@@ -111,6 +111,19 @@ function traceSilentFailure(scope: string, error: unknown): void {
   console.warn(`[chat] ${scope} — échec ignoré`, error)
 }
 
+type AppNotice = { text: string; noticeId?: number }
+
+function newestNotice(current: AppNotice | null, incoming: AppNotice): AppNotice {
+  if (
+    current?.noticeId !== undefined &&
+    incoming.noticeId !== undefined &&
+    incoming.noticeId < current.noticeId
+  ) {
+    return current
+  }
+  return incoming
+}
+
 export function ChatView({
   isActive = true,
   onInspectTurn
@@ -145,6 +158,7 @@ export function ChatView({
   }, [messages])
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const [appNotice, setAppNotice] = useState<AppNotice | null>(null)
   const [openImage, setOpenImage] = useState<{ src: string; name: string } | null>(null)
   const [dragActive, setDragActive] = useState(false)
 
@@ -161,6 +175,18 @@ export function ChatView({
       document.removeEventListener('keydown', closeOnEscape)
     }
   }, [openImage])
+  useEffect(() => {
+    if (appNotice?.noticeId === undefined) return
+    const noticeId = appNotice.noticeId
+    // Acquitter APRÈS un frame rendu. Si React démonte la vue avant, le cleanup annule l'ack et le
+    // prochain montage relira la notice au lieu de la perdre entre main et renderer.
+    const frame = window.requestAnimationFrame(() => {
+      void Promise.resolve(window.api.workflowProfileAcknowledgeNotice?.(noticeId)).catch(
+        () => undefined
+      )
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [appNotice])
   const [busyConversations, setBusyConversations] = useState<Set<string>>(() => new Set())
   const [runtimeIdentity, setRuntimeIdentity] = useState<ChatRuntimeIdentity | null>(null)
   // Coût-eq du dernier tour par conversation → pastille coût live.
@@ -657,10 +683,20 @@ export function ChatView({
     window.api.setActiveConversation(activeId)
   }, [activeId])
   useEffect(() => {
+    let disposed = false
     void Promise.resolve().then(() => {
       void refreshConvs()
       void refreshRuntimeIdentity()
     })
+    void Promise.resolve(window.api.workflowProfileNotice?.())
+      .then((notice) => {
+        if (!disposed && notice && typeof notice.text === 'string') {
+          setAppNotice((current) =>
+            newestNotice(current, { text: notice.text, noticeId: notice.id })
+          )
+        }
+      })
+      .catch(() => undefined)
     // Les mutations faites par l'agent (bus) rafraîchissent les listes SANS toucher le fil.
     const deltaBatcher = createLiveRunDeltaBatcher<{
       convId: string
@@ -685,7 +721,12 @@ export function ChatView({
     )
     const offApp = window.api.onAppEvent((e) => {
       if (e.type !== 'orchestrate-delta') deltaBatcher.flush()
-      if (e.type === 'refresh') {
+      if (e.type === 'toast') {
+        if (e.text) {
+          const text = e.text
+          setAppNotice((current) => newestNotice(current, { text, noticeId: e.noticeId }))
+        }
+      } else if (e.type === 'refresh') {
         if (e.scope === 'conversations') refreshConvs()
         if (e.scope === 'workflows') refreshRuns()
         if (e.scope === 'roles') refreshRuntimeIdentity()
@@ -766,6 +807,7 @@ export function ChatView({
       }
     })
     return () => {
+      disposed = true
       deltaBatcher.cancel()
       offApp()
     }
@@ -2090,6 +2132,19 @@ export function ChatView({
             </button>
           </div>
         </header>
+
+        {appNotice && (
+          <div className="chat-workflow-notice" data-testid="chat-workflow-notice" role="alert">
+            <span>{appNotice.text}</span>
+            <button
+              type="button"
+              onClick={() => setAppNotice(null)}
+              aria-label="Fermer l’avertissement"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {deleteCandidate && (
           <div

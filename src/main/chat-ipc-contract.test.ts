@@ -125,6 +125,23 @@ describe('renderer chat IPC contract', () => {
     expect(catalogSetup).toContain("broadcast({ type: 'refresh', scope: 'roles' })")
   })
 
+  it('transporte le refus du workflow actif jusqu’au chat au lieu de le laisser dans la console', () => {
+    const { main, preload, preloadTypes } = readChatContractSources()
+    const applyActive = main.slice(
+      main.indexOf('const appliquerWorkflowActif'),
+      main.indexOf("ipcMain.handle('os:workflowProfiles:get'")
+    )
+
+    expect(applyActive).toMatch(
+      /broadcast\(\{[\s\S]*?type: 'toast',[\s\S]*?text: refus\.message,[\s\S]*?noticeId:/
+    )
+    expect(main).toContain("ipcMain.handle('os:workflowProfiles:notice'")
+    expect(main).toContain("ipcMain.handle('os:workflowProfiles:acknowledgeNotice'")
+    expect(preload).toContain("ipcRenderer.invoke('os:workflowProfiles:notice')")
+    expect(preloadTypes).toContain('workflowProfileNotice')
+    expect(preloadTypes).toContain('workflowProfileAcknowledgeNotice')
+  })
+
   it('exposes a guarded conversation-routing preflight before pilotChat', () => {
     const sources = readChatContractSources()
 

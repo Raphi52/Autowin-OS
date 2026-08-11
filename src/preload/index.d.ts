@@ -177,6 +177,8 @@ interface ChatApi {
   onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void) => () => void
   /** Workflows nommés : lire, créer/modifier, supprimer, sélectionner. */
   workflowProfiles: () => Promise<WorkflowProfilesFile>
+  workflowProfileNotice: () => Promise<{ id: number; text: string } | null>
+  workflowProfileAcknowledgeNotice: (id: number) => Promise<boolean>
   workflowProfileSave: (profile: unknown) => Promise<WorkflowProfilesFile>
   workflowProfileRemove: (id: string) => Promise<WorkflowProfilesFile>
   workflowProfileSelect: (id: string | null) => Promise<WorkflowProfilesFile>
@@ -390,6 +392,7 @@ interface ChatApi {
       origin?: string
       scope?: string
       text?: string
+      noticeId?: number
       convId?: string
       runPath?: string
       task?: string

@@ -64,4 +64,81 @@ describe('OrchestratorModelSelector', () => {
     expect(host.querySelector('.model-effort-menu')).toBeNull()
     outside.remove()
   })
+
+  /**
+   * Choisir un modèle par défaut sur un provider EXPIRÉ produit un échec au premier prompt : le
+   * sélecteur ne recevait aucun statut, alors que Routage les avait déjà chargés.
+   */
+  it('affiche le statut du provider par option et refuse un provider expiré', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const onSelect = vi.fn()
+
+    await act(async () => {
+      root?.render(
+        createElement(OrchestratorModelSelector, {
+          busy: false,
+          catalogLoaded: true,
+          models: [
+            {
+              id: 'codex:gpt',
+              provider: 'codex',
+              model: 'gpt',
+              label: 'GPT',
+              reasoningEfforts: [],
+              defaultReasoningEffort: 'none'
+            }
+          ],
+          statuses: [{ provider: 'codex', status: 'expired' }],
+          binding: null,
+          pending: false,
+          error: null,
+          onSelect
+        })
+      )
+    })
+
+    const option = host.querySelector('[role="option"]') as HTMLButtonElement
+    expect(option.textContent).toContain('Expiré')
+    expect(option.getAttribute('aria-disabled')).toBe('true')
+    await act(async () => option.click())
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('un provider authentifié reste sélectionnable', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const onSelect = vi.fn()
+
+    await act(async () => {
+      root?.render(
+        createElement(OrchestratorModelSelector, {
+          busy: false,
+          catalogLoaded: true,
+          models: [
+            {
+              id: 'codex:gpt',
+              provider: 'codex',
+              model: 'gpt',
+              label: 'GPT',
+              reasoningEfforts: [],
+              defaultReasoningEffort: 'none'
+            }
+          ],
+          statuses: [{ provider: 'codex', status: 'authenticated' }],
+          binding: null,
+          pending: false,
+          error: null,
+          onSelect
+        })
+      )
+    })
+
+    const option = host.querySelector('[role="option"]') as HTMLButtonElement
+    expect(option.getAttribute('aria-disabled')).not.toBe('true')
+    await act(async () => option.click())
+    expect(onSelect).toHaveBeenCalled()
+  })
 })

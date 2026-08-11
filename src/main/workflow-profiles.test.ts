@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   activeWorkflowProfile,
+  activeWorkflowRefusal,
+  estInvocable,
+  WorkflowRefusalMailbox,
+  workflowProfileIssues,
   loadWorkflowProfiles,
   removeWorkflowProfile,
   saveWorkflowProfiles,
@@ -193,7 +197,11 @@ describe('instructions — les deux lectures cohabitent', () => {
       path,
       JSON.stringify({
         profiles: [
-          { id: 'p', name: 'P', instructions: { mode: 'replace', perPhase: { build: 'ta méthode' } } }
+          {
+            id: 'p',
+            name: 'P',
+            instructions: { mode: 'replace', perPhase: { build: 'ta méthode' } }
+          }
         ],
         activeId: null
       })
@@ -208,8 +216,69 @@ describe('instructions — les deux lectures cohabitent', () => {
     const path = tempFile()
     writeFileSync(
       path,
-      JSON.stringify({ profiles: [{ id: 'p', name: 'P', instructions: { text: '   ' } }], activeId: null })
+      JSON.stringify({
+        profiles: [{ id: 'p', name: 'P', instructions: { text: '   ' } }],
+        activeId: null
+      })
     )
     expect(loadWorkflowProfiles(path).profiles[0].instructions).toBeUndefined()
+  })
+})
+
+/**
+ * Un workflow ACTIF devenu structurellement mort restait le workflow du chat : la vue exemptait
+ * l'actif de sa garde (`issues.length > 0 && !actif`) et main ne revérifiait jamais `activeId`
+ * contre l'exécutabilité. Le prochain prompt partait donc sur un graphe que rien ne sait jouer.
+ */
+describe('workflow actif — l’exécutabilité est revérifiée côté main', () => {
+  const casse: WorkflowProfile = {
+    id: 'casse',
+    name: 'Cassé',
+    graph: {
+      entry: 'build-1',
+      nodes: [{ id: 'build-1', phase: 'build' }],
+      edges: [{ from: 'disparu', to: 'build-1', when: 'always' }]
+    }
+  }
+
+  it('un profil sans topologie n’a aucun défaut — le régime décide, c’est légitime', () => {
+    expect(workflowProfileIssues({ id: 'x', name: 'X', roles: {} })).toEqual([])
+  })
+
+  it('nomme ce qui rend le workflow injouable', () => {
+    expect(workflowProfileIssues(casse).join(' ')).toMatch(/disparu/)
+  })
+
+  it('un workflow cassé reste non invocable même si son ancien fichier disait enabled', () => {
+    expect(estInvocable({ ...casse, enabled: true })).toBe(false)
+  })
+
+  it('le workflow actif non exécutable N’EST PAS porté au moteur', () => {
+    const file: WorkflowProfilesFile = { profiles: [casse], activeId: 'casse' }
+    expect(activeWorkflowProfile(file)).toBeUndefined()
+  })
+
+  it('… et le refus est explicite, nommable à l’utilisateur', () => {
+    const file: WorkflowProfilesFile = { profiles: [casse], activeId: 'casse' }
+    const refus = activeWorkflowRefusal(file)
+    expect(refus?.profile.id).toBe('casse')
+    expect(refus?.message).toContain('Cassé')
+    expect(refus?.issues.length).toBeGreaterThan(0)
+  })
+
+  it('un workflow actif sain reste porté', () => {
+    expect(activeWorkflowProfile({ profiles: [rapide], activeId: 'rapide' })?.id).toBe('rapide')
+    expect(activeWorkflowRefusal({ profiles: [rapide], activeId: 'rapide' })).toBeUndefined()
+  })
+
+  it('conserve un refus produit avant la fenêtre jusqu’à sa première lecture', () => {
+    const mailbox = new WorkflowRefusalMailbox()
+    const file: WorkflowProfilesFile = { profiles: [casse], activeId: 'casse' }
+
+    expect(mailbox.update(file)?.profile.id).toBe('casse')
+    const notice = mailbox.peek()
+    expect(notice?.text).toContain('Cassé')
+    expect(mailbox.acknowledge(notice!.id)).toBe(true)
+    expect(mailbox.peek()).toBeNull()
   })
 })

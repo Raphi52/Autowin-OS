@@ -167,7 +167,7 @@ export interface PromptSnapshot {
 export type AppEvent =
   | { type: 'navigate'; tab: string; origin?: string }
   | { type: 'refresh'; scope: string; convId?: string }
-  | { type: 'toast'; text: string }
+  | { type: 'toast'; text: string; noticeId?: number }
   // Orchestration LIVE (statut temps réel + fil des sous-agents), diffusée par étape.
   | { type: 'orchestrate-start'; convId?: string; runPath?: string; task: string }
   | { type: 'orchestrate-phase'; convId?: string; runPath?: string; phase: OrchestrationPhase }
@@ -1285,11 +1285,10 @@ export class AppCommandBus {
               published: true
             })
           }
-          let learning: OutcomeLearningResult | undefined
           const lessonStep = [...steps]
             .reverse()
             .find((step) => step.text?.includes(OUTCOME_LESSON_MARKER))
-          learning = await this.observeOutcomeLearning({
+          const learning: OutcomeLearningResult | undefined = await this.observeOutcomeLearning({
             conversationId: convId,
             turnId: orchestrationTurnId,
             runId: currentRunId ?? runPath ?? orchestrationTurnId,

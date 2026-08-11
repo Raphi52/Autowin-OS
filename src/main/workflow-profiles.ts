@@ -98,9 +98,9 @@ export interface WorkflowProfile {
   enabled?: boolean
 }
 
-/** Un profil est invocable par le chat sauf s'il a été explicitement désactivé. */
+/** Un profil n'est invocable que s'il est autorisé ET structurellement exécutable. */
 export function estInvocable(profile: WorkflowProfile): boolean {
-  return profile.enabled !== false
+  return profile.enabled !== false && workflowProfileIssues(profile).length === 0
 }
 
 /**
@@ -326,7 +326,72 @@ export function selectWorkflowProfile(
   return { ...file, activeId: file.profiles.some((profile) => profile.id === id) ? id : null }
 }
 
-/** Le profil sélectionné, ou `undefined` — auquel cas la configuration courante s'applique. */
+/**
+ * Ce qui empêche un profil de tourner, en clair. Liste vide = jouable.
+ *
+ * Un profil SANS topologie n'a aucun défaut : il n'exprime que des écarts (modèles, consignes) et le
+ * régime décide des phases. Le défaut visé ici est l'autre cas — une topologie DÉCLARÉE mais morte.
+ */
+export function workflowProfileIssues(profile: WorkflowProfile): string[] {
+  const graph = graphOf(profile)
+  if (!graph) return []
+  if (!graph.nodes.length) return ['workflow vide : aucune phase à jouer']
+  return graphDefects(graph).map((defect) => defect.message)
+}
+
+/**
+ * Le profil sélectionné REFUSÉ, s'il l'est — avec de quoi le dire à l'utilisateur.
+ *
+ * `activeId` n'était revérifié que sur l'EXISTENCE de l'id : un workflow imposé au chat puis cassé
+ * par une édition restait porté au moteur, et le prompt suivant partait sur un graphe injouable.
+ */
+export function activeWorkflowRefusal(
+  file: WorkflowProfilesFile
+): { profile: WorkflowProfile; issues: string[]; message: string } | undefined {
+  const selected = file.profiles.find((profile) => profile.id === file.activeId)
+  if (!selected) return undefined
+  const issues = workflowProfileIssues(selected)
+  if (!issues.length) return undefined
+  return {
+    profile: selected,
+    issues,
+    message: `Workflow « ${selected.name} » imposé au chat mais non exécutable : ${issues.join(' ; ')}. Il ne sera pas joué — corrige-le ou désélectionne-le.`
+  }
+}
+
+/**
+ * Boîte aux lettres mono-consommation du refus actif.
+ *
+ * L'application applique le profil persistant AVANT de créer sa fenêtre. Un simple événement live
+ * est donc perdu au démarrage ; cette boîte conserve le message jusqu'au premier Chat monté.
+ */
+export class WorkflowRefusalMailbox {
+  private pending: { id: number; text: string } | null = null
+  private sequence = 0
+
+  update(file: WorkflowProfilesFile): ReturnType<typeof activeWorkflowRefusal> {
+    const refusal = activeWorkflowRefusal(file)
+    this.pending = refusal ? { id: ++this.sequence, text: refusal.message } : null
+    return refusal
+  }
+
+  peek(): { id: number; text: string } | null {
+    return this.pending ? { ...this.pending } : null
+  }
+
+  acknowledge(id: number): boolean {
+    if (this.pending?.id !== id) return false
+    this.pending = null
+    return true
+  }
+}
+
+/**
+ * Le profil sélectionné, ou `undefined` — auquel cas la configuration courante s'applique. Un profil
+ * sélectionné mais INEXÉCUTABLE vaut `undefined` : mieux vaut le régime courant qu'un graphe mort.
+ */
 export function activeWorkflowProfile(file: WorkflowProfilesFile): WorkflowProfile | undefined {
-  return file.profiles.find((profile) => profile.id === file.activeId)
+  const selected = file.profiles.find((profile) => profile.id === file.activeId)
+  if (!selected) return undefined
+  return workflowProfileIssues(selected).length ? undefined : selected
 }

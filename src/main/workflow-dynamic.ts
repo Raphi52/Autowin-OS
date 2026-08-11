@@ -1,5 +1,5 @@
 import { graphDefects, worstCaseNodeExecutions, type WorkflowGraph } from './workflow-graph'
-import { estInvocable, type WorkflowProfile } from './workflow-profiles'
+import { estInvocable, workflowProfileIssues, type WorkflowProfile } from './workflow-profiles'
 
 /**
  * Choisir le workflow adapté à la situation — ou n'en choisir AUCUN.
@@ -38,7 +38,10 @@ export function meriteUneDecision(task: string): boolean {
   const propre = task.trim()
   if (propre.length < 40) return false
   // Une question pure appelle une réponse, pas un pipeline.
-  if (/^(qu(i|e|el|elle|oi)|comment|pourquoi|où|quand|combien)\b/i.test(propre) && propre.endsWith('?')) {
+  if (
+    /^(qu(i|e|el|elle|oi)|comment|pourquoi|où|quand|combien)\b/i.test(propre) &&
+    propre.endsWith('?')
+  ) {
     return false
   }
   return true
@@ -115,10 +118,7 @@ export function acceptProposedGraph(
  * Lit la réponse du modèle. TOUT ce qui n'est pas compris rend « aucun » : devant une réponse
  * ambiguë, ne rien piloter est le repli sûr — c'est le comportement d'avant le mode dynamique.
  */
-export function readWorkflowDecision(
-  text: string,
-  profiles: WorkflowProfile[]
-): WorkflowDecision {
+export function readWorkflowDecision(text: string, profiles: WorkflowProfile[]): WorkflowDecision {
   const ligne = text.split('\n').find((l) => /^\s*WORKFLOW\s*:/i.test(l))
   if (!ligne) return { kind: 'none', reason: 'aucune décision lisible' }
   const valeur = ligne.replace(/^\s*WORKFLOW\s*:/i, '').trim()
@@ -133,20 +133,30 @@ export function readWorkflowDecision(
     if (!graph?.nodes?.length) return { kind: 'none', reason: 'graphe vide' }
     const verdict = acceptProposedGraph(graph)
     if (!verdict.ok) return { kind: 'none', reason: verdict.reason }
-    const name = typeof propose.name === 'string' && propose.name.trim() ? propose.name.trim() : 'Composé à la volée'
+    const name =
+      typeof propose.name === 'string' && propose.name.trim()
+        ? propose.name.trim()
+        : 'Composé à la volée'
     return { kind: 'new', graph, name }
   }
 
-  // Deuxième barrière du drapeau `enabled` : le catalogue ne montre déjà que les invocables, mais un
-  // modèle peut nommer un id qu'il a vu ailleurs (un run précédent, la demande de l'utilisateur).
-  // Désactiver doit EMPÊCHER, pas seulement s'abstenir de suggérer.
-  const trouve = profiles.filter(estInvocable).find((p) => p.id === valeur)
-  if (!trouve && profiles.some((p) => p.id === valeur)) {
-    return { kind: 'none', reason: `workflow désactivé : ${valeur}` }
+  // Deuxième barrière de l'invocabilité : le catalogue ne montre déjà que les profils autorisés ET
+  // exécutables, mais un modèle peut nommer un id vu ailleurs. On refuse alors avec la cause réelle.
+  const nomme = profiles.find((p) => p.id === valeur)
+  if (nomme?.enabled === false) return { kind: 'none', reason: `workflow désactivé : ${valeur}` }
+  const issues = nomme ? workflowProfileIssues(nomme) : []
+  if (issues.length) {
+    return {
+      kind: 'none',
+      reason: `workflow non exécutable : ${valeur} — ${issues.join(' ; ')}`
+    }
   }
+  const trouve = nomme && estInvocable(nomme) ? nomme : undefined
   // Un id inconnu n'est pas un incident : le modèle a pu inventer un nom. On ne pilote rien plutôt
   // que de choisir un workflow au hasard parce qu'il ressemblait.
-  return trouve ? { kind: 'existing', profile: trouve } : { kind: 'none', reason: `id inconnu : ${valeur}` }
+  return trouve
+    ? { kind: 'existing', profile: trouve }
+    : { kind: 'none', reason: `id inconnu : ${valeur}` }
 }
 
 /** Extrait le premier objet JSON équilibré du texte — un modèle encadre souvent son JSON de prose. */

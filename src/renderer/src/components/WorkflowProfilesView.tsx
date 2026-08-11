@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { WorkflowBenchPanel } from './WorkflowBenchPanel'
 import { WorkflowGraphEditor } from './WorkflowGraphEditor'
-import { profileSummary } from './workflow-profile-summary'
+import { profileSummary, promptEffectif } from './workflow-profile-summary'
 import { rolesEffectifs, trackNodes, workflowIssues } from './workflow-executability'
 import './WorkflowProfilesView.css'
 
@@ -22,7 +22,8 @@ interface WorkflowProfile {
   phases?: string[]
   graph?: import('./WorkflowCanvas').CanvasGraph
   allocation?: { judgeMembers?: number; maxGreedyNodes?: number }
-  instructions?: { mode: 'append' | 'replace'; text?: string }
+  /** `perPhase` prime sur `text` pour la phase visée — le modèle main le porte déjà (`workflow-profiles.ts`). */
+  instructions?: { mode: 'append' | 'replace'; text?: string; perPhase?: Record<string, string> }
   /** Le chat peut-il invoquer ce workflow de lui-même ? Absent vaut oui (voir `workflow-profiles.ts`). */
   enabled?: boolean
 }
@@ -208,6 +209,8 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
   const [names, setNames] = useState<Record<string, string>>({})
   const renameTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const persistQueueRef = useRef<Promise<void>>(Promise.resolve())
+  /** Renommages saisis mais pas encore écrits, à flusher si la vue disparaît avant la retombée. */
+  const pendingRenamesRef = useRef<Record<string, WorkflowProfile>>({})
   const persistVersionRef = useRef(0)
 
   useEffect(() => {
@@ -277,7 +280,11 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
     // Un nom vide rendrait le profil illisible ET le ferait rejeter à la relecture : on garde la
     // frappe à l'écran mais on n'enregistre rien tant qu'elle ne dit rien.
     if (!name.trim()) return
+    // Ce qui reste À ÉCRIRE si la vue disparaît avant la retombée : sans cette mémoire, le cleanup
+    // ne pouvait que jeter la frappe (clearTimeout sans flush).
+    pendingRenamesRef.current[profile.id] = { ...profile, name }
     renameTimersRef.current[profile.id] = setTimeout(() => {
+      delete pendingRenamesRef.current[profile.id]
       const version = ++persistVersionRef.current
       setError(undefined)
       const request = persistQueueRef.current.then(
@@ -303,10 +310,29 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
     }, 300)
   }
 
+  /**
+   * Quitter la section juste après avoir renommé PERDAIT le renommage : le cleanup faisait
+   * `clearTimeout` sans jamais écrire. On annule le minuteur ET on écrit ce qui restait en attente.
+   */
   useEffect(() => {
     const timers = renameTimersRef.current
+    const pending = pendingRenamesRef.current
     return () => {
       for (const timer of Object.values(timers)) clearTimeout(timer)
+      for (const id of Object.keys(pending)) {
+        const profil = pending[id]
+        delete pending[id]
+        // Démonté : plus aucun état à mettre à jour, seule l'ÉCRITURE compte. Elle reste dans la MÊME
+        // file que les debounces déjà partis : sinon une ancienne sauvegarde lente peut finir après
+        // ce flush et réécrire l'ancien nom.
+        const request = persistQueueRef.current.then(
+          () => window.api.workflowProfileSave?.(profil) as Promise<ProfilesFile>
+        )
+        persistQueueRef.current = request.then(
+          () => undefined,
+          () => undefined
+        )
+      }
     }
   }, [])
 
@@ -398,6 +424,25 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         </p>
       )}
 
+      {/* Le workflow IMPOSÉ peut avoir été cassé par une édition après sa sélection : `bloque`
+          exemptait l'actif, donc plus rien ne le disait. Main le refuse désormais au moteur — ici on
+          le dit, sans verrouiller le bouton, qui reste le seul chemin vers la désélection. */}
+      {(() => {
+        const actifProfil = file.profiles.find((p) => p.id === file.activeId)
+        const soucis = actifProfil ? workflowIssues(actifProfil) : []
+        return soucis.length > 0 && actifProfil ? (
+          <p
+            className="workflow-profiles-error"
+            role="alert"
+            data-testid="workflow-active-unrunnable"
+          >
+            Workflow « {actifProfil.name} » imposé au chat mais NON EXÉCUTABLE :{' '}
+            {soucis.join(' ; ')}. Il ne sera pas joué — corrige-le ou re-clique-le pour le
+            désélectionner.
+          </p>
+        ) : null
+      })()}
+
       {/* L'état vide était gardé par `!loading` mais AUCUNE branche ne couvrait le chargement :
           pendant la lecture, la vue ne rendait ni liste ni message. */}
       {loading && file.profiles.length === 0 ? (
@@ -484,14 +529,19 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                   <label
                     className="workflow-profile-toggle"
                     title={
-                      profile.enabled === false
-                        ? `${profile.name} : le chat ne peut pas l’invoquer`
-                        : `${profile.name} : le chat peut l’invoquer`
+                      issues.length > 0
+                        ? `Non exécutable : ${issues.join(' ; ')} — le chat ne peut pas l’invoquer tant que ce n’est pas corrigé`
+                        : profile.enabled === false
+                          ? `${profile.name} : le chat ne peut pas l’invoquer`
+                          : `${profile.name} : le chat peut l’invoquer`
                     }
                   >
                     <input
                       type="checkbox"
                       data-testid={`workflow-enabled-${profile.id}`}
+                      // Un workflow injouable laissé « invocable » permettait au ROUTEUR de le
+                      // choisir seul : l'échec ne venait alors d'aucun geste de l'utilisateur.
+                      disabled={issues.length > 0}
                       checked={profile.enabled !== false}
                       aria-label={`Rendre ${profile.name} invocable par le chat`}
                       onChange={(e) => void save({ ...profile, enabled: e.target.checked })}
@@ -590,6 +640,37 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                       </li>
                     ))}
                   </ul>
+                )}
+                {/* Le PROMPT EFFECTIF : ce que les consignes du workflow enverront réellement,
+                    phase par phase, et si elles s'ajoutent ou REMPLACENT le corps de la phase. */}
+                {promptEffectif(profile).length > 0 && (
+                  <details
+                    className="workflow-profile-prompt"
+                    data-testid={`workflow-prompt-${profile.id}`}
+                  >
+                    <summary>
+                      Prompt effectif
+                      {profile.instructions?.mode === 'replace' ? (
+                        <span
+                          className="wf-badge is-broken"
+                          data-testid={`workflow-prompt-replace-${profile.id}`}
+                        >
+                          remplace les consignes de phase
+                        </span>
+                      ) : (
+                        <span className="wf-badge">s’ajoute aux consignes de phase</span>
+                      )}
+                    </summary>
+                    <ul>
+                      {promptEffectif(profile).map((ligne) => (
+                        <li key={`${ligne.phase}-${ligne.origine}`}>
+                          <b>{ligne.phase}</b>{' '}
+                          <em>{ligne.origine === 'phase' ? '(consigne de phase)' : '(globale)'}</em>
+                          <blockquote>{ligne.texte}</blockquote>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 )}
                 {/* La portée reste visible même quand l'éditeur est ouvert : on ne perd jamais la
                     vue d'ensemble. */}

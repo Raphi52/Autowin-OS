@@ -194,3 +194,17 @@
 .settings-preflight-list li.is-ko strong {
   color: var(--danger);
 }
+
+/* Une anomalie de la section, visible depuis l'onglet VOISIN : sans elle, un provider expiré ou un
+   workflow injouable ne se découvrait qu'en ouvrant la section — donc après l'échec du prompt. */
+.domain-tab-anomaly {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  color: #fff;
+  background: var(--err, #d3455b);
+}

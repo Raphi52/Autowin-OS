@@ -296,6 +296,9 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
           busy={false}
           catalogLoaded={loaded}
           models={models}
+          // Les statuts étaient chargés ICI et jamais transmis : on pouvait poser comme modèle par
+          // défaut un provider expiré, et ne le découvrir qu'au premier prompt.
+          statuses={statuses}
           binding={binding}
           pending={modelPending}
           error={modelError}

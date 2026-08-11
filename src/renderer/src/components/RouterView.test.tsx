@@ -3,8 +3,14 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+// Les props REÇUES sont observées : le sélecteur de modèle par défaut ignorait les statuts
+// providers que cette vue avait déjà chargés, donc rien n'empêchait de choisir un provider expiré.
+const propsSelecteur: Record<string, unknown>[] = []
 vi.mock('./OrchestratorModelSelector', () => ({
-  OrchestratorModelSelector: () => createElement('div', { 'data-testid': 'model-selector' })
+  OrchestratorModelSelector: (props: Record<string, unknown>) => {
+    propsSelecteur.push(props)
+    return createElement('div', { 'data-testid': 'model-selector' })
+  }
 }))
 
 import { RouterView } from './RouterView'
@@ -432,5 +438,31 @@ describe('RouterView — erreurs provider locales', () => {
 
     expect(container.querySelector('[data-provider="claude"]')).toBeNull()
     expect(container.querySelector('[data-provider="ollama"]')).not.toBeNull()
+  })
+})
+
+describe('RouterView — le modèle par défaut connaît l’état des providers', () => {
+  it('passe les statuts chargés au sélecteur de modèle par défaut', async () => {
+    propsSelecteur.length = 0
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models: async () => [],
+        providerStatus: async () => [{ provider: 'codex', status: 'expired', testable: true }],
+        roles: async () => ({}),
+        providerTest: vi.fn(),
+        onAppEvent: vi.fn(() => () => undefined),
+        setRole: vi.fn()
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => root.render(createElement(RouterView, {})))
+    await flush()
+
+    const dernier = propsSelecteur[propsSelecteur.length - 1]
+    expect(dernier.statuses).toEqual([{ provider: 'codex', status: 'expired', testable: true }])
   })
 })

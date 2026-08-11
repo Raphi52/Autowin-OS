@@ -2518,3 +2518,39 @@ ol.md-list li {
 .activity-group[aria-disabled='true'] {
   cursor: default;
 }
+
+/* L'état d'authentification du provider, à l'endroit même du choix : choisir un provider expiré
+   comme modèle par défaut échouait au premier prompt, sans aucun signal au moment du clic. */
+.model-option-status {
+  color: var(--err, #d3455b);
+}
+
+[role='option'][aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.chat-workflow-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 14px 0;
+  padding: 9px 11px;
+  color: var(--warn, #e8a33d);
+  background: color-mix(in srgb, var(--warn, #e8a33d) 10%, var(--surface, #11151b));
+  border: 1px solid color-mix(in srgb, var(--warn, #e8a33d) 38%, transparent);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.chat-workflow-notice button {
+  flex: 0 0 auto;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+}

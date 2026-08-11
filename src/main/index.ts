@@ -263,6 +263,7 @@ import {
   seedDefaultWorkflows,
   selectWorkflowProfile,
   upsertWorkflowProfile,
+  WorkflowRefusalMailbox,
   type WorkflowProfile,
   type WorkflowProfilesFile
 } from './workflow-profiles'
@@ -1998,7 +1999,19 @@ Le fil reprend ensuite normalement.`
    * tour de chat — la feature était entièrement décorative. On applique à l'ouverture ET à chaque
    * changement de sélection, sinon l'un des deux chemins retombe dans le même piège.
    */
+  const workflowRefusalMailbox = new WorkflowRefusalMailbox()
   const appliquerWorkflowActif = (fichier: WorkflowProfilesFile): void => {
+    // Un workflow imposé puis CASSÉ par une édition ne doit pas rester le workflow du chat :
+    // `activeWorkflowProfile` le refuse, et le refus se dit au lieu de disparaître en silence.
+    const refus = workflowRefusalMailbox.update(fichier)
+    if (refus) {
+      console.warn(`[workflow] ${refus.message}`)
+      broadcast({
+        type: 'toast',
+        text: refus.message,
+        noticeId: workflowRefusalMailbox.peek()?.id
+      })
+    }
     const actif = activeWorkflowProfile(fichier)
     const override = overrideFor(actif ?? null)
     // Activé depuis la vue = choix EXPLICITE : la proportionnalité ne doit pas l'écarter en silence.
@@ -2012,6 +2025,17 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Workflow profiles')
     return loadWorkflowProfiles()
   })
+  ipcMain.handle('os:workflowProfiles:notice', (event) => {
+    assertTrustedRendererSender(event, 'Workflow profile notice')
+    return workflowRefusalMailbox.peek()
+  })
+  ipcMain.handle('os:workflowProfiles:acknowledgeNotice', (event, rawId: unknown) => {
+    assertTrustedRendererSender(event, 'Workflow profile notice acknowledgement')
+    if (typeof rawId !== 'number' || !Number.isSafeInteger(rawId)) {
+      throw new Error('Identifiant de notice invalide')
+    }
+    return workflowRefusalMailbox.acknowledge(rawId)
+  })
   ipcMain.handle('os:workflowProfiles:upsert', (event, raw: unknown) => {
     assertTrustedRendererSender(event, 'Workflow profiles')
     const next = upsertWorkflowProfile(loadWorkflowProfiles(), raw as WorkflowProfile)
@@ -2019,6 +2043,7 @@ Le fil reprend ensuite normalement.`
     // Éditer le graphe du workflow ACTIF doit prendre effet tout de suite : sinon le moteur
     // continuerait de jouer la version d'avant, sans que rien ne le signale.
     appliquerWorkflowActif(next)
+    broadcast({ type: 'refresh', scope: 'workflows' })
     return next
   })
   ipcMain.handle('os:workflowProfiles:remove', (event, rawId: unknown) => {
@@ -2027,6 +2052,7 @@ Le fil reprend ensuite normalement.`
     saveWorkflowProfiles(next)
     // Supprimer le workflow actif doit le retirer du moteur, pas le laisser piloter un profil mort.
     appliquerWorkflowActif(next)
+    broadcast({ type: 'refresh', scope: 'workflows' })
     return next
   })
   ipcMain.handle('os:workflowProfiles:select', (event, rawId: unknown) => {
@@ -2035,6 +2061,7 @@ Le fil reprend ensuite normalement.`
     const next = selectWorkflowProfile(loadWorkflowProfiles(), id)
     saveWorkflowProfiles(next)
     appliquerWorkflowActif(next)
+    broadcast({ type: 'refresh', scope: 'workflows' })
     return next
   })
   /**
@@ -2080,7 +2107,11 @@ Le fil reprend ensuite normalement.`
     let fichier = loadWorkflowProfiles()
     const { profiles, rejected } = readImport(brut, fichier.profiles)
     for (const profil of profiles) fichier = upsertWorkflowProfile(fichier, profil)
-    if (profiles.length) saveWorkflowProfiles(fichier)
+    if (profiles.length) {
+      saveWorkflowProfiles(fichier)
+      appliquerWorkflowActif(fichier)
+      broadcast({ type: 'refresh', scope: 'workflows' })
+    }
     return { ok: true as const, imported: profiles.length, rejected, file: fichier }
   })
   // La validité d'un graphe composé. Calculée côté main pour que le canevas et l'exécution partagent

@@ -59,6 +59,20 @@ describe('la question posée au modèle', () => {
   it('un profil sans drapeau reste invocable — une mise à jour ne rend pas le catalogue muet', () => {
     expect(catalogueBrief(catalogue)).toContain('eclair')
   })
+
+  it('un workflow cassé est absent du catalogue même si son ancien fichier le laisse activé', () => {
+    const casse: WorkflowProfile = {
+      id: 'casse',
+      name: 'Cassé',
+      enabled: true,
+      graph: {
+        entry: 'build-1',
+        nodes: [{ id: 'build-1', phase: 'build' }],
+        edges: [{ from: 'disparu', to: 'build-1', when: 'always' }]
+      }
+    }
+    expect(catalogueBrief([casse, ...catalogue])).not.toContain('casse')
+  })
 })
 
 describe('le drapeau « invocable par le chat » EMPÊCHE, il ne fait pas que s’abstenir', () => {
@@ -75,6 +89,23 @@ describe('le drapeau « invocable par le chat » EMPÊCHE, il ne fait pas que s�
     const decision = readWorkflowDecision('WORKFLOW: eclair', catalogue)
     expect(decision.kind).toBe('existing')
     expect(decision.kind === 'existing' && decision.profile.id).toBe('eclair')
+  })
+
+  it('un id cassé nommé malgré le catalogue est refusé avec sa vraie cause', () => {
+    const casse: WorkflowProfile = {
+      id: 'casse',
+      name: 'Cassé',
+      enabled: true,
+      graph: {
+        entry: 'build-1',
+        nodes: [{ id: 'build-1', phase: 'build' }],
+        edges: [{ from: 'disparu', to: 'build-1', when: 'always' }]
+      }
+    }
+    expect(readWorkflowDecision('WORKFLOW: casse', [casse])).toEqual({
+      kind: 'none',
+      reason: expect.stringMatching(/non exécutable.*disparu/i)
+    })
   })
 })
 

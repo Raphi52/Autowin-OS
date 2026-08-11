@@ -442,3 +442,164 @@ describe('vue Workflows — gestes séparés et suppression confirmée', () => {
     expect(supprimer.className).toContain('is-danger')
   })
 })
+
+const casse = {
+  id: 'casse',
+  name: 'Cassé',
+  phases: ['inconnue'],
+  instructions: { mode: 'append' as const, text: 'Sois bref' }
+}
+
+/**
+ * `bloque = issues.length > 0 && !actif` exemptait l'ACTIF : un workflow imposé au chat puis cassé
+ * restait le workflow du prochain prompt, sans que rien ne le dise. La désélection reste possible
+ * (c'est pourquoi le bouton n'est pas verrouillé) mais le refus se voit.
+ */
+describe('vue Workflows — un workflow ACTIF devenu injouable se voit', () => {
+  it('avertit que le workflow imposé ne sera pas joué', async () => {
+    api({ workflowProfiles: vi.fn().mockResolvedValue({ profiles: [casse], activeId: 'casse' }) })
+    await render()
+    const alerte = container.querySelector('[data-testid="workflow-active-unrunnable"]')
+    expect(alerte).not.toBeNull()
+    expect(alerte?.textContent).toContain('Cassé')
+    expect(alerte?.textContent).toContain('phase inconnue')
+  })
+
+  it('rien à avertir quand le workflow imposé est sain', async () => {
+    api({ workflowProfiles: vi.fn().mockResolvedValue({ profiles: [rapide], activeId: 'rapide' }) })
+    await render()
+    expect(container.querySelector('[data-testid="workflow-active-unrunnable"]')).toBeNull()
+  })
+
+  // Finding 4 : la case « invocable par le chat » restait offerte sur un workflow injouable — le
+  // routeur pouvait donc le choisir SEUL, et l'échec n'était provoqué par aucun geste utilisateur.
+  it('« invocable par le chat » est verrouillé tant que le workflow n’est pas exécutable', async () => {
+    api({ workflowProfiles: vi.fn().mockResolvedValue({ profiles: [casse], activeId: null }) })
+    await render()
+    const case_ = container.querySelector<HTMLInputElement>(
+      '[data-testid="workflow-enabled-casse"]'
+    )!
+    expect(case_.disabled).toBe(true)
+  })
+
+  it('… et reste offerte sur un workflow sain', async () => {
+    api()
+    await render()
+    expect(
+      container.querySelector<HTMLInputElement>('[data-testid="workflow-enabled-rapide"]')!.disabled
+    ).toBe(false)
+  })
+})
+
+/**
+ * Finding 3 : `instructions.mode: 'replace'` REMPLACE le corps de la phase. Le résumé d'une ligne
+ * disait « consignes remplacées » sans jamais montrer CE QUI serait envoyé — donc un prompt partait
+ * sur des consignes que personne n'avait relues.
+ */
+describe('vue Workflows — le prompt EFFECTIF est lisible avant d’envoyer', () => {
+  const avecConsignes = {
+    id: 'strict',
+    name: 'Strict',
+    phases: ['build', 'judge'],
+    instructions: {
+      mode: 'replace' as const,
+      text: 'Réponds en une ligne',
+      perPhase: { judge: 'Verdict binaire' }
+    }
+  }
+
+  it('montre les consignes composées, phase par phase', async () => {
+    api({
+      workflowProfiles: vi.fn().mockResolvedValue({ profiles: [avecConsignes], activeId: null })
+    })
+    await render()
+    const panneau = container.querySelector('[data-testid="workflow-prompt-strict"]')
+    expect(panneau).not.toBeNull()
+    expect(panneau?.textContent).toContain('Réponds en une ligne')
+    expect(panneau?.textContent).toContain('Verdict binaire')
+    expect(panneau?.textContent).toContain('judge')
+  })
+
+  it('signale VISIBLEMENT le mode replace', async () => {
+    api({
+      workflowProfiles: vi.fn().mockResolvedValue({ profiles: [avecConsignes], activeId: null })
+    })
+    await render()
+    const marque = container.querySelector('[data-testid="workflow-prompt-replace-strict"]')
+    expect(marque).not.toBeNull()
+    expect(marque?.textContent?.toLowerCase()).toContain('remplace')
+  })
+
+  it('aucun panneau quand le workflow ne porte aucune consigne', async () => {
+    api()
+    await render()
+    expect(container.querySelector('[data-testid="workflow-prompt-rapide"]')).toBeNull()
+  })
+})
+
+/**
+ * Finding 5 : le cleanup du debounce faisait `clearTimeout` SANS flush — quitter la section juste
+ * après avoir renommé perdait le renommage, silencieusement.
+ */
+describe('vue Workflows — un renommage en attente n’est pas perdu au démontage', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('démonter la vue enregistre le renommage encore en attente', async () => {
+    vi.useFakeTimers()
+    const save = vi.fn().mockResolvedValue({ profiles: [rapide], activeId: null })
+    api({ workflowProfileSave: save })
+    await render()
+    const champ = container.querySelector<HTMLInputElement>(
+      '[data-testid="workflow-rename-rapide"]'
+    )!
+    await act(async () => saisir(champ, 'Foudre'))
+    expect(save).not.toHaveBeenCalled()
+
+    // Changement de section = démontage, AVANT la retombée des 300 ms.
+    await act(async () => root.render(createElement('div')))
+
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: 'rapide', name: 'Foudre' }))
+  })
+
+  it('rien n’est enregistré au démontage sans renommage en attente', async () => {
+    vi.useFakeTimers()
+    const save = vi.fn().mockResolvedValue({ profiles: [rapide], activeId: null })
+    api({ workflowProfileSave: save })
+    await render()
+    await act(async () => root.render(createElement('div')))
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('le flush de démontage attend la sauvegarde précédente au lieu de pouvoir être écrasé', async () => {
+    vi.useFakeTimers()
+    let finirPremiere!: (value: unknown) => void
+    const premiere = new Promise((resolve) => {
+      finirPremiere = resolve
+    })
+    const save = vi
+      .fn()
+      .mockImplementationOnce(() => premiere)
+      .mockResolvedValue({ profiles: [{ ...rapide, name: 'Foudre' }], activeId: null })
+    api({ workflowProfileSave: save })
+    await render()
+    const champ = container.querySelector<HTMLInputElement>(
+      '[data-testid="workflow-rename-rapide"]'
+    )!
+
+    await act(async () => saisir(champ, 'Éclair'))
+    await act(async () => vi.advanceTimersByTime(300))
+    expect(save).toHaveBeenCalledTimes(1)
+
+    await act(async () => saisir(champ, 'Foudre'))
+    await act(async () => root.render(createElement('div')))
+    expect(save).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      finirPremiere({ profiles: [{ ...rapide, name: 'Éclair' }], activeId: null })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'Foudre' }))
+  })
+})

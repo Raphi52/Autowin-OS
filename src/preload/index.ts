@@ -225,6 +225,10 @@ const api = {
   // Config par rôle
   workflowProfiles: (): Promise<WorkflowProfilesFile> =>
     ipcRenderer.invoke('os:workflowProfiles:get'),
+  workflowProfileNotice: (): Promise<{ id: number; text: string } | null> =>
+    ipcRenderer.invoke('os:workflowProfiles:notice'),
+  workflowProfileAcknowledgeNotice: (id: number): Promise<boolean> =>
+    ipcRenderer.invoke('os:workflowProfiles:acknowledgeNotice', id),
   workflowProfileSave: (profile: unknown): Promise<WorkflowProfilesFile> =>
     ipcRenderer.invoke('os:workflowProfiles:upsert', profile),
   workflowProfileRemove: (id: string): Promise<WorkflowProfilesFile> =>

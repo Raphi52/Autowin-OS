@@ -16,10 +16,34 @@ const EFFORT_LABELS: Record<string, string> = {
   ultra: 'Ultra'
 }
 
+/**
+ * L'état d'authentification d'un provider, tel que Routage le charge déjà (`providerStatus()`).
+ *
+ * Il manquait ici : choisir un modèle par défaut sur un provider expiré, absent ou en standby
+ * produisait un échec au PREMIER prompt, sans aucun signal au moment du choix.
+ */
+export interface OrchestratorProviderStatus {
+  provider: string
+  status: string
+}
+
+const STATUT_LABEL: Record<string, string> = {
+  authenticated: 'Authentifié',
+  expired: 'Expiré · à reconnecter',
+  'installed-untested': 'Installé · validité non testée',
+  absent: 'Non connecté',
+  unknown: 'Indéterminé',
+  standby: 'En standby'
+}
+
+/** Les états sous lesquels un prompt ne partirait pas : le choix est refusé, pas juste décoré. */
+const STATUTS_BLOQUANTS = new Set(['expired', 'absent', 'standby'])
+
 export function OrchestratorModelSelector({
   busy,
   catalogLoaded,
   models,
+  statuses,
   binding,
   pending,
   error,
@@ -28,11 +52,15 @@ export function OrchestratorModelSelector({
   busy: boolean
   catalogLoaded: boolean
   models: RuntimeModel[]
+  /** Absent = aucun statut connu : aucune option n'est alors bloquée (comportement d'avant). */
+  statuses?: OrchestratorProviderStatus[]
   binding: { provider: string; model?: string; reasoningEffort?: string } | null
   pending: boolean
   error: string | null
   onSelect: (option: OrchestratorModelOption) => void
 }): React.JSX.Element {
+  const statutDe = (provider: string): string | undefined =>
+    statuses?.find((s) => s.provider === provider)?.status
   const dropdownRef = useRef<HTMLDetailsElement>(null)
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
   useEffect(() => {
@@ -74,11 +102,7 @@ export function OrchestratorModelSelector({
   useEffect(() => {
     const closeOnOutsidePointer = (event: PointerEvent): void => {
       const dropdown = dropdownRef.current
-      if (
-        !dropdown?.open ||
-        !(event.target instanceof Node) ||
-        dropdown.contains(event.target)
-      ) {
+      if (!dropdown?.open || !(event.target instanceof Node) || dropdown.contains(event.target)) {
         return
       }
       dropdown.open = false
@@ -119,20 +143,34 @@ export function OrchestratorModelSelector({
               <span>{group.label}</span>
               {group.options.map((option) => {
                 const optionKey = `${option.provider}:${option.model}`
-                const selectableEfforts = option.reasoningEfforts.filter((effort) => effort !== 'none')
+                const selectableEfforts = option.reasoningEfforts.filter(
+                  (effort) => effort !== 'none'
+                )
                 const active =
                   option.provider === binding?.provider &&
                   option.model === (currentCatalogModel ?? binding?.model)
+                const statut = statutDe(option.provider)
+                const injoignable = statut !== undefined && STATUTS_BLOQUANTS.has(statut)
                 return (
                   <div key={optionKey} className="model-select-option">
                     <button
                       type="button"
                       role="option"
                       aria-selected={active}
+                      data-provider-status={statut}
+                      aria-disabled={injoignable || undefined}
+                      title={
+                        injoignable
+                          ? `${option.provider} : ${STATUT_LABEL[statut] ?? statut} — reconnecte ce provider dans Routage avant de l’imposer par défaut`
+                          : undefined
+                      }
                       aria-expanded={
                         selectableEfforts.length > 0 ? expandedModel === optionKey : undefined
                       }
                       onClick={() => {
+                        // Un provider expiré, absent ou en standby échouerait au premier prompt :
+                        // le choix est REFUSÉ au moment où il se fait, pas découvert à l'envoi.
+                        if (injoignable) return
                         if (selectableEfforts.length === 0) {
                           dropdownRef.current?.removeAttribute('open')
                           setExpandedModel(null)
@@ -145,6 +183,11 @@ export function OrchestratorModelSelector({
                       <span>
                         <strong>{option.label}</strong>
                         <small>{option.model}</small>
+                        {statut && statut !== 'authenticated' && (
+                          <small className={`model-option-status is-${statut}`}>
+                            {STATUT_LABEL[statut] ?? statut}
+                          </small>
+                        )}
                       </span>
                       {selectableEfforts.length > 0 && <i className="model-option-chevron">›</i>}
                     </button>
