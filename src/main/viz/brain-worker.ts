@@ -1,6 +1,7 @@
 import { parentPort } from 'node:worker_threads'
 import { graphifyEvidence } from '../amitel-context'
-import type { BrainNavigation } from '../brain-retrieval'
+import { listInboxCandidates, readInboxCandidateBody } from '../brain-inbox'
+import { resolveHeadShas } from '../brain-source-sha'
 import {
   applyBrainRetrievalScoresAsync,
   assertAuthorizedBrainVaultAsync,
@@ -10,40 +11,18 @@ import {
   loadBrainNeighborhood,
   loadBrainThemeNodes,
   loadBrainThemes,
-  invalidateBrainCaches,
   readNodeFile,
   scanBrainGraphs,
-  searchVaultBrainNotesAsync,
-  type BrainNoteSearchResult
+  searchVaultBrainNotesAsync
 } from './fs-brains'
-import { GenerationCache, GenerationFence } from './generation-cache'
-
-type BrainWorkerRequest = {
-  id: number
-  method:
-    | 'listBrains'
-    | 'loadPreview'
-    | 'loadGraph'
-    | 'loadThemes'
-    | 'loadThemeNodes'
-    | 'loadNeighborhood'
-    | 'readNodeFile'
-    | 'authorizeVault'
-    | 'searchBrain'
-    | 'fuseRetrieval'
-    | 'invalidate'
-    | 'graphifyEvidence'
-  args: unknown[]
-}
+import type { BrainWorkerRequest } from './brain-worker-contract'
 
 if (!parentPort) throw new Error('brain-worker doit être exécuté dans un Worker')
 
-const graphCache = new GenerationCache<string, ReturnType<typeof loadBrainGraph>>()
-const neighborhoodCache = new GenerationCache<string, ReturnType<typeof loadBrainNeighborhood>>()
-const responseFence = new GenerationFence()
+const graphCache = new Map<string, ReturnType<typeof loadBrainGraph>>()
+const neighborhoodCache = new Map<string, ReturnType<typeof loadBrainNeighborhood>>()
 
 parentPort.on('message', async (request: BrainWorkerRequest) => {
-  const epochAtStart = responseFence.capture()
   try {
     let value: unknown
     switch (request.method) {
@@ -51,97 +30,69 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
         value = scanBrainGraphs(undefined, undefined, false)
         break
       case 'loadPreview':
-        value = await loadBrainGraphPreviewAsync(
-          request.args[0] as string,
-          request.args[1] as number | undefined
-        )
+        value = await loadBrainGraphPreviewAsync(request.args[0], request.args[1], request.args[2])
         break
       case 'loadGraph': {
-        const [path, lod, community] = request.args as [
-          string,
-          number | undefined,
-          number | undefined
-        ]
-        const key = `${path}\u0000${lod ?? 300}\u0000${community ?? ''}`
+        const [path, lod, community, corpus] = request.args
+        const key = `${path}\u0000${lod ?? 300}\u0000${community ?? ''}\u0000${JSON.stringify(corpus)}`
         value = graphCache.get(key)
         if (!value) {
-          const lease = graphCache.capture(key)
-          try {
-            value = await loadBrainGraphAsync(path, lod, community)
-            if (!graphCache.publish(lease, value as ReturnType<typeof loadBrainGraph>)) {
-              throw new Error('cache Brain invalidé pendant le chargement')
-            }
-          } catch (error) {
-            graphCache.abandon(lease)
-            throw error
-          }
+          value = await loadBrainGraphAsync(path, lod, community, corpus)
+          graphCache.set(key, value as ReturnType<typeof loadBrainGraph>)
         }
         break
       }
       case 'loadThemes':
-        value = loadBrainThemes(request.args[0] as string)
+        value = loadBrainThemes(request.args[0], request.args[1])
         break
       case 'loadThemeNodes':
-        value = loadBrainThemeNodes(request.args[0] as string, request.args[1] as string[])
+        value = loadBrainThemeNodes(request.args[0], request.args[1], request.args[2])
         break
       case 'loadNeighborhood': {
-        const [path, nodeId] = request.args as [string, string]
-        const key = `${path}\u0000${nodeId}`
+        const [path, nodeId, corpus] = request.args
+        const key = `${path}\u0000${nodeId}\u0000${JSON.stringify(corpus)}`
         value = neighborhoodCache.get(key)
         if (!value) {
-          const lease = neighborhoodCache.capture(key)
-          try {
-            value = loadBrainNeighborhood(path, nodeId)
-            if (
-              !neighborhoodCache.publish(lease, value as ReturnType<typeof loadBrainNeighborhood>)
-            ) {
-              throw new Error('cache Brain invalidé pendant le chargement')
-            }
-          } catch (error) {
-            neighborhoodCache.abandon(lease)
-            throw error
-          }
+          value = loadBrainNeighborhood(path, nodeId, corpus)
+          neighborhoodCache.set(key, value as ReturnType<typeof loadBrainNeighborhood>)
         }
         break
       }
       case 'readNodeFile':
-        value = readNodeFile(request.args[0] as string)
+        value = readNodeFile(request.args[0], request.args[1], request.args[2])
         break
       case 'authorizeVault':
-        value = await assertAuthorizedBrainVaultAsync(request.args[0] as string)
+        value = await assertAuthorizedBrainVaultAsync(request.args[0])
         break
       case 'searchBrain':
-        value = await searchVaultBrainNotesAsync(
-          request.args[0] as string,
-          request.args[1] as string
-        )
+        value = await searchVaultBrainNotesAsync(request.args[0], request.args[1], {
+          corpus: request.args[2]
+        })
         break
       case 'fuseRetrieval':
         value = await applyBrainRetrievalScoresAsync(
-          request.args[0] as BrainNoteSearchResult[],
-          request.args[1] as BrainNavigation | undefined,
-          request.args[2] as string | undefined
+          request.args[0],
+          request.args[1],
+          request.args[2]
         )
-        break
-      case 'invalidate':
-        responseFence.invalidate()
-        graphCache.invalidate()
-        neighborhoodCache.invalidate()
-        // Le worker n'autorise qu'un vault de notes : un vidage total couvre les alias équivalents,
-        // y compris ceux qui n'avaient encore jamais servi de clé.
-        invalidateBrainCaches()
-        value = true
         break
       case 'graphifyEvidence':
-        value = graphifyEvidence(
-          request.args[0] as string,
-          request.args[1] as string,
-          request.args[2] as number
-        )
+        value = graphifyEvidence(request.args[0], request.args[1], request.args[2])
         break
-    }
-    if (request.method !== 'invalidate' && !responseFence.isCurrent(epochAtStart)) {
-      throw new Error('réponse Brain invalidée pendant le chargement')
+      case 'listInbox': {
+        const [root, workspaces] = request.args
+        value = listInboxCandidates(root, {
+          headShasFor: (paths) => resolveHeadShas(workspaces, paths)
+        })
+        break
+      }
+      case 'readInboxCandidateBody':
+        value = readInboxCandidateBody(request.args[0], request.args[1])
+        break
+      default: {
+        const exhaustive: never = request
+        throw new Error(`méthode Brain inconnue : ${String(exhaustive)}`)
+      }
     }
     parentPort?.postMessage({ id: request.id, ok: true, value })
   } catch (error) {

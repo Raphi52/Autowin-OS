@@ -26,6 +26,17 @@ describe('decideBrainQuery — bornage de la question', () => {
     expect(decision.allowed).toBe(true)
     if (decision.allowed) expect(decision.query.length).toBe(BRAIN_QUERY_MAX_CHARS)
   })
+
+  it('compte les points de code Unicode sans couper une paire surrogate', () => {
+    const boundary = decideBrainQuery(`${'x'.repeat(BRAIN_QUERY_MAX_CHARS - 1)}😀suite`)
+    expect(boundary).toEqual({
+      allowed: true,
+      query: `${'x'.repeat(BRAIN_QUERY_MAX_CHARS - 1)}😀`
+    })
+
+    const emojis = '😀'.repeat(BRAIN_QUERY_MAX_CHARS)
+    expect(decideBrainQuery(emojis)).toEqual({ allowed: true, query: emojis })
+  })
 })
 
 describe('capBrainResult — le savoir n’inonde pas le tour', () => {
@@ -42,6 +53,16 @@ describe('capBrainResult — le savoir n’inonde pas le tour', () => {
   it('garde le DÉBUT (le retriever classe par pertinence)', () => {
     const capped = capBrainResult(`LE_PLUS_PERTINENT${'z'.repeat(BRAIN_RESULT_CAP * 2)}`)
     expect(capped.startsWith('LE_PLUS_PERTINENT')).toBe(true)
+  })
+
+  it('ne produit jamais de surrogate isolé au plafond du savoir', () => {
+    const capped = capBrainResult(`${'x'.repeat(BRAIN_RESULT_CAP - 1)}😀suite`)
+    expect([...capped]).toHaveLength(BRAIN_RESULT_CAP)
+    expect(capped).not.toMatch(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u
+    )
+    const exact = '😀'.repeat(BRAIN_RESULT_CAP)
+    expect(capBrainResult(exact)).toBe(exact)
   })
 })
 
@@ -73,6 +94,18 @@ describe('buildBrainOutcome status', () => {
     expect(buildBrainOutcome('q', '', 'unavailable').note).toContain('indisponible')
     expect(buildBrainOutcome('q', '', 'invalid').note).toContain('integrite')
   })
+
+  it.each([' ', '\n\t', '\r\n'])(
+    'normalise un contexte sans caractère utile annoncé found en empty (%j)',
+    (context) => {
+      expect(buildBrainOutcome('q', context, 'found')).toMatchObject({
+        found: false,
+        status: 'empty',
+        knowledge: '',
+        note: expect.stringContaining('aucun savoir')
+      })
+    }
+  )
 })
 
 /** Contrat de CABLAGE : une commande declaree mais jamais atteignable resterait du theatre. */

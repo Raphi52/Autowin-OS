@@ -28,14 +28,6 @@ export class BrainSearchCoordinator {
     this.fence.invalidate()
   }
 
-  async search(
-    root: string,
-    query: string,
-    operations: BrainSearchOperations
-  ): Promise<BrainNoteSearchResult[]> {
-    return (await this.searchDetailed(root, query, operations)).results
-  }
-
   async searchDetailed(
     root: string,
     query: string,
@@ -57,12 +49,18 @@ export class BrainSearchCoordinator {
         .catch((): BrainRetrievalResult => ({ context: '', status: 'unavailable' }))
     ])
     if (!this.fence.isCurrent(epochAtStart)) return { results: [] }
-    const navigation = retrieval.navigation
-    if (local.length === 0 || !navigation) return { results: local, retrieval }
+    const effectiveRetrieval: BrainRetrievalResult =
+      retrieval.navigation && retrieval.navigation.query !== decision.query
+        ? { context: '', status: 'invalid' }
+        : retrieval
+    const navigation = effectiveRetrieval.navigation
+    if (local.length === 0 || !navigation) return { results: local, retrieval: effectiveRetrieval }
 
     const fused = await Promise.resolve()
       .then(() => operations.fuse(local, navigation, authorizedRoot))
       .catch(() => local)
-    return this.fence.isCurrent(epochAtStart) ? { results: fused, retrieval } : { results: [] }
+    return this.fence.isCurrent(epochAtStart)
+      ? { results: fused, retrieval: effectiveRetrieval }
+      : { results: [] }
   }
 }

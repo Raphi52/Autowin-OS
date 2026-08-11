@@ -76,6 +76,14 @@ export function AgentsTopologyView({
   const [namingProfile, setNamingProfile] = useState(false)
   /** Relance manuelle du chargement initial : une erreur de lecture laissait la vue morte. */
   const [reloadKey, setReloadKey] = useState(0)
+  /** Échec de LECTURE de la liste des profils — canal distinct : la topologie, elle, est chargée.
+   *  Avalé (`.catch(() => undefined)`), il rendait un sélecteur vide indiscernable d'un « aucun
+   *  profil enregistré ». */
+  const [profilesError, setProfilesError] = useState('')
+  const [profilesReloadKey, setProfilesReloadKey] = useState(0)
+  /** Refus de VALIDATION (dépôt inerte) — jamais dans le badge de persistance : rien n'a échoué à
+   *  l'écriture, et l'erreur y restait collée jusqu'au prochain enregistrement. */
+  const [validationError, setValidationError] = useState('')
   const topologyRef = useRef<AgentTopology | null>(null)
   const persistQueueRef = useRef<Promise<void>>(Promise.resolve())
   const persistVersionRef = useRef(0)
@@ -109,11 +117,14 @@ export function AgentsTopologyView({
         void window.api
           .topology()
           .then(replaceTopology)
-          .catch((reason: unknown) =>
+          .catch((reason: unknown) => {
+            // `setError` SEUL ne s'affichait pas : le badge ne rend le message que si
+            // `state === 'error'`. L'échec de rafraîchissement était donc totalement muet.
             setError(
               `Rafraîchissement de la topologie impossible : ${reason instanceof Error ? reason.message : String(reason)}`
             )
-          )
+            setState('error')
+          })
       }
     })
     return off
@@ -121,9 +132,14 @@ export function AgentsTopologyView({
   useEffect(() => {
     window.api
       .profiles()
-      .then(setProfiles)
-      .catch(() => undefined)
-  }, [])
+      .then((liste) => {
+        setProfiles(liste)
+        setProfilesError('')
+      })
+      .catch((reason: unknown) =>
+        setProfilesError(reason instanceof Error ? reason.message : String(reason))
+      )
+  }, [profilesReloadKey])
 
   async function saveProfile(): Promise<void> {
     if (!topology) return
@@ -234,12 +250,15 @@ export function AgentsTopologyView({
     // Le fan-out des sous-agents n'est pas branché : un 2e slot était persisté puis étiqueté « non
     // actif ». On refuse le dépôt inerte plutôt que d'enregistrer une configuration sans effet.
     if (target === 'subagents' && !slotId && current.subagents.length >= 1) {
-      setError(
+      // Canal PROPRE : un refus de validation n'est pas un échec d'écriture. En passant par
+      // `state = 'error'`, il maquillait le badge de persistance en panne jusqu'au prochain
+      // enregistrement, alors que la topologie persistée était intacte.
+      setValidationError(
         'Le fan-out des sous-agents n’est pas branché : un second sous-agent ne serait pas exécuté. Remplacez le slot existant.'
       )
-      setState('error')
       return
     }
+    setValidationError('')
     const id = target === 'orchestrator' ? 'orchestrator' : (slotId ?? nextSlotId(target, current))
     const binding = bindingFor(model, id)
     const next =
@@ -553,7 +572,8 @@ export function AgentsTopologyView({
           </select>
           {appliedProfileId && (
             <span className="topology-profile-badge" data-testid="topology-profile-applied">
-              {profiles.find((profile) => profile.id === appliedProfileId)?.name ?? appliedProfileId}
+              {profiles.find((profile) => profile.id === appliedProfileId)?.name ??
+                appliedProfileId}
               {topologyDirty ? ' · modifié' : ''}
             </span>
           )}
@@ -595,6 +615,37 @@ export function AgentsTopologyView({
         </div>
       </header>
 
+      {profilesError && (
+        <p
+          className="topology-unresolved-banner"
+          role="alert"
+          data-testid="topology-profiles-error"
+        >
+          Liste des profils illisible : {profilesError}
+          <button
+            type="button"
+            className="topology-assign-button"
+            data-testid="topology-profiles-retry"
+            onClick={() => {
+              setProfilesError('')
+              setProfilesReloadKey((key) => key + 1)
+            }}
+          >
+            Réessayer
+          </button>
+        </p>
+      )}
+
+      {validationError && (
+        <p
+          className="topology-unresolved-banner"
+          role="alert"
+          data-testid="topology-validation-error"
+        >
+          {validationError}
+        </p>
+      )}
+
       {unresolvedSlots.length > 0 && (
         <p className="topology-unresolved-banner" role="alert" data-testid="topology-unresolved">
           {unresolvedSlots.length} slot(s) pointent un modèle introuvable au catalogue (
@@ -613,13 +664,14 @@ export function AgentsTopologyView({
             onClick={() =>
               // Sans ce retour, un échec de lancement du login (spawn du terminal OAuth impossible)
               // était totalement silencieux : l'utilisateur attend une fenêtre qui ne viendra pas.
-              void window.api
-                .providerLogin('gemini')
-                .catch((reason: unknown) =>
-                  setError(
-                    `Le login Gemini n'a pas pu être lancé : ${reason instanceof Error ? reason.message : String(reason)}`
-                  )
+              void window.api.providerLogin('gemini').catch((reason: unknown) => {
+                // Même défaut que le rafraîchissement : sans `state = 'error'`, le message posé
+                // n'était jamais rendu et le bouton semblait sans effet.
+                setError(
+                  `Le login Gemini n'a pas pu être lancé : ${reason instanceof Error ? reason.message : String(reason)}`
                 )
+                setState('error')
+              })
             }
           >
             Connecter Gemini avec Google

@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { loadConvActivity } from './conv-activity'
-import { persistChatUsageSettlement } from './chat-usage-settlement'
+import {
+  persistChatUsageSettlement,
+  persistRecoveredChatProviderUsage
+} from './chat-usage-settlement'
 import { TraceStore } from './trace-store'
 import type { ExecutionUsageSnapshot } from '../execution-supervisor'
 
@@ -123,5 +126,37 @@ describe('persistChatUsageSettlement', () => {
 
     expect(loadConvActivity('conv-dedupe', activityRoot)).toHaveLength(1)
     expect(traceStore.readConversation('conv-dedupe')).toHaveLength(1)
+  })
+
+  it('acquitte immediatement et une seule fois le cout d un provider recupere', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-chat-recovered-usage-'))
+    const activityRoot = join(root, 'activity')
+    const input = {
+      conversationId: 'conv-recovered',
+      usageCallId: 'provider-paid-once',
+      provider: 'claude',
+      model: 'haiku',
+      label: 'tour repris',
+      usage: {
+        inputTokens: 40,
+        outputTokens: 5,
+        cacheReadTokens: 30,
+        costUsd: 0.12
+      },
+      activityRoot
+    }
+
+    expect(persistRecoveredChatProviderUsage(input)).toBe(true)
+    expect(persistRecoveredChatProviderUsage(input)).toBe(false)
+    expect(loadConvActivity('conv-recovered', activityRoot)).toEqual([
+      expect.objectContaining({
+        kind: 'chat-recovered',
+        usageCallId: 'provider-paid-once',
+        inputTokens: 40,
+        outputTokens: 5,
+        cacheReadTokens: 30,
+        costUsd: 0.12
+      })
+    ])
   })
 })

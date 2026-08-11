@@ -27,9 +27,103 @@ function mountTrace(trace: BrainTraceView): void {
   })
 }
 
+function renderTrace(trace: BrainTraceView): void {
+  act(() => {
+    root!.render(<BrainNavigationCard trace={trace} />)
+  })
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+function scopedTrace(rootPath: string, query: string, timestamp: string): BrainTraceView {
+  return {
+    timestamp,
+    conversationId: 'c1',
+    query,
+    injectedChars: 10,
+    navigation: {
+      query,
+      minDense: 0.25,
+      root: rootPath,
+      candidates: [{ rank: 1, path: 'same.md', type: 'domain', denseCos: 0.5, retained: true }]
+    }
+  }
+}
+
 const enc = (s: string): number => new TextEncoder().encode(s).length
 
 describe('BrainNavigationCard — dépli + surlignage du passage retenu', () => {
+  it('ne conserve pas le contenu A quand une nouvelle trace B réutilise rang et chemin', async () => {
+    const readNodeFile = vi.fn(async (path: string) => ({
+      path,
+      content: path.startsWith('B/') ? 'CONTENU-B' : 'CONTENU-A'
+    }))
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = { readNodeFile }
+    mountTrace(scopedTrace('A', 'QUESTION-A', 'trace-a'))
+    const detailsA = host!.querySelector('details') as HTMLDetailsElement
+    await act(async () => {
+      detailsA.open = true
+      detailsA.dispatchEvent(new Event('toggle'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(host!.textContent).toContain('CONTENU-A')
+
+    renderTrace(scopedTrace('B', 'QUESTION-B', 'trace-b'))
+    expect(host!.textContent).toContain('QUESTION-B')
+    expect(host!.textContent).not.toContain('CONTENU-A')
+    const detailsB = host!.querySelector('details') as HTMLDetailsElement
+    await act(async () => {
+      detailsB.open = true
+      detailsB.dispatchEvent(new Event('toggle'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(readNodeFile).toHaveBeenLastCalledWith('B/same.md', 'B')
+    expect(host!.textContent).toContain('CONTENU-B')
+    expect(host!.textContent).not.toContain('CONTENU-A')
+  })
+
+  it('ignore une lecture A terminée après le montage de la trace B', async () => {
+    const pendingA = deferred<{ path: string; content: string }>()
+    const readNodeFile = vi.fn((path: string) =>
+      path.startsWith('A/')
+        ? pendingA.promise
+        : Promise.resolve({ path, content: 'CONTENU-B-FRAIS' })
+    )
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = { readNodeFile }
+    mountTrace(scopedTrace('A', 'QUESTION-A', 'trace-a'))
+    const detailsA = host!.querySelector('details') as HTMLDetailsElement
+    await act(async () => {
+      detailsA.open = true
+      detailsA.dispatchEvent(new Event('toggle'))
+      await Promise.resolve()
+    })
+
+    renderTrace(scopedTrace('B', 'QUESTION-B', 'trace-b'))
+    const detailsB = host!.querySelector('details') as HTMLDetailsElement
+    await act(async () => {
+      detailsB.open = true
+      detailsB.dispatchEvent(new Event('toggle'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      pendingA.resolve({ path: 'A/same.md', content: 'CONTENU-A-RETARDE' })
+      await Promise.resolve()
+    })
+    expect(readNodeFile.mock.calls.map(([path]) => path)).toEqual(['A/same.md', 'B/same.md'])
+    expect(host!.textContent).toContain('QUESTION-B')
+    expect(host!.textContent).toContain('CONTENU-B-FRAIS')
+    expect(host!.textContent).not.toContain('CONTENU-A-RETARDE')
+  })
+
   it('surligne EXACTEMENT la tranche octets, correct malgré les accents (byte≠char)', async () => {
     // Contenu accentué : "é" = 2 octets → byteStart/End ≠ index caractère → teste byteToChar.
     const before = 'préambule éàç '
@@ -77,7 +171,10 @@ describe('BrainNavigationCard — dépli + surlignage du passage retenu', () => 
       await Promise.resolve()
     })
 
-    expect(readNodeFile).toHaveBeenCalledWith('//ged2/rig/Projets IA/Amitel Brain/knowledge/a.md')
+    expect(readNodeFile).toHaveBeenCalledWith(
+      '//ged2/rig/Projets IA/Amitel Brain/knowledge/a.md',
+      '//ged2/rig/Projets IA/Amitel Brain'
+    )
     const mark = host!.querySelector('.brain-nav-highlight')
     expect(mark).toBeTruthy()
     // le passage surligné = EXACTEMENT la tranche cible (pas décalé par les accents)

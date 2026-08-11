@@ -65,6 +65,10 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
   const [accountBusy, setAccountBusy] = useState(false)
   /** Dernier échec d'une action de compte (ajout/bascule/retrait) — affiché, jamais avalé. */
   const [accountError, setAccountError] = useState<string | null>(null)
+  /** Dernier échec d'une action LOCALE à un provider (test / mode / reconnexion), par provider.
+   *  Trois `catch` muets rendaient « Tester », « Se reconnecter » et « Mettre en standby »
+   *  apparemment sans effet — et `changeProviderMode` n'en avait aucun, donc rejet non géré. */
+  const [providerError, setProviderError] = useState<Record<string, string>>({})
   const [modelPending, setModelPending] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const [catalogActive, setCatalogActive] = useState(active)
@@ -156,8 +160,21 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
       testable: true
     }
 
+  const raisonDe = (reason: unknown): string =>
+    reason instanceof Error ? reason.message : String(reason)
+  const noterEchec = (provider: string, reason: unknown): void =>
+    setProviderError((prev) => ({ ...prev, [provider]: raisonDe(reason) }))
+  const oublierEchec = (provider: string): void =>
+    setProviderError((prev) => {
+      if (!(provider in prev)) return prev
+      const next = { ...prev }
+      delete next[provider]
+      return next
+    })
+
   const test = async (provider: string): Promise<void> => {
     setTesting((t) => ({ ...t, [provider]: true }))
+    oublierEchec(provider)
     try {
       const res = (await window.api.providerTest(provider)) as { status: AuthStatus }
       setStatuses((prev) =>
@@ -165,8 +182,10 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
           s.provider === provider ? { ...s, status: res.status, testable: s.testable } : s
         )
       )
-    } catch {
-      // le probe borné a échoué → on laisse le statut inchangé (jamais « authentifié » à tort)
+    } catch (reason) {
+      // le probe borné a échoué → statut inchangé (jamais « authentifié » à tort), MAIS dit :
+      // un `catch {}` muet rendait le bouton « Tester » indiscernable d'un bouton mort.
+      noterEchec(provider, reason)
     } finally {
       setTesting((t) => ({ ...t, [provider]: false }))
     }
@@ -177,9 +196,13 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
     mode: 'active' | 'standby'
   ): Promise<void> => {
     setModePending((pending) => ({ ...pending, [provider]: true }))
+    oublierEchec(provider)
     try {
       await window.api.setProviderMode(provider, mode)
       await reloadCatalog()
+    } catch (reason) {
+      // Sans ce `catch`, le rejet remontait NON GÉRÉ (exit 1 de la suite) et le bouton restait muet.
+      noterEchec(provider, reason)
     } finally {
       setModePending((pending) => ({ ...pending, [provider]: false }))
     }
@@ -187,11 +210,14 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
 
   const [launched, setLaunched] = useState<Record<string, boolean>>({})
   const reconnect = async (provider: string): Promise<void> => {
+    oublierEchec(provider)
     try {
       await window.api.providerLogin(provider)
       setLaunched((l) => ({ ...l, [provider]: true }))
-    } catch {
-      // le spawn du terminal a échoué → on n'affiche pas « lancé »
+    } catch (reason) {
+      // le spawn du terminal a échoué → on n'affiche pas « lancé », mais on DIT pourquoi :
+      // sinon l'utilisateur attend une fenêtre de login qui ne viendra jamais.
+      noterEchec(provider, reason)
     }
   }
 
@@ -333,6 +359,15 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                   </button>
                 </span>
               </header>
+              {providerError[provider] && (
+                <p
+                  className="router-account-error"
+                  role="alert"
+                  data-testid={`router-provider-error-${provider}`}
+                >
+                  Action impossible : {providerError[provider]}
+                </p>
+              )}
               {provider === 'claude' && (
                 <div className="router-accounts" data-testid="claude-accounts">
                   <span className="router-accounts-title">Comptes</span>
@@ -435,6 +470,13 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
               Réessayer
             </button>
           </div>
+        )}
+        {/* Sans cet état, `loaded === false` ne rendait RIEN : un écran blanc indiscernable d'un
+            catalogue réellement vide ou d'une vue cassée. */}
+        {!catalogError && !loaded && (
+          <p className="router-empty" role="status" aria-busy="true" data-testid="router-loading">
+            Chargement des providers…
+          </p>
         )}
         {!catalogError && loaded && providers.length === 0 && (
           <p className="router-empty">Aucun provider détecté.</p>

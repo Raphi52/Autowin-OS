@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   GRAPH_PALETTE,
   buildThemeSummaries,
+  brainBusinessError,
   brainScoreChannelLabel,
   completeProgressiveGraph,
   dynamicGraphForKey,
@@ -35,6 +36,20 @@ import {
   type GraphLink,
   type GraphNode
 } from './graph-view-model'
+
+describe('erreurs Brain lisibles', () => {
+  it('masque une enveloppe IPC brute mais conserve un détail métier court', () => {
+    expect(
+      brainBusinessError(
+        'Lecture impossible.',
+        new Error("Error invoking remote method 'os:readNodeFile': Error: ENOENT")
+      )
+    ).toBe('Lecture impossible.')
+    expect(brainBusinessError('Lecture impossible.', new Error('vault indisponible'))).toBe(
+      'Lecture impossible. (vault indisponible)'
+    )
+  })
+})
 
 describe('lentille de santé des connaissances', () => {
   const healthNodes: GraphNode[] = [

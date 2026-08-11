@@ -88,9 +88,11 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
       return genericGuard || specializedGuard ? [] : [channel]
     })
 
-    // La vue Knowledge ajoute trois canaux inbox au socle courant. `unguarded` porte la garantie de
+    // La vue Knowledge ajoute les canaux inbox au socle courant. `unguarded` porte la garantie de
     // sécurité ; le compte force une relecture explicite à chaque nouveau canal exposé.
-    expect(handlers).toHaveLength(126)
+    // +1 : `worktree:resolve-conflict` (résolution humaine d'un conflit depuis le Hub), gardé par
+    // assertTrustedRendererSender + validation stricte de l'agentId et du choix.
+    expect(handlers).toHaveLength(128)
     expect(unguarded).toEqual([])
   })
 
@@ -102,13 +104,14 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     expect(block).not.toMatch(/readBrainTraces\([^)]*undefined/)
   })
 
-  it('invalide les deux workers et le coordinateur apres toute mutation du Brain', () => {
+  it('invalide tous les workers et le coordinateur apres toute mutation du Brain', () => {
     const helperStart = source.indexOf('const invalidateBrainRuntime')
     const helperEnd = source.indexOf('// Conversations persist', helperStart)
     const helper = source.slice(helperStart, helperEnd)
     expect(helper).toMatch(/brainSearchCoordinator\.invalidate\(\)/)
     expect(helper).toMatch(/brainWorker\.invalidate\(\)/)
     expect(helper).toMatch(/brainSearchWorker\.invalidate\(\)/)
+    expect(helper).toMatch(/brainInboxWorker\.invalidate\(\)/)
 
     for (const channel of ['os:promoteInbox', 'os:rejectInbox', 'os:refreshBrain']) {
       const start = source.indexOf(`'${channel}'`)
@@ -117,11 +120,21 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     }
   })
 
+  it('execute la collecte inbox dans un worker dedie et borne', () => {
+    const start = source.indexOf("'os:listInbox'")
+    const next = source.indexOf('ipcMain.handle(', start + 1)
+    const block = source.slice(start, next)
+    expect(block).toMatch(/async\s*\(event/)
+    expect(block).toMatch(/brainInboxWorker\.requestWithTimeout\(/)
+    expect(block).toMatch(/'listInbox'/)
+    expect(block).not.toMatch(/listInboxCandidates\(/)
+  })
+
   it('autorise le vault dans le worker borne avant tout retrieval global', () => {
     const start = source.indexOf("'os:searchBrain'")
     const next = source.indexOf('ipcMain.handle(', start + 1)
     const block = source.slice(start, next)
-    expect(block).toMatch(/authorize:\s*\(root\).*?requestWithTimeout<string>/s)
+    expect(block).toMatch(/authorize:\s*\(root\).*?requestWithTimeout\(/s)
     expect(block).toMatch(/'authorizeVault'/)
     expect(block.indexOf('authorize:')).toBeLessThan(block.indexOf('retrieve:'))
   })

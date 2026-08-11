@@ -14,7 +14,7 @@ import { ArtifactPreview } from './ArtifactPreview'
 import { AssistantActivityGroup } from './ChatView.parts'
 import { ForkIcon, InspectIcon } from './chat-view-icons'
 import { formatFileSize } from './chat-attachments'
-import { groupAssistantActivity, type ChatPart } from './chat-view-model'
+import { groupAssistantActivity, type ChatErrorPart, type ChatPart } from './chat-view-model'
 import type { TerminalStatus } from './chat-resume-refine'
 import type { AttachmentMeta, DirectiveReceipt, Msg } from './chat-view-types'
 import type { InspectTurnTarget } from '../observatory-focus'
@@ -38,6 +38,77 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
       </div>
     </div>
   )
+}
+
+const ERROR_CAUSE_LABEL: Record<ChatErrorPart['cause'], string> = {
+  send: 'Envoi impossible',
+  turn: 'Le tour a échoué'
+}
+
+/**
+ * Rendu DÉDIÉ d'une erreur de tour. Une erreur n'est pas du contenu : elle est annoncée
+ * (`role="alert"`), sa CAUSE est nommée, et elle porte sa propre sortie de secours — l'ancien
+ * `⚠️ …` texte n'offrait aucune des trois.
+ */
+export function ChatErrorBlock({
+  part,
+  retryPrompt,
+  onResend,
+  onRefineResume
+}: {
+  part: ChatErrorPart
+  retryPrompt?: string
+  onResend?: (prompt: string) => void
+  onRefineResume?: (prompt: string, status: TerminalStatus, reason?: string | null) => void
+}): React.JSX.Element {
+  return (
+    <div className="msg-error" role="alert" data-cause={part.cause}>
+      <span className="msg-error-cause">⚠️ {ERROR_CAUSE_LABEL[part.cause]}</span>
+      <span className="msg-error-message">{part.message}</span>
+      {retryPrompt && (onResend || onRefineResume) && (
+        <span className="msg-error-actions">
+          {onResend && (
+            <button
+              type="button"
+              className="msg-error-action"
+              title={`Renvoyer : ${retryPrompt}`}
+              onClick={() => onResend(retryPrompt)}
+            >
+              ↻ Renvoyer
+            </button>
+          )}
+          {onRefineResume && (
+            <button
+              type="button"
+              className="msg-error-action"
+              data-testid="error-refine"
+              title="Pré-remplir le composer avec ce prompt et le motif d’échec, sans envoyer"
+              onClick={() => onRefineResume(retryPrompt, 'failed', part.message)}
+            >
+              ✎ Reprendre en précisant…
+            </button>
+          )}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Motif d'échec RÉEL du tour, pour l'injecter dans la reprise « en précisant ». Deux sources,
+ * dans l'ordre : la part d'erreur structurée (chemin courant) puis l'ancien `⚠️ …` texte, qui
+ * reste présent dans les conversations DÉJÀ persistées.
+ */
+function terminalFailureReason(message: Msg): string | undefined {
+  if (message.role !== 'assistant') return undefined
+  for (const part of message.parts) {
+    if (part.kind === 'error') return part.message
+  }
+  for (const part of message.parts) {
+    if (part.kind === 'text' && part.text.trimStart().startsWith('⚠️'))
+      return part.text.replace('⚠️', '').trim() || undefined
+  }
+  return undefined
 }
 
 type AssistantTimelineItem =
@@ -287,6 +358,14 @@ export const ChatMessageRow = memo(
                         rows={part.rows}
                         onPick={(prompt) => onPickSuggestion?.(prompt)}
                       />
+                    ) : part.kind === 'error' ? (
+                      <ChatErrorBlock
+                        key={index}
+                        part={part}
+                        retryPrompt={retryPrompt?.trim()}
+                        onResend={onResend}
+                        onRefineResume={onRefineResume}
+                      />
                     ) : part.kind === 'artifact' ? (
                       <ArtifactPreview
                         key={part.artifact.id}
@@ -316,27 +395,42 @@ export const ChatMessageRow = memo(
               )
           )}
         </div>
-        {/* Statuts terminaux MUETS : un tour annulé ou interrompu ne poussait aucun texte — la bulle
-            restait vide et l'utilisateur n'avait aucun moyen de repartir. `failed` garde son ⚠️. */}
+        {/* Statuts terminaux MUETS : un tour annulé, interrompu ou EN ÉCHEC ne poussait aucune
+            action — la bulle restait une impasse. `failed` rejoint le bloc : sans lui, un tour
+            raté n'offrait qu'un `⚠️ …` inerte, indistinguable d'un contenu modèle. */}
         {message.done &&
-          (message.status === 'cancelled' || message.status === 'interrupted') &&
+          (message.status === 'cancelled' ||
+            message.status === 'interrupted' ||
+            // Un `failed` porteur d'une part d'ERREUR structurée a déjà sa barre d'actions dans
+            // le bloc d'alerte : la dupliquer ici donnerait deux « ↻ Renvoyer » côte à côte.
+            (message.status === 'failed' &&
+              !message.parts.some((part) => part.kind === 'error'))) &&
           (() => {
-            const annule = message.status === 'cancelled'
+            const status = message.status as TerminalStatus
+            const echoue = status === 'failed'
+            const annule = status === 'cancelled'
             const prompt = retryPrompt?.trim()
-            const relancer = annule ? onResend : onResumeTurn
+            // Un tour en échec se RENVOIE (le tour n'a rien produit à poursuivre) ; un tour
+            // interrompu se REPREND là où il s'est arrêté.
+            const relancer = annule || echoue ? onResend : onResumeTurn
+            const raison = terminalFailureReason(message)
             return (
               <div className="msg-terminal" data-status={message.status}>
                 <span className="msg-terminal-text">
-                  {annule ? 'Réponse annulée' : 'Réponse interrompue avant la fin'}
+                  {echoue
+                    ? 'Réponse en échec'
+                    : annule
+                      ? 'Réponse annulée'
+                      : 'Réponse interrompue avant la fin'}
                 </span>
                 {prompt && relancer && (
                   <button
                     type="button"
                     className="msg-terminal-action"
-                    title={annule ? `Renvoyer : ${prompt}` : `Reprendre : ${prompt}`}
+                    title={annule || echoue ? `Renvoyer : ${prompt}` : `Reprendre : ${prompt}`}
                     onClick={() => relancer(prompt)}
                   >
-                    {annule ? '↻ Renvoyer' : '↻ Reprendre'}
+                    {annule || echoue ? '↻ Renvoyer' : '↻ Reprendre'}
                   </button>
                 )}
                 {/* Rejouer À L'IDENTIQUE un tour qui vient d'échouer refait le même échec. Ce
@@ -348,9 +442,7 @@ export const ChatMessageRow = memo(
                     className="msg-terminal-action msg-terminal-refine"
                     data-testid="resume-refine"
                     title="Pré-remplir le composer avec ce prompt et le motif d’échec, sans envoyer"
-                    onClick={() =>
-                      onRefineResume(prompt, message.status as TerminalStatus, undefined)
-                    }
+                    onClick={() => onRefineResume(prompt, status, raison)}
                   >
                     ✎ Reprendre en précisant…
                   </button>

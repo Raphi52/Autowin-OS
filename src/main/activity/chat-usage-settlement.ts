@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import type { ExecutionUsageSnapshot } from '../execution-supervisor'
 import { sameExecutionUsage } from '../execution-supervisor'
-import { appendConvActivity } from './conv-activity'
+import type { Usage } from '../providers/types'
+import { appendConvActivity, loadConvActivity } from './conv-activity'
 import type { TraceStore } from './trace-store'
 
 interface PersistChatUsageSettlementInput {
@@ -19,8 +20,56 @@ interface PersistChatUsageSettlementInput {
   traceStore: TraceStore
 }
 
+interface PersistRecoveredChatProviderUsageInput {
+  conversationId: string
+  usageCallId: string
+  provider: string
+  model?: string
+  reasoningEffort?: string
+  label: string
+  usage: Usage
+  durationMs?: number
+  activityRoot?: string
+}
+
 function counterDelta(current: number, previous?: number): number {
   return Math.max(0, current - (previous ?? 0))
+}
+
+/**
+ * Acquitte le cout d'un appel provider recupere AVANT de lancer sa continuation. Si l'app retombe
+ * pendant ce nouvel appel, le premier cout reste donc visible. L'identifiant du journal provider
+ * rend l'ecriture idempotente au prochain redemarrage.
+ */
+export function persistRecoveredChatProviderUsage(
+  input: PersistRecoveredChatProviderUsageInput
+): boolean {
+  if (
+    loadConvActivity(input.conversationId, input.activityRoot).some(
+      (entry) => entry.usageCallId === input.usageCallId
+    )
+  )
+    return false
+
+  appendConvActivity(
+    input.conversationId,
+    {
+      kind: 'chat-recovered',
+      label: `${input.label} — appel recupere apres redemarrage`,
+      provider: input.provider,
+      model: input.model,
+      reasoningEffort: input.reasoningEffort,
+      inputTokens: input.usage.inputTokens,
+      outputTokens: input.usage.outputTokens,
+      cacheReadTokens: input.usage.cacheReadTokens,
+      costUsd: input.usage.costUsd,
+      usageCallId: input.usageCallId,
+      durationMs: input.durationMs,
+      text: 'Resultat provider certifie et reinjecte sans repeter cet appel.'
+    },
+    input.activityRoot
+  )
+  return true
 }
 
 /**

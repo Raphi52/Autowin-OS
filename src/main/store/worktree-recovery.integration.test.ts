@@ -519,6 +519,52 @@ describe('récupération des worktrees après redémarrage', () => {
     expect(current.manager.listAgentIds()).toEqual([])
   })
 
+  it("conserve les fichiers agent dans le manifeste après un blocage transitoire de l'index", () => {
+    const repo = tempRepo()
+    const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-recovery-root-'))
+    roots.push(worktreeRoot)
+    let injected = false
+    const tryGitFn = (dir: string, args: string[]) => {
+      if (!injected && dir === repo && args.includes('merge') && args.includes('--ff-only')) {
+        injected = true
+        writeFileSync(join(repo, 'a.txt'), 'travail utilisateur indexé\n')
+        git(repo, 'add', 'a.txt')
+      }
+      const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+      return {
+        code: result.status ?? 1,
+        stdout: result.stdout ?? '',
+        stderr: result.stderr ?? ''
+      }
+    }
+    const store = stateStore(worktreeRoot)
+    const coordinator = new RunWorktreeCoordinator({
+      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot, tryGitFn }),
+      stateStore: store
+    })
+    const runId = 'index-change-then-retry'
+    const worktreePath = coordinator.begin(runId, 'Builder', true)!
+    writeFileSync(join(worktreePath, 'b.txt'), 'travail agent\n')
+
+    expect(coordinator.end(runId)).toMatchObject({
+      outcome: 'blocked',
+      reason: 'base-in-progress'
+    })
+    expect(store.get(runId)).toMatchObject({
+      publication: 'pending',
+      files: [{ path: 'b.txt', kind: 'mod' }]
+    })
+
+    coordinator.retryRecovery()
+
+    expect(readFileSync(join(repo, 'b.txt'), 'utf8')).toContain('travail agent')
+    expect(git(repo, 'status', '--porcelain')).toBe('M  a.txt')
+    expect(store.get(runId)).toMatchObject({
+      publication: 'complete',
+      files: [{ path: 'b.txt', kind: 'mod' }]
+    })
+  })
+
   it('publie une seule fois apres un retry manuel epuise avant publication', () => {
     const repo = tempRepo()
     const current = manager(repo)

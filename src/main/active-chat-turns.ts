@@ -6,6 +6,9 @@ interface ActiveChatTurn {
 export class ActiveChatTurns {
   private readonly turns = new Map<string, Map<AbortController, ActiveChatTurn>>()
   private readonly deleting = new Set<string>()
+  private readonly idleWaiters = new Set<() => void>()
+  private readonly interactiveWaiters = new Set<() => void>()
+  private idleLeaseHeld = false
   /**
    * Conversations dont le dernier arrêt a été DÉLIBÉRÉ (clic Stop, suppression de conversation).
    *
@@ -22,6 +25,78 @@ export class ActiveChatTurns {
 
   get(conversationId: string): ActiveChatTurn | undefined {
     return [...(this.turns.get(conversationId)?.values() ?? [])].at(-1)
+  }
+
+  /**
+   * Attend l'inactivite sans jamais interrompre un tour existant. Le delai appartient a l'appelant :
+   * un reveil de fond doit pouvoir renoncer plutot que prendre la main sur le travail interactif.
+   *
+   * fix-ok: le Watchdog avait seulement une primitive destructive `abortAndWait`; cette attente
+   * non destructive est la frontiere minimale qui permet au dispatch de rester fail-closed.
+   */
+  waitForIdle(timeoutMs: number): Promise<boolean> {
+    if (this.turns.size === 0 && !this.idleLeaseHeld) {
+      this.idleLeaseHeld = true
+      return Promise.resolve(true)
+    }
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.resolve(false)
+
+    return new Promise<boolean>((resolve) => {
+      let settled = false
+      const finish = (idle: boolean): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        this.idleWaiters.delete(onIdle)
+        resolve(idle)
+      }
+      const onIdle = (): void => {
+        if (this.turns.size > 0 || this.idleLeaseHeld) return
+        this.idleLeaseHeld = true
+        finish(true)
+      }
+      const timer = setTimeout(() => finish(false), Math.min(Math.floor(timeoutMs), 2_147_000_000))
+      timer.unref?.()
+      this.idleWaiters.add(onIdle)
+      // Ferme la course entre le premier test et l'inscription du waiter.
+      this.grantNextIdleLease()
+    })
+  }
+
+  /**
+   * Barriere symetrique pour un tour humain. Une fois l'inactivite accordee au Watchdog, aucun
+   * nouveau tour interactif ne peut se glisser entre le controle et le spawn du provider.
+   */
+  waitForInteractiveAccess(): Promise<void> {
+    if (!this.idleLeaseHeld) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      const admit = (): void => {
+        this.interactiveWaiters.delete(admit)
+        resolve()
+      }
+      this.interactiveWaiters.add(admit)
+      if (!this.idleLeaseHeld) admit()
+    })
+  }
+
+  /** Rend le lease acquis par `waitForIdle`, y compris sur erreur ou annulation du reveil. */
+  releaseIdleLease(): void {
+    if (!this.idleLeaseHeld) return
+    this.idleLeaseHeld = false
+    if (this.interactiveWaiters.size > 0) {
+      for (const admit of [...this.interactiveWaiters]) admit()
+      // Les reactions des promesses interactives enregistrent leur tour avant qu'un autre reveil
+      // puisse reprendre le lease. Sans ce tour de microtask, le fond gagnerait encore la course.
+      queueMicrotask(() => this.grantNextIdleLease())
+      return
+    }
+    this.grantNextIdleLease()
+  }
+
+  private grantNextIdleLease(): void {
+    if (this.turns.size > 0 || this.idleLeaseHeld) return
+    const next = this.idleWaiters.values().next().value as (() => void) | undefined
+    next?.()
   }
 
   set(conversationId: string, controller: AbortController, completion: Promise<void>): void {
@@ -55,6 +130,7 @@ export class ActiveChatTurns {
     if (!conversationTurns) return
     conversationTurns.delete(controller)
     if (conversationTurns.size === 0) this.turns.delete(conversationId)
+    if (this.turns.size === 0) this.grantNextIdleLease()
   }
 
   abort(conversationId: string, reason: string): boolean {

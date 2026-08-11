@@ -3,6 +3,76 @@ import { ActiveChatTurns } from './active-chat-turns'
 import { AppCommandBus } from './commands'
 
 describe('ActiveChatTurns', () => {
+  // fix-ok: le contrat d'inactivite est le signal executable du correctif anti-intrusion Watchdog.
+  it('attend que tous les tours soient termines avant de signaler l inactivite', async () => {
+    const turns = new ActiveChatTurns()
+    const controller = new AbortController()
+    turns.set('conv-active', controller, Promise.resolve())
+
+    const idle = turns.waitForIdle(1_000)
+    let settled = false
+    void idle.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    turns.delete('conv-active', controller)
+    await expect(idle).resolves.toBe(true)
+  })
+
+  it('cesse d attendre au terme du delai borne', async () => {
+    vi.useFakeTimers()
+    try {
+      const turns = new ActiveChatTurns()
+      turns.set('conv-active', new AbortController(), Promise.resolve())
+
+      const idle = turns.waitForIdle(250)
+      await vi.advanceTimersByTimeAsync(250)
+
+      await expect(idle).resolves.toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('confirme immediatement une application deja inactive', async () => {
+    await expect(new ActiveChatTurns().waitForIdle(250)).resolves.toBe(true)
+  })
+
+  it('reserve atomiquement l inactivite pour qu un tour interactif ne puisse pas doubler le watchdog', async () => {
+    const turns = new ActiveChatTurns()
+
+    await expect(turns.waitForIdle(250)).resolves.toBe(true)
+    const interactive = turns.waitForInteractiveAccess()
+    let admitted = false
+    void interactive.then(() => {
+      admitted = true
+    })
+    await Promise.resolve()
+    expect(admitted).toBe(false)
+
+    turns.releaseIdleLease()
+    await expect(interactive).resolves.toBeUndefined()
+  })
+
+  it('ne donne le lease de fond qu a un seul reveil a la fois', async () => {
+    const turns = new ActiveChatTurns()
+
+    await expect(turns.waitForIdle(250)).resolves.toBe(true)
+    const second = turns.waitForIdle(250)
+    let admitted = false
+    void second.then(() => {
+      admitted = true
+    })
+    await Promise.resolve()
+    expect(admitted).toBe(false)
+
+    turns.releaseIdleLease()
+    await expect(second).resolves.toBe(true)
+    turns.releaseIdleLease()
+  })
+
   it('aborts and waits for the active turn before allowing conversation deletion', async () => {
     const turns = new ActiveChatTurns()
     const controller = new AbortController()

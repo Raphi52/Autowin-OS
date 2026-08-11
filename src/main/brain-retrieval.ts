@@ -7,7 +7,7 @@
  * Toute dégradation reste non bloquante et typée : empty, invalid ou unavailable.
  */
 import { existsSync, readFileSync } from 'node:fs'
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import {
   readSignedBrainPayload,
@@ -192,8 +192,8 @@ export async function retrieveBrainContext(
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000)
   try {
     const origin = `http://127.0.0.1:${opts.port ?? 8765}`
-    let nonce = ''
-    const challengeResponse = await doFetch(`${origin}/challenge`, {
+    const nonce = randomBytes(12).toString('hex')
+    const challengeResponse = await doFetch(`${origin}/challenge?nonce=${nonce}`, {
       method: 'GET',
       signal: controller.signal
     })
@@ -204,18 +204,20 @@ export async function retrieveBrainContext(
         token
       )
       const challengeNonce = /^challenge:([0-9a-f]{24})$/.exec(challenge.context)?.[1]
-      if (!challengeNonce) {
+      if (challengeNonce !== nonce) {
         return { context: '', status: 'invalid' }
       }
-      nonce = challengeNonce
     } catch {
       return { context: '', status: 'invalid' }
     }
 
     const requestPayload = {
-      query: query.slice(0, 8000),
+      // Même sémantique que Python : trim puis borne en points de code, sans couper un surrogate.
+      query: Array.from(query.trim()).slice(0, 8000).join(''),
       harness: 'autowin-os',
-      trace_id: opts.traceId?.() ?? randomUUID(),
+      trace_id: Array.from(opts.traceId?.() ?? randomUUID())
+        .slice(0, 128)
+        .join(''),
       ...(corpus.length > 0 ? { corpus } : {})
     }
     const res = await doFetch(`${origin}/query-secure`, {
@@ -232,7 +234,15 @@ export async function retrieveBrainContext(
     } catch {
       return { context: '', status: 'invalid' }
     }
-    const context = verified.context
+    // Le contexte livré est la seule vérité du statut : des espaces signés ne constituent pas du savoir.
+    const context = verified.context.trim()
+    if (
+      !verified.request ||
+      verified.request.query !== requestPayload.query ||
+      verified.request.traceId !== requestPayload.trace_id
+    ) {
+      return { context: '', status: 'invalid' }
+    }
     if (
       corpus.length > 0 &&
       (verified.corpus?.length !== corpus.length ||
@@ -240,9 +250,16 @@ export async function retrieveBrainContext(
     ) {
       return { context: '', status: 'invalid' }
     }
+    const navigation = parseNavigation(verified.navigation)
+    if (navigation && navigation.query !== requestPayload.query) {
+      return { context: '', status: 'invalid' }
+    }
+    if (!context && navigation?.candidates.some((candidate) => candidate.retained)) {
+      return { context: '', status: 'invalid' }
+    }
     const result: BrainRetrievalResult = {
       context,
-      navigation: parseNavigation(verified.navigation),
+      navigation,
       ...(verified.corpus ? { corpus: verified.corpus } : {}),
       ...(verified.structuredContext ? { structuredContext: verified.structuredContext } : {}),
       status: context ? 'found' : 'empty'

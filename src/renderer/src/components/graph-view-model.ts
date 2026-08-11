@@ -69,6 +69,14 @@ export type ThemeClusterAnchor = ThemeDefinition & {
   count: number
 }
 export type LinkedNode = { node: GraphNode; direction: 'incoming' | 'outgoing'; relation?: string }
+
+/** Masque les enveloppes IPC/stacks et conserve seulement un détail court exploitable. */
+export function brainBusinessError(headline: string, error: unknown): string {
+  const raw = (error instanceof Error ? error.message : String(error)).replace(/^Error:\s*/, '')
+  const opaque =
+    raw === '' || raw.length > 120 || /invoking remote method|\n|\bat\s+\S+:\d+|Error:/i.test(raw)
+  return opaque ? headline : `${headline} (${raw})`
+}
 export type GalaxyNodeAppearance = { color: string; opacity: number }
 
 export const GRAPH_PALETTE = [

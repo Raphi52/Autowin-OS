@@ -1,10 +1,11 @@
-import type {
-  Message,
-  PromptEnvelope,
-  ProviderAdapter,
-  SendOptions,
-  SendResult,
-  StreamChunk
+import {
+  ProviderCallError,
+  type Message,
+  type PromptEnvelope,
+  type ProviderAdapter,
+  type SendOptions,
+  type SendResult,
+  type StreamChunk
 } from './types'
 import { withHardDeadline } from './watchdog'
 import type { ExecutionSupervisor } from '../execution-supervisor'
@@ -401,7 +402,9 @@ export class ProviderRegistry {
           // La coupure de la pompe de coordination ne prouve pas que le provider/CLI est mort. Sa
           // réservation reste active jusqu'à ce que le `next()` réel ou `return()` du générateur
           // termine ; le checkpoint continue ainsi de verrouiller toute reprise concurrente.
-          if (error !== unprovenTerminationError) settleReservation(true)
+          if (error !== unprovenTerminationError) {
+            settleReservation(true, error instanceof ProviderCallError ? error.usage : undefined)
+          }
           // Toute défaillance passe ici : c'est le point unique où armer le disjoncteur. On l'arme sur
           // la PREUVE (le refus du provider), pas sur une supposition — `quotaWallReason` écarte
           // explicitement le rate-limit passager.

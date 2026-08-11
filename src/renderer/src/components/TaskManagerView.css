@@ -709,6 +709,14 @@
 .watchdog-stats .watchdog-pending strong {
   color: #f0c274;
 }
+.watchdog-stats .watchdog-failed strong,
+.watchdog-status.status-failed {
+  color: #ff8094;
+}
+.watchdog-stats .watchdog-cancelled strong,
+.watchdog-status.status-cancelled {
+  color: #f0c274;
+}
 .watchdog-empty {
   margin: 12px 0 0;
   color: #9fb3c8;
@@ -784,6 +792,11 @@
 }
 .watchdog-rule-history time {
   color: #8fa3b6;
+}
+.watchdog-status {
+  color: #c7d3df;
+  font-size: 10px;
+  font-weight: 600;
 }
 .watchdog-outcome {
   padding: 1px 7px;
@@ -864,4 +877,41 @@
   padding: 0 4px;
   color: #9fb3c8;
   font-size: 11px;
+}
+
+.task-manager-occurrence-actions {
+  grid-column: 2;
+  justify-self: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  background: none;
+  border-radius: 0;
+  padding: 0;
+  text-transform: none;
+}
+
+.task-manager-alert-task {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 1px 7px;
+  border: 1px solid var(--container-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.task-manager-alert-task:hover {
+  color: var(--text);
+}
+
+.task-manager-running {
+  color: var(--gold);
+  font-style: normal;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }

@@ -7,9 +7,6 @@ import './DomainShell.css'
 
 type PreflightResult = Awaited<ReturnType<typeof window.api.recheckPreflight>>
 
-/** Providers attendus par l'app — l'état réel vient de l'IPC existant `providerStatus`. */
-const KNOWN_PROVIDERS = ['claude', 'codex', 'kimi', 'gemini'] as const
-
 interface ProviderRow {
   provider: string
   status: string
@@ -19,19 +16,25 @@ interface ProviderRow {
 export function SettingsView({
   active,
   section,
-  onSectionChange
+  onSectionChange,
+  onOpenRouter
 }: {
   active: boolean
   section: SettingsSection
   onSectionChange: (section: SettingsSection) => void
+  /** Navigation RÉELLE vers la page Routeur (Agent Studio · routing) — pas un simple texte. */
+  onOpenRouter?: () => void
 }): React.JSX.Element {
   const [preflight, setPreflight] = useState<PreflightResult>()
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [repairing, setRepairing] = useState<string | null>(null)
+  const [repairDone, setRepairDone] = useState<string | null>(null)
 
   const [providers, setProviders] = useState<ProviderRow[] | null>(null)
   const [providersError, setProvidersError] = useState<string | null>(null)
+  /** Incrémenté par « Réessayer » : relance la lecture sans changer de section. */
+  const [providersReload, setProvidersReload] = useState(0)
   const providersLoading = providers === null && providersError === null
 
   /**
@@ -78,6 +81,11 @@ export function SettingsView({
   useEffect(() => {
     if (section !== 'providers') return
     let alive = true
+    queueMicrotask(() => {
+      if (!alive) return
+      setProviders(null)
+      setProvidersError(null)
+    })
     void (async () => {
       const load = window.api?.providerStatus
       if (typeof load !== 'function') {
@@ -97,15 +105,17 @@ export function SettingsView({
     return () => {
       alive = false
     }
-  }, [section])
+  }, [section, providersReload])
 
   const repair = useCallback(
     async (checkId: string) => {
       setRepairing(checkId)
       setError(null)
+      setRepairDone(null)
       let repairFailed = false
       try {
         await window.api?.repairPreflight?.(checkId)
+        setRepairDone(checkId)
       } catch {
         repairFailed = true
         setError('La réparation a échoué. Suivez la consigne affichée puis réessayez.')
@@ -118,6 +128,19 @@ export function SettingsView({
     },
     [recheck]
   )
+
+  // Une erreur/succès posé dans une section ne doit pas survivre ORPHELIN dans une autre.
+  useEffect(() => {
+    let alive = true
+    queueMicrotask(() => {
+      if (!alive) return
+      setError(null)
+      setRepairDone(null)
+    })
+    return () => {
+      alive = false
+    }
+  }, [section])
 
   const preflightAlert = preflight ? !preflight.ok || preflight.checks.some((c) => !c.ok) : false
 
@@ -188,39 +211,40 @@ export function SettingsView({
               </div>
             </header>
             {providersError && (
-              <p className="domain-warning" role="alert">
-                {providersError}
-              </p>
+              <div className="domain-warning">
+                <p role="alert">{providersError}</p>
+                <button type="button" onClick={() => setProvidersReload((token) => token + 1)}>
+                  Réessayer
+                </button>
+              </div>
             )}
             {providersLoading && <p role="status">Chargement des providers…</p>}
-            {!providersLoading && !providersError && (
-              <ul className="settings-providers-list">
-                {KNOWN_PROVIDERS.map((name) => {
-                  const row = providers?.find((entry) => entry.provider === name)
-                  return (
-                    <li key={name} data-testid={`settings-provider-${name}`}>
-                      <strong>{name}</strong>
-                      <span>{row ? row.status : 'non configuré'}</span>
-                      {row?.detail && <span>{row.detail}</span>}
-                    </li>
-                  )
-                })}
-                {providers
-                  ?.filter(
-                    (entry) => !(KNOWN_PROVIDERS as readonly string[]).includes(entry.provider)
-                  )
-                  .map((entry) => (
+            {!providersLoading &&
+              !providersError &&
+              (providers && providers.length > 0 ? (
+                <ul className="settings-providers-list">
+                  {providers.map((entry) => (
                     <li key={entry.provider} data-testid={`settings-provider-${entry.provider}`}>
                       <strong>{entry.provider}</strong>
                       <span>{entry.status}</span>
                       {entry.detail && <span>{entry.detail}</span>}
                     </li>
                   ))}
-              </ul>
-            )}
+                </ul>
+              ) : (
+                <p>Aucun provider n&apos;est exposé par l&apos;application.</p>
+              ))}
             <p className="domain-hint">
-              Lecture seule : la configuration (connexion, test, mode) se pilote depuis la page
-              Routeur.
+              Lecture seule : la configuration (connexion, test, mode) se pilote depuis la page{' '}
+              <button
+                type="button"
+                className="domain-link"
+                data-testid="settings-open-router"
+                onClick={() => onOpenRouter?.()}
+              >
+                Routeur
+              </button>
+              .
             </p>
           </section>
         )}
@@ -241,6 +265,11 @@ export function SettingsView({
             {error && (
               <p className="domain-warning" role="alert">
                 {error}
+              </p>
+            )}
+            {repairDone && (
+              <p className="domain-ok" role="status" data-testid="settings-repair-status">
+                Réparation effectuée pour « {repairDone} » : le diagnostic a été relancé.
               </p>
             )}
             {!preflight ? (

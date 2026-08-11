@@ -47,6 +47,12 @@ export function useObservatorySources<TNativeTrace>({
   conversationActivity: ConversationActivity[]
   nativeTraces: TNativeTrace[]
   semanticTimeline: SemanticTemporalProjectionV1 | null
+  /**
+   * Chargement PAR SOURCE, et non un drapeau global : le rail affiche trois listes independantes.
+   * Sans ce detail, une section encore en vol est indistinguable d'une section vraiment vide.
+   */
+  loadingActivitySessions: boolean
+  loadingConversationActivity: boolean
 } {
   const [activitySessions, setActivitySessions] = useState<ActivitySessionMeta[]>([])
   const [conversationActivity, setConversationActivity] = useState<ConversationActivity[]>([])
@@ -54,10 +60,14 @@ export function useObservatorySources<TNativeTrace>({
   const [semanticTimeline, setSemanticTimeline] = useState<SemanticTemporalProjectionV1 | null>(
     null
   )
+  const [loadingActivitySessions, setLoadingActivitySessions] = useState(false)
+  const [loadingConversationActivity, setLoadingConversationActivity] = useState(false)
 
   useEffect(() => {
     if (!active) return
     let disposed = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingActivitySessions(true)
     void (window.api.activitySessions?.() ?? Promise.resolve([]))
       .then((sessions) => {
         if (!disposed) {
@@ -70,6 +80,9 @@ export function useObservatorySources<TNativeTrace>({
           setActivitySessions([])
           onSourceError('activitySessions', error instanceof Error ? error.message : String(error))
         }
+      })
+      .finally(() => {
+        if (!disposed) setLoadingActivitySessions(false)
       })
     return () => {
       disposed = true
@@ -86,12 +99,15 @@ export function useObservatorySources<TNativeTrace>({
       queueMicrotask(() => {
         if (disposed) return
         setConversationActivity([])
+        setLoadingConversationActivity(false)
         onSourceError('conversationActivity')
       })
       return () => {
         disposed = true
       }
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingConversationActivity(true)
     void (window.api.conversationActivity?.(conversationId) ?? Promise.resolve([]))
       .then((entries) => {
         if (!disposed) {
@@ -107,6 +123,9 @@ export function useObservatorySources<TNativeTrace>({
             error instanceof Error ? error.message : String(error)
           )
         }
+      })
+      .finally(() => {
+        if (!disposed) setLoadingConversationActivity(false)
       })
     return () => {
       disposed = true
@@ -170,5 +189,12 @@ export function useObservatorySources<TNativeTrace>({
     }
   }, [active, refreshKey, onSourceError])
 
-  return { activitySessions, conversationActivity, nativeTraces, semanticTimeline }
+  return {
+    activitySessions,
+    conversationActivity,
+    nativeTraces,
+    semanticTimeline,
+    loadingActivitySessions,
+    loadingConversationActivity
+  }
 }

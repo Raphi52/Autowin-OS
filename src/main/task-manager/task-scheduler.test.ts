@@ -264,6 +264,45 @@ describe('Task Manager — ordonnanceur durable', () => {
     expect(h.dispatched).toEqual([occurrenceId])
   })
 
+  it('identifie explicitement un lancement manuel dans son occurrence', async () => {
+    const now = Date.parse('2026-08-03T08:00:00.000Z')
+    const h = harness(now)
+    const task = h.store.create(input('active-only'))
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.runNow(task.id)
+
+    expect(h.store.getOccurrence(`${task.id}@manual-${now}`)).toMatchObject({
+      status: 'completed',
+      trigger: 'manual'
+    })
+  })
+
+  it('rattache un reglement provider tardif a l occurrence deja terminee', async () => {
+    const now = Date.parse('2026-08-03T08:00:00.000Z')
+    const h = harness(now)
+    const task = h.store.create(input('active-only'))
+    let settleLate:
+      | ((usage: { knownCostUsd?: number; totalTokens?: number; unpricedCalls?: number }) => void)
+      | undefined
+    const dispatch: TaskDispatcher = {
+      run: async (_task, _occurrence, _claims, onLateUsageSettlement) => {
+        settleLate = onLateUsageSettlement
+        return { status: 'completed', knownCostUsd: 0.01, totalTokens: 100 }
+      }
+    }
+    const scheduler = new TaskScheduler(h.store, dispatch, h.relay, h.clock)
+
+    await scheduler.runNow(task.id)
+    settleLate?.({ knownCostUsd: 0.03, totalTokens: 300 })
+
+    expect(h.store.getOccurrence(`${task.id}@manual-${now}`)).toMatchObject({
+      status: 'completed',
+      knownCostUsd: 0.03,
+      totalTokens: 300
+    })
+  })
+
   it('conserve le canal de causalite tardive sur le chemin watchdog uniquement', async () => {
     const now = Date.parse('2026-08-03T08:00:00.000Z')
     const h = harness(now)

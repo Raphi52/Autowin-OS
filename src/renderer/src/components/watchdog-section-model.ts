@@ -23,6 +23,9 @@ export type WatchdogSource =
 export interface WatchdogGuards {
   dedupWindowMs: number
   maxTriggersPerHour: number
+  maxTriggersPerDay?: number
+  maxKnownCostUsdPerDay?: number
+  maxUnpricedCallsPerDay?: number
   maxChainDepth: number
   /** Largeur maximale d'une cascade issue d'une même cause racine. */
   maxPerRoot: number
@@ -95,6 +98,15 @@ export function describeWatchdogSource(source: WatchdogSource): string {
 export function describeWatchdogGuards(guards: WatchdogGuards): string {
   const parts = [
     `${guards.maxTriggersPerHour} réveils/h max`,
+    ...(guards.maxTriggersPerDay === undefined
+      ? []
+      : [`${guards.maxTriggersPerDay} réveils/24 h max`]),
+    ...(guards.maxKnownCostUsdPerDay === undefined
+      ? []
+      : [`coupe-circuit à ${guards.maxKnownCostUsdPerDay.toFixed(2)} $ connus/24 h`]),
+    ...(guards.maxUnpricedCallsPerDay === undefined
+      ? []
+      : [`${guards.maxUnpricedCallsPerDay} appel(s) non chiffré(s)/24 h max`]),
     guards.dedupWindowMs > 0
       ? `même signal ignoré pendant ${Math.round(guards.dedupWindowMs / 1000)} s`
       : 'aucune fenêtre d’apaisement',
@@ -127,6 +139,20 @@ export function outcomeTone(
   return 'act'
 }
 
+const OCCURRENCE_STATUS_LABEL: Record<string, string> = {
+  claimed: 'En attente',
+  running: 'En cours',
+  completed: 'Terminé',
+  failed: 'Échec',
+  cancelled: 'Annulé',
+  missed: 'Manqué'
+}
+
+/** Le statut d'exécution reste distinct du tri rendu par l'agent. */
+export function describeOccurrenceStatus(status: string): string {
+  return OCCURRENCE_STATUS_LABEL[status] ?? 'Statut inconnu'
+}
+
 /** Historique des réveils d'une règle, du plus récent au plus ancien. */
 export function watchdogHistory<T extends WatchdogOccurrenceLike>(
   occurrences: T[],
@@ -138,23 +164,30 @@ export function watchdogHistory<T extends WatchdogOccurrenceLike>(
 }
 
 /**
- * Ce que la section annonce en tête. `pendingTriage` compte les réveils TERMINÉS dont on ignore la
- * conclusion : c'est le chiffre qui doit inquiéter, parce qu'un agent a travaillé et que personne ne
- * sait sur quoi il a conclu.
+ * Ce que la section annonce en tête. Toute occurrence sans `outcome` reste sans issue, y compris un
+ * échec ou une annulation : le statut explique comment l'exécution s'est arrêtée, pas ce que l'agent
+ * a conclu.
  */
 export function watchdogSummary(
   tasks: WatchdogTaskLike[],
   occurrences: WatchdogOccurrenceLike[]
-): { rules: number; active: number; triggers: number; pendingTriage: number } {
+): {
+  rules: number
+  active: number
+  triggers: number
+  pendingTriage: number
+  failures: number
+  cancellations: number
+} {
   const { watchdog } = splitByTrigger(tasks)
   const fired = occurrences.filter((occurrence) => occurrence.trigger === 'watchdog')
   return {
     rules: watchdog.length,
     active: watchdog.filter((task) => task.enabled).length,
     triggers: fired.length,
-    pendingTriage: fired.filter(
-      (occurrence) => occurrence.status === 'completed' && !occurrence.outcome
-    ).length
+    pendingTriage: fired.filter((occurrence) => !occurrence.outcome).length,
+    failures: fired.filter((occurrence) => occurrence.status === 'failed').length,
+    cancellations: fired.filter((occurrence) => occurrence.status === 'cancelled').length
   }
 }
 
@@ -162,6 +195,7 @@ export function watchdogSummary(
 export const DEFAULT_DRAFT_GUARDS: WatchdogGuards = {
   dedupWindowMs: 60_000,
   maxTriggersPerHour: 12,
+  maxTriggersPerDay: 48,
   maxChainDepth: 0,
   maxPerRoot: 20
 }
@@ -206,6 +240,18 @@ export function watchdogDraftProblem(watchdog: WatchdogRule | undefined): string
     if (regexProblem) return `Expression de surveillance refusée : ${regexProblem}`
   }
   if (watchdog.guards.maxTriggersPerHour < 1) return 'Le plafond horaire doit valoir au moins 1.'
+  if (watchdog.guards.maxTriggersPerDay !== undefined && watchdog.guards.maxTriggersPerDay < 1)
+    return 'Le plafond quotidien doit valoir au moins 1.'
+  if (
+    watchdog.guards.maxKnownCostUsdPerDay !== undefined &&
+    watchdog.guards.maxKnownCostUsdPerDay <= 0
+  )
+    return 'Le budget quotidien doit être positif.'
+  if (
+    watchdog.guards.maxUnpricedCallsPerDay !== undefined &&
+    watchdog.guards.maxUnpricedCallsPerDay < 1
+  )
+    return 'Le plafond d’appels non chiffrés doit valoir au moins 1.'
   if (watchdog.guards.maxPerRoot < 1)
     return 'La largeur maximale d’une cascade doit valoir au moins 1.'
   return undefined

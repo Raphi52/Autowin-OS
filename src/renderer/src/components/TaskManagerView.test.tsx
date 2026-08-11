@@ -800,6 +800,8 @@ describe('TaskManagerView', () => {
         knownCostUsd: 0.42,
         totalTokens: 12_345,
         unpricedCalls: 1,
+        requestedModel: 'haiku',
+        resolvedModel: 'claude-haiku-4-5-20251001',
         missedCount: 3,
         watchdog: { context: 'ERROR relay down', depth: 1, source: 'file-match' }
       }
@@ -815,6 +817,8 @@ describe('TaskManagerView', () => {
     expect(meta?.textContent).toContain('0,42 $')
     expect(meta?.textContent).toContain('12 345 tokens')
     expect(meta?.textContent).toContain('1 appel non chiffré')
+    expect(meta?.textContent).toContain('Modèle demandé : haiku')
+    expect(meta?.textContent).toContain('Modèle exécuté : claude-haiku-4-5-20251001')
     expect(meta?.textContent).toContain('3 échéances agrégées')
     expect(meta?.textContent).toContain('ERROR relay down')
   })

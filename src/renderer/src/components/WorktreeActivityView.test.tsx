@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeActivityView } from './WorktreeActivityView'
 import {
+  conflictDiffMessage,
   requiresAttention,
   type WorktreeAgentActivity,
   type WorktreeRuntimeStatus
@@ -391,5 +392,169 @@ describe('WorktreeActivityView — A2 Hub', () => {
 
     expect(container.textContent).toContain('Après 3 essais')
     expect(container.textContent).not.toContain('Après 6 essais')
+  })
+})
+
+describe('WorktreeActivityView — chantiers Hub', () => {
+  /** Rendu libre : les nouveaux chantiers ont besoin de props que le helper historique ne passe pas. */
+  function renderProps(props: Parameters<typeof WorktreeActivityView>[0]): void {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => root.render(createElement(WorktreeActivityView, props)))
+  }
+
+  it('P0-2 : un statut non résolu se dit « en vérification », jamais indisponible', () => {
+    renderProps({ agents: [], status: null })
+
+    const main = container.querySelector('[data-testid="wt-main-office"]')!
+    expect(main.className).not.toContain('is-unavailable')
+    expect(main.textContent).toContain('Vérification de la protection')
+    expect(container.textContent).not.toContain('mutations sont bloquées')
+  })
+
+  it('P1-5 : une action en cours verrouille le bouton et dit ce qu’elle fait', async () => {
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    renderProps({
+      agents: [
+        {
+          ...offices[0],
+          state: 'ready',
+          verdict: 'green',
+          publication: 'cleanup-pending',
+          attentionReason: 'retry-exhausted',
+          retryCount: 6
+        }
+      ],
+      onRetryOffice: () => pending
+    })
+
+    const retry = (): HTMLButtonElement =>
+      container.querySelector<HTMLButtonElement>('[data-testid="wt-retry-office"]')!
+    act(() => retry().click())
+    expect(retry().disabled).toBe(true)
+    expect(retry().textContent).toContain('Nouvel essai en cours')
+    await act(async () => {
+      release()
+      await Promise.resolve()
+    })
+    expect(retry().disabled).toBe(false)
+  })
+
+  it('P1-5 : un échec d’action est affiché au lieu d’être avalé', async () => {
+    renderProps({
+      agents: [
+        {
+          ...offices[0],
+          state: 'ready',
+          verdict: 'green',
+          publication: 'cleanup-pending',
+          attentionReason: 'retry-exhausted',
+          retryCount: 6
+        }
+      ],
+      onRetryOffice: () => Promise.reject(new Error('Bureau introuvable sur le disque.'))
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="wt-retry-office"]')!.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const alert = container.querySelector('[data-testid="wt-office-error"]')
+    expect(alert?.getAttribute('role')).toBe('alert')
+    expect(alert?.textContent).toContain('Bureau introuvable sur le disque.')
+  })
+
+  it('P1-8 : les bureaux en conflit passent devant les bureaux rangés', () => {
+    renderProps({
+      agents: [
+        { ...offices[0], agentId: 'm1', agentName: 'Merged', state: 'merged', endedAtMs: 9 },
+        { ...offices[1], agentId: 'c1', agentName: 'Conflit' }
+      ],
+      status: { available: true, workspacePath: 'C:\repo' }
+    })
+
+    const names = [...container.querySelectorAll('[data-testid="wt-agent-office"]')].map(
+      (office) => office.querySelector('.wt-office-person strong')!.textContent
+    )
+    expect(names).toEqual(['Conflit', 'Merged'])
+  })
+
+  it('P1-8 : le tableau de props n’est jamais muté', () => {
+    const agents: WorktreeAgentActivity[] = [
+      { ...offices[0], agentId: 'm1', state: 'merged', endedAtMs: 9 },
+      { ...offices[1], agentId: 'c1' }
+    ]
+    const snapshot = agents.map((agent) => agent.agentId)
+    renderProps({ agents })
+
+    expect(agents.map((agent) => agent.agentId)).toEqual(snapshot)
+  })
+
+  it('P2-9 : la durée du bureau utilise nowMs', () => {
+    renderProps({
+      agents: [{ ...offices[0], startedAtMs: 1_000_000, endedAtMs: undefined }],
+      nowMs: 1_000_000 + 40 * 60_000
+    })
+
+    expect(container.querySelector('[data-testid="wt-office-duration"]')?.textContent).toContain(
+      '40 min'
+    )
+  })
+
+  it('P2-10 : la traçabilité réelle est exposée sobrement', () => {
+    renderProps({
+      agents: [
+        {
+          ...offices[0],
+          state: 'ready',
+          verdict: 'green',
+          publication: 'published',
+          baseBranch: 'main',
+          publishedSha: 'abcdef1234567890'
+        }
+      ]
+    })
+
+    const trace = container.querySelector('[data-testid="wt-office-trace"]')!.textContent!
+    expect(trace).toContain('main')
+    expect(trace).toContain('réussie')
+    expect(trace).toContain('abcdef12')
+  })
+
+  it('P0-4 : les deux gestes de résolution sont proposés sur un conflit', () => {
+    const onResolveConflictChoice = vi.fn()
+    renderProps({ agents: [offices[1]], onResolveConflictChoice })
+
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="wt-keep-agent"]')!.click())
+    act(() => container.querySelector<HTMLButtonElement>('[data-testid="wt-keep-mine"]')!.click())
+
+    expect(onResolveConflictChoice.mock.calls).toEqual([
+      ['a2', 'agent'],
+      ['a2', 'mine']
+    ])
+  })
+
+  it('P1-6 : chaque raison d’échec de comparaison a son message actionnable', () => {
+    const reasons = [
+      'invalid-agent',
+      'not-conflict',
+      'ownership-unproven',
+      'invalid-path',
+      'revision-unavailable',
+      'read-failed'
+    ] as const
+    const messages = reasons.map((reason) => conflictDiffMessage(reason))
+
+    expect(new Set(messages).size).toBe(reasons.length)
+    for (const message of messages) {
+      expect(message.length).toBeGreaterThan(40)
+      expect(message).not.toContain('undefined')
+    }
   })
 })

@@ -9,8 +9,10 @@ import {
 import { ModuleHeader } from './ModuleHeader'
 import {
   formatTicketSelectionPrompt,
-  loadTicketTreatmentRecords,
+  mapWithConcurrency,
   plainText,
+  reconcileTicketTreatmentRecords,
+  reportTicketTreatment,
   runTicketTreatmentBatch,
   saveTicketTreatmentRecord,
   ticketConversationTitle,
@@ -186,8 +188,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   /** Recherche ACTUELLEMENT appliquee cote serveur (titleContains). '' = aucun filtre. */
   const serverQueryRef = useRef('')
   const [serverQuery, setServerQuery] = useState('')
+  /**
+   * Au MONTAGE, tout record `running` persisté est orphelin : le run vivait dans ce renderer et n'a
+   * pas survécu. On le rend « interrompu » plutôt que « en cours » à vie (voir
+   * `reconcileTicketTreatmentRecords`). `onItemSettled` réécrit ensuite le statut réel.
+   */
   const [treatmentRecords, setTreatmentRecords] = useState(() =>
-    loadTicketTreatmentRecords(localStorage)
+    reconcileTicketTreatmentRecords(localStorage)
   )
 
   const recordTreatment = useCallback(
@@ -202,26 +209,44 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: conversationId }))
   }, [])
 
+  /**
+   * Fiches relues, RESULTAT compris. Une simple Set d'ids empêchait bien le second appel, mais
+   * rendait ensuite la fiche légère après un refresh. La Promise déduplique aussi deux demandes
+   * simultanées ; `updatedAt` invalide naturellement une fiche devenue plus récente.
+   */
+  const enrichedRef = useRef<Map<string, { updatedAt: string; value: Promise<TicketItem> }>>(
+    new Map()
+  )
+
   const enrichTicket = useCallback(
     async (item: TicketItem, source: TicketSourceProfile | undefined): Promise<TicketItem> => {
       if (!source || typeof window.api.getTicket !== 'function') return item
-      try {
-        return (await window.api.getTicket({
+      const identity = `${item.sourceId}::${item.id}`
+      const cached = enrichedRef.current.get(identity)
+      if (cached?.updatedAt === item.updatedAt) return cached.value
+
+      const value = window.api
+        .getTicket({
           source,
           id: item.id,
           requestId: `ticket-detail-${crypto.randomUUID()}`
-        })) as TicketItem
-      } catch {
-        return item
-      }
+        })
+        .then((enriched) => enriched as TicketItem)
+        .catch(() => {
+          // Un échec reste réessayable. Ne supprime pas une lecture plus récente lancée entre-temps.
+          if (enrichedRef.current.get(identity)?.value === value)
+            enrichedRef.current.delete(identity)
+          return item
+        })
+      enrichedRef.current.set(identity, { updatedAt: item.updatedAt, value })
+      return value
     },
     []
   )
 
-  const selectTicket = useCallback(
+  const enrichIntoList = useCallback(
     (item: TicketItem): void => {
       const identity = `${item.sourceId}::${item.id}`
-      setSelectedId(identity)
       void enrichTicket(item, activeSourceRef.current).then((enriched) => {
         if (enriched === item) return
         setItems((current) =>
@@ -232,6 +257,14 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       })
     },
     [enrichTicket]
+  )
+
+  const selectTicket = useCallback(
+    (item: TicketItem): void => {
+      setSelectedId(`${item.sourceId}::${item.id}`)
+      enrichIntoList(item)
+    },
+    [enrichIntoList]
   )
 
   useEffect(() => {
@@ -483,6 +516,14 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
   const selectedItem =
     visibleItems.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? visibleItems[0]
+  const selectedIdentity = selectedItem ? `${selectedItem.sourceId}::${selectedItem.id}` : undefined
+  /**
+   * Le panneau de détail affiche AUSSI le ticket de repli (`visibleItems[0]`, sans clic) : sans cet
+   * effet il annonçait « Aucun commentaire chargé » / « Aucune relation » sur une fiche qui en a.
+   */
+  useEffect(() => {
+    if (selectedItem) enrichIntoList(selectedItem)
+  }, [selectedIdentity, selectedItem, enrichIntoList])
   /** Miroir stable des tickets FILTRES : le mode auto lit le perimetre courant sans se re-abonner. */
   const visibleItemsRef = useRef<TicketItem[]>([])
   useEffect(() => {
@@ -569,9 +610,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   }, [])
 
   const updateAutoSetting = (key: keyof AutoModeSettings, value: number): void => {
-    setAutoSettings((current) =>
-      saveAutoModeSettings(localStorage, { ...current, [key]: value })
-    )
+    setAutoSettings((current) => saveAutoModeSettings(localStorage, { ...current, [key]: value }))
   }
 
   const setAutoModeChecked = (checked: boolean): void => {
@@ -584,6 +623,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       // AMORCE : l'existant devient « connu » sans etre traite.
       for (const key of primeSeen(visibleItemsRef.current)) seenRef.current.add(key)
       saveSeen(localStorage, seenRef.current)
+      autoPrimedRef.current = true
       setAutoStatus(
         `en veille · ${visibleItemsRef.current.length} ticket(s) déjà présents ignorés · ` +
           describeAutoModeCost(autoSettingsRef.current, 0)
@@ -645,6 +685,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     for (const key of selection.seenAdditions) seenRef.current.add(key)
     saveSeen(localStorage, seenRef.current)
     const attemptedThisCycle = new Set<string>()
+    const cycleStartedAt = new Date().toISOString()
     let succeeded = 0
     let failed = 0
     let total = 0
@@ -675,6 +716,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           recordTreatment(item, {
             conversationId: conversation.id,
             status: 'running',
+            // Horodatage du DÉBUT : seul repère si le run reste orphelin (voir réconciliation).
+            startedAt: cycleStartedAt,
             updatedAt: new Date().toISOString()
           })
         },
@@ -685,8 +728,22 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             recordTreatment(item, {
               conversationId: conversation.id,
               status: ok ? 'succeeded' : 'failed',
+              startedAt: cycleStartedAt,
               updatedAt: new Date().toISOString()
             })
+            // RETOUR SUR LA FICHE : commentaire SEUL, valeurs copiées (id ticket, id conversation,
+            // statut réel). Ni état ni assigné : ces changements exigent un geste explicite.
+            if (typeof window.api.updateTicket === 'function') {
+              void reportTicketTreatment(
+                {
+                  updateTicket: window.api.updateTicket,
+                  ...(activeSourceRef.current ? { source: activeSourceRef.current } : {})
+                },
+                item,
+                ok,
+                conversation
+              )
+            }
           }
         }
       })
@@ -723,9 +780,29 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     )
   }, [autoMode, enrichTicket, recordTreatment])
 
+  /**
+   * AMORCE de la REPRISE PERSISTÉE. `primeSeen` n'existait que dans `setAutoModeChecked` : au
+   * montage avec la case déjà cochée (localStorage), la première page arrivait comme une vague
+   * d'« entrants » et déclenchait un run PAR ticket affiché. L'amorce couvre donc aussi ce chemin.
+   */
+  const autoPrimedRef = useRef(!autoMode)
+
   // Chaque rafraichissement de la liste est un cycle de veille : les nouveaux arrives passent.
   useEffect(() => {
-    if (autoMode) void treatIncoming()
+    if (!autoMode) return
+    if (!autoPrimedRef.current) {
+      // Rien d'affiché encore : l'amorce attend la PREMIÈRE page non vide, sinon elle n'amorce rien.
+      if (visibleItemsRef.current.length === 0) return
+      for (const key of primeSeen(visibleItemsRef.current)) seenRef.current.add(key)
+      saveSeen(localStorage, seenRef.current)
+      autoPrimedRef.current = true
+      setAutoStatus(
+        `en veille · ${visibleItemsRef.current.length} ticket(s) déjà présents ignorés · ` +
+          describeAutoModeCost(autoSettingsRef.current, 0)
+      )
+      return
+    }
+    void treatIncoming()
   }, [items, autoMode, treatIncoming])
 
   const openSelectionConversation = useCallback(async () => {
@@ -733,8 +810,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     if (!selected.length) return
     // Les listes fournisseur sont légères. Le prompt, lui, relit chaque fiche pour inclure la
     // discussion et les titres de relations réellement courants.
-    const selection = await Promise.all(
-      selected.map((item) => enrichTicket(item, activeSourceRef.current))
+    // Pool BORNÉ (même garde-fou que les lots auto) : 30 tickets cochés ne doivent pas ouvrir 30
+    // requêtes distantes simultanées.
+    const selection = await mapWithConcurrency(
+      selected,
+      autoSettingsRef.current.concurrency,
+      (item) => enrichTicket(item, activeSourceRef.current)
     )
     const prompt = formatTicketSelectionPrompt(selection, activeSourceRef.current)
     if (!prompt) return
@@ -781,6 +862,24 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     else void loadSources()
   }
   const initialLoading = active && !sourcesLoaded && !error
+  /** Causes RÉELLES d'un écran vide : ce qui restreint le périmètre, nommé une par une. */
+  const emptyCauses = [
+    serverQuery ? `recherche serveur « ${serverQuery} »` : undefined,
+    query.trim() ? `recherche locale « ${query.trim()} »` : undefined,
+    typeFilter ? `type « ${typeFilter} »` : undefined,
+    stateFilter ? `état « ${stateFilter} »` : undefined,
+    assigneeFilter.trim() ? `assigné « ${assigneeFilter.trim()} »` : undefined
+  ].filter((cause): cause is string => cause !== undefined)
+
+  /** Navigation clavier ↑/↓ dans la liste (P3-9) : déplace la sélection, sans toucher aux coches. */
+  const moveSelection = (delta: number): void => {
+    if (!visibleItems.length) return
+    const current = visibleItems.findIndex(
+      (candidate) => `${candidate.sourceId}::${candidate.id}` === selectedIdentity
+    )
+    const next = Math.min(visibleItems.length - 1, Math.max(0, (current < 0 ? 0 : current) + delta))
+    selectTicket(visibleItems[next])
+  }
 
   return (
     <section className="tickets-view" data-testid="tickets-view" data-active={active}>
@@ -901,11 +1000,20 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
       {items.length > 0 && (
         <div className="tickets-stats" data-testid="tickets-stats">
-          <span className="tickets-stats-total">
+          {/* PÉRIMÈTRE ANNONCÉ : ces compteurs ne sont PAS des statistiques projet — ils portent
+              sur la page chargée uniquement (le fournisseur pagine à 50). */}
+          <span
+            className="tickets-stats-total"
+            title="Compteurs calculés sur la page chargée, pas sur tout le projet"
+          >
             <strong>{items.length}</strong> chargé(s) · <strong>{visibleItems.length}</strong>{' '}
-            affiché(s)
+            affiché(s) · périmètre : page chargée
           </span>
-          <div className="tickets-stats-states" role="group" aria-label="Répartition par état">
+          <div
+            className="tickets-stats-states"
+            role="group"
+            aria-label="Répartition par état sur la page chargée"
+          >
             {stateCounts.map(([state, count]) => (
               <button
                 key={state}
@@ -969,6 +1077,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         )}
         <select
           aria-label="Filtrer par type"
+          title="Types présents dans la page chargée (pas tout le projet)"
           value={typeFilter}
           onChange={(event) => setTypeFilter(event.target.value)}
         >
@@ -979,6 +1088,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         </select>
         <select
           aria-label="Filtrer par état"
+          title="États présents dans la page chargée (pas tout le projet)"
           value={stateFilter}
           onChange={(event) => setStateFilter(event.target.value)}
         >
@@ -1184,25 +1294,77 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             <strong>Aucune source configurée</strong>
             <span>Ajoute une source Azure DevOps, GitHub ou GitLab.</span>
           </div>
-        ) : items.length === 0 && !hasMore ? (
-          <div className="tickets-empty">
-            <strong>Aucun ticket</strong>
-            <span>Cette source ne renvoie aucun élément accessible.</span>
-          </div>
-        ) : visibleItems.length === 0 && items.length > 0 && !hasMore ? (
-          <div className="tickets-empty">
-            <strong>Aucun résultat</strong>
-            <span>Modifie la recherche ou les filtres.</span>
+        ) : visibleItems.length === 0 ? (
+          /* Vide HONNÊTE : la cause (recherche serveur, filtres locaux) est nommée, une issue est
+             offerte, et « Charger la suite » reste accessible quand la page suivante existe —
+             avant, `!hasMore` supprimait tout message et l'écran restait muet. */
+          <div className="tickets-empty" data-testid="tickets-empty">
+            <strong>{items.length === 0 ? 'Aucun ticket' : 'Aucun résultat'}</strong>
+            <span>
+              {emptyCauses.length
+                ? `Périmètre restreint par : ${emptyCauses.join(' · ')}.`
+                : 'Cette source ne renvoie aucun élément accessible sur la page chargée.'}
+            </span>
+            {emptyCauses.length > 0 && (
+              <button
+                type="button"
+                data-testid="tickets-empty-clear"
+                title="Effacer la recherche serveur et les filtres locaux"
+                onClick={() => {
+                  resetFilters()
+                  if (serverQuery) runServerSearch('')
+                }}
+              >
+                Effacer la recherche et les filtres
+              </button>
+            )}
+            {hasMore && (
+              <button
+                className="tickets-load-more"
+                type="button"
+                disabled={loading}
+                onClick={() =>
+                  selectedSource && cursor
+                    ? void load(selectedSource, { cursor, append: true })
+                    : undefined
+                }
+              >
+                {loading ? 'Chargement…' : 'Charger la suite'}
+              </button>
+            )}
           </div>
         ) : (
           <>
-            {stale && error && (
+            {loading && (
+              <div
+                className="tickets-refreshing"
+                data-testid="tickets-refreshing"
+                role="status"
+                aria-label="Actualisation des tickets en cours"
+              >
+                <span className="tickets-spinner" aria-hidden="true" />
+                <span>Actualisation…</span>
+              </div>
+            )}
+            {error && (
               <div className="tickets-stale" data-testid="tickets-stale" role="status">
-                <strong>Données périmées</strong>
+                {/* Toute erreur survenue sur une liste DÉJÀ chargée est visible : avant, elle
+                    dépendait de `stale`, donc une erreur de pagination passait inaperçue. */}
+                <strong>{stale ? 'Données périmées' : 'Chargement partiel impossible'}</strong>
                 <span>{error}</span>
               </div>
             )}
-            <div className="tickets-list" role="list" aria-label="Tickets">
+            <div
+              className="tickets-list"
+              role="list"
+              aria-label="Tickets"
+              tabIndex={-1}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+                event.preventDefault()
+                moveSelection(event.key === 'ArrowDown' ? 1 : -1)
+              }}
+            >
               {visibleItems.map((item) => {
                 const identity = `${item.sourceId}::${item.id}`
                 const treatment = treatmentRecords[identity]
@@ -1219,6 +1381,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                       type="button"
                       data-testid="ticket-row"
                       className={selectedItem === item ? 'is-selected' : ''}
+                      aria-selected={selectedItem === item}
                       onClick={() => selectTicket(item)}
                     >
                       <span className="tickets-id">#{item.id}</span>
@@ -1269,7 +1432,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                             ? 'en cours'
                             : treatment.status === 'succeeded'
                               ? 'traité'
-                              : 'échec'}
+                              : treatment.status === 'interrupted'
+                                ? 'interrompu'
+                                : 'échec'}
                       </button>
                     )}
                   </div>
@@ -1281,7 +1446,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                   type="button"
                   disabled={loading}
                   onClick={() =>
-                    selectedSource && cursor ? void load(selectedSource, { cursor, append: true }) : undefined
+                    selectedSource && cursor
+                      ? void load(selectedSource, { cursor, append: true })
+                      : undefined
                   }
                 >
                   {loading ? 'Chargement…' : 'Charger la suite'}
@@ -1363,7 +1530,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                       {selectedItem.comments.map((comment, index) => (
                         <li key={comment.id ?? `${comment.createdAt ?? 'comment'}:${index}`}>
                           <strong>{comment.author ?? 'Auteur inconnu'}</strong>
-                          {comment.createdAt ? <time>{relativeDate(comment.createdAt)}</time> : null}
+                          {comment.createdAt ? (
+                            <time>{relativeDate(comment.createdAt)}</time>
+                          ) : null}
                           <p>{plainText(comment.text)}</p>
                         </li>
                       ))}

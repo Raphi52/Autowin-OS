@@ -4,7 +4,11 @@ import {
   buildBrainSearchEnvelope,
   type BrainSearchLocalResult
 } from './brain-search-envelope'
-import { BRAIN_QUERY_MAX_CHARS, BRAIN_RESULT_CAP } from './brain-query-command'
+import {
+  BRAIN_QUERY_MAX_CHARS,
+  BRAIN_RESULT_CAP,
+  BRAIN_RESULT_TRUNCATION_MARKER
+} from './brain-query-command'
 import type { BrainRetrievalResult } from './brain-retrieval'
 
 const local: BrainSearchLocalResult[] = [
@@ -28,6 +32,75 @@ describe('buildBrainSearchEnvelope — le statut et le budget cessent d’être 
       // Une panne ne doit PAS effacer la recherche locale (le bug de GraphView.tsx:306).
       expect(envelope.results).toHaveLength(1)
     }
+  })
+
+  it.each([' ', '\n\t', '\r\n'])(
+    'annonce empty et zéro savoir pour un contexte found sans caractère utile (%j)',
+    (context) => {
+      const envelope = buildBrainSearchEnvelope({
+        rawQuery: 'question',
+        results: local,
+        retrieval: retrieval({ status: 'found', context })
+      })
+      expect(envelope).toMatchObject({
+        status: 'empty',
+        note: BRAIN_RETRIEVAL_NOTES.empty,
+        budget: {
+          knowledgeAvailableChars: 0,
+          knowledgeChars: 0,
+          knowledgeDroppedChars: 0
+        }
+      })
+    }
+  )
+
+  it('rejette une navigation retenue contradictoire avec zéro savoir injectable', () => {
+    const envelope = buildBrainSearchEnvelope({
+      rawQuery: 'question',
+      results: local,
+      retrieval: retrieval({
+        status: 'found',
+        context: '\n\t',
+        navigation: {
+          query: 'question',
+          minDense: 0.25,
+          candidates: [
+            {
+              rank: 1,
+              path: 'knowledge/a.md',
+              type: 'domain',
+              denseCos: 0.9,
+              retained: true
+            }
+          ]
+        }
+      })
+    })
+
+    expect(envelope.status).toBe('invalid')
+    expect(envelope.note).toBe(BRAIN_RETRIEVAL_NOTES.invalid)
+    expect(envelope.navigation).toBeUndefined()
+    expect(envelope.budget.knowledgeChars).toBe(0)
+  })
+
+  it('rejette une navigation qui ne correspond pas à la question normalisée', () => {
+    const envelope = buildBrainSearchEnvelope({
+      rawQuery: '  Où   vit 😀 A ?  ',
+      results: local,
+      retrieval: retrieval({
+        status: 'found',
+        context: '[BRAIN] réponse B',
+        navigation: {
+          query: 'Où vit 😀 B ?',
+          minDense: 0.25,
+          candidates: []
+        }
+      })
+    })
+    expect(envelope.query).toBe('Où vit 😀 A ?')
+    expect(envelope.status).toBe('invalid')
+    expect(envelope.navigation).toBeUndefined()
+    expect(envelope.budget.knowledgeChars).toBe(0)
   })
 
   it('rend visible la troncature de la QUESTION au plafond de brain-query-command', () => {
@@ -55,6 +128,19 @@ describe('buildBrainSearchEnvelope — le statut et le budget cessent d’être 
     expect(envelope.budget.questionChars).toBe('promotion inbox'.length)
   })
 
+  it('compte et borne les questions Unicode en caractères, pas en unités UTF-16', () => {
+    const rawQuery = `${'😀'.repeat(BRAIN_QUERY_MAX_CHARS)}fin`
+    const envelope = buildBrainSearchEnvelope({
+      rawQuery,
+      results: [],
+      retrieval: retrieval()
+    })
+    expect(envelope.query).toBe('😀'.repeat(BRAIN_QUERY_MAX_CHARS))
+    expect(envelope.budget.questionSubmittedChars).toBe(BRAIN_QUERY_MAX_CHARS + 3)
+    expect(envelope.budget.questionChars).toBe(BRAIN_QUERY_MAX_CHARS)
+    expect(envelope.budget.questionTruncated).toBe(true)
+  })
+
   it('rend visible le plafond du SAVOIR et le nombre de caractères réellement coupés', () => {
     const context = 'x'.repeat(BRAIN_RESULT_CAP + 1_000)
     const envelope = buildBrainSearchEnvelope({
@@ -65,7 +151,9 @@ describe('buildBrainSearchEnvelope — le statut et le budget cessent d’être 
     expect(envelope.budget.knowledgeMax).toBe(BRAIN_RESULT_CAP)
     expect(envelope.budget.knowledgeTruncated).toBe(true)
     expect(envelope.budget.knowledgeChars).toBe(BRAIN_RESULT_CAP)
-    expect(envelope.budget.knowledgeDroppedChars).toBe(1_000)
+    expect(envelope.budget.knowledgeDroppedChars).toBe(
+      1_000 + [...BRAIN_RESULT_TRUNCATION_MARKER].length
+    )
     expect(envelope.budget.knowledgeAvailableChars).toBe(BRAIN_RESULT_CAP + 1_000)
   })
 
@@ -78,6 +166,19 @@ describe('buildBrainSearchEnvelope — le statut et le budget cessent d’être 
     expect(envelope.budget.knowledgeTruncated).toBe(false)
     expect(envelope.budget.knowledgeChars).toBe(5)
     expect(envelope.budget.knowledgeDroppedChars).toBe(0)
+  })
+
+  it('compte honnêtement les caractères Unicode réellement écartés du savoir', () => {
+    const envelope = buildBrainSearchEnvelope({
+      rawQuery: 'q',
+      results: [],
+      retrieval: retrieval({ context: '😀'.repeat(BRAIN_RESULT_CAP + 1) })
+    })
+    expect(envelope.budget.knowledgeAvailableChars).toBe(BRAIN_RESULT_CAP + 1)
+    expect(envelope.budget.knowledgeChars).toBe(BRAIN_RESULT_CAP)
+    expect(envelope.budget.knowledgeDroppedChars).toBe(
+      1 + [...BRAIN_RESULT_TRUNCATION_MARKER].length
+    )
   })
 
   it('propage la navigation du Brain — c’est elle qui alimente le banc d’essai', () => {

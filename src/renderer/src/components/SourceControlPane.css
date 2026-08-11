@@ -77,6 +77,21 @@
   font-size: 11px;
   padding: 3px 8px;
 }
+/* Bureaux en attente d'une décision : visible sans ouvrir l'onglet Workspace. */
+.sc-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--err, #d9584a);
+  color: var(--on-accent, #fff);
+  font-size: 9px;
+  font-weight: 700;
+}
 /* Dépôt actuellement affiché (Projet / Brain) — repère immédiat de ce qu'on regarde. */
 .sc-repo-btn.is-active {
   border-color: var(--gold, #e9bd4e);

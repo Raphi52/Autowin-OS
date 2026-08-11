@@ -1,7 +1,10 @@
 import React from 'react'
 import {
+  formatOfficeDuration,
   requiresAttention,
+  sortOfficesByAttention,
   type WorktreeAgentActivity,
+  type WorktreeConflictResolutionChoice,
   type WorktreeRuntimeStatus
 } from '../../../shared/worktree-activity-model'
 import './WorktreeActivityView.css'
@@ -155,6 +158,19 @@ function routeCopy(agent: WorktreeAgentActivity): { label: string; tone: string;
   return { label: 'Travaille dans ce bureau séparé', tone: 'working', glyph: '→' }
 }
 
+/** Verdict de vérification en clair (jamais « green »/« red » bruts à l'écran). */
+function verdictLabel(verdict: NonNullable<WorktreeAgentActivity['verdict']>): string {
+  const labels: Record<typeof verdict, string> = {
+    unknown: 'inconnue',
+    running: 'en cours',
+    green: 'réussie',
+    red: 'échouée',
+    cancelled: 'annulée',
+    interrupted: 'interrompue'
+  }
+  return labels[verdict]
+}
+
 function FileList({ agent }: { agent: WorktreeAgentActivity }): React.JSX.Element {
   if (agent.files.length === 0) {
     return <div className="wt-office-empty">Aucun fichier signalé</div>
@@ -171,19 +187,58 @@ function FileList({ agent }: { agent: WorktreeAgentActivity }): React.JSX.Elemen
   )
 }
 
+type OfficeActionKey = 'open' | 'retry' | 'keep-agent' | 'keep-mine'
+
+/** Une action à la fois par bureau : pendant l'appel, le bouton dit ce qu'il fait et se verrouille. */
+function useOfficeAction(): {
+  pending: OfficeActionKey | null
+  error?: string
+  run: (key: OfficeActionKey, action: () => unknown) => void
+} {
+  const [pending, setPending] = React.useState<OfficeActionKey | null>(null)
+  const [error, setError] = React.useState<string | undefined>(undefined)
+  const run = (key: OfficeActionKey, action: () => unknown): void => {
+    if (pending) return
+    setPending(key)
+    setError(undefined)
+    const fail = (cause: unknown): void => {
+      setPending(null)
+      setError(cause instanceof Error ? cause.message : 'Action impossible pour l’instant.')
+    }
+    try {
+      const result = action() as PromiseLike<unknown> | undefined
+      // Une action synchrone n'a pas d'attente à montrer : ne pas inventer un état « en cours ».
+      if (!result || typeof result.then !== 'function') {
+        setPending(null)
+        return
+      }
+      result.then(() => setPending(null), fail)
+    } catch (cause) {
+      fail(cause)
+    }
+  }
+  return { pending, error, run }
+}
+
 function AgentOffice({
   agent,
+  nowMs,
   onResolveConflict,
+  onResolveConflictChoice,
   onOpenOffice,
   onRetryOffice
 }: {
   agent: WorktreeAgentActivity
+  nowMs?: number
   onResolveConflict?: (agentId: string) => void
-  onOpenOffice?: (path: string) => void
-  onRetryOffice?: (agentId: string) => void
+  onResolveConflictChoice?: (agentId: string, choice: WorktreeConflictResolutionChoice) => unknown
+  onOpenOffice?: (path: string) => unknown
+  onRetryOffice?: (agentId: string) => unknown
 }): React.JSX.Element {
   const copy = stateCopy(agent)
   const route = routeCopy(agent)
+  const action = useOfficeAction()
+  const duration = formatOfficeDuration(agent, nowMs)
   return (
     <div className="wt-office-branch" data-testid="wt-office-branch">
       <article
@@ -237,6 +292,21 @@ function AgentOffice({
             </details>
           )}
           {agent.recovered && <span className="wt-recovered">↻ Récupéré après redémarrage</span>}
+          {duration && (
+            <div className="wt-office-duration" data-testid="wt-office-duration">
+              {agent.endedAtMs ? 'Durée · ' : 'Ouvert depuis · '}
+              {duration}
+            </div>
+          )}
+          <div className="wt-office-trace" data-testid="wt-office-trace">
+            {agent.baseBranch && <span>Branche de départ · {agent.baseBranch}</span>}
+            {agent.verdict && agent.verdict !== 'unknown' && (
+              <span>Vérification · {verdictLabel(agent.verdict)}</span>
+            )}
+            {agent.publication === 'published' && agent.publishedSha && (
+              <span>Ajouté sous · {agent.publishedSha.slice(0, 8)}</span>
+            )}
+          </div>
           <FileList agent={agent} />
           <div className="wt-office-outcome">{copy.outcome}</div>
           <div className={`wt-office-route is-${route.tone}`}>
@@ -254,6 +324,36 @@ function AgentOffice({
               Comparer les deux versions
             </button>
           )}
+          {agent.state === 'conflict' && onResolveConflictChoice && (
+            <div className="wt-office-choices" data-testid="wt-office-choices">
+              <button
+                type="button"
+                className="wt-resolve btn btn-sm"
+                data-testid="wt-keep-agent"
+                disabled={action.pending !== null}
+                onClick={() =>
+                  action.run('keep-agent', () => onResolveConflictChoice(agent.agentId, 'agent'))
+                }
+              >
+                {action.pending === 'keep-agent'
+                  ? 'Application de la version de l’agent…'
+                  : 'Garder la version de l’agent'}
+              </button>
+              <button
+                type="button"
+                className="wt-resolve btn btn-sm"
+                data-testid="wt-keep-mine"
+                disabled={action.pending !== null}
+                onClick={() =>
+                  action.run('keep-mine', () => onResolveConflictChoice(agent.agentId, 'mine'))
+                }
+              >
+                {action.pending === 'keep-mine'
+                  ? 'Application de ta version…'
+                  : 'Garder ma version'}
+              </button>
+            </div>
+          )}
           {agent.state !== 'conflict' &&
             requiresAttention(agent) &&
             agent.worktreePath &&
@@ -263,9 +363,10 @@ function AgentOffice({
                 type="button"
                 className="wt-resolve btn btn-sm"
                 data-testid="wt-open-office"
-                onClick={() => onOpenOffice(agent.worktreePath!)}
+                disabled={action.pending !== null}
+                onClick={() => action.run('open', () => onOpenOffice(agent.worktreePath!))}
               >
-                Ouvrir le bureau protégé
+                {action.pending === 'open' ? 'Ouverture du bureau…' : 'Ouvrir le bureau protégé'}
               </button>
             )}
           {agent.attentionReason === 'retry-exhausted' && onRetryOffice && (
@@ -273,12 +374,20 @@ function AgentOffice({
               type="button"
               className="wt-resolve btn btn-sm"
               data-testid="wt-retry-office"
-              onClick={() => onRetryOffice(agent.agentId)}
+              disabled={action.pending !== null}
+              onClick={() => action.run('retry', () => onRetryOffice(agent.agentId))}
             >
-              {agent.worktreeAvailable === false
-                ? 'Réessayer de recréer le bureau'
-                : 'Réessayer maintenant'}
+              {action.pending === 'retry'
+                ? 'Nouvel essai en cours…'
+                : agent.worktreeAvailable === false
+                  ? 'Réessayer de recréer le bureau'
+                  : 'Réessayer maintenant'}
             </button>
+          )}
+          {action.error && (
+            <div className="wt-office-error" data-testid="wt-office-error" role="alert">
+              {action.error}
+            </div>
           )}
         </div>
       </article>
@@ -288,20 +397,27 @@ function AgentOffice({
 
 export function WorktreeActivityView({
   agents,
-  status = { available: false, workspacePath: '', reason: 'identity-unavailable' },
+  status,
+  nowMs,
   onResolveConflict,
+  onResolveConflictChoice,
   onOpenOffice,
   onRetryOffice,
   className
 }: {
   agents: WorktreeAgentActivity[]
-  status?: WorktreeRuntimeStatus
+  /** `null`/absent = protection encore en cours de vérification (JAMAIS un état d'erreur). */
+  status?: WorktreeRuntimeStatus | null
   nowMs?: number
   onResolveConflict?: (agentId: string) => void
-  onOpenOffice?: (path: string) => void
-  onRetryOffice?: (agentId: string) => void
+  onResolveConflictChoice?: (agentId: string, choice: WorktreeConflictResolutionChoice) => unknown
+  onOpenOffice?: (path: string) => unknown
+  onRetryOffice?: (agentId: string) => unknown
   className?: string
 }): React.JSX.Element {
+  const resolving = !status
+  const available = status?.available === true
+  const orderedAgents = sortOfficesByAttention(agents)
   const decisions = agents.filter(requiresAttention).length
   const active = agents.filter(
     (agent) => agent.state === 'working' || agent.state === 'isolated'
@@ -321,23 +437,35 @@ export function WorktreeActivityView({
       </header>
 
       <section
-        className={`wt-main-office${status.available ? '' : ' is-unavailable'}`}
+        className={`wt-main-office${available || resolving ? '' : ' is-unavailable'}${
+          resolving ? ' is-checking' : ''
+        }`}
         data-testid="wt-main-office"
+        data-status={resolving ? 'checking' : available ? 'available' : 'unavailable'}
       >
         <div className="wt-main-icon" aria-hidden>
           ⌂
         </div>
         <div className="wt-main-copy">
           <span>TON WORKSPACE · PRINCIPAL</span>
-          <strong>{status.workspacePath || 'Workspace non identifié'}</strong>
+          <strong>
+            {resolving
+              ? 'Workspace en cours de vérification'
+              : status.workspacePath || 'Workspace non identifié'}
+          </strong>
           <p>
-            {status.available
-              ? 'Disponible · les agents travaillent dans des bureaux séparés'
-              : 'Protection indisponible · les mutations sont bloquées'}
+            {resolving
+              ? 'Vérification de la protection…'
+              : available
+                ? 'Disponible · les agents travaillent dans des bureaux séparés'
+                : 'Protection indisponible · les mutations sont bloquées'}
           </p>
         </div>
-        <span className="wt-shield" aria-label={status.available ? 'Protégé' : 'Indisponible'}>
-          {status.available ? '✓' : '!'}
+        <span
+          className="wt-shield"
+          aria-label={resolving ? 'Vérification' : available ? 'Protégé' : 'Indisponible'}
+        >
+          {resolving ? '…' : available ? '✓' : '!'}
         </span>
       </section>
 
@@ -359,11 +487,13 @@ export function WorktreeActivityView({
               <p>Ton workspace reste le seul bureau actif.</p>
             </div>
           ) : (
-            agents.map((agent) => (
+            orderedAgents.map((agent) => (
               <AgentOffice
                 key={agent.agentId}
                 agent={agent}
+                nowMs={nowMs}
                 onResolveConflict={onResolveConflict}
+                onResolveConflictChoice={onResolveConflictChoice}
                 onOpenOffice={onOpenOffice}
                 onRetryOffice={onRetryOffice}
               />

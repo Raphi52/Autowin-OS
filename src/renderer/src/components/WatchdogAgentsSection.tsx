@@ -1,4 +1,5 @@
 import {
+  describeOccurrenceStatus,
   describeOutcome,
   describeWatchdogGuards,
   describeWatchdogSource,
@@ -63,9 +64,16 @@ export function WatchdogAgentsSection({
         </span>
         <span
           className={summary.pendingTriage ? 'watchdog-pending' : ''}
-          title="Réveils terminés dont on ignore la conclusion de l’agent."
+          title="Réveils dont on ignore la conclusion de l’agent."
         >
           <strong>{summary.pendingTriage}</strong> sans issue
+        </span>
+        <span className={summary.failures ? 'watchdog-failed' : ''}>
+          <strong>{summary.failures}</strong> échec{summary.failures === 1 ? '' : 's'}
+        </span>
+        <span className={summary.cancellations ? 'watchdog-cancelled' : ''}>
+          <strong>{summary.cancellations}</strong> annulation
+          {summary.cancellations === 1 ? '' : 's'}
         </span>
       </div>
 
@@ -103,6 +111,9 @@ export function WatchdogAgentsSection({
                   <ol className="watchdog-rule-history">
                     {history.slice(0, 4).map((entry) => (
                       <li key={entry.id}>
+                        <span className={`watchdog-status status-${entry.status}`}>
+                          {describeOccurrenceStatus(entry.status)}
+                        </span>
                         <span className={`watchdog-outcome is-${outcomeTone(entry.outcome)}`}>
                           {describeOutcome(entry.outcome)}
                         </span>

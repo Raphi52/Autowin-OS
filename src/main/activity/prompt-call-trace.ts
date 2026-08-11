@@ -9,7 +9,7 @@ export function promptCallToTraceEvents(
   const actor = { id: call.actor, kind: 'agent' as const, label: call.actor }
   const provider = {
     id: call.provider,
-    model: call.model,
+    model: call.resolvedModel ?? call.model,
     reasoningEffort:
       typeof call.options.reasoningEffort === 'string' ? call.options.reasoningEffort : undefined,
     transport: call.transport,
@@ -66,7 +66,11 @@ export function promptCallToTraceEvents(
       injector: { id: 'autowin', kind: 'system', label: 'Autowin OS' }
     }),
     make(2, 'boundary', [
-      { kind: 'provider-options', content: JSON.stringify(call.options), mediaType: 'application/json' }
+      {
+        kind: 'provider-options',
+        content: JSON.stringify(call.options),
+        mediaType: 'application/json'
+      }
     ]),
     make(
       3,

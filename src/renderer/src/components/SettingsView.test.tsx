@@ -5,7 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
-vi.mock('./OrchestrationBudgetSettings', () => ({ OrchestrationBudgetSettings: () => null }))
+vi.mock('./OrchestrationBudgetSettings', async () => {
+  const { createElement } = await import('react')
+  return {
+    OrchestrationBudgetSettings: () => createElement('div', { 'data-testid': 'budget-panel' })
+  }
+})
 
 import { SettingsView } from './SettingsView'
 
@@ -244,10 +249,172 @@ describe('SettingsView diagnostic', () => {
     expect(
       container.querySelector('[data-testid="settings-provider-codex"]')?.textContent
     ).toContain('authenticated')
+    // Aucun provider INVENTÉ : la liste est dérivée de l'état réellement exposé par l'app.
+    expect(container.querySelector('[data-testid="settings-provider-kimi"]')).toBeNull()
+    expect(container.querySelector('[data-testid="settings-provider-gemini"]')).toBeNull()
+    expect(container.textContent).not.toContain('non configuré')
+  })
+
+  it('permet de réessayer la lecture des providers après un échec', async () => {
+    const providerStatus = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValue([{ provider: 'kimi', status: 'authenticated' }])
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        providerStatus,
+        getPreflight: vi.fn().mockResolvedValue(null),
+        recheckPreflight: vi.fn(),
+        onPreflight: () => () => {}
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, {
+          active: true,
+          section: 'providers',
+          onSectionChange: vi.fn()
+        })
+      )
+    })
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('providers')
+    const retry = [...container.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent === 'Réessayer'
+    ) as HTMLButtonElement
+    expect(retry).toBeTruthy()
+    await act(async () => retry.click())
+
+    expect(providerStatus).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-testid="settings-provider-kimi"]')).toBeTruthy()
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+  })
+
+  it('recharge les providers à chaque entrée dans la section', async () => {
+    const providerStatus = vi.fn().mockResolvedValue([{ provider: 'codex', status: 'ok' }])
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        providerStatus,
+        getPreflight: vi.fn().mockResolvedValue(null),
+        recheckPreflight: vi.fn(),
+        onPreflight: () => () => {}
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+    const render = async (section: 'providers' | 'budget'): Promise<void> => {
+      await act(async () => {
+        root.render(
+          createElement(SettingsView, { active: true, section, onSectionChange: vi.fn() })
+        )
+      })
+    }
+    await render('providers')
+    await render('budget')
+    await render('providers')
+    expect(providerStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('rend le renvoi vers le Routeur cliquable', async () => {
+    const onOpenRouter = vi.fn()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        providerStatus: vi.fn().mockResolvedValue([]),
+        getPreflight: vi.fn().mockResolvedValue(null),
+        recheckPreflight: vi.fn(),
+        onPreflight: () => () => {}
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, {
+          active: true,
+          section: 'providers',
+          onSectionChange: vi.fn(),
+          onOpenRouter
+        })
+      )
+    })
+    const link = container.querySelector(
+      '[data-testid="settings-open-router"]'
+    ) as HTMLButtonElement
+    expect(link).toBeTruthy()
+    await act(async () => link.click())
+    expect(onOpenRouter).toHaveBeenCalled()
+  })
+
+  it('annonce le succès de la réparation et ne laisse pas l erreur orpheline au changement de section', async () => {
+    const getPreflight = vi.fn().mockResolvedValue({
+      ok: false,
+      summary: 'Un prérequis manque.',
+      checks: [{ id: 'brain', label: 'Brain server', ok: false }]
+    })
+    const repairPreflight = vi.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValue({
+      started: true
+    })
+    const recheckPreflight = vi.fn().mockResolvedValue({
+      ok: false,
+      summary: 'Un prérequis manque.',
+      checks: [{ id: 'brain', label: 'Brain server', ok: false }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        getPreflight,
+        recheckPreflight,
+        repairPreflight,
+        providerStatus: vi.fn().mockResolvedValue([]),
+        onPreflight: () => () => {}
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+    const render = async (section: 'preflight' | 'providers'): Promise<void> => {
+      await act(async () => {
+        root.render(
+          createElement(SettingsView, { active: true, section, onSectionChange: vi.fn() })
+        )
+      })
+    }
+    await render('preflight')
+    const click = async (): Promise<void> => {
+      const repairButton = [...container.querySelectorAll('button')].find(
+        (candidate) => candidate.textContent === 'Réparer'
+      ) as HTMLButtonElement
+      await act(async () => repairButton.click())
+    }
+    await click()
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'La réparation a échoué'
+    )
+
+    // Changer de section ne laisse pas l'erreur globale orpheline.
+    await render('providers')
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+
+    await render('preflight')
+    await click()
     expect(
-      container.querySelector('[data-testid="settings-provider-kimi"]')?.textContent
-    ).toContain('non configuré')
-    expect(container.querySelector('[data-testid="settings-provider-gemini"]')).toBeTruthy()
+      container.querySelector('[data-testid="settings-repair-status"]')?.getAttribute('role')
+    ).toBe('status')
+    expect(container.querySelector('[data-testid="settings-repair-status"]')?.textContent).toMatch(
+      /répar/i
+    )
   })
 
   it('affiche un etat de chargement sans inventer des providers non configures', async () => {
@@ -326,5 +493,6 @@ describe('SettingsView diagnostic', () => {
     expect(
       [...container.querySelectorAll('button')].some((button) => button.textContent === 'Budget')
     ).toBe(true)
+    expect(container.querySelector('[data-testid="budget-panel"]')).toBeTruthy()
   })
 })

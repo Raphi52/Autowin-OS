@@ -169,13 +169,27 @@ function guards(raw: unknown): WatchdogGuards {
     const parsed = typeof input === 'number' && Number.isFinite(input) ? input : fallback
     return Math.min(max, Math.max(min, Math.round(parsed)))
   }
+  const optionalClamp = (input: unknown, min: number, max: number): number | undefined =>
+    typeof input === 'number' && Number.isFinite(input)
+      ? Math.min(max, Math.max(min, input))
+      : undefined
+  const maxTriggersPerDay = optionalClamp(value.maxTriggersPerDay, 1, 5_760)
+  const maxKnownCostUsdPerDay = optionalClamp(value.maxKnownCostUsdPerDay, 0.01, 10_000)
+  const maxUnpricedCallsPerDay = optionalClamp(value.maxUnpricedCallsPerDay, 1, 5_760)
   return {
     dedupWindowMs: clamp(value.dedupWindowMs, 0, 24 * 3_600_000, 60_000),
     maxTriggersPerHour: clamp(value.maxTriggersPerHour, 1, 240, 12),
     // La profondeur reste la garde la plus sensible : une chaine longue est une boucle qui ecrit.
     maxChainDepth: clamp(value.maxChainDepth, 0, 3, 0),
     // Largeur de cascade : bornee comme le reste. Un plafond a 0 desarmerait la regle entierement.
-    maxPerRoot: clamp(value.maxPerRoot, 1, 500, 20)
+    maxPerRoot: clamp(value.maxPerRoot, 1, 500, 20),
+    ...(maxTriggersPerDay === undefined
+      ? {}
+      : { maxTriggersPerDay: Math.round(maxTriggersPerDay) }),
+    ...(maxKnownCostUsdPerDay === undefined ? {} : { maxKnownCostUsdPerDay }),
+    ...(maxUnpricedCallsPerDay === undefined
+      ? {}
+      : { maxUnpricedCallsPerDay: Math.round(maxUnpricedCallsPerDay) })
   }
 }
 

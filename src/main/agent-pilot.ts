@@ -1,7 +1,14 @@
 import type { ProviderRegistry } from './providers/registry'
 import type { RoleBinding, RoleModelConfig } from './roles'
 import type { AppCommandBus, CommandResult } from './commands'
-import type { Message, PromptEnvelope, SendOptions, Usage } from './providers/types'
+import {
+  ProviderCallError,
+  type Message,
+  type PromptEnvelope,
+  type SendOptions,
+  type SendResult,
+  type Usage
+} from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import { buildTurnMessages } from './chat-turn-messages'
@@ -51,7 +58,14 @@ export type PilotEventVariant =
   /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté dans le message. */
   | { kind: 'reasoning'; text: string; iteration: number }
   | { kind: 'command'; actionId: string; name: string; args: unknown }
-  | { kind: 'result'; actionId: string; name: string; ok: boolean; data?: unknown }
+  | {
+      kind: 'result'
+      actionId: string
+      name: string
+      ok: boolean
+      data?: unknown
+      attachments?: NonNullable<Message['attachments']>
+    }
   | {
       kind: 'done'
       text: string
@@ -76,6 +90,8 @@ export type PilotEventVariant =
       callUsage?: Usage
       callDurationMs: number
       sessionId?: string
+      /** Identite concrete rapportee par le provider, distincte du modele demande. */
+      resolvedModel?: string
     }
   | { kind: 'artifact'; artifact: ChatArtifact; iteration: number }
 
@@ -116,8 +132,46 @@ export interface PilotEvent {
   streamId?: string
   actionId?: string
   artifact?: ChatArtifact
+  /** Modele concret rapporte par le provider pour un appel termine. */
+  resolvedModel?: string
+  /** Pieces jointes brutes du resultat, durables cote main mais retirees avant l'IPC renderer. */
+  attachments?: NonNullable<Message['attachments']>
   /** Coût cumulé du tour (surfacé sur l'event 'done') → journal d'activité par conversation. */
   usage?: TurnUsage
+}
+
+/**
+ * Résultat terminal d'un appel provider qui a fini pendant l'absence du main Electron. Le pilote
+ * repart à l'itération enregistrée : il consomme ce résultat une fois, sans respawn équivalent.
+ */
+export interface RecoveredPilotProviderCall {
+  iteration: number
+  attempt: number
+  streamId: string
+  /** Préfixe déjà persisté dans le message avant le redémarrage : il ne doit pas être réémis. */
+  streamedPrefix: string
+  /** Résultats déjà persistés pour cette réponse provider : ne jamais rejouer leurs commandes. */
+  settledActions?: RecoveredPilotActionResult[]
+  result: SendResult
+}
+
+export interface RecoveredPilotActionResult {
+  actionId: string
+  name: string
+  ok: boolean
+  data?: unknown
+  attachments?: NonNullable<Message['attachments']>
+}
+
+/** Barrière durable du chat direct, publiée par l'adaptateur avant son spawn. */
+export interface PilotProviderJournalLink {
+  provider: string
+  token: string
+  journalPath: string
+  iteration: number
+  attempt: number
+  streamId: string
+  requestId: string
 }
 
 const CONTROL_RE = /<(cmd|question)>\s*([\s\S]*?)\s*<\/\1>/g
@@ -283,7 +337,16 @@ export class AgentPilot {
     /** Identité causale du tour créée par le contrôleur de chat. */
     turnId?: string,
     /** Snapshot du runtime affiche pour ce tour ; distinct de l'override des commandes orchestrees. */
-    runtimeBinding?: RoleBinding
+    runtimeBinding?: RoleBinding,
+    /** Appel déjà payé à reprendre sans invoquer une seconde fois le provider. */
+    recoveredProviderCall?: RecoveredPilotProviderCall,
+    /** Persistance du lien tour → journal avant le spawn d'un chat direct. */
+    onProviderJournal?: (link: PilotProviderJournalLink) => void,
+    /** Bornes provider propres a ce tour de fond, distinctes des preferences du role. */
+    sendLimits?: Pick<SendOptions, 'maxBudgetUsd'> & {
+      /** Profil minimal du triage automatique : aucune commande, aucun pipeline, aucun gros kit. */
+      systemProfile?: 'watchdog-read-only'
+    }
   ): Promise<void> {
     // Chronométrage des jalons jusqu'au PREMIER token : c'est la latence réellement perçue au clic.
     const timer = startTurnTimer('chat')
@@ -374,7 +437,12 @@ export class AgentPilot {
 
     // MÊME config que les phases orchestrées : la CONSTITUTION (soul/réflexes) est la source
     // UNIQUE partagée ; le chat y ajoute seulement ce qui lui est propre (pilotage par commandes).
-    const pilotage = buildChatPilotagePrompt(catalog)
+    const watchdogReadOnly = sendLimits?.systemProfile === 'watchdog-read-only'
+    const providerLimits: Pick<SendOptions, 'maxBudgetUsd' | 'toolProfile'> = {
+      ...(sendLimits?.maxBudgetUsd ? { maxBudgetUsd: sendLimits.maxBudgetUsd } : {}),
+      ...(watchdogReadOnly ? { toolProfile: 'watchdog-read-only' as const } : {})
+    }
+    const pilotage = watchdogReadOnly ? '' : buildChatPilotagePrompt(catalog)
     /**
      * PRÉFIXE SYSTEM STABLE = condition du cache (mesure 2026-07-28 : cache_read = 0 sur 100 % des
      * appels, ~16 k de cache_write REÉCRITS à chaque tour, ~0,32 $ pour répondre une phrase).
@@ -384,12 +452,26 @@ export class AgentPilot {
      * être réutilisé. Il est désormais passé dans le MESSAGE (voir `convo`) : même information remise
      * au modèle, mais le system redevient identique d'un tour à l'autre, donc cachable.
      */
-    const systemParts = [
-      { name: 'constitution', text: CONSTITUTION },
-      { name: 'pilotage', text: pilotage },
-      { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-      { name: 'projectContext', text: this.projectContext() }
-    ]
+    const systemParts = watchdogReadOnly
+      ? [
+          {
+            name: 'watchdog-read-only',
+            text:
+              "Tu es le triage automatique non invasif d'Autowin OS. Reponds en francais, " +
+              'directement et en moins de 250 mots. Tu observes un incident en LECTURE SEULE : ' +
+              "n'emets aucune commande Autowin, ne lance aucune orchestration, ne modifie rien et " +
+              'ne cree aucun worktree. Utilise au plus les lectures locales strictement necessaires. ' +
+              'Si le contexte ne cite aucun artefact ou chemin precis, ne fouille pas le depot au hasard : ' +
+              'distingue les faits, la cause seulement si elle est prouvee, puis la preuve manquante. ' +
+              'Respecte exactement toute derniere ligne ISSUE demandee par le message utilisateur.\n'
+          }
+        ]
+      : [
+          { name: 'constitution', text: CONSTITUTION },
+          { name: 'pilotage', text: pilotage },
+          { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+          { name: 'projectContext', text: this.projectContext() }
+        ]
     const system = systemParts.map((p) => p.text).join('')
     const systemBlocks = systemParts
       .filter((p) => p.text)
@@ -490,7 +572,7 @@ export class AgentPilot {
     let anySpokenText = false
     let conclusionRecoveryAvailable = true
     let commandAttachments: NonNullable<Message['attachments']> = []
-    for (let i = 0; i < iterationLimit; i++) {
+    for (let i = recoveredProviderCall?.iteration ?? 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
       // point d'itération (priorité immédiate, sans attendre la fin du tour).
       for (const directive of drainDirectives?.() ?? []) {
@@ -515,16 +597,23 @@ export class AgentPilot {
           system,
           systemBlocks,
           model: binding.model,
-          reasoningEffort: binding.reasoningEffort
+          reasoningEffort: binding.reasoningEffort,
+          ...providerLimits
         },
         binding.model
       )
       prompt.systemBlocks = systemBlocks
+      let attempt =
+        recoveredProviderCall && i === recoveredProviderCall.iteration
+          ? recoveredProviderCall.attempt
+          : 0
+      const requestId = randomUUID()
       const options: SendOptions = {
         system,
         systemBlocks,
         model: binding.model,
         reasoningEffort: binding.reasoningEffort,
+        ...providerLimits,
         // Repris seulement au PREMIER appel du tour : les itérations suivantes chaînent déjà sur la
         // session que ce tour vient d'ouvrir (voir la mémorisation après réception).
         ...(resumeSessionId && i === 0 ? { resumeSessionId } : {}),
@@ -533,13 +622,32 @@ export class AgentPilot {
           prompt = observed
         },
         signal,
-        requestId: randomUUID()
+        requestId,
+        ...(onProviderJournal
+          ? {
+              onJournal: (token: string, journalPath: string) => {
+                const streamId = `${i}:${attempt}`
+                onProviderJournal({
+                  provider,
+                  token,
+                  journalPath,
+                  iteration: i,
+                  attempt,
+                  streamId,
+                  requestId
+                })
+              }
+            }
+          : {})
       }
-      let res
-      let attempt = 0
+      const recoveredHere =
+        recoveredProviderCall && i === recoveredProviderCall.iteration
+          ? recoveredProviderCall
+          : undefined
+      let res: SendResult | undefined = recoveredHere?.result
       let callStartedAt = performance.now()
-      let successfulStreamedPrefix = ''
-      let successfulAttempt = 0
+      let successfulStreamedPrefix = recoveredHere?.streamedPrefix ?? ''
+      let successfulAttempt = recoveredHere?.attempt ?? 0
       while (!res) {
         const streamId = `${i}:${attempt}`
         const visibleFilter = new VisibleStreamFilter()
@@ -601,8 +709,15 @@ export class AgentPilot {
             response: '',
             status: 'failed',
             error: message,
+            ...(error instanceof ProviderCallError && error.usage
+              ? { callUsage: error.usage }
+              : {}),
+            ...(error instanceof ProviderCallError && error.resolvedModel
+              ? { resolvedModel: error.resolvedModel }
+              : {}),
             callDurationMs: performance.now() - callStartedAt
           })
+          if (error instanceof ProviderCallError && !error.retryable) throw error
           if (attempt >= 1) throw error
           if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
           attempt += 1
@@ -623,7 +738,8 @@ export class AgentPilot {
         status: 'completed',
         callUsage: res.usage,
         callDurationMs: performance.now() - callStartedAt,
-        sessionId: res.sessionId
+        sessionId: res.sessionId,
+        ...(res.model ? { resolvedModel: res.model } : {})
       })
       // Mémorise la session pour que le PROCHAIN tour la reprenne au lieu de re-payer l'historique.
       if (conversationId) {
@@ -694,6 +810,12 @@ export class AgentPilot {
         .trim()
       if (spoken) anySpokenText = true
       const hasCommand = ordered.some((token) => token.kind === 'command')
+      const onlyAuxiliaryRemember =
+        hasCommand &&
+        Boolean(spoken) &&
+        ordered.every(
+          (token) => token.kind === 'text' || (token.kind === 'command' && token.name === 'remember')
+        )
 
       if (!hasCommand) {
         if (!successfulStreamedPrefix && spoken) emit({ kind: 'think', text: spoken })
@@ -779,7 +901,10 @@ export class AgentPilot {
 
         const actionId = `${i}:${commandIndex++}`
         anyActionExecuted = true
-        emit({ kind: 'command', actionId, name: token.name, args: token.args })
+        const settledAction = recoveredHere?.settledActions?.find(
+          (action) => action.actionId === actionId && action.name === token.name
+        )
+        if (!settledAction) emit({ kind: 'command', actionId, name: token.name, args: token.args })
         if (token.name === 'orchestrate' && orchestrationIssued) {
           const refusal = ORCHESTRATION_ALREADY_ISSUED_REFUSAL
           emit({
@@ -795,15 +920,33 @@ export class AgentPilot {
         }
         if (token.name === 'orchestrate') orchestrationIssued = true
         signal?.throwIfAborted()
-        const r = await execCommand(token.name, token.args)
+        const r: CommandResult = settledAction
+          ? settledAction.ok
+            ? {
+                ok: true,
+                data: settledAction.data,
+                ...(settledAction.attachments?.length
+                  ? { attachments: settledAction.attachments }
+                  : {})
+              }
+            : {
+                ok: false,
+                error: String(settledAction.data ?? 'échec déjà journalisé'),
+                ...(settledAction.attachments?.length
+                  ? { attachments: settledAction.attachments }
+                  : {})
+              }
+          : await execCommand(token.name, token.args)
         if (r.attachments?.length) commandAttachments.push(...r.attachments)
-        emit({
-          kind: 'result',
-          actionId,
-          name: token.name,
-          ok: r.ok,
-          data: r.ok ? r.data : r.error
-        })
+        if (!settledAction)
+          emit({
+            kind: 'result',
+            actionId,
+            name: token.name,
+            ok: r.ok,
+            data: r.ok ? r.data : r.error,
+            ...(r.attachments?.length ? { attachments: r.attachments } : {})
+          })
         // `orchestrate` rend déjà l'issue AUTORITATIVE du pipeline complet : build, juge, gate,
         // publication et fermeture du RUN. Redemander au modèle de l'interpréter coûtait un appel
         // supplémentaire et, pire, lui faisait parfois suivre le rapport PROVISOIRE du worker
@@ -822,13 +965,23 @@ export class AgentPilot {
               outcome,
               r.ok ? undefined : String(r.error ?? '')
             )}\n\n${closureNotice}`,
-            outcome: r.ok ? ((r.data as Record<string, unknown> | undefined) ?? undefined) : undefined,
+            outcome: r.ok
+              ? ((r.data as Record<string, unknown> | undefined) ?? undefined)
+              : undefined,
             usage
           })
           return
         }
         results.push(`${token.name} → ${r.ok ? JSON.stringify(r.data) : 'ERREUR ' + r.error}`)
         tokenIndex += 1
+      }
+
+      // `remember` est une écriture auxiliaire : son résultat est déjà visible dans la carte action.
+      // Quand le modèle a livré sa réponse dans le même message, repayer une génération uniquement
+      // pour commenter un refus déterministe (type/locator/SHA) ne peut améliorer le travail rendu.
+      if (onlyAuxiliaryRemember) {
+        emit({ kind: 'done', text: '', usage })
+        return
       }
 
       const state = await this.bus.snapshotForPrompt()

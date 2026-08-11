@@ -67,8 +67,26 @@ describe('renderer chat IPC contract', () => {
     expect(main).toContain("from './activity/chat-usage-settlement'")
     expect(pilotChat).toContain('persistChatUsageSettlement({')
     expect(pilotChat).toMatch(/os\.runChatTurn\([\s\S]*?onSupervisedUsageSettlement/)
+    expect(pilotChat).toMatch(
+      /pilotEvent\.kind === 'prompt-call'[\s\S]{0,900}executionSupervisor\.currentSnapshot\(\)[\s\S]{0,300}persistSupervisedChatUsage/
+    )
     expect(pilotChat).toContain('os.executionSupervisor.currentSignal()')
+    expect(pilotChat).toContain(
+      'const watchdogReadOnlyProfile = policy?.readOnly && policy.background'
+    )
+    expect(pilotChat).toContain("systemProfile: 'watchdog-read-only' as const")
     expect(pilotChat).toContain("broadcast({ type: 'refresh', scope: 'workflows' })")
+  })
+
+  it('journalise les pieces jointes de commande sans les exposer au renderer', () => {
+    const { main } = readChatContractSources()
+    const pilotChat = main.slice(
+      main.indexOf('const runPilotChat = async'),
+      main.indexOf("ipcMain.handle('os:pilotChat'")
+    )
+
+    expect(pilotChat).toContain('guardAttachments(pilotEvent.attachments)')
+    expect(pilotChat.match(/delete\s+\w+\.attachments/g)).toHaveLength(2)
   })
 
   it('conserve le checkpoint et persiste le règlement tardif sur os:orchestrate', () => {

@@ -249,6 +249,141 @@ describe('RouterView — erreurs provider locales', () => {
     expect(container.querySelector('[data-provider="claude"]')).not.toBeNull()
   })
 
+  it('affiche l’échec du test de provider sans jamais le dire authentifié', async () => {
+    // Défaut : `catch {}` muet — le bouton « Tester » semblait sans effet.
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models: async () => [],
+        providerStatus: async () => [{ provider: 'claude', status: 'absent', testable: true }],
+        roles: async () => ({}),
+        providerTest: vi.fn(async () => {
+          throw new Error('probe refusé')
+        }),
+        providerLogin: vi.fn(),
+        setProviderMode: vi.fn(),
+        onAppEvent: vi.fn(() => () => undefined),
+        setRole: vi.fn()
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => root.render(createElement(RouterView, { active: true })))
+    await flush()
+
+    const claude = container.querySelector<HTMLElement>('[data-provider="claude"]')!
+    const tester = Array.from(claude.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Tester'
+    )!
+    await act(async () => tester.click())
+    await flush()
+
+    const alerte = claude.querySelector('[data-testid="router-provider-error-claude"]')
+    expect(alerte).not.toBeNull()
+    expect(alerte?.getAttribute('role')).toBe('alert')
+    expect(alerte?.textContent).toContain('probe refusé')
+    expect(claude.getAttribute('data-status')).not.toBe('authenticated')
+    expect(claude.textContent).not.toContain('Authentifié')
+  })
+
+  it('affiche l’échec du changement de mode au lieu d’un rejet non géré', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models: async () => [],
+        providerStatus: async () => [{ provider: 'claude', status: 'absent', testable: true }],
+        roles: async () => ({}),
+        providerTest: vi.fn(),
+        providerLogin: vi.fn(),
+        setProviderMode: vi.fn(async () => {
+          throw new Error('mode non enregistrable')
+        }),
+        onAppEvent: vi.fn(() => () => undefined),
+        setRole: vi.fn()
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => root.render(createElement(RouterView, { active: true })))
+    await flush()
+
+    const claude = container.querySelector<HTMLElement>('[data-provider="claude"]')!
+    const standby = claude.querySelector<HTMLButtonElement>('.router-standby')!
+    await act(async () => standby.click())
+    await flush()
+
+    const alerte = claude.querySelector('[data-testid="router-provider-error-claude"]')
+    expect(alerte?.getAttribute('role')).toBe('alert')
+    expect(alerte?.textContent).toContain('mode non enregistrable')
+    expect(standby.disabled).toBe(false)
+  })
+
+  it('affiche l’échec du lancement de reconnexion sans annoncer « login lancé »', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models: async () => [],
+        providerStatus: async () => [{ provider: 'claude', status: 'absent', testable: true }],
+        roles: async () => ({}),
+        providerTest: vi.fn(),
+        providerLogin: vi.fn(async () => {
+          throw new Error('spawn impossible')
+        }),
+        setProviderMode: vi.fn(),
+        onAppEvent: vi.fn(() => () => undefined),
+        setRole: vi.fn()
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => root.render(createElement(RouterView, { active: true })))
+    await flush()
+
+    const claude = container.querySelector<HTMLElement>('[data-provider="claude"]')!
+    await act(async () => claude.querySelector<HTMLButtonElement>('.router-reconnect')!.click())
+    await flush()
+
+    const alerte = claude.querySelector('[data-testid="router-provider-error-claude"]')
+    expect(alerte?.getAttribute('role')).toBe('alert')
+    expect(alerte?.textContent).toContain('spawn impossible')
+    expect(claude.textContent).not.toContain('Login lancé')
+  })
+
+  it('annonce le chargement du catalogue au lieu d’un écran blanc', async () => {
+    // Défaut : `loaded === false` ne rendait RIEN — indiscernable d'un catalogue vide.
+    const attente = deferred<unknown[]>()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models: () => attente.promise,
+        providerStatus: async () => [],
+        roles: async () => ({}),
+        providerTest: vi.fn(),
+        providerLogin: vi.fn(),
+        setProviderMode: vi.fn(),
+        onAppEvent: vi.fn(() => () => undefined),
+        setRole: vi.fn()
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => root.render(createElement(RouterView, { active: true })))
+    await flush()
+
+    const chargement = container.querySelector('[data-testid="router-loading"]')
+    expect(chargement).not.toBeNull()
+    expect(chargement?.getAttribute('aria-busy')).toBe('true')
+
+    await act(async () => attente.resolve([]))
+    await flush()
+    expect(container.querySelector('[data-testid="router-loading"]')).toBeNull()
+    expect(container.textContent).toContain('Aucun provider détecté.')
+  })
+
   it('ignore une ancienne réponse de catalogue qui termine après la plus récente', async () => {
     type Model = { id: string; provider: string; model: string; label: string }
     let appEvent: ((event: { type: string; scope?: string }) => void) | undefined

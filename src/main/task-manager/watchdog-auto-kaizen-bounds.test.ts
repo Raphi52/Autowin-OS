@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { routeSkillRequest } from '../skill-routing'
 import { TaskStore } from './task-store'
-import { AUTO_KAIZEN_SEED_ID, autoKaizenSeed, seedWatchdogTasks } from './watchdog-seeds'
+import {
+  AUTO_KAIZEN_SEED_ID,
+  autoKaizenSeed,
+  previousOrchestrationAutoKaizenSeed,
+  seedWatchdogTasks
+} from './watchdog-seeds'
 
 function store(): TaskStore {
   let counter = 0
@@ -9,20 +13,74 @@ function store(): TaskStore {
 }
 
 describe('Auto-kaizen borne', () => {
-  it('ne reserve que le build et une seule occurrence par cause', () => {
+  it('trie en lecture seule sur le modele economique, sans lancer un second pipeline', () => {
     const seed = autoKaizenSeed()
-    // Le moteur d'orchestration ne neutralise un workflow compose que pour une COMMANDE de skill
-    // (`/build`), pas pour le mot naturel « build ». Le dogfood Tickets a prouve qu'un simple
-    // prefixe verbal repartait en scout quand la conversation Auto-kaizen gardait son workflow.
-    expect(routeSkillRequest(seed.prompt)?.explicitPhase).toBe('build')
+    expect(seed.watchdog?.action).toBe('chat')
+    expect(seed.prompt).toContain('LECTURE SEULE')
+    expect(seed.prompt).toContain('Ne lance aucune orchestration')
+    expect(seed.prompt).not.toMatch(/^\/build\b/)
+    expect(seed.destination).toMatchObject({
+      provider: 'claude',
+      model: 'haiku',
+      reasoningEffort: 'low'
+    })
     expect(seed.watchdog?.guards.maxPerRoot).toBe(1)
     expect(seed.watchdog?.guards.maxTriggersPerHour).toBe(1)
+    expect(seed.watchdog?.guards.maxTriggersPerDay).toBe(4)
+    expect(seed.watchdog?.guards.maxKnownCostUsdPerDay).toBe(0.25)
+    expect(seed.watchdog?.guards.maxUnpricedCallsPerDay).toBe(1)
     expect(seed.watchdog?.guards.dedupWindowMs).toBe(1_800_000)
+  })
+
+  it('ajoute les budgets quotidiens au premier triage Haiku intact', () => {
+    const tasks = store()
+    const current = autoKaizenSeed()
+    if (current.destination.kind !== 'new') throw new Error('destination inattendue')
+    const prior = tasks.create({
+      ...current,
+      prompt: [
+        'Auto-kaizen LECTURE SEULE : trie cet incident en un seul diagnostic borne.',
+        'Ne lance aucune orchestration. Ne modifie aucun fichier et ne cree aucun worktree.',
+        '',
+        'Un workflow vient de mal se terminer — soit en echec, soit en annoncant un succes que rien',
+        "n'etaye. Etablis ce qui s'est reellement passe avant de conclure.",
+        '',
+        '1. Lis le RUN cite dans le contexte s’il est accessible et distingue la cause du symptome.',
+        '2. Cherche la preuve terminale deja disponible ; ne relance ni test ni workflow couteux.',
+        "3. Si le workflow s'est dit REUSSI sans preuve, dis explicitement quelle preuve manque.",
+        '4. Si une correction est justifiee, decris la correction bornee et son oracle, sans',
+        '   l’appliquer. Sans cause etablie, rapporte seulement ce qui reste a verifier.',
+        '5. Termine par le tri ISSUE demande. `repair` est interdit ici puisqu’aucune mutation',
+        '   automatique n’est autorisee ; utilise `investigate` ou `report` pour une suite.'
+      ].join('\n'),
+      destination: { ...current.destination, conversationId: 'conv-auto-kaizen-read-only' },
+      watchdog: {
+        ...current.watchdog!,
+        guards: {
+          dedupWindowMs: 1_800_000,
+          maxTriggersPerHour: 1,
+          maxChainDepth: 0,
+          maxPerRoot: 1
+        }
+      }
+    })
+    tasks.markSeeded(AUTO_KAIZEN_SEED_ID)
+
+    seedWatchdogTasks(tasks)
+
+    expect(tasks.getTask(prior.id)?.destination).toMatchObject({
+      conversationId: 'conv-auto-kaizen-read-only'
+    })
+    expect(tasks.getTask(prior.id)?.watchdog?.guards).toMatchObject({
+      maxTriggersPerDay: 4,
+      maxKnownCostUsdPerDay: 0.25,
+      maxUnpricedCallsPerDay: 1
+    })
   })
 
   it('durcit la version bornee precedente sans toucher une regle personnalisee', () => {
     const tasks = store()
-    const current = autoKaizenSeed()
+    const current = previousOrchestrationAutoKaizenSeed()
     const previous = tasks.create({
       ...current,
       watchdog: {
@@ -45,6 +103,8 @@ describe('Auto-kaizen borne', () => {
       maxChainDepth: 0,
       maxPerRoot: 1
     })
+    expect(tasks.getTask(previous.id)?.watchdog?.action).toBe('chat')
+    expect(tasks.getTask(previous.id)?.destination).toMatchObject({ model: 'haiku' })
   })
 
   it('migre le semis historique intact sans perdre sa conversation dediee', () => {
@@ -84,7 +144,9 @@ describe('Auto-kaizen borne', () => {
 
     const migrated = tasks.getTask(legacy.id)!
     expect(migrated.destination).toMatchObject({ conversationId: 'conv-auto-kaizen' })
-    expect(routeSkillRequest(migrated.prompt)?.explicitPhase).toBe('build')
+    expect(migrated.watchdog?.action).toBe('chat')
+    expect(migrated.prompt).not.toMatch(/^\/build\b/)
+    expect(migrated.destination).toMatchObject({ model: 'haiku', reasoningEffort: 'low' })
     expect(migrated.watchdog?.guards.maxPerRoot).toBe(1)
     expect(migrated.watchdog?.source).toMatchObject({
       events: [
@@ -96,9 +158,9 @@ describe('Auto-kaizen borne', () => {
     })
   })
 
-  it('migre la version build naturelle observée en production vers la commande /build', () => {
+  it('migre la version build naturelle observée en production vers le triage', () => {
     const tasks = store()
-    const previous = autoKaizenSeed()
+    const previous = previousOrchestrationAutoKaizenSeed()
     if (previous.destination.kind !== 'new') throw new Error('destination de semis inattendue')
     const legacy = tasks.create({
       ...previous,
@@ -110,8 +172,32 @@ describe('Auto-kaizen borne', () => {
     seedWatchdogTasks(tasks)
 
     const migrated = tasks.getTask(legacy.id)!
-    expect(routeSkillRequest(migrated.prompt)?.explicitPhase).toBe('build')
+    expect(migrated.watchdog?.action).toBe('chat')
+    expect(migrated.prompt).not.toMatch(/^\/build\b/)
     expect(migrated.destination).toMatchObject({ conversationId: 'conv-auto-kaizen-active' })
+  })
+
+  it('migre la version orchestration mesuree en production vers le triage Haiku', () => {
+    const tasks = store()
+    const previous = previousOrchestrationAutoKaizenSeed()
+    if (previous.destination.kind !== 'new') throw new Error('destination inattendue')
+    const live = tasks.create({
+      ...previous,
+      destination: { ...previous.destination, conversationId: 'conv-auto-kaizen-live' }
+    })
+    tasks.markSeeded(AUTO_KAIZEN_SEED_ID)
+
+    seedWatchdogTasks(tasks)
+
+    expect(tasks.getTask(live.id)).toMatchObject({
+      watchdog: { action: 'chat' },
+      destination: {
+        conversationId: 'conv-auto-kaizen-live',
+        provider: 'claude',
+        model: 'haiku',
+        reasoningEffort: 'low'
+      }
+    })
   })
 
   it('ne remplace jamais une variante historique editee par l utilisateur', () => {
@@ -142,5 +228,66 @@ describe('Auto-kaizen borne', () => {
 
     expect(tasks.getTask(edited.id)?.prompt).toBe(editedPrompt)
     expect(tasks.getTask(edited.id)?.watchdog?.guards.maxPerRoot).toBe(3)
+  })
+
+  it.each([
+    ['provider', { provider: 'codex' }],
+    ['categorie', { category: 'Mes diagnostics' }],
+    ['modele', { model: 'opus' }],
+    ['effort', { reasoningEffort: 'high' as const }]
+  ])('ne migre pas une destination personnalisee (%s)', (_label, destinationPatch) => {
+    const tasks = store()
+    const previous = previousOrchestrationAutoKaizenSeed()
+    if (previous.destination.kind !== 'new') throw new Error('destination inattendue')
+    const edited = tasks.create({
+      ...previous,
+      destination: {
+        ...previous.destination,
+        ...destinationPatch,
+        conversationId: 'conv-personnalisee'
+      }
+    })
+    tasks.markSeeded(AUTO_KAIZEN_SEED_ID)
+
+    seedWatchdogTasks(tasks)
+
+    expect(tasks.getTask(edited.id)).toEqual(edited)
+  })
+
+  it('ne migre pas une garde personnalisee', () => {
+    const tasks = store()
+    const previous = previousOrchestrationAutoKaizenSeed()
+    const edited = tasks.create({
+      ...previous,
+      watchdog: {
+        ...previous.watchdog!,
+        guards: { ...previous.watchdog!.guards, maxTriggersPerHour: 9 }
+      }
+    })
+    tasks.markSeeded(AUTO_KAIZEN_SEED_ID)
+
+    seedWatchdogTasks(tasks)
+
+    expect(tasks.getTask(edited.id)).toEqual(edited)
+  })
+
+  it('ne migre pas un budget quotidien personnalise sur une ancienne version', () => {
+    const tasks = store()
+    const previous = previousOrchestrationAutoKaizenSeed()
+    const edited = tasks.create({
+      ...previous,
+      watchdog: {
+        ...previous.watchdog!,
+        guards: {
+          ...previous.watchdog!.guards,
+          maxKnownCostUsdPerDay: 9.99
+        }
+      }
+    })
+    tasks.markSeeded(AUTO_KAIZEN_SEED_ID)
+
+    seedWatchdogTasks(tasks)
+
+    expect(tasks.getTask(edited.id)).toEqual(edited)
   })
 })

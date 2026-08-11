@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createDecipheriv, createHash, createHmac } from 'node:crypto'
-import {
-  retrieveBrainContext,
-  brainServiceToken
-} from './brain-retrieval'
+import { retrieveBrainContext, brainServiceToken } from './brain-retrieval'
 
 const TEST_TOKEN = 'x'.repeat(40)
 
@@ -13,7 +10,9 @@ const signedPayload = (body: Record<string, unknown>): Record<string, unknown> =
   const authenticated = JSON.stringify({
     context,
     navigation: body.navigation ?? null,
-    ...('corpus' in body ? { corpus: body.corpus } : {})
+    ...('corpus' in body ? { corpus: body.corpus } : {}),
+    ...('structuredContext' in body ? { structuredContext: body.structuredContext } : {}),
+    ...('request' in body ? { request: body.request } : {})
   })
   return {
     service: 'amitel-brain',
@@ -25,9 +24,21 @@ const signedPayload = (body: Record<string, unknown>): Record<string, unknown> =
   }
 }
 
-const challengeResponse = (url: unknown): { ok: true; json: () => Promise<unknown> } | undefined => {
-  if (!String(url).endsWith('/challenge')) return undefined
-  return { ok: true, json: async () => signedPayload({ context: `challenge:${'ab'.repeat(12)}` }) }
+const textResponse = (body: unknown, ok = true): { ok: boolean; text: () => Promise<string> } => ({
+  ok,
+  text: async () => JSON.stringify(body)
+})
+
+const challengeResponse = (
+  url: unknown
+): { ok: boolean; text: () => Promise<string> } | undefined => {
+  const parsed = new URL(String(url))
+  if (parsed.pathname !== '/challenge') return undefined
+  const nonce = parsed.searchParams.get('nonce') ?? ''
+  if (!/^[0-9a-f]{24}$/.test(nonce)) {
+    return textResponse({ error: 'invalid challenge' }, false)
+  }
+  return textResponse(signedPayload({ context: `challenge:${nonce}` }))
 }
 
 const withChallenge = (
@@ -36,22 +47,31 @@ const withChallenge = (
   (async (url: unknown, init?: RequestInit) =>
     challengeResponse(url) ?? queryFetch(url, init)) as unknown as typeof fetch
 
-const okFetch = (body: Record<string, unknown>): typeof fetch =>
-  withChallenge(async () => ({ ok: true, json: async () => signedPayload(body) }))
-
 const openRequest = (body: unknown): Record<string, unknown> => {
   const envelope = JSON.parse(String(body)) as { nonce: string; ciphertext: string }
   const encrypted = Buffer.from(envelope.ciphertext, 'base64')
   const key = createHash('sha256').update(TEST_TOKEN, 'utf8').digest()
-  const decipher = createDecipheriv(
-    'aes-256-gcm', key, Buffer.from(envelope.nonce, 'hex')
-  )
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.nonce, 'hex'))
   decipher.setAAD(Buffer.from('amitel-brain/request-v1', 'utf8'))
   decipher.setAuthTag(encrypted.subarray(-16))
-  return JSON.parse(Buffer.concat([
-    decipher.update(encrypted.subarray(0, -16)), decipher.final()
-  ]).toString('utf8')) as Record<string, unknown>
+  return JSON.parse(
+    Buffer.concat([decipher.update(encrypted.subarray(0, -16)), decipher.final()]).toString('utf8')
+  ) as Record<string, unknown>
 }
+
+const boundSignedPayload = (
+  body: Record<string, unknown>,
+  requestBody: unknown
+): Record<string, unknown> => {
+  const request = openRequest(requestBody)
+  return signedPayload({
+    ...body,
+    request: { query: request.query, trace_id: request.trace_id }
+  })
+}
+
+const okFetch = (body: Record<string, unknown>): typeof fetch =>
+  withChallenge(async (_url, init) => textResponse(boundSignedPayload(body, init?.body)))
 
 describe('parseNavigation — offsets de chunk + root', () => {
   it('borne le nombre de candidats signés avant exposition à l’UI', async () => {
@@ -126,6 +146,81 @@ describe('parseNavigation — offsets de chunk + root', () => {
 })
 
 describe('retrieveBrainContext', () => {
+  it.each([' ', '\n\t', '\r\n'])(
+    'classe un contexte signé sans caractère utile comme empty (%j)',
+    async (context) => {
+      const result = await retrieveBrainContext('question', {
+        env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+        fetchFn: okFetch({ context })
+      })
+      expect(result).toMatchObject({ context: '', status: 'empty' })
+    }
+  )
+
+  it('rejette une navigation retenue quand le contexte signé ne contient aucun savoir', async () => {
+    const result = await retrieveBrainContext('question', {
+      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      fetchFn: okFetch({
+        context: '\n\t',
+        navigation: {
+          query: 'question',
+          minDense: 0.25,
+          candidates: [
+            {
+              rank: 1,
+              path: 'knowledge/a.md',
+              type: 'domain',
+              denseCos: 0.9,
+              retained: true
+            }
+          ]
+        }
+      })
+    })
+    expect(result).toEqual({ context: '', status: 'invalid' })
+  })
+
+  it('rejette une navigation signée pour une autre question Unicode', async () => {
+    const result = await retrieveBrainContext('Où vit 😀 A ?', {
+      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      fetchFn: okFetch({
+        context: '[BRAIN] réponse B',
+        navigation: {
+          query: 'Où vit 😀 B ?',
+          minDense: 0.25,
+          candidates: []
+        }
+      })
+    })
+    expect(result).toEqual({ context: '', status: 'invalid' })
+  })
+
+  it('rejette un contexte sans navigation ni liaison signée à la requête', async () => {
+    const result = await retrieveBrainContext('QUESTION_A', {
+      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      fetchFn: withChallenge(async () =>
+        textResponse(signedPayload({ context: '[BRAIN] REPONSE_DE_B' }))
+      )
+    })
+    expect(result).toEqual({ context: '', status: 'invalid' })
+  })
+
+  it("rejette le rejeu signé d'une ancienne exécution de la même question", async () => {
+    const result = await retrieveBrainContext('QUESTION_A', {
+      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      traceId: () => 'trace-courante',
+      fetchFn: withChallenge(async () =>
+        textResponse(
+          signedPayload({
+            context: '[BRAIN] ANCIENNE_REPONSE',
+            request: { query: 'QUESTION_A', trace_id: 'trace-ancienne' }
+          })
+        )
+      )
+    })
+    expect(result).toEqual({ context: '', status: 'invalid' })
+  })
+
   it('ne contacte pas le Brain quand le workspace est fail-closed', async () => {
     const fetchFn = vi.fn()
     const res = await retrieveBrainContext('secret', {
@@ -141,15 +236,21 @@ describe('retrieveBrainContext', () => {
     const bodies: unknown[] = []
     const fetchFn = withChallenge(async (_url: unknown, init?: RequestInit) => {
       bodies.push(openRequest(init?.body))
-      return { ok: true, json: async () => signedPayload({ context: '[BRAIN] savoir' }) }
+      return textResponse(boundSignedPayload({ context: '[BRAIN] savoir' }, init?.body))
     })
     const env = { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
 
     await retrieveBrainContext('question', {
-      env, fetchFn, corpus: ['autowin-os'], traceId: () => 'trace-a'
+      env,
+      fetchFn,
+      corpus: ['autowin-os'],
+      traceId: () => 'trace-a'
     })
     await retrieveBrainContext('question', {
-      env, fetchFn, corpus: ['rig-'], traceId: () => 'trace-b'
+      env,
+      fetchFn,
+      corpus: ['rig-'],
+      traceId: () => 'trace-b'
     })
 
     expect(bodies).toEqual([
@@ -309,9 +410,9 @@ describe('fraîcheur — aucune publication n’est masquée par le client', () 
 
   function countingFetch(): { fetchFn: typeof fetch; appels: () => number } {
     let appels = 0
-    const fetchFn = withChallenge(async () => {
+    const fetchFn = withChallenge(async (_url, init) => {
       appels += 1
-      return { ok: true, json: async () => signedPayload({ context: '[BRAIN] savoir' }) }
+      return textResponse(boundSignedPayload({ context: '[BRAIN] savoir' }, init?.body))
     })
     return { fetchFn, appels: () => appels }
   }
@@ -328,9 +429,11 @@ describe('fraîcheur — aucune publication n’est masquée par le client', () 
   it('ne masque pas une nouvelle génération pour une requête identique', async () => {
     let generation = 'A'
     let appels = 0
-    const fetchFn = withChallenge(async () => {
+    const fetchFn = withChallenge(async (_url, init) => {
       appels += 1
-      return { ok: true, json: async () => signedPayload({ context: `[BRAIN] génération ${generation}` }) }
+      return textResponse(
+        boundSignedPayload({ context: `[BRAIN] génération ${generation}` }, init?.body)
+      )
     }) as unknown as typeof fetch
 
     const premier = await retrieveBrainContext('même question', { env, fetchFn })
@@ -352,10 +455,10 @@ describe('fraîcheur — aucune publication n’est masquée par le client', () 
   it('un serveur indisponible n’est PAS mémorisé — sinon un vide se figerait', async () => {
     let appels = 0
     let enPanne = true
-    const fetchFn = withChallenge(async () => {
+    const fetchFn = withChallenge(async (_url, init) => {
       appels += 1
       if (enPanne) throw new Error('serveur down')
-      return { ok: true, json: async () => signedPayload({ context: '[BRAIN] revenu' }) }
+      return textResponse(boundSignedPayload({ context: '[BRAIN] revenu' }, init?.body))
     }) as unknown as typeof fetch
 
     const panne = await retrieveBrainContext('q', { env, fetchFn })

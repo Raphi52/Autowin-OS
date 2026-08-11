@@ -25,6 +25,12 @@ export interface OrchestrationOutcome {
   runId?: unknown
   result?: unknown
   reused?: unknown
+  learning?: {
+    state?: unknown
+    detail?: unknown
+    candidateId?: unknown
+    knowledgeId?: unknown
+  }
   error?: unknown
 }
 
@@ -615,6 +621,8 @@ export function formatOrchestrationOutcome(
   const run = runLabelFromPath(asString(outcome.runPath) ?? asString(outcome.runId))
   const result = asString(outcome.result)
   const visibleResult = result ? reconcileClosedOrchestrationText(result, outcome) : result
+  const learningState = asString(outcome.learning?.state)
+  const learningDetail = asString(outcome.learning?.detail)
 
   const headline = gateBlocked
     ? '⛔ Workflow BLOQUÉ par le gate — livrable non validé'
@@ -633,6 +641,21 @@ export function formatOrchestrationOutcome(
   ].filter((fact): fact is string => Boolean(fact))
 
   const lines = [facts.length ? `${headline} · ${facts.join(' · ')}` : headline]
+  if (learningState) {
+    const learningLabels: Record<string, string> = {
+      none: 'aucune leçon proposée',
+      off: 'apprentissage désactivé',
+      shadow: 'leçon simulée',
+      inbox: 'leçon gardée en revue',
+      escrow: 'leçon en attente de confirmation',
+      published: 'leçon prouvée publiée',
+      suppressed: 'doublon ou leçon non recevable écarté',
+      unknown: 'état de la leçon inconnu'
+    }
+    lines.push(
+      `Brain : ${learningLabels[learningState] ?? learningState}${learningDetail ? ` — ${learningDetail}` : ''}`
+    )
+  }
   if (visibleResult)
     lines.push(
       '',

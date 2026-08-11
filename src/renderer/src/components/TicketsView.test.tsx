@@ -223,7 +223,9 @@ describe('vue Tickets', () => {
     )
     await act(async () => checks[0].click())
     await act(async () => {
-      ;(container.querySelector('[data-testid="tickets-treat-selection"]') as HTMLButtonElement).click()
+      ;(
+        container.querySelector('[data-testid="tickets-treat-selection"]') as HTMLButtonElement
+      ).click()
       for (let index = 0; index < 20; index += 1) await Promise.resolve()
     })
 
@@ -755,6 +757,17 @@ describe('vue Tickets', () => {
   })
 })
 
+/**
+ * Reprise PERSISTÉE du mode auto : la première page non vide est AMORCÉE (marquée vue, non
+ * traitée). Ces scénarios injectent donc leurs entrants par un rafraîchissement, après l'amorce.
+ */
+async function refreshList(container: HTMLElement, ticks = 20): Promise<void> {
+  await act(async () => {
+    ;(container.querySelector('[data-testid="tickets-refresh"]') as HTMLButtonElement).click()
+    for (let index = 0; index < ticks; index += 1) await Promise.resolve()
+  })
+}
+
 describe('vue Tickets — lots automatiques différés', () => {
   afterEach(() => {
     document.body.replaceChildren()
@@ -762,25 +775,28 @@ describe('vue Tickets — lots automatiques différés', () => {
     vi.restoreAllMocks()
   })
 
-  it('traite 5 entrants en deux lots successifs de 3 puis 2 sans rafraîchissement', async () => {
+  it('traite 5 entrants en deux lots successifs de 3 puis 2 dans le MÊME cycle', async () => {
     localStorage.setItem('autowin:tickets-auto-mode', '1')
     const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
       id: `conv-${title}`
     }))
+    let page = [item('0')]
     api({
-      listTickets: vi.fn(async () => ({
-        items: [item('1'), item('2'), item('3'), item('4'), item('5')],
-        hasMore: false
-      })),
+      listTickets: vi.fn(async () => ({ items: [...page], hasMore: false })),
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
       orchestrate: vi.fn(async () => ({ ok: true }))
     })
 
-    const { root } = await render()
+    const { root, container } = await render()
     await act(async () => {
       for (let index = 0; index < 20; index += 1) await Promise.resolve()
     })
+    // Amorce : le ticket déjà présent n'engage rien.
+    expect(conversationsCreate).not.toHaveBeenCalled()
+
+    page = [item('0'), item('1'), item('2'), item('3'), item('4'), item('5')]
+    await refreshList(container)
 
     expect(conversationsCreate).toHaveBeenCalledTimes(5)
     await act(async () => root.unmount())
@@ -795,29 +811,26 @@ describe('vue Tickets — lots automatiques différés', () => {
     const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
       id: `conv-${title}`
     }))
+    let page = [item('0')]
     api({
-      listTickets: vi.fn(async () => ({ items: [item('1')], hasMore: false })),
+      listTickets: vi.fn(async () => ({ items: [...page], hasMore: false })),
       roles,
       conversationsCreate,
       orchestrate: vi.fn(async () => ({ ok: true }))
     })
 
-    const { root } = await render()
+    const { root, container } = await render()
     await act(async () => {
       for (let index = 0; index < 10; index += 1) await Promise.resolve()
     })
 
+    // Un entrant arrive alors qu'AUCUN rôle n'est configuré : rien ne doit être consommé.
+    page = [item('0'), item('1')]
+    await refreshList(container, 10)
     expect(conversationsCreate).not.toHaveBeenCalled()
-    expect(localStorage.getItem('autowin:tickets-auto-seen')).toBeNull()
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).not.toContain('::1')
 
-    await act(async () => {
-      root.render(createElement(TicketsView, { active: false }))
-      await Promise.resolve()
-    })
-    await act(async () => {
-      root.render(createElement(TicketsView, { active: true }))
-      for (let index = 0; index < 20; index += 1) await Promise.resolve()
-    })
+    await refreshList(container)
 
     expect(conversationsCreate).toHaveBeenCalledTimes(1)
     await act(async () => root.unmount())
@@ -830,37 +843,35 @@ describe('vue Tickets — lots automatiques différés', () => {
       .mockResolvedValueOnce([{ provider: 'claude', status: 'expired', testable: false }])
       .mockResolvedValue([{ provider: 'claude', status: 'authenticated', testable: false }])
     const orchestrate = vi.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValue({ ok: true })
+    let page = [item('0')]
     api({
-      listTickets: vi.fn(async () => ({ items: [item('1')], hasMore: false })),
+      listTickets: vi.fn(async () => ({ items: [...page], hasMore: false })),
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       providerStatus,
       conversationsCreate: vi.fn(async () => ({ id: 'conv-ticket' })),
       orchestrate
     })
 
-    const first = await render()
+    const { root, container } = await render()
     await act(async () => {
       for (let index = 0; index < 10; index += 1) await Promise.resolve()
     })
+
+    // Entrant vu alors que le provider est expiré : rien n'est consommé, rien n'est marqué.
+    page = [item('0'), item('1')]
+    await refreshList(container, 10)
     expect(orchestrate).not.toHaveBeenCalled()
-    expect(localStorage.getItem('autowin:tickets-auto-seen')).toBeNull()
-    await act(async () => first.root.unmount())
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).not.toContain('::1')
 
-    const second = await render()
-    await act(async () => {
-      for (let index = 0; index < 20; index += 1) await Promise.resolve()
-    })
+    await refreshList(container)
     expect(orchestrate).toHaveBeenCalledTimes(1)
     expect(localStorage.getItem('autowin:tickets-auto-seen')).toContain('::1')
-    await act(async () => second.root.unmount())
 
-    const third = await render()
-    await act(async () => {
-      for (let index = 0; index < 20; index += 1) await Promise.resolve()
-    })
+    // Le lancement a échoué (ok:false) : il ne doit JAMAIS être repayé au cycle suivant.
+    await refreshList(container)
     expect(orchestrate).toHaveBeenCalledTimes(1)
     expect(localStorage.getItem('autowin:tickets-auto-seen')).toContain('::1')
-    await act(async () => third.root.unmount())
+    await act(async () => root.unmount())
   })
 
   it('affiche et rouvre la conversation liee a un ticket prepare', async () => {
@@ -881,7 +892,9 @@ describe('vue Tickets — lots automatiques différés', () => {
     )
     await act(async () => checks[0].click())
     await act(async () => {
-      ;(container.querySelector('[data-testid="tickets-treat-selection"]') as HTMLButtonElement).click()
+      ;(
+        container.querySelector('[data-testid="tickets-treat-selection"]') as HTMLButtonElement
+      ).click()
       for (let index = 0; index < 10; index += 1) await Promise.resolve()
     })
 
@@ -909,11 +922,9 @@ describe('vue Tickets — lots automatiques différés', () => {
     const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
       id: `conv-${title}`
     }))
+    let page = [item('0')]
     api({
-      listTickets: vi.fn(async () => ({
-        items: [item('1'), item('2'), item('3'), item('4'), item('5')],
-        hasMore: false
-      })),
+      listTickets: vi.fn(async () => ({ items: [...page], hasMore: false })),
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
       orchestrate
@@ -923,6 +934,8 @@ describe('vue Tickets — lots automatiques différés', () => {
     await act(async () => {
       for (let index = 0; index < 10; index += 1) await Promise.resolve()
     })
+    page = [item('0'), item('1'), item('2'), item('3'), item('4'), item('5')]
+    await refreshList(container, 10)
     expect(conversationsCreate).toHaveBeenCalledTimes(3)
 
     const auto = container.querySelector(
@@ -956,11 +969,9 @@ describe('vue Tickets — lots automatiques différés', () => {
       }
       return { id: `conv-${title}` }
     })
+    let page = [item('0')]
     api({
-      listTickets: vi.fn(async () => ({
-        items: [item('1'), item('2'), item('3'), item('4'), item('5'), item('6')],
-        hasMore: false
-      })),
+      listTickets: vi.fn(async () => ({ items: [...page], hasMore: false })),
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
       orchestrate
@@ -971,6 +982,8 @@ describe('vue Tickets — lots automatiques différés', () => {
     await act(async () => {
       for (let index = 0; index < 20; index += 1) await Promise.resolve()
     })
+    page = [item('0'), item('1'), item('2'), item('3'), item('4'), item('5'), item('6')]
+    await refreshList(container)
     await act(async () => {
       pending.splice(0).forEach((resolve) => resolve({ ok: true }))
       for (let index = 0; index < 20; index += 1) await Promise.resolve()
@@ -980,6 +993,376 @@ describe('vue Tickets — lots automatiques différés', () => {
     expect(container.querySelector('[data-testid="tickets-auto-status"]')?.textContent).toContain(
       'arrêté'
     )
+    await act(async () => root.unmount())
+  })
+  it('enrichit le ticket affiché par défaut, sans clic et sans rafale (P1-3)', async () => {
+    const getTicket = vi.fn(async () => ({
+      ...item('1'),
+      comments: [{ author: 'Alice', text: 'commentaire réel' }]
+    }))
+    api({
+      listTickets: vi.fn(async (): Promise<TicketPage> => ({ items: [item('1')], hasMore: false })),
+      getTicket
+    })
+    const { root, container } = await render()
+    await act(async () => {
+      for (let index = 0; index < 5; index += 1) await Promise.resolve()
+    })
+    expect(getTicket).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('commentaire réel')
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: true }))
+      await Promise.resolve()
+    })
+    expect(getTicket).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+  })
+
+  it('publie un compte-rendu COPIÉ sur la fiche après un traitement auto réussi (P1-1)', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const updateTicket = vi.fn(async (_request: unknown) => item('1'))
+    let page = [item('0')]
+    api({
+      listTickets: vi.fn(async (): Promise<TicketPage> => ({ items: [...page], hasMore: false })),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate: vi.fn(async () => ({ id: 'conv-77' })),
+      orchestrate: vi.fn(async () => ({ ok: true })),
+      updateTicket
+    })
+    const { root, container } = await render()
+    await act(async () => {
+      for (let index = 0; index < 30; index += 1) await Promise.resolve()
+    })
+    expect(updateTicket).not.toHaveBeenCalled()
+
+    page = [item('0'), item('1')]
+    await refreshList(container, 30)
+    expect(updateTicket).toHaveBeenCalledTimes(1)
+    const request = updateTicket.mock.calls[0][0] as Record<string, unknown>
+    expect(request.id).toBe('1')
+    expect(String(request.comment)).toContain('conv-77')
+    expect(request.state).toBeUndefined()
+    expect(request.assignee).toBeUndefined()
+    await act(async () => root.unmount())
+  })
+
+  it('affiche « interrompu » pour un record running orphelin au montage (P1-2)', async () => {
+    localStorage.setItem(
+      'autowin:tickets-treatment-records',
+      JSON.stringify({
+        [`${DEFAULT_TICKET_SOURCE.id}::1`]: {
+          conversationId: 'conv-1',
+          status: 'running',
+          updatedAt: '2026-08-01T10:00:00.000Z'
+        }
+      })
+    )
+    api({
+      listTickets: vi.fn(async (): Promise<TicketPage> => ({ items: [item('1')], hasMore: false }))
+    })
+    const { root, container } = await render()
+    const badge = container.querySelector('[data-testid="ticket-treatment-status"]')
+    expect(badge?.textContent).toBe('interrompu')
+    await act(async () => root.unmount())
+  })
+
+  it('rend un état vide même quand la page suivante existe, en gardant « Charger la suite » (P2-4)', async () => {
+    api({
+      listTickets: vi.fn(async (): Promise<TicketPage> => ({
+        items: [],
+        hasMore: true,
+        cursor: 'c2'
+      }))
+    })
+    const { root, container } = await render()
+    expect(container.querySelector('[data-testid="tickets-empty"]')?.textContent).toContain(
+      'Aucun ticket'
+    )
+    expect(container.querySelector('.tickets-load-more')?.textContent).toContain('Charger la suite')
+    await act(async () => root.unmount())
+  })
+
+  it('nomme la cause du vide (recherche serveur) et offre de l’effacer (P2-5)', async () => {
+    const listTickets = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [item('1')], hasMore: false })
+      .mockResolvedValueOnce({ items: [], hasMore: false })
+      .mockResolvedValue({ items: [item('1')], hasMore: false })
+    api({ listTickets })
+    const { root, container } = await render()
+    const search = container.querySelector(
+      '[aria-label="Rechercher les tickets"]'
+    ) as HTMLInputElement
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(search, 'zzz')
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      ;(
+        container.querySelector('[data-testid="tickets-search-server"]') as HTMLButtonElement
+      ).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const empty = container.querySelector('[data-testid="tickets-empty"]') as HTMLElement
+    expect(empty.textContent).toContain('zzz')
+    const clear = container.querySelector(
+      '[data-testid="tickets-empty-clear"]'
+    ) as HTMLButtonElement
+    expect(clear).not.toBeNull()
+    await act(async () => {
+      clear.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(listTickets).toHaveBeenCalledTimes(3)
+    await act(async () => root.unmount())
+  })
+
+  it('signale un rafraîchissement en cours sur une liste déjà chargée (P2-6)', async () => {
+    let release: ((page: TicketPage) => void) | undefined
+    const listTickets = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [item('1')], hasMore: true, cursor: 'c2' })
+      .mockImplementationOnce(
+        () =>
+          new Promise<TicketPage>((resolve) => {
+            release = resolve
+          })
+      )
+    api({ listTickets })
+    const { root, container } = await render()
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-refresh"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="tickets-refreshing"]')).not.toBeNull()
+    await act(async () => {
+      release?.({ items: [item('1')], hasMore: false })
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="tickets-refreshing"]')).toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('rend visible une erreur de pagination sans dépendre de stale (P2-6)', async () => {
+    const listTickets = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [item('1')], hasMore: true, cursor: 'c2' })
+      .mockRejectedValueOnce(new Error('Page suivante refusée.'))
+    api({ listTickets })
+    const { root, container } = await render()
+    await act(async () => {
+      ;(container.querySelector('.tickets-load-more') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="tickets-stale"]')?.textContent).toContain(
+      'Page suivante refusée'
+    )
+    await act(async () => root.unmount())
+  })
+
+  it('annonce que compteurs et filtres portent sur la PAGE chargée (P2-7)', async () => {
+    api()
+    const { root, container } = await render()
+    expect(container.querySelector('[data-testid="tickets-stats"]')?.textContent).toContain(
+      'page chargée'
+    )
+    const type = container.querySelector('[aria-label="Filtrer par type"]') as HTMLSelectElement
+    expect(type.getAttribute('title')).toContain('page chargée')
+    expect(type.options.length).toBe(3)
+    await act(async () => root.unmount())
+  })
+
+  it('navigue au clavier ↑/↓ et expose aria-selected sur la ligne active (P3-9)', async () => {
+    api()
+    const { root, container } = await render()
+    const list = container.querySelector('.tickets-list') as HTMLElement
+    const rows = (): Element[] => [...container.querySelectorAll('[data-testid="ticket-row"]')]
+    expect(rows()[0].getAttribute('aria-selected')).toBe('true')
+    await act(async () => {
+      list.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })
+      )
+    })
+    expect(rows()[1].getAttribute('aria-selected')).toBe('true')
+    expect(rows()[0].getAttribute('aria-selected')).toBe('false')
+    await act(async () => {
+      list.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })
+      )
+    })
+    expect(rows()[0].getAttribute('aria-selected')).toBe('true')
+    await act(async () => root.unmount())
+  })
+})
+
+describe('vue Tickets — reprise persistée du mode auto (P1)', () => {
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  })
+  afterEach(() => {
+    document.body.replaceChildren()
+    localStorage.clear()
+    vi.restoreAllMocks()
+  })
+
+  it('MODE AUTO persisté : la page déjà présente est AMORCÉE, seul l’entrant est traité', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const existing = Array.from({ length: 50 }, (_, index) => item(String(index + 100)))
+    let page = existing
+    const orchestrate = vi.fn(async () => ({ ok: true }))
+    api({
+      listTickets: vi.fn(async () => ({ items: [...page], hasMore: false })),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate: vi.fn(async ({ title }: { title: string }) => ({ id: `conv-${title}` })),
+      orchestrate
+    })
+
+    const { root, container } = await render()
+    await act(async () => {
+      for (let index = 0; index < 30; index += 1) await Promise.resolve()
+    })
+    // Reprise persistée : les 50 tickets DEJA la sont « vus », jamais traites.
+    expect(orchestrate).not.toHaveBeenCalled()
+
+    page = [item('999'), ...existing]
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-refresh"]') as HTMLButtonElement).click()
+      for (let index = 0; index < 30; index += 1) await Promise.resolve()
+    })
+    expect(orchestrate).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+  })
+})
+
+describe('vue Tickets — enrichissement mémoïsé et borné (P3)', () => {
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  })
+  afterEach(() => {
+    document.body.replaceChildren()
+    localStorage.clear()
+    vi.restoreAllMocks()
+  })
+
+  it('3 clics sur le même ticket → une SEULE relecture distante', async () => {
+    const getTicket = vi.fn(async ({ id }: { id: string }) => ({
+      ...item(id),
+      comments: [{ author: 'Alice', text: 'discussion' }]
+    }))
+    api({ getTicket })
+    const { root, container } = await render()
+    const row = container.querySelector('[data-testid="ticket-row"]') as HTMLElement
+    for (let click = 0; click < 3; click += 1) {
+      await act(async () => {
+        row.click()
+        for (let index = 0; index < 10; index += 1) await Promise.resolve()
+      })
+    }
+    expect(getTicket).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+  })
+
+  it('clic → refresh léger → sélection : réutilise la FICHE enrichie, pas seulement son id', async () => {
+    const getTicket = vi.fn(async ({ id }: { id: string }) => ({
+      ...item(id),
+      comments: [{ author: 'Alice', text: 'Décision enrichie conservée après refresh.' }]
+    }))
+    api({
+      getTicket,
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate: vi.fn(async () => ({ id: 'conv-cache' })),
+      appCommand: vi.fn(async () => ({ ok: true }))
+    })
+    const prompts: string[] = []
+    const listener = (event: Event): void => {
+      prompts.push((event as CustomEvent<{ prompt: string }>).detail.prompt)
+    }
+    window.addEventListener('autowin:prefill-conversation', listener)
+    const { root, container } = await render()
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="ticket-row"]') as HTMLElement).click()
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+    await refreshList(container)
+    await act(async () => {
+      ;(
+        container.querySelector('[data-testid="ticket-process-checkbox"]') as HTMLInputElement
+      ).click()
+      ;(
+        container.querySelector('[data-testid="tickets-treat-selection"]') as HTMLButtonElement
+      ).click()
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+
+    expect(getTicket).toHaveBeenCalledTimes(1)
+    expect(prompts[0]).toContain('Décision enrichie conservée après refresh.')
+    window.removeEventListener('autowin:prefill-conversation', listener)
+    await act(async () => root.unmount())
+  })
+
+  it('deux demandes simultanées de la même fiche partagent la même Promise distante', async () => {
+    let resolveTicket!: (value: TicketItem) => void
+    const getTicket = vi.fn(
+      ({ id }: { id: string }) =>
+        new Promise<TicketItem>((resolve) => {
+          resolveTicket = resolve
+          void id
+        })
+    )
+    api({ getTicket })
+    const { root, container } = await render()
+    const row = container.querySelector('[data-testid="ticket-row"]') as HTMLElement
+
+    await act(async () => {
+      row.click()
+      row.click()
+      await Promise.resolve()
+    })
+    expect(getTicket).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      resolveTicket({ ...item('1'), comments: [{ text: 'résultat partagé' }] })
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+
+    await act(async () => root.unmount())
+  })
+
+  it('sélection de 30 tickets → au plus `concurrency` relectures en vol', async () => {
+    let inflight = 0
+    let peak = 0
+    const getTicket = vi.fn(async ({ id }: { id: string }) => {
+      inflight += 1
+      peak = Math.max(peak, inflight)
+      for (let index = 0; index < 5; index += 1) await Promise.resolve()
+      inflight -= 1
+      return { ...item(id), comments: [{ author: 'A', text: 'c' }] }
+    })
+    api({
+      listTickets: vi.fn(async () => ({
+        items: Array.from({ length: 30 }, (_, index) => item(String(index + 1))),
+        hasMore: false
+      })),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate: vi.fn(async () => ({ id: 'conv-sel' })),
+      appCommand: vi.fn(async () => ({ ok: true })),
+      getTicket
+    })
+    const { root, container } = await render()
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-select-all"]') as HTMLButtonElement).click()
+    })
+    await act(async () => {
+      ;(
+        container.querySelector('[data-testid="tickets-treat-selection"]') as HTMLButtonElement
+      ).click()
+      for (let index = 0; index < 200; index += 1) await Promise.resolve()
+    })
+    expect(getTicket).toHaveBeenCalledTimes(30)
+    expect(peak).toBeLessThanOrEqual(3)
     await act(async () => root.unmount())
   })
 })

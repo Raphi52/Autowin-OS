@@ -82,6 +82,12 @@ export interface WatchdogGuards {
    * geometrique — deux dimensions, deux gardes.
    */
   maxPerRoot: number
+  /** Plafond glissant sur 24 h ; absent = seule la borne horaire s'applique. */
+  maxTriggersPerDay?: number
+  /** Coupe les reveils suivants quand le cout connu des dernieres 24 h atteint ce montant. */
+  maxKnownCostUsdPerDay?: number
+  /** Coupe les reveils suivants quand trop d'appels des dernieres 24 h restent non chiffres. */
+  maxUnpricedCallsPerDay?: number
 }
 
 /**
@@ -143,6 +149,15 @@ export interface WatchdogSignal {
   observedAt: number
 }
 
+/** Frontière d'autorité : la règle décide, le signal observé ne fournit qu'une preuve non fiable. */
+export interface WatchdogOrchestrationRequest {
+  instruction: string
+  evidence?: {
+    trust: 'untrusted'
+    signal: WatchdogSignal
+  }
+}
+
 /** Mutations qu'un run revendique, y compris lorsqu'elles sont publiées après son retour. */
 export interface WatchdogMutationClaims {
   /** Identifiant stable d'une publication rejouable, pour dédupliquer dans un même processus. */
@@ -153,6 +168,21 @@ export interface WatchdogMutationClaims {
 }
 
 export type WatchdogMutationClaimsSink = (claims: WatchdogMutationClaims) => void
+
+/** Snapshot cumulatif d'usage rattache a une occurrence, y compris apres son retour. */
+export interface TaskUsageSettlement {
+  /** Identite durable ajoutee par le scheduler pour rendre les republications idempotentes. */
+  eventId?: string
+  conversationId?: string
+  turnId?: string
+  knownCostUsd?: number
+  totalTokens?: number
+  unpricedCalls?: number
+  requestedModel?: string
+  resolvedModel?: string
+}
+
+export type TaskUsageSettlementSink = (usage: TaskUsageSettlement) => void
 
 export interface TaskOccurrence {
   id: string
@@ -171,6 +201,9 @@ export interface TaskOccurrence {
   totalTokens?: number
   /** Appels exécutés sans tarif exposé, donc en plus du coût connu. */
   unpricedCalls?: number
+  /** Modele demande par la tache et modele reel rapporte par le provider. */
+  requestedModel?: string
+  resolvedModel?: string
   /** Nombre d'échéances représentées par cette occurrence agrégée (absent = une seule). */
   missedCount?: number
   /** Dernière échéance couverte par un retard agrégé. */

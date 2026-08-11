@@ -353,7 +353,7 @@ export function preparePersistedRunForRelaunch(
   return reconciled
 }
 
-interface DetachedProviderSuccess {
+export interface DetachedProviderSuccess {
   text: string
   usage?: {
     inputTokens: number
@@ -361,6 +361,7 @@ interface DetachedProviderSuccess {
     cacheReadTokens: number
   }
   costUsd?: number
+  sessionId?: string
   executionEvidence?: ExecutionEvidence[]
 }
 
@@ -411,8 +412,31 @@ function jsonRecord(line: string): Record<string, unknown> | undefined {
   }
 }
 
-function detachedClaudeSuccess(lines: string[]): DetachedProviderSuccess | undefined {
+function detachedClaudeSuccess(
+  lines: string[],
+  includeAssistantText = false
+): DetachedProviderSuccess | undefined {
   const executionEvidence = detachedClaudeEvidence(lines)
+  // Parité stricte avec le parser live de ClaudeProvider : le CLI peut émettre plusieurs blocs
+  // assistant avant son event `result`. C'est notamment là que vivent les commandes Autowin
+  // `<cmd>…</cmd>`. Ne relire que `result` les supprimait après un redémarrage, puis le tour était
+  // clôturé comme une simple réponse sans jamais exécuter l'action demandée.
+  const assistantText = lines
+    .map(jsonRecord)
+    .filter((event): event is Record<string, unknown> => event?.type === 'assistant')
+    .flatMap((event) => {
+      const message =
+        event.message && typeof event.message === 'object' && !Array.isArray(event.message)
+          ? (event.message as Record<string, unknown>)
+          : undefined
+      return Array.isArray(message?.content) ? message.content : []
+    })
+    .flatMap((rawPart) => {
+      if (!rawPart || typeof rawPart !== 'object' || Array.isArray(rawPart)) return []
+      const part = rawPart as Record<string, unknown>
+      return part.type === 'text' && typeof part.text === 'string' ? [part.text] : []
+    })
+    .join('')
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const event = jsonRecord(lines[index])
     if (!event) continue
@@ -434,13 +458,14 @@ function detachedClaudeSuccess(lines: string[]): DetachedProviderSuccess | undef
     const usage = normalizeClaudeUsage(rawUsage, event.total_cost_usd, hasReportedCost)
     if (!usage) return undefined
     return {
-      text: event.result.trim(),
+      text: (includeAssistantText ? assistantText : '') || event.result.trim(),
       usage: {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
         cacheReadTokens: usage.cacheReadTokens ?? 0
       },
       ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd }),
+      ...(typeof event.session_id === 'string' ? { sessionId: event.session_id } : {}),
       ...(executionEvidence.length > 0 ? { executionEvidence } : {})
     }
   }
@@ -624,14 +649,16 @@ function detachedGeminiSuccess(lines: string[]): DetachedProviderSuccess | undef
   return text ? { text } : undefined
 }
 
-function detachedProviderSuccess(
+export function recoverDetachedProviderResult(
   provider: string,
-  journalPath: string
+  journalPath: string,
+  options?: { includeAssistantText?: boolean }
 ): DetachedProviderSuccess | undefined {
   if (!successfulRelayExit(journalPath)) return undefined
   const lines = journalLines(journalPath)
   if (!lines) return undefined
-  if (provider === 'claude') return detachedClaudeSuccess(lines)
+  if (provider === 'claude')
+    return detachedClaudeSuccess(lines, options?.includeAssistantText === true)
   if (provider === 'codex') return detachedCodexSuccess(lines)
   if (provider === 'gemini') return detachedGeminiSuccess(lines)
   if (provider === 'kimi') return detachedKimiSuccess(lines)
@@ -703,7 +730,10 @@ export function settleCompletedDetachedPhase(
     return null
   }
   const { phase } = attribution
-  const success = detachedProviderSuccess(attribution.agent.provider, attribution.agent.journalPath)
+  const success = recoverDetachedProviderResult(
+    attribution.agent.provider,
+    attribution.agent.journalPath
+  )
   if (!success) return null
 
   const prior = state.usage

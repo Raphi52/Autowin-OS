@@ -114,6 +114,167 @@ describe('GraphView refresh', () => {
     expect(metadataRule).not.toContain('text-overflow: ellipsis')
   })
 
+  it('efface A dès la saisie de B et ne mélange jamais leurs résultats', async () => {
+    const pendingB = deferred<{
+      status: 'found'
+      note: string
+      results: Array<{
+        id: string
+        label: string
+        file: string
+        themes: string[]
+        score: number
+        relations: []
+      }>
+    }>()
+    const searchBrain = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'found',
+        note: 'VERDICT-A',
+        results: [
+          {
+            id: 'knowledge/a',
+            label: 'FICHE-A',
+            file: 'C:/brain/knowledge/a.md',
+            themes: [],
+            score: 1,
+            relations: []
+          }
+        ]
+      })
+      .mockImplementationOnce(() => pendingB.promise)
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'brain', label: 'Brain', path: 'C:/brain', sizeMb: 1, kind: 'vault' }
+        ]),
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainGraph: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([]),
+      searchBrain
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+    const search = container.querySelector<HTMLInputElement>(
+      '[aria-label="Rechercher un thème ou une fiche"]'
+    )
+    if (!search) throw new Error('recherche Brain absente')
+
+    await act(async () => changeText(search, 'question A'))
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 220)))
+    await flush()
+    expect(container.textContent).toContain('VERDICT-A')
+    expect(container.textContent).toContain('FICHE-A')
+
+    await act(async () => changeText(search, 'question B'))
+    expect(container.textContent).not.toContain('VERDICT-A')
+    expect(container.textContent).not.toContain('FICHE-A')
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 220)))
+    expect(container.textContent).not.toContain('VERDICT-A')
+
+    pendingB.resolve({
+      status: 'found',
+      note: 'VERDICT-B',
+      results: [
+        {
+          id: 'knowledge/b',
+          label: 'FICHE-B',
+          file: 'C:/brain/knowledge/b.md',
+          themes: [],
+          score: 1,
+          relations: []
+        }
+      ]
+    })
+    await flush()
+    expect(container.textContent).toContain('VERDICT-B')
+    expect(container.textContent).toContain('FICHE-B')
+    expect(container.textContent).not.toContain('FICHE-A')
+  })
+
+  it('préserve le banc Knowledge quand seule la recherche principale change', async () => {
+    const searchBrain = vi.fn().mockResolvedValue({
+      status: 'found',
+      note: 'VERDICT-BANC-STABLE',
+      query: 'question du banc',
+      results: [],
+      navigation: {
+        query: 'question du banc',
+        minDense: 0.25,
+        candidates: [
+          {
+            rank: 1,
+            path: 'knowledge/PREUVE-BANC-STABLE.md',
+            type: 'domain',
+            denseCos: 0.8,
+            retained: true
+          }
+        ]
+      },
+      budget: {
+        questionSubmittedChars: 16,
+        questionChars: 16,
+        questionMax: 500,
+        questionTruncated: false,
+        knowledgeAvailableChars: 42,
+        knowledgeChars: 42,
+        knowledgeMax: 6_000,
+        knowledgeTruncated: false,
+        knowledgeDroppedChars: 0
+      }
+    })
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'brain', label: 'Brain', path: 'C:/brain', sizeMb: 1, kind: 'vault' }
+        ]),
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainGraph: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([]),
+      listInbox: vi.fn().mockResolvedValue([]),
+      searchBrain
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
+        ?.click()
+    )
+    await flush()
+    const benchQuestion = container.querySelector<HTMLInputElement>(
+      '[aria-label="Question posée au Brain"]'
+    )
+    const mainQuestion = container.querySelector<HTMLInputElement>(
+      '[aria-label="Rechercher un thème ou une fiche"]'
+    )
+    if (!benchQuestion || !mainQuestion) throw new Error('champs Knowledge absents')
+    await act(async () => changeText(benchQuestion, 'question du banc'))
+    await act(async () => benchQuestion.closest('.brain-bench')?.querySelector('button')?.click())
+    await flush()
+    expect(container.textContent).toContain('VERDICT-BANC-STABLE')
+    expect(container.textContent).toContain('PREUVE-BANC-STABLE.md')
+    expect(container.querySelector('[aria-label="Budget d’injection"]')).toBeTruthy()
+
+    await act(async () => changeText(mainQuestion, 'question principale B'))
+    expect(container.textContent).toContain('VERDICT-BANC-STABLE')
+    expect(container.textContent).toContain('PREUVE-BANC-STABLE.md')
+    expect(container.querySelector('[aria-label="Budget d’injection"]')).toBeTruthy()
+    expect(benchQuestion.value).toBe('question du banc')
+    expect(searchBrain).toHaveBeenCalledTimes(1)
+  })
+
   it('reloads the selected graph even when listBrains returns the same path', async () => {
     const refreshBrain = vi.fn().mockResolvedValue({ ok: true })
     const loadBrainGraphPreview = vi
@@ -203,6 +364,165 @@ describe('GraphView refresh', () => {
     expect(container.querySelector('[data-retrieval-status="empty"]')?.textContent).toContain(
       'FRAIS'
     )
+  })
+
+  it('une ancienne recherche principale ne repeint jamais pendant Refresh', async () => {
+    const oldSearch = deferred<{ status: string; note: string; results: never[] }>()
+    const refresh = deferred<{ ok: boolean }>()
+    const searchBrain = vi
+      .fn()
+      .mockReturnValueOnce(oldSearch.promise)
+      .mockResolvedValueOnce({ status: 'empty', note: 'FRAIS-PRINCIPAL', results: [] })
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'brain', label: 'Brain', path: 'C:\\brain', sizeMb: 1, kind: 'vault' }
+        ]),
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainGraph: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      refreshBrain: vi.fn().mockReturnValue(refresh.promise),
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([]),
+      searchBrain
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+    const search = container.querySelector<HTMLInputElement>(
+      '[aria-label="Rechercher un thème ou une fiche"]'
+    )
+    if (!search) throw new Error('recherche Brain absente')
+    await act(async () => changeText(search, 'decision'))
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 220)))
+    expect(searchBrain).toHaveBeenCalledTimes(1)
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Rafraîchir les graphes"]')?.click()
+    )
+    await act(async () => {
+      oldSearch.resolve({ status: 'found', note: 'ANCIEN-PRINCIPAL', results: [] })
+      await Promise.resolve()
+    })
+    await flush()
+    expect(container.textContent).not.toContain('ANCIEN-PRINCIPAL')
+    expect(search.value).toBe('decision')
+    expect(searchBrain).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      refresh.resolve({ ok: true })
+      await Promise.resolve()
+    })
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 220)))
+    await flush()
+    expect(searchBrain).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('FRAIS-PRINCIPAL')
+  })
+
+  it('retire immédiatement les résultats du vault précédent quand la sélection change', async () => {
+    const searchB = deferred<{ status: string; note: string; results: never[] }>()
+    const searchBrain = vi.fn((path: string) =>
+      path === 'A'
+        ? Promise.resolve({ status: 'found', note: 'RÉSULTAT-A', results: [] })
+        : searchB.promise
+    )
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains: vi.fn().mockResolvedValue([
+        { id: 'a', label: 'Brain A', path: 'A', sizeMb: 1, kind: 'vault' },
+        { id: 'b', label: 'Brain B', path: 'B', sizeMb: 1, kind: 'vault' }
+      ]),
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainGraph: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([]),
+      searchBrain
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+    const search = container.querySelector<HTMLInputElement>(
+      '[aria-label="Rechercher un thème ou une fiche"]'
+    )
+    if (!search) throw new Error('recherche Brain absente')
+    await act(async () => changeText(search, 'promotion'))
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 220)))
+    await flush()
+    expect(container.textContent).toContain('RÉSULTAT-A')
+
+    await act(async () => chooseBrain('B'))
+    await flush()
+    expect(container.textContent).not.toContain('RÉSULTAT-A')
+    expect(search.value).toBe('promotion')
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 220)))
+    expect(searchBrain).toHaveBeenLastCalledWith('B', 'promotion')
+    await act(async () => {
+      searchB.resolve({ status: 'found', note: 'RÉSULTAT-B', results: [] })
+      await Promise.resolve()
+    })
+    await flush()
+    expect(container.textContent).toContain('RÉSULTAT-B')
+  })
+
+  it('une décision inbox terminée après avoir quitté son vault ne perturbe pas le vault courant', async () => {
+    const promote = deferred<{ ok: boolean }>()
+    const refreshBrain = vi.fn().mockResolvedValue({ ok: true })
+    const loadBrainGraph = vi.fn().mockResolvedValue({ nodes: [], links: [] })
+    const listBrains = vi.fn().mockResolvedValue([
+      { id: 'a', label: 'Brain A', path: 'A', sizeMb: 1, kind: 'vault' },
+      { id: 'b', label: 'Brain B', path: 'B', sizeMb: 1, kind: 'vault' }
+    ])
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains,
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainGraph,
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([]),
+      listInbox: vi.fn().mockResolvedValue([
+        {
+          id: 'inbox/a',
+          file: 'A/inbox/a.md',
+          title: 'Candidat A',
+          body: 'a',
+          nearDuplicates: []
+        }
+      ]),
+      promoteInbox: vi.fn().mockReturnValue(promote.promise),
+      rejectInbox: vi.fn().mockResolvedValue({ ok: true }),
+      refreshBrain
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
+        ?.click()
+    )
+    await flush()
+    await act(async () => container.querySelector<HTMLButtonElement>('button.is-promote')?.click())
+    await flush()
+    await act(async () => chooseBrain('B'))
+    await flush()
+    const graphCallsAfterSwitch = loadBrainGraph.mock.calls.length
+    const listCallsAfterSwitch = listBrains.mock.calls.length
+
+    await act(async () => {
+      promote.resolve({ ok: true })
+      await Promise.resolve()
+    })
+    await flush()
+    expect(refreshBrain).not.toHaveBeenCalled()
+    expect(loadBrainGraph).toHaveBeenCalledTimes(graphCallsAfterSwitch)
+    expect(listBrains).toHaveBeenCalledTimes(listCallsAfterSwitch)
+    expect(
+      container.querySelector<HTMLSelectElement>('[aria-label="Graphe de connaissances"]')?.value
+    ).toBe('B')
   })
 
   it('efface immédiatement puis relance aussi le banc Knowledge après Refresh', async () => {
@@ -594,6 +914,54 @@ describe('GraphView refresh', () => {
       for (let index = 0; index < 4; index += 1) await Promise.resolve()
     })
     expect(loadBrainGraph).toHaveBeenCalledTimes(2)
+  })
+
+  it('ne refusionne pas un voisinage de l’ancien corpus après Réessayer sur le même vault', async () => {
+    const loadBrainGraph = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('workspace remplacé'))
+      .mockResolvedValueOnce({
+        nodes: [{ id: 'autowin', label: 'Autowin', group: 0 }],
+        links: []
+      })
+    const loadBrainNeighborhood = vi.fn().mockResolvedValue({
+      nodes: [{ id: 'rig', label: 'RIG', group: 0 }],
+      links: [{ source: 'autowin', target: 'rig', relation: 'related' }]
+    })
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains: vi
+        .fn()
+        .mockResolvedValue([{ id: 'a', label: 'A', path: 'A', sizeMb: 1, kind: 'vault' }]),
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({
+        nodes: [{ id: 'autowin', label: 'Autowin', group: 0 }],
+        links: []
+      }),
+      loadBrainGraph,
+      loadBrainNeighborhood,
+      readNodeFile: vi.fn().mockResolvedValue({ path: 'autowin.md', content: '# Autowin' }),
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([])
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-node-id="autowin"]')?.click()
+    )
+    await flush()
+    expect(container.querySelector('[data-node-id="rig"]')).toBeTruthy()
+
+    const retry = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Réessayer')
+    )
+    await act(async () => retry?.click())
+    await flush()
+
+    expect(loadBrainGraph).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-node-id="rig"]')).toBeNull()
+    expect(container.querySelector('[data-node-id="autowin"]')).toBeTruthy()
   })
 
   it('affiche une file de santé uniquement à partir des relations explicites', async () => {

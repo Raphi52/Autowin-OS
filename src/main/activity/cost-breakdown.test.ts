@@ -61,6 +61,18 @@ describe('os:costBreakdown — chaine IPC complete', () => {
 })
 
 describe('comptabilite canonique des appels', () => {
+  it('attribue le cout au modele reel tout en conservant l alias demande dans la trace', () => {
+    const call = {
+      ...callFixture('orchestrator', 0.42, 80),
+      model: 'haiku',
+      resolvedModel: 'claude-opus-5'
+    }
+
+    const rows = summarizeCostSamples(costSamplesFrom([call]), 'model')
+
+    expect(rows).toEqual([expect.objectContaining({ key: 'claude-opus-5', costUsd: 0.42 })])
+  })
+
   it('dedoublonne par usageCallId sans comparer des montants arrondis', () => {
     const call = callFixture('subagent', 0.3684004, 2834)
     const rows = summarizeCostSamples(

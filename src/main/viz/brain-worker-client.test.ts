@@ -26,7 +26,7 @@ describe('BrainWorkerClient lifecycle', () => {
     }).not.toThrow()
     await expect(client.request('listBrains')).rejects.toThrow('INITIAL_CREATE_FAILED')
 
-    const recovered = client.request<string>('listBrains')
+    const recovered = client.request('listBrains')
     const request = fresh.postMessage.mock.calls[0][0] as { id: number }
     fresh.emit('message', { id: request.id, ok: true, value: 'RECOVERED' })
     await expect(recovered).resolves.toBe('RECOVERED')
@@ -44,7 +44,7 @@ describe('BrainWorkerClient lifecycle', () => {
     await expect(failed).rejects.toThrow(/code 1/)
     expect(client.pendingCount).toBe(0)
 
-    const recovered = client.request<string>('loadPreview', 'brain')
+    const recovered = client.request('loadPreview', 'brain')
     expect(createWorker).toHaveBeenCalledTimes(2)
     const request = second.postMessage.mock.calls[0][0] as { id: number }
     second.emit('message', { id: request.id, ok: true, value: 'recovered' })
@@ -66,7 +66,7 @@ describe('BrainWorkerClient lifecycle', () => {
     first.emit('error', new Error('boom'))
     await expect(failed).rejects.toThrow('boom')
 
-    const recovered = client.request<string>('loadPreview', 'brain')
+    const recovered = client.request('loadPreview', 'brain')
     const secondId = second.postMessage.mock.calls[0][0].id as number
     first.emit('message', { id: firstId, ok: true, value: 'stale' })
     second.emit('message', { id: secondId, ok: true, value: 'fresh' })
@@ -94,7 +94,7 @@ describe('BrainWorkerClient lifecycle', () => {
     }).not.toThrow()
     await expect(failed).rejects.toThrow('CREATE_WORKER_FAILED')
 
-    const recovered = client.request<string>('searchBrain', 'brain', 'query')
+    const recovered = client.request('searchBrain', 'brain', 'query')
     const request = fresh.postMessage.mock.calls[0][0] as { id: number }
     fresh.emit('message', { id: request.id, ok: true, value: 'RECOVERED' })
     await expect(recovered).resolves.toBe('RECOVERED')
@@ -126,7 +126,7 @@ describe('BrainWorkerClient lifecycle', () => {
     await vi.advanceTimersByTimeAsync(51)
     await timedOut
 
-    const recovered = client.request<string>('loadPreview', 'brain')
+    const recovered = client.request('loadPreview', 'brain')
     expect(first.terminate).toHaveBeenCalledOnce()
     expect(createWorker).toHaveBeenCalledTimes(2)
     const request = second.postMessage.mock.calls[0][0] as { id: number }
@@ -143,7 +143,7 @@ describe('BrainWorkerClient lifecycle', () => {
     const graphClient = new BrainWorkerClient('brain-worker.js', () => graphWorker, 2_000)
     const searchClient = new BrainWorkerClient('brain-worker.js', () => searchWorker, 2_000)
 
-    const graph = graphClient.request<string>('loadGraph', 'brain')
+    const graph = graphClient.request('loadGraph', 'brain')
     const blockedSearch = searchClient.requestWithTimeout(50, 'searchBrain', 'brain', 'query')
     const timedOut = expect(blockedSearch).rejects.toThrow(/sans reponse/)
     await vi.advanceTimersByTimeAsync(51)
@@ -172,7 +172,7 @@ describe('BrainWorkerClient lifecycle', () => {
     expect(saturated.terminate).toHaveBeenCalledOnce()
     expect(client.pendingCount).toBe(0)
 
-    const nextSearch = client.request<string>('searchBrain', 'brain', 'new')
+    const nextSearch = client.request('searchBrain', 'brain', 'new')
     const request = fresh.postMessage.mock.calls[0][0] as { id: number }
     fresh.emit('message', { id: request.id, ok: true, value: 'NEW' })
     await expect(nextSearch).resolves.toBe('NEW')
@@ -193,7 +193,7 @@ describe('BrainWorkerClient lifecycle', () => {
       message: expect.stringMatching(/invalidation prioritaire/)
     })
 
-    const nextGraph = client.request<string>('loadGraph', 'brain')
+    const nextGraph = client.request('loadGraph', 'brain')
     const request = fresh.postMessage.mock.calls[0][0] as { id: number }
     fresh.emit('message', { id: request.id, ok: true, value: 'FRESH' })
     await expect(nextGraph).resolves.toBe('FRESH')
@@ -226,7 +226,7 @@ describe('BrainWorkerClient lifecycle', () => {
     expect(await blockedError).toMatchObject({
       message: expect.stringMatching(/invalidation prioritaire/)
     })
-    await expect(client.request<string>('loadGraph', 'brain')).resolves.toBe('FRESH')
+    await expect(client.request('loadGraph', 'brain')).resolves.toBe('FRESH')
   })
 
   it("retire un worker idle silencieux sans attendre l'acquittement de son invalidate", async () => {
@@ -252,7 +252,7 @@ describe('BrainWorkerClient lifecycle', () => {
     await client.invalidate()
 
     expect(Date.now() - startedAt).toBeLessThan(1_000)
-    await expect(client.request<string>('loadGraph', 'brain')).resolves.toBe('FRESH')
+    await expect(client.request('loadGraph', 'brain')).resolves.toBe('FRESH')
   })
 
   it('borne et remplace un vrai worker dont le thread natif reste bloque', async () => {
@@ -276,6 +276,6 @@ describe('BrainWorkerClient lifecycle', () => {
     const startedAt = Date.now()
     await expect(client.requestWithTimeout(100, 'listBrains')).rejects.toThrow(/sans reponse/)
     expect(Date.now() - startedAt).toBeLessThan(1_000)
-    await expect(client.request<string>('listBrains')).resolves.toBe('fresh')
+    await expect(client.request('listBrains')).resolves.toBe('fresh')
   })
 })

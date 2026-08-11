@@ -13,6 +13,7 @@ import {
   type WatchdogRule,
   type WatchdogTaskLike
 } from './watchdog-section-model'
+import { scheduleDraftProblem } from './task-schedule-draft'
 import type { RuntimeModel } from './chat-view-model'
 import { compareModelsByName, displayedModelName } from './model-name-order'
 import './TaskManagerView.css'
@@ -85,6 +86,8 @@ interface TaskOccurrence {
   knownCostUsd?: number
   totalTokens?: number
   unpricedCalls?: number
+  requestedModel?: string
+  resolvedModel?: string
   /** Nombre d'échéances représentées par cette occurrence agrégée (absent = une seule). */
   missedCount?: number
   trigger?: 'schedule' | 'manual' | 'watchdog'
@@ -288,6 +291,8 @@ function occurrenceMeta(occurrence: TaskOccurrence): string[] {
     meta.push(TRIGGER_LABELS[occurrence.trigger])
   const duration = durationLabel(occurrence.startedAt, occurrence.finishedAt)
   if (duration) meta.push(duration)
+  if (occurrence.requestedModel) meta.push(`Modèle demandé : ${occurrence.requestedModel}`)
+  if (occurrence.resolvedModel) meta.push(`Modèle exécuté : ${occurrence.resolvedModel}`)
   meta.push(
     ...usageMeta({
       knownCostUsd: occurrence.knownCostUsd,
@@ -359,14 +364,14 @@ export function TaskManagerView({
   const conversationsRequestRef = useRef(0)
   const modelsRequestRef = useRef(0)
   const modelCatalogReady = active && catalogReady && !loading
-  const loadErrorScope = (['task-manager', 'conversations', 'roles'] as const).find(
+  /** Toutes les pannes de chargement, pas seulement la première : trois scopes peuvent tomber ensemble. */
+  const failedScopes = (['task-manager', 'conversations', 'roles'] as const).filter(
     (scope) => loadErrors[scope] !== undefined
   )
-  const loadError = loadErrorScope ? loadErrors[loadErrorScope] : undefined
-  const loadErrorTitle =
-    loadErrorScope === 'roles'
+  const loadErrorTitleOf = (scope: 'task-manager' | 'conversations' | 'roles'): string =>
+    scope === 'roles'
       ? 'Chargement des modèles impossible'
-      : loadErrorScope === 'conversations'
+      : scope === 'conversations'
         ? 'Chargement des conversations impossible'
         : 'Chargement des tâches impossible'
 
@@ -492,8 +497,24 @@ export function TaskManagerView({
   const taskIsRunning = occurrences.some(
     ({ status }) => status === 'claimed' || status === 'running'
   )
+  /** Les tâches qui TOURNENT en ce moment : une exécution invisible se lit comme une tâche inerte. */
+  const runningTaskIds = new Set(
+    snapshot.occurrences
+      .filter(({ status }) => status === 'claimed' || status === 'running')
+      .map(({ taskId }) => taskId)
+  )
   const openAlerts = snapshot.alerts.filter(({ acknowledgedAt }) => !acknowledgedAt)
-  const selectedAlerts = snapshot.alerts.filter(({ taskId }) => taskId === selectedId)
+  /**
+   * Le compteur d'en-tête et le panneau parlent du MÊME ensemble : les alertes ouvertes de toutes
+   * les tâches. Filtrer le panneau sur la tâche sélectionnée laissait un compteur à 3 en face d'un
+   * panneau vide, sans aucun chemin pour atteindre les alertes des autres tâches.
+   */
+  const visibleAlerts = [
+    ...openAlerts,
+    ...snapshot.alerts.filter(
+      ({ taskId, acknowledgedAt }) => acknowledgedAt && taskId === selectedId
+    )
+  ].sort((left, right) => right.createdAt - left.createdAt)
   const draftDestination = draft?.destination
   const draftModelId = draftDestination
     ? (() => {
@@ -532,6 +553,17 @@ export function TaskManagerView({
     })
   }
 
+  /**
+   * Après un échec, la correction se fait sur le prompt QUI A ÉCHOUÉ, avec l'erreur sous les yeux :
+   * rouvrir un éditeur vide obligerait à retrouver de mémoire ce qui a été envoyé.
+   */
+  const openFixAfterFailure = (task: ScheduledTask, occurrence: TaskOccurrence): void => {
+    openEdit(task)
+    setError(
+      `Dernier échec : ${occurrence.error ?? 'erreur non enregistrée'} — corrige le prompt puis enregistre.`
+    )
+  }
+
   const closeEditor = (): void => {
     setDraft(undefined)
     setEditingId(undefined)
@@ -552,14 +584,21 @@ export function TaskManagerView({
       setError(watchdogProblem)
       return
     }
+    const scheduleProblem = draft.watchdog ? undefined : scheduleDraftProblem(draft.schedule)
+    if (scheduleProblem) {
+      setError(scheduleProblem)
+      return
+    }
     setSaving(true)
     setError(undefined)
     try {
       const payload = toTaskPayload(draft)
       if (editingId) await window.api.taskManagerUpdate(editingId, payload)
       else await window.api.taskManagerCreate(payload)
+      const mayCreateConversation = draft.destination.kind === 'new'
       closeEditor()
-      await load()
+      await refreshSnapshot()
+      if (mayCreateConversation) await refreshConversations()
     } catch (failure) {
       setError(errorText(failure))
     } finally {
@@ -571,7 +610,7 @@ export function TaskManagerView({
     setSaving(true)
     try {
       await window.api.taskManagerUpdate(task.id, { ...task, ...patch })
-      await load()
+      await refreshSnapshot()
     } catch (failure) {
       setError(errorText(failure))
     } finally {
@@ -586,10 +625,10 @@ export function TaskManagerView({
     try {
       await window.api.taskManagerRemove(task.id)
       if (editingId === task.id) closeEditor()
-      await load()
+      await refreshSnapshot()
     } catch (failure) {
       setError(errorText(failure))
-      await load()
+      await refreshSnapshot()
     } finally {
       setSaving(false)
     }
@@ -601,7 +640,10 @@ export function TaskManagerView({
     try {
       const result = await window.api.taskManagerRunNow(task.id)
       if (!result.started) setError('La tâche n’a pas pu démarrer.')
-      await load()
+      await refreshSnapshot()
+      // Une destination « nouvelle conversation » pas encore matérialisée peut en créer une.
+      if (task.destination.kind === 'new' && !task.destination.conversationId)
+        await refreshConversations()
     } catch (failure) {
       setError(errorText(failure))
     } finally {
@@ -611,7 +653,7 @@ export function TaskManagerView({
 
   const acknowledge = async (alertId: string): Promise<void> => {
     await window.api.taskManagerAcknowledge(alertId)
-    await load()
+    await refreshSnapshot()
   }
 
   const setSchedule = (patch: Partial<TaskSchedule>): void => {
@@ -683,6 +725,11 @@ export function TaskManagerView({
         <span>
           <strong>{snapshot.tasks.filter(({ enabled }) => enabled).length}</strong> actives
         </span>
+        {runningTaskIds.size > 0 && (
+          <span className="task-manager-running" data-testid="task-manager-running-count">
+            <strong>{runningTaskIds.size}</strong> en cours
+          </span>
+        )}
         <span className={openAlerts.length ? 'has-alerts' : ''}>
           <strong>{openAlerts.length}</strong> alertes
         </span>
@@ -691,23 +738,28 @@ export function TaskManagerView({
         </span>
       </div>
 
-      {loadError && (
-        <div className="task-manager-error" role="alert" data-testid="task-manager-load-error">
-          <strong>{loadErrorTitle}</strong>
-          <span>{loadError}</span>
+      {failedScopes.map((scope) => (
+        <div
+          key={scope}
+          className="task-manager-error"
+          role="alert"
+          data-testid="task-manager-load-error"
+        >
+          <strong>{loadErrorTitleOf(scope)}</strong>
+          <span>{loadErrors[scope]}</span>
           <button
             type="button"
             disabled={loading}
             onClick={() => {
-              if (loadErrorScope === 'task-manager') void refreshSnapshot()
-              else if (loadErrorScope === 'conversations') void refreshConversations()
-              else if (loadErrorScope === 'roles') void refreshModels()
+              if (scope === 'task-manager') void refreshSnapshot()
+              else if (scope === 'conversations') void refreshConversations()
+              else void refreshModels()
             }}
           >
             Réessayer
           </button>
         </div>
-      )}
+      ))}
 
       {error && (
         <div className="task-manager-error" role="alert">
@@ -757,6 +809,11 @@ export function TaskManagerView({
                   <small>{formatDateTime(task.nextRunAt)}</small>
                 </span>
                 <span className="task-manager-row-meta">
+                  {runningTaskIds.has(task.id) && (
+                    <em className="task-manager-running" data-testid="task-manager-row-running">
+                      En cours
+                    </em>
+                  )}
                   <b>{task.enabled ? 'ON' : 'OFF'}</b>
                   <small>{task.mode === 'windows' ? 'WIN' : 'APP'}</small>
                 </span>
@@ -1283,6 +1340,27 @@ export function TaskManagerView({
                       <small data-testid="task-manager-occurrence-meta">
                         {occurrenceMeta(occurrence).join(' · ') || 'Tour Chat'}
                       </small>
+                      {occurrence.status === 'failed' && (
+                        <span className="task-manager-occurrence-actions">
+                          <button
+                            type="button"
+                            className="task-manager-occurrence-open"
+                            data-testid="task-manager-occurrence-replay"
+                            disabled={saving}
+                            onClick={() => void runNow(selected)}
+                          >
+                            Rejouer
+                          </button>
+                          <button
+                            type="button"
+                            className="task-manager-occurrence-open"
+                            data-testid="task-manager-occurrence-replay-fixed"
+                            onClick={() => openFixAfterFailure(selected, occurrence)}
+                          >
+                            Rejouer avec prompt corrigé
+                          </button>
+                        </span>
+                      )}
                       {occurrence.conversationId && (
                         <button
                           className="task-manager-occurrence-open"
@@ -1323,13 +1401,13 @@ export function TaskManagerView({
             <span>Alertes</span>
             <b>{openAlerts.length}</b>
           </div>
-          {selectedAlerts.length === 0 ? (
+          {visibleAlerts.length === 0 ? (
             <div className="task-manager-alert-empty">
               <span>✓</span>
-              <p>Aucune échéance manquée pour cette tâche.</p>
+              <p>Aucune alerte ouverte.</p>
             </div>
           ) : (
-            selectedAlerts.map((alert) => (
+            visibleAlerts.map((alert) => (
               <article
                 key={alert.id}
                 className={`task-manager-alert${alert.acknowledgedAt ? ' is-acknowledged' : ''}`}
@@ -1340,6 +1418,14 @@ export function TaskManagerView({
                   </strong>
                   <time>{formatDateTime(alert.createdAt)}</time>
                 </header>
+                <button
+                  type="button"
+                  className="task-manager-alert-task"
+                  data-testid="task-manager-alert-select"
+                  onClick={() => setSelectedId(alert.taskId)}
+                >
+                  {snapshot.tasks.find(({ id }) => id === alert.taskId)?.title ?? 'Tâche supprimée'}
+                </button>
                 <p>{alert.message}</p>
                 {!alert.acknowledgedAt && (
                   <button type="button" onClick={() => void acknowledge(alert.id)}>

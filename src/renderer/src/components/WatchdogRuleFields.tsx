@@ -152,10 +152,9 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
       </label>
 
       <p className="watchdog-fields-note">
-        Ces quatre bornes empêchent un réveil de partir en rafale, de se rappeler ou d’élargir une
-        cascade sans limite. Un agent réveillé peut travailler sans que personne regarde. La limite
-        « même cause » borne la LARGEUR : mesuré dans ce dépôt, une cascade peu profonde s’était
-        élargie de 8 à 681 par niveau pendant que la garde de profondeur, elle, tenait.
+        Ces bornes empêchent un réveil de partir en rafale, de dépasser son budget ou d’élargir une
+        cascade sans limite. Un agent réveillé peut travailler sans que personne regarde. Les appels
+        non chiffrés ont leur propre coupe-circuit : une absence de tarif ne vaut jamais coût nul.
       </p>
 
       <label className="task-manager-field">
@@ -168,6 +167,58 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
           data-testid="watchdog-max-per-hour"
           onChange={(event) =>
             setGuards({ maxTriggersPerHour: Math.max(1, Number(event.target.value)) })
+          }
+        />
+      </label>
+
+      <label className="task-manager-field">
+        <span>Réveils maximum par 24 heures</span>
+        <input
+          type="number"
+          min={1}
+          max={5_760}
+          value={rule.guards.maxTriggersPerDay ?? ''}
+          data-testid="watchdog-max-per-day"
+          onChange={(event) =>
+            setGuards({
+              maxTriggersPerDay:
+                event.target.value === '' ? undefined : Math.max(1, Number(event.target.value))
+            })
+          }
+        />
+      </label>
+
+      <label className="task-manager-field">
+        <span>Coupe-circuit du coût connu sur 24 heures ($)</span>
+        <input
+          type="number"
+          min={0.01}
+          max={10_000}
+          step={0.01}
+          value={rule.guards.maxKnownCostUsdPerDay ?? ''}
+          data-testid="watchdog-cost-per-day"
+          onChange={(event) =>
+            setGuards({
+              maxKnownCostUsdPerDay:
+                event.target.value === '' ? undefined : Math.max(0.01, Number(event.target.value))
+            })
+          }
+        />
+      </label>
+
+      <label className="task-manager-field">
+        <span>Appels non chiffrés maximum par 24 heures</span>
+        <input
+          type="number"
+          min={1}
+          max={5_760}
+          value={rule.guards.maxUnpricedCallsPerDay ?? ''}
+          data-testid="watchdog-unpriced-per-day"
+          onChange={(event) =>
+            setGuards({
+              maxUnpricedCallsPerDay:
+                event.target.value === '' ? undefined : Math.max(1, Number(event.target.value))
+            })
           }
         />
       </label>
@@ -211,18 +262,6 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
           <option value="2">Oui, jusqu’à deux niveaux</option>
           <option value="3">Oui, jusqu’à trois niveaux</option>
         </select>
-      </label>
-
-      <label className="task-manager-field">
-        <span>Réveils maximum par même cause</span>
-        <input
-          type="number"
-          min={1}
-          max={500}
-          value={rule.guards.maxPerRoot}
-          data-testid="watchdog-max-per-root"
-          onChange={(event) => setGuards({ maxPerRoot: Math.max(1, Number(event.target.value)) })}
-        />
       </label>
 
       {rule.guards.maxChainDepth > 0 && (

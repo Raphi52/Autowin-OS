@@ -16,10 +16,42 @@ import type { BrainRetrievalStatus } from './brain-retrieval'
 
 export const BRAIN_QUERY_MAX_CHARS = 500
 export const BRAIN_RESULT_CAP = 6_000
+export const BRAIN_RESULT_TRUNCATION_MARKER = '\n…[tronqué — suite du savoir non transmise]'
+
+/** Compte des caractères Unicode complets (points de code), jamais des demi-paires UTF-16. */
+export function countBrainCharacters(value: string): number {
+  let count = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index)
+    const nextCodeUnit = value.charCodeAt(index + 1)
+    if (
+      codeUnit >= 0xd800 &&
+      codeUnit <= 0xdbff &&
+      nextCodeUnit >= 0xdc00 &&
+      nextCodeUnit <= 0xdfff
+    ) {
+      index += 1
+    }
+    count += 1
+  }
+  return count
+}
+
+/** Coupe à une frontière Unicode valide sans matérialiser tout le texte dans un tableau. */
+function sliceBrainCharacters(value: string, max: number): string {
+  if (max <= 0) return ''
+  let count = 0
+  let end = 0
+  for (const character of value) {
+    if (count >= max) break
+    end += character.length
+    count += 1
+  }
+  return end >= value.length ? value : value.slice(0, end)
+}
 
 export type BrainQueryDecision =
-  | { allowed: true; query: string }
-  | { allowed: false; reason: string }
+  { allowed: true; query: string } | { allowed: false; reason: string }
 
 /**
  * Valide et NORMALISE la question. Une requete vide n'a rien a chercher ; une requete demesuree est
@@ -31,7 +63,7 @@ export function decideBrainQuery(raw: unknown): BrainQueryDecision {
   }
   const query = raw.replace(/\s+/g, ' ').trim()
   if (!query) return { allowed: false, reason: 'question vide — rien à chercher' }
-  return { allowed: true, query: query.slice(0, BRAIN_QUERY_MAX_CHARS) }
+  return { allowed: true, query: sliceBrainCharacters(query, BRAIN_QUERY_MAX_CHARS) }
 }
 
 /**
@@ -41,9 +73,11 @@ export function decideBrainQuery(raw: unknown): BrainQueryDecision {
  */
 export function capBrainResult(raw: string, cap: number = BRAIN_RESULT_CAP): string {
   const text = raw.trim()
-  if (text.length <= cap) return text
-  const marker = '\n…[tronqué — suite du savoir non transmise]'
-  return `${text.slice(0, Math.max(0, cap - marker.length))}${marker}`
+  if (countBrainCharacters(text) <= cap) return text
+  return `${sliceBrainCharacters(
+    text,
+    Math.max(0, cap - countBrainCharacters(BRAIN_RESULT_TRUNCATION_MARKER))
+  )}${BRAIN_RESULT_TRUNCATION_MARKER}`
 }
 
 /** Réponse rendue à l'agent : jamais une erreur brute de transport. */
@@ -63,17 +97,19 @@ export function buildBrainOutcome(
   status: BrainRetrievalStatus = context.trim() ? 'found' : 'unavailable'
 ): BrainQueryOutcome {
   const knowledge = capBrainResult(context)
+  const effectiveStatus: BrainRetrievalStatus = knowledge || status !== 'found' ? status : 'empty'
   if (!knowledge) {
-    const note = status === 'invalid'
-      ? "reponse Brain rejetee : identite ou integrite invalide - aucune connaissance n'a ete utilisee"
-      : status === 'empty'
-        ? 'aucun savoir cure sur cette question - ne pas conclure que la reponse est negative'
-        : 'service Brain indisponible - ne pas conclure que la reponse est negative'
+    const note =
+      effectiveStatus === 'invalid'
+        ? "reponse Brain rejetee : identite ou integrite invalide - aucune connaissance n'a ete utilisee"
+        : effectiveStatus === 'empty'
+          ? 'aucun savoir cure sur cette question - ne pas conclure que la reponse est negative'
+          : 'service Brain indisponible - ne pas conclure que la reponse est negative'
     return {
       found: false,
       query,
       knowledge: '',
-      status,
+      status: effectiveStatus,
       note
     }
   }

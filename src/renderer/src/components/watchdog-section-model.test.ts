@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   describeOutcome,
+  describeOccurrenceStatus,
   describeWatchdogGuards,
   describeWatchdogSource,
   outcomeTone,
@@ -71,6 +72,19 @@ describe('description d’une règle', () => {
       'chaîne autorisée jusqu’à 2'
     )
   })
+
+  it('rend les plafonds quotidiens de volume et de cout visibles', () => {
+    const text = describeWatchdogGuards({
+      ...guards,
+      maxTriggersPerDay: 4,
+      maxKnownCostUsdPerDay: 0.25,
+      maxUnpricedCallsPerDay: 1
+    })
+
+    expect(text).toContain('4 réveils/24 h max')
+    expect(text).toContain('coupe-circuit à 0.25 $ connus/24 h')
+    expect(text).toContain('1 appel(s) non chiffré(s)/24 h max')
+  })
 })
 
 describe('issue du tri', () => {
@@ -81,6 +95,13 @@ describe('issue du tri', () => {
     expect(outcomeTone(undefined)).toBe('unknown')
     expect(outcomeTone('benign')).toBe('neutral')
     expect(outcomeTone('repair')).toBe('act')
+  })
+
+  it('nomme le statut humainement sans le confondre avec l issue', () => {
+    expect(describeOccurrenceStatus('failed')).toBe('Échec')
+    expect(describeOccurrenceStatus('cancelled')).toBe('Annulé')
+    expect(describeOccurrenceStatus('completed')).toBe('Terminé')
+    expect(describeOccurrenceStatus('running')).toBe('En cours')
   })
 })
 
@@ -96,23 +117,32 @@ describe('historique et résumé', () => {
     },
     { id: 'o2', taskId: 'w1', scheduledFor: 300, status: 'completed', trigger: 'watchdog' },
     { id: 'o3', taskId: 'w1', scheduledFor: 200, status: 'failed', trigger: 'watchdog' },
+    { id: 'o5', taskId: 'w1', scheduledFor: 500, status: 'cancelled', trigger: 'watchdog' },
+    { id: 'o6', taskId: 'w1', scheduledFor: 600, status: 'running', trigger: 'watchdog' },
     { id: 'o4', taskId: 'h1', scheduledFor: 400, status: 'completed', trigger: 'schedule' }
   ]
 
   it('ne retient que les réveils de la règle, du plus récent au plus ancien', () => {
-    expect(watchdogHistory(occurrences, 'w1').map((entry) => entry.id)).toEqual(['o2', 'o3', 'o1'])
+    expect(watchdogHistory(occurrences, 'w1').map((entry) => entry.id)).toEqual([
+      'o6',
+      'o5',
+      'o2',
+      'o3',
+      'o1'
+    ])
   })
 
-  it('compte les réveils TERMINÉS sans conclusion — le chiffre qui doit inquiéter', () => {
+  it('compte toute occurrence sans conclusion et expose les échecs et annulations', () => {
     const summary = watchdogSummary([hourly, watcher], occurrences)
 
-    expect(summary).toEqual({ rules: 1, active: 1, triggers: 3, pendingTriage: 1 })
-  })
-
-  it('ne compte pas un réveil ÉCHOUÉ comme un tri manquant', () => {
-    // Un échec est déjà signalé par son statut ; le compter deux fois brouillerait le signal.
-    const summary = watchdogSummary([watcher], [occurrences[2]])
-    expect(summary.pendingTriage).toBe(0)
+    expect(summary).toEqual({
+      rules: 1,
+      active: 1,
+      triggers: 5,
+      pendingTriage: 4,
+      failures: 1,
+      cancellations: 1
+    })
   })
 })
 

@@ -2,6 +2,8 @@ import { occurrenceIdFor, resolveNextOccurrence } from './schedule'
 import type { TaskStore } from './task-store'
 import type {
   ScheduledTask,
+  TaskUsageSettlement,
+  TaskUsageSettlementSink,
   TaskOccurrence,
   WatchdogMutationClaimsSink,
   WatchdogOutcome,
@@ -22,6 +24,8 @@ export interface DispatchResult {
   knownCostUsd?: number
   totalTokens?: number
   unpricedCalls?: number
+  requestedModel?: string
+  resolvedModel?: string
   /** Le tri conclu par un agent réveillé, quand il a pu être lu dans sa réponse. */
   outcome?: WatchdogOutcome
   /** Fichiers réellement attribués à ce tour par les preuves d'exécution. */
@@ -35,7 +39,8 @@ export interface TaskDispatcher {
   run(
     task: ScheduledTask,
     occurrence: TaskOccurrence,
-    onLateMutationClaims?: WatchdogMutationClaimsSink
+    onLateMutationClaims?: WatchdogMutationClaimsSink,
+    onLateUsageSettlement?: TaskUsageSettlementSink
   ): Promise<DispatchResult>
 }
 
@@ -169,7 +174,7 @@ export class TaskScheduler {
     if (!task?.enabled) return false
     const scheduledFor = this.clock.now()
     const occurrenceId = `${task.id}@manual-${scheduledFor}`
-    const claim = this.store.claim(task.id, occurrenceId, scheduledFor)
+    const claim = this.store.claim(task.id, occurrenceId, scheduledFor, { trigger: 'manual' })
     if (!claim.claimed) return false
     await this.execute(task, claim.occurrence)
     if (this.running) await this.plan()
@@ -184,12 +189,16 @@ export class TaskScheduler {
   async runWatchdog(
     taskId: string,
     signal: WatchdogSignal,
-    onLateMutationClaims?: WatchdogMutationClaimsSink
+    onLateMutationClaims?: WatchdogMutationClaimsSink,
+    onLateUsageSettlement?: TaskUsageSettlementSink
   ): Promise<{
     fired: boolean
+    eventId?: string
     mutatedPaths?: readonly string[]
     mutatedLineFingerprints?: Record<string, readonly string[]>
     mutatedPathGenerationMarkers?: Record<string, string>
+    knownCostUsd?: number
+    unpricedCalls?: number
   }> {
     const task = this.store.getTask(taskId)
     if (!task?.enabled || !task.watchdog) return { fired: false }
@@ -200,16 +209,24 @@ export class TaskScheduler {
       watchdog: signal
     })
     if (!claim.claimed) return { fired: false }
-    const result = await this.execute(task, claim.occurrence, onLateMutationClaims)
+    const result = await this.execute(
+      task,
+      claim.occurrence,
+      onLateMutationClaims,
+      onLateUsageSettlement
+    )
     return {
       fired: true,
+      eventId: occurrenceId,
       ...(result.mutatedPaths ? { mutatedPaths: result.mutatedPaths } : {}),
       ...(result.mutatedLineFingerprints
         ? { mutatedLineFingerprints: result.mutatedLineFingerprints }
         : {}),
       ...(result.mutatedPathGenerationMarkers
         ? { mutatedPathGenerationMarkers: result.mutatedPathGenerationMarkers }
-        : {})
+        : {}),
+      ...(result.knownCostUsd === undefined ? {} : { knownCostUsd: result.knownCostUsd }),
+      ...(result.unpricedCalls === undefined ? {} : { unpricedCalls: result.unpricedCalls })
     }
   }
 
@@ -221,11 +238,22 @@ export class TaskScheduler {
   private async execute(
     task: ScheduledTask,
     occurrence: TaskOccurrence,
-    onLateMutationClaims?: WatchdogMutationClaimsSink
+    onLateMutationClaims?: WatchdogMutationClaimsSink,
+    onLateUsageSettlement?: TaskUsageSettlementSink
   ): Promise<DispatchResult> {
     this.store.markRunning(occurrence.id)
+    const reconcileUsage = (usage: TaskUsageSettlement): void => {
+      const identified = { ...usage, eventId: occurrence.id }
+      this.store.reconcileUsage(occurrence.id, identified)
+      onLateUsageSettlement?.(identified)
+    }
     try {
-      const result = await this.dispatcher.run(task, occurrence, onLateMutationClaims)
+      const result = await this.dispatcher.run(
+        task,
+        occurrence,
+        onLateMutationClaims,
+        reconcileUsage
+      )
       this.store.finish(occurrence.id, result.status, {
         conversationId: result.conversationId,
         turnId: result.turnId,
@@ -233,8 +261,11 @@ export class TaskScheduler {
         knownCostUsd: result.knownCostUsd,
         totalTokens: result.totalTokens,
         unpricedCalls: result.unpricedCalls,
+        requestedModel: result.requestedModel,
+        resolvedModel: result.resolvedModel,
         outcome: result.outcome
       })
+      reconcileUsage(result)
       return result
     } catch (error) {
       const failed: DispatchResult = {

@@ -270,11 +270,20 @@ describe('AgentPilot turn contract', () => {
 
     const normalizedActivityBlock = activityBlock?.replace(/\s+/g, ' ')
     expect(normalizedActivityBlock).toContain(
-      'model: turnPromptIdentity?.model ?? turnRuntimeBinding.model'
+      'model: turnResolvedModel ?? turnPromptIdentity?.model ?? turnRuntimeBinding.model'
     )
     expect(normalizedActivityBlock).toContain(
       'reasoningEffort: turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort'
     )
+  })
+
+  it('journalise aussi le modele concret rapporte par le provider', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const promptCallBlock = source.match(
+      /const promptCall = appendPromptCall\(\{[\s\S]*?\n\s*\}\)/
+    )?.[0]
+
+    expect(promptCallBlock).toContain('resolvedModel: pilotEvent.resolvedModel')
   })
 
   it('dispatches every command without an authority mode', async () => {

@@ -56,6 +56,9 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('enabled')
   const [selectedId, setSelectedId] = useState('')
   const [relationCatalog, setRelationCatalog] = useState<RelatedItem[]>([])
+  // L'échec d'UNE source de relations ne doit ni vider le catalogue ni polluer la liste principale :
+  // il est agrégé partiellement et SIGNALÉ ici.
+  const [relationSourcesDown, setRelationSourcesDown] = useState<string[]>([])
 
   useEffect(() => {
     if (!active) return
@@ -97,40 +100,57 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
   useEffect(() => {
     if (!active) return
     let current = true
-    Promise.all([
-      window.api.claudeHooks().then((entries) =>
-        entries.map((item) => ({
-          ...item,
-          relationKind: 'hook' as const,
-          relationSource: 'Claude'
-        }))
-      ),
-      window.api.codexHooks().then((entries) =>
-        entries.map((item) => ({
-          ...item,
-          relationKind: 'hook' as const,
-          relationSource: 'Codex'
-        }))
-      ),
-      window.api.capabilityControls('hooks').then((entries) =>
-        entries.map((item) => ({
-          ...item,
-          relationKind: 'hook' as const,
-          relationSource: 'Autowin'
-        }))
-      ),
-      window.api.capabilityControls('tools').then((entries) =>
-        entries.map((item) => ({
-          ...item,
-          relationKind: 'tool' as const,
-          relationSource: 'Autowin'
-        }))
-      )
-    ])
-      .then((groups) => {
-        if (current) setRelationCatalog(groups.flat())
+    const sources: Array<{
+      label: string
+      relationKind: 'hook' | 'tool'
+      relationSource: string
+      load: () => Promise<Item[]>
+    }> = [
+      {
+        label: 'Hooks Claude',
+        relationKind: 'hook',
+        relationSource: 'Claude',
+        load: () => window.api.claudeHooks()
+      },
+      {
+        label: 'Hooks Codex',
+        relationKind: 'hook',
+        relationSource: 'Codex',
+        load: () => window.api.codexHooks()
+      },
+      {
+        label: 'Hooks Autowin',
+        relationKind: 'hook',
+        relationSource: 'Autowin',
+        load: () => window.api.capabilityControls('hooks')
+      },
+      {
+        label: 'Tools Autowin',
+        relationKind: 'tool',
+        relationSource: 'Autowin',
+        load: () => window.api.capabilityControls('tools')
+      }
+    ]
+    void Promise.allSettled(sources.map((source) => source.load())).then((results) => {
+      if (!current) return
+      const catalog: RelatedItem[] = []
+      const down: string[] = []
+      results.forEach((result, index) => {
+        const source = sources[index]
+        if (result.status === 'fulfilled') {
+          for (const item of result.value)
+            catalog.push({
+              ...item,
+              relationKind: source.relationKind,
+              relationSource: source.relationSource
+            })
+        } else {
+          down.push(source.label)
+        }
       })
-      .catch(() => undefined)
+      setRelationCatalog(catalog)
+      setRelationSourcesDown(down)
+    })
     return () => {
       current = false
     }
@@ -167,6 +187,22 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
 
   const selected = filtered.find((item) => item.id === selectedId) ?? filtered[0]
   const enabledCount = effectiveItems.filter((item) => item.enabled).length
+  // FAUX état vide : des éléments EXISTENT mais le filtre d'état les masque. On le dit, avec le
+  // compteur, plutôt que d'afficher « aucun ».
+  const hiddenByStatus = useMemo(() => {
+    if (statusFilter === 'all') return 0
+    const needle = query.trim().toLocaleLowerCase('fr')
+    return effectiveItems.filter((item) => {
+      const sourceMatches =
+        kind !== 'skills' || skillSource === 'all' || item.source === skillSource
+      const statusMatches = statusFilter === 'enabled' ? item.enabled : !item.enabled
+      const queryMatches =
+        `${item.label} ${item.description} ${item.source ?? ''} ${item.matcher ?? ''}`
+          .toLocaleLowerCase('fr')
+          .includes(needle)
+      return sourceMatches && !statusMatches && queryMatches
+    }).length
+  }, [effectiveItems, kind, query, skillSource, statusFilter])
   const relations = useMemo(() => {
     if (!selected || kind !== 'skills') return []
     const needle = selected.label.toLocaleLowerCase('fr')
@@ -333,6 +369,23 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
           <div className="control-list">
             {loading ? (
               <p className="control-empty">Lecture des sources…</p>
+            ) : filtered.length === 0 && hiddenByStatus > 0 ? (
+              <div className="control-empty">
+                <p>
+                  {hiddenByStatus} capacité{hiddenByStatus > 1 ? 's' : ''} existe
+                  {hiddenByStatus > 1 ? 'nt' : ''} mais {hiddenByStatus > 1 ? 'sont' : 'est'}{' '}
+                  masquée
+                  {hiddenByStatus > 1 ? 's' : ''} par le filtre d’état.
+                </p>
+                <button
+                  type="button"
+                  data-testid="capabilities-reveal-disabled"
+                  onClick={() => setStatusFilter('all')}
+                >
+                  Afficher les {hiddenByStatus}{' '}
+                  {statusFilter === 'enabled' ? 'désactivées' : 'actives'}
+                </button>
+              </div>
             ) : filtered.length === 0 ? (
               <p className="control-empty">{META[kind].empty}</p>
             ) : (
@@ -404,6 +457,12 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
                   {relations.length} relation{relations.length > 1 ? 's' : ''}
                 </span>
               </div>
+              {relationSourcesDown.length > 0 && (
+                <p className="control-notice" data-testid="relations-partial">
+                  Catalogue de relations partiel : {relationSourcesDown.join(', ')} indisponible
+                  {relationSourcesDown.length > 1 ? 's' : ''}.
+                </p>
+              )}
               <div className="related-list">
                 {relations.length > 0 ? (
                   relations.slice(0, 4).map((relation) => (

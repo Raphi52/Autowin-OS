@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { BrainSearchEnvelope } from '../../../main/brain-search-envelope'
+import { brainBusinessError } from './graph-view-model'
 import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
 
 /**
@@ -24,25 +26,7 @@ type BenchState =
   | { phase: 'done'; scope: string; envelope: BrainSearchEnvelopeView }
   | { phase: 'failed'; scope: string; message: string }
 
-/** Forme LUE de l'enveloppe — le renderer n'en consomme que ce qu'il affiche. */
-export interface BrainSearchEnvelopeView {
-  status: 'found' | 'empty' | 'invalid' | 'unavailable' | 'not-requested'
-  note: string
-  query: string
-  results: Array<{ id: string }>
-  navigation?: BrainTraceView['navigation']
-  budget: {
-    questionSubmittedChars: number
-    questionChars: number
-    questionMax: number
-    questionTruncated: boolean
-    knowledgeAvailableChars: number
-    knowledgeChars: number
-    knowledgeMax: number
-    knowledgeTruncated: boolean
-    knowledgeDroppedChars: number
-  }
-}
+export type BrainSearchEnvelopeView = BrainSearchEnvelope
 
 /**
  * Libellé court par état — le titre du verdict, la `note` en portant le détail. Volontairement NON
@@ -119,10 +103,7 @@ export function BrainRetrievalBench({
     const requestGeneration = ++requestGenerationRef.current
     setState({ phase: 'running', scope: requestScope })
     try {
-      const envelope = (await window.api.searchBrain(
-        brainPath,
-        asked
-      )) as unknown as BrainSearchEnvelopeView
+      const envelope = await window.api.searchBrain(brainPath, asked)
       if (requestGeneration !== requestGenerationRef.current) return
       setState({ phase: 'done', scope: requestScope, envelope })
     } catch (error) {
@@ -131,7 +112,7 @@ export function BrainRetrievalBench({
       setState({
         phase: 'failed',
         scope: requestScope,
-        message: error instanceof Error ? error.message : String(error)
+        message: brainBusinessError("Impossible d'exécuter le banc d'essai.", error)
       })
     }
   }, [brainPath, question, requestScope])
@@ -153,6 +134,27 @@ export function BrainRetrievalBench({
   const failed = state.phase === 'failed' && state.scope === requestScope ? state : undefined
   const envelope =
     state.phase === 'done' && state.scope === requestScope ? state.envelope : undefined
+  const navigationTrace = useMemo<BrainTraceView | undefined>(
+    () =>
+      envelope
+        ? {
+            // Stable pendant toute la vie de CETTE enveloppe : les rerenders du champ question ne
+            // doivent ni remonter les candidats ni fermer une note dépliée.
+            timestamp: new Date().toISOString(),
+            conversationId: 'knowledge-bench',
+            kind: 'query',
+            query: envelope.query,
+            injectedChars: envelope.budget.knowledgeChars,
+            navigation: envelope.navigation
+          }
+        : undefined,
+    [envelope]
+  )
+  /**
+   * Une invalidation efface l'affichage mais la RELANCE peut ne jamais venir (réindexation en échec) :
+   * le banc redevenait alors muet, question tapée mais verdict disparu sans un mot. On le DIT.
+   */
+  const stale = state.phase !== 'idle' && state.scope !== requestScope && Boolean(question.trim())
 
   return (
     <section className="brain-bench" aria-label="Banc d’essai de récupération">
@@ -178,10 +180,25 @@ export function BrainRetrievalBench({
         </button>
       </div>
 
+      {stale && !running && (
+        <p className="brain-bench__status is-stale" data-bench-state="stale" role="status">
+          <strong>Résultat périmé</strong>
+          <span>
+            Le savoir a été réindexé depuis cette réponse : elle a été retirée plutôt que de mentir.
+          </span>
+          <button type="button" className="brain-bench__relaunch" onClick={() => void run()}>
+            Relancer la question
+          </button>
+        </p>
+      )}
+
       {failed && (
         <p className="brain-bench__status is-failed" data-retrieval-status="failed" role="alert">
           <strong>Recherche impossible</strong>
           <span>{failed.message}</span>
+          <button type="button" className="brain-bench__retry" onClick={() => void run()}>
+            Réessayer
+          </button>
         </p>
       )}
 
@@ -223,16 +240,7 @@ export function BrainRetrievalBench({
 
           {/* La carte de navigation n'est PAS réécrite ici : c'est le composant existant, alimenté
               par une trace construite depuis l'enveloppe. */}
-          <BrainNavigationCard
-            trace={{
-              timestamp: new Date().toISOString(),
-              conversationId: 'knowledge-bench',
-              kind: 'query',
-              query: envelope.query,
-              injectedChars: envelope.budget.knowledgeChars,
-              navigation: envelope.navigation
-            }}
-          />
+          {navigationTrace && <BrainNavigationCard trace={navigationTrace} />}
 
           <p className="brain-bench__local">
             Recherche locale du vault : <strong>{count(envelope.results.length)}</strong> fiche

@@ -200,9 +200,11 @@ export class GeminiCliAdapter implements ProviderAdapter {
       cwd: sandbox,
       journalRoot: process.env.AUTOWIN_RUN_JOURNAL_ROOT ?? join(sandbox, '.run'),
       runId: spawnToken,
-      onJournalPrepared: opts.execution?.onJournal
-        ? (journalPath) => opts.execution?.onJournal?.(spawnToken, journalPath)
-        : undefined
+      onJournalPrepared:
+        (opts.execution?.onJournal ?? opts.onJournal)
+          ? (journalPath) =>
+              (opts.execution?.onJournal ?? opts.onJournal)?.(spawnToken, journalPath)
+          : undefined
     })
     const child = run.child
     const childPid = child.pid

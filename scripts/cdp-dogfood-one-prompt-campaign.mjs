@@ -2,11 +2,11 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9223'
 const artifactRoot = 'C:/Amitel/Autowin OS/artifacts/dogfood-one-prompt'
-const registryPath = `${artifactRoot}/campaign.json`
+const registryPath = process.env.AUTOWIN_DOGFOOD_REGISTRY || `${artifactRoot}/campaign.json`
 const mode = process.argv[2] ?? 'run'
 const campaignId = process.env.AUTOWIN_DOGFOOD_ID || `dogfood-${Date.now()}`
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-const views = [
+const allViews = [
   ['chat', 'Chat'],
   ['agent-studio', 'Agent Studio'],
   ['knowledge', 'Knowledge'],
@@ -16,6 +16,18 @@ const views = [
   ['tickets', 'Tickets'],
   ['settings', 'Settings']
 ]
+const requestedViews = new Set(
+  (process.env.AUTOWIN_DOGFOOD_VIEWS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+)
+const views = requestedViews.size ? allViews.filter(([slug]) => requestedViews.has(slug)) : allViews
+if (requestedViews.size && views.length !== requestedViews.size) {
+  const known = new Set(allViews.map(([slug]) => slug))
+  const unknown = [...requestedViews].filter((slug) => !known.has(slug))
+  throw new Error(`Vue(s) dogfood inconnue(s): ${unknown.join(', ')}`)
+}
 
 mkdirSync(artifactRoot, { recursive: true })
 
@@ -128,7 +140,9 @@ const evaluate = async (expression) => {
     awaitPromise: true
   })
   if (response.exceptionDetails) {
-    throw new Error(response.exceptionDetails.exception?.description ?? response.exceptionDetails.text)
+    throw new Error(
+      response.exceptionDetails.exception?.description ?? response.exceptionDetails.text
+    )
   }
   return response.result?.value
 }
@@ -139,6 +153,16 @@ await send('Log.enable')
 const save = (campaign) => {
   campaign.updatedAt = new Date().toISOString()
   campaign.rendererEvents = rendererEvents.slice(-200)
+  campaign.cost = campaign.entries.reduce(
+    (total, entry) => ({
+      knownUsd: total.knownUsd + (entry.telemetry?.cost?.knownUsd ?? 0),
+      calls: total.calls + (entry.telemetry?.cost?.calls ?? 0),
+      unpricedCalls: total.unpricedCalls + (entry.telemetry?.cost?.unpricedCalls ?? 0),
+      inputTokens: total.inputTokens + (entry.telemetry?.cost?.inputTokens ?? 0),
+      outputTokens: total.outputTokens + (entry.telemetry?.cost?.outputTokens ?? 0)
+    }),
+    { knownUsd: 0, calls: 0, unpricedCalls: 0, inputTokens: 0, outputTokens: 0 }
+  )
   writeFileSync(registryPath, JSON.stringify(campaign, null, 2), 'utf8')
 }
 
@@ -175,7 +199,8 @@ const setInput = async (selector, value) =>
 const selectConversation = async (title) => {
   await clickChat()
   const searchSelector = 'input[placeholder*="Rechercher"]'
-  if (!(await setInput(searchSelector, title))) throw new Error('Recherche de conversations absente')
+  if (!(await setInput(searchSelector, title)))
+    throw new Error('Recherche de conversations absente')
   await sleep(300)
   const clicked = await evaluate(`(() => {
     const item = [...document.querySelectorAll('.conv-item')].find(
@@ -192,17 +217,41 @@ const selectConversation = async (title) => {
 const typeAndSend = async (prompt) => {
   if (!(await setInput('.composer textarea', prompt))) throw new Error('Composer absent')
   await sleep(100)
+  const targetConversationId = await evaluate(
+    `window.api.appState().then((state) => state.activeConversationId ?? null)`
+  )
+  if (!targetConversationId) throw new Error('Conversation active absente avant envoi')
   const clicked = await evaluate(`(() => {
     const button = document.querySelector('.composer .composer-send:not(:disabled)')
     button?.click()
     return Boolean(button)
   })()`)
   if (!clicked) throw new Error('Bouton Envoyer indisponible')
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    await sleep(100)
+    const accepted = await evaluate(`(async () => {
+      const conversation = await window.api.conversation(${JSON.stringify(targetConversationId)})
+      const persisted = conversation?.messages?.some(
+        (message) => message.role === 'user' && message.content === ${JSON.stringify(prompt)}
+      ) ?? false
+      if (persisted) return 'persisted'
+      const state = await window.api.appState()
+      const queued = state.activeConversationId === ${JSON.stringify(targetConversationId)} &&
+        [...document.querySelectorAll('.directive-queue-text')].some(
+          (item) => item.textContent?.trim() === ${JSON.stringify(prompt)}
+        )
+      return queued ? 'queued' : null
+    })()`)
+    if (accepted) return
+  }
+  throw new Error(`Message ni persisté ni mis en file dans ${targetConversationId}`)
 }
 
 const startConversation = async (prompt, sentinel) => {
   await clickChat()
-  const previousId = await evaluate(`window.api.appState().then((state) => state.activeConversationId ?? null)`)
+  const previousId = await evaluate(
+    `window.api.appState().then((state) => state.activeConversationId ?? null)`
+  )
   const clicked = await evaluate(`(() => {
     const button = [...document.querySelectorAll('button')].find(
       (candidate) => candidate.textContent?.trim() === 'Nouveau'
@@ -231,12 +280,13 @@ const startConversation = async (prompt, sentinel) => {
 const conversationTelemetry = async (entry) =>
   evaluate(`(async () => {
     const id = ${JSON.stringify(entry.conversationId)}
-    const [conversation, calls, traces, runs, activity] = await Promise.all([
+    const [conversation, calls, traces, runs, activity, costByModel] = await Promise.all([
       window.api.conversation(id),
       window.api.promptCalls(id),
       window.api.causalTrace(id),
       window.api.conversationRuns(id),
-      window.api.conversationActivity(id)
+      window.api.conversationActivity(id),
+      window.api.costBreakdown('model', id)
     ])
     const messages = conversation?.messages ?? []
     const last = messages.at(-1)
@@ -259,6 +309,21 @@ const conversationTelemetry = async (entry) =>
       runs: runs.map((run) => ({ path: run.path, status: run.summary.status, defects: run.summary.defauts })),
       activity: activity.length,
       actionFailures: actionFailures.length,
+      cost: {
+        knownUsd: costByModel.reduce((sum, row) => sum + row.costUsd, 0),
+        calls: costByModel.reduce((sum, row) => sum + row.calls, 0),
+        unpricedCalls: costByModel.reduce((sum, row) => sum + row.unpricedCalls, 0),
+        inputTokens: costByModel.reduce((sum, row) => sum + row.inputTokens, 0),
+        outputTokens: costByModel.reduce((sum, row) => sum + row.outputTokens, 0),
+        byModel: costByModel.map((row) => ({
+          model: row.key,
+          calls: row.calls,
+          knownUsd: row.costUsd,
+          unpricedCalls: row.unpricedCalls,
+          inputTokens: row.inputTokens,
+          outputTokens: row.outputTokens
+        }))
+      },
       recentFailures: actionFailures.slice(-5).map((item) => ({
         name: item.name ?? item.kind ?? null,
         status: item.status ?? null,
@@ -285,7 +350,9 @@ if (mode === 'stop-repair') {
   campaign.repair.telemetry = await conversationTelemetry(campaign.repair)
   campaign.repair.stoppedAt = new Date().toISOString()
   save(campaign)
-  console.log(JSON.stringify({ event: 'repair-stop', stopped, telemetry: campaign.repair.telemetry }))
+  console.log(
+    JSON.stringify({ event: 'repair-stop', stopped, telemetry: campaign.repair.telemetry })
+  )
   socket.close()
   process.exit(stopped ? 0 : 1)
 }
@@ -341,6 +408,7 @@ if (mode === 'run') {
     id: campaignId,
     createdAt: new Date().toISOString(),
     phase: 'scout',
+    views: views.map(([slug]) => slug),
     entries: [],
     observations: [],
     rendererEvents: []
@@ -421,7 +489,9 @@ if (mode !== 'status') {
       .join('|')
     if (summary !== lastSummary) {
       campaign.observations.push({ ts: new Date().toISOString(), summary })
-      console.log(JSON.stringify({ event: 'status', finished, total: campaign.entries.length, summary }))
+      console.log(
+        JSON.stringify({ event: 'status', finished, total: campaign.entries.length, summary })
+      )
       lastSummary = summary
     }
     save(campaign)

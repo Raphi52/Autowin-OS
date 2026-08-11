@@ -14,7 +14,9 @@
 import {
   BRAIN_QUERY_MAX_CHARS,
   BRAIN_RESULT_CAP,
+  BRAIN_RESULT_TRUNCATION_MARKER,
   capBrainResult,
+  countBrainCharacters,
   decideBrainQuery
 } from './brain-query-command'
 import type { BrainNavigation, BrainRetrievalResult, BrainRetrievalStatus } from './brain-retrieval'
@@ -91,25 +93,49 @@ export function buildBrainSearchEnvelope({
   const decision = decideBrainQuery(rawQuery)
   const normalized = typeof rawQuery === 'string' ? rawQuery.replace(/\s+/g, ' ').trim() : ''
   const query = decision.allowed ? decision.query : ''
-  const knowledgeAvailable = (retrieval?.context ?? '').trim()
+  const rawKnowledgeAvailable = (retrieval?.context ?? '').trim()
+  const navigationQuestionMismatch = Boolean(
+    retrieval?.navigation && retrieval.navigation.query !== query
+  )
+  const retainedWithoutKnowledge = Boolean(
+    !rawKnowledgeAvailable &&
+    retrieval?.navigation?.candidates.some((candidate) => candidate.retained)
+  )
+  const invalidNavigation = navigationQuestionMismatch || retainedWithoutKnowledge
+  const knowledgeAvailable = invalidNavigation ? '' : rawKnowledgeAvailable
   const capped = knowledgeAvailable ? capBrainResult(knowledgeAvailable) : ''
-  const status: BrainSearchStatus = retrieval ? retrieval.status : 'not-requested'
+  const questionSubmittedChars = countBrainCharacters(normalized)
+  const questionChars = countBrainCharacters(query)
+  const knowledgeAvailableChars = countBrainCharacters(knowledgeAvailable)
+  const knowledgeChars = countBrainCharacters(capped)
+  const knowledgeTruncated = knowledgeAvailableChars > BRAIN_RESULT_CAP
+  const retainedKnowledgeChars = knowledgeTruncated
+    ? knowledgeChars - countBrainCharacters(BRAIN_RESULT_TRUNCATION_MARKER)
+    : knowledgeChars
+  const status: BrainSearchStatus = invalidNavigation
+    ? 'invalid'
+    : retrieval
+      ? knowledgeAvailable || retrieval.status !== 'found'
+        ? retrieval.status
+        : 'empty'
+      : 'not-requested'
+  const navigation = status === 'found' || status === 'empty' ? retrieval?.navigation : undefined
   return {
     status,
     note: BRAIN_RETRIEVAL_NOTES[status],
     query,
     results,
-    ...(retrieval?.navigation ? { navigation: retrieval.navigation } : {}),
+    ...(navigation ? { navigation } : {}),
     budget: {
-      questionSubmittedChars: normalized.length,
-      questionChars: query.length,
+      questionSubmittedChars,
+      questionChars,
       questionMax: BRAIN_QUERY_MAX_CHARS,
-      questionTruncated: normalized.length > BRAIN_QUERY_MAX_CHARS,
-      knowledgeAvailableChars: knowledgeAvailable.length,
-      knowledgeChars: capped.length,
+      questionTruncated: questionSubmittedChars > BRAIN_QUERY_MAX_CHARS,
+      knowledgeAvailableChars,
+      knowledgeChars,
       knowledgeMax: BRAIN_RESULT_CAP,
-      knowledgeTruncated: knowledgeAvailable.length > BRAIN_RESULT_CAP,
-      knowledgeDroppedChars: Math.max(0, knowledgeAvailable.length - capped.length)
+      knowledgeTruncated,
+      knowledgeDroppedChars: Math.max(0, knowledgeAvailableChars - retainedKnowledgeChars)
     }
   }
 }

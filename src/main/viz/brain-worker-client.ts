@@ -1,18 +1,6 @@
 import { Worker } from 'node:worker_threads'
+import type { BrainWorkerArgs, BrainWorkerMethod, BrainWorkerResult } from './brain-worker-contract'
 
-type BrainWorkerMethod =
-  | 'listBrains'
-  | 'loadPreview'
-  | 'loadGraph'
-  | 'loadThemes'
-  | 'loadThemeNodes'
-  | 'loadNeighborhood'
-  | 'readNodeFile'
-  | 'authorizeVault'
-  | 'searchBrain'
-  | 'fuseRetrieval'
-  | 'invalidate'
-  | 'graphifyEvidence'
 type PendingCall = {
   resolve(value: unknown): void
   reject(error: Error): void
@@ -74,7 +62,10 @@ export class BrainWorkerClient {
     return worker
   }
 
-  request<T>(method: BrainWorkerMethod, ...args: unknown[]): Promise<T> {
+  request<M extends BrainWorkerMethod>(
+    method: M,
+    ...args: BrainWorkerArgs<M>
+  ): Promise<BrainWorkerResult<M>> {
     return this.requestWithTimeout(this.timeoutMs, method, ...args)
   }
 
@@ -90,11 +81,11 @@ export class BrainWorkerClient {
     return Promise.resolve()
   }
 
-  requestWithTimeout<T>(
+  requestWithTimeout<M extends BrainWorkerMethod>(
     timeoutMs: number,
-    method: BrainWorkerMethod,
-    ...args: unknown[]
-  ): Promise<T> {
+    method: M,
+    ...args: BrainWorkerArgs<M>
+  ): Promise<BrainWorkerResult<M>> {
     if (this.pending.size >= this.maxPending) {
       return Promise.reject(new Error(`Worker Brain sature (${this.maxPending} appels en attente)`))
     }
@@ -111,14 +102,18 @@ export class BrainWorkerClient {
     } catch (error) {
       return Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }
-    return new Promise<T>((resolve, reject) => {
+    return new Promise<BrainWorkerResult<M>>((resolve, reject) => {
       const timeout = setTimeout(() => {
         if (!this.pending.has(id)) return
         const error = new Error(`Worker Brain sans reponse apres ${boundedTimeoutMs} ms`)
         this.retireWorker(worker, error)
       }, boundedTimeoutMs)
       timeout.unref?.()
-      this.pending.set(id, { resolve: (value) => resolve(value as T), reject, timeout })
+      this.pending.set(id, {
+        resolve: (value) => resolve(value as BrainWorkerResult<M>),
+        reject,
+        timeout
+      })
       try {
         worker.postMessage({ id, method, args })
       } catch (error) {

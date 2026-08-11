@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
 import type { PromptSnapshot } from './commands'
+import { ProviderCallError } from './providers/types'
 
 const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   tab: 'chat',
@@ -44,6 +45,65 @@ describe('AgentPilot retry observable', () => {
     ])
     expect(events[0]).toMatchObject({ status: 'failed', error: 'transport indisponible' })
     expect(events[1]).toMatchObject({ kind: 'retry', data: { attempt: 1, maxAttempts: 2 } })
+  })
+  it('ne repaie pas un echec provider terminal et journalise sa consommation reelle', async () => {
+    const usage = { inputTokens: 38, outputTokens: 1043, costUsd: 0.065648 }
+    const send = vi.fn().mockRejectedValue(
+      new ProviderCallError('Budget provider atteint', {
+        code: 'error_max_budget_usd',
+        retryable: false,
+        usage,
+        resolvedModel: 'claude-haiku-real'
+      })
+    )
+    const registry = {
+      send,
+      honoursSessionResume: () => false,
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'spawn',
+        messages: [],
+        options: {},
+        limitation: 'opaque'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'haiku', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+    const events: PilotEvent[] = []
+
+    await expect(
+      new AgentPilot(registry as never, roles as never, bus as never).chat(
+        [{ role: 'user', content: 'test' }],
+        (event) => events.push(event),
+        undefined,
+        1,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { systemProfile: 'watchdog-read-only' }
+      )
+    ).rejects.toThrow('Budget provider atteint')
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0][2]).toMatchObject({ toolProfile: 'watchdog-read-only' })
+    expect(send.mock.calls[0][2].system).toContain('triage automatique')
+    expect(send.mock.calls[0][2].system).not.toContain("Pour agir sur l'app")
+    expect(send.mock.calls[0][2].system.length).toBeLessThan(2_000)
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: 'prompt-call',
+        status: 'failed',
+        callUsage: usage,
+        resolvedModel: 'claude-haiku-real'
+      })
+    ])
   })
   it('emet une annulation sans retry lorsque le signal utilisateur est coupe', async () => {
     const controller = new AbortController()

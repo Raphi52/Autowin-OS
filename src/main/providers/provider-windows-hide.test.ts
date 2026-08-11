@@ -82,7 +82,7 @@ describe('providers CLI — consoles Windows non interactives', () => {
 
   it('persiste le journal Claude avant de lancer le provider', () => {
     const source = readFileSync('src/main/providers/claude.ts', 'utf8')
-    const journal = source.indexOf('execution.onJournal(spawnToken, journal.path)')
+    const journal = source.indexOf('onJournal(spawnToken, journal.path)')
     const spawn = source.indexOf('const child = spawn(invocation.bin')
     expect(journal).toBeGreaterThanOrEqual(0)
     expect(spawn).toBeGreaterThan(journal)

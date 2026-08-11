@@ -784,8 +784,29 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     expect(co.end('run-1')?.outcome).toBe('blocked')
     expect(co.activity()[0]).toMatchObject({
       state: 'blocked',
-      files: [{ path: 'a.txt', kind: 'mod' }],
+      files: [{ path: 'os.ts', kind: 'mod' }],
       attentionReason: 'base-in-progress'
+    })
+  })
+
+  it('échec de compensation durable → conserve la provenance des fichiers agent', () => {
+    const finalize = (id: string): FinalizeResult => ({
+      outcome: 'blocked',
+      agentId: id,
+      files: ['a.txt', 'b.txt'],
+      reason: 'merge-failed',
+      preserveAgentFiles: true
+    })
+    const co = new RunWorktreeCoordinator({
+      manager: fakeManager({ finalize, changedFiles: () => ['b.txt'] }),
+      nowFn: () => 9
+    })
+    co.begin('run-compensation', 'Builder', true)
+
+    expect(co.end('run-compensation')).toMatchObject({ outcome: 'blocked' })
+    expect(co.activity()[0]).toMatchObject({
+      files: [{ path: 'b.txt', kind: 'mod' }],
+      attentionReason: 'merge-failed'
     })
   })
 
@@ -1526,5 +1547,99 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+
+  /** P0-4 : la résolution humaine d'un conflit repasse par la transaction protégée. */
+  describe('resolveConflictAsync (décision humaine sur un conflit)', () => {
+    function conflictedCoordinator(
+      finalizeAsync: (id: string, options?: unknown) => Promise<FinalizeResult>
+    ) {
+      const manager = {
+        ...fakeManager({
+          finalize: (id: string): FinalizeResult => ({
+            outcome: 'conflict',
+            agentId: id,
+            files: ['os.ts'],
+            baseSha: 'base111',
+            agentSha: 'agent222'
+          })
+        }),
+        finalizeAsync,
+        changedFilesAsync: async () => ['os.ts']
+      }
+      const co = new RunWorktreeCoordinator({ manager, nowFn: () => 9 })
+      co.begin('run-1', 'Judge', true)
+      co.end('run-1')
+      return co
+    }
+
+    it('« garder la version de l’agent » rejoue l’intégration avec la stratégie theirs', async () => {
+      const finalizeAsync = vi.fn(
+        async (id: string) =>
+          ({
+            outcome: 'merged',
+            agentId: id,
+            committed: true,
+            publishedSha: PUBLISHED_SHA
+          }) as FinalizeResult
+      )
+      const co = conflictedCoordinator(finalizeAsync)
+
+      const result = await co.resolveConflictAsync('run-1', 'agent')
+
+      expect(result).toEqual({ resolved: true, agentId: 'run-1', outcome: 'merged' })
+      expect(finalizeAsync).toHaveBeenCalledWith(
+        'run-1',
+        expect.objectContaining({ conflictStrategy: 'theirs' })
+      )
+      expect(co.activity()[0].state).toBe('merged')
+    })
+
+    it('« garder ma version » utilise la stratégie ours sans toucher au workspace autrement', async () => {
+      const finalizeAsync = vi.fn(
+        async (id: string) =>
+          ({ outcome: 'merged', agentId: id, committed: true }) as FinalizeResult
+      )
+      const co = conflictedCoordinator(finalizeAsync)
+
+      await co.resolveConflictAsync('run-1', 'mine')
+
+      expect(finalizeAsync).toHaveBeenCalledWith(
+        'run-1',
+        expect.objectContaining({ conflictStrategy: 'ours' })
+      )
+    })
+
+    it('un refus de la base ne prétend jamais avoir résolu', async () => {
+      const finalizeAsync = vi.fn(
+        async (id: string) =>
+          ({
+            outcome: 'blocked',
+            agentId: id,
+            files: ['os.ts'],
+            reason: 'base-dirty'
+          }) as FinalizeResult
+      )
+      const co = conflictedCoordinator(finalizeAsync)
+
+      const result = await co.resolveConflictAsync('run-1', 'agent')
+
+      expect(result).toMatchObject({ resolved: false, reason: 'blocked' })
+      expect(co.activity()[0]).toMatchObject({ state: 'blocked', attentionReason: 'base-dirty' })
+    })
+
+    it('refuse un bureau qui n’est pas en conflit', async () => {
+      const co = new RunWorktreeCoordinator({ manager: fakeManager(), nowFn: () => 9 })
+      co.begin('run-2', 'Builder', true)
+
+      expect(await co.resolveConflictAsync('run-2', 'agent')).toEqual({
+        resolved: false,
+        reason: 'not-conflict'
+      })
+      expect(await co.resolveConflictAsync('inconnu', 'agent')).toEqual({
+        resolved: false,
+        reason: 'invalid-agent'
+      })
+    })
   })
 })

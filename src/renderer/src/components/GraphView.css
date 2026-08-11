@@ -1505,6 +1505,16 @@
   font-size: 11px;
 }
 
+.knowledge-inbox__warning {
+  margin: 0;
+  padding: 7px 9px 7px 24px;
+  border: 1px solid #7a6533;
+  border-radius: 6px;
+  background: rgba(122, 101, 51, 0.16);
+  color: #ffe3a1;
+  font-size: 11px;
+}
+
 .knowledge-inbox__empty {
   margin: 0;
   color: #718094;
@@ -1867,4 +1877,51 @@
 .theme-sidebar__retrieval.is-failed {
   border-color: #7a3340;
   color: #ffc4cd;
+}
+
+/* Compteur de candidats en attente : la revue humaine se voit SANS ouvrir le poste de travail. */
+.graph-workbench-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #ff9f43;
+  color: #10161f;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.graph-stat-inbox strong {
+  color: #ff9f43;
+}
+
+/* Sorties concrètes : réessais par canal, état vide actionnable, troncature dite. */
+.graph-brains-recovery,
+.theme-sidebar__error,
+.graph-empty-actions,
+.graph-truncation,
+.node-panel__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.graph-truncation {
+  position: absolute;
+  z-index: 12;
+  bottom: 14px;
+  left: 50%;
+  max-width: 520px;
+  padding: 8px 12px;
+  border: 1px solid #6d5a2f;
+  border-radius: 8px;
+  background: rgba(24, 19, 8, 0.92);
+  color: #f0d9a8;
+  font-size: 12px;
+  transform: translateX(-50%);
 }

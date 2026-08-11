@@ -687,3 +687,224 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(onSendPrompt).toHaveBeenCalledWith('push la branche courante')
   })
 })
+
+describe('SourceControlPane — Hub des bureaux', () => {
+  const CONFLICT_AGENT = {
+    agentId: 'a2',
+    agentName: 'Builder',
+    state: 'conflict',
+    files: [{ path: 'src/main/os.ts', kind: 'mod' }],
+    startedAtMs: 1,
+    conflictFile: 'src/main/os.ts',
+    verdict: 'green',
+    publication: 'blocked'
+  }
+
+  function api(): Record<string, unknown> {
+    return (window as unknown as { api: Record<string, unknown> }).api
+  }
+
+  async function renderPane(): Promise<void> {
+    await act(async () => {
+      root.render(createElement(SourceControlPane, { conversationId: 'conv-a' }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  async function openWorkspace(): Promise<void> {
+    await act(async () => {
+      ;(container.querySelector('[data-testid="sc-view-workspace"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+  }
+
+  it('P0-1 : le panneau de comparaison peut être refermé', async () => {
+    mockApi(GIT)
+    api().getWorktreeActivity = () => Promise.resolve([CONFLICT_AGENT])
+    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
+    api().getWorktreeConflictDiff = () =>
+      Promise.resolve({ available: true, agentId: 'a2', paths: ['src/main/os.ts'], diff: '-a\n+b' })
+    await renderPane()
+    await openWorkspace()
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="wt-resolve-conflict"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="wt-conflict-diff"]')).toBeTruthy()
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="wt-conflict-close"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-testid="wt-conflict-diff"]')).toBeNull()
+  })
+
+  it('P0-2 : pendant la lecture du statut, la protection n’est pas déclarée indisponible', async () => {
+    mockApi(GIT)
+    api().getWorktreeActivity = () => Promise.resolve([])
+    api().getWorktreeStatus = () => new Promise(() => {})
+    await renderPane()
+    await openWorkspace()
+
+    const main = container.querySelector('[data-testid="wt-main-office"]')!
+    expect(main.className).not.toContain('is-unavailable')
+    expect(main.textContent).toContain('Vérification de la protection')
+  })
+
+  it('P0-3 : un échec de lecture est nommé et rejouable', async () => {
+    mockApi(GIT)
+    let attempt = 0
+    api().getWorktreeActivity = () => {
+      attempt += 1
+      return attempt === 1
+        ? Promise.reject(new Error('IPC coupé'))
+        : Promise.resolve([CONFLICT_AGENT])
+    }
+    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
+    await renderPane()
+    await openWorkspace()
+
+    const banner = container.querySelector('[data-testid="wt-load-error"]')!
+    expect(banner.getAttribute('role')).toBe('alert')
+    expect(banner.textContent).toContain('Lecture des bureaux agents indisponible.')
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="wt-load-retry"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(attempt).toBe(2)
+    expect(container.querySelector('[data-testid="wt-load-error"]')).toBeNull()
+    expect(container.querySelectorAll('[data-testid="wt-agent-office"]')).toHaveLength(1)
+  })
+
+  it('P0-4 : la résolution est envoyée au main puis referme la comparaison', async () => {
+    mockApi(GIT)
+    const resolveWorktreeConflict = vi.fn(() =>
+      Promise.resolve({ resolved: true as const, agentId: 'a2', outcome: 'merged' as const })
+    )
+    api().getWorktreeActivity = () => Promise.resolve([CONFLICT_AGENT])
+    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
+    api().getWorktreeConflictDiff = () =>
+      Promise.resolve({ available: true, agentId: 'a2', paths: ['src/main/os.ts'], diff: '-a\n+b' })
+    api().resolveWorktreeConflict = resolveWorktreeConflict
+    await renderPane()
+    await openWorkspace()
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="wt-resolve-conflict"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      ;(container.querySelector('[data-testid="wt-keep-agent"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(resolveWorktreeConflict).toHaveBeenCalledWith('a2', 'agent')
+    expect(container.querySelector('[data-testid="wt-conflict-diff"]')).toBeNull()
+    expect(
+      container.querySelector('[data-testid="wt-conflict-resolution"]')?.textContent
+    ).toContain('Version de l’agent appliquée')
+  })
+
+  it('P0-4 : un refus du main est affiché sans prétendre avoir résolu', async () => {
+    mockApi(GIT)
+    api().getWorktreeActivity = () => Promise.resolve([CONFLICT_AGENT])
+    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
+    api().resolveWorktreeConflict = () =>
+      Promise.resolve({ resolved: false as const, reason: 'blocked' as const })
+    await renderPane()
+    await openWorkspace()
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="wt-keep-mine"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-testid="wt-office-error"]')?.textContent).toContain(
+      'Résolution refusée'
+    )
+    expect(container.querySelector('[data-testid="wt-conflict-resolution"]')).toBeNull()
+  })
+
+  it('P1-7 : l’onglet Workspace porte le nombre de bureaux à décider', async () => {
+    mockApi(GIT)
+    api().getWorktreeActivity = () => Promise.resolve([CONFLICT_AGENT])
+    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
+    await renderPane()
+
+    expect(container.querySelector('[data-testid="sc-workspace-badge"]')?.textContent).toBe('1')
+  })
+
+  it('P1-6 : chaque raison d’échec de comparaison a son propre message', async () => {
+    const reasons = [
+      ['invalid-agent', 'plus connu'],
+      ['not-conflict', 'plus en conflit'],
+      ['ownership-unproven', 'n’appartient plus'],
+      ['invalid-path', 'pas lisibles'],
+      ['revision-unavailable', 'plus présentes'],
+      ['read-failed', 'a échoué']
+    ] as const
+    for (const [reason, expected] of reasons) {
+      mockApi(GIT)
+      api().getWorktreeActivity = () => Promise.resolve([CONFLICT_AGENT])
+      api().getWorktreeStatus = () =>
+        Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
+      api().getWorktreeConflictDiff = () => Promise.resolve({ available: false, reason })
+      await renderPane()
+      await openWorkspace()
+      await act(async () => {
+        ;(
+          container.querySelector('[data-testid="wt-resolve-conflict"]') as HTMLButtonElement
+        ).click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(
+        container.querySelector('[data-testid="wt-conflict-diff-error"]')?.textContent
+      ).toContain(expected)
+    }
+  })
+
+  it('P2-11 : un preload partiel ne crashe pas et le dit', async () => {
+    mockApi(GIT)
+    delete api().retryWorktreeRecovery
+    api().getWorktreeActivity = () =>
+      Promise.resolve([
+        {
+          agentId: 'restore-me',
+          agentName: 'Agent récupéré',
+          state: 'ready',
+          files: [],
+          startedAtMs: 1,
+          verdict: 'green',
+          publication: 'cleanup-pending',
+          attentionReason: 'retry-exhausted',
+          retryCount: 6,
+          worktreeAvailable: false
+        }
+      ])
+    api().getWorktreeStatus = () => Promise.resolve({ available: true, workspacePath: 'C:\\repo' })
+    await renderPane()
+    await openWorkspace()
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="wt-retry-office"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-testid="wt-office-error"]')?.textContent).toContain(
+      'Nouvel essai indisponible'
+    )
+    expect(container.querySelector('[data-testid="wt-agent-office"]')).toBeTruthy()
+  })
+})

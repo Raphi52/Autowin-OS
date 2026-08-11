@@ -15,13 +15,16 @@ import { defineConfig } from 'vitest/config'
  * Le pool `forks` de Vitest 3.2.7 laisse ici un appel RPC `onTaskUpdate` sans réponse jusqu'à son
  * timeout interne de 60 s, même lorsque toutes les assertions passent. Le pool `threads` conserve
  * l'isolation par fichier mais remplace le canal `child_process` fautif par un `MessagePort`.
- * Huit workers bornent en plus la contention des tests qui créent de vrais dépôts et worktrees Git.
+ * Quatre workers bornent en plus la contention des tests qui créent de vrais dépôts et worktrees Git,
+ * y compris quand plusieurs worktrees Autowin valident leurs chantiers en même temps.
  */
 export default defineConfig({
   test: {
     /**
      * Perimetre STRICT du depot. Sans exclusion, vitest ramassait les COPIES de code que les agents
-     * deposent sous `Audit/` (instances headless, worktrees d'agents) : mesure du 2026-07-29 —
+     * deposent sous `Audit/` ou `artifacts/` (instances headless, worktrees d'agents) : mesure du
+     * 2026-08-11 — une commande ciblant un seul fichier a rejoué deux copies historiques et pris
+     * 514 s au lieu d'environ 250 s. Mesure initiale du 2026-07-29 —
      * 323 fichiers de test collectes au lieu de ~160, dont 164 qui ne se chargeaient meme pas
      * (dependances absentes dans ces copies). Consequence : la suite paraissait massivement rouge des
      * qu'un agent tournait, et le vrai signal devenait illisible.
@@ -31,6 +34,7 @@ export default defineConfig({
       '**/dist/**',
       '**/out/**',
       'Audit/**',
+      'artifacts/**',
       '**/worktrees/**',
       '**/.claude/**',
       /**
@@ -62,7 +66,7 @@ export default defineConfig({
       AUTOWIN_RUN_JOURNAL_ROOT: ''
     },
     pool: 'threads',
-    maxWorkers: 8,
+    maxWorkers: 4,
     testTimeout: 20_000,
     hookTimeout: 20_000
   }

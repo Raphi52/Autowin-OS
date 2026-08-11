@@ -319,9 +319,7 @@ describe('réconciliation au chargement des tours interrompus', () => {
 
     const message = store.get('conv-1056')!.messages.at(-1)!
     expect(message.status).toBe('interrupted')
-    expect(message.content).toContain(
-      "run `turn-zombie` interrompu — l'application a été fermée"
-    )
+    expect(message.content).toContain("run `turn-zombie` interrompu — l'application a été fermée")
     // L'action en vol n'est plus « en cours » : son issue ne viendra jamais.
     expect(message.parts?.[0]).toMatchObject({ name: 'orchestrate', interrupted: true })
   })
@@ -331,7 +329,9 @@ describe('réconciliation au chargement des tours interrompus', () => {
     store.hydrate(zombie(), { resumableTurnIds: new Set(['turn-zombie']) })
 
     const message = store.get('conv-1056')!.messages.at(-1)!
+    expect(message.status).toBe('streaming')
     expect(message.content).not.toContain('interrompu')
+    expect(message.parts?.[0]).not.toHaveProperty('interrupted')
   })
 
   it('un second chargement ne réempile pas l’avis', () => {

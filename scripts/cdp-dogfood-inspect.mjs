@@ -81,13 +81,31 @@ const evaluate = async (expression) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const action = process.argv[2]
+const reloadRenderer = action === 'reload'
+const inspectBudget = action === 'budget'
+const maximizeBudget = action === 'maximize-budget'
+const inspectCampaignRuntime = action === 'campaign-runtime'
 const retryWorktreeId = action?.startsWith('retry:') ? action.slice('retry:'.length) : undefined
 const sendConversationId = action?.startsWith('send:') ? action.slice('send:'.length) : undefined
+const removeQueueMatch = action?.match(/^remove-queue:([^:]+):(\d+)$/)
+const removeQueueEntry = removeQueueMatch
+  ? { conversationId: removeQueueMatch[1], index: Number(removeQueueMatch[2]) }
+  : undefined
+const flushQueueConversationId = action?.startsWith('flush-queue:')
+  ? action.slice('flush-queue:'.length)
+  : undefined
+const orientQueueMatch = action?.match(/^orient-queue:([^:]+):(\d+)$/)
+const orientQueueEntry = orientQueueMatch
+  ? { conversationId: orientQueueMatch[1], index: Number(orientQueueMatch[2]) }
+  : undefined
 const inspectConversationId = action?.startsWith('conversation:')
   ? action.slice('conversation:'.length)
   : undefined
 const telemetryConversationId = action?.startsWith('telemetry:')
   ? action.slice('telemetry:'.length)
+  : undefined
+const statusConversationId = action?.startsWith('status:')
+  ? action.slice('status:'.length)
   : undefined
 const verifySettings = action === 'verify-settings'
 const verifyAgentStudio = action === 'verify-agent-studio'
@@ -95,16 +113,216 @@ const verifyWorktrees = action === 'verify-worktrees'
 const inspectWorktreeActivity = action === 'activity'
 const cancelConversationId =
   action &&
+  !reloadRenderer &&
+  !inspectBudget &&
+  !maximizeBudget &&
+  !inspectCampaignRuntime &&
   !retryWorktreeId &&
   !sendConversationId &&
+  !removeQueueEntry &&
+  !flushQueueConversationId &&
+  !orientQueueEntry &&
   !inspectConversationId &&
   !telemetryConversationId &&
+  !statusConversationId &&
   !verifySettings &&
   !verifyAgentStudio &&
   !verifyWorktrees &&
   !inspectWorktreeActivity
     ? action
     : undefined
+
+if (reloadRenderer) {
+  await send('Page.reload', { ignoreCache: false })
+  console.log(JSON.stringify({ reloaded: true }, null, 2))
+  socket.close()
+  process.exit(0)
+}
+
+if (inspectBudget) {
+  const budget = await evaluate('window.api.orchestrationBudget()')
+  console.log(JSON.stringify(budget, null, 2))
+  socket.close()
+  process.exit(0)
+}
+
+if (maximizeBudget) {
+  await evaluate(`document.querySelector('[data-testid="nav-settings"]')?.click()`)
+  await sleep(300)
+  const budgetOpened = await evaluate(`(() => {
+    const button = [...document.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent?.trim() === 'Budget'
+    )
+    button?.click()
+    return Boolean(button)
+  })()`)
+  if (!budgetOpened) throw new Error('Section Budget introuvable')
+  await sleep(500)
+  const changed = await evaluate(`(() => {
+    const inputs = [...document.querySelectorAll('.orchestration-budget input')]
+    if (inputs.length !== 3 || inputs.some((input) => !(input instanceof HTMLInputElement))) {
+      return false
+    }
+    const values = ['24', '15000000', '']
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    inputs.forEach((input, index) => {
+      setter?.call(input, values[index])
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    return true
+  })()`)
+  if (!changed) throw new Error('Champs Budget introuvables')
+  await sleep(150)
+  const saved = await evaluate(`(() => {
+    const button = [...document.querySelectorAll('.orchestration-budget button')].find(
+      (candidate) => candidate.textContent?.trim() === 'Enregistrer'
+    )
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false
+    button.click()
+    return true
+  })()`)
+  if (!saved) throw new Error('Bouton Enregistrer indisponible')
+  await sleep(500)
+  const budget = await evaluate('window.api.orchestrationBudget()')
+  console.log(JSON.stringify({ budgetOpened, changed, saved, budget }, null, 2))
+  socket.close()
+  process.exit(
+    budget?.maxProviderCalls === 24 &&
+      budget?.maxTotalTokens === 15_000_000 &&
+      budget?.maxUsd === null
+      ? 0
+      : 1
+  )
+}
+
+if (inspectCampaignRuntime) {
+  const snapshot = await evaluate(`(async () => {
+    const ids = ['conv-1101','conv-1102','conv-1103','conv-1104','conv-1105','conv-1106','conv-1107','conv-1108']
+    return Promise.all(ids.map(async (id) => {
+      const [conversation, calls, runs] = await Promise.all([
+        window.api.conversation(id),
+        window.api.promptCalls(id),
+        window.api.conversationRuns(id)
+      ])
+      const last = conversation?.messages?.at(-1)
+      return {
+        id,
+        title: conversation?.title,
+        messages: conversation?.messages?.length ?? 0,
+        lastStatus: last?.status ?? null,
+        calls: calls.slice(-6).map((call) => ({
+          id: call.id,
+          status: call.status,
+          role: call.role,
+          provider: call.provider,
+          model: call.model,
+          journalPath: call.journalPath,
+          startedAt: call.startedAt,
+          endedAt: call.endedAt,
+          error: call.error,
+          usage: call.usage
+        })),
+        runs: runs.map((run) => ({ path: run.path, status: run.summary?.status }))
+      }
+    }))
+  })()`)
+  console.log(JSON.stringify(snapshot, null, 2))
+  socket.close()
+  process.exit(0)
+}
+
+if (flushQueueConversationId) {
+  await evaluate(`document.querySelector('[data-testid="nav-chat"]')?.click()`)
+  await sleep(250)
+  const selected = await evaluate(`(async () => {
+    const conversation = await window.api.conversation(${JSON.stringify(flushQueueConversationId)})
+    const item = [...document.querySelectorAll('.conv-item')].find(
+      (candidate) => candidate.querySelector('.conv-label')?.textContent?.trim() === conversation?.title
+    )
+    item?.querySelector('.conv-pick')?.click()
+    return Boolean(item)
+  })()`)
+  if (!selected) throw new Error(`Conversation UI introuvable: ${flushQueueConversationId}`)
+  await sleep(350)
+  const result = await evaluate(`(() => {
+    const queued = [...document.querySelectorAll('.directive-queue-text')].map(
+      (item) => item.textContent?.trim() ?? ''
+    )
+    const target = document.querySelector('[aria-label="Interrompre et envoyer tout"]')
+    if (!(target instanceof HTMLButtonElement) || target.disabled) {
+      return { flushed: false, queued, reason: target ? 'disabled' : 'button-absent' }
+    }
+    target.click()
+    return { flushed: true, queued }
+  })()`)
+  console.log(JSON.stringify({ conversationId: flushQueueConversationId, ...result }, null, 2))
+  socket.close()
+  process.exit(result.flushed ? 0 : 1)
+}
+
+if (orientQueueEntry) {
+  await evaluate(`document.querySelector('[data-testid="nav-chat"]')?.click()`)
+  await sleep(250)
+  const selected = await evaluate(`(async () => {
+    const conversation = await window.api.conversation(${JSON.stringify(orientQueueEntry.conversationId)})
+    const item = [...document.querySelectorAll('.conv-item')].find(
+      (candidate) => candidate.querySelector('.conv-label')?.textContent?.trim() === conversation?.title
+    )
+    item?.querySelector('.conv-pick')?.click()
+    return Boolean(item)
+  })()`)
+  if (!selected) throw new Error(`Conversation UI introuvable: ${orientQueueEntry.conversationId}`)
+  await sleep(350)
+  const result = await evaluate(`(() => {
+    const target = document.querySelector(
+      ${JSON.stringify(`[aria-label="Orienter le tour en cours avec le message ${orientQueueEntry.index}"]`)}
+    )
+    if (!(target instanceof HTMLButtonElement) || target.disabled) {
+      return { oriented: false, reason: target ? 'disabled' : 'button-absent' }
+    }
+    target.click()
+    return { oriented: true }
+  })()`)
+  console.log(
+    JSON.stringify({ conversationId: orientQueueEntry.conversationId, ...result }, null, 2)
+  )
+  socket.close()
+  process.exit(result.oriented ? 0 : 1)
+}
+
+if (removeQueueEntry) {
+  await evaluate(`document.querySelector('[data-testid="nav-chat"]')?.click()`)
+  await sleep(250)
+  const selected = await evaluate(`(async () => {
+    const conversation = await window.api.conversation(${JSON.stringify(removeQueueEntry.conversationId)})
+    const item = [...document.querySelectorAll('.conv-item')].find(
+      (candidate) => candidate.querySelector('.conv-label')?.textContent?.trim() === conversation?.title
+    )
+    item?.querySelector('.conv-pick')?.click()
+    return Boolean(item)
+  })()`)
+  if (!selected) throw new Error(`Conversation UI introuvable: ${removeQueueEntry.conversationId}`)
+  await sleep(350)
+  const result = await evaluate(`(() => {
+    const before = [...document.querySelectorAll('[aria-label^="Retirer le message "]')].map(
+      (button) => button.getAttribute('aria-label')
+    )
+    const target = document.querySelector(
+      ${JSON.stringify(`[aria-label="Retirer le message ${removeQueueEntry.index}"]`)}
+    )
+    if (!(target instanceof HTMLButtonElement)) return { removed: false, before, after: before }
+    target.click()
+    const after = [...document.querySelectorAll('[aria-label^="Retirer le message "]')].map(
+      (button) => button.getAttribute('aria-label')
+    )
+    return { removed: true, before, after }
+  })()`)
+  console.log(
+    JSON.stringify({ conversationId: removeQueueEntry.conversationId, ...result }, null, 2)
+  )
+  socket.close()
+  process.exit(result.removed ? 0 : 1)
+}
 
 if (sendConversationId) {
   const prompt = process.argv.slice(3).join(' ').trim()
@@ -143,7 +361,11 @@ if (sendConversationId) {
     return true
   })()`)
   console.log(
-    JSON.stringify({ chatOpened, selected, typed, sent, conversationId: sendConversationId }, null, 2)
+    JSON.stringify(
+      { chatOpened, selected, typed, sent, conversationId: sendConversationId },
+      null,
+      2
+    )
   )
   socket.close()
   process.exit(sent ? 0 : 1)
@@ -185,6 +407,68 @@ if (telemetryConversationId) {
     }
   })()`)
   console.log(JSON.stringify(telemetry, null, 2))
+  socket.close()
+  process.exit(0)
+}
+
+if (statusConversationId) {
+  const status = await evaluate(`(async () => {
+    const id = ${JSON.stringify(statusConversationId)}
+    const [conversation, calls, traces, runs, activity] = await Promise.all([
+      window.api.conversation(id),
+      window.api.promptCalls(id),
+      window.api.causalTrace(id),
+      window.api.conversationRuns(id),
+      window.api.conversationActivity(id)
+    ])
+    const last = conversation?.messages?.at(-1) ?? null
+    const recentCalls = calls.slice(-8)
+    const costs = recentCalls.reduce((sum, call) => sum + (call.usage?.costUsd ?? 0), 0)
+    const tokens = recentCalls.reduce((sum, call) =>
+      sum + (call.usage?.inputTokens ?? 0) + (call.usage?.outputTokens ?? 0), 0)
+    const lastTrace = traces.at(-1) ?? null
+    const lastActivity = activity.at(-1) ?? null
+    return {
+      id,
+      messageStatus: last?.status ?? null,
+      messagePreview: last?.content?.slice(0, 240) ?? null,
+      messageTail: last?.content?.slice(-600) ?? null,
+      calls: {
+        active: recentCalls.filter((call) => call.status === 'running').length,
+        failed: recentCalls.filter((call) => call.status === 'failed').length,
+        completed: recentCalls.filter((call) => call.status === 'completed').length,
+        recentCostUsd: costs,
+        recentTokens: tokens
+      },
+      lastTrace: lastTrace ? {
+        type: lastTrace.type,
+        status: lastTrace.status,
+        actor: lastTrace.actor?.label,
+        phase: lastTrace.execution?.phase,
+        timestamp: lastTrace.timestamp,
+        payloads: lastTrace.payloads?.map((payload) => ({
+          kind: payload.kind,
+          name: payload.name,
+          content: payload.content?.slice(0, 500)
+        }))
+      } : null,
+      latestRun: runs.at(0) ? {
+        path: runs[0].path,
+        status: runs[0].summary?.status,
+        subject: runs[0].summary?.subject
+      } : null,
+      lastActivity: lastActivity ? {
+        ts: lastActivity.ts,
+        kind: lastActivity.kind,
+        provider: lastActivity.provider,
+        model: lastActivity.model,
+        costUsd: lastActivity.costUsd,
+        durationMs: lastActivity.durationMs,
+        label: lastActivity.label?.slice(0, 180)
+      } : null
+    }
+  })()`)
+  console.log(JSON.stringify(status, null, 2))
   socket.close()
   process.exit(0)
 }
@@ -321,9 +605,9 @@ const response = await send('Runtime.evaluate', {
     ? `window.api.retryWorktreeRecovery(${JSON.stringify(retryWorktreeId)})`
     : inspectWorktreeActivity
       ? 'window.api.getWorktreeActivity()'
-    : cancelConversationId
-      ? `window.api.cancelOrchestration(${JSON.stringify(cancelConversationId)})`
-      : `(async () => {
+      : cancelConversationId
+        ? `window.api.cancelOrchestration(${JSON.stringify(cancelConversationId)})`
+        : `(async () => {
     const state = await window.api.appState()
     const conversations = await window.api.conversations()
     const active = conversations.find((conversation) => conversation.id === state.activeConversationId)

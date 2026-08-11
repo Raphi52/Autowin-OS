@@ -21,7 +21,11 @@ export type WorktreeOperationRequest =
   | {
       operation: 'finalize'
       agentId: string
-      options?: { baseBranch?: string; expectedAgentSha?: string }
+      options?: {
+        baseBranch?: string
+        expectedAgentSha?: string
+        conflictStrategy?: 'ours' | 'theirs'
+      }
     }
   | {
       operation: 'cleanupPublished'

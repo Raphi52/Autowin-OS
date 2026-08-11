@@ -1139,6 +1139,82 @@
   font-size: 10px;
 }
 
+/* Erreur de tour : bloc d'alerte DÉDIÉ, jamais confondu avec un contenu du modèle. */
+.msg-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--err);
+  border-radius: 8px;
+  background: rgba(255, 107, 107, 0.08);
+  font-size: 12px;
+}
+.msg-error-cause {
+  color: var(--err);
+  font-weight: 600;
+}
+.msg-error-message {
+  flex: 1;
+  min-width: 160px;
+}
+.msg-error-actions {
+  display: flex;
+  gap: 6px;
+}
+.msg-error-action {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 3px 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+/* Chargement du fil : squelette d'attente et bandeau d'échec ACTIONNABLE. */
+.conv-load-skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 18px 4px;
+}
+.conv-load-skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.conv-load-skeleton-line:nth-child(2) {
+  width: 78%;
+}
+.conv-load-skeleton-line:nth-child(3) {
+  width: 52%;
+}
+.conv-load-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.08);
+  font-size: 12px;
+}
+.conv-load-error-text {
+  flex: 1;
+  color: var(--err);
+}
+.conv-load-retry {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 4px 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
 /* Confirmation destructive : modale nette, sans halo, au-dessus du chat. */
 .delete-confirm-layer {
   position: fixed;

@@ -103,6 +103,14 @@ const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024
  * (l'agent parle ET pilote — ses actions en puces inline), workflows (RUN.md)
  * repliables à droite. Tout se passe ici.
  */
+/**
+ * Un échec AVALÉ ne doit jamais disparaître : même quand le repli est correct (on garde l'écran
+ * précédent), la cause doit rester diagnosticable. Trace unique, préfixée par sa portée.
+ */
+function traceSilentFailure(scope: string, error: unknown): void {
+  console.warn(`[chat] ${scope} — échec ignoré`, error)
+}
+
 export function ChatView({
   isActive = true,
   onInspectTurn
@@ -290,6 +298,8 @@ export function ChatView({
   )
   const activeRef = useRef<string | null>(null)
   const loadConversationRequestRef = useRef(0)
+  /** Tours déjà rejoués depuis le journal fichier — clé de dédup du rejeu (voir replayTurnJournal). */
+  const replayedTurnsRef = useRef(new Set<string>())
   const runtimeRefreshGenerationRef = useRef(0)
   const runsRequestRef = useRef<RunRequestIdentity>({ id: 0, scope: 'conv', convId: null })
   const followTailRef = useRef(true)
@@ -411,8 +421,9 @@ export function ChatView({
       )
       try {
         await refreshRuntimeIdentity()
-      } catch {
+      } catch (error) {
         // L'identité affichée reste la dernière identité confirmée.
+        traceSilentFailure('runtime-identity', error)
       }
     } finally {
       setModelChangePending(false)
@@ -562,7 +573,8 @@ export function ChatView({
     let turns: UnfinishedTurn[] = []
     try {
       turns = ((await window.api.unfinishedTurns?.()) ?? []) as UnfinishedTurn[]
-    } catch {
+    } catch (error) {
+      traceSilentFailure('unfinished-turns', error)
       return
     }
     const target = pickTurnToResume(turns)
@@ -828,10 +840,46 @@ export function ChatView({
 
   /* --- conversations : sélection = fil rechargé depuis le store --- */
 
+  /**
+   * ÉTAT DE CHARGEMENT du fil. Sans lui, une IPC `conversation()` qui rejette (ou qui rend `null`)
+   * laissait une promesse non gérée et un fil VIDE, impossible à distinguer d'une conversation
+   * réellement vide — et sans aucun moyen de réessayer.
+   */
+  const [convLoad, setConvLoad] = useState<{
+    status: 'idle' | 'loading' | 'error'
+    target?: Conv
+    error?: string
+  }>({ status: 'idle' })
+  const resetConvLoad = (): void =>
+    setConvLoad((prev) => (prev.status === 'idle' ? prev : { status: 'idle' }))
+
   async function loadConv(c: Conv): Promise<void> {
     const requestId = ++loadConversationRequestRef.current
-    const detailed = c.messages ? c : ((await window.api.conversation(c.id)) as Conv | null)
-    if (!detailed || requestId !== loadConversationRequestRef.current) return
+    // Le numéro de requête arbitre AUSSI l'affichage : une réponse (ou un échec) PÉRIMÉ ne
+    // repeint plus rien — c'est la dernière sélection de l'utilisateur qui fait foi.
+    const perime = (): boolean => requestId !== loadConversationRequestRef.current
+    let detailed: Conv | null
+    if (c.messages) detailed = c
+    else {
+      setConvLoad({ status: 'loading', target: c })
+      try {
+        detailed = (await window.api.conversation(c.id)) as Conv | null
+      } catch (error) {
+        if (perime()) return
+        setConvLoad({
+          status: 'error',
+          target: c,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        return
+      }
+    }
+    if (perime()) return
+    if (!detailed) {
+      setConvLoad({ status: 'error', target: c, error: 'conversation introuvable dans le store' })
+      return
+    }
+    resetConvLoad()
     followTailRef.current = true
     setHasNewActivity(false)
     activeRef.current = c.id
@@ -859,6 +907,7 @@ export function ChatView({
 
   function newConv(): void {
     loadConversationRequestRef.current += 1
+    resetConvLoad()
     followTailRef.current = true
     setHasNewActivity(false)
     activeRef.current = null
@@ -894,7 +943,7 @@ export function ChatView({
       const id = detail.conversationId
       if (id) {
         const target = convsRef.current.find((conversation) => conversation.id === id)
-        if (target) loadConv(target)
+        if (target) void loadConv(target)
         else {
           activeRef.current = id
           setActiveId(id)
@@ -924,7 +973,8 @@ export function ChatView({
     let events: Array<Record<string, unknown>> = []
     try {
       events = (await window.api.turnJournal?.(conversationId, turnId)) ?? []
-    } catch {
+    } catch (error) {
+      traceSilentFailure('turn-journal', error)
       return
     }
     const replayed = events
@@ -933,10 +983,14 @@ export function ChatView({
       .join('')
     if (!replayed.trim()) return
     const current = liveMessagesRef.current.get(conversationId) ?? []
-    const already = current.some((message) =>
-      JSON.stringify(message).includes(replayed.trim().slice(0, 80))
-    )
-    if (already) return
+    // Dédup par TOUR, pas par texte : `JSON.stringify(message).includes(80 premiers caractères)`
+    // sérialisait tout le fil à chaque rejeu ET se trompait dans les deux sens — deux tours au
+    // préambule identique se masquaient, un tour reformulé à la persistance se dupliquait.
+    if (replayedTurnsRef.current.has(turnId)) return
+    if (current.some((message) => message.role === 'assistant' && message.turnId === turnId)) {
+      replayedTurnsRef.current.add(turnId)
+      return
+    }
     const next: Msg[] = [
       ...current,
       // `parts` EXPLICITE : un tableau vide passerait le `??` de hydrateStoredAssistant et donnerait
@@ -944,9 +998,12 @@ export function ChatView({
       hydrateStoredAssistant({
         content: replayed,
         parts: [{ kind: 'text', text: replayed }],
-        status: 'completed'
+        status: 'completed',
+        // Le tour est PORTÉ par le message : c'est lui qui rend la dédup exacte au rejeu suivant.
+        turnId
       })
     ]
+    replayedTurnsRef.current.add(turnId)
     liveMessagesRef.current.set(conversationId, next)
     if (activeRef.current === conversationId) setMessages(next)
   }
@@ -959,7 +1016,7 @@ export function ChatView({
       const id = detail?.conversationId
       if (!id) return
       const target = convsRef.current.find((conversation) => conversation.id === id)
-      if (target) loadConv(target)
+      if (target) void loadConv(target)
       // REJEU du journal : l'app était fermée pendant le tour → le store n'a pas reçu ces événements,
       // seul le journal fichier les contient. On reconstruit le texte produit et on l'affiche.
       if (detail?.turnId) void replayTurnJournal(id, detail.turnId)
@@ -1032,7 +1089,7 @@ export function ChatView({
     const fresh = (await window.api.conversations()) as Conv[]
     setConvs(fresh)
     const updated = fresh.find((c) => c.id === id)
-    if (updated) loadConv(updated)
+    if (updated) void loadConv(updated)
   }
   /**
    * Forker ouvre la conversation CRÉÉE — c'est le geste attendu : on continue dans la copie, pas
@@ -1045,7 +1102,7 @@ export function ChatView({
     const fresh = (await window.api.conversations()) as Conv[]
     setConvs(fresh)
     const target = (forked?.id && fresh.find((c) => c.id === forked.id)) || undefined
-    if (target) loadConv(target)
+    if (target) void loadConv(target)
     else await reloadActiveFromStore(activeId) // fork refusé : on reste où on est
   }
   /**
@@ -1118,7 +1175,8 @@ export function ChatView({
     let result: { ok: boolean }
     try {
       result = await window.api.injectDirective(id, entry.text)
-    } catch {
+    } catch (error) {
+      traceSilentFailure('inject-directive', error)
       restore()
       setDirectiveReceipt(id, entry, 'failed')
       settle()
@@ -1198,7 +1256,8 @@ export function ChatView({
     let injected = false
     try {
       injected = (await window.api.injectDirective(id, text))?.ok === true
-    } catch {
+    } catch (error) {
+      traceSilentFailure('inject-directive:btw', error)
       injected = false
     }
     // Repli explicite : l'injection a échoué → file d'attente (drainée en fin de tour), rien n'est perdu.
@@ -1308,6 +1367,7 @@ export function ChatView({
         .map((p) => {
           if (p.kind === 'text') return p.text
           if (p.kind === 'artifact') return `[artefact ${p.artifact.name}]`
+          if (p.kind === 'error') return `⚠️ ${p.message}`
           return `[a exécuté ${p.name}${p.ok === false ? ' (échec)' : ''}]`
         })
         .join('\n')
@@ -1465,7 +1525,10 @@ export function ChatView({
         patchLast(convId, (m) => {
           m.status = res.cancelled ? 'cancelled' : 'failed'
           m.done = true
-          if (!res.cancelled) m.parts.push({ kind: 'text', text: `⚠️ ${res.error ?? 'erreur'}` })
+          // Part d'ERREUR structurée (et non plus un `⚠️ …` texte, que rien ne distinguait d'une
+          // réponse du modèle) : cause + message, rendus par un bloc `role="alert"` dédié.
+          if (!res.cancelled)
+            m.parts.push({ kind: 'error', cause: 'turn', message: res.error ?? 'erreur' })
         })
     } catch (error) {
       if (!messageCommitted) {
@@ -1489,8 +1552,9 @@ export function ChatView({
           m.status = 'failed'
           m.done = true
           m.parts.push({
-            kind: 'text',
-            text: `⚠️ ${error instanceof Error ? error.message : String(error)}`
+            kind: 'error',
+            cause: 'send',
+            message: error instanceof Error ? error.message : String(error)
           })
         })
       }
@@ -1536,7 +1600,8 @@ export function ChatView({
     try {
       const trace = (await window.api.runTrace(r.path)) as OrchStep[] | null
       setOpenTrace(trace && trace.length > 0 ? trace : null)
-    } catch {
+    } catch (error) {
+      traceSilentFailure('run-trace', error)
       setOpenTrace(null)
     }
     try {
@@ -1571,8 +1636,9 @@ export function ChatView({
       const suivant = { ...courant, [key]: !replieActuel }
       try {
         localStorage.setItem('autowin.conv-groups.collapsed', JSON.stringify(suivant))
-      } catch {
+      } catch (error) {
         // Quota plein ou stockage indisponible : le repli reste valable pour la session en cours.
+        traceSilentFailure('groupes-replies:persist', error)
       }
       return suivant
     })
@@ -1657,8 +1723,9 @@ export function ChatView({
             runtimeByTurn
           ) as ScopedLiveRun<OrchStep>[]
         )
-      } catch {
+      } catch (error) {
         /* trace illisible : on garde le direct, jamais d'écran vide à cause de la relecture */
+        traceSilentFailure('live-action-trace', error)
       }
     })()
     return () => {
@@ -1693,7 +1760,7 @@ export function ChatView({
                   className={`agent-inbox-row${agent.id === activeId ? ' active' : ''}`}
                   onClick={() => {
                     const target = convs.find((c) => c.id === agent.id)
-                    if (target) loadConv(target)
+                    if (target) void loadConv(target)
                   }}
                   title={agent.task ?? agent.title}
                 >
@@ -1806,7 +1873,7 @@ export function ChatView({
                           e.dataTransfer.effectAllowed = 'move'
                         }}
                       >
-                        <button className="conv-pick" onClick={() => loadConv(c)}>
+                        <button className="conv-pick" onClick={() => void loadConv(c)}>
                           <span
                             className={`conversation-state is-${conversationState.key}`}
                             data-conversation-state={conversationState.key}
@@ -2139,7 +2206,34 @@ export function ChatView({
             if (nearBottom) setHasNewActivity(false)
           }}
         >
-          {messages.length === 0 && (!busy || activeId === null) && (
+          {/* Chargement du fil : squelette pendant l'attente, bandeau ACTIONNABLE en cas d'échec.
+              Un fil vide muet ne disait pas la différence entre « rien à afficher » et « la
+              lecture a planté ». */}
+          {convLoad.status === 'loading' && (
+            <div className="conv-load-skeleton" role="status" aria-label="Chargement du fil…">
+              <span className="conv-load-skeleton-line" />
+              <span className="conv-load-skeleton-line" />
+              <span className="conv-load-skeleton-line" />
+            </div>
+          )}
+          {convLoad.status === 'error' && (
+            <div className="conv-load-error" role="alert">
+              <span className="conv-load-error-text">
+                ⚠️ Conversation illisible : {convLoad.error}
+              </span>
+              {convLoad.target && (
+                <button
+                  type="button"
+                  className="conv-load-retry"
+                  onClick={() => void loadConv(convLoad.target as Conv)}
+                >
+                  ↻ Réessayer
+                </button>
+              )}
+            </div>
+          )}
+
+          {convLoad.status === 'idle' && messages.length === 0 && (!busy || activeId === null) && (
             <div className="chat-welcome">
               <div className="empty">
                 <h3>Parle à l’agent</h3>

@@ -20,11 +20,13 @@ describe('seedWatchdogTasks — l’auto-kaizen comme VRAIE tâche', () => {
     expect(seeded[0].watchdog?.source).toMatchObject({ kind: 'app-event' })
   })
 
-  it('elle passe par le PIPELINE : c’est ce qui remplace l’analyse/correctif/vérification maison', () => {
+  it('elle fait un triage leger plutot que de lancer un second pipeline apres chaque rouge', () => {
     const tasks = store()
     seedWatchdogTasks(tasks)
 
-    expect(tasks.listTasks()[0].watchdog?.action).toBe('orchestration')
+    const task = tasks.listTasks()[0]
+    expect(task.watchdog?.action).toBe('chat')
+    expect(task.destination).toMatchObject({ model: 'haiku', reasoningEffort: 'low' })
   })
 
   it('elle est ÉDITABLE comme n’importe quelle tâche', () => {
@@ -129,6 +131,14 @@ describe('seedWatchdogTasks — l’auto-kaizen comme VRAIE tâche', () => {
 
   it('un kaizen ne peut pas en déclencher un autre', () => {
     expect(autoKaizenSeed().watchdog?.guards.maxChainDepth).toBe(0)
+  })
+
+  it('coupe la consommation quotidienne, y compris quand le tarif manque', () => {
+    expect(autoKaizenSeed().watchdog?.guards).toMatchObject({
+      maxTriggersPerDay: 4,
+      maxKnownCostUsdPerDay: 0.25,
+      maxUnpricedCallsPerDay: 1
+    })
   })
 
   it('borne la largeur : une panne unique ne lance pas un agent par orchestration cassée', () => {

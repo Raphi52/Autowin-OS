@@ -285,6 +285,66 @@ export class TaskStore {
     })
   }
 
+  /**
+   * Reconcile un snapshot cumulatif arrive apres la reponse du dispatcher. Les compteurs ne peuvent
+   * que monter : une publication ancienne ou rejouee apres crash ne retranche jamais une depense.
+   */
+  reconcileUsage(
+    occurrenceId: string,
+    usage: {
+      conversationId?: string
+      turnId?: string
+      knownCostUsd?: number
+      totalTokens?: number
+      unpricedCalls?: number
+      requestedModel?: string
+      resolvedModel?: string
+    }
+  ): TaskOccurrence {
+    const occurrence = this.occurrences.get(occurrenceId)
+    if (!occurrence) throw new Error(`Occurrence inconnue: ${occurrenceId}`)
+    const maximum = (
+      current: number | undefined,
+      incoming: number | undefined
+    ): number | undefined =>
+      incoming === undefined || !Number.isFinite(incoming)
+        ? current
+        : Math.max(current ?? 0, Math.max(0, incoming))
+    const nextKnownCostUsd = maximum(occurrence.knownCostUsd, usage.knownCostUsd)
+    const nextTotalTokens = maximum(occurrence.totalTokens, usage.totalTokens)
+    const nextUnpricedCalls = maximum(occurrence.unpricedCalls, usage.unpricedCalls)
+    const changed =
+      nextKnownCostUsd !== occurrence.knownCostUsd ||
+      nextTotalTokens !== occurrence.totalTokens ||
+      nextUnpricedCalls !== occurrence.unpricedCalls ||
+      (usage.conversationId !== undefined && usage.conversationId !== occurrence.conversationId) ||
+      (usage.turnId !== undefined && usage.turnId !== occurrence.turnId) ||
+      (usage.requestedModel !== undefined && usage.requestedModel !== occurrence.requestedModel) ||
+      (usage.resolvedModel !== undefined && usage.resolvedModel !== occurrence.resolvedModel)
+    if (!changed) return structuredClone(occurrence)
+    if (nextKnownCostUsd !== undefined) occurrence.knownCostUsd = nextKnownCostUsd
+    if (nextTotalTokens !== undefined) occurrence.totalTokens = nextTotalTokens
+    if (nextUnpricedCalls !== undefined) occurrence.unpricedCalls = nextUnpricedCalls
+    if (usage.conversationId !== undefined) occurrence.conversationId = usage.conversationId
+    if (usage.turnId !== undefined) occurrence.turnId = usage.turnId
+    if (usage.requestedModel !== undefined) occurrence.requestedModel = usage.requestedModel
+    if (usage.resolvedModel !== undefined) occurrence.resolvedModel = usage.resolvedModel
+    this.changed()
+    return structuredClone(occurrence)
+  }
+
+  /** Retrouve l'occurrence apres redemarrage grace a la correlation posee avant le spawn. */
+  reconcileUsageForTurn(
+    conversationId: string,
+    turnId: string,
+    usage: Parameters<TaskStore['reconcileUsage']>[1]
+  ): TaskOccurrence | undefined {
+    const occurrence = [...this.occurrences.values()].find(
+      (candidate) => candidate.conversationId === conversationId && candidate.turnId === turnId
+    )
+    return occurrence ? this.reconcileUsage(occurrence.id, usage) : undefined
+  }
+
   finish(
     occurrenceId: string,
     status: Extract<TaskOccurrenceStatus, 'completed' | 'failed' | 'cancelled'>,
@@ -295,13 +355,29 @@ export class TaskStore {
       knownCostUsd?: number
       totalTokens?: number
       unpricedCalls?: number
+      requestedModel?: string
+      resolvedModel?: string
       /** Le tri rendu par un agent réveillé. Absent = l'agent n'a pas conclu, on ne le devine pas. */
       outcome?: WatchdogOutcome
     } = {}
   ): TaskOccurrence {
+    const existing = this.occurrences.get(occurrenceId)
+    if (!existing) throw new Error(`Occurrence inconnue: ${occurrenceId}`)
+    const monotoneDetails = {
+      ...details,
+      ...(details.knownCostUsd === undefined && existing.knownCostUsd === undefined
+        ? {}
+        : { knownCostUsd: Math.max(existing.knownCostUsd ?? 0, details.knownCostUsd ?? 0) }),
+      ...(details.totalTokens === undefined && existing.totalTokens === undefined
+        ? {}
+        : { totalTokens: Math.max(existing.totalTokens ?? 0, details.totalTokens ?? 0) }),
+      ...(details.unpricedCalls === undefined && existing.unpricedCalls === undefined
+        ? {}
+        : { unpricedCalls: Math.max(existing.unpricedCalls ?? 0, details.unpricedCalls ?? 0) })
+    }
     const occurrence = this.updateOccurrence(occurrenceId, status, {
       finishedAt: this.now(),
-      ...details
+      ...monotoneDetails
     })
     if (status === 'failed') {
       this.createAlertOnce(occurrence, 'failed', details.error ?? 'Le prompt planifié a échoué.')

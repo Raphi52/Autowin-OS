@@ -119,10 +119,29 @@ describe('WatchdogRuleFields — créer une règle à la souris', () => {
     render()
 
     expect(field<HTMLInputElement>('watchdog-max-per-hour').value).toBe('12')
+    expect(field<HTMLInputElement>('watchdog-max-per-day').value).toBe('48')
+    expect(field<HTMLInputElement>('watchdog-cost-per-day').value).toBe('')
+    expect(field<HTMLInputElement>('watchdog-unpriced-per-day').value).toBe('')
     expect(field<HTMLInputElement>('watchdog-max-per-root').value).toBe('20')
     expect(field<HTMLInputElement>('watchdog-dedup-seconds').value).toBe('60')
     expect(field<HTMLSelectElement>('watchdog-chain-depth').value).toBe('0')
     expect(container.textContent).toContain('partir en rafale')
+  })
+
+  it('ne rend chaque borne qu une seule fois', () => {
+    render()
+
+    for (const testId of [
+      'watchdog-max-per-hour',
+      'watchdog-max-per-day',
+      'watchdog-cost-per-day',
+      'watchdog-unpriced-per-day',
+      'watchdog-dedup-seconds',
+      'watchdog-max-per-root',
+      'watchdog-chain-depth'
+    ]) {
+      expect(container.querySelectorAll(`[data-testid="${testId}"]`)).toHaveLength(1)
+    }
   })
 
   it('le réglage SÛR de la chaîne est le défaut et le premier proposé', () => {
@@ -166,6 +185,25 @@ describe('WatchdogRuleFields — créer une règle à la souris', () => {
     expect(current.guards.maxPerRoot).toBe(1)
   })
 
+  it('saisit les budgets quotidiens et permet de les désactiver explicitement', () => {
+    render()
+    type(field<HTMLInputElement>('watchdog-max-per-day'), '4')
+    render(current)
+    type(field<HTMLInputElement>('watchdog-cost-per-day'), '0.25')
+    render(current)
+    type(field<HTMLInputElement>('watchdog-unpriced-per-day'), '1')
+
+    expect(current.guards).toMatchObject({
+      maxTriggersPerDay: 4,
+      maxKnownCostUsdPerDay: 0.25,
+      maxUnpricedCallsPerDay: 1
+    })
+
+    render(current)
+    type(field<HTMLInputElement>('watchdog-cost-per-day'), '')
+    expect(current.guards.maxKnownCostUsdPerDay).toBeUndefined()
+  })
+
   it('permet de revenir aux bornes conseillées', () => {
     render({
       ...fileRule,
@@ -199,7 +237,7 @@ describe('WatchdogRuleFields — action et largeur de cascade', () => {
     render()
 
     expect(field<HTMLInputElement>('watchdog-max-per-root').value).toBe('20')
-    expect(container.textContent).toContain('8 à 681')
+    expect(container.textContent).toContain('cascade sans limite')
   })
 
   it('refuse une largeur à zéro, qui désarmerait la garde', () => {

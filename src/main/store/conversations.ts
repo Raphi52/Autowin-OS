@@ -185,6 +185,11 @@ export class ConversationStore {
         }
         if (message.status === 'streaming') {
           migrated = true
+          // Un checkpoint durable (orchestration OU appel provider direct) prouve qu'une reprise va
+          // réellement prendre la main. Conserver l'état streaming intact évite deux mensonges :
+          // afficher « interrompu » pendant que le CLI travaille encore, et marquer ses actions en
+          // vol comme définitivement interrompues avant que leur résultat récupéré soit réinjecté.
+          if (message.turnId && resumable?.has(message.turnId)) return message
           const interrupted: Msg = {
             ...message,
             status: 'interrupted' as const,
@@ -197,7 +202,7 @@ export class ConversationStore {
             )
           }
           const runId = message.turnId
-          if (!runId || resumable?.has(runId)) return interrupted
+          if (!runId) return interrupted
           if (hasInterruptionNotice(interrupted.content, runId)) return interrupted
           const notice = interruptionNotice(runId)
           const parts: PersistedChatPart[] = [
@@ -224,7 +229,12 @@ export class ConversationStore {
         workspaceId: c.workspaceId ?? `workspace-${c.id}`,
         messages
       }
-      if (c.schemaVersion !== 3 || !c.workspaceId || legacy.authorityMode !== undefined || hadBranches) {
+      if (
+        c.schemaVersion !== 3 ||
+        !c.workspaceId ||
+        legacy.authorityMode !== undefined ||
+        hadBranches
+      ) {
         migrated = true
       }
       this.conversations.set(c.id, hydrated)

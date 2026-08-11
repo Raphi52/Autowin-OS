@@ -103,6 +103,42 @@ export class ExecutionBudgetExceededError extends Error {
   }
 }
 
+/**
+ * Reconnait un epuisement de BUDGET a travers les enveloppes successives.
+ *
+ * Un plafond atteint n'est pas un defaut du livrable : c'est une limite de DEPENSE. Confondre les
+ * deux a un cout mesure — le 2026-08-10, un run a heurte le plafond de tokens en phase `clean`
+ * APRES avoir produit un commit verifie (lint, TypeScript, 183 tests cibles, suite complete de
+ * 4978). Le run s'est ferme `failed` comme n'importe quel echec, le commit est reste orphelin dans
+ * son worktree, et deux prompts de recuperation manuelle ont ete necessaires pour le retrouver.
+ *
+ * On remonte la chaine des `cause` parce que l'erreur est enveloppee en route (`sendWithRoleContext`
+ * la reecrit pour y ajouter le role et son binding). Le repli sur le MESSAGE couvre les enveloppes
+ * plus anciennes qui ne propageaient pas `cause` — il est volontairement ancre sur « budget », pour
+ * ne pas mordre sur un texte quelconque contenant le mot.
+ */
+const BUDGET_MESSAGE = /budget (?:tokens?|d'agents|d'appels|usd|de concurrence|duree)/i
+
+export function isBudgetExhaustion(error: unknown): boolean {
+  // Pas de `instanceof Error` : mesure faite en ecrivant ce test, une erreur creee dans un AUTRE
+  // contexte d'execution (le cas normal dans Electron entre main, preload et renderer, et dans le
+  // harnais de test) echoue silencieusement ce controle parce que son `Error` n'est pas le meme
+  // objet global. Un garde qui rend `false` sans rien dire est pire qu'absent : on croit qu'il
+  // protege. On reconnait donc la FORME (un `message` texte, une `cause`), plus le nom de classe
+  // qui, lui, traverse les contextes.
+  const seen = new Set<unknown>()
+  for (let current = error; current;) {
+    if (seen.has(current)) break
+    seen.add(current)
+    if (current instanceof ExecutionBudgetExceededError) return true
+    const shaped = current as { name?: unknown; message?: unknown; cause?: unknown }
+    if (shaped.name === 'ExecutionBudgetExceededError') return true
+    if (typeof shaped.message === 'string' && BUDGET_MESSAGE.test(shaped.message)) return true
+    current = shaped.cause
+  }
+  return false
+}
+
 function combinedSignal(...signals: Array<AbortSignal | undefined>): AbortSignal {
   const available = signals.filter((signal): signal is AbortSignal => Boolean(signal))
   if (available.length === 0) return new AbortController().signal
@@ -156,6 +192,15 @@ export class ExecutionSupervisor {
 
   lastSnapshot(): ExecutionUsageSnapshot | undefined {
     return this.latest ? { ...this.latest } : undefined
+  }
+
+  /**
+   * Lance une autorite independante sans heriter du devis AsyncLocalStorage de l'appelant. Les
+   * callbacks d'evenement peuvent s'executer avant la fin du parent ; un reveil de fond doit alors
+   * ouvrir son propre livre de couts, jamais depenser dans celui qui l'a reveille.
+   */
+  runOutsideCurrent<T>(execute: () => T): T {
+    return this.storage.exit(execute)
   }
 
   async run<T>(

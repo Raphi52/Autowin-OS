@@ -65,13 +65,14 @@ describe('un tour ÉCHOUÉ n’est plus zombie', () => {
  * fichier, la détection ci-dessus ne verrait jamais l'état terminal.
  */
 describe('câblage — le catch de pilotChat écrit l’état terminal au journal', () => {
-  const main = (): string =>
-    readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  const main = (): string => readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
 
   it('écrit dans le store ET dans le journal fichier', () => {
     const source = main()
     const catchBlock = source.slice(source.indexOf('const terminal = controller.signal.aborted'))
-    expect(catchBlock).toContain('os.conversations.applyTurnEvent(conversationId, turnId, terminal)')
+    expect(catchBlock).toContain(
+      'os.conversations.applyTurnEvent(conversationId, turnId, terminal)'
+    )
     expect(catchBlock).toContain('appendTurnEvent(turnJournalRoot, conversationId, turnId, {')
   })
 
@@ -110,11 +111,13 @@ describe('cablage — le texte du `done` atterrit dans le message', () => {
     expect(branch).toContain("kind: 'delta'")
   })
 
-  it('ne duplique JAMAIS un texte deja diffuse en streaming', () => {
+  it('ne duplique JAMAIS un texte deja diffuse en streaming ou en fallback', () => {
     const source = main()
     const branch = source.slice(source.indexOf("else if (pilotEvent.kind === 'done')"))
-    // La condition doit exiger l'ABSENCE de streaming, sinon le message contiendrait deux fois le texte.
-    expect(branch).toMatch(/if \(closing && !streamedSpoken\.trim\(\)\)/)
+    // `think` est lui aussi persisté comme delta fallback : le `done` ne doit pas le recopier.
+    expect(source).toContain('let durableResponseTextSeen = Boolean(streamedSpoken.trim())')
+    expect(source).toContain("pilotEvent.kind === 'think' && pilotEvent.text")
+    expect(branch).toMatch(/if \(closing && !durableResponseTextSeen\)/)
   })
 
   it('ecrit aussi au journal du tour (une reprise doit retrouver la conclusion)', () => {

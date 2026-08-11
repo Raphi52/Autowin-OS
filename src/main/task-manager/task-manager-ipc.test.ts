@@ -109,6 +109,29 @@ describe('Task Manager IPC — remplacement du declencheur', () => {
     expect(updated.watchdog?.source).toEqual({ kind: 'app-event', events })
   })
 
+  it('contraint les plafonds quotidiens recus du renderer', () => {
+    const updated = parseTaskUpdate(base, {
+      watchdog: {
+        source: { kind: 'app-event', events: ['task-failed'] },
+        guards: {
+          dedupWindowMs: 60_000,
+          maxTriggersPerHour: 4,
+          maxTriggersPerDay: 99_999,
+          maxKnownCostUsdPerDay: 0,
+          maxUnpricedCallsPerDay: 0,
+          maxChainDepth: 0,
+          maxPerRoot: 1
+        }
+      }
+    })
+
+    expect(updated.watchdog?.guards).toMatchObject({
+      maxTriggersPerDay: 5_760,
+      maxKnownCostUsdPerDay: 0.01,
+      maxUnpricedCallsPerDay: 1
+    })
+  })
+
   it('refuse la suppression IPC pendant une occurrence active puis la permet terminee', async () => {
     const handlers = new Map<string, (...args: unknown[]) => unknown>()
     const store = new TaskStore({ now: () => 1_000, id: () => 'task-ipc' })

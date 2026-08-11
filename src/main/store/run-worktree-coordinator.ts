@@ -2,6 +2,8 @@ import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from '.
 import type {
   WorktreeAgentActivity,
   WorktreeConflictDiffResult,
+  WorktreeConflictResolutionChoice,
+  WorktreeConflictResolutionResult,
   WorktreeState
 } from '../../shared/worktree-activity-model'
 import {
@@ -853,6 +855,61 @@ export class RunWorktreeCoordinator {
     })
   }
 
+  /**
+   * Résolution HUMAINE d'un conflit depuis le Hub : rejoue l'intégration protégée en tranchant
+   * les zones en conflit, soit pour l'agent (`agent` → `-X theirs`), soit pour le workspace
+   * (`mine` → `-X ours`). Aucune écriture directe dans le workspace : on repasse par `finalize`,
+   * donc par la même transaction de publication (merge éphémère + fast-forward).
+   */
+  async resolveConflictAsync(
+    runId: string,
+    choice: WorktreeConflictResolutionChoice
+  ): Promise<WorktreeConflictResolutionResult> {
+    const tracked = this.runs.get(runId)
+    if (!tracked) return { resolved: false, reason: 'invalid-agent' }
+    if (tracked.state !== 'conflict' || tracked.publication !== 'blocked') {
+      return { resolved: false, reason: 'not-conflict' }
+    }
+    const finalizeAsync = this.manager.finalizeAsync
+    if (!finalizeAsync) return { resolved: false, reason: 'unsupported' }
+    this.persist(tracked, 'green', 'integrating', 'Résolution de conflit demandée depuis le Hub.')
+    try {
+      const res = await finalizeAsync.call(this.manager, runId, {
+        baseBranch: tracked.baseBranch,
+        conflictStrategy: choice === 'agent' ? 'theirs' : 'ours',
+        onIntegrated: (integratedSha, agentSha, baseSha) => {
+          tracked.publishedSha = integratedSha
+          tracked.publicationAgentSha = agentSha
+          tracked.publicationBaseSha = baseSha
+        }
+      })
+      this.applyFinalize(tracked, res)
+      this.persistFinalize(tracked, res)
+      await this.acknowledgePublicationAsync(tracked, res)
+      this.emit()
+      if (res.outcome === 'merged') return { resolved: true, agentId: runId, outcome: 'merged' }
+      if (res.outcome === 'nothing') return { resolved: true, agentId: runId, outcome: 'nothing' }
+      if (res.outcome === 'conflict') return { resolved: false, reason: 'still-conflicting' }
+      return {
+        resolved: false,
+        reason: 'blocked',
+        ...(res.outcome === 'blocked' && res.detail ? { detail: res.detail } : {})
+      }
+    } catch (error) {
+      const blocked: FinalizeResult = {
+        outcome: 'blocked',
+        agentId: runId,
+        files: tracked.files.map((file) => file.path),
+        reason: 'merge-failed',
+        detail: error instanceof Error ? error.message : String(error)
+      }
+      this.applyFinalize(tracked, blocked)
+      this.persistFinalize(tracked, blocked)
+      this.emit()
+      return { resolved: false, reason: 'blocked', detail: blocked.detail }
+    }
+  }
+
   async discardHeldAsync(runId: string): Promise<boolean> {
     const tracked = this.runs.get(runId)
     if (
@@ -990,7 +1047,9 @@ export class RunWorktreeCoordinator {
     }
     if (res.outcome === 'blocked') {
       tracked.attentionReason = res.reason
-      tracked.files = res.files.map((path) => ({ path, kind: 'mod' as const }))
+      if (res.reason !== 'base-in-progress' && !res.preserveAgentFiles) {
+        tracked.files = res.files.map((path) => ({ path, kind: 'mod' as const }))
+      }
       if (res.reason === 'base-in-progress') {
         const retries = (this.retryCounts.get(tracked.runId) ?? 0) + 1
         this.retryCounts.set(tracked.runId, retries)

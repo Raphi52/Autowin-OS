@@ -38,14 +38,14 @@ describe('adaptateur orchestration watchdog', () => {
     const result = await runWatchdogOrchestration(
       { exec, readMutatedPaths },
       'conv-1',
-      'prompt',
+      { instruction: 'prompt' },
       task({
         kind: 'existing',
         conversationId: 'conv-1'
       })
     )
 
-    expect(exec).toHaveBeenCalledWith('prompt', 'conv-1', [])
+    expect(exec).toHaveBeenCalledWith({ instruction: 'prompt' }, 'conv-1', [])
     expect(readMutatedPaths).toHaveBeenCalledWith('conv-1', 'turn-red')
     expect(result).toMatchObject({
       ok: false,
@@ -66,14 +66,15 @@ describe('adaptateur orchestration watchdog', () => {
         turnId: 'turn-green',
         knownCostUsd: 0.42,
         totalTokens: 12_345,
-        unpricedCalls: 1
+        unpricedCalls: 1,
+        resolvedModel: 'claude-haiku-4-5-20251001'
       }
     })
 
     const result = await runWatchdogOrchestration(
       { exec, readMutatedPaths: () => [] },
       'conv-dedicated',
-      'prompt',
+      { instruction: 'prompt' },
       task({
         kind: 'new',
         title: 'Incidents',
@@ -83,14 +84,15 @@ describe('adaptateur orchestration watchdog', () => {
       })
     )
 
-    expect(exec).toHaveBeenCalledWith('prompt', 'conv-dedicated', [])
+    expect(exec).toHaveBeenCalledWith({ instruction: 'prompt' }, 'conv-dedicated', [])
     expect(result).toMatchObject({
       ok: true,
       text: 'ISSUE: repair',
       turnId: 'turn-green',
       knownCostUsd: 0.42,
       totalTokens: 12_345,
-      unpricedCalls: 1
+      unpricedCalls: 1,
+      resolvedModel: 'claude-haiku-4-5-20251001'
     })
   })
 
@@ -103,7 +105,7 @@ describe('adaptateur orchestration watchdog', () => {
         }
       },
       'conv-1',
-      'prompt',
+      { instruction: 'prompt' },
       task({ kind: 'existing', conversationId: 'conv-1' })
     )
 
@@ -125,11 +127,11 @@ describe('adaptateur orchestration watchdog', () => {
     await runWatchdogOrchestration(
       { exec, readMutatedPaths: () => [] },
       'conv-1',
-      'prompt sans chemin interne',
+      { instruction: 'prompt sans chemin interne' },
       fileTask
     )
 
-    expect(exec).toHaveBeenCalledWith('prompt sans chemin interne', 'conv-1', [
+    expect(exec).toHaveBeenCalledWith({ instruction: 'prompt sans chemin interne' }, 'conv-1', [
       'C:/repo/logs/app.log'
     ])
   })
@@ -144,11 +146,11 @@ describe('adaptateur orchestration watchdog', () => {
     await runWatchdogOrchestration(
       { exec, readMutatedPaths: () => [] },
       'conv-1',
-      'prompt',
+      { instruction: 'prompt' },
       task({ kind: 'existing', conversationId: 'conv-1' }),
       onLateMutationClaims
     )
 
-    expect(exec).toHaveBeenCalledWith('prompt', 'conv-1', [], onLateMutationClaims)
+    expect(exec).toHaveBeenCalledWith({ instruction: 'prompt' }, 'conv-1', [], onLateMutationClaims)
   })
 })

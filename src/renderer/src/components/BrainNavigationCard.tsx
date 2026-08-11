@@ -1,30 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { BrainTrace } from '../../../main/activity/brain-trace-spool'
+import type { BrainNavigationCandidate } from '../../../main/brain-retrieval'
+import { brainBusinessError } from './graph-view-model'
 
-interface BrainNavigationCandidate {
-  rank: number
-  path: string
-  type: string
-  denseCos: number
-  retained: boolean
-  chunkByteStart?: number
-  chunkByteEnd?: number
-}
-interface BrainNavigation {
-  query: string
-  minDense: number
-  root?: string
-  candidates: BrainNavigationCandidate[]
-}
-export interface BrainTraceView {
-  id?: string
-  timestamp: string
-  conversationId: string
-  turnId?: string
-  kind?: 'automatic' | 'query'
-  query: string
-  injectedChars: number
-  navigation?: BrainNavigation
-}
+export type BrainTraceView = BrainTrace
 
 /**
  * Convertit un offset OCTETS (fichier UTF-8 brut) en index CARACTÈRE dans la string décodée.
@@ -50,12 +29,23 @@ function CandidateRow({
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [content, setContent] = useState('')
   const [error, setError] = useState('')
+  const requestGenerationRef = useRef(0)
+  const loadStartedRef = useRef(false)
+  useEffect(
+    () => () => {
+      // Une lecture de l'ancienne trace peut finir après le remontage de la nouvelle ligne.
+      requestGenerationRef.current += 1
+    },
+    []
+  )
 
   const canHighlight =
     typeof candidate.chunkByteStart === 'number' && typeof candidate.chunkByteEnd === 'number'
 
   const load = async (): Promise<void> => {
-    if (state !== 'idle') return
+    if (state !== 'idle' || loadStartedRef.current) return
+    loadStartedRef.current = true
+    const requestGeneration = ++requestGenerationRef.current
     if (!root) {
       // Trace ANCIENNE (produite avant l'exposition de `root` par le serveur) : on ne peut pas
       // résoudre le chemin absolu → message explicite au lieu d'un dépli vide silencieux.
@@ -68,11 +58,13 @@ function CandidateRow({
       // Le path candidat est relatif à la racine Brain → on résout l'absolu (readNodeFile est borné
       // à la racine côté main, donc pas de traversal possible même si le path était malicieux).
       const abs = `${root}/${candidate.path}`
-      const res = await window.api.readNodeFile(abs)
+      const res = await window.api.readNodeFile(abs, root)
+      if (requestGeneration !== requestGenerationRef.current) return
       setContent(res?.content ?? '')
       setState('ready')
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (requestGeneration !== requestGenerationRef.current) return
+      setError(brainBusinessError('Impossible de lire cette note.', e))
       setState('error')
     }
   }
@@ -129,6 +121,17 @@ function CandidateRow({
  */
 export function BrainNavigationCard({ trace }: { trace: BrainTraceView }): React.JSX.Element {
   const nav = trace.navigation
+  const traceIdentity =
+    trace.id ??
+    [
+      trace.timestamp,
+      trace.conversationId,
+      trace.turnId ?? '',
+      trace.kind ?? '',
+      trace.query,
+      nav?.query ?? '',
+      nav?.root ?? ''
+    ].join('\u0000')
   const retained = nav?.candidates.filter((c) => c.retained).length ?? 0
   const status = trace.injectedChars > 0 ? 'is-injected' : 'is-absent'
   return (
@@ -152,7 +155,7 @@ export function BrainNavigationCard({ trace }: { trace: BrainTraceView }): React
         <ol className="brain-nav-candidates">
           {nav.candidates.map((c) => (
             <CandidateRow
-              key={`${c.rank}:${c.path}`}
+              key={`${traceIdentity}\u0000${c.rank}\u0000${c.path}`}
               candidate={c}
               root={nav.root}
               minDense={nav.minDense}

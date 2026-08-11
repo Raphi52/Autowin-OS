@@ -4,6 +4,8 @@ import {
   formatTicketSelectionPrompt,
   formatTicketTreatmentPrompt,
   plainText,
+  reconcileTicketTreatmentRecords,
+  reportTicketTreatment,
   runTicketTreatmentBatch,
   loadTicketTreatmentRecords,
   saveTicketTreatmentRecord,
@@ -495,5 +497,213 @@ describe('#7 concurrence explicite du lot', () => {
     })
     expect(prompts[0]).toContain('Dépôt cible : RigApplication')
     expect(prompts[0]).toContain('npm test')
+  })
+})
+
+describe('formatTicketSelectionPrompt — contexte DÉCISIF par ticket (P2)', () => {
+  const rich = (id: string): TicketItem =>
+    ({
+      sourceId: 's1',
+      id,
+      type: 'Task',
+      title: `Titre ${id}`,
+      state: 'Ouvert',
+      updatedAt: '2026-07-28T00:00:00.000Z',
+      url: `https://x/${id}`,
+      description: `<p>Description du ticket ${id}</p>`,
+      relations: [{ kind: 'child', target: `rel-${id}` }],
+      comments: [
+        { author: 'Alice', text: `vieux commentaire ${id}` },
+        { author: 'Bob', text: `décision courante ${id}` }
+      ],
+      fields: { AreaPath: `RIG/${id}` }
+    }) as unknown as TicketItem
+
+  it('5 tickets → discussion ET relations des 5 présentes, prompt borné', () => {
+    const items = ['1', '2', '3', '4', '5'].map(rich)
+    const prompt = formatTicketSelectionPrompt(items)
+    for (const id of ['1', '2', '3', '4', '5']) {
+      expect(prompt).toContain(`décision courante ${id}`)
+      expect(prompt).toContain(`rel-${id}`)
+      expect(prompt).toContain(`Description du ticket ${id}`)
+    }
+    expect(prompt).not.toContain('<p>')
+    expect(prompt.length).toBeLessThanOrEqual(16_000)
+  })
+
+  it('exige un nom de branche EXACT par ticket quand la source déclare un préfixe', () => {
+    const prompt = formatTicketSelectionPrompt([rich('1'), rich('2')], {
+      id: 's1',
+      label: 's',
+      provider: 'gitlab',
+      namespace: 'grp',
+      repository: 'proj',
+      branchPrefix: 'feat'
+    })
+    expect(prompt).toContain('feat/1-titre-1')
+    expect(prompt).toContain('feat/2-titre-2')
+    // Le bloc de contexte COMMUN reste sans branche : elle est portée par chaque ticket.
+    expect(prompt).not.toContain('Branche à créer')
+  })
+
+  it('reste borné avec 40 tickets volumineux ET leur discussion', () => {
+    const many = Array.from({ length: 40 }, (_, index) => ({
+      ...rich(String(index)),
+      description: `description-${index} ${'x'.repeat(5_000)}`,
+      comments: Array.from({ length: 20 }, (_, c) => ({
+        author: 'A',
+        text: `comment-${index}-${c} ${'y'.repeat(1_000)}`
+      }))
+    })) as TicketItem[]
+    const prompt = formatTicketSelectionPrompt(many, {
+      id: 's1',
+      label: 's',
+      provider: 'gitlab',
+      namespace: 'grp',
+      repository: 'proj',
+      branchPrefix: 'feat'
+    })
+    expect(prompt.length).toBeLessThanOrEqual(16_000)
+    for (const id of ['0', '20', '39']) {
+      expect(prompt).toContain(`feat/${id}-titre-${id}`)
+      expect(prompt).toContain(`comment-${id}-19`)
+      expect(prompt).toContain(`rel-${id}`)
+      expect(prompt).toContain(`RIG/${id}`)
+      expect(prompt).toContain(`description-${id}`)
+    }
+  })
+
+  it('un lot impossible à représenter produit un REFUS fiable, jamais une fausse consigne de traitement', () => {
+    const impossible = Array.from({ length: 500 }, (_, index) => rich(String(index)))
+    const prompt = formatTicketSelectionPrompt(impossible, {
+      id: 's1',
+      label: 's',
+      provider: 'gitlab',
+      namespace: 'grp',
+      repository: 'proj',
+      branchPrefix: 'feat'
+    })
+
+    expect(prompt).toMatch(/^Ne traite AUCUN/)
+    expect(prompt).toContain('Fractionne explicitement')
+    expect(prompt).not.toContain('Traite les 500 tickets')
+    expect(prompt).not.toContain('Definition of done')
+    expect(prompt).not.toContain('<ticket_donnees_non_fiables>')
+    expect(prompt.length).toBeLessThanOrEqual(16_000)
+  })
+})
+
+describe('compte-rendu sur la fiche (P1-1)', () => {
+  const source = {
+    id: 'azure:rig',
+    label: 'RIG',
+    provider: 'azure' as const,
+    organization: 'AmitelGTC',
+    project: 'RIG',
+    repository: 'RigApplication'
+  }
+
+  it('publie un commentaire COPIÉ (id ticket + id conversation) après un succès, sans état ni assigné', async () => {
+    const updateTicket = vi.fn(async (_request: unknown) => ticket('1'))
+    const posted = await reportTicketTreatment({ updateTicket, source }, ticket('1'), true, {
+      id: 'conv-42'
+    })
+    expect(posted).toBe(true)
+    expect(updateTicket).toHaveBeenCalledTimes(1)
+    const request = updateTicket.mock.calls[0][0] as Record<string, unknown>
+    expect(request.id).toBe('1')
+    expect(request.source).toBe(source)
+    expect(request.state).toBeUndefined()
+    expect(request.assignee).toBeUndefined()
+    expect(String(request.comment)).toContain('conv-42')
+    expect(String(request.comment)).toContain('#1')
+    expect(String(request.comment)).toContain('succeeded')
+  })
+
+  it('n’appelle pas la fiche sans conversation (mode « prepared », prompt non envoyé)', async () => {
+    const updateTicket = vi.fn(async (_request: unknown) => ticket('1'))
+    expect(await reportTicketTreatment({ updateTicket, source }, ticket('1'), true)).toBe(false)
+    expect(updateTicket).not.toHaveBeenCalled()
+  })
+
+  it('n’appelle pas la fiche sur échec, sauf commentaire d’échec explicite', async () => {
+    const updateTicket = vi.fn(async (_request: unknown) => ticket('1'))
+    expect(
+      await reportTicketTreatment({ updateTicket, source }, ticket('1'), false, { id: 'c1' })
+    ).toBe(false)
+    expect(updateTicket).not.toHaveBeenCalled()
+    expect(
+      await reportTicketTreatment(
+        { updateTicket, source, reportFailures: true },
+        ticket('1'),
+        false,
+        { id: 'c1' }
+      )
+    ).toBe(true)
+    expect(String((updateTicket.mock.calls[0][0] as { comment: string }).comment)).toContain(
+      'failed'
+    )
+  })
+
+  it('avale l’échec du fournisseur sans casser le lot', async () => {
+    const updateTicket = vi.fn(async (_request: unknown) => {
+      throw new Error('403')
+    })
+    expect(
+      await reportTicketTreatment({ updateTicket, source }, ticket('1'), true, { id: 'c1' })
+    ).toBe(false)
+  })
+})
+
+describe('statuts orphelins (P1-2)', () => {
+  function memoryStorage(initial?: string): {
+    getItem: (key: string) => string | null
+    setItem: (key: string, value: string) => void
+  } {
+    const values = new Map<string, string>()
+    if (initial) values.set('autowin:tickets-treatment-records', initial)
+    return {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => {
+        values.set(key, value)
+      }
+    }
+  }
+
+  it('marque « interrompu » un record running orphelin, et le persiste', () => {
+    const storage = memoryStorage(
+      JSON.stringify({
+        'azure:rig::1': {
+          conversationId: 'conv-1',
+          status: 'running',
+          startedAt: '2026-08-01T10:00:00.000Z',
+          updatedAt: '2026-08-01T10:00:00.000Z'
+        },
+        'azure:rig::2': {
+          conversationId: 'conv-2',
+          status: 'succeeded',
+          updatedAt: '2026-08-01T10:00:00.000Z'
+        }
+      })
+    )
+    const records = reconcileTicketTreatmentRecords(storage)
+    expect(records['azure:rig::1'].status).toBe('interrupted')
+    expect(records['azure:rig::1'].startedAt).toBe('2026-08-01T10:00:00.000Z')
+    expect(records['azure:rig::2'].status).toBe('succeeded')
+    // Persisté : un second montage lit déjà l'état réconcilié.
+    expect(loadTicketTreatmentRecords(storage)['azure:rig::1'].status).toBe('interrupted')
+  })
+
+  it('laisse intact un record prepared (prompt en attente de l’utilisateur, aucun run à interrompre)', () => {
+    const storage = memoryStorage(
+      JSON.stringify({
+        'azure:rig::3': {
+          conversationId: 'conv-3',
+          status: 'prepared',
+          updatedAt: '2026-08-01T10:00:00.000Z'
+        }
+      })
+    )
+    expect(reconcileTicketTreatmentRecords(storage)['azure:rig::3'].status).toBe('prepared')
   })
 })

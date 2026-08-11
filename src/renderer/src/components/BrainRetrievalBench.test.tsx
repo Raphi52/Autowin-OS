@@ -21,7 +21,7 @@ function envelope(over: Partial<BrainSearchEnvelopeView> = {}): BrainSearchEnvel
     status: 'found',
     note: 'savoir trouvé — passages retenus injectés dans le budget ci-dessous',
     query: 'où vit la promotion ?',
-    results: [{ id: 'knowledge/a' }],
+    results: [localResult('knowledge/a')],
     budget: {
       questionSubmittedChars: 20,
       questionChars: 20,
@@ -34,6 +34,16 @@ function envelope(over: Partial<BrainSearchEnvelopeView> = {}): BrainSearchEnvel
       knowledgeDroppedChars: 0
     },
     ...over
+  }
+}
+
+function localResult(id: string): BrainSearchEnvelopeView['results'][number] {
+  return {
+    id,
+    label: id,
+    file: `C:/brain/${id}.md`,
+    themes: [],
+    score: 1
   }
 }
 
@@ -187,7 +197,7 @@ describe('BrainRetrievalBench — tester une question depuis la vue Knowledge', 
   })
 
   it('rappelle que la recherche locale reste rendue même Brain éteint', async () => {
-    mockSearch(envelope({ status: 'unavailable', results: [{ id: 'a' }, { id: 'b' }] }))
+    mockSearch(envelope({ status: 'unavailable', results: [localResult('a'), localResult('b')] }))
     await ask()
     expect(container.querySelector('.brain-bench__local')?.textContent).toContain('2 fiches')
   })

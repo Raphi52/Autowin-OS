@@ -36,6 +36,17 @@ describe('projection Markdown multi-fragments', () => {
  * étaient tous disponibles. Ces cas figent le contraire : jamais de succès prétendu, toujours les faits.
  */
 describe('formatOrchestrationOutcome — jamais un faux succès', () => {
+  it('rend visible le destin Brain de la leçon sans dépendre du texte du modèle', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      learning: { state: 'published', detail: 'preuve causale confirmée' }
+    })
+    expect(text).toContain('Brain : leçon prouvée publiée — preuve causale confirmée')
+  })
+
   it('retire les consignes de clôture périmées du worker après une livraison réussie', () => {
     const text = formatOrchestrationOutcome(true, {
       status: 'succeeded',

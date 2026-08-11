@@ -16,6 +16,7 @@ const call: Omit<PromptCallRecord, 'id' | 'ts'> = {
   actor: 'orchestrator',
   provider: 'claude',
   model: 'claude-sonnet',
+  resolvedModel: 'claude-sonnet-4-6',
   transport: 'claude-cli',
   boundary: 'Autowin OS -> provider adapter',
   limitation: 'Les ajouts internes du provider ne sont pas observables.',
@@ -40,6 +41,8 @@ describe('prompt observability', () => {
         expect.objectContaining({
           id: 'call-1',
           turnId: 'turn-7',
+          model: 'claude-sonnet',
+          resolvedModel: 'claude-sonnet-4-6',
           system: 'REGLE EXACTE',
           messages: [{ role: 'user', content: 'Question exacte' }],
           response: 'Réponse exacte'

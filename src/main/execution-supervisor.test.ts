@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ExecutionSupervisor } from './execution-supervisor'
+import { ProviderCallError } from './providers/types'
 import { compileExecutionQuote } from './execution-quote'
 import { ProviderRegistry } from './providers/registry'
 import type {
@@ -76,26 +77,60 @@ describe('ExecutionSupervisor', () => {
     const quote = compileExecutionQuote('lier une occurrence à son coût')
 
     await supervisor.run(quote, undefined, async () => {
-      await registry.send(
-        'reservation-aware',
-        [{ role: 'user', content: 'go' }],
-        {
-          execution: {
-            cwd: process.cwd(),
-            sandbox: 'read-only',
-            onSpawnIntent: (_token, active, reservationId) => {
-              if (active) observedReservationId = reservationId
-            },
-            onReservationSettled: (reservationId) => {
-              settledReservationId = reservationId
-            }
+      await registry.send('reservation-aware', [{ role: 'user', content: 'go' }], {
+        execution: {
+          cwd: process.cwd(),
+          sandbox: 'read-only',
+          onSpawnIntent: (_token, active, reservationId) => {
+            if (active) observedReservationId = reservationId
+          },
+          onReservationSettled: (reservationId) => {
+            settledReservationId = reservationId
           }
         }
-      )
+      })
     })
 
     expect(observedReservationId).toMatch(/^[0-9a-f-]{36}$/)
     expect(settledReservationId).toBe(observedReservationId)
+  })
+
+  it('regle un appel echoue avec la consommation reelle portee par le provider', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const usage = { inputTokens: 38, outputTokens: 1043, cacheReadTokens: 12, costUsd: 0.065648 }
+    const provider: ProviderAdapter = {
+      id: 'terminal-cost',
+      auth: async () => true,
+      // The provider contract requires a generator; this fixture fails before its first chunk.
+      // eslint-disable-next-line require-yield
+      async *send() {
+        throw new ProviderCallError('Budget provider atteint', {
+          code: 'error_max_budget_usd',
+          retryable: false,
+          usage,
+          resolvedModel: 'provider-model-real'
+        })
+      }
+    }
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const quote = compileExecutionQuote('mesurer un appel provider coupe par sa borne')
+
+    await supervisor.run(quote, undefined, async () => {
+      await expect(
+        registry.send('terminal-cost', [{ role: 'user', content: 'go' }])
+      ).rejects.toThrow('Budget provider atteint')
+    })
+
+    expect(supervisor.lastSnapshot()).toMatchObject({
+      failedCalls: 1,
+      unmeteredCalls: 0,
+      unpricedCalls: 0,
+      inputTokens: 38,
+      outputTokens: 1043,
+      cacheReadTokens: 12,
+      totalTokens: 1081,
+      knownCostUsd: 0.065648
+    })
   })
 
   it('reserve tout le fan-out autorise sans sur-reserver le budget tokens', async () => {
@@ -530,5 +565,38 @@ describe('ExecutionSupervisor', () => {
     ).rejects.toThrow(/budget duree/i)
 
     expect(provider.calls).toBe(0)
+  })
+
+  it('isole un reveil de fond du devis encore actif dans le contexte parent', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const parentQuote = compileExecutionQuote('orchestration parente')
+    const childQuote = compileExecutionQuote('reveil auto-kaizen')
+    let childSettlement: number | null | undefined
+
+    await supervisor.run(parentQuote, undefined, async () => {
+      const parent = supervisor.reserveProviderCall()!
+      parent.complete({ inputTokens: 10, outputTokens: 1, costUsd: 0.2 })
+
+      await supervisor.runOutsideCurrent(() =>
+        supervisor.run(
+          childQuote,
+          undefined,
+          async () => {
+            expect(supervisor.currentQuote()?.id).toBe(childQuote.id)
+            const child = supervisor.reserveProviderCall()!
+            child.complete({ inputTokens: 2, outputTokens: 1, costUsd: 0.01 })
+          },
+          undefined,
+          (usage) => {
+            childSettlement = usage.knownCostUsd
+          }
+        )
+      )
+
+      expect(supervisor.currentQuote()?.id).toBe(parentQuote.id)
+    })
+
+    expect(childSettlement).toBe(0.01)
+    expect(supervisor.lastSnapshot()?.knownCostUsd).toBe(0.2)
   })
 })

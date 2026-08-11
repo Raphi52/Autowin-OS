@@ -17,7 +17,10 @@ export interface PromptCallRecord {
   /** Phase d'execution reelle ; absente uniquement sur les anciens journaux. */
   phase?: PipelinePhase
   provider: string
+  /** Modele demande a l'adaptateur, alias compris. */
   model?: string
+  /** Modele concret rapporte par le provider apres execution. */
+  resolvedModel?: string
   transport: string
   boundary: string
   limitation: string
@@ -215,7 +218,7 @@ function sampleFromCall(call: PromptCallRecord): CostSample {
   return {
     actor: call.actor || '(inconnu)',
     provider: call.provider || '(inconnu)',
-    ...(call.model ? { model: call.model } : {}),
+    ...(call.resolvedModel || call.model ? { model: call.resolvedModel ?? call.model } : {}),
     costUsd: call.usage?.costUsd ?? 0,
     costKnown: Number.isFinite(call.usage?.costUsd),
     inputTokens: call.usage?.inputTokens ?? 0,

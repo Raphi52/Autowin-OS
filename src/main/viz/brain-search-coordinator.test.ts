@@ -16,6 +16,42 @@ function deferred<T>(): {
 }
 
 describe('BrainSearchCoordinator', () => {
+  it('ne fusionne jamais une navigation signée pour une autre question Unicode', async () => {
+    const coordinator = new BrainSearchCoordinator()
+    const local: BrainNoteSearchResult[] = [
+      {
+        id: 'knowledge/a',
+        label: 'LOCAL A',
+        file: 'C:\\brain\\knowledge\\a.md',
+        score: 1,
+        themes: [],
+        relations: []
+      }
+    ]
+    const fuse = vi.fn(async () => [])
+
+    const resolution = await coordinator.searchDetailed('C:\\brain', '  Où   vit 😀 A ?  ', {
+      searchLocal: async () => local,
+      retrieve: async () => ({
+        context: '[BRAIN] réponse B',
+        status: 'found',
+        navigation: {
+          query: 'Où vit 😀 B ?',
+          minDense: 0.25,
+          root: 'C:\\brain',
+          candidates: []
+        }
+      }),
+      fuse
+    })
+
+    expect(fuse).not.toHaveBeenCalled()
+    expect(resolution).toEqual({
+      results: local,
+      retrieval: { context: '', status: 'invalid' }
+    })
+  })
+
   it('ne rend pas un resultat local capture avant un refresh intercale avant la fusion', async () => {
     const coordinator = new BrainSearchCoordinator()
     const retrieval = deferred<BrainRetrievalResult>()
@@ -36,7 +72,7 @@ describe('BrainSearchCoordinator', () => {
     })
     const fuse = vi.fn(async () => oldLocal)
 
-    const pending = coordinator.search('C:\\brain', 'decision', {
+    const pending = coordinator.searchDetailed('C:\\brain', 'decision', {
       searchLocal,
       retrieve: () => retrieval.promise,
       fuse
@@ -50,7 +86,7 @@ describe('BrainSearchCoordinator', () => {
       navigation: { query: 'decision', minDense: 0, root: 'C:\\brain', candidates: [] }
     })
 
-    await expect(pending).resolves.toEqual([])
+    await expect(pending).resolves.toEqual({ results: [] })
     expect(fuse).not.toHaveBeenCalled()
   })
 
@@ -69,7 +105,7 @@ describe('BrainSearchCoordinator', () => {
       }
     ]
 
-    const pending = coordinator.search('C:\\brain', 'decision', {
+    const pending = coordinator.searchDetailed('C:\\brain', 'decision', {
       searchLocal: async () => oldLocal,
       retrieve: async () => ({
         context: '',
@@ -86,21 +122,24 @@ describe('BrainSearchCoordinator', () => {
     coordinator.invalidate()
     fusion.resolve(oldLocal)
 
-    await expect(pending).resolves.toEqual([])
+    await expect(pending).resolves.toEqual({ results: [] })
   })
 
   it('degrade en liste vide meme si le demarrage du worker local leve synchroniquement', async () => {
     const coordinator = new BrainSearchCoordinator()
 
     await expect(
-      coordinator.search('C:\\brain', 'decision', {
+      coordinator.searchDetailed('C:\\brain', 'decision', {
         searchLocal: () => {
           throw new Error('CREATE_WORKER_FAILED')
         },
         retrieve: async () => ({ context: '', status: 'unavailable' }),
         fuse: async (local) => local
       })
-    ).resolves.toEqual([])
+    ).resolves.toEqual({
+      results: [],
+      retrieval: { context: '', status: 'unavailable' }
+    })
   })
 
   it('conserve les resultats locaux si le retrieval leve synchroniquement', async () => {
@@ -118,14 +157,17 @@ describe('BrainSearchCoordinator', () => {
     const fuse = vi.fn(async () => [])
 
     await expect(
-      coordinator.search('C:\\brain', 'decision', {
+      coordinator.searchDetailed('C:\\brain', 'decision', {
         searchLocal: async () => local,
         retrieve: () => {
           throw new Error('RETRIEVE_SYNC')
         },
         fuse
       })
-    ).resolves.toEqual(local)
+    ).resolves.toEqual({
+      results: local,
+      retrieval: { context: '', status: 'unavailable' }
+    })
     expect(fuse).not.toHaveBeenCalled()
   })
 
@@ -143,14 +185,17 @@ describe('BrainSearchCoordinator', () => {
     ]
 
     await expect(
-      coordinator.search('C:\\brain', 'decision', {
+      coordinator.searchDetailed('C:\\brain', 'decision', {
         searchLocal: async () => local,
         retrieve: async () => {
           throw new Error('RETRIEVE_ASYNC')
         },
         fuse: async () => []
       })
-    ).resolves.toEqual(local)
+    ).resolves.toEqual({
+      results: local,
+      retrieval: { context: '', status: 'unavailable' }
+    })
   })
 
   it('transporte le statut retrieval avec les resultats pour la vue Knowledge', async () => {
@@ -194,21 +239,21 @@ describe('BrainSearchCoordinator', () => {
     }
 
     await expect(
-      coordinator.search('C:\\brain', 'decision', {
+      coordinator.searchDetailed('C:\\brain', 'decision', {
         searchLocal: async () => local,
         retrieve: async () => retrieval,
         fuse: () => {
           throw new Error('FUSE_SYNC')
         }
       })
-    ).resolves.toEqual(local)
+    ).resolves.toEqual({ results: local, retrieval })
     await expect(
-      coordinator.search('C:\\brain', 'decision', {
+      coordinator.searchDetailed('C:\\brain', 'decision', {
         searchLocal: async () => local,
         retrieve: async () => retrieval,
         fuse: async () => [{ ...local[0], label: 'FUSED' }]
       })
-    ).resolves.toMatchObject([{ label: 'FUSED' }])
+    ).resolves.toMatchObject({ results: [{ label: 'FUSED' }], retrieval })
   })
 
   it('conserve le statut et la navigation retrieval avec les resultats fusionnes', async () => {
@@ -265,6 +310,37 @@ describe('BrainSearchCoordinator', () => {
     })
     expect(envelope.query).toBe(seenRetrieval[0])
     expect(envelope.budget.questionChars).toBe(seenRetrieval[0].length)
+  })
+
+  it('transmet exactement 500 caractères Unicode valides aux deux recherches', async () => {
+    const coordinator = new BrainSearchCoordinator()
+    const seenLocal: string[] = []
+    const seenRetrieval: string[] = []
+    const expected = `${'x'.repeat(499)}😀`
+    const rawQuery = `${expected}suite`
+
+    const resolution = await coordinator.searchDetailed('C:\\brain', rawQuery, {
+      searchLocal: async (_root, query) => {
+        seenLocal.push(query)
+        return []
+      },
+      retrieve: async (query) => {
+        seenRetrieval.push(query)
+        return { context: '', status: 'empty' }
+      },
+      fuse: async (local) => local
+    })
+
+    expect(seenLocal).toEqual([expected])
+    expect(seenRetrieval).toEqual([expected])
+    const envelope = buildBrainSearchEnvelope({
+      rawQuery,
+      results: resolution.results,
+      retrieval: resolution.retrieval
+    })
+    expect(envelope.query).toBe(expected)
+    expect(envelope.budget.questionChars).toBe(500)
+    expect(envelope.budget.questionSubmittedChars).toBe(505)
   })
 
   it('ne lance jamais le retrieval si le vault ne peut pas etre autorise', async () => {

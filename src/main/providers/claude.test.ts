@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  appendClaudeSelectionArgs,
   claudeContentArtifacts,
   claudeTransportEnvelope,
   materializeClaudeAttachments
@@ -62,6 +63,59 @@ vi.mock('node:child_process', async (importOriginal) => ({
 
 beforeEach(() => {
   spawnCapture.stdoutEvents = []
+})
+
+describe('ClaudeCliAdapter — plafond de depense provider', () => {
+  it('transmet la borne dure au CLI Claude en mode print', () => {
+    const args: string[] = []
+
+    appendClaudeSelectionArgs(args, { model: 'haiku', maxBudgetUsd: 0.0625 })
+
+    expect(args).toEqual(['--model', 'haiku', '--max-budget-usd', '0.0625'])
+  })
+
+  it('conserve le cout reel et interdit le retry quand Claude coupe sur la borne', async () => {
+    const previousWorkspace = process.env.AUTOWIN_OS_WORKSPACE
+    process.env.AUTOWIN_OS_WORKSPACE = process.cwd()
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: { model: 'claude-haiku-real', content: [] }
+      },
+      {
+        type: 'result',
+        subtype: 'error_max_budget_usd',
+        result: '',
+        session_id: 'budget-session',
+        is_error: true,
+        total_cost_usd: 0.065648,
+        usage: {
+          input_tokens: 26,
+          output_tokens: 1043,
+          cache_read_input_tokens: 12
+        }
+      }
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send(
+      [{ role: 'user', content: 'Diagnostic borne' }],
+      { maxBudgetUsd: 0.0625, toolProfile: 'watchdog-read-only' }
+    )
+
+    await expect(async () => {
+      let step = await gen.next()
+      while (!step.done) step = await gen.next()
+    }).rejects.toMatchObject({
+      retryable: false,
+      code: 'error_max_budget_usd',
+      resolvedModel: 'claude-haiku-real',
+      usage: { inputTokens: 38, outputTokens: 1043, cacheReadTokens: 12, costUsd: 0.065648 }
+    })
+    expect(spawnCapture.args).toContain('Read,Grep,Glob')
+    expect(spawnCapture.args.join(' ')).not.toContain('Bash')
+    if (previousWorkspace === undefined) delete process.env.AUTOWIN_OS_WORKSPACE
+    else process.env.AUTOWIN_OS_WORKSPACE = previousWorkspace
+  })
 })
 
 describe('ClaudeCliAdapter — pièces jointes', () => {

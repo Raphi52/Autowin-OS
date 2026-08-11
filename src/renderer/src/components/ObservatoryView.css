@@ -1529,3 +1529,60 @@
   font-size: 12px;
   line-height: 1.45;
 }
+
+/* Rail : recherche + fenetrage (905 conversations ne se defilent pas, elles se cherchent). */
+.observatory-conversation-filter {
+  width: 100%;
+  margin: 8px 0 4px;
+  padding: 7px 9px;
+  border: 1px solid #27333f;
+  border-radius: 7px;
+  background: var(--surface-card);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.observatory-conversation-filter:focus-visible {
+  border-color: #59dcff;
+  outline: none;
+}
+[data-testid='observatory-conversation-count'] {
+  display: block;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.observatory-conversation-more {
+  width: 100%;
+  margin: 0 0 18px;
+  padding: 8px;
+  border: 1px dashed #27333f;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+/* Etat de la comparaison A/B : le geste (Shift+clic) etait invisible. */
+.observatory-compare-status {
+  display: grid;
+  gap: 1px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.observatory-compare-status b {
+  color: var(--text-dim);
+}
+/* Etats vides actionnables : chaque cause porte sa sortie. */
+.observatory-empty {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+.observatory-empty button {
+  padding: 7px 12px;
+  border: 1px solid #27333f;
+  border-radius: 7px;
+  background: var(--surface-card);
+  color: var(--text-dim);
+  cursor: pointer;
+}

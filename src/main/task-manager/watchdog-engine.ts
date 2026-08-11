@@ -18,6 +18,8 @@ import { describeFileMatch } from './watchdog-prompt'
 import { suppressionFor } from './watchdog-suppression'
 import type {
   ScheduledTask,
+  TaskUsageSettlement,
+  TaskUsageSettlementSink,
   WatchdogAppEvent,
   WatchdogMutationClaims,
   WatchdogMutationClaimsSink,
@@ -36,14 +38,18 @@ export interface WatchdogDispatch {
   runWatchdog(
     taskId: string,
     signal: WatchdogSignal,
-    onLateMutationClaims?: WatchdogMutationClaimsSink
+    onLateMutationClaims?: WatchdogMutationClaimsSink,
+    onLateUsageSettlement?: TaskUsageSettlementSink
   ): Promise<
     | boolean
     | {
         fired: boolean
+        eventId?: string
         mutatedPaths?: readonly string[]
         mutatedLineFingerprints?: Record<string, readonly string[]>
         mutatedPathGenerationMarkers?: Record<string, string>
+        knownCostUsd?: number
+        unpricedCalls?: number
       }
   >
 }
@@ -190,6 +196,19 @@ export class WatchdogEngine {
   /** Ce dont une regle se plaint (fichier absent, illisible) — une regle muette est un piege. */
   complaint(taskId: string): string | undefined {
     return this.complaints.get(taskId)
+  }
+
+  /**
+   * Reinjecte un reglement provider retrouve apres crash dans le livre EN MEMOIRE courant.
+   * La persistance de l'occurrence ne suffit pas : sans cette etape, le prochain signal pouvait
+   * franchir le budget jusqu'au redemarrage suivant du moteur.
+   */
+  rememberRecoveredUsage(taskId: string, usage: TaskUsageSettlement): boolean {
+    const task = this.watchdogTasks().find((candidate) => candidate.id === taskId)
+    if (!task) return false
+    this.bookFor(task).recordSettlement(usage)
+    this.notifyDiagnosticsChanged()
+    return true
   }
 
   /**
@@ -360,12 +379,15 @@ export class WatchdogEngine {
     const rememberLate: WatchdogMutationClaimsSink = (claims) => {
       this.rememberDispatchClaims(task, signal, claims)
     }
+    const rememberLateUsage: TaskUsageSettlementSink = (usage) => {
+      book.recordSettlement(usage)
+    }
     if (singleFlight) this.inFlightOrchestrations.add(task.id)
     let dispatchResult: unknown
     try {
       dispatchResult = await this.causalDepth.run(signal.depth + 1, () =>
         this.causalRoot.run(signal.rootSignature, () =>
-          this.dispatch.runWatchdog(task.id, signal, rememberLate)
+          this.dispatch.runWatchdog(task.id, signal, rememberLate, rememberLateUsage)
         )
       )
     } finally {
@@ -376,6 +398,18 @@ export class WatchdogEngine {
     // les lignes revendiquées par les outils du tour héritent de sa causalité au prochain poll.
     if (typeof dispatchResult === 'object' && dispatchResult !== null)
       this.rememberDispatchClaims(task, signal, dispatchResult)
+    if (typeof dispatchResult === 'object' && dispatchResult !== null) {
+      const metrics = dispatchResult as {
+        eventId?: string
+        knownCostUsd?: number
+        unpricedCalls?: number
+      }
+      book.recordSettlement({
+        eventId: metrics.eventId,
+        knownCostUsd: metrics.knownCostUsd,
+        unpricedCalls: metrics.unpricedCalls
+      })
+    }
   }
 
   private rememberDispatchClaims(

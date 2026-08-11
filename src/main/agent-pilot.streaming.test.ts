@@ -11,6 +11,93 @@ const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
 })
 
 describe('AgentPilot chat streaming', () => {
+  it('ne repaie pas un appel pour reformuler un remember auxiliaire refusé après une réponse complète', async () => {
+    const responses = [
+      'Scout livré.<cmd>{"name":"remember","args":{"type":"constraint"}}</cmd>',
+      "Le dépôt mémoire a échoué."
+    ]
+    const send = vi.fn(async () => ({ text: responses.shift() ?? '', provider: 'claude' }))
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'remember', args: {}, description: 'mémoire auxiliaire' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: false, error: 'type invalide' })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'scout la vue Chat' }],
+      (event) => events.push(event),
+      undefined,
+      6,
+      'conv-remember-cost'
+    )
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'result', name: 'remember', ok: false, data: 'type invalide' })
+    )
+    expect(events.at(-1)).toMatchObject({ kind: 'done' })
+  })
+
+  it('demande une conclusion quand la réponse ne contient qu’un remember auxiliaire', async () => {
+    const responses = [
+      '<cmd>{"name":"remember","args":{"type":"constraint"}}</cmd>',
+      'Le dépôt mémoire a échoué, mais le travail demandé est terminé.'
+    ]
+    const send = vi.fn(async () => ({ text: responses.shift() ?? '', provider: 'claude' }))
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'remember', args: {}, description: 'mémoire auxiliaire' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: false, error: 'type invalide' })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'mémorise puis conclus' }],
+      (event) => events.push(event),
+      undefined,
+      6,
+      'conv-remember-muted'
+    )
+
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'result', name: 'remember', ok: false, data: 'type invalide' })
+    )
+    expect(events.at(-1)).toMatchObject({
+      kind: 'done',
+      text: 'Le dépôt mémoire a échoué, mais le travail demandé est terminé.'
+    })
+  })
+
   it('clôt mécaniquement un orchestrate terminal sans repayer un appel ni demander un second judge', async () => {
     const send = vi.fn(
       async (

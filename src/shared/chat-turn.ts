@@ -1,4 +1,5 @@
 import type { ChatArtifact } from './artifacts'
+import type { ChatAttachment } from './preload-contracts'
 
 export type ChatTurnStatus = 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
 
@@ -29,8 +30,24 @@ export interface PersistedChatArtifactPart {
   artifact: ChatArtifact
 }
 
+/**
+ * ERREUR STRUCTURÉE d'un tour. Avant, l'échec était poussé comme une part texte `⚠️ …` :
+ * indistinguable d'un contenu produit par le modèle (copié, cité, relu comme une réponse), sans
+ * cause exploitable ni sémantique d'alerte. La cause dit OÙ ça a cassé, pour que la reprise
+ * proposée soit la bonne.
+ */
+export interface PersistedChatErrorPart {
+  kind: 'error'
+  /** `send` : l'appel n'est jamais parti. `turn` : le tour est parti et a échoué. */
+  cause: 'send' | 'turn'
+  message: string
+}
+
 export type PersistedChatPart =
-  PersistedChatTextPart | PersistedChatActionPart | PersistedChatArtifactPart
+  | PersistedChatTextPart
+  | PersistedChatActionPart
+  | PersistedChatArtifactPart
+  | PersistedChatErrorPart
 
 export interface ChatTurnRuntime {
   provider: string
@@ -52,7 +69,15 @@ export type ChatTurnEvent =
   | { kind: 'stream-reset'; streamId: string }
   | { kind: 'resumed' }
   | { kind: 'command'; actionId: string; name: string; args?: unknown }
-  | { kind: 'result'; actionId: string; name: string; ok?: boolean; data?: unknown }
+  | {
+      kind: 'result'
+      actionId: string
+      name: string
+      ok?: boolean
+      data?: unknown
+      /** Payload brut durable, reserve a la reprise du modele et jamais projete dans la vue. */
+      attachments?: ChatAttachment[]
+    }
   | { kind: 'artifact'; artifact: ChatArtifact }
   | { kind: 'done'; sessionId?: string }
   | { kind: 'failed'; error: string }
@@ -207,6 +232,7 @@ export function flattenChatParts(parts: PersistedChatPart[]): string {
     .map((part) => {
       if (part.kind === 'text') return part.text
       if (part.kind === 'artifact') return `[artefact ${part.artifact.name}]`
+      if (part.kind === 'error') return `⚠️ ${part.message}`
       return `[a exécuté ${part.name}${part.ok === false ? ' (échec)' : ''}]`
     })
     .filter(Boolean)

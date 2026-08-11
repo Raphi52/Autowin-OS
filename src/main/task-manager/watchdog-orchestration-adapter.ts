@@ -1,8 +1,12 @@
-import type { ScheduledTask, WatchdogMutationClaimsSink } from './types'
+import type {
+  ScheduledTask,
+  WatchdogMutationClaimsSink,
+  WatchdogOrchestrationRequest
+} from './types'
 
 interface OrchestrationAdapterDependencies {
   exec(
-    task: string,
+    request: WatchdogOrchestrationRequest,
     conversationId: string,
     causalWatchPaths: readonly string[],
     onLateMutationClaims?: WatchdogMutationClaimsSink
@@ -24,6 +28,7 @@ export interface WatchdogOrchestrationDispatch {
   knownCostUsd?: number
   totalTokens?: number
   unpricedCalls?: number
+  resolvedModel?: string
   mutatedPaths?: readonly string[]
   mutatedLineFingerprints?: Record<string, readonly string[]>
   mutatedPathGenerationMarkers?: Record<string, string>
@@ -50,7 +55,7 @@ function nonNegativeNumber(value: unknown): number | undefined {
 export async function runWatchdogOrchestration(
   dependencies: OrchestrationAdapterDependencies,
   conversationId: string,
-  prompt: string,
+  request: WatchdogOrchestrationRequest,
   task: ScheduledTask,
   onLateMutationClaims?: WatchdogMutationClaimsSink
 ): Promise<WatchdogOrchestrationDispatch> {
@@ -59,8 +64,8 @@ export async function runWatchdogOrchestration(
     const causalWatchPaths = source?.kind === 'file-match' ? [source.path] : []
     const envelope = record(
       onLateMutationClaims
-        ? await dependencies.exec(prompt, conversationId, causalWatchPaths, onLateMutationClaims)
-        : await dependencies.exec(prompt, conversationId, causalWatchPaths)
+        ? await dependencies.exec(request, conversationId, causalWatchPaths, onLateMutationClaims)
+        : await dependencies.exec(request, conversationId, causalWatchPaths)
     )
     if (!envelope) return { ok: false, error: 'Réponse d’orchestration illisible.' }
     if (envelope.ok !== true) {
@@ -81,10 +86,12 @@ export async function runWatchdogOrchestration(
     const knownCostUsd = nonNegativeNumber(raw.knownCostUsd)
     const totalTokens = nonNegativeNumber(raw.totalTokens)
     const unpricedCalls = nonNegativeNumber(raw.unpricedCalls)
+    const resolvedModel = text(raw.resolvedModel)
     const metering = {
       ...(knownCostUsd === undefined ? {} : { knownCostUsd }),
       ...(totalTokens === undefined ? {} : { totalTokens }),
-      ...(unpricedCalls === undefined ? {} : { unpricedCalls })
+      ...(unpricedCalls === undefined ? {} : { unpricedCalls }),
+      ...(resolvedModel ? { resolvedModel } : {})
     }
     const succeeded = raw.status === 'succeeded' && raw.gateBlocked !== true
     if (succeeded) {

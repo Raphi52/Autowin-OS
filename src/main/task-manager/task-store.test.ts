@@ -269,6 +269,30 @@ describe('Task Manager — store durable', () => {
     expect(store.claim(task.id, occurrenceId, task.nextRunAt!)).toMatchObject({ claimed: false })
   })
 
+  it('reconcilie un reglement tardif de facon monotone et idempotente apres la cloture', () => {
+    const store = new TaskStore({ now: () => 5000, id: () => 'task-late' })
+    const task = store.create(input())
+    const occurrenceId = `${task.id}@${task.nextRunAt}`
+    store.claim(task.id, occurrenceId, task.nextRunAt!)
+    store.finish(occurrenceId, 'failed', { knownCostUsd: 0.01, totalTokens: 100 })
+
+    store.reconcileUsage(occurrenceId, {
+      knownCostUsd: 0.03,
+      totalTokens: 300,
+      unpricedCalls: 1,
+      resolvedModel: 'claude-haiku-4-5'
+    })
+    store.reconcileUsage(occurrenceId, { knownCostUsd: 0.02, totalTokens: 200 })
+
+    expect(store.getOccurrence(occurrenceId)).toMatchObject({
+      status: 'failed',
+      knownCostUsd: 0.03,
+      totalTokens: 300,
+      unpricedCalls: 1,
+      resolvedModel: 'claude-haiku-4-5'
+    })
+  })
+
   it('fige le mode de chaque occurrence même si la tâche change ensuite', () => {
     const ids = ['task-1', 'task-2', 'alert-1']
     const store = new TaskStore({ now: () => 5000, id: () => ids.shift() ?? 'unused' })

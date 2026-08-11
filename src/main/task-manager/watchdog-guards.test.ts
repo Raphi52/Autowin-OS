@@ -88,6 +88,98 @@ describe('WatchdogGuardBook — les bornes du reveil evenementiel', () => {
     expect(book.admit('d', 0).admitted).toBe(true)
   })
 
+  it('PLAFOND JOURNALIER : plusieurs incidents distincts ne peuvent pas repayer sans fin', () => {
+    const time = clock()
+    const book = new WatchdogGuardBook(
+      guards({ maxTriggersPerHour: 100, maxTriggersPerDay: 2, dedupWindowMs: 0 }),
+      time.now
+    )
+
+    expect(book.admit('incident A', 0).admitted).toBe(true)
+    time.advance(3_600_001)
+    expect(book.admit('incident B', 0).admitted).toBe(true)
+    time.advance(3_600_001)
+    const refused = book.admit('incident C', 0)
+    expect(refused.admitted).toBe(false)
+    expect(refused.admitted === false && refused.reason).toBe('daily-rate')
+
+    time.advance(24 * 3_600_000)
+    expect(book.admit('incident D', 0).admitted).toBe(true)
+  })
+
+  it('BUDGET : une depense connue ou un appel non chiffre ouvre le coupe-circuit', () => {
+    const priced = new WatchdogGuardBook(
+      guards({
+        maxTriggersPerHour: 100,
+        maxTriggersPerDay: 100,
+        maxKnownCostUsdPerDay: 0.25,
+        dedupWindowMs: 0
+      }),
+      clock().now
+    )
+    expect(priced.admit('a', 0).admitted).toBe(true)
+    priced.recordSettlement({ knownCostUsd: 0.26 })
+    const overCost = priced.admit('b', 0)
+    expect(overCost.admitted).toBe(false)
+    expect(overCost.admitted === false && overCost.reason).toBe('cost-budget')
+
+    const unpriced = new WatchdogGuardBook(
+      guards({
+        maxTriggersPerHour: 100,
+        maxTriggersPerDay: 100,
+        maxUnpricedCallsPerDay: 1,
+        dedupWindowMs: 0
+      }),
+      clock().now
+    )
+    expect(unpriced.admit('a', 0).admitted).toBe(true)
+    unpriced.recordSettlement({ unpricedCalls: 1 })
+    const unknownCost = unpriced.admit('b', 0)
+    expect(unknownCost.admitted).toBe(false)
+    expect(unknownCost.admitted === false && unknownCost.reason).toBe('unpriced-budget')
+  })
+
+  it('remplace le snapshot d une meme occurrence au lieu de compter deux fois son cout', () => {
+    const book = new WatchdogGuardBook(
+      guards({
+        maxTriggersPerHour: 100,
+        maxKnownCostUsdPerDay: 0.05,
+        dedupWindowMs: 0
+      }),
+      clock().now
+    )
+    expect(book.admit('a', 0).admitted).toBe(true)
+    book.recordSettlement({ eventId: 'occurrence-a', knownCostUsd: 0.02 })
+    book.recordSettlement({ eventId: 'occurrence-a', knownCostUsd: 0.03 })
+
+    expect(book.admit('b', 0).admitted).toBe(true)
+  })
+
+  it('restaure le plafond quotidien et le cout apres redemarrage', () => {
+    const time = clock(2 * 24 * 3_600_000)
+    const book = new WatchdogGuardBook(
+      guards({
+        maxTriggersPerHour: 100,
+        maxTriggersPerDay: 1,
+        maxKnownCostUsdPerDay: 0.25,
+        dedupWindowMs: 0
+      }),
+      time.now
+    )
+    book.restore([
+      {
+        signature: 'incident avant restart',
+        rootSignature: 'racine',
+        admittedAt: time.now() - 2 * 3_600_000,
+        knownCostUsd: 0.2
+      }
+    ])
+
+    const refused = book.admit('incident apres restart', 0)
+    expect(refused.admitted).toBe(false)
+    expect(refused.admitted === false && refused.reason).toBe('daily-rate')
+  })
+
   it('un signal REFUSE ne consomme pas le budget horaire', () => {
     // Sinon une rafale refusee murerait la regle contre le signal legitime qui suit.
     const time = clock()

@@ -59,6 +59,15 @@ describe('projection causale d’un appel provider', () => {
     const second = promptCallToTraceEvents({ ...call, id: 'call-2', turnId: 'turn-2' }, 4)
     expect(second.map((event) => event.sequence)).toEqual([4, 5, 6, 7])
   })
+  it('affiche le modele reel quand le provider en resout un autre', () => {
+    const events = promptCallToTraceEvents({
+      ...call,
+      model: 'haiku',
+      resolvedModel: 'claude-haiku-4-5'
+    })
+
+    expect(events.every((event) => event.provider?.model === 'claude-haiku-4-5')).toBe(true)
+  })
   it('rattache un nouvel appel au dernier resultat outil du sous-tour precedent', () => {
     const events = promptCallToTraceEvents(call, 12, 'turn-1:action:1')
     expect(events[0].parentId).toBe('turn-1:action:1')

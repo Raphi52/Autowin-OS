@@ -20,14 +20,16 @@ export const AUTO_KAIZEN_SEED_ID = 'auto-kaizen-v1'
  * L'auto-kaizen en tant que Watchdog Agent.
  *
  * Ce que la regle remplace : `auto-kaizen-supervisor.ts` observait les memes incidents mais depuis
- * un module a part, invisible dans l'interface et non reglable. Ici le declencheur est le meme que
- * pour toute autre regle, et son ACTION est l'orchestration — donc l'analyse, le correctif et la
- * VERIFICATION (gate a preuve + juge) viennent du pipeline au lieu d'etre redeveloppees.
+ * un module a part, invisible dans l'interface et non reglable. Le premier semis Watchdog lancait
+ * une seconde orchestration complete apres chaque rouge. Le dogfood Tickets a mesure le probleme :
+ * un build Opus a 3,15 $ a ete suivi d'un autre worktree automatique alors que le premier diff
+ * n'etait ni publie ni visible depuis la copie du reparateur.
  *
- * Une regle qui se declenche seule peut agir directement ; ses effets restent observables et bornes
- * par les gates de preuve et les gardes du pipeline.
+ * Le reveil fait donc seulement le TRIAGE : un tour Haiku en lecture seule, visible dans le Task
+ * Manager. Une correction devient une recommandation explicite ; elle ne part jamais en chantier
+ * autonome sur la seule foi d'un evenement terminal.
  */
-export function autoKaizenSeed(): ScheduledTaskInput {
+export function previousOrchestrationAutoKaizenSeed(): ScheduledTaskInput {
   return {
     title: 'Auto-kaizen — orchestration rouge ou workflow douteux',
     prompt: [
@@ -90,6 +92,69 @@ export function autoKaizenSeed(): ScheduledTaskInput {
   }
 }
 
+export function autoKaizenSeed(): ScheduledTaskInput {
+  const previous = previousOrchestrationAutoKaizenSeed()
+  return {
+    ...previous,
+    prompt: [
+      'Auto-kaizen LECTURE SEULE : trie cet incident en un seul diagnostic borne.',
+      'Ne lance aucune orchestration. Ne modifie aucun fichier et ne cree aucun worktree.',
+      '',
+      'Un workflow vient de mal se terminer — soit en echec, soit en annoncant un succes que rien',
+      "n'etaye. Etablis ce qui s'est reellement passe avant de conclure.",
+      '',
+      '1. Lis le RUN cite dans le contexte s’il est accessible et cherche la cause RACINE.',
+      '2. Cherche la preuve hors-modele deja disponible ; ne relance ni test ni workflow couteux.',
+      "3. S'il se dit REUSSI, demande-toi : est-ce reellement fait ? Sans preuve, c'est un faux vert.",
+      '4. Si une correction est justifiee, decris la correction bornee et son oracle, sans',
+      '   l’appliquer. Sans cause etablie, ne repare rien : rapporte ce qui reste a verifier.',
+      '5. Termine par le tri ISSUE demande. `repair` est interdit ici puisqu’aucune mutation',
+      '   automatique n’est autorisee ; utilise `investigate` ou `report` pour une suite.'
+    ].join('\n'),
+    destination:
+      previous.destination.kind === 'new'
+        ? {
+            ...previous.destination,
+            model: 'haiku',
+            reasoningEffort: 'low'
+          }
+        : previous.destination,
+    watchdog: previous.watchdog
+      ? {
+          ...previous.watchdog,
+          action: 'chat',
+          guards: {
+            ...previous.watchdog.guards,
+            // Deuxième horizon : le plafond horaire ne suffit pas à empêcher une consommation
+            // lente mais continue sur une journée entière.
+            maxTriggersPerDay: 4,
+            // Coupe-circuit mesuré sur le coût REEL remonté par le provider. Si le tarif manque,
+            // le budget séparé ci-dessous bloque après un appel au lieu de compter 0 $.
+            maxKnownCostUsdPerDay: 0.25,
+            maxUnpricedCallsPerDay: 1
+          }
+        }
+      : undefined
+  }
+}
+
+/** Empreinte exacte du premier triage Haiku livré avant les budgets quotidiens. */
+const PRIOR_READ_ONLY_AUTO_KAIZEN_PROMPT = [
+  'Auto-kaizen LECTURE SEULE : trie cet incident en un seul diagnostic borne.',
+  'Ne lance aucune orchestration. Ne modifie aucun fichier et ne cree aucun worktree.',
+  '',
+  'Un workflow vient de mal se terminer — soit en echec, soit en annoncant un succes que rien',
+  "n'etaye. Etablis ce qui s'est reellement passe avant de conclure.",
+  '',
+  '1. Lis le RUN cite dans le contexte s’il est accessible et distingue la cause du symptome.',
+  '2. Cherche la preuve terminale deja disponible ; ne relance ni test ni workflow couteux.',
+  "3. Si le workflow s'est dit REUSSI sans preuve, dis explicitement quelle preuve manque.",
+  '4. Si une correction est justifiee, decris la correction bornee et son oracle, sans',
+  '   l’appliquer. Sans cause etablie, rapporte seulement ce qui reste a verifier.',
+  '5. Termine par le tri ISSUE demande. `repair` est interdit ici puisqu’aucune mutation',
+  '   automatique n’est autorisee ; utilise `investigate` ou `report` pour une suite.'
+].join('\n')
+
 const LEGACY_AUTO_KAIZEN_TITLE = 'Auto-kaizen — une orchestration rouge'
 const LEGACY_AUTO_KAIZEN_PROMPT = [
   "Une orchestration vient d'echouer. Etablis ce qui s'est reellement passe avant de conclure.",
@@ -104,12 +169,41 @@ const LEGACY_AUTO_KAIZEN_PROMPT = [
   '   reste a verifier. Une reparation sur une cause supposee cree le defaut suivant.'
 ].join('\n')
 
+type NewTaskDestination = Extract<ScheduledTaskInput['destination'], { kind: 'new' }>
+
+/** La conversation dediee est une donnee runtime ; tout autre ecart est une edition utilisateur. */
+function hasExactSeedDestination(task: ScheduledTask, expected: NewTaskDestination): boolean {
+  return (
+    task.destination.kind === 'new' &&
+    task.destination.title === expected.title &&
+    task.destination.category === expected.category &&
+    task.destination.provider === expected.provider &&
+    task.destination.model === expected.model &&
+    task.destination.reasoningEffort === expected.reasoningEffort
+  )
+}
+
+/** Les versions historiques ne portaient aucun budget quotidien : leur présence est une édition. */
+function hasNoCustomizedDailyGuard(task: ScheduledTask): boolean {
+  const guards = task.watchdog?.guards
+  return (
+    guards !== undefined &&
+    guards.maxTriggersPerDay === undefined &&
+    guards.maxKnownCostUsdPerDay === undefined &&
+    guards.maxUnpricedCallsPerDay === undefined
+  )
+}
+
 function isUntouchedLegacyAutoKaizen(task: ScheduledTask): boolean {
   return (
     task.title === LEGACY_AUTO_KAIZEN_TITLE &&
     task.prompt === LEGACY_AUTO_KAIZEN_PROMPT &&
-    task.destination.kind === 'new' &&
-    task.destination.title === 'Auto-kaizen' &&
+    hasExactSeedDestination(task, {
+      kind: 'new',
+      title: 'Auto-kaizen',
+      category: 'Qualite',
+      provider: 'claude'
+    }) &&
     task.watchdog?.action === 'orchestration' &&
     task.watchdog.source.kind === 'app-event' &&
     task.watchdog.source.events.length === 1 &&
@@ -117,7 +211,8 @@ function isUntouchedLegacyAutoKaizen(task: ScheduledTask): boolean {
     task.watchdog.guards.dedupWindowMs === 300_000 &&
     task.watchdog.guards.maxTriggersPerHour === 4 &&
     task.watchdog.guards.maxChainDepth === 0 &&
-    task.watchdog.guards.maxPerRoot === 3
+    task.watchdog.guards.maxPerRoot === 3 &&
+    hasNoCustomizedDailyGuard(task)
   )
 }
 
@@ -128,7 +223,7 @@ function isUntouchedLegacyAutoKaizen(task: ScheduledTask): boolean {
  * personnalisée.
  */
 function isUntouchedBareBuildAutoKaizen(task: ScheduledTask): boolean {
-  const current = autoKaizenSeed()
+  const current = previousOrchestrationAutoKaizenSeed()
   const destination = current.destination
   const watchdog = current.watchdog
   const taskWatchdog = task.watchdog
@@ -138,10 +233,7 @@ function isUntouchedBareBuildAutoKaizen(task: ScheduledTask): boolean {
     watchdog?.source.kind === 'app-event' &&
     task.title === current.title &&
     task.prompt === current.prompt.replace(/^\/build /, 'build ') &&
-    task.destination.kind === 'new' &&
-    task.destination.title === destination.title &&
-    task.destination.category === destination.category &&
-    task.destination.provider === destination.provider &&
+    hasExactSeedDestination(task, destination) &&
     taskWatchdog !== undefined &&
     taskWatchdog.action === watchdog.action &&
     taskSource?.kind === 'app-event' &&
@@ -149,13 +241,14 @@ function isUntouchedBareBuildAutoKaizen(task: ScheduledTask): boolean {
     taskWatchdog.guards.dedupWindowMs === watchdog.guards.dedupWindowMs &&
     taskWatchdog.guards.maxTriggersPerHour === watchdog.guards.maxTriggersPerHour &&
     taskWatchdog.guards.maxChainDepth === watchdog.guards.maxChainDepth &&
-    taskWatchdog.guards.maxPerRoot === watchdog.guards.maxPerRoot
+    taskWatchdog.guards.maxPerRoot === watchdog.guards.maxPerRoot &&
+    hasNoCustomizedDailyGuard(task)
   )
 }
 
 /** Version `/build` précédente : 5 min et deux runs/h, durcie après mesure du coût dogfood. */
 function isUntouchedPriorBoundedAutoKaizen(task: ScheduledTask): boolean {
-  const current = autoKaizenSeed()
+  const current = previousOrchestrationAutoKaizenSeed()
   const destination = current.destination
   const watchdog = current.watchdog
   const source = task.watchdog?.source
@@ -164,17 +257,71 @@ function isUntouchedPriorBoundedAutoKaizen(task: ScheduledTask): boolean {
     watchdog?.source.kind === 'app-event' &&
     task.title === current.title &&
     task.prompt === current.prompt &&
-    task.destination.kind === 'new' &&
-    task.destination.title === destination.title &&
-    task.destination.category === destination.category &&
-    task.destination.provider === destination.provider &&
+    hasExactSeedDestination(task, destination) &&
     task.watchdog?.action === watchdog.action &&
     source?.kind === 'app-event' &&
     JSON.stringify(source.events) === JSON.stringify(watchdog.source.events) &&
     task.watchdog?.guards.dedupWindowMs === 300_000 &&
     task.watchdog?.guards.maxTriggersPerHour === 2 &&
     task.watchdog?.guards.maxChainDepth === 0 &&
-    task.watchdog?.guards.maxPerRoot === 1
+    task.watchdog?.guards.maxPerRoot === 1 &&
+    hasNoCustomizedDailyGuard(task)
+  )
+}
+
+/** Version mesuree en dogfood : une orchestration Opus complete a chaque rouge. */
+function isUntouchedOrchestrationAutoKaizen(task: ScheduledTask): boolean {
+  const previous = previousOrchestrationAutoKaizenSeed()
+  const destination = previous.destination
+  const watchdog = previous.watchdog
+  const source = task.watchdog?.source
+  return (
+    destination.kind === 'new' &&
+    watchdog?.source.kind === 'app-event' &&
+    task.title === previous.title &&
+    task.prompt === previous.prompt &&
+    hasExactSeedDestination(task, destination) &&
+    task.watchdog?.action === 'orchestration' &&
+    source?.kind === 'app-event' &&
+    JSON.stringify(source.events) === JSON.stringify(watchdog.source.events) &&
+    task.watchdog.guards.dedupWindowMs === watchdog.guards.dedupWindowMs &&
+    task.watchdog.guards.maxTriggersPerHour === watchdog.guards.maxTriggersPerHour &&
+    task.watchdog.guards.maxChainDepth === watchdog.guards.maxChainDepth &&
+    task.watchdog.guards.maxPerRoot === watchdog.guards.maxPerRoot &&
+    hasNoCustomizedDailyGuard(task)
+  )
+}
+
+function isUntouchedPriorReadOnlyAutoKaizen(task: ScheduledTask): boolean {
+  const current = autoKaizenSeed()
+  const source = task.watchdog?.source
+  return (
+    task.title === current.title &&
+    task.prompt === PRIOR_READ_ONLY_AUTO_KAIZEN_PROMPT &&
+    hasExactSeedDestination(task, {
+      kind: 'new',
+      title: 'Auto-kaizen',
+      category: 'Qualite',
+      provider: 'claude',
+      model: 'haiku',
+      reasoningEffort: 'low'
+    }) &&
+    task.watchdog?.action === 'chat' &&
+    source?.kind === 'app-event' &&
+    JSON.stringify(source.events) ===
+      JSON.stringify([
+        'orchestration-red',
+        'workflow-gate-failed',
+        'workflow-unverified',
+        'workflow-proof-lost'
+      ]) &&
+    task.watchdog.guards.dedupWindowMs === 1_800_000 &&
+    task.watchdog.guards.maxTriggersPerHour === 1 &&
+    task.watchdog.guards.maxTriggersPerDay === undefined &&
+    task.watchdog.guards.maxKnownCostUsdPerDay === undefined &&
+    task.watchdog.guards.maxUnpricedCallsPerDay === undefined &&
+    task.watchdog.guards.maxChainDepth === 0 &&
+    task.watchdog.guards.maxPerRoot === 1
   )
 }
 
@@ -184,19 +331,22 @@ function upgradeLegacyAutoKaizen(store: TaskStore): void {
     if (
       (!isUntouchedLegacyAutoKaizen(task) &&
         !isUntouchedBareBuildAutoKaizen(task) &&
-        !isUntouchedPriorBoundedAutoKaizen(task)) ||
+        !isUntouchedPriorBoundedAutoKaizen(task) &&
+        !isUntouchedOrchestrationAutoKaizen(task) &&
+        !isUntouchedPriorReadOnlyAutoKaizen(task)) ||
       task.destination.kind !== 'new'
     )
       continue
     const next = autoKaizenSeed()
     if (next.destination.kind !== 'new') continue
+    const conversationId = task.destination.conversationId
     store.update(task.id, {
       ...next,
       enabled: task.enabled,
       mode: task.mode,
       destination: {
         ...next.destination,
-        ...task.destination
+        ...(conversationId === undefined ? {} : { conversationId })
       }
     })
   }

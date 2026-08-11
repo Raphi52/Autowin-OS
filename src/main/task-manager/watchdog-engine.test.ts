@@ -160,6 +160,36 @@ describe('WatchdogEngine — observer, filtrer, deleguer', () => {
     await first
   })
 
+  it('reinjecte un cout recupere apres crash dans le budget vivant de la regle', async () => {
+    const dispatch = spy()
+    const task = watchdogTask(logPath, {
+      watchdog: {
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        action: 'chat',
+        guards: {
+          dedupWindowMs: 0,
+          maxTriggersPerHour: 100,
+          maxChainDepth: 0,
+          maxPerRoot: 20,
+          maxKnownCostUsdPerDay: 0.25
+        }
+      }
+    })
+    const engine = new WatchdogEngine(() => [task], dispatch, clock)
+
+    expect(
+      engine.rememberRecoveredUsage(task.id, {
+        eventId: `${task.id}@watchdog-crash`,
+        knownCostUsd: 0.26,
+        resolvedModel: 'claude-haiku-real'
+      })
+    ).toBe(true)
+    await engine.notifyAppEvent('orchestration-red', 'nouvel incident apres reprise')
+
+    expect(dispatch.calls).toHaveLength(0)
+    expect(engine.lastSuppression(task.id)).toBe('cost-budget')
+  })
+
   it('DoD : l historique du fichier ne reveille PERSONNE au demarrage', async () => {
     await writeFile(logPath, 'ERROR vieille 1\nERROR vieille 2\n')
     const dispatch = spy()
@@ -800,6 +830,31 @@ describe('WatchdogEngine — observer, filtrer, deleguer', () => {
     expect(dispatch.calls).toHaveLength(0)
     expect(restarted.admittedLastHour(task.id)).toBe(2)
     expect(restarted.lastSuppression(task.id)).toBe('rate')
+  })
+
+  it('solde le cout du dispatch avant d admettre le reveil suivant', async () => {
+    const task = watchdogTask(logPath, {
+      watchdog: {
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        guards: {
+          dedupWindowMs: 0,
+          maxTriggersPerHour: 100,
+          maxTriggersPerDay: 100,
+          maxKnownCostUsdPerDay: 0.25,
+          maxChainDepth: 0,
+          maxPerRoot: 20
+        }
+      }
+    })
+    const runWatchdog = vi.fn(async () => ({ fired: true, knownCostUsd: 0.26 }))
+    const engine = new WatchdogEngine(() => [task], { runWatchdog }, clock)
+    await engine.start()
+
+    await engine.notifyAppEvent('orchestration-red', 'premier incident')
+    await engine.notifyAppEvent('orchestration-red', 'second incident')
+
+    expect(runWatchdog).toHaveBeenCalledTimes(1)
+    expect(engine.lastSuppression(task.id)).toBe('cost-budget')
   })
 })
 

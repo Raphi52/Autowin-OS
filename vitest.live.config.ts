@@ -14,7 +14,14 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     include: ['src/**/*.live.test.?(c|m)[jt]s?(x)'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/out/**', 'Audit/**', '**/worktrees/**'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/out/**',
+      'Audit/**',
+      'artifacts/**',
+      '**/worktrees/**'
+    ],
     pool: 'threads',
     maxWorkers: 2,
     // Un appel modèle réel prend de 10 s à plusieurs minutes : l'horloge de la suite unitaire (20 s)

@@ -23,6 +23,17 @@ export type WorktreeConflictDiffResult =
         | 'read-failed'
     }
 
+/** Choix humain devant un conflit : garder le travail de l'agent, ou garder le workspace. */
+export type WorktreeConflictResolutionChoice = 'agent' | 'mine'
+
+export type WorktreeConflictResolutionResult =
+  | { resolved: true; agentId: string; outcome: 'merged' | 'nothing' }
+  | {
+      resolved: false
+      reason: 'invalid-agent' | 'not-conflict' | 'unsupported' | 'still-conflicting' | 'blocked'
+      detail?: string
+    }
+
 export interface WorktreeFileChange {
   path: string
   kind: FileChangeKind
@@ -84,4 +95,65 @@ export function requiresAttention(agent: WorktreeAgentActivity): boolean {
     return true
   }
   return agent.state === 'blocked' && agent.attentionReason !== 'base-in-progress'
+}
+
+/**
+ * Durée réelle d'un bureau, exprimée sans jargon. `endedAtMs` fige la durée d'un bureau terminé ;
+ * sinon la mesure court jusqu'à `nowMs`. Rend `undefined` quand rien n'est mesurable (jamais
+ * d'invention : une horloge absente ou incohérente n'affiche pas de durée).
+ */
+export function formatOfficeDuration(
+  agent: WorktreeAgentActivity,
+  nowMs?: number
+): string | undefined {
+  const end = agent.endedAtMs ?? nowMs
+  if (typeof end !== 'number' || !Number.isFinite(end)) return undefined
+  if (!Number.isFinite(agent.startedAtMs)) return undefined
+  const elapsed = end - agent.startedAtMs
+  if (elapsed < 0) return undefined
+  const minutes = Math.floor(elapsed / 60_000)
+  if (minutes < 1) return 'moins d’une minute'
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`
+}
+
+/** Ordre d'affichage : les bureaux qui attendent une décision d'abord, conflits en tête. */
+export function sortOfficesByAttention(
+  agents: readonly WorktreeAgentActivity[]
+): WorktreeAgentActivity[] {
+  const rank = (agent: WorktreeAgentActivity): number => {
+    if (agent.state === 'conflict') return 0
+    if (requiresAttention(agent)) return 1
+    return 2
+  }
+  return [...agents]
+    .map((agent, index) => ({ agent, index }))
+    .sort((a, b) => rank(a.agent) - rank(b.agent) || a.index - b.index)
+    .map((entry) => entry.agent)
+}
+
+/**
+ * Un message ACTIONNABLE par raison réelle : « comparaison indisponible » seul ne disait pas
+ * quoi faire ensuite, ni si le bureau était perdu (il ne l'est jamais).
+ */
+export function conflictDiffMessage(
+  reason: Extract<WorktreeConflictDiffResult, { available: false }>['reason']
+): string {
+  const messages: Record<typeof reason, string> = {
+    'invalid-agent':
+      'Comparaison indisponible : ce bureau n’est plus connu d’Autowin. Rafraîchis le Hub ; le dossier du bureau reste conservé.',
+    'not-conflict':
+      'Comparaison indisponible : ce bureau n’est plus en conflit. Son état a changé — rafraîchis le Hub pour voir où il en est.',
+    'ownership-unproven':
+      'Comparaison indisponible : le dossier du bureau n’appartient plus à ce workspace. Ouvre le bureau protégé pour vérifier son contenu avant toute décision.',
+    'invalid-path':
+      'Comparaison indisponible : les fichiers en conflit ne sont pas lisibles depuis ce dépôt. Ouvre le bureau protégé pour les inspecter.',
+    'revision-unavailable':
+      'Comparaison indisponible : les deux versions ne sont plus présentes dans ce dépôt (objets nettoyés). Le bureau reste conservé sur le disque.',
+    'read-failed':
+      'Comparaison indisponible : la lecture des deux versions a échoué. Réessaie ; le bureau reste conservé.'
+  }
+  return messages[reason]
 }

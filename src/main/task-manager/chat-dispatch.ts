@@ -1,6 +1,12 @@
 import { buildWatchdogPrompt, parseWatchdogOutcome } from './watchdog-prompt'
 import type { DispatchResult, TaskDispatcher } from './task-scheduler'
-import type { ScheduledTask, TaskOccurrence, WatchdogMutationClaimsSink } from './types'
+import type {
+  ScheduledTask,
+  TaskOccurrence,
+  TaskUsageSettlementSink,
+  WatchdogMutationClaimsSink,
+  WatchdogOrchestrationRequest
+} from './types'
 import type { ReasoningEffort } from '../roles'
 
 export interface ScheduledChatRuntime {
@@ -9,10 +15,21 @@ export interface ScheduledChatRuntime {
   bindConversation(taskId: string, conversationId: string): void
   isConversationBusy(conversationId: string): boolean
   interruptAndWait(conversationId: string, reason: string): Promise<boolean>
+  /** Attend sans interruption que le travail interactif se termine. `false` signifie timeout. */
+  waitForInteractiveIdle?(timeoutMs: number): Promise<boolean>
+  /** Rend le lease d'inactivite pris par `waitForInteractiveIdle`. */
+  releaseInteractiveIdle?(): void
   runPrompt(
     conversationId: string,
     prompt: string,
-    binding?: { provider: string; model: string; reasoningEffort?: ReasoningEffort }
+    binding?: { provider: string; model?: string; reasoningEffort?: ReasoningEffort },
+    policy?: {
+      readOnly: boolean
+      maxIterations: number
+      background?: boolean
+      maxBudgetUsd?: number
+    },
+    onLateUsageSettlement?: TaskUsageSettlementSink
   ): Promise<{
     ok: boolean
     cancelled?: boolean
@@ -29,6 +46,7 @@ export interface ScheduledChatRuntime {
     knownCostUsd?: number
     totalTokens?: number
     unpricedCalls?: number
+    resolvedModel?: string
   }>
   /**
    * Lance le PIPELINE complet (scout/frame/terrain/build/clean/judge) sur une tâche, au lieu d'un
@@ -40,7 +58,7 @@ export interface ScheduledChatRuntime {
    */
   runOrchestration?(
     conversationId: string,
-    task: string,
+    request: WatchdogOrchestrationRequest,
     scheduledTask: ScheduledTask,
     onLateMutationClaims?: WatchdogMutationClaimsSink
   ): Promise<{
@@ -55,7 +73,41 @@ export interface ScheduledChatRuntime {
     knownCostUsd?: number
     totalTokens?: number
     unpricedCalls?: number
+    resolvedModel?: string
   }>
+}
+
+export const WATCHDOG_INTERACTIVE_IDLE_TIMEOUT_MS = 30_000
+
+export function scheduledTaskBinding(
+  task: ScheduledTask
+): { provider: string; model?: string; reasoningEffort?: ReasoningEffort } | undefined {
+  const provider = task.destination.provider
+  if (!provider) return undefined
+  return {
+    provider,
+    ...(task.destination.model ? { model: task.destination.model } : {}),
+    ...(task.destination.reasoningEffort
+      ? { reasoningEffort: task.destination.reasoningEffort }
+      : {})
+  }
+}
+
+/** Les alias Claude sont volontaires (`haiku`, `sonnet`, `opus`) : le provider rend un id versionne. */
+function requestedClaudeFamily(model: string): 'haiku' | 'sonnet' | 'opus' | undefined {
+  const normalized = model.toLowerCase()
+  return (['haiku', 'sonnet', 'opus'] as const).find((family) => normalized.includes(family))
+}
+
+function watchdogProviderBudgetUsd(task: ScheduledTask): number | undefined {
+  const guards = task.watchdog?.guards
+  const dailyBudget = guards?.maxKnownCostUsdPerDay
+  if (!guards || !Number.isFinite(dailyBudget) || (dailyBudget as number) <= 0) return undefined
+  const maximumDailyAdmissions = Math.max(
+    1,
+    guards.maxTriggersPerDay ?? guards.maxTriggersPerHour * 24
+  )
+  return (dailyBudget as number) / maximumDailyAdmissions
 }
 
 export class ScheduledChatDispatcher implements TaskDispatcher {
@@ -64,82 +116,177 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
   async run(
     task: ScheduledTask,
     occurrence: TaskOccurrence,
-    onLateMutationClaims?: WatchdogMutationClaimsSink
+    onLateMutationClaims?: WatchdogMutationClaimsSink,
+    onLateUsageSettlement?: TaskUsageSettlementSink
   ): Promise<DispatchResult> {
-    const conversationId = this.resolveConversation(task)
-    if (!conversationId) {
-      return {
-        status: 'failed',
-        error:
-          task.destination.kind === 'existing'
-            ? `Conversation cible introuvable: ${task.destination.conversationId}`
-            : 'Impossible de créer la conversation dédiée.'
+    // L'autorite de fond appartient a la REGLE, pas a son declencheur : cliquer "Executer" sur une
+    // regle Watchdog ne doit pas soudain lui donner le droit d'interrompre le travail humain.
+    const isWatchdogTask = Boolean(task.watchdog || occurrence.watchdog)
+    let idleLeaseHeld = false
+    if (isWatchdogTask && this.runtime.waitForInteractiveIdle) {
+      const idle = await this.runtime.waitForInteractiveIdle(WATCHDOG_INTERACTIVE_IDLE_TIMEOUT_MS)
+      if (!idle) {
+        return {
+          status: 'cancelled',
+          error: "Reveil Watchdog annule : l'activite interactive n'a pas cesse dans le delai."
+        }
       }
+      idleLeaseHeld = true
     }
 
-    if (this.runtime.isConversationBusy(conversationId)) {
-      await this.runtime.interruptAndWait(conversationId, 'scheduled-task')
-    }
+    try {
+      const conversationId = this.resolveConversation(task)
+      if (!conversationId) {
+        return {
+          status: 'failed',
+          error:
+            task.destination.kind === 'existing'
+              ? `Conversation cible introuvable: ${task.destination.conversationId}`
+              : 'Impossible de créer la conversation dédiée.'
+        }
+      }
 
-    const binding =
-      task.destination.provider && task.destination.model
-        ? {
-            provider: task.destination.provider,
-            model: task.destination.model,
-            ...(task.destination.reasoningEffort
-              ? { reasoningEffort: task.destination.reasoningEffort }
-              : {})
+      if (this.runtime.isConversationBusy(conversationId)) {
+        if (isWatchdogTask) {
+          // fix-ok: un reveil de fond ne prend jamais autorite sur un tour existant, meme si une course
+          // rend la cible occupee juste apres que l'attente globale a signale l'inactivite.
+          return {
+            status: 'cancelled',
+            conversationId,
+            error: 'Reveil Watchdog annule : la conversation cible est occupee.'
           }
-        : undefined
-    // Un agent réveillé par un événement reçoit le CONTEXTE de cet événement et la consigne de
-    // TRIER. Une tâche horaire garde exactement son prompt d'avant : le chemin planifié est intact.
-    const prompt = occurrence.watchdog
-      ? buildWatchdogPrompt(task.prompt, occurrence.watchdog)
-      : task.prompt
+        }
+        await this.runtime.interruptAndWait(conversationId, 'scheduled-task')
+      }
 
-    // Une règle en action `orchestration` passe par le pipeline complet : l'analyse, le correctif et
-    // la VÉRIFICATION y existent déjà. Si le runtime ne sait pas orchestrer, on retombe sur le tour
-    // de conversation plutôt que d'échouer — dégradé annoncé, jamais silencieux.
-    const wantsOrchestration =
-      Boolean(occurrence.watchdog) && task.watchdog?.action === 'orchestration'
-    const result =
-      wantsOrchestration && this.runtime.runOrchestration
-        ? await this.runtime.runOrchestration(conversationId, prompt, task, onLateMutationClaims)
-        : binding
-          ? await this.runtime.runPrompt(conversationId, prompt, binding)
-          : await this.runtime.runPrompt(conversationId, prompt)
-    const metering = {
-      ...(result.knownCostUsd === undefined ? {} : { knownCostUsd: result.knownCostUsd }),
-      ...(result.totalTokens === undefined ? {} : { totalTokens: result.totalTokens }),
-      ...(result.unpricedCalls === undefined ? {} : { unpricedCalls: result.unpricedCalls })
-    }
-    if (result.cancelled) {
-      return {
-        status: 'cancelled',
-        conversationId,
-        turnId: result.turnId,
-        ...metering,
-        error: result.error
+      const binding = scheduledTaskBinding(task)
+      // Une règle en action `orchestration` passe par le pipeline complet : l'analyse, le correctif et
+      // la VÉRIFICATION y existent déjà. Si le runtime ne sait pas orchestrer, on retombe sur le tour
+      // de conversation plutôt que d'échouer — dégradé annoncé, jamais silencieux.
+      const wantsOrchestration = isWatchdogTask && task.watchdog?.action === 'orchestration'
+      // Le texte observé reste dans une enveloppe NON FIABLE séparée. Il ne peut donc jamais changer
+      // le routage, le régime ou le sandbox calculés depuis la règle enregistrée par l'utilisateur.
+      const orchestrationRequest: WatchdogOrchestrationRequest = {
+        instruction: task.prompt,
+        ...(occurrence.watchdog
+          ? { evidence: { trust: 'untrusted' as const, signal: occurrence.watchdog } }
+          : {})
       }
-    }
-    if (!result.ok) {
-      return {
-        status: 'failed',
-        conversationId,
-        turnId: result.turnId,
-        ...metering,
-        error: result.error ?? 'Le tour Chat planifié a échoué.'
+      // Le chat de tri est lecture seule et peut afficher le contexte brut. L'orchestration mutante,
+      // y compris son fallback sans runtime dédié, ne reçoit comme ordre que le prompt de la règle.
+      const prompt =
+        occurrence.watchdog && !wantsOrchestration
+          ? buildWatchdogPrompt(task.prompt, occurrence.watchdog)
+          : task.prompt
+      const maxBudgetUsd =
+        binding?.provider === 'claude' ? watchdogProviderBudgetUsd(task) : undefined
+      const readOnlyPolicy =
+        (occurrence.watchdog || task.watchdog) && task.watchdog?.action !== 'orchestration'
+          ? {
+              readOnly: true,
+              maxIterations: 1,
+              background: true,
+              ...(maxBudgetUsd === undefined ? {} : { maxBudgetUsd })
+            }
+          : undefined
+      const backgroundFallbackPolicy = isWatchdogTask
+        ? (readOnlyPolicy ?? { readOnly: false, maxIterations: 6, background: true })
+        : undefined
+      const result =
+        wantsOrchestration && this.runtime.runOrchestration
+          ? await this.runtime.runOrchestration(
+              conversationId,
+              orchestrationRequest,
+              task,
+              onLateMutationClaims
+            )
+          : binding
+            ? backgroundFallbackPolicy
+              ? await this.runtime.runPrompt(
+                  conversationId,
+                  prompt,
+                  binding,
+                  backgroundFallbackPolicy,
+                  onLateUsageSettlement
+                )
+              : await this.runtime.runPrompt(conversationId, prompt, binding)
+            : backgroundFallbackPolicy
+              ? await this.runtime.runPrompt(
+                  conversationId,
+                  prompt,
+                  undefined,
+                  backgroundFallbackPolicy,
+                  onLateUsageSettlement
+                )
+              : await this.runtime.runPrompt(conversationId, prompt)
+      const metering = {
+        ...(result.knownCostUsd === undefined ? {} : { knownCostUsd: result.knownCostUsd }),
+        ...(result.totalTokens === undefined ? {} : { totalTokens: result.totalTokens }),
+        ...(result.unpricedCalls === undefined ? {} : { unpricedCalls: result.unpricedCalls }),
+        ...(binding?.model ? { requestedModel: binding.model } : {}),
+        ...(result.resolvedModel ? { resolvedModel: result.resolvedModel } : {})
       }
-    }
-    return {
-      status: 'completed',
-      conversationId,
-      ...metering,
-      ...(occurrence.watchdog ? { outcome: parseWatchdogOutcome(result.text) } : {}),
-      mutatedPaths: result.mutatedPaths,
-      mutatedLineFingerprints: result.mutatedLineFingerprints,
-      mutatedPathGenerationMarkers: result.mutatedPathGenerationMarkers,
-      turnId: result.turnId
+      if (result.cancelled) {
+        return {
+          status: 'cancelled',
+          conversationId,
+          turnId: result.turnId,
+          ...metering,
+          error: result.error
+        }
+      }
+      if (!result.ok) {
+        return {
+          status: 'failed',
+          conversationId,
+          turnId: result.turnId,
+          ...metering,
+          error: result.error ?? 'Le tour Chat planifié a échoué.'
+        }
+      }
+      const requestedFamily =
+        binding?.provider === 'claude' && binding.model
+          ? requestedClaudeFamily(binding.model)
+          : undefined
+      if (task.watchdog && requestedFamily && !result.resolvedModel) {
+        return {
+          status: 'failed',
+          conversationId,
+          turnId: result.turnId,
+          ...metering,
+          error:
+            `Modele Watchdog invérifiable : ${binding?.model ?? requestedFamily} demande, ` +
+            'modele reel non expose par le provider.'
+        }
+      }
+      if (
+        task.watchdog &&
+        requestedFamily &&
+        result.resolvedModel &&
+        !result.resolvedModel.toLowerCase().includes(requestedFamily)
+      ) {
+        return {
+          status: 'failed',
+          conversationId,
+          turnId: result.turnId,
+          ...metering,
+          error:
+            `Modele Watchdog non conforme : ${binding?.model ?? requestedFamily} demande, ` +
+            `${result.resolvedModel} execute.`
+        }
+      }
+      return {
+        status: 'completed',
+        conversationId,
+        ...metering,
+        ...(occurrence.watchdog ? { outcome: parseWatchdogOutcome(result.text) } : {}),
+        mutatedPaths: result.mutatedPaths,
+        mutatedLineFingerprints: result.mutatedLineFingerprints,
+        mutatedPathGenerationMarkers: result.mutatedPathGenerationMarkers,
+        turnId: result.turnId
+      }
+    } finally {
+      if (idleLeaseHeld) this.runtime.releaseInteractiveIdle?.()
     }
   }
 

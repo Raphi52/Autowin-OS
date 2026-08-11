@@ -25,6 +25,17 @@ export function buildChatPilotagePrompt(
     // plus clair », « n'utilise JAMAIS ». Un modele lisant cela choisit le Markdown a tous les coups.
     // Le declencheur devient une FORME DE REPONSE observable (comparaison, etapes, statuts, chiffres),
     // pas un jugement subjectif sur la clarte. Les contraintes de securite sont inchangees.
+    // QUESTION CLIQUABLE. Mesure du 2026-08-10 sur 883 conversations : quand une decision
+    // appartient a l'utilisateur, le modele termine en PROSE (« Veux-tu que je le fasse ? »),
+    // ce qui l'oblige a retaper sa reponse. Les options doivent etre DECLAREES : une lecture du
+    // texte proposait comme reponses des resultats de tests et des chemins de fichiers.
+    `QUESTION A L'UTILISATEUR : quand une decision lui appartient vraiment — un choix entre ` +
+    `approches, une autorisation — appelle la commande \`ask\` avec ta question et 2 a 4 reponses, ` +
+    `la premiere etant celle que tu recommandes. Elles s'affichent en boutons cliquables. Ne ` +
+    `termine pas par une question en prose quand tu peux offrir le choix : cela oblige ` +
+    `l'utilisateur a retaper ce que tu viens d'enumerer. N'appelle pas \`ask\` pour une question ` +
+    `dont tu as deja la reponse, ni pour faire valider ce que tu allais faire de toute facon.
+` +
     `EXPRESSION VISUELLE : tu peux répondre en HTML mis en forme, et c'est souvent le meilleur ` +
     `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +
     `avant/après, récapitulatif, arborescence — préfère un bloc fermé \`\`\`html-render contenant une ` +

@@ -4,9 +4,11 @@ import {
   type ChatTurnStatus,
   type PersistedChatActionPart,
   type PersistedChatArtifactPart,
+  type PersistedChatErrorPart,
   type PersistedChatPart,
   type PersistedChatTextPart
 } from '../../../shared/chat-turn'
+import { parseAskChoices } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
 import { parseScoutTable, type ScoutRow } from './scout-table'
 import type { PilotEventKind } from '../../../shared/pilot-events'
@@ -25,17 +27,23 @@ import {
 
 export type ChatActionPart = PersistedChatActionPart
 export type ChatArtifactPart = PersistedChatArtifactPart
+export type ChatErrorPart = PersistedChatErrorPart
 export type ChatTextPart = PersistedChatTextPart & {
   /** Contexte de fence calculé pour le rendu seulement — jamais persisté. */
   markdownContinuationPrefix?: string
 }
 export type ChatPart = PersistedChatPart
-type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart
+type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart | ChatErrorPart
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
 export type ChatScoutTableBlock = { kind: 'scout-table'; rows: ScoutRow[] }
 export type ChatRenderBlock =
-  ChatTextPart | ChatArtifactPart | ChatActivityBlock | ChatSuggestionsBlock | ChatScoutTableBlock
+  | ChatTextPart
+  | ChatArtifactPart
+  | ChatErrorPart
+  | ChatActivityBlock
+  | ChatSuggestionsBlock
+  | ChatScoutTableBlock
 
 export interface HydratedAssistantMessage {
   role: 'assistant'
@@ -1063,7 +1071,14 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       else blocks.push(part)
       continue
     }
-    if (part.kind === 'artifact') {
+    // Question posee par le modele avec des reponses DECLAREES : elle devient une grille de chips,
+    // par le meme chemin que les suggestions scout. Le clic renvoie le label comme prompt.
+    const askChoices = parseAskChoices(part)
+    if (askChoices) {
+      blocks.push({ kind: 'suggestions', groups: askChoices })
+      continue
+    }
+    if (part.kind === 'artifact' || part.kind === 'error') {
       blocks.push(part)
       continue
     }

@@ -213,6 +213,123 @@ describe('profils de topologie', () => {
   })
 })
 
+describe('échecs qui doivent être VUS', () => {
+  it('affiche l’échec du rafraîchissement de topologie déclenché par un événement roles', async () => {
+    // Défaut : le `.catch` posait `setError` sans `setState('error')` — or le badge ne rend le
+    // message que si `state === 'error'`. L'échec était donc 100 % muet.
+    let listener: ((event: { type: string; scope?: string }) => void) | undefined
+    let appels = 0
+    api({
+      topology: async () => {
+        appels += 1
+        if (appels > 1) throw new Error('topologie illisible')
+        return topologie()
+      },
+      onAppEvent: (fn: (event: { type: string; scope?: string }) => void) => {
+        listener = fn
+        return () => undefined
+      }
+    })
+    await monter()
+
+    await act(async () => listener?.({ type: 'refresh', scope: 'roles' }))
+    await flush()
+
+    const alertes = Array.from(container.querySelectorAll('[role="alert"]')).map(
+      (node) => node.textContent ?? ''
+    )
+    expect(alertes.join(' | ')).toContain('topologie illisible')
+  })
+
+  it('affiche l’échec du lancement du login Gemini', async () => {
+    api({
+      models: async () => [
+        ...models,
+        {
+          id: 'gemini-pro',
+          provider: 'gemini',
+          model: 'gemini-pro',
+          label: 'Gemini Pro',
+          reasoningEfforts: ['medium'],
+          defaultReasoningEffort: 'medium',
+          dynamicallyLoaded: true
+        }
+      ],
+      providerLogin: vi.fn(async () => {
+        throw new Error('terminal indisponible')
+      })
+    })
+    await monter()
+
+    const bouton = container.querySelector<HTMLButtonElement>('.topology-provider-login')!
+    await act(async () => bouton.click())
+    await flush()
+
+    const alertes = Array.from(container.querySelectorAll('[role="alert"]')).map(
+      (node) => node.textContent ?? ''
+    )
+    expect(alertes.join(' | ')).toContain('terminal indisponible')
+  })
+
+  it('dit que la liste des profils n’a pas pu être lue, et offre de réessayer', async () => {
+    // Défaut : `.catch(() => undefined)` laissait un sélecteur vide, indiscernable d'un « aucun
+    // profil enregistré ».
+    let tentative = 0
+    api({
+      profiles: async () => {
+        tentative += 1
+        if (tentative === 1) throw new Error('profiles.json verrouillé')
+        return [{ id: 'p1', name: 'Profil A', updatedAt: '2026-01-01', topology: topologie() }]
+      }
+    })
+    await monter()
+
+    const erreur = container.querySelector('[data-testid="topology-profiles-error"]')
+    expect(erreur).not.toBeNull()
+    expect(erreur?.getAttribute('role')).toBe('alert')
+    expect(erreur?.textContent).toContain('profiles.json verrouillé')
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-profiles-retry"]')!.click()
+    )
+    await flush()
+
+    expect(tentative).toBe(2)
+    expect(container.querySelector('[data-testid="topology-profiles-error"]')).toBeNull()
+    expect(
+      container.querySelector<HTMLSelectElement>('[data-testid="topology-profile-select"]')!
+        .textContent
+    ).toContain('Profil A')
+  })
+
+  it('un dépôt REFUSÉ ne laisse pas le badge de persistance en erreur', async () => {
+    // Défaut : le refus de validation (fan-out sous-agents non branché) posait `state = 'error'`,
+    // polluant le badge de PERSISTANCE jusqu'au prochain enregistrement — alors que rien n'avait
+    // échoué à l'écriture.
+    api({})
+    await monter()
+
+    const panneau = container.querySelector<HTMLElement>(
+      '.topology-panel[data-target="subagents"]'
+    )!
+    const drop = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(drop, 'dataTransfer', {
+      value: { getData: () => 'gpt', setData: () => undefined }
+    })
+    await act(async () => {
+      panneau.dispatchEvent(drop)
+    })
+    await flush()
+
+    const badge = container.querySelector('.topology-state')!
+    expect(badge.textContent).toBe('Enregistré dans le profil Autowin')
+    // Le refus est dit, mais dans son PROPRE canal.
+    expect(
+      container.querySelector('[data-testid="topology-validation-error"]')?.textContent
+    ).toContain('fan-out des sous-agents')
+  })
+})
+
 describe('erreur de chargement', () => {
   it('propose de RÉESSAYER au lieu de laisser la vue morte', async () => {
     // Défaut : un échec de lecture affichait « ⛔ … » définitivement — seul un redémarrage de

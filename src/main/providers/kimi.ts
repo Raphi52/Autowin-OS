@@ -193,9 +193,11 @@ export class KimiCliAdapter implements ProviderAdapter {
       args: [...this.command.prefix, ...args],
       cwd: sandbox,
       runId: spawnToken,
-      onJournalPrepared: opts.execution?.onJournal
-        ? (journalPath) => opts.execution?.onJournal?.(spawnToken, journalPath)
-        : undefined
+      onJournalPrepared:
+        (opts.execution?.onJournal ?? opts.onJournal)
+          ? (journalPath) =>
+              (opts.execution?.onJournal ?? opts.onJournal)?.(spawnToken, journalPath)
+          : undefined
     })
     const child = run.child
     const childPid = child.pid

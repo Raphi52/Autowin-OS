@@ -2398,7 +2398,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
       expect(orchestrate).toHaveBeenCalledWith('ma tâche longue', 'A')
     })
 
-    it('échoué : garde son texte d’erreur ⚠️ et n’affiche aucun statut terminal', async () => {
+    // CONTRAT MIS À JOUR : l'échec n'est plus une part texte `⚠️ …` inerte (indistinguable d'un
+    // contenu du modèle) mais un bloc d'ALERTE structuré, qui porte lui-même la reprise.
+    it('échoué : rend une alerte structurée (cause + message) porteuse de la reprise', async () => {
       const turn = deferred<{ ok: boolean; error?: string }>()
       const mockApi = api({
         conversations: vi.fn().mockResolvedValue([conversation('A')]),
@@ -2413,10 +2415,16 @@ describe('ChatView behavior under concurrent UI actions', () => {
         await flushAnimationFrames()
       })
 
-      expect(container!.textContent).toContain('⚠️ boom')
+      const alerte = container!.querySelector('.msg-error') as HTMLElement
+      expect(alerte).toBeTruthy()
+      expect(alerte.getAttribute('role')).toBe('alert')
+      expect(alerte.textContent).toContain('Le tour a échoué')
+      expect(alerte.textContent).toContain('boom')
       expect(container!.textContent).not.toContain('Réponse annulée')
       expect(container!.textContent).not.toContain('Réponse interrompue avant la fin')
+      // Une seule barre d'actions : celle de l'alerte (le bloc terminal ne la duplique pas).
       expect(container!.querySelector('.msg-terminal-action')).toBeNull()
+      expect(container!.querySelectorAll('.msg-error-action')).toHaveLength(2)
     })
   })
 })
