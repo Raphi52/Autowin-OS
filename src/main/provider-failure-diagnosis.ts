@@ -17,6 +17,11 @@ export type ProviderFailureKind =
   | 'auth'
   /** L'exécutable est introuvable → rien ne peut tourner tant qu'il n'est pas résolu. */
   | 'cli-missing'
+  /**
+   * Le superviseur a REFUSÉ l'appel à l'admission : le budget du run était déjà épuisé.
+   * Le provider n'a rien vu, le rôle refusé n'a rien consommé — la dépense vient d'avant.
+   */
+  | 'budget'
   /** Autre chose (timeout, watchdog, refus du modèle…) : on ne devine pas. */
   | 'other'
 
@@ -41,6 +46,11 @@ export interface DiagnosedFailure extends ProviderFailure {
  */
 export function classifyProviderFailure(message: string): ProviderFailureKind {
   const text = message.toLowerCase()
+  // Testé AVANT `cli-missing` : « Budget d'appels provider atteint » contient « atteint », et un
+  // futur libellé de budget pourrait contenir un mot de la famille « introuvable ».
+  if (/^budget /.test(text) || /budget (tokens|usd|duree|durée|d'appels|d’appels|de concurrence|d'agents|d’agents)/.test(text)) {
+    return 'budget'
+  }
   if (/non authentifi|unauthorized|401|session (oauth )?(absente|expir)|not logged in/.test(text)) {
     return 'auth'
   }
@@ -58,6 +68,12 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
   }
   if (kind === 'cli-missing') {
     return `Le CLI ${provider} n’a pas été trouvé — installe-le, ou désigne-le via ${provider.toUpperCase()}_BIN.`
+  }
+  if (kind === 'budget') {
+    return (
+      'Relève le devis du run (Settings › Budget) ou réduis le périmètre : ' +
+      'le plafond a été atteint avant cet appel.'
+    )
   }
   return undefined
 }
@@ -110,7 +126,14 @@ export function explainRoleFailure(
 ): string {
   const diagnosed = diagnoseProviderFailure(failure)
   const target = `${failure.provider}${failure.model ? ` (${failure.model})` : ''}`
-  const head = `${label} — le rôle ${role} est bindé sur ${target} : ${failure.message}`
+  // Un budget épuisé n'est pas une panne du provider sur lequel le rôle est bindé : l'appel a été
+  // refusé À L'ADMISSION, le provider ne l'a jamais vu (mesuré : durationMs 0.698 sur conv-1102).
+  // Nommer le binding désignait un innocent et envoyait chercher la panne du mauvais côté.
+  const head =
+    diagnosed.kind === 'budget'
+      ? `${label} — appel du rôle ${role} refusé : ${failure.message}. ` +
+        `Ce rôle n'a rien consommé ; le budget avait déjà été consommé par les phases précédentes.`
+      : `${label} — le rôle ${role} est bindé sur ${target} : ${failure.message}`
   return diagnosed.hint ? `${head}
 → ${diagnosed.hint}` : head
 }
