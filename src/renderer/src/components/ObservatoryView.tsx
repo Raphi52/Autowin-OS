@@ -9,22 +9,21 @@ import { QUICK_FILTERS, matchesQuickFilter, type QuickFilter } from './observato
 import { compareObservatoryEvents } from './observatory-comparison-model'
 import { buildObservatoryDecisionLedger } from './observatory-decision-ledger'
 import { buildObservatoryPrioritySignals } from './observatory-priority-signals'
-import type {
-  ShadowRouteInsufficientData,
-  ShadowRouteRecommendation
-} from '../../../main/shadow-router'
 import { HumanJson } from './HumanJson'
 import { BrainMarkdown } from './BrainMarkdown'
 import { summarizeNativeTraces, type NativeTraceSummaryInput } from './native-trace-summary'
-import {
-  eventTurnId,
-  humanEventPreview,
-  lastUserMessagePreview,
-  splitLabeledJson
-} from './observatory-event-preview'
+import { eventTurnId, humanEventPreview, splitLabeledJson } from './observatory-event-preview'
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { useObservatorySources, type ActivitySessionMeta } from './useObservatorySources'
+import { ObservatoryRail } from './ObservatoryRail'
+import { ObservatoryCallDetail } from './ObservatoryCallDetail'
+import type {
+  ActivitySession,
+  ConversationItem,
+  NativeRawTrace,
+  PromptCall
+} from './observatory-view-types'
 import { ObservatoryRagCausalStep } from './ObservatoryRagCausalStep'
 import { RagTraceCard } from './RagTraceCard'
 import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
@@ -35,48 +34,6 @@ import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
 import type { ObservatoryFocus } from '../observatory-focus'
 import { layoutTurnEvents } from './observatory-turn-layout'
 
-interface ConversationItem {
-  id: string
-  title: string
-  provider: string
-  updatedAt: number
-}
-interface PromptCall {
-  id: string
-  brainTraceId?: string
-  ts: string
-  conversationId: string
-  turnId: string
-  provider: string
-  actor?: string
-  phase?: string
-  model?: string
-  boundary: string
-  limitation: string
-  system?: string
-  messages: Array<{ role: string; content: string }>
-  options: Record<string, unknown>
-  response: string
-  usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; costUsd?: number }
-}
-/**
- * Trace native COMPLETE — la requete brute, par opposition au RESUME (`NativeTraceSummaryInput`)
- * dont elle herite. L'ancien nom, `NativeRawTrace`, ne disait pas cette opposition : rien
- * n'indiquait lequel des deux portait le payload integral.
- */
-interface NativeRawTrace extends NativeTraceSummaryInput {
-  apiRequestId: string
-  messageCount: number
-  toolCount: number
-  request: Record<string, unknown>
-  fidelity: 'exact-redacted'
-}
-interface ActivitySession {
-  meta: ActivitySessionMeta
-  turns: Array<{ kind: 'user' | 'assistant'; text: string }>
-  images: Array<{ path: string; exists: boolean }>
-  totalToolCalls: number
-}
 const EMPTY: HarnessTimeline = { turns: [], anomalies: [], totalTokens: 0, totalCostUsd: 0 }
 const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
   'response-displayed': 'Réponse affichée',
@@ -106,6 +63,11 @@ const ZONE_HINT: Record<'sortant' | 'reponse' | 'sousagent', string> = {
   sousagent: 'délégation et jugements des sous-agents'
 }
 type CausalScope = 'all' | 'critical' | 'signals'
+/**
+ * Fenetre de rendu du rail. Mesure du 2026-08-11 : 905 conversations etaient montees d'un bloc,
+ * soit 905 boutons DOM pour ~8 lignes visibles. Un rail se cherche, il ne se defile pas.
+ */
+const CONVERSATION_PAGE = 30
 
 /** Rendu lisible d'un contenu de payload : JSON embarqué → arbre HumanJson ; sinon Markdown. */
 function PayloadContent({ content }: { content: string }): React.JSX.Element {
@@ -150,6 +112,9 @@ export function ObservatoryView({
   const [providerFilter, setProviderFilter] = useState('all')
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
   const [causalScope, setCausalScope] = useState<CausalScope>('all')
+  const [conversationQuery, setConversationQuery] = useState('')
+  const [conversationLimit, setConversationLimit] = useState(CONVERSATION_PAGE)
+  const [callsLoading, setCallsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number>()
@@ -164,23 +129,9 @@ export function ObservatoryView({
   const [causalTracePartial, setCausalTracePartial] = useState(false)
   const [activitySession, setActivitySession] = useState<ActivitySession | null>(null)
   const [activityImage, setActivityImage] = useState('')
-  /**
-   * Type REEL de la recommandation, au lieu d'`unknown`.
-   *
-   * Le contrat existait deja (`ShadowRouteRecommendation` / `ShadowRouteInsufficientData`, declares
-   * dans le preload) : la vue jetait un type disponible et diffusait la valeur en `unknown` jusqu'a
-   * l'affichage. `import type` est efface a la compilation — aucun code de `main` n'entre dans le
-   * bundle du renderer.
-   */
-  const [shadowRecommendation, setShadowRecommendation] = useState<
-    ShadowRouteRecommendation | ShadowRouteInsufficientData | null
-  >(null)
-  const [shadowLoading, setShadowLoading] = useState(false)
-  const [shadowError, setShadowError] = useState('')
   const causalRequestGate = useRef(new LatestRequestGate())
   const promptRequestGate = useRef(new LatestRequestGate())
   const brainRequestGate = useRef(new LatestRequestGate())
-  const shadowRequestGate = useRef(new LatestRequestGate())
   const refreshStartedAt = useRef(0)
   const liveRefreshTimer = useRef<number | null>(null)
 
@@ -193,23 +144,20 @@ export function ObservatoryView({
     })
   }, [])
 
-  const { activitySessions, conversationActivity, nativeTraces, semanticTimeline } =
-    useObservatorySources<NativeRawTrace>({
-      active,
-      conversationId,
-      refreshKey,
-      semanticRetryKey,
-      onSourceError: updateSourceError
-    })
-
-  useEffect(() => {
-    shadowRequestGate.current.begin()
-    // Une recommandation n'est valable que pour l'appel qui l'a demandée.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setShadowRecommendation(null)
-    setShadowLoading(false)
-    setShadowError('')
-  }, [selectedCall?.id])
+  const {
+    activitySessions,
+    conversationActivity,
+    nativeTraces,
+    semanticTimeline,
+    loadingActivitySessions,
+    loadingConversationActivity
+  } = useObservatorySources<NativeRawTrace>({
+    active,
+    conversationId,
+    refreshKey,
+    semanticRetryKey,
+    onSourceError: updateSourceError
+  })
 
   const resetTimelineFilters = useCallback((): void => {
     setQuery('')
@@ -304,11 +252,15 @@ export function ObservatoryView({
       queueMicrotask(() => {
         if (!promptRequestGate.current.isCurrent(requestId)) return
         setPromptCalls([])
+        setCallsLoading(false)
         updateSourceError('promptCalls')
       })
       return
     }
     const requestId = promptRequestGate.current.begin()
+    // Chargement PROPRE a cette section du rail : `loading` ne couvre que la trace causale.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCallsLoading(true)
     queueMicrotask(() => {
       if (promptRequestGate.current.isCurrent(requestId)) setPromptCalls([])
     })
@@ -323,6 +275,9 @@ export function ObservatoryView({
         if (!promptRequestGate.current.isCurrent(requestId)) return
         setPromptCalls([])
         updateSourceError('promptCalls', error instanceof Error ? error.message : String(error))
+      })
+      .finally(() => {
+        if (promptRequestGate.current.isCurrent(requestId)) setCallsLoading(false)
       })
   }, [active, conversationId, refreshKey, updateSourceError])
 
@@ -506,6 +461,17 @@ export function ObservatoryView({
     Number(typeFilter !== 'all') +
     Number(providerFilter !== 'all') +
     Number(quickFilter !== 'all')
+  const conversationNeedle = conversationQuery.trim().toLocaleLowerCase('fr')
+  const filteredConversations = conversationNeedle
+    ? conversations.filter((conversation) =>
+        `${conversation.title} ${conversation.provider}`
+          .toLocaleLowerCase('fr')
+          .includes(conversationNeedle)
+      )
+    : conversations
+  const visibleConversations = filteredConversations.slice(0, conversationLimit)
+  const hiddenConversationCount = filteredConversations.length - visibleConversations.length
+  const causalFilterCount = Number(causalScope !== 'all')
   const visibleCausalNodes = causalNodes.filter((node) => {
     if (causalScope === 'critical') return node.onCriticalPath
     if (causalScope === 'signals')
@@ -522,6 +488,45 @@ export function ObservatoryView({
     setSelectedCall(null)
     setCompare([])
     setConversationId(nextConversationId)
+  }
+
+  function openActivitySession(session: ActivitySessionMeta): void {
+    // `.catch` obligatoire : une session supprimée/déplacée entre le listing et le clic (nettoyage
+    // auto des runs) rejetait en silence — clic muet, l'utilisateur reclique.
+    void window.api
+      .activitySession(session)
+      .then((result) => {
+        setActivitySession(result)
+        setActivityImage('')
+      })
+      .catch((error: unknown) => {
+        setActivitySession(null)
+        setActivityImage('')
+        // Visible : le bandeau d'erreurs de sources, plutôt qu'un clic sans effet.
+        updateSourceError(
+          'activitySession',
+          `Session illisible (${session.path}) : ${error instanceof Error ? error.message : String(error)}`
+        )
+      })
+  }
+
+  function openActivityImage(path: string): void {
+    if (!activitySession) return
+    // Meme exigence que `activitySession` ci-dessus : une capture supprimee entre le listing et le
+    // clic rejetait en SILENCE.
+    void window.api
+      .activityImage(activitySession.meta, path)
+      .then((result) => {
+        setActivityImage(result.dataUrl)
+        updateSourceError('activityImage')
+      })
+      .catch((error: unknown) => {
+        setActivityImage('')
+        updateSourceError(
+          'activityImage',
+          `Capture illisible (${path}) : ${error instanceof Error ? error.message : String(error)}`
+        )
+      })
   }
 
   function refreshSources(): void {
@@ -589,7 +594,10 @@ export function ObservatoryView({
       timeline: exportedTimeline,
       causalNodes: exportedCausalNodes,
       promptCalls: currentCalls,
-      nativeTraces
+      // SCOPE : `nativeTraces` est la liste GLOBALE. L'exporter contredisait la limitation affichee
+      // juste au-dessus et faisait fuiter les requetes d'AUTRES conversations dans un fichier
+      // presente comme celui de la conversation courante.
+      nativeTraces: convNativeTraces
     })
     const href = URL.createObjectURL(
       new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' })
@@ -813,6 +821,18 @@ export function ObservatoryView({
               Chemin critique
             </button>
           </div>
+          {/* La comparaison A/B n'existait que comme geste cache (Shift+clic) : rien ne l'annoncait
+              ni ne montrait ou en etait la selection. */}
+          <span
+            className="observatory-compare-status"
+            data-testid="observatory-compare-status"
+            role="status"
+          >
+            <b>
+              {compare.length}/2 sélectionné{compare.length > 1 ? 's' : ''}
+            </b>
+            <small>Shift+clic sur deux événements pour les comparer</small>
+          </span>
 
           {viewMode === 'timeline' ? (
             <div className="observatory-toolbar__timeline" data-testid="timeline-controls">
@@ -892,6 +912,15 @@ export function ObservatoryView({
                   {label}
                 </button>
               ))}
+              <button
+                type="button"
+                className="observatory-reset"
+                data-testid="observatory-causal-reset"
+                onClick={() => setCausalScope('all')}
+                disabled={causalFilterCount === 0}
+              >
+                Réinitialiser{causalFilterCount ? ` · ${causalFilterCount}` : ''}
+              </button>
             </div>
           )}
         </div>
@@ -1045,142 +1074,37 @@ export function ObservatoryView({
         </details>
       )}
       <div className="observatory-flightdeck">
-        <aside className="observatory-rail">
-          <span className="observatory-panel-title">conversations</span>
-          <div className="observatory-conversations">
-            {conversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                className={conversation.id === conversationId ? 'is-active' : ''}
-                onClick={() => selectConversation(conversation.id)}
-              >
-                <strong>{conversation.title}</strong>
-                <small>{conversation.provider}</small>
-              </button>
-            ))}
-          </div>
-          <section className="observatory-calls">
-            <span className="observatory-panel-title">APPELS OBSERVÉS</span>
-            {currentCalls.map((call) => (
-              <button
-                key={call.id}
-                className={selectedCall?.id === call.id ? 'is-active' : ''}
-                onClick={() => {
-                  setSelected(null)
-                  setSelectedCall(call)
-                }}
-              >
-                <strong>
-                  {call.provider}
-                  {call.model ? ` · ${call.model}` : ''}
-                </strong>
-                {(() => {
-                  const preview = lastUserMessagePreview(call.messages)
-                  return preview ? (
-                    <span className="observatory-call-preview" title={preview}>
-                      « {preview} »
-                    </span>
-                  ) : null
-                })()}
-                <small>
-                  {new Date(call.ts).toLocaleTimeString('fr-FR')} ·{' '}
-                  {(call.usage?.inputTokens ?? 0).toLocaleString('fr-FR')} in ·{' '}
-                  {(call.usage?.cacheReadTokens ?? 0).toLocaleString('fr-FR')} cache
-                </small>
-              </button>
-            ))}
-          </section>
-          <section
-            className="observatory-conversation-activity"
-            data-testid="conversation-activity"
-          >
-            <span className="observatory-panel-title">ACTIVITÉ CONVERSATION</span>
-            {conversationActivity.slice(-12).map((entry, index) => (
-              <p key={`${entry.ts}:${entry.kind}:${index}`}>
-                <strong>{entry.label}</strong>
-                <small>{entry.kind}</small>
-              </p>
-            ))}
-          </section>
-          <section className="observatory-transcripts" data-testid="activity-transcripts">
-            <span className="observatory-panel-title">TRANSCRIPTS</span>
-            {activitySessions.slice(0, 8).map((session) => (
-              <button
-                key={session.path}
-                onClick={() =>
-                  // `.catch` obligatoire : une session supprimée/déplacée entre le listing et le clic
-                  // (nettoyage auto des runs) rejetait en silence — clic muet, l'utilisateur reclique.
-                  void window.api
-                    .activitySession(session)
-                    .then((result) => {
-                      setActivitySession(result)
-                      setActivityImage('')
-                    })
-                    .catch((error: unknown) => {
-                      setActivitySession(null)
-                      setActivityImage('')
-                      // Visible : le bandeau d'erreurs de sources, plutôt qu'un clic sans effet.
-                      setSourceErrors((current) => ({
-                        ...current,
-                        activitySession: `Session illisible (${session.path}) : ${error instanceof Error ? error.message : String(error)}`
-                      }))
-                    })
-                }
-              >
-                <strong>{session.project}</strong>
-                <small>{session.id}</small>
-              </button>
-            ))}
-            {activitySession && (
-              <div>
-                <small>{activitySession.totalToolCalls} appels outil</small>
-                {activitySession.turns.slice(-3).map((turn, index) => (
-                  <p key={`${turn.kind}:${index}`}>{turn.text}</p>
-                ))}
-                {activitySession.images
-                  .filter((image) => image.exists)
-                  .map((image) => (
-                    <button
-                      key={image.path}
-                      onClick={() =>
-                        void window.api
-                          .activityImage(activitySession.meta, image.path)
-                          .then((result) => setActivityImage(result.dataUrl))
-                      }
-                    >
-                      Voir image
-                    </button>
-                  ))}
-                {activityImage && <img src={activityImage} alt="Capture du transcript" />}
-              </div>
-            )}
-          </section>
-          <section className="observatory-diagnostics">
-            <span className="observatory-panel-title">SIGNAUX PRIORITAIRES</span>
-            {prioritySignals.length === 0 ? (
-              <p>Aucun signal évident.</p>
-            ) : (
-              prioritySignals.map((item) => (
-                <button
-                  key={item.id}
-                  data-severity={item.severity}
-                  data-signal-id={item.eventId}
-                  onClick={() => openEvent(item.eventId)}
-                >
-                  <strong>
-                    {item.severityLabel} · {item.impact.toLocaleString('fr-FR')} caractères
-                  </strong>
-                  <span>
-                    {item.label}
-                    {item.turnIds.length > 0
-                      ? ` · ${item.turnIds.length} tour${item.turnIds.length > 1 ? 's' : ''}`
-                      : ''}
-                  </span>
-                </button>
-              ))
-            )}
-          </section>
-        </aside>
+        <ObservatoryRail
+          conversationQuery={conversationQuery}
+          onConversationQueryChange={(value) => {
+            setConversationQuery(value)
+            setConversationLimit(CONVERSATION_PAGE)
+          }}
+          conversationLimitStep={CONVERSATION_PAGE}
+          visibleConversations={visibleConversations}
+          filteredConversationCount={filteredConversations.length}
+          hiddenConversationCount={hiddenConversationCount}
+          onShowMoreConversations={() => setConversationLimit((limit) => limit + CONVERSATION_PAGE)}
+          conversationId={conversationId}
+          onSelectConversation={selectConversation}
+          callsLoading={callsLoading}
+          currentCalls={currentCalls}
+          selectedCallId={selectedCall?.id}
+          onSelectCall={(call) => {
+            setSelected(null)
+            setSelectedCall(call)
+          }}
+          conversationActivity={conversationActivity}
+          conversationActivityLoading={loadingConversationActivity}
+          activitySessions={activitySessions}
+          activitySessionsLoading={loadingActivitySessions}
+          activitySession={activitySession}
+          onOpenSession={openActivitySession}
+          activityImage={activityImage}
+          onOpenImage={openActivityImage}
+          prioritySignals={prioritySignals}
+          onOpenSignal={openEvent}
+        />
         <main
           className="observatory-stream"
           onClick={() => {
@@ -1191,9 +1115,30 @@ export function ObservatoryView({
           aria-busy={loading}
         >
           {loading && <div className="observatory-empty">Lecture des traces…</div>}
-          {!loading && viewMode === 'timeline' && visibleTurns.length === 0 && (
-            <div className="observatory-empty">Aucune trace dans ce filtre.</div>
-          )}
+          {/* Trois CAUSES distinctes derriere un flux vide : aucune conversation, aucune trace, ou
+              filtre trop strict. Un message unique laissait l'utilisateur sans action suivante. */}
+          {!loading &&
+            viewMode === 'timeline' &&
+            visibleTurns.length === 0 &&
+            (!conversationId ? (
+              <div className="observatory-empty" data-testid="observatory-empty-no-conversation">
+                Aucune conversation à observer. Sélectionnez-en une dans le rail.
+              </div>
+            ) : allEvents.length === 0 ? (
+              <div className="observatory-empty" data-testid="observatory-empty-no-trace">
+                Cette conversation n’a aucune trace capturée.
+              </div>
+            ) : (
+              <div className="observatory-empty" data-testid="observatory-empty-filtered">
+                <span>
+                  Aucun des {allEvents.length.toLocaleString('fr-FR')} événements ne passe les
+                  filtres actifs.
+                </span>
+                <button type="button" onClick={resetTimelineFilters}>
+                  Réinitialiser les filtres
+                </button>
+              </div>
+            ))}
           {!loading && viewMode === 'causal' && causalNodes.length === 0 && (
             <div className="observatory-empty">Aucun lien causal observable.</div>
           )}
@@ -1201,7 +1146,15 @@ export function ObservatoryView({
             viewMode === 'causal' &&
             causalNodes.length > 0 &&
             visibleCausalNodes.length === 0 && (
-              <div className="observatory-empty">Aucun signal dans ce filtre.</div>
+              <div className="observatory-empty" data-testid="observatory-empty-causal-filtered">
+                <span>
+                  Aucune des {causalNodes.length.toLocaleString('fr-FR')} étapes ne passe ce filtre
+                  causal.
+                </span>
+                <button type="button" onClick={() => setCausalScope('all')}>
+                  Voir tous les liens
+                </button>
+              </div>
             )}
           {!loading && viewMode === 'causal' && visibleCausalNodes.length > 0 && (
             <section className="observatory-causal-path" aria-label="Chemin causal critique">
@@ -1290,86 +1243,11 @@ export function ObservatoryView({
             </section>
           )}
           {selectedCall && (
-            <article
-              className="observatory-call-detail"
-              onClick={(click) => click.stopPropagation()}
-            >
-              <header>
-                <div>
-                  <b>
-                    Appel exact · {selectedCall.provider}
-                    {selectedCall.model ? ` · ${selectedCall.model}` : ''}
-                  </b>
-                  <small>
-                    {selectedCall.boundary} · {selectedCall.turnId}
-                  </small>
-                </div>
-                <button onClick={() => setSelectedCall(null)}>Fermer</button>
-              </header>
-              <div className="observatory-call-metrics">
-                <b>{(selectedCall.usage?.inputTokens ?? 0).toLocaleString('fr-FR')} in</b>
-                <span>
-                  {(selectedCall.usage?.cacheReadTokens ?? 0).toLocaleString('fr-FR')} cache
-                </span>
-                <span>{(selectedCall.usage?.outputTokens ?? 0).toLocaleString('fr-FR')} out</span>
-                <span>${(selectedCall.usage?.costUsd ?? 0).toFixed(4)}</span>
-              </div>
-              <small>{selectedCall.limitation}</small>
-              <button
-                type="button"
-                disabled={!selectedCall.phase}
-                title={
-                  selectedCall.phase
-                    ? 'Comparer les routes observées pour cette phase'
-                    : 'Phase inconnue pour cet ancien appel'
-                }
-                onClick={() => {
-                  if (!selectedCall.phase) return
-                  const requestId = shadowRequestGate.current.begin()
-                  setShadowRecommendation(null)
-                  setShadowError('')
-                  setShadowLoading(true)
-                  void window.api
-                    .shadowRouteRecommendation(selectedCall.phase, {
-                      provider: selectedCall.provider,
-                      model: selectedCall.model ?? 'default'
-                    })
-                    .then((recommendation) => {
-                      if (shadowRequestGate.current.isCurrent(requestId))
-                        setShadowRecommendation(recommendation)
-                    })
-                    .catch((error: unknown) => {
-                      if (shadowRequestGate.current.isCurrent(requestId))
-                        setShadowError(error instanceof Error ? error.message : String(error))
-                    })
-                    .finally(() => {
-                      if (shadowRequestGate.current.isCurrent(requestId)) setShadowLoading(false)
-                    })
-                }}
-              >
-                Comparer en shadow
-              </button>
-              {shadowLoading && <small role="status">Comparaison shadow en coursâ€¦</small>}
-              {shadowError && <small role="alert">Shadow indisponible : {shadowError}</small>}
-              {shadowRecommendation != null && (
-                <section data-testid="shadow-route-recommendation">
-                  <b>Recommandation shadow · jamais appliquée automatiquement</b>
-                  <HumanJson value={shadowRecommendation} />
-                </section>
-              )}
-              {selectedCall.system && (
-                <>
-                  <b>System</b>
-                  <pre className="observatory-payload">{selectedCall.system}</pre>
-                </>
-              )}
-              <b>Messages</b>
-              <HumanJson className="observatory-payload" value={selectedCall.messages} />
-              <b>Options</b>
-              <HumanJson className="observatory-payload" value={selectedCall.options} />
-              <b>Réponse</b>
-              <pre className="observatory-payload">{selectedCall.response || '(vide)'}</pre>
-            </article>
+            <ObservatoryCallDetail
+              key={selectedCall.id}
+              call={selectedCall}
+              onClose={() => setSelectedCall(null)}
+            />
           )}
           {compare.length === 2 && semanticComparison && (
             <section className="observatory-diff">
