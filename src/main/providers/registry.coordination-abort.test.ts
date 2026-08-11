@@ -9,6 +9,33 @@ describe('ProviderRegistry — expiration de coordination', () => {
     vi.resetModules()
   })
 
+  it('ne coupe pas un appel orchestré avant la durée explicite de son devis', async () => {
+    vi.stubEnv('AUTOWIN_SUBAGENT_CEILING_MS', '20')
+    vi.resetModules()
+    const { ProviderRegistry } = await import('./registry')
+    const provider: ProviderAdapter = {
+      id: 'progressing',
+      supportsExecution: true,
+      auth: async () => true,
+      async *send(): AsyncGenerator<StreamChunk, SendResult, void> {
+        yield* [] as StreamChunk[]
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        return { text: 'terminé', provider: 'progressing', systemInjected: true }
+      }
+    }
+    const registry = new ProviderRegistry().register(provider)
+
+    await expect(
+      registry.send('progressing', [{ role: 'user', content: 'travail long' }], {
+        execution: {
+          cwd: process.cwd(),
+          sandbox: 'read-only',
+          providerTimeoutMs: 100
+        }
+      })
+    ).resolves.toMatchObject({ text: 'terminé' })
+  })
+
   it("annule le signal du provider et ne déclare pas l'appel arrêté avant sa vraie fin", async () => {
     vi.stubEnv('AUTOWIN_SUBAGENT_CEILING_MS', '20')
     vi.resetModules()

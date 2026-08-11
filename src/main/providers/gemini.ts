@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSurvivable } from '../runs/survivable-spawn'
-import { killEscalate } from './watchdog'
+import { killEscalate, resolveProviderTimeoutMs } from './watchdog'
 import type {
   Message,
   PromptEnvelope,
@@ -59,6 +59,10 @@ export interface GeminiCliAdapterOptions {
 }
 
 export function buildGeminiArgs(messages: Message[], opts: SendOptions): string[] {
+  const timeoutMinutes = Math.max(
+    1,
+    Math.ceil(resolveProviderTimeoutMs(opts.execution?.providerTimeoutMs, 120_000) / 60_000)
+  )
   const args = [
     '--print',
     buildGeminiPrompt(messages, opts.system),
@@ -66,7 +70,7 @@ export function buildGeminiArgs(messages: Message[], opts: SendOptions): string[
     'plan',
     '--sandbox',
     '--print-timeout',
-    '2m'
+    `${timeoutMinutes}m`
   ]
   if (opts.model) args.push('--model', opts.model)
   return args
@@ -223,11 +227,14 @@ export class GeminiCliAdapter implements ProviderAdapter {
     let wake: (() => void) | undefined
     const queue: StreamChunk[] = []
     const tailController = new AbortController()
-    const timer = setTimeout(() => {
-      errored = new Error('Gemini via Antigravity a dépassé la durée maximale.')
-      killEscalate(child)
-      forceTerminate(errored)
-    }, this.timeoutMs)
+    const timer = setTimeout(
+      () => {
+        errored = new Error('Gemini via Antigravity a dépassé la durée maximale.')
+        killEscalate(child)
+        forceTerminate(errored)
+      },
+      resolveProviderTimeoutMs(opts.execution?.providerTimeoutMs, this.timeoutMs)
+    )
     const onAbort = (): void => {
       const error = new Error('Envoi Gemini annulé.')
       error.name = 'AbortError'

@@ -66,6 +66,12 @@ export interface SendOptions {
   execution?: {
     cwd: string
     sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
+    /**
+     * Plafond total de l'appel orchestré, dérivé du devis actif. Les adaptateurs et le registre
+     * l'utilisent à la place de leur garde locale afin qu'un agent actif ne soit pas tué avant la
+     * durée promise par le run. L'abort du superviseur reste la borne autoritaire du run entier.
+     */
+    providerTimeoutMs?: number
     /** Vrai uniquement quand ce cwd appartient exclusivement à ce run/conversation. */
     causallyIsolated?: boolean
     /** Fichiers surveillés présents dans la copie isolée, à attribuer exactement. */

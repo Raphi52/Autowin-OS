@@ -22,13 +22,23 @@ const envMs = (name: string, fallback: number): number => {
  *  - TOTAL : plafond de durée d'un tour, même s'il progresse (backstop généreux).
  * Ancien comportement = un simple kill total à 120s SANS filet de rejet (→ pouvait pendre à l'infini
  * si `close` ne tirait pas). L'inactivité 5 min reste le vrai signal de figé. Le cap total doit
- * laisser finir un build actif : un run réel Agent Studio a été tué à 20 min après deux suites
- * complètes vertes, avant son message final. 40 min reste sous le plafond de coordination à 45 min.
+ * laisser finir un build actif. Ces valeurs sont les gardes des appels directs ; une orchestration
+ * transporte désormais la durée de son devis jusqu'au watchdog et au plafond de coordination.
  */
 export const SUBAGENT_INACTIVITY_MS = envMs('AUTOWIN_SUBAGENT_INACTIVITY_MS', 5 * 60_000)
 export const SUBAGENT_TOTAL_MS = envMs('AUTOWIN_SUBAGENT_TOTAL_MS', 40 * 60_000)
 /** Délai de grâce entre SIGTERM et SIGKILL lors de l'escalade de kill d'un process figé. */
 export const KILL_GRACE_MS = envMs('AUTOWIN_SUBAGENT_KILL_GRACE_MS', 3_000)
+
+/**
+ * Le devis du run prime sur le plafond local du transport. Hors orchestration (chat direct, sonde),
+ * l'adaptateur conserve son fallback et son éventuel override d'environnement.
+ */
+export function resolveProviderTimeoutMs(explicit: number | undefined, fallback: number): number {
+  return typeof explicit === 'number' && Number.isFinite(explicit) && explicit > 0
+    ? explicit
+    : fallback
+}
 
 /**
  * Tue un process en ESCALADE : SIGTERM d'abord (arrêt propre), puis SIGKILL après un délai de grâce

@@ -1207,9 +1207,11 @@ export class Orchestrator {
       learningOracles = loadTrustedLearningOracles(cwd)
       this.learningOraclesByRun.set(runId, learningOracles)
     }
+    const providerTimeoutMs = this.deps.currentExecutionQuote?.()?.limits.maxDurationMs
     return {
       cwd,
       sandbox,
+      ...(providerTimeoutMs ? { providerTimeoutMs } : {}),
       ...(cwd !== this.deps.executionWorkspace ? { causallyIsolated: true } : {}),
       ...(causalWatchPaths.length ? { causalWatchPaths } : {}),
       ...(learningOracles.length ? { learningOracles: [...learningOracles] } : {}),

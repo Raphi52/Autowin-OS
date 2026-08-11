@@ -7,7 +7,7 @@ import {
   type SendResult,
   type StreamChunk
 } from './types'
-import { withHardDeadline } from './watchdog'
+import { resolveProviderTimeoutMs, withHardDeadline } from './watchdog'
 import type { ExecutionSupervisor } from '../execution-supervisor'
 
 /**
@@ -436,10 +436,14 @@ export class ProviderRegistry {
       if (!suivant) throw error
       return this.sendPossiblyRotating(id, messages, opts, onChunk, true, visitedWalls)
     }
+    const coordinationCeilingMs = resolveProviderTimeoutMs(
+      route.opts.execution?.providerTimeoutMs,
+      COORDINATION_CEILING_MS
+    )
     return withHardDeadline(
       trackedPump.catch(rotationSiQuotaEpuise),
-      COORDINATION_CEILING_MS,
-      `Sous-agent ${route.id} sans réponse depuis ${Math.round(COORDINATION_CEILING_MS / 1000)}s (watchdog coordination) — abandonné pour ne pas bloquer le run.`,
+      coordinationCeilingMs,
+      `Sous-agent ${route.id} sans réponse depuis ${Math.round(coordinationCeilingMs / 1000)}s (watchdog coordination) — abandonné pour ne pas bloquer le run.`,
       () => {
         const reason = `Watchdog coordination expiré pour ${route.id}`
         coordinationController.abort(reason)

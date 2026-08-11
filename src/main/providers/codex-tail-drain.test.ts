@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const relay = vi.hoisted(() => ({ tailDelayMs: 25 }))
+
 vi.mock('../runs/survivable-spawn', () => ({
   spawnSurvivable: () => {
     const child = new EventEmitter() as EventEmitter & Record<string, unknown>
@@ -19,7 +21,7 @@ vi.mock('../runs/survivable-spawn', () => ({
       survivable: true,
       release: vi.fn(),
       tail: async (onLine: (line: string) => void) => {
-        await new Promise((resolve) => setTimeout(resolve, 25))
+        await new Promise((resolve) => setTimeout(resolve, relay.tailDelayMs))
         onLine(
           JSON.stringify({
             type: 'item.completed',
@@ -36,11 +38,40 @@ import { CodexAdapter } from './codex'
 
 const previousBin = process.env.CODEX_BIN
 afterEach(() => {
+  relay.tailDelayMs = 25
   if (previousBin === undefined) delete process.env.CODEX_BIN
   else process.env.CODEX_BIN = previousBin
 })
 
 describe('Codex CLI — barrière de drain du journal', () => {
+  it('fait primer le devis orchestré sur la garde locale du transport', async () => {
+    process.env.CODEX_BIN = 'codex-test'
+    const stream = new CodexAdapter({ timeoutMs: 10 }).send(
+      [{ role: 'user', content: 'travaille longtemps' }],
+      {
+        execution: {
+          cwd: process.cwd(),
+          sandbox: 'read-only',
+          providerTimeoutMs: 100
+        }
+      }
+    )
+
+    let step = await stream.next()
+    while (!step.done) step = await stream.next()
+    expect(step.value.text).toBe('dernière ligne Codex')
+  })
+
+  it('conserve sa garde locale sans devis orchestré', async () => {
+    process.env.CODEX_BIN = 'codex-test'
+    const stream = new CodexAdapter({ timeoutMs: 10 }).send(
+      [{ role: 'user', content: 'travaille trop longtemps' }],
+      { execution: { cwd: process.cwd(), sandbox: 'read-only' } }
+    )
+
+    await expect(stream.next()).rejects.toThrow(/durée max/i)
+  })
+
   it('attend la dernière ligne du tail même si close arrive avant elle', async () => {
     process.env.CODEX_BIN = 'codex-test'
     const stream = new CodexAdapter().send([{ role: 'user', content: 'travaille' }], {

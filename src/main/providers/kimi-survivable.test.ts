@@ -10,7 +10,8 @@ const capture = vi.hoisted(() => ({
     runId?: string
     onJournalPrepared?: (journalPath: string) => void
   }>,
-  journals: [] as Array<{ token: string; path: string }>
+  journals: [] as Array<{ token: string; path: string }>,
+  tailDelayMs: 0
 }))
 
 function fakeChild(): EventEmitter & {
@@ -64,6 +65,8 @@ vi.mock('../runs/survivable-spawn', () => ({
       survivable: true,
       release: vi.fn(),
       tail: async (onLine: (line: string) => void) => {
+        if (capture.tailDelayMs)
+          await new Promise((resolve) => setTimeout(resolve, capture.tailDelayMs))
         onLine(JSON.stringify({ delta: 'relay' }))
         queueMicrotask(() => {
           child.exitCode = 0
@@ -91,9 +94,40 @@ beforeEach(() => {
   capture.direct = []
   capture.survivable = []
   capture.journals = []
+  capture.tailDelayMs = 0
 })
 
 describe('KimiCliAdapter — exécution sans console', () => {
+  it('fait primer le devis orchestré sur la garde locale du transport', async () => {
+    capture.tailDelayMs = 25
+    const adapter = new KimiCliAdapter({ bin: 'kimi-test', timeoutMs: 10 })
+
+    await expect(
+      drain(
+        adapter.send([{ role: 'user', content: 'travaille longtemps' }], {
+          execution: {
+            cwd: process.cwd(),
+            sandbox: 'read-only',
+            providerTimeoutMs: 100
+          }
+        })
+      )
+    ).resolves.toBe('relay')
+  })
+
+  it('conserve sa garde locale sans devis orchestré', async () => {
+    capture.tailDelayMs = 25
+    const adapter = new KimiCliAdapter({ bin: 'kimi-test', timeoutMs: 10 })
+
+    await expect(
+      drain(
+        adapter.send([{ role: 'user', content: 'travaille trop longtemps' }], {
+          execution: { cwd: process.cwd(), sandbox: 'read-only' }
+        })
+      )
+    ).rejects.toThrow(/durée max/i)
+  })
+
   it('fait passer send par le relais survivable commun et publie son journal', async () => {
     const adapter = new KimiCliAdapter({ bin: 'kimi-test' })
 

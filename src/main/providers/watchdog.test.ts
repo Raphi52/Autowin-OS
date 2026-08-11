@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   assertArgvWithinLimit,
   createStreamWatchdog,
+  resolveProviderTimeoutMs,
   SUBAGENT_INACTIVITY_MS,
   SUBAGENT_TOTAL_MS,
   withHardDeadline
@@ -93,6 +94,17 @@ describe('createStreamWatchdog', () => {
     wd.dispose()
     await wait(30)
     expect(onTrip).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('resolveProviderTimeoutMs', () => {
+  it('fait primer le devis orchestré sur la garde locale du fournisseur', () => {
+    expect(resolveProviderTimeoutMs(7_200_000, 2_400_000)).toBe(7_200_000)
+  })
+
+  it('conserve la garde locale hors orchestration ou pour une valeur invalide', () => {
+    expect(resolveProviderTimeoutMs(undefined, 120_000)).toBe(120_000)
+    expect(resolveProviderTimeoutMs(0, 120_000)).toBe(120_000)
   })
 })
 

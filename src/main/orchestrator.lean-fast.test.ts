@@ -135,6 +135,24 @@ function makeOrchestrator(
 }
 
 describe('#1 pipeline adaptatif', () => {
+  it('transporte la durée du devis jusqu’au watchdog de chaque appel orchestré', async () => {
+    const provider = new RecordingProvider()
+    const quote = compileExecutionQuote('refonds une vue critique de bout en bout')
+    quote.limits.maxDurationMs = 2 * 60 * 60_000
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['build'],
+      currentExecutionQuote: () => quote
+    })
+
+    await orch.run('refonds une vue critique de bout en bout')
+
+    expect(provider.calls).toHaveLength(2)
+    expect(provider.calls.map((call) => call.execution?.providerTimeoutMs)).toEqual([
+      quote.limits.maxDurationMs,
+      quote.limits.maxDurationMs
+    ])
+  })
+
   it('classifyPhases prime : une tâche joue exactement le sous-ensemble retourné', async () => {
     const provider = new RecordingProvider()
     const orch = makeOrchestrator(provider, { classifyPhases: () => ['build'] })

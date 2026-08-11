@@ -2,6 +2,7 @@ import {
   assertArgvWithinLimit,
   createStreamWatchdog,
   killEscalate,
+  resolveProviderTimeoutMs,
   SUBAGENT_INACTIVITY_MS,
   SUBAGENT_TOTAL_MS
 } from './watchdog'
@@ -244,7 +245,7 @@ export class KimiCliAdapter implements ProviderAdapter {
     })
     const watchdog = createStreamWatchdog({
       inactivityMs: SUBAGENT_INACTIVITY_MS,
-      totalMs: this.timeoutMs,
+      totalMs: resolveProviderTimeoutMs(opts.execution?.providerTimeoutMs, this.timeoutMs),
       onTrip: (reason) => {
         killEscalate(child)
         forceSettle(

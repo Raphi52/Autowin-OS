@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const relay = vi.hoisted(() => ({ emitClose: true, certifiedExit: undefined as number | undefined }))
+const relay = vi.hoisted(() => ({
+  emitClose: true,
+  certifiedExit: undefined as number | undefined,
+  tailDelayMs: 25
+}))
 
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:child_process')>()),
@@ -35,7 +39,7 @@ vi.mock('../runs/stdout-journal', async (importOriginal) => ({
     onLine: (line: string) => void,
     options?: { isComplete?: () => boolean }
   ) => {
-    await new Promise((resolve) => setTimeout(resolve, 25))
+    await new Promise((resolve) => setTimeout(resolve, relay.tailDelayMs))
     onLine(
       JSON.stringify({
         type: 'result',
@@ -59,12 +63,45 @@ const previousRoot = process.env.AUTOWIN_RUN_JOURNAL_ROOT
 afterEach(() => {
   relay.emitClose = true
   relay.certifiedExit = undefined
+  relay.tailDelayMs = 25
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
   if (previousRoot === undefined) delete process.env.AUTOWIN_RUN_JOURNAL_ROOT
   else process.env.AUTOWIN_RUN_JOURNAL_ROOT = previousRoot
 })
 
 describe('Claude CLI — barrière de drain du journal', () => {
+  it('fait primer le devis orchestré sur la garde locale du transport', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-claude-quoted-timeout-'))
+    roots.push(root)
+    process.env.AUTOWIN_RUN_JOURNAL_ROOT = root
+    const stream = new ClaudeCliAdapter({ bin: 'claude-test', timeoutMs: 10 }).send(
+      [{ role: 'user', content: 'travaille longtemps' }],
+      {
+        execution: {
+          cwd: root,
+          sandbox: 'read-only',
+          providerTimeoutMs: 100
+        }
+      }
+    )
+
+    let step = await stream.next()
+    while (!step.done) step = await stream.next()
+    expect(step.value.text).toBe('dernière ligne Claude')
+  })
+
+  it('conserve sa garde locale sans devis orchestré', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-claude-local-timeout-'))
+    roots.push(root)
+    process.env.AUTOWIN_RUN_JOURNAL_ROOT = root
+    const stream = new ClaudeCliAdapter({ bin: 'claude-test', timeoutMs: 10 }).send(
+      [{ role: 'user', content: 'travaille trop longtemps' }],
+      { execution: { cwd: root, sandbox: 'read-only' } }
+    )
+
+    await expect(stream.next()).rejects.toThrow(/durée max/i)
+  })
+
   it('attend la dernière ligne du tail même si close arrive avant elle', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-claude-tail-'))
     roots.push(root)

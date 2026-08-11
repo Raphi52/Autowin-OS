@@ -19,6 +19,7 @@ import {
   assertArgvWithinLimit,
   createStreamWatchdog,
   killEscalate,
+  resolveProviderTimeoutMs,
   SUBAGENT_INACTIVITY_MS,
   SUBAGENT_TOTAL_MS
 } from './watchdog'
@@ -325,7 +326,8 @@ export function codexExecSpec(
 async function runCodexExec(
   messages: Message[],
   opts: SendOptions,
-  model: string
+  model: string,
+  fallbackTimeoutMs: number
 ): Promise<SendResult> {
   opts.signal?.throwIfAborted()
   const execution = opts.execution
@@ -393,7 +395,7 @@ async function runCodexExec(
     // l'event `close` ne tire jamais (zombie). Remplace l'ancien kill-total-30min sans filet de rejet.
     const watchdog = createStreamWatchdog({
       inactivityMs: SUBAGENT_INACTIVITY_MS,
-      totalMs: SUBAGENT_TOTAL_MS,
+      totalMs: resolveProviderTimeoutMs(opts.execution?.providerTimeoutMs, fallbackTimeoutMs),
       onTrip: (reason) => {
         killEscalate(child)
         reject(
@@ -608,6 +610,7 @@ export interface CodexAdapterOptions {
   /** Fournit/rafraîchit les tokens ; défaut = store Autowin OS. */
   loadTokensFn?: () => Tokens | null
   model?: string
+  /** Garde locale d'un appel direct ; le devis orchestré prime quand il est présent. */
   timeoutMs?: number
 }
 
@@ -617,6 +620,7 @@ export class CodexAdapter implements ProviderAdapter {
   private readonly fetchFn: FetchLike
   private readonly loadTokensFn: () => Tokens | null
   private readonly model: string
+  private readonly timeoutMs: number
 
   constructor(opts: CodexAdapterOptions = {}) {
     this.fetchFn = opts.fetchFn ?? fetch
@@ -624,6 +628,7 @@ export class CodexAdapter implements ProviderAdapter {
     // gpt-5.6-terra : modèle réel accepté par Codex/compte ChatGPT (vérifié live ;
     // gpt-5-codex renvoie « model not supported »). Suffixe -terra = vrai variant.
     this.model = opts.model ?? 'gpt-5.6-terra'
+    this.timeoutMs = opts.timeoutMs ?? SUBAGENT_TOTAL_MS
   }
 
   async auth(): Promise<boolean> {
@@ -659,7 +664,7 @@ export class CodexAdapter implements ProviderAdapter {
     opts: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
     if (opts.execution) {
-      const result = await runCodexExec(messages, opts, opts.model ?? this.model)
+      const result = await runCodexExec(messages, opts, opts.model ?? this.model, this.timeoutMs)
       yield { delta: result.text }
       return result
     }
