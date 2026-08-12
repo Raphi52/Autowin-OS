@@ -1,11 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentPilot } from './agent-pilot'
+import { configureAutowinAppDataBase } from './app-data'
 import type { Message, SendOptions, SendResult, StreamChunk } from './providers/types'
 
 /**
  * Session-resume du CHAT (levier coût — mesure 2026-07-28 : 1,85 M de cache_write en 1h, ~79 k de
  * contexte re-payé par tour). Le tour N+1 doit REPRENDRE la session ouverte au tour N et n'envoyer
  * que le dernier message, au lieu de ré-injecter tout le fil.
+ *
+ * HERMÉTICITÉ OBLIGATOIRE depuis que l'index de sessions est PERSISTÉ : sans racine de données
+ * dédiée, ces tests écrivaient dans le `%APPDATA%` RÉEL du développeur et se relisaient d'un run à
+ * l'autre — le test « pas de fuite entre conversations » passait au premier run et échouait au
+ * second, en lisant une entrée que le run précédent avait laissée. Constaté, pas supposé : une entrée
+ * `conv-B → sess-1` a bel et bien été retrouvée dans le store réel. Un test qui écrit dans la donnée
+ * de production n'est pas seulement fragile, il peut faire tenter à l'app une reprise sur une session
+ * qui n'existe pas.
  */
 type Captured = { options: SendOptions; content: string }
 
@@ -38,9 +50,20 @@ function pilot(captured: Captured[], sessionId: string | null = 'sess-1') {
 }
 
 const history = (...turns: string[]): Message[] =>
-  turns.map((content, index) => ({ role: index % 2 === 0 ? 'user' : 'assistant', content }) as Message)
+  turns.map(
+    (content, index) => ({ role: index % 2 === 0 ? 'user' : 'assistant', content }) as Message
+  )
 
 describe('chat() — session-resume par conversation', () => {
+  // Une racine NEUVE par test : l'index de sessions étant persisté, un test qui hérite du store d'un
+  // autre (ou du store réel) ne mesure plus ce qu'il croit.
+  beforeEach(() => {
+    configureAutowinAppDataBase(mkdtempSync(join(tmpdir(), 'aos-sessresume-')))
+  })
+  afterEach(() => {
+    configureAutowinAppDataBase(undefined)
+  })
+
   it('tour 1 : aucune session connue → fil COMPLET, sans resumeSessionId', async () => {
     const captured: Captured[] = []
     await pilot(captured).chat(history('bonjour'), () => {}, undefined, 1, 'conv-A')
@@ -53,7 +76,13 @@ describe('chat() — session-resume par conversation', () => {
     const captured: Captured[] = []
     const p = pilot(captured)
     await p.chat(history('premier message'), () => {}, undefined, 1, 'conv-A')
-    await p.chat(history('premier message', 'ma reponse', 'deuxieme message'), () => {}, undefined, 1, 'conv-A')
+    await p.chat(
+      history('premier message', 'ma reponse', 'deuxieme message'),
+      () => {},
+      undefined,
+      1,
+      'conv-A'
+    )
 
     expect(captured[1].options.resumeSessionId).toBe('sess-1')
     expect(captured[1].content).toContain('deuxieme message')
@@ -83,7 +112,11 @@ describe('chat() — session-resume par conversation', () => {
     }
     let model = 'opus-5'
     const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model })) }
-    const bus = { catalog: vi.fn(() => []), snapshotForPrompt: vi.fn(async () => ({})), exec: vi.fn() }
+    const bus = {
+      catalog: vi.fn(() => []),
+      snapshotForPrompt: vi.fn(async () => ({})),
+      exec: vi.fn()
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const p = new AgentPilot(registry as any, roles as any, bus as any)
     await p.chat(history('avec opus'), () => {}, undefined, 1, 'conv-A')
@@ -119,7 +152,11 @@ describe('chat() — session-resume par conversation', () => {
       honoursSessionResume: vi.fn((id: string) => id === 'claude')
     }
     const roles = { getBinding: vi.fn(() => ({ provider, model })) }
-    const bus = { catalog: vi.fn(() => []), snapshotForPrompt: vi.fn(async () => ({})), exec: vi.fn() }
+    const bus = {
+      catalog: vi.fn(() => []),
+      snapshotForPrompt: vi.fn(async () => ({})),
+      exec: vi.fn()
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const p = new AgentPilot(registry as any, roles as any, bus as any)
 
@@ -176,7 +213,11 @@ describe('chat() — session-resume par conversation', () => {
       honoursSessionResume: vi.fn(() => false)
     }
     const roles = { getBinding: vi.fn(() => ({ provider: 'codex', model: 'gpt-5.6-sol' })) }
-    const bus = { catalog: vi.fn(() => []), snapshotForPrompt: vi.fn(async () => ({})), exec: vi.fn() }
+    const bus = {
+      catalog: vi.fn(() => []),
+      snapshotForPrompt: vi.fn(async () => ({})),
+      exec: vi.fn()
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const p = new AgentPilot(registry as any, roles as any, bus as any)
 

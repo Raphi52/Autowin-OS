@@ -1,3 +1,4 @@
+import { forgetChatSession, loadChatSessions, saveChatSession } from './runs/chat-session-store'
 import type { ProviderRegistry } from './providers/registry'
 import type { RoleBinding, RoleModelConfig } from './roles'
 import type { AppCommandBus, CommandResult } from './commands'
@@ -310,6 +311,50 @@ export class AgentPilot {
   private readonly chatSessions = new Map<string, { key: string; sessionId: string }>()
 
   /**
+   * L'index memoire ci-dessus est HYDRATE une fois depuis le disque, puis maintenu en miroir.
+   *
+   * Sans cela, le gain de la reprise de session s'evaporait a CHAQUE redemarrage de l'app : la `Map`
+   * repartait vide, donc le premier tour de chaque conversation re-payait l'historique entier. Le
+   * chiffrage est dans le commentaire de `chat()` plus bas (mesure du 2026-07-28 : ~79 k tokens
+   * re-payes par tour, 1,85 M de `cache_write` par heure).
+   *
+   * TOUT est en fail-open : la persistance est un CACHE, jamais une autorite. Un disque plein, un
+   * fichier verrouille ou un JSON corrompu doivent couter un renvoi d'historique — cher, jamais faux —
+   * et surtout PAS casser le tour de l'utilisateur. D'ou les `try/catch` muets ici, qui seraient une
+   * faute sur une frontiere de securite et sont le bon choix sur un cache.
+   */
+  private chatSessionsHydrated = false
+
+  private hydrateChatSessions(): void {
+    if (this.chatSessionsHydrated) return
+    this.chatSessionsHydrated = true
+    try {
+      for (const [conversationId, record] of Object.entries(loadChatSessions())) {
+        // Ne JAMAIS ecraser une entree memoire plus fraiche que le disque.
+        if (!this.chatSessions.has(conversationId)) this.chatSessions.set(conversationId, record)
+      }
+    } catch {
+      /* cache indisponible = aucune session connue : on renverra l'historique, c'est correct */
+    }
+  }
+
+  private persistChatSession(conversationId: string, key: string, sessionId: string): void {
+    try {
+      saveChatSession(conversationId, key, sessionId)
+    } catch {
+      /* cache non ecrit : le prochain demarrage re-paiera l'historique, rien de faux */
+    }
+  }
+
+  private forgetPersistedChatSession(conversationId: string): void {
+    try {
+      forgetChatSession(conversationId)
+    } catch {
+      /* best-effort : une entree perimee sur disque sera de toute facon rejetee par sa `key` */
+    }
+  }
+
+  /**
    * Mode CONVERSATION (chat transparent) : l'agent parle À l'utilisateur ET peut
    * piloter l'app dans le même tour. Le texte hors-commande est sa réponse parlée ;
    * les `<cmd>` sont exécutées et rendues comme des actions inline. L'historique
@@ -506,6 +551,9 @@ export class AgentPilot {
     // le MÊME binding, on la reprend — l'historique y est déjà, on n'envoie donc que le dernier
     // message + l'état courant de l'app (qui, lui, a pu changer). Sinon : fil complet, inchangé.
     const sessionKey = `${provider}:${binding.model ?? ''}`
+    // Hydrate depuis le disque au premier tour du process : c'est ce qui fait survivre la reprise a
+    // un redemarrage de l'app. Idempotent, et sans effet si le cache memoire est deja chaud.
+    this.hydrateChatSessions()
     const known = conversationId ? this.chatSessions.get(conversationId) : undefined
     /**
      * RESUME FANTÔME — la reprise n'est armée que si l'adaptateur la TRANSMET vraiment.
@@ -521,6 +569,9 @@ export class AgentPilot {
     // Elle devient donc définitivement périmée, même si l'utilisateur revient ensuite au binding initial.
     if (conversationId && known && known.key !== sessionKey) {
       this.chatSessions.delete(conversationId)
+      // Le disque doit oublier AUSSI : une entree perimee y survivrait au redemarrage et ferait
+      // reprendre une session ouverte sous un autre binding.
+      this.forgetPersistedChatSession(conversationId)
     }
     const lastUserMessage = [...history].reverse().find((m) => m.role === 'user')
     // Le contexte Brain vit ICI (et non dans le system) pour ne pas casser le préfixe cachable.
@@ -766,13 +817,18 @@ export class AgentPilot {
         ...(res.model ? { resolvedModel: res.model } : {})
       })
       // Mémorise la session pour que le PROCHAIN tour la reprenne au lieu de re-payer l'historique.
+      // PERSISTÉ sur disque en plus du cache mémoire : sans ça, le prochain démarrage de l'app oublie
+      // la session et re-paie l'historique entier — le gain de la reprise s'évaporait à chaque
+      // relance. Le cache mémoire reste la source rapide ; le disque est le filet.
       if (conversationId) {
         if (res.sessionId && providerResumes) {
           this.chatSessions.set(conversationId, { key: sessionKey, sessionId: res.sessionId })
+          this.persistChatSession(conversationId, sessionKey, res.sessionId)
         } else {
           // Un provider qui ne rend pas de nouvelle session ne garantit pas que ce tour appartient
           // à la précédente. La conserver ferait élider un historique qu'il n'a peut-être jamais reçu.
           this.chatSessions.delete(conversationId)
+          this.forgetPersistedChatSession(conversationId)
         }
       }
       if (res.usage) {
