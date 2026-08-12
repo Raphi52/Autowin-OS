@@ -213,8 +213,27 @@ const setInput = async (selector, value) =>
     return true
   })()`)
 
+/**
+ * Déplie les groupes repliés de la liste de conversations.
+ *
+ * Mesuré le 2026-08-12 : la liste rend ses conversations dans des `.conv-group`, et un groupe
+ * `is-collapsed` ne rend AUCUN `.conv-item`. Sur une app dont le groupe est replié — l'état par
+ * défaut au démarrage — `selectConversation` ne trouvait donc jamais rien, et CINQ vues sur neuf
+ * n'ont jamais reçu leur « Fais tout ». Déplier fait apparaître les 40 entrées.
+ */
+const expandGroups = async () => {
+  await evaluate(`(() => {
+    for (const group of document.querySelectorAll('.conv-group.is-collapsed')) {
+      group.querySelector('.conv-group-head')?.click()
+    }
+    return true
+  })()`)
+  await sleep(400)
+}
+
 const selectConversation = async (title) => {
   await clickChat()
+  await expandGroups()
   const searchSelector = 'input[placeholder*="Rechercher"]'
   if (!(await setInput(searchSelector, title)))
     throw new Error('Recherche de conversations absente')
@@ -260,16 +279,14 @@ const typeAndSend = async (prompt) => {
       const persisted = conversation?.messages?.some(
         (message) => message.role === 'user' && message.content === ${JSON.stringify(prompt)}
       ) ?? false
-      if (persisted) return 'persisted'
-      const state = await window.api.appState()
-      const queued = state.activeConversationId === ${JSON.stringify(targetConversationId)} &&
-        [...document.querySelectorAll('.directive-queue-text')].some(
-          (item) => item.textContent?.trim() === ${JSON.stringify(prompt)}
-        )
-      return queued ? 'queued' : null
+      return persisted ? 'persisted' : null
     })()`)
     if (accepted) return
   }
+  // Auparavant une mise en FILE DE DIRECTIVES comptait comme un envoi. C'est un faux positif :
+  // une directive est injectée dans le tour EN COURS, elle ne démarre aucun tour et disparaît
+  // avec lui. Mesuré le 2026-08-12 : le moniteur journalisait « followup-launched » pour des
+  // vues dont la conversation restait à 2 messages. Seule la persistance prouve l'envoi.
   throw new Error(`Message ni persisté ni mis en file dans ${targetConversationId}`)
 }
 
