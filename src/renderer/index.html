@@ -8,96 +8,106 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; frame-src 'self' data: blob:; object-src 'none'; base-uri 'none'"
     />
-    <!--
-      ÉTAT DE CHARGEMENT, écrit en HTML statique et NON en React.
-
-      Mesuré au chronomètre sur deux lancements en mode dev, cache chaud : la fenêtre n'existe qu'à
-      44 s, et React ne monte qu'à 70 s. Entre les deux, 26 secondes de fenêtre BLANCHE — c'est là
-      qu'on relance l'application quatre fois en croyant qu'elle n'a pas démarré.
-
-      Ce bloc doit rester du HTML statique : tout ce qui dépend du bundle React arriverait par
-      définition APRÈS le moment qu'il s'agit de couvrir. Il vit DANS `#root`, donc React l'efface
-      tout seul à son premier rendu — aucun code de nettoyage à maintenir, et aucun risque qu'il
-      reste affiché par-dessus l'application.
-
-      Les styles sont en ligne parce que la CSP autorise `style-src 'unsafe-inline'` mais pas une
-      feuille externe servie avant le bundle.
-    -->
-    <style>
-      #autowin-boot {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 18px;
-        background: #0b0d12;
-        color: #f5f7fb;
-        font-family:
-          'Segoe UI',
-          system-ui,
-          -apple-system,
-          sans-serif;
-      }
-      #autowin-boot .boot-name {
-        font-size: 15px;
-        font-weight: 500;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        opacity: 0.92;
-      }
-      #autowin-boot .boot-rail {
-        position: relative;
-        width: 232px;
-        height: 3px;
-        overflow: hidden;
-        border-radius: 999px;
-        background: rgb(245 247 251 / 12%);
-      }
-      /* Barre INDÉTERMINÉE : le temps restant n'est pas connaissable depuis la page — le bundle qui
-         le saurait n'est pas encore chargé. Une fausse progression chiffrée mentirait ; un va-et-vient
-         dit « ça travaille » sans rien promettre. */
-      #autowin-boot .boot-rail::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 40%;
-        height: 100%;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #4f7cff, #9b7cff);
-        animation: autowin-boot-slide 1.15s ease-in-out infinite;
-      }
-      #autowin-boot .boot-step {
-        font-size: 12px;
-        color: rgb(245 247 251 / 55%);
-      }
-      @keyframes autowin-boot-slide {
-        0% {
-          transform: translateX(-100%);
-        }
-        100% {
-          transform: translateX(250%);
-        }
-      }
-      /* Un utilisateur qui a demandé moins d'animation en obtient une barre fixe, pas un clignotement. */
-      @media (prefers-reduced-motion: reduce) {
-        #autowin-boot .boot-rail::after {
-          animation: none;
-          width: 100%;
-          opacity: 0.5;
-        }
-      }
-    </style>
   </head>
 
   <body>
+    <!--
+      Le MÊME écran d'attente que celui du processus principal — voir `src/shared/boot-splash.ts`,
+      qui explique pourquoi il en faut deux et quel trou chacun couvre. Un test compare les deux
+      copies : ce fichier étant statique, il ne peut pas importer le module.
+
+      Il vit DANS `#root` : React l'efface de lui-même à son premier rendu.
+    -->
     <div id="root">
+      <style>
+        html,
+        body {
+          margin: 0;
+          height: 100%;
+          background: #000;
+          color: #f5f7fb;
+          font-family:
+            'Segoe UI',
+            system-ui,
+            -apple-system,
+            sans-serif;
+          overflow: hidden;
+        }
+        #autowin-boot {
+          position: fixed;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 26px;
+          background: #000;
+          animation: boot-in 0.45s ease both;
+        }
+        #autowin-boot .ring {
+          width: 58px;
+          height: 58px;
+          animation: boot-turn 1.1s linear infinite;
+        }
+        #autowin-boot .ring circle {
+          fill: none;
+          stroke-width: 3.5;
+          stroke-linecap: round;
+        }
+        #autowin-boot .track {
+          stroke: rgba(245, 247, 251, 0.07);
+        }
+        #autowin-boot .arc-a {
+          stroke: #e9bd4e;
+          stroke-dasharray: 44 158;
+        }
+        #autowin-boot .arc-b {
+          stroke: #9d79ed;
+          stroke-dasharray: 30 172;
+          stroke-dashoffset: -101;
+        }
+        #autowin-boot .name {
+          font-size: 13px;
+          font-weight: 500;
+          letter-spacing: 0.24em;
+          text-transform: uppercase;
+          color: rgba(245, 247, 251, 0.86);
+        }
+        #autowin-boot .step {
+          font-size: 12px;
+          color: rgba(245, 247, 251, 0.34);
+          letter-spacing: 0.01em;
+        }
+        @keyframes boot-turn {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        @keyframes boot-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          #autowin-boot .ring {
+            animation-duration: 3s;
+          }
+          #autowin-boot {
+            animation: none;
+          }
+        }
+      </style>
       <div id="autowin-boot" role="status" aria-live="polite" data-testid="autowin-boot">
-        <span class="boot-name">Autowin OS</span>
-        <div class="boot-rail"></div>
-        <span class="boot-step">Chargement de l’interface…</span>
+        <svg class="ring" viewBox="0 0 64 64" aria-hidden="true">
+          <circle class="track" cx="32" cy="32" r="26"></circle>
+          <circle class="arc-a" cx="32" cy="32" r="26"></circle>
+          <circle class="arc-b" cx="32" cy="32" r="26"></circle>
+        </svg>
+        <span class="name">Autowin OS</span>
+        <span class="step">Pr&eacute;paration de l&rsquo;interface&hellip;</span>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

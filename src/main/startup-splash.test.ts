@@ -45,45 +45,33 @@ describe('démarrage — la fenêtre n’attend plus la migration', () => {
 })
 
 describe('écran d’attente', () => {
-  it('est chargé par le processus principal, pas par le bundle', () => {
-    // Un écran d'attente servi par le serveur de développement n'apparaîtrait qu'une fois l'attente
-    // terminée : c'est exactement l'erreur d'une première version, constatée sur capture.
-    expect(source).toContain('data:text/html;charset=utf-8')
-    expect(source).toMatch(/const attente = /)
+  it('est chargé par le processus principal depuis un FICHIER, jamais par une URL `data:`', () => {
+    // MESURÉ : avec `data:text/html,…`, le document se chargeait mais son contenu était VIDE —
+    // Chromium bloque les navigations de premier niveau vers `data:`. L'écran n'était donc jamais
+    // visible pendant les 44 secondes qu'il devait couvrir.
+    // On vise le CODE, pas la documentation : le commentaire qui explique l'ancienne approche cite
+    // forcément `data:text/html`, et une garde qui l'interdit partout se déclencherait sur lui.
+    expect(source).not.toMatch(/loadURL\([`'"]data:/)
+    expect(source).toContain("join(app.getPath('temp'), 'autowin-boot.html')")
+    expect(source).toContain('writeFileSync(cheminAttente, BOOT_SPLASH_DOCUMENT')
   })
 
   it('est PEINT AVANT que le vrai document soit demandé', () => {
-    // Enchaîner deux `loadURL` sans attendre ANNULE le premier : l'écran ne s'affichait jamais. Cette
-    // erreur a été commise puis corrigée ; ce test est là pour qu'elle ne revienne pas.
-    expect(source).toMatch(
-      /\.loadURL\(`data:text\/html[^`]*`\)\s*\n?\s*\.then\(chargerInterface, chargerInterface\)/
-    )
+    // Enchaîner deux chargements sans attendre ANNULE le premier : l'écran ne s'affichait jamais.
+    // Cette erreur a été commise puis corrigée ; ce test est là pour qu'elle ne revienne pas.
+    expect(source).toMatch(/loadFile\(cheminAttente\)\.then\(chargerInterface, chargerInterface\)/)
   })
 
   it('charge l’interface même si l’écran d’attente échoue', () => {
-    // Les deux arguments de `then` sont le même appel : une attente ratée ne doit jamais empêcher
-    // l'application de démarrer.
+    // Les deux arguments de `then` sont le même appel, ET l'écriture du fichier est enveloppée : ni un
+    // chargement raté ni un disque en lecture seule ne doivent empêcher l'application de démarrer.
     expect(source).toContain('.then(chargerInterface, chargerInterface)')
+    expect(source).toMatch(/else chargerInterface\(\)/)
   })
 
-  it('porte les couleurs de l’application : fond noir, roue jaune et violette', () => {
-    const bloc = source.slice(
-      source.indexOf('const attente = '),
-      source.indexOf('chargerInterface)')
-    )
-    expect(bloc).toContain('background:#000')
-    expect(bloc).toContain('#e9bd4e')
-    expect(bloc).toContain('#9d79ed')
-    expect(bloc).toMatch(/animation:t /)
-  })
-
-  it('reste annoncé aux lecteurs d’écran, et ralentit si l’on demande moins d’animation', () => {
-    const bloc = source.slice(
-      source.indexOf('const attente = '),
-      source.indexOf('chargerInterface)')
-    )
-    expect(bloc).toMatch(/role="status"/)
-    expect(bloc).toMatch(/aria-live="polite"/)
-    expect(bloc).toMatch(/prefers-reduced-motion/)
+  it('vient du module PARTAGÉ, pas d’une chaîne recopiée ici', () => {
+    // L'apparence et l'accessibilité sont vérifiées dans `src/shared/boot-splash.test.ts`, au même
+    // endroit que leur définition. Les dupliquer ici les ferait diverger en silence.
+    expect(source).toContain("import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'")
   })
 })

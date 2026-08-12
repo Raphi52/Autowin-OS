@@ -85,6 +85,7 @@ import { AgentPilot, type PilotEvent, type RecoveredPilotProviderCall } from './
 import { ActiveChatTurns } from './active-chat-turns'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import { boundedTurnHistory } from './chat-turn-messages'
+import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'
 import type { ChatTurnEvent } from '../shared/chat-turn'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger } from './activity/ledger'
@@ -4959,26 +4960,6 @@ function createWindow(): void {
    * l'écran reste visible pendant toute la compilation, puis disparaît de lui-même quand l'interface
    * est prête. Aucun code de nettoyage, aucune fenêtre séparée à gérer.
    */
-  // Fond NOIR et roue jaune/violet, aux couleurs de l'application : le jaune `#e9bd4e` est son accent
-  // dominant (26 usages dans les feuilles de style), le violet `#9d79ed` le second. Un écran d'attente
-  // qui ne ressemble pas au produit se lit comme une erreur de lancement.
-  const attente = `<!doctype html><meta charset="utf-8"><title>Autowin OS</title><style>
-    html,body{margin:0;height:100%;background:#000;color:#f5f7fb;
-      font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
-    .b{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
-      justify-content:center;gap:22px}
-    /* Roue : un anneau dont seuls deux quarts sont colorés, ce qui rend la rotation lisible. Bordure
-       plutôt qu'un dégradé conique — le rendu des dégradés coniques varie selon la version d'Electron,
-       et cet écran doit s'afficher partout du premier coup. */
-    .w{width:46px;height:46px;border-radius:50%;border:3px solid rgba(245,247,251,.10);
-      border-top-color:#e9bd4e;border-right-color:#9d79ed;animation:t .9s linear infinite}
-    .n{font-size:14px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;opacity:.9}
-    .s{font-size:12px;color:rgba(245,247,251,.5)}
-    @keyframes t{to{transform:rotate(360deg)}}
-    @media (prefers-reduced-motion:reduce){.w{animation-duration:2.4s}}
-  </style><div class="b" role="status" aria-live="polite"><div class="w"></div>
-    <span class="n">Autowin OS</span>
-    <span class="s">D&eacute;marrage&nbsp;: pr&eacute;paration de l&rsquo;interface&hellip;</span></div>`
   const chargerInterface = (): void => {
     if (mainWindow.isDestroyed()) return
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -4992,14 +4973,35 @@ function createWindow(): void {
     }
   }
 
-  // L'ATTENTE DOIT ÊTRE PEINTE AVANT de demander le vrai document. Enchaîner deux `loadURL` sans
+  /**
+   * L'attente est écrite dans un vrai FICHIER, puis chargée par `loadFile`.
+   *
+   * Une version précédente passait par `data:text/html,…`. MESURÉ : le document se chargeait bien —
+   * le protocole relevé était `data:` — mais son contenu était VIDE, `#autowin-boot` introuvable.
+   * Chromium bloque les navigations de premier niveau vers une URL `data:`, et Electron suit. L'écran
+   * n'était donc jamais visible pendant les 44 secondes qu'il devait couvrir : seul celui d'
+   * `index.html` s'affichait, à la toute fin, d'où l'impression qu'il « disparaissait après une
+   * seconde ».
+   *
+   * Le fichier vit dans le dossier temporaire : il est régénéré à chaque lancement, donc jamais
+   * périmé, et son absence ne peut pas empêcher le démarrage — l'interface est chargée dans les deux
+   * branches du `.then`.
+   */
+  const cheminAttente = join(app.getPath('temp'), 'autowin-boot.html')
+  let attentePrete = false
+  try {
+    writeFileSync(cheminAttente, BOOT_SPLASH_DOCUMENT, 'utf8')
+    attentePrete = true
+  } catch {
+    // Écriture impossible : on saute l'attente plutôt que de retarder l'application.
+  }
+
+  // L'ATTENTE DOIT ÊTRE PEINTE AVANT de demander le vrai document. Enchaîner deux chargements sans
   // attendre ANNULE le premier : l'écran n'aurait jamais été affiché, et on retombait exactement sur
   // la fenêtre vide que ceci corrige. On attend donc la fin du chargement — quelques millisecondes
-  // pour un document autonome — puis on lance l'interface. Quoi qu'il arrive, elle est chargée : une
-  // attente qui échoue ne doit jamais empêcher l'application de démarrer.
-  mainWindow
-    .loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(attente)}`)
-    .then(chargerInterface, chargerInterface)
+  // pour un document autonome — puis on lance l'interface.
+  if (attentePrete) mainWindow.loadFile(cheminAttente).then(chargerInterface, chargerInterface)
+  else chargerInterface()
 }
 
 // This method will be called when Electron has finished
