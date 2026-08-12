@@ -939,6 +939,15 @@ export class RunWorktreeCoordinator {
     }
     const finalizeAsync = this.manager.finalizeAsync
     if (!finalizeAsync) return { resolved: false, reason: 'unsupported' }
+    // Les SHA de conflit décrivent l'état BLOQUÉ. `isRecord` ne les autorise QU'avec
+    // `publication: 'blocked'` ; les garder en passant à `integrating` faisait échouer le tout
+    // premier `save()` de la résolution — « Manifeste de bureau invalide », mesuré le 2026-08-12
+    // sur les trois conflits en attente. Le bouton de résolution ne pouvait donc JAMAIS aboutir.
+    // Les SHA utiles à la fusion vivent ailleurs (`publicationAgentSha`/`publicationBaseSha`,
+    // remplis par `onIntegrated`), rien n'est perdu.
+    tracked.conflictBaseSha = undefined
+    tracked.conflictAgentSha = undefined
+    tracked.conflictFile = undefined
     this.persist(tracked, 'green', 'integrating', 'Résolution de conflit demandée depuis le Hub.')
     try {
       const res = await finalizeAsync.call(this.manager, runId, {

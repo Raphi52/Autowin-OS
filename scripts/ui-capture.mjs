@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Harnais de capture UI destiné aux phases BUILD/CLEAN, appelable en UNE commande depuis Bash.
  *
