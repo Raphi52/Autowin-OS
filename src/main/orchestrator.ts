@@ -800,7 +800,11 @@ const JUDGE_PHASE_CAP = 6000
  * Connecteurs de clause utilisés pour repérer une SECONDE action non couverte par le préfixe
  * lecture-seule reconnu (voir `classifyMutationConfidence`).
  */
-const CLAUSE_SPLIT = /\b(?:et|puis|then|and|apres|après)\b|[;,]/gi
+// Conflit de merge résolu en gardant les DEUX apports, qui ne s'opposaient pas : un côté enrichissait
+// le découpage en clauses (connecteurs d'opposition + ponctuation de fin de phrase), l'autre ajoutait
+// trois constantes indépendantes. Choisir un camp aurait perdu du travail utile dans les deux sens.
+const CLAUSE_SPLIT =
+  /\b(?:et|puis|then|and|apres|après|mais|but|cependant|however)\b|[;,]|[.!?]\s+/gi
 /**
  * Apostrophes typographiques ramenées à l'apostrophe droite AVANT toute détection de négation.
  * `NEGATED_MUTATION` n'accepte que `'` : « n’implémente rien » — la forme que produit tout clavier
@@ -814,8 +818,11 @@ const SENTINEL_PREFIX = /^\[[^\]]{0,160}\]\s*/
 const PHASE_LECTURE_SEULE_LEAD = /^\/?(?:scout|frame|judge)\b/i
 /** Verbes/participes lecture-seule reconnus À L'INTÉRIEUR d'une clause secondaire. */
 const READ_ONLY_STEM =
-  'analys|audit|cadr|document|expliqu|inspect|review|resume|resum|decri|lis|lire|liste|montre|affiche'
+  'analys|audit|cadr|document|expliqu|inspect|review|resume|resum|repond|decri|lis|lire|liste|montre|affiche'
 const READ_ONLY_CLAUSE = new RegExp(`^(?:${READ_ONLY_STEM})\\w*\\b`, 'i')
+const READ_ONLY_DELIVERABLE_CLAUSE =
+  /^(?:produi|fourni)\w*\s+(?:(?:le|la|un|une)\s+)?(?:cadrage|analyse|audit|resume|documentation)\b/i
+const NEGATED_OBJECT_REMAINDER = /^(?:de|du|des|le|la|les|un|une|aucun|aucune|rien)\b/i
 
 /**
  * #2 — verdict EXPLICITE de confiance sur la nature (mutation ou non) d'une tâche, au lieu d'un
@@ -877,16 +884,27 @@ export function classifyMutationConfidence(task: string): MutationConfidence {
   const simpleReadOnlyLead =
     /^(?:analys|audit|expliqu|inspect|review|cadr|document|resume|decri)\w*\b/i.test(normalized)
   if (!explicitReadOnly && !simpleReadOnlyLead) return 'mutation'
-  if (explicitReadOnly) return 'read-only'
-  // `simpleReadOnlyLead` ne certifie QUE le premier verbe. Une clause suivante introduite par un
-  // connecteur (« puis », « et », « then »...) porte peut-être une action non couverte par le
-  // dictionnaire de mutation — on ne peut pas l'affirmer lecture-seule sans l'avoir vérifiée.
+  // Une negation explicite ne certifie PAS les actions suivantes. Exemple falsifie :
+  // « Analyse sans modifier puis publie une release » conserve une mutation positive inconnue.
+  // Toutes les clauses passent donc le meme examen, y compris apres une negation.
   const clauses = normalized
     .split(CLAUSE_SPLIT)
     .map((clause) => clause.trim())
     .filter(Boolean)
-  if (clauses.length <= 1) return 'read-only'
-  const allClausesReadOnly = clauses.every((clause) => READ_ONLY_CLAUSE.test(clause))
+  const allClausesReadOnly = clauses.every((clause) => {
+    const withoutNegatedMutation = clause.replace(NEGATED_MUTATION, ' ').trim()
+    if (
+      READ_ONLY_CLAUSE.test(withoutNegatedMutation) ||
+      READ_ONLY_DELIVERABLE_CLAUSE.test(withoutNegatedMutation)
+    ) {
+      return true
+    }
+    const containedNegatedMutation = withoutNegatedMutation !== clause
+    return (
+      containedNegatedMutation &&
+      (!withoutNegatedMutation || NEGATED_OBJECT_REMAINDER.test(withoutNegatedMutation))
+    )
+  })
   return allClausesReadOnly ? 'read-only' : 'uncertain'
 }
 

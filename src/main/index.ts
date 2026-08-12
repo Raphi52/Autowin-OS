@@ -327,6 +327,7 @@ import { persistTaskStore } from './task-manager/task-store-disk'
 import { TaskScheduler } from './task-manager/task-scheduler'
 import { WatchdogEngine } from './task-manager/watchdog-engine'
 import { seedWatchdogTasks } from './task-manager/watchdog-seeds'
+import { planQuotaResume } from './quota-resume'
 import type { TaskUsageSettlementSink, WatchdogAppEvent } from './task-manager/types'
 import { ScheduledChatDispatcher, scheduledTaskBinding } from './task-manager/chat-dispatch'
 import { runWatchdogOrchestration } from './task-manager/watchdog-orchestration-adapter'
@@ -514,6 +515,97 @@ function notifyWatchdogWorkflowIncident(
 ${incident.detail}`,
     sourceConversationId
   )
+}
+
+/**
+ * Ouvre un selecteur de dossier natif — ou REFUSE de l'ouvrir quand personne ne peut y repondre.
+ *
+ * Un `showOpenDialog` sans fenetre parente est modal au niveau de l'APPLICATION : il vole le focus
+ * et attend indefiniment. Constate le 2026-08-10 : une session pilotant l'app a declenche « ranger
+ * la conversation dans un dossier » sans chemin, et un selecteur natif a surgi sur le bureau de
+ * l'utilisateur, bloquant le handler, alors que personne ne regardait cet ecran.
+ *
+ * Deux corrections, et la seconde est la vraie :
+ *  1. la fenetre PARENTE est passee quand elle existe — le dialogue devient modal a sa fenetre au
+ *     lieu de l'application entiere (c'est ce que `git:pickRepo` faisait deja, seul des trois) ;
+ *  2. sans fenetre visible, on REND `null` au lieu d'ouvrir. Le garde qui existait ne couvrait que
+ *     `headlessTestInstance`, c'est-a-dire les instances de TEST — pas une instance normale pilotee
+ *     par un agent, qui est precisement le cas ou personne n'est devant l'ecran. Un dialogue
+ *     bloquant n'a de sens que s'il existe un humain pour le fermer.
+ *
+ * `null` est deja le contrat de l'annulation sur les trois appelants : refuser ressemble donc, pour
+ * eux, a un utilisateur qui a clique « Annuler ». Aucun n'a besoin d'apprendre un nouveau cas.
+ */
+async function pickPath(
+  sender: Electron.WebContents,
+  kind: 'openDirectory' | 'openFile'
+): Promise<string | null> {
+  if (headlessTestInstance) return null
+  const parent = BrowserWindow.fromWebContents(sender)
+  const visible = parent && !parent.isDestroyed() && parent.isVisible() ? parent : undefined
+  if (!visible) {
+    console.warn(
+      `[dialog] sélecteur (${kind}) refusé : aucune fenêtre visible pour le porter. ` +
+        'Fournis le chemin explicitement plutôt que de compter sur le dialogue natif.'
+    )
+    return null
+  }
+  const result = await dialog.showOpenDialog(visible, { properties: [kind] })
+  return result.canceled ? null : (result.filePaths[0] ?? null)
+}
+
+const pickDirectory = (sender: Electron.WebContents): Promise<string | null> =>
+  pickPath(sender, 'openDirectory')
+
+/** Meme garde pour l'ENREGISTREMENT : un « ou sauvegarder ? » bloque tout autant. */
+async function pickSavePath(
+  sender: Electron.WebContents,
+  defaultPath: string
+): Promise<string | null> {
+  if (headlessTestInstance) return null
+  const parent = BrowserWindow.fromWebContents(sender)
+  const visible = parent && !parent.isDestroyed() && parent.isVisible() ? parent : undefined
+  if (!visible) {
+    console.warn(
+      '[dialog] sélecteur d’enregistrement refusé : aucune fenêtre visible pour le porter.'
+    )
+    return null
+  }
+  const result = await dialog.showSaveDialog(visible, { defaultPath })
+  return result.canceled ? null : (result.filePath ?? null)
+}
+
+/**
+ * Pose une reprise apres quota, si le refus annonce son heure. Best-effort et SILENCIEUX en cas
+ * d'echec : un tour deja en erreur ne doit pas echouer deux fois pour une commodite.
+ */
+function armQuotaResume(conversationId: string, error: unknown): void {
+  try {
+    const reason = error instanceof Error ? error.message : String(error ?? '')
+    const plan = planQuotaResume({
+      conversationId,
+      reason,
+      now: Date.now(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    })
+    if (!plan) return
+    // Une seule reprise par conversation : deux murs successifs ne doivent pas empiler deux reveils.
+    const dejaArmee = scheduledTasks
+      .listTasks()
+      .some(
+        (task) =>
+          task.enabled &&
+          task.destination.kind === 'existing' &&
+          task.destination.conversationId === conversationId &&
+          task.title.startsWith('Reprise après quota')
+      )
+    if (dejaArmee) return
+    scheduledTasks.create(plan.task)
+    console.log(`[quota] reprise armée pour ${conversationId} (source: ${plan.source})`)
+    broadcast({ type: 'refresh', scope: 'task-manager' })
+  } catch (armError) {
+    console.warn('[quota] reprise non armée', armError)
+  }
 }
 
 function broadcast(e: AppEvent): void {
@@ -1175,22 +1267,40 @@ function behaviourRendererOptions(): { devRendererUrl?: string; rendererHtmlPath
   }
 }
 
-/** IPC one-shot : lecture historique, import renderer, acquittement, puis marqueur. */
-function registerStorageMigrationIpc(
-  legacyStorageValues: MigratedRendererStorage,
-  canWriteMigrationMarker: boolean
-): void {
-  ipcMain.handle(
-    'app:storage-migration',
-    createStorageMigrationReadHandler(legacyStorageValues, (event, scope) =>
-      assertTrustedRendererSender(event, scope)
-    )
-  )
-  ipcMain.handle('app:storage-migration-complete', (event) => {
+/** Ce que la lecture historique finit par produire — attendu au moment où le renderer le demande. */
+type LectureHistorique = { values: MigratedRendererStorage; canWriteMarker: boolean }
+
+/**
+ * IPC one-shot : lecture historique, import renderer, acquittement, puis marqueur.
+ *
+ * La lecture arrive en PROMESSE, et c'est le cœur du correctif de démarrage. Elle était auparavant
+ * attendue AVANT la création de la fenêtre, or elle ouvre une fenêtre cachée et y charge le renderer
+ * ENTIER — juste pour relire quelques clés de `localStorage`. En développement, cela paie la
+ * compilation complète du bundle avant que la moindre fenêtre existe : mesuré au chronomètre,
+ * 30 à 44 secondes d'écran totalement vide, pendant lesquelles on relance l'application en croyant
+ * qu'elle n'a pas démarré.
+ *
+ * En l'attendant ICI plutôt que là-bas, la fenêtre s'ouvre tout de suite et c'est le seul appel qui
+ * a réellement besoin des valeurs qui patiente.
+ */
+function registerStorageMigrationIpc(lecture: Promise<LectureHistorique>): void {
+  ipcMain.handle('app:storage-migration', async (event) => {
+    const { values } = await lecture
+    // Le handler est construit à l'appel, une fois les valeurs connues : il les capture, donc il ne
+    // peut pas être fabriqué à l'enregistrement, quand elles n'existent pas encore.
+    //
+    // `assertTrustedRendererSender` est passée TELLE QUELLE et non enveloppée dans une lambda : la
+    // fabrique est générique sur le type d'évènement, qu'elle déduit de cette fonction. Une lambda
+    // aux paramètres implicites la faisait déduire `unknown`, et le typecheck refusait l'évènement.
+    const handler = createStorageMigrationReadHandler(values, assertTrustedRendererSender)
+    return handler(event)
+  })
+  ipcMain.handle('app:storage-migration-complete', async (event) => {
     if (!isTrustedRendererUrl(event.senderFrame?.url ?? '', behaviourRendererOptions())) {
       throw new Error('Origine renderer non autorisee pour la migration')
     }
-    if (!canWriteMigrationMarker) return false
+    const { canWriteMarker } = await lecture
+    if (!canWriteMarker) return false
     markRendererStorageMigrationComplete(canonicalAppDataRoot)
     return true
   })
@@ -1914,11 +2024,7 @@ Le fil reprend ensuite normalement.`
   // Sélecteur de dépôt (dialogue dossier, read-only) → renvoie le chemin choisi ou null si annulé.
   ipcMain.handle('git:pickRepo', async (event) => {
     assertTrustedRendererSender(event, 'GitPickRepo')
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const res = await (win
-      ? dialog.showOpenDialog(win, { properties: ['openDirectory'] })
-      : dialog.showOpenDialog({ properties: ['openDirectory'] }))
-    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
+    return pickDirectory(event.sender)
   })
   // Racine du Brain partagé : permet à Source control de basculer sur SON dépôt git en un clic
   // (les notes du Brain sont versionnées comme le code). Lecture seule, aucun secret exposé.
@@ -2090,14 +2196,11 @@ Le fil reprend ensuite normalement.`
     const id = rawId === null || rawId === undefined ? null : guardString(rawId, 'id')
     const choisis = id ? fichier.profiles.filter((p) => p.id === id) : fichier.profiles
     if (!choisis.length) return { ok: false as const, reason: 'aucun workflow à exporter' }
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const cible = await (win
-      ? dialog.showSaveDialog(win, { defaultPath: suggestedFileName(id ? choisis[0] : undefined) })
-      : dialog.showSaveDialog({ defaultPath: suggestedFileName(id ? choisis[0] : undefined) }))
-    if (cible.canceled || !cible.filePath) return { ok: false as const, reason: 'annulé' }
+    const cible = await pickSavePath(event.sender, suggestedFileName(id ? choisis[0] : undefined))
+    if (!cible) return { ok: false as const, reason: 'annulé' }
     const paquet = buildExport(choisis, new Date().toISOString())
-    writeFileSync(cible.filePath, JSON.stringify(paquet, null, 2), 'utf8')
-    return { ok: true as const, path: cible.filePath, count: choisis.length }
+    writeFileSync(cible, JSON.stringify(paquet, null, 2), 'utf8')
+    return { ok: true as const, path: cible, count: choisis.length }
   })
   /**
    * Faire entrer des workflows depuis un fichier. Le contenu n'est JAMAIS cru : il passe par le même
@@ -2106,17 +2209,14 @@ Le fil reprend ensuite normalement.`
    */
   ipcMain.handle('os:workflowProfiles:import', async (event) => {
     assertTrustedRendererSender(event, 'Workflow profiles')
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const choix = await (win
-      ? dialog.showOpenDialog(win, { properties: ['openFile'] })
-      : dialog.showOpenDialog({ properties: ['openFile'] }))
-    if (choix.canceled || !choix.filePaths.length) {
+    const choisi = await pickPath(event.sender, 'openFile')
+    if (!choisi) {
       return { ok: false as const, reason: 'annulé', file: loadWorkflowProfiles() }
     }
     let brut: unknown
     try {
       // Le BOM est retiré : sous Windows, presque tout ce qui écrit un JSON à la main en pose un.
-      brut = JSON.parse(readFileSync(choix.filePaths[0], 'utf8').replace(/^\uFEFF/, ''))
+      brut = JSON.parse(readFileSync(choisi, 'utf8').replace(/^\uFEFF/, ''))
     } catch {
       return { ok: false as const, reason: 'fichier illisible', file: loadWorkflowProfiles() }
     }
@@ -2621,9 +2721,7 @@ Le fil reprend ensuite normalement.`
 
   ipcMain.handle('os:behaviour:choose-workspace', async (event) => {
     assertTrustedBehaviourSender(event)
-    if (headlessTestInstance) return null
-    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
-    const selected = result.canceled ? null : (result.filePaths[0] ?? null)
+    const selected = await pickDirectory(event.sender)
     return selected ? behaviourAccess.approve(selected) : null
   })
 
@@ -2789,10 +2887,8 @@ Le fil reprend ensuite normalement.`
       const id = guardString(rawId, 'id')
       let chemin: string | null
       if (rawPath === undefined) {
-        if (headlessTestInstance) return null
-        const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
-        if (result.canceled) return null
-        chemin = result.filePaths[0] ?? null
+        chemin = await pickDirectory(event.sender)
+        if (chemin === null) return null
       } else {
         chemin = rawPath === null ? null : guardString(rawPath, 'projectPath')
       }
@@ -4057,6 +4153,11 @@ Le fil reprend ensuite normalement.`
       // Le `return` ci-dessus couvre l'abort du contrôleur du TOUR. Ce garde couvre le cas où l'arrêt de
       // l'ORCHESTRATION fait jeter le tour sans que son propre contrôleur ait été aborté : même geste
       // volontaire, même absence d'incident.
+      // MUR DE QUOTA : arme une reprise a l'heure ANNONCEE par le refus, sans jamais sonder.
+      // Le registre refuse de re-tester periodiquement (« ca couterait du quota ») et il a raison ;
+      // le prix etait paye par l'utilisateur, qui devait se souvenir de revenir. Le refus portant son
+      // heure de retour, il n'y a rien a sonder : on pose une tache planifiee a cette heure.
+      if (conversationId) armQuotaResume(conversationId, e)
       if (conversationId && !activeChatTurns.wasDeliberatelyStopped(conversationId)) {
         reportAutoKaizen({
           dedupeKey: `chat-turn:${conversationId}:${turnId}:failed`,
@@ -4845,15 +4946,60 @@ function createWindow(): void {
     setTimeout(() => void warmCapabilities(), 250)
   })
 
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    const rendererUrl = new URL(process.env['ELECTRON_RENDERER_URL'])
-    if (isolatedTestInstance) rendererUrl.searchParams.set('instance', 'test')
-    mainWindow.loadURL(rendererUrl.toString())
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), {
-      query: isolatedTestInstance ? { instance: 'test' } : undefined
-    })
+  /**
+   * ÉCRAN D'ATTENTE, chargé par le processus PRINCIPAL avant l'URL du renderer.
+   *
+   * Un premier essai avait mis ce bloc dans `index.html`. Il ne marche pas, et c'est une CAPTURE au
+   * niveau de l'OS qui l'a montré : la fenêtre devient visible AVANT que le serveur de développement
+   * ait servi la page, donc il n'y a encore rien à peindre — la fenêtre reste entièrement vide.
+   * Chronométré, cache chaud : fenêtre visible vers 35-55 s, interface montée vers 70-80 s.
+   *
+   * Ici l'attente ne dépend plus de vite : c'est un document autonome. Et Electron continue
+   * d'afficher le document COURANT jusqu'à ce que le suivant ait peint sa première image — donc
+   * l'écran reste visible pendant toute la compilation, puis disparaît de lui-même quand l'interface
+   * est prête. Aucun code de nettoyage, aucune fenêtre séparée à gérer.
+   */
+  // Fond NOIR et roue jaune/violet, aux couleurs de l'application : le jaune `#e9bd4e` est son accent
+  // dominant (26 usages dans les feuilles de style), le violet `#9d79ed` le second. Un écran d'attente
+  // qui ne ressemble pas au produit se lit comme une erreur de lancement.
+  const attente = `<!doctype html><meta charset="utf-8"><title>Autowin OS</title><style>
+    html,body{margin:0;height:100%;background:#000;color:#f5f7fb;
+      font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+    .b{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:22px}
+    /* Roue : un anneau dont seuls deux quarts sont colorés, ce qui rend la rotation lisible. Bordure
+       plutôt qu'un dégradé conique — le rendu des dégradés coniques varie selon la version d'Electron,
+       et cet écran doit s'afficher partout du premier coup. */
+    .w{width:46px;height:46px;border-radius:50%;border:3px solid rgba(245,247,251,.10);
+      border-top-color:#e9bd4e;border-right-color:#9d79ed;animation:t .9s linear infinite}
+    .n{font-size:14px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;opacity:.9}
+    .s{font-size:12px;color:rgba(245,247,251,.5)}
+    @keyframes t{to{transform:rotate(360deg)}}
+    @media (prefers-reduced-motion:reduce){.w{animation-duration:2.4s}}
+  </style><div class="b" role="status" aria-live="polite"><div class="w"></div>
+    <span class="n">Autowin OS</span>
+    <span class="s">D&eacute;marrage&nbsp;: pr&eacute;paration de l&rsquo;interface&hellip;</span></div>`
+  const chargerInterface = (): void => {
+    if (mainWindow.isDestroyed()) return
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+      const rendererUrl = new URL(process.env['ELECTRON_RENDERER_URL'])
+      if (isolatedTestInstance) rendererUrl.searchParams.set('instance', 'test')
+      void mainWindow.loadURL(rendererUrl.toString())
+    } else {
+      void mainWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+        query: isolatedTestInstance ? { instance: 'test' } : undefined
+      })
+    }
   }
+
+  // L'ATTENTE DOIT ÊTRE PEINTE AVANT de demander le vrai document. Enchaîner deux `loadURL` sans
+  // attendre ANNULE le premier : l'écran n'aurait jamais été affiché, et on retombait exactement sur
+  // la fenêtre vide que ceci corrige. On attend donc la fin du chargement — quelques millisecondes
+  // pour un document autonome — puis on lance l'interface. Quoi qu'il arrive, elle est chargée : une
+  // attente qui échoue ne doit jamais empêcher l'application de démarrer.
+  mainWindow
+    .loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(attente)}`)
+    .then(chargerInterface, chargerInterface)
 }
 
 // This method will be called when Electron has finished
@@ -4902,22 +5048,29 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  let legacyStorageValues: MigratedRendererStorage = {}
-  let canWriteMigrationMarker = isRendererStorageMigrationComplete(canonicalAppDataRoot)
-  if (!explicitUserDataDir && !canWriteMigrationMarker) {
-    const legacyRead = await readLegacyRendererStorage(
-      legacyAppDataRoot(appDataRoot),
-      rendererLocation()
-    )
-    legacyStorageValues = legacyRead.values
-    canWriteMigrationMarker = legacyRead.status !== 'failed'
-    if (legacyRead.status === 'failed') {
-      console.warn(
-        `[Autowin migration] legacy LocalStorage read failed at ${legacyRead.stage ?? 'unknown-stage'} (${legacyRead.errorCode ?? 'UNKNOWN'}); will retry on next application launch`
-      )
-    }
-  }
-  registerStorageMigrationIpc(legacyStorageValues, canWriteMigrationMarker)
+  const dejaMigre = isRendererStorageMigrationComplete(canonicalAppDataRoot)
+  // PAS de `await` ici : cette lecture ouvre une fenêtre cachée et y charge le renderer entier, ce
+  // qui coûte en développement la compilation complète du bundle. L'attendre à cet endroit repoussait
+  // la création de la fenêtre principale de 30 à 44 secondes — mesuré — et l'utilisateur relançait
+  // l'application faute de voir quoi que ce soit. La promesse est attendue par le seul appel IPC qui
+  // en a besoin.
+  const lectureHistorique: Promise<LectureHistorique> =
+    !explicitUserDataDir && !dejaMigre
+      ? readLegacyRendererStorage(legacyAppDataRoot(appDataRoot), rendererLocation()).then(
+          (legacyRead) => {
+            if (legacyRead.status === 'failed') {
+              console.warn(
+                `[Autowin migration] legacy LocalStorage read failed at ${legacyRead.stage ?? 'unknown-stage'} (${legacyRead.errorCode ?? 'UNKNOWN'}); will retry on next application launch`
+              )
+            }
+            return { values: legacyRead.values, canWriteMarker: legacyRead.status !== 'failed' }
+          },
+          // Un échec de migration ne doit jamais empêcher l'application de démarrer : on repart sur
+          // rien à importer, et le marqueur n'est pas écrit pour que la prochaine ouverture réessaie.
+          () => ({ values: {}, canWriteMarker: false })
+        )
+      : Promise.resolve({ values: {}, canWriteMarker: dejaMigre })
+  registerStorageMigrationIpc(lectureHistorique)
   registerChatIpc()
   registerTicketsIpc({
     ipc: ipcMain,
