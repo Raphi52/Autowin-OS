@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
-import { serializeEvidenceForJudge } from './evidence-digest'
+import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
 import type { Role, RoleBinding, RoleModelConfig, ReasoningEffort } from './roles'
 import { resolvePhaseBinding } from './roles'
 import { defaultQuorumThreshold } from './quorum'
@@ -1987,7 +1987,7 @@ export class Orchestrator {
     const judgePrompt =
       `Tu es un juge outillé en lecture seule. Confronte le livrable aux preuves d'outil. ` +
       `Le livrable est le TEXTE agrégé (sous-tâches parallèles), PAS un RUN.md sur disque.\n` +
-      `TÂCHE: ${task}\nRÉPONSE (agrégat des sous-tâches) : ${aggregate}\n` +
+      `TÂCHE: ${task}\nRÉPONSE (agrégat des sous-tâches) : ${clampAggregateForJudge(aggregate)}\n` +
       `PREUVES OUTILS: ${serializeEvidenceForJudge(evidence)}\n` +
       `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
     const messages = [{ role: 'user' as const, content: judgePrompt }]
@@ -3564,7 +3564,7 @@ export class Orchestrator {
           `IMPORTANT (in-app Autowin OS) : le livrable est le TEXTE agrégé ci-dessous, PAS un fichier ` +
           `RUN.md sur disque (Autowin le gère). N'exige jamais de RUN.md physique, d'empreinte SHA-256 ` +
           `ni de chemin kit ; juge la SUBSTANCE du livrable et les preuves d'outil réellement observées.\n` +
-          `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${exec.text}\n` +
+          `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
           `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]

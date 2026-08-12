@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ExecutionEvidence } from './providers/types'
 import {
   EVIDENCE_MAX_ITEMS,
+  clampAggregateForJudge,
   clampMiddle,
   evidenceForJudge,
   serializeEvidenceForJudge
@@ -100,6 +101,24 @@ describe('evidence-digest', () => {
     expect(parsed[0].kind).toBe('mutation')
     expect(parsed.some((item: { kind: string }) => item.kind === 'verification')).toBe(true)
     expect(serialized).toContain('preuves de moindre portée omises')
+  })
+
+  it('borne le livrable agrégé en gardant sa substance et ses preuves', () => {
+    // Calqué sur conv-101 : 1,54 M de caractères transmis au juge pour 6,36 $ sur un seul appel.
+    const livrable = `## Ce qui a changé\nP0-1 corrigé\n${'redite sans valeur\n'.repeat(80_000)}## Preuves\nexit 0, 103 passed`
+    expect(livrable.length).toBeGreaterThan(1_000_000)
+    const borne = clampAggregateForJudge(livrable)
+    expect(borne.length).toBeLessThan(70_000)
+    expect(borne).toContain('## Ce qui a changé')
+    expect(borne).toContain('P0-1 corrigé')
+    expect(borne).toContain('exit 0, 103 passed')
+    expect(borne).toContain('caractères omis')
+  })
+
+  it('laisse intact un livrable de taille normale', () => {
+    const livrable = `## Ce qui a changé\n${'ligne utile\n'.repeat(200)}## Preuves\nexit 0`
+    expect(clampAggregateForJudge(livrable)).toBe(livrable)
+    expect(clampAggregateForJudge(undefined)).toBe('')
   })
 
   it('rend un tableau vide lisible', () => {

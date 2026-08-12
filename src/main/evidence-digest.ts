@@ -16,6 +16,25 @@ import type { ExecutionEvidence } from './providers/types'
  * laisse au Chat ce qui ne sert qu'à l'affichage.
  */
 
+/**
+ * Bornes du LIVRABLE agrégé transmis au juge.
+ *
+ * Levier n°1 du scout coût joué dans Autowin le 2026-08-12 (conv-1120), adossé aux conversations
+ * réelles : sur `conv-101`, un appel juge porte 1 540 000 caractères de messages pour 6,36 $, et
+ * trois passes juge du même fil totalisent 10,56 $. Le chemin greedy injecte l'agrégat ENTIER,
+ * sans le plafond que les autres phases appliquent.
+ *
+ * On coupe au milieu, jamais aux extrémités : un livrable porte sa substance en tête (ce qui a été
+ * fait) et ses preuves en queue (tests, exit codes, verdicts). Amputer un bord rendrait le juge
+ * incapable de juger ; amputer le ventre lui coûte des redites.
+ */
+export const AGGREGATE_HEAD = 40_000
+export const AGGREGATE_TAIL = 20_000
+
+/** Borne le livrable agrégé soumis au juge sans lui retirer ses deux bords porteurs. */
+export const clampAggregateForJudge = (text: string | undefined): string =>
+  text ? clampMiddle(text, AGGREGATE_HEAD, AGGREGATE_TAIL) : ''
+
 /** Bornes : têtes/queues de `stdout`, longueur de commande, nombre de preuves. */
 export const EVIDENCE_STDOUT_HEAD = 400
 export const EVIDENCE_STDOUT_TAIL = 800
