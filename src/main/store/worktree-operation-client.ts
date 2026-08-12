@@ -38,13 +38,24 @@ export class WorktreeOperationClient {
     return this.active
   }
 
+  /**
+   * `timeoutMs` par appel, parce qu'un budget unique est une erreur de catégorie.
+   *
+   * Le budget par défaut est celui d'UNE commande git (30 s + 2). MESURÉ : l'inventaire de
+   * récupération, lui, balaie 52 copies — chacune avec plusieurs sous-processus git — et il a été
+   * interrompu à 32 000 ms, laissant la récupération en échec alors qu'elle progressait normalement.
+   * Le message affiché disait la vérité (« interrompu après 32000 ms ») ; c'est la limite qui était
+   * fausse, pas la mesure.
+   */
   run<T>(
     request: WorktreeOperationRequest,
     callbacks: {
       onPrepared?: (agentSha: string, baseSha: string) => void
       onIntegrated?: (integratedSha: string, agentSha: string, baseSha: string) => void
-    } = {}
+    } = {},
+    options: { timeoutMs?: number } = {}
   ): Promise<T> {
+    const timeoutMs = options.timeoutMs ?? this.timeoutMs
     const worker = this.workerFactory()
     this.active += 1
     return new Promise<T>((resolve, reject) => {
@@ -59,8 +70,8 @@ export class WorktreeOperationClient {
         else resolve(outcome.value)
       }
       const timer = setTimeout(
-        () => finish({ error: new WorktreeOperationTimeoutError(this.timeoutMs) }),
-        this.timeoutMs
+        () => finish({ error: new WorktreeOperationTimeoutError(timeoutMs) }),
+        timeoutMs
       )
       ;(timer as ReturnType<typeof setTimeout> & { unref?: () => void }).unref?.()
 

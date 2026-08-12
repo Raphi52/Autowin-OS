@@ -43,6 +43,17 @@ import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
 
 const SAFE_ID = /^[A-Za-z0-9_-]+$/
 const GIT_COMMAND_TIMEOUT_MS = 30_000
+
+/**
+ * Budget de l'inventaire de récupération, distinct de celui d'une commande git.
+ *
+ * MESURÉ sur ce dépôt : cet inventaire balaie 52 copies, chacune avec plusieurs sous-processus git —
+ * le seul balayage des copies abandonnées pesait 19,7 s, et la réconciliation complète ~23 s. Avec le
+ * budget d'une commande unique (32 s), il était interrompu à mi-course et la récupération repartait en
+ * échec. Rien n'attend ce résultat : il alimente une vue, pas un chemin bloquant. Cinq minutes est
+ * donc large sans être infini — un worker vraiment pendu reste tué.
+ */
+const INVENTAIRE_RECUPERATION_TIMEOUT_MS = 300_000
 function assertSafeId(value: string, label: string): void {
   if (!SAFE_ID.test(value))
     throw new Error(`${label} invalide (caractères non autorisés): ${value}`)
@@ -330,24 +341,30 @@ export function defaultProcessIdentity(pid: number): string | null | undefined {
 }
 
 /**
- * L'isolation des opérations Git dans un worker : ÉTEINTE, délibérément.
+ * L'isolation des opérations Git dans un worker : ACTIVE, et il a fallu deux correctifs pour ça.
  *
- * Elle était déjà éteinte avant ce drapeau, mais par ACCIDENT — le chemin du worker était calculé
- * depuis `__dirname`, qui vaut `out/main/chunks` pour ce module (le bundler l'émet dans son propre
- * morceau) alors que le worker vit dans `out/main`. `existsSync` échouait, et comme cette présence est
- * la condition de l'isolation, tout le travail Git repassait sur le fil principal sans un mot.
+ * Elle était éteinte depuis un moment, par ACCIDENT : le chemin du worker était calculé depuis
+ * `__dirname`, qui vaut `out/main/chunks` pour ce module (le bundler l'émet dans son propre morceau)
+ * alors que le worker vit dans `out/main`. `existsSync` échouait donc toujours, et comme cette présence
+ * est la condition de l'isolation, tout le travail Git repassait sur le fil principal sans un mot.
  *
- * La résolution est corrigée juste en dessous, mais l'isolation reste coupée, parce que l'activer a
- * été MESURÉ et casse la récupération : l'inventaire produit par le worker ne restaure qu'UN run là où
- * le chemin synchrone en restaure 215, sans lever d'erreur — une perte d'état silencieuse, pire que le
- * gel qu'elle supprime. Le worker échoue sur `fatal: not a git repository: (NULL)`, donc son
- * environnement Git ne se résout pas comme celui du processus principal.
+ * Une fois la résolution corrigée, l'activer CASSAIT la récupération : un run restauré au lieu de 215.
+ * Deux causes, mesurées et corrigées séparément :
+ *  - une seule copie au lien Git mort faisait échouer l'inventaire ENTIER — `recoveryInventory` ne
+ *    tolérait pas la panne copie par copie, contrairement au chemin synchrone ;
+ *  - l'inventaire recevait le budget d'UNE commande git (32 s) alors qu'il balaie 52 copies. Il était
+ *    interrompu à mi-course, avec le message exact « interrompu après 32000 ms » : la mesure disait
+ *    vrai, c'est la limite qui était de la mauvaise catégorie.
  *
- * Ce qui reste vrai en attendant : la réconciliation gèle le fil principal le temps de quelques appels
- * `git` individuels — mesuré, 2 copies à ~4,4 s et 3 runs à ~1 à 1,5 s. Aucun découpage ne peut les
- * subdiviser : un `execFileSync` est indivisible. Seul le passage hors-fil les supprimera.
+ * PREUVE d'équivalence, faite AVANT d'activer : les deux chemins restaurent exactement les mêmes 215
+ * runs, identifiant par identifiant — 0 manquant, 0 en plus, comparé par différence d'ensembles et non
+ * par un compte. Et la latence IPC retombe au plancher : médiane 2 ms, max 1,3 s, contre 3,9 s avec le
+ * travail sur le fil principal et 23,9 s avant tout report.
+ *
+ * Le drapeau qui figeait l'isolation a été RETIRÉ plutôt que passé à `true` : une constante que rien ne
+ * bascule est un faux réglage. La vraie porte de sortie existe déjà et sert aux tests —
+ * `disableAsyncOperations`.
  */
-const ISOLATION_OPERATIONS_ACTIVE = false
 
 /**
  * Où trouver `worktree-operation-worker.js` depuis le module qui le lance.
@@ -406,7 +423,6 @@ export class WorktreeManager {
     this.now = opts.nowFn ?? Date.now
     const operationWorkerPath = resoudreCheminWorker(__dirname, existsSync)
     if (
-      ISOLATION_OPERATIONS_ACTIVE &&
       !opts.disableAsyncOperations &&
       !opts.git &&
       !opts.tryGitFn &&
@@ -539,7 +555,11 @@ export class WorktreeManager {
 
   async recoveryInventoryAsync(): Promise<WorktreeRecoveryInventory> {
     return this.operationClient
-      ? this.operationClient.run({ operation: 'recoveryInventory' })
+      ? this.operationClient.run(
+          { operation: 'recoveryInventory' },
+          {},
+          { timeoutMs: INVENTAIRE_RECUPERATION_TIMEOUT_MS }
+        )
       : this.recoveryInventory()
   }
 
