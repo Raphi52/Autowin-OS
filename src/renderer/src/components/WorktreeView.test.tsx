@@ -289,6 +289,42 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     expect(container?.querySelector('[data-testid="worktree-topology-main"]')).not.toBeNull()
   })
 
+  it('place le résumé chef de projet AVANT la frise et la topologie', async () => {
+    installApi()
+    await renderView()
+
+    // L'ordre EST la fonctionnalité : « en un coup d'œil » veut dire en haut, avant le tracé détaillé.
+    const html = container?.innerHTML ?? ''
+    const resume = html.indexOf('worktree-chef-de-projet')
+    const topologie = html.indexOf('worktree-topology-main')
+    expect(resume).toBeGreaterThan(-1)
+    expect(resume).toBeLessThan(topologie)
+    // La frise est IMBRIQUÉE dans la section topologie — son identifiant apparaît donc après celui de
+    // la section, et comparer les deux positions à plat donnait un faux échec.
+    const sectionTopologie = container?.querySelector('[data-testid="worktree-topology-main"]')
+    expect(sectionTopologie?.querySelector('[data-testid="worktree-frise"]')).not.toBeNull()
+    expect(container?.querySelector('[data-testid="worktree-flux"]')).not.toBeNull()
+    // Chaque pastille écrit son verdict : la couleur ne porte pas l'information seule.
+    expect(container?.querySelector('[data-testid="worktree-chantiers"]')?.textContent).toMatch(
+      /à toi|prêt à fusionner|en cours|à vérifier|interrompu|terminé/
+    )
+  })
+
+  it('dit que l’avancement est indisponible au lieu d’afficher des zéros', async () => {
+    installApi({
+      getWorktreeActivity: vi.fn(async () => {
+        throw new Error('activité indisponible')
+      })
+    })
+    await renderView()
+
+    // Un bandeau à zéro se lirait comme « projet au calme », ce qui est un mensonge quand la donnée
+    // n'a pas pu être lue.
+    const bloc = container?.querySelector('[data-testid="worktree-chef-de-projet"]')
+    expect(bloc?.textContent).toContain('indisponible')
+    expect(container?.querySelector('[data-testid="worktree-flux"]')).toBeNull()
+  })
+
   it('le conteneur de la topologie a une hauteur BORNÉE, sinon la frise ne montre rien', () => {
     // Défaut rencontré et mesuré : avec `flex: 1` seul, ce conteneur grandissait avec ses 271 commits,
     // son `scrollTop` restait à 0 et le cadre « portion lue » couvrait 1000/1000 de la frise — elle

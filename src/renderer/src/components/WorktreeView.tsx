@@ -3,6 +3,13 @@ import type { GitGraphCommit, GitGraphSnapshot } from '../../../shared/git-graph
 import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
 import { ModuleHeader } from './ModuleHeader'
 import { layoutGitGraph } from './GitGraphLayout'
+import {
+  formatAttente,
+  LIBELLES_VERDICT,
+  regrouperParChantier,
+  resumerFlux,
+  type Chantier
+} from './worktree-chef-de-projet'
 import './WorktreeView.css'
 
 type DataState = 'healthy' | 'unknown' | 'unavailable' | 'stale'
@@ -42,6 +49,111 @@ function projectState(
  * Périmètre : le DÉPÔT entier. Rien ici n'est propre à une conversation — les runs, les tours et leurs
  * fichiers vivent dans Observatory et Chat, et les mêler ici était justement le défaut corrigé.
  */
+/** Combien de chantiers d'un coup d'œil, avant même de lire une ligne. Douze lignes au plus. */
+const CHANTIERS_AFFICHES = 12
+
+/**
+ * Le bandeau de flux et le feu tricolore par chantier : ce qu'un chef de projet lit en trois secondes.
+ *
+ * Le bandeau répond « est-ce que ça avance », les lignes répondent « qu'est-ce qui m'attend ». Les deux
+ * comptent des CHANTIERS et non des runs : dix runs sur une branche en conflit sont UNE décision à
+ * prendre, et les compter dix fois est exactement la manière de rendre un tableau de bord inutile.
+ *
+ * Aucun appel Git supplémentaire ici : tout vient de l'activité déjà chargée. C'est délibéré — mesuré
+ * dans ce dépôt, un `git` par copie coûte ~292 ms et gèlerait la vue pour 36 copies.
+ */
+function ResumeChefDeProjet({
+  agents,
+  disponible
+}: {
+  agents: WorktreeAgentActivity[]
+  disponible: boolean
+}): React.JSX.Element {
+  const maintenant = Date.now()
+  const flux = useMemo(() => resumerFlux(agents, maintenant), [agents, maintenant])
+  const chantiers = useMemo(() => regrouperParChantier(agents, maintenant), [agents, maintenant])
+  const attente = formatAttente(flux.plusVieilleAttenteMs)
+  const caches = Math.max(chantiers.length - CHANTIERS_AFFICHES, 0)
+
+  if (!disponible) {
+    return (
+      <section className="wt-cdp" data-testid="worktree-chef-de-projet">
+        <p className="wt-cdp-indisponible" role="status">
+          {/* Ne RIEN afficher serait lu comme « zéro chantier », donc comme un projet au calme. */}
+          Avancement indisponible : l’activité des copies n’a pas pu être lue.
+        </p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="wt-cdp" data-testid="worktree-chef-de-projet">
+      <div className="wt-cdp-flux" data-testid="worktree-flux">
+        <div className="wt-cdp-nombre is-attention">
+          <b>{flux.aToi}</b>
+          <span>{flux.aToi === 1 ? 'chantier t’attend' : 'chantiers t’attendent'}</span>
+        </div>
+        <div className="wt-cdp-nombre is-pret">
+          <b>{flux.pret}</b>
+          <span>prêts à fusionner</span>
+        </div>
+        <div className="wt-cdp-nombre is-vivant">
+          <b>{flux.enCours}</b>
+          <span>en cours</span>
+        </div>
+        <div className="wt-cdp-nombre is-inconnu">
+          <b>{flux.aVerifier}</b>
+          <span>à vérifier</span>
+        </div>
+        <div className="wt-cdp-nombre">
+          <b>{flux.interrompus}</b>
+          <span>interrompus</span>
+        </div>
+        <div className="wt-cdp-nombre">
+          {/* Sans attente en cours on écrit « aucune », jamais un tiret muet ni un zéro trompeur. */}
+          <b>{attente ?? 'aucune'}</b>
+          <span>plus vieille attente</span>
+        </div>
+      </div>
+
+      {chantiers.length === 0 ? (
+        <p className="wt-cdp-vide">Aucun chantier en cours sur ce dépôt.</p>
+      ) : (
+        <ul className="wt-cdp-liste" data-testid="worktree-chantiers">
+          {chantiers.slice(0, CHANTIERS_AFFICHES).map((chantier: Chantier) => (
+            <li key={chantier.branche} className={`wt-cdp-ligne is-${chantier.verdict}`}>
+              <span className="wt-cdp-pastille">{LIBELLES_VERDICT[chantier.verdict]}</span>
+              <strong className="wt-cdp-branche">{chantier.branche}</strong>
+              <span className="wt-cdp-sujet">{chantier.sujet ?? ''}</span>
+              <span className="wt-cdp-compte">
+                {/*
+                  On écrit « 2 / 8 à trancher » et non « 8 runs » : mesuré sur ce dépôt, les quatre
+                  chantiers ressortent « à toi », donc le verdict seul ne dit plus l'ampleur. Et
+                  « 0 fichier » sur un chantier qui attend est l'information la plus utile de la ligne :
+                  il ne retient aucun travail, il attend d'être relancé ou oublié.
+                */}
+                {chantier.aToi > 0 ? `${chantier.aToi} / ${chantier.runs} à trancher` : null}
+                {chantier.aToi > 0 ? ' · ' : null}
+                {chantier.fichiers} {chantier.fichiers === 1 ? 'fichier' : 'fichiers'}
+              </span>
+              <span className="wt-cdp-attente">
+                {formatAttente(chantier.attenteDepuisMs) ?? ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {caches > 0 && (
+        <p className="wt-cdp-reste">
+          {/* Une troncature muette se lirait comme « tout est là ». On dit ce qui n'est pas montré. */}
+          {caches} chantier{caches > 1 ? 's' : ''} de plus, non affiché
+          {caches > 1 ? 's' : ''} — les moins urgents.
+        </p>
+      )}
+    </section>
+  )
+}
+
 function FriseRepo({
   noeuds,
   fraction,
@@ -186,6 +298,22 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
     }
   }, [active, load])
 
+  /**
+   * L'activité arrive APRÈS le premier rendu, et il faut s'y abonner pour ne pas mentir.
+   *
+   * MESURÉ : au lancement, la vue lisait l'activité à ~9 s alors que la récupération des copies ne la
+   * remplit qu'ensuite (~23 s de travail de fond). Le résumé affichait donc « 0 chantier t'attend » et
+   * « 0 en cours » pendant que 215 runs sur 4 branches existaient, et il ne se corrigeait jamais sans
+   * un clic sur « Actualiser ». Un tableau de bord à zéro se lit comme un projet au calme.
+   */
+  useEffect(() => {
+    if (!active) return undefined
+    return window.api?.onWorktreeActivity?.((suivant) => {
+      setAgents(suivant)
+      setActivityAvailable(true)
+    })
+  }, [active])
+
   // Mesurer DÈS que la disposition change : sans cela `portion` reste à 1 jusqu'au premier défilement,
   // et le cadre de la frise couvre toute la largeur en prétendant que tout est visible.
   useEffect(() => {
@@ -272,6 +400,8 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
               <span>L’activité des worktrees est indisponible.</span>
             </div>
           )}
+
+          <ResumeChefDeProjet agents={agents} disponible={activityAvailable} />
 
           {/*
             La topologie du DÉPÔT, plein cadre et sans clic préalable. Elle était auparavant cachée

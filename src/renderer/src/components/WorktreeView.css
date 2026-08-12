@@ -388,3 +388,124 @@
   padding: 24px;
   color: var(--text-faint, rgba(245, 247, 251, 0.4));
 }
+
+/*
+  RÉSUMÉ CHEF DE PROJET : bandeau de flux + feu tricolore par chantier.
+
+  La couleur ne porte JAMAIS l'information seule : chaque pastille écrit son verdict en mots. Un
+  tableau de bord dont le sens tient dans une nuance devient illisible dès qu'on le projette.
+*/
+.wt-cdp {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wt-cdp-flux {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1px;
+  border: 1px solid var(--container-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--container-border);
+}
+.wt-cdp-nombre {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--surface-inset, rgba(255, 255, 255, 0.02));
+}
+.wt-cdp-nombre b {
+  font-size: 20px;
+  line-height: 1.1;
+}
+.wt-cdp-nombre span {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint, rgba(245, 247, 251, 0.4));
+}
+/* Seul « ce qui t'attend » est en alerte : si tout crie, plus rien ne crie. */
+.wt-cdp-nombre.is-attention b {
+  color: var(--gold);
+}
+.wt-cdp-nombre.is-pret b {
+  color: var(--cyan);
+}
+.wt-cdp-nombre.is-vivant b {
+  color: var(--rose);
+}
+.wt-cdp-nombre.is-inconnu b {
+  color: var(--text-faint, rgba(245, 247, 251, 0.55));
+}
+.wt-cdp-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--container-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--container-border);
+}
+.wt-cdp-ligne {
+  display: grid;
+  grid-template-columns: 132px minmax(140px, 1fr) minmax(0, 2fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--surface-inset, rgba(255, 255, 255, 0.02));
+  font-size: 12px;
+}
+.wt-cdp-pastille {
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--text-faint, rgba(245, 247, 251, 0.4));
+}
+.wt-cdp-ligne.is-a-toi .wt-cdp-pastille {
+  color: var(--gold);
+}
+.wt-cdp-ligne.is-pret .wt-cdp-pastille {
+  color: var(--cyan);
+}
+.wt-cdp-ligne.is-en-cours .wt-cdp-pastille {
+  color: var(--rose);
+}
+/* Une bordure gauche marque la ligne qui appelle une décision, sans repeindre toute la rangée. */
+.wt-cdp-ligne.is-a-toi {
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.wt-cdp-branche {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt-cdp-sujet,
+.wt-cdp-compte,
+.wt-cdp-attente {
+  color: var(--text-faint, rgba(245, 247, 251, 0.45));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt-cdp-attente {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.wt-cdp-vide,
+.wt-cdp-reste,
+.wt-cdp-indisponible {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint, rgba(245, 247, 251, 0.45));
+}
