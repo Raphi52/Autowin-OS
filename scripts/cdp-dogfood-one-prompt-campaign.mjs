@@ -119,13 +119,24 @@ await new Promise((resolve, reject) => {
   socket.onerror = reject
 })
 
+/**
+ * Borne d'un aller-retour CDP.
+ *
+ * 30 s ne tenaient pas : au 8e scout d'une campagne, sept orchestrations tournent déjà et le
+ * renderer est assez saturé pour qu'un `Runtime.evaluate` dépasse la borne (mesuré le 2026-08-12,
+ * la campagne est morte sur « CDP Runtime.evaluate expiré » en lançant la vue Settings, emportant
+ * le moniteur et donc TOUS les « Fais tout » des sept vues déjà lancées). La borne protège d'un
+ * CDP mort, pas d'un CDP lent : la remonter ne masque rien, elle cesse de confondre les deux.
+ */
+const CDP_TIMEOUT_MS = Number(process.env.AUTOWIN_CDP_TIMEOUT_MS || 120_000)
+
 const send = (method, params = {}) =>
   new Promise((resolve, reject) => {
     const id = ++nextId
     const timeout = setTimeout(() => {
       pending.delete(id)
       reject(new Error(`CDP ${method} expiré`))
-    }, 30_000)
+    }, CDP_TIMEOUT_MS)
     pending.set(id, {
       resolve: (value) => {
         clearTimeout(timeout)
