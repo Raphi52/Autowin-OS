@@ -9,6 +9,12 @@ import {
   type WorktreeMapSnapshot,
   type WorktreeDoctorProposal
 } from '../../../shared/worktree-map'
+import type {
+  WorktreeAgentActivity,
+  WorktreeConflictResolutionChoice,
+  WorktreeRuntimeStatus
+} from '../../../shared/worktree-activity-model'
+import { WorktreeActivityView } from './WorktreeActivityView'
 import './WorktreeMapView.css'
 
 /**
@@ -33,10 +39,17 @@ const REPO_STORAGE_KEY = 'autowin:sc-repo'
 export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<WorktreeMapSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
+  const [activity, setActivity] = useState<WorktreeAgentActivity[]>([])
+  const [runtimeStatus, setRuntimeStatus] = useState<WorktreeRuntimeStatus | null>(null)
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [activityLoaded, setActivityLoaded] = useState(false)
+  const [activityError, setActivityError] = useState<string | null>(null)
+  const [activityNowMs, setActivityNowMs] = useState(() => Date.now())
   const [selected, setSelected] = useState<string | null>(null)
   const [repoPath, setRepoPath] = useState(() => localStorage.getItem(REPO_STORAGE_KEY) ?? '')
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const refreshGenerationRef = useRef(0)
+  const activityGenerationRef = useRef(0)
   const [viewport, setViewport] = useState({ left: 0, width: 1 })
 
   const refresh = useCallback(async () => {
@@ -69,6 +82,31 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
     }
   }, [repoPath])
 
+  const refreshActivity = useCallback(async () => {
+    const generation = ++activityGenerationRef.current
+    await Promise.resolve()
+    const readActivity = window.api?.getWorktreeActivity
+    const readStatus = window.api?.getWorktreeStatus
+    if (!readActivity || !readStatus) {
+      if (generation === activityGenerationRef.current)
+        setActivityError('Bridge des runs indisponible dans cette fenêtre.')
+      return
+    }
+    setActivityLoading(true)
+    const [activityResult, statusResult] = await Promise.allSettled([readActivity(), readStatus()])
+    if (generation !== activityGenerationRef.current) return
+    const errors: string[] = []
+    if (activityResult.status === 'fulfilled') {
+      setActivity(activityResult.value)
+      setActivityLoaded(true)
+    } else errors.push(errorMessage(activityResult.reason))
+    if (statusResult.status === 'fulfilled') setRuntimeStatus(statusResult.value)
+    else errors.push(errorMessage(statusResult.reason))
+    setActivityNowMs(Date.now())
+    setActivityError(errors.length > 0 ? errors.join(' · ') : null)
+    setActivityLoading(false)
+  }, [])
+
   const pickRepo = useCallback(async () => {
     const chosen = await window.api?.pickGitRepo?.()
     if (!chosen) return
@@ -87,6 +125,50 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
       refreshGenerationRef.current += 1
     }
   }, [active, refresh])
+
+  useEffect(() => {
+    if (!active) return undefined
+    queueMicrotask(() => void refreshActivity())
+    const off = window.api?.onWorktreeActivity?.((next) => {
+      // Le push live est plus récent qu'une lecture encore en vol : cette dernière ne doit pas
+      // faire revenir l'interface en arrière lors de fins de runs concurrentes.
+      activityGenerationRef.current += 1
+      setActivity(next)
+      setActivityLoaded(true)
+      setActivityNowMs(Date.now())
+      setActivityError(null)
+      setActivityLoading(false)
+    })
+    return () => {
+      activityGenerationRef.current += 1
+      off?.()
+    }
+  }, [active, refreshActivity])
+
+  const retryOffice = useCallback(
+    async (agentId: string): Promise<void> => {
+      const retry = window.api?.retryWorktreeRecovery
+      if (!retry) throw new Error('Reprise indisponible depuis cette fenêtre.')
+      await retry(agentId)
+      await refreshActivity()
+    },
+    [refreshActivity]
+  )
+
+  const resolveConflict = useCallback(
+    async (agentId: string, choice: WorktreeConflictResolutionChoice): Promise<void> => {
+      const resolve = window.api?.resolveWorktreeConflict
+      if (!resolve) throw new Error('Résolution indisponible depuis cette fenêtre.')
+      const result = await resolve(agentId, choice)
+      if (!result.resolved) {
+        throw new Error(
+          `${result.detail ?? 'Le conflit n’a pas pu être résolu.'} Rien n’a été écrasé.`
+        )
+      }
+      await refreshActivity()
+    },
+    [refreshActivity]
+  )
 
   // Memoïsé : `?? []` fabriquait un tableau NEUF a chaque rendu, donc les trois mémos qui en
   // dependent recalculaient la geometrie entiere a chaque frappe.
@@ -218,6 +300,36 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
       )}
 
       {snapshot?.available && snapshot.doctor && <WorktreeDoctor report={snapshot.doctor} />}
+
+      <section className="wtmap-activity" data-testid="worktree-activity-panel">
+        <div className="wtmap-activity-head">
+          <b>Runs et bureaux agents</b>
+          {activityLoading && <span role="status">Lecture de l’activité…</span>}
+        </div>
+        {activityError && (
+          <div className="wtmap-notice is-error" role="alert" data-testid="worktree-activity-error">
+            <b>Lecture partielle</b>
+            <p>{activityError}</p>
+            <button
+              onClick={() => void refreshActivity()}
+              disabled={activityLoading}
+              data-testid="worktree-activity-retry"
+            >
+              Réessayer
+            </button>
+          </div>
+        )}
+        {activityLoaded && (
+          <WorktreeActivityView
+            agents={activity}
+            status={runtimeStatus}
+            nowMs={activityNowMs}
+            onOpenOffice={(path) => window.api.openFolder(path)}
+            onRetryOffice={retryOffice}
+            onResolveConflictChoice={resolveConflict}
+          />
+        )}
+      </section>
 
       {entries.length > 0 && (
         <>
@@ -448,6 +560,10 @@ function WorktreeDoctor({
  * Traduit la sortie technique en cause LISIBLE et actionnable : le message git brut seul laisse
  * l'utilisateur sans issue. Les trois cas usuels sont nommés, le reste tombe sur un générique.
  */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function explainWorktreeError(raw: string | undefined): string {
   const text = (raw ?? '').toLowerCase()
   if (!raw)

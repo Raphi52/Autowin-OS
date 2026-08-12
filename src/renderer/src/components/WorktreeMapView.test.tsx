@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeMapSnapshot } from '../../../shared/worktree-map'
+import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
 import { WorktreeMapView } from './WorktreeMapView'
 
 ;(
@@ -85,6 +86,12 @@ let previousApi: PropertyDescriptor | undefined
 interface StubApi {
   getWorktreeMap: ReturnType<typeof vi.fn>
   pickGitRepo: ReturnType<typeof vi.fn>
+  getWorktreeActivity: ReturnType<typeof vi.fn>
+  getWorktreeStatus: ReturnType<typeof vi.fn>
+  onWorktreeActivity: ReturnType<typeof vi.fn>
+  retryWorktreeRecovery: ReturnType<typeof vi.fn>
+  resolveWorktreeConflict: ReturnType<typeof vi.fn>
+  openFolder: ReturnType<typeof vi.fn>
 }
 
 function deferred<T>(): {
@@ -105,7 +112,20 @@ function installApi(
   previousApi = Object.getOwnPropertyDescriptor(window, 'api')
   const api: StubApi = {
     getWorktreeMap: vi.fn().mockResolvedValue(value),
-    pickGitRepo: vi.fn().mockResolvedValue(chosenRepo)
+    pickGitRepo: vi.fn().mockResolvedValue(chosenRepo),
+    getWorktreeActivity: vi.fn().mockResolvedValue([]),
+    getWorktreeStatus: vi.fn().mockResolvedValue({
+      available: true,
+      workspacePath: value.repoPath
+    }),
+    onWorktreeActivity: vi.fn().mockReturnValue(() => undefined),
+    retryWorktreeRecovery: vi.fn().mockResolvedValue(undefined),
+    resolveWorktreeConflict: vi.fn().mockResolvedValue({
+      resolved: true,
+      agentId: 'run-1',
+      outcome: 'merged'
+    }),
+    openFolder: vi.fn().mockResolvedValue(undefined)
   }
   Object.defineProperty(window, 'api', { value: api, configurable: true, writable: true })
   return api
@@ -494,6 +514,114 @@ describe('WorktreeMapView — états de chargement et d’erreur', () => {
     await clickTestId('worktree-map-retry')
 
     expect(api.getWorktreeMap).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('WorktreeMapView - parcours agents et runs', () => {
+  const recoveringAgent: WorktreeAgentActivity = {
+    agentId: 'run-1',
+    agentName: 'Build',
+    role: 'producer',
+    state: 'blocked',
+    files: [{ path: 'src/worktrees.ts', kind: 'mod' }],
+    startedAtMs: 1_000,
+    task: 'Reprendre la publication',
+    worktreePath: 'C:\\runs\\run-1',
+    worktreeAvailable: true,
+    workspacePath: 'C:\\repo',
+    verdict: 'red',
+    publication: 'held',
+    attentionReason: 'retry-exhausted',
+    retryCount: 3,
+    recovered: true
+  }
+
+  it('affiche dans l onglet reel l activite live et la reprise apres echec', async () => {
+    const api = installApi()
+    api.getWorktreeActivity.mockResolvedValue([recoveringAgent])
+    await renderView()
+
+    expect(container?.querySelector('[data-testid="worktree-activity-panel"]')).toBeTruthy()
+    expect(container?.textContent).toContain('Reprendre la publication')
+    expect(container?.textContent).toContain('Récupéré après redémarrage')
+
+    await clickTestId('wt-retry-office')
+    expect(api.retryWorktreeRecovery).toHaveBeenCalledWith('run-1')
+  })
+
+  it('conserve la carte si la lecture d activite echoue et rend l erreur partielle rejouable', async () => {
+    const api = installApi()
+    api.getWorktreeActivity.mockRejectedValue(new Error('journal verrouillé'))
+    await renderView()
+
+    expect(container?.querySelector('svg.wtmap-plan')).toBeTruthy()
+    expect(
+      container?.querySelector('[data-testid="worktree-activity-error"]')?.textContent
+    ).toContain('journal verrouillé')
+    expect(container?.querySelector('[data-testid="worktree-activity-retry"]')).toBeTruthy()
+    expect(container?.textContent).not.toContain('Aucun bureau agent ouvert')
+  })
+
+  it('ne declare pas un faux etat vide pendant le chargement des runs', async () => {
+    const pending = deferred<WorktreeAgentActivity[]>()
+    const api = installApi()
+    api.getWorktreeActivity.mockReturnValue(pending.promise)
+
+    await renderViewWithoutSettling()
+
+    expect(container?.textContent).toContain('Lecture de l’activité')
+    expect(container?.textContent).not.toContain('Aucun bureau agent ouvert')
+  })
+
+  it('ignore une lecture obsolete apres un push concurrent plus recent', async () => {
+    const pending = deferred<WorktreeAgentActivity[]>()
+    const api = installApi()
+    api.getWorktreeActivity.mockReturnValue(pending.promise)
+    let push: ((activity: WorktreeAgentActivity[]) => void) | undefined
+    api.onWorktreeActivity.mockImplementation((callback) => {
+      push = callback
+      return () => undefined
+    })
+    await renderViewWithoutSettling()
+
+    await act(async () => {
+      push?.([{ ...recoveringAgent, agentName: 'Etat live' }])
+      await Promise.resolve()
+    })
+    pending.resolve([{ ...recoveringAgent, agentName: 'Etat obsolete' }])
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container?.textContent).toContain('Etat live')
+    expect(container?.textContent).not.toContain('Etat obsolete')
+  })
+
+  it('rend une erreur de resolution partielle sans masquer le bureau en conflit', async () => {
+    const api = installApi()
+    api.getWorktreeActivity.mockResolvedValue([
+      {
+        ...recoveringAgent,
+        state: 'conflict',
+        attentionReason: undefined,
+        conflictFile: 'src/worktrees.ts'
+      }
+    ])
+    api.resolveWorktreeConflict.mockResolvedValue({
+      resolved: false,
+      reason: 'still-conflicting',
+      detail: 'Le fichier contient encore des marqueurs.'
+    })
+    await renderView()
+
+    await clickTestId('wt-keep-agent')
+
+    expect(api.resolveWorktreeConflict).toHaveBeenCalledWith('run-1', 'agent')
+    expect(container?.querySelector('[data-testid="wt-office-error"]')?.textContent).toContain(
+      'Rien n’a été écrasé'
+    )
+    expect(container?.querySelector('[data-state="conflict"]')).toBeTruthy()
   })
 })
 
