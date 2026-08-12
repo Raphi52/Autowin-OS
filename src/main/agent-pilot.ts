@@ -20,6 +20,7 @@ import { CONSTITUTION } from './constitution'
 import { routeSkillRequest } from './skill-routing'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { startTurnTimer } from './turn-timing'
+import { classifyMutationConfidence } from './orchestrator'
 import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
@@ -438,11 +439,20 @@ export class AgentPilot {
     // MÊME config que les phases orchestrées : la CONSTITUTION (soul/réflexes) est la source
     // UNIQUE partagée ; le chat y ajoute seulement ce qui lui est propre (pilotage par commandes).
     const watchdogReadOnly = sendLimits?.systemProfile === 'watchdog-read-only'
+    // Une analyse entierement lecture-seule n'a besoin ni du kit complet (~19 k caracteres), ni du
+    // catalogue de commandes, ni d'un pipeline multi-agent. Le verdict est fail-closed : toute
+    // clause incertaine ou toute action deja reconnue par le routeur conserve le chat pilote normal.
+    const directReadOnly =
+      !watchdogReadOnly &&
+      !directRoute &&
+      latestUserMessage !== undefined &&
+      classifyMutationConfidence(latestUserMessage) === 'read-only'
+    const commandFreeReadOnly = watchdogReadOnly || directReadOnly
     const providerLimits: Pick<SendOptions, 'maxBudgetUsd' | 'toolProfile'> = {
       ...(sendLimits?.maxBudgetUsd ? { maxBudgetUsd: sendLimits.maxBudgetUsd } : {}),
-      ...(watchdogReadOnly ? { toolProfile: 'watchdog-read-only' as const } : {})
+      ...(commandFreeReadOnly ? { toolProfile: 'watchdog-read-only' as const } : {})
     }
-    const pilotage = watchdogReadOnly ? '' : buildChatPilotagePrompt(catalog)
+    const pilotage = commandFreeReadOnly ? '' : buildChatPilotagePrompt(catalog)
     /**
      * PRÉFIXE SYSTEM STABLE = condition du cache (mesure 2026-07-28 : cache_read = 0 sur 100 % des
      * appels, ~16 k de cache_write REÉCRITS à chaque tour, ~0,32 $ pour répondre une phrase).
@@ -466,12 +476,26 @@ export class AgentPilot {
               'Respecte exactement toute derniere ligne ISSUE demandee par le message utilisateur.\n'
           }
         ]
-      : [
-          { name: 'constitution', text: CONSTITUTION },
-          { name: 'pilotage', text: pilotage },
-          { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-          { name: 'projectContext', text: this.projectContext() }
-        ]
+      : directReadOnly
+        ? [
+            {
+              name: 'direct-read-only',
+              text:
+                "Tu es le chat direct d'Autowin OS. Reponds en francais a la demande exacte de " +
+                "l'utilisateur, sans preambule inutile. Ce tour est strictement en LECTURE SEULE : " +
+                "n'emets aucune balise <cmd>, aucune commande Autowin, ne lance aucune orchestration, " +
+                'ne modifie rien et ne cree aucun worktree. Utilise uniquement les lectures locales ' +
+                'strictement necessaires. Distingue les faits observes des deductions et respecte tout ' +
+                'format de sortie explicitement demande. Si le message dit « reponds exactement X », ' +
+                'ta sortie ENTIERE doit etre exactement X, sans note, explication ni mise en forme en plus.\n'
+            }
+          ]
+        : [
+            { name: 'constitution', text: CONSTITUTION },
+            { name: 'pilotage', text: pilotage },
+            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            { name: 'projectContext', text: this.projectContext() }
+          ]
     const system = systemParts.map((p) => p.text).join('')
     const systemBlocks = systemParts
       .filter((p) => p.text)
@@ -814,8 +838,23 @@ export class AgentPilot {
         hasCommand &&
         Boolean(spoken) &&
         ordered.every(
-          (token) => token.kind === 'text' || (token.kind === 'command' && token.name === 'remember')
+          (token) =>
+            token.kind === 'text' || (token.kind === 'command' && token.name === 'remember')
         )
+
+      // Defense en profondeur : le profil provider retire deja les outils d'ecriture, mais une
+      // balise de commande peut encore apparaitre comme simple texte genere. Dans un tour declare
+      // lecture-seule elle n'atteint JAMAIS le bus, meme si le modele ignore son system prompt.
+      if (commandFreeReadOnly && hasCommand) {
+        emit({
+          kind: 'done',
+          text:
+            spoken ||
+            'Reponse bloquee : le modele a tente une commande pendant un tour en lecture seule.',
+          usage
+        })
+        return
+      }
 
       if (!hasCommand) {
         if (!successfulStreamedPrefix && spoken) emit({ kind: 'think', text: spoken })

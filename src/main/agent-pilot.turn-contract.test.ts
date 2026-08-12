@@ -798,4 +798,171 @@ describe('AgentPilot turn contract', () => {
     expect(result).toBe('resolved')
     expect(ask).not.toHaveBeenCalled()
   })
+
+  it('traite une analyse explicitement non mutante avec un seul appel lecture seule', async () => {
+    const send = vi.fn(
+      async (
+        _provider: string,
+        _messages: unknown,
+        options: { toolProfile?: string; system?: string }
+      ) => ({
+        text:
+          options.toolProfile === 'watchdog-read-only'
+            ? options.system?.includes('sortie ENTIERE doit etre exactement')
+              ? 'PREUVE_WATCHDOG_OK'
+              : 'PREUVE_WATCHDOG_OK\n\nNote non demandee par le modele.'
+            : '<cmd>{"name":"orchestrate","args":{"task":"analyse package.json"}}</cmd>',
+        provider: 'claude'
+      })
+    )
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'pipeline' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { status: 'succeeded' } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [
+        {
+          role: 'user',
+          content:
+            'Analyse package.json puis réponds exactement PREUVE_WATCHDOG_OK. Ne modifie aucun fichier.'
+        }
+      ],
+      (event) => events.push(event),
+      undefined,
+      12,
+      'conv-read-only-cost'
+    )
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0][2]).toMatchObject({ toolProfile: 'watchdog-read-only' })
+    expect(send.mock.calls[0][2].system).toMatch(/lecture seule/i)
+    expect(send.mock.calls[0][2].system).not.toContain("Pour agir sur l'app")
+    expect(bus.exec).not.toHaveBeenCalled()
+    expect(events.at(-1)).toMatchObject({
+      kind: 'done',
+      text: 'PREUVE_WATCHDOG_OK'
+    })
+  })
+
+  it('bloque mecaniquement une commande generee dans un tour lecture seule', async () => {
+    const registry = {
+      send: vi.fn().mockResolvedValue({
+        text: '<cmd>{"name":"orchestrate","args":{"task":"appel interdit"}}</cmd>',
+        provider: 'claude'
+      }),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'pipeline' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { status: 'succeeded' } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(
+      registry as never,
+      {
+        getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+      } as never,
+      bus as never
+    ).chat([{ role: 'user', content: 'Analyse package.json sans rien modifier.' }], (event) =>
+      events.push(event)
+    )
+
+    expect(registry.send).toHaveBeenCalledTimes(1)
+    expect(bus.exec).not.toHaveBeenCalled()
+    expect(events.some((event) => event.kind === 'command')).toBe(false)
+    expect(events.at(-1)).toMatchObject({ kind: 'done' })
+    expect(events.at(-1)?.text).toMatch(/bloqu/i)
+  })
+
+  it('conserve le pilotage et les commandes pour une demande qui modifie le workspace', async () => {
+    const registry = {
+      send: vi.fn().mockResolvedValue({
+        text: '<cmd>{"name":"orchestrate","args":{"task":"corrige package.json"}}</cmd>',
+        provider: 'claude'
+      }),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'pipeline' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { status: 'succeeded' } })
+    }
+
+    const pilot = new AgentPilot(
+      registry as never,
+      {
+        getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+      } as never,
+      bus as never
+    )
+
+    for (const content of [
+      'Analyse package.json puis corrige ses scripts obsoletes.',
+      "Documente l'API dans README.md",
+      'Analyse package.json sans le modifier puis publie une release.',
+      'Analyse package.json sans rien modifier puis ecrase le script obsolete.'
+    ]) {
+      await pilot.chat([{ role: 'user', content }], () => undefined)
+    }
+
+    expect(registry.send).toHaveBeenCalledTimes(4)
+    expect(
+      registry.send.mock.calls.every((call) => call[2].toolProfile !== 'watchdog-read-only')
+    ).toBe(true)
+    expect(bus.exec).toHaveBeenCalledTimes(4)
+    expect(bus.exec).toHaveBeenNthCalledWith(
+      1,
+      'orchestrate',
+      { task: 'corrige package.json' },
+      undefined
+    )
+    expect(bus.exec).toHaveBeenNthCalledWith(
+      2,
+      'orchestrate',
+      { task: 'corrige package.json' },
+      undefined
+    )
+    expect(bus.exec).toHaveBeenNthCalledWith(
+      3,
+      'orchestrate',
+      { task: 'corrige package.json' },
+      undefined
+    )
+    expect(bus.exec).toHaveBeenNthCalledWith(
+      4,
+      'orchestrate',
+      { task: 'corrige package.json' },
+      undefined
+    )
+  })
 })

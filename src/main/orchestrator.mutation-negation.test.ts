@@ -54,6 +54,29 @@ describe('isMutationTask (J3 — négation)', () => {
       expect(classifyMutationConfidence('audit le module puis résume les risques')).toBe(
         'read-only'
       )
+      expect(
+        classifyMutationConfidence(
+          'Analyse package.json puis réponds exactement PREUVE_WATCHDOG_OK. Ne modifie aucun fichier.'
+        )
+      ).toBe('read-only')
+    })
+
+    it('ne laisse pas repondre masquer une mutation dans une clause suivante', () => {
+      expect(
+        classifyMutationConfidence(
+          'analyse package.json puis reponds et supprime le script obsolete'
+        )
+      ).toBe('mutation')
+    })
+
+    it('ne laisse pas une negation absoudre une mutation positive suivante inconnue', () => {
+      for (const task of [
+        'Analyse package.json sans le modifier puis publie une release.',
+        'Analyse package.json sans rien modifier puis ecrase le script obsolete.'
+      ]) {
+        expect(classifyMutationConfidence(task)).toBe('uncertain')
+        expect(isMutationTask(task)).toBe(true)
+      }
     })
   })
 })
