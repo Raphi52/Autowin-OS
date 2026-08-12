@@ -794,6 +794,66 @@ export function admitAutomaticResumeRuntime(
  *  - moins de `maxAgeMs`.
  * Plusieurs candidats -> le plus recent.
  */
+/**
+ * Phases dont l'acquis est un TEXTE, donc réutilisable tel quel dans la même conversation.
+ * `build` et `clean` en sont exclues par nature : leur acquis vit sur le disque, le workspace a pu
+ * bouger depuis, et les rejouer est la seule façon honnête de savoir où en est le code.
+ */
+const PHASES_ANALYSE_REUTILISABLES: readonly PipelinePhase[] = ['scout', 'frame', 'terrain']
+
+/**
+ * Acquis d'analyse déjà produit DANS LA MÊME CONVERSATION, réutilisable même si le libellé de la
+ * demande a changé.
+ *
+ * `pickResumeForTask` exige la même tâche à la clé près. Le parcours réel ne la respecte jamais :
+ * mesuré sur `conv-1061`, l'utilisateur enchaîne « scout des améliorations de la vue Chat » puis
+ * « Fais tout. Mène les chantiers retenus… ». Deux libellés, donc aucun acquis reconnu, donc le
+ * scout est intégralement rejoué — 11,20 $ de scout+frame+terrain sur 15,16 $ de sous-agents.
+ *
+ * Ce relâchement est borné : même conversation, acquis non vide, fenêtre de fraîcheur de la
+ * reprise, aucun appel encore actif (un verrou n'est pas un livrable), et la phase n'est pas
+ * explicitement redemandée par l'utilisateur.
+ */
+export function pickAcquiredAnalysis(
+  states: readonly OrchestrationRunState[],
+  lookup: {
+    conversationId: string | undefined
+    task: string
+    nowMs: number
+    maxAgeMs?: number
+  }
+): Array<{ phase: PipelinePhase; text: string }> {
+  if (!lookup.conversationId) return []
+  const maxAge = lookup.maxAgeMs ?? DEFAULT_RESUME_MAX_AGE_MS
+  // Une phase nommée dans la demande est un ordre de la rejouer, pas un acquis à recycler.
+  const redemandees = new Set(
+    PHASES_ANALYSE_REUTILISABLES.filter((phase) =>
+      new RegExp(`(^|\\s)/${phase}\\b`, 'i').test(lookup.task)
+    )
+  )
+  const utilisables = states
+    .filter((state) => state.conversationId === lookup.conversationId)
+    .filter((state) => (state.usage?.activeCalls ?? 0) === 0)
+    .filter((state) => !state.resumeDisposition)
+    .filter((state) => lookup.nowMs >= state.updatedAt && lookup.nowMs - state.updatedAt <= maxAge)
+    .sort((a, b) => a.updatedAt - b.updatedAt)
+
+  // Le plus récent gagne : on écrase au fil du tri croissant.
+  const parPhase = new Map<PipelinePhase, string>()
+  for (const state of utilisables) {
+    for (const output of state.phaseOutputs ?? []) {
+      if (!PHASES_ANALYSE_REUTILISABLES.includes(output.phase)) continue
+      if (redemandees.has(output.phase)) continue
+      if (typeof output.text !== 'string' || !output.text.trim()) continue
+      parPhase.set(output.phase, output.text)
+    }
+  }
+  return PHASES_ANALYSE_REUTILISABLES.filter((phase) => parPhase.has(phase)).map((phase) => ({
+    phase,
+    text: parPhase.get(phase) as string
+  }))
+}
+
 export function pickResumeForTask(
   states: readonly OrchestrationRunState[],
   lookup: ResumeLookup
