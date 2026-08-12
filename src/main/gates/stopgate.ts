@@ -7,6 +7,11 @@ export interface DodItem {
   checked: boolean
   /** La case a un contenu réel (une DoD vide/non applicable ne bloque jamais). */
   hasContent: boolean
+  /**
+   * Libellé de la case, pour que le refus NOMME ce qui manque au lieu de le compter. Optionnel : les
+   * appelants qui ne le fournissent pas gardent le message compté, plutôt qu'un nom inventé.
+   */
+  label?: string
 }
 
 /** État de clôture soumis à évaluation. */
@@ -39,13 +44,25 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
   if (state.status === 'open') {
     reasons.push('Statut "open" : le travail n\'est pas fermé.')
   } else if (state.status === 'red') {
-    reasons.push('Statut "red" : un signal de vérification est en échec.')
+    // NE PAS inventer la cause. Ce message affirmait « un signal de vérification est en échec »
+    // alors que le gate ne sait PAS si un signal a tourné : `red` peut venir d'un avis de juge, d'une
+    // exception, ou d'un test rouge. Un gate qui nomme une cause qu'il n'a pas vérifiée envoie
+    // chercher au mauvais endroit — constaté sur un run où aucun test n'avait tourné.
+    reasons.push('Statut "red" : la clôture a été refusée en amont.')
   }
 
   const uncheckedContentItems = state.dod.filter((item) => item.hasContent && !item.checked)
   if (uncheckedContentItems.length > 0) {
+    // NOMMER, pas compter. « 1 case(s) non cochée(s) » n'est pas actionnable : il faut ouvrir le
+    // fichier pour savoir laquelle. Les libellés disponibles sont cités ; sans libellé, on retombe
+    // sur le compte plutôt que d'inventer un nom.
+    const libelles = uncheckedContentItems
+      .map((item) => item.label?.trim())
+      .filter((label): label is string => !!label)
     reasons.push(
-      `DoD non tenue : ${uncheckedContentItems.length} case(s) à contenu réel non cochée(s).`
+      libelles.length > 0
+        ? `DoD non tenue : ${libelles.map((l) => `« ${l} »`).join(', ')}.`
+        : `DoD non tenue : ${uncheckedContentItems.length} case(s) à contenu réel non cochée(s).`
     )
   }
 

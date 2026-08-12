@@ -140,6 +140,24 @@ function verdictDePhase(phase: PipelinePhase, text: string): NodeVerdict {
 }
 
 /**
+ * LE SEUL lecteur de verdict de juge. Exporté pour être testable, et surtout pour qu'il n'y en ait
+ * qu'un.
+ *
+ * Il y en avait DEUX, en désaccord dans ce fichier : `verdictDePhase` ci-dessus (durci le 2026-08-05
+ * après quatre cas dégénérés mesurés) accepte « VALIDE » PARTOUT dans la réponse, tandis que le
+ * chemin greedy testait `/^\s*valide/i` — donc exigeait que le mot OUVRE la phrase. Conséquence
+ * observée sur un run réel de l'utilisateur (`conv-1136`) : un juge écrivant « Verdict : VALIDE »
+ * voyait son APPROBATION jetée, le run passait `red`, et la vignette annonçait un échec sur un
+ * livrable pourtant complet. Un faux négatif coûte ici un travail entier déclaré perdu.
+ *
+ * Le brief (`Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>"`) n'impose PAS que le mot
+ * ouvre la réponse : exiger le préfixe ajoutait une contrainte que le contrat ne demande pas.
+ */
+export function lireVerdictJuge(text: string): boolean {
+  return verdictDePhase('judge', text) === 'green'
+}
+
+/**
  * Le retour judge rouge → build est exécuté par la boucle de réparation enrichie du moteur, pas par
  * le marcheur générique. Le retirer ici donne au devis et à l'exécution la même topologie effective.
  */
@@ -2145,7 +2163,9 @@ export class Orchestrator {
     }
     const verdictText = res.text ?? ''
     // Les preuves ont déjà passé le pré-gate : le juge tranche maintenant la substance.
-    const ok = /^\s*valide/i.test(verdictText)
+    // UN SEUL lecteur : ce site testait `/^\s*valide/i` et jetait donc l'approbation d'un juge qui
+    // n'ouvrait pas sa phrase par le mot. Cf. `lireVerdictJuge`.
+    const ok = lireVerdictJuge(verdictText)
     trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
     push({
       step: 'judge',
@@ -2164,14 +2184,18 @@ export class Orchestrator {
       execution: judgeExecution
     })
     onPhase?.({ step: 'gate' })
-    const gate = evaluateClosure({
-      status: ok ? 'green' : 'red',
-      dod: [{ checked: ok, hasContent: true }]
-    })
+    // Pas de fausse DoD miroir du statut : elle faisait rendre au gate DEUX raisons pour UN SEUL
+    // fait (le verdict du juge), en laissant croire à deux problèmes indépendants. Le gate reçoit
+    // l'état réel — un statut — et rien d'inventé.
+    const gate = evaluateClosure({ status: ok ? 'green' : 'red', dod: [] })
     push({
       step: 'gate',
       role: 'gate',
-      detail: gate.blocked ? `BLOQUÉ: ${gate.reasons.join('; ')}` : 'clôture autorisée'
+      // La RAISON du juge est ce qui manquait : sans elle, « bloqué » n'est pas actionnable. Elle est
+      // déjà capturée dans `verdictText` — elle n'était simplement jamais remontée jusqu'ici.
+      detail: gate.blocked
+        ? `BLOQUÉ: ${gate.reasons.join('; ')} — verdict du juge: ${verdictText.trim().slice(0, 200) || '(réponse vide)'}`
+        : 'clôture autorisée'
     })
     return {
       valid: ok,

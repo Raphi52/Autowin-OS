@@ -269,7 +269,11 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       expect(runPath).toBeTypeOf('string')
       const run = readFileSync(runPath as string, 'utf8')
       expect(run).toMatch(/^status: degraded-closed$/m)
-      expect(run).toMatch(/^ {2}- \[ \] le juge valide/m)
+      // La section de critère existe toujours, mais SANS case pré-remplie : l'ancienne
+      // « - [ ] le juge valide … » n'était pas un critère du travail, et faisait afficher une DoD
+      // manquée fantôme sur tout run non vert.
+      expect(run).toMatch(/\*\*Critere de succes \(DoD cochable\)\*\*/)
+      expect(run).not.toMatch(/^ {2}- \[ \] le juge valide/m)
     } finally {
       releaseRunTask()
       await execution

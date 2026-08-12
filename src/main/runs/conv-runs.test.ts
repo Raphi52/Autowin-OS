@@ -26,15 +26,21 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     const runs = await listConvRuns('conv-9', [], root)
     expect(runs).toHaveLength(1)
     expect(runs[0].summary.status).toBe('open')
-    expect(runs[0].summary.dodTotal).toBe(1)
+    // Plus AUCUNE case auto-remplie : le gabarit posait « le juge valide … », qui n'était pas un
+    // critère du travail mais le report du verdict — et faisait afficher « DoD 0/1 » à tout run rouge.
+    expect(runs[0].summary.dodTotal).toBe(0)
   })
 
-  it('closeConvRun preserve les quatre statuts et ne coche le DoD que pour green', async () => {
+  it('closeConvRun preserve les quatre statuts, sans plus cocher de pseudo-DoD', async () => {
     const g = createConvRun('conv-9', 'tâche verte', root, () => 2000)
     closeConvRun(g, 'green', 'Juge: validé.')
     const green = (await listConvRuns('conv-9', [], root)).find((r) => r.path === g)!
     expect(green.summary.status).toBe('green')
-    expect(green.summary.dodChecked).toBe(1)
+    // Le cochage auto est retiré AVEC la case : il cochait un pseudo-critère au moment même où le
+    // statut le disait déjà. Une DoD réelle n'est jamais cochée par la clôture — c'est celui qui
+    // produit la preuve qui la coche, sinon la case ne prouve rien.
+    expect(green.summary.dodTotal).toBe(0)
+    expect(green.summary.dodChecked).toBe(0)
 
     const r = createConvRun('conv-9', 'tâche rouge', root, () => 3000)
     closeConvRun(r, 'red', 'Gate BLOQUÉ: défaut.')

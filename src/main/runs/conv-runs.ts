@@ -39,7 +39,24 @@ function slugify(task: string): string {
   return s || 'tache'
 }
 
-/** Crée le RUN.md (status: open) d'une tâche lancée depuis une conversation. */
+/**
+ * Crée le RUN.md (status: open) d'une tâche lancée depuis une conversation.
+ *
+ * POURQUOI AUCUNE CASE DE DoD N'EST PRÉ-REMPLIE. Le gabarit en posait une : « le juge valide le
+ * résultat et le gate autorise la clôture ». Elle était nuisible pour trois raisons cumulées :
+ * 1. Ce n'était pas un critère du TRAVAIL, mais le report du verdict de clôture — elle ne disait rien
+ *    de ce que le run devait obtenir, donc elle n'aidait personne à juger s'il avait réussi.
+ * 2. Le gate ne la lisait JAMAIS : `orchestrator.ts` synthétise l'état qu'il évalue depuis le verdict
+ *    du juge, sans ouvrir le fichier. Elle était donc décorative côté décision.
+ * 3. Mais pas côté AFFICHAGE : `dashboards/runs.ts` compte les cases et `isBlocked` classe un run « à
+ *    traiter » sur `dodChecked < dodTotal`. Chaque run rouge affichait donc « DoD 0/1 », comme si un
+ *    critère avait été manqué alors qu'aucun n'avait jamais été défini — un reproche fantôme.
+ *
+ * Le remède n'est pas d'inventer un critère à la place de l'auteur du prompt : c'est de ne pas en
+ * poser, et de laisser le STATUT porter le signal — il le portait déjà (`isBlocked` teste le statut
+ * en premier). Le support de la DoD reste entier : une case posée par un humain ou par la phase
+ * terrain est comptée et bloque comme avant.
+ */
 export function createConvRun(
   convId: string,
   task: string,
@@ -62,7 +79,8 @@ signal: verdict du juge + gate déterministe (orchestration in-app)
 ${task}
 
 **Critere de succes (DoD cochable)** :
-  - [ ] le juge valide le résultat et le gate autorise la clôture
+<!-- Aucune case n'est pre-remplie : un critere de succes se pose ici par l'auteur du prompt ou par la
+     phase terrain, comme une condition de SORTIE verifiable avec sa preuve. -->
 
 ## Contraintes
 <!-- bornes de la solution (HARD/SOFT), source + conséquence si violée -->
@@ -174,7 +192,9 @@ export function closeConvRun(path: string, status: RunClosureStatus, journalLine
   try {
     let md = readFileSync(path, 'utf8')
     md = md.replace(/^status: open/m, `status: ${status}`)
-    if (status === 'green') md = md.replace(/^ {2}- \[ \] (le juge valide.*)$/m, '  - [x] $1')
+    // Le cochage auto de « le juge valide … » est retiré avec la case elle-même : il cochait un
+    // pseudo-critère au moment où le statut le disait déjà. Une DoD RÉELLE, elle, n'est jamais cochée
+    // par la clôture — c'est à celui qui produit la preuve de la cocher, sinon la case ne prouve rien.
     md = md.replace(/^## Journal$/m, `## Journal`)
     md = md.replace(
       /(## Journal\n)/,
