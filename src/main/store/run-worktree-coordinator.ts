@@ -49,6 +49,7 @@ export interface RunWorktreeCoordinatorDeps {
       Pick<
         WorktreeManager,
         | 'reconcileResidues'
+        | 'reconcileResiduesAsync'
         | 'cleanupPublished'
         | 'readConflictDiff'
         | 'prepareAsync'
@@ -194,26 +195,25 @@ export class RunWorktreeCoordinator {
       /**
        * La réconciliation est DIFFÉRÉE au lieu d'être faite ici, et c'est la correction du démarrage.
        *
-       * MESURÉ : cet appel synchrone énumère les copies git sur disque. Comme ce coordinateur est
-       * construit par `new AutowinOS()`, lui-même au premier niveau du module principal, il bloquait
-       * ~25 secondes AVANT que `app.whenReady` puisse se déclencher — donc avant qu'aucune fenêtre
-       * n'existe. Chronologie relevée : corps du module 28 s, `whenReady` +0,1 s, fenêtre visible 57 s.
-       * Le coût suivait le nombre de copies (42 à ce moment-là).
+       * MESURÉ : ce travail est synchrone et énumère les copies git sur disque. Comme ce coordinateur
+       * est construit par `new AutowinOS()`, lui-même au premier niveau du module principal, il
+       * bloquait ~24 s AVANT que `app.whenReady` puisse se déclencher — donc avant qu'aucune fenêtre
+       * n'existe. `whenReady` arrivait à 26 047 ms ; test d'inversion : 1 545 ms sans ce travail.
        *
-       * Ce n'est pas un changement de contrat : la branche AU-DESSUS diffère déjà la réconciliation
-       * via une promesse. Tout ce qui lit l'état de ce coordinateur tolère donc déjà qu'elle n'ait pas
-       * encore eu lieu. C'était la branche synchrone qui était l'anomalie.
+       * C'EST un changement de contrat, contrairement à ce qu'affirmait ce commentaire avant : la
+       * branche synchrone ci-dessous est lue par des tests qui construisent puis lisent immédiatement
+       * l'état réconcilié. Le report est donc opt-in, et la production seule le demande.
        *
-       * Le délai laisse la fenêtre s'ouvrir d'abord : la récupération n'est pas urgente, l'écran si.
-       * Le minuteur est conservé pour rester annulable.
+       * On attend un ÉVÉNEMENT et non un délai : reporté de 1 500 ms par une minuterie, ce travail
+       * tombait juste avant la micro-tâche de `whenReady` et le blocage était DÉPLACÉ, pas supprimé.
        */
       const attendre = deps.deferRecoveryUntil
       if (attendre) {
         // `void` et non `await` : le constructeur ne peut pas attendre, et un rejet de la promesse de
         // garde ne doit pas empêcher la récupération — on réconcilie dans les deux cas.
         void attendre.then(
-          () => this.reconcileExisting(),
-          () => this.reconcileExisting()
+          () => this.reconcileExistingAsync(),
+          () => this.reconcileExistingAsync()
         )
       } else {
         this.reconcileExisting()
@@ -1322,8 +1322,28 @@ export class RunWorktreeCoordinator {
    * Au redémarrage, le worktree Git est la source durable : on reprend chaque copie agent.
    * Une copie intégrable est fusionnée/nettoyée ; un conflit reste intact et redevient visible.
    */
-  private reconcileExisting(inventory?: WorktreeRecoveryInventory): void {
-    const residues = inventory?.residues ?? this.manager.reconcileResidues?.()
+  /**
+   * La réconciliation avec son étape coûteuse rendue non bloquante.
+   *
+   * MESURÉ sur 52 copies : le balayage des copies abandonnées pesait 19,7 s des 23 s totales, et
+   * balayait 0 copie — du ramassage opportuniste dont rien n'attend le résultat. La boucle des runs,
+   * elle, ne pèse que ~4 s et reste synchrone : la découper n'aurait acheté qu'un sixième du gain
+   * pour un contrat bien plus large à casser.
+   */
+  private async reconcileExistingAsync(): Promise<void> {
+    const residues = this.manager.reconcileResiduesAsync
+      ? await this.manager.reconcileResiduesAsync()
+      : this.manager.reconcileResidues?.()
+    this.reconcileExisting(undefined, residues)
+  }
+
+  private reconcileExisting(
+    inventory?: WorktreeRecoveryInventory,
+    residuesPrecalcules?: ReturnType<WorktreeManager['reconcileResidues']>
+  ): void {
+    // `??` et non `||` : des résidus déjà calculés mais VIDES ne doivent pas relancer le balayage.
+    const residues =
+      inventory?.residues ?? residuesPrecalcules ?? this.manager.reconcileResidues?.()
     const records = new Map((this.stateStore?.list() ?? []).map((record) => [record.runId, record]))
     const observed = new Map(inventory?.agents.map((agent) => [agent.agentId, agent]) ?? [])
     const managerIds =

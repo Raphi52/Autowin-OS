@@ -51,8 +51,15 @@ describe('le report de la réconciliation attend un ÉVÉNEMENT, jamais un déla
     // Les deux branches de `then` réconcilient : une garde en échec doit dégrader vers « tout de
     // suite », jamais vers « jamais ».
     expect(coordinateur).toMatch(
-      /\(\) => this\.reconcileExisting\(\),\s*\(\) => this\.reconcileExisting\(\)/
+      /\(\) => this\.reconcileExistingAsync\(\),\s*\(\) => this\.reconcileExistingAsync\(\)/
     )
+  })
+
+  it('la branche différée passe par la variante NON BLOQUANTE', () => {
+    // MESURÉ : le balayage des copies abandonnées pesait 19,7 s des 23 s, et balayait 0 copie. Derrière
+    // une interface chargée, ce travail synchrone gelait quand même tous les IPC.
+    expect(coordinateur).toContain('private async reconcileExistingAsync()')
+    expect(coordinateur).toContain('await this.manager.reconcileResiduesAsync()')
   })
 
   it('reste SYNCHRONE quand aucune garde n’est fournie', () => {
