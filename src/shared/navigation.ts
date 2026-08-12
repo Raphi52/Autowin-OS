@@ -12,10 +12,15 @@ export const APP_DESTINATIONS = [
 export type AppDestination = (typeof APP_DESTINATIONS)[number]['id']
 export type AgentStudioSection = 'topology' | 'routing' | 'workflows'
 export type SettingsSection = 'capabilities' | 'budget' | 'behaviour' | 'providers' | 'preflight'
+/**
+ * Deux MÉTIERS distincts dans Task Manager, donc deux sections : surveiller des agents (alertes,
+ * occurrences ratées) n'est pas éditer des tâches planifiées. Elles s'empilaient sur un seul écran.
+ */
+export type TaskManagerSection = 'watchdog' | 'planification'
 
 export interface AppLocation {
   destination: AppDestination
-  section?: AgentStudioSection | SettingsSection
+  section?: AgentStudioSection | SettingsSection | TaskManagerSection
 }
 
 const DESTINATION_IDS = new Set<string>(APP_DESTINATIONS.map(({ id }) => id))
@@ -42,7 +47,9 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   'prompt-load': 'observatory',
   tasks: 'task-manager',
   scheduler: 'task-manager',
-  planning: 'task-manager'
+  planning: 'task-manager',
+  planification: 'task-manager',
+  watchdog: 'task-manager'
 }
 
 const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
@@ -57,7 +64,13 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   tools: { destination: 'settings', section: 'capabilities' },
   budget: { destination: 'settings', section: 'budget' },
   behaviour: { destination: 'settings', section: 'behaviour' },
-  behavior: { destination: 'settings', section: 'behaviour' }
+  behavior: { destination: 'settings', section: 'behaviour' },
+  // Un agent pilote l'app par des NOMS : sans ces entrées, la séparation Watchdog/Planification ne
+  // serait atteignable qu'à la souris, et « va sur le watchdog » atterrirait sur la mauvaise section.
+  watchdog: { destination: 'task-manager', section: 'watchdog' },
+  planification: { destination: 'task-manager', section: 'planification' },
+  planning: { destination: 'task-manager', section: 'planification' },
+  scheduler: { destination: 'task-manager', section: 'planification' }
 }
 
 export function isAppDestination(value: string): value is AppDestination {

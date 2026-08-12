@@ -25,7 +25,8 @@ import {
   resolveAppLocation,
   type AgentStudioSection,
   type SettingsSection,
-  type Tab
+  type Tab,
+  type TaskManagerSection
 } from './tabs'
 import autowinLogo from './assets/autowin-logo-transparent.png'
 import './assets/app-shell.css'
@@ -122,6 +123,9 @@ export function MainApp(): React.JSX.Element {
   // Une section choisie par l'humain (ou par une navigation ciblée) fait autorité : le défaut
   // « Diagnostic » ne s'applique que tant que personne n'a tranché.
   const settingsSectionPinned = useRef(false)
+  // Planification par défaut : c'est le contenu historique de Task Manager. Le Watchdog est le second
+  // écran, atteignable par le sélecteur ou par un deep-link d'agent (« va sur le watchdog »).
+  const [taskManagerSection, setTaskManagerSection] = useState<TaskManagerSection>('planification')
   const [navigationOrigin] = useState(() => `renderer-${globalThis.crypto.randomUUID()}`)
   const navigationGeneration = useRef(0)
 
@@ -216,6 +220,9 @@ export function MainApp(): React.JSX.Element {
       if (location.destination === 'settings' && location.section) {
         settingsSectionPinned.current = true
         setSettingsSection(location.section as SettingsSection)
+      }
+      if (location.destination === 'task-manager' && location.section) {
+        setTaskManagerSection(location.section as TaskManagerSection)
       }
       activateTab(location.destination)
     },
@@ -500,6 +507,8 @@ export function MainApp(): React.JSX.Element {
             <TaskManagerView
               active={tab === 'task-manager'}
               onOpenConversation={openTaskConversation}
+              section={taskManagerSection}
+              onSectionChange={setTaskManagerSection}
             />
           </div>
         )}
