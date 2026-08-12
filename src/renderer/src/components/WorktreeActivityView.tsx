@@ -77,6 +77,16 @@ function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: stri
       tone: 'danger'
     }
   }
+  if (agent.state === 'interrupted') {
+    // Ni un refus ni un conflit : l'application s'est arrêtée pendant que le run travaillait.
+    // Le présenter comme « bloqué » noyait les 7 bureaux à traiter sous 118 faux positifs.
+    return {
+      label: 'Interrompu',
+      outcome:
+        'Le run tournait quand Autowin s’est arrêté. Rien n’a été perdu : la copie est conservée, tu peux la relancer ou l’oublier.',
+      tone: 'waiting'
+    }
+  }
   if (agent.state === 'blocked') {
     if (agent.attentionReason === 'base-in-progress') {
       return {

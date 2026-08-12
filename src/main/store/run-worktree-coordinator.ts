@@ -6,6 +6,7 @@ import type {
   WorktreeConflictResolutionResult,
   WorktreeState
 } from '../../shared/worktree-activity-model'
+import { etatBureauRecupere } from '../../shared/worktree-activity-model'
 import {
   WorktreeRunStateStore,
   type WorktreePublicationState,
@@ -1532,9 +1533,14 @@ export class RunWorktreeCoordinator {
         tracked.state = 'ready'
         tracked.attentionReason = 'retry-exhausted'
       } else {
-        tracked.state = 'blocked'
-        tracked.attentionReason =
-          (record.attentionReason as Tracked['attentionReason']) ?? 'merge-failed'
+        // Source unique partagée avec la vue : un run coupé par un arrêt de l'app est
+        // « interrompu », pas « bloqué · merge-failed » — aucune fusion n'a été tentée.
+        const etat = etatBureauRecupere({
+          verdict: record.verdict,
+          attentionReason: record.attentionReason as Tracked['attentionReason']
+        })
+        tracked.state = etat.state
+        tracked.attentionReason = etat.attentionReason
       }
       if (record.verdict === 'running') {
         this.persist(tracked, 'interrupted', 'blocked', 'Processus interrompu après redémarrage')
@@ -1708,9 +1714,14 @@ export class RunWorktreeCoordinator {
         tracked.state = 'ready'
         tracked.attentionReason = 'retry-exhausted'
       } else {
-        tracked.state = 'blocked'
-        tracked.attentionReason =
-          (record.attentionReason as Tracked['attentionReason']) ?? 'merge-failed'
+        // Source unique partagée avec la vue : un run coupé par un arrêt de l'app est
+        // « interrompu », pas « bloqué · merge-failed » — aucune fusion n'a été tentée.
+        const etat = etatBureauRecupere({
+          verdict: record.verdict,
+          attentionReason: record.attentionReason as Tracked['attentionReason']
+        })
+        tracked.state = etat.state
+        tracked.attentionReason = etat.attentionReason
       }
       if (record.verdict === 'running') {
         this.persist(tracked, 'interrupted', 'blocked', 'Processus interrompu après redémarrage')
