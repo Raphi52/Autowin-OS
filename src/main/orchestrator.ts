@@ -19,6 +19,31 @@ import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-di
  * Même classe de couplage que celui déjà neutralisé pour le RUN.md physique et l'empreinte SHA-256.
  * On neutralise le FORMAT, jamais le fond : la substance et les preuves restent exigées.
  */
+/**
+ * Ce que le PRODUCTEUR pouvait réellement faire — le juge l'ignorait.
+ *
+ * Mesuré le 2026-08-12 : deux builds sur quatre ont été rejetés pour une preuve hors de portée —
+ * « aucune preuve UI live sur un binaire packagé frais » (conv-1135), « la capture/CDP de
+ * l'application réelle est affirmée sans preuve d'exécution » (conv-1137). Asymétrie structurelle :
+ * le producteur reçoit `PIPELINE_DISCIPLINE_INSTRUCTION` qui énumère son outillage, le juge ne
+ * reçoit que sa consigne de phase, le style et le contexte projet.
+ *
+ * On ne baisse pas l'exigence : `scripts/ui-capture.mjs` met désormais la preuve UI à portée du
+ * producteur. Le juge doit donc savoir qu'elle existe, à quoi elle ressemble, et ce qu'il peut
+ * légitimement réclamer — ni plus, ni moins.
+ */
+const JUDGE_TOOLSET_CONTRACT =
+  `OUTILLAGE DU PRODUCTEUR : in-app, il dispose de Read/Grep/Glob, et en phase de mutation de ` +
+  `Bash/Edit/Write bornés au dossier de travail. Pas d'accès web, pas de sous-agents. Pour une ` +
+  `preuve UI il dispose de \`node scripts/ui-capture.mjs --view <vue> --out <png>\`, qui navigue ` +
+  `par le vrai bouton, refuse une vue vide ou erronée, et rend un JSON + un exit-code. ` +
+  `Une capture citée avec son exit-code 0 et son chemin EST une preuve recevable. ` +
+  `Ne réclame aucun mécanisme absent de cet outillage — binaire packagé, relais planifié, outil ` +
+  `tiers : leur absence n'est jamais un défaut du livrable. En revanche exige ce qui EST à portée ` +
+  `— exit-code de test, lecture ciblée, capture par ce harnais — et une affirmation invérifiable ` +
+  `ou sans preuve reste un défaut.
+`
+
 const JUDGE_FORMAT_CONTRACT =
   `CONTRAT DE FORMAT : le format attendu est celui de l'application, pas celui d'un SKILL.md ` +
   `externe. Un tableau \`Score | Type | What | Why | How\` avec un Score agrégé /100 est CONFORME. ` +
@@ -3620,6 +3645,7 @@ export class Orchestrator {
           `RUN.md sur disque (Autowin le gère). N'exige jamais de RUN.md physique, d'empreinte SHA-256 ` +
           `ni de chemin kit ; juge la SUBSTANCE du livrable et les preuves d'outil réellement observées.\n` +
           JUDGE_FORMAT_CONTRACT +
+          JUDGE_TOOLSET_CONTRACT +
           `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
           `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
