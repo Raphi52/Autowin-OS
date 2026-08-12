@@ -223,16 +223,25 @@ const selectConversation = async (title) => {
 const typeAndSend = async (prompt) => {
   if (!(await setInput('.composer textarea', prompt))) throw new Error('Composer absent')
   await sleep(100)
+  // Sur une app fraîchement démarrée, « Nouveau » ne crée PAS encore la conversation : elle
+  // n'existe qu'à la persistance du premier message, donc `activeConversationId` est nul et exiger
+  // sa présence ici rendait la campagne INDÉMARRABLE (« Conversation active absente avant envoi »,
+  // mesuré le 2026-08-12 sur une app relancée). Le harnais ne fonctionnait qu'en héritant d'une
+  // conversation déjà ouverte par un usage antérieur. On envoie donc sans exiger l'identifiant ;
+  // sa création est vérifiée juste après, par la sentinelle, qui est la vraie preuve.
   const targetConversationId = await evaluate(
     `window.api.appState().then((state) => state.activeConversationId ?? null)`
   )
-  if (!targetConversationId) throw new Error('Conversation active absente avant envoi')
   const clicked = await evaluate(`(() => {
     const button = document.querySelector('.composer .composer-send:not(:disabled)')
     button?.click()
     return Boolean(button)
   })()`)
   if (!clicked) throw new Error('Bouton Envoyer indisponible')
+  // Sans conversation préexistante, l'acceptation se prouve par l'apparition de la conversation
+  // portant la sentinelle — c'est le rôle de l'appelant. Attendre ici sur un id nul bouclerait 10 s
+  // pour rien à chaque envoi.
+  if (!targetConversationId) return
   for (let attempt = 0; attempt < 100; attempt += 1) {
     await sleep(100)
     const accepted = await evaluate(`(async () => {
