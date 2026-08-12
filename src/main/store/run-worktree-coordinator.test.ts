@@ -1670,8 +1670,11 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     ['red', 'not-requested', 'ready'],
     ['cancelled', 'not-requested', 'ready'],
     ['unknown', 'blocked', 'blocked'],
-    ['interrupted', 'blocked', 'blocked'],
-    ['running', 'not-requested', 'blocked']
+    // Un run coupé par un arrêt de l'application converge vers `interrupted`, pas `blocked` :
+    // il n'a été refusé par rien. Le reste de l'assertion (sortie de `working`, aucune
+    // finalisation, verdict persisté) est inchangé — seul le libellé cessait d'être vrai.
+    ['interrupted', 'blocked', 'interrupted'],
+    ['running', 'not-requested', 'interrupted']
   ] as const)(
     'fait converger un run %s récupéré dès que son processus disparaît',
     (verdict, publication, expectedState) => {

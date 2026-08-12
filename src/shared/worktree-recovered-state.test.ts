@@ -39,6 +39,15 @@ describe('état d’un bureau récupéré au démarrage', () => {
     expect(etatBureauRecupere({ verdict: 'running' }).attentionReason).toBeUndefined()
   })
 
+  it('garde le défaut « merge-failed » pour une copie anormale sans raison enregistrée', () => {
+    // Une copie dont le processus a disparu SANS manifeste reste une anomalie : le défaut
+    // historique tient. On ne l'a retiré que pour l'arrêt de l'application, où il mentait.
+    expect(etatBureauRecupere({ verdict: 'unknown' })).toEqual({
+      state: 'blocked',
+      attentionReason: 'merge-failed'
+    })
+  })
+
   it('conserve la raison réelle quand elle est enregistrée', () => {
     expect(etatBureauRecupere({ verdict: 'green', attentionReason: 'base-dirty' })).toEqual({
       state: 'blocked',

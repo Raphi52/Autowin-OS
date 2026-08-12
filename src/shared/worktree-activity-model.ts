@@ -110,9 +110,10 @@ export function etatBureauRecupere(record: {
   if (record.verdict === 'running' || record.verdict === 'interrupted') {
     return { state: 'interrupted' }
   }
-  return record.attentionReason
-    ? { state: 'blocked', attentionReason: record.attentionReason }
-    : { state: 'blocked' }
+  // Hors interruption, le defaut historique est conserve : une copie sans raison enregistree dont
+  // le processus a disparu EST une anomalie a traiter (test « sort de working une copie sans
+  // manifeste »). On ne retire le defaut que la ou il mentait — l'arret de l'application.
+  return { state: 'blocked', attentionReason: record.attentionReason ?? 'merge-failed' }
 }
 
 /** Source unique pour décider si un bureau attend une action humaine. */
