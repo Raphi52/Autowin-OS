@@ -178,7 +178,12 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
     expect(handler).toContain('...(step.artifacts ?? [])')
     expect(handler).toContain('materializeChatArtifact(')
     expect(handler).toContain('durableTurn.artifact(stored)')
-    expect(handler).toContain('durableTurn.succeed(result)')
+    // Le handler ne persiste plus `result` brut mais `delivered` (= result + apprentissage), et
+    // rend LA MEME valeur au renderer. Asserter le nom de variable suivait un renommage sans rien
+    // garantir ; on asserte donc la PROPRIETE qui compte : ce qui est persiste est ce qui est livre.
+    const succeed = /durableTurn\.succeed\((\w+)\)/.exec(handler)
+    expect(succeed, 'durableTurn.succeed introuvable').not.toBeNull()
+    expect(handler).toContain(`return { ok: true, result: ${succeed![1]} }`)
     expect(handler).toContain('durableTurn.fail(error, aborted)')
     expect(handler).toContain('persistRunLifecycle(lifecycle')
     expect(handler).toMatch(/persistOrchestrationPhaseStart\(\s*phase,/)

@@ -54,7 +54,11 @@ function fakeOs(): any {
       }
     },
     registry: { ids: () => ['claude'] },
-    roles: { all: () => ({}) },
+    // `commands.ts` lit `roles.getBinding('orchestrator').model` (4 sites) pour etiqueter le run.
+    // Le double ne l'exposait pas : `orchestrate` echouait sur « getBinding is not a function » et
+    // huit tests tombaient sur `{ ok: false }`. Un double qui ne suit pas son original ne teste
+    // plus rien. `model` reste absent pour que le repli `?? 'autowin'` soit exerce.
+    roles: { all: () => ({}), getBinding: () => ({ provider: 'claude' }) },
     runsWithGate: () => [],
     budget: () => ({ spent: 0 }),
     setRole: () => {
@@ -66,7 +70,19 @@ function fakeOs(): any {
     runTask: async (task: string) => {
       calls.runTask += 1
       calls.lastTask = task
-      return { gateBlocked: false, valid: true, costUsd: 0, result: '' }
+      // Aligne sur `OrchestrationResult` : `commands.ts` lit `phaseOutputs` (l. 1308) et
+      // `gateReasons`. Les omettre faisait echouer `orchestrate` sur
+      // « Cannot read properties of undefined (reading 'flatMap') » — un double en retard sur son
+      // original ne teste plus le chemin reel, il teste une fiction.
+      return {
+        task,
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
     },
     chat: async () => ({ text: '', provider: 'claude', systemInjected: false }),
     calls
