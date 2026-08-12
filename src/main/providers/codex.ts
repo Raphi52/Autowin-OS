@@ -91,6 +91,42 @@ export function codexStructuralFailure(error: unknown): Error {
 }
 
 /** Élément d'exécution brut remonté par Codex (sous-ensemble typé utile à la preuve). */
+/**
+ * Que faire du travail déjà accumulé quand le watchdog coupe le CLI.
+ *
+ * Mesuré le 2026-08-12 sur conv-1122 (vue Agent Studio) : un appel subagent a tourné 1 286 s —
+ * 21 minutes — puis s'est tu 5 minutes, et le watchdog l'a tué sur inactivité. Le seuil est sain,
+ * mais l'adaptateur rejetait alors que `finalText`, `executionEvidence` et l'usage étaient DÉJÀ en
+ * mémoire : 21 minutes de travail perdues, run rouge, rien de récupérable.
+ *
+ * Le watchdog reste souverain sur la mort du process ; il ne l'est pas sur la destruction du
+ * travail. On récupère dès qu'il y a de la matière, et l'interruption est ÉCRITE dans le texte :
+ * le juge doit voir un tour coupé, jamais croire à une livraison complète.
+ */
+export function salvageOnWatchdogTrip(
+  reason: 'inactivity' | 'total',
+  produit: { finalText: string; executionEvidence: ExecutionEvidence[] }
+):
+  | { kind: 'salvaged'; result: { text: string; executionEvidence: ExecutionEvidence[] } }
+  | { kind: 'failed'; error: Error } {
+  const cause = reason === 'inactivity' ? 'aucune sortie' : 'durée max'
+  const texte = produit.finalText.trim()
+  const preuves = produit.executionEvidence
+  if (!texte && preuves.length === 0) {
+    return { kind: 'failed', error: new Error(`codex exec figé (${cause}) — tué par le watchdog`) }
+  }
+  const entete =
+    `⚠️ TOUR INTERROMPU — codex exec tué par le watchdog (${cause}). Ce qui suit est le travail ` +
+    `réellement produit AVANT la coupure, pas une livraison complète : traite-le comme partiel.`
+  return {
+    kind: 'salvaged',
+    result: {
+      text: texte ? `${entete}\n\n${texte}` : entete,
+      executionEvidence: preuves
+    }
+  }
+}
+
 export interface CodexExecItem {
   type?: string
   status?: string
@@ -398,11 +434,23 @@ async function runCodexExec(
       totalMs: resolveProviderTimeoutMs(opts.execution?.providerTimeoutMs, fallbackTimeoutMs),
       onTrip: (reason) => {
         killEscalate(child)
-        reject(
-          new Error(
-            `codex exec figé (${reason === 'inactivity' ? 'aucune sortie' : 'durée max'}) — tué par le watchdog`
-          )
-        )
+        // Ne pas jeter ce qui a déjà été produit : mesuré le 2026-08-12 (conv-1122), un appel de
+        // 21 minutes a été tué après 5 min de silence, emportant texte, preuves et usage déjà
+        // accumulés. Le watchdog reste souverain sur la MORT du process, pas sur la destruction
+        // du travail.
+        const issue = salvageOnWatchdogTrip(reason, { finalText, executionEvidence })
+        if (issue.kind === 'failed') {
+          reject(issue.error)
+          return
+        }
+        resolvePromise({
+          ...issue.result,
+          provider: 'codex',
+          sessionId,
+          systemInjected: Boolean(opts.system),
+          usage,
+          thinking: joinThinking(reasoningFragments)
+        })
       }
     })
     execution.registerTermination?.((reason) => {

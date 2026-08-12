@@ -1094,7 +1094,15 @@ export class AppCommandBus {
               bindingOverride,
               runtimeSnapshot
             ) ?? null
-          const resumeOutputs = resumable?.phaseOutputs ?? []
+          // Repli quand aucune reprise STRICTE n'existe (le libellé a changé entre deux tours) :
+          // on récupère quand même l'analyse en lecture seule déjà produite dans CETTE
+          // conversation, plutôt que de la repayer. Mesuré sur conv-1061 : « scout … vue Chat »
+          // puis « Fais tout … » ne s'apparient pas, et le scout est intégralement rejoué.
+          // Aucun checkpoint n'est repris ici : seuls des textes de phase sont réinjectés.
+          const resumeOutputs =
+            resumable?.phaseOutputs ??
+            this.os.acquiredAnalysisForConversation?.(task, convId, Date.now()) ??
+            []
           this.broadcast({ type: 'orchestrate-start', convId, runPath, task: requestedTask })
           let currentRunId: string | undefined
           let terminalLifecycle: Extract<RunLifecycleEvent, { stage: 'closure' }> | undefined

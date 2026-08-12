@@ -175,7 +175,11 @@ import {
   listBehaviourFiles,
   readBehaviourFileFromManifest
 } from './behaviour-files'
-import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-access'
+import {
+  ApprovedBehaviourWorkspaces,
+  diagnostiquerExpediteurRenderer,
+  isTrustedRendererUrl
+} from './behaviour-access'
 import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
@@ -1144,8 +1148,20 @@ const defaultBehaviourRoot = defaultBehaviourWorkspace()
 const behaviourAccess = new ApprovedBehaviourWorkspaces(defaultBehaviourRoot)
 
 function assertTrustedRendererSender(event: IpcMainInvokeEvent, scope: string): void {
-  const trusted = isTrustedRendererUrl(event.senderFrame?.url ?? '', behaviourRendererOptions())
-  if (!trusted) throw new Error(`Origine renderer non autorisée pour ${scope}`)
+  // Le refus DIT ce qu'il a vu : une frame détachée (rechargement en cours) n'est pas une origine
+  // hostile, et la confondre envoyait chercher une faille là où il y a un cycle de vie.
+  // Rien n'est relâché : les deux cas restent refusés.
+  const verdict = diagnostiquerExpediteurRenderer(
+    event.senderFrame?.url,
+    behaviourRendererOptions()
+  )
+  if (verdict.trusted) return
+  if (verdict.cause === 'frame-indisponible') {
+    throw new Error(`Frame renderer indisponible pour ${scope} (rechargement en cours ?)`)
+  }
+  throw new Error(
+    `Origine renderer non autorisée pour ${scope}${verdict.origine ? ` : ${verdict.origine}` : ''}`
+  )
 }
 
 function assertTrustedBehaviourSender(event: IpcMainInvokeEvent): void {

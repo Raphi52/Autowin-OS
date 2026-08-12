@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ExecutionSupervisor } from './execution-supervisor'
 import { ProviderCallError } from './providers/types'
-import { compileExecutionQuote } from './execution-quote'
+import { compileExecutionQuote, type ExecutionQuoteCaps } from './execution-quote'
 import { ProviderRegistry } from './providers/registry'
 import type {
   Message,
@@ -32,10 +32,20 @@ class CountedProvider implements ProviderAdapter {
   }
 }
 
+/**
+ * Ces tests garantissent l'autorité d'admission en mode `blocking`, la sémantique pour laquelle
+ * ils ont tous été écrits. Depuis la décision utilisateur du 2026-08-12, ce n'est plus le DÉFAUT
+ * du produit — `compileExecutionQuote` rend désormais `metering-only`, qui compte sans jamais
+ * refuser (voir `execution-supervisor.no-blocking.test.ts`). On opte donc explicitement ici, pour
+ * que le mode bloquant reste gardé tant qu'il existe, au lieu de perdre ces garanties.
+ */
+const devisBloquant = (tache: string, caps?: ExecutionQuoteCaps) =>
+  compileExecutionQuote(tache, { ...caps, spendEnforcement: 'blocking' })
+
 describe('ExecutionSupervisor', () => {
   it('publie l’identité exacte de chaque réservation active puis la retire au règlement', async () => {
     const supervisor = new ExecutionSupervisor()
-    const quote = compileExecutionQuote('suivre deux membres du fan-out')
+    const quote = devisBloquant('suivre deux membres du fan-out')
     quote.limits.maxProviderCalls = 2
     quote.limits.maxConcurrency = 2
 
@@ -74,7 +84,7 @@ describe('ExecutionSupervisor', () => {
       }
     }
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('lier une occurrence à son coût')
+    const quote = devisBloquant('lier une occurrence à son coût')
 
     await supervisor.run(quote, undefined, async () => {
       await registry.send('reservation-aware', [{ role: 'user', content: 'go' }], {
@@ -113,7 +123,7 @@ describe('ExecutionSupervisor', () => {
       }
     }
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('mesurer un appel provider coupe par sa borne')
+    const quote = devisBloquant('mesurer un appel provider coupe par sa borne')
 
     await supervisor.run(quote, undefined, async () => {
       await expect(
@@ -135,7 +145,7 @@ describe('ExecutionSupervisor', () => {
 
   it('reserve tout le fan-out autorise sans sur-reserver le budget tokens', async () => {
     const supervisor = new ExecutionSupervisor()
-    const quote = compileExecutionQuote('analyse trois pistes')
+    const quote = devisBloquant('analyse trois pistes')
     quote.limits.maxProviderCalls = 3
     quote.limits.maxConcurrency = 3
     quote.limits.maxTotalTokens = 300
@@ -153,7 +163,7 @@ describe('ExecutionSupervisor', () => {
 
   it('interrompt le fan-out restant quand un reglement consomme ses reservations', async () => {
     const supervisor = new ExecutionSupervisor()
-    const quote = compileExecutionQuote('analyse trois pistes')
+    const quote = devisBloquant('analyse trois pistes')
     quote.limits.maxProviderCalls = 3
     quote.limits.maxConcurrency = 3
     quote.limits.maxTotalTokens = 300
@@ -173,7 +183,7 @@ describe('ExecutionSupervisor', () => {
 
   it("n'admet aucun appel dont la reservation tokens serait nulle", async () => {
     const supervisor = new ExecutionSupervisor()
-    const quote = compileExecutionQuote('analyse trois pistes')
+    const quote = devisBloquant('analyse trois pistes')
     quote.limits.maxProviderCalls = 3
     quote.limits.maxConcurrency = 3
     quote.limits.maxTotalTokens = 1
@@ -191,7 +201,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 10, outputTokens: 2 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('corrige la typo', { maxProviderCalls: 1 })
+    const quote = devisBloquant('corrige la typo', { maxProviderCalls: 1 })
 
     await supervisor.run(quote, undefined, async () => {
       await registry.send('counted', [{ role: 'user', content: 'premier' }])
@@ -208,7 +218,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 1, costUsd: 0.1 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('corrige la typo', { maxUsd: 1 })
+    const quote = devisBloquant('corrige la typo', { maxUsd: 1 })
     const prior = {
       quoteId: quote.id,
       startedAgents: 1,
@@ -243,7 +253,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 1 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('refonte critique complete de toute application')
+    const quote = devisBloquant('refonte critique complete de toute application')
     quote.limits.maxAgents = 10
     const execution = { cwd: process.cwd(), sandbox: 'read-only' as const }
 
@@ -279,7 +289,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 1 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('refonte critique complete de toute application')
+    const quote = devisBloquant('refonte critique complete de toute application')
     quote.limits.maxAgents = 3
     const prior = {
       quoteId: quote.id,
@@ -317,7 +327,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider()
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('corrige la typo')
+    const quote = devisBloquant('corrige la typo')
 
     await supervisor.run(quote, undefined, () =>
       registry.send('counted', [{ role: 'user', content: 'sans usage' }])
@@ -336,7 +346,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 1 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('corrige la typo', { maxProviderCalls: 1 })
+    const quote = devisBloquant('corrige la typo', { maxProviderCalls: 1 })
 
     await Promise.all([
       supervisor.run(quote, undefined, () =>
@@ -354,7 +364,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 5, outputTokens: 1 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('corrige la typo', { maxProviderCalls: 2 })
+    const quote = devisBloquant('corrige la typo', { maxProviderCalls: 2 })
     const prior = {
       quoteId: quote.id,
       startedCalls: 1,
@@ -392,7 +402,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 5, outputTokens: 1 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('corrige la typo', { maxProviderCalls: 2 })
+    const quote = devisBloquant('corrige la typo', { maxProviderCalls: 2 })
     quote.limits.maxConcurrency = 1
     const prior = {
       quoteId: quote.id,
@@ -426,7 +436,7 @@ describe('ExecutionSupervisor', () => {
 
   it('publie aussi le snapshot final quand le provider se regle avant le finally', async () => {
     const supervisor = new ExecutionSupervisor()
-    const quote = compileExecutionQuote('corrige la typo')
+    const quote = devisBloquant('corrige la typo')
     const settlements: Array<NonNullable<ReturnType<typeof supervisor.currentSnapshot>>> = []
     let closureSnapshot: NonNullable<ReturnType<typeof supervisor.currentSnapshot>> | undefined
 
@@ -460,7 +470,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('corrige la typo', { maxTotalTokens: 1 })
+    const quote = devisBloquant('corrige la typo', { maxTotalTokens: 1 })
     quote.limits.maxFreshTokens = 1
     const prior = {
       quoteId: quote.id,
@@ -495,7 +505,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('corrige la typo')
+    const quote = devisBloquant('corrige la typo')
     quote.limits.maxFreshTokens = 1
     const prior = {
       quoteId: quote.id,
@@ -536,7 +546,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('corrige la typo')
+    const quote = devisBloquant('corrige la typo')
     // Devis créé il y a 3 heures, budget de 2 heures : l'ancien calcul refusait tout net.
     quote.createdAt = new Date(Date.now() - 3 * 60 * 60 * 1_000).toISOString()
     quote.limits.maxDurationMs = 2 * 60 * 60 * 1_000
@@ -551,7 +561,7 @@ describe('ExecutionSupervisor', () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = compileExecutionQuote('corrige la typo')
+    const quote = devisBloquant('corrige la typo')
     // Budget NUL : l'échéance court désormais depuis le début de l'exécution, donc un devis
     // simplement ANCIEN ne suffit plus à la faire expirer — c'est précisément la correction (une
     // reprise après une longue interruption était condamnée avant de jouer une phase). Le garde du
@@ -569,8 +579,8 @@ describe('ExecutionSupervisor', () => {
 
   it('isole un reveil de fond du devis encore actif dans le contexte parent', async () => {
     const supervisor = new ExecutionSupervisor()
-    const parentQuote = compileExecutionQuote('orchestration parente')
-    const childQuote = compileExecutionQuote('reveil auto-kaizen')
+    const parentQuote = devisBloquant('orchestration parente')
+    const childQuote = devisBloquant('reveil auto-kaizen')
     let childSettlement: number | null | undefined
 
     await supervisor.run(parentQuote, undefined, async () => {

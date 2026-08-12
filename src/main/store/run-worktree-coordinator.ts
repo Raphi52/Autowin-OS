@@ -6,6 +6,7 @@ import type {
   WorktreeConflictResolutionResult,
   WorktreeState
 } from '../../shared/worktree-activity-model'
+import { etatBureauRecupere } from '../../shared/worktree-activity-model'
 import {
   WorktreeRunStateStore,
   type WorktreePublicationState,
@@ -938,6 +939,15 @@ export class RunWorktreeCoordinator {
     }
     const finalizeAsync = this.manager.finalizeAsync
     if (!finalizeAsync) return { resolved: false, reason: 'unsupported' }
+    // Les SHA de conflit décrivent l'état BLOQUÉ. `isRecord` ne les autorise QU'avec
+    // `publication: 'blocked'` ; les garder en passant à `integrating` faisait échouer le tout
+    // premier `save()` de la résolution — « Manifeste de bureau invalide », mesuré le 2026-08-12
+    // sur les trois conflits en attente. Le bouton de résolution ne pouvait donc JAMAIS aboutir.
+    // Les SHA utiles à la fusion vivent ailleurs (`publicationAgentSha`/`publicationBaseSha`,
+    // remplis par `onIntegrated`), rien n'est perdu.
+    tracked.conflictBaseSha = undefined
+    tracked.conflictAgentSha = undefined
+    tracked.conflictFile = undefined
     this.persist(tracked, 'green', 'integrating', 'Résolution de conflit demandée depuis le Hub.')
     try {
       const res = await finalizeAsync.call(this.manager, runId, {
@@ -1368,6 +1378,9 @@ export class RunWorktreeCoordinator {
           isMutation: true,
           startedAtMs: timestamp,
           endedAtMs: record?.updatedAtMs ?? timestamp,
+          // L'etat suivait `publication` en IGNORANT le verdict : un run coupe par un arret de
+          // l'application (verdict `interrupted`, publication `blocked`) devenait « bloque ».
+          // Mesure du 2026-08-12 : 118 bureaux sur 218 dans ce cas, pour 7 vrais cas a traiter.
           state: !record
             ? 'blocked'
             : record.publication === 'complete'
@@ -1376,9 +1389,11 @@ export class RunWorktreeCoordinator {
                   record.conflictBaseSha &&
                   record.conflictAgentSha
                 ? 'conflict'
-                : record.publication === 'blocked'
-                  ? 'blocked'
-                  : 'ready',
+                : record.verdict === 'interrupted' || record.verdict === 'running'
+                  ? 'interrupted'
+                  : record.publication === 'blocked'
+                    ? 'blocked'
+                    : 'ready',
           files: record?.files.length
             ? record.files
             : inventory
@@ -1408,10 +1423,15 @@ export class RunWorktreeCoordinator {
           publicationAgentSha: record?.publicationAgentSha,
           publicationBaseSha: record?.publicationBaseSha,
           causalPublicationDeliveredAtMs: record?.causalPublicationDeliveredAtMs,
+          // Un run interrompu n'a subi AUCUNE fusion : ne lui invente pas `merge-failed`.
           attentionReason: !record
             ? 'merge-failed'
             : ((record.attentionReason as Tracked['attentionReason']) ??
-              (record.publication === 'blocked' ? 'merge-failed' : undefined)),
+              (record.publication === 'blocked' &&
+              record.verdict !== 'interrupted' &&
+              record.verdict !== 'running'
+                ? 'merge-failed'
+                : undefined)),
           verdict: record?.verdict ?? 'unknown',
           publication: record?.publication ?? 'blocked',
           recovered: true,
@@ -1532,9 +1552,14 @@ export class RunWorktreeCoordinator {
         tracked.state = 'ready'
         tracked.attentionReason = 'retry-exhausted'
       } else {
-        tracked.state = 'blocked'
-        tracked.attentionReason =
-          (record.attentionReason as Tracked['attentionReason']) ?? 'merge-failed'
+        // Source unique partagée avec la vue : un run coupé par un arrêt de l'app est
+        // « interrompu », pas « bloqué · merge-failed » — aucune fusion n'a été tentée.
+        const etat = etatBureauRecupere({
+          verdict: record.verdict,
+          attentionReason: record.attentionReason as Tracked['attentionReason']
+        })
+        tracked.state = etat.state
+        tracked.attentionReason = etat.attentionReason
       }
       if (record.verdict === 'running') {
         this.persist(tracked, 'interrupted', 'blocked', 'Processus interrompu après redémarrage')
@@ -1708,9 +1733,14 @@ export class RunWorktreeCoordinator {
         tracked.state = 'ready'
         tracked.attentionReason = 'retry-exhausted'
       } else {
-        tracked.state = 'blocked'
-        tracked.attentionReason =
-          (record.attentionReason as Tracked['attentionReason']) ?? 'merge-failed'
+        // Source unique partagée avec la vue : un run coupé par un arrêt de l'app est
+        // « interrompu », pas « bloqué · merge-failed » — aucune fusion n'a été tentée.
+        const etat = etatBureauRecupere({
+          verdict: record.verdict,
+          attentionReason: record.attentionReason as Tracked['attentionReason']
+        })
+        tracked.state = etat.state
+        tracked.attentionReason = etat.attentionReason
       }
       if (record.verdict === 'running') {
         this.persist(tracked, 'interrupted', 'blocked', 'Processus interrompu après redémarrage')

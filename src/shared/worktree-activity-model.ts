@@ -1,6 +1,14 @@
 /** Contrats partagés de l'activité et de l'état des worktrees. */
 
-export type WorktreeState = 'isolated' | 'working' | 'ready' | 'merged' | 'conflict' | 'blocked'
+export type WorktreeState =
+  | 'isolated'
+  | 'working'
+  | 'ready'
+  | 'merged'
+  | 'conflict'
+  | 'blocked'
+  /** Le run tournait quand l'application s'est arrêtée : personne ne l'a bloqué, il a été coupé. */
+  | 'interrupted'
 export type FileChangeKind = 'add' | 'mod' | 'del'
 
 export interface WorktreeRuntimeStatus {
@@ -85,8 +93,33 @@ export interface WorktreeAgentActivity {
   retryCount?: number
 }
 
+/**
+ * État d'affichage d'un bureau reconstruit au démarrage, à partir de son enregistrement.
+ *
+ * Mesuré le 2026-08-12 : la vue annonçait 146 bureaux « bloqués » pour SEPT qui retenaient
+ * réellement du travail vert. 118 d'entre eux étaient des runs coupés par un arrêt de
+ * l'application, étiquetés `blocked` avec `merge-failed` PAR DÉFAUT — alors qu'aucune fusion
+ * n'avait été tentée. Le signal utile était noyé d'un facteur 20.
+ *
+ * Un run interrompu n'appelle aucune action humaine : il a été coupé, pas refusé.
+ */
+export function etatBureauRecupere(record: {
+  verdict?: string
+  attentionReason?: WorktreeAgentActivity['attentionReason']
+}): { state: WorktreeState; attentionReason?: WorktreeAgentActivity['attentionReason'] } {
+  if (record.verdict === 'running' || record.verdict === 'interrupted') {
+    return { state: 'interrupted' }
+  }
+  // Hors interruption, le defaut historique est conserve : une copie sans raison enregistree dont
+  // le processus a disparu EST une anomalie a traiter (test « sort de working une copie sans
+  // manifeste »). On ne retire le defaut que la ou il mentait — l'arret de l'application.
+  return { state: 'blocked', attentionReason: record.attentionReason ?? 'merge-failed' }
+}
+
 /** Source unique pour décider si un bureau attend une action humaine. */
 export function requiresAttention(agent: WorktreeAgentActivity): boolean {
+  // Un run coupé par un arrêt de l'app n'attend personne : il attend d'être relancé ou oublié.
+  if (agent.state === 'interrupted') return false
   if (agent.state === 'conflict') return true
   if (
     agent.attentionReason === 'retry-exhausted' ||

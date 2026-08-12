@@ -2,6 +2,53 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
+import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
+
+/**
+ * Le juge doit juger contre le contrat que le PRODUCTEUR a reçu.
+ *
+ * Mesuré sur la campagne du 2026-08-12 : quatre scouts sur quatre (Knowledge, Task Manager,
+ * Tickets, Settings) rejetés pour la MÊME raison, purement cosmétique — « score /100 interdit
+ * par /scout, colonne # absente et bandes 🟢/🟡/🔴 non utilisées ». Aucun défaut de fond n'était
+ * reproché. Texte contre texte : `phase-briefs.ts` impose au producteur des colonnes
+ * `Score | Type | What | Why | How` avec « une note agrégée /100 », tandis que le SKILL.md `scout`
+ * du kit externe (l. 66) INTERDIT le /100 et exige une colonne `#` et des bandes. Le juge charge
+ * le kit et sanctionne un livrable pour n'avoir pas suivi un contrat qui n'est pas le sien — or
+ * le format /100 est précisément celui voulu dans Autowin.
+ *
+ * Même classe de couplage que celui déjà neutralisé pour le RUN.md physique et l'empreinte SHA-256.
+ * On neutralise le FORMAT, jamais le fond : la substance et les preuves restent exigées.
+ */
+/**
+ * Ce que le PRODUCTEUR pouvait réellement faire — le juge l'ignorait.
+ *
+ * Mesuré le 2026-08-12 : deux builds sur quatre ont été rejetés pour une preuve hors de portée —
+ * « aucune preuve UI live sur un binaire packagé frais » (conv-1135), « la capture/CDP de
+ * l'application réelle est affirmée sans preuve d'exécution » (conv-1137). Asymétrie structurelle :
+ * le producteur reçoit `PIPELINE_DISCIPLINE_INSTRUCTION` qui énumère son outillage, le juge ne
+ * reçoit que sa consigne de phase, le style et le contexte projet.
+ *
+ * On ne baisse pas l'exigence : `scripts/ui-capture.mjs` met désormais la preuve UI à portée du
+ * producteur. Le juge doit donc savoir qu'elle existe, à quoi elle ressemble, et ce qu'il peut
+ * légitimement réclamer — ni plus, ni moins.
+ */
+const JUDGE_TOOLSET_CONTRACT =
+  `OUTILLAGE DU PRODUCTEUR : in-app, il dispose de Read/Grep/Glob, et en phase de mutation de ` +
+  `Bash/Edit/Write bornés au dossier de travail. Pas d'accès web, pas de sous-agents. Pour une ` +
+  `preuve UI il dispose de \`node scripts/ui-capture.mjs --view <vue> --out <png>\`, qui navigue ` +
+  `par le vrai bouton, refuse une vue vide ou erronée, et rend un JSON + un exit-code. ` +
+  `Une capture citée avec son exit-code 0 et son chemin EST une preuve recevable. ` +
+  `Ne réclame aucun mécanisme absent de cet outillage — binaire packagé, relais planifié, outil ` +
+  `tiers : leur absence n'est jamais un défaut du livrable. En revanche exige ce qui EST à portée ` +
+  `— exit-code de test, lecture ciblée, capture par ce harnais — et une affirmation invérifiable ` +
+  `ou sans preuve reste un défaut.
+`
+
+const JUDGE_FORMAT_CONTRACT =
+  `CONTRAT DE FORMAT : le format attendu est celui de l'application, pas celui d'un SKILL.md ` +
+  `externe. Un tableau \`Score | Type | What | Why | How\` avec un Score agrégé /100 est CONFORME. ` +
+  `Ne sanctionne jamais l'absence d'une colonne « # », l'absence de bandes 🟢/🟡/🔴, ni la présence ` +
+  `d'un /100 : ce ne sont pas des défauts ici. Juge le FOND.\n`
 import type { Role, RoleBinding, RoleModelConfig, ReasoningEffort } from './roles'
 import { resolvePhaseBinding } from './roles'
 import { defaultQuorumThreshold } from './quorum'
@@ -754,6 +801,17 @@ const JUDGE_PHASE_CAP = 6000
  * lecture-seule reconnu (voir `classifyMutationConfidence`).
  */
 const CLAUSE_SPLIT = /\b(?:et|puis|then|and|apres|après)\b|[;,]/gi
+/**
+ * Apostrophes typographiques ramenées à l'apostrophe droite AVANT toute détection de négation.
+ * `NEGATED_MUTATION` n'accepte que `'` : « n’implémente rien » — la forme que produit tout clavier
+ * français et que portent les prompts réels — n'était donc PAS reconnue comme une négation, et la
+ * tâche basculait en mutation à cause du verbe qu'elle prétendait justement exclure.
+ */
+const APOSTROPHES = /[‘’ʼ]/g
+/** Sentinelle de campagne en tête de prompt : « [claude-propre-A-chat] … ». */
+const SENTINEL_PREFIX = /^\[[^\]]{0,160}\]\s*/
+/** Phases dont le contrat EST la lecture seule, nommées en tête de demande (slash facultatif). */
+const PHASE_LECTURE_SEULE_LEAD = /^\/?(?:scout|frame|judge)\b/i
 /** Verbes/participes lecture-seule reconnus À L'INTÉRIEUR d'une clause secondaire. */
 const READ_ONLY_STEM =
   'analys|audit|cadr|document|expliqu|inspect|review|resume|resum|decri|lis|lire|liste|montre|affiche'
@@ -780,9 +838,32 @@ export function classifyMutationConfidence(task: string): MutationConfidence {
   // cité dans sa cible (ex. « pourquoi le modèle a voulu modifier X »).
   if (/^\/kaizen(?=\s|$)/i.test(task.trim())) return 'read-only'
   if (/^\/(?:scout|frame|judge)(?=\s|$)/i.test(task.trim())) return 'read-only'
+  // Le contrat de phase doit être reconnu AVANT le test de mutation, sinon un simple mot comme
+  // « améliorations » bascule un scout en écriture. Mesuré le 2026-08-12 : les prompts réels de la
+  // campagne portent une sentinelle et pas de slash — « [claude-propre-A-observatory] scout des
+  // améliorations de la vue Observatory … N'implémente rien à ce tour. » — donc le garde ci-dessus
+  // ne s'appliquait pas. La tâche devenait une mutation, et le pré-gate réclamait à la phase une
+  // preuve d'écriture que `sandboxForPhase` lui interdit précisément de produire.
+  const sansSentinelle = task.trim().replace(SENTINEL_PREFIX, '')
+  if (PHASE_LECTURE_SEULE_LEAD.test(sansSentinelle)) {
+    const normaliseLead = sansSentinelle
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(APOSTROPHES, "'")
+      .toLowerCase()
+      .replace(NEGATED_MUTATION, ' ')
+    // Le contrat ne couvre que SA clause. « scout … puis implémente-les » reste une mutation :
+    // une clause suivante porteuse d'un verbe d'écriture invalide le contrat.
+    const [, ...clausesSuivantes] = normaliseLead
+      .split(CLAUSE_SPLIT)
+      .map((clause) => clause.trim())
+      .filter(Boolean)
+    if (!clausesSuivantes.some((clause) => MUTATION_TASK.test(clause))) return 'read-only'
+  }
   const normalized = task
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
+    .replace(APOSTROPHES, "'")
     .toLowerCase()
   const withoutNegations = normalized.replace(NEGATED_MUTATION, ' ')
   if (MUTATION_TASK.test(withoutNegations)) return 'mutation'
@@ -1986,8 +2067,8 @@ export class Orchestrator {
     const judgePrompt =
       `Tu es un juge outillé en lecture seule. Confronte le livrable aux preuves d'outil. ` +
       `Le livrable est le TEXTE agrégé (sous-tâches parallèles), PAS un RUN.md sur disque.\n` +
-      `TÂCHE: ${task}\nRÉPONSE (agrégat des sous-tâches) : ${aggregate}\n` +
-      `PREUVES OUTILS: ${JSON.stringify(evidence ?? [])}\n` +
+      `TÂCHE: ${task}\nRÉPONSE (agrégat des sous-tâches) : ${clampAggregateForJudge(aggregate)}\n` +
+      `PREUVES OUTILS: ${serializeEvidenceForJudge(evidence)}\n` +
       `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
     const messages = [{ role: 'user' as const, content: judgePrompt }]
     const parts = [
@@ -3563,8 +3644,10 @@ export class Orchestrator {
           `IMPORTANT (in-app Autowin OS) : le livrable est le TEXTE agrégé ci-dessous, PAS un fichier ` +
           `RUN.md sur disque (Autowin le gère). N'exige jamais de RUN.md physique, d'empreinte SHA-256 ` +
           `ni de chemin kit ; juge la SUBSTANCE du livrable et les preuves d'outil réellement observées.\n` +
-          `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${exec.text}\n` +
-          `PREUVES OUTILS OBSERVÉES: ${JSON.stringify(exec.executionEvidence ?? [])}\n` +
+          JUDGE_FORMAT_CONTRACT +
+          JUDGE_TOOLSET_CONTRACT +
+          `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
+          `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       let judgeEnvelope

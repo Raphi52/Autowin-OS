@@ -52,6 +52,7 @@ import {
   loadOrchestrationStates,
   pickOrchestrationsToResume,
   pickOrchestrationToResume,
+  pickAcquiredAnalysis,
   pickResumeForTask,
   saveOrchestrationAgentCheckpoint,
   saveOrchestrationState,
@@ -981,6 +982,24 @@ export class AutowinOS {
     )
     if (!state) return
     saveOrchestrationState(this.orchestrationStateRoot, { ...state, agents, updatedAt: Date.now() })
+  }
+
+  /**
+   * Analyse en lecture seule déjà produite dans cette conversation, réutilisable même si le
+   * libellé de la demande a changé entre deux tours. Ne reprend AUCUN checkpoint : uniquement des
+   * textes de phase, que l'orchestrateur saute alors au lieu de les repayer.
+   */
+  acquiredAnalysisForConversation(
+    task: string,
+    conversationId: string | undefined,
+    nowMs = Date.now()
+  ): Array<{ phase: PipelinePhase; text: string }> {
+    const acquis = pickAcquiredAnalysis(loadOrchestrationStates(this.orchestrationStateRoot), {
+      task,
+      conversationId,
+      nowMs
+    })
+    return acquis.length > 0 ? acquis : []
   }
 
   /** Abandonne explicitement un état reprenable (l'utilisateur ne veut pas le reprendre). */

@@ -16,10 +16,16 @@ const allViews = [
   ['tickets', 'Tickets'],
   ['settings', 'Settings']
 ]
+// Le slug historique de ce script diverge du catalogue de l'application : `APP_DESTINATIONS`
+// (src/shared/navigation.ts) déclare `worktree` au singulier. Demander la vue par son vrai nom
+// échouait donc en « Vue(s) dogfood inconnue(s) ». On accepte les deux plutôt que de renommer,
+// pour ne pas invalider les registres de campagne déjà écrits sur disque.
+const VIEW_ALIASES = { worktree: 'worktrees' }
+const canonicalView = (value) => VIEW_ALIASES[value] ?? value
 const requestedViews = new Set(
   (process.env.AUTOWIN_DOGFOOD_VIEWS || '')
     .split(',')
-    .map((value) => value.trim())
+    .map((value) => canonicalView(value.trim()))
     .filter(Boolean)
 )
 const views = requestedViews.size ? allViews.filter(([slug]) => requestedViews.has(slug)) : allViews
@@ -113,13 +119,24 @@ await new Promise((resolve, reject) => {
   socket.onerror = reject
 })
 
+/**
+ * Borne d'un aller-retour CDP.
+ *
+ * 30 s ne tenaient pas : au 8e scout d'une campagne, sept orchestrations tournent déjà et le
+ * renderer est assez saturé pour qu'un `Runtime.evaluate` dépasse la borne (mesuré le 2026-08-12,
+ * la campagne est morte sur « CDP Runtime.evaluate expiré » en lançant la vue Settings, emportant
+ * le moniteur et donc TOUS les « Fais tout » des sept vues déjà lancées). La borne protège d'un
+ * CDP mort, pas d'un CDP lent : la remonter ne masque rien, elle cesse de confondre les deux.
+ */
+const CDP_TIMEOUT_MS = Number(process.env.AUTOWIN_CDP_TIMEOUT_MS || 120_000)
+
 const send = (method, params = {}) =>
   new Promise((resolve, reject) => {
     const id = ++nextId
     const timeout = setTimeout(() => {
       pending.delete(id)
       reject(new Error(`CDP ${method} expiré`))
-    }, 30_000)
+    }, CDP_TIMEOUT_MS)
     pending.set(id, {
       resolve: (value) => {
         clearTimeout(timeout)
@@ -196,8 +213,27 @@ const setInput = async (selector, value) =>
     return true
   })()`)
 
+/**
+ * Déplie les groupes repliés de la liste de conversations.
+ *
+ * Mesuré le 2026-08-12 : la liste rend ses conversations dans des `.conv-group`, et un groupe
+ * `is-collapsed` ne rend AUCUN `.conv-item`. Sur une app dont le groupe est replié — l'état par
+ * défaut au démarrage — `selectConversation` ne trouvait donc jamais rien, et CINQ vues sur neuf
+ * n'ont jamais reçu leur « Fais tout ». Déplier fait apparaître les 40 entrées.
+ */
+const expandGroups = async () => {
+  await evaluate(`(() => {
+    for (const group of document.querySelectorAll('.conv-group.is-collapsed')) {
+      group.querySelector('.conv-group-head')?.click()
+    }
+    return true
+  })()`)
+  await sleep(400)
+}
+
 const selectConversation = async (title) => {
   await clickChat()
+  await expandGroups()
   const searchSelector = 'input[placeholder*="Rechercher"]'
   if (!(await setInput(searchSelector, title)))
     throw new Error('Recherche de conversations absente')
@@ -217,16 +253,25 @@ const selectConversation = async (title) => {
 const typeAndSend = async (prompt) => {
   if (!(await setInput('.composer textarea', prompt))) throw new Error('Composer absent')
   await sleep(100)
+  // Sur une app fraîchement démarrée, « Nouveau » ne crée PAS encore la conversation : elle
+  // n'existe qu'à la persistance du premier message, donc `activeConversationId` est nul et exiger
+  // sa présence ici rendait la campagne INDÉMARRABLE (« Conversation active absente avant envoi »,
+  // mesuré le 2026-08-12 sur une app relancée). Le harnais ne fonctionnait qu'en héritant d'une
+  // conversation déjà ouverte par un usage antérieur. On envoie donc sans exiger l'identifiant ;
+  // sa création est vérifiée juste après, par la sentinelle, qui est la vraie preuve.
   const targetConversationId = await evaluate(
     `window.api.appState().then((state) => state.activeConversationId ?? null)`
   )
-  if (!targetConversationId) throw new Error('Conversation active absente avant envoi')
   const clicked = await evaluate(`(() => {
     const button = document.querySelector('.composer .composer-send:not(:disabled)')
     button?.click()
     return Boolean(button)
   })()`)
   if (!clicked) throw new Error('Bouton Envoyer indisponible')
+  // Sans conversation préexistante, l'acceptation se prouve par l'apparition de la conversation
+  // portant la sentinelle — c'est le rôle de l'appelant. Attendre ici sur un id nul bouclerait 10 s
+  // pour rien à chaque envoi.
+  if (!targetConversationId) return
   for (let attempt = 0; attempt < 100; attempt += 1) {
     await sleep(100)
     const accepted = await evaluate(`(async () => {
@@ -234,16 +279,14 @@ const typeAndSend = async (prompt) => {
       const persisted = conversation?.messages?.some(
         (message) => message.role === 'user' && message.content === ${JSON.stringify(prompt)}
       ) ?? false
-      if (persisted) return 'persisted'
-      const state = await window.api.appState()
-      const queued = state.activeConversationId === ${JSON.stringify(targetConversationId)} &&
-        [...document.querySelectorAll('.directive-queue-text')].some(
-          (item) => item.textContent?.trim() === ${JSON.stringify(prompt)}
-        )
-      return queued ? 'queued' : null
+      return persisted ? 'persisted' : null
     })()`)
     if (accepted) return
   }
+  // Auparavant une mise en FILE DE DIRECTIVES comptait comme un envoi. C'est un faux positif :
+  // une directive est injectée dans le tour EN COURS, elle ne démarre aucun tour et disparaît
+  // avec lui. Mesuré le 2026-08-12 : le moniteur journalisait « followup-launched » pour des
+  // vues dont la conversation restait à 2 messages. Seule la persistance prouve l'envoi.
   throw new Error(`Message ni persisté ni mis en file dans ${targetConversationId}`)
 }
 

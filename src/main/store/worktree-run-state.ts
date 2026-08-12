@@ -251,7 +251,10 @@ export class WorktreeRunStateStore {
     if (!existsSync(path) && !existsSync(backup)) return undefined
     try {
       const source = existsSync(path) ? path : backup
-      const parsed = JSON.parse(readFileSync(source, 'utf8')) as unknown
+      const parsed = this.rebaserCheminHerite(
+        JSON.parse(readFileSync(source, 'utf8')) as unknown,
+        runId
+      )
       if (
         !isRecord(parsed, this.worktreeRoot) ||
         parsed.repoId !== this.repoId ||
@@ -299,6 +302,32 @@ export class WorktreeRunStateStore {
     const path = this.pathFor(runId)
     rmSync(path, { force: true })
     rmSync(`${path}.bak`, { force: true })
+  }
+
+  /**
+   * Ramène sous la racine COURANTE un `worktreePath` écrit avant un déménagement du dossier de
+   * données.
+   *
+   * Mesuré le 2026-08-12 sur les données réelles : 52 enregistrements sur 218 étaient rendus
+   * « bloqués · state-unreadable » — exactement ceux dont le chemin pointait encore vers
+   * `%APPDATA%\autowin-os\worktrees\…`, l'emplacement d'avant le passage au stockage portable
+   * `.autowin-data`. La migration avait recopié les fichiers sans réécrire le chemin ABSOLU
+   * qu'ils portent, donc `isRecord` les rejetait définitivement, emportant du travail vert.
+   * Même cicatrice que `claude-accounts.ts` : « un chemin absolu ne survit pas à un déménagement ».
+   *
+   * STRICT : on ne réécrit que si le dernier segment est EXACTEMENT `agent__<runId>`. Un chemin
+   * qui désigne un autre bureau reste illisible — on répare un déménagement, on n'invente pas une
+   * identité.
+   */
+  private rebaserCheminHerite(parsed: unknown, runId: string): unknown {
+    if (!parsed || typeof parsed !== 'object') return parsed
+    const candidat = parsed as { worktreePath?: unknown }
+    if (typeof candidat.worktreePath !== 'string') return parsed
+    const attendu = join(this.worktreeRoot, `agent__${runId}`)
+    if (canonicalPath(candidat.worktreePath) === canonicalPath(attendu)) return parsed
+    const dernierSegment = candidat.worktreePath.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
+    if (dernierSegment !== `agent__${runId}`) return parsed
+    return { ...(parsed as object), worktreePath: attendu }
   }
 
   private blocked(runId: string): WorktreeRunRecord {

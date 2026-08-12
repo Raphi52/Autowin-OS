@@ -39,6 +39,14 @@ const flush = (): Promise<void> =>
     for (let index = 0; index < 12; index += 1) await Promise.resolve()
   })
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 const brain = { id: 'brain', label: 'Brain', path: 'C:\\brain', sizeMb: 1, kind: 'vault' }
 
 function node(id: string, themes: string[] = []): Record<string, unknown> {
@@ -137,6 +145,42 @@ describe('GraphView — chantier 2 : la boîte de réception est visible sans ou
 })
 
 describe('GraphView — chantier 4 : les états vides offrent une sortie', () => {
+  it('distingue le chargement initial du catalogue de son état vide', async () => {
+    const pending = deferred<(typeof brain)[]>()
+    installApi({ listBrains: vi.fn().mockReturnValue(pending.promise) })
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+
+    expect(container.textContent).toContain('Détection des graphes…')
+    expect(container.textContent).not.toContain('Aucun graphe accessible')
+
+    pending.resolve([])
+    await flush()
+    expect(container.textContent).toContain('Aucun graphe accessible')
+  })
+
+  it('ignore une réponse de catalogue périmée arrivée après un rafraîchissement', async () => {
+    const stale = deferred<(typeof brain)[]>()
+    const listBrains = vi.fn().mockReturnValueOnce(stale.promise).mockResolvedValueOnce([brain])
+    installApi({ listBrains })
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Rafraîchir les graphes"]')?.click()
+    )
+    await flush()
+    expect(container.textContent).toContain('Brain')
+
+    stale.resolve([])
+    await flush()
+    expect(container.textContent).toContain('Brain')
+    expect(container.textContent).not.toContain('Aucun graphe accessible')
+  })
+
   it('« Aucun graphe accessible » propose de relancer la détection', async () => {
     const listBrains = vi.fn().mockResolvedValue([])
     installApi({ listBrains })
@@ -162,6 +206,18 @@ describe('GraphView — chantier 4 : les états vides offrent une sortie', () =>
 })
 
 describe('GraphView — chantier 5 : chaque canal a son réessai', () => {
+  it('une panne de thèmes ne masque pas un graphe chargé par une erreur globale', async () => {
+    installApi({
+      loadBrainThemes: vi.fn().mockRejectedValue(new Error('thèmes indisponibles')),
+      loadBrainGraph: vi.fn().mockResolvedValue({ nodes: [node('a')], links: [] })
+    })
+    await mount()
+
+    expect(container.querySelector('.theme-sidebar__error')).not.toBeNull()
+    expect(container.querySelector('.graph-status--error')).toBeNull()
+    expect(container.querySelector('[data-testid="force-graph"]')).not.toBeNull()
+  })
+
   it('la liste des brains en échec est réessayable', async () => {
     const listBrains = vi
       .fn()
