@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TaskManagerSection } from '../tabs'
-import { ModuleHeader } from './ModuleHeader'
+import { ViewTopBar } from './ViewTopBar'
 import { WatchdogAgentsSection } from './WatchdogAgentsSection'
 import { WatchdogRuleFields } from './WatchdogRuleFields'
 import {
@@ -701,56 +701,43 @@ export function TaskManagerView({
 
   return (
     <section className="task-manager-view" data-testid="task-manager-view">
-      <header className="task-manager-head">
-        <div>
-          <ModuleHeader eyebrow="AUTOMATISATION" title="Task Manager" />
-          <p className="task-manager-description">
-            Planifie de vrais prompts Chat, visibles et traçables comme tes envois manuels.
-          </p>
-        </div>
-        <div className="task-manager-head-actions">
-          <span
-            className={`task-manager-health ${snapshot.scheduler.running ? 'is-ok' : 'is-error'}`}
-          >
-            {snapshot.scheduler.running ? 'Scheduler actif' : 'Scheduler arrêté'}
-          </span>
-          <span
-            className={`task-manager-health ${
-              snapshot.scheduler.relayAvailable ? 'is-ok' : 'is-warn'
-            }`}
-            title={snapshot.scheduler.relayError}
-          >
-            {snapshot.scheduler.relayAvailable ? 'Relais Windows prêt' : 'Relais à vérifier'}
-          </span>
-          <button
-            type="button"
-            className="task-manager-primary"
-            disabled={loading}
-            onClick={openCreate}
-          >
-            + Nouvelle tâche
-          </button>
-        </div>
-      </header>
-
-      <nav className="domain-tabs" aria-label="Sections Task Manager">
-        <button
-          type="button"
-          className={sectionActive === 'watchdog' ? 'is-active' : ''}
-          aria-pressed={sectionActive === 'watchdog'}
-          onClick={() => changerSection('watchdog')}
-        >
-          Watchdog
-        </button>
-        <button
-          type="button"
-          className={sectionActive === 'planification' ? 'is-active' : ''}
-          aria-pressed={sectionActive === 'planification'}
-          onClick={() => changerSection('planification')}
-        >
-          Planification
-        </button>
-      </nav>
+      <ViewTopBar
+        eyebrow="AUTOMATISATION"
+        title="Task Manager"
+        description="Planifie de vrais prompts Chat, visibles et traçables comme tes envois manuels."
+        ariaLabel="Sections Task Manager"
+        active={sectionActive}
+        onSelect={changerSection}
+        tabs={[
+          { id: 'watchdog', label: 'Watchdog' },
+          { id: 'planification', label: 'Planification' }
+        ]}
+        actions={
+          <div className="task-manager-head-actions">
+            <span
+              className={`task-manager-health ${snapshot.scheduler.running ? 'is-ok' : 'is-error'}`}
+            >
+              {snapshot.scheduler.running ? 'Scheduler actif' : 'Scheduler arrêté'}
+            </span>
+            <span
+              className={`task-manager-health ${
+                snapshot.scheduler.relayAvailable ? 'is-ok' : 'is-warn'
+              }`}
+              title={snapshot.scheduler.relayError}
+            >
+              {snapshot.scheduler.relayAvailable ? 'Relais Windows prêt' : 'Relais à vérifier'}
+            </span>
+            <button
+              type="button"
+              className="task-manager-primary"
+              disabled={loading}
+              onClick={openCreate}
+            >
+              + Nouvelle tâche
+            </button>
+          </div>
+        }
+      />
 
       {sectionActive === 'watchdog' && (
         <WatchdogAgentsSection

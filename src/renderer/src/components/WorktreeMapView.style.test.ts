@@ -55,6 +55,10 @@ describe('WorktreeMapView — conformité visuelle à l’app', () => {
   })
 
   it('reprend l’en-tête de module de l’app', () => {
-    expect(tsx).toContain('className="module-header"')
+    // L'en-tête n'est plus recopié ici : il vient de `ViewTopBar`, qui rend `ModuleHeader` (donc
+    // `.module-header`) pour TOUTES les vues. Chercher la chaîne littérale reviendrait à exiger la
+    // duplication qu'on vient de supprimer. La présence réelle du `.module-header` dans le DOM rendu
+    // est vérifiée par `WorktreeMapView.test.tsx` (« .module-header h1 »), pas par ce test de texte.
+    expect(tsx).toContain('<ViewTopBar')
   })
 })

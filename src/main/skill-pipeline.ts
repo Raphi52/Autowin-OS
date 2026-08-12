@@ -10,26 +10,22 @@ import { listNativeRegistry, skillRoots } from './native-registry'
  * packagée chez un autre), chaque loader renvoie '' → l'orchestration retombe sur la discipline
  * condensée intégrée (pipeline-discipline.ts). Aucune dépendance dure au home du dev.
  */
-export type PipelinePhase =
-  | 'scout'
-  | 'frame'
-  | 'terrain'
-  | 'build'
-  | 'clean'
-  | 'judge'
-  | 'kaizen'
-  | 'remake'
+/**
+ * RE-EXPORTÉ depuis `shared/pipeline-phases`, plus déclaré ici.
+ *
+ * Cette liste existait en DOUBLE : ici (huit phases) et dans `workflow-executability.ts` côté
+ * renderer (sept, sans `remake`). La copie périmée faisait afficher à l'onglet Workflows un badge
+ * d'anomalie sur un profil parfaitement jouable — celui-là même que `workflow-defaults.ts` livre par
+ * défaut. Le renderer ne peut pas importer depuis `main/`, d'où le déplacement vers `shared/`, seul
+ * endroit visible des deux côtés de la frontière Electron.
+ *
+ * Le re-export garde les ~10 appelants de `./skill-pipeline` inchangés.
+ */
+// Un `export … from` ne met PAS les noms dans la portée locale : ce fichier utilise `PipelinePhase`
+// dans ses propres signatures, d'où l'import en plus du re-export.
+import { type PipelinePhase } from '../shared/pipeline-phases'
 
-export const PIPELINE_PHASES: PipelinePhase[] = [
-  'scout',
-  'frame',
-  'terrain',
-  'build',
-  'clean',
-  'judge',
-  'kaizen',
-  'remake'
-]
+export { PIPELINE_PHASES, isPipelinePhase, type PipelinePhase } from '../shared/pipeline-phases'
 
 export function skillsRoot(root = join(homedir(), '.claude', 'skills')): string {
   return root

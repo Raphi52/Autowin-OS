@@ -1,0 +1,47 @@
+/* Barre du haut partagée par toutes les vues. Reproduit l'arrangement de Task Manager, choisi comme
+   référence : identité du module à gauche (surtitre + titre + description), pastilles de sections en
+   dessous, actions optionnelles à droite.
+   Aucune couleur en dur : les pastilles viennent de `DomainShell.css`, les titres de `ui-system.css`.
+   Direction Linéaire : aplats unis, aucun halo, aucun dégradé flou. */
+
+.view-topbar {
+  /* `flex: 0 0 auto` : la barre ne s'étire jamais — c'est le contenu de la vue qui prend la place. */
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px var(--s4);
+  padding: 18px 20px 0;
+}
+
+.view-topbar-identity {
+  min-width: 0;
+  grid-column: 1;
+}
+
+.view-topbar-description {
+  margin: 3px 0 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* Les actions restent sur la première rangée, alignées avec le titre. */
+.view-topbar-actions {
+  display: flex;
+  grid-column: 2;
+  grid-row: 1;
+  gap: var(--s2);
+  align-items: center;
+}
+
+/* Les pastilles occupent la rangée du dessous, sur toute la largeur : c'est la forme validée dans
+   Task Manager. Sans `grid-column: 1 / -1`, elles se coinçaient à côté du titre. */
+.view-topbar .domain-tabs {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  /* La marge basse est portée par la vue, pas par la barre : chaque vue a son propre rythme. */
+  margin-bottom: 0;
+  /* Largeur INTRINSÈQUE : étirée sur toute la ligne, le cadre des pastilles devenait une bande vide
+     qui traversait l'écran. Constaté sur la vue Settings, qui n'a que quatre sections. */
+  justify-self: start;
+}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AgentStudioSection } from '../tabs'
 import { workflowIssues, type ExecutabilityInput } from './workflow-executability'
+import { ViewTopBar } from './ViewTopBar'
 // Importe DIRECTEMENT le composant : `RolesView` n'etait qu'un alias d'une ligne re-exportant
 // `AgentsTopologyView`, avec ce fichier pour unique appelant. Deux noms pour un seul composant, c'est
 // un renommage laisse a moitie fait — et un lecteur qui cherche `RolesView` ne trouve pas le code.
@@ -68,52 +69,35 @@ export function AgentStudioView({
 
   return (
     <section className="domain-shell" data-testid="agent-studio-view">
-      <nav className="domain-tabs" aria-label="Sections Agent Studio">
-        <button
-          type="button"
-          className={section === 'topology' ? 'is-active' : ''}
-          aria-pressed={section === 'topology'}
-          onClick={() => onSectionChange('topology')}
-        >
-          Modèles & topologie
-        </button>
-        <button
-          type="button"
-          className={section === 'routing' ? 'is-active' : ''}
-          aria-pressed={section === 'routing'}
-          onClick={() => onSectionChange('routing')}
-        >
-          Routage
-          {providersExpires.length > 0 && (
-            <span
-              className="domain-tab-anomaly"
-              data-testid="studio-anomaly-routing"
-              title={`Provider(s) à reconnecter : ${providersExpires.join(', ')}`}
-              aria-label={`${providersExpires.length} provider(s) expiré(s)`}
-            >
-              {providersExpires.length}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          className={section === 'workflows' ? 'is-active' : ''}
-          aria-pressed={section === 'workflows'}
-          onClick={() => onSectionChange('workflows')}
-        >
-          Workflows
-          {workflowsCasses.length > 0 && (
-            <span
-              className="domain-tab-anomaly"
-              data-testid="studio-anomaly-workflows"
-              title={`Workflow(s) non exécutable(s) : ${workflowsCasses.join(', ')}`}
-              aria-label={`${workflowsCasses.length} workflow(s) non exécutable(s)`}
-            >
-              {workflowsCasses.length}
-            </span>
-          )}
-        </button>
-      </nav>
+      <ViewTopBar
+        eyebrow="ORCHESTRATION"
+        title="Agent Studio"
+        description="Quels modèles jouent quels rôles, comment ils sont routés, et quels workflows les enchaînent."
+        ariaLabel="Sections Agent Studio"
+        active={section}
+        onSelect={onSectionChange}
+        tabs={[
+          { id: 'topology', label: 'Modèles & topologie' },
+          {
+            id: 'routing',
+            label: 'Routage',
+            anomaly: {
+              count: providersExpires.length,
+              title: `Provider(s) à reconnecter : ${providersExpires.join(', ')}`,
+              testId: 'studio-anomaly-routing'
+            }
+          },
+          {
+            id: 'workflows',
+            label: 'Workflows',
+            anomaly: {
+              count: workflowsCasses.length,
+              title: `Workflow(s) non exécutable(s) : ${workflowsCasses.join(', ')}`,
+              testId: 'studio-anomaly-workflows'
+            }
+          }
+        ]}
+      />
       <div className="domain-content">
         {section === 'routing' ? (
           <RouterView active={active} />

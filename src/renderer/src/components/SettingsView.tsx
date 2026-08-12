@@ -3,6 +3,7 @@ import type { SettingsSection } from '../tabs'
 import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView } from './CapabilitiesView'
 import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
+import { ViewTopBar } from './ViewTopBar'
 import './DomainShell.css'
 
 type PreflightResult = Awaited<ReturnType<typeof window.api.recheckPreflight>>
@@ -146,58 +147,30 @@ export function SettingsView({
 
   return (
     <section className="domain-shell" data-testid="settings-view">
-      <nav className="domain-tabs" aria-label="Sections Settings">
-        <button
-          type="button"
-          className={section === 'budget' ? 'is-active' : ''}
-          aria-pressed={section === 'budget'}
-          onClick={() => onSectionChange('budget')}
-        >
-          Budget
-        </button>
-        <button
-          type="button"
-          className={section === 'capabilities' ? 'is-active' : ''}
-          aria-pressed={section === 'capabilities'}
-          onClick={() => onSectionChange('capabilities')}
-        >
-          Skills · Hooks · Tools
-        </button>
-        <button
-          type="button"
-          className={section === 'behaviour' ? 'is-active' : ''}
-          aria-pressed={section === 'behaviour'}
-          onClick={() => onSectionChange('behaviour')}
-        >
-          Behaviour
-        </button>
-        <button
-          type="button"
-          className={section === 'providers' ? 'is-active' : ''}
-          aria-pressed={section === 'providers'}
-          onClick={() => onSectionChange('providers')}
-        >
-          Providers
-        </button>
-        <button
-          type="button"
-          className={section === 'preflight' ? 'is-active' : ''}
-          aria-pressed={section === 'preflight'}
-          onClick={() => onSectionChange('preflight')}
-        >
-          Diagnostic
-          {preflightAlert && (
-            <span
-              className="domain-badge-alert"
-              data-testid="settings-preflight-alert"
-              title="Un prérequis est en échec"
-              aria-label="Un prérequis est en échec"
-            >
-              !
-            </span>
-          )}
-        </button>
-      </nav>
+      <ViewTopBar
+        eyebrow="CONFIGURATION"
+        title="Settings"
+        description="Budget, capacités accordées aux agents, comportement, providers et prérequis machine."
+        ariaLabel="Sections Settings"
+        active={section}
+        onSelect={onSectionChange}
+        tabs={[
+          { id: 'budget', label: 'Budget' },
+          { id: 'capabilities', label: 'Skills · Hooks · Tools' },
+          { id: 'behaviour', label: 'Behaviour' },
+          { id: 'providers', label: 'Providers' },
+          {
+            id: 'preflight',
+            label: 'Diagnostic',
+            alert: {
+              active: preflightAlert,
+              mark: '!',
+              title: 'Un prérequis est en échec',
+              testId: 'settings-preflight-alert'
+            }
+          }
+        ]}
+      />
       <div className="domain-content">
         {section === 'capabilities' && <CapabilitiesView active={active} />}
         {section === 'budget' && <OrchestrationBudgetSettings />}

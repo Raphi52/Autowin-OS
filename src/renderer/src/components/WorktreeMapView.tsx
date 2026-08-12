@@ -14,6 +14,7 @@ import type {
   WorktreeConflictResolutionChoice,
   WorktreeRuntimeStatus
 } from '../../../shared/worktree-activity-model'
+import { ViewTopBar } from './ViewTopBar'
 import { WorktreeActivityView } from './WorktreeActivityView'
 import './WorktreeMapView.css'
 
@@ -270,16 +271,30 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
 
   return (
     <div className="wtmap" data-testid="worktree-map">
-      <header className="wtmap-header">
-        <div className="module-header">
-          <span>Worktrees</span>
-          <h1>{snapshot?.repositoryName ?? 'Dépôt'}</h1>
-          <span className="wtmap-path">{snapshot?.repoPath || repoPath || 'Dépôt courant'}</span>
-        </div>
-        <div className="wtmap-spacer" />
-        {/* Tant qu'aucun snapshot n'est arrivé, des compteurs à zéro MENTIRAIENT : on ne montre
-            que l'indicateur de lecture, pas un tableau de bord vide. */}
-        <div className="wtmap-stats" hidden={!snapshot}>
+      {/* MÊME en-tête que Task Manager, Agent Studio et Settings : la vue portait un en-tête maison
+          (surtitre + titre collés, boutons dans le même bloc que les compteurs), d'où la régression
+          visuelle signalée. Worktrees n'a pas de sections : `ViewTopBar` rend alors l'identité et les
+          actions, sans barre d'onglets vide. */}
+      <ViewTopBar
+        eyebrow="WORKTREES"
+        title={snapshot?.repositoryName ?? 'Dépôt'}
+        description={snapshot?.repoPath || repoPath || 'Dépôt courant'}
+        actions={
+          <>
+            <button onClick={() => void pickRepo()} data-testid="worktree-map-pick">
+              Choisir un dépôt
+            </button>
+            <button onClick={() => void refresh()} disabled={loading}>
+              {loading ? 'Lecture…' : 'Actualiser'}
+            </button>
+          </>
+        }
+      />
+
+      {/* Tant qu'aucun snapshot n'est arrivé, des compteurs à zéro MENTIRAIENT : on ne montre
+          que l'indicateur de lecture, pas un tableau de bord vide. */}
+      <div className="wtmap-header" hidden={!snapshot}>
+        <div className="wtmap-stats">
           <Stat value={String(totals.count)} label="worktrees" />
           <Stat value={String(totals.dirty)} label="avec travail" tone="live" />
           <Stat value={String(totals.clean)} label="propres" tone="clean" />
@@ -304,15 +319,7 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
             tone="ref"
           />
         </div>
-        <div className="wtmap-actions">
-          <button onClick={() => void pickRepo()} data-testid="worktree-map-pick">
-            Choisir un dépôt
-          </button>
-          <button onClick={() => void refresh()} disabled={loading}>
-            {loading ? 'Lecture…' : 'Actualiser'}
-          </button>
-        </div>
-      </header>
+      </div>
 
       {/* BARRE D'ÉTAT GIT restaurée. Elle vivait dans `WorktreeView.tsx` sous le nom `project-strip`
           et a disparu avec le remplacement de la vue (commit 4af73b5, 2026-08-06) : les compteurs qui
