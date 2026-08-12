@@ -329,6 +329,54 @@ export function defaultProcessIdentity(pid: number): string | null | undefined {
   }
 }
 
+/**
+ * L'isolation des opérations Git dans un worker : ÉTEINTE, délibérément.
+ *
+ * Elle était déjà éteinte avant ce drapeau, mais par ACCIDENT — le chemin du worker était calculé
+ * depuis `__dirname`, qui vaut `out/main/chunks` pour ce module (le bundler l'émet dans son propre
+ * morceau) alors que le worker vit dans `out/main`. `existsSync` échouait, et comme cette présence est
+ * la condition de l'isolation, tout le travail Git repassait sur le fil principal sans un mot.
+ *
+ * La résolution est corrigée juste en dessous, mais l'isolation reste coupée, parce que l'activer a
+ * été MESURÉ et casse la récupération : l'inventaire produit par le worker ne restaure qu'UN run là où
+ * le chemin synchrone en restaure 215, sans lever d'erreur — une perte d'état silencieuse, pire que le
+ * gel qu'elle supprime. Le worker échoue sur `fatal: not a git repository: (NULL)`, donc son
+ * environnement Git ne se résout pas comme celui du processus principal.
+ *
+ * Ce qui reste vrai en attendant : la réconciliation gèle le fil principal le temps de quelques appels
+ * `git` individuels — mesuré, 2 copies à ~4,4 s et 3 runs à ~1 à 1,5 s. Aucun découpage ne peut les
+ * subdiviser : un `execFileSync` est indivisible. Seul le passage hors-fil les supprimera.
+ */
+const ISOLATION_OPERATIONS_ACTIVE = false
+
+/**
+ * Où trouver `worktree-operation-worker.js` depuis le module qui le lance.
+ *
+ * Ce n'est pas de la défense excessive, c'est un défaut CONSTATÉ. `WorktreeManager` est assez gros pour
+ * que le bundler l'émette dans son propre morceau, `out/main/chunks/worktree-manager-*.js`, tandis que
+ * le worker reste à `out/main/worktree-operation-worker.js`. Le chemin calculé depuis `__dirname`
+ * désignait donc `out/main/chunks/worktree-operation-worker.js`, qui n'existe pas — et comme la
+ * présence du worker est justement la CONDITION de l'isolation, celle-ci était silencieusement
+ * éteinte. Aucune erreur, aucun avertissement : tout le travail git repassait sur le fil principal.
+ *
+ * MESURÉ, c'était l'origine des ~23 s de blocage au démarrage : avec l'isolation réellement active,
+ * l'inventaire de récupération est calculé dans le worker et la réconciliation n'exécute plus un seul
+ * `git` sur le fil principal.
+ *
+ * On remonte d'un cran, pas plus : `out/main/chunks` → `out/main` couvre la mise en morceaux sans
+ * transformer une résolution en recherche à l'aveugle.
+ */
+export function resoudreCheminWorker(
+  dossierModule: string,
+  existe: (chemin: string) => boolean
+): string {
+  const candidats = [
+    join(dossierModule, 'worktree-operation-worker.js'),
+    join(dossierModule, '..', 'worktree-operation-worker.js')
+  ]
+  return candidats.find((candidat) => existe(candidat)) ?? candidats[0]
+}
+
 export class WorktreeManager {
   private readonly baseRepo: string
   private readonly worktreeRoot: string
@@ -356,8 +404,9 @@ export class WorktreeManager {
     this.requireCanonicalRemote = opts.requireCanonicalRemote ?? false
     this.processIdentity = opts.processIdentityFn ?? defaultProcessIdentity
     this.now = opts.nowFn ?? Date.now
-    const operationWorkerPath = join(__dirname, 'worktree-operation-worker.js')
+    const operationWorkerPath = resoudreCheminWorker(__dirname, existsSync)
     if (
+      ISOLATION_OPERATIONS_ACTIVE &&
       !opts.disableAsyncOperations &&
       !opts.git &&
       !opts.tryGitFn &&
@@ -442,8 +491,28 @@ export class WorktreeManager {
     return Boolean(this.operationClient)
   }
 
+  /**
+   * L'inventaire de récupération, dans lequel UNE copie cassée ne fait pas perdre les autres.
+   *
+   * CONSTATÉ en activant réellement l'isolation : une copie dont le lien Git est mort faisait échouer
+   * `git status` (`fatal: not a git repository: (NULL)`), l'exception remontait hors de la boucle, et
+   * l'inventaire entier était perdu. Le coordinateur enregistrait alors un unique run « Récupération
+   * Git » en échec — 215 runs restaurés devenaient 1. Le chemin synchrone, lui, tolérait déjà cette
+   * panne copie par copie ; c'est cette asymétrie qui est corrigée ici.
+   *
+   * Une copie illisible est donc rapportée SANS ses détails plutôt qu'omise : elle reste visible dans
+   * la vue Worktrees, ce qui est exactement ce dont on a besoin pour décider de la nettoyer à la main.
+   */
   recoveryInventory(): WorktreeRecoveryInventory {
-    const residues = this.reconcileResidues()
+    // Un `reconcileResidues` en échec ne doit pas non plus emporter l'inventaire des copies.
+    // En cas d'échec : un inventaire de résidus VIDE, et non pas absent. `blocked` vide veut dire
+    // « rien à signaler », ce qui est le comportement sûr — aucun nettoyage ne sera proposé à tort.
+    let residues: ReturnType<WorktreeManager['reconcileResidues']>
+    try {
+      residues = this.reconcileResidues()
+    } catch {
+      residues = { cleaned: 0, recovered: [], blocked: [] }
+    }
     const agents = this.listAgentIds().map((agentId) => {
       let context: WorktreeRunContext | undefined
       try {
@@ -451,12 +520,19 @@ export class WorktreeManager {
       } catch {
         context = undefined
       }
-      return {
-        agentId,
-        ...(context ? { context } : {}),
-        active: this.hasActiveProcesses(agentId),
-        changedFiles: this.changedFiles(agentId)
+      let active = false
+      try {
+        active = this.hasActiveProcesses(agentId)
+      } catch {
+        active = false
       }
+      let changedFiles: ReturnType<WorktreeManager['changedFiles']> = []
+      try {
+        changedFiles = this.changedFiles(agentId)
+      } catch {
+        changedFiles = []
+      }
+      return { agentId, ...(context ? { context } : {}), active, changedFiles }
     })
     return { residues, agents }
   }
