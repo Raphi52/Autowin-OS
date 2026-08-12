@@ -337,6 +337,11 @@ export class AutowinOS {
           requireCanonicalRemote: true
         })
         this.worktrees = new RunWorktreeCoordinator({
+          // La réconciliation des copies est REPORTÉE ici, et seulement ici : en production ce
+          // constructeur tourne au premier niveau du module principal, et énumérer les copies git
+          // bloquait ~25 s avant qu'aucune fenêtre n'existe. La récupération n'a aucune urgence,
+          // l'affichage si. Les tests, eux, gardent la réconciliation synchrone.
+          deferRecoveryMs: 1_500,
           manager,
           stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
           onRecoveredPublication: async (publication) => {

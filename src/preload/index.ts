@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import type { GitGraphSnapshot } from '../shared/git-graph'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   ChatAttachment,
@@ -239,6 +240,8 @@ const api = {
   workflowProfilesExport: (id: string | null): Promise<unknown> =>
     ipcRenderer.invoke('os:workflowProfiles:export', id),
   workflowProfilesImport: (): Promise<unknown> => ipcRenderer.invoke('os:workflowProfiles:import'),
+  getGitGraph: (repoPath?: string): Promise<GitGraphSnapshot> =>
+    ipcRenderer.invoke('git:graph', repoPath),
   checkWorkflowGraph: (graph: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:workflowGraph:check', graph),
   conversationWorkflow: (conversationId: string): Promise<string | null> =>

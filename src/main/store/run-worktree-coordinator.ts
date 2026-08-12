@@ -81,6 +81,21 @@ export interface RunWorktreeCoordinatorDeps {
     baseSha: string
     agentSha: string
   }) => void | Promise<void>
+  /**
+   * Reporte de N millisecondes la réconciliation des copies existantes, au lieu de la faire
+   * SYNCHRONEMENT dans le constructeur. Absent ou 0 = comportement inchangé.
+   *
+   * Pourquoi une option et non un défaut : la réconciliation synchrone est un contrat OBSERVÉ —
+   * plusieurs tests construisent ce coordinateur et lisent immédiatement l'état réconcilié. Les
+   * basculer en asynchrone reviendrait à réécrire leurs attentes pour accommoder un correctif, ce qui
+   * affaiblirait la couverture au lieu de l'adapter.
+   *
+   * En production le report est vital : ce coordinateur naît de `new AutowinOS()`, au premier niveau
+   * du module principal, et la réconciliation énumère les copies git sur disque. MESURÉ avec 42
+   * copies : ~25 s de blocage AVANT que `app.whenReady` puisse se déclencher, donc avant qu'aucune
+   * fenêtre n'existe. Avec le report : corps du module 28 s → 1,35 s, fenêtre construite 42 s → 3,9 s.
+   */
+  deferRecoveryMs?: number
 }
 
 interface Tracked {
@@ -174,7 +189,29 @@ export class RunWorktreeCoordinator {
         .then((inventory) => this.reconcileExisting(inventory))
         .catch((error) => this.recordRecoveryFailure(error))
     } else {
-      this.reconcileExisting()
+      /**
+       * La réconciliation est DIFFÉRÉE au lieu d'être faite ici, et c'est la correction du démarrage.
+       *
+       * MESURÉ : cet appel synchrone énumère les copies git sur disque. Comme ce coordinateur est
+       * construit par `new AutowinOS()`, lui-même au premier niveau du module principal, il bloquait
+       * ~25 secondes AVANT que `app.whenReady` puisse se déclencher — donc avant qu'aucune fenêtre
+       * n'existe. Chronologie relevée : corps du module 28 s, `whenReady` +0,1 s, fenêtre visible 57 s.
+       * Le coût suivait le nombre de copies (42 à ce moment-là).
+       *
+       * Ce n'est pas un changement de contrat : la branche AU-DESSUS diffère déjà la réconciliation
+       * via une promesse. Tout ce qui lit l'état de ce coordinateur tolère donc déjà qu'elle n'ait pas
+       * encore eu lieu. C'était la branche synchrone qui était l'anomalie.
+       *
+       * Le délai laisse la fenêtre s'ouvrir d'abord : la récupération n'est pas urgente, l'écran si.
+       * Le minuteur est conservé pour rester annulable.
+       */
+      const report = deps.deferRecoveryMs ?? 0
+      if (report > 0) {
+        this.recoveryTimer = setTimeout(() => this.reconcileExisting(), report)
+        this.recoveryTimer.unref?.()
+      } else {
+        this.reconcileExisting()
+      }
     }
   }
 

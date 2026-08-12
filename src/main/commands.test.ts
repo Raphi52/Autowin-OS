@@ -54,10 +54,12 @@ function fakeOs(): any {
       }
     },
     registry: { ids: () => ['claude'] },
-    // `commands.ts` lit `roles.getBinding('orchestrator').model` (4 sites) pour etiqueter le run.
-    // Le double ne l'exposait pas : `orchestrate` echouait sur « getBinding is not a function » et
-    // huit tests tombaient sur `{ ok: false }`. Un double qui ne suit pas son original ne teste
-    // plus rien. `model` reste absent pour que le repli `?? 'autowin'` soit exerce.
+    // Conflit résolu : les deux côtés ajoutaient le MÊME `getBinding` au double, avec deux
+    // formulations du pourquoi. `getBinding` est appelé par trois chemins d'`orchestrate`
+    // (`commands.ts:1304, 1378, 1516`) pour nommer le modèle du run ; le double ne l'exposait pas,
+    // donc huit tests recevaient « this.os.roles.getBinding is not a function ». `model` reste absent
+    // pour que le repli `?? 'autowin'` soit exercé. Un double qui ne suit pas son original ne teste
+    // plus rien.
     roles: { all: () => ({}), getBinding: () => ({ provider: 'claude' }) },
     runsWithGate: () => [],
     budget: () => ({ spent: 0 }),
@@ -70,10 +72,12 @@ function fakeOs(): any {
     runTask: async (task: string) => {
       calls.runTask += 1
       calls.lastTask = task
-      // Aligne sur `OrchestrationResult` : `commands.ts` lit `phaseOutputs` (l. 1308) et
-      // `gateReasons`. Les omettre faisait echouer `orchestrate` sur
-      // « Cannot read properties of undefined (reading 'flatMap') » — un double en retard sur son
-      // original ne teste plus le chemin reel, il teste une fiction.
+      // Conflit résolu en gardant le retour le PLUS COMPLET des deux : `phaseOutputs` est REQUIS
+      // par le type de retour (`orchestrator.ts:327`) et `commands.ts:1300` fait
+      // `r.phaseOutputs.flatMap(...)` sans garde — à raison. Le double l'omettait, donc
+      // l'orchestration mourait sur « Cannot read properties of undefined (reading 'flatMap') ».
+      // `task` et `gateReasons` viennent de l'autre côté du conflit : un double plus riche que le
+      // contrat ne coûte rien, un double plus pauvre teste une fiction.
       return {
         task,
         gateBlocked: false,
@@ -157,10 +161,12 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
 
     const result = await bus.exec('brain_query', { question: 'architecture RIG' })
 
-    expect(seenCorpus[0]).toContain('knowledge/domain/rigapplication-documentation/')
+    // Plus de corpus IMPOSÉ par le workspace : le classement par pertinence décide. Ce test
+    // affirmait l'inverse (isolation RIG contre une source Autowin) ; le filtrage dérivé du
+    // workspace a été retiré parce qu'il masquait 450 des 461 notes du Brain sans le dire.
+    expect(seenCorpus[0]).toBeUndefined()
     expect(result).toMatchObject({ ok: true, data: { found: true } })
     expect(JSON.stringify(result)).toContain('RIG_COMMANDE_AUTORISEE')
-    expect(JSON.stringify(result)).not.toContain('AUTOWIN_COMMANDE_INTERDITE')
   })
 
   it('persiste lifecycle et démarrage live dans le TraceStore de cette instance', async () => {
@@ -1659,5 +1665,63 @@ describe('AppCommandBus command execution policy', () => {
 
     expect(forget).toHaveBeenCalledTimes(1)
     expect(forget).toHaveBeenCalledWith('run-admitted')
+  })
+})
+
+describe('AppCommandBus — les preuves des phases remontent au suivi d’issue', () => {
+  /**
+   * Trou de couverture constaté le 2026-08-12 : en remplaçant
+   * `evidence: r.phaseOutputs.flatMap(...)` (`commands.ts:1300`) par `evidence: []`, AUCUN des
+   * 44 tests ne tombait. La ligne existait, rien ne la tenait. Une régression y serait passée
+   * inaperçue — et c'est précisément la ligne qui décide de ce que le suivi d'issue peut PROUVER.
+   */
+  it('agrège l’`executionEvidence` de TOUTES les phases qui en portent', async () => {
+    const os = fakeOs()
+    os.runTask = async () => ({
+      gateBlocked: false,
+      valid: true,
+      costUsd: 0,
+      result: '',
+      phaseOutputs: [
+        { phase: 'build', text: '', executionEvidence: [{ pathFingerprints: { 'a.ts': 'h1' } }] },
+        // Une phase SANS preuve ne doit ni casser l'agrégation ni y ajouter un trou.
+        { phase: 'clean', text: '' },
+        { phase: 'judge', text: '', executionEvidence: [{ pathFingerprints: { 'b.ts': 'h2' } }] }
+      ]
+    })
+    const vues: unknown[][] = []
+    const learning = {
+      reserveProposal: () => undefined,
+      recordProposal: () => {},
+      observeOutcome: async (input: { evidence: unknown[] }) => {
+        vues.push(input.evidence)
+        return undefined
+      }
+    }
+    const bus = new AppCommandBus(
+      os,
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      learning as never
+    )
+
+    await bus.exec('orchestrate', { task: 'produis des preuves' }, 'conv-1')
+
+    expect(vues).toHaveLength(1)
+    expect(vues[0]).toHaveLength(2)
+    expect(vues[0]).toEqual([
+      { pathFingerprints: { 'a.ts': 'h1' } },
+      { pathFingerprints: { 'b.ts': 'h2' } }
+    ])
   })
 })

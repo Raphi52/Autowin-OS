@@ -3,10 +3,15 @@ import packageManifest from '../../../package.json'
 import { ChatView } from './components/ChatView'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
-// L'onglet Worktrees porte le plan de metro des copies GIT. L'ancien cockpit d'activite agents
-// (`WorktreeView`) a ete SUPPRIME : son sujet n'etait pas git. `WorktreeActivityView`, lui, vit
-// toujours — il est utilise par SourceControlPane.
-import { WorktreeMapView } from './components/WorktreeMapView'
+// L'onglet Worktrees porte la vue à FRISE D'HISTORIQUE GIT (`WorktreeView`), restaurée sur demande de
+// l'utilisateur. Elle avait été supprimée en deux commits — la vue elle-même, puis son socle
+// `git-graph` — et remplacée par un plan de métro des copies (`WorktreeMapView`). L'utilisateur ne
+// retrouvait plus l'historique, qui était précisément ce qu'il utilisait.
+//
+// `WorktreeMapView` reste dans le dépôt, non branchée : elle chiffre le retard, la saleté et la taille
+// disque des copies, ce que la frise ne dit pas. La supprimer aurait détruit un travail utile sur un
+// changement d'avis d'affichage.
+import { WorktreeView } from './components/WorktreeView'
 import { UpdateBanner } from './components/UpdateBanner'
 import { pickTurnToResume } from './components/resume-unfinished'
 import { TicketsView } from './components/TicketsView'
@@ -487,7 +492,7 @@ export function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('worktree') && (
           <div className={`view-slot${tab === 'worktree' ? ' is-active' : ''}`}>
-            <WorktreeMapView active={tab === 'worktree'} />
+            <WorktreeView active={tab === 'worktree'} />
           </div>
         )}
         {visitedTabs.has('task-manager') && (

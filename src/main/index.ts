@@ -1,4 +1,29 @@
 import { spawn } from 'node:child_process'
+import { readGitGraph } from './git-graph-main'
+/**
+ * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
+ *
+ * Constat de départ : ~30 secondes de fenêtre absente au lancement, au point de relancer
+ * l'application en croyant qu'elle n'avait pas démarré. Quatre hypothèses ont été essayées de
+ * l'EXTÉRIEUR (écran d'attente en HTML statique, URL `data:`, séquencement des chargements, attente
+ * de la migration de stockage) ; aucune ne tenait. Ces jalons ont réglé la question en trois mesures.
+ *
+ * CE QU'ILS ONT MONTRÉ, chiffres relevés en développement :
+ *   · `electron-vite` a fini sa part en 1,6 s — le retard n'est pas dans l'outil de construction.
+ *   · le CORPS de ce module coûte ~25 à 35 s, et `app.whenReady` se déclenche 0,1 s après : Electron
+ *     attendait notre code, pas l'inverse.
+ *   · dans ce corps, `new AutowinOS()` pèse à lui seul ~24 s, soit 74 % du total.
+ *   · à l'intérieur, tout est instantané (71 ms) jusqu'à `new RunWorktreeCoordinator`, qui lance un
+ *     inventaire de récupération des worktrees. La machine en portait 51, dont 46 copies d'agents :
+ *     le coût du démarrage suit donc la taille de cette pile.
+ *
+ * L'instant zéro est l'évaluation de ce module — les imports sont déjà résolus à ce point.
+ */
+const T0_DEMARRAGE = Date.now()
+function jalonDemarrage(etape: string): void {
+  console.log(`[demarrage] ${String(Date.now() - T0_DEMARRAGE).padStart(6)} ms  ${etape}`)
+}
+jalonDemarrage('module principal évalué')
 import { resolveClaudeBin } from './providers/claude'
 import { traceActionEventId } from './activity/trace-event'
 import { emitToLiveWindows } from './renderer-emit'
@@ -347,6 +372,15 @@ import {
   type AutoKaizenIncidentInput
 } from './auto-kaizen-supervisor'
 
+/**
+ * ATTRIBUTION du démarrage. Le jalon « module principal évalué » est posé AVANT les 167 imports
+ * ci-dessus ; une fois le bundle produit, ces imports sont exécutés en séquence à cet endroit. Sans
+ * ce second jalon, les 43,9 s mesurées le 2026-08-12 entre les deux marqueurs existants restaient
+ * inattribuables : impossible de savoir si elles vont à l'exécution des modules importés ou au corps
+ * de ce fichier — donc impossible de choisir quoi optimiser.
+ */
+jalonDemarrage('imports du process principal évalués')
+
 guardBrokenProcessPipes(process.stdout, process.stderr)
 
 const scheduledTaskDispatch = process.argv.includes('--autowin-task-dispatch')
@@ -397,6 +431,7 @@ if (is.dev) {
 // seule I/O autorisée avant le verrou : le chemin obtenu est À LA FOIS l'identité Electron et la
 // racine effective de tous les stores, donc deux propriétaires distincts ne partagent jamais un run.
 const canonicalAppDataRoot = createAutowinAppDataRoot(appDataRoot)
+jalonDemarrage('racine de donnees preparee')
 app.setPath('userData', canonicalAppDataRoot)
 // Le verrou Electron est rattaché au `userData` : deux instances de test isolées avec deux racines
 // restent indépendantes, tandis que DEUX processus sur la même racine ne peuvent jamais parcourir
@@ -418,13 +453,16 @@ configureSessionMemoryEcho(join(app.getPath('userData'), 'session-memory.json'))
 configureRememberDepositStore(join(app.getPath('userData'), 'remember-deposits.json'))
 
 /** Noyau applicatif unique (P0-P4 câblés) : kit SOUL injecté, 2 voies, modules. */
+jalonDemarrage('verrou instance obtenu')
 const os = new AutowinOS()
+jalonDemarrage('noyau applicatif construit')
 const turnJournalRoot = join(app.getPath('userData'), 'turn-journals')
 const brainWorkerPath = join(__dirname, 'brain-worker.js')
 const brainWorker = new BrainWorkerClient(brainWorkerPath)
 const brainSearchWorker = new BrainWorkerClient(brainWorkerPath)
 const brainInboxWorker = new BrainWorkerClient(brainWorkerPath)
 const brainSearchCoordinator = new BrainSearchCoordinator()
+jalonDemarrage('clients Brain crees')
 const BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS = 2_500
 const BRAIN_INBOX_BOUNDARY_TIMEOUT_MS = 5_000
 const invalidateBrainRuntime = async (): Promise<void> => {
@@ -441,6 +479,7 @@ const invalidateBrainRuntime = async (): Promise<void> => {
 // conversation d'origine — sauf pour les tours dont le checkpoint survit, qui vont vraiment
 // reprendre quelques lignes plus bas. Sans ce discriminant on mentirait dans un sens ou dans l'autre.
 const startupRecoverableChatCalls = listRecoverableChatProviderCalls(turnJournalRoot)
+jalonDemarrage('appels chat recuperables inventories')
 const resumableTurnIds = new Set([
   ...os
     .resumableOrchestrations()
@@ -454,6 +493,7 @@ const scheduledTasks = new TaskStore()
  *  changement, donc sans cette mémoire la même alerte réveillerait un agent en boucle. */
 const notifiedTaskAlerts = new Set<string>()
 const flushScheduledTasks = persistTaskStore(scheduledTasks)
+jalonDemarrage('stores conversations et taches charges')
 // Les alertes restaurées sont déjà connues de l'utilisateur. Les rejouer au démarrage créerait un
 // faux nouvel événement et pourrait réveiller un watchdog plusieurs heures après l'incident.
 for (const alert of scheduledTasks.listAlerts(true)) notifiedTaskAlerts.add(alert.id)
@@ -947,6 +987,7 @@ configureClaudeActiveAccountId(() => claudeAccounts.active().id)
 configureClaudeAccountRotation((walled) => claudeAccounts.rotateAwayFrom(walled))
 // Le cache est chargé AVANT la topologie : un bridge momentanément incomplet ne rase pas les bindings existants.
 let agentModels = loadCachedImportedModels(modelCatalogCachePath)
+jalonDemarrage('catalogue de modeles relu')
 const fabricControlPlane = new FabricControlPlane({
   statePath: join(app.getPath('userData'), 'compute-fabric.json'),
   manifestClient: new FetchFabricManifestClient(),
@@ -2009,6 +2050,13 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('git:read', (event, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitRead')
     return readGitState(cwd && typeof cwd === 'string' ? cwd : process.cwd())
+  })
+  // Historique git : la frise de commits de la vue Worktrees. Lecture seule, bornée côté main.
+  ipcMain.handle('git:graph', (event, cwd?: string) => {
+    assertTrustedRendererSender(event, 'GitGraph')
+    return readGitGraph(
+      cwd && typeof cwd === 'string' ? cwd : (process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd())
+    )
   })
   // Vue Worktrees : état des copies git enrichi du retard, de la saleté et de la taille disque —
   // trois grandeurs que `git worktree list --porcelain` ne donne pas. Lecture seule.
@@ -4856,6 +4904,7 @@ function rendererLocation(): { devRendererUrl?: string; rendererHtmlPath: string
 
 function createWindow(): void {
   // Create the browser window.
+  jalonDemarrage('construction de la fenêtre')
   const mainWindow = new BrowserWindow({
     title: isolatedTestInstance ? 'Autowin OS Test' : 'Autowin OS',
     width: 900,
@@ -4943,6 +4992,7 @@ function createWindow(): void {
   relayoutMainWindow = forceRelayout
 
   mainWindow.on('ready-to-show', () => {
+    jalonDemarrage('ready-to-show : la fenêtre devient visible')
     presentAutomationWindow(mainWindow, automationInstanceMode.headless, { maximize: true })
     setTimeout(() => void warmCapabilities(), 250)
   })
@@ -4961,6 +5011,7 @@ function createWindow(): void {
    * est prête. Aucun code de nettoyage, aucune fenêtre séparée à gérer.
    */
   const chargerInterface = (): void => {
+    jalonDemarrage("chargement de l'interface demandé")
     if (mainWindow.isDestroyed()) return
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
       const rendererUrl = new URL(process.env['ELECTRON_RENDERER_URL'])
@@ -5039,7 +5090,13 @@ installCrashHandlers({
 
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
+// Ce jalon DÉPARTAGE les deux causes possibles des ~34 secondes qui précèdent `whenReady` : si le
+// temps est déjà écoulé ICI, il est consommé par le corps du module (tout ce qui s'exécute au premier
+// niveau avant cette ligne). S'il est proche de zéro, c'est l'évènement `ready` d'Electron qui tarde,
+// et la cause est alors hors de notre code.
+jalonDemarrage('corps du module terminé, whenReady enregistré')
 app.whenReady().then(async () => {
+  jalonDemarrage('app.whenReady')
   // Set app user model id for windows
   electronApp.setAppUserModelId(automationAppIdentity(AUTOWIN_APP_ID, automationInstanceMode))
 
@@ -5080,6 +5137,7 @@ app.whenReady().then(async () => {
     assertTrusted: assertTrustedRendererSender,
     isolated: isolatedTestInstance
   })
+  jalonDemarrage('avant createWindow')
   createWindow()
   setupTray() // l'app vit en tray → fermer la fenêtre ne tue plus les runs en cours
 
