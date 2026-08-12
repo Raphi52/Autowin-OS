@@ -3,6 +3,27 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from './evidence-digest'
+
+/**
+ * Le juge doit juger contre le contrat que le PRODUCTEUR a reçu.
+ *
+ * Mesuré sur la campagne du 2026-08-12 : quatre scouts sur quatre (Knowledge, Task Manager,
+ * Tickets, Settings) rejetés pour la MÊME raison, purement cosmétique — « score /100 interdit
+ * par /scout, colonne # absente et bandes 🟢/🟡/🔴 non utilisées ». Aucun défaut de fond n'était
+ * reproché. Texte contre texte : `phase-briefs.ts` impose au producteur des colonnes
+ * `Score | Type | What | Why | How` avec « une note agrégée /100 », tandis que le SKILL.md `scout`
+ * du kit externe (l. 66) INTERDIT le /100 et exige une colonne `#` et des bandes. Le juge charge
+ * le kit et sanctionne un livrable pour n'avoir pas suivi un contrat qui n'est pas le sien — or
+ * le format /100 est précisément celui voulu dans Autowin.
+ *
+ * Même classe de couplage que celui déjà neutralisé pour le RUN.md physique et l'empreinte SHA-256.
+ * On neutralise le FORMAT, jamais le fond : la substance et les preuves restent exigées.
+ */
+const JUDGE_FORMAT_CONTRACT =
+  `CONTRAT DE FORMAT : le format attendu est celui de l'application, pas celui d'un SKILL.md ` +
+  `externe. Un tableau \`Score | Type | What | Why | How\` avec un Score agrégé /100 est CONFORME. ` +
+  `Ne sanctionne jamais l'absence d'une colonne « # », l'absence de bandes 🟢/🟡/🔴, ni la présence ` +
+  `d'un /100 : ce ne sont pas des défauts ici. Juge le FOND.\n`
 import type { Role, RoleBinding, RoleModelConfig, ReasoningEffort } from './roles'
 import { resolvePhaseBinding } from './roles'
 import { defaultQuorumThreshold } from './quorum'
@@ -3564,6 +3585,7 @@ export class Orchestrator {
           `IMPORTANT (in-app Autowin OS) : le livrable est le TEXTE agrégé ci-dessous, PAS un fichier ` +
           `RUN.md sur disque (Autowin le gère). N'exige jamais de RUN.md physique, d'empreinte SHA-256 ` +
           `ni de chemin kit ; juge la SUBSTANCE du livrable et les preuves d'outil réellement observées.\n` +
+          JUDGE_FORMAT_CONTRACT +
           `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
           `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
