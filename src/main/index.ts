@@ -1,3 +1,4 @@
+import { signalerInterfaceVisible } from './startup-gate'
 import { spawn } from 'node:child_process'
 import { readGitGraph } from './git-graph-main'
 /**
@@ -5010,9 +5011,24 @@ function createWindow(): void {
    * l'écran reste visible pendant toute la compilation, puis disparaît de lui-même quand l'interface
    * est prête. Aucun code de nettoyage, aucune fenêtre séparée à gérer.
    */
+  /**
+   * Le travail de fond attend que l'interface soit CHARGÉE, pas seulement que la fenêtre existe.
+   *
+   * MESURÉ : signalé à `ready-to-show`, la réconciliation des copies (~23 s, synchrone) occupait le
+   * fil principal avant que `loadURL` soit même demandé — écran d'attente visible à 6,5 s, interface
+   * réelle à 32,8 s. Signalé ici, le vrai document est demandé tout de suite et la réconciliation
+   * tourne derrière une interface déjà affichée.
+   */
   const chargerInterface = (): void => {
     jalonDemarrage("chargement de l'interface demandé")
     if (mainWindow.isDestroyed()) return
+    // L'écoute est posée ICI, et pas plus haut : posée à la création de la fenêtre, elle captait le
+    // `did-finish-load` de l'ÉCRAN D'ATTENTE — MESURÉ, elle partait à 7 149 ms, avant même que le vrai
+    // document soit demandé, et les 23 s de réconciliation synchrone repoussaient `loadURL` à 30 400 ms.
+    mainWindow.webContents.once('did-finish-load', () => {
+      jalonDemarrage('interface chargée')
+      signalerInterfaceVisible()
+    })
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
       const rendererUrl = new URL(process.env['ELECTRON_RENDERER_URL'])
       if (isolatedTestInstance) rendererUrl.searchParams.set('instance', 'test')

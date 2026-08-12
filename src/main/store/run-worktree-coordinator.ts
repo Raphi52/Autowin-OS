@@ -82,8 +82,8 @@ export interface RunWorktreeCoordinatorDeps {
     agentSha: string
   }) => void | Promise<void>
   /**
-   * Reporte de N millisecondes la réconciliation des copies existantes, au lieu de la faire
-   * SYNCHRONEMENT dans le constructeur. Absent ou 0 = comportement inchangé.
+   * Reporte la réconciliation des copies existantes jusqu'à la résolution de cette promesse, au lieu
+   * de la faire SYNCHRONEMENT dans le constructeur. Absente = comportement inchangé.
    *
    * Pourquoi une option et non un défaut : la réconciliation synchrone est un contrat OBSERVÉ —
    * plusieurs tests construisent ce coordinateur et lisent immédiatement l'état réconcilié. Les
@@ -91,11 +91,13 @@ export interface RunWorktreeCoordinatorDeps {
    * affaiblirait la couverture au lieu de l'adapter.
    *
    * En production le report est vital : ce coordinateur naît de `new AutowinOS()`, au premier niveau
-   * du module principal, et la réconciliation énumère les copies git sur disque. MESURÉ avec 42
-   * copies : ~25 s de blocage AVANT que `app.whenReady` puisse se déclencher, donc avant qu'aucune
-   * fenêtre n'existe. Avec le report : corps du module 28 s → 1,35 s, fenêtre construite 42 s → 3,9 s.
+   * du module principal, et la réconciliation énumère synchroniquement les copies git sur disque.
+   *
+   * Une PROMESSE et non un délai, parce que le délai a été essayé et mesuré : reporté de 1 500 ms, le
+   * travail synchrone occupait le fil principal juste avant la micro-tâche de `app.whenReady`, qui
+   * arrivait alors à 26 047 ms. Le blocage avait été déplacé, pas supprimé. Voir `startup-gate.ts`.
    */
-  deferRecoveryMs?: number
+  deferRecoveryUntil?: Promise<unknown>
 }
 
 interface Tracked {
@@ -205,10 +207,14 @@ export class RunWorktreeCoordinator {
        * Le délai laisse la fenêtre s'ouvrir d'abord : la récupération n'est pas urgente, l'écran si.
        * Le minuteur est conservé pour rester annulable.
        */
-      const report = deps.deferRecoveryMs ?? 0
-      if (report > 0) {
-        this.recoveryTimer = setTimeout(() => this.reconcileExisting(), report)
-        this.recoveryTimer.unref?.()
+      const attendre = deps.deferRecoveryUntil
+      if (attendre) {
+        // `void` et non `await` : le constructeur ne peut pas attendre, et un rejet de la promesse de
+        // garde ne doit pas empêcher la récupération — on réconcilie dans les deux cas.
+        void attendre.then(
+          () => this.reconcileExisting(),
+          () => this.reconcileExisting()
+        )
       } else {
         this.reconcileExisting()
       }

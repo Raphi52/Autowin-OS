@@ -4,6 +4,7 @@
  * Principe : rien d'exposé ici n'est mort — chaque méthode a un appelant réel
  * (chat, orchestration, dashboards, graphe 3D).
  */
+import { interfaceVisible } from './startup-gate'
 import { ProviderRegistry } from './providers/registry'
 import { claudeActiveAccountId, claudeRotateAccount } from './claude-accounts'
 import { ClaudeCliAdapter } from './providers/claude'
@@ -341,7 +342,7 @@ export class AutowinOS {
           // constructeur tourne au premier niveau du module principal, et énumérer les copies git
           // bloquait ~25 s avant qu'aucune fenêtre n'existe. La récupération n'a aucune urgence,
           // l'affichage si. Les tests, eux, gardent la réconciliation synchrone.
-          deferRecoveryMs: 1_500,
+          deferRecoveryUntil: interfaceVisible,
           manager,
           stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
           onRecoveredPublication: async (publication) => {
