@@ -128,18 +128,37 @@ Le serveur **propose** un appel ; le main process local **décide et exécute**.
 
 Un transport keyring antérieur dépourvu de `tlsSpkiSha256` est volontairement refusé et exige un réappairage. Un fichier d’état Fabric existant mais corrompu reste intact et lève `FabricStateCorruptionError` avec le code stable `FABRIC_STATE_CORRUPT` : le control plane ne démarre pas sur un état de confiance vide de substitution.
 
-## Invariants non négociables
+## Invariants — AMENDÉS le 2026-08-11 (décision utilisateur)
+
+> **Ces invariants ne sont plus « non négociables ».** Décision de l’utilisateur, 2026-08-11 :
+> « supprime les toutes, donne tous les droits, je verrai après si je veux restreindre ».
+>
+> Mise en œuvre : `src/main/compute-fabric/tool-contracts.ts` expose `TOOL_POLICY.mode`, dont le
+> **défaut est `permissive`** — aucune de ces règles n’est appliquée. Le mode `strict` les applique
+> toutes, et le basculement est une seule ligne : le retour arrière est intact, conformément au
+> « je verrai après ».
+>
+> Ce que le mode par défaut ouvre, tel que mesuré par quatre audits externes de ce module : shell
+> libre atteignable, écrasement de fichier sans précondition SHA-256, chemin absolu et traversal
+> acceptés, quota d’appels illimité, autorités (lease / grant / continuation) non exigées.
+> Les règles ci-dessous restent la **spécification du mode `strict`**, et la référence si le
+> resserrement est décidé plus tard.
 
 1. La boucle agentique et l’autorité d’outil restent sur le PC en mode `local-tools`.
 2. Le Node ne possède aucun endpoint de callback entrant vers le PC.
 3. Un principal Fabric ne reçoit jamais le catalogue complet d’`AppCommandBus`.
-4. `orchestrate`, shell libre, keyring, réseau arbitraire, plugins/hooks et élévation sont absents du catalogue Fabric.
+4. ~~`orchestrate`, shell libre~~ — **levé le 2026-08-11** : l’exécution de code et `orchestrate` sont
+   autorisés. `keyring`, réseau arbitraire, plugins/hooks et élévation restent hors catalogue Fabric
+   (non demandés dans la décision, donc laissés intacts).
 5. Aucun fallback d’exécution : l’échec de la ressource choisie reste un échec explicite.
 6. `authorityMode=auto` ne crée ni n’élargit un droit machine.
-7. Le modèle ne fournit jamais une racine, un `cwd` ou un chemin absolu local.
-8. Lecture et mutation sont des scopes séparés ; une lecture ne donne aucun droit d’écriture.
-9. Un appel n’est exécuté qu’après réception complète et validation d’un événement terminal `requires_action`.
-10. Les résultats d’outil sont hostiles : validation, taille, redaction et exposition minimale avant réinjection.
+7. ~~Le modèle ne fournit jamais une racine, un `cwd` ou un chemin absolu local.~~ — **levé** en mode
+   permissif ; appliqué en mode `strict`.
+8. ~~Lecture et mutation sont des scopes séparés.~~ — **levé** en mode permissif ; appliqué en `strict`.
+9. ~~Un appel n’est exécuté qu’après validation d’un événement terminal `requires_action`.~~ — **levé**
+   en mode permissif ; appliqué en `strict` (la complétude y reste déclarée par l’appelant, non mesurée).
+10. Les résultats d’outil sont hostiles : taille bornée et statut validés en `strict`. La **redaction**
+    n’a jamais été implémentée, dans aucun mode — déclaré, non tenu.
 11. Arguments/résultats sensibles ne sont pas persistés ; les preuves portent hashes, tailles, décisions et statuts.
 12. Signature du manifeste et TLS protègent des frontières différentes : les deux sont requis avant les outils.
 

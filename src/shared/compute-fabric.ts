@@ -68,14 +68,14 @@ export interface ComputeBinding {
   fallback: { kind: 'none' }
 }
 
-function record(value: unknown, label: string): Record<string, unknown> {
+export function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${label} invalide`)
   }
   return value as Record<string, unknown>
 }
 
-function exactKeys(
+export function exactKeys(
   value: Record<string, unknown>,
   allowed: readonly string[],
   label: string
@@ -100,7 +100,7 @@ function text(value: unknown, label: string): string {
   return value
 }
 
-function positiveInteger(value: unknown, label: string): number {
+export function positiveInteger(value: unknown, label: string): number {
   if (!Number.isSafeInteger(value) || (value as number) <= 0) {
     throw new Error(`${label} invalide`)
   }

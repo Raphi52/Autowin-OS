@@ -2324,18 +2324,25 @@ export class Orchestrator {
           const userContent = [phaseContext, depContext, `[sous-tâche ${node.id}] ${node.prompt}`]
             .filter(Boolean)
             .join('\n\n')
+          // ORDRE = DU PLUS STABLE AU PLUS VOLATILE (cf. le commentaire détaillé du site fan-out) :
+          // le cache de préfixe s'arrête au premier octet qui diffère, donc un bloc constant placé
+          // après un bloc variable n'est jamais réutilisé. Contenu identique, ordre seul modifié.
           const parts = [
             { name: 'constitution', text: CONSTITUTION },
-            this.phasePrompt(phase, withFoundation),
             { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
             // Le droit de dévier n'est dit QUE si un graphe pilote : sinon la consigne parlerait
             // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
+            // Constant pour la durée du run.
             {
               name: 'workflowTool',
               text: this.workflowDuRun()?.graph ? WORKFLOW_IS_A_TOOL_INSTRUCTION : ''
             },
-            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            // Constant par workspace.
             { name: 'projectContext', text: projectContext },
+            // VARIABLE par phase.
+            this.phasePrompt(phase, withFoundation),
+            // VARIABLE par sandbox — le plus volatile, donc en dernier.
             // Vide quand le run tourne dans le dépôt de base : rien n'est payé en contexte.
             {
               name: 'workspaceIsolation',
@@ -3069,15 +3076,32 @@ export class Orchestrator {
       if (fanMembers.length >= 1) {
         // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
         const fanMessages = [{ role: 'user' as const, content: userContextForPhase(phase) }]
+        /**
+         * ORDRE = DU PLUS STABLE AU PLUS VOLATILE. Le cache de préfixe du provider s'arrête au
+         * PREMIER octet qui diffère : un bloc invariant placé APRÈS un bloc variable n'est jamais
+         * réutilisé, même s'il est identique d'un appel à l'autre.
+         *
+         * Avant ce réordonnancement, `phasePrompt` — qui change à chaque phase — était en position 2,
+         * donc `discipline`, `workflowTool` et `style`, trois blocs CONSTANTS, tombaient derrière lui :
+         * le préfixe cachable se réduisait au seul `CONSTITUTION`. Mesuré le 2026-08-11 sur 688 appels
+         * réels du magasin `prompt-observability` : acteur `subagent` à 55,4 % de cache seulement
+         * (243 431 485 tokens d'entrée NON cachés), acteur `judge` à 10,6 %.
+         *
+         * Le contenu remis au modèle est IDENTIQUE — seul l'ordre de concaténation change.
+         */
         const parts = [
           { name: 'constitution', text: CONSTITUTION },
-          this.phasePrompt(phase, true),
           { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+          { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
           // Le droit de dévier n'est dit QUE si un graphe pilote : sinon la consigne parlerait
           // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
+          // Constant pour toute la durée d'un run (dépend du graphe, pas de la phase).
           { name: 'workflowTool', text: grapheBrut ? WORKFLOW_IS_A_TOOL_INSTRUCTION : '' },
-          { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+          // Constant par workspace, donc encore devant la phase.
           { name: 'projectContext', text: projectContext },
+          // VARIABLE par phase — d'où sa place ici, et non en position 2.
+          this.phasePrompt(phase, true),
+          // VARIABLE par sandbox : le plus volatile, donc en dernier.
           {
             name: 'workspaceIsolation',
             text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
@@ -3385,10 +3409,15 @@ export class Orchestrator {
       // projectContext (≤32k) sont DÉJÀ connus de la session (envoyés en phase 1) → les ré-envoyer
       // à chaque phase gonfle le contexte pour rien ("ENGINE injectée N fois", "1M3 tokens"). On ne
       // renvoie que la consigne de phase (qui CHANGE) + le style. Fallback (pas de resume) = complet.
+      // ORDRE = DU PLUS STABLE AU PLUS VOLATILE dans les DEUX branches (cf. commentaire du site
+      // fan-out). Même en session-resume, mettre `style` — constant — devant la consigne de phase
+      // qui change permet au préfixe d'être réutilisé au lieu d'être invalidé dès le second bloc.
       const parts = resuming
         ? [
-            this.phasePrompt(phase, false),
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            // VARIABLE par phase.
+            this.phasePrompt(phase, false),
+            // VARIABLE par sandbox.
             {
               name: 'workspaceIsolation',
               text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
@@ -3396,13 +3425,17 @@ export class Orchestrator {
           ]
         : [
             { name: 'constitution', text: CONSTITUTION },
-            this.phasePrompt(phase, true),
             { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
             // Le droit de dévier n'est dit QUE si un graphe pilote : sinon la consigne parlerait
             // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
+            // Constant pour la durée du run.
             { name: 'workflowTool', text: grapheBrut ? WORKFLOW_IS_A_TOOL_INSTRUCTION : '' },
-            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            // Constant par workspace.
             { name: 'projectContext', text: projectContext },
+            // VARIABLE par phase.
+            this.phasePrompt(phase, true),
+            // VARIABLE par sandbox — le plus volatile, donc en dernier.
             {
               name: 'workspaceIsolation',
               text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
