@@ -313,3 +313,78 @@
     display: none;
   }
 }
+
+/*
+  FRISE DE SURVOL DU DÉPÔT + TOPOLOGIE PLEIN CADRE.
+
+  Reprend la lecture de l'ancien plan de métro : rose pour ce qui vit hors du tronc, cyan pour la ligne
+  principale. La hauteur du trait porte la même information que la couleur — une frise lisible ne doit
+  pas dépendre de la seule distinction rose/cyan.
+*/
+.wt-frise {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 4px;
+  border: 1px solid var(--border-soft, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  background: var(--surface-inset, rgba(255, 255, 255, 0.02));
+}
+.wt-frise svg {
+  width: 100%;
+  height: 46px;
+  cursor: pointer;
+}
+.wt-frise-legende {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint, rgba(245, 247, 251, 0.4));
+}
+.wt-frise-legende .is-tronc {
+  color: var(--cyan);
+}
+.wt-frise-legende .is-vivant {
+  color: var(--rose);
+}
+.wt-frise-tick {
+  stroke: var(--cyan);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.wt-frise-tick.is-vivant {
+  stroke: var(--rose);
+}
+/* Le cadre de la portion lue : un remplissage discret, jamais un pavé qui écrase les traits. */
+.wt-frise-portion {
+  fill: rgba(245, 247, 251, 0.08);
+  stroke: rgba(245, 247, 251, 0.28);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.wt-topologie {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+/* La topologie prend la place : c'est la réponse à « où en est le dépôt », plus un panneau annexe. */
+/*
+  Une HAUTEUR BORNÉE, et pas seulement `flex: 1` : mesuré, sans borne ce conteneur grandissait avec ses
+  271 commits, son `scrollTop` restait 0 et le cadre « portion lue » de la frise couvrait toute la
+  largeur — la frise ne montrait donc rien. C'est `.cockpit-scroll` qui défilait à sa place.
+*/
+.wt-topologie-defilement {
+  overflow: auto;
+  height: min(64vh, 760px);
+  border: 1px solid var(--border-soft, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  background: var(--surface-inset, rgba(255, 255, 255, 0.02));
+}
+.wt-topologie-vide {
+  padding: 24px;
+  color: var(--text-faint, rgba(245, 247, 251, 0.4));
+}

@@ -1,19 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GitGraphCommit, GitGraphSnapshot } from '../../../shared/git-graph'
-import type { GitDiffResult } from '../../../shared/git-read'
-import type {
-  WorktreeAgentActivity,
-  WorktreeRuntimeStatus
-} from '../../../shared/worktree-activity-model'
+import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
 import { ModuleHeader } from './ModuleHeader'
 import { layoutGitGraph } from './GitGraphLayout'
-import { WorktreeActivitySummary, WorktreeActivityView } from './WorktreeActivityView'
-import { DiffView } from './DiffView'
-import { RunInspector } from './RunInspector'
 import './WorktreeView.css'
 
-type DetailTab = 'work' | 'files' | 'run' | 'git'
-type RunEntry = Awaited<ReturnType<typeof window.api.listRuns>>[number]
 type DataState = 'healthy' | 'unknown' | 'unavailable' | 'stale'
 
 const staleAfterMs = 30 * 60 * 1000
@@ -35,6 +26,82 @@ function projectState(
   ).length
   if (stale) return { state: 'stale', label: 'Obsolète', alertCount: alerts }
   return { state: 'healthy', label: alerts ? 'Attention' : 'Sain', alertCount: alerts }
+}
+
+/**
+ * La frise de survol du dépôt : tout l'historique en une bande, et la portion actuellement lue.
+ *
+ * Elle reprend la lecture de l'ancien plan de métro — rose = ce qui vit hors du tronc, cyan = la ligne
+ * principale — mais appliquée à la MÊME géométrie que la topologie en dessous : les deux consomment
+ * `layoutGitGraph`, donc une couleur vue ici désigne exactement le commit vu là. Deux tracés calculés
+ * séparément auraient dérivé au premier changement de disposition.
+ *
+ * Le cadre clair est la portion visible du graphe, pas une décoration : c'est ce qui rend une frise
+ * utile quand l'historique dépasse largement la hauteur de l'écran. Un clic y déplace la lecture.
+ *
+ * Périmètre : le DÉPÔT entier. Rien ici n'est propre à une conversation — les runs, les tours et leurs
+ * fichiers vivent dans Observatory et Chat, et les mêler ici était justement le défaut corrigé.
+ */
+function FriseRepo({
+  noeuds,
+  fraction,
+  portion,
+  surClic
+}: {
+  noeuds: ReturnType<typeof layoutGitGraph>['nodes']
+  fraction: number
+  portion: number
+  surClic: (fraction: number) => void
+}): React.JSX.Element | null {
+  if (noeuds.length === 0) return null
+  const LARGEUR = 1000
+  const HAUTEUR = 46
+  const troncX = Math.min(...noeuds.map((n) => n.x))
+  const pas = noeuds.length > 1 ? LARGEUR / (noeuds.length - 1) : 0
+  return (
+    <div className="wt-frise" data-testid="worktree-frise">
+      <div className="wt-frise-legende">
+        <span className="is-tronc">ligne principale</span>
+        <span className="is-vivant">hors du tronc</span>
+        <span className="is-portion">portion lue</span>
+      </div>
+      <svg
+        viewBox={`0 0 ${LARGEUR} ${HAUTEUR}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Historique du dépôt : ${noeuds.length} commits`}
+        onClick={(evenement) => {
+          const cadre = evenement.currentTarget.getBoundingClientRect()
+          if (cadre.width === 0) return
+          surClic((evenement.clientX - cadre.left) / cadre.width)
+        }}
+      >
+        <rect
+          className="wt-frise-portion"
+          x={fraction * LARGEUR}
+          y={0}
+          width={Math.max(portion * LARGEUR, 6)}
+          height={HAUTEUR}
+        />
+        {noeuds.map((noeud, index) => {
+          const horsTronc = noeud.x > troncX
+          // Un commit hors du tronc monte plus haut : la hauteur PORTE l'information, la couleur seule
+          // serait perdue pour qui distingue mal le rose du cyan.
+          const hauteur = horsTronc ? HAUTEUR - 10 : HAUTEUR / 2
+          return (
+            <line
+              key={noeud.commit.hash}
+              className={horsTronc ? 'wt-frise-tick is-vivant' : 'wt-frise-tick'}
+              x1={index * pas}
+              x2={index * pas}
+              y1={HAUTEUR}
+              y2={HAUTEUR - hauteur}
+            />
+          )
+        })}
+      </svg>
+    </div>
+  )
 }
 
 function GitTopology({ commits }: { commits: GitGraphCommit[] }): React.JSX.Element {
@@ -76,18 +143,14 @@ function GitTopology({ commits }: { commits: GitGraphCommit[] }): React.JSX.Elem
 export function WorktreeView({ active }: { active: boolean }): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<GitGraphSnapshot>()
   const [agents, setAgents] = useState<WorktreeAgentActivity[]>([])
-  const [status, setStatus] = useState<WorktreeRuntimeStatus>()
   const [loading, setLoading] = useState(false)
   const [activityAvailable, setActivityAvailable] = useState(true)
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [detailTab, setDetailTab] = useState<DetailTab>('work')
-  const [openFile, setOpenFile] = useState<string>()
-  const [diff, setDiff] = useState<GitDiffResult | null>(null)
-  const [openRun, setOpenRun] = useState<{ entry: RunEntry; content: string }>()
-  const [detailError, setDetailError] = useState<string>()
   const [repoPath, setRepoPath] = useState(() => localStorage.getItem('autowin:sc-repo') ?? '')
   const requestId = useRef(0)
-  const detailRequestId = useRef(0)
+  // Le défilement du graphe pilote le cadre de la frise. Mesuré depuis le DOM et non déduit d'un index
+  // de commit : la hauteur d'un nœud n'est pas la hauteur d'une ligne rendue.
+  const grapheRef = useRef<HTMLDivElement>(null)
+  const [survol, setSurvol] = useState({ fraction: 0, portion: 1 })
 
   const load = useCallback(async (): Promise<void> => {
     const id = ++requestId.current
@@ -98,10 +161,11 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
       setLoading(false)
       return
     }
-    const [gitResult, activityResult, statusResult] = await Promise.allSettled([
+    // `getWorktreeStatus` n'est plus appelé : il n'alimentait que le panneau de détail retiré. Garder
+    // l'appel pour ranger sa réponse dans un état que personne ne lit serait un coût sans lecteur.
+    const [gitResult, activityResult] = await Promise.allSettled([
       gitPromise,
-      window.api.getWorktreeActivity?.() ?? Promise.reject(new Error('Activité indisponible')),
-      window.api.getWorktreeStatus?.() ?? Promise.reject(new Error('Statut indisponible'))
+      window.api.getWorktreeActivity?.() ?? Promise.reject(new Error('Activité indisponible'))
     ])
     if (id !== requestId.current) return
     setSnapshot(
@@ -111,7 +175,6 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
     )
     setActivityAvailable(activityResult.status === 'fulfilled')
     setAgents(activityResult.status === 'fulfilled' ? activityResult.value : [])
-    setStatus(statusResult.status === 'fulfilled' ? statusResult.value : undefined)
     setLoading(false)
   }, [repoPath])
 
@@ -123,15 +186,23 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
     }
   }, [active, load])
 
+  // Mesurer DÈS que la disposition change : sans cela `portion` reste à 1 jusqu'au premier défilement,
+  // et le cadre de la frise couvre toute la largeur en prétendant que tout est visible.
+  useEffect(() => {
+    const noeud = grapheRef.current
+    if (!noeud || noeud.scrollHeight === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSurvol({
+      fraction: noeud.scrollTop / noeud.scrollHeight,
+      portion: noeud.clientHeight / noeud.scrollHeight
+    })
+  }, [snapshot])
+
   const health = projectState(snapshot, agents, activityAvailable)
+  // UNE disposition pour les deux tracés : la frise et le graphe doivent désigner le même commit.
+  const dispositionGraphe = useMemo(() => layoutGitGraph(snapshot?.commits ?? []), [snapshot])
   const activeAgents = agents.filter(
     (agent) => agent.state === 'working' || agent.state === 'isolated'
-  )
-  const priorities = agents.filter(
-    (agent) => agent.state === 'conflict' || agent.state === 'blocked'
-  )
-  const recent = [...agents].sort(
-    (a, b) => (b.endedAtMs ?? b.startedAtMs) - (a.endedAtMs ?? a.startedAtMs)
   )
 
   const pickRepo = async (): Promise<void> => {
@@ -139,39 +210,6 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
     if (!chosen) return
     localStorage.setItem('autowin:sc-repo', chosen)
     setRepoPath(chosen)
-  }
-
-  const openDiff = (agent: WorktreeAgentActivity, path: string): void => {
-    const id = ++detailRequestId.current
-    setOpenFile(path)
-    setDiff(null)
-    setDetailError(undefined)
-    void window.api.getGitDiff(path, agent.worktreePath || repoPath || undefined).then(
-      (value) => {
-        if (detailRequestId.current === id) setDiff(value)
-      },
-      (error) => {
-        if (detailRequestId.current === id) setDetailError(String(error))
-      }
-    )
-  }
-
-  const openRunDetail = (): void => {
-    setDetailTab('run')
-    if (openRun || detailError) return
-    const id = ++detailRequestId.current
-    void window.api
-      .listRuns()
-      .then(async (runs) => {
-        const entry = runs[0]
-        if (!entry) throw new Error('Aucun RUN disponible')
-        const file = await window.api.readNodeFile(entry.path)
-        if (detailRequestId.current === id) setOpenRun({ entry, content: file.content })
-      })
-      .catch((error) => {
-        if (detailRequestId.current === id)
-          setDetailError(error instanceof Error ? error.message : String(error))
-      })
   }
 
   return (
@@ -235,202 +273,55 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
             </div>
           )}
 
-          <section className="cockpit-section cockpit-now" data-testid="worktree-priorities">
-            <header>
-              <div>
-                <span>Priorités</span>
-                <h2>À faire maintenant</h2>
-              </div>
-              <b>{priorities.length}</b>
-            </header>
-            {priorities.length ? (
-              priorities.map((agent) => (
-                <button
-                  key={agent.agentId}
-                  type="button"
-                  onClick={() => {
-                    setDetailTab('work')
-                    setDetailOpen(true)
-                  }}
-                >
-                  <strong>
-                    {agent.state === 'conflict' ? 'Conflit à trancher' : 'Travail bloqué'}
-                  </strong>
-                  <span>
-                    {agent.task ?? agent.agentName}
-                    {agent.conflictFile ? ` · ${agent.conflictFile}` : ''}
-                  </span>
-                </button>
-              ))
+          {/*
+            La topologie du DÉPÔT, plein cadre et sans clic préalable. Elle était auparavant cachée
+            derrière un bouton « Ouvrir la topologie Git », sous trois sections de runs — or les runs
+            sont propres à une conversation et vivent dans Observatory et Chat. Cet onglet répond à une
+            seule question : où en est le dépôt.
+          */}
+          <section className="wt-topologie" data-testid="worktree-topology-main">
+            <FriseRepo
+              noeuds={dispositionGraphe.nodes}
+              fraction={survol.fraction}
+              portion={survol.portion}
+              surClic={(fraction) => {
+                const noeud = grapheRef.current
+                if (!noeud) return
+                noeud.scrollTop = Math.max(
+                  0,
+                  fraction * noeud.scrollHeight - noeud.clientHeight / 2
+                )
+              }}
+            />
+            {snapshot?.available === false ? (
+              <p className="wt-topologie-vide">Topologie indisponible.</p>
             ) : (
-              <p>Aucun blocage ni décision prioritaire.</p>
-            )}
-          </section>
-
-          <section className="cockpit-section" data-testid="worktree-current-work">
-            <header>
-              <div>
-                <span>Vue d’ensemble</span>
-                <h2>Travaux en cours</h2>
-              </div>
-            </header>
-            {activeAgents.length ? (
-              <div className="cockpit-work-list">
-                {activeAgents.map((agent) => (
-                  <WorktreeActivitySummary
-                    key={agent.agentId}
-                    agent={agent}
-                    onOpen={() => {
-                      setDetailTab('work')
-                      setDetailOpen(true)
-                    }}
-                  />
-                ))}
-                <div className="cockpit-touched-files" aria-label="Fichiers touchés">
-                  {activeAgents
-                    .flatMap((agent) => agent.files)
-                    .map((file) => (
-                      <span key={`${file.kind}:${file.path}`}>{file.path}</span>
-                    ))}
-                </div>
-              </div>
-            ) : (
-              <div className="cockpit-empty">
-                <strong>{activityAvailable ? 'Projet prêt' : 'Activité indisponible'}</strong>
-                <span>
-                  {activityAvailable
-                    ? 'Aucun travail agent en cours.'
-                    : 'Impossible de déterminer les travaux actifs.'}
-                </span>
+              <div
+                className="wt-topologie-defilement"
+                ref={grapheRef}
+                onScroll={(evenement) => {
+                  const el = evenement.currentTarget
+                  if (el.scrollHeight === 0) return
+                  setSurvol({
+                    fraction: el.scrollTop / el.scrollHeight,
+                    portion: el.clientHeight / el.scrollHeight
+                  })
+                }}
+              >
+                <GitTopology commits={snapshot?.commits ?? []} />
               </div>
             )}
           </section>
-
-          <section
-            className="cockpit-section cockpit-recent"
-            data-testid="worktree-recent-activity"
-          >
-            <header>
-              <div>
-                <span>Historique</span>
-                <h2>Activité récente</h2>
-              </div>
-            </header>
-            {recent.length ? (
-              <div className="cockpit-work-list">
-                {recent.slice(0, 6).map((agent) => (
-                  <WorktreeActivitySummary
-                    key={agent.agentId}
-                    agent={agent}
-                    onOpen={() => {
-                      setDetailTab('work')
-                      setDetailOpen(true)
-                    }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p>
-                {activityAvailable ? 'Aucune activité récente.' : 'Activité récente indisponible.'}
-              </p>
-            )}
-          </section>
-
-          <button
-            className="cockpit-open-detail"
-            type="button"
-            onClick={() => {
-              setDetailTab('git')
-              setDetailOpen(true)
-            }}
-          >
-            Ouvrir la topologie Git
-          </button>
         </div>
       )}
 
-      {detailOpen && (
-        <aside
-          className="cockpit-detail"
-          aria-label="Détails du projet"
-          data-testid="worktree-detail-panel"
-        >
-          <header>
-            <strong>Détails du projet</strong>
-            <button type="button" onClick={() => setDetailOpen(false)}>
-              Fermer
-            </button>
-          </header>
-          <nav>
-            <button
-              className={detailTab === 'work' ? 'is-active' : ''}
-              onClick={() => setDetailTab('work')}
-            >
-              État du travail
-            </button>
-            <button
-              className={detailTab === 'files' ? 'is-active' : ''}
-              onClick={() => setDetailTab('files')}
-            >
-              Fichiers
-            </button>
-            <button className={detailTab === 'run' ? 'is-active' : ''} onClick={openRunDetail}>
-              RUN
-            </button>
-            <button
-              className={detailTab === 'git' ? 'is-active' : ''}
-              onClick={() => setDetailTab('git')}
-            >
-              Topologie Git
-            </button>
-          </nav>
-          {detailTab === 'git' ? (
-            snapshot?.available === false ? (
-              <p>Topologie indisponible.</p>
-            ) : (
-              <GitTopology commits={snapshot?.commits ?? []} />
-            )
-          ) : detailTab === 'run' ? (
-            detailError ? (
-              <p role="alert">RUN indisponible : {detailError}</p>
-            ) : openRun ? (
-              <RunInspector content={openRun.content} summary={openRun.entry.summary} />
-            ) : (
-              <p role="status">Lecture du RUN…</p>
-            )
-          ) : detailTab === 'files' ? (
-            <div className="cockpit-detail__files">
-              {agents
-                .flatMap((agent) => agent.files.map((file) => ({ agent, file })))
-                .map(({ agent, file }) => (
-                  <div key={`${agent.agentId}:${file.path}`}>
-                    <button type="button" onClick={() => openDiff(agent, file.path)}>
-                      {file.path}
-                    </button>
-                    {openFile === file.path && (
-                      <div className="cockpit-detail__diff">
-                        {detailError ? (
-                          <p role="alert">Diff indisponible : {detailError}</p>
-                        ) : diff === null ? (
-                          <p role="status">Chargement du diff…</p>
-                        ) : diff.available ? (
-                          <DiffView diff={diff.diff ?? ''} />
-                        ) : (
-                          <p role="alert">
-                            Diff indisponible{diff.error ? ` : ${diff.error}` : '.'}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              {agents.every((agent) => agent.files.length === 0) && <p>Aucun fichier touché.</p>}
-            </div>
-          ) : (
-            <WorktreeActivityView agents={agents} status={status} className="is-detail" />
-          )}
-        </aside>
-      )}
+      {/*
+        Le panneau latéral de détail a été RETIRÉ avec les sections de runs, et non laissé en place :
+        ses seules entrées étaient ces sections, donc il devenait inatteignable. Ses onglets « État du
+        travail », « Fichiers » et « RUN » portaient l'activité d'une conversation — le domaine
+        d'Observatory et de Chat — et son onglet « Topologie Git » doublait désormais le tracé principal.
+        Un panneau mort derrière un état qui ne peut plus être vrai est pire qu'un panneau absent.
+      */}
     </section>
   )
 }
