@@ -16,8 +16,11 @@ import { compileExecutionQuote } from './execution-quote'
  * ainsi des commits de fonctionnalité complets jamais publiés. Le garde-fou ne protégeait pas
  * un budget : il détruisait du travail déjà payé.
  *
- * Restent enforçables, car ils ne protègent pas le portefeuille : la CONCURRENCE (sinon on sature
- * la machine en process) et la DURÉE (sinon une boucle folle tourne indéfiniment).
+ * La ligne de partage, corrigée le 2026-08-12 après une régression attrapée par
+ * `os.chat-supervisor.test.ts` : seuls les JETONS et l'USD sont du portefeuille et passent en
+ * mesure seule. Le NOMBRE d'appels et d'agents, la CONCURRENCE et la DURÉE restent toujours
+ * enforcés — ce sont des invariantes structurelles (un tour de chat vaut un appel, la machine ne
+ * doit pas saturer, une boucle doit finir), pas des limites de dépense.
  */
 describe('budget en mode mesure seule', () => {
   it('n’interrompt pas un run qui dépasse massivement le plafond de tokens', async () => {
@@ -43,17 +46,16 @@ describe('budget en mode mesure seule', () => {
     expect(final.completedCalls).toBe(2)
   })
 
-  it('ne refuse plus un appel sur le nombre d’appels, d’agents ou le plafond USD', async () => {
+  it('ne refuse plus un appel sur les jetons ni sur le plafond USD', async () => {
     const supervisor = new ExecutionSupervisor()
     const quote = compileExecutionQuote('mène tous les chantiers de la vue Chat')
-    quote.limits.maxProviderCalls = 1
-    quote.limits.maxAgents = 1
     quote.limits.maxUsd = 0.01
+    quote.limits.maxTotalTokens = 1_000
     quote.limits.maxConcurrency = 8
 
     await supervisor.run(quote, undefined, async () => {
       for (let i = 0; i < 6; i += 1) {
-        const reservation = supervisor.reserveProviderCall(undefined, true)
+        const reservation = supervisor.reserveProviderCall()
         expect(reservation).toBeDefined()
         reservation!.complete({ inputTokens: 500_000, outputTokens: 5_000, costUsd: 4.2 })
       }
@@ -62,8 +64,21 @@ describe('budget en mode mesure seule', () => {
     const final = supervisor.lastSnapshot()!
     expect(final.stoppedReason).toBeUndefined()
     expect(final.startedCalls).toBe(6)
-    expect(final.startedAgents).toBe(6)
     expect(final.knownCostUsd).toBeCloseTo(25.2, 5)
+  })
+
+  it('continue de borner le NOMBRE d’appels : un tour de chat vaut un appel, pas deux', async () => {
+    // Invariante structurelle, pas une limite de dépense : `os.ts` et le routeur de conversation
+    // posent `maxProviderCalls: 1` pour qu'un même tour n'appelle pas deux fois le provider.
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('un tour de chat')
+    quote.limits.maxProviderCalls = 1
+    quote.limits.maxConcurrency = 4
+
+    await supervisor.run(quote, undefined, async () => {
+      supervisor.reserveProviderCall()!.complete({ inputTokens: 10, outputTokens: 2 })
+      expect(() => supervisor.reserveProviderCall()).toThrowError(/appels provider/i)
+    })
   })
 
   it('continue de borner la concurrence : elle protège la machine, pas le portefeuille', async () => {

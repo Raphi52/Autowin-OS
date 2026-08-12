@@ -335,10 +335,15 @@ export class ExecutionSupervisor {
     ) {
       deny(`Budget USD atteint (${limits.maxUsd} USD)`)
     }
-    if (enforceSpend && runtime.startedCalls >= limits.maxProviderCalls) {
+    // Le NOMBRE d'appels et d'agents est une invariante STRUCTURELLE, pas une limite de dépense :
+    // un tour de chat vaut UN appel provider (`maxProviderCalls: 1` posé par os.ts et par le
+    // routeur de conversation), et le relâcher laisserait un même tour appeler deux fois.
+    // Régression attrapée le 2026-08-12 par `os.chat-supervisor.test.ts` après avoir rangé ces
+    // deux compteurs avec les jetons : ce sont les JETONS et l'USD qui tuaient des runs, pas eux.
+    if (runtime.startedCalls >= limits.maxProviderCalls) {
       deny(`Budget d'appels provider atteint (${limits.maxProviderCalls})`)
     }
-    if (enforceSpend && launchesAgent && runtime.startedAgents >= limits.maxAgents) {
+    if (launchesAgent && runtime.startedAgents >= limits.maxAgents) {
       deny(`Budget d'agents atteint (${limits.maxAgents})`)
     }
     if (runtime.activeCalls >= limits.maxConcurrency) {
