@@ -88,11 +88,20 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
       return genericGuard || specializedGuard ? [] : [channel]
     })
 
-    // La vue Knowledge ajoute les canaux inbox au socle courant. `unguarded` porte la garantie de
-    // sécurité ; le compte force une relecture explicite à chaque nouveau canal exposé.
-    // +1 : `worktree:resolve-conflict` (résolution humaine d'un conflit depuis le Hub), gardé par
-    // assertTrustedRendererSender + validation stricte de l'agentId et du choix.
-    expect(handlers).toHaveLength(128)
+    // `unguarded` porte la garantie de SÉCURITÉ ; le compte n'est qu'un fil-piège qui force une
+    // relecture explicite à chaque nouveau canal exposé.
+    //
+    // RESYNCHRONISÉ le 2026-08-12, et il faut dire pourquoi : le littéral valait 128 alors que la
+    // source en comptait déjà 135 AU COMMIT MÊME qui l'a figé (3855638, « checkpoint: consolidate
+    // autowin dogfood improvements »). Ce test était donc rouge dès sa naissance et n'a jamais
+    // passé — un fil-piège qu'on ne regarde plus ne protège rien. Ne pas chercher une dérive de
+    // 9 canaux : il n'y en a eu que DEUX depuis, les deux ci-dessous, et `unguarded` est resté vide
+    // sur toute la période (vérifié en rejouant la même détection sur les deux révisions).
+    //
+    // Les deux canaux ajoutés depuis, tous deux gardés en première ligne :
+    //   `os:workflowProfiles:notice`            — lecture de la boîte de refus de workflow
+    //   `os:workflowProfiles:acknowledgeNotice` — accusé de réception, id validé en entier sûr
+    expect(handlers).toHaveLength(137)
     expect(unguarded).toEqual([])
   })
 
