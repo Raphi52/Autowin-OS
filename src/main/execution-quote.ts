@@ -5,6 +5,20 @@ import type { PipelinePhase } from './skill-pipeline'
 export type DecompositionPolicy =
   { mode: 'disabled'; maxNodes: 1 } | { mode: 'build-only'; maxNodes: number }
 
+/**
+ * Ce que le devis fait des plafonds de DÉPENSE (tokens, appels, agents, USD).
+ *
+ * `metering-only` est le défaut depuis la décision utilisateur du 2026-08-12 : les compteurs
+ * restent exacts et alimentent Observatory, mais ils ne peuvent plus interrompre un run. Motif
+ * mesuré : sur la campagne du 11/08, le plafond n'a économisé aucun token — la dépense était déjà
+ * faite quand il l'a constatée — et il a détruit du travail déjà payé, neuf worktrees portant des
+ * commits de fonctionnalité jamais publiés.
+ *
+ * La concurrence et la durée ne relèvent PAS de ce réglage : elles protègent la machine et
+ * l'arrêt du run, pas le portefeuille, et restent toujours enforçées.
+ */
+export type SpendEnforcement = 'blocking' | 'metering-only'
+
 export interface ExecutionLimits {
   maxProviderCalls: number
   maxFreshTokens: number
@@ -14,6 +28,7 @@ export interface ExecutionLimits {
   maxDurationMs: number
   maxRecoveries: number
   maxUsd: number | null
+  spendEnforcement: SpendEnforcement
 }
 
 export interface ExecutionQuote {
@@ -69,6 +84,8 @@ export interface ExecutionQuoteCaps {
   maxProviderCalls?: number | null
   maxTotalTokens?: number | null
   maxUsd?: number | null
+  /** `blocking` réarme les refus de dépense ; absent = `metering-only` (défaut). */
+  spendEnforcement?: SpendEnforcement
 }
 
 interface RegimePreset {
@@ -271,7 +288,8 @@ export function compileExecutionQuote(task: string, caps: ExecutionQuoteCaps = {
       maxConcurrency: preset.maxConcurrency,
       maxDurationMs: preset.maxDurationMs,
       maxRecoveries: preset.maxRecoveries,
-      maxUsd: positiveNumber(caps.maxUsd) ?? null
+      maxUsd: positiveNumber(caps.maxUsd) ?? null,
+      spendEnforcement: caps.spendEnforcement ?? 'metering-only'
     }
   }
 }
