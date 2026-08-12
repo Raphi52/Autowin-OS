@@ -125,6 +125,15 @@ export interface WorktreeMapTotals extends Readonly<{
   totalBytes: number
   /** Octets des copies propres et sans retard nul : ce qui peut partir sans rien perdre. */
   reclaimableBytes: number
+  /**
+   * Nombre de copies dont la taille a RÉELLEMENT été mesurée.
+   *
+   * Sans ce compteur, `totalBytes` valant 0 est ambigu : soit les copies sont vides, soit personne
+   * n'a mesuré. L'en-tête affichait « 0 o au total » dans les deux cas — donc il affirmait une mesure
+   * qui n'avait pas eu lieu (la mesure de taille n'est pas activée par défaut côté IPC). Le modèle
+   * d'entrée distingue déjà les deux (`sizeBytes?: number`) ; l'agrégat écrasait la distinction.
+   */
+  measuredSizes: number
   maxBehind: number
 }> {}
 
@@ -134,17 +143,28 @@ export function summarizeWorktreeMap(entries: readonly WorktreeMapEntry[]): Work
   let unknown = 0
   let totalBytes = 0
   let reclaimableBytes = 0
+  let measuredSizes = 0
   let maxBehind = 0
   for (const entry of entries) {
     if (entry.dirtyFiles === undefined) unknown += 1
     else if (entry.dirtyFiles > 0) dirty += 1
     else clean += 1
+    if (entry.sizeBytes !== undefined) measuredSizes += 1
     totalBytes += entry.sizeBytes ?? 0
     // Recuperable = propre AVEC certitude. Une saleté non mesurée n'est pas une copie propre.
     if (entry.dirtyFiles === 0) reclaimableBytes += entry.sizeBytes ?? 0
     if ((entry.behind ?? 0) > maxBehind) maxBehind = entry.behind ?? 0
   }
-  return { count: entries.length, dirty, clean, unknown, totalBytes, reclaimableBytes, maxBehind }
+  return {
+    count: entries.length,
+    dirty,
+    clean,
+    unknown,
+    totalBytes,
+    reclaimableBytes,
+    measuredSizes,
+    maxBehind
+  }
 }
 
 /* ------------------------------------------------------------------ geometrie */

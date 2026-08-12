@@ -469,3 +469,41 @@
 .wtmap-activity .wt-view {
   min-height: 0;
 }
+.project-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  border: 1px solid var(--container-border);
+  border-left: 3px solid var(--cyan);
+  border-radius: var(--container-radius-panel);
+  background: var(--surface-card);
+}
+.project-strip.is-unavailable {
+  border-left-color: var(--warn);
+}
+.project-strip.is-unknown {
+  border-left-color: var(--text-faint);
+}
+.project-strip.is-stale {
+  border-left-color: var(--gold);
+}
+.project-strip > div {
+  display: grid;
+  gap: 5px;
+  padding: 14px 16px;
+  border-right: 1px solid var(--container-border);
+}
+.project-strip > div:last-child {
+  border: 0;
+}
+/* `.cockpit-section header span` accompagnait ce bloc dans l'ancienne feuille : cette classe n'existe
+   pas dans cette vue, le sélecteur est donc retiré plutôt que recopié mort. */
+.project-strip span {
+  color: var(--text-faint);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.project-strip strong {
+  font-size: 13px;
+}
+

@@ -232,6 +232,42 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
 
   const selectedEntry = selected ? byPath.get(selected) : undefined
 
+  /**
+   * VALEURS DE LA BARRE D'ÉTAT. Règle unique : ne jamais présenter comme mesuré ce qui ne l'est pas.
+   * `dirtyFiles` et `sizeBytes` sont optionnels dans le modèle précisément parce que la mesure peut
+   * ne pas avoir eu lieu — l'ancienne barre, elle, affichait `changeCount ?? 0`, donc « 0 changement »
+   * sur un dépôt qu'on n'avait pas lu. On restaure la barre sans restaurer ce défaut.
+   */
+  const brancheCourante =
+    entries.find((entry) => entry.path === snapshot?.repoPath)?.branch ??
+    snapshot?.baseBranch ??
+    entries.find((entry) => entry.branch)?.branch
+
+  const mesurees = entries.filter((entry) => entry.dirtyFiles !== undefined)
+  const changementsLocaux =
+    mesurees.length === 0
+      ? 'non mesuré'
+      : String(mesurees.reduce((somme, entry) => somme + (entry.dirtyFiles ?? 0), 0))
+
+  const alertes =
+    snapshot?.available === false
+      ? 'lecture git impossible'
+      : // `findings`, PAS `proposals` : j'avais deviné ce nom et le typecheck l'a attrapé. Une barre
+        // d'état qui compte un champ inexistant afficherait un zéro rassurant — et faux.
+        String(
+          (snapshot?.doctor?.findings.length ?? 0) +
+            entries.filter((entry) => entry.pathExists === false || entry.prunableReason).length
+        )
+
+  const sante: { ton: string; libelle: string } =
+    snapshot?.available === false
+      ? { ton: 'unavailable', libelle: 'Git indisponible' }
+      : totals.count > 0 && totals.unknown === totals.count
+        ? { ton: 'unknown', libelle: 'État non mesuré' }
+        : totals.dirty > 0
+          ? { ton: 'stale', libelle: 'Travail en cours' }
+          : { ton: 'clean', libelle: 'Propre' }
+
   return (
     <div className="wtmap" data-testid="worktree-map">
       <header className="wtmap-header">
@@ -250,8 +286,18 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
           {totals.unknown > 0 && (
             <Stat value={String(totals.unknown)} label="non mesurés" tone="unknown" />
           )}
-          <Stat value={formatBytes(totals.totalBytes)} label="au total" />
-          <Stat value={formatBytes(totals.reclaimableBytes)} label="récupérables" tone="live" />
+          {/* Une taille NON MESURÉE n'est pas zéro. `totalBytes` vaut 0 aussi bien quand les copies
+              sont vides que quand personne n'a mesuré — et la mesure n'est pas activée par défaut,
+              donc « 0 o au total » était le cas COURANT, affirmé comme un fait. On ne montre un
+              chiffre que si au moins une taille a été relevée. */}
+          {totals.measuredSizes > 0 ? (
+            <>
+              <Stat value={formatBytes(totals.totalBytes)} label="au total" />
+              <Stat value={formatBytes(totals.reclaimableBytes)} label="récupérables" tone="live" />
+            </>
+          ) : (
+            <Stat value="non mesuré" label="taille disque" tone="unknown" />
+          )}
           <Stat
             value={snapshot?.baseHead ?? '—'}
             label={`référence ${snapshot?.baseBranch ?? '—'}`}
@@ -267,6 +313,37 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
           </button>
         </div>
       </header>
+
+      {/* BARRE D'ÉTAT GIT restaurée. Elle vivait dans `WorktreeView.tsx` sous le nom `project-strip`
+          et a disparu avec le remplacement de la vue (commit 4af73b5, 2026-08-06) : les compteurs qui
+          l'ont remplacée disent le nombre de copies, mais plus la BRANCHE ni les CHANGEMENTS LOCAUX —
+          les deux informations qu'on vient chercher en premier sur un dépôt.
+          Chaque cellule dit « non mesuré » plutôt qu'un zéro quand la donnée manque : c'est la leçon
+          de l'en-tête d'à côté, qui affichait « 0 o » sans avoir rien mesuré. */}
+      {snapshot && (
+        <section className={`project-strip is-${sante.ton}`} aria-label="État du dépôt">
+          <div>
+            <span>Santé du projet</span>
+            <strong>{sante.libelle}</strong>
+          </div>
+          <div>
+            <span>Branche</span>
+            <strong>{brancheCourante ?? 'Inconnue'}</strong>
+          </div>
+          <div>
+            <span>Changements locaux</span>
+            <strong>{changementsLocaux}</strong>
+          </div>
+          <div>
+            <span>Travaux actifs</span>
+            <strong>{totals.unknown === totals.count ? 'non mesuré' : totals.dirty}</strong>
+          </div>
+          <div>
+            <span>Alertes</span>
+            <strong>{alertes}</strong>
+          </div>
+        </section>
+      )}
 
       {!snapshot && (
         <p className="wtmap-notice" role="status" data-testid="worktree-map-loading">
