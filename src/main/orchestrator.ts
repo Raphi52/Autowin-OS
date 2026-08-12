@@ -776,6 +776,17 @@ const JUDGE_PHASE_CAP = 6000
  * lecture-seule reconnu (voir `classifyMutationConfidence`).
  */
 const CLAUSE_SPLIT = /\b(?:et|puis|then|and|apres|après)\b|[;,]/gi
+/**
+ * Apostrophes typographiques ramenées à l'apostrophe droite AVANT toute détection de négation.
+ * `NEGATED_MUTATION` n'accepte que `'` : « n’implémente rien » — la forme que produit tout clavier
+ * français et que portent les prompts réels — n'était donc PAS reconnue comme une négation, et la
+ * tâche basculait en mutation à cause du verbe qu'elle prétendait justement exclure.
+ */
+const APOSTROPHES = /[‘’ʼ]/g
+/** Sentinelle de campagne en tête de prompt : « [claude-propre-A-chat] … ». */
+const SENTINEL_PREFIX = /^\[[^\]]{0,160}\]\s*/
+/** Phases dont le contrat EST la lecture seule, nommées en tête de demande (slash facultatif). */
+const PHASE_LECTURE_SEULE_LEAD = /^\/?(?:scout|frame|judge)\b/i
 /** Verbes/participes lecture-seule reconnus À L'INTÉRIEUR d'une clause secondaire. */
 const READ_ONLY_STEM =
   'analys|audit|cadr|document|expliqu|inspect|review|resume|resum|decri|lis|lire|liste|montre|affiche'
@@ -802,9 +813,32 @@ export function classifyMutationConfidence(task: string): MutationConfidence {
   // cité dans sa cible (ex. « pourquoi le modèle a voulu modifier X »).
   if (/^\/kaizen(?=\s|$)/i.test(task.trim())) return 'read-only'
   if (/^\/(?:scout|frame|judge)(?=\s|$)/i.test(task.trim())) return 'read-only'
+  // Le contrat de phase doit être reconnu AVANT le test de mutation, sinon un simple mot comme
+  // « améliorations » bascule un scout en écriture. Mesuré le 2026-08-12 : les prompts réels de la
+  // campagne portent une sentinelle et pas de slash — « [claude-propre-A-observatory] scout des
+  // améliorations de la vue Observatory … N'implémente rien à ce tour. » — donc le garde ci-dessus
+  // ne s'appliquait pas. La tâche devenait une mutation, et le pré-gate réclamait à la phase une
+  // preuve d'écriture que `sandboxForPhase` lui interdit précisément de produire.
+  const sansSentinelle = task.trim().replace(SENTINEL_PREFIX, '')
+  if (PHASE_LECTURE_SEULE_LEAD.test(sansSentinelle)) {
+    const normaliseLead = sansSentinelle
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(APOSTROPHES, "'")
+      .toLowerCase()
+      .replace(NEGATED_MUTATION, ' ')
+    // Le contrat ne couvre que SA clause. « scout … puis implémente-les » reste une mutation :
+    // une clause suivante porteuse d'un verbe d'écriture invalide le contrat.
+    const [, ...clausesSuivantes] = normaliseLead
+      .split(CLAUSE_SPLIT)
+      .map((clause) => clause.trim())
+      .filter(Boolean)
+    if (!clausesSuivantes.some((clause) => MUTATION_TASK.test(clause))) return 'read-only'
+  }
   const normalized = task
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
+    .replace(APOSTROPHES, "'")
     .toLowerCase()
   const withoutNegations = normalized.replace(NEGATED_MUTATION, ' ')
   if (MUTATION_TASK.test(withoutNegations)) return 'mutation'
