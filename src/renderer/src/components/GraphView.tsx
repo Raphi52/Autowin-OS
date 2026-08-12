@@ -157,6 +157,7 @@ export function GraphView({
     loadGraphVisualMode(localStorage)
   )
   const [brains, setBrains] = useState<BrainGraphRef[]>([])
+  const [brainsLoading, setBrainsLoading] = useState(true)
   const [selected, setSelected] = useState('')
   const selectedRef = useRef(selected)
   useLayoutEffect(() => {
@@ -220,6 +221,7 @@ export function GraphView({
   const [initialFitRequest, setInitialFitRequest] = useState(0)
   const fileRequestRef = useRef(0)
   const themeNodesRequestRef = useRef(0)
+  const brainsRequestRef = useRef(0)
   const columnResizeCleanupRef = useRef<(() => void) | null>(null)
   const [size, setSize] = useState({ w: 800, h: 500 })
 
@@ -238,9 +240,15 @@ export function GraphView({
   }, [detailWidths])
 
   const refreshBrains = useCallback((): void => {
+    const request = ++brainsRequestRef.current
+    const isCurrent = (): boolean => request === brainsRequestRef.current
+    queueMicrotask(() => {
+      if (isCurrent()) setBrainsLoading(true)
+    })
     window.api
       .listBrains()
       .then((available) => {
+        if (!isCurrent()) return
         // Le catalogue fourni par le scan est GLOBAL. Pour un vault, il ne doit jamais servir de
         // valeur provisoire avant que loadBrainThemes applique le corpus du workspace.
         const safeAvailable = available.map((brain) =>
@@ -254,11 +262,15 @@ export function GraphView({
             : (safeAvailable[0]?.path ?? '')
         )
       })
-      .catch((error) =>
-        setBrainsErr(
-          brainBusinessError('Impossible de lister les graphes de connaissances.', error)
-        )
-      )
+      .catch((error) => {
+        if (isCurrent())
+          setBrainsErr(
+            brainBusinessError('Impossible de lister les graphes de connaissances.', error)
+          )
+      })
+      .finally(() => {
+        if (isCurrent()) setBrainsLoading(false)
+      })
   }, [])
 
   const resetPrimaryBrainSearchResults = useCallback((): void => {
@@ -298,6 +310,7 @@ export function GraphView({
       .then(() => {
         evictGraphCache(selected)
         setSearchReload((request) => request + 1)
+        setThemesReload((request) => request + 1)
         setGraphReload((request) => request + 1)
         refreshBrains()
       })
@@ -527,25 +540,6 @@ export function GraphView({
     }
   }, [graph.nodes.length, initialFitRequest])
 
-  useEffect(() => {
-    if (!selected || selectedBrain?.kind !== 'vault') return
-    let current = true
-    void window.api
-      .loadBrainThemes(selected)
-      .then((themes) => {
-        if (!current) return
-        setBrains((available) =>
-          available.map((brain) => (brain.path === selected ? { ...brain, themes } : brain))
-        )
-      })
-      .catch((error) => {
-        if (current)
-          setErr(brainBusinessError('Impossible de charger les thèmes du workspace.', error))
-      })
-    return () => {
-      current = false
-    }
-  }, [graphReload, selected, selectedBrain?.kind])
   const themeSummaries = useMemo(
     () =>
       selectedBrain?.kind === 'vault' && selectedBrain.themes
@@ -1624,7 +1618,11 @@ export function GraphView({
             setCollapsedTreeNodeIds(new Set())
           }}
         >
-          {brains.length === 0 && <option value="">Aucun graphe accessible</option>}
+          {brains.length === 0 && (
+            <option value="">
+              {brainsLoading ? 'Détection des graphes…' : 'Aucun graphe accessible'}
+            </option>
+          )}
           {brains.map((brain) => (
             <option key={brain.path} value={brain.path}>
               {brain.label}
@@ -1633,7 +1631,7 @@ export function GraphView({
           ))}
         </select>
         {/* Un catalogue vide ou en panne n'est plus un cul-de-sac : la détection se relance ici. */}
-        {(brains.length === 0 || brainsErr) && (
+        {!brainsLoading && (brains.length === 0 || brainsErr) && (
           <span className="graph-brains-recovery" role={brainsErr ? 'alert' : undefined}>
             {brainsErr && <span className="graph-brains-recovery__message">{brainsErr}</span>}
             <button
@@ -1883,7 +1881,7 @@ export function GraphView({
             </button>
           </div>
         )}
-        {!loading && !err && graph.nodes.length === 0 && (
+        {!brainsLoading && !loading && !err && selected && graph.nodes.length === 0 && (
           <div className="graph-status graph-status--empty">
             <span>Aucun nœud disponible pour ce graphe.</span>
             {/* Un écran vide sans issue laissait l'utilisateur sans recours : deux sorties concrètes. */}
