@@ -3499,11 +3499,24 @@ export class Orchestrator {
         )
       } catch (error) {
         // L'erreur brute dit la cause mais pas QUEL role l'a subie ni son binding : on prefixe.
-        const explained = explainRoleFailure(`Phase ${phase}`, 'subagent', {
-          provider: providerDeLaPhase,
-          ...(subOptions.model ? { model: subOptions.model } : {}),
-          message: error instanceof Error ? error.message : String(error)
-        })
+        //
+        // DEUX defauts corriges ici. (1) Le role etait ecrit EN DUR a `'subagent'` alors que
+        // `roleDeLaPhase` — utilise deux lignes plus bas dans le meme `push` — vaut `'judge'` sur une
+        // phase de juge dedie : un echec de juge s'affichait donc « le role subagent ». (2) Le
+        // provider passe est celui qui a SERVI a l'appel ; sur une phase de juge il vient de
+        // `bindingDeRepliPourPhase`, qui lit un INSTANTANE de roles pris au demarrage du run. Il peut
+        // donc differer de la config courante — d'ou le binding REEL transmis en dernier argument,
+        // pour que le message dise « parti sur X, binde sur Y » au lieu d'affirmer un reglage absent.
+        const explained = explainRoleFailure(
+          `Phase ${phase}`,
+          roleDeLaPhase,
+          {
+            provider: providerDeLaPhase,
+            ...(subOptions.model ? { model: subOptions.model } : {}),
+            message: error instanceof Error ? error.message : String(error)
+          },
+          roles.getBinding(roleDeLaPhase).provider
+        )
         push({
           step: 'exec',
           provider: providerDeLaPhase,

@@ -151,7 +151,13 @@ describe('câblage — l’orchestrateur remonte les causes au lieu de les jeter
   })
 
   it('le chemin mono-modèle nomme aussi le rôle et son binding', () => {
-    expect(source).toContain("explainRoleFailure(`Phase ${phase}`, 'subagent'")
+    // Ce test épinglait le littéral `'subagent'` — et VERROUILLAIT donc le défaut : sur une phase de
+    // juge dédié, `roleDeLaPhase` vaut `'judge'`, si bien qu'un échec de juge s'affichait sous le
+    // rôle subagent. Il vérifie désormais l'INTENTION (le rôle réel est nommé, son binding est
+    // transmis) au lieu d'une forme d'écriture qui interdisait la correction.
+    expect(source).toContain('explainRoleFailure(')
+    expect(source).toContain('roleDeLaPhase,')
+    expect(source).toMatch(/roles\.getBinding\(roleDeLaPhase\)\.provider/)
   })
 
   /**
@@ -183,5 +189,50 @@ describe('câblage — l’orchestrateur remonte les causes au lieu de les jeter
   it('il y a bien plusieurs appels de provider audités (le test ne passe pas à vide)', () => {
     const count = source.split(/\r?\n/).filter((l) => l.includes('registry.send(')).length
     expect(count).toBeGreaterThanOrEqual(6)
+  })
+})
+
+describe('un repli ne doit pas se faire passer pour un réglage', () => {
+  // Signalé par l'utilisateur : « Phase build — le rôle subagent est bindé sur codex (gpt-5.6-sol) »
+  // alors qu'Agent Studio ne montrait codex NULLE PART. Vérifié : ses cinq sources de configuration
+  // (deux `roles.json`, `agent-topology.json`, les défauts codés, `workflow-profiles.json`) étaient
+  // intégralement claude. Le codex venait de `bindingDeRepliPourPhase`, qui lit un INSTANTANÉ de
+  // rôles pris au démarrage du run. Le message affirmait donc un binding en lisant une panne, et
+  // envoyait chercher un réglage inexistant.
+  const panne = { provider: 'codex', model: 'gpt-5.6-sol', message: 'codex exec annulé' }
+
+  it('NOMME la divergence quand l’appel part ailleurs que le binding', () => {
+    const texte = explainRoleFailure('Phase build', 'subagent', panne, 'claude')
+    expect(texte).toContain('parti sur codex (gpt-5.6-sol)')
+    expect(texte).toContain('bindé sur claude')
+    // Ce qui aurait épargné la fausse piste : dire de ne PAS chercher codex dans la configuration.
+    expect(texte).toMatch(/repli/i)
+    expect(texte).not.toMatch(/le rôle subagent est bindé sur codex/)
+  })
+
+  it('reste inchangé quand le provider appelé EST celui du binding', () => {
+    const texte = explainRoleFailure('Phase build', 'subagent', panne, 'codex')
+    expect(texte).toContain('le rôle subagent est bindé sur codex (gpt-5.6-sol)')
+    expect(texte).not.toMatch(/repli/i)
+  })
+
+  it('sans binding connu, le message d’origine est conservé', () => {
+    const texte = explainRoleFailure('Phase build', 'subagent', panne)
+    expect(texte).toContain('le rôle subagent est bindé sur codex (gpt-5.6-sol)')
+  })
+
+  it('le site de phase ne code plus le rôle EN DUR : un juge n’est plus dit « subagent »', () => {
+    // `roleDeLaPhase` vaut `'judge'` sur une phase de juge dédié ; le site passait le littéral
+    // `'subagent'`, donc un échec de juge s'affichait sous le mauvais rôle.
+    const orchestrateur = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+    // ANCRE sur le marqueur du site de PHASE, pas sur le premier `explainRoleFailure` du fichier :
+    // celui-là est le site des sous-tâches, et ma première version l'attrapait — un test qui vise à
+    // côté échoue pour la mauvaise raison, ou passe pour la mauvaise raison.
+    const debut = orchestrateur.indexOf('`Phase ${phase}`')
+    expect(debut, 'le site de phase doit être trouvé, sinon ce test ment').toBeGreaterThan(-1)
+    const appel = orchestrateur.slice(debut - 200, debut + 400)
+    expect(appel).toContain('roleDeLaPhase')
+    expect(appel).toMatch(/roles\.getBinding\(roleDeLaPhase\)\.provider/)
+    expect(appel).not.toMatch(/explainRoleFailure\(\s*`Phase \$\{phase\}`,\s*'subagent'/)
   })
 })

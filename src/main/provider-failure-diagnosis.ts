@@ -122,10 +122,21 @@ export function explainRoleFailure(
    *  Ne pas re-prefixer ici : « Phase sous-tache scout » se lisait mal a l'ecran (2026-07-29). */
   label: string,
   role: string,
-  failure: ProviderFailure
+  failure: ProviderFailure,
+  /**
+   * Provider sur lequel ce rôle est RÉELLEMENT bindé dans la configuration COURANTE, quand
+   * l'appelant le connaît. `failure.provider` est celui qui a servi à l'appel — les deux DIVERGENT
+   * dès qu'un repli entre en jeu (`bindingDeRepliPourPhase` lit un INSTANTANÉ de rôles pris au
+   * démarrage du run, pas la config actuelle). Sans ce paramètre, le message affirmait un binding en
+   * lisant une panne : un utilisateur a cherché un binding `subagent → codex` dans Agent Studio,
+   * où il n'existait pas — sa configuration était intégralement claude, et le codex venait de
+   * l'instantané. Généralise la leçon déjà tirée pour le budget juste en dessous.
+   */
+  boundTo?: string
 ): string {
   const diagnosed = diagnoseProviderFailure(failure)
   const target = `${failure.provider}${failure.model ? ` (${failure.model})` : ''}`
+  const divergent = boundTo !== undefined && boundTo !== failure.provider
   // Un budget épuisé n'est pas une panne du provider sur lequel le rôle est bindé : l'appel a été
   // refusé À L'ADMISSION, le provider ne l'a jamais vu (mesuré : durationMs 0.698 sur conv-1102).
   // Nommer le binding désignait un innocent et envoyait chercher la panne du mauvais côté.
@@ -133,7 +144,11 @@ export function explainRoleFailure(
     diagnosed.kind === 'budget'
       ? `${label} — appel du rôle ${role} refusé : ${failure.message}. ` +
         `Ce rôle n'a rien consommé ; le budget avait déjà été consommé par les phases précédentes.`
-      : `${label} — le rôle ${role} est bindé sur ${target} : ${failure.message}`
+      : divergent
+        ? `${label} — appel du rôle ${role} parti sur ${target} : ${failure.message}. ` +
+          `Ce rôle est bindé sur ${boundTo} dans la configuration courante — ` +
+          `l'appel a donc suivi un repli, ne cherchez pas ${failure.provider} dans Agent Studio.`
+        : `${label} — le rôle ${role} est bindé sur ${target} : ${failure.message}`
   return diagnosed.hint ? `${head}
 → ${diagnosed.hint}` : head
 }
