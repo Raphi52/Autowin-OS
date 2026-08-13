@@ -1222,18 +1222,14 @@ export function ChatView({
       return
     stoppedQueueDrainRef.current.add(id)
     setConversationInterrupting(id, true)
+    // Même si l'IPC perd la course avec la fin réelle du tour, le geste Stop garde la file.
+    // En revanche, libère le feedback « Arrêt… » si aucune annulation n'a été prise en charge.
     void window.api
       .cancelPilotChat(id)
       .then((result) => {
-        if (result?.ok === false) {
-          stoppedQueueDrainRef.current.delete(id)
-          setConversationInterrupting(id, false)
-        }
+        if (result?.ok === false) setConversationInterrupting(id, false)
       })
-      .catch(() => {
-        stoppedQueueDrainRef.current.delete(id)
-        setConversationInterrupting(id, false)
-      })
+      .catch(() => setConversationInterrupting(id, false))
   }
 
   /**

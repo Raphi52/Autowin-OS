@@ -3493,7 +3493,14 @@ Le fil reprend ensuite normalement.`
       let traceArtifactOrdinal = 0
       let turnSessionId: string | undefined
       const last = safe[safe.length - 1]
-      activityLabel = last?.role === 'user' ? last.content : 'tour agent'
+      const routingUserMessageOverride = continuation
+        ? [...safe.slice(0, -1)].reverse().find((message) => message.role === 'user')?.content
+        : undefined
+      activityLabel = continuation
+        ? 'reprise du tour interrompu'
+        : last?.role === 'user'
+          ? last.content
+          : 'tour agent'
       const recoveredProviderUsage = recovery?.providerCall.result.usage
       if (
         conversationId &&
@@ -4210,7 +4217,8 @@ Le fil reprend ensuite normalement.`
                       at: Date.now()
                     })
                 : undefined,
-              pilotSendLimits
+              pilotSendLimits,
+              routingUserMessageOverride
             )
           },
           onSupervisedUsageSettlement

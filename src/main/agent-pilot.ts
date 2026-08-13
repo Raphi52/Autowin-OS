@@ -40,6 +40,16 @@ import type { PilotEventKind } from '../shared/pilot-events'
  */
 type TurnUsage = { inputTokens: number; outputTokens: number; costUsd?: number }
 
+export function resolveLatestUserMessage(
+  history: Array<Pick<Message, 'role' | 'content'>>,
+  routingUserMessageOverride?: string
+): string | undefined {
+  return (
+    routingUserMessageOverride ??
+    [...history].reverse().find((message) => message.role === 'user')?.content
+  )
+}
+
 /**
  * Union discriminée sur `kind` : chaque variante ne porte que ses champs REELS, non-optionnels
  * quand ils le sont vraiment. Avant, `PilotEvent` etait une interface a ~20 champs optionnels pour
@@ -410,7 +420,9 @@ export class AgentPilot {
     sendLimits?: Pick<SendOptions, 'maxBudgetUsd'> & {
       /** Profil minimal du triage automatique : aucune commande, aucun pipeline, aucun gros kit. */
       systemProfile?: 'watchdog-read-only'
-    }
+    },
+    /** Dernière vraie demande humaine, quand le dernier message transport est une instruction interne. */
+    routingUserMessageOverride?: string
   ): Promise<void> {
     // Chronométrage des jalons jusqu'au PREMIER token : c'est la latence réellement perçue au clic.
     const timer = startTurnTimer('chat')
@@ -438,9 +450,7 @@ export class AgentPilot {
     const snapshot = await this.bus.snapshotForPrompt()
     timer.mark('snapshot')
 
-    const latestUserMessage = [...history]
-      .reverse()
-      .find((message) => message.role === 'user')?.content
+    const latestUserMessage = resolveLatestUserMessage(history, routingUserMessageOverride)
     const directRoute = latestUserMessage ? routeSkillRequest(latestUserMessage) : undefined
     // COURT-CIRCUIT reserve a la demande EXPLICITE (« /scout … », « /build … »).
     //
