@@ -42,11 +42,38 @@
  *   background: var(--lisere-haut), <le fond de l'element>;
  */
 .shell {
-  --lisere-haut: linear-gradient(
-      90deg,
-      var(--rose),
-      transparent 42%,
-      color-mix(in srgb, var(--gold) 70%, transparent)
-    )
-    top / 100% 1px no-repeat;
+  /* Le degrade NU : sert quand le lisere doit etre dessine PAR-DESSUS le contenu (voir plus bas). */
+  --lisere-degrade: linear-gradient(
+    90deg,
+    var(--rose),
+    transparent 42%,
+    color-mix(in srgb, var(--gold) 70%, transparent)
+  );
+  /* La meme chose en COUCHE DE FOND composable : `background: var(--lisere-haut), <fond propre>`. */
+  --lisere-haut: var(--lisere-degrade) top / 100% 1px no-repeat;
+}
+
+/**
+ * Lisere DESSINE AU-DESSUS, pour les conteneurs dont le premier enfant touche le bord haut.
+ *
+ * Une couche de fond ne suffit pas toujours : `.chat` n'a aucun retrait, et son en-tete a un fond
+ * OPAQUE — il recouvrait donc le lisere. Mesure : a 1, 2 et 3 px du bord haut, l'element peint etait
+ * `HEADER.chat-head` (fond `rgba(5, 5, 6, 0.95)`), pas le panneau. Le fond calcule declarait pourtant
+ * le degrade present : « declare » et « visible » sont deux choses differentes, et c'est l'oeil de
+ * l'utilisateur qui a tranche.
+ */
+.lisere-dessus {
+  position: relative;
+}
+.lisere-dessus::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: var(--lisere-degrade);
+  /* Au-dessus des enfants opaques, mais sans intercepter le moindre clic. */
+  z-index: 3;
+  pointer-events: none;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
 }
