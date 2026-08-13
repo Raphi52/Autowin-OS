@@ -182,7 +182,13 @@ class Splash:
         branche = _git(["rev-parse", "--abbrev-ref", "HEAD"])
         porcelain = _git(["status", "--porcelain"])
         non_committes = len([l for l in porcelain.splitlines() if l.strip()])
-        return formater_identite(commit, branche, non_committes)
+        # RETARD sur la reference distante : c'est le chiffre que l'app affiche dans son bouton de
+        # mise a jour, et son absence ici faisait lire « +32 fichiers » comme « +32 commits ». On ne
+        # RAPATRIE rien pour le calculer (`rev-list` sur la ref locale deja connue) : un lanceur ne
+        # part pas sur le reseau pour afficher une ligne, sinon il ralentit chaque demarrage.
+        brut = _git(["rev-list", "--count", "HEAD..origin/main"])
+        retard = int(brut) if brut.isdigit() else None
+        return formater_identite(commit, branche, non_committes, retard)
 
     def _charger_logo(self) -> tk.PhotoImage | None:
         """Le VRAI logo du produit. Absent ou illisible : on s'en passe, on n'echoue pas pour une image."""
