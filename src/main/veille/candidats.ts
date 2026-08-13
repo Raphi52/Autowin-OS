@@ -181,7 +181,7 @@ function urlAcceptable(url: string): boolean {
  * est CONTRAINTE (chemin sous `src/` ou `scripts/`, suivi d'un numero de ligne) pour qu'une chaine
  * quelconque ne passe pas pour un ancrage.
  */
-function ancrageInterne(valeur: string): boolean {
+export function ancrageInterne(valeur: string): boolean {
   return /^(?:src|scripts)\/[\w./-]+:\d+$/.test(valeur)
 }
 

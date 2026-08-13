@@ -1,4 +1,4 @@
-import { trierCandidats, type CandidatBrut, type Refus } from './candidats'
+import { ancrageInterne, trierCandidats, type CandidatBrut, type Refus } from './candidats'
 import {
   clesConnues,
   fusionnerPasse,
@@ -98,6 +98,20 @@ export function extraireCandidats(sortie: string): CandidatBrut[] | undefined {
 
 /** Le prompt proposé à l'utilisateur pour ce candidat. Il porte sa source : on cliquera dessus. */
 export function redigerPromptCandidat(candidat: CandidatBrut): string {
+  // Un candidat INTERNE ne s'etudie pas comme une nouveaute concurrente : il n'y a pas de page a
+  // verifier, il y a un besoin observe dans l'app et un ancrage de code qui le prouve.
+  if (candidat.url && ancrageInterne(candidat.url.trim())) {
+    return [
+      `Voici un besoin observé dans Autowin OS lui-même — propose son implémentation :`,
+      '',
+      `« ${candidat.titre} »`,
+      `Ancrage : ${candidat.url} (${candidat.dateSource})`,
+      `Preuve lue : « ${candidat.citation} »`,
+      '',
+      'Commence par relire l’ancrage et vérifier que le besoin tient toujours — si le code a déjà',
+      'évolué et le couvre, dis-le et arrête-toi là. Sinon, propose ce que ça donnerait, et ce que ça coûte.'
+    ].join('\n')
+  }
   return [
     `Étudie cette nouveauté de ${candidat.concurrent} et dis-moi si Autowin OS devrait l’avoir :`,
     '',
@@ -200,4 +214,25 @@ export async function executerPasse(deps: {
   const stock = fusionnerPasse(stockAvant, { retenus, echecs, maintenant })
   ecrireStockVeille(stock, deps.chemin)
   return { retenus: retenus.length, refuses, echecs, stock }
+}
+
+/**
+ * La passe INTERNE seule : aucun scout web, uniquement des candidats venus de l'app elle-meme.
+ *
+ * C'est le chemin du bouton « En generer plus » de la vue : relancer les scouts web a chaque clic
+ * couterait ~4 minutes par source pour des pages qui n'ont pas change ; le scout interne, lui, lit
+ * le poste. Les candidats passent par LE MEME tri et LE MEME stock que la passe complete.
+ */
+export async function executerPasseInterne(deps: {
+  candidatsInternes: () => Promise<CandidatBrut[]>
+  maintenant?: () => string
+  chemin?: string
+}): Promise<ResultatPasse> {
+  return executerPasse({
+    lancerScout: () => Promise.reject(new Error('passe interne : aucun scout web')),
+    sources: [],
+    candidatsInternes: await deps.candidatsInternes(),
+    ...(deps.maintenant ? { maintenant: deps.maintenant } : {}),
+    ...(deps.chemin ? { chemin: deps.chemin } : {})
+  })
 }

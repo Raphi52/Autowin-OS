@@ -344,6 +344,8 @@ interface ChatApi {
   /** Stock de veille concurrents : candidats sources + sources muettes de la derniere passe. */
   veilleSnapshot: () => Promise<StockVeille>
   veilleMarquer: (id: string, statut: 'nouveau' | 'ecarte' | 'prompte') => Promise<StockVeille>
+  /** Lance la passe INTERNE (scout local) et rend le résultat ; le stock est réécrit côté main. */
+  veilleGenerer: () => Promise<{ retenus: number; stock: StockVeille }>
   taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
   taskManagerCreate: (task: unknown) => Promise<ScheduledTask>
   taskManagerUpdate: (id: string, task: unknown) => Promise<ScheduledTask>

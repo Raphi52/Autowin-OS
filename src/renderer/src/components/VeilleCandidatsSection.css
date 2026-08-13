@@ -129,6 +129,15 @@
   font-weight: 500;
 }
 
+/* Le déclencheur du scout interne : visuellement une ACTION, pas une simple relecture. */
+.veille-generer {
+  font-weight: 500;
+}
+.veille-generer:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 /* Deux colonnes : les ajouts qu'on reprend, les corrections qui disent où un concurrent bute. */
 .veille-colonnes {
   display: grid;

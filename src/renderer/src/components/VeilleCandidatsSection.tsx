@@ -25,6 +25,11 @@ export interface VeilleCandidatsSectionProps {
   marquer?: (id: string, statut: CandidatVeille['statut']) => Promise<StockVeille>
   /** Injectable pour les tests : l'envoi réel passe par l'événement de pré-remplissage. */
   prompter?: (candidat: CandidatVeille) => Promise<void> | void
+  /**
+   * « En générer plus » : déclenche la passe INTERNE côté main (scout local sur les traces d'usage
+   * et le code d'Autowin) puis relit le stock. Injectable pour les tests.
+   */
+  generer?: () => Promise<unknown>
 }
 
 const LIBELLE_STATUT: Record<CandidatVeille['statut'], string> = {
@@ -124,7 +129,8 @@ function LigneCandidat({
 export function VeilleCandidatsSection({
   charger,
   marquer,
-  prompter
+  prompter,
+  generer
 }: VeilleCandidatsSectionProps): React.JSX.Element {
   const [stock, setStock] = useState<StockVeille>()
   const [erreur, setErreur] = useState<string>()
@@ -147,6 +153,22 @@ export function VeilleCandidatsSection({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void lire()
   }, [lire])
+
+  const [generation, setGeneration] = useState(false)
+  const genererPlus = useCallback(async (): Promise<void> => {
+    // La vue ne fabrique aucun candidat : elle déclenche la passe interne côté main, dont le
+    // contrôle de citation reste l'unique chemin d'écriture — puis elle RELIT le stock.
+    const lanceur = generer ?? ((): Promise<unknown> => window.api.veilleGenerer())
+    setGeneration(true)
+    try {
+      await lanceur()
+      await lire()
+    } catch (cause) {
+      setErreur(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setGeneration(false)
+    }
+  }, [generer, lire])
 
   const changerStatut = async (
     candidat: CandidatVeille,
@@ -226,6 +248,16 @@ export function VeilleCandidatsSection({
           )}
           <button type="button" onClick={() => void lire()} data-testid="veille-actualiser">
             Actualiser
+          </button>
+          <button
+            type="button"
+            className="veille-generer"
+            onClick={() => void genererPlus()}
+            disabled={generation}
+            data-testid="veille-generer"
+            title="Scout interne : analyse les conversations loggées, les workflows et le code d’Autowin pour proposer de nouveaux candidats"
+          >
+            {generation ? 'Génération en cours…' : 'En générer plus'}
           </button>
         </div>
       </header>

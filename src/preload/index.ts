@@ -445,6 +445,7 @@ const api = {
   veilleSnapshot: (): Promise<unknown> => ipcRenderer.invoke('veille:snapshot'),
   veilleMarquer: (id: string, statut: string): Promise<unknown> =>
     ipcRenderer.invoke('veille:marquer', id, statut),
+  veilleGenerer: (): Promise<unknown> => ipcRenderer.invoke('veille:generer'),
   taskManagerSnapshot: (): Promise<TaskManagerSnapshot> =>
     ipcRenderer.invoke('task-manager:snapshot'),
   taskManagerCreate: (task: unknown): Promise<ScheduledTask> =>
