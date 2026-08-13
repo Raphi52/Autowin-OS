@@ -194,7 +194,10 @@ describe('AgentPilot turn contract', () => {
     const bus = {
       catalog: () => [],
       snapshotForPrompt,
-      exec: vi.fn().mockResolvedValue({ ok: true, data: { valid: true } })
+      exec: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+      })
     }
     const directives = [['resserre le correctif'], []] as string[][]
     const events: PilotEvent[] = []
@@ -219,6 +222,49 @@ describe('AgentPilot turn contract', () => {
     expect(events.at(-1)).toMatchObject({ kind: 'done' })
     expect((events.at(-1) as { text?: string }).text).toMatch(
       /orientation[\s\S]*aucun second run.*relanc/i
+    )
+    expect((events.at(-1) as { text?: string }).text?.trimEnd()).toMatch(
+      /👉 Recommandé : passer à la prochaine demande\.$/u
+    )
+  })
+
+  it('termine aussi le chemin orchestrate du modèle par Recommandé', async () => {
+    const events: PilotEvent[] = []
+    const registry = {
+      send: vi.fn().mockResolvedValue({
+        text: '<cmd>{"name":"orchestrate","args":{"task":"corrige le bug"}}</cmd>',
+        provider: 'codex'
+      }),
+      describePrompt: vi.fn().mockReturnValue({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'pipeline' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+      })
+    }
+
+    await new AgentPilot(
+      registry as never,
+      { getBinding: () => ({ provider: 'codex', model: 'gpt-test' }) } as never,
+      bus as never
+    ).chat(
+      [{ role: 'user', content: 'corrige le bug' }],
+      (event) => events.push(event),
+      undefined,
+      1
+    )
+
+    expect((events.at(-1) as { text?: string }).text?.trimEnd()).toMatch(
+      /👉 Recommandé : passer à la prochaine demande\.$/u
     )
   })
 

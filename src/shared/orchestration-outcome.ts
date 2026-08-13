@@ -562,20 +562,37 @@ function removeExistingStructuredClosingBlock(
   const wanted: ClosingMarker[] = ['fait', 'maintenant', 'reste', 'recommande']
   let wantedIndex = 0
   let start = -1
+  let end = -1
   for (const [index, line] of lines.entries()) {
     if (protectedLines.has(index + 1)) continue
     const marker = structuredClosingMarker(line)
     if (marker === wanted[wantedIndex]) {
       if (wantedIndex === 0) start = index
       wantedIndex += 1
-      if (wantedIndex === wanted.length) break
+      if (wantedIndex === wanted.length) {
+        end = index + 1
+        break
+      }
     } else if (marker === 'fait') {
       start = index
       wantedIndex = 1
     }
   }
-  if (wantedIndex !== wanted.length || start < 0) return report
-  return lines.slice(0, start).join('\n').trimEnd()
+  if (wantedIndex !== wanted.length || start < 0 || end < 0) return report
+
+  // Le dernier intitulé contient normalement sa recommandation sur la même ligne. Si elle est
+  // portée par le paragraphe suivant, retire aussi ce paragraphe, mais jamais les preuves placées
+  // après une ligne vide : elles appartiennent au rapport, pas à l'ancien footer.
+  const recommendedLine = lines[end - 1].trim().replace(/^#{1,6}\s*/u, '')
+  const recommendedLabel = /^👉\s*(?:\*\*)?Recommandé(?:\*\*)?/u.exec(recommendedLine)?.[0]
+  const inlineRecommendation = recommendedLabel
+    ? recommendedLine.slice(recommendedLabel.length).trim().replace(/^[:：—–-]\s*/u, '')
+    : ''
+  if (!inlineRecommendation) {
+    while (end < lines.length && lines[end].trim()) end += 1
+  }
+
+  return [...lines.slice(0, start), ...lines.slice(end)].join('\n').trimEnd()
 }
 
 interface OpenFence {
@@ -636,10 +653,9 @@ export function reconcileClosedOrchestrationText(
 ): string {
   if (!isDeliveredOrchestrationOutcome(outcome)) return report
   const protectedLines = markdownCodeLineProtection([report])[0]
-  return removeStaleWorkerLifecycleAdvice(
-    removeExistingStructuredClosingBlock(report, protectedLines),
-    protectedLines
-  )
+  const withoutExistingClosingBlock = removeExistingStructuredClosingBlock(report, protectedLines)
+  const remainingProtectedLines = markdownCodeLineProtection([withoutExistingClosingBlock])[0]
+  return removeStaleWorkerLifecycleAdvice(withoutExistingClosingBlock, remainingProtectedLines)
 }
 
 /** Réconcilie un flux persisté en projetant d'abord ses spans Markdown sur tous les fragments. */
@@ -705,7 +721,8 @@ function deliveredClosingBlock(run: string | undefined): string[] {
 export function formatOrchestrationOutcome(
   ok: boolean,
   data: OrchestrationOutcome | undefined,
-  errorMessage?: string
+  errorMessage?: string,
+  closingNotice?: string
 ): string {
   if (!ok) {
     return `Échec du workflow : ${asString(errorMessage) ?? asString(data?.error) ?? 'raison non rapportée'}`
@@ -755,6 +772,7 @@ export function formatOrchestrationOutcome(
     )
   }
   if (visibleResult) lines.push('', boundedMarkdownResult(visibleResult))
+  if (closingNotice?.trim()) lines.push('', closingNotice.trim())
   if (delivered) lines.push('', ...deliveredClosingBlock(run))
   return lines.join('\n')
 }

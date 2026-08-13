@@ -488,19 +488,19 @@ export class AgentPilot {
         lateDirectives.push(...directives)
       }
       const directiveNotice = lateDirectives.length
-        ? `\n\n⚠️ ${lateDirectives.length} orientation(s) reçue(s) après le lancement : aucun second run n'a été relancé. Renvoyez-la comme nouveau message si elle reste nécessaire.`
-        : ''
+        ? `⚠️ ${lateDirectives.length} orientation(s) reçue(s) après le lancement : aucun second run n'a été relancé. Renvoyez-la comme nouveau message si elle reste nécessaire.`
+        : undefined
       emit({
         kind: 'done',
         // Les FAITS, pas une formule : statut, validite, blocage de gate, cout, run et resultat sont
         // tous rendus par l'orchestrateur et etaient jetes (conv-76 : 18 sous-agents, 10,05 $, le fil
         // n'affichait que « Workflow Autowin execute. »).
-        text:
-          formatOrchestrationOutcome(
-            result.ok,
-            result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
-            result.ok ? undefined : String(result.error ?? '')
-          ) + directiveNotice,
+        text: formatOrchestrationOutcome(
+          result.ok,
+          result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
+          result.ok ? undefined : String(result.error ?? ''),
+          directiveNotice
+        ),
         outcome: result.ok
           ? ((result.data as Record<string, unknown> | undefined) ?? undefined)
           : failedOrchestrationOutcome(result.error),
@@ -1094,11 +1094,12 @@ export class AgentPilot {
             : 'Clôture Autowin : résultat terminal rendu ; aucune autre orchestration n’est relancée dans ce tour.'
           emit({
             kind: 'done',
-            text: `${formatOrchestrationOutcome(
+            text: formatOrchestrationOutcome(
               r.ok,
               outcome,
-              r.ok ? undefined : String(r.error ?? '')
-            )}\n\n${closureNotice}`,
+              r.ok ? undefined : String(r.error ?? ''),
+              closureNotice
+            ),
             outcome: outcome as Record<string, unknown> | undefined,
             usage
           })

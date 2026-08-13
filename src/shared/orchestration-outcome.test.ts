@@ -790,6 +790,35 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).not.toContain('Ancienne tentative')
   })
 
+  it('préserve une preuve factuelle placée après un ancien bloc final', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      result:
+        'Préambule.\n\n✅ Fait\nAncien travail.\n\n📍 Maintenant : RUN open.\n⏳ Reste à faire : judge.\n👉 Recommandé : publier.\n\nPreuve finale ordinaire : checksum abc123.'
+    })
+
+    expect(text).toContain('Préambule.')
+    expect(text).toContain('Preuve finale ordinaire : checksum abc123.')
+    expect(text).not.toContain('Ancien travail')
+  })
+
+  it('recalcule les lignes Markdown protégées après le retrait de l’ancien bloc', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      result:
+        'Préambule.\n\n✅ Fait\nAncien travail.\n📍 Maintenant : RUN open.\n⏳ Reste à faire : judge.\n👉 Recommandé : publier.\n\n```text\nRUN reste open — preuve verbatim.\n```'
+    })
+
+    expect(text).toContain('RUN reste open — preuve verbatim.')
+    expect(text).not.toContain('Ancien travail')
+  })
+
   it('ferme une fence tronquée avant le bloc final pour que les rubriques restent visibles', () => {
     const text = formatOrchestrationOutcome(true, {
       status: 'succeeded',
