@@ -753,6 +753,25 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).toContain('Trois fichiers modifiés')
   })
 
+  it('remplace les rubriques provisoires par le bloc final autoritaire', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      runPath: 'C:/Audit/response-footer-workspace/RUN.md',
+      result:
+        'Tests 12/12 verts.\n\n📍 Maintenant — RUN open.\n⏳ Reste à faire — lancer judge.\n👉 Recommandé — publier.'
+    })
+    const headings = ['✅ Fait', '📍 Maintenant', '⏳ Reste à faire', '👉 Recommandé']
+    const positions = headings.map((heading) => text.indexOf(heading))
+
+    expect(positions.every((position) => position >= 0)).toBe(true)
+    expect(positions).toEqual([...positions].sort((left, right) => left - right))
+    expect(text).not.toContain('RUN open')
+    expect(text).not.toContain('lancer judge')
+  })
+
   it('un coût inconnu ne devient jamais un faux 0.00 $', () => {
     const text = formatOrchestrationOutcome(true, {
       status: 'succeeded',

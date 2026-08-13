@@ -162,7 +162,10 @@ describe('AgentPilot turn contract', () => {
     const bus = {
       catalog: () => [],
       snapshotForPrompt,
-      exec: vi.fn().mockResolvedValue({ ok: true, data: { valid: true } })
+      exec: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+      })
     }
     const events: PilotEvent[] = []
 
@@ -181,6 +184,10 @@ describe('AgentPilot turn contract', () => {
       'conv-1'
     )
     expect(events.map((event) => event.kind)).toEqual(['command', 'result', 'done'])
+    const done = events.at(-1)
+    expect(done?.kind === 'done' ? done.text : '').toMatch(
+      /✅ Fait[\s\S]*📍 Maintenant[\s\S]*⏳ Reste à faire[\s\S]*👉 Recommandé/u
+    )
   })
 
   it('ne relance pas un second run quand une orientation arrive pendant un /skill', async () => {

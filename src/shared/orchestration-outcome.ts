@@ -599,6 +599,21 @@ export function runLabelFromPath(path: string | undefined): string | undefined {
   return workspace?.replace(/-workspace$/, '') ?? segments.at(-2)
 }
 
+/** Bloc final dérivé uniquement de l'issue structurée, après retrait du statut provisoire du worker. */
+function deliveredClosingBlock(run: string | undefined): string[] {
+  const current = run
+    ? `livraison vérifiée dans le run « ${run} », fermé green.`
+    : 'livraison vérifiée, gate validé et RUN fermé green.'
+  return [
+    '---',
+    '✅ Fait',
+    '1. Workflow livré : gate validé et RUN fermé green.',
+    `📍 Maintenant : ${current}`,
+    '⏳ Reste à faire : rien.',
+    '👉 Recommandé : passer à la prochaine demande.'
+  ]
+}
+
 /**
  * Texte de clôture d'une orchestration. Ne prétend JAMAIS un succès : `gateBlocked` ou `valid: false`
  * sont dits explicitement, même quand l'appel a « réussi » techniquement. Un gate qui bloque est un
@@ -661,5 +676,6 @@ export function formatOrchestrationOutcome(
       '',
       visibleResult.length > 4_000 ? `${visibleResult.slice(0, 4_000)}…[tronqué]` : visibleResult
     )
+  if (delivered) lines.push('', ...deliveredClosingBlock(run))
   return lines.join('\n')
 }
