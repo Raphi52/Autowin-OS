@@ -128,6 +128,59 @@ function bindingDeRepliPourPhase(
  * authentifié — cette dernière vérification est asynchrone et coûteuse ici. Un provider enregistré
  * mais déconnecté échouera donc encore, mais son message nomme désormais la divergence.
  */
+/**
+ * ASSAINIT l'instantané À L'ADMISSION : tout rôle pointant sur un provider non enregistré retombe sur
+ * la configuration courante.
+ *
+ * Corriger phase par phase ne suffisait PAS, et c'est un test du vrai `run()` qui l'a montré — le
+ * test de la fonction pure, lui, passait et donnait une fausse confiance. L'instantané est consommé
+ * par PLUSIEURS chemins (fan-out de phase, fan-out de juge, phase séquentielle) ; le premier qui
+ * atteignait le registre jetait `Provider inconnu: <x>` avant toute validation. Un seul point
+ * d'entrée les couvre tous.
+ */
+export function instantaneAssaini(
+  instantane: OrchestrationRuntimeSnapshot,
+  rolesCourants: Record<Role, RoleBinding>,
+  providersDisponibles: readonly string[]
+): { instantane: OrchestrationRuntimeSnapshot; notes: string[] } {
+  const notes: string[] = []
+  const disponible = (binding: RoleBinding): boolean =>
+    providersDisponibles.includes(binding.provider)
+  const roles = { ...instantane.roles }
+  for (const [role, binding] of Object.entries(instantane.roles) as [Role, RoleBinding][]) {
+    if (disponible(binding)) continue
+    roles[role] = rolesCourants[role]
+    notes.push(
+      `instantané abandonné pour ${role} : ${binding.provider} n'est plus disponible — ` +
+        `repli sur la configuration courante (${rolesCourants[role].provider})`
+    )
+  }
+  // Les fan-outs portent des bindings INDÉPENDANTS des rôles : un membre injoignable ferait tomber
+  // tout le fan-out. On RETIRE le membre plutôt que de le remplacer — sa place n'a pas d'équivalent
+  // dans la configuration courante, et un panel amputé vaut mieux qu'un panel qui jette.
+  const filtrer = (membres: readonly RoleBinding[], ou: string): RoleBinding[] => {
+    const gardes = membres.filter(disponible)
+    if (gardes.length !== membres.length)
+      notes.push(
+        `${membres.length - gardes.length} membre(s) du fan-out ${ou} retiré(s) : provider absent du registre`
+      )
+    return gardes
+  }
+  const phaseFanOut = Object.fromEntries(
+    Object.entries(instantane.phaseFanOut).map(([phase, membres]) => [
+      phase,
+      filtrer(membres ?? [], phase)
+    ])
+  )
+  const judgeFanOut = filtrer(instantane.judgeFanOut, 'juge')
+  // RIEN à assainir → on rend l'objet D'ORIGINE, pas une copie identique. Un contrat existant vérifie
+  // que les points de reprise portent le MÊME instantané par identité
+  // (`orchestrator.provider-identity.test.ts` : « execute tout le run avec le snapshot persiste ») —
+  // reconstruire sans raison le cassait, et c'était une copie gratuite dans le cas courant.
+  if (notes.length === 0) return { instantane, notes }
+  return { instantane: { ...instantane, roles, phaseFanOut, judgeFanOut }, notes }
+}
+
 export function bindingDePhaseValide(
   instantane: RoleBinding | undefined,
   courant: RoleBinding,
@@ -1501,7 +1554,15 @@ export class Orchestrator {
       }
       executionQuote.limits.maxAgents = Math.max(executionQuote.limits.maxAgents, mandatory)
     }
-    const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
+    // Un instantané FOURNI est assaini AVANT tout usage : il est consommé par plusieurs chemins
+    // (fan-out de phase, fan-out de juge, phase séquentielle) et le premier qui atteignait le registre
+    // jetait `Provider inconnu: <x>`. Un instantané construit ICI vient de la configuration courante,
+    // donc rien à assainir.
+    const assainissement = runtimeSnapshot
+      ? instantaneAssaini(runtimeSnapshot, this.deps.roles.all(), this.deps.registry.ids())
+      : undefined
+    for (const note of assainissement?.notes ?? []) onDelta?.('exec', `[binding] ${note}\n`)
+    const admittedRuntime: OrchestrationRuntimeSnapshot = assainissement?.instantane ?? {
       roles: this.deps.roles.all(),
       phaseFanOut: Object.fromEntries(
         phases.map((phase) => [phase, [...(this.deps.phaseFanOut?.(phase) ?? [])]])
