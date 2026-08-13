@@ -21,14 +21,7 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 // Miroir de `PipelinePhase` (src/main/skill-pipeline.ts) — les deux doivent rester alignés, sinon on
 // compose à l'écran une phase que le moteur ne sait pas jouer.
 export type Phase =
-  | 'scout'
-  | 'frame'
-  | 'terrain'
-  | 'build'
-  | 'clean'
-  | 'judge'
-  | 'kaizen'
-  | 'remake'
+  'scout' | 'frame' | 'terrain' | 'build' | 'clean' | 'judge' | 'kaizen' | 'remake'
 
 /** Un membre du fan-out : QUI regarde (persona), avec QUEL modèle et QUEL effort. */
 export interface CanvasAgent {
@@ -288,122 +281,132 @@ export function WorkflowCanvas({
         <div className="wf-plan-zone">
           <div className="wf-plan-viewport">
             <div className="wf-plan" style={{ width: planW, height: planH }}>
-          <svg className="wf-wires" width={planW} height={planH} aria-hidden="true">
-            <defs>
-              <marker id="wf-ar" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                <path d="M0,0 L7,3.5 L0,7 z" className="wf-ar-n" />
-              </marker>
-              <marker
-                id="wf-ar-red"
-                markerWidth="7"
-                markerHeight="7"
-                refX="6"
-                refY="3.5"
-                orient="auto"
-              >
-                <path d="M0,0 L7,3.5 L0,7 z" className="wf-ar-r" />
-              </marker>
-              <marker
-                id="wf-ar-green"
-                markerWidth="7"
-                markerHeight="7"
-                refX="6"
-                refY="3.5"
-                orient="auto"
-              >
-                <path d="M0,0 L7,3.5 L0,7 z" className="wf-ar-g" />
-              </marker>
-            </defs>
-            {/* Les arêtes AVANT se lisent dans `graph.edges`, JAMAIS dans l'ordre du tableau de
+              <svg className="wf-wires" width={planW} height={planH} aria-hidden="true">
+                <defs>
+                  <marker
+                    id="wf-ar"
+                    markerWidth="7"
+                    markerHeight="7"
+                    refX="6"
+                    refY="3.5"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L7,3.5 L0,7 z" className="wf-ar-n" />
+                  </marker>
+                  <marker
+                    id="wf-ar-red"
+                    markerWidth="7"
+                    markerHeight="7"
+                    refX="6"
+                    refY="3.5"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L7,3.5 L0,7 z" className="wf-ar-r" />
+                  </marker>
+                  <marker
+                    id="wf-ar-green"
+                    markerWidth="7"
+                    markerHeight="7"
+                    refX="6"
+                    refY="3.5"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L7,3.5 L0,7 z" className="wf-ar-g" />
+                  </marker>
+                </defs>
+                {/* Les arêtes AVANT se lisent dans `graph.edges`, JAMAIS dans l'ordre du tableau de
                 nœuds : dessiner nœud[i] → nœud[i+1] afficherait une chaîne linéaire même quand le
                 moteur, lui, suit d'autres arêtes — l'utilisateur validerait un graphe qu'il ne
                 compose pas. */}
-            {avants.map((edge) => {
-              const a = rang.get(edge.from)
-              const b = rang.get(edge.to)
-              if (a === undefined || b === undefined) return null
-              return (
-                <path
-                  key={`fwd-${edge.from}-${edge.to}`}
-                  d={traceAvant(a, b)}
-                  className="wf-wire"
-                  markerEnd="url(#wf-ar)"
-                />
-              )
-            })}
-            {retours.map((edge, voie) => {
-              const a = rang.get(edge.from)
-              const b = rang.get(edge.to)
-              if (a === undefined || b === undefined) return null
-              return (
-                <path
-                  key={`ret-${edge.from}-${edge.to}`}
-                  d={traceRetour(a, b, voie)}
-                  className={`wf-wire wf-wire-${edge.when}`}
-                  markerEnd={`url(#wf-ar-${edge.when === 'green' ? 'green' : 'red'})`}
-                />
-              )
-            })}
-          </svg>
+                {avants.map((edge) => {
+                  const a = rang.get(edge.from)
+                  const b = rang.get(edge.to)
+                  if (a === undefined || b === undefined) return null
+                  return (
+                    <path
+                      key={`fwd-${edge.from}-${edge.to}`}
+                      d={traceAvant(a, b)}
+                      className="wf-wire"
+                      markerEnd="url(#wf-ar)"
+                    />
+                  )
+                })}
+                {retours.map((edge, voie) => {
+                  const a = rang.get(edge.from)
+                  const b = rang.get(edge.to)
+                  if (a === undefined || b === undefined) return null
+                  return (
+                    <path
+                      key={`ret-${edge.from}-${edge.to}`}
+                      d={traceRetour(a, b, voie)}
+                      className={`wf-wire wf-wire-${edge.when}`}
+                      markerEnd={`url(#wf-ar-${edge.when === 'green' ? 'green' : 'red'})`}
+                    />
+                  )
+                })}
+              </svg>
 
-          {graph.nodes.map((node, index) => {
-            const soucis = parNoeud.get(node.id) ?? []
-            const pos = place(index)
-            const agents = node.agents ?? []
-            return (
-              <div
-                key={node.id}
-                className={`wf-node wf-ph-${node.phase}${soucis.length ? ' is-broken' : ''}${
-                  ouvert === node.id ? ' is-open' : ''
-                }`}
-                style={{ left: pos.x, top: pos.y, width: NODE_W }}
-                data-testid={`wf-node-${node.id}`}
-                draggable
-                onDragStart={() => setDrag(index)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => deposer(index)}
-              >
-                <span className="wf-node-bar" />
-                <button
-                  type="button"
-                  className="wf-node-head"
-                  data-testid={`wf-open-${node.id}`}
-                  onClick={() => setOuvert(ouvert === node.id ? undefined : node.id)}
-                >
-                  <span className="wf-node-phase">
-                    <span className="wf-dot" />
-                    {node.phase}
-                  </span>
-                  <span className="wf-node-id">{node.id}</span>
-                </button>
-                <button
-                  type="button"
-                  className="wf-node-remove"
-                  data-testid={`wf-remove-${node.id}`}
-                  title={`Retirer ${node.phase}`}
-                  onClick={() => retirer(node.id)}
-                >
-                  ×
-                </button>
-                <span className="wf-node-agents">
-                  {agents.length > 1 ? (
-                    agents.map((agent, i) => (
-                      <span className="wf-ag" key={i} title={agent.model ?? 'modèle par défaut'} />
-                    ))
-                  ) : (
-                    <span className="wf-ag-label">{agents[0]?.model ?? '1 agent'}</span>
-                  )}
-                  {node.quorum ? <span className="wf-quorum-badge">q{node.quorum}</span> : null}
-                </span>
-                {soucis.map((message) => (
-                  <p className="wf-node-defect" key={message}>
-                    {message}
-                  </p>
-                ))}
-              </div>
-            )
-          })}
-
+              {graph.nodes.map((node, index) => {
+                const soucis = parNoeud.get(node.id) ?? []
+                const pos = place(index)
+                const agents = node.agents ?? []
+                return (
+                  <div
+                    key={node.id}
+                    className={`wf-node wf-ph-${node.phase}${soucis.length ? ' is-broken' : ''}${
+                      ouvert === node.id ? ' is-open' : ''
+                    }`}
+                    style={{ left: pos.x, top: pos.y, width: NODE_W }}
+                    data-testid={`wf-node-${node.id}`}
+                    draggable
+                    onDragStart={() => setDrag(index)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => deposer(index)}
+                  >
+                    <span className="wf-node-bar" />
+                    <button
+                      type="button"
+                      className="wf-node-head"
+                      data-testid={`wf-open-${node.id}`}
+                      onClick={() => setOuvert(ouvert === node.id ? undefined : node.id)}
+                    >
+                      <span className="wf-node-phase">
+                        <span className="wf-dot" />
+                        {node.phase}
+                      </span>
+                      <span className="wf-node-id">{node.id}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="wf-node-remove"
+                      data-testid={`wf-remove-${node.id}`}
+                      title={`Retirer ${node.phase}`}
+                      onClick={() => retirer(node.id)}
+                    >
+                      ×
+                    </button>
+                    <span className="wf-node-agents">
+                      {agents.length > 1 ? (
+                        agents.map((agent, i) => (
+                          <span
+                            className="wf-ag"
+                            key={i}
+                            title={agent.model ?? 'modèle par défaut'}
+                          />
+                        ))
+                      ) : (
+                        <span className="wf-ag-label">{agents[0]?.model ?? '1 agent'}</span>
+                      )}
+                      {node.quorum ? <span className="wf-quorum-badge">q{node.quorum}</span> : null}
+                    </span>
+                    {soucis.map((message) => (
+                      <p className="wf-node-defect" key={message}>
+                        {message}
+                      </p>
+                    ))}
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -480,7 +483,9 @@ export function WorkflowCanvas({
                         <select
                           data-testid={`wf-agent-persona-${node.id}-${r}`}
                           value={agent.persona ?? ''}
-                          onChange={(e) => majAgent(node, r, { persona: e.target.value || undefined })}
+                          onChange={(e) =>
+                            majAgent(node, r, { persona: e.target.value || undefined })
+                          }
                         >
                           <option value="">aucun angle imposé</option>
                           {personasFor(node.phase).map((p) => (
@@ -495,7 +500,9 @@ export function WorkflowCanvas({
                         <select
                           data-testid={`wf-agent-model-${node.id}-${r}`}
                           value={agent.model ?? ''}
-                          onChange={(e) => majAgent(node, r, { model: e.target.value || undefined })}
+                          onChange={(e) =>
+                            majAgent(node, r, { model: e.target.value || undefined })
+                          }
                         >
                           <option value="">modèle par défaut</option>
                           {/* Un modèle déjà composé mais absent du catalogue reste proposé : sinon
@@ -563,7 +570,11 @@ export function WorkflowCanvas({
                           className={dejaTrace ? 'is-active' : undefined}
                           aria-pressed={dejaTrace}
                           disabled={dejaTrace}
-                          title={dejaTrace ? `Renvoi vers ${cible.phase} déjà tracé — retirez-le dans « Retours »` : undefined}
+                          title={
+                            dejaTrace
+                              ? `Renvoi vers ${cible.phase} déjà tracé — retirez-le dans « Retours »`
+                              : undefined
+                          }
                           data-testid={`wf-return-${node.id}-${cible.id}`}
                           onClick={() => tracerRetour(node.id, cible.id)}
                         >

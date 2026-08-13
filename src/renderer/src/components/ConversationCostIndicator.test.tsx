@@ -4,8 +4,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
 
 let container: HTMLDivElement
 let root: Root
@@ -47,17 +48,35 @@ async function render(props: { conversationId?: string; busy?: boolean }): Promi
 }
 
 const rows = [
-  { key: 'subagent', calls: 18, costUsd: 10.05, inputTokens: 900_000, outputTokens: 5000, cacheReadTokens: 0, cacheHitRatio: 0, unpricedCalls: 0 },
-  { key: 'orchestrator', calls: 12, costUsd: 0.86, inputTokens: 42_000, outputTokens: 900, cacheReadTokens: 40_000, cacheHitRatio: 0.95, unpricedCalls: 0 }
+  {
+    key: 'subagent',
+    calls: 18,
+    costUsd: 10.05,
+    inputTokens: 900_000,
+    outputTokens: 5000,
+    cacheReadTokens: 0,
+    cacheHitRatio: 0,
+    unpricedCalls: 0
+  },
+  {
+    key: 'orchestrator',
+    calls: 12,
+    costUsd: 0.86,
+    inputTokens: 42_000,
+    outputTokens: 900,
+    cacheReadTokens: 40_000,
+    cacheHitRatio: 0.95,
+    unpricedCalls: 0
+  }
 ]
 
 describe('ConversationCostIndicator — la dépense est à l’écran', () => {
   it('affiche le total de la conversation', async () => {
     setApi({ costBreakdown: async () => rows })
     await render({ conversationId: 'conv-76' })
-    expect(container.querySelector('[data-testid="conversation-cost-total"]')?.textContent).toContain(
-      '10,91 $'
-    )
+    expect(
+      container.querySelector('[data-testid="conversation-cost-total"]')?.textContent
+    ).toContain('10,91 $')
   })
 
   it('interroge le canal pour LA conversation affichée, dimension acteur', async () => {
@@ -69,13 +88,22 @@ describe('ConversationCostIndicator — la dépense est à l’écran', () => {
   it('keeps an unpriced provider call visible', async () => {
     setApi({
       costBreakdown: async () => [
-        { key: 'codex', calls: 1, costUsd: 0, inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheHitRatio: 0, unpricedCalls: 1 }
+        {
+          key: 'codex',
+          calls: 1,
+          costUsd: 0,
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 0,
+          cacheHitRatio: 0,
+          unpricedCalls: 1
+        }
       ]
     })
     await render({ conversationId: 'conv-unpriced' })
-    expect(container.querySelector('[data-testid="conversation-cost-total"]')?.textContent).toContain(
-      'non expos'
-    )
+    expect(
+      container.querySelector('[data-testid="conversation-cost-total"]')?.textContent
+    ).toContain('non expos')
   })
 
   it('rien dépensé → l’indicateur ne s’affiche PAS (aucun faux « 0 $ »)', async () => {
@@ -116,13 +144,22 @@ describe('ConversationCostIndicator — la dépense est à l’écran', () => {
   it('un bon cache n’affiche AUCUNE alerte', async () => {
     setApi({
       costBreakdown: async () => [
-        { key: 'orchestrator', calls: 20, costUsd: 2, inputTokens: 100_000, outputTokens: 900, cacheReadTokens: 90_000, cacheHitRatio: 0.9, unpricedCalls: 0 }
+        {
+          key: 'orchestrator',
+          calls: 20,
+          costUsd: 2,
+          inputTokens: 100_000,
+          outputTokens: 900,
+          cacheReadTokens: 90_000,
+          cacheHitRatio: 0.9,
+          unpricedCalls: 0
+        }
       ]
     })
     await render({ conversationId: 'conv-76' })
-    expect(container.querySelector('[data-testid="conversation-cost-total"]')?.className).not.toContain(
-      'warn'
-    )
+    expect(
+      container.querySelector('[data-testid="conversation-cost-total"]')?.className
+    ).not.toContain('warn')
   })
 
   it('un canal qui JETTE ne casse pas le composeur', async () => {

@@ -8,7 +8,7 @@
   max-width: 100%;
   min-width: 0;
   overflow-x: hidden;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 11px;
   line-height: 1.5;
   white-space: normal;

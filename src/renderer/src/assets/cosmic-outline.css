@@ -513,7 +513,6 @@
   line-height: 1.62;
 }
 
-
 /* Conteneur de la barre : porte le cadre et le fond ; les actions vivent DEDANS. */
 .cosmic-outline .activity-group {
   width: min(100%, 720px);
@@ -589,7 +588,6 @@
   white-space: nowrap;
 }
 
-
 .cosmic-outline .activity-group-tools {
   flex: 1;
   overflow: hidden;
@@ -598,8 +596,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-
 
 .cosmic-outline .chat-jump-latest {
   position: absolute;

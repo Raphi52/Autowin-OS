@@ -4,6 +4,7 @@ import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView } from './CapabilitiesView'
 import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
 import { ViewTopBar } from './ViewTopBar'
+import './ViewPage.css'
 import './DomainShell.css'
 
 type PreflightResult = Awaited<ReturnType<typeof window.api.recheckPreflight>>
@@ -146,7 +147,7 @@ export function SettingsView({
   const preflightAlert = preflight ? !preflight.ok || preflight.checks.some((c) => !c.ok) : false
 
   return (
-    <section className="domain-shell" data-testid="settings-view">
+    <section className="view-page domain-shell" data-testid="settings-view">
       <ViewTopBar
         eyebrow="CONFIGURATION"
         title="Settings"

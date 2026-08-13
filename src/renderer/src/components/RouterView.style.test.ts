@@ -17,7 +17,7 @@ const css = (): string => readFileSync(new URL('./RouterView.css', import.meta.u
 
 const ruleBody = (selector: string): string | undefined => {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return css().match(new RegExp(`${escaped}\\s*{([^}]*)}`, 's'))?.[1]
+  return css().match(new RegExp(`${escaped}\\s*{([^}]*)}`, 's'))?.[1]
 }
 
 /**
@@ -29,11 +29,7 @@ const ruleBody = (selector: string): string | undefined => {
  * montent le DOM sans feuille de style, et une capture n'aurait montré qu'un rectangle sombre.
  */
 describe('boutons de comptes — lisibles sur le thème sombre', () => {
-  const interactifs = [
-    '.router-account-chip',
-    '.router-account-add',
-    '.router-account-remove'
-  ]
+  const interactifs = ['.router-account-chip', '.router-account-add', '.router-account-remove']
 
   it.each(interactifs)('%s déclare une couleur de texte', (selector) => {
     const body = ruleBody(selector)
@@ -42,14 +38,19 @@ describe('boutons de comptes — lisibles sur le thème sombre', () => {
     expect(body).toMatch(/(^|;|\s)color\s*:/)
   })
 
-  it.each(interactifs)('%s hérite de la police plutôt que celle de l’agent utilisateur', (selector) => {
-    expect(ruleBody(selector)).toMatch(/font\s*:\s*inherit/)
-  })
+  it.each(interactifs)(
+    '%s hérite de la police plutôt que celle de l’agent utilisateur',
+    (selector) => {
+      expect(ruleBody(selector)).toMatch(/font\s*:\s*inherit/)
+    }
+  )
 
   it('le compte actif reste lisible malgré son état désactivé', () => {
     // Il est `disabled` (on ne rebascule pas sur soi-même) : sans règle dédiée il hériterait de
     // l'opacité « indisponible », qui dit l'inverse de « c'est celui-ci qui est en cours ».
-    const body = ruleBody('.router-account-chip.is-active,\n.router-account-chip.is-active:disabled')
+    const body = ruleBody(
+      '.router-account-chip.is-active,\n.router-account-chip.is-active:disabled'
+    )
     expect(body).toBeDefined()
     expect(body).toMatch(/opacity\s*:\s*1/)
     expect(body).toMatch(/(^|;|\s)color\s*:/)

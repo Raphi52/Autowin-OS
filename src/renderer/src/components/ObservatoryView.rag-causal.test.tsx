@@ -245,23 +245,59 @@ describe('Observatory RAG causal trace', () => {
     const mockApi = api(repeated)
     mockApi.promptCalls.mockResolvedValue([
       {
-        id: 'call-1', conversationId: 'conv-1', turnId: 'turn-1', provider: 'codex',
-        model: 'gpt-test', boundary: 'provider', limitation: 'opaque', brainTraceId: 'brain-1',
-        system: ragBlock, messages: [{ role: 'user', content: 'Pourquoi le cache ?' }], options: {}, response: ''
+        id: 'call-1',
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        provider: 'codex',
+        model: 'gpt-test',
+        boundary: 'provider',
+        limitation: 'opaque',
+        brainTraceId: 'brain-1',
+        system: ragBlock,
+        messages: [{ role: 'user', content: 'Pourquoi le cache ?' }],
+        options: {},
+        response: ''
       },
       {
-        id: 'call-2', conversationId: 'conv-1', turnId: 'turn-1', provider: 'codex',
-        model: 'gpt-test', boundary: 'provider', limitation: 'opaque', brainTraceId: 'brain-2',
-        system: secondBlock, messages: [{ role: 'user', content: 'Pourquoi la latence ?' }], options: {}, response: ''
+        id: 'call-2',
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        provider: 'codex',
+        model: 'gpt-test',
+        boundary: 'provider',
+        limitation: 'opaque',
+        brainTraceId: 'brain-2',
+        system: secondBlock,
+        messages: [{ role: 'user', content: 'Pourquoi la latence ?' }],
+        options: {},
+        response: ''
       }
     ])
     mockApi.brainTraces.mockResolvedValue([
-      { id: 'brain-2', timestamp: '2026-07-24T10:00:04.500Z', conversationId: 'conv-1', turnId: 'turn-1', kind: 'query', query: 'Pourquoi la latence ?', injectedChars: secondBlock.length },
-      { id: 'brain-1', timestamp: '2026-07-24T10:00:00.500Z', conversationId: 'conv-1', turnId: 'turn-1', kind: 'automatic', query: 'Pourquoi le cache ?', injectedChars: ragBlock.length }
+      {
+        id: 'brain-2',
+        timestamp: '2026-07-24T10:00:04.500Z',
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        kind: 'query',
+        query: 'Pourquoi la latence ?',
+        injectedChars: secondBlock.length
+      },
+      {
+        id: 'brain-1',
+        timestamp: '2026-07-24T10:00:00.500Z',
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        kind: 'automatic',
+        query: 'Pourquoi le cache ?',
+        injectedChars: ragBlock.length
+      }
     ])
 
     const view = await mount(mockApi)
-    const steps = [...view.querySelectorAll<HTMLElement>('[data-testid="observatory-rag-causal-step"]')]
+    const steps = [
+      ...view.querySelectorAll<HTMLElement>('[data-testid="observatory-rag-causal-step"]')
+    ]
 
     expect(steps).toHaveLength(2)
     expect(steps.map((step) => step.dataset.correlation)).toEqual(['exact', 'exact'])

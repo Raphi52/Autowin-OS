@@ -104,7 +104,9 @@ describe('ChatView — refus visible du workflow actif', () => {
     resolveStartup({ id: 1, text: 'Refus startup ancien' })
     await act(async () => new Promise((resolve) => window.setTimeout(resolve, 0)))
 
-    const text = harness.container.querySelector('[data-testid="chat-workflow-notice"]')?.textContent
+    const text = harness.container.querySelector(
+      '[data-testid="chat-workflow-notice"]'
+    )?.textContent
     expect(text).toContain('live récent')
     expect(text).not.toContain('startup ancien')
     expect(acknowledge).toHaveBeenCalledWith(2)

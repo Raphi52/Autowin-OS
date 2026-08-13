@@ -8,6 +8,7 @@ import { ViewTopBar } from './ViewTopBar'
 import { AgentsTopologyView } from './AgentsTopologyView'
 import { RouterView } from './RouterView'
 import { WorkflowProfilesView } from './WorkflowProfilesView'
+import './ViewPage.css'
 import './DomainShell.css'
 
 export function AgentStudioView({
@@ -68,7 +69,7 @@ export function AgentStudioView({
   }, [active])
 
   return (
-    <section className="domain-shell" data-testid="agent-studio-view">
+    <section className="view-page domain-shell" data-testid="agent-studio-view">
       <ViewTopBar
         eyebrow="ORCHESTRATION"
         title="Agent Studio"

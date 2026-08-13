@@ -14,7 +14,6 @@
   min-height: 0;
 }
 
-
 /*
  * L'en-tête posait son titre et son texte À NU sur le fond cosmique : lisible sur une zone sombre de
  * l'image, illisible dès qu'une nébuleuse passait derrière. On lui donne la même surface qu'aux
@@ -379,9 +378,20 @@ input.workflow-profile-name:focus-visible {
   margin: 2px 14px 12px;
   max-width: 100%;
 }
-.wf-track svg { position: absolute; left: 0; top: 0; }
-.wf-track-line { stroke: var(--container-border, #2c3543); stroke-width: 1; }
-.wf-track-arc { fill: none; stroke: var(--err, #cf625e); stroke-width: 1.5; }
+.wf-track svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.wf-track-line {
+  stroke: var(--container-border, #2c3543);
+  stroke-width: 1;
+}
+.wf-track-arc {
+  fill: none;
+  stroke: var(--err, #cf625e);
+  stroke-width: 1.5;
+}
 
 .wf-tn {
   position: absolute;

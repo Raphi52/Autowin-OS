@@ -38,7 +38,10 @@ function stringsIn(value: unknown, found: string[] = []): string[] {
   return found
 }
 
-function empty(status: RagTraceStatus, engine: RagTraceSummary['engine'] = 'Amitel Brain'): RagTraceSummary {
+function empty(
+  status: RagTraceStatus,
+  engine: RagTraceSummary['engine'] = 'Amitel Brain'
+): RagTraceSummary {
   return {
     status,
     engine,
@@ -59,14 +62,16 @@ function summarizeProjectContext(request: object): RagTraceSummary | null {
   // est le dernier bloc concaténé — sinon injectedCharacters gonfle avec tout ce qui suit.
   const start = marked.indexOf(match?.[0] ?? '')
   const rest = marked.slice(start)
-  const next = rest.indexOf('\n=== ', (match?.[0]?.length ?? 0))
+  const next = rest.indexOf('\n=== ', match?.[0]?.length ?? 0)
   const block = next === -1 ? rest : rest.slice(0, next)
   return {
     status: 'injected',
     engine: 'Contexte projet',
     query: '',
     injectedCharacters: block.length,
-    sources: [{ rank: 1, path: file, type: 'contexte projet', scope: '', author: '', date: '', text: block }],
+    sources: [
+      { rank: 1, path: file, type: 'contexte projet', scope: '', author: '', date: '', text: block }
+    ],
     injectedText: block
   }
 }

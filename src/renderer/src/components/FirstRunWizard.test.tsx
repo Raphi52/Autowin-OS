@@ -4,17 +4,19 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FirstRunWizard } from './FirstRunWizard'
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
 
 let container: HTMLDivElement
 let root: Root
 let outsideButton: HTMLButtonElement | null
 
-const flush = (): Promise<void> => act(async () => {
-  await Promise.resolve()
-  await Promise.resolve()
-})
+const flush = (): Promise<void> =>
+  act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
 
 beforeEach(() => {
   localStorage.clear()
@@ -84,7 +86,11 @@ describe('FirstRunWizard (#5)', () => {
     await render()
     expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeTruthy()
     await act(async () => {
-      pushed?.({ ok: true, summary: 'OK', checks: [{ id: 'brain', label: 'brain_server (:8765)', ok: true }] })
+      pushed?.({
+        ok: true,
+        summary: 'OK',
+        checks: [{ id: 'brain', label: 'brain_server (:8765)', ok: true }]
+      })
     })
     await flush()
     expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeNull()
@@ -154,9 +160,7 @@ describe('FirstRunWizard (#5)', () => {
     expect(document.activeElement).toBe(first)
 
     first.focus()
-    first.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true })
-    )
+    first.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }))
     expect(document.activeElement).toBe(last)
   })
 
@@ -191,7 +195,10 @@ describe('réparer un prérequis rouge depuis la popup', () => {
         repairCalls.push(id)
         return repair
           ? await repair(id)
-          : { started: true, detail: 'Console de connexion ouverte. Termine le login, puis re-vérifie.' }
+          : {
+              started: true,
+              detail: 'Console de connexion ouverte. Termine le login, puis re-vérifie.'
+            }
       }
     }
     return { repairCalls }
@@ -218,7 +225,12 @@ describe('réparer un prérequis rouge depuis la popup', () => {
     withChecks([
       { id: 'claude', label: 'CLI claude', ok: true },
       { id: 'claude-session', label: 'Session claude', ok: false, detail: 'claude auth login' },
-      { id: 'codex-session', label: 'Session OAuth Codex', ok: false, detail: 'npm run codex:login' }
+      {
+        id: 'codex-session',
+        label: 'Session OAuth Codex',
+        ok: false,
+        detail: 'npm run codex:login'
+      }
     ])
     await render()
 
@@ -264,9 +276,9 @@ describe('réparer un prérequis rouge depuis la popup', () => {
       container.querySelector('[data-testid="frw-repair-note-codex-session"]')?.textContent
     ).toContain('venv Python introuvable')
     // Le check est toujours affiché en rouge : aucune fausse guérison.
-    expect(
-      container.querySelector('[data-testid="frw-check-codex-session"]')?.className
-    ).toContain('ko')
+    expect(container.querySelector('[data-testid="frw-check-codex-session"]')?.className).toContain(
+      'ko'
+    )
   })
 
   it('un main qui JETTE ne casse pas la popup', async () => {

@@ -30,7 +30,14 @@ describe('RunInspector', () => {
       root.render(
         createElement(RunInspector, {
           content: `status: open\nregime: standard\n\n## Besoin\n- [x] Déjà fait\n- [ ] À faire\n\n## Contraintes\nTexte\n\n## Options\n| Option | Choix |\n| - | - |\n| A | oui |\n\n## SOP\n1. Vérifier\n\n## Journal\n[2026-07-21] événement\n\n## Défauts\n- Aucun\n\n## Reprise\nContinuer`,
-          summary: { status: 'open', regime: 'standard', dodChecked: 1, dodTotal: 2, journalEvents: 1, defauts: 1 }
+          summary: {
+            status: 'open',
+            regime: 'standard',
+            dodChecked: 1,
+            dodTotal: 2,
+            journalEvents: 1,
+            defauts: 1
+          }
         })
       )
     )
@@ -43,7 +50,10 @@ describe('RunInspector', () => {
 
   it('navigue vers la bonne section même si une section précédente est absente', () => {
     const scrollIntoView = vi.fn()
-    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true })
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      value: scrollIntoView,
+      configurable: true
+    })
     act(() =>
       root.render(
         createElement(RunInspector, {
@@ -53,7 +63,9 @@ describe('RunInspector', () => {
       )
     )
 
-    const buttons = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="run-section-nav"] button')]
+    const buttons = [
+      ...container.querySelectorAll<HTMLButtonElement>('[data-testid="run-section-nav"] button')
+    ]
     act(() => buttons.find((button) => button.textContent === 'Journal')?.click())
     expect(scrollIntoView).toHaveBeenCalledTimes(1)
   })

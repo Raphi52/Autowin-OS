@@ -7,8 +7,10 @@ import { summaryForProvider, summaryWindowId, windowIdLabel } from './ModelQuota
  * fenetre 5 h alors que sur ces offres c'est le quota HEBDOMADAIRE qui contraint reellement l'usage.
  * La wheel etait donc rassurante et sans rapport avec la limite reellement atteinte.
  */
-const snapshot = (windows: Array<{ id: string; remainingPercent: number }>, provider: string):
-  ModelQuotaSnapshot =>
+const snapshot = (
+  windows: Array<{ id: string; remainingPercent: number }>,
+  provider: string
+): ModelQuotaSnapshot =>
   ({
     observedAt: '2026-07-29T13:00:00.000Z',
     summary: { remainingPercent: 99, status: 'healthy' },
