@@ -1,4 +1,31 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { defineConfig } from 'vitest/config'
+
+/**
+ * Racine de données ISOLÉE pour les tests. Une seule ligne, mais elle ferme une pollution mesurée.
+ *
+ * MESURÉ le 2026-08-13 : `%APPDATA%utowin-os
+uns\conv-1` contenait 6 396 dossiers de run et
+ * 14 146 fichiers, accumulés depuis le 18 juillet. La cause n'était pas l'application : c'est la SUITE
+ * DE TESTS qui écrivait dans les données réelles de l'utilisateur. Preuve par avant/après autour d'un
+ * seul fichier — `src/main/commands.test.ts` crée +12 dossiers à chaque exécution (6 384 → 6 396), et
+ * une première hypothèse (une boucle auto-kaizen en production) a été RÉFUTÉE par la même mesure sur un
+ * autre fichier, qui n'en créait aucun.
+ *
+ * Trois dégâts, dont le dernier est le pire : des runs fantômes que l'application croit réels ; 14 000
+ * fichiers à énumérer pour 5,8 Mo ; et surtout un test qui ÉCRIT dans l'environnement qu'il mesure —
+ * de quoi faire passer au vert du code qui lit ce dossier, et fausser toute mesure de démarrage qui
+ * l'énumère.
+ *
+ * `app-data.ts` résout sa racine via `process.env.APPDATA`, donc la fixer ici couvre TOUS les stores de
+ * TOUS les tests d'un coup : conversations, tâches planifiées, coûts, runs, traces. Chemin stable et non
+ * aléatoire, pour qu'un test qui écrit puis relit fonctionne, et pour qu'on puisse le vider d'un geste.
+ *
+ * Si un test échoue à cause de ça, c'est un FINDING et non une régression : il dépendait des données
+ * réelles du poste, donc il n'était pas reproductible ailleurs.
+ */
+const RACINE_DONNEES_TESTS = join(tmpdir(), 'autowin-tests-appdata')
 
 /**
  * Réglages de stabilité de la suite, sans modifier sa résolution ni son isolation.
@@ -63,7 +90,9 @@ export default defineConfig({
      * tests decrivent. Rien n'est modifie cote production ni cote assertions.
      */
     env: {
-      AUTOWIN_RUN_JOURNAL_ROOT: ''
+      AUTOWIN_RUN_JOURNAL_ROOT: '',
+      // Voir `RACINE_DONNEES_TESTS` : aucun test n'écrit plus dans le %APPDATA% réel.
+      APPDATA: RACINE_DONNEES_TESTS
     },
     pool: 'threads',
     maxWorkers: 4,
