@@ -74,6 +74,9 @@ import {
   scopedRunsFromTimeline,
   type TurnRuntimeIdentity
 } from './subagent-thread-from-trace'
+// La classe `.lisere-dessus` vit dans cette feuille : importee ICI et non « heritee » d'une
+// autre vue, sinon l'apparence de Chat dependrait de l'ordre de chargement des AUTRES vues.
+import './ViewPage.css'
 import './ChatView.css'
 import './SlashPalette.css'
 import './ChatComposerExtras.css'
@@ -1773,7 +1776,7 @@ export function ChatView({
       data-active-conversation-id={activeId ?? ''}
     >
       {/* ---- Panneau gauche : conversations ---- */}
-      <aside className="conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
+      <aside className="lisere-dessus conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
         <div className="conv-head">
           <ModuleHeader eyebrow="Espace de travail" title="Conversations" />
         </div>
@@ -2041,7 +2044,7 @@ export function ChatView({
 
       {/* ---- Centre : fil ---- */}
       <section
-        className={`chat${dragActive ? ' is-file-dragging' : ''}`}
+        className={`lisere-dessus chat${dragActive ? ' is-file-dragging' : ''}`}
         onDragEnter={(event) => {
           if (Array.from(event.dataTransfer.types).includes('Files')) {
             event.preventDefault()
