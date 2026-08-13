@@ -568,6 +568,18 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      * ne change aucun autre périmètre.
      */
     const OUTILS_WEB = 'WebFetch,WebSearch'
+    /**
+     * `--allowedTools` veut des arguments SÉPARÉS, pas une chaîne à virgules.
+     *
+     * MESURÉ en A/B sur le CLI réel : avec `--allowedTools WebFetch,WebSearch`, une demande de
+     * récupération de page PEND jusqu'au délai maximum (code 124) ; avec `--allowedTools WebFetch
+     * WebSearch`, elle rend la bonne réponse en quelques secondes. `--tools`, lui, attend bien la
+     * forme à virgules — c'est sa forme documentée.
+     *
+     * Sans cette distinction, le web serait DÉCLARÉ et inutilisable sur les chemins qui passaient la
+     * même chaîne aux deux drapeaux : annoncé dans les arguments, jamais autorisé à l'usage.
+     */
+    const autorises = (liste: string): string[] => liste.split(',')
     // Cwd du spawn : celui de l'execution, ou le workspace en lecture seule pour un tour de chat.
     let readOnlyCwd: string | undefined
     if (execution) {
@@ -590,10 +602,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         '--tools',
         tools,
         '--allowedTools',
-        tools
+        ...autorises(tools)
       )
     } else if (materialized) {
-      args.push('--tools', 'Read,' + OUTILS_WEB, '--allowedTools', 'Read', 'WebFetch', 'WebSearch')
+      args.push(
+        '--tools',
+        'Read,' + OUTILS_WEB,
+        '--allowedTools',
+        ...autorises('Read,' + OUTILS_WEB)
+      )
     } else {
       /**
        * TOUR DE CHAT : lecture seule du workspace, au lieu d'etre AVEUGLE.
@@ -652,7 +669,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // La MEME valeur aux deux drapeaux, comme dans les autres branches : `--tools` charge,
         // `--allowedTools` autorise, et une asymetrie entre les deux laisse un outil declare mais
         // refuse (ou l'inverse) sans que rien ne le signale.
-        args.push('--tools', OUTILS_WEB, '--allowedTools', OUTILS_WEB)
+        args.push('--tools', OUTILS_WEB, '--allowedTools', ...autorises(OUTILS_WEB))
       }
     }
     /**

@@ -30,11 +30,17 @@ describe('spawn CLI — regime de contexte', () => {
       source.indexOf('if (execution) {'),
       source.indexOf('} else if (materialized) {')
     )
-    const toolsArgs = [...execBlock.matchAll(/'--(?:allowed)?[Tt]ools',\s*\n?\s*(\w+)/g)].map(
-      (m) => m[1]
-    )
-    expect(toolsArgs.length).toBeGreaterThanOrEqual(2)
-    expect(new Set(toolsArgs).size).toBe(1) // une seule variable source
+    /**
+     * `--tools` recoit la liste a VIRGULES, `--allowedTools` la MEME liste en arguments SEPARES.
+     *
+     * La propriete protegee ici est inchangee — les deux drapeaux portent la meme liste, sinon on
+     * autorise un outil non charge (ou l'inverse). Ce qui a change est la FORME, et elle a ete mesuree
+     * en A/B sur le CLI reel : avec `--allowedTools WebFetch,WebSearch`, une recuperation de page PEND
+     * jusqu'au delai maximum (code 124) ; avec les arguments separes, elle repond en quelques secondes.
+     * Une chaine a virgules sur ce drapeau donne donc un outil DECLARE et inutilisable.
+     */
+    expect(execBlock).toMatch(/'--tools',\s*tools,\s*'--allowedTools',\s*\.\.\.autorises\(tools\)/)
+    expect(source).toContain("const autorises = (liste: string): string[] => liste.split(',')")
   })
 
   it('desactive les slash-commands et skills du CLI (jamais utilisees ici)', () => {
@@ -172,7 +178,9 @@ describe('spawn CLI — regime de contexte', () => {
     // disque, seul le web reste. Changement demande par l'utilisateur le 2026-08-13.
     const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
     expect(chatBranch).not.toContain("'--add-dir', readOnlyWorkspace, '--tools', 'Read'")
-    expect(chatBranch).toMatch(/'--tools', OUTILS_WEB, '--allowedTools', OUTILS_WEB/)
+    expect(chatBranch).toMatch(
+      /'--tools', OUTILS_WEB, '--allowedTools', \.\.\.autorises\(OUTILS_WEB\)/
+    )
     expect(chatBranch).toContain('existsSync(')
   })
 

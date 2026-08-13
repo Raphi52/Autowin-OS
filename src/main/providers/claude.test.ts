@@ -111,7 +111,15 @@ describe('ClaudeCliAdapter — plafond de depense provider', () => {
       resolvedModel: 'claude-haiku-real',
       usage: { inputTokens: 38, outputTokens: 1043, cacheReadTokens: 12, costUsd: 0.065648 }
     })
-    expect(spawnCapture.args).toContain('Read,Grep,Glob')
+    // La liste CHARGÉE porte désormais les outils web (décision utilisateur du 2026-08-13 : les agents
+    // doivent pouvoir aller lire le monde extérieur). Ce test vérifie les arguments RÉELLEMENT passés au
+    // spawn, donc il devait suivre — mais la propriété qu'il protège est intacte et vérifiée juste après :
+    // en lecture seule, aucun Bash.
+    expect(spawnCapture.args).toContain('Read,Grep,Glob,WebFetch,WebSearch')
+    // Et les outils AUTORISÉS arrivent en arguments séparés : mesuré en A/B, une chaîne à virgules sur
+    // `--allowedTools` fait PENDRE toute récupération de page (code 124 au délai maximum).
+    expect(spawnCapture.args).toContain('WebFetch')
+    expect(spawnCapture.args).toContain('WebSearch')
     expect(spawnCapture.args.join(' ')).not.toContain('Bash')
     if (previousWorkspace === undefined) delete process.env.AUTOWIN_OS_WORKSPACE
     else process.env.AUTOWIN_OS_WORKSPACE = previousWorkspace
