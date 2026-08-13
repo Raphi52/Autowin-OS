@@ -537,6 +537,86 @@ function removeStaleWorkerLifecycleAdvice(
   })
 }
 
+type ClosingMarker = 'fait' | 'maintenant' | 'reste' | 'recommande'
+
+function structuredClosingMarker(line: string): ClosingMarker | undefined {
+  const text = line
+    .trim()
+    .replace(/^#{1,6}\s*/u, '')
+    .replace(/^\*\*/u, '')
+    .replace(/\*\*(?=\s*(?:[:：—–-]|$))/u, '')
+    .trim()
+  if (/^✅\s*Fait(?=\s|[:：—–-]|$)/u.test(text)) return 'fait'
+  if (/^📍️?\s*Maintenant(?=\s|[:：—–-]|$)/u.test(text)) return 'maintenant'
+  if (/^⏳️?\s*Reste à faire(?=\s|[:：—–-]|$)/u.test(text)) return 'reste'
+  if (/^👉\s*Recommandé(?=\s|[:：—–-]|$)/u.test(text)) return 'recommande'
+  return undefined
+}
+
+/** Retire uniquement un bloc de clôture COMPLET et final déjà produit par le worker. */
+function removeExistingStructuredClosingBlock(
+  report: string,
+  protectedLines: ReadonlySet<number>
+): string {
+  const lines = report.split(/\r?\n/u)
+  const wanted: ClosingMarker[] = ['fait', 'maintenant', 'reste', 'recommande']
+  let wantedIndex = 0
+  let start = -1
+  for (const [index, line] of lines.entries()) {
+    if (protectedLines.has(index + 1)) continue
+    const marker = structuredClosingMarker(line)
+    if (marker === wanted[wantedIndex]) {
+      if (wantedIndex === 0) start = index
+      wantedIndex += 1
+      if (wantedIndex === wanted.length) break
+    } else if (marker === 'fait') {
+      start = index
+      wantedIndex = 1
+    }
+  }
+  if (wantedIndex !== wanted.length || start < 0) return report
+  return lines.slice(0, start).join('\n').trimEnd()
+}
+
+interface OpenFence {
+  marker: '`' | '~'
+  length: number
+  prefix: string
+}
+
+/** Détecte la fence CommonMark encore ouverte au point de coupe, afin d'isoler le footer. */
+function openMarkdownFence(text: string): OpenFence | undefined {
+  let open: OpenFence | undefined
+  for (const line of text.split(/\r?\n/u)) {
+    if (!open) {
+      const match = /^((?:(?: {0,3}> ?)+)? {0,3})(`{3,}|~{3,})(.*)$/u.exec(line)
+      if (!match) continue
+      const fence = match[2]
+      if (fence[0] === '`' && /`/u.test(match[3])) continue
+      open = {
+        marker: fence[0] as '`' | '~',
+        length: fence.length,
+        prefix: match[1]
+      }
+      continue
+    }
+    const candidate = line.slice(open.prefix.length)
+    const fence = candidate.match(open.marker === '`' ? /^`{3,}/u : /^~{3,}/u)?.[0]
+    if (fence && fence.length >= open.length && candidate.slice(fence.length).trim() === '') {
+      open = undefined
+    }
+  }
+  return open
+}
+
+function boundedMarkdownResult(result: string, maxLength = 4_000): string {
+  if (result.length <= maxLength) return result
+  const truncated = result.slice(0, maxLength)
+  const open = openMarkdownFence(truncated)
+  const closure = open ? `\n${open.prefix}${open.marker.repeat(open.length)}` : ''
+  return `${truncated}${closure}\n…[tronqué]`
+}
+
 export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): boolean {
   return (
     asString(outcome.status) === 'succeeded' &&
@@ -554,9 +634,12 @@ export function reconcileClosedOrchestrationText(
   report: string,
   outcome: OrchestrationOutcome
 ): string {
-  return isDeliveredOrchestrationOutcome(outcome)
-    ? removeStaleWorkerLifecycleAdvice(report, markdownCodeLineProtection([report])[0])
-    : report
+  if (!isDeliveredOrchestrationOutcome(outcome)) return report
+  const protectedLines = markdownCodeLineProtection([report])[0]
+  return removeStaleWorkerLifecycleAdvice(
+    removeExistingStructuredClosingBlock(report, protectedLines),
+    protectedLines
+  )
 }
 
 /** Réconcilie un flux persisté en projetant d'abord ses spans Markdown sur tous les fragments. */
@@ -671,11 +754,7 @@ export function formatOrchestrationOutcome(
       `Brain : ${learningLabels[learningState] ?? learningState}${learningDetail ? ` — ${learningDetail}` : ''}`
     )
   }
-  if (visibleResult)
-    lines.push(
-      '',
-      visibleResult.length > 4_000 ? `${visibleResult.slice(0, 4_000)}…[tronqué]` : visibleResult
-    )
+  if (visibleResult) lines.push('', boundedMarkdownResult(visibleResult))
   if (delivered) lines.push('', ...deliveredClosingBlock(run))
   return lines.join('\n')
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { fromMarkdown } from 'mdast-util-from-markdown'
 import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
@@ -770,6 +771,40 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(positions).toEqual([...positions].sort((left, right) => left - right))
     expect(text).not.toContain('RUN open')
     expect(text).not.toContain('lancer judge')
+  })
+
+  it('retire atomiquement un ancien bloc final complet avant de créer le bloc autoritaire', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      result:
+        'Preuve utile.\n\n✅ Fait\n1. Ancienne tentative.\n\n📍 Maintenant : RUN open.\n⏳ Reste à faire : lancer judge.\n👉 Recommandé : publier.'
+    })
+
+    for (const heading of ['✅ Fait', '📍 Maintenant', '⏳ Reste à faire', '👉 Recommandé']) {
+      expect(text.split(heading)).toHaveLength(2)
+    }
+    expect(text).toContain('Preuve utile.')
+    expect(text).not.toContain('Ancienne tentative')
+  })
+
+  it('ferme une fence tronquée avant le bloc final pour que les rubriques restent visibles', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      result: `\`\`\`txt\n${'x'.repeat(4_500)}`
+    })
+    const tree = fromMarkdown(text) as { children?: Array<{ type?: string; value?: string }> }
+    const code = tree.children?.find((node) => node.type === 'code')
+    const prose = tree.children?.filter((node) => node.type !== 'code') ?? []
+
+    expect(code?.value).not.toContain('✅ Fait')
+    expect(prose.some((node) => JSON.stringify(node).includes('✅ Fait'))).toBe(true)
+    expect(text).toMatch(/```\s*\n…\[tronqué\]\n\n---\n✅ Fait/u)
   })
 
   it('un coût inconnu ne devient jamais un faux 0.00 $', () => {
