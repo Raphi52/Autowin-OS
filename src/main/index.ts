@@ -111,7 +111,7 @@ import { captureElectronDesktop } from './electron-desktop-capture'
 import { AgentPilot, type PilotEvent, type RecoveredPilotProviderCall } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
-import { boundedTurnHistory } from './chat-turn-messages'
+import { boundedContinuationHistory, boundedTurnHistory } from './chat-turn-messages'
 import { buildContinuationProviderHistory } from './chat-continuation'
 import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'
 import type { ChatTurnEvent } from '../shared/chat-turn'
@@ -3469,11 +3469,17 @@ Le fil reprend ensuite normalement.`
     // tour invasif ; il peut reprendre son travail sans que le Watchdog n'interrompe quoi que ce soit.
     if (policy?.background) activeChatTurns.releaseIdleLease()
     try {
-      const safe = boundedTurnHistory(Array.isArray(messages) ? messages : [], 40).map((m) => ({
-        role: m.role,
-        content: guardString(m.content, 'content'),
-        ...(m.attachments?.length ? { attachments: guardAttachments(m.attachments) } : {})
-      }))
+      const rawMessages = Array.isArray(messages) ? messages : []
+      const continuationWindow = continuation
+        ? boundedContinuationHistory(rawMessages, 40)
+        : undefined
+      const safe = (continuationWindow?.history ?? boundedTurnHistory(rawMessages, 40)).map(
+        (m) => ({
+          role: m.role,
+          content: guardString(m.content, 'content'),
+          ...(m.attachments?.length ? { attachments: guardAttachments(m.attachments) } : {})
+        })
+      )
       let traceParentId: string | undefined
       let traceSequence = conversationId ? causalTrace.nextSequence(conversationId) : 0
       let traceActionIndex = 0
@@ -3493,8 +3499,8 @@ Le fil reprend ensuite normalement.`
       let traceArtifactOrdinal = 0
       let turnSessionId: string | undefined
       const last = safe[safe.length - 1]
-      const routingUserMessageOverride = continuation
-        ? [...safe.slice(0, -1)].reverse().find((message) => message.role === 'user')?.content
+      const routingUserMessageOverride = continuationWindow?.routingUserMessage
+        ? guardString(continuationWindow.routingUserMessage.content, 'content')
         : undefined
       activityLabel = continuation
         ? 'reprise du tour interrompu'

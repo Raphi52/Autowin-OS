@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { boundedTurnHistory, buildTurnMessages } from './chat-turn-messages'
+import {
+  boundedContinuationHistory,
+  boundedTurnHistory,
+  buildTurnMessages
+} from './chat-turn-messages'
 
 describe('boundedTurnHistory', () => {
   it('retire la réponse assistant orpheline créée par la limite de 40 messages', () => {
@@ -40,6 +44,27 @@ describe('boundedTurnHistory', () => {
         40
       )
     ).toEqual([])
+  })
+})
+
+describe('boundedContinuationHistory', () => {
+  it('conserve le dernier vrai prompt et du contexte apres plus de 40 messages assistant', () => {
+    const history = [
+      { role: 'user' as const, content: 'Analyse ce depot en lecture seule' },
+      ...Array.from({ length: 39 }, (_, index) => ({
+        role: 'assistant' as const,
+        content: `continuation-${index + 1}`
+      })),
+      { role: 'user' as const, content: 'INSTRUCTION INTERNE DE CONTINUATION' }
+    ]
+
+    const result = boundedContinuationHistory(history, 40)
+
+    expect(result.routingUserMessage?.content).toBe('Analyse ce depot en lecture seule')
+    expect(result.history).toHaveLength(40)
+    expect(result.history[0]?.content).toBe('Analyse ce depot en lecture seule')
+    expect(result.history.some((message) => message.role === 'assistant')).toBe(true)
+    expect(result.history.at(-1)?.content).toBe('INSTRUCTION INTERNE DE CONTINUATION')
   })
 })
 

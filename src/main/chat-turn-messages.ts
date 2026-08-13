@@ -52,6 +52,28 @@ export function boundedTurnHistory<T extends { role: 'user' | 'assistant' }>(
 }
 
 /**
+ * Variante pour une continuation dont le dernier `user` est une instruction transport interne.
+ * Le dernier vrai prompt humain reste l'ancre de permissions/RAG, même s'il tombe hors de la borne.
+ */
+export function boundedContinuationHistory<T extends { role: 'user' | 'assistant' }>(
+  history: readonly T[],
+  maxMessages = 40
+): { history: T[]; routingUserMessage?: T } {
+  const priorMessages = history.slice(0, -1)
+  const routingUserMessage = [...priorMessages].reverse().find((message) => message.role === 'user')
+  const bounded = boundedTurnHistory(history, maxMessages)
+  if (!routingUserMessage || !Number.isInteger(maxMessages) || maxMessages <= 0)
+    return { history: bounded, routingUserMessage }
+  if (bounded.includes(routingUserMessage)) return { history: bounded, routingUserMessage }
+  if (maxMessages === 1) return { history: [routingUserMessage], routingUserMessage }
+
+  return {
+    history: [routingUserMessage, ...history.slice(-(maxMessages - 1))],
+    routingUserMessage
+  }
+}
+
+/**
  * Rend les entrées du message, dans l'ordre, sans aucune entrée vide.
  *
  * Une entrée vide (pas de contexte récupéré, pas d'écho) laisserait un trou de deux sauts de ligne dans
