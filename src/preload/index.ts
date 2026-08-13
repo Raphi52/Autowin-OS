@@ -69,6 +69,7 @@ import type { WorkflowProfilesFile } from '../main/workflow-profiles'
 import type { WorkflowBenchReport } from '../main/workflow-bench'
 import type { AutowinProfile } from '../main/profile-store'
 import type { ShadowRouteResult } from '../main/shadow-router'
+import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setting'
 import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
 import type { CommandSpec, CommandResult, AppSnapshot } from '../main/commands'
@@ -223,6 +224,11 @@ const api = {
     maxProviderCalls: number
     maxTotalTokens: number
   }> => ipcRenderer.invoke('os:orchestrationBudget:set', settings),
+  /** Opt-in persistant du pilote de routage shadow (mesure verte/coût par route). */
+  shadowRoutingPilot: (): Promise<ShadowRoutingPilotState> =>
+    ipcRenderer.invoke('os:shadowRoutingPilot:get'),
+  setShadowRoutingPilot: (enabled: boolean): Promise<ShadowRoutingPilotState> =>
+    ipcRenderer.invoke('os:shadowRoutingPilot:set', enabled),
   // Config par rôle
   workflowProfiles: (): Promise<WorkflowProfilesFile> =>
     ipcRenderer.invoke('os:workflowProfiles:get'),
