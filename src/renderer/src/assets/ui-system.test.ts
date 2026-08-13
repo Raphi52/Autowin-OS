@@ -55,7 +55,11 @@ describe('Autowin UI contract', () => {
     const theme = readFileSync(new URL('./cosmic-outline.css', import.meta.url), 'utf8')
     const cadre = component('ViewPage.css')
 
-    expect(cadre).toMatch(/--lisere-haut:\s*linear-gradient\(/)
+    // Le degrade litteral vit dans `--lisere-degrade` (source unique), `--lisere-haut` le compose en
+    // couche de fond. Ce test suivait l'ancien nom : il verifie desormais les deux maillons, sans quoi
+    // renommer le token le rendrait vert sans rien garantir.
+    expect(cadre).toMatch(/--lisere-degrade:\s*linear-gradient\(/)
+    expect(cadre).toMatch(/--lisere-haut:\s*var\(--lisere-degrade\)\s*top \/ 100% 1px no-repeat/)
     for (const bloc of theme.split('}')) {
       const coupe = bloc.lastIndexOf('{')
       if (coupe < 0) continue

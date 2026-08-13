@@ -25,17 +25,20 @@ describe('Observatory visual contracts', () => {
     const cadre = readFileSync(new URL('./ViewPage.css', import.meta.url), 'utf8')
     const observatory = readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
     const liseré =
-      /linear-gradient\(\s*90deg,\s*var\(--rose\),\s*transparent 42%,\s*color-mix\(in srgb, var\(--gold\) 70%, transparent\)\s*\)\s*top \/ 100% 1px no-repeat/s
+      /linear-gradient\(\s*90deg,\s*var\(--rose\),\s*transparent 42%,\s*color-mix\(in srgb, var\(--gold\) 70%, transparent\)\s*\)/s
 
-    // 3ᵉ tournure de ce liseré, et la meilleure : il est devenu un TOKEN `--lisere-haut` déclaré sur
-    // `.shell`, que chaque vue COMPOSE avec son propre fond. Ce test épinglait le littéral dans
-    // `.view-page` ; il suit la source réelle, sinon il interdirait l'amélioration qu'il prétend
-    // protéger. Ce qu'on garantit reste le même : UNE définition, et Observatory la consomme.
+    // MERGE de deux tournures concurrentes du meme test, vers le sur-ensemble de leurs intentions.
+    // 3ᵉ formulation de ce lisere, et la meilleure : il est devenu un TOKEN declare sur `.shell`, que
+    // chaque vue COMPOSE avec son propre fond. Ce test epinglait le litteral dans `.view-page` ; il
+    // suit desormais la source reelle, sinon il interdirait l'amelioration qu'il pretend proteger.
+    // Ce qu'on garantit reste le meme : UNE definition, et Observatory la consomme.
+    // Deux exigences viennent de l'autre tournure, plus strictes et conservees : la VIRGULE apres le
+    // token (elle prouve une COMPOSITION, pas un remplacement), et le bord verifie dans la regle
+    // `.view-page` elle-meme plutot que n'importe ou dans la feuille.
+    const regleCadre = cadre.match(/\.view-page\s*{[^}]*}/s)?.[0]
     expect(cadre.match(/\.shell\s*{[^}]*}/s)?.[0]).toMatch(liseré)
-    expect(cadre.match(/\.view-page\s*{[^}]*}/s)?.[0]).toMatch(
-      /background:\s*var\(--lisere-haut\)/
-    )
-    expect(cadre).toMatch(/border: 1px solid color-mix\(in srgb, var\(--rose\) 34%/)
+    expect(regleCadre).toMatch(/background:\s*var\(--lisere-haut\),/)
+    expect(regleCadre).toMatch(/border: 1px solid color-mix\(in srgb, var\(--rose\) 34%/)
     // Et Observatory ne repart pas en solo : aucun cadre redécrit dans sa propre règle.
     const regleObservatory = observatory.match(/\.observatory-view\s*{[^}]*}/s)?.[0]
     expect(regleObservatory).not.toMatch(liseré)
