@@ -139,7 +139,10 @@ function ResumeChefDeProjet({
       ) : (
         <ul className="wt-cdp-liste" data-testid="worktree-chantiers">
           {chantiers.slice(0, CHANTIERS_AFFICHES).map((chantier: Chantier) => (
-            <li key={chantier.branche} className={`wt-cdp-ligne is-${chantier.verdict}`}>
+            <li
+              key={chantier.branche}
+              className={`wt-cdp-ligne is-${chantier.verdict}${chantier.branche === 'main' ? ' is-main' : ''}`}
+            >
               <span className="wt-cdp-pastille">{LIBELLES_VERDICT[chantier.verdict]}</span>
               <strong className="wt-cdp-branche">{chantier.branche}</strong>
               <span className="wt-cdp-sujet">{chantier.sujet ?? ''}</span>
@@ -321,7 +324,8 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
       <ViewTopBar
         eyebrow="COCKPIT PROJET"
         title={snapshot?.repositoryName ?? 'Worktrees'}
-        description={snapshot?.repoPath || repoPath || 'Dépôt courant'}
+        description="Suis l’état, l’activité et les branches de ton dépôt."
+        detail={snapshot?.repoPath || repoPath || 'Dépôt courant'}
         actions={
           <>
             <button type="button" onClick={() => void pickRepo()}>

@@ -136,6 +136,17 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(0)
   })
 
+  it('demande les bureaux de la conversation active, pas le snapshot global', async () => {
+    mockApi(GIT)
+    const getWorktreeActivity = vi.fn(() => Promise.resolve([]))
+    ;(window as unknown as { api: Record<string, unknown> }).api.getWorktreeActivity =
+      getWorktreeActivity
+
+    await render(undefined, 'conv-cible')
+
+    expect(getWorktreeActivity).toHaveBeenCalledWith('conv-cible')
+  })
+
   it('rétablit et explique l’état Auto-close quand sa persistance échoue', async () => {
     mockApi(GIT)
     const setAutoClose = vi.fn(() => Promise.reject(new Error('disque indisponible')))

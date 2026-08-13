@@ -12,6 +12,7 @@ import type {
   StreamChunk
 } from './providers/types'
 import { RoleModelConfig } from './roles'
+import { compileExecutionQuote } from './execution-quote'
 import { TrustLedger } from './trust/ledger'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
@@ -616,7 +617,10 @@ describe('Orchestrator execution contract', () => {
     }
   })
 
-  it('clôture rouge une mutation sans preuve au lieu de relancer implicitement', async () => {
+  it('clôture rouge une mutation sans preuve au lieu de relancer implicitement — en mode bloquant', async () => {
+    // En mesure seule (défaut, décision du 12/08), la réparation B5 rejouerait le build avec les
+    // raisons du gate — comportement voulu (« 1 prompt = 1 réussite »). Le refus de relance testé
+    // ici est la posture du mode `blocking`.
     let execCount = 0
     let providerCalls = 0
     const provider: ProviderAdapter = {
@@ -663,7 +667,9 @@ describe('Orchestrator execution contract', () => {
       cost: new CostAggregator(),
       trust: new TrustLedger(),
       executionWorkspace: 'C:\\workspace',
-      worktrees: makeTestWorktrees('C:\\workspace')
+      worktrees: makeTestWorktrees('C:\\workspace'),
+      currentExecutionQuote: () =>
+        compileExecutionQuote('corrige le bug du sélecteur', { spendEnforcement: 'blocking' })
     })
 
     const result = await orchestrator.run('corrige le bug du sélecteur')

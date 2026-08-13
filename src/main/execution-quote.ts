@@ -82,7 +82,9 @@ export interface ExecutionQuoteCaps {
   maxProviderCalls?: number | null
   maxTotalTokens?: number | null
   maxUsd?: number | null
-  /** `metering-only` désarme explicitement les refus ; absent = `blocking` (défaut sûr). */
+  /** `blocking` réarme les refus de dépense ; absent = `metering-only` (décision utilisateur du
+   * 2026-08-12 : « le blocage détruit du travail payé » — un défaut `blocking` a été réintroduit
+   * une fois par un agent le 13/08 et a re-tué une campagne ; la doctrine prime). */
   spendEnforcement?: SpendEnforcement
 }
 
@@ -115,7 +117,8 @@ const PRESETS: Record<TaskRegime, RegimePreset> = {
     maxAgents: 5,
     maxConcurrency: 3,
     maxDurationMs: 45 * 60_000,
-    maxRecoveries: 0,
+    // La réparation promise après un juge rouge : la retirer casse « 1 prompt = 1 réussite ».
+    maxRecoveries: 1,
     decomposition: { mode: 'disabled', maxNodes: 1 }
   },
   critical: {
@@ -125,7 +128,7 @@ const PRESETS: Record<TaskRegime, RegimePreset> = {
     maxAgents: 10,
     maxConcurrency: 4,
     maxDurationMs: 120 * 60_000,
-    maxRecoveries: 0,
+    maxRecoveries: 1,
     decomposition: { mode: 'build-only', maxNodes: 5 }
   }
 }
@@ -182,9 +185,20 @@ export function allocateExecutionTopology(
       ? nodeExecutions + judgePasses + recoveries
       : nodeExecutions)
   if (mandatory > available) {
-    throw new Error(
-      `Devis impossible avant exécution : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
-    )
+    // En mesure seule (défaut depuis la décision utilisateur du 12/08), un workflow DÉTERMINISTE
+    // au pire cas fini ne se refuse pas : le devis S'AGRANDIT à sa demande. Mesuré sur conv-1148 :
+    // « 12 agent(s) obligatoires pour 10 place(s) restante(s) » tuait le run avant le premier
+    // appel — le régime servait de plafond de dépense déguisé. En mode bloquant, le refus reste :
+    // là, le plafond est un contrat.
+    if (quote.limits.spendEnforcement === 'metering-only') {
+      const requis = mandatory + Math.max(0, startedAgents, startedCalls)
+      quote.limits.maxAgents = Math.max(quote.limits.maxAgents, requis)
+      quote.limits.maxProviderCalls = Math.max(quote.limits.maxProviderCalls, requis)
+    } else {
+      throw new Error(
+        `Devis impossible avant exécution : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
+      )
+    }
   }
 
   if (exactWorkflowCalls !== undefined) {
@@ -286,7 +300,7 @@ export function compileExecutionQuote(task: string, caps: ExecutionQuoteCaps = {
       maxDurationMs: preset.maxDurationMs,
       maxRecoveries: preset.maxRecoveries,
       maxUsd: positiveNumber(caps.maxUsd) ?? null,
-      spendEnforcement: caps.spendEnforcement ?? 'blocking'
+      spendEnforcement: caps.spendEnforcement ?? 'metering-only'
     }
   }
 }

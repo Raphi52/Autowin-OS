@@ -285,7 +285,11 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
 
   return (
     <section className="router-view">
-      <ModuleHeader eyebrow="Providers et modèles connectés" title="Routeur" />
+      <ModuleHeader
+        eyebrow="Providers et modèles connectés"
+        title="Routeur"
+        description="Choisis les providers et modèles utilisés par chaque rôle."
+      />
 
       <section className="router-default">
         <header>

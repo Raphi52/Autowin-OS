@@ -4,6 +4,7 @@ import {
   cleDedup,
   normaliserTitre,
   trierCandidats,
+  bornerPertinence,
   type CandidatBrut
 } from './candidats'
 
@@ -29,6 +30,7 @@ const brut = (partiel: Partial<CandidatBrut> = {}): CandidatBrut => ({
   url: 'https://github.com/openai/codex/releases',
   dateSource: '2026-08-07',
   citation: CITATION,
+  type: 'ajout',
   ...partiel
 })
 
@@ -64,6 +66,30 @@ describe('un candidat sans preuve n’entre pas', () => {
   it('refuse une date absente : l’âge de la nouveauté est l’information utile', () => {
     const { refuses } = trierCandidats([brut({ dateSource: '  ' })], new Set(), contexte)
     expect(refuses[0].raison).toBe('date manquante')
+  })
+
+  it('CONSERVE une correction, en la marquant comme telle', () => {
+    // Revirement assumé : la première version refusait tout ce qui n'était pas un ajout, ce qui écartait
+    // 19 entrées sur 21 dans un seul CHANGELOG. Ce que les concurrents corrigent dit aussi où ils butent,
+    // donc l'information est gardée et la séparation se fait à l'affichage.
+    const { retenus, refuses } = trierCandidats(
+      [brut({ type: 'correction', titre: 'Corrige un crash sur les chemins UNC' })],
+      new Set(),
+      contexte
+    )
+    expect(refuses).toHaveLength(0)
+    expect(retenus[0].type).toBe('correction')
+  })
+
+  it('refuse une nature ABSENTE plutôt que de la deviner', () => {
+    // Classer à la place du scout reviendrait à décider d'après un titre — l'à-peu-près qu'on évite.
+    const { refuses } = trierCandidats([brut({ type: undefined })], new Set(), contexte)
+    expect(refuses[0].raison).toBe('nature non precisee')
+  })
+
+  it('range une nature inconnue en `autre`, sans la deviner', () => {
+    const { retenus } = trierCandidats([brut({ type: 'amélioration ?' })], new Set(), contexte)
+    expect(retenus[0].type).toBe('autre')
   })
 
   it('accepte un candidat complet, et n’invente aucun champ', () => {
@@ -131,5 +157,35 @@ describe('normalisation du titre', () => {
       normaliserTitre('support mcp distant')
     )
     expect(normaliserTitre('Reprise (auto) !')).toBe('reprise auto')
+  })
+})
+
+describe('pertinence — la note du scout, bornee et jamais inventee', () => {
+  it('borne une valeur hors 0-100 et arrondit', () => {
+    expect(bornerPertinence(150)).toBe(100)
+    expect(bornerPertinence(-4)).toBe(0)
+    expect(bornerPertinence(72.6)).toBe(73)
+    expect(bornerPertinence('88')).toBe(88)
+  })
+
+  it('une pertinence absente ou illisible reste undefined — pas un zero', () => {
+    expect(bornerPertinence(undefined)).toBeUndefined()
+    expect(bornerPertinence('beaucoup')).toBeUndefined()
+    expect(bornerPertinence(null)).toBeUndefined()
+    expect(bornerPertinence(NaN)).toBeUndefined()
+  })
+
+  it('trierCandidats porte la pertinence sur le retenu, bornee', () => {
+    const { retenus } = trierCandidats(
+      [brut({ pertinence: 250 as unknown as number })],
+      new Set(),
+      contexte
+    )
+    expect(retenus[0].pertinence).toBe(100)
+  })
+
+  it('un candidat sans pertinence n’en gagne pas une par defaut', () => {
+    const { retenus } = trierCandidats([brut()], new Set(), contexte)
+    expect(retenus[0].pertinence).toBeUndefined()
   })
 })

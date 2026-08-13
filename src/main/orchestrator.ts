@@ -261,14 +261,51 @@ export function lireVerdictJuge(text: string): boolean {
 }
 
 /**
- * Les arêtes rouges décrivent une reprise possible, mais ne la déclenchent jamais seules. Les
- * retirer du parcours automatique garantit qu'un nouveau tour humain précède toute nouvelle dépense.
+ * Retire du parcours du marcheur le SEUL retour judge→build : il est joué en aval par la boucle de
+ * réparation B5, qui renourrit le build des raisons du gate. Les AUTRES arêtes rouges restent :
+ * elles portent le fail-closed d'un juge intermédiaire (rouge → chemin de repli, jamais l'arête
+ * verte) — les retirer toutes faisait franchir l'arête verte à un juge muet ou en panne (mesuré :
+ * 3 tests fail-closed rouges sur main au commit 2329a77).
  */
-function sansRetoursAutomatiques(graph: WorkflowGraph): WorkflowGraph {
+function sansRetourReparationJuge(graph: WorkflowGraph): WorkflowGraph {
   return {
     ...graph,
-    edges: graph.edges.filter((edge) => edge.when !== 'red')
+    edges: graph.edges.filter((edge) => {
+      if (edge.when !== 'red') return true
+      const depuis = graph.nodes.find((node) => node.id === edge.from)?.phase
+      const vers = graph.nodes.find((node) => node.id === edge.to)?.phase
+      return !(depuis === 'judge' && vers === 'build')
+    })
   }
+}
+
+/**
+ * Phases situées entre le build ciblé par un retour rouge et le juge qui l'a déclenché.
+ * Le build est exécuté par la réparation enrichie ; le juge par le gate final. Ce tableau est donc
+ * exactement le milieu à rejouer (par exemple `clean` dans build → clean → judge).
+ */
+function phasesApresBuildDeReparation(graph: WorkflowGraph): PipelinePhase[] {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+  const retour = graph.edges.find((edge) => {
+    if (edge.when !== 'red') return false
+    return byId.get(edge.from)?.phase === 'judge' && byId.get(edge.to)?.phase === 'build'
+  })
+  if (!retour) return []
+  const phases: PipelinePhase[] = []
+  const vus = new Set<string>([retour.to])
+  let courant = retour.to
+  for (let pas = 0; pas < graph.nodes.length; pas++) {
+    const suivantes = graph.edges.filter((edge) => edge.from === courant && edge.when === 'always')
+    if (suivantes.length !== 1) return []
+    courant = suivantes[0].to
+    if (courant === retour.from) return phases
+    if (vus.has(courant)) return []
+    vus.add(courant)
+    const node = byId.get(courant)
+    if (!node || node.phase === 'judge') return []
+    phases.push(node.phase)
+  }
+  return []
 }
 
 /** Nombre d'appels réellement promis par le graphe, panels et synthèses compris. */
@@ -1374,25 +1411,37 @@ export class Orchestrator {
             }
           }
         : undefined
-    const workflowWithoutAutomaticRecovery = workflowGraph
-      ? sansRetoursAutomatiques(workflowGraph)
-      : undefined
-    const appelsWorkflow = workflowWithoutAutomaticRecovery
-      ? appelsRequisParWorkflow(workflowWithoutAutomaticRecovery, impose)
+    const appelsWorkflow = workflowGraph
+      ? appelsRequisParWorkflow(workflowGraph, impose)
       : undefined
     if (executionQuote && workflow?.explicit && workflowGraph) {
       // Une sélection manuelle engage le graphe affiché. Le devis doit donc refléter ses phases et
       // la borne de reprise qu'il porte, puis lui réserver les places nécessaires sans dépasser le
       // plafond d'appels déjà fixé par le régime / l'utilisateur.
       executionQuote.phases = [...phases]
-      // Une arête rouge dìrit le chemin de reprise à afficher, pas l'autorisation de repayer ce
-      // chemin sans nouvelle stratégie humaine. Les reprises automatiques sont donc toujours nulles.
-      executionQuote.limits.maxRecoveries = 0
+      // En mode bloquant, une arête rouge décrit le chemin de reprise à afficher, pas
+      // l'autorisation de repayer ce chemin sans nouvelle stratégie humaine. En mesure seule
+      // (défaut, décision du 12/08), la reprise bornée par le graphe se joue automatiquement :
+      // « 1 prompt = 1 réussite » exige que le juge rouge déclenche la réparation sans tour humain.
+      executionQuote.limits.maxRecoveries =
+        executionQuote.limits.spendEnforcement === 'blocking'
+          ? 0
+          : (recoveriesFromGraph(workflowGraph) ?? executionQuote.limits.maxRecoveries)
       const mandatory = appelsWorkflow!
       const maxPanel = Math.max(
         impose?.judgeMembers ?? 1,
         ...Object.values(impose?.phaseMembers ?? {}).map((count) => count ?? 1)
       )
+      // `maxProviderCalls` est un plafond de PORTEFEUILLE : en mesure seule (défaut depuis le
+      // 12/08), un workflow déterministe plus large que le régime agrandit le devis au lieu d'être
+      // refusé (conv-1148 : 12 obligatoires pour 10 places tuait le run avant le premier appel).
+      // `maxConcurrency` protège la MACHINE, pas le portefeuille : son refus reste inconditionnel.
+      if (
+        mandatory > executionQuote.limits.maxProviderCalls &&
+        executionQuote.limits.spendEnforcement === 'metering-only'
+      ) {
+        executionQuote.limits.maxProviderCalls = mandatory
+      }
       if (
         mandatory > executionQuote.limits.maxProviderCalls ||
         maxPanel > executionQuote.limits.maxConcurrency
@@ -1448,7 +1497,7 @@ export class Orchestrator {
         // qui serait ensuite coupé en plein milieu, faute de places.
         ...(workflowGraph
           ? {
-              worstCaseNodeExecutions: worstCaseNodeExecutions(workflowWithoutAutomaticRecovery!),
+              worstCaseNodeExecutions: worstCaseNodeExecutions(workflowGraph),
               worstCaseProviderCalls: appelsWorkflow
             }
           : {})
@@ -2750,7 +2799,7 @@ export class Orchestrator {
      * fois, et doublerait silencieusement le coût que le devis a provisionné.
      */
     const graphePilote: WorkflowGraph | undefined = grapheBrut
-      ? sansRetoursAutomatiques(grapheBrut)
+      ? sansRetourReparationJuge(grapheBrut)
       : undefined
     const suitePhases = function* (): Generator<PipelinePhase> {
       if (!graphePilote?.nodes?.length) {
@@ -3596,7 +3645,7 @@ export class Orchestrator {
       usage: lastUsage,
       executionEvidence: aggregatedEvidence
     })
-    const exec = buildExec()
+    let exec = buildExec()
     let lastJudgeText = ''
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
@@ -3990,12 +4039,52 @@ export class Orchestrator {
       }
     }
 
-    // Une arête rouge reste visible dans le workflow, mais n'autorise pas une relance automatique :
-    // une vraie stratégie nouvelle doit arriver d'un nouveau tour humain, avant tout appel provider.
+    // B5 — pour une MUTATION bloquée, UNE réparation ciblée (feedback = raisons du gate) AVANT
+    // d'escalader à l'humain. La doctrine tranche le mode : en mesure seule (défaut, décision du
+    // 12/08 — « 1 prompt = 1 réussite »), le juge rouge déclenche la réparation automatiquement,
+    // bornée par le graphe ou le devis. En mode bloquant, aucune relance : une stratégie nouvelle
+    // doit arriver d'un nouveau tour humain avant toute nouvelle dépense.
     const graphRecoveries = grapheBrut ? recoveriesFromGraph(grapheBrut) : undefined
-    const judged = await judgeAndGate()
-    if (judged.gate.blocked && (graphRecoveries ?? 0) > 0) {
-      judged.gate.reasons.push(
+    const enforceSpend =
+      (this.deps.currentExecutionQuote?.()?.limits.spendEnforcement ?? 'metering-only') ===
+      'blocking'
+    const allowedRecoveries =
+      !enforceSpend && isMutationTask(task)
+        ? grapheBrut
+          ? (graphRecoveries ?? 0)
+          : (this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
+        : 0
+    const MAX_ATTEMPTS = 1 + Math.max(0, Math.floor(allowedRecoveries))
+    let valid = false
+    let gate!: ReturnType<typeof evaluateClosure>
+    let learningAttestations: IndependentLearningAttestation[] = []
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      if (attempt > 0) {
+        // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
+        // donc son panel, sa synthèse, sa concurrence et sa télémétrie.
+        phaseContext.push(
+          `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
+        )
+        // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
+        // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.
+        prevSessionId = undefined
+        await executePipelinePhase('build')
+        // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
+        // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
+        // codé en dur build → judge.
+        for (const phase of grapheBrut ? phasesApresBuildDeReparation(grapheBrut) : []) {
+          await executePipelinePhase(phase)
+        }
+        exec = buildExec()
+      }
+      const r = await judgeAndGate()
+      valid = r.valid
+      gate = r.gate
+      learningAttestations = r.learningAttestations
+      if (!gate.blocked) break
+    }
+    if (gate.blocked && enforceSpend && (graphRecoveries ?? 0) > 0) {
+      gate.reasons.push(
         'Reprise automatique desactivee : une strategie nouvelle doit etre fournie avant un nouvel appel.'
       )
     }
@@ -4003,13 +4092,11 @@ export class Orchestrator {
     return {
       task,
       result: phaseOutputs.length > 0 ? exec.text : lastJudgeText,
-      valid: judged.valid,
-      gateBlocked: judged.gate.blocked,
-      gateReasons: judged.gate.reasons,
+      valid,
+      gateBlocked: gate.blocked,
+      gateReasons: gate.reasons,
       phaseOutputs,
-      ...(judged.learningAttestations.length
-        ? { learningAttestations: judged.learningAttestations }
-        : {}),
+      ...(learningAttestations.length ? { learningAttestations } : {}),
       brainQuery,
       brainRetrievedAt,
       brainNavigation: scopedBrain.navigation,

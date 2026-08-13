@@ -876,6 +876,8 @@ export class RunWorktreeCoordinator {
       state: t.state,
       files: t.files,
       startedAtMs: t.startedAtMs,
+      conversationId: t.conversationId,
+      turnId: t.turnId,
       endedAtMs: t.endedAtMs,
       conflictWith: t.conflictWith,
       conflictFile: t.conflictFile,

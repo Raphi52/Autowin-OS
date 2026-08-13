@@ -39,6 +39,7 @@ const candidat = (partiel: Partial<CandidatVeille> = {}): CandidatVeille => ({
   url: 'https://x/releases',
   dateSource: '2026-08-07',
   citation: 'Ajout du support des serveurs MCP distants avec OAuth',
+  type: 'ajout',
   prompt: 'Implémente le support MCP distant',
   vuLe: '2026-08-13T00:00:00.000Z',
   statut: 'nouveau',

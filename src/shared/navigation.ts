@@ -26,6 +26,13 @@ export type TaskManagerSection = 'watchdog' | 'planification'
  * premier, quel que soit l'onglet.
  */
 export type WorktreeSection = 'carte' | 'activite' | 'sante'
+/**
+ * Deux MÉTIERS dans Tickets, comme Task Manager en a deux : traiter le travail synchronisé d'un
+ * serveur de tickets n'est pas décider quoi reprendre chez les concurrents. Le sélecteur de Source
+ * existant ne pouvait pas porter la veille — une source y désigne un profil AVEC authentification et
+ * requêtes serveur, et y glisser un stock local aurait détourné ce modèle.
+ */
+export type TicketsSection = 'externes' | 'autowin'
 
 export interface AppLocation {
   destination: AppDestination

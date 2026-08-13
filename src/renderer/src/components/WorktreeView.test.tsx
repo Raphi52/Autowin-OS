@@ -304,6 +304,29 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     )
   })
 
+  it('distingue visuellement la ligne de la branche principale sans marquer les autres', async () => {
+    installApi({
+      getWorktreeActivity: vi.fn(async () => [
+        { ...activity[0], agentId: 'main-run', baseBranch: 'main' },
+        { ...activity[1], agentId: 'feature-run', baseBranch: 'feat/cockpit' }
+      ])
+    })
+    await renderView()
+
+    const lignes = Array.from(
+      container?.querySelectorAll('[data-testid="worktree-chantiers"] .wt-cdp-ligne') ?? []
+    )
+    const ligneMain = lignes.find(
+      (ligne) => ligne.querySelector('.wt-cdp-branche')?.textContent === 'main'
+    )
+    const ligneFeature = lignes.find(
+      (ligne) => ligne.querySelector('.wt-cdp-branche')?.textContent === 'feat/cockpit'
+    )
+
+    expect(ligneMain?.classList.contains('is-main')).toBe(true)
+    expect(ligneFeature?.classList.contains('is-main')).toBe(false)
+  })
+
   it('dit que la lecture est EN COURS au lieu d’afficher des zéros', async () => {
     // MESURÉ : la récupération hors fil principal met ~16 s à répondre. Pendant ce temps la lecture
     // initiale rend un tableau vide, et le bandeau annonçait « 0 chantier t'attend » alors que 215 runs

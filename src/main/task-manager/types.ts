@@ -110,9 +110,27 @@ export interface WatchdogRule {
 /** Ce que l'agent reveille a CONCLU. Le tri est le livrable, pas un effet de bord. */
 export type WatchdogOutcome = 'benign' | 'report' | 'investigate' | 'repair'
 
+/**
+ * Ce que la tache FAIT quand elle se declenche.
+ *
+ * `chat` (defaut, et valeur des taches historiques) : envoyer le prompt dans une conversation, le seul
+ * comportement qui existait. `veille` : executer une passe de veille concurrents, qui ecrit ses
+ * candidats dans le stock lu par l'onglet Tickets.
+ *
+ * Champ OPTIONNEL a dessein : une tache deja enregistree n'a pas ce champ et doit continuer a se
+ * comporter exactement comme avant. Un champ requis aurait casse toutes les taches du disque.
+ *
+ * Ce champ a ete PERDU une fois par une fusion venue d'origin/main, puis remis : sans lui, le
+ * dispatcheur de veille ne se declenche jamais et la tache planifiee envoie un prompt de chat a la
+ * place — un echec silencieux, la tache passant au vert sans avoir lu une seule page.
+ */
+export type TaskAction = 'chat' | 'veille'
+
 export interface ScheduledTaskInput {
   title: string
   prompt: string
+  /** Absent = `chat`. Voir {@link TaskAction}. */
+  action?: TaskAction
   enabled: boolean
   mode: TaskExecutionMode
   destination: TaskDestination

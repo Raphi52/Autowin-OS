@@ -10,6 +10,22 @@ const CLAUSE_SPLIT =
 const APOSTROPHES = /[‘’ʼ]/g
 const SENTINEL_PREFIX = /^\[[^\]]{0,160}\]\s*/
 const PHASE_LECTURE_SEULE_LEAD = /^\/?(?:scout|frame|judge)\b/i
+/*
+  ATTENTION : un verbe de lecture seule doit être ajouté ICI **et** dans les deux listes de
+  `classifyMutationConfidence` (les gardes `explicitReadOnly` / `simpleReadOnlyLead`). Elles ne sont
+  pas interchangeables — celle-ci filtre CHAQUE clause, les autres décident si le chemin lecture seule
+  est même tenté — et ne pas le poser partout laisse la tâche en `uncertain`, donc traitée comme une
+  mutation.
+
+  POURQUOI `verifi` N'EST PAS DANS CETTE LISTE, alors que « vérifier » ne modifie rien. Ce classement
+  ne pilote pas seulement le bac à sable : dans `agent-pilot.ts:508-518`, un verdict `read-only`
+  SUPPRIME le catalogue de commandes du chat. « Vérifie la suite » deviendrait donc une tâche à
+  laquelle l'agent n'a plus le droit de lancer un test — l'inverse exact de ce qui est demandé.
+  MESURÉ : ajouter le verbe faisait tomber `agent-pilot.result-truth` (l'événement `verify` n'était
+  plus émis du tout). « Vérifier » se lit selon son objet — un écart de facturation se LIT, une suite
+  de tests s'EXÉCUTE — et ce classifieur n'a pas cette information. Le défaut sûr (mutation) garde la
+  capacité ; c'est le bon compromis ici.
+*/
 const READ_ONLY_STEM =
   'analys|audit|cadr|document|expliqu|inspect|review|resume|resum|repond|decri|lis|lire|liste|montre|affiche'
 const READ_ONLY_CLAUSE = new RegExp(`^(?:${READ_ONLY_STEM})\\w*\\b`, 'i')

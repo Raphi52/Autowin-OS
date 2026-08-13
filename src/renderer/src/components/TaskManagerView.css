@@ -21,9 +21,7 @@
   padding: 4px 8px 0;
 }
 
-/* L'eyebrow reprend `--module-eyebrow-color` comme partout : le forcer en `--gold` ici et dans
-   Tickets rendait un surtitre JAUNE dans deux vues sur sept, sans que rien ne le justifie. Le titre
-   de panneau garde sa couleur propre — c'est un titre de PANNEAU, pas l'identite de la vue. */
+/* Le titre de panneau garde sa couleur propre : c'est un titre de PANNEAU. */
 .task-manager-panel-title > span {
   color: var(--gold);
 }

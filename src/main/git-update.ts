@@ -30,8 +30,11 @@ const defaultRunner: GitRunner = async (args, cwd) => {
 export interface UpdateStatus {
   available: boolean
   behind: number
-  /** Arbre de travail modifié. N'empêche PLUS la mise à jour : `--autostash` s'en charge. */
+  /** Arbre de travail modifié. Il sera protégé par un stash explicite pendant la mise à jour. */
   dirty?: boolean
+  /** Une opération Git contient déjà des fichiers non fusionnés. */
+  conflicted?: boolean
+  conflictOperation?: 'merge' | 'unknown'
   /** Stratégies applicables ici, la première étant la recommandée. */
   strategies?: UpdateStrategy[]
   /** Branche SORTIE (≠ la référence comparée) — à afficher pour lever toute ambiguïté. */
@@ -46,8 +49,35 @@ const TEAM_REFERENCE = 'origin/main'
 
 
 
-/** Fetch quiet + compte les commits de retard (HEAD..upstream). Tout échec → indisponible (silencieux). */
+/** Détecte d'abord les conflits locaux, puis fetch et compte les commits de retard. */
 export async function checkForUpdate(cwd: string, run: GitRunner = defaultRunner): Promise<UpdateStatus> {
+  // L'annulation d'une fusion est purement LOCALE : elle doit rester disponible même si le réseau
+  // ou le remote est indisponible. Ne jamais remettre cette sonde après le fetch.
+  try {
+    const unmerged = (await run(['diff', '--name-only', '--diff-filter=U'], cwd)).stdout.trim()
+    if (unmerged) {
+      const mergeHead = (
+        await run(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], cwd)
+      ).stdout.trim()
+      let branch: string | undefined
+      try {
+        branch = (await run(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)).stdout.trim() || undefined
+      } catch {
+        /* le bouton d'annulation ne dépend pas du nom de branche */
+      }
+      return {
+        available: true,
+        behind: 0,
+        ...(branch ? { branch, strategies: strategiesFor(branch) } : {}),
+        dirty: true,
+        conflicted: true,
+        conflictOperation: mergeHead ? 'merge' : 'unknown'
+      }
+    }
+  } catch {
+    /* hors dépôt ou état local illisible : le fetch produira l'erreur utile */
+  }
+
   try {
     await run(['fetch', '--quiet'], cwd)
     const branch = (await run(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)).stdout.trim()
@@ -71,7 +101,15 @@ export async function checkForUpdate(cwd: string, run: GitRunner = defaultRunner
     } catch {
       /* état inconnu : on n'en fait pas un blocage */
     }
-    return { available: behind > 0, behind, branch, reference, dirty, strategies: strategiesFor(branch) }
+    return {
+      available: behind > 0,
+      behind,
+      branch,
+      reference,
+      dirty,
+      conflicted: false,
+      strategies: strategiesFor(branch)
+    }
   } catch (error) {
     return { available: false, behind: 0, error: error instanceof Error ? error.message : String(error) }
   }
@@ -132,6 +170,36 @@ export interface ApplyOptions {
   strategy?: UpdateStrategy
 }
 
+/** Annule uniquement une fusion réellement ouverte; jamais un reset implicite. */
+export async function abortUpdateConflict(
+  cwd: string,
+  run: GitRunner = defaultRunner
+): Promise<ApplyResult> {
+  try {
+    const unmerged = (await run(['diff', '--name-only', '--diff-filter=U'], cwd)).stdout.trim()
+    const mergeHead = (
+      await run(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], cwd)
+    ).stdout.trim()
+    if (!unmerged || !mergeHead) {
+      return { ok: false, error: "Aucune fusion Git conflictuelle n'est actuellement ouverte." }
+    }
+    await run(['merge', '--abort'], cwd)
+    const remaining = (await run(['diff', '--name-only', '--diff-filter=U'], cwd)).stdout.trim()
+    if (remaining) {
+      return {
+        ok: false,
+        error: `La fusion n'a pas pu être annulée complètement (${remaining.split(/\r?\n/).length} fichier(s) encore en conflit).`
+      }
+    }
+    return { ok: true, effect: 'none', reload: false, relaunch: false }
+  } catch (error) {
+    return {
+      ok: false,
+      error: `Impossible d'annuler la fusion en cours. ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+}
+
 function packageSignature(cwd: string): string {
   const read = (f: string): string => {
     const p = join(cwd, f)
@@ -143,9 +211,9 @@ function packageSignature(cwd: string): string {
 /**
  * Applique la mise à jour selon la stratégie demandée.
  *
- * Un arbre SALE n'est PLUS un refus : `--autostash` met le travail de côté et le remet, y compris en cas
- * d'échec. L'ancien refus obligeait à commiter n'importe quoi juste pour récupérer une mise à jour, ce
- * qui est le contraire de protéger le travail local.
+ * Un arbre SALE n'est PLUS un refus : un stash explicite met le travail de côté, la mise à jour est
+ * tentée, puis le stash est remis. Contrairement à `--autostash`, ce flux permet d'annuler une fusion
+ * ou un rebase raté AVANT de restaurer le travail local.
  *
  * La SEULE garde conservée : hors de `main`, aucune stratégie n'est choisie à la place de l'utilisateur
  * → `needsChoice`. C'est une question posée, pas un échec, et c'est ce qui empêche de fabriquer une
@@ -162,8 +230,8 @@ export async function applyUpdate(
   try {
     const before = packageSignature(cwd)
     // Le SHA d'avant : c'est lui qui permettra de lister ce que la mise à jour a réellement changé,
-    // donc de décider entre recharger la fenêtre et redémarrer. `HEAD@{1}` ne conviendrait pas —
-    // le reflog bouge aussi pour un autostash.
+    // donc de décider entre recharger la fenêtre et redémarrer. `HEAD@{1}` ne conviendrait pas :
+    // une fusion ou un rebase peut ajouter plusieurs entrées au reflog.
     const headBefore = (await run(['rev-parse', 'HEAD'], cwd)).stdout.trim()
     const currentBranch = (await run(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)).stdout.trim()
     const available = strategiesFor(currentBranch)
@@ -186,17 +254,98 @@ export async function applyUpdate(
         error: `La stratégie « ${strategy} » ne s'applique pas depuis « ${currentBranch} ».`
       }
     }
-    // `--autostash` PARTOUT : git met le travail en cours de côté et le remet lui-même, y compris si
-    // l'opération échoue. C'est ce qui remplace l'ancien refus sur arbre sale — refuser obligeait à
-    // commiter n'importe quoi juste pour récupérer une mise à jour.
-    if (strategy === 'fast-forward') await run(['pull', '--ff-only', '--autostash'], cwd)
-    else if (strategy === 'merge') await run(['merge', '--autostash', TEAM_REFERENCE], cwd)
-    else if (strategy === 'rebase') await run(['rebase', '--autostash', TEAM_REFERENCE], cwd)
-    else {
-      // Basculer NE PERD RIEN : le travail de la branche reste sur la branche, on ne fait que changer
-      // de point de vue avant d'avancer main.
-      await run(['switch', 'main'], cwd)
-      await run(['pull', '--ff-only', '--autostash'], cwd)
+
+    const unmerged = (await run(['diff', '--name-only', '--diff-filter=U'], cwd)).stdout.trim()
+    if (unmerged) {
+      return {
+        ok: false,
+        strategy,
+        error: `Le dépôt est déjà en conflit (${unmerged.split(/\r?\n/).length} fichier(s)). Résous les conflits ou annule l'opération Git en cours avant de mettre à jour.`
+      }
+    }
+
+    const dirty = (await run(['status', '--porcelain'], cwd)).stdout.trim().length > 0
+
+    let stashed = false
+    if (dirty) {
+      await run(['stash', 'push', '--include-untracked', '--message', 'autowin-pre-update'], cwd)
+      stashed = true
+    }
+
+    let switchedToMain = false
+    try {
+      if (strategy === 'fast-forward') await run(['pull', '--ff-only'], cwd)
+      else if (strategy === 'merge') await run(['merge', TEAM_REFERENCE], cwd)
+      else if (strategy === 'rebase') await run(['rebase', TEAM_REFERENCE], cwd)
+      else {
+        await run(['switch', 'main'], cwd)
+        switchedToMain = true
+        await run(['pull', '--ff-only'], cwd)
+        // Le stash appartient au contexte de la branche d'origine : on y revient AVANT de le remettre.
+        await run(['switch', currentBranch], cwd)
+        switchedToMain = false
+      }
+    } catch (updateError) {
+      // Une fusion/rebase en conflit doit être ANNULÉE avant le pop. Si l'annulation ne suffit pas,
+      // le stash reste intact : mieux vaut un travail rangé qu'un mélange impossible à démêler.
+      if (strategy === 'merge') {
+        try {
+          await run(['merge', '--abort'], cwd)
+        } catch {
+          /* le merge a pu échouer avant de commencer */
+        }
+      } else if (strategy === 'rebase') {
+        try {
+          await run(['rebase', '--abort'], cwd)
+        } catch {
+          /* le rebase a pu échouer avant de commencer */
+        }
+      }
+
+      if (switchedToMain) {
+        try {
+          await run(['switch', currentBranch], cwd)
+          switchedToMain = false
+        } catch (restoreBranchError) {
+          return {
+            ok: false,
+            strategy,
+            error: `La mise à jour de main a échoué et la branche d'origine « ${currentBranch} » n'a pas pu être restaurée. Le travail local reste protégé dans le stash. Mise à jour : ${updateError instanceof Error ? updateError.message : String(updateError)}. Retour : ${restoreBranchError instanceof Error ? restoreBranchError.message : String(restoreBranchError)}`
+          }
+        }
+      }
+
+      const conflictsRemain = (await run(['diff', '--name-only', '--diff-filter=U'], cwd)).stdout.trim()
+      if (stashed && !conflictsRemain) {
+        try {
+          await run(['stash', 'pop'], cwd)
+        } catch (popError) {
+          return {
+            ok: false,
+            strategy,
+            error: `La mise à jour a échoué et le travail local n'a pas pu être remis automatiquement. Le stash est conservé. Mise à jour : ${updateError instanceof Error ? updateError.message : String(updateError)}. Restauration : ${popError instanceof Error ? popError.message : String(popError)}`
+          }
+        }
+      }
+      return {
+        ok: false,
+        strategy,
+        error: conflictsRemain
+          ? `La mise à jour a échoué et des conflits subsistent. Le travail local reste protégé dans le stash. ${updateError instanceof Error ? updateError.message : String(updateError)}`
+          : `La mise à jour a échoué; la tentative a été annulée${stashed ? ' et le travail local remis' : ''}. ${updateError instanceof Error ? updateError.message : String(updateError)}`
+      }
+    }
+
+    if (stashed) {
+      try {
+        await run(['stash', 'pop'], cwd)
+      } catch (popError) {
+        return {
+          ok: false,
+          strategy,
+          error: `La mise à jour est appliquée, mais le travail local n'a pas pu être remis automatiquement. Résous les conflits; le stash est conservé. ${popError instanceof Error ? popError.message : String(popError)}`
+        }
+      }
     }
     const npmInstalled = packageSignature(cwd) !== before
     if (npmInstalled) await npmInstall(cwd)

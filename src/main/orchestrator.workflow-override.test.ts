@@ -85,6 +85,7 @@ class RedPuisVertParModele extends RedPuisVert {
   }
 }
 
+/** Un juge qui ne valide JAMAIS : le cas où seule la borne arrête la boucle. */
 class ToujoursRouge extends Recorder {
   readonly phases: string[] = []
 
@@ -95,9 +96,8 @@ class ToujoursRouge extends Recorder {
     const phase = /SKILL\s+(scout|frame|terrain|build|clean|judge)/.exec(options.system ?? '')?.[1]
     if (phase) this.phases.push(phase)
     const result = yield* super.send(messages, options)
-    return phase === 'judge' && options.execution?.sandbox === 'read-only'
-      ? { ...result, text: 'DEFAUT: preuve identique' }
-      : result
+    if (phase !== 'judge' || options.execution?.sandbox !== 'read-only') return result
+    return { ...result, text: 'DEFAUT: toujours le meme defaut' }
   }
 }
 
@@ -290,22 +290,30 @@ describe('un graphe pilote le run', () => {
     expect(provider.execCount).toBe(1)
   })
 
-  it('le devis ignore les retours rouges qui exigent desormais un nouveau tour humain', async () => {
+  it('le devis provisionne le PIRE CAS du graphe, pas sa chaîne — refus en mode bloquant', async () => {
+    // Régime standard : la chaîne seule (2 phases) passe. C'est bien le pire cas du graphe à boucles
+    // — 7 exécutions de nœuds — qui fait refuser, AVANT de dépenser plutôt qu'en pleine course.
+    // Depuis conv-1148 (13/08), ce refus est réservé au mode `blocking` : en mesure seule (défaut),
+    // le devis s'agrandit au pire cas au lieu de tuer le run.
+    const bloquant = compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
     await expect(
-      makeOrchestrator(new Recorder(), undefined, compileExecutionQuote('corrige le bug')).run(
-        'corrige le bug'
-      )
+      makeOrchestrator(new Recorder(), undefined, bloquant).run('corrige le bug')
     ).resolves.toBeDefined()
-    const provider = new Recorder()
     await expect(
-      makeOrchestrator(provider, { graph: boucle }, compileExecutionQuote('corrige le bug')).run(
-        'corrige le bug'
-      )
+      makeOrchestrator(
+        new Recorder(),
+        { graph: boucle },
+        compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
+      ).run('corrige le bug')
+    ).rejects.toThrow('Devis impossible')
+    const mesure = compileExecutionQuote('corrige le bug')
+    await expect(
+      makeOrchestrator(new Recorder(), { graph: boucle }, mesure).run('corrige le bug')
     ).resolves.toBeDefined()
-    expect(provider.prompts).toHaveLength(3)
+    expect(mesure.limits.maxProviderCalls).toBeGreaterThanOrEqual(7)
   })
 
-  it('un graphe explicitement choisi reserve uniquement son chemin initial', async () => {
+  it('un graphe explicitement choisi réserve son chemin complet et ses deux reprises', async () => {
     const graph = {
       entry: 'scout-1',
       nodes: [
@@ -333,8 +341,8 @@ describe('un graphe pilote le run', () => {
       )
     ).resolves.toBeDefined()
     expect(quote.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
-    expect(quote.limits.maxRecoveries).toBe(0)
-    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(6)
+    expect(quote.limits.maxRecoveries).toBe(2)
+    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(11)
     expect(quote.limits.maxAgents).toBeLessThanOrEqual(quote.limits.maxProviderCalls)
   })
 
@@ -355,7 +363,7 @@ describe('un graphe pilote le run', () => {
     expect(provider.prompts).toHaveLength(2) // build + gate judge
   })
 
-  it('une arrete rouge ne repaie jamais automatiquement le sous-chemin sans strategie nouvelle', async () => {
+  it('un juge rouge rejoue tout le sous-chemin build → clean avant le nouveau gate', async () => {
     const provider = new RedPuisVert()
     const quote = compileExecutionQuote('corrige le bug')
     await makeOrchestrator(
@@ -385,12 +393,22 @@ describe('un graphe pilote le run', () => {
       quote
     ).run('corrige le bug')
 
-    expect(provider.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
+    expect(provider.phases).toEqual([
+      'scout',
+      'frame',
+      'terrain',
+      'build',
+      'clean',
+      'judge',
+      'build',
+      'clean',
+      'judge'
+    ])
   })
 
   it('un graphe avec une reprise tient dans un cap égal à son vrai pire cas', async () => {
     const provider = new RedPuisVert()
-    const quote = compileExecutionQuote('corrige le bug', { maxProviderCalls: 3 })
+    const quote = compileExecutionQuote('corrige le bug', { maxProviderCalls: 5 })
     await expect(
       makeOrchestrator(
         provider,
@@ -413,34 +431,7 @@ describe('un graphe pilote le run', () => {
         quote
       ).run('corrige le bug')
     ).resolves.toBeDefined()
-    expect(provider.prompts).toHaveLength(3)
-  })
-
-  it('arrête une boucle explicite si le livrable et le défaut restent identiques', async () => {
-    const provider = new ToujoursRouge()
-    const quote = compileExecutionQuote('corrige le bug')
-    const result = await makeOrchestrator(
-      provider,
-      {
-        explicit: true,
-        graph: {
-          entry: 'build',
-          nodes: [
-            { id: 'build', phase: 'build' },
-            { id: 'judge', phase: 'judge' }
-          ],
-          edges: [
-            { from: 'build', to: 'judge', when: 'always' },
-            { from: 'judge', to: 'build', when: 'red', maxTraversals: 2 }
-          ]
-        }
-      },
-      quote
-    ).run('corrige le bug')
-
-    expect(result.gateBlocked).toBe(true)
-    expect(result.gateReasons.at(-1)).toMatch(/reprise automatique.*desactivee/i)
-    expect(provider.phases).toEqual(['build', 'judge'])
+    expect(provider.prompts).toHaveLength(5)
   })
 
   it('refuse un panel composé hors caps avant le premier appel provider', async () => {
@@ -494,7 +485,7 @@ describe('un graphe pilote le run', () => {
     expect(provider.prompts).toHaveLength(2)
   })
 
-  it('une arrete rouge ne rejoue pas le panel compose du noeud build', async () => {
+  it('une reprise rejoue le panel composé du nœud build et sa synthèse', async () => {
     const provider = new RedPuisVertParModele()
     const quote = compileExecutionQuote('refonte architecture sécurité migration')
     await makeOrchestrator(
@@ -524,8 +515,8 @@ describe('un graphe pilote le run', () => {
       quote
     ).run('refonte architecture sécurité migration')
 
-    expect(provider.modeles).toEqual(['a', 'b', 'c', 'chef', 'juge'])
-    expect(quote.allocation?.estimatedMaxCalls).toBe(5)
+    expect(provider.modeles).toEqual(['a', 'b', 'c', 'chef', 'juge', 'a', 'b', 'c', 'chef', 'juge'])
+    expect(quote.allocation?.estimatedMaxCalls).toBe(10)
   })
 })
 
@@ -667,5 +658,48 @@ describe('le quorum composé décide du verdict', () => {
   it('un quorum de 3 exige l’unanimité — le dissident fait échouer', async () => {
     // C'est là que le réglage composé se VOIT : même jury, même dissident, verdict inverse.
     expect((await lancer(3)).valid).toBe(false)
+  })
+})
+
+describe('mode bloquant : aucune reprise automatique sans nouveau tour humain', () => {
+  // Posture introduite par main (2329a77) puis PORTÉE PAR LA DOCTRINE : en `blocking` le plafond
+  // est un contrat et l'arête rouge ne repaie rien seule ; en mesure seule (défaut, décision du
+  // 12/08) la réparation bornée se joue automatiquement — couverte par les tests ci-dessus.
+  const grapheReprise = {
+    entry: 'build',
+    nodes: [
+      { id: 'build', phase: 'build' as const },
+      { id: 'judge', phase: 'judge' as const }
+    ],
+    edges: [
+      { from: 'build', to: 'judge', when: 'always' as const },
+      { from: 'judge', to: 'build', when: 'red' as const, maxTraversals: 2 }
+    ]
+  }
+
+  it('un graphe explicitement choisi ne reserve AUCUNE reprise en bloquant', async () => {
+    const quote = compileExecutionQuote('corrige le sommaire du README', {
+      spendEnforcement: 'blocking'
+    })
+    await expect(
+      makeOrchestrator(new ToujoursRouge(), { explicit: true, graph: grapheReprise }, quote).run(
+        'corrige le sommaire du README'
+      )
+    ).resolves.toBeDefined()
+    expect(quote.limits.maxRecoveries).toBe(0)
+  })
+
+  it('un juge toujours rouge s’arrete au premier verdict, avec la raison affichee', async () => {
+    const provider = new ToujoursRouge()
+    const quote = compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
+    const result = await makeOrchestrator(
+      provider,
+      { explicit: true, graph: grapheReprise },
+      quote
+    ).run('corrige le bug')
+
+    expect(result.gateBlocked).toBe(true)
+    expect(result.gateReasons.at(-1)).toMatch(/reprise automatique.*desactivee/i)
+    expect(provider.phases).toEqual(['build', 'judge'])
   })
 })

@@ -6,7 +6,8 @@ import { compileExecutionQuote } from './execution-quote'
 describe('budget bloquant sans destruction du travail déjà payé', () => {
   it('compte le cache dans le total, finalise le premier appel puis refuse le suivant', async () => {
     const supervisor = new ExecutionSupervisor()
-    const quote = compileExecutionQuote('améliore la vue Worktrees')
+    // Refus de dépense = mode `blocking` explicite : le défaut est mesure seule (décision du 12/08).
+    const quote = compileExecutionQuote('améliore la vue Worktrees', { spendEnforcement: 'blocking' })
     quote.limits.maxTotalTokens = 2_500_000
 
     let livrableFinalise = false
@@ -36,7 +37,9 @@ describe('budget bloquant sans destruction du travail déjà payé', () => {
 
   it('refuse le prochain appel quand le plafond USD est atteint', async () => {
     const supervisor = new ExecutionSupervisor()
-    const quote = compileExecutionQuote('mène tous les chantiers de la vue Chat')
+    const quote = compileExecutionQuote('mène tous les chantiers de la vue Chat', {
+      spendEnforcement: 'blocking'
+    })
     quote.limits.maxUsd = 0.01
     quote.limits.maxTotalTokens = 1_000
     quote.limits.maxConcurrency = 8

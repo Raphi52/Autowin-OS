@@ -87,6 +87,7 @@ import {
 import { amitelWorkspaces } from './amitel-paths'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
+import { chatTurnBudget, estCoupureBudget, CHAT_BUDGET_ABORT_PREFIX } from './chat-turn-budget'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import {
   appPreflightProbes,
@@ -151,9 +152,9 @@ import {
   listRecoverableChatProviderCalls,
   recoverCompletedChatProviderCall,
   streamedPrefixForProviderCall,
+  waitForRecoverableChatProviderExit,
   type RecoverableChatProviderCall
 } from './runs/chat-provider-recovery'
-import { survivableExitCode } from './runs/stdout-journal'
 import { pruneContextValues } from './runs/context-value'
 import { appendConvActivity, loadConvActivity } from './activity/conv-activity'
 import {
@@ -275,7 +276,8 @@ import { gitlabTicketProvider } from './ticket-providers/gitlab'
 import { loadAzureDevOpsCliToken } from './azure-cli-token'
 import { loadForgeCliToken } from './forge-cli-token'
 import { registerTicketsIpc } from './tickets-ipc'
-import { checkForUpdate, applyUpdate, type UpdateStrategy } from './git-update'
+import { abortUpdateConflict, checkForUpdate, applyUpdate } from './git-update'
+import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
 import {
   ChatArtifactPreviewBudget,
@@ -320,6 +322,7 @@ import { recapMessage, summarizeJournal } from './runs/journal-replay'
 import { tailJournalOnce } from './runs/stdout-journal'
 import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summary'
 import { defaultProcessIdentity } from './store/worktree-manager'
+import { scopeWorktreeActivity } from '../shared/worktree-activity-model'
 import {
   appendConversationFileTrace,
   appendExecutionEvidenceFileTrace,
@@ -372,6 +375,7 @@ import {
   windowsRelayTaskName
 } from './task-manager/windows-relay'
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
+import { registerVeilleIpc } from './veille/veille-ipc'
 import {
   AutoKaizenSupervisor,
   incidentFromPilotEvent,
@@ -1464,11 +1468,14 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Update')
     return checkForUpdate(os.executionWorkspace)
   })
-  ipcMain.handle('update:apply', async (event, strategy?: UpdateStrategy) => {
+  ipcMain.handle('update:apply', async (event, action?: UpdateAction) => {
     assertTrustedRendererSender(event, 'Update')
     // La stratégie vient du BOUTON cliqué : hors de main, c'est ce qui distingue une intégration
     // demandée d'un merge fabriqué dans le dos de l'utilisateur.
-    const result = await applyUpdate(os.executionWorkspace, strategy ? { strategy } : {})
+    const result =
+      action === 'abort-conflict'
+        ? await abortUpdateConflict(os.executionWorkspace)
+        : await applyUpdate(os.executionWorkspace, action ? { strategy: action } : {})
     if (result.ok && result.reload) {
       // Le changement ne touche que le renderer : on recharge les FENÊTRES et le process principal
       // reste vivant — donc les runs en cours, les connexions et l'état en mémoire survivent.
@@ -2152,9 +2159,13 @@ Le fil reprend ensuite normalement.`
         status: ReturnType<typeof os.getWorktreeRuntimeStatus>
       }
     | undefined
-  ipcMain.handle('worktree:activity', (event) => {
+  ipcMain.handle('worktree:activity', (event, conversationId?: unknown) => {
     assertTrustedRendererSender(event, 'WorktreeActivity')
-    return worktreeFixture?.activity ?? os.getWorktreeActivity()
+    const activity = worktreeFixture?.activity ?? os.getWorktreeActivity()
+    return scopeWorktreeActivity(
+      activity,
+      typeof conversationId === 'string' && conversationId.trim() ? conversationId : undefined
+    )
   })
   ipcMain.handle('worktree:status', (event) => {
     assertTrustedRendererSender(event, 'WorktreeStatus')
@@ -3383,14 +3394,11 @@ Le fil reprend ensuite normalement.`
      * (2 $) — assez haut pour ne jamais gêner un tour légitime, assez bas pour arrêter une boucle
      * (le pire tour mesuré coûtait 2,109 $).
      */
-    const chatUsdCap = Number(process.env.AUTOWIN_CHAT_USD_CAP)
-    const chatTokenCap = Number(process.env.AUTOWIN_CHAT_TOKEN_CAP)
-    const chatCallCap = Number(process.env.AUTOWIN_CHAT_CALL_CAP)
-    const chatBreaker = new CostCircuitBreaker({
-      maxUsd: Number.isFinite(chatUsdCap) && chatUsdCap > 0 ? chatUsdCap : 2,
-      maxTokens: Number.isFinite(chatTokenCap) && chatTokenCap > 0 ? chatTokenCap : 1_500_000,
-      maxCalls: Number.isFinite(chatCallCap) && chatCallCap > 0 ? chatCallCap : 6
-    })
+    // Politique extraite dans `chat-turn-budget.ts` : mesuré sur conv-1149 (13/08), le défaut
+    // câblé coupait une campagne légitime à 3 $ et la déguisait en `cancelled`. Sans cap explicite
+    // de l'utilisateur, le trip OBSERVE (ledger) mais ne coupe plus.
+    const budgetDuTour = chatTurnBudget(process.env)
+    const chatBreaker = new CostCircuitBreaker(budgetDuTour.limits)
     const spoken: string[] = []
     let streamedSpoken = recovery?.providerCall.streamedPrefix ?? ''
     let durableResponseTextSeen = Boolean(streamedSpoken.trim())
@@ -3803,12 +3811,17 @@ Le fil reprend ensuite normalement.`
             tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
           } as Parameters<typeof chatBreaker.observe>[0])
           if (tripped) {
+            // Le dépassement reste TOUJOURS visible ; la coupure n'est armée que par un cap
+            // explicite (contrat utilisateur) — cf. chat-turn-budget.ts et conv-1149.
+            const coupe = budgetDuTour.enforcement === 'blocking'
             ledger.append({
               source: 'orchestrate',
               name: 'chat-budget',
-              detail: `tour coupé — ${tripped.reason}`
+              detail: coupe
+                ? `tour coupé — ${tripped.reason}`
+                : `seuil d'observation dépassé (mesure seule, aucun arrêt) — ${tripped.reason}`
             })
-            controller.abort(`budget du tour dépassé : ${tripped.reason}`)
+            if (coupe) controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : ${tripped.reason}`)
           }
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
@@ -4248,9 +4261,14 @@ Le fil reprend ensuite normalement.`
        * pilote apres 2 tentatives ; le journal du tour s'arretait sur ['delta','stream-reset',
        * 'delta'] sans aucun evenement terminal. Un tour qui echoue doit se CONCLURE, pas disparaitre.
        */
-      const terminal = controller.signal.aborted
-        ? ({ kind: 'cancelled' } as const)
-        : ({ kind: 'failed', error: e instanceof Error ? e.message : String(e) } as const)
+      // Un abort BUDGET n'est pas un stop volontaire : le classer `cancelled` l'excluait de la
+      // relance automatique et faisait porter le renoncement à l'utilisateur (conv-1149, 13/08).
+      const coupureBudget = controller.signal.aborted && estCoupureBudget(controller.signal.reason)
+      const terminal = coupureBudget
+        ? ({ kind: 'failed', error: String(controller.signal.reason) } as const)
+        : controller.signal.aborted
+          ? ({ kind: 'cancelled' } as const)
+          : ({ kind: 'failed', error: e instanceof Error ? e.message : String(e) } as const)
       if (conversationId && os.conversations.get(conversationId)) {
         os.conversations.applyTurnEvent(conversationId, turnId, terminal)
       }
@@ -4267,6 +4285,15 @@ Le fil reprend ensuite normalement.`
       if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
       usagePersistenceReady = true
       broadcast({ type: 'refresh', scope: 'workflows' })
+      if (coupureBudget)
+        return {
+          ok: false,
+          cancelled: false,
+          turnId,
+          error: String(controller.signal.reason),
+          ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
+          ...taskUsageMetricsFromExecution(supervisedUsage)
+        }
       if (controller.signal.aborted)
         return {
           ok: true,
@@ -4331,15 +4358,10 @@ Le fil reprend ensuite normalement.`
     setImmediate(() => {
       void (async () => {
         try {
-          let exitCode: number | undefined
-          while (!recoveryController.signal.aborted) {
-            exitCode = survivableExitCode(call.journalPath)
-            if (exitCode !== undefined) break
-            await new Promise<void>((resolve) => {
-              const timer = setTimeout(resolve, 250)
-              timer.unref?.()
-            })
-          }
+          const terminal = await waitForRecoverableChatProviderExit(call.journalPath, {
+            signal: recoveryController.signal,
+            fallbackActivityAt: call.updatedAt
+          })
 
           const closeWithoutRecovery = (event: ChatTurnEvent): void => {
             if (os.conversations.get(call.conversationId)) {
@@ -4351,10 +4373,15 @@ Le fil reprend ensuite normalement.`
             })
             broadcast({ type: 'refresh', scope: 'conversations' })
           }
-          if (recoveryController.signal.aborted) {
+          if (terminal.kind === 'aborted') {
             closeWithoutRecovery({ kind: 'cancelled' })
             return
           }
+          if (terminal.kind === 'stale') {
+            closeWithoutRecovery({ kind: 'interrupted' })
+            return
+          }
+          const { exitCode } = terminal
           if (exitCode !== 0) {
             closeWithoutRecovery({
               kind: 'failed',
@@ -4679,6 +4706,9 @@ Le fil reprend ensuite normalement.`
     }
     broadcast({ type: 'refresh', scope: 'task-manager' })
   })
+  // Veille concurrents : la vue Tickets lit le stock et marque un candidat. Deux gestes, pas plus —
+  // elle ne peut pas FABRIQUER de candidat, ce qui contournerait le controle de citation.
+  registerVeilleIpc({ ipc: ipcMain, assertTrusted: assertTrustedRendererSender })
   registerTaskManagerIpc({
     ipc: ipcMain,
     store: scheduledTasks,

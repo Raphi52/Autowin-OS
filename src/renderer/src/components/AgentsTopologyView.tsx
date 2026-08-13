@@ -496,7 +496,11 @@ export function AgentsTopologyView({
   return (
     <div className="agents-topology">
       <header className="topology-toolbar">
-        <ModuleHeader eyebrow="Configuration des agents" title="Models" />
+        <ModuleHeader
+          eyebrow="Configuration des agents"
+          title="Models"
+          description="Assigne les modèles aux rôles et contrôle leur disponibilité."
+        />
         <strong
           className={`topology-state is-${state}`}
           role={state === 'error' ? 'alert' : undefined}

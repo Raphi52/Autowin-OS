@@ -10,11 +10,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import {
-  flattenChatParts,
-  reduceChatTurn,
-  type ChatTurnEvent
-} from '../../shared/chat-turn'
+import { flattenChatParts, reduceChatTurn, type ChatTurnEvent } from '../../shared/chat-turn'
 import type { Conversation, ConversationChange, ConversationStore, Msg } from './conversations'
 import { ensureAutowinAppData } from '../app-data'
 
@@ -408,12 +404,19 @@ function writeConversationSnapshot(all: Conversation[], path: string): void {
     writeFileSync(tmp, JSON.stringify(all, null, 1), 'utf8')
     renameSync(tmp, path)
   } catch (error) {
+    /*
+      Le message porte la CAUSE, pas seulement le chemin.
+      Constaté le 2026-08-13 : l'application est morte au démarrage sur « Écriture du store
+      conversations impossible: <chemin> », et ce message ne disait pas POURQUOI. Il a fallu trois
+      sondes pour découvrir que le chemin d'écriture fonctionnait parfaitement en isolation — l'échec
+      était un accès concurrent (un second processus tenant le fichier, donc un renommage refusé).
+      Un `cause` rangé dans l'objet mais absent du message ne sert qu'à celui qui lit le code.
+    */
+    const cause = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
     throw new ConversationPersistenceError(
-      `Écriture du store conversations impossible: ${path}`,
+      `Écriture du store conversations impossible: ${path} — ${cause}`,
       path,
-      {
-        cause: error
-      }
+      { cause: error }
     )
   }
 }
@@ -451,7 +454,8 @@ function appendConversationChanges(
     const payload = `${journalRecords(changes)
       .map((record) => JSON.stringify(record))
       .join('\n')}\n`
-    const projected = (existsSync(journal) ? statSync(journal).size : 0) + Buffer.byteLength(payload)
+    const projected =
+      (existsSync(journal) ? statSync(journal).size : 0) + Buffer.byteLength(payload)
     if (projected > JOURNAL_MAX_BYTES) saveConversations([...all], path)
     else appendFileSync(journal, payload, 'utf8')
   } catch (error) {

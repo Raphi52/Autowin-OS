@@ -62,6 +62,13 @@ function runnerFor(changed: string[], headAfter = HEAD_AFTER): GitRunner {
       return { stdout: headCalls === 1 ? HEAD_BEFORE : headAfter }
     }
     if (args[0] === 'rev-parse') return { stdout: 'main' }
+    /*
+      La sonde de CONFLIT doit être distinguée du diff des fichiers changés. Les deux commencent par
+      `git diff`, et répondre la liste des changements à la première faisait croire à `applyUpdate`
+      que le dépôt était déjà en conflit : elle refusait de mettre à jour, et les quatre cas d'effet
+      rendaient `ok: false` sans que rien ne soit cassé dans le code testé.
+    */
+    if (args.includes('--diff-filter=U')) return { stdout: '' }
     if (args[0] === 'diff') return { stdout: changed.join('\n') }
     return { stdout: '' }
   }
@@ -127,6 +134,10 @@ describe('applyUpdate — l’effet suit ce qui a RÉELLEMENT changé', () => {
     // ne prouverait rien du repli. C'est le piège dans lequel sa première version est tombée.
     let headCalls = 0
     const run: GitRunner = async (args) => {
+      // La panne porte sur le diff qui dit CE QUI a changé — le seul dont l'indisponibilité doit
+      // déclencher le repli. La sonde de conflit reste répondue : la faire échouer testerait « git est
+      // mort », un cas où refuser la mise à jour est le bon comportement, pas se replier sur relaunch.
+      if (args.includes('--diff-filter=U')) return { stdout: '' }
       if (args[0] === 'diff') throw new Error('git indisponible')
       if (args[0] === 'rev-parse' && args[1] === 'HEAD') {
         headCalls += 1
