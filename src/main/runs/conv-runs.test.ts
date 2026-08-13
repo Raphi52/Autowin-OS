@@ -26,9 +26,16 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     const runs = await listConvRuns('conv-9', [], root)
     expect(runs).toHaveLength(1)
     expect(runs[0].summary.status).toBe('open')
-    // Plus AUCUNE case auto-remplie : le gabarit posait « le juge valide … », qui n'était pas un
-    // critère du travail mais le report du verdict — et faisait afficher « DoD 0/1 » à tout run rouge.
-    expect(runs[0].summary.dodTotal).toBe(0)
+    /*
+      Ce qui est interdit : la pseudo-DoD qui REPORTAIT LE VERDICT (« le juge valide le résultat et le
+      gate autorise la clôture »). Ce n'était pas un critère du travail, et elle faisait afficher
+      « DoD 0/1 » à tout run rouge — un reproche fantôme.
+
+      L'assertion ne porte donc PAS sur `dodTotal == 0` : les cases que le gabarit pose encore viennent
+      du contrat d'exécution racine, sont dérivées de la demande et se cochent sur preuve. Le cas d'une
+      tâche de lecture, qui n'en dérive aucune, est couvert par `conv-runs.dod-honnete.test.ts`.
+    */
+    expect(md).not.toMatch(/- \[[ x]\].*(?:juge valide|gate autorise)/i)
   })
 
   it('closeConvRun preserve les quatre statuts, sans plus cocher de pseudo-DoD', async () => {
