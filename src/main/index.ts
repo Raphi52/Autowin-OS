@@ -87,6 +87,7 @@ import {
 import { amitelWorkspaces } from './amitel-paths'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
+import { chatTurnBudget, estCoupureBudget, CHAT_BUDGET_ABORT_PREFIX } from './chat-turn-budget'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import {
   appPreflightProbes,
@@ -3383,14 +3384,11 @@ Le fil reprend ensuite normalement.`
      * (2 $) — assez haut pour ne jamais gêner un tour légitime, assez bas pour arrêter une boucle
      * (le pire tour mesuré coûtait 2,109 $).
      */
-    const chatUsdCap = Number(process.env.AUTOWIN_CHAT_USD_CAP)
-    const chatTokenCap = Number(process.env.AUTOWIN_CHAT_TOKEN_CAP)
-    const chatCallCap = Number(process.env.AUTOWIN_CHAT_CALL_CAP)
-    const chatBreaker = new CostCircuitBreaker({
-      maxUsd: Number.isFinite(chatUsdCap) && chatUsdCap > 0 ? chatUsdCap : 2,
-      maxTokens: Number.isFinite(chatTokenCap) && chatTokenCap > 0 ? chatTokenCap : 1_500_000,
-      maxCalls: Number.isFinite(chatCallCap) && chatCallCap > 0 ? chatCallCap : 6
-    })
+    // Politique extraite dans `chat-turn-budget.ts` : mesuré sur conv-1149 (13/08), le défaut
+    // câblé coupait une campagne légitime à 3 $ et la déguisait en `cancelled`. Sans cap explicite
+    // de l'utilisateur, le trip OBSERVE (ledger) mais ne coupe plus.
+    const budgetDuTour = chatTurnBudget(process.env)
+    const chatBreaker = new CostCircuitBreaker(budgetDuTour.limits)
     const spoken: string[] = []
     let streamedSpoken = recovery?.providerCall.streamedPrefix ?? ''
     let durableResponseTextSeen = Boolean(streamedSpoken.trim())
@@ -3803,12 +3801,17 @@ Le fil reprend ensuite normalement.`
             tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
           } as Parameters<typeof chatBreaker.observe>[0])
           if (tripped) {
+            // Le dépassement reste TOUJOURS visible ; la coupure n'est armée que par un cap
+            // explicite (contrat utilisateur) — cf. chat-turn-budget.ts et conv-1149.
+            const coupe = budgetDuTour.enforcement === 'blocking'
             ledger.append({
               source: 'orchestrate',
               name: 'chat-budget',
-              detail: `tour coupé — ${tripped.reason}`
+              detail: coupe
+                ? `tour coupé — ${tripped.reason}`
+                : `seuil d'observation dépassé (mesure seule, aucun arrêt) — ${tripped.reason}`
             })
-            controller.abort(`budget du tour dépassé : ${tripped.reason}`)
+            if (coupe) controller.abort(`${CHAT_BUDGET_ABORT_PREFIX} : ${tripped.reason}`)
           }
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
@@ -4248,9 +4251,14 @@ Le fil reprend ensuite normalement.`
        * pilote apres 2 tentatives ; le journal du tour s'arretait sur ['delta','stream-reset',
        * 'delta'] sans aucun evenement terminal. Un tour qui echoue doit se CONCLURE, pas disparaitre.
        */
-      const terminal = controller.signal.aborted
-        ? ({ kind: 'cancelled' } as const)
-        : ({ kind: 'failed', error: e instanceof Error ? e.message : String(e) } as const)
+      // Un abort BUDGET n'est pas un stop volontaire : le classer `cancelled` l'excluait de la
+      // relance automatique et faisait porter le renoncement à l'utilisateur (conv-1149, 13/08).
+      const coupureBudget = controller.signal.aborted && estCoupureBudget(controller.signal.reason)
+      const terminal = coupureBudget
+        ? ({ kind: 'failed', error: String(controller.signal.reason) } as const)
+        : controller.signal.aborted
+          ? ({ kind: 'cancelled' } as const)
+          : ({ kind: 'failed', error: e instanceof Error ? e.message : String(e) } as const)
       if (conversationId && os.conversations.get(conversationId)) {
         os.conversations.applyTurnEvent(conversationId, turnId, terminal)
       }
@@ -4267,6 +4275,15 @@ Le fil reprend ensuite normalement.`
       if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
       usagePersistenceReady = true
       broadcast({ type: 'refresh', scope: 'workflows' })
+      if (coupureBudget)
+        return {
+          ok: false,
+          cancelled: false,
+          turnId,
+          error: String(controller.signal.reason),
+          ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
+          ...taskUsageMetricsFromExecution(supervisedUsage)
+        }
       if (controller.signal.aborted)
         return {
           ok: true,

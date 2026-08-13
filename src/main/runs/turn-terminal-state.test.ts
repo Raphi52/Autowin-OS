@@ -70,7 +70,7 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
 
   it('écrit dans le store ET dans le journal fichier', () => {
     const source = main()
-    const catchBlock = source.slice(source.indexOf('const terminal = controller.signal.aborted'))
+    const catchBlock = source.slice(source.indexOf('const coupureBudget = controller.signal.aborted'))
     expect(catchBlock).toContain(
       'os.conversations.applyTurnEvent(conversationId, turnId, terminal)'
     )
@@ -79,7 +79,7 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
 
   it('l’écriture de trace ne masque JAMAIS l’erreur d’origine', () => {
     const source = main()
-    const catchBlock = source.slice(source.indexOf('const terminal = controller.signal.aborted'))
+    const catchBlock = source.slice(source.indexOf('const coupureBudget = controller.signal.aborted'))
     const journalWrite = catchBlock.slice(catchBlock.indexOf('appendTurnEvent'))
     expect(journalWrite).toContain('catch')
     // L'erreur d'origine doit toujours etre remontee a l'appelant.
@@ -88,7 +88,7 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
 
   it('distingue une ANNULATION d’un ÉCHEC', () => {
     const source = main()
-    const catchBlock = source.slice(source.indexOf('const terminal = controller.signal.aborted'))
+    const catchBlock = source.slice(source.indexOf('const coupureBudget = controller.signal.aborted'))
     expect(catchBlock).toContain("kind: 'cancelled'")
     expect(catchBlock).toContain("kind: 'failed'")
   })
