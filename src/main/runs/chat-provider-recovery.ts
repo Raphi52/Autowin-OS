@@ -1,7 +1,63 @@
+import { statSync } from 'node:fs'
 import type { Attachment, SendResult } from '../providers/types'
 import { guardAttachments } from '../ipc-guards'
 import { recoverDetachedProviderResult } from './run-reattach'
+import { survivableExitCode } from './stdout-journal'
 import { listUnfinishedTurns, readTurnJournal, type TurnJournalEvent } from './turn-journal'
+
+/** Apres le plafond reel des appels directs (40 min), un journal muet sans recu est orphelin. */
+export const MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS = 2 * 60 * 60_000
+
+function providerJournalActivityAt(path: string, fallback: number): number {
+  try {
+    return Math.max(fallback, statSync(path).mtimeMs)
+  } catch {
+    return fallback
+  }
+}
+
+export type RecoverableChatProviderExit =
+  { kind: 'exit'; exitCode: number } | { kind: 'stale' } | { kind: 'aborted' }
+
+/**
+ * Attend un recu terminal tant que le journal progresse. La borne d'inactivite reste dans la boucle :
+ * un appel recent au demarrage mais dont le producteur est mort ne peut donc pas bloquer le chat a vie.
+ */
+export async function waitForRecoverableChatProviderExit(
+  journalPath: string,
+  options: {
+    signal: AbortSignal
+    fallbackActivityAt?: number
+    maxInactivityMs?: number
+    pollMs?: number
+    now?: () => number
+    activityAt?: (path: string, fallback: number) => number
+    readExitCode?: (path: string) => number | undefined
+    wait?: (ms: number) => Promise<void>
+  }
+): Promise<RecoverableChatProviderExit> {
+  const maxInactivityMs = options.maxInactivityMs ?? MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS
+  const pollMs = options.pollMs ?? 250
+  const now = options.now ?? Date.now
+  const activityAt = options.activityAt ?? providerJournalActivityAt
+  const readExitCode = options.readExitCode ?? survivableExitCode
+  const wait =
+    options.wait ??
+    ((ms: number) =>
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, ms)
+        timer.unref?.()
+      }))
+
+  while (!options.signal.aborted) {
+    const exitCode = readExitCode(journalPath)
+    if (exitCode !== undefined) return { kind: 'exit', exitCode }
+    if (now() - activityAt(journalPath, options.fallbackActivityAt ?? now()) > maxInactivityMs)
+      return { kind: 'stale' }
+    await wait(pollMs)
+  }
+  return { kind: 'aborted' }
+}
 
 /** Lien durable écrit avant le spawn d'un provider de chat direct. */
 export interface RecoverableChatProviderCall {
@@ -95,8 +151,13 @@ function providerLink(
  * Ne considère que les tours sans clôture et prend leur DERNIER spawn : un premier essai peut avoir
  * échoué puis avoir été retenté. Rejouer l'ancien journal exécuterait une réponse obsolète.
  */
-export function listRecoverableChatProviderCalls(root: string): RecoverableChatProviderCall[] {
+export function listRecoverableChatProviderCalls(
+  root: string,
+  options: { now?: number; maxUncertifiedAgeMs?: number } = {}
+): RecoverableChatProviderCall[] {
   const calls: RecoverableChatProviderCall[] = []
+  const now = options.now ?? Date.now()
+  const maxUncertifiedAgeMs = options.maxUncertifiedAgeMs ?? MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS
   for (const turn of listUnfinishedTurns(root)) {
     const events = readTurnJournal(root, turn.conversationId, turn.turnId)
     let latest: RecoverableChatProviderCall | undefined
@@ -156,7 +217,11 @@ export function listRecoverableChatProviderCalls(root: string): RecoverableChatP
         })
       }
     }
-    if (!invalidProviderJournal && latest)
+    const uncertifiedAndStale =
+      latest &&
+      survivableExitCode(latest.journalPath) === undefined &&
+      now - providerJournalActivityAt(latest.journalPath, latest.updatedAt) > maxUncertifiedAgeMs
+    if (!invalidProviderJournal && latest && !uncertifiedAndStale)
       calls.push({
         ...latest,
         ...(settledActions.size > 0 ? { settledActions: [...settledActions.values()] } : {})

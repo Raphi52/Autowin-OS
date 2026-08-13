@@ -29,11 +29,45 @@ export interface CandidatVeille {
   citation: string
   /** Langue dans laquelle la source a été lue : plusieurs concurrents ne publient qu'en anglais. */
   langue?: string
+  /**
+   * Ce que l'entrée EST : un ajout de capacité, ou une correction.
+   *
+   * Constaté sur la première passe réelle : sur 10 candidats tirés d'un CHANGELOG, 8 étaient des
+   * corrections de bugs — « corrige la connexion OAuth MCP », « pings keepalive contre un timeout »,
+   * « corrige un crash sur les chemins UNC ». Proposer d'implémenter la correction d'un bug qu'on n'a
+   * pas n'a aucun sens, et les deux vraies features étaient noyées dans le lot.
+   */
+  type: TypeEntree
+  /**
+   * PERTINENCE pour Autowin, 0-100, telle que le scout l'a jugée : à quel point cette nouveauté
+   * mérite d'être reprise ici. `undefined` = le scout n'en a pas donné (source ancienne, ou modèle
+   * qui a ignoré la consigne) — on ne l'invente pas, l'absence est un fait distinct d'un zéro.
+   */
+  pertinence?: number
   /** Le prompt prêt à partir dans le chat. */
   prompt: string
   /** Quand la passe a vu cette entrée pour la première fois. */
   vuLe: string
   statut: 'nouveau' | 'ecarte' | 'prompte'
+}
+
+/**
+ * La nature d'une entrée de notes de version.
+ *
+ * Les trois natures sont CONSERVÉES, et c'est un revirement assumé : la première version refusait tout
+ * ce qui n'était pas un `ajout`, ce qui écartait 19 entrées sur 21 dans un seul CHANGELOG. Écarter
+ * n'était pas idiot — on ne réimplémente pas le correctif d'un bug qu'on n'a pas — mais ça jetait de
+ * l'information que l'utilisateur veut voir : ce que les concurrents CORRIGENT dit aussi où ils butent.
+ *
+ * La séparation se fait donc à l'AFFICHAGE (deux colonnes), pas à l'entrée. Ce qui reste refusé, c'est
+ * seulement ce qui n'a pas de preuve : citation, date ou URL manquantes.
+ */
+export type TypeEntree = 'ajout' | 'correction' | 'autre'
+
+/** Ramène ce qu'un scout a écrit à l'une des trois natures. Inconnu → `autre`, jamais deviné. */
+export function natureDe(brut: string | undefined): TypeEntree {
+  const valeur = brut?.trim().toLowerCase()
+  return valeur === 'ajout' || valeur === 'correction' ? valeur : 'autre'
 }
 
 /** Ce qu'un scout rend : les champs bruts, avant tout contrôle. */
@@ -44,6 +78,25 @@ export interface CandidatBrut {
   dateSource?: string
   citation?: string
   langue?: string
+  type?: string
+  /** Pertinence 0-100 telle que rendue par le scout ; bornée à l'entrée, jamais crue sur parole. */
+  pertinence?: number
+}
+
+/**
+ * Ramène une pertinence brute (nombre, chaîne numérique, hors bornes) à un entier 0-100, ou
+ * `undefined`. Piège trouvé par test : `Number(null)`, `Number('')` et `Number([])` valent `0`, pas
+ * `NaN` — accepter aveuglément `Number(valeur)` aurait transformé une note ABSENTE en un vrai zéro,
+ * exactement le mensonge que le champ optionnel doit éviter. On n'accepte donc QUE `number` ou une
+ * chaîne non vide entièrement numérique.
+ */
+export function bornerPertinence(valeur: unknown): number | undefined {
+  let n: number
+  if (typeof valeur === 'number') n = valeur
+  else if (typeof valeur === 'string' && valeur.trim() !== '') n = Number(valeur)
+  else return undefined
+  if (!Number.isFinite(n)) return undefined
+  return Math.max(0, Math.min(100, Math.round(n)))
 }
 
 export type RaisonRefus =
@@ -54,6 +107,7 @@ export type RaisonRefus =
   | 'date manquante'
   | 'citation manquante'
   | 'citation trop courte'
+  | 'nature non precisee'
   | 'deja connu'
 
 export interface Refus {
@@ -118,6 +172,9 @@ function premierRefus(brut: CandidatBrut): RaisonRefus | undefined {
   if (!brut.dateSource?.trim()) return 'date manquante'
   if (!brut.citation?.trim()) return 'citation manquante'
   if (brut.citation.trim().length < CITATION_MINIMUM) return 'citation trop courte'
+  // Une nature ABSENTE est refusée plutôt que devinée : classer à la place du scout reviendrait à
+  // décider d'après un titre, ce qui est exactement l'à-peu-près qu'on cherche à éviter.
+  if (!brut.type?.trim()) return 'nature non precisee'
   return undefined
 }
 
@@ -162,6 +219,10 @@ export function trierCandidats(
       dateSource: brut.dateSource!.trim(),
       citation: brut.citation!.trim(),
       ...(brut.langue?.trim() ? { langue: brut.langue.trim() } : {}),
+      ...(bornerPertinence(brut.pertinence) !== undefined
+        ? { pertinence: bornerPertinence(brut.pertinence) }
+        : {}),
+      type: natureDe(brut.type),
       prompt: contexte.redigerPrompt(brut),
       vuLe: contexte.maintenant,
       statut: 'nouveau'

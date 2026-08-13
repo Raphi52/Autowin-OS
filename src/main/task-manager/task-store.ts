@@ -181,6 +181,11 @@ export class TaskStore {
     const input: ScheduledTaskInput = {
       title: patch.title ?? current.title,
       prompt: patch.prompt ?? current.prompt,
+      // `action` reportee comme les autres champs. Elle manquait ici alors que la couche IPC la
+      // transmettait : une mise a jour de titre suffisait donc a retransformer une veille en tache de
+      // chat, silencieusement. Constate en verifiant le fichier sur disque apres un appel — l'API
+      // rendait `action: undefined` alors qu'elle venait d'etre demandee.
+      ...((patch.action ?? current.action) ? { action: patch.action ?? current.action } : {}),
       enabled: patch.enabled ?? current.enabled,
       mode: patch.mode ?? current.mode,
       destination: structuredClone(patch.destination ?? current.destination),

@@ -729,7 +729,11 @@ export function ObservatoryView({
   return (
     <section className="view-page observatory-view" data-testid="observatory-view">
       <header className="observatory-head">
-        <ModuleHeader eyebrow="Traçabilité des conversations" title="Observatory" />
+        <ModuleHeader
+          eyebrow="Traçabilité des conversations"
+          title="Observatory"
+          description="Suis les appels, les coûts, les durées et les erreurs."
+        />
         <div className="observatory-metrics">
           <strong data-metric="calls">
             {currentCalls.length.toLocaleString('fr-FR')}

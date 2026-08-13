@@ -3,6 +3,7 @@ import type { TaskScheduler } from './task-scheduler'
 import type { TaskStore } from './task-store'
 import type {
   ScheduledTaskInput,
+  TaskAction,
   TaskDestination,
   TaskManagerSnapshot,
   TaskOccurrence,
@@ -130,6 +131,7 @@ export function parseTaskUpdate(current: ScheduledTaskInput, raw: unknown): Sche
     enabled: patch.enabled ?? current.enabled,
     mode: patch.mode ?? current.mode,
     destination: patch.destination ?? current.destination,
+    action: patch.action ?? current.action,
     schedule: replacesTrigger ? patch.schedule : current.schedule,
     watchdog: replacesTrigger ? patch.watchdog : current.watchdog
   })
@@ -147,9 +149,15 @@ function parseTaskInput(raw: unknown): ScheduledTaskInput {
     enabled: boolean(value.enabled, 'enabled'),
     mode: mode(value.mode),
     destination: destination(value.destination),
+    ...(value.action === undefined ? {} : { action: taskAction(value.action) }),
     ...(value.schedule === undefined ? {} : { schedule: schedule(value.schedule) }),
     ...(value.watchdog === undefined ? {} : { watchdog: watchdog(value.watchdog) })
   }
+}
+
+function taskAction(raw: unknown): TaskAction {
+  if (raw === 'chat' || raw === 'veille') return raw
+  throw new Error(`action de tache invalide: ${String(raw)}`)
 }
 
 const WATCHDOG_APP_EVENTS: readonly WatchdogAppEvent[] = [

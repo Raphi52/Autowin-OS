@@ -179,8 +179,8 @@ const api = {
   setTicketsFixture: (fixture: unknown): Promise<boolean> =>
     ipcRenderer.invoke('app:test:tickets-fixture', fixture),
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
-  getWorktreeActivity: (): Promise<WorktreeAgentActivity[]> =>
-    ipcRenderer.invoke('worktree:activity'),
+  getWorktreeActivity: (conversationId?: string): Promise<WorktreeAgentActivity[]> =>
+    ipcRenderer.invoke('worktree:activity', conversationId),
   getWorktreeStatus: (): Promise<WorktreeRuntimeStatus> => ipcRenderer.invoke('worktree:status'),
   getWorktreeConflictDiff: (agentId: string): Promise<WorktreeConflictDiffResult> =>
     ipcRenderer.invoke('worktree:conflict-diff', agentId),
@@ -442,6 +442,9 @@ const api = {
     artifactId: string
   ): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('os:chatArtifact:reveal', conversationId, turnId, artifactId),
+  veilleSnapshot: (): Promise<unknown> => ipcRenderer.invoke('veille:snapshot'),
+  veilleMarquer: (id: string, statut: string): Promise<unknown> =>
+    ipcRenderer.invoke('veille:marquer', id, statut),
   taskManagerSnapshot: (): Promise<TaskManagerSnapshot> =>
     ipcRenderer.invoke('task-manager:snapshot'),
   taskManagerCreate: (task: unknown): Promise<ScheduledTask> =>

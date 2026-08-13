@@ -30,6 +30,9 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     // obligations falsifiables du prompt (root-execution-contract) : ici mutation + tests.
     expect(runs[0].summary.dodTotal).toBe(2)
     expect(md).toContain('- [ ] Mutation demandee produite avec une preuve executable')
+    // L'interdit lui-même, énoncé de façon falsifiable : aucune case ne doit REPORTER LE VERDICT.
+    // Compter les cases ne l'attrape pas — la pseudo-DoD retirée en faisait exactement une.
+    expect(md).not.toMatch(/- \[[ x]\].*(?:juge valide|gate autorise)/i)
     // Une demande de lecture seule, elle, garde une DoD vide.
     const lecture = createConvRun('conv-9-ro', 'Explique les écarts de facturation', root, () => 1100)
     expect(readFileSync(lecture, 'utf8')).not.toContain('- [ ]')
@@ -41,7 +44,8 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     const green = (await listConvRuns('conv-9', [], root)).find((r) => r.path === g)!
     expect(green.summary.status).toBe('green')
     // Le cochage n'est jamais un pseudo-critère de verdict : une case dérivée ne se coche qu'avec
-    // une PREUVE d'exécution transmise à la clôture — ici aucune, donc rien n'est coché.
+    // une PREUVE d'exécution transmise à la clôture — ici aucune, donc rien n'est coché. C'est
+    // l'assertion discriminante : ce cochage-là est exactement ce que l'ancien code faisait sur un vert.
     expect(green.summary.dodTotal).toBe(1)
     expect(green.summary.dodChecked).toBe(0)
 

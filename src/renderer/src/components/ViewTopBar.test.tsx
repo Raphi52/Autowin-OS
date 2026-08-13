@@ -59,9 +59,10 @@ describe('ViewTopBar — la barre de Task Manager, pour toutes les vues', () => 
       onSelect: () => {}
     })
     const entete = container.querySelector('.module-header')
-    expect(entete?.querySelector('span')?.textContent).toBe('AUTOMATISATION')
+    expect(entete?.querySelector('span')).toBeNull()
+    expect(entete?.firstElementChild?.tagName).toBe('H1')
     expect(entete?.querySelector('h1')?.textContent).toBe('Task Manager')
-    expect(container.querySelector('.view-topbar-description')?.textContent).toBe(
+    expect(container.querySelector('.module-header-description')?.textContent).toBe(
       'Planifie de vrais prompts Chat.'
     )
   })
@@ -74,7 +75,7 @@ describe('ViewTopBar — la barre de Task Manager, pour toutes les vues', () => 
       active: 'a',
       onSelect: () => {}
     })
-    expect(container.querySelector('.view-topbar-description')).toBeNull()
+    expect(container.querySelector('.module-header-description')).toBeNull()
   })
 
   it('les pastilles portent la classe partagée, donc le style partagé', async () => {

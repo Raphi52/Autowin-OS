@@ -119,12 +119,20 @@ describe('ClaudeCliAdapter — plafond de depense provider', () => {
     // Ce qui compte reellement dans ce profil (fond autonome, contexte d'evenement NON FIABLE) : la
     // lecture est permise et le SHELL est interdit. Le prompt systeme n'est qu'une consigne ; cette
     // liste est la capacite reelle. On verifie donc l'invariant, pas sa forme du jour.
+    //
+    // FUSION de deux formulations concurrentes (2026-08-13) : l'invariant vient de la version d'une
+    // autre session, qui a raison de generaliser ; les deux dernieres assertions viennent de la mienne
+    // et couvrent une propriete que l'invariant ne dit pas — `--allowedTools` recoit les outils web en
+    // arguments SEPARES. Mesure A/B sur le CLI reel : en une chaine a virgules, toute recuperation de
+    // page PEND jusqu'au delai maximum (code 124). Garder les deux, c'est garder les deux intentions.
     const outils = spawnCapture.args[spawnCapture.args.indexOf('--tools') + 1]
     expect(outils).toMatch(/(^|,)Read(,|$)/)
     expect(outils).toMatch(/(^|,)Grep(,|$)/)
     expect(outils).toMatch(/(^|,)Glob(,|$)/)
     expect(outils).not.toMatch(/(^|,)Bash/)
     expect(spawnCapture.args).not.toContain('Bash')
+    expect(spawnCapture.args).toContain('WebFetch')
+    expect(spawnCapture.args).toContain('WebSearch')
     expect(spawnCapture.args.join(' ')).not.toContain('Bash')
     if (previousWorkspace === undefined) delete process.env.AUTOWIN_OS_WORKSPACE
     else process.env.AUTOWIN_OS_WORKSPACE = previousWorkspace

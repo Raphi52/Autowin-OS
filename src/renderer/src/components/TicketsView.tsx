@@ -6,7 +6,9 @@ import {
   type TicketProvider,
   type TicketSourceProfile
 } from '../../../shared/tickets'
-import { ModuleHeader } from './ModuleHeader'
+import type { TicketsSection } from '../../../shared/navigation'
+import { ViewTopBar } from './ViewTopBar'
+import { VeilleCandidatsSection } from './VeilleCandidatsSection'
 import {
   formatTicketSelectionPrompt,
   mapWithConcurrency,
@@ -197,6 +199,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const [treatmentRecords, setTreatmentRecords] = useState(() =>
     reconcileTicketTreatmentRecords(localStorage)
   )
+
+  /** Section affichée. « externes » par défaut : c'est l'usage historique de cette vue. */
+  const [sectionActive, setSectionActive] = useState<TicketsSection>('externes')
 
   const recordTreatment = useCallback(
     (item: Pick<TicketItem, 'sourceId' | 'id'>, record: TicketTreatmentRecord): void => {
@@ -884,672 +889,709 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
   return (
     <section className="view-page tickets-view" data-testid="tickets-view" data-active={active}>
-      <header className="tickets-head">
-        <ModuleHeader eyebrow="Travail synchronisé" title="Tickets" />
-        <div className="tickets-source-controls">
-          <label className="tickets-source-pill">
-            <span className="tickets-source-eyebrow">Source</span>
-            <span className="tickets-source-provider" aria-hidden="true">
-              {selectedSource?.provider === 'github'
-                ? ''
-                : selectedSource?.provider === 'gitlab'
-                  ? '🦊'
-                  : '◆'}
-            </span>
-            <select
-              aria-label="Source de tickets"
-              data-testid="tickets-source"
-              value={sourceId}
-              onChange={(event) => changeSource(event.target.value)}
-            >
-              {sources.map(({ profile }) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="tickets-source-add"
-            title={showSourceForm ? 'Fermer le formulaire' : 'Ajouter une source'}
-            aria-label={showSourceForm ? 'Fermer le formulaire' : 'Ajouter une source'}
-            aria-expanded={showSourceForm}
-            onClick={() => setShowSourceForm((visible) => !visible)}
-          >
-            {showSourceForm ? '✕' : '＋ Source'}
-          </button>
-        </div>
-      </header>
+      {/*
+        Deux sections, comme Task Manager : le travail synchronisé d'un serveur de tickets d'un côté,
+        ce qu'il vaut la peine de reprendre chez les concurrents de l'autre. La barre vient de
+        `ViewTopBar`, la même que les autres vues — la recopier ici l'aurait fait diverger.
+      */}
+      <ViewTopBar
+        eyebrow="Travail synchronisé"
+        title="Tickets"
+        description="Synchronise et pilote le travail issu de tes sources externes."
+        ariaLabel="Sections Tickets"
+        active={sectionActive}
+        onSelect={setSectionActive}
+        tabs={[
+          { id: 'externes', label: 'Sources externes' },
+          { id: 'autowin', label: 'Autowin OS' }
+        ]}
+      />
 
-      {showSourceForm && (
-        <div className="tickets-source-form">
-          <select
-            aria-label="Fournisseur"
-            value={draft.provider}
-            onChange={(event) =>
-              setDraft({ ...EMPTY_DRAFT, provider: event.target.value as TicketProvider })
-            }
-          >
-            <option value="azure">Azure DevOps</option>
-            <option value="github">GitHub</option>
-            <option value="gitlab">GitLab</option>
-          </select>
-          {draft.provider === 'azure' && (
-            <>
-              <input
-                aria-label="Organisation Azure"
-                placeholder="Organisation"
-                value={draft.organization}
-                onChange={(event) => setDraft({ ...draft, organization: event.target.value })}
-              />
-              <input
-                aria-label="Projet Azure"
-                placeholder="Projet"
-                value={draft.project}
-                onChange={(event) => setDraft({ ...draft, project: event.target.value })}
-              />
-            </>
-          )}
-          {draft.provider === 'github' && (
-            <input
-              aria-label="Propriétaire GitHub"
-              placeholder="Organisation ou propriétaire"
-              value={draft.owner}
-              onChange={(event) => setDraft({ ...draft, owner: event.target.value })}
-            />
-          )}
-          {draft.provider === 'gitlab' && (
-            <input
-              aria-label="Namespace GitLab"
-              placeholder="Groupe / sous-groupe"
-              value={draft.namespace}
-              onChange={(event) => setDraft({ ...draft, namespace: event.target.value })}
-            />
-          )}
-          <input
-            aria-label={draft.provider === 'azure' ? 'Dépôt Azure de contexte' : 'Dépôt'}
-            placeholder={draft.provider === 'azure' ? 'Dépôt de contexte' : 'Dépôt'}
-            value={draft.repository}
-            onChange={(event) => setDraft({ ...draft, repository: event.target.value })}
-          />
-          {draft.provider !== 'azure' && (
-            <>
-              <input
-                aria-label="URL personnalisée"
-                placeholder="URL personnalisée (optionnel)"
-                value={draft.baseUrl}
-                onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
-              />
-              <span className="tickets-auth-help" data-testid="tickets-auth-help">
-                {draft.provider === 'github'
-                  ? 'Privé : GH_TOKEN sur github.com ; pour une URL personnalisée, connecte gh à cet hôte.'
-                  : 'Privé : GITLAB_TOKEN sur gitlab.com ; pour une URL personnalisée, connecte glab à cet hôte.'}
-              </span>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => void saveSource()}
-            aria-label="Enregistrer la source"
-            title="Enregistrer la source"
-          >
-            Enregistrer
-          </button>
-        </div>
-      )}
+      {sectionActive === 'autowin' && <VeilleCandidatsSection />}
 
-      {items.length > 0 && (
-        <div className="tickets-stats" data-testid="tickets-stats">
-          {/* PÉRIMÈTRE ANNONCÉ : ces compteurs ne sont PAS des statistiques projet — ils portent
-              sur la page chargée uniquement (le fournisseur pagine à 50). */}
-          <span
-            className="tickets-stats-total"
-            title="Compteurs calculés sur la page chargée, pas sur tout le projet"
-          >
-            <strong>{items.length}</strong> chargé(s) · <strong>{visibleItems.length}</strong>{' '}
-            affiché(s) · périmètre : page chargée
-          </span>
-          <div
-            className="tickets-stats-states"
-            role="group"
-            aria-label="Répartition par état sur la page chargée"
-          >
-            {stateCounts.map(([state, count]) => (
+      {/*
+        TOUT le contenu « sources externes » est monte SOUS condition, pas seulement son en-tete.
+        Premiere version : seul l'en-tete portait `hidden`, si bien que la liste de veille s'affichait
+        AU-DESSUS du selecteur de source, des filtres et du tableau de tickets — les deux sections
+        empilees. Vu a la capture, pas au typecheck.
+      */}
+      {sectionActive === 'externes' && (
+        <>
+          <header className="tickets-head">
+            <div className="tickets-source-controls">
+              <label className="tickets-source-pill">
+                <span className="tickets-source-eyebrow">Source</span>
+                <span className="tickets-source-provider" aria-hidden="true">
+                  {selectedSource?.provider === 'github'
+                    ? ''
+                    : selectedSource?.provider === 'gitlab'
+                      ? '🦊'
+                      : '◆'}
+                </span>
+                <select
+                  aria-label="Source de tickets"
+                  data-testid="tickets-source"
+                  value={sourceId}
+                  onChange={(event) => changeSource(event.target.value)}
+                >
+                  {sources.map(({ profile }) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
-                key={state}
                 type="button"
-                className={`tickets-state-chip${stateFilter === state ? ' is-active' : ''}`}
-                style={{ ['--chip-hue' as string]: hueOf(state) }}
-                title={`Filtrer sur « ${state} »`}
-                onClick={() => setStateFilter((current) => (current === state ? '' : state))}
+                className="tickets-source-add"
+                title={showSourceForm ? 'Fermer le formulaire' : 'Ajouter une source'}
+                aria-label={showSourceForm ? 'Fermer le formulaire' : 'Ajouter une source'}
+                aria-expanded={showSourceForm}
+                onClick={() => setShowSourceForm((visible) => !visible)}
               >
-                {state} <b>{count}</b>
+                {showSourceForm ? '✕' : '＋ Source'}
               </button>
-            ))}
-          </div>
-          {checkedIds.size > 0 && (
-            <span className="tickets-stats-selection" data-testid="tickets-selection-count">
-              {checkedVisibleItems.length} sélectionné(s)
-            </span>
-          )}
-        </div>
-      )}
+            </div>
+          </header>
 
-      <div className="tickets-toolbar">
-        <input
-          type="search"
-          aria-label="Rechercher les tickets"
-          placeholder="ID, titre ou assigné… (Entrée = recherche serveur)"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              runServerSearch(query)
-            }
-          }}
-        />
-        {/* La recherche SERVEUR interroge tout le projet ; le champ seul ne filtrait que les
-            50 items déjà chargés, et répondait « aucun résultat » sur une fiche existante. */}
-        <button
-          data-testid="tickets-search-server"
-          type="button"
-          title="Chercher ce titre sur le serveur (tout le projet), pas seulement dans la page chargée"
-          disabled={!selectedSource || loading}
-          onClick={() => runServerSearch(query)}
-        >
-          Chercher
-        </button>
-        {serverQuery && (
-          <span className="tickets-server-query" data-testid="tickets-server-query">
-            serveur : « {serverQuery} »
-            <button
-              type="button"
-              title="Effacer la recherche serveur"
-              onClick={() => {
-                setQuery('')
-                runServerSearch('')
-              }}
-            >
-              ×
-            </button>
-          </span>
-        )}
-        <select
-          aria-label="Filtrer par type"
-          title="Types présents dans la page chargée (pas tout le projet)"
-          value={typeFilter}
-          onChange={(event) => setTypeFilter(event.target.value)}
-        >
-          <option value="">Tous les types</option>
-          {types.map((type) => (
-            <option key={type}>{type}</option>
-          ))}
-        </select>
-        <select
-          aria-label="Filtrer par état"
-          title="États présents dans la page chargée (pas tout le projet)"
-          value={stateFilter}
-          onChange={(event) => setStateFilter(event.target.value)}
-        >
-          <option value="">Tous les états</option>
-          {states.map((state) => (
-            <option key={state}>{state}</option>
-          ))}
-        </select>
-        <input
-          list="tickets-people-list"
-          aria-label="Filtrer par assigné"
-          data-testid="tickets-assignee-filter"
-          placeholder="Assigné…"
-          value={assigneeFilter}
-          onChange={(event) => setAssigneeFilter(event.target.value)}
-        />
-        <datalist id="tickets-people-list" data-testid="tickets-people-list">
-          {peopleOptions.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
-        <select
-          aria-label="Trier"
-          data-testid="tickets-sort"
-          value={sortKey}
-          onChange={(event) => setSortKey(event.target.value as SortKey)}
-        >
-          <option value="recent">Plus récents</option>
-          <option value="priority">Priorité</option>
-          <option value="id">ID croissant</option>
-          <option value="title">Titre A→Z</option>
-        </select>
-        {selectedSource && (
-          <span className="tickets-auth-mode">
-            {selectedSource.provider === 'azure'
-              ? `Projet ${selectedSource.project} · ${
-                  selectedSummary?.credentialConfigured ? 'Coffre configuré' : 'Session Azure CLI'
-                }`
-              : selectedSummary?.credentialConfigured
-                ? 'Coffre configuré'
-                : 'Public · session CLI/env si privée'}
-          </span>
-        )}
-        <button
-          data-testid="tickets-refresh"
-          type="button"
-          aria-label="Actualiser les tickets"
-          title="Actualiser les tickets"
-          disabled={!selectedSource || loading}
-          onClick={() => selectedSource && void load(selectedSource)}
-        >
-          Actualiser
-        </button>
-      </div>
-
-      <div className="tickets-actions">
-        <button
-          data-testid="tickets-select-all"
-          type="button"
-          title={
-            allVisibleChecked ? 'Tout désélectionner' : `Tout sélectionner (${visibleItems.length})`
-          }
-          disabled={visibleItems.length === 0}
-          onClick={toggleAllVisible}
-        >
-          {allVisibleChecked ? 'Tout désélectionner' : `Tout sélectionner (${visibleItems.length})`}
-        </button>
-        <button
-          data-testid="tickets-treat-selection"
-          type="button"
-          className="tickets-treat-selection"
-          disabled={checkedVisibleItems.length === 0}
-          title={
-            sendDirectly
-              ? 'Ouvre UNE conversation pour la sélection et ENVOIE le prompt'
-              : 'Ouvre UNE conversation pour la sélection et y pré-remplit le prompt, sans l’envoyer'
-          }
-          onClick={() => void openSelectionConversation()}
-        >
-          {sendDirectly
-            ? `Traiter la sélection (${checkedVisibleItems.length})`
-            : `Préparer le prompt (${checkedVisibleItems.length})`}
-        </button>
-        {/* Le geste par défaut PRÉPARE (prompt-first, comme le Source control) : c'est
-            l'utilisateur qui décide d'envoyer. Cocher cette case rend l'envoi immédiat. */}
-        <label className="tickets-mode" data-testid="tickets-mode-send">
-          <input
-            type="checkbox"
-            checked={sendDirectly}
-            onChange={(e) => setSendDirectly(e.target.checked)}
-          />
-          Traiter réellement (envoi immédiat)
-        </label>
-        {/* Mode auto : la veille porte sur le FILTRE COURANT — ce que l'utilisateur voit est le
-            périmètre. L'existant est ignoré à l'activation ; seuls les entrants sont traités. */}
-        <label className="tickets-mode" data-testid="tickets-mode-auto">
-          <input
-            type="checkbox"
-            checked={autoMode}
-            onChange={(e) => setAutoModeChecked(e.target.checked)}
-          />
-          Mode auto (traite les entrants du filtre)
-        </label>
-        {/* GARDE-FOUS VISIBLES : le mode auto lance des runs PAYANTS. Le nombre simultané, le cap
-            par cycle et le plafond de session sont réglables ici, et le coût est annoncé. */}
-        <span className="tickets-auto-guards" data-testid="tickets-auto-guards">
-          <label>
-            Parallèle
-            <input
-              type="number"
-              aria-label="Runs en parallèle"
-              data-testid="tickets-auto-concurrency"
-              min={AUTO_MODE_LIMITS.concurrency.min}
-              max={AUTO_MODE_LIMITS.concurrency.max}
-              value={autoSettings.concurrency}
-              onChange={(e) => updateAutoSetting('concurrency', Number(e.target.value))}
-            />
-          </label>
-          <label>
-            Par cycle
-            <input
-              type="number"
-              aria-label="Tickets traités par cycle"
-              data-testid="tickets-auto-cap"
-              min={AUTO_MODE_LIMITS.capPerCycle.min}
-              max={AUTO_MODE_LIMITS.capPerCycle.max}
-              value={autoSettings.capPerCycle}
-              onChange={(e) => updateAutoSetting('capPerCycle', Number(e.target.value))}
-            />
-          </label>
-          <label>
-            Plafond session
-            <input
-              type="number"
-              aria-label="Plafond de runs pour la session"
-              data-testid="tickets-auto-max-runs"
-              min={AUTO_MODE_LIMITS.maxRunsPerSession.min}
-              max={AUTO_MODE_LIMITS.maxRunsPerSession.max}
-              value={autoSettings.maxRunsPerSession}
-              onChange={(e) => updateAutoSetting('maxRunsPerSession', Number(e.target.value))}
-            />
-          </label>
-          <span data-testid="tickets-auto-cost">
-            {describeAutoModeCost(autoSettings, 0)} · {launched} lancé(s)
-          </span>
-          {/* KILL-SWITCH : arrêt global immédiat, indépendant du rendu React. */}
-          <button
-            type="button"
-            data-testid="tickets-auto-kill"
-            className="tickets-auto-kill"
-            title="Arrêt immédiat du mode auto (kill-switch global)"
-            onClick={() => {
-              stopAutoModeNow()
-              autoBusyRef.current = false
-              setAutoModeChecked(false)
-              setAutoStatus('arrêté (kill-switch)')
-            }}
-          >
-            Stop
-          </button>
-        </span>
-        {autoStatus && (
-          <span className="tickets-auto-status" data-testid="tickets-auto-status">
-            {autoStatus}
-          </span>
-        )}
-      </div>
-
-      <div className="tickets-content">
-        {sourceError ? (
-          <div className="tickets-error" role="alert">
-            <strong>Chargement des sources impossible</strong>
-            <span>{sourceError}</span>
-            <button
-              data-testid="tickets-retry"
-              type="button"
-              title="Réessayer le chargement des tickets"
-              onClick={retry}
-            >
-              Réessayer
-            </button>
-          </div>
-        ) : (loading || initialLoading) && items.length === 0 ? (
-          <div className="tickets-loading" role="status" aria-label="Chargement des tickets">
-            <span className="tickets-spinner" aria-hidden="true" />
-            <span>Synchronisation des tickets…</span>
-          </div>
-        ) : error && items.length === 0 ? (
-          <div className="tickets-error" role="alert">
-            <strong>Chargement impossible</strong>
-            <span>{error}</span>
-            <button
-              data-testid="tickets-retry"
-              type="button"
-              title="Réessayer le chargement des tickets"
-              onClick={retry}
-            >
-              Réessayer
-            </button>
-          </div>
-        ) : sourcesLoaded && sources.length === 0 ? (
-          <div className="tickets-empty">
-            <strong>Aucune source configurée</strong>
-            <span>Ajoute une source Azure DevOps, GitHub ou GitLab.</span>
-          </div>
-        ) : visibleItems.length === 0 ? (
-          /* Vide HONNÊTE : la cause (recherche serveur, filtres locaux) est nommée, une issue est
-             offerte, et « Charger la suite » reste accessible quand la page suivante existe —
-             avant, `!hasMore` supprimait tout message et l'écran restait muet. */
-          <div className="tickets-empty" data-testid="tickets-empty">
-            <strong>{items.length === 0 ? 'Aucun ticket' : 'Aucun résultat'}</strong>
-            <span>
-              {emptyCauses.length
-                ? `Périmètre restreint par : ${emptyCauses.join(' · ')}.`
-                : 'Cette source ne renvoie aucun élément accessible sur la page chargée.'}
-            </span>
-            {emptyCauses.length > 0 && (
-              <button
-                type="button"
-                data-testid="tickets-empty-clear"
-                title="Effacer la recherche serveur et les filtres locaux"
-                onClick={() => {
-                  resetFilters()
-                  if (serverQuery) runServerSearch('')
-                }}
-              >
-                Effacer la recherche et les filtres
-              </button>
-            )}
-            {hasMore && (
-              <button
-                className="tickets-load-more"
-                type="button"
-                disabled={loading}
-                onClick={() =>
-                  selectedSource && cursor
-                    ? void load(selectedSource, { cursor, append: true })
-                    : undefined
+          {showSourceForm && (
+            <div className="tickets-source-form">
+              <select
+                aria-label="Fournisseur"
+                value={draft.provider}
+                onChange={(event) =>
+                  setDraft({ ...EMPTY_DRAFT, provider: event.target.value as TicketProvider })
                 }
               >
-                {loading ? 'Chargement…' : 'Charger la suite'}
-              </button>
-            )}
-          </div>
-        ) : (
-          <>
-            {loading && (
-              <div
-                className="tickets-refreshing"
-                data-testid="tickets-refreshing"
-                role="status"
-                aria-label="Actualisation des tickets en cours"
+                <option value="azure">Azure DevOps</option>
+                <option value="github">GitHub</option>
+                <option value="gitlab">GitLab</option>
+              </select>
+              {draft.provider === 'azure' && (
+                <>
+                  <input
+                    aria-label="Organisation Azure"
+                    placeholder="Organisation"
+                    value={draft.organization}
+                    onChange={(event) => setDraft({ ...draft, organization: event.target.value })}
+                  />
+                  <input
+                    aria-label="Projet Azure"
+                    placeholder="Projet"
+                    value={draft.project}
+                    onChange={(event) => setDraft({ ...draft, project: event.target.value })}
+                  />
+                </>
+              )}
+              {draft.provider === 'github' && (
+                <input
+                  aria-label="Propriétaire GitHub"
+                  placeholder="Organisation ou propriétaire"
+                  value={draft.owner}
+                  onChange={(event) => setDraft({ ...draft, owner: event.target.value })}
+                />
+              )}
+              {draft.provider === 'gitlab' && (
+                <input
+                  aria-label="Namespace GitLab"
+                  placeholder="Groupe / sous-groupe"
+                  value={draft.namespace}
+                  onChange={(event) => setDraft({ ...draft, namespace: event.target.value })}
+                />
+              )}
+              <input
+                aria-label={draft.provider === 'azure' ? 'Dépôt Azure de contexte' : 'Dépôt'}
+                placeholder={draft.provider === 'azure' ? 'Dépôt de contexte' : 'Dépôt'}
+                value={draft.repository}
+                onChange={(event) => setDraft({ ...draft, repository: event.target.value })}
+              />
+              {draft.provider !== 'azure' && (
+                <>
+                  <input
+                    aria-label="URL personnalisée"
+                    placeholder="URL personnalisée (optionnel)"
+                    value={draft.baseUrl}
+                    onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
+                  />
+                  <span className="tickets-auth-help" data-testid="tickets-auth-help">
+                    {draft.provider === 'github'
+                      ? 'Privé : GH_TOKEN sur github.com ; pour une URL personnalisée, connecte gh à cet hôte.'
+                      : 'Privé : GITLAB_TOKEN sur gitlab.com ; pour une URL personnalisée, connecte glab à cet hôte.'}
+                  </span>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => void saveSource()}
+                aria-label="Enregistrer la source"
+                title="Enregistrer la source"
               >
-                <span className="tickets-spinner" aria-hidden="true" />
-                <span>Actualisation…</span>
+                Enregistrer
+              </button>
+            </div>
+          )}
+
+          {items.length > 0 && (
+            <div className="tickets-stats" data-testid="tickets-stats">
+              {/* PÉRIMÈTRE ANNONCÉ : ces compteurs ne sont PAS des statistiques projet — ils portent
+              sur la page chargée uniquement (le fournisseur pagine à 50). */}
+              <span
+                className="tickets-stats-total"
+                title="Compteurs calculés sur la page chargée, pas sur tout le projet"
+              >
+                <strong>{items.length}</strong> chargé(s) · <strong>{visibleItems.length}</strong>{' '}
+                affiché(s) · périmètre : page chargée
+              </span>
+              <div
+                className="tickets-stats-states"
+                role="group"
+                aria-label="Répartition par état sur la page chargée"
+              >
+                {stateCounts.map(([state, count]) => (
+                  <button
+                    key={state}
+                    type="button"
+                    className={`tickets-state-chip${stateFilter === state ? ' is-active' : ''}`}
+                    style={{ ['--chip-hue' as string]: hueOf(state) }}
+                    title={`Filtrer sur « ${state} »`}
+                    onClick={() => setStateFilter((current) => (current === state ? '' : state))}
+                  >
+                    {state} <b>{count}</b>
+                  </button>
+                ))}
               </div>
-            )}
-            {error && (
-              <div className="tickets-stale" data-testid="tickets-stale" role="status">
-                {/* Toute erreur survenue sur une liste DÉJÀ chargée est visible : avant, elle
-                    dépendait de `stale`, donc une erreur de pagination passait inaperçue. */}
-                <strong>{stale ? 'Données périmées' : 'Chargement partiel impossible'}</strong>
-                <span>{error}</span>
-              </div>
-            )}
-            <div
-              className="tickets-list"
-              role="list"
-              aria-label="Tickets"
-              tabIndex={-1}
-              onKeyDown={(event) => {
-                if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-                event.preventDefault()
-                moveSelection(event.key === 'ArrowDown' ? 1 : -1)
-              }}
-            >
-              {visibleItems.map((item) => {
-                const identity = `${item.sourceId}::${item.id}`
-                const treatment = treatmentRecords[identity]
-                return (
-                  <div className="ticket-select-row" key={identity} role="listitem">
-                    <input
-                      type="checkbox"
-                      data-testid="ticket-process-checkbox"
-                      aria-label={`Cocher le ticket ${item.id}`}
-                      checked={checkedIds.has(identity)}
-                      onChange={() => toggleChecked(identity)}
-                    />
-                    <button
-                      type="button"
-                      data-testid="ticket-row"
-                      className={selectedItem === item ? 'is-selected' : ''}
-                      aria-selected={selectedItem === item}
-                      onClick={() => selectTicket(item)}
-                    >
-                      <span className="tickets-id">#{item.id}</span>
-                      <strong className="tickets-title">{item.title}</strong>
-                      <span className="tickets-updated" title={item.updatedAt}>
-                        {relativeDate(item.updatedAt)}
-                      </span>
-                      <span className="tickets-meta">
-                        <span className="tickets-badge tickets-type">{item.type}</span>
-                        <span
-                          className="tickets-badge tickets-state"
-                          style={{ ['--chip-hue' as string]: hueOf(item.state) }}
-                        >
-                          {item.state}
-                        </span>
-                        {priorityRank(item.priority) < 99 && (
-                          <span
-                            className={`tickets-badge tickets-priority is-p${priorityRank(item.priority)}`}
-                          >
-                            P{priorityRank(item.priority)}
-                          </span>
-                        )}
-                        <span className="tickets-assignee">
-                          {item.assignee ? (
-                            <>
-                              <span className="tickets-avatar" aria-hidden="true">
-                                {initialsOf(item.assignee)}
-                              </span>
-                              {item.assignee}
-                            </>
-                          ) : (
-                            <span className="tickets-unassigned">Non assigné</span>
-                          )}
-                        </span>
-                      </span>
-                    </button>
-                    {treatment && (
-                      <button
-                        type="button"
-                        data-testid="ticket-treatment-status"
-                        className={`ticket-treatment-status is-${treatment.status}`}
-                        title="Ouvrir la conversation de traitement"
-                        onClick={() => void openTreatmentConversation(treatment.conversationId)}
-                      >
-                        {treatment.status === 'prepared'
-                          ? 'prêt'
-                          : treatment.status === 'running'
-                            ? 'en cours'
-                            : treatment.status === 'succeeded'
-                              ? 'traité'
-                              : treatment.status === 'interrupted'
-                                ? 'interrompu'
-                                : 'échec'}
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-              {hasMore ? (
-                <button
-                  className="tickets-load-more"
-                  type="button"
-                  disabled={loading}
-                  onClick={() =>
-                    selectedSource && cursor
-                      ? void load(selectedSource, { cursor, append: true })
-                      : undefined
-                  }
-                >
-                  {loading ? 'Chargement…' : 'Charger la suite'}
-                </button>
-              ) : (
-                <span data-testid="tickets-page-end" className="tickets-page-end">
-                  Fin de la liste
+              {checkedIds.size > 0 && (
+                <span className="tickets-stats-selection" data-testid="tickets-selection-count">
+                  {checkedVisibleItems.length} sélectionné(s)
                 </span>
               )}
             </div>
-            {selectedItem && (
-              <article className="tickets-detail" data-testid="ticket-detail">
-                <div className="tickets-detail-title">
-                  <span className="tickets-detail-eyebrow">
-                    <span className="tickets-badge tickets-type">{selectedItem.type}</span>
-                    <span
-                      className="tickets-badge tickets-state"
-                      style={{ ['--chip-hue' as string]: hueOf(selectedItem.state) }}
-                    >
-                      {selectedItem.state}
-                    </span>
-                    {priorityRank(selectedItem.priority) < 99 && (
-                      <span
-                        className={`tickets-badge tickets-priority is-p${priorityRank(selectedItem.priority)}`}
-                      >
-                        P{priorityRank(selectedItem.priority)}
-                      </span>
-                    )}
-                    <span className="tickets-detail-id">#{selectedItem.id}</span>
-                  </span>
-                  <h2>{selectedItem.title}</h2>
-                </div>
-                {ticketTags(selectedItem).length > 0 && (
-                  <div className="tickets-tags" data-testid="ticket-tags">
-                    {ticketTags(selectedItem).map((tag) => (
-                      <span key={tag} className="tickets-tag">
-                        {tag}
-                      </span>
-                    ))}
+          )}
+
+          <div className="tickets-toolbar">
+            <input
+              type="search"
+              aria-label="Rechercher les tickets"
+              placeholder="ID, titre ou assigné… (Entrée = recherche serveur)"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  runServerSearch(query)
+                }
+              }}
+            />
+            {/* La recherche SERVEUR interroge tout le projet ; le champ seul ne filtrait que les
+            50 items déjà chargés, et répondait « aucun résultat » sur une fiche existante. */}
+            <button
+              data-testid="tickets-search-server"
+              type="button"
+              title="Chercher ce titre sur le serveur (tout le projet), pas seulement dans la page chargée"
+              disabled={!selectedSource || loading}
+              onClick={() => runServerSearch(query)}
+            >
+              Chercher
+            </button>
+            {serverQuery && (
+              <span className="tickets-server-query" data-testid="tickets-server-query">
+                serveur : « {serverQuery} »
+                <button
+                  type="button"
+                  title="Effacer la recherche serveur"
+                  onClick={() => {
+                    setQuery('')
+                    runServerSearch('')
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            )}
+            <select
+              aria-label="Filtrer par type"
+              title="Types présents dans la page chargée (pas tout le projet)"
+              value={typeFilter}
+              onChange={(event) => setTypeFilter(event.target.value)}
+            >
+              <option value="">Tous les types</option>
+              {types.map((type) => (
+                <option key={type}>{type}</option>
+              ))}
+            </select>
+            <select
+              aria-label="Filtrer par état"
+              title="États présents dans la page chargée (pas tout le projet)"
+              value={stateFilter}
+              onChange={(event) => setStateFilter(event.target.value)}
+            >
+              <option value="">Tous les états</option>
+              {states.map((state) => (
+                <option key={state}>{state}</option>
+              ))}
+            </select>
+            <input
+              list="tickets-people-list"
+              aria-label="Filtrer par assigné"
+              data-testid="tickets-assignee-filter"
+              placeholder="Assigné…"
+              value={assigneeFilter}
+              onChange={(event) => setAssigneeFilter(event.target.value)}
+            />
+            <datalist id="tickets-people-list" data-testid="tickets-people-list">
+              {peopleOptions.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            <select
+              aria-label="Trier"
+              data-testid="tickets-sort"
+              value={sortKey}
+              onChange={(event) => setSortKey(event.target.value as SortKey)}
+            >
+              <option value="recent">Plus récents</option>
+              <option value="priority">Priorité</option>
+              <option value="id">ID croissant</option>
+              <option value="title">Titre A→Z</option>
+            </select>
+            {selectedSource && (
+              <span className="tickets-auth-mode">
+                {selectedSource.provider === 'azure'
+                  ? `Projet ${selectedSource.project} · ${
+                      selectedSummary?.credentialConfigured
+                        ? 'Coffre configuré'
+                        : 'Session Azure CLI'
+                    }`
+                  : selectedSummary?.credentialConfigured
+                    ? 'Coffre configuré'
+                    : 'Public · session CLI/env si privée'}
+              </span>
+            )}
+            <button
+              data-testid="tickets-refresh"
+              type="button"
+              aria-label="Actualiser les tickets"
+              title="Actualiser les tickets"
+              disabled={!selectedSource || loading}
+              onClick={() => selectedSource && void load(selectedSource)}
+            >
+              Actualiser
+            </button>
+          </div>
+
+          <div className="tickets-actions">
+            <button
+              data-testid="tickets-select-all"
+              type="button"
+              title={
+                allVisibleChecked
+                  ? 'Tout désélectionner'
+                  : `Tout sélectionner (${visibleItems.length})`
+              }
+              disabled={visibleItems.length === 0}
+              onClick={toggleAllVisible}
+            >
+              {allVisibleChecked
+                ? 'Tout désélectionner'
+                : `Tout sélectionner (${visibleItems.length})`}
+            </button>
+            <button
+              data-testid="tickets-treat-selection"
+              type="button"
+              className="tickets-treat-selection"
+              disabled={checkedVisibleItems.length === 0}
+              title={
+                sendDirectly
+                  ? 'Ouvre UNE conversation pour la sélection et ENVOIE le prompt'
+                  : 'Ouvre UNE conversation pour la sélection et y pré-remplit le prompt, sans l’envoyer'
+              }
+              onClick={() => void openSelectionConversation()}
+            >
+              {sendDirectly
+                ? `Traiter la sélection (${checkedVisibleItems.length})`
+                : `Préparer le prompt (${checkedVisibleItems.length})`}
+            </button>
+            {/* Le geste par défaut PRÉPARE (prompt-first, comme le Source control) : c'est
+            l'utilisateur qui décide d'envoyer. Cocher cette case rend l'envoi immédiat. */}
+            <label className="tickets-mode" data-testid="tickets-mode-send">
+              <input
+                type="checkbox"
+                checked={sendDirectly}
+                onChange={(e) => setSendDirectly(e.target.checked)}
+              />
+              Traiter réellement (envoi immédiat)
+            </label>
+            {/* Mode auto : la veille porte sur le FILTRE COURANT — ce que l'utilisateur voit est le
+            périmètre. L'existant est ignoré à l'activation ; seuls les entrants sont traités. */}
+            <label className="tickets-mode" data-testid="tickets-mode-auto">
+              <input
+                type="checkbox"
+                checked={autoMode}
+                onChange={(e) => setAutoModeChecked(e.target.checked)}
+              />
+              Mode auto (traite les entrants du filtre)
+            </label>
+            {/* GARDE-FOUS VISIBLES : le mode auto lance des runs PAYANTS. Le nombre simultané, le cap
+            par cycle et le plafond de session sont réglables ici, et le coût est annoncé. */}
+            <span className="tickets-auto-guards" data-testid="tickets-auto-guards">
+              <label>
+                Parallèle
+                <input
+                  type="number"
+                  aria-label="Runs en parallèle"
+                  data-testid="tickets-auto-concurrency"
+                  min={AUTO_MODE_LIMITS.concurrency.min}
+                  max={AUTO_MODE_LIMITS.concurrency.max}
+                  value={autoSettings.concurrency}
+                  onChange={(e) => updateAutoSetting('concurrency', Number(e.target.value))}
+                />
+              </label>
+              <label>
+                Par cycle
+                <input
+                  type="number"
+                  aria-label="Tickets traités par cycle"
+                  data-testid="tickets-auto-cap"
+                  min={AUTO_MODE_LIMITS.capPerCycle.min}
+                  max={AUTO_MODE_LIMITS.capPerCycle.max}
+                  value={autoSettings.capPerCycle}
+                  onChange={(e) => updateAutoSetting('capPerCycle', Number(e.target.value))}
+                />
+              </label>
+              <label>
+                Plafond session
+                <input
+                  type="number"
+                  aria-label="Plafond de runs pour la session"
+                  data-testid="tickets-auto-max-runs"
+                  min={AUTO_MODE_LIMITS.maxRunsPerSession.min}
+                  max={AUTO_MODE_LIMITS.maxRunsPerSession.max}
+                  value={autoSettings.maxRunsPerSession}
+                  onChange={(e) => updateAutoSetting('maxRunsPerSession', Number(e.target.value))}
+                />
+              </label>
+              <span data-testid="tickets-auto-cost">
+                {describeAutoModeCost(autoSettings, 0)} · {launched} lancé(s)
+              </span>
+              {/* KILL-SWITCH : arrêt global immédiat, indépendant du rendu React. */}
+              <button
+                type="button"
+                data-testid="tickets-auto-kill"
+                className="tickets-auto-kill"
+                title="Arrêt immédiat du mode auto (kill-switch global)"
+                onClick={() => {
+                  stopAutoModeNow()
+                  autoBusyRef.current = false
+                  setAutoModeChecked(false)
+                  setAutoStatus('arrêté (kill-switch)')
+                }}
+              >
+                Stop
+              </button>
+            </span>
+            {autoStatus && (
+              <span className="tickets-auto-status" data-testid="tickets-auto-status">
+                {autoStatus}
+              </span>
+            )}
+          </div>
+
+          <div className="tickets-content">
+            {sourceError ? (
+              <div className="tickets-error" role="alert">
+                <strong>Chargement des sources impossible</strong>
+                <span>{sourceError}</span>
+                <button
+                  data-testid="tickets-retry"
+                  type="button"
+                  title="Réessayer le chargement des tickets"
+                  onClick={retry}
+                >
+                  Réessayer
+                </button>
+              </div>
+            ) : (loading || initialLoading) && items.length === 0 ? (
+              <div className="tickets-loading" role="status" aria-label="Chargement des tickets">
+                <span className="tickets-spinner" aria-hidden="true" />
+                <span>Synchronisation des tickets…</span>
+              </div>
+            ) : error && items.length === 0 ? (
+              <div className="tickets-error" role="alert">
+                <strong>Chargement impossible</strong>
+                <span>{error}</span>
+                <button
+                  data-testid="tickets-retry"
+                  type="button"
+                  title="Réessayer le chargement des tickets"
+                  onClick={retry}
+                >
+                  Réessayer
+                </button>
+              </div>
+            ) : sourcesLoaded && sources.length === 0 ? (
+              <div className="tickets-empty">
+                <strong>Aucune source configurée</strong>
+                <span>Ajoute une source Azure DevOps, GitHub ou GitLab.</span>
+              </div>
+            ) : visibleItems.length === 0 ? (
+              /* Vide HONNÊTE : la cause (recherche serveur, filtres locaux) est nommée, une issue est
+             offerte, et « Charger la suite » reste accessible quand la page suivante existe —
+             avant, `!hasMore` supprimait tout message et l'écran restait muet. */
+              <div className="tickets-empty" data-testid="tickets-empty">
+                <strong>{items.length === 0 ? 'Aucun ticket' : 'Aucun résultat'}</strong>
+                <span>
+                  {emptyCauses.length
+                    ? `Périmètre restreint par : ${emptyCauses.join(' · ')}.`
+                    : 'Cette source ne renvoie aucun élément accessible sur la page chargée.'}
+                </span>
+                {emptyCauses.length > 0 && (
+                  <button
+                    type="button"
+                    data-testid="tickets-empty-clear"
+                    title="Effacer la recherche serveur et les filtres locaux"
+                    onClick={() => {
+                      resetFilters()
+                      if (serverQuery) runServerSearch('')
+                    }}
+                  >
+                    Effacer la recherche et les filtres
+                  </button>
+                )}
+                {hasMore && (
+                  <button
+                    className="tickets-load-more"
+                    type="button"
+                    disabled={loading}
+                    onClick={() =>
+                      selectedSource && cursor
+                        ? void load(selectedSource, { cursor, append: true })
+                        : undefined
+                    }
+                  >
+                    {loading ? 'Chargement…' : 'Charger la suite'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                {loading && (
+                  <div
+                    className="tickets-refreshing"
+                    data-testid="tickets-refreshing"
+                    role="status"
+                    aria-label="Actualisation des tickets en cours"
+                  >
+                    <span className="tickets-spinner" aria-hidden="true" />
+                    <span>Actualisation…</span>
                   </div>
                 )}
-                <dl>
-                  <div>
-                    <dt>Assigné</dt>
-                    <dd>{selectedItem.assignee || 'Non assigné'}</dd>
+                {error && (
+                  <div className="tickets-stale" data-testid="tickets-stale" role="status">
+                    {/* Toute erreur survenue sur une liste DÉJÀ chargée est visible : avant, elle
+                    dépendait de `stale`, donc une erreur de pagination passait inaperçue. */}
+                    <strong>{stale ? 'Données périmées' : 'Chargement partiel impossible'}</strong>
+                    <span>{error}</span>
                   </div>
-                  <div>
-                    <dt>Créé</dt>
-                    <dd>{selectedItem.createdAt || '—'}</dd>
-                  </div>
-                  <div>
-                    <dt>Mis à jour</dt>
-                    <dd title={selectedItem.updatedAt}>{relativeDate(selectedItem.updatedAt)}</dd>
-                  </div>
-                </dl>
-                <section>
-                  <h3>Description</h3>
-                  <p>{plainText(selectedItem.description) || 'Aucune description.'}</p>
-                </section>
-                <section>
-                  <h3>Relations</h3>
-                  {selectedItem.relations?.length ? (
-                    <ul>
-                      {selectedItem.relations.map((relation, index) => (
-                        <li key={`${relation.kind}:${relation.target}:${index}`}>
-                          <span>{relation.kind}</span> <strong>#{relation.target}</strong>
-                          {relation.title ? <span> — {relation.title}</span> : null}
-                        </li>
-                      ))}
-                    </ul>
+                )}
+                <div
+                  className="tickets-list"
+                  role="list"
+                  aria-label="Tickets"
+                  tabIndex={-1}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+                    event.preventDefault()
+                    moveSelection(event.key === 'ArrowDown' ? 1 : -1)
+                  }}
+                >
+                  {visibleItems.map((item) => {
+                    const identity = `${item.sourceId}::${item.id}`
+                    const treatment = treatmentRecords[identity]
+                    return (
+                      <div className="ticket-select-row" key={identity} role="listitem">
+                        <input
+                          type="checkbox"
+                          data-testid="ticket-process-checkbox"
+                          aria-label={`Cocher le ticket ${item.id}`}
+                          checked={checkedIds.has(identity)}
+                          onChange={() => toggleChecked(identity)}
+                        />
+                        <button
+                          type="button"
+                          data-testid="ticket-row"
+                          className={selectedItem === item ? 'is-selected' : ''}
+                          aria-selected={selectedItem === item}
+                          onClick={() => selectTicket(item)}
+                        >
+                          <span className="tickets-id">#{item.id}</span>
+                          <strong className="tickets-title">{item.title}</strong>
+                          <span className="tickets-updated" title={item.updatedAt}>
+                            {relativeDate(item.updatedAt)}
+                          </span>
+                          <span className="tickets-meta">
+                            <span className="tickets-badge tickets-type">{item.type}</span>
+                            <span
+                              className="tickets-badge tickets-state"
+                              style={{ ['--chip-hue' as string]: hueOf(item.state) }}
+                            >
+                              {item.state}
+                            </span>
+                            {priorityRank(item.priority) < 99 && (
+                              <span
+                                className={`tickets-badge tickets-priority is-p${priorityRank(item.priority)}`}
+                              >
+                                P{priorityRank(item.priority)}
+                              </span>
+                            )}
+                            <span className="tickets-assignee">
+                              {item.assignee ? (
+                                <>
+                                  <span className="tickets-avatar" aria-hidden="true">
+                                    {initialsOf(item.assignee)}
+                                  </span>
+                                  {item.assignee}
+                                </>
+                              ) : (
+                                <span className="tickets-unassigned">Non assigné</span>
+                              )}
+                            </span>
+                          </span>
+                        </button>
+                        {treatment && (
+                          <button
+                            type="button"
+                            data-testid="ticket-treatment-status"
+                            className={`ticket-treatment-status is-${treatment.status}`}
+                            title="Ouvrir la conversation de traitement"
+                            onClick={() => void openTreatmentConversation(treatment.conversationId)}
+                          >
+                            {treatment.status === 'prepared'
+                              ? 'prêt'
+                              : treatment.status === 'running'
+                                ? 'en cours'
+                                : treatment.status === 'succeeded'
+                                  ? 'traité'
+                                  : treatment.status === 'interrupted'
+                                    ? 'interrompu'
+                                    : 'échec'}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                  {hasMore ? (
+                    <button
+                      className="tickets-load-more"
+                      type="button"
+                      disabled={loading}
+                      onClick={() =>
+                        selectedSource && cursor
+                          ? void load(selectedSource, { cursor, append: true })
+                          : undefined
+                      }
+                    >
+                      {loading ? 'Chargement…' : 'Charger la suite'}
+                    </button>
                   ) : (
-                    <p>Aucune relation.</p>
+                    <span data-testid="tickets-page-end" className="tickets-page-end">
+                      Fin de la liste
+                    </span>
                   )}
-                </section>
-                <section>
-                  <h3>Discussion</h3>
-                  {selectedItem.comments?.length ? (
-                    <ul data-testid="ticket-comments">
-                      {selectedItem.comments.map((comment, index) => (
-                        <li key={comment.id ?? `${comment.createdAt ?? 'comment'}:${index}`}>
-                          <strong>{comment.author ?? 'Auteur inconnu'}</strong>
-                          {comment.createdAt ? (
-                            <time>{relativeDate(comment.createdAt)}</time>
-                          ) : null}
-                          <p>{plainText(comment.text)}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>Aucun commentaire chargé.</p>
-                  )}
-                </section>
-                <a href={selectedItem.url} target="_blank" rel="noreferrer">
-                  Ouvrir dans {selectedSource?.provider ?? 'la source'}
-                </a>
-              </article>
+                </div>
+                {selectedItem && (
+                  <article className="tickets-detail" data-testid="ticket-detail">
+                    <div className="tickets-detail-title">
+                      <span className="tickets-detail-eyebrow">
+                        <span className="tickets-badge tickets-type">{selectedItem.type}</span>
+                        <span
+                          className="tickets-badge tickets-state"
+                          style={{ ['--chip-hue' as string]: hueOf(selectedItem.state) }}
+                        >
+                          {selectedItem.state}
+                        </span>
+                        {priorityRank(selectedItem.priority) < 99 && (
+                          <span
+                            className={`tickets-badge tickets-priority is-p${priorityRank(selectedItem.priority)}`}
+                          >
+                            P{priorityRank(selectedItem.priority)}
+                          </span>
+                        )}
+                        <span className="tickets-detail-id">#{selectedItem.id}</span>
+                      </span>
+                      <h2>{selectedItem.title}</h2>
+                    </div>
+                    {ticketTags(selectedItem).length > 0 && (
+                      <div className="tickets-tags" data-testid="ticket-tags">
+                        {ticketTags(selectedItem).map((tag) => (
+                          <span key={tag} className="tickets-tag">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <dl>
+                      <div>
+                        <dt>Assigné</dt>
+                        <dd>{selectedItem.assignee || 'Non assigné'}</dd>
+                      </div>
+                      <div>
+                        <dt>Créé</dt>
+                        <dd>{selectedItem.createdAt || '—'}</dd>
+                      </div>
+                      <div>
+                        <dt>Mis à jour</dt>
+                        <dd title={selectedItem.updatedAt}>
+                          {relativeDate(selectedItem.updatedAt)}
+                        </dd>
+                      </div>
+                    </dl>
+                    <section>
+                      <h3>Description</h3>
+                      <p>{plainText(selectedItem.description) || 'Aucune description.'}</p>
+                    </section>
+                    <section>
+                      <h3>Relations</h3>
+                      {selectedItem.relations?.length ? (
+                        <ul>
+                          {selectedItem.relations.map((relation, index) => (
+                            <li key={`${relation.kind}:${relation.target}:${index}`}>
+                              <span>{relation.kind}</span> <strong>#{relation.target}</strong>
+                              {relation.title ? <span> — {relation.title}</span> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>Aucune relation.</p>
+                      )}
+                    </section>
+                    <section>
+                      <h3>Discussion</h3>
+                      {selectedItem.comments?.length ? (
+                        <ul data-testid="ticket-comments">
+                          {selectedItem.comments.map((comment, index) => (
+                            <li key={comment.id ?? `${comment.createdAt ?? 'comment'}:${index}`}>
+                              <strong>{comment.author ?? 'Auteur inconnu'}</strong>
+                              {comment.createdAt ? (
+                                <time>{relativeDate(comment.createdAt)}</time>
+                              ) : null}
+                              <p>{plainText(comment.text)}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>Aucun commentaire chargé.</p>
+                      )}
+                    </section>
+                    <a href={selectedItem.url} target="_blank" rel="noreferrer">
+                      Ouvrir dans {selectedSource?.provider ?? 'la source'}
+                    </a>
+                  </article>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </section>
   )
 }
