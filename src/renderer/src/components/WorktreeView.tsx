@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GitGraphCommit, GitGraphSnapshot } from '../../../shared/git-graph'
 import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
-import { ModuleHeader } from './ModuleHeader'
+import { ViewTopBar } from './ViewTopBar'
 import { layoutGitGraph } from './GitGraphLayout'
 import {
   formatAttente,
@@ -376,20 +376,25 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
 
   return (
     <section className="worktree-tab cockpit" data-active={active}>
-      <header className="cockpit-header">
-        <div>
-          <ModuleHeader eyebrow="Cockpit projet" title={snapshot?.repositoryName ?? 'Worktrees'} />
-          <span className="cockpit-path">{snapshot?.repoPath || repoPath || 'Dépôt courant'}</span>
-        </div>
-        <div className="cockpit-actions">
-          <button type="button" onClick={() => void pickRepo()}>
-            Choisir
-          </button>
-          <button type="button" onClick={() => void load()} disabled={loading}>
-            {loading ? 'Actualisation…' : 'Actualiser'}
-          </button>
-        </div>
-      </header>
+      {/* MÊME barre du haut que Task Manager, Agent Studio et Settings (arrangement retenu par
+          l'utilisateur), au lieu d'un `cockpit-header` maison : surtitre et titre collés au chemin,
+          boutons dans un bloc à part — d'où la régression visuelle signalée. Cette vue n'a pas de
+          sections : `ViewTopBar` rend alors l'identité et les actions, sans barre d'onglets vide. */}
+      <ViewTopBar
+        eyebrow="COCKPIT PROJET"
+        title={snapshot?.repositoryName ?? 'Worktrees'}
+        description={snapshot?.repoPath || repoPath || 'Dépôt courant'}
+        actions={
+          <>
+            <button type="button" onClick={() => void pickRepo()}>
+              Choisir
+            </button>
+            <button type="button" onClick={() => void load()} disabled={loading}>
+              {loading ? 'Actualisation…' : 'Actualiser'}
+            </button>
+          </>
+        }
+      />
 
       {loading && !snapshot ? (
         <div className="cockpit-state" role="status">
