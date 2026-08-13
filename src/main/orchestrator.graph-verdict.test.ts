@@ -158,11 +158,19 @@ describe('le verdict d’un nœud judge est un fait, pas une variable', () => {
     provider.verdictDuJuge = '   '
     await lancer()
     expect(phasesExecutees).toContain('judge')
-    // Preuve du fail-closed : l'arête ROUGE est franchie, donc `clean` (sa cible) tourne. Avant le
-    // durcissement la séquence était scout→judge→build : l'arête VERTE, aucun `clean`.
-    // `build` réapparaît en fin de séquence et c'est NORMAL — un rouge déclenche la boucle de
-    // réparation, que le marcheur laisse volontairement en aval (orchestrator.ts:1887).
-    expect(phasesExecutees).toContain('clean')
+    /*
+      Preuve du fail-closed : l'arête VERTE n'est PAS franchie, donc `build` ne tourne pas. Avant le
+      durcissement la séquence était scout→judge→build.
+
+      Cette assertion portait sur `toContain('clean')`, la cible de l'arête rouge — elle ne pouvait pas
+      passer : `sansRetoursAutomatiques` (orchestrator.ts:267) RETIRE les arêtes rouges du parcours
+      automatique, à dessein, pour qu'un tour humain précède toute nouvelle dépense. Un rouge ARRÊTE
+      donc la marche au lieu de repartir vers `clean`. La propriété qui compte — un non-approbation ne
+      vaut jamais approbation — est intacte ; c'est la preuve choisie qui visait le mauvais effet.
+
+      Non vacuité : sur un verdict VALIDE, `build` tourne (les deux tests verts ci-dessous).
+    */
+    expect(phasesExecutees).not.toContain('build')
   })
 
   it('un juge EN PANNE ne vaut pas une approbation', async () => {
@@ -170,11 +178,19 @@ describe('le verdict d’un nœud judge est un fait, pas une variable', () => {
     provider.verdictDuJuge = 'Error: provider timeout after 30000ms'
     await lancer()
     expect(phasesExecutees).toContain('judge')
-    // Preuve du fail-closed : l'arête ROUGE est franchie, donc `clean` (sa cible) tourne. Avant le
-    // durcissement la séquence était scout→judge→build : l'arête VERTE, aucun `clean`.
-    // `build` réapparaît en fin de séquence et c'est NORMAL — un rouge déclenche la boucle de
-    // réparation, que le marcheur laisse volontairement en aval (orchestrator.ts:1887).
-    expect(phasesExecutees).toContain('clean')
+    /*
+      Preuve du fail-closed : l'arête VERTE n'est PAS franchie, donc `build` ne tourne pas. Avant le
+      durcissement la séquence était scout→judge→build.
+
+      Cette assertion portait sur `toContain('clean')`, la cible de l'arête rouge — elle ne pouvait pas
+      passer : `sansRetoursAutomatiques` (orchestrator.ts:267) RETIRE les arêtes rouges du parcours
+      automatique, à dessein, pour qu'un tour humain précède toute nouvelle dépense. Un rouge ARRÊTE
+      donc la marche au lieu de repartir vers `clean`. La propriété qui compte — un non-approbation ne
+      vaut jamais approbation — est intacte ; c'est la preuve choisie qui visait le mauvais effet.
+
+      Non vacuité : sur un verdict VALIDE, `build` tourne (les deux tests verts ci-dessous).
+    */
+    expect(phasesExecutees).not.toContain('build')
   })
 
   it('un rejet en MILIEU de phrase est un rejet', async () => {
@@ -182,11 +198,19 @@ describe('le verdict d’un nœud judge est un fait, pas une variable', () => {
     provider.verdictDuJuge = 'Le livrable présente un DEFAUT: il plante sur null'
     await lancer()
     expect(phasesExecutees).toContain('judge')
-    // Preuve du fail-closed : l'arête ROUGE est franchie, donc `clean` (sa cible) tourne. Avant le
-    // durcissement la séquence était scout→judge→build : l'arête VERTE, aucun `clean`.
-    // `build` réapparaît en fin de séquence et c'est NORMAL — un rouge déclenche la boucle de
-    // réparation, que le marcheur laisse volontairement en aval (orchestrator.ts:1887).
-    expect(phasesExecutees).toContain('clean')
+    /*
+      Preuve du fail-closed : l'arête VERTE n'est PAS franchie, donc `build` ne tourne pas. Avant le
+      durcissement la séquence était scout→judge→build.
+
+      Cette assertion portait sur `toContain('clean')`, la cible de l'arête rouge — elle ne pouvait pas
+      passer : `sansRetoursAutomatiques` (orchestrator.ts:267) RETIRE les arêtes rouges du parcours
+      automatique, à dessein, pour qu'un tour humain précède toute nouvelle dépense. Un rouge ARRÊTE
+      donc la marche au lieu de repartir vers `clean`. La propriété qui compte — un non-approbation ne
+      vaut jamais approbation — est intacte ; c'est la preuve choisie qui visait le mauvais effet.
+
+      Non vacuité : sur un verdict VALIDE, `build` tourne (les deux tests verts ci-dessous).
+    */
+    expect(phasesExecutees).not.toContain('build')
   })
 
   it('un VALIDE reste un VALIDE (le durcissement ne bloque pas le chemin vert)', async () => {

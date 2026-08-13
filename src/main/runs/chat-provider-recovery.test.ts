@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,7 +7,8 @@ import { writeSurvivableExit } from './stdout-journal'
 import {
   listRecoverableChatProviderCalls,
   recoverCompletedChatProviderCall,
-  streamedPrefixForProviderCall
+  streamedPrefixForProviderCall,
+  waitForRecoverableChatProviderExit
 } from './chat-provider-recovery'
 
 let root = ''
@@ -127,6 +128,55 @@ describe('reprise des appels provider du chat direct', () => {
     })
 
     expect(listRecoverableChatProviderCalls(root)).toEqual([])
+  })
+
+  it('ne declare pas reprenable un provider ancien sans recu terminal', () => {
+    root = mkdtempSync(join(tmpdir(), 'autowin-chat-provider-orphan-'))
+    const journalPath = join(root, 'provider.stdout.jsonl')
+    writeFileSync(journalPath, '{"type":"assistant"}\n', 'utf8')
+    appendTurnEvent(root, 'conv-ghost', 'turn-ghost', {
+      kind: 'provider-journal',
+      provider: 'claude',
+      token: 'provider-mort',
+      journalPath,
+      iteration: 0,
+      attempt: 0,
+      streamId: '0:0',
+      requestId: 'request-ghost'
+    })
+
+    expect(
+      listRecoverableChatProviderCalls(root, {
+        now: Date.now() + 2 * 60 * 60_000,
+        maxUncertifiedAgeMs: 60 * 60_000
+      })
+    ).toEqual([])
+
+    // Contre-exemple : le mÃªme tour ancien reste reprenable si son producteur Ã©crit encore.
+    const recentActivity = new Date(Date.now() + 90 * 60_000)
+    utimesSync(journalPath, recentActivity, recentActivity)
+    expect(
+      listRecoverableChatProviderCalls(root, {
+        now: Date.now() + 2 * 60 * 60_000,
+        maxUncertifiedAgeMs: 60 * 60_000
+      })
+    ).toHaveLength(1)
+  })
+
+  it('borne aussi un rattachement initialement recent qui cesse ensuite toute activite', async () => {
+    let now = 1_000
+    const result = await waitForRecoverableChatProviderExit('provider.stdout.jsonl', {
+      signal: new AbortController().signal,
+      maxInactivityMs: 500,
+      now: () => now,
+      activityAt: () => 1_000,
+      readExitCode: () => undefined,
+      wait: async () => {
+        now += 250
+      }
+    })
+
+    expect(result).toEqual({ kind: 'stale' })
   })
 
   it('ignore un tour deja terminal pour ne jamais rejouer un resultat', () => {

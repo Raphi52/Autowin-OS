@@ -10,8 +10,15 @@ const CLAUSE_SPLIT =
 const APOSTROPHES = /[‘’ʼ]/g
 const SENTINEL_PREFIX = /^\[[^\]]{0,160}\]\s*/
 const PHASE_LECTURE_SEULE_LEAD = /^\/?(?:scout|frame|judge)\b/i
+/*
+  ATTENTION : un verbe de lecture seule doit être ajouté ICI **et** dans les deux listes de
+  `classifyMutationConfidence` (le garde `explicitReadOnly` / `simpleReadOnlyLead`). Elles ne sont pas
+  interchangeables — celle-ci filtre CHAQUE clause, les autres décident si le chemin lecture seule est
+  même tenté — et ne pas le poser partout laisse la tâche en `uncertain`, donc traitée comme une
+  mutation. C'est ce qui est arrivé à `verifi` : ajouté aux deux gardes seulement, il ne suffisait pas.
+*/
 const READ_ONLY_STEM =
-  'analys|audit|cadr|document|expliqu|inspect|review|resume|resum|repond|decri|lis|lire|liste|montre|affiche'
+  'analys|audit|cadr|document|expliqu|inspect|review|resume|resum|repond|decri|lis|lire|liste|montre|affiche|verifi'
 const READ_ONLY_CLAUSE = new RegExp(`^(?:${READ_ONLY_STEM})\\w*\\b`, 'i')
 const READ_ONLY_DELIVERABLE_CLAUSE =
   /^(?:produi|fourni)\w*\s+(?:(?:le|la|un|une)\s+)?(?:cadrage|analyse|audit|resume|documentation)\b/i
@@ -44,11 +51,26 @@ export function classifyMutationConfidence(task: string): MutationConfidence {
     .toLowerCase()
   const withoutNegations = normalized.replace(NEGATED_MUTATION, ' ')
   if (MUTATION_TASK.test(withoutNegations)) return 'mutation'
+  /*
+    `verifi` manquait à ces deux listes. Conséquence MESURÉE : « Vérifier les écarts de facturation »
+    était classé MUTATION (le défaut de la ligne suivante, un défaut sûr pour le bac à sable), donc le
+    gabarit de RUN.md lui posait « Mutation demandee produite » et « Tests demandes executes » — deux
+    obligations que la tâche ne demande pas, affichées ensuite comme une DoD manquée.
+
+    Ajouter ce verbe ne relâche rien : `MUTATION_TASK` est testé AVANT (ligne 46), donc « vérifie puis
+    corrige » reste une mutation, et `allClausesReadOnly` exige ensuite que CHAQUE clause soit en
+    lecture seule. Le seul cas déplacé est la vérification pure — qui n'a effectivement pas besoin
+    d'écrire.
+  */
   const explicitReadOnly =
     withoutNegations !== normalized &&
-    /\b(?:analys|audit|cadr|document|expliqu|inspect|lecture seule|review)\w*/i.test(normalized)
+    /\b(?:analys|audit|cadr|document|expliqu|inspect|lecture seule|review|verifi)\w*/i.test(
+      normalized
+    )
   const simpleReadOnlyLead =
-    /^(?:analys|audit|expliqu|inspect|review|cadr|document|resume|decri)\w*\b/i.test(normalized)
+    /^(?:analys|audit|expliqu|inspect|review|cadr|document|resume|decri|verifi)\w*\b/i.test(
+      normalized
+    )
   if (!explicitReadOnly && !simpleReadOnlyLead) return 'mutation'
   const clauses = normalized
     .split(CLAUSE_SPLIT)

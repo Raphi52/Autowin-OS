@@ -5,6 +5,60 @@ import { recoverDetachedProviderResult } from './run-reattach'
 import { survivableExitCode } from './stdout-journal'
 import { listUnfinishedTurns, readTurnJournal, type TurnJournalEvent } from './turn-journal'
 
+/** Apres le plafond reel des appels directs (40 min), un journal muet sans recu est orphelin. */
+export const MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS = 2 * 60 * 60_000
+
+function providerJournalActivityAt(path: string, fallback: number): number {
+  try {
+    return Math.max(fallback, statSync(path).mtimeMs)
+  } catch {
+    return fallback
+  }
+}
+
+export type RecoverableChatProviderExit =
+  { kind: 'exit'; exitCode: number } | { kind: 'stale' } | { kind: 'aborted' }
+
+/**
+ * Attend un recu terminal tant que le journal progresse. La borne d'inactivite reste dans la boucle :
+ * un appel recent au demarrage mais dont le producteur est mort ne peut donc pas bloquer le chat a vie.
+ */
+export async function waitForRecoverableChatProviderExit(
+  journalPath: string,
+  options: {
+    signal: AbortSignal
+    fallbackActivityAt?: number
+    maxInactivityMs?: number
+    pollMs?: number
+    now?: () => number
+    activityAt?: (path: string, fallback: number) => number
+    readExitCode?: (path: string) => number | undefined
+    wait?: (ms: number) => Promise<void>
+  }
+): Promise<RecoverableChatProviderExit> {
+  const maxInactivityMs = options.maxInactivityMs ?? MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS
+  const pollMs = options.pollMs ?? 250
+  const now = options.now ?? Date.now
+  const activityAt = options.activityAt ?? providerJournalActivityAt
+  const readExitCode = options.readExitCode ?? survivableExitCode
+  const wait =
+    options.wait ??
+    ((ms: number) =>
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, ms)
+        timer.unref?.()
+      }))
+
+  while (!options.signal.aborted) {
+    const exitCode = readExitCode(journalPath)
+    if (exitCode !== undefined) return { kind: 'exit', exitCode }
+    if (now() - activityAt(journalPath, options.fallbackActivityAt ?? now()) > maxInactivityMs)
+      return { kind: 'stale' }
+    await wait(pollMs)
+  }
+  return { kind: 'aborted' }
+}
+
 /** Lien durable écrit avant le spawn d'un provider de chat direct. */
 export interface RecoverableChatProviderCall {
   conversationId: string
@@ -97,8 +151,13 @@ function providerLink(
  * Ne considère que les tours sans clôture et prend leur DERNIER spawn : un premier essai peut avoir
  * échoué puis avoir été retenté. Rejouer l'ancien journal exécuterait une réponse obsolète.
  */
-export function listRecoverableChatProviderCalls(root: string): RecoverableChatProviderCall[] {
+export function listRecoverableChatProviderCalls(
+  root: string,
+  options: { now?: number; maxUncertifiedAgeMs?: number } = {}
+): RecoverableChatProviderCall[] {
   const calls: RecoverableChatProviderCall[] = []
+  const now = options.now ?? Date.now()
+  const maxUncertifiedAgeMs = options.maxUncertifiedAgeMs ?? MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS
   for (const turn of listUnfinishedTurns(root)) {
     const events = readTurnJournal(root, turn.conversationId, turn.turnId)
     let latest: RecoverableChatProviderCall | undefined
@@ -158,7 +217,11 @@ export function listRecoverableChatProviderCalls(root: string): RecoverableChatP
         })
       }
     }
-    if (!invalidProviderJournal && latest)
+    const uncertifiedAndStale =
+      latest &&
+      survivableExitCode(latest.journalPath) === undefined &&
+      now - providerJournalActivityAt(latest.journalPath, latest.updatedAt) > maxUncertifiedAgeMs
+    if (!invalidProviderJournal && latest && !uncertifiedAndStale)
       calls.push({
         ...latest,
         ...(settledActions.size > 0 ? { settledActions: [...settledActions.values()] } : {})
@@ -213,81 +276,5 @@ export function recoverCompletedChatProviderCall(
     ...(recovered.executionEvidence?.length
       ? { executionEvidence: recovered.executionEvidence }
       : {})
-  }
-}
-
-/**
- * L'issue d'un appel provider detache, telle qu'un redemarrage peut la constater.
- *
- * Trois issues SEULEMENT, et l'absence de quatrieme est le fond du sujet : il n'existe pas d'issue
- * « probablement fini ». Une sortie non certifiee ne devient jamais un succes — elle devient `stale`,
- * et l'appelant clot le tour en `interrupted` plutot que d'inventer une reponse.
- */
-export type RecoverableChatProviderExit =
-  { kind: 'exited'; exitCode: number } | { kind: 'aborted' } | { kind: 'stale' }
-
-/** Intervalle entre deux lectures de la preuve de sortie. Court : on attend un fichier, pas un reseau. */
-const SONDE_MS = 2_000
-
-/**
- * Silence tolere avant de declarer un appel perime.
- *
- * Genereux a dessein : un tour de chat peut reflechir plusieurs minutes sans ecrire une ligne, et
- * declarer perime un appel encore vivant ferait perdre son travail. Dix minutes sans AUCUNE ecriture ni
- * preuve de sortie signifient en pratique que le processus est mort sans laisser sa preuve.
- */
-const PEREMPTION_MS = 10 * 60 * 1_000
-
-/**
- * Attend la preuve de sortie CERTIFIEE d'un appel provider detache.
- *
- * Ecrite pour completer une fusion qui appelait cette fonction sans qu'elle existe nulle part — ni dans
- * l'arbre, ni dans l'historique, ni sur origin/main.
- *
- * Le contrat vient de son site d'appel (`index.ts`, reprise au demarrage) : `aborted` quand le signal
- * tombe, `stale` quand plus rien ne bouge, et sinon le code de sortie ECRIT par le relais. On ne lit
- * jamais le code d'un processus qu'on observe : on lit le fichier qu'il a laisse.
- */
-export async function waitForRecoverableChatProviderExit(
-  journalPath: string,
-  options: {
-    signal?: AbortSignal
-    /** Derniere activite connue quand le journal n'a pas encore de date : evite une peremption immediate. */
-    fallbackActivityAt?: number
-    sondeMs?: number
-    peremptionMs?: number
-  } = {}
-): Promise<RecoverableChatProviderExit> {
-  const sonde = options.sondeMs ?? SONDE_MS
-  const peremption = options.peremptionMs ?? PEREMPTION_MS
-  const derniereActivite = (): number => {
-    // La date du journal, ou celle fournie par l'appelant : un journal pas encore cree ne doit pas
-    // compter comme un silence de dix minutes.
-    try {
-      return statSync(journalPath).mtimeMs
-    } catch {
-      return options.fallbackActivityAt ?? Date.now()
-    }
-  }
-
-  for (;;) {
-    if (options.signal?.aborted) return { kind: 'aborted' }
-    const code = survivableExitCode(journalPath)
-    // La preuve d'abord : un appel qui a fini ET dont le journal ne bouge plus doit rendre son code,
-    // pas `stale`.
-    if (typeof code === 'number') return { kind: 'exited', exitCode: code }
-    if (Date.now() - derniereActivite() > peremption) return { kind: 'stale' }
-    await new Promise<void>((resolve) => {
-      const minuteur = setTimeout(resolve, sonde)
-      minuteur.unref?.()
-      options.signal?.addEventListener(
-        'abort',
-        () => {
-          clearTimeout(minuteur)
-          resolve()
-        },
-        { once: true }
-      )
-    })
   }
 }

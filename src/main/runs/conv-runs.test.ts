@@ -36,10 +36,18 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     closeConvRun(g, 'green', 'Juge: validé.')
     const green = (await listConvRuns('conv-9', [], root)).find((r) => r.path === g)!
     expect(green.summary.status).toBe('green')
-    // Le cochage auto est retiré AVEC la case : il cochait un pseudo-critère au moment même où le
-    // statut le disait déjà. Une DoD réelle n'est jamais cochée par la clôture — c'est celui qui
-    // produit la preuve qui la coche, sinon la case ne prouve rien.
-    expect(green.summary.dodTotal).toBe(0)
+    /*
+      Ce qui est vérifié ici : la CLÔTURE ne coche jamais une case. Elle cochait un pseudo-critère au
+      moment même où le statut le disait déjà — une DoD réelle n'est cochée que par celui qui produit
+      la preuve, sinon la case ne prouve rien. C'est l'assertion discriminante : c'est exactement ce
+      cochage-là que l'ancien code faisait sur un vert.
+
+      `dodTotal` n'est PAS asserté ici, contrairement aux quatre autres statuts de ce test : cette
+      tâche-ci n'a aucun verbe, donc `classifyMutationConfidence` la range en mutation par DÉFAUT —
+      un défaut sûr, voulu pour le bac à sable — et le contrat racine lui pose une obligation de
+      preuve. L'absence de case AUTO sur une tâche de lecture est couverte, elle, par
+      `conv-runs.dod-honnete.test.ts` avec une vraie tâche d'audit.
+    */
     expect(green.summary.dodChecked).toBe(0)
 
     const r = createConvRun('conv-9', 'tâche rouge', root, () => 3000)
