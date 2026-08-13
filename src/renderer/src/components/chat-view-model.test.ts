@@ -928,6 +928,13 @@ describe('durable assistant hydration and streaming', () => {
   })
 
   it('removes a persisted green closure when the latest orchestration failed', () => {
+    const previousGreenText = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      result: 'Ancienne preuve : tests 12/12 verts.'
+    })
     const hydrated = hydrateStoredAssistant({
       content: 'projection',
       status: 'completed',
@@ -938,10 +945,7 @@ describe('durable assistant hydration and streaming', () => {
           ok: true,
           data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
         },
-        {
-          kind: 'text',
-          text: 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
-        },
+        { kind: 'text', text: previousGreenText },
         { kind: 'action', name: 'orchestrate', ok: false, data: { error: 'timeout' } },
         { kind: 'text', text: 'Échec final : publication non exécutée.' }
       ]
@@ -952,7 +956,10 @@ describe('durable assistant hydration and streaming', () => {
       .join('\n')
 
     expect(text).toContain('Échec final : publication non exécutée.')
-    expect(text).not.toContain('Clôture Autowin : gate validé')
+    expect(text).toContain('Ancienne preuve : tests 12/12 verts.')
+    expect(text).not.toContain('Workflow livré : gate validé')
+    expect(text).not.toContain('Reste à faire : rien')
+    expect(text).not.toContain('passer à la prochaine demande')
   })
 
   it('ignores the historical same-turn duplicate refusal because it launched no run', () => {

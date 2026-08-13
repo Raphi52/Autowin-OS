@@ -22,6 +22,7 @@ import {
   markdownCodeLineProtection,
   ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
   reconcileClosedOrchestrationTextParts,
+  removeAuthoritativeDeliveredClosingBlock,
   rewriteUnprotectedMarkdownLines,
   type OrchestrationOutcome
 } from '../../../shared/orchestration-outcome'
@@ -237,9 +238,10 @@ function removePersistedAuthoritativeClosures(parts: ChatPart[]): ChatPart[] {
       protectedLines[textIndex++],
       withoutPersistedAuthoritativeClosure
     )
-    if (text === part.text) return [part]
+    const withoutDeliveredFooter = removeAuthoritativeDeliveredClosingBlock(text)
+    if (withoutDeliveredFooter === part.text) return [part]
     changed = true
-    return text ? [{ ...part, text }] : []
+    return withoutDeliveredFooter ? [{ ...part, text: withoutDeliveredFooter }] : []
   })
   return changed ? reconciled : parts
 }

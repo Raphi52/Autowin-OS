@@ -725,23 +725,39 @@ function deliveredClosingBlock(run: string | undefined): string[] {
 }
 
 /** Reconnaît le footer synthétisé par Autowin, sans confondre un bloc libre produit par le worker. */
-export function hasAuthoritativeDeliveredClosingBlock(report: string): boolean {
+function authoritativeDeliveredClosingBlockSpan(
+  report: string
+): { start: number; end: number } | undefined {
   const protectedLines = markdownCodeLineProtection([report])[0]
-  const visibleLines = report
-    .split(/\r?\n/u)
-    .filter((_, index) => !protectedLines.has(index + 1))
-    .map((line) => line.trim())
-  const fact = visibleLines.indexOf('✅ Fait')
-  if (fact < 0 || visibleLines[fact + 1] !== '1. Workflow livré : gate validé et RUN fermé green.') {
-    return false
+  const lines = report.split(/\r?\n/u)
+  const visible = lines.map((line, index) => (protectedLines.has(index + 1) ? undefined : line.trim()))
+  const fact = visible.indexOf('✅ Fait')
+  if (fact < 0 || visible[fact + 1] !== '1. Workflow livré : gate validé et RUN fermé green.') {
+    return undefined
   }
-  const now = visibleLines.findIndex((line, index) => index > fact && line.startsWith('📍 Maintenant :'))
-  const remaining = visibleLines.indexOf('⏳ Reste à faire : rien.', now + 1)
-  const recommended = visibleLines.indexOf(
+  const now = visible.findIndex(
+    (line, index) => index > fact && line?.startsWith('📍 Maintenant :')
+  )
+  const remaining = visible.indexOf('⏳ Reste à faire : rien.', now + 1)
+  const recommended = visible.indexOf(
     '👉 Recommandé : passer à la prochaine demande.',
     remaining + 1
   )
-  return fact < now && now < remaining && remaining < recommended
+  if (!(fact < now && now < remaining && remaining < recommended)) return undefined
+  const start = fact > 0 && visible[fact - 1] === '---' ? fact - 1 : fact
+  return { start, end: recommended + 1 }
+}
+
+export function hasAuthoritativeDeliveredClosingBlock(report: string): boolean {
+  return authoritativeDeliveredClosingBlockSpan(report) !== undefined
+}
+
+/** Retire un ancien footer vert exact quand une issue plus récente fait autorité. */
+export function removeAuthoritativeDeliveredClosingBlock(report: string): string {
+  const span = authoritativeDeliveredClosingBlockSpan(report)
+  if (!span) return report
+  const lines = report.split(/\r?\n/u)
+  return [...lines.slice(0, span.start), ...lines.slice(span.end)].join('\n').trimEnd()
 }
 
 /**
