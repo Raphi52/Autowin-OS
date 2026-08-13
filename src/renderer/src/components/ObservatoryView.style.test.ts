@@ -27,9 +27,15 @@ describe('Observatory visual contracts', () => {
     const liseré =
       /linear-gradient\(\s*90deg,\s*var\(--rose\),\s*transparent 42%,\s*color-mix\(in srgb, var\(--gold\) 70%, transparent\)\s*\)\s*top \/ 100% 1px no-repeat/s
 
-    const regleCadre = cadre.match(/\.view-page\s*{[^}]*}/s)?.[0]
-    expect(regleCadre).toMatch(liseré)
-    expect(regleCadre).toMatch(/border: 1px solid color-mix\(in srgb, var\(--rose\) 34%/)
+    // 3ᵉ tournure de ce liseré, et la meilleure : il est devenu un TOKEN `--lisere-haut` déclaré sur
+    // `.shell`, que chaque vue COMPOSE avec son propre fond. Ce test épinglait le littéral dans
+    // `.view-page` ; il suit la source réelle, sinon il interdirait l'amélioration qu'il prétend
+    // protéger. Ce qu'on garantit reste le même : UNE définition, et Observatory la consomme.
+    expect(cadre.match(/\.shell\s*{[^}]*}/s)?.[0]).toMatch(liseré)
+    expect(cadre.match(/\.view-page\s*{[^}]*}/s)?.[0]).toMatch(
+      /background:\s*var\(--lisere-haut\)/
+    )
+    expect(cadre).toMatch(/border: 1px solid color-mix\(in srgb, var\(--rose\) 34%/)
     // Et Observatory ne repart pas en solo : aucun cadre redécrit dans sa propre règle.
     const regleObservatory = observatory.match(/\.observatory-view\s*{[^}]*}/s)?.[0]
     expect(regleObservatory).not.toMatch(liseré)

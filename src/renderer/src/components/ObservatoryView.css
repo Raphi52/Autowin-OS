@@ -495,6 +495,15 @@
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
+/* WORKFLOWS ouvre le rail : hauteur BORNÉE avec son propre défilement, sinon 12 runs repoussaient la
+   liste des conversations hors de l'écran — on aurait troqué un problème contre l'autre. Premier de la
+   colonne, donc pas de filet haut : il n'y a rien au-dessus dont le séparer. */
+.observatory-runs {
+  max-height: 176px;
+  overflow-y: auto;
+  padding-top: 0;
+  border-top: 0;
+}
 .observatory-diagnostics button {
   border-color: rgba(216, 183, 101, 0.27);
   color: #e9bd4e;

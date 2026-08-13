@@ -71,6 +71,40 @@ export function ObservatoryRail({
 }): React.JSX.Element {
   return (
     <aside className="observatory-rail">
+      {/* WORKFLOWS EN PREMIER — vue TRANSVERSALE des RUN.md du dépôt, notamment ceux restés `open`.
+          Placée d'abord en BAS du rail par symétrie avec les autres sections : à l'écran elle était
+          alors enterrée sous 943 conversations, donc invisible sans scroller longtemps. Constaté en
+          LISANT une capture de l'app, pas en test — aucun test ne voit un ordre de sections. */}
+      <section className="observatory-diagnostics observatory-runs" aria-busy={runsLoading}>
+        <span className="observatory-panel-title">
+          WORKFLOWS · TOUS
+          {runs.length > 0
+            ? ` · ${runs.filter((r) => r.summary.status === 'open').length} open`
+            : ''}
+        </span>
+        {runs.length === 0 ? (
+          <p>{runsLoading ? 'Lecture des RUN.md…' : 'Aucun RUN.md.'}</p>
+        ) : (
+          runs.slice(0, 12).map((run) => (
+            <button
+              key={run.path}
+              data-run-status={run.summary.status}
+              data-testid="observatory-run"
+              onClick={() => onOpenRun(run.path)}
+            >
+              <strong>
+                {run.summary.status} · {run.subject}
+              </strong>
+              <span>
+                {run.session}
+                {run.summary.dodTotal > 0
+                  ? ` · DoD ${run.summary.dodChecked}/${run.summary.dodTotal}`
+                  : ''}
+              </span>
+            </button>
+          ))
+        )}
+      </section>
       <span className="observatory-panel-title">conversations</span>
       <input
         className="observatory-conversation-filter"
@@ -177,38 +211,6 @@ export function ObservatoryRail({
               ))}
             {activityImage && <img src={activityImage} alt="Capture du transcript" />}
           </div>
-        )}
-      </section>
-      {/* WORKFLOWS — vue TRANSVERSALE. La barre du Chat ne montre que la conversation courante ;
-          c'est ici qu'on voit les RUN.md de tout le dépôt, et notamment ceux restés `open`. */}
-      <section className="observatory-diagnostics" aria-busy={runsLoading}>
-        <span className="observatory-panel-title">
-          WORKFLOWS · TOUS
-          {runs.length > 0
-            ? ` · ${runs.filter((r) => r.summary.status === 'open').length} open`
-            : ''}
-        </span>
-        {runs.length === 0 ? (
-          <p>{runsLoading ? 'Lecture des RUN.md…' : 'Aucun RUN.md.'}</p>
-        ) : (
-          runs.slice(0, 12).map((run) => (
-            <button
-              key={run.path}
-              data-run-status={run.summary.status}
-              data-testid="observatory-run"
-              onClick={() => onOpenRun(run.path)}
-            >
-              <strong>
-                {run.summary.status} · {run.subject}
-              </strong>
-              <span>
-                {run.session}
-                {run.summary.dodTotal > 0
-                  ? ` · DoD ${run.summary.dodChecked}/${run.summary.dodTotal}`
-                  : ''}
-              </span>
-            </button>
-          ))
         )}
       </section>
       <section className="observatory-diagnostics">
