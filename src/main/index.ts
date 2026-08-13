@@ -347,7 +347,6 @@ import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker
 } from './providers/workspace-mutation-evidence'
-import { readWorktreeMap } from './worktree-map-main'
 import {
   automationAppIdentity,
   presentAutomationWindow,
@@ -2091,14 +2090,6 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('git:graph', (event, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitGraph')
     return readGitGraph(
-      cwd && typeof cwd === 'string' ? cwd : (process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd())
-    )
-  })
-  // Vue Worktrees : état des copies git enrichi du retard, de la saleté et de la taille disque —
-  // trois grandeurs que `git worktree list --porcelain` ne donne pas. Lecture seule.
-  ipcMain.handle('git:worktreeMap', (event, cwd?: string) => {
-    assertTrustedRendererSender(event, 'GitWorktreeMap')
-    return readWorktreeMap(
       cwd && typeof cwd === 'string' ? cwd : (process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd())
     )
   })

@@ -353,9 +353,9 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     installApi()
     await renderView()
 
-    // L'onglet Worktrees monte CETTE vue (`App.tsx` → `WorktreeView`) ; `WorktreeMapView` n'est
-    // branchée sur rien. Aligner la barre ailleurs n'aurait donc rien changé à l'écran — d'où ce
-    // test, qui ancre l'alignement sur le composant RÉELLEMENT affiché.
+    // L'onglet Worktrees monte CETTE vue (`App.tsx` → `WorktreeView`). La barre avait d'abord été
+    // alignée sur `WorktreeMapView`, que l'app ne montait pas : rien n'avait change a l'ecran. Cette
+    // carte est depuis supprimee ; ce test garde l'ancrage sur le composant REELLEMENT affiche.
     const barre = container?.querySelector('.view-topbar')
     expect(barre).toBeTruthy()
     expect(barre?.querySelector('.module-header h1')?.textContent).toBe('Autowin OS')

@@ -30,30 +30,26 @@ describe('frontend cleanup guard', () => {
     ['components/ObservatoryView.css', '.observatory-call-sent'],
     ['assets/ui-system.css', '.surface-card'],
     ['assets/cosmic-outline.css', '.behaviour-reader'],
-    // Le cockpit d'activite agents `WorktreeView` a ete supprime : l'onglet Worktrees porte
-    // desormais le plan git (`WorktreeMapView`). Le selecteur mort est garde ici comme
-    // interdiction, contre le fichier qui a herite du sujet.
-    ['components/WorktreeMapView.css', '.git-ledger__ref-catalog']
+    // L'entree `components/WorktreeMapView.css` a ete retiree AVEC son fichier : garder un test qui
+    // lit une feuille supprimee ne verifie plus une interdiction, il jette.
+    ['components/WorktreeView.css', '.git-ledger__ref-catalog']
   ])('does not restore stale selector %s → %s', (file, selector) => {
     expect(source(file)).not.toContain(selector)
   })
 
   it('ne monte QU’UNE vue Worktrees — et c’est la frise git', () => {
-    // Ce garde-fou exigeait l'INVERSE : que `WorktreeView.tsx/.css` et `GitGraphLayout.ts` n'existent
-    // pas, et que `App.tsx` monte `WorktreeMapView`. Il datait du moment ou l'onglet Worktrees avait
-    // change de sujet (activite des agents -> plan des copies git). L'utilisateur a ensuite demande le
-    // RETOUR de la frise d'historique : `WorktreeView` a ete restauree et remontee, donc ce test
-    // rougissait a chaque run en defendant une decision renversee. Un garde que plus personne ne croit
-    // est pire qu'un garde absent — il devient du bruit qu'on apprend a ignorer.
+    // Historique de ce garde-fou, en deux temps. Il a d'abord exige l'INVERSE (que `WorktreeView`
+    // n'existe PAS et que `App.tsx` monte `WorktreeMapView`), et il rougissait a chaque run depuis que
+    // l'utilisateur avait redemande la frise. Corrige, il interdisait ensuite de monter la carte EN
+    // PLUS de la frise, la carte restant dans le depot sans etre branchee.
     //
-    // L'INTENTION est conservee telle quelle : pas DEUX vues Worktrees concurrentes montees en meme
-    // temps. Seuls les roles sont inverses, conformement a l'etat reellement voulu.
+    // La carte est desormais SUPPRIMEE (decision utilisateur du 2026-08-13) : elle n'avait aucun
+    // consommateur, deux gardes-fous la surveillaient pour rien, et deux tours de travail ont ete
+    // depenses a aligner une vue que l'app ne montait pas. Ne reste donc a garantir qu'une chose :
+    // l'onglet monte la frise, et aucun fichier ne ressuscite la carte sans qu'on le voie ici.
     expect(source('App.tsx')).toContain("<WorktreeView active={tab === 'worktree'} />")
-    expect(source('App.tsx')).not.toContain('<WorktreeMapView ')
-    // `WorktreeMapView` RESTE dans le depot sans etre montee : elle chiffre le retard, la salete et la
-    // taille disque des copies, ce que la frise ne dit pas. Sa presence en fichier n'est donc pas une
-    // faute — la monter en plus de la frise en serait une, et c'est ce qu'interdit la ligne au-dessus.
     expect(existsSync(join(rendererRoot, 'components', 'WorktreeView.tsx'))).toBe(true)
+    expect(existsSync(join(rendererRoot, 'components', 'WorktreeMapView.tsx'))).toBe(false)
   })
 
   it('mounts a single preflight surface', () => {
