@@ -96,10 +96,37 @@ describe('behaviour instruction map', () => {
 
     const claude = select(await listBehaviourFiles(opts), 'claude')
 
+    // CONTRAT CORRIGÉ. Ce test affirmait que la mémoire globale et `CLAUDE.local.md` étaient
+    // `active` : c'était faux, et l'utilisateur a légitimement douté de ce qui pilote ses agents en
+    // voyant « actif » dans Settings → Behaviour. Deux faits vérifiés dans le code :
+    //   1. Autowin lance le CLI Claude avec `--setting-sources ""` (`providers/claude.ts`) → la
+    //      mémoire utilisateur globale n'est JAMAIS chargée ici. Elle gouverne les sessions Claude
+    //      Code lancées à la main, pas les agents d'Autowin.
+    //   2. Ce qui atteint le prompt vient de `PROJECT_CONTEXT_CHAIN` (`context-files.ts`) :
+    //      `AGENTS.md` → `CLAUDE.md` → `.cursorrules`, le PREMIER trouvé. `CLAUDE.local.md` n'y est
+    //      pas du tout.
+    // Seul le `CLAUDE.md` du workspace est donc réellement replié dans un prompt.
     expect(
       claude.filter((file) => file.state === 'active').map((file) => normalized(file.path))
-    ).toEqual([normalized(global), normalized(workspace), normalized(projectA)])
+    ).toEqual([normalized(workspace)])
+    expect(claude.find((file) => file.path === global)?.state).toBe('shadowed')
+    expect(claude.find((file) => file.path === global)?.reason).toMatch(/--setting-sources/)
+    expect(claude.find((file) => file.path === projectA)?.state).toBe('shadowed')
     expect(claude.find((file) => file.path === projectB)?.state).toBe('conditional')
+  })
+
+  it('un CLAUDE.md voisin d’un AGENTS.md est MASQUÉ : la chaîne prend le premier', async () => {
+    const root = sandbox()
+    const opts = options(root)
+    const claudeMd = put(join(opts.workspaceRoot, 'CLAUDE.md'))
+    put(join(opts.workspaceRoot, 'AGENTS.md'))
+
+    const claude = select(await listBehaviourFiles(opts), 'claude')
+
+    const fiche = claude.find((file) => file.path === claudeMd)
+    expect(fiche?.state).toBe('shadowed')
+    expect(fiche?.reason).toMatch(/AGENTS\.md/)
+    expect(fiche?.active).toBe(false)
   })
 
   it('does not leak a manifest between two successive workspaces', async () => {

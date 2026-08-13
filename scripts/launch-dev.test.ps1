@@ -19,20 +19,42 @@ Assert-True ($help -match '--watch.*main process or preload script modules') `
 
 # LE HAUT DE LA CHAÎNE NE DOIT PAS ÊTRE UNE APPLICATION CONSOLE.
 # Viser powershell.exe donnait une console allouée par Windows, confiée à Windows Terminal sur
-# Windows 11 — lequel ignore le SW_HIDE de `-WindowStyle Hidden`. La fenêtre restait affichée puis
-# `cmd` en héritait, son `title` la renommant « Autowin OS Dev ». wscript.exe est graphique : pas de
-# console à hériter, et le masquage s'applique alors réellement au PowerShell qu'il lance.
+# Windows 11 — lequel ignore le SW_HIDE de `-WindowStyle Hidden` (fenêtre visible 242 ms, mesuré le
+# 2026-08-05). `pyw.exe` est graphique : la contrainte est satisfaite par la CIBLE elle-même, donc le
+# duo VBS + PowerShell n'a plus de raison d'être et la chaîne passe de cinq maillons à deux.
 $shortcutSource = Get-Content -Raw (Join-Path $PSScriptRoot 'create-dev-shortcut.ps1')
-Assert-True ($shortcutSource -match '\$shortcut\.TargetPath\s*=\s*"\$env:SystemRoot\\System32\\wscript\.exe"') `
-  'the desktop shortcut must be launched by wscript.exe, a GUI host with no console to inherit'
-Assert-True ($shortcutSource -notmatch '\$shortcut\.TargetPath\s*=[^\r\n]*powershell\.exe') `
+Assert-True ($shortcutSource -match '\$shortcut\.TargetPath\s*=\s*\$interpreteur') `
+  'the shortcut must target the resolved GUI Python interpreter'
+Assert-True ($shortcutSource -match "notmatch '\(pyw\|pythonw\)") `
+  'the creator must REFUSE a console interpreter (python.exe / py.exe) and say so'
+Assert-True ($shortcutSource -notmatch '\$shortcut\.TargetPath\s*=[^
+]*powershell\.exe') `
   'the shortcut must never target powershell.exe directly: Windows Terminal would show its console'
-Assert-True (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'launch-dev.vbs')) `
-  'the console-less bootstrap must exist'
-$bootstrapSource = Get-Content -Raw (Join-Path $PSScriptRoot 'launch-dev.vbs')
-Assert-True ($bootstrapSource -match 'shell\.Run\s+commande,\s*0,\s*False') `
-  'the bootstrap must start the launcher hidden and not wait for it'
-Assert-True ($bootstrapSource -match 'launch-dev\.ps1') 'the bootstrap must delegate to the real launcher'
+Assert-True ($shortcutSource -match "resources\\python\\pythonw\.exe") `
+  'an EMBEDDED CPython must win over any interpreter on the PATH (Brain decision python-runtime)'
+
+# LE LANCEUR PYTHON NE DOIT JAMAIS ÉCHOUER EN SILENCE.
+# C'est le défaut réellement subi : `shell.Run commande, 0, False` ne récupérait pas le code de
+# sortie, donc « déjà lancé » et un échec de compilation étaient tous deux invisibles. L'utilisateur
+# double-cliquait, rien ne se passait, la fenêtre périmée restait à l'écran.
+$launcherPy = Join-Path $PSScriptRoot 'launch_dev.py'
+Assert-True (Test-Path -LiteralPath $launcherPy) 'the Python launcher must exist'
+$pySource = Get-Content -Raw $launcherPy
+Assert-True ($pySource -match 'MessageBoxW') `
+  'without a console, a dialog box is the ONLY channel the user can see'
+Assert-True ($pySource -match 'CreateMutexW') `
+  'single instance must use the exact Windows primitive, not command-line sniffing'
+Assert-True ($pySource -match 'CREATE_NO_WINDOW') 'the dev loop must start without allocating a console'
+Assert-True ($pySource -match 'st_mtime >= avant') `
+  'the launcher must PROVE the bundle was rebuilt after the last source change'
+Assert-True ($pySource -match 'ATTENTE_FRAICHEUR_S') 'the freshness wait must be bounded, not infinite'
+Assert-True (($pySource -split 'alerter\(').Count -ge 6) `
+  'every abnormal exit must reach the user, not just the first one'
+
+# L'ancien duo ne doit plus être RÉFÉRENCÉ : un raccourci qui pointe sur un fichier supprimé
+# retomberait exactement dans l'échec muet qu'on vient de corriger.
+Assert-True ($shortcutSource -notmatch 'launch-dev\.vbs') 'the VBS bootstrap must no longer be wired'
+Assert-True ($shortcutSource -notmatch 'launch-dev\.ps1') 'the PowerShell launcher must no longer be wired'
 
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) "autowin-launch-dev-test-$PID"
 New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null

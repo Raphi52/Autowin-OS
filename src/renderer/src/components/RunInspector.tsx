@@ -17,7 +17,13 @@ function hasSection(content: string, section: string): boolean {
   return new RegExp(`^## ${section}(?:\\s|$)`, 'm').test(content)
 }
 
-export function RunInspector({ content, summary }: { content: string; summary: RunInspectorSummary }): React.JSX.Element {
+export function RunInspector({
+  content,
+  summary
+}: {
+  content: string
+  summary: RunInspectorSummary
+}): React.JSX.Element {
   const contentRef = useRef<HTMLDivElement>(null)
   let headingIndex = 0
   const sections = SECTIONS.map((name) => {
@@ -36,11 +42,17 @@ export function RunInspector({ content, summary }: { content: string; summary: R
       <div className="run-inspector__summary" data-testid="run-summary">
         <span className="badge">{summary.status}</span>
         {summary.regime && <span className="badge">{summary.regime}</span>}
-        <span>DoD {summary.dodChecked}/{summary.dodTotal}</span>
+        <span>
+          DoD {summary.dodChecked}/{summary.dodTotal}
+        </span>
         <span>Journal {summary.journalEvents}</span>
         <span>Défauts {summary.defauts}</span>
       </div>
-      <nav className="run-inspector__nav" data-testid="run-section-nav" aria-label="Sections du RUN">
+      <nav
+        className="run-inspector__nav"
+        data-testid="run-section-nav"
+        aria-label="Sections du RUN"
+      >
         {sections.map(({ name, present, index }) => (
           <button
             key={name}

@@ -75,6 +75,9 @@ import {
   scopedRunsFromTimeline,
   type TurnRuntimeIdentity
 } from './subagent-thread-from-trace'
+// La classe `.lisere-dessus` vit dans cette feuille : importee ICI et non « heritee » d'une
+// autre vue, sinon l'apparence de Chat dependrait de l'ordre de chargement des AUTRES vues.
+import './ViewPage.css'
 import './ChatView.css'
 import './SlashPalette.css'
 import './ChatComposerExtras.css'
@@ -239,7 +242,6 @@ export function ChatView({
   // Quatre sections : Sous-agents · Run · Graphe · Source control. Défaut = Sous-agents, la section qu'on regarde
   // pendant une orchestration — garder « Run » par défaut aurait retiré les sous-agents de la vue.
   const [paneTab, setPaneTab] = useState<WorkflowPanelSection>('subagents')
-  const [runScope, setRunScope] = useState<'conv' | 'tous'>('conv')
   const [runs, setRuns] = useState<RunEntry[]>([])
   const [checkpoints, setCheckpoints] = useState<CheckpointEntry[]>([])
   const [forkedCheckpoint, setForkedCheckpoint] = useState('')
@@ -293,7 +295,6 @@ export function ChatView({
       // concerné — cadrer la seule liste laissait l'utilisateur chercher lequel regarder.
       // `pickRunForTrace` dégrade proprement : chemin portant le runId → sinon le plus récent →
       // sinon rien, et dans ce dernier cas on retombe sur le cadrage d'origine (aucune régression).
-      setRunScope('conv')
       const target = pickRunForTrace(runsRef.current, runId)
       if (target) void viewRun(target)
       return
@@ -679,27 +680,23 @@ export function ChatView({
   useEffect(() => {
     setPendingDirectives(queueRef.current.get(activeId ?? '') ?? [])
   }, [activeId])
-  const runScopeRef = useRef(runScope)
-  useEffect(() => {
-    runScopeRef.current = runScope
-  }, [runScope])
-  /** Workflows affichés : ceux de la CONVERSATION ACTIVE par défaut, global sur demande. */
+  /**
+   * Workflows affichés : ceux de la CONVERSATION ACTIVE, et rien d'autre. Le cadrage « tous »
+   * a été retiré — cette barre montre le contexte courant, le global relève de l'Observatory.
+   */
   async function refreshRuns(): Promise<void> {
     const request: RunRequestIdentity = {
       id: runsRequestRef.current.id + 1,
-      scope: runScopeRef.current,
+      scope: 'conv',
       convId: activeRef.current
     }
     runsRequestRef.current = request
-    const nextRuns =
-      request.scope === 'tous'
-        ? await window.api.listRuns()
-        : request.convId
-          ? ((await window.api.conversationRuns(request.convId)) as RunEntry[])
-          : []
+    const nextRuns = request.convId
+      ? ((await window.api.conversationRuns(request.convId)) as RunEntry[])
+      : []
     const currentRequest = {
       id: runsRequestRef.current.id,
-      scope: runScopeRef.current,
+      scope: 'conv' as const,
       convId: activeRef.current
     }
     if (isRunRequestCurrent(request, currentRequest)) setRuns(nextRuns)
@@ -708,13 +705,9 @@ export function ChatView({
       if (isRunRequestCurrent(request, currentRequest)) setCheckpoints(nextCheckpoints)
     }
   }
-  function selectRunScope(scope: 'conv' | 'tous'): void {
-    runScopeRef.current = scope
-    setRunScope(scope)
-  }
   useEffect(() => {
     void Promise.resolve().then(refreshRuns)
-  }, [runScope, activeId])
+  }, [activeId])
   // Tient le bus au courant de la conversation active → les orchestrations s'y rattachent.
   useEffect(() => {
     window.api.setActiveConversation(activeId)
@@ -1126,14 +1119,10 @@ export function ChatView({
   }
 
   function requestDeleteRun(run: RunEntry): void {
-    const scope = runScopeRef.current
-    if (scope === 'conv' && !activeId) return
+    // Portée toujours « conv » : on ne supprime que dans la conversation affichée.
+    if (!activeId) return
     setRunDeleteError(null)
-    setDeleteRunCandidate({
-      run,
-      scope,
-      ...(scope === 'conv' && activeId ? { conversationId: activeId } : {})
-    })
+    setDeleteRunCandidate({ run, scope: 'conv', conversationId: activeId })
   }
 
   async function confirmDeleteRun(): Promise<void> {
@@ -1813,8 +1802,8 @@ export function ChatView({
   }, [isActive, activeId, showRuns, paneTab, liveRuns, active])
 
   const visibleLiveRuns = mergeLiveAndPersisted<OrchStep>(
-    visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, runScope),
-    runScope === 'tous' ? persistedRuns : persistedRuns.filter((run) => run.convId === activeId)
+    visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, 'conv'),
+    persistedRuns.filter((run) => run.convId === activeId)
   )
 
   return (
@@ -1824,7 +1813,7 @@ export function ChatView({
       data-active-conversation-id={activeId ?? ''}
     >
       {/* ---- Panneau gauche : conversations ---- */}
-      <aside className="conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
+      <aside className="lisere-dessus conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
         <div className="conv-head">
           <ModuleHeader eyebrow="Espace de travail" title="Conversations" />
         </div>
@@ -2092,7 +2081,7 @@ export function ChatView({
 
       {/* ---- Centre : fil ---- */}
       <section
-        className={`chat${dragActive ? ' is-file-dragging' : ''}`}
+        className={`lisere-dessus chat${dragActive ? ' is-file-dragging' : ''}`}
         onDragEnter={(event) => {
           if (Array.from(event.dataTransfer.types).includes('Files')) {
             event.preventDefault()
@@ -2708,8 +2697,6 @@ export function ChatView({
             Boolean(activeId && busyConversations.has(activeId)) ||
             liveRuns[activeId ?? '']?.status === 'running'
           }
-          runScope={runScope}
-          selectRunScope={selectRunScope}
           visibleLiveRuns={visibleLiveRuns}
           checkpoints={checkpoints}
           forkedCheckpoint={forkedCheckpoint}

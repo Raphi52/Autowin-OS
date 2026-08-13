@@ -34,6 +34,7 @@ import {
   stopAutoModeNow,
   type AutoModeSettings
 } from './ticket-auto-mode'
+import './ViewPage.css'
 import './TicketsView.css'
 
 interface TicketSourceSummary {
@@ -882,7 +883,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   }
 
   return (
-    <section className="tickets-view" data-testid="tickets-view" data-active={active}>
+    <section className="view-page tickets-view" data-testid="tickets-view" data-active={active}>
       <header className="tickets-head">
         <ModuleHeader eyebrow="Travail synchronisé" title="Tickets" />
         <div className="tickets-source-controls">

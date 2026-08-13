@@ -53,13 +53,11 @@ describe('collapsed navigation rail', () => {
 
   it('keeps the collapsed controls square and reduces the gap before content', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.rail\.is-collapsed\s*{[^}]*width:\s*54px[^}]*padding-inline:\s*9px/s)
+    expect(css).toMatch(/\.rail\.is-collapsed \.nav-item\s*{[^}]*width:\s*36px[^}]*height:\s*36px/s)
     expect(css).toMatch(
-      /\.rail\.is-collapsed\s*{[^}]*width:\s*54px[^}]*padding-inline:\s*9px/s
+      /\.shell:has\(\.rail\.is-collapsed\) \.main\s*{[^}]*padding-left:\s*var\(--s2\)/s
     )
-    expect(css).toMatch(
-      /\.rail\.is-collapsed \.nav-item\s*{[^}]*width:\s*36px[^}]*height:\s*36px/s
-    )
-    expect(css).toMatch(/\.shell:has\(\.rail\.is-collapsed\) \.main\s*{[^}]*padding-left:\s*var\(--s2\)/s)
     expect(css).toMatch(/\.rail\.is-collapsed \.nav\s*{[^}]*overflow-x:\s*hidden/s)
     expect(css).not.toMatch(/(?:^|\n)\.nav\s*{[^}]*overflow-x:\s*hidden/s)
   })

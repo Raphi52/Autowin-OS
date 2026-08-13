@@ -977,7 +977,15 @@ export function loadBrainThemes(
   if (corpus?.length === 0) return []
   if (!existsSync(path) || !statSync(path).isDirectory()) return []
   const root = assertAuthorizedBrainVaultSync(path, allowedRoot)
-  if (corpus === undefined) return vaultThemeCatalog(root)
+  // PAS de branche sans compteur pour `corpus === undefined`.
+  //
+  // Elle renvoyait `vaultThemeCatalog`, qui rend les themes SANS `count`. Depuis que la portee par
+  // workspace est retiree, `undefined` est le cas NORMAL : la vue affichait donc « 0 » a gauche et
+  // perdait ses etiquettes flottantes, alors que cliquer un theme surlignait toujours les bons noeuds
+  // — le lien theme/notes etait intact, seul le DENOMBREMENT manquait.
+  //
+  // `vaultNoteRecords(root, undefined)` rend deja toutes les notes (hors quarantaine) : le comptage
+  // ci-dessous fonctionne donc a l'identique, avec ou sans corpus.
   const records = vaultNoteRecords(root, corpus)
   const counts = new Map<string, number>()
   for (const record of records) {

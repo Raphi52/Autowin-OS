@@ -1860,6 +1860,40 @@ describe('Amitel Brain graph', () => {
     ])
   })
 
+  it('compte les themes MEME sans corpus — la vue affichait 0 et perdait ses etiquettes', () => {
+    /**
+     * REGRESSION du 2026-08-12. En retirant la portee par workspace, `corpus` est devenu `undefined`
+     * dans le cas NORMAL. `loadBrainThemes` avait une branche dediee qui renvoyait `vaultThemeCatalog`,
+     * lequel rend les themes SANS `count`. Symptome constate par l'utilisateur : « 0 a gauche », plus
+     * d'etiquettes flottantes — mais cliquer un theme surlignait toujours les bons noeuds, parce que
+     * le lien theme/notes etait intact et que seul le DENOMBREMENT manquait.
+     */
+    const root = mkdtempSync(join(tmpdir(), 'autowin-os-themes-sans-corpus-'))
+    mkdirSync(join(root, 'knowledge', 'domain'), { recursive: true })
+    for (const [nom, theme] of [
+      ['un', 'theme/architecture'],
+      ['deux', 'theme/architecture'],
+      ['trois', 'theme/operations']
+    ]) {
+      writeFileSync(
+        join(root, 'knowledge', 'domain', `${nom}.md`),
+        `---
+tags: [${theme}]
+---
+
+# ${nom}
+`,
+        'utf8'
+      )
+    }
+
+    const themes = loadBrainThemes(root, undefined, root)
+    const architecture = themes.find((theme) => theme.id === 'theme/architecture')
+
+    expect(architecture).toEqual({ id: 'theme/architecture', label: 'Architecture', count: 2 })
+    expect(themes.every((theme) => typeof theme.count === 'number')).toBe(true)
+  })
+
   it('un corpus vide ne touche pas le vault', async () => {
     const missing = join(tmpdir(), `autowin-os-missing-vault-${process.pid}-${Date.now()}`)
 

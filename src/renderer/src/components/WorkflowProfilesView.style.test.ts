@@ -71,7 +71,9 @@ describe('vue Workflows — le style tient ses promesses', () => {
     expect(zone).not.toMatch(/overflow\s*:\s*(auto|scroll)/)
 
     // Et le viewport ne doit pas redevenir l'ancre en reprenant `position: relative`.
-    expect(corpsDeRegle('WorkflowCanvas.css', '.wf-plan-viewport')).not.toMatch(/position\s*:\s*relative/)
+    expect(corpsDeRegle('WorkflowCanvas.css', '.wf-plan-viewport')).not.toMatch(
+      /position\s*:\s*relative/
+    )
 
     // La barre est un frère du viewport, pas son enfant.
     const tsx = lire('WorkflowCanvas.tsx')
@@ -129,9 +131,7 @@ describe('vue Workflows — le style tient ses promesses', () => {
     // définition réelle, simplement pas dans une feuille. L'ignorer produisait un faux rouge.
     for (const match of readdirSync(fileURLToPath(new URL('.', import.meta.url)))
       .filter((nom) => nom.endsWith('.tsx'))
-      .flatMap((nom) =>
-        [...lire(nom).matchAll(/['"](--[a-z0-9-]+)['"]\s*:/g)].map((m) => m[1])
-      )) {
+      .flatMap((nom) => [...lire(nom).matchAll(/['"](--[a-z0-9-]+)['"]\s*:/g)].map((m) => m[1]))) {
       definies.add(match)
     }
 

@@ -34,9 +34,7 @@ function mountWith(api: Record<string, unknown>): void {
           reasoningEfforts: []
         }
       ],
-      providerStatus: async () => [
-        { provider: 'claude', status: 'authenticated', testable: true }
-      ],
+      providerStatus: async () => [{ provider: 'claude', status: 'authenticated', testable: true }],
       roles: async () => ({}),
       providerTest: vi.fn(),
       providerLogin: vi.fn(),
@@ -231,9 +229,9 @@ describe('RouterView — comptes Claude', () => {
     await act(async () => root.render(createElement(RouterView, {})))
     await flush()
 
-    const tiers = Array.from(
-      container.querySelectorAll<HTMLElement>('.router-account-tier')
-    ).map((node) => node.textContent)
+    const tiers = Array.from(container.querySelectorAll<HTMLElement>('.router-account-tier')).map(
+      (node) => node.textContent
+    )
     expect(tiers).toEqual(['team', 'max'])
     // Le nom seul ne suffit plus a les separer : c'est bien la pastille qui porte la distinction.
     expect(chips()[0].textContent).not.toBe(chips()[1].textContent)

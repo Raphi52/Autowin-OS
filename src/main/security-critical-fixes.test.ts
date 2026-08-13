@@ -1,7 +1,10 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { readFileSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
+
+/** Chemin lisible dans un message d'échec : `src/main/...` plutôt qu'un absolu illisible. */
+const entreeCourte = (chemin: string): string => relative(__dirname, chemin).replace(/\\/gu, '/')
 import { loadTokens, saveTokens, type Tokens } from './providers/codex-auth'
 
 const dir = mkdtempSync(join(tmpdir(), 'secfix-'))
@@ -40,7 +43,16 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     if (start < 0) return false
     const next = source.indexOf('ipcMain.handle(', start + marker.length)
     const block = source.slice(start, next < 0 ? source.length : next)
-    return /assertTrustedRendererSender\(\s*event/.test(block)
+    // Un canal peut garder EN DÉLÉGUANT : `app:storage-migration` construit son handler par une
+    // fabrique à laquelle on PASSE `assertTrustedRendererSender`, appelé en première ligne du
+    // handler produit (`renderer-storage-migration.ts:23`). N'accepter que l'appel littéral
+    // déclarait ce canal NON gardé alors qu'il l'est — un faux rouge, et un faux rouge finit par
+    // décrédibiliser tout le fichier. On exige donc que le garde soit bien celui-là, pas n'importe
+    // quelle fonction : il doit apparaître en argument de la fabrique.
+    return (
+      /assertTrustedRendererSender\(\s*event/.test(block) ||
+      /createStorageMigrationReadHandler\([^)]*assertTrustedRendererSender/.test(block)
+    )
   }
   it.each([
     // critiques
@@ -77,9 +89,15 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     const unguarded = handlers.flatMap((match, index) => {
       const block = source.slice(match.index, handlers[index + 1]?.index ?? source.length)
       const channel = match[1]
+      // La fabrique doit recevoir LE garde, pas seulement exister : accepter
+      // `/createStorageMigrationReadHandler/` NU rendait cette variante plus LAXISTE que `guarded()`
+      // ci-dessus — et c'est celle-ci qui porte la garantie de sécurité. Signalé par un audit externe.
       const genericGuard =
         /assertTrusted(?:Renderer|Behaviour)Sender\(\s*event/.test(block) ||
-        /createStorageMigrationReadHandler/.test(block)
+        /createStorageMigrationReadHandler\([^)]*assertTrustedRendererSender/.test(block) ||
+        // Handler enregistré hors `index.ts` : le garde y est INJECTÉ (`deps.assertTrusted`), et le
+        // site d'injection est vérifié séparément par le test « hors index.ts » plus bas.
+        /\bassertTrusted\(\s*event/.test(block)
       const specializedGuard =
         (channel === 'app:storage-migration-complete' &&
           /isTrustedRendererUrl\(event\.senderFrame/.test(block)) ||
@@ -101,8 +119,73 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     // Les deux canaux ajoutés depuis, tous deux gardés en première ligne :
     //   `os:workflowProfiles:notice`            — lecture de la boîte de refus de workflow
     //   `os:workflowProfiles:acknowledgeNotice` — accusé de réception, id validé en entier sûr
-    expect(handlers).toHaveLength(137)
+    //
+    // MISE À JOUR 2026-08-13 — 137 → 138. Cette fois le littéral était JUSTE à sa pose (vérifié :
+    // au commit e9075c0, source = 137). UN seul canal est apparu depuis, et il est gardé dès sa
+    // première ligne :
+    //   `git:graph` — lecture du graphe git pour la vue Worktrees
+    // `unguarded` est resté VIDE sur toute la période : aucune régression de sécurité, seulement
+    // le fil-piège qui a fait son travail en réclamant cette relecture.
+    expect(handlers).toHaveLength(138)
     expect(unguarded).toEqual([])
+  })
+
+  it('ne laisse AUCUN canal hors d’index.ts échapper au garde', () => {
+    // Le fil-piège ci-dessus ne lit QUE `index.ts` : deux canaux réels vivaient ailleurs
+    // (`workflow-bench-ipc.ts`, exposés par `preload/index.ts`) et étaient donc invisibles au compte
+    // comme à la détection. Ils sont gardés — mais rien ne l'imposait, et le compte « 138 » décrivait
+    // une surface de 140. Signalé par un audit externe. On DÉCOUVRE désormais les fichiers au lieu de
+    // les énumérer : un canal ajouté dans un nouveau fichier est couvert sans qu'on y pense.
+    const racine = __dirname
+    const fichiers: string[] = []
+    const explorer = (dossier: string): void => {
+      for (const entree of readdirSync(dossier, { withFileTypes: true })) {
+        const chemin = join(dossier, entree.name)
+        if (entree.isDirectory()) explorer(chemin)
+        else if (
+          entree.isFile() &&
+          entree.name.endsWith('.ts') &&
+          !entree.name.includes('.test.') &&
+          entree.name !== 'index.ts'
+        ) {
+          const contenu = readFileSync(chemin, 'utf8')
+          if (/ipcMain\.handle\(\s*['"]/.test(contenu)) fichiers.push(chemin)
+        }
+      }
+    }
+    explorer(racine)
+
+    const nonGardes = fichiers.flatMap((chemin) => {
+      const contenu = readFileSync(chemin, 'utf8')
+      const trouves = [...contenu.matchAll(/ipcMain\.handle\(\s*['"]([^'"]+)['"]/g)]
+      return trouves.flatMap((match, index) => {
+        const bloc = contenu.slice(match.index, trouves[index + 1]?.index ?? contenu.length)
+        // Garde direct OU garde INJECTÉ (`deps.assertTrusted(event, …)`).
+        const garde =
+          /assertTrusted(?:Renderer|Behaviour)Sender\(\s*event/.test(bloc) ||
+          /\bassertTrusted\(\s*event/.test(bloc)
+        return garde ? [] : [`${entreeCourte(chemin)}:${match[1]}`]
+      })
+    })
+    expect(nonGardes).toEqual([])
+
+    // Et le site d'INJECTION doit passer LE VRAI garde : un `assertTrusted` injecté ne vaut que la
+    // fonction qu'on lui donne, et injecter un `() => {}` passerait la vérification ci-dessus.
+    // On exige donc que CHAQUE clé `assertTrusted:` d'`index.ts` délègue à `assertTrustedRendererSender`
+    // — formulation qui ne devine aucun nom de fabrique (ma première version attrapait le premier
+    // `export function` du fichier, soit `overrideFor`, qui n'enregistre rien : un test faux).
+    // FENÊTRE autour de l'injection, et non un segment coupé à la virgule : la forme
+    // `assertTrusted: (event, label) => assertTrustedRendererSender(event, label)` contient une
+    // virgule DANS ses paramètres, ce qui tronquait la capture à `(event` — un faux rouge.
+    const injections = [...source.matchAll(/assertTrusted:/g)].map((m) =>
+      source.slice(m.index, (m.index ?? 0) + 160)
+    )
+    expect(injections.length, 'aucune injection trouvée : ce test mentirait').toBeGreaterThan(0)
+    for (const fenetre of injections) {
+      expect(fenetre, 'un garde injecté doit déléguer au vrai garde').toMatch(
+        /assertTrustedRendererSender/
+      )
+    }
   })
 
   it('exige un conversationId avant toute lecture Brain', () => {

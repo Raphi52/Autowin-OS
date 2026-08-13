@@ -29,8 +29,6 @@ function baseProps(overrides: Partial<WorkflowsPanelProps> = {}): WorkflowsPanel
     isActive: true,
     requestLabel: undefined,
     liveGraphActive: false,
-    runScope: 'conv',
-    selectRunScope: vi.fn(),
     visibleLiveRuns: [],
     checkpoints: [],
     forkedCheckpoint: '',

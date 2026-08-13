@@ -2,12 +2,47 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 describe('Observatory visual contracts', () => {
-  it('uses the selected sans-serif display font only inside the Observatory header', () => {
+  it('ne redéfinit PAS la police du titre : elle suit celle de toutes les vues', () => {
+    // Ce test exigeait l'INVERSE : que le titre d'Observatory soit en `'Segoe UI Variable Display',
+    // …, sans-serif`, alors que `--module-title-font` vaut `--display` = `Georgia, serif` partout
+    // ailleurs. Il epinglait donc une divergence, SANS enoncer de raison — aucun commentaire, aucune
+    // trace de decision. L'utilisateur a explicitement demande que la police soit la meme d'un onglet
+    // a l'autre : c'est cette instruction, datee et attribuable, qui tranche contre une assertion
+    // muette. Si un motif de densite justifiait le sans-serif, il devra revenir avec son motif ecrit.
     const css = readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
 
-    expect(css).toMatch(
-      /\.observatory-head \.module-header > h1\s*{[^}]*font-family:\s*'Segoe UI Variable Display',\s*'Segoe UI',\s*ui-sans-serif,\s*system-ui,\s*sans-serif/s
-    )
+    expect(css).not.toMatch(/\.module-header\s*>?\s*h1\s*{[^}]*font-family/s)
+  })
+
+  it('porte le liseré rose→doré du haut, à l’identique des autres vues', () => {
+    // Test venu d'une session CONCURRENTE, conservé avec son intention : « empêcher les deux vues de
+    // dériver l'une de l'autre, ce que deux copies manuelles font toujours ». Il cherchait le liseré
+    // DANS la règle `.observatory-view`, où cette session-là venait de le recopier depuis
+    // `TaskManagerView.css`. Entre-temps le liseré a été SORTI dans `.view-page`, consommé par les
+    // sept vues : la copie n'existe plus, donc l'intention est mieux servie qu'elle ne le demandait —
+    // il n'y a plus deux formes à comparer, il n'y en a qu'une. Le test vérifie désormais cette
+    // source unique, et qu'Observatory la consomme au lieu de redécrire un cadre en propre.
+    const cadre = readFileSync(new URL('./ViewPage.css', import.meta.url), 'utf8')
+    const observatory = readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
+    const liseré =
+      /linear-gradient\(\s*90deg,\s*var\(--rose\),\s*transparent 42%,\s*color-mix\(in srgb, var\(--gold\) 70%, transparent\)\s*\)/s
+
+    // MERGE de deux tournures concurrentes du meme test, vers le sur-ensemble de leurs intentions.
+    // 3ᵉ formulation de ce lisere, et la meilleure : il est devenu un TOKEN declare sur `.shell`, que
+    // chaque vue COMPOSE avec son propre fond. Ce test epinglait le litteral dans `.view-page` ; il
+    // suit desormais la source reelle, sinon il interdirait l'amelioration qu'il pretend proteger.
+    // Ce qu'on garantit reste le meme : UNE definition, et Observatory la consomme.
+    // Deux exigences viennent de l'autre tournure, plus strictes et conservees : la VIRGULE apres le
+    // token (elle prouve une COMPOSITION, pas un remplacement), et le bord verifie dans la regle
+    // `.view-page` elle-meme plutot que n'importe ou dans la feuille.
+    const regleCadre = cadre.match(/\.view-page\s*{[^}]*}/s)?.[0]
+    expect(cadre.match(/\.shell\s*{[^}]*}/s)?.[0]).toMatch(liseré)
+    expect(regleCadre).toMatch(/background:\s*var\(--lisere-haut\),/)
+    expect(regleCadre).toMatch(/border: 1px solid color-mix\(in srgb, var\(--rose\) 34%/)
+    // Et Observatory ne repart pas en solo : aucun cadre redécrit dans sa propre règle.
+    const regleObservatory = observatory.match(/\.observatory-view\s*{[^}]*}/s)?.[0]
+    expect(regleObservatory).not.toMatch(liseré)
+    expect(regleObservatory).not.toMatch(/border:/)
   })
 
   it('keeps the six Observatory metric cards on one row when space is available', () => {
@@ -25,7 +60,12 @@ describe('Observatory visual contracts', () => {
     )?.[0]
 
     expect(viewRule).toMatch(/--surface-selected:\s*rgba\(225,\s*193,\s*103,\s*0\.1\)/)
-    expect(viewRule).toMatch(/background:\s*var\(--surface-panel\)/)
+    // La surface de Models est CONSERVEE, mais desormais composee avec le lisere partage : la regle
+    // s'ecrit `var(--lisere-haut), var(--surface-panel)`. L'assertion d'origine exigeait
+    // `var(--surface-panel)` SEUL, ce qui interdisait toute couche par-dessus — et c'est cette
+    // exigence qui a fait disparaitre le lisere d'Observatory. L'intention (« meme surface que
+    // Models ») est intacte ; seule la forme exacte de la declaration est assouplie.
+    expect(viewRule).toMatch(/background:\s*var\(--lisere-haut\),\s*var\(--surface-panel\)/)
     expect(selectedRule).toMatch(/border-color:\s*rgba\(225,\s*193,\s*103,\s*0\.88\)/)
     expect(selectedRule).toMatch(/background:\s*var\(--surface-selected\)/)
   })

@@ -73,7 +73,9 @@ export function RagTraceCard({
       )}
       {rag.status === 'injected' && rag.injectedText && (
         <details className="rag-injected-full">
-          <summary>Voir le texte exact lu ({rag.injectedCharacters.toLocaleString('fr-FR')} caractères)</summary>
+          <summary>
+            Voir le texte exact lu ({rag.injectedCharacters.toLocaleString('fr-FR')} caractères)
+          </summary>
           <pre>{rag.injectedText}</pre>
         </details>
       )}

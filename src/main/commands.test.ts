@@ -130,7 +130,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     }
   })
 
-  it('brain_query isole le vrai workspace RigApplication d une source Autowin adverse', async () => {
+  it('brain_query n impose plus aucun corpus derive du workspace (isolation RIG retiree)', async () => {
     const os = fakeOs()
     os.executionWorkspace = 'D:\\DevSrc\\RigApplication'
     const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\n'
@@ -161,12 +161,20 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
 
     const result = await bus.exec('brain_query', { question: 'architecture RIG' })
 
-    // Plus de corpus IMPOSÉ par le workspace : le classement par pertinence décide. Ce test
-    // affirmait l'inverse (isolation RIG contre une source Autowin) ; le filtrage dérivé du
-    // workspace a été retiré parce qu'il masquait 450 des 461 notes du Brain sans le dire.
+    // Ce test et son JUMEAU (`orchestrator.execution.test.ts`) portent le MÊME contrat par deux
+    // chemins — la commande et l'orchestrateur — et doivent bouger ENSEMBLE. Ils ont affirmé
+    // successivement l'inverse l'un de l'autre parce qu'UN SEUL avait été mis à jour : c'est ce
+    // décalage qui a laissé une contradiction vivante dans le dépôt.
+    //
+    // ÉTAT FINAL, arbitré par l'utilisateur après audit : AUCUN filtrage dérivé du workspace. Ni
+    // pertinence ni « contamination croisée » ne le justifiaient — la dominance de corpus se traite
+    // dans le CLASSEMENT (dense + lexical + RRF), pas par une liste blanche qui se périme en silence
+    // et masquait 450 des 461 notes. La conséquence est ASSUMÉE et vérifiée ici : une source Autowin
+    // PEUT désormais entrer dans un prompt agissant sur RigApplication.
     expect(seenCorpus[0]).toBeUndefined()
     expect(result).toMatchObject({ ok: true, data: { found: true } })
     expect(JSON.stringify(result)).toContain('RIG_COMMANDE_AUTORISEE')
+    expect(JSON.stringify(result)).toContain('AUTOWIN_COMMANDE_INTERDITE')
   })
 
   it('persiste lifecycle et démarrage live dans le TraceStore de cette instance', async () => {

@@ -75,70 +75,70 @@ export function WorkflowVerdict({
       <h3 className="workflow-verdict-title">Verdict — « {objective} »</h3>
       <div className="workflow-verdict-table-scroll" tabIndex={0} aria-label="Résultats comparés">
         <table className="workflow-verdict-table">
-        <thead>
-          <tr>
-            <th>Workflow</th>
-            <th>Aboutit</th>
-            <th>Preuves</th>
-            <th>Coût</th>
-            <th>Tokens</th>
-            <th>Durée</th>
-            <th>Bureau</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.profileId || 'courant'}
-              className={row.profileId === recommendedProfileId ? 'is-recommended' : undefined}
-              data-testid={`verdict-row-${row.profileId || 'courant'}`}
-            >
-              <th scope="row">
-                {row.profileName}
-                {row.profileId === recommendedProfileId && (
-                  <span className="workflow-verdict-badge">recommandé</span>
-                )}
-                {/* La réserve vit sur la ligne : une note de bas de tableau ne se lit pas. */}
-                {row.caveat && <span className="workflow-verdict-caveat">{row.caveat}</span>}
-              </th>
-              <td>{row.green ? 'oui' : 'non'}</td>
-              <td>{describeProof(row)}</td>
-              <td>{cost(row.comparableCostUsd)}</td>
-              <td>
-                {typeof row.totalTokens === 'number'
-                  ? row.totalTokens.toLocaleString('fr-FR')
-                  : '—'}
-              </td>
-              <td>{duration(row.durationMs)}</td>
-              <td>
-                {row.retainedWorkspace &&
-                  (discarded.has(row.retainedWorkspace.runId) ? (
-                    <span>Bureau supprimé</span>
-                  ) : (
-                    <span className="workflow-verdict-workspace-actions">
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => void window.api.openFolder(row.retainedWorkspace!.path)}
-                      >
-                        Ouvrir
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost workflow-verdict-discard"
-                        onClick={() => void discard(row.retainedWorkspace!.runId)}
-                      >
-                        Supprimer
-                      </button>
-                      {discardError[row.retainedWorkspace.runId] && (
-                        <small role="alert">{discardError[row.retainedWorkspace.runId]}</small>
-                      )}
-                    </span>
-                  ))}
-              </td>
+          <thead>
+            <tr>
+              <th>Workflow</th>
+              <th>Aboutit</th>
+              <th>Preuves</th>
+              <th>Coût</th>
+              <th>Tokens</th>
+              <th>Durée</th>
+              <th>Bureau</th>
             </tr>
-          ))}
-        </tbody>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.profileId || 'courant'}
+                className={row.profileId === recommendedProfileId ? 'is-recommended' : undefined}
+                data-testid={`verdict-row-${row.profileId || 'courant'}`}
+              >
+                <th scope="row">
+                  {row.profileName}
+                  {row.profileId === recommendedProfileId && (
+                    <span className="workflow-verdict-badge">recommandé</span>
+                  )}
+                  {/* La réserve vit sur la ligne : une note de bas de tableau ne se lit pas. */}
+                  {row.caveat && <span className="workflow-verdict-caveat">{row.caveat}</span>}
+                </th>
+                <td>{row.green ? 'oui' : 'non'}</td>
+                <td>{describeProof(row)}</td>
+                <td>{cost(row.comparableCostUsd)}</td>
+                <td>
+                  {typeof row.totalTokens === 'number'
+                    ? row.totalTokens.toLocaleString('fr-FR')
+                    : '—'}
+                </td>
+                <td>{duration(row.durationMs)}</td>
+                <td>
+                  {row.retainedWorkspace &&
+                    (discarded.has(row.retainedWorkspace.runId) ? (
+                      <span>Bureau supprimé</span>
+                    ) : (
+                      <span className="workflow-verdict-workspace-actions">
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => void window.api.openFolder(row.retainedWorkspace!.path)}
+                        >
+                          Ouvrir
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost workflow-verdict-discard"
+                          onClick={() => void discard(row.retainedWorkspace!.runId)}
+                        >
+                          Supprimer
+                        </button>
+                        {discardError[row.retainedWorkspace.runId] && (
+                          <small role="alert">{discardError[row.retainedWorkspace.runId]}</small>
+                        )}
+                      </span>
+                    ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
       <p className="workflow-verdict-rationale">{rationale}</p>

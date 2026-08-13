@@ -175,7 +175,9 @@ describe('Amitel prompt context', () => {
     )
   })
 
-  it('fails closed for an unknown workspace without contacting the Brain', async () => {
+  it('interroge le Brain meme depuis un workspace inconnu — il est PARTAGE', async () => {
+    // Ce test affirmait l'inverse (fail-closed sur workspace inconnu). Le filtrage derive du
+    // workspace est retire : un depot non repertorie n'est pas une raison de couper la memoire.
     const fetchFn = vi.fn()
     const provider = createAmitelContextProvider({
       workspace: () => 'C:\\Unknown\\Repository',
@@ -185,8 +187,8 @@ describe('Amitel prompt context', () => {
       graphLoader: vi.fn().mockResolvedValue(null)
     })
 
-    await expect(provider('secret transverse')).resolves.toBe('')
-    expect(fetchFn).not.toHaveBeenCalled()
+    await provider('secret transverse')
+    expect(fetchFn).toHaveBeenCalled()
   })
 
   it('returns no invented Graphify evidence when the query matches no node', () => {

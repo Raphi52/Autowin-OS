@@ -81,7 +81,7 @@ describe('StepThread — preuves d’exécution inline', () => {
     render([{ step: 'exec', status: 'failed', error: 'timeout du sous-agent' }])
     expect(container.querySelector('.subagent-step.failed')).not.toBeNull()
     expect(container.querySelector('.subagent-failed-pill')).not.toBeNull()
-    expect((container.textContent ?? '')).toContain('timeout du sous-agent')
+    expect(container.textContent ?? '').toContain('timeout du sous-agent')
   })
 
   it('un step réussi n’a NI classe failed NI cause (rétrocompat)', () => {
@@ -94,13 +94,25 @@ describe('StepThread — preuves d’exécution inline', () => {
     render([{ step: 'exec', thinking: 'je pèse A contre B', text: 'réponse' }])
     const details = container.querySelector('.subagent-thinking')
     expect(details).not.toBeNull()
-    expect((container.textContent ?? '')).toContain('je pèse A contre B')
+    expect(container.textContent ?? '').toContain('je pèse A contre B')
   })
 
   it('les membres d’un fan-out sont rendus en grille côte à côte (N colonnes)', () => {
     render([
-      { step: 'exec', role: 'subagent', model: 'opus', detail: 'phase frame · modèle opus', text: 'idée A' },
-      { step: 'exec', role: 'subagent', model: 'codex', detail: 'phase frame · modèle codex', text: 'idée B' }
+      {
+        step: 'exec',
+        role: 'subagent',
+        model: 'opus',
+        detail: 'phase frame · modèle opus',
+        text: 'idée A'
+      },
+      {
+        step: 'exec',
+        role: 'subagent',
+        model: 'codex',
+        detail: 'phase frame · modèle codex',
+        text: 'idée B'
+      }
     ])
     const grid = container.querySelector('.fanout-grid')
     expect(grid).not.toBeNull()
@@ -118,7 +130,9 @@ describe('StepThread — preuves d’exécution inline', () => {
   })
 
   it('en-tête : le modèle prime sur le provider quand les deux sont présents (précédence figée)', () => {
-    render([{ step: 'exec', role: 'subagent', model: 'claude-opus-4-8', provider: 'claude', text: 'x' }])
+    render([
+      { step: 'exec', role: 'subagent', model: 'claude-opus-4-8', provider: 'claude', text: 'x' }
+    ])
     const header = container.querySelector('.subagent-step .mono')
     expect(header?.textContent).toBe('claude-opus-4-8')
   })

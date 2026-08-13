@@ -1,27 +1,30 @@
+/* `padding: 5px 28px` posait le titre de cette vue 11 px plus haut et 10 px plus a droite que
+   partout ailleurs — l'ecart que l'utilisateur voyait en changeant d'onglet. Cadre delegue a
+   `.view-page` ; ne reste ici que le flou de fond, propre a cette vue. */
 .observatory-view {
-  height: 100%;
-  min-width: 0;
-  padding: 5px 28px;
   color: var(--text);
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--container-border);
-  border-radius: var(--container-radius-page);
-  background: var(--surface-panel);
-  box-shadow: var(--container-shadow);
+  /* CONFLIT RESOLU — deux sessions visaient la MEME intention. Le travail concurrent recopiait ici
+     le lisere rose->dore de `TaskManagerView.css` (« forme canonique »), avec son bord a 34 % ; la
+     version amont le sort dans `.view-page`, consomme par les sept vues. L'intention concurrente est
+     donc SATISFAITE, et sans la troisieme copie qu'elle allait creer — c'est precisement la derive
+     que son propre commentaire redoutait. Ne reste ici que ce qui appartient a cette vue. */
   backdrop-filter: blur(var(--container-blur));
 }
 .observatory-head {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  align-items: flex-end;
+  /* Aligne en HAUT comme `ViewTopBar` : cale en bas ou au centre, le titre descendait des que les
+     controles voisins etaient plus hauts que lui — mesure : 76 px du bord contre 49 ailleurs. */
+  align-items: flex-start;
+  /* Aucun retrait auparavant : ce titre etait 20 px plus a gauche que tous les autres. */
+  padding: var(--view-head-pad, 18px 20px 0);
   margin-bottom: 14px;
 }
-.observatory-head .module-header > h1 {
-  font-family: 'Segoe UI Variable Display', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
-}
+/* Police du titre NON surchargee : cette vue imposait sa propre famille la ou toutes les autres
+   suivent `--module-title-font`. C'est exactement la difference de police signalee a l'oeil. */
 .observatory-panel-title {
   color: #59dcff;
   font-size: 10px;
@@ -491,6 +494,15 @@
 .observatory-diagnostics {
   padding-top: 14px;
   border-top: 1px solid var(--line);
+}
+/* WORKFLOWS ouvre le rail : hauteur BORNÉE avec son propre défilement, sinon 12 runs repoussaient la
+   liste des conversations hors de l'écran — on aurait troqué un problème contre l'autre. Premier de la
+   colonne, donc pas de filet haut : il n'y a rien au-dessus dont le séparer. */
+.observatory-runs {
+  max-height: 176px;
+  overflow-y: auto;
+  padding-top: 0;
+  border-top: 0;
 }
 .observatory-diagnostics button {
   border-color: rgba(216, 183, 101, 0.27);
@@ -1172,9 +1184,15 @@
 /* Palette Noir de Models : surfaces neutres, or pour la sélection, couleur seulement sémantique. */
 .theme-serious .observatory-view {
   --surface-selected: rgba(225, 193, 103, 0.1);
-  border-color: rgba(255, 255, 255, 0.18);
-  background: var(--surface-panel);
   color: #f2f3f5;
+  /* La surface reste celle de Models (contrat teste juste a cote), mais le lisere est COMPOSE avec
+     elle au lieu d'etre efface. La version precedente posait `background: var(--surface-panel)` seul :
+     plus specifique que `.view-page`, elle remplacait tout le degrade, et Observatory etait la seule
+     vue sans lisere dans le theme reellement utilise — invisible a mes mesures, qui relevaient la
+     position et la police du titre, jamais le FOND.
+     `border-color: rgba(255, 255, 255, 0.18)` a ete RETIRE : il repeignait en blanc le bord rose du
+     cadre partage, une divergence de plus sans contrat qui la demande. */
+  background: var(--lisere-haut), var(--surface-panel);
 }
 
 .theme-serious .observatory-view .observatory-toolbar,

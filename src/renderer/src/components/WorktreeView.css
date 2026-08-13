@@ -1,15 +1,9 @@
+/* Aucun padding ici auparavant : le titre touchait le bord du cadre, alors que Task Manager le pose
+   a 16/18 px. Cadre delegue a `.view-page`. */
 .worktree-tab {
   position: relative;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  overflow: hidden;
-  border: 1px solid var(--container-border);
-  border-radius: var(--container-radius-page);
-  background: var(--surface-panel);
   color: var(--text);
 }
 .cockpit-header {

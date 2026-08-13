@@ -115,7 +115,11 @@ function instruction(
       : engine === 'claude'
         ? state === 'conditional'
           ? 'Lorsque Claude travaille dans ce sous-arbre'
-          : 'Au chargement de la mémoire Claude'
+          : state === 'shadowed'
+            ? // Ne PAS annoncer une injection pour un fichier désarmé : c'est ce libellé, autant que
+              // l'état, qui faisait croire que la mémoire globale pilotait les agents d'Autowin.
+              'Jamais : Autowin ne charge pas ce fichier'
+            : 'Replié dans le prompt comme contexte projet'
         : scope === 'skill'
           ? 'À l’invocation de la skill'
           : 'Déclaré · injection non tracée'
@@ -294,23 +298,52 @@ function codexFiles(query: Required<BehaviourQuery>, discovered: string[]): Beha
 
 function claudeFiles(query: Required<BehaviourQuery>, discovered: string[]): BehaviourFile[] {
   const files: BehaviourFile[] = []
+  // Autowin lance le CLI Claude NU : `--setting-sources ""` (`providers/claude.ts`). La mémoire
+  // utilisateur globale n'est donc JAMAIS chargée sous Autowin — elle gouverne les sessions Claude
+  // Code lancées à la main, pas les agents d'ici. L'annoncer `active` faisait douter l'utilisateur de
+  // ce qui pilote réellement ses agents : un inventaire de gouvernance qui affiche « actif » sur un
+  // fichier désarmé est pire qu'une ligne absente.
   const global = join(query.homeRoot, '.claude', 'CLAUDE.md')
   if (existsSync(global))
-    files.push(instruction(global, 'claude', 'active', 'global', 'Mémoire utilisateur Claude'))
+    files.push(
+      instruction(
+        global,
+        'claude',
+        'shadowed',
+        'global',
+        'Neutralisé par Autowin : CLI lancé avec --setting-sources ""'
+      )
+    )
   for (const dir of ancestors(query)) {
-    for (const name of ['CLAUDE.md', 'CLAUDE.local.md']) {
-      const path = join(dir, name)
-      if (existsSync(path))
-        files.push(
-          instruction(
-            path,
-            'claude',
-            'active',
-            scopeFor(dir, query),
-            'Ancêtre du contexte sélectionné'
-          )
+    // Ce qui est RÉELLEMENT replié dans le prompt vient de `PROJECT_CONTEXT_CHAIN`
+    // (`context-files.ts`) : `AGENTS.md` → `CLAUDE.md` → `.cursorrules`, LE PREMIER TROUVÉ. Donc un
+    // `CLAUDE.md` voisin d'un `AGENTS.md` ne sert pas, et `CLAUDE.local.md` n'est pas dans la chaîne
+    // du tout — deux cas qui s'affichaient « actifs » sans jamais atteindre un prompt.
+    const agentsPresent = ['AGENTS.md', 'agents.md'].some((nom) => existsSync(join(dir, nom)))
+    const claudeMd = join(dir, 'CLAUDE.md')
+    if (existsSync(claudeMd))
+      files.push(
+        instruction(
+          claudeMd,
+          'claude',
+          agentsPresent ? 'shadowed' : 'active',
+          scopeFor(dir, query),
+          agentsPresent
+            ? 'Masqué par AGENTS.md, premier de la chaîne de contexte projet'
+            : 'Contexte projet replié dans le prompt'
         )
-    }
+      )
+    const claudeLocal = join(dir, 'CLAUDE.local.md')
+    if (existsSync(claudeLocal))
+      files.push(
+        instruction(
+          claudeLocal,
+          'claude',
+          'shadowed',
+          scopeFor(dir, query),
+          'Hors chaîne de contexte projet : jamais lu par Autowin'
+        )
+      )
   }
   const known = new Set(files.map((file) => file.path))
   for (const path of discovered) {

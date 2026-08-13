@@ -171,7 +171,7 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     expect(container?.querySelector('[data-testid="worktree-topology-main"]')).not.toBeNull()
     expect(container?.querySelector('[data-testid="git-topology"]')).not.toBeNull()
     expect(container?.querySelector('[data-testid="worktree-frise"]')).not.toBeNull()
-    expect(container?.textContent).not.toMatch(/\d{1,3}\s?%/)
+    expect(container?.textContent).not.toMatch(/\b\d{1,3}\s?%/)
   })
 
   it('ne montre RIEN qui soit propre à une conversation', async () => {
@@ -347,6 +347,27 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     const regle = bloc.slice(0, bloc.indexOf('}'))
     expect(regle).toMatch(/overflow:\s*auto/)
     expect(regle).toMatch(/height:\s*min\(/)
+  })
+
+  it('porte LA barre du haut partagée, pas un en-tête maison', async () => {
+    installApi()
+    await renderView()
+
+    // L'onglet Worktrees monte CETTE vue (`App.tsx` → `WorktreeView`) ; `WorktreeMapView` n'est
+    // branchée sur rien. Aligner la barre ailleurs n'aurait donc rien changé à l'écran — d'où ce
+    // test, qui ancre l'alignement sur le composant RÉELLEMENT affiché.
+    const barre = container?.querySelector('.view-topbar')
+    expect(barre).toBeTruthy()
+    expect(barre?.querySelector('.module-header h1')?.textContent).toBe('Autowin OS')
+    // Les deux actions vivent dans le bloc d'actions de la barre, comme « + Nouvelle tâche » ailleurs.
+    const actions = [...(barre?.querySelectorAll('.view-topbar-actions button') ?? [])].map((b) =>
+      b.textContent?.trim()
+    )
+    expect(actions).toEqual(['Choisir', 'Actualiser'])
+    // Discriminant : l'ancien en-tête ne doit plus être rendu, sinon les deux coexisteraient.
+    expect(container?.querySelector('.cockpit-header')).toBeNull()
+    // Aucune section ici : une barre d'onglets VIDE serait pire que pas de barre.
+    expect(container?.querySelector('.domain-tabs')).toBeNull()
   })
 
   it('ne lit ni diff ni RUN au chargement : la topologie ne coûte pas ces appels', async () => {

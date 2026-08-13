@@ -13,6 +13,7 @@ import { HumanJson } from './HumanJson'
 import { BrainMarkdown } from './BrainMarkdown'
 import { summarizeNativeTraces, type NativeTraceSummaryInput } from './native-trace-summary'
 import { eventTurnId, humanEventPreview, splitLabeledJson } from './observatory-event-preview'
+import './ViewPage.css'
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { useObservatorySources, type ActivitySessionMeta } from './useObservatorySources'
@@ -150,7 +151,9 @@ export function ObservatoryView({
     nativeTraces,
     semanticTimeline,
     loadingActivitySessions,
-    loadingConversationActivity
+    loadingConversationActivity,
+    runs,
+    loadingRuns
   } = useObservatorySources<NativeRawTrace>({
     active,
     conversationId,
@@ -724,7 +727,7 @@ export function ObservatoryView({
   )
 
   return (
-    <section className="observatory-view" data-testid="observatory-view">
+    <section className="view-page observatory-view" data-testid="observatory-view">
       <header className="observatory-head">
         <ModuleHeader eyebrow="Traçabilité des conversations" title="Observatory" />
         <div className="observatory-metrics">
@@ -1102,6 +1105,11 @@ export function ObservatoryView({
           onOpenSession={openActivitySession}
           activityImage={activityImage}
           onOpenImage={openActivityImage}
+          runs={runs}
+          runsLoading={loadingRuns}
+          // Révéler le fichier plutôt qu'en afficher un aperçu : un RUN.md se lit et s'ÉDITE, et
+          // Observatory n'est pas un éditeur. `showItemInFolder` côté main fait le reste.
+          onOpenRun={(path) => void window.api.openFolder?.(path)}
           prioritySignals={prioritySignals}
           onOpenSignal={openEvent}
         />

@@ -27,26 +27,25 @@ export interface CostRow {
   unpricedCalls: number
 }
 
-export interface CostSummary
-  extends Readonly<{
-    totalUsd: number
-    calls: number
-    /** Libellé compact pour l'indicateur (ex. « 1,23 $ »). */
-    label: string
-    /** Poste le plus cher, ou `undefined` si rien n'a été dépensé. */
-    topKey?: string
-    /** Ratio de cache global, pondéré par les tokens (pas une moyenne des ratios). */
-    cacheHitRatio: number
-    /** Temps cumulé de la conversation. 0 = aucune source ne l'a mesuré. */
-    durationMs: number
-    unpricedCalls: number
-    /**
-     * Le contexte est RÉÉCRIT au lieu d'être relu — c'est ce symptôme qui a mené à la cause racine du
-     * 2026-07-28. Jugé sur le VOLUME de contexte, pas sur le nombre d'appels : trois appels qui
-     * réécrivent 900 k tokens sont un problème, deux appels de 5 k tokens ne prouvent rien.
-     */
-    rewritingContext: boolean
-  }> {}
+export interface CostSummary extends Readonly<{
+  totalUsd: number
+  calls: number
+  /** Libellé compact pour l'indicateur (ex. « 1,23 $ »). */
+  label: string
+  /** Poste le plus cher, ou `undefined` si rien n'a été dépensé. */
+  topKey?: string
+  /** Ratio de cache global, pondéré par les tokens (pas une moyenne des ratios). */
+  cacheHitRatio: number
+  /** Temps cumulé de la conversation. 0 = aucune source ne l'a mesuré. */
+  durationMs: number
+  unpricedCalls: number
+  /**
+   * Le contexte est RÉÉCRIT au lieu d'être relu — c'est ce symptôme qui a mené à la cause racine du
+   * 2026-07-28. Jugé sur le VOLUME de contexte, pas sur le nombre d'appels : trois appels qui
+   * réécrivent 900 k tokens sont un problème, deux appels de 5 k tokens ne prouvent rien.
+   */
+  rewritingContext: boolean
+}> {}
 
 /** Montant en euros-style français, arrondi au centime. Les micro-coûts restent visibles. */
 export function formatUsd(amount: number): string {

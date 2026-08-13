@@ -234,12 +234,16 @@
 .cosmic-outline .conv-pane,
 .cosmic-outline .runs-pane {
   border-color: rgba(255, 255, 255, 0.14);
-  background: var(--surface-panel);
+  /* Meme lisere que les cadres de page : les trois panneaux de Chat etaient les seuls sans ce
+     repere. Couche AJOUTEE au fond propre du panneau, pas un remplacement. */
+  background: var(--lisere-haut), var(--surface-panel);
   box-shadow: none;
 }
 /* Liste de conversations : legerement plus transparente (90%) que les autres panneaux. */
 .cosmic-outline .conv-pane {
-  background: rgba(5, 5, 6, 0.9);
+  /* Cette regle ECRASE le fond pose juste au-dessus (meme specificite, declaree apres) : sans y
+     remettre la couche, le lisere du rail disparaissait. */
+  background: var(--lisere-haut), rgba(5, 5, 6, 0.9);
 }
 
 .cosmic-outline .chat,
@@ -252,7 +256,7 @@
   border: 1px solid var(--container-border);
   border-radius: var(--container-radius-panel);
   overflow: hidden;
-  background: var(--surface-panel);
+  background: var(--lisere-haut), var(--surface-panel);
 }
 
 .cosmic-outline .chat-head {
@@ -513,7 +517,6 @@
   line-height: 1.62;
 }
 
-
 /* Conteneur de la barre : porte le cadre et le fond ; les actions vivent DEDANS. */
 .cosmic-outline .activity-group {
   width: min(100%, 720px);
@@ -589,7 +592,6 @@
   white-space: nowrap;
 }
 
-
 .cosmic-outline .activity-group-tools {
   flex: 1;
   overflow: hidden;
@@ -598,8 +600,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-
 
 .cosmic-outline .chat-jump-latest {
   position: absolute;

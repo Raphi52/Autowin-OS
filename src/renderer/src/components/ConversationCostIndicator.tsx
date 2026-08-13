@@ -41,22 +41,25 @@ export function ConversationCostIndicator({
    */
   const [manualError, setManualError] = useState(false)
 
-  const refresh = useCallback(async (manual = false) => {
-    if (!conversationId || !window.api?.costBreakdown) return
-    setLoading(true)
-    if (manual) setManualError(false)
-    try {
-      const result = (await window.api.costBreakdown('actor', conversationId)) as
-        CostRow[] | undefined
-      setRows(Array.isArray(result) ? result : [])
-      setManualError(false)
-    } catch {
-      // Un journal illisible ne doit pas casser le composeur : on garde le dernier total connu.
-      if (manual) setManualError(true)
-    } finally {
-      setLoading(false)
-    }
-  }, [conversationId])
+  const refresh = useCallback(
+    async (manual = false) => {
+      if (!conversationId || !window.api?.costBreakdown) return
+      setLoading(true)
+      if (manual) setManualError(false)
+      try {
+        const result = (await window.api.costBreakdown('actor', conversationId)) as
+          CostRow[] | undefined
+        setRows(Array.isArray(result) ? result : [])
+        setManualError(false)
+      } catch {
+        // Un journal illisible ne doit pas casser le composeur : on garde le dernier total connu.
+        if (manual) setManualError(true)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [conversationId]
+  )
 
   // Au changement de conversation, et à la FIN d'un tour (busy repasse à false) : c'est le moment où
   // le journal contient la dépense du tour.

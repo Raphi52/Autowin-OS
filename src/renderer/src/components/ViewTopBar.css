@@ -11,7 +11,8 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 4px var(--s4);
-  padding: 18px 20px 0;
+  /* Meme retrait que les en-tetes maison des autres vues : le token vit dans `ViewPage.css`. */
+  padding: var(--view-head-pad, 18px 20px 0);
 }
 
 .view-topbar-identity {

@@ -35,11 +35,9 @@ export function compareObservatoryEvents(
   beforeEvent: HarnessTimelineEvent,
   afterEvent: HarnessTimelineEvent
 ): ObservatoryComparison {
-  const fields: Array<[
-    key: string,
-    label: string,
-    read: (event: HarnessTimelineEvent) => ObservatoryComparisonValue
-  ]> = [
+  const fields: Array<
+    [key: string, label: string, read: (event: HarnessTimelineEvent) => ObservatoryComparisonValue]
+  > = [
     ['kind', 'Type', (event) => value(event.kind)],
     ['actor', 'Acteur', (event) => value(event.actor)],
     ['provider', 'Provider', (event) => value(event.provider)],
@@ -64,7 +62,14 @@ export function compareObservatoryEvents(
       typeof before === 'number' && typeof after === 'number'
         ? Number((after - before).toFixed(6))
         : undefined
-    return { key, label, before, after, change: changeOf(before, after), ...(delta != null ? { delta } : {}) }
+    return {
+      key,
+      label,
+      before,
+      after,
+      change: changeOf(before, after),
+      ...(delta != null ? { delta } : {})
+    }
   })
   return { rows, changed: rows.filter((row) => row.change !== 'same').length }
 }

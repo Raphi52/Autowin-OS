@@ -1,57 +1,46 @@
 /**
- * PORTÉE DU BRAIN, DÉRIVÉE DU WORKSPACE (option O3 du cadrage `rag-brain-pertinence`).
+ * PORTEE DU BRAIN. Par defaut : TOUT le Brain, sauf les zones de quarantaine.
  *
- * MESURE qui justifie ce module (index vivant du Brain, 2026-07-29) : 15 342 chunks, dont **99 %** de
- * `knowledge/domain/rigapplication-documentation` et **0,19 %** sur Autowin OS (4 documents). Une
- * question Autowin (« le bouton fork dans le chat ») ramenait donc 2 sources RIG sur 3 — appariement sur
- * le mot « bouton ». Ce n'est PAS un défaut de classement : c'est le résultat attendu d'un corpus à
- * 99 % consacré à un autre projet.
+ * CE QUE CE MODULE FAISAIT, ET POURQUOI C'EST RETIRE.
  *
- * Ce que ce module fait : restreindre les sources retenues au corpus du WORKSPACE courant. Ce qu'il ne
- * fait PAS : prétendre enrichir le Brain. Filtrer ne crée pas de connaissance — pour Autowin, la
- * connaissance vit dans le graphe de code (déjà scopé) et dans le contexte projet ; le Brain n'apporte
- * que 4 documents, qui restent atteignables.
+ * Il restreignait les sources a une liste blanche de prefixes derivee du nom du workspace. La mesure
+ * qui l'avait justifie etait reelle (index du 2026-07-29 : 15 342 chunks, dont 99 % de
+ * `knowledge/domain/rigapplication-documentation` et 0,19 % sur Autowin OS) — une question Autowin
+ * ramenait des sources RIG par appariement sur un mot commun.
  *
- * PRINCIPE DE PRUDENCE : un workspace sans identité déclarée est fail-closed. L'opérateur peut
- * explicitement demander le corpus canonique global avec `AUTOWIN_BRAIN_CORPUS=*` ; les zones de
- * quarantaine restent toujours exclues et une absence de mapping ne devient jamais silencieusement
- * « tout autoriser ».
+ * Mais la liste n'a jamais suivi le vault. Mesure du 2026-08-12 : le corpus `autowin-os` n'admettait
+ * que 11 notes sur les 461 de `knowledge/`, en ignorant `projects/autowin-os/obsidian/` et
+ * `knowledge/decisions/` — qui portent l'essentiel des decisions Autowin. La vue Knowledge affichait
+ * donc « 11 NOEUDS » pour un Brain de 633 notes, SANS annoncer qu'un filtre etait actif : l'utilisateur
+ * a legitimement cru avoir perdu les neuf dixiemes de sa memoire.
+ *
+ * Et le remede etait redondant avec le mal : la recuperation CLASSE deja par pertinence (dense +
+ * lexical + RRF). Un filtre par prefixe pose AU-DESSUS d'un classeur de pertinence ne corrige pas un
+ * mauvais classement — il supprime des candidats avant qu'ils soient notes, y compris le meilleur.
+ * Le probleme de dominance d'un corpus se traite dans le CLASSEMENT, pas par une liste blanche
+ * ecrite a la main qui se perime en silence.
+ *
+ * CE QUI RESTE, exhaustivement — deux choses, et rien d'autre :
+ *
+ * 1. Les zones de QUARANTAINE (`inbox`, `.trash`, `escrow`) sont TOUJOURS exclues, meme sous
+ *    wildcard : ce n'est pas du savoir canonique. Deux couches independantes l'assurent, chacune
+ *    SUFFISANTE seule (verifie par sabotage : desarmer l'une laisse les tests verts, desarmer les
+ *    deux fait remonter `inbox/note`) — `SKIPPED_VAULT_DIRS` (`viz/fs-brains.ts`) pour le parcours
+ *    disque, et `brainSourcePathAllowed` ici pour les chemins ANNONCES par la recuperation. Cette
+ *    seconde couche compte : les chemins de sources viennent du serveur Brain, donc rien ne garantit
+ *    qu'ils correspondent a un dossier reel.
+ * 2. `AUTOWIN_BRAIN_CORPUS` permet a un operateur de re-restreindre EXPLICITEMENT ; une valeur
+ *    invalide coupe le Brain (fail-closed) plutot que de devenir un acces global par accident.
+ *
+ * Aucune restriction n'est plus derivee du chemin du workspace. Une exception RigApplication a ete
+ * ajoutee puis RETIREE le meme jour (2026-08-13) : elle ne pouvait pas se declencher, et affichait
+ * donc une protection inexistante — le detail est dans `brainCorpusForWorkspace`.
  */
-import { readFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { basename } from 'node:path'
 import { renderStructuredBrainContext } from './brain-protocol'
 import { retrieveBrainContext, type BrainRetrievalResult } from './brain-retrieval'
 import type { BrainNoteSearchResult } from './viz/fs-brains'
 /** En-tête d'une source : `### Source N — <chemin>`. */
-
-/**
- * Corpus Brain par workspace, indexé par SLUG de dossier. Les valeurs sont des identités exactes ou
- * des préfixes ANCRÉS du chemin `knowledge/...` (`/` ou `-` final = famille). Une sous-chaîne libre
- * permettrait à `rig/.../autowin-migration.md` de contourner l'isolation.
- *
- * Table EXPLICITE et non devinée : le slug d'un dossier ne dit pas le nom de son corpus
- * (« Code RIG » → la doc s'appelle `rigapplication-documentation`). Un workspace absent de cette table
- * est fail-closed.
- */
-const RIG_BRAIN_CORPUS = [
-  'knowledge/_maps/rig.md',
-  'knowledge/_maps/rig-',
-  'knowledge/decisions/rig-',
-  'knowledge/domain/rig-',
-  'knowledge/domain/rigapplication-documentation/',
-  'knowledge/lessons/rig-'
-] as const
-
-const WORKSPACE_BRAIN_CORPUS: Readonly<Record<string, readonly string[]>> = {
-  'autowin-os': [
-    'knowledge/_maps/autowin-os.md',
-    'knowledge/domain/autowin-os-',
-    'knowledge/runbooks/autowin-os-'
-  ],
-  'code-rig': RIG_BRAIN_CORPUS,
-  rigapplication: RIG_BRAIN_CORPUS,
-  rig: RIG_BRAIN_CORPUS
-}
 
 let invalidOverrideWarningEmitted = false
 
@@ -84,25 +73,25 @@ export function workspaceSlug(workspacePath: string): string {
 }
 
 /**
- * Fragments de chemin autorisés. `[]` signifie fail-closed ; `undefined` est réservé au wildcard
- * opérateur explicite (aucun filtrage).
+ * Fragments de chemin autorisés, ou `undefined` = AUCUN filtrage (le cas par défaut désormais).
  *
- * Échappatoire opérateur : `AUTOWIN_BRAIN_CORPUS` (fragments séparés par des virgules) surclasse la
- * table ; la valeur `*` ouvre tout le corpus canonique mais jamais les zones de quarantaine.
+ * `[]` ne subsiste que pour UN cas : un `AUTOWIN_BRAIN_CORPUS` malformé, qui coupe le Brain plutôt
+ * que de devenir un accès global par faute de frappe. Il n'y a plus de « table » à surclasser — ce
+ * JSDoc en parlait encore alors qu'elle avait été supprimée, et décrivait donc un module disparu.
+ * `AUTOWIN_BRAIN_CORPUS=*` ouvre tout le corpus canonique, jamais la quarantaine.
  */
 export function brainCorpusForWorkspace(
   workspacePath: string | undefined,
-  env: NodeJS.ProcessEnv = process.env,
-  worktreeOwner: (workspacePath: string) => string | undefined = gitWorktreeOwner
+  env: NodeJS.ProcessEnv = process.env
 ): readonly string[] | undefined {
   const configuredOverride = env.AUTOWIN_BRAIN_CORPUS
   if (configuredOverride !== undefined) {
     const override = configuredOverride.trim()
     if (override === '*') return undefined
     const fragments = override.split(',').map((fragment) => fragment.trim().toLowerCase())
-    // Le wildcard n'est valide que SEUL et chaque élément doit être explicite. Une virgule finale,
+    // Le wildcard n'est valide que SEUL et chaque element doit etre explicite. Une virgule finale,
     // une liste vide ou `*,foo` est une erreur de configuration : elle coupe le Brain au lieu de
-    // transformer une faute de frappe en accès global.
+    // transformer une faute de frappe en acces global.
     if (
       fragments.some(
         (fragment) => !fragment || fragment === '*' || !isCanonicalCorpusSelector(fragment)
@@ -113,36 +102,23 @@ export function brainCorpusForWorkspace(
     }
     return fragments
   }
-  if (!workspacePath) return []
-  const segments = workspacePath.split(/[\\/]+/).filter(Boolean)
-  const direct = WORKSPACE_BRAIN_CORPUS[workspaceSlug(segments.at(-1) ?? '')]
-  if (direct) return direct
-
-  // Une copie agent vérifiée conserve l'identité du dépôt sous la forme
-  // `<workspace>/.autowin/agent__<id>`. Ne jamais remonter arbitrairement les parents : un dépôt
-  // client placé sous `.../autowin-os/` n'est pas pour autant le dépôt Autowin.
-  const leaf = segments.at(-1) ?? ''
-  const marker = segments.at(-2)?.toLowerCase()
-  if (/^agent__[a-z0-9._-]+$/i.test(leaf) && marker === '.autowin') {
-    return WORKSPACE_BRAIN_CORPUS[workspaceSlug(segments.at(-3) ?? '')] ?? []
-  }
-
-  // Les copies actuelles vivent dans le dossier de données global de l'app, donc leur chemin ne
-  // porte PAS le nom du dépôt propriétaire. Leur fichier `.git` le prouve en revanche sans deviner
-  // un parent : `gitdir: <dépôt>/.git/worktrees/<copie>`. Cette frontière est aussi valable pour un
-  // dépôt externe (RigApplication) et évite de lui attribuer par erreur le corpus d'Autowin OS.
-  const owner = worktreeOwner(workspacePath)
-  return owner ? (WORKSPACE_BRAIN_CORPUS[workspaceSlug(owner)] ?? []) : []
-}
-
-function gitWorktreeOwner(workspacePath: string): string | undefined {
-  try {
-    const pointer = readFileSync(join(workspacePath, '.git'), 'utf8').trim()
-    const match = /^gitdir:\s*(.+?)[\\/]\.git[\\/]worktrees[\\/][^\\/]+\s*$/i.exec(pointer)
-    return match ? basename(match[1]) : undefined
-  } catch {
-    return undefined
-  }
+  // AUCUNE restriction derivee du workspace. Une exception « isolation RigApplication » a existe ici
+  // du 2026-08-13 au meme jour : elle n'a JAMAIS pu se declencher. Le workspace vient de
+  // `resolveExecutionWorkspace` → `gitWorkspaceFrom` (`os.ts:109`), qui exige `.git` ET
+  // `package.json` dans le meme dossier ; `C:\Code RIG\RigApplication` est un depot .NET sans
+  // `package.json`, donc le slug ne valait jamais `rigapplication`. Elle affichait une protection
+  // inexistante — pire qu'aucune protection.
+  //
+  // Et le motif ne tenait pas non plus : la mesure d'origine (2026-07-29, index a 15 342 fragments
+  // dont 99 % de doc RIG) decrit une DOMINANCE de corpus, que le classement (dense + lexical + RRF)
+  // traite mieux qu'une liste blanche. Un filtre par prefixe pose AU-DESSUS d'un classeur supprime
+  // des candidats avant qu'ils soient notes, y compris le meilleur — c'est ce qui masquait 450 des
+  // 461 notes. Le Brain est le vault de l'equipe, pas une entree hostile : le modele de menace
+  // « source adverse » supposait une note piegee dans sa propre memoire.
+  //
+  // Si des sources RIG polluent un jour les reponses Autowin, le correctif est dans le CLASSEMENT.
+  void workspacePath
+  return undefined
 }
 
 /** Ramène un chemin absolu/UNC ou relatif à son identité stable `knowledge/...`. */
@@ -180,7 +156,18 @@ export function brainSourcePathAllowed(
   path: string,
   selectors: readonly string[] | undefined
 ): boolean {
-  const segments = path.trim().toLowerCase().replace(/\\/gu, '/').split('/').filter(Boolean)
+  // Chaque SEGMENT est nettoyé, pas seulement la chaîne entière : `knowledge/ inbox /x.md`,
+  // `knowledge/ escrow/x.md` et `knowledge/inbox./x.md` franchissaient la quarantaine (mesuré), là où
+  // `knowledge/inbox/x.md` était bien rejeté. Ces chemins ne viennent PAS du disque mais de la
+  // RÉCUPÉRATION — ce sont les sources annoncées par le serveur Brain — donc rien ne garantit qu'ils
+  // soient des chemins réels : une source adverse peut se nommer ainsi. Windows tolère mal l'espace
+  // ou le point final dans un nom de dossier, ce qui rendait ce trou invisible aux essais locaux.
+  const segments = path
+    .toLowerCase()
+    .replace(/\\/gu, '/')
+    .split('/')
+    .map((segment) => segment.trim().replace(/\.+$/u, ''))
+    .filter(Boolean)
   // Ces zones ne sont jamais du savoir canonique, même sous wildcard opérateur.
   if (
     segments.some((segment) => segment === 'inbox' || segment === '.trash' || segment === 'escrow')

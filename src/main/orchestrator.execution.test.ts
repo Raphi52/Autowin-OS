@@ -233,7 +233,7 @@ describe('Orchestrator execution contract', () => {
     expect(prompt).toContain('conserver les preuves')
   })
 
-  it('isole le vrai workspace RigApplication d une source Autowin adverse', async () => {
+  it('n impose plus aucun corpus derive du workspace (isolation RIG retiree)', async () => {
     const provider = new CapturingProvider()
     const seenCorpus: Array<readonly string[] | undefined> = []
     const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\n'
@@ -273,9 +273,13 @@ describe('Orchestrator execution contract', () => {
     await orchestrator.run('analyse RigApplication en lecture seule sans le modifier')
 
     const prompt = provider.messages[0].map((message) => message.content).join('\n')
-    expect(seenCorpus[0]).toContain('knowledge/domain/rigapplication-documentation/')
+    // JUMEAU de `commands.test.ts` (« brain_query … source Autowin adverse ») : même contrat, deux
+    // chemins, et ils doivent bouger ENSEMBLE — les avoir mis à jour séparément est ce qui a laissé
+    // une contradiction vivante. État final arbitré après audit : plus AUCUN filtrage dérivé du
+    // workspace, donc les DEUX sources atteignent le prompt. Conséquence assumée, pas oubliée.
+    expect(seenCorpus[0]).toBeUndefined()
     expect(prompt).toContain('RIG_SOURCE_AUTORISEE')
-    expect(prompt).not.toContain('AUTOWIN_SOURCE_INTERDITE')
+    expect(prompt).toContain('AUTOWIN_SOURCE_INTERDITE')
   })
 
   it('n injecte aucun caractère quand un contexte signé dépasse le budget', async () => {

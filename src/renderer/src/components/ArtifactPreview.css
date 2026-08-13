@@ -247,7 +247,9 @@
   padding: 34px 42px;
   background: #f5f2ea;
   color: #1c1e22;
-  font: 14px/1.6 Georgia, serif;
+  font:
+    14px/1.6 Georgia,
+    serif;
 }
 
 .artifact-office-document p {

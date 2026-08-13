@@ -1,7 +1,7 @@
+/* Ces vues (Agent Studio, Settings, Knowledge) n'avaient AUCUN cadre de page : leur barre du haut
+   flottait hors du conteneur du contenu, contrairement a toutes les autres. Cadre delegue a
+   `.view-page`, applique sur la racine de chaque vue. */
 .domain-shell {
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
 }

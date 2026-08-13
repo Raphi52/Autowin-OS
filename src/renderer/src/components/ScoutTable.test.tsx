@@ -19,8 +19,24 @@ function render(props: Parameters<typeof ScoutTable>[0]): void {
 }
 
 const ROWS: ScoutRow[] = [
-  { num: '1', impact: 'g', effort: 'y', type: 'fix', what: 'Reprise run', why: 'crash', how: 'commands.ts:598' },
-  { num: '2', impact: 'y', effort: 'g', type: 'new', what: 'Findings', why: 'aveugle', how: 'orch.ts:241' }
+  {
+    num: '1',
+    impact: 'g',
+    effort: 'y',
+    type: 'fix',
+    what: 'Reprise run',
+    why: 'crash',
+    how: 'commands.ts:598'
+  },
+  {
+    num: '2',
+    impact: 'y',
+    effort: 'g',
+    type: 'new',
+    what: 'Findings',
+    why: 'aveugle',
+    how: 'orch.ts:241'
+  }
 ]
 
 describe('ScoutTable', () => {
