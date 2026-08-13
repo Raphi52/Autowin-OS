@@ -226,6 +226,41 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.directive-queue')).not.toBeNull()
   })
 
+  it('un envoi explicite de la file remplace le gel laisse par un Stop rate', async () => {
+    const turn = deferred<{ ok: boolean; cancelled?: boolean }>()
+    const pilotChat = vi.fn((_messages: unknown[], _conversationId: string) => turn.promise)
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat,
+      cancelPilotChat: vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false })
+        .mockResolvedValueOnce({ ok: true })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('lance un tour')
+    await click('.composer-send')
+    await type('message a envoyer')
+    await click('.composer-send')
+    await click('.composer-send')
+    await act(async () => flushAnimationFrames())
+
+    await click('.directive-queue-send-all')
+    await act(async () => {
+      turn.resolve({ ok: true, cancelled: true })
+      await flushAnimationFrames()
+    })
+
+    expect(mockApi.cancelPilotChat).toHaveBeenCalledTimes(2)
+    expect(pilotChat).toHaveBeenCalledTimes(2)
+    expect(pilotChat.mock.calls[1]?.[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'user', content: 'message a envoyer' })
+      ])
+    )
+  })
+
   it('n affiche AUCUN bouton stop hors tour — il n y a rien a arreter', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)

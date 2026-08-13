@@ -451,7 +451,12 @@ export class AgentPilot {
     timer.mark('snapshot')
 
     const latestUserMessage = resolveLatestUserMessage(history, routingUserMessageOverride)
-    const directRoute = latestUserMessage ? routeSkillRequest(latestUserMessage) : undefined
+    // Une continuation réutilise le vrai prompt pour les permissions et le RAG, jamais pour
+    // déclencher une seconde fois son raccourci /skill : ce geste exige un nouveau message humain.
+    const directRoute =
+      routingUserMessageOverride === undefined && latestUserMessage
+        ? routeSkillRequest(latestUserMessage)
+        : undefined
     // COURT-CIRCUIT reserve a la demande EXPLICITE (« /scout … », « /build … »).
     //
     // L'ancienne branche heuristique (`workspace-action`, deduite d'un verbe + une cible) est RETIREE.

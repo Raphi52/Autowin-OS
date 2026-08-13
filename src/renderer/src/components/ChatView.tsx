@@ -1202,6 +1202,9 @@ export function ChatView({
     // actif, cette transition n'arrive jamais et les boutons restent figés sur « ⏳ Interruption… »
     // pour toujours, file bloquée. Constaté sur une file survivante à un changement de conversation.
     if (!busyConversationsRef.current.has(id)) return
+    // Ce nouveau geste explicite remplace un éventuel Stop simple raté : la file doit désormais
+    // partir dès la fin du tour, même si le premier IPC avait laissé son gel one-shot armé.
+    stoppedQueueDrainRef.current.delete(id)
     setConversationInterrupting(id, true)
     void window.api
       .cancelPilotChat(id)
