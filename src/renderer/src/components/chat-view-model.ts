@@ -15,6 +15,7 @@ import type { PilotEventKind } from '../../../shared/pilot-events'
 import {
   AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
   authoritativeOrchestrationClosureSpan,
+  hasAuthoritativeDeliveredClosingBlock,
   isAuthoritativeOrchestrationClosureLine,
   isDeliveredOrchestrationOutcome,
   markdownCodeContinuationPrefixes,
@@ -270,11 +271,18 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
   if (!isDeliveredOrchestrationOutcome(outcome)) return removePersistedAuthoritativeClosures(parts)
   const textIndexes = parts.flatMap((part, index) => (part.kind === 'text' ? [index] : []))
   const mutableTextStart = textIndexes.findIndex((index) => index > actionIndex)
-  const reconciledText = reconcileClosedOrchestrationTextParts(
-    textIndexes.map((index) => (parts[index] as ChatTextPart).text),
-    outcome,
-    mutableTextStart < 0 ? textIndexes.length : mutableTextStart
-  )
+  const storedTexts = textIndexes.map((index) => (parts[index] as ChatTextPart).text)
+  const authoritativeFooterAlreadyPersisted = storedTexts.some((text, index) => {
+    const partIndex = textIndexes[index]
+    return partIndex > actionIndex && hasAuthoritativeDeliveredClosingBlock(text)
+  })
+  const reconciledText = authoritativeFooterAlreadyPersisted
+    ? storedTexts
+    : reconcileClosedOrchestrationTextParts(
+        storedTexts,
+        outcome,
+        mutableTextStart < 0 ? textIndexes.length : mutableTextStart
+      )
   const textByIndex = new Map(
     textIndexes.map((index, position) => [index, reconciledText[position]])
   )

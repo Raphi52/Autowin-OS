@@ -563,11 +563,13 @@ function removeExistingStructuredClosingBlock(
   let wantedIndex = 0
   let start = -1
   let end = -1
+  let now = -1
   for (const [index, line] of lines.entries()) {
     if (protectedLines.has(index + 1)) continue
     const marker = structuredClosingMarker(line)
     if (marker === wanted[wantedIndex]) {
       if (wantedIndex === 0) start = index
+      if (marker === 'maintenant') now = index
       wantedIndex += 1
       if (wantedIndex === wanted.length) {
         end = index + 1
@@ -575,10 +577,11 @@ function removeExistingStructuredClosingBlock(
       }
     } else if (marker === 'fait') {
       start = index
+      now = -1
       wantedIndex = 1
     }
   }
-  if (wantedIndex !== wanted.length || start < 0 || end < 0) return report
+  if (wantedIndex !== wanted.length || start < 0 || now < 0 || end < 0) return report
 
   // Le dernier intitulé contient normalement sa recommandation sur la même ligne. Si elle est
   // portée par le paragraphe suivant, retire aussi ce paragraphe, mais jamais les preuves placées
@@ -592,7 +595,15 @@ function removeExistingStructuredClosingBlock(
     while (end < lines.length && lines[end].trim()) end += 1
   }
 
-  return [...lines.slice(0, start), ...lines.slice(end)].join('\n').trimEnd()
+  // Le contenu sous « Fait » porte les preuves du worker (tests, fichiers, checksum). Conserve-le
+  // comme corps du rapport ; seuls l'ancien intitulé et les rubriques de cycle de vie sont remplacés.
+  const inlineFact = lines[start]
+    .trim()
+    .replace(/^#{1,6}\s*/u, '')
+    .replace(/^(?:\*\*)?✅\s*Fait(?:\*\*)?\s*(?:[:：—–-]\s*)?/u, '')
+    .trim()
+  const facts = [...(inlineFact ? [inlineFact] : []), ...lines.slice(start + 1, now)]
+  return [...lines.slice(0, start), ...facts, ...lines.slice(end)].join('\n').trimEnd()
 }
 
 interface OpenFence {
@@ -711,6 +722,26 @@ function deliveredClosingBlock(run: string | undefined): string[] {
     '⏳ Reste à faire : rien.',
     '👉 Recommandé : passer à la prochaine demande.'
   ]
+}
+
+/** Reconnaît le footer synthétisé par Autowin, sans confondre un bloc libre produit par le worker. */
+export function hasAuthoritativeDeliveredClosingBlock(report: string): boolean {
+  const protectedLines = markdownCodeLineProtection([report])[0]
+  const visibleLines = report
+    .split(/\r?\n/u)
+    .filter((_, index) => !protectedLines.has(index + 1))
+    .map((line) => line.trim())
+  const fact = visibleLines.indexOf('✅ Fait')
+  if (fact < 0 || visibleLines[fact + 1] !== '1. Workflow livré : gate validé et RUN fermé green.') {
+    return false
+  }
+  const now = visibleLines.findIndex((line, index) => index > fact && line.startsWith('📍 Maintenant :'))
+  const remaining = visibleLines.indexOf('⏳ Reste à faire : rien.', now + 1)
+  const recommended = visibleLines.indexOf(
+    '👉 Recommandé : passer à la prochaine demande.',
+    remaining + 1
+  )
+  return fact < now && now < remaining && remaining < recommended
 }
 
 /**

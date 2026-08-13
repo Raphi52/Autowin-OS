@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { formatOrchestrationOutcome } from '../../../shared/orchestration-outcome'
 import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
@@ -894,6 +895,39 @@ describe('durable assistant hydration and streaming', () => {
     expect(text).toContain('Échec initial : publication non exécutée.')
     expect(text).toContain('Tests 12/12 verts.')
     expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+  })
+
+  it('préserve le footer autoritaire après persistance et réhydratation', () => {
+    const outcome = {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      result: 'Tests 12/12 verts.'
+    }
+    const liveText = formatOrchestrationOutcome(
+      true,
+      outcome,
+      undefined,
+      'Clôture Autowin : gate validé, RUN fermé green ; aucune relance nécessaire.'
+    )
+    const hydrated = hydrateStoredAssistant({
+      content: liveText,
+      status: 'completed',
+      parts: [
+        { kind: 'action', name: 'orchestrate', ok: true, data: outcome },
+        { kind: 'text', text: liveText }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    for (const heading of ['✅ Fait', '📍 Maintenant', '⏳ Reste à faire', '👉 Recommandé']) {
+      expect(text.split(heading)).toHaveLength(2)
+    }
+    expect(text.trimEnd()).toMatch(/👉 Recommandé : passer à la prochaine demande\.$/u)
   })
 
   it('removes a persisted green closure when the latest orchestration failed', () => {

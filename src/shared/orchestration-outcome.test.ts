@@ -787,7 +787,7 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
       expect(text.split(heading)).toHaveLength(2)
     }
     expect(text).toContain('Preuve utile.')
-    expect(text).not.toContain('Ancienne tentative')
+    expect(text).toContain('Ancienne tentative.')
   })
 
   it('préserve une preuve factuelle placée après un ancien bloc final', () => {
@@ -802,7 +802,23 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
 
     expect(text).toContain('Préambule.')
     expect(text).toContain('Preuve finale ordinaire : checksum abc123.')
-    expect(text).not.toContain('Ancien travail')
+    expect(text).toContain('Ancien travail.')
+  })
+
+  it('conserve les preuves du worker écrites sous son ancien Fait', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      result:
+        '✅ Fait\n348 assertions vertes ; checksum abc123.\ntypechecks node/web verts.\n\n📍 Maintenant : RUN open.\n⏳ Reste à faire : judge.\n👉 Recommandé : publier.'
+    })
+
+    expect(text).toContain('348 assertions vertes ; checksum abc123.')
+    expect(text).toContain('typechecks node/web verts.')
+    expect(text.split('✅ Fait')).toHaveLength(2)
+    expect(text).not.toContain('RUN open')
   })
 
   it('recalcule les lignes Markdown protégées après le retrait de l’ancien bloc', () => {
@@ -816,7 +832,7 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     })
 
     expect(text).toContain('RUN reste open — preuve verbatim.')
-    expect(text).not.toContain('Ancien travail')
+    expect(text).toContain('Ancien travail.')
   })
 
   it('ferme une fence tronquée avant le bloc final pour que les rubriques restent visibles', () => {
