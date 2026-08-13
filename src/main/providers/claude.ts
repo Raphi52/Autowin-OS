@@ -552,13 +552,30 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // pas. Elles etaient donc payees a chaque appel sans jamais etre utilisees.
       '--disable-slash-commands'
     ]
+    /**
+     * LE WEB EST UNE CAPACITÉ DE BASE, sur TOUS les chemins d'agent.
+     *
+     * Décision explicite de l'utilisateur (2026-08-13) : « je veux que les agents soient florissants,
+     * expansifs, grandissants, libres ». Avant, aucune branche ne chargeait d'outil web — donc aucun
+     * agent d'Autowin ne pouvait lire une page, même en le demandant. Un agent qui ne peut pas aller
+     * voir un changelog, une documentation ou une note de version doit deviner : il inventait au lieu
+     * de lire, ce qui est exactement le défaut que l'on cherche à supprimer.
+     *
+     * Ce n'est PAS un oubli à refermer. Si un futur lecteur veut retirer ces deux outils, la question à
+     * poser est « qu'est-ce que l'utilisateur a demandé », et la réponse est : de les ouvrir.
+     *
+     * Ce que cela n'ouvre pas : ni écriture, ni shell. Le web ajoute la LECTURE du monde extérieur, il
+     * ne change aucun autre périmètre.
+     */
+    const OUTILS_WEB = 'WebFetch,WebSearch'
     // Cwd du spawn : celui de l'execution, ou le workspace en lecture seule pour un tour de chat.
     let readOnlyCwd: string | undefined
     if (execution) {
       // B — mode exécuteur : outils activés + permission autonome, dans le cwd borné. A (générique) :
       // read-only ⇒ pas d'écriture/Bash-mutation ; workspace-write/danger ⇒ édition + Bash.
       const write = execution.sandbox !== 'read-only'
-      const tools = write ? 'Read,Grep,Glob,Bash,Edit,Write,MultiEdit' : 'Read,Grep,Glob'
+      const tools =
+        (write ? 'Read,Grep,Glob,Bash,Edit,Write,MultiEdit' : 'Read,Grep,Glob') + ',' + OUTILS_WEB
       // `--tools` EN PLUS de `--allowedTools` : mesure du 2026-07-28 sur les journaux reels — 34
       // outils etaient DECLARES alors que 3 seulement etaient autorises en read-only. La doc du CLI
       // les distingue : `--tools` = « the list of available tools from the built-in set » (restreint
@@ -576,7 +593,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         tools
       )
     } else if (materialized) {
-      args.push('--tools', 'Read', '--allowedTools', 'Read')
+      args.push('--tools', 'Read,' + OUTILS_WEB, '--allowedTools', 'Read', 'WebFetch', 'WebSearch')
     } else {
       /**
        * TOUR DE CHAT : lecture seule du workspace, au lieu d'etre AVEUGLE.
@@ -602,22 +619,26 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             '--add-dir',
             readOnlyWorkspace,
             '--tools',
-            'Read,Grep,Glob',
+            'Read,Grep,Glob,' + OUTILS_WEB,
             '--allowedTools',
             'Read',
             'Grep',
-            'Glob'
+            'Glob',
+            'WebFetch',
+            'WebSearch'
           )
         } else {
           args.push(
             '--add-dir',
             readOnlyWorkspace,
             '--tools',
-            'Read,Grep,Glob,Bash',
+            'Read,Grep,Glob,Bash,' + OUTILS_WEB,
             '--allowedTools',
             'Read',
             'Grep',
             'Glob',
+            'WebFetch',
+            'WebSearch',
             // Bash n'est JAMAIS autorisé nu ici : uniquement par périmètres incapables de muter
             // (voir CHAT_READ_ONLY_SHELL). Sans eux, une question sur l'état du dépôt forçait une
             // orchestration, qui répond depuis un worktree isolé — donc à côté de la question.
@@ -625,8 +646,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           )
         }
       } else {
-        // Aucun workspace resolu : on garde le comportement d'origine plutot que de deviner un dossier.
-        args.push('--disallowedTools', '*')
+        // Aucun workspace resolu : plus rien a LIRE sur le disque, mais ce n'est pas une raison de
+        // rendre l'agent totalement aveugle. Il garde le web, donc il peut encore fonder une reponse
+        // au lieu de la deviner. Avant, `--disallowedTools '*'` le laissait sans aucun moyen.
+        // La MEME valeur aux deux drapeaux, comme dans les autres branches : `--tools` charge,
+        // `--allowedTools` autorise, et une asymetrie entre les deux laisse un outil declare mais
+        // refuse (ou l'inverse) sans que rien ne le signale.
+        args.push('--tools', OUTILS_WEB, '--allowedTools', OUTILS_WEB)
       }
     }
     /**
