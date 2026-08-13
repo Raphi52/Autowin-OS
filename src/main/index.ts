@@ -367,7 +367,7 @@ import { WatchdogEngine } from './task-manager/watchdog-engine'
 import { seedWatchdogTasks } from './task-manager/watchdog-seeds'
 import { planQuotaResume } from './quota-resume'
 import type { TaskUsageSettlementSink, WatchdogAppEvent } from './task-manager/types'
-import { ScheduledChatDispatcher, scheduledTaskBinding } from './task-manager/chat-dispatch'
+import { ScheduledChatDispatcher, scheduledTaskBinding, type ScheduledChatRuntime } from './task-manager/chat-dispatch'
 import { runWatchdogOrchestration } from './task-manager/watchdog-orchestration-adapter'
 import {
   isolatedRelayLaunchArguments,
@@ -378,8 +378,11 @@ import {
 } from './task-manager/windows-relay'
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
 import { registerVeilleIpc } from './veille/veille-ipc'
-import { executerPasseInterne } from './veille/passe'
-import { candidatsDuScoutInterne } from './veille/scout-interne'
+import { executerPasse } from './veille/passe'
+import { genererCandidatsEnConversation } from './veille/scout-visible'
+import { lancerScoutVeille } from './veille/scout-claude'
+import { candidatsInternesDuDepot } from './veille/audit-depot'
+import { dispatcherAvecVeille } from './veille/dispatch-veille'
 import {
   AutoKaizenSupervisor,
   incidentFromPilotEvent,
@@ -4624,7 +4627,9 @@ Le fil reprend ensuite normalement.`
   const relayScriptPath = app.isPackaged
     ? join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'autowin-task-relay.ps1')
     : join(app.getAppPath(), 'resources', 'autowin-task-relay.ps1')
-  const taskDispatcher = new ScheduledChatDispatcher({
+  // Runtime partagé : les tâches planifiées ET le scout de veille visible passent par le même
+  // chemin de conversation — un agent de fond reste un agent du cockpit, jamais un process muet.
+  const scheduledChatRuntime: ScheduledChatRuntime = {
     hasConversation: (conversationId) => Boolean(os.conversations.get(conversationId)),
     createConversation: (input) => os.conversations.create(input),
     bindConversation: (taskId, conversationId) => {
@@ -4683,7 +4688,8 @@ Le fil reprend ensuite normalement.`
         task,
         onLateMutationClaims
       )
-  })
+  }
+  const taskDispatcher = new ScheduledChatDispatcher(scheduledChatRuntime)
   const relay = new PowerShellWindowsRelay({
     scriptPath: relayScriptPath,
     executablePath: process.execPath,
@@ -4695,7 +4701,20 @@ Le fil reprend ensuite normalement.`
       userDataPath: app.getPath('userData')
     })
   })
-  scheduledTaskScheduler = new TaskScheduler(scheduledTasks, taskDispatcher, relay)
+  // La tâche planifiée « veille » passe ENFIN par le scheduler (le dispatcheur existait mais n'était
+  // branché nulle part — exposé-jamais-appelé). Sa passe : le scout interne en conversation VISIBLE,
+  // puis les scouts web + l'audit de corrections du dépôt, fusionnés dans le même stock.
+  const dispatcherVeille = dispatcherAvecVeille({
+    suivant: taskDispatcher,
+    executerPasse: async () => {
+      await genererCandidatsInternesVisibles()
+      return executerPasse({
+        lancerScout: lancerScoutVeille,
+        candidatsInternes: candidatsInternesDuDepot(os.executionWorkspace)
+      })
+    }
+  })
+  scheduledTaskScheduler = new TaskScheduler(scheduledTasks, dispatcherVeille, relay)
   // Le moteur de réveil OBSERVE et délègue à ce même scheduler : il n'y a qu'un chemin d'exécution.
   if (!AUTO_KAIZEN_SUPERVISOR_ENABLED) {
     watchdogEngine = new WatchdogEngine(
@@ -4758,18 +4777,26 @@ Le fil reprend ensuite normalement.`
   })
   // Veille concurrents : la vue Tickets lit le stock et marque un candidat. Deux gestes, pas plus —
   // elle ne peut pas FABRIQUER de candidat, ce qui contournerait le controle de citation.
+  /** Le binding du scout de veille : la config de rôles de l'utilisateur, jamais un défaut inventé. */
+  const bindingScoutVeille = (): { provider: string; model?: string } => {
+    const roleMap = os.roles.all()
+    const choisi = roleMap.subagent ?? roleMap.orchestrator ?? Object.values(roleMap)[0]
+    if (!choisi?.provider) throw new Error('aucun provider configuré pour le scout de veille')
+    return { provider: choisi.provider, ...(choisi.model ? { model: choisi.model } : {}) }
+  }
+  /** Le scout interne comme AGENT VISIBLE : conversation dédiée, tour interruptible, coût compté. */
+  const genererCandidatsInternesVisibles = (): ReturnType<typeof genererCandidatsEnConversation> =>
+    genererCandidatsEnConversation({
+      runtime: scheduledChatRuntime,
+      binding: bindingScoutVeille(),
+      racineDepot: os.executionWorkspace,
+      racineDonnees: ensureAutowinAppData(appDataRoot)
+    })
   registerVeilleIpc({
     ipc: ipcMain,
     assertTrusted: assertTrustedRendererSender,
-    // « En générer plus » : la passe interne seule (scout local en lecture), jamais les scouts web.
-    genererInterne: () =>
-      executerPasseInterne({
-        candidatsInternes: () =>
-          candidatsDuScoutInterne({
-            racineDepot: os.executionWorkspace,
-            racineDonnees: ensureAutowinAppData(appDataRoot)
-          })
-      })
+    // « En générer plus » : le scout interne seul (pas les scouts web), dans une conversation VISIBLE.
+    genererInterne: genererCandidatsInternesVisibles
   })
   registerTaskManagerIpc({
     ipc: ipcMain,
