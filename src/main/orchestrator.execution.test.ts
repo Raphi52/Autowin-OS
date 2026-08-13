@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { CostAggregator } from './dashboards/cost'
-import { Orchestrator } from './orchestrator'
+import { bindingDePhaseValide, Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
 import type {
   ExecutionEvidence,
@@ -703,5 +703,52 @@ describe('Orchestrator execution contract', () => {
     expect(evidenceSatisfiesTask('crée puis relis le fichier', [mut, inspection])).toBe(false)
     // mutation + vrai test (verification) → validé
     expect(evidenceSatisfiesTask('crée le fichier', [mut, verification])).toBe(true)
+  })
+})
+
+describe('instantané de rôles — opposable tant que sa cible existe', () => {
+  // Vécu par l'utilisateur : instantané sur `codex`, configuration reconfigurée en `claude`, et le
+  // run appelait quand même codex avant d'échouer sur un provider qu'il n'utilise plus. Le gel est
+  // VOULU (un run doit être jugé par la famille qui l'a produit) ; ce qui ne l'était pas, c'est qu'il
+  // survive à la disparition de sa cible, et qu'il le fasse en SILENCE.
+  const claude = { provider: 'claude', model: 'claude-opus-5' } as const
+  const codex = { provider: 'codex', model: 'gpt-5.6-sol' } as const
+
+  it('provider de l’instantané DISPARU → repli sur la config courante, et il est DIT', () => {
+    const r = bindingDePhaseValide(codex, claude, ['claude', 'gemini'])
+    expect(r.binding).toEqual(claude)
+    expect(r.note).toMatch(/instantané abandonné/)
+    expect(r.note).toContain('codex')
+    expect(r.note).toContain('claude')
+  })
+
+  it('instantané VALIDE mais divergent → il est conservé, la divergence est annoncée', () => {
+    const r = bindingDePhaseValide(codex, claude, ['claude', 'codex'])
+    // Conservé : c'est le gel, et il a une raison — le verdict doit rester comparable.
+    expect(r.binding).toEqual(codex)
+    expect(r.note).toMatch(/instantané du run/)
+    expect(r.note).toContain('configuration courante')
+  })
+
+  it('instantané IDENTIQUE à la config → aucune note, pas de bruit', () => {
+    const r = bindingDePhaseValide(claude, claude, ['claude'])
+    expect(r.binding).toEqual(claude)
+    expect(r.note).toBeUndefined()
+  })
+
+  it('aucun instantané → la config courante, sans note', () => {
+    const r = bindingDePhaseValide(undefined, claude, ['claude'])
+    expect(r.binding).toEqual(claude)
+    expect(r.note).toBeUndefined()
+  })
+
+  it('un modèle change à provider égal est aussi une divergence', () => {
+    const r = bindingDePhaseValide(
+      { provider: 'claude', model: 'claude-sonnet-5' },
+      claude,
+      ['claude']
+    )
+    expect(r.note).toMatch(/instantané du run/)
+    expect(r.binding.model).toBe('claude-sonnet-5')
   })
 })
