@@ -1,4 +1,5 @@
 import { applyEdit, decideEdit, editDiff } from './edit-file-command'
+import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { brainCorpusForWorkspace, scopeBrainRetrieval, workspaceSlug } from './brain-corpus-scope'
@@ -1094,6 +1095,34 @@ export class AppCommandBus {
               bindingOverride,
               runtimeSnapshot
             ) ?? null
+          // Publication Git DÉJÀ acquise pour ce checkpoint → le tour se clôt en SUCCÈS, sans
+          // repayer aucun provider. Mesuré sur conv-1145 (13/08) : le run avait publié — verdict
+          // green, publication complete, SHA poussé sur origin/auto/… — puis la reprise du
+          // checkpoint encore présent a été refusée (« publication complete déjà engagée ») et ce
+          // refus marquait le TOUR ENTIER failed : une réussite à 10 $ affichée comme un échec.
+          // Le démarrage clôt déjà ce cas en succès ; le chemin du chat fait désormais pareil.
+          if (resumable) {
+            const activity = this.os.getWorktreeActivity?.() as
+              | { agents?: unknown[] }
+              | unknown[]
+              | undefined
+            const agents = (Array.isArray(activity) ? activity : (activity?.agents ?? [])) as never
+            const preuve = publishedWorktreeProofForResume(resumable.runId, agents)
+            if (preuve) {
+              this.os.forgetResumableOrchestration?.(resumable.runId)
+              const sha = preuve.publishedSha ? ` (commit ${preuve.publishedSha.slice(0, 8)})` : ''
+              return {
+                ok: true,
+                data: {
+                  result:
+                    `Publication Git déjà acquise${sha} : le travail de ce checkpoint est déjà ` +
+                    `mergé et poussé. Reprise annulée sans nouvel appel provider.`,
+                  publication: preuve.publication,
+                  ...(preuve.publishedSha ? { publishedSha: preuve.publishedSha } : {})
+                }
+              }
+            }
+          }
           // Repli quand aucune reprise STRICTE n'existe (le libellé a changé entre deux tours) :
           // on récupère quand même l'analyse en lecture seule déjà produite dans CETTE
           // conversation, plutôt que de la repayer. Mesuré sur conv-1061 : « scout … vue Chat »

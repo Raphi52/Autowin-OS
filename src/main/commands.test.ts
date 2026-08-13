@@ -1607,6 +1607,50 @@ describe('AppCommandBus command execution policy', () => {
     }
   })
 
+  it('clot en SUCCES un checkpoint dont la publication Git est deja acquise, sans repayer', async () => {
+    // Mesure sur conv-1145 (13/08) : le run run-5f5a75a0208d-1 avait PUBLIE — verdict green,
+    // publication complete, SHA 30a1b368 pousse sur origin/auto/… — puis la reprise du checkpoint
+    // encore present a ete refusee (« publication complete deja engagee ») et ce refus a marque le
+    // TOUR ENTIER failed. L'utilisateur voyait rouge la ou git disait vert : une reussite a 10 $
+    // affichee comme un echec. Le demarrage sait deja clore ce cas en succes ; le chemin du CHAT
+    // doit faire pareil.
+    const os = fakeOs()
+    const forget = vi.fn()
+    const runTask = vi.fn()
+    os.resumableOrchestrationForTask = () => ({
+      runId: 'run-publie',
+      task: '/build implémente le routage shadow',
+      conversationId: 'conv-1',
+      phaseOutputs: [{ phase: 'build', text: 'chantier livré' }],
+      startedAt: 1,
+      updatedAt: 2
+    })
+    os.forgetResumableOrchestration = forget
+    os.getWorktreeActivity = () => ({
+      agents: [
+        {
+          agentId: 'run-publie',
+          verdict: 'green',
+          publication: 'complete',
+          publishedSha: '30a1b3687957e95796f8814902390b6fb97deb0e'
+        }
+      ]
+    })
+    os.runTask = runTask
+
+    const result = await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: '/build implémente le routage shadow' },
+      'conv-1'
+    )
+
+    expect(result).toMatchObject({ ok: true })
+    expect(JSON.stringify(result)).toContain('30a1b368')
+    // AUCUN provider repaye, et le checkpoint perime est retire.
+    expect(runTask).not.toHaveBeenCalled()
+    expect(forget).toHaveBeenCalledWith('run-publie')
+  })
+
   it("conserve le checkpoint si la reprise est refusee avant d'entrer dans l'orchestrateur", async () => {
     const os = fakeOs()
     const forget = vi.fn()
