@@ -50,7 +50,12 @@ export interface OrchestrateTurnPersistence {
   /** Résultat de fichier produit pendant l’étape, affiché comme tel dans le même tour. */
   artifact(artifact: ChatArtifact): void
   /** Clôture NOMINALE : texte de livraison (si rien n'a été streamé) puis `done`. */
-  succeed(result?: { result?: string }): void
+  succeed(result?: {
+    result?: string
+    valid?: boolean
+    gateBlocked?: boolean
+    gateReasons?: unknown
+  }): void
   /** Clôture d'ÉCHEC/ANNULATION : une erreur devient VISIBLE au lieu d'être jetée par le `void`. */
   fail(error: string, aborted: boolean): void
 }
@@ -165,18 +170,29 @@ export function createOrchestrateTurnPersistence(
     succeed(result) {
       if (!opened || closed) return
       closed = true
+      const deliveryFailed = result?.gateBlocked === true || result?.valid === false
       for (const actionId of resumedActionIds)
         emit({
           kind: 'result',
           actionId,
           name: 'orchestrate',
-          ok: true,
-          data: { resumed: true }
+          ok: !deliveryFailed,
+          data: { resumed: true, ...(deliveryFailed && { gateBlocked: true }) }
         })
       const closing = result?.result?.trim()
       if (closing && !streamedText.trim())
         emit({ kind: 'delta', streamId: `${turnId}:closing`, text: closing })
-      emit({ kind: 'done' })
+      if (deliveryFailed) {
+        const reasons = Array.isArray(result?.gateReasons)
+          ? result.gateReasons.filter((reason): reason is string => typeof reason === 'string')
+          : []
+        emit({
+          kind: 'failed',
+          error: reasons.join(' ; ') || closing || 'Livraison refusée par le gate Autowin.'
+        })
+      } else {
+        emit({ kind: 'done' })
+      }
     },
     fail(error, aborted) {
       if (!opened || closed) return

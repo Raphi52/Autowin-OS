@@ -67,6 +67,17 @@ import {
   type IndependentLearningAttestation
 } from './outcome-learning-proposal'
 import { PIPELINE_PHASES, type PipelinePhase } from './skill-pipeline'
+import {
+  ROOT_DOD,
+  rootExecutionRequirements,
+  rootRequirementChecks
+} from './root-execution-contract'
+import { isMutationTask } from './task-mutation-classifier'
+export {
+  classifyMutationConfidence,
+  isMutationTask,
+  type MutationConfidence
+} from './task-mutation-classifier'
 import { routeSkillRequest } from './skill-routing'
 import { combinePhaseInstruction, type PhaseInstructionOverride } from './workflow-instruction'
 import {
@@ -158,48 +169,14 @@ export function lireVerdictJuge(text: string): boolean {
 }
 
 /**
- * Le retour judge rouge → build est exécuté par la boucle de réparation enrichie du moteur, pas par
- * le marcheur générique. Le retirer ici donne au devis et à l'exécution la même topologie effective.
+ * Les arêtes rouges décrivent une reprise possible, mais ne la déclenchent jamais seules. Les
+ * retirer du parcours automatique garantit qu'un nouveau tour humain précède toute nouvelle dépense.
  */
-function sansRetourReparationJuge(graph: WorkflowGraph): WorkflowGraph {
+function sansRetoursAutomatiques(graph: WorkflowGraph): WorkflowGraph {
   return {
     ...graph,
-    edges: graph.edges.filter((edge) => {
-      if (edge.when !== 'red') return true
-      const depuis = graph.nodes.find((node) => node.id === edge.from)?.phase
-      const vers = graph.nodes.find((node) => node.id === edge.to)?.phase
-      return !(depuis === 'judge' && vers === 'build')
-    })
+    edges: graph.edges.filter((edge) => edge.when !== 'red')
   }
-}
-
-/**
- * Phases situées entre le build ciblé par un retour rouge et le juge qui l'a déclenché.
- * Le build est exécuté par la réparation enrichie ; le juge par le gate final. Ce tableau est donc
- * exactement le milieu à rejouer (par exemple `clean` dans build → clean → judge).
- */
-function phasesApresBuildDeReparation(graph: WorkflowGraph): PipelinePhase[] {
-  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
-  const retour = graph.edges.find((edge) => {
-    if (edge.when !== 'red') return false
-    return byId.get(edge.from)?.phase === 'judge' && byId.get(edge.to)?.phase === 'build'
-  })
-  if (!retour) return []
-  const phases: PipelinePhase[] = []
-  const vus = new Set<string>([retour.to])
-  let courant = retour.to
-  for (let pas = 0; pas < graph.nodes.length; pas++) {
-    const suivantes = graph.edges.filter((edge) => edge.from === courant && edge.when === 'always')
-    if (suivantes.length !== 1) return []
-    courant = suivantes[0].to
-    if (courant === retour.from) return phases
-    if (vus.has(courant)) return []
-    vus.add(courant)
-    const node = byId.get(courant)
-    if (!node || node.phase === 'judge') return []
-    phases.push(node.phase)
-  }
-  return []
 }
 
 /** Nombre d'appels réellement promis par le graphe, panels et synthèses compris. */
@@ -794,14 +771,6 @@ export interface RunCloser {
   }): Promise<void>
 }
 
-const MUTATION_STEM =
-  'ajout|add|modifi|chang|corrig|fix|cre|create|implement|refactor|supprim|remove|renomm|rename|update|build|ger|ecri|write|edit|patch|apply|delete|move|remplac|configur|repar|nettoi|deplac|mets|met|fai'
-const MUTATION_TASK = new RegExp(`\\b(?:${MUTATION_STEM})\\w*`, 'i')
-const NEGATED_MUTATION = new RegExp(
-  `\\b(?:sans(?:\\s+rien)?\\s+(?:\\w+\\s+){0,2}|n['e]?\\s*(?:\\w+\\s+){0,2})(?:${MUTATION_STEM})\\w*(?:\\s+pas)?`,
-  'gi'
-)
-
 /** B4 — plafond du texte d'une phase RÉINJECTÉ dans le contexte de la phase suivante. */
 const PHASE_CONTEXT_CAP = 2000
 
@@ -813,130 +782,6 @@ const PHASE_CONTEXT_CAP = 2000
  * un aperçu). La sortie complète reste dans `phaseOutputs` + la trace des sous-agents.
  */
 const JUDGE_PHASE_CAP = 6000
-
-/**
- * Connecteurs de clause utilisés pour repérer une SECONDE action non couverte par le préfixe
- * lecture-seule reconnu (voir `classifyMutationConfidence`).
- */
-// Conflit de merge résolu en gardant les DEUX apports, qui ne s'opposaient pas : un côté enrichissait
-// le découpage en clauses (connecteurs d'opposition + ponctuation de fin de phrase), l'autre ajoutait
-// trois constantes indépendantes. Choisir un camp aurait perdu du travail utile dans les deux sens.
-const CLAUSE_SPLIT =
-  /\b(?:et|puis|then|and|apres|après|mais|but|cependant|however)\b|[;,]|[.!?]\s+/gi
-/**
- * Apostrophes typographiques ramenées à l'apostrophe droite AVANT toute détection de négation.
- * `NEGATED_MUTATION` n'accepte que `'` : « n’implémente rien » — la forme que produit tout clavier
- * français et que portent les prompts réels — n'était donc PAS reconnue comme une négation, et la
- * tâche basculait en mutation à cause du verbe qu'elle prétendait justement exclure.
- */
-const APOSTROPHES = /[‘’ʼ]/g
-/** Sentinelle de campagne en tête de prompt : « [claude-propre-A-chat] … ». */
-const SENTINEL_PREFIX = /^\[[^\]]{0,160}\]\s*/
-/** Phases dont le contrat EST la lecture seule, nommées en tête de demande (slash facultatif). */
-const PHASE_LECTURE_SEULE_LEAD = /^\/?(?:scout|frame|judge)\b/i
-/** Verbes/participes lecture-seule reconnus À L'INTÉRIEUR d'une clause secondaire. */
-const READ_ONLY_STEM =
-  'analys|audit|cadr|document|expliqu|inspect|review|resume|resum|repond|decri|lis|lire|liste|montre|affiche'
-const READ_ONLY_CLAUSE = new RegExp(`^(?:${READ_ONLY_STEM})\\w*\\b`, 'i')
-const READ_ONLY_DELIVERABLE_CLAUSE =
-  /^(?:produi|fourni)\w*\s+(?:(?:le|la|un|une)\s+)?(?:cadrage|analyse|audit|resume|documentation)\b/i
-const NEGATED_OBJECT_REMAINDER = /^(?:de|du|des|le|la|les|un|une|aucun|aucune|rien)\b/i
-
-/**
- * #2 — verdict EXPLICITE de confiance sur la nature (mutation ou non) d'une tâche, au lieu d'un
- * booléen qui fait passer une heuristique textuelle pour une certitude. Trois issues :
- *  - 'mutation'  : un verbe de mutation est présent hors négation → certain.
- *  - 'read-only' : la tâche ENTIÈRE (chaque clause) matche un préfixe lecture-seule reconnu →
- *                  confiant, mais jamais absolu (langage naturel).
- *  - 'uncertain' : ni l'un ni l'autre — p.ex. une clause de tête « lecture seule » suivie d'une
- *                  seconde clause (« puis », « et », « then »...) dont le verbe n'est PAS reconnu
- *                  comme lecture-seule. C'est exactement le faux-négatif visé : une paraphrase ou
- *                  un verbe de mutation absent du dictionnaire (« puis écrase le fichier ») ne doit
- *                  jamais être absous par le préfixe lecture-seule du début de phrase.
- * Fail-safe : tout appelant qui a besoin d'un booléen (`isMutationTask`) doit traiter 'uncertain'
- * comme une mutation — le côté sûr (worktree isolé + preuve exigée), jamais le côté permissif.
- */
-export type MutationConfidence = 'mutation' | 'read-only' | 'uncertain'
-
-export function classifyMutationConfidence(task: string): MutationConfidence {
-  // Kaizen est contractuellement un audit natif en lecture seule, quel que soit le vocabulaire
-  // cité dans sa cible (ex. « pourquoi le modèle a voulu modifier X »).
-  if (/^\/kaizen(?=\s|$)/i.test(task.trim())) return 'read-only'
-  if (/^\/(?:scout|frame|judge)(?=\s|$)/i.test(task.trim())) return 'read-only'
-  // Le contrat de phase doit être reconnu AVANT le test de mutation, sinon un simple mot comme
-  // « améliorations » bascule un scout en écriture. Mesuré le 2026-08-12 : les prompts réels de la
-  // campagne portent une sentinelle et pas de slash — « [claude-propre-A-observatory] scout des
-  // améliorations de la vue Observatory … N'implémente rien à ce tour. » — donc le garde ci-dessus
-  // ne s'appliquait pas. La tâche devenait une mutation, et le pré-gate réclamait à la phase une
-  // preuve d'écriture que `sandboxForPhase` lui interdit précisément de produire.
-  const sansSentinelle = task.trim().replace(SENTINEL_PREFIX, '')
-  if (PHASE_LECTURE_SEULE_LEAD.test(sansSentinelle)) {
-    const normaliseLead = sansSentinelle
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .replace(APOSTROPHES, "'")
-      .toLowerCase()
-      .replace(NEGATED_MUTATION, ' ')
-    // Le contrat ne couvre que SA clause. « scout … puis implémente-les » reste une mutation :
-    // une clause suivante porteuse d'un verbe d'écriture invalide le contrat.
-    const [, ...clausesSuivantes] = normaliseLead
-      .split(CLAUSE_SPLIT)
-      .map((clause) => clause.trim())
-      .filter(Boolean)
-    if (!clausesSuivantes.some((clause) => MUTATION_TASK.test(clause))) return 'read-only'
-  }
-  const normalized = task
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(APOSTROPHES, "'")
-    .toLowerCase()
-  const withoutNegations = normalized.replace(NEGATED_MUTATION, ' ')
-  if (MUTATION_TASK.test(withoutNegations)) return 'mutation'
-  // Fail-closed : le langage naturel ne peut pas fournir une liste exhaustive des façons de
-  // demander une écriture ("write", "patch", "apply", "fais…"). Seule une négation explicite
-  // ET un contrat de lecture identifiable autorisent le chemin partagé ; une négation mêlée à un
-  // ordre positif inconnu reste donc isolée.
-  const explicitReadOnly =
-    withoutNegations !== normalized &&
-    /\b(?:analys|audit|cadr|document|expliqu|inspect|lecture seule|review)\w*/i.test(normalized)
-  const simpleReadOnlyLead =
-    /^(?:analys|audit|expliqu|inspect|review|cadr|document|resume|decri)\w*\b/i.test(normalized)
-  if (!explicitReadOnly && !simpleReadOnlyLead) return 'mutation'
-  // Une negation explicite ne certifie PAS les actions suivantes. Exemple falsifie :
-  // « Analyse sans modifier puis publie une release » conserve une mutation positive inconnue.
-  // Toutes les clauses passent donc le meme examen, y compris apres une negation.
-  const clauses = normalized
-    .split(CLAUSE_SPLIT)
-    .map((clause) => clause.trim())
-    .filter(Boolean)
-  const allClausesReadOnly = clauses.every((clause) => {
-    const withoutNegatedMutation = clause.replace(NEGATED_MUTATION, ' ').trim()
-    if (
-      READ_ONLY_CLAUSE.test(withoutNegatedMutation) ||
-      READ_ONLY_DELIVERABLE_CLAUSE.test(withoutNegatedMutation)
-    ) {
-      return true
-    }
-    const containedNegatedMutation = withoutNegatedMutation !== clause
-    return (
-      containedNegatedMutation &&
-      (!withoutNegatedMutation || NEGATED_OBJECT_REMAINDER.test(withoutNegatedMutation))
-    )
-  })
-  return allClausesReadOnly ? 'read-only' : 'uncertain'
-}
-
-/**
- * J3 — une tâche est une MUTATION seulement si un verbe de mutation apparaît HORS d'une négation.
- * « Ne modifie pas de code » (cadrage) ne doit PAS exiger de preuve de mutation → sinon faux-red.
- * On neutralise les clauses négatives « ne … pas » / « n'… pas » avant de tester.
- *
- * BEST-EFFORT, jamais une certitude : dérive du verdict `classifyMutationConfidence` et traite
- * 'uncertain' comme mutation (fail-safe — voir sa docstring pour le faux-négatif visé).
- */
-export function isMutationTask(task: string): boolean {
-  return classifyMutationConfidence(task) !== 'read-only'
-}
 
 /**
  * Les droits suivent la RESPONSABILITE de la phase, pas seulement le verbe de la demande.
@@ -1437,16 +1282,20 @@ export class Orchestrator {
             }
           }
         : undefined
-    const appelsWorkflow = workflowGraph
-      ? appelsRequisParWorkflow(workflowGraph, impose)
+    const workflowWithoutAutomaticRecovery = workflowGraph
+      ? sansRetoursAutomatiques(workflowGraph)
+      : undefined
+    const appelsWorkflow = workflowWithoutAutomaticRecovery
+      ? appelsRequisParWorkflow(workflowWithoutAutomaticRecovery, impose)
       : undefined
     if (executionQuote && workflow?.explicit && workflowGraph) {
       // Une sélection manuelle engage le graphe affiché. Le devis doit donc refléter ses phases et
       // la borne de reprise qu'il porte, puis lui réserver les places nécessaires sans dépasser le
       // plafond d'appels déjà fixé par le régime / l'utilisateur.
       executionQuote.phases = [...phases]
-      const graphRecoveries = recoveriesFromGraph(workflowGraph)
-      if (graphRecoveries !== undefined) executionQuote.limits.maxRecoveries = graphRecoveries
+      // Une arête rouge dìrit le chemin de reprise à afficher, pas l'autorisation de repayer ce
+      // chemin sans nouvelle stratégie humaine. Les reprises automatiques sont donc toujours nulles.
+      executionQuote.limits.maxRecoveries = 0
       const mandatory = appelsWorkflow!
       const maxPanel = Math.max(
         impose?.judgeMembers ?? 1,
@@ -1499,7 +1348,7 @@ export class Orchestrator {
         // qui serait ensuite coupé en plein milieu, faute de places.
         ...(workflowGraph
           ? {
-              worstCaseNodeExecutions: worstCaseNodeExecutions(workflowGraph),
+              worstCaseNodeExecutions: worstCaseNodeExecutions(workflowWithoutAutomaticRecovery!),
               worstCaseProviderCalls: appelsWorkflow
             }
           : {})
@@ -1934,6 +1783,26 @@ export class Orchestrator {
         )
         produced.result = aligned.result
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
+      }
+      const publishedCommitSha =
+        projectPublication?.publishedSha ??
+        (typeof finalized === 'object' && finalized !== null
+          ? ((finalized as { publishedSha?: string; agentSha?: string }).publishedSha ??
+            (finalized as { agentSha?: string }).agentSha)
+          : undefined) ??
+        finalActivity?.publishedSha
+      if (
+        green &&
+        rootExecutionRequirements(task).commit &&
+        !publishedCommitSha?.trim() &&
+        produced
+      ) {
+        green = false
+        produced.valid = false
+        produced.gateBlocked = true
+        if (!produced.gateReasons.includes('Commit demande sans identite Git publiee verifiable')) {
+          produced.gateReasons.push('Commit demande sans identite Git publiee verifiable')
+        }
       }
       // Clôture auto APRÈS la fusion (le travail est dans la base) et seulement si vert.
       // La clôture est attendue pour que le statut distant soit déterministe avant la fin du run.
@@ -2781,7 +2650,7 @@ export class Orchestrator {
      * fois, et doublerait silencieusement le coût que le devis a provisionné.
      */
     const graphePilote: WorkflowGraph | undefined = grapheBrut
-      ? sansRetourReparationJuge(grapheBrut)
+      ? sansRetoursAutomatiques(grapheBrut)
       : undefined
     const suitePhases = function* (): Generator<PipelinePhase> {
       if (!graphePilote?.nodes?.length) {
@@ -3604,7 +3473,7 @@ export class Orchestrator {
       usage: lastUsage,
       executionEvidence: aggregatedEvidence
     })
-    let exec = buildExec()
+    const exec = buildExec()
     let lastJudgeText = ''
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
@@ -3620,8 +3489,8 @@ export class Orchestrator {
       learningAttestations: IndependentLearningAttestation[]
     }> => {
       // Les contrôles locaux falsifiables passent AVANT le juge payant. Un livrable sans preuve ou
-      // bloqué par pre-green part directement en réparation : le juge ne peut rien apprendre qu'un
-      // oracle local vient déjà de réfuter.
+      // bloqué par pre-green clôture rouge, ou rejoint une reprise explicitement dessinée : le juge
+      // ne peut rien apprendre qu'un oracle local vient déjà de réfuter.
       const evidenceOk = evidenceSatisfiesTask(task, exec.executionEvidence)
       const hookOutcome = await this.hooks.run('pre-green', {
         task,
@@ -3631,9 +3500,18 @@ export class Orchestrator {
         evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
         evidence: exec.executionEvidence
       })
+      const rootChecks = rootRequirementChecks(task, { phases: phaseOutputs }).filter(
+        (check) => check.label !== ROOT_DOD.commit
+      )
+      if (isMutationTask(task) && !rootChecks.some((check) => check.label === ROOT_DOD.mutation)) {
+        rootChecks.push({ label: ROOT_DOD.mutation, checked: evidenceOk })
+      }
       const preGate = evaluateClosure({
         status: evidenceOk && !hookOutcome.blocked ? 'green' : 'red',
-        dod: [{ checked: evidenceOk, hasContent: true }]
+        dod:
+          rootChecks.length > 0
+            ? rootChecks.map((check) => ({ ...check, hasContent: true }))
+            : [{ checked: evidenceOk, hasContent: true }]
       })
       if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
       if (preGate.blocked) {
@@ -3989,56 +3867,26 @@ export class Orchestrator {
       }
     }
 
-    // B5 — pour une MUTATION bloquée, UNE réparation ciblée (feedback = raisons du gate) AVANT
-    // d'escalader à l'humain (résolveur avant interruption). Bornée à 1, jamais de boucle infinie.
-    // Un graphe qui dessine « juge rouge → build, au plus N fois » PILOTE ce nombre : c'est la même
-    // boucle, nommée à l'écran au lieu d'être déduite du régime.
+    // Une arête rouge reste visible dans le workflow, mais n'autorise pas une relance automatique :
+    // une vraie stratégie nouvelle doit arriver d'un nouveau tour humain, avant tout appel provider.
     const graphRecoveries = grapheBrut ? recoveriesFromGraph(grapheBrut) : undefined
-    const allowedRecoveries = isMutationTask(task)
-      ? grapheBrut
-        ? (graphRecoveries ?? 0)
-        : (this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
-      : 0
-    const MAX_ATTEMPTS = 1 + Math.max(0, Math.floor(allowedRecoveries))
-    let valid = false
-    let gate!: ReturnType<typeof evaluateClosure>
-    let learningAttestations: IndependentLearningAttestation[] = []
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      if (attempt > 0) {
-        // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
-        // donc son panel, sa synthèse, sa concurrence et sa télémétrie. L'ancien chemin spécialisé
-        // appelait toujours le binding `subagent` seul ; devis et graphe promettaient alors trois
-        // membres tandis que l'exécution n'en payait qu'un.
-        phaseContext.push(
-          `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
-        )
-        // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
-        // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.
-        prevSessionId = undefined
-        await executePipelinePhase('build')
-        // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
-        // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
-        // codé en dur build → judge.
-        for (const phase of grapheBrut ? phasesApresBuildDeReparation(grapheBrut) : []) {
-          await executePipelinePhase(phase)
-        }
-        exec = buildExec()
-      }
-      const r = await judgeAndGate()
-      valid = r.valid
-      gate = r.gate
-      learningAttestations = r.learningAttestations
-      if (!gate.blocked) break
+    const judged = await judgeAndGate()
+    if (judged.gate.blocked && (graphRecoveries ?? 0) > 0) {
+      judged.gate.reasons.push(
+        'Reprise automatique desactivee : une strategie nouvelle doit etre fournie avant un nouvel appel.'
+      )
     }
 
     return {
       task,
       result: phaseOutputs.length > 0 ? exec.text : lastJudgeText,
-      valid,
-      gateBlocked: gate.blocked,
-      gateReasons: gate.reasons,
+      valid: judged.valid,
+      gateBlocked: judged.gate.blocked,
+      gateReasons: judged.gate.reasons,
       phaseOutputs,
-      ...(learningAttestations.length ? { learningAttestations } : {}),
+      ...(judged.learningAttestations.length
+        ? { learningAttestations: judged.learningAttestations }
+        : {}),
       brainQuery,
       brainRetrievedAt,
       brainNavigation: scopedBrain.navigation,

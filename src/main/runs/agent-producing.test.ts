@@ -11,9 +11,14 @@ import { runIsProducing, SILENCE_TOLERE_MS } from './run-reattach'
  * pas. Le journal est le seul témoin de production qu'on ait sur disque.
  */
 const MAINTENANT = 1_000_000_000
-const agent = (token: string, journalPath?: string): { token: string; journalPath?: string } => ({
+const agent = (
+  token: string,
+  journalPath?: string,
+  active?: boolean
+): { token: string; journalPath?: string; active?: boolean } => ({
   token,
-  ...(journalPath ? { journalPath } : {})
+  ...(journalPath ? { journalPath } : {}),
+  ...(active === undefined ? {} : { active })
 })
 
 describe('produire n’est pas exister', () => {
@@ -35,6 +40,17 @@ describe('produire n’est pas exister', () => {
       '/j/b.jsonl': MAINTENANT - 5_000
     }
     expect(runIsProducing(etat, MAINTENANT, (p) => dates[p])).toBe(true)
+  })
+
+  it('un ancien journal inactif recent ne masque pas le blocage de l agent courant', () => {
+    const etat = {
+      agents: [agent('courant', '/j/current.jsonl', true), agent('historique', '/j/old.jsonl', false)]
+    }
+    const dates: Record<string, number> = {
+      '/j/current.jsonl': MAINTENANT - 60 * 60_000,
+      '/j/old.jsonl': MAINTENANT - 1_000
+    }
+    expect(runIsProducing(etat, MAINTENANT, (p) => dates[p])).toBe(false)
   })
 
   it('la frontière du seuil ne bascule pas à l’envers', () => {

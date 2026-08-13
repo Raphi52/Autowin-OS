@@ -509,6 +509,29 @@ describe('Orchestrator — flip live worktree', () => {
     })
   })
 
+  it('refuse la cloture verte si un commit demande ne produit aucune identite Git', async () => {
+    const lifecycle: RunLifecycleEvent[] = []
+    const { orch } = makeOrchestrator({
+      begin: () => 'C:\\wt\\run-sans-sha',
+      end: () => ({ outcome: 'merged' as const, agentId: 'run-sans-sha', committed: true })
+    })
+
+    const result = await runWithLifecycle(
+      orch,
+      'modifie le projet et publie un commit',
+      (event) => lifecycle.push(event)
+    )
+
+    expect(result.gateBlocked).toBe(true)
+    expect(result.gateReasons).toContain(
+      'Commit demande sans identite Git publiee verifiable'
+    )
+    expect(lifecycle.at(-1)).toMatchObject({
+      stage: 'closure',
+      closure: { status: 'red' }
+    })
+  })
+
   it('N1 — observe le dépôt de base et la clôture, sans événement Git', async () => {
     const lifecycle: RunLifecycleEvent[] = []
     const { orch } = makeOrchestrator({ begin: () => undefined, end: () => undefined })

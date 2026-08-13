@@ -16,7 +16,9 @@ describe('ExecutionQuote', () => {
         maxTotalTokens: 6_000_000,
         // frame + build + juge, puis une reparation et son re-jugement autorises par maxRecoveries=1.
         maxAgents: 5,
-        maxConcurrency: 3
+        maxConcurrency: 3,
+        maxRecoveries: 0,
+        spendEnforcement: 'blocking'
       }
     })
   })
@@ -34,7 +36,8 @@ describe('ExecutionQuote', () => {
       maxFreshTokens: 2_000_000,
       maxTotalTokens: 15_000_000,
       maxConcurrency: 4,
-      maxRecoveries: 1
+      maxRecoveries: 0,
+      spendEnforcement: 'blocking'
     })
   })
 
@@ -71,10 +74,10 @@ describe('ExecutionQuote', () => {
     })
 
     expect(allocation).toMatchObject({
-      phaseMembers: { frame: 1 },
+      phaseMembers: { frame: 2 },
       judgeMembers: 1,
       maxGreedyNodes: 1,
-      reservedMandatoryAgents: 5,
+      reservedMandatoryAgents: 3,
       estimatedMaxAgents: 5
     })
   })
@@ -96,8 +99,8 @@ describe('ExecutionQuote', () => {
     expect(allocation).toMatchObject({
       phaseMembers: { scout: 1, frame: 1, terrain: 1 },
       judgeMembers: 1,
-      maxGreedyNodes: 2,
-      reservedMandatoryAgents: 8,
+      maxGreedyNodes: 4,
+      reservedMandatoryAgents: 6,
       estimatedMaxAgents: 10
     })
   })

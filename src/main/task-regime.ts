@@ -93,9 +93,15 @@ export function regimePhases(task: string): PipelinePhase[] {
   // derniere ne fait que RESTREINDRE les phases d'une tache deja partie en orchestration — elle ne
   // decide jamais d'orchestrer, precisement pour ne pas rejouer la regression du 2026-07-28.
   // Une phase NOMMÉE est AUTORITAIRE : l'utilisateur (ou le modèle) l'a désignée, on ne discute pas.
-  const namedPhase = routeSkillRequest(task)?.explicitPhase ?? matchExplicitPhase(task) ?? undefined
-  if (namedPhase === 'judge') return []
-  if (namedPhase) return [namedPhase]
+  const explicitSlashPhase = routeSkillRequest(task)?.explicitPhase
+  if (explicitSlashPhase === 'judge') return []
+  if (explicitSlashPhase) return [explicitSlashPhase]
+
+  const namedPhase = matchExplicitPhase(task) ?? undefined
+  const naturalIntent = matchIntentPhase(task)?.phase
+  if (namedPhase && naturalIntent === namedPhase) {
+    return namedPhase === 'judge' ? [] : [namedPhase]
+  }
 
   const regime = classifyRegime(task)
   // AMPUTATION D'UN RÉGIME CRITIQUE — défaut relevé par l'audit du 2026-07-29 :
@@ -106,12 +112,17 @@ export function regimePhases(task: string): PipelinePhase[] {
   // Une phase NOMMÉE, elle, garde le droit de réduire (au-dessus) : c'est une décision explicite.
   if (regime === 'critical') return [...REGIME_PHASES[regime]]
 
-  const intentPhase = matchIntentPhase(task)?.phase
+  const intentPhase = naturalIntent
   // `judge` est la closure externe permanente de l'orchestrateur, pas une phase worker : une demande
   // d'audit saute donc les phases d'exécution et lance ce juge une seule fois.
   if (intentPhase === 'judge') return []
   if (intentPhase) return [intentPhase]
-  return [...REGIME_PHASES[regime]]
+  const fallback = [...REGIME_PHASES[regime]]
+  // Une phase naturelle suivie d'une seconde action n'est pas une commande de reduction. Elle reste
+  // visible, puis le regime poursuit le travail demande (ex. scout -> correction).
+  return namedPhase && namedPhase !== 'judge'
+    ? [namedPhase, ...fallback.filter((phase) => phase !== namedPhase)]
+    : fallback
 }
 
 /** Exposé pour test/observabilité : phases d'un régime donné. */

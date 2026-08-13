@@ -38,7 +38,7 @@ describe('AgentPilot chat streaming', () => {
     const events: PilotEvent[] = []
 
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
-      [{ role: 'user', content: 'scout la vue Chat' }],
+      [{ role: 'user', content: 'memorise ce resultat puis reponds' }],
       (event) => events.push(event),
       undefined,
       6,
@@ -137,7 +137,7 @@ describe('AgentPilot chat streaming', () => {
           gateBlocked: false,
           reused: false,
           runPath: 'C:/runs/conv/build-settings-workspace/RUN.md',
-          result: 'Le worker indique encore RUN open et recommande de lancer judge.'
+          result: 'Tests cibles 11/11 verts.\nNext: commit final puis livraison.'
         }
       })
     }
@@ -157,8 +157,9 @@ describe('AgentPilot chat streaming', () => {
     const done = events.find((event) => event.kind === 'done')
     expect(done?.text).toContain('Workflow terminé')
     expect(done?.text).toContain('aucune autre orchestration')
-    expect(done?.text).not.toContain('RUN open')
-    expect(done?.text).not.toContain('lancer judge')
+    expect(done?.text).toContain('Tests cibles 11/11 verts.')
+    expect(done?.text).not.toContain('Next:')
+    expect(done?.text).not.toContain('commit final')
   })
 
   it('ne forge pas une clôture verte depuis un outcome incomplet', async () => {

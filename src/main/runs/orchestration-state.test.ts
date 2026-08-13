@@ -581,6 +581,30 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     ).toEqual(['run-paid-new', 'run-paid-old', 'run-zero'])
   })
 
+  it('conserve un run interrompu pour diagnostic mais ne le reprend jamais', () => {
+    const interrupted: OrchestrationRunState = {
+      ...state('run-interrupted', 9000, ['frame']),
+      conversationId: 'conv-interrupted',
+      terminal: {
+        status: 'interrupted',
+        reason: 'provider disparu',
+        decidedAt: 9000
+      }
+    }
+    saveOrchestrationState(root, interrupted)
+    const loaded = loadOrchestrationStates(root)
+
+    expect(loaded).toHaveLength(1)
+    expect(pickOrchestrationsToResume(loaded)).toEqual([])
+    expect(
+      pickResumeForTask(loaded, {
+        task: 'ajoute un bouton',
+        conversationId: 'conv-interrupted',
+        nowMs: 9001
+      })
+    ).toBeNull()
+  })
+
   it('elit un seul workflow pour deux checkpoints de la meme demande canonique', () => {
     const older: OrchestrationRunState = {
       ...state('run-duplicate-old', 1000, ['frame']),
