@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { shouldPersistClosingText } from './turn-closing'
 import { appendTurnEvent, listUnfinishedTurns } from './turn-journal'
 
 /**
@@ -111,13 +112,13 @@ describe('cablage — le texte du `done` atterrit dans le message', () => {
     expect(branch).toContain("kind: 'delta'")
   })
 
-  it('ne duplique JAMAIS un texte deja diffuse en streaming ou en fallback', () => {
-    const source = main()
-    const branch = source.slice(source.indexOf("else if (pilotEvent.kind === 'done')"))
-    // `think` est lui aussi persisté comme delta fallback : le `done` ne doit pas le recopier.
-    expect(source).toContain('let durableResponseTextSeen = Boolean(streamedSpoken.trim())')
-    expect(source).toContain("pilotEvent.kind === 'think' && pilotEvent.text")
-    expect(branch).toMatch(/if \(closing && !durableResponseTextSeen\)/)
+  it('conserve une cloture structuree meme apres un preambule deja diffuse', () => {
+    expect(shouldPersistClosingText(true, { status: 'succeeded', valid: true })).toBe(true)
+  })
+
+  it('ne duplique pas le done conversationnel ordinaire deja diffuse', () => {
+    expect(shouldPersistClosingText(true, undefined)).toBe(false)
+    expect(shouldPersistClosingText(false, undefined)).toBe(true)
   })
 
   it('ecrit aussi au journal du tour (une reprise doit retrouver la conclusion)', () => {

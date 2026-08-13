@@ -6,16 +6,14 @@ export type DecompositionPolicy =
   { mode: 'disabled'; maxNodes: 1 } | { mode: 'build-only'; maxNodes: number }
 
 /**
- * Ce que le devis fait des plafonds de DÉPENSE (tokens, appels, agents, USD).
+ * Ce que le devis fait des plafonds de DÉPENSE (tokens et USD).
  *
- * `metering-only` est le défaut depuis la décision utilisateur du 2026-08-12 : les compteurs
- * restent exacts et alimentent Observatory, mais ils ne peuvent plus interrompre un run. Motif
- * mesuré : sur la campagne du 11/08, le plafond n'a économisé aucun token — la dépense était déjà
- * faite quand il l'a constatée — et il a détruit du travail déjà payé, neuf worktrees portant des
- * commits de fonctionnalité jamais publiés.
+ * `blocking` est le défaut : une consommation réglée ne détruit jamais son livrable, mais elle
+ * interdit l'admission de l'appel suivant. `metering-only` reste l'opt-out explicite pour mesurer
+ * sans refuser. Les deux modes alimentent Observatory avec les mêmes compteurs.
  *
- * La concurrence et la durée ne relèvent PAS de ce réglage : elles protègent la machine et
- * l'arrêt du run, pas le portefeuille, et restent toujours enforçées.
+ * Le nombre d'appels/agents, la concurrence et la durée sont des invariantes structurelles : ils
+ * ne relèvent pas de ce réglage et restent toujours enforcés.
  */
 export type SpendEnforcement = 'blocking' | 'metering-only'
 
@@ -84,7 +82,7 @@ export interface ExecutionQuoteCaps {
   maxProviderCalls?: number | null
   maxTotalTokens?: number | null
   maxUsd?: number | null
-  /** `blocking` réarme les refus de dépense ; absent = `metering-only` (défaut). */
+  /** `metering-only` désarme explicitement les refus ; absent = `blocking` (défaut sûr). */
   spendEnforcement?: SpendEnforcement
 }
 
@@ -114,11 +112,10 @@ const PRESETS: Record<TaskRegime, RegimePreset> = {
     maxProviderCalls: 12,
     maxFreshTokens: 750_000,
     maxTotalTokens: 6_000_000,
-    // frame + build + juge, puis la reparation et le re-jugement promis par maxRecoveries=1.
     maxAgents: 5,
     maxConcurrency: 3,
     maxDurationMs: 45 * 60_000,
-    maxRecoveries: 1,
+    maxRecoveries: 0,
     decomposition: { mode: 'disabled', maxNodes: 1 }
   },
   critical: {
@@ -128,7 +125,7 @@ const PRESETS: Record<TaskRegime, RegimePreset> = {
     maxAgents: 10,
     maxConcurrency: 4,
     maxDurationMs: 120 * 60_000,
-    maxRecoveries: 1,
+    maxRecoveries: 0,
     decomposition: { mode: 'build-only', maxNodes: 5 }
   }
 }
@@ -151,8 +148,8 @@ function boundedCount(value: number | undefined): number {
 }
 
 /**
- * Réserve d'abord le chemin qui doit encore pouvoir se fermer : phases mono-modèle, juge, puis
- * réparation + re-jugement promis. Le DAG et les panels ne reçoivent que la capacité restante.
+ * Réserve d'abord le chemin qui doit encore pouvoir se fermer : phases mono-modèle et juge, puis
+ * uniquement les reprises explicitement prévues. Le DAG et les panels reçoivent la capacité restante.
  * Une configuration impossible est refusée ici, avant que le premier provider ne soit touché.
  */
 export function allocateExecutionTopology(
@@ -289,7 +286,7 @@ export function compileExecutionQuote(task: string, caps: ExecutionQuoteCaps = {
       maxDurationMs: preset.maxDurationMs,
       maxRecoveries: preset.maxRecoveries,
       maxUsd: positiveNumber(caps.maxUsd) ?? null,
-      spendEnforcement: caps.spendEnforcement ?? 'metering-only'
+      spendEnforcement: caps.spendEnforcement ?? 'blocking'
     }
   }
 }

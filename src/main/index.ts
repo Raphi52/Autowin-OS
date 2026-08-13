@@ -131,6 +131,7 @@ import {
 } from './runs/conv-runs'
 import { deleteListedRun } from './dashboards/runs-scan'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
+import { shouldPersistClosingText } from './runs/turn-closing'
 import { StartupResumeQueue } from './runs/startup-resume-queue'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
 import {
@@ -480,6 +481,32 @@ const invalidateBrainRuntime = async (): Promise<void> => {
 // l'app : plus aucun process ne viendra le clore. Le chargement le clôt donc et le DIT dans la
 // conversation d'origine — sauf pour les tours dont le checkpoint survit, qui vont vraiment
 // reprendre quelques lignes plus bas. Sans ce discriminant on mentirait dans un sens ou dans l'autre.
+// La sonde doit précéder l'hydratation : un PID mort ne doit pas maintenir son tour `streaming`.
+const persistedJournalLastWriteMs = (path: string): number | undefined => {
+  try {
+    return statSync(path).mtimeMs
+  } catch {
+    return undefined
+  }
+}
+const terminatePersistedProviderPid = (pid: number): boolean => {
+  try {
+    process.kill(pid, 'SIGTERM')
+    return true
+  } catch {
+    return defaultProcessIdentity(pid) === undefined
+  }
+}
+const persistedRunTerminalizationProbes = {
+  lastWriteMs: persistedJournalLastWriteMs,
+  terminatePid: terminatePersistedProviderPid
+}
+os.terminalizeAbandonedOrchestrations(
+  defaultProcessIdentity,
+  false,
+  Date.now(),
+  persistedRunTerminalizationProbes
+)
 const startupRecoverableChatCalls = listRecoverableChatProviderCalls(turnJournalRoot)
 jalonDemarrage('appels chat recuperables inventories')
 const resumableTurnIds = new Set([
@@ -3556,7 +3583,7 @@ Le fil reprend ensuite normalement.`
            * n'a ete emis pendant le tour (sinon le texte du `done` reprend ce qui a deja ete dit).
            */
           const closing = pilotEvent.text?.trim()
-          if (closing && !durableResponseTextSeen) {
+          if (closing && shouldPersistClosingText(durableResponseTextSeen, pilotEvent.outcome)) {
             os.conversations.applyTurnEvent(conversationId, turnId, {
               kind: 'delta',
               // Flux dedie : ce texte de cloture n'appartient a aucun stream deja ouvert.
@@ -5274,7 +5301,12 @@ app.whenReady().then(async () => {
     // TRAIN DE TRAVAILLER. Relancer par-dessus mettrait deux agents sur la même copie, à s'écraser
     // l'un l'autre. On vérifie chaque run avant de le relancer — et on l'écrit, pour que ce silence
     // soit lisible sans empêcher les autres reprises.
-    const reprise = resumeActionFor(resumableRun, defaultProcessIdentity)
+    const reprise = resumeActionFor(
+      resumableRun,
+      defaultProcessIdentity,
+      Date.now(),
+      persistedJournalLastWriteMs
+    )
     if (electedDuplicateRunId) {
       // Un doublon supprime n'est PAS un run a reprendre : aucun tour Chat n'est ouvert et aucune
       // cloture verte/rouge n'est fabriquee. On observe uniquement la preuve de fin du provider,
@@ -5313,7 +5345,14 @@ app.whenReady().then(async () => {
         const latest = os
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)
-        return latest ? resumeActionFor(latest, defaultProcessIdentity) : 'ignorer'
+        return latest
+          ? resumeActionFor(
+              latest,
+              defaultProcessIdentity,
+              Date.now(),
+              persistedJournalLastWriteMs
+            )
+          : 'ignorer'
       }).then((action) => {
         const latest = os
           .resumableOrchestrations()
@@ -5644,11 +5683,12 @@ app.whenReady().then(async () => {
           })
           const delivered = { ...result, ...(learning ? { learning } : {}) }
           durableResumeTurn.succeed(delivered)
+          const deliveryStatus = result.gateBlocked || !result.valid ? 'red' : 'green'
           broadcast({
             type: 'orchestrate-end',
             convId: conversationId,
             ...(resumedCurrentRunId ? { runPath: resumedCurrentRunId } : {}),
-            status: 'green'
+            status: deliveryStatus
           })
           broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
           return delivered
@@ -5682,6 +5722,13 @@ app.whenReady().then(async () => {
       const reason =
         'Appel provider terminé sans preuve récupérable — relance bloquée pour éviter un double coût.'
       const conversationId = resumableRun.conversationId ?? '__autonomous__'
+      os.terminalizeAbandonedOrchestration(
+        resumableRun.runId,
+        defaultProcessIdentity,
+        false,
+        Date.now(),
+        persistedRunTerminalizationProbes
+      )
       durableLiveReattachment?.fail(reason, false)
       broadcast({
         type: 'orchestrate-end',
@@ -5698,7 +5745,14 @@ app.whenReady().then(async () => {
         const latest = os
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)
-        return latest ? resumeActionFor(latest, defaultProcessIdentity) : 'ignorer'
+        return latest
+          ? resumeActionFor(
+              latest,
+              defaultProcessIdentity,
+              Date.now(),
+              persistedJournalLastWriteMs
+            )
+          : 'ignorer'
       }).then(async (action) => {
         const latest = os
           .resumableOrchestrations()
@@ -5710,6 +5764,13 @@ app.whenReady().then(async () => {
                 ? 'Appel provider terminé sans preuve récupérable — relance bloquée pour éviter un double coût.'
                 : 'Rattachement expiré sans preuve de fin — aucun appel provider n’a été relancé.'
             const conversationId = latest.conversationId ?? '__autonomous__'
+            os.terminalizeAbandonedOrchestration(
+              latest.runId,
+              defaultProcessIdentity,
+              action === 'ignorer',
+              Date.now(),
+              persistedRunTerminalizationProbes
+            )
             durableLiveReattachment?.fail(reason, false)
             broadcast({
               type: 'orchestrate-end',

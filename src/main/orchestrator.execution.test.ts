@@ -616,8 +616,7 @@ describe('Orchestrator execution contract', () => {
     }
   })
 
-  it('B5 — répare UNE fois une mutation bloquée puis clôture vert', async () => {
-    // exec#1 sans preuve → bloqué ; réparation exec#2 avec mutation+vérification → vert.
+  it('clôture rouge une mutation sans preuve au lieu de relancer implicitement', async () => {
     let execCount = 0
     let providerCalls = 0
     const provider: ProviderAdapter = {
@@ -669,11 +668,11 @@ describe('Orchestrator execution contract', () => {
 
     const result = await orchestrator.run('corrige le bug du sélecteur')
 
-    expect(result.valid).toBe(true)
-    expect(result.gateBlocked).toBe(false)
-    expect(execCount).toBe(2) // une réparation a bien eu lieu
+    expect(result.valid).toBe(false)
+    expect(result.gateBlocked).toBe(true)
+    expect(execCount).toBe(1)
     // Le pré-gate local bloque la tentative sans preuve AVANT de payer un premier juge.
-    expect(providerCalls).toBe(3) // build rouge + réparation + juge final
+    expect(providerCalls).toBe(1)
   })
 
   it('F3 (strict) — une mutation exige une VÉRIFICATION, pas une simple inspection', async () => {

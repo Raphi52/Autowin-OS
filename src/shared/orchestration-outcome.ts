@@ -272,7 +272,7 @@ function maskQuotedEvidence(text: string): string {
 const RUN_LIFECYCLE_ASSERTION_SOURCE =
   'run\\s+(?:est\\s+)?(?:(?:(?:reste|toujours)\\s+)?(?:(?:standard\\s*\\/\\s*)?(?:open|ouvert))|encore\\s+ouvert)'
 
-const LIFECYCLE_ASSERTION_SOURCE = `(?:${RUN_LIFECYCLE_ASSERTION_SOURCE}|non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|publication\\s+(?:est\\s+)?(?:reste|non\\s+ex[ée]cut(?:[ée]e?s?)?|en\\s+attente|[àa]\\s+faire)|(?:modifications?|changements?)\\s+non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|(?:les\\s+)?changements?\\s+(?:(?:ne\\s+sont\\s+)?pas\\s+encore|non)\\s+publi[ée]s?|gate\\s+(?:est\\s+)?(?:(?:reste|toujours|encore)\\s+)?bloqu[ée]|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge\\s+[àa]\\s+lancer|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)`
+const LIFECYCLE_ASSERTION_SOURCE = `(?:${RUN_LIFECYCLE_ASSERTION_SOURCE}|(?:next|[ée]tape\\s+suivante|prochaine\\s+[ée]tape)\\s*:?[^\\n]*(?:commit(?:\\s+final)?|push|publication|livraison)|non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|publication\\s+(?:est\\s+)?(?:reste|non\\s+ex[ée]cut(?:[ée]e?s?)?|en\\s+attente|[àa]\\s+faire)|(?:modifications?|changements?)\\s+non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|(?:les\\s+)?changements?\\s+(?:(?:ne\\s+sont\\s+)?pas\\s+encore|non)\\s+publi[ée]s?|gate\\s+(?:est\\s+)?(?:(?:reste|toujours|encore)\\s+)?bloqu[ée]|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge\\s+[àa]\\s+lancer|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)`
 
 const LIFECYCLE_WRAPPED_SOURCE =
   '(?:(?:\\*\\*|__|~~|\\*|_|\\[|`|\\/)\\s*)*' +

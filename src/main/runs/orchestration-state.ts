@@ -70,6 +70,12 @@ export interface OrchestrationRunState {
     electedRunId: string
     decidedAt: number
   }
+  /** Fin durable d'un appel dont l'issue provider est indémontrable. Jamais repris implicitement. */
+  terminal?: {
+    status: 'interrupted'
+    reason: string
+    decidedAt: number
+  }
   startedAt: number
   updatedAt: number
   /**
@@ -367,6 +373,19 @@ function isResumeDisposition(
   )
 }
 
+function isTerminalDisposition(
+  value: unknown
+): value is NonNullable<OrchestrationRunState['terminal']> {
+  return (
+    isRecord(value) &&
+    value.status === 'interrupted' &&
+    isNonEmptyString(value.reason) &&
+    typeof value.decidedAt === 'number' &&
+    Number.isFinite(value.decidedAt) &&
+    value.decidedAt >= 0
+  )
+}
+
 function isOrchestrationRunState(value: unknown): value is OrchestrationRunState {
   if (!isRecord(value)) return false
   return (
@@ -383,6 +402,7 @@ function isOrchestrationRunState(value: unknown): value is OrchestrationRunState
     (value.usage === undefined || isExecutionUsageSnapshot(value.usage)) &&
     (value.resumeDisposition === undefined ||
       isResumeDisposition(value.resumeDisposition, value.runId)) &&
+    (value.terminal === undefined || isTerminalDisposition(value.terminal)) &&
     (value.agents === undefined ||
       (Array.isArray(value.agents) && value.agents.every(isRunAgentRef))) &&
     hasConsistentActiveReservationLinks(value) &&
@@ -527,19 +547,20 @@ export function pickOrchestrationsToResume(
   const mostRecentFirst = (candidates: readonly OrchestrationRunState[]): OrchestrationRunState[] =>
     [...candidates].sort((left, right) => right.updatedAt - left.updatedAt)
 
-  const suppressed = states.filter((state) => state.resumeDisposition !== undefined)
+  const resumable = states.filter((state) => state.terminal === undefined)
+  const suppressed = resumable.filter((state) => state.resumeDisposition !== undefined)
   const suppressedIds = new Set(suppressed.map((state) => state.runId))
-  const activeLocks = states.filter(
+  const activeLocks = resumable.filter(
     (state) => !suppressedIds.has(state.runId) && (state.usage?.activeCalls ?? 0) > 0
   )
   const activeIds = new Set(activeLocks.map((state) => state.runId))
-  const withWork = states.filter(
+  const withWork = resumable.filter(
     (state) =>
       !suppressedIds.has(state.runId) &&
       !activeIds.has(state.runId) &&
       state.phaseOutputs.some((output) => typeof output.text === 'string' && output.text.trim())
   )
-  const neverStarted = states.filter(
+  const neverStarted = resumable.filter(
     (state) =>
       !suppressedIds.has(state.runId) &&
       !activeIds.has(state.runId) &&
@@ -863,6 +884,7 @@ export function pickResumeForTask(
   if (!wanted) return null
   const maxAge = lookup.maxAgeMs ?? DEFAULT_RESUME_MAX_AGE_MS
   const usable = states.filter((state) => {
+    if (state.terminal) return false
     if (state.conversationId !== lookup.conversationId || normalizeTaskKey(state.task) !== wanted) {
       return false
     }

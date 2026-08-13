@@ -309,9 +309,9 @@ export class ExecutionSupervisor {
     if (!runtime) return undefined
     runtime.signal.throwIfAborted()
     const limits = runtime.quote.limits
-    const deny = (reason: string): never => {
+    const deny = (reason: string, abortRun = true): never => {
       runtime.stoppedReason = reason
-      runtime.controller.abort(reason)
+      if (abortRun) runtime.controller.abort(reason)
       throw new ExecutionBudgetExceededError(reason)
     }
     // La DURÉE et la CONCURRENCE restent toujours enforcées : la première protège de l'emballement
@@ -320,10 +320,8 @@ export class ExecutionSupervisor {
     if (Date.now() >= runtime.deadlineAtMs) {
       deny(`Budget duree depasse (${limits.maxDurationMs} ms)`)
     }
-    // Plafonds de DÉPENSE : en `metering-only` (défaut) on continue de tout compter, mais on ne
-    // refuse plus rien. Mesuré sur la campagne du 11/08 : ces refus n'ont économisé aucun token —
-    // la dépense d'un sous-agent CLI est déjà faite quand elle est constatée au règlement — et ils
-    // ont détruit du travail déjà payé en avortant le run avant sa publication.
+    // Plafonds de DÉPENSE : `blocking` refuse l'appel SUIVANT, jamais la finalisation d'un appel
+    // déjà payé. `metering-only` continue de tout compter sans refuser.
     // L'ORDRE des contrôles est celui d'origine : il détermine QUEL motif est rendu quand deux
     // plafonds sont atteints en même temps, et des tests s'appuient dessus.
     const enforceSpend = limits.spendEnforcement === 'blocking'
@@ -333,7 +331,7 @@ export class ExecutionSupervisor {
       runtime.pricedCalls > 0 &&
       runtime.knownCostUsd >= limits.maxUsd
     ) {
-      deny(`Budget USD atteint (${limits.maxUsd} USD)`)
+      deny(`Budget USD atteint (${limits.maxUsd} USD)`, false)
     }
     // Le NOMBRE d'appels et d'agents est une invariante STRUCTURELLE, pas une limite de dépense :
     // un tour de chat vaut UN appel provider (`maxProviderCalls: 1` posé par os.ts et par le
@@ -350,10 +348,10 @@ export class ExecutionSupervisor {
       deny(`Budget de concurrence atteint (${limits.maxConcurrency})`)
     }
     if (enforceSpend && runtime.totalTokens >= limits.maxTotalTokens) {
-      deny(`Budget tokens total atteint (${limits.maxTotalTokens})`)
+      deny(`Budget tokens total atteint (${limits.maxTotalTokens})`, false)
     }
     if (enforceSpend && runtime.freshTokens >= limits.maxFreshTokens) {
-      deny(`Budget tokens frais atteint (${limits.maxFreshTokens})`)
+      deny(`Budget tokens frais atteint (${limits.maxFreshTokens})`, false)
     }
     const remainingCalls = Math.max(1, limits.maxProviderCalls - runtime.startedCalls)
     const totalReservation = Math.ceil(
@@ -365,22 +363,22 @@ export class ExecutionSupervisor {
         remainingCalls
     )
     if (enforceSpend && totalReservation <= 0) {
-      deny(`Budget tokens total entierement reserve (${limits.maxTotalTokens})`)
+      deny(`Budget tokens total entierement reserve (${limits.maxTotalTokens})`, false)
     }
     if (enforceSpend && freshReservation <= 0) {
-      deny(`Budget tokens frais entierement reserve (${limits.maxFreshTokens})`)
+      deny(`Budget tokens frais entierement reserve (${limits.maxFreshTokens})`, false)
     }
     if (
       enforceSpend &&
       runtime.totalTokens + runtime.reservedTotalTokens + totalReservation > limits.maxTotalTokens
     ) {
-      deny(`Budget tokens total atteint (${limits.maxTotalTokens})`)
+      deny(`Budget tokens total atteint (${limits.maxTotalTokens})`, false)
     }
     if (
       enforceSpend &&
       runtime.freshTokens + runtime.reservedFreshTokens + freshReservation > limits.maxFreshTokens
     ) {
-      deny(`Budget tokens frais atteint (${limits.maxFreshTokens})`)
+      deny(`Budget tokens frais atteint (${limits.maxFreshTokens})`, false)
     }
 
     const reservationId = randomUUID()
@@ -425,26 +423,26 @@ export class ExecutionSupervisor {
       }
       // C'est ICI que le run mourait après coup, une fois la dépense déjà engagée : le règlement
       // constatait le dépassement et avortait, emportant un travail déjà produit et déjà payé.
-      // En `metering-only` on enregistre la consommation et on laisse le run aller à sa clôture.
+      // Dans tous les modes on enregistre la consommation et on laisse cet appel aller à sa clôture.
       if (enforceSpend) {
         if (runtime.totalTokens > limits.maxTotalTokens) {
           runtime.stoppedReason = `Budget tokens total depasse (${runtime.totalTokens}/${limits.maxTotalTokens})`
-          runtime.controller.abort(runtime.stoppedReason)
         } else if (runtime.totalTokens + runtime.reservedTotalTokens > limits.maxTotalTokens) {
           runtime.stoppedReason =
             `Budget tokens total compromis ` +
             `(${runtime.totalTokens + runtime.reservedTotalTokens}/${limits.maxTotalTokens}, reservations actives incluses)`
-          runtime.controller.abort(runtime.stoppedReason)
         } else if (runtime.freshTokens > limits.maxFreshTokens) {
           runtime.stoppedReason = `Budget tokens frais depasse (${runtime.freshTokens}/${limits.maxFreshTokens})`
-          runtime.controller.abort(runtime.stoppedReason)
         } else if (runtime.freshTokens + runtime.reservedFreshTokens > limits.maxFreshTokens) {
           runtime.stoppedReason =
             `Budget tokens frais compromis ` +
             `(${runtime.freshTokens + runtime.reservedFreshTokens}/${limits.maxFreshTokens}, reservations actives incluses)`
-          runtime.controller.abort(runtime.stoppedReason)
         } else if (limits.maxUsd !== null && runtime.knownCostUsd > limits.maxUsd) {
           runtime.stoppedReason = `Budget USD depasse (${runtime.knownCostUsd}/${limits.maxUsd})`
+        }
+        // Un appel déjà réglé reste publiable. En revanche, les autres membres du même fan-out
+        // encore en vol sont stoppés dès que leurs réservations ne tiennent plus dans le plafond.
+        if (runtime.stoppedReason && runtime.activeCalls > 0) {
           runtime.controller.abort(runtime.stoppedReason)
         }
       }
