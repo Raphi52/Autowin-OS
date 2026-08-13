@@ -82,6 +82,18 @@ function estCommentaire(ligne: string): boolean {
   return /^\s*(\/\/|\/\*|\*)/.test(ligne)
 }
 
+/**
+ * Une ligne ENTIEREMENT contenue dans une chaine est un FIXTURE, pas du code executé.
+ *
+ * Constaté a la troisieme passe, et encore sur ce module : son propre fichier de tests contient
+ * `"  const css = readFileSync(new URL('./Disparue.css', …))"` comme DONNEE d'entree. Le detecteur
+ * y voyait trois lectures de fichiers absents. Un fixture commence par un guillemet — c'est
+ * grossier, mais c'est vrai, et ca vaut mieux qu'un detecteur qui invente trois defauts.
+ */
+function estFixture(ligne: string): boolean {
+  return /^\s*['"`]/.test(ligne)
+}
+
 /** Numéro de ligne (1-indexé) du premier motif trouvé, et la ligne elle-même. */
 function trouver(
   fichier: FichierAudite,
@@ -214,7 +226,7 @@ export function detecterGardesSurFichierAbsent(fichiers: FichierAudite[]): Const
   for (const f of fichiers.filter((x) => /\.test\.tsx?$/.test(x.chemin))) {
     const dossier = f.chemin.slice(0, f.chemin.lastIndexOf('/'))
     for (const [i, ligne] of lignes(f.contenu).entries()) {
-      if (estCommentaire(ligne)) continue
+      if (estCommentaire(ligne) || estFixture(ligne)) continue
       const cible = /['"`]\.\/([\w./-]+\.(?:css|tsx?|md))['"`]/.exec(ligne)?.[1]
       if (!cible) continue
       if (!/readFileSync|existsSync|source\(/.test(ligne)) continue
