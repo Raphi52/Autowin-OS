@@ -117,8 +117,7 @@ export function redigerPromptCandidat(candidat: CandidatBrut): string {
         '',
         'Commence par relire l’ancrage et vérifier que le besoin tient toujours — si le code a déjà',
         'évolué et le couvre, dis-le et arrête-toi là. Sinon, propose ce que ça donnerait, et ce que ça coûte.'
-      ].join('
-')
+      ].join('\n')
     }
     return [
       `Corrige ce defaut d'Autowin OS :`,
