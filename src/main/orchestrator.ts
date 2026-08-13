@@ -112,6 +112,45 @@ function bindingDeRepliPourPhase(
     : (runtimeSnapshot?.roles.subagent ?? roles.getBinding('subagent'))
 }
 
+/**
+ * L'instantané de rôles est OPPOSABLE tant que sa cible existe — pas au-delà.
+ *
+ * Pourquoi geler : un run qui traverse build→judge doit être jugé par la même famille de modèles qui
+ * l'a produit, sinon le verdict n'est plus comparable ; et un run repris après une pause quota ne
+ * doit pas changer de provider en silence. Ce gel est voulu, il n'est pas le défaut.
+ *
+ * Ce qui l'était : l'instantané survivait à la disparition de ce qu'il désignait. Vécu par
+ * l'utilisateur — instantané sur `codex`, configuration reconfigurée en `claude`, et le run appelait
+ * quand même codex avant d'échouer sur un provider qu'il n'utilise plus. Un run ne doit pas mourir
+ * sur une configuration déjà corrigée.
+ *
+ * LIMITE ASSUMÉE : on vérifie que le provider est ENREGISTRÉ (`registry.ids()`), pas qu'il est
+ * authentifié — cette dernière vérification est asynchrone et coûteuse ici. Un provider enregistré
+ * mais déconnecté échouera donc encore, mais son message nomme désormais la divergence.
+ */
+export function bindingDePhaseValide(
+  instantane: RoleBinding | undefined,
+  courant: RoleBinding,
+  providersDisponibles: readonly string[]
+): { binding: RoleBinding; note?: string } {
+  if (!instantane) return { binding: courant }
+  if (!providersDisponibles.includes(instantane.provider))
+    return {
+      binding: courant,
+      note:
+        `instantané abandonné : ${instantane.provider} n'est plus disponible — ` +
+        `repli sur la configuration courante (${courant.provider})`
+    }
+  if (instantane.provider !== courant.provider || instantane.model !== courant.model)
+    return {
+      binding: instantane,
+      note:
+        `instantané du run : ${instantane.provider}${instantane.model ? ` (${instantane.model})` : ''} — ` +
+        `configuration courante : ${courant.provider}${courant.model ? ` (${courant.model})` : ''}`
+    }
+  return { binding: instantane }
+}
+
 /** La forme que le brief du juge IMPOSE pour un rejet : « DEFAUT: <raison> », où qu'elle se trouve. */
 const REJET_FORME_CONTRAT = /\b(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|KO)\s*:/i
 /** L'approbation que le brief du juge IMPOSE : « Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: …" ». */
@@ -3399,11 +3438,21 @@ export class Orchestrator {
       // (besoin + acquis des phases) vit dans le message user ci-dessous, pas dans le system.
       // Modèle EFFECTIF de la phase : override par phase (petit modèle sur analyse, gros sur build)
       // → défaut = modèle du binding. Générique/rétrocompat (resolvePhaseBinding).
-      const bindingDeLaPhase = jugeDedie
-        ? bindingDeRepliPourPhase(phase, roles, runtimeSnapshot)
-        : subBinding
-      const providerDeLaPhase = bindingDeLaPhase.provider
       const roleDeLaPhase = jugeDedie ? 'judge' : 'subagent'
+      // L'instantané est VALIDÉ contre les providers réellement enregistrés : il ne doit pas survivre
+      // à la disparition de sa cible. Et sa divergence avec la configuration courante est ANNONCÉE
+      // ici, avant l'appel — jusqu'ici on ne l'apprenait qu'en lisant l'erreur, une fois la phase
+      // cassée, et il fallait fouiller cinq fichiers de configuration pour comprendre.
+      const choix = jugeDedie
+        ? bindingDePhaseValide(
+            bindingDeRepliPourPhase(phase, roles, runtimeSnapshot),
+            roles.getBinding(roleDeLaPhase),
+            registry.ids()
+          )
+        : { binding: subBinding }
+      const bindingDeLaPhase = choix.binding
+      const providerDeLaPhase = bindingDeLaPhase.provider
+      if (choix.note) onDelta?.('exec', `[binding] Phase ${phase} — ${choix.note}\n`)
       const phaseBinding = resolvePhaseBinding(bindingDeLaPhase, phase)
       // Anti-perte-de-contexte / longs runs : en session-resume, la discipline (~1-2k) et le
       // projectContext (≤32k) sont DÉJÀ connus de la session (envoyés en phase 1) → les ré-envoyer
