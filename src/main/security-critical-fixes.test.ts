@@ -117,7 +117,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `git:graph` — lecture du graphe git pour la vue Worktrees
     // `unguarded` est resté VIDE sur toute la période : aucune régression de sécurité, seulement
     // le fil-piège qui a fait son travail en réclamant cette relecture.
-    expect(handlers).toHaveLength(138)
+    //
+    // MISE À JOUR 2026-08-13 — 138 → 140. DEUX canaux ajoutés, tous deux gardés dès leur première
+    // ligne par `assertTrustedRendererSender(event, 'Pilote de routage shadow')` :
+    //   `os:shadowRoutingPilot:get` — lecture de l'opt-in persistant du pilote de routage shadow
+    //   `os:shadowRoutingPilot:set` — bascule de cet opt-in, valeur refusée si non booléenne
+    // `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(140)
     expect(unguarded).toEqual([])
   })
 

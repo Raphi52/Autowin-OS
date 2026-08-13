@@ -3,6 +3,7 @@ import type { SettingsSection } from '../tabs'
 import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView } from './CapabilitiesView'
 import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
+import { ShadowRoutingPilotSettings } from './ShadowRoutingPilotSettings'
 import { ViewTopBar } from './ViewTopBar'
 import './ViewPage.css'
 import './DomainShell.css'
@@ -174,7 +175,12 @@ export function SettingsView({
       />
       <div className="domain-content">
         {section === 'capabilities' && <CapabilitiesView active={active} />}
-        {section === 'budget' && <OrchestrationBudgetSettings />}
+        {section === 'budget' && (
+          <>
+            <OrchestrationBudgetSettings />
+            <ShadowRoutingPilotSettings />
+          </>
+        )}
         {section === 'behaviour' && <BehaviourView />}
         {section === 'providers' && (
           <section className="settings-providers surface-panel" aria-label="Providers">

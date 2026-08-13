@@ -223,7 +223,12 @@ import { createFabricNodeTransportStore } from './compute-fabric/node-transport-
 import { createFabricProductBindings } from './compute-fabric/product-bridge'
 import { createCheckpointForkManifest } from './wire-checkpoint-fork'
 import { recommendShadowRoute } from './shadow-router'
-import { createShadowRoutingRuntime } from './model-routing-shadow'
+import { createShadowRoutingRuntime, shadowRoutingEnvOverride } from './model-routing-shadow'
+import {
+  loadShadowRoutingPilotSetting,
+  saveShadowRoutingPilotSetting,
+  type ShadowRoutingPilotState
+} from './model-routing-shadow-setting'
 import { rebuildSemanticTemporalProjection } from './knowledge/semantic-temporal-store'
 import { causalLearningContext } from './knowledge/semantic-temporal-projection'
 import { ModelCatalogRefresher } from './model-refresh'
@@ -1240,9 +1245,31 @@ try {
 }
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
-const shadowRoutingRuntime = createShadowRoutingRuntime(
-  join(app.getPath('userData'), 'model-routing-shadow', 'observations-v1.jsonl')
+const shadowRoutingObservationsPath = join(
+  app.getPath('userData'),
+  'model-routing-shadow',
+  'observations-v1.jsonl'
 )
+const shadowRoutingPilotPath = join(app.getPath('userData'), 'model-routing-shadow-pilot.json')
+/**
+ * `let` DELIBERE : la bascule de la vue Settings reconstruit ce runtime, et le sink de trace
+ * ci-dessous relit la reference a chaque evenement — l'opt-in prend donc effet sans redemarrage.
+ */
+let shadowRoutingRuntime = createShadowRoutingRuntime(
+  shadowRoutingObservationsPath,
+  process.env,
+  loadShadowRoutingPilotSetting(shadowRoutingPilotPath).enabled
+)
+/** État rendu à l'UI : réglage persistant, effet RÉEL du runtime, surcharge d'environnement. */
+function shadowRoutingPilotState(
+  setting = loadShadowRoutingPilotSetting(shadowRoutingPilotPath)
+): ShadowRoutingPilotState {
+  return {
+    enabled: setting.enabled,
+    active: shadowRoutingRuntime.enabled,
+    envOverride: shadowRoutingEnvOverride(process.env) ?? null
+  }
+}
 const otelGenAiExporter = new MetadataOnlyOtlpExporter(
   resolveOtelGenAiConfig(),
   undefined,
@@ -2374,6 +2401,22 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Orchestration budget')
     return saveOrchestrationBudget(orchestrationBudgetPath, value)
   })
+  ipcMain.handle('os:shadowRoutingPilot:get', (event) => {
+    assertTrustedRendererSender(event, 'Pilote de routage shadow')
+    return shadowRoutingPilotState()
+  })
+  ipcMain.handle('os:shadowRoutingPilot:set', (event, enabled: unknown) => {
+    assertTrustedRendererSender(event, 'Pilote de routage shadow')
+    const saved = saveShadowRoutingPilotSetting(shadowRoutingPilotPath, enabled)
+    // Reconstruction IMMEDIATE : le sink de trace relit `shadowRoutingRuntime` a chaque evenement,
+    // la bascule prend donc effet sans redemarrage. L'environnement garde la priorite.
+    shadowRoutingRuntime = createShadowRoutingRuntime(
+      shadowRoutingObservationsPath,
+      process.env,
+      saved.enabled
+    )
+    return shadowRoutingPilotState(saved)
+  })
   ipcMain.handle(
     'os:setRole',
     async (event, role: Role, provider: string, model?: string, reasoningEffort?: string) => {
@@ -2548,7 +2591,8 @@ Le fil reprend ensuite normalement.`
         status: 'insufficient-data' as const,
         confidence: 'insufficient' as const,
         phase: safePhase,
-        reason: 'Routeur shadow desactive (AUTOWIN_MODEL_ROUTING_SHADOW_ENABLED=1 pour activer).'
+        reason:
+          'Routeur shadow desactive : activez « Mesurer les routes (pilote shadow) » dans Settings > Budget pour que l app commence a mesurer quelle route tient le vert au cout le plus bas.'
       }
     }
     if (!champion || typeof champion !== 'object') throw new Error('Champion invalide')

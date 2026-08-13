@@ -37,8 +37,19 @@ describe('AgentPilot chat streaming', () => {
     }
     const events: PilotEvent[] = []
 
+    /**
+     * Le message porte une demande MUTANTE : c'est la seule route où une `<cmd>` atteint le bus,
+     * donc la seule où « ne pas repayer un appel » se mesure.
+     *
+     * Il disait « scout la vue Chat » et ce test était rouge : depuis que le classifieur reconnaît
+     * un contrat scout sans slash (`orchestrator.scout-readonly`), ce libellé ouvre un tour
+     * `direct-read-only`, où une commande générée est bloquée AVANT le bus par défense en
+     * profondeur — comportement délibéré, couvert par `agent-pilot.turn-contract` (« bloque
+     * mecaniquement une commande generee dans un tour lecture seule »). Le scénario visé ici
+     * n'était donc plus exercé du tout. La garantie testée, elle, est inchangée.
+     */
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
-      [{ role: 'user', content: 'scout la vue Chat' }],
+      [{ role: 'user', content: 'mémorise la contrainte puis corrige le module' }],
       (event) => events.push(event),
       undefined,
       6,
