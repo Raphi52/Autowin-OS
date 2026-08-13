@@ -22,8 +22,17 @@ describe('spawn CLI — regime de contexte', () => {
     expect(source).toContain("'--tools',")
     expect(source).toContain("'--allowedTools',")
     // Les deux doivent recevoir la MEME liste : sinon on autorise un outil non charge (ou l'inverse).
-    const execBlock = source.slice(source.indexOf('if (execution) {'), source.indexOf('let systemPromptDir'))
-    const toolsArgs = [...execBlock.matchAll(/'--(?:allowed)?[Tt]ools',\s*\n?\s*(\w+)/g)].map((m) => m[1])
+    // Tranche bornee a la branche EXECUTEUR seule. Elle allait jusqu'a `systemPromptDir`, donc elle
+    // englobait aussi les branches suivantes ; depuis que celles-ci passent leur propre constante
+    // d'outils web, la tranche large voyait deux variables et le test echouait alors qu'aucune
+    // propriete n'etait cassee. C'est l'instrument qui etait trop large, pas le code qui a derive.
+    const execBlock = source.slice(
+      source.indexOf('if (execution) {'),
+      source.indexOf('} else if (materialized) {')
+    )
+    const toolsArgs = [...execBlock.matchAll(/'--(?:allowed)?[Tt]ools',\s*\n?\s*(\w+)/g)].map(
+      (m) => m[1]
+    )
     expect(toolsArgs.length).toBeGreaterThanOrEqual(2)
     expect(new Set(toolsArgs).size).toBe(1) // une seule variable source
   })
@@ -48,7 +57,6 @@ describe('spawn CLI — regime de contexte', () => {
     expect(source).not.toContain('append-system-prompt')
   })
 
-
   it('ramene la memoire auto au PROJET COURANT (et non celle d’un autre projet)', () => {
     // Mesure du 2026-07-28 : le settings.json de l'utilisateur pointait autoMemoryDirectory sur
     // ~/.claude/projects/C--Code-RIG/memory (552 Ko) — chargee a chaque appel alors qu'Autowin
@@ -58,7 +66,10 @@ describe('spawn CLI — regime de contexte', () => {
   })
 
   it('n’ecrit JAMAIS dans le settings.json de l’utilisateur (fichier temporaire dedie)', () => {
-    const block = source.slice(source.indexOf('let settingsDir'), source.indexOf('let systemPromptDir'))
+    const block = source.slice(
+      source.indexOf('let settingsDir'),
+      source.indexOf('let systemPromptDir')
+    )
     expect(block).toContain('mkdtempSync(')
     // Le kit de l'utilisateur ne doit pas etre modifie pour economiser des tokens.
     expect(block).not.toContain('.claude')
@@ -67,7 +78,6 @@ describe('spawn CLI — regime de contexte', () => {
   it('nettoie le dossier temporaire de reglages (pas de fuite disque)', () => {
     expect(source).toMatch(/if \(settingsDir\) rmSync\(settingsDir/)
   })
-
 
   it('donne la LECTURE SEULE au tour de chat (il n’est plus aveugle)', () => {
     // Avant : `--disallowedTools '*'` -> l'agent ne pouvait rien lire, donc toute question factuelle
@@ -94,13 +104,20 @@ describe('spawn CLI — regime de contexte', () => {
     // La propriété remplaçante est PLUS FORTE : shell ouvert, mais par périmètres vérifiés.
     const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
     // Bash n'est jamais autorisé NU dans la branche chat (ce serait `rm`, `git checkout`, …).
-    const nakedLists = [...chatBranch.matchAll(/'([A-Z][A-Za-z]*(?:,[A-Z][A-Za-z]*)*)'/g)].map(
-      (m) => m[1]
-    )
-    const allowedNaked = nakedLists.filter((list) => list.split(',').includes('Bash'))
-    // Seul `--tools` (ce qui est CHARGÉ) peut citer Bash ; `--allowedTools` (ce qui est AUTORISÉ)
-    // ne le reçoit que par périmètres.
-    expect(allowedNaked).toEqual(['Read,Grep,Glob,Bash'])
+    /**
+     * La propriete est INCHANGEE : Bash n'apparait que dans la liste CHARGEE (`--tools`), jamais parmi
+     * les outils AUTORISES nus — il n'est autorise que par perimetres verifies.
+     *
+     * Ce qui change est la FORME de la liste chargee : elle est desormais concatenee avec les outils web
+     * (`'Read,Grep,Glob,Bash,' + OUTILS_WEB`), suite a la decision utilisateur du 2026-08-13 « je veux
+     * que les agents soient florissants, expansifs, libres ». L'ancienne regex ne cherchait qu'un
+     * litteral entierement majuscule-separe-de-virgules, donc elle ne voyait plus rien et rendait une
+     * liste VIDE : un test qui passe a cote de sa propriete au lieu de la contredire.
+     */
+    expect(chatBranch).toMatch(/'--tools',\s*'Read,Grep,Glob,Bash,' \+ OUTILS_WEB/)
+    // Et le point dur : aucun `'Bash'` isole dans cette branche, ce qui signalerait un Bash AUTORISE nu.
+    const bashNu = [...chatBranch.matchAll(/(?<![A-Za-z,])'Bash'/g)]
+    expect(bashNu).toHaveLength(0)
     expect(chatBranch).toContain('CHAT_READ_ONLY_SHELL')
 
     // Chaque périmètre est scopé, et sur un verbe git strictement lisible.
@@ -148,9 +165,14 @@ describe('spawn CLI — regime de contexte', () => {
     }
   })
 
-  it('sans workspace resolu, garde le comportement d’origine (aucun dossier devine)', () => {
+  it('sans workspace resolu, ne devine aucun dossier — mais garde le WEB', () => {
+    // Avant, cette branche passait `--disallowedTools '*'` : sans workspace, l'agent perdait TOUT moyen
+    // de fonder une reponse et ne pouvait plus que deviner. La propriete a preserver n'etait pas
+    // « aucun outil », c'etait « aucun dossier devine » — et elle tient toujours : rien n'est ajoute au
+    // disque, seul le web reste. Changement demande par l'utilisateur le 2026-08-13.
     const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
-    expect(chatBranch).toContain("'--disallowedTools', '*'")
+    expect(chatBranch).not.toContain("'--add-dir', readOnlyWorkspace, '--tools', 'Read'")
+    expect(chatBranch).toMatch(/'--tools', OUTILS_WEB, '--allowedTools', OUTILS_WEB/)
     expect(chatBranch).toContain('existsSync(')
   })
 
