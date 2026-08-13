@@ -98,6 +98,34 @@ export function extraireCandidats(sortie: string): CandidatBrut[] | undefined {
 
 /** Le prompt proposé à l'utilisateur pour ce candidat. Il porte sa source : on cliquera dessus. */
 export function redigerPromptCandidat(candidat: CandidatBrut): string {
+  /**
+   * Un defaut INTERNE ne se demande pas, il se corrige.
+   *
+   * Le gabarit ci-dessous est celui de la veille : « etudie cette nouveaute et dis-moi si Autowin
+   * devrait l'avoir ». Applique a un defaut de notre propre code, il produisait une phrase absurde —
+   * « etudie cette nouveaute de Autowin OS et dis-moi si Autowin OS devrait l'avoir » — devant une
+   * classe CSS manquante. Constate sur le premier remplissage reel du stock, avant que ces prompts
+   * ne partent en conversation.
+   *
+   * Le prompt de correction porte l'ancrage et la ligne fautive, et demande de VERIFIER d'abord :
+   * l'audit est deterministe mais pas infaillible, et corriger un faux positif coute plus cher que
+   * de le refermer.
+   */
+  const interne = /^(?:src|scripts)\/[\w./-]+:\d+$/.test((candidat.url ?? '').trim())
+  if (interne) {
+    return [
+      `Corrige ce defaut d'Autowin OS :`,
+      '',
+      `« ${candidat.titre} »`,
+      `Ou : ${candidat.url}`,
+      `Ligne en cause : « ${candidat.citation} »`,
+      '',
+      'Commence par VERIFIER que le defaut est reel a cet endroit — un detecteur se trompe, et une',
+      'correction posee sur un faux positif coute plus cher que de refermer le ticket. S il est reel,',
+      'corrige-le et prouve la correction (test rouge -> vert, ou capture). Sinon, dis pourquoi c est',
+      'un faux positif : c’est le détecteur qu’il faudra corriger, pas le code.'
+    ].join('\n')
+  }
   return [
     `Étudie cette nouveauté de ${candidat.concurrent} et dis-moi si Autowin OS devrait l’avoir :`,
     '',
