@@ -378,13 +378,47 @@ print("PASS launch_dev_phases + splash")
 # Plainte de depart : « ca lance une vieille version a chaque fois » sans jamais dire laquelle.
 from launch_dev_phases import formater_identite as _fmt  # noqa: E402
 
-verifie(_fmt("fc5f2d6", "main", 0) == "fc5f2d6 · main · propre",
-        "arbre propre : commit + branche + « propre », sans bruit")
-verifie(_fmt("fc5f2d6", "veille-concurrents", 3) == "fc5f2d6 · veille-concurrents · +3 non committés",
-        "arbre sale : le nombre de non-committes dit que ce n'est PAS exactement le commit")
-verifie(_fmt("abc1234", "main", 1).endswith("+1 non committé"),
-        "singulier au singulier, pluriel au pluriel")
-verifie(_fmt("", "main", 0).startswith("sans commit"),
+verifie(_fmt("fc5f2d6", "main", 0, 0) == "fc5f2d6 · main · à jour · arbre propre",
+        "rien a faire : chaque etat est NOMME, aucun « +N » nu")
+verifie(_fmt("fc5f2d6", "main", 32, 5) == "fc5f2d6 · main · 5 commits de retard · 32 fichiers modifiés",
+        "les DEUX grandeurs portent leur unite : le loading disait « +32 » et l'app « +5 », "
+        "les deux justes, illisibles ensemble")
+verifie("1 commit de retard" in _fmt("abc1234", "main", 1, 1)
+        and "1 fichier modifié" in _fmt("abc1234", "main", 1, 1),
+        "singulier au singulier, pluriel au pluriel, sur les deux nombres")
+verifie("retard inconnu" in _fmt("abc1234", "main", 0, None),
+        "comparaison impossible : on le DIT, on n'affiche pas « a jour » sans avoir compare")
+verifie("+" not in _fmt("fc5f2d6", "main", 32, 5),
+        "aucun « +N » nu ne revient : c'est ce qui rendait les deux chiffres confondables")
+verifie(_fmt("", "main", 0, 0).startswith("sans commit"),
         "un commit vide ne casse pas la ligne")
-verifie("détaché" in _fmt("abc1234", "", 0),
+verifie("détaché" in _fmt("abc1234", "", 0, 0),
         "une branche vide (HEAD detache) est nommee, pas laissee vide")
+
+# --- Mise a jour automatique au lancement : QUAND, et surtout QUAND PAS ---
+from launch_dev_phases import decider_mise_a_jour as _maj, libelle_mise_a_jour as _majl  # noqa: E402
+
+verifie(_maj(0, 0) == "a-jour", "rien a rapatrier : on ne touche a rien")
+verifie(_maj(5, 0) == "appliquer", "du retard et un arbre propre : on rapatrie")
+verifie(_maj(5, 3) == "refus-arbre-sale",
+        "du retard MAIS du travail en cours : on NE TOUCHE PAS. Le 2026-08-13 un pull --autostash "
+        "concurrent a efface un correctif non committe de l'arbre partage ; un lanceur qui stashe "
+        "au double-clic reproduirait ce degat a chaque demarrage")
+verifie(_maj(None, 0) == "inconnu",
+        "comparaison impossible : c'est une issue NOMMEE, pas un « a jour » invente")
+verifie(_maj(None, 9) == "inconnu",
+        "sans retard connu, l'etat de l'arbre ne peut pas conclure a lui seul")
+verifie("rien ne sera touché" in _majl("refus-arbre-sale", 5, 3),
+        "le refus DIT ce qu'il protege, sinon il passe pour une panne")
+verifie("5 commits" in _majl("appliquer", 5, 0) and "+" not in _majl("appliquer", 5, 0),
+        "les nombres portent leur unite, aucun « +N » nu qui se confondrait avec un autre compteur")
+verifie(_majl("a-jour", 0, 0) == "déjà à jour", "l'etat nominal se lit d'un coup d'oeil")
+
+# VERDICT de ce troisieme bloc. Sans lui, les `verifie` ci-dessus n'assertaient RIEN : le fichier
+# imprimait deja « PASS » plus haut, et les echecs s'empilaient dans `ECHECS` sans jamais etre lus.
+# Constate par mutation — desarmer le refus sur arbre sale laissait le test vert.
+if ECHECS:
+    for message in ECHECS:
+        print("FAIL:", message)
+    sys.exit(1)
+print("PASS launch_dev_phases + mise a jour")

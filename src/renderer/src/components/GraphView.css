@@ -1930,3 +1930,95 @@
   font-size: 12px;
   transform: translateX(-50%);
 }
+
+/**
+ * BOUTONS DE REPRISE ET MESSAGES D'ÉCHEC de la vue Knowledge.
+ *
+ * Dix classes étaient écrites par le JSX sans AUCUNE règle : `graph-brains-retry`,
+ * `graph-themes-retry`, `graph-theme-nodes-retry`, `graph-status__retry`, `graph-empty-reindex`,
+ * `graph-empty-brains`, `graph-truncation__extend`, `node-panel__retry`, plus les deux messages
+ * `graph-brains-recovery__message` et `graph-status__message`. Leurs CONTENEURS étaient stylés — la
+ * boîte se voyait, son contenu retombait sur le style par défaut du navigateur. Détecté par l'audit
+ * interne, pas à l'œil : ces états n'apparaissent qu'en cas d'échec, donc personne ne les regarde
+ * jamais au moment où ils comptent le plus.
+ *
+ * Un bouton de reprise est la SORTIE d'un cul-de-sac : il doit se voir et être cliquable au clavier.
+ * L'idiome est celui de `.graph-refresh`, la seule commande déjà habillée de cette vue — mêmes bord,
+ * fond et couleur, pour ne pas inventer un troisième vocabulaire.
+ */
+.graph-brains-retry,
+.graph-themes-retry,
+.graph-theme-nodes-retry,
+.graph-status__retry,
+.graph-empty-reindex,
+.graph-empty-brains,
+.graph-truncation__extend,
+.node-panel__retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 12px;
+  border: 1px solid #293543;
+  border-radius: 999px;
+  background: rgba(16, 23, 34, 0.95);
+  color: #dce7f3;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease;
+}
+.graph-brains-retry:hover,
+.graph-themes-retry:hover,
+.graph-theme-nodes-retry:hover,
+.graph-status__retry:hover,
+.graph-empty-reindex:hover,
+.graph-empty-brains:hover,
+.graph-truncation__extend:hover,
+.node-panel__retry:hover {
+  border-color: #59dcff;
+  color: #f2f7ff;
+}
+/* Le focus clavier était invisible : ces boutons sont souvent le SEUL chemin hors d'un état vide. */
+.graph-brains-retry:focus-visible,
+.graph-themes-retry:focus-visible,
+.graph-theme-nodes-retry:focus-visible,
+.graph-status__retry:focus-visible,
+.graph-empty-reindex:focus-visible,
+.graph-empty-brains:focus-visible,
+.graph-truncation__extend:focus-visible,
+.node-panel__retry:focus-visible {
+  outline: 2px solid #e9bd4e;
+  outline-offset: 2px;
+}
+.graph-brains-retry:disabled,
+.graph-themes-retry:disabled,
+.graph-theme-nodes-retry:disabled,
+.graph-status__retry:disabled,
+.graph-empty-reindex:disabled,
+.graph-empty-brains:disabled,
+.graph-truncation__extend:disabled,
+.node-panel__retry:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+/* Le MOTIF de l'échec, à côté de son bouton : lisible sans crier, et jamais tronqué. */
+.graph-brains-recovery__message,
+.graph-status__message {
+  color: #f0a8a8;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* État VIDE (aucun graphe) : le même cadre que l'état d'erreur, sans la couleur d'alerte — un vide
+   n'est pas une panne, et le peindre en rouge apprend à ignorer le rouge. */
+.graph-status--empty {
+  border-color: #293543;
+  color: #9fb0c4;
+}

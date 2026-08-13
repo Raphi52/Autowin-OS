@@ -9,21 +9,28 @@ import type { LancerScout } from './passe'
  * point l'importera plutot que d'en garder une copie, sinon les deux divergeront — et c'est justement le
  * script qui a servi a trouver les trois pieges d'environnement encodes ci-dessous.
  */
-export const lancerScoutVeille: LancerScout = (source, prompt) =>
+export interface OptionsScoutCli {
+  /** Outils CHARGES et AUTORISES, en arguments SEPARES (la forme a virgules pend — mesure A/B). */
+  outils: readonly string[]
+  /** Repertoire de travail du CLI — necessaire au scout INTERNE pour lire le depot. */
+  cwd?: string
+  timeoutMs?: number
+}
+
+/** Le corps commun a tous les scouts CLI : memes pieges d'environnement, seuls les outils changent. */
+export const lancerScoutCli = (prompt: string, options: OptionsScoutCli): Promise<string> =>
   new Promise<string>((resoudre, rejeter) => {
-    void source
     const enfant = spawn(
       resolveClaudeBin(),
       [
         '-p',
         prompt,
         '--tools',
-        'WebFetch,WebSearch',
+        options.outils.join(','),
         // Arguments SEPARES : mesure A/B sur le CLI reel — la forme a virgules fait PENDRE toute
         // recuperation de page jusqu'au delai maximum, la forme separee repond en quelques secondes.
         '--allowedTools',
-        'WebFetch',
-        'WebSearch',
+        ...options.outils,
         '--permission-mode',
         'bypassPermissions',
         // Sans ces trois-la, le CLI demarre tous les serveurs MCP du poste avant de repondre : mesure,
@@ -34,7 +41,7 @@ export const lancerScoutVeille: LancerScout = (source, prompt) =>
         '--disable-slash-commands'
       ],
       // stdin FERME : avec un tuyau ouvert, le CLI attend une entree (« no stdin data received in 3s »).
-      { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
+      { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, ...(options.cwd ? { cwd: options.cwd } : {}) }
     )
     let sortie = ''
     let erreurs = ''
@@ -46,7 +53,7 @@ export const lancerScoutVeille: LancerScout = (source, prompt) =>
     enfant.stderr.on('data', (bout: string) => {
       erreurs += bout
     })
-    const minuteur = setTimeout(() => enfant.kill('SIGKILL'), 240_000)
+    const minuteur = setTimeout(() => enfant.kill('SIGKILL'), options.timeoutMs ?? 240_000)
     minuteur.unref?.()
     enfant.on('error', (erreur) => {
       clearTimeout(minuteur)
@@ -68,3 +75,9 @@ export const lancerScoutVeille: LancerScout = (source, prompt) =>
       )
     })
   })
+
+/** Le scout de veille WEB historique : outils web seuls — un scout n'a rien a ecrire ni a executer. */
+export const lancerScoutVeille: LancerScout = (source, prompt) => {
+  void source
+  return lancerScoutCli(prompt, { outils: ['WebFetch', 'WebSearch'] })
+}

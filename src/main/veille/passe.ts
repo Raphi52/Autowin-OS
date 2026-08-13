@@ -1,4 +1,4 @@
-import { trierCandidats, type CandidatBrut, type Refus } from './candidats'
+import { ancrageInterne, trierCandidats, type CandidatBrut, type Refus } from './candidats'
 import {
   clesConnues,
   fusionnerPasse,
@@ -98,6 +98,40 @@ export function extraireCandidats(sortie: string): CandidatBrut[] | undefined {
 
 /** Le prompt proposé à l'utilisateur pour ce candidat. Il porte sa source : on cliquera dessus. */
 export function redigerPromptCandidat(candidat: CandidatBrut): string {
+  /**
+   * Un candidat INTERNE ne s'etudie pas comme une nouveaute concurrente : il n'y a pas de page a
+   * verifier, il y a un ancrage de code qui prouve. Deux natures, deux gestes :
+   *  - une CORRECTION (audit interne) se corrige — apres verification, un detecteur se trompe ;
+   *  - un AJOUT (scout interne) s'implemente — apres relecture, le code a pu evoluer.
+   * Le gabarit de veille appliquait aux deux la phrase absurde « etudie cette nouveaute de Autowin OS
+   * et dis-moi si Autowin OS devrait l'avoir » — constate sur le premier remplissage reel du stock.
+   */
+  if (candidat.url && ancrageInterne(candidat.url.trim())) {
+    if (candidat.type === 'ajout') {
+      return [
+        `Voici un besoin observé dans Autowin OS lui-même — propose son implémentation :`,
+        '',
+        `« ${candidat.titre} »`,
+        `Ancrage : ${candidat.url} (${candidat.dateSource})`,
+        `Preuve lue : « ${candidat.citation} »`,
+        '',
+        'Commence par relire l’ancrage et vérifier que le besoin tient toujours — si le code a déjà',
+        'évolué et le couvre, dis-le et arrête-toi là. Sinon, propose ce que ça donnerait, et ce que ça coûte.'
+      ].join('\n')
+    }
+    return [
+      `Corrige ce defaut d'Autowin OS :`,
+      '',
+      `« ${candidat.titre} »`,
+      `Ou : ${candidat.url}`,
+      `Ligne en cause : « ${candidat.citation} »`,
+      '',
+      'Commence par VERIFIER que le defaut est reel a cet endroit — un detecteur se trompe, et une',
+      'correction posee sur un faux positif coute plus cher que de refermer le ticket. S il est reel,',
+      'corrige-le et prouve la correction (test rouge -> vert, ou capture). Sinon, dis pourquoi c est',
+      'un faux positif : c’est le détecteur qu’il faudra corriger, pas le code.'
+    ].join('\n')
+  }
   return [
     `Étudie cette nouveauté de ${candidat.concurrent} et dis-moi si Autowin OS devrait l’avoir :`,
     '',
@@ -121,6 +155,16 @@ export async function executerPasse(deps: {
   sources?: readonly SourceVeille[]
   maintenant?: () => string
   chemin?: string
+  /**
+   * SECOND BRAS de la passe : les defauts d'Autowin lui-meme, produits par `audit-interne`.
+   *
+   * Demande utilisateur du 2026-08-13 : la tache planifiee qui remplit l'onglet Tickets > Autowin OS
+   * doit livrer « et les new feature et les fix ». Les nouveautes viennent des sources web (les
+   * concurrents inspirent des AJOUTS) ; les corrections viennent d'ICI, pas de leurs changelogs.
+   *
+   * Injecte plutot que lu depuis le disque : cette fonction reste testable sans depot ni reseau.
+   */
+  candidatsInternes?: readonly CandidatBrut[]
 }): Promise<ResultatPasse> {
   const sources = deps.sources ?? SOURCES_VEILLE
   const maintenant = (deps.maintenant ?? (() => new Date().toISOString()))()
@@ -166,7 +210,22 @@ export async function executerPasse(deps: {
     })
   )
 
-  const bruts = parSource.flatMap((r) => r.bruts)
+  /**
+   * Les corrections venues du WEB sont ecartees ici.
+   *
+   * « Les tickets sont a chier, il faut que ca soit de vrais fix pour Autowin, pas inspires du web »
+   * (utilisateur, 2026-08-13). Une correction de changelog concurrent decrit un bug QU'ON N'A PAS :
+   * la reprendre n'a aucun sens, et sur une passe reelle elles noyaient les ajouts a 19 contre 2.
+   * Le scout continue de les CLASSER (son prompt le lui demande, et savoir ou un concurrent bute a
+   * sa valeur) — elles ne deviennent simplement plus des candidats a traiter.
+   */
+  // AUCUN filtrage ici : les corrections concurrentes sont refusees par `trierCandidats`, avec une
+  // raison NOMMEE. Une premiere version les coupait a cet endroit, et cassait l'invariant du module —
+  // une entree sans citation disparaissait alors en silence au lieu d'etre comptee comme refus.
+  const brutsWeb = parSource.flatMap((r) => r.bruts)
+  // Les internes passent par le MEME tri, la meme deduplication et le meme stock : une seule colonne,
+  // un seul chemin de code, donc aucune divergence a maintenir entre les deux origines.
+  const bruts = [...brutsWeb, ...(deps.candidatsInternes ?? [])]
   const echecs = parSource.map((r) => r.echec).filter((e): e is EchecSource => e !== undefined)
   const { retenus, refuses } = trierCandidats(bruts, clesConnues(stockAvant), {
     maintenant,
@@ -175,4 +234,25 @@ export async function executerPasse(deps: {
   const stock = fusionnerPasse(stockAvant, { retenus, echecs, maintenant })
   ecrireStockVeille(stock, deps.chemin)
   return { retenus: retenus.length, refuses, echecs, stock }
+}
+
+/**
+ * La passe INTERNE seule : aucun scout web, uniquement des candidats venus de l'app elle-meme.
+ *
+ * C'est le chemin du bouton « En generer plus » de la vue : relancer les scouts web a chaque clic
+ * couterait ~4 minutes par source pour des pages qui n'ont pas change ; le scout interne, lui, lit
+ * le poste. Les candidats passent par LE MEME tri et LE MEME stock que la passe complete.
+ */
+export async function executerPasseInterne(deps: {
+  candidatsInternes: () => Promise<CandidatBrut[]>
+  maintenant?: () => string
+  chemin?: string
+}): Promise<ResultatPasse> {
+  return executerPasse({
+    lancerScout: () => Promise.reject(new Error('passe interne : aucun scout web')),
+    sources: [],
+    candidatsInternes: await deps.candidatsInternes(),
+    ...(deps.maintenant ? { maintenant: deps.maintenant } : {}),
+    ...(deps.chemin ? { chemin: deps.chemin } : {})
+  })
 }

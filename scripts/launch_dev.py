@@ -42,6 +42,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from launch_dev_phases import decider_mise_a_jour, libelle_mise_a_jour
 from launch_dev_splash import Splash  # noqa: E402 - le chemin doit etre pose avant l'import
 
 RACINE = Path(__file__).resolve().parent.parent
@@ -242,8 +243,64 @@ def main() -> int:
     # un silence. C'est un veilleur separe qui le fait.
     parole = {"dernier": time.monotonic()}
 
+    def git(args: list[str], delai: int = 25) -> tuple[int, str]:
+        """Appel git borne. Une panne git ne doit JAMAIS empecher un demarrage."""
+        try:
+            fin = subprocess.run(  # noqa: S603 - arguments fixes, cwd resolu
+                ["git", *args],
+                cwd=str(RACINE),
+                capture_output=True,
+                text=True,
+                timeout=delai,
+                check=False,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            return fin.returncode, (fin.stdout or "").strip()
+        except Exception:  # noqa: BLE001 - git absent, lent ou hors depot : on continue sans
+            return 1, ""
+
+    def mettre_a_jour() -> None:
+        """Rapatrie ce qui manque AVANT de construire — et refuse de le faire sur un arbre sale.
+
+        Demande utilisateur : « ca devrait auto update en plus des le launcher ». Le refus sur arbre
+        sale n'est pas une precaution decorative : le 2026-08-13, un `git pull --autostash` lance par
+        une session concurrente a EFFACE de l'arbre partage un correctif non committe, verifie et
+        vert, qu'il a fallu reecrire. Un lanceur qui stashe au double-clic le travail en cours de
+        quelqu'un d'autre reproduirait ce degat a chaque demarrage.
+
+        Chaque issue est ANNONCEE a l'ecran : un lanceur muet est exactement ce qui a fait croire
+        pendant des jours qu'on lançait la derniere version.
+        """
+        splash.pousser("[demarrage] mise à jour : lecture de la référence distante\n")
+        # `fetch` seul : il ne touche PAS a l'arbre de travail, donc il est sur meme sur un arbre sale.
+        code_fetch, _ = git(["fetch", "origin", "main"], delai=40)
+        if code_fetch != 0:
+            splash.pousser("[demarrage] mise à jour : référence distante injoignable, on continue\n")
+            journaliser("maj: fetch impossible")
+            return
+        _, brut = git(["rev-list", "--count", "HEAD..origin/main"])
+        retard = int(brut) if brut.isdigit() else None
+        _, porcelain = git(["status", "--porcelain"])
+        non_committes = len([l for l in porcelain.splitlines() if l.strip()])
+        decision = decider_mise_a_jour(retard, non_committes)
+        libelle = libelle_mise_a_jour(decision, retard, non_committes)
+        splash.pousser(f"[demarrage] {libelle}\n")
+        journaliser(f"maj: {decision} (retard={retard}, non_committes={non_committes})")
+        if decision != "appliquer":
+            return
+        # `--ff-only` : on AVANCE, on ne fusionne ni ne rebase. Sur un arbre propre en retard pur,
+        # c'est sans perte possible ; tout autre cas a deja ete refuse au-dessus.
+        code_pull, _ = git(["merge", "--ff-only", "origin/main"], delai=60)
+        if code_pull == 0:
+            splash.pousser("[demarrage] mise à jour appliquée\n")
+            journaliser("maj: appliquee")
+        else:
+            splash.pousser("[demarrage] mise à jour refusée par git, on lance la version locale\n")
+            journaliser("maj: merge ff-only refuse")
+
     def travailler() -> None:
         try:
+            mettre_a_jour()
             JOURNAL.parent.mkdir(parents=True, exist_ok=True)
             with JOURNAL.open("a", encoding="utf-8") as sortie:
                 processus = subprocess.Popen(  # noqa: S603 - chemin resolu, arguments fixes

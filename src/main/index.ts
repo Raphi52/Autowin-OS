@@ -378,6 +378,8 @@ import {
 } from './task-manager/windows-relay'
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
 import { registerVeilleIpc } from './veille/veille-ipc'
+import { executerPasseInterne } from './veille/passe'
+import { candidatsDuScoutInterne } from './veille/scout-interne'
 import {
   AutoKaizenSupervisor,
   incidentFromPilotEvent,
@@ -4756,7 +4758,19 @@ Le fil reprend ensuite normalement.`
   })
   // Veille concurrents : la vue Tickets lit le stock et marque un candidat. Deux gestes, pas plus —
   // elle ne peut pas FABRIQUER de candidat, ce qui contournerait le controle de citation.
-  registerVeilleIpc({ ipc: ipcMain, assertTrusted: assertTrustedRendererSender })
+  registerVeilleIpc({
+    ipc: ipcMain,
+    assertTrusted: assertTrustedRendererSender,
+    // « En générer plus » : la passe interne seule (scout local en lecture), jamais les scouts web.
+    genererInterne: () =>
+      executerPasseInterne({
+        candidatsInternes: () =>
+          candidatsDuScoutInterne({
+            racineDepot: os.executionWorkspace,
+            racineDonnees: ensureAutowinAppData(appDataRoot)
+          })
+      })
+  })
   registerTaskManagerIpc({
     ipc: ipcMain,
     store: scheduledTasks,

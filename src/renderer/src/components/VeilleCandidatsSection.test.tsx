@@ -226,3 +226,45 @@ describe('pertinence — la note du scout, affichee et triable', () => {
     expect(regle).toMatch(/min-height:\s*0/)
   })
 })
+
+describe('« En générer plus » — le scout interne depuis la vue', () => {
+  it('déclenche la génération, montre l’état occupé, puis RELIT le stock', async () => {
+    let resoudre!: (v: unknown) => void
+    const generer = vi.fn(() => new Promise((r) => (resoudre = r)))
+    const charges: StockVeille[] = [
+      stock(),
+      stock({ candidats: [candidat(), candidat({ id: 'interne|src/x.ts:1|vue cout', concurrent: 'Autowin OS', titre: 'Vue coût par rôle', url: 'src/x.ts:1' })] })
+    ]
+    const charger = vi.fn(async () => charges.shift() ?? stock())
+    await rendre({ charger, generer })
+
+    const bouton = trouver('veille-generer') as HTMLButtonElement
+    expect(bouton).not.toBeNull()
+    await act(async () => {
+      bouton.click()
+    })
+    // Pendant la passe : bouton désactivé et libellé d'attente — un double-clic ne repaie rien.
+    expect((trouver('veille-generer') as HTMLButtonElement).disabled).toBe(true)
+    expect(texte()).toContain('Génération en cours…')
+
+    await act(async () => {
+      resoudre({ retenus: 1 })
+    })
+    expect(generer).toHaveBeenCalledTimes(1)
+    // Le stock a été RELU après la passe : le nouveau candidat interne est affiché.
+    expect(charger).toHaveBeenCalledTimes(2)
+    expect(texte()).toContain('Vue coût par rôle')
+    expect((trouver('veille-generer') as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('une génération en échec est NOMMÉE à l’écran, pas avalée', async () => {
+    const generer = vi.fn(async () => {
+      throw new Error('génération interne non câblée sur ce poste')
+    })
+    await rendre({ charger: async () => stock(), generer })
+    await act(async () => {
+      ;(trouver('veille-generer') as HTMLButtonElement).click()
+    })
+    expect(texte()).toContain('non câblée')
+  })
+})

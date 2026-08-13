@@ -27,10 +27,32 @@ export interface RegisterVeilleIpcOptions {
   assertTrusted(event: IpcMainInvokeEvent, scope: string): void
   /** Injecté pour les tests : sinon on écrirait dans la racine de données réelle. */
   chemin?: string
+  /**
+   * « En générer plus » : lance la passe INTERNE côté main et rend le stock à jour. La vue ne
+   * fabrique toujours AUCUN candidat — elle déclenche une passe, dont le contrôle de citation
+   * (`trierCandidats`) reste le seul chemin d'écriture. Absent = le canal répond par une erreur
+   * nommée plutôt que d'exister en silence.
+   */
+  genererInterne?: () => Promise<unknown>
 }
 
 export function registerVeilleIpc(options: RegisterVeilleIpcOptions): void {
   const { ipc, assertTrusted, chemin } = options
+
+  /** Une seule génération à la fois : un double-clic ne paie pas deux scouts. */
+  let generationEnCours: Promise<unknown> | undefined
+  ipc.handle('veille:generer', (event) => {
+    assertTrusted(event, 'Veille concurrents')
+    if (!options.genererInterne) {
+      throw new Error('génération interne non câblée sur ce poste')
+    }
+    if (!generationEnCours) {
+      generationEnCours = options.genererInterne().finally(() => {
+        generationEnCours = undefined
+      })
+    }
+    return generationEnCours
+  })
 
   ipc.handle('veille:snapshot', (event) => {
     assertTrusted(event, 'Veille concurrents')
