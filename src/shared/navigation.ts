@@ -17,10 +17,19 @@ export type SettingsSection = 'capabilities' | 'budget' | 'behaviour' | 'provide
  * occurrences ratées) n'est pas éditer des tâches planifiées. Elles s'empilaient sur un seul écran.
  */
 export type TaskManagerSection = 'watchdog' | 'planification'
+/**
+ * Worktrees empilait quatre blocs sur un seul écran — état du dépôt, santé, activité des agents,
+ * plan des copies — si bien qu'il fallait défiler pour atteindre la carte, et que la vue ne pouvait
+ * pas porter la même barre d'onglets que les autres (aucune section à afficher). Ce sont trois
+ * QUESTIONS distinctes : où en sont mes copies (carte), qui travaille en ce moment (activité), et
+ * qu'est-ce qui cloche (santé). L'état du dépôt reste hors sections : c'est le résumé qu'on lit en
+ * premier, quel que soit l'onglet.
+ */
+export type WorktreeSection = 'carte' | 'activite' | 'sante'
 
 export interface AppLocation {
   destination: AppDestination
-  section?: AgentStudioSection | SettingsSection | TaskManagerSection
+  section?: AgentStudioSection | SettingsSection | TaskManagerSection | WorktreeSection
 }
 
 const DESTINATION_IDS = new Set<string>(APP_DESTINATIONS.map(({ id }) => id))

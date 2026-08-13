@@ -173,6 +173,23 @@ async function renderView(): Promise<void> {
   })
 }
 
+/**
+ * Ouvre une section par son onglet, comme l'utilisateur. Les trois blocs de la vue (carte, activité,
+ * santé) ne s'empilent plus sur un seul écran : les tests qui visent l'activité ou la santé doivent
+ * donc passer par la barre, sinon ils assertent sur du contenu que personne ne voit. Échoue fort si
+ * l'onglet manque — un test qui ne trouve pas son onglet doit le DIRE, pas asserter sur du vide.
+ */
+async function ouvrirSection(label: string): Promise<void> {
+  const onglet = [...(container?.querySelectorAll('.domain-tabs button') ?? [])].find((bouton) =>
+    bouton.textContent?.trim().startsWith(label)
+  ) as HTMLButtonElement | undefined
+  if (!onglet) throw new Error(`Onglet « ${label} » absent de la barre Worktrees`)
+  await act(async () => {
+    onglet.click()
+    await Promise.resolve()
+  })
+}
+
 afterEach(() => {
   act(() => root?.unmount())
   container?.remove()
@@ -200,6 +217,7 @@ describe('WorktreeMapView — plan de métro des worktrees git', () => {
   it('rend le docteur read-only et une commande copiable sans bouton d’exécution', async () => {
     installApi()
     await renderView()
+    await ouvrirSection('Santé')
 
     const doctor = container?.querySelector('[data-testid="worktree-doctor"]')
     expect(doctor?.textContent).toContain('1 point à vérifier')
@@ -212,6 +230,7 @@ describe('WorktreeMapView — plan de métro des worktrees git', () => {
   it('annonce explicitement un diagnostic sain', async () => {
     installApi({ ...snapshot, doctor: { status: 'healthy', findings: [] } })
     await renderView()
+    await ouvrirSection('Santé')
 
     expect(container?.querySelector('[data-testid="worktree-doctor"]')?.textContent).toContain(
       'Docteur : sain'
@@ -540,6 +559,7 @@ describe('WorktreeMapView - parcours agents et runs', () => {
     const api = installApi()
     api.getWorktreeActivity.mockResolvedValue([recoveringAgent])
     await renderView()
+    await ouvrirSection('Activité')
 
     expect(container?.querySelector('[data-testid="worktree-activity-panel"]')).toBeTruthy()
     expect(container?.textContent).toContain('Reprendre la publication')
@@ -554,7 +574,12 @@ describe('WorktreeMapView - parcours agents et runs', () => {
     api.getWorktreeActivity.mockRejectedValue(new Error('journal verrouillé'))
     await renderView()
 
+    // L'INTENTION du test est conservée : une lecture d'activité en échec ne detruit pas la carte.
+    // Carte et activité vivant maintenant dans deux onglets, on verifie la carte sur le sien PUIS
+    // l'erreur rejouable sur le sien — au lieu d'exiger qu'elles soient visibles en meme temps.
     expect(container?.querySelector('svg.wtmap-plan')).toBeTruthy()
+    await ouvrirSection('Activité')
+    expect(container?.querySelector('svg.wtmap-plan')).toBeNull()
     expect(
       container?.querySelector('[data-testid="worktree-activity-error"]')?.textContent
     ).toContain('journal verrouillé')
@@ -568,6 +593,7 @@ describe('WorktreeMapView - parcours agents et runs', () => {
     api.getWorktreeActivity.mockReturnValue(pending.promise)
 
     await renderViewWithoutSettling()
+    await ouvrirSection('Activité')
 
     expect(container?.textContent).toContain('Lecture de l’activité')
     expect(container?.textContent).not.toContain('Aucun bureau agent ouvert')
@@ -583,6 +609,7 @@ describe('WorktreeMapView - parcours agents et runs', () => {
       return () => undefined
     })
     await renderViewWithoutSettling()
+    await ouvrirSection('Activité')
 
     await act(async () => {
       push?.([{ ...recoveringAgent, agentName: 'Etat live' }])
@@ -614,6 +641,7 @@ describe('WorktreeMapView - parcours agents et runs', () => {
       detail: 'Le fichier contient encore des marqueurs.'
     })
     await renderView()
+    await ouvrirSection('Activité')
 
     await clickTestId('wt-keep-agent')
 
@@ -622,6 +650,63 @@ describe('WorktreeMapView - parcours agents et runs', () => {
       'Rien n’a été écrasé'
     )
     expect(container?.querySelector('[data-state="conflict"]')).toBeTruthy()
+  })
+})
+
+describe('WorktreeMapView — trois sections dans la barre du haut', () => {
+  it('porte la meme barre a onglets que les autres vues, et ouvre la carte par defaut', async () => {
+    installApi()
+    await renderView()
+
+    const onglets = [...(container?.querySelectorAll('.domain-tabs button') ?? [])].map((b) =>
+      b.textContent?.trim()
+    )
+    expect(onglets).toEqual(['Carte', 'Activité', 'Santé1'])
+    // La carte est la question qu'on vient poser : elle s'ouvre sans clic.
+    expect(container?.querySelector('svg.wtmap-plan')).toBeTruthy()
+    expect(container?.querySelector('[data-testid="worktree-activity-panel"]')).toBeNull()
+    expect(container?.querySelector('[data-testid="worktree-doctor"]')).toBeNull()
+  })
+
+  it('montre UNE section a la fois — sans quoi la barre d onglets ne signifierait rien', async () => {
+    installApi()
+    await renderView()
+
+    await ouvrirSection('Activité')
+    expect(container?.querySelector('[data-testid="worktree-activity-panel"]')).toBeTruthy()
+    expect(container?.querySelector('svg.wtmap-plan')).toBeNull()
+    expect(container?.querySelector('[data-testid="worktree-doctor"]')).toBeNull()
+
+    await ouvrirSection('Santé')
+    expect(container?.querySelector('[data-testid="worktree-doctor"]')).toBeTruthy()
+    expect(container?.querySelector('[data-testid="worktree-activity-panel"]')).toBeNull()
+  })
+
+  it('garde l etat du depot visible dans TOUTES les sections', async () => {
+    installApi()
+    await renderView()
+
+    // La barre d'etat git (branche, changements locaux) est le resume qu'on lit en premier : la
+    // masquer derriere un onglet obligerait a revenir sur « Carte » pour savoir ou l'on est.
+    for (const section of ['Activité', 'Santé', 'Carte']) {
+      await ouvrirSection(section)
+      expect(container?.querySelector('.project-strip')).toBeTruthy()
+      expect(container?.querySelector('.wtmap-stats')).toBeTruthy()
+    }
+  })
+
+  it('compte les constats du docteur sur l onglet Sante, et n affiche RIEN quand il n y en a pas', async () => {
+    installApi()
+    await renderView()
+    const badge = container?.querySelector('[data-testid="worktree-anomaly-sante"]')
+    expect(badge?.textContent).toBe('1')
+
+    // Discriminant : un depot sain ne doit porter AUCUN badge — un « 0 » inquiete sans rien signaler.
+    act(() => root?.unmount())
+    container?.remove()
+    installApi({ ...snapshot, doctor: { status: 'healthy', findings: [] } })
+    await renderView()
+    expect(container?.querySelector('[data-testid="worktree-anomaly-sante"]')).toBeNull()
   })
 })
 

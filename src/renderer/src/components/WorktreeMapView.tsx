@@ -14,6 +14,7 @@ import type {
   WorktreeConflictResolutionChoice,
   WorktreeRuntimeStatus
 } from '../../../shared/worktree-activity-model'
+import type { WorktreeSection } from '../../../shared/navigation'
 import { ViewTopBar } from './ViewTopBar'
 import { WorktreeActivityView } from './WorktreeActivityView'
 import './WorktreeMapView.css'
@@ -47,6 +48,8 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
   const [activityError, setActivityError] = useState<string | null>(null)
   const [activityNowMs, setActivityNowMs] = useState(() => Date.now())
   const [selected, setSelected] = useState<string | null>(null)
+  // `carte` par défaut : c'est la question qu'on vient poser à cette vue (où en sont mes copies).
+  const [section, setSection] = useState<WorktreeSection>('carte')
   const [repoPath, setRepoPath] = useState(() => localStorage.getItem(REPO_STORAGE_KEY) ?? '')
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const refreshGenerationRef = useRef(0)
@@ -279,6 +282,24 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
         eyebrow="WORKTREES"
         title={snapshot?.repositoryName ?? 'Dépôt'}
         description={snapshot?.repoPath || repoPath || 'Dépôt courant'}
+        ariaLabel="Sections Worktrees"
+        active={section}
+        onSelect={setSection}
+        tabs={[
+          { id: 'carte', label: 'Carte' },
+          { id: 'activite', label: 'Activité' },
+          {
+            id: 'sante',
+            label: 'Santé',
+            // Le nombre de constats du doctor, visible depuis les deux autres onglets : sinon un
+            // dépôt en vrac ne se signale qu'à celui qui pense à ouvrir l'onglet.
+            anomaly: {
+              count: snapshot?.doctor?.findings.length ?? 0,
+              title: `Constat(s) sur le dépôt : ${snapshot?.doctor?.findings.length ?? 0}`,
+              testId: 'worktree-anomaly-sante'
+            }
+          }
+        ]}
         actions={
           <>
             <button onClick={() => void pickRepo()} data-testid="worktree-map-pick">
@@ -383,39 +404,52 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
         </p>
       )}
 
-      {snapshot?.available && snapshot.doctor && <WorktreeDoctor report={snapshot.doctor} />}
+      {section === 'sante' && snapshot?.available && snapshot.doctor && (
+        <WorktreeDoctor report={snapshot.doctor} />
+      )}
+      {section === 'sante' && snapshot?.available && !snapshot.doctor && (
+        <p className="wtmap-notice" role="status" data-testid="worktree-sante-vide">
+          Aucun diagnostic pour ce dépôt.
+        </p>
+      )}
 
-      <section className="wtmap-activity" data-testid="worktree-activity-panel">
-        <div className="wtmap-activity-head">
-          <b>Runs et bureaux agents</b>
-          {activityLoading && <span role="status">Lecture de l’activité…</span>}
-        </div>
-        {activityError && (
-          <div className="wtmap-notice is-error" role="alert" data-testid="worktree-activity-error">
-            <b>Lecture partielle</b>
-            <p>{activityError}</p>
-            <button
-              onClick={() => void refreshActivity()}
-              disabled={activityLoading}
-              data-testid="worktree-activity-retry"
-            >
-              Réessayer
-            </button>
+      {section === 'activite' && (
+        <section className="wtmap-activity" data-testid="worktree-activity-panel">
+          <div className="wtmap-activity-head">
+            <b>Runs et bureaux agents</b>
+            {activityLoading && <span role="status">Lecture de l’activité…</span>}
           </div>
-        )}
-        {activityLoaded && (
-          <WorktreeActivityView
-            agents={activity}
-            status={runtimeStatus}
-            nowMs={activityNowMs}
-            onOpenOffice={(path) => window.api.openFolder(path)}
-            onRetryOffice={retryOffice}
-            onResolveConflictChoice={resolveConflict}
-          />
-        )}
-      </section>
+          {activityError && (
+            <div
+              className="wtmap-notice is-error"
+              role="alert"
+              data-testid="worktree-activity-error"
+            >
+              <b>Lecture partielle</b>
+              <p>{activityError}</p>
+              <button
+                onClick={() => void refreshActivity()}
+                disabled={activityLoading}
+                data-testid="worktree-activity-retry"
+              >
+                Réessayer
+              </button>
+            </div>
+          )}
+          {activityLoaded && (
+            <WorktreeActivityView
+              agents={activity}
+              status={runtimeStatus}
+              nowMs={activityNowMs}
+              onOpenOffice={(path) => window.api.openFolder(path)}
+              onRetryOffice={retryOffice}
+              onResolveConflictChoice={resolveConflict}
+            />
+          )}
+        </section>
+      )}
 
-      {entries.length > 0 && (
+      {section === 'carte' && entries.length > 0 && (
         <>
           <div className="wtmap-area">
             <span className="wtmap-territory is-up">↑ vivant — réclame ton attention</span>
@@ -559,7 +593,7 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
         </>
       )}
 
-      {selectedEntry && (
+      {section === 'carte' && selectedEntry && (
         <aside className="wtmap-detail" data-testid="worktree-map-detail">
           <div className="wtmap-detail-head">
             <b>{worktreeLabel(selectedEntry)}</b>
