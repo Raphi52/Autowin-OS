@@ -152,7 +152,15 @@ export class AutowinOS {
   readonly registry: ProviderRegistry
   readonly executionSupervisor = new ExecutionSupervisor()
   readonly roles = new RoleModelConfig(loadRoleBindings()) // restaure la config persistée
-  readonly cost = new CostAggregator(undefined, join(ensureAutowinAppData(), 'cost.jsonl'))
+  /**
+   * Le plafond est relu à CHAQUE `budgetStatus()` depuis le réglage persisté. Avant, on passait
+   * `undefined` : `budget` restait toujours `null` et le seuil d'alerte à 80 % était donc
+   * structurellement inatteignable en production — un garde-fou affiché qui ne gardait rien.
+   */
+  readonly cost = new CostAggregator(
+    () => loadOrchestrationBudget(join(ensureAutowinAppData(), 'orchestration-budget.json')).maxUsd,
+    join(ensureAutowinAppData(), 'cost.jsonl')
+  )
   readonly conversations = new ConversationStore()
   readonly trust = new TrustLedger(join(ensureAutowinAppData(), 'trust.jsonl'))
   readonly orchestrator: Orchestrator

@@ -92,6 +92,39 @@ describe('CostAggregator', () => {
   })
 })
 
+describe('CostAggregator — couverture de tarification (le total ne ment plus)', () => {
+  it('budgetStatus expose le nombre de tours NON tarifés que le total ignore', () => {
+    const agg = new CostAggregator()
+    agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 1, costUsd: 0.5 })
+    agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 1 })
+    agg.add({ provider: 'codex', inputTokens: 1, outputTokens: 1 })
+    const status = agg.budgetStatus()
+    expect(status.spent).toBeCloseTo(0.5)
+    expect(status.turns).toBe(3)
+    expect(status.unpricedTurns).toBe(2)
+    expect(status.spentIsPartial).toBe(true)
+  })
+
+  it('tous les tours tarifés => spentIsPartial faux', () => {
+    const agg = new CostAggregator()
+    agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 1, costUsd: 0.5 })
+    const status = agg.budgetStatus()
+    expect(status.unpricedTurns).toBe(0)
+    expect(status.spentIsPartial).toBe(false)
+  })
+
+  it('budget fourni par un resolveur (relu à chaque appel) => le seuil peut se déclencher', () => {
+    let cap: number | null = null
+    const agg = new CostAggregator(() => cap)
+    agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 1, costUsd: 8 })
+    expect(agg.budgetStatus().budget).toBeNull()
+    cap = 10
+    const status = agg.budgetStatus()
+    expect(status.budget).toBe(10)
+    expect(status.alert).toBe(true)
+  })
+})
+
 describe('CostAggregator — persistance (F1)', () => {
   it('recharge les tours depuis le fichier au démarrage', async () => {
     const { mkdtempSync } = await import('node:fs')

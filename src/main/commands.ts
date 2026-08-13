@@ -148,7 +148,29 @@ export interface AppSnapshot {
   roles: Record<string, { provider: string; model?: string }>
   conversations: Array<{ id: string; title: string; category: string }>
   runs: Array<{ subject: string; status: string; blocked: boolean }>
+  /**
+   * Coût cumulé RÉELLEMENT tarifé. C'est un PLANCHER, pas un total : les tours sans `costUsd`
+   * comptent 0. Les deux champs suivants disent de combien ce plancher est en dessous du réel —
+   * sans eux, `budgetUsd` se lit comme un total complet et ment (sur les données réelles,
+   * la majorité des tours de `cost.jsonl` n'est pas tarifée).
+   */
   budgetUsd: number
+  budgetUnpricedTurns: number
+  budgetIsPartial: boolean
+}
+
+/** Projette le statut budget de l'OS sur les trois champs honnêtes du snapshot. */
+function budgetSnapshot(status: {
+  spent: number
+  unpricedTurns?: number
+  spentIsPartial?: boolean
+}): Pick<AppSnapshot, 'budgetUsd' | 'budgetUnpricedTurns' | 'budgetIsPartial'> {
+  const unpriced = status.unpricedTurns ?? 0
+  return {
+    budgetUsd: status.spent,
+    budgetUnpricedTurns: unpriced,
+    budgetIsPartial: status.spentIsPartial ?? unpriced > 0
+  }
 }
 
 /**
@@ -853,7 +875,7 @@ export class AppCommandBus {
       runs: runs
         .slice(0, 12)
         .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
-      budgetUsd: this.os.budget().spent
+      ...budgetSnapshot(this.os.budget())
     }
   }
 

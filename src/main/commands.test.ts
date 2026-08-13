@@ -1098,6 +1098,18 @@ describe('AppCommandBus command execution policy', () => {
     await expect(bus.snapshot()).resolves.toMatchObject({ tab: 'agent-studio' })
   })
 
+  it("le snapshot dit si le coût affiché est PARTIEL (tours non tarifés), au lieu d'un total nu", async () => {
+    const os = fakeOs()
+    os.budget = () => ({ spent: 1.25, turns: 10, unpricedTurns: 7, spentIsPartial: true })
+    const bus = new AppCommandBus(os, () => undefined)
+
+    await expect(bus.snapshot()).resolves.toMatchObject({
+      budgetUsd: 1.25,
+      budgetUnpricedTurns: 7,
+      budgetIsPartial: true
+    })
+  })
+
   it('publie et exécute le tool Graphify avec un chemin borné au workspace', async () => {
     const graphify = vi.fn(async () => ({
       action: 'updated' as const,

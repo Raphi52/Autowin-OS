@@ -37,6 +37,16 @@ export interface BudgetStatus {
   budget: number | null
   ratio: number | null
   alert: boolean
+  /** Nombre TOTAL de tours agrégés (tarifés ou non). */
+  turns: number
+  /**
+   * Tours SANS `costUsd`, donc comptés 0 dans `spent`. Sur les données réelles la majorité des
+   * tours n'est pas tarifée : présenter `spent` comme un total sans ce compteur, c'est afficher
+   * un chiffre amputé comme s'il était complet.
+   */
+  unpricedTurns: number
+  /** `true` dès qu'au moins un tour n'est pas tarifé : `spent` est un PLANCHER, pas un total. */
+  spentIsPartial: boolean
 }
 
 /** Ratio a partir duquel l'alerte se declenche (80% du budget). */
@@ -45,9 +55,14 @@ const ALERT_RATIO_THRESHOLD = 0.8
 export class CostAggregator {
   private turns: TurnCost[] = []
 
-  /** `persistPath` : fichier JSONL où historiser les tours (rechargé au démarrage). */
+  /**
+   * `budgetUsd` : plafond fixe, ou RESOLVEUR relu à chaque `budgetStatus()`. Le résolveur existe
+   * parce que le plafond réel vit dans un réglage persisté modifiable en cours de session : figé à
+   * la construction, le seuil d'alerte restait structurellement inatteignable.
+   * `persistPath` : fichier JSONL où historiser les tours (rechargé au démarrage).
+   */
   constructor(
-    private readonly budgetUsd?: number,
+    private readonly budgetUsd?: number | (() => number | null),
     private readonly persistPath?: string
   ) {
     if (persistPath && existsSync(persistPath)) {
@@ -105,12 +120,28 @@ export class CostAggregator {
   /** Statut budget : ratio et alerte (>= 80% du budget defini). */
   budgetStatus(): BudgetStatus {
     const spent = this.totalUsd()
-    const budget = this.budgetUsd ?? null
+    const turns = this.turns.length
+    const unpricedTurns = this.turns.reduce((n, t) => n + (t.costUsd === undefined ? 1 : 0), 0)
+    const coverage = { turns, unpricedTurns, spentIsPartial: unpricedTurns > 0 }
+    const budget = this.resolveBudget()
     if (budget === null) {
-      return { spent, budget: null, ratio: null, alert: false }
+      return { spent, budget: null, ratio: null, alert: false, ...coverage }
     }
     const ratio = budget > 0 ? spent / budget : 0
-    return { spent, budget, ratio, alert: ratio >= ALERT_RATIO_THRESHOLD }
+    return { spent, budget, ratio, alert: ratio >= ALERT_RATIO_THRESHOLD, ...coverage }
+  }
+
+  /** Plafond courant : valeur fixe, appel du résolveur, ou `null` si aucun plafond. */
+  private resolveBudget(): number | null {
+    if (typeof this.budgetUsd === 'function') {
+      try {
+        const value = this.budgetUsd()
+        return typeof value === 'number' && Number.isFinite(value) ? value : null
+      } catch {
+        return null // un réglage illisible ne doit pas casser le dashboard
+      }
+    }
+    return this.budgetUsd ?? null
   }
 
   private groupBy(keyFn: (t: TurnCost) => string | undefined): Record<string, GroupTotal> {

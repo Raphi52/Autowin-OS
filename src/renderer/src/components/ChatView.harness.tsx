@@ -58,9 +58,17 @@ export interface ChatHarness {
 
 export function installRafShim(): void {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  // rAF ET cAF doivent être shimés ENSEMBLE : un rAF rendu par setTimeout produit un id de
+  // timer, qu'un cancelAnimationFrame natif ne connaît pas. Shimer seulement rAF rendait donc
+  // TOUT cleanup d'animation frame inopérant sous test — un effet démonté continuait de tirer
+  // (ack de notice envoyé après unmount, et attribué au montage suivant).
   Object.defineProperty(window, 'requestAnimationFrame', {
     configurable: true,
     value: (callback: FrameRequestCallback) => window.setTimeout(() => callback(0), 0)
+  })
+  Object.defineProperty(window, 'cancelAnimationFrame', {
+    configurable: true,
+    value: (handle: number) => window.clearTimeout(handle)
   })
 }
 
