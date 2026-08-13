@@ -16,15 +16,11 @@ export interface ExecutabilityInput {
 }
 
 /** Les phases qu'un run sait réellement jouer (miroir de `ORCHESTRATE_PHASES`, côté main). */
-const PHASES_CONNUES: ReadonlySet<string> = new Set([
-  'scout',
-  'frame',
-  'terrain',
-  'build',
-  'clean',
-  'judge',
-  'kaizen'
-])
+// PLUS de liste recopiée ici. Cette copie manuelle avait sept phases quand le moteur en déclarait
+// huit : `remake` manquait, donc l'onglet Workflows accusait d'être injouable un profil que le moteur
+// sait jouer — et que `workflow-defaults.ts` livre PAR DÉFAUT. L'app criait au loup contre elle-même.
+// La liste vit désormais dans `shared/pipeline-phases`, importable des deux côtés de la frontière.
+import { isPipelinePhase } from '../../../shared/pipeline-phases'
 
 /** Les nœuds d'un profil, que sa topologie vienne du graphe composé ou de ses seules phases. */
 export function trackNodes(
@@ -51,7 +47,7 @@ export function workflowIssues(profile: ExecutabilityInput): string[] {
   const nodes = trackNodes(profile)
   if (!nodes.length) return ['aucune phase : ce workflow ne jouerait rien']
   for (const node of nodes) {
-    if (!PHASES_CONNUES.has(node.phase)) issues.push(`phase inconnue : ${node.phase}`)
+    if (!isPipelinePhase(node.phase)) issues.push(`phase inconnue : ${node.phase}`)
     if (node.agents < 1) issues.push(`aucun agent sur le nœud ${node.id}`)
   }
   const connus = new Set(nodes.map((node) => node.id))
