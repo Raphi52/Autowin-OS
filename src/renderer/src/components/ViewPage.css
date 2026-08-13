@@ -28,14 +28,25 @@
   padding: 16px 18px;
   border: 1px solid color-mix(in srgb, var(--rose) 34%, var(--container-border));
   border-radius: var(--container-radius-page);
-  background:
-    linear-gradient(
-        90deg,
-        var(--rose),
-        transparent 42%,
-        color-mix(in srgb, var(--gold) 70%, transparent)
-      )
-      top / 100% 1px no-repeat,
-    var(--surface-panel);
+  /* Le lisere lui-meme est un TOKEN (`--lisere-haut`, plus bas) : la vue Chat en a besoin sur ses
+     trois panneaux, dont deux ont leur propre fond. Une couche de fond se compose ; une regle
+     complete se recopie — et trois copies derivent. */
+  background: var(--lisere-haut), var(--surface-panel);
   box-shadow: var(--container-shadow);
+}
+
+/**
+ * LE lisere du haut : 1 px, rose vers dore. Pose en COUCHE DE FOND (`top / 100% 1px no-repeat`) et
+ * non en bordure coloree, ce qui evite d'epaissir le cadre. Declare sur `.shell` pour etre visible
+ * de toutes les feuilles, et compose avec le fond propre de chaque element :
+ *   background: var(--lisere-haut), <le fond de l'element>;
+ */
+.shell {
+  --lisere-haut: linear-gradient(
+      90deg,
+      var(--rose),
+      transparent 42%,
+      color-mix(in srgb, var(--gold) 70%, transparent)
+    )
+    top / 100% 1px no-repeat;
 }

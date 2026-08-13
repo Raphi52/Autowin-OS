@@ -1170,9 +1170,15 @@
 /* Palette Noir de Models : surfaces neutres, or pour la sélection, couleur seulement sémantique. */
 .theme-serious .observatory-view {
   --surface-selected: rgba(225, 193, 103, 0.1);
-  border-color: rgba(255, 255, 255, 0.18);
-  background: var(--surface-panel);
   color: #f2f3f5;
+  /* La surface reste celle de Models (contrat teste juste a cote), mais le lisere est COMPOSE avec
+     elle au lieu d'etre efface. La version precedente posait `background: var(--surface-panel)` seul :
+     plus specifique que `.view-page`, elle remplacait tout le degrade, et Observatory etait la seule
+     vue sans lisere dans le theme reellement utilise — invisible a mes mesures, qui relevaient la
+     position et la police du titre, jamais le FOND.
+     `border-color: rgba(255, 255, 255, 0.18)` a ete RETIRE : il repeignait en blanc le bord rose du
+     cadre partage, une divergence de plus sans contrat qui la demande. */
+  background: var(--lisere-haut), var(--surface-panel);
 }
 
 .theme-serious .observatory-view .observatory-toolbar,
