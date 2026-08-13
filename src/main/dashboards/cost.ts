@@ -47,6 +47,8 @@ export interface BudgetStatus {
   unpricedTurns: number
   /** `true` dès qu'au moins un tour n'est pas tarifé : `spent` est un PLANCHER, pas un total. */
   spentIsPartial: boolean
+  /** Anciennes entrees sans modele : leur attribution reste explicitement incomplete. */
+  incompleteModelTurns: number
 }
 
 /** Ratio a partir duquel l'alerte se declenche (80% du budget). */
@@ -69,7 +71,8 @@ export class CostAggregator {
       for (const line of readFileSync(persistPath, 'utf8').split(/\r?\n/)) {
         if (!line) continue
         try {
-          this.turns.push(JSON.parse(line) as TurnCost)
+          const parsed: unknown = JSON.parse(line)
+          if (isTurnCost(parsed)) this.turns.push(parsed)
         } catch {
           /* ligne corrompue — ignorée */
         }
@@ -122,7 +125,13 @@ export class CostAggregator {
     const spent = this.totalUsd()
     const turns = this.turns.length
     const unpricedTurns = this.turns.reduce((n, t) => n + (t.costUsd === undefined ? 1 : 0), 0)
-    const coverage = { turns, unpricedTurns, spentIsPartial: unpricedTurns > 0 }
+    const incompleteModelTurns = this.turns.reduce((n, t) => n + (t.model ? 0 : 1), 0)
+    const coverage = {
+      turns,
+      unpricedTurns,
+      spentIsPartial: unpricedTurns > 0,
+      incompleteModelTurns
+    }
     const budget = this.resolveBudget()
     if (budget === null) {
       return { spent, budget: null, ratio: null, alert: false, ...coverage }
@@ -157,4 +166,18 @@ export class CostAggregator {
     }
     return result
   }
+}
+
+function isTurnCost(value: unknown): value is TurnCost {
+  if (!value || typeof value !== 'object') return false
+  const turn = value as Partial<TurnCost>
+  return (
+    typeof turn.provider === 'string' &&
+    turn.provider.length > 0 &&
+    (turn.model === undefined || (typeof turn.model === 'string' && turn.model.length > 0)) &&
+    typeof turn.inputTokens === 'number' &&
+    Number.isFinite(turn.inputTokens) &&
+    typeof turn.outputTokens === 'number' &&
+    Number.isFinite(turn.outputTokens)
+  )
 }

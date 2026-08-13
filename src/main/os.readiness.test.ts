@@ -103,6 +103,39 @@ describe('barrière de disponibilité des modèles', () => {
       expect.any(Function)
     )
   })
+  it('attribue le cout au provider et au modele reellement retournes', async () => {
+    const add = vi.fn()
+    const os = Object.create(AutowinOS.prototype) as AutowinOS
+    Object.defineProperties(os, {
+      executionSupervisor: { value: new ExecutionSupervisor() },
+      roles: {
+        value: {
+          getBinding: () => ({
+            provider: 'requested-provider',
+            model: 'requested-model',
+            reasoningEffort: 'medium'
+          })
+        }
+      },
+      registry: {
+        value: {
+          send: vi.fn(async () => ({
+            text: 'ok',
+            provider: 'actual-provider',
+            model: 'actual-model',
+            systemInjected: true,
+            usage: { inputTokens: 8, outputTokens: 4, costUsd: 0.01 }
+          }))
+        }
+      },
+      cost: { value: { add } }
+    })
+    await os.chat(undefined, 'orchestrator', [{ role: 'user', content: 'bonjour' }], () => {})
+    expect(add).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'actual-provider', model: 'actual-model' })
+    )
+  })
+
   it('attend aussi une nouvelle generation de readiness installee pendant la precedente', async () => {
     const first = deferred<void>()
     const send = vi.fn(async () => ({

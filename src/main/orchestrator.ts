@@ -3581,6 +3581,7 @@ export class Orchestrator {
           // local) — pas le demandé, sinon trace/coût mentent sur qui a vraiment tourné.
           provider: phaseRes.provider ?? subProvider,
           role: 'subagent',
+          model: phaseRes.model ?? phaseBinding.model,
           inputTokens: phaseRes.usage.inputTokens,
           outputTokens: phaseRes.usage.outputTokens,
           cacheReadTokens: phaseRes.usage.cacheReadTokens,
@@ -3976,6 +3977,7 @@ export class Orchestrator {
           cost.add({
             provider: verdict.provider ?? judgeProvider,
             role: 'judge',
+            model: verdict.model ?? judgeBinding.model,
             inputTokens: verdict.usage.inputTokens,
             outputTokens: verdict.usage.outputTokens,
             cacheReadTokens: verdict.usage.cacheReadTokens,

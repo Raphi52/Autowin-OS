@@ -139,4 +139,30 @@ describe('CostAggregator — persistance (F1)', () => {
     expect(reloaded.totalUsd()).toBeCloseTo(1.0)
     expect(reloaded.byProvider().codex.turns).toBe(1)
   })
+
+  it('rend visibles les anciennes entrees valides mais sans modele', async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const path = join(mkdtempSync(join(tmpdir(), 'cost-')), 'cost.jsonl')
+    writeFileSync(
+      path,
+      [
+        JSON.stringify({ provider: 'claude', inputTokens: 10, outputTokens: 5, costUsd: 0.1 }),
+        JSON.stringify({
+          provider: 'codex',
+          model: 'gpt-real',
+          inputTokens: 20,
+          outputTokens: 8,
+          costUsd: 0.2
+        })
+      ].join('\n')
+    )
+
+    const status = new CostAggregator(undefined, path).budgetStatus()
+
+    expect(status.turns).toBe(2)
+    expect(status.incompleteModelTurns).toBe(1)
+    expect(status.spent).toBeCloseTo(0.3)
+  })
 })
