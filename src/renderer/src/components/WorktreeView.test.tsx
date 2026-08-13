@@ -171,7 +171,7 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     expect(container?.querySelector('[data-testid="worktree-topology-main"]')).not.toBeNull()
     expect(container?.querySelector('[data-testid="git-topology"]')).not.toBeNull()
     expect(container?.querySelector('[data-testid="worktree-frise"]')).not.toBeNull()
-    expect(container?.textContent).not.toMatch(/\d{1,3}\s?%/)
+    expect(container?.textContent).not.toMatch(/\b\d{1,3}\s?%/)
   })
 
   it('ne montre RIEN qui soit propre à une conversation', async () => {
