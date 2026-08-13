@@ -67,6 +67,9 @@ describe('regroupement par chantier', () => {
     const flux = resumerFlux(interrompus, MAINTENANT)
     expect(flux.aToi).toBe(0)
     expect(flux.interrompus).toBe(1)
+    // ET les runs sont comptés séparément : 20 runs coupés sur UN chantier. Sans ce nombre, le bandeau
+    // affichait « 0 interrompus » quand 119 runs l'étaient — un zéro qui se lit « aucun ».
+    expect(flux.runsInterrompus).toBe(20)
     expect(flux.plusVieilleAttenteMs).toBeUndefined()
   })
 
@@ -174,8 +177,26 @@ describe('bandeau de flux', () => {
       pret: 0,
       enCours: 0,
       aVerifier: 0,
-      interrompus: 0
+      interrompus: 0,
+      runsInterrompus: 0
     })
+  })
+
+  it('un chantier « à toi » qui porte aussi des runs coupés les rend VISIBLES', () => {
+    // Le cas exact du dépôt : une branche dont un run attend une décision et 40 ont été coupés. Le
+    // verdict du chantier est « à toi » — donc `interrompus` vaut 0 — mais les 40 runs existent.
+    const flux = resumerFlux(
+      [
+        run({ agentId: 'bloque', baseBranch: 'codex/lot', state: 'conflict' }),
+        ...Array.from({ length: 40 }, (_, i) =>
+          run({ agentId: `coupe-${i}`, baseBranch: 'codex/lot', state: 'interrupted' })
+        )
+      ],
+      MAINTENANT
+    )
+    expect(flux.aToi).toBe(1)
+    expect(flux.interrompus).toBe(0)
+    expect(flux.runsInterrompus).toBe(40)
   })
 
   it('l’ordre des verdicts place l’actionnable avant l’inerte', () => {

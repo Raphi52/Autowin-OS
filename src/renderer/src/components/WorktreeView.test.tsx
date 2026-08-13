@@ -310,6 +310,19 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     )
   })
 
+  it('dit que la lecture est EN COURS au lieu d’afficher des zéros', async () => {
+    // MESURÉ : la récupération hors fil principal met ~16 s à répondre. Pendant ce temps la lecture
+    // initiale rend un tableau vide, et le bandeau annonçait « 0 chantier t'attend » alors que 215 runs
+    // allaient apparaître. Un zéro se lit « projet au calme ».
+    installApi({ getWorktreeActivity: vi.fn(async () => []) })
+    await renderView()
+
+    expect(container?.querySelector('[data-testid="worktree-cdp-attente"]')).not.toBeNull()
+    expect(container?.querySelector('[data-testid="worktree-flux"]')).toBeNull()
+    // La topologie, elle, ne dépend pas de l'activité : elle reste affichée.
+    expect(container?.querySelector('[data-testid="worktree-topology-main"]')).not.toBeNull()
+  })
+
   it('dit que l’avancement est indisponible au lieu d’afficher des zéros', async () => {
     installApi({
       getWorktreeActivity: vi.fn(async () => {

@@ -64,10 +64,24 @@ const CHANTIERS_AFFICHES = 12
  */
 function ResumeChefDeProjet({
   agents,
-  disponible
+  disponible,
+  recuEvenement
 }: {
   agents: WorktreeAgentActivity[]
   disponible: boolean
+  /**
+   * Vrai dès qu'un événement d'activité est arrivé — y compris un événement VIDE.
+   *
+   * MESURÉ : avec la récupération hors du fil principal, l'inventaire des copies met ~16 s à répondre,
+   * et pendant ce temps la lecture initiale rend un tableau vide. Le bandeau affichait donc « 0 chantier
+   * t'attend » alors que 215 runs allaient apparaître — le même zéro qui se lit « projet au calme ».
+   *
+   * Ce drapeau, et pas un délai : le coordinateur publie son état à la FIN de la réconciliation, même
+   * quand elle ne trouve rien. « Aucun événement reçu » et « zéro chantier » sont donc distinguables
+   * sans deviner combien de temps attendre — et deviner un délai est exactement l'erreur déjà commise
+   * au démarrage, où un report de 1 500 ms n'avait fait que déplacer le blocage.
+   */
+  recuEvenement: boolean
 }): React.JSX.Element {
   const maintenant = Date.now()
   const flux = useMemo(() => resumerFlux(agents, maintenant), [agents, maintenant])
@@ -81,6 +95,18 @@ function ResumeChefDeProjet({
         <p className="wt-cdp-indisponible" role="status">
           {/* Ne RIEN afficher serait lu comme « zéro chantier », donc comme un projet au calme. */}
           Avancement indisponible : l’activité des copies n’a pas pu être lue.
+        </p>
+      </section>
+    )
+  }
+
+  // APRES l'indisponibilité, et l'ordre est le correctif : place avant, un échec de lecture s'affichait
+  // « lecture en cours » — une attente éternelle, donc un mensonge pire que le zéro qu'on corrigeait.
+  if (agents.length === 0 && !recuEvenement) {
+    return (
+      <section className="wt-cdp" data-testid="worktree-chef-de-projet">
+        <p className="wt-cdp-indisponible" role="status" data-testid="worktree-cdp-attente">
+          Lecture des copies en cours — l’avancement s’affichera dès qu’elle répond.
         </p>
       </section>
     )
@@ -106,8 +132,13 @@ function ResumeChefDeProjet({
           <span>à vérifier</span>
         </div>
         <div className="wt-cdp-nombre">
-          <b>{flux.interrompus}</b>
-          <span>interrompus</span>
+          {/*
+            Le seul nombre de ce bandeau compté sur les RUNS, et son libellé le dit. Les autres comptent
+            des chantiers réduits à leur verdict le plus urgent : « interrompus » y restait à 0 pendant
+            que 119 runs l'étaient — un zéro qui se lit « aucun ».
+          */}
+          <b>{flux.runsInterrompus}</b>
+          <span>runs interrompus</span>
         </div>
         <div className="wt-cdp-nombre">
           {/* Sans attente en cours on écrit « aucune », jamais un tiret muet ni un zéro trompeur. */}
@@ -262,6 +293,8 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
   // Le défilement du graphe pilote le cadre de la frise. Mesuré depuis le DOM et non déduit d'un index
   // de commit : la hauteur d'un nœud n'est pas la hauteur d'une ligne rendue.
   const grapheRef = useRef<HTMLDivElement>(null)
+  // Voir `recuEvenement` : distingue « pas encore de donnée » de « zéro chantier ».
+  const [recuEvenement, setRecuEvenement] = useState(false)
   const [survol, setSurvol] = useState({ fraction: 0, portion: 1 })
 
   const load = useCallback(async (): Promise<void> => {
@@ -311,6 +344,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
     return window.api?.onWorktreeActivity?.((suivant) => {
       setAgents(suivant)
       setActivityAvailable(true)
+      setRecuEvenement(true)
     })
   }, [active])
 
@@ -401,7 +435,11 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
             </div>
           )}
 
-          <ResumeChefDeProjet agents={agents} disponible={activityAvailable} />
+          <ResumeChefDeProjet
+            agents={agents}
+            disponible={activityAvailable}
+            recuEvenement={recuEvenement || agents.length > 0}
+          />
 
           {/*
             La topologie du DÉPÔT, plein cadre et sans clic préalable. Elle était auparavant cachée

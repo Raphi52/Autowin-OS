@@ -70,6 +70,16 @@ export interface FluxProjet {
   enCours: number
   aVerifier: number
   interrompus: number
+  /**
+   * Les RUNS coupés, pas les chantiers — et c'est une unité différente à dessein.
+   *
+   * Tous les autres nombres de ce bandeau comptent des chantiers, chacun réduit à son verdict le PLUS
+   * urgent. Un chantier qui porte 40 runs coupés et un seul run bloqué compte donc comme « à toi », et
+   * `interrompus` reste à zéro. MESURÉ sur ce dépôt : le bandeau affichait « 0 interrompus » alors que
+   * 119 runs l'étaient. Ce n'était pas faux au sens strict — c'était un zéro qui se lisait comme
+   * « aucun », soit un mensonge par omission. L'unité est donc écrite dans le libellé.
+   */
+  runsInterrompus: number
   /** Le plus vieux blocage, toutes branches confondues : c'est lui qui dit si ça stagne. */
   plusVieilleAttenteMs?: number
 }
@@ -158,6 +168,8 @@ export function resumerFlux(agents: readonly WorktreeAgentActivity[], nowMs: num
     enCours: compte('en-cours'),
     aVerifier: compte('a-verifier'),
     interrompus: compte('interrompu'),
+    // Compté sur les runs BRUTS et non sur les chantiers : c'est le seul nombre du bandeau qui le fait.
+    runsInterrompus: agents.filter((agent) => agent.state === 'interrupted').length,
     ...(attentes.length ? { plusVieilleAttenteMs: Math.max(...attentes) } : {})
   }
 }
