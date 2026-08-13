@@ -24,6 +24,13 @@ beforeAll(async () => {
   git(repo, 'tag', 'v1.0.0')
   git(repo, 'branch', 'stale')
   git(repo, 'tag', '-a', 'annotated-stale', '-m', 'annotated release', 'stale')
+  git(repo, 'checkout', '-b', 'tag-only')
+  await writeFile(path.join(repo, 'tag-only.txt'), 'tagged but not open\n')
+  git(repo, 'add', 'tag-only.txt')
+  git(repo, 'commit', '-m', 'archive: tag only')
+  git(repo, 'tag', 'rescue/test')
+  git(repo, 'checkout', 'main')
+  git(repo, 'branch', '-D', 'tag-only')
   for (let index = 0; index < 25; index += 1) {
     await writeFile(path.join(repo, 'history.txt'), `${index}\n`)
     git(repo, 'add', 'history.txt')
@@ -34,6 +41,8 @@ beforeAll(async () => {
   await writeFile(path.join(worktree, 'graph.txt'), 'graph\n')
   git(worktree, 'add', 'graph.txt')
   git(worktree, 'commit', '-m', 'feat: graph')
+  await writeFile(path.join(repo, 'stash-only.txt'), 'hidden stash payload\n')
+  git(repo, 'stash', 'push', '--include-untracked', '-m', 'autowin-layout-test')
 })
 
 afterAll(async () => {
@@ -78,6 +87,14 @@ describe('readGitGraph', () => {
     expect(result.commits?.some((commit) => commit.hash === stale?.hash)).toBe(true)
   })
 
+  it('reserve ouvert aux branches et exclut un historique porte seulement par un tag', async () => {
+    const result = await readGitGraph(repo, 20)
+    const openBranch = result.refs?.find((ref) => ref.name === 'feat/graph')
+    const tagOnly = result.refs?.find((ref) => ref.name === 'rescue/test')
+    expect(result.openBranchHashes).toContain(openBranch?.hash)
+    expect(result.openBranchHashes).not.toContain(tagOnly?.hash)
+  })
+
   it('rattache un tag annoté à son commit pelé', async () => {
     const result = await readGitGraph(repo, 20)
     const tag = result.refs?.find((ref) => ref.name === 'annotated-stale')
@@ -91,5 +108,43 @@ describe('readGitGraph', () => {
 
     expect(result.available).toBe(false)
     expect(result.repoPath).toBe(root)
+  })
+
+  it('exclut les commits techniques du stash', async () => {
+    const result = await readGitGraph(repo, 100)
+    const subjects = result.commits?.map((commit) => commit.subject) ?? []
+    expect(subjects).not.toContain('On main: autowin-layout-test')
+    expect(subjects.some((subject) => subject.startsWith('index on main:'))).toBe(false)
+    expect(subjects.some((subject) => subject.startsWith('untracked files on main:'))).toBe(false)
+  })
+
+  it('reconnait upstream/main sans remote HEAD', async () => {
+    const detachedRepo = path.join(root, 'upstream-detached-repo')
+    git(root, 'init', '-b', 'main', detachedRepo)
+    git(detachedRepo, 'config', 'user.email', 'tests@autowin.local')
+    git(detachedRepo, 'config', 'user.name', 'Autowin Tests')
+    await writeFile(path.join(detachedRepo, 'base.txt'), 'base\n')
+    git(detachedRepo, 'add', 'base.txt')
+    git(detachedRepo, 'commit', '-m', 'base')
+    const mainHash = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: detachedRepo,
+      encoding: 'utf8'
+    }).trim()
+    git(detachedRepo, 'checkout', '-b', 'feature')
+    await writeFile(path.join(detachedRepo, 'feature.txt'), 'feature\n')
+    git(detachedRepo, 'add', 'feature.txt')
+    git(detachedRepo, 'commit', '-m', 'feature')
+    const featureHash = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: detachedRepo,
+      encoding: 'utf8'
+    }).trim()
+    git(detachedRepo, 'checkout', '--detach', featureHash)
+    git(detachedRepo, 'update-ref', 'refs/remotes/upstream/main', mainHash)
+    git(detachedRepo, 'update-ref', 'refs/remotes/upstream/feature', featureHash)
+    git(detachedRepo, 'branch', '-D', 'main')
+    git(detachedRepo, 'branch', '-D', 'feature')
+    const result = await readGitGraph(detachedRepo, 20)
+    expect(result.mainLineHashes).toContain(mainHash)
+    expect(result.openBranchHashes).toContain(featureHash)
   })
 })

@@ -1,10 +1,15 @@
-import type { GitGraphCommit, GitGraphRef } from '../../../shared/git-graph'
+import {
+  selectGitGraphMainRef,
+  type GitGraphCommit,
+  type GitGraphRef
+} from '../../../shared/git-graph'
 
 export interface GitGraphLayoutNode {
   commit: GitGraphCommit
   lane: number
   x: number
   y: number
+  side?: 'closed' | 'main' | 'open'
 }
 
 export interface GitGraphLayoutEdge {
@@ -18,6 +23,17 @@ export interface GitGraphLayout {
   edges: GitGraphLayoutEdge[]
   width: number
   height: number
+}
+
+export interface GitGraphLayoutAxes {
+  main: ReadonlySet<string>
+  ouvertes: ReadonlySet<string>
+}
+
+export interface GitGraphReachability {
+  mainLineHashes?: readonly string[]
+  mergedIntoMainHashes?: readonly string[]
+  openBranchHashes?: readonly string[]
 }
 
 export function commitsReachableFromRefs(
@@ -38,6 +54,54 @@ export function commitsReachableFromRefs(
   return commits.filter((commit) => included.has(commit.hash))
 }
 
+export function projectGitGraphAxes(
+  commits: GitGraphCommit[],
+  refs: GitGraphRef[],
+  reachability?: GitGraphReachability
+): GitGraphLayoutAxes | undefined {
+  const selectedMainRef = selectGitGraphMainRef(refs)
+  const mainRef =
+    selectedMainRef ??
+    (reachability?.mainLineHashes?.[0]
+      ? {
+          name: 'HEAD',
+          fullName: 'HEAD',
+          kind: 'local' as const,
+          hash: reachability.mainLineHashes[0],
+          isHead: true
+        }
+      : undefined)
+  if (!mainRef) return undefined
+
+  const commitByHash = new Map(commits.map((commit) => [commit.hash, commit]))
+  const fusionnesDansMain = new Set(
+    reachability?.mergedIntoMainHashes ??
+      commitsReachableFromRefs(commits, [mainRef]).map((commit) => commit.hash)
+  )
+  const main = new Set(reachability?.mainLineHashes ?? [])
+  if (!reachability?.mainLineHashes) {
+    let hash: string | undefined = mainRef.hash
+    while (hash && !main.has(hash)) {
+      const commit = commitByHash.get(hash)
+      if (!commit) break
+      main.add(hash)
+      hash = commit.parents[0]
+    }
+  }
+
+  return {
+    main,
+    ouvertes:
+      reachability?.openBranchHashes !== undefined
+        ? new Set(reachability.openBranchHashes)
+        : new Set(
+            commits
+              .filter((commit) => !fusionnesDansMain.has(commit.hash))
+              .map((commit) => commit.hash)
+          )
+  }
+}
+
 /**
  * Une voie retient un commit ATTENDU. Elle doit donc être rendue dès que cette attente n'a plus de
  * sens, sans quoi le tracé dérive vers la droite comme s'il y avait un second dépôt.
@@ -50,7 +114,10 @@ export function commitsReachableFromRefs(
  * Deux libérations, et rien de plus : pas de compactage, pas de renumérotation. Une voie qui garde sa
  * position garde la lisibilité verticale d'une branche.
  */
-export function layoutGitGraph(commits: GitGraphCommit[]): GitGraphLayout {
+export function layoutGitGraph(
+  commits: GitGraphCommit[],
+  axes?: GitGraphLayoutAxes
+): GitGraphLayout {
   const lanes: Array<string | undefined> = []
   const laneByHash = new Map<string, number>()
   const nodes: GitGraphLayoutNode[] = []
@@ -85,6 +152,38 @@ export function layoutGitGraph(commits: GitGraphCommit[]): GitGraphLayout {
     nodes.push({ commit, lane, x: 42 + lane * 64, y: 34 + row * 48 })
   })
 
+  const closedLanes = [
+    ...new Set(
+      nodes
+        .filter(
+          (node) => !axes?.main.has(node.commit.hash) && !axes?.ouvertes.has(node.commit.hash)
+        )
+        .map((node) => node.lane)
+    )
+  ].sort((a, b) => a - b)
+  const openLanes = [
+    ...new Set(
+      nodes.filter((node) => axes?.ouvertes.has(node.commit.hash)).map((node) => node.lane)
+    )
+  ].sort((a, b) => a - b)
+  const mainX = 280 + Math.max(1, closedLanes.length) * 64
+  if (axes) {
+    nodes.forEach((node) => {
+      if (axes.main.has(node.commit.hash)) {
+        node.side = 'main'
+        node.x = mainX
+        return
+      }
+      if (axes.ouvertes.has(node.commit.hash)) {
+        node.side = 'open'
+        node.x = mainX + (openLanes.indexOf(node.lane) + 1) * 64
+        return
+      }
+      node.side = 'closed'
+      node.x = mainX - (closedLanes.indexOf(node.lane) + 1) * 64
+    })
+  }
+
   const nodeByHash = new Map(nodes.map((node) => [node.commit.hash, node]))
   const edges = nodes.flatMap((node) =>
     node.commit.parents.flatMap((parent) => {
@@ -96,7 +195,9 @@ export function layoutGitGraph(commits: GitGraphCommit[]): GitGraphLayout {
   return {
     nodes,
     edges,
-    width: Math.max(720, laneCount * 64 + 520),
+    width: axes
+      ? Math.max(720, mainX + Math.max(1, openLanes.length) * 64 + 480)
+      : Math.max(720, laneCount * 64 + 520),
     height: Math.max(520, nodes.length * 48 + 54)
   }
 }

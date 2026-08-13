@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GitGraphCommit } from '../../../shared/git-graph'
-import { layoutGitGraph } from './GitGraphLayout'
+import { layoutGitGraph, projectGitGraphAxes } from './GitGraphLayout'
 
 function commit(hash: string, parents: string[] = []): GitGraphCommit {
   return {
@@ -38,6 +38,52 @@ describe('layoutGitGraph', () => {
   })
 })
 
+describe('projectGitGraphAxes', () => {
+  const ref = (fullName: string, hash: string, kind: 'local' | 'remote' | 'tag' = 'local') => ({
+    name: fullName.replace(/^refs\/(heads|remotes|tags)\//, ''),
+    fullName,
+    kind,
+    hash,
+    isHead: false
+  })
+
+  it('reserve ouvert aux branches et pas aux tags seuls', () => {
+    const commits = [commit('main-tip'), commit('open-tip'), commit('tag-only')]
+    const axes = projectGitGraphAxes(
+      commits,
+      [
+        ref('refs/heads/main', 'main-tip'),
+        ref('refs/heads/feature', 'open-tip'),
+        ref('refs/tags/rescue/test', 'tag-only', 'tag')
+      ],
+      {
+        mainLineHashes: ['main-tip'],
+        mergedIntoMainHashes: ['main-tip'],
+        openBranchHashes: ['open-tip']
+      }
+    )
+    expect(axes?.ouvertes.has('open-tip')).toBe(true)
+    expect(axes?.ouvertes.has('tag-only')).toBe(false)
+  })
+
+  it('reconnait main sur une remote non nommee origin sans remote HEAD', () => {
+    const axes = projectGitGraphAxes(
+      [commit('feature-tip'), commit('main-tip')],
+      [
+        ref('refs/remotes/upstream/main', 'main-tip', 'remote'),
+        ref('refs/remotes/upstream/feature', 'feature-tip', 'remote')
+      ],
+      {
+        mainLineHashes: ['main-tip'],
+        mergedIntoMainHashes: ['main-tip'],
+        openBranchHashes: ['feature-tip']
+      }
+    )
+    expect(axes?.main.has('main-tip')).toBe(true)
+    expect(axes?.ouvertes.has('feature-tip')).toBe(true)
+  })
+})
+
 describe('les voies sont LIBÉRÉES : sinon le graphe part en escalier vers la droite', () => {
   /**
    * Constaté à l'écran : en bas de la topologie, une seconde colonne de commits dérivait vers la
@@ -59,6 +105,26 @@ describe('les voies sont LIBÉRÉES : sinon le graphe part en escalier vers la d
    * Trois frères partageant un parent occupent LÉGITIMEMENT trois voies. Ce que ce test vérifie, c'est
    * qu'une fois ce parent placé, les voies sont RENDUES au groupe suivant.
    */
+  it('epingle main au centre, ferme a gauche et ouvert a droite', () => {
+    const commits = [
+      commit('main-tip', ['main-old', 'closed-tip']),
+      commit('open-tip', ['main-old']),
+      commit('closed-tip', ['main-old']),
+      commit('main-old', ['root']),
+      commit('root')
+    ]
+    const layout = layoutGitGraph(commits, {
+      main: new Set(['main-tip', 'main-old', 'root']),
+      ouvertes: new Set(['open-tip'])
+    })
+    const main = layout.nodes.filter((node) => node.side === 'main')
+    const ferme = layout.nodes.find((node) => node.commit.hash === 'closed-tip')
+    const ouvert = layout.nodes.find((node) => node.commit.hash === 'open-tip')
+    expect(new Set(main.map((node) => node.x))).toHaveLength(1)
+    expect(ferme?.x).toBeLessThan(main[0].x)
+    expect(ouvert?.x).toBeGreaterThan(main[0].x)
+  })
+
   const fratrie = (parent: string, prefixe: string): GitGraphCommit[] => [
     commit(`${prefixe}1`, [parent]),
     commit(`${prefixe}2`, [parent]),

@@ -160,7 +160,7 @@ afterEach(() => {
 })
 
 describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () => {
-  it('montre la topologie et la frise SANS clic préalable', async () => {
+  it('montre la topologie sans timeline SANS clic préalable', async () => {
     installApi()
     await renderView()
 
@@ -170,7 +170,7 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     // LE point de la vue : la topologie était cachée derrière un bouton « Ouvrir la topologie Git ».
     expect(container?.querySelector('[data-testid="worktree-topology-main"]')).not.toBeNull()
     expect(container?.querySelector('[data-testid="git-topology"]')).not.toBeNull()
-    expect(container?.querySelector('[data-testid="worktree-frise"]')).not.toBeNull()
+    expect(container?.querySelector('[data-testid="worktree-frise"]')).toBeNull()
     expect(container?.textContent).not.toMatch(/\b\d{1,3}\s?%/)
   })
 
@@ -189,16 +189,12 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     expect(container?.textContent).not.toContain('Ouvrir la topologie Git')
   })
 
-  it('la frise et le graphe désignent le MÊME nombre de commits', async () => {
+  it('le graphe rend un noeud par commit affiché', async () => {
     installApi()
     await renderView()
 
-    // Deux dispositions calculées séparément dériveraient : un trait de la frise ne pointerait plus le
-    // commit qu'il désigne. Les deux consomment `layoutGitGraph` sur la même entrée.
-    const traits = container?.querySelectorAll('[data-testid="worktree-frise"] line').length ?? 0
     const noeuds = container?.querySelectorAll('[data-testid="git-topology"] circle').length ?? 0
-    expect(traits).toBeGreaterThan(0)
-    expect(traits).toBe(noeuds)
+    expect(noeuds).toBe(snapshot.commits.length)
   })
 
   it.each([
@@ -289,7 +285,7 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     expect(container?.querySelector('[data-testid="worktree-topology-main"]')).not.toBeNull()
   })
 
-  it('place le résumé chef de projet AVANT la frise et la topologie', async () => {
+  it('place le résumé chef de projet AVANT la topologie', async () => {
     installApi()
     await renderView()
 
@@ -299,10 +295,8 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     const topologie = html.indexOf('worktree-topology-main')
     expect(resume).toBeGreaterThan(-1)
     expect(resume).toBeLessThan(topologie)
-    // La frise est IMBRIQUÉE dans la section topologie — son identifiant apparaît donc après celui de
-    // la section, et comparer les deux positions à plat donnait un faux échec.
     const sectionTopologie = container?.querySelector('[data-testid="worktree-topology-main"]')
-    expect(sectionTopologie?.querySelector('[data-testid="worktree-frise"]')).not.toBeNull()
+    expect(sectionTopologie?.querySelector('[data-testid="worktree-frise"]')).toBeNull()
     expect(container?.querySelector('[data-testid="worktree-flux"]')).not.toBeNull()
     // Chaque pastille écrit son verdict : la couleur ne porte pas l'information seule.
     expect(container?.querySelector('[data-testid="worktree-chantiers"]')?.textContent).toMatch(
@@ -338,10 +332,7 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     expect(container?.querySelector('[data-testid="worktree-flux"]')).toBeNull()
   })
 
-  it('le conteneur de la topologie a une hauteur BORNÉE, sinon la frise ne montre rien', () => {
-    // Défaut rencontré et mesuré : avec `flex: 1` seul, ce conteneur grandissait avec ses 271 commits,
-    // son `scrollTop` restait à 0 et le cadre « portion lue » couvrait 1000/1000 de la frise — elle
-    // prétendait donc que tout l'historique était visible. C'est `.cockpit-scroll` qui défilait.
+  it('le conteneur de la topologie a une hauteur BORNÉE pour défiler sans étirer la page', () => {
     const css = readFileSync(join(__dirname, 'WorktreeView.css'), 'utf8')
     const bloc = css.slice(css.indexOf('.wt-topologie-defilement'))
     const regle = bloc.slice(0, bloc.indexOf('}'))

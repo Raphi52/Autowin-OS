@@ -5,6 +5,7 @@ import {
   parseGitGraphCommits,
   parseGitGraphRefs,
   parseGitWorktrees,
+  selectGitGraphMainRef,
   type GitGraphSnapshot
 } from '../shared/git-graph'
 import { parseGitStatus } from '../shared/git-read'
@@ -26,7 +27,14 @@ export async function readGitGraph(cwd: string, historyLimit = 240): Promise<Git
       maxBuffer: MAX_BUFFER
     })
     const repoPath = rootResult.stdout.trim()
-    const [statusResult, refsResult, commitsResult, decoratedResult, worktreesResult] = await Promise.all([
+    const [
+      statusResult,
+      refsResult,
+      commitsResult,
+      decoratedResult,
+      worktreesResult,
+      headHashResult
+    ] = await Promise.all([
       run('git', ['status', '--porcelain=v2', '--branch'], {
         cwd: repoPath,
         windowsHide: true,
@@ -47,6 +55,7 @@ export async function readGitGraph(cwd: string, historyLimit = 240): Promise<Git
         'git',
         [
           'log',
+          '--exclude=refs/stash',
           '--all',
           '--topo-order',
           '--date-order',
@@ -59,6 +68,7 @@ export async function readGitGraph(cwd: string, historyLimit = 240): Promise<Git
         'git',
         [
           'log',
+          '--exclude=refs/stash',
           '--all',
           '--topo-order',
           '--date-order',
@@ -71,7 +81,12 @@ export async function readGitGraph(cwd: string, historyLimit = 240): Promise<Git
         cwd: repoPath,
         windowsHide: true,
         maxBuffer: MAX_BUFFER
-      })
+      }),
+      run('git', ['rev-parse', '--verify', 'HEAD'], {
+        cwd: repoPath,
+        windowsHide: true,
+        maxBuffer: MAX_BUFFER
+      }).catch(() => undefined)
     ])
 
     const state = parseGitStatus(statusResult.stdout)
@@ -83,8 +98,55 @@ export async function readGitGraph(cwd: string, historyLimit = 240): Promise<Git
       (commit) => !recentHashes.has(commit.hash)
     )
     const commits = [...recentCommits, ...decoratedCommits]
+    const displayedHashes = new Set(commits.map((commit) => commit.hash))
     const headRef = refs.find((ref) => ref.isHead)
-    const headCommit = commits.find((commit) => commit.hash === headRef?.hash)
+    const headHash = headHashResult?.stdout.trim()
+    const headCommit = commits.find((commit) => commit.hash === (headRef?.hash ?? headHash))
+    const mainRef =
+      selectGitGraphMainRef(refs) ??
+      (headHash
+        ? {
+            name: 'HEAD',
+            fullName: 'HEAD',
+            kind: 'local' as const,
+            hash: headHash,
+            isHead: true
+          }
+        : undefined)
+    const [mainLineHashes, mergedIntoMainHashes, openBranchHashes] = mainRef
+      ? await Promise.all([
+          run('git', ['rev-list', '--first-parent', mainRef.hash], {
+            cwd: repoPath,
+            windowsHide: true,
+            maxBuffer: MAX_BUFFER
+          }).then((result) =>
+            result.stdout
+              .trim()
+              .split(/\r?\n/)
+              .filter((hash) => displayedHashes.has(hash))
+          ),
+          run('git', ['rev-list', mainRef.hash], {
+            cwd: repoPath,
+            windowsHide: true,
+            maxBuffer: MAX_BUFFER
+          }).then((result) =>
+            result.stdout
+              .trim()
+              .split(/\r?\n/)
+              .filter((hash) => displayedHashes.has(hash))
+          ),
+          run('git', ['rev-list', '--branches', '--remotes', '--not', mainRef.hash], {
+            cwd: repoPath,
+            windowsHide: true,
+            maxBuffer: MAX_BUFFER
+          }).then((result) =>
+            result.stdout
+              .trim()
+              .split(/\r?\n/)
+              .filter((hash) => displayedHashes.has(hash))
+          )
+        ])
+      : [[], [], []]
 
     return {
       available: true,
@@ -95,6 +157,9 @@ export async function readGitGraph(cwd: string, historyLimit = 240): Promise<Git
       changeCount: state.changes.length,
       refs,
       commits,
+      mainLineHashes,
+      mergedIntoMainHashes,
+      openBranchHashes,
       worktrees: parseGitWorktrees(worktreesResult.stdout),
       truncated: allCommits.length > limit
     }

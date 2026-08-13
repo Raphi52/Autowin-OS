@@ -263,6 +263,42 @@
   fill: var(--text-dim);
   font: 9px var(--mono);
 }
+.wt-topologie .cockpit-detail__graph {
+  width: max-content;
+  min-width: 100%;
+  overflow: visible;
+  background: transparent;
+}
+.wt-topologie .cockpit-detail__graph svg {
+  display: block;
+}
+.wt-topologie-lien {
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.wt-topologie-lien.is-closed {
+  stroke: var(--ok);
+}
+.wt-topologie-lien.is-main {
+  stroke: var(--rose-bright);
+  stroke-width: 4;
+}
+.wt-topologie-lien.is-open {
+  stroke: var(--cyan);
+}
+.wt-topologie-noeud circle {
+  fill: var(--surface-inset);
+  stroke-width: 1.5;
+}
+.wt-topologie-noeud.is-closed circle {
+  stroke: var(--ok);
+}
+.wt-topologie-noeud.is-main circle {
+  stroke: var(--rose-bright);
+}
+.wt-topologie-noeud.is-open circle {
+  stroke: var(--cyan);
+}
 .cockpit-detail__files {
   min-height: 0;
   overflow: auto;
@@ -308,56 +344,6 @@
   }
 }
 
-/*
-  FRISE DE SURVOL DU DÉPÔT + TOPOLOGIE PLEIN CADRE.
-
-  Reprend la lecture de l'ancien plan de métro : rose pour ce qui vit hors du tronc, cyan pour la ligne
-  principale. La hauteur du trait porte la même information que la couleur — une frise lisible ne doit
-  pas dépendre de la seule distinction rose/cyan.
-*/
-.wt-frise {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px 4px;
-  border: 1px solid var(--border-soft, rgba(255, 255, 255, 0.08));
-  border-radius: 10px;
-  background: var(--surface-inset, rgba(255, 255, 255, 0.02));
-}
-.wt-frise svg {
-  width: 100%;
-  height: 46px;
-  cursor: pointer;
-}
-.wt-frise-legende {
-  display: flex;
-  gap: 16px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint, rgba(245, 247, 251, 0.4));
-}
-.wt-frise-legende .is-tronc {
-  color: var(--cyan);
-}
-.wt-frise-legende .is-vivant {
-  color: var(--rose);
-}
-.wt-frise-tick {
-  stroke: var(--cyan);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
-}
-.wt-frise-tick.is-vivant {
-  stroke: var(--rose);
-}
-/* Le cadre de la portion lue : un remplissage discret, jamais un pavé qui écrase les traits. */
-.wt-frise-portion {
-  fill: rgba(245, 247, 251, 0.08);
-  stroke: rgba(245, 247, 251, 0.28);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
 .wt-topologie {
   display: flex;
   flex-direction: column;
@@ -365,12 +351,46 @@
   min-height: 0;
   flex: 1;
 }
-/* La topologie prend la place : c'est la réponse à « où en est le dépôt », plus un panneau annexe. */
-/*
-  Une HAUTEUR BORNÉE, et pas seulement `flex: 1` : mesuré, sans borne ce conteneur grandissait avec ses
-  271 commits, son `scrollTop` restait 0 et le cadre « portion lue » de la frise couvrait toute la
-  largeur — la frise ne montrait donc rien. C'est `.cockpit-scroll` qui défilait à sa place.
-*/
+.wt-topologie-legende {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border-soft, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  background: var(--surface-inset, rgba(255, 255, 255, 0.02));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.wt-topologie-legende span {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+.wt-topologie-legende span::before {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  content: '';
+}
+.wt-topologie-legende .is-closed {
+  justify-self: start;
+  color: var(--ok);
+}
+.wt-topologie-legende .is-main {
+  justify-self: center;
+  color: var(--rose-bright);
+}
+.wt-topologie-legende .is-open {
+  justify-self: end;
+  color: var(--cyan);
+}
+/* Une hauteur bornée garde le défilement dans le graphe au lieu d'étirer toute la page. */
 .wt-topologie-defilement {
   overflow: auto;
   height: min(64vh, 760px);

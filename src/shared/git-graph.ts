@@ -37,9 +37,26 @@ export interface GitGraphSnapshot {
   changeCount?: number
   refs?: GitGraphRef[]
   commits?: GitGraphCommit[]
+  mainLineHashes?: string[]
+  mergedIntoMainHashes?: string[]
+  openBranchHashes?: string[]
   worktrees?: GitGraphWorktree[]
   truncated?: boolean
   error?: string
+}
+
+export function selectGitGraphMainRef(refs: GitGraphRef[]): GitGraphRef | undefined {
+  return (
+    refs.find((ref) => ref.fullName === 'refs/heads/main') ??
+    refs.find((ref) => ref.fullName === 'refs/remotes/origin/main') ??
+    refs.find((ref) => /^refs\/remotes\/[^/]+\/main$/.test(ref.fullName)) ??
+    refs.find((ref) => /^refs\/remotes\/[^/]+\/HEAD$/.test(ref.fullName)) ??
+    refs.find((ref) => ref.fullName === 'refs/heads/master') ??
+    refs.find((ref) => /^refs\/remotes\/[^/]+\/master$/.test(ref.fullName)) ??
+    refs.find((ref) => ref.fullName === 'refs/heads/trunk') ??
+    refs.find((ref) => /^refs\/remotes\/[^/]+\/trunk$/.test(ref.fullName)) ??
+    refs.find((ref) => ref.isHead)
+  )
 }
 
 function records(input: string): string[] {

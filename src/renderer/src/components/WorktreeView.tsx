@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GitGraphCommit, GitGraphSnapshot } from '../../../shared/git-graph'
+import type { GitGraphSnapshot } from '../../../shared/git-graph'
 import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
 import { ViewTopBar } from './ViewTopBar'
-import { layoutGitGraph } from './GitGraphLayout'
+import { layoutGitGraph, projectGitGraphAxes, type GitGraphLayout } from './GitGraphLayout'
 import {
   formatAttente,
   LIBELLES_VERDICT,
@@ -36,20 +36,6 @@ function projectState(
   return { state: 'healthy', label: alerts ? 'Attention' : 'Sain', alertCount: alerts }
 }
 
-/**
- * La frise de survol du dépôt : tout l'historique en une bande, et la portion actuellement lue.
- *
- * Elle reprend la lecture de l'ancien plan de métro — rose = ce qui vit hors du tronc, cyan = la ligne
- * principale — mais appliquée à la MÊME géométrie que la topologie en dessous : les deux consomment
- * `layoutGitGraph`, donc une couleur vue ici désigne exactement le commit vu là. Deux tracés calculés
- * séparément auraient dérivé au premier changement de disposition.
- *
- * Le cadre clair est la portion visible du graphe, pas une décoration : c'est ce qui rend une frise
- * utile quand l'historique dépasse largement la hauteur de l'écran. Un clic y déplace la lecture.
- *
- * Périmètre : le DÉPÔT entier. Rien ici n'est propre à une conversation — les runs, les tours et leurs
- * fichiers vivent dans Observatory et Chat, et les mêler ici était justement le défaut corrigé.
- */
 /** Combien de chantiers d'un coup d'œil, avant même de lire une ligne. Douze lignes au plus. */
 const CHANTIERS_AFFICHES = 12
 
@@ -186,70 +172,7 @@ function ResumeChefDeProjet({
   )
 }
 
-function FriseRepo({
-  noeuds,
-  fraction,
-  portion,
-  surClic
-}: {
-  noeuds: ReturnType<typeof layoutGitGraph>['nodes']
-  fraction: number
-  portion: number
-  surClic: (fraction: number) => void
-}): React.JSX.Element | null {
-  if (noeuds.length === 0) return null
-  const LARGEUR = 1000
-  const HAUTEUR = 46
-  const troncX = Math.min(...noeuds.map((n) => n.x))
-  const pas = noeuds.length > 1 ? LARGEUR / (noeuds.length - 1) : 0
-  return (
-    <div className="wt-frise" data-testid="worktree-frise">
-      <div className="wt-frise-legende">
-        <span className="is-tronc">ligne principale</span>
-        <span className="is-vivant">hors du tronc</span>
-        <span className="is-portion">portion lue</span>
-      </div>
-      <svg
-        viewBox={`0 0 ${LARGEUR} ${HAUTEUR}`}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={`Historique du dépôt : ${noeuds.length} commits`}
-        onClick={(evenement) => {
-          const cadre = evenement.currentTarget.getBoundingClientRect()
-          if (cadre.width === 0) return
-          surClic((evenement.clientX - cadre.left) / cadre.width)
-        }}
-      >
-        <rect
-          className="wt-frise-portion"
-          x={fraction * LARGEUR}
-          y={0}
-          width={Math.max(portion * LARGEUR, 6)}
-          height={HAUTEUR}
-        />
-        {noeuds.map((noeud, index) => {
-          const horsTronc = noeud.x > troncX
-          // Un commit hors du tronc monte plus haut : la hauteur PORTE l'information, la couleur seule
-          // serait perdue pour qui distingue mal le rose du cyan.
-          const hauteur = horsTronc ? HAUTEUR - 10 : HAUTEUR / 2
-          return (
-            <line
-              key={noeud.commit.hash}
-              className={horsTronc ? 'wt-frise-tick is-vivant' : 'wt-frise-tick'}
-              x1={index * pas}
-              x2={index * pas}
-              y1={HAUTEUR}
-              y2={HAUTEUR - hauteur}
-            />
-          )
-        })}
-      </svg>
-    </div>
-  )
-}
-
-function GitTopology({ commits }: { commits: GitGraphCommit[] }): React.JSX.Element {
-  const layout = useMemo(() => layoutGitGraph(commits), [commits])
+function GitTopology({ layout }: { layout: GitGraphLayout }): React.JSX.Element {
   return (
     <div className="cockpit-detail__graph" data-testid="git-topology">
       <svg
@@ -257,24 +180,36 @@ function GitTopology({ commits }: { commits: GitGraphCommit[] }): React.JSX.Elem
         width={layout.width}
         height={layout.height}
       >
-        {layout.edges.map((edge) => (
-          <path
-            key={`${edge.from.commit.hash}-${edge.to.commit.hash}`}
-            d={`M ${edge.from.x} ${edge.from.y} L ${edge.to.x} ${edge.to.y}`}
-            fill="none"
-            stroke="var(--cyan)"
-          />
-        ))}
+        {layout.edges.map((edge) => {
+          const side =
+            edge.from.side === 'main' && edge.to.side === 'main'
+              ? 'main'
+              : edge.from.side === 'open' || edge.to.side === 'open'
+                ? 'open'
+                : 'closed'
+          return (
+            <path
+              key={`${edge.from.commit.hash}-${edge.to.commit.hash}`}
+              className={`wt-topologie-lien is-${side}`}
+              d={`M ${edge.from.x} ${edge.from.y} L ${edge.to.x} ${edge.to.y}`}
+              fill="none"
+            />
+          )
+        })}
         {layout.nodes.map((node) => (
-          <g key={node.commit.hash}>
+          <g key={node.commit.hash} className={`wt-topologie-noeud is-${node.side ?? 'main'}`}>
             <circle
+              data-commit={node.commit.hash}
+              data-side={node.side ?? 'main'}
               cx={node.x}
               cy={node.y}
               r="5"
-              fill="var(--surface-inset)"
-              stroke="var(--gold)"
             />
-            <text x={node.x + 14} y={node.y + 4}>
+            <text
+              x={node.x + (node.side === 'closed' ? -14 : 14)}
+              y={node.y + 4}
+              textAnchor={node.side === 'closed' ? 'end' : 'start'}
+            >
               {node.commit.shortHash} · {node.commit.subject}
             </text>
           </g>
@@ -291,12 +226,10 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
   const [activityAvailable, setActivityAvailable] = useState(true)
   const [repoPath, setRepoPath] = useState(() => localStorage.getItem('autowin:sc-repo') ?? '')
   const requestId = useRef(0)
-  // Le défilement du graphe pilote le cadre de la frise. Mesuré depuis le DOM et non déduit d'un index
-  // de commit : la hauteur d'un nœud n'est pas la hauteur d'une ligne rendue.
+  // Le conteneur sert aussi à centrer horizontalement l'axe principal après chaque chargement.
   const grapheRef = useRef<HTMLDivElement>(null)
   // Voir `recuEvenement` : distingue « pas encore de donnée » de « zéro chantier ».
   const [recuEvenement, setRecuEvenement] = useState(false)
-  const [survol, setSurvol] = useState({ fraction: 0, portion: 1 })
 
   const load = useCallback(async (): Promise<void> => {
     const id = ++requestId.current
@@ -349,21 +282,25 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
     })
   }, [active])
 
-  // Mesurer DÈS que la disposition change : sans cela `portion` reste à 1 jusqu'au premier défilement,
-  // et le cadre de la frise couvre toute la largeur en prétendant que tout est visible.
+  const health = projectState(snapshot, agents, activityAvailable)
+  const dispositionGraphe = useMemo(() => {
+    const commits = snapshot?.commits ?? []
+    const axes = projectGitGraphAxes(commits, snapshot?.refs ?? [], {
+      mainLineHashes: snapshot?.mainLineHashes,
+      mergedIntoMainHashes: snapshot?.mergedIntoMainHashes,
+      openBranchHashes: snapshot?.openBranchHashes
+    })
+    return layoutGitGraph(commits, axes)
+  }, [snapshot])
+
   useEffect(() => {
     const noeud = grapheRef.current
     if (!noeud || noeud.scrollHeight === 0) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSurvol({
-      fraction: noeud.scrollTop / noeud.scrollHeight,
-      portion: noeud.clientHeight / noeud.scrollHeight
-    })
-  }, [snapshot])
-
-  const health = projectState(snapshot, agents, activityAvailable)
-  // UNE disposition pour les deux tracés : la frise et le graphe doivent désigner le même commit.
-  const dispositionGraphe = useMemo(() => layoutGitGraph(snapshot?.commits ?? []), [snapshot])
+    const axeMain = dispositionGraphe.nodes.find((node) => node.side === 'main')
+    if (axeMain && noeud.clientWidth > 0) {
+      noeud.scrollLeft = Math.max(0, axeMain.x - noeud.clientWidth / 2)
+    }
+  }, [dispositionGraphe])
   const activeAgents = agents.filter(
     (agent) => agent.state === 'working' || agent.state === 'isolated'
   )
@@ -454,35 +391,16 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
             seule question : où en est le dépôt.
           */}
           <section className="wt-topologie" data-testid="worktree-topology-main">
-            <FriseRepo
-              noeuds={dispositionGraphe.nodes}
-              fraction={survol.fraction}
-              portion={survol.portion}
-              surClic={(fraction) => {
-                const noeud = grapheRef.current
-                if (!noeud) return
-                noeud.scrollTop = Math.max(
-                  0,
-                  fraction * noeud.scrollHeight - noeud.clientHeight / 2
-                )
-              }}
-            />
+            <div className="wt-topologie-legende" aria-label="Legende de la topologie Git">
+              <span className="is-closed">Fusionné / fermé</span>
+              <span className="is-main">main</span>
+              <span className="is-open">Ouvert</span>
+            </div>
             {snapshot?.available === false ? (
               <p className="wt-topologie-vide">Topologie indisponible.</p>
             ) : (
-              <div
-                className="wt-topologie-defilement"
-                ref={grapheRef}
-                onScroll={(evenement) => {
-                  const el = evenement.currentTarget
-                  if (el.scrollHeight === 0) return
-                  setSurvol({
-                    fraction: el.scrollTop / el.scrollHeight,
-                    portion: el.clientHeight / el.scrollHeight
-                  })
-                }}
-              >
-                <GitTopology commits={snapshot?.commits ?? []} />
+              <div className="wt-topologie-defilement" ref={grapheRef}>
+                <GitTopology layout={dispositionGraphe} />
               </div>
             )}
           </section>
