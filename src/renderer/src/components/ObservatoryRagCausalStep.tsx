@@ -48,9 +48,7 @@ export function ObservatoryRagCausalStep({
     if (candidate.kind !== 'injection') return false
     const summary = summarizeRagTrace({ system: candidate.content })
     if (summary.status !== 'injected' || summary.engine !== 'Amitel Brain') return false
-    return call?.brainTraceId
-      ? callForEvent(candidate)?.brainTraceId === call.brainTraceId
-      : true
+    return call?.brainTraceId ? callForEvent(candidate)?.brainTraceId === call.brainTraceId : true
   })
   const isFirstDelivery = firstRagEvent?.id === event.id
   const callTrigger = call ? lastUserMessagePreview(call.messages, 500) : ''

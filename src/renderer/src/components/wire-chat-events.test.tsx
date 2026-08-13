@@ -3,8 +3,12 @@ import { isLiveOrchestrationEvent, refreshesActiveConversation } from './chat-ev
 
 describe('chat event wiring', () => {
   it('reloads only the conversation targeted by a resumed-run refresh', () => {
-    expect(refreshesActiveConversation({ type: 'refresh', scope: 'chat', convId: 'a' }, 'a')).toBe(true)
-    expect(refreshesActiveConversation({ type: 'refresh', scope: 'chat', convId: 'a' }, 'b')).toBe(false)
+    expect(refreshesActiveConversation({ type: 'refresh', scope: 'chat', convId: 'a' }, 'a')).toBe(
+      true
+    )
+    expect(refreshesActiveConversation({ type: 'refresh', scope: 'chat', convId: 'a' }, 'b')).toBe(
+      false
+    )
   })
 
   it('recognises direct orchestration steps before their terminal event', () => {

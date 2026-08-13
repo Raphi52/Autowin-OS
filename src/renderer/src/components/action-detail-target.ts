@@ -29,7 +29,7 @@ export function hasConsultableRun(actions: readonly ActionLike[]): boolean {
     // Repli robuste : une action qui porte une reference de run est consultable, quel que soit son nom.
     const data = action.data
     if (!data || typeof data !== 'object') return false
-    const reference = (data as { runPath?: unknown; runId?: unknown })
+    const reference = data as { runPath?: unknown; runId?: unknown }
     return typeof reference.runPath === 'string' || typeof reference.runId === 'string'
   })
 }
@@ -73,10 +73,7 @@ export function localActionDetails(actions: readonly ActionLike[]): LocalActionD
       reason ??
       diff ??
       (output !== undefined || exitCode !== undefined
-        ? [
-            exitCode !== undefined ? `exit ${exitCode}` : '',
-            succeeded ? '' : (output ?? '')
-          ]
+        ? [exitCode !== undefined ? `exit ${exitCode}` : '', succeeded ? '' : (output ?? '')]
             .filter(Boolean)
             .join('\n')
         : undefined) ??

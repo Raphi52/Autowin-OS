@@ -72,7 +72,13 @@ describe('summarizeConversationCost — le total, et le poste qui l’explique',
 
   it('un bon ratio de cache ne déclenche AUCUNE alerte', () => {
     const summary = summarizeConversationCost([
-      row({ key: 'orchestrator', costUsd: 2, inputTokens: 100_000, cacheReadTokens: 90_000, calls: 20 })
+      row({
+        key: 'orchestrator',
+        costUsd: 2,
+        inputTokens: 100_000,
+        cacheReadTokens: 90_000,
+        calls: 20
+      })
     ])
     expect(summary.cacheHitRatio).toBeCloseTo(0.9, 2)
     expect(summary.rewritingContext).toBe(false)
@@ -83,7 +89,13 @@ describe('summarizeConversationCost — le total, et le poste qui l’explique',
     // alerte — le garde exigeait 5 appels. Le volume est le signal, pas le nombre d'appels.
     const summary = summarizeConversationCost([
       row({ key: 'subagent', costUsd: 10.05, inputTokens: 900_000, cacheReadTokens: 0, calls: 1 }),
-      row({ key: 'orchestrator', costUsd: 0.86, inputTokens: 2100, cacheReadTokens: 41_000, calls: 1 }),
+      row({
+        key: 'orchestrator',
+        costUsd: 0.86,
+        inputTokens: 2100,
+        cacheReadTokens: 41_000,
+        calls: 1
+      }),
       row({ key: 'judge', costUsd: 0.03, inputTokens: 800, cacheReadTokens: 9000, calls: 1 })
     ])
     expect(summary.calls).toBe(3)
@@ -152,7 +164,9 @@ describe('câblage — l’indicateur est réellement monté dans le composeur',
 
   it('ChatView monte le composant avec la conversation active', () => {
     const chat = read('ChatView.tsx')
-    expect(chat).toContain("import { ConversationCostIndicator } from './ConversationCostIndicator'")
+    expect(chat).toContain(
+      "import { ConversationCostIndicator } from './ConversationCostIndicator'"
+    )
     expect(chat).toContain('<ConversationCostIndicator')
     expect(chat).toMatch(/conversationId=\{activeId \?\? undefined\}/)
     // La dépense d'un tour n'est lisible qu'à la FIN du tour → busy doit être transmis.

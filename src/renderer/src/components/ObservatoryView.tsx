@@ -13,6 +13,7 @@ import { HumanJson } from './HumanJson'
 import { BrainMarkdown } from './BrainMarkdown'
 import { summarizeNativeTraces, type NativeTraceSummaryInput } from './native-trace-summary'
 import { eventTurnId, humanEventPreview, splitLabeledJson } from './observatory-event-preview'
+import './ViewPage.css'
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { useObservatorySources, type ActivitySessionMeta } from './useObservatorySources'
@@ -724,7 +725,7 @@ export function ObservatoryView({
   )
 
   return (
-    <section className="observatory-view" data-testid="observatory-view">
+    <section className="view-page observatory-view" data-testid="observatory-view">
       <header className="observatory-head">
         <ModuleHeader eyebrow="Traçabilité des conversations" title="Observatory" />
         <div className="observatory-metrics">

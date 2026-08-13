@@ -98,9 +98,9 @@ describe('reprendre une action interrompue sans la retaper', () => {
   })
 
   it('interruptedTask prend la PREMIÈRE action interrompue qui porte une tâche', () => {
-    expect(interruptedTask([interrompue(), interrompue('la bonne'), interrompue('la suivante')])).toBe(
-      'la bonne'
-    )
+    expect(
+      interruptedTask([interrompue(), interrompue('la bonne'), interrompue('la suivante')])
+    ).toBe('la bonne')
     expect(interruptedTask([interrompue('   ')])).toBeUndefined()
   })
 })

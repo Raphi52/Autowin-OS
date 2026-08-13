@@ -67,7 +67,8 @@ function cells(line: string): string[] {
   return t.split('|').map((c) => c.trim())
 }
 const isTableRow = (line: string): boolean => line.trim().startsWith('|')
-const isSeparator = (line: string): boolean => /^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes('-')
+const isSeparator = (line: string): boolean =>
+  /^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes('-')
 
 /** Cherche l'index de colonne dont l'en-tête matche un des mots-clés (insensible casse). */
 function colOf(headers: string[], keywords: string[]): number {
@@ -124,7 +125,8 @@ export function parseScoutTable(text: string): ScoutRow[] | null {
   for (let i = headerIdx + 2; i < lines.length; i++) {
     if (!isTableRow(lines[i])) break
     const c = cells(lines[i])
-    const at = (idx: number, fallback = ''): string => (idx >= 0 && idx < c.length ? c[idx] : fallback)
+    const at = (idx: number, fallback = ''): string =>
+      idx >= 0 && idx < c.length ? c[idx] : fallback
     rows.push({
       num: at(iNum, String(rows.length + 1)),
       impact: iImpact >= 0 ? band(at(iImpact)) : scoreBand(at(iScore)),

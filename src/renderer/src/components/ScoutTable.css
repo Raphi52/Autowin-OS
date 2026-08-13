@@ -37,7 +37,7 @@
   background: var(--surface2, #191d23);
 }
 .st-num {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   color: var(--muted, #8b939f);
 }
 .st-celldot {
@@ -51,9 +51,15 @@
   vertical-align: middle;
   background: var(--line2, #31373f);
 }
-.st-dot.st-g { background: var(--ok, #3ecb8f); }
-.st-dot.st-y { background: var(--warn, #e8a33d); }
-.st-dot.st-r { background: var(--danger, #e6635b); }
+.st-dot.st-g {
+  background: var(--ok, #3ecb8f);
+}
+.st-dot.st-y {
+  background: var(--warn, #e8a33d);
+}
+.st-dot.st-r {
+  background: var(--danger, #e6635b);
+}
 .st-type {
   font-size: 11px;
   font-weight: 700;
@@ -62,12 +68,20 @@
   border: 1px solid var(--line2, #31373f);
   white-space: nowrap;
 }
-.st-type-fix { color: var(--accent, #4b9fff); }
-.st-type-new { color: var(--ok, #3ecb8f); }
-.st-what { font-weight: 600; }
-.st-why { color: var(--muted, #8b939f); }
+.st-type-fix {
+  color: var(--accent, #4b9fff);
+}
+.st-type-new {
+  color: var(--ok, #3ecb8f);
+}
+.st-what {
+  font-weight: 600;
+}
+.st-why {
+  color: var(--muted, #8b939f);
+}
 .st-how {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 12px;
   color: var(--accent, #4b9fff);
 }

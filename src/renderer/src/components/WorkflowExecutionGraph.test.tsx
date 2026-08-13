@@ -525,9 +525,11 @@ describe('WorkflowExecutionGraph', () => {
    * annoncait donc terminee une etape qui ne s'est jamais achevee — le contraire de la verite.
    */
   it('une etape reconciliee « interrupted » est dite interrompue, pas terminee', async () => {
-    const causalTrace = vi.fn().mockResolvedValue([
-      trace('etape-zombie', 1, { turnId: 'turn-latest', status: 'interrupted' })
-    ])
+    const causalTrace = vi
+      .fn()
+      .mockResolvedValue([
+        trace('etape-zombie', 1, { turnId: 'turn-latest', status: 'interrupted' })
+      ])
     Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
 
     const view = await render({ conversationId: 'conv-a', active: true })

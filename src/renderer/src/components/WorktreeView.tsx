@@ -10,6 +10,7 @@ import {
   resumerFlux,
   type Chantier
 } from './worktree-chef-de-projet'
+import './ViewPage.css'
 import './WorktreeView.css'
 
 type DataState = 'healthy' | 'unknown' | 'unavailable' | 'stale'
@@ -375,7 +376,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
   }
 
   return (
-    <section className="worktree-tab cockpit" data-active={active}>
+    <section className="view-page worktree-tab cockpit" data-active={active}>
       {/* MÊME barre du haut que Task Manager, Agent Studio et Settings (arrangement retenu par
           l'utilisateur), au lieu d'un `cockpit-header` maison : surtitre et titre collés au chemin,
           boutons dans un bloc à part — d'où la régression visuelle signalée. Cette vue n'a pas de

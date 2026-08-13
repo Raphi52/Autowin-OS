@@ -68,7 +68,13 @@ describe('localActionDetails — ce qui s’affiche SUR PLACE faute de run', () 
   })
 
   it('ignore ce qui n’a rien a lire (pas de ligne vide dans le fil)', () => {
-    expect(localActionDetails([{ name: 'x' }, { name: 'y', data: {} }, { name: 'z', data: { output: '  ' } }])).toEqual([])
+    expect(
+      localActionDetails([
+        { name: 'x' },
+        { name: 'y', data: {} },
+        { name: 'z', data: { output: '  ' } }
+      ])
+    ).toEqual([])
   })
 
   it('exit code SEUL suffit (une verification sans sortie reste informative)', () => {

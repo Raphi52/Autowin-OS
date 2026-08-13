@@ -10,9 +10,9 @@ const turn = (id: string, updatedAt: number, events = 3): UnfinishedTurn => ({
 
 describe('pickTurnToResume — reprise AUTOMATIQUE, sans popup', () => {
   it('reprend le tour le PLUS RÉCEMMENT actif', () => {
-    expect(pickTurnToResume([turn('vieux', 10), turn('recent', 99), turn('moyen', 50)])).toMatchObject(
-      { conversationId: 'recent' }
-    )
+    expect(
+      pickTurnToResume([turn('vieux', 10), turn('recent', 99), turn('moyen', 50)])
+    ).toMatchObject({ conversationId: 'recent' })
   })
 
   it('rien à reprendre → null (démarrage normal inchangé)', () => {

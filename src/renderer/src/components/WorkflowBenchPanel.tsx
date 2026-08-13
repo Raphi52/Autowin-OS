@@ -212,9 +212,7 @@ export function WorkflowBenchPanel({
             className="workflow-bench-cancel"
             data-testid="workflow-bench-cancel"
             onClick={() => {
-              setProgress((current) =>
-                current ? { ...current, label: 'Annulation…' } : current
-              )
+              setProgress((current) => (current ? { ...current, label: 'Annulation…' } : current))
               void window.api.workflowBenchCancel()
             }}
           >
@@ -278,13 +276,11 @@ export function WorkflowBenchPanel({
                   ? 'durée inconnue'
                   : `${(arm.durationMs / 1_000).toFixed(1)} s`}
               </p>
-              {(report.counterfactual!.diff.onlyByProfile[arm.profileId || 'current'] ?? []).length >
-                0 && (
+              {(report.counterfactual!.diff.onlyByProfile[arm.profileId || 'current'] ?? [])
+                .length > 0 && (
                 <p>
                   Fichiers propres :{' '}
-                  {report.counterfactual!.diff.onlyByProfile[
-                    arm.profileId || 'current'
-                  ].join(', ')}
+                  {report.counterfactual!.diff.onlyByProfile[arm.profileId || 'current'].join(', ')}
                 </p>
               )}
               {arm.risks.length > 0 && (

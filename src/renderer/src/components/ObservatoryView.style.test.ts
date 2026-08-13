@@ -2,12 +2,16 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 describe('Observatory visual contracts', () => {
-  it('uses the selected sans-serif display font only inside the Observatory header', () => {
+  it('ne redéfinit PAS la police du titre : elle suit celle de toutes les vues', () => {
+    // Ce test exigeait l'INVERSE : que le titre d'Observatory soit en `'Segoe UI Variable Display',
+    // …, sans-serif`, alors que `--module-title-font` vaut `--display` = `Georgia, serif` partout
+    // ailleurs. Il epinglait donc une divergence, SANS enoncer de raison — aucun commentaire, aucune
+    // trace de decision. L'utilisateur a explicitement demande que la police soit la meme d'un onglet
+    // a l'autre : c'est cette instruction, datee et attribuable, qui tranche contre une assertion
+    // muette. Si un motif de densite justifiait le sans-serif, il devra revenir avec son motif ecrit.
     const css = readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
 
-    expect(css).toMatch(
-      /\.observatory-head \.module-header > h1\s*{[^}]*font-family:\s*'Segoe UI Variable Display',\s*'Segoe UI',\s*ui-sans-serif,\s*system-ui,\s*sans-serif/s
-    )
+    expect(css).not.toMatch(/\.module-header\s*>?\s*h1\s*{[^}]*font-family/s)
   })
 
   it('keeps the six Observatory metric cards on one row when space is available', () => {

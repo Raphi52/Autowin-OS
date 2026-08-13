@@ -1,25 +1,9 @@
+/* Le cadre lui-meme vit dans `.view-page` (ui-system.css) : c'est CETTE vue qui a servi de
+   reference, elle n'a donc plus a le decrire en propre. Ne reste ici que sa mise en page interne. */
 .task-manager-view {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 18px;
-  border: 1px solid color-mix(in srgb, var(--rose) 34%, var(--container-border));
-  border-radius: var(--container-radius-page);
-  background:
-    linear-gradient(
-        90deg,
-        var(--rose),
-        transparent 42%,
-        color-mix(in srgb, var(--gold) 70%, transparent)
-      )
-      top / 100% 1px no-repeat,
-    var(--surface-panel);
-  box-shadow: var(--container-shadow);
 }
 
 .task-manager-head,
@@ -37,7 +21,9 @@
   padding: 4px 8px 0;
 }
 
-.task-manager-head .module-header > span,
+/* L'eyebrow reprend `--module-eyebrow-color` comme partout : le forcer en `--gold` ici et dans
+   Tickets rendait un surtitre JAUNE dans deux vues sur sept, sans que rien ne le justifie. Le titre
+   de panneau garde sa couleur propre — c'est un titre de PANNEAU, pas l'identite de la vue. */
 .task-manager-panel-title > span {
   color: var(--gold);
 }

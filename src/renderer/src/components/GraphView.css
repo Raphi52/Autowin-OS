@@ -11,8 +11,10 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  /* Aligne le titre a la meme hauteur que les autres vues (~52px du haut). */
-  padding-top: 13px;
+  /* Le calage a la main qui vivait ici (`padding-top: 13px`, « aligne le titre a la meme hauteur que
+     les autres vues ») posait en fait le titre 14 px trop bas depuis que l'en-tete porte son propre
+     retrait partage (`--view-head-pad`). Un decalage regle a l'oeil devient faux des que la reference
+     bouge — et personne ne repasse verifier. */
   color: #e8edf4;
   background: var(--surface-panel);
   border: 1px solid var(--container-border);
@@ -43,9 +45,12 @@
 .graph-toolbar {
   grid-column: 1 / -1;
   display: flex;
-  align-items: center;
+  /* Aligne en HAUT comme `ViewTopBar` : cale en bas ou au centre, le titre descendait des que les
+     controles voisins etaient plus hauts que lui — mesure : 76 px du bord contre 49 ailleurs. */
+  align-items: flex-start;
   gap: 20px;
-  padding: 0 18px;
+  /* Etait `0 18px` : le titre montait de 9 px par rapport aux autres vues. */
+  padding: var(--view-head-pad, 18px 20px 0);
   border-bottom: 1px solid var(--container-border);
   background: transparent;
 }

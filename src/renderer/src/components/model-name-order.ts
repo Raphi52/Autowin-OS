@@ -14,10 +14,7 @@ export function displayedModelName(model: NamedRuntimeModel): string {
   return model.label ?? model.model
 }
 
-export function compareModelsByName(
-  left: NamedRuntimeModel,
-  right: NamedRuntimeModel
-): number {
+export function compareModelsByName(left: NamedRuntimeModel, right: NamedRuntimeModel): number {
   return (
     modelNameCollator.compare(displayedModelName(left), displayedModelName(right)) ||
     modelNameCollator.compare(left.provider, right.provider) ||

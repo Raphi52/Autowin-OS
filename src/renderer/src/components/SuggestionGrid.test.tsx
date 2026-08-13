@@ -19,8 +19,17 @@ function render(props: Parameters<typeof SuggestionGrid>[0]): void {
 }
 
 const GROUPS: SuggestionGroup[] = [
-  { key: 'A', title: 'Découverte', items: [{ label: 'Que peux-tu faire ?' }, { label: 'Crée une conv' }] },
-  { key: 'B', title: 'Avancé', subtitle: 'score le plus haut', items: [{ label: 'Mets le juge sur codex' }] }
+  {
+    key: 'A',
+    title: 'Découverte',
+    items: [{ label: 'Que peux-tu faire ?' }, { label: 'Crée une conv' }]
+  },
+  {
+    key: 'B',
+    title: 'Avancé',
+    subtitle: 'score le plus haut',
+    items: [{ label: 'Mets le juge sur codex' }]
+  }
 ]
 
 describe('SuggestionGrid', () => {

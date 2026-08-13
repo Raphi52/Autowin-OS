@@ -87,8 +87,7 @@ describe('pickRunForTrace — degradation successive, jamais de pari', () => {
  * module jamais appele et le clic continue d'ouvrir la seule liste des runs.
  */
 describe('cablage du clic « action avec erreur » → trace', () => {
-  const read = (file: string): string =>
-    readFileSync(join(__dirname, file), 'utf8')
+  const read = (file: string): string => readFileSync(join(__dirname, file), 'utf8')
 
   it('le bloc d’activite transmet le run FAUTIF au clic', () => {
     const parts = read('ChatView.parts.tsx')

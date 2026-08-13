@@ -15,10 +15,13 @@ export interface UnfinishedTurn {
  * tombée), et seulement s'il porte au moins un événement récupéré (sinon rien à montrer).
  * Aucun candidat → null (démarrage normal, strictement inchangé).
  */
-export function pickTurnToResume(turns: readonly UnfinishedTurn[] | null | undefined): UnfinishedTurn | null {
+export function pickTurnToResume(
+  turns: readonly UnfinishedTurn[] | null | undefined
+): UnfinishedTurn | null {
   if (!Array.isArray(turns) || turns.length === 0) return null
   const usable = turns.filter(
-    (turn) => turn && typeof turn.conversationId === 'string' && turn.conversationId && turn.events > 0
+    (turn) =>
+      turn && typeof turn.conversationId === 'string' && turn.conversationId && turn.events > 0
   )
   if (usable.length === 0) return null
   return usable.reduce((best, turn) => (turn.updatedAt > best.updatedAt ? turn : best))

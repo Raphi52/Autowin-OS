@@ -1,0 +1,41 @@
+/**
+ * Le cadre de page partage, dans SA feuille : `ui-system.css` ne contient que des tokens et des
+ * primitives de couleur — un test l'exige (`defines only reusable color and container primitives`),
+ * et ce garde-fou a raison : y mettre de la mise en page melangerait vocabulaire et disposition.
+ */
+/**
+ * LE cadre de page, une seule fois. Chaque vue redefinissait le sien : Task Manager et Tickets
+ * cadraient a `16px 18px` avec un lisere rose, Observatory a `5px 28px` sans lisere, Worktrees sans
+ * padding du tout, et Agent Studio / Settings / Knowledge n'avaient aucun cadre — leur barre du haut
+ * flottait donc hors du conteneur du contenu. Resultat visible a l'oeil : le titre de page n'etait
+ * jamais a la meme distance des bords selon l'onglet.
+ *
+ * L'arrangement de Task Manager fait reference (choix utilisateur) : c'est celui-ci, copie ici mot
+ * pour mot depuis `.task-manager-view`, que toutes les vues consomment desormais.
+ */
+.view-page {
+  /* Retrait de l'en-tete de page, decrit UNE fois. `ViewTopBar` le consomme, et les trois vues qui
+     gardent un en-tete maison (Knowledge, Observatory, Tickets — leur titre est colle a un controle
+     fonctionnel) le consomment aussi : c'est ce qui rend la distance titre/bord identique partout,
+     sans avoir a restructurer ces trois en-tetes. Mesure avant : 49/39 px pour quatre vues, mais
+     58/38, 58/19 et 48/27 pour ces trois-la. */
+  --view-head-pad: 18px 20px 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--rose) 34%, var(--container-border));
+  border-radius: var(--container-radius-page);
+  background:
+    linear-gradient(
+        90deg,
+        var(--rose),
+        transparent 42%,
+        color-mix(in srgb, var(--gold) 70%, transparent)
+      )
+      top / 100% 1px no-repeat,
+    var(--surface-panel);
+  box-shadow: var(--container-shadow);
+}

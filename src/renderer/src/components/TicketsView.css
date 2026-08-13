@@ -9,33 +9,24 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 18px;
-  border: 1px solid color-mix(in srgb, var(--rose) 36%, var(--container-border));
-  border-radius: var(--container-radius-page);
-  background:
-    linear-gradient(
-        90deg,
-        var(--rose),
-        rgba(239, 63, 145, 0.12) 45%,
-        rgba(233, 189, 78, 0.18),
-        var(--gold)
-      )
-      top / 100% 1px no-repeat,
-    var(--surface-panel);
-  box-shadow: var(--container-shadow);
+  /* Cadre, padding, lisere et fond delegues a `.view-page`. Ils etaient recopies ici avec un lisere
+     a 36 % (contre 34 %) et un degrade a quatre arrets au lieu de trois : des ecarts invisibles en
+     lisant le code, parfaitement visibles en passant d'un onglet a l'autre. */
 }
 
 .tickets-head {
   display: flex;
-  align-items: flex-end;
+  /* Aligne en HAUT comme `ViewTopBar` : cale en bas ou au centre, le titre descendait des que les
+     controles voisins etaient plus hauts que lui — mesure : 76 px du bord contre 49 ailleurs. */
+  align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 4px 8px 0;
+  /* Etait `4px 8px 0` : 12 px trop a gauche et 1 px trop haut. */
+  padding: var(--view-head-pad, 18px 20px 0);
 }
 
-.tickets-head .module-header > span {
-  color: var(--gold);
-}
+/* Le surtitre suit `--module-eyebrow-color` comme partout. Peint en `--gold` ici (et jadis dans Task
+   Manager), il faisait un titre de page JAUNE dans deux onglets sur sept — l'ecart signale a l'oeil. */
 
 .tickets-source-controls,
 .tickets-toolbar,
@@ -395,7 +386,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 
 .tickets-id {
   color: var(--gold);

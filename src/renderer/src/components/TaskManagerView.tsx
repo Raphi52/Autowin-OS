@@ -17,6 +17,7 @@ import {
 import { scheduleDraftProblem } from './task-schedule-draft'
 import type { RuntimeModel } from './chat-view-model'
 import { compareModelsByName, displayedModelName } from './model-name-order'
+import './ViewPage.css'
 import './TaskManagerView.css'
 
 type ExecutionMode = 'windows' | 'active-only'
@@ -700,7 +701,7 @@ export function TaskManagerView({
   }
 
   return (
-    <section className="task-manager-view" data-testid="task-manager-view">
+    <section className="view-page task-manager-view" data-testid="task-manager-view">
       <ViewTopBar
         eyebrow="AUTOMATISATION"
         title="Task Manager"

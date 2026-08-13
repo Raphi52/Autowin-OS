@@ -23,8 +23,13 @@ export function ScoutTable({
       <table className="st-ledger">
         <thead>
           <tr>
-            <th>#</th><th>Imp.</th><th>Eff.</th><th>Type</th>
-            <th>Manquement</th><th>Pourquoi</th><th>1er pas</th>
+            <th>#</th>
+            <th>Imp.</th>
+            <th>Eff.</th>
+            <th>Type</th>
+            <th>Manquement</th>
+            <th>Pourquoi</th>
+            <th>1er pas</th>
           </tr>
         </thead>
         <tbody>
@@ -37,8 +42,12 @@ export function ScoutTable({
               title={onPick ? `Framer le candidat #${r.num}` : undefined}
             >
               <td className="st-num">{r.num}</td>
-              <td className="st-celldot"><Dot band={r.impact} /></td>
-              <td className="st-celldot"><Dot band={r.effort} /></td>
+              <td className="st-celldot">
+                <Dot band={r.impact} />
+              </td>
+              <td className="st-celldot">
+                <Dot band={r.effort} />
+              </td>
               <td>
                 {r.type && (
                   <span className={`st-type st-type-${r.type}`}>
