@@ -346,3 +346,18 @@ if ECHECS:
         print("FAIL:", message)
     sys.exit(1)
 print("PASS launch_dev_phases + splash")
+
+# --- Garde 2 : QUELLE version le lanceur execute ------------------------------------------------
+# Plainte de depart : « ca lance une vieille version a chaque fois » sans jamais dire laquelle.
+from launch_dev_phases import formater_identite as _fmt  # noqa: E402
+
+verifie(_fmt("fc5f2d6", "main", 0) == "fc5f2d6 · main · propre",
+        "arbre propre : commit + branche + « propre », sans bruit")
+verifie(_fmt("fc5f2d6", "veille-concurrents", 3) == "fc5f2d6 · veille-concurrents · +3 non committés",
+        "arbre sale : le nombre de non-committes dit que ce n'est PAS exactement le commit")
+verifie(_fmt("abc1234", "main", 1).endswith("+1 non committé"),
+        "singulier au singulier, pluriel au pluriel")
+verifie(_fmt("", "main", 0).startswith("sans commit"),
+        "un commit vide ne casse pas la ligne")
+verifie("détaché" in _fmt("abc1234", "", 0),
+        "une branche vide (HEAD detache) est nommee, pas laissee vide")

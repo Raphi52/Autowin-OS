@@ -158,6 +158,18 @@ def libelle_duree(secondes: float) -> str:
     return f"{entier // 60} min {entier % 60:02d} s"
 
 
+def formater_identite(commit: str, branche: str, non_committes: int) -> str:
+    """QUELLE version on lance, en une ligne. Sa plainte de depart : « ca lance une vieille version a
+    chaque fois » sans jamais dire laquelle. On affiche donc le commit court, la branche, et le nombre
+    de fichiers NON COMMITTES — car en dev le lanceur build l'arbre vivant, pas seulement le commit :
+    « +3 non committés » dit que ce qui tourne n'est PAS exactement `commit`. « propre » quand l'arbre
+    l'est vraiment. Fonction pure : la lecture git (impure) se fait dans le splash et passe ici."""
+    tete = commit.strip() or "sans commit"
+    lieu = branche.strip() or "HEAD détaché"
+    etat = "propre" if non_committes <= 0 else f"+{non_committes} non committé{'s' if non_committes > 1 else ''}"
+    return f"{tete} · {lieu} · {etat}"
+
+
 class SuiviDemarrage:
     """Decide QUAND l'ecran d'attente doit se fermer. Pur, donc eprouvable sans fenetre.
 

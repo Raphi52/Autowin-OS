@@ -33,7 +33,9 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import font as tkfont
 
-from launch_dev_phases import ETAPES, SuiviDemarrage, libelle_duree
+import subprocess
+
+from launch_dev_phases import ETAPES, SuiviDemarrage, formater_identite, libelle_duree
 
 # PALETTE — la MEME que l'ecran de demarrage de l'application, relue dans `src/renderer/index.html`
 # plutot que devinee. Les deux ecrans se suivent a l'oeil pendant un demarrage : deux codes couleur
@@ -120,6 +122,12 @@ class Splash:
         tk.Label(
             bloc_titre, text="mode développement", bg=_CARTE, fg=_DORE, font=corps
         ).pack(anchor="w")
+        # QUELLE version : commit + branche + fichiers non committés. En dev, le lanceur build l'arbre
+        # vivant — cette ligne rend visible ce qu'on execute reellement, y compris « +N non committés »
+        # qui signale que ce n'est PAS exactement le commit affiche.
+        tk.Label(
+            bloc_titre, text=self._identite_version(), bg=_CARTE, fg=_DORE, font=mono
+        ).pack(anchor="w", pady=(2, 0))
 
         tk.Frame(carte, bg=_FILET, height=1).pack(fill="x", padx=(34, 28), pady=(22, 20))
 
@@ -151,6 +159,31 @@ class Splash:
         self.racine.after(200, self._battement)
 
     # -- fenetre ---------------------------------------------------------------------------------
+    def _identite_version(self) -> str:
+        """Lit git (impur) et delegue le formatage a `formater_identite` (pur, teste). Toute panne git
+        rend une ligne neutre plutot que d'empecher le demarrage — un lanceur ne meurt pas pour un
+        `git` absent ou un dossier hors depot."""
+        def _git(args: list[str]) -> str:
+            try:
+                return subprocess.run(
+                    ["git", *args],
+                    cwd=str(_RACINE_PROJET),
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                ).stdout.strip()
+            except Exception:  # noqa: BLE001 - git indisponible ne doit pas bloquer le lanceur
+                return ""
+
+        commit = _git(["rev-parse", "--short", "HEAD"])
+        if not commit:
+            return "version git indisponible"
+        branche = _git(["rev-parse", "--abbrev-ref", "HEAD"])
+        porcelain = _git(["status", "--porcelain"])
+        non_committes = len([l for l in porcelain.splitlines() if l.strip()])
+        return formater_identite(commit, branche, non_committes)
+
     def _charger_logo(self) -> tk.PhotoImage | None:
         """Le VRAI logo du produit. Absent ou illisible : on s'en passe, on n'echoue pas pour une image."""
         chemin = _RACINE_PROJET / "resources" / "autowin-os-dev.png"
