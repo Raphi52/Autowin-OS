@@ -986,6 +986,12 @@ export class AppCommandBus {
         // éprouvée (`matchExplicitPhase` → `regimePhases`) au lieu d'ouvrir un second chemin.
         // Une valeur inconnue est IGNORÉE : le modèle ne doit pas pouvoir inventer une phase.
         const requestedPhase = typeof a.phase === 'string' ? a.phase.trim().toLowerCase() : ''
+        const delegatedTask = s('task')
+        const suppliedRootTask =
+          typeof a.rootTask === 'string' && a.rootTask.trim() ? a.rootTask.trim() : undefined
+        // Le prompt utilisateur est l'autorite du run. `phase` et `task` sont produits par le modele
+        // conversationnel : ils peuvent aider a deleguer, jamais reduire le contrat racine.
+        const authoritativeTask = suppliedRootTask ?? delegatedTask
         /**
          * UNE PHASE CHOISIE PAR LE MODÈLE N'AMPUTE PAS UNE TÂCHE À RISQUE.
          *
@@ -998,9 +1004,11 @@ export class AppCommandBus {
          * indistinguables en aval (même préfixe `/<phase> `), donc la garde est posée ICI, à l'entrée.
          */
         const modelPhaseAllowed =
-          ORCHESTRATE_PHASES.has(requestedPhase) && classifyRegime(s('task')) !== 'critical'
+          !suppliedRootTask &&
+          ORCHESTRATE_PHASES.has(requestedPhase) &&
+          classifyRegime(authoritativeTask) !== 'critical'
         const phasePrefix = modelPhaseAllowed ? `/${requestedPhase} ` : ''
-        const requestedTask = `${phasePrefix}${s('task')}`
+        const requestedTask = `${phasePrefix}${authoritativeTask}`
         const conversation = this.os.conversations.get(convId)
         const kaizenEvidenceConversation =
           conversation?.autoKaizen?.role === 'analysis'
@@ -1135,6 +1143,7 @@ export class AppCommandBus {
           this.broadcast({ type: 'orchestrate-start', convId, runPath, task: requestedTask })
           let currentRunId: string | undefined
           let terminalLifecycle: Extract<RunLifecycleEvent, { stage: 'closure' }> | undefined
+          let publishedCommitSha: string | undefined
           let resumedCheckpointReleased = false
           let phaseStartIteration = 0
           const r = await this.os.runTask(
@@ -1173,7 +1182,8 @@ export class AppCommandBus {
                     phase:
                       (s.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '') ||
                       'build',
-                    text: s.text as string
+                    text: s.text as string,
+                    executionEvidence: s.evidence
                   }))
                 populateConvRunSections(runPath, livePhases)
               }
@@ -1232,6 +1242,9 @@ export class AppCommandBus {
             orchestrationTurnId,
             (lifecycle) => {
               currentRunId = lifecycle.runId
+              if (lifecycle.stage === 'git' && lifecycle.git.outcome === 'merged') {
+                publishedCommitSha = lifecycle.git.commitSha
+              }
               // Le supervisor refuse une reprise avec provider encore actif AVANT d'entrer ici.
               // Conserver l'ancien checkpoint jusque ce premier evenement evite de perdre les phases
               // deja payees lorsqu'une admission echoue. Une fois admis, le nouveau run prend le relais.
@@ -1350,7 +1363,7 @@ export class AppCommandBus {
               unpricedCalls: r.usage?.unpricedCalls
             })
             saveConvRunTrace(runPath, steps)
-            populateConvRunSections(runPath, r.phaseOutputs) // J2 — RUN.md peuplé du vrai livrable
+            populateConvRunSections(runPath, r.phaseOutputs, { publishedCommitSha }) // J2 — RUN.md peuplé du vrai livrable
             const runStatus =
               terminalLifecycle && terminalLifecycle.closure.status !== 'open'
                 ? terminalLifecycle.closure.status

@@ -354,6 +354,23 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     expect(receivedTask).toMatch(/^\/build /)
   })
 
+  it('le prompt racine de mutation prime sur un sous-objectif scout choisi par le modele', async () => {
+    const os = fakeOs()
+    const rootTask =
+      'Scout les defauts du workflow puis corrige-les, lance les tests et publie un commit.'
+
+    const result = await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: 'liste seulement les defauts', phase: 'scout', rootTask },
+      'conv-1'
+    )
+
+    expect(result.ok).toBe(true)
+    expect(os.calls.lastTask).toContain(rootTask)
+    expect(os.calls.lastTask).not.toMatch(/^\/scout\b/)
+    expect(os.calls.lastTask).not.toBe('liste seulement les defauts')
+  })
+
   it('collecte le contexte substantiel avant de déléguer au pipeline', async () => {
     const os = fakeOs()
     let collected = ''

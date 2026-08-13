@@ -64,6 +64,8 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
   })
 
   it.each([
+    'Next: commit final puis livraison.',
+    'Étape suivante : push et livraison.',
     '⏳ **Reste à faire** — publication (commit/push).',
     '👉 **Recommandé** — autoriser la publication de ces 2 fichiers.',
     '⏳ **Reste à faire** — Gate/publication (commit).',

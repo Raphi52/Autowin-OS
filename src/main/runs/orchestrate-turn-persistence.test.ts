@@ -50,6 +50,28 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
     expect(assistant.error).toBe('provider indisponible')
   })
 
+  it('refuse une clôture nominale quand le gate a bloqué la livraison', () => {
+    const { store, id } = storeWithConversation()
+    const turn = createOrchestrateTurnPersistence({
+      conversations: store,
+      conversationId: id,
+      turnId: 'turn-gate-red'
+    })
+
+    turn.begin('tâche refusée par le gate')
+    turn.succeed({
+      result: 'Le correctif reste non livré.',
+      valid: false,
+      gateBlocked: true,
+      gateReasons: ['preuve runtime absente']
+    })
+
+    const assistant = store.get(id)!.messages[1]
+    expect(assistant.status).toBe('failed')
+    expect(assistant.error).toContain('preuve runtime absente')
+    expect(assistant.content).toContain('Le correctif reste non livré.')
+  })
+
   it('marque une annulation comme telle', () => {
     const { store, id } = storeWithConversation()
     const turn = createOrchestrateTurnPersistence({

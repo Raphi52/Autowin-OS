@@ -619,7 +619,16 @@ describe('câblage — le modèle ne peut pas réduire une tâche critique', () 
   const source = fs.readFileSync(path.join(__dirname, 'commands.ts'), 'utf8')
 
   it('la phase du modèle est refusée sur un régime critique', () => {
-    expect(source).toContain("classifyRegime(s('task')) !== 'critical'")
+    expect(source).toContain('!suppliedRootTask')
+    expect(source).toContain("classifyRegime(authoritativeTask) !== 'critical'")
+  })
+
+  it('une phase naturelle composee avec une mutation reste dans un pipeline complet', () => {
+    expect(regimePhases('Scout les defauts puis corrige-les et lance les tests')).toEqual([
+      'scout',
+      'frame',
+      'build'
+    ])
   })
 
   it('une phase NOMMÉE par l’utilisateur garde son pouvoir de réduire', () => {

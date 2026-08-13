@@ -85,6 +85,22 @@ class RedPuisVertParModele extends RedPuisVert {
   }
 }
 
+class ToujoursRouge extends Recorder {
+  readonly phases: string[] = []
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const phase = /SKILL\s+(scout|frame|terrain|build|clean|judge)/.exec(options.system ?? '')?.[1]
+    if (phase) this.phases.push(phase)
+    const result = yield* super.send(messages, options)
+    return phase === 'judge' && options.execution?.sandbox === 'read-only'
+      ? { ...result, text: 'DEFAUT: preuve identique' }
+      : result
+  }
+}
+
 function makeOrchestrator(
   provider: ProviderAdapter,
   workflow?: WorkflowRunOverride,
@@ -274,22 +290,22 @@ describe('un graphe pilote le run', () => {
     expect(provider.execCount).toBe(1)
   })
 
-  it('le devis provisionne le PIRE CAS du graphe, pas sa chaîne', async () => {
-    // Régime standard : la chaîne seule (2 phases) passe. C'est bien le pire cas du graphe à boucles
-    // — 7 exécutions de nœuds — qui fait refuser, AVANT de dépenser plutôt qu'en pleine course.
+  it('le devis ignore les retours rouges qui exigent desormais un nouveau tour humain', async () => {
     await expect(
       makeOrchestrator(new Recorder(), undefined, compileExecutionQuote('corrige le bug')).run(
         'corrige le bug'
       )
     ).resolves.toBeDefined()
+    const provider = new Recorder()
     await expect(
-      makeOrchestrator(new Recorder(), { graph: boucle }, compileExecutionQuote('corrige le bug')).run(
+      makeOrchestrator(provider, { graph: boucle }, compileExecutionQuote('corrige le bug')).run(
         'corrige le bug'
       )
-    ).rejects.toThrow('Devis impossible')
+    ).resolves.toBeDefined()
+    expect(provider.prompts).toHaveLength(3)
   })
 
-  it('un graphe explicitement choisi réserve son chemin complet et ses deux reprises', async () => {
+  it('un graphe explicitement choisi reserve uniquement son chemin initial', async () => {
     const graph = {
       entry: 'scout-1',
       nodes: [
@@ -317,8 +333,8 @@ describe('un graphe pilote le run', () => {
       )
     ).resolves.toBeDefined()
     expect(quote.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
-    expect(quote.limits.maxRecoveries).toBe(2)
-    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(11)
+    expect(quote.limits.maxRecoveries).toBe(0)
+    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(6)
     expect(quote.limits.maxAgents).toBeLessThanOrEqual(quote.limits.maxProviderCalls)
   })
 
@@ -339,7 +355,7 @@ describe('un graphe pilote le run', () => {
     expect(provider.prompts).toHaveLength(2) // build + gate judge
   })
 
-  it('un juge rouge rejoue tout le sous-chemin build → clean avant le nouveau gate', async () => {
+  it('une arrete rouge ne repaie jamais automatiquement le sous-chemin sans strategie nouvelle', async () => {
     const provider = new RedPuisVert()
     const quote = compileExecutionQuote('corrige le bug')
     await makeOrchestrator(
@@ -369,22 +385,12 @@ describe('un graphe pilote le run', () => {
       quote
     ).run('corrige le bug')
 
-    expect(provider.phases).toEqual([
-      'scout',
-      'frame',
-      'terrain',
-      'build',
-      'clean',
-      'judge',
-      'build',
-      'clean',
-      'judge'
-    ])
+    expect(provider.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
   })
 
   it('un graphe avec une reprise tient dans un cap égal à son vrai pire cas', async () => {
     const provider = new RedPuisVert()
-    const quote = compileExecutionQuote('corrige le bug', { maxProviderCalls: 5 })
+    const quote = compileExecutionQuote('corrige le bug', { maxProviderCalls: 3 })
     await expect(
       makeOrchestrator(
         provider,
@@ -407,7 +413,34 @@ describe('un graphe pilote le run', () => {
         quote
       ).run('corrige le bug')
     ).resolves.toBeDefined()
-    expect(provider.prompts).toHaveLength(5)
+    expect(provider.prompts).toHaveLength(3)
+  })
+
+  it('arrête une boucle explicite si le livrable et le défaut restent identiques', async () => {
+    const provider = new ToujoursRouge()
+    const quote = compileExecutionQuote('corrige le bug')
+    const result = await makeOrchestrator(
+      provider,
+      {
+        explicit: true,
+        graph: {
+          entry: 'build',
+          nodes: [
+            { id: 'build', phase: 'build' },
+            { id: 'judge', phase: 'judge' }
+          ],
+          edges: [
+            { from: 'build', to: 'judge', when: 'always' },
+            { from: 'judge', to: 'build', when: 'red', maxTraversals: 2 }
+          ]
+        }
+      },
+      quote
+    ).run('corrige le bug')
+
+    expect(result.gateBlocked).toBe(true)
+    expect(result.gateReasons.at(-1)).toMatch(/reprise automatique.*desactivee/i)
+    expect(provider.phases).toEqual(['build', 'judge'])
   })
 
   it('refuse un panel composé hors caps avant le premier appel provider', async () => {
@@ -461,7 +494,7 @@ describe('un graphe pilote le run', () => {
     expect(provider.prompts).toHaveLength(2)
   })
 
-  it('une reprise rejoue le panel composé du nœud build et sa synthèse', async () => {
+  it('une arrete rouge ne rejoue pas le panel compose du noeud build', async () => {
     const provider = new RedPuisVertParModele()
     const quote = compileExecutionQuote('refonte architecture sécurité migration')
     await makeOrchestrator(
@@ -491,8 +524,8 @@ describe('un graphe pilote le run', () => {
       quote
     ).run('refonte architecture sécurité migration')
 
-    expect(provider.modeles).toEqual(['a', 'b', 'c', 'chef', 'juge', 'a', 'b', 'c', 'chef', 'juge'])
-    expect(quote.allocation?.estimatedMaxCalls).toBe(10)
+    expect(provider.modeles).toEqual(['a', 'b', 'c', 'chef', 'juge'])
+    expect(quote.allocation?.estimatedMaxCalls).toBe(5)
   })
 })
 
