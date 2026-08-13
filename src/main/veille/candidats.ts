@@ -126,6 +126,14 @@ export interface Refus {
 export const CITATION_MINIMUM = 40
 
 /**
+ * Minimum pour une citation INTERNE : une ligne de code, pas une phrase.
+ *
+ * Dix caracteres suffisent a exclure un fragment inutilisable (`}`, `return`) sans refuser une ligne
+ * courte et parfaitement probante.
+ */
+export const CITATION_MINIMUM_INTERNE = 10
+
+/**
  * Titre réduit à sa forme comparable, pour reconnaître la même entrée d'une passe à l'autre.
  *
  * Les notes de version se réécrivent : une majuscule change, un point final apparaît, deux espaces se
@@ -164,14 +172,39 @@ function urlAcceptable(url: string): boolean {
   }
 }
 
+/**
+ * Ancrage INTERNE : `chemin/du/fichier.ts:123`.
+ *
+ * Un candidat tire du depot n'a pas d'URL publique — son adresse verifiable est le fichier et la
+ * ligne. Le champ `url` du modele signifie « ou aller voir » : l'ancrage y tient exactement le meme
+ * role, et l'exigence de fond (une adresse qu'un verificateur peut rouvrir) est respectee. La forme
+ * est CONTRAINTE (chemin sous `src/` ou `scripts/`, suivi d'un numero de ligne) pour qu'une chaine
+ * quelconque ne passe pas pour un ancrage.
+ */
+function ancrageInterne(valeur: string): boolean {
+  return /^(?:src|scripts)\/[\w./-]+:\d+$/.test(valeur)
+}
+
 function premierRefus(brut: CandidatBrut): RaisonRefus | undefined {
   if (!brut.concurrent?.trim()) return 'concurrent manquant'
   if (!brut.titre?.trim()) return 'titre manquant'
   if (!brut.url?.trim()) return 'url manquante'
-  if (!urlAcceptable(brut.url.trim())) return 'url non http(s)'
+  if (!urlAcceptable(brut.url.trim()) && !ancrageInterne(brut.url.trim())) return 'url non http(s)'
   if (!brut.dateSource?.trim()) return 'date manquante'
   if (!brut.citation?.trim()) return 'citation manquante'
-  if (brut.citation.trim().length < CITATION_MINIMUM) return 'citation trop courte'
+  /**
+   * Le minimum de 40 caracteres vise la PROSE d'un changelog : « nouvelle fonctionnalite » ne prouve
+   * rien. Un candidat INTERNE prouve autrement — son ancrage `fichier:ligne` dit ou verifier, et la
+   * citation est la ligne elle-meme. Or une ligne de code probante est souvent courte :
+   * `const maintenant = Date.now()` fait 29 caracteres, et
+   * une ligne d'enregistrement de canal IPC en fait 39. Appliquer le seuil de la prose a du code
+   * refusait donc de vrais defauts pour un caractere manquant — constate sur le premier test de
+   * bout en bout, avant que ce chemin ne serve.
+   *
+   * Le seuil interne reste NON NUL : une citation vide ne prouve rien, quelle que soit l'origine.
+   */
+  const minimum = ancrageInterne(brut.url.trim()) ? CITATION_MINIMUM_INTERNE : CITATION_MINIMUM
+  if (brut.citation.trim().length < minimum) return 'citation trop courte'
   // Une nature ABSENTE est refusée plutôt que devinée : classer à la place du scout reviendrait à
   // décider d'après un titre, ce qui est exactement l'à-peu-près qu'on cherche à éviter.
   if (!brut.type?.trim()) return 'nature non precisee'

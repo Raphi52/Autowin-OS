@@ -121,6 +121,16 @@ export async function executerPasse(deps: {
   sources?: readonly SourceVeille[]
   maintenant?: () => string
   chemin?: string
+  /**
+   * SECOND BRAS de la passe : les defauts d'Autowin lui-meme, produits par `audit-interne`.
+   *
+   * Demande utilisateur du 2026-08-13 : la tache planifiee qui remplit l'onglet Tickets > Autowin OS
+   * doit livrer « et les new feature et les fix ». Les nouveautes viennent des sources web (les
+   * concurrents inspirent des AJOUTS) ; les corrections viennent d'ICI, pas de leurs changelogs.
+   *
+   * Injecte plutot que lu depuis le disque : cette fonction reste testable sans depot ni reseau.
+   */
+  candidatsInternes?: readonly CandidatBrut[]
 }): Promise<ResultatPasse> {
   const sources = deps.sources ?? SOURCES_VEILLE
   const maintenant = (deps.maintenant ?? (() => new Date().toISOString()))()
@@ -166,7 +176,22 @@ export async function executerPasse(deps: {
     })
   )
 
-  const bruts = parSource.flatMap((r) => r.bruts)
+  /**
+   * Les corrections venues du WEB sont ecartees ici.
+   *
+   * « Les tickets sont a chier, il faut que ca soit de vrais fix pour Autowin, pas inspires du web »
+   * (utilisateur, 2026-08-13). Une correction de changelog concurrent decrit un bug QU'ON N'A PAS :
+   * la reprendre n'a aucun sens, et sur une passe reelle elles noyaient les ajouts a 19 contre 2.
+   * Le scout continue de les CLASSER (son prompt le lui demande, et savoir ou un concurrent bute a
+   * sa valeur) — elles ne deviennent simplement plus des candidats a traiter.
+   */
+  // AUCUN filtrage ici : les corrections concurrentes sont refusees par `trierCandidats`, avec une
+  // raison NOMMEE. Une premiere version les coupait a cet endroit, et cassait l'invariant du module —
+  // une entree sans citation disparaissait alors en silence au lieu d'etre comptee comme refus.
+  const brutsWeb = parSource.flatMap((r) => r.bruts)
+  // Les internes passent par le MEME tri, la meme deduplication et le meme stock : une seule colonne,
+  // un seul chemin de code, donc aucune divergence a maintenir entre les deux origines.
+  const bruts = [...brutsWeb, ...(deps.candidatsInternes ?? [])]
   const echecs = parSource.map((r) => r.echec).filter((e): e is EchecSource => e !== undefined)
   const { retenus, refuses } = trierCandidats(bruts, clesConnues(stockAvant), {
     maintenant,
