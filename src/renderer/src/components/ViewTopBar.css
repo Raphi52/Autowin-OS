@@ -20,12 +20,6 @@
   grid-column: 1;
 }
 
-.view-topbar-description {
-  margin: 3px 0 0;
-  color: var(--text-dim);
-  font-size: 11px;
-}
-
 /* Les actions restent sur la première rangée, alignées avec le titre. */
 .view-topbar-actions {
   display: flex;

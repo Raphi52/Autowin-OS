@@ -104,6 +104,28 @@ describe('ce que la section affiche', () => {
     expect(trouver('veille-jamais-lue')).not.toBeNull()
   })
 
+  it('SCINDE en deux colonnes : ajouts d’un côté, corrections de l’autre', async () => {
+    // Mesuré sur un seul CHANGELOG : 19 corrections pour 2 ajouts. Mélangées, les nouveautés étaient
+    // noyées ; refusées, l'information disparaissait. Deux colonnes gardent les deux.
+    await rendre({
+      charger: async () =>
+        stock({
+          candidats: [
+            candidat(),
+            candidat({ id: 'fix', titre: 'Corrige un crash UNC', type: 'correction' }),
+            candidat({ id: 'autre', titre: 'Documentation revue', type: 'autre' })
+          ]
+        })
+    })
+    const ajouts = trouver('veille-colonne-ajouts')
+    const corrections = trouver('veille-colonne-corrections')
+    expect(ajouts?.textContent).toContain('Support MCP distant')
+    expect(ajouts?.textContent).not.toContain('Corrige un crash UNC')
+    expect(corrections?.textContent).toContain('Corrige un crash UNC')
+    // `autre` n'est pas un ajout prouvé : il n'a rien à faire dans la colonne où l'on pioche.
+    expect(corrections?.textContent).toContain('Documentation revue')
+  })
+
   it('cache les candidats écartés, mais dit combien ils sont', async () => {
     await rendre({
       charger: async () =>

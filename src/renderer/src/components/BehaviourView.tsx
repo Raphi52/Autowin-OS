@@ -197,6 +197,7 @@ export function BehaviourView(): React.JSX.Element {
         <ModuleHeader
           eyebrow="Tout ce qui influe sur le comportement du chat — et rien d'autre"
           title="Behaviour"
+          description="Configure ce qui influence les réponses et les décisions du Chat."
         />
         <div className="behaviour-workspace">
           <span title={composition?.inspection?.workspace}>

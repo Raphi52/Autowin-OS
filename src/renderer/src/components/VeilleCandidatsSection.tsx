@@ -63,6 +63,48 @@ async function prompterParDefaut(candidat: CandidatVeille): Promise<void> {
   )
 }
 
+/** Une ligne de candidat. Extraite pour que les DEUX colonnes rendent exactement la même chose. */
+function LigneCandidat({
+  candidat,
+  onPrompter,
+  onEcarter
+}: {
+  candidat: CandidatVeille
+  onPrompter: (candidat: CandidatVeille) => void
+  onEcarter: (candidat: CandidatVeille) => void
+}): React.JSX.Element {
+  return (
+    <li className={`veille-ligne is-${candidat.statut}`}>
+      <div className="veille-ligne-tete">
+        <span className="veille-concurrent">{candidat.concurrent}</span>
+        <span className="veille-date">{candidat.dateSource}</span>
+        {candidat.langue && <span className="veille-langue">{candidat.langue}</span>}
+        <span className={`veille-statut is-${candidat.statut}`}>
+          {LIBELLE_STATUT[candidat.statut]}
+        </span>
+      </div>
+      <strong className="veille-titre">{candidat.titre}</strong>
+      {/* L'extrait lu, mot pour mot : c'est la preuve que la feature existe. */}
+      <blockquote className="veille-citation">{candidat.citation}</blockquote>
+      <div className="veille-actions">
+        <a href={candidat.url} target="_blank" rel="noreferrer" className="veille-source">
+          ouvrir la source
+        </a>
+        <button type="button" className="veille-prompter" onClick={() => onPrompter(candidat)}>
+          Prompter dans Autowin
+        </button>
+        <button
+          type="button"
+          onClick={() => onEcarter(candidat)}
+          disabled={candidat.statut === 'ecarte'}
+        >
+          Écarter
+        </button>
+      </div>
+    </li>
+  )
+}
+
 export function VeilleCandidatsSection({
   charger,
   marquer,
@@ -118,6 +160,14 @@ export function VeilleCandidatsSection({
   }
 
   const visibles = stock.candidats.filter((c) => voirEcartes || c.statut !== 'ecarte')
+  const ajouts = visibles.filter((c) => c.type === 'ajout')
+  // `autre` va avec les corrections : ce n'est pas un ajout prouvé, donc il n'a rien à faire dans la
+  // colonne où l'on va piocher ce qu'on implémente.
+  const corrections = visibles.filter((c) => c.type !== 'ajout')
+  const lancerPrompt = (candidat: CandidatVeille): void => {
+    void (prompter ?? prompterParDefaut)(candidat)
+    void changerStatut(candidat, 'prompte')
+  }
   const ecartes =
     stock.candidats.length - stock.candidats.filter((c) => c.statut !== 'ecarte').length
 
@@ -166,49 +216,56 @@ export function VeilleCandidatsSection({
 
       {visibles.length === 0 ? (
         <p className="veille-message" data-testid="veille-vide">
-          Aucun candidat à reprendre. Les corrections de bugs des concurrents sont écartées d’office
-          : seuls les ajouts de capacité arrivent ici.
+          Aucun candidat. Une lecture n’a peut-être jamais été lancée, ou les sources n’annoncent
+          rien.
         </p>
       ) : (
-        <ul className="veille-liste" data-testid="veille-liste">
-          {visibles.map((candidat) => (
-            <li key={candidat.id} className={`veille-ligne is-${candidat.statut}`}>
-              <div className="veille-ligne-tete">
-                <span className="veille-concurrent">{candidat.concurrent}</span>
-                <span className="veille-date">{candidat.dateSource}</span>
-                {candidat.langue && <span className="veille-langue">{candidat.langue}</span>}
-                <span className={`veille-statut is-${candidat.statut}`}>
-                  {LIBELLE_STATUT[candidat.statut]}
-                </span>
-              </div>
-              <strong className="veille-titre">{candidat.titre}</strong>
-              {/* L'extrait lu, mot pour mot : c'est la preuve que la feature existe. */}
-              <blockquote className="veille-citation">{candidat.citation}</blockquote>
-              <div className="veille-actions">
-                <a href={candidat.url} target="_blank" rel="noreferrer" className="veille-source">
-                  ouvrir la source
-                </a>
-                <button
-                  type="button"
-                  className="veille-prompter"
-                  onClick={() => {
-                    void (prompter ?? prompterParDefaut)(candidat)
-                    void changerStatut(candidat, 'prompte')
-                  }}
-                >
-                  Prompter dans Autowin
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void changerStatut(candidat, 'ecarte')}
-                  disabled={candidat.statut === 'ecarte'}
-                >
-                  Écarter
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        /*
+          DEUX colonnes : ce qui s'ajoute d'un côté, ce qui se corrige de l'autre.
+          Les deux sont utiles pour des raisons différentes — un ajout se reprend, une correction dit où
+          un concurrent bute. Les mélanger noyait les ajouts : mesuré, 19 corrections pour 2 ajouts dans
+          un seul changelog.
+        */
+        <div className="veille-colonnes" data-testid="veille-colonnes">
+          <div className="veille-colonne" data-testid="veille-colonne-ajouts">
+            <h3>
+              Nouveautés <b>{ajouts.length}</b>
+            </h3>
+            {ajouts.length === 0 ? (
+              <p className="veille-message">Aucun ajout de capacité dans cette lecture.</p>
+            ) : (
+              <ul className="veille-liste" data-testid="veille-liste">
+                {ajouts.map((candidat) => (
+                  <LigneCandidat
+                    key={candidat.id}
+                    candidat={candidat}
+                    onPrompter={lancerPrompt}
+                    onEcarter={(c) => void changerStatut(c, 'ecarte')}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="veille-colonne" data-testid="veille-colonne-corrections">
+            <h3>
+              Corrections &amp; autres <b>{corrections.length}</b>
+            </h3>
+            {corrections.length === 0 ? (
+              <p className="veille-message">Aucune correction relevée.</p>
+            ) : (
+              <ul className="veille-liste" data-testid="veille-liste-corrections">
+                {corrections.map((candidat) => (
+                  <LigneCandidat
+                    key={candidat.id}
+                    candidat={candidat}
+                    onPrompter={lancerPrompt}
+                    onEcarter={(c) => void changerStatut(c, 'ecarte')}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
     </section>
   )

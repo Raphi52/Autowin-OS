@@ -1815,7 +1815,11 @@ export function ChatView({
       {/* ---- Panneau gauche : conversations ---- */}
       <aside className="lisere-dessus conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
         <div className="conv-head">
-          <ModuleHeader eyebrow="Espace de travail" title="Conversations" />
+          <ModuleHeader
+            eyebrow="Espace de travail"
+            title="Conversations"
+            description="Retrouve, organise et reprends tes échanges."
+          />
         </div>
         {activeAgents.length > 0 && (
           <section className="agent-inbox" aria-label="Agents actifs">

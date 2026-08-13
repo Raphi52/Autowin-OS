@@ -1602,7 +1602,11 @@ export function GraphView({
       }
     >
       <header className="graph-toolbar">
-        <ModuleHeader eyebrow="Connaissances connectées" title="Memory" />
+        <ModuleHeader
+          eyebrow="Connaissances connectées"
+          title="Memory"
+          description="Explore les connaissances reliées de ton Brain."
+        />
         <select
           aria-label="Graphe de connaissances"
           value={selected}

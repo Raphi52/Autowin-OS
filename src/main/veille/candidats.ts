@@ -48,11 +48,21 @@ export interface CandidatVeille {
 /**
  * La nature d'une entrée de notes de version.
  *
- * `ajout` est le seul type retenu : c'est ce qu'on peut vouloir reprendre. Les autres ne sont pas
- * ignorés en silence — ils sont refusés AVEC leur raison, donc comptés et visibles. Une page qui
- * n'annonce que des corrections se lit alors « rien à reprendre », et non « rien lu ».
+ * Les trois natures sont CONSERVÉES, et c'est un revirement assumé : la première version refusait tout
+ * ce qui n'était pas un `ajout`, ce qui écartait 19 entrées sur 21 dans un seul CHANGELOG. Écarter
+ * n'était pas idiot — on ne réimplémente pas le correctif d'un bug qu'on n'a pas — mais ça jetait de
+ * l'information que l'utilisateur veut voir : ce que les concurrents CORRIGENT dit aussi où ils butent.
+ *
+ * La séparation se fait donc à l'AFFICHAGE (deux colonnes), pas à l'entrée. Ce qui reste refusé, c'est
+ * seulement ce qui n'a pas de preuve : citation, date ou URL manquantes.
  */
 export type TypeEntree = 'ajout' | 'correction' | 'autre'
+
+/** Ramène ce qu'un scout a écrit à l'une des trois natures. Inconnu → `autre`, jamais deviné. */
+export function natureDe(brut: string | undefined): TypeEntree {
+  const valeur = brut?.trim().toLowerCase()
+  return valeur === 'ajout' || valeur === 'correction' ? valeur : 'autre'
+}
 
 /** Ce qu'un scout rend : les champs bruts, avant tout contrôle. */
 export interface CandidatBrut {
@@ -73,7 +83,6 @@ export type RaisonRefus =
   | 'date manquante'
   | 'citation manquante'
   | 'citation trop courte'
-  | 'correction, pas un ajout'
   | 'nature non precisee'
   | 'deja connu'
 
@@ -139,11 +148,9 @@ function premierRefus(brut: CandidatBrut): RaisonRefus | undefined {
   if (!brut.dateSource?.trim()) return 'date manquante'
   if (!brut.citation?.trim()) return 'citation manquante'
   if (brut.citation.trim().length < CITATION_MINIMUM) return 'citation trop courte'
-  const type = brut.type?.trim().toLowerCase()
   // Une nature ABSENTE est refusée plutôt que devinée : classer à la place du scout reviendrait à
   // décider d'après un titre, ce qui est exactement l'à-peu-près qu'on cherche à éviter.
-  if (!type) return 'nature non precisee'
-  if (type !== 'ajout') return 'correction, pas un ajout'
+  if (!brut.type?.trim()) return 'nature non precisee'
   return undefined
 }
 
@@ -188,7 +195,7 @@ export function trierCandidats(
       dateSource: brut.dateSource!.trim(),
       citation: brut.citation!.trim(),
       ...(brut.langue?.trim() ? { langue: brut.langue.trim() } : {}),
-      type: 'ajout',
+      type: natureDe(brut.type),
       prompt: contexte.redigerPrompt(brut),
       vuLe: contexte.maintenant,
       statut: 'nouveau'

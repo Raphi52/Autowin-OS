@@ -25,9 +25,6 @@
   padding: var(--view-head-pad, 18px 20px 0);
 }
 
-/* Le surtitre suit `--module-eyebrow-color` comme partout. Peint en `--gold` ici (et jadis dans Task
-   Manager), il faisait un titre de page JAUNE dans deux onglets sur sept — l'ecart signale a l'oeil. */
-
 .tickets-source-controls,
 .tickets-toolbar,
 .tickets-source-form {

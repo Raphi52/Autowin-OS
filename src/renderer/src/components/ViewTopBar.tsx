@@ -36,6 +36,7 @@ export function ViewTopBar<Id extends string = string>({
   eyebrow,
   title,
   description,
+  detail,
   tabs,
   active,
   onSelect,
@@ -46,6 +47,8 @@ export function ViewTopBar<Id extends string = string>({
   title: string
   /** Une phrase qui dit à quoi sert la vue. Omise, elle n'occupe aucune place. */
   description?: string
+  /** Information contextuelle existante conservée sous la phrase (ex. chemin du dépôt). */
+  detail?: React.ReactNode
   /**
    * OPTIONNELS : Worktrees n'a pas de sections, mais doit porter le même en-tête que les autres vues.
    * Sans cette option, elle aurait gardé son en-tête maison — c'est-à-dire exactement la divergence
@@ -61,8 +64,7 @@ export function ViewTopBar<Id extends string = string>({
   return (
     <header className="view-topbar">
       <div className="view-topbar-identity">
-        <ModuleHeader eyebrow={eyebrow} title={title} />
-        {description && <p className="view-topbar-description">{description}</p>}
+        <ModuleHeader eyebrow={eyebrow} title={title} description={description} detail={detail} />
       </div>
       {tabs && tabs.length > 0 && (
         <nav className="domain-tabs" aria-label={ariaLabel ?? `Sections ${title}`}>

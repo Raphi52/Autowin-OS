@@ -93,19 +93,22 @@ export function SourceControlPane({
 
   useEffect(() => {
     let alive = true
+    const loadActivity = (): void => {
+      void window.api
+        .getWorktreeActivity?.(conversationId)
+        .then((activity) => {
+          if (alive) {
+            setWorktrees(activity)
+            setWorktreeError(undefined)
+          }
+        })
+        .catch(() => {
+          if (alive) setWorktreeError('Lecture des bureaux agents indisponible.')
+        })
+    }
     // fix-ok: un rejet laissait la vue sur « Aucun bureau agent ouvert », impossible à distinguer
     // d'un vrai vide ; l'échec de lecture est désormais nommé et rejouable.
-    void window.api
-      .getWorktreeActivity?.()
-      .then((activity) => {
-        if (alive) {
-          setWorktrees(activity)
-          setWorktreeError(undefined)
-        }
-      })
-      .catch(() => {
-        if (alive) setWorktreeError('Lecture des bureaux agents indisponible.')
-      })
+    loadActivity()
     void window.api
       .getWorktreeStatus?.()
       .then((status) => {
@@ -114,8 +117,9 @@ export function SourceControlPane({
       .catch(() => {
         if (alive) setWorktreeError('Lecture des bureaux agents indisponible.')
       })
-    const off = window.api.onWorktreeActivity?.((a) => {
-      setWorktrees(a)
+    const off = window.api.onWorktreeActivity?.(() => {
+      // L'Ã©vÃ©nement est global ; relire via l'IPC conserve le scope de CETTE conversation.
+      loadActivity()
       setNowMs(Date.now())
       // Une publication peut se terminer après le retour du run : son résultat auto-close
       // doit apparaître sans attendre un autre événement de chat ni un rafraîchissement manuel.
@@ -125,7 +129,7 @@ export function SourceControlPane({
       alive = false
       off?.()
     }
-  }, [worktreeTick])
+  }, [conversationId, worktreeTick])
 
   useEffect(() => {
     const requestId = ++dataRequestRef.current

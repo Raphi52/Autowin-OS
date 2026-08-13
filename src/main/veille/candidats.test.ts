@@ -67,16 +67,17 @@ describe('un candidat sans preuve n’entre pas', () => {
     expect(refuses[0].raison).toBe('date manquante')
   })
 
-  it('refuse une CORRECTION : on ne reprend pas le correctif d’un bug qu’on n’a pas', () => {
-    // Constaté sur la première passe réelle : 8 des 10 candidats étaient des corrections, et les deux
-    // vraies features étaient noyées. Le refus est NOMMÉ, donc comptable et visible.
+  it('CONSERVE une correction, en la marquant comme telle', () => {
+    // Revirement assumé : la première version refusait tout ce qui n'était pas un ajout, ce qui écartait
+    // 19 entrées sur 21 dans un seul CHANGELOG. Ce que les concurrents corrigent dit aussi où ils butent,
+    // donc l'information est gardée et la séparation se fait à l'affichage.
     const { retenus, refuses } = trierCandidats(
       [brut({ type: 'correction', titre: 'Corrige un crash sur les chemins UNC' })],
       new Set(),
       contexte
     )
-    expect(retenus).toHaveLength(0)
-    expect(refuses[0].raison).toBe('correction, pas un ajout')
+    expect(refuses).toHaveLength(0)
+    expect(retenus[0].type).toBe('correction')
   })
 
   it('refuse une nature ABSENTE plutôt que de la deviner', () => {
@@ -85,9 +86,9 @@ describe('un candidat sans preuve n’entre pas', () => {
     expect(refuses[0].raison).toBe('nature non precisee')
   })
 
-  it('refuse `autre`, le type du doute', () => {
-    const { refuses } = trierCandidats([brut({ type: 'autre' })], new Set(), contexte)
-    expect(refuses[0].raison).toBe('correction, pas un ajout')
+  it('range une nature inconnue en `autre`, sans la deviner', () => {
+    const { retenus } = trierCandidats([brut({ type: 'amélioration ?' })], new Set(), contexte)
+    expect(retenus[0].type).toBe('autre')
   })
 
   it('accepte un candidat complet, et n’invente aucun champ', () => {

@@ -281,7 +281,8 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
       <ViewTopBar
         eyebrow="WORKTREES"
         title={snapshot?.repositoryName ?? 'Dépôt'}
-        description={snapshot?.repoPath || repoPath || 'Dépôt courant'}
+        description="Visualise les copies et les branches de ton dépôt."
+        detail={snapshot?.repoPath || repoPath || 'Dépôt courant'}
         ariaLabel="Sections Worktrees"
         active={section}
         onSelect={setSection}

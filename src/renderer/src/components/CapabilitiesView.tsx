@@ -243,7 +243,11 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
   return (
     <section className="capability-cockpit">
       <header className="cockpit-header">
-        <ModuleHeader eyebrow="Capacités connectées" title="Skills · Hooks · Tools" />
+        <ModuleHeader
+          eyebrow="Capacités connectées"
+          title="Skills · Hooks · Tools"
+          description="Gère les skills, hooks et outils accessibles aux agents."
+        />
         <div className="cockpit-toolbar">
           <input
             className="input"
