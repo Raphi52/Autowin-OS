@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CandidatVeille } from '../../../main/veille/candidats'
 import type { StockVeille } from '../../../main/veille/candidats-store'
@@ -168,5 +170,59 @@ describe('prompter un candidat', () => {
 
     expect(marquer).toHaveBeenCalledWith('codex|https://x.test/releases|support mcp', 'ecarte')
     expect(prompter).not.toHaveBeenCalled()
+  })
+})
+
+describe('pertinence — la note du scout, affichee et triable', () => {
+  const av = (id: string, titre: string, pertinence: number | undefined): CandidatVeille =>
+    candidat({ id, titre, ...(pertinence !== undefined ? { pertinence } : {}) })
+
+  it('affiche la note a cote du candidat, et « non note » quand elle manque', async () => {
+    await rendre({
+      charger: async () =>
+        stock({ candidats: [av('a', 'Avec note', 82), av('b', 'Sans note', undefined)] })
+    })
+    const notes = [...(conteneur?.querySelectorAll('[data-testid="veille-pertinence"]') ?? [])]
+    expect(notes.some((n) => n.textContent?.includes('82'))).toBe(true)
+    expect(trouver('veille-pertinence-absente')?.textContent).toContain('non noté')
+  })
+
+  it('trie par pertinence DECROISSANTE par defaut, le non-note en dernier', async () => {
+    await rendre({
+      charger: async () =>
+        stock({
+          candidats: [av('a', 'Moyen', 40), av('b', 'Fort', 95), av('c', 'Inconnu', undefined)]
+        })
+    })
+    const titres = [...(conteneur?.querySelectorAll('.veille-titre') ?? [])].map(
+      (t) => t.textContent
+    )
+    expect(titres.indexOf('Fort')).toBeLessThan(titres.indexOf('Moyen'))
+    expect(titres.indexOf('Moyen')).toBeLessThan(titres.indexOf('Inconnu'))
+  })
+
+  it('bascule sur l’ordre de lecture quand on choisit « date »', async () => {
+    await rendre({
+      charger: async () => stock({ candidats: [av('a', 'Premier', 10), av('b', 'Second', 90)] })
+    })
+    const select = trouver('veille-tri') as HTMLSelectElement
+    await act(async () => {
+      select.value = 'date'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const titres = [...(conteneur?.querySelectorAll('.veille-titre') ?? [])].map(
+      (t) => t.textContent
+    )
+    // Ordre d'origine conserve : « Premier » avant « Second » malgre sa note plus faible.
+    expect(titres.indexOf('Premier')).toBeLessThan(titres.indexOf('Second'))
+  })
+
+  it('la zone des colonnes defile : min-height 0 + overflow, sinon la liste deborde', () => {
+    // happy-dom ne calcule pas le layout ; on verifie la REGLE, pas le rendu — c'est la propriete qui
+    // rendait la liste inatteignable en bas quand `.tickets-view` est `overflow: hidden`.
+    const css = readFileSync(join(__dirname, 'VeilleCandidatsSection.css'), 'utf8')
+    const regle = css.match(/\.veille-colonnes\s*{[^}]*}/s)?.[0] ?? ''
+    expect(regle).toMatch(/overflow-y:\s*auto/)
+    expect(regle).toMatch(/min-height:\s*0/)
   })
 })

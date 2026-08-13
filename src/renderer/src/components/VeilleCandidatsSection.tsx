@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { CandidatVeille } from '../../../main/veille/candidats'
 import type { StockVeille } from '../../../main/veille/candidats-store'
+import { trierParPertinence, type TriVeille } from './veille-tri'
 import './VeilleCandidatsSection.css'
 
 /**
@@ -30,26 +31,6 @@ const LIBELLE_STATUT: Record<CandidatVeille['statut'], string> = {
   nouveau: 'nouveau',
   prompte: 'prompté',
   ecarte: 'écarté'
-}
-
-export type TriVeille = 'pertinence' | 'date'
-
-/**
- * Ordonne les candidats. FONCTION PURE (copie d'abord, `sort` mute) pour être testable sans monter la
- * vue. Par pertinence DÉCROISSANTE : la question de l'utilisateur est « lequel reprendre en premier ».
- * Un candidat NON NOTÉ (`pertinence === undefined`) tombe en fin de liste — on ne le traite pas comme
- * un zéro, mais on ne le laisse pas non plus flotter en tête faute de note.
- */
-export function trierParPertinence(
-  candidats: readonly CandidatVeille[],
-  tri: TriVeille
-): CandidatVeille[] {
-  if (tri === 'date') return [...candidats]
-  return [...candidats].sort((a, b) => {
-    const pa = a.pertinence ?? -1
-    const pb = b.pertinence ?? -1
-    return pb - pa
-  })
 }
 
 /** L'envoi réel : création de conversation puis pré-remplissage, exactement comme pour un ticket. */
