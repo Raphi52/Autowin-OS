@@ -5,11 +5,26 @@ param(
 $ErrorActionPreference = 'Stop'
 $png = Join-Path $ProjectRoot 'resources\autowin-os-dev.png'
 $ico = Join-Path $ProjectRoot 'resources\autowin-os-dev.ico'
-$launcher = Join-Path $ProjectRoot 'scripts\launch-dev.ps1'
-$bootstrap = Join-Path $ProjectRoot 'scripts\launch-dev.vbs'
+$launcher = Join-Path $ProjectRoot 'scripts\launch_dev.py'
+# Interpreteur GRAPHIQUE, resolu dans un ordre delibere :
+#   1. un CPython EMBARQUE livre avec le depot, s'il existe (decision `python-runtime` du Brain :
+#      « CPython embarque, Windows x64 ») — aucune dependance exterieure ;
+#   2. `pyw.exe`, le lanceur officiel Python, independant de tout venv ;
+#   3. `pythonw.exe` du PATH en DERNIER recours : sur ce poste il pointe sur le venv de Hermes, et
+#      faire dependre le lanceur d'Autowin d'un autre produit serait une panne en attente.
+$embarque = Join-Path $ProjectRoot 'resources\python\pythonw.exe'
+$interpreteur = if (Test-Path -LiteralPath $embarque -PathType Leaf) { $embarque }
+  else {
+    $officiel = Get-Command pyw.exe -ErrorAction SilentlyContinue
+    if ($officiel) { $officiel.Source }
+    else {
+      $secours = Get-Command pythonw.exe -ErrorAction SilentlyContinue
+      if ($secours) { $secours.Source } else { throw "Aucun interpreteur Python graphique (pyw.exe) trouve." }
+    }
+  }
 if (-not (Test-Path -LiteralPath $png -PathType Leaf)) { throw "Icône Dev introuvable : $png" }
 if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw "Lanceur Dev introuvable : $launcher" }
-if (-not (Test-Path -LiteralPath $bootstrap -PathType Leaf)) { throw "Amorce Dev introuvable : $bootstrap" }
+
 
 # ICO multi-tailles : Windows choisit l'image native au lieu de flouter un unique 256px.
 Add-Type -AssemblyName System.Drawing
@@ -57,23 +72,26 @@ $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcutPath = Join-Path $desktop 'Autowin OS Dev.lnk'
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
-# CIBLE = wscript.exe, application GRAPHIQUE, donc AUCUNE console en haut de la chaîne.
-# Viser powershell.exe directement rouvrait le défaut : Windows alloue une console à toute
-# application console, Windows 11 la confie à Windows Terminal, et Windows Terminal ignore le SW_HIDE
-# de `-WindowStyle Hidden`. La fenêtre restait donc là, renommée « Autowin OS Dev » par le `title`
-# du lanceur. Le détail du mécanisme est dans `launch-dev.vbs`.
-$shortcut.TargetPath = "$env:SystemRoot\System32\wscript.exe"
-$shortcut.Arguments = "`"$bootstrap`""
+# CIBLE = un interpreteur Python GRAPHIQUE (`pyw.exe`), donc AUCUNE console en haut de la chaîne.
+# C'est la seule contrainte que l'ancien duo VBS+PowerShell servait : `powershell.exe` est une
+# application CONSOLE, Windows lui en alloue une, Windows 11 la confie a Windows Terminal, et Windows
+# Terminal IGNORE le SW_HIDE de `-WindowStyle Hidden` (fenêtre visible 242 ms, mesuré le 2026-08-05).
+# `pyw.exe` etant graphique, la contrainte est satisfaite par la cible elle-même : le VBS n'a plus
+# de raison d'être, et la chaîne passe de cinq maillons à deux.
+$shortcut.TargetPath = $interpreteur
+$shortcut.Arguments = "`"$launcher`""
 $shortcut.WorkingDirectory = $ProjectRoot
 $shortcut.IconLocation = "$ico,0"
 $shortcut.Description = 'Autowin OS - version Dev'
 $shortcut.Save()
 
 $verified = $shell.CreateShortcut($shortcutPath)
-if ($verified.IconLocation -notlike "$ico,*" -or $verified.Arguments -notlike '*launch-dev.vbs*') {
+if ($verified.IconLocation -notlike "$ico,*" -or $verified.Arguments -notlike '*launch_dev.py*') {
   throw "Le raccourci Dev n'a pas été mis à jour : $shortcutPath"
 }
-if ($verified.TargetPath -notlike '*wscript.exe') {
-  throw "Le raccourci Dev doit viser wscript.exe (sans console) : $($verified.TargetPath)"
+# `pythonw`/`pyw` : les deux sont graphiques. `python.exe` ou `py.exe` NON — les accepter
+# reintroduirait la console que tout ce mécanisme sert à éviter.
+if ($verified.TargetPath -notmatch '(pyw|pythonw)\.exe$') {
+  throw "Le raccourci Dev doit viser un Python GRAPHIQUE (pyw/pythonw) : $($verified.TargetPath)"
 }
-Write-Output "Dev shortcut updated: $shortcutPath -> $bootstrap -> $launcher"
+Write-Output "Dev shortcut updated: $shortcutPath -> $interpreteur -> $launcher"

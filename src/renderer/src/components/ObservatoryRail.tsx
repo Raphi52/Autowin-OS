@@ -1,6 +1,10 @@
 import { lastUserMessagePreview } from './observatory-event-preview'
 import type { ObservatoryPrioritySignal } from './observatory-priority-signals'
-import type { ActivitySessionMeta, ConversationActivity } from './useObservatorySources'
+import type {
+  ActivitySessionMeta,
+  ConversationActivity,
+  ObservatoryRunEntry
+} from './useObservatorySources'
 import type { ActivitySession, ConversationItem, PromptCall } from './observatory-view-types'
 
 /**
@@ -32,6 +36,9 @@ export function ObservatoryRail({
   onOpenSession,
   activityImage,
   onOpenImage,
+  runs,
+  runsLoading,
+  onOpenRun,
   prioritySignals,
   onOpenSignal
 }: {
@@ -56,6 +63,9 @@ export function ObservatoryRail({
   onOpenSession: (session: ActivitySessionMeta) => void
   activityImage: string
   onOpenImage: (path: string) => void
+  runs: ObservatoryRunEntry[]
+  runsLoading: boolean
+  onOpenRun: (path: string) => void
   prioritySignals: ObservatoryPrioritySignal[]
   onOpenSignal: (eventId: string) => void
 }): React.JSX.Element {
@@ -167,6 +177,38 @@ export function ObservatoryRail({
               ))}
             {activityImage && <img src={activityImage} alt="Capture du transcript" />}
           </div>
+        )}
+      </section>
+      {/* WORKFLOWS — vue TRANSVERSALE. La barre du Chat ne montre que la conversation courante ;
+          c'est ici qu'on voit les RUN.md de tout le dépôt, et notamment ceux restés `open`. */}
+      <section className="observatory-diagnostics" aria-busy={runsLoading}>
+        <span className="observatory-panel-title">
+          WORKFLOWS · TOUS
+          {runs.length > 0
+            ? ` · ${runs.filter((r) => r.summary.status === 'open').length} open`
+            : ''}
+        </span>
+        {runs.length === 0 ? (
+          <p>{runsLoading ? 'Lecture des RUN.md…' : 'Aucun RUN.md.'}</p>
+        ) : (
+          runs.slice(0, 12).map((run) => (
+            <button
+              key={run.path}
+              data-run-status={run.summary.status}
+              data-testid="observatory-run"
+              onClick={() => onOpenRun(run.path)}
+            >
+              <strong>
+                {run.summary.status} · {run.subject}
+              </strong>
+              <span>
+                {run.session}
+                {run.summary.dodTotal > 0
+                  ? ` · DoD ${run.summary.dodChecked}/${run.summary.dodTotal}`
+                  : ''}
+              </span>
+            </button>
+          ))
         )}
       </section>
       <section className="observatory-diagnostics">

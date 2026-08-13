@@ -3,7 +3,14 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('branchement runtime Auto-Kaizen', () => {
-  const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+  // Fins de ligne NORMALISEES : `index.ts` est integralement en CRLF (5814 CRLF, 0 LF isole).
+  // Les assertions multi-lignes ci-dessous s'ecrivent avec `\n` et ne pouvaient donc JAMAIS
+  // correspondre — le contrat d'exclusivite Watchdog etait rouge des sa naissance, sans rien
+  // prouver. Normaliser ici garde les litteraux lisibles et rend le test independant du checkout.
+  const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8').replace(
+    /\r\n/g,
+    '\n'
+  )
 
   it('observe les erreurs structurées du chat et de l’orchestration', () => {
     expect(source).toContain('incidentFromPilotEvent({')

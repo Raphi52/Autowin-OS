@@ -21,6 +21,15 @@ export interface ConversationActivity {
   text?: string
 }
 
+/** Ce qu'Observatory affiche d'un RUN.md : sa forme complète vit dans `chat-view-types`. */
+export interface ObservatoryRunEntry {
+  subject: string
+  session: string
+  path: string
+  mtime: number
+  summary: { status: string; dodTotal: number; dodChecked: number; defauts: number }
+}
+
 export interface ActivitySessionMeta {
   id: string
   project: string
@@ -53,7 +62,12 @@ export function useObservatorySources<TNativeTrace>({
    */
   loadingActivitySessions: boolean
   loadingConversationActivity: boolean
+  /** RUN.md de TOUT le dépôt — la vue transversale que la barre du Chat ne porte plus. */
+  runs: ObservatoryRunEntry[]
+  loadingRuns: boolean
 } {
+  const [runs, setRuns] = useState<ObservatoryRunEntry[]>([])
+  const [loadingRuns, setLoadingRuns] = useState(false)
   const [activitySessions, setActivitySessions] = useState<ActivitySessionMeta[]>([])
   const [conversationActivity, setConversationActivity] = useState<ConversationActivity[]>([])
   const [nativeTraces, setNativeTraces] = useState<TNativeTrace[]>([])
@@ -83,6 +97,36 @@ export function useObservatorySources<TNativeTrace>({
       })
       .finally(() => {
         if (!disposed) setLoadingActivitySessions(false)
+      })
+    return () => {
+      disposed = true
+    }
+  }, [active, refreshKey, onSourceError])
+
+  // RUNS GLOBAUX. Le panneau Workflows du Chat est volontairement borne a la conversation courante :
+  // ses compteurs y melangeaient 271 RUN.md de tout le depot avec les deux d'une conversation, sans
+  // dire lequel on lisait. Le global n'a pas disparu pour autant, il a sa place ICI — Observatory est
+  // la vue transversale, la barre du Chat est la vue de contexte.
+  useEffect(() => {
+    if (!active) return
+    let disposed = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingRuns(true)
+    void (window.api.listRuns?.() ?? Promise.resolve([]))
+      .then((entries) => {
+        if (!disposed) {
+          setRuns((entries ?? []) as ObservatoryRunEntry[])
+          onSourceError('listRuns')
+        }
+      })
+      .catch((error: unknown) => {
+        if (!disposed) {
+          setRuns([])
+          onSourceError('listRuns', error instanceof Error ? error.message : String(error))
+        }
+      })
+      .finally(() => {
+        if (!disposed) setLoadingRuns(false)
       })
     return () => {
       disposed = true
@@ -195,6 +239,8 @@ export function useObservatorySources<TNativeTrace>({
     nativeTraces,
     semanticTimeline,
     loadingActivitySessions,
-    loadingConversationActivity
+    loadingConversationActivity,
+    runs,
+    loadingRuns
   }
 }

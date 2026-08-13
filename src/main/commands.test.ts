@@ -161,12 +161,16 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
 
     const result = await bus.exec('brain_query', { question: 'architecture RIG' })
 
-    // Plus de corpus IMPOSÉ par le workspace : le classement par pertinence décide. Ce test
-    // affirmait l'inverse (isolation RIG contre une source Autowin) ; le filtrage dérivé du
-    // workspace a été retiré parce qu'il masquait 450 des 461 notes du Brain sans le dire.
-    expect(seenCorpus[0]).toBeUndefined()
+    // Ce test et son JUMEAU (`orchestrator.execution.test.ts`, « isole le vrai workspace
+    // RigApplication ») portent le MÊME contrat par deux chemins : la commande et l'orchestrateur.
+    // Ils doivent bouger ENSEMBLE. Le filtrage dérivé du workspace a bien été retiré — il masquait
+    // 450 des 461 notes du Brain sans le dire — SAUF pour le dépôt RigApplication, où ce n'est pas
+    // de la pertinence mais de la contamination croisée : une note Autowin rédigée pour être
+    // attirante entrerait sinon dans un prompt qui agit sur le code d'un autre produit.
+    expect(seenCorpus[0]).toEqual(['knowledge/domain/rigapplication-documentation/'])
     expect(result).toMatchObject({ ok: true, data: { found: true } })
     expect(JSON.stringify(result)).toContain('RIG_COMMANDE_AUTORISEE')
+    expect(JSON.stringify(result)).not.toContain('AUTOWIN_COMMANDE_INTERDITE')
   })
 
   it('persiste lifecycle et démarrage live dans le TraceStore de cette instance', async () => {

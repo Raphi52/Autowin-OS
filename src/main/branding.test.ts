@@ -7,7 +7,19 @@ const ALLOWED_LEGACY_FILE = 'src/shared/app-identity.ts'
 // `.autowin-data` : depuis le stockage portable, les DONNÉES de l'app vivent dans le dépôt. Ce
 // balayage cherche des traces de branding dans le CODE ; y inclure des conversations reviendrait à
 // faire échouer le test sur ce qu'un modèle a écrit un jour, et non sur ce que le projet contient.
-const EXCLUDED = new Set(['node_modules', 'out', 'dist', 'Audit', '.git', '.autowin-data'])
+// `artifacts` : y vivent des COPIES completes du depot (worktrees de dogfood). Le balayage y
+// retrouvait `src/shared/app-identity.ts` — le seul fichier ou ces constantes sont LEGITIMES —
+// mais sous un chemin prefixe, donc hors de `ALLOWED_LEGACY_FILE` : 6 faux positifs sur 7, pour
+// du code parfaitement conforme. Un garde qui crie sur des copies finit par n'etre plus lu.
+const EXCLUDED = new Set([
+  'node_modules',
+  'out',
+  'dist',
+  'Audit',
+  '.git',
+  '.autowin-data',
+  'artifacts'
+])
 const TEXT_EXTENSIONS = new Set([
   '.ts',
   '.tsx',

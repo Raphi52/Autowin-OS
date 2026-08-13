@@ -151,7 +151,9 @@ export function ObservatoryView({
     nativeTraces,
     semanticTimeline,
     loadingActivitySessions,
-    loadingConversationActivity
+    loadingConversationActivity,
+    runs,
+    loadingRuns
   } = useObservatorySources<NativeRawTrace>({
     active,
     conversationId,
@@ -1103,6 +1105,11 @@ export function ObservatoryView({
           onOpenSession={openActivitySession}
           activityImage={activityImage}
           onOpenImage={openActivityImage}
+          runs={runs}
+          runsLoading={loadingRuns}
+          // Révéler le fichier plutôt qu'en afficher un aperçu : un RUN.md se lit et s'ÉDITE, et
+          // Observatory n'est pas un éditeur. `showItemInFolder` côté main fait le reste.
+          onOpenRun={(path) => void window.api.openFolder?.(path)}
           prioritySignals={prioritySignals}
           onOpenSignal={openEvent}
         />

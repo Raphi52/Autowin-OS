@@ -44,8 +44,6 @@ export type WorkflowsPanelProps = {
   isActive: boolean
   requestLabel: string | undefined
   liveGraphActive: boolean
-  runScope: 'conv' | 'tous'
-  selectRunScope: (scope: 'conv' | 'tous') => void
   visibleLiveRuns: [string, ScopedLiveRun<OrchStep>][]
   checkpoints: CheckpointEntry[]
   forkedCheckpoint: string
@@ -79,8 +77,6 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     isActive,
     requestLabel,
     liveGraphActive,
-    runScope,
-    selectRunScope,
     visibleLiveRuns,
     checkpoints,
     forkedCheckpoint,
@@ -156,22 +152,9 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             live={liveGraphActive}
           />
         )}
-        {sectionUsesScope(paneTab) && (
-          <div className="row gap2" style={{ fontSize: 11 }}>
-            <button
-              className={`btn btn-sm${runScope === 'conv' ? ' btn-accent' : ''}`}
-              onClick={() => selectRunScope('conv')}
-            >
-              cette conversation
-            </button>
-            <button
-              className={`btn btn-sm${runScope === 'tous' ? ' btn-accent' : ''}`}
-              onClick={() => selectRunScope('tous')}
-            >
-              tous
-            </button>
-          </div>
-        )}
+        {/* Pas de sélecteur de portée : ce panneau ne montre QUE la conversation courante.
+            Le cadrage « tous » y affichait des compteurs globaux sous une conversation qui n'en
+            porte que deux — on ne s'y retrouvait plus. Le global relève de l'Observatory. */}
         <div
           className="scroll-y col grow"
           style={{
@@ -294,11 +277,9 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
           )}
           {paneTab === 'run' && runs.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-              {runScope === 'conv'
-                ? activeId
-                  ? 'Aucun RUN.md pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
-                  : 'Sélectionne ou démarre une conversation pour voir ses RUN.md.'
-                : 'Aucun run.'}
+              {activeId
+                ? 'Aucun RUN.md pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
+                : 'Sélectionne ou démarre une conversation pour voir ses RUN.md.'}
             </div>
           )}
           {paneTab === 'run' &&
@@ -347,7 +328,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                         </span>
                       </div>
                     </button>
-                    {(runScope === 'tous' || activeId) && (
+                    {activeId && (
                       <button
                         type="button"
                         className="run-delete-button"

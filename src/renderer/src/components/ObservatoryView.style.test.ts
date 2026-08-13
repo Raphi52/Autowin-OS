@@ -14,6 +14,28 @@ describe('Observatory visual contracts', () => {
     expect(css).not.toMatch(/\.module-header\s*>?\s*h1\s*{[^}]*font-family/s)
   })
 
+  it('porte le liseré rose→doré du haut, à l’identique des autres vues', () => {
+    // Test venu d'une session CONCURRENTE, conservé avec son intention : « empêcher les deux vues de
+    // dériver l'une de l'autre, ce que deux copies manuelles font toujours ». Il cherchait le liseré
+    // DANS la règle `.observatory-view`, où cette session-là venait de le recopier depuis
+    // `TaskManagerView.css`. Entre-temps le liseré a été SORTI dans `.view-page`, consommé par les
+    // sept vues : la copie n'existe plus, donc l'intention est mieux servie qu'elle ne le demandait —
+    // il n'y a plus deux formes à comparer, il n'y en a qu'une. Le test vérifie désormais cette
+    // source unique, et qu'Observatory la consomme au lieu de redécrire un cadre en propre.
+    const cadre = readFileSync(new URL('./ViewPage.css', import.meta.url), 'utf8')
+    const observatory = readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
+    const liseré =
+      /linear-gradient\(\s*90deg,\s*var\(--rose\),\s*transparent 42%,\s*color-mix\(in srgb, var\(--gold\) 70%, transparent\)\s*\)\s*top \/ 100% 1px no-repeat/s
+
+    const regleCadre = cadre.match(/\.view-page\s*{[^}]*}/s)?.[0]
+    expect(regleCadre).toMatch(liseré)
+    expect(regleCadre).toMatch(/border: 1px solid color-mix\(in srgb, var\(--rose\) 34%/)
+    // Et Observatory ne repart pas en solo : aucun cadre redécrit dans sa propre règle.
+    const regleObservatory = observatory.match(/\.observatory-view\s*{[^}]*}/s)?.[0]
+    expect(regleObservatory).not.toMatch(liseré)
+    expect(regleObservatory).not.toMatch(/border:/)
+  })
+
   it('keeps the six Observatory metric cards on one row when space is available', () => {
     const css = readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
     const metricsRule = css.match(/\.observatory-metrics\s*{[^}]*}/s)?.[0]

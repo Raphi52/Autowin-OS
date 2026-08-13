@@ -67,47 +67,56 @@ describe('workspaceSlug — un dossier devient une clé comparable', () => {
   })
 })
 
-describe('brainCorpusForWorkspace — dérivé du workspace, jamais écrit en dur', () => {
-  it('Autowin OS a son corpus', () => {
-    expect(brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {})).toContain(
-      'knowledge/domain/autowin-os-'
-    )
+describe('brainCorpusForWorkspace — tout le Brain par défaut', () => {
+  /**
+   * Le filtrage dérivé du workspace est RETIRÉ. Mesure du 2026-08-12 : le corpus `autowin-os`
+   * n'admettait que 11 notes sur les 461 de `knowledge/`, en ignorant `projects/autowin-os/obsidian/`
+   * et `knowledge/decisions/`. La vue Knowledge affichait donc « 11 NŒUDS » pour un Brain de
+   * 633 notes, sans annoncer le filtre — l'utilisateur a cru avoir perdu les neuf dixièmes de sa
+   * mémoire. Et le remède doublait le mal : la récupération classe déjà par pertinence, donc un
+   * filtre par préfixe supprime des candidats avant qu'ils soient notés, le meilleur inclus.
+   */
+  it('un workspace connu n’est PLUS restreint', () => {
+    // Antislashs DOUBLES : `'C:\Amitel'` valait « C:Amitel » (le `\A` n'est pas une échappée), donc
+    // ces deux lignes ne testaient pas les chemins qu'elles nomment.
+    expect(brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {})).toBeUndefined()
+    expect(brainCorpusForWorkspace('C:\\Code RIG', {})).toBeUndefined()
   })
 
-  it('un workspace RIG reçoit le corpus RIG — c’est là que la doc RIG est PERTINENTE', () => {
-    // Le piege que le cadrage nomme : regler le bruit d'aujourd'hui en creant un trou demain.
-    expect(brainCorpusForWorkspace('C:\\Code RIG', {})).toContain(
+  it('le dépôt RigApplication reste ISOLÉ : y exécuter ne donne que sa documentation', () => {
+    // Ce n'est pas de la pertinence, c'est de la contamination croisée : une note Autowin rédigée
+    // pour être attirante entrerait sinon dans un prompt qui agit sur le code d'un AUTRE produit,
+    // et aucun classement par pertinence ne protège de ça.
+    expect(brainCorpusForWorkspace('D:\\DevSrc\\RigApplication', {})).toEqual([
       'knowledge/domain/rigapplication-documentation/'
-    )
+    ])
+    // L'isolation ne déborde pas : le Brain d'Autowin reste entier, c'était le défaut à corriger.
+    expect(brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {})).toBeUndefined()
   })
 
-  it('reconnaît le vrai dépôt RigApplication et un worktree dérivé', () => {
-    expect(brainCorpusForWorkspace('D:\\DevSrc\\RigApplication', {})).toContain(
-      'knowledge/domain/rigapplication-documentation/'
-    )
-    expect(
-      brainCorpusForWorkspace('D:\\DevSrc\\RigApplication\\.autowin\\agent__run-42', {})
-    ).toContain('knowledge/domain/rigapplication-documentation/')
+  it('un workspace INCONNU ou ABSENT n’est plus fail-closed — le Brain est partagé', () => {
+    expect(brainCorpusForWorkspace('C:\Autre\Projet', {})).toBeUndefined()
+    expect(brainCorpusForWorkspace(undefined, {})).toBeUndefined()
   })
 
-  it('reconnaît le chemin réel des worktrees isolés Autowin', () => {
+  it('un worktree ou une copie d’agent voit le même Brain que son dépôt', () => {
+    // Plus rien à déduire d'un chemin : c'était la source des trous quand la table se périmait.
     expect(
       brainCorpusForWorkspace(
-        'C:\\Amitel\\Autowin OS\\.autowin-data\\autowin-os\\worktrees\\68fe8b086ee864a1\\agent__run-42',
-        {},
-        () => 'C:\\Amitel\\Autowin OS'
+        'C:/Amitel/Autowin OS/.autowin-data/autowin-os/worktrees/68fe8b/agent__run-42',
+        {}
       )
-    ).toContain('knowledge/domain/autowin-os-')
+    ).toBeUndefined()
   })
 
-  it('ne prend pas un dépôt enfant inconnu pour le workspace parent homonyme', () => {
-    expect(brainCorpusForWorkspace('C:\\tmp\\autowin-os\\unrelated-customer-repo', {})).toEqual([])
-    expect(brainCorpusForWorkspace('D:\\RigApplication\\client-secret', {})).toEqual([])
-  })
-
-  it('un workspace INCONNU ou absent est fail-closed', () => {
-    expect(brainCorpusForWorkspace('C:\\Autre\\Projet', {})).toEqual([])
-    expect(brainCorpusForWorkspace(undefined, {})).toEqual([])
+  it('la QUARANTAINE reste exclue, même sans aucune restriction', () => {
+    // C'est la seule frontière qui survit : `inbox`, `.trash` et `escrow` ne sont pas du savoir.
+    expect(brainSourcePathAllowed('inbox/brouillon.md', undefined)).toBe(false)
+    expect(brainSourcePathAllowed('.trash/2026-07-16.md', undefined)).toBe(false)
+    expect(brainSourcePathAllowed('escrow/en-attente.md', undefined)).toBe(false)
+    // Nom de note volontairement neutre : le garde de branding balaie TOUT le code, et un ancien
+    // nom de produit dans une simple donnée de test le faisait échouer hors de son fichier permis.
+    expect(brainSourcePathAllowed('knowledge/decisions/branches-rewind.md', undefined)).toBe(true)
   })
 
   it('AUTOWIN_BRAIN_CORPUS surclasse la table (échappatoire opérateur)', () => {
@@ -183,8 +192,9 @@ describe('brainCorpusForWorkspace — dérivé du workspace, jamais écrit en du
   })
 
   it('rejette les collisions de nom étrangères dans les deux sens', () => {
-    const autowin = brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {})
-    const rig = brainCorpusForWorkspace('D:\\DevSrc\\RigApplication', {})
+    // Corpus EXPLICITES : c'est l'échappatoire opérateur qui les fournit désormais, plus un chemin.
+    const autowin: readonly string[] = ['knowledge/domain/autowin-os-']
+    const rig: readonly string[] = ['knowledge/domain/rigapplication-documentation/']
     const rigNamedAutowin =
       'knowledge/domain/rigapplication-documentation/reference/autowin-os-migration.md'
     const autowinNamedRig = 'knowledge/domain/autowin-os-rig-migration.md'
@@ -201,7 +211,10 @@ describe('brainCorpusForWorkspace — dérivé du workspace, jamais écrit en du
 })
 
 describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
-  const autowinCorpus = brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {}) as readonly string[]
+  // Corpus EXPLICITE, plus dérivé du workspace : la dérivation automatique est retirée, mais le
+  // MÉCANISME de filtrage survit pour l'échappatoire `AUTOWIN_BRAIN_CORPUS`. C'est lui que ce bloc
+  // éprouve — bornes, traversées de chemin, attestation.
+  const autowinCorpus: readonly string[] = ['knowledge/domain/autowin-os-']
   const [preamble, ...rawSources] = REAL_BLOCK.split('\n\n---\n\n')
   const sources = rawSources.map((content) => ({
     path: /^### Source \d+ — (.+)$/m.exec(content)?.[1] ?? '',
@@ -239,7 +252,7 @@ describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
     expect(result.context).toBe(context)
   })
 
-  it('la recherche interactive Autowin écarte une réponse RIG avant toute fusion', async () => {
+  it('la recherche interactive ne restreint PLUS par workspace et garde la source', async () => {
     const retrieve = vi.fn(async (_query: string, options: { corpus?: readonly string[] }) => ({
       context: 'RIG seulement',
       status: 'found' as const,
@@ -287,21 +300,22 @@ describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
     const brainScope = brainScopeForWorkspace('C:\\Amitel\\Autowin OS')
     const result = await brainScope.retrieve('autowin query', retrieve)
 
+    // Plus aucun corpus impose : le classement par pertinence decide, pas une liste de prefixes.
     expect(retrieve).toHaveBeenCalledWith(
       'autowin query',
-      expect.objectContaining({
-        corpus: expect.arrayContaining(['knowledge/domain/autowin-os-'])
-      })
+      expect.objectContaining({ corpus: undefined })
     )
-    expect(result).toMatchObject({ context: '', status: 'empty' })
-    expect(result.navigation?.candidates).toEqual([
-      expect.objectContaining({
-        rank: 1,
-        path: 'knowledge/domain/autowin-os-note.md',
-        retained: false,
-        relations: []
-      })
+    // La source RIG n'est plus ECARTEE : dans un Brain partage, elle a le droit de repondre.
+    expect(result.status).toBe('found')
+    expect(result.context).toContain('RIG seulement')
+    // Les DEUX candidats survivent, dans leur ordre de pertinence. Avant, le candidat RIG était
+    // supprimé et l'Autowin passait à `retained: false` : la navigation mentait deux fois — elle
+    // cachait un candidat et déclarait l'autre écarté, alors que rien ne l'avait jugé.
+    expect(result.navigation?.candidates.map((candidate) => candidate.path)).toEqual([
+      'knowledge/domain/rigapplication-documentation/reference/proc.md',
+      'knowledge/domain/autowin-os-note.md'
     ])
+    expect(result.navigation?.candidates[0]).toMatchObject({ rank: 1, retained: true })
 
     const [foreignLocal] = applyBrainRetrievalScores(
       [
@@ -316,9 +330,11 @@ describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
       ],
       result.navigation
     )
-    expect(foreignLocal).not.toHaveProperty('denseScore')
-    expect(foreignLocal).not.toHaveProperty('fusedScore')
-    expect(foreignLocal.relations).toEqual([])
+    // Un nœud RIG reçoit désormais SES scores : il n'est plus « étranger » puisqu'il n'y a plus de
+    // frontière par workspace. Auparavant il ressortait sans score, donc invisible au classement —
+    // c'est exactement ce qui vidait la vue.
+    expect(foreignLocal).toHaveProperty('denseScore')
+    expect(foreignLocal).toHaveProperty('fusedScore')
 
     expect(
       brainScope.localResults([
@@ -343,9 +359,17 @@ describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
         }
       ])
     ).toEqual([
+      // Les DEUX notes reviennent, et la note Autowin garde ses DEUX relations. Avant, la relation
+      // vers une note RIG était coupée : c'est ce qui faisait tomber le graphe de 461 nœuds à 11.
+      expect.objectContaining({
+        id: 'knowledge/domain/rigapplication-documentation/reference/proc'
+      }),
       expect.objectContaining({
         id: 'knowledge/domain/autowin-os-note',
-        relations: [{ type: 'related', target: 'knowledge/domain/autowin-os-related.md' }]
+        relations: [
+          { type: 'related', target: 'knowledge/domain/rigapplication-documentation/secret.md' },
+          { type: 'related', target: 'knowledge/domain/autowin-os-related.md' }
+        ]
       })
     ])
   })
@@ -356,7 +380,7 @@ describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
     ).toBe(false)
   })
 
-  it('LE CAS RÉEL : les 2 sources RIG sont écartées, la source Autowin reste', () => {
+  it('un corpus EXPLICITE Autowin ecarte les 2 sources RIG et garde la source Autowin', () => {
     const result = scopedFor(autowinCorpus)
     expect(result.structuredContext?.sources).toHaveLength(1)
     expect(result.context).toContain('autowin-os-realite-produit-v4.md')
@@ -365,8 +389,8 @@ describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
     expect(result.context).not.toContain('proc_mjud.md')
   })
 
-  it('un workspace RIG garde les deux sources RIG et écarte l’Autowin', () => {
-    const rigCorpus = brainCorpusForWorkspace('D:\\DevSrc\\RigApplication', {}) as readonly string[]
+  it('un corpus EXPLICITE RIG garde les deux sources RIG et ecarte l’Autowin', () => {
+    const rigCorpus: readonly string[] = ['knowledge/domain/rigapplication-documentation/']
     const result = scopedFor(rigCorpus)
     expect(result.structuredContext?.sources).toHaveLength(2)
     expect(result.context).toContain('proc_mjud.md')

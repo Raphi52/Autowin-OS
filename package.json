@@ -64,6 +64,8 @@
     "test:unit": "vitest run",
     "test:clean-generated": "powershell -ExecutionPolicy Bypass -File scripts/clean-generated-artifacts.test.ps1",
     "test:worktree-fingerprint": "powershell -ExecutionPolicy Bypass -File scripts/worktree-fingerprint.test.ps1",
+    "test:launch-dev": "powershell -ExecutionPolicy Bypass -File scripts/launch-dev.test.ps1",
+    "test:launch-dev-phases": "py -3 scripts/launch_dev_phases_test.py",
     "codex:login": "tsx scripts/codex-login.mjs",
     "bootstrap:deps": "powershell -ExecutionPolicy Bypass -File scripts/bootstrap-deps.ps1",
     "clean:generated": "powershell -ExecutionPolicy Bypass -File scripts/clean-generated-artifacts.ps1",

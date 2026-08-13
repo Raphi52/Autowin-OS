@@ -234,8 +234,17 @@ describe('outcome learning — contrat visible par les modèles', () => {
     mkdirSync(join(root, 'inbox'))
     const discriminant = 'oracle-quartz-917 outcome-learning'
     writeFileSync(join(root, 'inbox', 'lesson.md'), `# Leçon\n\n${discriminant}`, 'utf8')
+    // `corpus` vaut desormais `undefined` pour Autowin : le filtrage par prefixe derive du workspace
+    // a ete retire (il masquait 450 des 461 notes). Exiger ici un corpus DEFINI revenait a tester ce
+    // filtre disparu, pas la promotion.
+    //
+    // Ce qui tient le `before` a vide, ETABLI par sabotage : DEUX couches independantes, chacune
+    // SUFFISANTE seule — `SKIPPED_VAULT_DIRS` (`viz/fs-brains.ts`) qui ne descend jamais dans
+    // `inbox` au parcours disque, et `brainSourcePathAllowed` qui rejette le chemin. Retirer l'une
+    // OU l'autre laisse ce test vert ; c'est de la defense en profondeur, pas une redondance morte.
+    // Corollaire a garder en tete : ce test seul ne prouve donc PAS la quarantaine — il faut les
+    // deux sabotages pour la falsifier, et c'est le voisin dedie qui la couvre en propre.
     const corpus = brainCorpusForWorkspace('C:/Amitel/Autowin OS')
-    expect(corpus).toBeDefined()
     const before = await searchVaultBrainNotesAsync(root, discriminant, {
       allowedRoot: root,
       corpus

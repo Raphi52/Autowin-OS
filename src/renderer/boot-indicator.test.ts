@@ -45,7 +45,11 @@ describe('écran d’attente du démarrage', () => {
   it('reste une barre INDÉTERMINÉE, sans pourcentage inventé', () => {
     // La page ne peut pas connaître le temps restant : ce qui le saurait n'est pas encore chargé.
     // Un chiffre serait une invention, et une fausse précision est pire qu'aucune.
-    expect(html).toContain('autowin-boot-slide')
+    // L'écran a été redessiné le 2026-08-12 (c654ea2) : la barre coulissante `autowin-boot-slide`
+    // a laissé place à un anneau. L'INTENTION est intacte — mouvement sans fin, aucun chiffre — donc
+    // on l'assied sur le mécanisme (`infinite`) plutôt que sur un nom de classe, qui ne survit pas
+    // au prochain habillage et transforme un test de propriété en test de décoration.
+    expect(html).toMatch(/animation:[^;]*infinite/)
     expect(html).not.toMatch(/\b\d{1,3}\s*%\s*<\/span>/)
     expect(html).toMatch(/prefers-reduced-motion/)
   })

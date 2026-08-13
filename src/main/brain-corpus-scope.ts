@@ -1,57 +1,40 @@
 /**
- * PORTÉE DU BRAIN, DÉRIVÉE DU WORKSPACE (option O3 du cadrage `rag-brain-pertinence`).
+ * PORTEE DU BRAIN. Par defaut : TOUT le Brain, sauf les zones de quarantaine.
  *
- * MESURE qui justifie ce module (index vivant du Brain, 2026-07-29) : 15 342 chunks, dont **99 %** de
- * `knowledge/domain/rigapplication-documentation` et **0,19 %** sur Autowin OS (4 documents). Une
- * question Autowin (« le bouton fork dans le chat ») ramenait donc 2 sources RIG sur 3 — appariement sur
- * le mot « bouton ». Ce n'est PAS un défaut de classement : c'est le résultat attendu d'un corpus à
- * 99 % consacré à un autre projet.
+ * CE QUE CE MODULE FAISAIT, ET POURQUOI C'EST RETIRE.
  *
- * Ce que ce module fait : restreindre les sources retenues au corpus du WORKSPACE courant. Ce qu'il ne
- * fait PAS : prétendre enrichir le Brain. Filtrer ne crée pas de connaissance — pour Autowin, la
- * connaissance vit dans le graphe de code (déjà scopé) et dans le contexte projet ; le Brain n'apporte
- * que 4 documents, qui restent atteignables.
+ * Il restreignait les sources a une liste blanche de prefixes derivee du nom du workspace. La mesure
+ * qui l'avait justifie etait reelle (index du 2026-07-29 : 15 342 chunks, dont 99 % de
+ * `knowledge/domain/rigapplication-documentation` et 0,19 % sur Autowin OS) — une question Autowin
+ * ramenait des sources RIG par appariement sur un mot commun.
  *
- * PRINCIPE DE PRUDENCE : un workspace sans identité déclarée est fail-closed. L'opérateur peut
- * explicitement demander le corpus canonique global avec `AUTOWIN_BRAIN_CORPUS=*` ; les zones de
- * quarantaine restent toujours exclues et une absence de mapping ne devient jamais silencieusement
- * « tout autoriser ».
+ * Mais la liste n'a jamais suivi le vault. Mesure du 2026-08-12 : le corpus `autowin-os` n'admettait
+ * que 11 notes sur les 461 de `knowledge/`, en ignorant `projects/autowin-os/obsidian/` et
+ * `knowledge/decisions/` — qui portent l'essentiel des decisions Autowin. La vue Knowledge affichait
+ * donc « 11 NOEUDS » pour un Brain de 633 notes, SANS annoncer qu'un filtre etait actif : l'utilisateur
+ * a legitimement cru avoir perdu les neuf dixiemes de sa memoire.
+ *
+ * Et le remede etait redondant avec le mal : la recuperation CLASSE deja par pertinence (dense +
+ * lexical + RRF). Un filtre par prefixe pose AU-DESSUS d'un classeur de pertinence ne corrige pas un
+ * mauvais classement — il supprime des candidats avant qu'ils soient notes, y compris le meilleur.
+ * Le probleme de dominance d'un corpus se traite dans le CLASSEMENT, pas par une liste blanche
+ * ecrite a la main qui se perime en silence.
+ *
+ * Ce qui reste : les zones de quarantaine (`inbox`, `.trash`, `escrow`) sont TOUJOURS exclues, meme
+ * sous wildcard — ce ne sont pas du savoir canonique. Et `AUTOWIN_BRAIN_CORPUS` permet a un operateur
+ * de re-restreindre EXPLICITEMENT s'il le veut ; une valeur invalide coupe toujours le Brain plutot
+ * que de se transformer en acces global par accident.
  */
-import { readFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { basename } from 'node:path'
 import { renderStructuredBrainContext } from './brain-protocol'
 import { retrieveBrainContext, type BrainRetrievalResult } from './brain-retrieval'
 import type { BrainNoteSearchResult } from './viz/fs-brains'
 /** En-tête d'une source : `### Source N — <chemin>`. */
 
-/**
- * Corpus Brain par workspace, indexé par SLUG de dossier. Les valeurs sont des identités exactes ou
- * des préfixes ANCRÉS du chemin `knowledge/...` (`/` ou `-` final = famille). Une sous-chaîne libre
- * permettrait à `rig/.../autowin-migration.md` de contourner l'isolation.
- *
- * Table EXPLICITE et non devinée : le slug d'un dossier ne dit pas le nom de son corpus
- * (« Code RIG » → la doc s'appelle `rigapplication-documentation`). Un workspace absent de cette table
- * est fail-closed.
- */
-const RIG_BRAIN_CORPUS = [
-  'knowledge/_maps/rig.md',
-  'knowledge/_maps/rig-',
-  'knowledge/decisions/rig-',
-  'knowledge/domain/rig-',
-  'knowledge/domain/rigapplication-documentation/',
-  'knowledge/lessons/rig-'
-] as const
-
-const WORKSPACE_BRAIN_CORPUS: Readonly<Record<string, readonly string[]>> = {
-  'autowin-os': [
-    'knowledge/_maps/autowin-os.md',
-    'knowledge/domain/autowin-os-',
-    'knowledge/runbooks/autowin-os-'
-  ],
-  'code-rig': RIG_BRAIN_CORPUS,
-  rigapplication: RIG_BRAIN_CORPUS,
-  rig: RIG_BRAIN_CORPUS
-}
+/** Portee d'une execution menee DANS le depot RigApplication : sa propre documentation. */
+const RIG_EXECUTION_CORPUS: readonly string[] = [
+  'knowledge/domain/rigapplication-documentation/'
+]
 
 let invalidOverrideWarningEmitted = false
 
@@ -92,17 +75,16 @@ export function workspaceSlug(workspacePath: string): string {
  */
 export function brainCorpusForWorkspace(
   workspacePath: string | undefined,
-  env: NodeJS.ProcessEnv = process.env,
-  worktreeOwner: (workspacePath: string) => string | undefined = gitWorktreeOwner
+  env: NodeJS.ProcessEnv = process.env
 ): readonly string[] | undefined {
   const configuredOverride = env.AUTOWIN_BRAIN_CORPUS
   if (configuredOverride !== undefined) {
     const override = configuredOverride.trim()
     if (override === '*') return undefined
     const fragments = override.split(',').map((fragment) => fragment.trim().toLowerCase())
-    // Le wildcard n'est valide que SEUL et chaque élément doit être explicite. Une virgule finale,
+    // Le wildcard n'est valide que SEUL et chaque element doit etre explicite. Une virgule finale,
     // une liste vide ou `*,foo` est une erreur de configuration : elle coupe le Brain au lieu de
-    // transformer une faute de frappe en accès global.
+    // transformer une faute de frappe en acces global.
     if (
       fragments.some(
         (fragment) => !fragment || fragment === '*' || !isCanonicalCorpusSelector(fragment)
@@ -113,36 +95,15 @@ export function brainCorpusForWorkspace(
     }
     return fragments
   }
-  if (!workspacePath) return []
-  const segments = workspacePath.split(/[\\/]+/).filter(Boolean)
-  const direct = WORKSPACE_BRAIN_CORPUS[workspaceSlug(segments.at(-1) ?? '')]
-  if (direct) return direct
-
-  // Une copie agent vérifiée conserve l'identité du dépôt sous la forme
-  // `<workspace>/.autowin/agent__<id>`. Ne jamais remonter arbitrairement les parents : un dépôt
-  // client placé sous `.../autowin-os/` n'est pas pour autant le dépôt Autowin.
-  const leaf = segments.at(-1) ?? ''
-  const marker = segments.at(-2)?.toLowerCase()
-  if (/^agent__[a-z0-9._-]+$/i.test(leaf) && marker === '.autowin') {
-    return WORKSPACE_BRAIN_CORPUS[workspaceSlug(segments.at(-3) ?? '')] ?? []
+  // SEULE restriction survivante, et ce n'est PAS de la pertinence : executer DANS le depot d'un
+  // AUTRE produit. Une note Autowin qui entre dans un prompt agissant sur RigApplication est un
+  // vecteur de contamination croisee, pas un simple hors-sujet — le classement par pertinence ne
+  // protege de rien face a une source redigee pour etre attirante. Le tri par pertinence suffit
+  // partout ailleurs, et le Brain d'Autowin reste entier (c'etait le defaut a corriger).
+  if (workspacePath !== undefined && workspaceSlug(workspacePath) === 'rigapplication') {
+    return RIG_EXECUTION_CORPUS
   }
-
-  // Les copies actuelles vivent dans le dossier de données global de l'app, donc leur chemin ne
-  // porte PAS le nom du dépôt propriétaire. Leur fichier `.git` le prouve en revanche sans deviner
-  // un parent : `gitdir: <dépôt>/.git/worktrees/<copie>`. Cette frontière est aussi valable pour un
-  // dépôt externe (RigApplication) et évite de lui attribuer par erreur le corpus d'Autowin OS.
-  const owner = worktreeOwner(workspacePath)
-  return owner ? (WORKSPACE_BRAIN_CORPUS[workspaceSlug(owner)] ?? []) : []
-}
-
-function gitWorktreeOwner(workspacePath: string): string | undefined {
-  try {
-    const pointer = readFileSync(join(workspacePath, '.git'), 'utf8').trim()
-    const match = /^gitdir:\s*(.+?)[\\/]\.git[\\/]worktrees[\\/][^\\/]+\s*$/i.exec(pointer)
-    return match ? basename(match[1]) : undefined
-  } catch {
-    return undefined
-  }
+  return undefined
 }
 
 /** Ramène un chemin absolu/UNC ou relatif à son identité stable `knowledge/...`. */

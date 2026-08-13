@@ -99,8 +99,10 @@ describe('cablage du clic « action avec erreur » → trace', () => {
     const chat = read('ChatView.tsx')
     expect(chat).toContain('pickRunForTrace(runsRef.current, runId)')
     expect(chat).toContain('void viewRun(target)')
-    // Degradation preservee : sans run resolu, on garde le cadrage d'origine.
-    expect(chat).toContain("setRunScope('conv')")
+    // Degradation preservee : sans run resolu, on garde le cadrage d'origine. Ce cadrage est
+    // desormais STRUCTUREL — le selecteur de portee a ete retire, la liste est toujours celle de
+    // la conversation. Reintroduire un setter de portee redonnerait au repli un sens a re-verifier.
+    expect(chat).not.toContain('setRunScope(')
   })
 })
 

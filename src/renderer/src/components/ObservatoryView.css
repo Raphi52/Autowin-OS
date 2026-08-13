@@ -5,6 +5,11 @@
   color: var(--text);
   display: flex;
   flex-direction: column;
+  /* CONFLIT RESOLU — deux sessions visaient la MEME intention. Le travail concurrent recopiait ici
+     le lisere rose->dore de `TaskManagerView.css` (« forme canonique »), avec son bord a 34 % ; la
+     version amont le sort dans `.view-page`, consomme par les sept vues. L'intention concurrente est
+     donc SATISFAITE, et sans la troisieme copie qu'elle allait creer — c'est precisement la derive
+     que son propre commentaire redoutait. Ne reste ici que ce qui appartient a cette vue. */
   backdrop-filter: blur(var(--container-blur));
 }
 .observatory-head {

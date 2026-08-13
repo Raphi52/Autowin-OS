@@ -1577,61 +1577,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.run-detail-box')).toBeNull()
   })
 
-  it('affiche et exécute aussi la suppression dans le scope tous', async () => {
-    const run = {
-      subject: 'run-global',
-      session: 'session-globale',
-      path: 'session-globale/run-global-workspace/RUN.md',
-      mtime: 1,
-      summary: {
-        status: 'green',
-        dodTotal: 1,
-        dodChecked: 1,
-        journalEvents: 1,
-        defauts: 0
-      }
-    }
-    let globalRuns = [run]
-    const listRuns = vi.fn(async () => globalRuns)
-    const deleteRun = vi.fn(async () => {
-      globalRuns = []
-      return { ok: true }
-    })
-    const deleteConversationRun = vi.fn()
-    const mockApi = api({
-      conversations: vi.fn().mockResolvedValue([conversation('A')]),
-      listRuns,
-      deleteRun,
-      deleteConversationRun
-    })
-    await mount(mockApi)
-    await click('.conv-pick')
-    await click('button[title="Workflows (RUN.md)"]')
-    const runTab = [...container!.querySelectorAll('.workflow-section-tabs button')].find(
-      (button) => button.textContent?.trim() === 'Run'
-    ) as HTMLButtonElement
-    await act(async () => runTab.click())
-    const allScope = [...container!.querySelectorAll('.runs-pane button')].find(
-      (button) => button.textContent?.trim() === 'tous'
-    ) as HTMLButtonElement
-    await act(async () => {
-      allScope.click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    const deleteButton = container!.querySelector(
-      'button[aria-label="Supprimer le run run-global"]'
-    ) as HTMLButtonElement
-    expect(deleteButton).toBeTruthy()
-    await act(async () => deleteButton.click())
-    await click('.run-delete-confirm')
-
-    expect(deleteRun).toHaveBeenCalledOnce()
-    expect(deleteRun).toHaveBeenCalledWith(run.path)
-    expect(deleteConversationRun).not.toHaveBeenCalled()
-    expect(container!.querySelector('.run-row')).toBeNull()
-  })
+  // Le test « suppression dans le scope tous » a ete RETIRE avec le selecteur de portee :
+  // la barre de droite ne montre plus que la conversation courante, donc `deleteRun`
+  // (suppression globale) n'y est plus atteignable. L'IPC existe toujours cote main.
 
   it('le fil des sous-agents se REMPLIT depuis la trace persistée, sans run en mémoire', async () => {
     // Le défaut : « Aucune orchestration dans cette conversation » sur une conversation qui en avait
