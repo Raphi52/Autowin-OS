@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { libelleSortieCommande } from './evidence-label'
 import { groupOutcomeSummary } from './action-outcome-summary'
 import { failedActionRunId } from './run-trace-target'
 import { hasConsultableRun, localActionDetails } from './action-detail-target'
@@ -158,11 +159,21 @@ export function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.El
             ) : (
               <>
                 <span className="mono">{e.command ? `$ ${e.command}` : e.type}</span>
-                {typeof e.exitCode === 'number' && (
-                  <span className={`evidence-exit ${e.exitCode === 0 ? 'st-ok' : 'st-err'}`}>
-                    exit {e.exitCode}
-                  </span>
-                )}
+                {(() => {
+                  // « exit 1 » ne dit rien a un humain : on met devant ce que le code SIGNIFIE, et
+                  // le decompte des tests quand la sortie le porte. Le code reste affiche en cas
+                  // d'echec — c'est la preuve verifiable, elle ne se cache pas derriere une phrase.
+                  const libelle = libelleSortieCommande({ exitCode: e.exitCode, stdout: e.stdout })
+                  if (!libelle) return null
+                  return (
+                    <span
+                      className={`evidence-exit ${libelle.ok ? 'st-ok' : 'st-err'}`}
+                      title={`code de sortie ${e.exitCode}`}
+                    >
+                      {libelle.texte}
+                    </span>
+                  )
+                })()}
               </>
             )}
           </summary>
