@@ -16,7 +16,6 @@ import type {
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 import type { UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
-import type { WorktreeMapSnapshot } from '../shared/worktree-map'
 import type {
   TicketItem,
   TicketSourceSummary,
@@ -124,8 +123,6 @@ const api = {
     workspaceRoot: string
   ): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:conversationDiff', conversationId, path, workspaceRoot),
-  getWorktreeMap: (repoPath?: string): Promise<WorktreeMapSnapshot> =>
-    ipcRenderer.invoke('git:worktreeMap', repoPath),
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),

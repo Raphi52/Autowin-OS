@@ -66,6 +66,15 @@ export interface WorktreeAgentActivity {
     'base-dirty' | 'base-in-progress' | 'merge-failed' | 'post-publish-change' | 'retry-exhausted'
   /** Contexte durable du bureau, affiché par le Hub A2. */
   task?: string
+  /**
+   * La conversation qui a lance ce bureau, quand elle est connue.
+   *
+   * Deja renseignee par le coordinateur (`run-worktree-coordinator`), mais absente de ce contrat
+   * partage : le champ voyageait donc sans etre declare, et `scopeWorktreeActivity` ne pouvait pas
+   * l'utiliser. OPTIONNEL a dessein — un bureau recupere apres un redemarrage peut n'avoir aucun
+   * rattachement, et c'est precisement ce cas que le perimetrage exclut au lieu de l'inventer.
+   */
+  conversationId?: string
   worktreePath?: string
   /** Faux quand la ref est protégée mais que le dossier doit encore être rematérialisé. */
   worktreeAvailable?: boolean
@@ -114,6 +123,26 @@ export function etatBureauRecupere(record: {
   // le processus a disparu EST une anomalie a traiter (test « sort de working une copie sans
   // manifeste »). On ne retire le defaut que la ou il mentait — l'arret de l'application.
   return { state: 'blocked', attentionReason: record.attentionReason ?? 'merge-failed' }
+}
+
+/**
+ * Restreint l'activité des bureaux à UNE conversation, ou la rend entière si aucune n'est demandée.
+ *
+ * Écrite pour satisfaire `worktree-activity-model.test.ts`, qui était arrivé dans l'arbre SANS son
+ * implémentation — un test importait une fonction inexistante, donc le typecheck cassait pour tout le
+ * monde. Le test est la specification : il exige qu'un bureau sans `conversationId` soit EXCLU quand un
+ * périmètre est demandé, et conservé quand il n'y en a pas.
+ *
+ * Pourquoi exclure un bureau sans conversation lors d'un scope : son rattachement est INCONNU, pas
+ * global. L'afficher dans une conversation à laquelle rien ne le relie serait une affirmation gratuite.
+ */
+export function scopeWorktreeActivity(
+  agents: readonly WorktreeAgentActivity[],
+  conversationId?: string
+): WorktreeAgentActivity[] {
+  if (!conversationId?.trim()) return [...agents]
+  const vise = conversationId.trim()
+  return agents.filter((agent) => agent.conversationId === vise)
 }
 
 /** Source unique pour décider si un bureau attend une action humaine. */

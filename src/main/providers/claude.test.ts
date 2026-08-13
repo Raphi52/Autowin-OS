@@ -111,13 +111,26 @@ describe('ClaudeCliAdapter — plafond de depense provider', () => {
       resolvedModel: 'claude-haiku-real',
       usage: { inputTokens: 38, outputTokens: 1043, cacheReadTokens: 12, costUsd: 0.065648 }
     })
-    // La liste CHARGÉE porte désormais les outils web (décision utilisateur du 2026-08-13 : les agents
-    // doivent pouvoir aller lire le monde extérieur). Ce test vérifie les arguments RÉELLEMENT passés au
-    // spawn, donc il devait suivre — mais la propriété qu'il protège est intacte et vérifiée juste après :
-    // en lecture seule, aucun Bash.
-    expect(spawnCapture.args).toContain('Read,Grep,Glob,WebFetch,WebSearch')
-    // Et les outils AUTORISÉS arrivent en arguments séparés : mesuré en A/B, une chaîne à virgules sur
-    // `--allowedTools` fait PENDRE toute récupération de page (code 124 au délai maximum).
+    // Cette assertion cherchait l'element EXACT `'Read,Grep,Glob'`. Elle a rougi le 2026-08-13 quand
+    // le web est devenu une capacite de base : la liste passee vaut desormais
+    // `'Read,Grep,Glob,WebFetch,WebSearch'` en UNE chaine. Le litteral epinglait une composition, pas
+    // une garantie — donc il interdisait toute capacite supplementaire, meme voulue.
+    //
+    // Ce qui compte reellement dans ce profil (fond autonome, contexte d'evenement NON FIABLE) : la
+    // lecture est permise et le SHELL est interdit. Le prompt systeme n'est qu'une consigne ; cette
+    // liste est la capacite reelle. On verifie donc l'invariant, pas sa forme du jour.
+    //
+    // FUSION de deux formulations concurrentes (2026-08-13) : l'invariant vient de la version d'une
+    // autre session, qui a raison de generaliser ; les deux dernieres assertions viennent de la mienne
+    // et couvrent une propriete que l'invariant ne dit pas — `--allowedTools` recoit les outils web en
+    // arguments SEPARES. Mesure A/B sur le CLI reel : en une chaine a virgules, toute recuperation de
+    // page PEND jusqu'au delai maximum (code 124). Garder les deux, c'est garder les deux intentions.
+    const outils = spawnCapture.args[spawnCapture.args.indexOf('--tools') + 1]
+    expect(outils).toMatch(/(^|,)Read(,|$)/)
+    expect(outils).toMatch(/(^|,)Grep(,|$)/)
+    expect(outils).toMatch(/(^|,)Glob(,|$)/)
+    expect(outils).not.toMatch(/(^|,)Bash/)
+    expect(spawnCapture.args).not.toContain('Bash')
     expect(spawnCapture.args).toContain('WebFetch')
     expect(spawnCapture.args).toContain('WebSearch')
     expect(spawnCapture.args.join(' ')).not.toContain('Bash')

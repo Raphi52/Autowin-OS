@@ -112,9 +112,6 @@ interface ChatApi {
   ) => Promise<import('../shared/git-read').GitDiffResult>
   /** Historique git de la vue Worktrees — la frise de commits. Lecture seule. */
   getGitGraph: (repoPath?: string) => Promise<import('../shared/git-graph').GitGraphSnapshot>
-  getWorktreeMap: (
-    repoPath?: string
-  ) => Promise<import('../shared/worktree-map').WorktreeMapSnapshot>
   getGitDiff: (
     path: string,
     repoPath?: string

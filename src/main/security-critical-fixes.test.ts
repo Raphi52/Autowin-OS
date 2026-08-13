@@ -132,7 +132,12 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:shadowRoutingPilot:get` — lecture de l'opt-in persistant du pilote de routage shadow
     //   `os:shadowRoutingPilot:set` — bascule de cet opt-in, valeur refusée si non booléenne
     // `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(140)
+    //
+    // MISE A JOUR 2026-08-13 — 140 → 139. Une SUPPRESSION, la premiere de cette serie :
+    //   `git:worktreeMap` — lecture d'etat des copies git, retiree avec `WorktreeMapView`
+    // La vue etait le SEUL consommateur de ce canal ; la supprimer sans retirer le canal aurait
+    // laisse une surface IPC atteignable que personne n'appelle. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(139)
     expect(unguarded).toEqual([])
   })
 

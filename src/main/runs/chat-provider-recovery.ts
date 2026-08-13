@@ -1,6 +1,8 @@
+import { statSync } from 'node:fs'
 import type { Attachment, SendResult } from '../providers/types'
 import { guardAttachments } from '../ipc-guards'
 import { recoverDetachedProviderResult } from './run-reattach'
+import { survivableExitCode } from './stdout-journal'
 import { listUnfinishedTurns, readTurnJournal, type TurnJournalEvent } from './turn-journal'
 
 /** Lien durable écrit avant le spawn d'un provider de chat direct. */
@@ -211,5 +213,81 @@ export function recoverCompletedChatProviderCall(
     ...(recovered.executionEvidence?.length
       ? { executionEvidence: recovered.executionEvidence }
       : {})
+  }
+}
+
+/**
+ * L'issue d'un appel provider detache, telle qu'un redemarrage peut la constater.
+ *
+ * Trois issues SEULEMENT, et l'absence de quatrieme est le fond du sujet : il n'existe pas d'issue
+ * « probablement fini ». Une sortie non certifiee ne devient jamais un succes — elle devient `stale`,
+ * et l'appelant clot le tour en `interrupted` plutot que d'inventer une reponse.
+ */
+export type RecoverableChatProviderExit =
+  { kind: 'exited'; exitCode: number } | { kind: 'aborted' } | { kind: 'stale' }
+
+/** Intervalle entre deux lectures de la preuve de sortie. Court : on attend un fichier, pas un reseau. */
+const SONDE_MS = 2_000
+
+/**
+ * Silence tolere avant de declarer un appel perime.
+ *
+ * Genereux a dessein : un tour de chat peut reflechir plusieurs minutes sans ecrire une ligne, et
+ * declarer perime un appel encore vivant ferait perdre son travail. Dix minutes sans AUCUNE ecriture ni
+ * preuve de sortie signifient en pratique que le processus est mort sans laisser sa preuve.
+ */
+const PEREMPTION_MS = 10 * 60 * 1_000
+
+/**
+ * Attend la preuve de sortie CERTIFIEE d'un appel provider detache.
+ *
+ * Ecrite pour completer une fusion qui appelait cette fonction sans qu'elle existe nulle part — ni dans
+ * l'arbre, ni dans l'historique, ni sur origin/main.
+ *
+ * Le contrat vient de son site d'appel (`index.ts`, reprise au demarrage) : `aborted` quand le signal
+ * tombe, `stale` quand plus rien ne bouge, et sinon le code de sortie ECRIT par le relais. On ne lit
+ * jamais le code d'un processus qu'on observe : on lit le fichier qu'il a laisse.
+ */
+export async function waitForRecoverableChatProviderExit(
+  journalPath: string,
+  options: {
+    signal?: AbortSignal
+    /** Derniere activite connue quand le journal n'a pas encore de date : evite une peremption immediate. */
+    fallbackActivityAt?: number
+    sondeMs?: number
+    peremptionMs?: number
+  } = {}
+): Promise<RecoverableChatProviderExit> {
+  const sonde = options.sondeMs ?? SONDE_MS
+  const peremption = options.peremptionMs ?? PEREMPTION_MS
+  const derniereActivite = (): number => {
+    // La date du journal, ou celle fournie par l'appelant : un journal pas encore cree ne doit pas
+    // compter comme un silence de dix minutes.
+    try {
+      return statSync(journalPath).mtimeMs
+    } catch {
+      return options.fallbackActivityAt ?? Date.now()
+    }
+  }
+
+  for (;;) {
+    if (options.signal?.aborted) return { kind: 'aborted' }
+    const code = survivableExitCode(journalPath)
+    // La preuve d'abord : un appel qui a fini ET dont le journal ne bouge plus doit rendre son code,
+    // pas `stale`.
+    if (typeof code === 'number') return { kind: 'exited', exitCode: code }
+    if (Date.now() - derniereActivite() > peremption) return { kind: 'stale' }
+    await new Promise<void>((resolve) => {
+      const minuteur = setTimeout(resolve, sonde)
+      minuteur.unref?.()
+      options.signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(minuteur)
+          resolve()
+        },
+        { once: true }
+      )
+    })
   }
 }

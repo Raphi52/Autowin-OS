@@ -26,7 +26,7 @@ function jalonDemarrage(etape: string): void {
 }
 jalonDemarrage('module principal évalué')
 import { resolveClaudeBin } from './providers/claude'
-import { traceActionEventId } from './activity/trace-event'
+import { seedTraceActionOrdinal, traceActionEventId } from './activity/trace-event'
 import { emitToLiveWindows } from './renderer-emit'
 import {
   ClaudeAccountsStore,
@@ -274,7 +274,8 @@ import { gitlabTicketProvider } from './ticket-providers/gitlab'
 import { loadAzureDevOpsCliToken } from './azure-cli-token'
 import { loadForgeCliToken } from './forge-cli-token'
 import { registerTicketsIpc } from './tickets-ipc'
-import { checkForUpdate, applyUpdate, type UpdateStrategy } from './git-update'
+import { abortUpdateConflict, checkForUpdate, applyUpdate } from './git-update'
+import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
 import {
   ChatArtifactPreviewBudget,
@@ -348,7 +349,6 @@ import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker
 } from './providers/workspace-mutation-evidence'
-import { readWorktreeMap } from './worktree-map-main'
 import {
   automationAppIdentity,
   presentAutomationWindow,
@@ -1440,11 +1440,14 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Update')
     return checkForUpdate(os.executionWorkspace)
   })
-  ipcMain.handle('update:apply', async (event, strategy?: UpdateStrategy) => {
+  ipcMain.handle('update:apply', async (event, action?: UpdateAction) => {
     assertTrustedRendererSender(event, 'Update')
     // La stratégie vient du BOUTON cliqué : hors de main, c'est ce qui distingue une intégration
     // demandée d'un merge fabriqué dans le dos de l'utilisateur.
-    const result = await applyUpdate(os.executionWorkspace, strategy ? { strategy } : {})
+    const result =
+      action === 'abort-conflict'
+        ? await abortUpdateConflict(os.executionWorkspace)
+        : await applyUpdate(os.executionWorkspace, action ? { strategy: action } : {})
     if (result.ok && result.reload) {
       // Le changement ne touche que le renderer : on recharge les FENÊTRES et le process principal
       // reste vivant — donc les runs en cours, les connexions et l'état en mémoire survivent.
@@ -2093,14 +2096,6 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('git:graph', (event, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitGraph')
     return readGitGraph(
-      cwd && typeof cwd === 'string' ? cwd : (process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd())
-    )
-  })
-  // Vue Worktrees : état des copies git enrichi du retard, de la saleté et de la taille disque —
-  // trois grandeurs que `git worktree list --porcelain` ne donne pas. Lecture seule.
-  ipcMain.handle('git:worktreeMap', (event, cwd?: string) => {
-    assertTrustedRendererSender(event, 'GitWorktreeMap')
-    return readWorktreeMap(
       cwd && typeof cwd === 'string' ? cwd : (process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd())
     )
   })
@@ -3459,7 +3454,13 @@ Le fil reprend ensuite normalement.`
        * remis a zero a chaque `prompt-call` et sert d'index LOCAL au bloc : s'appuyer sur lui pour un
        * identifiant produisait des doublons. Celui-ci ne redescend jamais.
        */
-      let traceActionOrdinal = 0
+      // Un tour RÉCUPÉRÉ réutilise son turnId : l'ordinal doit repartir d'où la trace s'était
+      // arrêtée, sinon le premier événement de la reprise duplique `…:action:0-0:…` et
+      // `TraceStore.append` fait échouer le tour entier (mesuré sur conv-1147, 3,19 $ perdus).
+      let traceActionOrdinal =
+        recovery && conversationId
+          ? seedTraceActionOrdinal(causalTrace.readConversationBestEffort(conversationId), turnId)
+          : 0
       // Ordinal DEDIE aux artefacts : partager celui des actions ferait collisionner les identifiants.
       let traceArtifactOrdinal = 0
       let turnSessionId: string | undefined
