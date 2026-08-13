@@ -90,6 +90,18 @@ export function runLiveness(
  */
 export type ResumeAction = 'rattacher' | 'relancer' | 'bloquer' | 'ignorer'
 
+type ResumableRunView = Pick<OrchestrationRunState, 'agents' | 'phaseOutputs' | 'terminal'> & {
+  usage?: { activeCalls: number }
+}
+
+/** Réservation persistée sans occurrence d'agent : son paiement est possible, sa relance ne l'est pas. */
+function hasOrphanedActiveReservation(state: ResumableRunView): boolean {
+  return (
+    (state.usage?.activeCalls ?? 0) > 0 &&
+    !(state.agents ?? []).some((agent) => agent.active !== false)
+  )
+}
+
 function hasCertifiedRelayExit(agent: { journalPath?: string } | undefined): boolean {
   return Boolean(agent?.journalPath && survivableExitCode(agent.journalPath) !== undefined)
 }
@@ -189,7 +201,9 @@ export function runIsProducing(
   lastWriteMs: (path: string) => number | undefined,
   seuilMs = SILENCE_TOLERE_MS
 ): boolean {
-  const silences = (state?.agents ?? []).map((agent) => agentSilenceMs(agent, nowMs, lastWriteMs))
+  const silences = (state?.agents ?? [])
+    .filter((agent) => agent.active !== false)
+    .map((agent) => agentSilenceMs(agent, nowMs, lastWriteMs))
   const mesures = silences.filter((silence): silence is number => silence !== undefined)
   if (!mesures.length) return true // rien de mesurable : on n'affirme pas un arrêt
   return mesures.some((silence) => silence < seuilMs)
@@ -215,12 +229,19 @@ function strandedTokenReservation(
 }
 
 export function resumeActionFor(
-  state: Pick<OrchestrationRunState, 'agents' | 'phaseOutputs'> | null | undefined,
-  identityOf: ProcessIdentity
+  state: ResumableRunView | null | undefined,
+  identityOf: ProcessIdentity,
+  nowMs = Date.now(),
+  lastWriteMs?: (path: string) => number | undefined
 ): ResumeAction {
-  if (!state) return 'ignorer'
+  if (!state || state.terminal) return 'ignorer'
+  if (hasOrphanedActiveReservation(state)) return 'bloquer'
   const liveness = runLiveness(state, identityOf)
-  if (liveness.working || hasUncertainActiveAgent(state, liveness)) return 'rattacher'
+  if (liveness.working) {
+    if (lastWriteMs && !runIsProducing(state, nowMs, lastWriteMs)) return 'bloquer'
+    return 'rattacher'
+  }
+  if (hasUncertainActiveAgent(state, liveness)) return 'rattacher'
   if (hasUnprovenEndedActiveAgent(state, liveness)) return 'bloquer'
   return 'relancer'
 }
@@ -239,7 +260,7 @@ export function preparePersistedRunForRelaunch(
   onRecoveredUsage?: (settlement: RecoveredDetachedUsageSettlement) => void
 ): OrchestrationRunState | null {
   const state = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
-  if (!state?.usage || state.usage.activeCalls <= 0) return state ?? null
+  if (!state?.usage || state.usage.activeCalls <= 0 || state.terminal) return state ?? null
 
   const liveness = runLiveness(state, identityOf)
   // Un événement terminal peut être déjà flushé alors que le CLI finit encore sa fermeture.
@@ -248,7 +269,9 @@ export function preparePersistedRunForRelaunch(
   if (liveness.working || hasUncertainActiveAgent(state, liveness)) return state
   // PID disparu sans sidecar : le provider a pu finir et facturer avant le crash du main. Cette
   // ignorance ne devient jamais une autorisation de relance.
-  if (hasUnprovenEndedActiveAgent(state, liveness)) return state
+  if (hasUnprovenEndedActiveAgent(state, liveness)) {
+    return terminalizeInterruptedPersistedRun(root, runId, identityOf, nowMs)
+  }
 
   // Point d'entrée COMMUN à toutes les reprises (`relancer` immédiat ou après rattachement).
   // Un succès terminal du journal doit devenir un acquis avant que l'appel mort soit facturé comme
@@ -351,6 +374,117 @@ export function preparePersistedRunForRelaunch(
   }
   saveOrchestrationState(root, reconciled)
   return reconciled
+}
+
+export const INTERRUPTED_WITHOUT_EXIT_REASON =
+  'PID provider disparu sans preuve de sortie — relance automatique interdite'
+export const INTERRUPTED_STALE_HEARTBEAT_REASON =
+  'PID provider vivant mais journal expire — processus arrete et relance automatique interdite'
+export const INTERRUPTED_ORPHANED_RESERVATION_REASON =
+  'Reservation provider active sans agent identifiable — soldee sans relance automatique'
+
+export interface InterruptedTerminalizationProbes {
+  lastWriteMs?: (path: string) => number | undefined
+  terminatePid?: (pid: number) => boolean
+}
+
+/**
+ * Rend terminal un appel orphelin sans inventer son résultat ni le rejouer. La réservation est
+ * soldée à sa borne haute : l'absence de métriques n'est jamais comptée comme une consommation nulle.
+ */
+export function terminalizeInterruptedPersistedRun(
+  root: string,
+  runId: string,
+  identityOf: ProcessIdentity,
+  nowMs = Date.now(),
+  allowUnknown = false,
+  probes: InterruptedTerminalizationProbes = {}
+): OrchestrationRunState | null {
+  const state = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  if (!state || state.terminal || !state.usage || state.usage.activeCalls <= 0) return state ?? null
+
+  const liveness = runLiveness(state, identityOf)
+  const orphanedReservation = hasOrphanedActiveReservation(state)
+  const staleLive =
+    liveness.working &&
+    Boolean(probes.lastWriteMs) &&
+    !runIsProducing(state, nowMs, probes.lastWriteMs!)
+  if (!orphanedReservation && liveness.working && !staleLive) return state
+  if (staleLive) {
+    const livePids = (state.agents ?? [])
+      .filter((agent, index) => agent.active !== false && liveness.agents[index]?.state === 'vivant')
+      .map((agent) => agent.pid)
+      .filter((pid): pid is number => typeof pid === 'number')
+    if (
+      livePids.length === 0 ||
+      !probes.terminatePid ||
+      !livePids.every((pid) => probes.terminatePid!(pid))
+    ) {
+      return state
+    }
+  }
+  if (!allowUnknown && hasUncertainActiveAgent(state, liveness)) return state
+  const interruptible =
+    orphanedReservation ||
+    staleLive ||
+    hasUnprovenEndedActiveAgent(state, liveness) ||
+    (allowUnknown && hasUncertainActiveAgent(state, liveness))
+  if (!interruptible) return state
+
+  const strandedCalls = state.usage.activeCalls
+  const limits = state.executionQuote?.limits
+  const totalReservation = limits
+    ? strandedTokenReservation(
+        limits.maxTotalTokens,
+        state.usage.totalTokens,
+        state.usage.startedCalls,
+        strandedCalls,
+        limits.maxProviderCalls
+      )
+    : 0
+  const freshReservation = limits
+    ? strandedTokenReservation(
+        limits.maxFreshTokens,
+        state.usage.freshTokens,
+        state.usage.startedCalls,
+        strandedCalls,
+        limits.maxProviderCalls
+      )
+    : 0
+  const terminal: OrchestrationRunState = {
+    ...state,
+    terminal: {
+      status: 'interrupted',
+      reason: orphanedReservation
+        ? INTERRUPTED_ORPHANED_RESERVATION_REASON
+        : staleLive
+          ? INTERRUPTED_STALE_HEARTBEAT_REASON
+          : INTERRUPTED_WITHOUT_EXIT_REASON,
+      decidedAt: nowMs
+    },
+    agents: state.agents?.map((agent) =>
+      agent.active === true ? { ...agent, active: false, reservationId: undefined } : agent
+    ),
+    usage: {
+      ...state.usage,
+      failedCalls: state.usage.failedCalls + strandedCalls,
+      activeCalls: 0,
+      activeReservationIds: [],
+      totalTokens: state.usage.totalTokens + totalReservation,
+      freshTokens: state.usage.freshTokens + freshReservation,
+      unpricedCalls: state.usage.unpricedCalls + strandedCalls,
+      unmeteredCalls: state.usage.unmeteredCalls + strandedCalls,
+      tokenCoverage: 'partial',
+      stoppedReason: orphanedReservation
+        ? INTERRUPTED_ORPHANED_RESERVATION_REASON
+        : staleLive
+          ? INTERRUPTED_STALE_HEARTBEAT_REASON
+          : INTERRUPTED_WITHOUT_EXIT_REASON
+    },
+    updatedAt: nowMs
+  }
+  saveOrchestrationState(root, terminal)
+  return terminal
 }
 
 export interface DetachedProviderSuccess {

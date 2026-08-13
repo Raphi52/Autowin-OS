@@ -106,10 +106,48 @@ describe('AgentPilot turn contract', () => {
     expect(bus.exec).toHaveBeenCalledTimes(1)
     expect(bus.exec).toHaveBeenCalledWith(
       'orchestrate',
-      { task: 'premier run' },
+      { task: 'premier run', rootTask: 'fais la tache' },
       'conv-unique',
       undefined,
       'turn-unique'
+    )
+  })
+
+  it('transporte le prompt utilisateur racine sans laisser le modele le reduire a un scout', async () => {
+    const rootTask =
+      'Scout les defauts du workflow puis corrige-les, prouve le rouge vers vert et publie un commit.'
+    const registry = {
+      send: vi.fn(async () => ({
+        text: '<cmd>{"name":"orchestrate","args":{"task":"liste les defauts","phase":"scout"}}</cmd>',
+        provider: 'codex'
+      })),
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'run' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { status: 'succeeded', valid: true, gateBlocked: false }
+      })
+    }
+
+    await new AgentPilot(
+      registry as never,
+      { getBinding: () => ({ provider: 'codex', model: 'gpt-test' }) } as never,
+      bus as never
+    ).chat([{ role: 'user', content: rootTask }], () => undefined, undefined, 2, 'conv-root')
+
+    expect(bus.exec).toHaveBeenCalledWith(
+      'orchestrate',
+      { task: 'liste les defauts', phase: 'scout', rootTask },
+      'conv-root'
     )
   })
 
@@ -943,25 +981,34 @@ describe('AgentPilot turn contract', () => {
     expect(bus.exec).toHaveBeenNthCalledWith(
       1,
       'orchestrate',
-      { task: 'corrige package.json' },
+      {
+        task: 'corrige package.json',
+        rootTask: 'Analyse package.json puis corrige ses scripts obsoletes.'
+      },
       undefined
     )
     expect(bus.exec).toHaveBeenNthCalledWith(
       2,
       'orchestrate',
-      { task: 'corrige package.json' },
+      { task: 'corrige package.json', rootTask: "Documente l'API dans README.md" },
       undefined
     )
     expect(bus.exec).toHaveBeenNthCalledWith(
       3,
       'orchestrate',
-      { task: 'corrige package.json' },
+      {
+        task: 'corrige package.json',
+        rootTask: 'Analyse package.json sans le modifier puis publie une release.'
+      },
       undefined
     )
     expect(bus.exec).toHaveBeenNthCalledWith(
       4,
       'orchestrate',
-      { task: 'corrige package.json' },
+      {
+        task: 'corrige package.json',
+        rootTask: 'Analyse package.json sans rien modifier puis ecrase le script obsolete.'
+      },
       undefined
     )
   })

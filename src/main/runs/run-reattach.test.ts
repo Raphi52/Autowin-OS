@@ -8,6 +8,7 @@ import {
   preparePersistedRunForRelaunch,
   resumeActionFor,
   runLiveness,
+  terminalizeInterruptedPersistedRun,
   waitUntilRunCanResume
 } from './run-reattach'
 import { loadOrchestrationStates, saveOrchestrationState } from './orchestration-state'
@@ -1796,8 +1797,21 @@ describe('que faire du run au démarrage', () => {
     expect(resumeActionFor(state, mort)).toBe('bloquer')
   })
 
-  it('un run SANS agent connu se relance — rien ne prouve qu’il tourne', () => {
+  it('un run sans agent et sans réservation active peut se relancer', () => {
     expect(resumeActionFor({ agents: [], phaseOutputs: [] }, vivant)).toBe('relancer')
+  })
+
+  it('une réservation active sans aucun agent identifiable est bloquée, jamais relancée', () => {
+    expect(
+      resumeActionFor(
+        {
+          agents: [],
+          phaseOutputs: [],
+          usage: { activeCalls: 1 }
+        },
+        vivant
+      )
+    ).toBe('bloquer')
   })
 
   it('aucun run à reprendre → on ne fait rien', () => {
@@ -1809,6 +1823,97 @@ describe('réconciliation persistée avant relance', () => {
   const roots: string[] = []
   afterEach(() => {
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  })
+
+  it('terminalise et solde une réservation historique sans agent identifiable', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-resume-orphan-reservation-'))
+    roots.push(root)
+    const quote = compileExecutionQuote('corrige puis teste')
+    saveOrchestrationState(root, {
+      runId: 'run-orphan-reservation',
+      task: 'corrige puis teste',
+      phaseOutputs: [],
+      executionQuote: quote,
+      usage: {
+        quoteId: quote.id,
+        startedAgents: 1,
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      },
+      agents: [],
+      startedAt: 1,
+      updatedAt: 2
+    })
+
+    const terminal = terminalizeInterruptedPersistedRun(
+      root,
+      'run-orphan-reservation',
+      () => undefined,
+      9
+    )
+
+    expect(terminal?.terminal).toMatchObject({ status: 'interrupted' })
+    expect(terminal?.usage).toMatchObject({
+      activeCalls: 0,
+      failedCalls: 1,
+      unpricedCalls: 1,
+      unmeteredCalls: 1,
+      tokenCoverage: 'partial'
+    })
+    expect(resumeActionFor(terminal, () => undefined)).toBe('ignorer')
+  })
+
+  it('un PID historique inactif ne masque pas une réservation orpheline', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-resume-inactive-pid-'))
+    roots.push(root)
+    const quote = compileExecutionQuote('corrige puis teste')
+    saveOrchestrationState(root, {
+      runId: 'run-inactive-pid-reservation',
+      task: 'corrige puis teste',
+      phaseOutputs: [],
+      executionQuote: quote,
+      usage: {
+        quoteId: quote.id,
+        startedAgents: 1,
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      },
+      agents: [{ token: 'historique', active: false, pid: 42 }],
+      startedAt: 1,
+      updatedAt: 2
+    })
+
+    const terminal = terminalizeInterruptedPersistedRun(
+      root,
+      'run-inactive-pid-reservation',
+      () => 'processus-sans-rapport',
+      9
+    )
+
+    expect(terminal?.terminal?.status).toBe('interrupted')
+    expect(terminal?.usage?.activeCalls).toBe(0)
   })
 
   it('classe l’appel actif comme échoué seulement après preuve que son PID est mort', () => {
@@ -1866,7 +1971,7 @@ describe('réconciliation persistée avant relance', () => {
     expect(reconciled?.updatedAt).toBe(9)
   })
 
-  it('conserve l’appel actif si le PID est mort sans preuve terminale récupérable', () => {
+  it('terminalise sans retry un appel dont le PID est mort sans preuve récupérable', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-resume-dead-unproven-'))
     roots.push(root)
     saveOrchestrationState(root, {
@@ -1901,8 +2006,84 @@ describe('réconciliation persistée avant relance', () => {
       9
     )
 
-    expect(reconciled?.usage).toMatchObject({ activeCalls: 1, failedCalls: 0 })
-    expect(reconciled?.updatedAt).toBe(2)
+    expect(reconciled?.terminal).toEqual({
+      status: 'interrupted',
+      reason: 'PID provider disparu sans preuve de sortie — relance automatique interdite',
+      decidedAt: 9
+    })
+    expect(reconciled?.usage).toMatchObject({
+      activeCalls: 0,
+      failedCalls: 1,
+      unpricedCalls: 1,
+      unmeteredCalls: 1,
+      tokenCoverage: 'partial'
+    })
+    expect(reconciled?.agents?.[0]).toMatchObject({ active: false })
+    expect(reconciled?.updatedAt).toBe(9)
+    expect(resumeActionFor(reconciled, () => undefined)).toBe('ignorer')
+
+    const secondPass = preparePersistedRunForRelaunch(
+      root,
+      'run-dead-unproven-provider',
+      () => undefined,
+      12
+    )
+    expect(secondPass).toEqual(reconciled)
+  })
+
+  it('termine le PID identifie mais bloque lorsque son journal a expire', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-resume-stale-live-'))
+    roots.push(root)
+    saveOrchestrationState(root, {
+      runId: 'run-stale-live-provider',
+      task: 'ne jamais attendre indefiniment',
+      phaseOutputs: [],
+      usage: {
+        quoteId: 'quote-1',
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      },
+      agents: [
+        {
+          token: 'agent-1',
+          pid: 42,
+          identity: 'identite-live',
+          active: true,
+          journalPath: join(root, 'agent.jsonl')
+        }
+      ],
+      startedAt: 1,
+      updatedAt: 2
+    })
+    let terminatedPid: number | undefined
+    const terminatePid = (pid: number): boolean => {
+      terminatedPid = pid
+      return true
+    }
+
+    const reconciled = terminalizeInterruptedPersistedRun(
+      root,
+      'run-stale-live-provider',
+      () => 'identite-live',
+      20 * 60_000,
+      false,
+      { lastWriteMs: () => 1, terminatePid }
+    )
+
+    expect(terminatedPid).toBe(42)
+    expect(reconciled?.terminal?.status).toBe('interrupted')
+    expect(reconciled?.usage?.activeCalls).toBe(0)
   })
 
   it('ne relance jamais un exit=0 dont le résultat terminal est non décodable', async () => {
@@ -2342,10 +2523,18 @@ describe('câblage — le démarrage consulte la garde avant de relancer', () =>
     expect(source).not.toContain('const resumableRun = os.resumableOrchestration()')
   })
 
-  it('la reprise au démarrage passe par resumeActionFor', () => {
-    expect(source).toContain(
-      'const reprise = resumeActionFor(resumableRun, defaultProcessIdentity)'
+  it('terminalise les PID morts avant de décider quels tours restent streaming', () => {
+    const reconciliation = source.indexOf(
+      'os.terminalizeAbandonedOrchestrations('
     )
+    const hydration = source.indexOf('const resumableTurnIds = new Set([')
+    expect(reconciliation).toBeGreaterThanOrEqual(0)
+    expect(hydration).toBeGreaterThan(reconciliation)
+  })
+
+  it('la reprise au démarrage passe par resumeActionFor', () => {
+    expect(source).toContain('const reprise = resumeActionFor(')
+    expect(source).toContain('persistedJournalLastWriteMs')
   })
 
   it('elle ne relance QUE si le verdict est « relancer »', () => {

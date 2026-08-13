@@ -49,13 +49,6 @@ describe('AgentPilot chat streaming', () => {
      * n'était donc plus exercé du tout. La garantie testée, elle, est inchangée.
      */
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
-      // Message MUTATION deliberement. Ce test visait « scout la vue Chat » et il est devenu rouge le
-      // 2026-08-12, quand `classifyMutationConfidence` a appris a reconnaitre un message COMMENCANT
-      // par « scout » (sans slash) comme lecture seule — pour les prompts de campagne. Le tour
-      // devenait donc `commandFreeReadOnly`, et la commande `remember` etait bloquee AVANT le bus :
-      // le chemin teste ici (ne pas repayer une generation pour commenter un refus) n'etait plus
-      // atteint. Le fixture etait un dommage collateral d'un comportement legitime, pas un bug de
-      // production — le garde lecture-seule a son propre test, juste en dessous.
       [{ role: 'user', content: 'ajoute une note de contrainte dans la memoire' }],
       (event) => events.push(event),
       undefined,
@@ -209,7 +202,7 @@ describe('AgentPilot chat streaming', () => {
           gateBlocked: false,
           reused: false,
           runPath: 'C:/runs/conv/build-settings-workspace/RUN.md',
-          result: 'Le worker indique encore RUN open et recommande de lancer judge.'
+          result: 'Tests cibles 11/11 verts.\nNext: commit final puis livraison.'
         }
       })
     }
@@ -229,8 +222,9 @@ describe('AgentPilot chat streaming', () => {
     const done = events.find((event) => event.kind === 'done')
     expect(done?.text).toContain('Workflow terminé')
     expect(done?.text).toContain('aucune autre orchestration')
-    expect(done?.text).not.toContain('RUN open')
-    expect(done?.text).not.toContain('lancer judge')
+    expect(done?.text).toContain('Tests cibles 11/11 verts.')
+    expect(done?.text).not.toContain('Next:')
+    expect(done?.text).not.toContain('commit final')
   })
 
   it('ne forge pas une clôture verte depuis un outcome incomplet', async () => {

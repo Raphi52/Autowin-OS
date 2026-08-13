@@ -21,7 +21,7 @@ import { CONSTITUTION } from './constitution'
 import { routeSkillRequest } from './skill-routing'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { startTurnTimer } from './turn-timing'
-import { classifyMutationConfidence } from './orchestrator'
+import { classifyMutationConfidence } from './task-mutation-classifier'
 import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
@@ -163,6 +163,24 @@ export interface RecoveredPilotActionResult {
   ok: boolean
   data?: unknown
   attachments?: NonNullable<Message['attachments']>
+}
+
+/** Réussite visible de l'action, distincte de la seule réussite du transport IPC. */
+export function commandResultSucceeded(result: CommandResult): boolean {
+  if (!result.ok) return false
+  if (!result.data || typeof result.data !== 'object') return true
+  const data = result.data as Record<string, unknown>
+  if (data.ok === false || data.valid === false || data.gateBlocked === true) return false
+  if (data.status === 'failed' || data.status === 'red') return false
+  return typeof data.exitCode !== 'number' || data.exitCode === 0
+}
+
+function failedOrchestrationOutcome(error: unknown): Record<string, unknown> {
+  return {
+    status: 'failed',
+    valid: false,
+    error: String(error ?? 'raison non rapportee')
+  }
 }
 
 /** Barrière durable du chat direct, publiée par l'adaptateur avant son spawn. */
@@ -442,7 +460,7 @@ export class AgentPilot {
         kind: 'result',
         actionId,
         name: 'orchestrate',
-        ok: result.ok,
+        ok: commandResultSucceeded(result),
         data: result.ok ? result.data : result.error
       })
       // Le /skill vient déjà de consommer l'unique orchestration autorisée pour ce tour. Une
@@ -470,7 +488,7 @@ export class AgentPilot {
           ) + directiveNotice,
         outcome: result.ok
           ? ((result.data as Record<string, unknown> | undefined) ?? undefined)
-          : undefined,
+          : failedOrchestrationOutcome(result.error),
         usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }
       })
       return
@@ -1015,6 +1033,10 @@ export class AgentPilot {
         }
         if (token.name === 'orchestrate') orchestrationIssued = true
         signal?.throwIfAborted()
+        const authoritativeArgs =
+          token.name === 'orchestrate' && latestUserMessage
+            ? { ...token.args, rootTask: latestUserMessage }
+            : token.args
         const r: CommandResult = settledAction
           ? settledAction.ok
             ? {
@@ -1031,14 +1053,14 @@ export class AgentPilot {
                   ? { attachments: settledAction.attachments }
                   : {})
               }
-          : await execCommand(token.name, token.args)
+          : await execCommand(token.name, authoritativeArgs)
         if (r.attachments?.length) commandAttachments.push(...r.attachments)
         if (!settledAction)
           emit({
             kind: 'result',
             actionId,
             name: token.name,
-            ok: r.ok,
+            ok: commandResultSucceeded(r),
             data: r.ok ? r.data : r.error,
             ...(r.attachments?.length ? { attachments: r.attachments } : {})
           })
@@ -1048,7 +1070,9 @@ export class AgentPilot {
         // (« RUN open, lance judge ») alors que le gate venait de fermer et publier le run. On clôt
         // donc mécaniquement le tour sur le résultat structuré, comme le chemin `/skill` explicite.
         if (token.name === 'orchestrate') {
-          const outcome = r.ok ? (r.data as OrchestrationOutcome | undefined) : undefined
+          const outcome = r.ok
+            ? (r.data as OrchestrationOutcome | undefined)
+            : failedOrchestrationOutcome(r.error)
           const deliveryClosed = r.ok && isDeliveredOrchestrationOutcome(outcome ?? {})
           const closureNotice = deliveryClosed
             ? 'Clôture Autowin : gate validé, RUN fermé green ; aucune autre orchestration ni aucun second judge ne sont nécessaires dans ce tour.'
@@ -1060,14 +1084,19 @@ export class AgentPilot {
               outcome,
               r.ok ? undefined : String(r.error ?? '')
             )}\n\n${closureNotice}`,
-            outcome: r.ok
-              ? ((r.data as Record<string, unknown> | undefined) ?? undefined)
-              : undefined,
+            outcome: outcome as Record<string, unknown> | undefined,
             usage
           })
           return
         }
-        results.push(`${token.name} → ${r.ok ? JSON.stringify(r.data) : 'ERREUR ' + r.error}`)
+        const commandSucceeded = commandResultSucceeded(r)
+        results.push(
+          `${token.name} → ${
+            commandSucceeded
+              ? JSON.stringify(r.data)
+              : 'ERREUR ' + (r.ok ? JSON.stringify(r.data) : r.error)
+          }`
+        )
         tokenIndex += 1
       }
 

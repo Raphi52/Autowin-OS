@@ -16,7 +16,9 @@ describe('ExecutionQuote', () => {
         maxTotalTokens: 6_000_000,
         // frame + build + juge, puis une reparation et son re-jugement autorises par maxRecoveries=1.
         maxAgents: 5,
-        maxConcurrency: 3
+        maxConcurrency: 3,
+        maxRecoveries: 1,
+        spendEnforcement: 'metering-only'
       }
     })
   })
@@ -34,7 +36,8 @@ describe('ExecutionQuote', () => {
       maxFreshTokens: 2_000_000,
       maxTotalTokens: 15_000_000,
       maxConcurrency: 4,
-      maxRecoveries: 1
+      maxRecoveries: 1,
+      spendEnforcement: 'metering-only'
     })
   })
 

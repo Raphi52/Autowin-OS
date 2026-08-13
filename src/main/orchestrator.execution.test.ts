@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { CostAggregator } from './dashboards/cost'
-import { bindingDePhaseValide, Orchestrator } from './orchestrator'
+import { bindingDePhaseValide, instantaneAssaini, Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
 import type {
   ExecutionEvidence,
@@ -12,6 +12,7 @@ import type {
   StreamChunk
 } from './providers/types'
 import { RoleModelConfig } from './roles'
+import { compileExecutionQuote } from './execution-quote'
 import { TrustLedger } from './trust/ledger'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
@@ -616,8 +617,10 @@ describe('Orchestrator execution contract', () => {
     }
   })
 
-  it('B5 — répare UNE fois une mutation bloquée puis clôture vert', async () => {
-    // exec#1 sans preuve → bloqué ; réparation exec#2 avec mutation+vérification → vert.
+  it('clôture rouge une mutation sans preuve au lieu de relancer implicitement — en mode bloquant', async () => {
+    // En mesure seule (défaut, décision du 12/08), la réparation B5 rejouerait le build avec les
+    // raisons du gate — comportement voulu (« 1 prompt = 1 réussite »). Le refus de relance testé
+    // ici est la posture du mode `blocking`.
     let execCount = 0
     let providerCalls = 0
     const provider: ProviderAdapter = {
@@ -664,16 +667,18 @@ describe('Orchestrator execution contract', () => {
       cost: new CostAggregator(),
       trust: new TrustLedger(),
       executionWorkspace: 'C:\\workspace',
-      worktrees: makeTestWorktrees('C:\\workspace')
+      worktrees: makeTestWorktrees('C:\\workspace'),
+      currentExecutionQuote: () =>
+        compileExecutionQuote('corrige le bug du sélecteur', { spendEnforcement: 'blocking' })
     })
 
     const result = await orchestrator.run('corrige le bug du sélecteur')
 
-    expect(result.valid).toBe(true)
-    expect(result.gateBlocked).toBe(false)
-    expect(execCount).toBe(2) // une réparation a bien eu lieu
+    expect(result.valid).toBe(false)
+    expect(result.gateBlocked).toBe(true)
+    expect(execCount).toBe(1)
     // Le pré-gate local bloque la tentative sans preuve AVANT de payer un premier juge.
-    expect(providerCalls).toBe(3) // build rouge + réparation + juge final
+    expect(providerCalls).toBe(1)
   })
 
   it('F3 (strict) — une mutation exige une VÉRIFICATION, pas une simple inspection', async () => {
@@ -736,6 +741,34 @@ describe('instantané de rôles — opposable tant que sa cible existe', () => {
     expect(r.note).toBeUndefined()
   })
 
+  it('rien à assainir → l’objet D’ORIGINE, pas une copie (identité préservée)', () => {
+    // Un contrat existant vérifie que les points de reprise portent le MÊME instantané PAR IDENTITÉ.
+    // Ma première version reconstruisait l’objet à chaque fois : contrat cassé, et copie gratuite
+    // dans le cas courant. Trouvé par la suite complète, pas par mes propres tests.
+    const instantane = {
+      roles: { orchestrator: claude, subagent: claude, judge: claude, scout: claude },
+      phaseFanOut: { build: [claude] },
+      judgeFanOut: [claude]
+    } as never
+    const r = instantaneAssaini(instantane, { orchestrator: claude, subagent: claude, judge: claude, scout: claude } as never, ['claude'])
+    expect(r.instantane).toBe(instantane)
+    expect(r.notes).toEqual([])
+  })
+
+  it('un membre de fan-out injoignable est RETIRÉ, pas remplacé', () => {
+    // Sa place n’a pas d’équivalent dans la configuration courante : un panel amputé vaut mieux
+    // qu’un panel qui jette « Provider inconnu ».
+    const instantane = {
+      roles: { orchestrator: claude, subagent: claude, judge: claude, scout: claude },
+      phaseFanOut: { build: [claude, codex] },
+      judgeFanOut: [codex]
+    } as never
+    const r = instantaneAssaini(instantane, { orchestrator: claude, subagent: claude, judge: claude, scout: claude } as never, ['claude'])
+    expect(r.instantane.phaseFanOut.build).toEqual([claude])
+    expect(r.instantane.judgeFanOut).toEqual([])
+    expect(r.notes.join(' ')).toMatch(/fan-out/)
+  })
+
   it('aucun instantané → la config courante, sans note', () => {
     const r = bindingDePhaseValide(undefined, claude, ['claude'])
     expect(r.binding).toEqual(claude)
@@ -750,5 +783,61 @@ describe('instantané de rôles — opposable tant que sa cible existe', () => {
     )
     expect(r.note).toMatch(/instantané du run/)
     expect(r.binding.model).toBe('claude-sonnet-5')
+  })
+})
+
+describe('instantané divergent — OBSERVÉ sur le vrai chemin de run()', () => {
+  // Les tests ci-dessus couvrent la fonction PURE. Celui-ci exerce l'orchestrateur REEL : c'est le
+  // câblage qui n'était pas observé, et le cas divergent ne se produit pas sur une configuration
+  // saine — donc il ne s'observerait jamais en usage normal sans le provoquer.
+  it('un provider d’instantané INCONNU du registre est abandonné, et la note SORT dans le flux', async () => {
+    const provider = new CapturingProvider()
+    const roles = new RoleModelConfig({
+      subagent: { provider: provider.id },
+      judge: { provider: provider.id }
+    })
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles,
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: process.cwd()
+    })
+
+    const deltas: string[] = []
+    // Instantané dont le juge pointe sur un provider JAMAIS enregistré : exactement le cas vécu
+    // (instantané sur codex, codex absent de la configuration courante).
+    const instantane = {
+      roles: {
+        orchestrator: { provider: provider.id },
+        subagent: { provider: provider.id },
+        judge: { provider: 'fantome', model: 'modele-disparu' },
+        scout: { provider: provider.id }
+      },
+      phaseFanOut: {},
+      judgeFanOut: []
+    } as never
+
+    await orchestrator.run(
+      'analyse le projet en lecture seule sans le modifier',
+      undefined,
+      undefined,
+      (_step, delta) => deltas.push(delta),
+      undefined,
+      '',
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      instantane
+    )
+
+    const note = deltas.find((d) => d.includes('[binding]'))
+    expect(note, `aucune note [binding] dans ${deltas.length} deltas`).toBeDefined()
+    expect(note).toMatch(/instantané abandonné/)
+    expect(note).toContain('fantome')
+    expect(note).toContain(provider.id)
   })
 })

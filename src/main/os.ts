@@ -96,6 +96,8 @@ import {
 } from './workflow-selection'
 import {
   preparePersistedRunForRelaunch,
+  terminalizeInterruptedPersistedRun,
+  type InterruptedTerminalizationProbes,
   type ProcessIdentity,
   type RecoveredDetachedUsageSettlement
 } from './runs/run-reattach'
@@ -897,6 +899,43 @@ export class AutowinOS {
   /** Tous les runs éligibles à la reprise automatique au démarrage, dans leur ordre de priorité. */
   resumableOrchestrations(): OrchestrationRunState[] {
     return pickOrchestrationsToResume(loadOrchestrationStates(this.orchestrationStateRoot))
+  }
+
+  /** Ferme durablement les appels dont le PID a disparu, sans jamais les rejouer. */
+  terminalizeAbandonedOrchestrations(
+    identityOf: ProcessIdentity,
+    allowUnknown = false,
+    nowMs = Date.now(),
+    probes: InterruptedTerminalizationProbes = {}
+  ): OrchestrationRunState[] {
+    return loadOrchestrationStates(this.orchestrationStateRoot).map(
+      (state) =>
+        terminalizeInterruptedPersistedRun(
+          this.orchestrationStateRoot,
+          state.runId,
+          identityOf,
+          nowMs,
+          allowUnknown,
+          probes
+        ) ?? state
+    )
+  }
+
+  terminalizeAbandonedOrchestration(
+    runId: string,
+    identityOf: ProcessIdentity,
+    allowUnknown = false,
+    nowMs = Date.now(),
+    probes: InterruptedTerminalizationProbes = {}
+  ): OrchestrationRunState | null {
+    return terminalizeInterruptedPersistedRun(
+      this.orchestrationStateRoot,
+      runId,
+      identityOf,
+      nowMs,
+      allowUnknown,
+      probes
+    )
   }
 
   /** Interdit durablement de relancer le pipeline doublon, tout en gardant son agent drainable. */

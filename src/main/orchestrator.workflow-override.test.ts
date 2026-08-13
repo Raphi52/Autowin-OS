@@ -85,6 +85,22 @@ class RedPuisVertParModele extends RedPuisVert {
   }
 }
 
+/** Un juge qui ne valide JAMAIS : le cas où seule la borne arrête la boucle. */
+class ToujoursRouge extends Recorder {
+  readonly phases: string[] = []
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const phase = /SKILL\s+(scout|frame|terrain|build|clean|judge)/.exec(options.system ?? '')?.[1]
+    if (phase) this.phases.push(phase)
+    const result = yield* super.send(messages, options)
+    if (phase !== 'judge' || options.execution?.sandbox !== 'read-only') return result
+    return { ...result, text: 'DEFAUT: toujours le meme defaut' }
+  }
+}
+
 function makeOrchestrator(
   provider: ProviderAdapter,
   workflow?: WorkflowRunOverride,
@@ -642,5 +658,48 @@ describe('le quorum composé décide du verdict', () => {
   it('un quorum de 3 exige l’unanimité — le dissident fait échouer', async () => {
     // C'est là que le réglage composé se VOIT : même jury, même dissident, verdict inverse.
     expect((await lancer(3)).valid).toBe(false)
+  })
+})
+
+describe('mode bloquant : aucune reprise automatique sans nouveau tour humain', () => {
+  // Posture introduite par main (2329a77) puis PORTÉE PAR LA DOCTRINE : en `blocking` le plafond
+  // est un contrat et l'arête rouge ne repaie rien seule ; en mesure seule (défaut, décision du
+  // 12/08) la réparation bornée se joue automatiquement — couverte par les tests ci-dessus.
+  const grapheReprise = {
+    entry: 'build',
+    nodes: [
+      { id: 'build', phase: 'build' as const },
+      { id: 'judge', phase: 'judge' as const }
+    ],
+    edges: [
+      { from: 'build', to: 'judge', when: 'always' as const },
+      { from: 'judge', to: 'build', when: 'red' as const, maxTraversals: 2 }
+    ]
+  }
+
+  it('un graphe explicitement choisi ne reserve AUCUNE reprise en bloquant', async () => {
+    const quote = compileExecutionQuote('corrige le sommaire du README', {
+      spendEnforcement: 'blocking'
+    })
+    await expect(
+      makeOrchestrator(new ToujoursRouge(), { explicit: true, graph: grapheReprise }, quote).run(
+        'corrige le sommaire du README'
+      )
+    ).resolves.toBeDefined()
+    expect(quote.limits.maxRecoveries).toBe(0)
+  })
+
+  it('un juge toujours rouge s’arrete au premier verdict, avec la raison affichee', async () => {
+    const provider = new ToujoursRouge()
+    const quote = compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
+    const result = await makeOrchestrator(
+      provider,
+      { explicit: true, graph: grapheReprise },
+      quote
+    ).run('corrige le bug')
+
+    expect(result.gateBlocked).toBe(true)
+    expect(result.gateReasons.at(-1)).toMatch(/reprise automatique.*desactivee/i)
+    expect(provider.phases).toEqual(['build', 'judge'])
   })
 })

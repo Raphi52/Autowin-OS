@@ -26,9 +26,13 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     const runs = await listConvRuns('conv-9', [], root)
     expect(runs).toHaveLength(1)
     expect(runs[0].summary.status).toBe('open')
-    // Plus AUCUNE case auto-remplie : le gabarit posait « le juge valide … », qui n'était pas un
-    // critère du travail mais le report du verdict — et faisait afficher « DoD 0/1 » à tout run rouge.
-    expect(runs[0].summary.dodTotal).toBe(0)
+    // Plus de case-VERDICT fantôme (« le juge valide … ») ; les cases présentes sont DÉRIVÉES des
+    // obligations falsifiables du prompt (root-execution-contract) : ici mutation + tests.
+    expect(runs[0].summary.dodTotal).toBe(2)
+    expect(md).toContain('- [ ] Mutation demandee produite avec une preuve executable')
+    // Une demande de lecture seule, elle, garde une DoD vide.
+    const lecture = createConvRun('conv-9-ro', 'Explique les écarts de facturation', root, () => 1100)
+    expect(readFileSync(lecture, 'utf8')).not.toContain('- [ ]')
   })
 
   it('closeConvRun preserve les quatre statuts, sans plus cocher de pseudo-DoD', async () => {
@@ -36,10 +40,9 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     closeConvRun(g, 'green', 'Juge: validé.')
     const green = (await listConvRuns('conv-9', [], root)).find((r) => r.path === g)!
     expect(green.summary.status).toBe('green')
-    // Le cochage auto est retiré AVEC la case : il cochait un pseudo-critère au moment même où le
-    // statut le disait déjà. Une DoD réelle n'est jamais cochée par la clôture — c'est celui qui
-    // produit la preuve qui la coche, sinon la case ne prouve rien.
-    expect(green.summary.dodTotal).toBe(0)
+    // Le cochage n'est jamais un pseudo-critère de verdict : une case dérivée ne se coche qu'avec
+    // une PREUVE d'exécution transmise à la clôture — ici aucune, donc rien n'est coché.
+    expect(green.summary.dodTotal).toBe(1)
     expect(green.summary.dodChecked).toBe(0)
 
     const r = createConvRun('conv-9', 'tâche rouge', root, () => 3000)

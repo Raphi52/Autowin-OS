@@ -16,6 +16,8 @@ import { scanRuns, type RunEntry } from '../dashboards/runs-scan'
 import type { OrchestrationStep } from '../orchestrator'
 import { ensureAutowinAppData } from '../app-data'
 import type { RunClosureStatus } from '../../shared/run-execution'
+import { rootDodLabels, rootRequirementChecks } from '../root-execution-contract'
+import type { ExecutionEvidence } from '../providers/types'
 
 /**
  * RUN.md PAR CONVERSATION — chaque tâche/orchestration lancée depuis une conversation
@@ -68,6 +70,7 @@ export function createConvRun(
   mkdirSync(dir, { recursive: true })
   const path = join(dir, 'RUN.md')
   const date = new Date(now()).toISOString().slice(0, 10)
+  const dod = rootDodLabels(task).map((label) => `- [ ] ${label}`).join('\n')
   writeFileSync(
     path,
     `status: open
@@ -79,8 +82,7 @@ signal: verdict du juge + gate déterministe (orchestration in-app)
 ${task}
 
 **Critere de succes (DoD cochable)** :
-<!-- Aucune case n'est pre-remplie : un critere de succes se pose ici par l'auteur du prompt ou par la
-     phase terrain, comme une condition de SORTIE verifiable avec sa preuve. -->
+${dod || '<!-- Aucune obligation falsifiable explicite detectee dans ce besoin. -->'}
 
 ## Contraintes
 <!-- bornes de la solution (HARD/SOFT), source + conséquence si violée -->
@@ -155,11 +157,20 @@ function extractSection(md: string, name: string): string {
  */
 export function populateConvRunSections(
   runPath: string,
-  phaseOutputs: { phase: string; text: string }[]
+  phaseOutputs: { phase: string; text: string; executionEvidence?: ExecutionEvidence[] }[],
+  proofs: { publishedCommitSha?: string } = {}
 ): void {
   if (!phaseOutputs?.length) return
   try {
     let md = readFileSync(runPath, 'utf8')
+    const rootTask = md.match(/## Besoin\s*\n([\s\S]*?)\n\s*\*\*Critere de succes/i)?.[1]?.trim() ?? ''
+    for (const check of rootRequirementChecks(rootTask, {
+      phases: phaseOutputs,
+      publishedCommitSha: proofs.publishedCommitSha
+    })) {
+      if (!check.checked) continue
+      md = md.replace(`- [ ] ${check.label}`, `- [x] ${check.label}`)
+    }
     for (const section of ['Contraintes', 'Options', 'SOP']) {
       // le contenu le plus long parmi les phases = le plus complet (résiste à une phase qui dérive)
       const best = phaseOutputs

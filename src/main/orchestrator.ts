@@ -67,6 +67,17 @@ import {
   type IndependentLearningAttestation
 } from './outcome-learning-proposal'
 import { PIPELINE_PHASES, type PipelinePhase } from './skill-pipeline'
+import {
+  ROOT_DOD,
+  rootExecutionRequirements,
+  rootRequirementChecks
+} from './root-execution-contract'
+import { isMutationTask } from './task-mutation-classifier'
+export {
+  classifyMutationConfidence,
+  isMutationTask,
+  type MutationConfidence
+} from './task-mutation-classifier'
 import { routeSkillRequest } from './skill-routing'
 import { combinePhaseInstruction, type PhaseInstructionOverride } from './workflow-instruction'
 import {
@@ -128,6 +139,59 @@ function bindingDeRepliPourPhase(
  * authentifié — cette dernière vérification est asynchrone et coûteuse ici. Un provider enregistré
  * mais déconnecté échouera donc encore, mais son message nomme désormais la divergence.
  */
+/**
+ * ASSAINIT l'instantané À L'ADMISSION : tout rôle pointant sur un provider non enregistré retombe sur
+ * la configuration courante.
+ *
+ * Corriger phase par phase ne suffisait PAS, et c'est un test du vrai `run()` qui l'a montré — le
+ * test de la fonction pure, lui, passait et donnait une fausse confiance. L'instantané est consommé
+ * par PLUSIEURS chemins (fan-out de phase, fan-out de juge, phase séquentielle) ; le premier qui
+ * atteignait le registre jetait `Provider inconnu: <x>` avant toute validation. Un seul point
+ * d'entrée les couvre tous.
+ */
+export function instantaneAssaini(
+  instantane: OrchestrationRuntimeSnapshot,
+  rolesCourants: Record<Role, RoleBinding>,
+  providersDisponibles: readonly string[]
+): { instantane: OrchestrationRuntimeSnapshot; notes: string[] } {
+  const notes: string[] = []
+  const disponible = (binding: RoleBinding): boolean =>
+    providersDisponibles.includes(binding.provider)
+  const roles = { ...instantane.roles }
+  for (const [role, binding] of Object.entries(instantane.roles) as [Role, RoleBinding][]) {
+    if (disponible(binding)) continue
+    roles[role] = rolesCourants[role]
+    notes.push(
+      `instantané abandonné pour ${role} : ${binding.provider} n'est plus disponible — ` +
+        `repli sur la configuration courante (${rolesCourants[role].provider})`
+    )
+  }
+  // Les fan-outs portent des bindings INDÉPENDANTS des rôles : un membre injoignable ferait tomber
+  // tout le fan-out. On RETIRE le membre plutôt que de le remplacer — sa place n'a pas d'équivalent
+  // dans la configuration courante, et un panel amputé vaut mieux qu'un panel qui jette.
+  const filtrer = (membres: readonly RoleBinding[], ou: string): RoleBinding[] => {
+    const gardes = membres.filter(disponible)
+    if (gardes.length !== membres.length)
+      notes.push(
+        `${membres.length - gardes.length} membre(s) du fan-out ${ou} retiré(s) : provider absent du registre`
+      )
+    return gardes
+  }
+  const phaseFanOut = Object.fromEntries(
+    Object.entries(instantane.phaseFanOut).map(([phase, membres]) => [
+      phase,
+      filtrer(membres ?? [], phase)
+    ])
+  )
+  const judgeFanOut = filtrer(instantane.judgeFanOut, 'juge')
+  // RIEN à assainir → on rend l'objet D'ORIGINE, pas une copie identique. Un contrat existant vérifie
+  // que les points de reprise portent le MÊME instantané par identité
+  // (`orchestrator.provider-identity.test.ts` : « execute tout le run avec le snapshot persiste ») —
+  // reconstruire sans raison le cassait, et c'était une copie gratuite dans le cas courant.
+  if (notes.length === 0) return { instantane, notes }
+  return { instantane: { ...instantane, roles, phaseFanOut, judgeFanOut }, notes }
+}
+
 export function bindingDePhaseValide(
   instantane: RoleBinding | undefined,
   courant: RoleBinding,
@@ -197,8 +261,11 @@ export function lireVerdictJuge(text: string): boolean {
 }
 
 /**
- * Le retour judge rouge → build est exécuté par la boucle de réparation enrichie du moteur, pas par
- * le marcheur générique. Le retirer ici donne au devis et à l'exécution la même topologie effective.
+ * Retire du parcours du marcheur le SEUL retour judge→build : il est joué en aval par la boucle de
+ * réparation B5, qui renourrit le build des raisons du gate. Les AUTRES arêtes rouges restent :
+ * elles portent le fail-closed d'un juge intermédiaire (rouge → chemin de repli, jamais l'arête
+ * verte) — les retirer toutes faisait franchir l'arête verte à un juge muet ou en panne (mesuré :
+ * 3 tests fail-closed rouges sur main au commit 2329a77).
  */
 function sansRetourReparationJuge(graph: WorkflowGraph): WorkflowGraph {
   return {
@@ -833,14 +900,6 @@ export interface RunCloser {
   }): Promise<void>
 }
 
-const MUTATION_STEM =
-  'ajout|add|modifi|chang|corrig|fix|cre|create|implement|refactor|supprim|remove|renomm|rename|update|build|ger|ecri|write|edit|patch|apply|delete|move|remplac|configur|repar|nettoi|deplac|mets|met|fai'
-const MUTATION_TASK = new RegExp(`\\b(?:${MUTATION_STEM})\\w*`, 'i')
-const NEGATED_MUTATION = new RegExp(
-  `\\b(?:sans(?:\\s+rien)?\\s+(?:\\w+\\s+){0,2}|n['e]?\\s*(?:\\w+\\s+){0,2})(?:${MUTATION_STEM})\\w*(?:\\s+pas)?`,
-  'gi'
-)
-
 /** B4 — plafond du texte d'une phase RÉINJECTÉ dans le contexte de la phase suivante. */
 const PHASE_CONTEXT_CAP = 2000
 
@@ -852,130 +911,6 @@ const PHASE_CONTEXT_CAP = 2000
  * un aperçu). La sortie complète reste dans `phaseOutputs` + la trace des sous-agents.
  */
 const JUDGE_PHASE_CAP = 6000
-
-/**
- * Connecteurs de clause utilisés pour repérer une SECONDE action non couverte par le préfixe
- * lecture-seule reconnu (voir `classifyMutationConfidence`).
- */
-// Conflit de merge résolu en gardant les DEUX apports, qui ne s'opposaient pas : un côté enrichissait
-// le découpage en clauses (connecteurs d'opposition + ponctuation de fin de phrase), l'autre ajoutait
-// trois constantes indépendantes. Choisir un camp aurait perdu du travail utile dans les deux sens.
-const CLAUSE_SPLIT =
-  /\b(?:et|puis|then|and|apres|après|mais|but|cependant|however)\b|[;,]|[.!?]\s+/gi
-/**
- * Apostrophes typographiques ramenées à l'apostrophe droite AVANT toute détection de négation.
- * `NEGATED_MUTATION` n'accepte que `'` : « n’implémente rien » — la forme que produit tout clavier
- * français et que portent les prompts réels — n'était donc PAS reconnue comme une négation, et la
- * tâche basculait en mutation à cause du verbe qu'elle prétendait justement exclure.
- */
-const APOSTROPHES = /[‘’ʼ]/g
-/** Sentinelle de campagne en tête de prompt : « [claude-propre-A-chat] … ». */
-const SENTINEL_PREFIX = /^\[[^\]]{0,160}\]\s*/
-/** Phases dont le contrat EST la lecture seule, nommées en tête de demande (slash facultatif). */
-const PHASE_LECTURE_SEULE_LEAD = /^\/?(?:scout|frame|judge)\b/i
-/** Verbes/participes lecture-seule reconnus À L'INTÉRIEUR d'une clause secondaire. */
-const READ_ONLY_STEM =
-  'analys|audit|cadr|document|expliqu|inspect|review|resume|resum|repond|decri|lis|lire|liste|montre|affiche'
-const READ_ONLY_CLAUSE = new RegExp(`^(?:${READ_ONLY_STEM})\\w*\\b`, 'i')
-const READ_ONLY_DELIVERABLE_CLAUSE =
-  /^(?:produi|fourni)\w*\s+(?:(?:le|la|un|une)\s+)?(?:cadrage|analyse|audit|resume|documentation)\b/i
-const NEGATED_OBJECT_REMAINDER = /^(?:de|du|des|le|la|les|un|une|aucun|aucune|rien)\b/i
-
-/**
- * #2 — verdict EXPLICITE de confiance sur la nature (mutation ou non) d'une tâche, au lieu d'un
- * booléen qui fait passer une heuristique textuelle pour une certitude. Trois issues :
- *  - 'mutation'  : un verbe de mutation est présent hors négation → certain.
- *  - 'read-only' : la tâche ENTIÈRE (chaque clause) matche un préfixe lecture-seule reconnu →
- *                  confiant, mais jamais absolu (langage naturel).
- *  - 'uncertain' : ni l'un ni l'autre — p.ex. une clause de tête « lecture seule » suivie d'une
- *                  seconde clause (« puis », « et », « then »...) dont le verbe n'est PAS reconnu
- *                  comme lecture-seule. C'est exactement le faux-négatif visé : une paraphrase ou
- *                  un verbe de mutation absent du dictionnaire (« puis écrase le fichier ») ne doit
- *                  jamais être absous par le préfixe lecture-seule du début de phrase.
- * Fail-safe : tout appelant qui a besoin d'un booléen (`isMutationTask`) doit traiter 'uncertain'
- * comme une mutation — le côté sûr (worktree isolé + preuve exigée), jamais le côté permissif.
- */
-export type MutationConfidence = 'mutation' | 'read-only' | 'uncertain'
-
-export function classifyMutationConfidence(task: string): MutationConfidence {
-  // Kaizen est contractuellement un audit natif en lecture seule, quel que soit le vocabulaire
-  // cité dans sa cible (ex. « pourquoi le modèle a voulu modifier X »).
-  if (/^\/kaizen(?=\s|$)/i.test(task.trim())) return 'read-only'
-  if (/^\/(?:scout|frame|judge)(?=\s|$)/i.test(task.trim())) return 'read-only'
-  // Le contrat de phase doit être reconnu AVANT le test de mutation, sinon un simple mot comme
-  // « améliorations » bascule un scout en écriture. Mesuré le 2026-08-12 : les prompts réels de la
-  // campagne portent une sentinelle et pas de slash — « [claude-propre-A-observatory] scout des
-  // améliorations de la vue Observatory … N'implémente rien à ce tour. » — donc le garde ci-dessus
-  // ne s'appliquait pas. La tâche devenait une mutation, et le pré-gate réclamait à la phase une
-  // preuve d'écriture que `sandboxForPhase` lui interdit précisément de produire.
-  const sansSentinelle = task.trim().replace(SENTINEL_PREFIX, '')
-  if (PHASE_LECTURE_SEULE_LEAD.test(sansSentinelle)) {
-    const normaliseLead = sansSentinelle
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .replace(APOSTROPHES, "'")
-      .toLowerCase()
-      .replace(NEGATED_MUTATION, ' ')
-    // Le contrat ne couvre que SA clause. « scout … puis implémente-les » reste une mutation :
-    // une clause suivante porteuse d'un verbe d'écriture invalide le contrat.
-    const [, ...clausesSuivantes] = normaliseLead
-      .split(CLAUSE_SPLIT)
-      .map((clause) => clause.trim())
-      .filter(Boolean)
-    if (!clausesSuivantes.some((clause) => MUTATION_TASK.test(clause))) return 'read-only'
-  }
-  const normalized = task
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(APOSTROPHES, "'")
-    .toLowerCase()
-  const withoutNegations = normalized.replace(NEGATED_MUTATION, ' ')
-  if (MUTATION_TASK.test(withoutNegations)) return 'mutation'
-  // Fail-closed : le langage naturel ne peut pas fournir une liste exhaustive des façons de
-  // demander une écriture ("write", "patch", "apply", "fais…"). Seule une négation explicite
-  // ET un contrat de lecture identifiable autorisent le chemin partagé ; une négation mêlée à un
-  // ordre positif inconnu reste donc isolée.
-  const explicitReadOnly =
-    withoutNegations !== normalized &&
-    /\b(?:analys|audit|cadr|document|expliqu|inspect|lecture seule|review)\w*/i.test(normalized)
-  const simpleReadOnlyLead =
-    /^(?:analys|audit|expliqu|inspect|review|cadr|document|resume|decri)\w*\b/i.test(normalized)
-  if (!explicitReadOnly && !simpleReadOnlyLead) return 'mutation'
-  // Une negation explicite ne certifie PAS les actions suivantes. Exemple falsifie :
-  // « Analyse sans modifier puis publie une release » conserve une mutation positive inconnue.
-  // Toutes les clauses passent donc le meme examen, y compris apres une negation.
-  const clauses = normalized
-    .split(CLAUSE_SPLIT)
-    .map((clause) => clause.trim())
-    .filter(Boolean)
-  const allClausesReadOnly = clauses.every((clause) => {
-    const withoutNegatedMutation = clause.replace(NEGATED_MUTATION, ' ').trim()
-    if (
-      READ_ONLY_CLAUSE.test(withoutNegatedMutation) ||
-      READ_ONLY_DELIVERABLE_CLAUSE.test(withoutNegatedMutation)
-    ) {
-      return true
-    }
-    const containedNegatedMutation = withoutNegatedMutation !== clause
-    return (
-      containedNegatedMutation &&
-      (!withoutNegatedMutation || NEGATED_OBJECT_REMAINDER.test(withoutNegatedMutation))
-    )
-  })
-  return allClausesReadOnly ? 'read-only' : 'uncertain'
-}
-
-/**
- * J3 — une tâche est une MUTATION seulement si un verbe de mutation apparaît HORS d'une négation.
- * « Ne modifie pas de code » (cadrage) ne doit PAS exiger de preuve de mutation → sinon faux-red.
- * On neutralise les clauses négatives « ne … pas » / « n'… pas » avant de tester.
- *
- * BEST-EFFORT, jamais une certitude : dérive du verdict `classifyMutationConfidence` et traite
- * 'uncertain' comme mutation (fail-safe — voir sa docstring pour le faux-négatif visé).
- */
-export function isMutationTask(task: string): boolean {
-  return classifyMutationConfidence(task) !== 'read-only'
-}
 
 /**
  * Les droits suivent la RESPONSABILITE de la phase, pas seulement le verbe de la demande.
@@ -1484,8 +1419,14 @@ export class Orchestrator {
       // la borne de reprise qu'il porte, puis lui réserver les places nécessaires sans dépasser le
       // plafond d'appels déjà fixé par le régime / l'utilisateur.
       executionQuote.phases = [...phases]
-      const graphRecoveries = recoveriesFromGraph(workflowGraph)
-      if (graphRecoveries !== undefined) executionQuote.limits.maxRecoveries = graphRecoveries
+      // En mode bloquant, une arête rouge décrit le chemin de reprise à afficher, pas
+      // l'autorisation de repayer ce chemin sans nouvelle stratégie humaine. En mesure seule
+      // (défaut, décision du 12/08), la reprise bornée par le graphe se joue automatiquement :
+      // « 1 prompt = 1 réussite » exige que le juge rouge déclenche la réparation sans tour humain.
+      executionQuote.limits.maxRecoveries =
+        executionQuote.limits.spendEnforcement === 'blocking'
+          ? 0
+          : (recoveriesFromGraph(workflowGraph) ?? executionQuote.limits.maxRecoveries)
       const mandatory = appelsWorkflow!
       const maxPanel = Math.max(
         impose?.judgeMembers ?? 1,
@@ -1511,7 +1452,15 @@ export class Orchestrator {
       }
       executionQuote.limits.maxAgents = Math.max(executionQuote.limits.maxAgents, mandatory)
     }
-    const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
+    // Un instantané FOURNI est assaini AVANT tout usage : il est consommé par plusieurs chemins
+    // (fan-out de phase, fan-out de juge, phase séquentielle) et le premier qui atteignait le registre
+    // jetait `Provider inconnu: <x>`. Un instantané construit ICI vient de la configuration courante,
+    // donc rien à assainir.
+    const assainissement = runtimeSnapshot
+      ? instantaneAssaini(runtimeSnapshot, this.deps.roles.all(), this.deps.registry.ids())
+      : undefined
+    for (const note of assainissement?.notes ?? []) onDelta?.('exec', `[binding] ${note}\n`)
+    const admittedRuntime: OrchestrationRuntimeSnapshot = assainissement?.instantane ?? {
       roles: this.deps.roles.all(),
       phaseFanOut: Object.fromEntries(
         phases.map((phase) => [phase, [...(this.deps.phaseFanOut?.(phase) ?? [])]])
@@ -1983,6 +1932,26 @@ export class Orchestrator {
         )
         produced.result = aligned.result
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
+      }
+      const publishedCommitSha =
+        projectPublication?.publishedSha ??
+        (typeof finalized === 'object' && finalized !== null
+          ? ((finalized as { publishedSha?: string; agentSha?: string }).publishedSha ??
+            (finalized as { agentSha?: string }).agentSha)
+          : undefined) ??
+        finalActivity?.publishedSha
+      if (
+        green &&
+        rootExecutionRequirements(task).commit &&
+        !publishedCommitSha?.trim() &&
+        produced
+      ) {
+        green = false
+        produced.valid = false
+        produced.gateBlocked = true
+        if (!produced.gateReasons.includes('Commit demande sans identite Git publiee verifiable')) {
+          produced.gateReasons.push('Commit demande sans identite Git publiee verifiable')
+        }
       }
       // Clôture auto APRÈS la fusion (le travail est dans la base) et seulement si vert.
       // La clôture est attendue pour que le statut distant soit déterministe avant la fin du run.
@@ -3692,8 +3661,8 @@ export class Orchestrator {
       learningAttestations: IndependentLearningAttestation[]
     }> => {
       // Les contrôles locaux falsifiables passent AVANT le juge payant. Un livrable sans preuve ou
-      // bloqué par pre-green part directement en réparation : le juge ne peut rien apprendre qu'un
-      // oracle local vient déjà de réfuter.
+      // bloqué par pre-green clôture rouge, ou rejoint une reprise explicitement dessinée : le juge
+      // ne peut rien apprendre qu'un oracle local vient déjà de réfuter.
       const evidenceOk = evidenceSatisfiesTask(task, exec.executionEvidence)
       const hookOutcome = await this.hooks.run('pre-green', {
         task,
@@ -3703,9 +3672,18 @@ export class Orchestrator {
         evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
         evidence: exec.executionEvidence
       })
+      const rootChecks = rootRequirementChecks(task, { phases: phaseOutputs }).filter(
+        (check) => check.label !== ROOT_DOD.commit
+      )
+      if (isMutationTask(task) && !rootChecks.some((check) => check.label === ROOT_DOD.mutation)) {
+        rootChecks.push({ label: ROOT_DOD.mutation, checked: evidenceOk })
+      }
       const preGate = evaluateClosure({
         status: evidenceOk && !hookOutcome.blocked ? 'green' : 'red',
-        dod: [{ checked: evidenceOk, hasContent: true }]
+        dod:
+          rootChecks.length > 0
+            ? rootChecks.map((check) => ({ ...check, hasContent: true }))
+            : [{ checked: evidenceOk, hasContent: true }]
       })
       if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
       if (preGate.blocked) {
@@ -4062,15 +4040,20 @@ export class Orchestrator {
     }
 
     // B5 — pour une MUTATION bloquée, UNE réparation ciblée (feedback = raisons du gate) AVANT
-    // d'escalader à l'humain (résolveur avant interruption). Bornée à 1, jamais de boucle infinie.
-    // Un graphe qui dessine « juge rouge → build, au plus N fois » PILOTE ce nombre : c'est la même
-    // boucle, nommée à l'écran au lieu d'être déduite du régime.
+    // d'escalader à l'humain. La doctrine tranche le mode : en mesure seule (défaut, décision du
+    // 12/08 — « 1 prompt = 1 réussite »), le juge rouge déclenche la réparation automatiquement,
+    // bornée par le graphe ou le devis. En mode bloquant, aucune relance : une stratégie nouvelle
+    // doit arriver d'un nouveau tour humain avant toute nouvelle dépense.
     const graphRecoveries = grapheBrut ? recoveriesFromGraph(grapheBrut) : undefined
-    const allowedRecoveries = isMutationTask(task)
-      ? grapheBrut
-        ? (graphRecoveries ?? 0)
-        : (this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
-      : 0
+    const enforceSpend =
+      (this.deps.currentExecutionQuote?.()?.limits.spendEnforcement ?? 'metering-only') ===
+      'blocking'
+    const allowedRecoveries =
+      !enforceSpend && isMutationTask(task)
+        ? grapheBrut
+          ? (graphRecoveries ?? 0)
+          : (this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
+        : 0
     const MAX_ATTEMPTS = 1 + Math.max(0, Math.floor(allowedRecoveries))
     let valid = false
     let gate!: ReturnType<typeof evaluateClosure>
@@ -4078,9 +4061,7 @@ export class Orchestrator {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (attempt > 0) {
         // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
-        // donc son panel, sa synthèse, sa concurrence et sa télémétrie. L'ancien chemin spécialisé
-        // appelait toujours le binding `subagent` seul ; devis et graphe promettaient alors trois
-        // membres tandis que l'exécution n'en payait qu'un.
+        // donc son panel, sa synthèse, sa concurrence et sa télémétrie.
         phaseContext.push(
           `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
         )
@@ -4101,6 +4082,11 @@ export class Orchestrator {
       gate = r.gate
       learningAttestations = r.learningAttestations
       if (!gate.blocked) break
+    }
+    if (gate.blocked && enforceSpend && (graphRecoveries ?? 0) > 0) {
+      gate.reasons.push(
+        'Reprise automatique desactivee : une strategie nouvelle doit etre fournie avant un nouvel appel.'
+      )
     }
 
     return {
