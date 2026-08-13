@@ -397,6 +397,8 @@ export function resoudreCheminWorker(
 export class WorktreeManager {
   private readonly baseRepo: string
   private readonly worktreeRoot: string
+  /** Voir {@link gitCommonDir} : mémorisé pour le dépôt de base seul, échec compris. */
+  private baseCommonDir?: { valeur: string | undefined }
   private readonly git: GitRunner
   private readonly tryGitFn: typeof tryGit
   private readonly removeDirFn: (path: string) => void
@@ -613,12 +615,37 @@ export class WorktreeManager {
   }
 
   /** Répertoire git PARTAGÉ (`--git-common-dir`) d'un dépôt, en absolu ; undefined si indéterminable. */
+  /**
+   * Le répertoire commun d'un dépôt, mémorisé POUR LE DÉPÔT DE BASE UNIQUEMENT.
+   *
+   * MESURÉ sur une publication contrariée par un hook concurrent : 445 appels git, dont 105 fois
+   * `rev-parse --git-common-dir` sur `baseRepo` — 4,4 s des 28,4 s passées dans git, pour une valeur qui
+   * ne peut pas changer pendant la vie de ce manager (un dépôt ne déplace pas sa base en cours
+   * d'opération).
+   *
+   * Le succès SEUL est mémorisé : une indisponibilité peut être temporaire, et un test existant l'exige
+   * explicitement (voir plus bas). Et SEULEMENT pour le dépôt de base : sur un chemin de copie, cette sonde sert à
+   * PROUVER l'appartenance Git avant d'écrire (`ownershipIssue`). Une copie peut disparaître ou changer
+   * de main entre deux appels ; mémoriser un succès ferait prouver une appartenance qui n'est plus
+   * vraie, ce qui autoriserait une écriture dans un dossier devenu étranger. Le gain ne vaut pas ça.
+   */
   private gitCommonDir(repo: string): string | undefined {
+    if (repo === this.baseRepo && this.baseCommonDir !== undefined) return this.baseCommonDir.valeur
     const probe = this.tryGitFn(repo, ['rev-parse', '--git-common-dir'])
-    if (probe.code !== 0) return undefined
-    const raw = probe.stdout.trim()
-    if (!raw) return undefined
-    return isAbsolute(raw) ? raw : resolve(repo, raw)
+    const resultat = ((): string | undefined => {
+      if (probe.code !== 0) return undefined
+      const raw = probe.stdout.trim()
+      if (!raw) return undefined
+      return isAbsolute(raw) ? raw : resolve(repo, raw)
+    })()
+    // Le SUCCÈS seulement. J'avais d'abord mémorisé l'échec aussi, en supposant qu'un dépôt de base
+    // illisible ne redevient pas lisible en cours de route. C'est FAUX, et un test existant le disait
+    // déjà : « réessaie le rangement quand la preuve Git est temporairement indisponible après
+    // publication ». Avec l'échec mémorisé, le réessai voyait toujours l'ancienne absence et rendait
+    // `cleanup-pending` au lieu de `merged`. Une sonde qui échoue est donc rejouée, ce qui ne coûte rien :
+    // les échecs sont rares, ce sont les 105 succès identiques qui coûtaient.
+    if (repo === this.baseRepo && resultat !== undefined) this.baseCommonDir = { valeur: resultat }
+    return resultat
   }
 
   /**
