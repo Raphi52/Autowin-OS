@@ -292,7 +292,9 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
     return text === part.text ? part : { ...part, text }
   })
   let changed = candidateParts.some((part, index) => part !== parts[index])
-  let closureSeen = false
+  // Le nouveau footer autoritaire EST la clôture. Ne lui ajoute pas l'ancienne phrase synthétique
+  // après coup, notamment au rechargement d'un `/skill` sans orientation tardive.
+  let closureSeen = authoritativeFooterAlreadyPersisted
   const protectedLines = markdownCodeLineProtection(
     candidateParts
       .filter((part): part is ChatTextPart => part.kind === 'text')

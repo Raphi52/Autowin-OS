@@ -905,12 +905,8 @@ describe('durable assistant hydration and streaming', () => {
       reused: false,
       result: 'Tests 12/12 verts.'
     }
-    const liveText = formatOrchestrationOutcome(
-      true,
-      outcome,
-      undefined,
-      'Clôture Autowin : gate validé, RUN fermé green ; aucune relance nécessaire.'
-    )
+    // Chemin `/skill` normal : aucune notice tardive n'est ajoutée avant le footer.
+    const liveText = formatOrchestrationOutcome(true, outcome)
     const hydrated = hydrateStoredAssistant({
       content: liveText,
       status: 'completed',
@@ -928,6 +924,7 @@ describe('durable assistant hydration and streaming', () => {
       expect(text.split(heading)).toHaveLength(2)
     }
     expect(text.trimEnd()).toMatch(/👉 Recommandé : passer à la prochaine demande\.$/u)
+    expect(text).not.toContain('Clôture Autowin : gate validé')
   })
 
   it('removes a persisted green closure when the latest orchestration failed', () => {
