@@ -271,7 +271,34 @@ casse = SuiviDemarrage()
 casse.voir_ligne('[vite:esbuild] Transform failed with 1 error:')
 verifie(casse.fermer(), "une erreur ferme l'ecran")
 verifie(casse.verdict(False)[0] == 7, "un echec de compilation a son propre verdict")
-verifie(casse.verdict(False)[1] == "Compilation en ECHEC", "le verdict NOMME la cause")
+_detail_casse = casse.verdict(False)[1] or ""
+# L'egalite stricte au libelle nu interdisait d'ENRICHIR le detail : il porte maintenant AUSSI la
+# ligne fautive, seule chose qui dise QUOI reparer sans ouvrir le journal.
+verifie(_detail_casse.startswith("Compilation en ECHEC"), "le verdict NOMME la cause")
+verifie("Transform failed" in _detail_casse, "et il porte la LIGNE fautive, pas seulement la categorie")
+
+# ROLLUP N'ECRIT PAS TOUJOURS « ERROR ». Un import non resolu s'ecrit autrement, et aucun motif ne
+# l'attrapait : le lanceur rendait 6 « bundle perime » (inerte) au lieu de 7 « compilation en echec ».
+# Ce correctif avait deja ete ecrit puis PERDU par un autostash concurrent avant d'etre committe —
+# c'est pourquoi il est ici, teste ET committe cette fois.
+_rollup = ('src/main/index.ts (278:9): "abortUpdateConflict" is not exported by '
+           '"src/main/git-update.ts", imported by "src/main/index.ts".')
+_c = classer_ligne(_rollup)
+verifie(_c is not None and _c[0] == "erreur", "un import non resolu est un ECHEC, pas un retard")
+verifie(_c[1] == "Compilation en ECHEC", "le libelle reste COURT pour l'etiquette d'etape")
+verifie(classer_ligne('Could not resolve "./absent" from "src/main/index.ts"')[0] == "erreur",
+        "module introuvable a la resolution")
+verifie(classer_ligne('Rollup failed to resolve import "x" from "a.ts"')[0] == "erreur",
+        "echec de resolution annonce par rollup")
+verifie(classer_ligne("ERROR:gpu_process_host.cc(1000) Network service crashed.") is None,
+        "un incident Chromium qui se remet seul n'est pas un echec de compilation")
+
+_sc = SuiviDemarrage()
+_sc.voir_ligne(_rollup)
+_code7, _detail7 = _sc.verdict(False)
+verifie(_code7 == 7, "une compilation cassee par un import non resolu rend 7, pas 6")
+verifie("abortUpdateConflict" in (_detail7 or "") and "git-update" in (_detail7 or ""),
+        "le detail du verdict nomme le symbole ET le fichier a corriger")
 
 # Rien ne vient et le delai expire : perime, pas succes silencieux.
 muet = SuiviDemarrage()

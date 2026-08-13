@@ -44,6 +44,13 @@ ERREURS = (
     # (« Network service crashed, restarting service »), un incident qui se remet tout seul, et
     # l'ecran annoncait « Compilation en ECHEC » sur un demarrage qui aboutissait.
     (r"Transform failed with|Unexpected \"<<|(?:esbuild|vite|rollup)[^\n]{0,40}ERROR", "Compilation en ECHEC"),
+    # ROLLUP N'ECRIT PAS TOUJOURS « ERROR ». Un import qui ne resout pas sort sous la forme
+    #   src/main/index.ts (278:9): "abortUpdateConflict" is not exported by "src/main/git-update.ts"
+    # Aucun motif ci-dessus ne l'attrapait : le lanceur rendait alors 6 « bundle perime » — vrai mais
+    # INERTE — la ou 7 « compilation en echec » existe justement pour ca. Vecu le 2026-08-13 : le
+    # build etait casse par un export manquant, la ligne etait DANS le journal, l'alerte n'en disait
+    # rien. Ces trois formes sont specifiques a la resolution de modules, insensibles au bruit Chromium.
+    (r"is not exported by|Could not resolve \"|Rollup failed to resolve import", "Compilation en ECHEC"),
     (r"ERR_MODULE_NOT_FOUND|Cannot find module", "Module introuvable"),
     # `EADDRINUSE` SEUL : « [cdp] port 9224 - 9223 etait occupe » est un repli REUSSI.
     (r"EADDRINUSE", "Port deja utilise"),
@@ -195,6 +202,10 @@ class SuiviDemarrage:
         self.bundle_frais = False
         self.app_affichee = False
         self.erreur: str | None = None
+        # La LIGNE fautive, gardee a part du libelle court. L'etiquette du splash doit rester courte ;
+        # c'est l'ALERTE qui a besoin du detail. Vecu le 2026-08-13 : « bundle perime » sans cause,
+        # alors que `"abortUpdateConflict" is not exported by …` etait dans le journal.
+        self.erreur_ligne: str | None = None
         # Compte des lignes vues : c'est la PREUVE que le demarrage progresse encore. Un build long
         # est normal (mesure du depot : interface vers 70-80 s) ; un build MUET ne l'est pas.
         self.lignes_vues = 0
@@ -212,6 +223,8 @@ class SuiviDemarrage:
         self.etape = cle
         if cle == "erreur":
             self.erreur = libelle
+            propre = nettoyer(ligne)
+            self.erreur_ligne = propre if len(propre) <= 200 else f"{propre[:197]}…"
         return classee
 
     def voir_fenetre(self, visible: bool) -> None:
@@ -229,7 +242,9 @@ class SuiviDemarrage:
     def verdict(self, delai_depasse: bool) -> tuple[int, str | None]:
         """`(code, detail)`. 0 = demarre. 6 = bundle perime. 7 = compilation en echec."""
         if self.erreur:
-            return (7, self.erreur)
+            # Le detail porte la LIGNE quand on l'a : c'est ce que l'alerte affiche en tete, et la
+            # seule chose qui dise a l'utilisateur QUOI reparer sans ouvrir le journal.
+            return (7, f"{self.erreur} — {self.erreur_ligne}" if self.erreur_ligne else self.erreur)
         if self.app_affichee:
             # L'application est a l'ecran mais le bundle n'a pas ete reecrit : elle tourne donc sur
             # l'ancien. C'est exactement le « perime » qu'on cherche a rendre impossible.
