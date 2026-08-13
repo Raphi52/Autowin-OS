@@ -150,9 +150,9 @@ import {
   listRecoverableChatProviderCalls,
   recoverCompletedChatProviderCall,
   streamedPrefixForProviderCall,
+  waitForRecoverableChatProviderExit,
   type RecoverableChatProviderCall
 } from './runs/chat-provider-recovery'
-import { survivableExitCode } from './runs/stdout-journal'
 import { pruneContextValues } from './runs/context-value'
 import { appendConvActivity, loadConvActivity } from './activity/conv-activity'
 import {
@@ -319,6 +319,7 @@ import { recapMessage, summarizeJournal } from './runs/journal-replay'
 import { tailJournalOnce } from './runs/stdout-journal'
 import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summary'
 import { defaultProcessIdentity } from './store/worktree-manager'
+import { scopeWorktreeActivity } from '../shared/worktree-activity-model'
 import {
   appendConversationFileTrace,
   appendExecutionEvidenceFileTrace,
@@ -372,6 +373,7 @@ import {
   windowsRelayTaskName
 } from './task-manager/windows-relay'
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
+import { registerVeilleIpc } from './veille/veille-ipc'
 import {
   AutoKaizenSupervisor,
   incidentFromPilotEvent,
@@ -2134,9 +2136,13 @@ Le fil reprend ensuite normalement.`
         status: ReturnType<typeof os.getWorktreeRuntimeStatus>
       }
     | undefined
-  ipcMain.handle('worktree:activity', (event) => {
+  ipcMain.handle('worktree:activity', (event, conversationId?: unknown) => {
     assertTrustedRendererSender(event, 'WorktreeActivity')
-    return worktreeFixture?.activity ?? os.getWorktreeActivity()
+    const activity = worktreeFixture?.activity ?? os.getWorktreeActivity()
+    return scopeWorktreeActivity(
+      activity,
+      typeof conversationId === 'string' && conversationId.trim() ? conversationId : undefined
+    )
   })
   ipcMain.handle('worktree:status', (event) => {
     assertTrustedRendererSender(event, 'WorktreeStatus')
@@ -4307,15 +4313,10 @@ Le fil reprend ensuite normalement.`
     setImmediate(() => {
       void (async () => {
         try {
-          let exitCode: number | undefined
-          while (!recoveryController.signal.aborted) {
-            exitCode = survivableExitCode(call.journalPath)
-            if (exitCode !== undefined) break
-            await new Promise<void>((resolve) => {
-              const timer = setTimeout(resolve, 250)
-              timer.unref?.()
-            })
-          }
+          const terminal = await waitForRecoverableChatProviderExit(call.journalPath, {
+            signal: recoveryController.signal,
+            fallbackActivityAt: call.updatedAt
+          })
 
           const closeWithoutRecovery = (event: ChatTurnEvent): void => {
             if (os.conversations.get(call.conversationId)) {
@@ -4327,10 +4328,15 @@ Le fil reprend ensuite normalement.`
             })
             broadcast({ type: 'refresh', scope: 'conversations' })
           }
-          if (recoveryController.signal.aborted) {
+          if (terminal.kind === 'aborted') {
             closeWithoutRecovery({ kind: 'cancelled' })
             return
           }
+          if (terminal.kind === 'stale') {
+            closeWithoutRecovery({ kind: 'interrupted' })
+            return
+          }
+          const { exitCode } = terminal
           if (exitCode !== 0) {
             closeWithoutRecovery({
               kind: 'failed',
@@ -4655,6 +4661,9 @@ Le fil reprend ensuite normalement.`
     }
     broadcast({ type: 'refresh', scope: 'task-manager' })
   })
+  // Veille concurrents : la vue Tickets lit le stock et marque un candidat. Deux gestes, pas plus —
+  // elle ne peut pas FABRIQUER de candidat, ce qui contournerait le controle de citation.
+  registerVeilleIpc({ ipc: ipcMain, assertTrusted: assertTrustedRendererSender })
   registerTaskManagerIpc({
     ipc: ipcMain,
     store: scheduledTasks,

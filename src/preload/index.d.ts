@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { StockVeille } from '../main/veille/candidats-store'
 import type {
   WorktreeAgentActivity,
   WorktreeConflictDiffResult,
@@ -167,7 +168,7 @@ interface ChatApi {
   cancelTickets: (requestId: string) => Promise<boolean>
   listTicketPeople: (source: unknown) => Promise<string[]>
   setTicketsFixture: (fixture: unknown) => Promise<boolean>
-  getWorktreeActivity: () => Promise<WorktreeAgentActivity[]>
+  getWorktreeActivity: (conversationId?: string) => Promise<WorktreeAgentActivity[]>
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   getWorktreeConflictDiff: (agentId: string) => Promise<WorktreeConflictDiffResult>
   resolveWorktreeConflict: (
@@ -343,6 +344,9 @@ interface ChatApi {
     turnId: string,
     artifactId: string
   ) => Promise<{ ok: boolean; error?: string }>
+  /** Stock de veille concurrents : candidats sources + sources muettes de la derniere passe. */
+  veilleSnapshot: () => Promise<StockVeille>
+  veilleMarquer: (id: string, statut: 'nouveau' | 'ecarte' | 'prompte') => Promise<StockVeille>
   taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
   taskManagerCreate: (task: unknown) => Promise<ScheduledTask>
   taskManagerUpdate: (id: string, task: unknown) => Promise<ScheduledTask>

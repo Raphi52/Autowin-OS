@@ -1,0 +1,124 @@
+/*
+  Les candidats de veille. La CITATION est l'élément porteur : c'est ce qui distingue une feature lue
+  d'une feature inventée, donc elle reste lisible et jamais reléguée en petit gris.
+*/
+.veille {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+  min-height: 0;
+}
+.veille-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  justify-content: space-between;
+}
+.veille-compte {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.veille-compte b {
+  font-size: 22px;
+}
+.veille-compte span,
+.veille-meta {
+  font-size: 12px;
+  color: var(--text-faint, rgba(245, 247, 251, 0.45));
+}
+.veille-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.veille-message {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--container-border);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text-faint, rgba(245, 247, 251, 0.5));
+}
+.veille-message.is-error {
+  border-style: solid;
+  border-color: var(--gold);
+  color: var(--gold);
+}
+/* Une source muette est une ALERTE, pas une note de bas de page : sans elle, zéro candidat mentirait. */
+.veille-echecs {
+  padding: 10px 14px;
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  font-size: 12px;
+}
+.veille-echecs ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--text-faint, rgba(245, 247, 251, 0.55));
+}
+.veille-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--container-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--container-border);
+}
+.veille-ligne {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--surface-inset, rgba(255, 255, 255, 0.02));
+}
+.veille-ligne.is-ecarte {
+  opacity: 0.55;
+}
+.veille-ligne-tete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint, rgba(245, 247, 251, 0.45));
+}
+.veille-concurrent {
+  color: var(--cyan);
+}
+.veille-statut.is-nouveau {
+  color: var(--rose);
+}
+.veille-statut.is-prompte {
+  color: var(--cyan);
+}
+.veille-titre {
+  font-size: 14px;
+}
+.veille-citation {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--rose);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12px;
+  font-style: italic;
+  color: rgba(245, 247, 251, 0.78);
+}
+.veille-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.veille-source {
+  color: var(--cyan);
+}
+.veille-prompter {
+  font-weight: 500;
+}
