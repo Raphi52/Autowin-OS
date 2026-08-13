@@ -7,7 +7,13 @@
   flex-direction: column;
   gap: 12px;
   padding: 4px 0;
+  /* Occupe la hauteur laissee par la ViewTopBar et NE DEBORDE PAS : `.tickets-view` est
+     `overflow: hidden`, donc sans zone de defilement propre la liste etait coupee en bas — les
+     candidats du fond etaient inatteignables. L'en-tete et les sources muettes restent fixes ;
+     seules les colonnes defilent (regle plus bas). */
+  flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 .veille-head {
   display: flex;
@@ -129,6 +135,51 @@
   grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
   gap: 14px;
   align-items: start;
+  /* SEULE zone qui defile : l'en-tete et les sources muettes restent visibles pendant qu'on
+     parcourt les candidats. `min-height: 0` est ce qui autorise reellement le retrecissement d'un
+     enfant flex — sans lui, `overflow` ne s'active jamais et la liste deborde. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+/* Note de pertinence donnee par le scout, juste a cote du titre : elle repond a « lequel reprendre
+   d'abord ». Pastille lisible, jamais en petit gris — c'est un critere de decision, pas un ornement. */
+.veille-pertinence {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+  color: var(--cyan);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.veille-pertinence b {
+  font-size: 14px;
+}
+.veille-pertinence small {
+  font-size: 9px;
+  opacity: 0.7;
+}
+/* Absente = le scout n'a pas note (source ancienne). On le DIT, plutot qu'afficher un faux zero. */
+.veille-pertinence.is-absente {
+  border-color: var(--container-border);
+  background: transparent;
+  color: var(--text-faint, rgba(245, 247, 251, 0.4));
+}
+.veille-tri {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-faint, rgba(245, 247, 251, 0.5));
+}
+.veille-tri select {
+  font-size: 12px;
 }
 .veille-colonne {
   display: flex;

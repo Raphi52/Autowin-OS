@@ -2152,6 +2152,87 @@ ol.md-list li {
   box-shadow: 0 0 0 2px rgba(64, 176, 225, 0.08);
 }
 
+/**
+ * Fin de tour NON NOMINALE (annulee, en echec, interrompue) : le libelle et ses relances.
+ *
+ * Ces quatre classes existaient dans le JSX sans AUCUNE regle : les boutons retombaient donc sur le
+ * style par defaut du navigateur, colles au texte, sans marge ni radius — une ligne brute au milieu
+ * d'une vue soignee, et c'est ce que l'utilisateur a vu. Un tour qui echoue est deja desagreable ;
+ * l'afficher salement ajoute l'insulte au dommage.
+ *
+ * Direction Lineaire : un repere net, aucun halo, aucun flou. Le statut colore le bloc (or pour une
+ * interruption, rose pour un echec) par une bordure GAUCHE, comme les barres de type d'action de
+ * l'Observatoire — pas par un fond criard.
+ */
+.msg-terminal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--container-border);
+  /* Le statut se lit AU BORD, sur 2 px : discret quand on ne le cherche pas, evident quand on scanne. */
+  border-left-width: 2px;
+  border-left-color: var(--gold);
+  border-radius: var(--container-radius-card);
+  background: var(--surface-card);
+}
+.msg-terminal[data-status='failed'] {
+  border-left-color: var(--rose);
+}
+
+.msg-terminal-text {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  /* Pousse les actions a DROITE : le libelle explique, les boutons agissent — deux roles, deux bords. */
+  margin-right: auto;
+}
+
+.msg-terminal-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 5px 12px;
+  border: 1px solid var(--line-strong);
+  /* Pastille, comme les onglets de section et les puces d'action : meme vocabulaire de forme. */
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease;
+}
+.msg-terminal-action:hover {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: var(--bg-2);
+}
+.msg-terminal-action:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* La reprise INFORMEE est l'action recommandee apres un echec : rejouer a l'identique refait le meme
+   echec. Elle porte donc l'accent, sans devenir un bouton plein qui volerait la hierarchie. */
+.msg-terminal-refine {
+  border-color: color-mix(in srgb, var(--rose) 58%, var(--container-border));
+  color: var(--rose);
+}
+.msg-terminal-refine:hover {
+  border-color: var(--rose);
+  color: var(--text);
+  background: color-mix(in srgb, var(--rose) 12%, transparent);
+}
+
 .msg-turn-actions {
   display: flex;
   gap: 6px;

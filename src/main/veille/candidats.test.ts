@@ -4,6 +4,7 @@ import {
   cleDedup,
   normaliserTitre,
   trierCandidats,
+  bornerPertinence,
   type CandidatBrut
 } from './candidats'
 
@@ -156,5 +157,35 @@ describe('normalisation du titre', () => {
       normaliserTitre('support mcp distant')
     )
     expect(normaliserTitre('Reprise (auto) !')).toBe('reprise auto')
+  })
+})
+
+describe('pertinence — la note du scout, bornee et jamais inventee', () => {
+  it('borne une valeur hors 0-100 et arrondit', () => {
+    expect(bornerPertinence(150)).toBe(100)
+    expect(bornerPertinence(-4)).toBe(0)
+    expect(bornerPertinence(72.6)).toBe(73)
+    expect(bornerPertinence('88')).toBe(88)
+  })
+
+  it('une pertinence absente ou illisible reste undefined — pas un zero', () => {
+    expect(bornerPertinence(undefined)).toBeUndefined()
+    expect(bornerPertinence('beaucoup')).toBeUndefined()
+    expect(bornerPertinence(null)).toBeUndefined()
+    expect(bornerPertinence(NaN)).toBeUndefined()
+  })
+
+  it('trierCandidats porte la pertinence sur le retenu, bornee', () => {
+    const { retenus } = trierCandidats(
+      [brut({ pertinence: 250 as unknown as number })],
+      new Set(),
+      contexte
+    )
+    expect(retenus[0].pertinence).toBe(100)
+  })
+
+  it('un candidat sans pertinence n’en gagne pas une par defaut', () => {
+    const { retenus } = trierCandidats([brut()], new Set(), contexte)
+    expect(retenus[0].pertinence).toBeUndefined()
   })
 })

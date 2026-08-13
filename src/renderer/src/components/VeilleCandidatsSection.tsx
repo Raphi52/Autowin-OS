@@ -32,6 +32,26 @@ const LIBELLE_STATUT: Record<CandidatVeille['statut'], string> = {
   ecarte: 'écarté'
 }
 
+export type TriVeille = 'pertinence' | 'date'
+
+/**
+ * Ordonne les candidats. FONCTION PURE (copie d'abord, `sort` mute) pour être testable sans monter la
+ * vue. Par pertinence DÉCROISSANTE : la question de l'utilisateur est « lequel reprendre en premier ».
+ * Un candidat NON NOTÉ (`pertinence === undefined`) tombe en fin de liste — on ne le traite pas comme
+ * un zéro, mais on ne le laisse pas non plus flotter en tête faute de note.
+ */
+export function trierParPertinence(
+  candidats: readonly CandidatVeille[],
+  tri: TriVeille
+): CandidatVeille[] {
+  if (tri === 'date') return [...candidats]
+  return [...candidats].sort((a, b) => {
+    const pa = a.pertinence ?? -1
+    const pb = b.pertinence ?? -1
+    return pb - pa
+  })
+}
+
 /** L'envoi réel : création de conversation puis pré-remplissage, exactement comme pour un ticket. */
 async function prompterParDefaut(candidat: CandidatVeille): Promise<void> {
   /*
@@ -79,6 +99,21 @@ function LigneCandidat({
         <span className="veille-concurrent">{candidat.concurrent}</span>
         <span className="veille-date">{candidat.dateSource}</span>
         {candidat.langue && <span className="veille-langue">{candidat.langue}</span>}
+        {/* La note du scout, à côté du candidat : « lequel reprendre d'abord » se lit d'un coup. */}
+        {candidat.pertinence !== undefined ? (
+          <span
+            className="veille-pertinence"
+            data-testid="veille-pertinence"
+            title="Pertinence pour Autowin, notée par le scout (0-100)"
+          >
+            <b>{candidat.pertinence}</b>
+            <small>/100</small>
+          </span>
+        ) : (
+          <span className="veille-pertinence is-absente" data-testid="veille-pertinence-absente">
+            non noté
+          </span>
+        )}
         <span className={`veille-statut is-${candidat.statut}`}>
           {LIBELLE_STATUT[candidat.statut]}
         </span>
@@ -113,6 +148,8 @@ export function VeilleCandidatsSection({
   const [stock, setStock] = useState<StockVeille>()
   const [erreur, setErreur] = useState<string>()
   const [voirEcartes, setVoirEcartes] = useState(false)
+  // Par défaut on trie par pertinence : la vue existe pour décider quoi reprendre en premier.
+  const [tri, setTri] = useState<TriVeille>('pertinence')
 
   const lire = useCallback(async (): Promise<void> => {
     const lecteur = charger ?? ((): Promise<StockVeille> => window.api.veilleSnapshot())
@@ -159,7 +196,10 @@ export function VeilleCandidatsSection({
     )
   }
 
-  const visibles = stock.candidats.filter((c) => voirEcartes || c.statut !== 'ecarte')
+  const visibles = trierParPertinence(
+    stock.candidats.filter((c) => voirEcartes || c.statut !== 'ecarte'),
+    tri
+  )
   const ajouts = visibles.filter((c) => c.type === 'ajout')
   // `autre` va avec les corrections : ce n'est pas un ajout prouvé, donc il n'a rien à faire dans la
   // colonne où l'on va piocher ce qu'on implémente.
@@ -187,6 +227,17 @@ export function VeilleCandidatsSection({
             // Jamais lu ≠ rien trouvé. Le dire évite de prendre une veille jamais lancée pour un calme plat.
             <span data-testid="veille-jamais-lue">aucune lecture effectuée pour l’instant</span>
           )}
+          <label className="veille-tri">
+            trier par
+            <select
+              value={tri}
+              onChange={(e) => setTri(e.target.value as TriVeille)}
+              data-testid="veille-tri"
+            >
+              <option value="pertinence">pertinence</option>
+              <option value="date">ordre de lecture</option>
+            </select>
+          </label>
           {ecartes > 0 && (
             <button type="button" onClick={() => setVoirEcartes((v) => !v)}>
               {voirEcartes ? 'masquer' : 'voir'} {ecartes} écarté{ecartes > 1 ? 's' : ''}

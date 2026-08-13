@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { checkForUpdate, applyUpdate, type GitRunner } from './git-update'
+import { abortUpdateConflict, checkForUpdate, applyUpdate, type GitRunner } from './git-update'
 
 function runnerFrom(map: Record<string, string>, throwOn?: string): GitRunner {
   return async (args) => {
@@ -28,6 +28,7 @@ describe('checkForUpdate', () => {
       branch: 'main',
       reference: 'origin/main',
       dirty: false,
+      conflicted: false,
       strategies: ['fast-forward']
     })
   })
@@ -47,22 +48,149 @@ describe('checkForUpdate', () => {
     expect(r.available).toBe(false)
     expect(r.error).toBeTruthy()
   })
+
+  it('fusion déjà en conflit → rend l’action d’annulation disponible même sans retard', async () => {
+    const run = runnerFrom({
+      'fetch --quiet': '',
+      'rev-parse --abbrev-ref HEAD': 'feat/x',
+      'rev-list --count HEAD..origin/main': '0',
+      'status --porcelain': 'UU src/x.ts',
+      'diff --name-only --diff-filter=U': 'src/x.ts',
+      'rev-parse --verify --quiet MERGE_HEAD': 'abc123'
+    })
+    expect(await checkForUpdate('/r', run)).toMatchObject({
+      available: true,
+      behind: 0,
+      conflicted: true,
+      conflictOperation: 'merge'
+    })
+  })
+
+  it('fusion en conflit + remote indisponible → garde l’annulation locale sans fetch', async () => {
+    const calls: string[][] = []
+    const run: GitRunner = async (args) => {
+      calls.push(args)
+      const key = args.join(' ')
+      if (key === 'diff --name-only --diff-filter=U') return { stdout: 'src/x.ts' }
+      if (key === 'rev-parse --verify --quiet MERGE_HEAD') return { stdout: 'abc123' }
+      if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'feat/x' }
+      if (key === 'fetch --quiet') throw new Error('remote indisponible')
+      return { stdout: '' }
+    }
+
+    expect(await checkForUpdate('/r', run)).toMatchObject({
+      available: true,
+      conflicted: true,
+      conflictOperation: 'merge'
+    })
+    expect(calls).not.toContainEqual(['fetch', '--quiet'])
+  })
+})
+
+describe('abortUpdateConflict', () => {
+  it('annule une vraie fusion puis vérifie que les conflits ont disparu', async () => {
+    const calls: string[][] = []
+    let aborted = false
+    const run: GitRunner = async (args) => {
+      calls.push(args)
+      const key = args.join(' ')
+      if (key === 'diff --name-only --diff-filter=U')
+        return { stdout: aborted ? '' : 'src/x.ts' }
+      if (key === 'rev-parse --verify --quiet MERGE_HEAD') return { stdout: 'abc123' }
+      if (key === 'merge --abort') aborted = true
+      return { stdout: '' }
+    }
+
+    expect(await abortUpdateConflict('/r', run)).toMatchObject({
+      ok: true,
+      effect: 'none',
+      reload: false,
+      relaunch: false
+    })
+    expect(calls).toContainEqual(['merge', '--abort'])
+  })
+
+  it('refuse si des fichiers sont en conflit mais aucune fusion MERGE_HEAD n’est ouverte', async () => {
+    const run = runnerFrom({
+      'diff --name-only --diff-filter=U': 'src/x.ts',
+      'rev-parse --verify --quiet MERGE_HEAD': ''
+    })
+    const result = await abortUpdateConflict('/r', run)
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/aucune fusion/i)
+  })
 })
 
 describe('applyUpdate', () => {
-  it('arbre SALE → met le travail de cote via --autostash au lieu de REFUSER', async () => {
-    // L'ancien comportement refusait, ce qui obligeait a commiter n'importe quoi pour recuperer une
-    // mise a jour. `--autostash` est confie a git : il remet le travail meme si l'operation echoue.
+  it('arbre SALE → stash explicite, mise à jour, puis pop dans cet ordre', async () => {
     const calls: string[][] = []
     const run: GitRunner = async (args) => {
       calls.push(args)
       if (args.join(' ') === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
       if (args.join(' ') === 'status --porcelain') return { stdout: ' M src/x.ts' }
+      if (args.join(' ') === 'diff --name-only --diff-filter=U') return { stdout: '' }
       return { stdout: '' }
     }
     const r = await applyUpdate('/r', {}, run, async () => {})
     expect(r.ok).toBe(true)
-    expect(calls).toContainEqual(['pull', '--ff-only', '--autostash'])
+    const stash = calls.findIndex((args) => args[0] === 'stash' && args[1] === 'push')
+    const update = calls.findIndex((args) => args[0] === 'pull')
+    const pop = calls.findIndex((args) => args[0] === 'stash' && args[1] === 'pop')
+    expect(stash).toBeGreaterThan(-1)
+    expect(update).toBeGreaterThan(stash)
+    expect(pop).toBeGreaterThan(update)
+    expect(calls[update]).toEqual(['pull', '--ff-only'])
+  })
+
+  it('dépôt déjà en conflit → refuse avant stash ou mise à jour', async () => {
+    const calls: string[][] = []
+    const run: GitRunner = async (args) => {
+      calls.push(args)
+      if (args.join(' ') === 'rev-parse --abbrev-ref HEAD') return { stdout: 'feat/x' }
+      if (args.join(' ') === 'diff --name-only --diff-filter=U') return { stdout: 'src/conflit.ts' }
+      return { stdout: '' }
+    }
+
+    const r = await applyUpdate('/r', { strategy: 'merge' }, run, async () => {})
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/déjà en conflit/i)
+    expect(calls.some((args) => ['stash', 'merge', 'pull', 'rebase'].includes(args[0]))).toBe(false)
+  })
+
+  it('fusion échouée → annule la fusion avant de remettre le stash', async () => {
+    const calls: string[][] = []
+    const run: GitRunner = async (args) => {
+      calls.push(args)
+      const key = args.join(' ')
+      if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'feat/x' }
+      if (key === 'status --porcelain') return { stdout: ' M src/x.ts' }
+      if (key === 'merge origin/main') throw new Error('CONFLICT')
+      return { stdout: '' }
+    }
+
+    const r = await applyUpdate('/r', { strategy: 'merge' }, run, async () => {})
+    expect(r.ok).toBe(false)
+    const merge = calls.findIndex((args) => args.join(' ') === 'merge origin/main')
+    const abort = calls.findIndex((args) => args.join(' ') === 'merge --abort')
+    const pop = calls.findIndex((args) => args.join(' ') === 'stash pop')
+    expect(abort).toBeGreaterThan(merge)
+    expect(pop).toBeGreaterThan(abort)
+    expect(r.error).toMatch(/travail local remis/i)
+  })
+
+  it('pop conflictuel → dit que la mise à jour est faite et le stash conservé', async () => {
+    const run: GitRunner = async (args) => {
+      const key = args.join(' ')
+      if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
+      if (key === 'status --porcelain') return { stdout: ' M src/x.ts' }
+      if (key === 'stash pop') throw new Error('CONFLICT pendant pop')
+      return { stdout: '' }
+    }
+
+    const r = await applyUpdate('/r', {}, run, async () => {})
+    expect(r).toMatchObject({ ok: false, strategy: 'fast-forward' })
+    expect(r.error).toMatch(/mise à jour est appliquée/i)
+    expect(r.error).toMatch(/stash est conservé/i)
   })
 
   it('sur main : fast-forward par defaut, relaunch, npm install seulement si package a change', async () => {
@@ -90,18 +218,18 @@ describe('applyUpdate — souplesse HORS de main, sans mutation non demandee', (
     expect(calls.some((c) => ['pull', 'merge', 'rebase', 'switch'].includes(c[0]))).toBe(false)
   })
 
-  it('strategie merge : fusionne origin/main avec autostash', async () => {
+  it('strategie merge : fusionne origin/main sans autostash implicite', async () => {
     const calls: string[][] = []
     const r = await applyUpdate('/r', { strategy: 'merge' }, onBranch(calls), async () => {})
     expect(r).toMatchObject({ ok: true, strategy: 'merge' })
-    expect(calls).toContainEqual(['merge', '--autostash', 'origin/main'])
+    expect(calls).toContainEqual(['merge', 'origin/main'])
   })
 
   it('strategie rebase : rejoue par-dessus origin/main', async () => {
     const calls: string[][] = []
     const r = await applyUpdate('/r', { strategy: 'rebase' }, onBranch(calls), async () => {})
     expect(r).toMatchObject({ ok: true, strategy: 'rebase' })
-    expect(calls).toContainEqual(['rebase', '--autostash', 'origin/main'])
+    expect(calls).toContainEqual(['rebase', 'origin/main'])
   })
 
   it('strategie switch-main : bascule PUIS avance, sans toucher au travail de la branche', async () => {
@@ -109,7 +237,56 @@ describe('applyUpdate — souplesse HORS de main, sans mutation non demandee', (
     const r = await applyUpdate('/r', { strategy: 'switch-main' }, onBranch(calls), async () => {})
     expect(r).toMatchObject({ ok: true, strategy: 'switch-main' })
     expect(calls).toContainEqual(['switch', 'main'])
-    expect(calls).toContainEqual(['pull', '--ff-only', '--autostash'])
+    expect(calls).toContainEqual(['pull', '--ff-only'])
+    expect(calls).toContainEqual(['switch', 'feat/x'])
+  })
+
+  it('switch-main sur arbre sale : revient sur la branche avant de remettre le stash', async () => {
+    const calls: string[][] = []
+    const run: GitRunner = async (args) => {
+      calls.push(args)
+      const key = args.join(' ')
+      if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'feat/x' }
+      if (key === 'status --porcelain') return { stdout: ' M src/x.ts' }
+      return { stdout: '' }
+    }
+
+    expect(await applyUpdate('/r', { strategy: 'switch-main' }, run, async () => {})).toMatchObject({
+      ok: true,
+      strategy: 'switch-main'
+    })
+    const stash = calls.findIndex((args) => args.join(' ') === 'stash push --include-untracked --message autowin-pre-update')
+    const main = calls.findIndex((args) => args.join(' ') === 'switch main')
+    const pull = calls.findIndex((args) => args.join(' ') === 'pull --ff-only')
+    const origin = calls.findIndex((args) => args.join(' ') === 'switch feat/x')
+    const pop = calls.findIndex((args) => args.join(' ') === 'stash pop')
+    expect(stash).toBeGreaterThan(-1)
+    expect(main).toBeGreaterThan(stash)
+    expect(pull).toBeGreaterThan(main)
+    expect(origin).toBeGreaterThan(pull)
+    expect(pop).toBeGreaterThan(origin)
+  })
+
+  it('switch-main échoué : revient sur la branche avant le pop', async () => {
+    const calls: string[][] = []
+    const run: GitRunner = async (args) => {
+      calls.push(args)
+      const key = args.join(' ')
+      if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'feat/x' }
+      if (key === 'status --porcelain') return { stdout: ' M src/x.ts' }
+      if (key === 'pull --ff-only') throw new Error('remote indisponible')
+      return { stdout: '' }
+    }
+
+    expect(await applyUpdate('/r', { strategy: 'switch-main' }, run, async () => {})).toMatchObject({
+      ok: false,
+      strategy: 'switch-main'
+    })
+    const pull = calls.findIndex((args) => args.join(' ') === 'pull --ff-only')
+    const origin = calls.findIndex((args) => args.join(' ') === 'switch feat/x')
+    const pop = calls.findIndex((args) => args.join(' ') === 'stash pop')
+    expect(origin).toBeGreaterThan(pull)
+    expect(pop).toBeGreaterThan(origin)
   })
 
   it('refuse une strategie INAPPLICABLE ici plutot que de faire autre chose', async () => {

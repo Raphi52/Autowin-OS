@@ -26,16 +26,16 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     const runs = await listConvRuns('conv-9', [], root)
     expect(runs).toHaveLength(1)
     expect(runs[0].summary.status).toBe('open')
-    /*
-      Ce qui est interdit : la pseudo-DoD qui REPORTAIT LE VERDICT (« le juge valide le résultat et le
-      gate autorise la clôture »). Ce n'était pas un critère du travail, et elle faisait afficher
-      « DoD 0/1 » à tout run rouge — un reproche fantôme.
-
-      L'assertion ne porte donc PAS sur `dodTotal == 0` : les cases que le gabarit pose encore viennent
-      du contrat d'exécution racine, sont dérivées de la demande et se cochent sur preuve. Le cas d'une
-      tâche de lecture, qui n'en dérive aucune, est couvert par `conv-runs.dod-honnete.test.ts`.
-    */
+    // Plus de case-VERDICT fantôme (« le juge valide … ») ; les cases présentes sont DÉRIVÉES des
+    // obligations falsifiables du prompt (root-execution-contract) : ici mutation + tests.
+    expect(runs[0].summary.dodTotal).toBe(2)
+    expect(md).toContain('- [ ] Mutation demandee produite avec une preuve executable')
+    // L'interdit lui-même, énoncé de façon falsifiable : aucune case ne doit REPORTER LE VERDICT.
+    // Compter les cases ne l'attrape pas — la pseudo-DoD retirée en faisait exactement une.
     expect(md).not.toMatch(/- \[[ x]\].*(?:juge valide|gate autorise)/i)
+    // Une demande de lecture seule, elle, garde une DoD vide.
+    const lecture = createConvRun('conv-9-ro', 'Explique les écarts de facturation', root, () => 1100)
+    expect(readFileSync(lecture, 'utf8')).not.toContain('- [ ]')
   })
 
   it('closeConvRun preserve les quatre statuts, sans plus cocher de pseudo-DoD', async () => {
@@ -43,18 +43,10 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     closeConvRun(g, 'green', 'Juge: validé.')
     const green = (await listConvRuns('conv-9', [], root)).find((r) => r.path === g)!
     expect(green.summary.status).toBe('green')
-    /*
-      Ce qui est vérifié ici : la CLÔTURE ne coche jamais une case. Elle cochait un pseudo-critère au
-      moment même où le statut le disait déjà — une DoD réelle n'est cochée que par celui qui produit
-      la preuve, sinon la case ne prouve rien. C'est l'assertion discriminante : c'est exactement ce
-      cochage-là que l'ancien code faisait sur un vert.
-
-      `dodTotal` n'est PAS asserté ici, contrairement aux quatre autres statuts de ce test : cette
-      tâche-ci n'a aucun verbe, donc `classifyMutationConfidence` la range en mutation par DÉFAUT —
-      un défaut sûr, voulu pour le bac à sable — et le contrat racine lui pose une obligation de
-      preuve. L'absence de case AUTO sur une tâche de lecture est couverte, elle, par
-      `conv-runs.dod-honnete.test.ts` avec une vraie tâche d'audit.
-    */
+    // Le cochage n'est jamais un pseudo-critère de verdict : une case dérivée ne se coche qu'avec
+    // une PREUVE d'exécution transmise à la clôture — ici aucune, donc rien n'est coché. C'est
+    // l'assertion discriminante : ce cochage-là est exactement ce que l'ancien code faisait sur un vert.
+    expect(green.summary.dodTotal).toBe(1)
     expect(green.summary.dodChecked).toBe(0)
 
     const r = createConvRun('conv-9', 'tâche rouge', root, () => 3000)

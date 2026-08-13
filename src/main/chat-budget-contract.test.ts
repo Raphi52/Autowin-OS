@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { chatTurnBudget } from './chat-turn-budget'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
 import type { OrchestrationStep } from './orchestrator'
 
@@ -28,16 +29,19 @@ describe('tour de chat — budget applique', () => {
     expect(chatRunner).toMatch(/prompt-call.*callUsage|callUsage[\s\S]{0,200}chatBreaker\.observe/)
   })
 
-  it('COUPE reellement le tour au depassement (abort, pas un simple log)', () => {
+  it('COUPE reellement le tour au depassement — quand un cap explicite l’exige', () => {
     const tripBlock = chatRunner.slice(chatRunner.indexOf('chatBreaker.observe('))
     expect(tripBlock).toContain('controller.abort(')
+    // ... et la coupure est conditionnee au contrat explicite, jamais au defaut cable.
+    expect(tripBlock).toContain("budgetDuTour.enforcement === 'blocking'")
   })
 
-  it('a un plafond par DEFAUT (une variable d’env absente ne desarme pas la garde)', () => {
-    // Le defaut doit etre un nombre positif : sans lui, un poste sans env serait sans protection.
-    expect(chatRunner).toMatch(/maxUsd:[\s\S]{0,120}:\s*\d+(\.\d+)?/)
-    expect(chatRunner).toMatch(/maxTokens:[\s\S]{0,160}:\s*1_500_000/)
-    expect(chatRunner).toMatch(/maxCalls:[\s\S]{0,120}:\s*6/)
+  it('a un seuil d’OBSERVATION par DEFAUT (une variable d’env absente ne desarme pas la mesure)', () => {
+    // Politique extraite dans chat-turn-budget.ts (conv-1149) : sans cap explicite les seuils
+    // restent armes pour OBSERVER (ledger), et seule la coupure est desarmee.
+    const budget = chatTurnBudget({})
+    expect(budget.limits).toEqual({ maxUsd: 2, maxTokens: 1_500_000, maxCalls: 6 })
+    expect(budget.enforcement).toBe('metering-only')
   })
 
   it('place tout le tour dans le supervisor avant le premier appel provider', () => {

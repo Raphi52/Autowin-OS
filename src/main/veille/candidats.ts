@@ -38,6 +38,12 @@ export interface CandidatVeille {
    * pas n'a aucun sens, et les deux vraies features étaient noyées dans le lot.
    */
   type: TypeEntree
+  /**
+   * PERTINENCE pour Autowin, 0-100, telle que le scout l'a jugée : à quel point cette nouveauté
+   * mérite d'être reprise ici. `undefined` = le scout n'en a pas donné (source ancienne, ou modèle
+   * qui a ignoré la consigne) — on ne l'invente pas, l'absence est un fait distinct d'un zéro.
+   */
+  pertinence?: number
   /** Le prompt prêt à partir dans le chat. */
   prompt: string
   /** Quand la passe a vu cette entrée pour la première fois. */
@@ -73,6 +79,24 @@ export interface CandidatBrut {
   citation?: string
   langue?: string
   type?: string
+  /** Pertinence 0-100 telle que rendue par le scout ; bornée à l'entrée, jamais crue sur parole. */
+  pertinence?: number
+}
+
+/**
+ * Ramène une pertinence brute (nombre, chaîne numérique, hors bornes) à un entier 0-100, ou
+ * `undefined`. Piège trouvé par test : `Number(null)`, `Number('')` et `Number([])` valent `0`, pas
+ * `NaN` — accepter aveuglément `Number(valeur)` aurait transformé une note ABSENTE en un vrai zéro,
+ * exactement le mensonge que le champ optionnel doit éviter. On n'accepte donc QUE `number` ou une
+ * chaîne non vide entièrement numérique.
+ */
+export function bornerPertinence(valeur: unknown): number | undefined {
+  let n: number
+  if (typeof valeur === 'number') n = valeur
+  else if (typeof valeur === 'string' && valeur.trim() !== '') n = Number(valeur)
+  else return undefined
+  if (!Number.isFinite(n)) return undefined
+  return Math.max(0, Math.min(100, Math.round(n)))
 }
 
 export type RaisonRefus =
@@ -195,6 +219,9 @@ export function trierCandidats(
       dateSource: brut.dateSource!.trim(),
       citation: brut.citation!.trim(),
       ...(brut.langue?.trim() ? { langue: brut.langue.trim() } : {}),
+      ...(bornerPertinence(brut.pertinence) !== undefined
+        ? { pertinence: bornerPertinence(brut.pertinence) }
+        : {}),
       type: natureDe(brut.type),
       prompt: contexte.redigerPrompt(brut),
       vuLe: contexte.maintenant,

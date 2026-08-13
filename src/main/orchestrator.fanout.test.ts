@@ -89,7 +89,7 @@ function makeOrchestrator(
 }
 
 describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
-  it('réduit la topologie avant tout appel pour préserver build et juge sans retry implicite', async () => {
+  it('réduit la topologie avant tout appel pour préserver build, juge et récupération', async () => {
     const provider = new RecordingProvider()
     const supervisor = new ExecutionSupervisor()
     const quote = compileExecutionQuote('ajoute une page de réglages')
@@ -117,29 +117,28 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
 
     await supervisor.run(quote, undefined, () => orch.run('ajoute une page de réglages'))
 
-    expect(provider.calls.map((call) => call.model)).toEqual([
-      'm1',
-      'm2',
-      'orch',
-      'worker',
-      'judge'
-    ])
+    expect(provider.calls.map((call) => call.model)).toEqual(['m1', 'worker', 'judge'])
     expect(supervisor.lastSnapshot()).toMatchObject({
-      startedAgents: 5,
-      completedCalls: 5,
+      startedAgents: 3,
+      completedCalls: 3,
       activeCalls: 0
     })
     expect(quote.allocation).toMatchObject({
-      phaseMembers: { frame: 2 },
-      reservedMandatoryAgents: 3,
+      phaseMembers: { frame: 1 },
+      reservedMandatoryAgents: 5,
       estimatedMaxAgents: 5
     })
   })
 
-  it('refuse un pipeline impossible sans toucher le provider', async () => {
+  it('refuse un pipeline impossible sans toucher le provider — en mode bloquant', async () => {
+    // Depuis conv-1148 (13/08), en mesure seule (défaut) le devis s'agrandit au lieu de refuser ;
+    // le refus ex-ante ne subsiste qu'en `blocking`, où le plafond est un contrat.
     const provider = new RecordingProvider()
     const supervisor = new ExecutionSupervisor()
-    const quote = compileExecutionQuote('ajoute une page de réglages', { maxProviderCalls: 2 })
+    const quote = compileExecutionQuote('ajoute une page de réglages', {
+      maxProviderCalls: 2,
+      spendEnforcement: 'blocking'
+    })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
     const orch = new Orchestrator({
       registry,
