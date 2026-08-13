@@ -173,6 +173,33 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(mockApi.pilotChat).toHaveBeenCalledTimes(1)
   })
 
+  it('Stop conserve la file sans relancer automatiquement un nouveau tour', async () => {
+    const turn = deferred<{ ok: boolean; cancelled?: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => turn.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('lance un tour')
+    await click('.composer-send')
+    await type('message a garder en file')
+    await click('.composer-send')
+    expect(container!.querySelector('.directive-queue')).not.toBeNull()
+    expect(container!.querySelector('.composer-send')?.textContent).toContain('Stop')
+
+    await click('.composer-send')
+    await act(async () => {
+      turn.resolve({ ok: true, cancelled: true })
+      await flushAnimationFrames()
+    })
+
+    expect(mockApi.cancelPilotChat).toHaveBeenCalledTimes(1)
+    expect(mockApi.pilotChat).toHaveBeenCalledTimes(1)
+    expect(container!.querySelector('.directive-queue')).not.toBeNull()
+    expect(container!.querySelector('.composer-send')?.textContent).toContain('Reprendre')
+  })
+
   it('n affiche AUCUN bouton stop hors tour — il n y a rien a arreter', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)

@@ -317,6 +317,7 @@ export function ChatView({
   const liveMessagesRef = useRef(new Map<string, Msg[]>())
   const busyConversationsRef = useRef(new Set<string>())
   const interruptingConversationsRef = useRef(new Set<string>())
+  const stoppedQueueDrainRef = useRef(new Set<string>())
   const steeringRef = useRef(new Set<number>())
   const sendLocksRef = useRef(new Set<string>())
   const composerDraftKeyRef = useRef(NEW_DRAFT_KEY)
@@ -1210,6 +1211,31 @@ export function ChatView({
       .catch(() => setConversationInterrupting(id, false))
   }
 
+  /** Stop simple : annule le tour sans transformer la file en relance automatique. */
+  function stopPilotTurn(): void {
+    const id = activeRef.current
+    if (
+      !id ||
+      interruptingConversationsRef.current.has(id) ||
+      !busyConversationsRef.current.has(id)
+    )
+      return
+    stoppedQueueDrainRef.current.add(id)
+    setConversationInterrupting(id, true)
+    void window.api
+      .cancelPilotChat(id)
+      .then((result) => {
+        if (result?.ok === false) {
+          stoppedQueueDrainRef.current.delete(id)
+          setConversationInterrupting(id, false)
+        }
+      })
+      .catch(() => {
+        stoppedQueueDrainRef.current.delete(id)
+        setConversationInterrupting(id, false)
+      })
+  }
+
   /**
    * ORIENTER SANS INTERROMPRE : injecte le message comme directive dans le tour EN COURS
    * (drainée à l'itération suivante du pilote) sans l'annuler, puis le retire de la file.
@@ -1367,6 +1393,7 @@ export function ChatView({
     if (!id) return
     if (busy) return
     if (interruptingConversationsRef.current.has(id)) setConversationInterrupting(id, false)
+    if (stoppedQueueDrainRef.current.delete(id)) return
     const queued = queueRef.current.get(id)
     if (!queued || queued.length === 0) return
     const [nextMessage, ...rest] = queued
@@ -2673,7 +2700,7 @@ export function ChatView({
                 onClick={() => {
                   if (handleBtw()) return
                   if (busy && !input.trim()) {
-                    interruptAndFlushQueue()
+                    stopPilotTurn()
                     return
                   }
                   if (canResumePilotTurn) {

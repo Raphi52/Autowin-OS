@@ -71,7 +71,7 @@ describe('navigation pendant une reponse', () => {
     // l arret est un bouton DEDIE, conditionne au seul `busy`.
     expect(source).not.toContain('data-testid="composer-stop"')
     expect(source.match(/data-testid="composer-send"/g)).toHaveLength(1)
-    expect(source).toContain('interruptAndFlushQueue()')
+    expect(source).toContain('stopPilotTurn()')
     expect(source).toContain('resumePilotTurn()')
     expect(source).toContain('queueCurrentMessage()')
   })

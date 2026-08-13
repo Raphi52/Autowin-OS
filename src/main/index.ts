@@ -112,6 +112,7 @@ import { AgentPilot, type PilotEvent, type RecoveredPilotProviderCall } from './
 import { ActiveChatTurns } from './active-chat-turns'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import { boundedTurnHistory } from './chat-turn-messages'
+import { buildContinuationProviderHistory } from './chat-continuation'
 import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'
 import type { ChatTurnEvent } from '../shared/chat-turn'
 import type { RunLifecycleEvent } from '../shared/run-execution'
@@ -4577,7 +4578,7 @@ Le fil reprend ensuite normalement.`
     }))
     return runPilotChat(
       event.sender,
-      [...history, { role: 'user', content: '' }],
+      buildContinuationProviderHistory(history),
       conversationId,
       undefined,
       undefined,
