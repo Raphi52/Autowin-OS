@@ -338,15 +338,41 @@ export type ShadowRoutingRuntime =
     }
 
 /**
- * Le pilote shadow est un opt-in explicite. Tant que la variable n'est pas a `1` ou `true`, aucun
- * store ni observateur n'est construit et aucun fichier ne peut etre materialise.
+ * Surcharge d'environnement : `1`/`true` force ON, `0`/`false` force OFF. Toute autre valeur (vide,
+ * inconnue, absente) rend `undefined` : l'environnement ne tranche pas et laisse decider le reglage.
+ */
+export function shadowRoutingEnvOverride(
+  env: Readonly<Record<string, string | undefined>>
+): boolean | undefined {
+  const flag = env[SHADOW_ROUTING_ENABLED_ENV]?.trim().toLowerCase()
+  if (flag === '1' || flag === 'true') return true
+  if (flag === '0' || flag === 'false') return false
+  return undefined
+}
+
+/**
+ * Precedence EXPLICITE de l'opt-in : la variable d'environnement l'emporte dans les DEUX sens
+ * quand elle est renseignee, sinon le reglage persistant de l'app decide, sinon OFF.
+ */
+export function resolveShadowRoutingEnabled(
+  env: Readonly<Record<string, string | undefined>>,
+  settingEnabled?: boolean
+): boolean {
+  return shadowRoutingEnvOverride(env) ?? settingEnabled === true
+}
+
+/**
+ * Le pilote shadow est un opt-in explicite : l'utilisateur l'active depuis la vue Settings
+ * (`settingEnabled`, persiste par `model-routing-shadow-setting`) ou l'environnement le force.
+ * Tant que l'opt-in resolu est OFF, aucun store ni observateur n'est construit et aucun fichier ne
+ * peut etre materialise.
  */
 export function createShadowRoutingRuntime(
   path: string,
-  env: Readonly<Record<string, string | undefined>> = process.env
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  settingEnabled?: boolean
 ): ShadowRoutingRuntime {
-  const flag = env[SHADOW_ROUTING_ENABLED_ENV]?.trim().toLowerCase()
-  if (flag !== '1' && flag !== 'true') return { enabled: false }
+  if (!resolveShadowRoutingEnabled(env, settingEnabled)) return { enabled: false }
   const store = new ShadowRoutingStore(path)
   return {
     enabled: true,

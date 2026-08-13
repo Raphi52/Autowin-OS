@@ -15,6 +15,9 @@ import { StepThread } from './ChatView.parts'
 import { RunInspector } from './RunInspector'
 import { SourceControlPane } from './SourceControlPane'
 import { WorkflowExecutionGraph } from './WorkflowExecutionGraph'
+// `.lisere-dessus` vit dans cette feuille (voir ViewPage.css) : import explicite, pas d'heritage
+// implicite d'une autre vue.
+import './ViewPage.css'
 
 const RUN_DOT: Record<string, string> = {
   green: 'st-ok',
@@ -102,7 +105,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
         aria-orientation="vertical"
         onPointerDown={beginRunsResize}
       />
-      <aside className="runs-pane fade-in" style={{ width: `${runsPaneWidth}px` }}>
+      <aside className="lisere-dessus runs-pane fade-in" style={{ width: `${runsPaneWidth}px` }}>
         <div className="workflow-panel-head">
           <div className="workflow-section-tabs" role="tablist" aria-label="Vues Workflows">
             {WORKFLOW_PANEL_SECTIONS.map((section) => (

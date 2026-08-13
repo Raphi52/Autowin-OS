@@ -79,6 +79,10 @@ describe('Codex app-server model source', () => {
 
     const models = await listCodexAppServerModels({
       spawnFn: vi.fn(() => fixture.child as never),
+      // La suite redirige `APPDATA` vers un dossier de test isole : la resolution du CLI y echoue
+      // (`Codex CLI npm introuvable`). Ces tests portent sur le PROTOCOLE app-server, pas sur la
+      // resolution — `codexBin` la court-circuite, et `spawnFn` factice rend le chemin sans effet.
+      codexBin: 'codex-factice',
       timeoutMs: 1_000
     })
 
@@ -104,6 +108,10 @@ describe('Codex app-server model source', () => {
     await expect(
       listCodexAppServerModels({
         spawnFn: vi.fn(() => fixture.child as never),
+      // La suite redirige `APPDATA` vers un dossier de test isole : la resolution du CLI y echoue
+      // (`Codex CLI npm introuvable`). Ces tests portent sur le PROTOCOLE app-server, pas sur la
+      // resolution — `codexBin` la court-circuite, et `spawnFn` factice rend le chemin sans effet.
+      codexBin: 'codex-factice',
         timeoutMs: 10
       })
     ).rejects.toThrow(/silencieux/i)
@@ -128,6 +136,10 @@ describe('Codex app-server model source', () => {
     await expect(
       listCodexAppServerModels({
         spawnFn: vi.fn(() => fixture.child as never),
+      // La suite redirige `APPDATA` vers un dossier de test isole : la resolution du CLI y echoue
+      // (`Codex CLI npm introuvable`). Ces tests portent sur le PROTOCOLE app-server, pas sur la
+      // resolution — `codexBin` la court-circuite, et `spawnFn` factice rend le chemin sans effet.
+      codexBin: 'codex-factice',
         timeoutMs: 1_000
       })
     ).rejects.toThrow(/pagination/i)
@@ -142,6 +154,10 @@ describe('Codex app-server model source', () => {
     await expect(
       listCodexAppServerModels({
         spawnFn: vi.fn(() => fixture.child as never),
+      // La suite redirige `APPDATA` vers un dossier de test isole : la resolution du CLI y echoue
+      // (`Codex CLI npm introuvable`). Ces tests portent sur le PROTOCOLE app-server, pas sur la
+      // resolution — `codexBin` la court-circuite, et `spawnFn` factice rend le chemin sans effet.
+      codexBin: 'codex-factice',
         timeoutMs: 1_000
       })
     ).rejects.toThrow(/curseur/i)
@@ -209,5 +225,45 @@ describe('Codex app-server — aucune console visible sous Windows', () => {
     // Le discriminant : ni Electron-comme-node, ni le wrapper, ne doivent apparaître.
     expect(commande).not.toContain('electron')
     expect(args.join(' ')).not.toContain('codex.js')
+  })
+})
+
+describe('resolution du CLI Codex — le garde qui manquait de couverture', () => {
+  /**
+   * Ce garde n'etait couvert PAR RIEN. Il etait seulement HEURTE par accident : quatre tests de
+   * protocole ne l'injectaient pas et echouaient dessus (« Codex CLI npm introuvable ») parce que la
+   * suite redirige `APPDATA` vers un dossier isole. Ce n'etait pas de la couverture, c'etait du
+   * bruit — et un bruit qui masquait l'absence de test reel. Verifie par sabotage : neutraliser le
+   * `throw` laissait les cinq tests du fichier VERTS.
+   */
+  it('entrypoint npm absent → refuse au lieu de lancer n’importe quoi', async () => {
+    const vide = mkdtempSync(join(tmpdir(), 'autowin-codex-vide-'))
+    await expect(
+      listCodexAppServerModels({
+        platform: 'win32',
+        appData: vide,
+        spawnFn: vi.fn(() => {
+          throw new Error('le spawn ne doit JAMAIS etre atteint')
+        }),
+        timeoutMs: 1_000
+      })
+    ).rejects.toThrow(/introuvable/i)
+    rmSync(vide, { recursive: true, force: true })
+  })
+
+  it('`codexBin` explicite court-circuite la resolution — c’est l’echappatoire des tests', async () => {
+    const vide = mkdtempSync(join(tmpdir(), 'autowin-codex-vide2-'))
+    const fixture = fakeAppServer({ first: { data: [] } })
+    // Meme `appData` vide que ci-dessus : sans `codexBin` ce cas jette. Avec, il passe.
+    await expect(
+      listCodexAppServerModels({
+        platform: 'win32',
+        appData: vide,
+        codexBin: 'codex-factice',
+        spawnFn: vi.fn(() => fixture.child as never),
+        timeoutMs: 1_000
+      })
+    ).resolves.toEqual([])
+    rmSync(vide, { recursive: true, force: true })
   })
 })

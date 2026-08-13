@@ -26,7 +26,7 @@ function jalonDemarrage(etape: string): void {
 }
 jalonDemarrage('module principal évalué')
 import { resolveClaudeBin } from './providers/claude'
-import { traceActionEventId } from './activity/trace-event'
+import { seedTraceActionOrdinal, traceActionEventId } from './activity/trace-event'
 import { emitToLiveWindows } from './renderer-emit'
 import {
   ClaudeAccountsStore,
@@ -224,7 +224,12 @@ import { createFabricNodeTransportStore } from './compute-fabric/node-transport-
 import { createFabricProductBindings } from './compute-fabric/product-bridge'
 import { createCheckpointForkManifest } from './wire-checkpoint-fork'
 import { recommendShadowRoute } from './shadow-router'
-import { createShadowRoutingRuntime } from './model-routing-shadow'
+import { createShadowRoutingRuntime, shadowRoutingEnvOverride } from './model-routing-shadow'
+import {
+  loadShadowRoutingPilotSetting,
+  saveShadowRoutingPilotSetting,
+  type ShadowRoutingPilotState
+} from './model-routing-shadow-setting'
 import { rebuildSemanticTemporalProjection } from './knowledge/semantic-temporal-store'
 import { causalLearningContext } from './knowledge/semantic-temporal-projection'
 import { ModelCatalogRefresher } from './model-refresh'
@@ -343,7 +348,6 @@ import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker
 } from './providers/workspace-mutation-evidence'
-import { readWorktreeMap } from './worktree-map-main'
 import {
   automationAppIdentity,
   presentAutomationWindow,
@@ -1267,9 +1271,31 @@ try {
 }
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
-const shadowRoutingRuntime = createShadowRoutingRuntime(
-  join(app.getPath('userData'), 'model-routing-shadow', 'observations-v1.jsonl')
+const shadowRoutingObservationsPath = join(
+  app.getPath('userData'),
+  'model-routing-shadow',
+  'observations-v1.jsonl'
 )
+const shadowRoutingPilotPath = join(app.getPath('userData'), 'model-routing-shadow-pilot.json')
+/**
+ * `let` DELIBERE : la bascule de la vue Settings reconstruit ce runtime, et le sink de trace
+ * ci-dessous relit la reference a chaque evenement — l'opt-in prend donc effet sans redemarrage.
+ */
+let shadowRoutingRuntime = createShadowRoutingRuntime(
+  shadowRoutingObservationsPath,
+  process.env,
+  loadShadowRoutingPilotSetting(shadowRoutingPilotPath).enabled
+)
+/** État rendu à l'UI : réglage persistant, effet RÉEL du runtime, surcharge d'environnement. */
+function shadowRoutingPilotState(
+  setting = loadShadowRoutingPilotSetting(shadowRoutingPilotPath)
+): ShadowRoutingPilotState {
+  return {
+    enabled: setting.enabled,
+    active: shadowRoutingRuntime.enabled,
+    envOverride: shadowRoutingEnvOverride(process.env) ?? null
+  }
+}
 const otelGenAiExporter = new MetadataOnlyOtlpExporter(
   resolveOtelGenAiConfig(),
   undefined,
@@ -2094,14 +2120,6 @@ Le fil reprend ensuite normalement.`
       cwd && typeof cwd === 'string' ? cwd : (process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd())
     )
   })
-  // Vue Worktrees : état des copies git enrichi du retard, de la saleté et de la taille disque —
-  // trois grandeurs que `git worktree list --porcelain` ne donne pas. Lecture seule.
-  ipcMain.handle('git:worktreeMap', (event, cwd?: string) => {
-    assertTrustedRendererSender(event, 'GitWorktreeMap')
-    return readWorktreeMap(
-      cwd && typeof cwd === 'string' ? cwd : (process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd())
-    )
-  })
   ipcMain.handle('git:diff', (event, path: string, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitDiff')
     return readGitDiff(cwd && typeof cwd === 'string' ? cwd : process.cwd(), String(path ?? ''))
@@ -2401,6 +2419,22 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Orchestration budget')
     return saveOrchestrationBudget(orchestrationBudgetPath, value)
   })
+  ipcMain.handle('os:shadowRoutingPilot:get', (event) => {
+    assertTrustedRendererSender(event, 'Pilote de routage shadow')
+    return shadowRoutingPilotState()
+  })
+  ipcMain.handle('os:shadowRoutingPilot:set', (event, enabled: unknown) => {
+    assertTrustedRendererSender(event, 'Pilote de routage shadow')
+    const saved = saveShadowRoutingPilotSetting(shadowRoutingPilotPath, enabled)
+    // Reconstruction IMMEDIATE : le sink de trace relit `shadowRoutingRuntime` a chaque evenement,
+    // la bascule prend donc effet sans redemarrage. L'environnement garde la priorite.
+    shadowRoutingRuntime = createShadowRoutingRuntime(
+      shadowRoutingObservationsPath,
+      process.env,
+      saved.enabled
+    )
+    return shadowRoutingPilotState(saved)
+  })
   ipcMain.handle(
     'os:setRole',
     async (event, role: Role, provider: string, model?: string, reasoningEffort?: string) => {
@@ -2575,7 +2609,8 @@ Le fil reprend ensuite normalement.`
         status: 'insufficient-data' as const,
         confidence: 'insufficient' as const,
         phase: safePhase,
-        reason: 'Routeur shadow desactive (AUTOWIN_MODEL_ROUTING_SHADOW_ENABLED=1 pour activer).'
+        reason:
+          'Routeur shadow desactive : activez « Mesurer les routes (pilote shadow) » dans Settings > Budget pour que l app commence a mesurer quelle route tient le vert au cout le plus bas.'
       }
     }
     if (!champion || typeof champion !== 'object') throw new Error('Champion invalide')
@@ -3436,7 +3471,13 @@ Le fil reprend ensuite normalement.`
        * remis a zero a chaque `prompt-call` et sert d'index LOCAL au bloc : s'appuyer sur lui pour un
        * identifiant produisait des doublons. Celui-ci ne redescend jamais.
        */
-      let traceActionOrdinal = 0
+      // Un tour RÉCUPÉRÉ réutilise son turnId : l'ordinal doit repartir d'où la trace s'était
+      // arrêtée, sinon le premier événement de la reprise duplique `…:action:0-0:…` et
+      // `TraceStore.append` fait échouer le tour entier (mesuré sur conv-1147, 3,19 $ perdus).
+      let traceActionOrdinal =
+        recovery && conversationId
+          ? seedTraceActionOrdinal(causalTrace.readConversationBestEffort(conversationId), turnId)
+          : 0
       // Ordinal DEDIE aux artefacts : partager celui des actions ferait collisionner les identifiants.
       let traceArtifactOrdinal = 0
       let turnSessionId: string | undefined

@@ -41,6 +41,7 @@ import type { WorkflowProfilesFile } from '../main/workflow-profiles'
 import type { WorkflowBenchReport } from '../main/workflow-bench'
 import type { AutowinProfile } from '../main/profile-store'
 import type { ShadowRouteResult } from '../main/shadow-router'
+import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setting'
 import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
 import type { CommandSpec, CommandResult, AppSnapshot } from '../main/commands'
@@ -96,6 +97,9 @@ interface ChatApi {
     maxProviderCalls: number
     maxTotalTokens: number
   }>
+  /** Opt-in persistant du pilote de routage shadow (mesure verte/coût par route). */
+  shadowRoutingPilot: () => Promise<ShadowRoutingPilotState>
+  setShadowRoutingPilot: (enabled: boolean) => Promise<ShadowRoutingPilotState>
   getGitState: (repoPath?: string) => Promise<import('../shared/git-read').GitReadResult>
   conversationGitState: (
     conversationId: string
@@ -107,9 +111,6 @@ interface ChatApi {
   ) => Promise<import('../shared/git-read').GitDiffResult>
   /** Historique git de la vue Worktrees — la frise de commits. Lecture seule. */
   getGitGraph: (repoPath?: string) => Promise<import('../shared/git-graph').GitGraphSnapshot>
-  getWorktreeMap: (
-    repoPath?: string
-  ) => Promise<import('../shared/worktree-map').WorktreeMapSnapshot>
   getGitDiff: (
     path: string,
     repoPath?: string

@@ -14,7 +14,7 @@ describe('AgentPilot chat streaming', () => {
   it('ne repaie pas un appel pour reformuler un remember auxiliaire refusé après une réponse complète', async () => {
     const responses = [
       'Scout livré.<cmd>{"name":"remember","args":{"type":"constraint"}}</cmd>',
-      "Le dépôt mémoire a échoué."
+      'Le dépôt mémoire a échoué.'
     ]
     const send = vi.fn(async () => ({ text: responses.shift() ?? '', provider: 'claude' }))
     const registry = {
@@ -37,8 +37,19 @@ describe('AgentPilot chat streaming', () => {
     }
     const events: PilotEvent[] = []
 
+    /**
+     * Le message porte une demande MUTANTE : c'est la seule route où une `<cmd>` atteint le bus,
+     * donc la seule où « ne pas repayer un appel » se mesure.
+     *
+     * Il disait « scout la vue Chat » et ce test était rouge : depuis que le classifieur reconnaît
+     * un contrat scout sans slash (`orchestrator.scout-readonly`), ce libellé ouvre un tour
+     * `direct-read-only`, où une commande générée est bloquée AVANT le bus par défense en
+     * profondeur — comportement délibéré, couvert par `agent-pilot.turn-contract` (« bloque
+     * mecaniquement une commande generee dans un tour lecture seule »). Le scénario visé ici
+     * n'était donc plus exercé du tout. La garantie testée, elle, est inchangée.
+     */
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
-      [{ role: 'user', content: 'memorise ce resultat puis reponds' }],
+      [{ role: 'user', content: 'ajoute une note de contrainte dans la memoire' }],
       (event) => events.push(event),
       undefined,
       6,
@@ -48,9 +59,58 @@ describe('AgentPilot chat streaming', () => {
     expect(send).toHaveBeenCalledTimes(1)
     expect(bus.exec).toHaveBeenCalledTimes(1)
     expect(events).toContainEqual(
-      expect.objectContaining({ kind: 'result', name: 'remember', ok: false, data: 'type invalide' })
+      expect.objectContaining({
+        kind: 'result',
+        name: 'remember',
+        ok: false,
+        data: 'type invalide'
+      })
     )
     expect(events.at(-1)).toMatchObject({ kind: 'done' })
+  })
+
+  it('bloque une commande emise pendant un tour LECTURE SEULE, sans perdre la reponse dite', async () => {
+    // Comportement apparu avec le classement lecture-seule et que RIEN ne nommait sur ce chemin :
+    // un message commencant par « scout » ouvre un tour sans catalogue de commandes ; si le modele
+    // en emet une quand meme, elle ne doit JAMAIS atteindre le bus — et le texte deja livre doit
+    // survivre, sinon on jette le travail rendu pour punir une balise de trop.
+    const responses = [
+      'Scout livré.<cmd>{"name":"remember","args":{"type":"constraint"}}</cmd>',
+      'Deuxième appel qui ne devrait pas avoir lieu.'
+    ]
+    const send = vi.fn(async () => ({ text: responses.shift() ?? '', provider: 'claude' }))
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'remember', args: {}, description: 'mémoire auxiliaire' }],
+      snapshotForPrompt,
+      exec: vi.fn()
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'scout la vue Chat' }],
+      (event) => events.push(event),
+      undefined,
+      6,
+      'conv-read-only-guard'
+    )
+
+    expect(bus.exec).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledTimes(1)
+    // Le texte livre survit au blocage : c'est le travail, la balise n'etait qu'un extra.
+    expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Scout livré.' })
   })
 
   it('demande une conclusion quand la réponse ne contient qu’un remember auxiliaire', async () => {
@@ -90,7 +150,12 @@ describe('AgentPilot chat streaming', () => {
     expect(send).toHaveBeenCalledTimes(2)
     expect(bus.exec).toHaveBeenCalledTimes(1)
     expect(events).toContainEqual(
-      expect.objectContaining({ kind: 'result', name: 'remember', ok: false, data: 'type invalide' })
+      expect.objectContaining({
+        kind: 'result',
+        name: 'remember',
+        ok: false,
+        data: 'type invalide'
+      })
     )
     expect(events.at(-1)).toMatchObject({
       kind: 'done',
@@ -444,40 +509,37 @@ describe('AgentPilot chat streaming', () => {
     '<question>{"question":"privé"',
     '<question>sk-test-123',
     '<QUESTION>sk-test-123'
-  ])(
-    'never falls back to raw incomplete control markup: %s',
-    async (response) => {
-      const registry = {
-        send: async (
-          _provider: string,
-          _messages: unknown,
-          _options: unknown,
-          onChunk?: (chunk: { delta: string }) => void
-        ) => {
-          onChunk?.({ delta: response })
-          return { text: response, provider: 'codex' }
-        },
-        describePrompt: () => ({
-          provider: 'codex',
-          transport: 'fixture',
-          messages: [],
-          options: {},
-          limitation: 'test'
-        })
-      }
-      const roles = {
-        getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
-      }
-      const bus = { catalog: () => [], snapshotForPrompt }
-      const events: PilotEvent[] = []
-
-      await new AgentPilot(registry as never, roles as never, bus as never).chat(
-        [{ role: 'user', content: 'test' }],
-        (event) => events.push(event)
-      )
-
-      expect(events.filter((event) => ['delta', 'think'].includes(event.kind))).toEqual([])
-      expect(JSON.stringify(events)).not.toContain('sk-test-123')
+  ])('never falls back to raw incomplete control markup: %s', async (response) => {
+    const registry = {
+      send: async (
+        _provider: string,
+        _messages: unknown,
+        _options: unknown,
+        onChunk?: (chunk: { delta: string }) => void
+      ) => {
+        onChunk?.({ delta: response })
+        return { text: response, provider: 'codex' }
+      },
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
     }
-  )
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'test' }],
+      (event) => events.push(event)
+    )
+
+    expect(events.filter((event) => ['delta', 'think'].includes(event.kind))).toEqual([])
+    expect(JSON.stringify(events)).not.toContain('sk-test-123')
+  })
 })

@@ -8,9 +8,12 @@ import { ObservatoryView } from './components/ObservatoryView'
 // `git-graph` — et remplacée par un plan de métro des copies (`WorktreeMapView`). L'utilisateur ne
 // retrouvait plus l'historique, qui était précisément ce qu'il utilisait.
 //
-// `WorktreeMapView` reste dans le dépôt, non branchée : elle chiffre le retard, la saleté et la taille
-// disque des copies, ce que la frise ne dit pas. La supprimer aurait détruit un travail utile sur un
-// changement d'avis d'affichage.
+// Le plan de métro (`WorktreeMapView`) a ensuite été SUPPRIMÉ, avec tout son membre : canal IPC
+// `git:worktreeMap`, `worktree-map-main.ts`, `worktree-doctor.ts` et `shared/worktree-map.ts`. Il
+// n'avait aucun consommateur, deux garde-fous le surveillaient pour rien, et du travail y a été
+// dépensé sans jamais atteindre l'écran. Les chiffres qui manquaient à la frise (branche,
+// changements locaux, travaux actifs, alertes) vivent dans sa barre d'état. Récupérable tel quel :
+// `git checkout  -- src/renderer/src/components/WorktreeMapView.tsx` (et ses voisins).
 import { WorktreeView } from './components/WorktreeView'
 import { UpdateBanner } from './components/UpdateBanner'
 import { pickTurnToResume } from './components/resume-unfinished'

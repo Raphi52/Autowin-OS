@@ -289,13 +289,30 @@ const dialogs = skipDialogs
       returnByValue: true
     })
 if (!skipScreenshot) {
-  const screenshot = await send('Runtime.evaluate', {
+  // `captureTestPage()` REFUSE hors instance isolée (`index.ts` : « Capture UI de test indisponible
+  // hors instance isolée ») — c'est voulu. Mais ce refus n'était pas lu : `exceptionDetails` était
+  // ignoré, la valeur restait un objet, et `Buffer.from` levait un `ERR_INVALID_ARG_TYPE` illisible.
+  // On diagnostiquait alors une API cassée là où l'app disait simplement non.
+  //
+  // Deux corrections : le refus est ÉNONCÉ, et on retombe sur `Page.captureScreenshot` — la capture
+  // NATIVE de CDP, qui marche sur n'importe quelle instance. C'est ce qui rend cet outil utilisable
+  // contre l'instance de dev ordinaire, le cas où l'on a justement besoin de VOIR avant de conclure.
+  const parApi = await send('Runtime.evaluate', {
     expression: 'window.api.captureTestPage()',
     awaitPromise: true,
     returnByValue: true
   })
-  if (!screenshot.result.value) throw new Error('Capture renderer vide')
-  writeFileSync(output, Buffer.from(screenshot.result.value, 'base64'))
+  const refus =
+    parApi.exceptionDetails?.exception?.description ??
+    parApi.exceptionDetails?.text ??
+    (typeof parApi.result.value === 'string' ? undefined : 'valeur non textuelle')
+  const base64 =
+    typeof parApi.result.value === 'string' && parApi.result.value
+      ? parApi.result.value
+      : (await send('Page.captureScreenshot', { format: 'png' })).data
+  if (!base64) throw new Error(`Capture renderer vide${refus ? ` — ${refus}` : ''}`)
+  if (refus) console.warn(`[capture] API de test indisponible (${refus}) → capture CDP native`)
+  writeFileSync(output, Buffer.from(base64, 'base64'))
 }
 socket.close()
 const result = {

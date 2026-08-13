@@ -16,7 +16,6 @@ import type {
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 import type { UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
-import type { WorktreeMapSnapshot } from '../shared/worktree-map'
 import type {
   TicketItem,
   TicketSourceSummary,
@@ -69,6 +68,7 @@ import type { WorkflowProfilesFile } from '../main/workflow-profiles'
 import type { WorkflowBenchReport } from '../main/workflow-bench'
 import type { AutowinProfile } from '../main/profile-store'
 import type { ShadowRouteResult } from '../main/shadow-router'
+import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setting'
 import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
 import type { CommandSpec, CommandResult, AppSnapshot } from '../main/commands'
@@ -123,8 +123,6 @@ const api = {
     workspaceRoot: string
   ): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:conversationDiff', conversationId, path, workspaceRoot),
-  getWorktreeMap: (repoPath?: string): Promise<WorktreeMapSnapshot> =>
-    ipcRenderer.invoke('git:worktreeMap', repoPath),
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
@@ -223,6 +221,11 @@ const api = {
     maxProviderCalls: number
     maxTotalTokens: number
   }> => ipcRenderer.invoke('os:orchestrationBudget:set', settings),
+  /** Opt-in persistant du pilote de routage shadow (mesure verte/coût par route). */
+  shadowRoutingPilot: (): Promise<ShadowRoutingPilotState> =>
+    ipcRenderer.invoke('os:shadowRoutingPilot:get'),
+  setShadowRoutingPilot: (enabled: boolean): Promise<ShadowRoutingPilotState> =>
+    ipcRenderer.invoke('os:shadowRoutingPilot:set', enabled),
   // Config par rôle
   workflowProfiles: (): Promise<WorkflowProfilesFile> =>
     ipcRenderer.invoke('os:workflowProfiles:get'),

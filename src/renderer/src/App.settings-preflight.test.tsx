@@ -6,7 +6,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 vi.mock('./components/ChatView', () => ({ ChatView: () => createElement('div') }))
 vi.mock('./components/FirstRunWizard', () => ({ FirstRunWizard: () => null }))
 vi.mock('./components/ObservatoryView', () => ({ ObservatoryView: () => null }))
-vi.mock('./components/WorktreeMapView', () => ({ WorktreeMapView: () => null }))
 vi.mock('./components/TicketsView', () => ({ TicketsView: () => null }))
 vi.mock('./components/TaskManagerView', () => ({ TaskManagerView: () => null }))
 vi.mock('./components/AgentStudioView', () => ({ AgentStudioView: () => null }))

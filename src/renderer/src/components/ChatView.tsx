@@ -40,6 +40,7 @@ import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { lastUserPromptBefore, messageKey } from './chat-message-keys'
+import { promptDeRelanceGratuite } from './auto-relance'
 import type {
   AsstMsg,
   ChatAttachment,
@@ -74,6 +75,9 @@ import {
   scopedRunsFromTimeline,
   type TurnRuntimeIdentity
 } from './subagent-thread-from-trace'
+// La classe `.lisere-dessus` vit dans cette feuille : importee ICI et non « heritee » d'une
+// autre vue, sinon l'apparence de Chat dependrait de l'ordre de chargement des AUTRES vues.
+import './ViewPage.css'
 import './ChatView.css'
 import './SlashPalette.css'
 import './ChatComposerExtras.css'
@@ -602,11 +606,47 @@ export function ChatView({
       return
     }
     const target = pickTurnToResume(turns)
-    if (!target) return
-    const conversation = loaded.find((candidate) => candidate.id === target.conversationId)
-    if (!conversation) return
-    await loadConv(conversation)
-    await replayTurnJournal(target.conversationId, target.turnId)
+    if (target) {
+      const conversation = loaded.find((candidate) => candidate.id === target.conversationId)
+      if (conversation) {
+        await loadConv(conversation)
+        await replayTurnJournal(target.conversationId, target.turnId)
+        return
+      }
+    }
+    // Survie niveau 3 — RELANCE GRATUITE (demande user 2026-08-13 : « faire en sorte que ça tue
+    // pas les runs »). `pickTurnToResume` exige `events > 0` : un tour mort AVANT d'avoir rien
+    // produit (0 événement, 0 texte, 0 action réglée — donc 0 dépense) passait au travers et
+    // restait abandonné jusqu'à un clic humain sur « Renvoyer ». Mesuré trois fois sur les
+    // campagnes des 12-13/08. Ce chemin tourne UNE fois au boot, avant toute activité vivante —
+    // pas dans la boucle de rendu, où un routage en vol marque transitoirement un tour
+    // `interrupted` et déclenchait un envoi parasite (pilotChat appelé 2 fois, mesuré).
+    // UNE seule conversation relancée par boot : deux orchestrations parallèles s'annulent
+    // mutuellement dans l'app (défaut mesuré le 13/08 — la seconde a tué la première).
+    // Les candidats viennent d'`unfinishedTurns` (events === 0 : rien produit, donc rien payé),
+    // PAS d'un balayage de toutes les conversations — un fetch systématique au boot consommait
+    // les réponses moquées des tests de chargement et interférait avec le premier chargement réel.
+    const candidats = turns
+      .filter((turn) => turn && turn.conversationId && turn.events === 0)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map((turn) => loaded.find((conversation) => conversation.id === turn.conversationId))
+      .filter((conversation): conversation is Conv => Boolean(conversation))
+    for (const candidate of candidats) {
+      try {
+        const detail = (await window.api.conversation(candidate.id)) as { messages?: unknown[] }
+        const hydrated = (detail?.messages ?? []).map((message) =>
+          (message as { role?: string }).role === 'assistant'
+            ? hydrateStoredAssistant(message as never)
+            : message
+        ) as Parameters<typeof promptDeRelanceGratuite>[0]
+        const prompt = promptDeRelanceGratuite(hydrated)
+        if (!prompt) continue
+        void sendRef.current(prompt, { targetConversationId: candidate.id })
+        return
+      } catch (error) {
+        traceSilentFailure('relance-gratuite', error)
+      }
+    }
   }
   // File d'attente LOCALE (renderer) : messages tapés pendant un tour, envoyés comme des tours
   // NORMAUX un par un à la fin du tour courant → chaque message = sa propre paire Q/R (rendu propre).
@@ -1773,7 +1813,7 @@ export function ChatView({
       data-active-conversation-id={activeId ?? ''}
     >
       {/* ---- Panneau gauche : conversations ---- */}
-      <aside className="conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
+      <aside className="lisere-dessus conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
         <div className="conv-head">
           <ModuleHeader eyebrow="Espace de travail" title="Conversations" />
         </div>
@@ -2041,7 +2081,7 @@ export function ChatView({
 
       {/* ---- Centre : fil ---- */}
       <section
-        className={`chat${dragActive ? ' is-file-dragging' : ''}`}
+        className={`lisere-dessus chat${dragActive ? ' is-file-dragging' : ''}`}
         onDragEnter={(event) => {
           if (Array.from(event.dataTransfer.types).includes('Files')) {
             event.preventDefault()

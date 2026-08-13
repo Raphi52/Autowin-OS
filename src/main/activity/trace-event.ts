@@ -328,3 +328,24 @@ export function traceActionEventId(input: {
   const stable = input.actionId?.replaceAll(':', '-') ?? `${input.iteration ?? 0}-${input.ordinal}`
   return `${input.turnId}:action:${stable}:${input.kind}`
 }
+
+/**
+ * Ordinal de DÉPART d'un tour qui reprend un `turnId` existant.
+ *
+ * Mesuré le 2026-08-13 sur conv-1147 (campagne de fixes, 3,19 $ perdus) : un tour RÉCUPÉRÉ réutilise
+ * son `turnId` (voulu — la corrélation durable en dépend) mais `traceActionOrdinal` repartait à 0
+ * dans la nouvelle invocation. La trace portait déjà `…:action:0-0:command` de la première vie du
+ * tour ; le premier `command` de la reprise a produit le MÊME identifiant, `TraceStore.append` a
+ * jeté « événement dupliqué », et le tour entier a échoué. L'unicité « par construction » promise
+ * ci-dessus ne tenait que dans UNE invocation.
+ *
+ * Le remède est le même que `rebaseTraceSequence` pour la séquence : semer l'ordinal depuis ce que
+ * la trace contient DÉJÀ pour ce tour. Compter suffit — les ordinaux existants sont 0..n-1.
+ */
+export function seedTraceActionOrdinal(
+  events: readonly { id: string }[],
+  turnId: string
+): number {
+  const prefixe = `${turnId}:action:`
+  return events.reduce((n, event) => (event.id.startsWith(prefixe) ? n + 1 : n), 0)
+}

@@ -123,6 +123,98 @@ function bindingDeRepliPourPhase(
     : (runtimeSnapshot?.roles.subagent ?? roles.getBinding('subagent'))
 }
 
+/**
+ * L'instantané de rôles est OPPOSABLE tant que sa cible existe — pas au-delà.
+ *
+ * Pourquoi geler : un run qui traverse build→judge doit être jugé par la même famille de modèles qui
+ * l'a produit, sinon le verdict n'est plus comparable ; et un run repris après une pause quota ne
+ * doit pas changer de provider en silence. Ce gel est voulu, il n'est pas le défaut.
+ *
+ * Ce qui l'était : l'instantané survivait à la disparition de ce qu'il désignait. Vécu par
+ * l'utilisateur — instantané sur `codex`, configuration reconfigurée en `claude`, et le run appelait
+ * quand même codex avant d'échouer sur un provider qu'il n'utilise plus. Un run ne doit pas mourir
+ * sur une configuration déjà corrigée.
+ *
+ * LIMITE ASSUMÉE : on vérifie que le provider est ENREGISTRÉ (`registry.ids()`), pas qu'il est
+ * authentifié — cette dernière vérification est asynchrone et coûteuse ici. Un provider enregistré
+ * mais déconnecté échouera donc encore, mais son message nomme désormais la divergence.
+ */
+/**
+ * ASSAINIT l'instantané À L'ADMISSION : tout rôle pointant sur un provider non enregistré retombe sur
+ * la configuration courante.
+ *
+ * Corriger phase par phase ne suffisait PAS, et c'est un test du vrai `run()` qui l'a montré — le
+ * test de la fonction pure, lui, passait et donnait une fausse confiance. L'instantané est consommé
+ * par PLUSIEURS chemins (fan-out de phase, fan-out de juge, phase séquentielle) ; le premier qui
+ * atteignait le registre jetait `Provider inconnu: <x>` avant toute validation. Un seul point
+ * d'entrée les couvre tous.
+ */
+export function instantaneAssaini(
+  instantane: OrchestrationRuntimeSnapshot,
+  rolesCourants: Record<Role, RoleBinding>,
+  providersDisponibles: readonly string[]
+): { instantane: OrchestrationRuntimeSnapshot; notes: string[] } {
+  const notes: string[] = []
+  const disponible = (binding: RoleBinding): boolean =>
+    providersDisponibles.includes(binding.provider)
+  const roles = { ...instantane.roles }
+  for (const [role, binding] of Object.entries(instantane.roles) as [Role, RoleBinding][]) {
+    if (disponible(binding)) continue
+    roles[role] = rolesCourants[role]
+    notes.push(
+      `instantané abandonné pour ${role} : ${binding.provider} n'est plus disponible — ` +
+        `repli sur la configuration courante (${rolesCourants[role].provider})`
+    )
+  }
+  // Les fan-outs portent des bindings INDÉPENDANTS des rôles : un membre injoignable ferait tomber
+  // tout le fan-out. On RETIRE le membre plutôt que de le remplacer — sa place n'a pas d'équivalent
+  // dans la configuration courante, et un panel amputé vaut mieux qu'un panel qui jette.
+  const filtrer = (membres: readonly RoleBinding[], ou: string): RoleBinding[] => {
+    const gardes = membres.filter(disponible)
+    if (gardes.length !== membres.length)
+      notes.push(
+        `${membres.length - gardes.length} membre(s) du fan-out ${ou} retiré(s) : provider absent du registre`
+      )
+    return gardes
+  }
+  const phaseFanOut = Object.fromEntries(
+    Object.entries(instantane.phaseFanOut).map(([phase, membres]) => [
+      phase,
+      filtrer(membres ?? [], phase)
+    ])
+  )
+  const judgeFanOut = filtrer(instantane.judgeFanOut, 'juge')
+  // RIEN à assainir → on rend l'objet D'ORIGINE, pas une copie identique. Un contrat existant vérifie
+  // que les points de reprise portent le MÊME instantané par identité
+  // (`orchestrator.provider-identity.test.ts` : « execute tout le run avec le snapshot persiste ») —
+  // reconstruire sans raison le cassait, et c'était une copie gratuite dans le cas courant.
+  if (notes.length === 0) return { instantane, notes }
+  return { instantane: { ...instantane, roles, phaseFanOut, judgeFanOut }, notes }
+}
+
+export function bindingDePhaseValide(
+  instantane: RoleBinding | undefined,
+  courant: RoleBinding,
+  providersDisponibles: readonly string[]
+): { binding: RoleBinding; note?: string } {
+  if (!instantane) return { binding: courant }
+  if (!providersDisponibles.includes(instantane.provider))
+    return {
+      binding: courant,
+      note:
+        `instantané abandonné : ${instantane.provider} n'est plus disponible — ` +
+        `repli sur la configuration courante (${courant.provider})`
+    }
+  if (instantane.provider !== courant.provider || instantane.model !== courant.model)
+    return {
+      binding: instantane,
+      note:
+        `instantané du run : ${instantane.provider}${instantane.model ? ` (${instantane.model})` : ''} — ` +
+        `configuration courante : ${courant.provider}${courant.model ? ` (${courant.model})` : ''}`
+    }
+  return { binding: instantane }
+}
+
 /** La forme que le brief du juge IMPOSE pour un rejet : « DEFAUT: <raison> », où qu'elle se trouve. */
 const REJET_FORME_CONTRAT = /\b(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|KO)\s*:/i
 /** L'approbation que le brief du juge IMPOSE : « Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: …" ». */
@@ -1311,7 +1403,15 @@ export class Orchestrator {
       }
       executionQuote.limits.maxAgents = Math.max(executionQuote.limits.maxAgents, mandatory)
     }
-    const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
+    // Un instantané FOURNI est assaini AVANT tout usage : il est consommé par plusieurs chemins
+    // (fan-out de phase, fan-out de juge, phase séquentielle) et le premier qui atteignait le registre
+    // jetait `Provider inconnu: <x>`. Un instantané construit ICI vient de la configuration courante,
+    // donc rien à assainir.
+    const assainissement = runtimeSnapshot
+      ? instantaneAssaini(runtimeSnapshot, this.deps.roles.all(), this.deps.registry.ids())
+      : undefined
+    for (const note of assainissement?.notes ?? []) onDelta?.('exec', `[binding] ${note}\n`)
+    const admittedRuntime: OrchestrationRuntimeSnapshot = assainissement?.instantane ?? {
       roles: this.deps.roles.all(),
       phaseFanOut: Object.fromEntries(
         phases.map((phase) => [phase, [...(this.deps.phaseFanOut?.(phase) ?? [])]])
@@ -3268,11 +3368,21 @@ export class Orchestrator {
       // (besoin + acquis des phases) vit dans le message user ci-dessous, pas dans le system.
       // Modèle EFFECTIF de la phase : override par phase (petit modèle sur analyse, gros sur build)
       // → défaut = modèle du binding. Générique/rétrocompat (resolvePhaseBinding).
-      const bindingDeLaPhase = jugeDedie
-        ? bindingDeRepliPourPhase(phase, roles, runtimeSnapshot)
-        : subBinding
-      const providerDeLaPhase = bindingDeLaPhase.provider
       const roleDeLaPhase = jugeDedie ? 'judge' : 'subagent'
+      // L'instantané est VALIDÉ contre les providers réellement enregistrés : il ne doit pas survivre
+      // à la disparition de sa cible. Et sa divergence avec la configuration courante est ANNONCÉE
+      // ici, avant l'appel — jusqu'ici on ne l'apprenait qu'en lisant l'erreur, une fois la phase
+      // cassée, et il fallait fouiller cinq fichiers de configuration pour comprendre.
+      const choix = jugeDedie
+        ? bindingDePhaseValide(
+            bindingDeRepliPourPhase(phase, roles, runtimeSnapshot),
+            roles.getBinding(roleDeLaPhase),
+            registry.ids()
+          )
+        : { binding: subBinding }
+      const bindingDeLaPhase = choix.binding
+      const providerDeLaPhase = bindingDeLaPhase.provider
+      if (choix.note) onDelta?.('exec', `[binding] Phase ${phase} — ${choix.note}\n`)
       const phaseBinding = resolvePhaseBinding(bindingDeLaPhase, phase)
       // Anti-perte-de-contexte / longs runs : en session-resume, la discipline (~1-2k) et le
       // projectContext (≤32k) sont DÉJÀ connus de la session (envoyés en phase 1) → les ré-envoyer
@@ -3368,11 +3478,24 @@ export class Orchestrator {
         )
       } catch (error) {
         // L'erreur brute dit la cause mais pas QUEL role l'a subie ni son binding : on prefixe.
-        const explained = explainRoleFailure(`Phase ${phase}`, 'subagent', {
-          provider: providerDeLaPhase,
-          ...(subOptions.model ? { model: subOptions.model } : {}),
-          message: error instanceof Error ? error.message : String(error)
-        })
+        //
+        // DEUX defauts corriges ici. (1) Le role etait ecrit EN DUR a `'subagent'` alors que
+        // `roleDeLaPhase` — utilise deux lignes plus bas dans le meme `push` — vaut `'judge'` sur une
+        // phase de juge dedie : un echec de juge s'affichait donc « le role subagent ». (2) Le
+        // provider passe est celui qui a SERVI a l'appel ; sur une phase de juge il vient de
+        // `bindingDeRepliPourPhase`, qui lit un INSTANTANE de roles pris au demarrage du run. Il peut
+        // donc differer de la config courante — d'ou le binding REEL transmis en dernier argument,
+        // pour que le message dise « parti sur X, binde sur Y » au lieu d'affirmer un reglage absent.
+        const explained = explainRoleFailure(
+          `Phase ${phase}`,
+          roleDeLaPhase,
+          {
+            provider: providerDeLaPhase,
+            ...(subOptions.model ? { model: subOptions.model } : {}),
+            message: error instanceof Error ? error.message : String(error)
+          },
+          roles.getBinding(roleDeLaPhase).provider
+        )
         push({
           step: 'exec',
           provider: providerDeLaPhase,
