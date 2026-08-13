@@ -3,7 +3,8 @@ import {
   assertTraceEvent,
   traceActionEventId,
   type TraceEventV1,
-  type TracePayload
+  type TracePayload,
+  seedTraceActionOrdinal
 } from './trace-event'
 
 const payloads: TracePayload[] = [
@@ -161,5 +162,34 @@ describe('identifiant d action — l unicite ne doit pas dependre d un compteur 
     expect(traceActionEventId({ turnId: 'T', kind: 'retry', ordinal: 0 })).not.toBe(
       traceActionEventId({ turnId: 'T', kind: 'error', ordinal: 0 })
     )
+  })
+})
+
+describe('seedTraceActionOrdinal — reprise d’un tour sans dupliquer la trace', () => {
+  // Mesuré sur conv-1147 (13/08, 3,19 $ perdus) : un tour récupéré réutilise son turnId, l'ordinal
+  // repartait à 0, et le premier command de la reprise dupliquait `…:action:0-0:command` — le
+  // TraceStore jetait, le tour entier échouait.
+  const turn = 'b63542e4-f7bb-4c6a-ada3-237f579d793e'
+  const events = [
+    { id: `${turn}:action:0-0:command` },
+    { id: `${turn}:action:0-1:result` },
+    { id: `${turn}:prompt-call:0` },
+    { id: `autre-tour:action:0-0:command` }
+  ]
+
+  it('repart après les événements d’action DÉJÀ tracés pour ce tour', () => {
+    expect(seedTraceActionOrdinal(events, turn)).toBe(2)
+    // L'identifiant produit avec ce semis ne collisionne pas avec l'existant.
+    const id = traceActionEventId({ turnId: turn, kind: 'command', iteration: 0, ordinal: 2 })
+    expect(events.some((event) => event.id === id)).toBe(false)
+  })
+
+  it('rend 0 pour un tour vierge — le démarrage normal est inchangé', () => {
+    expect(seedTraceActionOrdinal(events, 'tour-neuf')).toBe(0)
+    expect(seedTraceActionOrdinal([], turn)).toBe(0)
+  })
+
+  it('ne compte pas les événements des AUTRES tours', () => {
+    expect(seedTraceActionOrdinal([{ id: 'autre:action:0-0:command' }], turn)).toBe(0)
   })
 })

@@ -26,7 +26,7 @@ function jalonDemarrage(etape: string): void {
 }
 jalonDemarrage('module principal évalué')
 import { resolveClaudeBin } from './providers/claude'
-import { traceActionEventId } from './activity/trace-event'
+import { seedTraceActionOrdinal, traceActionEventId } from './activity/trace-event'
 import { emitToLiveWindows } from './renderer-emit'
 import {
   ClaudeAccountsStore,
@@ -3444,7 +3444,13 @@ Le fil reprend ensuite normalement.`
        * remis a zero a chaque `prompt-call` et sert d'index LOCAL au bloc : s'appuyer sur lui pour un
        * identifiant produisait des doublons. Celui-ci ne redescend jamais.
        */
-      let traceActionOrdinal = 0
+      // Un tour RÉCUPÉRÉ réutilise son turnId : l'ordinal doit repartir d'où la trace s'était
+      // arrêtée, sinon le premier événement de la reprise duplique `…:action:0-0:…` et
+      // `TraceStore.append` fait échouer le tour entier (mesuré sur conv-1147, 3,19 $ perdus).
+      let traceActionOrdinal =
+        recovery && conversationId
+          ? seedTraceActionOrdinal(causalTrace.readConversationBestEffort(conversationId), turnId)
+          : 0
       // Ordinal DEDIE aux artefacts : partager celui des actions ferait collisionner les identifiants.
       let traceArtifactOrdinal = 0
       let turnSessionId: string | undefined
