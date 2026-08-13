@@ -165,16 +165,39 @@ def libelle_duree(secondes: float) -> str:
     return f"{entier // 60} min {entier % 60:02d} s"
 
 
-def formater_identite(commit: str, branche: str, non_committes: int) -> str:
-    """QUELLE version on lance, en une ligne. Sa plainte de depart : « ca lance une vieille version a
-    chaque fois » sans jamais dire laquelle. On affiche donc le commit court, la branche, et le nombre
-    de fichiers NON COMMITTES — car en dev le lanceur build l'arbre vivant, pas seulement le commit :
-    « +3 non committés » dit que ce qui tourne n'est PAS exactement `commit`. « propre » quand l'arbre
-    l'est vraiment. Fonction pure : la lecture git (impure) se fait dans le splash et passe ici."""
+def formater_identite(
+    commit: str, branche: str, non_committes: int, retard: int | None = None
+) -> str:
+    """QUELLE version on lance, en une ligne, SANS chiffre ambigu.
+
+    Sa plainte de depart : « ca lance une vieille version a chaque fois » sans jamais dire laquelle.
+    Puis celle-ci, le 2026-08-13 : « le loading dit main +32 comites mais le bouton affiche +5 ».
+    Les deux chiffres etaient JUSTES et disaient des choses differentes — 32 FICHIERS non committes
+    ici, 5 COMMITS de retard dans l'app — mais tous deux s'affichaient « +N », donc ils se lisaient
+    comme la meme grandeur et se contredisaient.
+
+    Chaque nombre porte donc desormais son unite, en clair : « 32 fichiers modifies », « 5 commits de
+    retard ». Un « +N » nu ne revient pas. Le retard figure ICI parce que c'est le chiffre ACTIONNABLE
+    (ce qu'on n'a pas encore), la ou les fichiers modifies disent seulement que ce qui tourne n'est
+    pas exactement le commit affiche. `retard=None` quand la comparaison n'a pas pu etre faite : une
+    absence n'est pas un zero, et afficher « a jour » sans avoir compare serait un faux vert.
+
+    Fonction pure : la lecture git (impure) se fait dans le splash et passe ici.
+    """
     tete = commit.strip() or "sans commit"
     lieu = branche.strip() or "HEAD détaché"
-    etat = "propre" if non_committes <= 0 else f"+{non_committes} non committé{'s' if non_committes > 1 else ''}"
-    return f"{tete} · {lieu} · {etat}"
+    morceaux = [tete, lieu]
+    if retard is None:
+        morceaux.append("retard inconnu")
+    elif retard > 0:
+        morceaux.append(f"{retard} commit{'s' if retard > 1 else ''} de retard")
+    else:
+        morceaux.append("à jour")
+    if non_committes > 0:
+        morceaux.append(f"{non_committes} fichier{'s' if non_committes > 1 else ''} modifié{'s' if non_committes > 1 else ''}")
+    else:
+        morceaux.append("arbre propre")
+    return " · ".join(morceaux)
 
 
 class SuiviDemarrage:
@@ -252,3 +275,39 @@ class SuiviDemarrage:
         if delai_depasse:
             return (6, None)
         return (0, None)
+
+def decider_mise_a_jour(retard: int | None, non_committes: int) -> str:
+    """FAUT-IL mettre a jour au lancement, et est-ce SUR de le faire ?
+
+    Demande utilisateur : « ca devrait auto update en plus des le launcher ». Le lanceur peut donc
+    rapatrier ce qui manque — mais il ne le fera JAMAIS sur un arbre sale, et ce refus n'est pas une
+    precaution decorative : le 2026-08-13, un `git pull --autostash` lance par une session
+    concurrente a EFFACE un correctif non committe de l'arbre partage, verifie et vert, qu'il a fallu
+    reecrire. Un lanceur qui stashe le travail en cours de quelqu'un d'autre au double-clic
+    reproduirait ce degat a chaque demarrage.
+
+    Quatre issues, toutes NOMMEES — un lanceur muet est ce qui a fait croire pendant des jours qu'on
+    lançait la derniere version :
+      `inconnu`          la comparaison n'a pas pu etre faite (pas de reference distante connue) ;
+      `a-jour`           rien a rapatrier ;
+      `appliquer`        du retard ET un arbre propre : on peut rapatrier sans rien risquer ;
+      `refus-arbre-sale` du retard mais du travail non committe : on NE TOUCHE PAS, et on le dit.
+    """
+    if retard is None:
+        return "inconnu"
+    if retard <= 0:
+        return "a-jour"
+    return "refus-arbre-sale" if non_committes > 0 else "appliquer"
+
+
+def libelle_mise_a_jour(decision: str, retard: int | None, non_committes: int) -> str:
+    """Ce que l'ecran d'attente AFFICHE de cette decision. Chaque nombre garde son unite."""
+    if decision == "inconnu":
+        return "retard inconnu : aucune référence distante lisible"
+    if decision == "a-jour":
+        return "déjà à jour"
+    commits = f"{retard} commit{'s' if (retard or 0) > 1 else ''}"
+    if decision == "appliquer":
+        return f"mise à jour : {commits} à rapatrier"
+    fichiers = f"{non_committes} fichier{'s' if non_committes > 1 else ''} modifié{'s' if non_committes > 1 else ''}"
+    return f"{commits} de retard NON rapatriés : {fichiers} en cours, rien ne sera touché"

@@ -98,18 +98,39 @@ export function extraireCandidats(sortie: string): CandidatBrut[] | undefined {
 
 /** Le prompt proposé à l'utilisateur pour ce candidat. Il porte sa source : on cliquera dessus. */
 export function redigerPromptCandidat(candidat: CandidatBrut): string {
-  // Un candidat INTERNE ne s'etudie pas comme une nouveaute concurrente : il n'y a pas de page a
-  // verifier, il y a un besoin observe dans l'app et un ancrage de code qui le prouve.
+  /**
+   * Un candidat INTERNE ne s'etudie pas comme une nouveaute concurrente : il n'y a pas de page a
+   * verifier, il y a un ancrage de code qui prouve. Deux natures, deux gestes :
+   *  - une CORRECTION (audit interne) se corrige — apres verification, un detecteur se trompe ;
+   *  - un AJOUT (scout interne) s'implemente — apres relecture, le code a pu evoluer.
+   * Le gabarit de veille appliquait aux deux la phrase absurde « etudie cette nouveaute de Autowin OS
+   * et dis-moi si Autowin OS devrait l'avoir » — constate sur le premier remplissage reel du stock.
+   */
   if (candidat.url && ancrageInterne(candidat.url.trim())) {
+    if (candidat.type === 'ajout') {
+      return [
+        `Voici un besoin observé dans Autowin OS lui-même — propose son implémentation :`,
+        '',
+        `« ${candidat.titre} »`,
+        `Ancrage : ${candidat.url} (${candidat.dateSource})`,
+        `Preuve lue : « ${candidat.citation} »`,
+        '',
+        'Commence par relire l’ancrage et vérifier que le besoin tient toujours — si le code a déjà',
+        'évolué et le couvre, dis-le et arrête-toi là. Sinon, propose ce que ça donnerait, et ce que ça coûte.'
+      ].join('
+')
+    }
     return [
-      `Voici un besoin observé dans Autowin OS lui-même — propose son implémentation :`,
+      `Corrige ce defaut d'Autowin OS :`,
       '',
       `« ${candidat.titre} »`,
-      `Ancrage : ${candidat.url} (${candidat.dateSource})`,
-      `Preuve lue : « ${candidat.citation} »`,
+      `Ou : ${candidat.url}`,
+      `Ligne en cause : « ${candidat.citation} »`,
       '',
-      'Commence par relire l’ancrage et vérifier que le besoin tient toujours — si le code a déjà',
-      'évolué et le couvre, dis-le et arrête-toi là. Sinon, propose ce que ça donnerait, et ce que ça coûte.'
+      'Commence par VERIFIER que le defaut est reel a cet endroit — un detecteur se trompe, et une',
+      'correction posee sur un faux positif coute plus cher que de refermer le ticket. S il est reel,',
+      'corrige-le et prouve la correction (test rouge -> vert, ou capture). Sinon, dis pourquoi c est',
+      'un faux positif : c’est le détecteur qu’il faudra corriger, pas le code.'
     ].join('\n')
   }
   return [
