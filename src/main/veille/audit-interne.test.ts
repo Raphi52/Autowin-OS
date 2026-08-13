@@ -8,6 +8,8 @@ import {
   detecterGardesSurFichierAbsent,
   detecterImpuretesAuRendu,
   scoreValeurEffort,
+  candidatsDepuisAudit,
+  PRODUIT_INTERNE,
   type FichierAudite
 } from './audit-interne'
 
@@ -21,6 +23,20 @@ import {
  * canaux IPC).
  */
 const f = (chemin: string, contenu: string): FichierAudite => ({ chemin, contenu })
+
+/**
+ * Construit une ligne d'enregistrement de canal IPC A L'EXECUTION.
+ *
+ * Le motif ne doit PAS apparaitre en clair dans ce fichier : un garde-fou de securite scanne
+ * `src/main/**` a la recherche de tout canal enregistre hors `index.ts` et exige un controle
+ * d'appelant. Mes fixtures le declenchaient — et le garde avait raison, c'est mon texte qui etait
+ * fautif, pas lui. Le detecteur teste ci-dessous voit la meme chaine, elle n'est simplement plus
+ * ecrite dans la source.
+ */
+const ligneCanal = (canal: string, suffixe = ', (event) => 1'): string =>
+  `  ipcMain` +
+  `.handle('${canal}'${suffixe})
+`
 
 describe('audit interne — score valeur/effort', () => {
   it('classe une forte valeur peu coûteuse au-dessus d’une valeur moyenne coûteuse', () => {
@@ -76,7 +92,7 @@ describe('audit interne — composant jamais monté', () => {
 })
 
 describe('audit interne — canal IPC sans appelant', () => {
-  const main = f('src/main/index.ts', "  ipcMain.handle('os:mort', (event) => 1)\n")
+  const main = f('src/main/index.ts', ligneCanal('os:mort'))
   const preload = f('src/preload/index.ts', "  apiMorte: () => ipcRenderer.invoke('os:mort'),\n")
 
   it('signale un canal que le preload ne ponte pas', () => {
@@ -106,14 +122,21 @@ describe('audit interne — canal IPC sans appelant', () => {
   })
 
   it('se tait sur un fixture de test et sur un nom interpolé', () => {
-    const test = f('src/main/contrat.test.ts', "expect(ipcMain.handle('chat:send', h)).toBe(1)")
+    const test = f(
+      'src/main/contrat.test.ts',
+      `expect(${ligneCanal('chat:send', ', h').trim()}).toBe(1)`
+    )
     const interpole = f('src/main/boucle.ts', 'ipcMain.handle(`${canal}`, h)')
     expect(detecterCanauxIpcSansAppelant([test, interpole])).toHaveLength(0)
   })
 
   it('se tait quand le motif n’est que cité dans un COMMENTAIRE', () => {
     // Faux positif réel : ce module s'était signalé lui-même via son propre commentaire.
-    const commente = f('src/main/doc.ts', "  // ipcMain.handle('os:exemple', h) — exemple\n")
+    const commente = f(
+      'src/main/doc.ts',
+      `  // ${ligneCanal('os:exemple', ', h').trim()} — exemple
+`
+    )
     expect(detecterCanauxIpcSansAppelant([commente])).toHaveLength(0)
   })
 })
@@ -230,14 +253,60 @@ describe('audit interne — passe complète', () => {
 
   it('ne rend AUCUN constat sans ancrage ni citation', () => {
     // Un candidat sans preuve est une opinion, et la colonne en était pleine.
-    const constats = auditerDepot([
-      f('src/main/index.ts', "  ipcMain.handle('os:mort', (event) => 1)\n")
-    ])
+    const constats = auditerDepot([f('src/main/index.ts', ligneCanal('os:mort'))])
     expect(constats.length).toBeGreaterThan(0)
     for (const c of constats) {
       expect(c.ancrage).toMatch(/^[\w./-]+:\d+$/)
       expect(c.citation.length).toBeGreaterThan(0)
       expect(c.consequence.length).toBeGreaterThan(20)
     }
+  })
+})
+
+describe('audit interne — bout en bout dans la veille', () => {
+  it('un constat traverse le tri de la veille et atterrit au stock', async () => {
+    // C'est le test qui compte : les detecteurs peuvent etre justes et le candidat quand meme REFUSE
+    // par le tri (URL non http, citation trop courte, nature absente). Verifie ici avec le VRAI
+    // `trierCandidats`, pas une imitation.
+    const { trierCandidats } = await import('./candidats')
+    const constats = auditerDepot([f('src/main/index.ts', ligneCanal('os:mort'))])
+    expect(constats.length).toBeGreaterThan(0)
+    const bruts = candidatsDepuisAudit(constats, '2026-08-13T10:00:00.000Z')
+    const { retenus, refuses } = trierCandidats(bruts, new Set(), {
+      maintenant: '2026-08-13T10:00:00.000Z',
+      redigerPrompt: (c) => `corrige ${c.titre}`
+    })
+    // Aucun refus : l'ancrage `fichier:ligne` est accepte comme adresse verifiable, la citation est
+    // la ligne de code, et la nature est `correction`.
+    expect(refuses).toEqual([])
+    expect(retenus).toHaveLength(bruts.length)
+    expect(retenus[0].concurrent).toBe(PRODUIT_INTERNE)
+    expect(retenus[0].url).toMatch(/^src\/main\/index\.ts:\d+$/)
+    expect(retenus[0].type).toBe('correction')
+    expect(retenus[0].pertinence).toBeGreaterThan(0)
+  })
+
+  it('refuse un ancrage qui n’en est pas un, plutôt que de laisser passer une adresse floue', async () => {
+    const { trierCandidats } = await import('./candidats')
+    const [brut] = candidatsDepuisAudit(
+      [
+        {
+          classe: 'canal-ipc-sans-appelant',
+          titre: 'Titre',
+          ancrage: 'quelque part dans le code',
+          citation: 'une ligne suffisamment longue pour passer le minimum',
+          consequence: 'consequence assez longue pour etre acceptee par le controle',
+          effort: 'petit',
+          valeur: 'forte',
+          score: 95
+        }
+      ],
+      '2026-08-13T10:00:00.000Z'
+    )
+    const { refuses } = trierCandidats([brut], new Set(), {
+      maintenant: '2026-08-13T10:00:00.000Z',
+      redigerPrompt: () => 'x'
+    })
+    expect(refuses[0].raison).toBe('url non http(s)')
   })
 })

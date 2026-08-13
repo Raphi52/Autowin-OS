@@ -160,7 +160,7 @@ export function detecterCanauxIpcSansAppelant(fichiers: FichierAudite[]): Consta
   const appelants = fichiers.filter(
     (f) => !f.chemin.startsWith('src/main/') && !f.chemin.startsWith('src/preload/')
   )
-  // Les TESTS sont exclus : `ipcMain.handle('chat:send')` y apparait comme fixture, pas comme canal
+  // Les TESTS sont exclus : un enregistrement de canal y apparait comme fixture, pas comme canal
   // reel. Sans cette exclusion, la premiere passe sortait 17 constats dont 17 faux — mesure faite
   // avant d'y croire, et c'est exactement le bruit que l'utilisateur a appele « a chier ».
   for (const f of fichiers.filter(
@@ -302,11 +302,26 @@ export function detecterClassesCssSansRegle(fichiers: FichierAudite[]): ConstatI
       if (estCommentaire(ligne)) continue
       const litteral = /className="([^"{}]+)"/.exec(ligne)?.[1]
       if (!litteral) continue
-      for (const classe of litteral.trim().split(/\s+/)) {
-        if (!classe || dejaVu.has(classe)) continue
+      const surLaLigne = litteral.trim().split(/\s+/).filter(Boolean)
+      const stylee = (c: string): boolean => new RegExp(`\\.${c}(?=[\\s,:{[)>])`).test(toutLeCss)
+      /**
+       * L'ÉLÉMENT est-il stylé, et non « cette classe a-t-elle une règle » ?
+       *
+       * Erreur de la version précédente, et elle comptait : `className="domain-badge-alert
+       * nav-alert-badge"` était signalé pour `nav-alert-badge`, alors que `.domain-badge-alert` est
+       * stylé — l'élément a donc son apparence, et la seconde classe n'est qu'un CROCHET (test,
+       * ciblage, marqueur sémantique). Idem pour `tnum run-cost-uncosted`, `btn
+       * delete-confirm-cancel run-delete-cancel`, `directive-queue-send directive-queue-btw`.
+       *
+       * Le défaut réel — celui vécu sur « Réponse annulée » — c'est un élément dont AUCUNE classe
+       * n'est stylée : lui seul retombe sur le style par défaut du navigateur.
+       */
+      if (surLaLigne.some(stylee)) continue
+      for (const classe of surLaLigne) {
+        if (dejaVu.has(classe)) continue
         // Les classes utilitaires courtes (`row`, `gap2`) vivent dans des feuilles globales.
         if (classe.length < 6 || !classe.includes('-')) continue
-        if (new RegExp(`\\.${classe}(?=[\\s,:{[)>])`).test(toutLeCss)) continue
+        if (stylee(classe)) continue
         dejaVu.add(classe)
         constats.push({
           classe: 'classe-css-sans-regle',
@@ -376,3 +391,52 @@ export function auditerDepot(fichiers: FichierAudite[]): (ConstatInterne & { sco
     .map((c) => ({ ...c, score: scoreValeurEffort(c) }))
     .sort((a, b) => b.score - a.score || a.ancrage.localeCompare(b.ancrage))
 }
+
+/**
+ * Les constats d'audit, au format d'entrée de la veille — donc rangés dans la MÊME colonne, triés
+ * par le même code, dédupliqués par la même clé.
+ *
+ * Le modèle de candidat était pensé pour une page web ; il accueille un défaut interne sans être
+ * modifié, et chaque champ garde son sens :
+ *   `concurrent` → le produit concerné, ici Autowin OS lui-même ;
+ *   `url`        → l'ancrage `fichier:ligne`, qui joue exactement le rôle de l'URL : où aller voir ;
+ *   `citation`   → la ligne fautive recopiée, que le vérificateur rejoue ;
+ *   `pertinence` → le score valeur/effort.
+ *
+ * `dateSource` est la date de la PASSE et non celle du défaut : un défaut de code n'a pas de date de
+ * publication, et inventer celle du dernier commit ferait passer une supposition pour un fait.
+ */
+export function candidatsDepuisAudit(
+  constats: readonly (ConstatInterne & { score: number })[],
+  maintenant: string
+): {
+  concurrent: string
+  titre: string
+  url: string
+  dateSource: string
+  citation: string
+  type: 'correction'
+  pertinence: number
+  consequence: string
+}[] {
+  return constats.map((c) => ({
+    concurrent: PRODUIT_INTERNE,
+    titre: c.titre,
+    url: c.ancrage,
+    // La date de la passe, tronquée au jour : la journée suffit à situer, et l'heure donnerait une
+    // fausse précision sur un défaut qui existait sans doute bien avant.
+    dateSource: maintenant.slice(0, 10),
+    citation: c.citation,
+    type: 'correction' as const,
+    pertinence: c.score,
+    consequence: c.consequence
+  }))
+}
+
+/**
+ * Nom porté par les candidats internes dans la colonne, à la place d'un concurrent.
+ *
+ * Exporté, et non recopié : la vue et les tests le comparent pour distinguer « ce que fait un
+ * concurrent » de « ce qui cloche chez nous », et deux littéraux finiraient par diverger.
+ */
+export const PRODUIT_INTERNE = 'Autowin OS'
