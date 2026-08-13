@@ -111,7 +111,20 @@ describe('ClaudeCliAdapter — plafond de depense provider', () => {
       resolvedModel: 'claude-haiku-real',
       usage: { inputTokens: 38, outputTokens: 1043, cacheReadTokens: 12, costUsd: 0.065648 }
     })
-    expect(spawnCapture.args).toContain('Read,Grep,Glob')
+    // Cette assertion cherchait l'element EXACT `'Read,Grep,Glob'`. Elle a rougi le 2026-08-13 quand
+    // le web est devenu une capacite de base : la liste passee vaut desormais
+    // `'Read,Grep,Glob,WebFetch,WebSearch'` en UNE chaine. Le litteral epinglait une composition, pas
+    // une garantie — donc il interdisait toute capacite supplementaire, meme voulue.
+    //
+    // Ce qui compte reellement dans ce profil (fond autonome, contexte d'evenement NON FIABLE) : la
+    // lecture est permise et le SHELL est interdit. Le prompt systeme n'est qu'une consigne ; cette
+    // liste est la capacite reelle. On verifie donc l'invariant, pas sa forme du jour.
+    const outils = spawnCapture.args[spawnCapture.args.indexOf('--tools') + 1]
+    expect(outils).toMatch(/(^|,)Read(,|$)/)
+    expect(outils).toMatch(/(^|,)Grep(,|$)/)
+    expect(outils).toMatch(/(^|,)Glob(,|$)/)
+    expect(outils).not.toMatch(/(^|,)Bash/)
+    expect(spawnCapture.args).not.toContain('Bash')
     expect(spawnCapture.args.join(' ')).not.toContain('Bash')
     if (previousWorkspace === undefined) delete process.env.AUTOWIN_OS_WORKSPACE
     else process.env.AUTOWIN_OS_WORKSPACE = previousWorkspace
