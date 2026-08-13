@@ -29,12 +29,30 @@ export interface CandidatVeille {
   citation: string
   /** Langue dans laquelle la source a été lue : plusieurs concurrents ne publient qu'en anglais. */
   langue?: string
+  /**
+   * Ce que l'entrée EST : un ajout de capacité, ou une correction.
+   *
+   * Constaté sur la première passe réelle : sur 10 candidats tirés d'un CHANGELOG, 8 étaient des
+   * corrections de bugs — « corrige la connexion OAuth MCP », « pings keepalive contre un timeout »,
+   * « corrige un crash sur les chemins UNC ». Proposer d'implémenter la correction d'un bug qu'on n'a
+   * pas n'a aucun sens, et les deux vraies features étaient noyées dans le lot.
+   */
+  type: TypeEntree
   /** Le prompt prêt à partir dans le chat. */
   prompt: string
   /** Quand la passe a vu cette entrée pour la première fois. */
   vuLe: string
   statut: 'nouveau' | 'ecarte' | 'prompte'
 }
+
+/**
+ * La nature d'une entrée de notes de version.
+ *
+ * `ajout` est le seul type retenu : c'est ce qu'on peut vouloir reprendre. Les autres ne sont pas
+ * ignorés en silence — ils sont refusés AVEC leur raison, donc comptés et visibles. Une page qui
+ * n'annonce que des corrections se lit alors « rien à reprendre », et non « rien lu ».
+ */
+export type TypeEntree = 'ajout' | 'correction' | 'autre'
 
 /** Ce qu'un scout rend : les champs bruts, avant tout contrôle. */
 export interface CandidatBrut {
@@ -44,6 +62,7 @@ export interface CandidatBrut {
   dateSource?: string
   citation?: string
   langue?: string
+  type?: string
 }
 
 export type RaisonRefus =
@@ -54,6 +73,8 @@ export type RaisonRefus =
   | 'date manquante'
   | 'citation manquante'
   | 'citation trop courte'
+  | 'correction, pas un ajout'
+  | 'nature non precisee'
   | 'deja connu'
 
 export interface Refus {
@@ -118,6 +139,11 @@ function premierRefus(brut: CandidatBrut): RaisonRefus | undefined {
   if (!brut.dateSource?.trim()) return 'date manquante'
   if (!brut.citation?.trim()) return 'citation manquante'
   if (brut.citation.trim().length < CITATION_MINIMUM) return 'citation trop courte'
+  const type = brut.type?.trim().toLowerCase()
+  // Une nature ABSENTE est refusée plutôt que devinée : classer à la place du scout reviendrait à
+  // décider d'après un titre, ce qui est exactement l'à-peu-près qu'on cherche à éviter.
+  if (!type) return 'nature non precisee'
+  if (type !== 'ajout') return 'correction, pas un ajout'
   return undefined
 }
 
@@ -162,6 +188,7 @@ export function trierCandidats(
       dateSource: brut.dateSource!.trim(),
       citation: brut.citation!.trim(),
       ...(brut.langue?.trim() ? { langue: brut.langue.trim() } : {}),
+      type: 'ajout',
       prompt: contexte.redigerPrompt(brut),
       vuLe: contexte.maintenant,
       statut: 'nouveau'

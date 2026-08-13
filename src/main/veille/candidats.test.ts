@@ -29,6 +29,7 @@ const brut = (partiel: Partial<CandidatBrut> = {}): CandidatBrut => ({
   url: 'https://github.com/openai/codex/releases',
   dateSource: '2026-08-07',
   citation: CITATION,
+  type: 'ajout',
   ...partiel
 })
 
@@ -64,6 +65,29 @@ describe('un candidat sans preuve n’entre pas', () => {
   it('refuse une date absente : l’âge de la nouveauté est l’information utile', () => {
     const { refuses } = trierCandidats([brut({ dateSource: '  ' })], new Set(), contexte)
     expect(refuses[0].raison).toBe('date manquante')
+  })
+
+  it('refuse une CORRECTION : on ne reprend pas le correctif d’un bug qu’on n’a pas', () => {
+    // Constaté sur la première passe réelle : 8 des 10 candidats étaient des corrections, et les deux
+    // vraies features étaient noyées. Le refus est NOMMÉ, donc comptable et visible.
+    const { retenus, refuses } = trierCandidats(
+      [brut({ type: 'correction', titre: 'Corrige un crash sur les chemins UNC' })],
+      new Set(),
+      contexte
+    )
+    expect(retenus).toHaveLength(0)
+    expect(refuses[0].raison).toBe('correction, pas un ajout')
+  })
+
+  it('refuse une nature ABSENTE plutôt que de la deviner', () => {
+    // Classer à la place du scout reviendrait à décider d'après un titre — l'à-peu-près qu'on évite.
+    const { refuses } = trierCandidats([brut({ type: undefined })], new Set(), contexte)
+    expect(refuses[0].raison).toBe('nature non precisee')
+  })
+
+  it('refuse `autre`, le type du doute', () => {
+    const { refuses } = trierCandidats([brut({ type: 'autre' })], new Set(), contexte)
+    expect(refuses[0].raison).toBe('correction, pas un ajout')
   })
 
   it('accepte un candidat complet, et n’invente aucun champ', () => {

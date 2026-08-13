@@ -54,6 +54,12 @@ describe('le prompt du scout', () => {
     expect(prompt).toMatch(/réponds exactement : \[\]/)
   })
 
+  it('demande de CLASSER l’entrée, et donne `autre` comme issue du doute', () => {
+    expect(prompt).toMatch(/`type` vaut `ajout` si/)
+    expect(prompt).toMatch(/on ne réimplémente pas le/)
+    expect(prompt).toMatch(/En cas de doute, mets `autre`/)
+  })
+
   it('interdit de deviner une date', () => {
     expect(prompt).toMatch(/Ne devine JAMAIS une date/)
   })
@@ -86,6 +92,7 @@ describe('une passe complète', () => {
       lancerScout: async () =>
         jsonScout([
           {
+            type: 'ajout',
             titre: 'Support MCP distant',
             dateSource: '2026-08-07',
             citation: CITATION,
@@ -151,7 +158,9 @@ describe('une passe complète', () => {
       maintenant: () => MAINTENANT,
       lancerScout: async (source) => {
         if (source.concurrent === 'Codex') throw new Error('injoignable')
-        return jsonScout([{ titre: 'Reprise auto', dateSource: '2026-08-13', citation: CITATION }])
+        return jsonScout([
+          { type: 'ajout', titre: 'Reprise auto', dateSource: '2026-08-13', citation: CITATION }
+        ])
       }
     })
     expect(res.retenus).toBe(1)
@@ -170,6 +179,7 @@ describe('une passe complète', () => {
         jsonScout([
           {
             concurrent: 'Kimi',
+            type: 'ajout',
             titre: 'Support MCP distant',
             dateSource: '2026-08-07',
             citation: CITATION
@@ -182,7 +192,14 @@ describe('une passe complète', () => {
   it('deux passes sur la même page ne créent pas deux candidats', async () => {
     const p = chemin()
     const lancerScout = async (): Promise<string> =>
-      jsonScout([{ titre: 'Support MCP distant', dateSource: '2026-08-07', citation: CITATION }])
+      jsonScout([
+        {
+          type: 'ajout',
+          titre: 'Support MCP distant',
+          dateSource: '2026-08-07',
+          citation: CITATION
+        }
+      ])
     await executerPasse({ chemin: p, sources: [SOURCE], maintenant: () => MAINTENANT, lancerScout })
     const seconde = await executerPasse({
       chemin: p,
