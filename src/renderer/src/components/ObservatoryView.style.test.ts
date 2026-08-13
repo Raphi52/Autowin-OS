@@ -51,7 +51,12 @@ describe('Observatory visual contracts', () => {
     )?.[0]
 
     expect(viewRule).toMatch(/--surface-selected:\s*rgba\(225,\s*193,\s*103,\s*0\.1\)/)
-    expect(viewRule).toMatch(/background:\s*var\(--surface-panel\)/)
+    // La surface de Models est CONSERVEE, mais desormais composee avec le lisere partage : la regle
+    // s'ecrit `var(--lisere-haut), var(--surface-panel)`. L'assertion d'origine exigeait
+    // `var(--surface-panel)` SEUL, ce qui interdisait toute couche par-dessus — et c'est cette
+    // exigence qui a fait disparaitre le lisere d'Observatory. L'intention (« meme surface que
+    // Models ») est intacte ; seule la forme exacte de la declaration est assouplie.
+    expect(viewRule).toMatch(/background:\s*var\(--lisere-haut\),\s*var\(--surface-panel\)/)
     expect(selectedRule).toMatch(/border-color:\s*rgba\(225,\s*193,\s*103,\s*0\.88\)/)
     expect(selectedRule).toMatch(/background:\s*var\(--surface-selected\)/)
   })
