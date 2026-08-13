@@ -51,13 +51,19 @@ describe('provisionner un graphe à boucles', () => {
     expect(alloc.reservedMandatoryAgents).toBe(pireCas)
   })
 
-  it('un graphe trop gourmand est REFUSÉ avant de dépenser, pas coupé en route', () => {
+  it('un graphe trop gourmand est REFUSÉ avant de dépenser — en mode bloquant seulement', () => {
     // Régime standard : les 2 phases seules passent, c'est bien le pire cas du graphe qui fait refuser.
-    const quote = compileExecutionQuote('corrige le bug')
-    expect(() => allocateExecutionTopology(quote, requete())).not.toThrow()
+    // Depuis conv-1148 (13/08), ce refus est réservé au mode `blocking` : en mesure seule (défaut),
+    // le devis s'agrandit au pire cas du graphe au lieu de tuer le run.
+    const bloquant = compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
+    expect(() => allocateExecutionTopology(bloquant, requete())).not.toThrow()
     expect(() =>
-      allocateExecutionTopology(quote, requete({ worstCaseNodeExecutions: 40 }))
+      allocateExecutionTopology(bloquant, requete({ worstCaseNodeExecutions: 40 }))
     ).toThrow('Devis impossible')
+    const mesure = compileExecutionQuote('corrige le bug')
+    const alloc = allocateExecutionTopology(mesure, requete({ worstCaseNodeExecutions: 40 }))
+    expect(alloc.reservedMandatoryAgents).toBe(40)
+    expect(mesure.limits.maxProviderCalls).toBeGreaterThanOrEqual(40)
   })
 
   it('le pire cas ne peut pas SOUS-provisionner la liste de phases', () => {

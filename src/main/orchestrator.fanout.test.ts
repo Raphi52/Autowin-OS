@@ -130,10 +130,15 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     })
   })
 
-  it('refuse un pipeline impossible sans toucher le provider', async () => {
+  it('refuse un pipeline impossible sans toucher le provider — en mode bloquant', async () => {
+    // Depuis conv-1148 (13/08), en mesure seule (défaut) le devis s'agrandit au lieu de refuser ;
+    // le refus ex-ante ne subsiste qu'en `blocking`, où le plafond est un contrat.
     const provider = new RecordingProvider()
     const supervisor = new ExecutionSupervisor()
-    const quote = compileExecutionQuote('ajoute une page de réglages', { maxProviderCalls: 2 })
+    const quote = compileExecutionQuote('ajoute une page de réglages', {
+      maxProviderCalls: 2,
+      spendEnforcement: 'blocking'
+    })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
     const orch = new Orchestrator({
       registry,

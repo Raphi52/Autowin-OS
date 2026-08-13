@@ -274,19 +274,27 @@ describe('un graphe pilote le run', () => {
     expect(provider.execCount).toBe(1)
   })
 
-  it('le devis provisionne le PIRE CAS du graphe, pas sa chaîne', async () => {
+  it('le devis provisionne le PIRE CAS du graphe, pas sa chaîne — refus en mode bloquant', async () => {
     // Régime standard : la chaîne seule (2 phases) passe. C'est bien le pire cas du graphe à boucles
     // — 7 exécutions de nœuds — qui fait refuser, AVANT de dépenser plutôt qu'en pleine course.
+    // Depuis conv-1148 (13/08), ce refus est réservé au mode `blocking` : en mesure seule (défaut),
+    // le devis s'agrandit au pire cas au lieu de tuer le run.
+    const bloquant = compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
     await expect(
-      makeOrchestrator(new Recorder(), undefined, compileExecutionQuote('corrige le bug')).run(
-        'corrige le bug'
-      )
+      makeOrchestrator(new Recorder(), undefined, bloquant).run('corrige le bug')
     ).resolves.toBeDefined()
     await expect(
-      makeOrchestrator(new Recorder(), { graph: boucle }, compileExecutionQuote('corrige le bug')).run(
-        'corrige le bug'
-      )
+      makeOrchestrator(
+        new Recorder(),
+        { graph: boucle },
+        compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
+      ).run('corrige le bug')
     ).rejects.toThrow('Devis impossible')
+    const mesure = compileExecutionQuote('corrige le bug')
+    await expect(
+      makeOrchestrator(new Recorder(), { graph: boucle }, mesure).run('corrige le bug')
+    ).resolves.toBeDefined()
+    expect(mesure.limits.maxProviderCalls).toBeGreaterThanOrEqual(7)
   })
 
   it('un graphe explicitement choisi réserve son chemin complet et ses deux reprises', async () => {

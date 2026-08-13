@@ -1491,6 +1491,16 @@ export class Orchestrator {
         impose?.judgeMembers ?? 1,
         ...Object.values(impose?.phaseMembers ?? {}).map((count) => count ?? 1)
       )
+      // `maxProviderCalls` est un plafond de PORTEFEUILLE : en mesure seule (défaut depuis le
+      // 12/08), un workflow déterministe plus large que le régime agrandit le devis au lieu d'être
+      // refusé (conv-1148 : 12 obligatoires pour 10 places tuait le run avant le premier appel).
+      // `maxConcurrency` protège la MACHINE, pas le portefeuille : son refus reste inconditionnel.
+      if (
+        mandatory > executionQuote.limits.maxProviderCalls &&
+        executionQuote.limits.spendEnforcement === 'metering-only'
+      ) {
+        executionQuote.limits.maxProviderCalls = mandatory
+      }
       if (
         mandatory > executionQuote.limits.maxProviderCalls ||
         maxPanel > executionQuote.limits.maxConcurrency

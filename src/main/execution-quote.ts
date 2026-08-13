@@ -185,9 +185,20 @@ export function allocateExecutionTopology(
       ? nodeExecutions + judgePasses + recoveries
       : nodeExecutions)
   if (mandatory > available) {
-    throw new Error(
-      `Devis impossible avant exécution : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
-    )
+    // En mesure seule (défaut depuis la décision utilisateur du 12/08), un workflow DÉTERMINISTE
+    // au pire cas fini ne se refuse pas : le devis S'AGRANDIT à sa demande. Mesuré sur conv-1148 :
+    // « 12 agent(s) obligatoires pour 10 place(s) restante(s) » tuait le run avant le premier
+    // appel — le régime servait de plafond de dépense déguisé. En mode bloquant, le refus reste :
+    // là, le plafond est un contrat.
+    if (quote.limits.spendEnforcement === 'metering-only') {
+      const requis = mandatory + Math.max(0, startedAgents, startedCalls)
+      quote.limits.maxAgents = Math.max(quote.limits.maxAgents, requis)
+      quote.limits.maxProviderCalls = Math.max(quote.limits.maxProviderCalls, requis)
+    } else {
+      throw new Error(
+        `Devis impossible avant exécution : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
+      )
+    }
   }
 
   if (exactWorkflowCalls !== undefined) {
