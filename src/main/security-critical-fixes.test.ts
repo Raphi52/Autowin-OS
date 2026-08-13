@@ -69,6 +69,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     'os:openFolder',
     'os:appCommand',
     'os:pilotChat:cancel',
+    'os:pilotChat:resume',
     'os:orchestrate:cancel',
     'os:pilotChat:inject',
     'os:setActiveConversation',
@@ -137,7 +138,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `git:worktreeMap` — lecture d'etat des copies git, retiree avec `WorktreeMapView`
     // La vue etait le SEUL consommateur de ce canal ; la supprimer sans retirer le canal aurait
     // laisse une surface IPC atteignable que personne n'appelle. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(139)
+    expect(handlers).toHaveLength(140)
     expect(unguarded).toEqual([])
   })
 

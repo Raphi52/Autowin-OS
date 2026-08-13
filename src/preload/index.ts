@@ -478,6 +478,15 @@ const api = {
     error?: string
     verification?: { complete: boolean; evidence: string }
   }> => ipcRenderer.invoke('os:pilotChat', messages, conversationId),
+  resumePilotChat: (
+    conversationId: string
+  ): Promise<{
+    ok: boolean
+    cancelled: boolean
+    turnId: string
+    text?: string
+    error?: string
+  }> => ipcRenderer.invoke('os:pilotChat:resume', conversationId),
   cancelPilotChat: (conversationId: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:pilotChat:cancel', conversationId),
   cancelOrchestration: (conversationId: string): Promise<{ ok: boolean }> =>

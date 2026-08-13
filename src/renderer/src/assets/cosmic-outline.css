@@ -338,15 +338,15 @@
   box-shadow: none;
 }
 
-/*
- * Le rouge de l'arrêt suit désormais `.composer-stop`, son bouton DÉDIÉ. Avant, `.composer-send.is-stop`
- * habillait le bouton unique quand il basculait en Stop — bascule supprimée, parce qu'elle exigeait un
- * composer vide pour pouvoir arrêter. Sans ce repointage, la règle serait devenue morte et l'arrêt aurait
- * perdu sa couleur.
- */
-.cosmic-outline .composer-stop {
+.cosmic-outline .composer-send.is-stop {
   border-color: rgba(255, 103, 126, 0.82);
   background: rgba(142, 29, 50, 0.88);
+  color: #fff;
+}
+
+.cosmic-outline .composer-send.is-resume {
+  border-color: rgba(107, 224, 185, 0.74);
+  background: rgba(24, 105, 85, 0.86);
   color: #fff;
 }
 

@@ -118,6 +118,28 @@ describe('ConversationStore', () => {
 })
 
 describe('ConversationStore structured turns', () => {
+  it('starts a continuation with an assistant turn only', () => {
+    const store = new ConversationStore(makeClock())
+    const conv = store.create({ title: 'A', category: 'codex', provider: 'codex' })
+    store.beginTurn(conv.id, { content: 'Inspecte le depot' }, { turnId: 'turn-1' })
+    store.applyTurnEvent(conv.id, 'turn-1', { kind: 'cancelled' })
+    store.beginContinuationTurn(conv.id, {
+      turnId: 'turn-2',
+      runtime: { provider: 'codex', model: 'terra' }
+    })
+    expect(conv.messages).toHaveLength(3)
+    expect(conv.messages.map((message) => message.role)).toEqual(['user', 'assistant', 'assistant'])
+    expect(conv.messages[2]).toMatchObject({
+      role: 'assistant',
+      turnId: 'turn-2',
+      status: 'streaming',
+      parts: []
+    })
+    expect(conv.messages.some((message) => message.role === 'user' && message.content === '')).toBe(
+      false
+    )
+  })
+
   it('creates a durable user + streaming assistant turn before provider execution', () => {
     const store = new ConversationStore(makeClock())
     const conv = store.create({ title: 'A', category: 'codex', provider: 'codex' })

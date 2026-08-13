@@ -1391,19 +1391,6 @@ export function ChatView({
   sendRef.current = send
   const pickSuggestion = useCallback((prompt: string) => void sendRef.current(prompt), [])
   /**
-   * Reprise d'un tour INTERROMPU : passe par le canal d'orchestration direct (même raison que le
-   * bouton « Reprendre » des actions) ; à défaut, on renvoie simplement le prompt d'origine.
-   */
-  const resumeTurnPrompt = useCallback(
-    (prompt: string) => {
-      const orchestrate = window.api?.orchestrate
-      if (orchestrate) void orchestrate(prompt, activeId ?? undefined)
-      else void sendRef.current(prompt)
-    },
-    [activeId]
-  )
-
-  /**
    * « Reprendre en précisant… » : REMPLIT le composer (prompt d'origine + motif), et s'arrête là.
    * Aucun envoi, aucune orchestration — le geste appartient à l'utilisateur.
    * Callback STABLE (le row est memo'd) : passe par un ref, comme fork/send.
@@ -1661,6 +1648,56 @@ export function ChatView({
     }
   }
 
+  /** Continue le fil sans recréer ni renvoyer le dernier message utilisateur. */
+  async function resumePilotTurn(): Promise<void> {
+    const conversationId = activeRef.current
+    if (
+      !conversationId ||
+      busyConversationsRef.current.has(conversationId) ||
+      sendLocksRef.current.has(conversationId)
+    )
+      return
+    const history: Msg[] = [
+      ...(liveMessagesRef.current.get(conversationId) ?? []),
+      hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' })
+    ]
+    sendLocksRef.current.add(conversationId)
+    liveMessagesRef.current.set(conversationId, history)
+    if (activeRef.current === conversationId) setMessages(history)
+    setConversationBusy(conversationId, true)
+    followTailRef.current = true
+    try {
+      const result = await window.api.resumePilotChat(conversationId)
+      if (!result.ok || result.cancelled)
+        patchLast(conversationId, (message) => {
+          message.status = result.cancelled ? 'cancelled' : 'failed'
+          message.done = true
+          if (!result.cancelled)
+            message.parts.push({ kind: 'error', cause: 'turn', message: result.error ?? 'erreur' })
+        })
+    } catch (error) {
+      patchLast(conversationId, (message) => {
+        message.status = 'failed'
+        message.done = true
+        message.parts.push({
+          kind: 'error',
+          cause: 'send',
+          message: error instanceof Error ? error.message : String(error)
+        })
+      })
+    } finally {
+      sendLocksRef.current.delete(conversationId)
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+      patchLast(conversationId, (message) => {
+        if (message.status === 'streaming') message.status = 'interrupted'
+        message.done = true
+      })
+      setConversationBusy(conversationId, false)
+    }
+  }
+
   /* --- workflows --- */
 
   async function viewRun(r: RunEntry): Promise<void> {
@@ -1682,6 +1719,15 @@ export function ChatView({
   /* --- rendu --- */
 
   const active = convs.find((c) => c.id === activeId)
+  const latestAssistant = [...messages]
+    .reverse()
+    .find((message): message is AsstMsg => message.role === 'assistant')
+  const canResumePilotTurn =
+    !busy &&
+    Boolean(activeId) &&
+    !input.trim() &&
+    attachments.length === 0 &&
+    (latestAssistant?.status === 'cancelled' || latestAssistant?.status === 'interrupted')
   const conversationHits = useMemo(() => searchConversations(convs, convQuery), [convs, convQuery])
 
   /**
@@ -2353,7 +2399,6 @@ export function ChatView({
                   message.role === 'assistant' ? lastUserPromptBefore(messages, index) : undefined
                 }
                 onResend={pickSuggestion}
-                onResumeTurn={resumeTurnPrompt}
                 onRefineResume={refineResumeDraft}
                 directiveReceipts={
                   message.role === 'assistant'
@@ -2622,44 +2667,48 @@ export function ChatView({
                       : 'Écrire à l’agent ou déposer des fichiers…'
                 }
               />
-              {/*
-                ARRÊTER ne doit dépendre de RIEN d'autre que « un tour est en cours ».
-                Avant, un SEUL bouton portait trois comportements : `busy && !input.trim()` → Stop,
-                `busy && input.trim()` → Mettre en file, sinon Envoyer. Conséquence rapportée par
-                l'utilisateur : dès qu'il avait tapé quelque chose, il devait d'abord aller VIDER la
-                barre de prompt pour que le clic agisse comme stop. L'action la plus urgente du produit
-                était masquée derrière un état accessoire.
-              */}
-              {busy && (
-                <button
-                  className="btn composer-stop"
-                  data-testid="composer-stop"
-                  onClick={() => {
-                    if (activeId) void window.api.cancelPilotChat(activeId)
-                  }}
-                  disabled={!activeId}
-                  aria-label="Arrêter la réponse"
-                  title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
-                >
-                  ■ Stop
-                </button>
-              )}
               <button
-                className="btn-accent btn composer-send"
+                className={`btn-accent btn composer-send${busy && !input.trim() ? ' is-stop' : canResumePilotTurn ? ' is-resume' : ''}`}
                 data-testid="composer-send"
                 onClick={() => {
                   if (handleBtw()) return
-                  // Plus de branche « composer vide → annuler » : arrêter a son propre bouton, donc ce
-                  // bouton ne fait plus qu'une chose à la fois — envoyer, ou mettre en file.
+                  if (busy && !input.trim()) {
+                    interruptAndFlushQueue()
+                    return
+                  }
+                  if (canResumePilotTurn) {
+                    void resumePilotTurn()
+                    return
+                  }
                   if (busy && activeId) queueCurrentMessage()
                   else send()
                 }}
                 disabled={
-                  busy ? !activeId || !input.trim() : !input.trim() && attachments.length === 0
+                  busy
+                    ? !activeId || (!input.trim() && interruptingConversations.has(activeId ?? ''))
+                    : canResumePilotTurn
+                      ? false
+                      : !input.trim() && attachments.length === 0
                 }
-                aria-label={busy ? 'Mettre le message en file d’attente' : 'Envoyer le message'}
+                aria-label={
+                  busy && !input.trim()
+                    ? 'Arrêter la réponse'
+                    : canResumePilotTurn
+                      ? 'Reprendre la réponse'
+                      : busy
+                        ? 'Mettre le message en file d’attente'
+                        : 'Envoyer le message'
+                }
               >
-                {busy ? '⚡ Mettre en file' : 'Envoyer'}
+                {busy && !input.trim()
+                  ? interruptingConversations.has(activeId ?? '')
+                    ? 'Arrêt…'
+                    : '■ Stop'
+                  : canResumePilotTurn
+                    ? '↻ Reprendre'
+                    : busy
+                      ? '⚡ Mettre en file'
+                      : 'Envoyer'}
               </button>
             </div>
             <div className="composer-meta">

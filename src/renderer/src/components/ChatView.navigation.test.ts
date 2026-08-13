@@ -64,28 +64,15 @@ describe('navigation pendant une reponse', () => {
     )
   })
 
-  it('donne a l ARRET son propre bouton, disponible des qu un tour tourne', () => {
+  it('utilise un seul controle principal pour Stop, Reprendre et Envoyer', () => {
     // Ce test assertait l ANCIEN design : un bouton unique qui basculait en Stop quand le composer etait
     // VIDE. C etait justement le defaut — arreter exigeait d aller vider la barre de prompt, donc
     // l action la plus urgente dependait de ce qui etait tape. Le nouvel invariant est plus fort :
     // l arret est un bouton DEDIE, conditionne au seul `busy`.
-    const stopButton = source.match(
-      /<button\s+className="btn composer-stop"[\s\S]*?<\/button>/
-    )?.[0]
-    expect(stopButton).toBeDefined()
-    expect(stopButton).toContain('window.api.cancelPilotChat(activeId)')
-    expect(stopButton).toContain('■ Stop')
-    // Son affichage ne depend QUE du tour en cours, jamais du contenu du composer : c est l invariant
-    // exact dont l absence obligeait a vider la barre de prompt pour pouvoir arreter.
-    expect(source).toMatch(/\{busy && \(\s*<button\s+className="btn composer-stop"/)
-    expect(stopButton).not.toContain('input.trim()')
-
-    const sendButton = source.match(
-      /<button\s+className="btn-accent btn composer-send"[\s\S]*?<\/button>/
-    )?.[0]
-    expect(sendButton).toBeDefined()
-    // Le bouton d envoi ne porte PLUS l annulation : un bouton, une action a la fois.
-    expect(sendButton).not.toContain('cancelPilotChat')
-    expect(sendButton).toContain('queueCurrentMessage()')
+    expect(source).not.toContain('data-testid="composer-stop"')
+    expect(source.match(/data-testid="composer-send"/g)).toHaveLength(1)
+    expect(source).toContain('interruptAndFlushQueue()')
+    expect(source).toContain('resumePilotTurn()')
+    expect(source).toContain('queueCurrentMessage()')
   })
 })

@@ -230,7 +230,6 @@ export const ChatMessageRow = memo(
     directiveReceipts,
     retryPrompt,
     onResend,
-    onResumeTurn,
     onRefineResume
   }: {
     message: Msg
@@ -238,7 +237,6 @@ export const ChatMessageRow = memo(
     /** Prompt utilisateur à l'origine de ce tour — ce qu'on renvoie ou reprend. */
     retryPrompt?: string
     onResend?: (prompt: string) => void
-    onResumeTurn?: (prompt: string) => void
     /** Pré-remplit le composer avec le prompt d'origine + le motif d'échec. N'ENVOIE RIEN. */
     onRefineResume?: (prompt: string, status: TerminalStatus, reason?: string | null) => void
     onInspectTurn?: (target: InspectTurnTarget) => void
@@ -412,7 +410,6 @@ export const ChatMessageRow = memo(
             const prompt = retryPrompt?.trim()
             // Un tour en échec se RENVOIE (le tour n'a rien produit à poursuivre) ; un tour
             // interrompu se REPREND là où il s'est arrêté.
-            const relancer = annule || echoue ? onResend : onResumeTurn
             const raison = terminalFailureReason(message)
             return (
               <div className="msg-terminal" data-status={message.status}>
@@ -423,20 +420,20 @@ export const ChatMessageRow = memo(
                       ? 'Réponse annulée'
                       : 'Réponse interrompue avant la fin'}
                 </span>
-                {prompt && relancer && (
+                {prompt && echoue && onResend && (
                   <button
                     type="button"
                     className="msg-terminal-action"
-                    title={annule || echoue ? `Renvoyer : ${prompt}` : `Reprendre : ${prompt}`}
-                    onClick={() => relancer(prompt)}
+                    title={`Renvoyer : ${prompt}`}
+                    onClick={() => onResend(prompt)}
                   >
-                    {annule || echoue ? '↻ Renvoyer' : '↻ Reprendre'}
+                    ↻ Renvoyer
                   </button>
                 )}
                 {/* Rejouer À L'IDENTIQUE un tour qui vient d'échouer refait le même échec. Ce
                     troisième bouton prépare une reprise INFORMÉE dans le composer — et n'envoie
                     rien : l'utilisateur précise d'abord ce qui doit changer. */}
-                {prompt && onRefineResume && (
+                {prompt && echoue && onRefineResume && (
                   <button
                     type="button"
                     className="msg-terminal-action msg-terminal-refine"

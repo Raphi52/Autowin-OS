@@ -389,6 +389,39 @@ export class ConversationStore {
     return conversation
   }
 
+  /** Démarre une continuation explicite sans fabriquer de nouveau message utilisateur. */
+  beginContinuationTurn(
+    id: string,
+    assistant: { turnId: string; runtime?: ChatTurnRuntime }
+  ): Conversation {
+    const conversation = this.conversations.get(id)
+    if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
+    const ts = this.now()
+    const previous = conversation.messages.at(-1)
+    const turn = createChatTurn(assistant.turnId, assistant.runtime)
+    const assistantMessage: Msg = {
+      messageId: this.nextUniqueMessageId(conversation),
+      ...(previous?.messageId ? { parentMessageId: previous.messageId } : {}),
+      role: 'assistant',
+      content: '',
+      ts,
+      turnId: turn.turnId,
+      status: turn.status,
+      parts: turn.parts,
+      ...(turn.runtime ? { runtime: turn.runtime } : {})
+    }
+    conversation.messages.push(assistantMessage)
+    conversation.schemaVersion = 3
+    conversation.updatedAt = ts
+    this.changed(id, 'immediate', {
+      op: 'append-messages',
+      messages: [structuredClone(assistantMessage)],
+      updatedAt: ts,
+      schemaVersion: 3
+    })
+    return conversation
+  }
+
   /** Applique un événement au tour structuré ; les deltas demandent un checkpoint regroupé. */
   applyTurnEvent(id: string, turnId: string, event: ChatTurnEvent): Conversation {
     const conversation = this.conversations.get(id)

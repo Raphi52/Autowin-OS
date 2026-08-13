@@ -3362,7 +3362,8 @@ Le fil reprend ensuite normalement.`
       background?: boolean
       maxBudgetUsd?: number
     },
-    onLateTaskUsageSettlement?: TaskUsageSettlementSink
+    onLateTaskUsageSettlement?: TaskUsageSettlementSink,
+    continuation = false
   ): Promise<{
     ok: boolean
     cancelled: boolean
@@ -3535,6 +3536,15 @@ Le fil reprend ensuite normalement.`
         appendTurnEvent(turnJournalRoot, conversationId, turnId, {
           kind: 'resumed',
           at: Date.now()
+        })
+      } else if (conversationId && continuation && os.conversations.get(conversationId)) {
+        os.conversations.beginContinuationTurn(conversationId, {
+          turnId,
+          runtime: {
+            provider: turnRuntimeBinding.provider,
+            model: turnRuntimeBinding.model,
+            reasoningEffort: turnRuntimeBinding.reasoningEffort
+          }
         })
       } else if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
         os.conversations.beginTurn(
@@ -4554,6 +4564,28 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'PilotChat')
     return runPilotChat(event.sender, messages, conversationId)
   })
+  ipcMain.handle('os:pilotChat:resume', (event, rawConversationId: unknown) => {
+    assertTrustedRendererSender(event, 'ResumePilotChat')
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    const conversation = os.conversations.get(conversationId)
+    if (!conversation) throw new Error(`Conversation inconnue: ${conversationId}`)
+    if (activeChatTurns.get(conversationId))
+      throw new Error('Un tour est déjà en cours dans cette conversation')
+    const history = conversation.messages.map((message) => ({
+      role: message.role,
+      content: message.content
+    }))
+    return runPilotChat(
+      event.sender,
+      [...history, { role: 'user', content: '' }],
+      conversationId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true
+    )
+  })
   ipcMain.handle('git:conversationRead', async (event, conversationId: unknown) => {
     assertTrustedRendererSender(event, 'ConversationGitRead')
     const safeConversationId = guardString(conversationId, 'conversationId')
@@ -5418,12 +5450,7 @@ app.whenReady().then(async () => {
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)
         return latest
-          ? resumeActionFor(
-              latest,
-              defaultProcessIdentity,
-              Date.now(),
-              persistedJournalLastWriteMs
-            )
+          ? resumeActionFor(latest, defaultProcessIdentity, Date.now(), persistedJournalLastWriteMs)
           : 'ignorer'
       }).then((action) => {
         const latest = os
@@ -5862,12 +5889,7 @@ app.whenReady().then(async () => {
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)
         return latest
-          ? resumeActionFor(
-              latest,
-              defaultProcessIdentity,
-              Date.now(),
-              persistedJournalLastWriteMs
-            )
+          ? resumeActionFor(latest, defaultProcessIdentity, Date.now(), persistedJournalLastWriteMs)
           : 'ignorer'
       }).then(async (action) => {
         const latest = os

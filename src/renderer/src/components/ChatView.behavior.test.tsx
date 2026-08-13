@@ -63,6 +63,7 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
       decision: { route: 'current', confidence: 1, reason: 'related' }
     })),
     pilotChat: vi.fn().mockResolvedValue({ ok: true }),
+    resumePilotChat: vi.fn().mockResolvedValue({ ok: true }),
     markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
     cancelPilotChat: vi.fn().mockResolvedValue(undefined),
     injectDirective: vi.fn().mockResolvedValue({ ok: true }),
@@ -143,30 +144,33 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
 
-  it('ARRÊTE un tour même quand du texte est tapé — le defaut rapporte par l utilisateur', async () => {
-    // Avant : UN SEUL bouton portait trois comportements, et `busy && input.trim()` le faisait basculer
-    // en « Mettre en file ». Arreter exigeait donc un composer VIDE — l utilisateur devait aller vider la
-    // barre de prompt avant que le clic agisse comme stop. L action la plus urgente etait masquee
-    // derriere un etat accessoire. Aucun test ne couvrait ce mode : c est pour cela qu il a survecu.
+  it('fait basculer le controle principal de Stop a Reprendre sans rejouer le prompt', async () => {
     const turn = deferred<{ ok: boolean; cancelled?: boolean }>()
+    const resumed = deferred<{ ok: boolean; cancelled: boolean; turnId: string }>()
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
-      pilotChat: vi.fn(() => turn.promise)
+      pilotChat: vi.fn(() => turn.promise),
+      resumePilotChat: vi.fn(() => resumed.promise)
     })
     await mount(mockApi)
     await click('.conv-pick')
     await type('lance un tour')
     await click('.composer-send')
 
-    // Du texte dans le composer PENDANT le tour : c est exactement le cas qui bloquait.
-    await type('un message en cours de frappe')
-    const stop = container!.querySelector('[data-testid="composer-stop"]') as HTMLButtonElement
-    expect(stop).not.toBeNull()
-    expect(stop.disabled).toBe(false)
-    await click('[data-testid="composer-stop"]')
+    expect(container!.querySelector('[data-testid="composer-stop"]')).toBeNull()
+    expect(container!.querySelector('[data-testid="composer-send"]')?.textContent).toContain('Stop')
+    await click('[data-testid="composer-send"]')
     expect(mockApi.cancelPilotChat).toHaveBeenCalledWith('A')
-
-    await act(async () => turn.resolve({ ok: true, cancelled: true }))
+    await act(async () => {
+      turn.resolve({ ok: true, cancelled: true })
+      await flushAnimationFrames()
+    })
+    expect(container!.querySelector('[data-testid="composer-send"]')?.textContent).toContain(
+      'Reprendre'
+    )
+    await click('[data-testid="composer-send"]')
+    expect(mockApi.resumePilotChat).toHaveBeenCalledWith('A')
+    expect(mockApi.pilotChat).toHaveBeenCalledTimes(1)
   })
 
   it('n affiche AUCUN bouton stop hors tour — il n y a rien a arreter', async () => {
@@ -175,6 +179,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.conv-pick')
     await type('du texte, mais aucun tour')
     expect(container!.querySelector('[data-testid="composer-stop"]')).toBeNull()
+    expect(container!.querySelector('[data-testid="composer-send"]')?.textContent).toContain(
+      'Envoyer'
+    )
   })
 
   it('le bouton d envoi MET EN FILE pendant un tour, il n annule plus', async () => {
@@ -2295,12 +2302,14 @@ describe('ChatView behavior under concurrent UI actions', () => {
    * repartir. Les trois statuts terminaux doivent être lisibles, et `failed` rester INCHANGÉ.
    */
   describe('statuts terminaux du tour', () => {
-    it('annulé : affiche « Réponse annulée » et propose de renvoyer le même prompt', async () => {
+    it('annulé : affiche le statut et centralise la reprise dans le composer', async () => {
       const turn = deferred<{ ok: boolean; cancelled?: boolean }>()
+      const resumed = deferred<{ ok: boolean; cancelled: boolean; turnId: string }>()
       const pilotChat = vi.fn((_payload: Array<{ role: string; content: string }>) => turn.promise)
       const mockApi = api({
         conversations: vi.fn().mockResolvedValue([conversation('A')]),
-        pilotChat
+        pilotChat,
+        resumePilotChat: vi.fn(() => resumed.promise)
       })
       await mount(mockApi)
       await click('.conv-pick')
@@ -2312,23 +2321,20 @@ describe('ChatView behavior under concurrent UI actions', () => {
       })
 
       expect(container!.textContent).toContain('Réponse annulée')
-      const action = container!.querySelector('.msg-terminal-action') as HTMLButtonElement
-      expect(action).toBeTruthy()
-
-      await act(async () => action.click())
-      expect(pilotChat.mock.calls.length).toBe(2)
-      expect(pilotChat.mock.calls[1][0]).toEqual(
-        expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'ma question' })])
-      )
+      expect(container!.querySelector('.msg-terminal-action')).toBeNull()
+      expect(container!.querySelector('.composer-send')?.textContent).toContain('Reprendre')
+      await click('.composer-send')
+      expect(mockApi.resumePilotChat).toHaveBeenCalledWith('A')
+      expect(pilotChat).toHaveBeenCalledTimes(1)
     })
 
-    it('interrompu : affiche « Réponse interrompue avant la fin » et propose la reprise', async () => {
+    it('interrompu : affiche le statut et centralise la reprise dans le composer', async () => {
       const turn = deferred<{ ok: boolean }>()
-      const orchestrate = vi.fn().mockResolvedValue({ ok: true })
+      const resumed = deferred<{ ok: boolean; cancelled: boolean; turnId: string }>()
       const mockApi = api({
         conversations: vi.fn().mockResolvedValue([conversation('A')]),
         pilotChat: vi.fn(() => turn.promise),
-        orchestrate
+        resumePilotChat: vi.fn(() => resumed.promise)
       })
       await mount(mockApi)
       await click('.conv-pick')
@@ -2340,10 +2346,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
       })
 
       expect(container!.textContent).toContain('Réponse interrompue avant la fin')
-      const action = container!.querySelector('.msg-terminal-action') as HTMLButtonElement
-      expect(action).toBeTruthy()
-      await act(async () => action.click())
-      expect(orchestrate).toHaveBeenCalledWith('ma tâche longue', 'A')
+      expect(container!.querySelector('.msg-terminal-action')).toBeNull()
+      expect(container!.querySelector('.composer-send')?.textContent).toContain('Reprendre')
+      await click('.composer-send')
+      expect(mockApi.resumePilotChat).toHaveBeenCalledWith('A')
     })
 
     // CONTRAT MIS À JOUR : l'échec n'est plus une part texte `⚠️ …` inerte (indistinguable d'un

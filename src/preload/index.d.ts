@@ -73,6 +73,13 @@ interface ChatApi {
     conversationId: string
     turnId: string
   }>
+  resumePilotChat: (conversationId: string) => Promise<{
+    ok: boolean
+    cancelled: boolean
+    turnId: string
+    text?: string
+    error?: string
+  }>
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
   orchestrate: (
