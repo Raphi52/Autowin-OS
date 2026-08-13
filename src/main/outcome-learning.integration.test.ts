@@ -244,7 +244,12 @@ describe('outcome learning — contrat visible par les modèles', () => {
     // OU l'autre laisse ce test vert ; c'est de la defense en profondeur, pas une redondance morte.
     // Corollaire a garder en tete : ce test seul ne prouve donc PAS la quarantaine — il faut les
     // deux sabotages pour la falsifier, et c'est le voisin dedie qui la couvre en propre.
+    //
+    // Le `corpus` reste passe DELIBEREMENT, et on ASSERTE sa valeur : le laisser sans assertion en
+    // faisait un parametre inerte laissant croire a une couverture inexistante (releve par l'audit).
+    // Ainsi, si un filtrage derive du workspace revenait un jour, ce test le dirait.
     const corpus = brainCorpusForWorkspace('C:/Amitel/Autowin OS')
+    expect(corpus, 'plus aucun corpus derive du workspace').toBeUndefined()
     const before = await searchVaultBrainNotesAsync(root, discriminant, {
       allowedRoot: root,
       corpus

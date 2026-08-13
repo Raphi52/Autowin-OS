@@ -83,15 +83,23 @@ describe('brainCorpusForWorkspace — tout le Brain par défaut', () => {
     expect(brainCorpusForWorkspace('C:\\Code RIG', {})).toBeUndefined()
   })
 
-  it('le dépôt RigApplication reste ISOLÉ : y exécuter ne donne que sa documentation', () => {
-    // Ce n'est pas de la pertinence, c'est de la contamination croisée : une note Autowin rédigée
-    // pour être attirante entrerait sinon dans un prompt qui agit sur le code d'un AUTRE produit,
-    // et aucun classement par pertinence ne protège de ça.
-    expect(brainCorpusForWorkspace('D:\\DevSrc\\RigApplication', {})).toEqual([
-      'knowledge/domain/rigapplication-documentation/'
-    ])
-    // L'isolation ne déborde pas : le Brain d'Autowin reste entier, c'était le défaut à corriger.
-    expect(brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {})).toBeUndefined()
+  it('AUCUN chemin de workspace ne restreint plus le corpus — RigApplication compris', () => {
+    // Une exception RigApplication a existé ici, retirée le même jour après audit externe. Deux
+    // raisons, toutes deux mesurées. (1) Elle ne pouvait PAS se déclencher : le workspace vient de
+    // `gitWorkspaceFrom` (`os.ts:109`) qui exige `.git` ET `package.json`, or le dépôt RIG est un
+    // dépôt .NET sans `package.json` — le slug ne valait jamais `rigapplication`. (2) Le `basename`
+    // n'est de toute façon pas un discriminant : sous-dossier, worktree et racine réelle du poste
+    // donnaient tous un slug différent. Une protection qui s'annonce sans mordre est pire qu'aucune.
+    for (const chemin of [
+      'D:\\DevSrc\\RigApplication',
+      'C:\\Code RIG',
+      'C:\\Code RIG\\RigApplication',
+      'C:\\Code RIG\\RigApplication\\RigClientAccueil',
+      'C:\\Code RIG\\wt-edilot3',
+      'C:\\Amitel\\Autowin OS'
+    ]) {
+      expect(brainCorpusForWorkspace(chemin, {}), chemin).toBeUndefined()
+    }
   })
 
   it('un workspace INCONNU ou ABSENT n’est plus fail-closed — le Brain est partagé', () => {
@@ -117,6 +125,26 @@ describe('brainCorpusForWorkspace — tout le Brain par défaut', () => {
     // Nom de note volontairement neutre : le garde de branding balaie TOUT le code, et un ancien
     // nom de produit dans une simple donnée de test le faisait échouer hors de son fichier permis.
     expect(brainSourcePathAllowed('knowledge/decisions/branches-rewind.md', undefined)).toBe(true)
+  })
+
+  it('la quarantaine résiste à un segment DÉGUISÉ par un espace ou un point final', () => {
+    // Trou trouvé par un juge externe et re-mesuré : seule la chaîne ENTIÈRE était nettoyée, jamais
+    // chaque segment. `knowledge/ inbox /x.md` passait, `knowledge/inbox/x.md` était rejeté.
+    // Ces chemins viennent de la RÉCUPÉRATION — les sources annoncées par le serveur Brain — donc ce
+    // ne sont pas forcément des chemins disque : une source adverse peut se nommer ainsi, et Windows
+    // tolérant mal l'espace ou le point final dans un dossier, aucun essai LOCAL ne le révélait.
+    for (const chemin of [
+      'knowledge/ inbox /x.md',
+      'knowledge/inbox./x.md',
+      'knowledge/  inbox  /x.md',
+      'knowledge/ escrow/x.md',
+      'knowledge/.trash./x.md'
+    ]) {
+      expect(brainSourcePathAllowed(chemin, undefined), chemin).toBe(false)
+    }
+    // Contrôle NÉGATIF : le nettoyage ne doit pas rejeter un chemin légitime au passage.
+    expect(brainSourcePathAllowed('knowledge/domain/note.md', undefined)).toBe(true)
+    expect(brainSourcePathAllowed('knowledge/domain/mon-inbox-perso.md', undefined)).toBe(true)
   })
 
   it('AUTOWIN_BRAIN_CORPUS surclasse la table (échappatoire opérateur)', () => {

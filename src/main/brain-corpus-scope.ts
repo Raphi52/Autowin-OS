@@ -20,21 +20,27 @@
  * Le probleme de dominance d'un corpus se traite dans le CLASSEMENT, pas par une liste blanche
  * ecrite a la main qui se perime en silence.
  *
- * Ce qui reste : les zones de quarantaine (`inbox`, `.trash`, `escrow`) sont TOUJOURS exclues, meme
- * sous wildcard — ce ne sont pas du savoir canonique. Et `AUTOWIN_BRAIN_CORPUS` permet a un operateur
- * de re-restreindre EXPLICITEMENT s'il le veut ; une valeur invalide coupe toujours le Brain plutot
- * que de se transformer en acces global par accident.
+ * CE QUI RESTE, exhaustivement — deux choses, et rien d'autre :
+ *
+ * 1. Les zones de QUARANTAINE (`inbox`, `.trash`, `escrow`) sont TOUJOURS exclues, meme sous
+ *    wildcard : ce n'est pas du savoir canonique. Deux couches independantes l'assurent, chacune
+ *    SUFFISANTE seule (verifie par sabotage : desarmer l'une laisse les tests verts, desarmer les
+ *    deux fait remonter `inbox/note`) — `SKIPPED_VAULT_DIRS` (`viz/fs-brains.ts`) pour le parcours
+ *    disque, et `brainSourcePathAllowed` ici pour les chemins ANNONCES par la recuperation. Cette
+ *    seconde couche compte : les chemins de sources viennent du serveur Brain, donc rien ne garantit
+ *    qu'ils correspondent a un dossier reel.
+ * 2. `AUTOWIN_BRAIN_CORPUS` permet a un operateur de re-restreindre EXPLICITEMENT ; une valeur
+ *    invalide coupe le Brain (fail-closed) plutot que de devenir un acces global par accident.
+ *
+ * Aucune restriction n'est plus derivee du chemin du workspace. Une exception RigApplication a ete
+ * ajoutee puis RETIREE le meme jour (2026-08-13) : elle ne pouvait pas se declencher, et affichait
+ * donc une protection inexistante — le detail est dans `brainCorpusForWorkspace`.
  */
 import { basename } from 'node:path'
 import { renderStructuredBrainContext } from './brain-protocol'
 import { retrieveBrainContext, type BrainRetrievalResult } from './brain-retrieval'
 import type { BrainNoteSearchResult } from './viz/fs-brains'
 /** En-tête d'une source : `### Source N — <chemin>`. */
-
-/** Portee d'une execution menee DANS le depot RigApplication : sa propre documentation. */
-const RIG_EXECUTION_CORPUS: readonly string[] = [
-  'knowledge/domain/rigapplication-documentation/'
-]
 
 let invalidOverrideWarningEmitted = false
 
@@ -67,11 +73,12 @@ export function workspaceSlug(workspacePath: string): string {
 }
 
 /**
- * Fragments de chemin autorisés. `[]` signifie fail-closed ; `undefined` est réservé au wildcard
- * opérateur explicite (aucun filtrage).
+ * Fragments de chemin autorisés, ou `undefined` = AUCUN filtrage (le cas par défaut désormais).
  *
- * Échappatoire opérateur : `AUTOWIN_BRAIN_CORPUS` (fragments séparés par des virgules) surclasse la
- * table ; la valeur `*` ouvre tout le corpus canonique mais jamais les zones de quarantaine.
+ * `[]` ne subsiste que pour UN cas : un `AUTOWIN_BRAIN_CORPUS` malformé, qui coupe le Brain plutôt
+ * que de devenir un accès global par faute de frappe. Il n'y a plus de « table » à surclasser — ce
+ * JSDoc en parlait encore alors qu'elle avait été supprimée, et décrivait donc un module disparu.
+ * `AUTOWIN_BRAIN_CORPUS=*` ouvre tout le corpus canonique, jamais la quarantaine.
  */
 export function brainCorpusForWorkspace(
   workspacePath: string | undefined,
@@ -95,14 +102,22 @@ export function brainCorpusForWorkspace(
     }
     return fragments
   }
-  // SEULE restriction survivante, et ce n'est PAS de la pertinence : executer DANS le depot d'un
-  // AUTRE produit. Une note Autowin qui entre dans un prompt agissant sur RigApplication est un
-  // vecteur de contamination croisee, pas un simple hors-sujet — le classement par pertinence ne
-  // protege de rien face a une source redigee pour etre attirante. Le tri par pertinence suffit
-  // partout ailleurs, et le Brain d'Autowin reste entier (c'etait le defaut a corriger).
-  if (workspacePath !== undefined && workspaceSlug(workspacePath) === 'rigapplication') {
-    return RIG_EXECUTION_CORPUS
-  }
+  // AUCUNE restriction derivee du workspace. Une exception « isolation RigApplication » a existe ici
+  // du 2026-08-13 au meme jour : elle n'a JAMAIS pu se declencher. Le workspace vient de
+  // `resolveExecutionWorkspace` → `gitWorkspaceFrom` (`os.ts:109`), qui exige `.git` ET
+  // `package.json` dans le meme dossier ; `C:\Code RIG\RigApplication` est un depot .NET sans
+  // `package.json`, donc le slug ne valait jamais `rigapplication`. Elle affichait une protection
+  // inexistante — pire qu'aucune protection.
+  //
+  // Et le motif ne tenait pas non plus : la mesure d'origine (2026-07-29, index a 15 342 fragments
+  // dont 99 % de doc RIG) decrit une DOMINANCE de corpus, que le classement (dense + lexical + RRF)
+  // traite mieux qu'une liste blanche. Un filtre par prefixe pose AU-DESSUS d'un classeur supprime
+  // des candidats avant qu'ils soient notes, y compris le meilleur — c'est ce qui masquait 450 des
+  // 461 notes. Le Brain est le vault de l'equipe, pas une entree hostile : le modele de menace
+  // « source adverse » supposait une note piegee dans sa propre memoire.
+  //
+  // Si des sources RIG polluent un jour les reponses Autowin, le correctif est dans le CLASSEMENT.
+  void workspacePath
   return undefined
 }
 
@@ -141,7 +156,18 @@ export function brainSourcePathAllowed(
   path: string,
   selectors: readonly string[] | undefined
 ): boolean {
-  const segments = path.trim().toLowerCase().replace(/\\/gu, '/').split('/').filter(Boolean)
+  // Chaque SEGMENT est nettoyé, pas seulement la chaîne entière : `knowledge/ inbox /x.md`,
+  // `knowledge/ escrow/x.md` et `knowledge/inbox./x.md` franchissaient la quarantaine (mesuré), là où
+  // `knowledge/inbox/x.md` était bien rejeté. Ces chemins ne viennent PAS du disque mais de la
+  // RÉCUPÉRATION — ce sont les sources annoncées par le serveur Brain — donc rien ne garantit qu'ils
+  // soient des chemins réels : une source adverse peut se nommer ainsi. Windows tolère mal l'espace
+  // ou le point final dans un nom de dossier, ce qui rendait ce trou invisible aux essais locaux.
+  const segments = path
+    .toLowerCase()
+    .replace(/\\/gu, '/')
+    .split('/')
+    .map((segment) => segment.trim().replace(/\.+$/u, ''))
+    .filter(Boolean)
   // Ces zones ne sont jamais du savoir canonique, même sous wildcard opérateur.
   if (
     segments.some((segment) => segment === 'inbox' || segment === '.trash' || segment === 'escrow')
