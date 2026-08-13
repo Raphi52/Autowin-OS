@@ -135,6 +135,7 @@ import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persis
 import { shouldPersistClosingText } from './runs/turn-closing'
 import { StartupResumeQueue } from './runs/startup-resume-queue'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
+import { classifierRefusDeReprise } from './runs/resume-refusal'
 import {
   admitAutomaticResumeRuntime,
   admitLiveReattachment,
@@ -5765,6 +5766,50 @@ app.whenReady().then(async () => {
           return delivered
         })
         .catch(async (error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error)
+          // Refus DÉFINITIFS : sans cette classification, le checkpoint restait en place et le
+          // même run rejouait sa reprise (et son échec) à chaque boot (mesuré 13/08, deux boots).
+          const refus = classifierRefusDeReprise(message)
+          if (refus === 'publication-acquise') {
+            durableResumeTurn.succeed({
+              result:
+                'Publication Git déjà acquise pour ce run ; reprise automatique annulée sans nouvel appel provider.'
+            })
+            os.forgetResumableOrchestration(resumableRun.runId)
+            broadcast({
+              type: 'orchestrate-end',
+              convId: conversationId,
+              runPath: resumableRun.runId,
+              status: 'green'
+            })
+            broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+            console.warn(
+              '[resume-orchestration]',
+              resumableRun.runId,
+              '→ checkpoint retiré : publication déjà engagée = succès, pas un échec à rejouer'
+            )
+            return
+          }
+          if (refus === 'copie-durable-absente') {
+            durableResumeTurn.fail(
+              `${message} Reprise définitivement impossible — checkpoint retiré, ce run ne sera plus rejoué.`,
+              false
+            )
+            os.forgetResumableOrchestration(resumableRun.runId)
+            broadcast({
+              type: 'orchestrate-end',
+              convId: conversationId,
+              runPath: resumableRun.runId,
+              status: 'red'
+            })
+            broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+            console.warn(
+              '[resume-orchestration]',
+              resumableRun.runId,
+              '→ copie durable absente : échec conclu une fois, checkpoint retiré'
+            )
+            return
+          }
           await bus.observeOutcomeLearning({
             conversationId,
             turnId: resumeTurnId,
@@ -5772,13 +5817,13 @@ app.whenReady().then(async () => {
             resultText: '',
             valid: false,
             gateBlocked: true,
-            gateReasons: [error instanceof Error ? error.message : String(error)],
+            gateReasons: [message],
             reused: true,
             evidence: pendingResumedExecutionEvidence,
             model: resumeBinding.model,
             terminalClass: 'defect'
           })
-          durableResumeTurn.fail(error instanceof Error ? error.message : String(error), false)
+          durableResumeTurn.fail(message, false)
           broadcast({
             type: 'orchestrate-end',
             convId: conversationId,
