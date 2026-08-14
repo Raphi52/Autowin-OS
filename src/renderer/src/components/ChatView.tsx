@@ -2706,15 +2706,32 @@ export function ChatView({
                       : 'Écrire à l’agent ou déposer des fichiers…'
                 }
               />
+              {/*
+                ARRÊTER ne doit dépendre de RIEN d'autre que « un tour est en cours ». Avant, un SEUL
+                bouton portait trois rôles : `busy && !input.trim()` → Stop, `busy && input.trim()` →
+                Mettre en file, sinon Envoyer. Conséquence : dès qu'on avait tapé quelque chose, il
+                fallait d'abord VIDER la barre de prompt pour que le clic agisse comme stop — l'action
+                la plus urgente masquée derrière un état accessoire. Stop a désormais son propre bouton.
+              */}
+              {busy && (
+                <button
+                  className="btn composer-stop"
+                  data-testid="composer-stop"
+                  onClick={() => stopPilotTurn()}
+                  disabled={!activeId || interruptingConversations.has(activeId ?? '')}
+                  aria-label="Arrêter la réponse"
+                  title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
+                >
+                  {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : '■ Stop'}
+                </button>
+              )}
               <button
-                className={`btn-accent btn composer-send${busy && !input.trim() ? ' is-stop' : canResumePilotTurn ? ' is-resume' : ''}`}
+                className={`btn-accent btn composer-send${canResumePilotTurn ? ' is-resume' : ''}`}
                 data-testid="composer-send"
                 onClick={() => {
                   if (handleBtw()) return
-                  if (busy && !input.trim()) {
-                    stopPilotTurn()
-                    return
-                  }
+                  // Plus de branche « composer vide → arrêter » : Stop a son propre bouton, ce bouton
+                  // ne fait plus qu'une chose à la fois — reprendre, mettre en file, ou envoyer.
                   if (canResumePilotTurn) {
                     void resumePilotTurn()
                     return
@@ -2724,30 +2741,20 @@ export function ChatView({
                 }}
                 disabled={
                   busy
-                    ? !activeId || (!input.trim() && interruptingConversations.has(activeId ?? ''))
+                    ? !activeId || !input.trim()
                     : canResumePilotTurn
                       ? false
                       : !input.trim() && attachments.length === 0
                 }
                 aria-label={
-                  busy && !input.trim()
-                    ? 'Arrêter la réponse'
-                    : canResumePilotTurn
-                      ? 'Reprendre la réponse'
-                      : busy
-                        ? 'Mettre le message en file d’attente'
-                        : 'Envoyer le message'
+                  canResumePilotTurn
+                    ? 'Reprendre la réponse'
+                    : busy
+                      ? 'Mettre le message en file d’attente'
+                      : 'Envoyer le message'
                 }
               >
-                {busy && !input.trim()
-                  ? interruptingConversations.has(activeId ?? '')
-                    ? 'Arrêt…'
-                    : '■ Stop'
-                  : canResumePilotTurn
-                    ? '↻ Reprendre'
-                    : busy
-                      ? '⚡ Mettre en file'
-                      : 'Envoyer'}
+                {canResumePilotTurn ? '↻ Reprendre' : busy ? '⚡ Mettre en file' : 'Envoyer'}
               </button>
             </div>
             <div className="composer-meta">

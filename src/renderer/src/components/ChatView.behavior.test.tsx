@@ -157,9 +157,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await type('lance un tour')
     await click('.composer-send')
 
-    expect(container!.querySelector('[data-testid="composer-stop"]')).toBeNull()
-    expect(container!.querySelector('[data-testid="composer-send"]')?.textContent).toContain('Stop')
-    await click('[data-testid="composer-send"]')
+    expect(container!.querySelector('[data-testid="composer-stop"]')).not.toBeNull()
+    expect(container!.querySelector('[data-testid="composer-stop"]')?.textContent).toContain('Stop')
+    await click('[data-testid="composer-stop"]')
     expect(mockApi.cancelPilotChat).toHaveBeenCalledWith('A')
     await act(async () => {
       turn.resolve({ ok: true, cancelled: true })
@@ -186,9 +186,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await type('message a garder en file')
     await click('.composer-send')
     expect(container!.querySelector('.directive-queue')).not.toBeNull()
-    expect(container!.querySelector('.composer-send')?.textContent).toContain('Stop')
+    expect(container!.querySelector('[data-testid="composer-stop"]')?.textContent).toContain('Stop')
 
-    await click('.composer-send')
+    await click('[data-testid="composer-stop"]')
     await act(async () => {
       turn.resolve({ ok: true, cancelled: true })
       await flushAnimationFrames()
@@ -213,10 +213,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.composer-send')
     await type('message a garder en file')
     await click('.composer-send')
-    await click('.composer-send')
+    await click('[data-testid="composer-stop"]')
     await act(async () => flushAnimationFrames())
 
-    expect(container!.querySelector('.composer-send')?.textContent).toContain('Stop')
+    expect(container!.querySelector('[data-testid="composer-stop"]')?.textContent).toContain('Stop')
     await act(async () => {
       turn.resolve({ ok: true, cancelled: true })
       await flushAnimationFrames()
@@ -243,7 +243,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.composer-send')
     await type('message a envoyer')
     await click('.composer-send')
-    await click('.composer-send')
+    await click('[data-testid="composer-stop"]')
     await act(async () => flushAnimationFrames())
 
     await click('.directive-queue-send-all')

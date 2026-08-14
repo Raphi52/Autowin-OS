@@ -64,12 +64,12 @@ describe('navigation pendant une reponse', () => {
     )
   })
 
-  it('utilise un seul controle principal pour Stop, Reprendre et Envoyer', () => {
-    // Ce test assertait l ANCIEN design : un bouton unique qui basculait en Stop quand le composer etait
-    // VIDE. C etait justement le defaut — arreter exigeait d aller vider la barre de prompt, donc
-    // l action la plus urgente dependait de ce qui etait tape. Le nouvel invariant est plus fort :
-    // l arret est un bouton DEDIE, conditionne au seul `busy`.
-    expect(source).not.toContain('data-testid="composer-stop"')
+  it('donne a Stop un bouton DEDIE, distinct du controle Envoyer/Reprendre/File', () => {
+    // Ancien design : un bouton unique basculait en Stop quand le composer etait VIDE. C etait le
+    // defaut — arreter exigeait d aller vider la barre de prompt, donc l action la plus urgente
+    // dependait de ce qui etait tape. Nouvel invariant : l arret est un bouton DEDIE, conditionne au
+    // seul `busy`, et le bouton principal ne fait plus qu une chose a la fois (Reprendre/File/Envoyer).
+    expect(source).toContain('data-testid="composer-stop"')
     expect(source.match(/data-testid="composer-send"/g)).toHaveLength(1)
     expect(source).toContain('stopPilotTurn()')
     expect(source).toContain('resumePilotTurn()')
