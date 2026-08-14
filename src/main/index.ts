@@ -127,10 +127,14 @@ import { persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
 import { pruneLegacyContextValues } from './runs/context-value-gc'
 import {
+  closeConvRun,
   deleteConvRun,
   listConvRuns,
   loadConvRunTrace,
-  reconcileAbandonedConvRuns
+  populateConvRunSections,
+  reconcileAbandonedConvRuns,
+  reuseOrCreateConvRun,
+  saveConvRunTrace
 } from './runs/conv-runs'
 import { deleteListedRun } from './dashboards/runs-scan'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
@@ -5686,9 +5690,20 @@ app.whenReady().then(async () => {
         resumeExisting,
         journal: (event) => appendTurnEvent(turnJournalRoot, conversationId, resumeTurnId, event)
       })
+      // Le run repris s'exécutait SANS son RUN.md : trace.json jamais persistée → panneau Juges
+      // vide sur tout run repris (défaut mesuré 14/08 sur les runs relancés au boot). On rattache
+      // le MÊME RUN.md que l'orchestration d'origine (workflow ouvert de la conversation portant la
+      // même tâche), on y accumule le fil, et on le clôt comme le chemin nominal de commands.ts.
+      const resumedRunFile = resumableRun.conversationId
+        ? await reuseOrCreateConvRun(resumableRun.conversationId, resumableRun.task).catch(
+            () => undefined
+          )
+        : undefined
+      const resumedSteps: Parameters<typeof saveConvRunTrace>[1] = []
       const resumedArtifactIds = new Set<string>()
       const pendingResumedExecutionEvidence: ExecutionEvidence[] = []
       let resumedCurrentRunId: string | undefined
+      let resumedPublishedSha: string | undefined
       let resumedTerminalLifecycle: Extract<RunLifecycleEvent, { stage: 'closure' }> | undefined
       let resumedCheckpointReleased = false
       let resumedPhaseStartIteration = 0
@@ -5710,6 +5725,7 @@ app.whenReady().then(async () => {
                 resumedLearningAuthor = { model: step.model, role: step.role }
               }
               pendingResumedExecutionEvidence.push(...(step.evidence ?? []))
+              resumedSteps.push(step)
               durableResumeTurn.step(step)
               broadcast({ type: 'orchestrate-step', convId: conversationId, step })
               persistOrchestrationStep(
@@ -5780,6 +5796,9 @@ app.whenReady().then(async () => {
             resumeTurnId,
             (lifecycle) => {
               resumedCurrentRunId = lifecycle.runId
+              if (lifecycle.stage === 'git' && lifecycle.git.outcome === 'merged') {
+                resumedPublishedSha = lifecycle.git.commitSha
+              }
               // Une reprise moderne garde l'identité du run pour conserver sa copie Git. Elle vient
               // donc de réécrire le même checkpoint : seuls les anciens chemins à nouvelle identité
               // ont encore un checkpoint historique distinct à retirer.
@@ -5848,10 +5867,32 @@ app.whenReady().then(async () => {
           const delivered = { ...result, ...(learning ? { learning } : {}) }
           durableResumeTurn.succeed(delivered)
           const deliveryStatus = result.gateBlocked || !result.valid ? 'red' : 'green'
+          if (resumedRunFile) {
+            saveConvRunTrace(resumedRunFile.path, resumedSteps)
+            populateConvRunSections(resumedRunFile.path, result.phaseOutputs, {
+              publishedCommitSha: resumedPublishedSha
+            })
+            const closureStatus =
+              resumedTerminalLifecycle && resumedTerminalLifecycle.closure.status !== 'open'
+                ? resumedTerminalLifecycle.closure.status
+                : deliveryStatus
+            closeConvRun(
+              resumedRunFile.path,
+              closureStatus,
+              result.gateBlocked
+                ? `Reprise — gate BLOQUÉ: ${result.gateReasons.join('; ')}`
+                : 'Reprise après redémarrage — run rejoué et clos avec sa trace.'
+            )
+            broadcast({ type: 'refresh', scope: 'workflows' })
+          }
           broadcast({
             type: 'orchestrate-end',
             convId: conversationId,
-            ...(resumedCurrentRunId ? { runPath: resumedCurrentRunId } : {}),
+            ...(resumedRunFile
+              ? { runPath: resumedRunFile.path }
+              : resumedCurrentRunId
+                ? { runPath: resumedCurrentRunId }
+                : {}),
             status: deliveryStatus
           })
           broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
@@ -5916,10 +5957,23 @@ app.whenReady().then(async () => {
             terminalClass: 'defect'
           })
           durableResumeTurn.fail(message, false)
+          if (resumedRunFile) {
+            saveConvRunTrace(resumedRunFile.path, resumedSteps)
+            closeConvRun(
+              resumedRunFile.path,
+              'red',
+              `Reprise en échec: ${message.slice(0, 120)}`
+            )
+            broadcast({ type: 'refresh', scope: 'workflows' })
+          }
           broadcast({
             type: 'orchestrate-end',
             convId: conversationId,
-            ...(resumedCurrentRunId ? { runPath: resumedCurrentRunId } : {}),
+            ...(resumedRunFile
+              ? { runPath: resumedRunFile.path }
+              : resumedCurrentRunId
+                ? { runPath: resumedCurrentRunId }
+                : {}),
             status: 'red'
           })
           broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })

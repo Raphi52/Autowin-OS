@@ -1113,6 +1113,28 @@ describe('admission de la reprise automatique au démarrage', () => {
     expect(relaunchSource).toContain('resumedCurrentRunId !== resumableRun.runId')
   })
 
+  it('la reprise persiste sa trace dans le RUN.md de la conversation (panneau Juges)', () => {
+    // Mesuré 14/08 : un run repris rejouait ses phases SANS toucher son RUN.md — trace.json jamais
+    // écrite → le panneau des juges restait vide sur tout run relancé après redémarrage.
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
+    const relaunchEnd = indexSource.indexOf("if (reprise === 'bloquer')", relaunchStart)
+    const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
+
+    // Le RUN.md est rattaché AVANT le runTask (même workflow ouvert que l'orchestration d'origine).
+    const reuseAt = relaunchSource.indexOf('reuseOrCreateConvRun(')
+    const runTaskAt = relaunchSource.indexOf('.runTask(')
+    expect(reuseAt).toBeGreaterThanOrEqual(0)
+    expect(reuseAt).toBeLessThan(runTaskAt)
+    // Chaque step est accumulé, puis persisté et le run clos — sur le succès ET sur l'échec.
+    expect(relaunchSource).toContain('resumedSteps.push(step)')
+    expect(relaunchSource.split('saveConvRunTrace(resumedRunFile.path, resumedSteps)')).toHaveLength(
+      3
+    )
+    expect(relaunchSource).toContain('closeConvRun(')
+    expect(relaunchSource).toContain('populateConvRunSections(resumedRunFile.path')
+  })
+
   it('repersiste un règlement tardif sur la reprise automatique', () => {
     const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
