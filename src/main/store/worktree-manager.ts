@@ -285,6 +285,9 @@ const COMPENSATION_INDEX_MARKER_SWEEP_LIMIT = 256
  */
 const ABANDONED_AGENT_MIN_AGE_MS = 24 * 60 * 60 * 1_000
 
+/** Découpe en lignes, quel que soit le style de fin de ligne rendu par git. */
+const LIGNES = /\r?\n/
+
 /**
  * Empreinte d'un processus : heure de démarrage + chemin. Deux processus peuvent porter le MÊME pid
  * à quelques minutes d'écart (recyclage) ; cette empreinte distingue « toujours le nôtre » de
@@ -870,7 +873,46 @@ export class WorktreeManager {
     ])
     if (containing.code !== 0 || !containing.stdout.trim()) return undefined
 
-    return this.cleanupWorktree(path, false).ok ? agentId : undefined
+    return this.balayerLeChemin(path) ? agentId : undefined
+  }
+
+  /**
+   * Supprime une copie ABANDONNEE, qu'elle soit encore enregistree par git ou non.
+   *
+   * MESURE le 2026-08-14 sur l'installation de l'utilisateur : 57 dossiers de copies pour 3,6 Go,
+   * dont 22 que git ne connaissait PLUS (`git worktree remove` repondait « is not a working tree »).
+   * Le balayage passant uniquement par cette commande, ces 1,3 Go etaient invisibles aux deux
+   * mecanismes — ni git ni Autowin ne pouvaient les enlever — et s'accumulaient a chaque usage.
+   *
+   * L'appelant a DEJA verifie tout ce qui protege du travail : age, absence de processus actif,
+   * propriete, aucun fichier non publie, et commit contenu dans une reference du depot. Ce qui reste
+   * ici n'est donc qu'une question de MOYEN de suppression, pas de securite.
+   */
+  private balayerLeChemin(path: string): boolean {
+    if (this.cleanupWorktree(path, false).ok) return true
+    // Non enregistree : git ne peut rien pour elle, mais le dossier existe et pese. On le retire
+    // directement, puis on elague le registre au cas ou une entree morte y subsisterait.
+    if (!this.estWorktreeEnregistree(path)) {
+      try {
+        this.removeDirFn(path)
+      } catch {
+        return false
+      }
+      this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
+      return !existsSync(path)
+    }
+    return false
+  }
+
+  /** La copie figure-t-elle encore au registre `git worktree list` ? */
+  private estWorktreeEnregistree(path: string): boolean {
+    const liste = this.tryGitFn(this.baseRepo, ['worktree', 'list', '--porcelain'])
+    if (liste.code !== 0) return true // dans le doute, on ne supprime pas a la main
+    const cible = resolve(path).toLowerCase()
+    return liste.stdout
+      .split(LIGNES)
+      .filter((ligne) => ligne.startsWith('worktree '))
+      .some((ligne) => resolve(ligne.slice('worktree '.length).trim()).toLowerCase() === cible)
   }
 
   private copiesCandidates(): Dirent[] {
