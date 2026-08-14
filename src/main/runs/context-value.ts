@@ -105,29 +105,6 @@ export function loadContextValue(id: string, base = ensureAutowinAppData()): str
 }
 
 /**
- * Decoupe une valeur en une NOUVELLE valeur. L'originale reste intacte et reutilisable — c'est le
- * « contexte comme variable » du RLM : on manipule des tranches sans detruire la source.
- *
- * Les bornes sont REFUSEES si elles sortent, plutot que silencieusement ramenees dans l'intervalle :
- * une tranche tronquee en silence produirait un prompt amputé que personne ne verrait passer.
- */
-export function sliceContextValue(
-  id: string,
-  from: number,
-  to: number,
-  base = ensureAutowinAppData()
-): ContextValueHandle {
-  const texte = loadContextValue(id, base)
-  if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to)) {
-    throw new Error('bornes de tranche non entieres')
-  }
-  if (from < 0 || to > texte.length || from >= to) {
-    throw new Error(`bornes de tranche hors limites: ${from}..${to} sur ${texte.length}`)
-  }
-  return putContextValue(texte.slice(from, to), base)
-}
-
-/**
  * Purge par age. Le magasin est un CACHE : une valeur perdue se recalcule, donc la purge est sans
  * danger — contrairement a un journal, qu'on ne purge pas a la legere.
  */

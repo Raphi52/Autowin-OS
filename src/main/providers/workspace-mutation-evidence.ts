@@ -234,16 +234,6 @@ export async function appendWorkspaceMutationEvidence(
  * du répertoire vivant, cette plage ne peut pas rater une écriture arrivée juste avant `git add`, ni
  * attribuer une écriture arrivée après le commit (elle n'est alors pas publiée dans cette SHA).
  */
-export async function appendPreparedCommitMutationEvidence(
-  cwd: string,
-  baseSha: string,
-  agentSha: string,
-  observedPaths: readonly string[],
-  evidence: ExecutionEvidence[]
-): Promise<void> {
-  evidence.push(...preparedCommitMutationEvidence(cwd, baseSha, agentSha, observedPaths))
-}
-
 export function preparedCommitMutationEvidence(
   cwd: string,
   baseSha: string,

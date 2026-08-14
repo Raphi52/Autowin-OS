@@ -1,4 +1,3 @@
-import type { CircuitBreakerLimits } from './cost-circuit-breaker'
 import { readDurableJson, writeDurableJson } from './durable-json'
 
 export interface OrchestrationBudgetSettings {
@@ -89,14 +88,4 @@ export function saveOrchestrationBudget(path: string, value: unknown): Orchestra
   }
   writeDurableJson(path, settings, decodeStoredOrchestrationBudget)
   return settings
-}
-
-/** Maps the persisted user setting onto the exact limits consumed by the runtime breaker. */
-export function costLimitsFromSettings(
-  settings: OrchestrationBudgetSettings
-): CircuitBreakerLimits {
-  return {
-    ...(settings.maxUsd === null ? {} : { maxUsd: settings.maxUsd }),
-    maxTokens: settings.maxTotalTokens
-  }
 }

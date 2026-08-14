@@ -3,8 +3,7 @@ import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { ExecutionEvidence } from '../providers/types'
-import { appendPreparedCommitMutationEvidence } from '../providers/workspace-mutation-evidence'
+import { preparedCommitMutationEvidence } from '../providers/workspace-mutation-evidence'
 import { WatchdogEngine } from './watchdog-engine'
 import { captureFileGenerationMarker } from './watchdog-file-source'
 import { lineFingerprint } from './watchdog-line'
@@ -64,8 +63,7 @@ describe('watchdog causal evidence e2e', () => {
             cwd: root,
             encoding: 'utf8'
           }).trim()
-          const evidence: ExecutionEvidence[] = []
-          await appendPreparedCommitMutationEvidence(root, baseSha, agentSha, [logPath], evidence)
+          const evidence = preparedCommitMutationEvidence(root, baseSha, agentSha, [logPath])
           const delta = evidence[0]
           return {
             fired: true,

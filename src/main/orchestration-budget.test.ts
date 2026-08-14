@@ -2,12 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  costLimitsFromSettings,
-  loadOrchestrationBudget,
-  saveOrchestrationBudget
-} from './orchestration-budget'
-import { CostCircuitBreaker } from './cost-circuit-breaker'
+import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 
 const folders: string[] = []
 function settingPath(): string {
@@ -28,20 +23,16 @@ describe('orchestration budget settings', () => {
       maxProviderCalls: 24,
       maxTotalTokens: 15_000_000
     })
-    const breaker = new CostCircuitBreaker(costLimitsFromSettings(settings))
-    expect(breaker.observe({ step: 'exec', tokens: 15_000_001 })?.trip).toBe(true)
   })
 
-  it('persists a positive USD cap and feeds the runtime breaker', () => {
+  it('persists a positive USD cap', () => {
     const path = settingPath()
     expect(saveOrchestrationBudget(path, { maxUsd: 1.5 })).toEqual({
       maxUsd: 1.5,
       maxProviderCalls: 24,
       maxTotalTokens: 15_000_000
     })
-    const breaker = new CostCircuitBreaker(costLimitsFromSettings(loadOrchestrationBudget(path)))
-    expect(breaker.observe({ step: 'exec', costUsd: 1.5 })).toBeNull()
-    expect(breaker.observe({ step: 'exec', costUsd: 0.01 })?.reason).toContain('seuil 1.50$')
+    expect(loadOrchestrationBudget(path).maxUsd).toBe(1.5)
   })
 
   it('rejects unsafe caps and blocks on malformed persisted data without recovery', () => {
@@ -60,8 +51,6 @@ describe('orchestration budget settings', () => {
 
     const recovered = loadOrchestrationBudget(path)
     expect(recovered.maxUsd).toBe(1.5)
-    const breaker = new CostCircuitBreaker(costLimitsFromSettings(recovered))
-    expect(breaker.observe({ step: 'exec', costUsd: 1.51 })?.trip).toBe(true)
   })
 
   it('récupère le plafond si le JSON reste parsable mais perd un champ structurant', () => {
@@ -72,7 +61,5 @@ describe('orchestration budget settings', () => {
 
     const recovered = loadOrchestrationBudget(path)
     expect(recovered.maxUsd).toBe(1.5)
-    const breaker = new CostCircuitBreaker(costLimitsFromSettings(recovered))
-    expect(breaker.observe({ step: 'exec', costUsd: 1.51 })?.trip).toBe(true)
   })
 })

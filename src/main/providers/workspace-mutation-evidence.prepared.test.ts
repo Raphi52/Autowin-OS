@@ -4,8 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { exactLineFingerprint } from '../exact-line-fingerprint'
-import type { ExecutionEvidence } from './types'
-import { appendPreparedCommitMutationEvidence } from './workspace-mutation-evidence'
+import { preparedCommitMutationEvidence } from './workspace-mutation-evidence'
 
 const roots: string[] = []
 
@@ -37,15 +36,7 @@ describe('prepared commit mutation evidence', () => {
       cwd: root,
       encoding: 'utf8'
     }).trim()
-    const evidence: ExecutionEvidence[] = []
-
-    await appendPreparedCommitMutationEvidence(
-      root,
-      baseSha,
-      agentSha,
-      [join(root, 'app.log')],
-      evidence
-    )
+    const evidence = preparedCommitMutationEvidence(root, baseSha, agentSha, [join(root, 'app.log')])
 
     expect(evidence[0].writtenLineFingerprintsByPath?.['app.log']).toEqual([
       exactLineFingerprint('ERROR self sans LF')
@@ -74,9 +65,7 @@ describe('prepared commit mutation evidence', () => {
       cwd: root,
       encoding: 'utf8'
     }).trim()
-    const evidence: ExecutionEvidence[] = []
-
-    await appendPreparedCommitMutationEvidence(root, baseSha, agentSha, ['app.log'], evidence)
+    const evidence = preparedCommitMutationEvidence(root, baseSha, agentSha, ['app.log'])
 
     expect(evidence[0].writtenLineFingerprintsByPath?.['app.log']).toHaveLength(257)
     expect(evidence[0].writtenLineFingerprintsByPath?.['app.log']?.at(-1)).toBe(

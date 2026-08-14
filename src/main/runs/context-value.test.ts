@@ -6,8 +6,7 @@ import {
   contextValueRoot,
   loadContextValue,
   pruneContextValues,
-  putContextValue,
-  sliceContextValue
+  putContextValue
 } from './context-value'
 
 /**
@@ -61,22 +60,6 @@ describe('valeur de contexte — le primitif RLM', () => {
     const h = putContextValue('a retrouver apres redemarrage', root)
     // Aucun etat en memoire : on repart du handle seul, comme le ferait un processus neuf.
     expect(loadContextValue(h.id, root)).toBe('a retrouver apres redemarrage')
-  })
-
-  it('DECOUPABLE : la tranche est une nouvelle valeur, l originale reste intacte', () => {
-    const root = racine()
-    const h = putContextValue('0123456789', root)
-    const t = sliceContextValue(h.id, 2, 5, root)
-    expect(loadContextValue(t.id, root)).toBe('234')
-    expect(loadContextValue(h.id, root)).toBe('0123456789')
-    expect(t.id).not.toBe(h.id)
-  })
-
-  it('REFUSE une tranche hors bornes plutot que de rendre une valeur tronquee en silence', () => {
-    const root = racine()
-    const h = putContextValue('court', root)
-    expect(() => sliceContextValue(h.id, 3, 99, root)).toThrow(/bornes/i)
-    expect(() => sliceContextValue(h.id, 4, 2, root)).toThrow(/bornes/i)
   })
 
   it('REFUSE un handle inconnu, et un handle FORGE ne peut pas sortir du magasin', () => {
