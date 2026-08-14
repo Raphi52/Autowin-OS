@@ -32,7 +32,21 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
       text
     ) ||
     /\bdevis impossible avant ex[ée]cution\b/.test(text) ||
-    /\bhttp 429\b/.test(text)
+    /\bhttp 429\b/.test(text) ||
+    // TOKEN D'AUTH EXPIRE — mur non actionnable : l'agent ne peut PAS passer, seul l'utilisateur peut
+    // se re-authentifier, et Auto-Kaizen ne peut rien « corriger » a un token expire. Vecu sur
+    // conv-1086 (2026-08-13) : « 401 OAuth access token has expired. Re-authenticate to continue »
+    // passait a travers la suppression et declenchait un incident kaizen inutile — un des
+    // amplificateurs des 2248 alertes de l'historique. Ancre sur le VOCABULAIRE d'authentification
+    // pour ne pas avaler un vrai defaut qui mentionnerait « 401 » par hasard.
+    /\boauth\b[^\n]{0,40}\b(?:expired|expire|invalid)\b/.test(text) ||
+    /\baccess token has expired\b/.test(text) ||
+    /\bre-?authenticate\b/.test(text) ||
+    /\bfailed to authenticate\b/.test(text) ||
+    /\bauthentication_error\b/.test(text) ||
+    /\binvalid[_ ]api[_ ]key\b/.test(text) ||
+    /\bhttp 401\b[^\n]{0,60}\b(?:token|auth|expire|expired)\b/.test(text) ||
+    /\b401\b[^\n]{0,40}\b(?:oauth|token|authenticate)\b/.test(text)
   )
 }
 
