@@ -88,16 +88,33 @@ describe('balayage des copies agent abandonnées', () => {
     expect(git(repo, 'show', 'autowin/recovery/run-dirty:travail.txt')).toBe('non publié')
   })
 
-  it('conserve une copie dont le commit n’est atteignable par aucune référence', () => {
+  it('RATTACHE un commit qu’aucune référence ne retient, puis libère la copie', () => {
+    /*
+      Dernier prolongement de la frontière posée ici le 2026-08-05, décidé par l'utilisateur le
+      2026-08-14 sur chiffres. Après que la préservation du travail non committé ait rendu 971 Mo
+      (49 copies → 18), les 18 restantes étaient 10 copies protégées par l'âge et 8 qui étaient
+      TOUTES ce cas — `refs=0`, `sales=0`, 185 à 213 h d'âge, pour 216 Mo.
+
+      Le refus d'y toucher était juste — supprimer la copie perdrait un commit que rien ne retient —
+      mais sans issue : rien ne viendrait jamais rattacher le commit d'un run mort. On attache donc
+      une référence au commit EXISTANT (aucun commit n'est créé), et il devient récupérable par
+      `git worktree add` au lieu d'occuper un checkout complet.
+    */
     const repo = tempRepo()
     const wm = manager(repo, true)
     const path = wm.acquire('run-commit')
     writeFileSync(join(path, 'travail.txt'), 'commité mais jamais publié\n')
     git(path, 'add', 'travail.txt')
     git(path, 'commit', '-q', '-m', 'travail agent')
+    const sha = git(path, 'rev-parse', 'HEAD')
 
-    expect(wm.reconcileResidues().swept).toBeUndefined()
-    expect(existsSync(path)).toBe(true)
+    expect(wm.reconcileResidues().swept).toEqual(['run-commit'])
+    expect(existsSync(path)).toBe(false)
+    // Le commit EXACT survit — pas une copie de son contenu, le même objet.
+    expect(git(repo, 'rev-parse', 'autowin/recovery/run-commit')).toBe(sha)
+    expect(git(repo, 'show', 'autowin/recovery/run-commit:travail.txt')).toBe(
+      'commité mais jamais publié'
+    )
   })
 
   it('conserve une copie récente : un run vivant sans lease encore posé', () => {

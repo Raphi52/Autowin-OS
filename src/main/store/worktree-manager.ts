@@ -950,7 +950,26 @@ export class WorktreeManager {
       '--count=1',
       '--format=%(refname)'
     ])
-    if (containing.code !== 0 || !containing.stdout.trim()) return undefined
+    if (containing.code !== 0) return undefined
+    if (!containing.stdout.trim()) {
+      /**
+       * Commit atteignable par AUCUNE reference : on le RATTACHE avant de liberer.
+       *
+       * MESURE le 2026-08-14, apres que la preservation du travail non committe ait rendu 971 Mo
+       * (49 copies -> 18) : les 18 restantes sont 10 copies protegees par l'age (runs de moins de
+       * 24 h) et 8 qui sont TOUTES ce cas — `refs=0`, `sales=0`, 185 a 213 h d'age, 216 Mo. Le refus
+       * d'y toucher etait juste (supprimer la copie perdrait un commit que rien ne retient) mais sans
+       * issue : rien ne viendrait jamais rattacher le commit d'un run mort.
+       *
+       * Aucun commit n'est CREE ici — on ne fait que rendre atteignable celui qui existe deja. Un
+       * echec de creation interrompt tout : perdre un commit unique pour gagner 30 Mo serait le pire
+       * echange possible.
+       */
+      const branche = `autowin/recovery/${agentId}`
+      if (this.tryGitFn(this.baseRepo, ['branch', '--force', branche, sha]).code !== 0) {
+        return undefined
+      }
+    }
 
     return this.balayerLeChemin(path) ? agentId : undefined
   }
