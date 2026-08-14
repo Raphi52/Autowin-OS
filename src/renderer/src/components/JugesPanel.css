@@ -1,0 +1,90 @@
+/* Panneau des juges — « transparence totale » : aucun fond, filet de tête dégradé or. */
+.jpan {
+  margin-top: 10px;
+  background: transparent;
+  border: none;
+  padding: 4px 2px;
+}
+.jpan-tete {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(212, 169, 79, 0.55), rgba(212, 169, 79, 0.06)) 1;
+}
+.jpan-kicker {
+  font: 600 10.5px Consolas, monospace;
+  letter-spacing: 1.8px;
+  color: #d4a94f;
+  text-transform: uppercase;
+}
+.jpan-compte {
+  margin-left: auto;
+  font: 11.5px Consolas, monospace;
+  color: #a9b2c4;
+}
+.jpan-item + .jpan-item {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.jpan-ligne {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 2px;
+  font-size: 13.5px;
+}
+.jpan-deplier {
+  background: none;
+  border: none;
+  color: #d4a94f;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.jpan-juge {
+  flex: 1;
+  cursor: pointer;
+  color: #dde3ee;
+  font-family: Consolas, monospace;
+  font-size: 12.5px;
+}
+.jpan-vote {
+  font: 600 11.5px 'Segoe UI', sans-serif;
+  letter-spacing: 0.4px;
+}
+.jpan-vote.is-valide {
+  color: #3ecf8e;
+}
+.jpan-vote.is-defaut {
+  color: #ff6b6b;
+}
+.jpan-vote.is-echec {
+  color: #ffb454;
+}
+.jpan-cout {
+  font: 11.5px Consolas, monospace;
+  color: #8f9cb3;
+  min-width: 52px;
+  text-align: right;
+}
+.jpan-verdict {
+  margin: 2px 0 12px 26px;
+}
+.jpan-verdict b {
+  display: block;
+  font: 600 10.5px 'Segoe UI', sans-serif;
+  color: #d4a94f;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 2px;
+}
+.jpan-verdict p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #dde3ee;
+  max-width: 78ch;
+  white-space: pre-wrap;
+}

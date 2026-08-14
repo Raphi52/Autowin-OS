@@ -11,6 +11,7 @@ import { Markdown } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
 import { ScoutTable } from './ScoutTable'
 import { CandidatsPickPanel } from './CandidatsPickPanel'
+import { JugesPanel } from './JugesPanel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { AssistantActivityGroup } from './ChatView.parts'
 import { ForkIcon, InspectIcon } from './chat-view-icons'
@@ -396,6 +397,14 @@ export const ChatMessageRow = memo(
                       />
                     )
                   )}
+                  {/* Panneau des JUGES : décisions en barre, verdict complet en dépliant — même
+                      manière que les candidats du scout (14/08). Rendu sous les tours qui ont
+                      orchestré, alimenté par le fil de sous-agents persisté du dernier run. */}
+                  {conversationId &&
+                    message.status === 'completed' &&
+                    message.parts.some(
+                      (candidate) => candidate.kind === 'action' && candidate.name === 'orchestrate'
+                    ) && <JugesPanel conversationId={conversationId} />}
                 </Fragment>
               )
           )}
