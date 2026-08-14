@@ -246,6 +246,34 @@ export function consumeStreamedPrefix(
   return { visible: '', prefixRemaining: '' }
 }
 
+function retirerConclusionBloquantePrematuree(texte: string): string {
+  let resultat = texte
+  while (true) {
+    const marqueurs =
+      /^[ \t]*(?:(?:>[ \t]*)|(?:[-*+][ \t]+)|(?:\d+[.)][ \t]+))*(?:#{1,6}[ \t]+)?(?:(?:\*\*|__)[ \t]*)?⛔\uFE0F?[ \t]+Bloqué(?:[ \t]*(?:\*\*|__))?(?<suite>[^\r\n]*)/gimu
+    let marqueur: RegExpExecArray | null
+    let retrait: { debut: number; fin: number } | undefined
+    while ((marqueur = marqueurs.exec(resultat)) !== null) {
+      const suite = marqueur.groups?.suite ?? ''
+      if (!/^[ \t]*(?:\p{P}|$)/u.test(suite)) continue
+      const depuisMarqueur = resultat.slice(marqueur.index)
+      const paragrapheSuivant = /\r?\n[ \t]*\r?\n/.exec(depuisMarqueur)
+      retrait = {
+        debut: marqueur.index,
+        fin:
+          paragrapheSuivant && paragrapheSuivant.index !== undefined
+            ? marqueur.index + paragrapheSuivant.index + paragrapheSuivant[0].length
+            : resultat.length
+      }
+      break
+    }
+    if (!retrait) return resultat
+    const avant = resultat.slice(0, retrait.debut).trimEnd()
+    const apres = resultat.slice(retrait.fin).trimStart()
+    resultat = [avant, apres].filter(Boolean).join('\n\n')
+  }
+}
+
 export function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
   const tokens: OrderedPilotToken[] = []
   let cursor = 0
@@ -952,15 +980,23 @@ export class AgentPilot {
       }
 
       const ordered = parseOrderedPilotTokens(res.text)
+      const hasCommand = ordered.some((token) => token.kind === 'command')
       const spoken = ordered
-        .filter(
-          (token): token is Extract<OrderedPilotToken, { kind: 'text' }> => token.kind === 'text'
+        .filter((token): token is Extract<OrderedPilotToken, { kind: 'text' }> => token.kind === 'text')
+        .map((token) =>
+          hasCommand ? retirerConclusionBloquantePrematuree(token.text) : token.text
         )
-        .map((token) => token.text)
+        .filter(Boolean)
         .join('')
         .trim()
       if (spoken) anySpokenText = true
-      const hasCommand = ordered.some((token) => token.kind === 'command')
+      const prefixeStreameVisible = hasCommand
+        ? retirerConclusionBloquantePrematuree(successfulStreamedPrefix)
+        : successfulStreamedPrefix
+      if (successfulStreamedPrefix && prefixeStreameVisible !== successfulStreamedPrefix) {
+        emit({ kind: 'stream-reset', streamId: `${i}:${successfulAttempt}`, iteration: i })
+        successfulStreamedPrefix = ''
+      }
       const onlyAuxiliaryRemember =
         hasCommand &&
         Boolean(spoken) &&
@@ -1057,7 +1093,12 @@ export class AgentPilot {
       for (const token of ordered) {
         signal?.throwIfAborted()
         if (token.kind === 'text') {
-          const consumed = consumeStreamedPrefix(token.text, streamedPrefixRemaining)
+          const texteVisible = retirerConclusionBloquantePrematuree(token.text)
+          if (!texteVisible) {
+            tokenIndex += 1
+            continue
+          }
+          const consumed = consumeStreamedPrefix(texteVisible, streamedPrefixRemaining)
           const visible = consumed.visible
           streamedPrefixRemaining = consumed.prefixRemaining
           if (visible)

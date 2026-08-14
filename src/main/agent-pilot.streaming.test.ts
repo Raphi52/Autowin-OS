@@ -264,6 +264,384 @@ describe('AgentPilot chat streaming', () => {
     expect(done?.text).not.toContain('✅')
   })
 
+  it('ne rend pas visible un faux blocage terminal quand la même itération exécute encore une commande', async () => {
+    const responses = [
+      '<cmd>{"name":"find_in_files","args":{"pattern":"status","dir":"src"}}</cmd>' +
+        '⛔ Bloqué — les commandes de lecture n’ont retourné aucun résultat exploitable.',
+      'Synthèse vérifiée après lecture.'
+    ]
+    const registry = {
+      send: vi.fn(async () => ({ text: responses.shift() ?? '', provider: 'claude' })),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'find_in_files', args: {}, description: 'recherche locale' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { trouve: 3 } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'scout le dépôt' }],
+      (event) => events.push(event),
+      undefined,
+      6,
+      'conv-premature-blocked'
+    )
+
+    expect(bus.exec).toHaveBeenCalledOnce()
+    expect(events.map((event) => event.text ?? '').join('')).not.toContain('⛔ Bloqué')
+    expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Synthèse vérifiée après lecture.' })
+  })
+
+  it('conserve un vrai blocage terminal rendu sans commande', async () => {
+    const registry = {
+      send: vi.fn(async () => ({
+        text: '⛔ Bloqué — la lecture a réellement échoué.',
+        provider: 'claude'
+      })),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'lis le fichier absent' }],
+      (event) => events.push(event)
+    )
+
+    expect(events.at(-1)).toMatchObject({
+      kind: 'done',
+      text: '⛔ Bloqué — la lecture a réellement échoué.'
+    })
+  })
+
+  it('rétracte un faux blocage déjà streamé avant de découvrir la commande', async () => {
+    const bloque = '⛔ Bloqué — aucune lecture exploitable.'
+    const commande = '<cmd>{"name":"find_in_files","args":{"pattern":"status","dir":"src"}}</cmd>'
+    const responses = [
+      { chunks: [bloque, commande], text: `${bloque}${commande}` },
+      { chunks: ['Conclusion vérifiée.'], text: 'Conclusion vérifiée.' }
+    ]
+    const registry = {
+      send: vi.fn(
+        async (
+          _provider: string,
+          _messages: unknown,
+          _options: unknown,
+          onChunk?: (chunk: { delta: string }) => void
+        ) => {
+          const response = responses.shift()!
+          for (const delta of response.chunks) onChunk?.({ delta })
+          return { text: response.text, provider: 'claude' }
+        }
+      ),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'find_in_files', args: {}, description: 'recherche locale' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { trouve: 3 } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'scout le dépôt' }],
+      (event) => events.push(event)
+    )
+
+    const fauxBlocage = events.find((event) => event.kind === 'delta' && event.text === bloque)
+    const retrait = events.find(
+      (event) => event.kind === 'stream-reset' && event.streamId === fauxBlocage?.streamId
+    )
+    expect(fauxBlocage).toBeDefined()
+    expect(retrait).toBeDefined()
+    expect(events.indexOf(retrait!)).toBeGreaterThan(events.indexOf(fauxBlocage!))
+    expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Conclusion vérifiée.' })
+  })
+
+  it('retire le paragraphe bloquant après une narration et conserve le texte ordinaire autour', async () => {
+    const responses = [
+      'Lecture tentée.\n\n⛔ Bloqué — aucun résultat.\n\nJe poursuis.' +
+        '<cmd>{"name":"find_in_files","args":{"pattern":"status","dir":"src"}}</cmd>',
+      'Conclusion vérifiée.'
+    ]
+    const registry = {
+      send: vi.fn(async () => ({ text: responses.shift() ?? '', provider: 'claude' })),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'find_in_files', args: {}, description: 'recherche locale' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { trouve: 3 } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'scout le dépôt' }],
+      (event) => events.push(event)
+    )
+
+    const texteVisible = events.map((event) => event.text ?? '').join('')
+    expect(texteVisible).toContain('Lecture tentée.')
+    expect(texteVisible).toContain('Je poursuis.')
+    expect(texteVisible).not.toContain('⛔ Bloqué')
+  })
+
+  it('rétracte la variante Unicode streamée et réémet la narration saine', async () => {
+    const prefixe = 'Lecture tentée.\n\n⛔️ Bloqué. Aucun résultat.'
+    const commande = '<cmd>{"name":"find_in_files","args":{"pattern":"status","dir":"src"}}</cmd>'
+    const responses = [
+      { chunks: [prefixe, commande], text: `${prefixe}${commande}` },
+      { chunks: [], text: 'Conclusion vérifiée.' }
+    ]
+    const registry = {
+      send: vi.fn(
+        async (
+          _provider: string,
+          _messages: unknown,
+          _options: unknown,
+          onChunk?: (chunk: { delta: string }) => void
+        ) => {
+          const response = responses.shift()!
+          for (const delta of response.chunks) onChunk?.({ delta })
+          return { text: response.text, provider: 'claude' }
+        }
+      ),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'find_in_files', args: {}, description: 'recherche locale' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { trouve: 3 } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'scout le dépôt' }],
+      (event) => events.push(event)
+    )
+
+    const retraitIndex = events.findIndex((event) => event.kind === 'stream-reset')
+    expect(retraitIndex).toBeGreaterThan(-1)
+    expect(
+      events
+        .slice(retraitIndex + 1)
+        .some((event) => event.kind === 'delta' && event.text?.includes('Lecture tentée.'))
+    ).toBe(true)
+    expect(
+      events
+        .slice(retraitIndex + 1)
+        .map((event) => event.text ?? '')
+        .join('')
+    ).not.toContain('⛔️ Bloqué')
+  })
+
+  it('préserve une narration en prose qui explique le statut bloqué sans employer le marqueur terminal', async () => {
+    const responses = [
+      'Le statut « ⛔ Bloqué » signifie une conclusion terminale.' +
+        '<cmd>{"name":"find_in_files","args":{"pattern":"status","dir":"src"}}</cmd>',
+      'Conclusion vérifiée.'
+    ]
+    const registry = {
+      send: vi.fn(async () => ({ text: responses.shift() ?? '', provider: 'claude' })),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'find_in_files', args: {}, description: 'recherche locale' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { trouve: 3 } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'explique puis inspecte' }],
+      (event) => events.push(event)
+    )
+
+    expect(events.map((event) => event.text ?? '').join('')).toContain(
+      'Le statut « ⛔ Bloqué » signifie une conclusion terminale.'
+    )
+  })
+
+  it('retire tous les faux blocages, y compris Markdown, sans retirer les libellés expliqués', async () => {
+    const texte = [
+      'Avant.',
+      '⛔ Bloqué — aucun résultat, premier.',
+      'Milieu.',
+      '⛔ Bloqué — aucun résultat, second.',
+      '**⛔ Bloqué** — impossible de continuer, troisième.',
+      '## ⛔ Bloqué — recherche échouée, quatrième.',
+      '- ⛔ Bloqué — aucun résultat, liste.',
+      '> ⛔ Bloqué — aucun résultat, citation.',
+      '⛔ Bloqué — accès interdit.',
+      '⛔ Bloqué — permissions insuffisantes.',
+      'Le libellé « ⛔ Bloqué » est historique.',
+      'Une ligne « ⛔ Bloqué : ce libellé est terminal » reste une citation en prose.'
+    ].join('\n\n')
+    const commande = '<cmd>{"name":"find_in_files","args":{"pattern":"status","dir":"src"}}</cmd>'
+    const responses = [`${texte}${commande}`, 'Conclusion vérifiée.']
+    const registry = {
+      send: vi.fn(async () => ({ text: responses.shift() ?? '', provider: 'claude' })),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'find_in_files', args: {}, description: 'recherche locale' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { trouve: 3 } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'inspecte le dépôt' }],
+      (event) => events.push(event)
+    )
+
+    const visible = events.map((event) => event.text ?? '').join('')
+    expect(visible).toContain('Avant.')
+    expect(visible).toContain('Milieu.')
+    expect(visible).toContain('Le libellé « ⛔ Bloqué » est historique.')
+    expect(visible).toContain(
+      'Une ligne « ⛔ Bloqué : ce libellé est terminal » reste une citation en prose.'
+    )
+    expect(visible).not.toContain('premier.')
+    expect(visible).not.toContain('second.')
+    expect(visible).not.toContain('troisième.')
+    expect(visible).not.toContain('quatrième.')
+    expect(visible).not.toContain('liste.')
+    expect(visible).not.toContain('citation.')
+    expect(visible).not.toContain('accès interdit.')
+    expect(visible).not.toContain('permissions insuffisantes.')
+  })
+
+  it.each([
+    { variante: 'virgule', prefixeMarkdown: '', ponctuation: ',' },
+    { variante: 'points de suspension', prefixeMarkdown: '', ponctuation: '…' },
+    { variante: 'point d’exclamation', prefixeMarkdown: '', ponctuation: '!' },
+    { variante: 'liste Markdown', prefixeMarkdown: '- ', ponctuation: '—' },
+    { variante: 'citation Markdown', prefixeMarkdown: '> ', ponctuation: '—' }
+  ])(
+    'retire un blocage streamé $variante sans dupliquer la narration',
+    async ({ prefixeMarkdown, ponctuation }) => {
+      const narration = 'Narration saine.'
+      const prefixe = `${narration}\n\n${prefixeMarkdown}⛔️ Bloqué${ponctuation} aucun résultat.`
+      const commande =
+        '<cmd>{"name":"find_in_files","args":{"pattern":"status","dir":"src"}}</cmd>'
+      const responses = [
+        { chunks: [prefixe, commande], text: `${prefixe}${commande}` },
+        { chunks: [], text: 'Conclusion vérifiée.' }
+      ]
+      const registry = {
+        send: vi.fn(
+          async (
+            _provider: string,
+            _messages: unknown,
+            _options: unknown,
+            onChunk?: (chunk: { delta: string }) => void
+          ) => {
+            const response = responses.shift()!
+            for (const delta of response.chunks) onChunk?.({ delta })
+            return { text: response.text, provider: 'claude' }
+          }
+        ),
+        describePrompt: () => ({
+          provider: 'claude',
+          transport: 'fixture',
+          messages: [],
+          options: {},
+          limitation: 'test'
+        })
+      }
+      const roles = {
+        getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+      }
+      const bus = {
+        catalog: () => [{ name: 'find_in_files', args: {}, description: 'recherche locale' }],
+        snapshotForPrompt,
+        exec: vi.fn().mockResolvedValue({ ok: true, data: { trouve: 3 } })
+      }
+      const events: PilotEvent[] = []
+
+      await new AgentPilot(registry as never, roles as never, bus as never).chat(
+        [{ role: 'user', content: 'scout le dépôt' }],
+        (event) => events.push(event)
+      )
+
+      const retraitIndex = events.findIndex((event) => event.kind === 'stream-reset')
+      const apresRetrait = events.slice(retraitIndex + 1)
+      expect(retraitIndex).toBeGreaterThan(-1)
+      expect(apresRetrait.map((event) => event.text ?? '').join('')).not.toContain('⛔️ Bloqué')
+      expect(
+        apresRetrait.filter(
+          (event) => event.kind === 'delta' && event.text?.includes(narration)
+        )
+      ).toHaveLength(1)
+    }
+  )
+
   it('emits progressive visible deltas while suppressing fragmented command markup', async () => {
     const responses = [
       {
