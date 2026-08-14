@@ -909,7 +909,15 @@ export class AgentPilot {
           invalidQuestionRecoveryAvailable = false
           continue
         }
-        emit({ kind: 'done', text: '', usage })
+        // JAMAIS de bulle vide : une question refusee + reprises epuisees laissait l'utilisateur
+        // devant un message VIDE, sans savoir ce qui s'etait passe (vu sur conv-1141).
+        emit({
+          kind: 'done',
+          text:
+            'Je n’ai pas pu poser de question recevable et j’ai epuise les reprises — ' +
+            'je m’arrete sans solliciter l’utilisateur.',
+          usage
+        })
         return
       }
 
@@ -977,7 +985,20 @@ export class AgentPilot {
           )
           continue
         }
-        emit({ kind: 'done', text: spoken, usage })
+        // JAMAIS de bulle vide. Cause racine des « conversations qui echouent » (conv-1141) :
+        // le tour a AGI (« [a execute exec (echec)] ») mais n'a rien DIT, la reprise de conclusion
+        // etait deja consommee, et `spoken` vide produisait une bulle VIDE — l'utilisateur renvoyait
+        // alors le meme prompt en boucle sans jamais savoir ce qui ratait.
+        emit({
+          kind: 'done',
+          text:
+            spoken ||
+            (anyActionExecuted
+              ? 'J’ai agi mais je n’ai pas produit de conclusion en clair — vois les cartes ' +
+                'd’action ci-dessus pour le detail (et leurs eventuels echecs).'
+              : 'Aucune reponse produite pour ce tour.'),
+          usage
+        })
         return
       }
 
@@ -1119,7 +1140,9 @@ export class AgentPilot {
       // Quand le modèle a livré sa réponse dans le même message, repayer une génération uniquement
       // pour commenter un refus déterministe (type/locator/SHA) ne peut améliorer le travail rendu.
       if (onlyAuxiliaryRemember) {
-        emit({ kind: 'done', text: '', usage })
+        // Le modele a livre sa reponse ET sauve une memoire. On emettait VIDE — donc on JETAIT son
+        // texte reel, laissant une bulle vide (conv-1141). `spoken` est garanti non vide ici.
+        emit({ kind: 'done', text: spoken, usage })
         return
       }
 
