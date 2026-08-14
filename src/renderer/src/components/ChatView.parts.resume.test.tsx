@@ -105,6 +105,38 @@ describe('reprendre une action interrompue sans la retaper', () => {
   })
 })
 
+const echouee = (task?: string): ChatActionPart =>
+  ({
+    kind: 'action',
+    name: 'orchestrate',
+    ok: false,
+    ...(task ? { args: { task } } : {})
+  }) as ChatActionPart
+
+describe('relancer une action ECHOUEE — plus de « erreur » sans levier (manque #2)', () => {
+  it('propose « Relancer » (pas « Reprendre ») et renvoie la tâche d’origine', async () => {
+    const relance: string[] = []
+    render([echouee('audite les paiements en double')], (t) => relance.push(t))
+    const bouton = container.querySelector<HTMLButtonElement>('[data-testid="activity-resume"]')
+    expect(bouton).not.toBeNull()
+    expect(bouton?.textContent).toContain('Relancer')
+    await act(async () => bouton?.click())
+    expect(relance).toEqual(['audite les paiements en double'])
+  })
+
+  it('aucun bouton si l’échec ne porte pas de tâche relançable', () => {
+    render([echouee()], () => undefined)
+    expect(container.querySelector('[data-testid="activity-resume"]')).toBeNull()
+  })
+
+  it('une action INTERROMPUE garde « Reprendre » (acquis persisté prioritaire sur re-run)', () => {
+    render([interrompue('une tâche')], () => undefined)
+    expect(
+      container.querySelector('[data-testid="activity-resume"]')?.textContent
+    ).toContain('Reprendre')
+  })
+})
+
 describe('le clic a un retour visible et l’échec ne disparaît plus', () => {
   const bouton = (): HTMLButtonElement =>
     container.querySelector<HTMLButtonElement>('[data-testid="activity-resume"]')!

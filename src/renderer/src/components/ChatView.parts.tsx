@@ -218,6 +218,21 @@ export function interruptedTask(actions: ChatActionPart[]): string | undefined {
   return undefined
 }
 
+/**
+ * Tâche d'une action ÉCHOUÉE, si on peut la retrouver — pour la RELANCER d'un clic. Distincte de
+ * `interruptedTask` : un échec se re-lance (re-run), un tour interrompu se reprend (acquis persisté).
+ * Sans elle, un échec n'offrait AUCUN levier : l'utilisateur voyait « erreur » sans quoi faire.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec ce renderer
+export function failedTask(actions: ChatActionPart[]): string | undefined {
+  for (const action of actions) {
+    if (action.ok !== false) continue
+    const task = (action.args as { task?: unknown } | undefined)?.task
+    if (typeof task === 'string' && task.trim()) return task.trim()
+  }
+  return undefined
+}
+
 export function AssistantActivityGroup({
   actions,
   onOpenLiveAction,
@@ -279,9 +294,19 @@ export function AssistantActivityGroup({
    */
   const runConsultable = hasConsultableRun(actions)
   const details = runConsultable ? [] : localActionDetails(actions)
-  // Reprise proposée seulement s'il y a VRAIMENT quelque chose à relancer : une action interrompue
-  // dont on connaît la tâche, et un canal pour la relancer.
-  const resumable = interruptedCount > 0 && onResume ? interruptedTask(actions) : undefined
+  // Action INTERROMPUE -> on REPREND (acquis persisté) ; ÉCHOUÉE -> on RELANCE (re-run). Les deux
+  // passent par le même canal `onResume`, seul le mot change. Sans la branche échec, une action en
+  // erreur n'offrait AUCUN levier -> « erreur » sans quoi faire (frustration, conv veille 2026-08-14).
+  const retryable = onResume
+    ? interruptedCount > 0
+      ? { task: interruptedTask(actions), verb: 'Reprendre' as const, gerund: 'Reprise' }
+      : failed
+        ? { task: failedTask(actions), verb: 'Relancer' as const, gerund: 'Relance' }
+        : undefined
+    : undefined
+  const resumable = retryable?.task
+  const retryVerb = retryable?.verb ?? 'Reprendre'
+  const retryGerund = retryable?.gerund ?? 'Reprise'
   return (
     <>
       {/* La barre est un CONTENEUR : « voir » et « reprendre » y cohabitent sans s'imbriquer
@@ -339,10 +364,10 @@ export function AssistantActivityGroup({
             {...(resumeError ? { 'data-resume-error': resumeError } : {})}
             title={
               resumePending
-                ? `Reprise en cours : ${resumable}`
+                ? `${retryGerund} en cours : ${resumable}`
                 : resumeError
-                  ? `Reprise échouée : ${resumeError} — cliquer pour réessayer`
-                  : `Reprendre : ${resumable}`
+                  ? `${retryGerund} échouée : ${resumeError} — cliquer pour réessayer`
+                  : `${retryVerb} : ${resumable}`
             }
             onClick={async () => {
               if (resumePending) return
@@ -360,7 +385,7 @@ export function AssistantActivityGroup({
               }
             }}
           >
-            {resumePending ? '↻ Reprise…' : resumeError ? '↻ Réessayer' : '↻ Reprendre'}
+            {resumePending ? `↻ ${retryGerund}…` : resumeError ? '↻ Réessayer' : `↻ ${retryVerb}`}
           </button>
         )}
       </div>
