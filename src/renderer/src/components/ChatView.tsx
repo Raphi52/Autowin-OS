@@ -715,8 +715,22 @@ export function ChatView({
   }, [activeId])
   useEffect(() => {
     let disposed = false
-    void Promise.resolve().then(() => {
-      void refreshConvs()
+    void Promise.resolve().then(async () => {
+      await refreshConvs()
+      // ALIGNEMENT AU MONTAGE : le main est la source de vérité de la conversation active. Le scout
+      // de veille (et tout flux né hors du chat) sélectionne sa conversation PENDANT que cette vue
+      // est démontée — l'événement de sélection n'a alors aucun auditeur, et la vue remontait sur
+      // son ancienne sélection avec un panneau vide (mesuré le 14/08, conv-1164/1165).
+      try {
+        const etat = (await window.api.appState()) as { activeConversationId?: string }
+        const cibleId = etat?.activeConversationId
+        if (!disposed && cibleId && cibleId !== activeRef.current) {
+          const cible = convsRef.current.find((conversation) => conversation.id === cibleId)
+          if (cible) await loadConv(cible)
+        }
+      } catch {
+        // L'alignement est un confort : son échec ne doit pas empêcher la vue de fonctionner.
+      }
       void refreshRuntimeIdentity()
     })
     void Promise.resolve(window.api.workflowProfileNotice?.())
