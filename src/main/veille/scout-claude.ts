@@ -9,16 +9,14 @@ import type { LancerScout } from './passe'
  * point l'importera plutot que d'en garder une copie, sinon les deux divergeront — et c'est justement le
  * script qui a servi a trouver les trois pieges d'environnement encodes ci-dessous.
  */
-export interface OptionsScoutCli {
+interface OptionsScoutCli {
   /** Outils CHARGES et AUTORISES, en arguments SEPARES (la forme a virgules pend — mesure A/B). */
   outils: readonly string[]
-  /** Repertoire de travail du CLI — necessaire au scout INTERNE pour lire le depot. */
-  cwd?: string
   timeoutMs?: number
 }
 
 /** Le corps commun a tous les scouts CLI : memes pieges d'environnement, seuls les outils changent. */
-export const lancerScoutCli = (prompt: string, options: OptionsScoutCli): Promise<string> =>
+const lancerScoutCli = (prompt: string, options: OptionsScoutCli): Promise<string> =>
   new Promise<string>((resoudre, rejeter) => {
     const enfant = spawn(
       resolveClaudeBin(),
@@ -41,7 +39,7 @@ export const lancerScoutCli = (prompt: string, options: OptionsScoutCli): Promis
         '--disable-slash-commands'
       ],
       // stdin FERME : avec un tuyau ouvert, le CLI attend une entree (« no stdin data received in 3s »).
-      { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, ...(options.cwd ? { cwd: options.cwd } : {}) }
+      { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
     )
     let sortie = ''
     let erreurs = ''

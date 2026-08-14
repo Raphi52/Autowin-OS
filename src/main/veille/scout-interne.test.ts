@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { candidatsDuScoutInterne, construirePromptScoutInterne } from './scout-interne'
+import { construirePromptScoutInterne } from './scout-interne'
 import { executerPasseInterne } from './passe'
 import { lireStockVeille } from './candidats-store'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -17,23 +17,6 @@ describe('scout interne — candidats d’ajout nés de l’app', () => {
     expect(prompt).toContain('RECOPIÉE MOT POUR MOT')
     expect(prompt).toContain('MÉTHODE OBLIGATOIRE')
     expect(prompt).toContain('un [] sans lecture citée est un refus de travail')
-  })
-
-  it('estampille Autowin OS et force le type ajout — jamais laissé à l’agent', async () => {
-    const bruts = await candidatsDuScoutInterne({
-      ...params,
-      lancer: async () =>
-        'voilà : [{"type":"correction","titre":"Vue coût par rôle","url":"src/main/dashboards/cost.ts:42","dateSource":"2026-08-13","citation":"const parRole = new Map<string, number>()","langue":"fr","pertinence":80}]'
-    })
-    expect(bruts).toHaveLength(1)
-    expect(bruts[0].concurrent).toBe('Autowin OS')
-    expect(bruts[0].type).toBe('ajout')
-  })
-
-  it('une sortie illisible JETTE une erreur nommée au lieu de rendre du vide silencieux', async () => {
-    await expect(
-      candidatsDuScoutInterne({ ...params, lancer: async () => 'pas de JSON ici' })
-    ).rejects.toThrow(/illisible/)
   })
 })
 

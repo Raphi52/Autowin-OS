@@ -10,10 +10,6 @@
  * (`fichier:ligne`) et une citation recopiée d'un artefact réellement lu. `trierCandidats` refuse déjà
  * ce qui n'en porte pas — le même contrôle en aval que pour le web, aucun chemin privilégié.
  */
-import { lancerScoutCli } from './scout-claude'
-import { extraireCandidats } from './passe'
-import type { CandidatBrut } from './candidats'
-
 export interface ParametresScoutInterne {
   /** Racine du dépôt — le scout y lit le code et les workflows. */
   racineDepot: string
@@ -61,29 +57,4 @@ export function construirePromptScoutInterne(params: ParametresScoutInterne): st
     '- Rien de solide à proposer → tableau vide [], mais SEULEMENT après avoir lu et listé dans ta',
     '  synthèse les fichiers explorés : un [] sans lecture citée est un refus de travail, pas un résultat.'
   ].join('\n')
-}
-
-export interface DepsScoutInterne extends ParametresScoutInterne {
-  /** Injectable pour les tests : le vrai lanceur spawne le CLI Claude avec les outils de lecture. */
-  lancer?: (prompt: string) => Promise<string>
-}
-
-/**
- * Lance le scout interne et rend ses candidats BRUTS, estampillés `Autowin OS`.
- *
- * Le concurrent est posé ICI, jamais par l'agent : même règle que la passe web (un scout ne rattache
- * pas une trouvaille à une origine qu'on ne lui a pas donnée). La sortie illisible rend `[]` avec un
- * échec nommé chez l'appelant — pas d'invention réparatrice.
- */
-export async function candidatsDuScoutInterne(deps: DepsScoutInterne): Promise<CandidatBrut[]> {
-  const lancer =
-    deps.lancer ??
-    ((prompt: string) =>
-      // Outils de LECTURE seuls : un scout n'a rien à écrire ni à exécuter — et c'est aussi ce qui
-      // l'empêche de « prouver » un besoin en le fabriquant.
-      lancerScoutCli(prompt, { outils: ['Read', 'Grep', 'Glob'], cwd: deps.racineDepot }))
-  const sortie = await lancer(construirePromptScoutInterne(deps))
-  const bruts = extraireCandidats(sortie)
-  if (!bruts) throw new Error('sortie du scout interne illisible : aucun JSON exploitable')
-  return bruts.map((brut) => ({ ...brut, type: 'ajout', concurrent: 'Autowin OS' }))
 }
