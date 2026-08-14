@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { PILOT_EVENT_KINDS, type PilotEventKind } from './pilot-events'
+import type { PilotEventKind } from './pilot-events'
 import type { AssistantPilotEvent } from '../renderer/src/components/chat-view-model'
+
+const PILOT_EVENT_KINDS = [
+  'delta',
+  'stream-reset',
+  'think',
+  'reasoning',
+  'command',
+  'result',
+  'done',
+  'error',
+  'retry',
+  'cancellation',
+  'prompt-call',
+  'artifact'
+] as const satisfies readonly PilotEventKind[]
 
 /**
  * GARDE ANTI-DÉRIVE du vocabulaire d'évènements du pilote.

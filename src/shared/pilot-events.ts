@@ -26,25 +26,3 @@ export type PilotEventKind =
   | 'cancellation'
   | 'prompt-call'
   | 'artifact'
-
-/**
- * Les `kind` à l'exécution, dans le même ordre que le type ci-dessus.
- *
- * Sert de garde : un test peut vérifier qu'aucun `kind` n'a été ajouté au type sans être ajouté ici,
- * et surtout qu'un côté de la frontière n'en ignore pas silencieusement un. Sans valeur runtime, la
- * seule façon de constater la dérive était de comparer deux fichiers à l'œil — ce qui a échoué.
- */
-export const PILOT_EVENT_KINDS: readonly PilotEventKind[] = [
-  'delta',
-  'stream-reset',
-  'think',
-  'reasoning',
-  'command',
-  'result',
-  'done',
-  'error',
-  'retry',
-  'cancellation',
-  'prompt-call',
-  'artifact'
-] as const

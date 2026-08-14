@@ -152,34 +152,3 @@ export function explainRoleFailure(
   return diagnosed.hint ? `${head}
 → ${diagnosed.hint}` : head
 }
-
-/** Marqueurs acceptes comme « ce site porte un contexte de role ». */
-const ROLE_CONTEXT_MARKERS = [
-  'sendWithRoleContext',
-  'explainRoleFailure',
-  'describeFanoutFailure',
-  'cause: error instanceof'
-] as const
-
-/**
- * Lignes des appels de provider qui laissent passer une erreur NUE, dans un source d'orchestrateur.
- *
- * Regle STRUCTURELLE : la gestion d'erreur d'un appel vit AVANT l'appel suivant. Une fenetre de N
- * lignes serait arbitraire — a l'ecriture de cette garde, N=46 manquait la cible de 2 lignes.
- * Expose pour etre TESTABLE sur une source volontairement fautive : une garde qui ne peut pas echouer
- * ne prouve rien.
- */
-export function uncoveredSendSites(source: string, callMarker = 'registry.send('): number[] {
-  const lines = source.split(/\r?\n/)
-  const sites = lines
-    .map((line, index) => (line.includes(callMarker) ? index : -1))
-    .filter((index) => index >= 0)
-  return sites
-    .filter((index, rank) => {
-      const from = Math.max(0, index - 14)
-      const to = rank + 1 < sites.length ? sites[rank + 1] : lines.length
-      const block = lines.slice(from, to).join(' ')
-      return !ROLE_CONTEXT_MARKERS.some((marker) => block.includes(marker))
-    })
-    .map((index) => index + 1)
-}

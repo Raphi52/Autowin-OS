@@ -5,9 +5,30 @@ import {
   classifyProviderFailure,
   describeFanoutFailure,
   diagnoseProviderFailure,
-  explainRoleFailure,
-  uncoveredSendSites
+  explainRoleFailure
 } from './provider-failure-diagnosis'
+
+const ROLE_CONTEXT_MARKERS = [
+  'sendWithRoleContext',
+  'explainRoleFailure',
+  'describeFanoutFailure',
+  'cause: error instanceof'
+] as const
+
+function uncoveredSendSites(source: string, callMarker = 'registry.send('): number[] {
+  const lines = source.split(/\r?\n/)
+  const sites = lines
+    .map((line, index) => (line.includes(callMarker) ? index : -1))
+    .filter((index) => index >= 0)
+  return sites
+    .filter((index, rank) => {
+      const from = Math.max(0, index - 14)
+      const to = rank + 1 < sites.length ? sites[rank + 1] : lines.length
+      const block = lines.slice(from, to).join(' ')
+      return !ROLE_CONTEXT_MARKERS.some((marker) => block.includes(marker))
+    })
+    .map((index) => index + 1)
+}
 
 /**
  * DIRE POURQUOI un rôle a échoué.
