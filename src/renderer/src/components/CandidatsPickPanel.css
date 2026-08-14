@@ -1,17 +1,18 @@
-/* Panneau de sélection des candidats scout — natif app, direction sobre (pas de halos). */
+/* Panneau de sélection des candidats scout — « transparence totale » (14/08) :
+   AUCUN fond ni panneau, typographie sur le fond de l'app, filets fins dégradés or. */
 .cpick {
   margin-top: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 9px;
-  padding: 10px 14px;
-  background: rgba(14, 18, 27, 0.45);
+  background: transparent;
+  border: none;
+  padding: 4px 2px;
 }
 .cpick-tete {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 7px;
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(212, 169, 79, 0.55), rgba(212, 169, 79, 0.06)) 1;
   font-size: 12px;
   color: #a9b2c4;
 }
@@ -26,23 +27,29 @@
   font-family: Consolas, monospace;
   font-size: 11.5px;
 }
+.cpick-item + .cpick-item {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
 .cpick-ligne {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 8px 2px;
-  cursor: pointer;
+  padding: 9px 2px;
   font-size: 13.5px;
 }
-.cpick-ligne + .cpick-ligne {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+.cpick-deplier {
+  background: none;
+  border: none;
+  color: #d4a94f;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  line-height: 1;
 }
 .cpick-titre {
   flex: 1;
-}
-.cpick-ancrage {
-  font: 11.5px Consolas, monospace;
-  color: #8f9cb3;
+  cursor: pointer;
+  color: #dde3ee;
 }
 .cpick-score {
   font: 700 13px Consolas, monospace;
@@ -50,8 +57,34 @@
   min-width: 30px;
   text-align: right;
 }
+.cpick-details {
+  margin: 0 0 10px 44px;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  font-size: 12.5px;
+}
+.cpick-details dt {
+  color: #a9b2c4;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-size: 10.5px;
+  align-self: baseline;
+}
+.cpick-details dd {
+  margin: 0;
+  color: #dde3ee;
+}
+.cpick-details code {
+  font: 11.5px Consolas, monospace;
+  color: #cdd9ec;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 5px;
+  padding: 1px 7px;
+}
 .cpick-lancer {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .cpick-lancer:disabled {
   opacity: 0.55;

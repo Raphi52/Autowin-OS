@@ -4,11 +4,12 @@ import { redigerPromptFrameSelection } from './veille-candidats-message'
 import './CandidatsPickPanel.css'
 
 /**
- * Le panneau de SÉLECTION sous un message de scout : une case par candidat, et un bouton qui
- * envoie le prompt /frame parfait sur les lignes cochées (demande utilisateur du 14/08).
+ * Le panneau de SÉLECTION sous un message de scout : une case par candidat, une ligne DÉPLIABLE
+ * (tous les détails : preuve, ancrage, date, type…), et un bouton qui envoie le prompt /frame
+ * parfait sur les lignes cochées (demandes utilisateur du 14/08).
  *
  * Contrôles NATIFS de l'app — jamais dans le HTML du modèle : le sanitizeur refuse input/button
- * par conception (anti-hameçonnage), et c'est ici que vit l'interaction.
+ * par conception (anti-hameçonnage). Style « transparence totale » : aucun fond, filets fins.
  */
 export function CandidatsPickPanel({
   candidats,
@@ -19,8 +20,17 @@ export function CandidatsPickPanel({
 }): React.JSX.Element {
   // Tout coché par défaut : le geste courant est « enchaîne sur tout », décocher est l'exception.
   const [coches, setCoches] = useState<ReadonlySet<number>>(new Set(candidats.map((_, i) => i)))
+  const [deplies, setDeplies] = useState<ReadonlySet<number>>(new Set())
   const basculer = (index: number): void => {
     setCoches((courant) => {
+      const suivant = new Set(courant)
+      if (suivant.has(index)) suivant.delete(index)
+      else suivant.add(index)
+      return suivant
+    })
+  }
+  const deplier = (index: number): void => {
+    setDeplies((courant) => {
       const suivant = new Set(courant)
       if (suivant.has(index)) suivant.delete(index)
       else suivant.add(index)
@@ -47,18 +57,65 @@ export function CandidatsPickPanel({
         </span>
       </div>
       {candidats.map((candidat, index) => (
-        <label key={`${candidat.url}-${index}`} className="cpick-ligne" data-testid="cpick-ligne">
-          <input
-            type="checkbox"
-            checked={coches.has(index)}
-            onChange={() => basculer(index)}
-          />
-          <span className="cpick-titre">{candidat.titre}</span>
-          <span className="cpick-ancrage">{candidat.url}</span>
-          {candidat.pertinence !== undefined && (
-            <span className="cpick-score">{candidat.pertinence}</span>
+        <div key={`${candidat.url}-${index}`} className="cpick-item" data-testid="cpick-ligne">
+          <div className="cpick-ligne">
+            <input
+              type="checkbox"
+              checked={coches.has(index)}
+              onChange={() => basculer(index)}
+            />
+            <button
+              type="button"
+              className="cpick-deplier"
+              data-testid="cpick-deplier"
+              onClick={() => deplier(index)}
+              aria-expanded={deplies.has(index)}
+              title={deplies.has(index) ? 'Replier les détails' : 'Déplier tous les détails'}
+            >
+              {deplies.has(index) ? '▾' : '▸'}
+            </button>
+            <span className="cpick-titre" onClick={() => deplier(index)}>
+              {candidat.titre}
+            </span>
+            {candidat.pertinence !== undefined && (
+              <span className="cpick-score">{candidat.pertinence}</span>
+            )}
+          </div>
+          {deplies.has(index) && (
+            <dl className="cpick-details" data-testid="cpick-details">
+              <dt>Ancrage</dt>
+              <dd>
+                <code>{candidat.url}</code>
+              </dd>
+              {candidat.citation && (
+                <>
+                  <dt>Preuve lue</dt>
+                  <dd>
+                    <code>{candidat.citation}</code>
+                  </dd>
+                </>
+              )}
+              {candidat.type && (
+                <>
+                  <dt>Type</dt>
+                  <dd>{candidat.type}</dd>
+                </>
+              )}
+              {candidat.dateSource && (
+                <>
+                  <dt>Date source</dt>
+                  <dd>{candidat.dateSource}</dd>
+                </>
+              )}
+              {candidat.pertinence !== undefined && (
+                <>
+                  <dt>Pertinence</dt>
+                  <dd>{candidat.pertinence}/100</dd>
+                </>
+              )}
+            </dl>
           )}
-        </label>
+        </div>
       ))}
       <button
         type="button"

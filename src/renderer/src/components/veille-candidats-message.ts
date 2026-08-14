@@ -15,6 +15,9 @@ export interface CandidatAffiche {
   url: string
   citation?: string
   pertinence?: number
+  type?: string
+  dateSource?: string
+  langue?: string
 }
 
 /**
@@ -47,6 +50,13 @@ export function extraireCandidatsAffiches(texte: string): CandidatAffiche[] | un
         : {}),
       ...(typeof objet.pertinence === 'number' && Number.isFinite(objet.pertinence)
         ? { pertinence: objet.pertinence }
+        : {}),
+      ...(typeof objet.type === 'string' && objet.type.trim() ? { type: objet.type.trim() } : {}),
+      ...(typeof objet.dateSource === 'string' && objet.dateSource.trim()
+        ? { dateSource: objet.dateSource.trim() }
+        : {}),
+      ...(typeof objet.langue === 'string' && objet.langue.trim()
+        ? { langue: objet.langue.trim() }
         : {})
     })
   }
