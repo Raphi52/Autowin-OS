@@ -530,7 +530,24 @@ export class AgentPilot {
       ...(sendLimits?.maxBudgetUsd ? { maxBudgetUsd: sendLimits.maxBudgetUsd } : {}),
       ...(commandFreeReadOnly ? { toolProfile: 'watchdog-read-only' as const } : {})
     }
-    const pilotage = commandFreeReadOnly ? '' : buildChatPilotagePrompt(catalog)
+    /**
+     * Un tour LECTURE SEULE n'est plus SANS COMMANDES : il garde les commandes `readOnlyHint`.
+     *
+     * L'allègement d'origine (pas de catalogue sur un tour read-only) datait d'un catalogue où
+     * TOUTES les commandes mutaient quelque chose. Depuis `read_file`/`find_in_files`, c'est
+     * l'inverse : une ANALYSE est exactement le tour qui a besoin de lire. Mesuré sur 4 runs réels
+     * du scout de veille (conv-1154→1157) : classé read-only, il recevait zéro outil et répondait
+     * honnêtement « je n'ai pas pu exécuter les lectures obligatoires ». Le triage Watchdog, lui,
+     * reste volontairement sans commandes (son pilote refuse tout exec de toute façon).
+     */
+    const catalogueLectureSeule = catalog.filter((commande) => commande.annotations?.readOnlyHint)
+    const pilotage = watchdogReadOnly
+      ? ''
+      : directReadOnly
+        ? catalogueLectureSeule.length > 0
+          ? buildChatPilotagePrompt(catalogueLectureSeule)
+          : ''
+        : buildChatPilotagePrompt(catalog)
     /**
      * PRÉFIXE SYSTEM STABLE = condition du cache (mesure 2026-07-28 : cache_read = 0 sur 100 % des
      * appels, ~16 k de cache_write REÉCRITS à chaque tour, ~0,32 $ pour répondre une phrase).
@@ -561,12 +578,16 @@ export class AgentPilot {
               text:
                 "Tu es le chat direct d'Autowin OS. Reponds en francais a la demande exacte de " +
                 "l'utilisateur, sans preambule inutile. Ce tour est strictement en LECTURE SEULE : " +
-                "n'emets aucune balise <cmd>, aucune commande Autowin, ne lance aucune orchestration, " +
+                "n'emets aucune commande qui MODIFIE quoi que ce soit, ne lance aucune orchestration, " +
                 'ne modifie rien et ne cree aucun worktree. Utilise uniquement les lectures locales ' +
                 'strictement necessaires. Distingue les faits observes des deductions et respecte tout ' +
                 'format de sortie explicitement demande. Si le message dit « reponds exactement X », ' +
                 'ta sortie ENTIERE doit etre exactement X, sans note, explication ni mise en forme en plus.\n'
-            }
+            },
+            // Les commandes de LECTURE restent servies : une analyse est exactement le tour qui a
+            // besoin de lire (mesure : scout de veille, conv-1154→1157, zero outil, zero candidat).
+            // `pilotage` est deja reduit au catalogue readOnlyHint dans ce cas ('' si vide).
+            { name: 'pilotage-lecture', text: pilotage }
           ]
         : [
             { name: 'constitution', text: CONSTITUTION },
@@ -941,8 +962,26 @@ export class AgentPilot {
 
       // Defense en profondeur : le profil provider retire deja les outils d'ecriture, mais une
       // balise de commande peut encore apparaitre comme simple texte genere. Dans un tour declare
-      // lecture-seule elle n'atteint JAMAIS le bus, meme si le modele ignore son system prompt.
-      if (commandFreeReadOnly && hasCommand) {
+      // lecture-seule, seule une commande de LECTURE (readOnlyHint du catalogue) atteint le bus :
+      // les commandes mutantes n'y arrivent JAMAIS, meme si le modele ignore son system prompt.
+      // (Avant read_file/find_in_files, TOUT etait bloque — une analyse ne pouvait alors rien lire,
+      // mesure sur 4 runs reels du scout de veille, conv-1154→1157.)
+      const nomsLectureSeule = new Set(catalogueLectureSeule.map((commande) => commande.name))
+      const commandeMutante = ordered.some(
+        (token) => token.kind === 'command' && !nomsLectureSeule.has(token.name)
+      )
+      if (commandFreeReadOnly && commandeMutante) {
+        emit({
+          kind: 'done',
+          text:
+            spoken ||
+            'Reponse bloquee : le modele a tente une commande mutante pendant un tour en lecture seule.',
+          usage
+        })
+        return
+      }
+      // Le triage Watchdog reste, lui, INTEGRALEMENT sans commandes : son pilote refuse tout exec.
+      if (watchdogReadOnly && hasCommand) {
         emit({
           kind: 'done',
           text:

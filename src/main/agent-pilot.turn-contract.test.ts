@@ -951,6 +951,55 @@ describe('AgentPilot turn contract', () => {
     })
   })
 
+  it('un tour lecture seule garde les commandes de LECTURE et execute read_file', async () => {
+    // Mesure sur 4 runs reels du scout de veille (conv-1154→1157) : classe read-only, l'agent
+    // recevait ZERO commande et repondait « je n'ai pas pu executer les lectures obligatoires ».
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: '<cmd>{"name":"read_file","args":{"path":"src/a.ts"}}</cmd>',
+        provider: 'claude'
+      })
+      .mockResolvedValue({ text: 'Synthese apres lecture.', provider: 'claude' })
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const bus = {
+      catalog: () => [
+        { name: 'orchestrate', args: { task: 'string' }, description: 'pipeline' },
+        {
+          name: 'read_file',
+          args: { path: 'string' },
+          description: 'lire',
+          annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+        }
+      ],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { lu: true, contenu: '1→x' } })
+    }
+    const events: PilotEvent[] = []
+    await new AgentPilot(
+      registry as never,
+      {
+        getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+      } as never,
+      bus as never
+    ).chat([{ role: 'user', content: 'Analyse package.json sans rien modifier.' }], (event) =>
+      events.push(event)
+    )
+    // Le pilotage est present (il porte read_file) et la lecture a REELLEMENT atteint le bus.
+    expect(String(send.mock.calls[0][2].system)).toContain('read_file')
+    expect(bus.exec).toHaveBeenCalledWith('read_file', { path: 'src/a.ts' }, undefined)
+    expect(events.some((event) => event.kind === 'command' && event.name === 'read_file')).toBe(true)
+  })
+
   it('bloque mecaniquement une commande generee dans un tour lecture seule', async () => {
     const registry = {
       send: vi.fn().mockResolvedValue({
