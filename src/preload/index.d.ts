@@ -44,7 +44,7 @@ import type { ShadowRouteResult } from '../main/shadow-router'
 import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setting'
 import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
-import type { CommandSpec, CommandResult, AppSnapshot } from '../main/commands'
+import type { CommandResult, AppSnapshot } from '../main/commands'
 import type { TraceEventV1 } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
@@ -123,7 +123,6 @@ interface ChatApi {
     repoPath?: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
-  brainRepoPath: () => Promise<string>
   getAutoClose: () => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   setAutoClose: (enabled: boolean) => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   unfinishedTurns: () => Promise<
@@ -159,9 +158,6 @@ interface ChatApi {
   listTickets: (
     request: import('../shared/tickets').TicketListRequest
   ) => Promise<import('../shared/tickets').TicketPage>
-  createTicket: (
-    request: import('../main/tickets-ipc').TicketCreateIpcRequest
-  ) => Promise<import('../shared/tickets').TicketItem>
   getTicket: (
     request: import('../main/tickets-ipc').TicketGetIpcRequest
   ) => Promise<import('../shared/tickets').TicketItem>
@@ -208,12 +204,6 @@ interface ChatApi {
     defects: { target?: string; message: string }[]
     worstCaseNodeExecutions: number | null
   }>
-  /** Quel workflow pilote une conversation donnée. */
-  conversationWorkflow: (conversationId: string) => Promise<string | null>
-  selectConversationWorkflow: (
-    conversationId: string,
-    profileId: string | null
-  ) => Promise<string | null>
   /** Confrontation : un même objectif joué sous plusieurs workflows, puis comparé. */
   workflowBenchRun: (
     objective: string,
@@ -360,7 +350,6 @@ interface ChatApi {
   taskManagerRunNow: (id: string) => Promise<{ started: boolean }>
   openFolder: (path: string) => Promise<void>
   appState: () => Promise<AppSnapshot>
-  appCatalog: () => Promise<CommandSpec[]>
   appCommand: (name: string, args?: Record<string, unknown>) => Promise<CommandResult>
   pilotChat: (
     messages: Array<{
@@ -442,7 +431,6 @@ interface ChatApi {
   promoteInbox: (path: string, id: string) => Promise<InboxMove>
   rejectInbox: (path: string, id: string) => Promise<InboxMove>
   retractKnowledge: (path: string, id: string) => Promise<InboxMove>
-  restoreKnowledge: (path: string, id: string) => Promise<InboxMove>
   supersedeKnowledge: (
     path: string,
     obsoleteId: string,

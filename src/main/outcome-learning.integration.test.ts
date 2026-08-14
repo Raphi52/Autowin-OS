@@ -77,17 +77,11 @@ describe('outcome learning — contrat visible par les modèles', () => {
     )
     expect(source).toMatch(/new AppCommandBus\([\s\S]*?outcomeLearning\s*\)/u)
     expect(source).toContain("ipcMain.handle('os:retractKnowledge'")
-    expect(source).toContain("ipcMain.handle('os:restoreKnowledge'")
     expect(source).toContain("'os:supersedeKnowledge'")
     expect(source).toContain("ipcMain.handle('os:outcomeLearning:setMode'")
     expect(source).toContain("ipcMain.handle('os:outcomeLearning:undoCuration'")
     expect(source).toContain('const curationRecoveryReady = reconcileCurationIntents(')
-    expect(source.match(/await curationRecoveryReady/gu)).toHaveLength(4)
-    expect(
-      source.indexOf('await curationRecoveryReady', source.indexOf("'os:restoreKnowledge'"))
-    ).toBeLessThan(
-      source.indexOf('latestCurationForStoredId(sourceId)', source.indexOf("'os:restoreKnowledge'"))
-    )
+    expect(source.match(/await curationRecoveryReady/gu)).toHaveLength(3)
     expect(
       source.indexOf(
         'await curationRecoveryReady',
@@ -99,7 +93,7 @@ describe('outcome learning — contrat visible par les modèles', () => {
         source.indexOf("'os:outcomeLearning:undoCuration'")
       )
     )
-    expect(source.match(/return executeCurationTransaction\(/gu)).toHaveLength(4)
+    expect(source.match(/return executeCurationTransaction\(/gu)).toHaveLength(3)
     const graph = readFileSync(join(__dirname, '../renderer/src/components/GraphView.tsx'), 'utf8')
     expect(graph).toContain('window.api.retractKnowledge(selected, node.id)')
   })

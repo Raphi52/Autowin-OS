@@ -2159,10 +2159,6 @@ Le fil reprend ensuite normalement.`
     os.setAutoClose(enabled === true)
     return os.getAutoClose()
   })
-  ipcMain.handle('git:brainRoot', (event) => {
-    assertTrustedRendererSender(event, 'GitBrainRoot')
-    return amitelBrainRoot()
-  })
   // Cockpit worktree (volet A) : snapshot à la demande + push live des changements d'activité.
   let worktreeFixture:
     | {
@@ -2369,17 +2365,6 @@ Le fil reprend ensuite normalement.`
       defects,
       worstCaseNodeExecutions: defects.length ? null : worstCaseNodeExecutions(graph)
     }
-  })
-  // Quel workflow pilote CETTE conversation. Par conversation et non global : on veut un fil en
-  // Rapide pendant qu'un autre tourne en Rigoureux.
-  ipcMain.handle('os:workflowSelection:get', (event, rawConvId: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow selection')
-    return os.conversationWorkflow(guardString(rawConvId, 'conversationId'))
-  })
-  ipcMain.handle('os:workflowSelection:set', (event, rawConvId: unknown, rawId: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow selection')
-    const profileId = rawId === null ? null : guardString(rawId, 'profileId')
-    return os.selectConversationWorkflow(guardString(rawConvId, 'conversationId'), profileId)
   })
   // Confronter plusieurs workflows sur un même objectif. La logique vit dans son module : ce point
   // d'entrée n'a qu'à la brancher.
@@ -3197,31 +3182,6 @@ Le fil reprend ensuite normalement.`
       }
     )
   })
-  ipcMain.handle('os:restoreKnowledge', async (event, path: string, id: string) => {
-    assertTrustedRendererSender(event, 'BrainKnowledgeRestore')
-    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
-    const sourceId = guardString(id, 'id')
-    await curationRecoveryReady
-    return executeCurationTransaction(
-      outcomeLearning,
-      { action: 'restore', knowledgeId: sourceId },
-      {
-        mutate: () => {
-          const previous = outcomeLearning.latestCurationForStoredId(sourceId)
-          const moved = restoreTrashedKnowledge(root, sourceId)
-          return {
-            moved,
-            knowledgeId: previous?.value.knowledgeId ?? moved.to,
-            targetId: moved.to,
-            rollbackId: sourceId,
-            previousEventId: previous?.value.eventId
-          }
-        },
-        compensate: (result) => retractKnowledgeCandidate(root, result.moved.to),
-        invalidate: invalidateBrainRuntime
-      }
-    )
-  })
   ipcMain.handle(
     'os:supersedeKnowledge',
     async (event, path: string, obsoleteId: string, replacementId: string) => {
@@ -3340,10 +3300,6 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:appState', (event) => {
     assertTrustedRendererSender(event, 'App state')
     return bus.snapshot()
-  })
-  ipcMain.handle('os:appCatalog', (event) => {
-    assertTrustedRendererSender(event, 'App catalog')
-    return bus.catalog()
   })
   ipcMain.handle('os:appCommand', (event, name: string, args?: Record<string, unknown>) => {
     assertTrustedRendererSender(event, 'App command')

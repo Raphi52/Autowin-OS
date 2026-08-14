@@ -89,9 +89,7 @@ import { applyWorkflowProfile } from './workflow-profile-apply'
 import { graphOf, loadWorkflowProfiles } from './workflow-profiles'
 import {
   loadWorkflowSelections,
-  saveWorkflowSelections,
   refusExplicite,
-  selectWorkflowForConversation,
   workflowForConversation
 } from './workflow-selection'
 import {
@@ -278,17 +276,6 @@ export class AutowinOS {
     }
   }
 
-  /** Le workflow attaché à une conversation, ou `null`. */
-  conversationWorkflow(conversationId: string): string | null {
-    return workflowForConversation(loadWorkflowSelections(), conversationId) ?? null
-  }
-
-  /** Attache (ou détache) un workflow à une conversation. */
-  selectConversationWorkflow(conversationId: string, profileId: string | null): string | null {
-    const next = selectWorkflowForConversation(loadWorkflowSelections(), conversationId, profileId)
-    saveWorkflowSelections(next)
-    return workflowForConversation(next, conversationId) ?? null
-  }
   readonly executionWorkspace: string
   /**
    * Source LIVE du fan-out multi-modèles, alimentée par la topology (index.ts `syncRuntimeTopology`).

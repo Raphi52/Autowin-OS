@@ -132,20 +132,3 @@ describe('le choix atteint réellement le run du chat', () => {
     expect(os).toMatch(/poseConversationWorkflow[\s\S]{0,500}if \(this\.workflowImpose\) return this\.workflowImpose/)
   })
 })
-
-describe('le renderer peut choisir', () => {
-  const index = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
-  const preload = readFileSync(new URL('../preload/index.ts', import.meta.url), 'utf8')
-
-  it('les canaux existent et vérifient l’émetteur avant d’écrire', () => {
-    expect(index).toContain("ipcMain.handle('os:workflowSelection:set'")
-    expect(index).toMatch(
-      /os:workflowSelection:set[\s\S]{0,200}assertTrustedRendererSender/
-    )
-  })
-
-  it('le preload les expose', () => {
-    expect(preload).toContain("ipcRenderer.invoke('os:workflowSelection:get'")
-    expect(preload).toContain("ipcRenderer.invoke('os:workflowSelection:set'")
-  })
-})

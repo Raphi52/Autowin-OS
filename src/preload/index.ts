@@ -22,11 +22,7 @@ import type {
   TicketListRequest,
   TicketPage
 } from '../shared/tickets'
-import type {
-  TicketCreateIpcRequest,
-  TicketGetIpcRequest,
-  TicketUpdateIpcRequest
-} from '../main/tickets-ipc'
+import type { TicketGetIpcRequest, TicketUpdateIpcRequest } from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
@@ -70,7 +66,7 @@ import type { ShadowRouteResult } from '../main/shadow-router'
 import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setting'
 import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
-import type { CommandSpec, CommandResult, AppSnapshot } from '../main/commands'
+import type { CommandResult, AppSnapshot } from '../main/commands'
 import type { TraceEventV1 } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
@@ -125,7 +121,6 @@ const api = {
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
-  brainRepoPath: (): Promise<string> => ipcRenderer.invoke('git:brainRoot'),
   getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:get'),
   setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
@@ -165,8 +160,6 @@ const api = {
     ipcRenderer.invoke('tickets:source:save', profile),
   listTickets: (request: TicketListRequest): Promise<TicketPage> =>
     ipcRenderer.invoke('tickets:list', request),
-  createTicket: (request: TicketCreateIpcRequest): Promise<TicketItem> =>
-    ipcRenderer.invoke('tickets:create', request),
   getTicket: (request: TicketGetIpcRequest): Promise<TicketItem> =>
     ipcRenderer.invoke('tickets:get', request),
   updateTicket: (request: TicketUpdateIpcRequest): Promise<TicketItem> =>
@@ -246,13 +239,6 @@ const api = {
     ipcRenderer.invoke('git:graph', repoPath),
   checkWorkflowGraph: (graph: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:workflowGraph:check', graph),
-  conversationWorkflow: (conversationId: string): Promise<string | null> =>
-    ipcRenderer.invoke('os:workflowSelection:get', conversationId),
-  selectConversationWorkflow: (
-    conversationId: string,
-    profileId: string | null
-  ): Promise<string | null> =>
-    ipcRenderer.invoke('os:workflowSelection:set', conversationId, profileId),
   workflowBenchRun: (
     objective: string,
     profileIds: (string | null)[],
@@ -461,7 +447,6 @@ const api = {
   openFolder: (path: string): Promise<void> => ipcRenderer.invoke('os:openFolder', path),
   // Plan de contrôle (app pilotable par les agents) + pilotage in-model
   appState: (): Promise<AppSnapshot> => ipcRenderer.invoke('os:appState'),
-  appCatalog: (): Promise<CommandSpec[]> => ipcRenderer.invoke('os:appCatalog'),
   appCommand: (name: string, args?: Record<string, unknown>): Promise<CommandResult> =>
     ipcRenderer.invoke('os:appCommand', name, args),
   pilotChat: (
@@ -585,8 +570,6 @@ const api = {
     ipcRenderer.invoke('os:rejectInbox', path, id),
   retractKnowledge: (path: string, id: string): Promise<InboxMove> =>
     ipcRenderer.invoke('os:retractKnowledge', path, id),
-  restoreKnowledge: (path: string, id: string): Promise<InboxMove> =>
-    ipcRenderer.invoke('os:restoreKnowledge', path, id),
   supersedeKnowledge: (
     path: string,
     obsoleteId: string,

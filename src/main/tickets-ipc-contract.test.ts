@@ -5,7 +5,6 @@ const TICKET_CHANNELS = [
   'tickets:sources',
   'tickets:source:save',
   'tickets:list',
-  'tickets:create',
   'tickets:get',
   'tickets:update',
   'tickets:cancel',

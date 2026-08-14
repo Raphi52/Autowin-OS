@@ -17,15 +17,6 @@ export interface TicketsIpcRegistrar {
  * Requête de création telle qu'elle ARRIVE du renderer : le `requestId` sert au cycle de vie IPC
  * (annulation), les autres champs sont validés par le service, seule autorité sur leurs bornes.
  */
-export interface TicketCreateIpcRequest {
-  source: TicketSourceProfile
-  title: string
-  requestId?: string
-  description?: string
-  workItemType?: string
-  assignee?: string
-}
-
 /** Lecture d'une fiche par son id. Le service valide l'id, seule autorité sur sa forme. */
 export interface TicketGetIpcRequest {
   source: TicketSourceProfile
@@ -47,7 +38,6 @@ interface TicketsServicePort {
   sources(): TicketSourceSummary[]
   saveSource(value: unknown): TicketSourceSummary[]
   list(value: TicketListRequest, signal?: AbortSignal): Promise<TicketPage>
-  create(value: TicketCreateIpcRequest, signal?: AbortSignal): Promise<TicketItem>
   get(value: TicketGetIpcRequest, signal?: AbortSignal): Promise<TicketItem>
   update(value: TicketUpdateIpcRequest, signal?: AbortSignal): Promise<TicketItem>
 }
@@ -185,33 +175,6 @@ export function registerTicketsIpc({
     senderRequests.set(id, controller)
     try {
       return await service.list(request, controller.signal)
-    } finally {
-      if (senderRequests.get(id) === controller) senderRequests.delete(id)
-      if (senderRequests.size === 0) active.delete(event.sender)
-    }
-  })
-  /**
-   * CRÉATION — la seule action SORTANTE de la chaîne Tickets : elle écrit dans le backlog d'une
-   * équipe, sous l'identité de l'utilisateur. Elle franchit donc la même porte que les lectures
-   * (`assertTrusted`) et partage leur registre d'annulation : un POST réseau lent doit pouvoir être
-   * coupé par `tickets:cancel` avec le même `requestId`, sinon l'appelant reste pendu sans recours.
-   *
-   * Les bornes de validité des champs vivent dans le SERVICE, pas ici : l'IPC ne fait que la
-   * frontière de confiance et le cycle de vie de la requête.
-   */
-  ipc.handle('tickets:create', async (event, request: TicketCreateIpcRequest) => {
-    assertTrusted(event, 'Tickets')
-    const id = requestId(request?.requestId)
-    let senderRequests = active.get(event.sender)
-    if (!senderRequests) {
-      senderRequests = new Map()
-      active.set(event.sender, senderRequests)
-    }
-    senderRequests.get(id)?.abort()
-    const controller = new AbortController()
-    senderRequests.set(id, controller)
-    try {
-      return await service.create(request, controller.signal)
     } finally {
       if (senderRequests.get(id) === controller) senderRequests.delete(id)
       if (senderRequests.size === 0) active.delete(event.sender)
