@@ -1012,7 +1012,11 @@ export function ChatView({
           send?: boolean
         }>
       ).detail
-      if (!detail?.prompt) return
+      // Un événement SANS prompt mais AVEC conversationId est une demande de SÉLECTION : « ouvre
+      // cette conversation ». Le scout de veille s'en sert pour amener l'utilisateur devant le tour
+      // qui démarre — l'ignorer laissait la conversation active inchangée (mesuré le 14/08 : le clic
+      // « En générer plus » atterrissait sur l'ancienne conversation).
+      if (!detail?.prompt && !detail?.conversationId) return
       const id = detail.conversationId
       if (id) {
         const target = convsRef.current.find((conversation) => conversation.id === id)
@@ -1023,6 +1027,7 @@ export function ChatView({
           setMessages([])
         }
       }
+      if (!detail.prompt) return
       const draftKey = id ?? NEW_DRAFT_KEY
       switchComposerDraft(draftKey)
       setDraftInput(draftKey, detail.prompt)
