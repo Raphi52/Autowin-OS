@@ -97,29 +97,70 @@ def alerter(message: str, titre: str = "Autowin OS Dev") -> None:
         print(message, file=sys.stderr)
 
 
-def instance_unique() -> bool:
-    """Vrai si CE processus detient le verrou. Le handle reste ouvert tant que le processus vit.
+def _acquerir_verrou() -> tuple[bool, int | None]:
+    """UN essai d'acquisition. Rend `(possede, handle)`.
 
     Deux pieges ctypes, tous deux constates ici avant correction :
       - `restype` vaut `int` par defaut, soit 32 bits : un HANDLE 64 bits etait TRONQUE, et le
         `if not handle` jugeait sur une valeur mutilee ;
       - `windll.kernel32.GetLastError()` n'est pas fiable — un appel ctypes intermediaire peut avoir
         ecrase le code. Il faut `use_last_error=True` et `ctypes.get_last_error()`, lu immediatement.
-    Symptome mesure : le PREMIER appel rendait `False`, donc un lancement legitime se croyait dedouble.
+
+    `possede=True, handle=None` = verrou indisponible (droits) → on LANCE quand meme (un lanceur qui
+    refuse de lancer est pire qu'un doublon). Sinon le handle est rendu pour que l'APPELANT decide de
+    le garder (proprietaire) ou de le FERMER (perdant) — le fermer est vital pour l'attente : garder
+    les handles des essais perdus maintiendrait le mutex vivant et on ne verrait jamais l'ancien
+    proprietaire le liberer.
     """
-    global _verrou  # noqa: PLW0603 - garder le handle vivant, sinon le mutex meurt aussitot
     noyau = ctypes.WinDLL("kernel32", use_last_error=True)
     noyau.CreateMutexW.argtypes = (ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR)
     noyau.CreateMutexW.restype = wintypes.HANDLE
     handle = noyau.CreateMutexW(None, False, MUTEX)
     erreur = ctypes.get_last_error()
     if not handle:
-        # Verrou indisponible (droits, nom refuse) : mieux vaut LANCER que bloquer sur un detail
-        # systeme — un lanceur qui refuse de lancer est pire qu'un doublon.
         journaliser(f"mutex indisponible (erreur {erreur}) — verrou desactive")
+        return True, None
+    return erreur != 183, handle  # 183 = ERROR_ALREADY_EXISTS
+
+
+def _fermer_handle(handle: int) -> None:
+    noyau = ctypes.WinDLL("kernel32", use_last_error=True)
+    noyau.CloseHandle.argtypes = (wintypes.HANDLE,)
+    noyau.CloseHandle(handle)
+
+
+def instance_unique() -> bool:
+    """Vrai si CE processus detient le verrou. Le handle reste ouvert tant que le processus vit."""
+    global _verrou  # noqa: PLW0603 - garder le handle vivant, sinon le mutex meurt aussitot
+    possede, handle = _acquerir_verrou()
+    if possede:
+        _verrou = handle  # None (verrou desactive) ou le handle detenu : les deux sont acceptables
         return True
-    _verrou = handle
-    return erreur != 183  # ERROR_ALREADY_EXISTS
+    if handle:
+        _fermer_handle(handle)  # perdant : on ne garde PAS le handle, sinon on maintient le mutex
+    return False
+
+
+def attendre_verrou(timeout_s: float) -> bool:
+    """Attend que le verrou se LIBERE, jusqu'a `timeout_s`. Rend True si on finit par le detenir.
+
+    Sert au RESTART : le bouton « update » relance un nouveau lanceur pendant que l'ANCIEN tient
+    encore le verrou (il attend son `npm run dev`). Sans attente, le nouveau se croyait dedouble,
+    refusait, et l'ancien quittait ensuite — l'app se fermait sans jamais rouvrir (constate le
+    2026-08-14). On patiente donc que l'ancien meure, puis on prend le relais. Un vrai doublon (deux
+    lancements manuels) n'a PAS ce drapeau : il refuse tout de suite, sans cette attente.
+    """
+    global _verrou  # noqa: PLW0603
+    debut = time.monotonic()
+    while time.monotonic() - debut < timeout_s:
+        possede, handle = _acquerir_verrou()
+        if possede:
+            _verrou = handle
+            return True
+        if handle:
+            _fermer_handle(handle)  # sinon nos propres handles gardent le mutex vivant
+        time.sleep(0.4)
+    return False
 
 
 _verrou: int | None = None
@@ -198,7 +239,16 @@ def main() -> int:
         alerter(f"Projet Autowin OS introuvable :\n{RACINE}")
         return 1
 
-    if not instance_unique():
+    libre = instance_unique()
+    if not libre and os.environ.get("AUTOWIN_DEV_RESTART") == "1":
+        # RESTART (bouton « update ») : l'ancien lanceur tient encore le verrou le temps de mourir.
+        # On l'attend au lieu de refuser — sinon l'app se ferme sans jamais rouvrir.
+        journaliser("restart detecte — attente de la liberation du verrou (max 60 s)")
+        libre = attendre_verrou(60.0)
+        if not libre:
+            journaliser("restart : verrou toujours tenu apres 60 s — on lance quand meme")
+            libre = True  # ne JAMAIS laisser un restart sans fenetre : le pire des deux maux
+    if not libre:
         # C'est le cas qui echouait EN SILENCE : l'utilisateur double-cliquait, rien ne se passait,
         # et la fenetre perimee restait a l'ecran comme si le lancement avait reussi.
         alerter(

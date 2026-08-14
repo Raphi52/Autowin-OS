@@ -143,6 +143,27 @@ _autre = subprocess.run(
 verifie(_autre.stdout.strip() == _lanceur.MUTEX,
         "le nom du mutex doit etre IDENTIQUE dans un autre processus, sinon il ne verrouille rien")
 
+# RESTART (bouton « update ») : le nouveau lanceur doit ATTENDRE que l'ancien libere le verrou,
+# pas refuser — sinon l'app se ferme sans jamais rouvrir (constate le 2026-08-14). Le scenario a deux
+# process vit dans un HELPER isole (le process de test tient deja le verrou plus haut).
+_restart = subprocess.run(
+    [sys.executable, str(Path(__file__).resolve().parent / 'mutex_wait_scenario.py'), _lanceur.__file__],
+    capture_output=True, text=True, timeout=30,
+)
+verifie('IMMEDIAT False' in _restart.stdout,
+        f"le nouveau lanceur doit d'abord voir le verrou pris — {_restart.stdout!r} / {_restart.stderr[-200:]!r}")
+verifie('OBTENU True' in _restart.stdout,
+        f"puis l'OBTENIR une fois l'ancien mort, au lieu de refuser — {_restart.stdout!r}")
+
+# GARDE DE CABLAGE : le test ci-dessus prouve `attendre_verrou`, mais pas que le flux de lancement
+# l'APPELLE sur un restart. On lit donc la source : sans ce lien, saboter le point d'appel passerait
+# inapercu (constate).
+_src_lanceur = Path(_lanceur.__file__).read_text(encoding='utf-8')
+verifie("AUTOWIN_DEV_RESTART" in _src_lanceur and "attendre_verrou(" in _src_lanceur,
+        "le flux de lancement doit ATTENDRE le verrou quand AUTOWIN_DEV_RESTART est pose")
+verifie(_src_lanceur.count("attendre_verrou(60") >= 1,
+        "l'attente de restart doit etre bornee et reellement appelee dans main()")
+
 verifie(_lanceur.instance_unique(), "le PREMIER appel doit obtenir le verrou")
 _second = subprocess.run(
     [sys.executable, "-c",
@@ -153,6 +174,8 @@ _second = subprocess.run(
 )
 verifie(_second.stdout.strip() == "False",
         "une SECONDE instance doit etre refusee tant que la premiere tient le verrou")
+
+
 
 # --- PALETTE : la MEME que l'ecran de demarrage de l'app ----------------------------------------
 # Deux ecrans se suivent a l'oeil pendant un demarrage. Deux codes couleur differents feraient croire

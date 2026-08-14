@@ -64,7 +64,12 @@ function launchDevelopmentUi(projectRoot: string): void {
     cwd: projectRoot,
     detached: true,
     stdio: 'ignore',
-    windowsHide: true
+    windowsHide: true,
+    // DRAPEAU DE RESTART : le nouveau lanceur démarre pendant que CETTE instance tient encore le
+    // verrou d'instance unique (elle quitte juste après, ci-dessous). Sans ce drapeau, le nouveau se
+    // croyait dédoublé, refusait de lancer, et l'app se fermait sans jamais rouvrir (2026-08-14). Le
+    // drapeau lui dit d'ATTENDRE que le verrou se libère au lieu de refuser.
+    env: { ...process.env, AUTOWIN_DEV_RESTART: '1' }
   })
   child.unref()
 }
