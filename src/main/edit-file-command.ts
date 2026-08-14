@@ -36,7 +36,8 @@ const FORBIDDEN_FILES = [
   'id_rsa'
 ]
 
-function isForbidden(relativePath: string): string | undefined {
+/** Réutilisé par la lecture (`read-file-command`) : les zones interdites sont les MÊMES aux deux sens. */
+export function isForbidden(relativePath: string): string | undefined {
   const normalized = relativePath.replace(/\\/g, '/').toLowerCase()
   const segments = normalized.split('/')
   for (const segment of FORBIDDEN_SEGMENTS) {

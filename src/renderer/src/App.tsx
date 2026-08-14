@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import packageManifest from '../../../package.json'
+
+// Gravés au build par `electron.vite.config.ts` (remplacement littéral Vite). Hors build (tests
+// unitaires happy-dom, où `define` ne s'applique pas), ils sont indéfinis → repli lisible.
+declare const __BUILD_NUMBER__: string
+declare const __BUILD_SHA__: string
+const buildNumber = typeof __BUILD_NUMBER__ === 'string' ? __BUILD_NUMBER__ : 'dev'
+const buildSha = typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'local'
 import { ChatView } from './components/ChatView'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
@@ -465,7 +472,12 @@ export function MainApp(): React.JSX.Element {
           </div>
         </nav>
         <UpdateBanner collapsed={railCollapsed} />
-        <div className="rail-foot c-faint">{`v${packageManifest.version} · preview`}</div>
+        {/* Le NUMÉRO DE BUILD (nombre de commits) incrémente à chaque commit → l'utilisateur voit d'un
+            coup s'il lance une version plus récente. Le SHA court lève l'ambiguïté. `__BUILD_*__` sont
+            gravés au build par `electron.vite.config.ts` ; en test (non défini) on retombe proprement. */}
+        <div className="rail-foot c-faint" title={`commit ${buildSha}`}>
+          {`v${packageManifest.version} · build ${buildNumber} · ${buildSha}`}
+        </div>
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
         {visitedTabs.has('chat') && (
