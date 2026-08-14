@@ -69,11 +69,10 @@ describe('AgentPilot chat streaming', () => {
     expect(events.at(-1)).toMatchObject({ kind: 'done' })
   })
 
-  it('bloque une commande emise pendant un tour LECTURE SEULE, sans perdre la reponse dite', async () => {
-    // Comportement apparu avec le classement lecture-seule et que RIEN ne nommait sur ce chemin :
-    // un message commencant par « scout » ouvre un tour sans catalogue de commandes ; si le modele
-    // en emet une quand meme, elle ne doit JAMAIS atteindre le bus — et le texte deja livre doit
-    // survivre, sinon on jette le travail rendu pour punir une balise de trop.
+  it('OPEN BAR : une commande émise dans un tour « scout » ATTEINT le bus, et la réponse dite survit', async () => {
+    // Ce test asseyait le BLOCAGE d'une commande sur un message « scout » (classé lecture-seule).
+    // Open bar (choix utilisateur 2026-08-14) : plus de blocage sur un tour utilisateur — la commande
+    // `remember` joue. Le texte dit (« Scout livré. ») reste la réponse finale, jamais une bulle vide.
     const responses = [
       'Scout livré.<cmd>{"name":"remember","args":{"type":"constraint"}}</cmd>',
       'Deuxième appel qui ne devrait pas avoir lieu.'
@@ -95,7 +94,7 @@ describe('AgentPilot chat streaming', () => {
     const bus = {
       catalog: () => [{ name: 'remember', args: {}, description: 'mémoire auxiliaire' }],
       snapshotForPrompt,
-      exec: vi.fn()
+      exec: vi.fn().mockResolvedValue({ ok: true, data: {} })
     }
     const events: PilotEvent[] = []
 
@@ -104,12 +103,14 @@ describe('AgentPilot chat streaming', () => {
       (event) => events.push(event),
       undefined,
       6,
-      'conv-read-only-guard'
+      'conv-open-bar-scout'
     )
 
-    expect(bus.exec).not.toHaveBeenCalled()
+    // La commande a joué (plus de blocage) — mais un remember auxiliaire ne repaie pas un 2e appel.
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    expect(bus.exec.mock.calls[0][0]).toBe('remember')
     expect(send).toHaveBeenCalledTimes(1)
-    // Le texte livre survit au blocage : c'est le travail, la balise n'etait qu'un extra.
+    // Le texte livré reste la réponse finale (jamais une bulle vide).
     expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Scout livré.' })
   })
 

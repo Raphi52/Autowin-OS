@@ -21,7 +21,6 @@ import { CONSTITUTION } from './constitution'
 import { routeSkillRequest } from './skill-routing'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { startTurnTimer } from './turn-timing'
-import { classifyMutationConfidence } from './task-mutation-classifier'
 import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
@@ -517,14 +516,17 @@ export class AgentPilot {
     // MÊME config que les phases orchestrées : la CONSTITUTION (soul/réflexes) est la source
     // UNIQUE partagée ; le chat y ajoute seulement ce qui lui est propre (pilotage par commandes).
     const watchdogReadOnly = sendLimits?.systemProfile === 'watchdog-read-only'
-    // Une analyse entierement lecture-seule n'a besoin ni du kit complet (~19 k caracteres), ni du
-    // catalogue de commandes, ni d'un pipeline multi-agent. Le verdict est fail-closed : toute
-    // clause incertaine ou toute action deja reconnue par le routeur conserve le chat pilote normal.
-    const directReadOnly =
-      !watchdogReadOnly &&
-      !directRoute &&
-      latestUserMessage !== undefined &&
-      classifyMutationConfidence(latestUserMessage) === 'read-only'
+    // OPEN BAR (choix utilisateur explicite 2026-08-14) : un tour PILOTÉ PAR L'UTILISATEUR reçoit
+    // TOUJOURS le catalogue complet — jamais un catalogue réduit derrière une classification
+    // « lecture seule » du message. Cette classification (`classifyMutationConfidence`) starvait des
+    // tours qui devaient agir, mesuré à répétition (dont le scout de veille conv-1154→1157). L'utilisateur
+    // ASSUME la perte de garde-fou, dans la continuité du retrait du sandbox (décision C, 2026-08-06) :
+    // dans SON chat, si une demande d'analyse amène le modèle à écrire ou supprimer, c'est permis.
+    //
+    // La SEULE porte conservée est `watchdog-read-only` : le triage interne d'Auto-Kaizen, imposé par
+    // le SYSTÈME (pas par l'utilisateur) sur un incident. L'ouvrir laisserait un run échoué déclencher
+    // des écritures automatiques — hors du périmètre demandé, et son pilote refuse l'exec de toute façon.
+    const directReadOnly = false
     const commandFreeReadOnly = watchdogReadOnly || directReadOnly
     const providerLimits: Pick<SendOptions, 'maxBudgetUsd' | 'toolProfile'> = {
       ...(sendLimits?.maxBudgetUsd ? { maxBudgetUsd: sendLimits.maxBudgetUsd } : {}),

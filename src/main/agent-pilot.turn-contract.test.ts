@@ -890,19 +890,15 @@ describe('AgentPilot turn contract', () => {
     expect(ask).not.toHaveBeenCalled()
   })
 
-  it('traite une analyse explicitement non mutante avec un seul appel lecture seule', async () => {
+  it('OPEN BAR : une demande d’analyse d’utilisateur reçoit le catalogue COMPLET, jamais un profil bridé', async () => {
+    // Choix utilisateur 2026-08-14 : plus AUCUNE classification « lecture seule » sur un tour piloté
+    // par l'utilisateur. Ce test asseyait l'inverse (`toolProfile: 'watchdog-read-only'` + exec
+    // bloqué sur un message d'analyse) ; il verifie maintenant que l'analyse recoit tous les outils.
+    // Le profil watchdog RESTE teste, mais sur le SYSTEME (`agent-pilot.retry.test.ts`), pas sur un
+    // message utilisateur.
     const send = vi.fn(
-      async (
-        _provider: string,
-        _messages: unknown,
-        options: { toolProfile?: string; system?: string }
-      ) => ({
-        text:
-          options.toolProfile === 'watchdog-read-only'
-            ? options.system?.includes('sortie ENTIERE doit etre exactement')
-              ? 'PREUVE_WATCHDOG_OK'
-              : 'PREUVE_WATCHDOG_OK\n\nNote non demandee par le modele.'
-            : '<cmd>{"name":"orchestrate","args":{"task":"analyse package.json"}}</cmd>',
+      async (_provider: string, _messages: unknown, _options: { toolProfile?: string }) => ({
+        text: '<cmd>{"name":"orchestrate","args":{"task":"analyse package.json"}}</cmd>',
         provider: 'claude'
       })
     )
@@ -930,25 +926,21 @@ describe('AgentPilot turn contract', () => {
       [
         {
           role: 'user',
-          content:
-            'Analyse package.json puis réponds exactement PREUVE_WATCHDOG_OK. Ne modifie aucun fichier.'
+          content: 'Analyse package.json puis dis-moi ce qu’il faut corriger. Ne modifie rien.'
         }
       ],
       (event) => events.push(event),
       undefined,
       12,
-      'conv-read-only-cost'
+      'conv-open-bar'
     )
 
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(send.mock.calls[0][2]).toMatchObject({ toolProfile: 'watchdog-read-only' })
-    expect(send.mock.calls[0][2].system).toMatch(/lecture seule/i)
-    expect(send.mock.calls[0][2].system).not.toContain("Pour agir sur l'app")
-    expect(bus.exec).not.toHaveBeenCalled()
-    expect(events.at(-1)).toMatchObject({
-      kind: 'done',
-      text: 'PREUVE_WATCHDOG_OK'
-    })
+    // AUCUN profil bridé sur un tour utilisateur, et la commande ATTEINT le bus.
+    expect(send.mock.calls[0][2].toolProfile).not.toBe('watchdog-read-only')
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    expect(bus.exec.mock.calls[0][0]).toBe('orchestrate')
+    expect(bus.exec.mock.calls[0][1]).toMatchObject({ task: 'analyse package.json' })
+    expect(events.some((event) => event.kind === 'command')).toBe(true)
   })
 
   it('un tour lecture seule garde les commandes de LECTURE et execute read_file', async () => {
@@ -1000,10 +992,13 @@ describe('AgentPilot turn contract', () => {
     expect(events.some((event) => event.kind === 'command' && event.name === 'read_file')).toBe(true)
   })
 
-  it('bloque mecaniquement une commande generee dans un tour lecture seule', async () => {
+  it('OPEN BAR : une commande generee dans un tour d’analyse EXECUTE, elle n’est plus bloquee', async () => {
+    // Ce test asseyait le blocage mecanique d'une commande sur un message classe « lecture seule ».
+    // Open bar (choix utilisateur 2026-08-14) : plus de blocage sur un tour utilisateur — la commande
+    // atteint le bus. Le blocage mecanique RESTE, mais uniquement sur le profil systeme watchdog.
     const registry = {
       send: vi.fn().mockResolvedValue({
-        text: '<cmd>{"name":"orchestrate","args":{"task":"appel interdit"}}</cmd>',
+        text: '<cmd>{"name":"orchestrate","args":{"task":"appel autorise"}}</cmd>',
         provider: 'claude'
       }),
       describePrompt: () => ({
@@ -1031,11 +1026,12 @@ describe('AgentPilot turn contract', () => {
       events.push(event)
     )
 
-    expect(registry.send).toHaveBeenCalledTimes(1)
-    expect(bus.exec).not.toHaveBeenCalled()
-    expect(events.some((event) => event.kind === 'command')).toBe(false)
-    expect(events.at(-1)).toMatchObject({ kind: 'done' })
-    expect(events.at(-1)?.text).toMatch(/bloqu/i)
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    expect(bus.exec.mock.calls[0][0]).toBe('orchestrate')
+    expect(bus.exec.mock.calls[0][1]).toMatchObject({ task: 'appel autorise' })
+    expect(events.some((event) => event.kind === 'command')).toBe(true)
+    // Plus de message « bloqué » : la commande a joué.
+    expect(events.at(-1)?.text ?? '').not.toMatch(/bloqu/i)
   })
 
   it('conserve le pilotage et les commandes pour une demande qui modifie le workspace', async () => {
