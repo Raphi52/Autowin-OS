@@ -43,12 +43,13 @@ describe('scout interne en conversation visible', () => {
       expect(rt.createConversation).toHaveBeenCalledWith(
         expect.objectContaining({ title: expect.stringContaining('[veille] scout interne') })
       )
-      // Lecture seule et arrière-plan : un scout n'écrit rien et ne vole pas le focus.
+      // readOnly:false — le « readOnly » du runtime est le profil Watchdog SANS outils (conv-1155) ;
+      // background : le tour ne vole pas le focus.
       expect(rt.runPrompt).toHaveBeenCalledWith(
         'conv-scout',
         expect.stringContaining('DE L’INTÉRIEUR'),
         params.binding,
-        expect.objectContaining({ readOnly: true, background: true })
+        expect.objectContaining({ readOnly: false, background: true })
       )
       expect(resultat.conversationId).toBe('conv-scout')
       expect(resultat.retenus).toBe(1)

@@ -52,9 +52,12 @@ export async function genererCandidatsEnConversation(
     conversation.id,
     construirePromptScoutInterne(deps),
     deps.binding,
-    // Lecture seule : un scout n'a rien à écrire ni à exécuter. `background` : le tour ne vole pas
-    // le focus d'un travail interactif en cours.
-    { readOnly: true, maxIterations: 40, background: true }
+    // PAS de `readOnly: true` : cette politique n'est pas « lecture seule », c'est le profil de
+    // triage Watchdog — un pilote SANS AUCUN outil (`catalog: []`, exec refusé). Mesuré sur
+    // conv-1155 : le scout a répondu « je n'ai accès à aucun outil de lecture locale ». La retenue
+    // vient du prompt (lecture seule exigée), de la classification des commandes du tour, et du
+    // garde vide-sans-exploration ci-dessous. `background` : le tour ne vole pas le focus.
+    { readOnly: false, maxIterations: 40, background: true }
   )
   if (!resultat.ok || resultat.cancelled) {
     throw new Error(
