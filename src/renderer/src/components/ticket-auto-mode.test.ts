@@ -8,7 +8,6 @@ import {
   isAutoModeStopped,
   loadAutoModeSettings,
   normalizeAutoModeSettings,
-  onAutoModeStop,
   remainingSessionRuns,
   resumeAutoMode,
   saveAutoModeSettings,
@@ -227,15 +226,4 @@ describe('#7 kill-switch global', () => {
     expect(pickIncomingTickets(items, new Set()).toTreat).toHaveLength(2)
   })
 
-  it('notifie les abonnés au moment de l’arrêt, puis se désabonne proprement', () => {
-    let calls = 0
-    const off = onAutoModeStop(() => {
-      calls += 1
-    })
-    stopAutoModeNow()
-    expect(calls).toBe(1)
-    off()
-    stopAutoModeNow()
-    expect(calls).toBe(1)
-  })
 })

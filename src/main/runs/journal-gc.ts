@@ -62,8 +62,6 @@ export interface JournalGcPolicy {
 export const DEFAULT_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000
 /** 200 journaux ≈ quelques Mo : la fenetre reste consultable a la main. */
 export const DEFAULT_MAX_FILES = 200
-/** 10 min d'inactivite : conserve pour compatibilite d'API. Ne decide plus seul d'une suppression. */
-export const DEFAULT_MIN_IDLE_MS = 10 * 60 * 1000
 /**
  * 6 h sans une seule ecriture : seuil au-dela duquel on accepte de presumer le run mort.
  *

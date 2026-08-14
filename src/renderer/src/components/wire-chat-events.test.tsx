@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isLiveOrchestrationEvent, refreshesActiveConversation } from './chat-event-routing'
+import { refreshesActiveConversation } from './chat-event-routing'
 
 describe('chat event wiring', () => {
   it('reloads only the conversation targeted by a resumed-run refresh', () => {
@@ -11,8 +11,4 @@ describe('chat event wiring', () => {
     )
   })
 
-  it('recognises direct orchestration steps before their terminal event', () => {
-    expect(isLiveOrchestrationEvent({ type: 'orchestrate-step', convId: 'a' })).toBe(true)
-    expect(isLiveOrchestrationEvent({ type: 'orchestrate-end', convId: 'a' })).toBe(true)
-  })
 })

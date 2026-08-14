@@ -122,11 +122,9 @@ export function describeAutoModeCost(settings: AutoModeSettings, pendingRuns: nu
  * jusqu'a une reprise EXPLICITE.
  */
 let stopped = false
-const stopListeners = new Set<() => void>()
 
 export function stopAutoModeNow(): void {
   stopped = true
-  for (const listener of [...stopListeners]) listener()
 }
 
 /** Reprise EXPLICITE : jamais implicite, sinon le kill-switch ne protegerait rien. */
@@ -136,11 +134,6 @@ export function resumeAutoMode(): void {
 
 export function isAutoModeStopped(): boolean {
   return stopped
-}
-
-export function onAutoModeStop(listener: () => void): () => void {
-  stopListeners.add(listener)
-  return () => stopListeners.delete(listener)
 }
 
 /**

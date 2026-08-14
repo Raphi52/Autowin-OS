@@ -7,13 +7,13 @@ import {
   collectStdoutJournals,
   DEFAULT_ASSUME_DEAD_MS,
   DEFAULT_MAX_AGE_MS,
-  DEFAULT_MIN_IDLE_MS,
   planJournalGc,
   type JournalEntry
 } from './journal-gc'
 
 const NOW = 1_800_000_000_000
-const OLD_ENOUGH = NOW - DEFAULT_MIN_IDLE_MS - 1000
+const ELEVEN_MINUTES_MS = 11 * 60 * 1000
+const OLD_ENOUGH = NOW - ELEVEN_MINUTES_MS - 1000
 
 const entry = (path: string, over: Partial<JournalEntry> = {}): JournalEntry => ({
   path,
@@ -48,7 +48,7 @@ describe('planJournalGc — un run VIVANT n’est jamais sacrifie', () => {
   it('un journal VIDE inactif 11 min (run detache en cours) n’est PAS condamne', () => {
     const vivant = entry('/j/run-vivant.stdout.jsonl', {
       size: 0,
-      modifiedMs: NOW - DEFAULT_MIN_IDLE_MS - 60_000
+      modifiedMs: NOW - ELEVEN_MINUTES_MS
     })
     expect(planJournalGc([vivant], { nowMs: NOW })).toEqual([])
   })
@@ -139,7 +139,7 @@ describe('collectStdoutJournals — application au disque', () => {
       const vieuxDate = new Date(Date.now() - DEFAULT_MAX_AGE_MS - 60_000)
       utimesSync(vieux, vieuxDate, vieuxDate)
       utimesSync(vide, vieuxDate, vieuxDate)
-      const gardeDate = new Date(Date.now() - DEFAULT_MIN_IDLE_MS - 60_000)
+      const gardeDate = new Date(Date.now() - ELEVEN_MINUTES_MS)
       utimesSync(garde, gardeDate, gardeDate)
 
       const outcome = collectStdoutJournals(root)

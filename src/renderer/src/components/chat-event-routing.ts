@@ -16,7 +16,3 @@ export function refreshesActiveConversation(
     (!event.convId || event.convId === activeConversationId)
   )
 }
-
-export function isLiveOrchestrationEvent(event: ScopedAppEvent): boolean {
-  return event.type.startsWith('orchestrate-') && Boolean(event.convId)
-}
