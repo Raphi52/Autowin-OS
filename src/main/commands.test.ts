@@ -1110,6 +1110,29 @@ describe('AppCommandBus command execution policy', () => {
     })
   })
 
+  it('get_state expose les worktrees VIVANTS — « le workspace s’est fermé ? » devient une vérité live', async () => {
+    const os = fakeOs()
+    os.getWorktreeActivity = () =>
+      [
+        { agentId: 'a1', state: 'interrupted', workspacePath: '/w/run-1', conversationId: 'conv-1' },
+        { agentId: 'a2', state: 'blocked', worktreePath: '/w/run-2' }
+      ] as never
+    const bus = new AppCommandBus(os, () => undefined)
+    const snap = await bus.snapshot()
+    // Un worktree présent ici = encore vivant ; absent = nettoyé/fermé. C'est la sonde qui manquait.
+    expect(snap.worktrees).toEqual([
+      { workspacePath: '/w/run-1', state: 'interrupted', conversationId: 'conv-1' },
+      { workspacePath: '/w/run-2', state: 'blocked' }
+    ])
+  })
+
+  it('sans getWorktreeActivity, worktrees: [] (absence = rien de vivant, pas un crash)', async () => {
+    const os = fakeOs()
+    os.getWorktreeActivity = undefined
+    const bus = new AppCommandBus(os, () => undefined)
+    await expect(bus.snapshot()).resolves.toMatchObject({ worktrees: [] })
+  })
+
   it('publie et exécute le tool Graphify avec un chemin borné au workspace', async () => {
     const graphify = vi.fn(async () => ({
       action: 'updated' as const,

@@ -150,6 +150,13 @@ export interface AppSnapshot {
   conversations: Array<{ id: string; title: string; category: string }>
   runs: Array<{ subject: string; status: string; blocked: boolean }>
   /**
+   * Worktrees ENCORE connus d'Autowin (un worktree nettoyé/fermé n'y figure PLUS) — permet de répondre
+   * « le workspace s'est-il fermé ? » par une VÉRITÉ LIVE au lieu d'un « non vérifié » : absent d'ici
+   * pour une conversation = nettoyé/fermé. Ajouté 2026-08-14 (get_state ne portait que le statut des runs,
+   * jamais le cycle de vie disque du worktree — d'où le « non vérifiable avec get_state »).
+   */
+  worktrees: Array<{ workspacePath: string; state: string; conversationId?: string }>
+  /**
    * Coût cumulé RÉELLEMENT tarifé. C'est un PLANCHER, pas un total : les tours sans `costUsd`
    * comptent 0. Les deux champs suivants disent de combien ce plancher est en dessous du réel —
    * sans eux, `budgetUsd` se lit comme un total complet et ment (sur les données réelles,
@@ -916,6 +923,13 @@ export class AppCommandBus {
       runs: runs
         .slice(0, 12)
         .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
+      // Worktrees encore vivants côté Autowin : ce qui n'y figure plus a été nettoyé/fermé. C'est LA
+      // sonde qui manquait pour répondre « le workspace s'est fermé ? » sans hausser les épaules.
+      worktrees: (this.os.getWorktreeActivity?.() ?? []).map((w) => ({
+        workspacePath: w.workspacePath ?? w.worktreePath ?? '',
+        state: String(w.state),
+        ...(w.conversationId ? { conversationId: w.conversationId } : {})
+      })),
       ...budgetSnapshot(this.os.budget())
     }
   }
