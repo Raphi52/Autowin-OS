@@ -423,16 +423,21 @@ from launch_dev_phases import decider_mise_a_jour as _maj, libelle_mise_a_jour a
 
 verifie(_maj(0, 0) == "a-jour", "rien a rapatrier : on ne touche a rien")
 verifie(_maj(5, 0) == "appliquer", "du retard et un arbre propre : on rapatrie")
-verifie(_maj(5, 3) == "refus-arbre-sale",
-        "du retard MAIS du travail en cours : on NE TOUCHE PAS. Le 2026-08-13 un pull --autostash "
-        "concurrent a efface un correctif non committe de l'arbre partage ; un lanceur qui stashe "
-        "au double-clic reproduirait ce degat a chaque demarrage")
+verifie(_maj(5, 3) == "appliquer",
+        "du retard ET du travail en cours : on TENTE quand meme. L'ancien veto refusait des qu'UN "
+        "fichier etait modifie ; mesure le 2026-08-14 sur cet arbre partage : retard=3 bloque par 12 "
+        "fichiers d'une AUTRE session, sans rapport avec les commits entrants — la mise a jour etait "
+        "structurellement impossible. `merge --ff-only` ne stashe jamais et refuse tout seul en cas "
+        "de conflit reel : git est l'autorite, et il est plus fin que ce veto")
+verifie("préservé" in _majl("appliquer", 5, 3),
+        "le travail en cours est NOMME comme preserve, pas passe sous silence : c'est ce qui "
+        "distingue « on tente sans risque » d'un stash silencieux")
+verifie("préservé" not in _majl("appliquer", 5, 0),
+        "sans travail en cours, aucune promesse inutile n'est affichee")
 verifie(_maj(None, 0) == "inconnu",
         "comparaison impossible : c'est une issue NOMMEE, pas un « a jour » invente")
 verifie(_maj(None, 9) == "inconnu",
         "sans retard connu, l'etat de l'arbre ne peut pas conclure a lui seul")
-verifie("rien ne sera touché" in _majl("refus-arbre-sale", 5, 3),
-        "le refus DIT ce qu'il protege, sinon il passe pour une panne")
 verifie("5 commits" in _majl("appliquer", 5, 0) and "+" not in _majl("appliquer", 5, 0),
         "les nombres portent leur unite, aucun « +N » nu qui se confondrait avec un autre compteur")
 verifie(_majl("a-jour", 0, 0) == "déjà à jour", "l'etat nominal se lit d'un coup d'oeil")

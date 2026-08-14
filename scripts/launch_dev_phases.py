@@ -279,25 +279,35 @@ class SuiviDemarrage:
 def decider_mise_a_jour(retard: int | None, non_committes: int) -> str:
     """FAUT-IL mettre a jour au lancement, et est-ce SUR de le faire ?
 
-    Demande utilisateur : « ca devrait auto update en plus des le launcher ». Le lanceur peut donc
-    rapatrier ce qui manque — mais il ne le fera JAMAIS sur un arbre sale, et ce refus n'est pas une
-    precaution decorative : le 2026-08-13, un `git pull --autostash` lance par une session
-    concurrente a EFFACE un correctif non committe de l'arbre partage, verifie et vert, qu'il a fallu
-    reecrire. Un lanceur qui stashe le travail en cours de quelqu'un d'autre au double-clic
-    reproduirait ce degat a chaque demarrage.
+    Demande utilisateur : « ca devrait auto update en plus des le launcher », puis, apres l'avoir
+    vecu : « la c debile jme tape le chargement il me dit 3 commits de retard et apres je lance
+    l'app et je dois clicker sur mise a jour ».
 
-    Quatre issues, toutes NOMMEES — un lanceur muet est ce qui a fait croire pendant des jours qu'on
+    L'ARBRE SALE N'EST PLUS UN VETO, et c'est la correction. La version precedente refusait des
+    qu'UN SEUL fichier etait modifie. Mesure le 2026-08-14 sur cet arbre partage (Claude + Codex +
+    l'app en parallele) : `refus-arbre-sale (retard=3, non_committes=12)`, les 12 fichiers etant
+    l'edition en cours d'une AUTRE session, sans aucun rapport avec les 3 commits a rapatrier. Le
+    garde-fou ne protegeait donc rien : il rendait la mise a jour structurellement IMPOSSIBLE, ce que
+    l'utilisateur a vu comme « il me dit 3 de retard et il ne fait rien ».
+
+    La cicatrice du 2026-08-13 reste vraie mais ne s'applique PAS ici : c'est `git pull --autostash`
+    qui avait efface un correctif non committe. `merge --ff-only` ne stashe JAMAIS et REFUSE de
+    lui-meme quand les commits entrants toucheraient un fichier modifie localement — git est donc
+    l'autorite, et elle est plus fine que ce veto. Un fichier modifie qui n'est pas dans les commits
+    entrants n'a aucune raison de bloquer la mise a jour.
+
+    Trois issues, toutes NOMMEES — un lanceur muet est ce qui a fait croire pendant des jours qu'on
     lançait la derniere version :
-      `inconnu`          la comparaison n'a pas pu etre faite (pas de reference distante connue) ;
-      `a-jour`           rien a rapatrier ;
-      `appliquer`        du retard ET un arbre propre : on peut rapatrier sans rien risquer ;
-      `refus-arbre-sale` du retard mais du travail non committe : on NE TOUCHE PAS, et on le dit.
+      `inconnu`   la comparaison n'a pas pu etre faite (pas de reference distante connue) ;
+      `a-jour`    rien a rapatrier ;
+      `appliquer` du retard : on TENTE le `--ff-only`, et git refuse tout seul s'il y a conflit.
+    Le refus n'est plus DECIDE ici : il est CONSTATE apres coup, sur le code de retour de git.
     """
     if retard is None:
         return "inconnu"
     if retard <= 0:
         return "a-jour"
-    return "refus-arbre-sale" if non_committes > 0 else "appliquer"
+    return "appliquer"
 
 
 def libelle_mise_a_jour(decision: str, retard: int | None, non_committes: int) -> str:
@@ -308,6 +318,15 @@ def libelle_mise_a_jour(decision: str, retard: int | None, non_committes: int) -
         return "déjà à jour"
     commits = f"{retard} commit{'s' if (retard or 0) > 1 else ''}"
     if decision == "appliquer":
+        if non_committes > 0:
+            # Le travail en cours est NOMME sans etre presente comme un blocage : `--ff-only` le
+            # preserve, et si un conflit existait git refuserait de lui-meme.
+            fichiers = (
+                f"{non_committes} fichier{'s' if non_committes > 1 else ''} "
+                f"modifié{'s' if non_committes > 1 else ''} préservé{'s' if non_committes > 1 else ''}"
+            )
+            return f"mise à jour : {commits} à rapatrier, {fichiers}"
         return f"mise à jour : {commits} à rapatrier"
-    fichiers = f"{non_committes} fichier{'s' if non_committes > 1 else ''} modifié{'s' if non_committes > 1 else ''}"
-    return f"{commits} de retard NON rapatriés : {fichiers} en cours, rien ne sera touché"
+    # Plus aucune decision ne mene ici : le refus n'est plus DECIDE en amont, il est constate sur le
+    # code de retour de git. Ce filet reste pour ne pas rendre une chaine vide si une issue naissait.
+    return f"{commits} de retard : état non conclu"

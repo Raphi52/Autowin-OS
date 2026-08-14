@@ -294,7 +294,14 @@ def main() -> int:
     parole = {"dernier": time.monotonic()}
 
     def git(args: list[str], delai: int = 25) -> tuple[int, str]:
-        """Appel git borne. Une panne git ne doit JAMAIS empecher un demarrage."""
+        """Appel git borne. Une panne git ne doit JAMAIS empecher un demarrage.
+
+        `stdout` d'abord, `stderr` en REPLI quand il est vide : git ecrit ses REFUS sur `stderr`
+        (« Your local changes … would be overwritten »). Sans ce repli, un lanceur qui veut afficher
+        le motif du refus n'a rien a afficher, et un « refusée » sans raison ressemble a une panne.
+        Les appels qui lisent une valeur (`rev-list --count`) ne sont pas affectes : leur sortie
+        arrive sur `stdout`, et un echec leur donnait deja une chaine vide traitee en cas degrade.
+        """
         try:
             fin = subprocess.run(  # noqa: S603 - arguments fixes, cwd resolu
                 ["git", *args],
@@ -305,18 +312,26 @@ def main() -> int:
                 check=False,
                 creationflags=CREATE_NO_WINDOW,
             )
-            return fin.returncode, (fin.stdout or "").strip()
+            return fin.returncode, ((fin.stdout or "").strip() or (fin.stderr or "").strip())
         except Exception:  # noqa: BLE001 - git absent, lent ou hors depot : on continue sans
             return 1, ""
 
     def mettre_a_jour() -> None:
-        """Rapatrie ce qui manque AVANT de construire — et refuse de le faire sur un arbre sale.
+        """Rapatrie ce qui manque AVANT de construire, en laissant git arbitrer le risque.
 
-        Demande utilisateur : « ca devrait auto update en plus des le launcher ». Le refus sur arbre
-        sale n'est pas une precaution decorative : le 2026-08-13, un `git pull --autostash` lance par
-        une session concurrente a EFFACE de l'arbre partage un correctif non committe, verifie et
-        vert, qu'il a fallu reecrire. Un lanceur qui stashe au double-clic le travail en cours de
-        quelqu'un d'autre reproduirait ce degat a chaque demarrage.
+        Demande utilisateur : « ca devrait auto update en plus des le launcher », puis, apres l'avoir
+        vecu : « la c debile jme tape le chargement il me dit 3 commits de retard et apres je lance
+        l'app et je dois clicker sur mise a jour pour que ca relance l'app une fois de plus ».
+
+        La cause etait ici : un veto refusant des qu'UN fichier etait modifie. Sur cet arbre partage
+        (Claude + Codex + l'app en parallele) il y a presque toujours un fichier modifie par quelqu'un
+        d'autre, donc la mise a jour ne partait JAMAIS — mesure le 2026-08-14 :
+        `refus-arbre-sale (retard=3, non_committes=12)`, ces 12 fichiers etant l'edition d'une autre
+        session, sans rapport avec les 3 commits entrants.
+
+        `merge --ff-only` ne stashe JAMAIS (c'est `--autostash` qui avait efface un correctif le
+        2026-08-13) et refuse de lui-meme si les commits entrants toucheraient un fichier modifie
+        localement. On le TENTE donc, et git tranche — plus finement que ce veto.
 
         Chaque issue est ANNONCEE a l'ecran : un lanceur muet est exactement ce qui a fait croire
         pendant des jours qu'on lançait la derniere version.
@@ -340,13 +355,20 @@ def main() -> int:
             return
         # `--ff-only` : on AVANCE, on ne fusionne ni ne rebase. Sur un arbre propre en retard pur,
         # c'est sans perte possible ; tout autre cas a deja ete refuse au-dessus.
-        code_pull, _ = git(["merge", "--ff-only", "origin/main"], delai=60)
+        code_pull, sortie_pull = git(["merge", "--ff-only", "origin/main"], delai=60)
         if code_pull == 0:
-            splash.pousser("[demarrage] mise à jour appliquée\n")
+            splash.pousser(f"[demarrage] mise à jour appliquée : {retard} commit(s) rapatrié(s)\n")
             journaliser("maj: appliquee")
         else:
-            splash.pousser("[demarrage] mise à jour refusée par git, on lance la version locale\n")
-            journaliser("maj: merge ff-only refuse")
+            # Le motif de git est REPRIS a l'ecran : « refusée » tout court ressemble a une panne,
+            # alors que le cas courant est un fichier local que le rapatriement toucherait.
+            motif = (sortie_pull or "").splitlines()
+            detail = motif[0] if motif else "motif non rapporté par git"
+            splash.pousser(
+                f"[demarrage] mise à jour refusée, travail local préservé — {detail}\n"
+                "[demarrage] on lance la version locale telle quelle\n"
+            )
+            journaliser(f"maj: merge ff-only refuse ({detail})")
 
     def travailler() -> None:
         try:
