@@ -4601,6 +4601,7 @@ Le fil reprend ensuite normalement.`
   // Runtime partagé : les tâches planifiées ET le scout de veille visible passent par le même
   // chemin de conversation — un agent de fond reste un agent du cockpit, jamais un process muet.
   const scheduledChatRuntime: ScheduledChatRuntime = {
+    agentStudioBinding: () => os.roles.getBinding('orchestrator'),
     hasConversation: (conversationId) => Boolean(os.conversations.get(conversationId)),
     createConversation: (input) => os.conversations.create(input),
     bindConversation: (taskId, conversationId) => {

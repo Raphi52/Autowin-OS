@@ -13,6 +13,7 @@ import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 import { compileExecutionQuote, type ExecutionQuote } from './execution-quote'
+import { DEFAULT_WORKFLOWS } from './workflow-defaults'
 
 /** Enregistre ce que chaque phase a RÉELLEMENT reçu — le seul endroit où l'écart se constate. */
 class Recorder implements ProviderAdapter {
@@ -566,6 +567,16 @@ describe('les agents composés sur un nœud atteignent le run', () => {
   it('l’allocation du devis SUIT les agents composés — sinon le panel serait tronqué', async () => {
     const quote = compileExecutionQuote('refonte architecture sécurité migration')
     await makeOrchestrator(new ParModele(), { graph: troisJuges }, quote).run('corrige le bug')
+    expect(quote.allocation?.judgeMembers).toBe(3)
+  })
+
+  it('le panel critique provider-neutral alloue ses trois juges dans le devis réel', async () => {
+    const graph = DEFAULT_WORKFLOWS.find(({ id }) => id === 'panel-critique')?.graph
+    if (!graph) throw new Error('Workflow panel-critique absent')
+    const quote = compileExecutionQuote('refonte architecture sécurité migration')
+
+    await makeOrchestrator(new ParModele(), { graph }, quote).run('corrige le bug')
+
     expect(quote.allocation?.judgeMembers).toBe(3)
   })
 

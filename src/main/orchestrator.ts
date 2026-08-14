@@ -87,6 +87,7 @@ import {
   nodeRanks,
   quorumForPhase,
   recoveriesFromGraph,
+  resolveWorkflowAgents,
   worstCaseNodeExecutions,
   worstCaseVisits,
   type WorkflowGraph
@@ -1058,7 +1059,11 @@ export class Orchestrator {
     // canevas. Sans ce branchement, ouvrir un nœud et y régler trois agents ne changeait rien au run.
     const graph = this.workflowDuRun()?.graph
     const composes = graph ? agentsForPhase(graph, phase) : undefined
-    return (composes ?? runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
+    const fallback = bindingDeRepliPourPhase(phase, this.deps.roles, runtimeSnapshot)
+    const resolved = composes
+      ? resolveWorkflowAgents(composes, fallback)
+      : (runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
+    return resolved
       .filter((member) => member && member.provider)
       .slice(
         0,
@@ -1072,7 +1077,11 @@ export class Orchestrator {
   private resolveJudgeFanOut(runtimeSnapshot?: OrchestrationRuntimeSnapshot): RoleBinding[] {
     const graph = this.workflowDuRun()?.graph
     const composes = graph ? agentsForPhase(graph, 'judge') : undefined
-    return (composes ?? runtimeSnapshot?.judgeFanOut ?? this.deps.judgeFanOut?.() ?? [])
+    const fallback = bindingDeRepliPourPhase('judge', this.deps.roles, runtimeSnapshot)
+    const resolved = composes
+      ? resolveWorkflowAgents(composes, fallback)
+      : (runtimeSnapshot?.judgeFanOut ?? this.deps.judgeFanOut?.() ?? [])
+    return resolved
       .filter((member) => member && member.provider)
       .slice(
         0,

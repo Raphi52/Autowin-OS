@@ -18,11 +18,18 @@ import type { RoleBinding } from './roles'
 /** Ce qui fait franchir une arête. Une seule sortie `always`, sinon on choisit sur le verdict. */
 export type EdgeCondition = 'always' | 'green' | 'red'
 
+/**
+ * Un agent compose peut imposer un provider, ou seulement un angle. Sans provider, le binding de
+ * la phase vient d'Agent Studio au demarrage du run ; cela permet aux workflows livres de definir
+ * leur fan-out sans cacher une deuxieme configuration de modeles.
+ */
+export type WorkflowAgentBinding = Partial<RoleBinding>
+
 export interface WorkflowNode {
   id: string
   phase: PipelinePhase
   /** Les agents qui exécutent ce nœud. Plusieurs = fan-out ; le canevas les rend visibles. */
-  agents?: RoleBinding[]
+  agents?: WorkflowAgentBinding[]
   /** Voix concordantes exigées parmi les agents. Absent = majorité simple. */
   quorum?: number
 }
@@ -266,9 +273,19 @@ export function worstCaseNodeExecutions(graph: WorkflowGraph): number {
 export function agentsForPhase(
   graph: WorkflowGraph,
   phase: PipelinePhase
-): RoleBinding[] | undefined {
+): WorkflowAgentBinding[] | undefined {
   const node = graph.nodes.find((n) => n.phase === phase && n.agents?.length)
-  return node?.agents?.filter((agent) => agent && agent.provider)
+  return node?.agents?.filter(Boolean)
+}
+
+/** Resout les agents partiels d'un workflow contre le binding oppose du snapshot Agent Studio. */
+export function resolveWorkflowAgents(
+  agents: readonly WorkflowAgentBinding[],
+  fallback: RoleBinding
+): RoleBinding[] {
+  return agents.map((agent) =>
+    agent.provider ? (agent as RoleBinding) : { ...fallback, ...agent }
+  )
 }
 
 /**
@@ -291,7 +308,7 @@ export function allocationFromGraph(graph: WorkflowGraph): {
   const phaseMembers: Partial<Record<PipelinePhase, number>> = {}
   let judgeMembers: number | undefined
   for (const node of graph.nodes) {
-    const membres = node.agents?.filter((agent) => agent && agent.provider).length
+    const membres = node.agents?.length
     if (!membres) continue
     if (node.phase === 'judge') judgeMembers = Math.max(judgeMembers ?? 0, membres)
     else phaseMembers[node.phase] = Math.max(phaseMembers[node.phase] ?? 0, membres)

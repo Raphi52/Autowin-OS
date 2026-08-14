@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   removeWorkflowProfile,
   saveWorkflowProfiles,
-  seedDefaultWorkflows
+  seedDefaultWorkflows,
+  type WorkflowProfile
 } from './workflow-profiles'
 import { PIPELINE_PHASES } from './skill-pipeline'
 import { DEFAULT_WORKFLOWS } from './workflow-defaults'
@@ -51,6 +52,43 @@ describe('semis du catalogue', () => {
     const second = seedDefaultWorkflows(p)
     expect(second.profiles.map((x) => x.id)).not.toContain('eclair')
   })
+
+  it('migre un workflow livre intact qui forcait Claude, sans toucher une variante utilisateur', () => {
+    const p = chemin()
+    const legacyCorrectif: WorkflowProfile = {
+      id: 'correctif',
+      name: 'Correctif',
+      description: DEFAULT_WORKFLOWS.find((profile) => profile.id === 'correctif')!.description,
+      graph: {
+        entry: 'build-1',
+        nodes: [
+          { id: 'build-1', phase: 'build', agents: [{ provider: 'claude', persona: 'preuve' }] },
+          { id: 'judge-1', phase: 'judge', agents: [{ provider: 'claude', persona: 'correcteur' }] }
+        ],
+        edges: [
+          { from: 'build-1', to: 'judge-1', when: 'always' },
+          { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 }
+        ]
+      }
+    }
+    saveWorkflowProfiles(
+      {
+        seeded: true,
+        activeId: 'correctif',
+        profiles: [legacyCorrectif, { ...legacyCorrectif, id: 'mon-correctif', name: 'Le mien' }]
+      },
+      p
+    )
+
+    const apres = seedDefaultWorkflows(p)
+    const livre = apres.profiles.find((profile) => profile.id === 'correctif')!
+    const utilisateur = apres.profiles.find((profile) => profile.id === 'mon-correctif')!
+
+    expect(livre.graph?.nodes.flatMap((node) => node.agents ?? []).every((a) => !a.provider)).toBe(
+      true
+    )
+    expect(utilisateur.graph?.nodes[0].agents?.[0].provider).toBe('claude')
+  })
 })
 
 describe('workflows livrés d’origine', () => {
@@ -88,6 +126,16 @@ describe('workflows livrés d’origine', () => {
     ])
     // Aucun fournisseur, modèle ou fan-out caché : le moteur reprend la configuration Agent Studio.
     expect(graph.nodes.every((node) => node.agents === undefined)).toBe(true)
+  })
+
+  it('aucun workflow livre ne cache un provider qui contourne Agent Studio', () => {
+    for (const profile of DEFAULT_WORKFLOWS) {
+      for (const node of profile.graph?.nodes ?? []) {
+        for (const agent of node.agents ?? []) {
+          expect(agent.provider, `${profile.id}/${node.id}`).toBeUndefined()
+        }
+      }
+    }
   })
 
   it('termine le chemin nominal seulement après clean puis judge vert', () => {

@@ -15,12 +15,16 @@ import { DEFAULT_WORKFLOWS } from './workflow-defaults'
  * contenu, sinon un fichier vidé volontairement se repeuplerait tout seul au prochain démarrage.
  */
 export function seedDefaultWorkflows(path = workflowProfilesPath()): WorkflowProfilesFile {
-  const actuel = loadWorkflowProfiles(path)
+  const charge = loadWorkflowProfiles(path)
+  const actuel = migrateLegacyProviderLockedDefaults(charge)
   // Semé une fois, tracé par MARQUEUR et non par l'existence du fichier : une installation qui
   // possédait déjà un profil n'aurait JAMAIS reçu le catalogue (constaté en réel — un seul profil
   // présent, six livrés invisibles). Le marqueur permet aussi de ne pas ressusciter au démarrage
   // suivant ce que l'utilisateur a délibérément supprimé.
-  if (actuel.seeded) return actuel
+  if (actuel.seeded) {
+    if (actuel !== charge) saveWorkflowProfiles(actuel, path)
+    return actuel
+  }
   const connus = new Set(actuel.profiles.map((p) => p.id))
   const fichier: WorkflowProfilesFile = {
     ...actuel,
@@ -32,6 +36,31 @@ export function seedDefaultWorkflows(path = workflowProfilesPath()): WorkflowPro
   }
   saveWorkflowProfiles(fichier, path)
   return fichier
+}
+
+/** Migre uniquement l'empreinte exacte des anciens profils livres qui imposaient Claude. */
+function migrateLegacyProviderLockedDefaults(file: WorkflowProfilesFile): WorkflowProfilesFile {
+  let changed = false
+  const profiles = file.profiles.map((profile) => {
+    const current = DEFAULT_WORKFLOWS.find((candidate) => candidate.id === profile.id)
+    if (!current?.graph) return profile
+    const legacy: WorkflowProfile = {
+      ...current,
+      graph: {
+        ...current.graph,
+        nodes: current.graph.nodes.map((node) => ({
+          ...node,
+          ...(node.agents
+            ? { agents: node.agents.map((agent) => ({ provider: 'claude', ...agent })) }
+            : {})
+        }))
+      }
+    }
+    if (JSON.stringify(profile) !== JSON.stringify(legacy)) return profile
+    changed = true
+    return current
+  })
+  return changed ? { ...file, profiles } : file
 }
 
 /**

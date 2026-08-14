@@ -17,6 +17,11 @@ import {
 import { scheduleDraftProblem } from './task-schedule-draft'
 import type { RuntimeModel } from './chat-view-model'
 import { compareModelsByName, displayedModelName } from './model-name-order'
+import {
+  AGENT_STUDIO_DEFAULT_MODEL_LABEL,
+  AGENT_STUDIO_DEFAULT_PROVIDER,
+  usesAgentStudioDefault
+} from '../../../shared/task-provider'
 import './ViewPage.css'
 import './TaskManagerView.css'
 
@@ -314,10 +319,28 @@ function errorText(error: unknown): string {
 }
 
 function hasLoadedModel(destination: TaskDestination, models: RuntimeModel[]): boolean {
+  if (usesAgentStudioDefault(destination.provider)) return models.length > 0
   return models.some(
     (candidate) =>
       candidate.provider === destination.provider && candidate.model === destination.model
   )
+}
+
+function followAgentStudioDefault(destination: TaskDestination): TaskDestination {
+  if (destination.kind === 'existing') {
+    return {
+      kind: 'existing',
+      conversationId: destination.conversationId,
+      provider: AGENT_STUDIO_DEFAULT_PROVIDER
+    }
+  }
+  return {
+    kind: 'new',
+    title: destination.title,
+    category: destination.category,
+    provider: AGENT_STUDIO_DEFAULT_PROVIDER,
+    ...(destination.conversationId ? { conversationId: destination.conversationId } : {})
+  }
 }
 
 function modelDisplayKey(model: RuntimeModel): string {
@@ -541,7 +564,9 @@ export function TaskManagerView({
   ].sort((left, right) => right.createdAt - left.createdAt)
   const draftDestination = draft?.destination
   const draftModelId = draftDestination
-    ? (() => {
+    ? usesAgentStudioDefault(draftDestination.provider)
+      ? AGENT_STUDIO_DEFAULT_PROVIDER
+      : (() => {
         const loaded = models.find(
           (candidate) =>
             candidate.provider === draftDestination.provider &&
@@ -1016,6 +1041,17 @@ export function TaskManagerView({
                       value={draftModelId}
                       disabled={!modelCatalogReady || selectableModels.length === 0}
                       onChange={(event) => {
+                        if (event.target.value === AGENT_STUDIO_DEFAULT_PROVIDER) {
+                          setDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  destination: followAgentStudioDefault(current.destination)
+                                }
+                              : current
+                          )
+                          return
+                        }
                         const selectedModel = selectableModels.find(
                           (candidate) => candidate.id === event.target.value
                         )
@@ -1044,6 +1080,9 @@ export function TaskManagerView({
                         )
                       }}
                     >
+                      <option value={AGENT_STUDIO_DEFAULT_PROVIDER}>
+                        {AGENT_STUDIO_DEFAULT_MODEL_LABEL}
+                      </option>
                       {!draftModelId && draft.destination.model && (
                         <option value="" disabled>
                           {draft.destination.model} · indisponible

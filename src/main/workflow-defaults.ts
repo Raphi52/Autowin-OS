@@ -11,9 +11,7 @@ import type { WorkflowProfile } from './workflow-profiles'
  * chaque démarrage ferait revenir ce que l'utilisateur a délibérément supprimé.
  */
 
-const claude = (model?: string, persona?: string): { provider: string; model?: string; persona?: string } => ({
-  provider: 'claude',
-  ...(model ? { model } : {}),
+const agentStudio = (persona?: string): { persona?: string } => ({
   ...(persona ? { persona } : {})
 })
 
@@ -36,8 +34,8 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
     graph: {
       entry: 'build-1',
       nodes: [
-        { id: 'build-1', phase: 'build', agents: [claude(undefined, 'preuve')] },
-        { id: 'judge-1', phase: 'judge', agents: [claude(undefined, 'correcteur')] }
+        { id: 'build-1', phase: 'build', agents: [agentStudio('preuve')] },
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('correcteur')] }
       ],
       edges: [
         { from: 'build-1', to: 'judge-1', when: 'always' },
@@ -53,10 +51,10 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
     graph: {
       entry: 'frame-1',
       nodes: [
-        { id: 'frame-1', phase: 'frame', agents: [claude(undefined, 'probleme')] },
-        { id: 'build-1', phase: 'build', agents: [claude(undefined, 'minimal')] },
+        { id: 'frame-1', phase: 'frame', agents: [agentStudio('probleme')] },
+        { id: 'build-1', phase: 'build', agents: [agentStudio('minimal')] },
         { id: 'clean-1', phase: 'clean' },
-        { id: 'judge-1', phase: 'judge', agents: [claude(undefined, 'fidele')] }
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('fidele')] }
       ],
       edges: [
         { from: 'frame-1', to: 'build-1', when: 'always' },
@@ -108,9 +106,9 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
           phase: 'judge',
           quorum: 2,
           agents: [
-            claude(undefined, 'correcteur'),
-            claude(undefined, 'gardien'),
-            claude(undefined, 'lean')
+            agentStudio('correcteur'),
+            agentStudio('gardien'),
+            agentStudio('lean')
           ]
         }
       ],
@@ -132,13 +130,13 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
           id: 'scout-1',
           phase: 'scout',
           agents: [
-            claude(undefined, 'dette'),
-            claude(undefined, 'fragilite'),
-            claude(undefined, 'usage'),
-            claude(undefined, 'rupture')
+            agentStudio('dette'),
+            agentStudio('fragilite'),
+            agentStudio('usage'),
+            agentStudio('rupture')
           ]
         },
-        { id: 'frame-1', phase: 'frame', agents: [claude(undefined, 'contraintes')] }
+        { id: 'frame-1', phase: 'frame', agents: [agentStudio('contraintes')] }
       ],
       edges: [{ from: 'scout-1', to: 'frame-1', when: 'always' }]
     }
@@ -152,8 +150,8 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
       entry: 'remake-1',
       nodes: [
         { id: 'remake-1', phase: 'remake' },
-        { id: 'build-1', phase: 'build', agents: [claude(undefined, 'minimal')] },
-        { id: 'judge-1', phase: 'judge', agents: [claude(undefined, 'lean')] }
+        { id: 'build-1', phase: 'build', agents: [agentStudio('minimal')] },
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('lean')] }
       ],
       edges: [
         { from: 'remake-1', to: 'build-1', when: 'always' },

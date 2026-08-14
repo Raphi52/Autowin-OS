@@ -13,17 +13,16 @@ function store(): TaskStore {
 }
 
 describe('Auto-kaizen borne', () => {
-  it('trie en lecture seule sur le modele economique, sans lancer un second pipeline', () => {
+  it('trie en lecture seule avec le modele Agent Studio courant, sans second pipeline', () => {
     const seed = autoKaizenSeed()
     expect(seed.watchdog?.action).toBe('chat')
     expect(seed.prompt).toContain('LECTURE SEULE')
     expect(seed.prompt).toContain('Ne lance aucune orchestration')
     expect(seed.prompt).not.toMatch(/^\/build\b/)
     expect(seed.destination).toMatchObject({
-      provider: 'claude',
-      model: 'haiku',
-      reasoningEffort: 'low'
+      provider: 'agent-studio-default'
     })
+    expect(seed.destination).not.toHaveProperty('model')
     expect(seed.watchdog?.guards.maxPerRoot).toBe(1)
     expect(seed.watchdog?.guards.maxTriggersPerHour).toBe(1)
     expect(seed.watchdog?.guards.maxTriggersPerDay).toBe(4)
@@ -32,7 +31,7 @@ describe('Auto-kaizen borne', () => {
     expect(seed.watchdog?.guards.dedupWindowMs).toBe(1_800_000)
   })
 
-  it('ajoute les budgets quotidiens au premier triage Haiku intact', () => {
+  it('migre le premier triage Haiku intact vers le binding dynamique et les budgets quotidiens', () => {
     const tasks = store()
     const current = autoKaizenSeed()
     if (current.destination.kind !== 'new') throw new Error('destination inattendue')
@@ -53,7 +52,13 @@ describe('Auto-kaizen borne', () => {
         '5. Termine par le tri ISSUE demande. `repair` est interdit ici puisqu’aucune mutation',
         '   automatique n’est autorisee ; utilise `investigate` ou `report` pour une suite.'
       ].join('\n'),
-      destination: { ...current.destination, conversationId: 'conv-auto-kaizen-read-only' },
+      destination: {
+        ...current.destination,
+        provider: 'claude',
+        model: 'haiku',
+        reasoningEffort: 'low',
+        conversationId: 'conv-auto-kaizen-read-only'
+      },
       watchdog: {
         ...current.watchdog!,
         guards: {
@@ -69,6 +74,7 @@ describe('Auto-kaizen borne', () => {
     seedWatchdogTasks(tasks)
 
     expect(tasks.getTask(prior.id)?.destination).toMatchObject({
+      provider: 'agent-studio-default',
       conversationId: 'conv-auto-kaizen-read-only'
     })
     expect(tasks.getTask(prior.id)?.watchdog?.guards).toMatchObject({
@@ -104,7 +110,9 @@ describe('Auto-kaizen borne', () => {
       maxPerRoot: 1
     })
     expect(tasks.getTask(previous.id)?.watchdog?.action).toBe('chat')
-    expect(tasks.getTask(previous.id)?.destination).toMatchObject({ model: 'haiku' })
+    expect(tasks.getTask(previous.id)?.destination).toMatchObject({
+      provider: 'agent-studio-default'
+    })
   })
 
   it('migre le semis historique intact sans perdre sa conversation dediee', () => {
@@ -146,7 +154,7 @@ describe('Auto-kaizen borne', () => {
     expect(migrated.destination).toMatchObject({ conversationId: 'conv-auto-kaizen' })
     expect(migrated.watchdog?.action).toBe('chat')
     expect(migrated.prompt).not.toMatch(/^\/build\b/)
-    expect(migrated.destination).toMatchObject({ model: 'haiku', reasoningEffort: 'low' })
+    expect(migrated.destination).toMatchObject({ provider: 'agent-studio-default' })
     expect(migrated.watchdog?.guards.maxPerRoot).toBe(1)
     expect(migrated.watchdog?.source).toMatchObject({
       events: [
@@ -177,7 +185,7 @@ describe('Auto-kaizen borne', () => {
     expect(migrated.destination).toMatchObject({ conversationId: 'conv-auto-kaizen-active' })
   })
 
-  it('migre la version orchestration mesuree en production vers le triage Haiku', () => {
+  it('migre la version orchestration mesuree en production vers le binding Agent Studio', () => {
     const tasks = store()
     const previous = previousOrchestrationAutoKaizenSeed()
     if (previous.destination.kind !== 'new') throw new Error('destination inattendue')
@@ -193,9 +201,7 @@ describe('Auto-kaizen borne', () => {
       watchdog: { action: 'chat' },
       destination: {
         conversationId: 'conv-auto-kaizen-live',
-        provider: 'claude',
-        model: 'haiku',
-        reasoningEffort: 'low'
+        provider: 'agent-studio-default'
       }
     })
   })

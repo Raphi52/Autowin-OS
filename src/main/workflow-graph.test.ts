@@ -8,6 +8,7 @@ import {
   allocationFromGraph,
   quorumForPhase,
   worstCaseVisits,
+  resolveWorkflowAgents,
   type WorkflowGraph
 } from './workflow-graph'
 
@@ -34,6 +35,28 @@ const chaine: WorkflowGraph = {
   ],
   edges: [{ from: 'f', to: 'b', when: 'always' }]
 }
+
+describe("agents de workflow herites d'Agent Studio", () => {
+  it('hydrate les personas livrees avec le binding courant sans ecraser un override explicite', () => {
+    expect(
+      resolveWorkflowAgents(
+        [
+          { persona: 'preuve' },
+          { provider: 'gemini', model: 'gemini-pro', persona: 'rupture' }
+        ],
+        { provider: 'codex', model: 'gpt-5.6-sol', reasoningEffort: 'low' }
+      )
+    ).toEqual([
+      {
+        provider: 'codex',
+        model: 'gpt-5.6-sol',
+        reasoningEffort: 'low',
+        persona: 'preuve'
+      },
+      { provider: 'gemini', model: 'gemini-pro', persona: 'rupture' }
+    ])
+  })
+})
 
 describe('ce qui empêche un graphe de tourner', () => {
   it('une chaîne simple n’a aucun défaut', () => {
@@ -211,13 +234,14 @@ describe('les agents composés sur un nœud', () => {
     expect(agentsForPhase(avecAgents, 'clean')).toBeUndefined()
   })
 
-  it('un agent sans provider n’est pas exécutable, donc pas compté', () => {
+  it("un agent sans provider reste compté car il hérite d'Agent Studio", () => {
     const bancal: WorkflowGraph = {
       entry: 'j',
       nodes: [{ id: 'j', phase: 'judge', agents: [{ provider: 'claude' }, {} as never] }],
       edges: []
     }
-    expect(agentsForPhase(bancal, 'judge')).toHaveLength(1)
+    // Sans provider = herite d'Agent Studio ; ce membre reste donc volontairement dans le fan-out.
+    expect(agentsForPhase(bancal, 'judge')).toHaveLength(2)
   })
 
   it('le quorum se lit par phase, absent = majorité simple', () => {
@@ -230,6 +254,22 @@ describe('les agents composés sur un nœud', () => {
     const alloc = allocationFromGraph(avecAgents)
     expect(alloc.judgeMembers).toBe(3)
     expect(alloc.phaseMembers).toEqual({ build: 1 })
+  })
+
+  it("compte aussi les agents provider-neutral qui héritent d'Agent Studio", () => {
+    const providerNeutral: WorkflowGraph = {
+      entry: 'j',
+      nodes: [
+        {
+          id: 'j',
+          phase: 'judge',
+          agents: [{ persona: 'correcteur' }, { persona: 'gardien' }, { persona: 'lean' }]
+        }
+      ],
+      edges: []
+    }
+
+    expect(allocationFromGraph(providerNeutral)).toEqual({ judgeMembers: 3 })
   })
 
   it('un graphe sans agent composé n’impose aucune allocation', () => {

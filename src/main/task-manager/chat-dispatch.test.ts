@@ -147,6 +147,85 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     expect(second.conversationId).toBe('conv-new')
   })
 
+  it('resout Agents Studio model (default) au moment du run et cree la conversation avec ce provider', async () => {
+    const target = runtime()
+    const agentStudioBinding = vi
+      .fn()
+      .mockReturnValueOnce({
+        provider: 'codex',
+        model: 'gpt-5.6-sol',
+        reasoningEffort: 'high'
+      })
+      .mockReturnValueOnce({ provider: 'gemini', model: 'gemini-3-pro', reasoningEffort: 'medium' })
+    ;(target as ScheduledChatRuntime & {
+      agentStudioBinding: () => { provider: string; model: string; reasoningEffort: 'high' }
+    }).agentStudioBinding = agentStudioBinding
+    const dispatcher = new ScheduledChatDispatcher(target)
+
+    await dispatcher.run(
+      task({
+        destination: {
+          kind: 'new',
+          title: 'Auto-kaizen',
+          category: 'Qualite',
+          provider: 'agent-studio-default'
+        }
+      }),
+      occurrence
+    )
+    await dispatcher.run(
+      task({
+        destination: {
+          kind: 'new',
+          title: 'Auto-kaizen',
+          category: 'Qualite',
+          provider: 'agent-studio-default',
+          conversationId: 'conv-new'
+        }
+      }),
+      { ...occurrence, id: 'task-1@next', scheduledFor: occurrence.scheduledFor + 1 }
+    )
+
+    expect(target.createConversation).toHaveBeenCalledWith({
+      title: 'Auto-kaizen',
+      category: 'Qualite',
+      provider: 'codex'
+    })
+    expect(target.runPrompt).toHaveBeenNthCalledWith(1, 'conv-new', 'Prépare le rapport.', {
+      provider: 'codex',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'high'
+    })
+    expect(target.runPrompt).toHaveBeenNthCalledWith(2, 'conv-new', 'Prépare le rapport.', {
+      provider: 'gemini',
+      model: 'gemini-3-pro',
+      reasoningEffort: 'medium'
+    })
+    expect(agentStudioBinding).toHaveBeenCalledTimes(2)
+  })
+
+  it('ne transmet jamais le sentinel au provider si Agent Studio ne peut pas etre resolu', async () => {
+    const target = runtime()
+    const dispatcher = new ScheduledChatDispatcher(target)
+
+    const result = await dispatcher.run(
+      task({
+        destination: {
+          kind: 'new',
+          title: 'Auto-kaizen',
+          category: 'Qualite',
+          provider: 'agent-studio-default'
+        }
+      }),
+      occurrence
+    )
+
+    expect(result).toMatchObject({ status: 'failed' })
+    expect(result.error).toContain('Agents Studio model (default)')
+    expect(target.createConversation).not.toHaveBeenCalled()
+    expect(target.runPrompt).not.toHaveBeenCalled()
+  })
+
   it('échoue visiblement si la conversation cible a disparu', async () => {
     const dispatcher = new ScheduledChatDispatcher(runtime({ hasConversation: vi.fn(() => false) }))
 

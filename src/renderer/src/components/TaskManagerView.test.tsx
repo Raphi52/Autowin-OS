@@ -242,6 +242,7 @@ describe('TaskManagerView', () => {
 
     expect(model).not.toBeNull()
     expect([...model!.options].map((option) => option.value)).toEqual([
+      'agent-studio-default',
       'claude:sonnet',
       'ollama:qwen'
     ])
@@ -313,10 +314,56 @@ describe('TaskManagerView', () => {
       ?.querySelector('select')
 
     expect([...model!.options].map((option) => option.textContent)).toEqual([
+      'Agents Studio model (default)',
       'alpha 2 · zeta',
       'Éclair 3 · middle',
       'Zulu 10 · alpha'
     ])
+  })
+
+  it('enregistre Agents Studio model (default) comme binding dynamique sans modele fige', async () => {
+    const { container, mockApi } = await mount()
+    const newButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Nouvelle tâche')
+    )
+    await act(async () => newButton?.click())
+
+    const title = container.querySelector<HTMLInputElement>('input[name="title"]')!
+    const prompt = container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!
+    const model = [...container.querySelectorAll('label')]
+      .find((label) => label.textContent?.includes('Modèle'))
+      ?.querySelector('select')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        title,
+        'Kaizen dynamique'
+      )
+      title.dispatchEvent(new Event('input', { bubbles: true }))
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(
+        prompt,
+        'Diagnostique le dernier run.'
+      )
+      prompt.dispatchEvent(new Event('input', { bubbles: true }))
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(
+        model,
+        'agent-studio-default'
+      )
+      model?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    const save = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Créer la tâche'
+    )
+    await act(async () => save?.click())
+
+    expect(mockApi.taskManagerCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        destination: expect.objectContaining({ provider: 'agent-studio-default' })
+      })
+    )
+    const payload = mockApi.taskManagerCreate.mock.calls[0][0]
+    expect(payload.destination).not.toHaveProperty('model')
+    expect(payload.destination).not.toHaveProperty('reasoningEffort')
   })
 
   it('crée une tâche depuis des champs structurés', async () => {
@@ -443,6 +490,7 @@ describe('TaskManagerView', () => {
       .find((label) => label.textContent?.includes('Modèle'))
       ?.querySelector('select')
     expect([...provider!.options].map((option) => option.value)).toEqual([
+      'agent-studio-default',
       'claude:sonnet',
       'ollama:qwen'
     ])
@@ -636,7 +684,10 @@ describe('TaskManagerView', () => {
       .find((label) => label.textContent?.includes('Modèle'))
       ?.querySelector('select')
 
-    expect([...provider!.options].map((option) => option.value)).toEqual(['ollama:qwen'])
+    expect([...provider!.options].map((option) => option.value)).toEqual([
+      'agent-studio-default',
+      'ollama:qwen'
+    ])
   })
 
   it('ne permet pas une nouvelle destination avec la liste périmée pendant une réactivation', async () => {

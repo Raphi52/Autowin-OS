@@ -8,8 +8,20 @@ import type {
   WatchdogOrchestrationRequest
 } from './types'
 import type { ReasoningEffort } from '../roles'
+import {
+  AGENT_STUDIO_DEFAULT_MODEL_LABEL,
+  usesAgentStudioDefault
+} from '../../shared/task-provider'
+
+type ScheduledTaskRoleBinding = {
+  provider: string
+  model?: string
+  reasoningEffort?: ReasoningEffort
+}
 
 export interface ScheduledChatRuntime {
+  /** Résout le rôle orchestrateur Agent Studio au moment de CHAQUE run planifié. */
+  agentStudioBinding?(): ScheduledTaskRoleBinding
   hasConversation(conversationId: string): boolean
   createConversation(input: { title: string; category: string; provider: string }): { id: string }
   bindConversation(taskId: string, conversationId: string): void
@@ -80,10 +92,12 @@ export interface ScheduledChatRuntime {
 export const WATCHDOG_INTERACTIVE_IDLE_TIMEOUT_MS = 30_000
 
 export function scheduledTaskBinding(
-  task: ScheduledTask
-): { provider: string; model?: string; reasoningEffort?: ReasoningEffort } | undefined {
+  task: ScheduledTask,
+  agentStudioBinding?: ScheduledTaskRoleBinding
+): ScheduledTaskRoleBinding | undefined {
   const provider = task.destination.provider
   if (!provider) return undefined
+  if (usesAgentStudioDefault(provider)) return agentStudioBinding
   return {
     provider,
     ...(task.destination.model ? { model: task.destination.model } : {}),
@@ -135,7 +149,25 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
     }
 
     try {
-      const conversationId = this.resolveConversation(task)
+      const followsAgentStudio = usesAgentStudioDefault(task.destination.provider)
+      const binding = scheduledTaskBinding(
+        task,
+        followsAgentStudio ? this.runtime.agentStudioBinding?.() : undefined
+      )
+      if (followsAgentStudio && !binding) {
+        return {
+          status: 'failed',
+          error: `${AGENT_STUDIO_DEFAULT_MODEL_LABEL} : aucun modèle Agent Studio n'est configuré.`
+        }
+      }
+      const executionTask =
+        followsAgentStudio && binding
+          ? {
+              ...task,
+              destination: { ...task.destination, ...binding }
+            }
+          : task
+      const conversationId = this.resolveConversation(task, binding)
       if (!conversationId) {
         return {
           status: 'failed',
@@ -159,7 +191,6 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
         await this.runtime.interruptAndWait(conversationId, 'scheduled-task')
       }
 
-      const binding = scheduledTaskBinding(task)
       // Une règle en action `orchestration` passe par le pipeline complet : l'analyse, le correctif et
       // la VÉRIFICATION y existent déjà. Si le runtime ne sait pas orchestrer, on retombe sur le tour
       // de conversation plutôt que d'échouer — dégradé annoncé, jamais silencieux.
@@ -197,7 +228,7 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
           ? await this.runtime.runOrchestration(
               conversationId,
               orchestrationRequest,
-              task,
+              executionTask,
               onLateMutationClaims
             )
           : binding
@@ -290,7 +321,10 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
     }
   }
 
-  private resolveConversation(task: ScheduledTask): string | undefined {
+  private resolveConversation(
+    task: ScheduledTask,
+    binding?: ScheduledTaskRoleBinding
+  ): string | undefined {
     if (task.destination.kind === 'existing') {
       return this.runtime.hasConversation(task.destination.conversationId)
         ? task.destination.conversationId
@@ -305,7 +339,7 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
     const created = this.runtime.createConversation({
       title: task.destination.title,
       category: task.destination.category,
-      provider: task.destination.provider
+      provider: binding?.provider ?? task.destination.provider
     })
     this.runtime.bindConversation(task.id, created.id)
     return created.id

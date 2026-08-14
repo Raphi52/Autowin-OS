@@ -20,13 +20,71 @@ describe('seedWatchdogTasks — l’auto-kaizen comme VRAIE tâche', () => {
     expect(seeded[0].watchdog?.source).toMatchObject({ kind: 'app-event' })
   })
 
-  it('elle fait un triage leger plutot que de lancer un second pipeline apres chaque rouge', () => {
+  it('elle fait un triage leger avec le modele Agent Studio dynamique', () => {
     const tasks = store()
     seedWatchdogTasks(tasks)
 
     const task = tasks.listTasks()[0]
     expect(task.watchdog?.action).toBe('chat')
-    expect(task.destination).toMatchObject({ model: 'haiku', reasoningEffort: 'low' })
+    expect(task.destination).toMatchObject({ provider: 'agent-studio-default' })
+    expect(task.destination).not.toHaveProperty('model')
+    expect(task.destination).not.toHaveProperty('reasoningEffort')
+  })
+
+  it('encode explicitement l option Agents Studio model (default), pas un snapshot du demarrage', () => {
+    expect(autoKaizenSeed().destination).toMatchObject({ provider: 'agent-studio-default' })
+  })
+
+  it('migre aussi le semis Claude deja persiste vers le binding Agent Studio dynamique', () => {
+    const first = store()
+    const legacy = autoKaizenSeed()
+    if (legacy.destination.kind !== 'new') throw new Error('Le semis doit creer une conversation')
+    const { id } = first.create({
+      ...legacy,
+      destination: {
+        ...legacy.destination,
+        provider: 'claude',
+        model: 'haiku',
+        reasoningEffort: 'low'
+      }
+    })
+    first.markSeeded(AUTO_KAIZEN_SEED_ID)
+    first.bindConversation(id, 'conv-auto-kaizen')
+    const restarted = store()
+    restarted.hydrate(first.snapshot())
+
+    seedWatchdogTasks(restarted)
+
+    expect(restarted.getTask(id)?.destination).toMatchObject({
+      provider: 'agent-studio-default',
+      conversationId: 'conv-auto-kaizen'
+    })
+    expect(restarted.getTask(id)?.destination).not.toHaveProperty('model')
+  })
+
+  it('ne migre pas un Auto-kaizen dont le modele Claude a ete choisi par l utilisateur', () => {
+    const tasks = store()
+    const seed = autoKaizenSeed()
+    if (seed.destination.kind !== 'new') throw new Error('Le semis doit creer une conversation')
+    const customized = tasks.create({
+      ...seed,
+      prompt: `${seed.prompt}\nConsigne personnelle.`,
+      destination: {
+        ...seed.destination,
+        provider: 'claude',
+        model: 'claude-opus-5',
+        reasoningEffort: 'high'
+      }
+    })
+    tasks.markSeeded(AUTO_KAIZEN_SEED_ID)
+
+    seedWatchdogTasks(tasks)
+
+    expect(tasks.getTask(customized.id)?.destination).toMatchObject({
+      provider: 'claude',
+      model: 'claude-opus-5',
+      reasoningEffort: 'high'
+    })
   })
 
   it('elle est ÉDITABLE comme n’importe quelle tâche', () => {

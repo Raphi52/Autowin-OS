@@ -25,7 +25,8 @@ export type Phase =
 
 /** Un membre du fan-out : QUI regarde (persona), avec QUEL modèle et QUEL effort. */
 export interface CanvasAgent {
-  provider: string
+  /** Absent : herite du binding de phase configure dans Agent Studio. */
+  provider?: string
   model?: string
   reasoningEffort?: string
   /** L'angle imposé à ce membre. Injecté dans son prompt — sans lui, le panel est N fois le même. */
@@ -80,9 +81,6 @@ const PALETTE: Phase[] = [
   'kaizen',
   'remake'
 ]
-
-/** Provider par défaut d'un agent ajouté ; le modèle, lui, se choisit agent par agent. */
-const defaultProvider = 'claude'
 
 /* ── Géométrie du plan. Des constantes plutôt que des valeurs semées : le tracé des arêtes en dépend. ── */
 const NODE_W = 158
@@ -465,7 +463,7 @@ export function WorkflowCanvas({
                         majNoeud(node.id, {
                           agents: Array.from(
                             { length: n },
-                            (_, i) => actuels[i] ?? { provider: defaultProvider }
+                            (_, i) => actuels[i] ?? {}
                           ),
                           ...(node.quorum && node.quorum > n ? { quorum: n } : {})
                         })
@@ -500,9 +498,13 @@ export function WorkflowCanvas({
                         <select
                           data-testid={`wf-agent-model-${node.id}-${r}`}
                           value={agent.model ?? ''}
-                          onChange={(e) =>
-                            majAgent(node, r, { model: e.target.value || undefined })
-                          }
+                          onChange={(e) => {
+                            const selected = models.find((model) => model.id === e.target.value)
+                            majAgent(node, r, {
+                              provider: selected?.provider,
+                              model: selected?.id
+                            })
+                          }}
                         >
                           <option value="">modèle par défaut</option>
                           {/* Un modèle déjà composé mais absent du catalogue reste proposé : sinon

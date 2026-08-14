@@ -1,5 +1,6 @@
 import type { TaskStore } from './task-store'
 import type { ScheduledTask, ScheduledTaskInput } from './types'
+import { AGENT_STUDIO_DEFAULT_PROVIDER } from '../../shared/task-provider'
 
 /**
  * Les regles livrees d'origine.
@@ -25,9 +26,9 @@ export const AUTO_KAIZEN_SEED_ID = 'auto-kaizen-v1'
  * un build Opus a 3,15 $ a ete suivi d'un autre worktree automatique alors que le premier diff
  * n'etait ni publie ni visible depuis la copie du reparateur.
  *
- * Le reveil fait donc seulement le TRIAGE : un tour Haiku en lecture seule, visible dans le Task
- * Manager. Une correction devient une recommandation explicite ; elle ne part jamais en chantier
- * autonome sur la seule foi d'un evenement terminal.
+ * Le reveil fait donc seulement le TRIAGE : un tour en lecture seule, visible dans le Task Manager,
+ * avec le modele orchestrateur courant d'Agent Studio. Une correction devient une recommandation
+ * explicite ; elle ne part jamais en chantier autonome sur la seule foi d'un evenement terminal.
  */
 export function previousOrchestrationAutoKaizenSeed(): ScheduledTaskInput {
   return {
@@ -115,8 +116,7 @@ export function autoKaizenSeed(): ScheduledTaskInput {
       previous.destination.kind === 'new'
         ? {
             ...previous.destination,
-            model: 'haiku',
-            reasoningEffort: 'low'
+            provider: AGENT_STUDIO_DEFAULT_PROVIDER
           }
         : previous.destination,
     watchdog: previous.watchdog
@@ -326,6 +326,28 @@ function isUntouchedPriorReadOnlyAutoKaizen(task: ScheduledTask): boolean {
 }
 
 /** Migre uniquement le semis historique INTACT ; une regle editee par l'utilisateur reste sienne. */
+function isUntouchedClaudeReadOnlyAutoKaizen(task: ScheduledTask): boolean {
+  const current = autoKaizenSeed()
+  if (current.destination.kind !== 'new' || current.watchdog?.source.kind !== 'app-event') return false
+  const source = task.watchdog?.source
+  return (
+    task.title === current.title &&
+    task.prompt === current.prompt &&
+    hasExactSeedDestination(task, {
+      kind: 'new',
+      title: current.destination.title,
+      category: current.destination.category,
+      provider: 'claude',
+      model: 'haiku',
+      reasoningEffort: 'low'
+    }) &&
+    task.watchdog?.action === current.watchdog.action &&
+    source?.kind === 'app-event' &&
+    JSON.stringify(source.events) === JSON.stringify(current.watchdog.source.events) &&
+    JSON.stringify(task.watchdog?.guards) === JSON.stringify(current.watchdog.guards)
+  )
+}
+
 function upgradeLegacyAutoKaizen(store: TaskStore): void {
   for (const task of store.listTasks()) {
     if (
@@ -333,7 +355,8 @@ function upgradeLegacyAutoKaizen(store: TaskStore): void {
         !isUntouchedBareBuildAutoKaizen(task) &&
         !isUntouchedPriorBoundedAutoKaizen(task) &&
         !isUntouchedOrchestrationAutoKaizen(task) &&
-        !isUntouchedPriorReadOnlyAutoKaizen(task)) ||
+        !isUntouchedPriorReadOnlyAutoKaizen(task) &&
+        !isUntouchedClaudeReadOnlyAutoKaizen(task)) ||
       task.destination.kind !== 'new'
     )
       continue

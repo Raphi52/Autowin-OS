@@ -2542,11 +2542,24 @@ export function ChatView({
                     key={`${file.name}-${fileIndex}`}
                   >
                     {file.kind === 'image' ? (
-                      <img
-                        className="attachment-thumb"
-                        src={`data:${file.mimeType};base64,${file.content}`}
-                        alt={file.name}
-                      />
+                      <button
+                        type="button"
+                        className="attachment-thumb-button"
+                        aria-label={`Agrandir ${file.name}`}
+                        title="Agrandir"
+                        onClick={() =>
+                          setOpenImage({
+                            src: `data:${file.mimeType};base64,${file.content}`,
+                            name: file.name
+                          })
+                        }
+                      >
+                        <img
+                          className="attachment-thumb"
+                          src={`data:${file.mimeType};base64,${file.content}`}
+                          alt={file.name}
+                        />
+                      </button>
                     ) : (
                       <span aria-hidden="true">▤</span>
                     )}
