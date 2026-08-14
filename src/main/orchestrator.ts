@@ -2963,6 +2963,34 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const brainRetrievedAt = new Date().toISOString()
     const scopedBrain = scopeBrainRetrieval(brain, brainCorpus)
     const brainContext = scopedBrain.context
+    /**
+     * SKILL `load` INTÉGRÉE AU WORKFLOW (demande utilisateur du 14/08) : en plus de la récupération
+     * par tâche ci-dessus, l'EMPREINTE DURABLE du dépôt (écrite par `/save` : ce qu'il est, ce
+     * qu'il fait, architecture, décisions) est chargée à CHAQUE run, et l'action est VISIBLE comme
+     * step dans le fil de sous-agents — plus un geste implicite. Le load ne bloque jamais un run.
+     */
+    let empreinteDepot = ''
+    if (brainCorpus?.length !== 0) {
+      try {
+        const chargee = await (this.deps.retrieveBrain ?? retrieveBrainContext)(
+          `empreinte du dépôt ${workspaceSlug(this.deps.executionWorkspace)} — ce qu'il est, ce qu'il fait, architecture, conventions, décisions durables`,
+          { corpus: brainCorpus }
+        )
+        empreinteDepot = scopeBrainRetrieval(chargee, brainCorpus).context.slice(0, 6_000)
+      } catch {
+        // Le load est un confort de départ, jamais une raison d'échouer.
+      }
+      push({
+        step: 'exec',
+        role: 'load',
+        provider: 'brain',
+        text: empreinteDepot
+          ? `Empreinte du dépôt chargée (${empreinteDepot.length} caractères) — injectée en tête de contexte des phases.`
+          : 'Aucune empreinte de dépôt dans le Brain — /save en fin de run l’écrira pour les prochains.',
+        status: 'completed',
+        detail: empreinteDepot ? 'load : empreinte chargée' : 'load : aucune empreinte'
+      })
+    }
     const memoryEcho = sessionMemoryBlock(
       rememberedFacts(conversationId, this.deps.executionWorkspace),
       ECHO_MAX_BLOCK_CHARS,
@@ -2998,6 +3026,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const phaseContext: string[] = [
       ...(memoryEcho ? [memoryEcho] : []),
       ...(causalMemory ? [causalMemory] : []),
+      ...(empreinteDepot ? [`EMPREINTE DU DÉPÔT (skill load) :
+${empreinteDepot}`] : []),
       ...(brainContext
         ? [
             brainContext,

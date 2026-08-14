@@ -839,6 +839,15 @@ export class AppCommandBus {
     }
   }
 
+  /**
+   * SKILL `save` INTÉGRÉE AU WORKFLOW (demande utilisateur du 14/08) : après un run VERT dont la
+   * publication Git est acquise, l'app propose la mise à jour de l'EMPREINTE du dépôt — dans une
+   * conversation VISIBLE, jamais en tâche muette. Câblé tardivement depuis index.ts (le runtime des
+   * conversations n'existe pas encore quand le bus est construit), même motif que les fermetures
+   * Tickets ci-dessous. Absent → aucun save, jamais d'erreur.
+   */
+  onRunVertPublie?: (resume: { task: string; publishedCommitSha: string }) => void
+
   constructor(
     private readonly os: AutowinOS,
     private readonly broadcast: (e: AppEvent) => void,
@@ -1417,6 +1426,13 @@ export class AppCommandBus {
               unpricedCalls: r.usage?.unpricedCalls
             })
             saveConvRunTrace(runPath, steps)
+            if (publishedCommitSha && !r.gateBlocked && r.valid) {
+              try {
+                this.onRunVertPublie?.({ task, publishedCommitSha })
+              } catch {
+                // Le save est un bonus de capitalisation : il n'a pas le droit de toucher au run.
+              }
+            }
             populateConvRunSections(runPath, r.phaseOutputs, { publishedCommitSha }) // J2 — RUN.md peuplé du vrai livrable
             const runStatus =
               terminalLifecycle && terminalLifecycle.closure.status !== 'open'

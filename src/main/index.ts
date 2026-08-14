@@ -381,6 +381,7 @@ import {
   windowsRelayTaskName
 } from './task-manager/windows-relay'
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
+import { skillInstruction } from './skill-pipeline'
 import { registerVeilleIpc } from './veille/veille-ipc'
 import { executerPasse } from './veille/passe'
 import { genererCandidatsEnConversation } from './veille/scout-visible'
@@ -4763,6 +4764,46 @@ Le fil reprend ensuite normalement.`
     // « En générer plus » : le scout interne seul (pas les scouts web), dans une conversation VISIBLE.
     genererInterne: genererCandidatsInternesVisibles
   })
+  /**
+   * SKILL `save` intégrée au workflow (14/08) : après un run VERT publié, une conversation VISIBLE
+   * « [save] empreinte du dépôt » exécute la skill save (corps chargé depuis skills/save) pour
+   * capitaliser ce que le run vient de changer — l'action se voit, s'oriente et s'interrompt comme
+   * n'importe quel agent du cockpit. Une à la fois : un train de runs verts ne paie qu'un save.
+   */
+  let saveEnCours = false
+  bus.onRunVertPublie = ({ task, publishedCommitSha }) => {
+    if (saveEnCours) return
+    const corps = skillInstruction('save')
+    if (!corps) return
+    saveEnCours = true
+    void (async () => {
+      try {
+        const binding = bindingScoutVeille()
+        const conversation = os.conversations.create({
+          title: `[save] empreinte du dépôt ${new Date().toLocaleString('fr-FR')}`.slice(0, 80),
+          category: binding.provider,
+          provider: binding.provider
+        })
+        await scheduledChatRuntime.runPrompt(
+          conversation.id,
+          [
+            `Un run vient d'être publié en VERT (commit ${publishedCommitSha}) pour la tâche :`,
+            `« ${task.slice(0, 400)} »`,
+            '',
+            'Mets à jour l’EMPREINTE durable du dépôt en suivant la skill ci-dessous — relis',
+            'l’existant d’abord, mets à jour sans dupliquer, et dis honnêtement ce que tu as écrit.',
+            corps
+          ].join('\n'),
+          binding,
+          { readOnly: false, maxIterations: 30, background: true }
+        )
+      } catch {
+        // Capitalisation best-effort : ne jamais réveiller une erreur dans le chemin du run.
+      } finally {
+        saveEnCours = false
+      }
+    })()
+  }
   registerTaskManagerIpc({
     ipc: ipcMain,
     store: scheduledTasks,

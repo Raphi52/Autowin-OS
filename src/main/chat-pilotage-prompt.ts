@@ -47,7 +47,8 @@ export function buildChatPilotagePrompt(
     `OR sobres (#d4a94f à #e3ba55) pour les kickers en petites capitales monospace et les chiffres ` +
     `clés ; texte #dde3ee, libellés secondaires #a9b2c4 ; chemins/valeurs techniques en chips ` +
     `monospace discrètes (fond rgba(255,255,255,.045), bordure rgba(255,255,255,.13)) ; interlignes ` +
-    `généreux (1.7+), corps 14px ; JAMAIS de halos, dégradés flous ou ombres décoratives. Garde le ` +
+    `généreux (1.7+), corps 14px ; les couleurs restent lisibles si le thème change ` +
+    `(\`prefers-color-scheme\`) ; JAMAIS de halos, dégradés flous ou ombres décoratives. Garde le ` +
     `texte ou le Markdown normal pour ce qui est court et purement conversationnel : une ou deux ` +
     `phrases n'ont pas besoin d'une page. ` +
     `Elle est rendue dans le fil, sans JavaScript, sans ` +
