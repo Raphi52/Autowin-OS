@@ -903,6 +903,26 @@ export function ChatView({
           liveMessagesRef.current.set(conversationId, amorce)
           if (activeRef.current === conversationId) setMessages(amorce)
         }
+        // Le MESSAGE ENVOYÉ (le prompt du tour) vit dans le store, pas dans les événements : sans ce
+        // rattrapage, le fil montrait la réponse sans la demande (« j'ai pas vu le message envoyé »,
+        // 14/08). On le met en tête du fil adopté, sans écraser les patchs déjà arrivés.
+        if (!fil.some((message) => message.role === 'user')) {
+          void window.api
+            .conversation(conversationId)
+            .then((conversation) => {
+              const enregistres = ((conversation as { messages?: Msg[] })?.messages ?? []).filter(
+                (message) => message.role === 'user'
+              )
+              const dernierUtilisateur = enregistres.at(-1)
+              if (!dernierUtilisateur) return
+              const courant = liveMessagesRef.current.get(conversationId) ?? []
+              if (courant.some((message) => message.role === 'user')) return
+              const complet = [dernierUtilisateur, ...courant]
+              liveMessagesRef.current.set(conversationId, complet)
+              if (activeRef.current === conversationId) setMessages(complet)
+            })
+            .catch(() => {})
+        }
       }
       if (e.kind === 'done' || e.kind === 'error') setConversationBusy(conversationId, false)
       // Coût du dernier tour → pastille live (coût-eq tokens).
