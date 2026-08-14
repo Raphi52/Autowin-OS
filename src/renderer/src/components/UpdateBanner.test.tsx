@@ -402,7 +402,7 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
     )
   })
 
-  it('annonce que le travail en cours sera mis de côté, au lieu de refuser après le clic', async () => {
+  it('annonce que le travail en cours RESTE en place (aucun stash), refus si conflit', async () => {
     api({
       checkUpdate: vi
         .fn()
@@ -411,6 +411,6 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
     await render()
     expect(
       container.querySelector('[data-testid="update-apply"]')!.getAttribute('title')
-    ).toContain('mis de côté puis remis')
+    ).toContain('reste en place')
   })
 })

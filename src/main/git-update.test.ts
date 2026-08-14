@@ -122,7 +122,7 @@ describe('abortUpdateConflict', () => {
 })
 
 describe('applyUpdate', () => {
-  it('arbre SALE → stash explicite, mise à jour, puis pop dans cet ordre', async () => {
+  it('arbre SALE → mise à jour tentée TELLE QUELLE, AUCUN stash', async () => {
     const calls: string[][] = []
     const run: GitRunner = async (args) => {
       calls.push(args)
@@ -133,13 +133,9 @@ describe('applyUpdate', () => {
     }
     const r = await applyUpdate('/r', {}, run, async () => {})
     expect(r.ok).toBe(true)
-    const stash = calls.findIndex((args) => args[0] === 'stash' && args[1] === 'push')
-    const update = calls.findIndex((args) => args[0] === 'pull')
-    const pop = calls.findIndex((args) => args[0] === 'stash' && args[1] === 'pop')
-    expect(stash).toBeGreaterThan(-1)
-    expect(update).toBeGreaterThan(stash)
-    expect(pop).toBeGreaterThan(update)
-    expect(calls[update]).toEqual(['pull', '--ff-only'])
+    // Plus JAMAIS de stash : la mécanique push/pop a déjà effacé du travail non committé.
+    expect(calls.some((args) => args[0] === 'stash')).toBe(false)
+    expect(calls).toContainEqual(['pull', '--ff-only'])
   })
 
   it('dépôt déjà en conflit → refuse avant stash ou mise à jour', async () => {
@@ -157,7 +153,7 @@ describe('applyUpdate', () => {
     expect(calls.some((args) => ['stash', 'merge', 'pull', 'rebase'].includes(args[0]))).toBe(false)
   })
 
-  it('fusion échouée → annule la fusion avant de remettre le stash', async () => {
+  it('fusion échouée → annule la fusion, travail local INTACT (aucun stash)', async () => {
     const calls: string[][] = []
     const run: GitRunner = async (args) => {
       calls.push(args)
@@ -172,25 +168,27 @@ describe('applyUpdate', () => {
     expect(r.ok).toBe(false)
     const merge = calls.findIndex((args) => args.join(' ') === 'merge origin/main')
     const abort = calls.findIndex((args) => args.join(' ') === 'merge --abort')
-    const pop = calls.findIndex((args) => args.join(' ') === 'stash pop')
     expect(abort).toBeGreaterThan(merge)
-    expect(pop).toBeGreaterThan(abort)
-    expect(r.error).toMatch(/travail local remis/i)
+    expect(calls.some((args) => args[0] === 'stash')).toBe(false)
+    expect(r.error).toMatch(/intact/i)
   })
 
-  it('pop conflictuel → dit que la mise à jour est faite et le stash conservé', async () => {
+  it('arbre sale bloquant la MàJ → le DIT, travail intact, sans stash', async () => {
+    const calls: string[][] = []
     const run: GitRunner = async (args) => {
+      calls.push(args)
       const key = args.join(' ')
       if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
       if (key === 'status --porcelain') return { stdout: ' M src/x.ts' }
-      if (key === 'stash pop') throw new Error('CONFLICT pendant pop')
+      if (key === 'pull --ff-only') throw new Error('local changes would be overwritten')
       return { stdout: '' }
     }
 
     const r = await applyUpdate('/r', {}, run, async () => {})
     expect(r).toMatchObject({ ok: false, strategy: 'fast-forward' })
-    expect(r.error).toMatch(/mise à jour est appliquée/i)
-    expect(r.error).toMatch(/stash est conservé/i)
+    expect(calls.some((args) => args[0] === 'stash')).toBe(false)
+    expect(r.error).toMatch(/intact/i)
+    expect(r.error).toMatch(/committe|mets-le de côté/i)
   })
 
   it('sur main : fast-forward par defaut, relaunch, npm install seulement si package a change', async () => {
@@ -241,7 +239,7 @@ describe('applyUpdate — souplesse HORS de main, sans mutation non demandee', (
     expect(calls).toContainEqual(['switch', 'feat/x'])
   })
 
-  it('switch-main sur arbre sale : revient sur la branche avant de remettre le stash', async () => {
+  it('switch-main sur arbre sale : bascule et revient, SANS stash', async () => {
     const calls: string[][] = []
     const run: GitRunner = async (args) => {
       calls.push(args)
@@ -255,19 +253,16 @@ describe('applyUpdate — souplesse HORS de main, sans mutation non demandee', (
       ok: true,
       strategy: 'switch-main'
     })
-    const stash = calls.findIndex((args) => args.join(' ') === 'stash push --include-untracked --message autowin-pre-update')
+    expect(calls.some((args) => args[0] === 'stash')).toBe(false)
     const main = calls.findIndex((args) => args.join(' ') === 'switch main')
     const pull = calls.findIndex((args) => args.join(' ') === 'pull --ff-only')
     const origin = calls.findIndex((args) => args.join(' ') === 'switch feat/x')
-    const pop = calls.findIndex((args) => args.join(' ') === 'stash pop')
-    expect(stash).toBeGreaterThan(-1)
-    expect(main).toBeGreaterThan(stash)
+    expect(main).toBeGreaterThan(-1)
     expect(pull).toBeGreaterThan(main)
     expect(origin).toBeGreaterThan(pull)
-    expect(pop).toBeGreaterThan(origin)
   })
 
-  it('switch-main échoué : revient sur la branche avant le pop', async () => {
+  it('switch-main échoué : revient sur la branche, sans stash pop', async () => {
     const calls: string[][] = []
     const run: GitRunner = async (args) => {
       calls.push(args)
@@ -284,9 +279,8 @@ describe('applyUpdate — souplesse HORS de main, sans mutation non demandee', (
     })
     const pull = calls.findIndex((args) => args.join(' ') === 'pull --ff-only')
     const origin = calls.findIndex((args) => args.join(' ') === 'switch feat/x')
-    const pop = calls.findIndex((args) => args.join(' ') === 'stash pop')
     expect(origin).toBeGreaterThan(pull)
-    expect(pop).toBeGreaterThan(origin)
+    expect(calls.some((args) => args[0] === 'stash')).toBe(false)
   })
 
   it('refuse une strategie INAPPLICABLE ici plutot que de faire autre chose', async () => {

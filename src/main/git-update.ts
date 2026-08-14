@@ -30,7 +30,7 @@ const defaultRunner: GitRunner = async (args, cwd) => {
 export interface UpdateStatus {
   available: boolean
   behind: number
-  /** Arbre de travail modifié. Il sera protégé par un stash explicite pendant la mise à jour. */
+  /** Arbre de travail modifié. La mise à jour est tentée telle quelle ; git refuse si elle entre en conflit (aucun stash). */
   dirty?: boolean
   /** Une opération Git contient déjà des fichiers non fusionnés. */
   conflicted?: boolean
@@ -211,9 +211,10 @@ function packageSignature(cwd: string): string {
 /**
  * Applique la mise à jour selon la stratégie demandée.
  *
- * Un arbre SALE n'est PLUS un refus : un stash explicite met le travail de côté, la mise à jour est
- * tentée, puis le stash est remis. Contrairement à `--autostash`, ce flux permet d'annuler une fusion
- * ou un rebase raté AVANT de restaurer le travail local.
+ * Un arbre SALE n'est ni stashé ni refusé d'emblée : la mise à jour est tentée telle quelle et git
+ * refuse proprement (sans rien déplacer) si les commits entrants toucheraient un fichier modifié
+ * localement. Plus AUCUN stash — la mécanique `stash push`/`pop` a déjà effacé du travail non
+ * committé (un `pop` en conflit laissait le stash orphelin). Le travail local reste EN PLACE.
  *
  * La SEULE garde conservée : hors de `main`, aucune stratégie n'est choisie à la place de l'utilisateur
  * → `needsChoice`. C'est une question posée, pas un échec, et c'est ce qui empêche de fabriquer une
@@ -264,13 +265,12 @@ export async function applyUpdate(
       }
     }
 
+    // Un arbre SALE n'est PLUS mis de côté par un stash. Cette mécanique a déjà EFFACÉ du travail : un
+    // `stash pop` en conflit laissait le stash orphelin, et des dizaines s'étaient accumulés, chacun
+    // pouvant contenir du non-committé jamais remis. On tente désormais la mise à jour TELLE QUELLE ;
+    // git refuse proprement (sans rien déplacer) si les commits entrants toucheraient un fichier
+    // modifié localement. Le travail non committé reste EN PLACE, visible, jamais rangé ailleurs.
     const dirty = (await run(['status', '--porcelain'], cwd)).stdout.trim().length > 0
-
-    let stashed = false
-    if (dirty) {
-      await run(['stash', 'push', '--include-untracked', '--message', 'autowin-pre-update'], cwd)
-      stashed = true
-    }
 
     let switchedToMain = false
     try {
@@ -281,13 +281,12 @@ export async function applyUpdate(
         await run(['switch', 'main'], cwd)
         switchedToMain = true
         await run(['pull', '--ff-only'], cwd)
-        // Le stash appartient au contexte de la branche d'origine : on y revient AVANT de le remettre.
         await run(['switch', currentBranch], cwd)
         switchedToMain = false
       }
     } catch (updateError) {
-      // Une fusion/rebase en conflit doit être ANNULÉE avant le pop. Si l'annulation ne suffit pas,
-      // le stash reste intact : mieux vaut un travail rangé qu'un mélange impossible à démêler.
+      // Une fusion/rebase en conflit doit être ANNULÉE : sans stash à remettre, il s'agit seulement de
+      // rendre l'arbre propre. Le travail local n'a jamais bougé.
       if (strategy === 'merge') {
         try {
           await run(['merge', '--abort'], cwd)
@@ -310,41 +309,18 @@ export async function applyUpdate(
           return {
             ok: false,
             strategy,
-            error: `La mise à jour de main a échoué et la branche d'origine « ${currentBranch} » n'a pas pu être restaurée. Le travail local reste protégé dans le stash. Mise à jour : ${updateError instanceof Error ? updateError.message : String(updateError)}. Retour : ${restoreBranchError instanceof Error ? restoreBranchError.message : String(restoreBranchError)}`
+            error: `La mise à jour de main a échoué et la branche d'origine « ${currentBranch} » n'a pas pu être restaurée. Ton travail local est INTACT (aucun stash). Mise à jour : ${updateError instanceof Error ? updateError.message : String(updateError)}. Retour : ${restoreBranchError instanceof Error ? restoreBranchError.message : String(restoreBranchError)}`
           }
         }
       }
 
-      const conflictsRemain = (await run(['diff', '--name-only', '--diff-filter=U'], cwd)).stdout.trim()
-      if (stashed && !conflictsRemain) {
-        try {
-          await run(['stash', 'pop'], cwd)
-        } catch (popError) {
-          return {
-            ok: false,
-            strategy,
-            error: `La mise à jour a échoué et le travail local n'a pas pu être remis automatiquement. Le stash est conservé. Mise à jour : ${updateError instanceof Error ? updateError.message : String(updateError)}. Restauration : ${popError instanceof Error ? popError.message : String(popError)}`
-          }
-        }
-      }
+      // Un arbre sale a pu bloquer proprement l'intégration : on le DIT, sans rien avoir déplacé.
       return {
         ok: false,
         strategy,
-        error: conflictsRemain
-          ? `La mise à jour a échoué et des conflits subsistent. Le travail local reste protégé dans le stash. ${updateError instanceof Error ? updateError.message : String(updateError)}`
-          : `La mise à jour a échoué; la tentative a été annulée${stashed ? ' et le travail local remis' : ''}. ${updateError instanceof Error ? updateError.message : String(updateError)}`
-      }
-    }
-
-    if (stashed) {
-      try {
-        await run(['stash', 'pop'], cwd)
-      } catch (popError) {
-        return {
-          ok: false,
-          strategy,
-          error: `La mise à jour est appliquée, mais le travail local n'a pas pu être remis automatiquement. Résous les conflits; le stash est conservé. ${popError instanceof Error ? popError.message : String(popError)}`
-        }
+        error: dirty
+          ? `La mise à jour n'a pas pu s'appliquer par-dessus ton travail non committé — il reste INTACT. Committe-le ou mets-le de côté toi-même (git stash), puis relance. ${updateError instanceof Error ? updateError.message : String(updateError)}`
+          : `La mise à jour a échoué; la tentative a été annulée. ${updateError instanceof Error ? updateError.message : String(updateError)}`
       }
     }
     const npmInstalled = packageSignature(cwd) !== before

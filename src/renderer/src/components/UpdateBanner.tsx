@@ -13,7 +13,7 @@ interface UpdateInfo {
   branch?: string
   /** Référence réellement comparée (`origin/main`, ou l'upstream en repli). */
   reference?: string
-  /** Travail en cours : il sera mis de côté puis remis (`--autostash`), plus jamais un refus. */
+  /** Travail en cours : la mise à jour est tentée telle quelle et refusée si elle entre en conflit (aucun stash). */
   dirty?: boolean
   /** Voies d'intégration possibles ici, la première étant la recommandée. */
   strategies?: UpdateStrategy[]
@@ -162,8 +162,10 @@ export function UpdateBanner({
   // afficher « N commits sur feat/x » était faux. Si l'utilisateur n'est pas sur main, on le dit.
   const reference = info.reference ?? 'origin/main'
   const elsewhere = info.branch && info.branch !== 'main' ? ` · tu es sur ${info.branch}` : ''
-  const stash = info.dirty ? ' · ton travail en cours sera mis de côté puis remis' : ''
-  const detail = `${info.behind} commit(s) à récupérer depuis ${reference}${elsewhere}${stash}`
+  const dirtyNote = info.dirty
+    ? ' · ton travail en cours reste en place ; la mise à jour est refusée si elle entre en conflit'
+    : ''
+  const detail = `${info.behind} commit(s) à récupérer depuis ${reference}${elsewhere}${dirtyNote}`
   const buttonState = applying ? ' is-applying' : applyError ? ' is-error' : ''
   const actionLabel = applying
     ? 'Mise à jour en cours'

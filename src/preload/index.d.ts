@@ -136,7 +136,7 @@ interface ChatApi {
     behind: number
     branch?: string
     reference?: string
-    /** Travail en cours : sera mis de cote puis remis (`--autostash`), plus jamais un refus. */
+    /** Travail en cours : la mise a jour est tentee telle quelle et refusee si elle entre en conflit (aucun stash). */
     dirty?: boolean
     strategies?: UpdateStrategy[]
     error?: string
