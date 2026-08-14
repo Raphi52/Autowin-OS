@@ -10,6 +10,7 @@ import React, { Fragment, memo } from 'react'
 import { Markdown } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
 import { ScoutTable } from './ScoutTable'
+import { CandidatsPickPanel } from './CandidatsPickPanel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { AssistantActivityGroup } from './ChatView.parts'
 import { ForkIcon, InspectIcon } from './chat-view-icons'
@@ -354,6 +355,12 @@ export const ChatMessageRow = memo(
                       <ScoutTable
                         key={index}
                         rows={part.rows}
+                        onPick={(prompt) => onPickSuggestion?.(prompt)}
+                      />
+                    ) : part.kind === 'candidats-pick' ? (
+                      <CandidatsPickPanel
+                        key={index}
+                        candidats={part.candidats}
                         onPick={(prompt) => onPickSuggestion?.(prompt)}
                       />
                     ) : part.kind === 'error' ? (

@@ -11,6 +11,7 @@ import {
 import { parseAskChoices } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
 import { parseScoutTable, type ScoutRow } from './scout-table'
+import { extraireCandidatsAffiches, type CandidatAffiche } from './veille-candidats-message'
 import type { PilotEventKind } from '../../../shared/pilot-events'
 import {
   AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
@@ -39,6 +40,7 @@ type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart | ChatEr
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
 export type ChatScoutTableBlock = { kind: 'scout-table'; rows: ScoutRow[] }
+export type ChatCandidatsPickBlock = { kind: 'candidats-pick'; candidats: CandidatAffiche[] }
 export type ChatRenderBlock =
   | ChatTextPart
   | ChatArtifactPart
@@ -46,6 +48,7 @@ export type ChatRenderBlock =
   | ChatActivityBlock
   | ChatSuggestionsBlock
   | ChatScoutTableBlock
+  | ChatCandidatsPickBlock
 
 export interface HydratedAssistantMessage {
   role: 'assistant'
@@ -1075,6 +1078,15 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       const scoutRows = parseScoutTable(part.text)
       if (scoutRows) {
         blocks.push({ kind: 'scout-table', rows: scoutRows })
+        continue
+      }
+      // Scout de veille : charge utile JSON de candidats → panneau de sélection natif (cases +
+      // « Enchaîner (frame) sur la sélection ») — les contrôles ne peuvent pas vivre dans le HTML
+      // du modèle, le sanitizeur les refuse par conception (14/08).
+      const candidatsAffiches = extraireCandidatsAffiches(part.text)
+      if (candidatsAffiches) {
+        blocks.push(part)
+        blocks.push({ kind: 'candidats-pick', candidats: candidatsAffiches })
         continue
       }
       // Retour scout (suggestions groupées en markdown) → vrai array de chips cliquables.
