@@ -134,11 +134,11 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:shadowRoutingPilot:set` — bascule de cet opt-in, valeur refusée si non booléenne
     // `unguarded` reste VIDE.
     //
-    // MISE A JOUR 2026-08-13 — 140 → 139. Une SUPPRESSION, la premiere de cette serie :
-    //   `git:worktreeMap` — lecture d'etat des copies git, retiree avec `WorktreeMapView`
-    // La vue etait le SEUL consommateur de ce canal ; la supprimer sans retirer le canal aurait
-    // laisse une surface IPC atteignable que personne n'appelle. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(140)
+    // MISE A JOUR 2026-08-14 — 140 → 134. Six canaux sans consommateur ont été retirés avec leurs
+    // ponts preload : `git:brainRoot`, les deux `os:workflowSelection:*`, `os:fabric:pair`,
+    // `os:restoreKnowledge` et `os:appCatalog`. Leurs services internes encore actifs restent testés.
+    // `unguarded` reste VIDE : la réduction de surface ne relâche aucun garde.
+    expect(handlers).toHaveLength(134)
     expect(unguarded).toEqual([])
   })
 
