@@ -38,6 +38,10 @@ export interface CandidatVeille {
    * pas n'a aucun sens, et les deux vraies features étaient noyées dans le lot.
    */
   type: TypeEntree
+  /** Contrat étendu (14/08) : quoi / pourquoi / comment, affichés dépliés dans l'onglet Tickets. */
+  what?: string
+  why?: string
+  how?: string
   /**
    * PERTINENCE pour Autowin, 0-100, telle que le scout l'a jugée : à quel point cette nouveauté
    * mérite d'être reprise ici. `undefined` = le scout n'en a pas donné (source ancienne, ou modèle
@@ -81,6 +85,10 @@ export interface CandidatBrut {
   type?: string
   /** Pertinence 0-100 telle que rendue par le scout ; bornée à l'entrée, jamais crue sur parole. */
   pertinence?: number
+  /** Contrat étendu du scout interne (14/08) : ce que ça fait / pourquoi l'usage le réclame / le 1er pas. */
+  what?: string
+  why?: string
+  how?: string
 }
 
 /**
@@ -256,6 +264,9 @@ export function trierCandidats(
         ? { pertinence: bornerPertinence(brut.pertinence) }
         : {}),
       type: natureDe(brut.type),
+      ...(brut.what?.trim() ? { what: brut.what.trim() } : {}),
+      ...(brut.why?.trim() ? { why: brut.why.trim() } : {}),
+      ...(brut.how?.trim() ? { how: brut.how.trim() } : {}),
       prompt: contexte.redigerPrompt(brut),
       vuLe: contexte.maintenant,
       statut: 'nouveau'

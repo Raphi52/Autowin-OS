@@ -112,9 +112,22 @@ function LigneCandidat({
   onPrompter: (candidat: CandidatVeille) => void
   onEcarter: (candidat: CandidatVeille) => void
 }): React.JSX.Element {
+  // Dépliage Quoi/Pourquoi/Comment (14/08) : les candidats du scout interne portent le contrat
+  // étendu ; les autres retombent honnêtement sur ce qu'ils ont (titre, citation, ancrage).
+  const [deplie, setDeplie] = useState(false)
   return (
     <li className={`veille-ligne is-${candidat.statut}`}>
       <div className="veille-ligne-tete">
+        <button
+          type="button"
+          className="veille-deplier"
+          data-testid="veille-deplier"
+          onClick={() => setDeplie((v) => !v)}
+          aria-expanded={deplie}
+          title={deplie ? 'Replier les détails' : 'Déplier Quoi / Pourquoi / Comment'}
+        >
+          {deplie ? '▾' : '▸'}
+        </button>
         <span className="veille-concurrent">{candidat.concurrent}</span>
         <span className="veille-date">{candidat.dateSource}</span>
         {candidat.langue && <span className="veille-langue">{candidat.langue}</span>}
@@ -137,9 +150,27 @@ function LigneCandidat({
           {LIBELLE_STATUT[candidat.statut]}
         </span>
       </div>
-      <strong className="veille-titre">{candidat.titre}</strong>
+      <strong className="veille-titre" onClick={() => setDeplie((v) => !v)}>
+        {candidat.titre}
+      </strong>
       {/* L'extrait lu, mot pour mot : c'est la preuve que la feature existe. */}
       <blockquote className="veille-citation">{candidat.citation}</blockquote>
+      {deplie && (
+        <div className="veille-details" data-testid="veille-details">
+          <div className="veille-q">
+            <b>Quoi ?</b>
+            <p>{candidat.what ?? candidat.titre}</p>
+          </div>
+          <div className="veille-q">
+            <b>Pourquoi ?</b>
+            <p>{candidat.why ?? `Preuve lue : « ${candidat.citation} »`}</p>
+          </div>
+          <div className="veille-q">
+            <b>Comment ?</b>
+            <p>{candidat.how ?? `Partir de l'ancrage ${candidat.url}.`}</p>
+          </div>
+        </div>
+      )}
       <div className="veille-actions">
         <a href={candidat.url} target="_blank" rel="noreferrer" className="veille-source">
           ouvrir la source

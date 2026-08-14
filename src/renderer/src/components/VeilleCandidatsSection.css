@@ -214,3 +214,37 @@
 .veille-colonne[data-testid='veille-colonne-corrections'] h3 b {
   color: var(--text-faint, rgba(245, 247, 251, 0.6));
 }
+
+/* Dépliage Quoi/Pourquoi/Comment (14/08) — même langage que les panneaux du fil. */
+.veille-deplier {
+  background: none;
+  border: none;
+  color: #d4a94f;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.veille-titre {
+  cursor: pointer;
+}
+.veille-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+.veille-q b {
+  display: block;
+  font: 600 10.5px 'Segoe UI', sans-serif;
+  color: #d4a94f;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 2px;
+}
+.veille-q p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 78ch;
+}

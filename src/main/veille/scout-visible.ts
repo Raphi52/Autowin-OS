@@ -91,10 +91,12 @@ export async function genererCandidatsEnConversation(
       `le scout interne a répondu vide sans exploration citée (conversation ${conversation.id}) — relance ou change le modèle du rôle`
     )
   }
-  // L'estampille vient d'ICI, jamais de l'agent — même règle que la passe web.
+  // L'ORIGINE vient d'ICI, jamais de l'agent — même règle que la passe web. La NATURE, elle,
+  // appartient au constat : un manque = ajout, un défaut trouvé dans le code = correction
+  // (« dispatchés dans nouveautés et corrections », 14/08) ; hors contrat → ajout.
   const internes: CandidatBrut[] = bruts.map((brut) => ({
     ...brut,
-    type: 'ajout',
+    type: brut.type === 'correction' ? 'correction' : 'ajout',
     concurrent: 'Autowin OS'
   }))
   const passe = await executerPasseInterne({

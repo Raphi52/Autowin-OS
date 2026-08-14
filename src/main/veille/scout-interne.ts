@@ -19,8 +19,8 @@ export interface ParametresScoutInterne {
 
 export function construirePromptScoutInterne(params: ParametresScoutInterne): string {
   return [
-    'Tu analyses Autowin OS DE L’INTÉRIEUR pour proposer des NOUVELLES CAPACITÉS (features), pas des',
-    'corrections de bugs. Tes matières premières sont les traces d’usage réelles et le code :',
+    'Tu analyses Autowin OS DE L’INTÉRIEUR pour proposer des NOUVELLES CAPACITÉS et des CORRECTIONS',
+    'réelles. Tes matières premières sont les traces d’usage réelles et le code :',
     `- traces d’usage : ${params.racineDonnees} (cost.jsonl, prompt-observability/, runs/, turn-journals/) ;`,
     `- code et workflows : ${params.racineDepot} (src/main, src/renderer, .claude/workflows s’il existe).`,
     '',
@@ -50,7 +50,9 @@ export function construirePromptScoutInterne(params: ParametresScoutInterne): st
     '```',
     '',
     'Règles :',
-    '- `type` vaut TOUJOURS `ajout` : les corrections internes ont leur propre canal (audit interne).',
+    '- `type` : `ajout` pour une CAPACITÉ NOUVELLE que l’usage réclame, `correction` pour un DÉFAUT',
+    '  réel constaté dans le code (comportement cassé, garde qui ment, incohérence) — les deux',
+    '  alimentent l’onglet Tickets, chacun dans sa colonne.',
     '- `url` est un ANCRAGE INTERNE dans le DÉPÔT : `src/...:ligne` ou `scripts/...:ligne` — le code',
     '  qui prouve le manque (la vue qui n’exploite pas la donnée, le geste sans raccourci…). Les traces',
     '  d’usage INSPIRENT le candidat mais l’ancrage vit dans le code : un log est volatil, le code se',
