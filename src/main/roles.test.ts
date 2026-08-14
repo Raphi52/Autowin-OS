@@ -17,8 +17,6 @@ import { TEST_MODEL_CATALOG } from './models.fixture'
 import {
   bindingForModel,
   createDefaultTopology,
-  removeSlot,
-  resolveTopology,
   setSlot
 } from './topology'
 
@@ -276,9 +274,7 @@ describe('AgentTopology', () => {
     const topology = createDefaultTopology([fabricModel])
 
     expect(binding.compute).toEqual(fabricModel.compute)
-    expect(resolveTopology(topology, [fabricModel]).orchestrator.compute).toEqual(
-      fabricModel.compute
-    )
+    expect(topology.orchestrator.compute).toEqual(fabricModel.compute)
   })
 
   it('stores model and effort independently for Scout and Judge slots', () => {
@@ -298,17 +294,17 @@ describe('AgentTopology', () => {
       TEST_MODEL_CATALOG
     )
 
-    expect(resolveTopology(topology, TEST_MODEL_CATALOG).scout).toEqual(
+    expect(topology.panels.scout).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           slotId: 'exploration',
-          model: codex.model,
+          modelId: codex.id,
           reasoningEffort: 'high'
         })
       ])
     )
-    expect(resolveTopology(topology, TEST_MODEL_CATALOG).judge).toEqual(
-      expect.arrayContaining([expect.objectContaining({ slotId: 'security', model: claude.model })])
+    expect(topology.panels.judge).toEqual(
+      expect.arrayContaining([expect.objectContaining({ slotId: 'security', modelId: claude.id })])
     )
   })
 
@@ -339,7 +335,7 @@ describe('AgentTopology', () => {
     ).toThrow('Effort')
   })
 
-  it('creates and removes independent slots without mutating the source topology', () => {
+  it('creates independent slots without mutating the source topology', () => {
     const base = createDefaultTopology(TEST_MODEL_CATALOG)
     const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
     const added = setSlot(
@@ -348,10 +344,7 @@ describe('AgentTopology', () => {
       bindingForModel('contracts', codex),
       TEST_MODEL_CATALOG
     )
-    const removed = removeSlot(added, 'scout', 'contracts')
-
     expect(base.panels.scout.some((slot) => slot.slotId === 'contracts')).toBe(false)
     expect(added.panels.scout.some((slot) => slot.slotId === 'contracts')).toBe(true)
-    expect(removed.panels.scout.some((slot) => slot.slotId === 'contracts')).toBe(false)
   })
 })

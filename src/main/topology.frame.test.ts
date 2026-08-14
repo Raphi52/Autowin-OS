@@ -3,9 +3,7 @@ import {
   assertTopology,
   createDefaultTopology,
   migrateTopologyShape,
-  resolveTopology,
   setSlot,
-  removeSlot,
   bindingForModel,
   type AgentTopology
 } from './topology'
@@ -18,21 +16,12 @@ describe('topology — bloc frame', () => {
     expect(t.panels.frame[0].slotId).toBe('frame-1')
   })
 
-  it('resolveTopology résout aussi le bloc frame', () => {
-    const t = createDefaultTopology(TEST_MODEL_CATALOG)
-    const resolved = resolveTopology(t, TEST_MODEL_CATALOG)
-    expect(resolved.frame).toHaveLength(1)
-    expect(resolved.frame[0].target).toBe('frame')
-  })
-
-  it('setSlot/removeSlot fonctionnent sur frame (0..N modèles déposés)', () => {
+  it('setSlot fonctionne sur frame (0..N modèles déposés)', () => {
     const base = createDefaultTopology(TEST_MODEL_CATALOG)
     const codex = TEST_MODEL_CATALOG.find((m) => m.provider === 'codex')!
     const added = setSlot(base, 'frame', bindingForModel('frame-2', codex), TEST_MODEL_CATALOG)
     expect(added.panels.frame).toHaveLength(2)
     expect(base.panels.frame).toHaveLength(1) // immuable, source non mutée
-    const removed = removeSlot(added, 'frame', 'frame-2')
-    expect(removed.panels.frame).toHaveLength(1)
   })
 })
 

@@ -51,17 +51,6 @@ export interface AgentTopology {
   }
 }
 
-/** Un binding résolu vers son transport (provider + model + effort concrets). */
-export interface ResolvedSlot {
-  slotId: string
-  target: SlotTarget
-  provider: string
-  /** Identifiant de transport (ImportedModel.model), pas l'id canonique. */
-  model: string
-  reasoningEffort: ReasoningEffort
-  compute?: ComputeBinding
-}
-
 /** Valide un binding contre le catalogue de modèles importés. Jette si incohérent. */
 export function assertBinding(binding: SlotBinding, models: ImportedModel[]): SlotBinding {
   assertBindingShape(binding)
@@ -235,54 +224,6 @@ export function setSlot(
       : current.map((s, i) => (i === index ? { ...binding } : s))
   if (target === 'subagents') return { ...topology, subagents: next }
   return { ...topology, panels: { ...topology.panels, [target]: next } }
-}
-
-/**
- * Retire un binding d'une cible LISTE (subagents/scout/judge). L'orchestrateur
- * ne peut pas être retiré (singleton obligatoire) → à remplacer, pas supprimer.
- */
-export function removeSlot(
-  topology: AgentTopology,
-  target: PanelTarget | 'subagents',
-  slotId: string
-): AgentTopology {
-  const current = panelOf(topology, target).filter((slot) => slot.slotId !== slotId)
-  if (target === 'subagents') return { ...topology, subagents: current }
-  return { ...topology, panels: { ...topology.panels, [target]: current } }
-}
-
-/** Résout toutes les cibles vers leur transport concret (provider/model/effort). */
-export function resolveTopology(
-  topology: AgentTopology,
-  models: ImportedModel[]
-): {
-  orchestrator: ResolvedSlot
-  subagents: ResolvedSlot[]
-  scout: ResolvedSlot[]
-  frame: ResolvedSlot[]
-  terrain: ResolvedSlot[]
-  judge: ResolvedSlot[]
-} {
-  const resolve = (binding: SlotBinding, target: SlotTarget): ResolvedSlot => {
-    const model = findModel(models, binding.modelId)
-    if (!model) throw new Error(`Modèle inconnu à la résolution : ${binding.modelId}`)
-    return {
-      slotId: binding.slotId,
-      target,
-      provider: binding.provider,
-      model: model.model,
-      reasoningEffort: binding.reasoningEffort,
-      ...(binding.compute ? { compute: structuredClone(binding.compute) } : {})
-    }
-  }
-  return {
-    orchestrator: resolve(topology.orchestrator, 'orchestrator'),
-    subagents: topology.subagents.map((b) => resolve(b, 'subagents')),
-    scout: topology.panels.scout.map((b) => resolve(b, 'scout')),
-    frame: topology.panels.frame.map((b) => resolve(b, 'frame')),
-    terrain: topology.panels.terrain.map((b) => resolve(b, 'terrain')),
-    judge: topology.panels.judge.map((b) => resolve(b, 'judge'))
-  }
 }
 
 /**

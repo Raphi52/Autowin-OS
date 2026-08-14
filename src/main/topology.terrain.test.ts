@@ -4,32 +4,26 @@ import {
   bindingForModel,
   createDefaultTopology,
   migrateTopologyShape,
-  removeSlot,
-  resolveTopology,
   setSlot,
   type AgentTopology
 } from './topology'
 import { TEST_MODEL_CATALOG } from './models.fixture'
 
 describe('topology — panel terrain', () => {
-  it('crée et résout un slot Terrain par défaut', () => {
+  it('crée un slot Terrain par défaut', () => {
     const topology = createDefaultTopology(TEST_MODEL_CATALOG)
 
     expect(topology.panels.terrain).toHaveLength(1)
     expect(topology.panels.terrain[0].slotId).toBe('terrain-1')
-    expect(resolveTopology(topology, TEST_MODEL_CATALOG).terrain).toMatchObject([
-      { slotId: 'terrain-1', target: 'terrain' }
-    ])
   })
 
-  it('ajoute, remplace et retire des slots Terrain sans muter la source', () => {
+  it('ajoute et remplace des slots Terrain sans muter la source', () => {
     const base = createDefaultTopology(TEST_MODEL_CATALOG)
     const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
     const added = setSlot(base, 'terrain', bindingForModel('terrain-2', codex), TEST_MODEL_CATALOG)
 
     expect(added.panels.terrain).toHaveLength(2)
     expect(base.panels.terrain).toHaveLength(1)
-    expect(removeSlot(added, 'terrain', 'terrain-2').panels.terrain).toHaveLength(1)
   })
 
   it('migre un profil existant sans perdre ses panels configurés', () => {

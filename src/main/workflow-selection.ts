@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 
 /**
@@ -41,18 +41,6 @@ export function loadWorkflowSelections(path = workflowSelectionPath()): Workflow
   }
 }
 
-export function saveWorkflowSelections(
-  selections: WorkflowSelections,
-  path = workflowSelectionPath()
-): void {
-  try {
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, JSON.stringify(selections, null, 2), 'utf8')
-  } catch {
-    /* best-effort : un disque en échec ne casse pas la conversation en cours */
-  }
-}
-
 /**
  * Marqueur d'un refus EXPLICITE : « je ne veux aucun workflow ici ».
  *
@@ -61,17 +49,6 @@ export function saveWorkflowSelections(
  * persister comme une décision, pas s'évaporer.
  */
 export const AUCUN_WORKFLOW = '__aucun__'
-
-/** `null` enregistre un refus EXPLICITE ; il n'efface plus l'entrée (voir `AUCUN_WORKFLOW`). */
-export function selectWorkflowForConversation(
-  selections: WorkflowSelections,
-  conversationId: string,
-  profileId: string | null
-): WorkflowSelections {
-  const byConversation = { ...selections.byConversation }
-  byConversation[conversationId] = profileId ?? AUCUN_WORKFLOW
-  return { byConversation }
-}
 
 /** L'id choisi, `AUCUN_WORKFLOW` si l'utilisateur a refusé, `undefined` s'il ne s'est pas prononcé. */
 export function workflowForConversation(
@@ -88,20 +65,4 @@ export function refusExplicite(
   conversationId: string | undefined
 ): boolean {
   return workflowForConversation(selections, conversationId) === AUCUN_WORKFLOW
-}
-
-/**
- * Oublie les conversations disparues. Sans ce ménage le fichier grossit indéfiniment et une
- * conversation recréée avec le même id hériterait d'un réglage qu'on croyait effacé.
- */
-export function pruneWorkflowSelections(
-  selections: WorkflowSelections,
-  liveConversationIds: readonly string[]
-): WorkflowSelections {
-  const vivantes = new Set(liveConversationIds)
-  const byConversation: Record<string, string> = {}
-  for (const [convId, profileId] of Object.entries(selections.byConversation)) {
-    if (vivantes.has(convId)) byConversation[convId] = profileId
-  }
-  return { byConversation }
 }

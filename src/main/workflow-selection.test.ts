@@ -4,10 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   loadWorkflowSelections,
-  pruneWorkflowSelections,
-  refusExplicite,
-  saveWorkflowSelections,
-  selectWorkflowForConversation,
   workflowForConversation
 } from './workflow-selection'
 
@@ -21,33 +17,6 @@ beforeEach(() => {
 afterEach(() => rmSync(dossier, { recursive: true, force: true }))
 
 describe('un workflow par conversation', () => {
-  it('deux conversations gardent chacune le sien', () => {
-    // C'est tout l'intérêt du choix « par conversation » : un fil en Rapide pendant qu'un autre est
-    // en Rigoureux, sans basculer un réglage global à chaque fois.
-    let sel = selectWorkflowForConversation({ byConversation: {} }, 'conv-a', 'rapide')
-    sel = selectWorkflowForConversation(sel, 'conv-b', 'rigoureux')
-    expect(workflowForConversation(sel, 'conv-a')).toBe('rapide')
-    expect(workflowForConversation(sel, 'conv-b')).toBe('rigoureux')
-  })
-
-  /**
-   * Contrat CHANGÉ le 2026-08-05, après un audit de l'application sur son propre code : effacer
-   * l'entrée rendait un refus EXPLICITE indiscernable de « jamais choisi ». Le mode dynamique
-   * réimposait alors un workflow que l'utilisateur venait de retirer — la laisse exacte que ce
-   * chantier veut éviter. Un refus est une décision : il se persiste.
-   */
-  it('détacher enregistre un REFUS explicite, discernable de « jamais choisi »', () => {
-    const sel = selectWorkflowForConversation(
-      { byConversation: { 'conv-a': 'rapide' } },
-      'conv-a',
-      null
-    )
-    expect(refusExplicite(sel, 'conv-a')).toBe(true)
-    // Une conversation qui ne s'est jamais prononcée reste, elle, indéterminée.
-    expect(refusExplicite(sel, 'conv-jamais-vue')).toBe(false)
-    expect(workflowForConversation(sel, 'conv-jamais-vue')).toBeUndefined()
-  })
-
   it('une conversation sans choix n’impose rien', () => {
     expect(workflowForConversation({ byConversation: {} }, 'conv-x')).toBeUndefined()
     expect(workflowForConversation({ byConversation: { a: 'x' } }, undefined)).toBeUndefined()
@@ -55,11 +24,6 @@ describe('un workflow par conversation', () => {
 })
 
 describe('survie au disque', () => {
-  it('écrit puis relu à l’identique', () => {
-    saveWorkflowSelections({ byConversation: { 'conv-a': 'rapide' } }, chemin)
-    expect(loadWorkflowSelections(chemin).byConversation).toEqual({ 'conv-a': 'rapide' })
-  })
-
   it('un BOM ne fait pas perdre silencieusement tous les réglages', () => {
     // Déjà vu sur ce projet : PowerShell pose un BOM, JSON.parse jette, le catch retombe sur vide et
     // le réglage disparaît sans un mot.
@@ -79,17 +43,6 @@ describe('survie au disque', () => {
 
   it('un fichier absent vaut « aucun choix »', () => {
     expect(loadWorkflowSelections(join(dossier, 'absent.json'))).toEqual({ byConversation: {} })
-  })
-})
-
-describe('ménage', () => {
-  it('oublie les conversations disparues', () => {
-    // Sinon le fichier grossit sans fin, et une conversation recréée avec le même id hériterait d'un
-    // réglage qu'on croyait effacé.
-    const sel = pruneWorkflowSelections({ byConversation: { vivante: 'a', morte: 'b' } }, [
-      'vivante'
-    ])
-    expect(sel.byConversation).toEqual({ vivante: 'a' })
   })
 })
 
