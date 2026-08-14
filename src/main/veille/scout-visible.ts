@@ -14,6 +14,7 @@
  */
 import { construirePromptScoutInterne, type ParametresScoutInterne } from './scout-interne'
 import { extraireCandidats, executerPasseInterne, type ResultatPasse } from './passe'
+import { lireStockVeille } from './candidats-store'
 import type { CandidatBrut } from './candidats'
 
 export interface RuntimeConversationVisible {
@@ -57,9 +58,21 @@ export async function genererCandidatsEnConversation(
         category: deps.binding.provider,
         provider: deps.binding.provider
       })
+  // Anti-doublon SÉMANTIQUE : le scout reçoit les titres déjà au stock (écartés compris — une idée
+  // écartée à la main ne doit pas revenir sous un autre titre) et doit chercher ailleurs.
+  let dejaConnus: string[] = deps.dejaConnus ? [...deps.dejaConnus] : []
+  if (dejaConnus.length === 0) {
+    try {
+      dejaConnus = lireStockVeille(deps.chemin)
+        .candidats.filter((candidat) => candidat.concurrent === 'Autowin OS')
+        .map((candidat) => candidat.titre)
+    } catch {
+      // Stock illisible → le tri par clé reste le filet ; on ne bloque pas le scout pour ça.
+    }
+  }
   const resultat = await deps.runtime.runPrompt(
     conversation.id,
-    construirePromptScoutInterne(deps),
+    construirePromptScoutInterne({ ...deps, dejaConnus }),
     deps.binding,
     // PAS de `readOnly: true` : cette politique n'est pas « lecture seule », c'est le profil de
     // triage Watchdog — un pilote SANS AUCUN outil (`catalog: []`, exec refusé). Mesuré sur

@@ -64,3 +64,13 @@ describe('passe interne — le chemin du bouton « En générer plus »', () => 
     }
   })
 })
+
+  it('les idées déjà au stock sont transmises au scout avec interdiction de les reproposer', () => {
+    const prompt = construirePromptScoutInterne({
+      ...params,
+      dejaConnus: ['Centre de reprise unifié des tours', 'Cockpit des coûts par phase']
+    })
+    expect(prompt).toContain('DÉJÀ AU STOCK')
+    expect(prompt).toContain('- Centre de reprise unifié des tours')
+    expect(prompt).toContain('même reformulée')
+  })

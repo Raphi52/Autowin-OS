@@ -15,6 +15,13 @@ export interface ParametresScoutInterne {
   racineDepot: string
   /** Racine de données de l'app — cost.jsonl, prompt-observability/, runs/, turn-journals/. */
   racineDonnees: string
+  /**
+   * Titres des candidats DÉJÀ au stock (écartés compris). La clé de dédup (concurrent|url|titre)
+   * refuse les doublons EXACTS, mais une même idée reformulée avec un autre ancrage passait —
+   * mesuré le 14/08 : trois variantes de « centre de reprise » en trois runs. On ferme la porte à
+   * la SOURCE : le scout sait ce qui existe et doit chercher AILLEURS.
+   */
+  dejaConnus?: readonly string[]
 }
 
 export function construirePromptScoutInterne(params: ParametresScoutInterne): string {
@@ -66,6 +73,15 @@ export function construirePromptScoutInterne(params: ParametresScoutInterne): st
     '- `why` : pourquoi l’usage observé la réclame — cite le constat qui la justifie.',
     '- `how` : le PREMIER PAS concret d’implémentation (fichier à toucher, geste à faire).',
     '- 3 à 8 candidats maximum : garde les plus forts, pas un inventaire.',
+    ...(params.dejaConnus?.length
+      ? [
+          '',
+          'DÉJÀ AU STOCK — ne repropose AUCUNE de ces idées, même reformulée ou re-ancrée ailleurs ;',
+          'cherche ce qui n’y est PAS :',
+          ...params.dejaConnus.slice(0, 60).map((titre) => `- ${titre}`),
+          ''
+        ]
+      : []),
     '- Rien de solide à proposer → tableau vide [], mais SEULEMENT après avoir lu et listé dans ta',
     '  synthèse les fichiers explorés : un [] sans lecture citée est un refus de travail, pas un résultat.'
   ].join('\n')
