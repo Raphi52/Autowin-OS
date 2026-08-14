@@ -63,10 +63,20 @@ export async function genererCandidatsEnConversation(
         : `scout interne en échec : ${resultat.error ?? 'sans message'} (conversation ${conversation.id})`
     )
   }
-  const bruts = extraireCandidats(resultat.text ?? '')
+  const texte = resultat.text ?? ''
+  const bruts = extraireCandidats(texte)
   if (!bruts) {
     throw new Error(
       `sortie du scout interne illisible : aucun JSON exploitable (conversation ${conversation.id})`
+    )
+  }
+  // Mesuré sur le premier run réel (conv-1154, 13/08) : 717 tokens, 2,7 s, zéro outil — l'agent a
+  // répondu « [] » sans rien lire, et la vue affichait un carré. Un tableau vide n'est acceptable
+  // qu'accompagné de la synthèse d'exploration exigée par le prompt ; nu, c'est un refus de travail
+  // qu'on NOMME au lieu d'écrire « 0 candidat » comme si l'app avait été réellement lue.
+  if (bruts.length === 0 && texte.trim().length < 120) {
+    throw new Error(
+      `le scout interne a répondu vide sans exploration citée (conversation ${conversation.id}) — relance ou change le modèle du rôle`
     )
   }
   // L'estampille vient d'ICI, jamais de l'agent — même règle que la passe web.
