@@ -133,14 +133,11 @@ Un transport keyring antérieur dépourvu de `tlsSpkiSha256` est volontairement 
 > **Ces invariants ne sont plus « non négociables ».** Décision de l’utilisateur, 2026-08-11 :
 > « supprime les toutes, donne tous les droits, je verrai après si je veux restreindre ».
 >
-> Mise en œuvre : `src/main/compute-fabric/tool-contracts.ts` expose `TOOL_POLICY.mode`, dont le
-> **défaut est `permissive`** — aucune de ces règles n’est appliquée. Le mode `strict` les applique
-> toutes, et le basculement est une seule ligne : le retour arrière est intact, conformément au
-> « je verrai après ».
->
-> Ce que le mode par défaut ouvre, tel que mesuré par quatre audits externes de ce module : shell
-> libre atteignable, écrasement de fichier sans précondition SHA-256, chemin absolu et traversal
-> acceptés, quota d’appels illimité, autorités (lease / grant / continuation) non exigées.
+> État réel : aucun gateway d’outils Fabric n’est raccordé au chemin d’exécution. Les restrictions
+> ci-dessous ne sont donc pas appliquées aujourd’hui ; elles restent la **spécification d’un futur
+> mode strict** si le resserrement est décidé plus tard. L’ancien prototype isolé de contrats a été
+> retiré : il n’avait aucun appelant de production et donnait à tort l’impression d’une protection
+> active.
 > Les règles ci-dessous restent la **spécification du mode `strict`**, et la référence si le
 > resserrement est décidé plus tard.
 
