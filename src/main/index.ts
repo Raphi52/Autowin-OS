@@ -157,7 +157,6 @@ import {
   waitForRecoverableChatProviderExit,
   type RecoverableChatProviderCall
 } from './runs/chat-provider-recovery'
-import { pruneContextValues } from './runs/context-value'
 import { appendConvActivity, loadConvActivity } from './activity/conv-activity'
 import {
   persistChatUsageSettlement,
@@ -1446,13 +1445,6 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'UnfinishedTurns')
     try {
       pruneFinishedTurnJournals(turnJournalRoot)
-      // Le magasin de valeurs de contexte est un CACHE content-addressed : sans purge il grossit
-      // indefiniment. Une valeur perdue se recalcule, donc la purge est sans danger.
-      // ⚠️ Ceci est de l'ENTRETIEN, pas l'integration du RLM : `context-value` n'est encore utilise
-      // par AUCUN chemin de construction de prompt. Le brancher dans `agent-pilot` (contexte du tour)
-      // et `orchestrator` (fan-out par reference) reste a faire, et c'est la seulement que le gain de
-      // tokens se prouvera.
-      pruneContextValues()
     } catch {
       /* GC best-effort */
     }
