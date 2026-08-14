@@ -885,7 +885,26 @@ export function ChatView({
     const off = window.api.onPilotEvent((raw) => {
       const e = raw as PilotEvent
       const conversationId = e.conversationId
-      if (!conversationId || !busyConversationsRef.current.has(conversationId)) return
+      if (!conversationId) return
+      // TOUR INITIÉ CÔTÉ MAIN (scout de veille, tâche planifiée) : la vue ne l'a pas lancé, donc il
+      // n'est pas dans `busyConversationsRef` — et ses événements étaient JETÉS : la conversation
+      // s'ouvrait sur un panneau vide pendant que l'agent travaillait (mesuré le 14/08,
+      // conv-1164→1166). Le premier événement pilote PROUVE qu'un tour tourne : on marque la
+      // conversation occupée et on amorce un fil live pour que les patchs aient une cible.
+      if (!busyConversationsRef.current.has(conversationId)) {
+        if (e.kind === 'done' || e.kind === 'error') return
+        setConversationBusy(conversationId, true)
+        const fil = liveMessagesRef.current.get(conversationId) ?? []
+        if (!fil.some((message) => message.role === 'assistant' && !message.done)) {
+          const amorce = [
+            ...fil,
+            { role: 'assistant', content: '', parts: [], status: 'streaming' } as unknown as Msg
+          ]
+          liveMessagesRef.current.set(conversationId, amorce)
+          if (activeRef.current === conversationId) setMessages(amorce)
+        }
+      }
+      if (e.kind === 'done' || e.kind === 'error') setConversationBusy(conversationId, false)
       // Coût du dernier tour → pastille live (coût-eq tokens).
       if (e.kind === 'done' && e.usage) {
         const cost = turnCostEq(e.usage)
