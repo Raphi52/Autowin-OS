@@ -30,6 +30,13 @@ export interface DepsScoutVisible extends ParametresScoutInterne {
   runtime: RuntimeConversationVisible
   /** Provider/modèle du scout — la config de RÔLES de l'utilisateur, jamais un défaut inventé ici. */
   binding: { provider: string; model?: string }
+  /**
+   * Conversation DÉJÀ créée par la vue. Le bouton la crée et l'OUVRE avant de lancer le scout :
+   * l'utilisateur regarde le tour en direct dès le clic (« le bouton m'a encore pas lancé de
+   * conversation dans laquelle je peux voir tout ce qui se passe », 14/08). Absente (tâche
+   * planifiée), le flux la crée lui-même comme avant.
+   */
+  conversationId?: string
   chemin?: string
   maintenant?: () => string
 }
@@ -43,11 +50,13 @@ export async function genererCandidatsEnConversation(
   deps: DepsScoutVisible
 ): Promise<ResultatScoutVisible> {
   const quand = (deps.maintenant ?? (() => new Date().toISOString()))()
-  const conversation = deps.runtime.createConversation({
-    title: `[veille] scout interne ${quand.slice(0, 16).replace('T', ' ')}`,
-    category: deps.binding.provider,
-    provider: deps.binding.provider
-  })
+  const conversation = deps.conversationId
+    ? { id: deps.conversationId }
+    : deps.runtime.createConversation({
+        title: `[veille] scout interne ${quand.slice(0, 16).replace('T', ' ')}`,
+        category: deps.binding.provider,
+        provider: deps.binding.provider
+      })
   const resultat = await deps.runtime.runPrompt(
     conversation.id,
     construirePromptScoutInterne(deps),

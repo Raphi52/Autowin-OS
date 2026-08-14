@@ -4806,12 +4806,15 @@ Le fil reprend ensuite normalement.`
     return { provider: choisi.provider, ...(choisi.model ? { model: choisi.model } : {}) }
   }
   /** Le scout interne comme AGENT VISIBLE : conversation dédiée, tour interruptible, coût compté. */
-  const genererCandidatsInternesVisibles = (): ReturnType<typeof genererCandidatsEnConversation> =>
+  const genererCandidatsInternesVisibles = (
+    conversationId?: string
+  ): ReturnType<typeof genererCandidatsEnConversation> =>
     genererCandidatsEnConversation({
       runtime: scheduledChatRuntime,
       binding: bindingScoutVeille(),
       racineDepot: os.executionWorkspace,
-      racineDonnees: ensureAutowinAppData(appDataRoot)
+      racineDonnees: ensureAutowinAppData(appDataRoot),
+      ...(conversationId ? { conversationId } : {})
     })
   registerVeilleIpc({
     ipc: ipcMain,

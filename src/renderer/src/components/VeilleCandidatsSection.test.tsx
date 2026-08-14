@@ -236,7 +236,8 @@ describe('« En générer plus » — le scout interne depuis la vue', () => {
       stock({ candidats: [candidat(), candidat({ id: 'interne|src/x.ts:1|vue cout', concurrent: 'Autowin OS', titre: 'Vue coût par rôle', url: 'src/x.ts:1' })] })
     ]
     const charger = vi.fn(async () => charges.shift() ?? stock())
-    await rendre({ charger, generer })
+    const ouvrirConversationScout = vi.fn(async () => 'conv-scout-42')
+    await rendre({ charger, generer, ouvrirConversationScout })
 
     const bouton = trouver('veille-generer') as HTMLButtonElement
     expect(bouton).not.toBeNull()
@@ -251,6 +252,10 @@ describe('« En générer plus » — le scout interne depuis la vue', () => {
       resoudre({ retenus: 1 })
     })
     expect(generer).toHaveBeenCalledTimes(1)
+    // La conversation du scout est créée et OUVERTE par la vue AVANT le lancement, et son
+    // identifiant est transmis au main : le tour tourne là où l'utilisateur regarde.
+    expect(ouvrirConversationScout).toHaveBeenCalledTimes(1)
+    expect(generer).toHaveBeenCalledWith('conv-scout-42')
     // Le stock a été RELU après la passe : le nouveau candidat interne est affiché.
     expect(charger).toHaveBeenCalledTimes(2)
     expect(texte()).toContain('Vue coût par rôle')
@@ -261,7 +266,11 @@ describe('« En générer plus » — le scout interne depuis la vue', () => {
     const generer = vi.fn(async () => {
       throw new Error('génération interne non câblée sur ce poste')
     })
-    await rendre({ charger: async () => stock(), generer })
+    await rendre({
+      charger: async () => stock(),
+      generer,
+      ouvrirConversationScout: async () => 'conv-scout-43'
+    })
     await act(async () => {
       ;(trouver('veille-generer') as HTMLButtonElement).click()
     })

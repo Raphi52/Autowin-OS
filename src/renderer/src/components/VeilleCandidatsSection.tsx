@@ -29,13 +29,46 @@ export interface VeilleCandidatsSectionProps {
    * « En générer plus » : déclenche la passe INTERNE côté main (scout local sur les traces d'usage
    * et le code d'Autowin) puis relit le stock. Injectable pour les tests.
    */
-  generer?: () => Promise<unknown>
+  generer?: (conversationId?: string) => Promise<unknown>
+  /** Injectable pour les tests : la préparation réelle crée ET OUVRE la conversation du scout. */
+  ouvrirConversationScout?: () => Promise<string | undefined>
 }
 
 const LIBELLE_STATUT: Record<CandidatVeille['statut'], string> = {
   nouveau: 'nouveau',
   prompte: 'prompté',
   ecarte: 'écarté'
+}
+
+/**
+ * Prépare la conversation VISIBLE du scout interne : créée par la vue puis OUVERTE immédiatement
+ * (navigation chat + activation), AVANT de lancer la génération. « Le bouton m'a encore pas lancé de
+ * conversation dans laquelle je peux voir tout ce qui se passe » (14/08) : la version précédente la
+ * créait côté main, en arrière-plan — présente dans la liste, mais humainement invisible.
+ */
+async function ouvrirConversationScoutParDefaut(): Promise<string | undefined> {
+  const roleMap = await window.api.roles()
+  const provider =
+    roleMap.subagent?.provider ??
+    roleMap.orchestrator?.provider ??
+    Object.values(roleMap)[0]?.provider
+  if (!provider) return undefined
+  const conversation = await window.api.conversationsCreate({
+    title: `[veille] scout interne ${new Date().toLocaleString('fr-FR')}`.slice(0, 80),
+    category: provider,
+    provider
+  })
+  try {
+    await window.api.appCommand?.('navigate', { tab: 'chat' })
+  } catch {
+    // Navigation refusée : le scout tournera quand même dans la conversation créée.
+  }
+  window.dispatchEvent(
+    new CustomEvent('autowin:prefill-conversation', {
+      detail: { conversationId: conversation.id, prompt: '', send: false }
+    })
+  )
+  return conversation.id
 }
 
 /** L'envoi réel : création de conversation puis pré-remplissage, exactement comme pour un ticket. */
@@ -130,7 +163,8 @@ export function VeilleCandidatsSection({
   charger,
   marquer,
   prompter,
-  generer
+  generer,
+  ouvrirConversationScout
 }: VeilleCandidatsSectionProps): React.JSX.Element {
   const [stock, setStock] = useState<StockVeille>()
   const [erreur, setErreur] = useState<string>()
@@ -158,17 +192,21 @@ export function VeilleCandidatsSection({
   const genererPlus = useCallback(async (): Promise<void> => {
     // La vue ne fabrique aucun candidat : elle déclenche la passe interne côté main, dont le
     // contrôle de citation reste l'unique chemin d'écriture — puis elle RELIT le stock.
-    const lanceur = generer ?? ((): Promise<unknown> => window.api.veilleGenerer())
+    const lanceur =
+      generer ??
+      ((conversationId?: string): Promise<unknown> => window.api.veilleGenerer(conversationId))
     setGeneration(true)
     try {
-      await lanceur()
+      // La conversation est créée et OUVERTE d'abord : l'utilisateur regarde le scout travailler.
+      const conversationId = await (ouvrirConversationScout ?? ouvrirConversationScoutParDefaut)()
+      await lanceur(conversationId)
       await lire()
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setGeneration(false)
     }
-  }, [generer, lire])
+  }, [generer, ouvrirConversationScout, lire])
 
   const changerStatut = async (
     candidat: CandidatVeille,

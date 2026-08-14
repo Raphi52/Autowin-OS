@@ -33,7 +33,7 @@ export interface RegisterVeilleIpcOptions {
    * (`trierCandidats`) reste le seul chemin d'écriture. Absent = le canal répond par une erreur
    * nommée plutôt que d'exister en silence.
    */
-  genererInterne?: () => Promise<unknown>
+  genererInterne?: (conversationId?: string) => Promise<unknown>
 }
 
 export function registerVeilleIpc(options: RegisterVeilleIpcOptions): void {
@@ -41,13 +41,15 @@ export function registerVeilleIpc(options: RegisterVeilleIpcOptions): void {
 
   /** Une seule génération à la fois : un double-clic ne paie pas deux scouts. */
   let generationEnCours: Promise<unknown> | undefined
-  ipc.handle('veille:generer', (event) => {
+  ipc.handle('veille:generer', (event, ...args: unknown[]) => {
     assertTrusted(event, 'Veille concurrents')
     if (!options.genererInterne) {
       throw new Error('génération interne non câblée sur ce poste')
     }
+    // La vue crée et OUVRE la conversation avant de lancer : l'utilisateur voit le tour en direct.
+    const conversationId = typeof args[0] === 'string' && args[0] ? args[0] : undefined
     if (!generationEnCours) {
-      generationEnCours = options.genererInterne().finally(() => {
+      generationEnCours = options.genererInterne(conversationId).finally(() => {
         generationEnCours = undefined
       })
     }
