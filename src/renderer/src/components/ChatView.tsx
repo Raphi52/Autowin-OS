@@ -1022,9 +1022,17 @@ export function ChatView({
         const target = convsRef.current.find((conversation) => conversation.id === id)
         if (target) void loadConv(target)
         else {
+          // Conversation créée À L'INSTANT (scout de veille) : la liste du renderer ne la porte pas
+          // encore. La rafraîchir PUIS charger, sinon le panneau restait sur l'état vide « Parle à
+          // l'agent » pendant que le tour tournait dans le store (mesuré le 14/08, conv-1164).
           activeRef.current = id
           setActiveId(id)
           setMessages([])
+          void (async () => {
+            await refreshConvs()
+            const fraiche = convsRef.current.find((conversation) => conversation.id === id)
+            if (fraiche && activeRef.current === id) await loadConv(fraiche)
+          })()
         }
       }
       if (!detail.prompt) return
