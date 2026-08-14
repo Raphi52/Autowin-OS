@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TraceEventV1 } from './trace-event'
 import { resolveOtelGenAiConfig } from './otel-genai-config'
-import { MetadataOnlyOtlpExporter, mapTraceEventsToOtlp } from './otel-genai-exporter'
+import {
+  MetadataOnlyOtlpExporter,
+  type OtlpExportTraceServiceRequest,
+  type OtlpTransport
+} from './otel-genai-exporter'
 
 function event(overrides: Partial<TraceEventV1> = {}): TraceEventV1 {
   return {
@@ -25,6 +29,35 @@ function event(overrides: Partial<TraceEventV1> = {}): TraceEventV1 {
   }
 }
 
+async function exportPayload(
+  events: readonly TraceEventV1[],
+  serviceVersion = 'unknown'
+): Promise<OtlpExportTraceServiceRequest> {
+  let payload: OtlpExportTraceServiceRequest | undefined
+  const transport: OtlpTransport = async (_endpoint, next) => {
+    payload = next
+  }
+  const exporter = new MetadataOnlyOtlpExporter(
+    {
+      enabled: true,
+      endpoint: 'http://127.0.0.1:4318/v1/traces',
+      maxQueue: 100,
+      maxQueueBytes: 100_000,
+      batchSize: 100,
+      flushIntervalMs: 60_000,
+      timeoutMs: 100,
+      shutdownTimeoutMs: 100
+    },
+    transport,
+    serviceVersion
+  )
+  for (const item of events) exporter.enqueue(item)
+  await exporter.flush()
+  exporter.close()
+  if (!payload) throw new Error('Payload OTLP non émis')
+  return payload
+}
+
 describe('OTLP GenAI metadata-only', () => {
   it('is disabled by default and rejects an invalid endpoint without throwing', () => {
     expect(resolveOtelGenAiConfig({})).toEqual({ enabled: false, reason: 'disabled' })
@@ -33,7 +66,7 @@ describe('OTLP GenAI metadata-only', () => {
     ).toEqual({ enabled: false, reason: 'invalid-endpoint' })
   })
 
-  it('maps a causal tree to OTLP spans without any content or raw private ids', () => {
+  it('maps a causal tree to OTLP spans without any content or raw private ids', async () => {
     const parent = event({
       id: 'parent-private',
       sequence: 0,
@@ -41,7 +74,7 @@ describe('OTLP GenAI metadata-only', () => {
       parentId: undefined
     })
     const child = event({ parentId: parent.id })
-    const payload = mapTraceEventsToOtlp([parent, child], '1.2.3')
+    const payload = await exportPayload([parent, child], '1.2.3')
     const encoded = JSON.stringify(payload)
     const spans = payload.resourceSpans[0].scopeSpans[0].spans
 
@@ -59,8 +92,8 @@ describe('OTLP GenAI metadata-only', () => {
     expect(spans[1].kind).toBe(3)
   })
 
-  it('exports tool semantic attributes with CLIENT span kind', () => {
-    const payload = mapTraceEventsToOtlp([
+  it('exports tool semantic attributes with CLIENT span kind', async () => {
+    const payload = await exportPayload([
       event({
         type: 'tool-call',
         payloads: [{ kind: 'tool-call', name: 'shell_command', content: '{}' }]

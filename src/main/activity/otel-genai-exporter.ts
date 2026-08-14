@@ -117,20 +117,6 @@ function spanFor(event: TraceEventV1): OtlpSpan {
   }
 }
 
-/**
- * Strict allow-list mapper. Trace payloads, participant labels, raw conversation/turn/run ids and
- * Brain queries are deliberately unreachable from the returned OTLP shape.
- */
-export function mapTraceEventsToOtlp(
-  events: readonly TraceEventV1[],
-  serviceVersion = 'unknown'
-): OtlpExportTraceServiceRequest {
-  const spans = [...events]
-    .sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id))
-    .map(spanFor)
-  return requestForSpans(spans, serviceVersion)
-}
-
 function requestForSpans(
   spans: readonly OtlpSpan[],
   serviceVersion: string
