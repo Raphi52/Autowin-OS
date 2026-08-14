@@ -45,14 +45,6 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { claudeAccountEnv } from '../claude-accounts'
 
-/** Usage brut du `result` event du CLI Claude, dans la sémantique ANTHROPIC (voir ci-dessous). */
-export interface ClaudeRawUsage {
-  input_tokens?: number
-  output_tokens?: number
-  cache_read_input_tokens?: number
-  cache_creation_input_tokens?: number
-}
-
 /**
  * Ramène l'usage Claude à l'invariant de `Usage` : `inputTokens` = input TOTAL, cache INCLUS.
  *

@@ -1,12 +1,9 @@
-export const MODEL_QUESTION_REASONS = [
-  'destructive',
-  'irreversible',
-  'secret-or-personal-data',
-  'external-effect',
-  'material-ambiguity'
-] as const
-
-export type ModelQuestionReason = (typeof MODEL_QUESTION_REASONS)[number]
+export type ModelQuestionReason =
+  | 'destructive'
+  | 'irreversible'
+  | 'secret-or-personal-data'
+  | 'external-effect'
+  | 'material-ambiguity'
 
 export interface ModelQuestion {
   text: string
