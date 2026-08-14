@@ -58,20 +58,6 @@ export function survivableExitCodeFromLine(line: string): number | undefined {
   }
 }
 
-export function isSurvivableExitLine(line: string): boolean {
-  try {
-    const value: unknown = JSON.parse(line)
-    return Boolean(
-      value &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      (value as Record<string, unknown>).type === SURVIVABLE_EXIT_EVENT_TYPE
-    )
-  } catch {
-    return false
-  }
-}
-
 /**
  * Journal de SORTIE BRUTE d'un CLI (survie niveau 2, incr. 3) : au lieu de streamer dans un pipe
  * mémoire — perdu dès que l'app meurt — le process écrit sa stdout dans un FICHIER, et l'app SUIT
