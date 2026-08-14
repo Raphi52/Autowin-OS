@@ -15,7 +15,8 @@ describe('scout interne — candidats d’ajout nés de l’app', () => {
     expect(prompt).toContain('C:/depot')
     expect(prompt).toContain('src/...:ligne')
     expect(prompt).toContain('RECOPIÉE MOT POUR MOT')
-    expect(prompt).toContain('réponds exactement : []')
+    expect(prompt).toContain('MÉTHODE OBLIGATOIRE')
+    expect(prompt).toContain('un [] sans lecture citée est un refus de travail')
   })
 
   it('estampille Autowin OS et force le type ajout — jamais laissé à l’agent', async () => {

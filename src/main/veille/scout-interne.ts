@@ -32,7 +32,12 @@ export function construirePromptScoutInterne(params: ParametresScoutInterne): st
     'visibles dans les runs (reprises, échecs récurrents d’une même famille), données loggées mais',
     'jamais exploitées par une vue, workflows que les utilisateurs recomposent à chaque fois.',
     '',
-    'Rends un tableau JSON strict, sans aucun commentaire autour :',
+    'MÉTHODE OBLIGATOIRE — explore AVANT de répondre :',
+    '1. Ouvre RÉELLEMENT plusieurs artefacts avec tes outils de lecture (au moins 5 fichiers : traces',
+    '   d’usage ET code). Une réponse sans lecture préalable ne vaut rien et sera rejetée.',
+    '2. Écris ensuite une courte synthèse humaine (3-6 lignes) : ce que tu as lu (chemins), ce que',
+    '   l’usage montre, ce que tu retiens. C’est elle que l’utilisateur lira dans la conversation.',
+    '3. Termine par le tableau JSON strict, en dernière position du message :',
     '[{"type":"ajout","titre":"...","url":"src/main/fichier.ts:123","dateSource":"...","citation":"...","langue":"fr","pertinence":0}]',
     '',
     'Règles :',
@@ -47,7 +52,8 @@ export function construirePromptScoutInterne(params: ParametresScoutInterne): st
     '- `pertinence` : entier 0-100 — la valeur de la capacité pour Autowin OS, prouvée par l’usage',
     '  observé. En cas de doute, sous-note.',
     '- 3 à 8 candidats maximum : garde les plus forts, pas un inventaire.',
-    '- Rien de solide à proposer → réponds exactement : []'
+    '- Rien de solide à proposer → tableau vide [], mais SEULEMENT après avoir lu et listé dans ta',
+    '  synthèse les fichiers explorés : un [] sans lecture citée est un refus de travail, pas un résultat.'
   ].join('\n')
 }
 

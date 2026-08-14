@@ -92,4 +92,15 @@ describe('scout interne en conversation visible', () => {
       })
     ).rejects.toThrow(/illisible/)
   })
+
+  it('un « [] » nu, sans synthèse d’exploration, est un ÉCHEC nommé — pas « 0 candidat »', async () => {
+    // Mesuré sur conv-1154 : 717 tokens, 2,7 s, zéro outil — l'agent a rendu [] sans rien lire.
+    await expect(
+      genererCandidatsEnConversation({
+        ...params,
+        runtime: runtime({ ok: true, text: '[]' }),
+        chemin: 'C:/nulle-part/stock.json'
+      })
+    ).rejects.toThrow(/vide sans exploration/)
+  })
 })
