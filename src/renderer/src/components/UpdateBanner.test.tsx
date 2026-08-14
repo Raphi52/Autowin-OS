@@ -413,4 +413,50 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
       container.querySelector('[data-testid="update-apply"]')!.getAttribute('title')
     ).toContain('reste en place')
   })
+
+  it('bloqué → « Faire réparer » ouvre une conversation et PRÉ-REMPLIT le prompt de fix', async () => {
+    const conversationsCreate = vi.fn().mockResolvedValue({ id: 'conv-fix' })
+    const events: CustomEvent[] = []
+    const listener = (e: Event): void => void events.push(e as CustomEvent)
+    window.addEventListener('autowin:prefill-conversation', listener)
+    try {
+      api({
+        applyUpdate: vi
+          .fn()
+          .mockResolvedValue({ ok: false, error: 'ton travail non committé bloque' }),
+        roles: vi.fn().mockResolvedValue({ orchestrator: { provider: 'claude' } }),
+        conversationsCreate,
+        appCommand: vi.fn().mockResolvedValue({ ok: true })
+      })
+      await render()
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+      )
+      const repair = container.querySelector<HTMLButtonElement>('[data-testid="update-repair"]')
+      expect(repair).not.toBeNull()
+      await act(async () => {
+        repair!.click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      // Conversation ouverte sur le provider des RÔLES, pas un défaut inventé.
+      expect(conversationsCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'claude', title: 'Réparer la mise à jour' })
+      )
+      // Prompt PRÉ-REMPLI (send:false) portant la raison du blocage.
+      expect(events).toHaveLength(1)
+      expect(events[0].detail).toMatchObject({ conversationId: 'conv-fix', send: false })
+      const prompt = (events[0].detail as { prompt: string }).prompt
+      expect(prompt).toContain('bloquée')
+      expect(prompt).toContain('ton travail non committé bloque')
+    } finally {
+      window.removeEventListener('autowin:prefill-conversation', listener)
+    }
+  })
+
+  it('aucun bouton « Faire réparer » sans blocage', async () => {
+    api()
+    await render()
+    expect(container.querySelector('[data-testid="update-repair"]')).toBeNull()
+  })
 })

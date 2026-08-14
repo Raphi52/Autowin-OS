@@ -32,6 +32,42 @@ function errorMessage(reason: unknown, fallback: string): string {
 }
 
 /**
+ * « Faire réparer » : le fix que l'utilisateur relance À LA MAIN à chaque update bloqué (committer /
+ * mettre de côté son travail, ou résoudre le conflit). On le pré-remplit dans une conversation dédiée
+ * — même chemin que « Prompter dans Autowin » du veille (`autowin:prefill-conversation`, send:false) —
+ * il n'a plus qu'à valider d'un Entrée. Provider résolu depuis les RÔLES, jamais un défaut inventé ;
+ * sans provider on n'ouvre RIEN (mieux que créer une conversation inutilisable).
+ */
+async function reparerBlocageUpdate(raison: string): Promise<void> {
+  const roleMap = await window.api.roles?.()
+  const provider =
+    roleMap?.orchestrator?.provider ??
+    roleMap?.subagent?.provider ??
+    (roleMap ? Object.values(roleMap)[0]?.provider : undefined)
+  if (!provider) return
+  const conversation = await window.api.conversationsCreate?.({
+    title: 'Réparer la mise à jour',
+    category: provider,
+    provider
+  })
+  if (!conversation?.id) return
+  try {
+    await window.api.appCommand?.('navigate', { tab: 'chat' })
+  } catch {
+    /* navigation refusée : le prompt reste préparé dans la conversation */
+  }
+  const prompt =
+    `La mise à jour d'Autowin est bloquée : « ${raison} ». Résous le blocage — committe ou mets de ` +
+    `côté mon travail non committé selon le cas, ou résous le conflit d'intégration — puis relance la ` +
+    `mise à jour.`
+  window.dispatchEvent(
+    new CustomEvent('autowin:prefill-conversation', {
+      detail: { conversationId: conversation.id, prompt, send: false }
+    })
+  )
+}
+
+/**
  * Bouton de mise à jour, au bas du rail.
  *
  * C'était une bannière pleine largeur en tête d'application : elle mangeait la moitié de l'écran
@@ -239,13 +275,25 @@ export function UpdateBanner({
         </div>
       )}
       {applyError && (
-        <span
-          className={`rail-update-error${collapsed ? ' is-visually-hidden' : ''}`}
-          data-testid="update-error"
-          role="status"
-        >
-          {applyError}
-        </span>
+        <>
+          <span
+            className={`rail-update-error${collapsed ? ' is-visually-hidden' : ''}`}
+            data-testid="update-error"
+            role="status"
+          >
+            {applyError}
+          </span>
+          {/* Le geste que l'utilisateur refaisait à chaque blocage : on l'automatise (pré-rempli). */}
+          <button
+            type="button"
+            className={`rail-update-repair${collapsed ? ' is-visually-hidden' : ''}`}
+            data-testid="update-repair"
+            onClick={() => void reparerBlocageUpdate(applyError)}
+            title="Ouvre une conversation et pré-remplit un prompt pour que l'agent résolve ce blocage, puis relance la mise à jour"
+          >
+            🔧 Faire réparer
+          </button>
+        </>
       )}
     </div>
   )

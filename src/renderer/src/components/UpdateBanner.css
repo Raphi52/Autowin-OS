@@ -101,6 +101,32 @@
   border: 0;
 }
 
+.rail-update-repair {
+  margin-top: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--accent, #d4a94f);
+  background: rgba(212, 169, 79, 0.08);
+  border: 1px solid rgba(212, 169, 79, 0.28);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.rail-update-repair:hover {
+  background: rgba(212, 169, 79, 0.16);
+}
+
+.rail-update-repair.is-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .rail.is-collapsed .rail-update {
   padding-inline: 0;
 }
