@@ -184,6 +184,9 @@ export interface WorktreeRunContext {
   /** Total réel, conservé même si la liste d'affichage est bornée. */
   excludedDirtyFileCount?: number
   excludedDirtyFilesTruncated?: boolean
+  /** Commits locaux non poussés exclus du snapshot quand la base a divergé d'origin. */
+  excludedLocalCommits?: string[]
+  excludedLocalCommitCount?: number
 }
 
 export interface WorktreeRecoveryContext extends Omit<WorktreeRunContext, 'workspacePath'> {
@@ -3345,12 +3348,15 @@ exit 0
   /**
    * Prépare le snapshot d'un NOUVEAU job : fetch distant sans toucher au workspace, puis choisit la
    * révision la plus fraîche tant que local et origin/main|master restent linéaires. Une divergence
-   * est refusée : elle exige une intégration contrôlée, jamais un choix silencieux.
+   * ne bloque plus le lancement (décision user 14/08 : Autowin auto-gère, il ne bloque pas) : le job
+   * part de la base de publication (origin) et les commits locaux non intégrés sont EXCLUS et
+   * NOMMÉS dans le contexte — même philosophie que les fichiers sales, visible jamais silencieux.
    */
   describeForLaunch(agentId: string): WorktreeRunContext {
     const local = this.describe(agentId)
     const remote = this.canonicalRemoteBase()
     let sourceSha = local.baseSha
+    let excludedLocalCommits: string[] | undefined
     if (remote) {
       const localBeforeRemote =
         this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', local.baseSha, remote.sha])
@@ -3359,9 +3365,14 @@ exit 0
         this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', remote.sha, local.baseSha])
           .code === 0
       if (!localBeforeRemote && !remoteBeforeLocal) {
-        throw new Error(
-          `Lancement bloqué : ${local.baseBranch} et ${remote.ref} ont divergé ; intègre-les avant de lancer un job.`
-        )
+        sourceSha = remote.sha
+        const listed = this.tryGitFn(this.baseRepo, [
+          'rev-list',
+          '--oneline',
+          `${remote.sha}..${local.baseSha}`
+        ])
+        excludedLocalCommits =
+          listed.code === 0 ? listed.stdout.split('\n').filter(Boolean) : undefined
       }
       if (localBeforeRemote) sourceSha = remote.sha
     }
@@ -3375,7 +3386,13 @@ exit 0
       ...(remote ? { canonicalBaseRef: remote.ref } : {}),
       excludedDirtyFiles: excludedDirtyFiles.slice(0, excludedDirtyFileLimit),
       excludedDirtyFileCount: excludedDirtyFiles.length,
-      excludedDirtyFilesTruncated: excludedDirtyFiles.length > excludedDirtyFileLimit
+      excludedDirtyFilesTruncated: excludedDirtyFiles.length > excludedDirtyFileLimit,
+      ...(excludedLocalCommits
+        ? {
+            excludedLocalCommits: excludedLocalCommits.slice(0, 20),
+            excludedLocalCommitCount: excludedLocalCommits.length
+          }
+        : {})
     }
   }
 

@@ -60,6 +60,13 @@ export function verifyOutcomeSummary(action: ActionLike): OutcomeSummary | undef
  */
 export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | undefined {
   if (action.name !== 'orchestrate') return undefined
+  // Certains refus arrivent en CHAÎNE brute, pas en objet (mesuré conv-1178, 14/08 : data =
+  // « Lancement bloqué : main et origin/main ont divergé » et la barre restait opaque).
+  if (typeof action.data === 'string' && action.data.trim() && action.ok === false) {
+    const raison = action.data.trim()
+    const short = raison.length > 120 ? raison.slice(0, 117) + '…' : raison
+    return { label: `échec : ${short}`, state: 'failed' }
+  }
   const data = asRecord(action.data)
   if (!data) return undefined
   const cost = formatExecutionCostCoverage(data)

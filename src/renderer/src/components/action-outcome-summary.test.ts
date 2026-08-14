@@ -88,6 +88,16 @@ describe('groupOutcomeSummary — l’ÉCHEC passe devant', () => {
 })
 
 describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () => {
+  it('un refus livré en CHAÎNE brute porte quand même sa raison (conv-1178, 14/08)', () => {
+    const summary = orchestrateOutcomeSummary({
+      name: 'orchestrate',
+      ok: false,
+      data: 'Lancement bloqué : main et origin/main ont divergé ; intègre-les avant de lancer un job.'
+    })
+    expect(summary?.state).toBe('failed')
+    expect(summary?.label).toContain('ont divergé')
+  })
+
   it('succes : statut et cout', () => {
     expect(
       orchestrateOutcomeSummary({

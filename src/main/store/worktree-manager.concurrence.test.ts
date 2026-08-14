@@ -80,6 +80,44 @@ describe('WorktreeManager — concurrence (20/81 de la suite d’origine)', () =
     expect(readFileSync(join(repo, 'agent.txt'), 'utf8')).toContain('agent')
   })
 
+  it('une divergence local/origin ne bloque plus : le job part d’origin, commits locaux nommés', () => {
+    // Décision user 14/08 : « ça devrait auto-gérer les workspaces, pas bloquer » — mesuré sur
+    // conv-1178 : « Lancement bloqué : main et origin/main ont divergé » tuait toute orchestration.
+    const root = mkdtempSync(join(tmpdir(), 'autowin-wmremote-'))
+    roots.push(root)
+    const remote = join(root, 'origin.git')
+    const repo = join(root, 'work')
+    const peer = join(root, 'peer')
+    git(root, 'init', '--bare', '-q', remote)
+    git(root, 'clone', '-q', remote, repo)
+    git(repo, 'switch', '-c', 'main')
+    git(repo, 'config', 'user.email', 't@t')
+    git(repo, 'config', 'user.name', 'T')
+    git(repo, 'config', 'commit.gpgsign', 'false')
+    writeFileSync(join(repo, 'base.txt'), 'base\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'base')
+    git(repo, 'push', '-q', '-u', 'origin', 'main')
+    git(root, '--git-dir', remote, 'symbolic-ref', 'HEAD', 'refs/heads/main')
+    git(root, 'clone', '-q', remote, peer)
+    git(peer, 'config', 'user.email', 't@t')
+    git(peer, 'config', 'user.name', 'T')
+    writeFileSync(join(peer, 'remote.txt'), 'remote\n')
+    git(peer, 'add', '-A')
+    git(peer, 'commit', '-q', '-m', 'remote advances')
+    git(peer, 'push', '-q', 'origin', 'main')
+    // Divergence : un commit LOCAL non poussé pendant qu'origin avance.
+    writeFileSync(join(repo, 'local.txt'), 'local\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'local diverge')
+
+    const wm = manager(repo)
+    const context = wm.describeForLaunch('diverged')
+    expect(context.sourceSha).toBe(git(repo, 'rev-parse', 'origin/main'))
+    expect(context.excludedLocalCommitCount).toBe(1)
+    expect(context.excludedLocalCommits?.[0]).toContain('local diverge')
+  })
+
   it('prouve le contexte Git durable avant une reprise automatique', () => {
     const repo = tempRepo()
     const wm = manager(repo)
