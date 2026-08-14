@@ -65,6 +65,14 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
   const cost = formatExecutionCostCoverage(data)
   const suffix = cost ? ` · ${cost}` : ''
   if (data.gateBlocked === true) return { label: `bloqué par le gate${suffix}`, state: 'failed' }
+  // Une orchestration qui a JETÉ porte sa raison dans `error` (failedOrchestrationOutcome). Sans ce
+  // branchement elle tombait sur le générique « livrable refusé » et la CAUSE — la seule chose qui dit
+  // à l'utilisateur QUOI/POURQUOI — disparaissait (« 1 action avec erreur » opaque, conv veille 2026-08-14).
+  const errorReason = typeof data.error === 'string' && data.error.trim() ? data.error.trim() : undefined
+  if (errorReason) {
+    const short = errorReason.length > 120 ? errorReason.slice(0, 117) + '…' : errorReason
+    return { label: `échec : ${short}${suffix}`, state: 'failed' }
+  }
   if (data.valid === false) return { label: `livrable refusé${suffix}`, state: 'failed' }
   if (data.reused === true) return { label: `run réutilisé${suffix}`, state: 'refused' }
   const status = typeof data.status === 'string' && data.status ? data.status : 'terminé'

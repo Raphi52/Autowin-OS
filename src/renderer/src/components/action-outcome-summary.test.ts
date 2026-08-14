@@ -114,6 +114,32 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
     ).toBe('failed')
   })
 
+  it('orchestration qui JETTE remonte SA raison, pas un generique « livrable refusé »', () => {
+    const summary = orchestrateOutcomeSummary({
+      name: 'orchestrate',
+      data: { status: 'failed', valid: false, error: 'ENOENT: worktree introuvable' }
+    })
+    // La cause reelle est visible dans le fil (fin de la frustration « erreur » opaque).
+    expect(summary).toEqual({ label: 'échec : ENOENT: worktree introuvable', state: 'failed' })
+  })
+
+  it('raison longue tronquee pour ne pas casser la ligne du fil', () => {
+    const long = 'x'.repeat(200)
+    const summary = orchestrateOutcomeSummary({
+      name: 'orchestrate',
+      data: { status: 'failed', valid: false, error: long }
+    })
+    expect(summary?.label.startsWith('échec : ')).toBe(true)
+    expect(summary?.label.endsWith('…')).toBe(true)
+    expect(summary!.label.length).toBeLessThan(140)
+  })
+
+  it('un valid:false SANS error reste « livrable refusé » (refus propre du juge, pas un echec dur)', () => {
+    expect(
+      orchestrateOutcomeSummary({ name: 'orchestrate', data: { status: 'succeeded', valid: false } })?.label
+    ).toBe('livrable refusé')
+  })
+
   it('run REUTILISE est signale (aucun nouveau travail lance)', () => {
     expect(orchestrateOutcomeSummary({ name: 'orchestrate', data: { reused: true } })?.state).toBe(
       'refused'
