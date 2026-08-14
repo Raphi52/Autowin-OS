@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extraireVotesJuges } from './juges-votes'
+import { extraireVotesJuges, lireContratEtendu } from './juges-votes'
 
 /** Le panneau des juges (14/08) : votes en barre, verdict complet en dépliant. */
 describe('extraireVotesJuges', () => {
@@ -48,5 +48,37 @@ describe('extraireVotesJuges', () => {
   it('sans detail vote:, le texte tranche (VALIDE en tête = valide)', () => {
     const votes = extraireVotesJuges([{ step: 'judge', model: 'm', text: 'VALIDE — ok.' }])
     expect(votes[0].vote).toBe('valide')
+  })
+})
+
+describe('lireContratEtendu — SCORE et OBJECTIONS du contrat étendu (14/08)', () => {
+  const verdict = [
+    'DEFAUT: la preuve Vitest manque.',
+    'SCORE: 62',
+    'OBJECTIONS:',
+    '- le « 59/59 tests réussis » n’est soutenu par aucune exécution observée',
+    '- la synthèse CLEAN omet l’impact du chantier n°3'
+  ].join('\n')
+
+  it('lit la conclusion, le score et les objections', () => {
+    const lu = lireContratEtendu(verdict)
+    expect(lu.conclusion).toBe('DEFAUT: la preuve Vitest manque.')
+    expect(lu.score).toBe(62)
+    expect(lu.objections).toHaveLength(2)
+    expect(lu.objections![0]).toContain('59/59')
+  })
+
+  it('tolère un verdict ancien sans contrat étendu', () => {
+    const lu = lireContratEtendu('VALIDE')
+    expect(lu.conclusion).toBe('VALIDE')
+    expect(lu.score).toBeUndefined()
+    expect(lu.objections).toBeUndefined()
+  })
+
+  it('les votes portent les champs étendus', () => {
+    const votes = extraireVotesJuges([
+      { step: 'judge', model: 'm', text: verdict, detail: 'vote: DEFAUT' }
+    ])
+    expect(votes[0]).toMatchObject({ score: 62, conclusion: 'DEFAUT: la preuve Vitest manque.' })
   })
 })

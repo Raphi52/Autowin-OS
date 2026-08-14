@@ -2123,7 +2123,12 @@ export class Orchestrator {
       `Le livrable est le TEXTE agrégé (sous-tâches parallèles), PAS un RUN.md sur disque.\n` +
       `TÂCHE: ${task}\nRÉPONSE (agrégat des sous-tâches) : ${clampAggregateForJudge(aggregate)}\n` +
       `PREUVES OUTILS: ${serializeEvidenceForJudge(evidence)}\n` +
-      `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+      `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
+Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
+SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
+OBJECTIONS:
+- <chaque objection concrète : l'écart constaté, la preuve manquante, où vérifier>
+Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
     const messages = [{ role: 'user' as const, content: judgePrompt }]
     const parts = [
       this.phasePrompt('judge', true),
@@ -3763,7 +3768,12 @@ export class Orchestrator {
           `n’affirme rien que ton inspection n’établit pas.\n` +
           `IMPORTANT (in-app Autowin OS) : n'exige jamais de RUN.md physique, d'empreinte SHA-256 ni de chemin kit.\n` +
           `TÂCHE: ${task}\n` +
-          `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+          `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
+Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
+SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
+OBJECTIONS:
+- <chaque objection concrète : l'écart constaté, la preuve manquante, où vérifier>
+Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
         : `Tu es un juge outillé en lecture seule. Inspecte réellement le workspace et confronte au moins une preuve d'outil ci-dessous. ` +
           `Une affirmation sans preuve d'exécution observable est un défaut.\n` +
           `IMPORTANT (in-app Autowin OS) : le livrable est le TEXTE agrégé ci-dessous, PAS un fichier ` +
@@ -3773,7 +3783,12 @@ export class Orchestrator {
           JUDGE_TOOLSET_CONTRACT +
           `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
           `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
-          `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+          `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
+Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
+SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
+OBJECTIONS:
+- <chaque objection concrète : l'écart constaté, la preuve manquante, où vérifier>
+Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       let judgeEnvelope
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.

@@ -74,6 +74,7 @@ export function JugesPanel({
             <span className="jpan-juge" onClick={() => deplier(index)}>
               {vote.libelle}
             </span>
+            {vote.score !== undefined && <span className="jpan-score">{vote.score}</span>}
             <span className={`jpan-vote is-${vote.vote}`}>{LIBELLE_VOTE[vote.vote]}</span>
             {vote.costUsd !== undefined && (
               <span className="jpan-cout">{vote.costUsd.toFixed(2)} $</span>
@@ -81,8 +82,33 @@ export function JugesPanel({
           </div>
           {deplies.has(index) && (
             <div className="jpan-verdict" data-testid="jpan-verdict">
-              <b>Verdict complet</b>
-              <p>{vote.texte}</p>
+              <div className="jpan-q">
+                <b>Conclusion</b>
+                <p>{vote.conclusion ?? vote.texte}</p>
+              </div>
+              {vote.score !== undefined && (
+                <div className="jpan-q">
+                  <b>Score</b>
+                  <p>{vote.score}/100</p>
+                </div>
+              )}
+              {vote.objections && (
+                <div className="jpan-q">
+                  <b>Objections</b>
+                  <ul>
+                    {vote.objections.map((objection, i) => (
+                      <li key={i}>{objection}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {/* Le texte intégral reste accessible quand le contrat étendu n'a rien structuré. */}
+              {!vote.objections && vote.conclusion && vote.texte !== vote.conclusion && (
+                <div className="jpan-q">
+                  <b>Verdict complet</b>
+                  <p>{vote.texte}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -91,12 +117,19 @@ export function JugesPanel({
   )
 }
 
-/** Le vrai chargeur : dernier run de la conversation → trace → votes des juges. */
+/**
+ * Le vrai chargeur : les runs de la conversation, du plus récent au plus ancien, et le PREMIER
+ * qui porte des votes de juges gagne. « Le dernier run » ne suffisait pas : une conversation
+ * porte souvent un run jugé ET un run annexe sans juge (mesuré sur conv-1122, deux runs).
+ */
 async function chargerVotesParDefaut(conversationId: string): Promise<VoteJuge[]> {
-  const runs = await window.api.conversationRuns?.(conversationId)
-  const dernier = runs?.[0]?.path
-  if (!dernier) return []
-  const steps = await window.api.runTrace?.(dernier)
-  if (!steps) return []
-  return extraireVotesJuges(steps as never)
+  const runs = (await window.api.conversationRuns?.(conversationId)) ?? []
+  for (const run of runs) {
+    if (!run?.path) continue
+    const steps = await window.api.runTrace?.(run.path).catch(() => null)
+    if (!steps) continue
+    const votes = extraireVotesJuges(steps as never)
+    if (votes.length > 0) return votes
+  }
+  return []
 }

@@ -63,6 +63,25 @@
 .jpan-vote.is-echec {
   color: #ffb454;
 }
+.jpan-score {
+  font: 700 13px Consolas, monospace;
+  color: #d4a94f;
+  min-width: 30px;
+  text-align: right;
+}
+.jpan-q + .jpan-q {
+  margin-top: 8px;
+}
+.jpan-q ul {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+.jpan-q li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #dde3ee;
+  max-width: 78ch;
+}
 .jpan-cout {
   font: 11.5px Consolas, monospace;
   color: #8f9cb3;

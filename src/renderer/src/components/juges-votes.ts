@@ -28,8 +28,40 @@ export interface VoteJuge {
   vote: 'valide' | 'defaut' | 'echec'
   /** Le verdict COMPLET du juge — le détail dépliable. */
   texte: string
+  /** La première ligne du verdict (VALIDE / DEFAUT: raison) — l'essentiel, montré en tête du détail. */
+  conclusion?: string
+  /** SCORE: 0-100 déclaré par le juge (contrat étendu du 14/08). */
+  score?: number
+  /** Les puces OBJECTIONS: du contrat étendu — l'écart, la preuve manquante, où vérifier. */
+  objections?: string[]
   costUsd?: number
   durationMs?: number
+}
+
+/** Lit les champs du contrat étendu (SCORE / OBJECTIONS) dans un verdict, tolérant à leur absence. */
+export function lireContratEtendu(texte: string): {
+  conclusion?: string
+  score?: number
+  objections?: string[]
+} {
+  const lignes = texte.split(/\r?\n/)
+  const conclusion = lignes[0]?.trim() || undefined
+  const scoreBrut = /(?:^|\n)\s*SCORE:\s*(\d{1,3})/i.exec(texte)?.[1]
+  const score = scoreBrut !== undefined ? Math.min(100, Number(scoreBrut)) : undefined
+  let objections: string[] | undefined
+  const bloc = /(?:^|\n)\s*OBJECTIONS:\s*\n([\s\S]*)/i.exec(texte)?.[1]
+  if (bloc) {
+    objections = bloc
+      .split(/\r?\n/)
+      .map((ligne) => /^\s*-\s*(.+)$/.exec(ligne)?.[1]?.trim())
+      .filter((item): item is string => Boolean(item))
+    if (objections.length === 0) objections = undefined
+  }
+  return {
+    ...(conclusion ? { conclusion } : {}),
+    ...(score !== undefined && Number.isFinite(score) ? { score } : {}),
+    ...(objections ? { objections } : {})
+  }
 }
 
 export function extraireVotesJuges(steps: readonly StepDeRun[]): VoteJuge[] {
@@ -59,6 +91,7 @@ export function extraireVotesJuges(steps: readonly StepDeRun[]): VoteJuge[] {
       libelle,
       vote,
       texte: texte || `(verdict non textuel — ${detail || 'sans détail'})`,
+      ...lireContratEtendu(texte),
       ...(step.costUsd !== undefined ? { costUsd: step.costUsd } : {}),
       ...(step.durationMs !== undefined ? { durationMs: step.durationMs } : {})
     })
