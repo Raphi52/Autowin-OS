@@ -125,6 +125,7 @@ import {
 } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
+import { pruneLegacyContextValues } from './runs/context-value-gc'
 import {
   deleteConvRun,
   listConvRuns,
@@ -1445,6 +1446,7 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'UnfinishedTurns')
     try {
       pruneFinishedTurnJournals(turnJournalRoot)
+      pruneLegacyContextValues()
     } catch {
       /* GC best-effort */
     }
