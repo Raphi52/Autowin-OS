@@ -44,7 +44,7 @@ export function construirePromptScoutInterne(params: ParametresScoutInterne): st
     '   ```json … ``` : c’est une charge utile pour la machine — hors bloc de code, il salit la',
     '   conversation que l’utilisateur lit. Une seule entrée par candidat, compacte :',
     '```json',
-    '[{"type":"ajout","titre":"...","url":"src/main/fichier.ts:123","dateSource":"...","citation":"...","langue":"fr","pertinence":0}]',
+    '[{"type":"ajout","titre":"...","url":"src/main/fichier.ts:123","dateSource":"...","citation":"...","langue":"fr","pertinence":0,"what":"...","why":"...","how":"..."}]',
     '```',
     '',
     'Règles :',
@@ -58,6 +58,9 @@ export function construirePromptScoutInterne(params: ParametresScoutInterne): st
     '- `dateSource` : la date de l’artefact lu si elle existe (horodatage de trace), sinon la date du jour.',
     '- `pertinence` : entier 0-100 — la valeur de la capacité pour Autowin OS, prouvée par l’usage',
     '  observé. En cas de doute, sous-note.',
+    '- `what` : ce que la capacité FAIT, en 1-2 phrases concrètes (pas le titre répété).',
+    '- `why` : pourquoi l’usage observé la réclame — cite le constat qui la justifie.',
+    '- `how` : le PREMIER PAS concret d’implémentation (fichier à toucher, geste à faire).',
     '- 3 à 8 candidats maximum : garde les plus forts, pas un inventaire.',
     '- Rien de solide à proposer → tableau vide [], mais SEULEMENT après avoir lu et listé dans ta',
     '  synthèse les fichiers explorés : un [] sans lecture citée est un refus de travail, pas un résultat.'

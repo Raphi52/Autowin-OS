@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import type { CandidatAffiche } from './veille-candidats-message'
-import { redigerPromptFrameSelection } from './veille-candidats-message'
+import { emojiType, redigerPromptFrameSelection } from './veille-candidats-message'
 import './CandidatsPickPanel.css'
 
 /**
@@ -74,6 +74,9 @@ export function CandidatsPickPanel({
             >
               {deplies.has(index) ? '▾' : '▸'}
             </button>
+            <span className="cpick-type" title={candidat.type ?? 'nature inconnue'}>
+              {emojiType(candidat.type)}
+            </span>
             <span className="cpick-titre" onClick={() => deplier(index)}>
               {candidat.titre}
             </span>
@@ -82,38 +85,22 @@ export function CandidatsPickPanel({
             )}
           </div>
           {deplies.has(index) && (
-            <dl className="cpick-details" data-testid="cpick-details">
-              <dt>Ancrage</dt>
-              <dd>
-                <code>{candidat.url}</code>
-              </dd>
-              {candidat.citation && (
-                <>
-                  <dt>Preuve lue</dt>
-                  <dd>
-                    <code>{candidat.citation}</code>
-                  </dd>
-                </>
-              )}
-              {candidat.type && (
-                <>
-                  <dt>Type</dt>
-                  <dd>{candidat.type}</dd>
-                </>
-              )}
-              {candidat.dateSource && (
-                <>
-                  <dt>Date source</dt>
-                  <dd>{candidat.dateSource}</dd>
-                </>
-              )}
-              {candidat.pertinence !== undefined && (
-                <>
-                  <dt>Pertinence</dt>
-                  <dd>{candidat.pertinence}/100</dd>
-                </>
-              )}
-            </dl>
+            <div className="cpick-details" data-testid="cpick-details">
+              {/* Trois blocs, un par QUESTION — c'est tout (demande du 14/08). Les anciens
+                  candidats sans what/why/how retombent sur ce que leur charge portait. */}
+              <div className="cpick-q">
+                <b>Quoi ?</b>
+                <p>{candidat.what ?? candidat.titre}</p>
+              </div>
+              <div className="cpick-q">
+                <b>Pourquoi ?</b>
+                <p>{candidat.why ?? (candidat.citation ? `Preuve lue : « ${candidat.citation} »` : '—')}</p>
+              </div>
+              <div className="cpick-q">
+                <b>Comment ?</b>
+                <p>{candidat.how ?? `Partir de l'ancrage ${candidat.url}.`}</p>
+              </div>
+            </div>
           )}
         </div>
       ))}

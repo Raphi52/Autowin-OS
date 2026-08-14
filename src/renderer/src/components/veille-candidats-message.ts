@@ -18,6 +18,9 @@ export interface CandidatAffiche {
   type?: string
   dateSource?: string
   langue?: string
+  what?: string
+  why?: string
+  how?: string
 }
 
 /**
@@ -57,7 +60,10 @@ export function extraireCandidatsAffiches(texte: string): CandidatAffiche[] | un
         : {}),
       ...(typeof objet.langue === 'string' && objet.langue.trim()
         ? { langue: objet.langue.trim() }
-        : {})
+        : {}),
+      ...(typeof objet.what === 'string' && objet.what.trim() ? { what: objet.what.trim() } : {}),
+      ...(typeof objet.why === 'string' && objet.why.trim() ? { why: objet.why.trim() } : {}),
+      ...(typeof objet.how === 'string' && objet.how.trim() ? { how: objet.how.trim() } : {})
     })
   }
   return candidats
@@ -99,4 +105,11 @@ export function texteSansChargeJson(texte: string): string {
   const apres = texte.slice(fin + 1).replace(/^\s*```/, '')
   return `${avant.trimEnd()}
 ${apres.trimStart()}`.trim()
+}
+
+/** L'emoji de nature, affiché dans la barre du candidat sans avoir à déplier. */
+export function emojiType(type: string | undefined): string {
+  if (type === 'correction') return '🔧'
+  if (type === 'ajout') return '🆕'
+  return '❔'
 }

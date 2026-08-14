@@ -57,31 +57,29 @@
   min-width: 30px;
   text-align: right;
 }
+.cpick-type {
+  font-size: 13px;
+}
 .cpick-details {
-  margin: 0 0 10px 44px;
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
-  font-size: 12.5px;
+  margin: 2px 0 12px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.cpick-details dt {
-  color: #a9b2c4;
+.cpick-q b {
+  display: block;
+  font: 600 10.5px 'Segoe UI', sans-serif;
+  color: #d4a94f;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  font-size: 10.5px;
-  align-self: baseline;
+  letter-spacing: 0.8px;
+  margin-bottom: 2px;
 }
-.cpick-details dd {
+.cpick-q p {
   margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
   color: #dde3ee;
-}
-.cpick-details code {
-  font: 11.5px Consolas, monospace;
-  color: #cdd9ec;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 5px;
-  padding: 1px 7px;
+  max-width: 78ch;
 }
 .cpick-lancer {
   margin-top: 12px;
