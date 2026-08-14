@@ -584,7 +584,14 @@ export class AgentPilot {
                 'ne modifie rien et ne cree aucun worktree. Utilise uniquement les lectures locales ' +
                 'strictement necessaires. Distingue les faits observes des deductions et respecte tout ' +
                 'format de sortie explicitement demande. Si le message dit « reponds exactement X », ' +
-                'ta sortie ENTIERE doit etre exactement X, sans note, explication ni mise en forme en plus.\n'
+                'ta sortie ENTIERE doit etre exactement X, sans note, explication ni mise en forme en plus. ' +
+                'EXPRESSION VISUELLE : hors format strict demande, des que ta reponse a une STRUCTURE ' +
+                '(comparaison, etapes, statuts, chiffres, recapitulatif), prefere un bloc ferme ' +
+                '```html-render en DIRECTION « transparence totale » (choix utilisateur du 14/08) : aucun ' +
+                'panneau ni fond opaque, typographie sur le fond sombre de l’app, filets fins degrades or ' +
+                '(rgba(212,169,79,.55) vers .06), accents or #d4a94f-#e3ba55 pour kickers mono et chiffres ' +
+                'cles, texte #dde3ee, chips monospace discretes, interlignes 1.7+, jamais de halos ; sans ' +
+                'JavaScript ni URL externe. Garde le texte simple pour une ou deux phrases.\n'
             },
             // Les commandes de LECTURE restent servies : une analyse est exactement le tour qui a
             // besoin de lire (mesure : scout de veille, conv-1154→1157, zero outil, zero candidat).

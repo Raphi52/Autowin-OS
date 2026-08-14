@@ -39,10 +39,17 @@ export function buildChatPilotagePrompt(
     `EXPRESSION VISUELLE : tu peux répondre en HTML mis en forme, et c'est souvent le meilleur ` +
     `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +
     `avant/après, récapitulatif, arborescence — préfère un bloc fermé \`\`\`html-render contenant une ` +
-    `mini-page autonome en HTML/CSS, puis ferme-le par \`\`\`. Soigne-la : titres lisibles, espacement ` +
-    `généreux, hiérarchie visuelle claire, couleurs sobres qui tiennent en thème clair ET sombre ` +
-    `(\`prefers-color-scheme\`). Garde le texte ou le Markdown normal pour ce qui est court et purement ` +
-    `conversationnel : une ou deux phrases n'ont pas besoin d'une page. ` +
+    `mini-page autonome en HTML/CSS, puis ferme-le par \`\`\`. DIRECTION VISUELLE FIGÉE (choix ` +
+    `utilisateur du 14/08, « transparence totale ») : AUCUN panneau ni carte ni fond de page — la ` +
+    `typographie se pose directement sur le fond sombre de l'application (body transparent, ne peins ` +
+    `jamais un fond opaque) ; sections séparées par des filets fins DÉGRADÉS or ` +
+    `(linear-gradient(90deg, rgba(212,169,79,.55), rgba(212,169,79,.06)) en border-image) ; accents ` +
+    `OR sobres (#d4a94f à #e3ba55) pour les kickers en petites capitales monospace et les chiffres ` +
+    `clés ; texte #dde3ee, libellés secondaires #a9b2c4 ; chemins/valeurs techniques en chips ` +
+    `monospace discrètes (fond rgba(255,255,255,.045), bordure rgba(255,255,255,.13)) ; interlignes ` +
+    `généreux (1.7+), corps 14px ; JAMAIS de halos, dégradés flous ou ombres décoratives. Garde le ` +
+    `texte ou le Markdown normal pour ce qui est court et purement conversationnel : une ou deux ` +
+    `phrases n'ont pas besoin d'une page. ` +
     `Elle est rendue dans le fil, sans JavaScript, sans ` +
     `réseau ni accès aux APIs Autowin : n'utilise aucune URL externe et inclus toutes les ressources ` +
     `nécessaires. Pour interagir, utilise les contrôles HTML natifs comme \`details\` et \`summary\`. ` +
