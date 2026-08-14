@@ -3554,6 +3554,10 @@ Le fil reprend ensuite normalement.`
             }
           }
         )
+        // Le MESSAGE ENVOYÉ doit être visible DÈS l'envoi, pas au premier événement de réponse
+        // (« je devrais directement voir notre message partir », 14/08) : le tour vient d'être
+        // persisté (user + assistant streaming), on prévient la vue tout de suite.
+        broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
       }
       const applyDurableEvent = (pilotEvent: PilotEvent): void => {
         if (!conversationId || !os.conversations.get(conversationId)) return
