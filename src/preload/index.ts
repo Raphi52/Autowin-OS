@@ -168,8 +168,6 @@ const api = {
     ipcRenderer.invoke('tickets:cancel', requestId),
   listTicketPeople: (source: unknown): Promise<string[]> =>
     ipcRenderer.invoke('tickets:people', source),
-  setTicketsFixture: (fixture: unknown): Promise<boolean> =>
-    ipcRenderer.invoke('app:test:tickets-fixture', fixture),
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
   getWorktreeActivity: (conversationId?: string): Promise<WorktreeAgentActivity[]> =>
     ipcRenderer.invoke('worktree:activity', conversationId),
@@ -277,8 +275,6 @@ const api = {
     ipcRenderer.invoke('app:test:fabric-fixture:send', execution),
   refreshFabricNode: (nodeId: string): Promise<FabricNodeSummary> =>
     ipcRenderer.invoke('os:fabric:refresh', nodeId),
-  pairFabricNode: (request: unknown): Promise<FabricNodeSummary> =>
-    ipcRenderer.invoke('os:fabric:pair', request),
   checkpointForks: (): Promise<Array<PersistedCheckpoint<OrchestrationRunState>>> =>
     ipcRenderer.invoke('os:checkpointForks:list'),
   createCheckpointFork: (

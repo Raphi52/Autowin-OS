@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_TICKET_SOURCE } from '../shared/tickets'
 import { registerTicketsIpc, type TicketsIpcRegistrar } from './tickets-ipc'
 
-function setup(isolated = false) {
+function setup() {
   // Mirrors Electron's variadic invoke boundary for the in-memory registrar.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handlers = new Map<string, (...args: any[]) => unknown>()
@@ -38,7 +38,7 @@ function setup(isolated = false) {
     }))
   }
   const assertTrusted = vi.fn()
-  registerTicketsIpc({ ipc, service, assertTrusted, isolated })
+  registerTicketsIpc({ ipc, service, assertTrusted })
   return { handlers, service, assertTrusted }
 }
 
@@ -179,52 +179,4 @@ describe('IPC Tickets', () => {
     expect(signals.every(({ aborted }) => aborted)).toBe(true)
   })
 
-  it('n’expose jamais la fixture hors instance isolée', async () => {
-    const { handlers } = setup(false)
-    expect(() => handlers.get('app:test:tickets-fixture')!({}, { items: [] })).toThrow(
-      /indisponible/i
-    )
-  })
-
-  it('installe une page déterministe uniquement en instance isolée', async () => {
-    const { handlers, service } = setup(true)
-    await handlers.get('app:test:tickets-fixture')!(
-      {},
-      {
-        provider: 'azure',
-        organization: 'AmitelGTC',
-        project: 'RIG',
-        repository: 'RigApplication',
-        items: [
-          {
-            id: '1',
-            type: 'Fiche Team',
-            title: 'Fixture',
-            state: 'En cours',
-            description: '',
-            createdAt: '2026-07-22T09:00:00.000Z',
-            updatedAt: '2026-07-23T09:00:00.000Z',
-            relations: []
-          }
-        ]
-      }
-    )
-
-    const page = await handlers.get('tickets:list')!(
-      {},
-      { source: DEFAULT_TICKET_SOURCE, requestId: 'fixture-request' }
-    )
-    expect(page).toMatchObject({
-      items: [
-        {
-          id: '1',
-          sourceId: DEFAULT_TICKET_SOURCE.id,
-          title: 'Fixture',
-          createdAt: '2026-07-22T00:00:00.000Z'
-        }
-      ],
-      hasMore: false
-    })
-    expect(service.list).not.toHaveBeenCalled()
-  })
 })

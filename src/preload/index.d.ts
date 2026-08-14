@@ -166,7 +166,6 @@ interface ChatApi {
   ) => Promise<import('../shared/tickets').TicketItem>
   cancelTickets: (requestId: string) => Promise<boolean>
   listTicketPeople: (source: unknown) => Promise<string[]>
-  setTicketsFixture: (fixture: unknown) => Promise<boolean>
   getWorktreeActivity: (conversationId?: string) => Promise<WorktreeAgentActivity[]>
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   getWorktreeConflictDiff: (agentId: string) => Promise<WorktreeConflictDiffResult>
@@ -231,7 +230,6 @@ interface ChatApi {
    */
   sendIsolatedFabricFixture: (execution?: boolean) => Promise<unknown>
   refreshFabricNode: (nodeId: string) => Promise<FabricNodeSummary>
-  pairFabricNode: (request: unknown) => Promise<FabricNodeSummary>
   checkpointForks: () => Promise<Array<PersistedCheckpoint<OrchestrationRunState>>>
   createCheckpointFork: (
     checkpointId: string,

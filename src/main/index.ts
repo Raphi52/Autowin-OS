@@ -2557,15 +2557,6 @@ Le fil reprend ensuite normalement.`
     broadcast({ type: 'refresh', scope: 'roles' })
     return summary
   })
-  ipcMain.handle('os:fabric:pair', async (event, request: unknown) => {
-    assertTrustedRendererSender(event, 'Compute Fabric')
-    const summary = await fabricControlPlane.pair(
-      request as Parameters<FabricControlPlane['pair']>[0]
-    )
-    applyFabricSummaries(fabricControlPlane.list())
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return summary
-  })
   ipcMain.handle('os:checkpointForks:list', (event) => {
     assertTrustedRendererSender(event, 'Checkpoint forks')
     return os.resumableOrchestrations().map((checkpoint) => ({
@@ -5325,8 +5316,7 @@ app.whenReady().then(async () => {
   registerTicketsIpc({
     ipc: ipcMain,
     service: tickets,
-    assertTrusted: assertTrustedRendererSender,
-    isolated: isolatedTestInstance
+    assertTrusted: assertTrustedRendererSender
   })
   jalonDemarrage('avant createWindow')
   createWindow()

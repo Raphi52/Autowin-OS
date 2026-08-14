@@ -1,5 +1,4 @@
 import {
-  DEFAULT_TICKET_SOURCE,
   type TicketItem,
   type TicketListRequest,
   type TicketPage,
@@ -47,104 +46,13 @@ interface RegisterTicketsIpcOptions {
   service: TicketsServicePort
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assertTrusted: (event: any, scope: string) => void
-  isolated: boolean
-}
-
-function requiredText(value: unknown, name: string): string {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 500) {
-    throw new Error(`Fixture Tickets ${name} invalide`)
-  }
-  return value
-}
-
-function proofFixture(value: unknown): { source: TicketSourceProfile; page: TicketPage } {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Fixture Tickets invalide')
-  }
-  const raw = value as Record<string, unknown>
-  if (
-    raw.provider !== 'azure' ||
-    raw.organization !== DEFAULT_TICKET_SOURCE.organization ||
-    raw.project !== DEFAULT_TICKET_SOURCE.project ||
-    raw.repository !== DEFAULT_TICKET_SOURCE.repository ||
-    !Array.isArray(raw.items) ||
-    raw.items.length === 0 ||
-    raw.items.length > 100
-  ) {
-    throw new Error('Fixture Tickets invalide')
-  }
-  const items = raw.items.map<TicketItem>((candidate) => {
-    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
-      throw new Error('Élément de fixture Tickets invalide')
-    }
-    const item = candidate as Record<string, unknown>
-    const id = requiredText(item.id, 'id')
-    const relations = Array.isArray(item.relations)
-      ? item.relations.map((relation) => {
-          if (!relation || typeof relation !== 'object' || Array.isArray(relation)) {
-            throw new Error('Relation de fixture Tickets invalide')
-          }
-          const rawRelation = relation as Record<string, unknown>
-          return {
-            kind: requiredText(rawRelation.kind, 'relation.kind'),
-            target: requiredText(rawRelation.target, 'relation.target'),
-            // Titre OPTIONNEL : une relation sans titre reste un id nu, jamais un titre inventé.
-            ...(typeof rawRelation.title === 'string' && rawRelation.title
-              ? { title: rawRelation.title.slice(0, 255) }
-              : {})
-          }
-        })
-      : []
-    const comments = Array.isArray(item.comments)
-      ? item.comments.slice(-20).map((comment) => {
-          if (!comment || typeof comment !== 'object' || Array.isArray(comment)) {
-            throw new Error('Commentaire de fixture Tickets invalide')
-          }
-          const rawComment = comment as Record<string, unknown>
-          return {
-            text: requiredText(rawComment.text, 'comment.text').slice(0, 2_000),
-            ...(typeof rawComment.author === 'string' && rawComment.author
-              ? { author: rawComment.author.slice(0, 320) }
-              : {}),
-            ...(typeof rawComment.createdAt === 'string' && rawComment.createdAt
-              ? { createdAt: rawComment.createdAt.slice(0, 40) }
-              : {})
-          }
-        })
-      : []
-    return {
-      id,
-      sourceId: DEFAULT_TICKET_SOURCE.id,
-      type: requiredText(item.type, 'type'),
-      title: requiredText(item.title, 'title'),
-      state: requiredText(item.state, 'state'),
-      url: `https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/${encodeURIComponent(id)}`,
-      createdAt: '2026-07-22T00:00:00.000Z',
-      updatedAt: '2026-07-23T00:00:00.000Z',
-      ...(typeof item.assignee === 'string' && item.assignee
-        ? { assignee: item.assignee.slice(0, 500) }
-        : {}),
-      ...(typeof item.description === 'string'
-        ? { description: item.description.slice(0, 10_000) }
-        : {}),
-      relations,
-      ...(comments.length ? { comments } : {}),
-      fields: { __autowinTicketsProofFixture: true }
-    }
-  })
-  return {
-    source: DEFAULT_TICKET_SOURCE,
-    page: { items, hasMore: false }
-  }
 }
 
 export function registerTicketsIpc({
   ipc,
   service,
-  assertTrusted,
-  isolated
+  assertTrusted
 }: RegisterTicketsIpcOptions): void {
-  let fixture: { source: TicketSourceProfile; page: TicketPage } | undefined
   const active = new Map<unknown, Map<string, AbortController>>()
   const requestId = (value: unknown): string => {
     if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(value)) {
@@ -164,7 +72,6 @@ export function registerTicketsIpc({
   ipc.handle('tickets:list', async (event, request: TicketListRequest) => {
     assertTrusted(event, 'Tickets')
     const id = requestId(request?.requestId)
-    if (fixture && request?.source?.id === fixture.source.id) return fixture.page
     let senderRequests = active.get(event.sender)
     if (!senderRequests) {
       senderRequests = new Map()
@@ -229,12 +136,6 @@ export function registerTicketsIpc({
     current.abort()
     senderRequests?.delete(id)
     if (senderRequests?.size === 0) active.delete(event.sender)
-    return true
-  })
-  ipc.handle('app:test:tickets-fixture', (event, value: unknown) => {
-    assertTrusted(event, 'Fixture Tickets')
-    if (!isolated) throw new Error('Fixture Tickets indisponible hors instance isolée')
-    fixture = proofFixture(value)
     return true
   })
 }
