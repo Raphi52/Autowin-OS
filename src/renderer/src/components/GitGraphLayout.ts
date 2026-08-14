@@ -1,6 +1,7 @@
 import {
   selectGitGraphMainRef,
   type GitGraphCommit,
+  type GitGraphElision,
   type GitGraphRef
 } from '../../../shared/git-graph'
 
@@ -16,6 +17,10 @@ export interface GitGraphLayoutEdge {
   from: GitGraphLayoutNode
   to: GitGraphLayoutNode
   lane: number
+  /** Arête qui ENJAMBE une histoire non chargée : à tracer autrement qu'une parenté réelle. */
+  elidee?: boolean
+  /** Nombre de commits omis par ce saut. Absent sur une arête réelle. */
+  omis?: number
 }
 
 export interface GitGraphLayout {
@@ -116,7 +121,8 @@ export function projectGitGraphAxes(
  */
 export function layoutGitGraph(
   commits: GitGraphCommit[],
-  axes?: GitGraphLayoutAxes
+  axes?: GitGraphLayoutAxes,
+  elisions?: readonly GitGraphElision[]
 ): GitGraphLayout {
   const lanes: Array<string | undefined> = []
   const laneByHash = new Map<string, number>()
@@ -185,12 +191,27 @@ export function layoutGitGraph(
   }
 
   const nodeByHash = new Map(nodes.map((node) => [node.commit.hash, node]))
-  const edges = nodes.flatMap((node) =>
+  const edges: GitGraphLayoutEdge[] = nodes.flatMap((node) =>
     node.commit.parents.flatMap((parent) => {
       const target = nodeByHash.get(parent)
       return target ? [{ from: node, to: target, lane: laneByHash.get(parent) ?? node.lane }] : []
     })
   )
+  /**
+   * Les SAUTS de la ligne principale, tracés explicitement.
+   *
+   * Sans eux, le trou laissé par un parent non chargé se lit comme une donnée cassée : la ligne
+   * principale n'est qu'une somme de segments parent→enfant, et aucune colonne n'est dessinée derrière.
+   * Ces arêtes sont MARQUÉES pour que le rendu les distingue d'une parenté réelle — les inventer sans
+   * les signaler serait le mensonge inverse, une histoire continue là où elle est absente.
+   */
+  for (const elision of elisions ?? []) {
+    const from = nodeByHash.get(elision.from)
+    const to = nodeByHash.get(elision.to)
+    if (!from || !to) continue
+    edges.push({ from, to, lane: from.lane, elidee: true, omis: elision.omis })
+  }
+
   const laneCount = Math.max(1, ...nodes.map((node) => node.lane + 1))
   return {
     nodes,

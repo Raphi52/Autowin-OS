@@ -189,6 +189,39 @@ describe('WorktreeView — l’état du DÉPÔT, pas d’une conversation', () =
     expect(container?.textContent).not.toContain('Ouvrir la topologie Git')
   })
 
+  it('ANNONCE l’histoire élidée au lieu de laisser un trou muet', async () => {
+    /*
+      La ligne principale n'est qu'une somme de segments parent→enfant : là où le parent n'est pas
+      chargé, aucune arête n'était émise et le trou se lisait comme une donnée cassée. Or l'omission
+      est délibérée — le graphe ajoute les commits porteurs d'une ref à n'importe quelle profondeur,
+      sans leurs ancêtres. Mesuré le 2026-08-14 sur ce dépôt : 23 sauts, dont un de 181 commits.
+
+      Ce test tient le CÂBLAGE de bout en bout : sans le passage des élisions au layout, la vue rend
+      à nouveau un trou muet. C'est le seul endroit où cette chaîne est vérifiée entière.
+    */
+    installApi({
+      getGitGraph: vi.fn(async () => ({
+        ...snapshot,
+        mainLineHashes: ['46285c3full', '5d5cc22full'],
+        mainLineElisions: [{ from: '46285c3full', to: '5d5cc22full', omis: 27 }]
+      }))
+    })
+    await renderView()
+
+    const libelle = container?.querySelector('[data-testid="git-topology-elision"]')
+    expect(libelle?.textContent).toBe('⋯ 27 commits non chargés')
+    expect(container?.querySelector('.wt-topologie-lien.is-elide')).not.toBeNull()
+  })
+
+  it('ne montre AUCUN libellé d’élision quand l’histoire est contiguë', async () => {
+    // Le haut du graphe est réellement continu (0 saut mesuré dans la fenêtre récente) : y afficher
+    // un « ⋯ » serait une fausse alerte, pire que le trou d'origine.
+    installApi()
+    await renderView()
+
+    expect(container?.querySelector('[data-testid="git-topology-elision"]')).toBeNull()
+  })
+
   it('le graphe rend un noeud par commit affiché', async () => {
     installApi()
     await renderView()

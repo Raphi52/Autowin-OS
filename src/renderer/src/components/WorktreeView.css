@@ -286,6 +286,22 @@
 .wt-topologie-lien.is-open {
   stroke: var(--cyan);
 }
+/*
+  Un saut qui ENJAMBE une histoire non chargée. Il garde la couleur de sa ligne — c'est bien la même
+  lignée — mais devient pointillé et plus fin : la continuité est affirmée, la parenté directe non.
+  L'ancienne absence de trait laissait lire une donnée cassée là où l'omission est délibérée.
+*/
+.wt-topologie-lien.is-elide {
+  stroke-dasharray: 3 7;
+  stroke-width: 2;
+  opacity: 0.55;
+}
+.wt-topologie-elide-libelle {
+  fill: var(--text-dim);
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.02em;
+}
 .wt-topologie-noeud circle {
   fill: var(--surface-inset);
   stroke-width: 1.5;

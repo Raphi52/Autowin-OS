@@ -38,11 +38,50 @@ export interface GitGraphSnapshot {
   refs?: GitGraphRef[]
   commits?: GitGraphCommit[]
   mainLineHashes?: string[]
+  mainLineElisions?: GitGraphElision[]
   mergedIntoMainHashes?: string[]
   openBranchHashes?: string[]
   worktrees?: GitGraphWorktree[]
   truncated?: boolean
   error?: string
+}
+
+/** Un saut de la ligne principale dont l'histoire intermédiaire n'est pas chargée. */
+export interface GitGraphElision {
+  from: string
+  to: string
+  omis: number
+}
+
+/**
+ * Les SAUTS de la ligne principale, avec le nombre de commits omis.
+ *
+ * Le graphe charge deux jeux : les N commits les plus récents, PUIS les commits porteurs d'une ref à
+ * n'importe quelle profondeur (`--simplify-by-decoration`), ajoutés SANS leurs ancêtres. Ces vieux
+ * points d'ancrage sont donc des îlots, et la ligne principale se pointille sous la fenêtre récente.
+ *
+ * MESURÉ le 2026-08-14 sur ce dépôt : 577 commits de première lignée, 125 affichés, 23 sauts — 0 à
+ * l'intérieur de la fenêtre des 240 récents, 23 impliquant un îlot décoré hors fenêtre, dont un saut
+ * de 181 commits. L'histoire n'est pas perdue, elle est ÉLIDÉE ; ce qui manquait était le signe.
+ *
+ * Fonction PURE et partagée : le calcul a besoin de la liste `--first-parent` COMPLÈTE, qui n'existe
+ * que côté main, mais il ne doit rien devoir à git pour être testable.
+ */
+export function computeGitGraphElisions(
+  firstParentLine: readonly string[],
+  displayedHashes: ReadonlySet<string>
+): GitGraphElision[] {
+  const elisions: GitGraphElision[] = []
+  let dernierAffiche: { hash: string; index: number } | undefined
+  firstParentLine.forEach((hash, index) => {
+    if (!displayedHashes.has(hash)) return
+    // Un écart de 1 est la parenté normale : l'arête réelle existe, rien à signaler.
+    if (dernierAffiche && index - dernierAffiche.index > 1) {
+      elisions.push({ from: dernierAffiche.hash, to: hash, omis: index - dernierAffiche.index - 1 })
+    }
+    dernierAffiche = { hash, index }
+  })
+  return elisions
 }
 
 export function selectGitGraphMainRef(refs: GitGraphRef[]): GitGraphRef | undefined {

@@ -5,7 +5,9 @@ import {
   parseGitGraphCommits,
   parseGitGraphRefs,
   parseGitWorktrees,
+  computeGitGraphElisions,
   selectGitGraphMainRef,
+  type GitGraphElision,
   type GitGraphSnapshot
 } from '../shared/git-graph'
 import { parseGitStatus } from '../shared/git-read'
@@ -113,18 +115,26 @@ export async function readGitGraph(cwd: string, historyLimit = 240): Promise<Git
             isHead: true
           }
         : undefined)
+    let elisionsLignePrincipale: GitGraphElision[] = []
     const [mainLineHashes, mergedIntoMainHashes, openBranchHashes] = mainRef
       ? await Promise.all([
           run('git', ['rev-list', '--first-parent', mainRef.hash], {
             cwd: repoPath,
             windowsHide: true,
             maxBuffer: MAX_BUFFER
-          }).then((result) =>
-            result.stdout
-              .trim()
-              .split(/\r?\n/)
-              .filter((hash) => displayedHashes.has(hash))
-          ),
+          }).then((result) => {
+            /**
+             * La liste COMPLÈTE est conservée le temps de mesurer les sauts, puis filtrée comme avant.
+             *
+             * Le filtrage détruit l'information dont le rendu a besoin : une fois réduite aux commits
+             * affichés, la ligne ne dit plus COMBIEN de commits séparent deux voisins. Mesuré sur ce
+             * dépôt le 2026-08-14 : 577 commits de première lignée, 125 affichés, 23 sauts dont un de
+             * 181 commits — invisibles après filtrage.
+             */
+            const ligneComplete = result.stdout.trim().split(/\r?\n/)
+            elisionsLignePrincipale = computeGitGraphElisions(ligneComplete, displayedHashes)
+            return ligneComplete.filter((hash) => displayedHashes.has(hash))
+          }),
           run('git', ['rev-list', mainRef.hash], {
             cwd: repoPath,
             windowsHide: true,
@@ -158,6 +168,7 @@ export async function readGitGraph(cwd: string, historyLimit = 240): Promise<Git
       refs,
       commits,
       mainLineHashes,
+      mainLineElisions: elisionsLignePrincipale,
       mergedIntoMainHashes,
       openBranchHashes,
       worktrees: parseGitWorktrees(worktreesResult.stdout),

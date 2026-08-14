@@ -190,13 +190,30 @@ function GitTopology({ layout }: { layout: GitGraphLayout }): React.JSX.Element 
               : edge.from.side === 'open' || edge.to.side === 'open'
                 ? 'open'
                 : 'closed'
+          const cle = `${edge.from.commit.hash}-${edge.to.commit.hash}${edge.elidee ? '-elide' : ''}`
           return (
-            <path
-              key={`${edge.from.commit.hash}-${edge.to.commit.hash}`}
-              className={`wt-topologie-lien is-${side}`}
-              d={`M ${edge.from.x} ${edge.from.y} L ${edge.to.x} ${edge.to.y}`}
-              fill="none"
-            />
+            <g key={cle}>
+              <path
+                className={`wt-topologie-lien is-${side}${edge.elidee ? ' is-elide' : ''}`}
+                d={`M ${edge.from.x} ${edge.from.y} L ${edge.to.x} ${edge.to.y}`}
+                fill="none"
+              />
+              {/*
+                Le nombre est le message. Un pointillé seul dit « ce n'est pas une parenté directe »
+                sans dire ce qui manque ; « ⋯ 181 commits » transforme un trou suspect en une omission
+                assumée. Mesuré le 2026-08-14 : 23 sauts sur ce dépôt, le plus large en omettant 181.
+              */}
+              {edge.elidee ? (
+                <text
+                  className="wt-topologie-elide-libelle"
+                  data-testid="git-topology-elision"
+                  x={edge.from.x + 10}
+                  y={(edge.from.y + edge.to.y) / 2 + 4}
+                >
+                  {`⋯ ${edge.omis} commit${(edge.omis ?? 0) > 1 ? 's' : ''} non chargés`}
+                </text>
+              ) : null}
+            </g>
           )
         })}
         {layout.nodes.map((node) => (
@@ -293,7 +310,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
       mergedIntoMainHashes: snapshot?.mergedIntoMainHashes,
       openBranchHashes: snapshot?.openBranchHashes
     })
-    return layoutGitGraph(commits, axes)
+    return layoutGitGraph(commits, axes, snapshot?.mainLineElisions)
   }, [snapshot])
 
   useEffect(() => {
