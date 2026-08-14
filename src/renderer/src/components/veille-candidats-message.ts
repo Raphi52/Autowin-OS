@@ -23,21 +23,46 @@ export interface CandidatAffiche {
   how?: string
 }
 
+interface ChargeJson {
+  valeur: unknown
+  debut: number
+  fin: number
+}
+
+function trouverDerniereChargeJson(texte: string): ChargeJson | undefined {
+  const ouvertureJson = /^ {0,3}```json[ \t]*\r?$/gim
+  let debut: number | undefined
+  let finOuverture: number | undefined
+  for (const correspondance of texte.matchAll(ouvertureJson)) {
+    debut = correspondance.index
+    finOuverture = correspondance.index + correspondance[0].length
+  }
+  if (debut === undefined || finOuverture === undefined) return undefined
+  const apresOuverture = texte.slice(finOuverture)
+  const fermeture = /^ {0,3}```[ \t]*\r?$/m.exec(apresOuverture)
+  if (!fermeture || fermeture.index === undefined) return undefined
+  const fin = finOuverture + fermeture.index + fermeture[0].length
+  const charge = apresOuverture.slice(0, fermeture.index).trim()
+  try {
+    return {
+      valeur: JSON.parse(charge),
+      debut,
+      fin
+    }
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * Extrait les candidats d'un texte de message. On ne détecte QUE la forme émise par les scouts :
  * un tableau JSON d'objets portant au moins `titre` et `url`. Un JSON cassé ou d'une autre forme
  * rend `undefined` — ce panneau est un bonus, jamais une raison d'échouer un rendu.
  */
 export function extraireCandidatsAffiches(texte: string): CandidatAffiche[] | undefined {
-  const debut = texte.indexOf('[')
-  const fin = texte.lastIndexOf(']')
-  if (debut < 0 || fin <= debut) return undefined
-  let valeur: unknown
-  try {
-    valeur = JSON.parse(texte.slice(debut, fin + 1))
-  } catch {
-    return undefined
-  }
+  const charge = trouverDerniereChargeJson(texte)
+  if (!charge) return undefined
+  const valeur = charge.valeur
   if (!Array.isArray(valeur) || valeur.length === 0) return undefined
   const candidats: CandidatAffiche[] = []
   for (const brut of valeur) {
@@ -78,7 +103,15 @@ export function redigerPromptFrameSelection(selection: readonly CandidatAffiche[
     const morceaux = [`${index + 1}. ${candidat.titre} — ancrage ${candidat.url}`]
     if (candidat.citation) morceaux.push(`preuve : « ${candidat.citation} »`)
     if (candidat.pertinence !== undefined) morceaux.push(`pertinence ${candidat.pertinence}/100`)
-    return morceaux.join(' — ')
+    const details = [
+      candidat.type ? `   Type : ${candidat.type}` : undefined,
+      candidat.what ? `   Quoi : ${candidat.what}` : undefined,
+      candidat.why ? `   Pourquoi : ${candidat.why}` : undefined,
+      candidat.how ? `   Comment : ${candidat.how}` : undefined,
+      candidat.dateSource ? `   Date source : ${candidat.dateSource}` : undefined,
+      candidat.langue ? `   Langue : ${candidat.langue}` : undefined
+    ].filter((detail): detail is string => detail !== undefined)
+    return [morceaux.join(' — '), ...details].join('\n')
   })
   return [
     selection.length > 1
@@ -98,11 +131,10 @@ export function redigerPromptFrameSelection(selection: readonly CandidatAffiche[
  * sélection affiché, le pavé brut ferait doublon — c'est une charge machine, pas une lecture.
  */
 export function texteSansChargeJson(texte: string): string {
-  const debut = texte.indexOf('[')
-  const fin = texte.lastIndexOf(']')
-  if (debut < 0 || fin <= debut) return texte
-  const avant = texte.slice(0, debut).replace(/```(?:json)?\s*$/i, '')
-  const apres = texte.slice(fin + 1).replace(/^\s*```/, '')
+  const charge = trouverDerniereChargeJson(texte)
+  if (!charge) return texte
+  const avant = texte.slice(0, charge.debut)
+  const apres = texte.slice(charge.fin)
   return `${avant.trimEnd()}
 ${apres.trimStart()}`.trim()
 }

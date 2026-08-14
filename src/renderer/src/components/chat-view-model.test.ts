@@ -1390,6 +1390,30 @@ describe('groupAssistantActivity', () => {
       { kind: 'text', text: 'Après.' }
     ])
   })
+
+  it('remplace la charge JSON du scout par un panneau et conserve sa synthèse Markdown', () => {
+    const texte = [
+      'Fichiers lus : [index.ts](src/main/index.ts).',
+      '```json',
+      '[{"type":"ajout","titre":"Cockpit","url":"src/main/index.ts:1","pertinence":92}]',
+      '```'
+    ].join('\n')
+
+    expect(groupAssistantActivity([{ kind: 'text', text: texte }])).toEqual([
+      { kind: 'text', text: 'Fichiers lus : [index.ts](src/main/index.ts).' },
+      {
+        kind: 'candidats-pick',
+        candidats: [
+          {
+            type: 'ajout',
+            titre: 'Cockpit',
+            url: 'src/main/index.ts:1',
+            pertinence: 92
+          }
+        ]
+      }
+    ])
+  })
 })
 
 describe('chat scrolling and layout rules', () => {
