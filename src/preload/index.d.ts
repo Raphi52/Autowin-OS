@@ -1,4 +1,3 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
   WorktreeAgentActivity,
@@ -473,7 +472,6 @@ interface ChatApi {
 
 declare global {
   interface Window {
-    electron: ElectronAPI
     api: ChatApi
   }
 }

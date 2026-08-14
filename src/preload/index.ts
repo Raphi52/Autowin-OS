@@ -1,6 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { GitGraphSnapshot } from '../shared/git-graph'
-import { electronAPI } from '@electron-toolkit/preload'
 import type {
   ChatAttachment,
   AgentTopology,
@@ -635,7 +634,6 @@ const api = {
 // just add to the DOM global.
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
     console.error(error)
