@@ -1,4 +1,5 @@
 import { applyEdit, decideEdit, editDiff } from './edit-file-command'
+import { decideRead, enumererFichiersLisibles, executeRead, rechercherDansFichiers } from './read-file-command'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -510,6 +511,37 @@ const CATALOG: CommandSpec[] = [
     },
     annotations: {
       readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'read_file',
+    description:
+      'Lire un fichier du workspace (lignes numérotées, plage from/lines, max 400 lignes par appel) — traces .autowin-data comprises, secrets exclus',
+    args: {
+      path: 'chemin du fichier, relatif au workspace',
+      from: 'première ligne à lire (défaut 1)',
+      lines: 'nombre de lignes (défaut/max 400)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'find_in_files',
+    description:
+      'Chercher un motif (regex, insensible à la casse) dans les fichiers du workspace — rend chemin:ligne + extrait, max 80 correspondances',
+    args: {
+      pattern: 'motif regex à chercher',
+      dir: 'sous-dossier à fouiller (défaut : tout le workspace)'
+    },
+    annotations: {
+      readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false
@@ -1652,6 +1684,50 @@ export class AppCommandBus {
           }
         }
         return { ...outcome, ...(learning ? { learning } : {}) }
+      }
+      case 'read_file': {
+        const decision = decideRead(
+          { path: a.path, from: a.from, lines: a.lines },
+          this.os.executionWorkspace
+        )
+        if (!decision.allowed) return { lu: false, detail: `lecture refusée : ${decision.reason}` }
+        const lu = executeRead(decision, (absolutePath) => {
+          try {
+            return readFileSync(absolutePath, 'utf8')
+          } catch {
+            return null
+          }
+        })
+        if ('erreur' in lu) return { lu: false, detail: lu.erreur }
+        return {
+          lu: true,
+          path: lu.relativePath,
+          totalLignes: lu.totalLignes,
+          tronque: lu.tronque,
+          contenu: lu.contenu
+        }
+      }
+      case 'find_in_files': {
+        const motif = typeof a.pattern === 'string' ? a.pattern : ''
+        if (!motif.trim()) return { trouve: 0, detail: 'motif manquant' }
+        const racine = resolve(this.os.executionWorkspace)
+        const sousDossier = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
+        const fichiers = enumererFichiersLisibles(racine, sousDossier)
+        const resultat = rechercherDansFichiers(motif, fichiers, (relatif) => {
+          try {
+            return readFileSync(join(racine, relatif), 'utf8')
+          } catch {
+            return null
+          }
+        })
+        if (resultat.erreur) return { trouve: 0, detail: resultat.erreur }
+        return {
+          trouve: resultat.correspondances.length,
+          tronque: resultat.tronque,
+          correspondances: resultat.correspondances.map(
+            (c) => `${c.chemin}:${c.ligne}: ${c.texte}`
+          )
+        }
       }
       case 'edit_file': {
         return await this.runTracedEditFile(
