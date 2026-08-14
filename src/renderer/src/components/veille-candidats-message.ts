@@ -86,3 +86,17 @@ export function redigerPromptFrameSelection(selection: readonly CandidatAffiche[
     'échec franc — pas de demi-mesure.'
   ].join('\n')
 }
+
+/**
+ * Le même texte SANS la charge utile JSON (et sa clôture de fence) : une fois le panneau de
+ * sélection affiché, le pavé brut ferait doublon — c'est une charge machine, pas une lecture.
+ */
+export function texteSansChargeJson(texte: string): string {
+  const debut = texte.indexOf('[')
+  const fin = texte.lastIndexOf(']')
+  if (debut < 0 || fin <= debut) return texte
+  const avant = texte.slice(0, debut).replace(/```(?:json)?\s*$/i, '')
+  const apres = texte.slice(fin + 1).replace(/^\s*```/, '')
+  return `${avant.trimEnd()}
+${apres.trimStart()}`.trim()
+}

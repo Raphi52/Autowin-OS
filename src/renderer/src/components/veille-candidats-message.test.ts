@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   extraireCandidatsAffiches,
-  redigerPromptFrameSelection
+  redigerPromptFrameSelection,
+  texteSansChargeJson
 } from './veille-candidats-message'
 
 /** Le panneau cases + « Enchaîner (frame) » sous un message de scout (demande du 14/08). */
@@ -46,5 +47,17 @@ describe('redigerPromptFrameSelection', () => {
     const prompt = redigerPromptFrameSelection([{ titre: 'X', url: 'src/a.ts:1' }])
     expect(prompt).toMatch(/^\/frame Traite ce candidat issu/)
     expect(prompt).not.toContain('candidats issus')
+  })
+})
+
+describe('texteSansChargeJson', () => {
+  it('retire le pavé JSON et sa fence, garde la synthèse', () => {
+    const reste = texteSansChargeJson(MESSAGE)
+    expect(reste).toContain('Synthèse : j’ai lu cost.jsonl')
+    expect(reste).not.toContain('"titre"')
+    expect(reste).not.toContain('```')
+  })
+  it('rend le texte intact quand il ne porte pas de charge', () => {
+    expect(texteSansChargeJson('Rien à extraire ici.')).toBe('Rien à extraire ici.')
   })
 })

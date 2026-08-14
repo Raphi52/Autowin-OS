@@ -11,7 +11,7 @@ import {
 import { parseAskChoices } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
 import { parseScoutTable, type ScoutRow } from './scout-table'
-import { extraireCandidatsAffiches, type CandidatAffiche } from './veille-candidats-message'
+import { extraireCandidatsAffiches, texteSansChargeJson, type CandidatAffiche } from './veille-candidats-message'
 import type { PilotEventKind } from '../../../shared/pilot-events'
 import {
   AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
@@ -1085,7 +1085,10 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       // du modèle, le sanitizeur les refuse par conception (14/08).
       const candidatsAffiches = extraireCandidatsAffiches(part.text)
       if (candidatsAffiches) {
-        blocks.push(part)
+        // Le pavé JSON est retiré du texte affiché : la machine l'a déjà consommé, et le panneau
+        // montre tout (dépliable). Le texte restant (synthèse) garde sa place au-dessus.
+        const synthese = texteSansChargeJson(part.text)
+        if (synthese) blocks.push({ ...part, text: synthese })
         blocks.push({ kind: 'candidats-pick', candidats: candidatsAffiches })
         continue
       }
