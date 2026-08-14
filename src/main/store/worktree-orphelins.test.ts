@@ -96,8 +96,29 @@ describe('balayage des copies abandonnées', () => {
     expect(existsSync(copie)).toBe(false)
   })
 
-  it('ÉPARGNE une copie qui porte du travail non publié, orpheline ou non', () => {
-    // La garantie qui compte : on ne détruit jamais un travail qui n'existe nulle part ailleurs.
+  it('PRÉSERVE le travail non publié dans une référence, puis libère la copie', () => {
+    /*
+      La garantie a CHANGÉ DE FORME, et elle est plus forte qu'avant. La version précédente de ce test
+      affirmait qu'une copie porteuse de travail est épargnée — vrai, et sans issue : un run mort sans
+      passer par `finalize` gardait ses 30 Mo pour toujours, puisque personne ne viendrait jamais
+      publier ce travail. Mesuré le 2026-08-14 : 1 453 Mo de copies pour 665 Ko de travail unique.
+
+      Le travail est désormais committé sur `autowin/recovery/<id>` AVANT la libération. Il n'est donc
+      plus seulement épargné : il est SAUVEGARDÉ, restaurable par une commande git, et il cesse
+      d'occuper un checkout complet.
+    */
+    const { base, worktreeRoot, copie, agentId } = depotAvecCopie()
+    writeFileSync(join(copie, 'a.txt'), 'travail en cours\n')
+
+    manager(base, worktreeRoot).reconcileResidues()
+
+    expect(existsSync(copie)).toBe(false)
+    expect(git(base, 'show', `autowin/recovery/${agentId}:a.txt`)).toBe('travail en cours')
+  })
+
+  it('n’efface RIEN quand le travail ne peut PAS être préservé', () => {
+    // Perdre du travail pour gagner 30 Mo serait le pire échange possible. On rend la sauvegarde
+    // impossible en cassant l'administration git : la copie doit alors survivre.
     const { base, worktreeRoot, copie } = depotAvecCopie()
     writeFileSync(join(copie, 'a.txt'), 'travail en cours\n')
     rmSync(join(base, '.git', 'worktrees'), { recursive: true, force: true })

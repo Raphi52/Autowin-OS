@@ -715,6 +715,66 @@ export class WorktreeManager {
     return resultat
   }
 
+  /**
+   * PRESERVE le travail d'une copie abandonnee dans sa branche de recuperation, puis LIBERE la copie.
+   *
+   * Le probleme mesure le 2026-08-14 sur l'installation de l'utilisateur : 49 copies pour 1 453 Mo,
+   * alors que le travail unique qu'elles portent tient en 665 Ko de diff — deux megaoctets de copie
+   * par kilooctet utile, et 16 copies sans la moindre modification. Elles survivent parce qu'un run
+   * mort sans passer par `finalize` (app fermee, plantage, annulation) ne libere jamais sa copie, et
+   * que le balayage refuse — a juste titre — de supprimer un travail qui n'existe nulle part ailleurs.
+   *
+   * Le mecanisme de sauvetage existait deja pour le travail COMMITTE : `cleanupAgentWorktree` attache
+   * HEAD a `autowin/recovery/<agentId>` avant de supprimer, donc le commit survit comme reference.
+   * Ce qui manquait, c'est le travail NON COMMITTE — precisement celui qui bloquait tout.
+   *
+   * On le committe donc sur cette meme branche avant de liberer. Rien n'est perdu : la branche se
+   * restaure par `git worktree add <chemin> autowin/recovery/<agentId>`, et le commit satisfait
+   * naturellement le critere de surete du balayage (« contenu dans une reference »). Rien n'est
+   * publie non plus : cette branche n'est ni `main` ni une branche de travail.
+   */
+  preserverEtLiberer(agentId: string): {
+    outcome: 'libere' | 'preserve-et-libere' | 'refuse' | 'absente'
+    branche?: string
+    detail?: string
+  } {
+    assertSafeId(agentId, 'agentId')
+    const path = this.pathFor(agentId)
+    if (!existsSync(path)) return { outcome: 'absente' }
+    // Un run qui tourne encore garde sa copie : la liberer sous ses pieds casserait le run vivant.
+    if (this.hasActiveProcesses(agentId)) {
+      return { outcome: 'refuse', detail: 'des processus utilisent encore cette copie' }
+    }
+    const ownership = this.ownershipIssue(path)
+    if (ownership) return { outcome: 'refuse', detail: ownership }
+
+    const branche = `autowin/recovery/${agentId}`
+    const aDuTravail = this.unpublishedFiles(path).length > 0
+    if (aDuTravail) {
+      // `switch -C` : on se place sur la branche de recuperation SANS toucher aux fichiers, puis on
+      // committe. Un echec ici interrompt tout — mieux vaut garder la copie que perdre le travail.
+      if (this.tryGitFn(path, ['switch', '-C', branche]).code !== 0) {
+        return { outcome: 'refuse', detail: 'la branche de récupération n’a pas pu être créée' }
+      }
+      if (this.tryGitFn(path, ['add', '-A']).code !== 0) {
+        return { outcome: 'refuse', detail: 'le travail n’a pas pu être indexé' }
+      }
+      const commit = this.tryGitFn(path, [
+        'commit',
+        '--no-verify',
+        '-m',
+        `autowin: travail préservé de la copie ${agentId}`
+      ])
+      if (commit.code !== 0 && this.unpublishedFiles(path).length > 0) {
+        return { outcome: 'refuse', detail: 'le travail n’a pas pu être préservé' }
+      }
+    }
+    if (!this.balayerLeChemin(path)) {
+      return { outcome: 'refuse', detail: 'la copie n’a pas pu être supprimée' }
+    }
+    return aDuTravail ? { outcome: 'preserve-et-libere', branche } : { outcome: 'libere' }
+  }
+
   reconcileResidues(options?: { balayer?: boolean }): {
     cleaned: number
     recovered: string[]
@@ -858,7 +918,26 @@ export class WorktreeManager {
 
     if (this.hasActiveProcesses(agentId)) return undefined
     if (this.ownershipIssue(path)) return undefined
-    if (this.unpublishedFiles(path).length > 0) return undefined
+
+    /**
+     * Du travail non publie ne bloque plus le balayage : il est PRESERVE, puis la copie est liberee.
+     *
+     * C'est ici que se jouaient les 1 453 Mo mesures le 2026-08-14 pour 665 Ko de travail unique.
+     * L'ancienne regle — « une copie qui porte du travail ne se touche pas » — etait juste sur le
+     * fond et sans issue sur la forme : un run mort sans passer par `finalize` laissait sa copie pour
+     * toujours, puisque rien ne viendrait jamais publier ce travail.
+     *
+     * `preserverEtLiberer` le committe sur `autowin/recovery/<agentId>` avant de supprimer : le
+     * travail devient une REFERENCE du depot, restaurable par `git worktree add`, et cesse d'occuper
+     * 30 Mo. La garantie « on ne detruit jamais un travail qui n'existe nulle part ailleurs » est
+     * donc tenue plus fort qu'avant — avant, ce travail n'etait sauvegarde nulle part.
+     */
+    if (this.unpublishedFiles(path).length > 0) {
+      const preserve = this.preserverEtLiberer(agentId)
+      return preserve.outcome === 'preserve-et-libere' || preserve.outcome === 'libere'
+        ? agentId
+        : undefined
+    }
 
     const head = this.tryGitFn(path, ['rev-parse', 'HEAD'])
     if (head.code !== 0) return undefined

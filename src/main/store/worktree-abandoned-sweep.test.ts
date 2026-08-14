@@ -61,14 +61,31 @@ describe('balayage des copies agent abandonnées', () => {
     expect(git(repo, 'worktree', 'list')).not.toContain('run-sterile')
   })
 
-  it('conserve une copie porteuse de fichiers non publiés', () => {
+  it('PRÉSERVE les fichiers non publiés dans une référence, puis libère la copie', () => {
+    /*
+      Prolongement de la frontière posée ici le 2026-08-05, pas son abandon.
+
+      Le correctif d'alors — « la copie stérile part, celle qui porte du travail reste » — a supprimé
+      l'accumulation des copies VIDES. Il laissait ouvert le cas des copies PORTEUSES : personne ne
+      viendrait jamais publier le travail d'un run mort, donc leur conservation était définitive.
+      Mesuré le 2026-08-14 sur l'installation de l'utilisateur : 1 453 Mo de copies pour 665 Ko de
+      travail unique — deux mégaoctets par kilooctet utile.
+
+      Le travail est désormais committé sur `autowin/recovery/<id>` AVANT la libération : il n'est
+      plus seulement conservé, il est SAUVEGARDÉ dans le dépôt, restaurable par `git worktree add`,
+      et il cesse d'occuper un checkout complet. La garantie « on ne perd jamais un travail qui
+      n'existe nulle part ailleurs » est tenue plus fort qu'avant — avant, ce travail n'existait que
+      dans un dossier que rien ne sauvegardait.
+    */
     const repo = tempRepo()
     const wm = manager(repo, true)
     const path = wm.acquire('run-dirty')
     writeFileSync(join(path, 'travail.txt'), 'non publié\n')
 
-    expect(wm.reconcileResidues().swept).toBeUndefined()
-    expect(existsSync(path)).toBe(true)
+    expect(wm.reconcileResidues().swept).toEqual(['run-dirty'])
+    expect(existsSync(path)).toBe(false)
+    // La preuve qui compte : le contenu est relisible depuis le dépôt de base.
+    expect(git(repo, 'show', 'autowin/recovery/run-dirty:travail.txt')).toBe('non publié')
   })
 
   it('conserve une copie dont le commit n’est atteignable par aucune référence', () => {
