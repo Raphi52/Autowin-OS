@@ -152,6 +152,69 @@ describe('buildTurnMessages', () => {
     ])
   })
 
+  it('avec resumeSessionId, INJECTE un compte-rendu que le modele n’a jamais vu', () => {
+    /*
+      LE TROU DE SESSION, constate par l'utilisateur le 2026-08-14. Dans son fil, l'agent a repondu :
+      « je vois bien qu'un orchestrate a ete lance dans cette conversation, mais la trace fournie ne
+      contient ni son runId, ni ses phases, ni son resultat ».
+
+      Cause : la route `explicit-skill` d'`agent-pilot` execute l'orchestration ELLE-MEME puis `return`
+      AVANT tout appel au modele. La bulle affichee est redigee par du code. Le tour suivant reprend la
+      session CLI et n'envoie que le dernier message — donc ce tour est ABSENT du transcript du modele.
+
+      Pire que l'absence : on lui AFFIRMAIT « tu en connais deja l'historique par ta session ». C'est
+      exactement la faute que le commentaire « RESUME FANTOME » corrige plus haut dans `agent-pilot`
+      (mesure du 2026-08-04 : 0 appel reellement repris, 31 prompts amputes) — ici sur son cas frere.
+    */
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [],
+      resumeSessionId: 'sess-123',
+      compteRenduNonVu: 'Workflow termine — run r-42, 3 phases, 0,12 $',
+      lastUserMessage: 'on a bien fait tout le processus ?'
+    })
+    const injecte = entries.find((entry) => entry.includes('run r-42'))
+    expect(injecte).toBeDefined()
+    // La position compte : le compte-rendu doit precer la question qui l'interroge.
+    expect(entries.indexOf(injecte!)).toBeLessThan(
+      entries.findIndex((entry) => entry.startsWith('UTILISATEUR:'))
+    )
+  })
+
+  it('avec un compte-rendu non vu, ne PRETEND PLUS que la session contient tout', () => {
+    // Laisser l'affirmation intacte serait garder le mensonge tout en ajoutant le remede : le modele
+    // lirait « tu connais deja l'historique » juste au-dessus d'un tour qu'il n'a jamais vu.
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [],
+      resumeSessionId: 'sess-123',
+      compteRenduNonVu: 'Workflow termine — run r-42',
+      lastUserMessage: 'et alors ?'
+    })
+    expect(entries.some((entry) => entry.includes("tu en connais déjà l'historique"))).toBe(false)
+  })
+
+  it('sans compte-rendu non vu, le chemin de reprise reste INCHANGE', () => {
+    // Le cas courant ne doit pas payer ce correctif : aucune entree en plus, aucun mot en moins.
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [],
+      resumeSessionId: 'sess-123',
+      lastUserMessage: 'ok'
+    })
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      "Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).",
+      'UTILISATEUR: ok'
+    ])
+  })
+
   it('avec resumeSessionId sans lastUserMessage, rend une entree UTILISATEUR vide qui est filtree', () => {
     const entries = buildTurnMessages({
       snapshot: {},

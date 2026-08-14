@@ -366,6 +366,22 @@ export class AgentPilot {
   private readonly chatSessions = new Map<string, { key: string; sessionId: string }>()
 
   /**
+   * Comptes-rendus de tours executes SANS le modele, en attente d'etre reinjectes au tour suivant.
+   *
+   * Le trou constate par l'utilisateur le 2026-08-14 : la route `explicit-skill` ci-dessous lance
+   * l'orchestration elle-meme puis rend la main AVANT tout appel au modele. Le tour suivant reprend la
+   * session CLI et n'envoie que le dernier message — donc ce tour n'existe nulle part pour lui, et il
+   * repond « la trace ne contient ni son runId, ni ses phases, ni son resultat ». Reponse honnete face
+   * a un trou ; le defaut etait le trou.
+   *
+   * LIMITE ASSUMEE, dite plutot que cachee : cette carte vit en MEMOIRE. Un redemarrage de l'app entre
+   * les deux tours perd la note, alors que la session, elle, est rehydratee depuis le disque. Le cas
+   * reste donc possible — beaucoup plus rare qu'aujourd'hui, mais pas impossible. Le rendre durable
+   * demanderait de changer la forme du cache de sessions sur disque, hors du perimetre demande.
+   */
+  private readonly comptesRendusNonVus = new Map<string, string>()
+
+  /**
    * L'index memoire ci-dessus est HYDRATE une fois depuis le disque, puis maintenu en miroir.
    *
    * Sans cela, le gain de la reprise de session s'evaporait a CHAQUE redemarrage de l'app : la `Map`
@@ -517,17 +533,24 @@ export class AgentPilot {
       const directiveNotice = lateDirectives.length
         ? `⚠️ ${lateDirectives.length} orientation(s) reçue(s) après le lancement : aucun second run n'a été relancé. Renvoyez-la comme nouveau message si elle reste nécessaire.`
         : undefined
+      // Les FAITS, pas une formule : statut, validite, blocage de gate, cout, run et resultat sont
+      // tous rendus par l'orchestrateur et etaient jetes (conv-76 : 18 sous-agents, 10,05 $, le fil
+      // n'affichait que « Workflow Autowin execute. »).
+      const compteRendu = formatOrchestrationOutcome(
+        result.ok,
+        result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
+        result.ok ? undefined : String(result.error ?? ''),
+        directiveNotice
+      )
+      /**
+       * Ce tour n'a JAMAIS atteint le modele : on garde son compte-rendu pour le lui donner au tour
+       * suivant. Sans ce depot, il se voit demander « on a bien fait tout le processus ? » a propos
+       * d'un tour dont rien, dans sa session, ne porte la trace.
+       */
+      if (conversationId) this.comptesRendusNonVus.set(conversationId, compteRendu)
       emit({
         kind: 'done',
-        // Les FAITS, pas une formule : statut, validite, blocage de gate, cout, run et resultat sont
-        // tous rendus par l'orchestrateur et etaient jetes (conv-76 : 18 sous-agents, 10,05 $, le fil
-        // n'affichait que « Workflow Autowin execute. »).
-        text: formatOrchestrationOutcome(
-          result.ok,
-          result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
-          result.ok ? undefined : String(result.error ?? ''),
-          directiveNotice
-        ),
+        text: compteRendu,
         outcome: result.ok
           ? ((result.data as Record<string, unknown> | undefined) ?? undefined)
           : failedOrchestrationOutcome(result.error),
@@ -688,6 +711,18 @@ export class AgentPilot {
      */
     const invoked = invokedSkillId(lastUserMessage?.content ?? '')
     const skillBody = invoked ? skillInstruction(invoked) : ''
+    /**
+     * Le compte-rendu d'un tour execute sans le modele est CONSOMME ici — une seule fois.
+     *
+     * Lu puis retire : le laisser en place le re-injecterait a chaque tour suivant, ou il deviendrait
+     * un vieux resultat presente comme frais. Il n'est utile qu'au tour qui suit immediatement le trou.
+     * Retire meme sans reprise de session : dans ce cas l'historique complet part de toute facon, donc
+     * la note est redondante — la garder ne ferait que la faire ressortir plus tard, a contretemps.
+     */
+    const compteRenduNonVu = conversationId
+      ? this.comptesRendusNonVus.get(conversationId)
+      : undefined
+    if (conversationId) this.comptesRendusNonVus.delete(conversationId)
     const convo: string[] = buildTurnMessages({
       snapshot,
       brainContext,
@@ -695,7 +730,8 @@ export class AgentPilot {
       skillBody,
       history,
       resumeSessionId,
-      lastUserMessage: lastUserMessage?.content
+      lastUserMessage: lastUserMessage?.content,
+      compteRenduNonVu
     })
     const currentAttachments = history.at(-1)?.attachments
 
@@ -982,7 +1018,9 @@ export class AgentPilot {
       const ordered = parseOrderedPilotTokens(res.text)
       const hasCommand = ordered.some((token) => token.kind === 'command')
       const spoken = ordered
-        .filter((token): token is Extract<OrderedPilotToken, { kind: 'text' }> => token.kind === 'text')
+        .filter(
+          (token): token is Extract<OrderedPilotToken, { kind: 'text' }> => token.kind === 'text'
+        )
         .map((token) =>
           hasCommand ? retirerConclusionBloquantePrematuree(token.text) : token.text
         )

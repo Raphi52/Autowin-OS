@@ -32,6 +32,20 @@ export interface TurnMessageParts {
   resumeSessionId?: string
   /** Dernier message utilisateur — le seul renvoyé quand la session est reprise. */
   lastUserMessage?: string
+  /**
+   * Compte-rendu d'un tour que le modèle n'a JAMAIS vu, à réinjecter quand la session est reprise.
+   *
+   * Constaté par l'utilisateur le 2026-08-14, dans son fil : « je vois bien qu'un `orchestrate` a été
+   * lancé dans cette conversation, mais la trace fournie ne contient ni son `runId`, ni ses phases, ni
+   * son résultat ». La route `explicit-skill` d'`agent-pilot` exécute l'orchestration ELLE-MÊME puis
+   * rend la main AVANT tout appel au modèle : la bulle affichée est rédigée par du code. Le tour
+   * suivant reprenant la session CLI et n'envoyant que le dernier message, ce tour est absent de son
+   * transcript — et on lui AFFIRMAIT pourtant qu'il connaissait déjà l'historique.
+   *
+   * C'est le cas frère de « RESUME FANTÔME » (`agent-pilot`, mesuré le 2026-08-04 : 0 appel réellement
+   * repris, 31 prompts amputés) : ne jamais prétendre au modèle qu'il sait ce qu'on ne peut pas garantir.
+   */
+  compteRenduNonVu?: string
 }
 
 /**
@@ -80,13 +94,18 @@ export function boundedContinuationHistory<T extends { role: 'user' | 'assistant
  * le prompt final : on filtre, on ne laisse pas le hasard décider.
  */
 export function buildTurnMessages(parts: TurnMessageParts): string[] {
+  const nonVu = parts.compteRenduNonVu?.trim()
   const entries = parts.resumeSessionId
     ? [
         `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`,
         parts.brainContext,
         parts.memoryEcho,
         parts.skillBody ?? '',
-        `Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).`,
+        // La phrase CHANGE quand un tour manque : garder « tu connais déjà l'historique » au-dessus
+        // d'un tour jamais vu serait conserver le mensonge tout en ajoutant le remède.
+        nonVu
+          ? `Suite de NOTRE conversation en cours. Ta session en contient l'historique, À UNE EXCEPTION : le tour ci-dessous a été exécuté par l'application SANS passer par toi, il est donc absent de ta session. Traite-le comme un fait établi de cette conversation.\n\nTOI (tour exécuté par l'app, hors de ta session):\n${nonVu}`
+          : `Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).`,
         `UTILISATEUR: ${parts.lastUserMessage ?? ''}`
       ]
     : [
