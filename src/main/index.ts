@@ -367,7 +367,11 @@ import { WatchdogEngine } from './task-manager/watchdog-engine'
 import { seedWatchdogTasks } from './task-manager/watchdog-seeds'
 import { planQuotaResume } from './quota-resume'
 import type { TaskUsageSettlementSink, WatchdogAppEvent } from './task-manager/types'
-import { ScheduledChatDispatcher, scheduledTaskBinding, type ScheduledChatRuntime } from './task-manager/chat-dispatch'
+import {
+  ScheduledChatDispatcher,
+  scheduledTaskBinding,
+  type ScheduledChatRuntime
+} from './task-manager/chat-dispatch'
 import { runWatchdogOrchestration } from './task-manager/watchdog-orchestration-adapter'
 import {
   isolatedRelayLaunchArguments,
@@ -4579,6 +4583,23 @@ Le fil reprend ensuite normalement.`
   autoKaizenSupervisor?.resumePending()
   const autoKaizenResumeTimer = setInterval(() => autoKaizenSupervisor?.resumePending(), 15_000)
   autoKaizenResumeTimer.unref()
+
+  /**
+   * Le balayage des copies d'agent abandonnées, RÉPÉTÉ pendant la session et non plus au seul démarrage.
+   *
+   * Mesuré le 2026-08-14 sur l'installation de l'utilisateur : 49 copies pour 1 453 Mo. Une copie
+   * abandonnée à 9 h attendait le prochain lancement pour être vue, alors que les sessions durent la
+   * journée. L'heure est calibrée sur l'âge minimal du balayage (24 h) : plus court n'avancerait aucun
+   * verdict, plus long laisserait le disque grossir sans raison. `unref()` comme le minuteur voisin,
+   * sinon un minuteur horaire retient la boucle d'événements et la fermeture ne se fait plus proprement.
+   */
+  const balayagePeriodiqueTimer = setInterval(
+    () => {
+      void os.worktrees?.balayerLesCopiesAbandonnees()
+    },
+    60 * 60 * 1_000
+  )
+  balayagePeriodiqueTimer.unref()
 
   ipcMain.handle('os:pilotChat', (event, messages, conversationId) => {
     assertTrustedRendererSender(event, 'PilotChat')

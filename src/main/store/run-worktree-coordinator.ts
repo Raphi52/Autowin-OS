@@ -66,6 +66,7 @@ export interface RunWorktreeCoordinatorDeps {
         | 'validateRecoveryContextAsync'
         | 'readConflictDiffAsync'
         | 'discardAsync'
+        | 'sweepAbandonedAgentCopiesAsync'
       >
     >
   stateStore?: WorktreeRunStateStore
@@ -1332,6 +1333,32 @@ export class RunWorktreeCoordinator {
    * elle, ne pèse que ~4 s et reste synchrone : la découper n'aurait acheté qu'un sixième du gain
    * pour un contrat bien plus large à casser.
    */
+  /**
+   * Le balayage des copies abandonnées, appelable HORS du démarrage.
+   *
+   * Le correctif de préservation (2026-08-14) rend les copies porteuses de travail enfin libérables,
+   * mais il ne changeait pas le MOMENT où on les regarde : le balayage ne tournait qu'au lancement,
+   * donc une copie abandonnée à 9 h attendait le prochain démarrage. Sur une session qui dure la
+   * journée, le disque se remplissait pendant qu'un mécanisme capable de le rendre existait et dormait.
+   *
+   * Aucune garde n'est assouplie au passage. Le démarrage était sûr par construction — aucun run ne
+   * tourne — mais ce qui protège un run vivant EN SESSION, c'est le balayage lui-même : âge minimal de
+   * 24 h calculé sur la mtime du dossier (un run qui écrit ne peut donc jamais paraître abandonné) et
+   * lease PID par-dessus. Ces gardes sont des prédicats en lecture seule ; les consulter plus souvent
+   * change la date du verdict, pas le verdict.
+   *
+   * Les erreurs sont AVALÉES et rendues comme « rien balayé » : c'est du ramassage opportuniste dont
+   * rien n'attend le résultat, et un rejet remontant dans un minuteur deviendrait un rejet non capturé
+   * à chaque tour d'horloge.
+   */
+  async balayerLesCopiesAbandonnees(): Promise<string[]> {
+    try {
+      return (await this.manager.sweepAbandonedAgentCopiesAsync?.()) ?? []
+    } catch {
+      return []
+    }
+  }
+
   private async reconcileExistingAsync(): Promise<void> {
     const residues = this.manager.reconcileResiduesAsync
       ? await this.manager.reconcileResiduesAsync()
