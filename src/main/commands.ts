@@ -309,6 +309,37 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    /**
+     * CLASSER une conversation — la capacite qui manquait, et son absence poussait au pire chemin.
+     *
+     * Demande de l'utilisateur : « ranges moi mes conversations dans des sous categories adequates ».
+     * Mesure dans `conv-1244` le 2026-08-15 : faute de commande pour classer, l'agent a tente de
+     * piloter le BUREAU WINDOWS a la souris — `desktop_act`, clics qui ouvrent les reglages rapides
+     * par erreur, tentative de relancer l'application — puis a echoue sur
+     * « Type d'action desktop inconnu: double_click ». Rien n'a ete range.
+     *
+     * Le catalogue savait RENOMMER et SUPPRIMER une conversation, jamais la CLASSER, alors que
+     * `conversations.setProjectPath` existait deja. Meme forme que `list_files` le meme jour : une
+     * capacite absente ne rend pas l'agent prudent, elle le pousse vers un chemin desespere.
+     *
+     * La barre laterale groupe par DOSSIER (« Divers » = sans dossier) et indente les dossiers
+     * enfants en sous-categories : classer, c'est donc affecter un chemin de dossier.
+     */
+    name: 'classer_conversation',
+    description:
+      'Classer une conversation dans une categorie (dossier) — la barre laterale groupe par dossier et indente les dossiers enfants en sous-categories. Chemin vide = retirer du classement.',
+    args: {
+      id: 'identifiant de la conversation',
+      dossier: 'chemin du dossier (ex. C:/Clients ou C:/Clients/Amitel) ; vide pour declasser'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'rename_conversation',
     description: 'Renommer',
     args: { id: 'id', title: 'nouveau titre' },
@@ -1579,6 +1610,13 @@ export class AppCommandBus {
         })
         this.broadcast({ type: 'refresh', scope: 'conversations' })
         return c
+      }
+      case 'classer_conversation': {
+        const dossier = typeof a.dossier === 'string' ? a.dossier.trim() : ''
+        const c = this.os.conversations.setProjectPath(s('id'), dossier || null)
+        if (!c) return { erreur: 'conversation introuvable', id: s('id') }
+        this.broadcast({ type: 'refresh', scope: 'conversations' })
+        return { id: c.id, titre: c.title, dossier: c.projectPath ?? null }
       }
       case 'rename_conversation': {
         const c = this.os.conversations.rename(s('id'), s('title'))
