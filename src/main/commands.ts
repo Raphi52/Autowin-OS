@@ -1,8 +1,8 @@
 import { applyEdit, decideEdit, editDiff } from './edit-file-command'
 import { decideRead, enumererFichiersLisibles, executeRead, rechercherDansFichiers } from './read-file-command'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { brainCorpusForWorkspace, scopeBrainRetrieval, workspaceSlug } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
@@ -531,6 +531,34 @@ const CATALOG: CommandSpec[] = [
       path: 'chemin du fichier, relatif au workspace',
       from: 'première ligne à lire (défaut 1)',
       lines: 'nombre de lignes (défaut/max 400)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    /**
+     * LISTER un dossier — la capacité qui manquait, et son absence était SILENCIEUSE.
+     *
+     * Mesuré le 2026-08-15 en pilotant l'application : à « combien de fichiers .test.ts dans
+     * src/main ? » (réponse : 220), l'agent rend « Je ne peux pas donner un nombre fiable à partir
+     * des seuls éléments fournis » — avec UNE SEULE part texte, donc SANS avoir exécuté le moindre
+     * outil. Il n'essayait pas : le catalogue n'offrait que `find_in_files` (recherche de CONTENU) et
+     * `read_file` (un fichier connu). Aucune énumération.
+     *
+     * Conséquence : toute une classe de tâches triviales — compter, inventorier, vérifier qu'un
+     * fichier existe — était impossible, et l'échec se présentait en `completed`. C'est une cause
+     * directe du « 1 prompt ≠ 1 réussite ».
+     */
+    name: 'list_files',
+    description:
+      'Lister le contenu d’un dossier du workspace — rend les fichiers et sous-dossiers avec leur nombre. Non récursif par défaut ; `recursif: true` descend dans l’arborescence. Rend AUSSI `nombreParSuffixe` (ex. {".test.ts": 220}) : utilise ce compte tout fait plutôt que de dénombrer la liste toi-même.',
+    args: {
+      dir: 'sous-dossier à lister (défaut : racine du workspace)',
+      recursif: 'true pour descendre dans les sous-dossiers (défaut : false)'
     },
     annotations: {
       readOnlyHint: true,
@@ -1735,6 +1763,80 @@ export class AppCommandBus {
           totalLignes: lu.totalLignes,
           tronque: lu.tronque,
           contenu: lu.contenu
+        }
+      }
+      case 'list_files': {
+        /**
+         * Le NOMBRE est rendu explicitement, pas seulement la liste : la tâche mesurée était
+         * « donne-moi le nombre », et laisser l'agent compter lui-même une liste tronquée
+         * reproduirait l'approximation qu'on corrige ici. Le plafond est DIT quand il mord, pour
+         * qu'un total partiel ne se présente jamais comme un total.
+         */
+        const racine = resolve(this.os.executionWorkspace)
+        const sousDossier = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
+        const recursif = a.recursif === true || a.recursif === 'true'
+        const cible = resolve(join(racine, sousDossier))
+        // Le dossier demandé doit rester DANS le workspace : `..` ne doit pas ouvrir le disque.
+        if (cible !== racine && !cible.startsWith(racine + sep)) {
+          return { erreur: 'chemin hors du workspace', dossier: sousDossier }
+        }
+        let entrees
+        try {
+          entrees = readdirSync(cible, { withFileTypes: true })
+        } catch (erreur) {
+          return {
+            erreur: erreur instanceof Error ? erreur.message : String(erreur),
+            dossier: sousDossier || '.'
+          }
+        }
+        if (!recursif) {
+          const fichiers = entrees.filter((e) => e.isFile()).map((e) => e.name)
+          const dossiers = entrees.filter((e) => e.isDirectory()).map((e) => e.name)
+          /**
+           * Le COMPTE PAR SUFFIXE est rendu tout fait — mesuré, il vaut le dernier point sur dix.
+           *
+           * Avec la seule liste, l'agent devait compter 220 noms À LA MAIN pour répondre « combien de
+           * .test.ts ? ». Sur 10 essais il se trompait une fois : l'outil avait bien été appelé (7 s),
+           * mais le dénombrement humain d'une longue liste est faillible. Compter est le travail de la
+           * machine ; laisser ce calcul au modèle réintroduit l'approximation qu'on venait de retirer.
+           */
+          const parSuffixe: Record<string, number> = {}
+          for (const nom of fichiers) {
+            /*
+              CHAQUE suffixe possible du nom, pas seulement le premier.
+
+              Première version : coupe au PREMIER point. `git-graph.elisions.test.ts` produisait alors
+              `.elisions.test.ts`, si bien que le total de `.test.ts` était FAUX — et l'agent, qui fait
+              confiance à ce chiffre, répondait faux avec assurance. Mesuré : 9/10 → 4/10. Un compte
+              erroné est pire que pas de compte, puisqu'il supprime le doute qui aurait fait vérifier.
+
+              On indexe donc tous les suffixes : `a.test.ts` alimente `.test.ts` ET `.ts`. La question
+              « combien de X » se lit alors directement, quel que soit le découpage demandé.
+            */
+            for (let i = 0; i < nom.length; i++) {
+              if (nom[i] !== '.' || i === 0) continue
+              const suffixe = nom.slice(i)
+              parSuffixe[suffixe] = (parSuffixe[suffixe] ?? 0) + 1
+            }
+          }
+          return {
+            dossier: sousDossier || '.',
+            recursif: false,
+            nombreFichiers: fichiers.length,
+            nombreDossiers: dossiers.length,
+            nombreParSuffixe: parSuffixe,
+            fichiers,
+            dossiers
+          }
+        }
+        const PLAFOND = 5_000
+        const tous = enumererFichiersLisibles(racine, sousDossier, PLAFOND)
+        return {
+          dossier: sousDossier || '.',
+          recursif: true,
+          nombreFichiers: tous.length,
+          tronque: tous.length >= PLAFOND,
+          fichiers: tous
         }
       }
       case 'find_in_files': {

@@ -75,8 +75,27 @@ export function buildChatPilotagePrompt(
     catalog
       .map((c) => `- ${c.name}(${Object.keys(c.args).join(', ')}) : ${c.description}`)
       .join('\n') +
-    `\nRègles : réponds normalement quand c'est une simple question ; n'utilise des commandes ` +
-    `QUE si l'objectif demande d'agir sur l'app. Après une commande tu reçois le résultat + le ` +
+    // LIRE N'EST PAS AGIR — distinction ajoutée le 2026-08-15 sur mesure. La règle disait « n'utilise
+    // des commandes QUE si l'objectif demande d'agir sur l'app », et les outils de LECTURE tombaient
+    // sous cette interdiction. Constaté en pilotant l'app : à « combien de fichiers .test.ts dans
+    // src/main ? » (réponse : 220), l'agent rend « je ne peux pas donner un nombre fiable à partir des
+    // seules données fournies » avec UNE SEULE part texte — aucun outil appelé. Il obéissait : compter
+    // est une question, donc il répondait « normalement », depuis l'instantané, qui ne liste que
+    // quelques fichiers. Le tour se termine `completed` : l'échec est invisible.
+    `\nRègles : agir sur l'app (créer, modifier, lancer) exige une vraie demande d'action. En ` +
+    `revanche LIRE n'est pas AGIR : pour répondre à une question factuelle sur le code ou les ` +
+    `fichiers (compter, inventorier, vérifier qu'un fichier existe, citer un contenu), tu DOIS ` +
+    `utiliser les commandes de lecture — list_files, read_file, find_in_files — au lieu de répondre ` +
+    `depuis l'état fourni, qui n'est qu'un aperçu partiel. Ne réponds JAMAIS « je ne peux pas ` +
+    `déterminer » sur une question que ces commandes savent trancher : appelle-les.\n` +
+    // MESURÉ : après avoir autorisé la lecture, 7 essais sur 10 donnaient le nombre exact ; les 3
+    // échecs répondaient en 2-3 secondes, donc SANS appeler d'outil — un chiffre sorti de nulle part.
+    // La règle générale ne suffisait pas : il faut nommer le déclencheur, « un nombre est demandé ».
+    `RÈGLE ABSOLUE — si la question demande un NOMBRE, un COMPTE, une LISTE ou l'EXISTENCE d'un ` +
+    `fichier, tu appelles une commande de lecture AVANT de répondre, sans exception. Donner un ` +
+    `chiffre sans l'avoir lu est une faute, même si le chiffre te paraît évident : tu ne peux pas ` +
+    `connaître le contenu d'un dossier sans le lister.\n` +
+    `Après une commande tu reçois le résultat + le ` +
     `nouvel état et tu peux continuer. Quand tu as fini d'agir, termine par ta réponse en clair ` +
     `SANS commande.\n` +
     `Pour une action, émets la commande AVANT tout texte visible. N'annonce jamais un lancement, ` +
