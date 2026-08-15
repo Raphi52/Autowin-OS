@@ -4230,7 +4230,14 @@ Le fil reprend ensuite normalement.`
                     })
                 : undefined,
               pilotSendLimits,
-              routingUserMessageOverride
+              routingUserMessageOverride,
+              // Le cablage du tour COUPE a ete perdu sur cet arbre partage ; il sera repose a part.
+              undefined,
+              // Le CHAT de l'utilisateur exige l'experience soignee : bloc de cloture, aveu d'echec,
+              // et jamais un plan recite au futur en guise de resultat. Sans ce drapeau, les gardes
+              // restent inertes — c'est exactement ce qui a ete mesure : 0 conforme sur 8 sondes,
+              // alors que les gardes existaient et etaient testees.
+              true
             )
           },
           onSupervisedUsageSettlement
