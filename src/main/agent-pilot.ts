@@ -12,7 +12,7 @@ import {
 } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
-import { buildTurnMessages, exigeUnChiffreVerifie } from './chat-turn-messages'
+import { buildTurnMessages, exigeUnChiffreVerifie, exigeUneConclusion } from './chat-turn-messages'
 import { invokedSkillId, skillInstruction } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import { randomUUID } from 'node:crypto'
@@ -748,10 +748,19 @@ export class AgentPilot {
      * locales à chaque cas puisqu'elles portent un sens métier différent par motif.
      */
     const recoveryReasons: Array<
-      'late-directive' | 'invalid-question' | 'muted-turn' | 'chiffre-non-verifie'
+      | 'late-directive'
+      | 'invalid-question'
+      | 'muted-turn'
+      | 'chiffre-non-verifie'
+      | 'conclusion-absente'
     > = []
     const grantRecoveryIteration = (
-      reason: 'late-directive' | 'invalid-question' | 'muted-turn' | 'chiffre-non-verifie'
+      reason:
+        | 'late-directive'
+        | 'invalid-question'
+        | 'muted-turn'
+        | 'chiffre-non-verifie'
+        | 'conclusion-absente'
     ): void => {
       recoveryReasons.push(reason)
       iterationLimit += 1
@@ -780,6 +789,7 @@ export class AgentPilot {
     /** Dernier texte visible du tour, pour juger s'il avance un nombre non verifie. */
     let visibleTextThisTurn = ''
     let chiffreNonVerifieRecoveryAvailable = true
+    let conclusionFormatRecoveryAvailable = true
     let commandAttachments: NonNullable<Message['attachments']> = []
     for (let i = recoveredProviderCall?.iteration ?? 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
@@ -1131,6 +1141,27 @@ export class AgentPilot {
          * Bornee a une fois, comme sa jumelle, et strictement additive : elle ne peut que demander
          * une verification, jamais modifier une reponse deja verifiee.
          */
+        /**
+         * PAS DE CONCLUSION — le tour a agi, mais l'utilisateur ne lit ni ce qui a ete fait, ni la
+         * suite. MESURE le 2026-08-15 : 39 conversations de sonde sur 39 finissaient ainsi.
+         * Verdict de l'utilisateur : « toutes tes sondes sont des echecs ». Bornee a une relance,
+         * comme ses jumelles, et armee seulement si le tour a REELLEMENT agi.
+         */
+        if (
+          conclusionFormatRecoveryAvailable &&
+          exigeUneConclusion(anyActionExecuted, visibleTextThisTurn)
+        ) {
+          conclusionFormatRecoveryAvailable = false
+          grantRecoveryIteration('conclusion-absente')
+          convo.push(
+            'SYSTÈME: ta réponse ne CONCLUT pas. Reformule-la MAINTENANT, SANS aucune commande, en ' +
+              'terminant par ce bloc, court et concret : « ✅ Fait » (ce que tu as établi, avec le ' +
+              'résultat), puis l’état en trois lignes — 📍 Maintenant / ⏳ Reste à faire / 👉 ' +
+              'Recommandé. N’écris aucune étiquette technique du type « [a exécuté … ] » et ' +
+              'n’annonce pas ce que tu vas faire : le travail est déjà fait, dis ce qu’il a donné.'
+          )
+          continue
+        }
         if (
           chiffreNonVerifieRecoveryAvailable &&
           exigeUnChiffreVerifie(latestUserMessage, visibleTextThisTurn, anyReadExecuted)

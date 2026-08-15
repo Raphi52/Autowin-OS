@@ -18,7 +18,7 @@
  *
  * Usage : node scripts/cdp-monitor-10.mjs [--port 9223] [--essais 10]
  */
-import { readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { juger } from './cdp-verdict.mjs'
 
@@ -51,6 +51,28 @@ const compteDossiers = (dossier) =>
     statSync(join(racine, dossier, nom)).isDirectory()
   ).length
 
+/**
+ * FAMILLES DE TÂCHES — élargies le 2026-08-15 sur la remarque de l'utilisateur : « les sondes c'est
+ * pas des tasks assez complexes ». Un 10/10 obtenu sur le seul comptage ne dit RIEN de ce qui se
+ * passera quand il demandera de lire un contenu ou de fouiller le code.
+ *
+ * Chaque famille exerce une capacité DIFFÉRENTE, et sa vérité terrain est calculée ici, jamais
+ * demandée à l'application :
+ *   · compter / inventorier  -> `list_files`
+ *   · lire un contenu précis -> `read_file` (une valeur exacte DANS un fichier)
+ *   · chercher dans le code  -> `find_in_files` (combien de fichiers portent un motif)
+ */
+const lignesDe = (chemin) =>
+  readFileSync(join(racine, chemin), 'utf8').split(new RegExp('\\r?\\n')).length
+const valeurPackage = (cle) => JSON.parse(readFileSync(join(racine, 'package.json'), 'utf8'))[cle]
+const fichiersContenant = (dossier, motif) =>
+  readdirSync(join(racine, dossier)).filter(
+    (nom) =>
+      nom.endsWith('.ts') &&
+      !nom.endsWith('.test.ts') &&
+      readFileSync(join(racine, dossier, nom), 'utf8').includes(motif)
+  ).length
+
 const ESSAIS = [
   {
     prompt:
@@ -75,6 +97,21 @@ const ESSAIS = [
     prompt:
       'Combien de fichiers .ps1 se trouvent DIRECTEMENT dans le dossier scripts ? Donne le nombre.',
     attendu: compteFichiers('scripts', (n) => n.endsWith('.ps1'))
+  },
+  // LIRE UN CONTENU : la réponse est dans un fichier, pas dans une énumération.
+  {
+    prompt: 'Quelle est la valeur du champ "version" dans package.json ? Donne-la exactement.',
+    attendu: valeurPackage('version')
+  },
+  {
+    prompt: 'Combien de lignes compte le fichier src/shared/persona.ts ? Donne le nombre.',
+    attendu: lignesDe('src/shared/persona.ts')
+  },
+  // CHERCHER DANS LE CODE : ni une liste ni un fichier connu — il faut fouiller.
+  {
+    prompt:
+      'Dans combien de fichiers .ts de src/shared (hors .test.ts) trouve-t-on le texte "export function" ? Donne le nombre.',
+    attendu: fichiersContenant('src/shared', 'export function')
   }
 ]
 

@@ -161,3 +161,24 @@ export function exigeUnChiffreVerifie(
   */
   return reponse.trim().length > 0
 }
+
+/**
+ * Le tour a AGI mais sa réponse ne CONCLUT pas — l'utilisateur ne sait ni où il en est, ni la suite.
+ *
+ * MESURÉ le 2026-08-15 : sur 39 conversations de sonde, **39** finissaient sans bloc de clôture.
+ * Verdict de l'utilisateur : « pour moi toutes tes sondes sont des échecs, y'en a pas une qui a fini
+ * avec le bloc fait / à faire — c'est pas du tout l'expérience utilisateur que je veux offrir ».
+ * Les scores d'exactitude (10/10, 8/8) étaient des faux verts : ils ne jugeaient que le chiffre.
+ *
+ * La garde ne s'arme QUE si le tour a exécuté au moins une action : une réponse conversationnelle
+ * courte n'a pas à porter de cérémonie, et l'imposer partout produirait le défaut inverse — du
+ * remplissage sur trois mots.
+ */
+export function exigeUneConclusion(aAgi: boolean, reponse: string): boolean {
+  if (!aAgi) return false
+  const texte = (reponse ?? '').trim()
+  if (!texte) return false // le tour muet a sa propre garde, plus ancienne
+  const annonceCeQuiEstFait = /✅|\bfait\b/i.test(texte)
+  const annonceLaSuite = /(reste à faire|à faire|recommand|prochaine étape)/i.test(texte)
+  return !(annonceCeQuiEstFait && annonceLaSuite)
+}
