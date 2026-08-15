@@ -3,6 +3,7 @@ import {
   boundedContinuationHistory,
   boundedTurnHistory,
   buildTurnMessages,
+  exigeDireLEchec,
   exigeUnChiffreVerifie
 } from './chat-turn-messages'
 
@@ -286,10 +287,32 @@ describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', (
   it('mord sur une ANNONCE sans action — le cas mesuré le 2026-08-15', () => {
     // « Je vais vérifier directement le dossier src/main » : ni chiffre, ni action, tour terminé.
     // La première version de cette garde exigeait un nombre : elle ne pouvait pas voir ce cas.
-    expect(exigeUnChiffreVerifie(Q, 'Je vais vérifier directement le dossier src/main.', false)).toBe(true)
+    expect(
+      exigeUnChiffreVerifie(Q, 'Je vais vérifier directement le dossier src/main.', false)
+    ).toBe(true)
   })
 
   it('ne mord PAS sur une réponse vide', () => {
     expect(exigeUnChiffreVerifie(Q, '   ', false)).toBe(false)
+  })
+})
+
+describe('exigeDireLEchec — un « Fait » posé sur un échec', () => {
+  const AVEC_ECHEC = true
+
+  it('mord sur le cas RÉEL de conv-1178 : edit_file en ok:false, texte qui dit « ✅ Fait »', () => {
+    const vecu = '### ✅ Fait\nLe défaut reste confirmé dans `src/main/commands.ts`.'
+    expect(exigeDireLEchec(AVEC_ECHEC, vecu)).toBe(true)
+  })
+
+  it('ne mord PAS quand la réponse NOMME l’échec', () => {
+    expect(exigeDireLEchec(AVEC_ECHEC, 'La modification a échoué : le motif était ambigu.')).toBe(
+      false
+    )
+  })
+
+  it('ne mord PAS quand aucune action n’a échoué', () => {
+    // Réclamer un aveu d'échec là où tout a réussi produirait un doute injustifié.
+    expect(exigeDireLEchec(false, '### ✅ Fait\nTout est passé.')).toBe(false)
   })
 })

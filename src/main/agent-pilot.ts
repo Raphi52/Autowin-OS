@@ -12,7 +12,12 @@ import {
 } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
-import { buildTurnMessages, exigeUnChiffreVerifie, exigeUneConclusion } from './chat-turn-messages'
+import {
+  buildTurnMessages,
+  exigeDireLEchec,
+  exigeUnChiffreVerifie,
+  exigeUneConclusion
+} from './chat-turn-messages'
 import { invokedSkillId, skillInstruction } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import { randomUUID } from 'node:crypto'
@@ -753,6 +758,7 @@ export class AgentPilot {
       | 'muted-turn'
       | 'chiffre-non-verifie'
       | 'conclusion-absente'
+      | 'echec-taise'
     > = []
     const grantRecoveryIteration = (
       reason:
@@ -761,6 +767,7 @@ export class AgentPilot {
         | 'muted-turn'
         | 'chiffre-non-verifie'
         | 'conclusion-absente'
+        | 'echec-taise'
     ): void => {
       recoveryReasons.push(reason)
       iterationLimit += 1
@@ -790,6 +797,9 @@ export class AgentPilot {
     let visibleTextThisTurn = ''
     let chiffreNonVerifieRecoveryAvailable = true
     let conclusionFormatRecoveryAvailable = true
+    /** Une action de CE tour a-t-elle echoue ? Un « Fait » pose dessus serait un mensonge. */
+    let anyActionFailed = false
+    let echecTuRecoveryAvailable = true
     let commandAttachments: NonNullable<Message['attachments']> = []
     for (let i = recoveredProviderCall?.iteration ?? 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
@@ -1147,6 +1157,22 @@ export class AgentPilot {
          * Verdict de l'utilisateur : « toutes tes sondes sont des echecs ». Bornee a une relance,
          * comme ses jumelles, et armee seulement si le tour a REELLEMENT agi.
          */
+        /**
+         * UNE ACTION A ECHOUE ET LA REPONSE N'EN DIT RIEN. Trouve dans `conv-1178` : dernier
+         * `edit_file` en `ok:false`, et le texte lu se termine par « ✅ Fait ». Un bloc de cloture
+         * rendu obligatoire sans exigence d'honnetete produit un faux vert qui RASSURE.
+         */
+        if (echecTuRecoveryAvailable && exigeDireLEchec(anyActionFailed, visibleTextThisTurn)) {
+          echecTuRecoveryAvailable = false
+          grantRecoveryIteration('echec-taise')
+          convo.push(
+            'SYSTÈME: au moins une de tes actions a ÉCHOUÉ et ta réponse n’en dit rien. Reformule ' +
+              'MAINTENANT, SANS aucune commande : dis EXPLICITEMENT laquelle a échoué et ce que ' +
+              'cela empêche. N’écris « Fait » que pour ce qui a RÉELLEMENT abouti — un « ✅ Fait » ' +
+              'posé sur un échec est pire que pas de conclusion du tout, parce qu’il rassure à tort.'
+          )
+          continue
+        }
         if (
           conclusionFormatRecoveryAvailable &&
           exigeUneConclusion(anyActionExecuted, visibleTextThisTurn)
@@ -1332,6 +1358,7 @@ export class AgentPilot {
           return
         }
         const commandSucceeded = commandResultSucceeded(r)
+        if (!commandSucceeded) anyActionFailed = true
         results.push(
           `${token.name} → ${
             commandSucceeded

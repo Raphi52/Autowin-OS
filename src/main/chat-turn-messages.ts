@@ -182,3 +182,25 @@ export function exigeUneConclusion(aAgi: boolean, reponse: string): boolean {
   const annonceLaSuite = /(reste à faire|à faire|recommand|prochaine étape)/i.test(texte)
   return !(annonceCeQuiEstFait && annonceLaSuite)
 }
+
+/**
+ * Une action a ÉCHOUÉ mais la réponse annonce « Fait » sans le dire — le mensonge le plus coûteux.
+ *
+ * TROUVÉ le 2026-08-15 dans une conversation de l'utilisateur (`conv-1178`, statut `cancelled`) : sa
+ * dernière action est un `edit_file` avec `ok: false`, et le texte qu'il lit se termine par
+ * « ### ✅ Fait — Le défaut reste confirmé… ». L'échec n'existe que dans `parts[].ok = false`,
+ * invisible à la lecture.
+ *
+ * C'est le revers exact de la garde précédente : rendre le bloc de clôture OBLIGATOIRE sans exiger
+ * qu'il dise la vérité produit un « ✅ Fait » posé sur un échec — pire que pas de bloc du tout,
+ * parce qu'il RASSURE. La forme ne vaut que si le fond est honnête.
+ */
+export function exigeDireLEchec(uneActionAEchoue: boolean, reponse: string): boolean {
+  if (!uneActionAEchoue) return false
+  const texte = (reponse ?? '').trim()
+  if (!texte) return false // le tour muet a sa propre garde
+  const nommeLEchec = /(échou|erreur|impossible|n[’']a pas (pu|fonctionné)|refus|bloqu)/i.test(
+    texte
+  )
+  return !nommeLEchec
+}
