@@ -12,7 +12,7 @@ import {
 } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
-import { buildTurnMessages } from './chat-turn-messages'
+import { buildTurnMessages, exigeUnChiffreVerifie } from './chat-turn-messages'
 import { invokedSkillId, skillInstruction } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import { randomUUID } from 'node:crypto'
@@ -747,9 +747,11 @@ export class AgentPilot {
      * qu'ICI, même si les gardes anti-boucle (`invalidQuestionRecoveryAvailable`, etc.) restent
      * locales à chaque cas puisqu'elles portent un sens métier différent par motif.
      */
-    const recoveryReasons: Array<'late-directive' | 'invalid-question' | 'muted-turn'> = []
+    const recoveryReasons: Array<
+      'late-directive' | 'invalid-question' | 'muted-turn' | 'chiffre-non-verifie'
+    > = []
     const grantRecoveryIteration = (
-      reason: 'late-directive' | 'invalid-question' | 'muted-turn'
+      reason: 'late-directive' | 'invalid-question' | 'muted-turn' | 'chiffre-non-verifie'
     ): void => {
       recoveryReasons.push(reason)
       iterationLimit += 1
@@ -773,6 +775,11 @@ export class AgentPilot {
      */
     let anySpokenText = false
     let conclusionRecoveryAvailable = true
+    /** Une LECTURE a-t-elle eu lieu ? Un chiffre sans lecture est une supposition, pas une reponse. */
+    let anyReadExecuted = false
+    /** Dernier texte visible du tour, pour juger s'il avance un nombre non verifie. */
+    let visibleTextThisTurn = ''
+    let chiffreNonVerifieRecoveryAvailable = true
     let commandAttachments: NonNullable<Message['attachments']> = []
     for (let i = recoveredProviderCall?.iteration ?? 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
@@ -1028,6 +1035,7 @@ export class AgentPilot {
         .join('')
         .trim()
       if (spoken) anySpokenText = true
+      if (spoken) visibleTextThisTurn = spoken
       const prefixeStreameVisible = hasCommand
         ? retirerConclusionBloquantePrematuree(successfulStreamedPrefix)
         : successfulStreamedPrefix
@@ -1107,6 +1115,37 @@ export class AgentPilot {
           )
           continue
         }
+        /**
+         * UN CHIFFRE DONNE SANS AVOIR RIEN LU — le symetrique du tour muet, et aussi trompeur.
+         *
+         * MESURE en pilotant l'app le 2026-08-15, sur deux series de 10 sondes a verite terrain :
+         * 19 reussites sur 20, et l'UNIQUE echec repond en 3 secondes — trop vite pour avoir liste
+         * quoi que ce soit. La question identique avait reussi en 8 s dans la meme serie : ce n'est
+         * donc pas une capacite manquante mais une VARIANCE, l'agent devinant au lieu d'appeler.
+         *
+         * Le prompt l'interdit deja en toutes lettres (« RÈGLE ABSOLUE — si la question demande un
+         * NOMBRE… tu appelles une commande de lecture AVANT de repondre »). Il a quand meme devine.
+         * Ce depot connait la lecon, elle est ecrite au-dessus pour le tour muet : un correctif
+         * DECLARATIF ne garantit rien, seule une relance MECANIQUE tient.
+         *
+         * Bornee a une fois, comme sa jumelle, et strictement additive : elle ne peut que demander
+         * une verification, jamais modifier une reponse deja verifiee.
+         */
+        if (
+          chiffreNonVerifieRecoveryAvailable &&
+          exigeUnChiffreVerifie(latestUserMessage, visibleTextThisTurn, anyReadExecuted)
+        ) {
+          chiffreNonVerifieRecoveryAvailable = false
+          grantRecoveryIteration('chiffre-non-verifie')
+          convo.push(
+            'SYSTÈME: tu viens d’avancer un nombre SANS avoir appelé la moindre commande de ' +
+              'lecture. Tu ne peux pas connaître le contenu d’un dossier sans le lister : ce ' +
+              'chiffre est une supposition, pas une réponse. Appelle MAINTENANT `list_files` (ou ' +
+              '`find_in_files`) sur le dossier concerné, puis donne le nombre RÉELLEMENT observé. ' +
+              'S’il diffère de ce que tu viens d’écrire, corrige-toi explicitement.'
+          )
+          continue
+        }
         // JAMAIS de bulle vide. Cause racine des « conversations qui echouent » (conv-1141) :
         // le tour a AGI (« [a execute exec (echec)] ») mais n'a rien DIT, la reprise de conclusion
         // etait deja consommee, et `spoken` vide produisait une bulle VIDE — l'utilisateur renvoyait
@@ -1177,6 +1216,14 @@ export class AgentPilot {
 
         const actionId = `${i}:${commandIndex++}`
         anyActionExecuted = true
+        // Les commandes qui OBSERVENT reellement le disque. `get_state` n'en est pas : c'est
+        // l'apercu partiel dont l'agent tirait justement ses chiffres faux.
+        if (
+          token.name === 'list_files' ||
+          token.name === 'read_file' ||
+          token.name === 'find_in_files'
+        )
+          anyReadExecuted = true
         const settledAction = recoveredHere?.settledActions?.find(
           (action) => action.actionId === actionId && action.name === token.name
         )

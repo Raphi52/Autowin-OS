@@ -29,6 +29,15 @@ const arg = (nom, defaut) => {
 const port = arg('--port', '9223')
 const nbEssais = Number(arg('--essais', '10'))
 const sortie = resolve(arg('--out', 'Audit/cdp/monitor-10.json'))
+/**
+ * `--garder` : ne PAS supprimer les fils de sonde.
+ *
+ * Demande de l'utilisateur le 2026-08-15 : « je veux voir les 10 convers dans l'app, la je vois pas
+ * tes tentatives ». La suppression automatique protegeait son historique, mais elle emportait aussi
+ * la SEULE preuve qu'il pouvait inspecter lui-meme : il ne lui restait qu'un JSON et ma parole.
+ * Une preuve qu'on ne peut pas regarder ne vaut pas grand-chose.
+ */
+const garder = process.argv.includes('--garder')
 mkdirSync(dirname(sortie), { recursive: true })
 
 // --- VÉRITÉS TERRAIN, calculées ici et jamais demandées à l'application -----------------------
@@ -44,7 +53,8 @@ const compteDossiers = (dossier) =>
 
 const ESSAIS = [
   {
-    prompt: 'Combien de fichiers dont le nom finit par .test.ts se trouvent DIRECTEMENT dans src/main (sans les sous-dossiers) ? Donne le nombre.',
+    prompt:
+      'Combien de fichiers dont le nom finit par .test.ts se trouvent DIRECTEMENT dans src/main (sans les sous-dossiers) ? Donne le nombre.',
     attendu: compteFichiers('src/main', (n) => n.endsWith('.test.ts'))
   },
   {
@@ -52,15 +62,18 @@ const ESSAIS = [
     attendu: compteDossiers('src/main')
   },
   {
-    prompt: 'Combien de fichiers .ts (hors .test.ts) se trouvent DIRECTEMENT dans src/shared ? Donne le nombre.',
+    prompt:
+      'Combien de fichiers .ts (hors .test.ts) se trouvent DIRECTEMENT dans src/shared ? Donne le nombre.',
     attendu: compteFichiers('src/shared', (n) => n.endsWith('.ts') && !n.endsWith('.test.ts'))
   },
   {
-    prompt: 'Combien de fichiers .mjs se trouvent DIRECTEMENT dans le dossier scripts ? Donne le nombre.',
+    prompt:
+      'Combien de fichiers .mjs se trouvent DIRECTEMENT dans le dossier scripts ? Donne le nombre.',
     attendu: compteFichiers('scripts', (n) => n.endsWith('.mjs'))
   },
   {
-    prompt: 'Combien de fichiers .ps1 se trouvent DIRECTEMENT dans le dossier scripts ? Donne le nombre.',
+    prompt:
+      'Combien de fichiers .ps1 se trouvent DIRECTEMENT dans le dossier scripts ? Donne le nombre.',
     attendu: compteFichiers('scripts', (n) => n.endsWith('.ps1'))
   }
 ]
@@ -98,7 +111,11 @@ const json = (valeur) => JSON.stringify(valeur)
 const resultats = []
 for (let n = 0; n < nbEssais; n++) {
   const essai = ESSAIS[n % ESSAIS.length]
-  const titre = `__sonde-${Date.now()}-${n}`
+  // Titre LISIBLE dans la liste des conversations : l'utilisateur doit reconnaitre la sonde et sa
+  // question d'un coup d'oeil, pas dechiffrer un horodatage.
+  const titre = garder
+    ? `Sonde ${n + 1}/${nbEssais} — attendu ${essai.attendu}`
+    : `__sonde-${Date.now()}-${n}`
   let convId
   try {
     const conv = await ev(
@@ -127,7 +144,8 @@ for (let n = 0; n < nbEssais; n++) {
     console.log(`✘ essai ${n + 1}/${nbEssais} — sonde en erreur : ${erreur.message}`)
   } finally {
     // Nettoyage INCONDITIONNEL : un fil de sonde oublié fausserait la mesure suivante.
-    if (convId) await ev(`window.api.conversationsRemove(${json(convId)})`).catch(() => {})
+    if (convId && !garder)
+      await ev(`window.api.conversationsRemove(${json(convId)})`).catch(() => {})
   }
 }
 

@@ -1,7 +1,19 @@
 import { applyEdit, decideEdit, editDiff } from './edit-file-command'
-import { decideRead, enumererFichiersLisibles, executeRead, rechercherDansFichiers } from './read-file-command'
+import {
+  decideRead,
+  enumererFichiersLisibles,
+  executeRead,
+  rechercherDansFichiers
+} from './read-file-command'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync
+} from 'node:fs'
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { brainCorpusForWorkspace, scopeBrainRetrieval, workspaceSlug } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
@@ -1216,9 +1228,7 @@ export class AppCommandBus {
           // Le démarrage clôt déjà ce cas en succès ; le chemin du chat fait désormais pareil.
           if (resumable) {
             const activity = this.os.getWorktreeActivity?.() as
-              | { agents?: unknown[] }
-              | unknown[]
-              | undefined
+              { agents?: unknown[] } | unknown[] | undefined
             const agents = (Array.isArray(activity) ? activity : (activity?.agents ?? [])) as never
             const preuve = publishedWorktreeProofForResume(resumable.runId, agents)
             if (preuve) {
@@ -1856,9 +1866,7 @@ export class AppCommandBus {
         return {
           trouve: resultat.correspondances.length,
           tronque: resultat.tronque,
-          correspondances: resultat.correspondances.map(
-            (c) => `${c.chemin}:${c.ligne}: ${c.texte}`
-          )
+          correspondances: resultat.correspondances.map((c) => `${c.chemin}:${c.ligne}: ${c.texte}`)
         }
       }
       case 'edit_file': {

@@ -117,3 +117,47 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
       ]
   return entries.filter((entry) => entry.trim().length > 0)
 }
+
+/**
+ * La question exige-t-elle un chiffre VÉRIFIÉ, et la réponse en avance-t-elle un sans avoir lu ?
+ *
+ * MESURÉ le 2026-08-15 sur deux séries de 10 sondes à vérité terrain : 19 réussites sur 20, et
+ * l'unique échec répond en 3 secondes — trop vite pour avoir listé quoi que ce soit. La même question
+ * avait réussi en 8 s dans la même série : c'est une VARIANCE, l'agent devinant au lieu d'appeler.
+ *
+ * Le prompt l'interdit déjà en toutes lettres et n'a pas suffi. Ce prédicat arme la relance
+ * MÉCANIQUE, seule à tenir — la leçon que ce dépôt a déjà payée sur le tour muet.
+ *
+ * Prudent par construction : il ne se déclenche que si les TROIS conditions tiennent — la question
+ * réclame un compte, la réponse contient un nombre, et aucune lecture n'a eu lieu. Un faux positif
+ * coûterait une itération inutile ; on préfère le faux négatif.
+ */
+export function exigeUnChiffreVerifie(
+  question: string | undefined,
+  reponse: string,
+  lectureEffectuee: boolean
+): boolean {
+  if (lectureEffectuee) return false
+  const q = (question ?? '').toLowerCase()
+  const demandeUnCompte =
+    /\bcombien\b/.test(q) ||
+    /\bnombre\b/.test(q) ||
+    /\bcompte[rz]?\b/.test(q) ||
+    /\bliste[rz]?\b/.test(q) ||
+    /\binventaire\b/.test(q)
+  if (!demandeUnCompte) return false
+  /*
+    AUCUN chiffre n'est exigé dans la réponse, et c'est une CORRECTION mesurée.
+
+    Première version : la relance ne mordait que si la réponse contenait un nombre — l'agent qui
+    devine. Relevé du 2026-08-15 après ce correctif : encore 9/10, et l'échec (`conv-1205`) répondait
+    « Je vais vérifier directement le dossier `src/main` » — une ANNONCE, sans chiffre, sans action,
+    le tour se terminant là. La garde ne pouvait pas mordre : elle cherchait un nombre absent.
+
+    La règle juste est plus simple et couvre les TROIS façons de ne pas répondre — deviner un
+    chiffre, annoncer sans faire, refuser. Le déclencheur est l'ABSENCE DE LECTURE sur une question
+    qui en réclame une, jamais la forme de la phrase. Une réponse vide reste écartée : elle relève de
+    la garde du tour muet, sa jumelle.
+  */
+  return reponse.trim().length > 0
+}

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   boundedContinuationHistory,
   boundedTurnHistory,
-  buildTurnMessages
+  buildTurnMessages,
+  exigeUnChiffreVerifie
 } from './chat-turn-messages'
 
 describe('boundedTurnHistory', () => {
@@ -255,5 +256,40 @@ describe('buildTurnMessages', () => {
       history: []
     })
     expect(entries).toEqual([`ÉTAT DE L'APP:\n${JSON.stringify(null)}`])
+  })
+})
+
+describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', () => {
+  const Q = 'Combien de fichiers .test.ts dans src/main ?'
+
+  it('mord quand un NOMBRE est avancé SANS aucune lecture', () => {
+    // Le cas mesuré : réponse en 3 s, chiffre faux, zéro outil appelé.
+    expect(exigeUnChiffreVerifie(Q, 'Il y en a 42.', false)).toBe(true)
+  })
+
+  it('ne mord PAS quand une lecture a eu lieu', () => {
+    // C'est le cas nominal des 19 réussites : l'agent a listé, son chiffre est fondé.
+    expect(exigeUnChiffreVerifie(Q, 'Il y en a 220.', true)).toBe(false)
+  })
+
+  it('ne mord PAS sur une question qui ne demande aucun compte', () => {
+    // Un faux positif coûterait une itération, et surtout du temps sur chaque tour ordinaire.
+    expect(
+      exigeUnChiffreVerifie('Explique-moi ce module en 3 lignes.', 'Il fait 2 choses.', false)
+    ).toBe(false)
+  })
+
+  it('mord AUSSI sur un refus : list_files sait désormais trancher', () => {
+    expect(exigeUnChiffreVerifie(Q, 'Je ne peux pas le déterminer.', false)).toBe(true)
+  })
+
+  it('mord sur une ANNONCE sans action — le cas mesuré le 2026-08-15', () => {
+    // « Je vais vérifier directement le dossier src/main » : ni chiffre, ni action, tour terminé.
+    // La première version de cette garde exigeait un nombre : elle ne pouvait pas voir ce cas.
+    expect(exigeUnChiffreVerifie(Q, 'Je vais vérifier directement le dossier src/main.', false)).toBe(true)
+  })
+
+  it('ne mord PAS sur une réponse vide', () => {
+    expect(exigeUnChiffreVerifie(Q, '   ', false)).toBe(false)
   })
 })
