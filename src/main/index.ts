@@ -3358,6 +3358,19 @@ Le fil reprend ensuite normalement.`
     const budgetDuTour = chatTurnBudget(process.env)
     const chatBreaker = new CostCircuitBreaker(budgetDuTour.limits)
     const spoken: string[] = []
+    /**
+     * Les etiquettes d'action, TENUES A PART du vrai texte — et c'est un COUPLE de garanties.
+     *
+     * Elles existent comme dernier recours : un tour qui n'a fait qu'agir ne doit JAMAIS afficher une
+     * bulle vide (defaut documente, conv-1141). Mais melangees au texte, elles se retrouvaient EN TETE
+     * de reponses parfaitement redigees. Mesure le 2026-08-15 sur les conversations de sonde : 36 sur
+     * 39 commencaient par « [a execute ...] », et l'utilisateur a tranche — « c'est pas du tout
+     * l'experience que je veux offrir ».
+     *
+     * Separees, elles ne servent que quand rien d'autre n'existe. Les deux garanties tiennent alors
+     * ENSEMBLE : pas d'etiquette quand une reponse existe, jamais de bulle vide quand elle n'existe pas.
+     */
+    const etiquettesAction: string[] = []
     let streamedSpoken = recovery?.providerCall.streamedPrefix ?? ''
     let durableResponseTextSeen = Boolean(streamedSpoken.trim())
     /**
@@ -3395,7 +3408,9 @@ Le fil reprend ensuite normalement.`
         reasoningEffort: turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort,
         label: activityLabel,
         durationMs: Math.round(performance.now() - turnStartedAtMs),
-        text: (streamedSpoken || spoken.join('\n')).slice(0, 600) || undefined,
+        text:
+          (streamedSpoken || spoken.join('\n') || etiquettesAction.join('\n')).slice(0, 600) ||
+          undefined,
         traceStore: causalTrace
       })
       broadcast({ type: 'refresh', scope: 'workflows' })
@@ -3780,7 +3795,7 @@ Le fil reprend ensuite normalement.`
           durableResponseTextSeen = true
         }
         if (pilotEvent.kind === 'command' && pilotEvent.name)
-          spoken.push(`[a exécuté ${pilotEvent.name}]`)
+          etiquettesAction.push(`[a exécuté ${pilotEvent.name}]`)
         if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
         if (pilotEvent.kind === 'done' && pilotEvent.text?.trim())
           completedText = pilotEvent.text.trim()
@@ -4221,7 +4236,7 @@ Le fil reprend ensuite normalement.`
             outputTokens: turnUsage?.outputTokens,
             costUsd: turnUsage?.costUsd,
             durationMs: turnDurationMs,
-            text: (streamedSpoken || spoken.join('\n')).slice(0, 600)
+            text: (streamedSpoken || spoken.join('\n') || etiquettesAction.join('\n')).slice(0, 600)
           })
         }
       }
@@ -4231,7 +4246,11 @@ Le fil reprend ensuite normalement.`
         ok: true,
         cancelled: false,
         turnId,
-        text: completedText || streamedSpoken.trim() || spoken.join('\n').trim(),
+        text:
+          completedText ||
+          streamedSpoken.trim() ||
+          spoken.join('\n').trim() ||
+          etiquettesAction.join('\n').trim(),
         verification,
         ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
         ...taskUsageMetricsFromExecution(supervisedUsage)
@@ -4284,7 +4303,11 @@ Le fil reprend ensuite normalement.`
           ok: true,
           cancelled: true,
           turnId,
-          text: completedText || streamedSpoken.trim() || spoken.join('\n').trim(),
+          text:
+            completedText ||
+            streamedSpoken.trim() ||
+            spoken.join('\n').trim() ||
+            etiquettesAction.join('\n').trim(),
           ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
           ...taskUsageMetricsFromExecution(supervisedUsage)
         }
@@ -5960,11 +5983,7 @@ app.whenReady().then(async () => {
           durableResumeTurn.fail(message, false)
           if (resumedRunFile) {
             saveConvRunTrace(resumedRunFile.path, resumedSteps)
-            closeConvRun(
-              resumedRunFile.path,
-              'red',
-              `Reprise en échec: ${message.slice(0, 120)}`
-            )
+            closeConvRun(resumedRunFile.path, 'red', `Reprise en échec: ${message.slice(0, 120)}`)
             broadcast({ type: 'refresh', scope: 'workflows' })
           }
           broadcast({
