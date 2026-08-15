@@ -470,7 +470,21 @@ export class AgentPilot {
       systemProfile?: 'watchdog-read-only'
     },
     /** Dernière vraie demande humaine, quand le dernier message transport est une instruction interne. */
-    routingUserMessageOverride?: string
+    routingUserMessageOverride?: string,
+    /** Ce tour REPREND un tour coupe net pour laisser passer le dernier message utilisateur. */
+    tourCoupePourCeMessage?: boolean,
+    /**
+     * Exiger le BLOC DE CLOTURE et l'aveu d'echec — politique d'EXPERIENCE, pas regle du pilote.
+     *
+     * Demandee par l'utilisateur le 2026-08-15 apres lecture de ses conversations : « y'en a pas une
+     * qui a fini avec le bloc fait / a faire, c'est pas du tout l'experience que je veux offrir ».
+     *
+     * En OPTION plutot qu'en dur, parce qu'elle appartient a la SURFACE de chat et non au coeur du
+     * tour : imposee a tous, elle changeait le contrat de tours internes (recuperation, streaming,
+     * contrat de tour) dont les fixtures figent un nombre d'appels precis. L'expliciter dit QUI la
+     * veut, au lieu de la faire subir a tout le monde.
+     */
+    exigerExperienceSoignee = false
   ): Promise<void> {
     // Chronométrage des jalons jusqu'au PREMIER token : c'est la latence réellement perçue au clic.
     const timer = startTurnTimer('chat')
@@ -736,7 +750,8 @@ export class AgentPilot {
       history,
       resumeSessionId,
       lastUserMessage: lastUserMessage?.content,
-      compteRenduNonVu
+      compteRenduNonVu,
+      tourCoupePourCeMessage
     })
     const currentAttachments = history.at(-1)?.attachments
 
@@ -1189,6 +1204,7 @@ export class AgentPilot {
          * rendu obligatoire sans exigence d'honnetete produit un faux vert qui RASSURE.
          */
         if (
+          exigerExperienceSoignee &&
           !relanceDeFormeUtilisee &&
           echecTuRecoveryAvailable &&
           exigeDireLEchec(anyActionFailed, visibleTextThisTurn)
@@ -1205,6 +1221,7 @@ export class AgentPilot {
           continue
         }
         if (
+          exigerExperienceSoignee &&
           !relanceDeFormeUtilisee &&
           conclusionFormatRecoveryAvailable &&
           exigeUneConclusion(anyActionExecuted, visibleTextThisTurn)

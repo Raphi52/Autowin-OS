@@ -46,6 +46,8 @@ export interface TurnMessageParts {
    * repris, 31 prompts amputés) : ne jamais prétendre au modèle qu'il sait ce qu'on ne peut pas garantir.
    */
   compteRenduNonVu?: string
+  /** Ce tour REPREND un tour coupe net pour laisser passer le dernier message utilisateur. */
+  tourCoupePourCeMessage?: boolean
 }
 
 /**
