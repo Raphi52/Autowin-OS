@@ -3338,6 +3338,8 @@ Le fil reprend ensuite normalement.`
     // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
     const turnStartedAtMs = performance.now()
     const controller = new AbortController()
+    /** Veilleur d'inactivite du tour, arme plus bas et TOUJOURS eteint dans le `finally`. */
+    let veilleur: ReturnType<typeof setInterval> | undefined
     let resolveCompletion!: () => void
     const completion = new Promise<void>((resolve) => {
       resolveCompletion = resolve
@@ -3709,7 +3711,37 @@ Le fil reprend ensuite normalement.`
           }
         }
       }
+      /**
+       * VEILLEUR D'INACTIVITE — un tour qui ne finit jamais ne doit pas rester SILENCIEUX.
+       *
+       * Vecu par l'utilisateur : `conv-1181` le matin, `conv-1242` le soir — toutes deux figees en
+       * statut `streaming`, contenu « [a execute orchestrate] », action `ok: null`. Ni reponse, ni
+       * erreur, ni moyen de savoir que c'est mort. Sa demande : « ma derniere convers in app a encore
+       * foire, repare pour les prochains prompts ».
+       *
+       * Les quatre gardes de forme posees plus tot ne peuvent RIEN ici : elles s'arment a la FIN d'un
+       * tour, et ce tour n'en a pas. On surveille donc l'absence de signe de vie — tout evenement du
+       * pilote (delta, action, resultat, raisonnement) en est un.
+       *
+       * Le plafond est volontairement LARGE : il ne s'agit pas de brider un travail long mais de
+       * distinguer « long » de « MORT ». Une orchestration active emet regulierement ; un tour qui
+       * n'emet plus rien pendant vingt minutes n'est plus en train de travailler.
+       */
+      const PLAFOND_INACTIVITE_MS = 20 * 60 * 1000
+      let dernierSigneDeVie = Date.now()
+      veilleur = setInterval(() => {
+        if (Date.now() - dernierSigneDeVie < PLAFOND_INACTIVITE_MS) return
+        if (veilleur) clearInterval(veilleur)
+        // Un motif NOMME, jamais un arret muet : l'utilisateur doit lire pourquoi son tour s'arrete.
+        controller.abort(
+          `Tour interrompu : aucun signe de vie depuis ${Math.round(PLAFOND_INACTIVITE_MS / 60000)} minutes. ` +
+            'Le travail lance a pu se terminer sans rendre son resultat — relance ta demande.'
+        )
+      }, 60_000)
+      veilleur.unref()
+
       const handlePilotEvent = (incomingPilotEvent: PilotEvent): void => {
+        dernierSigneDeVie = Date.now()
         let pilotEvent = incomingPilotEvent
         if (conversationId && pilotEvent.kind === 'artifact' && pilotEvent.artifact) {
           try {
@@ -4338,6 +4370,8 @@ Le fil reprend ensuite normalement.`
         ...taskUsageMetricsFromExecution(supervisedUsage)
       }
     } finally {
+      // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant.
+      if (veilleur) clearInterval(veilleur)
       usagePersistenceReady = true
       if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
       if (conversationId) {
