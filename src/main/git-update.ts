@@ -25,8 +25,6 @@ const defaultRunner: GitRunner = async (args, cwd) => {
   return { stdout }
 }
 
-
-
 export interface UpdateStatus {
   available: boolean
   behind: number
@@ -47,10 +45,11 @@ export interface UpdateStatus {
 /** État de référence de l'équipe. Repli sur l'upstream de la branche si ce ref n'existe pas. */
 const TEAM_REFERENCE = 'origin/main'
 
-
-
 /** Détecte d'abord les conflits locaux, puis fetch et compte les commits de retard. */
-export async function checkForUpdate(cwd: string, run: GitRunner = defaultRunner): Promise<UpdateStatus> {
+export async function checkForUpdate(
+  cwd: string,
+  run: GitRunner = defaultRunner
+): Promise<UpdateStatus> {
   // L'annulation d'une fusion est purement LOCALE : elle doit rester disponible même si le réseau
   // ou le remote est indisponible. Ne jamais remettre cette sonde après le fetch.
   try {
@@ -111,7 +110,11 @@ export async function checkForUpdate(cwd: string, run: GitRunner = defaultRunner
       strategies: strategiesFor(branch)
     }
   } catch (error) {
-    return { available: false, behind: 0, error: error instanceof Error ? error.message : String(error) }
+    return {
+      available: false,
+      behind: 0,
+      error: error instanceof Error ? error.message : String(error)
+    }
   }
 }
 
@@ -314,13 +317,11 @@ export async function applyUpdate(
         }
       }
 
-      // Un arbre sale a pu bloquer proprement l'intégration : on le DIT, sans rien avoir déplacé.
+      // Rien n'a été déplacé : on DIT pourquoi, en lisant la raison de git plutôt qu'en la devinant.
       return {
         ok: false,
         strategy,
-        error: dirty
-          ? `La mise à jour n'a pas pu s'appliquer par-dessus ton travail non committé — il reste INTACT. Committe-le ou mets-le de côté toi-même (git stash), puis relance. ${updateError instanceof Error ? updateError.message : String(updateError)}`
-          : `La mise à jour a échoué; la tentative a été annulée. ${updateError instanceof Error ? updateError.message : String(updateError)}`
+        error: diagnostiquerEchecMaj(updateError, dirty, currentBranch)
       }
     }
     const npmInstalled = packageSignature(cwd) !== before
@@ -371,7 +372,55 @@ export async function applyUpdate(
 
 const defaultNpmInstall = (cwd: string): Promise<void> =>
   new Promise((resolve, reject) => {
-    execFile('npm', ['install'], { cwd, windowsHide: true, shell: true, timeout: 300_000 }, (err) =>
-      err ? reject(err) : resolve()
+    execFile(
+      'npm',
+      ['install'],
+      { cwd, windowsHide: true, shell: true, timeout: 300_000 },
+      (err) => (err ? reject(err) : resolve())
     )
   })
+
+/**
+ * POURQUOI la mise à jour a échoué — la raison de GIT, pas une corrélation.
+ *
+ * Vécu par l'utilisateur le 2026-08-14 (conversation « Réparer la mise à jour ») : l'app annonçait
+ * « n'a pas pu s'appliquer par-dessus ton travail non committé — committe-le ou mets-le de côté »,
+ * alors que git disait tout autre chose : « Diverging branches can't be fast-forwarded ». Son arbre
+ * était posé sur `autowin/recovery/run-e9bba61b1111-1`, une branche de récupération portant un commit
+ * propre. Committer ou stasher ne pouvait donc RIEN réparer, et il a tourné en rond.
+ *
+ * La faute était de choisir le message sur `dirty` : un arbre sale au moment d'un échec n'en est pas
+ * la cause. On lit désormais la sortie de git, et l'arbre sale n'est retenu que si git le nomme.
+ */
+export function diagnostiquerEchecMaj(
+  erreur: unknown,
+  arbreSale: boolean,
+  brancheCourante: string
+): string {
+  const brut = erreur instanceof Error ? erreur.message : String(erreur)
+  const texte = brut.toLowerCase()
+  const divergence =
+    texte.includes('diverging branches') ||
+    texte.includes('not possible to fast-forward') ||
+    texte.includes('non-fast-forward')
+  if (divergence) {
+    const surMain = brancheCourante === 'main'
+    return surMain
+      ? `Ta branche « main » a divergé d'origin/main : elle porte des commits que le distant n'a pas, donc l'avance simple est impossible. Ton travail est INTACT. Pousse tes commits, ou fusionne/rebase origin/main. ${brut}`
+      : `Tu n'es pas sur « main » mais sur « ${brancheCourante} », qui a divergé d'origin/main — c'est ce qui bloque, PAS ton travail non committé. Ton travail est INTACT. Bascule sur main (git checkout main), ou choisis fusionner/rebaser. ${brut}`
+  }
+  // L'arbre sale n'est retenu que si git l'invoque LUI-MÊME : sinon c'est une coïncidence, et
+  // l'accuser envoie l'utilisateur committer pour rien — exactement le défaut corrigé ici.
+  const gitBlameLArbre =
+    texte.includes('local changes') ||
+    texte.includes('would be overwritten') ||
+    texte.includes('unstaged') ||
+    texte.includes('cannot pull with rebase')
+  if (arbreSale && gitBlameLArbre) {
+    return `La mise à jour n'a pas pu s'appliquer par-dessus ton travail non committé — il reste INTACT. Committe-le ou mets-le de côté toi-même (git stash), puis relance. ${brut}`
+  }
+  // « INTACT » est une GARANTIE, pas une formule de politesse : rien n'a été stashé ni déplacé, et
+  // l'utilisateur doit le lire quel que soit le motif. Un test existant l'exigeait — il a rattrapé sa
+  // disparition dans ce repli, où je l'avais laissée tomber.
+  return `La mise à jour a échoué; la tentative a été annulée et ton travail local est INTACT (aucun stash). Raison rapportée par git : ${brut}`
+}
