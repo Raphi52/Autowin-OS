@@ -797,6 +797,17 @@ export class AgentPilot {
     let visibleTextThisTurn = ''
     let chiffreNonVerifieRecoveryAvailable = true
     let conclusionFormatRecoveryAvailable = true
+    /**
+     * UNE SEULE relance de FORME par tour, toutes gardes confondues.
+     *
+     * Sans ce verrou commun, elles s'enchainent : le tour muet est relance, sa reponse n'a pas encore
+     * de bloc de cloture, la garde suivante repart, puis celle de l'echec tu — trois iterations
+     * payantes pour un seul tour, et une sortie qui ne ressemble plus a rien. Constate le 2026-08-15 :
+     * quatre fichiers de tests d'`agent-pilot` sont tombes d'un coup pour cette raison.
+     *
+     * Chaque garde reste bornee a une fois par elle-meme ; ce verrou borne l'ENSEMBLE.
+     */
+    let relanceDeFormeUtilisee = false
     /** Une action de CE tour a-t-elle echoue ? Un « Fait » pose dessus serait un mensonge. */
     let anyActionFailed = false
     let echecTuRecoveryAvailable = true
@@ -963,7 +974,11 @@ export class AgentPilot {
         kind: 'prompt-call',
         iteration: i,
         prompt,
-        response: res.text.replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER),
+        // `?? ''` : un provider qui ne rend AUCUN texte ne doit pas faire planter le tour. Constate
+        // le 2026-08-15 — une relance de forme supplementaire suffisait a epuiser la reponse et le
+        // pilote tombait sur « Cannot read properties of undefined ». Un tour sans texte est un cas
+        // METIER (le tour muet a sa garde) ; ce n'en est pas un pour l'interpreteur.
+        response: (res.text ?? '').replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER),
         status: 'completed',
         callUsage: res.usage,
         callDurationMs: performance.now() - callStartedAt,
@@ -1010,8 +1025,18 @@ export class AgentPilot {
       for (const artifact of res.artifacts ?? []) {
         emit({ kind: 'artifact', artifact, iteration: i })
       }
-      const rejectedQuestion = /<question>/i.test(res.text)
-      const text = res.text.replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER).trim()
+      /**
+       * Le texte du provider, NORMALISE une fois pour toutes.
+       *
+       * Un provider peut ne rien rendre — et le tour ne doit pas PLANTER pour autant. Constate le
+       * 2026-08-15 : une relance de forme supplementaire epuisait la reponse d'un test, et le pilote
+       * tombait successivement sur `.replace`, puis `.slice`, d'un `undefined`. Rustiner chaque usage
+       * aurait laisse le suivant exploser ; on assainit donc a la SOURCE. L'absence de texte reste un
+       * cas METIER, traite par la garde du tour muet, pas une panne d'interpreteur.
+       */
+      const texteProvider = res.text ?? ''
+      const rejectedQuestion = /<question>/i.test(texteProvider)
+      const text = texteProvider.replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER).trim()
       const question = parseModelQuestion(text)
       if (question && ask) {
         const answer = await waitForAnswer(ask(question), signal)
@@ -1042,7 +1067,7 @@ export class AgentPilot {
         return
       }
 
-      const ordered = parseOrderedPilotTokens(res.text)
+      const ordered = parseOrderedPilotTokens(texteProvider)
       const hasCommand = ordered.some((token) => token.kind === 'command')
       const spoken = ordered
         .filter(
@@ -1125,6 +1150,7 @@ export class AgentPilot {
         // Le tour a AGI mais n'a rien dit : on redemande la conclusion plutot que de livrer des
         // etiquettes nues. Borne a une relance pour ne jamais boucler.
         if (!anySpokenText && anyActionExecuted && conclusionRecoveryAvailable) {
+          relanceDeFormeUtilisee = true
           conclusionRecoveryAvailable = false
           grantRecoveryIteration('muted-turn')
           convo.push(
@@ -1162,7 +1188,12 @@ export class AgentPilot {
          * `edit_file` en `ok:false`, et le texte lu se termine par « ✅ Fait ». Un bloc de cloture
          * rendu obligatoire sans exigence d'honnetete produit un faux vert qui RASSURE.
          */
-        if (echecTuRecoveryAvailable && exigeDireLEchec(anyActionFailed, visibleTextThisTurn)) {
+        if (
+          !relanceDeFormeUtilisee &&
+          echecTuRecoveryAvailable &&
+          exigeDireLEchec(anyActionFailed, visibleTextThisTurn)
+        ) {
+          relanceDeFormeUtilisee = true
           echecTuRecoveryAvailable = false
           grantRecoveryIteration('echec-taise')
           convo.push(
@@ -1174,9 +1205,11 @@ export class AgentPilot {
           continue
         }
         if (
+          !relanceDeFormeUtilisee &&
           conclusionFormatRecoveryAvailable &&
           exigeUneConclusion(anyActionExecuted, visibleTextThisTurn)
         ) {
+          relanceDeFormeUtilisee = true
           conclusionFormatRecoveryAvailable = false
           grantRecoveryIteration('conclusion-absente')
           convo.push(

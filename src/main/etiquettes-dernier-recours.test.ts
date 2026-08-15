@@ -28,12 +28,18 @@ describe('étiquettes d’action : dernier recours, jamais devant une vraie rép
   })
 
   it('chaque repli place les étiquettes en DERNIER, après le vrai texte', () => {
-    const replis = source.split('\n').filter((l) => l.includes('etiquettesAction.join'))
+    /*
+      Les espaces sont NORMALISÉS avant de juger, et c'est une correction : la première version
+      raisonnait ligne par ligne, or prettier éclate ces replis sur plusieurs lignes. Le test tombait
+      donc sur un formatage, pas sur un défaut — un faux rouge, aussi trompeur qu'un faux vert.
+    */
+    const compact = source.replace(/\s+/g, ' ')
+    const replis = compact.split('text:').filter((bout) => bout.includes('etiquettesAction.join'))
     expect(replis.length).toBeGreaterThanOrEqual(4)
     for (const repli of replis) {
-      // `spoken` (le vrai texte) doit être consulté AVANT les étiquettes, dans la même expression.
-      expect(repli.indexOf('spoken.join')).toBeGreaterThan(0)
-      expect(repli.indexOf('spoken.join')).toBeLessThan(repli.indexOf('etiquettesAction.join'))
+      const debut = repli.slice(0, repli.indexOf('etiquettesAction.join'))
+      // Le vrai texte doit être consulté AVANT les étiquettes, dans la même expression de repli.
+      expect(debut).toContain('spoken.join')
     }
   })
 
