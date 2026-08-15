@@ -53,10 +53,26 @@ function excerpt(content: unknown, query: string, cap = 96): string {
   return `${start > 0 ? '…' : ''}${compact.slice(start, start + cap).trim()}${start + cap < compact.length ? '…' : ''}`
 }
 
+/**
+ * Plafond de la liste — 40 auparavant, et ce chiffre MENTAIT.
+ *
+ * Constaté par l'utilisateur le 2026-08-15 : « je vois que la catégorie Divers avec 40 éléments, on
+ * dirait un mock-up, le compteur bouge jamais ». Il avait raison : « 40 » n'était pas un compte mais
+ * LE PLAFOND, appliqué dès que la recherche est vide. Son installation compte 1 011 conversations —
+ * la barre latérale n'en montrait que les 40 premières, et l'en-tête affichait donc éternellement 40.
+ * Trente conversations de sonde, vérifiées présentes (`conv-1195`→`conv-1224`), étaient invisibles :
+ * elles tombaient hors de cette fenêtre.
+ *
+ * Le plafond n'est pas supprimé — il protège le rendu d'une base sans limite — mais porté à une
+ * valeur qui COUVRE l'usage réel observé, de sorte que le compteur redevienne un compte. Au-delà, la
+ * recherche prend le relais : elle parcourt tout, elle, sans passer par cette fenêtre.
+ */
+export const PLAFOND_LISTE = 2_000
+
 export function searchConversations<T extends ConversationSearchSource>(
   conversations: readonly T[],
   rawQuery: string,
-  limit = 40
+  limit = PLAFOND_LISTE
 ): ConversationSearchHit<T>[] {
   const query = normalize(rawQuery.trim())
   if (!query) {

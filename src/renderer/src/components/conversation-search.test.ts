@@ -96,3 +96,55 @@ describe('conversation search', () => {
     expect(searchConversations([updated], 'alpha')).toEqual([])
   })
 })
+
+describe('la liste SANS recherche ne doit pas mentir sur ce qu’elle contient', () => {
+  /*
+    Constaté par l'utilisateur le 2026-08-15 : « je vois que la catégorie Divers avec 40 éléments,
+    on dirait un mock-up, le compteur bouge jamais ».
+
+    Il avait raison, et le « 40 » n'était pas un compte : c'était le PLAFOND lui-même, appliqué quand
+    la recherche est vide. Son installation compte 1 011 conversations ; la barre latérale n'en
+    montrait que les 40 premières, et l'en-tête affichait donc éternellement 40. Trente sondes créées
+    et vérifiées présentes (`conv-1195`→`conv-1224`) restaient invisibles : elles tombaient hors des 40.
+
+    C'est la même faute que celles corrigées le même jour — un affichage qui montre une PARTIE en se
+    présentant comme le TOUT. Un plafond est légitime pour tenir le rendu ; le présenter comme un
+    inventaire complet ne l'est pas.
+  */
+  const beaucoup = Array.from({ length: 300 }, (_, i) => ({
+    id: `conv-${i}`,
+    title: `Conversation ${i}`,
+    category: 'general',
+    provider: 'claude',
+    updatedAt: i,
+    messages: []
+  }))
+
+  it('rend BIEN PLUS que les 40 premières quand aucune recherche n’est saisie', () => {
+    const hits = searchConversations(beaucoup, '')
+    expect(hits.length).toBeGreaterThan(40)
+    expect(hits.length).toBe(300)
+  })
+
+  it('rend les récentes ET les anciennes : une conversation au-delà du 40ᵉ rang reste atteignable', () => {
+    // Le cas vécu : les sondes existaient, mais hors fenêtre. Une liste qui les cache les nie.
+    const hits = searchConversations(beaucoup, '')
+    expect(hits.some((hit) => hit.conversation.id === 'conv-250')).toBe(true)
+  })
+
+  it('garde un plafond de sécurité : une base énorme ne rend pas la liste sans fin', () => {
+    // Le plafond n'est pas supprimé, il est porté à une valeur qui couvre l'usage réel observé
+    // (1 011 conversations) sans promettre l'infini.
+    const enorme = Array.from({ length: 5_000 }, (_, i) => ({
+      id: `c-${i}`,
+      title: `t${i}`,
+      category: 'general',
+      provider: 'claude',
+      updatedAt: i,
+      messages: []
+    }))
+    const hits = searchConversations(enorme, '')
+    expect(hits.length).toBeLessThan(5_000)
+    expect(hits.length).toBeGreaterThanOrEqual(1_500)
+  })
+})
