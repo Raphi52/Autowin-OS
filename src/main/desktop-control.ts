@@ -120,14 +120,32 @@ export function parseDesktopActions(input: unknown): DesktopAction[] {
           x: normalizedCoordinate(action.x, `actions[${index}].x`),
           y: normalizedCoordinate(action.y, `actions[${index}].y`)
         }
+      /**
+       * `double_click` est un ALIAS de `click` avec `clicks: 2` — pas une capacite nouvelle.
+       *
+       * MESURE le 2026-08-15 sur les 40 dernieres conversations : `desktop_act` est la commande qui
+       * echoue le PLUS (4 echecs), et son motif est litteral — « Type d'action desktop inconnu:
+       * double_click ». Le double-clic etait pourtant deja possible ici meme, via `clicks: 2` ; seul
+       * le NOM manquait. Un agent qui ecrit le nom le plus naturel se heurtait a un refus.
+       *
+       * Refuser un synonyme evident ne protege rien : cela transforme une action realisable en echec,
+       * et l'agent part alors cliquer a l'aveugle ailleurs — ce qui a ete observe.
+       */
+      case 'double_click':
       case 'click': {
         const button = action.button ?? 'left'
         if (button !== 'left' && button !== 'right' && button !== 'middle') {
           throw new Error(`actions[${index}].button est invalide`)
         }
-        const clicks = finiteInteger(action.clicks ?? 1, `actions[${index}].clicks`, 1, 2) as 1 | 2
+        const clicks = (
+          type === 'double_click'
+            ? 2
+            : finiteInteger(action.clicks ?? 1, `actions[${index}].clicks`, 1, 2)
+        ) as 1 | 2
         return {
-          type,
+          // Normalise en `click` : l'execution en aval ne connait qu'un seul geste, le nombre de
+          // clics porte la difference. Laisser fuiter `double_click` ferait echouer un cran plus loin.
+          type: 'click' as const,
           x: normalizedCoordinate(action.x, `actions[${index}].x`),
           y: normalizedCoordinate(action.y, `actions[${index}].y`),
           button,
