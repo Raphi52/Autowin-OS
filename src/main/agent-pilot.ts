@@ -14,6 +14,7 @@ import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import {
   buildTurnMessages,
+  exigeAgirPasAnnoncer,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
   exigeUneConclusion
@@ -774,6 +775,7 @@ export class AgentPilot {
       | 'chiffre-non-verifie'
       | 'conclusion-absente'
       | 'echec-taise'
+      | 'annonce-sans-action'
     > = []
     const grantRecoveryIteration = (
       reason:
@@ -783,6 +785,7 @@ export class AgentPilot {
         | 'chiffre-non-verifie'
         | 'conclusion-absente'
         | 'echec-taise'
+        | 'annonce-sans-action'
     ): void => {
       recoveryReasons.push(reason)
       iterationLimit += 1
@@ -826,6 +829,7 @@ export class AgentPilot {
     /** Une action de CE tour a-t-elle echoue ? Un « Fait » pose dessus serait un mensonge. */
     let anyActionFailed = false
     let echecTuRecoveryAvailable = true
+    let annonceSansActionRecoveryAvailable = true
     let commandAttachments: NonNullable<Message['attachments']> = []
     for (let i = recoveredProviderCall?.iteration ?? 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
@@ -1203,6 +1207,32 @@ export class AgentPilot {
          * `edit_file` en `ok:false`, et le texte lu se termine par « ✅ Fait ». Un bloc de cloture
          * rendu obligatoire sans exigence d'honnetete produit un faux vert qui RASSURE.
          */
+        /**
+         * IL PARLE SANS AGIR — miroir du tour muet, decouvert le 2026-08-15.
+         *
+         * Demande : « ranges moi mes conversations dans des sous categories adequates ». Reponse
+         * recue, marquee `completed` : « Je vais d'abord identifier… », « Je cible maintenant… »,
+         * et ZERO action. Rien n'a ete range. Les cinq gardes precedentes exigent toutes
+         * `anyActionExecuted` : aucune ne pouvait voir un tour qui n'agit pas du tout.
+         */
+        if (
+          exigerExperienceSoignee &&
+          !relanceDeFormeUtilisee &&
+          annonceSansActionRecoveryAvailable &&
+          exigeAgirPasAnnoncer(latestUserMessage, visibleTextThisTurn, anyActionExecuted)
+        ) {
+          annonceSansActionRecoveryAvailable = false
+          relanceDeFormeUtilisee = true
+          grantRecoveryIteration('annonce-sans-action')
+          convo.push(
+            'SYSTÈME: tu as ANNONCÉ ce que tu allais faire, sans rien faire — aucune commande n’a ' +
+              'été exécutée, donc la demande n’est PAS satisfaite. AGIS maintenant : émets les ' +
+              'commandes nécessaires, puis rends compte de ce qu’elles ont réellement produit. Si ' +
+              'tu ne peux pas agir, dis-le explicitement et pourquoi — ne décris jamais un plan au ' +
+              'futur comme s’il tenait lieu de résultat.'
+          )
+          continue
+        }
         if (
           exigerExperienceSoignee &&
           !relanceDeFormeUtilisee &&

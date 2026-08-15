@@ -3,6 +3,7 @@ import {
   boundedContinuationHistory,
   boundedTurnHistory,
   buildTurnMessages,
+  exigeAgirPasAnnoncer,
   exigeDireLEchec,
   exigeUnChiffreVerifie
 } from './chat-turn-messages'
@@ -314,5 +315,35 @@ describe('exigeDireLEchec — un « Fait » posé sur un échec', () => {
   it('ne mord PAS quand aucune action n’a échoué', () => {
     // Réclamer un aveu d'échec là où tout a réussi produirait un doute injustifié.
     expect(exigeDireLEchec(false, '### ✅ Fait\nTout est passé.')).toBe(false)
+  })
+})
+
+describe('exigeAgirPasAnnoncer — il parle sans agir', () => {
+  const DEMANDE = 'ranges moi mes conversations dans des sous categories adequates'
+  const VECU =
+    'Je vais d’abord identifier le comportement actuel, écrire un test rouge…\nJe cible maintenant le flux réel de classement.'
+
+  it('mord sur le cas RÉEL de conv-1242 : un plan au futur, zéro action', () => {
+    expect(exigeAgirPasAnnoncer(DEMANDE, VECU, false)).toBe(true)
+  })
+
+  it('ne mord PAS si une action a réellement eu lieu', () => {
+    // Annoncer PUIS faire est legitime : c'est l'absence d'acte qui est en cause, pas la phrase.
+    expect(exigeAgirPasAnnoncer(DEMANDE, VECU, true)).toBe(false)
+  })
+
+  it('ne mord PAS sur une QUESTION : on n’exige pas d’agir pour répondre', () => {
+    expect(exigeAgirPasAnnoncer('combien de fichiers dans src ?', VECU, false)).toBe(false)
+  })
+
+  it('ne mord PAS sur un refus argumenté, qui n’annonce rien au futur', () => {
+    // Dire « je ne peux pas, voici pourquoi » est une reponse honnete, pas un plan recite.
+    expect(
+      exigeAgirPasAnnoncer(
+        DEMANDE,
+        'Je ne peux pas ranger ces conversations : aucune catégorie n’existe.',
+        false
+      )
+    ).toBe(false)
   })
 })

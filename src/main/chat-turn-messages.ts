@@ -206,3 +206,45 @@ export function exigeDireLEchec(uneActionAEchoue: boolean, reponse: string): boo
   )
   return !nommeLEchec
 }
+
+/**
+ * LE TOUR QUI ANNONCE SANS AGIR — miroir exact du tour muet, et tout aussi trompeur.
+ *
+ * Vécu par l'utilisateur le 2026-08-15. Demande : « ranges moi mes conversations dans des sous
+ * catégories adéquates ». Réponse reçue, marquée `completed` :
+ *
+ *     « Je vais d'abord identifier le comportement actuel, écrire un test rouge… »
+ *     « Je cible maintenant le flux réel de classement… »
+ *     ACTIONS: []
+ *
+ * Zéro action exécutée. Rien n'a été rangé. Le tour a récité son plan au futur puis s'est terminé,
+ * en se déclarant réussi.
+ *
+ * Les cinq gardes posées plus tôt ne pouvaient PAS le voir : toutes exigent `anyActionExecuted`.
+ * Le tour muet est « il agit sans parler » ; celui-ci est son miroir — « il parle sans agir ». Même
+ * angle mort que le veilleur d'inactivité : on couvrait les mauvaises fins, jamais l'absence de tout.
+ *
+ * Prudent par construction : il ne mord que si la demande RÉCLAME une action, qu'AUCUNE n'a eu lieu,
+ * et que la réponse est au FUTUR. Une réponse à une question ou un refus argumenté passent.
+ */
+export function exigeAgirPasAnnoncer(
+  question: string | undefined,
+  reponse: string,
+  uneActionAEuLieu: boolean
+): boolean {
+  if (uneActionAEuLieu) return false
+  const texte = (reponse ?? '').trim()
+  if (!texte) return false // le tour muet a sa propre garde
+  const q = (question ?? '').toLowerCase()
+  // Un verbe d'ACTION à l'impératif ou à l'infinitif : l'utilisateur demande un effet, pas un avis.
+  const demandeUneAction =
+    /\b(range|classe|cr[ée]e|ajoute|modifie|corrige|r[ée]pare|supprime|renomme|impl[ée]mente|fais|lance|applique|configure|installe|d[ée]place)/i.test(
+      q
+    )
+  if (!demandeUneAction) return false
+  // La marque du plan récité : « je vais », « je cible maintenant », « je commence par »…
+  const annonceAuFutur =
+    /\bje (vais|commence|cible|compte|prévois|m[’']apprête)\b/i.test(texte) ||
+    /\bje (procède|démarre|attaque) (maintenant|par)\b/i.test(texte)
+  return annonceAuFutur
+}
