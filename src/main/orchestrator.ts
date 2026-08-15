@@ -3035,8 +3035,12 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const phaseContext: string[] = [
       ...(memoryEcho ? [memoryEcho] : []),
       ...(causalMemory ? [causalMemory] : []),
-      ...(empreinteDepot ? [`EMPREINTE DU DÉPÔT (skill load) :
-${empreinteDepot}`] : []),
+      ...(empreinteDepot
+        ? [
+            `EMPREINTE DU DÉPÔT (skill load) :
+${empreinteDepot}`
+          ]
+        : []),
       ...(brainContext
         ? [
             brainContext,
@@ -4112,6 +4116,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     let valid = false
     let gate!: ReturnType<typeof evaluateClosure>
     let learningAttestations: IndependentLearningAttestation[] = []
+    /** Motif du refus precedent : un refus INCHANGE prouve qu'une nouvelle tentative est vaine. */
+    let motifPrecedent = ''
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (attempt > 0) {
         // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
@@ -4136,6 +4142,26 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       gate = r.gate
       learningAttestations = r.learningAttestations
       if (!gate.blocked) break
+      /**
+       * REFUS IDENTIQUE = REPARATION INUTILE, on s'arrete la.
+       *
+       * Mesure dans `conv-1242` le 2026-08-15 : trois passages `build` (73 s, 60 s, puis un
+       * troisieme), chacun suivi du MEME refus mot pour mot — « PRE-GATE BLOQUE: Statut "red" : la
+       * cloture a ete refusee en amont ». Plus de deux minutes de calcul brulees pour rien, puis
+       * abandon. Rien ne changeait entre deux tentatives : le run etait rouge EN AMONT, et aucune
+       * reparation du livrable ne pouvait lever ce verrou.
+       *
+       * La reparation n'a de sens que si le refus EVOLUE — un nouveau motif prouve qu'on a avance.
+       * Un motif inchange prouve l'inverse : rejouer coute sans rien apprendre.
+       */
+      const motifCourant = gate.reasons.join('; ')
+      if (motifCourant && motifCourant === motifPrecedent) {
+        gate.reasons.push(
+          'Reparation interrompue : le refus est identique a la tentative precedente, rejouer ne peut rien changer.'
+        )
+        break
+      }
+      motifPrecedent = motifCourant
     }
     if (gate.blocked && enforceSpend && (graphRecoveries ?? 0) > 0) {
       gate.reasons.push(
