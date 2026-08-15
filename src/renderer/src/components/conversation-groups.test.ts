@@ -65,6 +65,20 @@ describe('le nom lisible d’un dossier', () => {
 })
 
 describe('l’ordre des groupes', () => {
+  it('un dossier enfant devient une sous-catégorie du dossier parent présent', () => {
+    const groupes = grouperConversations([
+      conv('parent', { projectPath: 'C:\\Clients' }),
+      conv('enfant', { projectPath: 'C:\\Clients\\Amitel' }),
+      conv('autre', { projectPath: 'D:\\Projets' })
+    ])
+
+    expect(groupes.map((g) => ({ label: g.label, depth: g.depth, parentKey: g.parentKey }))).toEqual([
+      { label: 'Clients', depth: 0, parentKey: undefined },
+      { label: 'Amitel', depth: 1, parentKey: 'C:\\Clients' },
+      { label: 'Projets', depth: 0, parentKey: undefined }
+    ])
+  })
+
   it('les projets d’abord, « Divers » ensuite, « Auto-kaizen » en DERNIER', () => {
     // Le bruit descend : c'est la demande. S'il remontait, la séparation ne servirait à rien.
     const groupes = grouperConversations([

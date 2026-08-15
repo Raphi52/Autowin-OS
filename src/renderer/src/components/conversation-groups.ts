@@ -29,6 +29,10 @@ export interface ConversationGroup<T extends ConversationLike> {
   key: string
   label: string
   kind: 'kaizen' | 'projet' | 'divers'
+  /** Niveau visuel dans l'arborescence des dossiers réellement présents. */
+  depth: number
+  /** Catégorie parente la plus proche parmi les dossiers réellement présents. */
+  parentKey?: string
   items: T[]
 }
 
@@ -77,8 +81,31 @@ export function grouperConversations<T extends ConversationLike>(
     const { key, label, kind } = groupeDe(conversation)
     const existant = par.get(key)
     if (existant) existant.items.push(conversation)
-    else par.set(key, { key, label, kind, items: [conversation] })
+    else par.set(key, { key, label, kind, depth: 0, items: [conversation] })
   }
+
+  const projets = [...par.values()].filter((g) => g.kind === 'projet')
+  const parCheminNormalise = new Map(
+    projets.map((g) => [g.key.replace(/[\\/]+$/, '').toLocaleLowerCase('fr'), g])
+  )
+  for (const groupe of projets) {
+    let candidat = groupe.key.replace(/[\\/]+$/, '')
+    while (/[\\/]/.test(candidat)) {
+      candidat = candidat.replace(/[\\/][^\\/]+$/, '')
+      const parent = parCheminNormalise.get(candidat.toLocaleLowerCase('fr'))
+      if (parent) {
+        groupe.parentKey = parent.key
+        break
+      }
+    }
+  }
+
+  const profondeur = (groupe: ConversationGroup<T>): number => {
+    if (!groupe.parentKey) return 0
+    const parent = par.get(groupe.parentKey)
+    return parent ? profondeur(parent) + 1 : 0
+  }
+  for (const groupe of projets) groupe.depth = profondeur(groupe)
 
   const rang = (g: ConversationGroup<T>): number =>
     g.kind === 'projet' ? 0 : g.kind === 'divers' ? 1 : 2
@@ -86,6 +113,9 @@ export function grouperConversations<T extends ConversationLike>(
   return [...par.values()].sort((a, b) => {
     const delta = rang(a) - rang(b)
     if (delta !== 0) return delta
+    if (a.kind === 'projet' && b.kind === 'projet') {
+      return a.key.localeCompare(b.key, 'fr', { sensitivity: 'base' })
+    }
     return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' })
   })
 }

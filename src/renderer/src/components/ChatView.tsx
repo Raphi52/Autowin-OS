@@ -2035,6 +2035,7 @@ export function ChatView({
                     surviole === groupe.key ? ' is-drop' : ''
                   }`}
                   data-testid={`conv-group-${groupe.key}`}
+                  data-depth={groupe.depth}
                   onDragOver={(e) => {
                     if (groupe.kind !== 'projet') return
                     e.preventDefault()
@@ -2053,6 +2054,7 @@ export function ChatView({
                     onClick={() => basculerGroupe(groupe.key, replie)}
                     aria-expanded={!replie}
                     title={groupe.kind === 'projet' ? groupe.key : groupe.label}
+                    style={{ paddingLeft: 8 + groupe.depth * 14 }}
                   >
                     <span className="conv-group-chevron" aria-hidden="true">
                       {replie ? '▸' : '▾'}
@@ -2074,6 +2076,7 @@ export function ChatView({
                       <div
                         key={c.id}
                         className={`conv-item${c.id === activeId ? ' active' : ''}`}
+                        style={{ marginLeft: groupe.depth * 14 }}
                         // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
                         // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
                         // ceux qui ne peuvent pas glisser.
