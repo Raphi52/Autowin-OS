@@ -1614,7 +1614,7 @@ export class AppCommandBus {
       case 'classer_conversation': {
         const dossier = typeof a.dossier === 'string' ? a.dossier.trim() : ''
         const c = this.os.conversations.setProjectPath(s('id'), dossier || null)
-        if (!c) return { erreur: 'conversation introuvable', id: s('id') }
+        if (!c) throw new Error(`conversation introuvable: ${s('id')}`)
         this.broadcast({ type: 'refresh', scope: 'conversations' })
         return { id: c.id, titre: c.title, dossier: c.projectPath ?? null }
       }

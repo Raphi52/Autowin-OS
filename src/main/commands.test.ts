@@ -48,6 +48,11 @@ function fakeOs(): any {
       get: (id: string) => conversations.get(id),
       remove: (id: string) => conversations.delete(id),
       list: () => [...conversations.values()],
+      setProjectPath: (id: string, projectPath: string | null) => {
+        const conversation = conversations.get(id)
+        if (!conversation) return undefined
+        return Object.assign(conversation, { projectPath: projectPath ?? undefined })
+      },
       attachRun: () => {
         calls.attachRun += 1
         return { id: 'conv-1', runPaths: [] }
@@ -92,6 +97,20 @@ function fakeOs(): any {
     calls
   }
 }
+
+describe('classement d’une conversation', () => {
+  it('signale comme ECHEC une conversation absente au lieu de produire un faux vert', async () => {
+    const bus = new AppCommandBus(fakeOs(), () => undefined)
+
+    // Entrée discriminante : sans le correctif, `conv-absente` ressort encore en ok:true.
+    const result = await bus.exec('classer_conversation', {
+      id: 'conv-absente',
+      dossier: 'Clients/Amitel'
+    })
+
+    expect(result).toMatchObject({ ok: false, error: expect.stringMatching(/introuvable/i) })
+  })
+})
 
 describe('isolation du prompt watchdog', () => {
   it('retire le chemin absolu de la base et interdit de modifier la source', () => {
