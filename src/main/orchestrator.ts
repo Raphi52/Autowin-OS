@@ -4123,7 +4123,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
         // donc son panel, sa synthèse, sa concurrence et sa télémétrie.
         phaseContext.push(
-          `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
+          `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Objections du juge : ${lastJudgeText || '(verdict vide)'}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
         )
         // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
         // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.

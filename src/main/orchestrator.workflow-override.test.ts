@@ -407,6 +407,33 @@ describe('un graphe pilote le run', () => {
     ])
   })
 
+  it('transmet les objections du juge au build de reprise', async () => {
+    const provider = new RedPuisVert()
+    const quote = compileExecutionQuote('corrige le bug')
+    await makeOrchestrator(
+      provider,
+      {
+        explicit: true,
+        graph: {
+          entry: 'build',
+          nodes: [
+            { id: 'build', phase: 'build' },
+            { id: 'judge', phase: 'judge' }
+          ],
+          edges: [
+            { from: 'build', to: 'judge', when: 'always' },
+            { from: 'judge', to: 'build', when: 'red', maxTraversals: 1 }
+          ]
+        }
+      },
+      quote
+    ).run('corrige le bug')
+
+    const builds = provider.prompts.filter((prompt) => prompt.includes('SKILL build'))
+    expect(builds).toHaveLength(2)
+    expect(builds[1]).toContain('DEFAUT: reprise requise')
+  })
+
   it('un graphe avec une reprise tient dans un cap égal à son vrai pire cas', async () => {
     const provider = new RedPuisVert()
     const quote = compileExecutionQuote('corrige le bug', { maxProviderCalls: 5 })
