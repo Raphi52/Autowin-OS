@@ -35,7 +35,7 @@ describe('résolution du chemin du worker', () => {
 })
 
 describe('inventaire de récupération — une copie cassée n’emporte pas les autres', () => {
-  const manager = (jets: { sur: string }): WorktreeManager =>
+  const manager = (_jets: { sur: string }): WorktreeManager =>
     new WorktreeManager({
       baseRepo: 'C:\\repo',
       worktreeRoot: 'C:\\copies',
@@ -43,7 +43,7 @@ describe('inventaire de récupération — une copie cassée n’emporte pas les
       // Injecter `tryGitFn` suffit à rester hors du disque : aucune de ces méthodes ne doit lancer git.
       tryGitFn: () => ({ code: 0, stdout: '', stderr: '' }),
       git: () => ''
-    }) as WorktreeManager & { jets: typeof jets }
+    }) as WorktreeManager & { jets: typeof _jets }
 
   it('rapporte la copie illisible SANS ses détails, au lieu de tout perdre', () => {
     const m = manager({ sur: 'copie-cassee' })

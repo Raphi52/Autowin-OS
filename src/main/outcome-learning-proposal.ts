@@ -111,6 +111,11 @@ export function verifyIndependentLearningAttestation(
     !value.attestorId.trim()
   )
     return false
-  const { attestation: _attestation, ...unsigned } = value
+  const unsigned = {
+    proposalHash: value.proposalHash,
+    runId: value.runId,
+    attestorRole: value.attestorRole,
+    attestorId: value.attestorId
+  }
   return value.attestation === independentAttestationDigest(unsigned)
 }

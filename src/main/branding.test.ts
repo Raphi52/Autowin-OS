@@ -99,7 +99,9 @@ describe('identite Autowin OS', () => {
     expect(manifest.author).toBe('Amitel')
     expect(manifest.homepage).toBeUndefined()
     expect(appShell).toContain("import packageManifest from '../../../package.json'")
-    expect(appShell).toContain('{`v${packageManifest.version} · preview`}')
+    expect(appShell).toContain(
+      '{`v${packageManifest.version} · build ${buildNumber} · ${buildSha}`}'
+    )
     expect(appShell).not.toContain('v0 · MVP')
     expect(main.indexOf("app.setPath('userData'")).toBeGreaterThanOrEqual(0)
     expect(main.indexOf("app.setPath('userData'")).toBeLessThan(

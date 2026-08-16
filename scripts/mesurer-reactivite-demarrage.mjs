@@ -8,7 +8,9 @@ const attendre = async () => {
       const pages = await (await fetch(`http://127.0.0.1:${p}/json`)).json()
       const page = pages.find((x) => x.type === 'page' && x.webSocketDebuggerUrl)
       if (page) return page
-    } catch {}
+    } catch {
+      // CDP n'est pas encore prêt : la boucle bornée retente après 300 ms.
+    }
     await new Promise((r) => setTimeout(r, 300))
   }
   throw new Error('pas de page CDP')
@@ -40,7 +42,7 @@ while (Date.now() - debut < 40_000) {
       awaitPromise: true
     })
     latences.push(Date.now() - t)
-  } catch (e) {
+  } catch {
     latences.push(-1)
   }
   await new Promise((r) => setTimeout(r, 400))

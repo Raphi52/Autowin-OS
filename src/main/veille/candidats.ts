@@ -150,7 +150,7 @@ export const CITATION_MINIMUM_INTERNE = 10
 export function normaliserTitre(titre: string): string {
   return titre
     .toLocaleLowerCase('fr')
-    .replace(/[\s ]+/g, ' ')
+    .replace(/[\s\u00a0]+/g, ' ')
     .replace(/[.,;:!?()[\]«»"'’]/g, '')
     .trim()
 }

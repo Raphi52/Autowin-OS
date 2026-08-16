@@ -166,8 +166,10 @@ export function BehaviourView(): React.JSX.Element {
   }, [loadComposition, workspace])
 
   useEffect(() => {
-    void loadOutcomeLearning().catch((reason) =>
-      setError(reason instanceof Error ? reason.message : String(reason))
+    queueMicrotask(() =>
+      void loadOutcomeLearning().catch((reason) =>
+        setError(reason instanceof Error ? reason.message : String(reason))
+      )
     )
   }, [loadOutcomeLearning])
 

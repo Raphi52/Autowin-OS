@@ -10,9 +10,9 @@ function covered(path: string, pattern: string): boolean {
   const selector = normalized(pattern)
   const escaped = selector.replace(/[.+^${}()|[\]\\]/gu, '\\$&')
   const expression = escaped
-    .replace(/\*\*/gu, '\u0000')
+    .replace(/\*\*/gu, '\u{e000}')
     .replace(/\*/gu, '[^/]*')
-    .replace(/\u0000/gu, '.*')
+    .replace(/\u{e000}/gu, '.*')
   return new RegExp(`^${expression}$`, 'u').test(source)
 }
 

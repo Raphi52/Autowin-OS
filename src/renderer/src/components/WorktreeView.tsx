@@ -70,6 +70,8 @@ function ResumeChefDeProjet({
    */
   recuEvenement: boolean
 }): React.JSX.Element {
+  // La fraîcheur est intentionnellement évaluée au rendu : elle dépend de l'heure murale.
+  // eslint-disable-next-line react-hooks/purity
   const maintenant = Date.now()
   const flux = useMemo(() => resumerFlux(agents, maintenant), [agents, maintenant])
   const chantiers = useMemo(() => regrouperParChantier(agents, maintenant), [agents, maintenant])

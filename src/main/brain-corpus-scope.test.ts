@@ -103,7 +103,7 @@ describe('brainCorpusForWorkspace — tout le Brain par défaut', () => {
   })
 
   it('un workspace INCONNU ou ABSENT n’est plus fail-closed — le Brain est partagé', () => {
-    expect(brainCorpusForWorkspace('C:\Autre\Projet', {})).toBeUndefined()
+    expect(brainCorpusForWorkspace('C:\\Autre\\Projet', {})).toBeUndefined()
     expect(brainCorpusForWorkspace(undefined, {})).toBeUndefined()
   })
 
