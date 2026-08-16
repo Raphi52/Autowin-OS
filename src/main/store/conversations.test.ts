@@ -193,7 +193,9 @@ describe('ConversationStore structured turns', () => {
 
     expect(conv.messages[1]).toMatchObject({
       status: 'completed',
-      content: 'Je vérifie.\n[a exécuté get_state]'
+      // La projection ne porte plus l'étiquette d'une action RÉUSSIE : elle masquait le texte que
+      // l'utilisateur lit. Elle reste rendue quand AUCUN texte n'existe — jamais de bulle vide.
+      content: 'Je vérifie.'
     })
     expect(conv.messages[1].parts).toHaveLength(2)
   })

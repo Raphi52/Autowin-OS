@@ -40,7 +40,19 @@ describe('chat turn reducer', () => {
       },
       { kind: 'text', streamId: '1:0', text: ' Terminé.' }
     ])
-    expect(flattenChatParts(turn.parts)).toBe('Bonjour Raphaël.\n[a exécuté get_state]\n Terminé.')
+    /*
+      L'ORDRE des textes reste la garantie de ce test — c'était son intention, et elle tient. Ce qui
+      change : l'étiquette d'une action RÉUSSIE ne s'intercale plus entre eux. Mesuré le 2026-08-15,
+      36 conversations sur 39 commençaient par « [a exécuté …] », et l'utilisateur a tranché — « c'est
+      pas du tout l'expérience utilisateur que je veux offrir ».
+
+      L'étiquette reste un DERNIER RECOURS : sans aucun texte, elle réapparaît, sinon la bulle serait
+      vide — un défaut plus ancien et pire (`conv-1141`). Les deux garanties tiennent ensemble.
+    */
+    expect(flattenChatParts(turn.parts)).toBe('Bonjour Raphaël.\n Terminé.')
+    expect(flattenChatParts(turn.parts.filter((part) => part.kind === 'action'))).toContain(
+      'get_state'
+    )
   })
 
   it('removes only the failed retry stream', () => {

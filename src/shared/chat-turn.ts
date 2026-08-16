@@ -227,14 +227,40 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
   }
 }
 
+/**
+ * Le texte LU par l'utilisateur — les etiquettes d'action n'y sont qu'un DERNIER RECOURS.
+ *
+ * MESURE le 2026-08-15 sur 39 conversations de sonde : 36 commencaient par « [a execute ... ] », y
+ * compris quand la reponse en dessous etait parfaitement redigee. Verdict de l'utilisateur : « c'est
+ * pas du tout l'experience utilisateur que je veux offrir ».
+ *
+ * Les supprimer purement ferait revenir un defaut plus ancien et PIRE : la bulle VIDE d'un tour qui
+ * n'a fait qu'agir (conv-1141). D'ou un couple de garanties indissociable — aucune etiquette quand
+ * une vraie reponse existe, jamais de bulle vide quand elle n'existe pas.
+ *
+ * Les ERREURS et les actions ECHOUEES restent toujours visibles : un echec n'est pas du bruit
+ * technique, c'est le fait le plus important du tour. Seules les actions REUSSIES s'effacent.
+ */
 export function flattenChatParts(parts: PersistedChatPart[]): string {
-  return parts
-    .map((part) => {
-      if (part.kind === 'text') return part.text
-      if (part.kind === 'artifact') return `[artefact ${part.artifact.name}]`
-      if (part.kind === 'error') return `⚠️ ${part.message}`
-      return `[a exécuté ${part.name}${part.ok === false ? ' (échec)' : ''}]`
-    })
-    .filter(Boolean)
-    .join('\n')
+  const lisible: string[] = []
+  const etiquettes: string[] = []
+  for (const part of parts) {
+    if (part.kind === 'text') {
+      if (part.text) lisible.push(part.text)
+      continue
+    }
+    if (part.kind === 'artifact') {
+      lisible.push(`[artefact ${part.artifact.name}]`)
+      continue
+    }
+    if (part.kind === 'error') {
+      lisible.push(`⚠️ ${part.message}`)
+      continue
+    }
+    const etiquette = `[a exécuté ${part.name}${part.ok === false ? ' (échec)' : ''}]`
+    if (part.ok === false) lisible.push(etiquette)
+    else etiquettes.push(etiquette)
+  }
+  const texte = lisible.filter(Boolean).join('\n')
+  return texte || etiquettes.join('\n')
 }
