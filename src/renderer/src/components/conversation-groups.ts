@@ -132,3 +132,25 @@ export function estReplie(key: string, replies: Readonly<Record<string, boolean>
   if (typeof choix === 'boolean') return choix
   return key === GROUPE_KAIZEN
 }
+
+/**
+ * Retire les descendants d'une catégorie repliée.
+ *
+ * L'indentation seule ne suffit pas à former une arborescence : sans ce filtre, fermer un parent
+ * laissait toutes ses sous-catégories affichées comme si elles étaient indépendantes.
+ */
+export function groupesVisibles<T extends ConversationLike>(
+  groupes: readonly ConversationGroup<T>[],
+  replies: Readonly<Record<string, boolean>>
+): ConversationGroup<T>[] {
+  const parCle = new Map(groupes.map((groupe) => [groupe.key, groupe]))
+
+  return groupes.filter((groupe) => {
+    let parentKey = groupe.parentKey
+    while (parentKey) {
+      if (estReplie(parentKey, replies)) return false
+      parentKey = parCle.get(parentKey)?.parentKey
+    }
+    return true
+  })
+}

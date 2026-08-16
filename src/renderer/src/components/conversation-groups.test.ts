@@ -4,6 +4,7 @@ import {
   GROUPE_DIVERS,
   GROUPE_KAIZEN,
   groupeDe,
+  groupesVisibles,
   grouperConversations,
   nomDeDossier
 } from './conversation-groups'
@@ -76,6 +77,20 @@ describe('l’ordre des groupes', () => {
       { label: 'Clients', depth: 0, parentKey: undefined },
       { label: 'Amitel', depth: 1, parentKey: 'C:\\Clients' },
       { label: 'Projets', depth: 0, parentKey: undefined }
+    ])
+  })
+
+  it('masque une sous-catégorie quand sa catégorie parente est repliée', () => {
+    const groupes = grouperConversations([
+      conv('parent', { projectPath: 'C:\\Clients' }),
+      conv('enfant', { projectPath: 'C:\\Clients\\Amitel' }),
+      conv('autre', { projectPath: 'D:\\Projets' })
+    ])
+
+    // Entrée discriminante : si `C:\Clients` n'est pas marqué replié, Amitel doit rester visible.
+    expect(groupesVisibles(groupes, { 'C:\\Clients': true }).map((g) => g.key)).toEqual([
+      'C:\\Clients',
+      'D:\\Projets'
     ])
   })
 

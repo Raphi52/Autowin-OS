@@ -64,7 +64,7 @@ import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-
 import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment } from './chat-attachments'
 import { searchConversations } from './conversation-search'
-import { estReplie, grouperConversations } from './conversation-groups'
+import { estReplie, groupesVisibles, grouperConversations } from './conversation-groups'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
@@ -1868,15 +1868,18 @@ export function ChatView({
    */
   const groupes = useMemo(
     () =>
-      grouperConversations(
-        conversationHits.map((hit) => ({
-          id: hit.conversation.id,
-          projectPath: hit.conversation.projectPath,
-          autoKaizen: hit.conversation.autoKaizen,
-          hit
-        }))
+      groupesVisibles(
+        grouperConversations(
+          conversationHits.map((hit) => ({
+            id: hit.conversation.id,
+            projectPath: hit.conversation.projectPath,
+            autoKaizen: hit.conversation.autoKaizen,
+            hit
+          }))
+        ),
+        groupesReplies
       ),
-    [conversationHits]
+    [conversationHits, groupesReplies]
   )
 
   /**
