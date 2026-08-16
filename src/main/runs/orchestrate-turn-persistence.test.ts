@@ -205,6 +205,10 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
     // garantir ; on asserte donc la PROPRIETE qui compte : ce qui est persiste est ce qui est livre.
     const succeed = /durableTurn\.succeed\((\w+)\)/.exec(handler)
     expect(succeed, 'durableTurn.succeed introuvable').not.toBeNull()
+    const afterSucceed = handler.slice(handler.indexOf(succeed![0]))
+    expect(afterSucceed).toMatch(
+      /broadcast\(\{\s*type:\s*'refresh',\s*scope:\s*'chat',\s*convId:\s*conversationId\s*\}\)[\s\S]*return \{ ok: true, result:/
+    )
     expect(handler).toContain(`return { ok: true, result: ${succeed![1]} }`)
     expect(handler).toContain('durableTurn.fail(error, aborted)')
     expect(handler).toContain('persistRunLifecycle(lifecycle')

@@ -2026,6 +2026,8 @@ Le fil reprend ensuite normalement.`
       })
       const delivered = { ...result, ...(learning ? { learning } : {}) }
       durableTurn.succeed(delivered)
+      // fix-ok: publier immédiatement la clôture persistée du run direct, sans attendre un reprompt.
+      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
       return { ok: true, result: delivered }
     } catch (e) {
       const aborted = controller.signal.aborted
