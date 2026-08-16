@@ -53,3 +53,30 @@ describe('flattenChatParts — les étiquettes ne masquent plus la réponse', ()
     expect(flattenChatParts([] as never)).toBe('')
   })
 })
+
+describe('annonce d’intention en tête — retirée quand le résultat suit', () => {
+  it('retire « Je dois d’abord lire… » quand la réponse suit', () => {
+    // Cas RÉEL, `conv-1257` : dernier défaut refusé par le juge d'expérience.
+    const rendu = flattenChatParts([
+      texte(
+        'Je dois d’abord lire le contenu direct de `src/main` pour donner un nombre vérifié.\n226 fichiers.'
+      )
+    ] as never)
+    expect(rendu).toBe('226 fichiers.')
+  })
+
+  it('GARDE l’annonce si elle est tout le message : mieux vaut ça qu’une bulle vide', () => {
+    const seule = 'Je vais vérifier le dossier.'
+    expect(flattenChatParts([texte(seule)] as never)).toBe(seule)
+  })
+
+  it('ne touche PAS un refus, qui n’annonce rien au futur', () => {
+    const refus = 'Je ne peux pas lister ce dossier : il est introuvable.\nAucun nombre disponible.'
+    expect(flattenChatParts([texte(refus)] as never)).toBe(refus)
+  })
+
+  it('ne touche PAS une phrase qui commence par autre chose', () => {
+    const normal = 'Le dossier contient 12 fichiers.\nDétail ci-dessous.'
+    expect(flattenChatParts([texte(normal)] as never)).toBe(normal)
+  })
+})

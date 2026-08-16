@@ -228,6 +228,29 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
 }
 
 /**
+ * Retire une ANNONCE D'INTENTION en tete, quand le resultat suit juste apres.
+ *
+ * Mesure le 2026-08-16 : dernier defaut refuse par le juge d'experience. L'agent ecrit « Je dois
+ * d'abord lire le contenu de src/shared pour donner un nombre verifie. » PUIS donne le nombre. Une
+ * fois le resultat la, cette phrase n'apporte rien — elle raconte une intention deja depassee.
+ *
+ * Le prompt l'interdit deja en toutes lettres (« n'annonce jamais un lancement avant son resultat »)
+ * et n'a pas suffi — comme pour les cinq gardes precedentes. Une relance mecanique couterait un appel
+ * modele pour un defaut purement cosmetique : on nettoie donc a l'AFFICHAGE, sans depense.
+ *
+ * Etroit par construction : SEULE la premiere ligne, SEULEMENT si du texte la suit, et seulement si
+ * elle annonce au futur. Un refus (« je ne peux pas ») ou une explication ne sont jamais touches.
+ */
+const ANNONCE_EN_TETE = /^\s*je (?:dois|vais|commence par|cible|proc\u00e8de)\b[^\n]*\n/i
+
+export function retirerAnnonceEnTete(texte: string): string {
+  if (!ANNONCE_EN_TETE.test(texte)) return texte
+  const reste = texte.replace(ANNONCE_EN_TETE, '').trim()
+  // Si l'annonce etait TOUT le message, on la garde : mieux vaut une intention qu'une bulle vide.
+  return reste ? reste : texte
+}
+
+/**
  * Le texte LU par l'utilisateur — les etiquettes d'action n'y sont qu'un DERNIER RECOURS.
  *
  * MESURE le 2026-08-15 sur 39 conversations de sonde : 36 commencaient par « [a execute ... ] », y
@@ -261,6 +284,6 @@ export function flattenChatParts(parts: PersistedChatPart[]): string {
     if (part.ok === false) lisible.push(etiquette)
     else etiquettes.push(etiquette)
   }
-  const texte = lisible.filter(Boolean).join('\n')
+  const texte = retirerAnnonceEnTete(lisible.filter(Boolean).join('\n'))
   return texte || etiquettes.join('\n')
 }
