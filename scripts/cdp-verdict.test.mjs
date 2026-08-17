@@ -58,4 +58,4 @@ verifie(
 )
 
 console.log(`\n${echecs === 0 ? 'TOUS VERTS' : `${echecs} ÉCHEC(S)`}`)
-process.exit(echecs === 0 ? 0 : 1)
+process.exitCode = echecs === 0 ? 0 : 1
