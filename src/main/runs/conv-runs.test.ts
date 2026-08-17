@@ -85,6 +85,17 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     expect(reused).toEqual({ path: first, reused: true })
   })
 
+  it('réutilise un RUN ouvert quand la redemande ne diffère que par la forme', async () => {
+    const first = createConvRun('conv-reask', 'Continuer le même workflow', root, () => 8100)
+    const reused = await reuseOrCreateConvRun(
+      'conv-reask',
+      '  continuer le meme workflow !  ',
+      root,
+      () => 9100
+    )
+    expect(reused).toEqual({ path: first, reused: true })
+  })
+
   it('saveConvRunTrace/loadConvRunTrace : le fil des sous-agents est persisté et relu', () => {
     const p = createConvRun('conv-T', 'tâche avec trace', root, () => 7000)
     const steps: OrchestrationStep[] = [

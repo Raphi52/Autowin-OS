@@ -41,6 +41,15 @@ function slugify(task: string): string {
   return s || 'tache'
 }
 
+function comparableTask(task: string): string {
+  return task
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLocaleLowerCase('fr')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
 /**
  * Crée le RUN.md (status: open) d'une tâche lancée depuis une conversation.
  *
@@ -129,7 +138,12 @@ export async function reuseOrCreateConvRun(
       const path = join(conversationRoot, workspace, 'RUN.md')
       try {
         const md = await readFile(path, 'utf8')
-        if (parseRun(md).status === 'open' && md.includes(`## Besoin\n${task}`)) {
+        const storedTask =
+          md.match(/## Besoin\s*\n([\s\S]*?)\n\s*\*\*Critere de succes/i)?.[1]?.trim() ?? ''
+        if (
+          parseRun(md).status === 'open' &&
+          comparableTask(storedTask) === comparableTask(task)
+        ) {
           return { path, reused: true }
         }
       } catch {
