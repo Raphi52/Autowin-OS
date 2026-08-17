@@ -688,7 +688,11 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.directive-queue-steer')
     await act(async () => flushAnimationFrames())
 
-    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' })
+    // `behavior` corrigé le 2026-08-17 : l'intention de ce test est « ramener IMMÉDIATEMENT dans le
+    // viewport », et le saut sec la sert mieux que l'animation. Le fil est ici à 900 px du bas pour une
+    // fenêtre de 100 px — un `smooth` relancé à chaque frame de croissance n'avance jamais, défaut
+    // mesuré le même jour (fil réel bloqué à `scrollTop` 0 avec 1688 px hors champ).
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'auto' })
     await act(async () => injection.resolve({ ok: true }))
     await act(async () => pilot.resolve({ ok: true }))
   })
