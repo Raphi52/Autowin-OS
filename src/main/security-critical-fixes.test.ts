@@ -138,7 +138,14 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     // ponts preload : `git:brainRoot`, les deux `os:workflowSelection:*`, `os:fabric:pair`,
     // `os:restoreKnowledge` et `os:appCatalog`. Leurs services internes encore actifs restent testés.
     // `unguarded` reste VIDE : la réduction de surface ne relâche aucun garde.
-    expect(handlers).toHaveLength(134)
+    // MISE A JOUR 2026-08-17 — 134 → 135. Un canal AJOUTÉ : `worktree:preserve-release`, qui libère
+    // une copie d'agent en PRÉSERVANT son travail dans `autowin/recovery/<id>` avant suppression.
+    // Il existe parce que `worktree:discard-held`, seule voie exposée jusque-là, supprime SANS
+    // préserver — inutilisable pour un ménage à l'initiative de l'utilisateur : 11 des copies
+    // mesurées ce jour-là portaient des fichiers non committés. Il porte son garde
+    // (`assertTrustedRendererSender`) et valide son argument par expression régulière, donc
+    // `unguarded` reste VIDE : la surface grandit d'un canal, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(135)
     expect(unguarded).toEqual([])
   })
 

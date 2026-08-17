@@ -2200,6 +2200,17 @@ Le fil reprend ensuite normalement.`
     }
     return os.retryWorktreeRecovery(agentId)
   })
+  /**
+   * Liberation SURE d'une copie : le travail est preserve dans `autowin/recovery/<id>` AVANT
+   * suppression. Distinct de `worktree:discard-held`, qui supprime sans preserver.
+   */
+  ipcMain.handle('worktree:preserve-release', (event, agentId: unknown) => {
+    assertTrustedRendererSender(event, 'WorktreePreserveRelease')
+    if (typeof agentId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(agentId)) {
+      throw new Error('Identifiant de bureau invalide')
+    }
+    return os.preserverEtLibererWorktree(agentId)
+  })
   ipcMain.handle('worktree:discard-held', (event, agentId: unknown) => {
     assertTrustedRendererSender(event, 'WorktreeDiscardHeld')
     if (typeof agentId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(agentId)) {

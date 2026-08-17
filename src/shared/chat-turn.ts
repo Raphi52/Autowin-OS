@@ -124,6 +124,25 @@ export function createChatTurn(turnId: string, runtime?: ChatTurnRuntime): ChatT
   return { turnId, status: 'streaming', parts: [], ...(runtime ? { runtime } : {}) }
 }
 
+/**
+ * JAMAIS DE BULLE VIDE — y compris sur un tour ANNULE ou INTERROMPU.
+ *
+ * Constate dans `conv-1267` (message 5) : l'utilisateur commence une phrase, se corrige, le tour est
+ * annule — et il ne reste RIEN a lire. La regle « jamais de bulle vide » existait deja, mais seulement
+ * sur les chemins ou le modele avait parle ; une annulation precoce y echappait.
+ *
+ * Un tour clos sans un mot est indistinguable d'une panne : l'utilisateur ne sait pas s'il a interrompu
+ * quelque chose, ni si du travail a ete perdu. Le mot est ajoute UNIQUEMENT si rien d'autre n'existe —
+ * un tour qui a deja parle garde sa reponse intacte.
+ */
+const MOT_ANNULE = 'Tour annulé avant toute réponse — rien n’a été exécuté.'
+const MOT_INTERROMPU =
+  'Tour interrompu avant sa conclusion — le travail lancé a pu ne pas rendre son résultat.'
+
+function avecMotSiVide(parts: PersistedChatPart[], mot: string): PersistedChatPart[] {
+  return parts.length > 0 ? parts : [{ kind: 'text', text: mot }]
+}
+
 export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): ChatTurnState {
   if (event.kind === 'resumed') return { ...state, status: 'streaming', error: undefined }
 
@@ -211,7 +230,8 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
         part.kind === 'action' && part.ok === undefined ? { ...part, ok: false } : part
       )
     }
-  if (event.kind === 'cancelled') return { ...state, status: 'cancelled' }
+  if (event.kind === 'cancelled')
+    return { ...state, status: 'cancelled', parts: avecMotSiVide(state.parts, MOT_ANNULE) }
   // INTERROMPU : le tour est clos sans que les actions en vol puissent aboutir. Les laisser en
   // `ok === undefined` les ferait lire « encore en cours » par toutes les surfaces (fil, graphe) —
   // c'est exactement l'état zombie d'un run tué par la fermeture de l'app. `interrupted` dit la
@@ -219,7 +239,7 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
   return {
     ...state,
     status: 'interrupted',
-    parts: state.parts.map((part) =>
+    parts: avecMotSiVide(state.parts, MOT_INTERROMPU).map((part) =>
       part.kind === 'action' && part.ok === undefined && !part.interrupted
         ? { ...part, interrupted: true }
         : part

@@ -1351,6 +1351,25 @@ export class RunWorktreeCoordinator {
    * rien n'attend le résultat, et un rejet remontant dans un minuteur deviendrait un rejet non capturé
    * à chaque tour d'horloge.
    */
+  /**
+   * Libere UNE copie en PRESERVANT son travail — la voie sure, exposee a l'interface.
+   *
+   * `discard` existe deja mais SUPPRIME sans preserver : il ne passe pas par la branche de
+   * recuperation. Pour un menage a l'initiative de l'utilisateur (« fais le tri »), c'est le mauvais
+   * outil : 11 des copies mesurees le 2026-08-17 portaient des fichiers non committes.
+   *
+   * Ici le travail est d'abord committe sur `autowin/recovery/<agentId>`, donc restaurable par
+   * `git worktree add`, et la copie n'est liberee qu'ensuite. Un refus (processus vivant, depot
+   * etranger, preservation impossible) laisse la copie INTACTE.
+   */
+  preserverEtLiberer(agentId: string): { outcome: string; branche?: string; detail?: string } {
+    const manager = this.manager as unknown as {
+      preserverEtLiberer?: (id: string) => { outcome: string; branche?: string; detail?: string }
+    }
+    if (!manager.preserverEtLiberer) return { outcome: 'refuse', detail: 'capacite indisponible' }
+    return manager.preserverEtLiberer(agentId)
+  }
+
   async balayerLesCopiesAbandonnees(): Promise<string[]> {
     try {
       return (await this.manager.sweepAbandonedAgentCopiesAsync?.()) ?? []

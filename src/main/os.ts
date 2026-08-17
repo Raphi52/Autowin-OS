@@ -650,6 +650,20 @@ export class AutowinOS {
     return this.worktrees?.retryRunAsync(agentId)
   }
 
+  /** Libere une copie en PRESERVANT son travail (branche de recuperation), contrairement a `discard`. */
+  preserverEtLibererWorktree(agentId: string): {
+    outcome: string
+    branche?: string
+    detail?: string
+  } {
+    return (
+      this.worktrees?.preserverEtLiberer(agentId) ?? {
+        outcome: 'refuse',
+        detail: 'coordinateur indisponible'
+      }
+    )
+  }
+
   async discardHeldWorktree(agentId: string): Promise<boolean> {
     return (await this.worktrees?.discardHeldAsync(agentId)) ?? false
   }

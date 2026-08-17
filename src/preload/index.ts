@@ -183,6 +183,10 @@ const api = {
     ipcRenderer.invoke('worktree:retry-recovery', agentId),
   discardHeldWorktree: (agentId: string): Promise<boolean> =>
     ipcRenderer.invoke('worktree:discard-held', agentId),
+  preserveReleaseWorktree: (
+    agentId: string
+  ): Promise<{ outcome: string; branche?: string; detail?: string }> =>
+    ipcRenderer.invoke('worktree:preserve-release', agentId),
   setWorktreeFixture: (fixture: {
     activity: WorktreeAgentActivity[]
     status: WorktreeRuntimeStatus
