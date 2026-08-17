@@ -710,15 +710,12 @@ export function runLabelFromPath(path: string | undefined): string | undefined {
 }
 
 /** Bloc final dérivé uniquement de l'issue structurée, après retrait du statut provisoire du worker. */
-function deliveredClosingBlock(run: string | undefined): string[] {
-  const current = run
-    ? `livraison vérifiée dans le run « ${run} », fermé green.`
-    : 'livraison vérifiée, gate validé et RUN fermé green.'
+function deliveredClosingBlock(): string[] {
   return [
     '---',
     '✅ Fait',
-    '1. Workflow livré : gate validé et RUN fermé green.',
-    `📍 Maintenant : ${current}`,
+    '1. Le résultat demandé a été produit et validé.',
+    '📍 Maintenant : la tâche demandée est terminée et son résultat est disponible.',
     '⏳ Reste à faire : rien.',
     '👉 Recommandé : passer à la prochaine demande.'
   ]
@@ -732,7 +729,12 @@ function authoritativeDeliveredClosingBlockSpan(
   const lines = report.split(/\r?\n/u)
   const visible = lines.map((line, index) => (protectedLines.has(index + 1) ? undefined : line.trim()))
   const fact = visible.indexOf('✅ Fait')
-  if (fact < 0 || visible[fact + 1] !== '1. Workflow livré : gate validé et RUN fermé green.') {
+  const factLine = visible[fact + 1]
+  if (
+    fact < 0 ||
+    (factLine !== '1. Workflow livré : gate validé et RUN fermé green.' &&
+      factLine !== '1. Le résultat demandé a été produit et validé.')
+  ) {
     return undefined
   }
   const now = visible.findIndex(
@@ -820,6 +822,6 @@ export function formatOrchestrationOutcome(
   }
   if (visibleResult) lines.push('', boundedMarkdownResult(visibleResult))
   if (closingNotice?.trim()) lines.push('', closingNotice.trim())
-  if (delivered) lines.push('', ...deliveredClosingBlock(run))
+  if (delivered) lines.push('', ...deliveredClosingBlock())
   return lines.join('\n')
 }

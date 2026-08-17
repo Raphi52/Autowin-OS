@@ -773,6 +773,21 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).not.toContain('lancer judge')
   })
 
+  it('décrit l’état de la tâche dans le bloc final sans exposer le workflow interne', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      runPath: 'C:/Audit/response-footer-workspace/RUN.md',
+      result: 'Le classement des conversations est maintenant enregistré.'
+    })
+    const footer = text.slice(text.lastIndexOf('✅ Fait'))
+
+    expect(footer).toContain('📍 Maintenant : la tâche demandée est terminée et son résultat est disponible.')
+    expect(footer).not.toMatch(/workflow|gate|RUN|build|judge/iu)
+  })
+
   it('retire atomiquement un ancien bloc final complet avant de créer le bloc autoritaire', () => {
     const text = formatOrchestrationOutcome(true, {
       status: 'succeeded',
