@@ -108,8 +108,12 @@ describe('cablage — le texte du `done` atterrit dans le message', () => {
   it('persiste le texte de cloture quand rien n’a ete streame', () => {
     const source = main()
     const branch = source.slice(source.indexOf("else if (pilotEvent.kind === 'done')"))
-    expect(branch).toContain('const closing = pilotEvent.text?.trim()')
-    expect(branch).toContain("kind: 'delta'")
+    // Ancre mise a jour le 2026-08-17 : la decision et le trim vivent desormais dans
+    // `closingTurnDelivery`, qui rend le durable ET le live d'un seul tenant — le texte etait persiste
+    // sans jamais etre livre au fil vivant (conv-1276). L'intention du test est inchangee : la branche
+    // `done` doit poser une part de texte durable.
+    expect(branch).toContain('closingTurnDelivery(')
+    expect(branch).toContain('applyTurnEvent(conversationId, turnId, livraison.durable)')
   })
 
   it('conserve une cloture structuree meme apres un preambule deja diffuse', () => {
@@ -123,7 +127,7 @@ describe('cablage — le texte du `done` atterrit dans le message', () => {
 
   it('ecrit aussi au journal du tour (une reprise doit retrouver la conclusion)', () => {
     const source = main()
-    const branch = source.slice(source.indexOf('const closing = pilotEvent.text?.trim()'))
+    const branch = source.slice(source.indexOf('const livraison = closingTurnDelivery('))
     expect(branch.slice(0, branch.indexOf("durableEvent = { kind: 'done'"))).toContain(
       'appendTurnEvent(turnJournalRoot'
     )

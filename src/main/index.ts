@@ -138,7 +138,7 @@ import {
 } from './runs/conv-runs'
 import { deleteListedRun } from './dashboards/runs-scan'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
-import { shouldPersistClosingText } from './runs/turn-closing'
+import { closingTurnDelivery } from './runs/turn-closing'
 import { StartupResumeQueue } from './runs/startup-resume-queue'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
 import { classifierRefusDeReprise } from './runs/resume-refusal'
@@ -3644,19 +3644,32 @@ Le fil reprend ensuite normalement.`
            *
            * Condition stricte pour ne JAMAIS dupliquer : on ne persiste ce texte que si aucun delta
            * n'a ete emis pendant le tour (sinon le texte du `done` reprend ce qui a deja ete dit).
+           *
+           * ET IL FAUT LE LIVRER AU FIL LIVE, pas seulement l'ecrire. Mesure du 2026-08-17 sur
+           * `conv-1276` : tout le texte du tour tenait dans cette seule part `<turnId>:closing`, et
+           * l'utilisateur ne l'a vu qu'apres avoir envoye le message SUIVANT — qui relit le store. Le
+           * renderer ne recoit que `done`, dont son reducteur jette le texte (par construction, pour ne
+           * pas dupliquer le streame) : un texte porte par le seul `done` n'atteignait donc JAMAIS le
+           * fil vivant. Meme patron que la carte de livraison jetee ci-dessus, un cran plus loin — non
+           * plus a la frontiere de persistance, mais a celle de l'AFFICHAGE.
            */
-          const closing = pilotEvent.text?.trim()
-          if (closing && shouldPersistClosingText(durableResponseTextSeen, pilotEvent.outcome)) {
-            os.conversations.applyTurnEvent(conversationId, turnId, {
-              kind: 'delta',
-              // Flux dedie : ce texte de cloture n'appartient a aucun stream deja ouvert.
-              streamId: `${turnId}:closing`,
-              text: closing
+          const livraison = closingTurnDelivery(
+            turnId,
+            pilotEvent.text,
+            durableResponseTextSeen,
+            pilotEvent.outcome
+          )
+          if (livraison) {
+            os.conversations.applyTurnEvent(conversationId, turnId, livraison.durable)
+            emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
+              ...livraison.live,
+              conversationId,
+              turnId
             })
             try {
               appendTurnEvent(turnJournalRoot, conversationId, turnId, {
                 kind: 'delta',
-                text: closing,
+                text: livraison.durable.text,
                 at: Date.now()
               })
             } catch {
