@@ -78,6 +78,8 @@ SILENCE_MAX_S = 75
 # fenetre ouverte indefiniment.
 ATTENTE_TOTALE_S = 600
 CREATE_NO_WINDOW = 0x08000000
+# L'enregistreur de sortie doit SURVIVRE a ce lanceur : detache, il n'herite pas de sa fin.
+DETACHED_PROCESS = 0x00000008
 
 
 def journaliser(message: str) -> None:
@@ -158,6 +160,38 @@ def demarrer_dev(
         # Notre copie du handle ne sert plus : l'enfant a la sienne. La garder ferait croire au
         # fichier qu'un ecrivain de plus existe.
         fichier.close()
+
+
+def demarrer_enregistreur(pid: int) -> None:
+    """Lance l'enregistreur de sortie, DETACHE, pour qu'il survive a ce lanceur.
+
+    Les deux morts silencieuses du 2026-08-17 n'ont laisse ni exception, ni minidump, ni rapport WER —
+    parce que PERSONNE n'attendait le processus : ce lanceur quitte des que la fenetre apparait. Sans le
+    code de sortie, toute cause avancee reste une supposition (j'en ai avance une, la mesure l'a en
+    partie contredite). L'enregistreur, lui, attend et ecrit `app-exits.log`.
+
+    Best-effort assume : si l'enregistreur ne demarre pas, l'app tourne quand meme. Une observabilite
+    qui empeche de travailler serait pire que son absence.
+    """
+    try:
+        subprocess.Popen(  # noqa: S603 - chemin resolu, arguments fixes
+            [
+                sys.executable,
+                str(Path(__file__).resolve().parent / "enregistreur_sortie.py"),
+                "--racine",
+                str(RACINE),
+                "--pid",
+                str(pid),
+            ],
+            cwd=str(RACINE),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS,
+        )
+        journaliser(f"enregistreur de sortie arme (pid surveille {pid})")
+    except OSError as erreur:
+        journaliser(f"enregistreur de sortie indisponible : {erreur}")
 
 
 def suivre_sortie(sortie: Path, limite_s: float, depuis: int = 0):
@@ -443,6 +477,7 @@ def main() -> int:
                 # d'attente SUIT ce fichier depuis la position d'avant le lancement.
                 depuis = SORTIE_APP.stat().st_size if SORTIE_APP.is_file() else 0
                 processus = demarrer_dev([commande, "run", "dev"], RACINE, SORTIE_APP)
+                demarrer_enregistreur(processus.pid)
                 limite_totale = time.monotonic() + ATTENTE_TOTALE_S
                 # La fraicheur du bundle est TRANSMISE, elle ne ferme rien : c'est `SuiviDemarrage`
                 # qui decide, sur la preuve qu'une fenetre Electron existe. Confondre les deux fermait
