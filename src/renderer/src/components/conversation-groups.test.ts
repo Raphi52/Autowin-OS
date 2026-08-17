@@ -63,6 +63,16 @@ describe('le nom lisible d’un dossier', () => {
     expect(groupes).toHaveLength(2)
     expect(groupes.map((g) => g.label)).toEqual(['rig', 'rig'])
   })
+
+  it('un séparateur final ne duplique pas la catégorie du même dossier', () => {
+    const groupes = grouperConversations([
+      conv('a', { projectPath: 'C:\\Clients' }),
+      conv('b', { projectPath: 'C:\\Clients\\' })
+    ])
+
+    expect(groupes).toHaveLength(1)
+    expect(groupes[0].items.map((item) => item.id)).toEqual(['a', 'b'])
+  })
 })
 
 describe('l’ordre des groupes', () => {

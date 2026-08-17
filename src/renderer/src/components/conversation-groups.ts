@@ -61,7 +61,10 @@ export function groupeDe(conversation: ConversationLike): {
     return { key: GROUPE_KAIZEN, label: 'Auto-kaizen', kind: 'kaizen' }
   }
   const chemin = conversation.projectPath?.trim()
-  if (chemin) return { key: chemin, label: nomDeDossier(chemin), kind: 'projet' }
+  if (chemin) {
+    const key = chemin.replace(/[\\/]+$/, '') || chemin
+    return { key, label: nomDeDossier(key), kind: 'projet' }
+  }
   return { key: GROUPE_DIVERS, label: 'Divers', kind: 'divers' }
 }
 
