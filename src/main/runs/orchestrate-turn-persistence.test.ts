@@ -118,7 +118,17 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
     expect(journal.at(-1)).toBe('done')
   })
 
-  it('ne duplique pas un texte déjà porté par les étapes', () => {
+  /**
+   * INTENTION CONSERVÉE — ne jamais répéter un texte DÉJÀ LU par l'utilisateur — mais le critère est
+   * corrigé le 2026-08-17 : ce test comptait `step.text` comme « déjà porté par les étapes », ce qui
+   * est FAUX. La carte `result` d'une étape ne transporte que `detail`, `error`, `costUsd` et
+   * `durationMs` ; `step.text` n'est émis NULLE PART. Conséquence mesurée sur `conv-1267` : dès qu'une
+   * phase produisait du texte, la clôture était supprimée et le tour se terminait sur quatre étiquettes
+   * nues — « [a exécuté orchestrate] [a exécuté exec] [a exécuté judge] [a exécuté gate] », zéro mot,
+   * alors que judge ET gate avaient passé. La déduplication ne peut porter que sur ce qui est
+   * RÉELLEMENT livré au fil.
+   */
+  it('ne supprime PAS la conclusion à cause d’un texte d’étape jamais affiché', () => {
     const { store, id } = storeWithConversation()
     const turn = createOrchestrateTurnPersistence({
       conversations: store,
@@ -126,10 +136,55 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
       turnId: 'turn-4'
     })
     turn.begin('tâche')
-    turn.step({ step: 'exec', text: 'texte déjà dit' })
-    turn.succeed({ result: 'texte déjà dit' })
+    turn.step({ step: 'judge', text: 'raisonnement du juge, jamais rendu dans le fil' })
+    turn.succeed({ result: 'verdict final : livraison validée' })
+    const message = store.get(id)!.messages[1]
+    expect(message.content).toContain('verdict final : livraison validée')
+    // Et le tour ne se réduit pas à des étiquettes d'action.
+    expect((message.parts ?? []).some((p) => p.kind === 'text')).toBe(true)
+  })
+
+  it('ne répète pas un texte que le fil porte DÉJÀ', () => {
+    const { store, id } = storeWithConversation()
+    const turn = createOrchestrateTurnPersistence({
+      conversations: store,
+      conversationId: id,
+      turnId: 'turn-4-bis'
+    })
+    turn.begin('tâche')
+    // Un texte déjà présent dans le tour : c'est ce que l'utilisateur lit, la clôture ne le redit pas.
+    store.applyTurnEvent(id, 'turn-4-bis', {
+      kind: 'delta',
+      streamId: 'turn-4-bis:phase',
+      text: 'texte déjà lu'
+    })
+    turn.succeed({ result: 'texte déjà lu' })
     const content = store.get(id)!.messages[1].content
-    expect(content.match(/texte déjà dit/g) ?? []).toHaveLength(0)
+    expect(content.match(/texte déjà lu/g) ?? []).toHaveLength(1)
+  })
+
+  /**
+   * Le critère est l'IDENTITÉ, pas la présence : un texte déjà livré ne doit pas éteindre une clôture
+   * qui dit autre chose. Sans cette distinction, il suffit qu'une phase ait parlé pour perdre le
+   * verdict — c'est la forme faible du défaut de `conv-1267`.
+   */
+  it('garde une clôture qui dit AUTRE CHOSE qu’un texte déjà livré', () => {
+    const { store, id } = storeWithConversation()
+    const turn = createOrchestrateTurnPersistence({
+      conversations: store,
+      conversationId: id,
+      turnId: 'turn-4-ter'
+    })
+    turn.begin('tâche')
+    store.applyTurnEvent(id, 'turn-4-ter', {
+      kind: 'delta',
+      streamId: 'turn-4-ter:phase',
+      text: 'préambule lu par l’utilisateur'
+    })
+    turn.succeed({ result: 'verdict distinct du préambule' })
+    const content = store.get(id)!.messages[1].content
+    expect(content).toContain('préambule lu par l’utilisateur')
+    expect(content).toContain('verdict distinct du préambule')
   })
 
   it('persiste les fichiers produits comme artefacts du même tour', () => {

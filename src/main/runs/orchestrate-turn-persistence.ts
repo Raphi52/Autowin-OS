@@ -76,7 +76,6 @@ export function createOrchestrateTurnPersistence(
   const targeted = conversationId !== AUTONOMOUS
   let opened = false
   let closed = false
-  let streamedText = ''
   /**
    * Tache du tour, retenue pour etre RECOPIEE sur chaque carte d'etape. Sans elle, le bouton
    * « Reprendre » du fil ne s'affichait jamais : il lit la tache dans `args.task` de l'action
@@ -89,6 +88,26 @@ export function createOrchestrateTurnPersistence(
   let resumedActionIds: string[] = []
 
   const live = (): boolean => targeted && Boolean(conversations.get(conversationId))
+
+  /**
+   * Ce que l'utilisateur LIT DÉJÀ dans ce tour, relu depuis le store — la seule base honnête pour ne
+   * pas se répéter.
+   *
+   * L'ancien critère comptait `step.text` comme « déjà dit ». C'était faux : le texte d'une phase part
+   * vers le panneau des sous-agents (`orchestrate:step`), jamais dans la bulle. Mesuré sur `conv-1267`
+   * le 2026-08-17 — dès qu'une phase parlait, la clôture était supprimée et le tour finissait sur
+   * quatre étiquettes nues (« [a exécuté orchestrate] … [a exécuté gate] »), zéro mot, alors que judge
+   * ET gate avaient passé. Relire le fil couvre en plus tout futur écrivain de texte, pas seulement
+   * celui qu'on connaît aujourd'hui.
+   */
+  const dejaLuDansLeFil = (texte: string): boolean => {
+    const message = conversations
+      .get(conversationId)
+      ?.messages.find((candidat) => candidat.role === 'assistant' && candidat.turnId === turnId)
+    return (message?.parts ?? []).some(
+      (part) => part.kind === 'text' && part.text.includes(texte)
+    )
+  }
 
   const emit = (event: ChatTurnEvent): void => {
     if (!opened || !live()) return
@@ -158,10 +177,11 @@ export function createOrchestrateTurnPersistence(
           ...(typeof step.durationMs === 'number' && { durationMs: step.durationMs })
         }
       })
-      // Le texte d'une phase est du contenu déjà porté par la carte `result` : on le compte comme
-      // « déjà dit » pour ne JAMAIS le dupliquer dans le texte de clôture (condition stricte du
-      // patron pilotChat).
-      if (step.text) streamedText += step.text
+      // Le texte d'une phase n'est PAS livré au fil : la carte `result` ci-dessus ne transporte que
+      // `detail`, `error`, `costUsd` et `durationMs`. Il ne peut donc pas compter comme « déjà dit ».
+      // Mesuré sur `conv-1267` le 2026-08-17 : il le comptait, et toute phase qui parlait supprimait la
+      // clôture — le tour finissait sur quatre étiquettes nues, zéro mot, alors que judge ET gate
+      // avaient passé. Seul ce qui est RÉELLEMENT livré (`deliver`) éteint la clôture.
     },
     artifact(artifact) {
       if (!opened || closed) return
@@ -180,7 +200,7 @@ export function createOrchestrateTurnPersistence(
           data: { resumed: true, ...(deliveryFailed && { gateBlocked: true }) }
         })
       const closing = result?.result?.trim()
-      if (closing && !streamedText.trim())
+      if (closing && !dejaLuDansLeFil(closing))
         emit({ kind: 'delta', streamId: `${turnId}:closing`, text: closing })
       if (deliveryFailed) {
         const reasons = Array.isArray(result?.gateReasons)
