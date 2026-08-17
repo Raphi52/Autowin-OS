@@ -47,6 +47,8 @@ from launch_dev_splash import Splash  # noqa: E402 - le chemin doit etre pose av
 
 RACINE = Path(__file__).resolve().parent.parent
 JOURNAL = RACINE / ".autowin-data" / "launch-dev.log"
+# Sortie de l'APPLICATION elle-meme, ecrite par elle, pour toute sa vie — voir `demarrer_dev`.
+SORTIE_APP = RACINE / ".autowin-data" / "dev-app-stdout.log"
 BUNDLE = RACINE / "out" / "main" / "index.js"
 
 # Sources dont une modification doit rendre le bundle perime. `electron.vite.config.ts` en fait
@@ -121,6 +123,67 @@ def _acquerir_verrou() -> tuple[bool, int | None]:
         journaliser(f"mutex indisponible (erreur {erreur}) — verrou desactive")
         return True, None
     return erreur != 183, handle  # 183 = ERROR_ALREADY_EXISTS
+
+
+def demarrer_dev(
+    commande: list[str], cwd: Path, sortie: Path
+) -> subprocess.Popen[bytes]:
+    """Lance l'app en lui donnant un FICHIER, jamais un tube.
+
+    CAUSE RACINE MESUREE le 2026-08-17. L'app mourait sans laisser aucune exception : rien dans
+    `crash.log` a l'heure de la mort, aucun minidump. Le lanceur lui donnait un `subprocess.PIPE`,
+    lisait ses lignes pour l'ecran d'attente, ARRETAIT de lire des que la fenetre apparaissait, puis
+    quittait. L'app ecrivait alors dans un tube dont le lecteur etait mort, et mourait a la premiere
+    ecriture qui deborde le tampon du tube.
+
+    Reproduit en isolation le meme jour : un enfant bavard branche sur un tube abandonne meurt apres
+    93 lignes sur `OSError` a l'ecriture — ce que Node rapporte `write EPIPE`, et c'est la signature de
+    66 des 72 entrees de `crash.log`.
+
+    Un fichier n'a pas de lecteur a satisfaire : l'app peut ecrire pendant des heures, que le lanceur
+    soit vivant ou non. L'ecran d'attente, lui, SUIT le fichier (`suivre_sortie`).
+    """
+    sortie.parent.mkdir(parents=True, exist_ok=True)
+    fichier = sortie.open("ab")
+    try:
+        return subprocess.Popen(  # noqa: S603 - commande construite par l'appelant, cwd resolu
+            commande,
+            cwd=str(cwd),
+            stdout=fichier,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW,
+        )
+    finally:
+        # Notre copie du handle ne sert plus : l'enfant a la sienne. La garder ferait croire au
+        # fichier qu'un ecrivain de plus existe.
+        fichier.close()
+
+
+def suivre_sortie(sortie: Path, limite_s: float, depuis: int = 0):
+    """Suit le fichier de sortie de l'app, ligne a ligne, comme un `tail -f` borne dans le temps.
+
+    Rend la main quand l'appelant arrete d'iterer : contrairement a un tube, cesser de lire un fichier
+    n'a AUCUN effet sur l'ecrivain — c'est tout l'interet.
+    """
+    fin = time.monotonic() + limite_s
+    position = depuis
+    reste = b""
+    while time.monotonic() < fin:
+        if not sortie.exists():
+            time.sleep(0.1)  # sleep-ok: attente d'apparition du fichier, cadence courte
+            continue
+        with sortie.open("rb") as flux:
+            flux.seek(position)
+            morceau = flux.read()
+            position = flux.tell()
+        if not morceau:
+            time.sleep(0.1)  # sleep-ok: rien de neuf, on repasse dans 100 ms
+            continue
+        reste += morceau
+        *lignes, reste = reste.split(b"\n")
+        for ligne in lignes:
+            yield ligne.decode("utf-8", "replace") + "\n"
 
 
 def _fermer_handle(handle: int) -> None:
@@ -375,27 +438,17 @@ def main() -> int:
             mettre_a_jour()
             JOURNAL.parent.mkdir(parents=True, exist_ok=True)
             with JOURNAL.open("a", encoding="utf-8") as sortie:
-                processus = subprocess.Popen(  # noqa: S603 - chemin resolu, arguments fixes
-                    [commande, "run", "dev"],
-                    cwd=str(RACINE),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    stdin=subprocess.DEVNULL,
-                    creationflags=CREATE_NO_WINDOW,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    bufsize=1,
-                )
+                # L'app ecrit dans SON fichier, pas dans un tube qui mourrait avec nous : c'est la
+                # cause racine des morts silencieuses du 2026-08-17 (voir `demarrer_dev`). L'ecran
+                # d'attente SUIT ce fichier depuis la position d'avant le lancement.
+                depuis = SORTIE_APP.stat().st_size if SORTIE_APP.is_file() else 0
+                processus = demarrer_dev([commande, "run", "dev"], RACINE, SORTIE_APP)
                 limite_totale = time.monotonic() + ATTENTE_TOTALE_S
-                # On lit la sortie LIGNE A LIGNE : elle alimente l'ecran ET le journal. Sans cette
-                # lecture, le tube se remplit et `npm` finit par se bloquer dessus.
-                #
                 # La fraicheur du bundle est TRANSMISE, elle ne ferme rien : c'est `SuiviDemarrage`
                 # qui decide, sur la preuve qu'une fenetre Electron existe. Confondre les deux fermait
                 # l'ecran a la premiere ligne, puisqu'un bundle sortant d'un build est deja frais.
                 depasse = False
-                for ligne in processus.stdout or ():
+                for ligne in suivre_sortie(SORTIE_APP, ATTENTE_TOTALE_S + 5, depuis):
                     sortie.write(ligne)
                     sortie.flush()
                     splash.bundle_frais(BUNDLE.is_file() and BUNDLE.stat().st_mtime >= avant)
