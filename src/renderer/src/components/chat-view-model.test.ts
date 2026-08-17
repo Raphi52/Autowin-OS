@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { formatOrchestrationOutcome } from '../../../shared/orchestration-outcome'
 import {
   CHAT_PANE_LIMITS,
@@ -1435,7 +1437,11 @@ describe('chat scrolling and layout rules', () => {
     }
 
     scrollChatToBottom(element, (callback) => queue.push(callback))
-    expect(targets[0]).toEqual({ top: 1000, behavior: 'smooth' })
+    // `behavior` corrigé le 2026-08-17 : l'intention de ce test est le RE-CIBLAGE du vrai bas, pas la
+    // façon d'y aller. Ici le bas est à 900 px pour une fenêtre de 100 px — neuf hauteurs d'écran, donc
+    // le saut est sec. C'est ce qui a été mesuré défaillant : un `smooth` relancé à chaque frame de
+    // croissance repart d'une vitesse nulle et n'avance jamais (fil bloqué à `scrollTop` 0).
+    expect(targets[0]).toEqual({ top: 1000, behavior: 'auto' })
 
     // Le markdown/les images finissent de se rendre : le bas RÉEL a bougé.
     element.scrollHeight = 2400
@@ -1447,6 +1453,110 @@ describe('chat scrolling and layout rules', () => {
     // La descente se termine par un atterrissage garanti sur le bas final.
     while (queue.length > 0) queue.shift()?.()
     expect(targets.at(-1)).toEqual({ top: 2400, behavior: 'auto' })
+  })
+
+  /**
+   * MESURÉ le 2026-08-17 par sonde CDP (`scripts/cdp-sonde-bloc-cloture.mjs`, fil réel, un prompt) :
+   * pendant un tour qui streame, le fil grandit de 887 → 1911 → 2575 px et `scrollTop` reste à **0**.
+   * Le bloc de clôture (émis par l'itération de relance, donc en toute fin) restait donc hors champ
+   * jusqu'à ce que l'utilisateur écrive un nouveau message — le défaut rapporté.
+   *
+   * Cause : une animation `smooth` redémarrée à chaque frame où la hauteur bouge ne progresse jamais
+   * (chaque `scrollTo` repart d'une vitesse nulle). Un saut d'une hauteur de fenêtre ou plus doit
+   * donc être SEC ; le `smooth` ne garde de sens que pour un dernier centimètre.
+   */
+  it('rattrape SEC un bas devenu lointain, au lieu de relancer une animation qui n’avance pas', () => {
+    const queue: Array<() => void> = []
+    const targets: Array<{ top: number; behavior?: string }> = []
+    const element = {
+      scrollTop: 0,
+      clientHeight: 887,
+      scrollHeight: 2575,
+      scrollTo(options: ScrollToOptions) {
+        targets.push({ top: options.top ?? 0, behavior: options.behavior })
+        element.scrollTop = (options.top ?? 0) - element.clientHeight
+      }
+    }
+
+    scrollChatToBottom(element, (callback) => queue.push(callback))
+
+    expect(targets[0]).toEqual({ top: 2575, behavior: 'auto' })
+    expect(isChatNearBottom(element)).toBe(true)
+  })
+
+  /**
+   * Le re-rendu markdown remet `scrollTop` à 0 sous nos pieds : la garde anti-recul le prenait pour
+   * un lecteur qui reprend la main et ABANDONNAIT la descente — plus aucune frame ne redescendait
+   * ensuite. Discriminant : un lecteur qui remonte le fait sur un fil de hauteur STABLE ; un reset de
+   * re-rendu s'accompagne d'un changement de hauteur.
+   */
+  it('ne prend pas un reset de re-rendu pour un lecteur qui remonte', () => {
+    const queue: Array<() => void> = []
+    const targets: Array<{ top: number }> = []
+    const element = {
+      scrollTop: 0,
+      clientHeight: 100,
+      scrollHeight: 1000,
+      scrollTo(options: ScrollToOptions) {
+        targets.push({ top: options.top ?? 0 })
+        element.scrollTop = (options.top ?? 0) - element.clientHeight
+      }
+    }
+
+    scrollChatToBottom(element, (callback) => queue.push(callback))
+    const apresPremiereDescente = targets.length
+
+    // Le markdown se re-rend : la hauteur bouge ET le navigateur repose le défilement en haut.
+    element.scrollHeight = 2400
+    element.scrollTop = 0
+    queue.shift()?.()
+
+    expect(targets.length).toBeGreaterThan(apresPremiereDescente)
+    expect(targets.at(-1)?.top).toBe(2400)
+  })
+
+  /**
+   * FILET DE SECOURS. Le défaut mesuré était SILENCIEUX : le fil se croyait collé au bas, donc aucun
+   * bouton ne signalait le texte resté hors champ. Un cas résiduel doit rester visible.
+   */
+  it('signale une descente qui n’atterrit pas, et ne crie pas quand elle atterrit', () => {
+    const descente = (croissanceParFrame: number): { atterri: boolean | undefined; appels: number } => {
+      const queue: Array<() => void> = []
+      let atterri: boolean | undefined
+      let appels = 0
+      const element = {
+        scrollTop: 0,
+        clientHeight: 100,
+        scrollHeight: 1000,
+        scrollTo(options: ScrollToOptions) {
+          // Le fil continue de grandir sous nos pieds : on n'atteint le bas que s'il se stabilise.
+          element.scrollTop = (options.top ?? 0) - element.clientHeight
+          element.scrollHeight += croissanceParFrame
+        }
+      }
+      scrollChatToBottom(
+        element,
+        (callback) => queue.push(callback),
+        40,
+        (landed) => {
+          atterri = landed
+          appels += 1
+        }
+      )
+      while (queue.length > 0) queue.shift()?.()
+      return { atterri, appels }
+    }
+
+    // Le fil se stabilise → on atterrit, aucun badge à armer.
+    expect(descente(0)).toEqual({ atterri: true, appels: 1 })
+    // Le fil grandit sans cesse plus vite que la descente → on le DIT.
+    expect(descente(5_000).atterri).toBe(false)
+  })
+
+  it('câble le filet de secours dans ChatView (exposé sans appelant = théâtre)', () => {
+    const vue = readFileSync(join(__dirname, 'ChatView.tsx'), 'utf8')
+    expect(vue).toMatch(/scrollChatToBottom\(\s*scroll,\s*requestAnimationFrame,\s*40,/u)
+    expect(vue).toMatch(/if \(!landed\) setHasNewActivity\(true\)/u)
   })
 
   it('arrête la descente quand le fil est démonté, sans replanifier de frame', () => {

@@ -1134,11 +1134,31 @@ type ScrollableChat = Pick<HTMLElement, 'scrollTop' | 'clientHeight' | 'scrollHe
  * d'activité finissent de se rendre PENDANT l'animation, donc le bas réel s'éloigne et la descente
  * atterrit court. On re-cible donc à chaque frame où la hauteur bouge, et on garantit l'arrivée par
  * un dernier saut sec. Si le lecteur remonte de lui-même entre deux frames, on lui rend la main.
+ *
+ * DEUX DÉFAUTS MESURÉS le 2026-08-17 (sonde CDP `scripts/cdp-sonde-bloc-cloture.mjs`, fil réel) :
+ * pendant un tour qui streame, le fil passait de 887 à 2575 px avec `scrollTop` immobile à **0**, et
+ * le bloc de clôture — émis par l'itération de relance, donc tout à la fin — n'apparaissait qu'au
+ * message suivant.
+ *
+ *   1. Une animation `smooth` RELANCÉE à chaque frame où la hauteur bouge n'avance jamais : chaque
+ *      `scrollTo` repart d'une vitesse nulle. Un saut d'au moins une hauteur de fenêtre est donc SEC ;
+ *      le `smooth` ne sert plus qu'au dernier centimètre, là où il se voit et où il aboutit.
+ *   2. Le re-rendu markdown remet `scrollTop` à 0 sous nos pieds, et la garde anti-recul y voyait un
+ *      lecteur reprenant la main : la descente était abandonnée sans que rien ne la reprenne. Le
+ *      discriminant est la HAUTEUR — un lecteur remonte sur un fil stable, un reset de re-rendu
+ *      s'accompagne d'un changement de hauteur.
  */
 export function scrollChatToBottom(
   element: ScrollableChat,
   schedule: (callback: () => void) => void = requestAnimationFrame,
-  maxFrames = 40
+  maxFrames = 40,
+  /**
+   * FILET DE SECOURS — appelé quand la descente s'arrête, avec `false` si elle n'a PAS atteint le bas.
+   * Sans lui, un texte tardif resté hors champ était SILENCIEUX : l'appelant se croyait collé au bas,
+   * donc il n'armait pas le bouton « ↓ Dernière réponse », et rien ne signalait les 1688 px non lus
+   * mesurés le 2026-08-17. Un défaut résiduel doit rester VISIBLE, pas se taire.
+   */
+  onSettled?: (landed: boolean) => void
 ): void {
   let frames = 0
   let lastHeight = -1
@@ -1146,16 +1166,23 @@ export function scrollChatToBottom(
   const step = (): void => {
     // Le fil a été démonté (changement de conversation, fermeture) : plus rien à faire piloter.
     if ('isConnected' in element && element.isConnected === false) return
-    if (element.scrollTop < lastTop - 4) return
     const height = element.scrollHeight
+    const heightMoved = height !== lastHeight
+    if (element.scrollTop < lastTop - 4 && !heightMoved) {
+      onSettled?.(isChatNearBottom(element))
+      return
+    }
     const isLastFrame = frames >= maxFrames - 1
-    if (height !== lastHeight || (isLastFrame && !isChatNearBottom(element))) {
-      element.scrollTo({ top: height, behavior: isLastFrame ? 'auto' : 'smooth' })
+    const remaining = height - element.clientHeight - element.scrollTop
+    if (heightMoved || (isLastFrame && !isChatNearBottom(element))) {
+      const sec = isLastFrame || remaining >= element.clientHeight
+      element.scrollTo({ top: height, behavior: sec ? 'auto' : 'smooth' })
     }
     lastHeight = height
     lastTop = element.scrollTop
     frames += 1
-    if (!isLastFrame) schedule(step)
+    if (isLastFrame) onSettled?.(isChatNearBottom(element))
+    else schedule(step)
   }
   step()
 }

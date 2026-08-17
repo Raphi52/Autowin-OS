@@ -951,7 +951,13 @@ export function ChatView({
       // lieu de la présumer. Sans cette relecture, un message qui arrive juste avant un scroll vers
       // le haut le ramène de force en bas et efface le bouton de retour.
       if (!followTailRef.current) return
-      scrollChatToBottom(scroll)
+      // Le troisième argument est le défaut de `scrollChatToBottom` ; on ne le passe que pour atteindre
+      // le filet. Si la descente n'atterrit PAS (re-rendu qui repose le fil en haut, contenu qui grandit
+      // plus vite qu'on ne descend), le texte tardif — typiquement le bloc de clôture — reste hors
+      // champ : le bouton « ↓ Dernière réponse » doit alors le dire, au lieu d'un silence.
+      scrollChatToBottom(scroll, requestAnimationFrame, 40, (landed) => {
+        if (!landed) setHasNewActivity(true)
+      })
       setHasNewActivity(false)
       setScrolledAwayFromTail(false)
     })
