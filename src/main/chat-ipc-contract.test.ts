@@ -166,7 +166,9 @@ describe('renderer chat IPC contract', () => {
       main.indexOf('const questionWindows')
     )
     const handler = extractIpcHandler(main, 'os:pilotChat:inject')
-    const activeTurnGuard = handler.indexOf('if (!activeChatTurns.get(conversationId))')
+    const activeTurnGuard = handler.indexOf(
+      'if (!(await activeChatTurns.waitForActive(conversationId, 500)))'
+    )
     const pendingDirectiveWrite = handler.indexOf('pendingDirectives.set(conversationId, queued)')
     const turnCleanup = main.indexOf('activeChatTurns.delete(conversationId, controller)')
     const staleDirectiveCleanup = main.indexOf(
@@ -181,7 +183,7 @@ describe('renderer chat IPC contract', () => {
     expect(staleDirectiveCleanup).toBeGreaterThan(turnCleanup)
   })
 
-  it('acknowledges a live directive immediately after enqueueing it', () => {
+  it('acknowledges a live directive immediately after the bounded active-turn guard', () => {
     const { main } = readChatContractSources()
     const drain = main.slice(
       main.indexOf('function drainPendingDirectives'),

@@ -8,6 +8,7 @@ export class ActiveChatTurns {
   private readonly deleting = new Set<string>()
   private readonly idleWaiters = new Set<() => void>()
   private readonly interactiveWaiters = new Set<() => void>()
+  private readonly activeWaiters = new Map<string, Set<() => void>>()
   private idleLeaseHeld = false
   /**
    * Conversations dont le dernier arrêt a été DÉLIBÉRÉ (clic Stop, suppression de conversation).
@@ -25,6 +26,36 @@ export class ActiveChatTurns {
 
   get(conversationId: string): ActiveChatTurn | undefined {
     return [...(this.turns.get(conversationId)?.values() ?? [])].at(-1)
+  }
+
+  /**
+   * Attend la courte course renderer -> IPC -> enregistrement du tour.
+   * fix-ok: sans cette barriere bornee, « Orienter » echoue si le clic devance `set()` de quelques ms.
+   */
+  waitForActive(conversationId: string, timeoutMs: number): Promise<boolean> {
+    if (this.get(conversationId)) return Promise.resolve(true)
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.resolve(false)
+
+    return new Promise<boolean>((resolve) => {
+      let settled = false
+      const finish = (active: boolean): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        const waiters = this.activeWaiters.get(conversationId)
+        waiters?.delete(onActive)
+        if (waiters?.size === 0) this.activeWaiters.delete(conversationId)
+        resolve(active)
+      }
+      const onActive = (): void => finish(true)
+      const timer = setTimeout(() => finish(false), Math.min(Math.floor(timeoutMs), 2_147_000_000))
+      timer.unref?.()
+      const waiters = this.activeWaiters.get(conversationId) ?? new Set()
+      waiters.add(onActive)
+      this.activeWaiters.set(conversationId, waiters)
+      // Ferme la course entre le premier test et l'inscription du waiter.
+      if (this.get(conversationId)) onActive()
+    })
   }
 
   /**
@@ -103,6 +134,7 @@ export class ActiveChatTurns {
     const conversationTurns = this.turns.get(conversationId) ?? new Map()
     conversationTurns.set(controller, { controller, completion })
     this.turns.set(conversationId, conversationTurns)
+    for (const notify of [...(this.activeWaiters.get(conversationId) ?? [])]) notify()
     // Un nouveau tour referme la fenêtre d'arrêt délibéré : ce qui échouera désormais est un VRAI échec.
     this.deliberatelyStopped.delete(conversationId)
     if (this.deleting.has(conversationId)) controller.abort('conversation-deleted')

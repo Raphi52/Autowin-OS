@@ -40,6 +40,42 @@ describe('ActiveChatTurns', () => {
     await expect(new ActiveChatTurns().waitForIdle(250)).resolves.toBe(true)
   })
 
+  it('attend le bref enregistrement d un tour avant une orientation envoyee pendant son demarrage', async () => {
+    vi.useFakeTimers()
+    try {
+      const turns = new ActiveChatTurns()
+      const active = turns.waitForActive('conv-starting', 250)
+      let admitted = false
+      void active.then((value) => {
+        admitted = value
+      })
+
+      setTimeout(() => {
+        turns.set('conv-starting', new AbortController(), Promise.resolve())
+      }, 50)
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(admitted).toBe(true)
+      await expect(active).resolves.toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refuse l orientation si aucun tour ne devient actif dans le delai borne', async () => {
+    vi.useFakeTimers()
+    try {
+      const turns = new ActiveChatTurns()
+      const active = turns.waitForActive('conv-absent', 250)
+
+      await vi.advanceTimersByTimeAsync(250)
+
+      await expect(active).resolves.toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('reserve atomiquement l inactivite pour qu un tour interactif ne puisse pas doubler le watchdog', async () => {
     const turns = new ActiveChatTurns()
 

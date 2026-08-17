@@ -4960,12 +4960,14 @@ Le fil reprend ensuite normalement.`
   // au prochain point d'itération (pilotage continu, sans attendre la fin du tour).
   ipcMain.handle(
     'os:pilotChat:inject',
-    (event, rawConversationId: string, rawDirective: string) => {
+    async (event, rawConversationId: string, rawDirective: string) => {
       assertTrustedRendererSender(event, 'Pilot chat directive')
       const conversationId = guardString(rawConversationId, 'conversationId')
       const directive = guardString(rawDirective, 'directive').trim()
       if (!directive) return { ok: false }
-      if (!activeChatTurns.get(conversationId)) return { ok: false }
+      // Le renderer passe busy avant que l'IPC `pilotChat` ait fini d'enregistrer son controleur.
+      // Une attente courte absorbe cette course de demarrage sans accepter de directive hors tour.
+      if (!(await activeChatTurns.waitForActive(conversationId, 500))) return { ok: false }
       const queued = pendingDirectives.get(conversationId) ?? []
       queued.push(directive)
       pendingDirectives.set(conversationId, queued)
