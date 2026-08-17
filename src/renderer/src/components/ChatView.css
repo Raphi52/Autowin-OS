@@ -226,6 +226,23 @@
   font-size: 11px;
   line-height: 1.4;
 }
+.conv-date-sort {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.conv-date-sort:hover,
+.conv-date-sort:focus-visible {
+  color: var(--text);
+}
 .conv-list {
   display: flex;
   flex-direction: column;

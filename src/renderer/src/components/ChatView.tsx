@@ -140,6 +140,7 @@ export function ChatView({
   const convsRef = useRef<Conv[]>([])
   convsRef.current = convs
   const [convQuery, setConvQuery] = useState('')
+  const [conversationDateOrder, setConversationDateOrder] = useState<'desc' | 'asc'>('desc')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
@@ -1826,7 +1827,14 @@ export function ChatView({
     !input.trim() &&
     attachments.length === 0 &&
     (latestAssistant?.status === 'cancelled' || latestAssistant?.status === 'interrupted')
-  const conversationHits = useMemo(() => searchConversations(convs, convQuery), [convs, convQuery])
+  const conversationHits = useMemo(
+    () =>
+      searchConversations(convs, convQuery).sort((left, right) => {
+        const delta = left.conversation.updatedAt - right.conversation.updatedAt
+        return conversationDateOrder === 'asc' ? delta : -delta
+      }),
+    [convs, convQuery, conversationDateOrder]
+  )
 
   /**
    * Repli des groupes, PERSISTÉ. Le redéplier à chaque ouverture annulerait tout le bénéfice :
@@ -1884,8 +1892,12 @@ export function ChatView({
           }))
         ),
         groupesReplies
-      ),
-    [conversationHits, groupesReplies]
+      ).sort((left, right) => {
+        const delta =
+          left.items[0].hit.conversation.updatedAt - right.items[0].hit.conversation.updatedAt
+        return conversationDateOrder === 'asc' ? delta : -delta
+      }),
+    [conversationHits, groupesReplies, conversationDateOrder]
   )
 
   /**
@@ -2007,6 +2019,21 @@ export function ChatView({
             </button>
           )}
         </div>
+        <button
+          type="button"
+          className="conv-date-sort"
+          aria-label={
+            conversationDateOrder === 'desc'
+              ? 'Trier les conversations des plus anciennes aux plus récentes'
+              : 'Trier les conversations des plus récentes aux plus anciennes'
+          }
+          onClick={() =>
+            setConversationDateOrder((current) => (current === 'desc' ? 'asc' : 'desc'))
+          }
+        >
+          <span aria-hidden="true">{conversationDateOrder === 'desc' ? '↓' : '↑'}</span>
+          {conversationDateOrder === 'desc' ? 'Plus récentes' : 'Plus anciennes'}
+        </button>
         <div className="conv-list scroll-y">
           <button
             className={`conv-new-row${activeId === null ? ' active' : ''}`}
