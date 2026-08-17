@@ -204,6 +204,20 @@ class DefectJudgeProvider extends RecordingProvider {
   }
 }
 
+class RepeatedDefectThenSuccessProvider extends RecordingProvider {
+  private judgeCount = 0
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const result = yield* super.send(messages, options)
+    if (options.execution?.sandbox !== 'read-only') return result
+    this.judgeCount += 1
+    return { ...result, text: this.judgeCount <= 2 ? 'DEFAUT: preuve identique' : 'VALIDE' }
+  }
+}
+
 describe('budget de recuperation du devis', () => {
   it('ne lance aucune reparation quand maxRecoveries vaut zero', async () => {
     const provider = new DefectJudgeProvider()
@@ -219,6 +233,23 @@ describe('budget de recuperation du devis', () => {
     expect(result.gateBlocked).toBe(true)
     expect(provider.calls).toHaveLength(2)
     expect(provider.execCount).toBe(1)
+  })
+
+  it('reessaie apres deux refus identiques et atteint la reussite autorisee par le devis', async () => {
+    const provider = new RepeatedDefectThenSuccessProvider()
+    const quote = compileExecutionQuote('corrige le bug en boucle jusqu a reussite')
+    quote.limits.maxRecoveries = 2
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['build'],
+      currentExecutionQuote: () => quote
+    })
+
+    const result = await orch.run('corrige le bug en boucle jusqu a reussite')
+
+    expect(result.valid).toBe(true)
+    expect(result.gateBlocked).toBe(false)
+    expect(provider.execCount).toBe(3)
+    expect(provider.calls).toHaveLength(6)
   })
 })
 
