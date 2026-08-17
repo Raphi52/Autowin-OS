@@ -506,6 +506,11 @@
 .conv-menu-pop button.c-err:hover {
   background: rgba(239, 63, 63, 0.14);
 }
+.conv-menu-empty {
+  padding: 8px 10px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
 .chat-conv-title {
   font-size: 14px;
   overflow: hidden;

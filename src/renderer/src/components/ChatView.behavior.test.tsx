@@ -144,6 +144,46 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
 
+  it('propose les dossiers deja utilises au lieu du selecteur Windows', async () => {
+    const conversationsSetProject = vi.fn().mockResolvedValue(undefined)
+    const mockApi = api({
+      conversations: vi
+        .fn()
+        .mockResolvedValue([
+          conversation('A'),
+          { ...conversation('B'), projectPath: 'C:\\Amitel\\Projet Alpha' },
+          { ...conversation('C'), projectPath: 'C:\\Amitel\\Projet Beta' }
+        ]),
+      conversationsSetProject
+    })
+    await mount(mockApi)
+
+    const conversationA = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')].find(
+      (button) => button.textContent?.includes('Conversation A')
+    )
+    const trigger =
+      conversationA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')
+    expect(trigger).not.toBeNull()
+    await act(async () => trigger!.click())
+    const action = document.querySelector<HTMLButtonElement>(
+      '[data-testid="conv-menu-set-project"]'
+    )
+    expect(action).not.toBeNull()
+    await act(async () => action!.click())
+
+    expect(conversationsSetProject).not.toHaveBeenCalled()
+    const choice = [
+      ...document.querySelectorAll<HTMLButtonElement>('[data-testid="conv-project-choice"]')
+    ].find((button) => button.dataset.projectPath === 'C:\\Amitel\\Projet Alpha')
+    expect(choice).toBeDefined()
+    await act(async () => {
+      choice!.click()
+      await Promise.resolve()
+    })
+    expect(conversationsSetProject).toHaveBeenCalledWith('A', 'C:\\Amitel\\Projet Alpha')
+    expect(conversationsSetProject).not.toHaveBeenCalledWith('A', undefined)
+  })
+
   it('fait basculer le controle principal de Stop a Reprendre sans rejouer le prompt', async () => {
     const turn = deferred<{ ok: boolean; cancelled?: boolean }>()
     const resumed = deferred<{ ok: boolean; cancelled: boolean; turnId: string }>()

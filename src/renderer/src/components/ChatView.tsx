@@ -198,6 +198,11 @@ export function ChatView({
   const [lastTurnCost, setLastTurnCost] = useState<Record<string, number>>({})
   // Menu ⋮ d'une conversation, rendu en position fixe (déborde du conteneur scrollable).
   const [convMenu, setConvMenu] = useState<{ conv: Conv; top: number; left: number } | null>(null)
+  const [convFolderMenu, setConvFolderMenu] = useState<{
+    conv: Conv
+    top: number
+    left: number
+  } | null>(null)
   // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
   const [pendingDirectives, setPendingDirectives] = useState<QueuedDirective[]>([])
   const [steeringDirectives, setSteeringDirectives] = useState<Set<number>>(() => new Set())
@@ -1874,6 +1879,13 @@ export function ChatView({
     },
     [refreshConvs]
   )
+  const dossiersConversations = useMemo(
+    () =>
+      [...new Set(convs.map((conv) => conv.projectPath?.trim()).filter(Boolean) as string[])].sort(
+        (a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })
+      ),
+    [convs]
+  )
 
   /**
    * Les résultats de recherche, groupés. On transporte le HIT entier (`snippet` compris) plutôt que
@@ -2202,12 +2214,9 @@ export function ChatView({
                 role="menuitem"
                 data-testid="conv-menu-set-project"
                 onClick={() => {
-                  const conv = convMenu.conv
+                  const { conv, top, left } = convMenu
                   setConvMenu(null)
-                  // Chemin OMIS : c'est le main qui ouvre le sélecteur natif — le renderer n'a pas
-                  // le disque, et lui laisser fabriquer un chemin ferait de ce canal une écriture
-                  // non contrôlée.
-                  void rangerDans(conv.id)
+                  setConvFolderMenu({ conv, top, left })
                 }}
               >
                 <span className="conv-menu-ic" aria-hidden="true">
@@ -2245,6 +2254,42 @@ export function ChatView({
                 </span>
                 Supprimer
               </button>
+            </div>
+          </>,
+          document.body
+        )}
+      {convFolderMenu &&
+        createPortal(
+          <>
+            <div className="conv-menu-backdrop" onClick={() => setConvFolderMenu(null)} />
+            <div
+              className="conv-menu-pop"
+              role="menu"
+              aria-label="Dossiers de conversations"
+              style={{ top: convFolderMenu.top, left: convFolderMenu.left }}
+            >
+              {dossiersConversations.length === 0 ? (
+                <span className="conv-menu-empty">Aucun dossier de conversations</span>
+              ) : (
+                dossiersConversations.map((chemin) => (
+                  <button
+                    key={chemin}
+                    role="menuitem"
+                    data-testid="conv-project-choice"
+                    data-project-path={chemin}
+                    onClick={() => {
+                      const conv = convFolderMenu.conv
+                      setConvFolderMenu(null)
+                      void rangerDans(conv.id, chemin)
+                    }}
+                  >
+                    <span className="conv-menu-ic" aria-hidden="true">
+                      🗂
+                    </span>
+                    {chemin}
+                  </button>
+                ))
+              )}
             </div>
           </>,
           document.body
