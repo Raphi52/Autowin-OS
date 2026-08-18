@@ -281,6 +281,56 @@ export function libelleCibleNommee(cibles: readonly string[]): string {
 }
 
 /**
+ * AUTORITÉS DE CLÔTURE : les fichiers dont le SEUL rôle est de décider si un run peut fermer.
+ *
+ * Défaut vécu (conv-1302, 2026-08-18) : bloqué par le gate, le run a réparé LE GATE quatre fois
+ * d'affilée au lieu de la tâche demandée, puis a fermé `succeeded` avec un juge à 96/100. L'agent
+ * modifiait la chose qui l'évaluait — un juge qui réécrit son propre barème.
+ *
+ * `orchestrator.ts` est volontairement ABSENT : il porte la clôture mais aussi presque tout le
+ * reste du run, donc l'y inclure produirait des faux blocages sur du travail légitime. Ne figurent
+ * ici que les modules dont la clôture est l'unique raison d'être.
+ */
+const AUTORITES_DE_CLOTURE = [
+  'src/main/root-execution-contract.ts',
+  'src/main/phase-briefs.ts'
+] as const
+
+/** La demande PARLE-t-elle du gate ? Alors le muter est le sujet, pas une échappatoire. */
+const SUJET_EST_LE_GATE =
+  /\b(?:gate|garde[\s-]?fous?|garde|cloture|clotur\w*|dod|kaizen|verdict|juge\w*|contrat\s+d\w*\s*execution)\b/i
+
+/**
+ * Le run n'a mute QUE ses propres garde-fous, sans que la demande les concerne.
+ *
+ * Sens d'erreur IMPOSE : faux negatif tolere, faux positif JAMAIS. Trois portes de sortie avant de
+ * bloquer — une seule mutation ailleurs, un fichier nomme dans la demande, ou le gate comme sujet.
+ */
+export function mutationLimiteeAuxGardeFous(
+  task: string,
+  evidence: readonly ExecutionEvidence[]
+): boolean {
+  const texte = task.normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  if (SUJET_EST_LE_GATE.test(texte)) return false
+  const touches = evidence
+    .filter((item) => item.kind === 'mutation' && successfulEvidence(item))
+    .flatMap((item) => attributedPaths(item))
+    .filter(ressembleAUnChemin)
+    .map((chemin) => normalized(chemin))
+  if (touches.length === 0) return false
+  const estAutorite = (chemin: string): boolean =>
+    AUTORITES_DE_CLOTURE.some((autorite) => memeChemin(chemin, autorite))
+  if (!touches.every(estAutorite)) return false
+  // La demande nomme explicitement le fichier : elle autorise la mutation, ancrage ou pas.
+  return !AUTORITES_DE_CLOTURE.some((autorite) =>
+    texte.toLowerCase().includes(autorite.split('/').pop() as string)
+  )
+}
+
+export const LIBELLE_GARDE_FOUS =
+  'Le run n’a modifié que ses propres garde-fous de clôture, non demandés'
+
+/**
  * L'état de clôture d'un run : ce que le gate doit évaluer, calculé EN UN SEUL ENDROIT.
  *
  * Cette décision vivait en ligne dans l'orchestrateur, donc hors de portée des tests — une mutation
@@ -320,8 +370,21 @@ export function etatDeCloture(
   if (cibleManquee) {
     checks.push({ label: libelleCibleNommee(ciblesNommees(task)), checked: false })
   }
+  // Garde « conflit d'interet » : la garde ci-dessus a besoin d'une cible ANCREE dans la demande.
+  // Sur une demande nue (« finis »), elle s'ouvre — et c'est exactement par la que les quatre
+  // derives de conv-1302 sont passees, en reecrivant le gate plutot que la tache.
+  const gardeFousSeuls =
+    !lectureSeule &&
+    mutationLimiteeAuxGardeFous(
+      task,
+      phases.flatMap((phase) => phase.executionEvidence ?? [])
+    )
+  if (gardeFousSeuls) {
+    checks.push({ label: LIBELLE_GARDE_FOUS, checked: false })
+  }
   return {
-    status: !cibleManquee && (lectureSeule || evidenceOk) ? 'green' : 'red',
+    status:
+      !cibleManquee && !gardeFousSeuls && (lectureSeule || evidenceOk) ? 'green' : 'red',
     dod: checks
   }
 }

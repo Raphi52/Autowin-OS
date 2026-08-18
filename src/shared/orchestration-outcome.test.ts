@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import {
+  demoteUnvalidatedSuccessClaims,
   executionCostCoverageFields,
   formatExecutionCostCoverage,
   formatOrchestrationOutcome,
@@ -1070,5 +1071,42 @@ describe('un run non valide ne garde pas le ✅ du worker', () => {
 
     expect(affiche).toContain('⛔ Workflow BLOQUÉ par le gate')
     expect(affiche).not.toContain('✅ Fait')
+  })
+})
+
+/**
+ * LE TRIO D'ÉTAT NE PEUT PAS ANNONCER LA FIN SOUS UN GATE QUI BLOQUE.
+ *
+ * Défaut vécu (conv-1302, 2026-08-18) : la rétrogradation ne touchait que la ligne `✅ Fait`. Sous
+ * un en-tête `⛔ Workflow BLOQUÉ`, le même message continuait d'afficher `⏳ Reste à faire : rien`
+ * et `👉 Recommandé : aucune action`. Le lecteur y voit la fin, redemande, et le tour recommence :
+ * neuf relances mesurées sur la même demande.
+ *
+ * Seules les lignes qui AFFIRMENT qu'il ne reste rien sont rétrogradées. Une ligne qui nomme du
+ * travail restant est déjà honnête : elle reste intacte, mot pour mot.
+ */
+describe('demoteUnvalidatedSuccessClaims — le trio d’état ne prétend pas la fin', () => {
+  const bloque = { gateBlocked: true, valid: false }
+
+  it('rétrograde « Reste à faire : rien » quand le gate a bloqué', () => {
+    const out = demoteUnvalidatedSuccessClaims('⏳ Reste à faire : rien', bloque)
+    expect(out).not.toMatch(/Reste à faire\s*:\s*rien\s*$/u)
+    expect(out).toContain('gate BLOQUÉ')
+  })
+
+  it('rétrograde « Recommandé : aucune action »', () => {
+    const out = demoteUnvalidatedSuccessClaims('👉 Recommandé : aucune action', bloque)
+    expect(out).not.toContain('aucune action')
+    expect(out).toContain('gate BLOQUÉ')
+  })
+
+  it('CONTRE-EXEMPLE — une ligne qui nomme du travail restant reste intacte', () => {
+    const ligne = '⏳ Reste à faire : publier le commit sur origin/main'
+    expect(demoteUnvalidatedSuccessClaims(ligne, bloque)).toBe(ligne)
+  })
+
+  it('CONTRE-EXEMPLE — un livrable validé n’est jamais réécrit', () => {
+    const ligne = '⏳ Reste à faire : rien'
+    expect(demoteUnvalidatedSuccessClaims(ligne, { status: 'succeeded', valid: true })).toBe(ligne)
   })
 })

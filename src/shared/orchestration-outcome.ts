@@ -689,10 +689,44 @@ export function demoteUnvalidatedSuccessClaims(
         : undefined
   if (!cause) return report
   const protectedLines = markdownCodeLineProtection([report])[0]
-  return rewriteUnprotectedMarkdownLines(report, protectedLines, (line) =>
-    structuredClosingMarker(line) === 'fait'
-      ? line.replace('✅', '⚠️').replace('Fait', `Fait — AUTO-DÉCLARÉ, non validé (${cause})`)
-      : line
+  return rewriteUnprotectedMarkdownLines(report, protectedLines, (line) => {
+    const marker = structuredClosingMarker(line)
+    if (marker === 'fait') {
+      return line.replace('✅', '⚠️').replace('Fait', `Fait — AUTO-DÉCLARÉ, non validé (${cause})`)
+    }
+    // La ligne `✅ Fait` n'etait pas la seule a pretendre la fin. Defaut vecu (conv-1302,
+    // 2026-08-18) : sous un en-tete `⛔ BLOQUÉ`, le meme message affichait encore
+    // « ⏳ Reste à faire : rien » et « 👉 Recommandé : aucune action ». Le lecteur y lit la fin,
+    // redemande, et le tour recommence — neuf relances mesurees sur la meme demande.
+    //
+    // On ne touche QUE les lignes qui affirment qu'il ne reste rien : une ligne nommant du travail
+    // restant est deja honnete, et la reecrire ferait perdre la seule information utile du worker.
+    if ((marker === 'reste' || marker === 'recommande') && affirmeQuIlNeResteRien(line)) {
+      return marker === 'reste'
+        ? `⏳ Reste à faire — AUTO-DÉCLARÉ, non validé (${cause}) : lever le blocage avant toute clôture`
+        : `👉 Recommandé — AUTO-DÉCLARÉ, non validé (${cause}) : traiter le motif du blocage`
+    }
+    return line
+  })
+}
+
+/**
+ * La ligne affirme-t-elle qu'il ne reste RIEN a faire ?
+ *
+ * Sens d'erreur impose : un faux negatif laisse passer une ligne deja honnete, un faux positif
+ * EFFACERAIT du travail restant que le worker avait nomme. Dans le doute, on ne reecrit pas.
+ */
+function affirmeQuIlNeResteRien(line: string): boolean {
+  const corps = line
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/^[^:：]*[:：]/u, '')
+    .replace(/[.!\s]+$/u, '')
+    .trim()
+  if (!corps) return false
+  return /^(?:rien|neant|nothing|none|aucune?(?:\s+(?:action|etape|suite|autre\s+action))?)$/u.test(
+    corps
   )
 }
 

@@ -286,3 +286,48 @@ describe('cablage — le verdict est rendu dans le bloc d’activite', () => {
     expect(parts()).toContain('{outcome && (')
   })
 })
+
+/**
+ * ÉTAT TERMINAL — un échec REPRIS n'est plus le verdict du groupe.
+ *
+ * Défaut vécu (conv-1302, 2026-08-18) : le résumé retenait le PREMIER échec du groupe. Un tour
+ * qui échouait puis se reprenait avec succès s'affichait « échec », si bien que l'utilisateur
+ * relançait une demande déjà satisfaite. Ce qui compte est l'état TERMINAL de chaque action, pas
+ * le premier incident rencontré en route.
+ *
+ * La règle ne blanchit rien : deux actions DIFFÉRENTES gardent leurs verdicts respectifs, et
+ * l'échec d'une vérification reste prioritaire face au succès d'une orchestration.
+ */
+describe('groupOutcomeSummary — l’état terminal prime sur un incident repris', () => {
+  const orchestrate = (data: Record<string, unknown>): { name: string; data: unknown } => ({
+    name: 'orchestrate',
+    data
+  })
+
+  it('une orchestration échouée PUIS reprise avec succès rend le succès terminal', () => {
+    const summary = groupOutcomeSummary([
+      orchestrate({ gateBlocked: true, gateReasons: ['statut red'] }),
+      orchestrate({ status: 'succeeded', valid: true })
+    ])
+    expect(summary).toMatchObject({ state: 'ok' })
+    expect(summary?.label).toContain('succeeded')
+  })
+
+  it('un échec NON repris reste le verdict du groupe', () => {
+    expect(
+      groupOutcomeSummary([
+        orchestrate({ status: 'succeeded', valid: true }),
+        orchestrate({ gateBlocked: true, gateReasons: ['statut red'] })
+      ])
+    ).toMatchObject({ state: 'failed' })
+  })
+
+  it('l’échec d’une AUTRE action n’est pas effacé par le succès d’une orchestration', () => {
+    expect(
+      groupOutcomeSummary([
+        { name: 'verify', data: { command: 'npm test', exitCode: 1, ok: false } },
+        orchestrate({ status: 'succeeded', valid: true })
+      ])
+    ).toMatchObject({ state: 'failed', label: 'npm test → exit 1' })
+  })
+})

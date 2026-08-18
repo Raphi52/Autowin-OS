@@ -172,3 +172,98 @@ describe('cibleNommeeTouchee — une valeur degeneree n est pas un chemin', () =
     expect(cibleNommeeTouchee(demande, preuve)).toBe('touchee')
   })
 })
+
+/**
+ * CONFLIT D'INTÉRÊT — un run bloqué ne se déverrouille pas en réécrivant son propre gate.
+ *
+ * Défaut vécu (conv-1302, 2026-08-18) : bloqué par le gate, le run a réparé LE GATE quatre fois de
+ * suite — `root-execution-contract.ts`, `phase-briefs.ts` — au lieu de la tâche demandée, puis a
+ * fermé. L'autorité de clôture était devenue la chose que l'agent modifiait pour passer.
+ *
+ * Sens d'erreur imposé : faux négatif toléré, faux positif JAMAIS. La garde ne mord donc que sur le
+ * cas total — AUCUNE mutation ailleurs que dans les garde-fous — et seulement si la demande ne
+ * parlait ni des fichiers ni du gate.
+ */
+describe('etatDeCloture — le run ne se déverrouille pas en mutant son propre gate', () => {
+  const gate = (chemin: string): ExecutionEvidence => mutation([chemin])
+  const phase = (evidence: ExecutionEvidence[]): {
+    phase: string
+    text: string
+    executionEvidence: ExecutionEvidence[]
+  } => ({ phase: 'build', text: 'rapport', executionEvidence: evidence })
+
+  // La demande ANCRÉE (`chemin:ligne`) est déjà couverte par la garde « cible nommée ». Le trou
+  // qui reste est la demande NUE — « finis », « repare jusqu'a finir » — sur laquelle cette garde
+  // s'ouvre volontairement (aucune cible à croiser). C'est exactement là que les quatre dérives de
+  // conv-1302 sont passées : le tour ne nommait plus rien, donc plus rien ne les contredisait.
+  it('BLOQUE : demande NUE, seule mutation = le contrat de clôture lui-même', () => {
+    const etat = etatDeCloture(
+      'finis',
+      [phase([gate('src/main/root-execution-contract.ts')])],
+      true,
+      true
+    )
+    expect(etat.status).toBe('red')
+    expect(etat.dod.some((c) => /garde-fou/i.test(c.label) && !c.checked)).toBe(true)
+  })
+
+  it('BLOQUE aussi via phase-briefs.ts (le prompt du juge est une autorité de clôture)', () => {
+    const etat = etatDeCloture(
+      'repare jusqu a finir cette task',
+      [phase([gate('src/main/phase-briefs.ts')])],
+      true,
+      true
+    )
+    expect(etat.status).toBe('red')
+  })
+
+  it('BLOQUE quand la demande ancre une AUTRE cible (garde existante) ET nomme le motif', () => {
+    const etat = etatDeCloture(
+      DEMANDE_CONV_1302,
+      [phase([gate('src/main/root-execution-contract.ts')])],
+      true,
+      true
+    )
+    expect(etat.status).toBe('red')
+  })
+
+  it('CONTRE-EXEMPLE — la demande NOMME le fichier du gate : mutation légitime', () => {
+    const etat = etatDeCloture(
+      'corrige src/main/root-execution-contract.ts:210 pour exiger toutes les cibles',
+      [phase([gate('src/main/root-execution-contract.ts')])],
+      true,
+      true
+    )
+    expect(etat.status).toBe('green')
+  })
+
+  it('CONTRE-EXEMPLE — la demande PARLE du gate (kaizen) : mutation légitime', () => {
+    const etat = etatDeCloture(
+      'integre le garde kaizen qui refuse une cloture hors sujet dans le gate',
+      [phase([gate('src/main/root-execution-contract.ts')])],
+      true,
+      true
+    )
+    expect(etat.status).toBe('green')
+  })
+
+  it('CONTRE-EXEMPLE — le run a AUSSI touché la cible demandée : rien à reprocher', () => {
+    const etat = etatDeCloture(
+      DEMANDE_CONV_1302,
+      [phase([gate('src/main/root-execution-contract.ts'), gate(CIBLE)])],
+      true,
+      true
+    )
+    expect(etat.status).toBe('green')
+  })
+
+  it('CONTRE-EXEMPLE — un run en lecture seule n’est jamais concerné', () => {
+    const etat = etatDeCloture(
+      DEMANDE_CONV_1302,
+      [{ phase: 'scout', text: 'shortlist' }],
+      false,
+      true
+    )
+    expect(etat.status).toBe('green')
+  })
+})
