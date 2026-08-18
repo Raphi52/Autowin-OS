@@ -18,13 +18,6 @@ export interface TurnCost {
   costUsd?: number
 }
 
-/** Totaux de tokens cumules. */
-export interface TokenTotals {
-  input: number
-  output: number
-  cacheRead: number
-}
-
 /** Agregat cout/tours pour une cle (provider ou role). */
 export interface GroupTotal {
   costUsd: number
@@ -95,26 +88,14 @@ export class CostAggregator {
     return this.turns.reduce((sum, t) => sum + (t.costUsd ?? 0), 0)
   }
 
-  /** Totaux de tokens cumules (input/output/cacheRead). */
-  totalTokens(): TokenTotals {
-    return this.turns.reduce(
-      (acc, t) => ({
-        input: acc.input + t.inputTokens,
-        output: acc.output + t.outputTokens,
-        cacheRead: acc.cacheRead + (t.cacheReadTokens ?? 0)
-      }),
-      { input: 0, output: 0, cacheRead: 0 }
-    )
-  }
-
-  /** Agregation cout/tours par provider. */
+  /**
+   * Agregation cout/tours par provider. Lecture d'INSPECTION : unique lecteur reel,
+   * `orchestrator.provider-identity.test.ts` (~l.152), qui verifie que le cout est enregistre sous
+   * le provider EXECUTANT et jamais sous le provider DEMANDE. L'ecran de cout ne passe pas par ici
+   * (il lit `os:costBreakdown`).
+   */
   byProvider(): Record<string, GroupTotal> {
     return this.groupBy((t) => t.provider)
-  }
-
-  /** Agregation cout/tours par role (les tours sans role sont ignores). */
-  byRole(): Record<string, GroupTotal> {
-    return this.groupBy((t) => t.role)
   }
 
   /** Statut budget : ratio et alerte (>= 80% du budget defini). */

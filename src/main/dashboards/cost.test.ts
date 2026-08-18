@@ -9,19 +9,6 @@ describe('CostAggregator', () => {
     expect(agg.totalUsd()).toBeCloseTo(0.8)
   })
 
-  it('totalTokens cumule input/output/cacheRead', () => {
-    const agg = new CostAggregator()
-    agg.add({ provider: 'claude', inputTokens: 100, outputTokens: 50, cacheReadTokens: 20 })
-    agg.add({ provider: 'codex', inputTokens: 40, outputTokens: 10, cacheReadTokens: 5 })
-    expect(agg.totalTokens()).toEqual({ input: 140, output: 60, cacheRead: 25 })
-  })
-
-  it('totalTokens sans cacheReadTokens => cacheRead reste a 0', () => {
-    const agg = new CostAggregator()
-    agg.add({ provider: 'claude', inputTokens: 10, outputTokens: 5 })
-    expect(agg.totalTokens().cacheRead).toBe(0)
-  })
-
   it('byProvider agrege cout et nombre de tours par provider', () => {
     const agg = new CostAggregator()
     agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 1, costUsd: 1 })
@@ -30,23 +17,6 @@ describe('CostAggregator', () => {
     expect(agg.byProvider()).toEqual({
       claude: { costUsd: 3, turns: 2 },
       codex: { costUsd: 0.5, turns: 1 }
-    })
-  })
-
-  it('byRole agrege cout et nombre de tours par role (ignore les tours sans role)', () => {
-    const agg = new CostAggregator()
-    agg.add({
-      provider: 'claude',
-      role: 'orchestrator',
-      inputTokens: 1,
-      outputTokens: 1,
-      costUsd: 1
-    })
-    agg.add({ provider: 'claude', role: 'subagent', inputTokens: 1, outputTokens: 1, costUsd: 2 })
-    agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 1, costUsd: 5 })
-    expect(agg.byRole()).toEqual({
-      orchestrator: { costUsd: 1, turns: 1 },
-      subagent: { costUsd: 2, turns: 1 }
     })
   })
 

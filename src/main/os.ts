@@ -1065,9 +1065,6 @@ export class AutowinOS {
   budget(): ReturnType<CostAggregator['budgetStatus']> {
     return this.cost.budgetStatus()
   }
-  costByRole(): ReturnType<CostAggregator['byRole']> {
-    return this.cost.byRole()
-  }
   trustRanking(): ReturnType<TrustLedger['ranking']> {
     return this.trust.ranking()
   }
