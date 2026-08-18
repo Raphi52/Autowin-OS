@@ -166,6 +166,37 @@ describe('disjoncteur de coût — montant ESTIMÉ des tours non tarifés (limit
     expect(trip!.estimatedUsd).toBeCloseTo(3, 5)
   })
 
+  it('coupe sur la SOMME facturé + estimé, qu’aucune des deux moitiés ne dépasse seule', () => {
+    // Le plafond était contournable par RÉPARTITION : 1,90 $ facturé et 0,90 $ estimé ne franchissent
+    // ni l’un ni l’autre les 2 $, alors que le run coûte 2,80 $. Les deux compteurs restent SÉPARÉS
+    // (leur séparation est délibérée) ; c’est un troisième motif qui porte sur leur total.
+    const breaker = new CostCircuitBreaker(LIMITES_PROD)
+    expect(
+      breaker.observe({
+        step: 'exec',
+        provider: 'claude',
+        model: 'claude-opus-5',
+        tokens: 10_000,
+        costUsd: 1.9,
+        usage: { inputTokens: 9_000, outputTokens: 1_000 }
+      })
+    ).toBeNull()
+    const trip = breaker.observe({
+      step: 'exec',
+      provider: 'codex',
+      model: 'claude-opus-5',
+      tokens: 132_000,
+      usage: { inputTokens: 120_000, outputTokens: 12_000 }
+    })
+    expect(trip).not.toBeNull()
+    // Aucune moitié ne dépasse seule : c’est bien le TOTAL mixte qui coupe.
+    expect(trip!.spentUsd).toBeCloseTo(1.9, 5)
+    expect(trip!.estimatedUsd).toBeCloseTo(0.9, 5)
+    expect(trip!.reason).toMatch(/factur/i)
+    expect(trip!.reason).toMatch(/estim/i)
+    expect(trip!.reason).toContain('2.80')
+  })
+
   it('modèle INCONNU : aucun montant inventé, le repli volumétrique reste la seule garde', () => {
     const breaker = new CostCircuitBreaker({ maxUsd: 5 })
     breaker.observe({

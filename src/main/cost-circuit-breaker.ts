@@ -159,6 +159,18 @@ export class CostCircuitBreaker {
             `à l'estimation)`
         )
       }
+      // Le plafond restait contournable par RÉPARTITION : chaque moitié confrontée SEULE au seuil, un
+      // run à 1,90 $ facturé + 0,90 $ estimé ne coupait sur aucune des deux. Troisième motif portant
+      // sur le TOTAL mixte. Les deux compteurs restent SÉPARÉS — on additionne pour DÉCIDER, jamais
+      // pour confondre `spentUsd` (facturé) et `estimatedUsd` (reconstitué).
+      const totalMixte = this.spentUsd + this.estimatedUsd
+      if (totalMixte > this.limits.maxUsd) {
+        reasons.push(
+          `coût total mixte ${totalMixte.toFixed(2)}$ ` +
+            `(facturé ${this.spentUsd.toFixed(2)}$ + estimé ${this.estimatedUsd.toFixed(2)}$) ` +
+            `> seuil ${this.limits.maxUsd.toFixed(2)}$`
+        )
+      }
       // Moitié NON reconstituable (modèle hors catalogue) : repli volumétrique calibré conv-102.
       const seuilNonChiffre = this.limits.maxUnpricedTokens ?? DEFAULT_MAX_UNPRICED_TOKENS
       if (this.unpricedUnknownModelTokens > seuilNonChiffre) {
