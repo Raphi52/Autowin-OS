@@ -285,9 +285,18 @@ function isExecutionQuote(value: unknown): value is ExecutionQuote {
  * demarrage, et un etat qui echoue la validation est SILENCIEUSEMENT ignore. Un renommage nu
  * perdrait donc, sans un seul message, tout run en vol au moment du basculement.
  *
- * Migration TOLERANTE : on accepte l'ancien nom a la relecture, on normalise en memoire, et on ne
- * REECRIT que le nouveau. Branche de compatibilite a retirer quand plus aucun etat ancien ne
- * circule.
+ * Migration TOLERANTE dans les DEUX sens, parce que la tolerance ne valait que pour la MONTEE :
+ *  - MONTEE : on accepte l'ancien nom a la relecture et on normalise en memoire vers `plannedMax*`,
+ *    qui reste la seule source de verite en LECTURE (priorite au nouveau nom).
+ *  - DESCENTE : on ECRIT les DEUX jeux de noms (cf. `withLegacyAllocationMirror`). Sans ce miroir,
+ *    un retour arriere du binaire perd en silence tout run en vol — exactement le defaut que cette
+ *    migration se donnait pour raison d'etre, applique a la descente au lieu de la montee : le
+ *    validateur d'avant EXIGE `estimatedMax*`, le fichier echoue la validation, et
+ *    `loadOrchestrationStates` l'avale sans un message.
+ *
+ * Le miroir est TEMPORAIRE — fenetre de transition. Il pourra etre retire quand plus aucun rollback
+ * vers un binaire anterieur a `77cbf012` ne sera envisage. Le retirer avant cela reproduira le
+ * defaut a l'identique, et de facon INVISIBLE (aucune erreur, juste des runs disparus).
  */
 function normalizeLegacyAllocationNames(value: unknown): void {
   if (!isRecord(value)) return
@@ -302,7 +311,30 @@ function normalizeLegacyAllocationNames(value: unknown): void {
     if (allocation[nouveau] === undefined && allocation[ancien] !== undefined) {
       allocation[nouveau] = allocation[ancien]
     }
-    delete allocation[ancien]
+    // Pas de `delete` de l'ancienne cle : c'est lui qui rendait le fichier reecrit illisible par le
+    // binaire d'avant. L'ancien nom est un MIROIR, jamais une source de lecture.
+  }
+}
+
+/**
+ * Rend l'etat serialisable en portant l'allocation sous les DEUX vocabulaires. Miroir TEMPORAIRE,
+ * meme fenetre de transition que `normalizeLegacyAllocationNames` : a retirer seulement quand plus
+ * aucun rollback vers un binaire anterieur a `77cbf012` n'est envisage.
+ */
+function withLegacyAllocationMirror(state: OrchestrationRunState): OrchestrationRunState {
+  const quote = state.executionQuote
+  const allocation = quote?.allocation
+  if (!quote || !allocation) return state
+  return {
+    ...state,
+    executionQuote: {
+      ...quote,
+      allocation: {
+        ...allocation,
+        estimatedMaxAgents: allocation.plannedMaxAgents,
+        estimatedMaxCalls: allocation.plannedMaxCalls
+      } as typeof allocation
+    }
   }
 }
 
@@ -462,7 +494,7 @@ export function saveOrchestrationState(root: string, state: OrchestrationRunStat
   // reprise devrait jeter. On écrit à côté puis on renomme (rename = atomique sur le même volume).
   const target = statePath(root, state.runId)
   const temporary = `${target}.tmp`
-  writeFileSync(temporary, JSON.stringify(state), 'utf8')
+  writeFileSync(temporary, JSON.stringify(withLegacyAllocationMirror(state)), 'utf8')
   // `rename` remplace la cible sur les plateformes supportées par Node. Supprimer d'abord le JSON
   // créerait une fenêtre de crash où seul le `.tmp` subsiste et où le loader perdrait le checkpoint.
   renameSync(temporary, target)

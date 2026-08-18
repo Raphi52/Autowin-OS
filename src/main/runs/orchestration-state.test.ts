@@ -177,14 +177,21 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     expect(relu?.executionQuote?.allocation?.plannedMaxCalls).toBe(12)
   })
 
-  it('un etat relu sous l ancien nom se REECRIT sous le nouveau seul', () => {
+  it('un etat reecrit porte les DEUX noms — sinon une DESCENTE de version perd les runs en vol', () => {
+    // Miroir TEMPORAIRE : le validateur d'AVANT exige `estimatedMax*`. Sans ce miroir, un retour
+    // arriere du binaire fait echouer la validation et `loadOrchestrationStates` avale le fichier
+    // sans un message — le defaut de la montee, applique a la descente.
     ecrisEtatLegacy('run-legacy-rewrite')
 
     const [relu] = loadOrchestrationStates(root)
     saveOrchestrationState(root, relu)
     const ecrit = readFileSync(join(root, 'run-legacy-rewrite.json'), 'utf8')
     expect(ecrit).toContain('plannedMaxAgents')
-    expect(ecrit).not.toContain('estimatedMaxAgents')
+    expect(ecrit).toContain('estimatedMaxAgents')
+    // `plannedMax*` reste la source de verite en LECTURE : le miroir ne fait que la recopier.
+    const alloc = JSON.parse(ecrit).executionQuote.allocation
+    expect([alloc.plannedMaxAgents, alloc.estimatedMaxAgents]).toEqual([5, 5])
+    expect([alloc.plannedMaxCalls, alloc.estimatedMaxCalls]).toEqual([12, 12])
   })
 
   it('rejette une réservation active liée à une occurrence historique plutôt qu’à l’agent actif', () => {
