@@ -635,7 +635,10 @@ export class ConversationStore {
     // conversations ne doivent jamais partager un messageId (le fork suivant viserait les deux).
     const copiedMessages = source.messages.slice(0, cut + 1)
     const messageIds = new Map<string, string>()
-    const allocatedIds = new Set<string>()
+    // UN seul balayage du corpus pour les N ids alloues, au lieu d'un par message copie : c'est le
+    // seul point reellement quadratique du store. Le Set est EPHEMERE (il meurt avec l'appel) —
+    // aucun invariant d'unicite n'est tenu entre deux appels, ce qui serait la vraie fuite.
+    const allocatedIds = this.allMessageIds()
     const generatedIds = copiedMessages.map((message) => {
       const generatedId = this.nextUniqueForkMessageId(allocatedIds)
       allocatedIds.add(generatedId)
@@ -660,11 +663,20 @@ export class ConversationStore {
     return forked
   }
 
+  /** Tous les messageId du corpus, en UN balayage. Jetable : ne jamais le conserver entre appels. */
+  private allMessageIds(): Set<string> {
+    const ids = new Set<string>()
+    for (const conversation of this.conversations.values()) {
+      for (const { messageId } of conversation.messages) if (messageId) ids.add(messageId)
+    }
+    return ids
+  }
+
   private nextUniqueForkMessageId(allocatedIds: ReadonlySet<string>): string {
     let candidate: string
     do {
       candidate = `message-${randomUUID()}`
-    } while (allocatedIds.has(candidate) || this.hasMessageId(candidate))
+    } while (allocatedIds.has(candidate))
     return candidate
   }
 
