@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ExecutionSupervisor } from './execution-supervisor'
+import { splitInputTokens } from '../shared/cost-estimate'
 import { ProviderCallError } from './providers/types'
 import { compileExecutionQuote, type ExecutionQuoteCaps } from './execution-quote'
 import { ProviderRegistry } from './providers/registry'
@@ -463,6 +464,69 @@ describe('ExecutionSupervisor', () => {
       outputTokens: 8,
       cacheReadTokens: 20,
       totalTokens: 128
+    })
+  })
+
+  it('arbitre l’invariant de cache dans le MEME ordre que l’estimateur de cout', async () => {
+    // Le meme usage INCOHERENT donnait (write 60, read 40) a l'estimateur et (write 20, read 80)
+    // ici : l'ecriture coute 1,25x l'entree, la lecture 0,1x — un facteur 12 sur la part
+    // litigieuse. Les deux chemins passent desormais par `splitInputTokens`.
+    const incoherent = {
+      inputTokens: 100,
+      outputTokens: 5,
+      cacheReadTokens: 80,
+      cacheCreationTokens: 60
+    }
+    const attendu = splitInputTokens(incoherent)
+    const supervisor = new ExecutionSupervisor()
+    const quote = devisBloquant('mesurer un usage incoherent')
+    const settlements: Array<NonNullable<ReturnType<typeof supervisor.currentSnapshot>>> = []
+
+    await supervisor.run(
+      quote,
+      undefined,
+      async () => {
+        supervisor.reserveProviderCall()?.complete(incoherent)
+      },
+      undefined,
+      (usage) => settlements.push(usage)
+    )
+
+    expect(attendu).toEqual({ fresh: 0, cacheRead: 40, cacheWrite: 60 })
+    expect(settlements[0]).toMatchObject({
+      cacheReadTokens: attendu.cacheRead,
+      cacheCreationTokens: attendu.cacheWrite
+    })
+  })
+
+  it('un usage COHERENT rend exactement les memes compteurs qu’avant', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const quote = devisBloquant('mesurer un usage nominal')
+    const settlements: Array<NonNullable<ReturnType<typeof supervisor.currentSnapshot>>> = []
+
+    await supervisor.run(
+      quote,
+      undefined,
+      async () => {
+        supervisor.reserveProviderCall()?.complete({
+          inputTokens: 1000,
+          outputTokens: 50,
+          cacheReadTokens: 600,
+          cacheCreationTokens: 200
+        })
+      },
+      undefined,
+      (usage) => settlements.push(usage)
+    )
+
+    expect(settlements[0]).toMatchObject({
+      inputTokens: 1000,
+      outputTokens: 50,
+      cacheReadTokens: 600,
+      cacheCreationTokens: 200,
+      totalTokens: 1050,
+      // fresh = entree - LECTURE + sortie : inchange, l'ecriture reste du contexte frais envoye.
+      freshTokens: 450
     })
   })
 

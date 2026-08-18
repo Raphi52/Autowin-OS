@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 import type { Usage } from './providers/types'
 import type { ExecutionQuote } from './execution-quote'
+import { splitInputTokens } from '../shared/cost-estimate'
 
 export type TokenCoverage = 'complete' | 'partial'
 
@@ -381,14 +382,17 @@ export class ExecutionSupervisor {
       } else {
         const input = Number.isFinite(usage.inputTokens) ? Math.max(0, usage.inputTokens) : 0
         const output = Number.isFinite(usage.outputTokens) ? Math.max(0, usage.outputTokens) : 0
-        const cache = Number.isFinite(usage.cacheReadTokens)
-          ? Math.min(input, Math.max(0, usage.cacheReadTokens as number))
-          : 0
-        // Ecriture de cache : meme invariant que la lecture (sous-ensemble de l'entree), bornee sur
-        // ce que la lecture laisse, sinon deux compteurs incoherents feraient depasser l'entree.
-        const cacheWrite = Number.isFinite(usage.cacheCreationTokens)
-          ? Math.min(Math.max(0, input - cache), Math.max(0, usage.cacheCreationTokens as number))
-          : 0
+        // L'invariant « le cache est un sous-ensemble de l'entree » est arbitre par UN SEUL
+        // endroit, partage avec l'estimateur de cout : l'ecriture bornee d'abord, la lecture sur
+        // ce qu'il reste. Ce module l'arbitrait dans l'ordre INVERSE, soit un facteur 12 d'ecart
+        // sur la part litigieuse d'un usage incoherent.
+        const { cacheRead: cache, cacheWrite } = splitInputTokens({
+          inputTokens: input,
+          cacheReadTokens: Number.isFinite(usage.cacheReadTokens) ? usage.cacheReadTokens : 0,
+          cacheCreationTokens: Number.isFinite(usage.cacheCreationTokens)
+            ? usage.cacheCreationTokens
+            : 0
+        })
         runtime.inputTokens += input
         runtime.outputTokens += output
         runtime.cacheReadTokens += cache

@@ -3,7 +3,8 @@ import {
   SONNET_5_INTRO_UNTIL_MS,
   estimateCostUsd,
   formatEstimatedCostUsd,
-  modelRate
+  modelRate,
+  splitInputTokens
 } from './cost-estimate'
 
 /**
@@ -147,5 +148,32 @@ describe('estimation de coût des appels non chiffrés', () => {
       model: 'claude-opus-5'
     })
     expect(label).toBe('≈ 10.00 $ estimés')
+  })
+})
+
+describe('splitInputTokens — un seul arbitre de l’invariant « le cache est un sous-ensemble »', () => {
+  it('ordre canonique : l’ÉCRITURE est bornée d’abord, la lecture sur ce qu’il reste', () => {
+    // Usage INCOHÉRENT (corruption de compteur) : 80 + 60 > 100. L'estimateur bornait l'écriture
+    // d'abord, le superviseur la lecture d'abord — un facteur 12 sur la part litigieuse.
+    expect(
+      splitInputTokens({ inputTokens: 100, cacheReadTokens: 80, cacheCreationTokens: 60 })
+    ).toEqual({ fresh: 0, cacheRead: 40, cacheWrite: 60 })
+  })
+
+  it('sur un usage COHÉRENT l’ordre est sans effet — les trois postes somment l’entrée', () => {
+    const split = splitInputTokens({
+      inputTokens: 1000,
+      cacheReadTokens: 600,
+      cacheCreationTokens: 200
+    })
+    expect(split).toEqual({ fresh: 200, cacheRead: 600, cacheWrite: 200 })
+    expect(split.fresh + split.cacheRead + split.cacheWrite).toBe(1000)
+  })
+
+  it('des compteurs absents ou aberrants ne rendent jamais une part négative', () => {
+    expect(splitInputTokens({})).toEqual({ fresh: 0, cacheRead: 0, cacheWrite: 0 })
+    expect(
+      splitInputTokens({ inputTokens: 50, cacheReadTokens: -10, cacheCreationTokens: 900 })
+    ).toEqual({ fresh: 0, cacheRead: 0, cacheWrite: 50 })
   })
 })

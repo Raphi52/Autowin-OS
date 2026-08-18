@@ -75,6 +75,37 @@ function positive(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
 }
 
+/** Décomposition de l'entrée en trois postes DISJOINTS dont la somme vaut `inputTokens`. */
+export interface InputTokenSplit {
+  /** Contexte envoyé au plein tarif : ni relu, ni écrit dans le cache. */
+  readonly fresh: number
+  /** Relu depuis le cache (0,1× l'entrée). */
+  readonly cacheRead: number
+  /** Écrit dans le cache (1,25× l'entrée). */
+  readonly cacheWrite: number
+}
+
+/**
+ * ARBITRE UNIQUE de l'invariant « le cache est un sous-ensemble de l'entrée ».
+ *
+ * Il était arbitré à DEUX endroits dans des ordres OPPOSÉS — l'estimateur bornait l'écriture
+ * d'abord, le superviseur d'exécution la lecture d'abord. L'écriture coûte 1,25× l'entrée et la
+ * lecture 0,1× : l'ordre décide qui absorbe l'excédent, soit un facteur 12 sur la part litigieuse
+ * du même usage.
+ *
+ * ORDRE CANONIQUE : l'ÉCRITURE bornée d'abord, la lecture sur ce qu'il reste. Sur un usage
+ * cohérent (le cas nominal garanti par le contrat de `providers/types.ts`) l'ordre est sans effet.
+ * Sur un usage INCOHÉRENT — une corruption de compteur, pas un cas métier — cet ordre fait tomber
+ * l'excédent dans le poste le plus cher : l'estimation SUR-évalue et le garde-budget mord plus
+ * TÔT. Les deux directions d'erreur sont conservatrices.
+ */
+export function splitInputTokens(usage: TokenUsage): InputTokenSplit {
+  const input = positive(usage.inputTokens)
+  const cacheWrite = Math.min(input, positive(usage.cacheCreationTokens))
+  const cacheRead = Math.min(input - cacheWrite, positive(usage.cacheReadTokens))
+  return { fresh: input - cacheWrite - cacheRead, cacheRead, cacheWrite }
+}
+
 /** Tarif du modèle servi, ou `undefined` si aucune famille connue ne correspond. */
 export function modelRate(model: string | undefined): ModelRate | undefined {
   if (!model) return undefined
@@ -97,12 +128,9 @@ export function estimateCostUsd(usage: TokenUsageShape, nowMs?: number): number 
   const output = positive(usage.outputTokens)
   if (input + output === 0) return undefined
   // Les tokens de cache — relus ET écrits — sont un SOUS-ENSEMBLE de l'entrée : on les facture une
-  // seule fois, à leur tarif propre, et on retire leur part du plein tarif. Des compteurs
-  // incohérents (lecture + écriture > entrée) rendraient une part fraîche NÉGATIVE : on borne
-  // l'écriture d'abord, puis la lecture sur ce qu'il reste.
-  const cacheWrite = Math.min(input, positive(usage.cacheCreationTokens))
-  const cacheRead = Math.min(input - cacheWrite, positive(usage.cacheReadTokens))
-  const freshInput = input - cacheWrite - cacheRead
+  // seule fois, à leur tarif propre, et on retire leur part du plein tarif. L'arbitrage de cet
+  // invariant vit dans `splitInputTokens`, partagé avec le superviseur d'exécution.
+  const { fresh: freshInput, cacheRead, cacheWrite } = splitInputTokens(usage)
   return (
     (freshInput * inputPerMTok +
       cacheWrite * inputPerMTok * CACHE_WRITE_RATIO +
