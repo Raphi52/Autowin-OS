@@ -31,7 +31,9 @@ describe('frictionEchecsRepetes — la série devient visible avant la relance s
     const friction = frictionEchecsRepetes([bloque(), bloque(), bloque()])
     expect(friction?.runs).toBe(3)
     expect(friction?.message).toContain('3 orchestrations')
-    expect(friction?.message).toContain('a déjà échoué 3 fois')
+    // L'ancienne phrase affirmait « relancer a l'identique a deja echoue N fois » : refutee, car
+    // rien ne rattache une issue a une demande. Le message ne porte plus que le constat verifiable.
+    expect(friction?.message).not.toContain('identique')
   })
 
   it('une LIVRAISON remet le compteur à zéro : un progrès réel a eu lieu', () => {
@@ -112,5 +114,74 @@ describe('câblage — la friction est réellement affichée dans le composer', 
     const source = chatView()
     expect(source).toContain('data-testid="friction-echecs-repetes"')
     expect(source).toContain('{friction.message}')
+  })
+})
+
+/**
+ * TROUS TROUVÉS PAR DEUX JUGES ADVERSARIAUX (2026-08-18), tous démontrés par exécution.
+ *
+ * D4 — `cumul` ignorait le repli `costUsd` des issues d'ancienne lignée, que la pastille par run
+ *      utilise pourtant : le bandeau annonçait « 2,00 $ » sous trois pastilles totalisant 10,40 $.
+ *      Le volet « forfait » du même reproche est HORS D'ATTEINTE et documenté dans le module :
+ *      aucune lignée ne pose `provider` sur l'issue, et la pastille par run a la même limite.
+ * D5 — le message affirmait « relancer à l'identique a déjà échoué N fois » sans qu'aucune donnée
+ *      ne rattache une issue à une demande. Trois échecs sur trois demandes DIFFÉRENTES le
+ *      déclenchaient : un faux signal, dans un module dont l'objet est d'en supprimer.
+ * D6 — un montant négatif ou `NaN` passait le garde ; un `gateBlocked` truthy non booléen et un
+ *      statut inconnu (`timeout`, espace final) ne comptaient pas.
+ */
+describe('frictionEchecsRepetes — les trous réfutés par les juges', () => {
+  it('D4 — cumule aussi le `costUsd` des issues d’ancienne lignée', () => {
+    const friction = frictionEchecsRepetes([
+      { status: 'failed', costUsd: 8.4 },
+      { status: 'failed', knownCostUsd: 1 },
+      { status: 'failed', knownCostUsd: 1 }
+    ])
+    expect(friction?.cout).toMatch(/10/u)
+    expect(friction?.cout).not.toMatch(/^2/u)
+  })
+
+  it('D5 — le message n’affirme QUE ce que les données soutiennent', () => {
+    const message = frictionEchecsRepetes([
+      { status: 'failed' },
+      { status: 'failed' },
+      { status: 'failed' }
+    ])?.message
+    expect(message).not.toContain('à l’identique')
+    expect(message).toContain('3 orchestrations')
+  })
+
+  it('D6 — un montant absurde ne devient jamais un coût affiché', () => {
+    const friction = frictionEchecsRepetes([
+      { status: 'failed', knownCostUsd: Number.NaN },
+      { status: 'failed', knownCostUsd: -5 },
+      { status: 'failed', knownCostUsd: 2 }
+    ])
+    expect(friction?.cout).not.toMatch(/-/u)
+  })
+
+  it('D6 — un `gateBlocked` truthy non booléen et un statut inconnu comptent', () => {
+    expect(
+      frictionEchecsRepetes([
+        { gateBlocked: 1 as unknown as boolean },
+        { status: 'timeout' },
+        { status: 'failed ' }
+      ])?.runs
+    ).toBe(3)
+  })
+
+  it('D7 — la phrase reste grammaticale quand le coût n’est pas un montant', () => {
+    const message = frictionEchecsRepetes([
+      { status: 'failed', totalTokens: 1_000_000 },
+      { status: 'failed', totalTokens: 1_000_000 },
+      { status: 'failed', totalTokens: 1_000_000 }
+    ])?.message
+    expect(message).not.toMatch(/exposé cumulés|tokens cumulés/u)
+    expect(message).toMatch(/série\s*:/u)
+  })
+
+  it('CONTRE-EXEMPLE — un seuil non atteint reste muet malgré tous ces cas', () => {
+    expect(frictionEchecsRepetes([{ status: 'timeout' }, { gateBlocked: 1 as unknown as boolean }]))
+      .toBeUndefined()
   })
 })

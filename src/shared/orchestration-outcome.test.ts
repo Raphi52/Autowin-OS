@@ -1107,6 +1107,86 @@ describe('demoteUnvalidatedSuccessClaims — le trio d’état ne prétend pas l
 
   it('CONTRE-EXEMPLE — un livrable validé n’est jamais réécrit', () => {
     const ligne = '⏳ Reste à faire : rien'
-    expect(demoteUnvalidatedSuccessClaims(ligne, { status: 'succeeded', valid: true })).toBe(ligne)
+    // La livraison exige les QUATRE conditions de `isDeliveredOrchestrationOutcome` : un fixture
+    // partiel decrit un run NON livre, pas un run livre.
+    expect(
+      demoteUnvalidatedSuccessClaims(ligne, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(ligne)
+  })
+})
+
+/**
+ * TROUS TROUVÉS PAR UN JUGE ADVERSARIAL (2026-08-18) sur la première version de la rétrogradation.
+ *
+ * D1 — `cause` n'était calculée que pour `gateBlocked` ou `valid: false`. Toute autre issue non
+ *      livrée (statut `failed` nu, `reused: true`) laissait le rapport INTACT : l'en-tête disait
+ *      l'échec, le corps disait la fin. Le défaut d'origine, sur une branche non visitée.
+ * D2 — la ligne `📍 Maintenant` n'était jamais touchée : « tout est livré » survivait sous ⛔.
+ * D3 — le vocabulaire de « il ne reste rien » était trop étroit (`rien de plus`, `aucune action
+ *      supplémentaire`, `R.A.S.`, `plus rien` passaient).
+ */
+describe('demoteUnvalidatedSuccessClaims — les trous réfutés par le juge', () => {
+  const trio = ['✅ Fait : livré', '📍 Maintenant : tout est livré', '⏳ Reste à faire : rien'].join(
+    '\n'
+  )
+
+  it('D1 — un statut d’échec NU rétrograde aussi (pas seulement gate/juge)', () => {
+    const out = demoteUnvalidatedSuccessClaims(trio, { status: 'failed' })
+    expect(out).not.toContain('✅ Fait')
+    expect(out).not.toMatch(/Reste à faire\s*:\s*rien/u)
+  })
+
+  it('D1 — un run RÉUTILISÉ ne prétend pas la livraison', () => {
+    const out = demoteUnvalidatedSuccessClaims(trio, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: true
+    })
+    expect(out).not.toContain('✅ Fait')
+  })
+
+  it('D2 — « Maintenant : tout est livré » ne survit pas à un gate bloqué', () => {
+    const out = demoteUnvalidatedSuccessClaims(trio, { gateBlocked: true, valid: false })
+    expect(out).not.toContain('tout est livré')
+    expect(out).toContain('gate BLOQUÉ')
+  })
+
+  it('D3 — les formes voisines de « rien » sont couvertes', () => {
+    for (const ligne of [
+      '⏳ Reste à faire : rien de plus',
+      '⏳ Reste à faire : plus rien',
+      '⏳ Reste à faire : rien à faire',
+      '⏳ Reste à faire : R.A.S.',
+      '👉 Recommandé : aucune action supplémentaire'
+    ]) {
+      expect(demoteUnvalidatedSuccessClaims(ligne, { gateBlocked: true })).toContain('gate BLOQUÉ')
+    }
+  })
+
+  it('CONTRE-EXEMPLE — du travail restant NOMMÉ reste intact, mot pour mot', () => {
+    for (const ligne of [
+      '⏳ Reste à faire : publier le commit sur origin/main',
+      '📍 Maintenant : 3 tests rouges sur le chemin async',
+      '👉 Recommandé : relire le diff avant de pousser'
+    ]) {
+      expect(demoteUnvalidatedSuccessClaims(ligne, { gateBlocked: true })).toBe(ligne)
+    }
+  })
+
+  it('CONTRE-EXEMPLE — un livrable réellement livré n’est jamais réécrit', () => {
+    expect(
+      demoteUnvalidatedSuccessClaims(trio, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(trio)
   })
 })

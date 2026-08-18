@@ -681,13 +681,20 @@ export function demoteUnvalidatedSuccessClaims(
   outcome: OrchestrationOutcome
 ): string {
   if (isDeliveredOrchestrationOutcome(outcome)) return report
+  // La cause NOMMEE quand on la connait, un libelle honnete sinon. Trou trouve par un juge
+  // adversarial le 2026-08-18 : `cause` etant `undefined` sur toute issue non livree qui n'etait ni
+  // bloquee par le gate ni refusee par le juge (statut `failed` nu, run REUTILISE), le rapport
+  // repartait INTACT — en-tete d'echec, corps qui annonce la fin. Exactement le defaut d'origine,
+  // sur la branche que le premier correctif n'avait pas visitee. `isDeliveredOrchestrationOutcome`
+  // a deja tranche plus haut : si on est ici, rien n'est livre, et le dire est toujours juste.
   const cause =
     outcome.gateBlocked === true
       ? 'gate BLOQUÉ'
       : outcome.valid === false
         ? 'juge a REFUSÉ le livrable'
-        : undefined
-  if (!cause) return report
+        : outcome.reused === true
+          ? 'run réutilisé, rien de neuf livré'
+          : 'livraison non prouvée'
   const protectedLines = markdownCodeLineProtection([report])[0]
   return rewriteUnprotectedMarkdownLines(report, protectedLines, (line) => {
     const marker = structuredClosingMarker(line)
@@ -701,10 +708,17 @@ export function demoteUnvalidatedSuccessClaims(
     //
     // On ne touche QUE les lignes qui affirment qu'il ne reste rien : une ligne nommant du travail
     // restant est deja honnete, et la reecrire ferait perdre la seule information utile du worker.
-    if ((marker === 'reste' || marker === 'recommande') && affirmeQuIlNeResteRien(line)) {
-      return marker === 'reste'
-        ? `⏳ Reste à faire — AUTO-DÉCLARÉ, non validé (${cause}) : lever le blocage avant toute clôture`
-        : `👉 Recommandé — AUTO-DÉCLARÉ, non validé (${cause}) : traiter le motif du blocage`
+    if (marker === 'reste' && affirmeQuIlNeResteRien(line)) {
+      return `⏳ Reste à faire — AUTO-DÉCLARÉ, non validé (${cause}) : lever la cause avant toute clôture`
+    }
+    if (marker === 'recommande' && affirmeQuIlNeResteRien(line)) {
+      return `👉 Recommandé — AUTO-DÉCLARÉ, non validé (${cause}) : traiter le motif du refus`
+    }
+    // `📍 Maintenant` aussi : « tout est livré » survivait sous un en-tete de blocage. Ici la ligne
+    // decrit un ETAT, donc on ne la remplace que si elle affirme la completude — une ligne qui
+    // decrit un etat partiel ou du travail en cours est deja honnete.
+    if (marker === 'maintenant' && affirmeLaCompletude(line)) {
+      return `📍 Maintenant — AUTO-DÉCLARÉ, non validé (${cause}) : l’état livré n’est pas prouvé`
     }
     return line
   })
@@ -723,9 +737,33 @@ function affirmeQuIlNeResteRien(line: string): boolean {
     .toLowerCase()
     .replace(/^[^:：]*[:：]/u, '')
     .replace(/[.!\s]+$/u, '')
+    // `R.A.S.` : les points INTERNES doivent tomber aussi, sinon l'abreviation la plus courante du
+    // « rien a signaler » passe a travers (trou trouve par le juge, puis par ce test).
+    .replace(/\./gu, '')
     .trim()
   if (!corps) return false
-  return /^(?:rien|neant|nothing|none|aucune?(?:\s+(?:action|etape|suite|autre\s+action))?)$/u.test(
+  // Vocabulaire elargi apres refutation : `rien de plus`, `plus rien`, `rien a faire`, `R.A.S.` et
+  // `aucune action supplementaire` passaient tous a travers la premiere version.
+  return /^(?:(?:plus\s+)?rien(?:\s+(?:de\s+plus|a\s+faire|d\w*\s+autre))?|neant|nothing(?:\s+(?:more|else|left))?|none|n\s*a\s*s|r\s*a\s*s|aucune?(?:\s+(?:action|etape|suite|autre\s+\w+|\w+\s+(?:supplementaire|requise|necessaire))|\s+\w+\s+\w+\s+(?:supplementaire|requise|necessaire))?)$/u.test(
+    corps
+  )
+}
+
+/**
+ * La ligne affirme-t-elle que TOUT est fait ? Meme sens d'erreur : dans le doute, on ne reecrit pas.
+ * Une ligne d'etat qui nomme un reste, un chiffre ou un en-cours n'est pas concernee.
+ */
+function affirmeLaCompletude(line: string): boolean {
+  const corps = line
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/^[^:：]*[:：]/u, '')
+    .replace(/[.!\s]+$/u, '')
+    .trim()
+  if (!corps) return false
+  if (affirmeQuIlNeResteRien(corps)) return true
+  return /^(?:tout\s+est\s+(?:livre|fini|termine|publie|fait|vert)|c\s*est\s+(?:livre|fini|termine|publie|fait)|(?:rien\s+en\s+cours[,;]?\s*)?tout\s+est\s+\w+|livre|fini|termine|publie)$/u.test(
     corps
   )
 }

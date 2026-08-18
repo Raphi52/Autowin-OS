@@ -2806,13 +2806,15 @@ export function ChatView({
               </div>
             )}
             {attachmentError && <div className="attachment-error">{attachmentError}</div>}
-            {/* Écho de PÉRIMÈTRE : ce que le tour va probablement faire, et sur quoi — AVANT
-                l'envoi, pour pouvoir corriger la visée plutôt que de découvrir l'écart après. */}
+            {/* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
+                suivante. Ne bloque rien — la décision reste humaine. */}
             {friction && (
               <div className="composer-friction" data-testid="friction-echecs-repetes" role="status">
                 <span aria-hidden="true">⚠</span> {friction.message}
               </div>
             )}
+            {/* Écho de PÉRIMÈTRE : ce que le tour va probablement faire, et sur quoi — AVANT
+                l'envoi, pour pouvoir corriger la visée plutôt que de découvrir l'écart après. */}
             {scopeEcho && (
               <div className="composer-scope-echo" data-testid="scope-echo">
                 <span aria-hidden="true">◎</span> {formatScopeEcho(scopeEcho)}

@@ -133,24 +133,22 @@ export function orchestrationOutcomesFromMessages(
 }
 
 /**
- * Résumé de preuve d'un groupe d'actions. Une vérification en ÉCHEC est prioritaire sur une réussie :
- * c'est elle qu'il faut voir quand un tour en contient plusieurs.
+ * Premier résumé de preuve d'un groupe d'actions. Une vérification en ÉCHEC est prioritaire sur une
+ * réussie : c'est elle qu'il faut voir quand un tour en contient plusieurs.
  *
- * Mais un échec REPRIS n'est plus un échec. Défaut vécu (conv-1302, 2026-08-18) : le groupe retenait
- * son premier incident, si bien qu'un tour « orchestration bloquée → relance réussie » s'affichait
- * `échec` alors que l'état terminal était le succès — l'utilisateur relançait une demande déjà
- * satisfaite. On ne compare donc que les états TERMINAUX : pour chaque action, le DERNIER verdict
- * observé remplace les précédents ; la priorité à l'échec s'applique ensuite, sur ces seuls
- * terminaux. Deux actions de nature différente gardent chacune le leur — un `verify` rouge reste
- * visible face à une orchestration verte, ce n'est pas une reprise du même geste.
+ * TENTÉ ET RETIRÉ le 2026-08-18 : faire primer l'état TERMINAL en dédupliquant par nom d'action,
+ * pour qu'un échec repris ne reste pas le verdict du groupe. Un juge adversarial l'a réfuté par
+ * exécution — deux actions de MÊME NOM ne sont pas une reprise du même geste. Sur conv-76, cité en
+ * tête de ce module, `verify` a tourné TROIS fois dans un seul groupe : `[typecheck exit 1,
+ * npm test exit 0]` affichait alors `exit 0` et l'échec disparaissait. Perdre un échec réel est
+ * pire que réafficher un échec déjà repris, et rien dans les données (ni `actionId`, ni la
+ * commande) ne distingue une reprise d'une action indépendante. La règle d'origine est donc
+ * restaurée telle quelle, et le cas de conv-76 est désormais gardé par un test.
  */
 export function groupOutcomeSummary(actions: readonly ActionLike[]): OutcomeSummary | undefined {
-  const terminals = new Map<string, OutcomeSummary>()
-  for (const action of actions) {
-    const summary = verifyOutcomeSummary(action) ?? orchestrateOutcomeSummary(action)
-    if (summary) terminals.set(action.name, summary)
-  }
-  const summaries = [...terminals.values()]
+  const summaries = actions
+    .map((action) => verifyOutcomeSummary(action) ?? orchestrateOutcomeSummary(action))
+    .filter((summary): summary is OutcomeSummary => summary !== undefined)
   return (
     summaries.find((summary) => summary.state === 'failed') ??
     summaries.find((summary) => summary.state === 'refused') ??

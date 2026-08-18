@@ -54,8 +54,15 @@ function cumul(outcomes: readonly OrchestrationOutcome[]): {
     // `knownCostUsd` a trois sens distincts : un montant, `null` (« connu et vide ») et l'absence
     // (« on n'en sait rien »). La somme ne doit devenir un nombre que si AU MOINS une issue en
     // portait un — sinon un cumul « 0,00 $ » se lirait comme « ça n'a rien coûté ».
-    const known = outcome.knownCostUsd
-    if (typeof known === 'number' && Number.isFinite(known)) connu = (connu ?? 0) + known
+    // Deux lignees coexistent : `knownCostUsd` (couverture explicite) et l'ancien `costUsd` seul,
+    // sur lequel la pastille par run se replie deja (`formatExecutionCostCoverage`). Ne sommer que
+    // la premiere annoncait « 2,00 $ » sous trois pastilles totalisant 10,40 $ — le bandeau
+    // sous-estimait de 5x l'argument censé arreter l'utilisateur.
+    //
+    // `nombre()` s'applique aussi aux montants : un `NaN` ou un negatif produisait « -3,000 $ »,
+    // un coût cumule NEGATIF affiche a l'utilisateur.
+    const known = nombre(outcome.knownCostUsd) || nombre(outcome.costUsd)
+    if (known > 0) connu = (connu ?? 0) + known
     total.unpricedCalls += nombre(outcome.unpricedCalls)
     total.totalTokens += nombre(outcome.totalTokens)
     total.inputTokens += nombre(outcome.inputTokens)
@@ -65,6 +72,11 @@ function cumul(outcomes: readonly OrchestrationOutcome[]): {
     const candidat = outcome.pricingModel ?? outcome.resolvedModel
     if (!model && typeof candidat === 'string' && candidat.trim()) model = candidat
   }
+  // LIMITE ASSUMEE : aucune lignee ne pose `provider` sur l'issue (`executionCostCoverageFields`
+  // n'expose que la couverture et le modele), donc `resolveCostCoverage` verra toujours
+  // `subscription: false` et un forfait s'affichera comme un montant. La pastille PAR RUN a
+  // exactement la meme limite : ce module ne diverge donc pas d'elle. Propager un champ que
+  // personne ne remplit aurait ete du code mort deguise en correctif.
   return { ...total, knownCostUsd: connu, ...(model ? { model } : {}) }
 }
 
@@ -94,7 +106,13 @@ export function frictionEchecsRepetes(
   return {
     runs: serie.length,
     cout,
-    message: `${serie.length} orchestrations d’affilée sans livraison · ${cout} cumulés sur la série · relancer à l’identique a déjà échoué ${serie.length} fois`
+    // Le message n'affirme QUE ce que les donnees soutiennent. La premiere version disait
+    // « relancer a l'identique a deja echoue N fois » — or rien ici ne rattache une issue a une
+    // demande : trois echecs sur trois demandes DIFFERENTES produisaient la meme phrase. Un faux
+    // signal dans le module dont l'objet est d'en supprimer. Le cumul est aussi mis apres deux
+    // points, sinon « coût non exposé cumulés sur la série » sortait agrammatical des que la
+    // couverture n'est pas un montant.
+    message: `${serie.length} orchestrations d’affilée sans livraison · série : ${cout}`
   }
 }
 
@@ -103,7 +121,11 @@ export function frictionEchecsRepetes(
  * Une issue sans aucun de ces signes n'est pas comptée : le silence n'est pas un échec.
  */
 function estTerminale(outcome: OrchestrationOutcome): boolean {
-  if (outcome.gateBlocked === true || outcome.valid === false) return true
-  const status = typeof outcome.status === 'string' ? outcome.status.toLowerCase() : ''
-  return /^(?:failed|error|cancelled|aborted|interrupted)$/.test(status)
+  // Lecture DUCK-TYPEE d'un fil relu du disque : `gateBlocked` peut arriver truthy sans etre un
+  // booleen, et un statut inconnu (`timeout`, ou avec une espace finale) est un echec terminal tout
+  // autant que `failed`. La premiere version les laissait tous les trois disparaitre en silence.
+  if (outcome.gateBlocked || outcome.valid === false) return true
+  const status = typeof outcome.status === 'string' ? outcome.status.trim().toLowerCase() : ''
+  if (!status) return false
+  return !/^(?:running|pending|queued|started|succeeded|success|ok|green)$/.test(status)
 }
