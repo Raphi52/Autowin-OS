@@ -63,12 +63,17 @@ import {
 import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-sections'
 import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment } from './chat-attachments'
-import { searchConversations } from './conversation-search'
+import {
+  recenceUtilisateur,
+  searchConversations,
+  trierParRecenceUtilisateur
+} from './conversation-search'
 import {
   canoniserReplis,
   estReplie,
   groupesVisibles,
-  grouperConversations
+  grouperConversations,
+  ordonnerGroupes
 } from './conversation-groups'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
@@ -1846,12 +1851,10 @@ export function ChatView({
     !input.trim() &&
     attachments.length === 0 &&
     (latestAssistant?.status === 'cancelled' || latestAssistant?.status === 'interrupted')
+  // « Plus récentes » = là où L'UTILISATEUR a parlé en dernier, pas la dernière touche : ranger une
+  // conversation dans un dossier bougeait `updatedAt` et la propulsait en tête (2026-08-18).
   const conversationHits = useMemo(
-    () =>
-      searchConversations(convs, convQuery).sort((left, right) => {
-        const delta = left.conversation.updatedAt - right.conversation.updatedAt
-        return conversationDateOrder === 'asc' ? delta : -delta
-      }),
+    () => trierParRecenceUtilisateur(searchConversations(convs, convQuery), conversationDateOrder),
     [convs, convQuery, conversationDateOrder]
   )
 
@@ -1910,21 +1913,28 @@ export function ChatView({
    */
   const groupes = useMemo(
     () =>
-      groupesVisibles(
-        grouperConversations(
-          conversationHits.map((hit) => ({
-            id: hit.conversation.id,
-            projectPath: hit.conversation.projectPath,
-            autoKaizen: hit.conversation.autoKaizen,
-            hit
-          }))
+      ordonnerGroupes(
+        groupesVisibles(
+          grouperConversations(
+            conversationHits.map((hit) => ({
+              id: hit.conversation.id,
+              projectPath: hit.conversation.projectPath,
+              autoKaizen: hit.conversation.autoKaizen,
+              hit
+            }))
+          ),
+          groupesReplies
         ),
-        groupesReplies
-      ).sort((left, right) => {
-        const delta =
-          left.items[0].hit.conversation.updatedAt - right.items[0].hit.conversation.updatedAt
-        return conversationDateOrder === 'asc' ? delta : -delta
-      }),
+        // La date n'arbitre qu'entre FRERES : un `.sort()` a plat ecrasait le rang par nature
+        // (« Auto-kaizen » remontait en tete) et l'ordre parent-avant-enfant (un sous-dossier
+        // s'affichait au-dessus de son parent, indente comme s'il y etait niche).
+        //
+        // MEME CLE que le tri a plat (`recenceUtilisateur`) : ce second tri portait encore sur
+        // `updatedAt` et ECRASAIT donc le premier — mesure le 2026-08-18, la liste affichee ne
+        // suivait pas l'ordre calcule juste au-dessus. Deux tris, une seule verite.
+        (groupe) => recenceUtilisateur(groupe.items[0].hit.conversation),
+        conversationDateOrder
+      ),
     [conversationHits, groupesReplies, conversationDateOrder]
   )
 

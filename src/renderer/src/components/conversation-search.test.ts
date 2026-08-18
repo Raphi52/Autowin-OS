@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { searchConversations, type ConversationSearchSource } from './conversation-search'
+import {
+  searchConversations,
+  trierParRecenceUtilisateur,
+  type ConversationSearchSource
+} from './conversation-search'
 
 const conversations: ConversationSearchSource[] = [
   {
@@ -140,5 +144,76 @@ describe('la liste SANS recherche ne doit pas mentir sur ce qu’elle contient',
     const hits = searchConversations(enorme, '')
     expect(hits.length).toBeLessThan(5_000)
     expect(hits.length).toBeGreaterThanOrEqual(1_500)
+  })
+})
+
+describe('tri « plus recentes » de la barre laterale', () => {
+  /**
+   * Defaut vecu le 2026-08-18 : la liste triait sur `updatedAt` SEUL, que bouge n'importe quelle
+   * touche non-utilisateur — ranger la conversation dans un dossier, attacher un RUN.md, un delta de
+   * streaming, un fork. Ranger une conversation la faisait donc remonter en tete comme si on venait
+   * d'y ecrire. « Plus recentes » doit vouloir dire « la ou J'AI parle en dernier ».
+   */
+  const rangee: ConversationSearchSource = {
+    id: 'rangee-a-l-instant',
+    title: 'Vieille discussion rangee dans un dossier',
+    provider: 'claude',
+    // Touchee a l'instant par le rangement...
+    updatedAt: 10_000,
+    // ...mais l'utilisateur n'y a rien ecrit depuis longtemps.
+    messages: [{ role: 'user', content: 'vieux message', ts: 100 }]
+  }
+  const parlee: ConversationSearchSource = {
+    id: 'parlee-recemment',
+    title: 'Discussion en cours',
+    provider: 'claude',
+    updatedAt: 900,
+    messages: [{ role: 'user', content: 'message recent', ts: 800 }]
+  }
+
+  const hits = (sources: ConversationSearchSource[]) =>
+    sources.map((conversation) => ({ conversation, matchedIn: 'all' as const }))
+
+  it('classe par DERNIER MESSAGE UTILISATEUR, pas par derniere touche', () => {
+    const ordonnes = trierParRecenceUtilisateur(hits([rangee, parlee]), 'desc')
+    expect(ordonnes.map((h) => h.conversation.id)).toEqual(['parlee-recemment', 'rangee-a-l-instant'])
+  })
+
+  it('inverse l ordre en « plus anciennes »', () => {
+    const ordonnes = trierParRecenceUtilisateur(hits([rangee, parlee]), 'asc')
+    expect(ordonnes.map((h) => h.conversation.id)).toEqual(['rangee-a-l-instant', 'parlee-recemment'])
+  })
+
+  it('retombe sur updatedAt quand l utilisateur n a jamais ecrit', () => {
+    const jamaisParlee: ConversationSearchSource = {
+      id: 'jamais-parlee',
+      title: 'Creee par un agent',
+      provider: 'claude',
+      updatedAt: 5_000,
+      messages: [{ role: 'assistant', content: 'bonjour', ts: 4_000 }]
+    }
+    const ordonnes = trierParRecenceUtilisateur(hits([parlee, jamaisParlee]), 'desc')
+    // 5 000 (repli updatedAt) passe devant 800 (dernier message utilisateur).
+    expect(ordonnes[0].conversation.id).toBe('jamais-parlee')
+  })
+
+  it('utilise lastUserMessageAt du resume quand les messages ne sont pas charges', () => {
+    // La liste IPC est une PROJECTION LEGERE : `messages` est souvent absent, seul
+    // `lastUserMessageAt` est fourni. Ignorer ce champ ramenait le defaut par une autre porte.
+    const resume = {
+      id: 'resume-sans-messages',
+      title: 'Sans historique charge',
+      provider: 'claude',
+      updatedAt: 10_000,
+      lastUserMessageAt: 50
+    } as ConversationSearchSource
+    const ordonnes = trierParRecenceUtilisateur(hits([resume, parlee]), 'desc')
+    expect(ordonnes[0].conversation.id).toBe('parlee-recemment')
+  })
+
+  it('ne modifie pas le tableau recu', () => {
+    const source = hits([rangee, parlee])
+    trierParRecenceUtilisateur(source, 'desc')
+    expect(source.map((h) => h.conversation.id)).toEqual(['rangee-a-l-instant', 'parlee-recemment'])
   })
 })

@@ -82,6 +82,11 @@ export type Conv = {
     error?: string
   }>
   messageCount?: number
+  /**
+   * Dernier message de L'UTILISATEUR, servi par la projection IPC. C'est la cle du tri « plus
+   * recentes » : `updatedAt` bouge aussi sur une touche non-utilisateur (rangement, RUN.md, fork).
+   */
+  lastUserMessageAt?: number
   lastMessageRole?: 'user' | 'assistant'
   lastAssistantStatus?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
   /** Le dossier de travail qui GROUPE la conversation dans la liste. Absent → « Divers ». */

@@ -3,6 +3,11 @@ export type ConversationSearchSource = {
   title: string
   provider: string
   updatedAt: number
+  /**
+   * Date du dernier message de L'UTILISATEUR, fournie par la projection IPC. Distincte
+   * d'`updatedAt`, que bouge aussi ce qui ne vient pas de lui.
+   */
+  lastUserMessageAt?: number
   messages?: ReadonlyArray<{ role: 'user' | 'assistant'; content: string; ts: number }>
 }
 
@@ -109,4 +114,42 @@ export function searchConversations<T extends ConversationSearchSource>(
         b.conversation.updatedAt - a.conversation.updatedAt
     )
     .slice(0, limit)
+}
+
+/**
+ * Date qui répond à « la dernière fois que J'AI parlé ici ».
+ *
+ * `lastUserMessageAt` du résumé IPC d'abord — la liste est une projection légère où `messages` est
+ * souvent absent. Sinon on le derive de l'historique s'il est charge. En dernier recours
+ * `updatedAt` : une conversation ou l'utilisateur n'a jamais ecrit (creee par un agent) doit rester
+ * classable.
+ */
+export function recenceUtilisateur(conversation: ConversationSearchSource): number {
+  if (typeof conversation.lastUserMessageAt === 'number') return conversation.lastUserMessageAt
+  const messages = conversation.messages
+  if (messages) {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index]
+      if (message.role === 'user' && typeof message.ts === 'number') return message.ts
+    }
+  }
+  return conversation.updatedAt
+}
+
+/**
+ * Ordonne la liste de la barre latérale sur la RÉCENCE UTILISATEUR.
+ *
+ * Defaut vecu le 2026-08-18 : le tri portait sur `updatedAt` seul, que bouge n'importe quelle touche
+ * non-utilisateur (rangement dans un dossier, attache d'un RUN.md, delta de streaming, fork). Ranger
+ * une vieille conversation la propulsait en tete de « Plus recentes ». Rend une COPIE : le tableau
+ * recu est celui d'un `useMemo`, le trier en place serait une mutation invisible.
+ */
+export function trierParRecenceUtilisateur<T extends ConversationSearchSource>(
+  hits: readonly ConversationSearchHit<T>[],
+  ordre: 'asc' | 'desc'
+): ConversationSearchHit<T>[] {
+  return [...hits].sort((gauche, droite) => {
+    const delta = recenceUtilisateur(gauche.conversation) - recenceUtilisateur(droite.conversation)
+    return ordre === 'asc' ? delta : -delta
+  })
 }
