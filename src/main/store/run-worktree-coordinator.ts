@@ -1807,10 +1807,18 @@ export class RunWorktreeCoordinator {
       this.persistFinalize(tracked, result)
       this.acknowledgePublication(tracked, result)
       void this.finishPublicationCallbacks(tracked, result, preparedPublication)
-    } catch {
+    } catch (error) {
+      // La classification `merge-failed` ne dit PAS quoi reparer. Le `catch` nu jetait la cause
+      // reelle : on la conserve EN PLUS d'elle, par le canal `detail` que `persist` porte deja
+      // jusqu'a l'activite, au manifeste durable et au recu Git terminal.
       tracked.state = 'blocked'
       tracked.attentionReason = 'merge-failed'
-      this.persist(tracked, 'green', 'blocked')
+      this.persist(
+        tracked,
+        'green',
+        'blocked',
+        error instanceof Error ? error.message : String(error)
+      )
     }
   }
 
@@ -1995,10 +2003,18 @@ export class RunWorktreeCoordinator {
       this.persistFinalize(tracked, result)
       await this.acknowledgePublicationAsync(tracked, result)
       await this.finishPublicationCallbacks(tracked, result, preparedPublication)
-    } catch {
+    } catch (error) {
+      // La classification `merge-failed` ne dit PAS quoi reparer. Le `catch` nu jetait la cause
+      // reelle : on la conserve EN PLUS d'elle, par le canal `detail` que `persist` porte deja
+      // jusqu'a l'activite, au manifeste durable et au recu Git terminal.
       tracked.state = 'blocked'
       tracked.attentionReason = 'merge-failed'
-      this.persist(tracked, 'green', 'blocked')
+      this.persist(
+        tracked,
+        'green',
+        'blocked',
+        error instanceof Error ? error.message : String(error)
+      )
     }
   }
 

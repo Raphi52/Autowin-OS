@@ -1980,3 +1980,130 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     })
   })
 })
+
+/**
+ * Defaut vecu : les deux chemins symetriques de finalisation recuperee attrapaient l'exception de
+ * publication avec un `catch {}` NU. Ils persistaient bien « bloque · merge-failed », mais la CAUSE
+ * reelle etait jetee — l'utilisateur lisait un echec sans savoir quoi reparer. La classification
+ * n'est pas en cause : c'est le message qui manquait, en plus d'elle.
+ */
+describe('RunWorktreeCoordinator — cause conservee quand la reprise de publication jette', () => {
+  const SENTINELLE = 'sentinelle-cause-publication-9f3c2a7e'
+
+  function manifesteVertEnAttente(root: string, runId: string): WorktreeRunStateStore {
+    const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+    stateStore.save({
+      version: 1,
+      repoId: 'repo-a',
+      runId,
+      agentName: 'Builder',
+      worktreePath: join(root, `agent__${runId}`),
+      baseBranch: 'main',
+      baseSha: TEST_SHA,
+      verdict: 'green',
+      publication: 'pending',
+      files: [{ path: 'a.txt', kind: 'mod' as const }],
+      createdAtMs: 10,
+      updatedAtMs: 20
+    })
+    return stateStore
+  }
+
+  /**
+   * ORACLE COMMUN aux variantes synchrone et asynchrone : deux tests qui divergeraient laisseraient
+   * la production asynchrone muette sans que le signal rougisse.
+   */
+  function laCauseEstConservee(
+    coordinator: RunWorktreeCoordinator,
+    stateStore: WorktreeRunStateStore,
+    runId: string,
+    cause: string
+  ): void {
+    // 1. L'activite (ce que lit l'IPC -> renderer, et l'orchestrateur via `finalActivity`).
+    expect(coordinator.activity()[0]).toMatchObject({
+      agentId: runId,
+      state: 'blocked',
+      attentionReason: 'merge-failed',
+      detail: cause
+    })
+    // 2. Le manifeste durable : c'est lui qui attrape une perte APRES redemarrage, qu'une
+    //    assertion sur `activity()` seule manquerait completement.
+    expect(stateStore.get(runId)).toMatchObject({
+      publication: 'blocked',
+      attentionReason: 'merge-failed',
+      detail: cause
+    })
+  }
+
+  it('chemin SYNCHRONE — conserve `merge-failed` ET le message de l’exception', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-cause-sync-'))
+    try {
+      const runId = 'run-cause-sync'
+      const stateStore = manifesteVertEnAttente(root, runId)
+      const coordinator = new RunWorktreeCoordinator({
+        manager: fakeManager({
+          listAgentIds: () => [runId],
+          finalize: () => {
+            throw new Error(SENTINELLE)
+          }
+        }),
+        stateStore,
+        nowFn: () => 30
+      })
+
+      laCauseEstConservee(coordinator, stateStore, runId, SENTINELLE)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('chemin ASYNCHRONE — meme invariant, sans quoi la production reste muette', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-cause-async-'))
+    try {
+      const runId = 'run-cause-async'
+      const stateStore = manifesteVertEnAttente(root, runId)
+      const coordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager({ listAgentIds: () => [runId] }),
+          operationsAreIsolated: () => true,
+          recoveryInventoryAsync: async () => ({
+            residues: { cleaned: 0, recovered: [], blocked: [] },
+            agents: [{ agentId: runId, active: false, changedFiles: ['a.txt'] }]
+          }),
+          finalizeAsync: async () => {
+            throw new Error(SENTINELLE)
+          }
+        },
+        stateStore,
+        nowFn: () => 30
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      laCauseEstConservee(coordinator, stateStore, runId, SENTINELLE)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('une valeur jetee qui n’est pas une Error reste lisible (String), jamais « [object Object] »', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-cause-non-error-'))
+    try {
+      const runId = 'run-cause-non-error'
+      const stateStore = manifesteVertEnAttente(root, runId)
+      const coordinator = new RunWorktreeCoordinator({
+        manager: fakeManager({
+          listAgentIds: () => [runId],
+          finalize: () => {
+            throw SENTINELLE
+          }
+        }),
+        stateStore,
+        nowFn: () => 30
+      })
+
+      laCauseEstConservee(coordinator, stateStore, runId, SENTINELLE)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})

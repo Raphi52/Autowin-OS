@@ -673,6 +673,56 @@ describe('Orchestrator — flip live worktree', () => {
     })
   })
 
+  /**
+   * Le recu Git terminal doit EXPOSER la cause conservee par le coordinateur. Quand la finalisation
+   * ne porte pas elle-meme de `detail` (cas d'une reprise de publication qui a jete et dont la cause
+   * n'existe que dans l'activite persistee), le recu retombe sur `finalActivity?.detail` : sans cette
+   * retombee, l'utilisateur lit « merge-failed » sans savoir quoi reparer.
+   */
+  it('expose dans le recu Git terminal la cause conservee par l’activite', async () => {
+    const SENTINELLE = 'sentinelle-cause-publication-9f3c2a7e'
+    const lifecycle: RunLifecycleEvent[] = []
+    let currentRunId = ''
+    const worktrees: RunWorktrees = {
+      begin: (runId) => {
+        currentRunId = runId
+        return 'C:\wt\run-cause'
+      },
+      // Aucun `detail` ici : la cause ne vit que dans l'activite persistee.
+      end: () => ({
+        outcome: 'blocked' as const,
+        agentId: currentRunId,
+        files: ['src/a.ts'],
+        reason: 'merge-failed' as const
+      }),
+      activity: () => [
+        {
+          agentId: currentRunId,
+          agentName: 'Agent',
+          state: 'blocked' as const,
+          attentionReason: 'merge-failed' as const,
+          files: [{ path: 'src/a.ts', kind: 'mod' as const }],
+          startedAtMs: 100,
+          endedAtMs: 200,
+          workspacePath: 'C:\base',
+          worktreePath: 'C:\wt\run-cause',
+          baseBranch: 'main',
+          baseSha: 'abc123',
+          detail: SENTINELLE
+        }
+      ]
+    }
+    const { orch } = makeOrchestrator(worktrees)
+
+    await runWithLifecycle(orch, 'modifie le projet', (event) => lifecycle.push(event))
+
+    const recu = lifecycle.find((event) => event.stage === 'git')
+    expect(recu).toMatchObject({
+      stage: 'git',
+      git: { outcome: 'blocked', reason: 'merge-failed', detail: SENTINELLE }
+    })
+  })
+
   it('refuse la cloture verte si un commit demande ne produit aucune identite Git', async () => {
     const lifecycle: RunLifecycleEvent[] = []
     const { orch } = makeOrchestrator({
