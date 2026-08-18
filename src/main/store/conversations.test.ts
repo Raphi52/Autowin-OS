@@ -80,24 +80,6 @@ describe('ConversationStore', () => {
     expect(list.map((c) => c.id)).toEqual([c1.id, c2.id])
   })
 
-  it('byCategory filtre par catégorie', () => {
-    const store = new ConversationStore(makeClock())
-    const native = store.create({ title: 'A', category: 'native', provider: 'p' })
-    store.create({ title: 'B', category: 'codex', provider: 'p' })
-
-    const result = store.byCategory('native')
-    expect(result).toEqual([native])
-  })
-
-  it('categories retourne les catégories distinctes', () => {
-    const store = new ConversationStore(makeClock())
-    store.create({ title: 'A', category: 'native', provider: 'p' })
-    store.create({ title: 'B', category: 'codex', provider: 'p' })
-    store.create({ title: 'C', category: 'native', provider: 'p' })
-
-    expect(store.categories().sort()).toEqual(['codex', 'native'])
-  })
-
   it('rename change le titre', () => {
     const store = new ConversationStore(makeClock())
     const conv = store.create({ title: 'A', category: 'native', provider: 'p' })

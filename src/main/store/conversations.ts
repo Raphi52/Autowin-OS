@@ -10,7 +10,7 @@ import {
 } from '../../shared/chat-turn'
 import { hasInterruptionNotice, interruptionNotice } from '../runs/run-interruption'
 import type { ChatArtifact } from '../../shared/artifacts'
-import type { AutoKaizenConversationLink } from '../auto-kaizen-supervisor'
+import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
 
 // Store en mémoire pour les conversations catégorisées (candidat type claude/codex).
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -104,7 +104,7 @@ export interface ConversationChange {
   conversation?: Conversation
   urgency: 'immediate' | 'checkpoint'
   journal?:
-    | { op: 'append-messages'; messages: Msg[]; updatedAt: number; schemaVersion?: 2 | 3 }
+    | { op: 'append-messages'; messages: Msg[]; updatedAt: number }
     | { op: 'turn-event'; turnId: string; event: ChatTurnEvent; updatedAt: number }
 }
 
@@ -383,8 +383,7 @@ export class ConversationStore {
     this.changed(id, 'immediate', {
       op: 'append-messages',
       messages: [structuredClone(userMessage), structuredClone(assistantMessage)],
-      updatedAt: ts,
-      schemaVersion: 3
+      updatedAt: ts
     })
     return conversation
   }
@@ -416,8 +415,7 @@ export class ConversationStore {
     this.changed(id, 'immediate', {
       op: 'append-messages',
       messages: [structuredClone(assistantMessage)],
-      updatedAt: ts,
-      schemaVersion: 3
+      updatedAt: ts
     })
     return conversation
   }
@@ -473,16 +471,6 @@ export class ConversationStore {
       lastAssistantStatus: [...messages].reverse().find((message) => message.role === 'assistant')
         ?.status
     }))
-  }
-
-  /** Liste les conversations d'une catégorie donnée, triées par updatedAt décroissant. */
-  byCategory(cat: Category): Conversation[] {
-    return this.list().filter((c) => c.category === cat)
-  }
-
-  /** Liste les catégories distinctes présentes dans le store. */
-  categories(): Category[] {
-    return [...new Set([...this.conversations.values()].map((c) => c.category))]
   }
 
   /** Renomme une conversation existante. Ne fait rien si l'id est inconnu. */

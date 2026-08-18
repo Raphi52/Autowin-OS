@@ -309,7 +309,6 @@ type ConversationJournalRecord =
       id: string
       messages: Msg[]
       updatedAt: number
-      schemaVersion?: 2 | 3
     }
   | {
       schema: 'autowin.conversation-change/v1'
@@ -348,7 +347,6 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
         if (!conversation) throw new Error('conversation du delta introuvable')
         conversation.messages.push(...record.messages)
         conversation.updatedAt = record.updatedAt
-        if (record.schemaVersion) conversation.schemaVersion = record.schemaVersion
       } else if (
         record.op === 'turn-event' &&
         typeof record.id === 'string' &&

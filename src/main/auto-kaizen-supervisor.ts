@@ -12,7 +12,11 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-export type AutoKaizenConversationRole = 'analysis' | 'fix'
+export type { AutoKaizenConversationRole, AutoKaizenConversationLink } from '../shared/auto-kaizen-link'
+import type {
+  AutoKaizenConversationLink,
+  AutoKaizenConversationRole
+} from '../shared/auto-kaizen-link'
 
 export const LEGACY_AUTO_KAIZEN_ENABLED_ENV = 'AUTOWIN_LEGACY_AUTO_KAIZEN_ENABLED'
 
@@ -21,15 +25,6 @@ export function legacyAutoKaizenSupervisorEnabled(
 ): boolean {
   const flag = env[LEGACY_AUTO_KAIZEN_ENABLED_ENV]?.trim().toLowerCase()
   return flag === '1' || flag === 'true'
-}
-
-export interface AutoKaizenConversationLink {
-  incidentId: string
-  sourceConversationId: string
-  role: AutoKaizenConversationRole
-  rootIncidentId: string
-  parentIncidentId?: string
-  depth: number
 }
 
 export type AutoKaizenIncidentStatus =
