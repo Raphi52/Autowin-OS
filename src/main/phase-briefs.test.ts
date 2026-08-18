@@ -50,6 +50,29 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     }
   })
 
+  // Defaut vecu le 2026-08-17 (conv-1286) : 21 tours utilisateur pour une demande d'un tour. BUILD a
+  // rendu la main trois fois sur des blocages qu'il s'etait inventes — « vazy » declare
+  // « n'identifie aucun dossier cible » alors que le tour precedent nommait l'action, un id de run
+  // absent du depot traite comme un mur, et « reessaye en boucle » interprete comme une reecriture du
+  // moteur de retry au lieu d'une reprise de la tache. Le brief autorisait « si bloque, dis bloque »
+  // sans jamais borner QUAND un blocage est legitime.
+  it('le brief build borne le droit de se declarer bloque', () => {
+    const build = PHASE_BRIEFS.build
+
+    // Une demande elliptique herite de l'intention du tour precedent, elle ne la redemande pas.
+    expect(build).toMatch(/ELLIPTIQUE/)
+    expect(build).toMatch(/RECOMMANDATION du tour pr[ée]c[ée]dent/)
+    // Interdiction de rendre la main sur une question derivable.
+    expect(build).toMatch(/Ne termine JAMAIS un tour sur une question/)
+    expect(build).toMatch(/[ÉE]CRIS l'hypoth[èe]se/)
+    // « Introuvable » et « un outil a echoue » ne sont pas des murs.
+    expect(build).toMatch(/"Introuvable" n'est pas "bloqu[ée]"/)
+    expect(build).toMatch(/n'est pas un mur/)
+    // Un blocage exige l'inventaire de ce qui a ete reellement sonde.
+    expect(build).toMatch(/[ÉE]NUM[ÈE]RE l'espace atteignable/)
+    expect(build).toMatch(/NOMME ce qui a [ée]t[ée] sond[ée]/)
+  })
+
   it('kaizen couvre les mécanismes propres à Autowin et reste en proposition', () => {
     const brief = phaseBrief('kaizen')
     expect(brief).toContain('conversation')
