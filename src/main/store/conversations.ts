@@ -11,6 +11,7 @@ import {
 import { hasInterruptionNotice, interruptionNotice } from '../runs/run-interruption'
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
+import { canonicalProjectPath } from '../../shared/project-path'
 
 // Store en mémoire des conversations : un PROVIDER qui répond, un DOSSIER qui range.
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -97,6 +98,22 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
   messageCount: number
   lastMessageRole?: Msg['role']
   lastAssistantStatus?: ChatTurnStatus
+  /**
+   * Date du dernier message de l'UTILISATEUR. Distincte d'`updatedAt`, que bougent aussi des
+   * écritures qui ne sont pas de lui : un delta de streaming (`applyTurnEvent`), l'attache ou le
+   * détachement d'un RUN.md, un fork. « La dernière conversation que j'ai utilisée » se lit ICI ;
+   * `updatedAt` répond à « la dernière touchée », ce qui n'est pas la même question.
+   */
+  lastUserMessageAt?: number
+}
+
+/** Date du dernier tour de l'utilisateur, ou `undefined` s'il n'a encore rien écrit. */
+export function lastUserMessageAt(messages: readonly Msg[]): number | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role === 'user' && typeof message.ts === 'number') return message.ts
+  }
+  return undefined
 }
 
 export interface ConversationChange {
@@ -119,25 +136,8 @@ export function deterministicMessageId(conversationId: string, index: number): s
   return `message-${conversationId}-${index + 1}`
 }
 
-/**
- * La forme CANONIQUE d'un chemin de dossier de travail.
- *
- * `C:/Clients`, `C:\Clients\` et ` C:\Clients ` désignent le MÊME dossier : sans canonisation ils
- * font trois groupes distincts dans la liste et trois entrées dans le sélecteur. Règle : `trim`,
- * séparateurs vers `\`, séparateur final retiré, lettre de lecteur en MAJUSCULE.
- *
- * La casse du RESTE du chemin est laissée intacte à dessein : la minusculiser fusionnerait bien
- * `c:\clients` et `C:\Clients`, mais dégraderait le libellé rendu par `nomDeDossier` (« clients »).
- * Deux dossiers homonymes de chemins différents (`C:\Clients` / `D:\Clients`) ne fusionnent donc
- * toujours pas — cicatrice délibérée, cf. `conversation-groups.ts`.
- *
- * Rend `undefined` pour ce qui ne désigne aucun dossier (vide, espaces, séparateurs seuls).
- */
-export function canonicalProjectPath(raw: string | null | undefined): string | undefined {
-  const propre = raw?.trim().replace(/\//g, '\\').replace(/\\+$/, '')
-  if (!propre) return undefined
-  return /^[a-z]:/.test(propre) ? propre[0].toUpperCase() + propre.slice(1) : propre
-}
+// Definition UNIQUE dans `shared/project-path` : le renderer en a besoin pour la meme cle.
+export { canonicalProjectPath } from '../../shared/project-path'
 
 /**
  * Applique un événement au tour `turnId` — LA définition unique du réducteur de tour.
@@ -544,7 +544,10 @@ export class ConversationStore {
       messageCount: messages.length,
       lastMessageRole: messages.at(-1)?.role,
       lastAssistantStatus: [...messages].reverse().find((message) => message.role === 'assistant')
-        ?.status
+        ?.status,
+      ...(lastUserMessageAt(messages) !== undefined
+        ? { lastUserMessageAt: lastUserMessageAt(messages) }
+        : {})
     }))
   }
 

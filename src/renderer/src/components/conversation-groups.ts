@@ -12,6 +12,8 @@
  * Logique PURE : testable sans Electron, sans DOM et sans store.
  */
 
+import { canonicalProjectPath } from '../../../shared/project-path'
+
 /** Le groupe des analyses automatiques. Replié par défaut — c'est tout l'objet de sa séparation. */
 export const GROUPE_KAIZEN = 'auto-kaizen'
 /** Le groupe de ce qui n'a pas de dossier. Jamais deviné : l'absence est une réponse. */
@@ -121,6 +123,25 @@ export function grouperConversations<T extends ConversationLike>(
     }
     return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' })
   })
+}
+
+/**
+ * Canonise les CLES d'un etat plie/deplie relu du stockage.
+ *
+ * La cle d'un groupe de dossier EST son `projectPath`, et l'hydratation du store canonise
+ * desormais ce chemin (`C:/Organisation/...` -> `C:\Organisation\...`). Sans cette passe, un etat
+ * enregistre sous l'ANCIENNE forme ne correspond plus a aucun groupe : tous les dossiers de la
+ * barre laterale se deplient au premier lancement, silencieusement.
+ *
+ * Les cles sentinelles (`auto-kaizen`, `divers`) ne portent ni separateur ni lettre de lecteur :
+ * la canonisation les laisse telles quelles.
+ */
+export function canoniserReplis(brut: Readonly<Record<string, boolean>>): Record<string, boolean> {
+  const sortie: Record<string, boolean> = {}
+  for (const [cle, replie] of Object.entries(brut)) {
+    sortie[canonicalProjectPath(cle) ?? cle] = replie
+  }
+  return sortie
 }
 
 /**

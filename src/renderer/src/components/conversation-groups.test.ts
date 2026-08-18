@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canoniserReplis,
   estReplie,
   GROUPE_DIVERS,
   GROUPE_KAIZEN,
@@ -151,5 +152,25 @@ describe('l’état replié', () => {
   it('un choix explicite gagne toujours sur le défaut, dans les DEUX sens', () => {
     expect(estReplie(GROUPE_KAIZEN, { [GROUPE_KAIZEN]: false })).toBe(false)
     expect(estReplie(GROUPE_DIVERS, { [GROUPE_DIVERS]: true })).toBe(true)
+  })
+})
+
+describe('canoniserReplis — l’état plié survit à la canonisation des chemins', () => {
+  it('un groupe plié sous `C:/Clients` est encore plié sous `C:\\Clients`', () => {
+    // L'utilisateur avait replié ce dossier AVANT que l'hydratation ne canonise les chemins.
+    const stocke = { 'C:/Clients': true, [GROUPE_KAIZEN]: false }
+    const relu = canoniserReplis(stocke)
+
+    // Sans canonisation à la lecture, la clé ne correspond plus au groupe : le dossier se déplie.
+    expect(estReplie('C:\\Clients', stocke)).toBe(false)
+    expect(estReplie('C:\\Clients', relu)).toBe(true)
+    // Les clés sentinelles traversent intactes, choix explicite inclus.
+    expect(estReplie(GROUPE_KAIZEN, relu)).toBe(false)
+  })
+
+  it('deux dossiers homonymes de lecteurs différents gardent des états distincts', () => {
+    const relu = canoniserReplis({ 'C:/Clients': true, 'd:/Clients/': false })
+    expect(estReplie('C:\\Clients', relu)).toBe(true)
+    expect(estReplie('D:\\Clients', relu)).toBe(false)
   })
 })

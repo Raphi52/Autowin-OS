@@ -64,7 +64,12 @@ import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-
 import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment } from './chat-attachments'
 import { searchConversations } from './conversation-search'
-import { estReplie, groupesVisibles, grouperConversations } from './conversation-groups'
+import {
+  canoniserReplis,
+  estReplie,
+  groupesVisibles,
+  grouperConversations
+} from './conversation-groups'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
@@ -1859,7 +1864,9 @@ export function ChatView({
   const [groupesReplies, setGroupesReplies] = useState<Record<string, boolean>>(() => {
     try {
       const brut = localStorage.getItem('autowin.conv-groups.collapsed')
-      return brut ? (JSON.parse(brut) as Record<string, boolean>) : {}
+      // Canonise a la LECTURE : un etat enregistre avant la canonisation des chemins porte encore
+      // `C:/Clients`, alors que le groupe s'appelle desormais `C:\Clients`. Sans cela, tout se deplie.
+      return brut ? canoniserReplis(JSON.parse(brut) as Record<string, boolean>) : {}
     } catch {
       // Un JSON corrompu ne doit pas empêcher la liste de s'afficher : on repart des défauts.
       return {}
