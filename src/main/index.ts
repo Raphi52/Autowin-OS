@@ -6033,7 +6033,10 @@ app.whenReady().then(async () => {
             )
             return
           }
-          if (refus === 'copie-durable-absente') {
+          // `contexte-de-reprise-invalide` rejoint `copie-durable-absente` : même verdict, même
+          // geste — l'échec est conclu UNE fois et le checkpoint est oublié, sinon la source ne
+          // tarit jamais et le bandeau ⛔ se rejoue à chaque boot.
+          if (refus === 'copie-durable-absente' || refus === 'contexte-de-reprise-invalide') {
             durableResumeTurn.fail(
               `${message} Reprise définitivement impossible — checkpoint retiré, ce run ne sera plus rejoué.`,
               false
