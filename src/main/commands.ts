@@ -1549,6 +1549,12 @@ export class AppCommandBus {
                 step.provider === bindingOverride?.provider &&
                 Boolean(step.model)
             )?.model
+          // Modèle retenu pour TARIFER les appels non chiffrés : à défaut d'une étape exec relevée,
+          // le modèle demandé reste une source tracée (jamais une famille devinée).
+          const pricingModel =
+            resolvedModel ??
+            bindingOverride?.model ??
+            this.os.roles.getBinding('orchestrator').model
           return {
             valid: r.valid,
             gateBlocked: r.gateBlocked,
@@ -1556,7 +1562,14 @@ export class AppCommandBus {
             knownCostUsd: r.usage?.knownCostUsd,
             unpricedCalls: r.usage?.unpricedCalls,
             totalTokens: r.usage?.totalTokens,
+            // Découpage des tokens : sans lui, un provider qui n'expose aucun prix laissait la
+            // pastille sur « coût non exposé » alors que le volume était compté. Il porte
+            // l'estimation au tarif public du modèle servi (`shared/cost-estimate.ts`).
+            inputTokens: r.usage?.inputTokens,
+            outputTokens: r.usage?.outputTokens,
+            cacheReadTokens: r.usage?.cacheReadTokens,
             ...(resolvedModel ? { resolvedModel } : {}),
+            ...(pricingModel ? { pricingModel } : {}),
             result: r.result,
             gateReasons: r.gateReasons,
             turnId: orchestrationTurnId,

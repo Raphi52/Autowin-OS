@@ -22,6 +22,16 @@ export interface OutcomeSummary {
   state: 'ok' | 'failed' | 'refused'
 }
 
+/** Premier motif de gate lisible, borné : la pastille doit rester une ligne. */
+function gateReasonLabel(reasons: unknown): string | undefined {
+  const first = (Array.isArray(reasons) ? reasons : [reasons]).find(
+    (reason): reason is string => typeof reason === 'string' && reason.trim().length > 0
+  )
+  if (!first) return undefined
+  const text = first.trim().replace(/\s+/gu, ' ')
+  return text.length > 90 ? `${text.slice(0, 87)}…` : text
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined
 }
@@ -71,11 +81,22 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
   if (!data) return undefined
   const cost = formatExecutionCostCoverage(data)
   const suffix = cost ? ` · ${cost}` : ''
-  if (data.gateBlocked === true) return { label: `bloqué par le gate${suffix}`, state: 'failed' }
+  if (data.gateBlocked === true) {
+    // Le MOTIF du blocage vit dans `gateReasons` depuis l'origine et n'était pas affiché : la
+    // pastille disait seulement « bloqué par le gate · <coût> », si bien que la mention comptable
+    // qui suit se lisait comme la cause. Un correctif d'une ligne a été abandonné pour ce
+    // malentendu (voir `dev-sans-watch.test.ts`).
+    const reason = gateReasonLabel(data.gateReasons)
+    return {
+      label: `bloqué par le gate${reason ? ` — ${reason}` : ''}${suffix}`,
+      state: 'failed'
+    }
+  }
   // Une orchestration qui a JETÉ porte sa raison dans `error` (failedOrchestrationOutcome). Sans ce
   // branchement elle tombait sur le générique « livrable refusé » et la CAUSE — la seule chose qui dit
   // à l'utilisateur QUOI/POURQUOI — disparaissait (« 1 action avec erreur » opaque, conv veille 2026-08-14).
-  const errorReason = typeof data.error === 'string' && data.error.trim() ? data.error.trim() : undefined
+  const errorReason =
+    typeof data.error === 'string' && data.error.trim() ? data.error.trim() : undefined
   if (errorReason) {
     const short = errorReason.length > 120 ? errorReason.slice(0, 117) + '…' : errorReason
     return { label: `échec : ${short}${suffix}`, state: 'failed' }
