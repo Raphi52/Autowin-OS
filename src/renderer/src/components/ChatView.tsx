@@ -636,7 +636,9 @@ export function ChatView({
       traceSilentFailure('unfinished-turns', error)
       return
     }
-    const target = pickTurnToResume(turns)
+    // L'horloge ECARTE les vestiges : un tour interrompu la veille ne doit plus voler le demarrage
+    // a la conversation ou l'utilisateur travaille (mesure conv-1267, 2026-08-18).
+    const target = pickTurnToResume(turns, Date.now())
     if (target) {
       const conversation = loaded.find((candidate) => candidate.id === target.conversationId)
       if (conversation) {
@@ -652,6 +654,13 @@ export function ChatView({
     if (derniere) {
       const conversation = loaded.find((candidate) => candidate.id === derniere)
       if (conversation) await loadConv(conversation)
+    } else {
+      // MEMOIRE VIDE (premier lancement, stockage efface, conversation supprimee depuis) : on ouvre
+      // LA PLUS RECENTE au sens de la RECENCE UTILISATEUR — la ou l'utilisateur a parle en dernier,
+      // jamais la derniere TOUCHEE (`updatedAt` bouge sur un rangement, un RUN.md attache, un delta
+      // de streaming). Avant, ce cas n'ouvrait RIEN et laissait le panneau vide.
+      const plusRecente = conversationsRecentes(loaded, 1)[0]
+      if (plusRecente) await loadConv(plusRecente)
     }
     // Survie niveau 3 — RELANCE GRATUITE (demande user 2026-08-13 : « faire en sorte que ça tue
     // pas les runs »). `pickTurnToResume` exige `events > 0` : un tour mort AVANT d'avoir rien

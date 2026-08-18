@@ -15,6 +15,11 @@ import type { ExecutionQuote } from '../execution-quote'
 import type { ExecutionUsageSnapshot } from '../execution-supervisor'
 import type { OrchestrationRuntimeSnapshot } from '../orchestrator'
 import type { ExecutionEvidence } from '../providers/types'
+// La fenetre de peremption des reprises vit dans `shared/` : le renderer l'applique aussi, aux tours
+// de chat inacheves. Deux constantes qui divergent, c'est un mecanisme qui oublie et l'autre qui se
+// souvient pour le MEME demarrage. Re-exportee pour les appelants qui la nommaient d'ici.
+import { RESUME_STALE_AFTER_MS, resumeIsStale } from '../../shared/resume-staleness'
+export { RESUME_STALE_AFTER_MS }
 
 /**
  * SURVIE NIVEAU 3 — état reprenable d'une ORCHESTRATION.
@@ -602,15 +607,6 @@ export function pickOrchestrationToResume(
  * puis tâches mortes avant leur première phase. Les phases présentes mais vides restent exclues.
  */
 /**
- * Au-dela de cette fenetre, un checkpoint n'est plus une reprise : le code a change, le contexte est
- * mort, et le reprendre ecrit dans une vieille conversation qui remonte au premier plan sans raison.
- *
- * 36 h : assez large pour couvrir une nuit, un week-end court ou un arret prolonge de la machine,
- * assez etroit pour qu'un run oublie ne hante pas la liste des jours plus tard.
- */
-export const RESUME_STALE_AFTER_MS = 36 * 60 * 60 * 1000
-
-/**
  * Un checkpoint est-il trop vieux pour etre repris ?
  *
  * Un run dont des appels provider sont ENCORE EN VOL echappe a la peremption quel que soit son age :
@@ -618,7 +614,7 @@ export const RESUME_STALE_AFTER_MS = 36 * 60 * 60 * 1000
  */
 function resumeCheckpointIsStale(state: OrchestrationRunState, nowMs: number): boolean {
   if ((state.usage?.activeCalls ?? 0) > 0) return false
-  return nowMs - state.updatedAt > RESUME_STALE_AFTER_MS
+  return resumeIsStale(state.updatedAt, nowMs)
 }
 
 /**

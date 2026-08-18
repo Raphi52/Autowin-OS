@@ -56,9 +56,14 @@ describe('ChatView — chargement d’une conversation', () => {
   it('échec IPC ⇒ bandeau d’erreur + « Réessayer », sans rejet non géré', async () => {
     const conversation = vi
       .fn()
-      .mockRejectedValueOnce(new Error('store injoignable'))
       .mockResolvedValue({ ...stubs[0], messages: [{ role: 'user', content: 'salut' }] })
     h = await mountChat(chatApi({ conversations: vi.fn().mockResolvedValue(stubs), conversation }))
+
+    // Le boot ouvre desormais LA PLUS RECENTE (demande du 2026-08-18) : il consomme un appel. Ces
+    // tests portent sur le chargement declenche par un CLIC — on isole donc leur sequence du boot,
+    // sinon le premier `Once` serait mange par l'ouverture automatique.
+    conversation.mockClear()
+    conversation.mockRejectedValueOnce(new Error('store injoignable'))
 
     await h.click('.conv-pick')
     await act(async () => {
@@ -84,11 +89,14 @@ describe('ChatView — chargement d’une conversation', () => {
   it('affiche un squelette pendant le chargement puis ignore la réponse PÉRIMÉE', async () => {
     const first = deferred<unknown>()
     const second = deferred<unknown>()
-    const conversation = vi
-      .fn()
+    const conversation = vi.fn().mockResolvedValue({ ...stubs[0], messages: [] })
+    h = await mountChat(chatApi({ conversations: vi.fn().mockResolvedValue(stubs), conversation }))
+
+    // Meme isolation : les deux reponses differees appartiennent aux deux CLICS ci-dessous.
+    conversation.mockClear()
+    conversation
       .mockImplementationOnce(() => first.promise)
       .mockImplementationOnce(() => second.promise)
-    h = await mountChat(chatApi({ conversations: vi.fn().mockResolvedValue(stubs), conversation }))
 
     const picks = (): NodeListOf<Element> => h!.container.querySelectorAll('.conv-pick')
     await act(async () => (picks()[0] as HTMLElement).click())

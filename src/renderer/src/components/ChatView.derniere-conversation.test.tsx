@@ -8,6 +8,13 @@ import { CLE_DERNIERE_CONVERSATION } from './derniere-conversation'
  * dernière conversation où j'étais au lieu de celle-là ». La conversation active n'était retenue
  * qu'en MEMOIRE du processus principal (`commands.ts` → `activeConversationId`), donc perdue à
  * chaque relance — et le boot n'ouvrait que les conversations à tour inachevé (survie de niveau 2).
+ *
+ * SUPERSEDE le meme jour, par une demande PLUS RECENTE du meme utilisateur : « ca doit ouvrir la
+ * plus recente ». Les deux premiers cas ci-dessous sont inchanges — la memoire fait toujours
+ * autorite quand elle est valide. Les deux derniers attendaient « aucune selection inventee » :
+ * desormais, memoire vide ou perimee ouvre LA PLUS RECENTE au sens de la recence UTILISATEUR, parce
+ * qu'un panneau vide au demarrage n'etait la reponse a aucune demande. Le comportement retire est
+ * trace ici plutot qu'efface : c'est un arbitrage entre deux exigences, pas une correction de bug.
  */
 describe('ChatView — reprise sur la derniere conversation ouverte', () => {
   let harness: ChatHarness | undefined
@@ -49,17 +56,20 @@ describe('ChatView — reprise sur la derniere conversation ouverte', () => {
     expect(actives()).toEqual(['Conversation intermediaire'])
   })
 
-  it("n'ouvre rien quand la memoire est vide — aucune selection inventee", async () => {
+  it('memoire vide : ouvre LA PLUS RECENTE, jamais un panneau vide', async () => {
     harness = await mountChat(api())
 
-    expect(actives()).toEqual([])
+    // `recente` porte le `updatedAt` le plus haut et aucun des trois n'a de `lastUserMessageAt` :
+    // la recence utilisateur retombe alors sur `updatedAt` (cf. `recenceUtilisateur`).
+    expect(actives()).toEqual(['Conversation recente'])
   })
 
-  it('ignore une conversation memorisee qui a ete supprimee depuis', async () => {
+  it('memoire PERIMEE (conversation supprimee depuis) : bascule sur la plus recente', async () => {
     localStorage.setItem(CLE_DERNIERE_CONVERSATION, 'effacee-entre-temps')
 
     harness = await mountChat(api())
 
-    expect(actives()).toEqual([])
+    // L'identifiant fantome est ignore — c'etait deja le cas — mais il ne laisse plus l'ecran vide.
+    expect(actives()).toEqual(['Conversation recente'])
   })
 })
