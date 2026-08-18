@@ -56,19 +56,26 @@ function hasRequestedAction(text: string, request: RegExp): boolean {
  * seule conserve une DoD vide ; une demande composee analyse + mutation ne peut plus etre fermee par
  * le seul sous-run d'analyse.
  */
-export function rootExecutionRequirements(task: string): RootExecutionRequirements {
+export function rootExecutionRequirements(
+  task: string,
+  phasesProgrammees?: readonly string[]
+): RootExecutionRequirements {
   const normalized = task.normalize('NFD').replace(/\p{Diacritic}/gu, '')
-  const mutation = isMutationTask(task)
+  const demandee = isMutationTask(task)
+  // Le TEXTE dit ce que l'utilisateur envisage ; le PROGRAMME dit ce que le run va jouer. Un run
+  // limite a frame/scout/terrain n'ecrit rien : lui demander une mutation, un test ou un commit est
+  // insatisfaisable par construction. L'ANALYSE, elle, reste due : il peut la tenir.
+  const ecrit = !programmeSansEcriture(phasesProgrammees)
   return {
-    analysis: mutation && hasRequestedAction(normalized, ANALYSIS_REQUEST),
-    mutation,
-    tests: mutation && hasRequestedAction(normalized, TEST_REQUEST),
-    commit: mutation && hasRequestedAction(normalized, COMMIT_REQUEST)
+    analysis: demandee && hasRequestedAction(normalized, ANALYSIS_REQUEST),
+    mutation: demandee && ecrit,
+    tests: demandee && ecrit && hasRequestedAction(normalized, TEST_REQUEST),
+    commit: demandee && ecrit && hasRequestedAction(normalized, COMMIT_REQUEST)
   }
 }
 
-export function rootDodLabels(task: string): string[] {
-  const required = rootExecutionRequirements(task)
+export function rootDodLabels(task: string, phasesProgrammees?: readonly string[]): string[] {
+  const required = rootExecutionRequirements(task, phasesProgrammees)
   const labels: string[] = []
   if (required.analysis) labels.push(ROOT_DOD.analysis)
   if (required.mutation) labels.push(ROOT_DOD.mutation)
@@ -156,6 +163,20 @@ const PHASES_LECTURE_SEULE = new Set(['scout', 'frame', 'terrain'])
  * laissait entrevoir pour la suite. Un tableau vide n'est PAS blanchi : sans phase, il n'y a rien à
  * déclarer en lecture seule.
  */
+/**
+ * Le PROGRAMME du run ne comporte aucune phase qui ecrit — pendant a `runEnLectureSeule`, mais en
+ * AMONT : celui-ci se prononce sur les phases PROGRAMMEES (avant execution, ce que connaissent
+ * `regimePhases`/`effectivePhases`), celui-la sur les phases JOUEES (apres execution).
+ *
+ * `undefined` ou tableau vide = « on ne sait pas » → aucune obligation n'est levee. Un programme
+ * inconnu ne blanchit rien : c'est ce qui rend le parametre sur derriere un appelant non migre.
+ */
+export function programmeSansEcriture(phases?: readonly string[]): boolean {
+  return (
+    Array.isArray(phases) && phases.length > 0 && phases.every((p) => PHASES_LECTURE_SEULE.has(p))
+  )
+}
+
 export function runEnLectureSeule(phases: readonly { phase: string }[]): boolean {
   return phases.length > 0 && phases.every((entree) => PHASES_LECTURE_SEULE.has(entree.phase))
 }

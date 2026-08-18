@@ -67,19 +67,30 @@ function comparableTask(task: string): string {
  * poser, et de laisser le STATUT porter le signal — il le portait déjà (`isBlocked` teste le statut
  * en premier). Le support de la DoD reste entier : une case posée par un humain ou par la phase
  * terrain est comptée et bloque comme avant.
+ *
+ * L'AUTRE MOITIÉ, et c'est le même reproche fantôme rentré par une autre porte (2026-08-18). Les
+ * cases restantes viennent de `rootDodLabels(task)`, qui les dérivait du SEUL texte du besoin. Une
+ * demande limitée à la phase `frame` mais phrasée comme une mutation (« traite ce candidat… ») se
+ * voyait donc semer « mutation produite », « tests exécutés », « commit publié » — trois cases
+ * qu'un run sans phase d'écriture ne peut PAS cocher, affichées ensuite en « DoD 0/1 » sur un
+ * livrable pourtant complet. D'où `phasesProgrammees` : les obligations sont croisées avec ce que
+ * le run va réellement jouer. Rien n'est retiré au seeding — il pose de vraies obligations ; il lui
+ * manquait seulement de savoir sur quoi le run allait être jugé. Paramètre OPTIONNEL et sans effet
+ * quand il est absent : un appelant non migré garde exactement le comportement d'avant.
  */
 export function createConvRun(
   convId: string,
   task: string,
   root = convRunsRoot(),
-  now: () => number = () => Date.now()
+  now: () => number = () => Date.now(),
+  phasesProgrammees?: readonly string[]
 ): string {
   // suffixe horodaté → pas de collision si la même tâche est relancée
   const dir = join(root, convId, `${slugify(task)}-${now().toString(36)}-workspace`)
   mkdirSync(dir, { recursive: true })
   const path = join(dir, 'RUN.md')
   const date = new Date(now()).toISOString().slice(0, 10)
-  const dod = rootDodLabels(task).map((label) => `- [ ] ${label}`).join('\n')
+  const dod = rootDodLabels(task, phasesProgrammees).map((label) => `- [ ] ${label}`).join('\n')
   writeFileSync(
     path,
     `status: open
@@ -128,7 +139,8 @@ export async function reuseOrCreateConvRun(
   convId: string,
   task: string,
   root = convRunsRoot(),
-  now: () => number = () => Date.now()
+  now: () => number = () => Date.now(),
+  phasesProgrammees?: readonly string[]
 ): Promise<{ path: string; reused: boolean }> {
   try {
     // Les RUN d'une conversation vivent sous leur propre dossier : borner le scan ici évite
@@ -153,7 +165,7 @@ export async function reuseOrCreateConvRun(
   } catch {
     // La recherche de workflow est une optimisation : une source illisible ne bloque pas le run.
   }
-  return { path: createConvRun(convId, task, root, now), reused: false }
+  return { path: createConvRun(convId, task, root, now, phasesProgrammees), reused: false }
 }
 
 /** Extrait le contenu d'une section `## Nom` d'un markdown (jusqu'à la prochaine `## ` ou la fin). */

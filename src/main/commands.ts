@@ -72,7 +72,7 @@ import { collectOrchestrationContext } from './orchestration-context'
 import { rememberFact } from './brain-remember'
 import { noteRemembered } from './session-memory-echo'
 import { brainServiceToken } from './brain-retrieval'
-import { classifyRegime } from './task-regime'
+import { classifyRegime, regimePhases } from './task-regime'
 import {
   runGraphify,
   type GraphifyCommandInput,
@@ -1293,8 +1293,11 @@ export class AppCommandBus {
               `Inspecte toi-même les sources causales configurées.`
           }
         }
+        // La DoD du RUN.md est croisée avec les phases que ce run va RÉELLEMENT jouer : sans cela,
+        // une demande limitée à `/frame` se voyait semer des cases « mutation / tests / commit »
+        // qu'aucune phase de lecture ne peut cocher (« DoD 0/1 » sur un livrable complet).
         const runReady = substantial
-          ? reuseOrCreateConvRun(convId, requestedTask)
+          ? reuseOrCreateConvRun(convId, requestedTask, undefined, undefined, regimePhases(requestedTask))
           : Promise.resolve(undefined)
         this.activeOrchestrationByFingerprint.set(fingerprint, runReady)
         let run: { path: string; reused: boolean } | undefined
