@@ -17,9 +17,11 @@ import { routeSkillRequest } from './skill-routing'
 export type TaskRegime = 'trivial' | 'standard' | 'critical'
 
 /**
- * Associe chaque régime au sous-ensemble de phases à exécuter.
- * Ce tableau détermine les phases lancées selon le régime de la tâche.
- * Le juge reste TOUJOURS actif (hors de cette liste, ajouté par l'orchestrateur).
+ * Définit les phases que l'orchestrateur exécute avant le juge pour chaque régime de tâche :
+ * trivial : exécute uniquement build pour une modification directe ;
+ * standard : cadre le besoin avec frame, puis exécute build ;
+ * critical : exécute le pipeline complet, de scout à clean.
+ * Le juge reste TOUJOURS actif : il est ajouté séparément par l'orchestrateur.
  */
 const REGIME_PHASES: Record<TaskRegime, PipelinePhase[]> = {
   trivial: ['build'],
