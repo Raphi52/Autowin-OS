@@ -177,3 +177,22 @@ describe('splitInputTokens — un seul arbitre de l’invariant « le cache est 
     ).toEqual({ fresh: 0, cacheRead: 0, cacheWrite: 50 })
   })
 })
+
+describe('catalogue indexé (provider, motif) — aucun tarif ajouté, seule la CLÉ change', () => {
+  it('sans provider, le lookup se comporte exactement comme avant', () => {
+    expect(modelRate('claude-opus-5')).toMatchObject({ inputPerMTok: 5, outputPerMTok: 25 })
+    expect(modelRate('claude-haiku-4-5')).toMatchObject({ inputPerMTok: 1, outputPerMTok: 5 })
+  })
+
+  it('un identifiant codex ne rend toujours AUCUN tarif — on n’en a pas la source', () => {
+    expect(modelRate('gpt-5.6-terra')).toBeUndefined()
+    expect(modelRate('gpt-5.6-terra', 'codex')).toBeUndefined()
+  })
+
+  it('le provider est une CONDITION : un modèle tiers n’hérite plus d’un tarif Anthropic', () => {
+    // Un futur identifiant tiers contenant « opus » aurait été tarifé 5/25 par le motif seul.
+    expect(modelRate('acme-opus-turbo')).toMatchObject({ inputPerMTok: 5 })
+    expect(modelRate('acme-opus-turbo', 'codex')).toBeUndefined()
+    expect(modelRate('claude-opus-5', 'claude')).toMatchObject({ inputPerMTok: 5 })
+  })
+})

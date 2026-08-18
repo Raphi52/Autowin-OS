@@ -17,6 +17,13 @@ import type { TokenUsage } from './token-usage'
 
 /** Tarifs publics en $ par million de tokens. Source : catalogue Anthropic (2026-08-18). */
 interface ModelRate {
+  /**
+   * Fournisseur qui SERT ce tarif, en minuscules. Le catalogue est celui d'Anthropic : un tarif ne
+   * vaut que pour le provider dont il est copié. Quand l'appelant nomme son provider, un motif de
+   * modèle ne peut plus rendre un tarif Anthropic pour un modèle tiers qui contiendrait le même
+   * mot. Sans provider, le lookup se comporte exactement comme avant.
+   */
+  readonly provider: string
   /** Motif reconnu dans l'identifiant du modèle, en minuscules. */
   readonly match: string
   readonly inputPerMTok: number
@@ -41,19 +48,20 @@ export const SONNET_5_INTRO_UNTIL_MS = Date.UTC(2026, 7, 31, 23, 59, 59, 999)
  * (fable/mythos) passent avant les génériques, sinon un `claude-fable-5` serait tarifé en opus.
  */
 const MODEL_RATES: readonly ModelRate[] = [
-  { match: 'fable', inputPerMTok: 10, outputPerMTok: 50 },
-  { match: 'mythos', inputPerMTok: 10, outputPerMTok: 50 },
-  { match: 'opus', inputPerMTok: 5, outputPerMTok: 25 },
+  { provider: 'claude', match: 'fable', inputPerMTok: 10, outputPerMTok: 50 },
+  { provider: 'claude', match: 'mythos', inputPerMTok: 10, outputPerMTok: 50 },
+  { provider: 'claude', match: 'opus', inputPerMTok: 5, outputPerMTok: 25 },
   // Sonnet 5 AVANT le `sonnet` générique : seul lui porte le tarif d'introduction. Sonnet 4.6 reste
   // à 3 $ / 15 $ en permanence, et l'attraper avec l'intro l'aurait sous-facturé de 33 %.
   {
+    provider: 'claude',
     match: 'sonnet-5',
     inputPerMTok: 3,
     outputPerMTok: 15,
     intro: { untilMs: SONNET_5_INTRO_UNTIL_MS, inputPerMTok: 2, outputPerMTok: 10 }
   },
-  { match: 'sonnet', inputPerMTok: 3, outputPerMTok: 15 },
-  { match: 'haiku', inputPerMTok: 1, outputPerMTok: 5 }
+  { provider: 'claude', match: 'sonnet', inputPerMTok: 3, outputPerMTok: 15 },
+  { provider: 'claude', match: 'haiku', inputPerMTok: 1, outputPerMTok: 5 }
 ]
 
 /** Un token relu en cache coûte 10 % du tarif d'entrée. */
@@ -106,11 +114,22 @@ export function splitInputTokens(usage: TokenUsage): InputTokenSplit {
   return { fresh: input - cacheWrite - cacheRead, cacheRead, cacheWrite }
 }
 
-/** Tarif du modèle servi, ou `undefined` si aucune famille connue ne correspond. */
-export function modelRate(model: string | undefined): ModelRate | undefined {
+/**
+ * Tarif du modèle servi, ou `undefined` si aucune famille connue ne correspond.
+ *
+ * `provider` est OPTIONNEL : omis, le lookup se comporte exactement comme avant (motif seul).
+ * Fourni, il devient une CONDITION — un identifiant tiers ne peut plus hériter d'un tarif
+ * Anthropic parce qu'il contient un mot du catalogue. Aucun tarif non-Anthropic n'est ajouté ici :
+ * il n'en existe pas de source citable, et un montant inventé est pire qu'un montant absent.
+ */
+export function modelRate(model: string | undefined, provider?: string): ModelRate | undefined {
   if (!model) return undefined
   const key = model.toLowerCase()
-  return MODEL_RATES.find((rate) => key.includes(rate.match))
+  const servedBy = provider?.toLowerCase()
+  return MODEL_RATES.find(
+    (rate) =>
+      key.includes(rate.match) && (servedBy === undefined || servedBy.includes(rate.provider))
+  )
 }
 
 /**
@@ -118,7 +137,7 @@ export function modelRate(model: string | undefined): ModelRate | undefined {
  * qu'aucun token n'a été compté — l'appelant affiche alors le volume, pas un montant inventé.
  */
 export function estimateCostUsd(usage: TokenUsageShape, nowMs?: number): number | undefined {
-  const rate = modelRate(usage.model)
+  const rate = modelRate(usage.model, usage.provider)
   if (!rate) return undefined
   const intro =
     rate.intro && nowMs !== undefined && nowMs <= rate.intro.untilMs ? rate.intro : undefined
