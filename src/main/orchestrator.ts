@@ -67,7 +67,11 @@ import {
   type IndependentLearningAttestation
 } from './outcome-learning-proposal'
 import { PIPELINE_PHASES, type PipelinePhase } from './skill-pipeline'
-import { rootExecutionRequirements, etatDeCloture, programmeSansEcriture } from './root-execution-contract'
+import {
+  rootExecutionRequirements,
+  etatDeCloture,
+  programmeSansEcriture
+} from './root-execution-contract'
 import { isMutationTask } from './task-mutation-classifier'
 export {
   classifyMutationConfidence,
@@ -327,6 +331,8 @@ function appelsRequisParWorkflow(
   return total
 }
 import { phaseBrief } from './phase-briefs'
+import { contratDeLaConversation, noteContratPourJuge } from './conversation-task-contract'
+import { convRunsRoot } from './runs/conv-runs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
@@ -1035,12 +1041,13 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
 
 function gitTargets(command: string | undefined): string[] {
   if (!command) return []
-  const matches = command.matchAll(
-    /\bgit(?:\.exe)?\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/gi
-  )
+  const matches = command.matchAll(/\bgit(?:\.exe)?\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/gi)
   return [...matches].map((match) => {
     const target = match[1] ?? match[2] ?? match[3]
-    return target.replaceAll('/', '\\').replace(/[\\]+$/, '').toLowerCase()
+    return target
+      .replaceAll('/', '\\')
+      .replace(/[\\]+$/, '')
+      .toLowerCase()
   })
 }
 
@@ -1053,30 +1060,26 @@ function hasVerifiedExternalGitMutation(
     .replace(/[\\]+$/, '')
     .toLowerCase()
   const successful = evidence.filter((item) => item.ok)
-  const mutation = successful.some(
-    (item) => {
-      const targets = gitTargets(item.command)
-      return (
-        item.kind === 'mutation' &&
-        !item.path &&
-        isShellMutation(item.command) &&
-        targets.length > 0 &&
-        targets.every((target) => target === expectedTarget)
-      )
-    }
-  )
+  const mutation = successful.some((item) => {
+    const targets = gitTargets(item.command)
+    return (
+      item.kind === 'mutation' &&
+      !item.path &&
+      isShellMutation(item.command) &&
+      targets.length > 0 &&
+      targets.every((target) => target === expectedTarget)
+    )
+  })
   if (!mutation) return false
-  return successful.some(
-    (item) => {
-      const targets = gitTargets(item.command)
-      return (
-        item.kind !== 'mutation' &&
-        isStateOracle(item.command) &&
-        targets.length > 0 &&
-        targets.every((target) => target === expectedTarget)
-      )
-    }
-  )
+  return successful.some((item) => {
+    const targets = gitTargets(item.command)
+    return (
+      item.kind !== 'mutation' &&
+      isStateOracle(item.command) &&
+      targets.length > 0 &&
+      targets.every((target) => target === expectedTarget)
+    )
+  })
 }
 
 export class Orchestrator {
@@ -3899,6 +3902,15 @@ ${empreinteDepot}`
       // du dépôt — mesuré sur le run conv-1078 (« DEFAUT: livrable agrégé vide et aucune preuve
       // d'outil observée », trace : judge + gate, zéro exec). Ici le juge n'atteste pas le travail
       // d'un autre : il EST l'unique agent, et sa propre inspection read-only est la preuve.
+      // CONTRAT DE TÂCHE DE LA CONVERSATION : un tour de relance (« finis », « répare ») ne nomme
+      // plus sa cible, donc le juge la perdait de vue — c'est ainsi que quatre runs de conv-1302 ont
+      // été validés 96/100 sur un AUTRE fichier que celui demandé. Le contrat encore ouvert est
+      // déduit des `RUN.md` de la conversation (aucun nouveau stockage) et RAPPELÉ au juge. On
+      // informe, on ne bloque pas : l'autorité reste au juge, qui peut peser une relocalisation
+      // causale justifiée là où une règle déterministe produirait des faux blocages (mesuré).
+      const noteContrat = conversationId
+        ? (noteContratPourJuge(task, contratDeLaConversation(conversationId, convRunsRoot())) ?? '')
+        : ''
       const jugeSeul = phaseOutputs.length === 0 && !exec.text.trim()
       const judgePrompt = jugeSeul
         ? `Tu es un juge outillé en lecture seule, et tu es le SEUL agent de ce run : AUCUNE phase d’exécution ` +
@@ -3906,6 +3918,7 @@ ${empreinteDepot}`
           `Inspecte TOI-MÊME le workspace avec tes outils de lecture et fonde ton verdict sur ce que tu as réellement lu ; ` +
           `n’affirme rien que ton inspection n’établit pas.\n` +
           `IMPORTANT (in-app Autowin OS) : n'exige jamais de RUN.md physique, d'empreinte SHA-256 ni de chemin kit.\n` +
+          noteContrat +
           `TÂCHE: ${task}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
@@ -3920,6 +3933,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           `ni de chemin kit ; juge la SUBSTANCE du livrable et les preuves d'outil réellement observées.\n` +
           JUDGE_FORMAT_CONTRACT +
           JUDGE_TOOLSET_CONTRACT +
+          noteContrat +
           `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
           `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
