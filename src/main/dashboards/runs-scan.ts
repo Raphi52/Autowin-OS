@@ -29,34 +29,81 @@ async function safeReaddir(p: string): Promise<string[]> {
   }
 }
 
-/** Découvre et parse tous les RUN.md sous la racine des runs, plus récent d'abord. */
-export async function scanRuns(
+export interface ScanRunsOptions {
+  /** Nombre maximum de RUN.md RÉELLEMENT lus et parsés (les plus récents d'abord). */
+  limit?: number
+  /** Restreint la traversée à ces sessions/conversations. Absent = toutes. */
+  sessions?: string[]
+}
+
+export interface ScanRunsResult {
+  entries: RunEntry[]
+  /** Candidats écartés par la borne. > 0 = la liste est TRONQUÉE, jamais en silence. */
+  remaining: number
+}
+
+/**
+ * Découvre et parse les RUN.md sous la racine, plus récent d'abord — avec une borne qui porte
+ * sur les LECTURES, pas seulement sur la sortie.
+ *
+ * Pourquoi la borne ne pouvait pas rester un simple `slice` : la version précédente lisait et
+ * parsait TOUS les fichiers puis tranchait. Sur la racine dev mesurée le 2026-08-18 (11 784
+ * RUN.md), cela coûtait ~15 s à froid pour n'en garder que quelques dizaines — et `listConvRuns`
+ * payait ce prix à chaque affichage d'une conversation. On stat d'abord (cheap), on trie, et on
+ * ne `readFile` que les `limit` plus récents.
+ */
+export async function scanRunsBounded(
   root = runsRoot(),
-  options: { limit?: number } = {}
-): Promise<RunEntry[]> {
-  const entries: RunEntry[] = []
-  for (const session of await safeReaddir(root)) {
+  options: ScanRunsOptions = {}
+): Promise<ScanRunsResult> {
+  const sessionFilter = options.sessions ? new Set(options.sessions) : undefined
+  const sessions = sessionFilter
+    ? (await safeReaddir(root)).filter((s) => sessionFilter.has(s))
+    : await safeReaddir(root)
+
+  const candidates: { subject: string; session: string; path: string; mtime: number }[] = []
+  for (const session of sessions) {
     const sessionDir = join(root, session)
     for (const ws of await safeReaddir(sessionDir)) {
       const runPath = join(sessionDir, ws, 'RUN.md')
       try {
-        const [md, runStat] = await Promise.all([readFile(runPath, 'utf8'), stat(runPath)])
-        const subject = ws.replace(/-workspace$/, '')
-        entries.push({
-          subject,
+        const runStat = await stat(runPath)
+        candidates.push({
+          subject: ws.replace(/-workspace$/, ''),
           session,
           path: runPath,
-          mtime: runStat.mtimeMs,
-          summary: parseRun(md, subject)
+          mtime: runStat.mtimeMs
         })
       } catch {
-        /* run illisible — ignoré */
+        /* pas de RUN.md ici — ignoré */
       }
     }
   }
+
+  candidates.sort((a, b) => b.mtime - a.mtime)
   const limit =
-    options.limit === undefined ? entries.length : Math.max(0, Math.floor(options.limit))
-  return entries.sort((a, b) => b.mtime - a.mtime).slice(0, limit)
+    options.limit === undefined ? candidates.length : Math.max(0, Math.floor(options.limit))
+  const retenus = candidates.slice(0, limit)
+
+  const entries: RunEntry[] = []
+  for (const candidate of retenus) {
+    try {
+      const md = await readFile(candidate.path, 'utf8')
+      entries.push({ ...candidate, summary: parseRun(md, candidate.subject) })
+    } catch {
+      /* run illisible — ignoré */
+    }
+  }
+
+  return { entries, remaining: candidates.length - retenus.length }
+}
+
+/** Variante historique : la liste seule. */
+export async function scanRuns(
+  root = runsRoot(),
+  options: ScanRunsOptions = {}
+): Promise<RunEntry[]> {
+  return (await scanRunsBounded(root, options)).entries
 }
 
 function comparablePath(path: string): string {

@@ -12,7 +12,7 @@ import {
 import { readFile, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseRun } from '../dashboards/runs'
-import { scanRuns, type RunEntry } from '../dashboards/runs-scan'
+import { scanRunsBounded, type RunEntry } from '../dashboards/runs-scan'
 import type { OrchestrationStep } from '../orchestrator'
 import { ensureAutowinAppData } from '../app-data'
 import type { RunClosureStatus } from '../../shared/run-execution'
@@ -352,13 +352,38 @@ export function loadConvRunTrace(runPath: string): OrchestrationStep[] | null {
   }
 }
 
-/** Runs d'UNE conversation : ceux créés dans son dossier + les RUN.md attachés. */
+/**
+ * Plafond de runs LUS pour une conversation. Borné PAR CONVERSATION et non globalement : un
+ * plafond global ferait disparaître l'historique d'une conversation dormante dès qu'on travaille
+ * ailleurs.
+ */
+export const CONV_RUNS_READ_LIMIT = 200
+
+/**
+ * Runs d'UNE conversation : ceux créés dans son dossier + les RUN.md attachés.
+ *
+ * Ne traverse plus que le dossier de la conversation, et ne lit que les `CONV_RUNS_READ_LIMIT`
+ * plus récents. Avant : `scanRuns(root)` lisait et parsait l'arbre ENTIER (11 784 fichiers
+ * mesurés sur la racine dev le 2026-08-18) pour n'en garder que ceux d'une conversation.
+ * La troncature est JOURNALISÉE, jamais muette — même raison que le `remaining` de
+ * `reconcileAbandonedConvRuns`.
+ */
 export function listConvRuns(
   convId: string,
   attachedPaths: string[] = [],
   root = convRunsRoot()
 ): Promise<RunEntry[]> {
-  return scanRuns(join(root)).then(async (runs) => {
+  return scanRunsBounded(join(root), {
+    sessions: [convId],
+    limit: CONV_RUNS_READ_LIMIT
+  }).then(async ({ entries: runs, remaining }) => {
+    if (remaining > 0) {
+      console.warn(
+        '[conv-runs]',
+        convId,
+        `liste tronquée : ${CONV_RUNS_READ_LIMIT} runs affichés, ${remaining} plus anciens non lus`
+      )
+    }
     const own = runs.filter((r) => r.session === convId)
     const attached = (
       await Promise.all(
