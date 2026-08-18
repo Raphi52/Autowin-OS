@@ -19,7 +19,6 @@ function conversation(messages: Conversation['messages']): Conversation {
     category: 'codex',
     provider: 'codex',
     messages,
-    workspaceId: 'workspace-conv-1',
     createdAt: 1,
     updatedAt: 1
   }

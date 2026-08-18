@@ -70,7 +70,6 @@ export interface Conversation {
   category: Category
   provider: string
   messages: Msg[]
-  workspaceId?: string
   /** Renseigné si la conversation est née d'un fork. Purement informatif. */
   forkedFrom?: ForkOrigin
   /** Filiation durable d'une analyse/correction Auto-Kaizen avec la conversation source. */
@@ -78,10 +77,8 @@ export interface Conversation {
   /**
    * Le dossier de travail auquel cette conversation appartient — ce qui la GROUPE dans la liste.
    *
-   * Distinct de `category`, qui porte le PROVIDER (`'claude' | 'codex' | ...`) et que consomment le
-   * dispatch task-manager et les commandes : le détourner pour y ranger un dossier casserait ces
-   * chemins sans erreur visible. Distinct aussi de `workspaceId`, synthétique et 1:1 avec la
-   * conversation, donc incapable de regrouper quoi que ce soit.
+   * Distinct de `category`, qui porte le PROVIDER (`'claude' | 'codex' | ...`) : le détourner pour
+   * y ranger un dossier casserait l'affichage et les recopies sans erreur visible.
    *
    * OPTIONNEL, et il le reste : un `conversations.json` écrit par une version antérieure doit
    * continuer à se relire. Absent → la conversation vit dans « Divers ».
@@ -276,15 +273,19 @@ export class ConversationStore {
       delete rest.activeBranchId
       delete rest.branches
       delete rest.authorityMode
+      // Champ synthétique jamais lu, retiré du modèle : sans ce `delete` le spread le recopierait
+      // indéfiniment depuis les vieux fichiers, et sa seule absence forcerait `migrated` à chaque
+      // démarrage — donc une réécriture intégrale du snapshot à chaque lancement.
+      const hadWorkspaceId = rest.workspaceId !== undefined
+      delete rest.workspaceId
       const hydrated: Conversation = {
         ...(rest as unknown as Conversation),
         schemaVersion: 3 as const,
-        workspaceId: c.workspaceId ?? `workspace-${c.id}`,
         messages
       }
       if (
         c.schemaVersion !== 3 ||
-        !c.workspaceId ||
+        hadWorkspaceId ||
         legacy.authorityMode !== undefined ||
         hadBranches
       ) {
@@ -327,7 +328,6 @@ export class ConversationStore {
       category: p.category,
       provider: p.provider,
       messages: [],
-      workspaceId: `workspace-${id}`,
       ...(p.autoKaizen ? { autoKaizen: p.autoKaizen } : {}),
       createdAt: ts,
       updatedAt: ts

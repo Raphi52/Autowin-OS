@@ -239,7 +239,7 @@ function isConversation(value: unknown): value is Conversation {
   }
   if (value.forkedFrom !== undefined && !isForkOrigin(value.forkedFrom)) return false
   if (value.autoKaizen !== undefined && !isAutoKaizenLink(value.autoKaizen)) return false
-  if (!isOptionalString(value.workspaceId) || !isOptionalString(value.projectPath)) return false
+  if (!isOptionalString(value.projectPath)) return false
   if (
     value.runPaths !== undefined &&
     (!Array.isArray(value.runPaths) || value.runPaths.some((entry) => typeof entry !== 'string'))

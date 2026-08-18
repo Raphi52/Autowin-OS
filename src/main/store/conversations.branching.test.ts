@@ -69,7 +69,6 @@ describe('ConversationStore — fork', () => {
         category: 'codex',
         provider: 'codex',
         messages: [{ role: 'user', content: 'u1', ts: 1, messageId: 'msg-3' }],
-        workspaceId: 'workspace-conv-1',
         createdAt: 1,
         updatedAt: 1
       }
@@ -109,7 +108,6 @@ describe('ConversationStore — fork', () => {
             parentMessageId: `msg-${Number.MAX_SAFE_INTEGER}`
           }
         ],
-        workspaceId: `workspace-${sourceConversationId}`,
         createdAt: 1,
         updatedAt: 2
       }
@@ -147,7 +145,6 @@ describe('ConversationStore — fork', () => {
             parentMessageId: 'message-conv-1-3'
           }
         ],
-        workspaceId: 'workspace-conv-1',
         createdAt: 1,
         updatedAt: 2
       }
@@ -200,14 +197,12 @@ describe('ConversationStore — fork', () => {
           ...base,
           id: 'conv-1',
           title: 'one',
-          workspaceId: 'workspace-conv-1',
           messages: [{ role: 'user', content: 'one', ts: 1, messageId: 'shared-id' }]
         },
         {
           ...base,
           id: 'conv-2',
           title: 'two',
-          workspaceId: 'workspace-conv-2',
           messages: [
             { role: 'user', content: 'root', ts: 1, messageId: 'shared-id' },
             {
@@ -252,14 +247,12 @@ describe('ConversationStore — fork', () => {
           ...base,
           id: 'conv-2',
           title: 'collision',
-          workspaceId: 'workspace-conv-2',
           messages: [{ role: 'user', content: 'occupant', ts: 1, messageId: 'message-conv-1-1' }]
         },
         {
           ...base,
           id: 'conv-1',
           title: 'legacy',
-          workspaceId: 'workspace-conv-1',
           messages: [
             { role: 'user', content: 'root', ts: 1 },
             {

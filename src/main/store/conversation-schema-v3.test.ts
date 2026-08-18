@@ -34,7 +34,10 @@ describe('conversation schema v3', () => {
     expect(first.hydrate([legacyConversation()])).toBe(true)
     const migrated = structuredClone(first.get('conv-7')!)
 
-    expect(migrated).toMatchObject({ schemaVersion: 3, workspaceId: 'workspace-conv-7' })
+    expect(migrated).toMatchObject({ schemaVersion: 3 })
+    // `workspaceId` etait synthetique et jamais lu : l'hydratation le RETIRE (sinon le spread le
+    // recopierait et son absence forcerait une reecriture du snapshot a chaque demarrage).
+    expect(migrated).not.toHaveProperty('workspaceId')
     expect(migrated).not.toHaveProperty('authorityMode')
     // Les champs de branche ne sont plus portes : forker cree une conversation a part.
     expect('branches' in migrated).toBe(false)
