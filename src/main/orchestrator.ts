@@ -1869,11 +1869,24 @@ export class Orchestrator {
       const finalizeDiagnosis =
         typeof finalized === 'object' && finalized !== null
           ? (() => {
-              const raw = finalized as { reason?: string; files?: string[]; detail?: string }
+              const raw = finalized as {
+                reason?: string
+                files?: string[]
+                detail?: string
+                rescueRef?: string
+              }
               if (!raw.reason) return undefined
               const files = raw.files?.slice(0, 5) ?? []
               const filesPart = files.length > 0 ? ` — fichiers en cause: ${files.join(', ')}` : ''
-              return `blocage d’intégration: ${raw.reason}${filesPart}`
+              // L'ADRESSE du travail, quand il en a une. Une réparation invisible ne répare rien :
+              // le manager sécurise désormais le travail sur une référence durable avant de refuser
+              // une publication, et cette référence doit ARRIVER à l'utilisateur — sinon il relit
+              // « blocage d'intégration » exactement comme avant. Absente = rien n'a été sauvé, on
+              // n'invente aucune adresse (le faux vert que ce chemin combat).
+              const rescuePart = raw.rescueRef
+                ? ` — travail atteignable : \`git show ${raw.rescueRef}\` (non publié)`
+                : ''
+              return `blocage d’intégration: ${raw.reason}${filesPart}${rescuePart}`
             })()
           : undefined
       const finalActivity = activityForRun()

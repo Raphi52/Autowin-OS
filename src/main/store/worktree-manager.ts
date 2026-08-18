@@ -167,6 +167,12 @@ export type FinalizeResult =
       reason: 'base-dirty' | 'base-in-progress' | 'merge-failed'
       /** Les fichiers remontés diagnostiquent la base ; conserver la provenance agent déjà suivie. */
       preserveAgentFiles?: boolean
+      /**
+       * Référence git durable où le travail refusé est ATTEIGNABLE, quand une a pu être posée.
+       * Absente = il n'y avait rien à sauver, ou l'adresse n'a pas pu être écrite — jamais une
+       * promesse creuse : l'appelant ne doit annoncer une adresse que s'il en reçoit une.
+       */
+      rescueRef?: string
       detail?: string
     }
 
@@ -3664,11 +3670,26 @@ exit 0
 
     const existingOperationFiles = this.operationInProgress()
     if (existingOperationFiles) {
+      // On refuse toujours de publier — mais plus les mains vides. Ce refus arrivait AVANT que le
+      // travail de la copie soit committé : il restait donc en fichiers libres, et le rapport
+      // annonçait « rien n'est publié » sans que rien ne soit atteignable autrement qu'en fouillant
+      // un dossier de worktree. Mesuré le 2026-08-18 : 216 refus `base-in-progress` contre 86
+      // `base-dirty`, parce que l'utilisateur travaille en continu dans la base — ce refus est la
+      // norme, pas l'exception, et il ne doit pas laisser le travail sans adresse.
+      //
+      // Le ref de SECOURS est délibérément DISTINCT de `refs/autowin/publications/<id>` : ce dernier
+      // est le candidat d'une transaction de publication dont la reprise exige `baseSha` ET `sha`
+      // pour ancêtres, et y écrire tôt transformerait un réessai réparable en `merge-failed` dur dès
+      // que la base avance. Séparer les deux rôles laisse la transaction et sa compensation
+      // INTACTES : rien du chemin de publication n'est touché ici.
       return {
         outcome: 'blocked',
         agentId,
         files: existingOperationFiles,
-        reason: 'base-in-progress'
+        reason: 'base-in-progress',
+        ...(this.secureWorkBeforeRefusal(agentId, path)
+          ? { rescueRef: this.rescueRef(agentId) }
+          : {})
       }
     }
 
@@ -4201,6 +4222,52 @@ exit 0
   private publicationMarkerRef(agentId: string): string {
     assertSafeId(agentId, 'agentId')
     return `refs/autowin/publications/${agentId}`
+  }
+
+  /**
+   * Référence de SECOURS : elle donne une adresse durable au travail d'un run dont la publication a
+   * été refusée. Distincte de `publicationMarkerRef` À DESSEIN — celle-là est le candidat d'une
+   * transaction dont la reprise valide l'ascendance ; celle-ci ne promet rien d'autre que « le
+   * travail est là, atteignable, non publié ».
+   */
+  private rescueRef(agentId: string): string {
+    assertSafeId(agentId, 'agentId')
+    return `refs/autowin/secours/${agentId}`
+  }
+
+  /**
+   * Committe le travail de la copie et lui donne une adresse durable, AVANT un refus de publication.
+   *
+   * Sans ça, un refus laissait le travail en fichiers libres dans un dossier de worktree : rien ne
+   * le désignait, et le rapport disait « rien n'est publié » sans dire où regarder. Le geste est
+   * volontairement minimal et sans effet sur la base : un commit dans la COPIE, puis un `update-ref`
+   * d'une référence privée. Aucun hook de publication, aucune validation de l'arbre de
+   * l'utilisateur — écrire ce ref ne touche ni sa branche, ni son index, ni ses fichiers.
+   *
+   * Rend `true` seulement si une adresse a réellement été posée : une copie sans aucun changement
+   * n'a rien à sauver, et prétendre le contraire serait le faux vert que ce module combat.
+   */
+  private secureWorkBeforeRefusal(agentId: string, path: string): boolean {
+    try {
+      const dirty = this.git(path, ['status', '--porcelain=v1', '-z']).length > 0
+      if (dirty) {
+        this.git(path, ['add', '-A'])
+        // MÊME message que le commit de publication (`agent <id>`) — à dessein. Ce commit N'EST PAS
+        // un doublon de secours : c'est celui que la reprise publiera. Lui donner un libellé
+        // décoratif polluait l'historique publié, et un test l'a attrapé en épinglant le message
+        // exact (`worktree-recovery.integration`) — la bonne réaction est d'aligner le message, pas
+        // de desserrer son assertion.
+        this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', `agent ${agentId}`])
+      }
+      const sha = this.git(path, ['rev-parse', 'HEAD'])
+      const baseSha = this.tryGitFn(path, ['rev-parse', 'HEAD@{1}'])
+      // Rien à sauver si la copie n'a produit aucun commit par-dessus son point de départ.
+      if (!dirty && baseSha.code === 0 && baseSha.stdout.trim() === sha) return false
+      return this.tryGitFn(this.baseRepo, ['update-ref', this.rescueRef(agentId), sha]).code === 0
+    } catch {
+      // Sécuriser est un BONUS : son échec ne doit jamais transformer un refus propre en exception.
+      return false
+    }
   }
 
   /** Supprime l'ancre transactionnelle seulement après persistance durable de la SHA publiée. */
