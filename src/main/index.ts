@@ -185,6 +185,7 @@ import { pilotActionToTraceEvent } from './activity/pilot-action-trace'
 import { chatArtifactToTraceEvent } from './activity/chat-artifact-trace'
 import { reasoningToTraceEvent } from './activity/reasoning-trace'
 import { appendObservedOrchestrationOutcome } from './activity/orchestration-outcome-trace'
+import { executionCostCoverageFields } from '../shared/orchestration-outcome'
 import { installTraceEventSink, rebaseTraceSequence, TraceStore } from './activity/trace-store'
 import { resolveOtelGenAiConfig } from './activity/otel-genai-config'
 import { MetadataOnlyOtlpExporter } from './activity/otel-genai-exporter'
@@ -2023,7 +2024,17 @@ Le fil reprend ensuite normalement.`
         role: learningAuthor.role ?? 'orchestrator',
         proposalAttestations: result.learningAttestations
       })
-      const delivered = { ...result, ...(learning ? { learning } : {}) }
+      // La COUVERTURE de coût, projetée comme sur la lignée `commands.ts` : sans elle cette issue ne
+      // portait que `costUsd` — la somme des étapes, où un tour non tarifé compte 0 — et un run dont
+      // aucun appel n'est chiffré s'affichait « 0.00 $ ».
+      const delivered = {
+        ...result,
+        ...executionCostCoverageFields(
+          result.usage,
+          learningAuthor.model ?? orchestratorBinding.model
+        ),
+        ...(learning ? { learning } : {})
+      }
       durableTurn.succeed(delivered)
       // fix-ok: publier immédiatement la clôture persistée du run direct, sans attendre un reprompt.
       broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
@@ -5955,7 +5966,15 @@ app.whenReady().then(async () => {
             role: resumedLearningAuthor.role ?? 'orchestrator',
             proposalAttestations: result.learningAttestations
           })
-          const delivered = { ...result, ...(learning ? { learning } : {}) }
+          // Meme projection que le run direct : une reprise n'a pas de raison de mentir sur son cout.
+          const delivered = {
+            ...result,
+            ...executionCostCoverageFields(
+              result.usage,
+              resumedLearningAuthor.model ?? resumeBinding.model
+            ),
+            ...(learning ? { learning } : {})
+          }
           durableResumeTurn.succeed(delivered)
           const deliveryStatus = result.gateBlocked || !result.valid ? 'red' : 'green'
           if (resumedRunFile) {

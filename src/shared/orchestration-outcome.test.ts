@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import {
+  executionCostCoverageFields,
+  formatExecutionCostCoverage,
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
   markdownCodeContinuationPrefixes,
@@ -785,7 +787,9 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     })
     const footer = text.slice(text.lastIndexOf('✅ Fait'))
 
-    expect(footer).toContain('📍 Maintenant : la tâche demandée est terminée et son résultat est disponible.')
+    expect(footer).toContain(
+      '📍 Maintenant : la tâche demandée est terminée et son résultat est disponible.'
+    )
     expect(footer).not.toMatch(/workflow|gate|RUN|build|judge/iu)
   })
 
@@ -866,6 +870,50 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(code?.value).not.toContain('✅ Fait')
     expect(prose.some((node) => JSON.stringify(node).includes('✅ Fait'))).toBe(true)
     expect(text).toMatch(/```\s*\n…\[tronqué\]\n\n---\n✅ Fait/u)
+  })
+
+  /**
+   * Le faux zero de la lignee `os:orchestrate` (bouton « Reprendre », pilotage programmatique).
+   * Cette issue-la ne portait que `costUsd` — la somme des etapes, ou un tour non tarife compte 0 —
+   * donc un run dont AUCUN appel n'est chiffre affichait « 0.00 $ ». `executionCostCoverageFields`
+   * est la projection PARTAGEE qui fait dire la meme chose aux deux lignees.
+   */
+  it("la couverture partagee empeche le faux « 0.00 $ » d'un run non tarife", () => {
+    const usage = {
+      knownCostUsd: null,
+      unpricedCalls: 3,
+      totalTokens: 2_100_000,
+      inputTokens: 2_000_000,
+      outputTokens: 100_000,
+      cacheReadTokens: 1_500_000
+    }
+    const issue = { costUsd: 0, ...executionCostCoverageFields(usage, 'claude-opus-5') }
+    const libelle = formatExecutionCostCoverage(issue)
+
+    expect(libelle).not.toContain('0.00 $')
+    expect(libelle).toContain('estimés')
+    expect(libelle).toContain('3 appels non chiffrés')
+  })
+
+  it("pose `knownCostUsd` meme a null : c'est sa PRESENCE qui porte la couverture", () => {
+    // Entree discriminante : sans la cle, `hasOwnProperty` est faux et on retombe sur `costUsd`.
+    const champs = executionCostCoverageFields({ knownCostUsd: null, unpricedCalls: 2 })
+    expect(Object.prototype.hasOwnProperty.call(champs, 'knownCostUsd')).toBe(true)
+    expect(formatExecutionCostCoverage({ costUsd: 0, ...champs })).toContain('coût non exposé')
+  })
+
+  it('un run REELLEMENT tarife garde son montant, pas une estimation', () => {
+    const champs = executionCostCoverageFields(
+      { knownCostUsd: 3.5, unpricedCalls: 0 },
+      'claude-opus-5'
+    )
+    expect(formatExecutionCostCoverage({ costUsd: 3.5, ...champs })).toBe('3.50 $')
+  })
+
+  it('sans consommation du tout, la projection est VIDE et le legacy reste intact', () => {
+    // Un vieux message persiste n'a pas d'`usage` : il doit continuer a afficher son `costUsd`.
+    expect(executionCostCoverageFields(undefined)).toEqual({})
+    expect(formatExecutionCostCoverage({ costUsd: 10.05 })).toBe('10.05 $')
   })
 
   it('un coût inconnu ne devient jamais un faux 0.00 $', () => {
@@ -971,7 +1019,13 @@ describe('un run non valide ne garde pas le ✅ du worker', () => {
   })
 
   it('laisse intact le rapport d un run reellement livre', () => {
-    const livre = { status: 'succeeded', valid: true, gateBlocked: false, reused: false, result: 'x' }
+    const livre = {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false,
+      result: 'x'
+    }
     expect(isDeliveredOrchestrationOutcome(livre)).toBe(true)
     expect(demoteUnvalidatedSuccessClaims(rapportWorker, livre)).toBe(rapportWorker)
   })

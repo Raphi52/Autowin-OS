@@ -106,6 +106,27 @@ describe('renderer chat IPC contract', () => {
     expect(directRun).toContain("broadcast({ type: 'orchestrate-usage', convId: conversationId })")
   })
 
+  /**
+   * Le handler direct est un monolithe qu'aucun harnais ne pilote : le COMPORTEMENT de la projection
+   * est teste sur `executionCostCoverageFields` (`shared/orchestration-outcome.test.ts`), et cette
+   * assertion-ci ne verifie qu'une chose, assumee comme telle — que la lignee directe l'appelle.
+   * Sans elle, ce chemin retombe sur `costUsd` et un run non tarife affiche « 0.00 $ ».
+   */
+  it('la lignee directe PROJETTE la couverture de cout, comme la lignee commands', () => {
+    const { main } = readChatContractSources()
+    const directRun = main.slice(
+      main.indexOf("ipcMain.handle('os:orchestrate'"),
+      main.indexOf("ipcMain.handle('os:behaviourComposition'")
+    )
+    const deliveredAt = directRun.indexOf('const delivered = {')
+    const coverageAt = directRun.indexOf('executionCostCoverageFields(')
+
+    expect(deliveredAt).toBeGreaterThanOrEqual(0)
+    expect(coverageAt).toBeGreaterThan(deliveredAt)
+    // La projection est posee AVANT `learning`, donc dans l'objet livre, pas apres son usage.
+    expect(directRun.indexOf('...(learning ? { learning } : {})')).toBeGreaterThan(coverageAt)
+  })
+
   it('serves the cached model catalog immediately, then notifies the renderer after boot refresh', () => {
     const sources = readChatContractSources()
     const modelHandler = sources.main.slice(

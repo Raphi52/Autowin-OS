@@ -610,7 +610,10 @@ function removeExistingStructuredClosingBlock(
   const recommendedLine = lines[end - 1].trim().replace(/^#{1,6}\s*/u, '')
   const recommendedLabel = /^👉\s*(?:\*\*)?Recommandé(?:\*\*)?/u.exec(recommendedLine)?.[0]
   const inlineRecommendation = recommendedLabel
-    ? recommendedLine.slice(recommendedLabel.length).trim().replace(/^[:：—–-]\s*/u, '')
+    ? recommendedLine
+        .slice(recommendedLabel.length)
+        .trim()
+        .replace(/^[:：—–-]\s*/u, '')
     : ''
   if (!inlineRecommendation) {
     while (end < lines.length && lines[end].trim()) end += 1
@@ -734,6 +737,50 @@ export function reconcileClosedOrchestrationTextParts(
   )
 }
 
+/**
+ * Consommation d'un run, telle que la compte le superviseur d'exécution. Décrite ici en STRUCTURE
+ * plutôt qu'importée : `shared/` ne doit pas dépendre du process principal.
+ */
+export interface ExecutionUsageLike {
+  knownCostUsd?: number | null
+  unpricedCalls?: number
+  totalTokens?: number
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadTokens?: number
+  cacheCreationTokens?: number
+}
+
+/**
+ * Champs de COUVERTURE de coût à poser sur l'issue — UNE seule définition pour toutes les lignées.
+ *
+ * Il y a deux chemins qui produisent une action `orchestrate` : la commande (`commands.ts`) et le
+ * handler direct `os:orchestrate` (bouton « Reprendre », pilotage programmatique). Seul le premier
+ * projetait ces champs ; le second renvoyait l'`OrchestrationResult` brut, qui ne porte que
+ * `costUsd` — la somme des étapes, où un tour non tarifé compte 0. Un run dont AUCUN appel n'est
+ * chiffré y affichait donc « 0.00 $ » : exactement le faux zéro que `knownCostUsd`/`unpricedCalls`
+ * existent pour empêcher, et l'estimation au tarif public n'y était jamais atteinte.
+ *
+ * `knownCostUsd` est posé même à `null` : c'est sa PRÉSENCE qui dit « la couverture est connue, et
+ * elle est vide » — `formatExecutionCostCoverage` la teste avec `hasOwnProperty`, pas par sa valeur.
+ */
+export function executionCostCoverageFields(
+  usage: ExecutionUsageLike | undefined,
+  pricingModel?: string
+): Record<string, unknown> {
+  if (!usage) return {}
+  return {
+    knownCostUsd: usage.knownCostUsd ?? null,
+    unpricedCalls: usage.unpricedCalls,
+    totalTokens: usage.totalTokens,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cacheReadTokens: usage.cacheReadTokens,
+    cacheCreationTokens: usage.cacheCreationTokens,
+    ...(pricingModel ? { pricingModel } : {})
+  }
+}
+
 /** Libellé de coût honnête, compatible avec les anciens résultats qui n'avaient que `costUsd`. */
 export function formatExecutionCostCoverage(data: OrchestrationOutcome): string | undefined {
   const hasCoverage = Object.prototype.hasOwnProperty.call(data, 'knownCostUsd')
@@ -800,7 +847,9 @@ function authoritativeDeliveredClosingBlockSpan(
 ): { start: number; end: number } | undefined {
   const protectedLines = markdownCodeLineProtection([report])[0]
   const lines = report.split(/\r?\n/u)
-  const visible = lines.map((line, index) => (protectedLines.has(index + 1) ? undefined : line.trim()))
+  const visible = lines.map((line, index) =>
+    protectedLines.has(index + 1) ? undefined : line.trim()
+  )
   const fact = visible.indexOf('✅ Fait')
   const factLine = visible[fact + 1]
   if (

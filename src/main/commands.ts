@@ -63,7 +63,10 @@ import {
 } from './activity/orchestration-observability'
 import { createHash, randomUUID } from 'node:crypto'
 import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
-import { formatExecutionCostCoverage } from '../shared/orchestration-outcome'
+import {
+  executionCostCoverageFields,
+  formatExecutionCostCoverage
+} from '../shared/orchestration-outcome'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { collectOrchestrationContext } from './orchestration-context'
 import { rememberFact } from './brain-remember'
@@ -1631,18 +1634,10 @@ export class AppCommandBus {
             valid: r.valid,
             gateBlocked: r.gateBlocked,
             costUsd: r.costUsd,
-            knownCostUsd: r.usage?.knownCostUsd,
-            unpricedCalls: r.usage?.unpricedCalls,
-            totalTokens: r.usage?.totalTokens,
-            // Découpage des tokens : sans lui, un provider qui n'expose aucun prix laissait la
-            // pastille sur « coût non exposé » alors que le volume était compté. Il porte
-            // l'estimation au tarif public du modèle servi (`shared/cost-estimate.ts`).
-            inputTokens: r.usage?.inputTokens,
-            outputTokens: r.usage?.outputTokens,
-            cacheReadTokens: r.usage?.cacheReadTokens,
-            cacheCreationTokens: r.usage?.cacheCreationTokens,
+            // Couverture de coût : projection PARTAGÉE avec le handler direct `os:orchestrate`, pour
+            // que les deux lignées d'une même pastille disent la même chose (`shared/`).
+            ...executionCostCoverageFields(r.usage, pricingModel),
             ...(resolvedModel ? { resolvedModel } : {}),
-            ...(pricingModel ? { pricingModel } : {}),
             result: r.result,
             gateReasons: r.gateReasons,
             turnId: orchestrationTurnId,
