@@ -1372,6 +1372,37 @@ describe('coalesceAssistantParts', () => {
 })
 
 describe('groupAssistantActivity', () => {
+  /**
+   * Defaut vecu le 2026-08-18 : un scout de code rendait un tableau EN LECTURE SEULE. Le panneau de
+   * selection (cases + « Enchainer (frame) sur la selection »), livre le 14/08, teste et branche,
+   * n'etait jamais atteint — ce chemin sortait avant lui. Aucun test ne gardait le routeur, donc la
+   * fonctionnalite pouvait rester morte sans qu'un seul signal ne rougisse.
+   */
+  it('un tableau scout markdown devient un panneau SELECTIONNABLE, pas un tableau mort', () => {
+    const tableau = [
+      '| # | Impact | Effort | Type | Manquement | Pourquoi | 1er pas |',
+      '| --- | --- | --- | --- | --- | --- | --- |',
+      '| 1 | 🟢 | 🟡 | 🔧 fix | Le journal accepte une ligne mal formee | Elle entre comme fiable | Test rouge sur `src/main/activity/ledger.ts:63` |'
+    ].join('\n')
+
+    const blocs = groupAssistantActivity([{ kind: 'text', text: tableau }])
+
+    expect(blocs).toHaveLength(1)
+    expect(blocs[0].kind).toBe('candidats-pick')
+    expect(blocs[0].kind === 'candidats-pick' && blocs[0].candidats).toEqual([
+      {
+        titre: 'Le journal accepte une ligne mal formee',
+        url: 'src/main/activity/ledger.ts:63',
+        type: 'fix',
+        what: 'Le journal accepte une ligne mal formee',
+        why: 'Elle entre comme fiable',
+        how: 'Test rouge sur `src/main/activity/ledger.ts:63`'
+      }
+    ])
+    // Le rendu en lecture seule ne doit plus etre choisi pour un scout.
+    expect(blocs.some((bloc) => bloc.kind === 'scout-table')).toBe(false)
+  })
+
   it('groups consecutive actions without crossing surrounding text', () => {
     expect(
       groupAssistantActivity([

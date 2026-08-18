@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  candidatsDepuisScoutTable,
   extraireCandidatsAffiches,
   redigerPromptFrameSelection,
   texteSansChargeJson
 } from './veille-candidats-message'
+import { parseScoutTable } from './scout-table'
 
 /** Le panneau cases + « Enchaîner (frame) » sous un message de scout (demande du 14/08). */
 const MESSAGE = [
@@ -104,7 +106,9 @@ describe('redigerPromptFrameSelection', () => {
     const candidats = extraireCandidatsAffiches(MESSAGE)!
     const prompt = redigerPromptFrameSelection(candidats)
     expect(prompt).toMatch(/^\/frame Traite ENSEMBLE ces 2 candidats/)
-    expect(prompt).toContain('1. File de reprise groupée — ancrage src/renderer/src/components/chat-home-suggestions.ts:59')
+    expect(prompt).toContain(
+      '1. File de reprise groupée — ancrage src/renderer/src/components/chat-home-suggestions.ts:59'
+    )
     expect(prompt).toContain('pertinence 94/100')
     expect(prompt).toContain('COMMIT PUBLIÉ')
   })
@@ -147,5 +151,54 @@ describe('texteSansChargeJson', () => {
   })
   it('rend le texte intact quand il ne porte pas de charge', () => {
     expect(texteSansChargeJson('Rien à extraire ici.')).toBe('Rien à extraire ici.')
+  })
+})
+
+/**
+ * Defaut vecu le 2026-08-18 : le panneau de selection (cases + « Enchainer (frame) ») n'apparaissait
+ * JAMAIS sur un scout de code. Deux causes en amont : le routeur essayait `parseScoutTable` d'abord
+ * et sortait par `continue`, et ce module n'acceptait qu'une charge JSON avec `titre` ET `url` — la
+ * forme de la veille web, pas celle d'un scout interne, qui rend un tableau markdown.
+ */
+describe('un tableau scout markdown alimente le panneau de selection', () => {
+  const TABLEAU = [
+    '| # | Impact | Effort | Type | Manquement | Pourquoi | 1er pas |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    '| 1 | 🟢 | 🟡 | 🔧 fix | Le journal accepte une ligne mal formee | Une ligne invalide entre comme fiable | Test rouge sur `src/main/activity/ledger.ts:63` |',
+    '| 2 | 🟡 | 🟢 | 🆕 new | Proposer un rejeu cible | Aucun moyen de rejouer un tour seul | Partir de `src/main/runs/run-reattach.ts:495` |'
+  ].join('\n')
+
+  it('convertit chaque ligne en candidat selectionnable', () => {
+    const rows = parseScoutTable(TABLEAU)
+    expect(rows).not.toBeNull()
+    const candidats = candidatsDepuisScoutTable(rows!)
+
+    expect(candidats).toHaveLength(2)
+    expect(candidats[0].titre).toContain('Le journal accepte une ligne mal formee')
+    expect(candidats[0].type).toBe('fix')
+    expect(candidats[0].why).toContain('entre comme fiable')
+    expect(candidats[0].how).toContain('ledger.ts:63')
+  })
+
+  it("recupere l'ancrage `fichier:ligne` present dans une cellule", () => {
+    const candidats = candidatsDepuisScoutTable(parseScoutTable(TABLEAU)!)
+    expect(candidats[0].url).toBe('src/main/activity/ledger.ts:63')
+    expect(candidats[1].url).toBe('src/main/runs/run-reattach.ts:495')
+  })
+
+  it("n'invente aucun ancrage quand aucune cellule n'en porte", () => {
+    const sansAncrage = [
+      '| # | Impact | Effort | Type | Manquement | Pourquoi | 1er pas |',
+      '| --- | --- | --- | --- | --- | --- | --- |',
+      '| 1 | 🟢 | 🟢 | 🔧 fix | Renommer une variable | Lisibilite | Le faire |'
+    ].join('\n')
+    const candidats = candidatsDepuisScoutTable(parseScoutTable(sansAncrage)!)
+    expect(candidats[0].url).toBe(undefined)
+  })
+
+  it('le prompt de selection reste lisible sans ancrage', () => {
+    const prompt = redigerPromptFrameSelection([{ titre: 'Renommer une variable', type: 'fix' }])
+    expect(prompt).toContain('Renommer une variable')
+    expect(prompt).not.toContain('ancrage undefined')
   })
 })

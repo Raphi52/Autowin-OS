@@ -57,13 +57,13 @@ export function CandidatsPickPanel({
         </span>
       </div>
       {candidats.map((candidat, index) => (
-        <div key={`${candidat.url}-${index}`} className="cpick-item" data-testid="cpick-ligne">
+        <div
+          key={`${candidat.url ?? candidat.titre}-${index}`}
+          className="cpick-item"
+          data-testid="cpick-ligne"
+        >
           <div className="cpick-ligne">
-            <input
-              type="checkbox"
-              checked={coches.has(index)}
-              onChange={() => basculer(index)}
-            />
+            <input type="checkbox" checked={coches.has(index)} onChange={() => basculer(index)} />
             <button
               type="button"
               className="cpick-deplier"
@@ -94,11 +94,19 @@ export function CandidatsPickPanel({
               </div>
               <div className="cpick-q">
                 <b>Pourquoi ?</b>
-                <p>{candidat.why ?? (candidat.citation ? `Preuve lue : « ${candidat.citation} »` : '—')}</p>
+                <p>
+                  {candidat.why ??
+                    (candidat.citation ? `Preuve lue : « ${candidat.citation} »` : '—')}
+                </p>
               </div>
               <div className="cpick-q">
                 <b>Comment ?</b>
-                <p>{candidat.how ?? `Partir de l'ancrage ${candidat.url}.`}</p>
+                <p>
+                  {candidat.how ??
+                    (candidat.url
+                      ? `Partir de l'ancrage ${candidat.url}.`
+                      : 'Premier pas non précisé.')}
+                </p>
               </div>
             </div>
           )}

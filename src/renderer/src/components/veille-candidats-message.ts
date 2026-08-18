@@ -11,8 +11,14 @@
 
 export interface CandidatAffiche {
   titre: string
-  /** Ancrage interne `src/...:ligne` ou URL web — affiché tel quel, jamais réécrit. */
-  url: string
+  /**
+   * Ancrage interne `src/...:ligne` ou URL web — affiché tel quel, jamais réécrit.
+   *
+   * OPTIONNEL depuis le 2026-08-18 : un scout de code rend un tableau markdown dont toutes les
+   * lignes ne portent pas d'ancrage. L'exiger interdisait au panneau de sélection d'exister sur
+   * ces scouts — c'est-à-dire sur le cas d'usage principal.
+   */
+  url?: string
   citation?: string
   pertinence?: number
   type?: string
@@ -94,13 +100,55 @@ export function extraireCandidatsAffiches(texte: string): CandidatAffiche[] | un
   return candidats
 }
 
+/** Premier ancrage `chemin:ligne` trouvé dans les cellules, dans l'ordre où on le lirait. */
+function ancrageDansCellules(cellules: readonly string[]): string | undefined {
+  for (const cellule of cellules) {
+    const trouve = /(?:src|scripts|tests|tools)\/[\w./-]+:\d+/.exec(cellule)
+    if (trouve) return trouve[0]
+  }
+  return undefined
+}
+
+/**
+ * Convertit un tableau scout markdown déjà analysé en candidats SÉLECTIONNABLES.
+ *
+ * Le panneau de sélection ne savait lire qu'une charge JSON de veille web ; un scout interne rend un
+ * tableau. Ce pont réutilise le panneau existant au lieu de recoder des cases à cocher ailleurs.
+ * L'ancrage est EXTRAIT des cellules quand il y est, jamais inventé quand il n'y est pas.
+ */
+export function candidatsDepuisScoutTable(
+  rows: readonly {
+    num: string
+    type: 'fix' | 'new' | null
+    what: string
+    why: string
+    how: string
+  }[]
+): CandidatAffiche[] {
+  return rows.map((row) => {
+    const ancrage = ancrageDansCellules([row.how, row.what, row.why])
+    return {
+      titre: row.what.trim() || `Candidat #${row.num}`,
+      ...(ancrage ? { url: ancrage } : {}),
+      ...(row.type ? { type: row.type } : {}),
+      ...(row.what.trim() ? { what: row.what.trim() } : {}),
+      ...(row.why.trim() ? { why: row.why.trim() } : {}),
+      ...(row.how.trim() ? { how: row.how.trim() } : {})
+    }
+  })
+}
+
 /**
  * Le prompt « parfait » pour enchaîner : /frame sur LA SÉLECTION, avec les ancrages et preuves,
  * et la consigne d'aller jusqu'au commit publié — le même contrat que les campagnes.
  */
 export function redigerPromptFrameSelection(selection: readonly CandidatAffiche[]): string {
   const lignes = selection.map((candidat, index) => {
-    const morceaux = [`${index + 1}. ${candidat.titre} — ancrage ${candidat.url}`]
+    const morceaux = [
+      candidat.url
+        ? `${index + 1}. ${candidat.titre} — ancrage ${candidat.url}`
+        : `${index + 1}. ${candidat.titre}`
+    ]
     if (candidat.citation) morceaux.push(`preuve : « ${candidat.citation} »`)
     if (candidat.pertinence !== undefined) morceaux.push(`pertinence ${candidat.pertinence}/100`)
     const details = [

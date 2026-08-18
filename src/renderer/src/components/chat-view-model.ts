@@ -11,7 +11,12 @@ import {
 import { parseAskChoices } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
 import { parseScoutTable, type ScoutRow } from './scout-table'
-import { extraireCandidatsAffiches, texteSansChargeJson, type CandidatAffiche } from './veille-candidats-message'
+import {
+  candidatsDepuisScoutTable,
+  extraireCandidatsAffiches,
+  texteSansChargeJson,
+  type CandidatAffiche
+} from './veille-candidats-message'
 import type { PilotEventKind } from '../../../shared/pilot-events'
 import {
   AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
@@ -1074,10 +1079,17 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
   const blocks: ChatRenderBlock[] = []
   for (const part of coalesceAssistantParts(parts)) {
     if (part.kind === 'text') {
-      // Retour scout : tableau markdown rankée → vrai tableau à pastilles (Ledger dense).
+      // Retour scout : tableau markdown rangé → le PANNEAU DE SÉLECTION (cases + « Enchaîner
+      // (frame) sur la sélection »), pas un tableau en lecture seule.
+      //
+      // Défaut vécu le 2026-08-18 : ce panneau existait, était branché et testé depuis le 14/08,
+      // mais ne s'affichait JAMAIS sur un scout de code — ce `continue` sortait avant de l'essayer,
+      // et lui n'acceptait qu'une charge JSON de veille web. La fonctionnalité était donc complète
+      // et inatteignable. Un scout dont on ne peut pas cocher les lignes n'avance à rien : la
+      // sélection passe donc AVANT le rendu en lecture seule.
       const scoutRows = parseScoutTable(part.text)
       if (scoutRows) {
-        blocks.push({ kind: 'scout-table', rows: scoutRows })
+        blocks.push({ kind: 'candidats-pick', candidats: candidatsDepuisScoutTable(scoutRows) })
         continue
       }
       // Scout de veille : charge utile JSON de candidats → panneau de sélection natif (cases +
