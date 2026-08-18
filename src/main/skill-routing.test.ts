@@ -200,3 +200,33 @@ describe('« scout » apres un preambule declenche aussi la phase', () => {
     }
   })
 })
+
+describe('« scout » COMPOSE avec une mutation garde le pipeline complet', () => {
+  /**
+   * Regression introduite par moi le 2026-08-18 et attrapee par `intent-phase-routing.test.ts:627` :
+   * « Scout les defauts puis corrige-les et lance les tests » forcait la phase scout SEULE, donc la
+   * partie mutante de la demande disparaissait. Une demande composee doit rester un pipeline complet.
+   *
+   * Le discriminant est la presence d un VERBE D ACTION quelque part dans le message : c est lui qui
+   * dit qu il ne s agit pas d une analyse pure.
+   */
+  it('ne court-circuite PAS quand la demande porte aussi une mutation', () => {
+    for (const message of [
+      'Scout les defauts puis corrige-les et lance les tests',
+      'scout des ameliorations et implemente la premiere',
+      'scout du code et refais la barre laterale'
+    ]) {
+      expect(routeSkillRequest(message)?.explicitPhase, message).not.toBe('scout')
+    }
+  })
+
+  it('court-circuite toujours une demande d ANALYSE pure', () => {
+    for (const message of [
+      "en te basant sur la derniere conversation, scout des ameliorations de l'experience utilisateur",
+      'scout les fix de autowin',
+      'Scout LECTURE SEULE : dans src/main/, trouve 2 ameliorations'
+    ]) {
+      expect(routeSkillRequest(message)?.explicitPhase, message).toBe('scout')
+    }
+  })
+})

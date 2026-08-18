@@ -10,6 +10,14 @@ const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   conversationsCount: 0
 })
 
+/**
+ * NOTE (2026-08-18) : les prompts de ce fichier sont volontairement NEUTRES (« regarde … »).
+ *
+ * Ils portaient « scout … », choisi comme simple decor. Depuis que « scout » nomme deterministe­ment
+ * la phase (`skill-routing.ts`, arbitrage utilisateur du 2026-08-18), un tel prompt court-circuite le
+ * pilote et part en orchestration : ces tests ne testaient plus le streaming mais le routage. Le
+ * comportement verifie ici — une commande atteint le bus, aucun faux blocage terminal — est inchange.
+ */
 describe('AgentPilot chat streaming', () => {
   it('ne repaie pas un appel pour reformuler un remember auxiliaire refusé après une réponse complète', async () => {
     const responses = [
@@ -99,7 +107,7 @@ describe('AgentPilot chat streaming', () => {
     const events: PilotEvent[] = []
 
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
-      [{ role: 'user', content: 'scout la vue Chat' }],
+      [{ role: 'user', content: 'regarde la vue Chat' }],
       (event) => events.push(event),
       undefined,
       6,
@@ -291,7 +299,7 @@ describe('AgentPilot chat streaming', () => {
     const events: PilotEvent[] = []
 
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
-      [{ role: 'user', content: 'scout le dépôt' }],
+      [{ role: 'user', content: 'regarde le dépôt' }],
       (event) => events.push(event),
       undefined,
       6,
@@ -373,7 +381,7 @@ describe('AgentPilot chat streaming', () => {
     const events: PilotEvent[] = []
 
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
-      [{ role: 'user', content: 'scout le dépôt' }],
+      [{ role: 'user', content: 'regarde le dépôt' }],
       (event) => events.push(event)
     )
 
@@ -414,7 +422,7 @@ describe('AgentPilot chat streaming', () => {
     const events: PilotEvent[] = []
 
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
-      [{ role: 'user', content: 'scout le dépôt' }],
+      [{ role: 'user', content: 'regarde le dépôt' }],
       (event) => events.push(event)
     )
 
@@ -463,7 +471,7 @@ describe('AgentPilot chat streaming', () => {
     const events: PilotEvent[] = []
 
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
-      [{ role: 'user', content: 'scout le dépôt' }],
+      [{ role: 'user', content: 'regarde le dépôt' }],
       (event) => events.push(event)
     )
 
@@ -626,7 +634,7 @@ describe('AgentPilot chat streaming', () => {
       const events: PilotEvent[] = []
 
       await new AgentPilot(registry as never, roles as never, bus as never).chat(
-        [{ role: 'user', content: 'scout le dépôt' }],
+        [{ role: 'user', content: 'regarde le dépôt' }],
         (event) => events.push(event)
       )
 

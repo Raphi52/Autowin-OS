@@ -42,6 +42,11 @@ describe('ChatView — chargement d’une conversation', () => {
   }
   beforeAll(() => window.addEventListener('unhandledrejection', onUnhandled))
   afterEach(async () => {
+    // La reprise au boot lit la derniere conversation ouverte en localStorage (feature du
+    // 2026-08-18). Sans ce nettoyage, un test laisse un identifiant qui fait charger une
+    // conversation au montage du SUIVANT — ce qui consommait un `mockImplementationOnce` et
+    // decalait toute la sequence de la course peremption/fraicheur testee ici.
+    localStorage.clear()
     await h?.unmount()
     h = null
     rejections.length = 0

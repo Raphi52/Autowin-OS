@@ -90,7 +90,20 @@ export function routeSkillRequest(message: string): SkillRoute | undefined {
     String.raw`(?:^|[\s(,;:.!])scout\s+(?:des?|du|les?|la|l'|sur|dans|moi)\b`,
     'i'
   )
-  if ((SCOUT_EN_TETE.test(text) || ORDRE_SCOUT.test(text)) && !text.includes('?')) {
+  // Une demande COMPOSEE (« Scout les defauts puis CORRIGE-les ») n'est pas une analyse pure : la
+  // reduire a la seule phase scout ferait disparaitre la partie mutante. Regression introduite le
+  // 2026-08-18 et attrapee par `intent-phase-routing.test.ts:627` — le pipeline complet doit rester.
+  // Le verbe doit etre INTRODUIT (« puis corrige », « et implemente ») ou ouvrir la phrase : sans
+  // cette borne, « scout les FIX de autowin » etait pris pour une mutation — « fix » y est un NOM.
+  const MUTATION_AILLEURS = new RegExp(
+    String.raw`(?:^|\b(?:puis|et|ensuite|apres|après)\s+|,\s*)` + ACTION_VERB,
+    'i'
+  )
+  if (
+    (SCOUT_EN_TETE.test(text) || ORDRE_SCOUT.test(text)) &&
+    !text.includes('?') &&
+    !MUTATION_AILLEURS.test(text)
+  ) {
     return { task: text, explicitPhase: 'scout', reason: 'explicit-skill' }
   }
 
