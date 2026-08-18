@@ -204,13 +204,13 @@ export interface AppSnapshot {
 
 /** Projette le statut budget de l'OS sur les trois champs honnêtes du snapshot. */
 function budgetSnapshot(status: {
-  spent: number
+  pricedSpendUsd: number
   unpricedTurns?: number
   spentIsPartial?: boolean
 }): Pick<AppSnapshot, 'budgetUsd' | 'budgetUnpricedTurns' | 'budgetIsPartial'> {
   const unpriced = status.unpricedTurns ?? 0
   return {
-    budgetUsd: status.spent,
+    budgetUsd: status.pricedSpendUsd,
     budgetUnpricedTurns: unpriced,
     budgetIsPartial: status.spentIsPartial ?? unpriced > 0
   }

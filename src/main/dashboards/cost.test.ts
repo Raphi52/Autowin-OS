@@ -24,7 +24,7 @@ describe('CostAggregator', () => {
     const agg = new CostAggregator()
     agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 1, costUsd: 100 })
     const status = agg.budgetStatus()
-    expect(status.budget).toBeNull()
+    expect(status.budgetUsd).toBeNull()
     expect(status.ratio).toBeNull()
     expect(status.alert).toBe(false)
   })
@@ -50,7 +50,7 @@ describe('CostAggregator', () => {
     agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 1, costUsd: 9.5 })
     const status = agg.budgetStatus()
     expect(status.alert).toBe(true)
-    expect(status.spent).toBeCloseTo(9.5)
+    expect(status.pricedSpendUsd).toBeCloseTo(9.5)
   })
 
   it('turn sans costUsd compte comme 0 dans les totaux', () => {
@@ -69,7 +69,7 @@ describe('CostAggregator — couverture de tarification (le total ne ment plus)'
     agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 1 })
     agg.add({ provider: 'codex', inputTokens: 1, outputTokens: 1 })
     const status = agg.budgetStatus()
-    expect(status.spent).toBeCloseTo(0.5)
+    expect(status.pricedSpendUsd).toBeCloseTo(0.5)
     expect(status.turns).toBe(3)
     expect(status.unpricedTurns).toBe(2)
     expect(status.spentIsPartial).toBe(true)
@@ -87,10 +87,10 @@ describe('CostAggregator — couverture de tarification (le total ne ment plus)'
     let cap: number | null = null
     const agg = new CostAggregator(() => cap)
     agg.add({ provider: 'claude', inputTokens: 1, outputTokens: 1, costUsd: 8 })
-    expect(agg.budgetStatus().budget).toBeNull()
+    expect(agg.budgetStatus().budgetUsd).toBeNull()
     cap = 10
     const status = agg.budgetStatus()
-    expect(status.budget).toBe(10)
+    expect(status.budgetUsd).toBe(10)
     expect(status.alert).toBe(true)
   })
 })

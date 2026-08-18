@@ -31,19 +31,25 @@ export interface GroupTotal {
 
 /** Statut budget courant. */
 export interface BudgetStatus {
-  spent: number
-  budget: number | null
+  /**
+   * Somme en USD des tours TARIFÉS uniquement — donc un PLANCHER, jamais un total : voir
+   * `spentIsPartial`. L'unité est dans le nom parce que tout le domaine la nomme ailleurs
+   * (`maxUsd`, `costUsd`, `totalUsd`).
+   */
+  pricedSpendUsd: number
+  /** Plafond courant en USD, ou `null` si aucun plafond n'est défini. */
+  budgetUsd: number | null
   ratio: number | null
   alert: boolean
   /** Nombre TOTAL de tours agrégés (tarifés ou non). */
   turns: number
   /**
-   * Tours SANS `costUsd`, donc comptés 0 dans `spent`. Sur les données réelles la majorité des
-   * tours n'est pas tarifée : présenter `spent` comme un total sans ce compteur, c'est afficher
+   * Tours SANS `costUsd`, donc comptés 0 dans `pricedSpendUsd`. Sur les données réelles la majorité des
+   * tours n'est pas tarifée : présenter `pricedSpendUsd` comme un total sans ce compteur, c'est afficher
    * un chiffre amputé comme s'il était complet.
    */
   unpricedTurns: number
-  /** `true` dès qu'au moins un tour n'est pas tarifé : `spent` est un PLANCHER, pas un total. */
+  /** `true` dès qu'au moins un tour n'est pas tarifé : `pricedSpendUsd` est un PLANCHER, pas un total. */
   spentIsPartial: boolean
 }
 
@@ -105,16 +111,22 @@ export class CostAggregator {
 
   /** Statut budget : ratio et alerte (>= 80% du budget defini). */
   budgetStatus(): BudgetStatus {
-    const spent = this.totalUsd()
+    const pricedSpendUsd = this.totalUsd()
     const turns = this.turns.length
     const unpricedTurns = this.turns.reduce((n, t) => n + (t.costUsd === undefined ? 1 : 0), 0)
     const coverage = { turns, unpricedTurns, spentIsPartial: unpricedTurns > 0 }
-    const budget = this.resolveBudget()
-    if (budget === null) {
-      return { spent, budget: null, ratio: null, alert: false, ...coverage }
+    const budgetUsd = this.resolveBudget()
+    if (budgetUsd === null) {
+      return { pricedSpendUsd, budgetUsd: null, ratio: null, alert: false, ...coverage }
     }
-    const ratio = budget > 0 ? spent / budget : 0
-    return { spent, budget, ratio, alert: ratio >= ALERT_RATIO_THRESHOLD, ...coverage }
+    const ratio = budgetUsd > 0 ? pricedSpendUsd / budgetUsd : 0
+    return {
+      pricedSpendUsd,
+      budgetUsd,
+      ratio,
+      alert: ratio >= ALERT_RATIO_THRESHOLD,
+      ...coverage
+    }
   }
 
   /** Plafond courant : valeur fixe, appel du résolveur, ou `null` si aucun plafond. */

@@ -1211,7 +1211,7 @@ describe('AppCommandBus command execution policy', () => {
 
   it("le snapshot dit si le coût affiché est PARTIEL (tours non tarifés), au lieu d'un total nu", async () => {
     const os = fakeOs()
-    os.budget = () => ({ spent: 1.25, turns: 10, unpricedTurns: 7, spentIsPartial: true })
+    os.budget = () => ({ pricedSpendUsd: 1.25, turns: 10, unpricedTurns: 7, spentIsPartial: true })
     const bus = new AppCommandBus(os, () => undefined)
 
     await expect(bus.snapshot()).resolves.toMatchObject({
