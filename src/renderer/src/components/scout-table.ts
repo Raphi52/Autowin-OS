@@ -144,7 +144,12 @@ export function parseScoutTable(text: string): ScoutRow[] | null {
     rows.push({
       num: at(iNum, String(rows.length + 1)),
       ...(note === undefined ? {} : { score: note }),
-      impact: iImpact >= 0 ? band(at(iImpact)) : scoreBand(at(iScore)),
+      // Une colonne « Score » peut porter un NOMBRE (« 82 », « 8/10 ») ou une PASTILLE (« 🟢 ») :
+      // constate le 2026-08-18 (conv-1293), le modele met souvent la pastille. Le nombre reste
+      // prioritaire ; a defaut on relit la meme cellule comme un emoji, plutot que de rendre une
+      // ligne sans aucun repere. On n'invente PAS de note depuis une pastille (`score` reste vide) :
+      // ce serait une precision fausse.
+      impact: iImpact >= 0 ? band(at(iImpact)) : (scoreBand(at(iScore)) ?? band(at(iScore))),
       effort: iEffort >= 0 ? band(at(iEffort)) : null,
       type: scoutType(at(iType)),
       // `iWhat` est garanti présent par `isScoutHeader` : plus de repli sur la colonne 1 « au hasard ».

@@ -22,6 +22,15 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     expect(scout).toMatch(/d[ée]croissant/i)
   })
 
+  // Defaut vecu le 2026-08-18 (conv-1293) : le modele a rempli la colonne Score avec « 🟢 ».
+  // Le brief disait « un seul nombre par ligne » — assez faible pour qu'une pastille passe.
+  it('le brief scout exige un ENTIER dans Score, pas une pastille', () => {
+    const scout = PHASE_BRIEFS.scout
+    expect(scout).toMatch(/ENTIER/)
+    expect(scout).toMatch(/en chiffres/)
+    expect(scout).toMatch(/Jamais une pastille/)
+  })
+
   it('le brief frame exige un inventaire de confiance ADOSSÉ À DES PREUVES, pas un ressenti', () => {
     const frame = PHASE_BRIEFS.frame
 

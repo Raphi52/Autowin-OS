@@ -113,3 +113,37 @@ describe('parseScoutTable', () => {
     expect(scoreBand('120')).toBeNull()
   })
 })
+
+describe('colonne Score remplie avec une PASTILLE et non un nombre', () => {
+  /**
+   * Defaut vecu le 2026-08-18 (conv-1293) : le modele a rendu « | # | Score | Type | What | Why |
+   * How | » avec « 🟢 » dans la cellule Score. `scoreSur100` n'y trouve aucun chiffre, et le
+   * lecteur d'emoji n'etait consulte QUE s'il existait une colonne « Impact » — absente ici. La
+   * ligne perdait donc a la fois sa note ET sa pastille : « le scout est toujours pas score ».
+   */
+  const AVEC_PASTILLE = [
+    '| # | Score | Type | What | Why | How |',
+    '|---|---|---|---|---|---|',
+    '| 1 | 🟢 | 🔧 fix | Rattacher les demandes | Une raison | Un pas |',
+    '| 2 | 🟡 | 🆕 new | Ajouter un oracle | Une autre | Un autre |',
+    '| 3 | 82 | 🔧 fix | Avec un vrai nombre | Encore une | Encore un |'
+  ].join('\n')
+
+  it('lit la pastille de la colonne Score quand elle ne porte pas de nombre', () => {
+    const rows = parseScoutTable(AVEC_PASTILLE)!
+    expect(rows[0].impact).toBe('g')
+    expect(rows[1].impact).toBe('y')
+  })
+
+  it('ne fabrique pas de note a partir d une pastille', () => {
+    const rows = parseScoutTable(AVEC_PASTILLE)!
+    // Une pastille n'est pas un nombre : inventer « 100 » serait une precision fausse.
+    expect(rows[0].score).toBe(undefined)
+    expect(rows[2].score).toBe(82)
+  })
+
+  it('un nombre reste prioritaire sur toute lecture de pastille', () => {
+    const rows = parseScoutTable(AVEC_PASTILLE)!
+    expect(rows[2].impact).toBe('g')
+  })
+})
