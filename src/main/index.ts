@@ -139,6 +139,7 @@ import {
   saveConvRunTrace
 } from './runs/conv-runs'
 import { deleteListedRun } from './dashboards/runs-scan'
+import { regimePhases } from './task-regime'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
 import { closingTurnDelivery } from './runs/turn-closing'
 import { StartupResumeQueue } from './runs/startup-resume-queue'
@@ -5819,9 +5820,16 @@ app.whenReady().then(async () => {
       // le MÊME RUN.md que l'orchestration d'origine (workflow ouvert de la conversation portant la
       // même tâche), on y accumule le fil, et on le clôt comme le chemin nominal de commands.ts.
       const resumedRunFile = resumableRun.conversationId
-        ? await reuseOrCreateConvRun(resumableRun.conversationId, resumableRun.task).catch(
-            () => undefined
-          )
+        ? await reuseOrCreateConvRun(
+            resumableRun.conversationId,
+            resumableRun.task,
+            undefined,
+            undefined,
+            // Meme croisement que le chemin nominal : sans lui, un run REPRIS dont le RUN.md a
+            // disparu se reverrait semer les cases mutation/tests/commit qu'aucune phase de
+            // lecture ne peut cocher.
+            regimePhases(resumableRun.task)
+          ).catch(() => undefined)
         : undefined
       const resumedSteps: Parameters<typeof saveConvRunTrace>[1] = []
       const resumedArtifactIds = new Set<string>()
