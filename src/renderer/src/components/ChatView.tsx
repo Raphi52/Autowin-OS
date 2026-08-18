@@ -65,6 +65,7 @@ import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment } from './chat-attachments'
 import {
   conversationsRecentes,
+  GROUPE_RECENTES,
   recenceUtilisateur,
   RECENTES_AFFICHEES,
   searchConversations,
@@ -1941,17 +1942,36 @@ export function ChatView({
   )
 
   /**
-   * Section « Récentes » : où l'utilisateur a parlé en DERNIER, toutes provenances confondues.
+   * « Récentes » est une CATÉGORIE comme les autres — même en-tête pliable, même compteur, mêmes
+   * lignes. Un bloc au style propre au milieu de la liste jurait (retour utilisateur du 2026-08-18).
    *
-   * Mesuré le 2026-08-18 : ses 3 conversations les plus récentes étaient au rang 172 sur 182 lignes,
-   * parce que `ordonnerGroupes` classe par NATURE avant la date (délibéré : ça protège
-   * l'arborescence). Cette section répond à « ma dernière conversation » sans toucher à ce rang.
-   * Masquée pendant une recherche : la liste filtrée EST déjà la réponse.
+   * Elle est PRÉPOSÉE à la liste au lieu d'être classée par `ordonnerGroupes` : ce module range par
+   * nature (dossier → divers → auto-kaizen) avant la date, et c'est précisément ce rang — délibéré,
+   * il protège l'arborescence — qui enterrait la conversation la plus récente au rang 172 sur 182.
+   * On ne renverse donc pas son ordre : on ajoute une catégorie devant.
+   *
+   * Absente pendant une recherche : la liste filtrée EST déjà la réponse.
    */
-  const recentes = useMemo(
-    () => (convQuery.trim() ? [] : conversationsRecentes(convs, RECENTES_AFFICHEES)),
-    [convs, convQuery]
-  )
+  const groupesAvecRecentes = useMemo(() => {
+    if (convQuery.trim() || conversationHits.length === 0) return groupes
+    const parId = new Map(conversationHits.map((hit) => [hit.conversation.id, hit]))
+    const items = conversationsRecentes(convs, RECENTES_AFFICHEES)
+      .map((conversation) => parId.get(conversation.id))
+      .filter((hit): hit is (typeof conversationHits)[number] => hit !== undefined)
+      .map((hit) => ({
+        id: hit.conversation.id,
+        projectPath: hit.conversation.projectPath,
+        autoKaizen: hit.conversation.autoKaizen,
+        hit
+      }))
+    if (items.length === 0) return groupes
+    // `kind: 'divers'` à dessein : un dépôt par glisser sur cet en-tête ne voudrait rien dire
+    // (« récentes » n'est pas un dossier), et `conversation-groups` réserve le dépôt aux dossiers.
+    return [
+      { key: GROUPE_RECENTES, label: 'Récentes', kind: 'divers' as const, depth: 0, items },
+      ...groupes
+    ]
+  }, [groupes, conversationHits, convs, convQuery])
 
   /**
    * Inbox d'agents : conversations avec un agent EN TRAVAIL (tour en cours) ou une
@@ -2058,26 +2078,6 @@ export function ChatView({
             ))}
           </section>
         )}
-        {recentes.length > 0 && (
-          <section className="conv-recentes" aria-label="Conversations récentes">
-            <span className="conv-recentes-title">Récentes</span>
-            {recentes.map((conversation) => (
-              <button
-                key={conversation.id}
-                type="button"
-                data-testid="conv-recente"
-                className={`conv-recentes-row${conversation.id === activeId ? ' active' : ''}`}
-                onClick={() => void loadConv(conversation)}
-                title={conversation.projectPath ?? 'Sans dossier'}
-              >
-                <span className="conv-recentes-nom">{conversation.title}</span>
-                {conversation.projectPath && (
-                  <span className="conv-recentes-dossier">{conversation.projectPath}</span>
-                )}
-              </button>
-            ))}
-          </section>
-        )}
         <div className="conv-search">
           <span aria-hidden="true">⌕</span>
           <input
@@ -2129,7 +2129,7 @@ export function ChatView({
           {convs.length > 0 && conversationHits.length === 0 && (
             <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
           )}
-          {groupes.map((groupe) => {
+          {groupesAvecRecentes.map((groupe) => {
             const replie = estReplie(groupe.key, groupesReplies)
             return (
               <Fragment key={groupe.key}>
