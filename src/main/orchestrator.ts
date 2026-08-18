@@ -54,7 +54,7 @@ import { resolvePhaseBinding } from './roles'
 import { defaultQuorumThreshold } from './quorum'
 import type { CostAggregator } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
-import { evaluateClosure } from './gates/stopgate'
+import { doitArreterLaReparation, evaluateClosure } from './gates/stopgate'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
@@ -4129,6 +4129,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     let valid = false
     let gate!: ReturnType<typeof evaluateClosure>
     let learningAttestations: IndependentLearningAttestation[] = []
+    /** Motifs du refus precedent : sert a reconnaitre un refus qu'un rejeu ne peut pas faire evoluer. */
+    let motifsPrecedents: string[] = []
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (attempt > 0) {
         // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
@@ -4153,6 +4155,17 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       gate = r.gate
       learningAttestations = r.learningAttestations
       if (!gate.blocked) break
+      // Un refus IDENTIQUE et entierement hors de portee de build ne peut pas evoluer : chaque tour
+      // de plus rejoue un build complet, les phases post-build et un panel de juge, pour le meme
+      // resultat (mesure conv-1242 : 3 passages, 2 min+ brulees). La regle vit dans `stopgate` et
+      // laisse passer tout refus dont au moins une raison est reparable.
+      if (doitArreterLaReparation(gate.reasons, motifsPrecedents)) {
+        gate.reasons.push(
+          'Reparation interrompue : refus identique et hors de portee de build, rejouer ne peut rien changer.'
+        )
+        break
+      }
+      motifsPrecedents = [...gate.reasons]
     }
     if (gate.blocked && enforceSpend && (graphRecoveries ?? 0) > 0) {
       gate.reasons.push(

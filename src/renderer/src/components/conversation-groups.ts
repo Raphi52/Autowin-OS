@@ -126,6 +126,62 @@ export function grouperConversations<T extends ConversationLike>(
 }
 
 /**
+ * Ordonne les groupes par DATE sans casser ce que `grouperConversations` garantit.
+ *
+ * Le tri par date a d'abord ete applique en aval, directement sur la liste rendue — un `.sort()` par
+ * `items[0]` qui ecrasait les deux invariants de ce module : le RANG par nature (dossiers, puis
+ * « Divers », puis « Auto-kaizen » en DERNIER) et l'ordre PARENT-AVANT-ENFANT. Consequences vues :
+ * le groupe de bruit remontait en tete des qu'il contenait la conversation la plus recente, et un
+ * sous-dossier recent s'affichait au-dessus de son parent tout en gardant son indentation — une
+ * arborescence rendue qui n'en etait plus une. Les tests du module continuaient de passer : ils
+ * portent sur la fonction pure, une couche SOUS la vue ou le tri etait fait.
+ *
+ * La date n'arbitre donc qu'entre FRERES, a l'interieur d'un rang : les dossiers sont emis en
+ * pre-ordre (un parent, puis ses descendants), et les rangs restent dans leur ordre.
+ *
+ * `dateDe` appartient a l'appelant : ce module ne sait pas ce qui date une conversation.
+ */
+export function ordonnerGroupes<T extends ConversationLike>(
+  groupes: readonly ConversationGroup<T>[],
+  dateDe: (groupe: ConversationGroup<T>) => number,
+  ordre: 'asc' | 'desc'
+): ConversationGroup<T>[] {
+  const presentes = new Set(groupes.map((groupe) => groupe.key))
+  const parDate = (a: ConversationGroup<T>, b: ConversationGroup<T>): number => {
+    const delta = dateDe(a) - dateDe(b)
+    if (delta !== 0) return ordre === 'asc' ? delta : -delta
+    // Egalite de date : on retombe sur la cle, pour que l'ordre reste STABLE d'un rendu a l'autre.
+    return a.key.localeCompare(b.key, 'fr', { sensitivity: 'base' })
+  }
+
+  // Un parent absent de la liste (replie, donc ses descendants filtres) ne peut pas ancrer : le
+  // groupe est alors traite comme une racine plutot que disparaitre du rendu.
+  const enfants = new Map<string, ConversationGroup<T>[]>()
+  const racines: ConversationGroup<T>[] = []
+  for (const groupe of groupes) {
+    const parent =
+      groupe.kind === 'dossier' && groupe.parentKey && presentes.has(groupe.parentKey)
+        ? groupe.parentKey
+        : undefined
+    if (parent) enfants.set(parent, [...(enfants.get(parent) ?? []), groupe])
+    else racines.push(groupe)
+  }
+
+  const rang = (g: ConversationGroup<T>): number =>
+    g.kind === 'dossier' ? 0 : g.kind === 'divers' ? 1 : 2
+
+  const sortie: ConversationGroup<T>[] = []
+  const emettre = (groupe: ConversationGroup<T>): void => {
+    sortie.push(groupe)
+    for (const enfant of [...(enfants.get(groupe.key) ?? [])].sort(parDate)) emettre(enfant)
+  }
+  for (const racine of [...racines].sort((a, b) => rang(a) - rang(b) || parDate(a, b))) {
+    emettre(racine)
+  }
+  return sortie
+}
+
+/**
  * Canonise les CLES d'un etat plie/deplie relu du stockage.
  *
  * La cle d'un groupe de dossier EST son `projectPath`, et l'hydratation du store canonise

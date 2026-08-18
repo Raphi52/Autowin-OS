@@ -22,6 +22,44 @@ export interface ClosureState {
   signalExitCode?: number
 }
 
+/**
+ * Le refus qu'un nouveau passage de BUILD ne peut pas lever.
+ *
+ * Il ne parle pas du livrable : le RUN est rouge en amont, et rien de ce que build produira ne
+ * changera ce statut. Toutes les autres raisons (DoD non tenue, signal rouge) sont au contraire
+ * exactement ce qu'une réparation adresse.
+ */
+export const CLOSURE_UPSTREAM_REFUSAL = 'Statut "red" : la clôture a été refusée en amont.'
+
+/**
+ * Faut-il ARRÊTER la boucle de réparation plutôt que de payer un passage de plus ?
+ *
+ * Mesuré dans `conv-1242` le 2026-08-15 : trois passages `build` (73 s, 60 s, puis un troisième),
+ * chacun suivi du MÊME refus mot pour mot — « Statut "red" : la clôture a été refusée en amont ».
+ * Plus de deux minutes de calcul brûlées, puis abandon. Chaque tour de boucle rejoue un build
+ * complet, toutes les phases post-build et un panel de juge : ce n'est pas un retry bon marché.
+ *
+ * La règle tient les DEUX intentions, et c'est tout l'enjeu de sa forme :
+ * - un motif identique ne suffit PAS à conclure (une dépendance ou une preuve peut être devenue
+ *   disponible entre deux passages) — donc on ne coupe pas sur la seule répétition ;
+ * - un refus dont AUCUNE raison n'est réparable par build ne peut pas évoluer par un rejeu — donc
+ *   le répéter est une dépense sans contrepartie.
+ *
+ * On coupe à l'intersection : refus IDENTIQUE **et** entièrement hors de portée de build. Un refus
+ * mixte (amont + DoD non cochée) reste rejoué : la DoD, elle, est réparable.
+ */
+export function doitArreterLaReparation(
+  motifsCourants: readonly string[],
+  motifsPrecedents: readonly string[]
+): boolean {
+  if (motifsCourants.length === 0) return false
+  const identique =
+    motifsCourants.length === motifsPrecedents.length &&
+    motifsCourants.every((motif, index) => motif === motifsPrecedents[index])
+  if (!identique) return false
+  return motifsCourants.every((motif) => motif === CLOSURE_UPSTREAM_REFUSAL)
+}
+
 /** Résultat de l'évaluation : bloqué ou non, avec toutes les raisons cumulées. */
 export interface ClosureEvaluation {
   blocked: boolean
@@ -48,7 +86,7 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
     // alors que le gate ne sait PAS si un signal a tourné : `red` peut venir d'un avis de juge, d'une
     // exception, ou d'un test rouge. Un gate qui nomme une cause qu'il n'a pas vérifiée envoie
     // chercher au mauvais endroit — constaté sur un run où aucun test n'avait tourné.
-    reasons.push('Statut "red" : la clôture a été refusée en amont.')
+    reasons.push(CLOSURE_UPSTREAM_REFUSAL)
   }
 
   const uncheckedContentItems = state.dod.filter((item) => item.hasContent && !item.checked)

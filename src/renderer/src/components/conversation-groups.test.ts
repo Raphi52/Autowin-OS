@@ -7,7 +7,8 @@ import {
   groupeDe,
   groupesVisibles,
   grouperConversations,
-  nomDeDossier
+  nomDeDossier,
+  ordonnerGroupes
 } from './conversation-groups'
 
 /**
@@ -84,7 +85,9 @@ describe('l’ordre des groupes', () => {
       conv('autre', { projectPath: 'D:\\Projets' })
     ])
 
-    expect(groupes.map((g) => ({ label: g.label, depth: g.depth, parentKey: g.parentKey }))).toEqual([
+    expect(
+      groupes.map((g) => ({ label: g.label, depth: g.depth, parentKey: g.parentKey }))
+    ).toEqual([
       { label: 'Clients', depth: 0, parentKey: undefined },
       { label: 'Amitel', depth: 1, parentKey: 'C:\\Clients' },
       { label: 'Projets', depth: 0, parentKey: undefined }
@@ -172,5 +175,83 @@ describe('canoniserReplis — l’état plié survit à la canonisation des chem
     const relu = canoniserReplis({ 'C:/Clients': true, 'd:/Clients/': false })
     expect(estReplie('C:\\Clients', relu)).toBe(true)
     expect(estReplie('D:\\Clients', relu)).toBe(false)
+  })
+})
+
+/**
+ * Le tri par date de la barre laterale a d'abord ete un `.sort()` a plat applique DANS la vue, ce
+ * qui ecrasait les deux invariants testes plus haut. Ces tests-ci tiennent la composition : la date
+ * arbitre entre freres, jamais entre rangs ni entre un parent et son enfant.
+ *
+ * Les chemins sont ecrits avec `/` : la parente accepte les deux separateurs (`[\/]`), et cela
+ * garde le test lisible sans une foret d'echappements.
+ */
+describe('ordre des groupes quand la date entre en jeu', () => {
+  const PARENT = 'C:/Clients'
+  const ENFANT = 'C:/Clients/Amitel'
+  const AUTRE = 'D:/Projets'
+  const dates: Record<string, number> = {
+    [PARENT]: 100,
+    [ENFANT]: 900,
+    [AUTRE]: 500,
+    [GROUPE_DIVERS]: 950,
+    [GROUPE_KAIZEN]: 999
+  }
+  const dateDe = (groupe: { key: string }): number => dates[groupe.key] ?? 0
+  const groupes = (): ReturnType<typeof grouperConversations> =>
+    grouperConversations([
+      conv('k', { autoKaizen: { sourceId: 'x' } }),
+      conv('d'),
+      conv('parent', { projectPath: PARENT }),
+      conv('enfant', { projectPath: ENFANT }),
+      conv('autre', { projectPath: AUTRE })
+    ])
+
+  it('la filiation est bien etablie sur ce jeu (sinon les tests suivants ne prouvent rien)', () => {
+    // Garde-fou : un `parentKey` absent rendrait la hierarchie triviale et les tests complaisants.
+    expect(groupes().find((g) => g.key === ENFANT)?.parentKey).toBe(PARENT)
+  })
+
+  it('« Auto-kaizen » reste DERNIER meme en portant la conversation la plus recente', () => {
+    // Entree discriminante : sa date (999) est la plus haute de toutes.
+    const ordonnes = ordonnerGroupes(groupes(), dateDe, 'desc')
+    expect(ordonnes.at(-1)?.kind).toBe('kaizen')
+    expect(ordonnes.at(-2)?.kind).toBe('divers')
+    expect(ordonnes.map((g) => g.kind).slice(0, 3)).toEqual(['dossier', 'dossier', 'dossier'])
+  })
+
+  it('un sous-dossier RECENT reste sous son parent, jamais au-dessus', () => {
+    // ENFANT (900) est plus recent que son parent (100) ET que AUTRE (500) : a plat, il passerait
+    // premier, indente comme s'il etait niche sous un groupe qui n'est pas le sien.
+    const cles = ordonnerGroupes(groupes(), dateDe, 'desc').map((g) => g.key)
+    expect(cles.indexOf(PARENT)).toBeLessThan(cles.indexOf(ENFANT))
+    expect(cles.slice(0, 3)).toEqual([AUTRE, PARENT, ENFANT])
+  })
+
+  it('la date arbitre bien entre freres, dans les deux sens', () => {
+    const desc = ordonnerGroupes(groupes(), dateDe, 'desc').map((g) => g.key)
+    const asc = ordonnerGroupes(groupes(), dateDe, 'asc').map((g) => g.key)
+    expect(desc.indexOf(AUTRE)).toBeLessThan(desc.indexOf(PARENT))
+    expect(asc.indexOf(PARENT)).toBeLessThan(asc.indexOf(AUTRE))
+    // L'inversion ne casse ni le rang ni la filiation.
+    expect(asc.at(-1)).toBe(GROUPE_KAIZEN)
+    expect(asc.indexOf(PARENT)).toBeLessThan(asc.indexOf(ENFANT))
+  })
+
+  it('ne perd AUCUN groupe, et reste stable a date egale', () => {
+    const source = groupes()
+    const ordonnes = ordonnerGroupes(source, () => 42, 'desc')
+    expect(ordonnes).toHaveLength(source.length)
+    expect(new Set(ordonnes.map((g) => g.key))).toEqual(new Set(source.map((g) => g.key)))
+    expect(ordonnes.map((g) => g.key)).toEqual(
+      ordonnerGroupes(source, () => 42, 'desc').map((g) => g.key)
+    )
+  })
+
+  it('un groupe dont le parent est REPLIE (donc absent) reste rendu', () => {
+    // `groupesVisibles` retire les descendants d'un groupe replie ; si l'un arrive quand meme sans
+    // son parent, le perdre serait pire que le rendre a plat.
+    const orphelin = grouperConversations([conv('enfant', { projectPath: ENFANT })])
+    expect(ordonnerGroupes(orphelin, dateDe, 'desc').map((g) => g.key)).toEqual([ENFANT])
   })
 })
