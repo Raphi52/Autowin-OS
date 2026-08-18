@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { chatTurnBudget } from './chat-turn-budget'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
 import type { OrchestrationStep } from './orchestrator'
 
@@ -83,5 +84,98 @@ describe('disjoncteur de coût — volume non chiffré', () => {
     for (let i = 0; i < 1_200 && !trip; i++) trip = breaker.observe(step({ tokens: 795_000 }))
     expect(trip).not.toBeNull()
     expect(trip!.uncostedTokens).toBeGreaterThan(250_000_000)
+  })
+})
+
+/**
+ * LE GARDE VOLUMÉTRIQUE EST INATTEIGNABLE EN PRODUCTION, et les tests ci-dessus ne le montraient pas
+ * parce qu'ils instancient `{maxUsd}` SEUL. La seule instanciation réelle (`index.ts`) passe par
+ * `chatTurnBudget()`, qui pose TOUJOURS `maxTokens: 1_500_000` — or `uncostedTokens <= spentTokens`,
+ * donc `maxTokens` mord toujours avant le seuil de 250M. Ces tests sont donc construits sur les
+ * limites EXACTES de `chatTurnBudget({})`, sinon ils prouvent la même illusion.
+ */
+const LIMITES_PROD = chatTurnBudget({}).limits
+
+describe('disjoncteur de coût — montant ESTIMÉ des tours non tarifés (limites de production)', () => {
+  it('les limites de référence sont bien celles de la production', () => {
+    expect(LIMITES_PROD).toEqual({ maxUsd: 2, maxTokens: 1_500_000, maxCalls: 6 })
+  })
+
+  it('coupe sur le MONTANT estimé d’un modèle connu, bien avant les plafonds de volume', () => {
+    const breaker = new CostCircuitBreaker(LIMITES_PROD)
+    const opus = (): OrchestrationStep => ({
+      step: 'exec',
+      provider: 'codex',
+      model: 'claude-opus-5',
+      tokens: 220_000,
+      usage: { inputTokens: 200_000, outputTokens: 20_000 }
+    })
+    expect(breaker.observe(opus())).toBeNull() // 1,50 $ estimés
+    const trip = breaker.observe(opus()) // 3,00 $ estimés > 2 $
+    expect(trip).not.toBeNull()
+    expect(trip!.reason).toMatch(/estim/i)
+    // Ni le volume ni le nombre d’appels n’ont mordu : c’est bien le montant qui coupe.
+    expect(trip!.spentTokens).toBe(440_000)
+    expect(trip!.spentCalls).toBe(2)
+    expect(trip!.estimatedUsd).toBeCloseTo(3, 5)
+    // Le montant MESURÉ reste à zéro : estimé et mesuré ne se mélangent jamais.
+    expect(trip!.spentUsd).toBe(0)
+  })
+
+  it('un run entièrement TARIFÉ n’accumule aucun estimé et ne déclenche rien de nouveau', () => {
+    const breaker = new CostCircuitBreaker(LIMITES_PROD)
+    for (let i = 0; i < 5; i++) {
+      expect(
+        breaker.observe({
+          step: 'exec',
+          provider: 'claude',
+          model: 'claude-opus-5',
+          tokens: 220_000,
+          costUsd: 0.1,
+          usage: { inputTokens: 200_000, outputTokens: 20_000 }
+        })
+      ).toBeNull()
+    }
+    expect(breaker.totals.estimatedUsd).toBe(0)
+    expect(breaker.totals.uncostedTokens).toBe(0)
+    expect(breaker.totals.usd).toBeCloseTo(0.5)
+  })
+
+  it('tarification PARTIELLE sur un même run : le motif nomme les DEUX moitiés', () => {
+    const breaker = new CostCircuitBreaker(LIMITES_PROD)
+    breaker.observe({
+      step: 'exec',
+      provider: 'claude',
+      model: 'claude-opus-5',
+      tokens: 10_000,
+      costUsd: 0.75,
+      usage: { inputTokens: 9_000, outputTokens: 1_000 }
+    })
+    const trip = breaker.observe({
+      step: 'exec',
+      provider: 'codex',
+      model: 'claude-opus-5',
+      tokens: 440_000,
+      usage: { inputTokens: 400_000, outputTokens: 40_000 }
+    })
+    expect(trip).not.toBeNull()
+    expect(trip!.reason).toMatch(/estim/i)
+    expect(trip!.reason).toContain('0.75') // la moitié MESURÉE est nommée
+    expect(trip!.reason).toContain('3.00') // la moitié ESTIMÉE aussi
+    expect(trip!.spentUsd).toBeCloseTo(0.75)
+    expect(trip!.estimatedUsd).toBeCloseTo(3, 5)
+  })
+
+  it('modèle INCONNU : aucun montant inventé, le repli volumétrique reste la seule garde', () => {
+    const breaker = new CostCircuitBreaker({ maxUsd: 5 })
+    breaker.observe({
+      step: 'exec',
+      provider: 'codex',
+      model: 'gpt-5.6-sol',
+      tokens: 400_000,
+      usage: { inputTokens: 380_000, outputTokens: 20_000 }
+    })
+    expect(breaker.totals.estimatedUsd).toBe(0)
+    expect(breaker.totals.uncostedTokens).toBe(400_000)
   })
 })
