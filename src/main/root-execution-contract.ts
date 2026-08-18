@@ -126,7 +126,14 @@ export function rootRequirementChecks(
   if (required.analysis) {
     checks.push({
       label: ROOT_DOD.analysis,
-      checked: proofs.phases.some((phase) => phase.phase === 'scout' && Boolean(phase.text?.trim()))
+      // Toute phase de LECTURE porte l'analyse, pas seulement `scout` : un run programme
+      // `['frame']` ou `['terrain']` ne joue JAMAIS `scout`, donc n'aurait pu cocher cette case a
+      // aucun prix — la seule case que `rootDodLabels` lui seme etait structurellement incochable
+      // (« DoD 0/1 » sur un livrable complet). On reutilise `PHASES_LECTURE_SEULE`, l'ensemble deja
+      // defini plus bas : deux listes du meme concept, c'est le defaut que ce run corrige.
+      checked: proofs.phases.some(
+        (phase) => PHASES_LECTURE_SEULE.has(phase.phase) && Boolean(phase.text?.trim())
+      )
     })
   }
   if (required.mutation) {
