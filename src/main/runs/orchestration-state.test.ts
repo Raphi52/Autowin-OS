@@ -655,6 +655,59 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     ).toBeNull()
   })
 
+  /**
+   * PEREMPTION — un checkpoint vieux de plusieurs jours n'est plus une reprise, c'est une hantise.
+   *
+   * Defaut vecu (2026-08-18) : la conversation « Arret inattendu du processus Autowin OS » se
+   * rouvrait a CHAQUE demarrage. Cause lue dans `.autowin-data/.../run-state/` : deux orchestrations
+   * du 17/08 00:08 et 00:15 (« fais en sorte que ca chiffre toujours ») n'avaient jamais ete
+   * cloturees — le processus avait ete tue avant leur `finally` (le defaut `electron-vite --watch`,
+   * cf. `dev-sans-watch.test.ts`). Au demarrage, `index.ts` reprend chaque checkpoint et ecrit dans
+   * sa conversation, ce qui la ramene au premier plan. Dix checkpoints tra?naient ainsi, jusqu'a
+   * 119 h d'age : repris sur un code qui avait change des dizaines de fois depuis.
+   *
+   * L'horloge est un PARAMETRE : sans elle, aucune peremption — la fonction reste pure et ne se met
+   * pas a jeter des reprises legitimes toute seule.
+   */
+  it('ne reprend PAS un checkpoint plus vieux que la fenetre de peremption', () => {
+    const now = 1_000_000_000_000
+    const frais = { ...state('run-frais', now - 60 * 60 * 1000, ['frame']), task: 'hier soir' }
+    const perime = {
+      ...state('run-perime', now - 40 * 60 * 60 * 1000, ['frame']),
+      task: 'avant-hier'
+    }
+
+    // Sans horloge : le comportement historique, les deux sont candidats.
+    expect(pickOrchestrationsToResume([frais, perime]).map((s) => s.runId)).toEqual([
+      'run-frais',
+      'run-perime'
+    ])
+    // Avec horloge : seul le frais est repris.
+    expect(pickOrchestrationsToResume([frais, perime], now).map((s) => s.runId)).toEqual([
+      'run-frais'
+    ])
+  })
+
+  it('laisse passer une nuit — fermer le soir et rouvrir le matin reprend le run', () => {
+    const now = 1_000_000_000_000
+    // Entree discriminante : 14 h, le cas legitime le plus proche de la frontiere.
+    const nuit = { ...state('run-nuit', now - 14 * 60 * 60 * 1000, ['frame']), task: 'hier 20h' }
+    expect(pickOrchestrationsToResume([nuit], now).map((s) => s.runId)).toEqual(['run-nuit'])
+  })
+
+  it('la peremption ignore un run ENCORE ACTIF, quel que soit son age', () => {
+    const now = 1_000_000_000_000
+    // Un run dont des appels provider sont en vol ne doit jamais etre jete sur un critere de date :
+    // son verrou est la seule chose qui empeche de le repayer en double.
+    const actifAncien: OrchestrationRunState = {
+      ...state('run-actif', now - 200 * 60 * 60 * 1000, ['frame']),
+      usage: { activeCalls: 1 } as never
+    }
+    expect(pickOrchestrationsToResume([actifAncien], now).map((s) => s.runId)).toEqual([
+      'run-actif'
+    ])
+  })
+
   it('elit un seul workflow pour deux checkpoints de la meme demande canonique', () => {
     const older: OrchestrationRunState = {
       ...state('run-duplicate-old', 1000, ['frame']),

@@ -601,13 +601,43 @@ export function pickOrchestrationToResume(
  * Tous les runs à reprendre au démarrage, dans l'ordre de priorité : travail déjà payé d'abord,
  * puis tâches mortes avant leur première phase. Les phases présentes mais vides restent exclues.
  */
+/**
+ * Au-dela de cette fenetre, un checkpoint n'est plus une reprise : le code a change, le contexte est
+ * mort, et le reprendre ecrit dans une vieille conversation qui remonte au premier plan sans raison.
+ *
+ * 36 h : assez large pour couvrir une nuit, un week-end court ou un arret prolonge de la machine,
+ * assez etroit pour qu'un run oublie ne hante pas la liste des jours plus tard.
+ */
+export const RESUME_STALE_AFTER_MS = 36 * 60 * 60 * 1000
+
+/**
+ * Un checkpoint est-il trop vieux pour etre repris ?
+ *
+ * Un run dont des appels provider sont ENCORE EN VOL echappe a la peremption quel que soit son age :
+ * son verrou est ce qui empeche de le repayer en double, et une date ne doit jamais lever un verrou.
+ */
+function resumeCheckpointIsStale(state: OrchestrationRunState, nowMs: number): boolean {
+  if ((state.usage?.activeCalls ?? 0) > 0) return false
+  return nowMs - state.updatedAt > RESUME_STALE_AFTER_MS
+}
+
+/**
+ * `nowMs` est OPTIONNEL a dessein : omis, aucune peremption n'est appliquee et le comportement est
+ * exactement l'historique. Fourni par l'appelant (`os.resumableOrchestrations`), il ecarte les
+ * checkpoints hantes — ce module n'a donc pas d'horloge cachee.
+ */
 export function pickOrchestrationsToResume(
-  states: readonly OrchestrationRunState[]
+  states: readonly OrchestrationRunState[],
+  nowMs?: number
 ): OrchestrationRunState[] {
   const mostRecentFirst = (candidates: readonly OrchestrationRunState[]): OrchestrationRunState[] =>
     [...candidates].sort((left, right) => right.updatedAt - left.updatedAt)
 
-  const resumable = states.filter((state) => state.terminal === undefined)
+  const resumable = states.filter(
+    (state) =>
+      state.terminal === undefined &&
+      (nowMs === undefined || !resumeCheckpointIsStale(state, nowMs))
+  )
   const suppressed = resumable.filter((state) => state.resumeDisposition !== undefined)
   const suppressedIds = new Set(suppressed.map((state) => state.runId))
   const activeLocks = resumable.filter(

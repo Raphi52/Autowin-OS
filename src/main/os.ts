@@ -906,8 +906,10 @@ export class AutowinOS {
   }
 
   /** Tous les runs éligibles à la reprise automatique au démarrage, dans leur ordre de priorité. */
-  resumableOrchestrations(): OrchestrationRunState[] {
-    return pickOrchestrationsToResume(loadOrchestrationStates(this.orchestrationStateRoot))
+  resumableOrchestrations(nowMs = Date.now()): OrchestrationRunState[] {
+    // L'horloge est passee ICI et nulle part ailleurs : elle ecarte les checkpoints perimes, qui
+    // sinon rouvraient a chaque demarrage la conversation d'un run mort depuis des jours.
+    return pickOrchestrationsToResume(loadOrchestrationStates(this.orchestrationStateRoot), nowMs)
   }
 
   /** Ferme durablement les appels dont le PID a disparu, sans jamais les rejouer. */
