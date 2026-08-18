@@ -160,3 +160,43 @@ describe('« scout » en tete de message declenche la phase SCOUT', () => {
     expect(routeSkillRequest('/scout autowin')?.explicitPhase).toBe('scout')
   })
 })
+
+describe('« scout » apres un preambule declenche aussi la phase', () => {
+  /**
+   * Defaut vecu le 2026-08-18 (conv-1298) : la regle ancree en tete ne tirait PAS sur le prompt reel
+   * de l'utilisateur, « en te basant sur la derniere conversation qu'on a eu (cite la moi pour etre
+   * sur) scout des ameliorations de l'experience utilisateur ». Le mot y est, mais precede d'un
+   * preambule. Resultat mesure : phase build, tableau imite au format scout, colonne Score remplie
+   * d'une pastille — le brief scout n'ayant jamais ete injecte.
+   *
+   * On elargit au mot suivi d'un DETERMINANT (« scout des », « scout le », « scout sur »…) : c'est ce
+   * qui distingue l'ORDRE (« scout des ameliorations ») du simple mot dans une phrase (« le scout est
+   * pas score », « regarde le dernier scout »).
+   */
+  it('tire sur le prompt REEL de l utilisateur', () => {
+    const message =
+      "en te basant sur la derniere conversation qu'on a eu (cite la moi pour etre sur) scout des ameliorations de l'experience utilisateur pour oneshot les tasks"
+    expect(routeSkillRequest(message)?.explicitPhase).toBe('scout')
+  })
+
+  it('accepte les tournures usuelles', () => {
+    for (const message of [
+      'scout les fix de autowin',
+      'apres avoir lu le code, scout sur la barre laterale',
+      'scout dans src/main les ameliorations',
+      'scout moi des idees'
+    ]) {
+      expect(routeSkillRequest(message)?.explicitPhase, message).toBe('scout')
+    }
+  })
+
+  it('ne tire PAS quand « scout » est un simple nom dans la phrase', () => {
+    for (const message of [
+      'le scout est toujours pas score',
+      'regarde le dernier scout',
+      'le scout precedent etait meilleur'
+    ]) {
+      expect(routeSkillRequest(message), message).toBeUndefined()
+    }
+  })
+})

@@ -76,8 +76,21 @@ export function routeSkillRequest(message: string): SkillRoute | undefined {
   //
   // Ancree en TETE et bornee par une frontiere de mot : « le scout est pas score » et « scouting »
   // ne declenchent rien. Une question ne declenche rien non plus — le bloc ci-dessous la traite avant.
-  const scoutNu = /^scout(?=\s|$)([\s\S]*)$/i.exec(text)
-  if (scoutNu && !text.includes('?')) {
+  // Deux formes, mesurees sur des prompts REELS :
+  //  - en TETE (« scout des fix de autowin ») ;
+  //  - apres un preambule (« en te basant sur la derniere conversation ... scout des ameliorations »),
+  //    le cas de conv-1298, ou la regle ancree ne tirait pas et le modele a choisi build.
+  // Le DETERMINANT qui suit distingue l'ORDRE du simple nom : « le scout est pas score » et
+  // « regarde le dernier scout » ne portent pas de determinant apres le mot, donc ne declenchent rien.
+  // En TETE, quelle que soit la suite (« Scout LECTURE SEULE : dans src/main/ ... »).
+  const SCOUT_EN_TETE = new RegExp(String.raw`^scout(?=\s|$)`, 'i')
+  // Ou APRES un preambule, reconnu par le DETERMINANT qui suit — c'est lui qui distingue
+  // l'ORDRE du simple nom (« le scout est pas score », « regarde le dernier scout »).
+  const ORDRE_SCOUT = new RegExp(
+    String.raw`(?:^|[\s(,;:.!])scout\s+(?:des?|du|les?|la|l'|sur|dans|moi)\b`,
+    'i'
+  )
+  if ((SCOUT_EN_TETE.test(text) || ORDRE_SCOUT.test(text)) && !text.includes('?')) {
     return { task: text, explicitPhase: 'scout', reason: 'explicit-skill' }
   }
 
