@@ -52,7 +52,9 @@
   color: #dde3ee;
 }
 .cpick-score {
-  font: 700 13px Consolas, monospace;
+  font:
+    700 13px Consolas,
+    monospace;
   color: #d4a94f;
   min-width: 30px;
   text-align: right;
@@ -68,7 +70,9 @@
 }
 .cpick-q b {
   display: block;
-  font: 600 10.5px 'Segoe UI', sans-serif;
+  font:
+    600 10.5px 'Segoe UI',
+    sans-serif;
   color: #d4a94f;
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -87,4 +91,27 @@
 .cpick-lancer:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* Pastilles Impact/Effort d'un scout sans note chiffree — memes couleurs que le tableau Ledger. */
+.cpick-pastilles {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: auto;
+}
+.cpick-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.cpick-dot-g {
+  background: #34d399;
+}
+.cpick-dot-y {
+  background: #fbbf24;
+}
+.cpick-dot-r {
+  background: #f87171;
 }

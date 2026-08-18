@@ -27,6 +27,13 @@ export interface CandidatAffiche {
   what?: string
   why?: string
   how?: string
+  /**
+   * Pastilles du tableau scout, telles quelles ('g' | 'y' | 'r'). Sur un scout au format
+   * Impact/Effort il n'existe AUCUN nombre : ces deux pastilles SONT l'indication de valeur de la
+   * ligne. Les jeter vidait la ligne de tout reperage (constate le 2026-08-18).
+   */
+  impact?: 'g' | 'y' | 'r'
+  effort?: 'g' | 'y' | 'r'
 }
 
 interface ChargeJson {
@@ -119,6 +126,9 @@ function ancrageDansCellules(cellules: readonly string[]): string | undefined {
 export function candidatsDepuisScoutTable(
   rows: readonly {
     num: string
+    score?: number
+    impact: 'g' | 'y' | 'r' | null
+    effort: 'g' | 'y' | 'r' | null
     type: 'fix' | 'new' | null
     what: string
     why: string
@@ -129,6 +139,9 @@ export function candidatsDepuisScoutTable(
     const ancrage = ancrageDansCellules([row.how, row.what, row.why])
     return {
       titre: row.what.trim() || `Candidat #${row.num}`,
+      ...(row.score === undefined ? {} : { pertinence: row.score }),
+      ...(row.impact ? { impact: row.impact } : {}),
+      ...(row.effort ? { effort: row.effort } : {}),
       ...(ancrage ? { url: ancrage } : {}),
       ...(row.type ? { type: row.type } : {}),
       ...(row.what.trim() ? { what: row.what.trim() } : {}),
@@ -189,7 +202,11 @@ ${apres.trimStart()}`.trim()
 
 /** L'emoji de nature, affiché dans la barre du candidat sans avoir à déplier. */
 export function emojiType(type: string | undefined): string {
-  if (type === 'correction') return '🔧'
-  if (type === 'ajout') return '🆕'
+  // DEUX vocabulaires arrivent ici : celui de la veille web (« correction » / « ajout ») et celui du
+  // tableau scout (« fix » / « new »). N'en connaitre qu'un affichait « ❔ » sur chaque ligne d'un
+  // scout de code — constate le 2026-08-18. Le repli reste EXPLICITE pour une nature vraiment
+  // inconnue : mieux vaut un point d'interrogation assume qu'un emoji devine.
+  if (type === 'correction' || type === 'fix') return '🔧'
+  if (type === 'ajout' || type === 'new') return '🆕'
   return '❔'
 }

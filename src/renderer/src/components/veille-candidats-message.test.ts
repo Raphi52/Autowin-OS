@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   candidatsDepuisScoutTable,
+  emojiType,
   extraireCandidatsAffiches,
   redigerPromptFrameSelection,
   texteSansChargeJson
@@ -200,5 +201,101 @@ describe('un tableau scout markdown alimente le panneau de selection', () => {
     const prompt = redigerPromptFrameSelection([{ titre: 'Renommer une variable', type: 'fix' }])
     expect(prompt).toContain('Renommer une variable')
     expect(prompt).not.toContain('ancrage undefined')
+  })
+})
+
+describe('la note du scout reste sur la ligne du candidat', () => {
+  // Regression vecue le 2026-08-18 : le pont perdait la note. `scoreBand` calcule un score /100
+  // normalise (il gere « 82 », « 8/10 », « 75 % ») mais ne rendait qu'une pastille — le nombre etait
+  // jete, donc plus aucune note affichee a cote du titre.
+  const AVEC_SCORE = [
+    '| Score | Type | What | Why | How |',
+    '| --- | --- | --- | --- | --- |',
+    '| 82 | 🔧 fix | Journal permissif | Entre comme fiable | `src/main/activity/ledger.ts:63` |',
+    '| 8/10 | 🆕 new | Rejeu cible | Aucun rejeu unitaire | `src/main/runs/run-reattach.ts:495` |',
+    '| n/a | 🔧 fix | Sans note lisible | Peu clair | Le faire |'
+  ].join('\n')
+
+  it('transporte la note /100 dans le candidat', () => {
+    const candidats = candidatsDepuisScoutTable(parseScoutTable(AVEC_SCORE)!)
+    expect(candidats[0].pertinence).toBe(82)
+    // « 8/10 » vaut 80, pas 8 : la normalisation d echelle est conservee.
+    expect(candidats[1].pertinence).toBe(80)
+  })
+
+  it("n'invente pas de note quand la cellule n'en porte pas de lisible", () => {
+    const candidats = candidatsDepuisScoutTable(parseScoutTable(AVEC_SCORE)!)
+    expect(candidats[2].pertinence).toBe(undefined)
+  })
+
+  it('un tableau Impact/Effort sans colonne Score ne porte aucune note', () => {
+    const sansScore = [
+      '| # | Impact | Effort | Type | Manquement | Pourquoi | 1er pas |',
+      '| --- | --- | --- | --- | --- | --- | --- |',
+      '| 1 | 🟢 | 🟡 | 🔧 fix | Un manquement | Une raison | Un pas |'
+    ].join('\n')
+    expect(candidatsDepuisScoutTable(parseScoutTable(sansScore)!)[0].pertinence).toBe(undefined)
+  })
+})
+
+describe("l'emoji fix/feature s'affiche sur chaque ligne", () => {
+  // Regression vecue le 2026-08-18 : chaque ligne montrait « ❔ ». `emojiType` ne connait que le
+  // vocabulaire de la veille (« correction » / « ajout ») ; le pont lui passait celui du tableau
+  // scout (« fix » / « new »), qui tombait donc dans le repli « nature inconnue ».
+  it('reconnait le vocabulaire du tableau scout', () => {
+    expect(emojiType('fix')).toBe('🔧')
+    expect(emojiType('new')).toBe('🆕')
+  })
+
+  it('reconnait toujours le vocabulaire de la veille', () => {
+    expect(emojiType('correction')).toBe('🔧')
+    expect(emojiType('ajout')).toBe('🆕')
+  })
+
+  it('garde le repli explicite pour une nature vraiment inconnue', () => {
+    expect(emojiType('mystere')).toBe('❔')
+    expect(emojiType(undefined)).toBe('❔')
+  })
+
+  it('bout en bout : une ligne de scout porte son emoji', () => {
+    const tableau = [
+      '| Score | Type | What | Why | How |',
+      '| --- | --- | --- | --- | --- |',
+      '| 82 | 🔧 fix | Journal permissif | Entre comme fiable | Le corriger |'
+    ].join('\n')
+    const candidat = candidatsDepuisScoutTable(parseScoutTable(tableau)!)[0]
+    expect(emojiType(candidat.type)).toBe('🔧')
+  })
+})
+
+describe('les pastilles Impact/Effort restent sur la ligne', () => {
+  // Regression vecue le 2026-08-18 : sur un scout au format Impact/Effort il n'y a AUCUN nombre —
+  // la « note » de chaque ligne etait les deux pastilles colorees du tableau Ledger. Le pont ne
+  // transportait ni le nombre ni les pastilles : la ligne perdait toute indication de valeur.
+  const IMPACT_EFFORT = [
+    '| # | Impact | Effort | Type | Manquement | Pourquoi | 1er pas |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    '| 1 | 🟢 | 🟡 | 🔧 fix | Journal permissif | Entre comme fiable | Le corriger |',
+    '| 2 | 🔴 | 🟢 | 🆕 new | Vue diff | Manque | Le batir |'
+  ].join('\n')
+
+  it('transporte les deux pastilles telles quelles', () => {
+    const candidats = candidatsDepuisScoutTable(parseScoutTable(IMPACT_EFFORT)!)
+    expect(candidats[0].impact).toBe('g')
+    expect(candidats[0].effort).toBe('y')
+    expect(candidats[1].impact).toBe('r')
+    expect(candidats[1].effort).toBe('g')
+  })
+
+  it('un format Score rend une note ET une pastille d impact derivee', () => {
+    const avecScore = [
+      '| Score | Type | What | Why | How |',
+      '| --- | --- | --- | --- | --- |',
+      '| 82 | 🔧 fix | Journal permissif | Entre comme fiable | Le corriger |'
+    ].join('\n')
+    const candidat = candidatsDepuisScoutTable(parseScoutTable(avecScore)!)[0]
+    expect(candidat.pertinence).toBe(82)
+    expect(candidat.impact).toBe('g')
+    expect(candidat.effort).toBe(undefined)
   })
 })

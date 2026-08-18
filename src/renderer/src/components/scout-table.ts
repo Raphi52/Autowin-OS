@@ -13,6 +13,8 @@ export type Band = 'g' | 'y' | 'r' | null
 export type ScoutType = 'fix' | 'new' | null
 export interface ScoutRow {
   num: string
+  /** Note /100 normalisee quand la colonne Score en porte une de lisible. */
+  score?: number
   impact: Band
   effort: Band
   type: ScoutType
@@ -35,7 +37,7 @@ function band(cell: string): Band {
  * Déclencheurs constatés : « 8/10 » → 8 → pastille ROUGE alors que c'est excellent ; « #3 — 82 » → 3 →
  * rouge aussi. Une pastille fausse est pire qu'aucune pastille → `null` dès que ce n'est pas lisible.
  */
-export function scoreBand(cell: string): Band {
+export function scoreSur100(cell: string): number | undefined {
   // Un rang « #3 » n'est pas un score : on le retire avant toute lecture de nombre.
   const cleaned = cell.replace(/#\s*\d+/g, ' ')
   const ratio = cleaned.match(/(\d+(?:[.,]\d+)?)\s*(?:\/|\bsur\b)\s*(\d+(?:[.,]\d+)?)/i)
@@ -43,18 +45,29 @@ export function scoreBand(cell: string): Band {
   let score: number | undefined
   if (ratio) {
     const base = num(ratio[2])
-    if (base <= 0) return null
+    if (base <= 0) return undefined
     score = (num(ratio[1]) / base) * 100
   } else {
     const found = cleaned.match(/\d+(?:[.,]\d+)?/g)
     // Plusieurs nombres sans échelle explicite (« 82 (cf. 3 refs) ») = ambigu : on ne devine pas.
-    if (!found || found.length !== 1) return null
+    if (!found || found.length !== 1) return undefined
     const value = num(found[0])
     // Un nombre nu ≤ 10 peut aussi bien être un /10 qu'un très mauvais /100 → non interprétable.
-    if (value <= 10 && !/%/.test(cleaned)) return null
+    if (value <= 10 && !/%/.test(cleaned)) return undefined
     score = value
   }
-  if (!Number.isFinite(score) || score < 0 || score > 100) return null
+  if (!Number.isFinite(score) || score < 0 || score > 100) return undefined
+  return score
+}
+
+/**
+ * Pastille derivee de la note. Separee de `scoreSur100` pour que le NOMBRE reste disponible : le
+ * panneau de selection l'affiche a cote du titre, et le jeter faisait disparaitre la note de chaque
+ * ligne (regression vecue le 2026-08-18).
+ */
+export function scoreBand(cell: string): Band {
+  const score = scoreSur100(cell)
+  if (score === undefined) return null
   return score >= 70 ? 'g' : score >= 40 ? 'y' : 'r'
 }
 function scoutType(cell: string): ScoutType {
@@ -127,8 +140,10 @@ export function parseScoutTable(text: string): ScoutRow[] | null {
     const c = cells(lines[i])
     const at = (idx: number, fallback = ''): string =>
       idx >= 0 && idx < c.length ? c[idx] : fallback
+    const note = iScore >= 0 ? scoreSur100(at(iScore)) : undefined
     rows.push({
       num: at(iNum, String(rows.length + 1)),
+      ...(note === undefined ? {} : { score: note }),
       impact: iImpact >= 0 ? band(at(iImpact)) : scoreBand(at(iScore)),
       effort: iEffort >= 0 ? band(at(iEffort)) : null,
       type: scoutType(at(iType)),

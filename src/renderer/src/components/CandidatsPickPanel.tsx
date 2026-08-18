@@ -3,6 +3,13 @@ import type { CandidatAffiche } from './veille-candidats-message'
 import { emojiType, redigerPromptFrameSelection } from './veille-candidats-message'
 import './CandidatsPickPanel.css'
 
+/** Une pastille muette ne dit rien : chaque couleur porte son libelle en infobulle et en aria. */
+const LIBELLE_BANDE: Record<'g' | 'y' | 'r', string> = {
+  g: 'fort',
+  y: 'moyen',
+  r: 'faible'
+}
+
 /**
  * Le panneau de SÉLECTION sous un message de scout : une case par candidat, une ligne DÉPLIABLE
  * (tous les détails : preuve, ancrage, date, type…), et un bouton qui envoie le prompt /frame
@@ -80,8 +87,28 @@ export function CandidatsPickPanel({
             <span className="cpick-titre" onClick={() => deplier(index)}>
               {candidat.titre}
             </span>
+            {/* La valeur de la ligne : une note quand le scout en donne une, sinon les deux
+                pastilles Impact/Effort — un scout au format Impact/Effort n'a AUCUN nombre. */}
             {candidat.pertinence !== undefined && (
               <span className="cpick-score">{candidat.pertinence}</span>
+            )}
+            {candidat.pertinence === undefined && (candidat.impact || candidat.effort) && (
+              <span className="cpick-pastilles" data-testid="cpick-pastilles">
+                {candidat.impact && (
+                  <span
+                    className={`cpick-dot cpick-dot-${candidat.impact}`}
+                    title={`Impact ${LIBELLE_BANDE[candidat.impact]}`}
+                    aria-label={`Impact ${LIBELLE_BANDE[candidat.impact]}`}
+                  />
+                )}
+                {candidat.effort && (
+                  <span
+                    className={`cpick-dot cpick-dot-${candidat.effort}`}
+                    title={`Effort ${LIBELLE_BANDE[candidat.effort]}`}
+                    aria-label={`Effort ${LIBELLE_BANDE[candidat.effort]}`}
+                  />
+                )}
+              </span>
             )}
           </div>
           {deplies.has(index) && (

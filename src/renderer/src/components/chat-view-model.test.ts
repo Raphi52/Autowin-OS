@@ -1394,6 +1394,10 @@ describe('groupAssistantActivity', () => {
         titre: 'Le journal accepte une ligne mal formee',
         url: 'src/main/activity/ledger.ts:63',
         type: 'fix',
+        // Les pastilles Impact/Effort suivent la ligne : sur ce format il n'y a aucun nombre, elles
+        // SONT l'indication de valeur affichee a cote du titre.
+        impact: 'g',
+        effort: 'y',
         what: 'Le journal accepte une ligne mal formee',
         why: 'Elle entre comme fiable',
         how: 'Test rouge sur `src/main/activity/ledger.ts:63`'
