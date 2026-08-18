@@ -337,4 +337,70 @@ describe('conversations-disk — lecture tolerante apres le retrait de `category
     // de perte que cet increment devait eviter.
     expect(loadConversations(p)).toHaveLength(1)
   })
+
+  it('un fichier sans `provider` est REJETE — le champ a toujours ete obligatoire cote disque', () => {
+    const p = join(dir, 'validateur-sans-provider.json')
+    writeFileSync(
+      p,
+      JSON.stringify([
+        {
+          schemaVersion: 3,
+          id: 'conv-1',
+          title: 'Sans provider',
+          category: 'codex',
+          messages: [],
+          createdAt: 1,
+          updatedAt: 2
+        }
+      ]),
+      'utf8'
+    )
+    // Fige le comportement : `category` n'a JAMAIS pu etre la seule source du provider, meme avant
+    // ce remake. Un repli `provider ?? category` a l'hydratation serait donc inatteignable.
+    expect(() => loadConversations(p)).toThrow(/corrompu/)
+  })
+})
+
+describe('conversations-disk — sauvegarde avant la premiere ecriture migree', () => {
+  it('la 1re ecriture pose `.pre-remake` contenant l’ORIGINAL intact, la 2nde ne l’ecrase pas', () => {
+    const p = join(dir, 'legacy-pre-remake.json')
+    const backup = `${p}.pre-remake`
+    const legacy = JSON.stringify([
+      {
+        schemaVersion: 3,
+        id: 'conv-1',
+        title: 'Legacy',
+        provider: 'codex',
+        category: 'codex',
+        workspaceId: 'ws-1',
+        messages: [{ role: 'user', content: 'salut', ts: 1, messageId: 'message-conv-1-1' }],
+        createdAt: 1,
+        updatedAt: 2
+      }
+    ])
+    writeFileSync(p, legacy, 'utf8')
+    expect(existsSync(backup)).toBe(false)
+
+    // CYCLE 1 : charge -> hydrate (la migration retire `category` et `workspaceId`) -> ecrit.
+    const a = new ConversationStore(() => 10)
+    a.hydrate(loadConversations(p))
+    saveConversations(a.list(), p)
+
+    expect(existsSync(backup)).toBe(true)
+    const sauve = JSON.parse(readFileSync(backup, 'utf8')) as Record<string, unknown>[]
+    // L'ORIGINAL, pas le snapshot migre : les deux champs que l'ancien binaire EXIGEAIT sont la.
+    expect(sauve[0].category).toBe('codex')
+    expect(sauve[0].workspaceId).toBe('ws-1')
+    // Et le fichier vivant, lui, ne les porte plus.
+    const vivant = JSON.parse(readFileSync(p, 'utf8')) as Record<string, unknown>[]
+    expect(vivant[0]).not.toHaveProperty('category')
+
+    // CYCLE 2 : une seconde ecriture ne doit PAS remplacer le filet par un snapshot deja migre.
+    const b = new ConversationStore(() => 20)
+    b.hydrate(loadConversations(p))
+    saveConversations(b.list(), p)
+    const sauveApres = JSON.parse(readFileSync(backup, 'utf8')) as Record<string, unknown>[]
+    expect(sauveApres[0].category).toBe('codex')
+    expect(readFileSync(backup, 'utf8')).toBe(legacy)
+  })
 })

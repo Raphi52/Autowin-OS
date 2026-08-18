@@ -386,9 +386,36 @@ export function loadConversations(path = conversationsPath()): Conversation[] {
   return applyConversationJournal(loadConversationSnapshot(path), path)
 }
 
+/**
+ * Copie de sauvegarde UNIQUE prise avant la toute premiere ecriture de ce build.
+ *
+ * Ce build a cesse d'ecrire `category` et `workspaceId`, que la version PRECEDENTE du binaire
+ * EXIGEAIT (`isConversation` etait tout-ou-rien : un seul champ manquant faisait declarer le store
+ * ENTIER corrompu). Le rollback du CODE est donc en un geste, mais il rendrait l'utilisateur a un
+ * binaire incapable de relire ses propres donnees migrees. Le repli `.tmp` ne couvre pas ce cas :
+ * il rattrape une ecriture INTERROMPUE, pas un snapshot valide-mais-plus-recent.
+ *
+ * Restauration : `copy conversations.json.pre-remake conversations.json` (et supprimer
+ * `conversations.json.journal.jsonl`).
+ *
+ * Prise UNE SEULE FOIS : si la copie existe deja, on ne l'ecrase pas — sinon elle serait remplacee
+ * par un snapshot deja migre, c'est-a-dire par exactement ce dont elle protege.
+ */
+function backupBeforeFirstMigratedWrite(path: string): void {
+  const backup = `${path}.pre-remake`
+  if (!existsSync(path) || existsSync(backup)) return
+  try {
+    copyFileSync(path, backup)
+  } catch {
+    // Une sauvegarde impossible ne doit pas empecher l'application d'ecrire ses conversations :
+    // perdre le filet est moins grave que perdre le tour en cours.
+  }
+}
+
 function writeConversationSnapshot(all: Conversation[], path: string): void {
   try {
     mkdirSync(dirname(path), { recursive: true })
+    backupBeforeFirstMigratedWrite(path)
     const tmp = `${path}.tmp`
     writeFileSync(tmp, JSON.stringify(all, null, 1), 'utf8')
     renameSync(tmp, path)
