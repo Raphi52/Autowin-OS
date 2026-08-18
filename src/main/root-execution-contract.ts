@@ -240,6 +240,23 @@ function memeChemin(a: string, b: string): boolean {
  * FAIL-OPEN a deux endroits : aucune cible nommee, ou aucune preuve ne portant de chemin attribue
  * (un provider qui ne renseigne pas `paths` ne doit jamais produire un faux rouge).
  */
+/**
+ * Une valeur attribuee est-elle vraiment un CHEMIN ?
+ *
+ * Regression VECUE le 2026-08-18 sur conv-1304 : une preuve d'execution portait `path: "0"`. Le garde
+ * l'a comptee comme un fichier modifie, le repli « aucun chemin attribue → sans-objet » n'a donc pas
+ * joue, et un run qui avait POURTANT modifie et committe la cible nommee a ete bloque. Un faux
+ * blocage est pire que le defaut que ce garde corrige : il refuse du travail juste.
+ *
+ * Un chemin porte un separateur ou une extension de fichier. Tout le reste est une valeur de
+ * remplissage a laquelle on ne doit accorder aucune confiance — dans le doute, on NE BLOQUE PAS.
+ */
+function ressembleAUnChemin(valeur: string): boolean {
+  const propre = valeur.trim()
+  if (propre.length < 3) return false
+  return /[\\/]/u.test(propre) || /\.[A-Za-z0-9]{1,8}$/u.test(propre)
+}
+
 export function cibleNommeeTouchee(
   task: string,
   evidence: readonly ExecutionEvidence[]
@@ -249,6 +266,7 @@ export function cibleNommeeTouchee(
   const touches = evidence
     .filter((item) => item.kind === 'mutation' && successfulEvidence(item))
     .flatMap((item) => attributedPaths(item))
+    .filter(ressembleAUnChemin)
     .map((chemin) => normalized(chemin))
   if (touches.length === 0) return 'sans-objet'
   // Decision cadree : le gate ne bloque que le MISS TOTAL. Une couverture PARTIELLE part au juge,

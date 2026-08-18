@@ -136,3 +136,39 @@ describe('etatDeCloture — cablage du gate (INC-3, pas la fonction pure)', () =
     expect(etat.status).toBe('green')
   })
 })
+
+/**
+ * REGRESSION VECUE le 2026-08-18, en production, sur conv-1304.
+ *
+ * Le garde a bloque un run qui avait POURTANT modifie et committe la cible nommee. Cause : la preuve
+ * d'execution portait `path: "0"` — une valeur degeneree, pas un chemin. `attributedPaths` la rend
+ * telle quelle, le repli « aucun chemin attribue → sans-objet » n'a donc pas joue, et le croisement a
+ * conclu au miss total. Un faux blocage est PIRE que le defaut que ce garde corrige : il rend l'app
+ * inutilisable sur une demande legitime.
+ *
+ * Regle : une valeur n'est un chemin que si elle porte un separateur ou une extension de fichier.
+ */
+describe('cibleNommeeTouchee — une valeur degeneree n est pas un chemin', () => {
+  const demande = 'corrige src/main/task-regime.ts:20 en ajoutant un commentaire'
+
+  it('path "0" ne vaut PAS une preuve de chemin : on ne bloque pas', () => {
+    const preuve = [
+      { kind: 'mutation', status: 'ok', ok: true, path: '0' }
+    ] as unknown as Parameters<typeof cibleNommeeTouchee>[1]
+    expect(cibleNommeeTouchee(demande, preuve)).toBe('sans-objet')
+  })
+
+  it('une vraie preuve sur un AUTRE fichier bloque toujours', () => {
+    const preuve = [
+      { kind: 'mutation', status: 'ok', ok: true, path: 'src/main/orchestrator.ts' }
+    ] as unknown as Parameters<typeof cibleNommeeTouchee>[1]
+    expect(cibleNommeeTouchee(demande, preuve)).toBe('manquee')
+  })
+
+  it('la cible reellement touchee reste admise', () => {
+    const preuve = [
+      { kind: 'mutation', status: 'ok', ok: true, path: 'src/main/task-regime.ts' }
+    ] as unknown as Parameters<typeof cibleNommeeTouchee>[1]
+    expect(cibleNommeeTouchee(demande, preuve)).toBe('touchee')
+  })
+})
