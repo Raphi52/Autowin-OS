@@ -78,7 +78,7 @@ describe('ExecutionQuote', () => {
       judgeMembers: 1,
       maxGreedyNodes: 1,
       reservedMandatoryAgents: 5,
-      estimatedMaxAgents: 5
+      plannedMaxAgents: 5
     })
   })
 
@@ -101,7 +101,7 @@ describe('ExecutionQuote', () => {
       judgeMembers: 1,
       maxGreedyNodes: 2,
       reservedMandatoryAgents: 8,
-      estimatedMaxAgents: 10
+      plannedMaxAgents: 10
     })
   })
 
@@ -152,7 +152,7 @@ describe('devis face à un workflow plus large que le régime', () => {
     quote.limits.maxAgents = 10
     quote.limits.maxProviderCalls = 10
     const allocation = allocateExecutionTopology(quote, demande as never)
-    expect(allocation.estimatedMaxCalls).toBeGreaterThanOrEqual(12)
+    expect(allocation.plannedMaxCalls).toBeGreaterThanOrEqual(12)
     expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(12)
     expect(quote.limits.maxProviderCalls).toBeGreaterThanOrEqual(12)
   })

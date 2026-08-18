@@ -544,7 +544,7 @@ describe('un graphe pilote le run', () => {
     ).run('refonte architecture sécurité migration')
 
     expect(provider.modeles).toEqual(['a', 'b', 'c', 'chef', 'juge', 'a', 'b', 'c', 'chef', 'juge'])
-    expect(quote.allocation?.estimatedMaxCalls).toBe(10)
+    expect(quote.allocation?.plannedMaxCalls).toBe(10)
   })
 })
 

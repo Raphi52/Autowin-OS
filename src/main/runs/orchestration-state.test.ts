@@ -144,6 +144,49 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     expect(loadOrchestrationStates(root).map((entry) => entry.runId)).toEqual(['valid-quote'])
   })
 
+  /** Allocation telle qu'un ANCIEN binaire l'a serialisee : `estimatedMax*`, pas `plannedMax*`. */
+  const allocationLegacy = {
+    phaseMembers: { frame: 1 },
+    judgeMembers: 1,
+    maxGreedyNodes: 1,
+    reservedMandatoryAgents: 5,
+    estimatedMaxAgents: 5,
+    estimatedMaxCalls: 12
+  }
+
+  const ecrisEtatLegacy = (runId: string): void => {
+    const brut = JSON.parse(
+      JSON.stringify({
+        ...state(runId, 3000, ['frame']),
+        executionQuote: compileExecutionQuote('reprend le run en vol')
+      })
+    )
+    brut.executionQuote.allocation = { ...allocationLegacy }
+    writeFileSync(join(root, `${runId}.json`), JSON.stringify(brut), 'utf8')
+  }
+
+  it('un etat ecrit sous l ANCIEN nom (estimatedMax*) reste repris apres le renommage', () => {
+    // Regret 9 : ces deux champs traversent une frontiere SERIALISEE. Un etat qui echoue la
+    // validation est SILENCIEUSEMENT ignore (loadOrchestrationStates avale le fichier) : un
+    // renommage nu perdrait, sans un message, tout run en vol au moment du basculement.
+    ecrisEtatLegacy('run-legacy-alloc')
+
+    const [relu] = loadOrchestrationStates(root)
+    expect(relu?.runId).toBe('run-legacy-alloc')
+    expect(relu?.executionQuote?.allocation?.plannedMaxAgents).toBe(5)
+    expect(relu?.executionQuote?.allocation?.plannedMaxCalls).toBe(12)
+  })
+
+  it('un etat relu sous l ancien nom se REECRIT sous le nouveau seul', () => {
+    ecrisEtatLegacy('run-legacy-rewrite')
+
+    const [relu] = loadOrchestrationStates(root)
+    saveOrchestrationState(root, relu)
+    const ecrit = readFileSync(join(root, 'run-legacy-rewrite.json'), 'utf8')
+    expect(ecrit).toContain('plannedMaxAgents')
+    expect(ecrit).not.toContain('estimatedMaxAgents')
+  })
+
   it('rejette une réservation active liée à une occurrence historique plutôt qu’à l’agent actif', () => {
     const usage = {
       quoteId: 'quote-reservations',
@@ -1128,9 +1171,9 @@ describe('admission de la reprise automatique au démarrage', () => {
     expect(reuseAt).toBeLessThan(runTaskAt)
     // Chaque step est accumulé, puis persisté et le run clos — sur le succès ET sur l'échec.
     expect(relaunchSource).toContain('resumedSteps.push(step)')
-    expect(relaunchSource.split('saveConvRunTrace(resumedRunFile.path, resumedSteps)')).toHaveLength(
-      3
-    )
+    expect(
+      relaunchSource.split('saveConvRunTrace(resumedRunFile.path, resumedSteps)')
+    ).toHaveLength(3)
     expect(relaunchSource).toContain('closeConvRun(')
     expect(relaunchSource).toContain('populateConvRunSections(resumedRunFile.path')
   })

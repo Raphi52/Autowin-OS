@@ -42,8 +42,8 @@ export interface RunExecutionQuoteObservation {
     judgeMembers: number
     maxGreedyNodes: number
     reservedMandatoryAgents: number
-    estimatedMaxAgents: number
-    estimatedMaxCalls: number
+    plannedMaxAgents: number
+    plannedMaxCalls: number
   }
 }
 

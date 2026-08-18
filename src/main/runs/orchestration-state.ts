@@ -274,9 +274,36 @@ function isExecutionQuote(value: unknown): value is ExecutionQuote {
     isNonNegativeInteger(value.allocation.judgeMembers) &&
     isPositiveInteger(value.allocation.maxGreedyNodes) &&
     isNonNegativeInteger(value.allocation.reservedMandatoryAgents) &&
-    isNonNegativeInteger(value.allocation.estimatedMaxAgents) &&
-    isNonNegativeInteger(value.allocation.estimatedMaxCalls)
+    isNonNegativeInteger(value.allocation.plannedMaxAgents) &&
+    isNonNegativeInteger(value.allocation.plannedMaxCalls)
   )
+}
+
+/**
+ * `estimatedMax*` s'appelle `plannedMax*` depuis le renommage du vocabulaire de couts. Ces deux
+ * champs traversent une frontiere SERIALISEE : l'etat est ecrit en JSON sur disque et relu au
+ * demarrage, et un etat qui echoue la validation est SILENCIEUSEMENT ignore. Un renommage nu
+ * perdrait donc, sans un seul message, tout run en vol au moment du basculement.
+ *
+ * Migration TOLERANTE : on accepte l'ancien nom a la relecture, on normalise en memoire, et on ne
+ * REECRIT que le nouveau. Branche de compatibilite a retirer quand plus aucun etat ancien ne
+ * circule.
+ */
+function normalizeLegacyAllocationNames(value: unknown): void {
+  if (!isRecord(value)) return
+  const quote = value.executionQuote
+  if (!isRecord(quote)) return
+  const allocation = quote.allocation
+  if (!isRecord(allocation)) return
+  for (const [ancien, nouveau] of [
+    ['estimatedMaxAgents', 'plannedMaxAgents'],
+    ['estimatedMaxCalls', 'plannedMaxCalls']
+  ] as const) {
+    if (allocation[nouveau] === undefined && allocation[ancien] !== undefined) {
+      allocation[nouveau] = allocation[ancien]
+    }
+    delete allocation[ancien]
+  }
 }
 
 function isExecutionUsageSnapshot(value: unknown): value is ExecutionUsageSnapshot {
@@ -512,6 +539,7 @@ export function loadOrchestrationStates(root: string): OrchestrationRunState[] {
     if (!entry.endsWith('.json')) continue
     try {
       const parsed: unknown = JSON.parse(readFileSync(join(root, entry), 'utf8'))
+      normalizeLegacyAllocationNames(parsed)
       if (isOrchestrationRunState(parsed) && entry === `${parsed.runId}.json`) states.push(parsed)
     } catch {
       // JSON tronqué par un crash : on ignore ce run plutôt que de perdre les autres.

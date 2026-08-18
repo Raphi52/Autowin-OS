@@ -47,8 +47,8 @@ export interface ExecutionTopologyAllocation {
   judgeMembers: number
   maxGreedyNodes: number
   reservedMandatoryAgents: number
-  estimatedMaxAgents: number
-  estimatedMaxCalls: number
+  plannedMaxAgents: number
+  plannedMaxCalls: number
 }
 
 export interface ExecutionTopologyRequest {
@@ -217,8 +217,8 @@ export function allocateExecutionTopology(
       // nombre d'appels impossible à déduire du canevas qui vient d'être accepté.
       maxGreedyNodes: 1,
       reservedMandatoryAgents: mandatory,
-      estimatedMaxAgents: startedAgents + mandatory,
-      estimatedMaxCalls: startedCalls + mandatory
+      plannedMaxAgents: startedAgents + mandatory,
+      plannedMaxCalls: startedCalls + mandatory
     }
   }
 
@@ -270,8 +270,8 @@ export function allocateExecutionTopology(
     judgeMembers,
     maxGreedyNodes,
     reservedMandatoryAgents: mandatory,
-    estimatedMaxAgents: startedAgents + used,
-    estimatedMaxCalls: startedCalls + used
+    plannedMaxAgents: startedAgents + used,
+    plannedMaxCalls: startedCalls + used
   }
 }
 

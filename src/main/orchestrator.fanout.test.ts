@@ -126,7 +126,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     expect(quote.allocation).toMatchObject({
       phaseMembers: { frame: 1 },
       reservedMandatoryAgents: 5,
-      estimatedMaxAgents: 5
+      plannedMaxAgents: 5
     })
   })
 
