@@ -24,11 +24,28 @@ describe('phase-briefs (consignes courtes in-app)', () => {
 
   // Defaut vecu le 2026-08-18 (conv-1293) : le modele a rempli la colonne Score avec « 🟢 ».
   // Le brief disait « un seul nombre par ligne » — assez faible pour qu'une pastille passe.
+  // Mesure du 2026-08-18 : le brief INTERDISAIT la pastille en l'AFFICHANT, et l'historique de la
+  // conversation active portait 16 lignes a pastille pour 0 chiffree. Un exemple negatif ancre le
+  // motif qu'il pretend bannir ; le modele recopie ce qu'il voit. Le brief ne montre donc plus AUCUNE
+  // pastille, et porte une ligne d'exemple CHIFFREE a imiter.
+  it('ne montre aucune pastille de couleur, et donne un exemple chiffre', () => {
+    const scout = PHASE_BRIEFS.scout
+    for (const pastille of ['🟢', '🟡', '🔴']) {
+      expect(scout, 'le brief ne doit pas afficher ' + pastille).not.toContain(pastille)
+    }
+    // Les emojis de TYPE restent : eux sont voulus dans la colonne Type.
+    expect(scout).toContain('🔧')
+    // Une ligne d'exemple avec un vrai nombre, que le modele peut imiter.
+    expect(scout).toMatch(/\|\s*\d{2}\s*\|/)
+  })
+
   it('le brief scout exige un ENTIER dans Score, pas une pastille', () => {
     const scout = PHASE_BRIEFS.scout
     expect(scout).toMatch(/ENTIER/)
     expect(scout).toMatch(/en chiffres/)
-    expect(scout).toMatch(/Jamais une pastille/)
+    // La formulation NEGATIVE (« jamais une pastille ») a ete remplacee le 2026-08-18 par la raison
+    // positive : elle disait quoi eviter en MONTRANT ce qu'il fallait eviter, ce qui ancrait le motif.
+    expect(scout).toMatch(/TRIABLE/)
   })
 
   it('le brief frame exige un inventaire de confiance ADOSSÉ À DES PREUVES, pas un ressenti', () => {
