@@ -5,9 +5,10 @@
 // au redemarrage (avant : compteur en RAM perdu a chaque relance de l'app).
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import type { TokenUsage } from '../../shared/token-usage'
 
 /** Un tour (turn) d'agent, avec son cout et sa consommation de tokens. */
-export interface TurnCost {
+export interface TurnCost extends TokenUsage {
   provider: string
   role?: string
   /**
@@ -19,12 +20,6 @@ export interface TurnCost {
   model?: string
   inputTokens: number
   outputTokens: number
-  cacheReadTokens?: number
-  /**
-   * Tokens ECRITS dans le cache (sous-ensemble de `inputTokens`). OPTIONNEL a dessein : les
-   * instantanes `cost.jsonl` deja persistes ne l'ont jamais porte.
-   */
-  cacheCreationTokens?: number
   costUsd?: number
 }
 

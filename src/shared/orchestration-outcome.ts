@@ -1,5 +1,6 @@
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { formatEstimatedCostUsd } from './cost-estimate'
+import type { TokenUsage } from './token-usage'
 
 /**
  * CARTE DE LIVRAISON d'une orchestration — les faits, pas une formule.
@@ -741,14 +742,10 @@ export function reconcileClosedOrchestrationTextParts(
  * Consommation d'un run, telle que la compte le superviseur d'exécution. Décrite ici en STRUCTURE
  * plutôt qu'importée : `shared/` ne doit pas dépendre du process principal.
  */
-export interface ExecutionUsageLike {
+export interface ExecutionUsageLike extends TokenUsage {
   knownCostUsd?: number | null
   unpricedCalls?: number
   totalTokens?: number
-  inputTokens?: number
-  outputTokens?: number
-  cacheReadTokens?: number
-  cacheCreationTokens?: number
 }
 
 /**

@@ -13,6 +13,8 @@
  * Un modèle inconnu ne rend RIEN : on préfère afficher le volume de tokens qu'inventer un montant.
  */
 
+import type { TokenUsage } from './token-usage'
+
 /** Tarifs publics en $ par million de tokens. Source : catalogue Anthropic (2026-08-18). */
 interface ModelRate {
   /** Motif reconnu dans l'identifiant du modèle, en minuscules. */
@@ -63,14 +65,11 @@ const CACHE_READ_RATIO = 0.1
  */
 const CACHE_WRITE_RATIO = 1.25
 
-export interface TokenUsageShape {
-  inputTokens?: number
-  outputTokens?: number
-  cacheReadTokens?: number
-  /** Sous-ensemble de `inputTokens` écrit dans le cache — jamais une quantité qui s'y ajoute. */
-  cacheCreationTokens?: number
-  model?: string
-}
+/**
+ * Conservé comme ALIAS de `TokenUsage` : la forme de l'usage n'a plus qu'une définition, mais le
+ * nom historique reste importé par les appelants existants.
+ */
+export type TokenUsageShape = TokenUsage
 
 function positive(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 import type { Message, Usage } from '../providers/types'
 import type { PipelinePhase } from '../skill-pipeline'
+import type { TokenUsage } from '../../shared/token-usage'
 
 export interface PromptCallRecord {
   id: string
@@ -174,7 +175,7 @@ export function deletePromptCalls(
 }
 
 /** Ligne de coût agrégée pour un acteur (rôle) ou un modèle. */
-export interface CostBreakdownRow {
+export interface CostBreakdownRow extends TokenUsage {
   key: string
   calls: number
   costUsd: number
@@ -184,7 +185,8 @@ export interface CostBreakdownRow {
   /**
    * Tokens ÉCRITS dans le cache — un SOUS-ENSEMBLE de `inputTokens`, comme la lecture. Propagé
    * parce que sans lui le verdict de cache accuse une écriture de cache d'être une réécriture de
-   * contexte : le premier appel d'une longue conversation INVESTIT, il ne gaspille pas.
+   * contexte : le premier appel d'une longue conversation INVESTIT, il ne gaspille pas. Resserré
+   * en obligatoire ici : cet agrégat le calcule toujours.
    */
   cacheCreationTokens: number
   /** Part du contexte RELUE plutôt que réécrite : proche de 0 ⇒ le cache ne sert pas. */
@@ -205,10 +207,9 @@ export interface CostBreakdownRow {
  * n'existaient que dans l'activite. Une mesure de cout incomplete est pire qu'aucune mesure : elle
  * fait prendre des decisions fausses avec l'air d'etre fondee.
  */
-export interface CostSample {
+export interface CostSample extends TokenUsage {
   actor: string
   provider: string
-  model?: string
   costUsd: number
   /** Distingue un vrai 0 $ d'un prix absent. */
   costKnown: boolean

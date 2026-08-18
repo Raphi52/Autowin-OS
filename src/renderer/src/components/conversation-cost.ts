@@ -11,7 +11,9 @@
  * un deuxième calcul de coût dans le renderer serait une deuxième vérité.
  */
 
-export interface CostRow {
+import type { TokenUsage } from '../../../shared/token-usage'
+
+export interface CostRow extends TokenUsage {
   /** Acteur, modèle ou provider selon la dimension demandée. */
   key: string
   calls: number
