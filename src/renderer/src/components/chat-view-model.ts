@@ -652,17 +652,17 @@ export function costByModel(steps: OrchStep[]): Array<{
   costUsd: number
   count: number
   /** Tokens des appels de ce modèle dont le provider n'a PAS chiffré le coût. */
-  uncostedTokens: number
+  unpricedTokens: number
   /** Nombre de ces appels — un provider muet sur tout doit rester visible. */
-  uncostedCalls: number
+  unpricedCalls: number
 }> {
   const map = new Map<
     string,
     {
       costUsd: number
       count: number
-      uncostedTokens: number
-      uncostedCalls: number
+      unpricedTokens: number
+      unpricedCalls: number
       tokens: number
     }
   >()
@@ -671,16 +671,16 @@ export function costByModel(steps: OrchStep[]): Array<{
     const e = map.get(s.model) ?? {
       costUsd: 0,
       count: 0,
-      uncostedTokens: 0,
-      uncostedCalls: 0,
+      unpricedTokens: 0,
+      unpricedCalls: 0,
       tokens: 0
     }
     e.costUsd += s.costUsd ?? 0
     e.count += 1
     e.tokens += s.tokens ?? 0
     if (!Number.isFinite(s.costUsd)) {
-      e.uncostedCalls += 1
-      e.uncostedTokens += s.tokens ?? 0
+      e.unpricedCalls += 1
+      e.unpricedTokens += s.tokens ?? 0
     }
     map.set(s.model, e)
   }
@@ -692,8 +692,8 @@ export function costByModel(steps: OrchStep[]): Array<{
       model,
       costUsd: v.costUsd,
       count: v.count,
-      uncostedTokens: v.uncostedTokens,
-      uncostedCalls: v.uncostedCalls
+      unpricedTokens: v.unpricedTokens,
+      unpricedCalls: v.unpricedCalls
     }))
 }
 

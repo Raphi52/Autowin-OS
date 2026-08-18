@@ -25,7 +25,7 @@ export interface CircuitBreakerLimits {
    * reconstituable, donc le volume reste la seule mesure disponible. Absent → valeur par défaut
    * ci-dessous.
    */
-  maxUncostedTokens?: number
+  maxUnpricedTokens?: number
 }
 
 /**
@@ -49,7 +49,7 @@ export interface CircuitBreakerLimits {
  * près — un run légitime tué par un garde-fou trop serré, la pire façon de « protéger ». 250M laisse
  * 2,6× de marge au run le plus lourd observé tout en arrêtant une dérive d'un ordre de grandeur.
  */
-export const DEFAULT_MAX_UNCOSTED_TOKENS = 250_000_000
+export const DEFAULT_MAX_UNPRICED_TOKENS = 250_000_000
 
 export interface CircuitBreakerTrip {
   trip: true
@@ -58,7 +58,7 @@ export interface CircuitBreakerTrip {
   spentTokens: number
   spentCalls: number
   /** Tokens comptabilisés SANS coût remonté par le provider (donc invisibles pour `maxUsd`). */
-  uncostedTokens: number
+  unpricedTokens: number
   /**
    * Montant RECONSTITUÉ des tours non tarifés à modèle connu. Compteur SÉPARÉ de `spentUsd` : un
    * montant estimé et un montant facturé ne se mélangent jamais dans un même chiffre.
@@ -70,12 +70,12 @@ export class CostCircuitBreaker {
   private spentUsd = 0
   private spentTokens = 0
   private spentCalls = 0
-  private uncostedTokens = 0
-  private uncostedCalls = 0
+  private unpricedTokens = 0
+  private unpricedCalls = 0
   /** Montant reconstitué des tours non tarifés à modèle CONNU — jamais additionné à `spentUsd`. */
   private estimatedUsd = 0
-  /** Sous-ensemble de `uncostedTokens` dont le modèle est hors catalogue : le repli volumétrique. */
-  private uncostedUnknownModelTokens = 0
+  /** Sous-ensemble de `unpricedTokens` dont le modèle est hors catalogue : le repli volumétrique. */
+  private unpricedUnknownModelTokens = 0
   private tripped = false
 
   constructor(private readonly limits: CircuitBreakerLimits = {}) {}
@@ -89,21 +89,21 @@ export class CostCircuitBreaker {
      * chiffrés » au lieu d'un montant qui se lit comme un total complet — le coût affiché
      * sous-estimait de ~88 % sur les runs mesurés, précisément parce que ce volume était muet.
      */
-    uncostedTokens: number
-    uncostedCalls: number
+    unpricedTokens: number
+    unpricedCalls: number
     /** Montant reconstitué des tours non tarifés à modèle connu. À AFFICHER comme estimation. */
     estimatedUsd: number
-    /** Part de `uncostedTokens` sans tarif reconstituable (modèle hors catalogue). */
-    uncostedUnknownModelTokens: number
+    /** Part de `unpricedTokens` sans tarif reconstituable (modèle hors catalogue). */
+    unpricedUnknownModelTokens: number
   } {
     return {
       usd: this.spentUsd,
       tokens: this.spentTokens,
       calls: this.spentCalls,
-      uncostedTokens: this.uncostedTokens,
-      uncostedCalls: this.uncostedCalls,
+      unpricedTokens: this.unpricedTokens,
+      unpricedCalls: this.unpricedCalls,
       estimatedUsd: this.estimatedUsd,
-      uncostedUnknownModelTokens: this.uncostedUnknownModelTokens
+      unpricedUnknownModelTokens: this.unpricedUnknownModelTokens
     }
   }
 
@@ -121,8 +121,8 @@ export class CostCircuitBreaker {
     // Tour arrivé SANS prix : son volume est invisible pour `maxUsd`. On le compte à part plutôt que
     // de le laisser disparaître — c'est ce silence qui rendait le plafond USD inopérant.
     if (!chiffre && Number.isFinite(step.tokens)) {
-      this.uncostedTokens += step.tokens as number
-      this.uncostedCalls += 1
+      this.unpricedTokens += step.tokens as number
+      this.unpricedCalls += 1
       // Le TARIF manque, pas forcément le moyen de le reconstituer : à modèle connu, `estimateCostUsd`
       // rend un montant. On le cumule À PART — jamais dans `spentUsd`, qui reste ce qui est facturé.
       const estime = step.usage
@@ -130,7 +130,7 @@ export class CostCircuitBreaker {
         : undefined
       if (estime === undefined) {
         // Aucun montant reconstituable : le volume redevient la seule mesure (repli conv-102).
-        this.uncostedUnknownModelTokens += step.tokens as number
+        this.unpricedUnknownModelTokens += step.tokens as number
       } else {
         this.estimatedUsd += estime
       }
@@ -160,10 +160,10 @@ export class CostCircuitBreaker {
         )
       }
       // Moitié NON reconstituable (modèle hors catalogue) : repli volumétrique calibré conv-102.
-      const seuilNonChiffre = this.limits.maxUncostedTokens ?? DEFAULT_MAX_UNCOSTED_TOKENS
-      if (this.uncostedUnknownModelTokens > seuilNonChiffre) {
+      const seuilNonChiffre = this.limits.maxUnpricedTokens ?? DEFAULT_MAX_UNPRICED_TOKENS
+      if (this.unpricedUnknownModelTokens > seuilNonChiffre) {
         reasons.push(
-          `${this.uncostedUnknownModelTokens} tokens non chiffrés par le provider ` +
+          `${this.unpricedUnknownModelTokens} tokens non chiffrés par le provider ` +
             `et non estimables (modèle hors catalogue, > seuil ${seuilNonChiffre}) : le plafond ` +
             `${this.limits.maxUsd.toFixed(2)}$ ne peut pas mordre dessus`
         )
@@ -177,7 +177,7 @@ export class CostCircuitBreaker {
       spentUsd: this.spentUsd,
       spentTokens: this.spentTokens,
       spentCalls: this.spentCalls,
-      uncostedTokens: this.uncostedTokens,
+      unpricedTokens: this.unpricedTokens,
       estimatedUsd: this.estimatedUsd
     }
   }

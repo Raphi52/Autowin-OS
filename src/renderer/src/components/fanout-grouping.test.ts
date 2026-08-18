@@ -148,15 +148,15 @@ describe('costByModel', () => {
       model: 'opus',
       costUsd: expect.closeTo(0.07, 5),
       count: 2,
-      uncostedTokens: 0,
-      uncostedCalls: 0
+      unpricedTokens: 0,
+      unpricedCalls: 0
     })
     expect(r[1]).toEqual({
       model: 'codex',
       costUsd: 0.05,
       count: 1,
-      uncostedTokens: 0,
-      uncostedCalls: 0
+      unpricedTokens: 0,
+      unpricedCalls: 0
     })
   })
   it('ignore les steps sans model', () => {
@@ -164,12 +164,12 @@ describe('costByModel', () => {
       { step: 'gate', costUsd: 1 },
       { step: 'exec', model: 'm', costUsd: 0.1 }
     ])
-    expect(r).toEqual([{ model: 'm', costUsd: 0.1, count: 1, uncostedTokens: 0, uncostedCalls: 0 }])
+    expect(r).toEqual([{ model: 'm', costUsd: 0.1, count: 1, unpricedTokens: 0, unpricedCalls: 0 }])
   })
   it("coût absent → 0, et l'appel est compté comme NON CHIFFRÉ", () => {
-    // Un coût absent n'est pas un coût nul : le distinguer est tout l'objet du champ `uncostedCalls`.
+    // Un coût absent n'est pas un coût nul : le distinguer est tout l'objet du champ `unpricedCalls`.
     expect(costByModel([{ step: 'exec', model: 'm' }])).toEqual([
-      { model: 'm', costUsd: 0, count: 1, uncostedTokens: 0, uncostedCalls: 1 }
+      { model: 'm', costUsd: 0, count: 1, unpricedTokens: 0, unpricedCalls: 1 }
     ])
   })
 })

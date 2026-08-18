@@ -26,33 +26,33 @@ describe('disjoncteur de coût — volume non chiffré', () => {
     const breaker = new CostCircuitBreaker({ maxUsd: 5 })
     breaker.observe(step())
     breaker.observe(step())
-    expect(breaker.totals.uncostedTokens).toBe(800_000)
-    expect(breaker.totals.uncostedCalls).toBe(2)
+    expect(breaker.totals.unpricedTokens).toBe(800_000)
+    expect(breaker.totals.unpricedCalls).toBe(2)
   })
 
   it('un provider qui chiffre ses tours ne compte RIEN comme non chiffré', () => {
     const breaker = new CostCircuitBreaker({ maxUsd: 5 })
     breaker.observe(step({ provider: 'claude', costUsd: 0.42 }))
-    expect(breaker.totals.uncostedTokens).toBe(0)
-    expect(breaker.totals.uncostedCalls).toBe(0)
+    expect(breaker.totals.unpricedTokens).toBe(0)
+    expect(breaker.totals.unpricedCalls).toBe(0)
     expect(breaker.totals.usd).toBeCloseTo(0.42)
   })
 
   it('un plafond USD armé DÉCLENCHE quand le volume non chiffré le rend inopérant', () => {
-    const breaker = new CostCircuitBreaker({ maxUsd: 5, maxUncostedTokens: 1_000_000 })
+    const breaker = new CostCircuitBreaker({ maxUsd: 5, maxUnpricedTokens: 1_000_000 })
     expect(breaker.observe(step({ tokens: 600_000 }))).toBeNull()
     const trip = breaker.observe(step({ tokens: 600_000 }))
     expect(trip).not.toBeNull()
     // Le motif doit NOMMER la cause, pas dire « coût dépassé » : le coût est justement inconnu.
     expect(trip!.reason).toMatch(/non chiffr/i)
     expect(trip!.reason).toContain('1200000')
-    expect(trip!.uncostedTokens).toBe(1_200_000)
+    expect(trip!.unpricedTokens).toBe(1_200_000)
   })
 
   it("sans plafond USD, un volume non chiffré ne déclenche rien (on ne surveille pas ce qui n'est pas demandé)", () => {
     const breaker = new CostCircuitBreaker({ maxCalls: 99 })
     expect(breaker.observe(step({ tokens: 50_000_000 }))).toBeNull()
-    expect(breaker.totals.uncostedTokens).toBe(50_000_000)
+    expect(breaker.totals.unpricedTokens).toBe(50_000_000)
   })
 
   it('un plafond USD sans seuil de non-chiffré explicite garde un garde-fou par défaut', () => {
@@ -75,7 +75,7 @@ describe('disjoncteur de coût — volume non chiffré', () => {
     // 118 appels × 795k tokens ≈ 93,8M, la forme mesurée du run.
     for (let i = 0; i < 118 && !trip; i++) trip = breaker.observe(step({ tokens: 795_000 }))
     expect(trip).toBeNull()
-    expect(breaker.totals.uncostedTokens).toBeGreaterThan(93_000_000)
+    expect(breaker.totals.unpricedTokens).toBeGreaterThan(93_000_000)
   })
 
   it("coupe une dérive d'un ordre de grandeur au-dessus du plus lourd run observé", () => {
@@ -83,14 +83,14 @@ describe('disjoncteur de coût — volume non chiffré', () => {
     let trip: ReturnType<CostCircuitBreaker['observe']> = null
     for (let i = 0; i < 1_200 && !trip; i++) trip = breaker.observe(step({ tokens: 795_000 }))
     expect(trip).not.toBeNull()
-    expect(trip!.uncostedTokens).toBeGreaterThan(250_000_000)
+    expect(trip!.unpricedTokens).toBeGreaterThan(250_000_000)
   })
 })
 
 /**
  * LE GARDE VOLUMÉTRIQUE EST INATTEIGNABLE EN PRODUCTION, et les tests ci-dessus ne le montraient pas
  * parce qu'ils instancient `{maxUsd}` SEUL. La seule instanciation réelle (`index.ts`) passe par
- * `chatTurnBudget()`, qui pose TOUJOURS `maxTokens: 1_500_000` — or `uncostedTokens <= spentTokens`,
+ * `chatTurnBudget()`, qui pose TOUJOURS `maxTokens: 1_500_000` — or `unpricedTokens <= spentTokens`,
  * donc `maxTokens` mord toujours avant le seuil de 250M. Ces tests sont donc construits sur les
  * limites EXACTES de `chatTurnBudget({})`, sinon ils prouvent la même illusion.
  */
@@ -137,7 +137,7 @@ describe('disjoncteur de coût — montant ESTIMÉ des tours non tarifés (limit
       ).toBeNull()
     }
     expect(breaker.totals.estimatedUsd).toBe(0)
-    expect(breaker.totals.uncostedTokens).toBe(0)
+    expect(breaker.totals.unpricedTokens).toBe(0)
     expect(breaker.totals.usd).toBeCloseTo(0.5)
   })
 
@@ -176,6 +176,6 @@ describe('disjoncteur de coût — montant ESTIMÉ des tours non tarifés (limit
       usage: { inputTokens: 380_000, outputTokens: 20_000 }
     })
     expect(breaker.totals.estimatedUsd).toBe(0)
-    expect(breaker.totals.uncostedTokens).toBe(400_000)
+    expect(breaker.totals.unpricedTokens).toBe(400_000)
   })
 })

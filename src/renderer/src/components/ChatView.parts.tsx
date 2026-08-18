@@ -120,9 +120,9 @@ export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element 
                   « gratuit » alors que le provider n'a rien chiffré (mesuré : 532M de tokens codex
                   comptés à zéro). Le volume non chiffré prend alors la place du montant. */}
               {m.costUsd > 0 && <b className="tnum">{m.costUsd.toFixed(4)} $</b>}
-              {m.uncostedCalls > 0 && (
+              {m.unpricedCalls > 0 && (
                 <b className="tnum run-cost-uncosted" data-testid="cost-uncosted">
-                  {formatTokens(m.uncostedTokens)} non chiffré{m.uncostedCalls > 1 ? 's' : ''}
+                  {formatTokens(m.unpricedTokens)} non chiffré{m.unpricedCalls > 1 ? 's' : ''}
                 </b>
               )}
               <i className="c-faint">×{m.count}</i>

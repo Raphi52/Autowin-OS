@@ -41,18 +41,18 @@ describe('coût non chiffré — modèle', () => {
       { step: 'exec', model: 'opus', costUsd: 0.02, tokens: 12_000 }
     ])
     const codex = r.find((m) => m.model === 'codex')!
-    expect(codex.uncostedTokens).toBe(795_000)
-    expect(codex.uncostedCalls).toBe(2)
+    expect(codex.unpricedTokens).toBe(795_000)
+    expect(codex.unpricedCalls).toBe(2)
     const opus = r.find((m) => m.model === 'opus')!
-    expect(opus.uncostedTokens).toBe(0)
-    expect(opus.uncostedCalls).toBe(0)
+    expect(opus.unpricedTokens).toBe(0)
+    expect(opus.unpricedCalls).toBe(0)
   })
 
   it('un step sans coût NI tokens compte quand même comme appel non chiffré', () => {
     // Sinon un provider muet sur tout disparaîtrait du décompte, et le zéro redeviendrait crédible.
     const r = costByModel([{ step: 'exec', model: 'codex' }])
-    expect(r[0].uncostedCalls).toBe(1)
-    expect(r[0].uncostedTokens).toBe(0)
+    expect(r[0].unpricedCalls).toBe(1)
+    expect(r[0].unpricedTokens).toBe(0)
   })
 
   /**
