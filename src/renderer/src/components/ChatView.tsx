@@ -64,7 +64,9 @@ import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-
 import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment } from './chat-attachments'
 import {
+  conversationsRecentes,
   recenceUtilisateur,
+  RECENTES_AFFICHEES,
   searchConversations,
   trierParRecenceUtilisateur
 } from './conversation-search'
@@ -1939,6 +1941,19 @@ export function ChatView({
   )
 
   /**
+   * Section « Récentes » : où l'utilisateur a parlé en DERNIER, toutes provenances confondues.
+   *
+   * Mesuré le 2026-08-18 : ses 3 conversations les plus récentes étaient au rang 172 sur 182 lignes,
+   * parce que `ordonnerGroupes` classe par NATURE avant la date (délibéré : ça protège
+   * l'arborescence). Cette section répond à « ma dernière conversation » sans toucher à ce rang.
+   * Masquée pendant une recherche : la liste filtrée EST déjà la réponse.
+   */
+  const recentes = useMemo(
+    () => (convQuery.trim() ? [] : conversationsRecentes(convs, RECENTES_AFFICHEES)),
+    [convs, convQuery]
+  )
+
+  /**
    * Inbox d'agents : conversations avec un agent EN TRAVAIL (tour en cours) ou une
    * orchestration live — visible en tête, même quand la conv active est ailleurs.
    */
@@ -2040,6 +2055,26 @@ export function ChatView({
                   </span>
                 </button>
               </div>
+            ))}
+          </section>
+        )}
+        {recentes.length > 0 && (
+          <section className="conv-recentes" aria-label="Conversations récentes">
+            <span className="conv-recentes-title">Récentes</span>
+            {recentes.map((conversation) => (
+              <button
+                key={conversation.id}
+                type="button"
+                data-testid="conv-recente"
+                className={`conv-recentes-row${conversation.id === activeId ? ' active' : ''}`}
+                onClick={() => void loadConv(conversation)}
+                title={conversation.projectPath ?? 'Sans dossier'}
+              >
+                <span className="conv-recentes-nom">{conversation.title}</span>
+                {conversation.projectPath && (
+                  <span className="conv-recentes-dossier">{conversation.projectPath}</span>
+                )}
+              </button>
             ))}
           </section>
         )}

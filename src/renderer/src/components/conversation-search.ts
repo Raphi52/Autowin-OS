@@ -153,3 +153,27 @@ export function trierParRecenceUtilisateur<T extends ConversationSearchSource>(
     return ordre === 'asc' ? delta : -delta
   })
 }
+
+/** Combien de conversations la section « Récentes » affiche au plus. */
+export const RECENTES_AFFICHEES = 6
+
+/**
+ * Les N conversations où l'utilisateur a parlé le plus récemment, TOUTES PROVENANCES CONFONDUES.
+ *
+ * Mesuré le 2026-08-18 : les 3 conversations les plus récentes étaient au rang 172 sur 182 lignes.
+ * `ordonnerGroupes` classe par NATURE (dossier → divers → auto-kaizen) AVANT la date — c'est
+ * délibéré, ça protège l'arborescence et empêche « Auto-kaizen » de remonter — donc une conversation
+ * sans dossier tombe derrière tout le contenu des dossiers, quelle que soit sa date. Cette section
+ * répond à « où ai-je parlé en dernier » sans toucher à ce rang.
+ *
+ * Toujours en ordre RÉCENT, indépendamment du bouton de tri : elle s'appelle « Récentes ».
+ * Rend une COPIE — l'entrée vient d'un `useMemo`, la trier en place serait une mutation invisible.
+ */
+export function conversationsRecentes<T extends ConversationSearchSource>(
+  conversations: readonly T[],
+  limite = RECENTES_AFFICHEES
+): T[] {
+  return [...conversations]
+    .sort((gauche, droite) => recenceUtilisateur(droite) - recenceUtilisateur(gauche))
+    .slice(0, Math.max(0, limite))
+}

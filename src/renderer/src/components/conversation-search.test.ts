@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  conversationsRecentes,
   searchConversations,
   trierParRecenceUtilisateur,
   type ConversationSearchSource
@@ -215,5 +216,60 @@ describe('tri « plus recentes » de la barre laterale', () => {
     const source = hits([rangee, parlee])
     trierParRecenceUtilisateur(source, 'desc')
     expect(source.map((h) => h.conversation.id)).toEqual(['rangee-a-l-instant', 'parlee-recemment'])
+  })
+})
+
+describe('section « Recentes » en tete de la barre laterale', () => {
+  /**
+   * Defaut vecu le 2026-08-18 : mesure en direct, les 3 conversations les plus recentes etaient au
+   * RANG 172 sur 182 lignes. Cause : `ordonnerGroupes` classe par NATURE (dossier -> divers ->
+   * auto-kaizen) AVANT la date, donc une conversation sans dossier tombe derriere les 172 lignes du
+   * groupe « General », quelle que soit sa date. Choix utilisateur : garder ce rang (il protege
+   * l'arborescence et evite qu'« Auto-kaizen » remonte) et ajouter une section en tete.
+   */
+  const conv = (id: string, recence: number, dossier?: string): ConversationSearchSource =>
+    ({
+      id,
+      title: `Conversation ${id}`,
+      provider: 'claude',
+      updatedAt: recence,
+      lastUserMessageAt: recence,
+      ...(dossier ? { projectPath: dossier } : {})
+    }) as ConversationSearchSource
+
+  it('rend les plus recentes en premier, toutes provenances confondues', () => {
+    const recentes = conversationsRecentes(
+      [conv('rangee', 300, 'Clients/Amitel'), conv('sans-dossier', 900), conv('vieille', 100)],
+      5
+    )
+    expect(recentes.map((c) => c.id)).toEqual(['sans-dossier', 'rangee', 'vieille'])
+  })
+
+  it('borne la section a la limite demandee', () => {
+    const beaucoup = Array.from({ length: 30 }, (_, index) => conv(`c${index}`, index))
+    expect(conversationsRecentes(beaucoup, 6)).toHaveLength(6)
+    // La plus recente est bien la premiere.
+    expect(conversationsRecentes(beaucoup, 6)[0].id).toBe('c29')
+  })
+
+  it('reste en ordre RECENT quel que soit le tri choisi ailleurs — elle s appelle « Recentes »', () => {
+    const recentes = conversationsRecentes([conv('a', 10), conv('b', 20)], 5)
+    expect(recentes[0].id).toBe('b')
+  })
+
+  it('ne modifie pas le tableau recu', () => {
+    const source = [conv('a', 10), conv('b', 20)]
+    conversationsRecentes(source, 5)
+    expect(source.map((c) => c.id)).toEqual(['a', 'b'])
+  })
+
+  it('une conversation sans message utilisateur reste classable par sa derniere touche', () => {
+    const parAgent = {
+      id: 'par-agent',
+      title: 'Creee par un agent',
+      provider: 'claude',
+      updatedAt: 5_000
+    } as ConversationSearchSource
+    expect(conversationsRecentes([conv('humaine', 800), parAgent], 2)[0].id).toBe('par-agent')
   })
 })
