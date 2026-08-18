@@ -44,6 +44,7 @@ import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { claudeAccountEnv } from '../claude-accounts'
+import { abortFailure } from './abort-diagnostic'
 
 /**
  * Ramène l'usage Claude à l'invariant de `Usage` : `inputTokens` = input TOTAL, cache INCLUS.
@@ -863,7 +864,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     })
     opts.signal?.addEventListener('abort', () => {
       killEscalate(child)
-      forceSettle(new Error('claude CLI annulé'))
+      forceSettle(abortFailure('claude CLI', opts.signal))
     })
 
     const handleEvent = (o: Record<string, unknown>): void => {

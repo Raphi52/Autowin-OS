@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { join } from 'node:path'
 import { spawnSurvivable } from '../runs/survivable-spawn'
+import { abortFailure } from './abort-diagnostic'
 import type {
   Message,
   PromptEnvelope,
@@ -257,7 +258,7 @@ export class KimiCliAdapter implements ProviderAdapter {
     })
     opts.signal?.addEventListener('abort', () => {
       killEscalate(child)
-      forceSettle(new Error('Kimi Code annulé'))
+      forceSettle(abortFailure('Kimi Code', opts.signal))
     })
 
     const consumeLine = (line: string): void => {

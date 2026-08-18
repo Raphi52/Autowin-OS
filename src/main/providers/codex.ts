@@ -1,3 +1,4 @@
+import { abortFailure } from './abort-diagnostic'
 import type {
   Message,
   PromptEnvelope,
@@ -459,7 +460,15 @@ async function runCodexExec(
     })
     opts.signal?.addEventListener('abort', () => {
       killEscalate(child)
-      reject(new Error('codex exec annulé'))
+      // La RAISON de l'abort vient du superviseur (« budget duree depasse », « Budget USD
+      // depasse », …) et le tampon porte le dernier evenement d'erreur du provider. Les jeter
+      // laissait l'utilisateur — et l'agent — devant « annulé » sans cause (mesure du 2026-08-18).
+      reject(
+        abortFailure('codex exec', opts.signal, {
+          lastStructuredError,
+          stderr
+        })
+      )
     })
     // La couche commune livre des lignes COMPLÈTES (elle garde en tampon une ligne partielle) :
     // le découpage manuel disparaît, le traitement par ligne reste identique.

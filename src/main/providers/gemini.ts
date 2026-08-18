@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSurvivable } from '../runs/survivable-spawn'
 import { killEscalate, resolveProviderTimeoutMs } from './watchdog'
+import { abortFailure } from './abort-diagnostic'
 import type {
   Message,
   PromptEnvelope,
@@ -236,7 +237,7 @@ export class GeminiCliAdapter implements ProviderAdapter {
       resolveProviderTimeoutMs(opts.execution?.providerTimeoutMs, this.timeoutMs)
     )
     const onAbort = (): void => {
-      const error = new Error('Envoi Gemini annulé.')
+      const error = abortFailure('Envoi Gemini', opts.signal)
       error.name = 'AbortError'
       errored = error
       killEscalate(child)
