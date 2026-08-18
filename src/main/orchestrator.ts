@@ -2203,6 +2203,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         inputTokens: res.usage.inputTokens,
         outputTokens: res.usage.outputTokens,
         cacheReadTokens: res.usage.cacheReadTokens,
+        cacheCreationTokens: res.usage.cacheCreationTokens,
         costUsd: res.usage.costUsd
       })
     }
@@ -2480,6 +2481,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                     inputTokens: result.usage.inputTokens,
                     outputTokens: result.usage.outputTokens,
                     cacheReadTokens: result.usage.cacheReadTokens,
+                    cacheCreationTokens: result.usage.cacheCreationTokens,
                     costUsd: result.usage.costUsd
                   })
                 }
@@ -2645,6 +2647,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 inputTokens: synth.usage.inputTokens,
                 outputTokens: synth.usage.outputTokens,
                 cacheReadTokens: synth.usage.cacheReadTokens,
+                cacheCreationTokens: synth.usage.cacheCreationTokens,
                 costUsd: synth.usage.costUsd
               })
             }
@@ -3255,6 +3258,7 @@ ${empreinteDepot}`
                   inputTokens: res.usage.inputTokens,
                   outputTokens: res.usage.outputTokens,
                   cacheReadTokens: res.usage.cacheReadTokens,
+                  cacheCreationTokens: res.usage.cacheCreationTokens,
                   costUsd: res.usage.costUsd
                 })
               }
@@ -3416,6 +3420,7 @@ ${empreinteDepot}`
             inputTokens: synth.usage.inputTokens,
             outputTokens: synth.usage.outputTokens,
             cacheReadTokens: synth.usage.cacheReadTokens,
+            cacheCreationTokens: synth.usage.cacheCreationTokens,
             costUsd: synth.usage.costUsd
           })
         }
@@ -3645,6 +3650,7 @@ ${empreinteDepot}`
           inputTokens: phaseRes.usage.inputTokens,
           outputTokens: phaseRes.usage.outputTokens,
           cacheReadTokens: phaseRes.usage.cacheReadTokens,
+          cacheCreationTokens: phaseRes.usage.cacheCreationTokens,
           costUsd: phaseRes.usage.costUsd
         })
       }
@@ -3953,6 +3959,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                   inputTokens: r.usage.inputTokens,
                   outputTokens: r.usage.outputTokens,
                   cacheReadTokens: r.usage.cacheReadTokens,
+                  cacheCreationTokens: r.usage.cacheCreationTokens,
                   costUsd: r.usage.costUsd
                 })
               }
@@ -4050,6 +4057,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
             inputTokens: verdict.usage.inputTokens,
             outputTokens: verdict.usage.outputTokens,
             cacheReadTokens: verdict.usage.cacheReadTokens,
+            cacheCreationTokens: verdict.usage.cacheCreationTokens,
             costUsd: verdict.usage.costUsd
           })
         }

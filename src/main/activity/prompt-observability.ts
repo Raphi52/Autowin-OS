@@ -181,6 +181,12 @@ export interface CostBreakdownRow {
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
+  /**
+   * Tokens ÉCRITS dans le cache — un SOUS-ENSEMBLE de `inputTokens`, comme la lecture. Propagé
+   * parce que sans lui le verdict de cache accuse une écriture de cache d'être une réécriture de
+   * contexte : le premier appel d'une longue conversation INVESTIT, il ne gaspille pas.
+   */
+  cacheCreationTokens: number
   /** Part du contexte RELUE plutôt que réécrite : proche de 0 ⇒ le cache ne sert pas. */
   cacheHitRatio: number
   /** Temps cumule des appels de cette ligne. 0 = aucune source ne l'a enregistre, jamais devine. */
@@ -209,6 +215,8 @@ export interface CostSample {
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
+  /** Tokens ECRITS dans le cache (sous-ensemble de l'entree). 0 quand la source l'ignore. */
+  cacheCreationTokens: number
   /** Duree de l'appel ; 0 quand la source ne la connait pas. */
   durationMs: number
   callId?: string
@@ -224,6 +232,7 @@ function sampleFromCall(call: PromptCallRecord): CostSample {
     inputTokens: call.usage?.inputTokens ?? 0,
     outputTokens: call.usage?.outputTokens ?? 0,
     cacheReadTokens: call.usage?.cacheReadTokens ?? 0,
+    cacheCreationTokens: call.usage?.cacheCreationTokens ?? 0,
     durationMs: typeof call.durationMs === 'number' && call.durationMs > 0 ? call.durationMs : 0,
     callId: call.id
   }
@@ -239,6 +248,8 @@ export interface ActivityCostEntry {
   inputTokens?: number
   outputTokens?: number
   cacheReadTokens?: number
+  /** Jamais enregistre par le journal d'activite a ce jour : reste 0 sur ces lignes. */
+  cacheCreationTokens?: number
   durationMs?: number
   usageCallId?: string
 }
@@ -274,6 +285,7 @@ function sampleFromActivity(entry: ActivityCostEntry): CostSample {
     inputTokens: entry.inputTokens ?? 0,
     outputTokens: entry.outputTokens ?? 0,
     cacheReadTokens: entry.cacheReadTokens ?? 0,
+    cacheCreationTokens: entry.cacheCreationTokens ?? 0,
     durationMs: typeof entry.durationMs === 'number' && entry.durationMs > 0 ? entry.durationMs : 0,
     ...(entry.usageCallId ? { callId: entry.usageCallId } : {})
   }
@@ -386,6 +398,7 @@ export function summarizeCostSamples(
       inputTokens: 0,
       outputTokens: 0,
       cacheReadTokens: 0,
+      cacheCreationTokens: 0,
       cacheHitRatio: 0,
       durationMs: 0,
       unpricedCalls: 0
@@ -395,6 +408,7 @@ export function summarizeCostSamples(
     row.inputTokens += sample.inputTokens
     row.outputTokens += sample.outputTokens
     row.cacheReadTokens += sample.cacheReadTokens
+    row.cacheCreationTokens += sample.cacheCreationTokens
     row.durationMs += sample.durationMs
     if (!sample.costKnown) row.unpricedCalls += 1
     rows.set(key, row)

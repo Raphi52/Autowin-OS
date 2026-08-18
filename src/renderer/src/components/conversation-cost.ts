@@ -19,6 +19,11 @@ export interface CostRow {
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
+  /**
+   * Tokens ÉCRITS dans le cache — SOUS-ENSEMBLE de `inputTokens`, jamais un ajout. Optionnel : les
+   * lignes issues du seul journal d'activité ne l'ont jamais porté.
+   */
+  cacheCreationTokens?: number
   /** Part du contexte RELUE depuis le cache. Proche de 0 = contexte réécrit à chaque appel. */
   cacheHitRatio: number
   /** Temps cumulé des appels de cette ligne (0 = non mesuré par la source). */
@@ -36,6 +41,11 @@ export interface CostSummary extends Readonly<{
   topKey?: string
   /** Ratio de cache global, pondéré par les tokens (pas une moyenne des ratios). */
   cacheHitRatio: number
+  /**
+   * Volume ÉCRIT dans le cache. Exposé pour que « cache 0 % » cesse de se lire comme « rien n'a
+   * servi » : un premier appel écrit le cache que les suivants reliront.
+   */
+  cacheWriteTokens: number
   /** Temps cumulé de la conversation. 0 = aucune source ne l'a mesuré. */
   durationMs: number
   unpricedCalls: number
@@ -43,6 +53,10 @@ export interface CostSummary extends Readonly<{
    * Le contexte est RÉÉCRIT au lieu d'être relu — c'est ce symptôme qui a mené à la cause racine du
    * 2026-07-28. Jugé sur le VOLUME de contexte, pas sur le nombre d'appels : trois appels qui
    * réécrivent 900 k tokens sont un problème, deux appels de 5 k tokens ne prouvent rien.
+   *
+   * Jugé sur la part FRAÎCHE, pas sur le ratio de lecture : l'écriture de cache est au dénominateur
+   * du ratio sans jamais pouvoir atteindre son numérateur, si bien que le premier appel — celui qui
+   * ÉCRIT le cache — voyait l'alerte se déclencher au moment précis de l'investissement.
    */
   rewritingContext: boolean
 }> {}
@@ -73,6 +87,7 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
   let totalUsd = 0
   let calls = 0
   let cacheRead = 0
+  let cacheWrite = 0
   let input = 0
   let durationMs = 0
   let unpricedCalls = 0
@@ -84,6 +99,8 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
     totalUsd += cost
     calls += typeof row?.calls === 'number' && row.calls > 0 ? row.calls : 0
     cacheRead += typeof row?.cacheReadTokens === 'number' ? Math.max(0, row.cacheReadTokens) : 0
+    cacheWrite +=
+      typeof row?.cacheCreationTokens === 'number' ? Math.max(0, row.cacheCreationTokens) : 0
     durationMs += typeof row?.durationMs === 'number' && row.durationMs > 0 ? row.durationMs : 0
     input += typeof row?.inputTokens === 'number' ? Math.max(0, row.inputTokens) : 0
     unpricedCalls +=
@@ -95,6 +112,12 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
   }
   const contextTotal = input
   const cacheHitRatio = contextTotal > 0 ? Math.min(1, cacheRead / contextTotal) : 0
+  // Même arbitrage de l'invariant « le cache est un sous-ensemble de l'entrée » que le tarif :
+  // écriture bornée d'abord, lecture sur le reste.
+  const boundedWrite = Math.min(contextTotal, cacheWrite)
+  const boundedRead = Math.min(contextTotal - boundedWrite, cacheRead)
+  const freshRatio =
+    contextTotal > 0 ? (contextTotal - boundedWrite - boundedRead) / contextTotal : 0
   return {
     totalUsd,
     calls,
@@ -108,8 +131,9 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
     unpricedCalls,
     ...(topKey !== undefined ? { topKey } : {}),
     cacheHitRatio,
+    cacheWriteTokens: cacheWrite,
     rewritingContext:
-      contextTotal >= MIN_CONTEXT_TOKENS_FOR_CACHE_VERDICT && cacheHitRatio < POOR_CACHE_RATIO
+      contextTotal >= MIN_CONTEXT_TOKENS_FOR_CACHE_VERDICT && freshRatio > 1 - POOR_CACHE_RATIO
   }
 }
 

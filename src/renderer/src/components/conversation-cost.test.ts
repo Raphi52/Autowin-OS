@@ -111,6 +111,39 @@ describe('summarizeConversationCost — le total, et le poste qui l’explique',
     expect(summary.rewritingContext).toBe(false)
   })
 
+  it('un cache en cours d’ÉCRITURE n’est pas une réécriture de contexte', () => {
+    // Premier appel d'une longue conversation : rien n'est encore relu, mais 95 k tokens sont
+    // ÉCRITS dans le cache. Accuser un gaspillage ici, c'est accuser un investissement.
+    const summary = summarizeConversationCost([
+      row({
+        key: 'orchestrator',
+        costUsd: 1,
+        inputTokens: 100_000,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 95_000,
+        calls: 1
+      })
+    ])
+    expect(summary.rewritingContext).toBe(false)
+    expect(summary.cacheWriteTokens).toBe(95_000)
+    // La MESURE affichée ne ment pas non plus : rien n'a été relu, le ratio reste 0.
+    expect(summary.cacheHitRatio).toBe(0)
+  })
+
+  it('une VRAIE réécriture déclenche toujours l’avertissement (l’alerte n’est pas désarmée)', () => {
+    const summary = summarizeConversationCost([
+      row({
+        key: 'orchestrator',
+        costUsd: 1,
+        inputTokens: 100_000,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        calls: 3
+      })
+    ])
+    expect(summary.rewritingContext).toBe(true)
+  })
+
   it('un journal VIDE ne prétend rien (et l’indicateur ne s’affiche pas)', () => {
     const summary = summarizeConversationCost([])
     expect(summary.totalUsd).toBe(0)

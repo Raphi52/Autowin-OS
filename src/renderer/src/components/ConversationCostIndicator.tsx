@@ -27,6 +27,23 @@ interface Props {
   busy?: boolean
 }
 
+
+/**
+ * « cache 0 % » se lit comme « rien n'a servi » alors que le premier appel ÉCRIT le cache que les
+ * suivants reliront. La bulle d'aide expose ce volume ; le pourcentage, lui, reste une vraie part
+ * RELUE — on ne le gonfle pas d'une écriture.
+ */
+function cacheWriteHint(cacheWriteTokens: number | undefined): string {
+  if (!cacheWriteTokens || cacheWriteTokens <= 0) return ''
+  const volume =
+    cacheWriteTokens >= 1_000_000
+      ? `${(cacheWriteTokens / 1_000_000).toFixed(1)}M`
+      : cacheWriteTokens >= 1_000
+        ? `${Math.round(cacheWriteTokens / 1_000)}k`
+        : `${Math.round(cacheWriteTokens)}`
+  return ` (dont ${volume} tokens écrits en cache)`
+}
+
 export function ConversationCostIndicator({
   conversationId,
   busy
@@ -90,8 +107,8 @@ export function ConversationCostIndicator({
         }
         title={
           summary.rewritingContext
-            ? `${callsLabel(summary.calls)} · cache ${Math.round(summary.cacheHitRatio * 100)} % — le contexte est réécrit au lieu d’être relu`
-            : `${callsLabel(summary.calls)} · cache ${Math.round(summary.cacheHitRatio * 100)} % · cliquer pour le détail`
+            ? `${callsLabel(summary.calls)} · cache ${Math.round(summary.cacheHitRatio * 100)} %${cacheWriteHint(summary.cacheWriteTokens)} — le contexte est réécrit au lieu d’être relu`
+            : `${callsLabel(summary.calls)} · cache ${Math.round(summary.cacheHitRatio * 100)} %${cacheWriteHint(summary.cacheWriteTokens)} · cliquer pour le détail`
         }
       >
         {summary.label}

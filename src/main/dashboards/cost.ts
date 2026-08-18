@@ -20,6 +20,11 @@ export interface TurnCost {
   inputTokens: number
   outputTokens: number
   cacheReadTokens?: number
+  /**
+   * Tokens ECRITS dans le cache (sous-ensemble de `inputTokens`). OPTIONNEL a dessein : les
+   * instantanes `cost.jsonl` deja persistes ne l'ont jamais porte.
+   */
+  cacheCreationTokens?: number
   costUsd?: number
 }
 
