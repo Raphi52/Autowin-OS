@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TaskManagerSection } from '../tabs'
+import type { ConversationSummary as StoreConversationSummary } from '../../../main/store/conversations'
 import { ViewTopBar } from './ViewTopBar'
 import { WatchdogAgentsSection } from './WatchdogAgentsSection'
 import { WatchdogRuleFields } from './WatchdogRuleFields'
@@ -134,12 +135,13 @@ interface Snapshot {
   }
 }
 
-interface ConversationSummary {
-  id: string
-  title: string
-  category: string
-  provider: string
-}
+/**
+ * Le contrat vit dans le magasin (`main/store/conversations`), pas ici : une interface locale
+ * redeclaree divergeait en silence du vrai type. On n'expose que les champs consommes par cet
+ * ecran, via un `Pick` sur le type importe — retirer l'un d'eux du contrat casse desormais la
+ * compilation de ce fichier.
+ */
+type ConversationSummary = Pick<StoreConversationSummary, 'id' | 'title' | 'category' | 'provider'>
 
 const WEEK_DAYS = [
   { value: 1, label: 'L' },
