@@ -74,13 +74,34 @@ describe('Autowin UI contract', () => {
     }
   })
 
-  it('le menu Conversations du Chat finit sur un fond noir opaque', () => {
-    const chatCss = component('ChatView.css')
-    const rules = [...chatCss.matchAll(/\.cosmic-outline \.conv-pane\s*\{([^}]*)\}/gs)]
-    const finalRule = rules.map((rule) => rule[1]).filter((rule) => /background\s*:/.test(rule)).at(-1) ?? ''
+  // Defaut vecu le 2026-08-18 : la version precedente de ce test ne lisait QUE ChatView.css et
+  // prenait la derniere regle du fichier. Elle etait verte alors que le rendu vivant, lu en CDP,
+  // affichait encore `rgba(5, 5, 6, 0.9)` : c'est `cosmic-outline.css` qui gagnait la cascade
+  // (meme specificite, feuille declaree apres). Un test qui ignore les autres feuilles ne peut pas
+  // voir ca. On exige donc qu'AUCUNE feuille ne pose un fond translucide sur ce panneau : cette
+  // propriete est vraie independamment de l'ordre d'import, donc aucun reordonnancement ne peut la
+  // contourner.
+  it('aucune feuille ne pose un fond translucide sur le panneau Conversations', () => {
+    const feuilles: [string, string][] = [
+      ['cosmic-outline.css', cosmicOutline],
+      ['ChatView.css', component('ChatView.css')]
+    ]
+    const fonds: [string, string][] = []
+    for (const [nom, feuille] of feuilles) {
+      for (const regle of feuille.matchAll(/\.cosmic-outline \.conv-pane\s*\{([^}]*)\}/gs)) {
+        const declarations = regle[1]
+        const fond = /background\s*:([^;]*);/.exec(declarations)?.[1]
+        if (fond) fonds.push([nom, fond.trim()])
+      }
+    }
 
-    expect(finalRule).toMatch(/background:\s*#000\s*;/)
-    expect(finalRule).not.toMatch(/background:\s*rgba\(/)
+    expect(fonds.length, 'aucune règle de fond trouvée : le sélecteur a été renommé').toBeGreaterThan(
+      0
+    )
+    for (const [nom, fond] of fonds) {
+      expect(fond, nom).not.toMatch(/rgba\(/)
+      expect(fond, nom).toMatch(/#000(?![0-9a-fA-F])/)
+    }
   })
 
   it('aucune règle de thème ne réécrit le cadre de page', () => {

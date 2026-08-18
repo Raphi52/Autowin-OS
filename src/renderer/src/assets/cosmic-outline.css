@@ -239,11 +239,15 @@
   background: var(--lisere-haut), var(--surface-panel);
   box-shadow: none;
 }
-/* Liste de conversations : legerement plus transparente (90%) que les autres panneaux. */
+/* Liste de conversations : noir opaque, comme le rail. */
 .cosmic-outline .conv-pane {
   /* Cette regle ECRASE le fond pose juste au-dessus (meme specificite, declaree apres) : sans y
-     remettre la couche, le lisere du rail disparaissait. */
-  background: var(--lisere-haut), rgba(5, 5, 6, 0.9);
+     remettre la couche, le lisere du rail disparaissait.
+     Elle gagne AUSSI sur `.cosmic-outline .conv-pane` de ChatView.css (meme specificite, feuille
+     importee plus tot) : constate le 2026-08-18 en lisant le rendu vivant en CDP, ou le fond
+     calcule restait `rgba(5, 5, 6, 0.9)` alors que ChatView.css disait deja `#000`. Un fond pose
+     ailleurs sans corriger CELLE-CI est du code mort. */
+  background: var(--lisere-haut), #000;
 }
 
 .cosmic-outline .chat,
