@@ -102,6 +102,170 @@ function runWithLifecycle(
 }
 
 describe('Orchestrator — flip live worktree', () => {
+  it('ne bloque pas une mutation Git executee et verifiee sur le depot reel', async () => {
+    class ExternalGitProvider extends CapturingProvider {
+      constructor(
+        private readonly target = 'C:\\base',
+        private readonly prefix = ''
+      ) {
+        super()
+      }
+
+      override async *send(
+        _m: Message[],
+        options: SendOptions = {}
+      ): AsyncGenerator<StreamChunk, SendResult, void> {
+        this.calls.push(options)
+        return {
+          text: this.calls.length === 1 ? 'push effectue et refs alignees' : 'VALIDE',
+          provider: this.id,
+          systemInjected: Boolean(options.system),
+          executionEvidence:
+            this.calls.length === 1
+              ? [
+                  {
+                    type: 'command_execution',
+                    kind: 'mutation',
+                    status: 'completed',
+                    ok: true,
+                    command: `${this.prefix}git -C "${this.target}" push origin main`,
+                    summary: 'push termine'
+                  },
+                  {
+                    type: 'command_execution',
+                    kind: 'verification',
+                    status: 'completed',
+                    ok: true,
+                    command:
+                      `${this.prefix}git -C "${this.target}" rev-parse main; git -C "${this.target}" rev-parse origin/main`,
+                    summary: 'main = origin/main'
+                  }
+                ]
+              : undefined
+        }
+      }
+    }
+
+    const provider = new ExternalGitProvider()
+    let runId = ''
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\base',
+      worktrees: {
+        begin: (id) => {
+          runId = id
+          return 'C:\\wt\\run-1'
+        },
+        activity: () => [
+          {
+            agentId: runId,
+            agentName: 'Agent',
+            state: 'ready' as const,
+            files: [],
+            startedAtMs: 0
+          }
+        ],
+        end: () => ({
+          outcome: 'blocked' as const,
+          agentId: 'run-1',
+          reason: 'base-in-progress' as const
+        })
+      }
+    })
+
+    const result = await orch.run('mets a jour le depot reel C:\\base puis verifie les refs')
+
+    expect(result.gateReasons).toEqual([])
+    expect(result.valid).toBe(true)
+    expect(result.gateBlocked).toBe(false)
+
+    const wrongTargetProvider = new ExternalGitProvider('C:\\other')
+    let wrongTargetRunId = ''
+    const wrongTargetOrch = new Orchestrator({
+      registry: new ProviderRegistry().register(wrongTargetProvider),
+      roles: new RoleModelConfig({
+        subagent: { provider: wrongTargetProvider.id, model: 'worker' },
+        judge: { provider: wrongTargetProvider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\base',
+      worktrees: {
+        begin: (id) => {
+          wrongTargetRunId = id
+          return 'C:\\wt\\run-2'
+        },
+        activity: () => [
+          {
+            agentId: wrongTargetRunId,
+            agentName: 'Agent',
+            state: 'ready' as const,
+            files: [],
+            startedAtMs: 0
+          }
+        ],
+        end: () => ({
+          outcome: 'blocked' as const,
+          agentId: 'run-2',
+          reason: 'base-in-progress' as const
+        })
+      }
+    })
+
+    const wrongTargetResult = await wrongTargetOrch.run(
+      'mets a jour le depot reel C:\\base puis verifie les refs'
+    )
+    expect(wrongTargetResult.gateBlocked).toBe(true)
+    expect(wrongTargetResult.gateReasons).toContain('intégration locale non terminée')
+
+    const mixedTargetProvider = new ExternalGitProvider(
+      'C:\\other',
+      'git -C "C:\\base" status; '
+    )
+    let mixedTargetRunId = ''
+    const mixedTargetOrch = new Orchestrator({
+      registry: new ProviderRegistry().register(mixedTargetProvider),
+      roles: new RoleModelConfig({
+        subagent: { provider: mixedTargetProvider.id, model: 'worker' },
+        judge: { provider: mixedTargetProvider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\base',
+      worktrees: {
+        begin: (id) => {
+          mixedTargetRunId = id
+          return 'C:\\wt\\run-3'
+        },
+        activity: () => [
+          {
+            agentId: mixedTargetRunId,
+            agentName: 'Agent',
+            state: 'ready' as const,
+            files: [],
+            startedAtMs: 0
+          }
+        ],
+        end: () => ({
+          outcome: 'blocked' as const,
+          agentId: 'run-3',
+          reason: 'base-in-progress' as const
+        })
+      }
+    })
+
+    const mixedTargetResult = await mixedTargetOrch.run(
+      'mets a jour le depot reel C:\\base puis verifie les refs'
+    )
+    expect(mixedTargetResult.gateBlocked).toBe(true)
+  })
+
   it('laisse un log ignore hors du worktree et ne fabrique aucun claim publiable', async () => {
     const base = mkdtempSync(join(tmpdir(), 'autowin-causal-base-'))
     const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-causal-worktrees-'))

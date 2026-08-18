@@ -1033,6 +1033,52 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
   return successful.some((item) => !mutationSet.has(item) && isStateOracle(item.command))
 }
 
+function gitTargets(command: string | undefined): string[] {
+  if (!command) return []
+  const matches = command.matchAll(
+    /\bgit(?:\.exe)?\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/gi
+  )
+  return [...matches].map((match) => {
+    const target = match[1] ?? match[2] ?? match[3]
+    return target.replaceAll('/', '\\').replace(/[\\]+$/, '').toLowerCase()
+  })
+}
+
+function hasVerifiedExternalGitMutation(
+  evidence: readonly ExecutionEvidence[],
+  executionWorkspace: string
+): boolean {
+  const expectedTarget = executionWorkspace
+    .replaceAll('/', '\\')
+    .replace(/[\\]+$/, '')
+    .toLowerCase()
+  const successful = evidence.filter((item) => item.ok)
+  const mutation = successful.some(
+    (item) => {
+      const targets = gitTargets(item.command)
+      return (
+        item.kind === 'mutation' &&
+        !item.path &&
+        isShellMutation(item.command) &&
+        targets.length > 0 &&
+        targets.every((target) => target === expectedTarget)
+      )
+    }
+  )
+  if (!mutation) return false
+  return successful.some(
+    (item) => {
+      const targets = gitTargets(item.command)
+      return (
+        item.kind !== 'mutation' &&
+        isStateOracle(item.command) &&
+        targets.length > 0 &&
+        targets.every((target) => target === expectedTarget)
+      )
+    }
+  )
+}
+
 export class Orchestrator {
   private readonly causalWatchPathsByRun = new Map<string, readonly string[]>()
   private readonly learningOraclesByRun = new Map<string, readonly TrustedLearningOracle[]>()
@@ -1847,6 +1893,14 @@ export class Orchestrator {
       // saurait plus dire si le run avait produit des fichiers.
       const activityBeforeFinalize = activityForRun()
       const producedFileCount = activityBeforeFinalize?.files.length ?? 0
+      const executionEvidence =
+        produced?.phaseOutputs.flatMap((output) => output.executionEvidence ?? []) ?? []
+      // Une action Git explicitement ciblee et verifiee sur le depot reel n'a rien a publier depuis
+      // la copie isolee. L'activite doit cependant prouver que cette copie n'a produit aucun fichier.
+      const externalGitMutationDelivered =
+        activityBeforeFinalize !== undefined &&
+        producedFileCount === 0 &&
+        hasVerifiedExternalGitMutation(executionEvidence, this.deps.executionWorkspace)
       const finalized = this.deps.worktrees?.endAsync
         ? await this.deps.worktrees.endAsync(runId, finalizeOptions)
         : this.deps.worktrees?.end(runId, finalizeOptions)
@@ -1862,6 +1916,7 @@ export class Orchestrator {
       const emptyIntegrationClaim = finalizeOutcome === 'nothing' && producedFileCount > 0
       const integrated =
         !requiresIsolatedWorkspace ||
+        externalGitMutationDelivered ||
         finalizeOutcome === 'merged' ||
         (finalizeOutcome === 'nothing' && !emptyIntegrationClaim) ||
         finalizeOutcome === 'cleanup-pending' ||
