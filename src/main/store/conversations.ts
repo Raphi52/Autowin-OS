@@ -117,6 +117,29 @@ export function deterministicMessageId(conversationId: string, index: number): s
 }
 
 /**
+ * La forme CANONIQUE d'un chemin de dossier de travail.
+ *
+ * `C:/Clients`, `C:\Clients\` et ` C:\Clients ` désignent le MÊME dossier : sans canonisation ils
+ * font trois groupes distincts dans la liste et trois entrées dans le sélecteur. Règle : `trim`,
+ * séparateurs vers `\`, séparateur final retiré, lettre de lecteur en MAJUSCULE.
+ *
+ * La casse du RESTE du chemin est laissée intacte à dessein : la minusculiser fusionnerait bien
+ * `c:\clients` et `C:\Clients`, mais dégraderait le libellé rendu par `nomDeDossier` (« clients »).
+ * Deux dossiers homonymes de chemins différents (`C:\Clients` / `D:\Clients`) ne fusionnent donc
+ * toujours pas — cicatrice délibérée, cf. `conversation-groups.ts`.
+ *
+ * Rend `undefined` pour ce qui ne désigne aucun dossier (vide, espaces, séparateurs seuls).
+ */
+export function canonicalProjectPath(raw: string | null | undefined): string | undefined {
+  const propre = raw
+    ?.trim()
+    .replace(/\//g, '\\')
+    .replace(/\\+$/, '')
+  if (!propre) return undefined
+  return /^[a-z]:/.test(propre) ? propre[0].toUpperCase() + propre.slice(1) : propre
+}
+
+/**
  * Applique un événement au tour `turnId` — LA définition unique du réducteur de tour.
  *
  * Appelée par `ConversationStore.applyTurnEvent` (le direct) ET par le rejeu du journal
@@ -278,6 +301,12 @@ export class ConversationStore {
       // démarrage — donc une réécriture intégrale du snapshot à chaque lancement.
       const hadWorkspaceId = rest.workspaceId !== undefined
       delete rest.workspaceId
+      // Normalisation UNIQUE des chemins déjà écrits sous une forme non canonique : sans elle,
+      // seules les écritures neuves seraient canoniques et l'ancien resterait dupliqué à vie.
+      const canonicalPath = canonicalProjectPath(legacy.projectPath as string | undefined)
+      const pathChanged = (legacy.projectPath as string | undefined) !== canonicalPath
+      if (canonicalPath) rest.projectPath = canonicalPath
+      else delete rest.projectPath
       const hydrated: Conversation = {
         ...(rest as unknown as Conversation),
         schemaVersion: 3 as const,
@@ -286,6 +315,7 @@ export class ConversationStore {
       if (
         c.schemaVersion !== 3 ||
         hadWorkspaceId ||
+        pathChanged ||
         legacy.authorityMode !== undefined ||
         hadBranches
       ) {
@@ -533,7 +563,7 @@ export class ConversationStore {
   setProjectPath(id: string, projectPath: string | null): Conversation | undefined {
     const conversation = this.conversations.get(id)
     if (!conversation) return undefined
-    const propre = projectPath?.trim()
+    const propre = canonicalProjectPath(projectPath)
     if (propre) conversation.projectPath = propre
     else delete conversation.projectPath
     this.changed(id)
