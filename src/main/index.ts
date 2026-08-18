@@ -125,9 +125,11 @@ import {
 } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
+import { collectRunWorkspaces } from './runs/workspace-gc'
 import { pruneLegacyContextValues } from './runs/context-value-gc'
 import {
   closeConvRun,
+  convRunsRoot,
   deleteConvRun,
   listConvRuns,
   loadConvRunTrace,
@@ -5484,6 +5486,26 @@ app.whenReady().then(async () => {
     } catch (error) {
       console.warn('[runs] réconciliation des runs abandonnés impossible', error)
     }
+    // RAMASSE-MIETTES DES WORKSPACES DE RUNS. La réconciliation ci-dessus ne SUPPRIME rien : elle
+    // repeint `open` en `red`, donc elle fait grossir la population de bloqués. Mesuré le
+    // 2026-08-18 sur la racine dev : 11 784 RUN.md dont 9 341 verts — c'est là qu'est la masse.
+    // Trois gardes cumulatives (non clos jamais touché · moins de 7 j gardé · 50 plus récents par
+    // conversation gardés) + les runs reprenables explicitement protégés. Voir `workspace-gc.ts`.
+    try {
+      const gc = collectRunWorkspaces(convRunsRoot(), {
+        protectedRunIds: os.resumableOrchestrations().map((state) => state.runId)
+      })
+      if (gc.removed || gc.remaining) {
+        // Journalisé, jamais muet : une suppression de masse silencieuse est indéfendable.
+        console.log(
+          `[runs] GC workspaces : ${gc.removed} dossier(s) clos et anciens supprimé(s), ${gc.remaining} au prochain démarrage`
+        )
+        for (const chemin of gc.paths) console.log('[runs] GC workspace supprimé', chemin)
+      }
+    } catch (error) {
+      console.warn('[runs] GC des workspaces de runs impossible', error)
+    }
+
     // COPIES ISOLÉES ORPHELINES. Un run tué avec l'app laisse son bureau isolé sur le disque ;
     // il est déjà marqué `interrupted` par le coordinateur, mais restait introuvable. On les NOMME
     // ici. Jamais de suppression automatique : le travail de l'agent est récupérable, et une
