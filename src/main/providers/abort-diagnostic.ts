@@ -69,5 +69,13 @@ export function abortFailure(
     `last-event=${extras.lastStructuredError?.trim() || 'none'}`,
     `stderr=${extras.stderr?.trim().slice(-800) || 'none'}`
   ].join('\n')
-  return new Error(`${action} interrompu : ${raison}\n${details}`)
+  // Marqueur `[abort]` : la SIGNATURE de l'émetteur, pas un mot de la langue courante.
+  //
+  // Sans lui, la couche de diagnostic devait deviner une annulation au mot « interrompu » — et
+  // capturait alors `claude.ts:990` (« Claude a interrompu l'appel : … », levé sur un event `result`
+  // avec `is_error: true`, donc un échec TERMINAL), qu'elle annonçait ensuite comme « rien à réparer
+  // côté provider ». Un juge externe l'a trouvé le 2026-08-18 sur du code déjà poussé. Le dépôt avait
+  // déjà tiré la leçon ailleurs (`auto-kaizen-supervisor.ts` : le mot « aborted » seul n'est pas
+  // retenu). On ne devine plus : seul cet appel pose le marqueur, donc seul un vrai abort le porte.
+  return new Error(`[abort] ${action} interrompu : ${raison}\n${details}`)
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   alignReportWithDisk,
+  dispositionPourIssue,
   isolatedWorkNotice,
   rewriteWorktreePaths
 } from './worktree-path-rewrite'
@@ -200,16 +201,103 @@ describe('intégration différée ≠ intégration ratée', () => {
     expect(aligned.result).not.toMatch(/DIFFÉRÉE/)
   })
 
-  /** CÂBLAGE : le libellé ne sert à rien si l'orchestrateur ne distingue pas le cas. */
-  it('l’orchestrateur mappe base-in-progress sur « pending », pas sur « kept »', () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('node:fs') as typeof import('node:fs')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require('node:path') as typeof import('node:path')
-    const source = fs.readFileSync(path.join(__dirname, 'orchestrator.ts'), 'utf8')
-    expect(source).toMatch(/'base-in-progress'/)
-    expect(source).toMatch(/integrationDifferee \? 'pending' : 'kept'/)
-    // L'ancien mapping binaire ne doit plus exister.
-    expect(source).not.toMatch(/integrated \? 'merged' : 'kept'/)
+  /**
+   * CÂBLAGE — EXERCÉ, plus greppé.
+   *
+   * Ce test lisait le TEXTE SOURCE de `orchestrator.ts` et y cherchait une expression. Un juge
+   * externe a montré le 2026-08-18 qu'il ne gardait RIEN : en insérant `false &&` devant la
+   * condition, il a neutralisé tout le comportement — le message définitif revenait — et la suite est
+   * restée VERTE, l'expression greppée étant intacte. Mon propre sabotage, lui, réécrivait cette
+   * expression : il prouvait que le texte avait changé, pas que le comportement était gardé.
+   *
+   * La décision a donc été extraite en fonction pure (`dispositionPourIssue`), et c'est son
+   * COMPORTEMENT qui est éprouvé ici. Un `false &&` posé dedans fait maintenant rougir.
+   */
+  describe('la décision de disposition, exercée et non lue', () => {
+    it('base occupée → différé', () => {
+      expect(
+        dispositionPourIssue({ integrated: false, outcome: 'blocked', reason: 'base-in-progress' })
+      ).toBe('pending')
+    })
+
+    it('travail arrivé dans la base → fusionné, quelle que soit la cause', () => {
+      expect(
+        dispositionPourIssue({ integrated: true, outcome: 'blocked', reason: 'base-in-progress' })
+      ).toBe('merged')
+    })
+
+    it('blocage DÉFINITIF → conservé, l’avertissement dur reste mérité', () => {
+      expect(
+        dispositionPourIssue({ integrated: false, outcome: 'blocked', reason: 'merge-failed' })
+      ).toBe('kept')
+      expect(dispositionPourIssue({ integrated: false, outcome: 'conflict' })).toBe('kept')
+    })
+
+    it('issue inconnue sans cause → conservé : on ne promet pas une reprise qu’on ignore', () => {
+      expect(dispositionPourIssue({ integrated: false })).toBe('kept')
+    })
+
+    /** Bout en bout : c'est la CHAÎNE complète décision → message qui compte pour l'utilisateur. */
+    it('base occupée → le rapport dit DIFFÉRÉE et jamais « NON fusionné »', () => {
+      const aligned = alignReportWithDisk(
+        { result: 'Rapport.' },
+        WT,
+        BASE,
+        dispositionPourIssue({
+          integrated: false,
+          outcome: 'blocked',
+          reason: 'base-in-progress'
+        })
+      )
+      expect(aligned.result).toMatch(/DIFFÉRÉE/)
+      expect(aligned.result).not.toContain('NON fusionné')
+    })
+  })
+})
+
+/**
+ * L'ADRESSE DOIT SORTIR, QUEL QUE SOIT L'ÉTAT DU RUN.
+ *
+ * Deux juges externes indépendants ont convergé sur ce défaut le 2026-08-18 : l'adresse de secours ne
+ * voyageait que par `finalizeDiagnosis`, lui-même enfermé dans
+ * `if (green && !integrated && !retained && produced)`. Un run ROUGE recevait donc une référence
+ * écrite sur disque et JAMAIS montrée — le cas où retrouver le travail partiel compte le plus. La
+ * convergence de deux lentilles orthogonales sur le même point n'est pas un artefact de lecture.
+ */
+describe('l’adresse de secours atteint l’utilisateur', () => {
+  const WT2 = 'C:\repo\.autowin-data\autowin-os\worktrees\h\agent__run-9'
+  const BASE2 = 'C:\repo'
+  const REF = 'refs/autowin/rescue/run-9'
+
+  it('intégration différée : la note porte l’adresse ET une commande qui RÉCUPÈRE', () => {
+    const aligned = alignReportWithDisk({ result: 'Rapport.' }, WT2, BASE2, 'pending', REF)
+    expect(aligned.result).toContain(REF)
+    // Un geste de récupération, pas d'inspection : `git show` ne rapatrie rien.
+    expect(aligned.result).toMatch(/git checkout .* -- \./)
+  })
+
+  it('blocage DÉFINITIF : l’adresse sort AUSSI — c’est le refus que nulle reprise ne rattrape', () => {
+    const aligned = alignReportWithDisk({ result: 'Rapport.' }, WT2, BASE2, 'kept', REF)
+    expect(aligned.result).toContain('NON fusionné')
+    expect(aligned.result).toContain(REF)
+  })
+
+  it('sans adresse posée, AUCUNE promesse n’est faite', () => {
+    const pending = alignReportWithDisk({ result: 'Rapport.' }, WT2, BASE2, 'pending')
+    const kept = alignReportWithDisk({ result: 'Rapport.' }, WT2, BASE2, 'kept')
+    for (const texte of [pending.result, kept.result]) {
+      expect(texte).not.toMatch(/ATTEIGNABLE/)
+      expect(texte).not.toMatch(/git checkout/)
+      expect(texte).not.toMatch(/refs\/autowin/)
+    }
+  })
+
+  it('la note reste idempotente avec son adresse', () => {
+    const une = alignReportWithDisk({ result: 'Rapport.' }, WT2, BASE2, 'pending', REF)
+    const deux = alignReportWithDisk(une, WT2, BASE2, 'pending', REF)
+    expect(deux.result.match(/DIFFÉRÉE/g)).toHaveLength(1)
+    // La propriete qui compte : la NOTE n'est pas dupliquee. L'adresse y figure plusieurs fois par
+    // conception (la reference, puis les deux commandes). On compte donc la note et son geste.
+    expect(deux.result.match(/git checkout/g)).toHaveLength(1)
   })
 })

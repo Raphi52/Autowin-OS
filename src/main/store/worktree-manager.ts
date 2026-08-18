@@ -136,7 +136,15 @@ export type FinalizeResult =
       publishedSha?: string
     }
   | { outcome: 'nothing'; agentId: string }
-  | { outcome: 'conflict'; agentId: string; files: string[]; baseSha: string; agentSha: string }
+  | {
+      outcome: 'conflict'
+      agentId: string
+      files: string[]
+      baseSha: string
+      agentSha: string
+      /** Adresse durable du travail refusé, quand une a pu être posée. Voir `outcome: 'blocked'`. */
+      rescueRef?: string
+    }
   | {
       outcome: 'cleanup-pending'
       agentId: string
@@ -3601,6 +3609,18 @@ exit 0
    * - Conflit réel → { outcome: 'conflict', files } : merge AVORTÉ, copie CONSERVÉE.
    * - Base sale/refus Git → { outcome: 'blocked', files } : aucun faux conflit, copie CONSERVÉE.
    */
+  /**
+   * Enveloppe de `finalize` : TOUT refus repart avec une adresse, quand il y a quelque chose à sauver.
+   *
+   * Un juge externe a relevé le 2026-08-18 que la sécurisation n'était posée qu'au garde précoce
+   * `operationInProgress`. Les refus DÉFINITIFS — `merge-failed` (quatre chemins) et `conflict` —
+   * repartaient donc sans adresse, alors que ce sont les seuls que nulle reprise ne rattrape
+   * (`merge-failed` est exclu des issues réessayables). On outillait le refus temporaire et on
+   * laissait nu le refus définitif : l'inverse de ce qu'il faut.
+   *
+   * Un point de passage UNIQUE plutôt que cinq retours patchés : le geste est idempotent (il ne
+   * réécrit pas une adresse déjà posée) et sans effet sur la base.
+   */
   finalize(
     agentId: string,
     options: {
@@ -3610,6 +3630,30 @@ exit 0
        * Résolution humaine d'un conflit : `ours` garde le workspace sur les zones en conflit,
        * `theirs` garde la version de l'agent. Absent = merge strict (comportement automatique).
        */
+      conflictStrategy?: 'ours' | 'theirs'
+      onPrepared?: (agentSha: string, baseSha: string) => void
+      onIntegrated?: (integratedSha: string, agentSha: string, baseSha: string) => void
+    } = {}
+  ): FinalizeResult {
+    const issue = this.finalizeSansSecours(agentId, options)
+    if (issue.outcome !== 'blocked' && issue.outcome !== 'conflict') return issue
+    if ('rescueRef' in issue && issue.rescueRef) return issue
+    // JAMAIS sur `base-dirty` : ce refus protège du travail NON COMMITTÉ de l'utilisateur sur les
+    // mêmes fichiers. Y committer la copie contredirait la garde qu'on vient d'honorer, et la DoD de
+    // ce chantier exige explicitement qu'aucun ref ne soit écrit dans ce cas.
+    if (issue.outcome === 'blocked' && issue.reason === 'base-dirty') return issue
+    const path = this.pathFor(agentId)
+    if (!existsSync(path)) return issue
+    return this.secureWorkBeforeRefusal(agentId, path)
+      ? { ...issue, rescueRef: this.rescueRef(agentId) }
+      : issue
+  }
+
+  private finalizeSansSecours(
+    agentId: string,
+    options: {
+      baseBranch?: string
+      expectedAgentSha?: string
       conflictStrategy?: 'ours' | 'theirs'
       onPrepared?: (agentSha: string, baseSha: string) => void
       onIntegrated?: (integratedSha: string, agentSha: string, baseSha: string) => void
@@ -4229,10 +4273,33 @@ exit 0
    * été refusée. Distincte de `publicationMarkerRef` À DESSEIN — celle-là est le candidat d'une
    * transaction dont la reprise valide l'ascendance ; celle-ci ne promet rien d'autre que « le
    * travail est là, atteignable, non publié ».
+   *
+   * Nommée en ANGLAIS comme tous les espaces de noms de refs de ce fichier (`publications`,
+   * `compensations`, `locks`, `recovery`). Elle s'appelait `secours` : un juge externe a relevé le
+   * 2026-08-18 que c'était le seul namespace français du dépôt, invisible à un `grep` anglais.
    */
   private rescueRef(agentId: string): string {
     assertSafeId(agentId, 'agentId')
-    return `refs/autowin/secours/${agentId}`
+    return `refs/autowin/rescue/${agentId}`
+  }
+
+  /**
+   * Committe la copie si elle porte des changements non committés. Rend la SHA de sa tête.
+   *
+   * Le MÊME message que le commit de publication (`agent <id>`) est employé À DESSEIN : ce n'est pas
+   * un commit de secours parallèle, c'est celui que la reprise publiera. Un libellé décoratif
+   * polluait l'historique publié, et un test l'a attrapé en épinglant le message exact
+   * (`worktree-recovery.integration`) — la bonne réaction était d'aligner le message, pas de
+   * desserrer son assertion. Factorisé parce que `finalize` et `secureWorkBeforeRefusal` faisaient
+   * la même séquence à l'identique (relevé par un juge externe).
+   */
+  private commitCopyIfDirty(agentId: string, path: string): { sha: string; committed: boolean } {
+    const dirty = this.git(path, ['status', '--porcelain=v1', '-z']).length > 0
+    if (dirty) {
+      this.git(path, ['add', '-A'])
+      this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', `agent ${agentId}`])
+    }
+    return { sha: this.git(path, ['rev-parse', 'HEAD']), committed: dirty }
   }
 
   /**
@@ -4244,25 +4311,46 @@ exit 0
    * d'une référence privée. Aucun hook de publication, aucune validation de l'arbre de
    * l'utilisateur — écrire ce ref ne touche ni sa branche, ni son index, ni ses fichiers.
    *
-   * Rend `true` seulement si une adresse a réellement été posée : une copie sans aucun changement
-   * n'a rien à sauver, et prétendre le contraire serait le faux vert que ce module combat.
+   * **FAIL-CLOSED sur l'ambiguïté.** Rend `true` uniquement sur preuve POSITIVE que la copie a
+   * produit quelque chose. La version précédente déduisait « rien à sauver » de
+   * `git rev-parse HEAD@{1}` : quand le reflog est absent (`core.logAllRefUpdates=false`, une
+   * configuration git réelle et hors du contrôle de l'app), cette commande sort en 128, la garde ne
+   * se déclenchait pas, et un ref était posé sur un commit STRICTEMENT INCHANGÉ en rendant `true` —
+   * l'utilisateur lisait « travail atteignable » pour un travail inexistant. Un juge externe l'a
+   * reproduit en isolation le 2026-08-18, sur du code déjà poussé, alors que le commentaire de cette
+   * fonction affirmait exactement l'inverse. `rev-list --not --branches --remotes` répond à la vraie
+   * question — « cette copie porte-t-elle des commits qu'aucune branche ne connaît ? » — sans
+   * dépendre d'un reflog, et toute réponse illisible vaut refus.
    */
   private secureWorkBeforeRefusal(agentId: string, path: string): boolean {
     try {
+      // Ordre choisi pour le COÛT : les lectures d'abord, et on sort au plus tôt. Ce chemin s'exécute
+      // à CHAQUE refus, et un refus est la norme sur un dépôt partagé — deux tests de compensation,
+      // déjà proches de leur budget, ont dépassé le délai sous charge quand la vérification
+      // d'appartenance (3 appels git) était faite avant même de savoir s'il y avait quelque chose à
+      // sauver. Le cas fréquent « rien à sauver » ne coûte donc plus qu'une lecture.
       const dirty = this.git(path, ['status', '--porcelain=v1', '-z']).length > 0
-      if (dirty) {
-        this.git(path, ['add', '-A'])
-        // MÊME message que le commit de publication (`agent <id>`) — à dessein. Ce commit N'EST PAS
-        // un doublon de secours : c'est celui que la reprise publiera. Lui donner un libellé
-        // décoratif polluait l'historique publié, et un test l'a attrapé en épinglant le message
-        // exact (`worktree-recovery.integration`) — la bonne réaction est d'aligner le message, pas
-        // de desserrer son assertion.
-        this.git(path, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', `agent ${agentId}`])
+      if (!dirty) {
+        // Répond à la vraie question — « cette copie porte-t-elle des commits qu'aucune branche ne
+        // connaît ? » — sans dépendre d'un reflog. Toute réponse illisible vaut REFUS (fail-closed).
+        const ahead = this.tryGitFn(path, [
+          'rev-list',
+          '--count',
+          'HEAD',
+          '--not',
+          '--branches',
+          '--remotes'
+        ])
+        if (ahead.code !== 0) return false
+        if (Number.parseInt(ahead.stdout.trim() || '0', 10) === 0) return false
       }
-      const sha = this.git(path, ['rev-parse', 'HEAD'])
-      const baseSha = this.tryGitFn(path, ['rev-parse', 'HEAD@{1}'])
-      // Rien à sauver si la copie n'a produit aucun commit par-dessus son point de départ.
-      if (!dirty && baseSha.code === 0 && baseSha.stdout.trim() === sha) return false
+      // JAMAIS d'écriture sans appartenance PROUVÉE, et ce contrôle vient AVANT le commit : trois
+      // tests l'ont attrapé quand la sécurisation était trop large — une copie d'un autre dépôt, et
+      // une copie dont l'appartenance Git est indémontrable, ne doivent recevoir AUCUNE écriture, pas
+      // même un commit « pour les sauver ». Sécuriser est un service ; il ne justifie pas d'écrire là
+      // où le reste du module s'interdit de toucher.
+      if (this.ownershipIssue(path)) return false
+      const { sha } = this.commitCopyIfDirty(agentId, path)
       return this.tryGitFn(this.baseRepo, ['update-ref', this.rescueRef(agentId), sha]).code === 0
     } catch {
       // Sécuriser est un BONUS : son échec ne doit jamais transformer un refus propre en exception.

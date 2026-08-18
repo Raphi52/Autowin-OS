@@ -73,8 +73,30 @@ export function rewriteWorktreePaths(
  * Note ajoutée quand la copie est CONSERVÉE. Sans elle, l'utilisateur voit un chemin sous
  * `worktrees/agent__run-…` sans savoir s'il doit s'en inquiéter.
  */
-export function isolatedWorkNotice(worktreeCwd: string): string {
-  return `⚠️ Travail NON fusionné : il reste dans la copie isolée ${worktreeCwd} (rien n'est perdu, rien n'est publié).`
+export function isolatedWorkNotice(worktreeCwd: string, rescueRef?: string): string {
+  return `⚠️ Travail NON fusionné : il reste dans la copie isolée ${worktreeCwd} (rien n'est perdu, rien n'est publié).${adresseDeSecours(rescueRef)}`
+}
+
+/**
+ * La phrase qui dit OÙ est le travail et COMMENT le reprendre — vide quand aucune adresse n'existe.
+ *
+ * Deux défauts corrigés ici, tous deux relevés par des juges externes le 2026-08-18.
+ *   1. L'adresse ne sortait que par `finalizeDiagnosis`, lui-même enfermé dans
+ *      `if (green && !integrated && !retained && produced)`. Sur un run ROUGE — le cas où retrouver
+ *      le travail partiel compte le PLUS — la référence était écrite et jamais montrée. Elle vit donc
+ *      désormais dans la NOTE, qui est ajoutée au rapport quel que soit l'état du run.
+ *   2. Le geste proposé était `git show`, une commande d'INSPECTION qui déverse un diff : elle ne
+ *      RAPATRIE rien. On donne la commande qui récupère réellement les fichiers.
+ *
+ * Rien n'est promis sans adresse : `undefined` rend une chaîne vide, jamais une phrase creuse.
+ */
+export function adresseDeSecours(rescueRef?: string): string {
+  if (!rescueRef) return ''
+  return (
+    `\nLe travail est ATTEIGNABLE et ne dépend plus de cette copie : \`${rescueRef}\`. ` +
+    `Pour le récupérer dans ton dossier : \`git checkout ${rescueRef} -- .\` ` +
+    `(ou \`git diff HEAD ${rescueRef}\` pour le lire d'abord).`
+  )
 }
 
 /**
@@ -85,11 +107,12 @@ export function isolatedWorkNotice(worktreeCwd: string): string {
  * posé sur un état encore en mouvement, et la reprise la démentait sans que rien ne la réécrive.
  * Celle-ci ne promet pas la publication et ne la nie pas : elle dit ce qui est vrai à cet instant.
  */
-export function pendingIntegrationNotice(worktreeCwd: string): string {
+export function pendingIntegrationNotice(worktreeCwd: string, rescueRef?: string): string {
   return (
     `⏳ Intégration DIFFÉRÉE, pas échouée : la base portait une opération git en cours, une reprise ` +
     `automatique est programmée. En attendant, le travail est dans la copie isolée ${worktreeCwd} ` +
-    `(rien n'est perdu ; vérifie la publication avant de conclure qu'elle a manqué).`
+    `(rien n'est perdu ; vérifie la publication avant de conclure qu'elle a manqué).` +
+    adresseDeSecours(rescueRef)
   )
 }
 
@@ -108,7 +131,13 @@ export function alignReportWithDisk<T extends ReportPathsInput>(
   report: T,
   worktreeCwd: string | undefined,
   baseWorkspace: string,
-  disposition: WorktreeDisposition
+  disposition: WorktreeDisposition,
+  /**
+   * Adresse durable du travail refusé, quand la finalisation en a posé une. Portée par la NOTE et
+   * non par le diagnostic de gate : le diagnostic n'est rendu que pour un run vert, si bien qu'un run
+   * rouge recevait une adresse écrite mais jamais montrée.
+   */
+  rescueRef?: string
 ): T {
   if (!worktreeCwd) return report
   if (disposition === 'kept' || disposition === 'pending') {
@@ -116,8 +145,8 @@ export function alignReportWithDisk<T extends ReportPathsInput>(
     // LIBELLE, lui, depend de la nature du sursis : definitif (`kept`) ou differe (`pending`).
     const notice =
       disposition === 'pending'
-        ? pendingIntegrationNotice(worktreeCwd)
-        : isolatedWorkNotice(worktreeCwd)
+        ? pendingIntegrationNotice(worktreeCwd, rescueRef)
+        : isolatedWorkNotice(worktreeCwd, rescueRef)
     return report.result.includes(notice)
       ? report
       : { ...report, result: `${report.result}\n\n${notice}` }
@@ -134,4 +163,34 @@ export function alignReportWithDisk<T extends ReportPathsInput>(
         }
       : {})
   }
+}
+
+/**
+ * Décide de la disposition à partir du verdict de finalisation. **Fonction PURE, à dessein.**
+ *
+ * Cette décision vivait en ligne dans `orchestrator.ts`, et sa seule garde était un test qui faisait
+ * un `grep` sur le TEXTE SOURCE du fichier. Un juge externe l'a démontré inutile le 2026-08-18 : en
+ * insérant `false &&` devant la condition, il a neutralisé TOUT le comportement — le message
+ * définitif revenait — et la suite est restée verte, parce que l'expression greppée était toujours
+ * là. Mon propre sabotage, lui, réécrivait l'expression : il prouvait que le texte avait changé, pas
+ * que le comportement était gardé.
+ *
+ * D'où cette extraction : une décision qu'on peut EXERCER, plutôt qu'une décision qu'on peut lire.
+ * Un `false &&` posé ici fait désormais rougir un test.
+ */
+export function dispositionPourIssue(issue: {
+  /** L'appelant a-t-il conclu que le travail est arrivé dans la base ? */
+  integrated: boolean
+  /** Verdict brut de la finalisation (`merged`, `blocked`, `nothing`…). */
+  outcome?: string
+  /** Cause du blocage, quand il y en a une. */
+  reason?: string
+}): WorktreeDisposition {
+  if (issue.integrated) return 'merged'
+  // Une intégration DIFFÉRÉE n'est pas une intégration ratée : `base-in-progress` signifie que la
+  // base portait une opération git à cet instant, et le coordinateur programme jusqu'à 6 reprises.
+  // La confondre avec `kept` faisait écrire « rien n'est publié » — un verdict définitif sur un état
+  // encore en mouvement, que la reprise démentait sans que rien ne le réécrive.
+  if (issue.outcome === 'blocked' && issue.reason === 'base-in-progress') return 'pending'
+  return 'kept'
 }

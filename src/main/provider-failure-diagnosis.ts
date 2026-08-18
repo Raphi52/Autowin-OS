@@ -66,19 +66,30 @@ export function classifyProviderFailure(message: string): ProviderFailureKind {
     return 'auth'
   }
   if (/enoent|introuvable|not found|command not found/.test(text)) return 'cli-missing'
-  // Chaînes RÉELLEMENT jetées sur abort : `codex exec annulé` (codex.ts:462),
-  // `claude CLI annulé` (claude.ts), `This operation was aborted` (Node/undici).
-  // Testé APRÈS auth/cli-missing : un « annulé » n'y apparaît pas, l'ordre reste sans ambiguïté.
-  // Depuis le 2026-08-18 la RAISON de l'abort remonte (`providers/abort-diagnostic.ts`) : les
-  // libelles portent « interrompu : <raison> ». Les anciens (« codex exec annule », …) restent
-  // reconnus, ils vivent dans les traces et les runs persistes d'avant.
+  // Une annulation se RECONNAÎT À SA SIGNATURE — elle ne se devine pas à un mot de la langue.
   //
-  // Teste APRES `budget` A DESSEIN : un arret impose par le devis porte desormais
-  // « interrompu : budget duree depasse (…) » et se classe `budget`, pas `cancelled` — la cause
-  // est le plafond, l'interruption n'en est que le moyen. C'est ce que l'ancien message
-  // generique rendait indistinguable.
-  if (/interrompu|annul[ée]|operation was aborted|\baborted\b|aborterror/.test(text))
+  // La règle acceptait « interrompu » seul. Un juge externe a montré le 2026-08-18 qu'elle capturait
+  // `providers/claude.ts:990` — « Claude a interrompu l'appel : … », levé quand le CLI rend un event
+  // `result` avec `is_error: true`, donc une panne TERMINALE (`retryable: false`) — et la faisait
+  // annoncer « Rien à réparer côté provider : relance la phase ». Un vrai défaut masqué derrière un
+  // message rassurant, dans le correctif même qui prétendait cesser de mentir sur les causes. Le
+  // dépôt avait DÉJÀ tiré cette leçon (`auto-kaizen-supervisor.ts` : « le mot "aborted" seul n'est
+  // PAS retenu, une transaction annulée par une base de données étant un vrai échec »).
+  //
+  // Désormais `[abort]` est posé par `providers/abort-diagnostic.ts` et par LUI SEUL. Les libellés
+  // HISTORIQUES restent reconnus — ils vivent dans les runs déjà persistés — mais en chaînes
+  // ENTIÈRES et closes, jamais en mot isolé capable d'attraper la phrase voisine.
+  //
+  // Testé APRÈS `budget` À DESSEIN : un arrêt imposé par le devis porte « [abort] … interrompu :
+  // Budget USD depasse (…) » et se classe `budget`, pas `cancelled` — la cause est le plafond,
+  // l'interruption n'en est que le moyen.
+  if (/\[abort\]/.test(text)) return 'cancelled'
+  if (
+    /codex exec annul[ée]|claude cli annul[ée]|kimi code annul[ée]|envoi gemini annul[ée]/.test(text)
+  ) {
     return 'cancelled'
+  }
+  if (/^this operation was aborted\.?$|aborterror/.test(text.trim())) return 'cancelled'
   return 'other'
 }
 

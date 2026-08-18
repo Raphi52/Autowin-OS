@@ -353,7 +353,7 @@ import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { describeFanoutFailure, explainRoleFailure } from './provider-failure-diagnosis'
-import { alignReportWithDisk } from './worktree-path-rewrite'
+import { alignReportWithDisk, dispositionPourIssue } from './worktree-path-rewrite'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
 import type { ChatArtifact } from '../shared/artifacts'
 import type { RunLifecycleEvent } from '../shared/run-execution'
@@ -1869,24 +1869,15 @@ export class Orchestrator {
       const finalizeDiagnosis =
         typeof finalized === 'object' && finalized !== null
           ? (() => {
-              const raw = finalized as {
-                reason?: string
-                files?: string[]
-                detail?: string
-                rescueRef?: string
-              }
+              const raw = finalized as { reason?: string; files?: string[]; detail?: string }
               if (!raw.reason) return undefined
               const files = raw.files?.slice(0, 5) ?? []
               const filesPart = files.length > 0 ? ` — fichiers en cause: ${files.join(', ')}` : ''
-              // L'ADRESSE du travail, quand il en a une. Une réparation invisible ne répare rien :
-              // le manager sécurise désormais le travail sur une référence durable avant de refuser
-              // une publication, et cette référence doit ARRIVER à l'utilisateur — sinon il relit
-              // « blocage d'intégration » exactement comme avant. Absente = rien n'a été sauvé, on
-              // n'invente aucune adresse (le faux vert que ce chemin combat).
-              const rescuePart = raw.rescueRef
-                ? ` — travail atteignable : \`git show ${raw.rescueRef}\` (non publié)`
-                : ''
-              return `blocage d’intégration: ${raw.reason}${filesPart}${rescuePart}`
+              // L'adresse du travail ne passe PLUS par ici : ce diagnostic n'est poussé dans le
+              // rapport que sous `if (green && …)`, donc un run rouge ne l'aurait jamais vue. Elle
+              // vit désormais dans la note de disposition (`adresseDeSecours`), rendue quel que soit
+              // l'état du run. Ce message garde son seul rôle : nommer la CAUSE du blocage.
+              return `blocage d’intégration: ${raw.reason}${filesPart}`
             })()
           : undefined
       const finalActivity = activityForRun()
@@ -1957,25 +1948,34 @@ export class Orchestrator {
       // Le rapport a ete redige DANS la copie isolee ; la ligne ci-dessus vient de la fusionner puis de
       // la supprimer. Sans cet alignement, chaque chemin cite est mort — constate le 2026-07-29, dit
       // par l'agent lui-meme : « le rapport pointe vers un worktree qui n'existe plus ».
-      // Une integration DIFFEREE n'est pas une integration ratee. `base-in-progress` signifie que la
-      // base portait une operation git en cours a cet instant ; le coordinateur programme alors
-      // jusqu'a 6 reprises (`MAX_AUTOMATIC_RETRIES`). Le confondre avec `kept` faisait ecrire « rien
-      // n'est publie » — un verdict DEFINITIF sur un etat encore en mouvement, que la reprise
-      // dementait sans que rien ne le reecrive. Mesure le 2026-08-18 sur ce depot : les 24 copies
-      // presentes portaient toutes un commit deja ancetre du HEAD de la base, 0 orpheline — donc
-      // l'avertissement etait faux a chaque fois. Sur un arbre git partage (l'app, les agents et les
-      // sessions CLI pilotent la MEME base), cette collision est la norme, pas l'exception.
-      const integrationDifferee =
-        finalizeOutcome === 'blocked' &&
-        typeof finalized === 'object' &&
-        finalized !== null &&
-        (finalized as { reason?: string }).reason === 'base-in-progress'
+      // La DÉCISION vit dans `dispositionPourIssue` — fonction pure, testable, et SEULE porteuse de la
+      // mesure qui la justifie (cf. `WorktreeDisposition` dans `worktree-path-rewrite.ts`). Elle était
+      // en ligne ici, avec sa garde en forme de grep sur le TEXTE de ce fichier : un juge externe a
+      // neutralisé le comportement sans faire rougir la suite. Le paragraphe de mesure qui vivait ici
+      // en double a été ramené à son unique domicile — un fait répété à deux endroits finit par
+      // diverger de lui-même.
       if (produced && workCwd !== this.deps.executionWorkspace) {
         const aligned = alignReportWithDisk(
           { result: produced.result, phaseOutputs: produced.phaseOutputs },
           workCwd,
           this.deps.executionWorkspace,
-          integrated ? 'merged' : integrationDifferee ? 'pending' : 'kept'
+          dispositionPourIssue({
+            integrated,
+            ...(finalizeOutcome ? { outcome: finalizeOutcome } : {}),
+            ...(typeof finalized === 'object' &&
+            finalized !== null &&
+            typeof (finalized as { reason?: string }).reason === 'string'
+              ? { reason: (finalized as { reason: string }).reason }
+              : {})
+          }),
+          // L'adresse voyage par la NOTE, pas par le diagnostic de gate : celui-ci n'est rendu que
+          // pour un run VERT, si bien qu'un run rouge recevait une adresse écrite et jamais montrée
+          // — exactement le cas où retrouver le travail partiel compte le plus.
+          typeof finalized === 'object' &&
+            finalized !== null &&
+            typeof (finalized as { rescueRef?: string }).rescueRef === 'string'
+            ? (finalized as { rescueRef: string }).rescueRef
+            : undefined
         )
         produced.result = aligned.result
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs

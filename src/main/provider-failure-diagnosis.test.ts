@@ -279,11 +279,15 @@ describe('une annulation ne doit pas se faire passer pour une panne du provider'
    * provider et le binding, ce qui a envoyé chercher un défaut de codex qui n'existait pas.
    */
   const messagesDAnnulation = [
-    // Libelles ACTUELS (`providers/abort-diagnostic.ts`), avec la raison enfin portee.
-    "codex exec interrompu : raison non rapportee par l'appelant",
-    'claude CLI interrompu : conversation-deleted',
-    'Kimi Code interrompu : run remplace',
-    'Envoi Gemini interrompu : arret demande',
+    // Libelles ACTUELS (`providers/abort-diagnostic.ts`), avec la raison enfin portee ET le marqueur
+    // `[abort]` de son emetteur. Le marqueur a ete ajoute le 2026-08-18 apres qu'un juge externe a
+    // montre que reconnaitre le mot « interrompu » seul capturait `claude.ts:990` — une panne
+    // TERMINALE du CLI — et la faisait annoncer « rien a reparer cote provider ». Ces fixtures
+    // portent donc desormais ce que l'emetteur emet reellement.
+    "[abort] codex exec interrompu : raison non rapportee par l'appelant",
+    '[abort] claude CLI interrompu : conversation-deleted',
+    '[abort] Kimi Code interrompu : run remplace',
+    '[abort] Envoi Gemini interrompu : arret demande',
     // Libelles HISTORIQUES : ils vivent dans les traces et les runs persistes d'avant le 18/08.
     'codex exec annulé',
     'claude CLI annulé',
@@ -356,5 +360,59 @@ describe('une annulation ne doit pas se faire passer pour une panne du provider'
     )
     expect(texte).toContain('le rôle subagent est bindé sur codex (gpt-5.6-sol)')
     expect(texte).not.toContain('INTERROMPU')
+  })
+})
+
+describe('une panne TERMINALE ne doit pas être requalifiée en annulation', () => {
+  /**
+   * Défaut trouvé par un juge externe le 2026-08-18, sur du code déjà poussé.
+   *
+   * La règle de classification acceptait le mot « interrompu » seul. Or `claude.ts:990` lève
+   * `new ProviderCallError("Claude a interrompu l'appel : " + detail, { retryable: false })` quand le
+   * CLI Claude rend un event `result` avec `is_error === true` — un échec TERMINAL, sans aucun rapport
+   * avec un signal d'abort. Conséquence : cette panne était classée `cancelled` et l'utilisateur
+   * lisait « Rien à réparer côté provider : l'appel a été coupé. Relance la phase », c'est-à-dire un
+   * message rassurant collé sur un vrai défaut. Le correctif visait à cesser de mentir sur les
+   * causes ; sur ce chemin il en fabriquait un nouveau.
+   *
+   * Le dépôt avait DÉJÀ tiré cette leçon ailleurs (`auto-kaizen-supervisor.ts` : « le mot "aborted"
+   * seul n'est PAS retenu, une transaction annulée par une base de données étant un vrai échec »).
+   *
+   * D'où le marqueur `[abort]`, posé par `abortFailure` et par lui seul : on ne devine plus une
+   * annulation à partir d'un mot de la langue courante, on exige la signature de l'émetteur.
+   */
+  it('« Claude a interrompu l’appel : … » reste une panne, PAS une annulation', () => {
+    const reel = "Claude a interrompu l'appel : error_max_turns · 0.1234 USD"
+    expect(classifyProviderFailure(reel)).not.toBe('cancelled')
+    const texte = explainRoleFailure(
+      'Phase build',
+      'subagent',
+      { provider: 'claude', model: 'claude-opus-5', message: reel },
+      'claude'
+    )
+    // Le message rassurant ne doit PAS apparaître : il enverrait relancer au lieu d'investiguer.
+    expect(texte).not.toMatch(/Rien à réparer côté provider/)
+    expect(texte).not.toContain('INTERROMPU avant sa fin')
+  })
+
+  it('une VRAIE annulation, elle, porte le marqueur de son émetteur et reste reconnue', () => {
+    expect(classifyProviderFailure('[abort] codex exec interrompu : arret utilisateur')).toBe(
+      'cancelled'
+    )
+    expect(classifyProviderFailure('[abort] claude CLI interrompu : arret utilisateur')).toBe(
+      'cancelled'
+    )
+  })
+
+  it('les libellés HISTORIQUES restent reconnus : ils vivent dans les runs déjà persistés', () => {
+    expect(classifyProviderFailure('codex exec annulé')).toBe('cancelled')
+    expect(classifyProviderFailure('claude CLI annulé')).toBe('cancelled')
+    expect(classifyProviderFailure('This operation was aborted')).toBe('cancelled')
+  })
+
+  it('un abort imposé par le DEVIS reste classé budget — la cause prime sur le moyen', () => {
+    expect(
+      classifyProviderFailure('[abort] codex exec interrompu : Budget USD depasse (12.00)')
+    ).toBe('budget')
   })
 })
