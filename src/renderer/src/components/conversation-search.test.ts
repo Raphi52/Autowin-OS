@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   conversationsRecentes,
+  doitAfficherRecentes,
   searchConversations,
   trierParRecenceUtilisateur,
   type ConversationSearchSource
@@ -271,5 +272,43 @@ describe('section « Recentes » en tete de la barre laterale', () => {
       updatedAt: 5_000
     } as ConversationSearchSource
     expect(conversationsRecentes([conv('humaine', 800), parAgent], 2)[0].id).toBe('par-agent')
+  })
+})
+
+describe('la categorie « Recentes » ne se montre que si elle SERT', () => {
+  /**
+   * Defaut vecu le 2026-08-18, revele par le test d'une session concurrente
+   * (`ChatView.date-sort.test.tsx`) : sur une liste de 3 conversations, « Recentes » reaffichait les
+   * 3 memes lignes — 6 titres au lieu de 3. Un doublon integral n'aide personne. La categorie repond
+   * a UN defaut precis : la conversation la plus recente enterree derriere des dossiers (rang 172 sur
+   * 182 mesure). Quand elle est deja en tete, la categorie n'a plus d'objet.
+   */
+  it('se retire quand la plus recente est deja la premiere ligne', () => {
+    expect(doitAfficherRecentes('recente', 'recente')).toBe(false)
+  })
+
+  it("s'affiche quand la premiere ligne est une AUTRE conversation", () => {
+    expect(doitAfficherRecentes('recente', 'enterree-dans-un-dossier')).toBe(true)
+  })
+
+  it('se retire quand il n y a rien a montrer', () => {
+    expect(doitAfficherRecentes(undefined, 'peu-importe')).toBe(false)
+  })
+
+  it("s'affiche quand la liste groupee est vide mais qu'une recente existe", () => {
+    expect(doitAfficherRecentes('recente', undefined)).toBe(true)
+  })
+})
+
+describe('« Recentes » et le sens du tri', () => {
+  // Revele par `ChatView.date-sort.test.tsx` : en ordre « plus ANCIENNES », la plus recente n'est par
+  // construction jamais la premiere ligne — la categorie s'affichait donc toujours et doublait la
+  // liste. Quand l'utilisateur demande l'ordre inverse, il ne cherche pas sa derniere conversation.
+  it('ne se montre pas en ordre « plus anciennes »', () => {
+    expect(doitAfficherRecentes('recente', 'ancienne', 'asc')).toBe(false)
+  })
+
+  it('se montre en ordre « plus recentes » quand la premiere ligne differe', () => {
+    expect(doitAfficherRecentes('recente', 'enterree', 'desc')).toBe(true)
   })
 })

@@ -180,3 +180,27 @@ export function conversationsRecentes<T extends ConversationSearchSource>(
     .sort((gauche, droite) => recenceUtilisateur(droite) - recenceUtilisateur(gauche))
     .slice(0, Math.max(0, limite))
 }
+
+/**
+ * La catégorie « Récentes » ne se montre que si elle SERT.
+ *
+ * Elle répond à UN défaut précis, mesuré le 2026-08-18 : la conversation la plus récente enterrée au
+ * rang 172 sur 182 parce que les groupes se classent par nature avant la date. Quand elle est déjà la
+ * première ligne, la catégorie ne ferait que réafficher ce qui est sous les yeux — sur une liste de 3
+ * conversations, elle doublait la liste entière (défaut révélé par le test d'une session concurrente,
+ * `ChatView.date-sort.test.tsx` : 6 titres au lieu de 3).
+ *
+ * On compare des IDENTITÉS, pas des dates : deux conversations peuvent partager une date.
+ */
+export function doitAfficherRecentes(
+  plusRecenteId: string | undefined,
+  premiereDeLaListeId: string | undefined,
+  ordre: 'asc' | 'desc' = 'desc'
+): boolean {
+  if (!plusRecenteId) return false
+  // En ordre « plus anciennes », la plus récente n'est par construction JAMAIS la première ligne : la
+  // règle ci-dessous serait toujours vraie et la catégorie doublerait la liste en permanence. Or
+  // demander l'ordre inverse, c'est précisément ne pas chercher sa dernière conversation.
+  if (ordre === 'asc') return false
+  return plusRecenteId !== premiereDeLaListeId
+}

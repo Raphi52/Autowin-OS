@@ -65,6 +65,7 @@ import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment } from './chat-attachments'
 import {
   conversationsRecentes,
+  doitAfficherRecentes,
   GROUPE_RECENTES,
   recenceUtilisateur,
   RECENTES_AFFICHEES,
@@ -1965,13 +1966,17 @@ export function ChatView({
         hit
       }))
     if (items.length === 0) return groupes
+    // Pas de DOUBLON inutile : si la plus récente ouvre déjà la liste, la catégorie n'a plus d'objet.
+    // Sur une liste courte elle rejouait la liste entière — 6 titres pour 3 conversations.
+    if (!doitAfficherRecentes(items[0].id, groupes[0]?.items[0]?.id, conversationDateOrder))
+      return groupes
     // `kind: 'divers'` à dessein : un dépôt par glisser sur cet en-tête ne voudrait rien dire
     // (« récentes » n'est pas un dossier), et `conversation-groups` réserve le dépôt aux dossiers.
     return [
       { key: GROUPE_RECENTES, label: 'Récentes', kind: 'divers' as const, depth: 0, items },
       ...groupes
     ]
-  }, [groupes, conversationHits, convs, convQuery])
+  }, [groupes, conversationHits, convs, convQuery, conversationDateOrder])
 
   /**
    * Inbox d'agents : conversations avec un agent EN TRAVAIL (tour en cours) ou une
