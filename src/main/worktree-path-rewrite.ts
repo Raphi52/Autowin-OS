@@ -20,6 +20,15 @@ export type WorktreeDisposition =
   | 'merged'
   /** La copie est conservée (run non vert, conflit) : ses chemins existent toujours. */
   | 'kept'
+  /**
+   * L'intégration n'a pas ÉCHOUÉ, elle est DIFFÉRÉE : la base portait une opération git en cours au
+   * moment de la finalisation (`blocked` / `base-in-progress`), et le coordinateur a programmé une
+   * reprise automatique. Distinguer ce cas de `kept` n'est pas cosmétique — mesuré le 2026-08-18 :
+   * les 24 copies présentes sur disque portaient TOUTES un commit déjà ancêtre du HEAD de la base
+   * (0 orpheline), donc l'avertissement « rien n'est publié » était faux dans 100 % des cas. Il est
+   * écrit une seule fois à la clôture, la reprise fusionne ensuite, et personne ne le corrige.
+   */
+  | 'pending'
 
 /** Normalise les séparateurs pour comparer deux chemins Windows écrits différemment. */
 function normalizeSeparators(value: string): string {
@@ -68,6 +77,22 @@ export function isolatedWorkNotice(worktreeCwd: string): string {
   return `⚠️ Travail NON fusionné : il reste dans la copie isolée ${worktreeCwd} (rien n'est perdu, rien n'est publié).`
 }
 
+/**
+ * Note ajoutée quand l'intégration est DIFFÉRÉE, pas ratée.
+ *
+ * `isolatedWorkNotice` affirme « rien n'est publié » — un état DÉFINITIF. Or `base-in-progress` est
+ * réessayable (`run-worktree-coordinator.ts`, jusqu'à 6 reprises) : la phrase était donc un verdict
+ * posé sur un état encore en mouvement, et la reprise la démentait sans que rien ne la réécrive.
+ * Celle-ci ne promet pas la publication et ne la nie pas : elle dit ce qui est vrai à cet instant.
+ */
+export function pendingIntegrationNotice(worktreeCwd: string): string {
+  return (
+    `⏳ Intégration DIFFÉRÉE, pas échouée : la base portait une opération git en cours, une reprise ` +
+    `automatique est programmée. En attendant, le travail est dans la copie isolée ${worktreeCwd} ` +
+    `(rien n'est perdu ; vérifie la publication avant de conclure qu'elle a manqué).`
+  )
+}
+
 export interface ReportPathsInput {
   /** Le texte du rapport. */
   result: string
@@ -86,9 +111,13 @@ export function alignReportWithDisk<T extends ReportPathsInput>(
   disposition: WorktreeDisposition
 ): T {
   if (!worktreeCwd) return report
-  if (disposition === 'kept') {
-    // Les chemins restent bons : on n'y touche PAS, on explique juste ou le travail attend.
-    const notice = isolatedWorkNotice(worktreeCwd)
+  if (disposition === 'kept' || disposition === 'pending') {
+    // Les chemins restent bons : on n'y touche PAS, on explique juste ou le travail attend. Le
+    // LIBELLE, lui, depend de la nature du sursis : definitif (`kept`) ou differe (`pending`).
+    const notice =
+      disposition === 'pending'
+        ? pendingIntegrationNotice(worktreeCwd)
+        : isolatedWorkNotice(worktreeCwd)
     return report.result.includes(notice)
       ? report
       : { ...report, result: `${report.result}\n\n${notice}` }

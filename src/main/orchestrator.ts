@@ -1941,12 +1941,25 @@ export class Orchestrator {
       // Le rapport a ete redige DANS la copie isolee ; la ligne ci-dessus vient de la fusionner puis de
       // la supprimer. Sans cet alignement, chaque chemin cite est mort — constate le 2026-07-29, dit
       // par l'agent lui-meme : « le rapport pointe vers un worktree qui n'existe plus ».
+      // Une integration DIFFEREE n'est pas une integration ratee. `base-in-progress` signifie que la
+      // base portait une operation git en cours a cet instant ; le coordinateur programme alors
+      // jusqu'a 6 reprises (`MAX_AUTOMATIC_RETRIES`). Le confondre avec `kept` faisait ecrire « rien
+      // n'est publie » — un verdict DEFINITIF sur un etat encore en mouvement, que la reprise
+      // dementait sans que rien ne le reecrive. Mesure le 2026-08-18 sur ce depot : les 24 copies
+      // presentes portaient toutes un commit deja ancetre du HEAD de la base, 0 orpheline — donc
+      // l'avertissement etait faux a chaque fois. Sur un arbre git partage (l'app, les agents et les
+      // sessions CLI pilotent la MEME base), cette collision est la norme, pas l'exception.
+      const integrationDifferee =
+        finalizeOutcome === 'blocked' &&
+        typeof finalized === 'object' &&
+        finalized !== null &&
+        (finalized as { reason?: string }).reason === 'base-in-progress'
       if (produced && workCwd !== this.deps.executionWorkspace) {
         const aligned = alignReportWithDisk(
           { result: produced.result, phaseOutputs: produced.phaseOutputs },
           workCwd,
           this.deps.executionWorkspace,
-          integrated ? 'merged' : 'kept'
+          integrated ? 'merged' : integrationDifferee ? 'pending' : 'kept'
         )
         produced.result = aligned.result
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs

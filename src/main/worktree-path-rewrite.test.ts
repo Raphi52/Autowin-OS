@@ -153,3 +153,63 @@ describe('câblage — l’alignement a lieu APRÈS le verdict de fusion', () =>
     expect(source).toContain('workCwd !== this.deps.executionWorkspace')
   })
 })
+
+/**
+ * UNE INTÉGRATION DIFFÉRÉE N'EST PAS UNE INTÉGRATION RATÉE.
+ *
+ * Signalé par l'utilisateur le 2026-08-18 (« ça me met toujours ça quand je bosse dans Autowin OS »).
+ * Mesuré sur son dépôt : les 24 copies isolées présentes sous `worktrees/` portaient TOUTES un commit
+ * déjà ancêtre du HEAD de la base — 0 orpheline. L'avertissement « rien n'est publié » était donc faux
+ * dans 100 % des cas observés. Cause : `blocked/base-in-progress` est RÉESSAYABLE (jusqu'à 6 reprises
+ * côté coordinateur), mais l'orchestrateur le rangeait avec `kept` et écrivait un verdict définitif,
+ * une seule fois, à la clôture. La reprise fusionnait ensuite sans que personne ne réécrive la phrase.
+ */
+describe('intégration différée ≠ intégration ratée', () => {
+  const WT = 'C:\repo\.autowin-data\autowin-os\worktrees\h\agent__run-5ee1ad825286-1'
+  const BASE = 'C:\repo'
+  const report = { result: `Rapport. Fichier ${WT}\src\a.ts modifié.` }
+
+  it('n’affirme PAS « rien n’est publié » quand une reprise est programmée', () => {
+    const aligned = alignReportWithDisk(report, WT, BASE, 'pending')
+    // La phrase exacte qui a menti 24 fois sur 24 ne doit plus pouvoir sortir sur ce cas.
+    expect(aligned.result).not.toContain('NON fusionné')
+    expect(aligned.result).not.toContain("rien n'est publié")
+  })
+
+  it('dit la vérité de l’instant : différée, reprise programmée, chemin nommé', () => {
+    const aligned = alignReportWithDisk(report, WT, BASE, 'pending')
+    expect(aligned.result).toMatch(/DIFFÉRÉE/)
+    expect(aligned.result).toMatch(/reprise/i)
+    expect(aligned.result).toContain(WT)
+  })
+
+  it('les chemins de la copie restent VALIDES : on ne les réécrit pas', () => {
+    const aligned = alignReportWithDisk(report, WT, BASE, 'pending')
+    expect(aligned.result).toContain(`${WT}\src\a.ts`)
+  })
+
+  it('la note différée n’est pas ajoutée deux fois', () => {
+    const once = alignReportWithDisk(report, WT, BASE, 'pending')
+    const twice = alignReportWithDisk(once, WT, BASE, 'pending')
+    expect(twice.result.match(/DIFFÉRÉE/g)).toHaveLength(1)
+  })
+
+  it('un blocage DÉFINITIF garde bien l’avertissement dur — la nuance ne déborde pas', () => {
+    const aligned = alignReportWithDisk(report, WT, BASE, 'kept')
+    expect(aligned.result).toContain('NON fusionné')
+    expect(aligned.result).not.toMatch(/DIFFÉRÉE/)
+  })
+
+  /** CÂBLAGE : le libellé ne sert à rien si l'orchestrateur ne distingue pas le cas. */
+  it('l’orchestrateur mappe base-in-progress sur « pending », pas sur « kept »', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('node:fs') as typeof import('node:fs')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('node:path') as typeof import('node:path')
+    const source = fs.readFileSync(path.join(__dirname, 'orchestrator.ts'), 'utf8')
+    expect(source).toMatch(/'base-in-progress'/)
+    expect(source).toMatch(/integrationDifferee \? 'pending' : 'kept'/)
+    // L'ancien mapping binaire ne doit plus exister.
+    expect(source).not.toMatch(/integrated \? 'merged' : 'kept'/)
+  })
+})
