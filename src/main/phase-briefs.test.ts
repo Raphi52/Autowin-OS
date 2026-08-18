@@ -112,4 +112,15 @@ describe('phase-briefs (consignes courtes in-app)', () => {
       expect(PHASE_BRIEFS[phase], phase).not.toMatch(/ENGINE Ch\.|\[\[|→ `\w+`/)
     }
   })
+
+  // conv-1302 : 4 runs juges 96/100 sur un AUTRE fichier que la cible ancree par l'utilisateur.
+  // Le gate ne bloque que le miss TOTAL ; la couverture partielle, c'est le juge qui la releve.
+  it('le brief juge exige la matrice cible demandee -> fichier modifie -> preuve DoD', () => {
+    const juge = PHASE_BRIEFS.judge
+    expect(juge).toMatch(/cible\s+demandee\s*->\s*fichier\s+modifie\s*->\s*preuve\s+DoD/i)
+    expect(juge).toMatch(/chemin:ligne/)
+    // `every` : TOUTE cible ancree non couverte doit etre signalee, pas seulement le miss total.
+    expect(juge).toMatch(/TOUTE cible ancree non couverte/)
+    expect(juge).toMatch(/couverture partielle/i)
+  })
 })
