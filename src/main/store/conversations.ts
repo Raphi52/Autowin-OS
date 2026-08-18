@@ -301,11 +301,13 @@ export class ConversationStore {
       // démarrage — donc une réécriture intégrale du snapshot à chaque lancement.
       const hadWorkspaceId = rest.workspaceId !== undefined
       delete rest.workspaceId
-      // `category` etait le doublon en ecriture seule de `provider`. Lecture TOLERANTE d'un ancien
-      // fichier : on s'en sert en repli si `provider` manque, puis on cesse de l'ecrire.
+      // `category` n'a jamais ete qu'un DOUBLON EN ECRITURE de `provider` : le validateur disque a
+      // toujours exige `provider` (`conversations-disk.ts` — `isConversation`), donc un fichier ou
+      // `category` serait la seule source fait rejeter le store AVANT d'arriver ici. Aucun repli
+      // `provider ?? category` n'est donc atteignable ; on se contente de cesser de le recopier.
       const legacyCategory = rest.category
       delete rest.category
-      const provider = (legacy.provider as string | undefined) ?? (legacyCategory as string)
+      const provider = legacy.provider as string
       // Normalisation UNIQUE des chemins déjà écrits sous une forme non canonique : sans elle,
       // seules les écritures neuves seraient canoniques et l'ancien resterait dupliqué à vie.
       const canonicalPath = canonicalProjectPath(legacy.projectPath as string | undefined)
