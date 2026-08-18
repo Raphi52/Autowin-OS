@@ -9,7 +9,6 @@
 import React, { Fragment, memo } from 'react'
 import { Markdown } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
-import { ScoutTable } from './ScoutTable'
 import { CandidatsPickPanel } from './CandidatsPickPanel'
 import { JugesPanel } from './JugesPanel'
 import { ArtifactPreview } from './ArtifactPreview'
@@ -350,12 +349,6 @@ export const ChatMessageRow = memo(
                       <SuggestionGrid
                         key={index}
                         groups={part.groups}
-                        onPick={(prompt) => onPickSuggestion?.(prompt)}
-                      />
-                    ) : part.kind === 'scout-table' ? (
-                      <ScoutTable
-                        key={index}
-                        rows={part.rows}
                         onPick={(prompt) => onPickSuggestion?.(prompt)}
                       />
                     ) : part.kind === 'candidats-pick' ? (

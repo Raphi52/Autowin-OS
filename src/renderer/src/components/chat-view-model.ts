@@ -10,7 +10,7 @@ import {
 } from '../../../shared/chat-turn'
 import { parseAskChoices } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
-import { parseScoutTable, type ScoutRow } from './scout-table'
+import { parseScoutTable } from './scout-table'
 import {
   candidatsDepuisScoutTable,
   extraireCandidatsAffiches,
@@ -44,7 +44,6 @@ export type ChatPart = PersistedChatPart
 type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart | ChatErrorPart
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
-export type ChatScoutTableBlock = { kind: 'scout-table'; rows: ScoutRow[] }
 export type ChatCandidatsPickBlock = { kind: 'candidats-pick'; candidats: CandidatAffiche[] }
 export type ChatRenderBlock =
   | ChatTextPart
@@ -52,7 +51,6 @@ export type ChatRenderBlock =
   | ChatErrorPart
   | ChatActivityBlock
   | ChatSuggestionsBlock
-  | ChatScoutTableBlock
   | ChatCandidatsPickBlock
 
 export interface HydratedAssistantMessage {

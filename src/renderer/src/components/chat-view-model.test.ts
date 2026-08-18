@@ -1403,8 +1403,9 @@ describe('groupAssistantActivity', () => {
         how: 'Test rouge sur `src/main/activity/ledger.ts:63`'
       }
     ])
-    // Le rendu en lecture seule ne doit plus etre choisi pour un scout.
-    expect(blocs.some((bloc) => bloc.kind === 'scout-table')).toBe(false)
+    // L'ancien rendu en lecture seule ne peut PLUS etre choisi : son bloc a ete retire du modele,
+    // donc l'invariant est desormais tenu par le TYPE — plus fort qu'une assertion d'execution.
+    expect(blocs.every((bloc) => bloc.kind === 'candidats-pick')).toBe(true)
   })
 
   it('groups consecutive actions without crossing surrounding text', () => {
@@ -1555,7 +1556,9 @@ describe('chat scrolling and layout rules', () => {
    * bouton ne signalait le texte resté hors champ. Un cas résiduel doit rester visible.
    */
   it('signale une descente qui n’atterrit pas, et ne crie pas quand elle atterrit', () => {
-    const descente = (croissanceParFrame: number): { atterri: boolean | undefined; appels: number } => {
+    const descente = (
+      croissanceParFrame: number
+    ): { atterri: boolean | undefined; appels: number } => {
       const queue: Array<() => void> = []
       let atterri: boolean | undefined
       let appels = 0
