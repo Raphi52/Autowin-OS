@@ -10,7 +10,12 @@ import { dirname } from 'node:path'
 export interface TurnCost {
   provider: string
   role?: string
-  /** Modèle concret du tour — nécessaire pour distinguer le coût des N modèles d'un fan-out. */
+  /**
+   * Modèle concret du tour, COLLECTÉ et HISTORISÉ (il part dans `cost.jsonl`) pour que le tarif
+   * d'un tour non chiffré reste reconstituable a posteriori. Aucun agrégat par modèle n'est
+   * exposé ici, et c'est intentionnel : cet agrégateur ne garde que les lectures qui ont un
+   * lecteur réel.
+   */
   model?: string
   inputTokens: number
   outputTokens: number
