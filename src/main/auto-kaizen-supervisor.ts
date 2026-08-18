@@ -12,7 +12,10 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-export type { AutoKaizenConversationRole, AutoKaizenConversationLink } from '../shared/auto-kaizen-link'
+export type {
+  AutoKaizenConversationRole,
+  AutoKaizenConversationLink
+} from '../shared/auto-kaizen-link'
 import type {
   AutoKaizenConversationLink,
   AutoKaizenConversationRole

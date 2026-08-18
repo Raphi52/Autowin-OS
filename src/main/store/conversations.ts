@@ -119,6 +119,48 @@ export function deterministicMessageId(conversationId: string, index: number): s
   return `message-${conversationId}-${index + 1}`
 }
 
+/**
+ * Applique un événement au tour `turnId` — LA définition unique du réducteur de tour.
+ *
+ * Appelée par `ConversationStore.applyTurnEvent` (le direct) ET par le rejeu du journal
+ * (`conversations-disk`). Les deux copies avaient déjà divergé : le direct visait le DERNIER
+ * message du tour, le rejeu le PREMIER, si bien qu'une conversation portant deux messages
+ * assistant sous le même `turnId` ne se rechargeait pas telle qu'elle avait été vécue.
+ *
+ * La règle retenue est celle du DIRECT — le dernier — parce que c'est ce que l'utilisateur a vu
+ * pendant la session, et que le rejeu doit reproduire la session, pas l'inverse. Hors de ce cas
+ * (un seul candidat), les deux règles coïncident.
+ *
+ * Mute le message en place et le retourne ; `undefined` si aucun message du tour n'existe —
+ * l'appelant décide quoi en faire.
+ */
+export function applyTurnEventToMessages(
+  messages: readonly Msg[],
+  turnId: string,
+  event: ChatTurnEvent
+): Msg | undefined {
+  const message = [...messages]
+    .reverse()
+    .find((candidate) => candidate.role === 'assistant' && candidate.turnId === turnId)
+  if (!message) return undefined
+  const next = reduceChatTurn(
+    {
+      turnId,
+      status: message.status ?? 'streaming',
+      parts: message.parts ?? [],
+      ...(message.runtime ? { runtime: message.runtime } : {}),
+      ...(message.error ? { error: message.error } : {})
+    },
+    event
+  )
+  message.status = next.status
+  message.parts = next.parts
+  message.content = flattenChatParts(next.parts)
+  message.runtime = next.runtime
+  message.error = next.error
+  return message
+}
+
 /** Store en mémoire de conversations, avec horloge et générateur d'id injectables pour les tests. */
 export class ConversationStore {
   private readonly conversations = new Map<string, Conversation>()
@@ -435,23 +477,8 @@ export class ConversationStore {
   applyTurnEvent(id: string, turnId: string, event: ChatTurnEvent): Conversation {
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
-    const message = [...conversation.messages]
-      .reverse()
-      .find((candidate) => candidate.role === 'assistant' && candidate.turnId === turnId)
+    const message = applyTurnEventToMessages(conversation.messages, turnId, event)
     if (!message) throw new Error(`Tour assistant inconnu: ${turnId}`)
-    const current = {
-      turnId,
-      status: message.status ?? ('streaming' as const),
-      parts: message.parts ?? [],
-      ...(message.runtime ? { runtime: message.runtime } : {}),
-      ...(message.error ? { error: message.error } : {})
-    }
-    const next = reduceChatTurn(current, event)
-    message.status = next.status
-    message.parts = next.parts
-    message.content = flattenChatParts(next.parts)
-    message.runtime = next.runtime
-    message.error = next.error
     conversation.updatedAt = this.now()
     const terminal = ['done', 'failed', 'cancelled', 'interrupted'].includes(event.kind)
     this.changed(id, terminal ? 'immediate' : 'checkpoint', {

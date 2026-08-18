@@ -10,8 +10,8 @@ import {
   writeFileSync
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { flattenChatParts, reduceChatTurn, type ChatTurnEvent } from '../../shared/chat-turn'
-import { deterministicMessageId } from './conversations'
+import type { ChatTurnEvent } from '../../shared/chat-turn'
+import { applyTurnEventToMessages, deterministicMessageId } from './conversations'
 import type { Conversation, ConversationChange, ConversationStore, Msg } from './conversations'
 import { ensureAutowinAppData } from '../app-data'
 
@@ -357,25 +357,14 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
         typeof record.updatedAt === 'number'
       ) {
         const conversation = byId.get(record.id)
-        const message = conversation?.messages.find(
-          (candidate) => candidate.role === 'assistant' && candidate.turnId === record.turnId
-        )
+        const message = conversation
+          ? applyTurnEventToMessages(
+              conversation.messages,
+              record.turnId,
+              record.event as ChatTurnEvent
+            )
+          : undefined
         if (!conversation || !message) throw new Error('tour du delta introuvable')
-        const next = reduceChatTurn(
-          {
-            turnId: record.turnId,
-            status: message.status ?? 'streaming',
-            parts: message.parts ?? [],
-            ...(message.runtime ? { runtime: message.runtime } : {}),
-            ...(message.error ? { error: message.error } : {})
-          },
-          record.event as ChatTurnEvent
-        )
-        message.status = next.status
-        message.parts = next.parts
-        message.content = flattenChatParts(next.parts)
-        message.runtime = next.runtime
-        message.error = next.error
         conversation.updatedAt = record.updatedAt
       } else {
         throw new Error('opération de journal invalide')
