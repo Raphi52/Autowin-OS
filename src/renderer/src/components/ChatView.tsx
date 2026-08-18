@@ -63,6 +63,7 @@ import {
 import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-sections'
 import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment } from './chat-attachments'
+import { derniereConversationOuverte, memoriserDerniereConversation } from './derniere-conversation'
 import {
   conversationsRecentes,
   doitAfficherRecentes,
@@ -644,6 +645,14 @@ export function ChatView({
         return
       }
     }
+    // Pas de tour a reprendre : on rouvre la ou l'utilisateur etait (demande du 2026-08-18). La
+    // reprise d'un tour inacheve reste PRIORITAIRE — elle repare quelque chose, celle-ci ne fait
+    // que replacer le curseur. Aucune selection inventee si la memoire est vide ou perimee.
+    const derniere = derniereConversationOuverte(loaded)
+    if (derniere) {
+      const conversation = loaded.find((candidate) => candidate.id === derniere)
+      if (conversation) await loadConv(conversation)
+    }
     // Survie niveau 3 — RELANCE GRATUITE (demande user 2026-08-13 : « faire en sorte que ça tue
     // pas les runs »). `pickTurnToResume` exige `events > 0` : un tour mort AVANT d'avoir rien
     // produit (0 événement, 0 texte, 0 action réglée — donc 0 dépense) passait au travers et
@@ -1015,6 +1024,9 @@ export function ChatView({
     setConvLoad((prev) => (prev.status === 'idle' ? prev : { status: 'idle' }))
 
   async function loadConv(c: Conv): Promise<void> {
+    // Retenu ICI : `loadConv` est le point de passage unique de toute ouverture (clic, reprise,
+    // inbox d'agents), donc le seul endroit ou la memoire ne peut pas se desynchroniser.
+    memoriserDerniereConversation(c.id)
     const requestId = ++loadConversationRequestRef.current
     // Le numéro de requête arbitre AUSSI l'affichage : une réponse (ou un échec) PÉRIMÉ ne
     // repeint plus rien — c'est la dernière sélection de l'utilisateur qui fait foi.
