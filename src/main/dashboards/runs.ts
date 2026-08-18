@@ -120,9 +120,11 @@ export function parseRun(md: string, subject?: string): RunSummary {
  * Ne bloquent pas, à DoD complète : `green`, `degraded-closed` et `succeeded` — ce dernier est un
  * fossile de SUCCÈS, il hérite donc du traitement de `green`, condition de DoD comprise.
  * Une DoD incomplète bloque quel que soit le statut : c'est la règle, sans exception par statut.
+ * Un statut illisible (`unknown`) bloque également : un RUN.md corrompu doit rester visible.
  */
 export function isBlocked(s: RunSummary): boolean {
   return (
-    ['pending', 'running', 'open', 'failed', 'red'].includes(s.status) || s.dodChecked < s.dodTotal
+    ['pending', 'running', 'open', 'failed', 'red', 'unknown'].includes(s.status) ||
+    s.dodChecked < s.dodTotal
   )
 }
