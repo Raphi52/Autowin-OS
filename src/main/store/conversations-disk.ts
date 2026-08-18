@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { flattenChatParts, reduceChatTurn, type ChatTurnEvent } from '../../shared/chat-turn'
+import { deterministicMessageId } from './conversations'
 import type { Conversation, ConversationChange, ConversationStore, Msg } from './conversations'
 import { ensureAutowinAppData } from '../app-data'
 
@@ -177,7 +178,7 @@ function hasUniqueMessageIds(conversationId: string, messages: unknown[]): boole
     const messageId =
       typeof message.messageId === 'string'
         ? message.messageId
-        : `message-${conversationId}-${index + 1}`
+        : deterministicMessageId(conversationId, index)
     if (!messageId || seen.has(messageId)) return false
     seen.add(messageId)
   }

@@ -108,6 +108,17 @@ export interface ConversationChange {
     | { op: 'turn-event'; turnId: string; event: ChatTurnEvent; updatedAt: number }
 }
 
+/**
+ * L'identifiant déterministe d'un message qui n'en porte pas sur disque.
+ *
+ * UNE seule définition : `hydrate` l'alloue, et `hasUniqueMessageIds` (validateur disque) doit
+ * dériver exactement le même id, sinon des conversations valides sont déclarées invalides.
+ * `index` est l'index 0-based dans le tableau ; l'id est 1-based. Ne change pas d'un caractère.
+ */
+export function deterministicMessageId(conversationId: string, index: number): string {
+  return `message-${conversationId}-${index + 1}`
+}
+
 /** Store en mémoire de conversations, avec horloge et générateur d'id injectables pour les tests. */
 export class ConversationStore {
   private readonly conversations = new Map<string, Conversation>()
@@ -143,7 +154,7 @@ export class ConversationStore {
       const messageIdRemap = new Map<string, string>()
       const messages = c.messages.map((sourceMessage, index) => {
         let message = sourceMessage
-        const persistedMessageId = message.messageId ?? `message-${c.id}-${index + 1}`
+        const persistedMessageId = message.messageId ?? deterministicMessageId(c.id, index)
         let messageId = persistedMessageId
         if (usedMessageIds.has(messageId)) {
           migrated = true
@@ -591,7 +602,7 @@ export class ConversationStore {
   private nextUniqueForkMessageId(allocatedIds: ReadonlySet<string>): string {
     let candidate: string
     do {
-      candidate = `msg-${randomUUID()}`
+      candidate = `message-${randomUUID()}`
     } while (allocatedIds.has(candidate) || this.hasMessageId(candidate))
     return candidate
   }
