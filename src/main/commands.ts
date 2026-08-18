@@ -330,6 +330,38 @@ const CATALOG: CommandSpec[] = [
   },
   {
     /**
+     * Lire le CONTENU d'une autre conversation.
+     *
+     * Defaut vecu le 2026-08-18 : « scout en te basant sur la derniere conversation (cite-la) » a
+     * recu « je ne peux pas citer honnetement le contenu de la conversation precedente ». L'agent
+     * disait VRAI : `get_state` n'expose que des titres tronques, et le store sur disque avait 1h41
+     * de retard (id max conv-1290 pour la conv-1291 demandee) — le contenu ne vivait qu'en memoire.
+     * Autowin garde 31 modules de retrospective, exposes a l'INTERFACE par 9 canaux IPC et a l'agent
+     * par AUCUN outil : la rétrospective etait branchee pour l'oeil, pas pour le modele qui analyse.
+     *
+     * Lit le store VIVANT (`os.conversations`), jamais le fichier : c'est la seule source a jour.
+     */
+    name: 'conversation_read',
+    description:
+      "Lire le CONTENU REEL d'une autre conversation (ses messages), depuis l'etat vivant de l'app. " +
+      'Appelle-le des que la demande cite une conversation : « la derniere conversation », ' +
+      "« conv-1291 », « compare avec ce qu'on a dit hier », une retrospective ou une analyse " +
+      "comparative. L'etat general n'expose que des titres tronques, et le fichier sur disque peut " +
+      'avoir des heures de retard. Ne reponds JAMAIS « je ne peux pas citer cette conversation » ' +
+      'sans avoir appele cet outil.',
+    args: {
+      id: 'identifiant de la conversation (ex. « conv-1291 ») — `get_state` les liste',
+      derniers: 'nombre de derniers messages a rendre (defaut 20, borne 200)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    /**
      * CLASSER une conversation — la capacite qui manquait, et son absence poussait au pire chemin.
      *
      * Demande de l'utilisateur : « ranges moi mes conversations dans des sous categories adequates ».
@@ -1672,6 +1704,45 @@ export class AppCommandBus {
         if (!c) throw new Error(`conversation introuvable: ${s('id')}`)
         this.broadcast({ type: 'refresh', scope: 'conversations' })
         return { id: c.id, titre: c.title, dossier: c.projectPath ?? null }
+      }
+      case 'conversation_read': {
+        const id = s('id')
+        const conversation = this.os.conversations.get(id)
+        // Une conversation absente est un ECHEC franc : rendre « 0 message » laisserait l'agent
+        // conclure qu'elle est vide alors qu'il s'est trompe d'identifiant.
+        if (!conversation) throw new Error(`Conversation introuvable: ${id}`)
+        const tous = conversation.messages ?? []
+        const demandes = Number(a.derniers)
+        const combien = Math.max(1, Math.min(200, Math.floor(demandes) || 20))
+        const CAP_PAR_MESSAGE = 4000
+        const messages = tous.slice(-combien).map((message) => {
+          const texte = typeof message.content === 'string' ? message.content : ''
+          const coupe = texte.length > CAP_PAR_MESSAGE
+          return {
+            role: message.role,
+            ts: message.ts,
+            text: coupe ? texte.slice(0, CAP_PAR_MESSAGE) : texte,
+            ...(coupe ? { tronque: true, longueurReelle: texte.length } : {})
+          }
+        })
+        // Ce qui est coupe est DIT : une troncature muette ferait analyser un extrait comme s'il
+        // etait le tout — la conclusion fausse qu'une retrospective doit precisement eviter.
+        const coupes = messages.filter((message) => message.tronque).length
+        return {
+          id: conversation.id,
+          title: conversation.title,
+          // `category` a ete retire du contrat le 2026-08-18 (doublon toujours egal a `provider`) :
+          // le dossier de classement est `projectPath`.
+          provider: conversation.provider,
+          ...(conversation.projectPath ? { projectPath: conversation.projectPath } : {}),
+          createdAt: conversation.createdAt,
+          updatedAt: conversation.updatedAt,
+          messageCount: tous.length,
+          messages,
+          note:
+            `${tous.length} message(s) au total, ${messages.length} rendu(s)` +
+            (coupes > 0 ? `, ${coupes} tronque(s) a ${CAP_PAR_MESSAGE} caracteres` : '')
+        }
       }
       case 'rename_conversation': {
         const c = this.os.conversations.rename(s('id'), s('title'))

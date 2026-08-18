@@ -106,6 +106,90 @@ function fakeOs(): any {
   }
 }
 
+describe('conversation_read — lire une AUTRE conversation', () => {
+  /**
+   * Defaut vecu le 2026-08-18 : l'utilisateur demande « scout en te basant sur la derniere
+   * conversation (cite-la) ». L'agent a repondu qu'il ne pouvait pas, et il disait VRAI :
+   * `get_state` n'expose que des titres tronques, aucun outil ne rend les messages d'une
+   * conversation voisine, et le store sur disque avait 1h41 de retard (id max conv-1290 pour une
+   * conv-1291 demandee) — le contenu ne vivait qu'en memoire et dans le journal. Autowin garde 31
+   * modules de retrospective, exposes a l'INTERFACE par 9 canaux IPC et a l'agent par AUCUN outil.
+   */
+  it('rend les messages reels de la conversation demandee', async () => {
+    const bus = new AppCommandBus(fakeOs(), () => undefined)
+
+    const result = await bus.exec('conversation_read', { id: 'conv-1' })
+
+    expect(result.ok).toBe(true)
+    const data = result.data as {
+      id: string
+      title: string
+      provider: string
+      messageCount: number
+      messages: { role: string; text: string }[]
+    }
+    expect(data.id).toBe('conv-1')
+    expect(data.title).toBe('A garder')
+    expect(data.provider).toBe('claude')
+    expect(data.messageCount).toBe(1)
+    expect(data.messages[0].role).toBe('user')
+    expect(data.messages[0].text).toContain('le worktree est resté ouvert')
+  })
+
+  it('echoue franchement sur une conversation absente, sans inventer un vide', async () => {
+    const bus = new AppCommandBus(fakeOs(), () => undefined)
+
+    const result = await bus.exec('conversation_read', { id: 'conv-absente' })
+
+    expect(result.ok).toBe(false)
+    expect(String(result.error)).toContain('conv-absente')
+  })
+
+  it('BORNE la sortie et DIT ce qui a ete coupe (jamais une troncature muette)', async () => {
+    const os = fakeOs()
+    const longue = 'x'.repeat(9000)
+    for (let i = 0; i < 40; i++) {
+      os.conversations
+        .get('conv-1')
+        .messages.push({ role: 'assistant', content: longue, ts: 100 + i })
+    }
+
+    const result = await new AppCommandBus(os, () => undefined).exec('conversation_read', {
+      id: 'conv-1',
+      derniers: 5
+    })
+
+    const data = result.data as {
+      messageCount: number
+      messages: { text: string; tronque?: boolean }[]
+      note?: string
+    }
+    // Le compte TOTAL reste dit, meme si on ne rend que les derniers.
+    expect(data.messageCount).toBe(41)
+    expect(data.messages).toHaveLength(5)
+    // Chaque message trop long est coupe ET marque comme tel.
+    expect(data.messages[0].tronque).toBe(true)
+    expect(data.messages[0].text.length).toBeLessThan(longue.length)
+    expect(data.note).toContain('41')
+  })
+
+  it('rend les DERNIERS messages, pas les premiers', async () => {
+    const os = fakeOs()
+    os.conversations
+      .get('conv-1')
+      .messages.push({ role: 'assistant', content: 'le plus recent', ts: 99 })
+
+    const result = await new AppCommandBus(os, () => undefined).exec('conversation_read', {
+      id: 'conv-1',
+      derniers: 1
+    })
+
+    const data = result.data as { messages: { text: string }[] }
+    expect(data.messages).toHaveLength(1)
+    expect(data.messages[0].text).toBe('le plus recent')
+  })
+})
+
 describe('classement d’une conversation', () => {
   it('signale comme ECHEC une conversation absente au lieu de produire un faux vert', async () => {
     const bus = new AppCommandBus(fakeOs(), () => undefined)
