@@ -27,7 +27,7 @@ function openedTurn(task: string): {
   turnId: string
 } {
   const store = new ConversationStore(clock())
-  const conv = store.create({ title: 'Reprise', category: 'native', provider: 'codex' })
+  const conv = store.create({ title: 'Reprise', provider: 'codex' })
   const turnId = 'turn-resume-1'
   const turn = createOrchestrateTurnPersistence({
     conversations: store,

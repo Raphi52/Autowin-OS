@@ -209,7 +209,10 @@ describe('renderer chat IPC contract', () => {
     expect(sources.preload).not.toContain('authorityMode')
     expect(sources.preloadTypes).not.toContain('authorityMode')
     expect(sources.main).toMatch(
-      /'os:conversations:create'[\s\S]*?os\.conversations\.create\(p\)[\s\S]*?scope: 'conversations'/
+      // `create(p)` est devenu `create({ title, provider })` : le champ persiste `category`,
+      // doublon en ecriture seule de `provider`, n'est plus transmis au store (il reste accepte
+      // dans la charge utile IPC — contrat renderer inchange).
+      /'os:conversations:create'[\s\S]*?os\.conversations\.create\(\{ title: p\.title, provider: p\.provider \}\)[\s\S]*?scope: 'conversations'/
     )
     expect(sources.main).toMatch(
       /'os:conversations:remove'[\s\S]*?os\.conversations\.remove\(id\)[\s\S]*?scope: 'conversations'/

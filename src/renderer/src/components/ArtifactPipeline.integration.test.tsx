@@ -80,7 +80,7 @@ describe('pipeline artefact provider -> chat rechargé -> renderer', () => {
     }
     const base = mkdtempSync(join(tmpdir(), 'autowin-artifact-pipeline-'))
     const store = new ConversationStore(() => 1)
-    const conversation = store.create({ title: 'Pipeline', category: 'codex', provider: 'codex' })
+    const conversation = store.create({ title: 'Pipeline', provider: 'codex' })
     const turnId = 'turn-roundtrip'
     store.beginTurn(conversation.id, { content: 'Génère un rapport' }, { turnId })
 

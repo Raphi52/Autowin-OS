@@ -224,7 +224,8 @@ function isConversation(value: unknown): value is Conversation {
     typeof value.id !== 'string' ||
     value.id.length === 0 ||
     typeof value.title !== 'string' ||
-    typeof value.category !== 'string' ||
+    // `category` n'est PLUS exige : les fichiers ecrits apres ce remake ne le portent plus, et
+    // exiger un champ qu'on n'ecrit plus ferait declarer le store entier corrompu au demarrage.
     typeof value.provider !== 'string' ||
     !Array.isArray(value.messages) ||
     !value.messages.every(isConversationMessage) ||

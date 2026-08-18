@@ -62,12 +62,18 @@ export function forkTitle(sourceTitle: string): string {
   return `${base || 'Conversation'} (fork)`
 }
 
-/** Une conversation, regroupée par catégorie et rattachée à un provider. */
+/** Une conversation, rattachée à un provider et rangée dans un dossier de travail. */
 export interface Conversation {
   schemaVersion?: 2 | 3
   id: string
   title: string
-  category: Category
+  /**
+   * Le moteur qui répond (`'claude' | 'codex' | ...`).
+   *
+   * Portait AUSSI le nom `category` jusqu'à ce remake : deux champs persistés toujours égaux, dont
+   * un seul décidait quoi que ce soit. Un ancien `conversations.json` peut encore porter
+   * `category` — l'hydratation le lit en repli (`category ?? provider`) et ne le réécrit plus.
+   */
   provider: string
   messages: Msg[]
   /** Renseigné si la conversation est née d'un fork. Purement informatif. */
@@ -77,7 +83,7 @@ export interface Conversation {
   /**
    * Le dossier de travail auquel cette conversation appartient — ce qui la GROUPE dans la liste.
    *
-   * Distinct de `category`, qui porte le PROVIDER (`'claude' | 'codex' | ...`) : le détourner pour
+   * Distinct de `provider`, qui porte le MOTEUR (`'claude' | 'codex' | ...`) : le détourner pour
    * y ranger un dossier casserait l'affichage et les recopies sans erreur visible.
    *
    * OPTIONNEL, et il le reste : un `conversations.json` écrit par une version antérieure doit
@@ -131,10 +137,7 @@ export function deterministicMessageId(conversationId: string, index: number): s
  * Rend `undefined` pour ce qui ne désigne aucun dossier (vide, espaces, séparateurs seuls).
  */
 export function canonicalProjectPath(raw: string | null | undefined): string | undefined {
-  const propre = raw
-    ?.trim()
-    .replace(/\//g, '\\')
-    .replace(/\\+$/, '')
+  const propre = raw?.trim().replace(/\//g, '\\').replace(/\\+$/, '')
   if (!propre) return undefined
   return /^[a-z]:/.test(propre) ? propre[0].toUpperCase() + propre.slice(1) : propre
 }
@@ -301,6 +304,11 @@ export class ConversationStore {
       // démarrage — donc une réécriture intégrale du snapshot à chaque lancement.
       const hadWorkspaceId = rest.workspaceId !== undefined
       delete rest.workspaceId
+      // `category` etait le doublon en ecriture seule de `provider`. Lecture TOLERANTE d'un ancien
+      // fichier : on s'en sert en repli si `provider` manque, puis on cesse de l'ecrire.
+      const legacyCategory = rest.category
+      delete rest.category
+      const provider = (legacy.provider as string | undefined) ?? (legacyCategory as string)
       // Normalisation UNIQUE des chemins déjà écrits sous une forme non canonique : sans elle,
       // seules les écritures neuves seraient canoniques et l'ancien resterait dupliqué à vie.
       const canonicalPath = canonicalProjectPath(legacy.projectPath as string | undefined)
@@ -310,11 +318,13 @@ export class ConversationStore {
       const hydrated: Conversation = {
         ...(rest as unknown as Conversation),
         schemaVersion: 3 as const,
+        provider,
         messages
       }
       if (
         c.schemaVersion !== 3 ||
         hadWorkspaceId ||
+        legacyCategory !== undefined ||
         pathChanged ||
         legacy.authorityMode !== undefined ||
         hadBranches
@@ -345,7 +355,6 @@ export class ConversationStore {
   /** Crée une nouvelle conversation vide et la stocke. */
   create(p: {
     title: string
-    category: Category
     provider: string
     autoKaizen?: AutoKaizenConversationLink
   }): Conversation {
@@ -355,7 +364,6 @@ export class ConversationStore {
       schemaVersion: 3,
       id,
       title: p.title,
-      category: p.category,
       provider: p.provider,
       messages: [],
       ...(p.autoKaizen ? { autoKaizen: p.autoKaizen } : {}),
@@ -624,7 +632,6 @@ export class ConversationStore {
 
     const forked = this.create({
       title: forkTitle(source.title),
-      category: source.category,
       provider: source.provider
     })
     // Copie jusqu'au point de fork INCLUS. Les identifiants de message sont régénérés : deux

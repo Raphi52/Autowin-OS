@@ -8,7 +8,6 @@ import { ChatView } from './ChatView'
 export const conversation = (id: string, messages: unknown[] = []): Record<string, unknown> => ({
   id,
   title: `Conversation ${id}`,
-  category: 'codex',
   provider: 'codex',
   messages,
   updatedAt: 1

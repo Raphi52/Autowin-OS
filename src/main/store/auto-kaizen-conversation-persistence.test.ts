@@ -13,7 +13,6 @@ describe('filiation des conversations Auto-Kaizen', () => {
       const store = new ConversationStore(() => 42)
       const created = store.create({
         title: 'Auto-Kaizen — erreur provider',
-        category: 'codex',
         provider: 'codex',
         autoKaizen: {
           incidentId: 'ak-1',

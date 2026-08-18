@@ -5,7 +5,7 @@ import { createOrchestrateTurnPersistence } from './orchestrate-turn-persistence
 
 function storeWithConversation(): { store: ConversationStore; id: string } {
   const store = new ConversationStore(() => 1)
-  const conversation = store.create({ title: 'Reprise', category: 'claude', provider: 'cc' })
+  const conversation = store.create({ title: 'Reprise', provider: 'cc' })
   return { store, id: conversation.id }
 }
 

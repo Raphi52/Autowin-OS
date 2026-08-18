@@ -418,7 +418,7 @@ describe('ClaudeCliAdapter — sorties artefact stream-json', () => {
 
     const base = mkdtempSync(join(tmpdir(), 'autowin-claude-artifact-'))
     const store = new ConversationStore(() => 1)
-    const conversation = store.create({ title: 'Claude', category: 'claude', provider: 'claude' })
+    const conversation = store.create({ title: 'Claude', provider: 'claude' })
     store.beginTurn(conversation.id, { content: 'Image' }, { turnId: 'turn-claude' })
     const stored = materializeChatArtifact(
       step.value.artifacts![0],

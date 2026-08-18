@@ -990,7 +990,9 @@ export class AppCommandBus {
       roles: this.os.roles.all(),
       conversations: this.os.conversations
         .list()
-        .map((c) => ({ id: c.id, title: c.title, category: c.category })),
+        // Le nom `category` de CETTE sortie est un contrat d'agent : il reste, sa source devient
+        // `provider` (les deux valeurs etaient toujours egales).
+        .map((c) => ({ id: c.id, title: c.title, category: c.provider })),
       runs: runs
         .slice(0, 12)
         .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
@@ -1618,7 +1620,8 @@ export class AppCommandBus {
       case 'create_conversation': {
         const c = this.os.conversations.create({
           title: s('title'),
-          category: s('category') || 'claude',
+          // L'argument s'appelle encore `category` (contrat d'agent, cf. catalogue) ; il ALIMENTE
+          // desormais le seul champ persiste, `provider`.
           provider: s('category') || 'claude'
         })
         this.broadcast({ type: 'refresh', scope: 'conversations' })

@@ -70,7 +70,6 @@ describe('buildAutowinKaizenTask', () => {
         {
           id: 'conv-3',
           title: 'Audit',
-          category: 'codex',
           provider: 'codex',
           messages: [],
           runPaths: [externalClaude],

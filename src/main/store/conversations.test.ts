@@ -11,11 +11,10 @@ function makeClock(start = 1000): () => number {
 describe('ConversationStore', () => {
   it('create crée une conversation vide avec id déterministe', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'Titre', category: 'native', provider: 'anthropic' })
+    const conv = store.create({ title: 'Titre', provider: 'anthropic' })
 
     expect(conv.id).toBe('conv-1')
     expect(conv.title).toBe('Titre')
-    expect(conv.category).toBe('native')
     expect(conv.provider).toBe('anthropic')
     expect(conv.messages).toEqual([])
     expect(conv.createdAt).toBe(conv.updatedAt)
@@ -23,8 +22,8 @@ describe('ConversationStore', () => {
 
   it("create incrémente le compteur d'id à chaque appel", () => {
     const store = new ConversationStore(makeClock())
-    const c1 = store.create({ title: 'A', category: 'native', provider: 'p' })
-    const c2 = store.create({ title: 'B', category: 'native', provider: 'p' })
+    const c1 = store.create({ title: 'A', provider: 'p' })
+    const c2 = store.create({ title: 'B', provider: 'p' })
 
     expect(c1.id).toBe('conv-1')
     expect(c2.id).toBe('conv-2')
@@ -32,7 +31,7 @@ describe('ConversationStore', () => {
 
   it('append ajoute un message et met à jour updatedAt', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'native', provider: 'p' })
+    const conv = store.create({ title: 'A', provider: 'p' })
     const before = conv.updatedAt
 
     const updated = store.append(conv.id, { role: 'user', content: 'Salut' })
@@ -44,7 +43,7 @@ describe('ConversationStore', () => {
 
   it('persiste les métadonnées des fichiers joints sans leur contenu', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'claude', provider: 'claude' })
+    const conv = store.create({ title: 'A', provider: 'claude' })
     const updated = store.append(conv.id, {
       role: 'user',
       content: 'Analyse',
@@ -64,7 +63,7 @@ describe('ConversationStore', () => {
 
   it('get retourne la conversation ou undefined', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'native', provider: 'p' })
+    const conv = store.create({ title: 'A', provider: 'p' })
 
     expect(store.get(conv.id)).toBe(conv)
     expect(store.get('conv-inconnue')).toBeUndefined()
@@ -72,8 +71,8 @@ describe('ConversationStore', () => {
 
   it('list retourne les conversations triées par updatedAt décroissant', () => {
     const store = new ConversationStore(makeClock())
-    const c1 = store.create({ title: 'A', category: 'native', provider: 'p' })
-    const c2 = store.create({ title: 'B', category: 'native', provider: 'p' })
+    const c1 = store.create({ title: 'A', provider: 'p' })
+    const c2 = store.create({ title: 'B', provider: 'p' })
     // Touche c1 en dernier pour qu'il passe devant c2.
     store.append(c1.id, { role: 'user', content: 'x' })
 
@@ -83,7 +82,7 @@ describe('ConversationStore', () => {
 
   it('rename change le titre', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'native', provider: 'p' })
+    const conv = store.create({ title: 'A', provider: 'p' })
 
     store.rename(conv.id, 'Nouveau titre')
 
@@ -92,7 +91,7 @@ describe('ConversationStore', () => {
 
   it("remove supprime la conversation et retourne true/false selon l'existence", () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'native', provider: 'p' })
+    const conv = store.create({ title: 'A', provider: 'p' })
 
     expect(store.remove(conv.id)).toBe(true)
     expect(store.get(conv.id)).toBeUndefined()
@@ -103,7 +102,7 @@ describe('ConversationStore', () => {
 describe('ConversationStore structured turns', () => {
   it('starts a continuation with an assistant turn only', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'codex', provider: 'codex' })
+    const conv = store.create({ title: 'A', provider: 'codex' })
     store.beginTurn(conv.id, { content: 'Inspecte le depot' }, { turnId: 'turn-1' })
     store.applyTurnEvent(conv.id, 'turn-1', { kind: 'cancelled' })
     store.beginContinuationTurn(conv.id, {
@@ -125,7 +124,7 @@ describe('ConversationStore structured turns', () => {
 
   it('creates a durable user + streaming assistant turn before provider execution', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'codex', provider: 'codex' })
+    const conv = store.create({ title: 'A', provider: 'codex' })
 
     store.beginTurn(
       conv.id,
@@ -151,7 +150,7 @@ describe('ConversationStore structured turns', () => {
 
   it('applies structured events and keeps content as a compatible projection', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'codex', provider: 'codex' })
+    const conv = store.create({ title: 'A', provider: 'codex' })
     store.beginTurn(conv.id, { content: 'Go' }, { turnId: 'turn-1' })
 
     store.applyTurnEvent(conv.id, 'turn-1', {
@@ -189,7 +188,6 @@ describe('ConversationStore structured turns', () => {
       {
         id: 'conv-4',
         title: 'Legacy',
-        category: 'claude',
         provider: 'claude',
         createdAt: 1,
         updatedAt: 2,
@@ -221,7 +219,7 @@ describe('ConversationStore structured turns', () => {
  */
 describe('ConversationStore — le dossier de travail qui groupe', () => {
   const neuve = (store: ConversationStore): string =>
-    store.create({ title: 'T', category: 'claude', provider: 'anthropic' }).id
+    store.create({ title: 'T', provider: 'anthropic' }).id
 
   it('une conversation naît SANS dossier — on ne devine pas son projet', () => {
     const store = new ConversationStore(makeClock())
@@ -323,7 +321,6 @@ describe('réconciliation au chargement des tours interrompus', () => {
     {
       id: 'conv-1056',
       title: 'run interrompu',
-      category: 'codex',
       provider: 'codex',
       createdAt: 1,
       updatedAt: 2,

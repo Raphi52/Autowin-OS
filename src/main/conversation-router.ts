@@ -247,7 +247,6 @@ export class ConversationRouteCoordinator {
       'Nouvelle conversation'
     const target = this.conversations.create({
       title: decision.title || fallbackTitle,
-      category: source.category,
       provider: source.provider
     })
     return {

@@ -16,7 +16,6 @@ function conversation(messages: Conversation['messages']): Conversation {
     schemaVersion: 3,
     id: 'conv-1',
     title: 'Refonte du graphe Git',
-    category: 'codex',
     provider: 'codex',
     messages,
     createdAt: 1,
@@ -307,7 +306,7 @@ describe('ConversationRouter', () => {
 describe('ConversationRouteCoordinator', () => {
   it('creates an empty target and leaves the source untouched for a new topic', async () => {
     const store = new ConversationStore(() => 10)
-    const source = store.create({ title: 'Git', category: 'codex', provider: 'codex' })
+    const source = store.create({ title: 'Git', provider: 'codex' })
     store.append(source.id, { role: 'user', content: 'Parlons du graphe Git' })
     const decide = vi.fn().mockResolvedValue({
       route: 'new',
@@ -331,7 +330,6 @@ describe('ConversationRouteCoordinator', () => {
     expect(store.get(source.id)?.messages).toEqual(before)
     expect(store.get(result.conversationId)).toMatchObject({
       title: 'Mouse Move',
-      category: 'codex',
       provider: 'codex',
       messages: []
     })
@@ -339,7 +337,7 @@ describe('ConversationRouteCoordinator', () => {
 
   it('returns the source without creating anything when the decision is current', async () => {
     const store = new ConversationStore(() => 10)
-    const source = store.create({ title: 'Git', category: 'codex', provider: 'codex' })
+    const source = store.create({ title: 'Git', provider: 'codex' })
     store.append(source.id, { role: 'user', content: 'Parlons du graphe Git' })
     const decide = vi.fn().mockResolvedValue({
       route: 'current',

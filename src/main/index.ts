@@ -1551,7 +1551,6 @@ function registerChatIpc(): void {
     if (!isolatedTestInstance) throw new Error('Fixture indisponible hors instance isolée')
     const conversation = os.conversations.create({
       title: htmlOnly ? 'HTML rendu · fixture' : 'Galerie · artefacts modèles',
-      category: 'codex',
       provider: 'codex'
     })
     const previewTurnId = `artifact-preview-${Date.now()}`
@@ -2943,12 +2942,13 @@ Le fil reprend ensuite normalement.`
       event,
       p: {
         title: string
-        category: string
+        /** Contrat renderer INCHANGE : encore accepte, mais plus persiste — `provider` fait foi. */
+        category?: string
         provider: string
       }
     ) => {
       assertTrustedRendererSender(event, 'Conversation create')
-      const conversation = os.conversations.create(p)
+      const conversation = os.conversations.create({ title: p.title, provider: p.provider })
       broadcast({ type: 'refresh', scope: 'conversations' })
       return conversation
     }
@@ -4542,7 +4542,6 @@ Le fil reprend ensuite normalement.`
           const source = os.conversations.get(link.sourceConversationId)
           return os.conversations.create({
             title: title.slice(0, 140),
-            category: source?.category ?? 'codex',
             provider: source?.provider ?? os.roles.getBinding('orchestrator').provider,
             autoKaizen: link
           })
@@ -4880,7 +4879,6 @@ Le fil reprend ensuite normalement.`
         const binding = bindingScoutVeille()
         const conversation = os.conversations.create({
           title: `[save] empreinte du dépôt ${new Date().toLocaleString('fr-FR')}`.slice(0, 80),
-          category: binding.provider,
           provider: binding.provider
         })
         await scheduledChatRuntime.runPrompt(

@@ -141,7 +141,7 @@ interface Snapshot {
  * ecran, via un `Pick` sur le type importe — retirer l'un d'eux du contrat casse desormais la
  * compilation de ce fichier.
  */
-type ConversationSummary = Pick<StoreConversationSummary, 'id' | 'title' | 'category' | 'provider'>
+type ConversationSummary = Pick<StoreConversationSummary, 'id' | 'title' | 'provider'>
 
 const WEEK_DAYS = [
   { value: 1, label: 'L' },

@@ -3,7 +3,7 @@ import { ConversationStore, forkTitle } from './conversations'
 
 function seed(): { store: ConversationStore; id: string; ids: string[] } {
   const store = new ConversationStore(() => 1)
-  const conv = store.create({ title: 'T', category: 'codex', provider: 'codex' })
+  const conv = store.create({ title: 'T', provider: 'codex' })
   store.append(conv.id, { role: 'user', content: 'u1' })
   store.append(conv.id, { role: 'assistant', content: 'a1' })
   store.append(conv.id, { role: 'user', content: 'u2' })
@@ -66,7 +66,6 @@ describe('ConversationStore — fork', () => {
         schemaVersion: 3,
         id: 'conv-1',
         title: 'Hydrated',
-        category: 'codex',
         provider: 'codex',
         messages: [{ role: 'user', content: 'u1', ts: 1, messageId: 'msg-3' }],
         createdAt: 1,
@@ -91,7 +90,6 @@ describe('ConversationStore — fork', () => {
         schemaVersion: 3,
         id: sourceConversationId,
         title: 'Huge ids',
-        category: 'codex',
         provider: 'codex',
         messages: [
           {
@@ -133,7 +131,6 @@ describe('ConversationStore — fork', () => {
         schemaVersion: 3,
         id: 'conv-1',
         title: 'Sparse ids',
-        category: 'codex',
         provider: 'codex',
         messages: [
           { role: 'user', content: 'old', ts: 1, messageId: 'message-conv-1-3' },
@@ -166,7 +163,6 @@ describe('ConversationStore — fork', () => {
       schemaVersion: 3 as const,
       id,
       title: id,
-      category: 'codex',
       provider: 'codex',
       messages: [{ role: 'user' as const, content, ts: 1, messageId: 'shared-id' }],
       workspaceId: `workspace-${id}`,
@@ -298,12 +294,10 @@ describe('ConversationStore — fork', () => {
     const store = new ConversationStore(() => 1)
     const source = store.create({
       title: 'T',
-      category: 'claude',
       provider: 'claude'
     })
     store.append(source.id, { role: 'user', content: 'u1' })
     const forked = store.fork(source.id, store.get(source.id)!.messages[0].messageId!)
-    expect(forked.category).toBe('claude')
     expect(forked.provider).toBe('claude')
   })
 
@@ -317,7 +311,7 @@ describe('ConversationStore — fork', () => {
     // Constaté en usage : la loupe d'un message copié cherchait le tour SOUS le fork — le journal
     // étant rangé par conversation, elle ne trouvait rien et retombait sur un run étranger.
     const store = new ConversationStore(() => 1)
-    const source = store.create({ title: 'T', category: 'codex', provider: 'codex' })
+    const source = store.create({ title: 'T', provider: 'codex' })
     store.beginTurn(source.id, { content: 'u1' }, { turnId: 'turn-origine' })
     const messages = store.get(source.id)!.messages
 
@@ -334,7 +328,7 @@ describe('ConversationStore — fork', () => {
 
   it('un fork de fork renvoie vers le propriétaire D’ORIGINE, pas vers l’intermédiaire', () => {
     const store = new ConversationStore(() => 1)
-    const source = store.create({ title: 'T', category: 'codex', provider: 'codex' })
+    const source = store.create({ title: 'T', provider: 'codex' })
     store.beginTurn(source.id, { content: 'u1' }, { turnId: 'turn-origine' })
 
     const premier = store.fork(source.id, store.get(source.id)!.messages.at(-1)!.messageId!)

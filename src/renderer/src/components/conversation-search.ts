@@ -1,7 +1,6 @@
 export type ConversationSearchSource = {
   id: string
   title: string
-  category: string
   provider: string
   updatedAt: number
   messages?: ReadonlyArray<{ role: 'user' | 'assistant'; content: string; ts: number }>

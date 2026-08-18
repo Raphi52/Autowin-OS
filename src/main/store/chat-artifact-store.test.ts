@@ -32,7 +32,6 @@ function conversation(value: ChatArtifact): Conversation {
   return {
     id: 'conv-1',
     title: 'test',
-    category: 'codex',
     provider: 'codex',
     createdAt: 1,
     updatedAt: 1,
@@ -65,7 +64,6 @@ describe('chat artifact store', () => {
     const userConversation: Conversation = {
       id: 'conv-1',
       title: 'test',
-      category: 'claude',
       provider: 'claude',
       createdAt: 1,
       updatedAt: 1,
@@ -113,7 +111,6 @@ describe('chat artifact store', () => {
     const userConversation: Conversation = {
       id: 'conv-1',
       title: 'test',
-      category: 'claude',
       provider: 'claude',
       createdAt: 1,
       updatedAt: 1,

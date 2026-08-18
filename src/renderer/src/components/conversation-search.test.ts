@@ -5,7 +5,6 @@ const conversations: ConversationSearchSource[] = [
   {
     id: 'recent-message',
     title: 'Revue technique',
-    category: 'claude',
     provider: 'claude',
     updatedAt: 30,
     messages: [
@@ -16,7 +15,6 @@ const conversations: ConversationSearchSource[] = [
   {
     id: 'title',
     title: 'Déploiement production',
-    category: 'codex',
     provider: 'codex',
     updatedAt: 20,
     messages: []
@@ -24,7 +22,6 @@ const conversations: ConversationSearchSource[] = [
   {
     id: 'other',
     title: 'Interface Agents',
-    category: 'native',
     provider: 'native',
     updatedAt: 40,
     messages: [{ role: 'user', content: 'Améliorer la lisibilité', ts: 40 }]
@@ -75,7 +72,6 @@ describe('conversation search', () => {
     const conv: ConversationSearchSource = {
       id: 'evolutive',
       title: 'Sujet initial',
-      category: 'claude',
       provider: 'claude',
       updatedAt: 1,
       messages: [{ role: 'user', content: 'contenu alpha', ts: 1 }]
@@ -114,7 +110,6 @@ describe('la liste SANS recherche ne doit pas mentir sur ce qu’elle contient',
   const beaucoup = Array.from({ length: 300 }, (_, i) => ({
     id: `conv-${i}`,
     title: `Conversation ${i}`,
-    category: 'general',
     provider: 'claude',
     updatedAt: i,
     messages: []
@@ -138,7 +133,6 @@ describe('la liste SANS recherche ne doit pas mentir sur ce qu’elle contient',
     const enorme = Array.from({ length: 5_000 }, (_, i) => ({
       id: `c-${i}`,
       title: `t${i}`,
-      category: 'general',
       provider: 'claude',
       updatedAt: i,
       messages: []

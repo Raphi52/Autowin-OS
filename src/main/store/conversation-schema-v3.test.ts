@@ -5,7 +5,6 @@ const legacyConversation = (): Conversation =>
   ({
     id: 'conv-7',
     title: 'Legacy',
-    category: 'codex',
     provider: 'codex',
     authorityMode: 'plan',
     messages: [
@@ -19,7 +18,7 @@ const legacyConversation = (): Conversation =>
 describe('conversation schema v3', () => {
   it('lists lightweight summaries without message histories', () => {
     const store = new ConversationStore(() => 42)
-    const conversation = store.create({ title: 'Heavy', category: 'chat', provider: 'codex' })
+    const conversation = store.create({ title: 'Heavy', provider: 'codex' })
     store.append(conversation.id, { role: 'user', content: 'large history' })
 
     const summaries = store.listSummaries()
@@ -56,7 +55,7 @@ describe('conversation schema v3', () => {
   it('creates new conversations and turns directly in v3 with immutable lineage', () => {
     let now = 1000
     const store = new ConversationStore(() => now++)
-    const conversation = store.create({ title: 'Neuve', category: 'codex', provider: 'codex' })
+    const conversation = store.create({ title: 'Neuve', provider: 'codex' })
     store.beginTurn(conversation.id, { content: 'Go' }, { turnId: 'turn-new' })
 
     expect(conversation.schemaVersion).toBe(3)

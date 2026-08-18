@@ -22,7 +22,7 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     const p = join(dir, 'conversations.json')
     const a = new ConversationStore(() => 1000)
     persistConversations(a, p)
-    const c = a.create({ title: 'Persistée', category: 'codex', provider: 'codex' })
+    const c = a.create({ title: 'Persistée', provider: 'codex' })
     a.append(c.id, { role: 'user', content: 'salut' })
     a.append(c.id, { role: 'assistant', content: 'bonjour' })
     expect(existsSync(p)).toBe(true)
@@ -34,15 +34,15 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     expect(back?.title).toBe('Persistée')
     expect(back?.messages).toHaveLength(2)
     // nextId repart APRÈS les ids existants (pas de collision conv-1)
-    expect(b.create({ title: 'x', category: 'claude', provider: 'claude' }).id).not.toBe(c.id)
+    expect(b.create({ title: 'x', provider: 'claude' }).id).not.toBe(c.id)
   })
 
   it('remove/rename persistent aussi', () => {
     const p = join(dir, 'c2.json')
     const a = new ConversationStore()
     persistConversations(a, p)
-    const c1 = a.create({ title: 'un', category: 'claude', provider: 'claude' })
-    const c2 = a.create({ title: 'deux', category: 'claude', provider: 'claude' })
+    const c1 = a.create({ title: 'un', provider: 'claude' })
+    const c2 = a.create({ title: 'deux', provider: 'claude' })
     a.rename(c1.id, 'un-bis')
     a.remove(c2.id)
     const back = loadConversations(p)
@@ -54,7 +54,7 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     const p = join(dir, 'c3.json')
     const a = new ConversationStore()
     persistConversations(a, p)
-    const c = a.create({ title: 'avec runs', category: 'claude', provider: 'claude' })
+    const c = a.create({ title: 'avec runs', provider: 'claude' })
     a.attachRun(c.id, 'C:\\x\\RUN.md')
     a.attachRun(c.id, 'C:\\x\\RUN.md') // doublon ignoré
     const b = new ConversationStore()
@@ -66,7 +66,7 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     const p = join(dir, 'c4.json')
     const store = new ConversationStore()
     persistConversations(store, p)
-    const c = store.create({ title: 'avec deux runs', category: 'claude', provider: 'claude' })
+    const c = store.create({ title: 'avec deux runs', provider: 'claude' })
     store.attachRun(c.id, 'C:\\x\\RUN.md')
     store.attachRun(c.id, 'C:\\y\\RUN.md')
 
@@ -94,7 +94,6 @@ describe('conversations-disk — persistance à chaque mutation', () => {
         {
           id: 'conv-legacy',
           title: 'Legacy',
-          category: 'codex',
           provider: 'codex',
           authorityMode: 'plan',
           messages: [{ role: 'user', content: 'Question', ts: 10 }],
@@ -120,7 +119,7 @@ describe('conversations-disk structured restart', () => {
     const journal = `${p}.journal.jsonl`
     mkdirSync(journal)
 
-    expect(() => store.create({ title: 'Retenue', category: 'codex', provider: 'codex' })).toThrow()
+    expect(() => store.create({ title: 'Retenue', provider: 'codex' })).toThrow()
     rmSync(journal, { recursive: true, force: true })
     expect(() => flush()).not.toThrow()
 
@@ -131,11 +130,10 @@ describe('conversations-disk structured restart', () => {
     vi.useFakeTimers()
     const p = join(dir, 'incremental.json')
     const seed = new ConversationStore(() => 1000)
-    const target = seed.create({ title: 'Target', category: 'codex', provider: 'codex' })
+    const target = seed.create({ title: 'Target', provider: 'codex' })
     for (let index = 0; index < 30; index += 1) {
       const unrelated = seed.create({
         title: `Unrelated ${index}`,
-        category: 'codex',
         provider: 'codex'
       })
       seed.append(unrelated.id, { role: 'user', content: 'x'.repeat(50_000) })
@@ -169,7 +167,7 @@ describe('conversations-disk structured restart', () => {
     vi.useFakeTimers()
     const p = join(dir, 'active-large.json')
     const seed = new ConversationStore(() => 1000)
-    const target = seed.create({ title: 'Large', category: 'codex', provider: 'codex' })
+    const target = seed.create({ title: 'Large', provider: 'codex' })
     seed.append(target.id, { role: 'user', content: 'x'.repeat(5 * 1024 * 1024) })
     saveConversations(seed.list(), p)
     const store = new ConversationStore(() => 2000)
@@ -198,7 +196,7 @@ describe('conversations-disk structured restart', () => {
     const p = join(dir, 'debounced.json')
     const store = new ConversationStore(() => 1000)
     persistConversations(store, p)
-    const c = store.create({ title: 'Debounce', category: 'codex', provider: 'codex' })
+    const c = store.create({ title: 'Debounce', provider: 'codex' })
     store.beginTurn(c.id, { content: 'Go' }, { turnId: 'turn-debounce' })
     const beforeDelta = readFileSync(p, 'utf8')
 
@@ -220,7 +218,7 @@ describe('conversations-disk structured restart', () => {
     const p = join(dir, 'flush-quit.json')
     const store = new ConversationStore(() => 1000)
     const flush = persistConversations(store, p)
-    const c = store.create({ title: 'Q', category: 'codex', provider: 'codex' })
+    const c = store.create({ title: 'Q', provider: 'codex' })
     store.beginTurn(c.id, { content: 'Go' }, { turnId: 't' })
     const before = readFileSync(p, 'utf8')
     store.applyTurnEvent(c.id, 't', { kind: 'delta', streamId: '0:0', text: 'fragment-final' })
@@ -233,7 +231,7 @@ describe('conversations-disk structured restart', () => {
     const p = join(dir, 'startup-compaction.json')
     const first = new ConversationStore(() => 1000)
     persistConversations(first, p)
-    const conversation = first.create({ title: 'Compact', category: 'codex', provider: 'codex' })
+    const conversation = first.create({ title: 'Compact', provider: 'codex' })
     first.append(conversation.id, { role: 'user', content: 'persisted once' })
     const journal = `${p}.journal.jsonl`
     expect(existsSync(journal)).toBe(true)
@@ -249,7 +247,7 @@ describe('conversations-disk structured restart', () => {
     const p = join(dir, 'structured.json')
     const a = new ConversationStore(() => 1000)
     persistConversations(a, p)
-    const c = a.create({ title: 'Structurée', category: 'codex', provider: 'codex' })
+    const c = a.create({ title: 'Structurée', provider: 'codex' })
     a.beginTurn(c.id, { content: 'Go' }, { turnId: 'turn-structured' })
     a.applyTurnEvent(c.id, 'turn-structured', {
       kind: 'delta',
@@ -287,5 +285,56 @@ describe('conversations-disk structured restart', () => {
         }
       ]
     })
+  })
+})
+
+/**
+ * INC-6 — suppression du champ persiste `category`, doublon en ecriture seule de `provider`.
+ *
+ * Le validateur l'EXIGEAIT (`typeof value.category !== 'string'` → store entier declare corrompu,
+ * application vide au demarrage). Relacher le validateur et arreter l'ecriture partent donc
+ * ensemble. Ces deux fixtures sont la preuve qu'aucune donnee utilisateur n'est perdue dans un
+ * sens comme dans l'autre.
+ */
+describe('conversations-disk — lecture tolerante apres le retrait de `category`', () => {
+  const fixture = (extra: Record<string, unknown>): string =>
+    JSON.stringify([
+      {
+        schemaVersion: 3,
+        id: 'conv-1',
+        title: 'Ancienne',
+        provider: 'codex',
+        messages: [{ role: 'user', content: 'salut', ts: 1, messageId: 'message-conv-1-1' }],
+        createdAt: 1,
+        updatedAt: 2,
+        ...extra
+      }
+    ])
+
+  it.each([
+    ['AVEC category (fichier ecrit avant ce remake)', { category: 'codex' }],
+    ['SANS category (fichier ecrit apres)', {}]
+  ])('charge sans jeter et rend la meme valeur affichee : %s', (_nom, extra) => {
+    const p = join(dir, `tolerance-${_nom.length}.json`)
+    writeFileSync(p, fixture(extra), 'utf8')
+
+    const store = new ConversationStore(() => 1)
+    expect(() => store.hydrate(loadConversations(p))).not.toThrow()
+
+    const conversation = store.get('conv-1')
+    // Ce que `lister_conversations` (commands.ts) affiche : la valeur est identique a celle que
+    // `category` portait, puisque les deux champs etaient toujours egaux.
+    expect(conversation?.provider).toBe('codex')
+    // Le champ mort n'est plus recopie : sans le `delete`, le spread le ferait vivre a jamais.
+    expect(conversation).not.toHaveProperty('category')
+    expect(conversation?.messages).toHaveLength(1)
+  })
+
+  it('un fichier SANS category n’est plus rejete par le validateur — le store n’est pas vide', () => {
+    const p = join(dir, 'validateur-sans-category.json')
+    writeFileSync(p, fixture({}), 'utf8')
+    // Un rejet du validateur rend un tableau VIDE (store « corrompu ») : c’est exactement le mode
+    // de perte que cet increment devait eviter.
+    expect(loadConversations(p)).toHaveLength(1)
   })
 })

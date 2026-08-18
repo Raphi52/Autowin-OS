@@ -66,7 +66,6 @@ export interface PilotEvent {
 export type Conv = {
   id: string
   title: string
-  category: string
   provider: string
   messages?: Array<{
     role: 'user' | 'assistant'
