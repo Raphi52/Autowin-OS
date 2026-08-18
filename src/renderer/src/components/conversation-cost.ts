@@ -186,6 +186,21 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
   }
 }
 
+/**
+ * Le montant d'UNE ligne, dit avec le vocabulaire de couverture du TOTAL. La ligne rendait
+ * « + inconnu » la ou le total dit « + non expose » : un 4e mot pour la meme incertitude, que
+ * personne ne pouvait greper avec les trois autres.
+ *
+ * N'ESTIME RIEN : `CostRow` ne porte ni modele ni provider, donc un montant estime par ligne
+ * serait un montant invente. L'estimation reste au TOTAL, ou la couverture connait le modele.
+ */
+export function costRowLabel(row: Pick<CostRow, 'costUsd' | 'unpricedCalls'>): string {
+  if (row.unpricedCalls > 0) {
+    return row.costUsd > 0 ? `${formatUsd(row.costUsd)} + non exposé` : 'coût non exposé'
+  }
+  return formatUsd(row.costUsd)
+}
+
 /** Lignes triées par coût décroissant, sans les lignes à 0 $ (elles n'expliquent aucune dépense). */
 export function spendingRows(rows: readonly CostRow[]): CostRow[] {
   return rows

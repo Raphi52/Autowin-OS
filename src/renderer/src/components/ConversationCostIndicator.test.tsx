@@ -184,4 +184,38 @@ describe('ConversationCostIndicator — la dépense est à l’écran', () => {
     await render({ conversationId: 'conv-76' })
     expect(container.querySelector('[data-testid="conversation-cost"]')).toBeNull()
   })
+
+  it('un appel non tarife se dit avec le MEME mot sur la ligne et sur le total', async () => {
+    // Regret 10 : la ligne de detail disait « + inconnu » la ou le total dit « + non expose ».
+    // Un seul mot d'incertitude dans tout le vocabulaire de couverture.
+    setApi({
+      costBreakdown: async () => [
+        {
+          key: 'codex',
+          calls: 4,
+          costUsd: 1.5,
+          inputTokens: 10_000,
+          outputTokens: 500,
+          cacheReadTokens: 0,
+          cacheHitRatio: 0,
+          unpricedCalls: 2
+        }
+      ]
+    })
+    await render({ conversationId: 'conv-76' })
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="conversation-cost-total"]')
+        ?.click()
+    )
+    await flush()
+    const total = container.querySelector('[data-testid="conversation-cost-total"]')?.textContent
+    const ligne = container.querySelector(
+      '[data-testid="conversation-cost-row-codex"] .conv-cost-amount'
+    )?.textContent
+    expect(total).toContain('non exposé')
+    expect(ligne).toContain('non exposé')
+    expect(ligne).not.toContain('inconnu')
+  })
+
 })

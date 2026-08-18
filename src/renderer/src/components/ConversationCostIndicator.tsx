@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   callsLabel,
   formatDuration,
-  formatUsd,
+  costRowLabel,
   sharePercent,
   spendingRows,
   summarizeConversationCost,
@@ -26,7 +26,6 @@ interface Props {
   /** Passe à false à la fin d'un tour → c'est là que la dépense devient lisible. */
   busy?: boolean
 }
-
 
 /**
  * « cache 0 % » se lit comme « rien n'a servi » alors que le premier appel ÉCRIT le cache que les
@@ -149,13 +148,7 @@ export function ConversationCostIndicator({
                 <span className="conv-cost-bar" aria-hidden="true">
                   <span style={{ width: `${sharePercent(row, summary.totalUsd)}%` }} />
                 </span>
-                <span className="conv-cost-amount">
-                  {row.unpricedCalls > 0 && row.costUsd <= 0
-                    ? 'co\u00fbt non expos\u00e9'
-                    : row.unpricedCalls > 0
-                      ? `${formatUsd(row.costUsd)} + inconnu`
-                      : formatUsd(row.costUsd)}
-                </span>
+                <span className="conv-cost-amount">{costRowLabel(row)}</span>
                 {/* Le poste le plus LENT n'est pas forcement le plus cher : les deux sont montres. */}
                 <span className="conv-cost-time" data-testid={`conversation-time-${row.key}`}>
                   {formatDuration(row.durationMs ?? 0) ?? '—'}
