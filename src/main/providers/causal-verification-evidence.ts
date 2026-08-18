@@ -1,7 +1,7 @@
 import type { ExecutionEvidence, TrustedLearningOracle } from './types'
 import { isStrictlyReadOnlyCommand } from './evidence-vocabulary'
 
-function normalized(value: string): string {
+export function normalized(value: string): string {
   return value.replace(/\\/gu, '/').replace(/^\.\//u, '').toLowerCase()
 }
 
@@ -16,7 +16,7 @@ function covered(path: string, pattern: string): boolean {
   return new RegExp(`^${expression}$`, 'u').test(source)
 }
 
-function attributedPaths(item: ExecutionEvidence): string[] {
+export function attributedPaths(item: ExecutionEvidence): string[] {
   return [
     item.path,
     ...(item.paths ?? []),

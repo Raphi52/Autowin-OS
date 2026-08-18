@@ -1,4 +1,5 @@
 import type { ExecutionEvidence } from './providers/types'
+import { attributedPaths, normalized } from './providers/causal-verification-evidence'
 import { isMutationTask } from './task-mutation-classifier'
 
 export const ROOT_DOD = {
@@ -189,6 +190,79 @@ export function runEnLectureSeule(phases: readonly { phase: string }[]): boolean
 }
 
 /**
+ * Une CIBLE NOMMEE est un chemin de fichier porte par un ANCRAGE `chemin:ligne` dans la demande.
+ *
+ * Defaut vecu (conv-1302) : quatre runs d'affilee ont ferme `succeeded`, gate vert, juges 96/100,
+ * en corrigeant un AUTRE fichier que celui que l'utilisateur avait nomme. Le gate evalue la QUALITE
+ * de ce qui est produit ; personne n'evaluait la CORRESPONDANCE avec ce qui etait demande.
+ *
+ * Le numero de ligne est le discriminant, pas la mention : une reference documentaire, un exemple,
+ * un `.test.ts` cite en passant n'en portent pas. Sens d'erreur IMPOSE : faux negatif tolere, faux
+ * positif JAMAIS — un faux blocage rendrait l'app inutilisable.
+ */
+const EXTENSIONS_CIBLE =
+  'ts|tsx|js|jsx|mjs|cjs|json|md|ps1|psm1|py|cs|sql|css|scss|html|yml|yaml|sh|rs|go|java|xml'
+const CIBLE_ANCREE = new RegExp(
+  `((?:[\\w.@~-]+[/\\\\])+[\\w.@-]+\\.(?:${EXTENSIONS_CIBLE}))\\s*:\\s*(\\d{1,6})(?!\\d)`,
+  'gu'
+)
+/** Une clause « hors perimetre » decrit ce qu'il ne faut PAS toucher : jamais une obligation. */
+const HORS_PERIMETRE =
+  /\b(?:perimetre\s+out|out\s+of\s+scope|hors\s+perimetre|reste\s+intacts?|touche\w*\s+pas|sans\s+toucher|pas\s+toucher|ne\s+pas\s+modifier|exclu\w*)\b/i
+
+export function ciblesNommees(task: string): string[] {
+  const texte = task.normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  const cibles: string[] = []
+  for (const match of texte.matchAll(CIBLE_ANCREE)) {
+    const index = match.index ?? 0
+    // Une URL (`http://host:8080/x.ts:3`) n'est pas un chemin du depot.
+    if (/(?:https?|file|ftp):\/\/\S*$/i.test(texte.slice(Math.max(0, index - 200), index))) continue
+    const large = texte.slice(Math.max(0, index - 120), index)
+    if (HORS_PERIMETRE.test(large)) continue
+    if (NEGATED_MENTION_PREFIX.test(clauseBefore(texte, index))) continue
+    const chemin = normalized(match[1])
+    if (!cibles.includes(chemin)) cibles.push(chemin)
+  }
+  return cibles
+}
+
+function memeChemin(a: string, b: string): boolean {
+  if (a === b) return true
+  return a.length > b.length ? a.endsWith(`/${b}`) : b.endsWith(`/${a}`)
+}
+
+/**
+ * Croise les cibles nommees avec les chemins REELLEMENT mutes, rapportes par `ExecutionEvidence`.
+ *
+ * La source n'est PAS `git diff` : `worktrees.end()` (`orchestrator.ts:1887`) est POSTERIEUR au
+ * gate, donc un controle base sur le diff serait structurellement aveugle.
+ *
+ * FAIL-OPEN a deux endroits : aucune cible nommee, ou aucune preuve ne portant de chemin attribue
+ * (un provider qui ne renseigne pas `paths` ne doit jamais produire un faux rouge).
+ */
+export function cibleNommeeTouchee(
+  task: string,
+  evidence: readonly ExecutionEvidence[]
+): 'sans-objet' | 'touchee' | 'manquee' {
+  const cibles = ciblesNommees(task)
+  if (cibles.length === 0) return 'sans-objet'
+  const touches = evidence
+    .filter((item) => item.kind === 'mutation' && successfulEvidence(item))
+    .flatMap((item) => attributedPaths(item))
+    .map((chemin) => normalized(chemin))
+  if (touches.length === 0) return 'sans-objet'
+  // Decision cadree : le gate ne bloque que le MISS TOTAL. Une couverture PARTIELLE part au juge,
+  // non bloquante — un `every` en dur ici interdirait la relocalisation causale legitime.
+  return cibles.some((cible) => touches.some((chemin) => memeChemin(chemin, cible)))
+    ? 'touchee'
+    : 'manquee'
+}
+
+export function libelleCibleNommee(cibles: readonly string[]): string {
+  return `Cible nommee dans la demande reellement modifiee : ${cibles.join(', ')}`
+}
+
+/**
  * L'état de clôture d'un run : ce que le gate doit évaluer, calculé EN UN SEUL ENDROIT.
  *
  * Cette décision vivait en ligne dans l'orchestrateur, donc hors de portée des tests — une mutation
@@ -216,5 +290,20 @@ export function etatDeCloture(
   ) {
     checks.push({ label: ROOT_DOD.mutation, checked: evidenceOk })
   }
-  return { status: lectureSeule || evidenceOk ? 'green' : 'red', dod: checks }
+  // Garde « cible nommee » : un run qui a mute des fichiers SANS toucher aucune des cibles que la
+  // demande ancrait (`chemin:ligne`) ne peut pas fermer vert. Seul le MISS TOTAL bloque ; une
+  // couverture partielle passe et part au juge (`phase-briefs.ts`), non bloquante.
+  const cibleManquee =
+    !lectureSeule &&
+    cibleNommeeTouchee(
+      task,
+      phases.flatMap((phase) => phase.executionEvidence ?? [])
+    ) === 'manquee'
+  if (cibleManquee) {
+    checks.push({ label: libelleCibleNommee(ciblesNommees(task)), checked: false })
+  }
+  return {
+    status: !cibleManquee && (lectureSeule || evidenceOk) ? 'green' : 'red',
+    dod: checks
+  }
 }
