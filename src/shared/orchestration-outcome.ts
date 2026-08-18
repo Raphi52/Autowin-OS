@@ -725,47 +725,64 @@ export function demoteUnvalidatedSuccessClaims(
 }
 
 /**
- * La ligne affirme-t-elle qu'il ne reste RIEN a faire ?
+ * Le CORPS d'une ligne de cloture : ce qui suit son premier deux-points, normalise pour comparaison.
+ * Un seul lecteur, appele UNE fois par ligne — depouiller deux fois avalait le motif d'un blocage.
+ */
+function corpsDeLigne(line: string): string {
+  return (
+    line
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+      .replace(/^[^:：]*[:：]/u, '')
+      .replace(/[.!\s]+$/u, '')
+      // `R.A.S.` : les points INTERNES doivent tomber aussi, sinon l'abreviation la plus courante du
+      // « rien a signaler » passe a travers.
+      .replace(/\./gu, '')
+      .trim()
+  )
+}
+
+/**
+ * Le corps affirme-t-il qu'il ne reste RIEN a faire ?
  *
  * Sens d'erreur impose : un faux negatif laisse passer une ligne deja honnete, un faux positif
  * EFFACERAIT du travail restant que le worker avait nomme. Dans le doute, on ne reecrit pas.
  */
-function affirmeQuIlNeResteRien(line: string): boolean {
-  const corps = line
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .replace(/^[^:：]*[:：]/u, '')
-    .replace(/[.!\s]+$/u, '')
-    // `R.A.S.` : les points INTERNES doivent tomber aussi, sinon l'abreviation la plus courante du
-    // « rien a signaler » passe a travers (trou trouve par le juge, puis par ce test).
-    .replace(/\./gu, '')
-    .trim()
+function neResteRien(corps: string): boolean {
   if (!corps) return false
-  // Vocabulaire elargi apres refutation : `rien de plus`, `plus rien`, `rien a faire`, `R.A.S.` et
-  // `aucune action supplementaire` passaient tous a travers la premiere version.
   return /^(?:(?:plus\s+)?rien(?:\s+(?:de\s+plus|a\s+faire|d\w*\s+autre))?|neant|nothing(?:\s+(?:more|else|left))?|none|n\s*a\s*s|r\s*a\s*s|aucune?(?:\s+(?:action|etape|suite|autre\s+\w+|\w+\s+(?:supplementaire|requise|necessaire))|\s+\w+\s+\w+\s+(?:supplementaire|requise|necessaire))?)$/u.test(
     corps
   )
 }
 
+function affirmeQuIlNeResteRien(line: string): boolean {
+  return neResteRien(corpsDeLigne(line))
+}
+
 /**
  * La ligne affirme-t-elle que TOUT est fait ? Meme sens d'erreur : dans le doute, on ne reecrit pas.
- * Une ligne d'etat qui nomme un reste, un chiffre ou un en-cours n'est pas concernee.
+ *
+ * La premiere version acceptait `tout est \w+`, donc n'importe quel mot : « tout est rouge », « tout
+ * est casse », « tout est bloque » etaient reecrits — ce n'est pas un doute leve, c'est le sens
+ * OPPOSE qu'on effacait, et avec lui la cause que le lecteur cherchait. La liste des mots de
+ * completude est donc CLOSE et explicite.
+ *
+ * Le corps recu est deja depouille de son prefixe : on ne le repasse plus a
+ * `affirmeQuIlNeResteRien`, qui le depouillerait une SECONDE fois — « bloque sur le lint : rien »
+ * perdait alors son motif et devenait une simple affirmation de fin.
  */
+/**
+ * Liste CLOSE des mots de completude, en litteral de regex : un template literal perdait ses
+ * echappements (`\s` devenu `s`) et la regex ne mordait plus.
+ */
+const AFFIRME_COMPLETUDE =
+  /^(?:(?:rien\s+en\s+cours[,;]?\s*)?(?:tout\s+est|c\s*est)\s+)?(?:livre|fini|termine|publie|fait|pousse|merge|vert|complet)$/u
+
 function affirmeLaCompletude(line: string): boolean {
-  const corps = line
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .replace(/^[^:：]*[:：]/u, '')
-    .replace(/[.!\s]+$/u, '')
-    .trim()
+  const corps = corpsDeLigne(line)
   if (!corps) return false
-  if (affirmeQuIlNeResteRien(corps)) return true
-  return /^(?:tout\s+est\s+(?:livre|fini|termine|publie|fait|vert)|c\s*est\s+(?:livre|fini|termine|publie|fait)|(?:rien\s+en\s+cours[,;]?\s*)?tout\s+est\s+\w+|livre|fini|termine|publie)$/u.test(
-    corps
-  )
+  return neResteRien(corps) || AFFIRME_COMPLETUDE.test(corps)
 }
 
 /**

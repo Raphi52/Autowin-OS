@@ -1131,9 +1131,11 @@ describe('demoteUnvalidatedSuccessClaims — le trio d’état ne prétend pas l
  *      supplémentaire`, `R.A.S.`, `plus rien` passaient).
  */
 describe('demoteUnvalidatedSuccessClaims — les trous réfutés par le juge', () => {
-  const trio = ['✅ Fait : livré', '📍 Maintenant : tout est livré', '⏳ Reste à faire : rien'].join(
-    '\n'
-  )
+  const trio = [
+    '✅ Fait : livré',
+    '📍 Maintenant : tout est livré',
+    '⏳ Reste à faire : rien'
+  ].join('\n')
 
   it('D1 — un statut d’échec NU rétrograde aussi (pas seulement gate/juge)', () => {
     const out = demoteUnvalidatedSuccessClaims(trio, { status: 'failed' })
@@ -1188,5 +1190,50 @@ describe('demoteUnvalidatedSuccessClaims — les trous réfutés par le juge', (
         reused: false
       })
     ).toBe(trio)
+  })
+})
+
+/**
+ * SECOND PANEL ADVERSARIAL (2026-08-18) — la réparation `📍 Maintenant` effaçait de l'information.
+ *
+ * D-B — `tout est \w+` acceptait n'importe quel mot : « tout est rouge », « tout est cassé »,
+ *       « tout est bloqué » étaient réécrits, donc la CAUSE disparaissait. Ce n'est pas un doute,
+ *       c'est le sens opposé qui était effacé. Et le corps déjà dépouillé de son préfixe était
+ *       re-dépouillé une seconde fois : « bloqué sur le lint : rien » perdait son motif.
+ */
+describe('demoteUnvalidatedSuccessClaims — second panel', () => {
+  const bloque = { gateBlocked: true }
+
+  it('D-B — une ligne d’état qui dit l’ÉCHEC reste intacte, mot pour mot', () => {
+    for (const ligne of [
+      '📍 Maintenant : tout est rouge',
+      '📍 Maintenant : tout est cassé',
+      '📍 Maintenant : tout est bloqué',
+      '📍 Maintenant : tout est perdu',
+      '📍 Maintenant : tout est instable',
+      '📍 Maintenant : rien en cours, tout est rouge'
+    ]) {
+      expect(demoteUnvalidatedSuccessClaims(ligne, bloque)).toBe(ligne)
+    }
+  })
+
+  it('D-B — le motif d’un blocage n’est pas avalé par un second dépouillement', () => {
+    for (const ligne of [
+      '📍 Maintenant : bloqué sur le lint : rien',
+      '📍 Maintenant : judge 96/100 : rien'
+    ]) {
+      expect(demoteUnvalidatedSuccessClaims(ligne, bloque)).toBe(ligne)
+    }
+  })
+
+  it('CONTRE-EXEMPLE — la vraie complétude est toujours rétrogradée', () => {
+    for (const ligne of [
+      '📍 Maintenant : tout est livré',
+      '📍 Maintenant : tout est terminé',
+      '📍 Maintenant : rien en cours, tout est publié',
+      '📍 Maintenant : rien'
+    ]) {
+      expect(demoteUnvalidatedSuccessClaims(ligne, bloque)).toContain('gate BLOQUÉ')
+    }
   })
 })

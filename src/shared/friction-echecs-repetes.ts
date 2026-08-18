@@ -54,15 +54,21 @@ function cumul(outcomes: readonly OrchestrationOutcome[]): {
     // `knownCostUsd` a trois sens distincts : un montant, `null` (« connu et vide ») et l'absence
     // (« on n'en sait rien »). La somme ne doit devenir un nombre que si AU MOINS une issue en
     // portait un — sinon un cumul « 0,00 $ » se lirait comme « ça n'a rien coûté ».
-    // Deux lignees coexistent : `knownCostUsd` (couverture explicite) et l'ancien `costUsd` seul,
-    // sur lequel la pastille par run se replie deja (`formatExecutionCostCoverage`). Ne sommer que
-    // la premiere annoncait « 2,00 $ » sous trois pastilles totalisant 10,40 $ — le bandeau
-    // sous-estimait de 5x l'argument censé arreter l'utilisateur.
+    // MEME REGLE QUE LA PASTILLE PAR RUN, a la lettre (`formatExecutionCostCoverage`) : le repli sur
+    // l'ancien `costUsd` n'a lieu que si `knownCostUsd` est ABSENT de l'objet. Present a `null`, il
+    // dit « la couverture est connue, et elle est vide » — donc « coût non exposé », jamais un
+    // montant. Mesure sur le store live : 109 issues portent `knownCostUsd: null` AVEC un `costUsd`.
+    // Un `||` naif y annoncait « 25,20 $ connus » quand la pastille juste au-dessus disait « non
+    // exposé » : la divergence exacte que ce module existe pour eviter.
     //
-    // `nombre()` s'applique aussi aux montants : un `NaN` ou un negatif produisait « -3,000 $ »,
-    // un coût cumule NEGATIF affiche a l'utilisateur.
-    const known = nombre(outcome.knownCostUsd) || nombre(outcome.costUsd)
-    if (known > 0) connu = (connu ?? 0) + known
+    // `nombre()` filtre aussi les montants : un `NaN` ou un negatif produisait « -3,000 $ ».
+    const couvertureConnue = Object.prototype.hasOwnProperty.call(outcome, 'knownCostUsd')
+    if (couvertureConnue) {
+      if (outcome.knownCostUsd !== null) connu = (connu ?? 0) + nombre(outcome.knownCostUsd)
+    } else {
+      const ancien = nombre(outcome.costUsd)
+      if (ancien > 0) connu = (connu ?? 0) + ancien
+    }
     total.unpricedCalls += nombre(outcome.unpricedCalls)
     total.totalTokens += nombre(outcome.totalTokens)
     total.inputTokens += nombre(outcome.inputTokens)
@@ -97,7 +103,7 @@ export function frictionEchecsRepetes(
 ): FrictionEchecsRepetes | undefined {
   const serie: OrchestrationOutcome[] = []
   for (const outcome of [...outcomes].reverse()) {
-    if (isDeliveredOrchestrationOutcome(outcome)) break
+    if (progresObserve(outcome)) break
     if (!estTerminale(outcome)) continue
     serie.unshift(outcome)
   }
@@ -121,11 +127,33 @@ export function frictionEchecsRepetes(
  * Une issue sans aucun de ces signes n'est pas comptée : le silence n'est pas un échec.
  */
 function estTerminale(outcome: OrchestrationOutcome): boolean {
-  // Lecture DUCK-TYPEE d'un fil relu du disque : `gateBlocked` peut arriver truthy sans etre un
-  // booleen, et un statut inconnu (`timeout`, ou avec une espace finale) est un echec terminal tout
-  // autant que `failed`. La premiere version les laissait tous les trois disparaitre en silence.
+  // `gateBlocked` peut arriver truthy sans etre un booleen (fil relu du disque, duck-type).
   if (outcome.gateBlocked || outcome.valid === false) return true
   const status = typeof outcome.status === 'string' ? outcome.status.trim().toLowerCase() : ''
   if (!status) return false
-  return !/^(?:running|pending|queued|started|succeeded|success|ok|green)$/.test(status)
+  // LISTE D'ECHECS, jamais une liste blanche de succes. Tente le 2026-08-18 : inverser en
+  // « tout ce qui n'est pas connu comme un succes est un echec ». Refute — `completed` (245
+  // occurrences dans ce depot), `merged`, `done`, `nothing` devenaient des echecs, et la pastille
+  // soeur (`action-outcome-summary.ts`) traite au contraire tout statut inconnu comme un SUCCES :
+  // les deux surfaces lisaient le meme objet et concluaient l'inverse. Le sens d'erreur du module
+  // est de ne jamais alarmer a tort : un statut inconnu n'est donc PAS un echec.
+  return /^(?:failed|failure|error|errored|cancelled|canceled|aborted|interrupted|timeout|timed-out|blocked|red|refused|rejected)$/.test(
+    status
+  )
+}
+
+/**
+ * Un PROGRES a-t-il eu lieu ? Plus large que `isDeliveredOrchestrationOutcome`, et volontairement.
+ *
+ * Mesure sur le store live : la lignee directe (`index.ts`) et les reprises
+ * (`orchestrate-turn-persistence.ts`, qui pose `resumed` et non `reused`) n'emettent AUCUN `status`.
+ * Le predicat partage exigeant `status === 'succeeded'`, 15 + 56 livraisons REELLES ne coupaient pas
+ * la serie : le bandeau annoncait « N orchestrations d'affilee sans livraison » par-dessus une
+ * livraison. Ici on ne cherche pas a certifier une livraison — seulement a constater qu'il s'est
+ * passe quelque chose qui n'est pas un echec, ce qui suffit a remettre le compteur a zero.
+ */
+function progresObserve(outcome: OrchestrationOutcome): boolean {
+  if (isDeliveredOrchestrationOutcome(outcome)) return true
+  if (estTerminale(outcome)) return false
+  return outcome.valid === true || (outcome as { resumed?: unknown }).resumed === true
 }

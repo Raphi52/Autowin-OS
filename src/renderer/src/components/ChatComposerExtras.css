@@ -13,7 +13,7 @@
 
 /* Friction sur echecs repetes : une serie de runs sans livraison doit se VOIR avant la relance
    suivante (mesure conv-1302 : neuf relances a l'aveugle). Reprend la geometrie de l'echo de
-   perimetre, sans son opacite reduite — c'est justement ce qu'il ne faut pas atenuer. */
+   perimetre, sans son opacite reduite — c'est justement ce qu'il ne faut pas atténuer. */
 .composer-friction {
   display: flex;
   align-items: center;

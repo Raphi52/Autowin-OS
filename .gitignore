@@ -24,3 +24,8 @@ agent-studio-*.png
 # Racine UNIQUE hors du code : la supprimer ne laisse aucune trace sur la machine.
 .autowin-data
 artifacts/preuve-*.png
+
+# Captures de debug du chat, ecrites a la racine par les outils de diagnostic.
+# Versionnees par accident le 2026-08-18 (commit 601d7da0, balayage automatique dune session
+# concurrente) : 1,2 Mo de PNG dans lhistorique partage. Ignorees pour que cela ne recommence pas.
+.autowin-chat-*.png

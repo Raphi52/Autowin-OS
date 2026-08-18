@@ -311,7 +311,10 @@ export function ChatView({
    * personne ne lui montre le mur. Ce bandeau ne bloque RIEN : la relance reste à un geste, la
    * décision reste humaine. Il rend seulement la série et son coût lisibles avant le geste suivant.
    */
-  const friction = useMemo(() => frictionEchecsRepetes(orchestrationOutcomesFromMessages(messages)), [messages])
+  const friction = useMemo(
+    () => frictionEchecsRepetes(orchestrationOutcomesFromMessages(messages)),
+    [messages]
+  )
   const homeSuggestions = useMemo(
     () => buildHomeSuggestions({ runs, resumedDraft: input }),
     [runs, input]
@@ -2809,7 +2812,11 @@ export function ChatView({
             {/* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
                 suivante. Ne bloque rien — la décision reste humaine. */}
             {friction && (
-              <div className="composer-friction" data-testid="friction-echecs-repetes" role="status">
+              <div
+                className="composer-friction"
+                data-testid="friction-echecs-repetes"
+                role="status"
+              >
                 <span aria-hidden="true">⚠</span> {friction.message}
               </div>
             )}

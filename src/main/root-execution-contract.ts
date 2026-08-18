@@ -280,8 +280,9 @@ export function libelleCibleNommee(cibles: readonly string[]): string {
   return `Cible nommee dans la demande reellement modifiee : ${cibles.join(', ')}`
 }
 
-/**
+/*
  * AUTORITÉS DE CLÔTURE — pathologie CONNUE, garde RETIRÉE, à ne pas retenter à l'identique.
+ * (Commentaire de bloc et non JSDoc : il ne documente aucun symbole, il documente une ABSENCE.)
  *
  * Défaut réel (conv-1302, 2026-08-18) : bloqué par le gate, un run a réparé LE GATE quatre fois
  * d'affilée au lieu de la tâche demandée, puis a fermé `succeeded` avec un juge à 96/100. L'agent
@@ -289,7 +290,7 @@ export function libelleCibleNommee(cibles: readonly string[]): string {
  *
  * Une garde a été écrite le même jour : rougir un run dont TOUTES les mutations tombent dans
  * `root-execution-contract.ts` / `phase-briefs.ts` alors que la demande ne parle pas du gate. Un
- * juge adversarial l'a réfutée par exécution — ELEVEN faux blocages sur du travail légitime :
+ * juge adversarial l'a réfutée par exécution — onze faux blocages sur du travail légitime :
  * corriger une faute dans un brief de phase, raccourcir un prompt, ajouter une extension à la liste
  * des cibles, extraire une fonction, toute demande en anglais, et même une demande qui NOMMAIT le
  * fichier autrement que par son basename exact (`phase-briefs`, `src\main\phase-briefs`). Le

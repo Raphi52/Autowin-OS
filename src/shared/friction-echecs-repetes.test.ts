@@ -42,7 +42,9 @@ describe('frictionEchecsRepetes — la série devient visible avant la relance s
   })
 
   it('ne compte que la série FINALE, pas tous les échecs du fil', () => {
-    expect(frictionEchecsRepetes([bloque(), bloque(), livre(), bloque(), bloque(), bloque()])?.runs).toBe(3)
+    expect(
+      frictionEchecsRepetes([bloque(), bloque(), livre(), bloque(), bloque(), bloque()])?.runs
+    ).toBe(3)
   })
 
   it('un run encore EN COURS n’est ni un échec ni une coupure de série', () => {
@@ -181,7 +183,90 @@ describe('frictionEchecsRepetes — les trous réfutés par les juges', () => {
   })
 
   it('CONTRE-EXEMPLE — un seuil non atteint reste muet malgré tous ces cas', () => {
-    expect(frictionEchecsRepetes([{ status: 'timeout' }, { gateBlocked: 1 as unknown as boolean }]))
-      .toBeUndefined()
+    expect(
+      frictionEchecsRepetes([{ status: 'timeout' }, { gateBlocked: 1 as unknown as boolean }])
+    ).toBeUndefined()
+  })
+})
+
+/**
+ * SECOND PANEL ADVERSARIAL (2026-08-18) — les réparations elles-mêmes ont été réfutées.
+ *
+ * D-A — BLOQUANT, mesuré sur 109 enregistrements du store live : le repli `knownCostUsd || costUsd`
+ *       était faux. La pastille par run ne se replie sur `costUsd` que si `knownCostUsd` est ABSENT
+ *       (`hasOwnProperty`) ; présent à `null`, elle dit « coût non exposé ». Le bandeau annonçait
+ *       « 25,20 $ connus » là où la pastille disait « non exposé » — la divergence exacte que ce
+ *       module promet d'éviter.
+ * D-C — `estTerminale` était devenue une liste blanche : `completed`, `merged`, `done` (245
+ *       occurrences dans le dépôt) comptaient comme des échecs, et la pastille sœur traite au
+ *       contraire tout statut inconnu comme un succès.
+ * D-D — mesuré sur 15 + 56 enregistrements réels : la lignée directe et les reprises n'émettent
+ *       aucun `status`, donc une LIVRAISON réelle ne remettait pas le compteur à zéro.
+ */
+describe('frictionEchecsRepetes — second panel', () => {
+  it('D-A — `knownCostUsd: null` veut dire NON EXPOSÉ, jamais le repli `costUsd`', () => {
+    const issue = { status: 'failed', knownCostUsd: null, costUsd: 8.4, unpricedCalls: 3 }
+    const friction = frictionEchecsRepetes([issue, issue, issue])
+    expect(friction?.cout).not.toMatch(/25|8[.,]4/u)
+    expect(friction?.cout).toMatch(/non exposé|non chiffré/iu)
+  })
+
+  it('D-A — `knownCostUsd: 0` est un coût CONNU et nul, pas une absence', () => {
+    const issue = { status: 'failed', knownCostUsd: 0, costUsd: 4.2 }
+    expect(frictionEchecsRepetes([issue, issue, issue])?.cout).not.toMatch(/12|4[.,]2/u)
+  })
+
+  it('D-A — `costUsd` seul (issue d’avant la couverture) est bien cumulé', () => {
+    const issue = { status: 'failed', costUsd: 3 }
+    expect(frictionEchecsRepetes([issue, issue, issue])?.cout).toMatch(/9/u)
+  })
+
+  it('D-C — un statut de SUCCÈS hors liste ne compte pas comme un échec', () => {
+    for (const status of ['completed', 'merged', 'done', 'published', 'nothing']) {
+      expect(frictionEchecsRepetes([{ status }, { status }, { status }])).toBeUndefined()
+    }
+  })
+
+  it('D-C — les échecs nommés comptent toujours, espace finale et casse comprises', () => {
+    expect(
+      frictionEchecsRepetes([
+        { status: 'failed ' },
+        { status: 'TIMEOUT' },
+        { gateBlocked: 1 as unknown as boolean }
+      ])?.runs
+    ).toBe(3)
+  })
+
+  it('D-D — une livraison SANS `status` remet quand même le compteur à zéro', () => {
+    const livreSansStatus = { valid: true, gateBlocked: false, costUsd: 1.2 }
+    expect(
+      frictionEchecsRepetes([
+        { status: 'failed' },
+        { status: 'failed' },
+        livreSansStatus,
+        { status: 'failed' }
+      ])
+    ).toBeUndefined()
+  })
+
+  it('D-D — une reprise livrée (`resumed`, sans status) compte comme un progrès', () => {
+    expect(
+      frictionEchecsRepetes([
+        { status: 'failed' },
+        { status: 'failed' },
+        { resumed: true },
+        { status: 'failed' }
+      ])
+    ).toBeUndefined()
+  })
+
+  it('D-D — une reprise BLOQUÉE reste un échec de la série', () => {
+    expect(
+      frictionEchecsRepetes([
+        { resumed: true, gateBlocked: true },
+        { resumed: true, gateBlocked: true },
+        { resumed: true, gateBlocked: true }
+      ])?.runs
+    ).toBe(3)
   })
 })
