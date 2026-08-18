@@ -159,11 +159,23 @@ export function estimateCostUsd(usage: TokenUsageShape, nowMs?: number): number 
   )
 }
 
+/**
+ * LA forme d'un montant, partout. Virgule francaise, et 3 decimales sous le centime : arrondir a
+ * « 0,00 $ » effacerait une depense reelle. Montee ici depuis `conversation-cost.ts` — deux
+ * formateurs vivants, c'est deux ponctuations pour le meme montant selon la surface.
+ */
+export function formatUsd(amount: number): string {
+  if (!Number.isFinite(amount)) return '—'
+  if (amount === 0) return '0 $'
+  const decimals = amount < 0.01 ? 3 : 2
+  return `${amount.toFixed(decimals).replace('.', ',')} $`
+}
+
 /** Montant estimé, formaté avec la marque explicite de l'approximation. */
 export function formatEstimatedCostUsd(usage: TokenUsageShape, nowMs?: number): string | undefined {
   const estimate = estimateCostUsd(usage, nowMs)
   if (estimate === undefined) return undefined
-  return `≈ ${estimate.toFixed(2)} $ estimés`
+  return `≈ ${formatUsd(estimate)} estimés`
 }
 
 /** Volume lisible : la seule information vraie qui reste quand le tarif du modèle est inconnu. */
@@ -207,7 +219,8 @@ export function resolveCostCoverage(usage: CostCoverageInput, nowMs?: number): C
     typeof usage.knownCostUsd === 'number' && Number.isFinite(usage.knownCostUsd)
       ? usage.knownCostUsd
       : undefined
-  const tokens = positive(usage.totalTokens) || positive(usage.inputTokens) + positive(usage.outputTokens)
+  const tokens =
+    positive(usage.totalTokens) || positive(usage.inputTokens) + positive(usage.outputTokens)
   const estimated = known === undefined ? estimateCostUsd(usage, nowMs) : undefined
   const unpricedCalls = Math.max(0, Math.floor(positive(usage.unpricedCalls)))
   return {
@@ -228,11 +241,14 @@ export function formatCostCoverage(coverage: CostCoverage): string {
   const unpricedLabel = `${n} appel${n > 1 ? 's' : ''} non chiffré${n > 1 ? 's' : ''}`
   const withUnpriced = (label: string): string => (n > 0 ? `${label} · ${unpricedLabel}` : label)
   if (coverage.knownUsd !== undefined) {
-    return n > 0 ? `${coverage.knownUsd.toFixed(2)} $ connus · ${unpricedLabel}` : `${coverage.knownUsd.toFixed(2)} $`
+    return n > 0
+      ? `${formatUsd(coverage.knownUsd)} connus · ${unpricedLabel}`
+      : formatUsd(coverage.knownUsd)
   }
   if (coverage.estimatedUsd !== undefined) {
-    return withUnpriced(`≈ ${coverage.estimatedUsd.toFixed(2)} $ estimés`)
+    return withUnpriced(`≈ ${formatUsd(coverage.estimatedUsd)} estimés`)
   }
-  if (coverage.tokens > 0) return withUnpriced(`${formatTokenVolume(coverage.tokens)} · tarif non exposé`)
+  if (coverage.tokens > 0)
+    return withUnpriced(`${formatTokenVolume(coverage.tokens)} · tarif non exposé`)
   return withUnpriced('coût non exposé')
 }

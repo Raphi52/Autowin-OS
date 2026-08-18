@@ -752,7 +752,7 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     })
     expect(text).toContain('✅')
     expect(text).toContain('statut succeeded')
-    expect(text).toContain('coût 10.05 $')
+    expect(text).toContain('coût 10,05 $')
     expect(text).toContain('run « audit-cout »')
     expect(text).toContain('Trois fichiers modifiés')
   })
@@ -907,13 +907,13 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
       { knownCostUsd: 3.5, unpricedCalls: 0 },
       'claude-opus-5'
     )
-    expect(formatExecutionCostCoverage({ costUsd: 3.5, ...champs })).toBe('3.50 $')
+    expect(formatExecutionCostCoverage({ costUsd: 3.5, ...champs })).toBe('3,50 $')
   })
 
   it('sans consommation du tout, la projection est VIDE et le legacy reste intact', () => {
     // Un vieux message persiste n'a pas d'`usage` : il doit continuer a afficher son `costUsd`.
     expect(executionCostCoverageFields(undefined)).toEqual({})
-    expect(formatExecutionCostCoverage({ costUsd: 10.05 })).toBe('10.05 $')
+    expect(formatExecutionCostCoverage({ costUsd: 10.05 })).toBe('10,05 $')
   })
 
   it('un coût inconnu ne devient jamais un faux 0.00 $', () => {

@@ -12,7 +12,7 @@
  */
 
 import type { TokenUsage } from '../../../shared/token-usage'
-import { resolveCostCoverage, type CostCoverage } from '../../../shared/cost-estimate'
+import { formatUsd, resolveCostCoverage, type CostCoverage } from '../../../shared/cost-estimate'
 
 export interface CostRow extends TokenUsage {
   /** Acteur, modèle ou provider selon la dimension demandée. */
@@ -70,14 +70,8 @@ export interface CostSummary extends Readonly<{
   rewritingContext: boolean
 }> {}
 
-/** Montant en euros-style français, arrondi au centime. Les micro-coûts restent visibles. */
-export function formatUsd(amount: number): string {
-  if (!Number.isFinite(amount)) return '—'
-  if (amount === 0) return '0 $'
-  // Sous le centime, arrondir à 0,00 $ effacerait une dépense réelle → 3 décimales.
-  const decimals = amount < 0.01 ? 3 : 2
-  return `${amount.toFixed(decimals).replace('.', ',')} $`
-}
+/** LA forme d'un montant vit dans `shared/cost-estimate` ; re-exportee pour ne casser aucun import. */
+export { formatUsd } from '../../../shared/cost-estimate'
 
 /**
  * Le verdict de cache se juge au VOLUME de contexte, pas au nombre d'appels. Constate a l'ecran le

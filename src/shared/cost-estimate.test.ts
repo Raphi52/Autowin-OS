@@ -147,7 +147,7 @@ describe('estimation de coût des appels non chiffrés', () => {
       outputTokens: 200_000,
       model: 'claude-opus-5'
     })
-    expect(label).toBe('≈ 10.00 $ estimés')
+    expect(label).toBe('≈ 10,00 $ estimés')
   })
 })
 
@@ -239,7 +239,7 @@ describe('resolveCostCoverage — une seule réponse à « combien a coûté cec
     aggregator.add({ provider: 'claude', model: usage.model, inputTokens: 100_000, outputTokens: 10_000 })
     const budget = aggregator.budgetStatus()
 
-    expect(outcome).toBe('≈ 0.75 $ estimés · 1 appel non chiffré')
+    expect(outcome).toBe('≈ 0,75 $ estimés · 1 appel non chiffré')
     expect(conversation.coverage.estimatedUsd).toBeCloseTo(0.75, 6)
     expect(budget.coverage.estimatedUsd).toBeCloseTo(0.75, 6)
     expect(conversation.label).toBe('≈ 0,75 $ estimés')

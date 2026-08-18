@@ -1,5 +1,5 @@
 import { fromMarkdown } from 'mdast-util-from-markdown'
-import { formatCostCoverage, resolveCostCoverage } from './cost-estimate'
+import { formatCostCoverage, formatUsd, resolveCostCoverage } from './cost-estimate'
 import type { TokenUsage } from './token-usage'
 
 /**
@@ -802,7 +802,7 @@ export function formatExecutionCostCoverage(data: OrchestrationOutcome): string 
     )
   }
   const legacyCost = asNumber(data.costUsd)
-  return legacyCost === undefined ? undefined : `${legacyCost.toFixed(2)} $`
+  return legacyCost === undefined ? undefined : formatUsd(legacyCost)
 }
 
 /** Nom lisible du run à partir de son chemin (le dossier `<sujet>-workspace`). */

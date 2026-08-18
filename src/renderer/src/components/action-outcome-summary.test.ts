@@ -104,7 +104,7 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
         name: 'orchestrate',
         data: { status: 'succeeded', costUsd: 10.05 }
       })
-    ).toEqual({ label: 'succeeded · 10.05 $', state: 'ok' })
+    ).toEqual({ label: 'succeeded · 10,05 $', state: 'ok' })
   })
 
   it('gate BLOQUE = echec de livraison, pas un detail', () => {
@@ -112,7 +112,7 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
       name: 'orchestrate',
       data: { status: 'failed', gateBlocked: true, costUsd: 3 }
     })
-    expect(summary).toEqual({ label: 'bloqué par le gate · 3.00 $', state: 'failed' })
+    expect(summary).toEqual({ label: 'bloqué par le gate · 3,00 $', state: 'failed' })
   })
 
   it('livrable REFUSE par le juge = echec, meme si l’appel a reussi', () => {
@@ -239,7 +239,7 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
         name: 'orchestrate',
         data: { status: 'failed', gateBlocked: true, gateReasons: [], costUsd: 3 }
       })
-    ).toEqual({ label: 'bloqué par le gate · 3.00 $', state: 'failed' })
+    ).toEqual({ label: 'bloqué par le gate · 3,00 $', state: 'failed' })
   })
 
   it('une autre action ne produit rien', () => {
