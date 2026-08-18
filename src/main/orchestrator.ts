@@ -67,11 +67,7 @@ import {
   type IndependentLearningAttestation
 } from './outcome-learning-proposal'
 import { PIPELINE_PHASES, type PipelinePhase } from './skill-pipeline'
-import {
-  ROOT_DOD,
-  rootExecutionRequirements,
-  rootRequirementChecks
-} from './root-execution-contract'
+import { rootExecutionRequirements, etatDeCloture } from './root-execution-contract'
 import { isMutationTask } from './task-mutation-classifier'
 export {
   classifyMutationConfidence,
@@ -3739,18 +3735,15 @@ ${empreinteDepot}`
         evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
         evidence: exec.executionEvidence
       })
-      const rootChecks = rootRequirementChecks(task, { phases: phaseOutputs }).filter(
-        (check) => check.label !== ROOT_DOD.commit
-      )
-      if (isMutationTask(task) && !rootChecks.some((check) => check.label === ROOT_DOD.mutation)) {
-        rootChecks.push({ label: ROOT_DOD.mutation, checked: evidenceOk })
-      }
+      // UN SEUL endroit calcule l'etat de cloture (`root-execution-contract.ts`) : cette decision
+      // vivait ici en ligne, donc hors de portee des tests — une mutation de sa garde ne faisait
+      // rougir aucun test (mesure du 2026-08-18). Elle porte la regle du run en LECTURE SEULE : un
+      // run qui n'a joue que scout/frame/terrain n'a aucune mutation a prouver, meme si la phrase de
+      // l'utilisateur en annoncait une pour la suite.
+      const cloture = etatDeCloture(task, phaseOutputs, evidenceOk, isMutationTask(task))
       const preGate = evaluateClosure({
-        status: evidenceOk && !hookOutcome.blocked ? 'green' : 'red',
-        dod:
-          rootChecks.length > 0
-            ? rootChecks.map((check) => ({ ...check, hasContent: true }))
-            : [{ checked: evidenceOk, hasContent: true }]
+        status: hookOutcome.blocked ? 'red' : cloture.status,
+        dod: cloture.dod.map((check) => ({ ...check, hasContent: true }))
       })
       if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
       if (preGate.blocked) {

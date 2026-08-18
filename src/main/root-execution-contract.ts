@@ -139,3 +139,54 @@ export function rootRequirementChecks(
   }
   return checks
 }
+
+/** Phases qui n'ECRIVENT rien : leur livrable est un texte, pas une mutation. */
+const PHASES_LECTURE_SEULE = new Set(['scout', 'frame', 'terrain'])
+
+/**
+ * Le run n'a joué QUE des phases de lecture — il n'a donc aucune mutation à prouver.
+ *
+ * Défaut vécu le 2026-08-18 : « Statut "red" : la clôture a été refusée en amont » sur un scout qui
+ * avait pourtant rendu sa shortlist. Le prompt était classé MUTATION (`isMutationTask` → true) et,
+ * depuis que « scout » nomme déterministement la phase, le run ne jouait QUE scout. La clôture
+ * exigeait alors une preuve d'exécution mutante qu'un run en lecture seule ne peut pas produire :
+ * exigence structurellement insatisfaisable, donc rouge à chaque fois.
+ *
+ * Un run se juge sur ce qu'on lui a demandé de JOUER, pas sur ce que la phrase de l'utilisateur
+ * laissait entrevoir pour la suite. Un tableau vide n'est PAS blanchi : sans phase, il n'y a rien à
+ * déclarer en lecture seule.
+ */
+export function runEnLectureSeule(phases: readonly { phase: string }[]): boolean {
+  return phases.length > 0 && phases.every((entree) => PHASES_LECTURE_SEULE.has(entree.phase))
+}
+
+/**
+ * L'état de clôture d'un run : ce que le gate doit évaluer, calculé EN UN SEUL ENDROIT.
+ *
+ * Cette décision vivait en ligne dans l'orchestrateur, donc hors de portée des tests — une mutation
+ * de sa garde ne faisait rougir aucun test (vérifié le 2026-08-18). C'est la leçon de
+ * `orchestrator.verdict-gate.test.ts` appliquée une fois de plus : un fait, un seul lecteur.
+ */
+export function etatDeCloture(
+  task: string,
+  phases: readonly { phase: string; text?: string; executionEvidence?: ExecutionEvidence[] }[],
+  evidenceOk: boolean,
+  mutationDemandee: boolean
+): { status: 'green' | 'red'; dod: Array<{ label: string; checked: boolean }> } {
+  const lectureSeule = runEnLectureSeule(phases)
+  const checks = rootRequirementChecks(task, { phases: [...phases] }).filter(
+    (check) =>
+      check.label !== ROOT_DOD.commit &&
+      // Un run en lecture seule ne porte que l'obligation d'ANALYSE : exiger de lui une preuve de
+      // mutation ou de test est structurellement insatisfaisable, donc un rouge garanti.
+      !(lectureSeule && check.label !== ROOT_DOD.analysis)
+  )
+  if (
+    !lectureSeule &&
+    mutationDemandee &&
+    !checks.some((check) => check.label === ROOT_DOD.mutation)
+  ) {
+    checks.push({ label: ROOT_DOD.mutation, checked: evidenceOk })
+  }
+  return { status: lectureSeule || evidenceOk ? 'green' : 'red', dod: checks }
+}
