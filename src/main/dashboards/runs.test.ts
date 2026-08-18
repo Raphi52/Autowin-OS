@@ -113,4 +113,30 @@ describe('isBlocked', () => {
     const redFull = `status: red\n\n## Besoin\n- [x] a\n`
     expect(isBlocked(parseRun(redFull))).toBe(true)
   })
+
+  /**
+   * VOCABULAIRE FOSSILE. 101 RUN.md portent `status: succeeded` et 7 `failed` — des statuts
+   * qu'aucun code n'écrit plus (mesuré le 2026-08-18 sur la racine dev). La LECTURE doit être
+   * juste sans qu'un octet d'historique ne bouge : `succeeded` hérite EXACTEMENT du traitement de
+   * `green`, condition de DoD comprise ; `failed` reste bloqué comme `red`.
+   *
+   * Le second cas est LE discriminant : il prouve qu'on n'a pas ouvert à `succeeded` une exception
+   * contournant la règle de DoD. Il est le symétrique exact du `green` partiel ci-dessus.
+   */
+  it('false sur succeeded avec DoD pleine — clos au même titre que green', () => {
+    expect(isBlocked(parseRun(`status: succeeded\n\n## Besoin\n- [x] a\n- [x] b\n`))).toBe(false)
+  })
+
+  it('true sur succeeded avec DoD INCOMPLÈTE — aucune exception à la règle de DoD', () => {
+    expect(isBlocked(parseRun(`status: succeeded\n\n## Besoin\n- [x] a\n- [ ] b\n`))).toBe(true)
+  })
+
+  it('true sur failed même DoD pleine — un échec reste un échec, comme red', () => {
+    expect(isBlocked(parseRun(`status: failed\n\n## Besoin\n- [x] a\n`))).toBe(true)
+  })
+
+  it('true sur pending et running : figés depuis des semaines = abandonnés', () => {
+    expect(isBlocked(parseRun(`status: pending\n\n## Besoin\n- [x] a\n`))).toBe(true)
+    expect(isBlocked(parseRun(`status: running\n\n## Besoin\n- [x] a\n`))).toBe(true)
+  })
 })

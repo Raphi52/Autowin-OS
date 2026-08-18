@@ -111,7 +111,16 @@ export function parseRun(md: string, subject?: string): RunSummary {
   return { status, regime, dodTotal, dodChecked, journalEvents, defauts, subject }
 }
 
-/** True si le run est bloqué : status open/red, ou DoD incomplète. */
+/**
+ * True si le run est BLOQUÉ, c'est-à-dire ni clos ni concluant.
+ *
+ * Bloquent : `open`, `red`, et le vocabulaire FOSSILE `pending`/`running`/`failed` — plus aucun
+ * code ne les écrit, mais 109 RUN.md historiques les portent (mesuré le 2026-08-18) et un run figé
+ * sur `running` depuis des semaines n'est pas « en cours », c'est un abandon.
+ * Ne bloquent pas, à DoD complète : `green`, `degraded-closed` et `succeeded` — ce dernier est un
+ * fossile de SUCCÈS, il hérite donc du traitement de `green`, condition de DoD comprise.
+ * Une DoD incomplète bloque quel que soit le statut : c'est la règle, sans exception par statut.
+ */
 export function isBlocked(s: RunSummary): boolean {
   return (
     ['pending', 'running', 'open', 'failed', 'red'].includes(s.status) || s.dodChecked < s.dodTotal
