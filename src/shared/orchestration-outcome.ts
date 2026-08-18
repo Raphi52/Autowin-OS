@@ -674,6 +674,30 @@ export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): 
 }
 
 /**
+ * Retrograde l'etiquette de succes d'un rapport worker que la gate ou le juge a refuse.
+ * Les preuves (tests, diffs, diagnostics) restent INTACTES : seul le ✅ mensonger tombe.
+ */
+export function demoteUnvalidatedSuccessClaims(
+  report: string,
+  outcome: OrchestrationOutcome
+): string {
+  if (isDeliveredOrchestrationOutcome(outcome)) return report
+  const cause =
+    outcome.gateBlocked === true
+      ? 'gate BLOQUÉ'
+      : outcome.valid === false
+        ? 'juge a REFUSÉ le livrable'
+        : undefined
+  if (!cause) return report
+  const protectedLines = markdownCodeLineProtection([report])[0]
+  return rewriteUnprotectedMarkdownLines(report, protectedLines, (line) =>
+    structuredClosingMarker(line) === 'fait'
+      ? line.replace('✅', '⚠️').replace('Fait', `Fait — AUTO-DÉCLARÉ, non validé (${cause})`)
+      : line
+  )
+}
+
+/**
  * Réconcilie aussi les anciens messages déjà persistés : leur texte worker a été écrit avant la
  * publication, mais leur action `orchestrate` conserve l'outcome structuré qui fait autorité.
  */
@@ -681,7 +705,14 @@ export function reconcileClosedOrchestrationText(
   report: string,
   outcome: OrchestrationOutcome
 ): string {
-  if (!isDeliveredOrchestrationOutcome(outcome)) return report
+  // Defaut vecu le 2026-08-17 (conv-1286) : sur SEPT tours, l'en-tete disait « ⛔ Workflow BLOQUE par
+  // le gate » et le rapport du worker, imprime juste dessous, disait « ✅ Fait … verifie via 74 tests ».
+  // Le message affirmait l'echec et le succes en meme temps, donc l'utilisateur redemandait la meme
+  // chose : 21 tours pour une demande d'un tour. Le rapport du worker est capture AVANT la gate, donc
+  // son ✅ n'a jamais rien su du verdict. Ses PREUVES restent utiles et intactes ; seule l'etiquette
+  // de succes est retrogradee.
+  if (!isDeliveredOrchestrationOutcome(outcome))
+    return demoteUnvalidatedSuccessClaims(report, outcome)
   const protectedLines = markdownCodeLineProtection([report])[0]
   const withoutExistingClosingBlock = removeExistingStructuredClosingBlock(report, protectedLines)
   const remainingProtectedLines = markdownCodeLineProtection([withoutExistingClosingBlock])[0]

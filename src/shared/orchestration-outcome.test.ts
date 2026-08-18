@@ -4,6 +4,7 @@ import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
   markdownCodeContinuationPrefixes,
+  demoteUnvalidatedSuccessClaims,
   reconcileClosedOrchestrationText,
   reconcileClosedOrchestrationTextParts,
   runLabelFromPath
@@ -928,5 +929,61 @@ describe('runLabelFromPath — nommer le run lisiblement', () => {
 
   it('chemin absent → rien', () => {
     expect(runLabelFromPath(undefined)).toBeUndefined()
+  })
+})
+
+describe('un run non valide ne garde pas le ✅ du worker', () => {
+  // Defaut vecu le 2026-08-17 (conv-1286) : sept tours ou l'en-tete disait « ⛔ Workflow BLOQUE par le
+  // gate » avec, juste dessous, « ✅ Fait … verifie via 74 tests » ecrit par le worker. Le worker
+  // redige AVANT la gate : son ✅ ne peut rien savoir du verdict. L'utilisateur, lui, lisait un succes.
+  const rapportWorker = [
+    '✅ Fait',
+    '',
+    '1. Correctif applique dans ChatView.tsx.',
+    '2. Suite adjacente : 74/74 tests, exit-code 0.',
+    '',
+    '📍 Maintenant : correctif verifie dans le worktree.'
+  ].join('\n')
+
+  it('retrograde le ✅ quand le gate a bloque, et gate les preuves', () => {
+    const texte = reconcileClosedOrchestrationText(rapportWorker, {
+      gateBlocked: true,
+      status: 'failed'
+    })
+
+    expect(texte).not.toContain('✅ Fait')
+    expect(texte).toContain('⚠️ Fait — AUTO-DÉCLARÉ, non validé (gate BLOQUÉ)')
+    // Les preuves du worker restent : on retrograde une etiquette, on ne censure pas un rapport.
+    expect(texte).toContain('2. Suite adjacente : 74/74 tests, exit-code 0.')
+    expect(texte).toContain('📍 Maintenant : correctif verifie dans le worktree.')
+  })
+
+  it('nomme le juge quand c est lui qui a refuse', () => {
+    const texte = reconcileClosedOrchestrationText(rapportWorker, { valid: false })
+
+    expect(texte).toContain('⚠️ Fait — AUTO-DÉCLARÉ, non validé (juge a REFUSÉ le livrable)')
+  })
+
+  it('ne touche pas un ✅ ecrit dans un bloc de code', () => {
+    const avecCode = ['```md', '✅ Fait', '```'].join('\n')
+
+    expect(demoteUnvalidatedSuccessClaims(avecCode, { gateBlocked: true })).toBe(avecCode)
+  })
+
+  it('laisse intact le rapport d un run reellement livre', () => {
+    const livre = { status: 'succeeded', valid: true, gateBlocked: false, reused: false, result: 'x' }
+    expect(isDeliveredOrchestrationOutcome(livre)).toBe(true)
+    expect(demoteUnvalidatedSuccessClaims(rapportWorker, livre)).toBe(rapportWorker)
+  })
+
+  it('le texte affiche par Autowin ne contient plus de ✅ sous un en-tete BLOQUE', () => {
+    const affiche = formatOrchestrationOutcome(true, {
+      gateBlocked: true,
+      status: 'failed',
+      result: rapportWorker
+    })
+
+    expect(affiche).toContain('⛔ Workflow BLOQUÉ par le gate')
+    expect(affiche).not.toContain('✅ Fait')
   })
 })
