@@ -63,6 +63,24 @@ export function routeSkillRequest(message: string): SkillRoute | undefined {
     }
   }
 
+  // « scout » NU en tete de message nomme la phase, comme `/scout` le fait avec le slash.
+  //
+  // Defaut vecu le 2026-08-18 (conv-1297) : « scout des ameliorations de l'experience utilisateur » a
+  // produit un rapport de BUILD — trois lignes « Implemente » au lieu d'une shortlist. Seule la forme
+  // avec slash etait routee ; le mot nu partait au modele, qui a choisi build.
+  //
+  // Le mot avait ete retire du court-circuit le 2026-07-28 (voir ACTION_VERB ci-dessus), mais pour une
+  // AUTRE raison : il declenchait alors une ORCHESTRATION MUTANTE sans consulter le modele. Ici il
+  // designe une phase READ-ONLY explicitement demandee. Un faux positif coute une shortlist, pas une
+  // ecriture — c'est ce qui rend la regle acceptable la ou l'ancienne ne l'etait pas.
+  //
+  // Ancree en TETE et bornee par une frontiere de mot : « le scout est pas score » et « scouting »
+  // ne declenchent rien. Une question ne declenche rien non plus — le bloc ci-dessous la traite avant.
+  const scoutNu = /^scout(?=\s|$)([\s\S]*)$/i.exec(text)
+  if (scoutNu && !text.includes('?')) {
+    return { task: text, explicitPhase: 'scout', reason: 'explicit-skill' }
+  }
+
   const target = WORKSPACE_TARGET.test(text) || /^corriger[.!]?$/.test(text)
   const questionEnd = text.indexOf('?')
   if (questionEnd >= 0) {

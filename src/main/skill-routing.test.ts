@@ -85,14 +85,26 @@ describe('routeSkillRequest', () => {
     // Constate en essai reel : « Scout LECTURE SEULE dans src/main/ » lançait un pipeline SANS que le
     // modele soit consulte — ce routage court-circuite chat() en amont, donc aucune regle de prompt ne
     // pouvait le corriger. Analyser se fait maintenant avec Read/Grep/Glob.
+    //
+    // RETRECI le 2026-08-18, sur arbitrage utilisateur (« ca aurait du declencher scout ») : un
+    // message qui COMMENCE par « scout » nomme desormais la phase, comme `/scout`. La difference qui
+    // rend ce retour acceptable : l'ancien routage produisait une orchestration MUTANTE
+    // (`workspace-action`), celui-ci nomme une phase READ-ONLY. Les verbes d'analyse GENERIQUES —
+    // « scoute », « analyse », « audite » — restent hors court-circuit, eux n'ont jamais nomme de
+    // phase. Le cas « Scout LECTURE SEULE… » a donc change de camp : il est teste juste en dessous.
     for (const analysis of [
-      'Scout LECTURE SEULE : dans src/main/, trouve 2 ameliorations',
       'scoute le repo et dis-moi quoi ameliorer',
       'analyse le module de chat',
       'audite la securite du provider'
     ]) {
       expect(routeSkillRequest(analysis)).toBeUndefined()
     }
+  })
+
+  it('un message qui COMMENCE par « scout » nomme la phase, meme avec des precisions', () => {
+    // Le cas exact retire de la liste ci-dessus : il porte le mot en tete, donc il nomme la phase.
+    const route = routeSkillRequest('Scout LECTURE SEULE : dans src/main/, trouve 2 ameliorations')
+    expect(route?.explicitPhase).toBe('scout')
   })
 
   it('continue d’orchestrer ce qui MODIFIE vraiment', () => {
@@ -105,5 +117,46 @@ describe('routeSkillRequest', () => {
     ]) {
       expect(routeSkillRequest(modification)?.reason).toBe('workspace-action')
     }
+  })
+})
+
+describe('« scout » en tete de message declenche la phase SCOUT', () => {
+  /**
+   * Defaut vecu le 2026-08-18 (conv-1297) : « scout des ameliorations de l'experience utilisateur »
+   * a produit un rapport de BUILD — trois lignes marquees « Implemente » au lieu d'une shortlist. La
+   * phase scout n'a jamais tourne : seule la forme `/scout` etait routee, le mot nu partait au
+   * modele, qui a choisi build.
+   *
+   * Le mot avait ete retire du court-circuit le 2026-07-28, mais pour une AUTRE raison : il
+   * declenchait alors une ORCHESTRATION MUTANTE sans consulter le modele. Ici il nomme une phase
+   * READ-ONLY, ce que l'utilisateur demande explicitement. Un faux positif coute une shortlist, pas
+   * une ecriture.
+   */
+  it('route vers la phase scout sur le mot nu en tete', () => {
+    const route = routeSkillRequest("scout des ameliorations de l'experience utilisateur")
+    expect(route?.explicitPhase).toBe('scout')
+    expect(route?.reason).toBe('explicit-skill')
+  })
+
+  it('conserve le message tel quel comme tache', () => {
+    const message = 'scout des fix de autowin os'
+    expect(routeSkillRequest(message)?.task).toBe(message)
+  })
+
+  it('ne se declenche que EN TETE, jamais au milieu d une phrase', () => {
+    expect(routeSkillRequest('le scout est toujours pas score')).toBeUndefined()
+    expect(routeSkillRequest('regarde le dernier scout')).toBeUndefined()
+  })
+
+  it('ne transforme pas une QUESTION en scout', () => {
+    expect(routeSkillRequest('scout ou build ?')).toBeUndefined()
+  })
+
+  it('ne prend pas un mot qui commence par scout', () => {
+    expect(routeSkillRequest('scouting des idees')).toBeUndefined()
+  })
+
+  it('la forme avec slash continue de marcher', () => {
+    expect(routeSkillRequest('/scout autowin')?.explicitPhase).toBe('scout')
   })
 })
