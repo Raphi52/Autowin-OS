@@ -104,6 +104,19 @@ describe('Autowin UI contract', () => {
     }
   })
 
+  // Defaut vecu le 2026-08-18 : le popup « Ranger dans un dossier » etait a `#0b0f14`, soit
+  // R=11 G=15 B=20 — le bleu domine de 9 points, donc un gris-BLEU, pas un noir. Deux sessions l'ont
+  // declare corrige parce qu'elles verifiaient l'OPACITE (pas de rgba) sans regarder la TEINTE, et
+  // parce que `.conv-menu-pop` n'existe dans le DOM que menu ouvert : il echappait aux mesures.
+  it('le popup de menu des conversations est un noir neutre, pas une teinte froide', () => {
+    const chatCss = component('ChatView.css')
+    const regle = /\.conv-menu-pop\s*\{([^}]*)\}/.exec(chatCss)?.[1] ?? ''
+    const fond = /background\s*:([^;]*);/.exec(regle)?.[1]?.trim()
+
+    expect(fond, 'aucun fond declare sur .conv-menu-pop').toBeTruthy()
+    expect(fond).toBe('#000')
+  })
+
   it('aucune règle de thème ne réécrit le cadre de page', () => {
     // Defaut vecu : `.theme-serious .observatory-view { background: var(--surface-panel) }` etait
     // PLUS SPECIFIQUE que `.view-page` et remplacait donc le degrade — dont le lisere rose->dore du

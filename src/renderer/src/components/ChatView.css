@@ -475,7 +475,9 @@
   padding: 4px;
   border: 1px solid var(--line);
   border-radius: var(--r2);
-  background: #0b0f14;
+  /* Noir franc : `#0b0f14` etait une teinte FROIDE (R=11 G=15 B=20, le bleu domine de 9 points) —
+     lue en CDP sur le rendu vivant le 2026-08-18, c'est le « gris-bleu hors theme » signale. */
+  background: #000;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
 }
 .conv-menu-pop button {
