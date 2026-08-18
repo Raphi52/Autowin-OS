@@ -67,7 +67,7 @@ import {
   type IndependentLearningAttestation
 } from './outcome-learning-proposal'
 import { PIPELINE_PHASES, type PipelinePhase } from './skill-pipeline'
-import { rootExecutionRequirements, etatDeCloture } from './root-execution-contract'
+import { rootExecutionRequirements, etatDeCloture, programmeSansEcriture } from './root-execution-contract'
 import { isMutationTask } from './task-mutation-classifier'
 export {
   classifyMutationConfidence,
@@ -1935,7 +1935,10 @@ export class Orchestrator {
           }
         })
       }
-      if (green && !integrated && !retained && produced) {
+      // Un run dont le PROGRAMME ne comporte aucune phase d'ecriture (frame/scout/terrain) n'a rien
+      // a integrer : lui reprocher une « integration locale non terminee » est un reproche
+      // insatisfaisable. Des que `build` est au programme, la garde mord exactement comme avant.
+      if (green && !integrated && !retained && produced && !programmeSansEcriture(phases)) {
         produced.valid = false
         produced.gateBlocked = true
         if (!produced.gateReasons.includes('intégration locale non terminée')) {
@@ -1986,7 +1989,7 @@ export class Orchestrator {
         finalActivity?.publishedSha
       if (
         green &&
-        rootExecutionRequirements(task).commit &&
+        rootExecutionRequirements(task, phases).commit &&
         !publishedCommitSha?.trim() &&
         produced
       ) {
