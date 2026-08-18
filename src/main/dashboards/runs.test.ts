@@ -139,4 +139,8 @@ describe('isBlocked', () => {
     expect(isBlocked(parseRun(`status: pending\n\n## Besoin\n- [x] a\n`))).toBe(true)
     expect(isBlocked(parseRun(`status: running\n\n## Besoin\n- [x] a\n`))).toBe(true)
   })
+
+  it('true sur un statut illisible : un RUN.md corrompu reste visible', () => {
+    expect(isBlocked(parseRun(`status: CORROMPU\n\n## Besoin\n- [x] a\n`))).toBe(true)
+  })
 })
