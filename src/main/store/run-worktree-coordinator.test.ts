@@ -2106,4 +2106,32 @@ describe('RunWorktreeCoordinator — cause conservee quand la reprise de publica
       rmSync(root, { recursive: true, force: true })
     }
   })
+
+  it('chemin ASYNCHRONE - conserve aussi une valeur jetee non-Error via String', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-cause-async-non-error-'))
+    try {
+      const runId = 'run-cause-async-non-error'
+      const stateStore = manifesteVertEnAttente(root, runId)
+      const coordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager({ listAgentIds: () => [runId] }),
+          operationsAreIsolated: () => true,
+          recoveryInventoryAsync: async () => ({
+            residues: { cleaned: 0, recovered: [], blocked: [] },
+            agents: [{ agentId: runId, active: false, changedFiles: ['a.txt'] }]
+          }),
+          finalizeAsync: async () => {
+            throw SENTINELLE
+          }
+        },
+        stateStore,
+        nowFn: () => 30
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      laCauseEstConservee(coordinator, stateStore, runId, SENTINELLE)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 })
