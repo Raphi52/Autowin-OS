@@ -16,7 +16,10 @@ import { routeSkillRequest } from './skill-routing'
 
 export type TaskRegime = 'trivial' | 'standard' | 'critical'
 
-/** Phases jouées par régime. Le juge reste TOUJOURS actif (hors de cette liste, ajouté par l'orchestrateur). */
+/**
+ * Associe chaque régime au sous-ensemble de phases à exécuter.
+ * Le juge reste TOUJOURS actif (hors de cette liste, ajouté par l'orchestrateur).
+ */
 const REGIME_PHASES: Record<TaskRegime, PipelinePhase[]> = {
   trivial: ['build'],
   standard: ['frame', 'build'],
