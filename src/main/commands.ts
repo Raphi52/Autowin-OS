@@ -1570,6 +1570,7 @@ export class AppCommandBus {
             inputTokens: r.usage?.inputTokens,
             outputTokens: r.usage?.outputTokens,
             cacheReadTokens: r.usage?.cacheReadTokens,
+            cacheCreationTokens: r.usage?.cacheCreationTokens,
             ...(resolvedModel ? { resolvedModel } : {}),
             ...(pricingModel ? { pricingModel } : {}),
             result: r.result,

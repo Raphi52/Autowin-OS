@@ -85,6 +85,9 @@ export function normalizeClaudeUsage(
   }
   const inputTokens = nonCache + cache + cacheCreation
   if (!Number.isSafeInteger(inputTokens)) return undefined
+  // `cacheCreation` etait calcule puis PERDU dans le total : le consommateur ne pouvait donc pas le
+  // tarifer a 1,25x. On le transporte a cote, comme la lecture de cache.
+  const cacheCreationTokens = cacheCreation
   const normalizedCost =
     typeof costUsd === 'number' && Number.isFinite(costUsd) && costUsd >= 0 ? costUsd : undefined
   if (hasReportedCost && normalizedCost === undefined) return undefined
@@ -92,6 +95,7 @@ export function normalizeClaudeUsage(
     inputTokens,
     outputTokens: output,
     cacheReadTokens: cache,
+    cacheCreationTokens,
     ...(normalizedCost === undefined ? {} : { costUsd: normalizedCost })
   }
 }

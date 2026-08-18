@@ -158,6 +158,12 @@ export interface Usage {
   outputTokens: number
   /** Sous-ensemble de `inputTokens` relu depuis le cache — jamais une quantité qui s'y ajoute. */
   cacheReadTokens?: number
+  /**
+   * Sous-ensemble de `inputTokens` ÉCRIT dans le cache — jamais un ajout. Distinct de la lecture
+   * parce qu'il se facture 1,25× le tarif d'entrée là où la lecture se facture 0,1× : fondu dans
+   * l'entrée, il était sous-facturé de 25 % sans que rien ne le signale.
+   */
+  cacheCreationTokens?: number
   costUsd?: number
 }
 

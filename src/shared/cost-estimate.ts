@@ -19,7 +19,20 @@ interface ModelRate {
   readonly match: string
   readonly inputPerMTok: number
   readonly outputPerMTok: number
+  /**
+   * Tarif d'INTRODUCTION, borné dans le temps. Appliqué seulement si l'appelant fournit une
+   * horloge : sans elle on garde le tarif standard. Le module n'a donc pas d'horloge cachée, et il
+   * cesse de lui-même d'appliquer l'intro passé `untilMs` — aucune date à venir retirer à la main.
+   */
+  readonly intro?: {
+    readonly untilMs: number
+    readonly inputPerMTok: number
+    readonly outputPerMTok: number
+  }
 }
+
+/** Fin du tarif d'introduction de Sonnet 5 : 2026-08-31 23:59:59 UTC inclus (catalogue Anthropic). */
+export const SONNET_5_INTRO_UNTIL_MS = Date.UTC(2026, 7, 31, 23, 59, 59, 999)
 
 /**
  * Ordre significatif : le premier motif qui correspond gagne. Les familles les plus spécifiques
@@ -29,17 +42,33 @@ const MODEL_RATES: readonly ModelRate[] = [
   { match: 'fable', inputPerMTok: 10, outputPerMTok: 50 },
   { match: 'mythos', inputPerMTok: 10, outputPerMTok: 50 },
   { match: 'opus', inputPerMTok: 5, outputPerMTok: 25 },
+  // Sonnet 5 AVANT le `sonnet` générique : seul lui porte le tarif d'introduction. Sonnet 4.6 reste
+  // à 3 $ / 15 $ en permanence, et l'attraper avec l'intro l'aurait sous-facturé de 33 %.
+  {
+    match: 'sonnet-5',
+    inputPerMTok: 3,
+    outputPerMTok: 15,
+    intro: { untilMs: SONNET_5_INTRO_UNTIL_MS, inputPerMTok: 2, outputPerMTok: 10 }
+  },
   { match: 'sonnet', inputPerMTok: 3, outputPerMTok: 15 },
   { match: 'haiku', inputPerMTok: 1, outputPerMTok: 5 }
 ]
 
 /** Un token relu en cache coûte 10 % du tarif d'entrée. */
 const CACHE_READ_RATIO = 0.1
+/**
+ * Un token ÉCRIT dans le cache coûte 1,25× le tarif d'entrée (TTL 5 min, le défaut). Un TTL 1 h
+ * coûterait 2×, mais `cache_creation_input_tokens` ne dit pas le TTL : 1,25× est donc un PLANCHER
+ * assumé, pas une valeur exacte — l'estimation reste marquée « ≈ estimés ».
+ */
+const CACHE_WRITE_RATIO = 1.25
 
 export interface TokenUsageShape {
   inputTokens?: number
   outputTokens?: number
   cacheReadTokens?: number
+  /** Sous-ensemble de `inputTokens` écrit dans le cache — jamais une quantité qui s'y ajoute. */
+  cacheCreationTokens?: number
   model?: string
 }
 
@@ -58,27 +87,35 @@ export function modelRate(model: string | undefined): ModelRate | undefined {
  * Estimation en USD des tokens non tarifés. Rend `undefined` quand le modèle est inconnu ou
  * qu'aucun token n'a été compté — l'appelant affiche alors le volume, pas un montant inventé.
  */
-export function estimateCostUsd(usage: TokenUsageShape): number | undefined {
+export function estimateCostUsd(usage: TokenUsageShape, nowMs?: number): number | undefined {
   const rate = modelRate(usage.model)
   if (!rate) return undefined
+  const intro =
+    rate.intro && nowMs !== undefined && nowMs <= rate.intro.untilMs ? rate.intro : undefined
+  const inputPerMTok = intro?.inputPerMTok ?? rate.inputPerMTok
+  const outputPerMTok = intro?.outputPerMTok ?? rate.outputPerMTok
   const input = positive(usage.inputTokens)
   const output = positive(usage.outputTokens)
-  // Les tokens de cache sont un SOUS-ENSEMBLE de l'entrée : on ne les facture qu'une fois, au
-  // tarif réduit, et on retire donc leur part du plein tarif.
-  const cacheRead = Math.min(input, positive(usage.cacheReadTokens))
   if (input + output === 0) return undefined
-  const freshInput = input - cacheRead
+  // Les tokens de cache — relus ET écrits — sont un SOUS-ENSEMBLE de l'entrée : on les facture une
+  // seule fois, à leur tarif propre, et on retire leur part du plein tarif. Des compteurs
+  // incohérents (lecture + écriture > entrée) rendraient une part fraîche NÉGATIVE : on borne
+  // l'écriture d'abord, puis la lecture sur ce qu'il reste.
+  const cacheWrite = Math.min(input, positive(usage.cacheCreationTokens))
+  const cacheRead = Math.min(input - cacheWrite, positive(usage.cacheReadTokens))
+  const freshInput = input - cacheWrite - cacheRead
   return (
-    (freshInput * rate.inputPerMTok +
-      cacheRead * rate.inputPerMTok * CACHE_READ_RATIO +
-      output * rate.outputPerMTok) /
+    (freshInput * inputPerMTok +
+      cacheWrite * inputPerMTok * CACHE_WRITE_RATIO +
+      cacheRead * inputPerMTok * CACHE_READ_RATIO +
+      output * outputPerMTok) /
     1_000_000
   )
 }
 
 /** Montant estimé, formaté avec la marque explicite de l'approximation. */
-export function formatEstimatedCostUsd(usage: TokenUsageShape): string | undefined {
-  const estimate = estimateCostUsd(usage)
+export function formatEstimatedCostUsd(usage: TokenUsageShape, nowMs?: number): string | undefined {
+  const estimate = estimateCostUsd(usage, nowMs)
   if (estimate === undefined) return undefined
   return `≈ ${estimate.toFixed(2)} $ estimés`
 }

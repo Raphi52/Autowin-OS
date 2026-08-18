@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { estimateCostUsd, formatEstimatedCostUsd, modelRate } from './cost-estimate'
+import {
+  SONNET_5_INTRO_UNTIL_MS,
+  estimateCostUsd,
+  formatEstimatedCostUsd,
+  modelRate
+} from './cost-estimate'
 
 /**
  * Le défaut réparé : « coût non exposé » jetait une information qu'on POSSÈDE. Les tokens sont
@@ -52,6 +57,74 @@ describe('estimation de coût des appels non chiffrés', () => {
     expect(modelRate('claude-opus-5')?.inputPerMTok).toBe(5)
     expect(modelRate('claude-sonnet-5')?.inputPerMTok).toBe(3)
     expect(modelRate('claude-haiku-4-5')?.inputPerMTok).toBe(1)
+  })
+
+  /**
+   * Sonnet 5 est en tarif d'INTRODUCTION 2 $ / 10 $ jusqu'au 2026-08-31 inclus (catalogue Anthropic,
+   * relu le 2026-08-18). Le tarif standard 3 $ / 15 $ le surestimait de 50 % pendant cette fenetre.
+   * L'horloge est un PARAMETRE explicite : sans elle on garde le tarif standard, donc la fonction
+   * reste pure et le code ne se met pas a mentir tout seul le 1er septembre.
+   */
+  it('applique le tarif intro de Sonnet 5 pendant la fenetre, le standard apres', () => {
+    const usage = { inputTokens: 1_000_000, outputTokens: 1_000_000, model: 'claude-sonnet-5' }
+    const pendant = SONNET_5_INTRO_UNTIL_MS - 1
+    const apres = SONNET_5_INTRO_UNTIL_MS + 1
+
+    expect(estimateCostUsd(usage, pendant)).toBeCloseTo(12, 6) // 2 + 10
+    expect(estimateCostUsd(usage, apres)).toBeCloseTo(18, 6) // 3 + 15
+    // Sans horloge : tarif standard, jamais l'intro.
+    expect(estimateCostUsd(usage)).toBeCloseTo(18, 6)
+  })
+
+  it("n'applique l'intro qu'a Sonnet 5, pas a Sonnet 4.6", () => {
+    const pendant = SONNET_5_INTRO_UNTIL_MS - 1
+    const usage46 = { inputTokens: 1_000_000, outputTokens: 0, model: 'claude-sonnet-4-6' }
+
+    expect(estimateCostUsd(usage46, pendant)).toBeCloseTo(3, 6)
+    expect(modelRate('claude-sonnet-4-6')?.intro).toBe(undefined)
+    expect(modelRate('claude-sonnet-5')?.intro?.inputPerMTok).toBe(2)
+  })
+
+  /**
+   * Ecrire dans le cache coute 1,25x le tarif d'entree (TTL 5 min, le defaut). Ces tokens etaient
+   * fondus dans `inputTokens` et donc factures 1x : sous-estimation silencieuse de 25 % sur la part
+   * ecrite. Comme le cache relu, ils sont un SOUS-ENSEMBLE de l'entree — jamais un ajout.
+   */
+  it('facture un token ECRIT dans le cache a 1,25x le tarif d entree', () => {
+    // Tout l'input est une ecriture de cache : 1M x 5 $ x 1,25 = 6,25 $.
+    expect(
+      estimateCostUsd({
+        inputTokens: 1_000_000,
+        cacheCreationTokens: 1_000_000,
+        outputTokens: 0,
+        model: 'claude-opus-5'
+      })
+    ).toBeCloseTo(6.25, 6)
+  })
+
+  it('additionne lecture et ecriture de cache sans jamais doubler l entree', () => {
+    // 200k frais x 5 + 300k ecrits x 6,25 + 500k relus x 0,50 = 1 + 1,875 + 0,25.
+    expect(
+      estimateCostUsd({
+        inputTokens: 1_000_000,
+        cacheCreationTokens: 300_000,
+        cacheReadTokens: 500_000,
+        model: 'claude-opus-5'
+      })
+    ).toBeCloseTo(3.125, 6)
+  })
+
+  it('borne lecture + ecriture a l entree reelle (compteurs incoherents)', () => {
+    // 900k + 900k > 1M : sans borne, la part fraiche serait NEGATIVE.
+    const estimate = estimateCostUsd({
+      inputTokens: 1_000_000,
+      cacheCreationTokens: 900_000,
+      cacheReadTokens: 900_000,
+      model: 'claude-opus-5'
+    })
+    expect(estimate).toBeGreaterThan(0)
+    // Plafond dur : jamais plus que tout l'input facture au tarif d'ecriture.
+    expect(estimate!).toBeLessThanOrEqual(6.25)
   })
 
   it('un modèle INCONNU ne rend aucune estimation (jamais un tarif deviné)', () => {

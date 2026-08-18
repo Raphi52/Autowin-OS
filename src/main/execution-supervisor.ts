@@ -18,6 +18,11 @@ export interface ExecutionUsageSnapshot {
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
+  /**
+   * OPTIONNEL a dessein : le runtime le renseigne toujours, mais l'exiger invaliderait une douzaine
+   * d'instantanes deja persistes (et de fixtures) qui n'ont jamais porte ce compteur.
+   */
+  cacheCreationTokens?: number
   totalTokens: number
   freshTokens: number
   knownCostUsd: number | null
@@ -49,6 +54,7 @@ export function sameExecutionUsage(
     left.inputTokens === right.inputTokens &&
     left.outputTokens === right.outputTokens &&
     left.cacheReadTokens === right.cacheReadTokens &&
+    left.cacheCreationTokens === right.cacheCreationTokens &&
     left.totalTokens === right.totalTokens &&
     left.freshTokens === right.freshTokens &&
     left.knownCostUsd === right.knownCostUsd &&
@@ -76,6 +82,7 @@ interface ExecutionRuntime {
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
+  cacheCreationTokens: number
   totalTokens: number
   freshTokens: number
   knownCostUsd: number
@@ -122,6 +129,7 @@ function snapshot(runtime: ExecutionRuntime): ExecutionUsageSnapshot {
     inputTokens: runtime.inputTokens,
     outputTokens: runtime.outputTokens,
     cacheReadTokens: runtime.cacheReadTokens,
+    cacheCreationTokens: runtime.cacheCreationTokens,
     totalTokens: runtime.totalTokens,
     freshTokens: runtime.freshTokens,
     knownCostUsd: runtime.pricedCalls > 0 ? runtime.knownCostUsd : null,
@@ -213,6 +221,7 @@ export class ExecutionSupervisor {
       inputTokens: prior?.inputTokens ?? 0,
       outputTokens: prior?.outputTokens ?? 0,
       cacheReadTokens: prior?.cacheReadTokens ?? 0,
+      cacheCreationTokens: prior?.cacheCreationTokens ?? 0,
       totalTokens: prior?.totalTokens ?? 0,
       freshTokens: prior?.freshTokens ?? 0,
       knownCostUsd: prior?.knownCostUsd ?? 0,
@@ -375,9 +384,15 @@ export class ExecutionSupervisor {
         const cache = Number.isFinite(usage.cacheReadTokens)
           ? Math.min(input, Math.max(0, usage.cacheReadTokens as number))
           : 0
+        // Ecriture de cache : meme invariant que la lecture (sous-ensemble de l'entree), bornee sur
+        // ce que la lecture laisse, sinon deux compteurs incoherents feraient depasser l'entree.
+        const cacheWrite = Number.isFinite(usage.cacheCreationTokens)
+          ? Math.min(Math.max(0, input - cache), Math.max(0, usage.cacheCreationTokens as number))
+          : 0
         runtime.inputTokens += input
         runtime.outputTokens += output
         runtime.cacheReadTokens += cache
+        runtime.cacheCreationTokens += cacheWrite
         runtime.totalTokens += input + output
         runtime.freshTokens += Math.max(0, input - cache) + output
         if (Number.isFinite(usage.costUsd)) {

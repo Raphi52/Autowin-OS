@@ -27,6 +27,8 @@ export interface OrchestrationOutcome {
   inputTokens?: unknown
   outputTokens?: unknown
   cacheReadTokens?: unknown
+  /** Tokens ECRITS dans le cache : tarifes 1,25x l'entree, contre 0,1x pour la lecture. */
+  cacheCreationTokens?: unknown
   /** Modèle réellement servi, tel que relevé sur les étapes exec. */
   resolvedModel?: unknown
   /** Modèle retenu pour TARIFER : le servi, sinon le demandé. Jamais une famille devinée. */
@@ -746,9 +748,12 @@ export function formatExecutionCostCoverage(data: OrchestrationOutcome): string 
       inputTokens: asNumber(data.inputTokens),
       outputTokens: asNumber(data.outputTokens),
       cacheReadTokens: asNumber(data.cacheReadTokens),
+      cacheCreationTokens: asNumber(data.cacheCreationTokens),
       model: asString(data.pricingModel) ?? asString(data.resolvedModel)
     }
-    const estimated = formatEstimatedCostUsd(usage)
+    // L'horloge est fournie ICI, au point d'AFFICHAGE : le module de tarifs reste pur, et un tarif
+    // d'introduction borne dans le temps cesse de s'appliquer sans qu'on ait une date a retirer.
+    const estimated = formatEstimatedCostUsd(usage, Date.now())
     if (estimated) return unpricedCalls > 0 ? `${estimated} · ${unpricedLabel}` : estimated
     // Modèle inconnu : le VOLUME reste une information vraie, le montant non.
     const volume = asNumber(data.totalTokens)
