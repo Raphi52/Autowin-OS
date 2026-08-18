@@ -27,6 +27,10 @@ function fakeOs(): any {
       provider: string
       messages: Array<{ role: 'user' | 'assistant'; content: string; ts: number }>
       runPaths: string[]
+      // Une Conversation reelle porte toujours ces dates : le fake doit avoir la meme forme, sinon
+      // il valide un `get_state` qui ne saurait pas dater ses conversations.
+      createdAt: number
+      updatedAt: number
     }
   >()
   const calls: { setRole: number; attachRun: number; runTask: number; lastTask?: string } = {
@@ -40,7 +44,11 @@ function fakeOs(): any {
     category: 'claude',
     provider: 'claude',
     messages: [{ role: 'user', content: 'le worktree est resté ouvert', ts: 1 }],
-    runPaths: []
+    runPaths: [],
+    createdAt: 1,
+    // Posterieur au dernier message utilisateur : c'est exactement le cas qui trompait la lecture
+    // de la « derniere conversation » (une touche non-utilisateur remonte la conversation).
+    updatedAt: 42
   })
   return {
     executionWorkspace: process.cwd(),
@@ -1129,11 +1137,35 @@ describe('AppCommandBus command execution policy', () => {
     })
   })
 
+  /**
+   * Defaut mesure conv-1291 (2026-08-18) : `get_state` ne rendait que `id`, `title` et `category`.
+   * « Quelle est la derniere conversation ? » n'avait donc AUCUNE reponse dans cet etat — l'ordre du
+   * tableau portait la recence de facon implicite, ce qui invitait a la deviner puis a raconter un
+   * protocole qui n'avait pas eu lieu. Les deux dates repondent, et se distinguent.
+   */
+  it('get_state DATE chaque conversation : derniere touche ET dernier tour utilisateur', async () => {
+    const os = fakeOs()
+    const bus = new AppCommandBus(os, () => undefined)
+
+    const snap = await bus.snapshot()
+    const conv = snap.conversations.find((c) => c.id === 'conv-1')
+
+    expect(conv).toMatchObject({ id: 'conv-1', title: 'A garder' })
+    expect(typeof conv?.updatedAt).toBe('number')
+    // Le fake ne porte qu'un message utilisateur, a ts=1 : c'est LUI qui doit ressortir.
+    expect(conv?.lastUserMessageAt).toBe(1)
+  })
+
   it('get_state expose les worktrees VIVANTS — « le workspace s’est fermé ? » devient une vérité live', async () => {
     const os = fakeOs()
     os.getWorktreeActivity = () =>
       [
-        { agentId: 'a1', state: 'interrupted', workspacePath: '/w/run-1', conversationId: 'conv-1' },
+        {
+          agentId: 'a1',
+          state: 'interrupted',
+          workspacePath: '/w/run-1',
+          conversationId: 'conv-1'
+        },
         { agentId: 'a2', state: 'blocked', worktreePath: '/w/run-2' }
       ] as never
     const bus = new AppCommandBus(os, () => undefined)

@@ -377,6 +377,50 @@ describe('réconciliation au chargement des tours interrompus', () => {
     expect(store.get('conv-1056')!.messages.at(-1)!.content).toBe(once)
   })
 
+  /**
+   * Defaut mesure conv-1291 (2026-08-18) : « quelle est la derniere conversation ? » n'avait aucune
+   * reponse fiable. Le tri de la liste se fait sur `updatedAt`, que bougent aussi des ecritures qui
+   * ne viennent PAS de l'utilisateur — d'ou une « plus recente » qui n'est pas la derniere utilisee.
+   */
+  it('expose la date du dernier message UTILISATEUR, distincte de la derniere touche', () => {
+    const store = new ConversationStore(makeClock())
+    const id = store.create({ title: 'A', provider: 'claude' }).id
+    store.append(id, { role: 'user', content: 'ma question' })
+    const apresUser = store.listSummaries().find((s) => s.id === id)!
+    const dateUser = apresUser.lastUserMessageAt
+
+    store.append(id, { role: 'assistant', content: 'ma reponse' })
+    const resume = store.listSummaries().find((s) => s.id === id)!
+
+    // Le tour assistant est POSTERIEUR : il ne doit pas se faire passer pour un tour utilisateur.
+    expect(dateUser).toBeGreaterThan(0)
+    expect(resume.lastUserMessageAt).toBe(dateUser)
+    expect(resume.lastMessageRole).toBe('assistant')
+    expect(resume.updatedAt).toBeGreaterThan(dateUser!)
+  })
+
+  it("une ecriture NON-utilisateur bouge updatedAt sans bouger le dernier tour de l'utilisateur", () => {
+    const store = new ConversationStore(makeClock())
+    const id = store.create({ title: 'A', provider: 'claude' }).id
+    store.append(id, { role: 'user', content: 'ma question' })
+    const avant = store.listSummaries().find((s) => s.id === id)!
+
+    // Attacher un RUN.md n'est pas un message de l'utilisateur — c'est pourtant ce genre d'ecriture
+    // qui faisait remonter une conversation en tete de liste.
+    store.attachRun(id, 'C:/runs/quelconque/RUN.md')
+    const apres = store.listSummaries().find((s) => s.id === id)!
+
+    expect(apres.updatedAt).toBeGreaterThan(avant.updatedAt)
+    expect(apres.lastUserMessageAt).toBe(avant.lastUserMessageAt)
+  })
+
+  it("n'invente pas de date quand l'utilisateur n'a rien ecrit", () => {
+    const store = new ConversationStore(makeClock())
+    const id = store.create({ title: 'A', provider: 'claude' }).id
+
+    expect(store.listSummaries().find((s) => s.id === id)!.lastUserMessageAt).toBe(undefined)
+  })
+
   it("expose l'etat reconcilie au resume que lit la liste des conversations", () => {
     const store = new ConversationStore(makeClock())
     store.hydrate(zombie())

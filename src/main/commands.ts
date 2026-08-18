@@ -21,6 +21,7 @@ import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
 import { capVerifyOutput, decideVerifyCommand, type VerifyOutcome } from './verify-command'
 import type { AutowinOS } from './os'
+import { lastUserMessageAt } from './store/conversations'
 import type { Message } from './providers/types'
 import type { Role, RoleBinding } from './roles'
 import {
@@ -159,7 +160,26 @@ export interface AppSnapshot {
   activeConversationId?: string
   providers: string[]
   roles: Record<string, { provider: string; model?: string }>
-  conversations: Array<{ id: string; title: string; category: string }>
+  /**
+   * Les DEUX dates sont exposées, et c'est le point : sans elles, « quelle est la dernière
+   * conversation ? » n'avait aucune réponse dans cet état — seuls `id`, `title` et `category` y
+   * figuraient. L'ordre du tableau (récence d'`updatedAt`) portait l'information de façon
+   * implicite, ce qui invitait à la deviner puis à raconter une méthode qui n'a pas eu lieu
+   * (mesuré conv-1291, 2026-08-18 : un protocole en 5 étapes décrit avec aplomb, dont aucune
+   * n'était réalisable avec ces données).
+   *
+   * `updatedAt` = dernière fois que la conversation a été TOUCHÉE, y compris par ce qui ne vient
+   * pas de l'utilisateur (delta de streaming, attache d'un RUN.md, fork).
+   * `lastUserMessageAt` = dernière fois que L'UTILISATEUR y a écrit. C'est cette clé qui répond à
+   * « la dernière conversation que j'ai utilisée » ; elle est absente s'il n'a rien écrit.
+   */
+  conversations: Array<{
+    id: string
+    title: string
+    category: string
+    updatedAt: number
+    lastUserMessageAt?: number
+  }>
   runs: Array<{ subject: string; status: string; blocked: boolean }>
   /**
    * Worktrees ENCORE connus d'Autowin (un worktree nettoyé/fermé n'y figure PLUS) — permet de répondre
@@ -383,7 +403,16 @@ const CATALOG: CommandSpec[] = [
       openWorldHint: false
     }
   },
-  { name: 'get_state', description: 'Relire l’état courant de l’app', args: {} },
+  {
+    name: 'get_state',
+    // La donnee ne sert que si l'agent sait qu'elle existe : sans cette phrase, il continue de
+    // deduire la recence de l'ordre du tableau au lieu de lire les dates (mesure conv-1291).
+    description:
+      'Relire l’état courant de l’app. Chaque conversation porte `updatedAt` (dernière touche, y ' +
+      'compris non-utilisateur) et `lastUserMessageAt` (dernier tour de l’utilisateur) : pour « la ' +
+      'dernière conversation », trie sur `lastUserMessageAt`, ne te fie pas à l’ordre de la liste.',
+    args: {}
+  },
   {
     name: 'verify',
     // Aucun argument : le modele demande « verifie », il ne choisit JAMAIS la commande.
@@ -992,7 +1021,16 @@ export class AppCommandBus {
         .list()
         // Le nom `category` de CETTE sortie est un contrat d'agent : il reste, sa source devient
         // `provider` (les deux valeurs etaient toujours egales).
-        .map((c) => ({ id: c.id, title: c.title, category: c.provider })),
+        .map((c) => {
+          const userAt = lastUserMessageAt(c.messages ?? [])
+          return {
+            id: c.id,
+            title: c.title,
+            category: c.provider,
+            updatedAt: c.updatedAt,
+            ...(userAt !== undefined ? { lastUserMessageAt: userAt } : {})
+          }
+        }),
       runs: runs
         .slice(0, 12)
         .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
