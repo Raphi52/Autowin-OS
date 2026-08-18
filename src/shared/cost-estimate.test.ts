@@ -196,3 +196,84 @@ describe('catalogue indexé (provider, motif) — aucun tarif ajouté, seule la 
     expect(modelRate('claude-opus-5', 'claude')).toMatchObject({ inputPerMTok: 5 })
   })
 })
+
+describe('resolveCostCoverage — une seule réponse à « combien a coûté ceci »', () => {
+  // Le MÊME usage, non tarifé par le provider : 100 k d'entrée + 10 k de sortie sur opus,
+  // soit (100 000 × 5 + 10 000 × 25) / 1e6 = 0,75 $.
+  const usage = {
+    inputTokens: 100_000,
+    outputTokens: 10_000,
+    model: 'claude-opus-5',
+    provider: 'claude'
+  }
+
+  it('les TROIS surfaces rendent le même montant pour le même usage', async () => {
+    const { formatExecutionCostCoverage } = await import('./orchestration-outcome')
+    const { summarizeConversationCost } = await import(
+      '../renderer/src/components/conversation-cost'
+    )
+    const { CostAggregator } = await import('../main/dashboards/cost')
+
+    const outcome = formatExecutionCostCoverage({
+      knownCostUsd: null,
+      unpricedCalls: 1,
+      totalTokens: 110_000,
+      ...usage,
+      pricingModel: usage.model
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+
+    const conversation = summarizeConversationCost([
+      {
+        key: 'orchestrator',
+        calls: 1,
+        costUsd: 0,
+        cacheReadTokens: 0,
+        cacheHitRatio: 0,
+        unpricedCalls: 1,
+        ...usage
+      }
+    ])
+
+    const aggregator = new CostAggregator()
+    aggregator.add({ provider: 'claude', model: usage.model, inputTokens: 100_000, outputTokens: 10_000 })
+    const budget = aggregator.budgetStatus()
+
+    expect(outcome).toBe('≈ 0.75 $ estimés · 1 appel non chiffré')
+    expect(conversation.coverage.estimatedUsd).toBeCloseTo(0.75, 6)
+    expect(budget.coverage.estimatedUsd).toBeCloseTo(0.75, 6)
+    expect(conversation.label).toBe('≈ 0,75 $ estimés')
+  })
+
+  it('sur un run NON tarifé, aucune surface ne rend « 0,00 $ »', async () => {
+    const { formatExecutionCostCoverage } = await import('./orchestration-outcome')
+    const { summarizeConversationCost } = await import(
+      '../renderer/src/components/conversation-cost'
+    )
+    const { CostAggregator } = await import('../main/dashboards/cost')
+
+    // Modèle INCONNU : pas de tarif citable, donc pas de montant — le volume reste vrai.
+    const inconnu = { inputTokens: 100_000, outputTokens: 10_000, model: 'gpt-5.6-terra' }
+    const outcome = formatExecutionCostCoverage({
+      knownCostUsd: null,
+      unpricedCalls: 2,
+      totalTokens: 110_000,
+      ...inconnu,
+      pricingModel: inconnu.model
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    const conversation = summarizeConversationCost([
+      { key: 'codex', calls: 1, costUsd: 0, cacheReadTokens: 0, cacheHitRatio: 0, unpricedCalls: 2, ...inconnu }
+    ])
+    const aggregator = new CostAggregator()
+    aggregator.add({ provider: 'codex', model: inconnu.model, inputTokens: 100_000, outputTokens: 10_000 })
+
+    // Le trio délibéré est préservé mot pour mot.
+    expect(outcome).toBe('110k tokens · tarif non exposé · 2 appels non chiffrés')
+    expect(conversation.label).toBe('coût non exposé')
+    expect(conversation.label).not.toMatch(/0,00 \$|0\.00 \$/)
+    expect(outcome).not.toMatch(/0,00 \$|0\.00 \$/)
+    expect(aggregator.budgetStatus().coverage.estimatedUsd).toBeUndefined()
+    expect(aggregator.budgetStatus().coverage.tokens).toBe(110_000)
+  })
+})

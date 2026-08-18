@@ -1,5 +1,5 @@
 import { fromMarkdown } from 'mdast-util-from-markdown'
-import { formatEstimatedCostUsd } from './cost-estimate'
+import { formatCostCoverage, resolveCostCoverage } from './cost-estimate'
 import type { TokenUsage } from './token-usage'
 
 /**
@@ -267,13 +267,6 @@ function asString(value: unknown): string | undefined {
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-/** Volume lisible : la seule information vraie qui reste quand le tarif du modèle est inconnu. */
-function formatTokenVolume(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M tokens`
-  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k tokens`
-  return `${Math.round(tokens)} tokens`
 }
 
 function asCallCount(value: unknown): number {
@@ -778,41 +771,35 @@ export function executionCostCoverageFields(
   }
 }
 
-/** Libellé de coût honnête, compatible avec les anciens résultats qui n'avaient que `costUsd`. */
+/**
+ * Libellé de coût honnête, compatible avec les anciens résultats qui n'avaient que `costUsd`.
+ *
+ * PROJECTION de `resolveCostCoverage` sur l'issue d'orchestration — cette fonction ÉTAIT la version
+ * outcome-spécifique de la couverture de coût ; elle en est désormais l'application, pas un
+ * deuxième calcul. Ne restent ici que les deux choses qui lui sont propres : la lecture des champs
+ * de l'issue, et le repli sur l'ancien `costUsd` des résultats antérieurs à la couverture.
+ */
 export function formatExecutionCostCoverage(data: OrchestrationOutcome): string | undefined {
   const hasCoverage = Object.prototype.hasOwnProperty.call(data, 'knownCostUsd')
   const knownCost = asNumber(data.knownCostUsd)
-  const unpricedCalls = asCallCount(data.unpricedCalls)
-  const unpricedLabel = `${unpricedCalls} appel${unpricedCalls > 1 ? 's' : ''} non chiffré${unpricedCalls > 1 ? 's' : ''}`
-
-  if (hasCoverage && data.knownCostUsd === null) {
-    // Le provider n'expose pas de prix, mais les tokens sont comptés : on estime au tarif public
-    // du modèle servi plutôt que de jeter l'information (« coût non exposé » ne renseignait rien).
-    const usage = {
-      inputTokens: asNumber(data.inputTokens),
-      outputTokens: asNumber(data.outputTokens),
-      cacheReadTokens: asNumber(data.cacheReadTokens),
-      cacheCreationTokens: asNumber(data.cacheCreationTokens),
-      model: asString(data.pricingModel) ?? asString(data.resolvedModel)
-    }
+  if (hasCoverage && (data.knownCostUsd === null || knownCost !== undefined)) {
     // L'horloge est fournie ICI, au point d'AFFICHAGE : le module de tarifs reste pur, et un tarif
     // d'introduction borne dans le temps cesse de s'appliquer sans qu'on ait une date a retirer.
-    const estimated = formatEstimatedCostUsd(usage, Date.now())
-    if (estimated) return unpricedCalls > 0 ? `${estimated} · ${unpricedLabel}` : estimated
-    // Modèle inconnu : le VOLUME reste une information vraie, le montant non.
-    const volume = asNumber(data.totalTokens)
-    const volumeLabel = volume !== undefined && volume > 0 ? formatTokenVolume(volume) : undefined
-    if (volumeLabel) {
-      return unpricedCalls > 0
-        ? `${volumeLabel} · tarif non exposé · ${unpricedLabel}`
-        : `${volumeLabel} · tarif non exposé`
-    }
-    return unpricedCalls > 0 ? `coût non exposé · ${unpricedLabel}` : 'coût non exposé'
-  }
-  if (hasCoverage && knownCost !== undefined) {
-    return unpricedCalls > 0
-      ? `${knownCost.toFixed(2)} $ connus · ${unpricedLabel}`
-      : `${knownCost.toFixed(2)} $`
+    return formatCostCoverage(
+      resolveCostCoverage(
+        {
+          knownCostUsd: data.knownCostUsd === null ? null : knownCost,
+          unpricedCalls: asCallCount(data.unpricedCalls),
+          totalTokens: asNumber(data.totalTokens),
+          inputTokens: asNumber(data.inputTokens),
+          outputTokens: asNumber(data.outputTokens),
+          cacheReadTokens: asNumber(data.cacheReadTokens),
+          cacheCreationTokens: asNumber(data.cacheCreationTokens),
+          model: asString(data.pricingModel) ?? asString(data.resolvedModel)
+        },
+        Date.now()
+      )
+    )
   }
   const legacyCost = asNumber(data.costUsd)
   return legacyCost === undefined ? undefined : `${legacyCost.toFixed(2)} $`

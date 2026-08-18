@@ -405,6 +405,15 @@ export function summarizeCostSamples(
       unpricedCalls: 0
     }
     row.calls += 1
+    // Modele et provider ne sont portes par la ligne que s'ils sont UNANIMES parmi ses appels :
+    // une ligne qui melange deux modeles n'a pas de tarif, et en choisir un serait inventer.
+    if (row.calls === 1) {
+      if (sample.model) row.model = sample.model
+      if (sample.provider) row.provider = sample.provider
+    } else {
+      if (row.model !== sample.model) delete row.model
+      if (row.provider !== sample.provider) delete row.provider
+    }
     row.costUsd += sample.costUsd
     row.inputTokens += sample.inputTokens
     row.outputTokens += sample.outputTokens

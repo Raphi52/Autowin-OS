@@ -165,3 +165,74 @@ export function formatEstimatedCostUsd(usage: TokenUsageShape, nowMs?: number): 
   if (estimate === undefined) return undefined
   return `≈ ${estimate.toFixed(2)} $ estimés`
 }
+
+/** Volume lisible : la seule information vraie qui reste quand le tarif du modèle est inconnu. */
+export function formatTokenVolume(tokens: number): string {
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M tokens`
+  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k tokens`
+  return `${Math.round(tokens)} tokens`
+}
+
+/** Ce qu'on sait dire du coût d'un usage — le tout, pas un morceau par surface. */
+export interface CostCoverageInput extends TokenUsage {
+  /**
+   * Montant TARIFÉ par le provider. `null` dit explicitement « la couverture est connue, et elle
+   * est vide » ; `undefined` dit « on n'en sait rien ». Les deux mènent à l'estimation.
+   */
+  knownCostUsd?: number | null
+  unpricedCalls?: number
+  /** Volume total mesuré. À défaut, entrée + sortie. */
+  totalTokens?: number
+}
+
+/**
+ * RÉPONSE UNIQUE à « combien a coûté ceci ».
+ *
+ * Trois surfaces répondaient chacune la sienne : l'issue d'orchestration estimait au tarif public,
+ * l'indicateur de conversation rendait « coût non exposé », le dashboard rendait `spentIsPartial`.
+ * Une seule des trois savait estimer. Cette fonction porte la réponse ; les surfaces la FORMATENT.
+ */
+export interface CostCoverage {
+  /** Montant réellement facturé par le provider, `undefined` si aucun tour n'est tarifé. */
+  readonly knownUsd?: number
+  /** Estimation au tarif public, `undefined` si le modèle est inconnu. Jamais un montant inventé. */
+  readonly estimatedUsd?: number
+  readonly unpricedCalls: number
+  /** Volume de tokens : l'information vraie qui reste quand aucun montant n'est disponible. */
+  readonly tokens: number
+}
+
+export function resolveCostCoverage(usage: CostCoverageInput, nowMs?: number): CostCoverage {
+  const known =
+    typeof usage.knownCostUsd === 'number' && Number.isFinite(usage.knownCostUsd)
+      ? usage.knownCostUsd
+      : undefined
+  const tokens = positive(usage.totalTokens) || positive(usage.inputTokens) + positive(usage.outputTokens)
+  const estimated = known === undefined ? estimateCostUsd(usage, nowMs) : undefined
+  const unpricedCalls = Math.max(0, Math.floor(positive(usage.unpricedCalls)))
+  return {
+    ...(known !== undefined ? { knownUsd: known } : {}),
+    ...(estimated !== undefined ? { estimatedUsd: estimated } : {}),
+    unpricedCalls,
+    tokens
+  }
+}
+
+/**
+ * Libellé de couverture — les MÊMES mots sur toutes les surfaces. Le trio délibéré
+ * « coût non exposé » / « tarif non exposé » / « N appels non chiffrés » est une cicatrice : il
+ * distingue un prix absent d'un tarif absent d'un appel non compté, et se préserve mot pour mot.
+ */
+export function formatCostCoverage(coverage: CostCoverage): string {
+  const n = coverage.unpricedCalls
+  const unpricedLabel = `${n} appel${n > 1 ? 's' : ''} non chiffré${n > 1 ? 's' : ''}`
+  const withUnpriced = (label: string): string => (n > 0 ? `${label} · ${unpricedLabel}` : label)
+  if (coverage.knownUsd !== undefined) {
+    return n > 0 ? `${coverage.knownUsd.toFixed(2)} $ connus · ${unpricedLabel}` : `${coverage.knownUsd.toFixed(2)} $`
+  }
+  if (coverage.estimatedUsd !== undefined) {
+    return withUnpriced(`≈ ${coverage.estimatedUsd.toFixed(2)} $ estimés`)
+  }
+  if (coverage.tokens > 0) return withUnpriced(`${formatTokenVolume(coverage.tokens)} · tarif non exposé`)
+  return withUnpriced('coût non exposé')
+}

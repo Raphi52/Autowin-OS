@@ -12,6 +12,7 @@
  */
 
 import type { TokenUsage } from '../../../shared/token-usage'
+import { resolveCostCoverage, type CostCoverage } from '../../../shared/cost-estimate'
 
 export interface CostRow extends TokenUsage {
   /** Acteur, modèle ou provider selon la dimension demandée. */
@@ -51,6 +52,12 @@ export interface CostSummary extends Readonly<{
   /** Temps cumulé de la conversation. 0 = aucune source ne l'a mesuré. */
   durationMs: number
   unpricedCalls: number
+  /**
+   * Ce que l'app SAIT dire du coût — la MÊME réponse que l'issue d'orchestration et le dashboard,
+   * au lieu d'une troisième version locale. Porte l'estimation au tarif public quand le provider
+   * n'expose pas de prix mais que le modèle est connu.
+   */
+  coverage: CostCoverage
   /**
    * Le contexte est RÉÉCRIT au lieu d'être relu — c'est ce symptôme qui a mené à la cause racine du
    * 2026-07-28. Jugé sur le VOLUME de contexte, pas sur le nombre d'appels : trois appels qui
@@ -95,10 +102,31 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
   let unpricedCalls = 0
   let topKey: string | undefined
   let topCost = 0
+  let output = 0
+  let pricedUsd = 0
+  let pricedRows = 0
+  let model: string | undefined
+  let provider: string | undefined
+  let firstRow = true
   for (const row of rows) {
     const cost = typeof row?.costUsd === 'number' && Number.isFinite(row.costUsd) ? row.costUsd : 0
     if (cost < 0) continue
     totalUsd += cost
+    output += typeof row?.outputTokens === 'number' ? Math.max(0, row.outputTokens) : 0
+    if (cost > 0) {
+      pricedUsd += cost
+      pricedRows += 1
+    }
+    // Le tarif n'est reconstituable que si toutes les lignes servent le MÊME modèle : en choisir
+    // un parmi plusieurs serait inventer un montant.
+    if (firstRow) {
+      model = row?.model
+      provider = row?.provider
+      firstRow = false
+    } else {
+      if (model !== row?.model) model = undefined
+      if (provider !== row?.provider) provider = undefined
+    }
     calls += typeof row?.calls === 'number' && row.calls > 0 ? row.calls : 0
     cacheRead += typeof row?.cacheReadTokens === 'number' ? Math.max(0, row.cacheReadTokens) : 0
     cacheWrite +=
@@ -120,14 +148,33 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
   const boundedRead = Math.min(contextTotal - boundedWrite, cacheRead)
   const freshRatio =
     contextTotal > 0 ? (contextTotal - boundedWrite - boundedRead) / contextTotal : 0
+  const coverage = resolveCostCoverage(
+    {
+      knownCostUsd: pricedRows > 0 ? pricedUsd : null,
+      unpricedCalls,
+      inputTokens: input,
+      outputTokens: output,
+      cacheReadTokens: cacheRead,
+      cacheCreationTokens: cacheWrite,
+      ...(model ? { model } : {}),
+      ...(provider ? { provider } : {})
+    },
+    Date.now()
+  )
   return {
     totalUsd,
     calls,
+    coverage,
     label:
       unpricedCalls > 0
         ? totalUsd > 0
           ? `${formatUsd(totalUsd)} + non expos\u00e9`
-          : 'co\u00fbt non expos\u00e9'
+          : // Le tarif public est reconstituable : afficher le montant estimé vaut mieux que
+            // « coût non exposé », qui jetait une information qu'on possède. Sans modèle connu, le
+            // libellé délibéré est préservé mot pour mot.
+            coverage.estimatedUsd !== undefined
+            ? `\u2248 ${formatUsd(coverage.estimatedUsd)} estim\u00e9s`
+            : 'co\u00fbt non expos\u00e9'
         : formatUsd(totalUsd),
     durationMs,
     unpricedCalls,

@@ -6,6 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { TokenUsage } from '../../shared/token-usage'
+import { resolveCostCoverage, type CostCoverage } from '../../shared/cost-estimate'
 
 /** Un tour (turn) d'agent, avec son cout et sa consommation de tokens. */
 export interface TurnCost extends TokenUsage {
@@ -51,6 +52,13 @@ export interface BudgetStatus {
   unpricedTurns: number
   /** `true` dès qu'au moins un tour n'est pas tarifé : `pricedSpendUsd` est un PLANCHER, pas un total. */
   spentIsPartial: boolean
+  /**
+   * Ce que le systeme SAIT dire du cout — la MEME reponse que l'issue d'orchestration et
+   * l'indicateur de conversation. Porte l'estimation au tarif public des tours non tarifes quand
+   * le modele est connu : `spentIsPartial` disait qu'il manquait quelque chose sans jamais dire
+   * combien.
+   */
+  coverage: CostCoverage
 }
 
 /** Ratio a partir duquel l'alerte se declenche (80% du budget). */
@@ -114,7 +122,34 @@ export class CostAggregator {
     const pricedSpendUsd = this.totalUsd()
     const turns = this.turns.length
     const unpricedTurns = this.turns.reduce((n, t) => n + (t.costUsd === undefined ? 1 : 0), 0)
-    const coverage = { turns, unpricedTurns, spentIsPartial: unpricedTurns > 0 }
+    const unpriced = this.turns.filter((t) => t.costUsd === undefined)
+    // Le tarif n'est reconstituable que si les tours NON TARIFES servent tous le MEME modele :
+    // en choisir un parmi plusieurs serait inventer un montant.
+    const model = unpriced.every((t) => t.model === unpriced[0]?.model)
+      ? unpriced[0]?.model
+      : undefined
+    const provider = unpriced.every((t) => t.provider === unpriced[0]?.provider)
+      ? unpriced[0]?.provider
+      : undefined
+    const costCoverage = resolveCostCoverage(
+      {
+        knownCostUsd: turns > unpricedTurns ? pricedSpendUsd : null,
+        unpricedCalls: unpricedTurns,
+        inputTokens: unpriced.reduce((n, t) => n + (t.inputTokens || 0), 0),
+        outputTokens: unpriced.reduce((n, t) => n + (t.outputTokens || 0), 0),
+        cacheReadTokens: unpriced.reduce((n, t) => n + (t.cacheReadTokens || 0), 0),
+        cacheCreationTokens: unpriced.reduce((n, t) => n + (t.cacheCreationTokens || 0), 0),
+        ...(model ? { model } : {}),
+        ...(provider ? { provider } : {})
+      },
+      Date.now()
+    )
+    const coverage = {
+      turns,
+      unpricedTurns,
+      spentIsPartial: unpricedTurns > 0,
+      coverage: costCoverage
+    }
     const budgetUsd = this.resolveBudget()
     if (budgetUsd === null) {
       return { pricedSpendUsd, budgetUsd: null, ratio: null, alert: false, ...coverage }
