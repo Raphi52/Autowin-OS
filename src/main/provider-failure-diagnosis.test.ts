@@ -5,7 +5,8 @@ import {
   classifyProviderFailure,
   describeFanoutFailure,
   diagnoseProviderFailure,
-  explainRoleFailure
+  explainRoleFailure,
+  repairHint
 } from './provider-failure-diagnosis'
 
 const ROLE_CONTEXT_MARKERS = [
@@ -41,7 +42,9 @@ function uncoveredSendSites(source: string, callMarker = 'registry.send('): numb
 describe('classifyProviderFailure — sur les chaînes RÉELLEMENT jetées', () => {
   it('« codex non authentifié — lance npm run codex:login » → auth', () => {
     // Chaine exacte de codex.ts.
-    expect(classifyProviderFailure('codex non authentifié — lance npm run codex:login')).toBe('auth')
+    expect(classifyProviderFailure('codex non authentifié — lance npm run codex:login')).toBe(
+      'auth'
+    )
   })
 
   it('« spawn claude ENOENT » → binaire introuvable', () => {
@@ -67,7 +70,9 @@ describe('classifyProviderFailure — sur les chaînes RÉELLEMENT jetées', () 
   })
 
   it('une panne « other » ne propose AUCUN geste (mieux que conseiller au hasard)', () => {
-    expect(diagnoseProviderFailure({ provider: 'claude', message: 'tué par le watchdog' }).hint).toBeUndefined()
+    expect(
+      diagnoseProviderFailure({ provider: 'claude', message: 'tué par le watchdog' }).hint
+    ).toBeUndefined()
   })
 })
 
@@ -194,7 +199,9 @@ describe('câblage — l’orchestrateur remonte les causes au lieu de les jeter
 
   it('la garde SAIT échouer — sinon elle ne prouve rien', () => {
     // Source synthetique : un appel sans aucune gestion d'erreur autour.
-    const fautif = ['const a = 1', 'await registry.send(provider, msgs, opts)', 'return a'].join(String.fromCharCode(10))
+    const fautif = ['const a = 1', 'await registry.send(provider, msgs, opts)', 'return a'].join(
+      String.fromCharCode(10)
+    )
     expect(uncoveredSendSites(fautif)).toEqual([2])
     // Et le meme appel, enveloppe : plus de signalement.
     const correct = [
@@ -220,7 +227,11 @@ describe('un repli ne doit pas se faire passer pour un réglage', () => {
   // intégralement claude. Le codex venait de `bindingDeRepliPourPhase`, qui lit un INSTANTANÉ de
   // rôles pris au démarrage du run. Le message affirmait donc un binding en lisant une panne, et
   // envoyait chercher un réglage inexistant.
-  const panne = { provider: 'codex', model: 'gpt-5.6-sol', message: 'codex exec annulé' }
+  // La panne témoin est une VRAIE panne (`spawn … ENOENT`). Elle portait « codex exec annulé »
+  // jusqu'au 2026-08-18 : or une annulation n'est pas une panne et a désormais son propre libellé —
+  // la garder ici aurait fait tester la divergence de binding sur le seul message qui, par
+  // construction, ne parle plus de binding.
+  const panne = { provider: 'codex', model: 'gpt-5.6-sol', message: 'spawn codex ENOENT' }
 
   it('NOMME la divergence quand l’appel part ailleurs que le binding', () => {
     const texte = explainRoleFailure('Phase build', 'subagent', panne, 'claude')
@@ -255,5 +266,95 @@ describe('un repli ne doit pas se faire passer pour un réglage', () => {
     expect(appel).toContain('roleDeLaPhase')
     expect(appel).toMatch(/roles\.getBinding\(roleDeLaPhase\)\.provider/)
     expect(appel).not.toMatch(/explainRoleFailure\(\s*`Phase \$\{phase\}`,\s*'subagent'/)
+  })
+})
+
+describe('une annulation ne doit pas se faire passer pour une panne du provider', () => {
+  /**
+   * Signalé par l'utilisateur le 2026-08-18 : « Échec du workflow : Phase frame — le rôle subagent
+   * est bindé sur codex (gpt-5.6-sol) : codex exec annulé ». Vérifié dans le store live
+   * (`.autowin-data/autowin-os/roles.json`) : le binding codex était bien le réglage réel, et
+   * `codex exec annulé` n'est jeté qu'à UN endroit — `codex.ts:462`, sur le listener `abort` du
+   * signal. Rien n'avait donc échoué : l'appel avait été COUPÉ. Le message nommait pourtant le
+   * provider et le binding, ce qui a envoyé chercher un défaut de codex qui n'existait pas.
+   */
+  const messagesDAnnulation = [
+    // Libelles ACTUELS (`providers/abort-diagnostic.ts`), avec la raison enfin portee.
+    "codex exec interrompu : raison non rapportee par l'appelant",
+    'claude CLI interrompu : conversation-deleted',
+    'Kimi Code interrompu : run remplace',
+    'Envoi Gemini interrompu : arret demande',
+    // Libelles HISTORIQUES : ils vivent dans les traces et les runs persistes d'avant le 18/08.
+    'codex exec annulé',
+    'claude CLI annulé',
+    'This operation was aborted'
+  ]
+
+  it.each(messagesDAnnulation)('« %s » est classé cancelled, pas other', (message) => {
+    expect(classifyProviderFailure(message)).toBe('cancelled')
+  })
+
+  it("n'accuse NI le provider NI le binding du rôle", () => {
+    const texte = explainRoleFailure(
+      'Phase frame',
+      'subagent',
+      { provider: 'codex', model: 'gpt-5.6-sol', message: 'codex exec annulé' },
+      'codex'
+    )
+    // Le libellé exact qui a induit en erreur ne doit plus pouvoir être produit.
+    expect(texte).not.toContain('le rôle subagent est bindé sur codex')
+    expect(texte).toContain('INTERROMPU')
+    expect(texte).toMatch(/n'est pas une panne/)
+    // Le message brut reste lisible : on requalifie, on n'efface pas.
+    expect(texte).toContain('codex exec annulé')
+  })
+
+  /**
+   * LE CAS QUI A COUTE TROIS TOURS a l'utilisateur le 2026-08-18. La raison etant desormais portee,
+   * un arret impose par le devis se classe `budget` : il cesse d'etre une « annulation » indistincte,
+   * et le geste propose devient le bon (relever le devis, pas relancer betement).
+   */
+  it('un abort dont la RAISON est un budget se classe budget, pas cancelled', () => {
+    expect(
+      classifyProviderFailure('codex exec interrompu : budget duree depasse (600000 ms)')
+    ).toBe('budget')
+    expect(classifyProviderFailure('codex exec interrompu : Budget USD depasse (12/10)')).toBe(
+      'budget'
+    )
+  })
+
+  it('le diagnostic du provider joint a l abort atteint l ECRAN', () => {
+    // Le tampon de codex portait « usage limit » : c'est precisement ce que l'agent n'a pas eu, et
+    // ce qui l'a pousse a l'inventer depuis les traces d'autres appels.
+    const message = [
+      "codex exec interrompu : raison non rapportee par l'appelant",
+      'last-event={"type":"error","message":"You have hit your usage limit."}',
+      'stderr=none'
+    ].join(String.fromCharCode(10))
+    const texte = explainRoleFailure(
+      'Phase frame',
+      'subagent',
+      { provider: 'codex', model: 'gpt-5.6-sol', message },
+      'codex'
+    )
+    expect(texte).toContain('usage limit')
+  })
+
+  it('propose un geste au lieu de laisser sans suite (le défaut de `other`)', () => {
+    expect(repairHint('codex', 'cancelled')).toMatch(/coup[ée]/i)
+    expect(
+      diagnoseProviderFailure({ provider: 'codex', message: 'codex exec annulé' }).hint
+    ).toBeDefined()
+  })
+
+  it('une VRAIE panne garde son libellé de binding — la requalification ne déborde pas', () => {
+    const texte = explainRoleFailure(
+      'Phase frame',
+      'subagent',
+      { provider: 'codex', model: 'gpt-5.6-sol', message: 'spawn codex ENOENT' },
+      'codex'
+    )
+    expect(texte).toContain('le rôle subagent est bindé sur codex (gpt-5.6-sol)')
+    expect(texte).not.toContain('INTERROMPU')
   })
 })
