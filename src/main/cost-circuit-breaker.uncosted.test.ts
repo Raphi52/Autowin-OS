@@ -197,16 +197,42 @@ describe('disjoncteur de coût — montant ESTIMÉ des tours non tarifés (limit
     expect(trip!.reason).toContain('2.80')
   })
 
-  it('modèle INCONNU : aucun montant inventé, le repli volumétrique reste la seule garde', () => {
+  /**
+   * PREMISSE CORRIGEE le 2026-08-18 : ce cas utilisait `gpt-5.6-sol` comme exemple de modele sans
+   * tarif. Il en a un depuis (source primaire OpenAI, citee dans `cost-estimate.ts`), donc l'exemple
+   * devait changer — la REGLE, elle, ne change pas : sans tarif citable, aucun montant n'est invente
+   * et le volume redevient la seule garde.
+   *
+   * Le forfait ne s'applique PAS ici : un equivalent ne doit pas passer pour une depense a
+   * l'affichage, mais comme garde d'ampleur il reste la meilleure mesure — l'exclure viderait
+   * `maxUsd` de tout effet, les deux executeurs etant au forfait.
+   */
+  it('modele sans tarif citable : aucun montant invente, le repli volumetrique reste la garde', () => {
     const breaker = new CostCircuitBreaker({ maxUsd: 5 })
     breaker.observe({
       step: 'exec',
-      provider: 'codex',
-      model: 'gpt-5.6-sol',
+      provider: 'mistral',
+      model: 'mistral-large',
       tokens: 400_000,
       usage: { inputTokens: 380_000, outputTokens: 20_000 }
     })
     expect(breaker.totals.estimatedUsd).toBe(0)
     expect(breaker.totals.unpricedTokens).toBe(400_000)
+  })
+
+  it('provider AU TOKEN : le montant reconstituable nourrit bien la garde', () => {
+    // Entree discriminante : meme usage, provider hors forfait. Sans cette branche, la regle
+    // ci-dessus se confondrait avec « on n'estime jamais rien », et le trou que `estimatedUsd`
+    // comble reviendrait en silence.
+    const breaker = new CostCircuitBreaker({ maxUsd: 5 })
+    breaker.observe({
+      step: 'exec',
+      provider: 'un-provider-au-token',
+      model: 'claude-opus-5',
+      tokens: 400_000,
+      usage: { inputTokens: 380_000, outputTokens: 20_000 }
+    })
+    // 380k x 5 $ + 20k x 25 $ par MTok = 1,90 + 0,50.
+    expect(breaker.totals.estimatedUsd).toBeCloseTo(2.4, 5)
   })
 })

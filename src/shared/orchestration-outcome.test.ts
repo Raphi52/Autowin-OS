@@ -51,6 +51,37 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).toContain('Brain : leçon prouvée publiée — preuve causale confirmée')
   })
 
+  /**
+   * Signale par l'utilisateur le 2026-08-18 : « Brain : aucune leçon proposée — aucune leçon proposée
+   * pour ce run ». Le libelle vient de ce module, le detail de `outcome-learning-supervisor.ts:368` :
+   * deux sources qui s'ignorent et disent la meme chose. Un detail qui repete le libelle n'apprend
+   * rien a lire.
+   */
+  it('un detail qui REPETE le libelle Brain ne s affiche pas deux fois', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'failed',
+      valid: false,
+      gateBlocked: true,
+      reused: false,
+      learning: { state: 'none', detail: 'aucune leçon proposée pour ce run' }
+    })
+    expect(text).toContain('Brain : aucune leçon proposée')
+    // Le libelle exact qui a ete signale ne doit plus pouvoir etre produit.
+    expect(text).not.toContain('aucune leçon proposée — aucune leçon proposée')
+  })
+
+  it('un detail qui APPORTE une information reste affiche', () => {
+    // Entree discriminante : sans ce cas, supprimer tous les details passerait pour un correctif.
+    const text = formatOrchestrationOutcome(true, {
+      status: 'failed',
+      valid: false,
+      gateBlocked: true,
+      reused: false,
+      learning: { state: 'none', detail: 'aucune preuve causale dans les phases' }
+    })
+    expect(text).toContain('Brain : aucune leçon proposée — aucune preuve causale dans les phases')
+  })
+
   it('retire les consignes de clôture périmées du worker après une livraison réussie', () => {
     const text = formatOrchestrationOutcome(true, {
       status: 'succeeded',

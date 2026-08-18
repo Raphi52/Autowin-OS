@@ -184,9 +184,28 @@ describe('catalogue indexé (provider, motif) — aucun tarif ajouté, seule la 
     expect(modelRate('claude-haiku-4-5')).toMatchObject({ inputPerMTok: 1, outputPerMTok: 5 })
   })
 
-  it('un identifiant codex ne rend toujours AUCUN tarif — on n’en a pas la source', () => {
-    expect(modelRate('gpt-5.6-terra')).toBeUndefined()
-    expect(modelRate('gpt-5.6-terra', 'codex')).toBeUndefined()
+  /**
+   * PREMISSE INVALIDEE le 2026-08-18. Ce test assiait qu'aucun tarif codex n'etait connu — « on n'en
+   * a pas la source ». La source primaire a ete lue depuis
+   * (developers.openai.com/api/docs/pricing.md, table Standard) : les trois tarifs existent et sont
+   * citables. La regle n'a pas change (aucun tarif sans source) ; c'est la source qui est arrivee.
+   */
+  it('un identifiant codex rend son tarif PUBLIE, desormais source', () => {
+    expect(modelRate('gpt-5.6-sol', 'codex')).toMatchObject({ inputPerMTok: 5, outputPerMTok: 30 })
+    expect(modelRate('gpt-5.6-terra', 'codex')).toMatchObject({
+      inputPerMTok: 2,
+      outputPerMTok: 12
+    })
+    expect(modelRate('gpt-5.6-luna', 'codex')).toMatchObject({
+      inputPerMTok: 0.2,
+      outputPerMTok: 1.2
+    })
+  })
+
+  it('un modele dont AUCUN catalogue ne parle ne rend toujours rien', () => {
+    // La regle qui compte : pas de source, pas de tarif. Verifiee sur un tiers non catalogue.
+    expect(modelRate('mistral-large')).toBeUndefined()
+    expect(modelRate('mistral-large', 'mistral')).toBeUndefined()
   })
 
   it('le provider est une CONDITION : un modèle tiers n’hérite plus d’un tarif Anthropic', () => {
@@ -209,9 +228,8 @@ describe('resolveCostCoverage — une seule réponse à « combien a coûté cec
 
   it('les TROIS surfaces rendent le même montant pour le même usage', async () => {
     const { formatExecutionCostCoverage } = await import('./orchestration-outcome')
-    const { summarizeConversationCost } = await import(
-      '../renderer/src/components/conversation-cost'
-    )
+    const { summarizeConversationCost } =
+      await import('../renderer/src/components/conversation-cost')
     const { CostAggregator } = await import('../main/dashboards/cost')
 
     const outcome = formatExecutionCostCoverage({
@@ -236,7 +254,12 @@ describe('resolveCostCoverage — une seule réponse à « combien a coûté cec
     ])
 
     const aggregator = new CostAggregator()
-    aggregator.add({ provider: 'claude', model: usage.model, inputTokens: 100_000, outputTokens: 10_000 })
+    aggregator.add({
+      provider: 'claude',
+      model: usage.model,
+      inputTokens: 100_000,
+      outputTokens: 10_000
+    })
     const budget = aggregator.budgetStatus()
 
     expect(outcome).toBe('≈ 0,75 $ estimés · 1 appel non chiffré')
@@ -247,13 +270,13 @@ describe('resolveCostCoverage — une seule réponse à « combien a coûté cec
 
   it('sur un run NON tarifé, aucune surface ne rend « 0,00 $ »', async () => {
     const { formatExecutionCostCoverage } = await import('./orchestration-outcome')
-    const { summarizeConversationCost } = await import(
-      '../renderer/src/components/conversation-cost'
-    )
+    const { summarizeConversationCost } =
+      await import('../renderer/src/components/conversation-cost')
     const { CostAggregator } = await import('../main/dashboards/cost')
 
     // Modèle INCONNU : pas de tarif citable, donc pas de montant — le volume reste vrai.
-    const inconnu = { inputTokens: 100_000, outputTokens: 10_000, model: 'gpt-5.6-terra' }
+    // `gpt-5.6-terra` ne convient plus comme exemple : son tarif est source depuis le 2026-08-18.
+    const inconnu = { inputTokens: 100_000, outputTokens: 10_000, model: 'mistral-large' }
     const outcome = formatExecutionCostCoverage({
       knownCostUsd: null,
       unpricedCalls: 2,
@@ -263,10 +286,23 @@ describe('resolveCostCoverage — une seule réponse à « combien a coûté cec
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
     const conversation = summarizeConversationCost([
-      { key: 'codex', calls: 1, costUsd: 0, cacheReadTokens: 0, cacheHitRatio: 0, unpricedCalls: 2, ...inconnu }
+      {
+        key: 'codex',
+        calls: 1,
+        costUsd: 0,
+        cacheReadTokens: 0,
+        cacheHitRatio: 0,
+        unpricedCalls: 2,
+        ...inconnu
+      }
     ])
     const aggregator = new CostAggregator()
-    aggregator.add({ provider: 'codex', model: inconnu.model, inputTokens: 100_000, outputTokens: 10_000 })
+    aggregator.add({
+      provider: 'codex',
+      model: inconnu.model,
+      inputTokens: 100_000,
+      outputTokens: 10_000
+    })
 
     // Le trio délibéré est préservé mot pour mot.
     expect(outcome).toBe('110k tokens · tarif non exposé · 2 appels non chiffrés')

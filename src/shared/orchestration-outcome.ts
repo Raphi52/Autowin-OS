@@ -922,9 +922,22 @@ export function formatOrchestrationOutcome(
       suppressed: 'doublon ou leçon non recevable écarté',
       unknown: 'état de la leçon inconnu'
     }
-    lines.push(
-      `Brain : ${learningLabels[learningState] ?? learningState}${learningDetail ? ` — ${learningDetail}` : ''}`
-    )
+    const label = learningLabels[learningState] ?? learningState
+    // Le detail ne s'ajoute que s'il APPREND quelque chose. « aucune leçon proposée — aucune leçon
+    // proposée pour ce run » disait deux fois la meme chose, ses deux moities venant de deux sources
+    // qui s'ignorent (`outcome-learning-supervisor.ts` pour le detail, ce tableau pour le libelle).
+    // Comparaison sur le fond : accents, casse et ponctuation retires, un detail qui ne fait que
+    // repeter ou rallonger le libelle n'apporte rien a lire.
+    const noyau = (texte: string): string =>
+      texte
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+    const detail = learningDetail?.trim()
+    const detailApporte = Boolean(detail) && !noyau(detail as string).startsWith(noyau(label))
+    lines.push(`Brain : ${label}${detailApporte ? ` — ${detail}` : ''}`)
   }
   if (visibleResult) lines.push('', boundedMarkdownResult(visibleResult))
   if (closingNotice?.trim()) lines.push('', closingNotice.trim())

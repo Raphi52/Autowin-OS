@@ -14,6 +14,7 @@
  */
 
 import type { TokenUsage } from './token-usage'
+import { isSubscriptionBilled } from './billing-model'
 
 /** Tarifs publics en $ par million de tokens. Source : catalogue Anthropic (2026-08-18). */
 interface ModelRate {
@@ -61,7 +62,21 @@ const MODEL_RATES: readonly ModelRate[] = [
     intro: { untilMs: SONNET_5_INTRO_UNTIL_MS, inputPerMTok: 2, outputPerMTok: 10 }
   },
   { provider: 'claude', match: 'sonnet', inputPerMTok: 3, outputPerMTok: 15 },
-  { provider: 'claude', match: 'haiku', inputPerMTok: 1, outputPerMTok: 5 }
+  { provider: 'claude', match: 'haiku', inputPerMTok: 1, outputPerMTok: 5 },
+  // OpenAI / Codex — source primaire lue le 2026-08-18 :
+  // https://developers.openai.com/api/docs/pricing.md (table « Standard »).
+  // Les ratios de cache y sont IDENTIQUES a ceux d'Anthropic (relu -90 %, ecrit 1,25x), donc
+  // CACHE_READ_RATIO et CACHE_WRITE_RATIO s'appliquent sans exception a ajouter.
+  //
+  // Ces tarifs servent l'EQUIVALENT, pas une depense : cette application n'atteint codex que par
+  // l'abonnement ChatGPT (`shared/billing-model.ts`). Une surcharge long-contexte existe (~272k
+  // tokens) mais la table n'en publie pas le seuil exact : NON codee tant qu'elle n'est pas precise,
+  // plutot qu'approximee.
+  //
+  // `sol` et `terra` AVANT le motif generique `gpt-5`, sinon le premier motif gagnant les ecraserait.
+  { provider: 'codex', match: 'sol', inputPerMTok: 5, outputPerMTok: 30 },
+  { provider: 'codex', match: 'terra', inputPerMTok: 2, outputPerMTok: 12 },
+  { provider: 'codex', match: 'luna', inputPerMTok: 0.2, outputPerMTok: 1.2 }
 ]
 
 /** Un token relu en cache coûte 10 % du tarif d'entrée. */
@@ -205,13 +220,21 @@ export interface CostCoverageInput extends TokenUsage {
  * Une seule des trois savait estimer. Cette fonction porte la réponse ; les surfaces la FORMATENT.
  */
 export interface CostCoverage {
-  /** Montant réellement facturé par le provider, `undefined` si aucun tour n'est tarifé. */
+  /**
+   * Montant rapporte par le provider. NE VAUT PAS « facture » : sur un forfait c'est l'equivalent
+   * que le CLI calcule (`total_cost_usd`), pas un debit. `subscription` ci-dessous tranche le sens.
+   */
   readonly knownUsd?: number
   /** Estimation au tarif public, `undefined` si le modèle est inconnu. Jamais un montant inventé. */
   readonly estimatedUsd?: number
   readonly unpricedCalls: number
   /** Volume de tokens : l'information vraie qui reste quand aucun montant n'est disponible. */
   readonly tokens: number
+  /**
+   * La consommation est couverte par un forfait deja paye : tout montant est alors un EQUIVALENT.
+   * Verifie sur le provider, jamais suppose (`shared/billing-model.ts`).
+   */
+  readonly subscription: boolean
 }
 
 export function resolveCostCoverage(usage: CostCoverageInput, nowMs?: number): CostCoverage {
@@ -227,8 +250,37 @@ export function resolveCostCoverage(usage: CostCoverageInput, nowMs?: number): C
     ...(known !== undefined ? { knownUsd: known } : {}),
     ...(estimated !== undefined ? { estimatedUsd: estimated } : {}),
     unpricedCalls,
-    tokens
+    tokens,
+    subscription: isSubscriptionBilled(usage.provider)
   }
+}
+
+/**
+ * LIGNE PRINCIPALE d'une consommation sous forfait : ce qui est reellement consomme, dans l'unite qui
+ * s'applique au contrat. Choix utilisateur du 2026-08-18 (« les deux, quota d'abord ») : le volume et
+ * l'appartenance au forfait passent devant, le montant devient secondaire.
+ */
+function formatSubscriptionUsage(
+  coverage: CostCoverage,
+  unpricedLabel: string | undefined
+): string {
+  const base =
+    coverage.tokens > 0 ? `${formatTokenVolume(coverage.tokens)} · inclus (abo)` : 'inclus (abo)'
+  return unpricedLabel ? `${base} · ${unpricedLabel}` : base
+}
+
+/**
+ * LIGNE SECONDAIRE : ce que le meme travail couterait s'il etait facture a l'usage. `undefined` quand
+ * aucun montant n'est disponible — on ne remplace jamais une absence par un chiffre.
+ *
+ * Separee de la ligne principale a dessein : une pastille de fil n'a qu'une ligne, un panneau par
+ * role peut en afficher deux. La surface decide, le vocabulaire reste le meme.
+ */
+export function formatCostEquivalent(coverage: CostCoverage): string | undefined {
+  const montant = coverage.knownUsd ?? coverage.estimatedUsd
+  if (montant === undefined) return undefined
+  if (!coverage.subscription) return undefined
+  return `≈ ${formatUsd(montant)} si facturé à l'usage`
 }
 
 /**
@@ -240,6 +292,11 @@ export function formatCostCoverage(coverage: CostCoverage): string {
   const n = coverage.unpricedCalls
   const unpricedLabel = `${n} appel${n > 1 ? 's' : ''} non chiffré${n > 1 ? 's' : ''}`
   const withUnpriced = (label: string): string => (n > 0 ? `${label} · ${unpricedLabel}` : label)
+  // FORFAIT : aucun montant n'est une depense, donc aucun montant ne tient la ligne principale. Le
+  // mot « connus » etait faux ici — il presentait l'equivalent calcule par le CLI comme un debit.
+  if (coverage.subscription) {
+    return formatSubscriptionUsage(coverage, n > 0 ? unpricedLabel : undefined)
+  }
   if (coverage.knownUsd !== undefined) {
     return n > 0
       ? `${formatUsd(coverage.knownUsd)} connus · ${unpricedLabel}`

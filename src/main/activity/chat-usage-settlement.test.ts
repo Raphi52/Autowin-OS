@@ -79,7 +79,12 @@ describe('persistChatUsageSettlement', () => {
       cacheReadTokens: 20
     })
     expect(activity[1].costUsd).toBeUndefined()
-    expect(activity[1].text).toMatch(/cout non expose/i)
+    // Ce libelle etait ecrit a la main ici et disait « cout non expose ». Il passe desormais par le
+    // formateur COMMUN (`formatCostCoverage`), qui sur un provider au FORFAIT nomme ce qui est
+    // reellement consomme : le volume, et son appartenance a l'abonnement. « cout non expose » n'est
+    // plus juste dans ce cas — les tokens SONT connus.
+    expect(activity[1].text).toMatch(/inclus \(abo\)/i)
+    expect(activity[1].text).not.toMatch(/cout non expose/i)
     expect(activity[1].text).toMatch(/0 appel\(s\) actif/i)
 
     const trace = traceStore.readConversation('conv-usage')

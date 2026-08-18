@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { ExecutionUsageSnapshot } from '../execution-supervisor'
 import { sameExecutionUsage } from '../execution-supervisor'
 import type { Usage } from '../providers/types'
+import { formatCostCoverage, resolveCostCoverage } from '../../shared/cost-estimate'
 import { appendConvActivity, loadConvActivity } from './conv-activity'
 import type { TraceStore } from './trace-store'
 
@@ -90,10 +91,23 @@ export function persistChatUsageSettlement(
     current.knownCostUsd === null
       ? undefined
       : counterDelta(current.knownCostUsd, input.previous?.knownCostUsd ?? undefined)
-  const costLabel =
-    current.knownCostUsd === null
-      ? 'cout non expose'
-      : `${current.knownCostUsd.toFixed(4)} $ connu${current.unpricedCalls > 0 ? ` + ${current.unpricedCalls} appel(s) non chiffre(s)` : ''}`
+  // DERNIER libelle de cout ecrit a la main : il composait « cout non expose » et « N $ connu » avec
+  // son propre vocabulaire, hors du formateur commun. Sur un provider au FORFAIT — les deux
+  // executeurs de cette application le sont — « connu » etait faux : le montant remonte par le CLI
+  // est un equivalent, pas un debit. Le formateur partage tranche desormais, ici comme ailleurs.
+  const costLabel = formatCostCoverage(
+    resolveCostCoverage({
+      knownCostUsd: current.knownCostUsd,
+      unpricedCalls: current.unpricedCalls,
+      totalTokens: current.totalTokens,
+      inputTokens: current.inputTokens,
+      outputTokens: current.outputTokens,
+      cacheReadTokens: current.cacheReadTokens,
+      cacheCreationTokens: current.cacheCreationTokens,
+      provider: input.provider,
+      ...(input.model ? { model: input.model } : {})
+    })
+  )
   const usageSummary = `Usage supervise: ${current.totalTokens} tokens, ${costLabel}, ${current.activeCalls} appel(s) actif(s).`
   const settlementText = input.text ? `${input.text}\n\n${usageSummary}` : usageSummary
 

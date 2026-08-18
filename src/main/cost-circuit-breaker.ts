@@ -125,9 +125,17 @@ export class CostCircuitBreaker {
       this.unpricedCalls += 1
       // Le TARIF manque, pas forcément le moyen de le reconstituer : à modèle connu, `estimateCostUsd`
       // rend un montant. On le cumule À PART — jamais dans `spentUsd`, qui reste ce qui est facturé.
-      const estime = step.usage
-        ? estimateCostUsd({ ...step.usage, model: step.model })
-        : undefined
+      // Lookup par MOTIF SEUL, volontairement : `provider` est une condition dans `cost-estimate`,
+      // et l'y passer ici rendrait la garde plus PERMISSIVE (un run dont le provider ne correspond
+      // pas au motif cesserait d'etre estime, donc de compter). Une garde se trompe du cote
+      // conservateur : au pire elle surestime et mord plus tot.
+      //
+      // Le FORFAIT ne change rien non plus, et c'est deliberate : un equivalent ne doit pas se faire
+      // passer pour une depense A L'AFFICHAGE (`formatCostCoverage` s'en charge), mais comme mesure
+      // d'AMPLEUR il reste la meilleure disponible. Les deux executeurs de cette application etant au
+      // forfait, l'exclure viderait `maxUsd` de tout effet et rendrait les runs non bornes — le trou
+      // exact que ce compteur a ete ecrit pour fermer.
+      const estime = step.usage ? estimateCostUsd({ ...step.usage, model: step.model }) : undefined
       if (estime === undefined) {
         // Aucun montant reconstituable : le volume redevient la seule mesure (repli conv-102).
         this.unpricedUnknownModelTokens += step.tokens as number
