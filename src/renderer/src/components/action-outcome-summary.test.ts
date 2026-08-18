@@ -146,7 +146,10 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
 
   it('un valid:false SANS error reste « livrable refusé » (refus propre du juge, pas un echec dur)', () => {
     expect(
-      orchestrateOutcomeSummary({ name: 'orchestrate', data: { status: 'succeeded', valid: false } })?.label
+      orchestrateOutcomeSummary({
+        name: 'orchestrate',
+        data: { status: 'succeeded', valid: false }
+      })?.label
     ).toBe('livrable refusé')
   })
 
@@ -173,6 +176,70 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
     expect(summary?.label).toContain('coût non exposé')
     expect(summary?.label).toContain('3 appels non chiffrés')
     expect(summary?.label).not.toContain('0.00 $')
+  })
+
+  it('un coût non tarifé mais MESURÉ devient une estimation, pas « coût non exposé »', () => {
+    // Le volume est compté par le superviseur ; seul le tarif manquait. Cf. `cost-estimate.ts`.
+    const summary = orchestrateOutcomeSummary({
+      name: 'orchestrate',
+      data: {
+        status: 'succeeded',
+        knownCostUsd: null,
+        unpricedCalls: 3,
+        inputTokens: 2_000_000,
+        outputTokens: 100_000,
+        cacheReadTokens: 1_500_000,
+        pricingModel: 'claude-opus-5'
+      }
+    })
+    expect(summary?.label).toContain('estimés')
+    expect(summary?.label).not.toContain('coût non exposé')
+    expect(summary?.label).toContain('3 appels non chiffrés')
+  })
+
+  it('modèle inconnu : affiche le VOLUME plutôt qu’un montant inventé', () => {
+    const summary = orchestrateOutcomeSummary({
+      name: 'orchestrate',
+      data: {
+        status: 'succeeded',
+        knownCostUsd: null,
+        unpricedCalls: 2,
+        totalTokens: 2_100_000,
+        pricingModel: 'un-modele-maison'
+      }
+    })
+    expect(summary?.label).toContain('2.1M tokens')
+    expect(summary?.label).toContain('tarif non exposé')
+    expect(summary?.label).not.toContain('$')
+  })
+
+  it('un gate bloqué NOMME son motif : le coût qui suit n’est pas la cause', () => {
+    // Défaut vécu (`dev-sans-watch.test.ts`) : la pastille ne disait que « bloqué par le gate ·
+    // coût non exposé », et la mention comptable a été prise pour le motif du blocage.
+    const summary = orchestrateOutcomeSummary({
+      name: 'orchestrate',
+      data: {
+        status: 'failed',
+        gateBlocked: true,
+        gateReasons: ['DoD non cochée', 'signal non rejoué'],
+        knownCostUsd: null,
+        unpricedCalls: 3
+      }
+    })
+    expect(summary?.label).toContain('DoD non cochée')
+    expect(summary?.label.indexOf('DoD non cochée')).toBeLessThan(
+      summary!.label.indexOf('non chiffrés')
+    )
+    expect(summary?.state).toBe('failed')
+  })
+
+  it('un gate bloqué SANS motif rapporté reste lisible', () => {
+    expect(
+      orchestrateOutcomeSummary({
+        name: 'orchestrate',
+        data: { status: 'failed', gateBlocked: true, gateReasons: [], costUsd: 3 }
+      })
+    ).toEqual({ label: 'bloqué par le gate · 3.00 $', state: 'failed' })
   })
 
   it('une autre action ne produit rien', () => {

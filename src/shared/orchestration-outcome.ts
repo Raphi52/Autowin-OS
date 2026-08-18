@@ -1,4 +1,5 @@
 import { fromMarkdown } from 'mdast-util-from-markdown'
+import { formatEstimatedCostUsd } from './cost-estimate'
 
 /**
  * CARTE DE LIVRAISON d'une orchestration — les faits, pas une formule.
@@ -21,6 +22,17 @@ export interface OrchestrationOutcome {
   knownCostUsd?: unknown
   /** Appels dont les tokens sont connus mais dont le fournisseur n'expose pas le prix. */
   unpricedCalls?: unknown
+  /** Volume compté par le superviseur : sert à ESTIMER le coût quand le tarif manque. */
+  totalTokens?: unknown
+  inputTokens?: unknown
+  outputTokens?: unknown
+  cacheReadTokens?: unknown
+  /** Modèle réellement servi, tel que relevé sur les étapes exec. */
+  resolvedModel?: unknown
+  /** Modèle retenu pour TARIFER : le servi, sinon le demandé. Jamais une famille devinée. */
+  pricingModel?: unknown
+  /** Motifs RÉELS du blocage du gate. Présents depuis toujours, jamais affichés jusqu'ici. */
+  gateReasons?: unknown
   runPath?: unknown
   runId?: unknown
   result?: unknown
@@ -252,6 +264,13 @@ function asString(value: unknown): string | undefined {
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+/** Volume lisible : la seule information vraie qui reste quand le tarif du modèle est inconnu. */
+function formatTokenVolume(tokens: number): string {
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M tokens`
+  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k tokens`
+  return `${Math.round(tokens)} tokens`
 }
 
 function asCallCount(value: unknown): number {
@@ -690,6 +709,24 @@ export function formatExecutionCostCoverage(data: OrchestrationOutcome): string 
   const unpricedLabel = `${unpricedCalls} appel${unpricedCalls > 1 ? 's' : ''} non chiffré${unpricedCalls > 1 ? 's' : ''}`
 
   if (hasCoverage && data.knownCostUsd === null) {
+    // Le provider n'expose pas de prix, mais les tokens sont comptés : on estime au tarif public
+    // du modèle servi plutôt que de jeter l'information (« coût non exposé » ne renseignait rien).
+    const usage = {
+      inputTokens: asNumber(data.inputTokens),
+      outputTokens: asNumber(data.outputTokens),
+      cacheReadTokens: asNumber(data.cacheReadTokens),
+      model: asString(data.pricingModel) ?? asString(data.resolvedModel)
+    }
+    const estimated = formatEstimatedCostUsd(usage)
+    if (estimated) return unpricedCalls > 0 ? `${estimated} · ${unpricedLabel}` : estimated
+    // Modèle inconnu : le VOLUME reste une information vraie, le montant non.
+    const volume = asNumber(data.totalTokens)
+    const volumeLabel = volume !== undefined && volume > 0 ? formatTokenVolume(volume) : undefined
+    if (volumeLabel) {
+      return unpricedCalls > 0
+        ? `${volumeLabel} · tarif non exposé · ${unpricedLabel}`
+        : `${volumeLabel} · tarif non exposé`
+    }
     return unpricedCalls > 0 ? `coût non exposé · ${unpricedLabel}` : 'coût non exposé'
   }
   if (hasCoverage && knownCost !== undefined) {
