@@ -1847,6 +1847,10 @@ export class Orchestrator {
         ...(retained ? { retainGreen: true } : {}),
         onPublished
       }
+      // L'activite est lue AVANT `end` : la finalisation supprime la copie, donc apres l'appel on ne
+      // saurait plus dire si le run avait produit des fichiers.
+      const activityBeforeFinalize = activityForRun()
+      const producedFileCount = activityBeforeFinalize?.files.length ?? 0
       const finalized = this.deps.worktrees?.endAsync
         ? await this.deps.worktrees.endAsync(runId, finalizeOptions)
         : this.deps.worktrees?.end(runId, finalizeOptions)
@@ -1855,10 +1859,15 @@ export class Orchestrator {
         typeof finalized === 'object' && finalized !== null
           ? (finalized as { outcome?: string }).outcome
           : undefined
+      // Defaut vecu le 2026-08-18 (conv-1286) : un run dont la copie portait 4 fichiers modifies a
+      // renvoye `nothing`, compte comme integre, et l'utilisateur a lu « fusion verifiee » alors que
+      // le correctif n'avait jamais quitte la copie isolee. « Rien a fusionner » n'est credible que
+      // si le run n'a RIEN produit : sinon c'est une integration vide, donc un faux vert.
+      const emptyIntegrationClaim = finalizeOutcome === 'nothing' && producedFileCount > 0
       const integrated =
         !requiresIsolatedWorkspace ||
         finalizeOutcome === 'merged' ||
-        finalizeOutcome === 'nothing' ||
+        (finalizeOutcome === 'nothing' && !emptyIntegrationClaim) ||
         finalizeOutcome === 'cleanup-pending' ||
         finalizeOutcome === 'published-residue'
       const finalizeDiagnosis =
@@ -1922,6 +1931,10 @@ export class Orchestrator {
         produced.gateBlocked = true
         if (!produced.gateReasons.includes('intégration locale non terminée')) {
           produced.gateReasons.push('intégration locale non terminée')
+        }
+        if (emptyIntegrationClaim) {
+          const vide = `intégration vide : ${producedFileCount} fichier(s) modifié(s) dans la copie isolée, rien publié`
+          if (!produced.gateReasons.includes(vide)) produced.gateReasons.push(vide)
         }
         // La cause exacte (base-dirty / base-in-progress / merge-failed + fichiers) doit atterrir
         // dans le rapport : sinon le run rouge ne dit PAS pourquoi et le diagnostic recommence.

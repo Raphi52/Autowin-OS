@@ -1644,7 +1644,7 @@ ol.md-list li {
   gap: 14px;
   padding: 20px 15px;
   border-right: 1px solid rgba(212, 225, 239, 0.18);
-  background: rgba(3, 7, 11, 0.95);
+  background: #000;
 }
 
 .cosmic-outline .conv-head {

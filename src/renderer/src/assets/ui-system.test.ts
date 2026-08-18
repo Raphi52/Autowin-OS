@@ -74,6 +74,15 @@ describe('Autowin UI contract', () => {
     }
   })
 
+  it('le menu Conversations du Chat finit sur un fond noir opaque', () => {
+    const chatCss = component('ChatView.css')
+    const rules = [...chatCss.matchAll(/\.cosmic-outline \.conv-pane\s*\{([^}]*)\}/gs)]
+    const finalRule = rules.map((rule) => rule[1]).filter((rule) => /background\s*:/.test(rule)).at(-1) ?? ''
+
+    expect(finalRule).toMatch(/background:\s*#000\s*;/)
+    expect(finalRule).not.toMatch(/background:\s*rgba\(/)
+  })
+
   it('aucune règle de thème ne réécrit le cadre de page', () => {
     // Defaut vecu : `.theme-serious .observatory-view { background: var(--surface-panel) }` etait
     // PLUS SPECIFIQUE que `.view-page` et remplacait donc le degrade — dont le lisere rose->dore du
@@ -159,13 +168,11 @@ describe('Autowin UI contract', () => {
     }
   })
 
-  it('lets the cosmic backdrop show: transparent shell edges, ~95% translucent containers', () => {
+  it('lets the cosmic backdrop show around opaque navigation and translucent containers', () => {
     // Backdrop de shell transparent -> les bords / espaces hors containers montrent le cosmique.
     expect(themeModes).toMatch(/\.theme-serious \.main\s*\{\s*background:\s*transparent;/)
-    // Rail = container "fenetre" a 95% d'opacite.
-    expect(themeModes).toMatch(
-      /\.theme-serious \.rail\s*\{[\s\S]*?background:\s*rgba\(0, 0, 0, 0\.95\);/
-    )
+    // Le menu de navigation reste noir opaque : aucun bleu cosmique ne filtre à travers.
+    expect(themeModes).toMatch(/\.theme-serious \.rail\s*\{[\s\S]*?background:\s*#000;/)
     // Surfaces partagees translucides (alpha 0.95) et toujours routees via tokens semantiques.
     expect(css).toMatch(/--surface-panel:\s*rgba\([^)]*0\.95\)/)
     expect(css).toMatch(/--surface-card:\s*rgba\([^)]*0\.95\)/)

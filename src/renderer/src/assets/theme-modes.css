@@ -3,9 +3,9 @@
 .theme-serious .main {
   background: transparent;
 }
-/* Le rail est un container "fenetre" -> 95% d'opacite (le cosmique transparait legerement). */
+/* Le rail reste noir opaque : le fond cosmique ne doit pas bleuir le menu. */
 .theme-serious .rail {
-  background: rgba(0, 0, 0, 0.95);
+  background: #000;
   border-right-color: rgba(255, 255, 255, 0.2);
   backdrop-filter: none;
 }

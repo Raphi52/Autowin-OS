@@ -804,6 +804,56 @@ describe('Orchestrator — flip live worktree', () => {
       expect(close).not.toHaveBeenCalled()
     })
 
+    // Defaut vecu le 2026-08-18 (conv-1286) : la copie isolee portait 4 fichiers modifies, la
+    // finalisation a renvoye `nothing`, le run a ete compte INTEGRE et l'utilisateur a lu
+    // « fusion materialisee, verifiee hors-modele » alors que le correctif n'a jamais atteint main.
+    it('run vert dont la copie a produit des fichiers mais qui finalise sur « rien » → rouge, integration vide nommee', async () => {
+      const provider = new CapturingProvider()
+      const close = vi.fn().mockResolvedValue(undefined)
+      const onRunSettled = vi.fn()
+      let runId = ''
+      const orch = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id, model: 'worker' },
+          judge: { provider: provider.id, model: 'judge' }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        executionWorkspace: 'C:\base',
+        worktrees: {
+          begin: (id: string) => {
+            runId = id
+            return 'C:\wt\run-1'
+          },
+          activity: () => [
+            {
+              agentId: runId,
+              agentName: 'Agent',
+              state: 'ready' as const,
+              files: [
+                { path: 'src/renderer/src/assets/theme-modes.css', kind: 'mod' as const },
+                { path: 'src/renderer/src/components/ChatView.css', kind: 'mod' as const }
+              ],
+              startedAtMs: 0
+            }
+          ],
+          end: () => ({ outcome: 'nothing' as const, agentId: 'run-1' })
+        },
+        onRunSettled,
+        closeGreenRun: { begin: vi.fn(), close }
+      })
+
+      const result = await orch.run('modifie le projet')
+
+      expect(result.gateBlocked).toBe(true)
+      expect(result.valid).toBe(false)
+      expect(result.gateReasons).toContain(
+        'intégration vide : 2 fichier(s) modifié(s) dans la copie isolée, rien publié'
+      )
+      expect(close).not.toHaveBeenCalled()
+    })
+
     it('transmet à la clôture la plage Git exacte réellement publiée', async () => {
       const provider = new CapturingProvider()
       const close = vi.fn().mockResolvedValue(undefined)

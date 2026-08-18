@@ -2,6 +2,14 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 describe('collapsed navigation rail', () => {
+  it('keeps the application menu background opaque black', () => {
+    const themeModes = readFileSync(new URL('./theme-modes.css', import.meta.url), 'utf8')
+    const railRule = themeModes.match(/\.theme-serious \.rail\s*\{([^}]*)\}/s)?.[1] ?? ''
+
+    expect(railRule).toMatch(/background:\s*#000\s*;/)
+    expect(railRule).not.toMatch(/background:\s*rgba\(/)
+  })
+
   it('renders Autowin OS as one uniform brand string', () => {
     const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
