@@ -187,12 +187,25 @@ export function structuredEvidenceFields(
     }
   }
   if (item.type === 'file_change') {
-    const paths =
-      item.changes && typeof item.changes === 'object'
-        ? Object.keys(item.changes as Record<string, unknown>).map((path) =>
-            executionEvidencePath(path, executionCwd)
+    // Deux formes reelles, et une seule etait traitee. Le provider emet un TABLEAU
+    // `[{ path, kind }]` ; `Object.keys` d'un tableau rend ses INDICES, d'ou les `path: "0"` et
+    // `"0, 1"` mesures sur toutes les traces de production du 2026-08-18. Le vrai chemin etait
+    // pourtant la, dans l'element. Une preuve de mutation non rattachable a un fichier prive tout
+    // controle de cloture de la seule question qui compte : QUOI a ete modifie.
+    const brutes: string[] = Array.isArray(item.changes)
+      ? (item.changes as Array<unknown>)
+          .map((change) =>
+            change && typeof change === 'object'
+              ? (change as { path?: unknown }).path
+              : typeof change === 'string'
+                ? change
+                : undefined
           )
+          .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+      : item.changes && typeof item.changes === 'object'
+        ? Object.keys(item.changes as Record<string, unknown>)
         : []
+    const paths = brutes.map((path) => executionEvidencePath(path, executionCwd))
     return {
       diff: (typeof item.changes === 'string'
         ? item.changes
