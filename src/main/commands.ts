@@ -319,7 +319,7 @@ const CATALOG: CommandSpec[] = [
      * « Type d'action desktop inconnu: double_click ». Rien n'a ete range.
      *
      * Le catalogue savait RENOMMER et SUPPRIMER une conversation, jamais la CLASSER, alors que
-     * `conversations.setProjectPath` existait deja. Meme forme que `list_files` le meme jour : une
+     * `conversations.rangerDansDossier` existait deja. Meme forme que `list_files` le meme jour : une
      * capacite absente ne rend pas l'agent prudent, elle le pousse vers un chemin desespere.
      *
      * La barre laterale groupe par DOSSIER (« Divers » = sans dossier) et indente les dossiers
@@ -1629,7 +1629,7 @@ export class AppCommandBus {
       }
       case 'classer_conversation': {
         const dossier = typeof a.dossier === 'string' ? a.dossier.trim() : ''
-        const c = this.os.conversations.setProjectPath(s('id'), dossier || null)
+        const c = this.os.conversations.rangerDansDossier(s('id'), dossier || null)
         if (!c) throw new Error(`conversation introuvable: ${s('id')}`)
         this.broadcast({ type: 'refresh', scope: 'conversations' })
         return { id: c.id, titre: c.title, dossier: c.projectPath ?? null }

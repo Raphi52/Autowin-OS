@@ -11,7 +11,7 @@ import { AppCommandBus, type AppEvent } from './commands'
  * échoué sur « Type d'action desktop inconnu: double_click ». Rien n'a été rangé.
  *
  * Le catalogue savait RENOMMER et SUPPRIMER une conversation, jamais la CLASSER, alors que
- * `conversations.setProjectPath` existait déjà côté magasin. C'est la même forme que `list_files` le
+ * `conversations.rangerDansDossier` existait déjà côté magasin. C'est la même forme que `list_files` le
  * même jour : une capacité manquante ne rend pas l'agent prudent, elle le pousse vers un chemin
  * désespéré — et l'échec se présente ensuite comme un problème de l'utilisateur.
  *
@@ -51,7 +51,7 @@ function banc(): Espion {
       conversations: {
         get: (id: string) => conversations.get(id),
         list: () => [...conversations.values()],
-        setProjectPath: (id: string, projectPath: string | null) => {
+        rangerDansDossier: (id: string, projectPath: string | null) => {
           const conversation = conversations.get(id)
           if (!conversation) return undefined
           return Object.assign(conversation, { projectPath: projectPath ?? undefined })

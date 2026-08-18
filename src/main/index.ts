@@ -3022,7 +3022,7 @@ Le fil reprend ensuite normalement.`
       } else {
         chemin = rawPath === null ? null : guardString(rawPath, 'projectPath')
       }
-      const updated = os.conversations.setProjectPath(id, chemin)
+      const updated = os.conversations.rangerDansDossier(id, chemin)
       if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
       return updated?.projectPath ?? null
     }

@@ -28,10 +28,10 @@ export interface ConversationGroup<T extends ConversationLike> {
   /** Clé stable : sert d'identité au repli persisté. Un libellé changerait avec l'affichage. */
   key: string
   label: string
-  kind: 'kaizen' | 'projet' | 'divers'
+  kind: 'kaizen' | 'dossier' | 'divers'
   /** Niveau visuel dans l'arborescence des dossiers réellement présents. */
   depth: number
-  /** Catégorie parente la plus proche parmi les dossiers réellement présents. */
+  /** Dossier parent le plus proche parmi les dossiers réellement présents. */
   parentKey?: string
   items: T[]
 }
@@ -40,7 +40,7 @@ export interface ConversationGroup<T extends ConversationLike> {
  * Le nom lisible d'un dossier : son dernier segment.
  *
  * `C:\Amitel\Autowin OS` → `Autowin OS`. Afficher le chemin entier ferait déborder la barre latérale
- * et noierait le seul mot qui distingue deux projets. Le chemin complet reste la CLÉ, donc deux
+ * et noierait le seul mot qui distingue deux dossiers. Le chemin complet reste la CLÉ, donc deux
  * dossiers homonymes ne fusionnent pas — ils s'affichent juste pareil, et l'infobulle les départage.
  */
 export function nomDeDossier(chemin: string): string {
@@ -63,7 +63,7 @@ export function groupeDe(conversation: ConversationLike): {
   const chemin = conversation.projectPath?.trim()
   if (chemin) {
     const key = chemin.replace(/[\\/]+$/, '') || chemin
-    return { key, label: nomDeDossier(key), kind: 'projet' }
+    return { key, label: nomDeDossier(key), kind: 'dossier' }
   }
   return { key: GROUPE_DIVERS, label: 'Divers', kind: 'divers' }
 }
@@ -71,7 +71,7 @@ export function groupeDe(conversation: ConversationLike): {
 /**
  * Les groupes, dans l'ordre d'affichage.
  *
- * Les projets d'abord, par ordre alphabétique — ce que l'utilisateur cherche. Puis « Divers », puis
+ * Les dossiers d'abord, par ordre alphabétique — ce que l'utilisateur cherche. Puis « Divers », puis
  * « Auto-kaizen » en dernier : le bruit descend, il ne s'intercale pas. L'ordre des conversations à
  * l'intérieur d'un groupe est celui reçu (déjà trié par pertinence ou par date), jamais retrié ici :
  * ce module groupe, il n'arbitre pas la pertinence.
@@ -87,11 +87,11 @@ export function grouperConversations<T extends ConversationLike>(
     else par.set(key, { key, label, kind, depth: 0, items: [conversation] })
   }
 
-  const projets = [...par.values()].filter((g) => g.kind === 'projet')
+  const dossiers = [...par.values()].filter((g) => g.kind === 'dossier')
   const parCheminNormalise = new Map(
-    projets.map((g) => [g.key.replace(/[\\/]+$/, '').toLocaleLowerCase('fr'), g])
+    dossiers.map((g) => [g.key.replace(/[\\/]+$/, '').toLocaleLowerCase('fr'), g])
   )
-  for (const groupe of projets) {
+  for (const groupe of dossiers) {
     let candidat = groupe.key.replace(/[\\/]+$/, '')
     while (/[\\/]/.test(candidat)) {
       candidat = candidat.replace(/[\\/][^\\/]+$/, '')
@@ -108,15 +108,15 @@ export function grouperConversations<T extends ConversationLike>(
     const parent = par.get(groupe.parentKey)
     return parent ? profondeur(parent) + 1 : 0
   }
-  for (const groupe of projets) groupe.depth = profondeur(groupe)
+  for (const groupe of dossiers) groupe.depth = profondeur(groupe)
 
   const rang = (g: ConversationGroup<T>): number =>
-    g.kind === 'projet' ? 0 : g.kind === 'divers' ? 1 : 2
+    g.kind === 'dossier' ? 0 : g.kind === 'divers' ? 1 : 2
 
   return [...par.values()].sort((a, b) => {
     const delta = rang(a) - rang(b)
     if (delta !== 0) return delta
-    if (a.kind === 'projet' && b.kind === 'projet') {
+    if (a.kind === 'dossier' && b.kind === 'dossier') {
       return a.key.localeCompare(b.key, 'fr', { sensitivity: 'base' })
     }
     return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' })

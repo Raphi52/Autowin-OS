@@ -12,11 +12,8 @@ import { hasInterruptionNotice, interruptionNotice } from '../runs/run-interrupt
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
 
-// Store en mémoire pour les conversations catégorisées (candidat type claude/codex).
+// Store en mémoire des conversations : un PROVIDER qui répond, un DOSSIER qui range.
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
-
-/** Catégorie libre (ex. 'claude' | 'codex', mais pas de contrainte figée). */
-export type Category = string
 
 export interface AttachmentMeta {
   name: string
@@ -568,7 +565,7 @@ export class ConversationStore {
    * Ne touche PAS `updatedAt` : déplacer une conversation n'est pas y travailler, et la liste est
    * triée par `updatedAt` — un rangement la ferait remonter en tête comme si elle venait de servir.
    */
-  setProjectPath(id: string, projectPath: string | null): Conversation | undefined {
+  rangerDansDossier(id: string, projectPath: string | null): Conversation | undefined {
     const conversation = this.conversations.get(id)
     if (!conversation) return undefined
     const propre = canonicalProjectPath(projectPath)

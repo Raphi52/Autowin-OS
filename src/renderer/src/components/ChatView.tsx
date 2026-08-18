@@ -2094,7 +2094,7 @@ export function ChatView({
                   data-testid={`conv-group-${groupe.key}`}
                   data-depth={groupe.depth}
                   onDragOver={(e) => {
-                    if (groupe.kind !== 'projet') return
+                    if (groupe.kind !== 'dossier') return
                     e.preventDefault()
                     setSurvole(groupe.key)
                   }}
@@ -2103,14 +2103,14 @@ export function ChatView({
                     e.preventDefault()
                     setSurvole(null)
                     const id = e.dataTransfer.getData('text/autowin-conversation')
-                    if (id && groupe.kind === 'projet') void rangerDans(id, groupe.key)
+                    if (id && groupe.kind === 'dossier') void rangerDans(id, groupe.key)
                   }}
                 >
                   <button
                     className="conv-group-head"
                     onClick={() => basculerGroupe(groupe.key, replie)}
                     aria-expanded={!replie}
-                    title={groupe.kind === 'projet' ? groupe.key : groupe.label}
+                    title={groupe.kind === 'dossier' ? groupe.key : groupe.label}
                     style={{ paddingLeft: 8 + groupe.depth * 14 }}
                   >
                     <span className="conv-group-chevron" aria-hidden="true">

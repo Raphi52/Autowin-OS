@@ -29,7 +29,7 @@ describe('à quel groupe appartient une conversation', () => {
     expect(groupeDe(conv('a', { projectPath: 'C:\\Amitel\\Autowin OS' }))).toMatchObject({
       key: 'C:\\Amitel\\Autowin OS',
       label: 'Autowin OS',
-      kind: 'projet'
+      kind: 'dossier'
     })
   })
 
@@ -111,7 +111,7 @@ describe('l’ordre des groupes', () => {
       conv('d'),
       conv('p', { projectPath: 'C:\\Amitel\\Autowin OS' })
     ])
-    expect(groupes.map((g) => g.kind)).toEqual(['projet', 'divers', 'kaizen'])
+    expect(groupes.map((g) => g.kind)).toEqual(['dossier', 'divers', 'kaizen'])
   })
 
   it('les projets sont alphabétiques, insensibles à la casse et aux accents', () => {

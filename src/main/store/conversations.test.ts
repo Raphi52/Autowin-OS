@@ -229,7 +229,7 @@ describe('ConversationStore — le dossier de travail qui groupe', () => {
   it('poser un dossier le persiste sous sa forme canonique', () => {
     const store = new ConversationStore(makeClock())
     const id = neuve(store)
-    store.setProjectPath(id, 'd:/projets/Autowin OS')
+    store.rangerDansDossier(id, 'd:/projets/Autowin OS')
     // Canonique : separateurs `\\`, lettre de lecteur en majuscule. La casse du RESTE est intacte.
     expect(store.get(id)?.projectPath).toBe('D:\\projets\\Autowin OS')
   })
@@ -237,9 +237,9 @@ describe('ConversationStore — le dossier de travail qui groupe', () => {
   it('trois ecritures du MEME dossier ne font qu’UN groupe', () => {
     const store = new ConversationStore(makeClock())
     for (const ecriture of ['C:/Clients', 'C:\\Clients\\', ' C:\\Clients ']) {
-      store.setProjectPath(neuve(store), ecriture)
+      store.rangerDansDossier(neuve(store), ecriture)
     }
-    const groupes = grouperConversations(store.list()).filter((g) => g.kind === 'projet')
+    const groupes = grouperConversations(store.list()).filter((g) => g.kind === 'dossier')
     expect(groupes.map((g) => g.key)).toEqual(['C:\\Clients'])
     expect(groupes[0].items).toHaveLength(3)
   })
@@ -247,9 +247,9 @@ describe('ConversationStore — le dossier de travail qui groupe', () => {
   it('GARDE — deux dossiers homonymes de chemins differents ne fusionnent JAMAIS', () => {
     // Cicatrice deliberee (conversation-groups.ts) : la canonisation ne doit pas la dissoudre.
     const store = new ConversationStore(makeClock())
-    store.setProjectPath(neuve(store), 'C:\\Clients')
-    store.setProjectPath(neuve(store), 'D:\\Clients')
-    const groupes = grouperConversations(store.list()).filter((g) => g.kind === 'projet')
+    store.rangerDansDossier(neuve(store), 'C:\\Clients')
+    store.rangerDansDossier(neuve(store), 'D:\\Clients')
+    const groupes = grouperConversations(store.list()).filter((g) => g.kind === 'dossier')
     expect(groupes.map((g) => g.key).sort()).toEqual(['C:\\Clients', 'D:\\Clients'])
     expect(groupes.every((g) => g.label === 'Clients')).toBe(true)
   })
@@ -258,8 +258,8 @@ describe('ConversationStore — le dossier de travail qui groupe', () => {
     // Sans ce chemin de retour, un rangement serait définitif : la seule sortie serait de supprimer.
     const store = new ConversationStore(makeClock())
     const id = neuve(store)
-    store.setProjectPath(id, 'D:/projets/p')
-    store.setProjectPath(id, null)
+    store.rangerDansDossier(id, 'D:/projets/p')
+    store.rangerDansDossier(id, null)
     expect(store.get(id)?.projectPath).toBeUndefined()
     expect('projectPath' in (store.get(id) as object)).toBe(false)
   })
@@ -267,7 +267,7 @@ describe('ConversationStore — le dossier de travail qui groupe', () => {
   it('un chemin fait d’espaces vaut « pas de dossier », pas un groupe fantôme', () => {
     const store = new ConversationStore(makeClock())
     const id = neuve(store)
-    store.setProjectPath(id, '   ')
+    store.rangerDansDossier(id, '   ')
     expect(store.get(id)?.projectPath).toBeUndefined()
   })
 
@@ -277,14 +277,14 @@ describe('ConversationStore — le dossier de travail qui groupe', () => {
     const store = new ConversationStore(makeClock())
     const id = neuve(store)
     const avant = store.get(id)!.updatedAt
-    store.setProjectPath(id, 'D:/projets/p')
+    store.rangerDansDossier(id, 'D:/projets/p')
     expect(store.get(id)?.updatedAt).toBe(avant)
   })
 
   it('le dossier survit à un rechargement depuis le disque', () => {
     const store = new ConversationStore(makeClock())
     const id = neuve(store)
-    store.setProjectPath(id, 'D:/projets/p')
+    store.rangerDansDossier(id, 'D:/projets/p')
     // `list()` EST ce qui part sur disque (`onChange?.(this.list(), …)`) : recharger depuis lui,
     // plutôt que depuis un objet fabriqué à la main, teste le vrai aller-retour.
     const recharge = new ConversationStore(makeClock())
@@ -295,13 +295,13 @@ describe('ConversationStore — le dossier de travail qui groupe', () => {
   it('la projection envoyée à la liste porte le dossier — sinon l’UI ne peut pas grouper', () => {
     const store = new ConversationStore(makeClock())
     const id = neuve(store)
-    store.setProjectPath(id, 'D:/projets/p')
+    store.rangerDansDossier(id, 'D:/projets/p')
     expect(store.listSummaries().find((s) => s.id === id)?.projectPath).toBe('D:\\projets\\p')
   })
 
   it('un id inconnu ne jette pas et ne crée rien', () => {
     const store = new ConversationStore(makeClock())
-    expect(store.setProjectPath('conv-inexistante', 'D:/projets')).toBeUndefined()
+    expect(store.rangerDansDossier('conv-inexistante', 'D:/projets')).toBeUndefined()
   })
 })
 

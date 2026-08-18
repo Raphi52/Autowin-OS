@@ -48,7 +48,7 @@ function fakeOs(): any {
       get: (id: string) => conversations.get(id),
       remove: (id: string) => conversations.delete(id),
       list: () => [...conversations.values()],
-      setProjectPath: (id: string, projectPath: string | null) => {
+      rangerDansDossier: (id: string, projectPath: string | null) => {
         const conversation = conversations.get(id)
         if (!conversation) return undefined
         return Object.assign(conversation, { projectPath: projectPath ?? undefined })
