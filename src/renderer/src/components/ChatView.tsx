@@ -203,6 +203,15 @@ export function ChatView({
     top: number
     left: number
   } | null>(null)
+  /**
+   * Saisie du dossier en cours de creation, dans le sous-menu « Ranger dans un dossier ».
+   *
+   * `undefined` = pas en train de creer. La liste du menu est DERIVEE des conversations deja
+   * rangees : sans ce champ, zero dossier signifiait zero moyen d'en creer un, donc zero dossier
+   * pour toujours (constate le 2026-08-18). On saisit ICI plutot que via le selecteur natif :
+   * un dossier de conversations est une etiquette, pas un repertoire Windows.
+   */
+  const [nouveauDossier, setNouveauDossier] = useState<string | undefined>(undefined)
   // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
   const [pendingDirectives, setPendingDirectives] = useState<QueuedDirective[]>([])
   const [steeringDirectives, setSteeringDirectives] = useState<Set<number>>(() => new Set())
@@ -2261,7 +2270,13 @@ export function ChatView({
       {convFolderMenu &&
         createPortal(
           <>
-            <div className="conv-menu-backdrop" onClick={() => setConvFolderMenu(null)} />
+            <div
+              className="conv-menu-backdrop"
+              onClick={() => {
+                setNouveauDossier(undefined)
+                setConvFolderMenu(null)
+              }}
+            />
             <div
               className="conv-menu-pop"
               role="menu"
@@ -2289,6 +2304,43 @@ export function ChatView({
                     {chemin}
                   </button>
                 ))
+              )}
+              {nouveauDossier === undefined ? (
+                <button
+                  role="menuitem"
+                  data-testid="conv-project-new"
+                  onClick={() => setNouveauDossier('')}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    ＋
+                  </span>
+                  Nouveau dossier…
+                </button>
+              ) : (
+                <input
+                  className="conv-menu-input"
+                  data-testid="conv-project-new-input"
+                  autoFocus
+                  value={nouveauDossier}
+                  placeholder="Nom du dossier"
+                  aria-label="Nom du nouveau dossier de conversations"
+                  onChange={(event) => setNouveauDossier(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      setNouveauDossier(undefined)
+                      return
+                    }
+                    if (event.key !== 'Enter') return
+                    // Une saisie vide n'est PAS un dossier : sans cette garde, `rangerDans` partait
+                    // avec une chaine vide et le classement se faisait silencieusement sur rien.
+                    const chemin = nouveauDossier.trim()
+                    if (!chemin) return
+                    const conv = convFolderMenu.conv
+                    setNouveauDossier(undefined)
+                    setConvFolderMenu(null)
+                    void rangerDans(conv.id, chemin)
+                  }}
+                />
               )}
             </div>
           </>,

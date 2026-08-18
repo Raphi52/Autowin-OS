@@ -480,6 +480,20 @@
   background: #000;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
 }
+.conv-menu-input {
+  min-width: 0;
+  margin: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r1);
+  background: #000;
+  color: var(--fg);
+  font: inherit;
+}
+.conv-menu-input:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
 .conv-menu-pop button {
   display: flex;
   align-items: center;
