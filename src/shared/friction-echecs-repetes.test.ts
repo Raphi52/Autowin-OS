@@ -86,3 +86,31 @@ describe('frictionEchecsRepetes — la série devient visible avant la relance s
     expect(frictionEchecsRepetes([livre(), livre()])).toBeUndefined()
   })
 })
+
+/**
+ * CÂBLAGE — un module de friction jamais rendu ne freine rien. C'est le défaut « Potemkine » :
+ * exposé, testé, mais aucun appelant réel. On vérifie donc la présence de l'appel ET du rendu.
+ */
+describe('câblage — la friction est réellement affichée dans le composer', () => {
+  const chatView = (): string => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('node:fs') as typeof import('node:fs')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('node:path') as typeof import('node:path')
+    return fs.readFileSync(
+      path.join(__dirname, '..', 'renderer', 'src', 'components', 'ChatView.tsx'),
+      'utf8'
+    )
+  }
+
+  it('appelle frictionEchecsRepetes sur les issues du fil', () => {
+    const source = chatView()
+    expect(source).toContain('frictionEchecsRepetes(orchestrationOutcomesFromMessages(messages))')
+  })
+
+  it('rend le message dans le composer, repérable pour un test de vue', () => {
+    const source = chatView()
+    expect(source).toContain('data-testid="friction-echecs-repetes"')
+    expect(source).toContain('{friction.message}')
+  })
+})

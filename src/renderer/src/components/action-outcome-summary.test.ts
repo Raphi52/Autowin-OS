@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   groupOutcomeSummary,
+  orchestrationOutcomesFromMessages,
   orchestrateOutcomeSummary,
   verifyOutcomeSummary
 } from './action-outcome-summary'
@@ -329,5 +330,35 @@ describe('groupOutcomeSummary — l’état terminal prime sur un incident repri
         orchestrate({ status: 'succeeded', valid: true })
       ])
     ).toMatchObject({ state: 'failed', label: 'npm test → exit 1' })
+  })
+})
+
+/**
+ * MATIÈRE PREMIÈRE de la friction sur échecs répétés : les issues d'orchestration du fil, dans
+ * l'ordre. Lecture duck-typée — un fil relu du disque n'offre aucune garantie de forme.
+ */
+describe('orchestrationOutcomesFromMessages', () => {
+  const msg = (parts: unknown[]): unknown => ({ role: 'assistant', parts })
+  const action = (name: string, data: unknown): unknown => ({ kind: 'action', name, data })
+
+  it('rend les issues orchestrate dans l’ordre du fil', () => {
+    const outcomes = orchestrationOutcomesFromMessages([
+      { role: 'user', content: 'go' },
+      msg([action('orchestrate', { status: 'failed' })]),
+      msg([action('verify', { exitCode: 0 }), action('orchestrate', { status: 'succeeded' })])
+    ])
+    expect(outcomes).toEqual([{ status: 'failed' }, { status: 'succeeded' }])
+  })
+
+  it('ignore sans jeter tout ce qui n’est pas une issue exploitable', () => {
+    expect(
+      orchestrationOutcomesFromMessages([
+        null,
+        undefined,
+        { role: 'assistant' },
+        { role: 'assistant', parts: 'pas un tableau' },
+        msg([null, 'texte', action('orchestrate', 'chaîne brute'), { kind: 'text', text: 'x' }])
+      ])
+    ).toEqual([])
   })
 })

@@ -108,6 +108,31 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
 }
 
 /**
+ * Les issues d'orchestration du fil, dans l'ordre — matiere premiere de la friction sur echecs
+ * repetes (`shared/friction-echecs-repetes.ts`).
+ *
+ * Lecture DUCK-TYPEE volontairement : ce module n'a pas a dependre des types de la vue, et les
+ * messages relus du disque n'ont de toute facon aucune garantie de forme. Ce qui n'est pas une
+ * action `orchestrate` porteuse d'un objet est ignore, sans jamais jeter.
+ */
+export function orchestrationOutcomesFromMessages(
+  messages: readonly unknown[]
+): Array<Record<string, unknown>> {
+  const outcomes: Array<Record<string, unknown>> = []
+  for (const message of messages) {
+    const parts = asRecord(message)?.parts
+    if (!Array.isArray(parts)) continue
+    for (const part of parts) {
+      const record = asRecord(part)
+      if (record?.kind !== 'action' || record.name !== 'orchestrate') continue
+      const data = asRecord(record.data)
+      if (data) outcomes.push(data)
+    }
+  }
+  return outcomes
+}
+
+/**
  * Résumé de preuve d'un groupe d'actions. Une vérification en ÉCHEC est prioritaire sur une réussie :
  * c'est elle qu'il faut voir quand un tour en contient plusieurs.
  *

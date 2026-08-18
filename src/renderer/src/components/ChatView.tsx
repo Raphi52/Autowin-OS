@@ -96,6 +96,8 @@ import './ViewPage.css'
 import './ChatView.css'
 import './SlashPalette.css'
 import './ChatComposerExtras.css'
+import { frictionEchecsRepetes } from '../../../shared/friction-echecs-repetes'
+import { orchestrationOutcomesFromMessages } from './action-outcome-summary'
 import type { InspectTurnTarget } from '../observatory-focus'
 
 /* ---------- Types ---------- */
@@ -302,6 +304,14 @@ export function ChatView({
    */
   /** Récapitulatif de visée affiché au-dessus du composer (null = rien à dire, pas de bruit). */
   const scopeEcho = useMemo(() => buildScopeEcho(input, mentionSources), [input, mentionSources])
+  /**
+   * FRICTION sur une série d'orchestrations sans livraison. Mesuré (conv-1302, 2026-08-18) : douze
+   * runs d'affilée sur la même demande, plus de 20 $, et rien à l'écran ne disait qu'on était dans
+   * une série — l'utilisateur a relancé neuf fois, ce qui est le comportement rationnel quand
+   * personne ne lui montre le mur. Ce bandeau ne bloque RIEN : la relance reste à un geste, la
+   * décision reste humaine. Il rend seulement la série et son coût lisibles avant le geste suivant.
+   */
+  const friction = useMemo(() => frictionEchecsRepetes(orchestrationOutcomesFromMessages(messages)), [messages])
   const homeSuggestions = useMemo(
     () => buildHomeSuggestions({ runs, resumedDraft: input }),
     [runs, input]
@@ -2798,6 +2808,11 @@ export function ChatView({
             {attachmentError && <div className="attachment-error">{attachmentError}</div>}
             {/* Écho de PÉRIMÈTRE : ce que le tour va probablement faire, et sur quoi — AVANT
                 l'envoi, pour pouvoir corriger la visée plutôt que de découvrir l'écart après. */}
+            {friction && (
+              <div className="composer-friction" data-testid="friction-echecs-repetes" role="status">
+                <span aria-hidden="true">⚠</span> {friction.message}
+              </div>
+            )}
             {scopeEcho && (
               <div className="composer-scope-echo" data-testid="scope-echo">
                 <span aria-hidden="true">◎</span> {formatScopeEcho(scopeEcho)}
