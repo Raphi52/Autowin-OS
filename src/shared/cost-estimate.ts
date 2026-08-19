@@ -186,13 +186,6 @@ export function formatUsd(amount: number): string {
   return `${amount.toFixed(decimals).replace('.', ',')} $`
 }
 
-/** Montant estimé, formaté avec la marque explicite de l'approximation. */
-export function formatEstimatedCostUsd(usage: TokenUsageShape, nowMs?: number): string | undefined {
-  const estimate = estimateCostUsd(usage, nowMs)
-  if (estimate === undefined) return undefined
-  return `≈ ${formatUsd(estimate)} estimés`
-}
-
 /** Volume lisible : la seule information vraie qui reste quand le tarif du modèle est inconnu. */
 export function formatTokenVolume(tokens: number): string {
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M tokens`

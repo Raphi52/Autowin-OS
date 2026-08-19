@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   SONNET_5_INTRO_UNTIL_MS,
   estimateCostUsd,
-  formatEstimatedCostUsd,
   modelRate,
   splitInputTokens
 } from './cost-estimate'
@@ -141,14 +140,6 @@ describe('estimation de coût des appels non chiffrés', () => {
     )
   })
 
-  it('le libellé PORTE la marque de l’approximation', () => {
-    const label = formatEstimatedCostUsd({
-      inputTokens: 1_000_000,
-      outputTokens: 200_000,
-      model: 'claude-opus-5'
-    })
-    expect(label).toBe('≈ 10,00 $ estimés')
-  })
 })
 
 describe('splitInputTokens — un seul arbitre de l’invariant « le cache est un sous-ensemble »', () => {
