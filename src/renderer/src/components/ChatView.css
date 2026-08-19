@@ -1198,6 +1198,15 @@
   flex: 1;
   min-width: 160px;
 }
+/* Bilan d'un tour arrete : il occupe TOUTE la largeur sous la cause, parce qu'il porte le seul
+   contenu utile quand un run est coupe — ce qui a deja ete livre. Mesure du 2026-08-19 : deux commits
+   etaient dans `main` et l'ecran ne montrait que « budget duree depasse ». */
+.msg-error-bilan {
+  flex-basis: 100%;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
 .msg-error-actions {
   display: flex;
   gap: 6px;

@@ -674,3 +674,59 @@ describe('ExecutionSupervisor', () => {
     expect(supervisor.lastSnapshot()?.knownCostUsd).toBe(0.2)
   })
 })
+
+/**
+ * UNE TACHE LONGUE N'EST PAS UNE TACHE EN PANNE.
+ *
+ * Mesure du 2026-08-19 : l'application a livre son correctif de production en DEUX commits, puis son
+ * tour a ete tue sur « budget duree depasse (2700000 ms) » avant d'ecrire ses tests. Un run qui
+ * PROGRESSAIT, arrete parce qu'il durait — et l'utilisateur n'a recu aucun compte rendu du travail
+ * deja livre. Couper au bout d'un temps fixe ne protege rien : ca detruit du travail deja paye.
+ *
+ * Ce qu'une horloge attrape legitimement, c'est l'IMMOBILITE : un run bloque sur un processus mort ne
+ * consomme aucun jeton, donc aucun plafond de depense ne l'arrete jamais. L'echeance est donc
+ * repoussee a chaque progression observable, et ne mord plus que sur l'inactivite.
+ */
+describe('ExecutionSupervisor — la duree borne l’immobilite, plus la longueur', () => {
+  it('un run qui PROGRESSE depasse librement son budget de duree', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const quote = devisBloquant('une tache longue mais vivante')
+    // Budget d'inactivite VOLONTAIREMENT court, et six appels espaces qui le depassent largement en
+    // cumul : sous l'ancienne regle (duree totale), ce run etait condamne des le troisieme appel.
+    quote.limits.maxDurationMs = 300
+    quote.limits.maxProviderCalls = 10
+
+    const depart = Date.now()
+    await supervisor.run(quote, undefined, async () => {
+      for (let i = 0; i < 6; i++) {
+        await registry.send('counted', [{ role: 'user', content: `etape ${i}` }])
+        await new Promise((resolve) => setTimeout(resolve, 120))
+      }
+    })
+
+    expect(provider.calls).toBe(6)
+    expect(Date.now() - depart).toBeGreaterThan(quote.limits.maxDurationMs)
+  })
+
+  it('un run IMMOBILE est bien arrete, et la raison le dit', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const quote = devisBloquant('une tache qui se pend')
+    quote.limits.maxDurationMs = 250
+
+    const abandon = supervisor.run(quote, undefined, async () => {
+      await registry.send('counted', [{ role: 'user', content: 'un seul appel' }])
+      // Puis PLUS RIEN : aucune progression observable, comme un run bloque sur un processus mort.
+      await new Promise((resolve) => {
+        const t = setTimeout(resolve, 10_000)
+        t.unref?.()
+      })
+    })
+
+    await expect(abandon).rejects.toThrow(/aucune progression/i)
+    expect(supervisor.lastSnapshot()?.stoppedReason).toMatch(/pas trop long/i)
+  })
+})

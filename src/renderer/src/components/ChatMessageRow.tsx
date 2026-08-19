@@ -16,6 +16,7 @@ import { AssistantActivityGroup } from './ChatView.parts'
 import { ForkIcon, InspectIcon } from './chat-view-icons'
 import { formatFileSize } from './chat-attachments'
 import { groupAssistantActivity, type ChatErrorPart, type ChatPart } from './chat-view-model'
+import { bilanDuTour, formaterBilan } from './bilan-tour'
 import type { TerminalStatus } from './chat-resume-refine'
 import type { AttachmentMeta, DirectiveReceipt, Msg } from './chat-view-types'
 import type { InspectTurnTarget } from '../observatory-focus'
@@ -54,11 +55,18 @@ const ERROR_CAUSE_LABEL: Record<ChatErrorPart['cause'], string> = {
 export function ChatErrorBlock({
   part,
   retryPrompt,
+  bilan,
   onResend,
   onRefineResume
 }: {
   part: ChatErrorPart
   retryPrompt?: string
+  /**
+   * Ce que le tour a accompli AVANT de s'arreter. Sans lui, un arret se lit comme un echec total :
+   * vecu le 2026-08-19, deux commits etaient dans `main` et l'ecran ne montrait que « budget duree
+   * depasse ». Le travail vivait dans les parts du meme message — il n'y avait qu'a le dire.
+   */
+  bilan?: string
   onResend?: (prompt: string) => void
   onRefineResume?: (prompt: string, status: TerminalStatus, reason?: string | null) => void
 }): React.JSX.Element {
@@ -66,6 +74,11 @@ export function ChatErrorBlock({
     <div className="msg-error" role="alert" data-cause={part.cause}>
       <span className="msg-error-cause">⚠️ {ERROR_CAUSE_LABEL[part.cause]}</span>
       <span className="msg-error-message">{part.message}</span>
+      {bilan && (
+        <span className="msg-error-bilan" data-testid="erreur-bilan">
+          {bilan}
+        </span>
+      )}
       {retryPrompt && (onResend || onRefineResume) && (
         <span className="msg-error-actions">
           {onResend && (
@@ -361,6 +374,7 @@ export const ChatMessageRow = memo(
                       <ChatErrorBlock
                         key={index}
                         part={part}
+                        bilan={formaterBilan(bilanDuTour(message.parts))}
                         retryPrompt={retryPrompt?.trim()}
                         onResend={onResend}
                         onRefineResume={onRefineResume}
