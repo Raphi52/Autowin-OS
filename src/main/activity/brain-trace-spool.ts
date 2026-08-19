@@ -140,8 +140,12 @@ export function appendBrainTrace(
       )
     }
     return redacted
-  } catch {
-    // best-effort
+  } catch (erreur) {
+    // Le tracage ne doit JAMAIS casser l'action tracee — mais sa perte est desormais COMPTEE, et
+    // lisible par `brainTraceSpoolHealth()` : une chronologie Observatory trouee ne peut plus se
+    // presenter comme complete.
+    tracesPerdues += 1
+    dernierePerte = (erreur instanceof Error ? erreur.message : String(erreur)).slice(0, 500)
     return undefined
   }
 }
