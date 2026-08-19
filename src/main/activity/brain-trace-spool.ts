@@ -26,6 +26,28 @@ const MAX_QUERY_CHARS = 16_000
 const MAX_ENTRY_BYTES = 512 * 1024
 const latestTraceIds = new Map<string, string>()
 
+/** Sante du spool Brain, lisible sans jamais jeter. `enBonneSante` est faux des la premiere perte. */
+export interface SanteSpoolBrain {
+  tracesPerdues: number
+  derniereErreur?: string
+  enBonneSante: boolean
+}
+
+// Le tracage ne doit jamais casser l'action tracee, mais sa perte ne doit pas etre invisible :
+// un spool totalement mort se lisait comme un spool vide, et l'Observatory presentait une
+// chronologie incomplete en la donnant pour complete. Meme parti pris que TraceLedger.sante().
+let tracesPerdues = 0
+let dernierePerte: string | undefined
+
+/** Etat du spool de traces Brain (compteurs de perte), lisible sans jamais jeter. */
+export function brainTraceSpoolHealth(): SanteSpoolBrain {
+  return {
+    tracesPerdues,
+    ...(dernierePerte ? { derniereErreur: dernierePerte } : {}),
+    enBonneSante: tracesPerdues === 0
+  }
+}
+
 function correlationKey(base: string, conversationId: string, turnId: string): string {
   return `${resolve(base)}\u0000${conversationId}\u0000${turnId}`
 }
