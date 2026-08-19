@@ -105,7 +105,10 @@ describe('cablage de la commande verify', () => {
 
   it('la commande est DECLAREE sans aucun argument (le modele ne choisit pas)', () => {
     const source = commands()
-    const spec = source.slice(source.indexOf("name: 'verify'"), source.indexOf("name: 'verify'") + 500)
+    const spec = source.slice(
+      source.indexOf("name: 'verify'"),
+      source.indexOf("name: 'verify'") + 500
+    )
     expect(spec).toContain('args: {}')
   })
 
@@ -139,5 +142,63 @@ describe('cablage de la commande verify', () => {
     expect(refusal).toContain('if (!decision.allowed)')
     expect(refusal).toContain('reason')
     expect(refusal).not.toContain('spawn(')
+  })
+})
+
+/**
+ * LA TRONCATURE JETAIT LE VERDICT ET GARDAIT LE BRUIT.
+ *
+ * Vu dans l'app le 2026-08-19 (capture utilisateur) : une pastille « npm run test:unit → exit 1 »
+ * dont la sortie visible commençait par « …[tronqué — 182469 caractères omis] » puis n'affichait que
+ * des avertissements `stderr | … not configured to support act(...)` sur deux fichiers qui, vérifié
+ * ensuite, PASSENT tous les deux (exit 0, 4/4). Le lecteur voyait donc un échec dont la cause n'était
+ * pas à l'écran, et un indice qui pointait vers des tests sains.
+ *
+ * Cause : `stdout` et `stderr` sont fusionnés au fil de l'arrivée (`commands.ts`), et la troncature
+ * ne gardait que la FIN en supposant « l'échec et le récapitulatif sont en bas ». Quand `stderr` est
+ * bavard, la fin n'est plus le récapitulatif : c'est du bruit. Un diagnostic tronqué au mauvais
+ * endroit coûte le tour entier — ici il a envoyé chercher un défaut dans des fichiers verts.
+ */
+describe('capVerifyOutput — le verdict survit à la troncature', () => {
+  const bruit = (n: number): string =>
+    Array.from(
+      { length: n },
+      (_, i) =>
+        `stderr | src/renderer/src/components/SuggestionGrid.test.tsx > cas ${i}\nThe current testing environment is not configured to support act(...)`
+    ).join('\n')
+
+  const sortieRealiste = [
+    bruit(400),
+    ' FAIL  src/main/store/worktree-manager.concurrence.test.ts > reprend durablement au finalize suivant',
+    'AssertionError: expected false to be true',
+    ' Test Files  1 failed | 616 passed (617)',
+    '      Tests  1 failed | 6805 passed (6806)',
+    bruit(600)
+  ].join('\n')
+
+  it('garde la ligne FAIL et le récapitulatif, même noyés dans du stderr', () => {
+    const capped = capVerifyOutput(sortieRealiste)
+    expect(capped).toContain('worktree-manager.concurrence')
+    expect(capped).toContain('Test Files')
+    expect(capped).toContain('Tests')
+  })
+
+  it('respecte toujours le plafond', () => {
+    expect(capVerifyOutput(sortieRealiste).length).toBeLessThanOrEqual(VERIFY_OUTPUT_CAP)
+  })
+
+  it('dit toujours que la sortie est tronquée', () => {
+    expect(capVerifyOutput(sortieRealiste)).toContain('tronqué')
+  })
+
+  it('CONTRE-EXEMPLE — une sortie courte est rendue telle quelle', () => {
+    expect(capVerifyOutput('  Tests  4 passed (4)  ')).toBe('Tests  4 passed (4)')
+  })
+
+  it('CONTRE-EXEMPLE — une sortie sans verdict reconnaissable garde sa fin', () => {
+    const brut = bruit(800)
+    const capped = capVerifyOutput(brut)
+    expect(capped.length).toBeLessThanOrEqual(VERIFY_OUTPUT_CAP)
+    expect(capped).toContain('act(...)')
   })
 })

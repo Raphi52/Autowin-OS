@@ -15,8 +15,7 @@ import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
  */
 
 export type VerifyDecision =
-  | { allowed: true; command: string; cwd: string }
-  | { allowed: false; reason: string }
+  { allowed: true; command: string; cwd: string } | { allowed: false; reason: string }
 
 /**
  * Decide s'il y a une verification executable, et LAQUELLE. Les arguments eventuels du modele sont
@@ -69,17 +68,61 @@ export interface VerifyOutcome {
 
 export const VERIFY_OUTPUT_CAP = 4_000
 
+/** Saut de ligne sans sequence d'echappement : cinq occurrences d'un `\n` mange en route dans cette session. */
+const SAUT = String.fromCharCode(10)
+
 /**
  * Tronque la sortie en gardant la FIN : l'echec et le recapitulatif sont en bas.
  *
  * Le marqueur est COMPTE dans le plafond. Sans cette reserve, la valeur rendue depassait le cap au
  * lieu de le respecter — meme piege que `truncate` cote tickets, attrape par le test de bornage.
  */
+/**
+ * Lignes qui portent le VERDICT d'une verification : l'echec nomme et le recapitulatif.
+ *
+ * Volontairement conservateur et agnostique du runner. Ce qui n'est pas reconnu tombe simplement
+ * dans la queue, comme avant — on ne perd rien, on remonte seulement ce qui decide.
+ */
+const LIGNES_DE_VERDICT =
+  /^\s*(?:FAIL|×|✗|✕|Test Files|Tests\s|Duration|error TS\d+|Error:|AssertionError|exit code)/
+
+function verdictDe(texte: string, budget: number): string {
+  const vues = new Set<string>()
+  const retenues: string[] = []
+  let taille = 0
+  for (const ligne of texte.split(SAUT)) {
+    if (!LIGNES_DE_VERDICT.test(ligne)) continue
+    const propre = ligne.trimEnd()
+    if (vues.has(propre)) continue
+    if (taille + propre.length + 1 > budget) break
+    vues.add(propre)
+    retenues.push(propre)
+    taille += propre.length + 1
+  }
+  return retenues.join(SAUT)
+}
+
+/**
+ * Tronque la sortie SANS jeter le verdict.
+ *
+ * La version precedente ne gardait que la FIN, en supposant « l'echec et le recapitulatif sont en
+ * bas ». Vu dans l'app le 2026-08-19 : `stdout` et `stderr` etant fusionnes au fil de l'arrivee
+ * (`commands.ts`), une suite bavarde en `stderr` remplissait entierement la fenetre gardee. La
+ * pastille affichait « exit 1 », « 182469 caracteres omis », puis uniquement des avertissements
+ * `act(...)` sur deux fichiers qui PASSENT — un echec dont la cause etait absente de l'ecran, et un
+ * indice qui envoyait chercher le defaut dans du code sain.
+ *
+ * Les lignes de verdict passent donc devant, la queue remplit le reste. Le marqueur est COMPTE dans
+ * le plafond : la valeur rendue ne le depasse jamais.
+ */
 export function capVerifyOutput(raw: string, cap: number = VERIFY_OUTPUT_CAP): string {
   const text = raw.trim()
   if (text.length <= cap) return text
   const omitted = text.length - cap
-  const marker = `…[tronqué — ${omitted} caractères omis]\n`
-  const kept = Math.max(0, cap - marker.length)
-  return `${marker}${text.slice(-kept)}`
+  const marker = `…[tronqué — ${omitted} caractères omis]` + SAUT
+  const restant = Math.max(0, cap - marker.length)
+  const verdict = verdictDe(text, Math.floor(restant / 2))
+  const queue = restant - (verdict ? verdict.length + 1 : 0)
+  const fin = queue > 0 ? text.slice(-queue) : ''
+  return verdict ? marker + verdict + SAUT + fin : marker + fin
 }
