@@ -72,7 +72,7 @@ for (let i = 0; i < 60; i++) {
   await sleep(2000)
   const state = await ev(`(() => ({
     busy: document.querySelector('.composer-send')?.getAttribute('aria-label') !== 'Envoyer le message',
-    hasAction: document.querySelector('.action-event') !== null
+    hasAction: document.querySelector('.activity-group') !== null
   }))()`)
   if (!state.busy && state.hasAction) {
     done = true
@@ -83,10 +83,15 @@ console.log('[3 tour terminé]', done)
 await sleep(500)
 
 // 3. vérifier chaque élément dans le DOM
+//
+// La classe '.action-event' a été VOLONTAIREMENT supprimée du renderer (un test l'interdit
+// explicitement) : ce garde assertait donc sur une classe inexistante, sa liste était toujours vide,
+// et son verdict final — qui exige d'y trouver le titre — ne pouvait PLUS JAMAIS être vrai. Un garde
+// qui ne peut pas passer a cessé d'être cru. Classe réelle du produit : '.activity-group'.
 const checks = await ev(`(() => {
   const userMsg = [...document.querySelectorAll('.msg.user .msg-body')].map(e => e.textContent)
   const agentTexts = [...document.querySelectorAll('.msg.assistant .msg-body')].map(e => e.textContent.slice(0, 120))
-  const chips = [...document.querySelectorAll('.action-event')].map(e => e.textContent.trim().slice(0, 80))
+  const chips = [...document.querySelectorAll('.activity-group')].map(e => e.textContent.trim().slice(0, 120))
   const convs = [...document.querySelectorAll('.conv-item .conv-label')].map(e => e.textContent)
   const title = document.querySelector('.chat-conv-title')?.textContent
   return { userMsg, agentTexts, chips, convs, title }

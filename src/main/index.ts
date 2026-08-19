@@ -108,7 +108,12 @@ import { OutcomeLearningLedger } from './activity/outcome-learning-ledger'
 import { OutcomeLearningSupervisor, parseOutcomeLearningMode } from './outcome-learning-supervisor'
 import { WindowsDesktopController } from './desktop-control'
 import { captureElectronDesktop } from './electron-desktop-capture'
-import { AgentPilot, type PilotEvent, type RecoveredPilotProviderCall } from './agent-pilot'
+import {
+  CAP_ITERATIONS_TOUR,
+  AgentPilot,
+  type PilotEvent,
+  type RecoveredPilotProviderCall
+} from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import { boundedContinuationHistory, boundedTurnHistory } from './chat-turn-messages'
@@ -4252,7 +4257,7 @@ Le fil reprend ensuite normalement.`
                         'Une tâche planifiée ne peut pas répondre à une question interactive du modèle.'
                       )
                     ),
-              policy?.maxIterations ?? 6,
+              policy?.maxIterations ?? CAP_ITERATIONS_TOUR,
               conversationId,
               supervisedSignal,
               conversationId ? () => drainPendingDirectives(conversationId) : undefined,

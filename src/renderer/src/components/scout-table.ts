@@ -100,6 +100,17 @@ function colOf(headers: string[], keywords: string[]): number {
  *    contenu re-présenté comme une shortlist avec des pastilles inventées. D'où l'exigence de `what`
  *    PLUS l'une de `why`/`how`.
  */
+/**
+ * Colonnes qui jouent le role du « ou commencer » : le PREMIER PAS, mais aussi l'ANCRAGE et la
+ * PREUVE. Mesure du 2026-08-19 en pilotant l'app : un scout a rendu
+ * « Score | Type | Quoi | Ancrage fichier:ligne | Preuve que l'appelant manque », et le panneau a
+ * cases a ete refuse en SILENCE — retombee en Markdown mort, sans aucun signal. La fonctionnalite
+ * existait, testee et branchee, et devenait inatteignable des que le modele nommait ses colonnes
+ * autrement. Un ancrage `fichier:ligne` EST un premier pas ; une preuve du manque EST la valeur.
+ */
+const COLONNES_DEPART = ['how', '1er pas', 'premier', 'first', 'ancrage', 'anchor', 'ou verifier']
+const COLONNES_VALEUR = ['why', 'pourquoi', 'valeur', 'preuve', 'evidence', 'proof']
+
 function isScoutHeader(headers: string[]): boolean {
   const joined = headers.join(' | ')
   const shape =
@@ -107,9 +118,12 @@ function isScoutHeader(headers: string[]): boolean {
     (/score/i.test(joined) && /what|type/i.test(joined))
   if (!shape) return false
   const hasWhat = colOf(headers, ['what', 'manquement', 'quoi', 'candidat']) >= 0
-  const hasWhy = colOf(headers, ['why', 'pourquoi', 'valeur']) >= 0
-  const hasHow = colOf(headers, ['how', '1er pas', 'premier', 'first']) >= 0
-  return hasWhat && (hasWhy || hasHow)
+  const hasWhy = colOf(headers, COLONNES_VALEUR) >= 0
+  const hasHow = colOf(headers, COLONNES_DEPART) >= 0
+  // Un ancrage `fichier:ligne` nu, sans en-tete nommee, reste accepte : c'est la forme la plus
+  // frequente et elle porte a elle seule le « ou commencer ».
+  const ancrageNu = headers.some((h) => /fichier\s*:\s*ligne|file\s*:\s*line/i.test(h))
+  return hasWhat && (hasWhy || hasHow || ancrageNu)
 }
 
 export function parseScoutTable(text: string): ScoutRow[] | null {
@@ -131,8 +145,8 @@ export function parseScoutTable(text: string): ScoutRow[] | null {
   const iScore = colOf(headers, ['score'])
   const iType = colOf(headers, ['type'])
   const iWhat = colOf(headers, ['what', 'manquement', 'quoi', 'candidat'])
-  const iWhy = colOf(headers, ['why', 'pourquoi', 'valeur'])
-  const iHow = colOf(headers, ['how', '1er pas', 'premier', 'first'])
+  const iWhy = colOf(headers, COLONNES_VALEUR)
+  const iHow = colOf(headers, COLONNES_DEPART)
 
   const rows: ScoutRow[] = []
   for (let i = headerIdx + 2; i < lines.length; i++) {

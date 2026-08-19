@@ -35,16 +35,15 @@ export function decideRead(
   if (typeof input.path !== 'string' || !input.path.trim()) {
     return { allowed: false, reason: 'chemin de fichier manquant' }
   }
-  const absolutePath = isAbsolute(input.path)
-    ? resolve(input.path)
-    : resolve(workspace, input.path)
+  const absolutePath = isAbsolute(input.path) ? resolve(input.path) : resolve(workspace, input.path)
   const relativePath = relative(resolve(workspace), absolutePath)
   if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) {
     return { allowed: false, reason: 'chemin hors du workspace' }
   }
   const forbidden = isForbidden(relativePath)
   if (forbidden) return { allowed: false, reason: forbidden }
-  const from = Number.isSafeInteger(input.from) && (input.from as number) > 0 ? (input.from as number) : 1
+  const from =
+    Number.isSafeInteger(input.from) && (input.from as number) > 0 ? (input.from as number) : 1
   const wanted =
     Number.isSafeInteger(input.lines) && (input.lines as number) > 0
       ? (input.lines as number)
@@ -66,7 +65,8 @@ export function executeRead(
   lire: (absolutePath: string) => string | null
 ): LectureFichier | { erreur: string } {
   const brut = lire(decision.absolutePath)
-  if (brut === null) return { erreur: `fichier introuvable ou illisible : ${decision.relativePath}` }
+  if (brut === null)
+    return { erreur: `fichier introuvable ou illisible : ${decision.relativePath}` }
   if (brut.length > OCTETS_MAX_FICHIER) {
     return {
       erreur: `fichier trop lourd pour une lecture directe (${brut.length} octets) : cible une plage avec from/lines ou passe par find_in_files`
@@ -125,8 +125,32 @@ export function rechercherDansFichiers(
   return { correspondances, tronque: false }
 }
 
-/** Dossiers jamais parcourus : les mêmes zones que l'édition, plus les artefacts de build lourds. */
-const DOSSIERS_EXCLUS = new Set(['.git', 'node_modules', 'dist', 'out', 'coverage'])
+/**
+ * Dossiers jamais PARCOURUS : les mêmes zones que l'édition, les artefacts de build, et — depuis le
+ * 2026-08-19 — les DONNÉES et les PREUVES.
+ *
+ * Mesuré en pilotant l'app : un scout a rendu comme candidat à corriger un blob binaire du cache
+ * Chrome, ancré dans
+ * `Audit/workspaces/20260813-…/app-data/autowin-os/Cache/Cache_Data/f_000075:292`. La liste ne
+ * couvrait que les artefacts de BUILD ; le magasin vivant (`.autowin-data` : conversations, runs,
+ * worktrees, cache Electron) et les espaces de preuve (`Audit`, qui embarquent des profils
+ * applicatifs complets) étaient balayés à chaque recherche, lus comme du texte, et remontaient
+ * comme des ancrages de code.
+ *
+ * L'exclusion porte sur l'ÉNUMÉRATION seule. `read_file` décide par `decideRead`, donc une lecture
+ * CIBLÉE dans ces dossiers reste possible, et un appelant qui NOMME le sous-dossier l'énumère encore.
+ * On refuse de les balayer à l'aveugle, pas d'y regarder quand on sait ce qu'on cherche.
+ */
+const DOSSIERS_EXCLUS = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'out',
+  'coverage',
+  '.autowin-data',
+  'Audit',
+  'graphify-out'
+])
 
 /**
  * Énumère les fichiers lisibles sous la racine (chemins RELATIFS, séparateur `/`), borné pour qu'une

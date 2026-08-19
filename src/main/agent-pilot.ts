@@ -34,6 +34,22 @@ import {
   type OrchestrationOutcome
 } from '../shared/orchestration-outcome'
 import type { ChatArtifact } from '../shared/artifacts'
+
+/**
+ * CAP D'ITÉRATIONS d'un tour de chat — UNE seule valeur par défaut, exportée.
+ *
+ * Relevé de 6 à 12 le 2026-07-29 : sur un blocage réel, l'agent consommait 4 itérations en
+ * `edit_file` ratés avant même de pouvoir chercher une autre voie, puis s'arrêtait sur « cap atteint
+ * sans réponse finale » en laissant des mutations partielles.
+ *
+ * Cette constante existe parce que le relèvement N'ATTEIGNAIT PAS l'application : le chat interactif
+ * repliait sur un `?? 6` codé en dur (`index.ts`), et comme aucune police n'est fournie quand un
+ * humain tape dans le composer, la production tournait à 6 pendant que la signature affichait 12.
+ * Mesuré le 2026-08-19 en pilotant l'app : un scout a rendu « Cap d'itérations (6) atteint » et
+ * aucun livrable. Deux valeurs par défaut concurrentes pour un même fait — le commentaire qui
+ * justifiait 12 décrivait un monde qui n'existait pas.
+ */
+export const CAP_ITERATIONS_TOUR = 12
 import type { PilotEventKind } from '../shared/pilot-events'
 
 /**
@@ -450,7 +466,7 @@ export class AgentPilot {
      * le faire. Le cout reste borne par le budget du tour (AUTOWIN_CHAT_USD_CAP), qui coupe sur la
      * depense reelle plutot que sur un compteur aveugle.
      */
-    maxIter = 12,
+    maxIter = CAP_ITERATIONS_TOUR,
     conversationId?: string,
     signal?: AbortSignal,
     /** Directives injectées par l'utilisateur PENDANT le tour — drainées à chaque itération. */
@@ -1463,7 +1479,11 @@ export class AgentPilot {
       convo.push(`TU AS ÉMIS: ${text}`)
       convo.push(`RÉSULTATS:\n${results.join('\n')}\n\nÉTAT MAINTENANT:\n${JSON.stringify(state)}`)
     }
-    const capError = `Cap d'itérations (${maxIter}) atteint sans réponse finale`
+    // Le cap EFFECTIF, pas le cap initial : `grantRecoveryIteration` en accorde jusqu'a huit de plus
+    // (directive tardive, tour muet, chiffre non verifie, conclusion absente, echec taise...). Un tour
+    // ayant reellement tourne neuf fois annoncait « Cap d'iterations (6) », donc le seul nombre que
+    // l'utilisateur peut utiliser pour comprendre etait faux.
+    const capError = `Cap d'itérations (${iterationLimit}) atteint sans réponse finale`
     emit({
       kind: 'error',
       text: capError,
