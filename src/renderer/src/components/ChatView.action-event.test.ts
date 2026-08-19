@@ -22,12 +22,21 @@ describe('AssistantActivityGroup', () => {
       })
     )
 
-    // Le détail (prompt du sous-agent, résultats) vit dans Workflows, pas au milieu du chat.
+    // Le détail VERBEUX (prompt du sous-agent, entrée/résultat bruts) vit dans Workflows, pas au
+    // milieu du chat : c'est ce que cette garde protège, et elle tient toujours.
+    //
+    // Ce qu'elle ne protège PLUS : la CAUSE d'un échec. `navigate` et `get_state` ne produisent
+    // aucun run, donc le bouton ne peut renvoyer nulle part (décision du 2026-07-29 dans
+    // `action-detail-target.ts` : « s'il n'y a pas de run, le detail doit s'afficher SUR PLACE »).
+    // Depuis le 2026-08-18, `data.error` est expose : l'utilisateur voyait « 1 action avec erreur »
+    // sans jamais pouvoir savoir pourquoi. Le repli est CLIQUABLE, donc il n'encombre pas le fil —
+    // c'est exactement « en savoir plus quand je clique ».
     expect(html).toContain('<button')
-    expect(html).not.toContain('<details')
     expect(html).not.toContain('action-event')
     expect(html).not.toContain('Entrée')
     expect(html).not.toContain('Résultat')
+    // La cause est atteignable, repliee par defaut.
+    expect(html).toContain('boom')
     // Le résumé cliquable reste informatif.
     expect(html).toContain('2 actions avec erreur')
     expect(html).toContain('Navigation · Lecture d’état')

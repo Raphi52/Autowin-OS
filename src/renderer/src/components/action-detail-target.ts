@@ -63,6 +63,15 @@ export function localActionDetails(actions: readonly ActionLike[]): LocalActionD
     const exitCode = typeof data.exitCode === 'number' ? data.exitCode : undefined
     const knowledge = typeof data.knowledge === 'string' ? data.knowledge : undefined
     /**
+     * La CAUSE d'un echec. Une commande qui echoue rend `{ ok: false, error: <message> }`
+     * (`commands.ts:1120`), et ce champ n'etait lu par personne : faute de texte, l'action etait
+     * IGNOREE. Vecu le 2026-08-18 — « 1 action avec erreur — graphify » dans le fil, et rien d'autre.
+     * Un echec sans sa raison n'apprend rien ; c'est precisement le moment ou l'utilisateur en a le
+     * plus besoin. Place APRES `reason`, qui reste prioritaire : un refus explique deja pourquoi.
+     */
+    const error =
+      typeof data.error === 'string' && data.error.trim() ? data.error.trim() : undefined
+    /**
      * Une vérification qui PASSE n'a rien à raconter : son verdict est « exit 0 », et le reste est
      * la sortie de l'outil — souvent des milliers de lignes de bruit (avertissements git, worktrees
      * préparés) tronquées à leur queue la moins parlante. On ne montre donc la sortie que lorsqu'elle
@@ -71,6 +80,7 @@ export function localActionDetails(actions: readonly ActionLike[]): LocalActionD
     const succeeded = ok && exitCode === 0
     const text =
       reason ??
+      error ??
       diff ??
       (output !== undefined || exitCode !== undefined
         ? [exitCode !== undefined ? `exit ${exitCode}` : '', succeeded ? '' : (output ?? '')]

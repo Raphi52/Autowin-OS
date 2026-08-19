@@ -108,3 +108,37 @@ describe('cablage du bloc d’activite', () => {
     expect(source).toContain('activity-local-details')
   })
 })
+
+/**
+ * DEFAUT VECU le 2026-08-18 : « 1 action avec erreur — graphify » dans le fil, et RIEN de plus.
+ *
+ * Une commande qui echoue rend `{ ok: false, error: <message> }` (`commands.ts:1120`). Or
+ * `localActionDetails` ne lisait que `reason`, `diff`, `output`/`exitCode` et `knowledge` : sans
+ * texte trouve, l'action etait purement IGNOREE. L'utilisateur voyait donc l'echec sans jamais
+ * pouvoir savoir pourquoi — la seule information qui compte quand quelque chose casse.
+ */
+describe('localActionDetails — la cause d un echec doit se lire dans le fil', () => {
+  it("expose le message d'erreur d'une commande qui a echoue", () => {
+    const details = localActionDetails([
+      { name: 'graphify', ok: false, data: { ok: false, error: 'graphify: binaire introuvable' } }
+    ])
+    expect(details).toHaveLength(1)
+    expect(details[0].text).toContain('binaire introuvable')
+    expect(details[0].ok).toBe(false)
+  })
+
+  it('un refus explicite garde la priorite sur le message brut', () => {
+    const details = localActionDetails([
+      {
+        name: 'graphify',
+        ok: false,
+        data: { allowed: false, reason: 'chemin hors du workspace', error: 'EACCES' }
+      }
+    ])
+    expect(details[0].text).toBe('chemin hors du workspace')
+  })
+
+  it("une action qui reussit sans rien a raconter reste silencieuse", () => {
+    expect(localActionDetails([{ name: 'graphify', ok: true, data: { ok: true } }])).toHaveLength(0)
+  })
+})
