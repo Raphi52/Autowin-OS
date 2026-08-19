@@ -86,12 +86,27 @@ const SAUT = String.fromCharCode(10)
 const LIGNES_DE_VERDICT =
   /^\s*(?:FAIL|×|✗|✕|Test Files|Tests\s|Duration|error TS\d+|Error:|AssertionError|exit code)/
 
+/**
+ * Retire les sequences ANSI d'une ligne avant de la comparer.
+ *
+ * Revele par la sortie REELLE de l'app le 2026-08-19 : vitest prefixe ses lignes de `ESC[32m`,
+ * donc un motif ancre sur le debut de ligne ne matchait JAMAIS et le verdict etait perdu malgre le
+ * correctif. Le premier test utilisait du texte propre — un fixture qui ne ressemblait pas a la
+ * production, donc un vert qui ne prouvait rien.
+ */
+// eslint-disable-next-line no-control-regex -- matcher l'echappement ANSI est precisement l'objet : la regle vise un caractere de controle ACCIDENTEL.
+const SEQUENCE_ANSI = /\x1b\[[0-9;]*m/g
+
+function sansCouleur(ligne: string): string {
+  return ligne.replace(SEQUENCE_ANSI, '')
+}
+
 function verdictDe(texte: string, budget: number): string {
   const vues = new Set<string>()
   const retenues: string[] = []
   let taille = 0
   for (const ligne of texte.split(SAUT)) {
-    if (!LIGNES_DE_VERDICT.test(ligne)) continue
+    if (!LIGNES_DE_VERDICT.test(sansCouleur(ligne))) continue
     const propre = ligne.trimEnd()
     if (vues.has(propre)) continue
     if (taille + propre.length + 1 > budget) break

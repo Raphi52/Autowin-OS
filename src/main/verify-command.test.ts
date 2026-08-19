@@ -202,3 +202,38 @@ describe('capVerifyOutput — le verdict survit à la troncature', () => {
     expect(capped).toContain('act(...)')
   })
 })
+
+/**
+ * LA SORTIE REELLE EST COLOREE — et mon extracteur de verdict l'ignorait.
+ *
+ * Revele par l'app elle-meme le 2026-08-19 : la « Verification du bureau » d'un `edit_file` a echoue,
+ * et la sortie conservee ne montrait QUE des lignes vertes, sans aucune ligne de verdict. Cause : les
+ * lignes de vitest commencent par des sequences ANSI (`\u001b[32m`), donc un motif ancre sur
+ * `^\s*(?:FAIL|…)` ne peut jamais matcher. Le premier test de ce garde utilisait du texte PROPRE : un
+ * fixture qui ne ressemblait pas a la production, donc un vert qui ne prouvait rien.
+ */
+describe('capVerifyOutput — le verdict survit aussi quand la sortie est colorée', () => {
+  const ESC = String.fromCharCode(27)
+  const vert = (t: string): string => `${ESC}[32m${t}${ESC}[39m`
+  const rouge = (t: string): string => `${ESC}[31m${t}${ESC}[39m`
+
+  const sortieColoree = [
+    Array.from(
+      { length: 500 },
+      (_, i) => vert(`   ✓ cas ${i} passe`) + `${ESC}[33m 1561ms${ESC}[39m`
+    ).join('\n'),
+    rouge(' FAIL  src/main/store/worktree-manager.publication.test.ts > cas qui casse'),
+    rouge('      Tests  1 failed | 6814 passed (6815)'),
+    Array.from({ length: 500 }, (_, i) => vert(`   ✓ autre ${i}`)).join('\n')
+  ].join('\n')
+
+  it('retrouve la ligne FAIL malgré les séquences ANSI', () => {
+    const capped = capVerifyOutput(sortieColoree)
+    expect(capped).toContain('worktree-manager.publication')
+    expect(capped).toContain('1 failed')
+  })
+
+  it('respecte toujours le plafond', () => {
+    expect(capVerifyOutput(sortieColoree).length).toBeLessThanOrEqual(VERIFY_OUTPUT_CAP)
+  })
+})
