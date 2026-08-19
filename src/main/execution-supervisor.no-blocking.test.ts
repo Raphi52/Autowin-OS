@@ -85,16 +85,14 @@ describe('budget bloquant sans destruction du travail déjà payé', () => {
     })
   })
 
-  it('continue de borner la durée : elle protège d’une boucle qui ne s’arrête jamais', async () => {
-    const supervisor = new ExecutionSupervisor()
-    const quote = compileExecutionQuote('boucle sans fin')
-    quote.limits.maxDurationMs = -1
+  /**
+   * RETIRE le 2026-08-19 : le guetteur d'immobilite n'existe plus (« plus aucune coupe de run »,
+   * decision utilisateur maintenue apres objection). Ce test gardait la borne de duree ; la garder
+   * verte aurait exige de ressusciter ce qu'on venait de supprimer. Ce qui BORNE encore un run est
+   * structurel — appels, agents, concurrence — et reste couvert par les cas voisins.
+   *
+   * Consequence assumee, ecrite ici pour qu'elle ne se redecouvre pas : une boucle qui ne s'arrete
+   * jamais n'est plus arretee par le moteur. Seul un humain la stoppe.
+   */
 
-    // Le refus avorte le run entier : c'est bien la borne qui s'exerce, pas seulement l'appel.
-    await expect(
-      supervisor.run(quote, undefined, async () => {
-        supervisor.reserveProviderCall()
-      })
-    ).rejects.toThrowError(/duree|durée/i)
-  })
 })

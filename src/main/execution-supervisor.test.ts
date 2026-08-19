@@ -621,25 +621,11 @@ describe('ExecutionSupervisor', () => {
     expect(provider.calls).toBe(1)
   })
 
-  it('refuse synchroniquement un run dont la deadline est deja expiree', async () => {
-    const supervisor = new ExecutionSupervisor()
-    const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
-    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = devisBloquant('corrige la typo')
-    // Budget NUL : l'échéance court désormais depuis le début de l'exécution, donc un devis
-    // simplement ANCIEN ne suffit plus à la faire expirer — c'est précisément la correction (une
-    // reprise après une longue interruption était condamnée avant de jouer une phase). Le garde du
-    // refus synchrone, lui, reste indispensable et c'est ce que ce test continue de prouver.
-    quote.limits.maxDurationMs = 0
-
-    await expect(
-      supervisor.run(quote, undefined, () =>
-        registry.send('counted', [{ role: 'user', content: 'trop tard' }])
-      )
-    ).rejects.toThrow(/budget duree/i)
-
-    expect(provider.calls).toBe(0)
-  })
+  /**
+   * RETIRE le 2026-08-19 avec le refus synchrone sur duree : « plus aucune coupe de run ». Un devis
+   * a budget nul ne refuse plus a l'admission. Ce qui refuse encore est structurel (appels, agents,
+   * concurrence, reprise avec appels en vol) et reste couvert par les cas voisins.
+   */
 
   it('isole un reveil de fond du devis encore actif dans le contexte parent', async () => {
     const supervisor = new ExecutionSupervisor()
@@ -710,23 +696,12 @@ describe('ExecutionSupervisor — la duree borne l’immobilite, plus la longueu
     expect(Date.now() - depart).toBeGreaterThan(quote.limits.maxDurationMs)
   })
 
-  it('un run IMMOBILE est bien arrete, et la raison le dit', async () => {
-    const supervisor = new ExecutionSupervisor()
-    const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
-    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = devisBloquant('une tache qui se pend')
-    quote.limits.maxDurationMs = 250
-
-    const abandon = supervisor.run(quote, undefined, async () => {
-      await registry.send('counted', [{ role: 'user', content: 'un seul appel' }])
-      // Puis PLUS RIEN : aucune progression observable, comme un run bloque sur un processus mort.
-      await new Promise((resolve) => {
-        const t = setTimeout(resolve, 10_000)
-        t.unref?.()
-      })
-    })
-
-    await expect(abandon).rejects.toThrow(/aucune progression/i)
-    expect(supervisor.lastSnapshot()?.stoppedReason).toMatch(/pas trop long/i)
-  })
+  /**
+   * RETIRE le 2026-08-19 : c'est LE test du guetteur d'immobilite, supprime sur decision utilisateur
+   * maintenue apres objection. Il prouvait qu'un run pendu finissait par etre ramasse.
+   *
+   * Ce qu'on perd, ecrit noir sur blanc : un run bloque sur un processus mort ne consomme aucun
+   * jeton, donc aucun plafond ne l'arretera. Plus rien ne le ramasse — il reste actif jusqu'a ce
+   * qu'un humain l'arrete. C'est le prix accepte de « on ne coupe plus en route ».
+   */
 })
