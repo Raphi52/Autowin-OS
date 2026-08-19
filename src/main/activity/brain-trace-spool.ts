@@ -5,8 +5,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
-  statSync,
-  writeFileSync
+  statSync
 } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -77,18 +76,31 @@ function boundedRedactedTrace(trace: BrainTrace): BrainTrace {
   return bounded
 }
 
+/** Génération précédente de l'archive : `events.archive.jsonl` → `events.archive.1.jsonl`. */
+function previousArchivePath(archivePath: string): string {
+  return archivePath.replace(/\.jsonl$/, '.1.jsonl')
+}
+
+/**
+ * AJOUT EN FIN D'ARCHIVE, JAMAIS RELECTURE-RÉÉCRITURE INTÉGRALE.
+ *
+ * La version précédente rechargeait TOUTE l'archive (jusqu'à ARCHIVE_MAX_BYTES), y concaténait le
+ * segment, puis réécrivait le fichier entier : jusqu'à 10 Mo lus et 8 Mo réécrits pour ajouter
+ * quelques kilo-octets, sur le thread principal. L'archive est donc désormais un anneau de DEUX
+ * générations, chacune plafonnée à la moitié de ARCHIVE_MAX_BYTES : le plafond global est le même,
+ * mais le coût par rotation devient celui du seul segment.
+ *
+ * La coupe se fait à la frontière d'un FICHIER, donc jamais au milieu d'une ligne JSONL : aucune
+ * ligne partielle ne peut subsister en tête. La perte reste bornée à la génération la plus ancienne.
+ */
 function appendBoundedArchive(archivePath: string, segmentPath: string): void {
-  const existing = existsSync(archivePath) ? readFileSync(archivePath) : Buffer.alloc(0)
-  const segment = readFileSync(segmentPath)
-  let retained = Buffer.concat([existing, segment])
-  if (retained.length > ARCHIVE_MAX_BYTES) {
-    retained = retained.subarray(retained.length - ARCHIVE_MAX_BYTES)
-    // Une coupe au milieu d'une ligne JSONL créerait une fausse corruption à la lecture. La
-    // première ligne partielle est donc sacrifiée ; toutes les suivantes restent exactes.
-    const firstNewline = retained.indexOf(0x0a)
-    retained = firstNewline >= 0 ? retained.subarray(firstNewline + 1) : Buffer.alloc(0)
+  const segmentBytes = existsSync(segmentPath) ? statSync(segmentPath).size : 0
+  if (segmentBytes === 0) return
+  const currentBytes = existsSync(archivePath) ? statSync(archivePath).size : 0
+  if (currentBytes > 0 && currentBytes + segmentBytes > ARCHIVE_MAX_BYTES / 2) {
+    renameSync(archivePath, previousArchivePath(archivePath))
   }
-  writeFileSync(archivePath, retained)
+  appendFileSync(archivePath, readFileSync(segmentPath))
 }
 
 export interface BrainTrace {
@@ -124,7 +136,10 @@ export function appendBrainTrace(
     const line = `${JSON.stringify(redacted)}\n`
     const root = brainSpoolRoot(base)
     const path = join(root, 'events.jsonl')
-    if (existsSync(path) && statSync(path).size + Buffer.byteLength(line, 'utf8') > SPOOL_MAX_BYTES) {
+    if (
+      existsSync(path) &&
+      statSync(path).size + Buffer.byteLength(line, 'utf8') > SPOOL_MAX_BYTES
+    ) {
       const previous = join(root, 'events.previous.jsonl')
       if (existsSync(previous)) {
         appendBoundedArchive(join(root, 'events.archive.jsonl'), previous)
@@ -180,6 +195,8 @@ export function readBrainTraces(
 ): BrainTrace[] {
   const root = brainSpoolRoot(base)
   const all = [
+    // L'archive est un anneau de deux générations : la plus ancienne (`.1`) d'abord.
+    ...readFileTraces(join(root, 'events.archive.1.jsonl')),
     ...readFileTraces(join(root, 'events.archive.jsonl')),
     ...readFileTraces(join(root, 'events.previous.jsonl')),
     ...readFileTraces(join(root, 'events.jsonl'))

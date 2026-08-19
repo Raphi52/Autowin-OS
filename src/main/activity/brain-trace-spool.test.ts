@@ -282,3 +282,124 @@ describe('brainTraceSpoolHealth — une trace perdue laisse une marque', () => {
     expect(brainTraceSpoolHealth().tracesPerdues).toBe(avant.tracesPerdues)
   })
 })
+
+import { vi } from 'vitest'
+
+// Journal des relectures INTEGRALES de fichier faites par le code de production. `readFileSync` sur
+// l'archive est precisement le cout que la rotation ne doit plus payer : on le compte au lieu de le
+// supposer. Le reste de `node:fs` passe tel quel.
+const journalFs = vi.hoisted(() => ({ lecturesIntegrales: [] as string[] }))
+vi.mock('node:fs', async (importOriginal) => {
+  const reel = (await importOriginal()) as typeof import('node:fs')
+  return Object.assign({}, reel, {
+    default: reel,
+    readFileSync: (chemin: unknown, ...reste: unknown[]) => {
+      journalFs.lecturesIntegrales.push(String(chemin))
+      return (reel.readFileSync as unknown as (...a: unknown[]) => unknown)(chemin, ...reste)
+    }
+  })
+})
+
+/**
+ * ROTATION D'ARCHIVE — AJOUT EN FIN DE FICHIER, PAS RELECTURE NI REECRITURE INTEGRALE.
+ *
+ * `appendBoundedArchive` rechargeait TOUTE l'archive (plafond 8 Mo), y concatenait le segment
+ * (jusqu'a 2 Mo), tronquait, puis reecrivait le fichier entier : jusqu'a 10 Mo lus et 8 Mo reecrits
+ * pour ajouter quelques kilo-octets, sur le thread principal. Ces tests verrouillent le COUT sans
+ * lacher les deux proprietes existantes : plafond ARCHIVE_MAX_BYTES respecte, et aucune ligne JSONL
+ * partielle en tete apres une coupe. Le contre-exemple garde l'exigence inverse : sous le plafond,
+ * l'archive conserve TOUT son contenu.
+ */
+describe('rotation de l’archive Brain — cout borne, proprietes conservees', () => {
+  const racines: string[] = []
+  afterEach(() => {
+    for (const r of racines.splice(0)) rmSync(r, { recursive: true, force: true })
+  })
+
+  /** Une ligne JSONL valide d’environ `taille` octets, marquee par `tag`. */
+  function ligne(tag: string, taille: number): string {
+    return (
+      JSON.stringify({ tag, bourrage: 'x'.repeat(Math.max(1, taille - tag.length - 40)) }) + '\n'
+    )
+  }
+
+  /** Spool pret a tourner : `events.jsonl` au plafond, segment precedent present, archive donnee. */
+  function spoolPretARotation(
+    prefixe: string,
+    archive: string,
+    segment: string
+  ): { racine: string; cheminArchive: string } {
+    const racine = mkdtempSync(join(tmpdir(), prefixe))
+    racines.push(racine)
+    const spool = brainSpoolRoot(racine)
+    writeFileSync(join(spool, 'events.jsonl'), ligne('courant', 2 * 1024 * 1024), 'utf8')
+    writeFileSync(join(spool, 'events.previous.jsonl'), segment, 'utf8')
+    writeFileSync(join(spool, 'events.archive.jsonl'), archive, 'utf8')
+    return { racine, cheminArchive: join(spool, 'events.archive.jsonl') }
+  }
+
+  /** Declenche une rotation reelle et exige qu’aucune trace ne soit perdue au passage. */
+  function tourner(racine: string): void {
+    const avant = brainTraceSpoolHealth()
+    const rendu = appendBrainTrace(
+      {
+        timestamp: '2026-08-19T13:00:00.000Z',
+        conversationId: 'conv-rotation',
+        turnId: 'turn-1',
+        query: 'trace qui declenche la rotation',
+        injectedChars: 1
+      },
+      racine
+    )
+    expect(rendu).toBeTruthy()
+    expect(brainTraceSpoolHealth().tracesPerdues).toBe(avant.tracesPerdues)
+  }
+
+  it('CONTRE-EXEMPLE — sous le plafond : tout est conserve, sans relire l’archive', () => {
+    const segment = ligne('neuf', 4096)
+    // 1 Mo : franchement SOUS le seuil de rotation (moitie de ARCHIVE_MAX_BYTES). Le fixture d'origine
+    // valait 4 Mo, soit exactement le seuil : il exigeait donc qu'aucune rotation n'ait lieu au moment
+    // meme ou l'anneau doit tourner. Le dimensionnement de l'anneau est bon ; c'est le fixture qui
+    // decrivait une intention anterieure.
+    const archive = ligne('ancien', 1024 * 1024)
+    const cible = spoolPretARotation('autowin-brain-archive-append-', archive, segment)
+
+    journalFs.lecturesIntegrales.length = 0
+    tourner(cible.racine)
+    // RELEVE AVANT que le test lise l'archive : le mock compte TOUTES les lectures, y compris les
+    // siennes. Mesurer le cout de la rotation exige de figer le journal a la fin de la rotation.
+    const lecturesPendantRotation = [...journalFs.lecturesIntegrales]
+
+    expect(lecturesPendantRotation.filter((chemin) => chemin === cible.cheminArchive)).toEqual([])
+    const apres = readFileSync(cible.cheminArchive, 'utf8')
+    expect(apres).toBe(archive + segment)
+    expect(statSync(cible.cheminArchive).size).toBe(
+      Buffer.byteLength(archive, 'utf8') + Buffer.byteLength(segment, 'utf8')
+    )
+  })
+
+  it('au-dessus du plafond : taille bornee, aucune ligne partielle, segment conserve', () => {
+    const anciennes: string[] = []
+    for (let i = 0; i < 8; i += 1) anciennes.push(ligne(`ancien-${i}`, 1024 * 1024))
+    const segment = ligne('segment-neuf', 2 * 1024 * 1024)
+    const cible = spoolPretARotation('autowin-brain-archive-cap-', anciennes.join(''), segment)
+
+    journalFs.lecturesIntegrales.length = 0
+    tourner(cible.racine)
+    // Meme raison que ci-dessus : le journal est fige avant les lectures du test.
+    const lecturesPendantRotation = [...journalFs.lecturesIntegrales]
+
+    const contenu = readFileSync(cible.cheminArchive, 'utf8')
+    // Propriete 1 : le plafond tient.
+    expect(statSync(cible.cheminArchive).size).toBeLessThanOrEqual(8 * 1024 * 1024)
+    // Propriete 2 : aucune ligne JSONL partielle ne subsiste, ni en tete ni ailleurs.
+    for (const l of contenu.split('\n').filter((x) => x.trim())) {
+      expect(() => JSON.parse(l)).not.toThrow()
+    }
+    // Le neuf survit, le plus ancien est bien celui qui a ete sacrifie.
+    expect(contenu).toContain('"tag":"segment-neuf"')
+    expect(contenu).not.toContain('"tag":"ancien-0"')
+    // Cout : meme la coupe ne relit pas l’archive entiere.
+    expect(lecturesPendantRotation.filter((chemin) => chemin === cible.cheminArchive)).toEqual([])
+  })
+})
