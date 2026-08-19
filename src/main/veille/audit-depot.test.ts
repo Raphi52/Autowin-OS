@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -112,5 +112,82 @@ describe('candidats internes du dépôt', () => {
       'src/renderer/src/App.tsx': '<VueMontee />\n'
     })
     expect(candidatsInternesDuDepot(racine)).toEqual([])
+  })
+})
+
+/**
+ * DEUX CANDIDATS SORTIS PAR LE SCOUT DE L'APP ELLE-MÊME (2026-08-19, scores 94 et 89), vérifiés
+ * dans le code avant d'être traités :
+ *
+ * 94 — `statSync` SUIT les liens. Une jonction NTFS ou un lien symbolique placé sous `src/` fait
+ *      donc sortir l'audit du dépôt : il lit, et remonte comme « code du produit », des fichiers
+ *      qui vivent ailleurs — un autre dépôt, un partage réseau, une copie de run. Ce dépôt en
+ *      fabrique réellement (worktrees isolés, jonctions temporaires), donc le risque n'est pas
+ *      théorique. `lstatSync` ne suit rien : un lien est signalé et sauté.
+ *
+ * 89 — Aucun plafond ne bornait la lecture : chaque fichier retenu était chargé ENTIER en mémoire,
+ *      sans limite de nombre ni de taille. Une passe d'audit sur un arbre pathologique (ou sur un
+ *      dossier de données oublié dans les racines) devenait une lecture de plusieurs gigaoctets.
+ *      Mesuré le même jour sur ce dépôt : `Audit/` pèse 11 Go pour 21 488 fichiers.
+ */
+describe('lireSourcesDuDepot — bornes trouvées par le scout de l’app', () => {
+  function arbre(): string {
+    const racine = mkdtempSync(join(tmpdir(), 'autowin-audit-'))
+    mkdirSync(join(racine, 'src/main'), { recursive: true })
+    writeFileSync(join(racine, 'src/main/vrai.ts'), 'export const a = 1', 'utf8')
+    return racine
+  }
+
+  it('94 — un lien symbolique sous `src` n’est pas suivi', () => {
+    const racine = arbre()
+    const dehors = mkdtempSync(join(tmpdir(), 'autowin-dehors-'))
+    try {
+      mkdirSync(join(dehors, 'secret'), { recursive: true })
+      writeFileSync(join(dehors, 'secret/ailleurs.ts'), 'export const secret = 1', 'utf8')
+      try {
+        symlinkSync(join(dehors, 'secret'), join(racine, 'src/lien'), 'junction')
+      } catch {
+        return // sans droit de création de lien, le test ne peut rien prouver : il ne ment pas.
+      }
+      const fichiers = lireSourcesDuDepot(racine)
+      expect(fichiers.map((f) => f.chemin)).toContain('src/main/vrai.ts')
+      expect(fichiers.some((f) => f.contenu.includes('secret'))).toBe(false)
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+      rmSync(dehors, { recursive: true, force: true })
+    }
+  })
+
+  it('89 — la lecture est bornée en nombre de fichiers', () => {
+    const racine = arbre()
+    try {
+      for (let i = 0; i < 40; i++) {
+        writeFileSync(join(racine, `src/main/f${i}.ts`), `export const x${i} = ${i}`, 'utf8')
+      }
+      expect(lireSourcesDuDepot(racine, ['src'], { plafondFichiers: 10 })).toHaveLength(10)
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
+  })
+
+  it('89 — un fichier plus gros que le plafond est écarté, pas tronqué', () => {
+    const racine = arbre()
+    try {
+      writeFileSync(join(racine, 'src/main/enorme.ts'), 'x'.repeat(5000), 'utf8')
+      const fichiers = lireSourcesDuDepot(racine, ['src'], { plafondOctets: 1000 })
+      expect(fichiers.map((f) => f.chemin)).toContain('src/main/vrai.ts')
+      expect(fichiers.map((f) => f.chemin)).not.toContain('src/main/enorme.ts')
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
+  })
+
+  it('CONTRE-EXEMPLE — sans options, le comportement utile reste identique', () => {
+    const racine = arbre()
+    try {
+      expect(lireSourcesDuDepot(racine).map((f) => f.chemin)).toEqual(['src/main/vrai.ts'])
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
   })
 })

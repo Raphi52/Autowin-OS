@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { auditerDepot, candidatsDepuisAudit, type FichierAudite } from './audit-interne'
 import type { CandidatBrut } from './candidats'
@@ -33,9 +33,41 @@ const EXTENSIONS = /\.(ts|tsx|css|mjs)$/
  * `scripts/` est inclus au même titre que `src/` : c'est là que vivent les pilotes de test, et un
  * détecteur qui ne les voit pas conclut à tort qu'une surface est morte.
  */
-export function lireSourcesDuDepot(racine: string, dossiers = ['src', 'scripts']): FichierAudite[] {
+/**
+ * Bornes de la lecture — deux candidats sortis par le SCOUT DE L'APP le 2026-08-19 (scores 94 et 89),
+ * confirmes par son juge (« suivi de liens et lecture integrale dans audit-depot.ts:51,63-65 ») puis
+ * verifies dans le code avant correction.
+ *
+ * `plafondFichiers` et `plafondOctets` ne mordent jamais sur un depot sain : `src` + `scripts` pesent
+ * ~1 100 fichiers. Les atteindre signale une racine anormale — un dossier de donnees oublie, une
+ * copie de run — et c'est precisement le cas ou une lecture integrale devenait plusieurs gigaoctets.
+ * Mesure du meme jour sur ce depot : `Audit/` pese 11 Go pour 21 488 fichiers.
+ *
+ * `onEcarte` rend la troncature VISIBLE : un plafond silencieux se lirait comme « rien de plus a
+ * auditer ». L'appelant peut l'ignorer, il ne peut plus etre trompe sans l'avoir voulu.
+ */
+export interface BornesLecture {
+  plafondFichiers?: number
+  plafondOctets?: number
+  onEcarte?: (chemin: string, raison: 'lien' | 'trop-gros' | 'plafond') => void
+}
+
+const PLAFOND_FICHIERS = 5_000
+const PLAFOND_OCTETS = 1_000_000
+
+export function lireSourcesDuDepot(
+  racine: string,
+  dossiers = ['src', 'scripts'],
+  bornes: BornesLecture = {}
+): FichierAudite[] {
+  const plafondFichiers = bornes.plafondFichiers ?? PLAFOND_FICHIERS
+  const plafondOctets = bornes.plafondOctets ?? PLAFOND_OCTETS
+  const ecarte = (chemin: string, raison: 'lien' | 'trop-gros' | 'plafond'): void => {
+    bornes.onEcarte?.(relative(racine, chemin).split(sep).join('/'), raison)
+  }
   const fichiers: FichierAudite[] = []
   const parcourir = (dossier: string): void => {
+    if (fichiers.length >= plafondFichiers) return
     let entrees: string[]
     try {
       entrees = readdirSync(dossier)
@@ -45,20 +77,38 @@ export function lireSourcesDuDepot(racine: string, dossiers = ['src', 'scripts']
     }
     for (const entree of entrees) {
       if (IGNORES.has(entree) || entree.startsWith('.')) continue
+      if (fichiers.length >= plafondFichiers) {
+        ecarte(join(dossier, entree), 'plafond')
+        return
+      }
       const chemin = join(dossier, entree)
-      let estDossier = false
+      let infos
       try {
-        estDossier = statSync(chemin).isDirectory()
+        // `lstatSync` et NON `statSync` : celui-ci SUIT les liens, donc une jonction NTFS ou un lien
+        // symbolique pose sous `src/` faisait sortir l'audit du depot — il lisait, et remontait comme
+        // « code du produit », des fichiers vivant ailleurs (autre depot, partage reseau, copie de
+        // run). Ce depot en fabrique reellement : worktrees isoles, jonctions temporaires.
+        infos = lstatSync(chemin)
       } catch {
         // Fichier disparu entre le listing et le stat (un autre agent écrit dans l'arbre) : on
         // l'ignore plutôt que de faire échouer toute la passe pour une entrée volatile.
         continue
       }
-      if (estDossier) {
+      if (infos.isSymbolicLink()) {
+        ecarte(chemin, 'lien')
+        continue
+      }
+      if (infos.isDirectory()) {
         parcourir(chemin)
         continue
       }
       if (!EXTENSIONS.test(entree)) continue
+      if (infos.size > plafondOctets) {
+        // ECARTE, jamais tronque : la moitie d'un fichier ferait conclure a l'absence d'un appelant
+        // qui vit dans la moitie manquante. Un faux « code mort » coute une suppression a tort.
+        ecarte(chemin, 'trop-gros')
+        continue
+      }
       try {
         fichiers.push({
           chemin: relative(racine, chemin).split(sep).join('/'),

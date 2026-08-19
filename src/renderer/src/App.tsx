@@ -252,7 +252,18 @@ export function MainApp(): React.JSX.Element {
       try {
         apply((await window.api?.getPreflight?.()) as never)
       } catch {
-        /* l'absence de diagnostic ne casse pas le shell. */
+        // UN DIAGNOSTIC QUI ECHOUE N'EST PAS UN DIAGNOSTIC VERT. Ce `catch` etait vide : quand
+        // `getPreflight()` jetait, aucune alerte n'etait posee et la navigation avait l'air saine
+        // precisement parce que le controle de sante etait casse. Candidat du scout interne du
+        // 2026-08-19 (score 82), confirme par son juge (« erreur preflight avalee »).
+        //
+        // L'absence d'API reste silencieuse — `window.api?.getPreflight?.()` rend alors `undefined`
+        // et `apply` sort tot, sans alerte : un shell plus ancien n'est pas une panne. Seule une
+        // EXCEPTION leve l'alerte, et elle ne casse toujours pas le shell.
+        if (alive) {
+          setPreflightAlert(true)
+          if (!settingsSectionPinned.current) setSettingsSection('preflight')
+        }
       }
     })()
     const off = window.api?.onPreflight?.((result) => apply(result as never))

@@ -45,7 +45,12 @@ async function mountApp(preflight: unknown): Promise<{
       appState: vi.fn(async () => ({ tab: 'chat' })),
       onAppEvent: vi.fn(() => vi.fn()),
       appCommand: vi.fn(async () => ({ ok: true })),
-      getPreflight: vi.fn(async () => preflight),
+      getPreflight: vi.fn(async () => {
+        // Un diagnostic peut ECHOUER, pas seulement rendre un verdict rouge : le harnais doit
+        // pouvoir exprimer ce cas, sinon aucun test ne peut voir l'erreur avalee.
+        if (preflight instanceof Error) throw preflight
+        return preflight
+      }),
       onPreflight: vi.fn(() => vi.fn())
     }
   })
@@ -108,6 +113,56 @@ describe('Settings — alerte preflight dans la nav principale', () => {
     expect(
       container.querySelector('[data-testid="settings-stub"]')?.getAttribute('data-section')
     ).toBe('capabilities')
+    await act(async () => root.unmount())
+  })
+})
+
+/**
+ * UN DIAGNOSTIC QUI ÉCHOUE NE DOIT PAS SE LIRE COMME UN DIAGNOSTIC VERT.
+ *
+ * Candidat sorti par le SCOUT DE L'APP le 2026-08-19 (score 82, `App.tsx:251-256`), confirmé par son
+ * juge (« erreur preflight avalée dans App.tsx:251-256 ») puis vérifié dans le code : le `catch` était
+ * vide, donc si `getPreflight()` jetait, `setPreflightAlert` n'était jamais appelé et la navigation
+ * n'affichait AUCUNE alerte. L'application avait l'air saine précisément quand son propre contrôle de
+ * santé était cassé — le faux vert exact que cette session passe à traquer.
+ *
+ * L'absence d'API reste silencieuse (un shell plus ancien n'est pas une panne) ; seule une exception
+ * lève l'alerte.
+ */
+describe('Settings — un preflight qui JETTE alerte au lieu de se taire', () => {
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  })
+
+  afterEach(() => {
+    settingsProps.length = 0
+    document.body.replaceChildren()
+    localStorage.clear()
+  })
+
+  it('badge la nav quand le diagnostic lui-même échoue', async () => {
+    const { root, container } = await mountApp(new Error('preflight indisponible'))
+    expect(container.querySelector('[data-testid="nav-settings-alert"]')).toBeTruthy()
+    await act(async () => root.unmount())
+  })
+
+  it('ouvre Settings sur Diagnostic quand le diagnostic échoue', async () => {
+    const { root, container } = await mountApp(new Error('preflight indisponible'))
+    const navSettings = container.querySelector('[data-testid="nav-settings"]') as HTMLButtonElement
+    await act(async () => {
+      navSettings.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(
+      container.querySelector('[data-testid="settings-stub"]')?.getAttribute('data-section')
+    ).toBe('preflight')
+    await act(async () => root.unmount())
+  })
+
+  it('CONTRE-EXEMPLE — une API absente ne declenche aucune alerte', async () => {
+    const { root, container } = await mountApp(undefined)
+    expect(container.querySelector('[data-testid="nav-settings-alert"]')).toBeNull()
     await act(async () => root.unmount())
   })
 })
