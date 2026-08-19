@@ -622,10 +622,25 @@ describe('ExecutionSupervisor', () => {
   })
 
   /**
-   * RETIRE le 2026-08-19 avec le refus synchrone sur duree : « plus aucune coupe de run ». Un devis
-   * a budget nul ne refuse plus a l'admission. Ce qui refuse encore est structurel (appels, agents,
-   * concurrence, reprise avec appels en vol) et reste couvert par les cas voisins.
+   * REMIS le 2026-08-19 sur arbitrage de l'utilisateur, apres avoir ete retire le meme jour : le filet
+   * ne vise QUE l'immobilite, et un budget nul ne laisse aucune place a la moindre progression — le
+   * refus est donc immediat, avant de payer quoi que ce soit.
    */
+  it('refuse synchroniquement un devis qui ne laisse aucune place a la progression', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const quote = devisBloquant('corrige la typo')
+    quote.limits.maxDurationMs = 0
+
+    await expect(
+      supervisor.run(quote, undefined, () =>
+        registry.send('counted', [{ role: 'user', content: 'trop tard' }])
+      )
+    ).rejects.toThrow(/pendu, pas comme trop long/i)
+
+    expect(provider.calls).toBe(0)
+  })
 
   it('isole un reveil de fond du devis encore actif dans le contexte parent', async () => {
     const supervisor = new ExecutionSupervisor()
@@ -697,11 +712,28 @@ describe('ExecutionSupervisor — la duree borne l’immobilite, plus la longueu
   })
 
   /**
-   * RETIRE le 2026-08-19 : c'est LE test du guetteur d'immobilite, supprime sur decision utilisateur
-   * maintenue apres objection. Il prouvait qu'un run pendu finissait par etre ramasse.
-   *
-   * Ce qu'on perd, ecrit noir sur blanc : un run bloque sur un processus mort ne consomme aucun
-   * jeton, donc aucun plafond ne l'arretera. Plus rien ne le ramasse — il reste actif jusqu'a ce
-   * qu'un humain l'arrete. C'est le prix accepte de « on ne coupe plus en route ».
+   * REMIS le 2026-08-19 sur arbitrage de l'utilisateur. Ce test est le SEUL qui prouve qu'un run pendu
+   * finit par etre ramasse — et sans lui, le minuteur serait decoratif : `controller.abort` n'est
+   * observe que par un appel provider EN VOL, donc un run bloque sans appel actif restait pendu
+   * indefiniment. C'est exactement ce que ce cas verifie : un seul appel, puis plus rien.
    */
+  it('un run IMMOBILE est ramasse, et la raison dit qu’il est pendu et non trop long', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const quote = devisBloquant('une tache qui se pend')
+    quote.limits.maxDurationMs = 250
+
+    const abandon = supervisor.run(quote, undefined, async () => {
+      await registry.send('counted', [{ role: 'user', content: 'un seul appel' }])
+      // Puis PLUS RIEN : aucune progression observable, comme un run bloque sur un processus mort.
+      await new Promise((resolve) => {
+        const t = setTimeout(resolve, 10_000)
+        t.unref?.()
+      })
+    })
+
+    await expect(abandon).rejects.toThrow(/aucune progression/i)
+    expect(supervisor.lastSnapshot()?.stoppedReason).toMatch(/pendu, pas comme trop long/i)
+  })
 })
