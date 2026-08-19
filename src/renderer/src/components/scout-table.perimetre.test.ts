@@ -66,3 +66,58 @@ describe('parseScoutTable — le panneau de sélection accepte les colonnes de P
     ).toBeNull()
   })
 })
+
+/**
+ * DES LIGNES STRUCTURELLES DEVENAIENT DES CANDIDATS À COCHER.
+ *
+ * Mesuré le 2026-08-19 en pilotant l'app : le scout a répété son en-tête TROIS fois et intercalé ses
+ * séparateurs Markdown. `parseScoutTable` acceptait toute ligne `|…|` suivant l'en-tête, donc le
+ * panneau affichait 5 candidats pour UN seul vrai — les autres étant « Quoi » (l'intitulé de colonne)
+ * et « --- » (le séparateur). J'en ai coché deux et lancé la chaîne dessus ; la phase frame a dû
+ * expliquer que « les deux candidats sont des lignes structurelles du tableau, pas des sujets
+ * réalisables ». Un candidat qui n'existe pas coûte un tour complet.
+ *
+ * Entrée du test : la forme EXACTE observée dans l'app.
+ */
+describe('parseScoutTable — les lignes de structure ne sont pas des candidats', () => {
+  const OBSERVE = [
+    '| Score | Type | Quoi | Ancrage fichier:ligne | Preuve que l appelant manque |',
+    '|---:|---|---|---|---|',
+    '| Score | Type | Quoi | Ancrage fichier:ligne | Preuve que l appelant manque |',
+    '|---:|---|---|---|---|',
+    '| Score | Type | Quoi | Ancrage fichier:ligne | Preuve que l appelant manque |',
+    '|---:|---|---|---|---|',
+    '| 0 | fix | Aucun export inutilisé démontré | src/shared/app-identity.ts:1 | Recherche tronquée |'
+  ].join('\n')
+
+  it('ne retient QUE la ligne de données réelle', () => {
+    const rows = parseScoutTable(OBSERVE)
+    expect(rows).toHaveLength(1)
+    expect(rows?.[0].what).toContain('Aucun export inutilisé')
+  })
+
+  it('un séparateur intercalé ne coupe pas la lecture des lignes suivantes', () => {
+    const rows = parseScoutTable(
+      [
+        '| Score | Type | Quoi | Ancrage | Preuve |',
+        '|---:|---|---|---|---|',
+        '| 92 | fix | Alpha | src/a.ts:1 | aucun appelant |',
+        '| --- | --- | --- | --- | --- |',
+        '| 84 | fix | Beta | src/b.ts:2 | aucun appelant |'
+      ].join('\n')
+    )
+    expect(rows?.map((r) => r.what)).toEqual(['Alpha', 'Beta'])
+  })
+
+  it('CONTRE-EXEMPLE — une ligne dont le texte ressemble à un titre de colonne est gardée', () => {
+    const rows = parseScoutTable(
+      [
+        '| Score | Type | Quoi | Ancrage | Preuve |',
+        '|---:|---|---|---|---|',
+        '| 71 | new | Colonne Score jamais alimentée | src/c.ts:3 | aucun producteur |'
+      ].join('\n')
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows?.[0].what).toContain('Colonne Score')
+  })
+})

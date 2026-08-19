@@ -181,9 +181,18 @@ export function redigerPromptFrameSelection(selection: readonly CandidatAffiche[
     '',
     ...lignes,
     '',
-    'Commence par relire chaque ancrage et vérifier que le besoin tient toujours. Puis enchaîne le',
-    'workflow complet (frame → terrain → build → clean → judge) jusqu’au COMMIT PUBLIÉ, ou rends un',
-    'échec franc — pas de demi-mesure.'
+    // NE PROMETS PAS CE QUE CE RUN NE PEUT PAS TENIR. Le prefixe `/frame` REDUIT le run a la seule
+    // phase frame (`task-regime.ts` : une phase nommee explicitement rend `[phase]`). L'ancien texte
+    // exigeait pourtant « le workflow complet jusqu'au COMMIT PUBLIÉ » : le run etait donc
+    // structurellement incapable de satisfaire sa propre consigne, et le juge le sanctionnait pour
+    // ca. Mesure du 2026-08-19, en pilotant l'app : score 20/100, « le livrable s'arrete
+    // volontairement a FRAME sans declarer cet echec ». C'est aussi l'ORIGINE de conv-1302, ou ce
+    // meme prompt a ouvert douze tours de reparation : premier juge, score 25, « execution limitee a
+    // FRAME, contrairement au workflow complet demande ».
+    'Commence par relire chaque ancrage et vérifier que le besoin tient toujours, puis rends le',
+    'CADRAGE de ce besoin — périmètre, DoD falsifiable, risques. Ce tour ne joue que la phase frame :',
+    'la suite (terrain → build → clean → judge) s’enchaîne au tour suivant. Si un ancrage ne tient',
+    'plus, dis-le franchement plutôt que de cadrer un besoin mort.'
   ].join('\n')
 }
 

@@ -103,7 +103,15 @@ describe('extraireCandidatsAffiches', () => {
 })
 
 describe('redigerPromptFrameSelection', () => {
-  it('compose le /frame avec ancrages, preuves, et la consigne jusqu’au commit publié', () => {
+  /**
+   * Ce test EXIGEAIT la promesse contradictoire (« COMMIT PUBLIÉ ») : il verrouillait le défaut.
+   *
+   * Mesuré le 2026-08-19 en pilotant l'app : le préfixe `/frame` réduit le run à la seule phase
+   * frame, donc un run ainsi lancé ne peut PAS atteindre un commit publié. Le juge le sanctionnait
+   * pour ça — score 20/100, « le livrable s'arrête volontairement à FRAME sans déclarer cet échec ».
+   * C'est l'origine de conv-1302 : ce même prompt a ouvert douze tours de réparation.
+   */
+  it('compose le /frame sans promettre ce qu’un run frame-only ne peut pas tenir', () => {
     const candidats = extraireCandidatsAffiches(MESSAGE)!
     const prompt = redigerPromptFrameSelection(candidats)
     expect(prompt).toMatch(/^\/frame Traite ENSEMBLE ces 2 candidats/)
@@ -111,7 +119,13 @@ describe('redigerPromptFrameSelection', () => {
       '1. File de reprise groupée — ancrage src/renderer/src/components/chat-home-suggestions.ts:59'
     )
     expect(prompt).toContain('pertinence 94/100')
-    expect(prompt).toContain('COMMIT PUBLIÉ')
+    // La promesse impossible tombe...
+    expect(prompt).not.toContain('COMMIT PUBLIÉ')
+    expect(prompt).not.toMatch(/workflow complet/i)
+    // ...et ce que le tour DOIT rendre est dit, avec la suite annoncée honnêtement.
+    expect(prompt).toContain('CADRAGE')
+    expect(prompt).toMatch(/ne joue que la phase frame/i)
+    expect(prompt).toMatch(/s’enchaîne au tour suivant/i)
   })
 
   it('au singulier, le prompt reste grammatical', () => {

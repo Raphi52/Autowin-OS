@@ -148,10 +148,32 @@ export function parseScoutTable(text: string): ScoutRow[] | null {
   const iWhy = colOf(headers, COLONNES_VALEUR)
   const iHow = colOf(headers, COLONNES_DEPART)
 
+  /**
+   * Une ligne de STRUCTURE n'est pas un candidat.
+   *
+   * Mesure du 2026-08-19, en pilotant l'app : le scout a repete son en-tete TROIS fois et intercale
+   * ses separateurs. Toute ligne `|...|` suivant l'en-tete etant prise pour une donnee, le panneau
+   * affichait CINQ candidats a cocher pour UN seul vrai — les autres etant « Quoi » (un intitule de
+   * colonne) et « --- » (un separateur). Deux d'entre eux ont ete coches et ont declenche une chaine
+   * `/frame` complete, qui a du expliquer que « les deux candidats sont des lignes structurelles du
+   * tableau, pas des sujets realisables ». Un candidat qui n'existe pas coute un tour entier.
+   *
+   * On SAUTE ces lignes au lieu de s'arreter : un separateur au milieu ne doit pas faire perdre les
+   * candidats qui le suivent.
+   */
+  const memeQueEntete = (c: string[]): boolean =>
+    c.length === headers.length &&
+    c.every(
+      (cellule, index) => cellule.trim().toLowerCase() === headers[index].trim().toLowerCase()
+    )
+  const separateur = (c: string[]): boolean =>
+    c.length > 0 && c.every((cellule) => /^:?-{2,}:?$/u.test(cellule.trim()))
+
   const rows: ScoutRow[] = []
   for (let i = headerIdx + 2; i < lines.length; i++) {
     if (!isTableRow(lines[i])) break
     const c = cells(lines[i])
+    if (separateur(c) || memeQueEntete(c)) continue
     const at = (idx: number, fallback = ''): string =>
       idx >= 0 && idx < c.length ? c[idx] : fallback
     const note = iScore >= 0 ? scoreSur100(at(iScore)) : undefined
