@@ -155,3 +155,105 @@ describe('agent topology disk persistence', () => {
     expect(() => saveAgentTopology(path, oversized, TEST_MODEL_CATALOG)).toThrow('16 slots maximum')
   })
 })
+
+/**
+ * CANDIDAT DU SCOUT DE L'APP (score 91), cadré PAR L'APP puis livré ici.
+ *
+ * `loadAgentTopology` attrapait TOUTE exception et rendait `createDefaultTopology`. Un fichier absent
+ * le justifie — c'est le premier démarrage. Mais une erreur d'ACCÈS (permission, fichier verrouillé,
+ * chemin qui est un dossier) faisait remplacer silencieusement la topologie configurée par
+ * l'utilisateur : ses réglages de rôles disparaissaient sans un mot, et il croyait que l'app avait
+ * oublié.
+ *
+ * ÉCART ASSUMÉ avec la DoD cadrée par l'app, qui demandait qu'un JSON invalide ne rende PLUS la
+ * topologie par défaut : le test « falls back to a valid default when persisted JSON is corrupt »
+ * (ligne 54) encode la décision inverse, délibérément. Le cadrage avait lui-même note ce risque en
+ * « Élevé » — rendre visible une corruption jusque-là masquée peut interrompre le démarrage. Le repli
+ * est donc CONSERVÉ ; ce qui change, c'est qu'aucun de ces cas n'est plus SILENCIEUX.
+ */
+describe('loadAgentTopology — un échec de lecture ne remplace plus la config en silence', () => {
+  it('une erreur d’ACCÈS est signalée, avec sa cause', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aos-topo-acces-'))
+    try {
+      // Un DOSSIER a la place du fichier : l'erreur est deterministe sur toutes les plateformes,
+      // contrairement a une manipulation de permissions (risque note par le cadrage).
+      const incidents: Array<{ cause: string; chemin: string; detail: string }> = []
+      const topologie = loadAgentTopology(dir, TEST_MODEL_CATALOG, (i) => incidents.push(i))
+      expect(topologie).toBeTruthy()
+      expect(incidents).toHaveLength(1)
+      expect(incidents[0].cause).toBe('acces')
+      expect(incidents[0].detail).toBeTruthy()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('un contenu invalide est signalé, et distingué d’une erreur d’accès', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aos-topo-json-'))
+    try {
+      const path = join(dir, 'topology.json')
+      writeFileSync(path, '{ceci n est pas du json', 'utf8')
+      const incidents: Array<{ cause: string }> = []
+      const topologie = loadAgentTopology(path, TEST_MODEL_CATALOG, (i) => incidents.push(i))
+      expect(topologie).toBeTruthy()
+      expect(incidents.map((i) => i.cause)).toEqual(['contenu-invalide'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('CONTRE-EXEMPLE — un fichier ABSENT reste silencieux : c’est un premier démarrage', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aos-topo-absent-'))
+    try {
+      const incidents: unknown[] = []
+      const topologie = loadAgentTopology(join(dir, 'jamais-ecrit.json'), TEST_MODEL_CATALOG, (i) =>
+        incidents.push(i)
+      )
+      expect(topologie).toBeTruthy()
+      expect(incidents).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('CONTRE-EXEMPLE — sans rapporteur, le chargement se comporte comme avant', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aos-topo-sansrap-'))
+    try {
+      const path = join(dir, 'topology.json')
+      writeFileSync(path, 'pas du json', 'utf8')
+      expect(() => loadAgentTopology(path, TEST_MODEL_CATALOG)).not.toThrow()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+/**
+ * CÂBLAGE — un rapporteur d'incident que personne ne passe serait un paramètre décoratif, soit
+ * exactement le « exposé mais pas branché » que le scout cherchait. Les deux appelants réels doivent
+ * le fournir : chargement initial et rechargement après actualisation du catalogue.
+ */
+describe('câblage — les deux appelants signalent l’incident', () => {
+  const source = (): string => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('node:fs') as typeof import('node:fs')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('node:path') as typeof import('node:path')
+    return fs.readFileSync(path.join(__dirname, 'index.ts'), 'utf8')
+  }
+
+  it('les deux appels passent le rapporteur', () => {
+    const appels = source().split('loadAgentTopology(').length - 1
+    const avecRapporteur = source().split('signalerIncidentTopologie').length - 1
+    expect(appels).toBe(2)
+    // une definition + deux passages
+    expect(avecRapporteur).toBe(3)
+  })
+
+  it('l’incident est rendu lisible, avec fichier et cause', () => {
+    const src = source()
+    expect(src).toContain('[topologie]')
+    expect(src).toContain('incident.chemin')
+    expect(src).toContain('incident.detail')
+  })
+})

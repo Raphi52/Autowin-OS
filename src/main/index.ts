@@ -250,7 +250,7 @@ import { rebuildSemanticTemporalProjection } from './knowledge/semantic-temporal
 import { causalLearningContext } from './knowledge/semantic-temporal-projection'
 import { ModelCatalogRefresher } from './model-refresh'
 import { buildModelQuotaSnapshot, getModelQuotaSnapshot } from './model-quotas'
-import { loadAgentTopology, saveAgentTopology } from './topology-disk'
+import { loadAgentTopology, saveAgentTopology, type IncidentTopologie } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
 import {
@@ -1088,7 +1088,19 @@ async function refreshFabricNodes(): Promise<FabricNodeSummary[]> {
   applyFabricSummaries(summaries)
   return summaries
 }
-let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
+/**
+ * Un echec de chargement de topologie doit se VOIR. Le repli sur la topologie par defaut restait
+ * silencieux : l'utilisateur constatait que ses reglages de roles avaient « disparu » sans qu'aucune
+ * ligne ne dise pourquoi. Candidat du scout interne (score 91), cadre par l'app elle-meme.
+ */
+function signalerIncidentTopologie(incident: IncidentTopologie): void {
+  console.warn(
+    `[topologie] ${incident.cause === 'acces' ? 'lecture impossible' : 'contenu invalide'} — ` +
+      `repli sur la topologie par defaut. Fichier : ${incident.chemin}. Cause : ${incident.detail}`
+  )
+}
+
+let agentTopology = loadAgentTopology(agentTopologyPath, agentModels, signalerIncidentTopologie)
 const modelCatalog = new ModelCatalogRefresher(
   agentModels,
   () => discoverImportedModels(fetch, modelCatalogCachePath),
@@ -1121,7 +1133,7 @@ const modelCatalog = new ModelCatalogRefresher(
       // Les défauts de rôle (provider-only) se résolvent désormais par alias de famille
       // contre le catalogue découvert ; les bindings existants (modèle explicite) restent intacts.
       os.roles.setCatalog(agentModels)
-      agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
+      agentTopology = loadAgentTopology(agentTopologyPath, agentModels, signalerIncidentTopologie)
       syncRuntimeTopology(agentTopology)
       os.setTaskReadiness(runtimeTopologyReadiness(agentTopology))
       broadcast({ type: 'refresh', scope: 'roles' })
