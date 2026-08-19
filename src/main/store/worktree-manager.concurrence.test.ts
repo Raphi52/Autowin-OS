@@ -6,7 +6,29 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
  * aléatoires alors que le code est bon. Budget explicite, assez large pour la contention, assez
  * serré pour attraper un vrai blocage.
  */
-vi.setConfig({ testTimeout: 90_000, hookTimeout: 90_000 })
+/**
+ * BUDGET DIMENSIONNE SUR LA CONTENTION MESUREE — et c'est un DIMENSIONNEMENT, pas une rustine :
+ * le comportement teste est correct, c'est l'horloge qui etait plus petite que le cout reel.
+ *
+ * Mesures du 2026-08-19, sept faux rouges observes dans la meme session (jamais le meme test, tous
+ * verts en isole, toujours un « Test timed out », jamais une assertion) :
+ *
+ * - `worktree-manager.concurrence` SEUL : 237 s pour 21 tests, pire test 48,7 s.
+ * - les QUATRE fichiers `worktree-manager.*` dans la suite complete : 413 s, 427 s, 444 s, 449 s.
+ *   Soit un facteur 1,74 de ralentissement par contention.
+ * - `maxWorkers: 4` (vitest.config.ts) et ces quatre fichiers sont les quatre plus lourds de la
+ *   suite : ils occupent donc TOUS les workers en meme temps et se ralentissent mutuellement.
+ *
+ * 48,7 s x 1,74 = 85 s, pour un budget de 90 s : la marge etait de 5 s, d'ou un rouge marginal sur
+ * le test qui franchissait la ligne le premier. 180 s laisse un facteur 2 sur le pire cas contendu,
+ * sans jamais masquer un blocage reel (un test pendu echoue toujours, 90 s plus tard).
+ *
+ * Le budget avait DEJA ete releve une fois (20 s -> 90 s). Un troisieme relevement ne devra pas etre
+ * accepte sans traiter la cause : ces quatre fichiers coutent ~1 500 s de vrai travail git a eux
+ * seuls. Les serialiser a ete ecarte par la mesure — 16 min au lieu de 7,5 — donc la seule vraie
+ * sortie est de rendre ces tests moins couteux, ce qui est un chantier a part (dispatche).
+ */
+vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
 
 import {
   chmodSync,
