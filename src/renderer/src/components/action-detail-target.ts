@@ -42,6 +42,9 @@ export interface LocalActionDetail {
   ok: boolean
 }
 
+/** Au-dela, on ne lit plus : on noie. Mesure reelle sur une sortie de suite complete : 187 000 car. */
+const MAX_DETAIL_CHARS = 3_000
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined
 }
@@ -53,6 +56,21 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 export function localActionDetails(actions: readonly ActionLike[]): LocalActionDetail[] {
   const details: LocalActionDetail[] = []
   for (const action of actions) {
+    /**
+     * `data` n'est PAS toujours un objet. Un `edit_file` en echec rend une CHAINE — verifie dans les
+     * messages reels (conv-1308, conv-1326) : « Le bureau edit_file a ete conserve : publication
+     * automatique incomplete ». `asRecord` rendait `undefined` et l'action etait SAUTEE : la cause
+     * etait la, entiere, et se faisait jeter parce que le lecteur ne connaissait qu'une forme.
+     *
+     * On borne : les sorties reelles montent a 187 000 caracteres (une suite de tests complete).
+     */
+    if (typeof action.data === 'string') {
+      const brut = action.data.trim()
+      if (!brut) continue
+      const texte = brut.length > MAX_DETAIL_CHARS ? `${brut.slice(0, MAX_DETAIL_CHARS)}…` : brut
+      details.push({ name: action.name, text: texte, ok: action.ok !== false })
+      continue
+    }
     const data = asRecord(action.data)
     if (!data) continue
     const ok = action.ok !== false && data.allowed !== false

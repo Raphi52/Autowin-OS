@@ -142,3 +142,43 @@ describe('localActionDetails — la cause d un echec doit se lire dans le fil', 
     expect(localActionDetails([{ name: 'graphify', ok: true, data: { ok: true } }])).toHaveLength(0)
   })
 })
+
+/**
+ * DEFAUT VECU le 2026-08-19 : « 1 action avec erreur — edit_file », et toujours rien au clic.
+ *
+ * Le correctif de la veille exposait `data.error` — en SUPPOSANT que `data` est un objet. Or un
+ * `edit_file` en echec rend une CHAINE, verifiee dans les messages reels (conv-1308, conv-1326) :
+ *   "Le bureau edit_file a ete conserve : publication automatique incomplete"
+ * `asRecord()` rend alors `undefined`, et `if (!data) continue` SAUTE l'action. La cause etait la,
+ * entiere, et se faisait jeter parce que le lecteur ne connaissait qu'une seule forme.
+ *
+ * Les sorties reelles atteignent 187 000 caracteres (une suite de tests entiere) : on borne, sinon
+ * le fil devient illisible — c'est la lecon deja apprise sur `output` quand exitCode vaut 0.
+ */
+describe('localActionDetails — un data en CHAINE porte aussi la cause', () => {
+  it('expose le message quand data est une chaine, forme reelle de edit_file', () => {
+    const details = localActionDetails([
+      {
+        name: 'edit_file',
+        ok: false,
+        data: 'Le bureau edit_file a ete conserve : publication automatique incomplete'
+      }
+    ])
+    expect(details).toHaveLength(1)
+    expect(details[0].text).toContain('publication automatique incomplete')
+    expect(details[0].ok).toBe(false)
+  })
+
+  it('borne une sortie enorme au lieu de noyer le fil', () => {
+    const details = localActionDetails([
+      { name: 'edit_file', ok: false, data: `Verification echouee : ${'x'.repeat(200_000)}` }
+    ])
+    expect(details).toHaveLength(1)
+    expect(details[0].text.length).toBeLessThan(4_000)
+    expect(details[0].text).toContain('Verification echouee')
+  })
+
+  it('une chaine vide ne fabrique pas une ligne vide', () => {
+    expect(localActionDetails([{ name: 'edit_file', ok: false, data: '   ' }])).toHaveLength(0)
+  })
+})
