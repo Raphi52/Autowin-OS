@@ -358,3 +358,89 @@ describe('dérive dans un membre de sous-tâche greedy', () => {
     expect(b?.chunks).toBeGreaterThan(0)
   })
 })
+
+/**
+ * D1 — LE PLAFOND DE BIFURCATIONS AVEC UN GRAPHE QUI PILOTE.
+ *
+ * Le plafond ne bornait que la branche SANS graphe. Avec un graphe, `nextNode()` honore le souhait du
+ * modèle même vers une phase qu'aucune arête ne desservait : il fabrique une arête synthétique, qui
+ * n'a par construction aucun budget. Un agent qui dérive à chaque tentative pouvait donc faire payer
+ * jusqu'à 200 phases réelles là où trois étaient annoncées.
+ */
+class DeriveSansFin implements ProviderAdapter {
+  readonly id = 'sansfin'
+  readonly supportsExecution = true
+  /** Combien de fois la phase `build` a réellement été PAYÉE. Le seul chiffre qui compte ici. */
+  builds = 0
+  arbitrages = 0
+
+  async auth(): Promise<boolean> {
+    return true
+  }
+
+  async *send(
+    _messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const system = options.system ?? ''
+    // L'arbitre renvoie TOUJOURS la phase courante : la girouette parfaite, le pire cas du plafond.
+    if (system.includes('DÉRIVE DE ROUTE')) {
+      this.arbitrages += 1
+      return { text: 'ROUTE: build', provider: this.id, systemInjected: true }
+    }
+    const phase = /SKILL\s+(scout|frame|terrain|build|clean|judge)/.exec(system)?.[1]
+    if (phase === 'judge') return { text: 'VALIDE', provider: this.id, systemInjected: true }
+    if (phase === 'build') {
+      this.builds += 1
+      for (let i = 0; i < 10; i += 1) {
+        if (options.signal?.aborted) throw new Error('aborted')
+        yield { delta: `Error: ECONNREFUSED sur /srv/${i}\n` }
+        await Promise.resolve()
+      }
+      return { text: 'jamais atteint', provider: this.id, systemInjected: true }
+    }
+    return { text: `livrable ${phase ?? '?'}`, provider: this.id, systemInjected: true }
+  }
+}
+
+/** Le plafond côté moteur (`PLAFOND_BIFURCATIONS`). Écrit ici pour que le test dise POURQUOI 4. */
+const PLAFOND_ATTENDU = 3
+
+describe('D1 — une dérive répétée reste BORNÉE même quand un graphe pilote', () => {
+  it('ne paie pas 200 phases : le plafond de bifurcations vaut aussi sur la branche graphe', async () => {
+    const provider = new DeriveSansFin()
+    await new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'gros' },
+        judge: { provider: provider.id, model: 'juge' },
+        orchestrator: { provider: provider.id, model: 'chef' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
+      skillInstruction: (phase) => `SKILL ${phase}`,
+      currentWorkflow: () => ({
+        graph: {
+          entry: 'build-1',
+          nodes: [
+            { id: 'build-1', phase: 'build' },
+            { id: 'judge-2', phase: 'judge' }
+          ],
+          edges: [{ from: 'build-1', to: 'judge-2', when: 'always' }]
+        }
+      })
+    }).run('fais passer la suite')
+
+    // Le graphe prévoit UNE phase build. Chaque tentative dérive et l'arbitre redemande `build`.
+    // Le plafond vaut 3 : on tolère les bifurcations annoncées, jamais la girouette sans fin.
+    // Avant correctif, seul `pas < 200` bornait la marche — mesuré ici comme un plafond de fait.
+    // MESURÉ : 200 avant correctif (le garde-fou générique `pas < 200` était la seule borne),
+    // 4 après (la visite prévue + les 3 bifurcations du plafond). Le sabotage du bloc de décompte
+    // fait remonter ce chiffre à 200 — l'assertion mord donc réellement.
+    expect(provider.builds).toBeGreaterThan(0)
+    expect(provider.builds).toBeLessThanOrEqual(PLAFOND_ATTENDU + 1)
+    expect(provider.arbitrages).toBeLessThanOrEqual(PLAFOND_ATTENDU + 1)
+  })
+})

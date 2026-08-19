@@ -104,6 +104,7 @@ import {
   initialBudget,
   nextNode,
   readModelChoice,
+  resolveChoice,
   type ModelChoice,
   type NodeVerdict
 } from './workflow-walk'
@@ -3020,13 +3021,38 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       ? sansRetourReparationJuge(grapheBrut)
       : undefined
     /**
-     * Plafond de BIFURCATIONS pour un run sans graphe. Il existe pour la même raison que
+     * Plafond de BIFURCATIONS, sur les DEUX branches. Il existe pour la même raison que
      * `maxTraversals` sur une arête de retour : sans borne, une phase qui redemande la même
      * déviation à chaque tentative ne finit jamais, et le devis cesse d'être calculable. Trois
      * suffit — au-delà, ce n'est plus une correction de route, c'est une girouette.
+     *
+     * IL NE BORNAIT QUE LA BRANCHE SANS GRAPHE, et c'était un trou béant. Avec un graphe — le cas
+     * courant — `nextNode()` honore le souhait du modèle même vers une phase qu'AUCUNE arête ne
+     * desservait ; il fabrique alors une arête synthétique, qui par construction n'a aucune entrée
+     * dans la Map de budget. Mesuré : 250 bifurcations auto-référentes laissent `budget.size === 0`.
+     * Seul le garde-fou générique `pas < 200` arrêtait la course, soit jusqu'à 200 phases RÉELLEMENT
+     * payées au lieu de trois — la contrainte « le pire cas du devis reste calculable » était donc
+     * violée précisément par le mécanisme censé la respecter.
      */
     const PLAFOND_BIFURCATIONS = 3
     let bifurcations = 0
+    /**
+     * Le souhait du modèle est-il une BIFURCATION à décompter, ou un simple pas dans le graphe ?
+     *
+     * Une destination déjà desservie par une arête est prévue par le graphe : son budget la borne
+     * déjà, la compter deux fois rétrécirait un workflow composé à la main. Ce qui doit être borné
+     * ici est la destination HORS graphe, celle que le marcheur atteint par une arête inventée.
+     */
+    const bifurcationHorsGraphe = (
+      graphe: WorkflowGraph,
+      depuis: string,
+      voulu: ModelChoice
+    ): boolean => {
+      if (!voulu || voulu.kind === 'stop') return false
+      const cible = resolveChoice(graphe, voulu)
+      if (!cible) return false
+      return !graphe.edges.some((edge) => edge.from === depuis && edge.to === cible)
+    }
     const suitePhases = function* (): Generator<PipelinePhase> {
       if (!graphePilote?.nodes?.length) {
         /**
@@ -3066,8 +3092,14 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           return
         }
         yield node.phase
-        const voulu = souhaitModele
+        let voulu = souhaitModele
         souhaitModele = undefined // consommé : un souhait ne vaut que pour CETTE transition
+        // Une bifurcation HORS graphe se décompte, et au-delà du plafond on l'IGNORE : le graphe
+        // reprend la main plutôt que le run continue de payer une déviation qui se répète.
+        if (bifurcationHorsGraphe(graphePilote, courant, voulu)) {
+          if (bifurcations >= PLAFOND_BIFURCATIONS) voulu = undefined
+          else bifurcations += 1
+        }
         const suivant = nextNode(graphePilote, courant, dernierVerdict, budget, rangs, voulu)
         if (!suivant) return
         courant = suivant.to
@@ -3900,7 +3932,11 @@ ${empreinteDepot}`
                       phase,
                       task
                     ),
-                    model: phaseBinding.model
+                    model: phaseBinding.model,
+                    // L'annulation UTILISATEUR doit être honorée pendant l'arbitrage aussi. Cet appel
+                    // suit un trip de dérive, donc l'instant précis où l'utilisateur voit son run
+                    // partir de travers et veut couper ; sans ce signal il tournait jusqu'à son terme.
+                    ...(signal ? { signal } : {})
                   }
                 )
             )
@@ -3955,7 +3991,14 @@ ${empreinteDepot}`
           })
           recordPhase(phase, texteDerive, aggregatedEvidence.slice(evidenceStart))
           lastExecText = texteDerive
-          phaseContext.push(`[phase ${phase}] ${constat} — ${decision}`)
+          // L'EXTRAIT part avec le constat : la phase insérée (un `scout`, typiquement) recevait le
+          // COMPTE (« la même erreur est revenue 3 fois ») sans le fragment qui l'a montré, et
+          // partait donc chercher une autre route sans savoir sur quoi on avait buté. L'extrait est
+          // déjà borné à 240 caractères et déjà passé à l'arbitre — le refuser ici n'économisait rien.
+          phaseContext.push(
+            `[phase ${phase}] ${constat} — ${decision}` +
+              (trip?.extrait ? `\nExtrait fautif : ${trip.extrait}` : '')
+          )
           return
         }
         supervision.dispose()

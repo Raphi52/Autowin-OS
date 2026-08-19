@@ -212,3 +212,61 @@ describe('supervision mi-phase', () => {
     expect(sup.avortePourDerive()).toBe(false)
   })
 })
+
+/**
+ * DÉFAUTS DU CYCLE 1 DU JUGE — chaque test ci-dessous a été écrit ROUGE puis vert.
+ *
+ * Tous portent la même leçon : un détecteur qui coupe un agent doit se tromper du côté du SILENCE.
+ * Un faux négatif laisse un run s'entêter, ce que l'humain voit ; un faux positif tue un agent qui
+ * travaillait, ce que personne ne voit — et cela apprend à débrancher le garde.
+ */
+describe('D2 — des valeurs différentes ne sont pas la même erreur', () => {
+  it("trois assertions de tests DISTINCTS ne trippent pas (elles ne diffèrent QUE par leurs valeurs)", () => {
+    const d = createRouteDriftDetector()
+    d.beat('AssertionError: expected 3 to equal 4\n')
+    d.beat('AssertionError: expected 12 to equal 45\n')
+    expect(d.beat('AssertionError: expected 0 to equal 1\n')).toBeUndefined()
+  })
+
+  it('mais la MÊME erreur à des LIGNES différentes trippe toujours — la position, elle, est du bruit', () => {
+    const d = createRouteDriftDetector()
+    d.beat('Error: cannot read config, ligne 41\n')
+    d.beat('Error: cannot read config, ligne 87\n')
+    expect(d.beat('Error: cannot read config, ligne 112\n')?.signal).toBe('erreur-repetee')
+  })
+
+  it('la même erreur à des CHEMINS différents trippe toujours', () => {
+    const d = createRouteDriftDetector()
+    d.beat('Error: ECONNREFUSED sur /srv/a/x\n')
+    d.beat('Error: ECONNREFUSED sur /srv/b/y\n')
+    expect(d.beat('Error: ECONNREFUSED sur /srv/c/z\n')?.signal).toBe('erreur-repetee')
+  })
+})
+
+describe("D3 — du code affiché n'est pas un appel d'outil", () => {
+  it('Array(3) / Array(7) / Array(9) dans du code ne trippent pas', () => {
+    const d = createRouteDriftDetector()
+    d.beat(' return Array(3).fill(0)\n')
+    d.beat(' return Array(7).fill(0)\n')
+    expect(d.beat(' return Array(9).fill(0)\n')).toBeUndefined()
+  })
+
+  it('un vrai appel d’outil, marqué comme tel par le provider, trippe toujours', () => {
+    const d = createRouteDriftDetector()
+    d.beat('● Bash(npm run build)\n')
+    d.beat('● Bash(npm run build)\n')
+    expect(d.beat('● Bash(npm run build)\n')?.signal).toBe('boucle-outil')
+  })
+})
+
+describe('D4 — un progrès annoncé dans une ligne non terminée compte quand même', () => {
+  it("un gros chunk sans saut de ligne portant « wrote … » ne trippe PAS aucun-progres", () => {
+    const d = createRouteDriftDetector({ volumeSansProgres: 100 })
+    expect(d.beat(`wrote the file successfully${' x'.repeat(120)}`)).toBeUndefined()
+  })
+
+  it('un gros chunk sans saut de ligne et SANS progrès trippe toujours', () => {
+    const d = createRouteDriftDetector({ volumeSansProgres: 100 })
+    expect(d.beat('blabla'.repeat(40))?.signal).toBe('aucun-progres')
+  })
+})

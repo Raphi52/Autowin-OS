@@ -71,6 +71,14 @@ const EXTRAIT_MAX = 240
 /**
  * Réduit une ligne à sa FORME. Sans cela, « ligne 41 » et « ligne 87 » de la même erreur comptent
  * pour deux, et une boucle parfaitement stable passe sous le seuil pour toujours.
+ *
+ * Ce qui s'efface est ce qui VARIE SANS CHANGER LE SENS : chemins, adresses, POSITIONS. Les autres
+ * chiffres sont CONSERVÉS. Effacer tous les chiffres faisait de « expected 3 to equal 4 » et
+ * « expected 12 to equal 45 » la même erreur — un agent progressant à travers des assertions
+ * DISTINCTES était donc coupé comme s'il tournait en rond, et en fan-out sans même un arbitrage.
+ * Le détecteur doit se tromper du côté du silence : rater une boucle coûte un run qui s'entête, ce
+ * que l'humain finit par voir ; tuer un agent qui travaillait ne se voit pas, et apprend à
+ * débrancher le garde.
  */
 export function normaliserLigne(ligne: string): string {
   return ligne
@@ -78,7 +86,8 @@ export function normaliserLigne(ligne: string): string {
     .replace(/[a-z]:[\\/][^\s"']+/g, '<chemin>')
     .replace(/[\\/][^\s"']*[\\/][^\s"']+/g, '<chemin>')
     .replace(/0x[0-9a-f]+/g, '<hex>')
-    .replace(/\d+/g, '<n>')
+    .replace(/\b(ligne|line|l\.|col|colonne|column|offset|at)\s*:?\s*\d+/g, '$1 <pos>')
+    .replace(/:\d+(:\d+)?\b/g, ':<pos>')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -87,10 +96,14 @@ const ERREUR =
   /\b(error|erreur|exception|failed|échec|echec|fail(ed)?:|traceback|assertionerror)\b/i
 
 /**
- * Une invocation d'outil telle qu'elle apparaît dans un flux d'agent CLI. Les trois providers
- * l'écrivent différemment ; on reconnaît la forme commune « verbe(cible) » ou « ● Outil(cible) ».
+ * Une invocation d'outil telle que les providers la MARQUENT : une puce en tête de ligne.
+ *
+ * La forme large « toute majuscule suivie de parenthèses » attrapait du CODE AFFICHÉ dans la sortie
+ * de l'agent — `Array(3)`, `Object(x)`, `Promise(…)`. Exiger la puce rend le signal PLUS ÉTROIT à
+ * dessein, pour la même raison que `normaliserLigne` conserve les chiffres : couper un agent qui
+ * affichait du code est le pire résultat possible pour ce détecteur.
  */
-const OUTIL = /(?:^|[\s●•*>-])\s*([A-Z][A-Za-z]{2,15})\(([^)]{0,120})\)/
+const OUTIL = /^\s*[●•▶]\s*([A-Z][A-Za-z]{2,15})\(([^)]{0,120})\)/
 
 /**
  * Marqueurs de PROGRÈS. Volontairement des effets, pas des intentions : « je vais écrire » n'est pas
@@ -171,6 +184,11 @@ export function createRouteDriftDetector(options: RouteDriftOptions = {}): Route
           return trip
         }
       }
+      // Un PROGRÈS annoncé dans une ligne encore OUVERTE compte quand même. `examiner()` ne voit que
+      // les lignes terminées : un provider qui streame « wrote … » en un seul gros chunk sans saut de
+      // ligne (sortie bufferisée, JSON à sauts échappés) trippait un faux `aucun-progres` alors que
+      // le progrès était sous les yeux du détecteur, simplement dans son tampon.
+      if (tampon && PROGRES.test(tampon)) depuisProgres = 0
       if (depuisProgres >= volumeSansProgres) {
         trip = {
           signal: 'aucun-progres',
