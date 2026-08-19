@@ -335,10 +335,19 @@ export class AutowinOS {
           requireCanonicalRemote: true
         })
         this.worktrees = new RunWorktreeCoordinator({
-          // La réconciliation des copies est REPORTÉE ici, et seulement ici : en production ce
-          // constructeur tourne au premier niveau du module principal, et énumérer les copies git
-          // bloquait ~25 s avant qu'aucune fenêtre n'existe. La récupération n'a aucune urgence,
-          // l'affichage si. Les tests, eux, gardent la réconciliation synchrone.
+          // Promesse d'attente FOURNIE ici, et seulement ici : en production ce constructeur tourne
+          // au premier niveau du module principal, et énumérer les copies git bloquait ~25 s avant
+          // qu'aucune fenêtre n'existe. La récupération n'a aucune urgence, l'affichage si. Les
+          // tests, eux, gardent la réconciliation synchrone.
+          //
+          // MAIS elle n'est PAS toujours honorée, et le dire importe : quand les opérations sont
+          // isolées, le coordinateur lance l'inventaire IMMÉDIATEMENT dans son worker et ignore
+          // cette promesse (`run-worktree-coordinator.ts:190-194`) — le thread principal n'est pas
+          // bloqué pour autant, c'est l'autre moitié de la même correction. L'attente ci-dessous ne
+          // sert donc que la branche NON isolée (`:211`). Le commentaire précédent disait « la
+          // réconciliation est REPORTÉE ici » sans cette réserve, et un agent de cadrage l'a cru :
+          // il a bâti un besoin sur un ordonnancement inexistant, que le juge a réfuté en citant
+          // exactement ces lignes (2026-08-19). Un commentaire trop affirmatif se paie en diagnostic.
           deferRecoveryUntil: interfaceVisible,
           manager,
           stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
