@@ -18,9 +18,9 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
  *
  * `route-drift.test.ts` prouve que le détecteur trippe sur des flux fabriqués. Cela ne prouve RIEN
  * sur le run : un module parfait jamais appelé est du théâtre. Ce test-ci part de l'orchestrateur
- * réel, fait boucler un provider en streaming, et vérifie les trois effets qui n'existaient pas :
- * l'appel est COUPÉ pendant qu'il produit, un arbitrage est demandé UNE fois, et la route repart sur
- * une phase que le pipeline n'enchaînait pas.
+ * réel, fait boucler un provider en streaming, et vérifie les trois effets qui n'existaient pas : la
+ * dérive est VUE pendant que l'agent produit, un arbitrage est demandé UNE fois à la fin de son tour,
+ * et la route repart sur une phase que le pipeline n'enchaînait pas — sans que rien soit interrompu.
  */
 
 /** Boucle sur la même erreur en STREAMING, et honore l'avortement comme un vrai adaptateur. */
@@ -121,23 +121,23 @@ function makeOrchestrator(provider: ProviderAdapter): Orchestrator {
 }
 
 describe('dérive de route détectée pendant la phase', () => {
-  it("coupe l'appel en cours, arbitre UNE fois, et repart sur la phase choisie", async () => {
+  it('ne coupe RIEN, le dit, et change la route à la fin du tour', async () => {
     const provider = new AgentQuiBoucle()
     await makeOrchestrator(provider).run('fais passer la suite')
 
-    // 1. La coupure est RÉELLE : l'adaptateur a reçu l'avortement, et AUCUNE phase `build` n'est
-    //    allée jusqu'à son terme — c'est ce que « mi-parcours » veut dire.
-    expect(provider.avorte).toBe(true)
-    expect(provider.terminees).toBe(0)
+    // 1. RIEN N'A ÉTÉ COUPÉ, et c'est LA garantie de ce test : l'adaptateur n'a jamais vu
+    //    d'avortement, et chaque phase `build` est allée jusqu'à son terme malgré la dérive.
+    //    « Plus aucune coupe de run » (doctrine utilisateur du 2026-08-19).
+    expect(provider.avorte).toBe(false)
+    expect(provider.terminees).toBeGreaterThanOrEqual(1)
+    expect(provider.chunksEmis).toBe(provider.terminees * 40)
 
-    // 2. Un arbitrage par coupure, pas un appel de modèle par chunk. Le run rejoue `build` une
-    //    seconde fois (boucle de réparation PRÉEXISTANTE, sans lien avec la dérive : mesurée
-    //    identique sur un agent qui ne dérive pas), d'où un arbitrage par tentative.
+    // 2. La dérive est bien VUE : un arbitrage a lieu, au plus un par tour, jamais par chunk.
     expect(provider.arbitrages).toBeGreaterThanOrEqual(1)
-    // Le coût de l'arbitrage reste borné au nombre de coupures : jamais proportionnel aux chunks.
-    expect(provider.arbitrages).toBeLessThan(provider.chunksEmis)
+    expect(provider.arbitrages).toBeLessThanOrEqual(provider.terminees)
 
-    // 3. La route a repris sur `scout`, que le pipeline (`['build']`) n'enchaînait PAS.
+    // 3. Et elle sert à quelque chose : la route a repris sur `scout`, que le pipeline
+    //    (`['build']`) n'enchaînait PAS. Corriger la trajectoire n'exige donc pas de couper.
     expect(provider.systemes.some((s) => s.includes('SKILL scout'))).toBe(true)
   })
 
@@ -155,9 +155,9 @@ describe('dérive de route détectée pendant la phase', () => {
 })
 
 /**
- * FAN-OUT : la règle change, et c'est délibéré. Un membre qui boucle est COUPÉ, mais il ne route
- * pas — plusieurs membres dérivent en parallèle, et si chacun réclamait sa bifurcation la
- * destination du run dépendrait de l'ordre d'arrivée des réponses.
+ * FAN-OUT : un membre qui boucle est SIGNALÉ, et il ne route pas non plus — plusieurs membres
+ * dérivent en parallèle, et si chacun réclamait sa bifurcation la destination du run dépendrait de
+ * l'ordre d'arrivée des réponses. La dérive part dans la synthèse, seul endroit d'où on route.
  */
 class FanOutMixte implements ProviderAdapter {
   readonly id = 'fan'
@@ -223,7 +223,7 @@ class FanOutMixte implements ProviderAdapter {
 }
 
 describe('dérive dans un membre de fan-out', () => {
-  it('coupe le seul membre qui boucle, laisse l’autre finir, et le run continue', async () => {
+  it('signale le membre qui boucle sans le couper, et ne route pas depuis un fan-out', async () => {
     const provider = new FanOutMixte()
     await new Orchestrator({
       registry: new ProviderRegistry().register(provider),
@@ -250,13 +250,11 @@ describe('dérive dans un membre de fan-out', () => {
     const boucle = provider.parModele.get('qui-boucle')
     const avance = provider.parModele.get('qui-avance')
 
-    // Le membre qui boucle est coupé et n'atteint jamais son terme.
-    expect(boucle?.avorte).toBe(true)
-    expect(boucle?.termine).toBe(false)
-    expect(boucle?.chunks).toBeLessThan(30 * (boucle?.tentatives ?? 1))
+    // Le membre qui boucle est SIGNALÉ, pas coupé : il va au bout de son tour comme les autres.
+    expect(boucle?.avorte).toBe(false)
+    expect(boucle?.termine).toBe(true)
 
-    // CE QUI COMPTE AUTANT : son voisin n'est pas emporté avec lui. Un `AbortController` partagé
-    // aurait tué les deux, et la coupure ciblée serait devenue une panne de phase.
+    // Son voisin non plus n'est pas touché — aucun des deux ne subit d'avortement.
     expect(avance?.avorte).toBe(false)
     expect(avance?.termine).toBe(true)
     // Chaque tentative est allée au bout de ses 30 chunks. Le run rejoue `build` (boucle de
@@ -273,9 +271,10 @@ describe('dérive dans un membre de fan-out', () => {
 })
 
 /**
- * TROISIÈME site : les MEMBRES d'une sous-tâche greedy. Même règle que le fan-out de phase (couper,
- * pas router), plus une contrainte propre : le jeton d'admission du membre coupé doit être RENDU,
- * sinon une coupure pour dérive bloquerait les sous-tâches suivantes comme le ferait une vraie panne.
+ * TROISIÈME site : les MEMBRES d'une sous-tâche greedy. Même règle que partout — on OBSERVE et on
+ * rapporte. Ne plus couper a fait disparaître d'un coup la contrainte la plus subtile de ce site :
+ * il fallait RENDRE le jeton d'admission du membre coupé, sinon une coupure pour dérive bloquait les
+ * sous-tâches suivantes comme l'aurait fait une vraie panne. Sans coupure, plus de jeton à rendre.
  */
 class GreedyQuiBoucle implements ProviderAdapter {
   readonly id = 'greedy'
@@ -347,12 +346,13 @@ describe('dérive dans un membre de sous-tâche greedy', () => {
     const a = provider.parTache.get('A')
     const b = provider.parTache.get('B')
 
-    expect(a?.avorte).toBe(true)
-    expect(a?.termine).toBe(false)
+    // La sous-tâche qui boucle est signalée, pas coupée : elle finit son tour.
+    expect(a?.avorte).toBe(false)
+    expect(a?.termine).toBe(true)
 
-    // LA PREUVE QUI COMPTE : avec une concurrence de 1, `B` ne peut tourner que si le jeton
-    // d'admission de `A` a bien été rendu. Sans le `admission.release()` du chemin de dérive, `B`
-    // n'aurait jamais démarré — et la coupure ciblée serait devenue un blocage de phase.
+    // Et comme rien n'est avorté, le jeton d'admission suit son cours normal : avec une concurrence
+    // de 1, `B` démarre bien après `A`. Ne plus couper supprime du même coup tout le risque de
+    // blocage que le chemin de dérive devait gérer à la main.
     expect(b?.avorte).toBe(false)
     expect(b?.termine).toBe(true)
     expect(b?.chunks).toBeGreaterThan(0)

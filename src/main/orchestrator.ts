@@ -2588,20 +2588,24 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                   cause
                 }
               }
-              // Même supervision que le fan-out de phase, même règle : on COUPE le membre qui
-              // boucle, on ne route pas depuis ici. La sous-tâche greedy est encore plus concernée —
-              // ses membres tournent en concurrence, et un seul qui s'entête paie pour tout le monde.
+              // Même supervision que partout : elle OBSERVE. Un membre qui boucle est SIGNALÉ, jamais
+              // coupé — « plus aucune coupe de run » (doctrine utilisateur du 2026-08-19) vaut aussi
+              // pour un membre de sous-tâche. Ce qu'on y perd est de l'argent, ce qu'on y gagne est
+              // qu'aucun tour n'est jeté sans qu'un humain l'ait décidé.
               const supervision = createMidPhaseSupervision({
-                forward: (delta) => onDelta?.('exec', delta),
-                ...(signal ? { signal } : {})
+                forward: (delta) => onDelta?.('exec', delta)
               })
               try {
-                const result = await registry.send(
-                  subProvider,
-                  messages,
-                  { ...options, signal: supervision.signal },
-                  (chunk) => supervision.onDelta(chunk.delta)
+                const result = await registry.send(subProvider, messages, options, (chunk) =>
+                  supervision.onDelta(chunk.delta)
                 )
+                const derive = supervision.trip()
+                if (derive) {
+                  onDelta?.(
+                    'exec',
+                    `\n[dérive] sous-tâche ${node.id} (${memberKey}) : ${derive.detail} — signalé, rien n'a été interrompu\n`
+                  )
+                }
                 if (leader) {
                   admission.state = 'ready'
                   admission.release()
@@ -2652,60 +2656,6 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                   cause: undefined
                 }
               } catch (error) {
-                if (supervision.avortePourDerive()) {
-                  const trip = supervision.trip()
-                  const partiel = supervision.texte()
-                  supervision.dispose()
-                  // Le jeton d'admission doit être RENDU : une coupure pour dérive n'est pas une
-                  // panne de provider, et le garder bloquerait les membres suivants pour rien.
-                  if (leader) {
-                    admission.state = 'ready'
-                    admission.release()
-                  }
-                  const constat = `dérive détectée (${trip?.signal}) — ${trip?.detail}`
-                  onDelta?.(
-                    'exec',
-                    `
-[dérive] ${constat} — sous-tâche ${node.id} (${memberKey}) arrêtée
-`
-                  )
-                  const texteDerive = partiel.trim() ? `${partiel}
-
-[dérive] ${constat}` : ''
-                  push({
-                    step: 'exec',
-                    provider: subProvider,
-                    role: 'subagent',
-                    model: phaseBinding.model,
-                    text: texteDerive,
-                    status: texteDerive ? 'completed' : 'failed',
-                    ...(texteDerive ? {} : { error: constat }),
-                    durationMs: performance.now() - startedAt,
-                    detail: `sous-tâche ${node.id} · modèle ${memberKey} — ${constat}`,
-                    execution
-                  })
-                  // Coupé après avoir produit = une sortie utilisable pour la synthèse. Coupé sans
-                  // rien produire = pas une sortie : la compter bonne ferait synthétiser du vide.
-                  return texteDerive
-                    ? {
-                        ok: true as const,
-                        provider: subProvider,
-                        model: phaseBinding.model,
-                        text: texteDerive,
-                        evidence: [] as ExecutionEvidence[],
-                        agentId: execution.agentId,
-                        cause: undefined
-                      }
-                    : {
-                        ok: false as const,
-                        provider: subProvider,
-                        model: phaseBinding.model,
-                        text: '',
-                        evidence: [] as ExecutionEvidence[],
-                        agentId: execution.agentId,
-                        cause: constat
-                      }
-                }
                 supervision.dispose()
                 const structural = structuralFailure(error)
                 if (structural && structural.provider === subProvider) {
@@ -3492,25 +3442,28 @@ ${empreinteDepot}`
               execution
             })
             /**
-             * SUPERVISION MI-PHASE POUR UN MEMBRE DE FAN-OUT — et sa différence assumée avec le
-             * chemin séquentiel : ici on COUPE, on ne ROUTE pas.
+             * SUPERVISION D'UN MEMBRE DE FAN-OUT — elle OBSERVE, et elle ne route pas non plus.
              *
-             * Plusieurs membres dérivent indépendamment ; si chacun réclamait sa bifurcation, ils se
-             * battraient pour la même transition et la destination du run dépendrait de l'ordre
-             * d'arrivée. Le membre qui boucle est donc arrêté — c'est là qu'est le coût — et sa
-             * dérive part dans la SYNTHÈSE, qui reste le seul endroit d'où une route se décide.
+             * Deux raisons distinctes de ne rien faire d'autre que rapporter. La première tient à la
+             * doctrine « plus aucune coupe de run » : ce n'est pas à ce code d'arrêter un tour. La
+             * seconde est propre au fan-out : plusieurs membres dérivent indépendamment, et si chacun
+             * réclamait sa bifurcation, la destination du run dépendrait de l'ordre d'arrivée des
+             * réponses. La dérive part donc dans la SYNTHÈSE, seul endroit d'où une route se décide.
              */
             const supervision = createMidPhaseSupervision({
-              forward: (delta) => onDelta?.('exec', delta),
-              ...(signal ? { signal } : {})
+              forward: (delta) => onDelta?.('exec', delta)
             })
             try {
-              const res = await registry.send(
-                member.provider,
-                fanMessages,
-                { ...opts, signal: supervision.signal },
-                (c) => supervision.onDelta(c.delta)
+              const res = await registry.send(member.provider, fanMessages, opts, (c) =>
+                supervision.onDelta(c.delta)
               )
+              const derive = supervision.trip()
+              if (derive) {
+                onDelta?.(
+                  'exec',
+                  `\n[dérive] membre ${member.model ?? member.provider} : ${derive.detail} — signalé, rien n'a été interrompu\n`
+                )
+              }
               if (res.usage) {
                 cost.add({
                   provider: res.provider ?? member.provider,
@@ -3544,37 +3497,6 @@ ${empreinteDepot}`
               supervision.dispose()
               return { member, text: res.text, ok: true as const, cause: undefined }
             } catch (error) {
-              if (supervision.avortePourDerive()) {
-                const trip = supervision.trip()
-                const partiel = supervision.texte()
-                supervision.dispose()
-                const constat = `dérive détectée (${trip?.signal}) — ${trip?.detail}`
-                onDelta?.('exec', `
-[dérive] ${constat} — membre ${member.model ?? member.provider} arrêté
-`)
-                const texteDerive = partiel.trim() ? `${partiel}
-
-[dérive] ${constat}` : ''
-                push({
-                  step: 'exec',
-                  provider: member.provider,
-                  role: 'subagent',
-                  model: member.model,
-                  text: texteDerive,
-                  // Coupé, pas planté : le distinguer d'un échec de provider évite d'accuser le
-                  // binding d'une panne qui n'a pas eu lieu.
-                  status: texteDerive ? 'completed' : 'failed',
-                  ...(texteDerive ? {} : { error: constat }),
-                  durationMs: performance.now() - startedAt,
-                  detail: `phase ${phase} · modèle ${member.model ?? member.provider} — ${constat}`,
-                  execution
-                })
-                // Un membre coupé SANS rien produire n'est pas une sortie : le compter comme bonne
-                // ferait synthétiser du vide, et `good.length === 0` cesserait de dire la vérité.
-                return texteDerive
-                  ? { member, text: texteDerive, ok: true as const, cause: undefined }
-                  : { member, text: '', ok: false as const, cause: constat }
-              }
               supervision.dispose()
               push({
                 step: 'exec',
@@ -3884,123 +3806,20 @@ ${empreinteDepot}`
        * SUPERVISION MI-PHASE — l'orchestrateur voyait déjà tout, il ne jugeait rien.
        *
        * Chaque chunk continue d'aller à l'interface exactement comme avant ; il passe EN PLUS au
-       * détecteur de dérive. Au trip, l'appel est avorté séance tenante : jusqu'ici, un agent parti
-       * dans le mur y restait jusqu'à la fin de son tour, et le seul garde câblé
-       * (`createStreamWatchdog`) ne regarde que l'inactivité — un agent qui écrit beaucoup en
-       * tournant en rond ne le déclenchait jamais.
+       * détecteur de dérive. L'agent VA AU BOUT de son tour : « plus aucune coupe de run » (doctrine
+       * utilisateur du 2026-08-19). Le trip est retenu, DIT à l'utilisateur, et c'est seulement à la
+       * fin NATURELLE de la phase qu'il peut faire changer de route — ce qui donne la correction de
+       * trajectoire demandée sans jamais jeter un tour qu'un humain n'a pas décidé de jeter.
        */
       const supervision = createMidPhaseSupervision({
-        forward: (delta) => onDelta?.('exec', delta),
-        ...(signal ? { signal } : {})
+        forward: (delta) => onDelta?.('exec', delta)
       })
-      const optionsSupervisees: SendOptions = { ...subOptions, signal: supervision.signal }
       let phaseRes
       try {
-        phaseRes = await registry.send(
-          providerDeLaPhase,
-          phaseMessages,
-          optionsSupervisees,
-          (c) => supervision.onDelta(c.delta)
+        phaseRes = await registry.send(providerDeLaPhase, phaseMessages, subOptions, (c) =>
+          supervision.onDelta(c.delta)
         )
       } catch (error) {
-        // DÉRIVE, et non panne de rôle : c'est NOUS qui avons coupé. Une annulation utilisateur passe
-        // par la branche d'erreur normale ci-dessous — la confondre afficherait « le rôle a échoué »
-        // pour une interruption délibérée.
-        if (supervision.avortePourDerive()) {
-          const trip = supervision.trip()
-          const partiel = supervision.texte()
-          supervision.dispose()
-          const constat = `dérive détectée (${trip?.signal}) — ${trip?.detail}`
-          onDelta?.('exec', `\n[dérive] ${constat} — phase \`${phase}\` interrompue, arbitrage…\n`)
-          // UN appel de modèle, au trip seulement. Le détecteur ne choisit jamais la destination :
-          // trancher demande de comprendre l'objectif, et une heuristique déguisée en jugement est
-          // exactement ce qu'on refuse ici.
-          let verdict: RouteVerdict = { kind: 'continuer' }
-          try {
-            const arbitre = await this.sendWithRoleContext(
-              `arbitrage dérive ${phase}`,
-              'orchestrator',
-              providerDeLaPhase,
-              phaseBinding.model,
-              () =>
-                registry.send(
-                  providerDeLaPhase,
-                  [{ role: 'user', content: 'Tranche maintenant.' }],
-                  {
-                    system: briefArbitrage(
-                      trip ?? { signal: 'aucun-progres', detail: constat, extrait: '' },
-                      phase,
-                      task
-                    ),
-                    model: phaseBinding.model,
-                    // L'annulation UTILISATEUR doit être honorée pendant l'arbitrage aussi. Cet appel
-                    // suit un trip de dérive, donc l'instant précis où l'utilisateur voit son run
-                    // partir de travers et veut couper ; sans ce signal il tournait jusqu'à son terme.
-                    ...(signal ? { signal } : {})
-                  }
-                )
-            )
-            verdict = readRouteVerdict(arbitre.text)
-            if (arbitre.usage) {
-              cost.add({
-                provider: arbitre.provider ?? providerDeLaPhase,
-                role: 'orchestrator',
-                model: arbitre.model ?? phaseBinding.model,
-                inputTokens: arbitre.usage.inputTokens,
-                outputTokens: arbitre.usage.outputTokens,
-                cacheReadTokens: arbitre.usage.cacheReadTokens,
-                cacheCreationTokens: arbitre.usage.cacheCreationTokens,
-                costUsd: arbitre.usage.costUsd
-              })
-            }
-          } catch {
-            // L'arbitre est injoignable : on ne bifurque pas sur une décision qu'on n'a pas. Le
-            // travail partiel reste, le graphe reprend son cours — jamais un abandon silencieux.
-            verdict = { kind: 'continuer' }
-          }
-          /**
-           * La bifurcation passe par le mécanisme de déviation qui existe DÉJÀ : `recordPhase()` lit
-           * une ligne `SUITE:` en fin de sortie (`readModelChoice`) et le marcheur l'honore, même vers
-           * une phase que le graphe n'enchaînait pas. Aucune seconde plomberie de routage à maintenir.
-           */
-          const suite =
-            verdict?.kind === 'phase'
-              ? `\nSUITE: ${verdict.phase}`
-              : verdict?.kind === 'stop'
-                ? `\nSUITE: fin`
-                : ''
-          const decision =
-            verdict?.kind === 'phase'
-              ? `route reprise en \`${verdict.phase}\``
-              : verdict?.kind === 'stop'
-                ? 'run arrêté ici'
-                : 'le travail partiel est conservé, le plan reprend'
-          onDelta?.('exec', `[dérive] ${decision}\n`)
-          const texteDerive = `${partiel}\n\n[dérive] ${constat} — ${decision}.${suite}`
-          push({
-            step: 'exec',
-            provider: providerDeLaPhase,
-            role: roleDeLaPhase,
-            model: phaseBinding.model,
-            text: texteDerive,
-            prompt: execPrompt,
-            status: 'completed',
-            durationMs: performance.now() - phaseStartedAt,
-            detail: `phase ${phase} — ${constat}`,
-            execution
-          })
-          recordPhase(phase, texteDerive, aggregatedEvidence.slice(evidenceStart))
-          lastExecText = texteDerive
-          // L'EXTRAIT part avec le constat : la phase insérée (un `scout`, typiquement) recevait le
-          // COMPTE (« la même erreur est revenue 3 fois ») sans le fragment qui l'a montré, et
-          // partait donc chercher une autre route sans savoir sur quoi on avait buté. L'extrait est
-          // déjà borné à 240 caractères et déjà passé à l'arbitre — le refuser ici n'économisait rien.
-          phaseContext.push(
-            `[phase ${phase}] ${constat} — ${decision}` +
-              (trip?.extrait ? `\nExtrait fautif : ${trip.extrait}` : '')
-          )
-          return
-        }
         supervision.dispose()
         // L'erreur brute dit la cause mais pas QUEL role l'a subie ni son binding : on prefixe.
         //
@@ -4088,14 +3907,93 @@ ${empreinteDepot}`
       aggregatedEvidence.push(...(phaseRes.executionEvidence ?? []))
       lastExecText = phaseRes.text
       lastUsage = phaseRes.usage
-      recordPhase(phase, phaseRes.text, aggregatedEvidence.slice(evidenceStart))
+      /**
+       * LA DÉRIVE, DITE ET ARBITRÉE — à la fin NATURELLE de la phase, l'agent étant allé au bout.
+       *
+       * Rien n'a été interrompu : la seule chose que la dérive change est la SUITE. On le dit d'abord
+       * à l'utilisateur (c'était la demande : « il coupe pas, l'orchestrateur m'écrit que c'est
+       * arrivé »), puis UN appel de modèle tranche si la route prévue a encore un sens. Le détecteur
+       * ne choisit jamais la destination : trancher demande de comprendre l'objectif, et une
+       * heuristique déguisée en jugement est exactement ce qu'on refuse.
+       */
+      const derive = supervision.trip()
+      let texteDePhase = phaseRes.text
+      if (derive) {
+        const constat = `dérive détectée (${derive.signal}) — ${derive.detail}`
+        onDelta?.(
+          'exec',
+          `\n[dérive] ${constat}. La phase \`${phase}\` est allée au bout, rien n'a été interrompu — arbitrage de la suite…\n`
+        )
+        let verdict: RouteVerdict = { kind: 'continuer' }
+        try {
+          const arbitre = await this.sendWithRoleContext(
+            `arbitrage dérive ${phase}`,
+            'orchestrator',
+            providerDeLaPhase,
+            phaseBinding.model,
+            () =>
+              registry.send(
+                providerDeLaPhase,
+                [{ role: 'user', content: 'Tranche maintenant.' }],
+                {
+                  system: briefArbitrage(derive, phase, task),
+                  model: phaseBinding.model,
+                  // L'annulation UTILISATEUR est honorée pendant l'arbitrage aussi : sans ce signal
+                  // il tournait jusqu'à son terme au moment précis où l'utilisateur veut couper.
+                  ...(signal ? { signal } : {})
+                }
+              )
+          )
+          verdict = readRouteVerdict(arbitre.text)
+          if (arbitre.usage) {
+            cost.add({
+              provider: arbitre.provider ?? providerDeLaPhase,
+              role: 'orchestrator',
+              model: arbitre.model ?? phaseBinding.model,
+              inputTokens: arbitre.usage.inputTokens,
+              outputTokens: arbitre.usage.outputTokens,
+              cacheReadTokens: arbitre.usage.cacheReadTokens,
+              cacheCreationTokens: arbitre.usage.cacheCreationTokens,
+              costUsd: arbitre.usage.costUsd
+            })
+          }
+        } catch {
+          // Arbitre injoignable : on ne bifurque pas sur une décision qu'on n'a pas. Le plan reprend.
+          verdict = { kind: 'continuer' }
+        }
+        /**
+         * La bifurcation passe par le mécanisme de déviation qui existe DÉJÀ : `recordPhase()` lit une
+         * ligne `SUITE:` en fin de sortie (`readModelChoice`) et le marcheur l'honore, même vers une
+         * phase que le graphe n'enchaînait pas. Aucune seconde plomberie de routage à maintenir.
+         */
+        const suite =
+          verdict?.kind === 'phase'
+            ? `\nSUITE: ${verdict.phase}`
+            : verdict?.kind === 'stop'
+              ? `\nSUITE: fin`
+              : ''
+        const decision =
+          verdict?.kind === 'phase'
+            ? `route reprise en \`${verdict.phase}\``
+            : verdict?.kind === 'stop'
+              ? 'plus rien à jouer sur cette demande'
+              : 'le plan prévu reprend'
+        onDelta?.('exec', `[dérive] ${decision}\n`)
+        texteDePhase = `${phaseRes.text}\n\n[dérive] ${constat} — ${decision}.${suite}`
+      }
+      recordPhase(phase, texteDePhase, aggregatedEvidence.slice(evidenceStart))
       // B4 — le contexte PORTÉ à la phase suivante est borné (la sortie complète reste dans
       // phaseOutputs + la trace) : évite une croissance quadratique du prompt sur les chaînes longues.
       const carried =
-        phaseRes.text.length > PHASE_CONTEXT_CAP
-          ? `${phaseRes.text.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
-          : phaseRes.text
-      phaseContext.push(`[phase ${phase}] ${carried}`)
+        texteDePhase.length > PHASE_CONTEXT_CAP
+          ? `${texteDePhase.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
+          : texteDePhase
+      phaseContext.push(
+        `[phase ${phase}] ${carried}` +
+          // L'EXTRAIT part avec le constat : la phase insérée (un `scout`, typiquement) recevait le
+          // COMPTE (« la même erreur est revenue 3 fois ») sans le fragment qui l'a montré.
+          (derive?.extrait ? `\nExtrait fautif : ${derive.extrait}` : '')
+      )
     }
     for (const phase of suitePhases()) await executePipelinePhase(phase)
     // J1 — le juge (et le résultat) reçoivent l'AGRÉGAT de toutes les phases, jamais la seule

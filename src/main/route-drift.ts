@@ -274,63 +274,55 @@ export function readRouteVerdict(texte: string): RouteVerdict {
 }
 
 /**
- * LA SUPERVISION MI-PHASE elle-même — ce qui rend l'interruption possible sans toucher au transport.
+ * LA SUPERVISION MI-PHASE — elle OBSERVE et RAPPORTE. Elle ne coupe RIEN.
  *
  * Elle s'intercale entre le provider et `onDelta` : chaque chunk continue d'aller à l'interface
- * exactement comme avant, ET passe au détecteur. Au trip, elle avorte l'appel en cours via son propre
- * `AbortController`, chaîné au signal d'annulation de l'utilisateur : une annulation humaine reste
- * prioritaire, et l'avortement pour dérive ne se confond pas avec elle (`avortePourDerive`).
+ * exactement comme avant, ET passe au détecteur. Quand le détecteur trippe, l'agent CONTINUE son
+ * tour ; le trip est simplement RETENU pour être dit à l'utilisateur, et pour nourrir la décision de
+ * route à la fin NATURELLE de la phase.
  *
- * Elle garde le texte DÉJÀ produit. Sans lui, avorter jetterait le travail de l'agent et la phase
- * repartirait de zéro — on aurait remplacé un run qui s'entête par un run qui oublie.
+ * Cette version-ci coupait l'appel en cours via son propre `AbortController`. La doctrine posée par
+ * l'utilisateur le 2026-08-19 est « PLUS AUCUNE COUPE DE RUN » — la même décision qui a fait retirer
+ * le guetteur d'immobilité (commit 45387609). Un mécanisme qui coupe une phase entre dans ce
+ * périmètre : c'est l'utilisateur, pas ce module, qui décide d'arrêter quelque chose.
+ *
+ * CE QUE CELA COÛTE, écrit ici pour que personne ne le redécouvre : un agent qui tourne en rond est
+ * payé jusqu'au bout de son tour. On échange de l'argent contre le fait de ne jamais jeter un tour
+ * qu'un humain n'a pas décidé de jeter — et contre la disparition du pire risque de ce détecteur,
+ * tuer un agent qui travaillait sur un faux positif.
  */
 export interface MidPhaseSupervision {
   /** À passer au provider à la place du `onDelta` d'origine. */
   onDelta: (delta: string) => void
-  /** À passer comme `signal` de l'appel. Avorte sur dérive OU sur annulation utilisateur. */
-  signal: AbortSignal
-  /** Vrai si c'est NOUS qui avons avorté, et non l'utilisateur. Distingue les deux dans le `catch`. */
-  avortePourDerive: () => boolean
+  /** Le trip retenu, s'il a eu lieu. À lire APRÈS l'appel : rien n'a été interrompu. */
   trip: () => DriftTrip | undefined
-  /** Le texte produit avant l'avortement. Jamais jeté. */
+  /** Le texte vu passer. Sert au rapport, plus à rattraper un travail avorté. */
   texte: () => string
+  /** Conservé pour la symétrie des appels ; il n'y a plus rien à libérer. */
   dispose: () => void
 }
 
 export function createMidPhaseSupervision(opts: {
   /** Le relais d'origine — il continue de recevoir TOUT, dérive ou pas. */
   forward?: (delta: string) => void
-  /** L'annulation utilisateur, si le run en porte une. */
-  signal?: AbortSignal
   detector?: RouteDriftDetector
   options?: RouteDriftOptions
 }): MidPhaseSupervision {
   const detector = opts.detector ?? createRouteDriftDetector(opts.options)
-  const controller = new AbortController()
-  let derive = false
   let texte = ''
-  const relayer = (): void => controller.abort()
-  if (opts.signal) {
-    if (opts.signal.aborted) controller.abort()
-    else opts.signal.addEventListener('abort', relayer, { once: true })
-  }
   return {
     onDelta(delta: string): void {
       texte += delta
-      // Le relais d'abord : l'utilisateur doit voir le chunk même si c'est celui qui trippe.
+      // Le relais d'abord : l'utilisateur doit voir le chunk, y compris celui qui trippe.
       opts.forward?.(delta)
-      if (derive) return
-      if (detector.beat(delta)) {
-        derive = true
-        controller.abort()
-      }
+      // Le trip est ENREGISTRÉ, pas agi. `beat()` ne rend un trip qu'une fois, il est donc sûr de
+      // l'appeler à chaque chunk jusqu'à la fin du tour.
+      detector.beat(delta)
     },
-    signal: controller.signal,
-    avortePourDerive: () => derive,
     trip: () => detector.tripped(),
     texte: () => texte,
     dispose(): void {
-      opts.signal?.removeEventListener('abort', relayer)
+      /* Plus aucun écouteur ni minuteur à libérer : la supervision n'observe que le flux. */
     }
   }
 }

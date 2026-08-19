@@ -171,45 +171,45 @@ describe('arbitrage', () => {
   })
 })
 
-describe('supervision mi-phase', () => {
-  it("avorte l'appel dès le trip, en distinguant la dérive d'une annulation utilisateur", () => {
+describe('supervision mi-phase — elle observe, elle ne coupe pas', () => {
+  it('retient le trip et laisse le flux continuer, sans exposer aucun moyen de couper', () => {
     const vus: string[] = []
     const sup = createMidPhaseSupervision({
       forward: (d) => vus.push(d),
       options: { seuilErreur: 2 }
     })
     sup.onDelta('Error: x\n')
-    expect(sup.signal.aborted).toBe(false)
+    expect(sup.trip()).toBeUndefined()
     sup.onDelta('Error: x\n')
-    expect(sup.signal.aborted).toBe(true)
-    expect(sup.avortePourDerive()).toBe(true)
     expect(sup.trip()?.signal).toBe('erreur-repetee')
-    // Le relais a bien tout vu, y compris le chunk qui a trippé.
-    expect(vus).toEqual(['Error: x\n', 'Error: x\n'])
+
+    // LA GARDE DE LA DOCTRINE : la supervision ne porte AUCUN signal d'avortement. Si quelqu'un en
+    // rajoute un, ce test rougit — « plus aucune coupe de run » ne se protège pas par un commentaire.
+    expect('signal' in sup).toBe(false)
+    expect('avortePourDerive' in sup).toBe(false)
+
+    // Et le flux continue APRÈS le trip : les chunks suivants sont toujours relayés.
+    sup.onDelta('encore du travail\n')
+    expect(vus).toEqual(['Error: x\n', 'Error: x\n', 'encore du travail\n'])
   })
 
-  it('garde le texte déjà produit — avorter ne jette pas le travail', () => {
+  it('voit tout le texte du tour, y compris ce qui suit le trip', () => {
     const sup = createMidPhaseSupervision({ options: { seuilErreur: 2 } })
     sup.onDelta('wrote src/a.ts\n')
     sup.onDelta('Error: x\n')
     sup.onDelta('Error: x\n')
+    sup.onDelta('wrote src/b.ts\n')
     expect(sup.texte()).toContain('wrote src/a.ts')
+    // La preuve que le tour n'a pas été coupé : ce qui vient APRÈS le trip est là aussi.
+    expect(sup.texte()).toContain('wrote src/b.ts')
   })
 
-  it("une annulation UTILISATEUR avorte aussi, mais n'est pas une dérive", () => {
-    const user = new AbortController()
-    const sup = createMidPhaseSupervision({ signal: user.signal })
-    user.abort()
-    expect(sup.signal.aborted).toBe(true)
-    expect(sup.avortePourDerive()).toBe(false)
-  })
-
-  it('un signal DÉJÀ avorté est honoré immédiatement', () => {
-    const user = new AbortController()
-    user.abort()
-    const sup = createMidPhaseSupervision({ signal: user.signal })
-    expect(sup.signal.aborted).toBe(true)
-    expect(sup.avortePourDerive()).toBe(false)
+  it('le trip reste lisible après coup — c’est lui qui nourrit le rapport et la décision de route', () => {
+    const sup = createMidPhaseSupervision({ options: { seuilErreur: 2 } })
+    sup.onDelta('Error: ECONNREFUSED\n')
+    sup.onDelta('Error: ECONNREFUSED\n')
+    expect(sup.trip()?.detail).toContain('2')
+    expect(sup.trip()?.extrait).toContain('ECONNREFUSED')
   })
 })
 
@@ -221,7 +221,7 @@ describe('supervision mi-phase', () => {
  * travaillait, ce que personne ne voit — et cela apprend à débrancher le garde.
  */
 describe('D2 — des valeurs différentes ne sont pas la même erreur', () => {
-  it("trois assertions de tests DISTINCTS ne trippent pas (elles ne diffèrent QUE par leurs valeurs)", () => {
+  it('trois assertions de tests DISTINCTS ne trippent pas (elles ne diffèrent QUE par leurs valeurs)', () => {
     const d = createRouteDriftDetector()
     d.beat('AssertionError: expected 3 to equal 4\n')
     d.beat('AssertionError: expected 12 to equal 45\n')
@@ -260,7 +260,7 @@ describe("D3 — du code affiché n'est pas un appel d'outil", () => {
 })
 
 describe('D4 — un progrès annoncé dans une ligne non terminée compte quand même', () => {
-  it("un gros chunk sans saut de ligne portant « wrote … » ne trippe PAS aucun-progres", () => {
+  it('un gros chunk sans saut de ligne portant « wrote … » ne trippe PAS aucun-progres', () => {
     const d = createRouteDriftDetector({ volumeSansProgres: 100 })
     expect(d.beat(`wrote the file successfully${' x'.repeat(120)}`)).toBeUndefined()
   })
