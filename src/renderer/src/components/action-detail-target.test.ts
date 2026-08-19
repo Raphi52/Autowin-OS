@@ -182,3 +182,54 @@ describe('localActionDetails — un data en CHAINE porte aussi la cause', () => 
     expect(localActionDetails([{ name: 'edit_file', ok: false, data: '   ' }])).toHaveLength(0)
   })
 })
+
+/**
+ * RETOUR UTILISATEUR du 2026-08-19 : « c'est pas super clair a comprendre pour moi ».
+ *
+ * Le correctif precedent exposait bien la cause — mais BRUTE : 3000 caracteres de sortie vitest avec
+ * les codes ANSI du terminal. L'utilisateur voyait enfin quelque chose, sans pouvoir le lire.
+ *
+ * Dans ce pavé, trois choses portent l'information : la premiere ligne (LA cause), les tests qui
+ * echouent, et l'erreur reelle. Tout le reste — couleurs, tests verts, compteurs de duree — est du
+ * bruit qui ENTERRE le signal. Montrer trop equivaut a ne rien montrer.
+ */
+describe('localActionDetails — la sortie brute devient lisible', () => {
+  const SORTIE_REELLE = [
+    'Vérification du bureau échouée (npm run test:unit) : …[tronqué — 185347 caractères omis]',
+    '\u001b[31m   \u001b[31m×\u001b[31m appendBoundedArchive — cout de rotation borne\u001b[39m\u001b[32m 112\u001b[39m',
+    'OK   — un refus déclaré est un ÉCHEC malgré `completed`',
+    'OK   — le motif nomme le refus',
+    ' \u001b[32m✓\u001b[39m scripts/cdp-verdict-collection.test.mjs \u001b[2m(1 test)\u001b[22m',
+    '\u001b[41m\u001b[1m FAIL \u001b[22m\u001b[49m src/main/activity/brain-trace-spool.test.ts',
+    '\u001b[31m\u001b[1mTypeError\u001b[22m: appendBoundedArchive is not a function\u001b[39m',
+    '\u001b[2m      Tests \u001b[22m \u001b[31m2 failed\u001b[39m | \u001b[32m6852 passed\u001b[39m'
+  ].join('\n')
+
+  const detail = (): string =>
+    localActionDetails([{ name: 'edit_file', ok: false, data: SORTIE_REELLE }])[0].text
+
+  it('ne montre plus AUCUN code de couleur du terminal', () => {
+    // eslint-disable-next-line no-control-regex
+    expect(detail()).not.toMatch(/\u001b\[/)
+  })
+
+  it('garde la CAUSE, en tete', () => {
+    expect(detail().split('\n')[0]).toContain('Vérification du bureau échouée')
+  })
+
+  it("garde l'erreur reelle et le test fautif", () => {
+    const texte = detail()
+    expect(texte).toContain('appendBoundedArchive is not a function')
+    expect(texte).toContain('brain-trace-spool.test.ts')
+  })
+
+  it('jette le bruit : les lignes VERTES et les compteurs de reussite', () => {
+    const texte = detail()
+    expect(texte).not.toContain('cdp-verdict-collection')
+    expect(texte).not.toContain('un refus déclaré est un ÉCHEC')
+  })
+
+  it('tient en quelques lignes, pas en pavé', () => {
+    expect(detail().split('\n').length).toBeLessThanOrEqual(8)
+  })
+})

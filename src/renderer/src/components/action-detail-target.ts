@@ -45,6 +45,49 @@ export interface LocalActionDetail {
 /** Au-dela, on ne lit plus : on noie. Mesure reelle sur une sortie de suite complete : 187 000 car. */
 const MAX_DETAIL_CHARS = 3_000
 
+/** Sequences de couleur du terminal : elles ne veulent rien dire dans une interface. */
+// eslint-disable-next-line no-control-regex
+const ANSI = /\[[0-9;]*[A-Za-z]/gu
+
+/**
+ * Lignes qui PORTENT l'echec. Tout le reste d'une sortie de suite — les tests verts, les compteurs
+ * de duree, les journaux d'etape — enterre le signal sous des milliers de lignes.
+ */
+const LIGNE_UTILE =
+  /(^|\s)(FAIL|×|✗|AssertionError|TypeError|RangeError|ReferenceError|SyntaxError|Error:|Expected|Received|\d+\s+failed)/u
+
+/** Une ligne de SUCCES ne dit rien d'un echec : elle n'a rien a faire dans le resume. */
+const LIGNE_VERTE = /(^|\s)(✓|OK\s|passed\b|TOUS VERTS)/u
+
+/**
+ * Resume lisible d'une sortie brute.
+ *
+ * Retour utilisateur du 2026-08-19 : « c'est pas super clair a comprendre pour moi ». La cause etait
+ * bien affichee, mais noyee dans 3000 caracteres de sortie vitest coloree. Montrer trop equivaut a
+ * ne rien montrer.
+ *
+ * On garde la PREMIERE ligne — c'est la cause, telle que la commande l'annonce — puis les seules
+ * lignes qui portent un echec, dedupliquees. Si rien ne ressort, on retombe sur le texte borne :
+ * mieux vaut du brut que du vide.
+ */
+function resumeLisible(brut: string): string {
+  const lignes = brut
+    .replace(ANSI, '')
+    .split('\n')
+    .map((ligne) => ligne.replace(/\s+$/u, ''))
+    .filter((ligne) => ligne.trim().length > 0)
+  if (lignes.length === 0) return ''
+  const retenues = [lignes[0]]
+  for (const ligne of lignes.slice(1)) {
+    if (LIGNE_VERTE.test(ligne) || !LIGNE_UTILE.test(ligne)) continue
+    const propre = ligne.trim()
+    if (!retenues.some((deja) => deja.trim() === propre)) retenues.push(propre)
+    if (retenues.length >= 7) break
+  }
+  const texte = retenues.join('\n')
+  return texte.length > MAX_DETAIL_CHARS ? `${texte.slice(0, MAX_DETAIL_CHARS)}…` : texte
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined
 }
@@ -67,7 +110,8 @@ export function localActionDetails(actions: readonly ActionLike[]): LocalActionD
     if (typeof action.data === 'string') {
       const brut = action.data.trim()
       if (!brut) continue
-      const texte = brut.length > MAX_DETAIL_CHARS ? `${brut.slice(0, MAX_DETAIL_CHARS)}…` : brut
+      const texte = resumeLisible(brut)
+      if (!texte) continue
       details.push({ name: action.name, text: texte, ok: action.ok !== false })
       continue
     }
