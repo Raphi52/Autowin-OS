@@ -656,12 +656,25 @@ function openMarkdownFence(text: string): OpenFence | undefined {
   return open
 }
 
-function boundedMarkdownResult(result: string, maxLength = 4_000): string {
+/**
+ * Borne le livrable affiche, en DISANT ce qui manque et ou le lire.
+ *
+ * DEFAUT VECU le 20/08 : un cadrage a ete coupe en pleine section `## Confiance` — precisement la
+ * partie qui distingue le verifie du suppose — et l'utilisateur n'a jamais su qu'il lui manquait
+ * quelque chose : la marque etait un `…[tronque]` nu, sans volume ni destination.
+ *
+ * On n'ALLONGE PAS le plafond : ce serait une rustine, et le probleme n'est pas la taille mais le
+ * silence. Le run garde son livrable entier ; il suffit de dire combien il en reste et ou.
+ */
+function boundedMarkdownResult(result: string, maxLength = 4_000, runPath?: string): string {
   if (result.length <= maxLength) return result
   const truncated = result.slice(0, maxLength)
   const open = openMarkdownFence(truncated)
   const closure = open ? `\n${open.prefix}${open.marker.repeat(open.length)}` : ''
-  return `${truncated}${closure}\n…[tronqué]`
+  const reste = result.length - maxLength
+  const label = runLabelFromPath(runPath)
+  const ou = label ? ` — livrable entier dans le run « ${label} »` : ''
+  return `${truncated}${closure}\n…[tronqué : ${reste} caractères de plus${ou}]`
 }
 
 export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): boolean {
@@ -1096,7 +1109,11 @@ export function formatOrchestrationOutcome(
     const detailApporte = Boolean(detail) && !noyau(detail as string).startsWith(noyau(label))
     lines.push(`Brain : ${label}${detailApporte ? ` — ${detail}` : ''}`)
   }
-  if (visibleResult) lines.push('', boundedMarkdownResult(visibleResult))
+  if (visibleResult)
+    lines.push(
+      '',
+      boundedMarkdownResult(visibleResult, 4_000, asString(outcome.runPath) ?? undefined)
+    )
   if (closingNotice?.trim()) lines.push('', closingNotice.trim())
   if (delivered) lines.push('', ...deliveredClosingBlock(data))
   return lines.join('\n')

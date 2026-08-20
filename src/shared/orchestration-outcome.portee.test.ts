@@ -94,3 +94,36 @@ describe('le bloc honnête est RELU comme celui d’Autowin', () => {
     expect(hasAuthoritativeDeliveredClosingBlock(libre)).toBe(false)
   })
 })
+
+describe('un livrable tronqué dit ce qui manque, et où', () => {
+  /*
+   * Le 20/08, un cadrage a ete coupe en pleine section `## Confiance` — la partie qui distingue le
+   * verifie du suppose — et la marque etait un `…[tronque]` nu. L'utilisateur ne pouvait pas savoir
+   * qu'il lui manquait quelque chose, ni ou le lire. Le plafond n'est PAS allonge : ce serait une
+   * rustine. C'est le silence qui est corrige.
+   */
+  const long = (n: number): string => 'x'.repeat(n)
+
+  it('annonce le VOLUME manquant', () => {
+    const texte = formatOrchestrationOutcome(true, {
+      ...livre(['frame']),
+      result: long(4_500)
+    })
+    expect(texte).toContain('caractères de plus')
+    expect(texte).toContain('500 caractères de plus')
+  })
+
+  it('nomme le run où lire le livrable entier', () => {
+    const texte = formatOrchestrationOutcome(true, {
+      ...livre(['frame']),
+      result: long(4_500),
+      runPath: 'C:/x/runs/conv-9/cadrer-le-besoin-workspace/RUN.md'
+    })
+    expect(texte).toContain('livrable entier dans le run « cadrer-le-besoin »')
+  })
+
+  it('ne tronque pas ce qui tient, et n’ajoute alors aucune mention', () => {
+    const texte = formatOrchestrationOutcome(true, { ...livre(['frame']), result: long(100) })
+    expect(texte).not.toContain('tronqué')
+  })
+})

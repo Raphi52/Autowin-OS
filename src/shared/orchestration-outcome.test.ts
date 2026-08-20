@@ -903,7 +903,9 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
 
     expect(code?.value).not.toContain('✅ Fait')
     expect(prose.some((node) => JSON.stringify(node).includes('✅ Fait'))).toBe(true)
-    expect(text).toMatch(/```\s*\n…\[tronqué\]\n\n---\n✅ Fait/u)
+    // La marque porte desormais le VOLUME manquant et le run ou lire la suite : l'intention du
+    // test — fence refermee, rubriques hors du bloc de code — est inchangee.
+    expect(text).toMatch(/```\s*\n…\[tronqué[^\]]*\]\n\n---\n✅ Fait/u)
   })
 
   /**
@@ -991,7 +993,7 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
 
   it('borne un résultat très long', () => {
     const text = formatOrchestrationOutcome(true, { result: 'x'.repeat(9_000) })
-    expect(text).toContain('[tronqué]')
+    expect(text).toContain('[tronqué')
     expect(text.length).toBeLessThan(5_000)
   })
 })
@@ -1169,7 +1171,9 @@ describe('demoteUnvalidatedSuccessClaims — les trous réfutés par le juge', (
       '⏳ Reste à faire : R.A.S.',
       '👉 Recommandé : aucune action supplémentaire'
     ]) {
-      expect(demoteUnvalidatedSuccessClaims(ligne, { gateBlocked: true })).toContain('ARRÊTÉ au contrôle final')
+      expect(demoteUnvalidatedSuccessClaims(ligne, { gateBlocked: true })).toContain(
+        'ARRÊTÉ au contrôle final'
+      )
     }
   })
 
