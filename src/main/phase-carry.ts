@@ -34,9 +34,18 @@
  * devis calculable — lever la borne échangerait un défaut mesuré contre un coût non mesuré.
  */
 
+import { clampMiddle } from './evidence-digest'
+
 /**
- * Titres considérés comme PORTEURS, tirés des titres réellement observés dans la mesure — pas d'une
- * liste souhaitée. Un titre absent d'ici n'est pas ignoré : il tombe simplement dans l'étage 2.
+ * Titres considérés comme PORTEURS. Les sept premiers sont ceux dont la mesure a compté les
+ * occurrences (`besoin` 98×, `changement` 20×, `defauts` 16×, `verdict` 8×, `sop` 7×, `resultat` 6×,
+ * `conclusion` 5×). Les suivants sont des titres du VOCABULAIRE DU PIPELINE lui-même (`frame` écrit
+ * `## Contraintes` et `## Options`, `frame`/`judge` écrivent `## Décision`) : ils sont attendus par
+ * construction, pas observés statistiquement — la distinction est dite ici plutôt que laissée
+ * croire que la mesure les justifie tous.
+ *
+ * Un titre absent de cette liste n'est pas ignoré : il tombe dans l'étage 2, qui est le
+ * comportement sûr par défaut.
  */
 const SECTIONS_PORTEUSES = [
   'besoin',
@@ -66,8 +75,6 @@ export function normaliserTitre(titre: string): string {
 
 export interface SectionTrouvee {
   titre: string
-  /** Titre normalisé, tel qu'il a été comparé aux titres porteurs. */
-  cle: string
   /** Le corps de la section, titre EXCLU. */
   corps: string
   porteuse: boolean
@@ -92,7 +99,6 @@ export function decouperSections(texte: string): SectionTrouvee[] {
     const cle = normaliserTitre(marques[i].titre)
     sections.push({
       titre: marques[i].titre,
-      cle,
       corps: texte.slice(marques[i].finTitre, fin).trim(),
       // Un titre « Besoin réel » ou « Décision retenue » compte : on cherche le mot porteur DANS le
       // titre normalisé, sinon la moitié des titres réels tomberaient à côté pour un adjectif.
@@ -105,7 +111,12 @@ export function decouperSections(texte: string): SectionTrouvee[] {
 export interface PortageResultat {
   /** Le texte à transmettre à la phase suivante. Toujours ≤ `cap`. */
   texte: string
-  /** Comment il a été obtenu — pour l'observabilité, et pour que les tests le vérifient. */
+  /**
+   * Comment il a été obtenu. Lu par les TESTS, pas par la production : `porterVersPhaseSuivante`
+   * dans l'orchestrateur ne consomme que `.texte`. Dire « pour l'observabilité » était faux — il n'y
+   * a aucune observabilité câblée sur ce champ, et un commentaire qui promet un branchement absent
+   * fait chercher longtemps.
+   */
   voie: 'entier' | 'sections' | 'tete-queue'
   /** Titres présents dans la sortie mais NON transmis. Ce que la troncature a coûté, nommé. */
   omises: string[]
@@ -116,9 +127,18 @@ export interface PortageResultat {
 /**
  * Part de la borne réservée à la TÊTE dans l'étage 2. Le reste va à la QUEUE.
  *
- * Deux tiers / un tiers : la tête porte le contexte et l'amorce du raisonnement, la queue porte la
- * conclusion. Le volume total transmis est INCHANGÉ par rapport au `slice` d'avant — ce qui change
- * est qu'on ne jette plus systématiquement la fin.
+ * DEUX TIERS / UN TIERS, ET C'EST UN ÉCHANGE, PAS UN GAIN NET — il faut le dire clairement, parce
+ * que la première version de ce commentaire prétendait le contraire. L'ancien `slice(0, cap)`
+ * transmettait les caractères `[0, cap)`. Celui-ci transmet `[0, ~2cap/3)` puis le dernier tiers du
+ * texte. La tranche MÉDIANE de l'ancienne tête — de ~2cap/3 jusqu'au début de la queue — n'est donc
+ * plus portée du tout.
+ *
+ * L'échange est fait en connaissance de cause : les titres réellement observés dans les sorties
+ * d'agents sont des titres de CONCLUSION (`verdict`, `résultat`, `défauts`, `conclusion`), et une
+ * mesure sur les sorties réelles montre que la fin du texte n'arrivait quasiment jamais à la phase
+ * suivante. On préfère donc perdre du milieu de raisonnement que perdre la conclusion. Mais ce n'est
+ * pas « au moins autant d'information » : c'est un arbitrage, et il peut se retourner sur une sortie
+ * dont la substance vit précisément au milieu.
  */
 const PART_TETE = 2 / 3
 
@@ -165,32 +185,61 @@ export function porterSortieDePhase(texte: string, cap: number): PortageResultat
       const avis = omises.length
         ? `\n…[non transmis : ${omises.join(', ')} — voir le fil des sous-agents]`
         : ''
-      // L'avis peut faire dépasser la borne : on le taille sur le corps, jamais l'inverse — un avis
-      // tronqué ne dirait plus ce qu'il manque, et c'est justement sa seule raison d'être.
+      // L'avis se taille sur le corps, jamais l'inverse — un avis tronqué ne dirait plus ce qu'il
+      // manque, et c'est sa seule raison d'être.
       const place = Math.max(0, cap - avis.length)
+      const brut = corps.length > place ? `${corps.slice(0, place)}${avis}` : `${corps}${avis}`
+      // GARDE FINALE, absente ici jusqu'au 2026-08-19 : quand l'avis est à lui seul plus long que la
+      // borne (beaucoup de titres omis, titres longs), `place` tombe à 0 et cette branche rendait
+      // l'avis SEUL, sans aucune borne. Mesuré : `cap=200` rendait 1807 caractères, soit 9× la
+      // limite — dans un module dont l'en-tête affirme « le résultat reste BORNÉ ». Une contrainte
+      // HARD démentie par le code qui la documente est pire qu'une contrainte absente.
+      const rendu = brut.length <= cap ? brut : brut.slice(0, cap)
       return {
-        texte: corps.length > place ? `${corps.slice(0, place)}${avis}` : `${corps}${avis}`,
+        texte: rendu,
         voie: 'sections',
+        // Compté sur ce qui est RÉELLEMENT rendu : figer `coupes` avant la garde finale annonçait à
+        // l'appelant un chiffre que la garde démentait ensuite.
         omises,
-        coupes: propre.length - Math.min(corps.length, place)
+        coupes: Math.max(0, propre.length - rendu.length)
       }
     }
   }
 
-  // ÉTAGE 2 — aucune section porteuse exploitable : on garde les BORDS. Volume identique à l'ancien
-  // `slice`, mais la conclusion n'est plus jetée d'office.
-  const avisLongueur = 64
-  const utile = Math.max(0, cap - avisLongueur)
+  /**
+   * ÉTAGE 2 — aucune section porteuse exploitable : on garde les BORDS.
+   *
+   * `clampMiddle` vient de `evidence-digest.ts`, qui faisait DÉJÀ exactement ce geste (garder deux
+   * bords en annonçant ce qui est coupé au milieu). Ce module citait ce fichier comme modèle dans son
+   * en-tête… et réimplémentait sa fonction à la main juste en dessous. Le doublon est supprimé : une
+   * seule définition de « couper au milieu », déjà testée là-bas.
+   */
+  /**
+   * Place à réserver pour le marqueur que `clampMiddle` insère au milieu.
+   *
+   * Sa longueur dépend du nombre de CHIFFRES du compte d'omission, donc on ne peut pas la coder en
+   * dur — un `avisLongueur = 64` écrit au doigt devenait faux dès que ce compte passait à neuf
+   * chiffres, et le garde-fou final tronquait alors la conclusion, c'est-à-dire exactement ce que cet
+   * étage existe pour préserver.
+   *
+   * On la MESURE donc sur un gabarit minuscule, puis on ajoute les chiffres manquants. Et on ne sonde
+   * PAS avec `clampMiddle(propre, 0, 0)`, ce qui paraissait plus élégant : en JavaScript
+   * `slice(-0) === slice(0)`, donc une queue de zéro rend le texte ENTIER et la sonde mesurait tout
+   * le texte au lieu du marqueur. Les tests l'ont attrapé ; le piège vaut d'être écrit ici.
+   */
+  // `'abc'` et pas `'ab'` : avec 2 caractères pour `head + tail = 2`, `clampMiddle` prend son retour
+  // anticipé (`text.length <= head + tail`) et rend le texte sans marqueur — la sonde mesurait 0.
+  const gabarit = clampMiddle('abc', 1, 1).length - 2 // marqueur avec un compte à 1 chiffre
+  const marqueur = gabarit - 1 + String(propre.length).length
+  const utile = Math.max(0, cap - marqueur)
   const tete = Math.floor(utile * PART_TETE)
   const queue = utile - tete
-  const coupes = propre.length - utile
-  const avis = `\n…[${coupes} caractères coupés ici — voir le fil des sous-agents]\n`
-  const resultat = `${propre.slice(0, tete)}${avis}${queue > 0 ? propre.slice(propre.length - queue) : ''}`
+  const brut = clampMiddle(propre, tete, queue)
+  const rendu = brut.length <= cap ? brut : brut.slice(0, cap)
   return {
-    // Garde-fou : si l'avis est plus long que prévu, on retaille pour ne JAMAIS dépasser la borne.
-    texte: resultat.length <= cap ? resultat : resultat.slice(0, cap),
+    texte: rendu,
     voie: 'tete-queue',
     omises: sections.filter((s) => s.corps).map((s) => s.titre),
-    coupes
+    coupes: Math.max(0, propre.length - rendu.length)
   }
 }

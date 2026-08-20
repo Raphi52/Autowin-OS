@@ -139,7 +139,8 @@ describe('ÉTAGE 2 — sans aucune section, on garde les BORDS', () => {
   it('dit COMBIEN il a coupé', () => {
     const r = porterSortieDePhase(proseLongue(), CAP)
     expect(r.coupes).toBeGreaterThan(0)
-    expect(r.texte).toContain('caractères coupés')
+    // Le libellé vient de `clampMiddle`, la seule définition de « couper au milieu ».
+    expect(r.texte).toContain('caractères omis')
   })
 
   it('reste sous la borne — le volume porté ne dépasse pas celui d’avant', () => {
@@ -234,5 +235,119 @@ describe('garde structurelle — un seul point de portage', () => {
   it('la garde SAIT échouer — sinon elle ne prouve rien', () => {
     const sabote = `${source}\nconst x = texte.slice(0, PHASE_CONTEXT_CAP)\n`
     expect(decoupesManuelles(sabote).length).toBe(1)
+  })
+})
+
+/**
+ * DÉFAUTS DU JUDGE, cycle 1 sur ce chantier. Chacun a été REPRODUIT avant d'être corrigé.
+ *
+ * Le plus grave portait sur la seule contrainte HARD du cadrage : « le résultat reste BORNÉ ». Le
+ * module l'affirmait dans son en-tête et la violait par une branche. Une contrainte démentie par le
+ * code qui la documente est pire qu'une contrainte absente — on cesse de la vérifier.
+ */
+describe('JD1 — la borne est respectée par TOUTES les branches, y compris l’avis', () => {
+  it('une petite section porteuse + beaucoup de titres omis ne fait plus 9× la borne', () => {
+    const omises = Array.from(
+      { length: 30 },
+      (_, i) => `## Rubrique annexe au titre délibérément très long numéro ${i}\ncorps`
+    ).join('\n')
+    // « ## Besoin\nx » RENTRE dans le cap : c'est ce qui ouvrait la branche fautive, où l'avis
+    // d'omission — plus long que le cap à lui seul — était rendu SANS borne. Mesuré : 1807 pour 200.
+    const r = porterSortieDePhase(`## Besoin\nx\n${omises}`, 200)
+    expect(r.voie).toBe('sections')
+    expect(r.texte.length).toBeLessThanOrEqual(200)
+  })
+
+  it('la borne tient sur toute une gamme de caps, sections ou pas', () => {
+    const omises = Array.from(
+      { length: 40 },
+      (_, i) => `## Titre annexe interminable pour gonfler l'avis d'omission ${i}\ncorps ${i}`
+    ).join('\n')
+    for (const cap of [10, 25, 50, 120, 300, 1000, 2000]) {
+      expect(porterSortieDePhase(`## Besoin\nx\n${omises}`, cap).texte.length).toBeLessThanOrEqual(
+        cap
+      )
+      expect(porterSortieDePhase('z'.repeat(9000), cap).texte.length).toBeLessThanOrEqual(cap)
+      expect(
+        porterSortieDePhase(`## Besoin\n${'a'.repeat(5000)}`, cap).texte.length
+      ).toBeLessThanOrEqual(cap)
+    }
+  })
+})
+
+describe('JD2 — le compte annoncé correspond à ce qui est réellement rendu', () => {
+  it("`coupes` n'est plus figé avant la garde finale", () => {
+    const omises = Array.from(
+      { length: 30 },
+      (_, i) => `## Rubrique au titre très long numéro ${i}\ncorps`
+    ).join('\n')
+    const texte = `## Besoin\nx\n${omises}`
+    const r = porterSortieDePhase(texte, 200)
+    // Ce qui a été coupé = ce qui était là moins ce qui est rendu. Rien d'autre ne serait vrai.
+    expect(r.coupes).toBe(texte.length - r.texte.length)
+  })
+
+  it('la réservation du marqueur suit sa VRAIE longueur, pas une estimation en dur', () => {
+    // Le marqueur porte le nombre de caractères omis : sa longueur dépend du nombre de chiffres.
+    // Un `avisLongueur = 64` codé au doigt devenait faux dès que ce compte passait à 9 chiffres.
+    for (const taille of [3000, 300000, 30000000]) {
+      const r = porterSortieDePhase('x'.repeat(taille), 2000)
+      expect(r.texte.length).toBeLessThanOrEqual(2000)
+      expect(r.coupes).toBe(taille - r.texte.length)
+    }
+  })
+})
+
+describe('JD3 — pas de doublon : couper au milieu a une seule définition', () => {
+  it("l'étage 2 délègue à `clampMiddle`, déjà présent dans le dépôt", () => {
+    const source = readFileSync(join(__dirname, 'phase-carry.ts'), 'utf8')
+    expect(source).toContain("from './evidence-digest'")
+    expect(source).toContain('clampMiddle(propre, tete, queue)')
+    // Le marqueur du milieu vient de `clampMiddle`, pas d'un gabarit recopié ici.
+    const r = porterSortieDePhase(`DÉBUT ${'x'.repeat(5000)} FIN`, 2000)
+    expect(r.texte).toContain('caractères omis')
+  })
+})
+
+describe('JD4 — l’échange tête/queue est ASSUMÉ, pas maquillé en gain net', () => {
+  it('la tranche médiane de l’ancienne tête est bien perdue — le test le CONSTATE', () => {
+    const CAP_T = 300
+    const texte = `TETE${'a'.repeat(200)}MEDIANE_REPERE${'b'.repeat(200)}QUEUE_REPERE`
+    const ancien = texte.slice(0, CAP_T)
+    expect(ancien).toContain('MEDIANE_REPERE') // l'ancien portait ce repère…
+    expect(ancien).not.toContain('QUEUE_REPERE') // …mais pas la conclusion
+
+    const r = porterSortieDePhase(texte, CAP_T)
+    expect(r.texte).toContain('QUEUE_REPERE') // le nouveau porte la conclusion…
+    expect(r.texte).not.toContain('MEDIANE_REPERE') // …au prix du milieu. C'est l'arbitrage.
+  })
+})
+
+/**
+ * JD5 — LE COÛT NE PEUT PAS AUGMENTER, ET ÇA SE PROUVE SANS ÉCHANTILLON.
+ *
+ * La mesure sur le magasin réel tourne à `cap=1000` sur des sorties déjà bornées à 2000 en amont :
+ * elle ne dit donc RIEN du régime qui motivait la borne à l'origine — les sorties très longues, non
+ * tronquées, celles du précédent `evidence-digest` (un prompt de 422 504 caractères). Conclure « le
+ * risque de coût est éteint » depuis cet échantillon était une extrapolation.
+ *
+ * L'argument juste n'est pas statistique, il est structurel : l'ancien portage rendait `cap`
+ * caractères PLUS un suffixe d'avis, le nouveau rend AU PLUS `cap`. Le nouveau est donc borné par
+ * l'ancien pour TOUTE entrée, quelle que soit sa taille. Une propriété vérifiée sur des tailles
+ * extrêmes vaut mieux qu'un pourcentage mesuré sur un régime qui ne contient pas le cas craint.
+ */
+describe('JD5 — le coût est borné par construction, à toute taille', () => {
+  it('ne dépasse jamais le cap, ni ce que portait l’ancien slice, sur des entrées extrêmes', () => {
+    const cap = 2000
+    for (const taille of [2001, 5_000, 100_000, 2_000_000]) {
+      const prose = 'x'.repeat(taille)
+      const structure = `## Besoin\n${'a'.repeat(taille / 2)}\n## Blabla\n${'b'.repeat(taille / 2)}`
+      for (const entree of [prose, structure]) {
+        const ancien = `${entree.slice(0, cap)}\n…[tronqué — voir le fil des sous-agents]`
+        const nouveau = porterSortieDePhase(entree, cap).texte
+        expect(nouveau.length).toBeLessThanOrEqual(cap)
+        expect(nouveau.length).toBeLessThanOrEqual(ancien.length)
+      }
+    }
   })
 })
