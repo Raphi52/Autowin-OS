@@ -301,6 +301,23 @@ describe('JD2 — le compte annoncé correspond à ce qui est réellement rendu'
       expect(porterSortieDePhase('x'.repeat(cap * 4), cap).texte).toHaveLength(cap)
     }
 
+    // L'ITÉRATION TERMINE, et c'est la propriété la moins visible de ce calcul. La place réservée
+    // est mesurée sur le marqueur de `clampMiddle`, un texte que possède UN AUTRE FICHIER
+    // (`evidence-digest.ts`). Un relecteur a allongé ce libellé de 17 caractères et fait osciller
+    // le calcul en un pas (`taille=1002, cap=949` → `utile` alternant 903 / 904) : ma réservation
+    // dépendait donc silencieusement d'un littéral étranger. L'itération détecte l'oscillation au
+    // lieu de boucler (un `while (a !== b)` ne terminerait PAS) et, le cas échéant, SUR-réserve —
+    // au pire un caractère de substance perdu, jamais la borne. Vérifié en sabotant le libellé :
+    // aucune violation sur 2000 combinaisons, et le cas du relecteur retombe même exactement juste.
+    // Ce test-ci ne peut pas modifier l'autre fichier ; il fige l'invariant observable, sur des
+    // tailles et des caps où l'oscillation se produirait si elle n'était pas traitée.
+    for (const taille of [999, 1002, 5000, 10_001, 100_000]) {
+      for (let cap = 1; cap <= 1200; cap += 61) {
+        if (taille <= cap) continue
+        expect(porterSortieDePhase('x'.repeat(taille), cap).texte.length).toBeLessThanOrEqual(cap)
+      }
+    }
+
     // L'ÉCHANTILLON ÉLARGI, et il a fallu qu'un relecteur me le demande. Les trois cas ci-dessus
     // partagent une propriété que je n'avais pas vue : le compte d'omission y a le MÊME nombre de
     // chiffres que la longueur totale. L'affirmation « rempli au caractère près » n'était donc

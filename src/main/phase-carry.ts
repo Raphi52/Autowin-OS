@@ -233,22 +233,49 @@ export function porterSortieDePhase(texte: string, cap: number): PortageResultat
   const largeurMarqueur = (omis: number): number => gabarit - 1 + String(Math.max(1, omis)).length
 
   /**
-   * POINT FIXE, en un pas — et il corrige une réservation qui surestimait d'un caractère.
+   * POINT FIXE, itéré et BORNÉ — et il corrige deux défauts successifs.
    *
    * Le marqueur annonce le nombre de caractères OMIS, donc sa largeur dépend des chiffres de ce
-   * nombre… qui dépend lui-même de la place laissée par le marqueur. La première version réservait
-   * la place d'après les chiffres de la longueur TOTALE, une borne supérieure : dès que le compte
-   * omis retombait sous une puissance de 10, elle réservait un caractère de trop et le budget
-   * n'était pas rempli. Mesuré : `porterSortieDePhase('x'.repeat(1000), 200)` rendait 199 au lieu
-   * de 200 — un caractère de substance abandonné en silence, et un commentaire qui affirmait
-   * pourtant « rempli au caractère près ».
+   * nombre… qui dépend lui-même de la place laissée par le marqueur. Circularité.
    *
-   * On part donc de la borne supérieure, on en déduit le compte omis réel, et on RE-mesure. Un seul
-   * pas suffit : la largeur ne varie que par le nombre de chiffres, et le second calcul ne peut que
-   * la réduire — jamais osciller.
+   * Première version : réserver d'après les chiffres de la longueur TOTALE, une borne supérieure.
+   * Dès que le compte omis retombait sous une puissance de 10, elle réservait un caractère de trop.
+   * Mesuré : `porterSortieDePhase('x'.repeat(1000), 200)` rendait 199 au lieu de 200 — un caractère
+   * de substance abandonné en silence, sous un commentaire affirmant « rempli au caractère près ».
+   *
+   * Deuxième version : UN pas de raffinement, avec le commentaire « un seul pas suffit, jamais
+   * osciller ». C'était vrai pour le libellé ACTUEL du marqueur, et faux pour un libellé voisin : un
+   * relecteur a allongé de 17 caractères le texte de `clampMiddle` dans `evidence-digest.ts` et
+   * obtenu une oscillation réelle (`taille=1002, cap=949` → `utile` alternant 903 / 904). Ma
+   * réservation dépendait donc SILENCIEUSEMENT d'un texte qu'un autre fichier possède — le genre de
+   * couplage implicite qui casse six mois plus tard, quand plus personne ne se souvient du lien.
+   *
+   * Version actuelle : on itère jusqu'à stabilité, et on retient le `utile` le PLUS PETIT rencontré.
+   * Deux raisons, et la seconde est la moins évidente :
+   *  - une boucle `while (a !== b)` ne terminerait PAS sur une valeur qui oscille entre deux
+   *    états ; prendre le minimum rend la suite monotone décroissante, donc convergente ;
+   *  - sous-estimer `utile` revient à SUR-réserver la place du marqueur, ce qui ne peut jamais
+   *    violer la borne. En cas d'ambiguïté on perd donc au pire un caractère de substance, jamais
+   *    la garantie qui compte.
    */
-  const utileMajorant = Math.max(0, cap - largeurMarqueur(propre.length))
-  const utile = Math.max(0, cap - largeurMarqueur(propre.length - utileMajorant))
+  const PAS_MAX = 8 // large : le nombre de chiffres d'une longueur JS ne dépasse pas ~16
+  let utile = Math.max(0, cap - largeurMarqueur(propre.length))
+  const vus: number[] = [utile]
+  for (let pas = 0; pas < PAS_MAX; pas++) {
+    const suivant = Math.max(0, cap - largeurMarqueur(propre.length - utile))
+    if (suivant === utile) break // point fixe atteint : la réservation est EXACTE
+    if (vus.includes(suivant)) {
+      // OSCILLATION : la suite repasse par une valeur déjà vue et ne se stabilisera pas. On retient
+      // alors la place la PLUS LARGE (le `utile` le plus petit), qui sur-réserve : au pire un
+      // caractère de substance perdu, jamais la borne violée. Accepter `suivant` au lieu de
+      // comparer m'avait fait revenir à la sur-réservation SYSTÉMATIQUE — le test d'exactitude
+      // l'a rattrapé aussitôt.
+      utile = Math.min(utile, suivant)
+      break
+    }
+    vus.push(suivant)
+    utile = suivant
+  }
 
   /**
    * `cap` plus petit que le marqueur : il n'y a de place pour AUCUN contenu.
