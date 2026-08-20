@@ -25,7 +25,9 @@ describe('ChatView — un message routé ailleurs ne verrouille pas sa conversat
 
   it('après un routage, la conversation source peut RENVOYER pendant que la cible travaille', async () => {
     // Le tour sur la cible ne rend jamais la main : c'est le cas « une conversation travaille ».
-    const pilotChat = vi.fn(() => new Promise<{ ok: boolean }>(() => {}))
+    const pilotChat = vi.fn(
+      (_payload: unknown, _conversationId?: string) => new Promise<{ ok: boolean }>(() => {})
+    )
     const routeConversationMessage = vi.fn(async (conversationId: string) => ({
       sourceConversationId: conversationId,
       conversationId: conversationId === 'A' ? 'Z' : conversationId,
