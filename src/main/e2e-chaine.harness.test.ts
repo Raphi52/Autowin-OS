@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { describe, expect, it, afterEach } from 'vitest'
 import { creerDepotJetable, demonterOs, monterOsReel, type DepotJetable } from './e2e-chaine.harness'
 import type {
@@ -40,6 +41,44 @@ describe('TERRAIN — le harnais atteint le vrai code', () => {
     jetable = undefined
     osCourant = undefined
   })
+
+  /**
+   * LE RELACHEMENT DES COPIES, garde par une assertion et non par un commentaire.
+   *
+   * Defaut releve par un juge externe le 2026-08-20 : en VIDANT entierement la boucle de
+   * relachement de `demonterOs`, les deux fichiers de test restaient VERTS pendant que 18
+   * repertoires orphelins apparaissaient dans le store en moins de cinq minutes. La propriete etait
+   * donc nommee dans un commentaire — « sans le relachement des copies, cinq worktrees ORPHELINS
+   * sont restes dans le store » — et gardee par RIEN. C'est exactement la maladie que ce livrable
+   * existe pour tuer : une garantie annoncee qu'aucune assertion ne tient.
+   *
+   * Ce cas appelle `demonterOs` LUI-MEME, au lieu de s'en remettre au `afterEach` : une propriete du
+   * demontage ne peut pas etre observee par le mecanisme qui demonte.
+   */
+  it('le demontage relache la copie au lieu de la laisser orpheline', async () => {
+    const depotJetable = creerDepotJetable('cible.txt', 'AVANT\n')
+    const adaptateur = new AdaptateurSonde()
+    const os = await monterOsReel(depotJetable.depot, adaptateur)
+
+    // On acquiert par la porte VIVANTE — celle qu'emprunte un run de mutation.
+    const copie = await os.worktrees?.beginAsync('terrain-relache', 'agent-relache', true)
+    expect(copie).toBeDefined()
+    if (!copie) throw new Error('copie non acquise : le reste du cas ne prouverait rien')
+    expect(existsSync(copie)).toBe(true)
+    expect(os.worktrees?.activity().length ?? 0).toBeGreaterThan(0)
+
+    await demonterOs(os, depotJetable)
+
+    /**
+     * LA propriete, mesuree sur le DISQUE et non dans la comptabilite interne.
+     *
+     * `activity()` a ete essaye d'abord et rejete : il rend un registre HISTORIQUE des runs — apres
+     * relachement, l'entree y demeure avec l'etat `merged`. Asserter sa longueur aurait verifie une
+     * ecriture interne, pas la garantie qui compte. Le repertoire present ou absent sur le disque,
+     * lui, EST la garantie.
+     */
+    expect(existsSync(copie)).toBe(false)
+  }, 120000)
 
   it('provider simule selectionne, coordinateur reel present et acquerant', async () => {
     jetable = creerDepotJetable('cible.txt', 'AVANT\n')

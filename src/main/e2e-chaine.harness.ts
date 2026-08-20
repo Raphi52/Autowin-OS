@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
+import { signalerInterfaceVisible } from './startup-gate'
 import type { AutowinOS } from './os'
 import type { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 import type { ProviderAdapter } from './providers/types'
@@ -79,6 +80,22 @@ export async function monterOsReel(
   process.env[AUTOWIN_WORKSPACE_ENV] = depot
   const { AutowinOS } = await import('./os')
   const os = new AutowinOS()
+  /**
+   * LA RECONCILIATION EST DECLENCHEE TOUT DE SUITE, et ce n'est pas un detail de confort.
+   *
+   * Le coordinateur differe son inventaire des copies jusqu'a `interfaceVisible`, qui en production
+   * est la fenetre Electron — et qui, sans fenetre, se resout d'office au bout de son filet de
+   * securite de 20 s (`startup-gate.ts:20`). Or ce test dure ~15-17 s : le filet tombait donc pile
+   * PENDANT le demontage, l'inventaire enumerait les copies avec pour `cwd` un depot temporaire
+   * DEJA supprime, et `execFileSync('git', ...)` levait `ENOENT` dans une promesse que le
+   * constructeur `void`-e sans `catch`. Resultat mesure : une « Unhandled Rejection » imputee a ce
+   * fichier, faisant sortir la suite complete en exit 1 alors que 7183 tests passaient — et,
+   * probablement, les rouges intermittents que deux relecteurs ont observes.
+   *
+   * On ne rallonge donc aucun delai : on ORDONNE. La reconciliation se fait ici, tant que le depot
+   * existe, au lieu de courir contre un filet de 20 s. `signalerInterfaceVisible` est idempotent.
+   */
+  signalerInterfaceVisible()
   os.registry.register(adaptateur)
   // Un provider absent de `PROVIDER_DEFAULT_SELECTIONS` traverse `normalizeRoleBinding` intact
   // (`roles.ts:76`), donc l'id simule survit tel quel sur les quatre roles.
