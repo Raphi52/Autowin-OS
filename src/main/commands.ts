@@ -72,6 +72,7 @@ import { collectOrchestrationContext } from './orchestration-context'
 import { rememberFact } from './brain-remember'
 import { noteRemembered } from './session-memory-echo'
 import { brainServiceToken } from './brain-retrieval'
+import { normaliserReponsesAsk } from './ask-options'
 import { classifyRegime, regimePhases } from './task-regime'
 import {
   runGraphify,
@@ -256,12 +257,28 @@ export type AppEvent =
   | { type: 'orchestrate-usage'; convId?: string; runPath?: string }
   | { type: 'causal-trace-updated'; convId: string }
 
+/**
+ * Normalise l'argument `display` de desktop_observe : un rang 1-base, ou undefined pour tout le bureau.
+ * Le modele envoie parfois un nombre sous forme de chaine ; tout le reste est un refus explicite.
+ */
+export function parseDisplayArg(raw: unknown): number | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined
+  const value = typeof raw === 'string' ? Number(raw.trim()) : raw
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new Error(`display invalide: ${JSON.stringify(raw)} (entier >= 1 attendu)`)
+  }
+  return value
+}
+
 const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
     description:
-      "Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet.",
-    args: {},
+      "Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent.",
+    args: {
+      display:
+        'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans'
+    },
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -498,7 +515,13 @@ const CATALOG: CommandSpec[] = [
       'terminer par une question en prose, qui l’oblige a retaper sa reponse',
     args: {
       question: 'la question, en une phrase',
-      options: 'les reponses proposees (2 a 4), la premiere etant celle que tu recommandes'
+      options:
+        'les reponses proposees (2 a 4). Chacune est un objet : { libelle } court (une poignee de ' +
+        'mots, PAS une phrase portant le raisonnement), { consequence } en une ligne, ' +
+        '{ recommande: true } sur celle que tu recommandes (une seule), et facultativement ' +
+        '{ detail: { fait, touche, neReglePas } } — ce que ca fait, ce que ca touche, ce que ca ne ' +
+        'regle PAS. { envoi } remplace le libelle dans le prompt renvoye au clic. Une chaine nue ' +
+        'reste acceptee mais donne un bloc sans consequence ni detail.'
     },
     annotations: {
       // Elle n'ecrit rien : elle AFFICHE des choix. Ce que l'utilisateur clique repart comme un
@@ -1108,7 +1131,7 @@ export class AppCommandBus {
       if (!this.isCommandEnabled(name)) throw new Error(`Capacité désactivée: ${name}`)
       if (name === 'desktop_observe') {
         if (!this.desktop) throw new Error('Controle desktop indisponible')
-        const observed = await this.desktop.observe()
+        const observed = await this.desktop.observe({ display: parseDisplayArg(args.display) })
         this.trace?.(name, redactedArgs(name, args), true)
         return { ok: true, data: observed.data, attachments: [observed.attachment] }
       }
@@ -1152,10 +1175,10 @@ export class AppCommandBus {
         // en prose (« Veux-tu que je le fasse ? »). Une heuristique sur les puces de fin de message
         // proposait comme reponses cliquables des resultats de tests et des chemins de fichiers —
         // 3 echantillons sur 4. Un choix se declare.
-        const options = (Array.isArray(a.options) ? a.options : [])
-          .map((option) => (typeof option === 'string' ? option.trim() : ''))
-          .filter((option) => option.length > 0 && option.length <= 200)
-          .slice(0, 4)
+        // Contrat elargi le 20/08 : une reponse porte un libelle COURT + sa consequence, et non
+        // une phrase entiere. Les chaines nues restent acceptees — un modele qui emet l'ancienne
+        // forme obtient un bloc degrade, jamais une erreur.
+        const options = normaliserReponsesAsk(a.options)
         if (options.length < 2) throw new Error('Une question cliquable demande 2 a 4 reponses')
         return { question: s('question'), options }
       }

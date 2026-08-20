@@ -25,6 +25,10 @@ export interface DesktopObservation {
     originY: number
     mimeType: 'image/jpeg'
     scope: 'desktop' | 'foreground-window'
+    /** Nombre de moniteurs detectes ; permet au modele de choisir `display`. */
+    displays?: number
+    /** Rang 1-base du moniteur capture seul ; absent quand la capture couvre tout le bureau. */
+    display?: number
   }
   attachment: {
     name: 'desktop-current.jpg'
@@ -35,14 +39,21 @@ export interface DesktopObservation {
   }
 }
 
+export interface DesktopObserveOptions {
+  display?: number
+}
+
 export interface DesktopController {
-  observe(): Promise<DesktopObservation>
+  observe(options?: DesktopObserveOptions): Promise<DesktopObservation>
   act(actions: unknown): Promise<{ executed: number }>
 }
 
 type Platform = NodeJS.Platform | string
 type PowerShellRunner = (encodedCommand: string) => Promise<string>
-type DesktopCapture = () => Promise<DesktopObservation>
+type DesktopCapture = (options?: {
+  forceForegroundWindow?: boolean
+  display?: number
+}) => Promise<DesktopObservation>
 
 const MAX_ACTIONS = 20
 const MAX_TEXT_CHARS = 20_000
@@ -407,10 +418,10 @@ export class WindowsDesktopController implements DesktopController {
     }
   }
 
-  async observe(): Promise<DesktopObservation> {
+  async observe(options: DesktopObserveOptions = {}): Promise<DesktopObservation> {
     this.assertWindows()
     if (!this.capture) throw new Error('Capture desktop Electron indisponible')
-    const observed = await this.capture()
+    const observed = await this.capture({ display: options.display })
     const { data, attachment } = observed
     if (data.mimeType !== 'image/jpeg' || attachment.mimeType !== 'image/jpeg') {
       throw new Error('Format de capture desktop inattendu')

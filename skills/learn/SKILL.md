@@ -1,15 +1,15 @@
 ---
-name: save
-description: Écrit dans le Brain l'EMPREINTE du dépôt courant — ce qu'il est, ce qu'il fait, pourquoi et comment — en plusieurs faits ancrés et SANS doublon (relecture puis mise à jour de l'existant, jamais une seconde copie). Déclencher sur `/save`, « sauvegarde l'état de la codebase », « note où on en est », « capitalise ce qu'on sait de ce dépôt », ou avant de quitter un dépôt sur lequel on reviendra. NE PAS utiliser pour retenir une leçon d'un run (c'est `remember` seul), ni pour un état passager (branche courante, test rouge du moment) : l'empreinte décrit ce qui reste vrai dans trois mois.
+name: learn
+description: Écrit dans le Brain l'EMPREINTE du dépôt courant — ce qu'il est, ce qu'il fait, pourquoi et comment — en plusieurs faits ancrés et SANS doublon (relecture puis mise à jour de l'existant, jamais une seconde copie). Déclencher sur `/learn`, « sauvegarde l'état de la codebase », « note où on en est », « capitalise ce qu'on sait de ce dépôt », ou avant de quitter un dépôt sur lequel on reviendra. NE PAS utiliser pour retenir une leçon d'un run (c'est `remember` seul), ni pour un état passager (branche courante, test rouge du moment) : l'empreinte décrit ce qui reste vrai dans trois mois.
 ---
 
-# Save — l'empreinte durable d'un dépôt
+# Learn — l'empreinte durable d'un dépôt
 
 ## À quoi ça sert
 
 Un dépôt se redécouvre à chaque conversation : on relit les mêmes fichiers pour réapprendre les mêmes
-choses, et on repaie cette lecture à chaque fois. `save` écrit une fois ce qui restera vrai, pour que
-`load` le rende en une requête.
+choses, et on repaie cette lecture à chaque fois. `learn` écrit une fois ce qui restera vrai, pour que
+`think` le rende en une requête.
 
 Ce qui est capitalisé n'est pas un résumé de code — le code se relit. C'est ce qu'on ne peut PAS
 déduire d'un fichier isolé : à quoi sert cette pièce, **pourquoi** elle est ainsi, **comment** les

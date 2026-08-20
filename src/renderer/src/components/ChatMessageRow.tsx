@@ -10,6 +10,7 @@ import React, { Fragment, memo } from 'react'
 import { Markdown } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
 import { CandidatsPickPanel } from './CandidatsPickPanel'
+import { AskDecisionBlock } from './AskDecision'
 import { JugesPanel } from './JugesPanel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { AssistantActivityGroup } from './ChatView.parts'
@@ -362,6 +363,12 @@ export const ChatMessageRow = memo(
                       <SuggestionGrid
                         key={index}
                         groups={part.groups}
+                        onPick={(prompt) => onPickSuggestion?.(prompt)}
+                      />
+                    ) : part.kind === 'ask-decision' ? (
+                      <AskDecisionBlock
+                        key={index}
+                        decision={part.decision}
                         onPick={(prompt) => onPickSuggestion?.(prompt)}
                       />
                     ) : part.kind === 'candidats-pick' ? (

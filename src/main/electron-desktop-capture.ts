@@ -134,7 +134,8 @@ function observation(
   jpeg: Buffer,
   imageSize: { width: number; height: number },
   source: Rect,
-  scope: DesktopObservation['data']['scope']
+  scope: DesktopObservation['data']['scope'],
+  displayInfo: { displays: number; display?: number } = { displays: 1 }
 ): DesktopObservation {
   if (jpeg.length === 0) throw new Error('Electron a produit une capture desktop vide')
   return {
@@ -146,7 +147,9 @@ function observation(
       originX: source.left,
       originY: source.top,
       mimeType: 'image/jpeg',
-      scope
+      scope,
+      displays: displayInfo.displays,
+      ...(displayInfo.display === undefined ? {} : { display: displayInfo.display })
     },
     attachment: {
       name: 'desktop-current.jpg',
@@ -204,18 +207,47 @@ function sourceForDisplay(
   return sources.find(({ display_id }) => display_id === String(display.id)) ?? sources[index]
 }
 
-/** Capture tous les moniteurs, avec repli explicite sur la fenetre active sous RDP. */
+export interface DisplayEntry {
+  layout: PhysicalDisplayLayout
+  /** Index d'origine dans screen.getAllDisplays(), requis pour retrouver la source Electron. */
+  sourceIndex: number
+}
+
+/**
+ * Ordonne les moniteurs de gauche a droite (puis de haut en bas) et retient celui demande.
+ * `display` est un rang 1-base dans cet ordre visuel ; absent, tous les moniteurs sont gardes.
+ */
+export function selectDisplayEntries(
+  entries: readonly DisplayEntry[],
+  display?: number
+): DisplayEntry[] {
+  const ordered = [...entries].sort(
+    (a, b) => a.layout.left - b.layout.left || a.layout.top - b.layout.top
+  )
+  if (display === undefined) return ordered
+  if (!Number.isInteger(display) || display < 1 || display > ordered.length) {
+    throw new Error(`Ecran ${display} inexistant : ${ordered.length} moniteur(s) detecte(s)`)
+  }
+  return [ordered[display - 1]]
+}
+
+/** Capture tous les moniteurs (ou un seul, plein cadre), avec repli sur la fenetre active sous RDP. */
 export async function captureElectronDesktop(
-  options: { forceForegroundWindow?: boolean } = {}
+  options: { forceForegroundWindow?: boolean; display?: number } = {}
 ): Promise<DesktopObservation> {
-  const displays = screen.getAllDisplays()
-  if (displays.length === 0) throw new Error('Aucun ecran Windows disponible')
-  const layouts = displays.map((display) =>
+  const allDisplays = screen.getAllDisplays()
+  if (allDisplays.length === 0) throw new Error('Aucun ecran Windows disponible')
+  const allLayouts = allDisplays.map((display) =>
     physicalDisplayLayout(
       display,
       screen.dipToScreenPoint({ x: display.bounds.x, y: display.bounds.y })
     )
   )
+  const selected = selectDisplayEntries(
+    allLayouts.map((layout, sourceIndex) => ({ layout, sourceIndex })),
+    options.display
+  )
+  const layouts = selected.map(({ layout }) => layout)
   const virtual = virtualBounds(layouts)
   if (virtual.width <= 0 || virtual.height <= 0) throw new Error('Geometrie desktop invalide')
   const ratio = Math.min(1, MAX_WIDTH / virtual.width, MAX_HEIGHT / virtual.height)
@@ -237,9 +269,9 @@ export async function captureElectronDesktop(
   const bitmap = Buffer.alloc(width * height * 4)
   let copiedDisplays = 0
   let visibleSample = false
-  displays.forEach((display, index) => {
-    const layout = layouts[index]
-    const source = sourceForDisplay(sources, display, index)
+  selected.forEach(({ layout, sourceIndex }) => {
+    const display = allDisplays[sourceIndex]
+    const source = display ? sourceForDisplay(sources, display, sourceIndex) : undefined
     if (!layout || !source || source.thumbnail.isEmpty()) return
     const targetWidth = Math.max(1, Math.round(layout.width * ratio))
     const targetHeight = Math.max(1, Math.round(layout.height * ratio))
@@ -268,5 +300,8 @@ export async function captureElectronDesktop(
   const jpeg = nativeImage
     .createFromBitmap(bitmap, { width, height, scaleFactor: 1 })
     .toJPEG(JPEG_QUALITY)
-  return observation(jpeg, { width, height }, virtual, 'desktop')
+  return observation(jpeg, { width, height }, virtual, 'desktop', {
+    displays: allDisplays.length,
+    display: options.display
+  })
 }

@@ -4894,15 +4894,15 @@ Le fil reprend ensuite normalement.`
     genererInterne: genererCandidatsInternesVisibles
   })
   /**
-   * SKILL `save` intégrée au workflow (14/08) : après un run VERT publié, une conversation VISIBLE
-   * « [save] empreinte du dépôt » exécute la skill save (corps chargé depuis skills/save) pour
+   * SKILL `learn` (ex-`save`) intégrée au workflow (14/08) : après un run VERT publié, une conversation VISIBLE
+   * « [save] empreinte du dépôt » exécute la skill save (corps chargé depuis skills/learn) pour
    * capitaliser ce que le run vient de changer — l'action se voit, s'oriente et s'interrompt comme
    * n'importe quel agent du cockpit. Une à la fois : un train de runs verts ne paie qu'un save.
    */
   let saveEnCours = false
   bus.onRunVertPublie = ({ task, publishedCommitSha }) => {
     if (saveEnCours) return
-    const corps = skillInstruction('save')
+    const corps = skillInstruction('learn')
     if (!corps) return
     saveEnCours = true
     void (async () => {

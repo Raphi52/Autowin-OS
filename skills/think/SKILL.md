@@ -1,9 +1,9 @@
 ---
-name: load
-description: Charge dans la conversation l'EMPREINTE du dépôt courant écrite par `save` — ce qu'il est, ce qu'il fait, pourquoi et comment — et signale ce qui a bougé depuis. Déclencher sur `/load`, « charge le contexte de la codebase », « remets-toi dans ce projet », « qu'est-ce que je sais déjà de ce dépôt », ou en ouverture d'une conversation sur un dépôt déjà connu. NE PAS utiliser pour répondre à une question ponctuelle sur un fichier (lire le fichier coûte moins cher), ni pour découvrir un dépôt sans empreinte : dans ce cas, dis-le et propose `/save`.
+name: think
+description: Charge dans la conversation l'EMPREINTE du dépôt courant écrite par `learn` — ce qu'il est, ce qu'il fait, pourquoi et comment — et signale ce qui a bougé depuis. Déclencher sur `/think`, « charge le contexte de la codebase », « remets-toi dans ce projet », « qu'est-ce que je sais déjà de ce dépôt », ou en ouverture d'une conversation sur un dépôt déjà connu. NE PAS utiliser pour répondre à une question ponctuelle sur un fichier (lire le fichier coûte moins cher), ni pour découvrir un dépôt sans empreinte : dans ce cas, dis-le et propose `/learn`.
 ---
 
-# Load — remettre le dépôt dans le contexte
+# Think — remettre le dépôt dans le contexte
 
 ## À quoi ça sert
 
@@ -37,7 +37,7 @@ une seule question ne couvre pas un dépôt entier.
 
 Sans empreinte, tu ne charges rien. Ne comble PAS le vide en lisant le dépôt à la volée pour produire
 un résumé qui ressemblerait à une empreinte : ce serait un résumé non vérifié, indiscernable d'un
-savoir capitalisé. Dis qu'il n'y en a pas et propose `/save`.
+savoir capitalisé. Dis qu'il n'y en a pas et propose `/learn`.
 
 ### 4. Mesure l'ÂGE de ce que tu charges
 

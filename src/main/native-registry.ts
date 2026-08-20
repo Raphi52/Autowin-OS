@@ -211,6 +211,39 @@ function skillIdFrom(dir: string, fallback: string): string {
   return fallback
 }
 
+/**
+ * Description declaree dans le front-matter. Sert de libelle a la palette `/` du chat : une skill
+ * sans phrase utile s'y affichait « Skill (SKILL.md) », ce qui n'aide personne a choisir.
+ */
+function skillDescriptionFrom(dir: string): string | undefined {
+  let md: string
+  try {
+    md = readFileSync(join(dir, 'SKILL.md'), 'utf8')
+  } catch {
+    return undefined
+  }
+  const lignes = md.replace(/\r/gu, '').split('\n')
+  const index = lignes.findIndex((ligne) => /^description:/u.test(ligne))
+  if (index < 0) return undefined
+  const tete = lignes[index].replace(/^description:\s*/u, '').trim()
+  /**
+   * `description: >-` ou `|` — scalaire YAML replié : la valeur vit sur les lignes INDENTÉES qui
+   * suivent. Lire la seule première ligne rendait littéralement « >- », et c'est ce qui se serait
+   * affiché comme libellé dans la palette (vérifié sur build/frame/judge/kaizen/scout/terrain).
+   */
+  if (/^[|>][-+\d]*$/u.test(tete)) {
+    const suite: string[] = []
+    for (const ligne of lignes.slice(index + 1)) {
+      if (!/^\s+\S/u.test(ligne)) break
+      suite.push(ligne.trim())
+    }
+    const replie = suite.join(' ').trim()
+    return replie.length > 0 ? replie : undefined
+  }
+  const texte = tete.replace(/^["']|["']$/gu, '').trim()
+  return texte.length > 0 ? texte : undefined
+}
+
 function scanSkillDirs(root: string): { id: string; dir: string }[] {
   const out: { id: string; dir: string }[] = []
   let entries: string[]
@@ -237,13 +270,13 @@ export function nativeSkills(base = ensureAutowinAppData()): RegistryItem[] {
   const seen = new Set<string>()
   const items: RegistryItem[] = []
   for (const root of skillRoots()) {
-    for (const { id } of scanSkillDirs(root)) {
+    for (const { id, dir } of scanSkillDirs(root)) {
       if (seen.has(id)) continue // premier-gagne (dédup cross-racines)
       seen.add(id)
       items.push({
         id,
         label: id,
-        description: 'Skill (SKILL.md)',
+        description: skillDescriptionFrom(dir) ?? 'Skill (SKILL.md)',
         enabled: enablement[id] !== false, // actif par défaut ; seul un false explicite désactive
         mutable: true,
         source: 'disque'

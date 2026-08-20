@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { personasFor } from '../../../shared/persona'
 import './WorkflowCanvas.css'
+import { PIPELINE_PHASES, type PipelinePhase } from '../../../shared/pipeline-phases'
 
 /** Les efforts proposables. Miroir de `ReasoningEffort` côté main. */
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
@@ -18,10 +19,10 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
  * a toujours eu — réordonner la chaîne, pas déplacer dans le plan.
  */
 
-// Miroir de `PipelinePhase` (src/main/skill-pipeline.ts) — les deux doivent rester alignés, sinon on
-// compose à l'écran une phase que le moteur ne sait pas jouer.
-export type Phase =
-  'scout' | 'frame' | 'terrain' | 'build' | 'clean' | 'judge' | 'kaizen' | 'remake'
+// PLUS de miroir manuel : `Phase` DÉRIVE de la liste partagée. Ce fichier en était la TROISIÈME
+// copie à la main — et `shared/pipeline-phases.ts` documente déjà le faux positif qu'une copie
+// périmée avait produit dans l'onglet Workflows. Une seule liste, un seul endroit où se tromper.
+export type Phase = PipelinePhase
 
 /** Un membre du fan-out : QUI regarde (persona), avec QUEL modèle et QUEL effort. */
 export interface CanvasAgent {
@@ -71,16 +72,16 @@ export interface WorkflowCanvasProps {
   worstCase?: number | null
 }
 
-const PALETTE: Phase[] = [
-  'scout',
-  'frame',
-  'terrain',
-  'build',
-  'clean',
-  'judge',
-  'kaizen',
-  'remake'
-]
+/**
+ * Briques proposables = EXACTEMENT ce que le moteur sait jouer. Déduit, jamais recopié : une phase
+ * ajoutée à `PIPELINE_PHASES` apparaît ici seule.
+ *
+ * Une SKILL quelconque du disque n'y entre pas, et ce n'est pas un oubli : le moteur de graphe est
+ * typé sur `PipelinePhase` de bout en bout (binding d'agents, quorum, sémantique du verdict judge).
+ * Y afficher une skill libre composerait une brique injouable — exactement le mensonge d'interface
+ * qu'on corrige ailleurs. Les skills hors pipeline s'invoquent par la palette `/` du chat.
+ */
+const PALETTE: readonly Phase[] = PIPELINE_PHASES
 
 /* ── Géométrie du plan. Des constantes plutôt que des valeurs semées : le tracé des arêtes en dépend. ── */
 const NODE_W = 158

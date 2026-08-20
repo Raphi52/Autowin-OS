@@ -25,6 +25,7 @@ import {
   phaseLabel,
   parseBtw,
   matchSlashCommands,
+  skillSlashCommands,
   type SlashCommand,
   type OrchStep,
   type ChatPart,
@@ -161,6 +162,25 @@ export function ChatView({
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
+  /**
+   * Skills invocables, telles que le main les découvre sur disque. La palette `/` s'en déduit :
+   * plus aucune liste à tenir à jour côté interface. Lecture unique au montage — l'inventaire ne
+   * bouge qu'au redémarrage (l'activation d'une capacité le signale déjà : restartRequired).
+   */
+  const [skillCommands, setSkillCommands] = useState<SlashCommand[]>([])
+  useEffect(() => {
+    let vivant = true
+    void window.api
+      .capabilityControls('skills')
+      .then((items) => {
+        if (vivant) setSkillCommands(skillSlashCommands(items))
+      })
+      // Palette dégradée (commandes intégrées seules) plutôt que composer cassé.
+      .catch(() => undefined)
+    return () => {
+      vivant = false
+    }
+  }, [])
   const [slashIndex, setSlashIndex] = useState(0)
   const [slashDismissed, setSlashDismissed] = useState(false)
   // Palette de MENTIONS (`@run…`, `@fichier…`) : même mécanique d'état que la palette slash.
@@ -2860,7 +2880,7 @@ export function ChatView({
               )
             })()}
             {(() => {
-              const items = matchSlashCommands(input)
+              const items = matchSlashCommands(input, skillCommands)
               if (slashDismissed || items.length === 0) return null
               const sel = Math.min(slashIndex, items.length - 1)
               return (
@@ -2958,7 +2978,7 @@ export function ChatView({
                       return
                     }
                   }
-                  const items = matchSlashCommands(input)
+                  const items = matchSlashCommands(input, skillCommands)
                   if (!slashDismissed && items.length > 0) {
                     if (e.key === 'ArrowDown') {
                       e.preventDefault()

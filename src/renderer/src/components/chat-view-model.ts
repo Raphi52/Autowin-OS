@@ -8,7 +8,7 @@ import {
   type PersistedChatPart,
   type PersistedChatTextPart
 } from '../../../shared/chat-turn'
-import { parseAskChoices } from './ask-choices'
+import { parseAskDecision, type AskDecision } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
 import { parseScoutTable } from './scout-table'
 import {
@@ -45,6 +45,7 @@ type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart | ChatEr
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
 export type ChatCandidatsPickBlock = { kind: 'candidats-pick'; candidats: CandidatAffiche[] }
+export type ChatAskDecisionBlock = { kind: 'ask-decision'; decision: AskDecision }
 export type ChatRenderBlock =
   | ChatTextPart
   | ChatArtifactPart
@@ -52,6 +53,7 @@ export type ChatRenderBlock =
   | ChatActivityBlock
   | ChatSuggestionsBlock
   | ChatCandidatsPickBlock
+  | ChatAskDecisionBlock
 
 export interface HydratedAssistantMessage {
   role: 'assistant'
@@ -575,37 +577,19 @@ export interface SlashCommand {
 }
 
 /**
- * Registre des commandes `/` RÉELLES d'Autowin (pas celles de Claude Code). Extensible : ajouter
- * une entrée ici la fait apparaître dans la palette + l'autocomplete. Le comportement de chaque
- * commande est branché côté composer (ex. `/btw` → parseBtw/submitBtw).
+ * Commandes `/` INTÉGRÉES au composer — celles dont le comportement est câblé dans l'interface
+ * (ex. `/btw` → parseBtw/submitBtw) et qui n'existent donc pas comme skill sur le disque.
+ *
+ * Les SKILLS ne sont plus listées ici. Elles l'étaient, et c'était le défaut : une skill ajoutée sur
+ * le disque était bien découverte, chargée et invocable, mais restait ABSENTE de la palette — donc
+ * invisible, donc réputée morte. Vécu le 2026-08-20 avec `think`/`learn`. La palette se déduit
+ * désormais de l'inventaire réel (`skillSlashCommands`), pour qu'une skill future apparaisse seule.
  */
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
     name: 'btw',
     hint: 'Au fait… — ajoute à la file d’attente (traité après le tour en cours)',
     insert: '/btw '
-  },
-  { name: 'scout', hint: 'Chercher et classer les meilleures pistes', insert: '/scout ' },
-  { name: 'frame', hint: 'Cadrer précisément le besoin', insert: '/frame ' },
-  {
-    name: 'terrain',
-    hint: 'Préparer le terrain et les preuves de vérification',
-    insert: '/terrain '
-  },
-  { name: 'build', hint: 'Implémenter ou corriger avec preuve rouge → vert', insert: '/build ' },
-  { name: 'clean', hint: 'Nettoyer les résidus avant validation', insert: '/clean ' },
-  { name: 'judge', hint: 'Auditer le résultat avec un regard externe', insert: '/judge ' },
-  {
-    name: 'kaizen',
-    hint: 'Rétrospective Autowin : traces, agents, Git, RAG, coûts et mémoire',
-    insert: '/kaizen '
-  },
-  {
-    // Hors pipeline, volontairement : `remake` RE-ENTRE dans la progression au lieu d'en être une
-    // étape (`PipelinePhase` est une union fermée de 7, décrivant une marche linéaire).
-    name: 'remake',
-    hint: 'Ce que tu ferais autrement avec le recul — et le fait',
-    insert: '/remake '
   }
 ]
 
@@ -615,11 +599,47 @@ export const SLASH_COMMANDS: SlashCommand[] = [
  * Un corps déjà tapé (`/btw x`) ou un texte normal → [] (palette fermée, le parse prend le relais).
  * Pur → testable.
  */
-export function matchSlashCommands(input: string): SlashCommand[] {
+export function matchSlashCommands(
+  input: string,
+  skills: readonly SlashCommand[] = []
+): SlashCommand[] {
   const m = /^\/(\w*)$/.exec(input)
   if (!m) return []
   const prefix = m[1].toLowerCase()
-  return SLASH_COMMANDS.filter((c) => c.name.startsWith(prefix))
+  const vues = new Set<string>()
+  return [...SLASH_COMMANDS, ...skills].filter((c) => {
+    if (!c.name.startsWith(prefix)) return false
+    if (vues.has(c.name)) return false // une skill ne double jamais une commande intégrée
+    vues.add(c.name)
+    return true
+  })
+}
+
+/** Longueur au-delà de laquelle une description de skill cesse d'aider et se met à encombrer. */
+const HINT_MAX = 90
+
+/**
+ * Palette `/` à partir de l'inventaire des skills RÉELLEMENT invocables (celui que le main scanne
+ * sur disque). Générique par construction : aucune liste à tenir à jour, une skill ajoutée apparaît
+ * au prochain chargement. Les skills DÉSACTIVÉES sont écartées — proposer ce qui ne s'exécutera pas
+ * est exactement le mensonge qu'on vient de corriger.
+ *
+ * Le front-matter `description` est une consigne de déclenchement entière (plusieurs phrases) : on
+ * n'en garde que la première, bornée, sinon la palette devient illisible. Pur → testable.
+ */
+export function skillSlashCommands(
+  items: readonly { id: string; description?: string; enabled?: boolean }[]
+): SlashCommand[] {
+  return items
+    .filter((item) => item.enabled !== false && /^[\w-]+$/u.test(item.id))
+    .map((item) => {
+      const brut = (item.description ?? '').trim()
+      const phrase = brut.split(/(?<=\.)\s/u)[0]?.trim() ?? ''
+      const hint =
+        phrase.length > HINT_MAX ? `${phrase.slice(0, HINT_MAX - 1).trimEnd()}…` : phrase
+      return { name: item.id, hint: hint || 'Skill', insert: `/${item.id} ` }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /**
@@ -1108,11 +1128,13 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       else blocks.push(part)
       continue
     }
-    // Question posee par le modele avec des reponses DECLAREES : elle devient une grille de chips,
-    // par le meme chemin que les suggestions scout. Le clic renvoie le label comme prompt.
-    const askChoices = parseAskChoices(part)
-    if (askChoices) {
-      blocks.push({ kind: 'suggestions', groups: askChoices })
+    // Question posee par le modele avec des reponses DECLAREES : elle devient un bloc de DECISION
+    // (une ligne par reponse, empilee, dépliable) et non une grille de chips — mesure du 20/08 : la
+    // rangee de pilules faisait porter tout le raisonnement au libelle. Le clic renvoie `envoi`,
+    // sinon le libelle, comme prompt ordinaire.
+    const askDecision = parseAskDecision(part)
+    if (askDecision) {
+      blocks.push({ kind: 'ask-decision', decision: askDecision })
       continue
     }
     if (part.kind === 'artifact' || part.kind === 'error') {

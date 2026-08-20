@@ -1,0 +1,274 @@
+/*
+ * Bloc de decision (`ask`) — spec gelee le 20/08 apres trois tours de convergence.
+ *
+ * GARDE-FOU. Les reponses ne sont JAMAIS cote a cote : une ligne par reponse, empilee, a toute
+ * largeur. L'ancien bloc rendait une rangee horizontale de pilules dimensionnees par la longueur
+ * du texte — rangee en dents de scie, aucun rythme de lecture, et cassee des que le panneau
+ * Workflows reduisait la largeur. La pile est le contrat, pas une preference.
+ *
+ * TON. « Transparence totale » : aucune surface au repos, aucun panneau, aucun halo. Le seul
+ * ornement est un filet or, et il est FONCTIONNEL — c'est lui qui designe la ligne visee.
+ */
+
+.askd {
+  margin: 10px 0 2px;
+}
+
+.askd-tete {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 0 2px 10px;
+}
+.askd-badge {
+  font:
+    600 9.5px/1 ui-monospace,
+    Consolas,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #0b0e14;
+  background: linear-gradient(90deg, #d4a94f, #e3ba55);
+  border-radius: 3px;
+  padding: 3px 5px;
+}
+.askd-question {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.askd-liste {
+  margin-top: 8px;
+}
+
+/* --- la ligne et ses etats --- */
+.askd-item {
+  position: relative;
+  padding-left: 2px;
+}
+.askd-item + .askd-item {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+/*
+ * Le liseré or est toujours present, mais a l'echelle ZERO : il pousse depuis le haut au survol.
+ * Une largeur animee reflowerait la ligne ; `scaleY` reste sur la couche de composition.
+ */
+.askd-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, #d4a94f, rgba(212, 169, 79, 0.12));
+  transform: scaleY(0);
+  transform-origin: top;
+  opacity: 0.75;
+  transition:
+    transform 0.16s ease-out,
+    opacity 0.16s ease-out;
+}
+.askd-item:hover::before {
+  transform: scaleY(1);
+}
+.askd-item:focus-within::before {
+  transform: scaleY(1);
+  opacity: 1;
+}
+/* La recommandee porte son liseré en permanence : elle reste distincte d'une ligne survolee. */
+.askd-item.est-reco::before {
+  transform: scaleY(1);
+  opacity: 1;
+}
+
+.askd-ligne {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 11px 12px 12px 10px;
+  transition: background 0.16s ease-out;
+}
+.askd-item:hover .askd-ligne {
+  background: rgba(255, 255, 255, 0.032);
+}
+.askd-item:focus-within .askd-ligne {
+  background: rgba(255, 255, 255, 0.032);
+  box-shadow: inset 0 0 0 1px rgba(212, 169, 79, 0.22);
+}
+
+.askd-tri {
+  font:
+    13px/1 ui-monospace,
+    Consolas,
+    monospace;
+  color: rgba(169, 178, 196, 0.75);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  top: 5px;
+  transition: color 0.16s ease-out;
+}
+.askd-item:hover .askd-tri,
+.askd-item.est-reco .askd-tri,
+.askd-item:focus-within .askd-tri {
+  color: #e3ba55;
+}
+/* Invisible mais presente : sans repere, une option sans detail n'aurait pas la meme grille. */
+.askd-tri[aria-hidden='true'] {
+  visibility: hidden;
+  cursor: default;
+}
+
+.askd-choix {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+.askd-libelle {
+  /*
+   * `block` et non l'inline par defaut : le libelle et la consequence vivent dans un <button>, donc
+   * des <span>. Sans cela ils se collent sur une seule ligne — defaut vu sur le rendu reel du
+   * 20/08, invisible sur la maquette ou c'etaient deux <div>.
+   */
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.askd-consequence {
+  display: block;
+  color: #a9b2c4;
+  font-size: 12.5px;
+  line-height: 1.6;
+  margin-top: 2px;
+}
+.askd-tag {
+  font:
+    600 9.5px/1 ui-monospace,
+    Consolas,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #e3ba55;
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+
+/* La touche est pale au repos, or au survol : elle ne se lit alors plus comme un numero de liste. */
+.askd-droite {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  padding-left: 10px;
+}
+.askd-touche {
+  font:
+    600 11px/1 ui-monospace,
+    Consolas,
+    monospace;
+  color: rgba(169, 178, 196, 0.55);
+  transition: color 0.16s ease-out;
+}
+.askd-item:hover .askd-touche,
+.askd-item:focus-within .askd-touche,
+.askd-item.est-reco .askd-touche {
+  color: #e3ba55;
+}
+.askd-entree {
+  font:
+    600 9.5px/1 ui-monospace,
+    Consolas,
+    monospace;
+  letter-spacing: 0.1em;
+  color: #e3ba55;
+  opacity: 0;
+  transition: opacity 0.16s ease-out;
+}
+.askd-item:hover .askd-entree,
+.askd-item:focus-within .askd-entree {
+  opacity: 0.9;
+}
+
+/* --- le detail deplie : le triplet d'une DECISION --- */
+.askd-detail {
+  padding: 2px 12px 16px 36px;
+  display: grid;
+  gap: 11px;
+}
+.askd-q {
+  display: grid;
+  grid-template-columns: 136px 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+.askd-q b {
+  font:
+    600 10.5px/1.7 ui-monospace,
+    Consolas,
+    monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a9b2c4;
+}
+.askd-q p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+.askd-q.est-residuel b {
+  color: #d4a94f;
+}
+.askd-q.est-residuel p {
+  color: #a9b2c4;
+}
+
+.askd-pied {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px 12px 0;
+  border-top: 1px solid;
+  border-image: linear-gradient(90deg, rgba(212, 169, 79, 0.55), rgba(212, 169, 79, 0.06)) 1;
+  color: #a9b2c4;
+  font-size: 11.5px;
+}
+.askd-k {
+  font:
+    600 11px/1 ui-monospace,
+    Consolas,
+    monospace;
+  color: #e3ba55;
+}
+
+/* Sous ~420 px le detail passe en une colonne : le libelle court tient, le triplet s'empile. */
+@media (max-width: 420px) {
+  .askd-q {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .askd-detail {
+    padding-left: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .askd-item::before,
+  .askd-ligne,
+  .askd-tri,
+  .askd-touche,
+  .askd-entree {
+    transition: none;
+  }
+}
