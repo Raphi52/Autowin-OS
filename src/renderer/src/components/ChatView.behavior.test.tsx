@@ -208,7 +208,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     // Aucun dossier existant : l action de creation doit malgre tout etre la.
     expect(document.querySelectorAll('[data-testid="conv-project-choice"]').length).toBe(0)
     const creer = document.querySelector<HTMLButtonElement>('[data-testid="conv-project-new"]')
-    expect(creer, "l action « Nouveau dossier » manque : le menu vide est un cul-de-sac").not.toBeNull()
+    expect(
+      creer,
+      'l action « Nouveau dossier » manque : le menu vide est un cul-de-sac'
+    ).not.toBeNull()
     await act(async () => creer!.click())
 
     const champ = document.querySelector<HTMLInputElement>('[data-testid="conv-project-new-input"]')
@@ -242,9 +245,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
       (button) => button.textContent?.includes('Conversation A')
     )
     await act(async () =>
-      conversationA?.parentElement
-        ?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!
-        .click()
+      conversationA?.parentElement?.querySelector<HTMLButtonElement>('.conv-menu-trigger')!.click()
     )
     await act(async () =>
       document.querySelector<HTMLButtonElement>('[data-testid="conv-menu-set-project"]')!.click()
@@ -321,7 +322,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.composer-send')?.textContent).toContain('Reprendre')
   })
 
-  it('Stop conserve aussi la file quand l annulation perd la course de fin de tour', async () => {
+  it('Stop conserve la file meme quand le main dit qu il n y avait rien a couper', async () => {
     const turn = deferred<{ ok: boolean; cancelled?: boolean }>()
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
@@ -337,7 +338,16 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('[data-testid="composer-stop"]')
     await act(async () => flushAnimationFrames())
 
-    expect(container!.querySelector('[data-testid="composer-stop"]')?.textContent).toContain('Stop')
+    /**
+     * `cancelPilotChat` rend `{ ok: false }` : ce n'est pas un echec d'annulation, c'est la PREUVE
+     * — venue du processus qui detient la verite — qu'aucun tour ne tournait. Depuis le correctif
+     * du tour fantome, le renderer LIBERE au lieu de rester gele : c'est un changement de contrat
+     * assume, pas une regression. L'ancien test attendait le gel (bouton Stop toujours la).
+     *
+     * Ce que ce test garde, et qui n'a JAMAIS cesse d'etre la vraie garantie : la FILE SURVIT. Un
+     * message mis en file par l'utilisateur ne doit pas disparaitre parce qu'il a clique Stop.
+     */
+    expect(container!.querySelector('[data-testid="composer-stop"]')).toBeNull()
     await act(async () => {
       turn.resolve({ ok: true, cancelled: true })
       await flushAnimationFrames()
@@ -347,16 +357,25 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.directive-queue')).not.toBeNull()
   })
 
-  it('un envoi explicite de la file remplace le gel laisse par un Stop rate', async () => {
+  it('un message en file survit a un Stop fantome et peut encore etre envoye', async () => {
+    /**
+     * Ce test protegeait « le gel laisse par un Stop rate ». Ce gel n'existe plus : quand le main
+     * repond `{ ok: false }`, il PROUVE qu'aucun tour ne tournait, et le renderer libere au lieu de
+     * rester bloque (correctif du tour fantome, defaut vecu le 20/08 ou la conversation devenait
+     * definitivement muette). Le scenario a donc change, mais pas l'enjeu.
+     *
+     * L'enjeu, lui, est intact et c'est le seul qui compte pour l'utilisateur : un message qu'il a
+     * mis en file ne doit ni disparaitre ni devenir inatteignable. Hors tour actif, les boutons
+     * d'INTERRUPTION disparaissent legitimement (il n'y a rien a interrompre) et le drain reste
+     * volontairement suspendu apres un Stop — Stop ne transforme pas la file en relance automatique.
+     * La voie qui reste est le retour au composer, et ce test verifie qu'elle mene bien a un envoi.
+     */
     const turn = deferred<{ ok: boolean; cancelled?: boolean }>()
     const pilotChat = vi.fn((_messages: unknown[], _conversationId: string) => turn.promise)
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
       pilotChat,
-      cancelPilotChat: vi
-        .fn()
-        .mockResolvedValueOnce({ ok: false })
-        .mockResolvedValueOnce({ ok: true })
+      cancelPilotChat: vi.fn().mockResolvedValue({ ok: false })
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -367,13 +386,20 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('[data-testid="composer-stop"]')
     await act(async () => flushAnimationFrames())
 
-    await click('.directive-queue-send-all')
+    // Le tour fantome est libere, et le message est TOUJOURS la.
+    expect(container!.querySelector('[data-testid="composer-stop"]')).toBeNull()
+    expect(container!.querySelector('.directive-queue-text')?.textContent).toContain(
+      'message a envoyer'
+    )
+
+    // La porte de sortie : le message revient au composer, puis part normalement.
+    await click('.directive-queue-remove')
+    await click('.composer-send')
     await act(async () => {
       turn.resolve({ ok: true, cancelled: true })
       await flushAnimationFrames()
     })
 
-    expect(mockApi.cancelPilotChat).toHaveBeenCalledTimes(2)
     expect(pilotChat).toHaveBeenCalledTimes(2)
     expect(pilotChat.mock.calls[1]?.[0]).toEqual(
       expect.arrayContaining([
