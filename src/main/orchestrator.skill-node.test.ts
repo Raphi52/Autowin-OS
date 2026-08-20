@@ -235,4 +235,35 @@ describe('boucle d’outils d’un nœud skill, dans un run réel', () => {
     await orchestrateur.run('modifie le bouton')
     expect(provider.calls[0]?.system ?? '').not.toContain('OUTILS DISPONIBLES')
   })
+
+  it('le tour d OUTIL reporte le contexte de la phase, il ne l efface pas', async () => {
+    /**
+     * Le provider Claude n'envoie que le DERNIER message utilisateur
+     * (`providers/claude.ts` : `lastUser = lastUserMessage?.content`). Passer un tableau
+     * `[contexte, reponse, resultat]` en croyant a une conversation faisait perdre le contexte de
+     * la phase des le premier appel d'outil.
+     *
+     * Mesure sur le run reel `conv-1341` : le nœud `learn` a interroge le Brain, puis a conclu
+     * « mon contexte ne contient aucune sortie de phase precedente ». Il disait VRAI — son premier
+     * tour avait 3661 caracteres avec `[phase think]` et `[phase build]`, son second n'avait plus
+     * que le compte rendu de sa propre commande. La boucle censee l'outiller le rendait aveugle.
+     */
+    appelsBus.length = 0
+    const provider = new ProviderOutilleur([
+      '<cmd>{"name":"brain_query","args":{"question":"empreinte"}}</cmd>',
+      'Livrable final.'
+    ])
+    await construire(provider, true).run('remets-toi dans ce depot')
+
+    const premier = provider.recus[0]?.map((m) => String(m.content)).join('') ?? ''
+    const second = provider.recus[1] ?? []
+    // UN SEUL message utilisateur au second tour : tout le reste serait ignore par le provider.
+    expect(second).toHaveLength(1)
+    expect(second[0].role).toBe('user')
+    const texte = String(second[0].content)
+    // Le contexte du PREMIER tour doit s'y retrouver, sinon le nœud repart aveugle.
+    expect(texte).toContain(premier.slice(0, 60))
+    expect(texte).toContain('TA REPONSE PRECEDENTE')
+    expect(texte).toContain('empreinte trouvee')
+  })
 })
