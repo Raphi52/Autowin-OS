@@ -406,6 +406,7 @@ import {
   legacyAutoKaizenSupervisorEnabled,
   type AutoKaizenIncidentInput
 } from './auto-kaizen-supervisor'
+import { OUTILS_NOEUD_SKILL } from './skill-node-tools'
 
 /**
  * ATTRIBUTION du démarrage. Le jalon « module principal évalué » est posé AVANT les 167 imports
@@ -856,7 +857,21 @@ const bus = new AppCommandBus(
  * PAS expose ici, sans quoi un noeud pourrait appeler `orchestrate` et lancer un run depuis
  * l'interieur d'un run.
  */
-os.setSkillCommandRunner({ exec: (name, args) => bus.exec(name, args) })
+os.setSkillCommandRunner({
+  exec: (name, args) =>
+    /**
+     * DEUXIEME barriere, volontairement redondante. La liste blanche vit dans `skill-node-tools`,
+     * mais ce qu'on remet ici est le bus COMPLET : un appelant futur qui oublierait le filtre
+     * disposerait de `orchestrate`, donc de la capacite de lancer un run depuis l'interieur d'un
+     * run. Une garantie qui ne tient qu'a la discipline d'un seul appelant n'en est pas une.
+     */
+    OUTILS_NOEUD_SKILL.includes(name as (typeof OUTILS_NOEUD_SKILL)[number])
+      ? bus.exec(name, args)
+      : Promise.resolve({
+          ok: false,
+          error: `Commande indisponible depuis un noeud de workflow: ${name}`
+        })
+})
 seedRegistrySnapshot({
   tools: bus.catalog().map((command) => ({
     id: command.name,
