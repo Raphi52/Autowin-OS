@@ -29,8 +29,6 @@ class ProviderSimule implements ProviderAdapter {
   readonly supportsExecution = true
   /** Tous les repertoires de travail recus en phase d'execution, dans l'ordre. */
   readonly cwdRecus: string[] = []
-  /** Vrai si le registre a annonce le cwd comme exclusif a ce run. */
-  readonly isolationAnnoncee: boolean[] = []
   toursDeChat = 0
   /** Ce que la copie contient juste apres notre ecriture — la mutation a-t-elle vraiment eu lieu ? */
   contenuLuDansLaCopie?: string
@@ -56,7 +54,6 @@ class ProviderSimule implements ProviderAdapter {
       )
     }
     this.cwdRecus.push(options.execution.cwd)
-    this.isolationAnnoncee.push(options.execution.causallyIsolated === true)
     /**
      * LA mutation, faite pour de vrai dans le repertoire qu'on nous donne.
      *

@@ -18,7 +18,10 @@ import type { ProviderAdapter } from './providers/types'
  *
  * Mesures qui justifient chaque geste (sondes du 2026-08-20, cf. le RUN de la session) :
  *  - `new AutowinOS()` hors Electron : OK, ~750 ms, `os.worktrees` present.
- *  - `begin()` acquiert reellement une copie en ~1 s ; `end()` la supprime sans residu.
+ *  - la porte VIVANTE d'acquisition est `beginAsync()`, pas `begin()` : ce dernier n'est appele que
+ *    hors mutation, ou quand le prepare asynchrone du manager manque. Une sonde dans `begin()` ne
+ *    s'affiche jamais pendant un run de mutation alors que l'isolation a bien lieu.
+ *  - `beginAsync()` acquiert reellement une copie en ~1 s ; le relachement la supprime sans residu.
  *  - `requireCanonicalRemote: true` JETTE sans distant `origin` -> un depot BARE LOCAL suffit, et
  *    garde le `git fetch` hors reseau.
  *  - sans `core.autocrlf false`, la copie porte CRLF quand la base porte LF : une comparaison de
@@ -29,8 +32,6 @@ import type { ProviderAdapter } from './providers/types'
 export interface DepotJetable {
   /** Le depot de travail — devient `os.executionWorkspace`. */
   readonly depot: string
-  /** Le bare local declare comme `origin`. Aucun reseau n'est joignable depuis lui. */
-  readonly origin: string
   /** Racine temporaire a supprimer. */
   readonly racine: string
 }
@@ -61,7 +62,7 @@ export function creerDepotJetable(cible: string, contenuInitial: string): DepotJ
   git(['commit', '-m', 'base'], depot)
   git(['remote', 'add', 'origin', origin], depot)
   git(['push', '-u', 'origin', 'main'], depot)
-  return { depot, origin, racine }
+  return { depot, racine }
 }
 
 /**

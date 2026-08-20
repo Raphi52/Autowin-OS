@@ -42,15 +42,11 @@ describe('TERRAIN — le harnais atteint le vrai code', () => {
   })
 
   it('provider simule selectionne, coordinateur reel present et acquerant', async () => {
-    const t0 = Date.now()
     jetable = creerDepotJetable('cible.txt', 'AVANT\n')
-    const tDepot = Date.now() - t0
 
     const adaptateur = new AdaptateurSonde()
-    const t1 = Date.now()
     const os = await monterOsReel(jetable.depot, adaptateur)
     osCourant = os
-    const tOs = Date.now() - t1
 
     // 1. le binding pointe vraiment sur le simule, sur les quatre roles
     for (const role of ['orchestrator', 'subagent', 'judge', 'scout'] as const) {
@@ -60,11 +56,16 @@ describe('TERRAIN — le harnais atteint le vrai code', () => {
     // 2. le workspace resolu est bien le depot jetable
     expect(os.executionWorkspace).toBe(jetable.depot)
 
-    // 3. le coordinateur REEL est la, et il ACQUIERT
+    /**
+       * 3. le coordinateur REEL est la, et il ACQUIERT.
+       *
+       * On appelle `begin()` DIRECTEMENT ici, et il faut le dire : ce n'est pas la porte qu'emprunte
+       * un run de mutation — celle-la est `beginAsync()`. Ce controle verifie donc que le
+       * coordinateur du montage est fonctionnel, pas que le chemin de production l'atteint. C'est le
+       * fichier e2e voisin qui prouve ce second point, et son sabotage porte sur `beginAsync()`.
+       */
     expect(os.worktrees).toBeDefined()
-    const t2 = Date.now()
     const copie = os.worktrees?.begin('terrain-seam', 'agent-terrain', true)
-    const tBegin = Date.now() - t2
     expect(copie).toBeDefined()
     expect(copie).not.toBe(jetable.depot)
     os.worktrees?.end?.('terrain-seam')
@@ -74,8 +75,5 @@ describe('TERRAIN — le harnais atteint le vrai code', () => {
     await flux
     expect(adaptateur.appels).toBe(1)
 
-    console.log(
-      `[TERRAIN] depot ${tDepot}ms | os ${tOs}ms | begin ${tBegin}ms | total ${Date.now() - t0}ms`
-    )
   }, 120000)
 })
