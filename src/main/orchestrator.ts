@@ -342,6 +342,7 @@ function appelsRequisParWorkflow(
 }
 import { phaseBrief } from './phase-briefs'
 import { contratDeLaConversation, noteContratPourJuge } from './conversation-task-contract'
+import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-confiance'
 import { convRunsRoot } from './runs/conv-runs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
@@ -4131,6 +4132,18 @@ ${empreinteDepot}`
       const noteContrat = conversationId
         ? (noteContratPourJuge(task, contratDeLaConversation(conversationId, convRunsRoot())) ?? '')
         : ''
+      /*
+       * SUPPOSITIONS DU CADRAGE : un livrable peut etre impeccable et reposer sur une affirmation que
+       * le cadrage avait lui-meme marquee NON VERIFIEE. Sans ce rappel, le juge validait en silence —
+       * rien dans son prompt ne nommait ce sur quoi le travail repose. Meme source que le bloc montre
+       * a l'utilisateur : la section `## Confiance` du livrable de FRAME, aucune nouvelle donnee.
+       */
+      // Note : elle ne sert QUE la branche avec phases. La branche « juge seul » exige
+      // `phaseOutputs.length === 0`, donc aucun cadrage a lire et une note toujours vide — l'y
+      // injecter aurait ete une ligne qui fait semblant d'agir.
+      const noteHypotheses = noteHypothesesPourJuge(
+        hypothesesDuCadrage(phaseOutputs.find((sortie) => sortie.phase === 'frame')?.text)
+      )
       const jugeSeul = phaseOutputs.length === 0 && !exec.text.trim()
       const judgePrompt = jugeSeul
         ? `Tu es un juge outillé en lecture seule, et tu es le SEUL agent de ce run : AUCUNE phase d’exécution ` +
@@ -4154,6 +4167,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           JUDGE_FORMAT_CONTRACT +
           JUDGE_TOOLSET_CONTRACT +
           noteContrat +
+          noteHypotheses +
           `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
           `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
           `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".

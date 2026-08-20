@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { hypothesesDuCadrage, PLAFOND_HYPOTHESES } from './cadrage-confiance'
+import {
+  hypothesesDuCadrage,
+  noteHypothesesPourJuge,
+  PLAFOND_HYPOTHESES
+} from './cadrage-confiance'
 
 const cadrage = `## Besoin
 Le bloc ask doit devenir lisible d'un coup d'œil.
@@ -75,5 +79,34 @@ describe('hypothesesDuCadrage — ne remonte que ce que le cadrage a DÉCLARÉ n
     expect(trouvees).toEqual([
       { affirmation: 'le store est vide au premier lancement', source: 'besoin' }
     ])
+  })
+})
+
+describe('noteHypothesesPourJuge — le juge doit CONFRONTER, pas encaisser un postulat', () => {
+  const hypotheses = [
+    { affirmation: 'le sanitizeur refuse les contrôles', source: 'confiance' as const },
+    { affirmation: 'le store est vide au premier lancement', source: 'besoin' as const }
+  ]
+
+  it('nomme chaque supposition', () => {
+    const note = noteHypothesesPourJuge(hypotheses)
+    expect(note).toContain('- le sanitizeur refuse les contrôles')
+    expect(note).toContain('- le store est vide au premier lancement')
+  })
+
+  it('demande une VÉRIFICATION, sans conclure à la place du juge', () => {
+    const note = noteHypothesesPourJuge(hypotheses)
+    expect(note).toMatch(/verifie-la avec tes outils/u)
+    // Le piège : remettre au juge une conclusion déjà tirée revient à lui faire tamponner un
+    // postulat. La note doit dire l'inverse, explicitement.
+    expect(note).toMatch(/ne conclus\s+pas qu'une supposition est fausse/u)
+  })
+
+  it('impose de dire une supposition non tranchable, jamais de la taire', () => {
+    expect(noteHypothesesPourJuge(hypotheses)).toMatch(/objection, jamais en silence/u)
+  })
+
+  it('aucune supposition ⇒ note vide : rien n’est ajouté au prompt pour rien', () => {
+    expect(noteHypothesesPourJuge([])).toBe('')
   })
 })

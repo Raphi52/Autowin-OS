@@ -121,3 +121,28 @@ export function hypothesesDuCadrage(texte: unknown): HypotheseDeCadrage[] {
 export function amorceDeCorrection(hypothese: HypotheseDeCadrage): string {
   return `Correction du cadrage — « ${hypothese.affirmation} » est faux. En réalité : `
 }
+
+/**
+ * La note remise au JUGE : les suppositions que le cadrage a portees sans les verifier.
+ *
+ * POURQUOI LE JUGE ET PAS SEULEMENT L'UTILISATEUR. Un livrable peut etre impeccable et reposer sur
+ * une supposition fausse : le juge le validait alors en silence, parce que rien dans son prompt ne
+ * nommait ce sur quoi le travail repose. La note ne cree aucune nouvelle source — elle rappelle ce
+ * que le cadrage a lui-meme etiquete.
+ *
+ * CE QUE LA NOTE NE FAIT PAS : elle n'affirme pas que ces suppositions sont fausses. Remettre au
+ * juge une conclusion deja tiree revient a lui faire tamponner un postulat au lieu de l'auditer. Il
+ * lui est demande de VERIFIER celles dont le livrable depend, et de conclure sur ce qu'il a lu.
+ */
+export function noteHypothesesPourJuge(hypotheses: readonly HypotheseDeCadrage[]): string {
+  if (!hypotheses.length) return ''
+  const lignes = hypotheses.map((hypothese) => `- ${hypothese.affirmation}`).join('\n')
+  return (
+    `SUPPOSITIONS DU CADRAGE — le cadrage a lui-meme etiquete ces affirmations comme NON VERIFIEES, ` +
+    `et le livrable peut reposer dessus :\n${lignes}\n` +
+    `Pour chacune dont le livrable DEPEND : verifie-la avec tes outils de lecture et dis ce que tu as lu. ` +
+    `Une supposition que ta lecture CONTREDIT est un defaut, meme si le reste du livrable est impeccable. ` +
+    `Une supposition que tu ne peux pas trancher se dit en objection, jamais en silence — et ne conclus ` +
+    `pas qu'une supposition est fausse du seul fait qu'elle figure ici.\n`
+  )
+}
