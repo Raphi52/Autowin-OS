@@ -20,7 +20,11 @@ afterEach(() => {
 })
 
 const hypotheses: HypotheseDeCadrage[] = [
-  { affirmation: 'le sanitizeur refuse les contrôles du modèle', source: 'confiance' },
+  {
+    affirmation: 'le sanitizeur refuse les contrôles du modèle',
+    source: 'confiance',
+    justification: 'non exécutable en FRAME ; premier geste de BUILD'
+  },
   { affirmation: 'le store est vide au premier lancement', source: 'besoin' }
 ]
 
@@ -79,13 +83,21 @@ describe('CadrageHypotheses — les suppositions du run, contestables sans l’a
     expect(hote.querySelector('.cadrage-hyp-masquer')).toBeNull()
   })
 
-  it('déplie et replie le détail', () => {
+  it('déplie sur la RAISON du cadrage, pas sur une phrase toute faite', () => {
     rendre()
-    const triangle = hote.querySelectorAll<HTMLButtonElement>('.askd-tri')[0]
+    const triangle = hote.querySelector<HTMLButtonElement>('.askd-tri[aria-expanded]')!
     expect(triangle.getAttribute('aria-expanded')).toBe('false')
     act(() => triangle.click())
     expect(triangle.getAttribute('aria-expanded')).toBe('true')
-    expect(hote.textContent).toContain('Si c’est faux')
+    expect(hote.textContent).toContain('Pourquoi')
+    expect(hote.textContent).toContain('non exécutable en FRAME ; premier geste de BUILD')
+  })
+
+  it('sans raison à montrer, aucun triangle : un dépliable vide est un piège', () => {
+    rendre()
+    // Deux lignes, une seule justification → un seul triangle actionnable.
+    expect(hote.querySelectorAll('.askd-tri[aria-expanded]')).toHaveLength(1)
+    expect(hote.querySelectorAll('.askd-tri[aria-hidden="true"]')).toHaveLength(1)
   })
 })
 

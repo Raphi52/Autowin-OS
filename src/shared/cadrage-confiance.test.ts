@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   hypothesesDuCadrage,
@@ -108,5 +109,91 @@ describe('noteHypothesesPourJuge — le juge doit CONFRONTER, pas encaisser un p
 
   it('aucune supposition ⇒ note vide : rien n’est ajouté au prompt pour rien', () => {
     expect(noteHypothesesPourJuge([])).toBe('')
+  })
+})
+
+/*
+ * LE TEXTE REEL, copie du run `run-f7293debbd3b-1` (store live, 20/08). Le lecteur travaillait ligne
+ * par ligne et rendait « | Etat vert/rouge actuel de la suite | — non executable... | » : illisible,
+ * vu par l'utilisateur dans l'application. Cette fixture est la forme que le modele emet vraiment.
+ */
+const CONFIANCE_EN_TABLEAU = `## Confiance
+
+| Affirmation | Statut |
+|---|---|
+| \`workflowIssues\` accepte déjà \`skillsConnues\` (défaut \`[]\`) | VÉRIFIÉ — \`workflow-executability.ts:54-69\` lu |
+| Les 3 appelants l'appellent à 1 argument | VÉRIFIÉ — grep : \`WorkflowProfilesView.tsx:432\` |
+| État vert/rouge actuel de la suite | NON VÉRIFIÉ — non exécutable en FRAME ; premier geste de BUILD (baseline) |
+| Le run \`briques-workflows-skills-libres\` est la source de cet état | NON VÉRIFIÉ — hypothèse H1, sans impact sur le périmètre |
+
+Aucun choix d'approche n'est engagé.
+`
+
+describe('hypothesesDuCadrage — la forme TABLEAU, celle que le modèle émet vraiment', () => {
+  it('rend l’affirmation seule, sans barres verticales ni fragment de cellule', () => {
+    const trouvees = hypothesesDuCadrage(CONFIANCE_EN_TABLEAU)
+    expect(trouvees).toHaveLength(2)
+    expect(trouvees[0].affirmation).toBe('État vert/rouge actuel de la suite')
+    expect(trouvees[1].affirmation).toBe(
+      'Le run briques-workflows-skills-libres est la source de cet état'
+    )
+    for (const hypothese of trouvees) {
+      expect(hypothese.affirmation).not.toContain('|')
+      expect(hypothese.affirmation).not.toContain('`')
+      expect(hypothese.affirmation).not.toMatch(/VÉRIFIÉ/u)
+    }
+  })
+
+  it('met la RAISON du modèle dans la justification — pas une phrase toute faite', () => {
+    const trouvees = hypothesesDuCadrage(CONFIANCE_EN_TABLEAU)
+    expect(trouvees[0].justification).toBe(
+      'non exécutable en FRAME ; premier geste de BUILD (baseline)'
+    )
+    expect(trouvees[1].justification).toBe('hypothèse H1, sans impact sur le périmètre')
+    // Deux lignes, deux raisons DIFFERENTES : un dépliable identique partout n'apprendrait rien.
+    expect(trouvees[0].justification).not.toBe(trouvees[1].justification)
+  })
+
+  it('écarte l’en-tête et la ligne de séparation du tableau', () => {
+    const trouvees = hypothesesDuCadrage(CONFIANCE_EN_TABLEAU)
+    const textes = trouvees.map((h) => h.affirmation).join(' | ')
+    expect(textes).not.toContain('Affirmation')
+    expect(textes).not.toContain('Statut')
+    expect(textes).not.toMatch(/^-+$/u)
+  })
+
+  it('ne reprend AUCUNE ligne vérifiée du tableau', () => {
+    const trouvees = hypothesesDuCadrage(CONFIANCE_EN_TABLEAU)
+    const textes = trouvees.map((h) => h.affirmation).join(' | ')
+    expect(textes).not.toContain('workflowIssues')
+    expect(textes).not.toContain('3 appelants')
+  })
+
+  it('un tableau sans colonne de raison ne fabrique pas de justification vide', () => {
+    const sansRaison = [
+      '## Confiance',
+      '| Affirmation | Statut |',
+      '|---|---|',
+      '| le port est libre | NON VÉRIFIÉ |'
+    ].join('\n')
+    const trouvees = hypothesesDuCadrage(sansRaison)
+    expect(trouvees).toEqual([{ affirmation: 'le port est libre', source: 'confiance' }])
+  })
+})
+
+describe('le module ne contient aucun caractere de controle', () => {
+  /*
+   * Dix fois le meme piege dans la journee du 20/08 : un `` destine a une frontiere de mot,
+   * ecrit a travers une couche d'echappement, arrive en CARACTERE BACKSPACE (0x08) dans le source.
+   * Le regex exige alors un backspace litteral et ne matche jamais — invisible au typecheck, a
+   * eslint et a la relecture, puisque le caractere ne s'affiche pas. Ce test le voit.
+   */
+  it('aucun 0x08 ni autre caractere invisible dans le source', () => {
+    const source = readFileSync('src/shared/cadrage-confiance.ts', 'utf8')
+    const invisibles = [...source].filter((c) => {
+      const code = c.codePointAt(0) ?? 0
+      return code < 32 && c !== String.fromCharCode(10) && c !== String.fromCharCode(13)
+    })
+    expect(invisibles.map((c) => (c.codePointAt(0) ?? 0).toString(16))).toEqual([])
   })
 })

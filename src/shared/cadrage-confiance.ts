@@ -19,11 +19,20 @@ export interface HypotheseDeCadrage {
   /** L'affirmation, etiquette retiree. */
   affirmation: string
   source: SourceHypothese
+  /**
+   * Ce que le cadrage a ecrit APRES l'etiquette, dans ses propres mots — « non executable en FRAME ;
+   * premier geste de BUILD », « hypothese H1, sans impact sur le perimetre ». C'est la seule chose
+   * qui merite d'etre depliee : la generalite « le travail repose dessus » est vraie de toutes les
+   * lignes et n'apprend donc rien (defaut vecu le 20/08, un deroulant identique partout).
+   */
+  justification?: string
 }
 
 /** Au-dela, la liste cesse d'etre lisible et redevient le mur de texte qu'on veut eviter. */
 export const PLAFOND_HYPOTHESES = 5
 const PLAFOND_AFFIRMATION = 240
+/** La justification est une phrase du modele, pas un titre : elle a droit a plus de place. */
+const PLAFOND_JUSTIFICATION = 400
 
 /*
  * L'etiquette est cherchee telle qu'un modele l'ecrit : accents optionnels, tiret ou espace entre
@@ -49,11 +58,45 @@ function nettoyer(ligne: string): string {
   return ligne
     .replace(PREFIXE_PUCE, '')
     .replace(ETIQUETTE_NON_VERIFIE, ' ')
+    .replace(/`/gu, '')
     .replace(/\((?:\s*)\)/gu, ' ')
     .replace(/\s{2,}/gu, ' ')
     .replace(PONCTUATION_ORPHELINE, '')
     .trim()
     .slice(0, PLAFOND_AFFIRMATION)
+}
+
+/**
+ * Une ligne de TABLEAU markdown, decoupee en cellules — ou `null` si ce n'en est pas une.
+ *
+ * C'est la forme reellement emise, mesuree le 20/08 sur le run `run-f7293debbd3b-1` :
+ *
+ *   | Affirmation | Statut |
+ *   |---|---|
+ *   | Etat vert/rouge actuel de la suite | NON VERIFIE - non executable en FRAME ; premier geste... |
+ *
+ * Le lecteur travaillait ligne par ligne : il ramassait la ligne ENTIERE, barres comprises, et
+ * rendait « | Etat vert/rouge actuel de la suite | - non executable... | » — illisible. La ligne de
+ * separation et la ligne d'en-tete sont ecartees : ni l'une ni l'autre n'est une affirmation.
+ */
+function cellulesDeTableau(ligne: string): string[] | null {
+  if (!ligne.startsWith('|')) return null
+  const cellules = ligne
+    .replace(/^\|/u, '')
+    .replace(/\|\s*$/u, '')
+    .split('|')
+    .map((cellule) => cellule.trim())
+  if (cellules.length < 2) return null
+  // `|---|---|` : une ligne faite de tirets et de deux-points n'affirme rien.
+  if (cellules.every((cellule) => /^:?-{2,}:?$/u.test(cellule))) return null
+  return cellules
+}
+
+/** Ce que le cadrage a ecrit apres l'etiquette, dans ses mots. */
+function justificationApresEtiquette(cellule: string): string | undefined {
+  const reste = cellule.replace(ETIQUETTE_NON_VERIFIE, '').replace(/`/gu, '')
+  const propre = reste.replace(PONCTUATION_ORPHELINE, '').trim()
+  return propre ? propre.slice(0, PLAFOND_JUSTIFICATION) : undefined
 }
 
 /**
@@ -84,28 +127,41 @@ export function hypothesesDuCadrage(texte: unknown): HypotheseDeCadrage[] {
     const ligne = ligneBrute.trim()
     if (!ligne) continue
 
-    let retenue = false
-    if (sectionCourante === 'confiance') {
+    let affirmation: string | undefined
+    let justification: string | undefined
+
+    const cellules = cellulesDeTableau(ligne)
+    if (cellules) {
+      // Forme TABLEAU : l'affirmation est la premiere cellule, l'etiquette et sa raison vivent dans
+      // une autre. Une ligne d'en-tete (« Affirmation | Statut ») ne porte aucune etiquette.
+      const cellulEtiquetee = cellules.find((cellule) => ETIQUETTE_NON_VERIFIE.test(cellule))
+      if (!cellulEtiquetee) continue
+      const premiere = cellules[0] === cellulEtiquetee ? '' : cellules[0]
+      affirmation = nettoyer(premiere || cellulEtiquetee)
+      justification = premiere ? justificationApresEtiquette(cellulEtiquetee) : undefined
+    } else if (sectionCourante === 'confiance') {
       /*
        * SEULE l'etiquette NON VERIFIE explicite compte. Une ligne SANS etiquette n'est pas reprise :
        * remonter tout ce qui n'est pas marque verifie ferait de chaque phrase de la section une
        * hypothese, et le bloc redeviendrait le mur de texte qu'on cherche a supprimer. Une
        * affirmation deja VERIFIE ou tenue DE L'UTILISATEUR porte son autorite, on la laisse.
        */
-      retenue = ETIQUETTE_NON_VERIFIE.test(ligne)
+      if (!ETIQUETTE_NON_VERIFIE.test(ligne)) continue
+      affirmation = nettoyer(ligne)
     } else {
-      retenue = /^\s*(?:[-*•]|\d+[.)])?\s*hypoth[eè]se\b/iu.test(ligne)
+      if (!/^\s*(?:[-*•]|\d+[.)])?\s*hypoth[eè]se\b/iu.test(ligne)) continue
+      affirmation = nettoyer(ligne.replace(PREFIXE_PUCE, '').replace(/^hypoth[eè]se\b/iu, ''))
     }
-    if (!retenue) continue
 
-    // Le mot d'annonce tombe AVANT le nettoyage, sinon les deux-points qu'il laisse derriere lui
-    // survivent au trim de ponctuation et l'affirmation commence par « : ».
-    const affirmation = nettoyer(ligne.replace(PREFIXE_PUCE, '').replace(/^hypoth[eè]se\b/iu, ''))
     if (!affirmation) continue
     const cle = affirmation.toLowerCase()
     if (vues.has(cle)) continue
     vues.add(cle)
-    trouvees.push({ affirmation, source: sectionCourante })
+    trouvees.push({
+      affirmation,
+      source: sectionCourante,
+      ...(justification && { justification })
+    })
     if (trouvees.length >= PLAFOND_HYPOTHESES) break
   }
   return trouvees

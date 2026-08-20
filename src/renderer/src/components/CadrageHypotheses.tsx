@@ -39,7 +39,7 @@ export function CadrageHypotheses({
       <div className="askd-tete">
         <span className="askd-badge">cadrage</span>
         <span className="askd-question">
-          Je continue en supposant ceci — corrige si c&rsquo;est faux
+          Je continue en supposant ceci — clique une ligne seulement si c&rsquo;est faux
         </span>
         {onMasquer && (
           <button
@@ -58,15 +58,25 @@ export function CadrageHypotheses({
           return (
             <div key={index} className="askd-item" data-testid="cadrage-hypothese">
               <div className="askd-ligne">
-                <button
-                  type="button"
-                  className="askd-tri"
-                  aria-expanded={ouvert}
-                  aria-label={ouvert ? 'Replier' : 'Déplier'}
-                  onClick={() => basculer(index)}
-                >
-                  {ouvert ? '▾' : '▸'}
-                </button>
+                {/*
+                 * Pas de triangle sans raison a montrer. Un deroulant qui s'ouvre sur la meme phrase
+                 * toute faite a chaque ligne n'apprend rien — defaut vecu le 20/08.
+                 */}
+                {hypothese.justification ? (
+                  <button
+                    type="button"
+                    className="askd-tri"
+                    aria-expanded={ouvert}
+                    aria-label={ouvert ? 'Replier' : 'Déplier'}
+                    onClick={() => basculer(index)}
+                  >
+                    {ouvert ? '▾' : '▸'}
+                  </button>
+                ) : (
+                  <span className="askd-tri" aria-hidden="true">
+                    ▸
+                  </span>
+                )}
                 <button
                   type="button"
                   className="askd-choix"
@@ -79,14 +89,11 @@ export function CadrageHypotheses({
                   <span className="askd-entree">Corriger</span>
                 </div>
               </div>
-              {ouvert && (
+              {ouvert && hypothese.justification && (
                 <div className="askd-detail">
-                  <div className="askd-q est-residuel">
-                    <b>Si c&rsquo;est faux</b>
-                    <p>
-                      Le travail déjà produit repose dessus. Clique la ligne : le composer se
-                      pré-remplit, tu dis ce qui est vrai, et le cadrage repart de là.
-                    </p>
+                  <div className="askd-q">
+                    <b>Pourquoi</b>
+                    <p>{hypothese.justification}</p>
                   </div>
                 </div>
               )}
