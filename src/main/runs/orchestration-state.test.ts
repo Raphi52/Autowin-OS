@@ -247,7 +247,10 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
       join(root, 'invalid-agent-phase.json'),
       JSON.stringify({
         ...state('invalid-agent-phase', 1000, ['frame']),
-        agents: [{ token: 'agent-1', phase: 'inconnue' }]
+        // `phase: 'inconnue'` ne prouvait plus rien : c'est desormais un identifiant de SKILL
+        // parfaitement bien forme (un noeud de workflow peut en porter un). La garde porte sur la
+        // FORME — elle refuse toujours ce qu'on voulait vraiment refuser : un chemin deguise.
+        agents: [{ token: 'agent-1', phase: '../../evasion' }]
       }),
       'utf8'
     )

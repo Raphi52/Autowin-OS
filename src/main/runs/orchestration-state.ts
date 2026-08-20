@@ -389,9 +389,21 @@ function isRunAgentRef(
   if (!isRecord(value) || typeof value.token !== 'string' || !value.token.trim()) return false
   return (
     (value.provider === undefined || typeof value.provider === 'string') &&
+    /**
+     * Une phase du pipeline OU l'identifiant d'une skill du disque — meme borne que `isPhaseOutput`.
+     *
+     * Ce controle etait reste sur la liste FERMEE alors que le type venait d'etre elargi a
+     * `NodePhase`. Consequence mesuree sur un run REEL (conv-1336, workflow think->build->learn) :
+     * des qu'un agent est enregistre pour un noeud skill, cette ligne invalide le checkpoint ENTIER,
+     * `saveOrchestrationState` jette « checkpoint orchestration causalement invalide », et le run
+     * meurt avant sa premiere phase.
+     *
+     * Ni 7058 tests verts ni un passage du juge ne l'ont vu : la preuve de persistance ecrite pour
+     * le DoD exercait `isPhaseOutput` et JAMAIS une reference d'agent. Elargir un type sans elargir
+     * le controle runtime qui le double est exactement le piege que ce depot documente ailleurs.
+     */
     (value.phase === undefined ||
-      (typeof value.phase === 'string' &&
-        PIPELINE_PHASES.includes(value.phase as PipelinePhase))) &&
+      (typeof value.phase === 'string' && /^[\w-]{1,64}$/u.test(value.phase))) &&
     (value.active === undefined || typeof value.active === 'boolean') &&
     (value.fanOut === undefined || typeof value.fanOut === 'boolean') &&
     (value.reservationId === undefined || isNonEmptyString(value.reservationId)) &&

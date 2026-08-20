@@ -44,6 +44,46 @@ describe('persistance d’un nœud skill', () => {
     ).toThrow()
   })
 
+
+  it('accepte une REFERENCE D AGENT portant une phase de skill', () => {
+    /**
+     * Le trou que ce test bouche, trouve par un run REEL et par rien d'autre.
+     *
+     * Le controle runtime des references d'agent etait reste sur la liste FERMEE des huit phases,
+     * alors que le type venait d'etre elargi. Des qu'un agent etait enregistre pour un noeud skill,
+     * le checkpoint ENTIER devenait invalide et le run mourait sur
+     * « checkpoint orchestration causalement invalide » — avant meme sa premiere phase.
+     *
+     * 7058 tests verts et un audit ne l'avaient pas vu : la preuve de persistance existante
+     * exercait la sortie de phase, jamais l'agent qui la produit.
+     */
+    expect(() =>
+      saveOrchestrationState(racine, {
+        runId: 'run-skill-agent',
+        task: 'remets-toi dans ce depot',
+        startedAt: 1,
+        updatedAt: 2,
+        phaseOutputs: [{ phase: 'think', text: 'briefing' }],
+        agents: [{ token: 'agent-1', phase: 'think', active: false }]
+      } as never)
+    ).not.toThrow()
+    const relu = loadOrchestrationStates(racine).find((s) => s.runId === 'run-skill-agent')
+    expect(relu?.agents?.[0].phase).toBe('think')
+  })
+
+  it('refuse toujours une phase d agent malformee', () => {
+    expect(() =>
+      saveOrchestrationState(racine, {
+        runId: 'run-skill-agent-ko',
+        task: 'x',
+        startedAt: 1,
+        updatedAt: 2,
+        phaseOutputs: [],
+        agents: [{ token: 'agent-1', phase: '../../evasion' }]
+      } as never)
+    ).toThrow()
+  })
+
   it('nettoyage', () => {
     rmSync(racine, { recursive: true, force: true })
     expect(true).toBe(true)
