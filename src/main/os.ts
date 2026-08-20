@@ -99,6 +99,7 @@ import {
   type ProcessIdentity,
   type RecoveredDetachedUsageSettlement
 } from './runs/run-reattach'
+import type { LanceurCommandeSkill } from './skill-node-tools'
 
 interface ExecutionWorkspaceInput {
   cwd?: string
@@ -295,6 +296,8 @@ export class AutowinOS {
   private recoveredCausalClaimsListener?: WatchdogMutationClaimsSink
   private readonly pendingRecoveredCausalClaims: WatchdogMutationClaims[] = []
   private causalMemoryRetriever?: (conversationId: string) => string
+  /** Outils Brain d'un noeud skill, branches apres creation du bus (cf. `setSkillCommandRunner`). */
+  private skillCommandRunner?: LanceurCommandeSkill
   /** Dossier des états d'orchestration reprenables (survie niveau 3). */
   private readonly orchestrationStateRoot = join(ensureAutowinAppData(), 'run-state')
   private readonly orchestrationStartedAt = new Map<string, number>()
@@ -428,6 +431,8 @@ export class AutowinOS {
       trust: this.trust,
       executionWorkspace,
       causalMemoryFor: (conversationId) => this.causalMemoryRetriever?.(conversationId) ?? '',
+      // Lue A CHAQUE phase, pas figee ici : le bus de commandes n'existe pas encore a cet instant.
+      skillCommands: () => this.skillCommandRunner,
       // verify-replay EN PROD (opt-in via AUTOWIN_VERIFY_REPLAY) : rejoue la vérif au gate au lieu
       // de croire l'evidence sur parole. Off par défaut (voir resolveVerifyReplayConfig).
       ...resolveVerifyReplayConfig(),
@@ -592,6 +597,17 @@ export class AutowinOS {
   /** Met à jour la source live du fan-out (appelé par la topology au boot et à chaque changement). */
   setFanOut(next: FanOutTopology): void {
     this.fanOut = next
+  }
+
+  /**
+   * Branche les outils Brain des noeuds SKILL, apres creation du bus de commandes.
+   *
+   * Sans cet appel, un noeud `think` ou `learn` s'execute SANS outil : il decrit ce qu'il ferait au
+   * lieu de le faire. C'est precisement le cablage manquant que ce run corrige — la dependance
+   * existait deja, declaree et jamais branchee.
+   */
+  setSkillCommandRunner(runner: LanceurCommandeSkill): void {
+    this.skillCommandRunner = runner
   }
 
   /** Branche la mémoire causale après création du TraceStore (construit dans le point d'entrée). */

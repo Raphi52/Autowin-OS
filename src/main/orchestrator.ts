@@ -381,6 +381,14 @@ import type { RunLifecycleEvent } from '../shared/run-execution'
 import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
 import { allocateExecutionTopology, type ExecutionQuote } from './execution-quote'
 import type { ExecutionUsageSnapshot } from './execution-supervisor'
+import {
+  TOURS_OUTILS_MAX,
+  compteRenduDesOutils,
+  demandeUnOutil,
+  executerOutilsDuNoeud,
+  promptOutilsNoeudSkill,
+  type LanceurCommandeSkill
+} from './skill-node-tools'
 
 function canonicalCausalPath(root: string, path: string): string {
   const normalized = resolve(root, path).replaceAll('\\', '/')
@@ -750,6 +758,14 @@ export interface OrchestratorDecompositionDeps {
   greedyConcurrency?: number
   /** Injection substituable pour les tests ; en production charge le vrai kit via skill-pipeline. */
   skillInstruction?: (phase: NodePhase, opts: { withFoundation: boolean }) => string
+  /**
+   * Les outils Brain d'un noeud SKILL, en LIAISON TARDIVE.
+   *
+   * Le bus de commandes n'existe pas encore quand l'orchestrateur est construit (`index.ts` cree
+   * `AutowinOS` avant `AppCommandBus`). D'ou une fonction plutot qu'une valeur : elle est appelee
+   * au moment de la phase, quand le bus est la. Absente = aucun outil, comportement d'avant.
+   */
+  skillCommands?: () => LanceurCommandeSkill | undefined
   /** Source du devis actif, portee par l'ExecutionSupervisor local au run. */
   currentExecutionQuote?: () => ExecutionQuote | undefined
   /** Compteurs locaux du run, persistes avec chaque checkpoint pour une reprise sans reset. */
@@ -1245,7 +1261,20 @@ export class Orchestrator {
      * nulle part en production, d'ou le repli sur le chargeur reel.
      */
     const injectee = this.deps.skillInstruction?.(phase, { withFoundation }) ?? ''
-    const installed = injectee || (isPipelinePhase(phase) ? '' : chargerSkill(phase))
+    const corpsSkill = injectee || (isPipelinePhase(phase) ? '' : chargerSkill(phase))
+    /**
+     * Le noeud SKILL doit SAVOIR qu'il a des outils.
+     *
+     * La boucle peut etre parfaitement branchee : si le prompt ne declare pas le format `<cmd>` ni
+     * les deux commandes autorisees, le modele n'en emettra jamais et la boucle ne s'ouvrira pas.
+     * Une capacite non annoncee est une capacite absente — c'est le meme defaut, deplace d'un cran.
+     *
+     * Rien n'est ajoute a une phase du pipeline, ni quand aucun lanceur n'est branche : le prompt
+     * ne promet que ce qui est reellement disponible.
+     */
+    const outils =
+      !isPipelinePhase(phase) && this.deps.skillCommands?.() ? promptOutilsNoeudSkill() : ''
+    const installed = corpsSkill ? `${corpsSkill}${outils}` : ''
     const base = installed || phaseBrief(phase)
     // Point de passage UNIQUE des consignes de phase : y brancher le workflow suffit à couvrir
     // exec, judge et greedy sans les threader un par un.
@@ -3932,6 +3961,53 @@ ${empreinteDepot}`
        */
       const derive = supervision.trip()
       let texteDePhase = phaseRes.text
+      /**
+       * BOUCLE D'OUTILS d'un noeud SKILL — reservee aux noeuds skill, jamais aux huit phases.
+       *
+       * Sans elle, une skill qui prescrit « appelle brain_query » / « appelle remember » produisait
+       * un texte DECRIVANT l'action au lieu de l'accomplir, et le graphe affichait une brique qui
+       * avait l'air d'avoir travaille. Le catalogue est une liste blanche de deux commandes :
+       * `orchestrate` en est absent deliberement, sans quoi un noeud pourrait lancer un run depuis
+       * l'interieur d'un run.
+       *
+       * Rien ici ne coupe : plafond atteint, outil en echec ou commande refusee, on garde le
+       * dernier texte, on le TRACE, et la phase se termine normalement.
+       */
+      const lanceurOutils = isPipelinePhase(phase) ? undefined : this.deps.skillCommands?.()
+      if (lanceurOutils) {
+        for (let tour = 0; tour < TOURS_OUTILS_MAX; tour++) {
+          if (!demandeUnOutil(texteDePhase)) break
+          const appels = await executerOutilsDuNoeud(texteDePhase, lanceurOutils)
+          if (appels.length === 0) break
+          for (const appel of appels) {
+            const etat = appel.refuse ? 'refuse' : appel.ok ? 'ok' : 'echec'
+            push({
+              step: 'exec',
+              role: 'subagent',
+              detail: `outil ${appel.name} (${phase}) : ${etat}`
+            })
+          }
+          const compteRendu = compteRenduDesOutils(appels)
+          if (!compteRendu) break
+          try {
+            const suivant = await registry.send(
+              providerDeLaPhase,
+              [
+                ...phaseMessages,
+                { role: 'assistant', content: texteDePhase },
+                { role: 'user', content: compteRendu }
+              ],
+              subOptions
+            )
+            if (!suivant.text?.trim()) break
+            texteDePhase = suivant.text
+          } catch {
+            // Le tour d'outil supplementaire est un BONUS : son echec laisse le livrable precedent
+            // intact plutot que de perdre la phase.
+            break
+          }
+        }
+      }
       if (derive) {
         const constat = `dérive détectée (${derive.signal}) — ${derive.detail}`
         onDelta?.(
@@ -3946,17 +4022,13 @@ ${empreinteDepot}`
             providerDeLaPhase,
             phaseBinding.model,
             () =>
-              registry.send(
-                providerDeLaPhase,
-                [{ role: 'user', content: 'Tranche maintenant.' }],
-                {
-                  system: briefArbitrage(derive, phase, task),
-                  model: phaseBinding.model,
-                  // L'annulation UTILISATEUR est honorée pendant l'arbitrage aussi : sans ce signal
-                  // il tournait jusqu'à son terme au moment précis où l'utilisateur veut couper.
-                  ...(signal ? { signal } : {})
-                }
-              )
+              registry.send(providerDeLaPhase, [{ role: 'user', content: 'Tranche maintenant.' }], {
+                system: briefArbitrage(derive, phase, task),
+                model: phaseBinding.model,
+                // L'annulation UTILISATEUR est honorée pendant l'arbitrage aussi : sans ce signal
+                // il tournait jusqu'à son terme au moment précis où l'utilisateur veut couper.
+                ...(signal ? { signal } : {})
+              })
           )
           verdict = readRouteVerdict(arbitre.text)
           if (arbitre.usage) {

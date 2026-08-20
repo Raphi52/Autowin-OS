@@ -16,6 +16,7 @@ import { sandboxForPhase } from './orchestrator'
 import { nativeSkills } from './native-registry'
 import { isPipelinePhase } from './skill-pipeline'
 import { phaseBrief } from './phase-briefs'
+import { TOURS_OUTILS_MAX } from './skill-node-tools'
 
 /**
  * Un nœud de graphe peut porter une SKILL du disque et pas seulement l'une des huit phases.
@@ -85,5 +86,153 @@ describe('nœud portant une skill du disque', () => {
   it('reste en LECTURE SEULE : seules build et clean écrivent', () => {
     expect(sandboxForPhase('modifie le bouton', 'think')).toBe('read-only')
     expect(sandboxForPhase('modifie le bouton', 'build')).toBe('danger-full-access')
+  })
+})
+
+/**
+ * La boucle d'outils, vue depuis un VRAI run. Le module `skill-node-tools` peut être parfait et
+ * n'être appelé par personne — c'est exactement le défaut qu'on corrige ici, une couche plus bas.
+ */
+class ProviderOutilleur implements ProviderAdapter {
+  readonly id = 'capture'
+  readonly supportsExecution = true
+  readonly calls: SendOptions[] = []
+  readonly recus: Message[][] = []
+  constructor(private readonly sorties: string[]) {}
+  async auth(): Promise<boolean> {
+    return true
+  }
+  // eslint-disable-next-line require-yield
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    this.calls.push(options)
+    this.recus.push(messages)
+    const texte = this.sorties[this.calls.length - 1] ?? 'VALIDE'
+    return { text: texte, provider: this.id, systemInjected: Boolean(options.system) }
+  }
+}
+
+describe('boucle d’outils d’un nœud skill, dans un run réel', () => {
+  const appelsBus: Array<{ name: string; args: Record<string, unknown> }> = []
+  const lanceur = {
+    exec: async (name: string, args: Record<string, unknown>) => {
+      appelsBus.push({ name, args })
+      return { ok: true, data: 'empreinte trouvee' }
+    }
+  }
+  const construire = (provider: ProviderOutilleur, avecOutils: boolean): Orchestrator =>
+    new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace'),
+      execPhases: ['think'] as never,
+      ...(avecOutils ? { skillCommands: () => lanceur } : {})
+    })
+
+  it('une commande émise par un nœud skill atteint VRAIMENT le bus', async () => {
+    appelsBus.length = 0
+    const provider = new ProviderOutilleur([
+      '<cmd>{"name":"brain_query","args":{"query":"empreinte du depot"}}</cmd>',
+      'Voici ce que je sais du dépôt.'
+    ])
+    await construire(provider, true).run('remets-toi dans ce dépôt')
+    expect(appelsBus).toEqual([{ name: 'brain_query', args: { query: 'empreinte du depot' } }])
+  })
+
+  it('le RÉSULTAT est réinjecté au tour suivant — sinon la lecture ne sert à rien', async () => {
+    appelsBus.length = 0
+    const provider = new ProviderOutilleur([
+      '<cmd>{"name":"brain_query","args":{"query":"empreinte"}}</cmd>',
+      'Livrable final.'
+    ])
+    await construire(provider, true).run('remets-toi dans ce dépôt')
+    const secondTour = provider.recus[1]?.map((m) => String(m.content)).join('\n') ?? ''
+    expect(secondTour).toContain('empreinte trouvee')
+  })
+
+  it('sans lanceur branché, aucun appel : le comportement d’avant est intact', async () => {
+    appelsBus.length = 0
+    const provider = new ProviderOutilleur([
+      '<cmd>{"name":"brain_query","args":{"query":"empreinte"}}</cmd>'
+    ])
+    await construire(provider, false).run('remets-toi dans ce dépôt')
+    expect(appelsBus).toEqual([])
+  })
+
+  it('une PHASE du pipeline n’obtient AUCUN outil, meme avec le lanceur branche', async () => {
+    appelsBus.length = 0
+    const provider = new ProviderOutilleur([
+      '<cmd>{"name":"brain_query","args":{"query":"empreinte"}}</cmd>',
+      'VALIDE'
+    ])
+    const orchestrateur = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace'),
+      execPhases: ['build'],
+      skillCommands: () => lanceur
+    })
+    await orchestrateur.run('modifie le bouton')
+    // `build` garde exactement son comportement : la boucle est reservee aux noeuds skill.
+    expect(appelsBus).toEqual([])
+  })
+
+  it('la boucle est BORNEE et le run continue au depassement — elle ne coupe jamais', async () => {
+    appelsBus.length = 0
+    // Le modele redemande un outil a CHAQUE tour : sans borne, la boucle serait infinie.
+    const provider = new ProviderOutilleur(
+      Array.from(
+        { length: 12 },
+        () => '<cmd>{"name":"brain_query","args":{"query":"encore"}}</cmd>'
+      )
+    )
+    const resultat = await construire(provider, true).run('remets-toi dans ce depot')
+    expect(appelsBus.length).toBeLessThanOrEqual(TOURS_OUTILS_MAX)
+    // Le run VA AU BOUT : le depassement garde le dernier texte au lieu de tuer la phase.
+    expect(resultat).toBeDefined()
+  })
+
+  it('ANNONCE ses outils au modele — une capacite non declaree est une capacite absente', async () => {
+    const provider = new ProviderOutilleur(['Livrable.'])
+    await construire(provider, true).run('remets-toi dans ce depot')
+    const systeme = provider.calls[0]?.system ?? ''
+    expect(systeme).toContain('OUTILS DISPONIBLES')
+    expect(systeme).toContain('brain_query')
+    expect(systeme).toContain('remember')
+    // `orchestrate` n'est PAS annonce : on ne promet pas ce qui sera refuse.
+    expect(systeme).not.toContain('- orchestrate')
+  })
+
+  it('n annonce AUCUN outil a une phase du pipeline', async () => {
+    const provider = new ProviderOutilleur(['Livrable.', 'VALIDE'])
+    const orchestrateur = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\workspace',
+      worktrees: makeTestWorktrees('C:\workspace'),
+      execPhases: ['build'],
+      skillCommands: () => lanceur
+    })
+    await orchestrateur.run('modifie le bouton')
+    expect(provider.calls[0]?.system ?? '').not.toContain('OUTILS DISPONIBLES')
   })
 })

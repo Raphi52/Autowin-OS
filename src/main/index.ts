@@ -846,6 +846,18 @@ const bus = new AppCommandBus(
   resolveBinOnPath('sqlcmd') ?? undefined,
   outcomeLearning
 )
+/**
+ * Les outils Brain des noeuds SKILL d'un workflow.
+ *
+ * Liaison TARDIVE assumee : `os` est construit bien avant `bus` dans ce module, et l'orchestrateur
+ * lit cette dependance au moment de la phase, pas a sa construction. Sans cette ligne, un noeud
+ * `think` ou `learn` s'executerait sans outil — il DECRIRAIT l'action au lieu de l'accomplir.
+ *
+ * La liste blanche vit dans `skill-node-tools` (`brain_query`, `remember`) : le bus complet n'est
+ * PAS expose ici, sans quoi un noeud pourrait appeler `orchestrate` et lancer un run depuis
+ * l'interieur d'un run.
+ */
+os.setSkillCommandRunner({ exec: (name, args) => bus.exec(name, args) })
 seedRegistrySnapshot({
   tools: bus.catalog().map((command) => ({
     id: command.name,
