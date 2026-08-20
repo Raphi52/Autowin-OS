@@ -1283,7 +1283,9 @@ export class Orchestrator {
      * ne promet que ce qui est reellement disponible.
      */
     const outils =
-      !isPipelinePhase(phase) && this.deps.skillCommands?.() ? promptOutilsNoeudSkill() : ''
+      !isPipelinePhase(phase) && this.deps.skillCommands?.()
+        ? promptOutilsNoeudSkill(this.deps.skillCommands()?.catalogue?.() ?? [])
+        : ''
     const installed = corpsSkill ? `${corpsSkill}${outils}` : ''
     const base = installed || phaseBrief(phase)
     // Point de passage UNIQUE des consignes de phase : y brancher le workflow suffit à couvrir
