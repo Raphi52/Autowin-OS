@@ -751,7 +751,7 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
   it('n’affiche aucun signal vert quand la preuve structurée de livraison est incomplète', () => {
     const text = formatOrchestrationOutcome(true, { status: 'succeeded' })
 
-    expect(text).toContain('preuve incomplète')
+    expect(text).toContain('la livraison n’est pas prouvée')
     expect(text).not.toContain('✅')
   })
 
@@ -762,7 +762,9 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
       valid: false,
       costUsd: 10.05
     })
-    expect(text).toContain('BLOQUÉ')
+    // L'arrêt est annoncé comme tel : le mot « gate » a disparu des libellés (ils sont écrits pour
+    // l'utilisateur, cf. `orchestration-outcome.libelles.test.ts`), le FAIT annoncé est le même.
+    expect(text).toContain('ARRÊTÉ')
     expect(text).not.toContain('✅')
   })
 
@@ -979,12 +981,12 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
 
   it('données absentes → un en-tête, jamais de champ inventé', () => {
     const text = formatOrchestrationOutcome(true, {})
-    expect(text).toBe('⚠️ Workflow terminé — preuve incomplète de livraison')
+    expect(text).toBe('⚠️ Workflow terminé — la livraison n’est pas prouvée')
   })
 
   it('ignore les valeurs de mauvais type au lieu de les afficher', () => {
     const text = formatOrchestrationOutcome(true, { costUsd: 'beaucoup', status: 42 })
-    expect(text).toBe('⚠️ Workflow terminé — preuve incomplète de livraison')
+    expect(text).toBe('⚠️ Workflow terminé — la livraison n’est pas prouvée')
   })
 
   it('borne un résultat très long', () => {
@@ -1032,7 +1034,7 @@ describe('un run non valide ne garde pas le ✅ du worker', () => {
     })
 
     expect(texte).not.toContain('✅ Fait')
-    expect(texte).toContain('⚠️ Fait — AUTO-DÉCLARÉ, non validé (gate BLOQUÉ)')
+    expect(texte).toContain('⚠️ Fait — AUTO-DÉCLARÉ, non validé (ARRÊTÉ au contrôle final)')
     // Les preuves du worker restent : on retrograde une etiquette, on ne censure pas un rapport.
     expect(texte).toContain('2. Suite adjacente : 74/74 tests, exit-code 0.')
     expect(texte).toContain('📍 Maintenant : correctif verifie dans le worktree.')
@@ -1041,7 +1043,7 @@ describe('un run non valide ne garde pas le ✅ du worker', () => {
   it('nomme le juge quand c est lui qui a refuse', () => {
     const texte = reconcileClosedOrchestrationText(rapportWorker, { valid: false })
 
-    expect(texte).toContain('⚠️ Fait — AUTO-DÉCLARÉ, non validé (juge a REFUSÉ le livrable)')
+    expect(texte).toContain('⚠️ Fait — AUTO-DÉCLARÉ, non validé (le juge a REFUSÉ le résultat)')
   })
 
   it('ne touche pas un ✅ ecrit dans un bloc de code', () => {
@@ -1069,7 +1071,7 @@ describe('un run non valide ne garde pas le ✅ du worker', () => {
       result: rapportWorker
     })
 
-    expect(affiche).toContain('⛔ Workflow BLOQUÉ par le gate')
+    expect(affiche).toContain('⛔ Workflow ARRÊTÉ au contrôle final')
     expect(affiche).not.toContain('✅ Fait')
   })
 })
@@ -1091,13 +1093,13 @@ describe('demoteUnvalidatedSuccessClaims — le trio d’état ne prétend pas l
   it('rétrograde « Reste à faire : rien » quand le gate a bloqué', () => {
     const out = demoteUnvalidatedSuccessClaims('⏳ Reste à faire : rien', bloque)
     expect(out).not.toMatch(/Reste à faire\s*:\s*rien\s*$/u)
-    expect(out).toContain('gate BLOQUÉ')
+    expect(out).toContain('ARRÊTÉ au contrôle final')
   })
 
   it('rétrograde « Recommandé : aucune action »', () => {
     const out = demoteUnvalidatedSuccessClaims('👉 Recommandé : aucune action', bloque)
     expect(out).not.toContain('aucune action')
-    expect(out).toContain('gate BLOQUÉ')
+    expect(out).toContain('ARRÊTÉ au contrôle final')
   })
 
   it('CONTRE-EXEMPLE — une ligne qui nomme du travail restant reste intacte', () => {
@@ -1156,7 +1158,7 @@ describe('demoteUnvalidatedSuccessClaims — les trous réfutés par le juge', (
   it('D2 — « Maintenant : tout est livré » ne survit pas à un gate bloqué', () => {
     const out = demoteUnvalidatedSuccessClaims(trio, { gateBlocked: true, valid: false })
     expect(out).not.toContain('tout est livré')
-    expect(out).toContain('gate BLOQUÉ')
+    expect(out).toContain('ARRÊTÉ au contrôle final')
   })
 
   it('D3 — les formes voisines de « rien » sont couvertes', () => {
@@ -1167,7 +1169,7 @@ describe('demoteUnvalidatedSuccessClaims — les trous réfutés par le juge', (
       '⏳ Reste à faire : R.A.S.',
       '👉 Recommandé : aucune action supplémentaire'
     ]) {
-      expect(demoteUnvalidatedSuccessClaims(ligne, { gateBlocked: true })).toContain('gate BLOQUÉ')
+      expect(demoteUnvalidatedSuccessClaims(ligne, { gateBlocked: true })).toContain('ARRÊTÉ au contrôle final')
     }
   })
 
@@ -1233,7 +1235,7 @@ describe('demoteUnvalidatedSuccessClaims — second panel', () => {
       '📍 Maintenant : rien en cours, tout est publié',
       '📍 Maintenant : rien'
     ]) {
-      expect(demoteUnvalidatedSuccessClaims(ligne, bloque)).toContain('gate BLOQUÉ')
+      expect(demoteUnvalidatedSuccessClaims(ligne, bloque)).toContain('ARRÊTÉ au contrôle final')
     }
   })
 })

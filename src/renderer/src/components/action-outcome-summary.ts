@@ -131,7 +131,7 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
     const reason = gateReasonLabel(data.gateReasons)
     const motifs = gateReasonLines(data.gateReasons)
     return {
-      label: `bloqué par le gate${reason ? ` — ${reason}` : ''}${suffix}`,
+      label: `arrêté au contrôle final${reason ? ` — ${reason}` : ''}${suffix}`,
       state: 'failed',
       ...(motifs.length ? { why: motifs } : {})
     }
@@ -145,7 +145,8 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
     const short = errorReason.length > 120 ? errorReason.slice(0, 117) + '…' : errorReason
     return { label: `échec : ${short}${suffix}`, state: 'failed', why: [errorReason] }
   }
-  if (data.valid === false) return { label: `livrable refusé${suffix}`, state: 'failed' }
+  if (data.valid === false)
+    return { label: `résultat refusé par le juge${suffix}`, state: 'failed' }
   if (data.reused === true) return { label: `run réutilisé${suffix}`, state: 'refused' }
   const status = typeof data.status === 'string' && data.status ? data.status : 'terminé'
   return { label: `${status}${suffix}`, state: 'ok' }

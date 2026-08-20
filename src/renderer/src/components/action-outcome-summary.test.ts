@@ -113,7 +113,7 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
       name: 'orchestrate',
       data: { status: 'failed', gateBlocked: true, costUsd: 3 }
     })
-    expect(summary).toEqual({ label: 'bloqué par le gate · 3,00 $', state: 'failed' })
+    expect(summary).toEqual({ label: 'arrêté au contrôle final · 3,00 $', state: 'failed' })
   })
 
   it('livrable REFUSE par le juge = echec, meme si l’appel a reussi', () => {
@@ -125,7 +125,7 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
     ).toBe('failed')
   })
 
-  it('orchestration qui JETTE remonte SA raison, pas un generique « livrable refusé »', () => {
+  it('orchestration qui JETTE remonte SA raison, pas un generique « résultat refusé par le juge »', () => {
     const summary = orchestrateOutcomeSummary({
       name: 'orchestrate',
       data: { status: 'failed', valid: false, error: 'ENOENT: worktree introuvable' }
@@ -149,13 +149,13 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
     expect(summary!.label.length).toBeLessThan(140)
   })
 
-  it('un valid:false SANS error reste « livrable refusé » (refus propre du juge, pas un echec dur)', () => {
+  it('un valid:false SANS error reste « résultat refusé par le juge » (refus propre du juge, pas un echec dur)', () => {
     expect(
       orchestrateOutcomeSummary({
         name: 'orchestrate',
         data: { status: 'succeeded', valid: false }
       })?.label
-    ).toBe('livrable refusé')
+    ).toBe('résultat refusé par le juge')
   })
 
   it('run REUTILISE est signale (aucun nouveau travail lance)', () => {
@@ -244,7 +244,7 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
         name: 'orchestrate',
         data: { status: 'failed', gateBlocked: true, gateReasons: [], costUsd: 3 }
       })
-    ).toEqual({ label: 'bloqué par le gate · 3,00 $', state: 'failed' })
+    ).toEqual({ label: 'arrêté au contrôle final · 3,00 $', state: 'failed' })
   })
 
   it('une autre action ne produit rien', () => {
@@ -259,7 +259,7 @@ describe('groupOutcomeSummary — verify ET orchestrate', () => {
       { name: 'orchestrate', data: { gateBlocked: true, costUsd: 8 } }
     ])
     expect(summary?.state).toBe('failed')
-    expect(summary?.label).toContain('gate')
+    expect(summary?.label).toContain('contrôle final')
   })
 })
 

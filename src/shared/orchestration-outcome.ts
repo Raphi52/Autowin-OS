@@ -689,9 +689,9 @@ export function demoteUnvalidatedSuccessClaims(
   // a deja tranche plus haut : si on est ici, rien n'est livre, et le dire est toujours juste.
   const cause =
     outcome.gateBlocked === true
-      ? 'gate BLOQUÉ'
+      ? 'ARRÊTÉ au contrôle final'
       : outcome.valid === false
-        ? 'juge a REFUSÉ le livrable'
+        ? 'le juge a REFUSÉ le résultat'
         : outcome.reused === true
           ? 'run réutilisé, rien de neuf livré'
           : 'livraison non prouvée'

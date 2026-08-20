@@ -68,10 +68,31 @@ Un fait mémorisé porte un ancrage `git:<chemin>@<sha>`. Compare-le à `HEAD` :
 Les mécanismes et les motifs bougent lentement, un chemin de fichier non. Un savoir daté cité comme
 actuel fait perdre des heures sur un fichier déplacé.
 
-### 5. Rends un briefing, pas un corpus
+### 5. Rends un briefing, sous CES titres exactement
 
-En prose dense, organisée par ce que la tâche va devoir décider — pas par source. Aucun copier-coller
-de la mémoire : ce qui sert, c'est la synthèse qui tient en contexte.
+En prose dense, jamais un copier-coller de la mémoire. Et sous ces titres-là, qui ne sont pas une
+préférence de mise en page :
+
+```
+## Localisation    où la tâche se joue : fichiers, modules, tables
+## Cartographie    ce qui existe déjà, et comment les morceaux tiennent
+## Décisions       les choix passés sur ce terrain, options ÉCARTÉES comprises
+## Constats        les pièges déjà payés, avec leur coût observé
+## Contraintes     ce qui n'est pas négociable, et pourquoi
+## Trous           ce que tu n'as PAS trouvé
+```
+
+**Pourquoi ces titres et pas d'autres.** Ta sortie ne parvient pas telle quelle à l'étape suivante :
+elle passe par un portage BORNÉ (2000 caractères). Ce portage reconnaît certains titres et transmet
+ces sections ENTIÈRES, dans l'ordre, en NOMMANT celles qui n'ont pas tenu. Les cinq premiers
+ci-dessus en font partie. Sans titres reconnus, le portage retombe sur un repli qui garde les deux
+bords et jette le MILIEU — or un briefing n'a pas de conclusion à sauver : sa substance est partout.
+Un briefing sans ces titres arrive donc ampute en silence, et personne ne le sait.
+
+Corollaire direct sur le VOLUME : ce qui compte le plus se met dans les premières sections, et le
+total utile vise la borne. Au-delà, tu n'écris pas pour l'étape suivante — tu écris pour rien.
+`## Trous` n'est pas un titre reconnu : place-le en dernier, en sachant qu'il sera le premier omis,
+et qu'il sera alors nommé comme absent plutôt que coupé.
 
 Chaque affirmation garde son ancrage. Sans lui, l'étape suivante ne peut pas vérifier, et le doute la
 fera tout relire — le coût que `think` existait pour éviter.
