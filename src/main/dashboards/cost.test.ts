@@ -109,4 +109,35 @@ describe('CostAggregator — persistance (F1)', () => {
     expect(reloaded.totalUsd()).toBeCloseTo(1.0)
     expect(reloaded.byProvider().codex.turns).toBe(1)
   })
+
+  it('rend visibles les anciennes entrees valides mais sans modele', async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const path = join(mkdtempSync(join(tmpdir(), 'cost-')), 'cost.jsonl')
+    writeFileSync(
+      path,
+      [
+        JSON.stringify({ provider: 'claude', inputTokens: 10, outputTokens: 5, costUsd: 0.1 }),
+        JSON.stringify({
+          provider: 'codex',
+          model: 'gpt-real',
+          inputTokens: 20,
+          outputTokens: 8,
+          costUsd: 0.2
+        }),
+        // JSON VALIDE mais de mauvaise forme : le `catch` ne l'attrape pas, seule la validation
+        // de forme le rejette. Sans elle, `inputTokens` non numerique agrege en NaN.
+        JSON.stringify({ provider: 'claude', inputTokens: 'beaucoup', outputTokens: 3 }),
+        // Provider absent : casse le regroupement par provider.
+        JSON.stringify({ inputTokens: 1, outputTokens: 1 })
+      ].join('\n')
+    )
+
+    const status = new CostAggregator(undefined, path).budgetStatus()
+
+    expect(status.turns).toBe(2)
+    // Les deux lignes mal formees sont rejetees ; l'ancienne SANS modele reste comptee.
+    expect(status.pricedSpendUsd).toBeCloseTo(0.3)
+  })
 })

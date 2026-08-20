@@ -130,7 +130,13 @@ describe('Orchestrator — identité provider réelle dans trace + coût', () =>
       subagent: { provider: 'requested', model: 'worker' },
       judge: { provider: 'requested', model: 'judge' }
     })
+    const recordedCosts: Parameters<CostAggregator['add']>[0][] = []
     const cost = new CostAggregator()
+    const originalAdd = cost.add.bind(cost)
+    cost.add = (turn) => {
+      recordedCosts.push(turn)
+      originalAdd(turn)
+    }
     const result = await new Orchestrator({
       registry,
       roles,
@@ -158,6 +164,8 @@ describe('Orchestrator — identité provider réelle dans trace + coût', () =>
       .map((s) => s.model)
     expect(models).toContain('actual-model')
     expect(models).not.toContain('worker')
+    expect(recordedCosts).toHaveLength(2)
+    expect(recordedCosts.every((turn) => turn.model === 'actual-model')).toBe(true)
   })
 
   it('execute tout le run avec le snapshot persiste meme si les roles globaux ont change', async () => {
