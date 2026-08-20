@@ -397,6 +397,7 @@ import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
 import { registerVeilleIpc } from './veille/veille-ipc'
 import { executerPasse } from './veille/passe'
 import { genererCandidatsEnConversation } from './veille/scout-visible'
+import { unePasseALaFois } from './veille/une-passe-a-la-fois'
 import { lancerScoutVeille } from './veille/scout-claude'
 import { candidatsInternesDuDepot } from './veille/audit-depot'
 import { dispatcherAvecVeille } from './veille/dispatch-veille'
@@ -4824,13 +4825,15 @@ Le fil reprend ensuite normalement.`
   // puis les scouts web + l'audit de corrections du dépôt, fusionnés dans le même stock.
   const dispatcherVeille = dispatcherAvecVeille({
     suivant: taskDispatcher,
-    executerPasse: async () => {
+    // La passe planifiee COMPLETE est gardee a son tour : deux occurrences qui se recouvrent (une
+    // passe plus longue que son intervalle) rejoignent la premiere au lieu de doubler les scouts web.
+    executerPasse: unePasseALaFois(async () => {
       await genererCandidatsInternesVisibles()
       return executerPasse({
         lancerScout: lancerScoutVeille,
         candidatsInternes: candidatsInternesDuDepot(os.executionWorkspace)
       })
-    }
+    })
   })
   scheduledTaskScheduler = new TaskScheduler(scheduledTasks, dispatcherVeille, relay)
   // Le moteur de réveil OBSERVE et délègue à ce même scheduler : il n'y a qu'un chemin d'exécution.
@@ -4903,7 +4906,7 @@ Le fil reprend ensuite normalement.`
     return { provider: choisi.provider, ...(choisi.model ? { model: choisi.model } : {}) }
   }
   /** Le scout interne comme AGENT VISIBLE : conversation dédiée, tour interruptible, coût compté. */
-  const genererCandidatsInternesVisibles = (
+  const genererCandidatsInternesVisiblesBrut = (
     conversationId?: string
   ): ReturnType<typeof genererCandidatsEnConversation> =>
     genererCandidatsEnConversation({
@@ -4913,6 +4916,21 @@ Le fil reprend ensuite normalement.`
       racineDonnees: ensureAutowinAppData(appDataRoot),
       ...(conversationId ? { conversationId } : {})
     })
+  /**
+   * LA garde PARTAGEE de la generation interne — une seule, donnee aux DEUX chemins.
+   *
+   * `veille-ipc` portait deja une garde de simultaneite, mais INTERNE : elle ne dedoublonnait que
+   * l'IPC contre lui-meme. Le planificateur appelle cette generation depuis son `executerPasse`,
+   * donc passait a cote. Cliquer « En generer plus » pendant qu'une veille planifiee tournait
+   * lancait un SECOND fan-out de scouts sur le meme stock — deux fois le cout, deux ecritures
+   * concurrentes du meme magasin.
+   *
+   * CONSEQUENCE ASSUMEE : l'appelant tardif REJOINT la passe en cours, donc son `conversationId`
+   * n'est pas honore — un clic pendant une passe planifiee remplit bien le stock, mais la
+   * conversation visible est celle de la passe deja partie. Une passe partagee valait mieux que deux
+   * fan-outs concurrents sur le meme magasin.
+   */
+  const genererCandidatsInternesVisibles = unePasseALaFois(genererCandidatsInternesVisiblesBrut)
   registerVeilleIpc({
     ipc: ipcMain,
     assertTrusted: assertTrustedRendererSender,
