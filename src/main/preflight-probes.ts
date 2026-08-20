@@ -54,7 +54,11 @@ export function appPreflightProbes(): PreflightProbes {
       const ctrl = new AbortController()
       const t = setTimeout(() => ctrl.abort(), 1500) // sleep-ok: timeout d'abort d'un fetch réseau, borne la latence du ping (pas un sleep de polling)
       try {
-        await fetch('http://127.0.0.1:8765/', { signal: ctrl.signal })
+        // Le corps est lu jusqu'au bout AVANT de lâcher la connexion : couper une réponse
+        // à moitié écrite fait lever WinError 10053 côté serveur Brain, qui l'affiche alors
+        // comme un traceback au lancement d'Autowin (service pourtant sain).
+        const res = await fetch('http://127.0.0.1:8765/', { signal: ctrl.signal })
+        await res.arrayBuffer()
         return true
       } catch {
         return false
