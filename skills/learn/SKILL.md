@@ -38,6 +38,20 @@ remplissage pour avoir écrit pollue la mémoire que la tâche suivante devra tr
 Le critère : **compréhensible dans trois mois, sans cette conversation**. Une phrase qui commence par
 « actuellement » ou « en ce moment » n'a rien à faire ici.
 
+## Où est ta matière
+
+**Dans ton contexte, déjà.** Tu n'as pas vécu le travail : tu arrives après. Ce que les étapes
+précédentes ont produit t'est transmis — la tâche, puis chaque sortie de phase, préfixée
+`[phase <nom>]`. C'est là que vivent le chemin des fichiers touchés, la cause établie, le diff et
+les preuves.
+
+Lis-les AVANT de conclure que tu n'as rien. Mesuré le 2026-08-20 sur le run `conv-1339` : un nœud
+`learn` a déclaré « je n'ai ni diff, ni fichier à ancrer » alors que son contexte contenait le
+chemin exact du fichier ET le diff complet. Il a refusé d'écrire pour une bonne raison appliquée à
+une prémisse fausse — le pire des refus, parce qu'il a l'air rigoureux.
+
+Contexte réellement vide (aucune phase avant toi) → là, oui, dis-le et n'écris rien.
+
 ## Procédure
 
 ### 1. Nomme ce que la tâche a établi
@@ -46,14 +60,20 @@ Avant d'écrire, liste — en une phrase chacun — les savoirs que ce travail a
 filtre : **est-ce que la prochaine tâche sur ce terrain le repaierait ?** Si non, il ne se capitalise
 pas. Souvent la liste tient en un ou deux éléments ; parfois elle est vide.
 
-### 2. Ancre chaque savoir
+### 2. Ancre chaque savoir — et n'abandonne pas sur un SHA manquant
 
-`source: git:<chemin>@<sha>` — le chemin d'un fichier qui PROUVE le fait, et le SHA courant
-(`git rev-parse --short HEAD`). Un fait dont tu ne peux pas nommer le fichier est une supposition :
-ne l'écris pas.
+Par ordre de préférence, le PREMIER que tu peux réellement produire :
 
-Autres formes acceptées quand le fait ne vient pas du code : `url:https://…`, `ticket:ABC-123`,
-`session:current`, `file:<chemin absolu existant>`.
+1. `git:<chemin>@<sha>` — la meilleure forme pour un fait de code, si tu obtiens le SHA
+   (`git rev-parse --short HEAD`).
+2. `session:current` — la forme prévue POUR UN RUN, et elle vaut ancrage. Dans un nœud de workflow
+   tu es dans un run : si le SHA n'est pas à ta portée, c'est celle-ci, et le chemin du fichier va
+   dans le corps du fait.
+3. `url:` · `ticket:` · `file:<chemin absolu existant>` — quand le fait ne vient pas du code.
+
+Ce qui interdit d'écrire, c'est de ne pas pouvoir nommer le FICHIER — pas de ne pas avoir le SHA.
+Un SHA absent dégrade la précision de l'ancrage ; il n'annule pas le savoir. Renoncer pour cette
+seule raison, c'est jeter ce que la tâche a coûté pour un détail rattrapable.
 
 ### 3. RELIS AVANT D'ÉCRIRE — c'est ce qui évite les doublons
 

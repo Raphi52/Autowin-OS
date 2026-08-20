@@ -31,12 +31,24 @@ export const OUTILS_NOEUD_SKILL = ['brain_query', 'remember'] as const
 /** Tours d'outils au maximum. Au-delà, on garde le dernier texte et on continue. */
 export const TOURS_OUTILS_MAX = 2
 
+/** La declaration d'une commande, telle que le bus la publie. */
+export interface SpecCommandeSkill {
+  name: string
+  description: string
+  args: Record<string, unknown>
+}
+
 /** Ce dont ce module a besoin du bus de commandes — volontairement minuscule. */
 export interface LanceurCommandeSkill {
   exec(
     name: string,
     args: Record<string, unknown>
   ): Promise<{ ok: boolean; data?: unknown; error?: string }>
+  /**
+   * Les specs REELLES des commandes autorisees. Absent = prompt sans liste d'arguments (degrade,
+   * mais jamais faux) — voir `promptOutilsNoeudSkill`.
+   */
+  catalogue?(): SpecCommandeSkill[]
 }
 
 export interface AppelOutil {
@@ -124,23 +136,43 @@ export function compteRenduDesOutils(appels: readonly AppelOutil[]): string {
 }
 
 /**
- * Le prompt d'outillage d'un nœud skill.
+ * Le prompt d'outillage d'un nœud skill, ENGENDRE depuis le catalogue reel.
  *
- * Volontairement distinct de `buildChatPilotagePrompt` : celui-là s'adresse à l'agent du CHAT
- * (« tu converses avec l'utilisateur », catalogue complet, réponses cliquables). Un nœud de
- * workflow ne converse avec personne et ne dispose que de deux commandes. Réutiliser le prompt du
- * chat lui promettrait des capacités qu'il n'a pas.
+ * Volontairement distinct de `buildChatPilotagePrompt` : celui-la s'adresse a l'agent du CHAT
+ * (« tu converses avec l'utilisateur », catalogue complet, reponses cliquables). Un nœud de
+ * workflow ne converse avec personne et ne dispose que de deux commandes.
+ *
+ * POURQUOI ENGENDRE ET NON ECRIT A LA MAIN. La premiere version listait les arguments de memoire :
+ * elle annoncait `brain_query {"query": ...}` quand la commande attend `question`, et `remember`
+ * sans `scope` ni `source` alors que les deux sont OBLIGATOIRES. Consequence mesuree sur le run
+ * reel `conv-1339` : le nœud a bien emis sa commande, le bus l'a bien recue, et elle est revenue
+ * « question manquante ou invalide ». L'outil etait branche, teste, et inutilisable — parce que la
+ * documentation que le modele lit ne decrivait pas la fonction qu'il appelle.
+ *
+ * Un prompt copie d'une spec ne peut plus diverger d'elle. Sans catalogue, on degrade en nommant
+ * seulement les commandes : mieux vaut un prompt incomplet qu'un prompt FAUX.
  */
-export function promptOutilsNoeudSkill(): string {
+export function promptOutilsNoeudSkill(specs: readonly SpecCommandeSkill[] = []): string {
+  const autorisees = specs.filter((s) =>
+    (OUTILS_NOEUD_SKILL as readonly string[]).includes(s.name)
+  )
+  const lignes = autorisees.length
+    ? autorisees.map((s) => {
+        const args = Object.entries(s.args ?? {})
+          .map(([nom, attendu]) => `    "${nom}" : ${String(attendu)}`)
+          .join('\n')
+        return `- ${s.name} — ${s.description}\n  args :\n${args || '    (aucun)'}`
+      })
+    : (OUTILS_NOEUD_SKILL as readonly string[]).map(
+        (nom) => `- ${nom} (arguments non declares ici : lis le refus, il nomme ce qui manque)`
+      )
   return (
     `\n=== OUTILS DISPONIBLES ===\n` +
     `Tu peux appeler des commandes de l'application au FORMAT EXACT : ` +
     `<cmd>{"name":"...","args":{...}}</cmd>. Tout texte hors commande est ton livrable.\n` +
-    `Commandes autorisées ici, et AUCUNE autre :\n` +
-    `- brain_query — args {"query":"..."} : interroger la mémoire durable (le Brain).\n` +
-    `- remember — args {"title":"...","fact":"...","type":"lesson|decision|preference|domain"} : ` +
-    `y déposer un fait vérifié.\n` +
-    `Le résultat de tes commandes t'est rendu, puis tu produis ton livrable. ` +
-    `Tu disposes de ${TOURS_OUTILS_MAX} tours d'outils au maximum : au-delà, conclus avec ce que tu as.\n`
+    `Commandes autorisees ici, et AUCUNE autre :\n${lignes.join('\n')}\n` +
+    `Respecte le nom EXACT de chaque argument ci-dessus. ` +
+    `Le resultat de tes commandes t'est rendu, puis tu produis ton livrable. ` +
+    `Tu disposes de ${TOURS_OUTILS_MAX} tours d'outils au maximum : au-dela, conclus avec ce que tu as.\n`
   )
 }

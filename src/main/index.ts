@@ -871,7 +871,19 @@ os.setSkillCommandRunner({
       : Promise.resolve({
           ok: false,
           error: `Commande indisponible depuis un noeud de workflow: ${name}`
-        })
+        }),
+  /**
+   * Les specs REELLES des deux commandes, pour que le prompt d'outillage soit COPIE de la commande
+   * au lieu d'etre ecrit de memoire. Mesure du 2026-08-20 sur le run `conv-1339` : ecrit de memoire,
+   * il annoncait `brain_query {"query": ...}` la ou la commande attend `question`, et `remember`
+   * sans `scope` ni `source` alors que les deux sont obligatoires. L'outil etait branche, teste,
+   * et strictement inutilisable.
+   */
+  catalogue: () =>
+    bus
+      .catalog()
+      .filter((c) => OUTILS_NOEUD_SKILL.includes(c.name as (typeof OUTILS_NOEUD_SKILL)[number]))
+      .map((c) => ({ name: c.name, description: c.description, args: c.args }))
 })
 seedRegistrySnapshot({
   tools: bus.catalog().map((command) => ({

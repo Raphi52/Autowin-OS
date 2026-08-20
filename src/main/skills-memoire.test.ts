@@ -87,6 +87,30 @@ describe('skills learn/think — présentes, découvertes, invocables', () => {
     expect(think).toMatch(/frame/i)
   })
 
+
+  it('learn dit OU est sa matiere — sinon il refuse sur une premisse fausse', () => {
+    /**
+     * Mesure du 2026-08-20, run reel `conv-1339` : le nœud `learn` a ecrit « je n'ai ni diff, ni
+     * fichier a ancrer » alors que son contexte contenait 3969 caracteres incluant le chemin exact
+     * du fichier touche ET le diff complet, prefixes `[phase build]`. Un refus rigoureux applique a
+     * une premisse fausse est le pire des refus : il a l'air d'une preuve de serieux.
+     *
+     * La skill ne disait nulle part d'ou vient sa matiere. Un agent de phase n'a pas vecu le
+     * travail : son unique source est ce qui lui est transmis.
+     */
+    const learn = corpsDe('learn')
+    expect(learn).toMatch(/\[phase/)
+    expect(learn.toLowerCase()).toContain('matière')
+  })
+
+  it('learn n abandonne pas la capitalisation pour un SHA manquant', () => {
+    // `session:current` est la forme PREVUE pour un run et vaut ancrage : renoncer parce que le SHA
+    // n'est pas a portee jette ce que la tache a coute pour un detail rattrapable.
+    const learn = corpsDe('learn')
+    expect(learn).toContain('session:current')
+    expect(learn.toLowerCase()).toMatch(/pas de ne pas avoir le sha|sha manquant/)
+  })
+
   it('think date ce qu’il charge, au lieu de le présenter comme actuel', () => {
     // Un savoir daté cité comme courant est ce qui fait perdre des heures sur un fichier déplacé.
     const think = corpsDe('think')
