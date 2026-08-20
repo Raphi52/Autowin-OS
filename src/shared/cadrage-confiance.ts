@@ -26,12 +26,12 @@ export const PLAFOND_HYPOTHESES = 5
 const PLAFOND_AFFIRMATION = 240
 
 /*
- * `NON` doit etre teste AVANT `VERIFIE`, sinon « NON VERIFIE » compte comme verifie — l'inversion
- * exacte du signal. Les accents sont optionnels : le texte vient d'un modele, pas d'un formulaire.
+ * L'etiquette est cherchee telle qu'un modele l'ecrit : accents optionnels, tiret ou espace entre
+ * `NON` et `VERIFIE`, pluriel possible. Un `VERIFIE` seul serait un piege — il matcherait
+ * l'interieur de « NON VERIFIE » et inverserait exactement le signal ; on ne cherche donc jamais
+ * `VERIFIE` seul.
  */
 const ETIQUETTE_NON_VERIFIE = /\bNON\s*[- ]?\s*V[EÉ]RIFI[EÉ]E?S?\b/iu
-const ETIQUETTE_VERIFIE = /\bV[EÉ]RIFI[EÉ]E?S?\b/iu
-const ETIQUETTE_UTILISATEUR = /\bDE\s+L[’']?\s*UTILISATEUR\b/iu
 
 const PREFIXE_PUCE = /^\s*(?:[-*•]|\d+[.)])\s*/u
 const PONCTUATION_ORPHELINE = /^[\s:—–-]+|[\s:—–-]+$/gu
