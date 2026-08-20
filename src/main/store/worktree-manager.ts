@@ -302,6 +302,27 @@ const COMPENSATION_INDEX_MARKER_SWEEP_LIMIT = 256
  */
 const ABANDONED_AGENT_MIN_AGE_MS = 24 * 60 * 60 * 1_000
 
+/**
+ * Age minimal pour une copie qui ne retient RIEN : aucun fichier non publie, et un HEAD deja
+ * contenu par une reference du depot. La supprimer ne peut donc rien perdre.
+ *
+ * POURQUOI CE SECOND SEUIL EXISTE. Mesure du 20/08 sur l'installation de l'utilisateur : 25 copies
+ * pour 670 Mo, dont 14 propres et entierement contenues dans `main` — donc sans le moindre enjeu.
+ * Aucune n'etait ramassable : creees entre 07:57 et 19:01, toutes avaient moins de 24 h. Une journee
+ * de travail produit une copie par `edit_file` (~33 Mo) et le seul mecanisme capable de les rendre
+ * refusait de les regarder avant le lendemain. L'utilisateur l'a nomme : « une usine a worktrees
+ * abandonnes ».
+ *
+ * POURQUOI 3 H ET NON 30 MIN. Le delai de 24 h ne protege pas seulement la fenetre
+ * `acquire → markSpawnIntent` : il couvre aussi un run VIVANT mais momentanement inactif, dont la
+ * mtime cesse d'avancer. Une copie propre et deja publiee est indiscernable d'un residu SAUF par le
+ * bail PID (`hasActiveProcesses`). Descendre a quelques minutes ferait donc reposer la securite sur
+ * la seule fraicheur de ce bail — et un bail perime apres un crash supprimerait le bureau d'un agent
+ * au travail, ce qui serait bien pire que du disque perdu. Trois heures laissent une marge large
+ * au-dessus de toute verification longue, tout en vidant l'usine dans la journee.
+ */
+const RESIDU_SANS_ENJEU_MIN_AGE_MS = 3 * 60 * 60 * 1_000
+
 /** Découpe en lignes, quel que soit le style de fin de ligne rendu par git. */
 const LIGNES = /\r?\n/
 
@@ -931,7 +952,8 @@ export class WorktreeManager {
     } catch {
       return undefined
     }
-    if (!(ageMs >= ABANDONED_AGENT_MIN_AGE_MS)) return undefined
+    // Plancher commun : en dessous, aucune copie n'est regardee, quel que soit son etat.
+    if (!(ageMs >= RESIDU_SANS_ENJEU_MIN_AGE_MS)) return undefined
 
     if (this.hasActiveProcesses(agentId)) return undefined
     if (this.ownershipIssue(path)) return undefined
@@ -949,7 +971,16 @@ export class WorktreeManager {
      * 30 Mo. La garantie « on ne detruit jamais un travail qui n'existe nulle part ailleurs » est
      * donc tenue plus fort qu'avant — avant, ce travail n'etait sauvegarde nulle part.
      */
+    /*
+     * L'ORDRE des gardes reste du moins cher au plus cher, mais l'age ne tranche plus seul : il faut
+     * savoir si la copie retient quelque chose AVANT de choisir le seuil qui s'applique. Une copie
+     * agee de 3 a 24 h paie donc desormais `ownershipIssue` (~167 ms) et `unpublishedFiles`
+     * (~292 ms) la ou elle sortait en ~0,1 ms. C'est un cout assume : ce balayage est opportuniste,
+     * rien n'attend son resultat, et la variante async rend la main entre chaque copie.
+     */
     if (this.unpublishedFiles(path).length > 0) {
+      // Elle retient du travail : la marge LARGE d'origine s'applique, inchangee.
+      if (!(ageMs >= ABANDONED_AGENT_MIN_AGE_MS)) return undefined
       const preserve = this.preserverEtLiberer(agentId)
       return preserve.outcome === 'preserve-et-libere' || preserve.outcome === 'libere'
         ? agentId
@@ -982,6 +1013,11 @@ export class WorktreeManager {
        * echec de creation interrompt tout : perdre un commit unique pour gagner 30 Mo serait le pire
        * echange possible.
        */
+      // Rattacher un commit, c'est AGIR : le chemin accelere se limite a « rien a faire sauf
+      // supprimer ». Une copie de 3 a 24 h dont le HEAD n'est reference nulle part garde donc la
+      // marge large — creer une branche pour le compte d'un run peut-etre encore vivant serait un
+      // effet de bord, pas un ramassage.
+      if (!(ageMs >= ABANDONED_AGENT_MIN_AGE_MS)) return undefined
       const branche = `autowin/recovery/${agentId}`
       if (this.tryGitFn(this.baseRepo, ['branch', '--force', branche, sha]).code !== 0) {
         return undefined

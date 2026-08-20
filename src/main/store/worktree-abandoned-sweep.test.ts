@@ -2,7 +2,7 @@ import { describe, expect, it, afterEach, vi } from 'vitest'
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
@@ -43,6 +43,17 @@ function manager(repo: string, aged: boolean): WorktreeManager {
     baseRepo: repo,
     worktreeRoot,
     nowFn: () => Date.now() + (aged ? 2 * DAY_MS : 0)
+  })
+}
+
+/** Horloge decalee de N heures : permet de viser la fenetre 3 h - 24 h, invisible avec `aged`. */
+function managerDecaleDeHeures(repo: string, heures: number): WorktreeManager {
+  const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-sweeproot-'))
+  roots.push(worktreeRoot)
+  return new WorktreeManager({
+    baseRepo: repo,
+    worktreeRoot,
+    nowFn: () => Date.now() + heures * 60 * 60 * 1_000
   })
 }
 
@@ -134,5 +145,57 @@ describe('balayage des copies agent abandonnées', () => {
 
     expect(wm.reconcileResidues().swept).toBeUndefined()
     expect(existsSync(path)).toBe(true)
+  })
+})
+
+describe("l'usine a copies abandonnees : une copie SANS ENJEU n'attend plus 24 h", () => {
+  /*
+    Mesure du 20/08 sur l'installation de l'utilisateur : 25 copies pour 670 Mo, dont 14 propres et
+    entierement contenues dans `main` — donc sans le moindre enjeu. AUCUNE n'etait ramassable : creees
+    entre 07:57 et 19:01, toutes avaient moins de 24 h. Une journee de travail produit une copie par
+    `edit_file` (~33 Mo), et le seul mecanisme capable de les rendre refusait de les regarder avant le
+    lendemain. L'utilisateur l'a nomme : « une usine a worktrees abandonnes ».
+  */
+  it('une copie sterile de 4 h part, la ou elle attendait le lendemain', () => {
+    const repo = tempRepo()
+    const wm = managerDecaleDeHeures(repo, 4)
+    const path = wm.acquire('run-sterile-4h')
+
+    expect(wm.reconcileResidues().swept).toEqual(['run-sterile-4h'])
+    expect(existsSync(path)).toBe(false)
+  })
+
+  it('en dessous du plancher de 3 h, elle reste — la fenetre de spawn est protegee', () => {
+    const repo = tempRepo()
+    const wm = managerDecaleDeHeures(repo, 2)
+    const path = wm.acquire('run-jeune')
+
+    expect(wm.reconcileResidues().swept ?? []).toEqual([])
+    expect(existsSync(path)).toBe(true)
+  })
+
+  it('une copie qui RETIENT du travail garde la marge de 24 h, inchangee', () => {
+    // La garantie qui compte : accelerer le residu ne doit rien accelerer d'autre.
+    const repo = tempRepo()
+    const wm = managerDecaleDeHeures(repo, 4)
+    const path = wm.acquire('run-porteur')
+    writeFileSync(join(path, 'travail-unique.txt'), 'ce que personne ne sauvegarde', 'utf8')
+
+    expect(wm.reconcileResidues().swept ?? []).toEqual([])
+    expect(existsSync(path)).toBe(true)
+    expect(readFileSync(join(path, 'travail-unique.txt'), 'utf8')).toContain('personne')
+  })
+
+  it('passe 24 h, la copie porteuse est preservee puis liberee — comportement d origine', () => {
+    const repo = tempRepo()
+    const wm = managerDecaleDeHeures(repo, 30)
+    const path = wm.acquire('run-porteur-vieux')
+    writeFileSync(join(path, 'travail-unique.txt'), 'a sauvegarder', 'utf8')
+
+    expect(wm.reconcileResidues().swept).toEqual(['run-porteur-vieux'])
+    expect(existsSync(path)).toBe(false)
+    expect(git(repo, 'branch', '--list', 'autowin/recovery/run-porteur-vieux')).toContain(
+      'recovery'
+    )
   })
 })
