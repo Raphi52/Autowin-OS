@@ -2693,9 +2693,30 @@ export function ChatView({
                 {runtimeIdentity?.reasoningEffort && (
                   <span>effort {runtimeIdentity.reasoningEffort}</span>
                 )}
-                <span className={`chat-runtime-state${busy ? ' is-busy' : ''}`}>
+                {/*
+                  L'IDENTIFIANT de la conversation, a la place de « interface prete ».
+
+                  Ce libelle ne disait rien : une interface affichee est prete, sinon on ne la
+                  lirait pas. Pendant ce temps l'agent cite des conversations par leur id
+                  (« conv-12 ») sans que rien a l'ecran ne permette de savoir laquelle on regarde.
+                  La place etait donc occupee par du bruit alors qu'il manquait la seule
+                  information qui relie ce que l'agent dit a ce que l'utilisateur voit.
+
+                  L'etat occupe n'est PAS perdu : il reste porte par la classe `is-busy`, par la
+                  pastille, et par la mention ajoutee a la suite de l'id.
+                */}
+                <span
+                  className={`chat-runtime-state${busy ? ' is-busy' : ''}`}
+                  data-testid="chat-runtime-conv"
+                  title={
+                    activeId
+                      ? `Identifiant de cette conversation : ${activeId}. C'est ce nom que l'agent emploie quand il parle d'une conversation.`
+                      : 'Aucune conversation ouverte'
+                  }
+                >
                   <span className="status-dot" />
-                  {busy ? 'en cours' : 'interface prête'}
+                  {activeId ?? 'aucune conversation'}
+                  {busy && ' · en cours'}
                 </span>
               </div>
             </div>
