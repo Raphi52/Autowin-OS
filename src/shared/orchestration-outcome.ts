@@ -689,9 +689,9 @@ export function demoteUnvalidatedSuccessClaims(
   // a deja tranche plus haut : si on est ici, rien n'est livre, et le dire est toujours juste.
   const cause =
     outcome.gateBlocked === true
-      ? 'gate BLOQUÉ'
+      ? 'ARRÊTÉ au contrôle final'
       : outcome.valid === false
-        ? 'juge a REFUSÉ le livrable'
+        ? 'le juge a REFUSÉ le résultat'
         : outcome.reused === true
           ? 'run réutilisé, rien de neuf livré'
           : 'livraison non prouvée'
@@ -958,6 +958,25 @@ export function removeAuthoritativeDeliveredClosingBlock(report: string): string
 }
 
 /**
+ * Statut TRADUIT. Le fil affichait « statut failed » — un mot d'API, en anglais, au milieu d'une
+ * phrase française. Un statut inconnu est rendu tel quel : on ne traduit pas ce qu'on ne connaît pas,
+ * et inventer un libellé serait pire que montrer le brut.
+ */
+const STATUTS_LISIBLES: Record<string, string> = {
+  failed: 'échoué',
+  red: 'échoué',
+  green: 'réussi',
+  blocked: 'bloqué',
+  open: 'pas terminé',
+  cancelled: 'annulé',
+  'degraded-closed': 'clos en connaissance de cause'
+}
+
+function statutLisible(statut: string): string {
+  return STATUTS_LISIBLES[statut] ?? statut
+}
+
+/**
  * Texte de clôture d'une orchestration. Ne prétend JAMAIS un succès : `gateBlocked` ou `valid: false`
  * sont dits explicitement, même quand l'appel a « réussi » techniquement. Un gate qui bloque est un
  * échec de livraison, pas un détail.
@@ -984,17 +1003,17 @@ export function formatOrchestrationOutcome(
   const learningDetail = asString(outcome.learning?.detail)
 
   const headline = gateBlocked
-    ? '⛔ Workflow BLOQUÉ par le gate — livrable non validé'
+    ? '⛔ Workflow ARRÊTÉ au contrôle final — résultat non validé'
     : invalid
-      ? '⚠️ Workflow terminé mais le juge a REFUSÉ le livrable'
+      ? '⚠️ Workflow terminé mais le juge a REFUSÉ le résultat'
       : outcome.reused === true
         ? '↻ Workflow déjà en cours réutilisé (aucun nouveau run lancé)'
         : delivered
           ? '✅ Workflow terminé'
-          : '⚠️ Workflow terminé — preuve incomplète de livraison'
+          : '⚠️ Workflow terminé — la livraison n’est pas prouvée'
 
   const facts = [
-    status && `statut ${status}`,
+    status && `statut ${statutLisible(status)}`,
     cost && (cost.startsWith('coût ') ? cost : `coût ${cost}`),
     run && `run « ${run} »`
   ].filter((fact): fact is string => Boolean(fact))

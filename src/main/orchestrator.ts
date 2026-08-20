@@ -2305,7 +2305,7 @@ export class Orchestrator {
       push({
         step: 'gate',
         role: 'gate',
-        detail: `PRÉ-GATE en défaut (le run continue, le juge tranche) : ${motifsPreGate.join('; ')}`
+        detail: `Contrôle préalable en défaut (le travail continue, le juge tranchera) : ${motifsPreGate.join('; ')}`
       })
     }
     /**
@@ -4201,7 +4201,7 @@ ${empreinteDepot}`
         push({
           step: 'gate',
           role: 'gate',
-          detail: `PRÉ-GATE BLOQUÉ: ${preGate.reasons.join('; ')}`
+          detail: `Arrêté au contrôle final : ${preGate.reasons.join('; ')}`
         })
         return { valid: false, gate: preGate, learningAttestations: [] }
       }
