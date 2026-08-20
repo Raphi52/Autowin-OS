@@ -212,10 +212,24 @@ export class RunWorktreeCoordinator {
       if (attendre) {
         // `void` et non `await` : le constructeur ne peut pas attendre, et un rejet de la promesse de
         // garde ne doit pas empêcher la récupération — on réconcilie dans les deux cas.
-        void attendre.then(
-          () => this.reconcileExistingAsync(),
-          () => this.reconcileExistingAsync()
-        )
+        //
+        // Le `.catch` final n'est pas décoratif, et son absence a coûté. `reconcileExistingAsync`
+        // énumère les copies via `execFileSync('git', ...)` : il PEUT jeter, typiquement quand son
+        // `cwd` a disparu. Sans ce maillon, le rejet devenait une rejection NON GÉRÉE — mesuré le
+        // 2026-08-20 : `npm run test:unit` sortait en exit 1 avec 7183 tests VERTS et une seule ligne
+        // « spawnSync git ENOENT », et en production l'échec passait entièrement sous silence. La
+        // branche isolée quelques lignes plus haut chaînait pourtant déjà `recordRecoveryFailure` :
+        // c'était une asymétrie, pas une décision.
+        //
+        // On ENREGISTRE, on n'avale pas : un `catch` vide aurait fait taire le symptôme en laissant
+        // la récupération échouer sans trace, soit exactement ce que `recordRecoveryFailure` existe
+        // pour empêcher.
+        void attendre
+          .then(
+            () => this.reconcileExistingAsync(),
+            () => this.reconcileExistingAsync()
+          )
+          .catch((error) => this.recordRecoveryFailure(error))
       } else {
         this.reconcileExisting()
       }
