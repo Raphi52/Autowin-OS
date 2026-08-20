@@ -94,6 +94,7 @@ import {
   worstCaseVisits,
   type WorkflowGraph
 } from './workflow-graph'
+import { porterSortieDePhase } from './phase-carry'
 import {
   briefArbitrage,
   createMidPhaseSupervision,
@@ -914,6 +915,19 @@ export interface RunCloser {
 
 /** B4 — plafond du texte d'une phase RÉINJECTÉ dans le contexte de la phase suivante. */
 const PHASE_CONTEXT_CAP = 2000
+
+/**
+ * LE POINT UNIQUE du portage phase → phase. Il y en avait SIX, chacun faisant son propre
+ * `slice(0, PHASE_CONTEXT_CAP)` suivi du même `…[tronqué]` muet — donc six endroits où corriger la
+ * transmission, et cinq occasions d'en oublier un. La projection vit dans `phase-carry.ts` (pure,
+ * testable sans provider) ; ici on ne fait plus que l'appeler.
+ *
+ * Mesuré avant ce changement, sur 1280 sorties de phase réelles : 25,8 % étaient tronquées, dont
+ * 62,5 % des `scout` et 46,7 % des `frame` — les phases dont le métier est justement de transmettre.
+ */
+function porterVersPhaseSuivante(texte: string): string {
+  return porterSortieDePhase(texte, PHASE_CONTEXT_CAP).texte
+}
 
 /**
  * #3 — plafond du texte d'UNE phase agrégé dans le livrable remis au JUGE. Le portage phase→phase
@@ -2488,7 +2502,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         deps: node.deps,
         run: async (depResults) => {
           const depContext = Object.entries(depResults)
-            .map(([id, result]) => `[dépendance ${id}]\n${result.text.slice(0, PHASE_CONTEXT_CAP)}`)
+            .map(([id, result]) => `[dépendance ${id}]\n${porterVersPhaseSuivante(result.text)}`)
             .join('\n\n')
           const userContent = [phaseContext, depContext, `[sous-tâche ${node.id}] ${node.prompt}`]
             .filter(Boolean)
@@ -3296,12 +3310,7 @@ ${empreinteDepot}`
     let prevSessionSandbox: NonNullable<SendOptions['execution']>['sandbox'] | undefined
     // Réinjecte l'acquis d'un run repris pour que la phase suivante l'ait dans son contexte.
     for (const output of usableResume) {
-      const carried =
-        output.text.length > PHASE_CONTEXT_CAP
-          ? `${output.text.slice(0, PHASE_CONTEXT_CAP)}
-…[tronqué — voir le fil des sous-agents]`
-          : output.text
-      phaseContext.push(`[phase ${output.phase}] ${carried}`)
+      phaseContext.push(`[phase ${output.phase}] ${porterVersPhaseSuivante(output.text)}`)
       lastExecText = output.text
     }
     const executePipelinePhase = async (phase: PipelinePhase): Promise<void> => {
@@ -3334,11 +3343,7 @@ ${empreinteDepot}`
         aggregatedEvidence.push(...greedy.evidence)
         lastExecText = greedy.aggregate
         recordPhase(phase, greedy.aggregate, aggregatedEvidence.slice(evidenceStart))
-        const carried =
-          greedy.aggregate.length > PHASE_CONTEXT_CAP
-            ? `${greedy.aggregate.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
-            : greedy.aggregate
-        phaseContext.push(`[phase ${phase}] ${carried}`)
+        phaseContext.push(`[phase ${phase}] ${porterVersPhaseSuivante(greedy.aggregate)}`)
         // Plusieurs phases peuvent réutiliser le même DAG. Une phase suivante réussie ne doit pas
         // effacer les échecs/skips déjà observés (sinon un Terrain rouge disparaît après Build).
         failedTasks = [...new Set([...(failedTasks ?? []), ...greedy.failed])]
@@ -3554,11 +3559,7 @@ ${empreinteDepot}`
           const solo = good[0].text
           lastExecText = solo
           recordPhase(phase, solo, aggregatedEvidence.slice(evidenceStart))
-          const carriedSolo =
-            solo.length > PHASE_CONTEXT_CAP
-              ? `${solo.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
-              : solo
-          phaseContext.push(`[phase ${phase}] ${carriedSolo}`)
+          phaseContext.push(`[phase ${phase}] ${porterVersPhaseSuivante(solo)}`)
           prevSessionId = undefined
           return
         }
@@ -3657,11 +3658,7 @@ ${empreinteDepot}`
         lastExecText = synth.text
         lastUsage = synth.usage
         recordPhase(phase, synth.text, aggregatedEvidence.slice(evidenceStart))
-        const carried =
-          synth.text.length > PHASE_CONTEXT_CAP
-            ? `${synth.text.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
-            : synth.text
-        phaseContext.push(`[phase ${phase}] ${carried}`)
+        phaseContext.push(`[phase ${phase}] ${porterVersPhaseSuivante(synth.text)}`)
         prevSessionId = undefined // fan-out : pas de session linéaire à chaîner
         return
       }
@@ -3984,10 +3981,7 @@ ${empreinteDepot}`
       recordPhase(phase, texteDePhase, aggregatedEvidence.slice(evidenceStart))
       // B4 — le contexte PORTÉ à la phase suivante est borné (la sortie complète reste dans
       // phaseOutputs + la trace) : évite une croissance quadratique du prompt sur les chaînes longues.
-      const carried =
-        texteDePhase.length > PHASE_CONTEXT_CAP
-          ? `${texteDePhase.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
-          : texteDePhase
+      const carried = porterVersPhaseSuivante(texteDePhase)
       phaseContext.push(
         `[phase ${phase}] ${carried}` +
           // L'EXTRAIT part avec le constat : la phase insérée (un `scout`, typiquement) recevait le
