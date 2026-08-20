@@ -287,7 +287,22 @@ describe('JD2 — le compte annoncé correspond à ce qui est réellement rendu'
     expect(r.coupes).toBe(texte.length - r.texte.length)
   })
 
-  it('la réservation du marqueur suit sa VRAIE longueur, pas une estimation en dur', () => {
+  it('la réservation du marqueur est EXACTE : le budget est rempli au caractère près', () => {
+    // L'ASSERTION QUI MANQUAIT, et le test précédent ne pouvait PAS l'attraper. Un relecteur a rejoué
+    // le sabotage « remettre `marqueur = 64` en dur » : AUCUN test ne rougissait. La raison est
+    // instructive — avec le marqueur de `clampMiddle` (~24 caractères + les chiffres du compte), 64
+    // est toujours une SUR-réservation, donc inoffensive pour la borne. Vérifier « ça tient sous le
+    // cap » ne pouvait donc rien prouver : c'était une garde qui avait l'air de protéger.
+    //
+    // Ce qui distingue une réservation EXACTE d'une approximative, c'est qu'elle remplit le budget :
+    // `tete + marqueur + queue === cap`. Une sur-réservation de 37 caractères laisse 37 caractères
+    // de substance sur la table, silencieusement. C'est cela qu'on mesure.
+    for (const cap of [500, 2000, 5000]) {
+      expect(porterSortieDePhase('x'.repeat(cap * 4), cap).texte).toHaveLength(cap)
+    }
+  })
+
+  it('reste borné et cohérent sur des tailles où le compte change de nombre de chiffres', () => {
     // Le marqueur porte le nombre de caractères omis : sa longueur dépend du nombre de chiffres.
     // Un `avisLongueur = 64` codé au doigt devenait faux dès que ce compte passait à 9 chiffres.
     for (const taille of [3000, 300000, 30000000]) {
