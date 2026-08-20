@@ -89,8 +89,13 @@ ci-dessus en font partie. Sans titres reconnus, le portage retombe sur un repli 
 bords et jette le MILIEU — or un briefing n'a pas de conclusion à sauver : sa substance est partout.
 Un briefing sans ces titres arrive donc ampute en silence, et personne ne le sait.
 
-Corollaire direct sur le VOLUME : ce qui compte le plus se met dans les premières sections, et le
-total utile vise la borne. Au-delà, tu n'écris pas pour l'étape suivante — tu écris pour rien.
+**L'ORDRE est un ordre de PRIORITÉ, pas une mise en page.** Le portage empile les sections dans
+l'ordre du texte jusqu'à la borne : ce qui est écrit en dernier est ce qui saute. Mets donc en tête
+ce dont CETTE tâche a le plus besoin — l'ordre ci-dessus est un défaut raisonnable, pas une règle.
+Vérifié par mesure : sur un briefing de 5000 caractères, la troisième section était déjà omise.
+
+Corollaire sur le VOLUME : le total utile vise la borne. Au-delà, tu n'écris pas pour l'étape
+suivante — tu écris pour rien.
 `## Trous` n'est pas un titre reconnu : place-le en dernier, en sachant qu'il sera le premier omis,
 et qu'il sera alors nommé comme absent plutôt que coupé.
 
