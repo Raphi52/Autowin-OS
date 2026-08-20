@@ -394,7 +394,6 @@ import {
   windowsRelayTaskName
 } from './task-manager/windows-relay'
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
-import { skillInstruction } from './skill-pipeline'
 import { registerVeilleIpc } from './veille/veille-ipc'
 import { executerPasse } from './veille/passe'
 import { genererCandidatsEnConversation } from './veille/scout-visible'
@@ -4906,12 +4905,18 @@ Le fil reprend ensuite normalement.`
     genererInterne: genererCandidatsInternesVisibles
   })
   /**
-   * SKILL `learn` (ex-`save`) intégrée au workflow (14/08) : après un run VERT publié, une conversation VISIBLE
-   * « [save] empreinte du dépôt » exécute la skill save (corps chargé depuis skills/learn) pour
-   * capitaliser ce que le run vient de changer — l'action se voit, s'oriente et s'interrompt comme
-   * n'importe quel agent du cockpit. Une à la fois : un train de runs verts ne paie qu'un save.
+   * CAPITALISATION : plus AUCUN declenchement automatique.
+   *
+   * Une conversation « [save] empreinte du depot » partait toute seule apres chaque run vert publie
+   * (et la cloture auto etant active, cela arrivait a chaque fois). Retire a la demande explicite de
+   * l'utilisateur le 2026-08-20 : « je veux pas que ca soit automatique, ca doit etre une brique
+   * qu'on choisit ou pas d'invoquer selon le besoin ».
+   *
+   * `learn` reste ENTIEREMENT disponible, et de deux facons qui sont toutes deux un CHOIX : la
+   * commande `/learn` dans le chat, ou un noeud `learn` place dans un workflow. Rien n'est perdu —
+   * seul le declenchement subi disparait. `bus.onRunVertPublie` n'a plus d'abonne ; le point
+   * d'extension reste en place pour qui voudrait s'y brancher explicitement.
    */
-  let saveEnCours = false
   /*
    * ORIENTER UN RUN : l'orchestrateur draine cette meme file ENTRE DEUX PHASES. Sans ce branchement,
    * `injectDirective` acceptait la directive et personne ne pouvait la lire avant la fin du run —
@@ -4919,38 +4924,7 @@ Le fil reprend ensuite normalement.`
    * est lue par le premier des deux qui atteint son point de drainage, jamais deux fois.
    */
   os.directivesEnAttente = (conversationId) => drainPendingDirectives(conversationId)
-  bus.onRunVertPublie = ({ task, publishedCommitSha }) => {
-    if (saveEnCours) return
-    const corps = skillInstruction('learn')
-    if (!corps) return
-    saveEnCours = true
-    void (async () => {
-      try {
-        const binding = bindingScoutVeille()
-        const conversation = os.conversations.create({
-          title: `[save] empreinte du dépôt ${new Date().toLocaleString('fr-FR')}`.slice(0, 80),
-          provider: binding.provider
-        })
-        await scheduledChatRuntime.runPrompt(
-          conversation.id,
-          [
-            `Un run vient d'être publié en VERT (commit ${publishedCommitSha}) pour la tâche :`,
-            `« ${task.slice(0, 400)} »`,
-            '',
-            'Mets à jour l’EMPREINTE durable du dépôt en suivant la skill ci-dessous — relis',
-            'l’existant d’abord, mets à jour sans dupliquer, et dis honnêtement ce que tu as écrit.',
-            corps
-          ].join('\n'),
-          binding,
-          { readOnly: false, maxIterations: 30, background: true }
-        )
-      } catch {
-        // Capitalisation best-effort : ne jamais réveiller une erreur dans le chemin du run.
-      } finally {
-        saveEnCours = false
-      }
-    })()
-  }
+
   registerTaskManagerIpc({
     ipc: ipcMain,
     store: scheduledTasks,
