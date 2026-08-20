@@ -99,7 +99,14 @@ describe('cablage du bloc d’activite', () => {
   })
 
   it('la fleche « ouvrir » ne s’affiche que s’il y a vraiment un run', () => {
-    expect(parts()).toContain('{runConsultable && (')
+    // Assertion sur l'INTENTION, pas sur l'indentation : la fleche a ete imbriquee dans le ternaire
+    // du depliage (le clic principal deplie le pourquoi), donc `{runConsultable && (` litteral n'y
+    // est plus. La garde, elle, doit rester.
+    expect(parts()).toContain('runConsultable && (')
+  })
+
+  it('le bouton d’ouverture du run n’existe que s’il y a un run à ouvrir', () => {
+    expect(parts()).toContain('why.length > 0 && runConsultable && (')
   })
 
   it('le detail local est rendu dans le fil', () => {

@@ -20,6 +20,21 @@ export interface OutcomeSummary {
   label: string
   /** Verdict pour la coloration : une vérification qui échoue doit se voir. */
   state: 'ok' | 'failed' | 'refused'
+  /**
+   * Le POURQUOI intégral, pour le dépliage au clic — jamais tronqué, tous les motifs.
+   *
+   * La pastille est bornée à une ligne : elle coupe à 120 caractères et ne montre que le PREMIER
+   * motif de gate. Sur conv-1334, le second motif — la DoD non tenue, qui dit ce qu'il aurait fallu
+   * produire — n'était affiché NULLE PART. Le texte court reste le résumé ; ceci est la source.
+   */
+  why?: string[]
+}
+
+/** TOUS les motifs de gate, intégraux : matière du dépliage, pas de la pastille. */
+function gateReasonLines(reasons: unknown): string[] {
+  return (Array.isArray(reasons) ? reasons : [reasons])
+    .filter((reason): reason is string => typeof reason === 'string' && reason.trim().length > 0)
+    .map((reason) => reason.trim())
 }
 
 /** Premier motif de gate lisible, borné : la pastille doit rester une ligne. */
@@ -30,6 +45,20 @@ function gateReasonLabel(reasons: unknown): string | undefined {
   if (!first) return undefined
   const text = first.trim().replace(/\s+/gu, ' ')
   return text.length > 90 ? `${text.slice(0, 87)}…` : text
+}
+
+const SAUT_DE_LIGNE = /\r?\n/u
+
+/** Sortie d'une commande, bornee : de quoi comprendre l'echec sans deverser un log entier. */
+function outputLines(data: Record<string, unknown>): string[] {
+  const lignes: string[] = []
+  for (const cle of ['stderr', 'stdout', 'output'] as const) {
+    const brut = data[cle]
+    if (typeof brut !== 'string' || !brut.trim()) continue
+    const queue = brut.trim().split(SAUT_DE_LIGNE).slice(-12).join('\n')
+    lignes.push(queue)
+  }
+  return lignes
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -49,7 +78,7 @@ export function verifyOutcomeSummary(action: ActionLike): OutcomeSummary | undef
   // Refus explicite : aucune commande n'a été lancée (projet sans script de test, workspace absent).
   if (data.allowed === false) {
     const reason = typeof data.reason === 'string' && data.reason.trim() ? data.reason : 'refusée'
-    return { label: `vérification impossible — ${reason}`, state: 'refused' }
+    return { label: `vérification impossible — ${reason}`, state: 'refused', why: [reason.trim()] }
   }
 
   const command = typeof data.command === 'string' && data.command ? data.command : 'vérification'
@@ -58,9 +87,22 @@ export function verifyOutcomeSummary(action: ActionLike): OutcomeSummary | undef
 
   if (exitCode === undefined) {
     // Lancement impossible : pas d'exit code du tout, mais ce n'est pas un succès pour autant.
-    return { label: `${command} → aucun code de sortie`, state: ok ? 'ok' : 'failed' }
+    return {
+      label: `${command} → aucun code de sortie`,
+      state: ok ? 'ok' : 'failed',
+      ...(ok ? {} : { why: [`${command} n'a produit aucun code de sortie`] })
+    }
   }
-  return { label: `${command} → exit ${exitCode}`, state: ok ? 'ok' : 'failed' }
+  return {
+    label: `${command} → exit ${exitCode}`,
+    state: ok ? 'ok' : 'failed',
+    ...(ok
+      ? {}
+      : {
+          // Le POURQUOI d'une verification, c'est sa SORTIE — repeter le libelle ne deplierait rien.
+          why: [`${command} → exit ${exitCode}`, ...outputLines(data)]
+        })
+  }
 }
 
 /**
@@ -75,7 +117,7 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
   if (typeof action.data === 'string' && action.data.trim() && action.ok === false) {
     const raison = action.data.trim()
     const short = raison.length > 120 ? raison.slice(0, 117) + '…' : raison
-    return { label: `échec : ${short}`, state: 'failed' }
+    return { label: `échec : ${short}`, state: 'failed', why: [raison] }
   }
   const data = asRecord(action.data)
   if (!data) return undefined
@@ -87,9 +129,11 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
     // qui suit se lisait comme la cause. Un correctif d'une ligne a été abandonné pour ce
     // malentendu (voir `dev-sans-watch.test.ts`).
     const reason = gateReasonLabel(data.gateReasons)
+    const motifs = gateReasonLines(data.gateReasons)
     return {
       label: `bloqué par le gate${reason ? ` — ${reason}` : ''}${suffix}`,
-      state: 'failed'
+      state: 'failed',
+      ...(motifs.length ? { why: motifs } : {})
     }
   }
   // Une orchestration qui a JETÉ porte sa raison dans `error` (failedOrchestrationOutcome). Sans ce
@@ -99,7 +143,7 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
     typeof data.error === 'string' && data.error.trim() ? data.error.trim() : undefined
   if (errorReason) {
     const short = errorReason.length > 120 ? errorReason.slice(0, 117) + '…' : errorReason
-    return { label: `échec : ${short}${suffix}`, state: 'failed' }
+    return { label: `échec : ${short}${suffix}`, state: 'failed', why: [errorReason] }
   }
   if (data.valid === false) return { label: `livrable refusé${suffix}`, state: 'failed' }
   if (data.reused === true) return { label: `run réutilisé${suffix}`, state: 'refused' }
