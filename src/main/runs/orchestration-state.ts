@@ -8,7 +8,8 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
-import { PIPELINE_PHASES, type PipelinePhase, type NodePhase } from '../skill-pipeline'
+import { type PipelinePhase, type NodePhase } from '../skill-pipeline'
+import { estIdentifiantDeNoeud } from '../../shared/pipeline-phases'
 import { decodeRoleBinding } from '../role-store'
 import { ALL_ROLES, type RoleBinding } from '../roles'
 import type { ExecutionQuote } from '../execution-quote'
@@ -121,7 +122,7 @@ function isPhaseOutput(value: unknown): value is OrchestrationPhaseOutput {
      * FORME de l'identifiant (celle d'un dossier de skill), ce qui refuse toujours un JSON corrompu.
      */
     typeof output.phase === 'string' &&
-    /^[\w-]{1,64}$/u.test(output.phase) &&
+    estIdentifiantDeNoeud(output.phase) &&
     typeof output.text === 'string' &&
     (output.agentToken === undefined || isNonEmptyString(output.agentToken)) &&
     (output.executionEvidence === undefined ||
@@ -208,7 +209,7 @@ function isRuntimeSnapshot(value: unknown): value is OrchestrationRuntimeSnapsho
   if (
     !Object.entries(value.phaseFanOut).every(
       ([phase, members]) =>
-        PIPELINE_PHASES.includes(phase as PipelinePhase) &&
+        estIdentifiantDeNoeud(phase) &&
         Array.isArray(members) &&
         members.every(isRoleBinding)
     )
@@ -238,7 +239,7 @@ function isExecutionQuote(value: unknown): value is ExecutionQuote {
     !['trivial', 'standard', 'critical'].includes(String(value.regime)) ||
     !Array.isArray(value.phases) ||
     !value.phases.every(
-      (phase) => typeof phase === 'string' && PIPELINE_PHASES.includes(phase as PipelinePhase)
+      (phase) => estIdentifiantDeNoeud(phase)
     )
   ) {
     return false
@@ -278,7 +279,7 @@ function isExecutionQuote(value: unknown): value is ExecutionQuote {
   if (
     !Object.entries(value.allocation.phaseMembers).every(
       ([phase, count]) =>
-        PIPELINE_PHASES.includes(phase as PipelinePhase) && isPositiveInteger(count)
+        estIdentifiantDeNoeud(phase) && isPositiveInteger(count)
     )
   ) {
     return false
@@ -403,7 +404,7 @@ function isRunAgentRef(
      * le controle runtime qui le double est exactement le piege que ce depot documente ailleurs.
      */
     (value.phase === undefined ||
-      (typeof value.phase === 'string' && /^[\w-]{1,64}$/u.test(value.phase))) &&
+      estIdentifiantDeNoeud(value.phase)) &&
     (value.active === undefined || typeof value.active === 'boolean') &&
     (value.fanOut === undefined || typeof value.fanOut === 'boolean') &&
     (value.reservationId === undefined || isNonEmptyString(value.reservationId)) &&
@@ -470,6 +471,58 @@ function isTerminalDisposition(
   )
 }
 
+/**
+ * POURQUOI un checkpoint est refuse, champ par champ.
+ *
+ * `isOrchestrationRunState` rendait un booleen, et l'appelant jetait « checkpoint orchestration
+ * causalement invalide » — une phrase qui ne nomme RIEN. Mesure du 2026-08-20 : deux runs reels sont
+ * morts sur ce message, et il a fallu lire le code champ par champ pour former une hypothese, qui
+ * s'est revelee incomplete. Un garde qui refuse sans dire quoi transforme chaque panne en enquete.
+ *
+ * Le predicat ci-dessous est conserve tel quel : c'est lui qui decide. Cette fonction n'ajoute que
+ * la capacite de le DIRE.
+ */
+export function raisonsCheckpointInvalide(value: unknown): string[] {
+  if (!isRecord(value)) return ['ce n est pas un objet']
+  const r: string[] = []
+  if (!isRunId(value.runId)) r.push(`runId invalide (${JSON.stringify(value.runId)})`)
+  if (!isNonEmptyString(value.task)) r.push('task vide ou absente')
+  if (!(value.conversationId === undefined || isNonEmptyString(value.conversationId)))
+    r.push('conversationId invalide')
+  if (!(value.turnId === undefined || isNonEmptyString(value.turnId))) r.push('turnId invalide')
+  if (!(value.forkedFrom === undefined || isForkOrigin(value.forkedFrom))) r.push('forkedFrom invalide')
+  if (!Array.isArray(value.phaseOutputs)) r.push('phaseOutputs n est pas un tableau')
+  else
+    value.phaseOutputs.forEach((o, i) => {
+      if (!isPhaseOutput(o))
+        r.push(`phaseOutputs[${i}] invalide (phase=${JSON.stringify((o as { phase?: unknown })?.phase)})`)
+    })
+  if (!(value.bindingOverride === undefined || isRoleBinding(value.bindingOverride)))
+    r.push('bindingOverride invalide')
+  if (!(value.runtimeSnapshot === undefined || isRuntimeSnapshot(value.runtimeSnapshot)))
+    r.push('runtimeSnapshot invalide')
+  if (!(value.executionQuote === undefined || isExecutionQuote(value.executionQuote)))
+    r.push('executionQuote invalide')
+  if (!(value.usage === undefined || isExecutionUsageSnapshot(value.usage))) r.push('usage invalide')
+  if (!(value.resumeDisposition === undefined || (isRunId(value.runId) && isResumeDisposition(value.resumeDisposition, value.runId))))
+    r.push('resumeDisposition invalide')
+  if (!(value.terminal === undefined || isTerminalDisposition(value.terminal))) r.push('terminal invalide')
+  if (value.agents !== undefined) {
+    if (!Array.isArray(value.agents)) r.push('agents n est pas un tableau')
+    else
+      value.agents.forEach((a, i) => {
+        if (!isRunAgentRef(a))
+          r.push(`agents[${i}] invalide (phase=${JSON.stringify((a as { phase?: unknown })?.phase)})`)
+      })
+  }
+  if (!hasConsistentActiveReservationLinks(value)) r.push('liens de reservation incoherents')
+  if (!(typeof value.startedAt === 'number' && Number.isFinite(value.startedAt) && value.startedAt >= 0))
+    r.push('startedAt invalide')
+  if (!(typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt) && value.updatedAt >= 0))
+    r.push('updatedAt invalide')
+  return r
+}
+
 function isOrchestrationRunState(value: unknown): value is OrchestrationRunState {
   if (!isRecord(value)) return false
   return (
@@ -512,7 +565,10 @@ function statePath(root: string, runId: string): string {
 export function saveOrchestrationState(root: string, state: OrchestrationRunState): void {
   safeRunId(state.runId)
   if (!isOrchestrationRunState(state)) {
-    throw new Error('checkpoint orchestration causalement invalide')
+    // Le refus NOMME ce qu'il refuse : sans cela, la panne se paie en enquete a chaque fois.
+    throw new Error(
+      `checkpoint orchestration causalement invalide : ${raisonsCheckpointInvalide(state).join(' ; ')}`
+    )
   }
   mkdirSync(root, { recursive: true })
   // Écriture atomique : un kill au milieu d'un `writeFileSync` laisserait un JSON tronqué que la
