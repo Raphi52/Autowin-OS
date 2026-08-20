@@ -260,6 +260,12 @@ export function AssistantActivityGroup({
    * garde son propre bouton, rien n'est perdu.
    */
   const [whyOpen, setWhyOpen] = useState(false)
+  /**
+   * DEMANDE du 20/08 : « quand je clique sur 1 action terminee remember ca doit deplier ce que ca a
+   * remember ». Le detail local etait rendu HORS du clic : un succes arrivait deja plie, et il
+   * fallait viser son propre `<summary>`. Le clic du bloc pilote donc aussi ce pli, faute de `why`.
+   */
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const failed = actions.some((action) => action.ok === false)
   // « En cours » = sans résultat ET non interrompue. Une action interrompue (tour clos sans son
   // résultat) n'est PAS en cours : c'est ce qui laissait l'indicateur tourner indéfiniment.
@@ -332,13 +338,21 @@ export function AssistantActivityGroup({
                 ? 'Ouvrir cette action en cours dans Workflows'
                 : 'Voir le détail de cette action dans Workflows'
           }
-          aria-disabled={!runConsultable && !why.length}
-          {...(why.length ? { 'aria-expanded': whyOpen } : {})}
+          aria-disabled={!runConsultable && !why.length && !details.length}
+          {...(why.length
+            ? { 'aria-expanded': whyOpen }
+            : details.length
+              ? { 'aria-expanded': detailsOpen }
+              : {})}
           // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la liste
           // des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
           onClick={() => {
             if (why.length) {
               setWhyOpen((ouvert) => !ouvert)
+              return
+            }
+            if (details.length) {
+              setDetailsOpen((ouvert) => !ouvert)
               return
             }
             if (!runConsultable) return
@@ -365,6 +379,10 @@ export function AssistantActivityGroup({
           {why.length ? (
             <span className="activity-group-go" aria-hidden="true">
               {whyOpen ? '▾' : '▸'}
+            </span>
+          ) : details.length ? (
+            <span className="activity-group-go" aria-hidden="true">
+              {detailsOpen ? '▾' : '▸'}
             </span>
           ) : (
             runConsultable && (
@@ -437,7 +455,8 @@ export function AssistantActivityGroup({
             <details
               key={`${detail.name}-${index}`}
               className={detail.ok ? '' : 'failed'}
-              open={!detail.ok}
+              // Un echec s'ouvre d'office ; un succes attend le clic sur le bloc (ou son summary).
+              open={!detail.ok || detailsOpen}
             >
               <summary>
                 <span className={`status-dot ${detail.ok ? 'st-ok' : 'st-err'}`} />

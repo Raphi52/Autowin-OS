@@ -240,3 +240,59 @@ describe('localActionDetails — la sortie brute devient lisible', () => {
     expect(detail().split('\n').length).toBeLessThanOrEqual(8)
   })
 })
+
+describe('localActionDetails — un remember REUSSI se deplie', () => {
+  /** Forme reelle rendue par rememberFact (src/main/brain-remember.ts:531-544). */
+  const REMEMBER_OK = {
+    name: 'remember',
+    ok: true,
+    data: {
+      allowed: true,
+      stored: true,
+      detail: 'deposé au Brain (inbox)',
+      fact: {
+        title: 'Famine du chat : waitForInteractiveAccess',
+        body: 'waitForInteractiveAccess() attend sans timeout que releaseIdleLease() soit appelé.',
+        type: 'lesson',
+        scope: 'project',
+        source: 'run-44a6',
+        tags: ['chat', 'concurrence'],
+        confidence: 'high',
+        truncated: false
+      }
+    }
+  }
+
+  it("n'est plus SAUTE : il produit un detail", () => {
+    expect(localActionDetails([REMEMBER_OK])).toHaveLength(1)
+  })
+
+  it('montre le TITRE et le CORPS de ce qui a ete retenu', () => {
+    const texte = localActionDetails([REMEMBER_OK])[0].text
+    expect(texte).toContain('Famine du chat')
+    expect(texte).toContain('releaseIdleLease')
+  })
+
+  it('montre le classement et le sort du depot', () => {
+    const texte = localActionDetails([REMEMBER_OK])[0].text
+    expect(texte).toContain('lesson')
+    expect(texte).toContain('project')
+    expect(texte).toContain('deposé au Brain')
+  })
+
+  it('un depot NON ecrit reste lisible et garde son motif', () => {
+    const details = localActionDetails([
+      {
+        name: 'remember',
+        ok: true,
+        data: {
+          allowed: true,
+          stored: false,
+          detail: 'jeton du Brain absent — rien n’a été écrit',
+          fact: { title: 'T', body: 'B', type: 'lesson', scope: 'project' }
+        }
+      }
+    ])
+    expect(details[0].text).toContain('jeton du Brain absent')
+  })
+})

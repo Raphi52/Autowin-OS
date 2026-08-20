@@ -1,0 +1,101 @@
+// @vitest-environment happy-dom
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { AssistantActivityGroup } from './ChatView.parts'
+
+/**
+ * DEMANDE du 20/08 : « quand je clique sur 1 action terminée remember ça doit déplier ce que ça a
+ * remember ». Le bloc était INERTE sur un remember réussi : pas de `why` (aucun résumé d'issue pour
+ * cette commande), et `localActionDetails` ignorait `fact`/`detail`, donc rien à déplier non plus.
+ */
+let container: HTMLDivElement
+let root: Root
+
+beforeEach(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+})
+
+const rememberReussi = {
+  kind: 'action' as const,
+  name: 'remember',
+  ok: true,
+  args: { title: 'Famine du chat' },
+  data: {
+    allowed: true,
+    stored: true,
+    detail: 'deposé au Brain (inbox)',
+    fact: {
+      title: 'Famine du chat : waitForInteractiveAccess',
+      body: 'waitForInteractiveAccess() attend sans timeout que releaseIdleLease() soit appelé.',
+      type: 'lesson',
+      scope: 'project',
+      confidence: 'high',
+      tags: ['chat']
+    }
+  }
+}
+
+function render(): void {
+  act(() =>
+    root.render(createElement(AssistantActivityGroup, { actions: [rememberReussi] as never }))
+  )
+}
+
+const clicBloc = (): void => {
+  const bloc = container.querySelector<HTMLButtonElement>('[data-testid="activity-group"]')
+  if (!bloc) throw new Error('activity-group absent')
+  act(() => bloc.click())
+}
+
+const bloc = (): HTMLElement => {
+  const el = container.querySelector<HTMLElement>('[data-testid="activity-group"]')
+  if (!el) throw new Error('activity-group absent')
+  return el
+}
+
+describe('clic sur une action remember terminée', () => {
+  it('le bloc est ACTIONNABLE (plus aria-disabled)', () => {
+    render()
+    expect(bloc().getAttribute('aria-disabled')).not.toBe('true')
+    expect(bloc().getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('le contenu retenu est PLIÉ au départ', () => {
+    render()
+    const pli = container.querySelector<HTMLDetailsElement>(
+      '[data-testid="activity-local-details"] details'
+    )
+    expect(pli).not.toBeNull()
+    expect(pli?.open).toBe(false)
+  })
+
+  it('un clic DÉPLIE ce qui a été mémorisé', () => {
+    render()
+    clicBloc()
+    const pli = container.querySelector<HTMLDetailsElement>(
+      '[data-testid="activity-local-details"] details'
+    )
+    expect(pli?.open).toBe(true)
+    expect(container.textContent).toContain('releaseIdleLease')
+    expect(container.textContent).toContain('deposé au Brain')
+    expect(bloc().getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('un second clic REPLIE', () => {
+    render()
+    clicBloc()
+    clicBloc()
+    const pli = container.querySelector<HTMLDetailsElement>(
+      '[data-testid="activity-local-details"] details'
+    )
+    expect(pli?.open).toBe(false)
+  })
+})

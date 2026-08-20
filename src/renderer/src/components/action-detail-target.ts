@@ -92,6 +92,42 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined
 }
 
+/** Le corps d'un fait peut etre long : on le borne comme toute autre sortie. */
+const MAX_CORPS_CHARS = 1_200
+
+/**
+ * Rend lisible ce qu'un depot de memoire a retenu, s'il y en a un. Rien de tel dans `data` →
+ * `undefined`, et les autres extracteurs gardent la main.
+ */
+function resumeMemoire(data: Record<string, unknown>): string | undefined {
+  const fait = asRecord(data.fact)
+  const detail = typeof data.detail === 'string' ? data.detail.trim() : ''
+  const note = typeof data.note === 'string' ? data.note.trim() : ''
+  if (!fait && !detail && !note) return undefined
+  const lire = (cle: string): string => {
+    const valeur = fait?.[cle]
+    return typeof valeur === 'string' ? valeur.trim() : ''
+  }
+  const titre = lire('title')
+  const corps = lire('body')
+  const etiquettes = Array.isArray(fait?.tags)
+    ? (fait.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+    : []
+  const classement = [lire('type'), lire('scope'), lire('confidence'), ...etiquettes].filter(
+    Boolean
+  )
+  const lignes = [
+    titre,
+    corps.length > MAX_CORPS_CHARS ? `${corps.slice(0, MAX_CORPS_CHARS)}…` : corps,
+    classement.length ? classement.join(' · ') : '',
+    // Le sort du depot : ecrit, ou non — et pourquoi. C'est ce qui distingue « retenu » de « perdu ».
+    detail,
+    note
+  ].filter(Boolean)
+  const texte = lignes.join('\n')
+  return texte.trim() ? texte : undefined
+}
+
 /**
  * Extrait ce qu'il y a d'utile a LIRE dans le resultat d'une commande locale. Rien d'exploitable →
  * l'action est ignoree plutot que rendue comme une ligne vide.
@@ -139,10 +175,19 @@ export function localActionDetails(actions: readonly ActionLike[]): LocalActionD
      * préparés) tronquées à leur queue la moins parlante. On ne montre donc la sortie que lorsqu'elle
      * sert : quand ça a ÉCHOUÉ. Constaté en usage : un pavé de 68 000 caractères sous un « exit 0 ».
      */
+    /**
+     * Ce qu'un `remember` a REELLEMENT retenu. `rememberFact` rend `{ stored, detail, fact:{…} }`
+     * (src/main/brain-remember.ts:531-544) : aucun de ces champs n'etait lu ici, donc un remember
+     * REUSSI n'avait ni `reason`, ni `error`, ni `output` — il etait SAUTE, et le clic sur « 1 action
+     * terminee » ne depliait rien. Un refus, lui, portait `reason` et s'affichait deja : le trou etait
+     * specifique au succes, precisement le cas ou l'utilisateur veut relire ce qui a ete memorise.
+     */
+    const memoire = resumeMemoire(data)
     const succeeded = ok && exitCode === 0
     const text =
       reason ??
       error ??
+      memoire ??
       diff ??
       (output !== undefined || exitCode !== undefined
         ? [exitCode !== undefined ? `exit ${exitCode}` : '', succeeded ? '' : (output ?? '')]
