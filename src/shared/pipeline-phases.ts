@@ -51,3 +51,19 @@ export type NodePhase = PipelinePhase | (string & {})
 export function isSkillNode(value: NodePhase): boolean {
   return !isPipelinePhase(value)
 }
+
+/**
+ * Un identifiant de nœud est-il BIEN FORMÉ ? (nom de dossier de skill, ou phase du pipeline)
+ *
+ * La SEULE definition de cette borne. Elle existe parce qu'on l'a apprise trois fois : chaque
+ * controle runtime qui validait une phase contre `PIPELINE_PHASES` est devenu FAUX le jour ou le
+ * type est passe a `NodePhase`, et le compilateur ne pouvait pas le voir — un `includes()` sur une
+ * liste fermee compile parfaitement face a un type elargi.
+ *
+ * Mesure du 2026-08-20 : trois runs reels sont morts la-dessus. Le premier sur `isRunAgentRef`, le
+ * suivant sur `isExecutionQuote`, et deux gardes de plus attendaient leur tour (fan-out, allocation).
+ * Corriger au cas par cas aurait produit un quatrieme run mort ; on centralise donc la regle.
+ */
+export function estIdentifiantDeNoeud(value: unknown): boolean {
+  return typeof value === 'string' && /^[\w-]{1,64}$/u.test(value)
+}
