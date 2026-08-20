@@ -24,6 +24,7 @@ import { listNativeRegistry, skillRoots } from './native-registry'
 // Un `export … from` ne met PAS les noms dans la portée locale : ce fichier utilise `PipelinePhase`
 // dans ses propres signatures, d'où l'import en plus du re-export.
 import { type PipelinePhase } from '../shared/pipeline-phases'
+import { resolveSkillAlias } from '../shared/skill-aliases'
 
 export {
   PIPELINE_PHASES,
@@ -90,11 +91,17 @@ export function invokedSkillId(message: string): string | undefined {
 const ID_SKILL_VALIDE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 
 export function skillInstruction(id: string, roots = skillRoots()): string {
+  // La garde reste EN TÊTE : on ne résout un alias que sur une entrée déjà bornée, jamais l'inverse
+  // (résoudre d'abord rouvrirait la traversée par une clé d'alias forgée).
   if (!ID_SKILL_VALIDE.test(id)) return ''
-  const root = roots.find((candidate) => readIfExists(join(candidate, id, 'SKILL.md')).length > 0)
+  const cible = resolveSkillAlias(id)
+  if (!ID_SKILL_VALIDE.test(cible)) return ''
+  const root = roots.find(
+    (candidate) => readIfExists(join(candidate, cible, 'SKILL.md')).length > 0
+  )
   if (!root) return ''
-  const body = stripSkillFrontmatter(readIfExists(join(root, id, 'SKILL.md')))
-  return body ? `\n=== SKILL ${id.toUpperCase()} (kit) ===\n${body}\n` : ''
+  const body = stripSkillFrontmatter(readIfExists(join(root, cible, 'SKILL.md')))
+  return body ? `\n=== SKILL ${cible.toUpperCase()} (kit) ===\n${body}\n` : ''
 }
 
 /**

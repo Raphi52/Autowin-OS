@@ -18,6 +18,7 @@ import {
   type CandidatAffiche
 } from './veille-candidats-message'
 import type { PilotEventKind } from '../../../shared/pilot-events'
+import { SKILL_ALIASES } from '../../../shared/skill-aliases'
 import {
   AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
   authoritativeOrchestrationClosureSpan,
@@ -663,16 +664,31 @@ const HINT_MAX = 90
 export function skillSlashCommands(
   items: readonly { id: string; description?: string; enabled?: boolean }[]
 ): SlashCommand[] {
-  return items
-    .filter((item) => item.enabled !== false && /^[\w-]+$/u.test(item.id))
-    .map((item) => {
-      const brut = (item.description ?? '').trim()
-      const phrase = brut.split(/(?<=\.)\s/u)[0]?.trim() ?? ''
-      const hint =
-        phrase.length > HINT_MAX ? `${phrase.slice(0, HINT_MAX - 1).trimEnd()}…` : phrase
-      return { name: item.id, hint: hint || 'Skill', insert: `/${item.id} ` }
-    })
-    .sort((a, b) => a.name.localeCompare(b.name))
+  return (
+    items
+      .filter((item) => item.enabled !== false && /^[\w-]+$/u.test(item.id))
+      .map((item) => {
+        const brut = (item.description ?? '').trim()
+        const phrase = brut.split(/(?<=\.)\s/u)[0]?.trim() ?? ''
+        const hint =
+          phrase.length > HINT_MAX ? `${phrase.slice(0, HINT_MAX - 1).trimEnd()}…` : phrase
+        return { name: item.id, hint: hint || 'Skill', insert: `/${item.id} ` }
+      })
+      // ALIAS : même skill, entrée courte. Générée depuis la MÊME table que la résolution côté main
+      // (`shared/skill-aliases`), sinon la palette proposerait un alias que l'injection ignore.
+      .flatMap((cmd) => {
+        const aliases = Object.keys(SKILL_ALIASES).filter((a) => SKILL_ALIASES[a] === cmd.name)
+        return [
+          cmd,
+          ...aliases.map((a) => ({
+            name: a,
+            hint: `${cmd.hint} (alias de /${cmd.name})`,
+            insert: `/${a} `
+          }))
+        ]
+      })
+      .sort((a, b) => a.name.localeCompare(b.name))
+  )
 }
 
 /**
