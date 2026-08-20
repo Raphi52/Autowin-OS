@@ -157,6 +157,7 @@
 }
 .rail.is-collapsed .nav {
   overflow-x: hidden;
+  scrollbar-width: none;
 }
 
 .nav {
