@@ -1,0 +1,41 @@
+/*
+ * Le bloc des suppositions du cadrage REUTILISE la feuille du bloc de decision (`askd-*`) : meme
+ * pile de lignes, meme liseré or au survol, meme dépliable. Seuls les ecarts vivent ici.
+ */
+
+.cadrage-hyp {
+  margin: 8px 0 10px;
+}
+.cadrage-hyp .askd-tete {
+  gap: 8px;
+}
+/* Le badge du cadrage se distingue du badge `ask` : contour or, pas de plein. */
+.cadrage-hyp .askd-badge {
+  color: #e3ba55;
+  background: none;
+  border: 1px solid rgba(212, 169, 79, 0.45);
+  padding: 2px 5px;
+}
+.cadrage-hyp .askd-question {
+  font-size: 13px;
+  font-weight: 600;
+}
+.cadrage-hyp-masquer {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: #a9b2c4;
+  font:
+    15px/1 ui-monospace,
+    Consolas,
+    monospace;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.cadrage-hyp-masquer:hover {
+  color: #dde3ee;
+}
+/* « Corriger » est un mot, pas une touche : il ne doit pas se lire comme un raccourci clavier. */
+.cadrage-hyp .askd-entree {
+  letter-spacing: 0.04em;
+}

@@ -73,6 +73,7 @@ import { rememberFact } from './brain-remember'
 import { noteRemembered } from './session-memory-echo'
 import { brainServiceToken } from './brain-retrieval'
 import { normaliserReponsesAsk } from './ask-options'
+import { hypothesesDuCadrage, type HypotheseDeCadrage } from '../shared/cadrage-confiance'
 import { classifyRegime, regimePhases } from './task-regime'
 import {
   runGraphify,
@@ -255,6 +256,17 @@ export type AppEvent =
       detail?: string
     }
   | { type: 'orchestrate-usage'; convId?: string; runPath?: string }
+  /**
+   * Le CADRAGE remonte les affirmations sur lesquelles il repose SANS les avoir verifiees, au moment
+   * ou la phase se termine — pas a la fin du run. Le run ne s'arrete pas : ce qui change, c'est que
+   * l'hypothese devient contestable AVANT que tout soit construit dessus.
+   */
+  | {
+      type: 'orchestrate-hypotheses'
+      convId: string
+      runPath?: string
+      hypotheses: HypotheseDeCadrage[]
+    }
   | { type: 'causal-trace-updated'; convId: string }
 
 /**
@@ -1435,6 +1447,31 @@ export class AppCommandBus {
                 populateConvRunSections(runPath, livePhases)
               }
               this.broadcast({ type: 'orchestrate-step', convId, runPath, step })
+              /*
+               * Le cadrage devient CONTESTABLE ici, et nulle part ailleurs.
+               *
+               * Le brief de FRAME impose depuis toujours une section `## Confiance` etiquetant chaque
+               * affirmation porteuse. Mesure du 20/08 : personne ne la lisait — l'utilisateur
+               * decouvrait le malentendu a la fin, dans un livrable deja bati dessus. La phase est
+               * lue telle que le code voisin la lit (`detail` = « phase frame »), avec
+               * `execution.phase` quand il est renseigne.
+               */
+              if (convId) {
+                const phaseDuStep =
+                  step.execution?.phase ??
+                  (step.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '')
+                if (phaseDuStep === 'frame') {
+                  const hypotheses = hypothesesDuCadrage(step.text)
+                  if (hypotheses.length) {
+                    this.broadcast({
+                      type: 'orchestrate-hypotheses',
+                      convId,
+                      runPath,
+                      hypotheses
+                    })
+                  }
+                }
+              }
               // Journal d'activité de la conversation : chaque étape facturée + coût tokens.
               if (convId) {
                 appendConvActivity(convId, {

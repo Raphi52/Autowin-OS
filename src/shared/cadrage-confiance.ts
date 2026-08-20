@@ -27,11 +27,15 @@ const PLAFOND_AFFIRMATION = 240
 
 /*
  * L'etiquette est cherchee telle qu'un modele l'ecrit : accents optionnels, tiret ou espace entre
- * `NON` et `VERIFIE`, pluriel possible. Un `VERIFIE` seul serait un piege — il matcherait
+ * `NON` et `VERIFIE`, pluriel possible. Un `\bVERIFIE\b` seul serait un piege — il matcherait
  * l'interieur de « NON VERIFIE » et inverserait exactement le signal ; on ne cherche donc jamais
  * `VERIFIE` seul.
+ *
+ * La fin de l'etiquette se ferme par `(?!\p{L})` et NON par `\b` : `\b` s'appuie sur `\w`, qui est
+ * ASCII, donc apres le `É` final de « NON VÉRIFIÉ » la frontiere n'existe pas et l'etiquette la plus
+ * courante ne matchait JAMAIS. Mesure du 20/08 : cinq tests rouges sur ce seul caractere.
  */
-const ETIQUETTE_NON_VERIFIE = /\bNON\s*[- ]?\s*V[EÉ]RIFI[EÉ]E?S?\b/iu
+const ETIQUETTE_NON_VERIFIE = /\bNON\s*[- ]?\s*V[EÉ]RIFI[EÉ]E?S?(?!\p{L})/iu
 
 const PREFIXE_PUCE = /^\s*(?:[-*•]|\d+[.)])\s*/u
 const PONCTUATION_ORPHELINE = /^[\s:—–-]+|[\s:—–-]+$/gu
@@ -94,7 +98,9 @@ export function hypothesesDuCadrage(texte: unknown): HypotheseDeCadrage[] {
     }
     if (!retenue) continue
 
-    const affirmation = nettoyer(ligne).replace(/^hypoth[eè]se\s*/iu, '').trim()
+    // Le mot d'annonce tombe AVANT le nettoyage, sinon les deux-points qu'il laisse derriere lui
+    // survivent au trim de ponctuation et l'affirmation commence par « : ».
+    const affirmation = nettoyer(ligne.replace(PREFIXE_PUCE, '').replace(/^hypoth[eè]se\b/iu, ''))
     if (!affirmation) continue
     const cle = affirmation.toLowerCase()
     if (vues.has(cle)) continue
@@ -103,4 +109,15 @@ export function hypothesesDuCadrage(texte: unknown): HypotheseDeCadrage[] {
     if (trouvees.length >= PLAFOND_HYPOTHESES) break
   }
   return trouvees
+}
+
+/**
+ * L'amorce posee dans le composer quand l'utilisateur conteste une supposition.
+ *
+ * Elle se termine OUVERTE, par des deux-points : corriger demande de dire ce qui est vrai, et un
+ * clic ne le sait pas. Le modele ne recoit donc jamais un verdict vide « c'est faux » sans la
+ * suite ; c'est l'utilisateur qui complete.
+ */
+export function amorceDeCorrection(hypothese: HypotheseDeCadrage): string {
+  return `Correction du cadrage — « ${hypothese.affirmation} » est faux. En réalité : `
 }

@@ -59,14 +59,19 @@ describe('hypothesesDuCadrage — ne remonte que ce que le cadrage a DÉCLARÉ n
   })
 
   it('dédoublonne et plafonne', () => {
-    const repetee = ['## Confiance', ...Array.from({ length: 9 }, (_, i) => `- item ${i} — NON VÉRIFIÉ`)].join('\n')
+    const repetee = [
+      '## Confiance',
+      ...Array.from({ length: 9 }, (_, i) => `- item ${i} — NON VÉRIFIÉ`)
+    ].join('\n')
     expect(hypothesesDuCadrage(repetee)).toHaveLength(PLAFOND_HYPOTHESES)
     const doublon = '## Confiance\n- la clé existe — NON VÉRIFIÉ\n- La Clé Existe — NON VÉRIFIÉ\n'
     expect(hypothesesDuCadrage(doublon)).toHaveLength(1)
   })
 
   it('une hypothèse de ## Besoin est reprise sans son mot d’annonce', () => {
-    const trouvees = hypothesesDuCadrage('## Besoin\n- Hypothèse : le store est vide au premier lancement\n')
+    const trouvees = hypothesesDuCadrage(
+      '## Besoin\n- Hypothèse : le store est vide au premier lancement\n'
+    )
     expect(trouvees).toEqual([
       { affirmation: 'le store est vide au premier lancement', source: 'besoin' }
     ])

@@ -400,6 +400,74 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     }
   })
 
+  it('remonte les suppositions du CADRAGE des la fin de la phase frame', async () => {
+    const os = fakeOs()
+    const broadcasts: Array<Record<string, unknown>> = []
+    os.runTask = async (...args: unknown[]) => {
+      const onStep = args[1] as (step: OrchestrationStep) => void
+      onStep({
+        step: 'exec',
+        status: 'completed',
+        detail: 'phase frame',
+        text: [
+          '## Besoin',
+          "- Hypothèse : le store est vide au premier lancement",
+          '## Confiance',
+          '- le module existe — VÉRIFIÉ (lu)',
+          '- le sanitizeur refuse les contrôles — NON VÉRIFIÉ'
+        ].join('\n')
+      })
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+    await new AppCommandBus(os, (event) =>
+      broadcasts.push(event as Record<string, unknown>)
+    ).exec('orchestrate', { task: `/frame cadre ceci ${Date.now()}` }, 'conv-1')
+
+    const emis = broadcasts.filter((event) => event.type === 'orchestrate-hypotheses')
+    expect(emis).toHaveLength(1)
+    expect(emis[0].convId).toBe('conv-1')
+    // Ce qui est VÉRIFIÉ n'est jamais remonté : seule une supposition mérite d'être contestée.
+    expect(emis[0].hypotheses).toEqual([
+      { affirmation: 'le store est vide au premier lancement', source: 'besoin' },
+      { affirmation: 'le sanitizeur refuse les contrôles', source: 'confiance' }
+    ])
+  })
+
+  it("n'emet RIEN quand la phase n'est pas frame, ni quand le cadrage n'a aucune supposition", async () => {
+    const cas = [
+      { detail: 'phase build', text: '## Confiance\n- x — NON VÉRIFIÉ' },
+      { detail: 'phase frame', text: '## Confiance\n- tout est lu — VÉRIFIÉ' },
+      { detail: 'phase frame', text: 'un cadrage en prose, sans section' }
+    ]
+    for (const forme of cas) {
+      const os = fakeOs()
+      const broadcasts: Array<Record<string, unknown>> = []
+      os.runTask = async (...args: unknown[]) => {
+        const onStep = args[1] as (step: OrchestrationStep) => void
+        onStep({ step: 'exec', status: 'completed', ...forme })
+        return {
+          gateBlocked: false,
+          gateReasons: [],
+          valid: true,
+          costUsd: 0,
+          result: '',
+          phaseOutputs: []
+        }
+      }
+      await new AppCommandBus(os, (event) =>
+        broadcasts.push(event as Record<string, unknown>)
+      ).exec('orchestrate', { task: `/frame cas ${Date.now()}${forme.detail}` }, 'conv-1')
+      expect(broadcasts.filter((event) => event.type === 'orchestrate-hypotheses')).toEqual([])
+    }
+  })
+
   it('transmet le binding par tour au pipeline orchestré', async () => {
     const os = fakeOs()
     let receivedBinding: unknown

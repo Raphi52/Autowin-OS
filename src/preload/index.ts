@@ -518,6 +518,8 @@ const api = {
       phase?: { step: string; provider?: string; role?: string }
       deltaStep?: 'exec' | 'judge'
       delta?: string
+      /** Affirmations non verifiees sur lesquelles le cadrage repose (evenement `orchestrate-hypotheses`). */
+      hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
     }) => void
   ): (() => void) => {
     const h = (_e: unknown, ev: Parameters<typeof cb>[0]): void => cb(ev)

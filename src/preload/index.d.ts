@@ -403,6 +403,8 @@ interface ChatApi {
       phase?: { step: string; provider?: string; role?: string }
       deltaStep?: 'exec' | 'judge'
       delta?: string
+      /** Affirmations non verifiees sur lesquelles le cadrage repose (evenement `orchestrate-hypotheses`). */
+      hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
     }) => void
   ) => () => void
   emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }) => Promise<boolean>

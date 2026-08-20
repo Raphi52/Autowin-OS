@@ -98,6 +98,8 @@ import './ChatView.css'
 import './SlashPalette.css'
 import './ChatComposerExtras.css'
 import { frictionEchecsRepetes } from '../../../shared/friction-echecs-repetes'
+import type { HypotheseDeCadrage } from '../../../shared/cadrage-confiance'
+import { CadrageHypotheses } from './CadrageHypotheses'
 import { orchestrationOutcomesFromMessages } from './action-outcome-summary'
 import type { InspectTurnTarget } from '../observatory-focus'
 
@@ -162,6 +164,14 @@ export function ChatView({
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
+  /*
+   * Les suppositions du cadrage en cours, par conversation. Vivantes seulement : elles viennent d'un
+   * evenement de run, disparaissent quand l'utilisateur les masque ou quand un nouveau cadrage
+   * arrive. Rien n'est persiste — le cadrage lui-meme l'est, dans l'etat du run.
+   */
+  const [hypothesesCadrage, setHypothesesCadrage] = useState<
+    Record<string, HypotheseDeCadrage[]>
+  >({})
   /**
    * Skills invocables, telles que le main les découvre sur disque. La palette `/` s'en déduit :
    * plus aucune liste à tenir à jour côté interface. Lecture unique au montage — l'inventaire ne
@@ -912,6 +922,15 @@ export function ChatView({
             step
           })
         )
+      } else if (
+        e.type === 'orchestrate-hypotheses' &&
+        e.convId &&
+        Array.isArray(e.hypotheses) &&
+        e.hypotheses.length
+      ) {
+        const convId = e.convId
+        const recues = e.hypotheses as HypotheseDeCadrage[]
+        setHypothesesCadrage((current) => ({ ...current, [convId]: recues }))
       } else if (e.type === 'orchestrate-end' && e.convId) {
         const convId = e.convId
         const runPath = e.runPath
@@ -2829,6 +2848,21 @@ export function ChatView({
               </div>
             )}
             {attachmentError && <div className="attachment-error">{attachmentError}</div>}
+            {/* CADRAGE : ce sur quoi le run repose SANS l'avoir vérifié, montré pendant qu'il
+                tourne. Ne bloque rien ; un clic pré-remplit le composer pour corriger. */}
+            {activeId && hypothesesCadrage[activeId]?.length ? (
+              <CadrageHypotheses
+                hypotheses={hypothesesCadrage[activeId]}
+                onCorriger={(amorce) => setDraftInput(composerDraftKeyRef.current, amorce)}
+                onMasquer={() =>
+                  setHypothesesCadrage((current) => {
+                    const suivant = { ...current }
+                    delete suivant[activeId]
+                    return suivant
+                  })
+                }
+              />
+            ) : null}
             {/* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
                 suivante. Ne bloque rien — la décision reste humaine. */}
             {friction && (
