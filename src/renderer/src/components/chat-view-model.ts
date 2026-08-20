@@ -181,6 +181,39 @@ export function settleUnresolvedActions(parts: ChatPart[]): ChatPart[] {
 }
 
 /**
+ * Le run est TERMINE : l'action d'orchestration qui le portait recoit son issue.
+ *
+ * DEFAUT VECU le 20/08. Le fil affichait « 1 action en cours » alors que le panneau Sous-agents
+ * etait vide. Les deux surfaces ne lisent pas la meme chose : le badge se derive des parts du tour,
+ * le panneau se derive des runs vivants, vide a `orchestrate-end`. Rien ne les reconciliait. Quand
+ * `pilotChat` ne rend jamais la main — main redemarre, evenement de fin perdu — le `finally` qui
+ * clot le tour ne s'execute pas, `done` reste faux, et l'action reste « en cours » pour toujours.
+ *
+ * Ce que cette fonction fait, et pas plus : elle donne son issue a l'action, en la prenant du
+ * statut du run, qui est l'autorite sur ce point. Elle ne clot PAS le tour — le modele peut encore
+ * ecrire sa cloture apres le retour de l'outil, et fermer ici tronquerait sa reponse.
+ *
+ * LIMITE ASSUMEE : sur un fan-out de plusieurs orchestrations dans un meme tour, seule la DERNIERE
+ * action sans issue est reglee, faute d'un identifiant de run sur la part. Regler les autres au
+ * premier `orchestrate-end` leur attribuerait le statut d'un run qui n'est pas le leur — un chiffre
+ * legerement trop haut vaut mieux qu'une issue fausse.
+ */
+export function settleOrchestrationOnRunEnd(
+  parts: ChatPart[],
+  statut: 'green' | 'red'
+): ChatPart[] {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]
+    if (part.kind !== 'action' || part.name !== 'orchestrate') continue
+    if (part.ok !== undefined || part.interrupted) return parts
+    const settled = parts.slice()
+    settled[i] = { ...part, ok: statut === 'green' }
+    return settled
+  }
+  return parts
+}
+
+/**
  * Impose l'invariant « un tour `done` n'a plus rien en cours » sur un message VIVANT.
  *
  * `hydrateStoredAssistant` le faisait deja a la relecture disque, mais pas la session vivante : les

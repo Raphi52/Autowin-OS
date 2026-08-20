@@ -21,7 +21,6 @@ describe('ChatView — les suppositions du cadrage arrivent dans le fil', () => 
     let emit!: (event: Record<string, unknown>) => void
     harness = await mountChat(
       chatApi({
-        capabilityControls: vi.fn().mockResolvedValue([]),
         onAppEvent: vi.fn((listener) => {
           emit = listener as (event: Record<string, unknown>) => void
           return vi.fn()

@@ -16,6 +16,9 @@ export const conversation = (id: string, messages: unknown[] = []): Record<strin
 export function chatApi(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     conversations: vi.fn().mockResolvedValue([conversation('A')]),
+    // Palette `/` deduite des skills installees : ChatView lit ce canal au montage. Sans le stub,
+    // les 14 fichiers de test de la vue tombaient tous sur « capabilityControls is not a function ».
+    capabilityControls: vi.fn().mockResolvedValue([]),
     conversationRuns: vi.fn().mockResolvedValue([]),
     listRuns: vi.fn().mockResolvedValue([]),
     deleteConversationRun: vi.fn().mockResolvedValue({ ok: true, kind: 'deleted' }),

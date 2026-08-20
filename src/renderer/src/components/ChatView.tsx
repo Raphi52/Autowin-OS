@@ -32,7 +32,8 @@ import {
   type ChatRuntimeIdentity,
   type OrchestratorModelOption,
   type RunRequestIdentity,
-  type ScopedLiveRun
+  type ScopedLiveRun,
+  settleOrchestrationOnRunEnd
 } from './chat-view-model'
 import { buildHomeSuggestions } from './chat-home-suggestions'
 import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
@@ -934,6 +935,20 @@ export function ChatView({
             status: (e.status as 'green' | 'red') ?? 'green'
           })
         )
+        /*
+         * L'action d'orchestration recoit son issue ICI, du statut du run.
+         *
+         * Sans cela, le fil affichait « 1 action en cours » pendant que le panneau Sous-agents etait
+         * vide : le badge lit les parts du tour, le panneau lit les runs vivants, et rien ne les
+         * reconciliait. Le tour n'est PAS clos ici — le modele peut encore ecrire sa cloture apres
+         * le retour de l'outil, et fermer maintenant tronquerait sa reponse.
+         */
+        patchLast(convId, (m) => {
+          m.parts = settleOrchestrationOnRunEnd(
+            m.parts,
+            (e.status as 'green' | 'red') ?? 'green'
+          ) as typeof m.parts
+        })
         // Le run terminé RESTE dans la section Sous-agents avec son fil.
         //
         // Il y avait ici un `setTimeout(4000)` qui dispatchait `clear`, au motif que le run « rejoignait
