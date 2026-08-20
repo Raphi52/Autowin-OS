@@ -252,6 +252,14 @@ export function AssistantActivityGroup({
   // n'est pas revenu du main, et un second clic relançait la même tâche en double.
   const [resumePending, setResumePending] = useState(false)
   const [resumeError, setResumeError] = useState<string | null>(null)
+  /*
+   * POURQUOI DEPLIE SUR PLACE. La pastille est bornee a une ligne : elle tronque et ne montre que le
+   * premier motif. Sur conv-1334 le second motif — la DoD non tenue, la seule chose qui dit ce qu'il
+   * aurait fallu produire — n'etait visible NULLE PART, et le clic renvoyait vers Workflows, hors du
+   * fil, pour une information qui tient en deux lignes. Le clic la deplie donc ICI ; l'acces au run
+   * garde son propre bouton, rien n'est perdu.
+   */
+  const [whyOpen, setWhyOpen] = useState(false)
   const failed = actions.some((action) => action.ok === false)
   // « En cours » = sans résultat ET non interrompue. Une action interrompue (tour clos sans son
   // résultat) n'est PAS en cours : c'est ce qui laissait l'indicateur tourner indéfiniment.
@@ -286,6 +294,7 @@ export function AssistantActivityGroup({
    * ligne qui porte le verdict. Un echec passe devant une reussite.
    */
   const outcome = groupOutcomeSummary(actions)
+  const why = outcome?.why ?? []
   /**
    * Ne PROMETTRE Workflows que s'il y a un run a y voir. Constate en usage reel : sur
    * « edit_file · verify », le clic ne faisait RIEN — ces commandes locales ne creent aucun run, donc
@@ -323,10 +332,15 @@ export function AssistantActivityGroup({
                 ? 'Ouvrir cette action en cours dans Workflows'
                 : 'Voir le détail de cette action dans Workflows'
           }
-          aria-disabled={!runConsultable}
+          aria-disabled={!runConsultable && !why.length}
+          {...(why.length ? { 'aria-expanded': whyOpen } : {})}
           // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la liste
           // des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
           onClick={() => {
+            if (why.length) {
+              setWhyOpen((ouvert) => !ouvert)
+              return
+            }
             if (!runConsultable) return
             onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
           }}
@@ -348,12 +362,33 @@ export function AssistantActivityGroup({
             </span>
           )}
           {running && <span className="spinner" />}
-          {runConsultable && (
+          {why.length ? (
             <span className="activity-group-go" aria-hidden="true">
-              ↗
+              {whyOpen ? '▾' : '▸'}
             </span>
+          ) : (
+            runConsultable && (
+              <span className="activity-group-go" aria-hidden="true">
+                ↗
+              </span>
+            )
           )}
         </button>
+        {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre bouton,
+            sinon deplier couterait l'acces a la trace complete. */}
+        {why.length > 0 && runConsultable && (
+          <button
+            type="button"
+            className="activity-open-run"
+            data-testid="activity-open-run"
+            title="Voir la trace complète dans Workflows"
+            onClick={() =>
+              onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
+            }
+          >
+            ↗
+          </button>
+        )}
         {resumable && (
           <button
             type="button"
@@ -389,6 +424,13 @@ export function AssistantActivityGroup({
           </button>
         )}
       </div>
+      {whyOpen && why.length > 0 && (
+        <div className="activity-why" data-testid="activity-why">
+          {why.map((ligne, index) => (
+            <p key={index}>{ligne}</p>
+          ))}
+        </div>
+      )}
       {details.length > 0 && (
         <div className="activity-local-details" data-testid="activity-local-details">
           {details.map((detail, index) => (

@@ -30,7 +30,7 @@ describe('verifyOutcomeSummary — le verdict est lisible', () => {
         ok: true,
         data: { command: 'npm test', exitCode: 1, ok: false }
       })
-    ).toEqual({ label: 'npm test → exit 1', state: 'failed' })
+    ).toEqual({ label: 'npm test → exit 1', why: ['npm test → exit 1'], state: 'failed' })
   })
 
   it('REFUS : dit pourquoi rien n’a été lancé', () => {
@@ -71,7 +71,7 @@ describe('groupOutcomeSummary — l’ÉCHEC passe devant', () => {
       { name: 'edit_file', data: {} },
       { name: 'verify', data: { command: 'npm test', exitCode: 2, ok: false } }
     ])
-    expect(summary).toEqual({ label: 'npm test → exit 2', state: 'failed' })
+    expect(summary).toEqual({ label: 'npm test → exit 2', why: ['npm test → exit 2'], state: 'failed' })
   })
 
   it('privilégie un refus sur une réussie (rien n’a tourné, il faut le savoir)', () => {
@@ -131,7 +131,11 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
       data: { status: 'failed', valid: false, error: 'ENOENT: worktree introuvable' }
     })
     // La cause reelle est visible dans le fil (fin de la frustration « erreur » opaque).
-    expect(summary).toEqual({ label: 'échec : ENOENT: worktree introuvable', state: 'failed' })
+    expect(summary).toEqual({
+      label: 'échec : ENOENT: worktree introuvable',
+      state: 'failed',
+      why: ['ENOENT: worktree introuvable']
+    })
   })
 
   it('raison longue tronquee pour ne pas casser la ligne du fil', () => {
