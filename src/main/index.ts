@@ -4977,6 +4977,23 @@ Le fil reprend ensuite normalement.`
     const pilotAborted = activeChatTurns.abort(conversationId, 'user')
     return { ok: pilotAborted || orchestrationAborted }
   })
+  /**
+   * Un tour est-il REELLEMENT en vol pour cette conversation ?
+   *
+   * Le main est la seule autorite sur cette question, et le renderer n'avait aucun moyen de la poser.
+   * Sans elle, un message persiste en `streaming` — l'app tuee en plein tour — se relisait au
+   * demarrage comme un tour vivant : indicateur « N action en cours » colle, composer qui met les
+   * messages EN FILE au lieu de les envoyer, et rien pour en sortir puisque l'annulation n'a aucun
+   * tour a couper. Vecu par l'utilisateur le 20/08.
+   *
+   * Limite assumee : la sonde regarde le tour PILOTE. Une orchestration ne vit jamais hors d'un tour
+   * pilote, mais si cela changeait, cette reponse deviendrait incomplete.
+   */
+  ipcMain.handle('os:pilotChat:active', (event, rawConversationId: string) => {
+    assertTrustedRendererSender(event, 'Pilot chat active probe')
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    return { active: Boolean(activeChatTurns.get(conversationId)) }
+  })
   ipcMain.handle('os:orchestrate:cancel', (event, rawConversationId: string) => {
     assertTrustedRendererSender(event, 'Orchestration cancel')
     const conversationId = guardString(rawConversationId, 'conversationId')

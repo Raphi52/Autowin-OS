@@ -475,6 +475,9 @@ const api = {
   }> => ipcRenderer.invoke('os:pilotChat:resume', conversationId),
   cancelPilotChat: (conversationId: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:pilotChat:cancel', conversationId),
+  /** Un tour pilote est-il REELLEMENT en vol cote main ? Le renderer ne peut pas le savoir seul. */
+  pilotChatActive: (conversationId: string): Promise<{ active: boolean }> =>
+    ipcRenderer.invoke('os:pilotChat:active', conversationId),
   cancelOrchestration: (conversationId: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:orchestrate:cancel', conversationId),
   injectDirective: (conversationId: string, directive: string): Promise<{ ok: boolean }> =>

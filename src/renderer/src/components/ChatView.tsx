@@ -1129,6 +1129,36 @@ export function ChatView({
     liveMessagesRef.current.set(c.id, stored)
     setMessages(stored)
     switchComposerDraft(c.id)
+    void reconcilierTourNonClos(c.id)
+  }
+
+  /**
+   * Un tour relu comme NON CLOS est-il vraiment en vol ? Le main seul le sait.
+   *
+   * Un message persiste en `streaming` — l'app tuee en plein tour — se relisait comme un tour vivant :
+   * ses actions restaient sans issue, donc l'indicateur « N action en cours » collait alors que le
+   * panneau Sous-agents etait vide. On INTERROGE donc l'autorite, au lieu de supposer dans un sens ou
+   * dans l'autre : un tour reellement en vol n'est pas touche, un tour mort est clos.
+   *
+   * Best-effort : si la sonde echoue, on ne change rien — mieux vaut un indicateur trop prudent qu'un
+   * tour vivant declare mort.
+   */
+  async function reconcilierTourNonClos(id: string): Promise<void> {
+    const messages = liveMessagesRef.current.get(id) ?? []
+    const dernier = [...messages].reverse().find((message) => message.role === 'assistant')
+    if (!dernier || (dernier as AsstMsg).done) return
+    try {
+      const sonde = await window.api.pilotChatActive?.(id)
+      if (sonde?.active !== false) return
+    } catch {
+      return
+    }
+    if (activeRef.current !== id && !liveMessagesRef.current.has(id)) return
+    setConversationBusy(id, false)
+    patchLast(id, (message) => {
+      message.done = true
+      if (message.status === 'streaming') message.status = 'interrupted'
+    })
   }
 
   function newConv(): void {
@@ -1375,9 +1405,34 @@ export function ChatView({
     void window.api
       .cancelPilotChat(id)
       .then((result) => {
-        if (result?.ok === false) setConversationInterrupting(id, false)
+        if (result?.ok === false) libererTourFantome(id)
       })
       .catch(() => setConversationInterrupting(id, false))
+  }
+
+  /**
+   * TOUR FANTOME : le renderer se croit occupe, le main dit que rien ne tourne.
+   *
+   * `os:pilotChat:cancel` rend `{ ok: pilotAborted || orchestrationAborted }` : un `ok: false` n'est
+   * pas un echec d'annulation, c'est la PREUVE — venant du processus qui detient la verite — qu'il
+   * n'y avait aucun tour ni orchestration a couper. Cette reponse etait jetee : on ne relachait que
+   * le libelle « Arret… » en laissant `busy` arme. Consequences vecues par l'utilisateur le 20/08 :
+   * l'indicateur « 1 action en cours » restait colle alors que le panneau Sous-agents etait vide,
+   * les messages tapes partaient EN FILE au lieu d'etre envoyes, et le bouton Stop ne pouvait plus
+   * rien debloquer — la conversation etait definitivement muette.
+   *
+   * On passe par `patchLast`, l'entonnoir unique : `done = true` y declenche `settleIfDone`, donc les
+   * actions sans issue deviennent `interrupted` et cessent de se lire « en cours ». L'issue ne
+   * viendra jamais — le dire est la verite, la maquiller en echec constate (`ok: false`) serait faux.
+   */
+  function libererTourFantome(id: string): void {
+    setConversationInterrupting(id, false)
+    if (!busyConversationsRef.current.has(id)) return
+    setConversationBusy(id, false)
+    patchLast(id, (message) => {
+      message.done = true
+      if (message.status === 'streaming') message.status = 'interrupted'
+    })
   }
 
   /** Stop simple : annule le tour sans transformer la file en relance automatique. */
@@ -1396,7 +1451,7 @@ export function ChatView({
     void window.api
       .cancelPilotChat(id)
       .then((result) => {
-        if (result?.ok === false) setConversationInterrupting(id, false)
+        if (result?.ok === false) libererTourFantome(id)
       })
       .catch(() => setConversationInterrupting(id, false))
   }

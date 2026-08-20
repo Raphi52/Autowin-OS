@@ -365,6 +365,8 @@ interface ChatApi {
     verification?: { complete: boolean; evidence: string }
   }>
   cancelPilotChat: (conversationId: string) => Promise<{ ok: boolean }>
+  /** Un tour pilote est-il REELLEMENT en vol cote main pour cette conversation ? */
+  pilotChatActive: (conversationId: string) => Promise<{ active: boolean }>
   cancelOrchestration: (conversationId: string) => Promise<{ ok: boolean }>
   injectDirective: (conversationId: string, directive: string) => Promise<{ ok: boolean }>
 
