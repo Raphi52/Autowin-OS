@@ -116,7 +116,14 @@ export type QueuedDirective = { id: number; text: string; mode?: 'btw' }
 export type DirectiveReceipt = {
   id: number
   text: string
-  status: 'sending' | 'sent' | 'failed'
+  /**
+   * `hors-portee` : la directive est ACCEPTEE et stockee, mais un run tourne — et un run ne peut pas
+   * la lire. Le pilote ne draine les directives qu'entre deux de ses iterations, et pendant une
+   * orchestration il est bloque a l'interieur de l'appel `orchestrate` ; l'orchestrateur, lui, n'a
+   * aucune prise sur les directives. Dire « Oriente » dans ce cas est un mensonge par omission :
+   * mesure du 20/08, l'utilisateur a oriente et « rien ne se passe ».
+   */
+  status: 'sending' | 'sent' | 'hors-portee' | 'failed'
   afterMessageIndex: number
   afterPartIndex: number
   afterTextOffset?: number

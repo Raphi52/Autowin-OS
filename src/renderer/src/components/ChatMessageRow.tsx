@@ -33,7 +33,9 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
             ? '⏳ Orientation…'
             : receipt.status === 'sent'
               ? '✓ Orienté'
-              : '⚠ Échec — remis en file'}
+              : receipt.status === 'hors-portee'
+                ? '⏸ Reçue — le run en cours ne peut pas la lire'
+                : '⚠ Échec — remis en file'}
         </span>
       </div>
       <div className="msg-body" dir="auto">

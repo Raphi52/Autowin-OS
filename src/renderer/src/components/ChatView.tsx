@@ -1472,6 +1472,19 @@ export function ChatView({
   }
 
   /**
+   * L'issue HONNETE d'une injection acceptee.
+   *
+   * `injectDirective` repond `ok` des que la directive est empilee et qu'un tour est actif. Mais un
+   * RUN ne peut pas la lire : le pilote ne draine les directives qu'entre deux de ses iterations, et
+   * pendant une orchestration il est bloque dans l'appel `orchestrate` — l'orchestrateur n'ayant
+   * aucune prise dessus. Annoncer « Oriente » ici est ce qui faisait dire « j'ai oriente et rien ne
+   * se passe » (20/08). On distingue donc les deux cas au lieu de les confondre.
+   */
+  function issueDeLInjection(conversationId: string): 'sent' | 'hors-portee' {
+    return liveRuns[conversationId]?.status === 'running' ? 'hors-portee' : 'sent'
+  }
+
+  /**
    * ORIENTER SANS INTERROMPRE : injecte le message comme directive dans le tour EN COURS
    * (drainée à l'itération suivante du pilote) sans l'annuler, puis le retire de la file.
    * Différent de « Interrompre et envoyer » qui coupe le tour.
@@ -1515,7 +1528,7 @@ export function ChatView({
       restore()
       setDirectiveReceipt(id, entry, 'failed')
     } else {
-      setDirectiveReceipt(id, entry, 'sent')
+      setDirectiveReceipt(id, entry, issueDeLInjection(id))
     }
     settle()
   }
@@ -1591,7 +1604,7 @@ export function ChatView({
     }
     // Repli explicite : l'injection a échoué → file d'attente (drainée en fin de tour), rien n'est perdu.
     if (!injected) enqueueMessage(id, text, 'btw')
-    setDirectiveReceipt(id, entry, injected ? 'sent' : 'failed')
+    setDirectiveReceipt(id, entry, injected ? issueDeLInjection(id) : 'failed')
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
   function handleBtw(): boolean {
