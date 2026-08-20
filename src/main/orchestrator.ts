@@ -4028,13 +4028,29 @@ ${empreinteDepot}`
              * observabilite qui ment sur ce qui a ete envoye est pire qu'une absente.
              */
             const { observePrompt: _ignore, ...optionsOutil } = subOptions
+            /**
+             * UN SEUL message utilisateur, qui reporte TOUT.
+             *
+             * Le provider Claude n'envoie que le DERNIER message utilisateur
+             * (`providers/claude.ts` : `lastUser = lastUserMessage?.content`). Passer un tableau
+             * `[contexte, reponse, resultat]` en croyant a une conversation faisait donc perdre le
+             * contexte de la phase : le tour d'outil ne voyait plus que le resultat de sa propre
+             * commande.
+             *
+             * Mesure sur le run reel `conv-1341` : le noeud `learn` a interroge le Brain, puis a
+             * conclu « mon contexte ne contient aucune sortie de phase precedente — ni diff, ni
+             * chemin de fichier ». Il disait VRAI : son premier tour avait 3661 caracteres avec
+             * `[phase think]` et `[phase build]`, son second n'avait plus que le compte rendu de
+             * l'outil. La boucle censee l'outiller le rendait aveugle.
+             */
+            const rappel = [
+              phaseMessages.map((m) => m.content).join('\n\n'),
+              `TA REPONSE PRECEDENTE :\n${texteDePhase}`,
+              compteRendu
+            ].join('\n\n')
             const suivant = await registry.send(
               providerDeLaPhase,
-              [
-                ...phaseMessages,
-                { role: 'assistant', content: texteDePhase },
-                { role: 'user', content: compteRendu }
-              ],
+              [{ role: 'user', content: rappel }],
               optionsOutil
             )
             /**
