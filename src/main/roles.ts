@@ -3,7 +3,7 @@
 // (claude, codex, ...) et optionnellement a un modele precis ; si le modele
 // est absent, le provider utilise son modele par defaut.
 
-import type { PipelinePhase } from './skill-pipeline'
+import type { PipelinePhase, NodePhase } from './skill-pipeline'
 import type { ImportedModel } from './models'
 import { resolveAlias } from './model-aliases'
 
@@ -39,9 +39,9 @@ export interface RoleBinding {
 /** Résout le (modèle, effort) EFFECTIF d'une phase pour un binding (override phase → défaut binding). */
 export function resolvePhaseBinding(
   binding: RoleBinding,
-  phase: PipelinePhase
+  phase: NodePhase
 ): { model?: string; reasoningEffort?: ReasoningEffort } {
-  const override = binding.phaseModel?.[phase]
+  const override = binding.phaseModel?.[phase as PipelinePhase]
   return {
     model: override?.model ?? binding.model,
     reasoningEffort: override?.reasoningEffort ?? binding.reasoningEffort

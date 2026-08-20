@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  SLASH_COMMANDS,
-  matchSlashCommands,
-  skillSlashCommands
-} from './chat-view-model'
+import { SLASH_COMMANDS, matchSlashCommands, skillSlashCommands } from './chat-view-model'
 
 /**
  * La palette `/` n'avait AUCUN test — c'est ce qui a laissé passer le défaut vécu le 2026-08-20 :

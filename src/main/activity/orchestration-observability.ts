@@ -9,6 +9,7 @@ import type { RunLifecycleEvent } from '../../shared/run-execution'
 import { evidencePayloads } from './evidence-payloads'
 import { stepPayloads } from './step-reasoning-payloads'
 import { latestBrainTraceId } from './brain-trace-spool'
+import type { PipelinePhase } from '../skill-pipeline'
 
 interface OrchestrationTraceContext {
   conversationId: string
@@ -244,7 +245,7 @@ export function persistOrchestrationStep(
       ...context,
       brainTraceId: latestBrainTraceId(context.conversationId, context.turnId),
       actor: step.role,
-      phase: step.execution?.phase,
+      phase: step.execution?.phase as PipelinePhase | undefined,
       provider: step.prompt.provider,
       model: step.prompt.model,
       transport: step.prompt.transport,

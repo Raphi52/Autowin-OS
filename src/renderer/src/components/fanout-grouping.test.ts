@@ -4,38 +4,41 @@ import {
   costByModel,
   parseBtw,
   matchSlashCommands,
-  type OrchStep
-} from './chat-view-model'
+  type OrchStep, skillSlashCommands} from './chat-view-model'
 
 describe('matchSlashCommands (palette /)', () => {
-  it('« / » seul → toutes les commandes', () => {
-    expect(matchSlashCommands('/').map((c) => c.name)).toEqual([
-      'btw',
-      'scout',
-      'frame',
-      'terrain',
-      'build',
-      'clean',
-      'judge',
-      'kaizen',
-      // `remake` ferme la liste et n'est PAS une phase du pipeline : il RE-ENTRE dans la progression
-      // au lieu d'en être une étape (`PipelinePhase` est une union fermée de 7).
-      'remake'
+  it("« / » seul : commandes intégrées PUIS skills de l’inventaire", () => {
+    // La liste n'est plus figée dans le renderer : `/` rend ce que le composer lui passe. Une skill
+    // ajoutée sur le disque apparaît donc seule, sans qu'on touche à ce fichier — c'était le défaut.
+    const skills = skillSlashCommands([
+      { id: 'scout', description: 'Chercher.', enabled: true },
+      { id: 'think', description: 'Charger le contexte.', enabled: true }
     ])
+    expect(matchSlashCommands('/', skills).map((c) => c.name)).toEqual(['btw', 'scout', 'think'])
+    // Sans inventaire, seules les commandes câblées dans l'interface subsistent.
+    expect(matchSlashCommands('/').map((c) => c.name)).toEqual(['btw'])
   })
   it('filtre par préfixe (casse-insensible)', () => {
-    expect(matchSlashCommands('/b').map((c) => c.name)).toEqual(['btw', 'build'])
-    expect(matchSlashCommands('/BT').map((c) => c.name)).toEqual(['btw'])
+    const skills = skillSlashCommands([{ id: 'build', description: 'Implémenter.', enabled: true }])
+    expect(matchSlashCommands('/b', skills).map((c) => c.name)).toEqual(['btw', 'build'])
+    expect(matchSlashCommands('/BT', skills).map((c) => c.name)).toEqual(['btw'])
   })
   it('préfixe sans correspondance → []', () => {
     expect(matchSlashCommands('/zzz')).toEqual([])
   })
-  it('filtre les workflows par préfixe et insère un espace pour la consigne', () => {
-    expect(matchSlashCommands('/sc')).toEqual([
+  it('filtre les skills par préfixe et insère un espace pour la consigne', () => {
+    // Les skills ne sont plus écrites à la main dans le renderer : elles viennent de l'inventaire
+    // disque, passé ici tel que le composer le fournit.
+    const skills = skillSlashCommands([
+      { id: 'scout', description: 'Chercher.', enabled: true },
+      { id: 'judge', description: 'Auditer.', enabled: true },
+      { id: 'kaizen', description: 'Rétro.', enabled: true }
+    ])
+    expect(matchSlashCommands('/sc', skills)).toEqual([
       expect.objectContaining({ name: 'scout', insert: '/scout ' })
     ])
-    expect(matchSlashCommands('/j').map((c) => c.name)).toEqual(['judge'])
-    expect(matchSlashCommands('/k').map((c) => c.name)).toEqual(['kaizen'])
+    expect(matchSlashCommands('/j', skills).map((c) => c.name)).toEqual(['judge'])
+    expect(matchSlashCommands('/k', skills).map((c) => c.name)).toEqual(['kaizen'])
   })
   it('corps déjà tapé (/btw x) → palette fermée []', () => {
     expect(matchSlashCommands('/btw x')).toEqual([])

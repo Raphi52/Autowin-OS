@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react'
 import { personasFor } from '../../../shared/persona'
 import './WorkflowCanvas.css'
-import { PIPELINE_PHASES, type PipelinePhase } from '../../../shared/pipeline-phases'
+import {
+  PIPELINE_PHASES,
+  isPipelinePhase,
+  type NodePhase,
+  type PipelinePhase
+} from '../../../shared/pipeline-phases'
 
 /** Les efforts proposables. Miroir de `ReasoningEffort` côté main. */
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
@@ -22,7 +27,7 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 // PLUS de miroir manuel : `Phase` DÉRIVE de la liste partagée. Ce fichier en était la TROISIÈME
 // copie à la main — et `shared/pipeline-phases.ts` documente déjà le faux positif qu'une copie
 // périmée avait produit dans l'onglet Workflows. Une seule liste, un seul endroit où se tromper.
-export type Phase = PipelinePhase
+export type Phase = NodePhase
 
 /** Un membre du fan-out : QUI regarde (persona), avec QUEL modèle et QUEL effort. */
 export interface CanvasAgent {
@@ -70,6 +75,12 @@ export interface WorkflowCanvasProps {
   defects?: { target?: string; message: string }[]
   /** Exécutions provisionnées au pire cas, affichées en barre d'état. */
   worstCase?: number | null
+  /**
+   * Les skills du disque proposables comme briques, EN PLUS des huit phases. Vient de l'inventaire
+   * réel (`capabilityControls('skills')`) : une skill installée apparaît donc sans toucher au code.
+   * Un nœud skill est NEUTRE — lecture seule, pas de verdict, pas de quorum.
+   */
+  skills?: readonly string[]
 }
 
 /**
@@ -81,7 +92,7 @@ export interface WorkflowCanvasProps {
  * Y afficher une skill libre composerait une brique injouable — exactement le mensonge d'interface
  * qu'on corrige ailleurs. Les skills hors pipeline s'invoquent par la palette `/` du chat.
  */
-const PALETTE: readonly Phase[] = PIPELINE_PHASES
+const PALETTE_PHASES: readonly PipelinePhase[] = PIPELINE_PHASES
 
 /* ── Géométrie du plan. Des constantes plutôt que des valeurs semées : le tracé des arêtes en dépend. ── */
 const NODE_W = 158
@@ -113,13 +124,29 @@ function rechain(nodes: CanvasNode[], edges: CanvasEdge[]): CanvasEdge[] {
   return [...chaine, ...retours.filter((e) => vivants.has(e.from) && vivants.has(e.to))]
 }
 
+/**
+ * Classe de couleur d'une brique. Les huit phases ont chacune la leur ; une skill du disque n'en a
+ * aucune (`wf-ph-graphify` n'existe dans aucune feuille de style) et se rendait donc SANS couleur ni
+ * pastille — une brique fantôme. Elles partagent une classe neutre commune, qui les distingue aussi
+ * visuellement des phases : leur sémantique n'est pas la même.
+ */
+function classePhase(phase: Phase): string {
+  return isPipelinePhase(phase) ? `wf-ph-${phase}` : 'wf-ph-skill'
+}
+
 export function WorkflowCanvas({
   graph,
   onChange,
   defects = [],
   models = [],
-  worstCase = null
+  worstCase = null,
+  skills = []
 }: WorkflowCanvasProps): React.JSX.Element {
+  /** Huit phases d'abord, puis les skills du disque qui n'en sont pas déjà une. */
+  const palette = useMemo<readonly Phase[]>(
+    () => [...PALETTE_PHASES, ...skills.filter((id) => !PIPELINE_PHASES.includes(id as PipelinePhase))],
+    [skills]
+  )
   const [drag, setDrag] = useState<number>()
   const [ouvert, setOuvert] = useState<string>()
 
@@ -254,11 +281,11 @@ export function WorkflowCanvas({
         <aside className="wf-palette-pane">
           <p className="wf-kicker">Phases</p>
           <ul className="wf-palette" data-testid="wf-palette">
-            {PALETTE.map((phase) => (
+            {palette.map((phase) => (
               <li key={phase}>
                 <button
                   type="button"
-                  className={`wf-pal-item wf-ph-${phase}`}
+                  className={`wf-pal-item ${classePhase(phase)}`}
                   data-testid={`wf-add-${phase}`}
                   onClick={() => ajouter(phase)}
                 >
@@ -352,7 +379,7 @@ export function WorkflowCanvas({
                 return (
                   <div
                     key={node.id}
-                    className={`wf-node wf-ph-${node.phase}${soucis.length ? ' is-broken' : ''}${
+                    className={`wf-node ${classePhase(node.phase)}${soucis.length ? ' is-broken' : ''}${
                       ouvert === node.id ? ' is-open' : ''
                     }`}
                     style={{ left: pos.x, top: pos.y, width: NODE_W }}
@@ -444,7 +471,7 @@ export function WorkflowCanvas({
               return (
                 <div className="wf-node-detail" data-testid={`wf-detail-${node.id}`}>
                   <p className="wf-kicker">Nœud sélectionné</p>
-                  <p className={`wf-insp-title wf-ph-${node.phase}`}>
+                  <p className={`wf-insp-title ${classePhase(node.phase)}`}>
                     <span className="wf-dot" />
                     {node.id}
                   </p>

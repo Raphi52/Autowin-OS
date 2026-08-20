@@ -47,7 +47,7 @@ import {
 } from './run-autoclose'
 import { amitelBrainRoot } from './amitel-context'
 import { regimePhases } from './task-regime'
-import type { PipelinePhase } from './skill-pipeline'
+import type { NodePhase } from './skill-pipeline'
 import {
   clearOrchestrationState,
   loadOrchestrationStates,
@@ -140,7 +140,7 @@ export interface FanOutTopology {
   judge: FanMember[]
 }
 
-export function selectPhaseFanOut(fanOut: FanOutTopology, phase: PipelinePhase): FanMember[] {
+export function selectPhaseFanOut(fanOut: FanOutTopology, phase: NodePhase): FanMember[] {
   return phase === 'scout' || phase === 'frame' || phase === 'terrain' ? fanOut[phase] : []
 }
 
@@ -823,7 +823,7 @@ export class AutowinOS {
     signal?: AbortSignal,
     collectedContext?: string,
     /** SURVIE NIVEAU 3 : acquis d'un run interrompu → reprise à la phase suivante. */
-    resumeOutputs?: { phase: PipelinePhase; text: string }[],
+    resumeOutputs?: { phase: NodePhase; text: string }[],
     /** Conversation d'origine : persistée avec l'acquis pour qu'une reprise s'affiche au bon endroit. */
     conversationId?: string,
     /** Modèle figé pour ce run uniquement, sans mutation de la topologie globale. */
@@ -1033,7 +1033,7 @@ export class AutowinOS {
     agents: Array<{
       token: string
       provider?: string
-      phase?: PipelinePhase
+      phase?: NodePhase
       active?: boolean
       fanOut?: boolean
       pid?: number
@@ -1058,7 +1058,7 @@ export class AutowinOS {
     task: string,
     conversationId: string | undefined,
     nowMs = Date.now()
-  ): Array<{ phase: PipelinePhase; text: string }> {
+  ): Array<{ phase: NodePhase; text: string }> {
     const acquis = pickAcquiredAnalysis(loadOrchestrationStates(this.orchestrationStateRoot), {
       task,
       conversationId,

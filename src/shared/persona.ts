@@ -1,6 +1,7 @@
 // Import de TYPE uniquement : effacé à la compilation, donc ce module reste utilisable des deux
 // côtés (main et renderer) sans jamais tirer une dépendance Node dans le bundle du renderer.
 import type { PipelinePhase } from '../main/skill-pipeline'
+import type { NodePhase } from './pipeline-phases'
 
 /**
  * La persona d'un membre de fan-out : l'ANGLE sous lequel il regarde.
@@ -133,8 +134,9 @@ ou hors sujet.
 `
 
 /** Les personas proposables pour une phase. Vide = fan-out sans angle imposé, ce qui reste licite. */
-export function personasFor(phase: PipelinePhase): Persona[] {
-  return PERSONAS[phase] ?? []
+export function personasFor(phase: NodePhase): Persona[] {
+  // Un noeud SKILL n'a pas d'angles pre-ecrits : le selecteur reste vide plutot que d'en inventer.
+  return PERSONAS[phase as PipelinePhase] ?? []
 }
 
 /**

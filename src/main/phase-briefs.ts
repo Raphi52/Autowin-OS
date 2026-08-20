@@ -5,7 +5,7 @@
  * renvois qui pendouillent). Chaque brief = objectif · livrable · DoD · 2-3 gardes, ~1-2k. Le
  * sous-agent reçoit CE brief + l'état du RUN (besoin + acquis des phases), pas un doc kit entier.
  */
-import type { PipelinePhase } from './skill-pipeline'
+import type { PipelinePhase, NodePhase } from './skill-pipeline'
 
 export const PHASE_BRIEFS: Record<PipelinePhase, string> = {
   scout: `Tu es en phase SCOUT. Objectif : sur la CIBLE donnée, faire émerger une SHORTLIST de candidats d'amélioration concrets et priorisés — pas les réaliser.
@@ -71,7 +71,8 @@ Livrable :
 }
 
 /** Consigne d'une phase (vide si inconnue — l'appelant retombe alors sur la discipline générique). */
-export function phaseBrief(phase: PipelinePhase): string {
-  const brief = PHASE_BRIEFS[phase]
+export function phaseBrief(phase: NodePhase): string {
+  // Un noeud SKILL n'a pas de consigne native : son corps vient du kit, pas d'ici.
+  const brief = PHASE_BRIEFS[phase as PipelinePhase]
   return brief ? `\n=== CONSIGNE ${phase.toUpperCase()} ===\n${brief}\n` : ''
 }

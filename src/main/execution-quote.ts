@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { classifyRegime, regimePhases, type TaskRegime } from './task-regime'
-import type { PipelinePhase } from './skill-pipeline'
+import type { PipelinePhase, NodePhase } from './skill-pipeline'
 
 export type DecompositionPolicy =
   { mode: 'disabled'; maxNodes: 1 } | { mode: 'build-only'; maxNodes: number }
@@ -35,7 +35,7 @@ export interface ExecutionQuote {
   createdAt: string
   taskFingerprint: string
   regime: TaskRegime
-  phases: ReturnType<typeof regimePhases>
+  phases: NodePhase[]
   decomposition: DecompositionPolicy
   limits: ExecutionLimits
   /** Allocation ex-ante de la topologie, finalisée avant le premier appel provider. */
@@ -52,8 +52,8 @@ export interface ExecutionTopologyAllocation {
 }
 
 export interface ExecutionTopologyRequest {
-  phases: PipelinePhase[]
-  completedPhases: PipelinePhase[]
+  phases: NodePhase[]
+  completedPhases: NodePhase[]
   startedAgents: number
   startedCalls: number
   mutation: boolean

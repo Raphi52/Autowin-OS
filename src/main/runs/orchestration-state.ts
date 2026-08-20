@@ -8,7 +8,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
-import { PIPELINE_PHASES, type PipelinePhase } from '../skill-pipeline'
+import { PIPELINE_PHASES, type PipelinePhase, type NodePhase } from '../skill-pipeline'
 import { decodeRoleBinding } from '../role-store'
 import { ALL_ROLES, type RoleBinding } from '../roles'
 import type { ExecutionQuote } from '../execution-quote'
@@ -38,7 +38,7 @@ export { RESUME_STALE_AFTER_MS }
  * illisible (un crash en pleine écriture ne doit pas empêcher de reprendre les autres runs).
  */
 export interface OrchestrationPhaseOutput {
-  phase: PipelinePhase
+  phase: NodePhase
   text: string
   /** CLI exact ayant produit cette occurrence ; absent sur les checkpoints historiques/fan-out. */
   agentToken?: string
@@ -93,7 +93,7 @@ export interface OrchestrationRunState {
     /** Provider qui a produit le journal brut. */
     provider?: string
     /** Phase réellement exécutée par ce CLI ; ne jamais la redéduire de l'ordre du devis. */
-    phase?: PipelinePhase
+    phase?: NodePhase
     /** `true` de la réservation jusqu'au règlement provider, y compris après la sortie du PID. */
     active?: boolean
     /** Un membre de fan-out ne peut pas, seul, devenir le livrable agrégé de sa phase. */
@@ -112,8 +112,16 @@ function isPhaseOutput(value: unknown): value is OrchestrationPhaseOutput {
   if (!value || typeof value !== 'object') return false
   const output = value as Record<string, unknown>
   return (
+    /**
+     * Une phase du pipeline OU l'identifiant d'une skill du disque.
+     *
+     * Le filtre exigeait l'appartenance a `PIPELINE_PHASES` : la sortie d'un noeud skill etait donc
+     * REJETEE en silence a la relecture. Le run s'executait, produisait, et son acquis disparaissait
+     * au premier rechargement — une reprise repartait de zero sans rien dire. On borne plutot la
+     * FORME de l'identifiant (celle d'un dossier de skill), ce qui refuse toujours un JSON corrompu.
+     */
     typeof output.phase === 'string' &&
-    PIPELINE_PHASES.includes(output.phase as PipelinePhase) &&
+    /^[\w-]{1,64}$/u.test(output.phase) &&
     typeof output.text === 'string' &&
     (output.agentToken === undefined || isNonEmptyString(output.agentToken)) &&
     (output.executionEvidence === undefined ||
@@ -906,7 +914,7 @@ export function admitAutomaticResumeRuntime(
  * `build` et `clean` en sont exclues par nature : leur acquis vit sur le disque, le workspace a pu
  * bouger depuis, et les rejouer est la seule façon honnête de savoir où en est le code.
  */
-const PHASES_ANALYSE_REUTILISABLES: readonly PipelinePhase[] = ['scout', 'frame', 'terrain']
+const PHASES_ANALYSE_REUTILISABLES: readonly NodePhase[] = ['scout', 'frame', 'terrain']
 
 /**
  * Acquis d'analyse déjà produit DANS LA MÊME CONVERSATION, réutilisable même si le libellé de la
@@ -929,7 +937,7 @@ export function pickAcquiredAnalysis(
     nowMs: number
     maxAgeMs?: number
   }
-): Array<{ phase: PipelinePhase; text: string }> {
+): Array<{ phase: NodePhase; text: string }> {
   if (!lookup.conversationId) return []
   const maxAge = lookup.maxAgeMs ?? DEFAULT_RESUME_MAX_AGE_MS
   // Une phase nommée dans la demande est un ordre de la rejouer, pas un acquis à recycler.
@@ -946,7 +954,7 @@ export function pickAcquiredAnalysis(
     .sort((a, b) => a.updatedAt - b.updatedAt)
 
   // Le plus récent gagne : on écrase au fil du tri croissant.
-  const parPhase = new Map<PipelinePhase, string>()
+  const parPhase = new Map<NodePhase, string>()
   for (const state of utilisables) {
     for (const output of state.phaseOutputs ?? []) {
       if (!PHASES_ANALYSE_REUTILISABLES.includes(output.phase)) continue

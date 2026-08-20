@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AgentStudioSection } from '../tabs'
 import { workflowIssues, type ExecutabilityInput } from './workflow-executability'
+import { useSkillsInventory } from './useSkillsInventory'
 import { ViewTopBar } from './ViewTopBar'
 // Importe DIRECTEMENT le composant : `RolesView` n'etait qu'un alias d'une ligne re-exportant
 // `AgentsTopologyView`, avec ce fichier pour unique appelant. Deux noms pour un seul composant, c'est
@@ -26,7 +27,20 @@ export function AgentStudioView({
    * deux sondes sont en LECTURE seule et ne tournent que si Agent Studio est ouvert.
    */
   const [providersExpires, setProvidersExpires] = useState<string[]>([])
-  const [workflowsCasses, setWorkflowsCasses] = useState<string[]>([])
+  const [workflowProfils, setWorkflowProfils] = useState<ExecutabilityInput[]>([])
+  /**
+   * MEME inventaire que la vue Workflows : sans lui, la sonde accusait un workflow a brique skill
+   * d'etre injouable. Indetermine (`null`) = la sonde reste muette, elle n'invente pas d'alerte.
+   */
+  const skills = useSkillsInventory()
+  /**
+   * L'anomalie se DERIVE des profils lus et de l'inventaire, elle n'est pas figee dans un etat : sinon
+   * l'arrivee de l'inventaire devrait relancer la sonde IPC, et chaque montage lirait deux fois.
+   * Inventaire encore en vol (`null`) = aucune alerte, plutot qu'un faux positif clignotant.
+   */
+  const workflowsCasses = skills
+    ? workflowProfils.filter((p) => workflowIssues(p, skills).length > 0).map((p) => p.name)
+    : []
 
   useEffect(() => {
     if (!active) return
@@ -51,7 +65,7 @@ export function AgentStudioView({
           if (annule || generation !== workflowGeneration) return
           const profils = ((fichier as { profiles?: ExecutabilityInput[] } | undefined)?.profiles ??
             []) as ExecutabilityInput[]
-          setWorkflowsCasses(profils.filter((p) => workflowIssues(p).length > 0).map((p) => p.name))
+          setWorkflowProfils(profils)
         })
         .catch(() => undefined)
     }

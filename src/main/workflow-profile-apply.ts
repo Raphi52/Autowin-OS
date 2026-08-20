@@ -1,6 +1,7 @@
 import type { Role, RoleBinding } from './roles'
 import type { PipelinePhase } from './skill-pipeline'
 import type { WorkflowProfile } from './workflow-profiles'
+import type { NodePhase } from './skill-pipeline'
 
 /**
  * Traduire un workflow nommé en réglages effectifs pour un run.
@@ -28,7 +29,7 @@ export interface EffectiveWorkflow extends WorkflowBaseConfig {
   /** Profil appliqué, ou `undefined` si la configuration courante l'emporte. */
   profileId?: string
   /** Consigne effective pour une phase, avec la façon dont elle doit être combinée au skill. */
-  instructionFor: (phase: PipelinePhase) => { mode: 'append' | 'replace'; text: string } | undefined
+  instructionFor: (phase: NodePhase) => { mode: 'append' | 'replace'; text: string } | undefined
 }
 
 /** Fusionne un écart de rôle sur son binding : les champs absents du profil ne sont PAS écrasés. */

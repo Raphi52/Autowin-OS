@@ -109,6 +109,7 @@ import type { InspectTurnTarget } from '../observatory-focus'
 // importateurs historiques (`RunEntry`, `CheckpointEntry`) n'aient RIEN à changer.
 export type { RunEntry, CheckpointEntry } from './chat-view-types'
 import type { CheckpointEntry } from './chat-view-types'
+import { useSkillsCatalog } from './useSkillsInventory'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
 /* ---------- Constantes ---------- */
@@ -169,28 +170,19 @@ export function ChatView({
    * evenement de run, disparaissent quand l'utilisateur les masque ou quand un nouveau cadrage
    * arrive. Rien n'est persiste — le cadrage lui-meme l'est, dans l'etat du run.
    */
-  const [hypothesesCadrage, setHypothesesCadrage] = useState<
-    Record<string, HypotheseDeCadrage[]>
-  >({})
+  const [hypothesesCadrage, setHypothesesCadrage] = useState<Record<string, HypotheseDeCadrage[]>>(
+    {}
+  )
   /**
-   * Skills invocables, telles que le main les découvre sur disque. La palette `/` s'en déduit :
-   * plus aucune liste à tenir à jour côté interface. Lecture unique au montage — l'inventaire ne
-   * bouge qu'au redémarrage (l'activation d'une capacité le signale déjà : restartRequired).
+   * Palette `/` déduite des skills réellement installées. MÊME source que l'exécutabilité et que la
+   * palette de briques (`useSkillsInventory`) : deux lectures écrites à la main divergeraient, et
+   * une vue proposerait ce qu'une autre déclare inconnu.
    */
-  const [skillCommands, setSkillCommands] = useState<SlashCommand[]>([])
-  useEffect(() => {
-    let vivant = true
-    void window.api
-      .capabilityControls('skills')
-      .then((items) => {
-        if (vivant) setSkillCommands(skillSlashCommands(items))
-      })
-      // Palette dégradée (commandes intégrées seules) plutôt que composer cassé.
-      .catch(() => undefined)
-    return () => {
-      vivant = false
-    }
-  }, [])
+  const skillsInstallees = useSkillsCatalog()
+  const skillCommands = useMemo<SlashCommand[]>(
+    () => skillSlashCommands(skillsInstallees ?? []),
+    [skillsInstallees]
+  )
   const [slashIndex, setSlashIndex] = useState(0)
   const [slashDismissed, setSlashDismissed] = useState(false)
   // Palette de MENTIONS (`@run…`, `@fichier…`) : même mécanique d'état que la palette slash.

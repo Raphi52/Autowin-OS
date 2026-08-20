@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSkillsInventory } from './useSkillsInventory'
 import { WorkflowCanvas, type CanvasGraph, type Phase } from './WorkflowCanvas'
 
 /**
@@ -51,6 +52,12 @@ export function WorkflowGraphEditor({
   profile: ProfileLike
   onSave: (graph: CanvasGraph) => void
 }): React.JSX.Element {
+  /**
+   * Les skills du disque, proposables comme briques au même titre que les huit phases. La lecture
+   * vit dans `useSkillsInventory` : MÊME source que l'exécutabilité, sinon la palette proposerait
+   * une brique que la validation déclarerait inconnue. `null` (indéterminé) → palette aux phases.
+   */
+  const skills = useSkillsInventory() ?? []
   const [graph, setGraph] = useState<CanvasGraph>(() => initialGraph(profile))
   const [verdict, setVerdict] = useState<Verdict>()
   const [enregistre, setEnregistre] = useState(true)
@@ -111,6 +118,7 @@ export function WorkflowGraphEditor({
         defects={verdict?.defects}
         models={models}
         worstCase={verdict?.worstCaseNodeExecutions ?? null}
+        skills={skills}
       />
       <div className="workflow-graph-actions">
         <button

@@ -25,7 +25,13 @@ import { listNativeRegistry, skillRoots } from './native-registry'
 // dans ses propres signatures, d'où l'import en plus du re-export.
 import { type PipelinePhase } from '../shared/pipeline-phases'
 
-export { PIPELINE_PHASES, isPipelinePhase, type PipelinePhase } from '../shared/pipeline-phases'
+export {
+  PIPELINE_PHASES,
+  isPipelinePhase,
+  isSkillNode,
+  type PipelinePhase,
+  type NodePhase
+} from '../shared/pipeline-phases'
 
 export function skillsRoot(root = join(homedir(), '.claude', 'skills')): string {
   return root

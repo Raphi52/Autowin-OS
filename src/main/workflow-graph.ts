@@ -1,5 +1,6 @@
 import type { PipelinePhase } from './skill-pipeline'
 import type { RoleBinding } from './roles'
+import type { NodePhase } from '../shared/pipeline-phases'
 
 /**
  * Un workflow comme GRAPHE, et non plus comme liste de phases.
@@ -27,7 +28,8 @@ export type WorkflowAgentBinding = Partial<RoleBinding>
 
 export interface WorkflowNode {
   id: string
-  phase: PipelinePhase
+  /** Phase du pipeline, ou id d une skill du disque (semantique neutre). */
+  phase: NodePhase
   /** Les agents qui exécutent ce nœud. Plusieurs = fan-out ; le canevas les rend visibles. */
   agents?: WorkflowAgentBinding[]
   /** Voix concordantes exigées parmi les agents. Absent = majorité simple. */
@@ -272,7 +274,7 @@ export function worstCaseNodeExecutions(graph: WorkflowGraph): number {
  */
 export function agentsForPhase(
   graph: WorkflowGraph,
-  phase: PipelinePhase
+  phase: NodePhase
 ): WorkflowAgentBinding[] | undefined {
   const node = graph.nodes.find((n) => n.phase === phase && n.agents?.length)
   return node?.agents?.filter(Boolean)
@@ -369,11 +371,11 @@ export function graphFromPhases(phases: readonly PipelinePhase[]): WorkflowGraph
 }
 
 /** La suite de phases d'un graphe SANS retour — permet au moteur linéaire actuel de jouer un graphe simple. */
-export function linearPhasesOf(graph: WorkflowGraph): PipelinePhase[] | undefined {
+export function linearPhasesOf(graph: WorkflowGraph): NodePhase[] | undefined {
   const byId = indexNodes(graph)
   const ranks = forwardRanks(graph, byId)
   if (graph.edges.some((edge) => isReturnEdge(edge, ranks))) return undefined
-  const suite: PipelinePhase[] = []
+  const suite: NodePhase[] = []
   let courant: string | undefined = graph.entry
   const vus = new Set<string>()
   while (courant && byId.has(courant) && !vus.has(courant)) {

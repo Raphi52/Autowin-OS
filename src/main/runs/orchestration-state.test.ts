@@ -870,7 +870,14 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
 
   it.each([
     ['sortie nulle', [null]],
-    ['phase inconnue', [{ phase: 'unknown', text: 'livrable' }]],
+    /**
+     * `phase: 'unknown'` figurait ici comme cas hostile. Il ne l'est plus : un nœud peut porter
+     * l'identifiant d'une SKILL du disque, et « unknown » en est une forme parfaitement valide.
+     * La défense porte désormais sur la FORME de l'identifiant — ce qui refuse toujours ce qu'on
+     * voulait vraiment refuser : un chemin déguisé en phase.
+     */
+    ['phase en forme de chemin', [{ phase: '../../evasion', text: 'livrable' }]],
+    ['phase vide', [{ phase: '', text: 'livrable' }]],
     ['texte non chaîne', [{ phase: 'frame', text: 42 }]]
   ])('ignore un JSON valide mais structurellement hostile : %s', (_label, phaseOutputs) => {
     writeFileSync(

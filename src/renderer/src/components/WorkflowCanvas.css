@@ -42,6 +42,12 @@
 .wf-ph-remake {
   --wf-hue: var(--gold-bright, #ffdc73);
 }
+/* Une SKILL du disque : teinte neutre commune. Elle n'a pas la semantique d'une phase (pas de
+   verdict, pas de quorum, lecture seule), et le dessin doit le laisser voir plutot que de la
+   deguiser en neuvieme phase. */
+.wf-ph-skill {
+  --wf-hue: var(--text-faint);
+}
 
 .wf-dot {
   width: 7px;

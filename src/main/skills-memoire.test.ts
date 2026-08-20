@@ -12,9 +12,9 @@ import { invokedSkillId, skillInstruction } from './skill-pipeline'
  * livrée pendant des semaines. Un skill déposé sans être découvert par le registre, ou dont le corps
  * ne se charge pas, est exactement ce cas : le fichier existe, et rien ne l'exécute jamais.
  */
-const SKILLS = ['save', 'load'] as const
+const SKILLS = ['learn', 'think'] as const
 
-describe('skills save/load — présentes, découvertes, invocables', () => {
+describe('skills learn/think — présentes, découvertes, invocables', () => {
   it.each(SKILLS)('%s est livrée dans le dépôt', (id) => {
     const racine = bundledSkillsRoot()
     expect(racine).toBeTruthy()
@@ -44,34 +44,34 @@ describe('skills save/load — présentes, découvertes, invocables', () => {
   const corpsDe = (id: string): string =>
     readFileSync(join(bundledSkillsRoot()!, id, 'SKILL.md'), 'utf8')
 
-  it('save nomme les commandes qu’elle utilise VRAIMENT', () => {
+  it('learn nomme les commandes qu’elle utilise VRAIMENT', () => {
     // Une consigne qui invoque un outil inexistant produit un tour perdu et un message d'erreur
     // incompréhensible. `remember` et `brain_query` sont au catalogue ; l'empreinte n'invente rien.
-    const save = corpsDe('save')
-    expect(save).toContain('remember(')
-    expect(save).toContain('brain_query')
+    const learn = corpsDe('learn')
+    expect(learn).toContain('remember(')
+    expect(learn).toContain('brain_query')
     // La forme d'ancrage est celle que le Brain accepte réellement : un `file:` relatif est refusé.
-    expect(save).toMatch(/git:<chemin>@<sha>/)
+    expect(learn).toMatch(/git:<chemin>@<sha>/)
   })
 
-  it('save impose la RELECTURE avant écriture — c’est ce qui évite les doublons', () => {
-    const save = corpsDe('save')
-    expect(save).toMatch(/brain_query[\s\S]{0,400}avant/i)
-    expect(save.toLowerCase()).toContain('doublon')
+  it('learn impose la RELECTURE avant écriture — c’est ce qui évite les doublons', () => {
+    const learn = corpsDe('learn')
+    expect(learn).toMatch(/brain_query[\s\S]{0,400}avant/i)
+    expect(learn.toLowerCase()).toContain('doublon')
   })
 
-  it('load refuse de FABRIQUER une empreinte absente', () => {
-    // Le vrai risque de `load` : combler le vide en lisant le dépôt à la volée, et rendre un résumé
+  it('think refuse de FABRIQUER une empreinte absente', () => {
+    // Le vrai risque de `think` : combler le vide en lisant le dépôt à la volée, et rendre un résumé
     // non vérifié indiscernable d'un savoir capitalisé.
-    const load = corpsDe('load')
-    expect(load).toMatch(/AUCUNE empreinte/i)
-    expect(load.toLowerCase()).toContain('/save')
+    const think = corpsDe('think')
+    expect(think).toMatch(/AUCUNE empreinte/i)
+    expect(think.toLowerCase()).toContain('/learn')
   })
 
-  it('load date ce qu’il charge, au lieu de le présenter comme actuel', () => {
+  it('think date ce qu’il charge, au lieu de le présenter comme actuel', () => {
     // Un savoir daté cité comme courant est ce qui fait perdre des heures sur un fichier déplacé.
-    const load = corpsDe('load')
-    expect(load).toContain('HEAD')
-    expect(load.toLowerCase()).toMatch(/sha différent|écart/)
+    const think = corpsDe('think')
+    expect(think).toContain('HEAD')
+    expect(think.toLowerCase()).toMatch(/sha différent|écart/)
   })
 })

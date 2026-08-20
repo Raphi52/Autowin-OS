@@ -35,3 +35,19 @@ const PHASES = new Set<string>(PIPELINE_PHASES)
 export function isPipelinePhase(value: string): value is PipelinePhase {
   return PHASES.has(value)
 }
+
+/**
+ * Ce qu'un NŒUD de graphe peut porter : une phase du pipeline, OU l'identifiant d'une skill
+ * quelconque découverte sur disque (`think`, `learn`, `graphify`…).
+ *
+ * `PipelinePhase` reste un type FERMÉ : les huit phases gardent leur sémantique (verdict du juge,
+ * quorum, droits d'écriture de build/clean) et l'exhaustivité de leurs `Record`. Un nœud skill est
+ * NEUTRE — pas de verdict, pas de quorum, lecture seule — et c'est `isPipelinePhase` qui sépare les
+ * deux partout où la différence compte.
+ */
+export type NodePhase = PipelinePhase | (string & {})
+
+/** Vrai si ce nœud porte une skill libre plutôt qu'une phase du pipeline. */
+export function isSkillNode(value: NodePhase): boolean {
+  return !isPipelinePhase(value)
+}

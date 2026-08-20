@@ -1,45 +1,59 @@
 import { describe, expect, it } from 'vitest'
-import { SLASH_COMMANDS, matchSlashCommands } from './chat-view-model'
+import { SLASH_COMMANDS, matchSlashCommands, skillSlashCommands } from './chat-view-model'
 import { PIPELINE_PHASES } from '../../../main/skill-pipeline'
+import { nativeSkills } from '../../../main/native-registry'
 
 /**
- * La liste des commandes slash n'etait figee par AUCUN test (verifie le 2026-08-04). Elle est ecrite a
- * la main dans le renderer alors que les skills vivent dans le kit : rien ne signalait qu'une skill du
- * kit soit absente de l'autocompletion, ni qu'une phase du pipeline devienne inatteignable au clavier.
+ * Ce test gardait la DÉCOUVRABILITÉ du kit contre une liste écrite à la main dans le renderer. Il
+ * constatait le risque sans pouvoir l'éliminer : la liste restait manuelle, donc une skill ajoutée
+ * sur le disque restait invisible. C'est arrivé — `think` et `learn`, invocables mais absentes de la
+ * palette, d'où « je sais même pas si elles sont actives » (2026-08-20).
  *
- * A savoir pour lire ces tests : il n'existe AUCUN routage slash -> phase. Une entree ici est de
- * l'autocompletion — elle insere du texte dans le composeur. La substance vient du kit que le CLI
- * charge lui-meme (`~/.claude/skills/<nom>/SKILL.md`). Le test garde donc la DECOUVRABILITE, pas le
- * comportement : c'est precisement ce qui se perd en silence.
+ * La palette dérive désormais de l'inventaire disque. Le test se branche donc sur la MÊME source que
+ * l'application (`nativeSkills`), au lieu d'une liste que quelqu'un devait penser à mettre à jour.
  */
-const names = (): string[] => SLASH_COMMANDS.map((command) => command.name)
+const palette = (): ReturnType<typeof skillSlashCommands> => skillSlashCommands(nativeSkills())
+const noms = (): string[] => palette().map((command) => command.name)
 
 describe('commandes slash — découvrabilité du kit', () => {
   it('chaque phase du pipeline est atteignable au clavier', () => {
-    const missing = PIPELINE_PHASES.filter((phase) => !names().includes(phase))
-    expect(missing).toEqual([])
+    expect(PIPELINE_PHASES.filter((phase) => !noms().includes(phase))).toEqual([])
   })
 
-  it('`/remake` est exposé — la skill existe dans le kit, elle doit être trouvable', () => {
-    expect(names()).toContain('remake')
-    const remake = SLASH_COMMANDS.find((command) => command.name === 'remake')
-    // L'indice doit dire ce que ca FAIT : une entree sans intention lisible n'aide personne.
-    expect(remake?.hint).toBeTruthy()
-    expect(remake?.insert).toBe('/remake ')
+  it('TOUTE skill présente sur disque est proposée — plus aucune liste à tenir à jour', () => {
+    const surDisque = nativeSkills()
+      .filter((skill) => skill.enabled !== false)
+      .map((skill) => skill.id)
+    expect(noms()).toEqual(expect.arrayContaining(surDisque))
+  })
+
+  it('`think` et `learn` sont trouvables — le cas exact qui manquait', () => {
+    expect(noms()).toContain('think')
+    expect(noms()).toContain('learn')
+    expect(palette().find((c) => c.name === 'learn')?.insert).toBe('/learn ')
   })
 
   it('l’autocomplétion propose `remake` sur un préfixe partiel', () => {
-    expect(matchSlashCommands('/rem').map((command) => command.name)).toContain('remake')
-    // Et ne le propose pas sur un prefixe qui ne le concerne pas.
-    expect(matchSlashCommands('/jud').map((command) => command.name)).not.toContain('remake')
+    const items = matchSlashCommands('/rem', palette()).map((command) => command.name)
+    expect(items).toContain('remake')
+    expect(matchSlashCommands('/jud', palette()).map((c) => c.name)).not.toContain('remake')
   })
 
-  it('aucun doublon : deux entrées de même nom rendraient l’autocomplétion ambiguë', () => {
-    expect(names()).toHaveLength(new Set(names()).size)
+  it('chaque entrée porte un indice lisible : une entrée sans intention n’aide personne', () => {
+    for (const command of palette()) {
+      expect(command.hint.trim().length).toBeGreaterThan(0)
+      expect(command.hint.trim()).not.toBe('Skill')
+    }
+  })
+
+  it('aucun doublon entre commandes intégrées et skills', () => {
+    const tous = matchSlashCommands('/', palette()).map((c) => c.name)
+    expect(tous).toHaveLength(new Set(tous).size)
+    expect(tous).toContain(SLASH_COMMANDS[0].name)
   })
 
   it('chaque entrée insère bien sa propre commande', () => {
-    for (const command of SLASH_COMMANDS) {
+    for (const command of [...SLASH_COMMANDS, ...palette()]) {
       expect(command.insert.startsWith(`/${command.name}`)).toBe(true)
     }
   })

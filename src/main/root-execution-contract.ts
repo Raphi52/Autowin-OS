@@ -130,10 +130,12 @@ export function rootRequirementChecks(
       // Toute phase de LECTURE porte l'analyse, pas seulement `scout` : un run programme
       // `['frame']` ou `['terrain']` ne joue JAMAIS `scout`, donc n'aurait pu cocher cette case a
       // aucun prix — la seule case que `rootDodLabels` lui seme etait structurellement incochable
-      // (« DoD 0/1 » sur un livrable complet). On reutilise `PHASES_LECTURE_SEULE`, l'ensemble deja
-      // defini plus bas : deux listes du meme concept, c'est le defaut que ce run corrige.
+      // (« DoD 0/1 » sur un livrable complet). On reutilise `noeudSansEcriture`, le predicat deja
+      // defini plus bas : deux listes du meme concept, c'est le defaut que ce run corrige. Un noeud
+      // SKILL y entre aussi — sinon un workflow fait de skills n'aurait, lui non plus, aucun moyen
+      // de cocher cette case.
       checked: proofs.phases.some(
-        (phase) => PHASES_LECTURE_SEULE.has(phase.phase) && Boolean(phase.text?.trim())
+        (phase) => noeudSansEcriture(phase.phase) && Boolean(phase.text?.trim())
       )
     })
   }
@@ -158,6 +160,34 @@ export function rootRequirementChecks(
 /** Phases qui n'ECRIVENT rien : leur livrable est un texte, pas une mutation. */
 const PHASES_LECTURE_SEULE = new Set(['scout', 'frame', 'terrain'])
 
+/** Les huit phases du pipeline. Tout autre identifiant de noeud designe une SKILL du disque. */
+const PHASES_PIPELINE = new Set([
+  'scout',
+  'frame',
+  'terrain',
+  'build',
+  'clean',
+  'judge',
+  'kaizen',
+  'remake'
+])
+
+/**
+ * Ce noeud produit-il un texte plutot qu'une mutation ?
+ *
+ * Les trois phases d'analyse, PLUS tout noeud SKILL. Un noeud skill s'execute en `read-only`
+ * (`sandboxForPhase` ne donne les droits d'ecriture qu'a build et clean) : lui demander une preuve
+ * de mutation a la cloture serait une exigence structurellement insatisfaisable — exactement le
+ * defaut vecu le 2026-08-18 sur scout, ou un run correct sortait rouge a chaque fois parce qu'on
+ * exigeait de lui ce que son propre contrat lui interdit de produire.
+ *
+ * Les huit phases gardent leur classement d'origine : `judge`, `kaizen` et `remake` ne sont PAS
+ * ajoutes ici, ce serait un changement de comportement hors sujet.
+ */
+function noeudSansEcriture(phase: string): boolean {
+  return PHASES_LECTURE_SEULE.has(phase) || !PHASES_PIPELINE.has(phase)
+}
+
 /**
  * Le run n'a joué QUE des phases de lecture — il n'a donc aucune mutation à prouver.
  *
@@ -181,12 +211,12 @@ const PHASES_LECTURE_SEULE = new Set(['scout', 'frame', 'terrain'])
  */
 export function programmeSansEcriture(phases?: readonly string[]): boolean {
   return (
-    Array.isArray(phases) && phases.length > 0 && phases.every((p) => PHASES_LECTURE_SEULE.has(p))
+    Array.isArray(phases) && phases.length > 0 && phases.every((p) => noeudSansEcriture(p))
   )
 }
 
 export function runEnLectureSeule(phases: readonly { phase: string }[]): boolean {
-  return phases.length > 0 && phases.every((entree) => PHASES_LECTURE_SEULE.has(entree.phase))
+  return phases.length > 0 && phases.every((entree) => noeudSansEcriture(entree.phase))
 }
 
 /**

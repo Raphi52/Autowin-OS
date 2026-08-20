@@ -3,6 +3,7 @@ import { WorkflowBenchPanel } from './WorkflowBenchPanel'
 import { WorkflowGraphEditor } from './WorkflowGraphEditor'
 import { profileSummary, promptEffectif } from './workflow-profile-summary'
 import { rolesEffectifs, trackNodes, workflowIssues } from './workflow-executability'
+import { useSkillsInventory } from './useSkillsInventory'
 import './WorkflowProfilesView.css'
 
 /**
@@ -199,6 +200,15 @@ function raison(reason: unknown): string {
 
 export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX.Element {
   const [file, setFile] = useState<ProfilesFile>({ profiles: [], activeId: null })
+  /**
+   * Un noeud peut porter une SKILL du disque et non une phase du pipeline. Sans cet inventaire, la
+   * vue declarait « phase inconnue » une brique que sa propre palette propose, et bloquait son
+   * activation. `null` = inventaire indetermine (IPC en vol) : on ne juge rien, plutot que
+   * d'afficher un faux positif le temps d'un rendu.
+   */
+  const skills = useSkillsInventory()
+  const soucisDe = (profil: WorkflowProfile): string[] =>
+    skills ? workflowIssues(profil, skills) : []
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
   /** Ouvrir l'éditeur n'est PAS activer le workflow : deux gestes, deux états (point 3). */
@@ -429,7 +439,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
           le dit, sans verrouiller le bouton, qui reste le seul chemin vers la désélection. */}
       {(() => {
         const actifProfil = file.profiles.find((p) => p.id === file.activeId)
-        const soucis = actifProfil ? workflowIssues(actifProfil) : []
+        const soucis = actifProfil ? soucisDe(actifProfil) : []
         return soucis.length > 0 && actifProfil ? (
           <p
             className="workflow-profiles-error"
@@ -464,7 +474,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
           {file.profiles.map((profile) => {
             // L'exécutabilité se calcule AVANT d'offrir l'activation : un workflow structurellement
             // mort (phase inconnue, nœud sans agent, arête orpheline) ne doit pas pouvoir partir.
-            const issues = workflowIssues(profile)
+            const issues = soucisDe(profile)
             const actif = file.activeId === profile.id
             const bloque = issues.length > 0 && !actif
             const nom = names[profile.id] ?? profile.name

@@ -66,8 +66,12 @@ import {
   parseAttestedLearningProposal,
   type IndependentLearningAttestation
 } from './outcome-learning-proposal'
-import { PIPELINE_PHASES, type PipelinePhase,
-  isPipelinePhase
+import {
+  PIPELINE_PHASES,
+  type PipelinePhase,
+  type NodePhase,
+  isPipelinePhase,
+  skillInstruction as chargerSkill
 } from './skill-pipeline'
 import {
   rootExecutionRequirements,
@@ -125,7 +129,7 @@ const REJET_EN_TETE = /^\s*(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|ROUGE|K
  * (`resolvePhaseFanOut` honore déjà les agents COMPOSÉS : ce repli ne concerne que leur absence.)
  */
 function bindingDeRepliPourPhase(
-  phase: PipelinePhase,
+  phase: NodePhase,
   roles: RoleModelConfig,
   runtimeSnapshot?: OrchestrationRuntimeSnapshot
 ): RoleBinding {
@@ -244,7 +248,7 @@ const APPROBATION_CONTRAT = /\bVALIDE\b/i
  * contrat : hors contrat, on ne présume pas l'approbation. Les autres phases restent vertes — elles
  * racontent leur travail, elles ne se prononcent pas.
  */
-function verdictDePhase(phase: PipelinePhase, text: string): NodeVerdict {
+function verdictDePhase(phase: NodePhase, text: string): NodeVerdict {
   if (phase !== 'judge') return 'green'
   const propre = (text ?? '').trim()
   if (!propre) return 'red'
@@ -295,14 +299,14 @@ function sansRetourReparationJuge(graph: WorkflowGraph): WorkflowGraph {
  * Le build est exécuté par la réparation enrichie ; le juge par le gate final. Ce tableau est donc
  * exactement le milieu à rejouer (par exemple `clean` dans build → clean → judge).
  */
-function phasesApresBuildDeReparation(graph: WorkflowGraph): PipelinePhase[] {
+function phasesApresBuildDeReparation(graph: WorkflowGraph): NodePhase[] {
   const byId = new Map(graph.nodes.map((node) => [node.id, node]))
   const retour = graph.edges.find((edge) => {
     if (edge.when !== 'red') return false
     return byId.get(edge.from)?.phase === 'judge' && byId.get(edge.to)?.phase === 'build'
   })
   if (!retour) return []
-  const phases: PipelinePhase[] = []
+  const phases: NodePhase[] = []
   const vus = new Set<string>([retour.to])
   let courant = retour.to
   for (let pas = 0; pas < graph.nodes.length; pas++) {
@@ -434,7 +438,7 @@ export interface RunAgentRef {
   /** Décodeur du journal brut à employer après crash. */
   provider?: string
   /** Attribution persistée : le graphe/devis ne suffit pas à redéduire la phase après un crash. */
-  phase?: PipelinePhase
+  phase?: NodePhase
   /** Réservation provider non réglée ; reste vraie entre la sortie du PID et le règlement du stream. */
   active?: boolean
   /** Un résultat de membre doit repasser par l'agrégateur ; il n'est jamais un acquis de phase seul. */
@@ -473,7 +477,7 @@ export interface OrchestrationStep {
   thinking?: string
   /** Provenance causale stable utilisée par le graphe demande → phases → agents. */
   execution?: {
-    phase?: PipelinePhase
+    phase?: NodePhase
     agentId?: string
     taskId?: string
     groupId?: string
@@ -493,7 +497,7 @@ export interface OrchestrationPhase {
   model?: string
   reasoningEffort?: string
   /** A4 — phase du pipeline en cours (scout/frame/…) pour un libellé live précis (pas « sous-agent »). */
-  phase?: PipelinePhase
+  phase?: NodePhase
   execution?: OrchestrationStep['execution']
 }
 
@@ -510,7 +514,7 @@ export interface OrchestrationResult {
   usage?: ExecutionUsageSnapshot
   /** Sortie brute de chaque phase exec — sert à peupler le RUN.md de la conversation (J2). */
   phaseOutputs: {
-    phase: PipelinePhase
+    phase: NodePhase
     text: string
     agentToken?: string
     executionEvidence?: ExecutionEvidence[]
@@ -655,7 +659,7 @@ export interface OrchestratorRoutingDeps {
    * membre → binding subagent historique. Ne renvoyer des membres que pour scout/frame/terrain.
    */
   phaseFanOut?: (
-    phase: PipelinePhase
+    phase: NodePhase
   ) => Array<{ provider: string; model?: string; reasoningEffort?: ReasoningEffort }>
   /**
    * Fan-out MULTI-MODÈLES du JUGE : modèles déposés dans le bloc judge. ≥2 → N juges en parallèle
@@ -695,7 +699,7 @@ export interface OrchestratorLifecycleDeps {
     /** Topologie exacte admise au debut du run, reutilisee telle quelle apres un crash. */
     runtimeSnapshot: OrchestrationRuntimeSnapshot
     phaseOutputs: {
-      phase: PipelinePhase
+      phase: NodePhase
       text: string
       agentToken?: string
       executionEvidence?: ExecutionEvidence[]
@@ -745,7 +749,7 @@ export interface OrchestratorDecompositionDeps {
   /** Plafond de sous-agents simultanés en mode greedy (défaut 4). */
   greedyConcurrency?: number
   /** Injection substituable pour les tests ; en production charge le vrai kit via skill-pipeline. */
-  skillInstruction?: (phase: PipelinePhase, opts: { withFoundation: boolean }) => string
+  skillInstruction?: (phase: NodePhase, opts: { withFoundation: boolean }) => string
   /** Source du devis actif, portee par l'ExecutionSupervisor local au run. */
   currentExecutionQuote?: () => ExecutionQuote | undefined
   /** Compteurs locaux du run, persistes avec chaque checkpoint pour une reprise sans reset. */
@@ -795,7 +799,7 @@ export interface WorkflowRunOverride {
    * découlent directement. Purement informatif : rien dans le moteur ne s'en sert pour décider.
    */
   identity?: { name: string; source: 'manuel' | 'modele' | 'compose' }
-  phases?: PipelinePhase[]
+  phases?: NodePhase[]
   /** Le workflow comme graphe : pilote les phases jouées ET la borne des retours. */
   graph?: WorkflowGraph
   allocation?: {
@@ -803,7 +807,7 @@ export interface WorkflowRunOverride {
     judgeMembers?: number
     maxGreedyNodes?: number
   }
-  instructionFor?: (phase: PipelinePhase) => PhaseInstructionOverride | undefined
+  instructionFor?: (phase: NodePhase) => PhaseInstructionOverride | undefined
 }
 
 /** Un nœud du plan greedy : une sous-tâche + les ids dont elle dépend (doivent réussir avant). */
@@ -948,7 +952,7 @@ const JUDGE_PHASE_CAP = 6000
  */
 export function sandboxForPhase(
   task: string,
-  phase: PipelinePhase
+  phase: NodePhase
 ): NonNullable<SendOptions['execution']>['sandbox'] {
   return isMutationTask(task) && (phase === 'build' || phase === 'clean')
     ? 'danger-full-access'
@@ -1121,7 +1125,7 @@ export class Orchestrator {
    * l'autre `[]`), ce n'est donc pas un doublon à unifier.
    */
   private resolvePhaseFanOut(
-    phase: PipelinePhase,
+    phase: NodePhase,
     runtimeSnapshot?: OrchestrationRuntimeSnapshot
   ): RoleBinding[] {
     // Les agents COMPOSÉS sur le nœud priment sur la topologie globale : c'est le sens même du
@@ -1202,7 +1206,7 @@ export class Orchestrator {
     return this.workflowDuRun()?.graph
   }
 
-  private effectivePhases(task: string): PipelinePhase[] {
+  private effectivePhases(task: string): NodePhase[] {
     const explicitPhase = routeSkillRequest(task)?.explicitPhase
     if (explicitPhase) return explicitPhase === 'judge' ? [] : [explicitPhase]
     const workflow = this.workflowDuRun()
@@ -1224,12 +1228,24 @@ export class Orchestrator {
       : (this.deps.execPhases ?? ['build'])
   }
 
-  private phasePrompt(phase: PipelinePhase, withFoundation: boolean): PhasePromptBlock {
+  private phasePrompt(phase: NodePhase, withFoundation: boolean): PhasePromptBlock {
     // Le pipeline IN-APP utilise ses contrats natifs courts. Les SKILL.md du kit externe exigent
     // leurs propres RUN.md/hooks et demandaient donc a scout/frame/terrain d'ecrire alors que ces
     // phases sont volontairement read-only. Une instruction explicitement injectee reste prioritaire
     // (tests, extension embarquee), mais l'absence d'injection ne consulte plus le kit de la machine.
-    const installed = this.deps.skillInstruction?.(phase, { withFoundation }) ?? ''
+    /**
+     * Un noeud SKILL n'a pas de consigne native — son corps EST le SKILL.md du kit.
+     *
+     * Le pipeline in-app refuse deliberement de consulter le kit pour les huit phases (voir plus
+     * haut). Pour un noeud skill il n'existe aucune autre source : `phaseBrief` rend une chaine
+     * vide, et sans ce chargement le noeud partirait avec AUCUNE instruction. C'est ce qui separe
+     * une brique qui travaille d'une brique qui figure au dessin.
+     *
+     * `deps.skillInstruction` reste prioritaire (tests, extension embarquee) ; elle n'est branchee
+     * nulle part en production, d'ou le repli sur le chargeur reel.
+     */
+    const injectee = this.deps.skillInstruction?.(phase, { withFoundation }) ?? ''
+    const installed = injectee || (isPipelinePhase(phase) ? '' : chargerSkill(phase))
     const base = installed || phaseBrief(phase)
     // Point de passage UNIQUE des consignes de phase : y brancher le workflow suffit à couvrir
     // exec, judge et greedy sans les threader un par un.
@@ -1359,7 +1375,7 @@ export class Orchestrator {
     cwd: string,
     sandbox: NonNullable<SendOptions['execution']>['sandbox'],
     runId: string,
-    phase: PipelinePhase,
+    phase: NodePhase,
     provider: string,
     fanOut = false
   ): NonNullable<SendOptions['execution']> {
@@ -1437,7 +1453,7 @@ export class Orchestrator {
      * à la phase suivante (aucun token regaspillé).
      */
     resumeOutputs: {
-      phase: PipelinePhase
+      phase: NodePhase
       text: string
       agentToken?: string
       executionEvidence?: ExecutionEvidence[]
@@ -2414,7 +2430,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     runId: string,
     phaseContext: string,
     withFoundation: boolean,
-    phase: PipelinePhase,
+    phase: NodePhase,
     push: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
@@ -2919,7 +2935,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     runId = '',
     /** SURVIE NIVEAU 3 : acquis d'un run interrompu → ces phases sont REJOUÉES, pas refaites. */
     resumeOutputs: {
-      phase: PipelinePhase
+      phase: NodePhase
       text: string
       agentToken?: string
       executionEvidence?: ExecutionEvidence[]
@@ -2952,7 +2968,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     // triviale ne joue pas les 5 phases. Fallback `execPhases` statique (rétrocompat/tests).
     // Un workflow nommé REMPLACE ce pipeline : c'est ici que l'exécution se décide (le calcul du
     // devis, plus haut, en fait sa propre lecture — les deux doivent voir la même liste).
-    const execPhases: PipelinePhase[] = this.effectivePhases(task)
+    const execPhases: NodePhase[] = this.effectivePhases(task)
     /**
      * Le verdict de la phase qui vient de finir. C'est lui qui décide quelle arête le marcheur franchit.
      * Vert par défaut, DÉLIBÉRÉMENT : une phase qui ne déclare rien ne doit pas déclencher une réparation
@@ -3018,7 +3034,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       if (!cible) return false
       return !graphe.edges.some((edge) => edge.from === depuis && edge.to === cible)
     }
-    const suitePhases = function* (): Generator<PipelinePhase> {
+    const suitePhases = function* (): Generator<NodePhase> {
       if (!graphePilote?.nodes?.length) {
         /**
          * SANS GRAPHE, la déviation était MORTE : `souhaitModele` n'était lu que par le marcheur, et
@@ -3080,7 +3096,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     // donc que les phases porteuses de contenu ; les autres seront rejouées normalement.
     const usableResume = resumeOutputs.filter((output) => output.text.trim().length > 0)
     const phaseOutputs: {
-      phase: PipelinePhase
+      phase: NodePhase
       text: string
       agentToken?: string
       executionEvidence?: ExecutionEvidence[]
@@ -3097,7 +3113,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
      * jamais lieu. On décompte donc : la 1re visite d'une phase reprise est sautée, les suivantes
      * s'exécutent.
      */
-    const resteAPasser = new Map<PipelinePhase, number>()
+    const resteAPasser = new Map<NodePhase, number>()
     for (const output of usableResume) {
       resteAPasser.set(output.phase, (resteAPasser.get(output.phase) ?? 0) + 1)
     }
@@ -3111,14 +3127,14 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
      * (vert), le marcheur franchissait l'arête VERTE au nœud judge et SAUTAIT la réparation que le
      * rouge devait déclencher — en se déclarant réussi.
      */
-    const textesRepris = new Map<PipelinePhase, string[]>()
+    const textesRepris = new Map<NodePhase, string[]>()
     for (const output of usableResume) {
       const file = textesRepris.get(output.phase) ?? []
       file.push(output.text)
       textesRepris.set(output.phase, file)
     }
     /** Consomme et rend le texte d'une occurrence déjà payée, dans son ordre réel. */
-    const takePaidPhase = (phase: PipelinePhase): string | undefined => {
+    const takePaidPhase = (phase: NodePhase): string | undefined => {
       const reste = resteAPasser.get(phase) ?? 0
       if (reste <= 0) return undefined
       resteAPasser.set(phase, reste - 1)
@@ -3130,10 +3146,10 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       return texte
     }
     /** `true` = occurrence déjà payée, donc aucun appel provider à rejouer. */
-    const dejaPayee = (phase: PipelinePhase): boolean => takePaidPhase(phase) !== undefined
+    const dejaPayee = (phase: NodePhase): boolean => takePaidPhase(phase) !== undefined
     /** Enregistre une phase terminée ET notifie l'appelant pour qu'il persiste l'acquis. */
     const recordPhase = (
-      phase: PipelinePhase,
+      phase: NodePhase,
       text: string,
       executionEvidence: ExecutionEvidence[] = []
     ): void => {
@@ -3283,14 +3299,14 @@ ${empreinteDepot}`
      * `TÂCHE: ajoute ...` dominait et scout/frame tentaient le patch avant d'afficher un faux
      * « bloqué — Edit absent ». On rend donc la hiérarchie explicite au même niveau que le besoin.
      */
-    const analysisMission = (phase: PipelinePhase): string => {
+    const analysisMission = (phase: NodePhase): string => {
       if (phase !== 'scout' && phase !== 'frame' && phase !== 'terrain') return ''
       return [
         `MISSION ACTIVE — ${phase.toUpperCase()} UNIQUEMENT : produis le livrable textuel de cette phase en lecture seule.`,
         `Le BESOIN GLOBAL ci-dessous décrit le résultat final du workflow ; ses verbes de mutation sont réservés à BUILD. N'essaie pas d'écrire ni de préparer un patch, et ne signale pas l'absence de Write/Edit/Bash comme un blocage.`
       ].join(' ')
     }
-    const userContextForPhase = (phase: PipelinePhase): string => {
+    const userContextForPhase = (phase: NodePhase): string => {
       const mission = analysisMission(phase)
       if (!mission) return phaseContext.join('\n\n')
       const context = phaseContext.map((entry) =>
@@ -3314,7 +3330,7 @@ ${empreinteDepot}`
       phaseContext.push(`[phase ${output.phase}] ${porterVersPhaseSuivante(output.text)}`)
       lastExecText = output.text
     }
-    const executePipelinePhase = async (phase: PipelinePhase): Promise<void> => {
+    const executePipelinePhase = async (phase: NodePhase): Promise<void> => {
       // SURVIE NIVEAU 3 : phase déjà terminée avant l'interruption → on ne la refait pas. Compté par
       // occurrence : une visite ULTÉRIEURE du même nœud, via une arête de retour, doit bien s'exécuter.
       if (dejaPayee(phase)) return

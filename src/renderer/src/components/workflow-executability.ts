@@ -41,13 +41,32 @@ export function trackNodes(
   })
 }
 
-/** Tout ce qui rend un workflow inexécutable, en clair. Liste vide = activable. */
-export function workflowIssues(profile: ExecutabilityInput): string[] {
+/**
+ * Tout ce qui rend un workflow inexécutable, en clair. Liste vide = activable.
+ *
+ * `skillsConnues` = les skills présentes sur disque. Un nœud peut porter une phase du pipeline OU
+ * l'une d'elles ; tout le reste est un nœud qui ne jouerait rien. Le paramètre a un défaut vide :
+ * un appelant non migré retrouve exactement l'ancien comportement, il ne blanchit rien.
+ *
+ * Ce qu'il attrape et que rien ne voyait : un workflow ENREGISTRÉ qui référence une skill
+ * DISPARUE depuis. Il doit le dire ici, pas échouer au lancement.
+ */
+export function workflowIssues(
+  profile: ExecutabilityInput,
+  skillsConnues: readonly string[] = []
+): string[] {
   const issues: string[] = []
   const nodes = trackNodes(profile)
   if (!nodes.length) return ['aucune phase : ce workflow ne jouerait rien']
+  const skills = new Set(skillsConnues)
   for (const node of nodes) {
-    if (!isPipelinePhase(node.phase)) issues.push(`phase inconnue : ${node.phase}`)
+    if (!isPipelinePhase(node.phase) && !skills.has(node.phase)) {
+      issues.push(
+        skills.size
+          ? `skill introuvable sur cette machine : ${node.phase}`
+          : `phase inconnue : ${node.phase}`
+      )
+    }
     if (node.agents < 1) issues.push(`aucun agent sur le nœud ${node.id}`)
   }
   const connus = new Set(nodes.map((node) => node.id))

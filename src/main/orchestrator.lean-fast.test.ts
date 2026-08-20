@@ -27,6 +27,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSurvivable } from './runs/survivable-spawn'
+import type { NodePhase } from './skill-pipeline'
 
 /** Provider qui enregistre chaque appel (modèle, resumeSessionId, message) et rend un sessionId. */
 class RecordingProvider implements ProviderAdapter {
@@ -79,13 +80,13 @@ function makeOrchestrator(
     onPhaseCompleted?: (info: {
       runId: string
       task: string
-      phaseOutputs: { phase: PipelinePhase; text: string; agentToken?: string }[]
+      phaseOutputs: { phase: NodePhase; text: string; agentToken?: string }[]
       executionQuote?: ExecutionQuote
       usage?: ReturnType<ExecutionSupervisor['currentSnapshot']>
       agents?: Array<{
         token: string
         provider?: string
-        phase?: PipelinePhase
+        phase?: NodePhase
         active?: boolean
         fanOut?: boolean
         pid?: number
@@ -98,7 +99,7 @@ function makeOrchestrator(
       agents: Array<{
         token: string
         provider?: string
-        phase?: PipelinePhase
+        phase?: NodePhase
         active?: boolean
         fanOut?: boolean
         pid?: number
@@ -958,7 +959,7 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
       agents?: Array<{
         token: string
         provider?: string
-        phase?: PipelinePhase
+        phase?: NodePhase
         active?: boolean
         fanOut?: boolean
         pid?: number
@@ -992,7 +993,7 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
       Array<{
         token: string
         provider?: string
-        phase?: PipelinePhase
+        phase?: NodePhase
         active?: boolean
         fanOut?: boolean
         pid?: number
