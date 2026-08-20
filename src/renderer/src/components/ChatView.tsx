@@ -119,6 +119,8 @@ type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 // (`buildHomeSuggestions`), le jeu historique restant le repli quand l'état est vide.
 
 const MAX_ATTACHMENTS = 8
+/** Cadence de la veille sur un tour declare vivant (sonde d'autorite cote main). */
+const TOUR_VIVANT_SONDE_MS = 4000
 const NEW_DRAFT_KEY = '__new__'
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024
@@ -1463,6 +1465,51 @@ export function ChatView({
       if (message.status === 'streaming') message.status = 'interrupted'
     })
   }
+
+  /**
+   * VEILLE sur les tours declares vivants : la sonde d'autorite tire aussi SANS changer de vue.
+   *
+   * DEFAUT VECU le 20/08 : « la conversation affiche une action en cours quand le workflow est
+   * arrete ». La reconciliation existait deja (`reconcilierTourNonClos`, `libererTourFantome`) mais
+   * ses deux seuls declencheurs sont l'OUVERTURE d'une conversation et un geste Stop. Sur la
+   * conversation deja ouverte — celle qu'on regarde — un tour qui meurt sans rendre son evenement de
+   * fin (workflow arrete, evenement perdu, main redemarre) n'etait interroge par personne : le badge
+   * tournait jusqu'a un changement de conversation ou un redemarrage de l'app.
+   *
+   * DEUX sondes negatives consecutives sont exigees avant de clore : le renderer passe `busy` AVANT
+   * que le main ait enregistre le controleur du tour (meme course que le `waitForActive(500)` de
+   * l'injection), donc une seule sonde pourrait tuer un tour qui demarre.
+   */
+  useEffect(() => {
+    if (!busyConversations.size) return
+    const manques = new Map<string, number>()
+    const timer = window.setInterval(() => {
+      for (const id of busyConversationsRef.current) {
+        void (async () => {
+          let active: boolean
+          try {
+            const sonde = await window.api.pilotChatActive?.(id)
+            // Sonde absente ou en echec : on ne declare pas mort ce qu'on n'a pas pu verifier.
+            if (sonde?.active !== false) {
+              manques.delete(id)
+              return
+            }
+            active = false
+          } catch {
+            manques.delete(id)
+            return
+          }
+          if (active) return
+          const negatives = (manques.get(id) ?? 0) + 1
+          manques.set(id, negatives)
+          if (negatives < 2) return
+          manques.delete(id)
+          libererTourFantome(id)
+        })()
+      }
+    }, TOUR_VIVANT_SONDE_MS)
+    return () => window.clearInterval(timer)
+  }, [busyConversations])
 
   /** Stop simple : annule le tour sans transformer la file en relance automatique. */
   function stopPilotTurn(): void {
