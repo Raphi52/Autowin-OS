@@ -1,9 +1,9 @@
 ---
 name: think
-description: Rassemble ce qu'il faut savoir pour résoudre la tâche en cours, et rien de plus. Part de la tâche, en déduit les connaissances nécessaires, va les chercher (mémoire durable, code, décisions passées), et rend un briefing dense et ancré. Déclencher sur `/think`, « donne-moi le contexte pour faire X », « de quoi as-tu besoin pour traiter ça », ou en tête d'un workflow dont les étapes suivantes travailleront sur un terrain qu'elles ne connaissent pas. NE PAS utiliser pour CHERCHER quoi faire (c'est `scout`), pour cadrer un besoin (c'est `frame`), ni pour répondre à une question ponctuelle sur un fichier — l'ouvrir coûte moins cher.
+description: Rassemble et injecte le contexte nécessaire à la résolution de la tâche en cours. Part de la tâche, en déduit les connaissances nécessaires, va les chercher (mémoire durable, code, décisions passées), et rend un briefing dense et ancré. Déclencher sur `/think`, « donne-moi le contexte pour faire X », « de quoi as-tu besoin pour traiter ça », ou en tête d'un workflow dont les étapes suivantes travailleront sur un terrain qu'elles ne connaissent pas. NE PAS utiliser pour CHERCHER quoi faire (c'est `scout`), pour cadrer un besoin (c'est `frame`), ni pour répondre à une question ponctuelle sur un fichier — l'ouvrir coûte moins cher.
 ---
 
-# Think — le contexte que la tâche exige, et rien de plus
+# Think — le contexte que la tâche exige
 
 ## À quoi ça sert
 
@@ -68,10 +68,36 @@ Un fait mémorisé porte un ancrage `git:<chemin>@<sha>`. Compare-le à `HEAD` :
 Les mécanismes et les motifs bougent lentement, un chemin de fichier non. Un savoir daté cité comme
 actuel fait perdre des heures sur un fichier déplacé.
 
-### 5. Rends un briefing, pas un corpus
+### 5. Rends un briefing, sous CES titres exactement
 
-En prose dense, organisée par ce que la tâche va devoir décider — pas par source. Aucun copier-coller
-de la mémoire : ce qui sert, c'est la synthèse qui tient en contexte.
+En prose dense, jamais un copier-coller de la mémoire. Et sous ces titres-là, qui ne sont pas une
+préférence de mise en page :
+
+```
+## Localisation    où la tâche se joue : fichiers, modules, tables
+## Cartographie    ce qui existe déjà, et comment les morceaux tiennent
+## Décisions       les choix passés sur ce terrain, options ÉCARTÉES comprises
+## Constats        les pièges déjà payés, avec leur coût observé
+## Contraintes     ce qui n'est pas négociable, et pourquoi
+## Trous           ce que tu n'as PAS trouvé
+```
+
+**Pourquoi ces titres et pas d'autres.** Ta sortie ne parvient pas telle quelle à l'étape suivante :
+elle passe par un portage BORNÉ (2000 caractères). Ce portage reconnaît certains titres et transmet
+ces sections ENTIÈRES, dans l'ordre, en NOMMANT celles qui n'ont pas tenu. Les cinq premiers
+ci-dessus en font partie. Sans titres reconnus, le portage retombe sur un repli qui garde les deux
+bords et jette le MILIEU — or un briefing n'a pas de conclusion à sauver : sa substance est partout.
+Un briefing sans ces titres arrive donc ampute en silence, et personne ne le sait.
+
+**L'ORDRE est un ordre de PRIORITÉ, pas une mise en page.** Le portage empile les sections dans
+l'ordre du texte jusqu'à la borne : ce qui est écrit en dernier est ce qui saute. Mets donc en tête
+ce dont CETTE tâche a le plus besoin — l'ordre ci-dessus est un défaut raisonnable, pas une règle.
+Vérifié par mesure : sur un briefing de 5000 caractères, la troisième section était déjà omise.
+
+Corollaire sur le VOLUME : le total utile vise la borne. Au-delà, tu n'écris pas pour l'étape
+suivante — tu écris pour rien.
+`## Trous` n'est pas un titre reconnu : place-le en dernier, en sachant qu'il sera le premier omis,
+et qu'il sera alors nommé comme absent plutôt que coupé.
 
 Chaque affirmation garde son ancrage. Sans lui, l'étape suivante ne peut pas vérifier, et le doute la
 fera tout relire — le coût que `think` existait pour éviter.
