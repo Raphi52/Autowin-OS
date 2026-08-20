@@ -139,7 +139,8 @@
   display: none;
 }
 .rail.is-collapsed .nav-item {
-  width: 36px;
+  width: 100%;
+  max-width: 36px;
   height: 36px;
   margin-inline: auto;
   justify-content: center;
