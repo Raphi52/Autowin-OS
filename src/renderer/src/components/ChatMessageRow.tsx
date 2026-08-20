@@ -33,8 +33,8 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
             ? '⏳ Orientation…'
             : receipt.status === 'sent'
               ? '✓ Orienté'
-              : receipt.status === 'hors-portee'
-                ? '⏸ Reçue — le run en cours ne peut pas la lire'
+              : receipt.status === 'differee'
+                ? '⏸ Reçue — l’agent la lira à la phase suivante du run'
                 : '⚠ Échec — remis en file'}
         </span>
       </div>

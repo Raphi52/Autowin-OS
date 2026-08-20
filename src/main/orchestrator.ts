@@ -697,6 +697,16 @@ export interface OrchestratorLifecycleDeps {
    * qui rend un run tué très tôt encore reprenable — sans lui, une mort avant la fin de la première
    * phase perdait la tâche entière. Best-effort : une erreur de persistance ne casse JAMAIS le run.
    */
+  /**
+   * Directives utilisateur arrivees PENDANT le run, drainees ENTRE DEUX PHASES.
+   *
+   * « Orienter sans interrompre » ne pouvait pas atteindre un run : le pilote de chat ne draine les
+   * directives qu'entre deux de ses iterations, et pendant une orchestration il est bloque dans
+   * l'appel `orchestrate`. L'utilisateur orientait, et rien ne se passait (mesure du 20/08). La
+   * granularite est la PHASE : on n'interrompt pas un sous-agent en vol, on corrige le cadre de la
+   * phase suivante.
+   */
+  drainDirectives?: (conversationId: string) => string[]
   onPhaseCompleted?: (info: {
     runId: string
     task: string
@@ -3359,10 +3369,29 @@ ${empreinteDepot}`
       phaseContext.push(`[phase ${output.phase}] ${porterVersPhaseSuivante(output.text)}`)
       lastExecText = output.text
     }
+    /**
+     * ORIENTATION EN COURS DE RUN, a la granularite de la PHASE.
+     *
+     * On ne touche pas au sous-agent en vol : ses droits, son bureau isole et son devis sont deja
+     * engages, et l'interrompre pour lui parler serait « interrompre », precisement ce que
+     * l'utilisateur ne demande pas. La directive entre donc dans le contexte de la phase SUIVANTE,
+     * et y reste : c'est une correction du cadre, pas une remarque jetable.
+     */
+    const absorberLesDirectives = (): void => {
+      if (!conversationId) return
+      const directives = this.deps.drainDirectives?.(conversationId) ?? []
+      for (const directive of directives) {
+        phaseContext.push(
+          `DIRECTIVE UTILISATEUR ARRIVEE PENDANT LE RUN — PRIORITAIRE, elle CORRIGE le cadre : ${directive}`
+        )
+      }
+    }
+
     const executePipelinePhase = async (phase: NodePhase): Promise<void> => {
       // SURVIE NIVEAU 3 : phase déjà terminée avant l'interruption → on ne la refait pas. Compté par
       // occurrence : une visite ULTÉRIEURE du même nœud, via une arête de retour, doit bien s'exécuter.
       if (dejaPayee(phase)) return
+      absorberLesDirectives()
       const evidenceStart = aggregatedEvidence.length
       // DECOUPAGE DE TOUTE PHASE (et non du seul `build`). Mesure du 2026-07-28 sur conv-75 : une
       // phase d'exploration monolithique a coute 10,90 $ en 11 min, quand le meme travail decoupe en

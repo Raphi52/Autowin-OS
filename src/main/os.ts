@@ -170,6 +170,12 @@ export class AutowinOS {
    * c'est ce qui empêche deux conversations simultanées de se voler leur workflow. Le champ partagé
    * `activeWorkflow` qui servait avant était l'unique cause de cette contamination.
    */
+  /**
+   * Directives utilisateur en attente pour une conversation, branche par `index.ts` (qui possede la
+   * file). Sans ce fournisseur, un run ne peut pas etre oriente : le pilote de chat est bloque dans
+   * l'appel `orchestrate` et ne draine rien avant la fin.
+   */
+  directivesEnAttente?: (conversationId: string) => string[]
   private readonly orchestratorDeps: OrchestratorDeps
   /**
    * Workflow nommé imposé au run en cours. Les runs d'une confrontation s'enchaînent en série, donc
@@ -431,6 +437,9 @@ export class AutowinOS {
       trust: this.trust,
       executionWorkspace,
       causalMemoryFor: (conversationId) => this.causalMemoryRetriever?.(conversationId) ?? '',
+      // Lue A CHAQUE phase, comme `skillCommands` : le fournisseur est branche par `index.ts` apres
+      // construction, et une valeur figee ici resterait vide.
+      drainDirectives: (conversationId) => this.directivesEnAttente?.(conversationId) ?? [],
       // Lue A CHAQUE phase, pas figee ici : le bus de commandes n'existe pas encore a cet instant.
       skillCommands: () => this.skillCommandRunner,
       // verify-replay EN PROD (opt-in via AUTOWIN_VERIFY_REPLAY) : rejoue la vérif au gate au lieu

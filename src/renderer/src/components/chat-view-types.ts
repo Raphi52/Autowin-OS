@@ -117,13 +117,16 @@ export type DirectiveReceipt = {
   id: number
   text: string
   /**
-   * `hors-portee` : la directive est ACCEPTEE et stockee, mais un run tourne — et un run ne peut pas
-   * la lire. Le pilote ne draine les directives qu'entre deux de ses iterations, et pendant une
-   * orchestration il est bloque a l'interieur de l'appel `orchestrate` ; l'orchestrateur, lui, n'a
-   * aucune prise sur les directives. Dire « Oriente » dans ce cas est un mensonge par omission :
-   * mesure du 20/08, l'utilisateur a oriente et « rien ne se passe ».
+   * `differee` : la directive est acceptee, et un run tourne. Elle n'est pas perdue et elle n'est pas
+   * immediate — l'orchestrateur la draine ENTRE DEUX PHASES et l'ajoute au cadre de la suivante. On
+   * ne parle pas a un sous-agent en vol : ses droits, son bureau isole et son devis sont engages, et
+   * l'interrompre pour lui parler serait « interrompre ».
+   *
+   * Cet etat existe parce que dire « Oriente » couvrait les deux cas : mesure du 20/08, l'utilisateur
+   * a oriente pendant un run et « rien ne se passe » — a l'epoque, litteralement, rien ne pouvait
+   * lire sa directive.
    */
-  status: 'sending' | 'sent' | 'hors-portee' | 'failed'
+  status: 'sending' | 'sent' | 'differee' | 'failed'
   afterMessageIndex: number
   afterPartIndex: number
   afterTextOffset?: number

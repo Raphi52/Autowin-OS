@@ -4912,6 +4912,13 @@ Le fil reprend ensuite normalement.`
    * n'importe quel agent du cockpit. Une à la fois : un train de runs verts ne paie qu'un save.
    */
   let saveEnCours = false
+  /*
+   * ORIENTER UN RUN : l'orchestrateur draine cette meme file ENTRE DEUX PHASES. Sans ce branchement,
+   * `injectDirective` acceptait la directive et personne ne pouvait la lire avant la fin du run —
+   * « j'ai oriente et rien ne se passe » (20/08). Meme file que le pilote de chat, donc une directive
+   * est lue par le premier des deux qui atteint son point de drainage, jamais deux fois.
+   */
+  os.directivesEnAttente = (conversationId) => drainPendingDirectives(conversationId)
   bus.onRunVertPublie = ({ task, publishedCommitSha }) => {
     if (saveEnCours) return
     const corps = skillInstruction('learn')

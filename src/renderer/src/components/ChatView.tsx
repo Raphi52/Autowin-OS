@@ -1444,6 +1444,20 @@ export function ChatView({
     setConversationInterrupting(id, false)
     if (!busyConversationsRef.current.has(id)) return
     setConversationBusy(id, false)
+    /**
+     * Le VERROU D'ENVOI aussi, sans quoi la conversation reste muette par un autre chemin.
+     *
+     * `sendLocksRef` n'est relache que dans le `finally` de l'envoi, donc a la resolution de l'appel
+     * IPC. Or c'est precisement ce cas-la qu'on traite : le main affirme que rien ne tourne pendant
+     * que la promesse du renderer, elle, ne revient pas. Liberer `busy` sans liberer le verrou rend
+     * l'interface debloquee EN APPARENCE — le bouton Envoyer repond, et il ne part rien. Le defaut
+     * du 20/08 se serait rejoue d'un cran plus bas, en plus silencieux.
+     *
+     * Sur : le verrou existe pour empecher un DOUBLE envoi ; quand l'autorite dit qu'aucun tour ne
+     * tourne, un second envoi est legitime. Si la promesse d'origine revient plus tard, son `finally`
+     * supprime une cle deja absente — sans effet.
+     */
+    sendLocksRef.current.delete(id)
     patchLast(id, (message) => {
       message.done = true
       if (message.status === 'streaming') message.status = 'interrupted'
@@ -1480,8 +1494,8 @@ export function ChatView({
    * aucune prise dessus. Annoncer « Oriente » ici est ce qui faisait dire « j'ai oriente et rien ne
    * se passe » (20/08). On distingue donc les deux cas au lieu de les confondre.
    */
-  function issueDeLInjection(conversationId: string): 'sent' | 'hors-portee' {
-    return liveRuns[conversationId]?.status === 'running' ? 'hors-portee' : 'sent'
+  function issueDeLInjection(conversationId: string): 'sent' | 'differee' {
+    return liveRuns[conversationId]?.status === 'running' ? 'differee' : 'sent'
   }
 
   /**

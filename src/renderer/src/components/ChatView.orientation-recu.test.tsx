@@ -59,14 +59,14 @@ describe('ChatView — le reçu d’orientation dit la vérité', () => {
     await act(async () => {})
   }
 
-  it('un RUN en cours ⇒ « le run en cours ne peut pas la lire », pas « Orienté »', async () => {
+  it('un RUN en cours ⇒ « lira à la phase suivante », pas « Orienté »', async () => {
     const { pilote, app, injecte } = await monter()
     await act(async () =>
       app({ type: 'orchestrate-start', convId: 'A', task: '/frame les icônes' })
     )
     await orienter(pilote)
     expect(injecte).toHaveBeenCalled()
-    expect(recu()).toContain('ne peut pas la lire')
+    expect(recu()).toContain('à la phase suivante')
     expect(recu()).not.toContain('Orienté')
   })
 
