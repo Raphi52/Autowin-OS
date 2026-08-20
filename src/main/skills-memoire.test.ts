@@ -60,12 +60,31 @@ describe('skills learn/think — présentes, découvertes, invocables', () => {
     expect(learn.toLowerCase()).toContain('doublon')
   })
 
-  it('think refuse de FABRIQUER une empreinte absente', () => {
-    // Le vrai risque de `think` : combler le vide en lisant le dépôt à la volée, et rendre un résumé
-    // non vérifié indiscernable d'un savoir capitalisé.
+  it('think n’invente rien : il sépare ce qu’il a LU de ce qu’il déduit', () => {
+    /**
+     * Le risque de `think` n'a pas changé avec sa redéfinition (2026-08-20, de « charger l'empreinte
+     * du dépôt » à « réunir ce que la tâche exige ») : rendre un savoir SUPPOSÉ sous les apparences
+     * d'un savoir ÉTABLI. C'est le defaut le plus couteux de cette etape — il traverse toutes les
+     * phases suivantes sans jamais etre requestionne. Le test suit la garantie, pas la formulation.
+     */
     const think = corpsDe('think')
-    expect(think).toMatch(/AUCUNE empreinte/i)
-    expect(think.toLowerCase()).toContain('/learn')
+    expect(think.toLowerCase()).toContain('établi')
+    expect(think.toLowerCase()).toContain('supposé')
+    expect(think).toMatch(/n'invente rien|n’invente rien/i)
+  })
+
+  it('think nomme ce qu’il n’a PAS trouvé — une couverture partielle passe sinon pour complète', () => {
+    const think = corpsDe('think')
+    expect(think.toLowerCase()).toContain('trou')
+  })
+
+  it('think reste borné à la tâche, et le dit', () => {
+    // Son mode d'echec est le deballage : un contexte qui remplit la fenetre avant le premier geste
+    // a depense exactement ce qu'il pretendait economiser.
+    const think = corpsDe('think')
+    expect(think.toLowerCase()).toContain('tâche')
+    expect(think).toMatch(/scout/i)
+    expect(think).toMatch(/frame/i)
   })
 
   it('think date ce qu’il charge, au lieu de le présenter comme actuel', () => {

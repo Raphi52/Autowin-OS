@@ -9,7 +9,7 @@ description: Écrit dans le Brain l'EMPREINTE du dépôt courant — ce qu'il es
 
 Un dépôt se redécouvre à chaque conversation : on relit les mêmes fichiers pour réapprendre les mêmes
 choses, et on repaie cette lecture à chaque fois. `learn` écrit une fois ce qui restera vrai, pour que
-`think` le rende en une requête.
+`think` le retrouve le jour où une tâche en a besoin.
 
 Ce qui est capitalisé n'est pas un résumé de code — le code se relit. C'est ce qu'on ne peut PAS
 déduire d'un fichier isolé : à quoi sert cette pièce, **pourquoi** elle est ainsi, **comment** les

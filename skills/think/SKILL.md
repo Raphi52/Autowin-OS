@@ -1,70 +1,98 @@
 ---
 name: think
-description: Charge dans la conversation l'EMPREINTE du dépôt courant écrite par `learn` — ce qu'il est, ce qu'il fait, pourquoi et comment — et signale ce qui a bougé depuis. Déclencher sur `/think`, « charge le contexte de la codebase », « remets-toi dans ce projet », « qu'est-ce que je sais déjà de ce dépôt », ou en ouverture d'une conversation sur un dépôt déjà connu. NE PAS utiliser pour répondre à une question ponctuelle sur un fichier (lire le fichier coûte moins cher), ni pour découvrir un dépôt sans empreinte : dans ce cas, dis-le et propose `/learn`.
+description: Rassemble ce qu'il faut savoir pour résoudre la tâche en cours, et rien de plus. Part de la tâche, en déduit les connaissances nécessaires, va les chercher (mémoire durable, code, décisions passées), et rend un briefing dense et ancré. Déclencher sur `/think`, « donne-moi le contexte pour faire X », « de quoi as-tu besoin pour traiter ça », ou en tête d'un workflow dont les étapes suivantes travailleront sur un terrain qu'elles ne connaissent pas. NE PAS utiliser pour CHERCHER quoi faire (c'est `scout`), pour cadrer un besoin (c'est `frame`), ni pour répondre à une question ponctuelle sur un fichier — l'ouvrir coûte moins cher.
 ---
 
-# Think — remettre le dépôt dans le contexte
+# Think — le contexte que la tâche exige, et rien de plus
 
 ## À quoi ça sert
 
-Éviter de repayer la redécouverte. Une conversation qui commence par relire vingt fichiers pour
-réapprendre ce que le dépôt fait dépense son contexte avant d'avoir commencé à travailler.
+Une tâche échoue rarement faute d'intelligence : elle échoue parce qu'on ignorait un fait qu'on
+aurait pu connaître. Une décision déjà prise et rejouée, un piège déjà payé, une contrainte qui vit
+dans un fichier qu'on n'a pas ouvert.
 
-## Ce que tu rends, et dans quel ordre
+`think` est l'étape qui va chercher ces faits **avant** que le travail commence, pour que les étapes
+suivantes ne les redécouvrent pas — ou pire, les ignorent.
 
-L'ordre n'est pas cosmétique : il suit ce dont on a besoin pour décider.
+## Le principe qui gouverne tout le reste
 
-1. **Ce que c'est** — le produit, son utilisateur, le problème qu'il résout.
-2. **Ce qu'il fait** — ses capacités, telles qu'un utilisateur les voit.
-3. **Comment** — les mécanismes et leurs frontières : qui appelle qui, ce qui est interdit et pourquoi.
-4. **Pourquoi** — les décisions et leur motif, en particulier les options ÉCARTÉES : c'est ce qui
-   empêche de les reproposer.
-5. **Les pièges** — ce qui a déjà coûté cher, avec son coût observé.
+**La tâche commande.** On ne charge pas « ce qu'on sait du dépôt » : on charge ce que CETTE tâche
+exige. Sans tâche, `think` n'a rien à viser et doit le dire au lieu de déballer un panorama.
+
+Le mode d'échec n'est pas d'en dire trop peu, c'est d'en dire trop. Un contexte qui remplit la
+fenêtre avant le premier geste a dépensé exactement ce qu'il prétendait économiser. **Ce que tu
+n'injectes pas est un choix aussi délibéré que ce que tu injectes.**
 
 ## Procédure
 
-### 1. Identifie le dépôt
+### 1. Nomme ce qu'il faut savoir
 
-Nom du dépôt et `git rev-parse --short HEAD`. Le SHA sert à mesurer l'écart avec l'empreinte.
+Avant toute recherche, écris la liste — courte — des questions dont la réponse change la façon de
+traiter la tâche. Typiquement :
 
-### 2. Interroge le Brain
+- **Où** ça se joue : les fichiers, modules ou tables réellement concernés.
+- **Ce qui existe déjà** : le mécanisme en place, pour ne pas en construire un second à côté.
+- **Ce qui a été décidé** : les choix passés sur ce terrain, et surtout les options ÉCARTÉES — c'est
+  ce qui empêche de les reproposer.
+- **Ce qui a déjà coûté** : les pièges connus, avec leur coût observé.
+- **Ce qui contraint** : conventions, limites de plateforme, règles non négociables.
 
-`brain_query` avec « empreinte <nom du dépôt> ». Si le retour est maigre, pose une seconde question
-sur un domaine précis (« <dépôt> décisions », « <dépôt> pièges ») plutôt que de conclure au vide :
-une seule question ne couvre pas un dépôt entier.
+Une question dont la réponse ne changerait rien à la façon de faire n'a pas sa place ici. C'est le
+filtre qui empêche `think` de devenir un déballage.
 
-### 3. AUCUNE empreinte ? Dis-le, ne la fabrique pas
+### 2. Va chercher, aux deux sources
 
-Sans empreinte, tu ne charges rien. Ne comble PAS le vide en lisant le dépôt à la volée pour produire
-un résumé qui ressemblerait à une empreinte : ce serait un résumé non vérifié, indiscernable d'un
-savoir capitalisé. Dis qu'il n'y en a pas et propose `/learn`.
+- **La mémoire durable** (`brain_query`) — pour les décisions, les motifs et les pièges. Une seule
+  question ne couvre pas un domaine : si le retour est maigre, re-questionne sur un angle précis
+  plutôt que de conclure au vide.
+- **Le code lui-même** — pour l'état ACTUEL. La mémoire dit où regarder et pourquoi ; elle ne dit pas
+  ce que le fichier contient aujourd'hui.
 
-### 4. Mesure l'ÂGE de ce que tu charges
+Les deux, pas l'une ou l'autre : la mémoire sans le code est datée, le code sans la mémoire a perdu
+ses motifs.
 
-Chaque fait porte un ancrage `git:<chemin>@<sha>`. Compare ce SHA à `HEAD` :
+### 3. N'invente rien, et distingue les deux registres
 
-- **même SHA** → l'empreinte décrit le code courant ;
-- **SHA différent** → dis-le, avec le nombre de commits d'écart. L'empreinte reste utile — les
-  mécanismes et les motifs bougent lentement — mais un chemin de fichier peut avoir changé.
+Un fait que tu n'as pas lu quelque part n'est pas un fait. Marque chaque élément :
 
-Ce point n'est pas une formalité : un savoir daté cité comme actuel est exactement ce qui fait perdre
-des heures sur un fichier qui a été déplacé ou supprimé.
+- **établi** — tu l'as lu : donne l'ancrage (`fichier:ligne`, ou la fiche mémoire).
+- **supposé** — tu le déduis : dis-le comme tel.
 
-### 5. Restitue, sans recopier
+Un savoir supposé présenté comme établi est le défaut le plus coûteux de cette étape : il traverse
+toutes les phases suivantes sans jamais être requestionné, parce que plus personne ne sait qu'il
+fallait le vérifier.
 
-Rends l'empreinte dans l'ordre ci-dessus, en prose dense. Pas de copier-coller du Brain : ce qui est
-utile, c'est la synthèse qui tient dans le contexte, pas le corpus.
+### 4. Date ce que tu charges
 
-Chaque affirmation garde son ancrage `fichier` — sans lui, la conversation suivante ne pourra pas
-vérifier, et le doute la fera tout relire.
+Un fait mémorisé porte un ancrage `git:<chemin>@<sha>`. Compare-le à `HEAD` : SHA différent → dis-le.
+Les mécanismes et les motifs bougent lentement, un chemin de fichier non. Un savoir daté cité comme
+actuel fait perdre des heures sur un fichier déplacé.
 
-### 6. Nomme ce que tu n'as PAS
+### 5. Rends un briefing, pas un corpus
 
-Un domaine absent de l'empreinte doit être dit absent. Un chargement qui présente une couverture
-partielle comme complète est pire qu'un chargement vide : on croit savoir.
+En prose dense, organisée par ce que la tâche va devoir décider — pas par source. Aucun copier-coller
+de la mémoire : ce qui sert, c'est la synthèse qui tient en contexte.
 
-## Après le chargement
+Chaque affirmation garde son ancrage. Sans lui, l'étape suivante ne peut pas vérifier, et le doute la
+fera tout relire — le coût que `think` existait pour éviter.
 
-Tu as le contexte, pas la vérité du jour. Avant toute action qui dépend d'un détail de l'empreinte —
-un chemin, une signature, un nom de commande — **vérifie ce détail dans le code**. L'empreinte dit où
-regarder et pourquoi ; elle ne remplace pas la lecture du fichier que tu vas modifier.
+### 6. Nomme les trous
+
+Termine par ce que tu n'as PAS trouvé, et qui manque. Une couverture partielle présentée comme
+complète est pire qu'un contexte vide : on croit savoir. Un trou nommé devient une question que
+l'étape suivante saura poser ; un trou passé sous silence devient une hypothèse que personne ne
+testera.
+
+## Ce que `think` ne fait pas
+
+- **Il ne cherche pas quoi faire** — la tâche est déjà donnée. Chercher une tâche, c'est `scout`.
+- **Il ne cadre pas le besoin** — délimiter le problème et son critère de réussite, c'est `frame`.
+- **Il ne décide pas** — il donne de quoi décider. Une recommandation glissée ici court-circuite le
+  cadrage qui vient après.
+- **Il ne modifie rien.** Lecture seule, par construction.
+
+## Après
+
+Le briefing dit où regarder et pourquoi. Il ne remplace pas la lecture du fichier que tu vas
+modifier : avant tout geste qui dépend d'un détail — un chemin, une signature, un nom de commande —
+**vérifie ce détail dans le code**.
