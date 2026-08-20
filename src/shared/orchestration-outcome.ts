@@ -1,6 +1,7 @@
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { formatCostCoverage, formatUsd, resolveCostCoverage } from './cost-estimate'
 import type { TokenUsage } from './token-usage'
+import { phasesRestantes, runDAnalyseSeule } from './portee-de-phase'
 
 /**
  * CARTE DE LIVRAISON d'une orchestration — les faits, pas une formule.
@@ -902,8 +903,45 @@ export function runLabelFromPath(path: string | undefined): string | undefined {
   return workspace?.replace(/-workspace$/, '') ?? segments.at(-2)
 }
 
-/** Bloc final dérivé uniquement de l'issue structurée, après retrait du statut provisoire du worker. */
-function deliveredClosingBlock(): string[] {
+/** Les phases REELLEMENT jouees, telles que l'orchestrateur les rend. */
+export function phasesJouees(outcome: OrchestrationOutcome | undefined): string[] {
+  const sorties = (outcome as { phaseOutputs?: unknown } | undefined)?.phaseOutputs
+  if (!Array.isArray(sorties)) return []
+  return sorties
+    .map((sortie) => (sortie as { phase?: unknown })?.phase)
+    .filter((phase): phase is string => typeof phase === 'string' && phase.trim().length > 0)
+}
+
+/**
+ * Bloc final derive de l'issue structuree — et de la PORTEE reellement jouee.
+ *
+ * DEFAUT VECU le 20/08. Ce bloc etait une constante : il annoncait « Reste a faire : rien » et
+ * « passer a la prochaine demande » pour TOUTE issue livree, y compris un `/frame` seul. L'utilisateur
+ * avait ecrit noir sur blanc « ce tour ne joue que la phase frame : la suite s'enchaine au tour
+ * suivant », a recu ce bloc, et a repondu au tour suivant : « la vache t'as deja tout fait ? ».
+ * Il n'avait pas mal lu — l'application le lui avait dit.
+ *
+ * Ce n'etait donc PAS une hallucination du modele : le pilote clot ce tour mecaniquement et ce texte
+ * vient d'ici. Une garde comportementale ou une relance n'y auraient rien change ; c'est le gabarit
+ * qui mentait, et un gabarit se corrige sans appel supplementaire.
+ *
+ * Une phase d'ANALYSE rend un livrable, elle ne realise pas le besoin. Le bloc nomme donc la phase
+ * jouee et ce qui reste de la chaine, au lieu d'inviter a passer a autre chose.
+ */
+function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
+  const phases = phasesJouees(outcome)
+  if (runDAnalyseSeule(phases)) {
+    const restantes = phasesRestantes(phases)
+    const suite = restantes.length ? restantes.join(' → ') : 'la suite du pipeline'
+    return [
+      '---',
+      '✅ Fait',
+      `1. Le livrable de la phase ${phases.join(', ')} a été produit et validé.`,
+      "📍 Maintenant : cette phase est rendue — le besoin lui-même n'est PAS réalisé, rien n'a été muté.",
+      `⏳ Reste à faire : ${suite}.`,
+      `👉 Recommandé : lancer ${restantes[0] ?? 'la phase suivante'}.`
+    ]
+  }
   return [
     '---',
     '✅ Fait',
@@ -925,20 +963,31 @@ function authoritativeDeliveredClosingBlockSpan(
   )
   const fact = visible.indexOf('✅ Fait')
   const factLine = visible[fact + 1]
+  /*
+   * La forme d'ANALYSE SEULE nomme la phase jouee, donc sa premiere ligne varie. Sans elle ici, le
+   * bloc honnete n'etait pas reconnu comme celui d'Autowin — et `reconcileClosedOrchestrationText`
+   * le RETIRAIT au rechargement, faisant disparaitre la cloture corrigee. C'est la regression que
+   * le correctif du gabarit portait sans le dire : un bloc qu'on ecrit doit aussi etre relu.
+   */
+  const formeAnalyse = /^1\. Le livrable de la phase .+ a été produit et validé\.$/u
   if (
     fact < 0 ||
     (factLine !== '1. Workflow livré : gate validé et RUN fermé green.' &&
-      factLine !== '1. Le résultat demandé a été produit et validé.')
+      factLine !== '1. Le résultat demandé a été produit et validé.' &&
+      !(factLine && formeAnalyse.test(factLine)))
   ) {
     return undefined
   }
   const now = visible.findIndex(
     (line, index) => index > fact && line?.startsWith('📍 Maintenant :')
   )
-  const remaining = visible.indexOf('⏳ Reste à faire : rien.', now + 1)
-  const recommended = visible.indexOf(
-    '👉 Recommandé : passer à la prochaine demande.',
-    remaining + 1
+  // Les deux dernieres lignes varient sur la forme d'analyse (« terrain → build … », « lancer
+  // terrain »). On garde la PRECISION par l'ordre impose plus bas : ✅ puis 📍 puis ⏳ puis 👉.
+  const remaining = visible.findIndex(
+    (line, index) => index > now && Boolean(line?.startsWith('⏳ Reste à faire :'))
+  )
+  const recommended = visible.findIndex(
+    (line, index) => index > remaining && Boolean(line?.startsWith('👉 Recommandé :'))
   )
   if (!(fact < now && now < remaining && remaining < recommended)) return undefined
   const start = fact > 0 && visible[fact - 1] === '---' ? fact - 1 : fact
@@ -1049,6 +1098,6 @@ export function formatOrchestrationOutcome(
   }
   if (visibleResult) lines.push('', boundedMarkdownResult(visibleResult))
   if (closingNotice?.trim()) lines.push('', closingNotice.trim())
-  if (delivered) lines.push('', ...deliveredClosingBlock())
+  if (delivered) lines.push('', ...deliveredClosingBlock(data))
   return lines.join('\n')
 }
