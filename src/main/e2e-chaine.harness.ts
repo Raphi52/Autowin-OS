@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 import type { AutowinOS } from './os'
+import type { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 import type { ProviderAdapter } from './providers/types'
 
 /**
@@ -86,8 +87,30 @@ export async function monterOsReel(
   return os
 }
 
-/** Remet l'environnement de processus en etat. A appeler meme quand le test echoue. */
-export function demonterOs(jetable?: DepotJetable): void {
+/**
+ * Remet l'environnement en etat. A appeler meme quand le test echoue.
+ *
+ * MESURE du 2026-08-20 : sans le relachement des copies, cinq worktrees ORPHELINS sont restes dans
+ * le store apres cinq executions — leur `.git` pointant vers un depot temporaire deja supprime. Un
+ * test qui laisse des copies derriere lui a chaque passe fait exactement ce que ce depot combat, et
+ * l'arbre de cette machine en porte deja quinze. On relache donc les runs encore tenus AVANT de
+ * supprimer le depot, sinon la copie perd sa base et devient inatteignable par son propre proprietaire.
+ */
+export async function demonterOs(
+  os?: { worktrees?: Pick<RunWorktreeCoordinator, 'activity' | 'endAsync'> },
+  jetable?: DepotJetable
+): Promise<void> {
+  const coordinateur = os?.worktrees
+  if (coordinateur) {
+    for (const copie of coordinateur.activity()) {
+      // Best-effort assume : on demonte, un refus ici ne doit pas masquer l'echec du test lui-meme.
+      try {
+        await coordinateur.endAsync(copie.agentId)
+      } catch {
+        /* la suppression du depot ci-dessous emporte le reste */
+      }
+    }
+  }
   delete process.env[AUTOWIN_WORKSPACE_ENV]
   if (jetable) rmSync(jetable.racine, { recursive: true, force: true })
 }

@@ -57,15 +57,18 @@ class ProviderSimule implements ProviderAdapter {
 
 describe('e2e — du message de chat a la mutation prouvee', () => {
   let jetable: DepotJetable | undefined
-  afterEach(() => {
-    demonterOs(jetable)
+  let osCourant: Awaited<ReturnType<typeof monterOsReel>> | undefined
+  afterEach(async () => {
+    await demonterOs(osCourant, jetable)
     jetable = undefined
+    osCourant = undefined
   })
 
   it('INCREMENT 1 — le tour de chat atteint le coordinateur REEL et en recoit une copie', async () => {
     jetable = creerDepotJetable(CIBLE, AVANT)
     const provider = new ProviderSimule()
     const os = await monterOsReel(jetable.depot, provider)
+    osCourant = os
 
     const conversation = os.conversations.create({
       title: 'e2e chaine complete',

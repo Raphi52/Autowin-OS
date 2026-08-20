@@ -34,9 +34,11 @@ class AdaptateurSonde implements ProviderAdapter {
 
 describe('TERRAIN — le harnais atteint le vrai code', () => {
   let jetable: DepotJetable | undefined
-  afterEach(() => {
-    demonterOs(jetable)
+  let osCourant: Awaited<ReturnType<typeof monterOsReel>> | undefined
+  afterEach(async () => {
+    await demonterOs(osCourant, jetable)
     jetable = undefined
+    osCourant = undefined
   })
 
   it('provider simule selectionne, coordinateur reel present et acquerant', async () => {
@@ -47,6 +49,7 @@ describe('TERRAIN — le harnais atteint le vrai code', () => {
     const adaptateur = new AdaptateurSonde()
     const t1 = Date.now()
     const os = await monterOsReel(jetable.depot, adaptateur)
+    osCourant = os
     const tOs = Date.now() - t1
 
     // 1. le binding pointe vraiment sur le simule, sur les quatre roles
