@@ -1,19 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { evaluateClosure, type ClosureState } from './stopgate'
+import { CLOSURE_UPSTREAM_REFUSAL, evaluateClosure, type ClosureState } from './stopgate'
 
 describe('evaluateClosure', () => {
   it('bloque le statut "open"', () => {
     const state: ClosureState = { status: 'open', dod: [] }
     const result = evaluateClosure(state)
     expect(result.blocked).toBe(true)
-    expect(result.reasons.some((r) => r.includes('open'))).toBe(true)
+    expect(result.reasons.some((r) => r.includes('pas terminé'))).toBe(true)
   })
 
   it('bloque le statut "red"', () => {
     const state: ClosureState = { status: 'red', dod: [] }
     const result = evaluateClosure(state)
     expect(result.blocked).toBe(true)
-    expect(result.reasons.some((r) => r.includes('red'))).toBe(true)
+    expect(result.reasons).toContain(CLOSURE_UPSTREAM_REFUSAL)
   })
 
   it('bloque une DoD à contenu non cochée', () => {
@@ -23,7 +23,7 @@ describe('evaluateClosure', () => {
     }
     const result = evaluateClosure(state)
     expect(result.blocked).toBe(true)
-    expect(result.reasons.some((r) => r.includes('DoD'))).toBe(true)
+    expect(result.reasons.some((r) => r.includes('Promis mais pas fait'))).toBe(true)
   })
 
   it('ne bloque pas une DoD non cochée SANS contenu', () => {
@@ -44,7 +44,7 @@ describe('evaluateClosure', () => {
     }
     const result = evaluateClosure(state)
     expect(result.blocked).toBe(true)
-    expect(result.reasons.some((r) => r.includes('Signal rouge'))).toBe(true)
+    expect(result.reasons.some((r) => r.includes('Vérification en échec'))).toBe(true)
   })
 
   it('ne bloque jamais "degraded-closed", même avec DoD rouge et signal rouge', () => {

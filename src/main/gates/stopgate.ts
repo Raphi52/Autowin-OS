@@ -25,11 +25,17 @@ export interface ClosureState {
 /**
  * Le refus qu'un nouveau passage de BUILD ne peut pas lever.
  *
+ * FORMULATION : ces motifs s'affichent dans le fil de conversation, donc ils sont écrits pour
+ * l'utilisateur, pas pour le moteur. Demandé le 20/08 apres conv-1334 (« Statut "red" : la clôture a
+ * été refusée en amont. / DoD non tenue : … — je comprends même pas ce que ça veut dire »). Ni
+ * `red`, ni « clôture », ni « DoD » : le vocabulaire interne reste dans le code.
+ *
  * Il ne parle pas du livrable : le RUN est rouge en amont, et rien de ce que build produira ne
  * changera ce statut. Toutes les autres raisons (DoD non tenue, signal rouge) sont au contraire
  * exactement ce qu'une réparation adresse.
  */
-export const CLOSURE_UPSTREAM_REFUSAL = 'Statut "red" : la clôture a été refusée en amont.'
+export const CLOSURE_UPSTREAM_REFUSAL =
+  "Échec déjà déclaré : ce travail s'est lui-même terminé en échec, ce contrôle ne fait que le relayer."
 
 /**
  * Faut-il ARRÊTER la boucle de réparation plutôt que de payer un passage de plus ?
@@ -80,7 +86,7 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
   const reasons: string[] = []
 
   if (state.status === 'open') {
-    reasons.push('Statut "open" : le travail n\'est pas fermé.')
+    reasons.push("Travail pas terminé : personne ne l'a déclaré fini, ni réussi ni raté.")
   } else if (state.status === 'red') {
     // NE PAS inventer la cause. Ce message affirmait « un signal de vérification est en échec »
     // alors que le gate ne sait PAS si un signal a tourné : `red` peut venir d'un avis de juge, d'une
@@ -99,13 +105,15 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
       .filter((label): label is string => !!label)
     reasons.push(
       libelles.length > 0
-        ? `DoD non tenue : ${libelles.map((l) => `« ${l} »`).join(', ')}.`
-        : `DoD non tenue : ${uncheckedContentItems.length} case(s) à contenu réel non cochée(s).`
+        ? `Promis mais pas fait : ${libelles.map((l) => `« ${l} »`).join(', ')}.`
+        : `Promis mais pas fait : ${uncheckedContentItems.length} point(s) annoncé(s) au départ ne sont pas faits.`
     )
   }
 
   if (state.signalExitCode !== undefined && state.signalExitCode !== 0) {
-    reasons.push(`Signal rouge : code de sortie ${state.signalExitCode} != 0.`)
+    reasons.push(
+      `Vérification en échec : la commande de contrôle a rendu le code ${state.signalExitCode} (0 = réussi).`
+    )
   }
 
   return { blocked: reasons.length > 0, reasons }

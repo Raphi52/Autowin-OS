@@ -71,13 +71,15 @@ describe('gate de clôture — une raison par fait, et aucune cause inventée', 
   it('n AFFIRME PAS qu un signal de vérification a échoué quand aucun n a tourné', () => {
     const sansSignal = evaluateClosure({ status: 'red', dod: [] })
     expect(sansSignal.reasons.join(' ')).not.toMatch(/signal de v[eé]rification/i)
-    // La raison doit rester vraie et actionnable : le statut est rouge, point.
-    expect(sansSignal.reasons.join(' ')).toMatch(/red|rouge/i)
+    // La raison doit rester vraie et actionnable : ce travail s'est terminé en échec, point. (Le
+    // mot « red » a disparu des messages — ils sont écrits pour l'utilisateur, cf.
+    // `gates/stopgate.messages.test.ts` — mais le FAIT qu'ils énoncent, lui, est inchangé.)
+    expect(sansSignal.reasons.join(' ')).toMatch(/échec/i)
   })
 
   it('NOMME le signal quand il a réellement tourné et rendu un code non nul', () => {
     const avecSignal = evaluateClosure({ status: 'red', dod: [], signalExitCode: 2 })
-    expect(avecSignal.reasons.join(' ')).toMatch(/code de sortie 2/)
+    expect(avecSignal.reasons.join(' ')).toMatch(/code 2/)
   })
 
   it('NOMME les cases de DoD non tenues, au lieu de les compter', () => {
@@ -102,7 +104,7 @@ describe('gate de clôture — une raison par fait, et aucune cause inventée', 
       dod: [{ checked: false, hasContent: true }]
     })
     expect(evaluation.blocked).toBe(true)
-    expect(evaluation.reasons.join(' ')).toMatch(/1 case/i)
+    expect(evaluation.reasons.join(' ')).toMatch(/1 point/i)
   })
 
   it('une clôture dégradée assumée ne bloque jamais, quel que soit le reste', () => {
