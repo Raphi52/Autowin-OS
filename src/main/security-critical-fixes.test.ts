@@ -145,7 +145,15 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     // mesurées ce jour-là portaient des fichiers non committés. Il porte son garde
     // (`assertTrustedRendererSender`) et valide son argument par expression régulière, donc
     // `unguarded` reste VIDE : la surface grandit d'un canal, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(135)
+    // MISE A JOUR 2026-08-20 — 135 → 136. UN canal ajoute (commit d813b245, « un tour fantome ne
+    // peut plus rendre une conversation muette ») : `os:pilotChat:active`, qui dit si un tour de chat
+    // est encore actif pour une conversation. Il porte `assertTrustedRendererSender` des sa PREMIERE
+    // ligne et valide son argument par `guardString` — relu ligne a ligne, `unguarded` reste VIDE.
+    //
+    // A noter pour la prochaine fois : le compte est assert AVANT `unguarded`, donc un fil-piege qui
+    // saute masque la garantie de securite au lieu de la reveler. Le compte a echoue ici sans qu'on
+    // sache, jusqu'a relecture manuelle, si un canal etait non garde.
+    expect(handlers).toHaveLength(136)
     expect(unguarded).toEqual([])
   })
 
