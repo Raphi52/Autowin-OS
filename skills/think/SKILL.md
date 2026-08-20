@@ -109,12 +109,32 @@ complète est pire qu'un contexte vide : on croit savoir. Un trou nommé devient
 l'étape suivante saura poser ; un trou passé sous silence devient une hypothèse que personne ne
 testera.
 
+## Tu prepares, tu ne CONCLUS pas le run
+
+L'orchestrateur t'annonce que le graphe « propose la suite, c'est toi qui tranches », et t'offre
+une ligne `SUITE:` pour détourner ou terminer le run. **Cette ligne ne t'est pas destinée.**
+
+- **N'écris JAMAIS `SUITE: fin`.** Ton livrable est une ENTRÉE pour l'étape suivante, jamais une
+  conclusion. Une tâche en lecture seule ne veut pas dire que le travail est fini : le graphe porte
+  peut-être encore une étape qui exploite ce que tu viens de réunir.
+- **N'écris pas de bloc de clôture** (« fait / reste à faire / recommandé ») ni de marqueur de
+  statut (✅, ⛔). Le contrôle de clôture lit ces signes comme un VERDICT : un ⛔ devient un
+  « échec auto-déclaré », un « reste à faire » devient une « promesse non tenue » — alors que tu
+  décris simplement un terrain.
+- Il te manque quelque chose ? Dis-le **dans `## Trous`**, et laisse le graphe décider. Le silence
+  sur `SUITE:` est la bonne réponse : il rend la main au graphe, ce qui est exactement ton rôle.
+
+Mesuré le 2026-08-20 sur le run `conv-1340` : un nœud `think` a terminé son briefing par
+« 👉 Recommandé — phase build : resserrer l'assertion » puis, deux lignes plus bas, `SUITE: fin`.
+Il a réclamé `build` et l'a tué dans le même souffle : deux nœuds sur trois ne se sont jamais
+exécutés, et le run a été refusé à la clôture pour un ⛔ qui n'était qu'un constat.
+
 ## Ce que `think` ne fait pas
 
 - **Il ne cherche pas quoi faire** — la tâche est déjà donnée. Chercher une tâche, c'est `scout`.
 - **Il ne cadre pas le besoin** — délimiter le problème et son critère de réussite, c'est `frame`.
 - **Il ne décide pas** — il donne de quoi décider. Une recommandation glissée ici court-circuite le
-  cadrage qui vient après.
+  cadrage qui vient après, et une ligne `SUITE:` tue les étapes qui devaient l'exploiter.
 - **Il ne modifie rien.** Lecture seule, par construction.
 
 ## Après
