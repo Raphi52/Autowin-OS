@@ -230,8 +230,46 @@ export function porterSortieDePhase(texte: string, cap: number): PortageResultat
   // `'abc'` et pas `'ab'` : avec 2 caractères pour `head + tail = 2`, `clampMiddle` prend son retour
   // anticipé (`text.length <= head + tail`) et rend le texte sans marqueur — la sonde mesurait 0.
   const gabarit = clampMiddle('abc', 1, 1).length - 2 // marqueur avec un compte à 1 chiffre
-  const marqueur = gabarit - 1 + String(propre.length).length
-  const utile = Math.max(0, cap - marqueur)
+  const largeurMarqueur = (omis: number): number => gabarit - 1 + String(Math.max(1, omis)).length
+
+  /**
+   * POINT FIXE, en un pas — et il corrige une réservation qui surestimait d'un caractère.
+   *
+   * Le marqueur annonce le nombre de caractères OMIS, donc sa largeur dépend des chiffres de ce
+   * nombre… qui dépend lui-même de la place laissée par le marqueur. La première version réservait
+   * la place d'après les chiffres de la longueur TOTALE, une borne supérieure : dès que le compte
+   * omis retombait sous une puissance de 10, elle réservait un caractère de trop et le budget
+   * n'était pas rempli. Mesuré : `porterSortieDePhase('x'.repeat(1000), 200)` rendait 199 au lieu
+   * de 200 — un caractère de substance abandonné en silence, et un commentaire qui affirmait
+   * pourtant « rempli au caractère près ».
+   *
+   * On part donc de la borne supérieure, on en déduit le compte omis réel, et on RE-mesure. Un seul
+   * pas suffit : la largeur ne varie que par le nombre de chiffres, et le second calcul ne peut que
+   * la réduire — jamais osciller.
+   */
+  const utileMajorant = Math.max(0, cap - largeurMarqueur(propre.length))
+  const utile = Math.max(0, cap - largeurMarqueur(propre.length - utileMajorant))
+
+  /**
+   * `cap` plus petit que le marqueur : il n'y a de place pour AUCUN contenu.
+   *
+   * Sans cette garde, `tete` et `queue` valaient 0, et `clampMiddle(propre, 0, 0)` retombait sur le
+   * piège `slice(-0) === slice(0)` — il rendait le texte ENTIER précédé du marqueur, que la garde
+   * finale tronquait ensuite à `cap`. Le résultat était un FRAGMENT DU MARQUEUR : « \n… [520 ca »
+   * pour `cap=10`. La borne était respectée et le contenu n'avait aucun sens — il annonçait une
+   * omission sans jamais montrer ni tête ni queue. Inatteignable en production (`PHASE_CONTEXT_CAP`
+   * vaut 2000) mais atteignable par l'API publique, donc par un futur appelant.
+   */
+  if (utile <= 0) {
+    const rendu = propre.slice(0, cap)
+    return {
+      texte: rendu,
+      voie: 'tete-queue',
+      omises: sections.filter((s) => s.corps).map((s) => s.titre),
+      coupes: propre.length - rendu.length
+    }
+  }
+
   const tete = Math.floor(utile * PART_TETE)
   const queue = utile - tete
   const brut = clampMiddle(propre, tete, queue)

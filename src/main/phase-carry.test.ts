@@ -300,6 +300,37 @@ describe('JD2 — le compte annoncé correspond à ce qui est réellement rendu'
     for (const cap of [500, 2000, 5000]) {
       expect(porterSortieDePhase('x'.repeat(cap * 4), cap).texte).toHaveLength(cap)
     }
+
+    // L'ÉCHANTILLON ÉLARGI, et il a fallu qu'un relecteur me le demande. Les trois cas ci-dessus
+    // partagent une propriété que je n'avais pas vue : le compte d'omission y a le MÊME nombre de
+    // chiffres que la longueur totale. L'affirmation « rempli au caractère près » n'était donc
+    // vérifiée que sur les entrées où mon calcul ne pouvait pas se tromper. Les tailles juste
+    // au-dessus d'une puissance de 10 sont celles où le compte omis retombe d'un chiffre — et là,
+    // la réservation surestimait : `('x'.repeat(1000), 200)` rendait 199. Corrigé par un point fixe.
+    // MATRICE reprise TELLE QUELLE d'un relecteur externe, plutôt que la mienne : vérifier un
+    // correctif contre ses propres cas ne prouve pas qu'il couvre ceux qui l'ont mis en défaut.
+    // Sur ces 42 combinaisons, le rendu faisait systématiquement `cap - 1` avant le point fixe.
+    for (const taille of [1000, 1001, 9999, 10_000, 10_001, 99_999, 100_000, 100_001, 1_000_001]) {
+      for (const cap of [100, 200, 500, 999, 1000, 2000, 5000]) {
+        if (taille <= cap) continue
+        expect(porterSortieDePhase('x'.repeat(taille), cap).texte).toHaveLength(cap)
+      }
+    }
+  })
+
+  it('un cap trop petit pour le marqueur rend du CONTENU, pas un fragment de marqueur', () => {
+    // `clampMiddle(propre, 0, 0)` retombait sur `slice(-0) === slice(0)` et rendait le texte entier
+    // précédé du marqueur, tronqué ensuite à `cap` : le rendu était un morceau du MARQUEUR
+    // (« marqueur… » pour cap=10), qui annonce une omission sans montrer ni tête ni queue.
+    for (const cap of [1, 5, 10, 20, 27]) {
+      const entree = `DEBUT_${'x'.repeat(500)}_FIN`
+      const r = porterSortieDePhase(entree, cap)
+      expect(r.texte.length).toBeLessThanOrEqual(cap)
+      // Du CONTENU, et pas un morceau du marqueur : le début du texte, tout simplement.
+      expect(r.texte).not.toContain('caractères omis')
+      expect(r.texte).toBe(entree.slice(0, cap))
+      expect(r.coupes).toBe(entree.length - r.texte.length)
+    }
   })
 
   it('reste borné et cohérent sur des tailles où le compte change de nombre de chiffres', () => {
