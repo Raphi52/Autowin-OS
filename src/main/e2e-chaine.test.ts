@@ -167,5 +167,30 @@ describe('e2e — du message de chat a la mutation prouvee', () => {
      * l'utilisateur constate — le fichier a change dans SON depot, pas dans une copie qu'il ne voit pas.
      */
     expect(readFileSync(join(jetable.depot, CIBLE), 'utf8')).toBe(APRES)
+
+    /**
+     * LA CLOTURE — ce que l'utilisateur LIT, pas seulement ce que le disque porte.
+     *
+     * Sans ce maillon le test prouverait que la chaine marche, sans prouver qu'elle le DIT. Trois
+     * lectures independantes : la diffusion terminale du bus, l'issue structuree du tour, et le
+     * texte rendu au chat. Le texte seul serait fragile ; l'issue structuree seule ne dirait pas ce
+     * que l'humain voit.
+     */
+    const fin = diffusions.find(
+      (d): d is { type: string; status?: string } =>
+        typeof d === 'object' && d !== null && (d as { type?: string }).type === 'orchestrate-end'
+    )
+    expect(fin?.status).toBe('green')
+
+    const dernier = evenements.at(-1)
+    expect(dernier?.kind).toBe('done')
+    if (dernier?.kind !== 'done') throw new Error('dernier evenement inattendu')
+    expect(dernier.outcome).toMatchObject({
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false
+    })
+    // Le texte rendu au chat annonce la fin. C'est la seule partie que l'humain lit vraiment.
+    expect(dernier.text).toContain('Workflow terminé')
   }, 180000)
 })
