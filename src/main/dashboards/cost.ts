@@ -81,7 +81,11 @@ export class CostAggregator {
       for (const line of readFileSync(persistPath, 'utf8').split(/\r?\n/)) {
         if (!line) continue
         try {
-          this.turns.push(JSON.parse(line) as TurnCost)
+          const parsed: unknown = JSON.parse(line)
+          // Une ligne JSON VALIDE mais de mauvaise forme passait le cast et devenait un tour
+          // fantome : `inputTokens` non numerique agrege en NaN, provider absent casse le
+          // regroupement. Le `catch` ne voyait rien — il ne garde que les JSON illisibles.
+          if (isTurnCost(parsed)) this.turns.push(parsed)
         } catch {
           /* ligne corrompue — ignorée */
         }
@@ -190,4 +194,23 @@ export class CostAggregator {
     }
     return result
   }
+}
+
+/**
+ * Forme MINIMALE exigee d'une ligne relue : ce dont les agregats ont reellement besoin.
+ * `model` reste optionnel — les anciennes lignes n'en portent pas, et les rejeter effacerait
+ * de l'historique de cout reel.
+ */
+function isTurnCost(value: unknown): value is TurnCost {
+  if (!value || typeof value !== 'object') return false
+  const turn = value as Partial<TurnCost>
+  return (
+    typeof turn.provider === 'string' &&
+    turn.provider.length > 0 &&
+    (turn.model === undefined || (typeof turn.model === 'string' && turn.model.length > 0)) &&
+    typeof turn.inputTokens === 'number' &&
+    Number.isFinite(turn.inputTokens) &&
+    typeof turn.outputTokens === 'number' &&
+    Number.isFinite(turn.outputTokens)
+  )
 }

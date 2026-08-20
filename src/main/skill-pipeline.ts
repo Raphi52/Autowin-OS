@@ -74,10 +74,24 @@ export function invokedSkillId(message: string): string | undefined {
  * propriétés distinctes ; les confondre a produit une étiquette qui mentait. Vide si introuvable :
  * une skill inconnue ne jette pas, elle n'ajoute simplement rien.
  */
+/**
+ * Forme admise d'un identifiant de skill. C'est un NOM DE DOSSIER, rien d'autre.
+ *
+ * Ce module `join()` l'identifiant dans un chemin. Tant que seuls les huit `PipelinePhase` et
+ * `invokedSkillId` (deja borne par sa propre regex) l'atteignaient, la question ne se posait pas.
+ * Depuis qu'un NOEUD DE GRAPHE peut porter un identifiant libre, elle se pose : `normalizeGraph`
+ * accepte `value.nodes` TEL QUEL, donc un profil de workflow IMPORTE peut porter
+ * `phase: "../../../ailleurs"`. Verifie par sonde : le corps d'un `SKILL.md` situe hors de toute
+ * racine etait lu et INJECTE dans le prompt systeme d'un agent.
+ *
+ * On borne donc ici, au seul endroit qui construit le chemin — pas chez les appelants, qui
+ * grandiront et en oublieront un.
+ */
+const ID_SKILL_VALIDE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
+
 export function skillInstruction(id: string, roots = skillRoots()): string {
-  const root = roots.find(
-    (candidate) => readIfExists(join(candidate, id, 'SKILL.md')).length > 0
-  )
+  if (!ID_SKILL_VALIDE.test(id)) return ''
+  const root = roots.find((candidate) => readIfExists(join(candidate, id, 'SKILL.md')).length > 0)
   if (!root) return ''
   const body = stripSkillFrontmatter(readIfExists(join(root, id, 'SKILL.md')))
   return body ? `\n=== SKILL ${id.toUpperCase()} (kit) ===\n${body}\n` : ''

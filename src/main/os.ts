@@ -786,21 +786,22 @@ export class AutowinOS {
   ): Promise<{ text: string; provider: string; systemInjected: boolean }> {
     const task =
       [...messages].reverse().find((message) => message.role === 'user')?.content ?? 'chat'
-    let selectedProvider = provider
+    let selectedModel: string | undefined
     const r = await this.runChatTurn(task, undefined, () => {
       // Comme le routeur, relire APRÈS la readiness : le catalogue peut résoudre un alias pendant
       // l'attente et remplacer `codex/flagship` par son transport concret.
       const binding = this.roles.getBinding(role ?? 'orchestrator')
       const currentProvider = provider ?? binding.provider
-      selectedProvider = currentProvider
       const options = provider
         ? {}
         : { model: binding.model, reasoningEffort: binding.reasoningEffort }
+      selectedModel = options.model
       return this.registry.send(currentProvider, messages, options, (c) => onDelta(c.delta))
     })
     if (r.usage) {
       this.cost.add({
-        provider: selectedProvider ?? r.provider,
+        provider: r.provider,
+        model: r.model ?? selectedModel,
         inputTokens: r.usage.inputTokens,
         outputTokens: r.usage.outputTokens,
         cacheReadTokens: r.usage.cacheReadTokens,

@@ -3949,6 +3949,7 @@ ${empreinteDepot}`
           // local) — pas le demandé, sinon trace/coût mentent sur qui a vraiment tourné.
           provider: phaseRes.provider ?? subProvider,
           role: 'subagent',
+          model: phaseRes.model ?? phaseBinding.model,
           inputTokens: phaseRes.usage.inputTokens,
           outputTokens: phaseRes.usage.outputTokens,
           cacheReadTokens: phaseRes.usage.cacheReadTokens,
@@ -4019,6 +4020,12 @@ ${empreinteDepot}`
           const compteRendu = compteRenduDesOutils(appels)
           if (!compteRendu) break
           try {
+            /**
+             * `observePrompt` est RETIRE pour ce tour : il ecrase `execPrompt`, et la trace du run
+             * aurait alors montre le prompt du tour d'outil a la place de celui de la phase. Une
+             * observabilite qui ment sur ce qui a ete envoye est pire qu'une absente.
+             */
+            const { observePrompt: _ignore, ...optionsOutil } = subOptions
             const suivant = await registry.send(
               providerDeLaPhase,
               [
@@ -4026,8 +4033,26 @@ ${empreinteDepot}`
                 { role: 'assistant', content: texteDePhase },
                 { role: 'user', content: compteRendu }
               ],
-              subOptions
+              optionsOutil
             )
+            /**
+             * Le COUT de ce tour est compte comme celui de la phase. Sans cela, jusqu'a deux appels
+             * provider par noeud skill restaient invisibles au recap de cout : le run paraissait
+             * moins cher qu'il ne l'etait, en silence. Ce depot combat precisement les couts
+             * invisibles — en ajouter un ici serait se contredire.
+             */
+            if (suivant.usage) {
+              cost.add({
+                provider: suivant.provider ?? providerDeLaPhase,
+                role: 'subagent',
+                model: suivant.model ?? phaseBinding.model,
+                inputTokens: suivant.usage.inputTokens,
+                outputTokens: suivant.usage.outputTokens,
+                cacheReadTokens: suivant.usage.cacheReadTokens,
+                cacheCreationTokens: suivant.usage.cacheCreationTokens,
+                costUsd: suivant.usage.costUsd
+              })
+            }
             if (!suivant.text?.trim()) break
             texteDePhase = suivant.text
           } catch {
@@ -4496,6 +4521,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           cost.add({
             provider: verdict.provider ?? judgeProvider,
             role: 'judge',
+            model: verdict.model ?? judgeBinding.model,
             inputTokens: verdict.usage.inputTokens,
             outputTokens: verdict.usage.outputTokens,
             cacheReadTokens: verdict.usage.cacheReadTokens,
