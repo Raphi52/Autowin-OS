@@ -180,6 +180,8 @@ export function readBrainTraces(
 ): BrainTrace[] {
   const root = brainSpoolRoot(base)
   const all = [
+    // L'archive est un anneau de deux générations : la plus ancienne (`.1`) d'abord.
+    ...readFileTraces(join(root, 'events.archive.1.jsonl')),
     ...readFileTraces(join(root, 'events.archive.jsonl')),
     ...readFileTraces(join(root, 'events.previous.jsonl')),
     ...readFileTraces(join(root, 'events.jsonl'))
