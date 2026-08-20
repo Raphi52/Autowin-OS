@@ -111,6 +111,27 @@ describe('skills learn/think — présentes, découvertes, invocables', () => {
     expect(learn.toLowerCase()).toMatch(/pas de ne pas avoir le sha|sha manquant/)
   })
 
+
+  it('think n arrete JAMAIS le run — il prepare, il ne conclut pas', () => {
+    /**
+     * Mesure du 2026-08-20, run `conv-1340` : le briefing s'est termine par
+     * « Recommande — phase build » puis, deux lignes plus bas, `SUITE: fin`. L'orchestrateur honore
+     * cette ligne : deux nœuds sur trois ne se sont jamais executes. Il a reclame build et l'a tue.
+     *
+     * La consigne « le workflow est un outil, pas une laisse » est injectee a CHAQUE phase ; la skill
+     * doit dire explicitement qu'une etape de PREPARATION n'en est pas la destinataire.
+     */
+    const think = corpsDe('think')
+    expect(think).toContain('SUITE: fin')
+    expect(think.toLowerCase()).toMatch(/n.écris jamais `suite: fin`|jamais `suite: fin`/i)
+  })
+
+  it('think n emet pas de bloc de cloture que le gate lirait comme un verdict', () => {
+    const think = corpsDe('think')
+    expect(think.toLowerCase()).toContain('clôture')
+    expect(think).toMatch(/⛔/)
+  })
+
   it('think date ce qu’il charge, au lieu de le présenter comme actuel', () => {
     // Un savoir daté cité comme courant est ce qui fait perdre des heures sur un fichier déplacé.
     const think = corpsDe('think')
