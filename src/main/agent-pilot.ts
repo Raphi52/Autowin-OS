@@ -26,6 +26,7 @@ import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { routeSkillRequest } from './skill-routing'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { correctionOutilsPresents, outilsFaussementAbsents } from '../shared/outil-pretendu-absent'
 import { startTurnTimer } from './turn-timing'
 import {
   formatOrchestrationOutcome,
@@ -792,6 +793,7 @@ export class AgentPilot {
       | 'conclusion-absente'
       | 'echec-taise'
       | 'annonce-sans-action'
+      | 'outil-pretendu-absent'
     > = []
     const grantRecoveryIteration = (
       reason:
@@ -802,6 +804,7 @@ export class AgentPilot {
         | 'conclusion-absente'
         | 'echec-taise'
         | 'annonce-sans-action'
+        | 'outil-pretendu-absent'
     ): void => {
       recoveryReasons.push(reason)
       iterationLimit += 1
@@ -845,6 +848,8 @@ export class AgentPilot {
     /** Une action de CE tour a-t-elle echoue ? Un « Fait » pose dessus serait un mensonge. */
     let anyActionFailed = false
     let echecTuRecoveryAvailable = true
+    /** Une seule relance pour un outil faussement declare absent : au-dela, on n'insiste pas. */
+    let outilAbsentRecoveryAvailable = true
     let annonceSansActionRecoveryAvailable = true
     let commandAttachments: NonNullable<Message['attachments']> = []
     for (let i = recoveredProviderCall?.iteration ?? 0; i < iterationLimit; i++) {
@@ -1231,6 +1236,30 @@ export class AgentPilot {
          * et ZERO action. Rien n'a ete range. Les cinq gardes precedentes exigent toutes
          * `anyActionExecuted` : aucune ne pouvait voir un tour qui n'agit pas du tout.
          */
+        /*
+         * L'AGENT DIT NE PAS AVOIR UN OUTIL QU'IL A.
+         *
+         * Mesure du 20/08 sur une conversation reelle : « `edit_file` n'existe pas dans le catalogue
+         * reellement disponible de cette session », puis huit tours a reclamer des droits shell dont
+         * il n'avait pas besoin, 13,15 $, zero ligne ecrite. `directReadOnly` vaut `false` en dur :
+         * un tour pilote par l'utilisateur recoit TOUJOURS le catalogue complet.
+         *
+         * C'est la plus falsifiable des trois relances de cette famille — le catalogue est connu du
+         * code qui vient de l'envoyer — donc elle passe la premiere.
+         */
+        if (!relanceDeFormeUtilisee && outilAbsentRecoveryAvailable) {
+          const faussementAbsents = outilsFaussementAbsents(
+            visibleTextThisTurn,
+            catalog.map((commande) => commande.name)
+          )
+          if (faussementAbsents.length) {
+            outilAbsentRecoveryAvailable = false
+            relanceDeFormeUtilisee = true
+            grantRecoveryIteration('outil-pretendu-absent')
+            convo.push(correctionOutilsPresents(faussementAbsents))
+            continue
+          }
+        }
         if (
           exigerExperienceSoignee &&
           !relanceDeFormeUtilisee &&
