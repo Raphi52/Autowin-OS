@@ -1839,6 +1839,17 @@ export function ChatView({
           sendLocksRef.current.add(convId)
           liveMessagesRef.current.set(sourceId, sourcePreviousMessages)
           setConversationBusy(sourceId, false)
+          /*
+           * Le VERROU D'ENVOI de la source part avec son drapeau `busy` : ce tour ne lui appartient
+           * plus. Sans cela il restait pris jusqu'au `finally`, donc jusqu'a la FIN du tour sur la
+           * cible — des minutes. La source affichait « Envoyer », bouton actif, et le clic ne faisait
+           * RIEN : `send()` sortait en tete sur le verrou. Symptome vecu le 20/08 : « quand une
+           * conversation travaille, je peux pas cliquer sur Envoyer dans la conversation B ».
+           *
+           * Sur : le verrou existe contre un DOUBLE envoi du meme message ; celui-ci est parti
+           * ailleurs et la source ne porte plus rien, donc un nouvel envoi est legitime.
+           */
+          sendLocksRef.current.delete(sendLockKey)
           previousMessagesForTarget = liveMessagesRef.current.get(convId) ?? []
           const shouldAdoptRoutedConversation =
             activeRef.current === sourceId &&
