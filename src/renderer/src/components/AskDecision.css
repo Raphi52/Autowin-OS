@@ -11,10 +11,84 @@
  */
 
 .askd {
-  margin: 10px 0 2px;
+  /*
+   * VISIBILITE. Le bloc etait si sobre qu'il se confondait avec le fil : demande explicite du 20/08,
+   * « plus shiny pour qu'on le voit bien ». Aucun panneau pour autant — la direction tient. Ce qui
+   * le fait ressortir : deux filets or pleine largeur qui l'encadrent, un lustre qui balaie le filet
+   * du haut, et un liseré deja visible au repos sur chaque ligne (le bloc s'annonce cliquable avant
+   * qu'on le survole).
+   */
+  position: relative;
+  margin: 16px 0 6px;
+  padding: 14px 0 2px;
+  border-top: 2px solid;
+  border-bottom: 1px solid;
+  border-image: linear-gradient(
+      90deg,
+      rgba(212, 169, 79, 0.18),
+      rgba(227, 186, 85, 0.95) 42%,
+      rgba(227, 186, 85, 0.95) 58%,
+      rgba(212, 169, 79, 0.18)
+    )
+    1;
+}
+/* Le lustre : une bande claire qui traverse lentement le filet du haut. Rien ne clignote. */
+.askd::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -2px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 38%,
+    rgba(255, 240, 200, 1) 50%,
+    transparent 62%,
+    transparent 100%
+  );
+  background-size: 260% 100%;
+  animation: askd-lustre 5.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes askd-lustre {
+  0% {
+    background-position: -80% 0;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 1;
+  }
+  70% {
+    background-position: 180% 0;
+    opacity: 0;
+  }
+  100% {
+    background-position: 180% 0;
+    opacity: 0;
+  }
 }
 
+/*
+ * Lavis or derriere la tete, eteint en 90 px. Ce n'est pas un panneau : aucune bordure, aucun coin
+ * arrondi, aucune ombre — un degrade qui se dissout dans le fil, comme les filets.
+ */
+.askd::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 90px;
+  background: linear-gradient(180deg, rgba(212, 169, 79, 0.075), rgba(212, 169, 79, 0));
+  pointer-events: none;
+}
 .askd-tete {
+  position: relative;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -62,15 +136,16 @@
   bottom: 0;
   width: 2px;
   background: linear-gradient(180deg, #d4a94f, rgba(212, 169, 79, 0.12));
-  transform: scaleY(0);
+  transform: scaleY(1);
   transform-origin: top;
-  opacity: 0.75;
+  opacity: 0.38;
   transition:
     transform 0.16s ease-out,
     opacity 0.16s ease-out;
 }
 .askd-item:hover::before {
   transform: scaleY(1);
+  opacity: 0.9;
 }
 .askd-item:focus-within::before {
   transform: scaleY(1);
@@ -83,6 +158,8 @@
 }
 
 .askd-ligne {
+  /* Ancre de la zone de clic etendue ci-dessous. */
+  position: relative;
   display: grid;
   grid-template-columns: 16px 1fr auto;
   gap: 10px;
@@ -121,6 +198,27 @@
 .askd-tri[aria-hidden='true'] {
   visibility: hidden;
   cursor: default;
+}
+
+/*
+ * LA LIGNE ENTIERE est cliquable, pas seulement son texte.
+ *
+ * Defaut vecu le 20/08 : le survol allumait toute la ligne (liseré or + lavis) alors que la seule
+ * cible reelle etait le <button> du milieu. L'utilisateur cliquait dans une zone qui s'illumine et
+ * ne repond pas — « quand je clique sur la reponse ca la prompt pas ». Une surface qui reagit au
+ * survol DOIT etre cliquable sur toute son etendue.
+ *
+ * Realise par une zone de clic etiree sur `.askd-ligne` plutot qu'en faisant du <button> la ligne
+ * entiere : un bouton ne peut pas contenir le triangle, qui est un autre bouton.
+ */
+.askd-choix::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+/* Le triangle reste au-dessus de la zone etiree, sinon deplier deviendrait impossible. */
+.askd-tri {
+  z-index: 1;
 }
 
 .askd-choix {
@@ -264,6 +362,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .askd::after {
+    animation: none;
+    opacity: 0.5;
+    background-position: 50% 0;
+  }
   .askd-item::before,
   .askd-ligne,
   .askd-tri,
@@ -271,4 +374,50 @@
   .askd-entree {
     transition: none;
   }
+}
+
+/* --- choix multiple : on coche, puis on envoie --- */
+.askd-coche {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+.askd-coche input {
+  /* La case garde son apparence native : un faux carre dessine en CSS ne dit pas son etat aux
+     lecteurs d'ecran, et l'accent suffit a l'accorder au theme. */
+  accent-color: #d4a94f;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  position: relative;
+  top: 2px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.askd-envoyer {
+  font:
+    600 11.5px/1 ui-monospace,
+    Consolas,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #0b0e14;
+  background: linear-gradient(90deg, #d4a94f, #e3ba55);
+  border: 0;
+  border-radius: 4px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: filter 0.16s ease-out;
+}
+.askd-envoyer:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+/*
+ * Desactive tant que rien n'est coche : un envoi vide n'est pas une reponse. L'etat se LIT — un
+ * bouton grise mais cliquable est un piege, et un bouton qui disparait fait douter de sa presence.
+ */
+.askd-envoyer:disabled {
+  color: #a9b2c4;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: not-allowed;
 }

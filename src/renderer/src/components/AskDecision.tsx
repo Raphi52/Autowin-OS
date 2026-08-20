@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import './AskDecision.css'
-import { promptDeLOption, type AskDecision, type AskOption } from './ask-choices'
+import { promptDeLOption, promptDesOptions, type AskDecision, type AskOption } from './ask-choices'
 
 /*
  * SPEC GELEE — bloc de decision `ask` (20/08, apres trois tours de convergence visuelle).
@@ -69,6 +69,24 @@ export function AskDecisionBlock({
     })
 
   const auMoinsUnDetail = decision.options.some((option) => option.detail)
+  /*
+   * CHOIX MULTIPLE. Certaines questions ne sont pas exclusives (« lesquels de ces correctifs ? ») :
+   * les cocher une par une et envoyer d'un coup evite autant de tours que de reponses. Le drapeau
+   * est DECLARE par le modele — deviner a partir des libelles ferait basculer « Les deux » et
+   * « Seulement A » du mauvais cote.
+   */
+  const [cochees, setCochees] = useState<ReadonlySet<number>>(() => new Set())
+  const cocher = (index: number): void =>
+    setCochees((precedent) => {
+      const suivant = new Set(precedent)
+      if (!suivant.delete(index)) suivant.add(index)
+      return suivant
+    })
+  const selection = decision.options.filter((_, index) => cochees.has(index))
+  const envoyerLaSelection = (): void => {
+    if (!selection.length) return
+    onPick?.(promptDesOptions(selection))
+  }
 
   return (
     <div className="askd" data-testid="ask-decision">
@@ -101,25 +119,44 @@ export function AskDecisionBlock({
                     ▸
                   </span>
                 )}
-                <button
-                  type="button"
-                  className="askd-choix"
-                  onClick={() => onPick?.(promptDeLOption(option))}
-                >
-                  <span className="askd-libelle">
-                    {option.libelle}
-                    {option.recommande && <span className="askd-tag">recommandé</span>}
-                  </span>
-                  {option.consequence && (
-                    <span className="askd-consequence">{option.consequence}</span>
-                  )}
-                </button>
+                {decision.choixMultiple ? (
+                  <label className="askd-choix askd-coche">
+                    <input
+                      type="checkbox"
+                      checked={cochees.has(index)}
+                      onChange={() => cocher(index)}
+                    />
+                    <span>
+                      <span className="askd-libelle">
+                        {option.libelle}
+                        {option.recommande && <span className="askd-tag">recommandé</span>}
+                      </span>
+                      {option.consequence && (
+                        <span className="askd-consequence">{option.consequence}</span>
+                      )}
+                    </span>
+                  </label>
+                ) : (
+                  <button
+                    type="button"
+                    className="askd-choix"
+                    onClick={() => onPick?.(promptDeLOption(option))}
+                  >
+                    <span className="askd-libelle">
+                      {option.libelle}
+                      {option.recommande && <span className="askd-tag">recommandé</span>}
+                    </span>
+                    {option.consequence && (
+                      <span className="askd-consequence">{option.consequence}</span>
+                    )}
+                  </button>
+                )}
                 <div className="askd-droite">
                   {/*
                    * Le mot plutot que le glyphe ⏎ : la police du rendu ne le porte pas partout et
                    * il sortait en tofu (rectangle vide) sur la capture du 20/08.
                    */}
-                  <span className="askd-entree">Entrée</span>
+                  {!decision.choixMultiple && <span className="askd-entree">Entrée</span>}
                   <span className="askd-touche">{index + 1}</span>
                 </div>
               </div>
@@ -129,9 +166,24 @@ export function AskDecisionBlock({
         })}
       </div>
       <div className="askd-pied">
-        <span>
-          <span className="askd-k">Entrée</span> sur une ligne pour répondre
-        </span>
+        {decision.choixMultiple ? (
+          <>
+            <button
+              type="button"
+              className="askd-envoyer"
+              onClick={envoyerLaSelection}
+              disabled={selection.length === 0}
+              data-testid="ask-decision-envoyer"
+            >
+              Envoyer {selection.length > 0 ? `(${selection.length})` : ''}
+            </button>
+            <span>plusieurs réponses possibles — cochez celles qui conviennent</span>
+          </>
+        ) : (
+          <span>
+            <span className="askd-k">Entrée</span> sur une ligne pour répondre
+          </span>
+        )}
         {auMoinsUnDetail && (
           <span>
             <span className="askd-k">▸</span> pour déplier le détail

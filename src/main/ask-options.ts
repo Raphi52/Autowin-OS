@@ -70,6 +70,17 @@ function reponse(valeur: unknown): ReponseAsk | null {
  * Les reponses exploitables, plafonnees a quatre. Deux « recommande » ne recommandent rien : la
  * premiere garde la marque, les suivantes la perdent — l'option reste, seule la marque tombe.
  */
+/**
+ * Vrai quand la question accepte PLUSIEURS reponses.
+ *
+ * Certaines questions ne sont pas un choix exclusif : « lesquels de ces correctifs veux-tu ? ». Les
+ * cocher une par une et envoyer d'un coup evite quatre tours de conversation. Le drapeau est
+ * DECLARE par le modele, jamais devine a partir du libelle des options.
+ */
+export function choixMultipleDemande(brut: unknown): boolean {
+  return brut === true
+}
+
 export function normaliserReponsesAsk(brut: unknown): ReponseAsk[] {
   const reponses = (Array.isArray(brut) ? brut : [])
     .map(reponse)

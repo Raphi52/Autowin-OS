@@ -72,7 +72,7 @@ import { collectOrchestrationContext } from './orchestration-context'
 import { rememberFact } from './brain-remember'
 import { noteRemembered } from './session-memory-echo'
 import { brainServiceToken } from './brain-retrieval'
-import { normaliserReponsesAsk } from './ask-options'
+import { choixMultipleDemande, normaliserReponsesAsk } from './ask-options'
 import { hypothesesDuCadrage, type HypotheseDeCadrage } from '../shared/cadrage-confiance'
 import { classifyRegime, regimePhases } from './task-regime'
 import {
@@ -533,7 +533,10 @@ const CATALOG: CommandSpec[] = [
         '{ recommande: true } sur celle que tu recommandes (une seule), et facultativement ' +
         '{ detail: { fait, touche, neReglePas } } — ce que ca fait, ce que ca touche, ce que ca ne ' +
         'regle PAS. { envoi } remplace le libelle dans le prompt renvoye au clic. Une chaine nue ' +
-        'reste acceptee mais donne un bloc sans consequence ni detail.'
+        'reste acceptee mais donne un bloc sans consequence ni detail.',
+      choixMultiple:
+        'facultatif — `true` si la question accepte PLUSIEURS reponses a la fois : on coche ' +
+        'celles qui conviennent puis on envoie. Defaut : un choix exclusif.'
     },
     annotations: {
       // Elle n'ecrit rien : elle AFFICHE des choix. Ce que l'utilisateur clique repart comme un
@@ -1192,7 +1195,8 @@ export class AppCommandBus {
         // forme obtient un bloc degrade, jamais une erreur.
         const options = normaliserReponsesAsk(a.options)
         if (options.length < 2) throw new Error('Une question cliquable demande 2 a 4 reponses')
-        return { question: s('question'), options }
+        const choixMultiple = choixMultipleDemande(a.choixMultiple)
+        return { question: s('question'), options, ...(choixMultiple && { choixMultiple }) }
       }
       case 'chat_send': {
         const text = this.onChat

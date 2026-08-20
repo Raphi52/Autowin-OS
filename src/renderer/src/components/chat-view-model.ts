@@ -1145,6 +1145,22 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
     if (previous?.kind === 'activity') previous.actions.push(part)
     else blocks.push({ kind: 'activity', actions: [part] })
   }
+  /*
+   * LA DECISION PASSE EN DERNIER, apres le compte rendu.
+   *
+   * Le bloc se rendait a la position de l'action dans le flux : le modele appelle `ask` AVANT
+   * d'ecrire sa cloture, donc les reponses cliquables apparaissaient AU-DESSUS du « ce qui est fait /
+   * ce qu'il reste ». L'utilisateur devait choisir avant d'avoir lu de quoi choisir, puis redescendre.
+   * L'ordre du flux est celui de la production ; l'ordre de LECTURE veut le contraire.
+   *
+   * Un seul bloc est deplace, le dernier : deux questions dans un meme tour resteraient dans leur
+   * ordre relatif.
+   */
+  const derniereDecision = blocks.findLastIndex((bloc) => bloc.kind === 'ask-decision')
+  if (derniereDecision >= 0 && derniereDecision < blocks.length - 1) {
+    const [decision] = blocks.splice(derniereDecision, 1)
+    blocks.push(decision)
+  }
   return blocks
 }
 

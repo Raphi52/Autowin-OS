@@ -44,12 +44,19 @@ export interface AskOption {
 export interface AskChoicesData {
   question: string
   options: (string | AskOption)[]
+  /** La question accepte PLUSIEURS reponses : on coche, puis on envoie. */
+  choixMultiple?: boolean
 }
 
 /** La decision prete a rendre : question + lignes, toujours EMPILEES (jamais cote a cote). */
 export interface AskDecision {
   question: string
   options: AskOption[]
+  /**
+   * Plusieurs reponses acceptees. DECLARE par le modele, jamais devine a partir des libelles :
+   * « Les deux » et « Seulement A » se ressemblent trop pour qu'une heuristique tranche.
+   */
+  choixMultiple?: boolean
 }
 
 const PLAFOND_LIBELLE = 200
@@ -133,12 +140,28 @@ export function parseAskDecision(part: {
     return option
   })
 
-  return { question: data.question.trim().slice(0, PLAFOND_LIGNE), options: dedoublonnees }
+  return {
+    question: data.question.trim().slice(0, PLAFOND_LIGNE),
+    options: dedoublonnees,
+    ...(data.choixMultiple === true && { choixMultiple: true as const })
+  }
 }
 
 /** Ce qui repart comme prompt quand la ligne est choisie. */
 export function promptDeLOption(option: AskOption): string {
   return option.envoi ?? option.libelle
+}
+
+/**
+ * Ce qui repart quand PLUSIEURS reponses sont cochees.
+ *
+ * Les reponses sont listees en puces et non collees par des virgules : un libelle peut lui-meme
+ * contenir une virgule, et « A, B, C » deviendrait alors illisible pour le modele comme pour
+ * l'utilisateur. L'ordre est celui du bloc, pas celui des clics — il correspond a ce qui est lu.
+ */
+export function promptDesOptions(options: readonly AskOption[]): string {
+  if (options.length === 1) return promptDeLOption(options[0])
+  return options.map((option) => `- ${promptDeLOption(option)}`).join(String.fromCharCode(10))
 }
 
 /**
