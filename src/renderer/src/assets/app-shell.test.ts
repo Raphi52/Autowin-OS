@@ -62,7 +62,14 @@ describe('collapsed navigation rail', () => {
   it('keeps the collapsed controls square and reduces the gap before content', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
     expect(css).toMatch(/\.rail\.is-collapsed\s*{[^}]*width:\s*54px[^}]*padding-inline:\s*9px/s)
-    expect(css).toMatch(/\.rail\.is-collapsed \.nav-item\s*{[^}]*width:\s*36px[^}]*height:\s*36px/s)
+    // Géométrie verrouillée : 33px + margin-inline 0 3px, sinon l'icône ne peut pas
+    // se décaler de 3px vers la gauche dans un rail de 54px (voir le test suivant).
+    // `width` est ancré sur une frontière pour qu'un `max-width: 36px` ne le satisfasse pas.
+    const collapsedNavItem =
+      css.match(/\.rail\.is-collapsed \.nav-item\s*{([^}]*)}/s)?.[1] ?? ''
+    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])width:\s*33px\s*;/)
+    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])margin-inline:\s*0 3px\s*;/)
+    expect(collapsedNavItem).toMatch(/(?:^|[;{\s])height:\s*36px\s*;/)
     expect(css).toMatch(
       /\.shell:has\(\.rail\.is-collapsed\) \.main\s*{[^}]*padding-left:\s*var\(--s2\)/s
     )
