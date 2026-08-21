@@ -48,6 +48,26 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     expect(scout).toMatch(/TRIABLE/)
   })
 
+  /*
+   * Mesure du 2026-08-20 : sur 8 candidats repris a la main par l'utilisateur, DEUX etaient deja
+   * corriges. La cause n'etait pas la negligence mais un piege de lecture — un COMMENTAIRE qui
+   * raconte la cause passee se lit comme un defaut vivant, alors que le code au-dessus etait repare
+   * et que son test existait. Le cout : un cycle scout + un cycle frame, et un message ecrit a la
+   * main pour rien.
+   *
+   * CE TEST NE PROUVE PAS QUE LE SCOUT OBEIT — une regle dans un prompt n'est pas un garde-fou. Il
+   * garantit seulement qu'on ne la retire pas en silence.
+   */
+  it("le brief scout exige de ROUVRIR l'ancrage et de prouver que le defaut est ouvert", () => {
+    const scout = PHASE_BRIEFS.scout
+    expect(scout).toContain('ANCRAGE ROUVERT')
+    expect(scout).toMatch(/ouvre son ancrage file:line/iu)
+    // Le piege nomme, pas seulement la consigne : une regle sans son motif se perd a la relecture.
+    expect(scout).toMatch(/commentaire n.est pas un defaut/iu)
+    // Et la conclusion actionnable : le silence plutot qu'un candidat mort.
+    expect(scout).toMatch(/ne le liste pas/iu)
+  })
+
   it('le brief frame exige un inventaire de confiance ADOSSÉ À DES PREUVES, pas un ressenti', () => {
     const frame = PHASE_BRIEFS.frame
 
