@@ -143,6 +143,49 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     }
   })
 
+  /*
+   * LE SCORE DOIT MESURER LA PREUVE, PAS LA CERTITUDE.
+   *
+   * Mesure du 21/08 : sur mes candidats de scout, 84 et 82 sont alles aux deux qui etaient FAUX, 66 a
+   * un vrai. La confiance etait la plus haute exactement la ou la verification etait la plus faible —
+   * un score non contraint classe donc la shortlist au ressenti.
+   *
+   * L'idiome n'est PAS invente : le SKILL.md plafonnait deja l'impact d'un candidat web sur une
+   * premisse non verifiee (« impact-CAPPED — never 🟢 on an unverified premise »). La doctrine est
+   * ELARGIE a tout Why deductif, pas dupliquee.
+   */
+  it('le plafond de preuve existe DANS LES DEUX sources, avec sa valeur et sa condition', () => {
+    const brief = PHASE_BRIEFS.scout
+    const kit = readFileSync('skills/scout/SKILL.md', 'utf8')
+
+    expect(brief).toContain('PLAFOND DE PREUVE')
+    expect(kit).toContain('PROOF CEILING')
+
+    for (const source of [brief, kit]) {
+      // La valeur du plafond, sinon la regle n'est pas actionnable.
+      expect(source).toMatch(/50/u)
+      // Ce qui declenche le plafond : une DEDUCTION, pas une observation directe.
+      expect(source).toMatch(/DEDUCTION/u)
+      // Et la sortie du plafond : nommer les chemins fermes.
+      expect(source).toMatch(/chemins fermes|closed paths/iu)
+    }
+  })
+
+  /*
+   * La consigne scout est bornee a 3000 caracteres par le premier test de ce fichier. A 2897, il ne
+   * reste que ~100 caracteres : la prochaine clause devra CONDENSER, pas ajouter. Ce test rend cette
+   * marge VISIBLE au lieu de la laisser decouvrir par un rouge.
+   */
+  it('la consigne scout garde une marge annoncee sous son plafond', () => {
+    const restant = 3000 - PHASE_BRIEFS.scout.length
+    expect(restant).toBeGreaterThan(0)
+    // Si ce test tombe, ce n'est pas un bug : c'est le signal qu'il faut condenser avant d'ajouter.
+    expect(
+      restant,
+      `marge restante sous le plafond de 3000 : ${restant} caracteres`
+    ).toBeGreaterThan(60)
+  })
+
   it('phaseBrief enveloppe la consigne avec un en-tête de phase', () => {
     expect(phaseBrief('scout')).toContain('=== CONSIGNE SCOUT ===')
     expect(phaseBrief('scout')).toContain('SCOUT')
