@@ -1,3 +1,4 @@
+import { basename } from 'node:path'
 import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from './worktree-manager'
 import type {
   WorktreeAgentActivity,
@@ -1407,6 +1408,95 @@ export class RunWorktreeCoordinator {
     this.reconcileExisting(undefined, residues)
   }
 
+  /**
+   * REFERMER CE QUI A FINI SON OFFICE — la fuite qui remplissait le dossier d'etat.
+   *
+   * Mesure du 2026-08-21 : 381 manifestes pour 17 copies vivantes. La cause n'etait pas un cas
+   * limite mais le chemin NOMINAL — `save` a chaque persistance, `remove` a une seule ligne du
+   * depot, derriere une porte exigeant `green` + `held` et un clic humain. 219 des 381 manifestes
+   * venaient de runs sans le moindre incident. Le cout n'est pas le disque (2,3 Mo) : c'est qu'un
+   * badge d'attention noye parmi 380 entrees mortes ne sera jamais vu.
+   *
+   * POURQUOI ICI, et pas a la fermeture du run : pendant la session, le manifeste `complete` est ce
+   * qui permet de rejouer la publication si l'app meurt entre la fusion Git et l'acquittement du
+   * callback — des tests anterieurs le garantissent, et une premiere version de ce correctif s'y est
+   * cassee en le supprimant trop tot. Au REDEMARRAGE suivant, en revanche, la livraison est prouvee
+   * (`causalPublicationDeliveredAtMs` pose) : plus personne n'attend d'etre prevenu, et le travail
+   * est dans l'historique par construction (`complete` = `merged` ou `nothing`).
+   *
+   * Deux gardes dures, aucune heuristique — ni age, ni quota : la publication doit etre ACQUITTEE,
+   * et aucun processus ne doit tenir la copie. Ce qui ne remplit pas les deux reste sur disque.
+   */
+  private refermerLesManifestesAccomplis(records: Map<string, WorktreeRunRecord>): void {
+    if (!this.stateStore) return
+    for (const [runId, record] of [...records]) {
+      if (record.publication !== 'complete') continue
+      if (record.causalPublicationDeliveredAtMs === undefined) continue
+      if (this.manager.hasActiveProcesses?.(runId)) continue
+      this.stateStore.remove(runId)
+      records.delete(runId)
+    }
+  }
+
+  /**
+   * DONNER UNE FIN AUX RUNS QUE PLUS PERSONNE NE REPRENDRA.
+   *
+   * Apres six reprises, `applyFinalize` posait `attentionReason = 'retry-exhausted'` mais laissait
+   * `publication` sur `cleanup-pending` ou `blocked`. Le run n'etait alors ni repris — la
+   * reconciliation le saute justement a cause de ce budget epuise — ni abandonne. SUSPENDU pour
+   * toujours, et hors de portee des deux nettoyages existants : l'un exige un HEAD deja reference,
+   * l'autre exige `held`. C'est ainsi que 153 manifestes `blocked` se sont accumules.
+   *
+   * Terminal ne veut pas dire silencieux : `attentionReason` est conserve tel quel. On nomme la fin,
+   * on ne l'efface pas — un run abandonne doit rester lisible par l'humain qui le cherchera.
+   *
+   * Et le marqueur vit A COTE de `publication`, jamais A SA PLACE : une premiere version ecrivait
+   * `publication = 'abandoned'` et cassait `retryRun`, qui lit ce champ pour router la reprise
+   * MANUELLE. Nommer une fin ne doit pas confisquer la main a l'humain.
+   */
+  private abandonnerLesRunsABoutDeReprises(records: Map<string, WorktreeRunRecord>): void {
+    if (!this.stateStore) return
+    for (const [runId, record] of [...records]) {
+      if (record.abandoned) continue
+      if (record.attentionReason !== 'retry-exhausted') continue
+      if ((record.retryCount ?? 0) < MAX_AUTOMATIC_RETRIES) continue
+      if (this.manager.hasActiveProcesses?.(runId)) continue
+      const abandonne: WorktreeRunRecord = { ...record, abandoned: true }
+      this.stateStore.save(abandonne)
+      records.set(runId, abandonne)
+    }
+  }
+
+  /**
+   * QUAND LE BALAYAGE EMPORTE UNE COPIE, SON MANIFESTE PART AVEC ELLE.
+   *
+   * Le balayage savait deja decider qu'une copie est abandonnee, et ses quatre conditions cumulees
+   * SONT les gardes de surete de ce chantier : aucun processus vivant, arbre de travail vide, HEAD
+   * deja contenu dans une reference — donc le travail est dans l'historique, jamais une adresse
+   * unique perdue — et copie plus vieille que la fenetre de spawn. Il ne lui manquait que le droit
+   * d'emporter le manifeste.
+   *
+   * On le fait ICI plutot que dans le manager, volontairement : `worktree-manager.ts` ne contient
+   * aucune reference au store d'etat, et lui en injecter un creerait un couplage entre deux modules
+   * aujourd'hui independants. Sa liste `swept` etait deja rendue — elle n'etait simplement pas lue.
+   */
+  private oublierLesCopiesBalayees(
+    swept: readonly string[] | undefined,
+    records: Map<string, WorktreeRunRecord>
+  ): void {
+    if (!this.stateStore || !swept?.length) return
+    for (const balayee of swept) {
+      // La liste porte des chemins de copies ; l'identifiant du run est le suffixe du dossier.
+      // `basename` plutot qu'une regex de separateurs : il gere les deux formes de chemin, et
+      // aucune regex a echapper ne peut le casser silencieusement.
+      const nom = basename(balayee)
+      const runId = nom.startsWith('agent__') ? nom.slice('agent__'.length) : nom
+      if (!runId || !records.has(runId)) continue
+      this.stateStore.remove(runId)
+      records.delete(runId)
+    }
+  }
+
   private reconcileExisting(
     inventory?: WorktreeRecoveryInventory,
     residuesPrecalcules?: ReturnType<WorktreeManager['reconcileResidues']>
@@ -1415,6 +1505,9 @@ export class RunWorktreeCoordinator {
     const residues =
       inventory?.residues ?? residuesPrecalcules ?? this.manager.reconcileResidues?.()
     const records = new Map((this.stateStore?.list() ?? []).map((record) => [record.runId, record]))
+    this.oublierLesCopiesBalayees(residues?.swept, records)
+    this.refermerLesManifestesAccomplis(records)
+    this.abandonnerLesRunsABoutDeReprises(records)
     const observed = new Map(inventory?.agents.map((agent) => [agent.agentId, agent]) ?? [])
     const managerIds =
       inventory?.agents.map((agent) => agent.agentId) ?? this.manager.listAgentIds()

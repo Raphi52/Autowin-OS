@@ -63,6 +63,18 @@ export type WorktreePublicationState =
   | 'blocked'
 
 export interface WorktreeRunRecord {
+  /**
+   * TERMINAL : les reprises automatiques sont epuisees, plus rien ne reprendra ce run tout seul.
+   *
+   * Marqueur DEDIE, et surtout PAS une valeur de `publication` — une premiere version l'y avait
+   * mise, et a casse la reprise MANUELLE : `publication` n'est pas une etiquette, c'est le champ de
+   * ROUTAGE que `retryRun` lit pour savoir dans quel etat relancer. Le detourner pour nommer une fin
+   * confisquait a l'humain le bouton « reessayer » — un correctif qui retire une capacite.
+   *
+   * Ici la fin est nommee A COTE du routage : le run est declare abandonne par la reprise
+   * automatique, son motif d'attention est conserve, et sa route de reprise reste intacte.
+   */
+  abandoned?: boolean
   version: 1
   repoId: string
   runId: string
