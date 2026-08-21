@@ -1,0 +1,167 @@
+import { useEffect, useMemo, useState } from 'react'
+import type { OrchestratorModelOption } from './chat-view-model'
+import { effortLabel, sortEfforts } from './model-effort-labels'
+
+/**
+ * Une ligne de la matrice : un modèle du catalogue et les crans d'effort qu'il expose.
+ * `blocked` = provider injoignable (expiré / absent / standby) : la ligne reste visible,
+ * mais aucun cran n'est cliquable — le refus se voit AU MOMENT du choix.
+ */
+export interface ModelEffortRow {
+  key: string
+  label: string
+  model: string
+  option: OrchestratorModelOption
+  efforts: string[]
+  blocked?: boolean
+  blockedReason?: string
+}
+
+/**
+ * Matrice MODEL × EFFORT : une ligne par modèle, un slider discret de crans d'effort.
+ * Un seul couple (modèle, effort) est actif ; les autres lignes gardent un point discret
+ * sur leur cran MÉMORISÉ, et le survol montre le cran visé avant de cliquer.
+ */
+export function ModelEffortMatrix({
+  title,
+  rows,
+  activeKey,
+  activeEffort,
+  onSelect,
+  onClose
+}: {
+  title?: string
+  rows: ModelEffortRow[]
+  /** `${provider}:${model}` de la ligne active, ou null si aucune. */
+  activeKey: string | null
+  activeEffort?: string
+  onSelect: (option: OrchestratorModelOption) => void
+  onClose: () => void
+}): React.JSX.Element {
+  const [preview, setPreview] = useState<{ key: string; effort: string } | null>(null)
+  const columns = useMemo(
+    () => sortEfforts([...new Set(rows.flatMap((row) => row.efforts))]),
+    [rows]
+  )
+  /** Cran mémorisé par ligne : le cran actif pour la ligne active, sinon le défaut du catalogue. */
+  const memorized = useMemo(() => {
+    const table: Record<string, string> = {}
+    for (const row of rows) {
+      const efforts = sortEfforts(row.efforts)
+      if (efforts.length === 0) continue
+      const fromCatalog = row.option.defaultReasoningEffort
+      table[row.key] =
+        row.key === activeKey && activeEffort && efforts.includes(activeEffort)
+          ? activeEffort
+          : fromCatalog && efforts.includes(fromCatalog)
+            ? fromCatalog
+            : efforts[Math.floor((efforts.length - 1) / 2)]
+    }
+    return table
+  }, [rows, activeKey, activeEffort])
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
+
+  const previewRow = preview ? rows.find((row) => row.key === preview.key) : undefined
+
+  return (
+    <div
+      className="effort-matrix-overlay"
+      data-testid="effort-matrix"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title ?? 'Matrice modèle × effort'}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div className="effort-matrix">
+        <header>
+          <strong>{title ?? 'MODEL × EFFORT'}</strong>
+          <button type="button" aria-label="Fermer la matrice" onClick={onClose}>
+            ✕
+          </button>
+        </header>
+        <div className="effort-matrix-columns" aria-hidden="true">
+          <span />
+          {columns.map((effort) => (
+            <span key={effort}>{effort}</span>
+          ))}
+        </div>
+        {rows.map((row) => {
+          const efforts = sortEfforts(row.efforts)
+          const isActiveRow = row.key === activeKey
+          const held = memorized[row.key]
+          const shown =
+            preview && preview.key === row.key && efforts.includes(preview.effort)
+              ? preview.effort
+              : held
+          const filledUntil = shown ? efforts.indexOf(shown) : -1
+          return (
+            <div
+              key={row.key}
+              className={`effort-matrix-row${isActiveRow ? ' is-active' : ''}${row.blocked ? ' is-blocked' : ''}`}
+              data-row={row.key}
+              data-shown={shown}
+              role="radiogroup"
+              aria-label={`Effort pour ${row.label}`}
+            >
+              <span className="effort-matrix-name">
+                <strong>{row.label}</strong>
+                <small>{row.model}</small>
+              </span>
+              <span className="effort-matrix-track">
+                {columns.map((effort) => {
+                  const index = efforts.indexOf(effort)
+                  if (index === -1) {
+                    return (
+                      <span key={effort} className="effort-cran is-absent" aria-hidden="true" />
+                    )
+                  }
+                  const selected = shown === effort
+                  const filled = filledUntil >= 0 && index <= filledUntil
+                  return (
+                    <button
+                      key={effort}
+                      type="button"
+                      role="radio"
+                      aria-checked={isActiveRow && held === effort}
+                      aria-disabled={row.blocked || undefined}
+                      title={row.blocked ? row.blockedReason : effortLabel(effort)}
+                      className={`effort-cran${selected ? ' is-selected' : ''}${filled ? ' is-filled' : ''}${isActiveRow ? ' is-live' : ' is-memorized'}`}
+                      onMouseEnter={() => setPreview({ key: row.key, effort })}
+                      onFocus={() => setPreview({ key: row.key, effort })}
+                      onMouseLeave={() => setPreview(null)}
+                      onBlur={() => setPreview(null)}
+                      onClick={() => {
+                        if (row.blocked) return
+                        onSelect({ ...row.option, reasoningEffort: effort })
+                        onClose()
+                      }}
+                    >
+                      <i aria-hidden="true" />
+                      <em>{effortLabel(effort)}</em>
+                    </button>
+                  )
+                })}
+              </span>
+            </div>
+          )
+        })}
+        <footer role="status" aria-live="polite">
+          {preview && previewRow
+            ? `${previewRow.label} · ${effortLabel(preview.effort)}`
+            : activeKey && activeEffort
+              ? `Actif : ${rows.find((row) => row.key === activeKey)?.label ?? activeKey} · ${effortLabel(activeEffort)}`
+              : 'Choisis un modèle et son cran d’effort.'}
+        </footer>
+      </div>
+    </div>
+  )
+}

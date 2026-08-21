@@ -4,17 +4,9 @@ import {
   type OrchestratorModelOption,
   type RuntimeModel
 } from './chat-view-model'
+import { ModelEffortMatrix, type ModelEffortRow } from './ModelEffortMatrix'
+import { EFFORT_LABELS } from './model-effort-labels'
 import './ChatView.css'
-
-const EFFORT_LABELS: Record<string, string> = {
-  minimal: 'Minimal',
-  low: 'Léger',
-  medium: 'Moyen',
-  high: 'Élevé',
-  xhigh: 'Très élevé',
-  max: 'Max',
-  ultra: 'Ultra'
-}
 
 /**
  * L'état d'authentification d'un provider, tel que Routage le charge déjà (`providerStatus()`).
@@ -63,6 +55,7 @@ export function OrchestratorModelSelector({
     statuses?.find((s) => s.provider === provider)?.status
   const dropdownRef = useRef<HTMLDetailsElement>(null)
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
+  const [matrixOpen, setMatrixOpen] = useState(false)
   useEffect(() => {
     const closeOnOutsideClick = (event: MouseEvent): void => {
       const dropdown = dropdownRef.current
@@ -92,6 +85,34 @@ export function OrchestratorModelSelector({
         option.provider === binding?.provider &&
         option.model === (currentCatalogModel ?? binding?.model)
     )
+  /**
+   * Lignes de la matrice MODEL × EFFORT : mêmes options que le menu, mêmes efforts issus du
+   * catalogue, même refus des providers injoignables. Aucune liste d'efforts en dur.
+   */
+  const matrixRows: ModelEffortRow[] = grouped.groups.flatMap((group) =>
+    group.options
+      .map((option) => {
+        const statut = statutDe(option.provider)
+        const injoignable = statut !== undefined && STATUTS_BLOQUANTS.has(statut)
+        return {
+          key: `${option.provider}:${option.model}`,
+          label: option.label,
+          model: option.model,
+          option,
+          efforts: option.reasoningEfforts.filter((effort) => effort !== 'none'),
+          blocked: injoignable,
+          blockedReason: injoignable
+            ? `${option.provider} : ${STATUT_LABEL[statut as string] ?? statut} — reconnecte ce provider dans Routage`
+            : undefined
+        }
+      })
+      .filter((row) => row.efforts.length > 0)
+  )
+  const activeMatrixKey =
+    binding?.provider && (currentCatalogModel ?? binding?.model)
+      ? `${binding.provider}:${currentCatalogModel ?? binding.model}`
+      : null
+
   const disabled = busy || pending || models.length === 0
   const currentLabel = !catalogLoaded
     ? 'Chargement des modèles…'
@@ -138,6 +159,20 @@ export function OrchestratorModelSelector({
           )}
         </summary>
         <div className="model-select-menu" role="listbox" aria-label="Modèle orchestrateur">
+          {matrixRows.length > 0 && (
+            <button
+              type="button"
+              className="model-select-matrix-open"
+              onClick={(event) => {
+                event.preventDefault()
+                dropdownRef.current?.removeAttribute('open')
+                setExpandedModel(null)
+                setMatrixOpen(true)
+              }}
+            >
+              MODEL × EFFORT
+            </button>
+          )}
           {grouped.groups.map((group) => (
             <section key={group.key} className="model-select-group">
               <span>{group.label}</span>
@@ -220,6 +255,20 @@ export function OrchestratorModelSelector({
           ))}
         </div>
       </details>
+      {matrixOpen && (
+        <ModelEffortMatrix
+          title="MODEL × EFFORT"
+          rows={matrixRows}
+          activeKey={activeMatrixKey}
+          activeEffort={
+            binding?.reasoningEffort && binding.reasoningEffort !== 'none'
+              ? binding.reasoningEffort
+              : undefined
+          }
+          onSelect={onSelect}
+          onClose={() => setMatrixOpen(false)}
+        />
+      )}
       <span id="chat-orchestrator-model-help" className="model-select-help">
         {busy
           ? 'Sélecteur verrouillé pendant le tour en cours de cette conversation.'
