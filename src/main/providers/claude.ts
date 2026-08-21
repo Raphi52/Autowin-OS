@@ -22,6 +22,7 @@ import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
+import { attacherEvidenceALErreur } from './evidence-portee-par-erreur'
 import { isShellMutation, isVerificationCommand } from './evidence-vocabulary'
 import {
   appendWorkspaceMutationEvidence,
@@ -1261,7 +1262,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       await new Promise<void>((r) => (resolveWait = r))
     }
 
-    if (errored) throw errored
+    if (errored) {
+      // Les actions deja observees sont la SEULE trace de ce que l'agent a fait avant de casser, et
+      // c'est le moment ou on en a le plus besoin. Sans cet accrochage elles partent avec le `throw`.
+      attacherEvidenceALErreur(errored, executionEvidence)
+      throw errored
+    }
     if (mutationBefore && execution) {
       await appendWorkspaceMutationEvidence(mutationBefore, execution.cwd, executionEvidence)
     }

@@ -15,6 +15,7 @@ import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 import { CodexStructuralFailure } from './providers/codex'
+import { attacherEvidenceALErreur } from './providers/evidence-portee-par-erreur'
 
 /** Provider fake : renvoie OUT_<id> par sous-tâche, VALIDE pour le juge, throw si le prompt contient CRASH. */
 class GreedyProvider implements ProviderAdapter {
@@ -332,6 +333,46 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     expect(provider.contents).toHaveLength(2)
     expect(result.trace.some((step) => step.step === 'judge')).toBe(false)
     expect(result.gateBlocked).toBe(true)
+  })
+
+  it('une sous-tâche qui ÉCHOUE conserve les actions déjà faites', async () => {
+    // Mesuré le 2026-08-21 sur les 60 traces les plus récentes : un sous-agent `completed` montre ses
+    // actions 38 fois sur 39, un sous-agent `failed` ne les montre JAMAIS (0 sur 9). On veut voir ce
+    // qu'un agent a fait SURTOUT quand il casse — sinon le panneau est noir au pire moment.
+    class ProviderQuiCasseApresAvoirAgi extends GreedyProvider {
+      async *send(
+        messages: Message[],
+        options: SendOptions = {}
+      ): AsyncGenerator<StreamChunk, SendResult, void> {
+        const content = String(messages[messages.length - 1]?.content ?? '')
+        if (/CRASH/.test(content)) {
+          const erreur = new Error('le sous-agent est mort en route')
+          attacherEvidenceALErreur(erreur, [
+            {
+              type: 'Grep',
+              kind: 'inspection',
+              status: 'completed',
+              ok: true,
+              summary: 'Grep -rn cadrage src/'
+            } as never
+          ])
+          throw erreur
+        }
+        return yield* super.send(messages, options)
+      }
+    }
+    const provider = new ProviderQuiCasseApresAvoirAgi()
+    const result = await makeGreedy(provider, async () => [
+      { id: 'A', deps: [], prompt: 'fais A CRASH' },
+      { id: 'B', deps: [], prompt: 'fais B' }
+    ]).run('analyse le projet')
+
+    const echec = result.trace.find(
+      (step: OrchestrationStep) => step.role === 'subagent' && step.status === 'failed'
+    )
+    expect(echec).toBeDefined()
+    expect(echec?.evidence?.length).toBeGreaterThan(0)
+    expect(echec?.evidence?.[0]?.summary).toContain('Grep')
   })
 
   it('cascade : une sous-tâche dont la dépendance échoue est SAUTÉE, pas exécutée', async () => {
