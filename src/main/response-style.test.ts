@@ -19,15 +19,35 @@ describe('concise structured response policy', () => {
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
       /(?:sans|absence de|supprime).*(?:répétition|répéter)/iu
     )
-    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
-      /format strict.*prioritaire/iu
-    )
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(/format strict.*prioritaire/iu)
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).not.toMatch(/rubrique vide.*masqu/iu)
   })
 
   it('does not impose a closing block on trivial conversational answers', () => {
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
       /réponse conversationnelle triviale.*aucun bloc/iu
+    )
+  })
+})
+
+describe('prompt suivant prérempli dans le composer', () => {
+  it('demande la ligne technique, APRÈS les rubriques, et dit qu’elle est invisible', () => {
+    const consigne = CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
+    expect(consigne).toContain('AUTOWIN_PROMPT_V1:')
+    // La ligne vient après la rubrique Recommandé : sinon elle s'insère dans le bloc lu par l'humain.
+    expect(consigne.indexOf('AUTOWIN_PROMPT_V1:')).toBeGreaterThan(
+      consigne.indexOf('👉 Recommandé')
+    )
+    // Le modèle doit savoir que la ligne n'est pas affichée, sinon il l'annonce ou la commente.
+    expect(consigne).toMatch(/invisible|jamais affich|retir/iu)
+  })
+
+  it('exige un prompt à la DEUXIÈME personne, pas une redite de la recommandation', () => {
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /deuxième personne|impératif|comme si (?:tu|l'utilisateur)|que l'utilisateur (?:taperait|écrirait)/iu
+    )
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /pas (?:une )?(?:simple )?(?:copie|redite|reformulation)/iu
     )
   })
 })

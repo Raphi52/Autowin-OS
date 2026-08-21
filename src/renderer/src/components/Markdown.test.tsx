@@ -490,3 +490,23 @@ describe('extractRecommendation — ghost-text du composer', () => {
     expect(extractRecommendation('juste du texte\nsans reco')).toBeNull()
   })
 })
+
+describe('ligne technique du prompt suivant', () => {
+  it('n affiche PAS la ligne AUTOWIN_PROMPT_V1 : elle ne sert qu a pre-garnir le composer', () => {
+    render(['travail fait', 'AUTOWIN_PROMPT_V1: lance le terrain sur X'].join('\n'))
+    expect(container.textContent).toContain('travail fait')
+    expect(container.textContent).not.toContain('AUTOWIN_PROMPT_V1')
+    expect(container.textContent).not.toContain('lance le terrain sur X')
+  })
+
+  it('n affiche pas non plus le marqueur PARTIEL pendant le streaming', () => {
+    render(['texte', 'AUTOWIN_PROMPT_V'].join('\n'))
+    expect(container.textContent).toContain('texte')
+    expect(container.textContent).not.toContain('AUTOWIN_PROMPT_V')
+  })
+
+  it('PRESERVE la ligne citee dans un bloc de code : c est de la documentation', () => {
+    render(['Format :', '```', 'AUTOWIN_PROMPT_V1: exemple', '```'].join('\n'))
+    expect(container.textContent).toContain('AUTOWIN_PROMPT_V1: exemple')
+  })
+})

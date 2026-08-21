@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { extractRecommendation } from './Markdown'
+import { extrairePromptSuivant } from '../../../shared/prompt-suivant'
 import { SuggestionGrid } from './SuggestionGrid'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
@@ -191,8 +192,15 @@ export function ChatView({
   // Palette de MENTIONS (`@run…`, `@fichier…`) : même mécanique d'état que la palette slash.
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionDismissed, setMentionDismissed] = useState(false)
-  // Ghost-text (façon CLI) : la recommandation « 👉 Recommandé » du DERNIER message assistant,
-  // proposée en placeholder grisé quand le champ est vide et acceptée par Tab. null si aucune.
+  /*
+   * Ghost-text (façon CLI) du DERNIER message assistant : placeholder grisé quand le champ est vide,
+   * accepté par Tab.
+   *
+   * D'ABORD le PROMPT que le modèle a écrit POUR ce champ, ENSUITE seulement la rubrique
+   * « 👉 Recommandé » en repli. Les deux ne disent pas la même chose : la rubrique est un état
+   * adressé au lecteur (« passer en terrain »), donc la recopier ici donnait une phrase qu'il fallait
+   * réécrire avant de l'envoyer. Le repli garantit qu'un tour sans prompt garde l'ancien comportement.
+   */
   const ghostRecommendation = useMemo(() => {
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant') as
       AsstMsg | undefined
@@ -201,7 +209,7 @@ export function ChatView({
       .filter((p): p is Extract<ChatPart, { kind: 'text' }> => p.kind === 'text')
       .map((p) => p.text)
       .join('\n')
-    return extractRecommendation(text)
+    return extrairePromptSuivant(text) ?? extractRecommendation(text)
   }, [messages])
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)

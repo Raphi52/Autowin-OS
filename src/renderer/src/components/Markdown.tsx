@@ -12,6 +12,7 @@ import {
   markdownCodeLineProtection
 } from '../../../shared/orchestration-outcome'
 import { MAX_INLINE_HTML_CHARS, prepareChatHtml } from './chat-html-inline'
+import { retirerLignePromptSuivant } from '../../../shared/prompt-suivant'
 
 type MarkdownProps = {
   text: string
@@ -57,7 +58,13 @@ export function Markdown({
   continuationPrefix,
   highlightFinalSummary = false
 }: MarkdownProps): React.JSX.Element {
-  const source = continuationPrefix ? `${continuationPrefix}\n${text}` : text
+  /*
+   * La ligne technique du prompt suivant ne s AFFICHE jamais : elle ne sert qu a pre-garnir en grise
+   * le champ de saisie. La retirer ici, au plus pres du rendu, evite de la filtrer dans chaque
+   * appelant -- et de la laisser clignoter caractere par caractere pendant le streaming.
+   */
+  const brut = continuationPrefix ? `${continuationPrefix}'+chr(92)+'n${text}` : text
+  const source = retirerLignePromptSuivant(brut)
   const finalSummary = highlightFinalSummary ? splitFinalSummary(source) : null
   return (
     <div className="md">
