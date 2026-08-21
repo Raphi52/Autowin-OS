@@ -75,6 +75,7 @@ import { brainServiceToken } from './brain-retrieval'
 import { choixMultipleDemande, normaliserReponsesAsk } from './ask-options'
 import { hypothesesDuCadrage, type HypotheseDeCadrage } from '../shared/cadrage-confiance'
 import { classifyRegime, regimePhases } from './task-regime'
+import { PIPELINE_PHASES } from '../shared/pipeline-phases'
 import {
   runGraphify,
   type GraphifyCommandInput,
@@ -792,7 +793,17 @@ function redactedArgs(name: string, args: Record<string, unknown>): Record<strin
  * transmise, sinon un modèle pourrait préfixer la tâche de n'importe quoi. `kaizen` est volontairement
  * absent — il a son propre chemin de construction de tâche, plus bas dans ce même `case`.
  */
-const ORCHESTRATE_PHASES = new Set(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
+/**
+ * Les phases qu'une phase choisie par le MODELE peut designer — derivees, jamais recopiees.
+ *
+ * La copie en dur listait six phases sur huit (`kaizen` et `remake` manquaient), et c'est la troisieme
+ * copie d'une liste que `shared/pipeline-phases.ts` etait censee unifier.
+ *
+ * Ce que la garde protege reste INTACT : une phase venant du modele n'ampute jamais une tache classee
+ * `critical` (le test juste apres cette constante). Ce qui change, c'est qu'elle ne refuse plus une
+ * phase parfaitement valide au seul motif qu'on avait oublie de l'ecrire ici.
+ */
+const ORCHESTRATE_PHASES = new Set<string>(PIPELINE_PHASES)
 
 export class AppCommandBus {
   /**

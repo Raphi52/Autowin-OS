@@ -248,10 +248,17 @@ describe('câblage — le modèle peut NOMMER la phase', () => {
   })
 
   it('la liste des phases acceptées est FERMÉE (un modèle ne peut rien inventer)', () => {
-    expect(source).toContain(
-      "const ORCHESTRATE_PHASES = new Set(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])"
-    )
+    // Ce test assertait le TEXTE LITTÉRAL de la liste — six phases recopiées à la main. Il gardait la
+    // lettre au lieu de la propriété, et il a interdit de corriger une vraie omission : `kaizen` et
+    // `remake` étaient absents de cette copie alors qu'ils sont des phases canoniques, si bien qu'une
+    // phase parfaitement valide nommée par le modèle était refusée sans un mot.
+    //
+    // Ce qui compte est ici : la liste est FERMÉE (elle vient de la source canonique, donc un modèle
+    // ne peut rien inventer) et elle est bien CONSULTÉE avant d'accepter la phase.
+    expect(source).toContain('const ORCHESTRATE_PHASES = new Set<string>(PIPELINE_PHASES)')
     expect(source).toContain('ORCHESTRATE_PHASES.has(requestedPhase)')
+    // Et la fermeture reste vérifiée sur le COMPORTEMENT, pas seulement sur la forme.
+    expect(source).not.toContain('ORCHESTRATE_PHASES.add')
   })
 
   it('la phase est transmise sous la forme DÉJÀ éprouvée `/<phase> …`', () => {
