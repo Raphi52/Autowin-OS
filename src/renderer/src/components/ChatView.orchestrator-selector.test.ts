@@ -305,6 +305,33 @@ describe('selecteur orchestrateur Chat', () => {
     )
   })
 
+  it('liste id-par-id PAR FOURNISSEUR : le meme id chez deux providers donne deux lignes', () => {
+    const result = buildOrchestratorModelGroups([
+      { id: 'cli', provider: 'claude', model: 'claude-opus-4-8', label: 'Opus 4.8 · CLI' },
+      { id: 'api', provider: 'anthropic', model: 'claude-opus-4-8', label: 'Opus 4.8 · API' }
+    ])
+    const anthropic = result.groups.find((group) => group.key === 'anthropic')
+    // La vue « famille » n'en gardait qu'UNE : le second fournisseur disparaissait du menu ET de
+    // la matrice MODEL × EFFORT, sans aucun signal.
+    expect(anthropic?.options.map((option) => `${option.provider}:${option.model}`)).toEqual([
+      // Meme famille et meme version : l'egalite est tranchee par le LIBELLE (API avant CLI).
+      'anthropic:claude-opus-4-8',
+      'claude:claude-opus-4-8'
+    ])
+  })
+
+  it('ne dedouble PAS un couple (fournisseur, id) present deux fois dans le catalogue', () => {
+    // Entree qui ferait ECHOUER ce test si la correction supprimait toute deduplication :
+    // le meme couple provider+model apparait deux fois (deux entrees de catalogue, un seul modele).
+    const result = buildOrchestratorModelGroups([
+      { id: 'a', provider: 'claude', model: 'claude-opus-4-8', label: 'Opus 4.8' },
+      { id: 'b', provider: 'claude', model: 'claude-opus-4-8', label: 'Opus 4.8 (doublon)' }
+    ])
+    const anthropic = result.groups.find((group) => group.key === 'anthropic')
+    expect(anthropic?.options).toHaveLength(1)
+    expect(anthropic?.options[0].label).toBe('Opus 4.8')
+  })
+
   it('change le role orchestrateur partage sans toucher la conversation', () => {
     expect(source).toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
     expect(source).toContain('option.provider,')

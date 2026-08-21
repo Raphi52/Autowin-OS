@@ -922,7 +922,17 @@ export function buildOrchestratorModelGroups(
       rank: vendor.rank,
       options: []
     }
-    if (!bucket.options.some((entry) => entry.model === option.model)) bucket.options.push(option)
+    // Dédoublonnage par COUPLE (fournisseur, id) et non par id seul : le même id exposé par deux
+    // fournisseurs (ex. `claude-opus-4-8` via le CLI ET via l'API) est bien DEUX cibles
+    // sélectionnables — la vue « famille » en perdait une, silencieusement, dans le menu comme dans
+    // la matrice MODEL × EFFORT. Un couple présent deux fois dans le catalogue reste, lui, unique.
+    if (
+      !bucket.options.some(
+        (entry) => entry.model === option.model && entry.provider === option.provider
+      )
+    ) {
+      bucket.options.push(option)
+    }
     byVendor.set(vendor.key, bucket)
   }
   // Éditeurs : plus récent/capable d'abord (Opus 4.8 → 4.7 …). Auto : sous-tri Chat/Code conservé.
