@@ -6,7 +6,7 @@
  */
 
 export interface HookViolation {
-  hook: 'anti-flaky' | 'fix-gate' | 'done-without-proof'
+  hook: 'anti-flaky' | 'fix-gate' | 'done-without-proof' | 'visual-proof-missing'
   line?: number
   detail: string
 }
@@ -71,6 +71,35 @@ export function requireProofBeforeGreen(evidenceOkCount: number): HookViolation[
     : [{ hook: 'done-without-proof', detail: 'aucune preuve d’exécution ok — green refusé' }]
 }
 
+/**
+ * visual-proof : un diff qui touche le RENDU (fichiers de vue/composant/style du renderer) ne se
+ * valide PAS par un exit-code de test unitaire — il exige une preuve VISUELLE observée (capture
+ * réellement lue, cf. `scripts/ui-capture.mjs`). Kaizen du 2026-08-21 : le run « fond d'écran de
+ * l'Accueil » est passé vert sur un test unitaire puis s'est fermé `degraded`, l'utilisateur ayant
+ * dû constater lui-même le rendu. Fonction PURE ; opt-in via `requireVisualProof` (zéro régression
+ * sur les runs qui ne touchent pas au rendu).
+ */
+const FRONT_RENDER_FILE = /^src\/renderer\/.*\.(?:tsx?|css|html)$/
+export function requireVisualProofForFrontDiff(
+  diff: string,
+  visualProofOkCount: number
+): HookViolation[] {
+  const touched = diff
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('+++ '))
+    .map((line) => line.replace(/^\+\+\+\s+(?:b\/)?/, '').trim())
+    // Un fichier de TEST n'est pas du rendu : l'exiger rendrait le hook trop large et bloquerait
+    // des diffs qui n'affichent rien.
+    .filter((file) => !/\.(?:test|spec)\.[tj]sx?$/.test(file) && FRONT_RENDER_FILE.test(file))
+  if (!touched.length || visualProofOkCount > 0) return []
+  return [
+    {
+      hook: 'visual-proof-missing',
+      detail: `rendu modifié sans preuve visuelle lue (${touched.join(', ')}) — capture attendue via scripts/ui-capture.mjs`
+    }
+  ]
+}
+
 /** Agrège tous les hooks ; retourne les violations (vide = laisser passer). */
 export function runHooks(input: {
   producedDiff?: string
@@ -78,11 +107,15 @@ export function runHooks(input: {
   causeTokensByFile?: Record<string, boolean>
   evidenceOkCount?: number
   requireProof?: boolean
+  requireVisualProof?: boolean
+  visualProofOkCount?: number
 }): HookViolation[] {
   const v: HookViolation[] = []
   if (input.producedDiff) v.push(...detectRawSleep(input.producedDiff))
   if (input.editsByFile)
     v.push(...detectBlindFixLoop(input.editsByFile, input.causeTokensByFile))
   if (input.requireProof) v.push(...requireProofBeforeGreen(input.evidenceOkCount ?? 0))
+  if (input.requireVisualProof && input.producedDiff)
+    v.push(...requireVisualProofForFrontDiff(input.producedDiff, input.visualProofOkCount ?? 0))
   return v
 }

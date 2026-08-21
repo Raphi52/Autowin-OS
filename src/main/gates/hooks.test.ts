@@ -3,6 +3,7 @@ import {
   detectRawSleep,
   detectBlindFixLoop,
   requireProofBeforeGreen,
+  requireVisualProofForFrontDiff,
   runHooks
 } from './hooks'
 
@@ -70,5 +71,44 @@ describe('detectRawSleep — le numero de ligne doit designer le VRAI diff', () 
   it('reste juste avec plusieurs violations dispersees', () => {
     const diff = [' a', '+Start-Sleep 3', ' b', ' c', '+Task.Delay(9999)'].join('\n')
     expect(detectRawSleep(diff).map((v) => v.line)).toEqual([2, 5])
+  })
+})
+
+/**
+ * KAIZEN (2026-08-21, conv-1360). Defaut de PROCESS observe : le run `accueil-widgets` (remake du
+ * fond d'ecran de l'Accueil) est passe le gate `done-without-proof` avec un simple exit-code de
+ * test unitaire, puis s'est ferme `degraded` — l'utilisateur a du signaler lui-meme que le rendu
+ * n'allait pas. La lecon retenue dans la conversation ("une modif front ne se valide que par une
+ * capture reellement lue") n'etait PAS opposable, faute d'exister en CODE deterministe.
+ *
+ * Ce test est ecrit ROUGE avant la correction.
+ */
+describe('visual-proof : un diff de RENDU exige une preuve visuelle, pas un exit-code', () => {
+  const frontDiff = ['--- a/x', '+++ b/src/renderer/src/components/home-decor-scene.ts', '+const bg = 1'].join('\n')
+
+  it('block quand le diff touche le rendu et qu aucune preuve visuelle n est observee', () => {
+    const v = requireVisualProofForFrontDiff(frontDiff, 0)
+    expect(v).toHaveLength(1)
+    expect(v[0].hook).toBe('visual-proof-missing')
+    expect(v[0].detail).toContain('home-decor-scene.ts')
+  })
+
+  it('laisse passer des qu une preuve visuelle est observee', () => {
+    expect(requireVisualProofForFrontDiff(frontDiff, 1)).toEqual([])
+  })
+
+  // ENTREES QUI DOIVENT FAIRE ECHOUER CE TEST SI LA CORRECTION EST FAUSSE (detection trop large) :
+  // un diff de test seul, un diff main/, un diff sans fichier front.
+  it('n exige rien sur un diff qui ne touche AUCUN fichier de rendu', () => {
+    const testOnly = ['+++ b/src/renderer/src/components/home-decor-scene.test.ts', '+expect(1).toBe(1)'].join('\n')
+    const mainOnly = ['+++ b/src/main/gates/hooks.ts', '+const x = 1'].join('\n')
+    expect(requireVisualProofForFrontDiff(testOnly, 0)).toEqual([])
+    expect(requireVisualProofForFrontDiff(mainOnly, 0)).toEqual([])
+  })
+
+  it('runHooks : le hook visuel reste INACTIF par defaut (zero regression sur les runs existants)', () => {
+    expect(runHooks({ producedDiff: frontDiff })).toEqual([])
+    expect(runHooks({ producedDiff: frontDiff, requireVisualProof: true, visualProofOkCount: 0 })).toHaveLength(1)
+    expect(runHooks({ producedDiff: frontDiff, requireVisualProof: true, visualProofOkCount: 1 })).toEqual([])
   })
 })
