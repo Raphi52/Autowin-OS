@@ -809,7 +809,11 @@ export class RunWorktreeCoordinator {
   retryRun(runId: string): WorktreeAgentActivity | undefined {
     const tracked = this.runs.get(runId)
     const retryBlockedPublication =
-      tracked?.publication === 'blocked' && tracked.attentionReason === 'merge-failed'
+      tracked?.publication === 'blocked' &&
+      // Un refus pour fichiers ignorés se répare hors de l'app (déplacer/supprimer la preuve) :
+      // il doit rester réessayable à la main, comme `merge-failed`, sinon le Hub perd le bouton.
+      (tracked.attentionReason === 'merge-failed' ||
+        tracked.attentionReason === 'ignored-deliverables')
     const retryExhaustedPublication =
       !!tracked &&
       ['pending', 'cleanup-pending'].includes(tracked.publication ?? '') &&
@@ -846,7 +850,11 @@ export class RunWorktreeCoordinator {
   async retryRunAsync(runId: string): Promise<WorktreeAgentActivity | undefined> {
     const tracked = this.runs.get(runId)
     const retryBlockedPublication =
-      tracked?.publication === 'blocked' && tracked.attentionReason === 'merge-failed'
+      tracked?.publication === 'blocked' &&
+      // Un refus pour fichiers ignorés se répare hors de l'app (déplacer/supprimer la preuve) :
+      // il doit rester réessayable à la main, comme `merge-failed`, sinon le Hub perd le bouton.
+      (tracked.attentionReason === 'merge-failed' ||
+        tracked.attentionReason === 'ignored-deliverables')
     const retryExhaustedPublication =
       !!tracked &&
       ['pending', 'cleanup-pending'].includes(tracked.publication ?? '') &&

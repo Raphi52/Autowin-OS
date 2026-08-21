@@ -172,7 +172,7 @@ export type FinalizeResult =
       outcome: 'blocked'
       agentId: string
       files: string[]
-      reason: 'base-dirty' | 'base-in-progress' | 'merge-failed'
+      reason: 'base-dirty' | 'base-in-progress' | 'merge-failed' | 'ignored-deliverables'
       /** Les fichiers remontés diagnostiquent la base ; conserver la provenance agent déjà suivie. */
       preserveAgentFiles?: boolean
       /**
@@ -1461,6 +1461,10 @@ export class WorktreeManager {
       ':(exclude,glob)dist/**',
       ':(exclude,glob)dist-*/**',
       ':(exclude,glob)graphify-out/**',
+      // Dossier de preuves du harnais (`ui-capture`, `cdp-*-proof`) : une capture se REFAIT en
+      // relançant le script. Mesuré le 2026-08-21 (conv-1362) : un run vert a bloqué sa propre
+      // publication parce que SA preuve, `Audit/accueil-3d-anime.png`, comptait comme livrable.
+      ':(exclude,glob)Audit/**',
       ':(exclude,glob)**/.eslintcache',
       ':(exclude,glob)*.tsbuildinfo',
       ':(exclude,glob)**/*.tsbuildinfo',
@@ -3808,7 +3812,9 @@ exit 0
         outcome: 'blocked',
         agentId,
         files: ignoredFiles,
-        reason: 'merge-failed',
+        // PAS `merge-failed` : aucune fusion n'est tentée ici. Mesuré le 2026-08-21 (conv-1362) :
+        // le libellé de fusion a envoyé le diagnostic chercher un conflit git inexistant.
+        reason: 'ignored-deliverables',
         detail: 'La copie contient des fichiers ignorés non régénérables.'
       }
     }

@@ -1215,7 +1215,7 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         outcome: 'blocked',
         agentId: 'run-environment-fixed',
         files: ['tsconfig.web.tsbuildinfo'],
-        reason: 'merge-failed',
+        reason: 'ignored-deliverables',
         detail: 'La copie contient des fichiers ignorés non régénérables.'
       })
       .mockReturnValueOnce({
@@ -1230,7 +1230,8 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     expect(co.activity()[0]).toMatchObject({
       state: 'blocked',
       publication: 'blocked',
-      attentionReason: 'merge-failed'
+      // Le motif nomme la CAUSE (fichiers ignorés), il ne parle plus d'une fusion jamais tentée.
+      attentionReason: 'ignored-deliverables'
     })
 
     expect(co.retryRun('run-environment-fixed')).toMatchObject({

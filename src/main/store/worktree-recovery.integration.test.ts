@@ -519,6 +519,42 @@ describe('récupération des worktrees après redémarrage', () => {
     expect(current.manager.listAgentIds()).toEqual([])
   })
 
+  it("publie un travail accompagné de ses captures de preuve dans Audit/", () => {
+    // Mesuré le 2026-08-21 (conv-1362) : le run « fond 3d animé » a produit sa preuve avec
+    // `ui-capture --out Audit/accueil-3d-anime.png`, dans un dossier ignoré — et le refus des
+    // ignorés non régénérables a bloqué SON PROPRE code, vert, avec le motif `merge-failed`.
+    // `Audit/` est le dossier de preuves du harnais : régénérable par relance de la capture.
+    const repo = tempRepo()
+    writeFileSync(join(repo, '.gitignore'), 'node_modules\nout\nAudit/\n')
+    git(repo, 'add', '.gitignore')
+    git(repo, 'commit', '-q', '-m', 'ignore Audit')
+    const current = manager(repo)
+    const path = current.manager.acquire('run-audit-proof')
+    writeFileSync(join(path, 'a.txt'), 'travail agent\n')
+    mkdirSync(join(path, 'Audit'), { recursive: true })
+    writeFileSync(join(path, 'Audit', 'accueil-3d-anime.png'), 'capture\n')
+
+    expect(current.manager.finalize('run-audit-proof')).toMatchObject({ outcome: 'merged' })
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8')).toContain('travail agent')
+  })
+
+  it('nomme le refus des ignorés non régénérables sans parler de fusion', () => {
+    const repo = tempRepo()
+    writeFileSync(join(repo, '.gitignore'), '*.tmp\n')
+    git(repo, 'add', '.gitignore')
+    git(repo, 'commit', '-q', '-m', 'ignore tmp')
+    const current = manager(repo)
+    const path = current.manager.acquire('run-livrable-ignore')
+    writeFileSync(join(path, 'result.tmp'), 'livrable ignoré\n')
+
+    // `merge-failed` envoyait chercher un conflit de fusion inexistant : aucune fusion n'est tentée.
+    expect(current.manager.finalize('run-livrable-ignore')).toMatchObject({
+      outcome: 'blocked',
+      reason: 'ignored-deliverables',
+      files: ['result.tmp']
+    })
+  })
+
   it("conserve les fichiers agent dans le manifeste après un blocage transitoire de l'index", () => {
     const repo = tempRepo()
     const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-recovery-root-'))

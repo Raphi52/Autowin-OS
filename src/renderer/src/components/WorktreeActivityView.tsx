@@ -95,6 +95,13 @@ function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: stri
         tone: 'waiting'
       }
     }
+    if (agent.attentionReason === 'ignored-deliverables') {
+      return {
+        label: 'Des fichiers non suivis bloquent le retour',
+        outcome: `La copie contient des fichiers ignorés par git qui pourraient être des livrables : Autowin ne les jette pas. Déplace-les ou supprime-les, puis relance le retour.${agent.detail ? ` ${agent.detail}` : ''}`,
+        tone: 'danger'
+      }
+    }
     if (agent.attentionReason === 'base-dirty') {
       return {
         label: 'Ton travail est protégé',

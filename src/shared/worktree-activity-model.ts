@@ -63,7 +63,13 @@ export interface WorktreeAgentActivity {
   conflictFile?: string
   /** Pourquoi la copie attend sans être un conflit entre agents. */
   attentionReason?:
-    'base-dirty' | 'base-in-progress' | 'merge-failed' | 'post-publish-change' | 'retry-exhausted'
+    | 'base-dirty'
+    | 'base-in-progress'
+    | 'merge-failed'
+    /** Des fichiers ignorés non régénérables empêchent le retour : aucune fusion n'a été tentée. */
+    | 'ignored-deliverables'
+    | 'post-publish-change'
+    | 'retry-exhausted'
   /** Contexte durable du bureau, affiché par le Hub A2. */
   task?: string
   /**
