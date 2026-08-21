@@ -46,12 +46,13 @@ signal to choose. Read-only: scout PROPOSES the menu; it never frames, fixes, or
 
 ## Output  (default)
 ONE table, ranked **highest-IMPACT first** (NOT "most-pickable" = smallest/safest — that buries the conséquent under cheap fixes); the top row must still be a real, pickable `frame` input (a high-impact candidate, hard or not — show its effort honestly, never drop it for being hard). Scout STOPS here (the user picks a row → `frame`).
-| # | Impact | Effort | Type | What | Why | How |
-|---|---|---|---|---|---|---|
-| 1 | 🟢\|🟡\|🔴 | 🟢\|🟡\|🔴 | 🔧 fix \| 🆕 new | what it is, 1 line | the problem it solves / the value | the concrete first step (+ `file:line` if it's a fix) |
-- **Number every row** (`#` column, 1..N in final rank order) so the user can pick a candidate by number ("row 3 → `frame`"). The number is the PICK HANDLE, not a priority — priority = the **Impact** band + rank order.
-- **Impact ⊥ Effort = two SEPARATE bands, NEVER collapsed** (ENGINE Ch.1 ranking rule): **Impact** 🟢 high (changes the nature) / 🟡 medium / 🔴 low · **Effort** 🟢 low / 🟡 medium / 🔴 high. **Rank by Impact first**, then lower effort — a 🟢-impact candidate stays in the TOP even at 🔴 effort, so the ambitious/conséquent is never buried under safe small fixes; the human (not a merged number) decides if the impact is worth the cost. Both producer-judged, NOT verified measures — never a 2-digit /100. **Calibrate bold Impact vs the central-goal ceiling** (ENGINE Ch.1): a candidate that 10x's the target's central goal = 🟢 Impact even if uncertain/hard — uncertainty feeds Effort, it never deflates Impact (else conservative scoring re-buries the bold).
-- Keep ALL internal machinery OUT of the table (per-lens scores, "taste"/"novelty"/baskets stay under the hood — only the **Impact/Effort** bands surface).
+| # | Score | Type | What | Why | How |
+|---|---|---|---|---|---|
+| 1 | 82 | 🔧 fix \| 🆕 new | what it is, 1 line | the problem it solves / the value | the concrete first step (+ `file:line` if it's a fix) |
+- **Number every row** (`#` column, 1..N in final rank order) so the user can pick a candidate by number ("row 3 → `frame`"). The number is the PICK HANDLE, not a priority — priority = the **Score** + rank order.
+- **Score = a PLAIN INTEGER 0-100, written in digits — NEVER a colour pastille (🟢/🟡/🔴), never "high/medium", never a ratio ("8/10"), never a range.** This column is READ BY MACHINE as well as by the human: Autowin's scout panel parses it to show the note next to each candidate ([scout-table.ts:143](file:///C:/Amitel/Autowin%20OS/src/renderer/src/components/scout-table.ts)), and a pastille there degrades every row to a mute dot — measured 2026-08-18. It also makes the shortlist non-sortable and says nothing the row's rank doesn't already say.
+- **How to compute it, WITHOUT re-burying the bold** (ENGINE Ch.1 ranking rule — the reason this used to be two columns): judge **Impact** (does it change the target's nature? 🟢 high / 🟡 medium / 🔴 low) and **Effort** (🟢 low / 🟡 medium / 🔴 high) SEPARATELY under the hood, then surface ONE score in which **impact DOMINATES**: a high-impact candidate never scores below ~70 however hard it is, and no cheap-and-safe low-impact fix ever outranks it. Uncertainty about feasibility feeds effort — it never deflates impact. **Say the effort in the How column** (e.g. "gros chantier — 1er pas : …") so the human still sees the cost the single number hides. Both judgements stay producer-judged, NOT verified measures: the score is a coarse ranking handle, never false 2-digit precision.
+- Keep ALL internal machinery OUT of the table (per-lens scores, "taste"/"novelty"/baskets, the raw Impact/Effort bands stay under the hood — only the **Score** surfaces).
 - If a 🔧 and a 🆕 point at the SAME lever, add ONE line under the table saying so. Already-owned items → one line "already covered: X" at most.
 
 ## Modes
