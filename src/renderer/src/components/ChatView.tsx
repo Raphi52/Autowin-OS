@@ -1388,18 +1388,16 @@ export function ChatView({
     else await reloadActiveFromStore(activeId) // fork refusé : on reste où on est
   }
   /**
-   * CHOIX EXPLICITE (tour en cours) : le message tapé pendant un run est MIS EN FILE, jamais
-   * appliqué automatiquement. Le bloc de file affiche alors les deux actions — 🧭 Orienter
-   * (injecte dans le tour sans l'interrompre) et ⏹ Interrompre et envoyer. Le raccourci `/btw`
-   * reste, lui, une injection explicite immédiate.
+   * PARITÉ claude.exe (demande du 2026-08-21) : le message tapé pendant un tour ORIENTE le tour en
+   * cours, il n'est PLUS mis en file. C'est exactement le chemin `/btw` — même IPC `injectDirective`,
+   * même reçu — donc plus deux comportements pour un seul geste. La file survit uniquement comme
+   * REPLI de `submitBtw` quand l'injection est refusée (rien n'est perdu), et ses actions manuelles
+   * (🧭 Orienter, ⏹ Interrompre et envoyer) restent disponibles sur ces entrées de repli.
    */
   function queueCurrentMessage(): void {
     if (!activeId) return
-    const text = input.trim()
-    if (!text) return
-    const id = activeId
-    setDraftInput(id, '')
-    enqueueMessage(id, text)
+    if (!input.trim()) return
+    void submitBtw(input, 'normal')
   }
 
   /**
@@ -1635,7 +1633,14 @@ export function ChatView({
    * Repli : si l'injection échoue (tour non injectable), on enfile pour ne rien perdre.
    * Idle (aucun tour) → envoi normal.
    */
-  async function submitBtw(body: string): Promise<void> {
+  async function submitBtw(
+    body: string,
+    // Mode du REPLI en file si l'injection échoue. `/btw` garde 'btw' (« celui-là passe en dernier ») ;
+    // un message ORDINAIRE tapé pendant le tour doit, lui, retomber en file NORMALE — sinon le repli
+    // le marquait btw et l'ordre de la file mentait sur ce que l'utilisateur avait tapé.
+    repli: 'btw' | 'normal' = 'btw'
+  ): Promise<void> {
+    const replimode: QueuedDirective['mode'] = repli === 'btw' ? 'btw' : undefined
     const text = body.trim()
     if (!text) {
       setDraftInput(composerDraftKeyRef.current, '') // "/btw" seul → rien à injecter, on nettoie
@@ -1654,7 +1659,7 @@ export function ChatView({
     // réponse ». Une divergence entre deux chemins du même mécanisme, pas un oubli isolé.
     // Même compteur que la file : un reçu et une entrée de file ne doivent jamais partager un id,
     // sinon le repli en file (ci-dessous) écraserait le reçu qu'on vient de poser.
-    const entry: QueuedDirective = { id: nextQueueEntryIdRef.current++, text, mode: 'btw' }
+    const entry: QueuedDirective = { id: nextQueueEntryIdRef.current++, text, mode: replimode }
     setDirectiveReceipt(id, entry, 'sending')
     let injected = false
     try {
@@ -1664,7 +1669,7 @@ export function ChatView({
       injected = false
     }
     // Repli explicite : l'injection a échoué → file d'attente (drainée en fin de tour), rien n'est perdu.
-    if (!injected) enqueueMessage(id, text, 'btw')
+    if (!injected) enqueueMessage(id, text, replimode)
     setDirectiveReceipt(id, entry, injected ? issueDeLInjection(id) : 'failed')
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
@@ -3226,7 +3231,7 @@ export function ChatView({
                 }}
                 placeholder={
                   busy && activeId !== null
-                    ? 'Mettre en file… envoyé à la fin du tour (Entrée)'
+                    ? 'Orienter l’agent sans l’interrompre (Entrée)'
                     : ghostRecommendation
                       ? `⇥ ${ghostRecommendation}`
                       : 'Écrire à l’agent ou déposer des fichiers…'
@@ -3276,11 +3281,11 @@ export function ChatView({
                   canResumePilotTurn
                     ? 'Reprendre la réponse'
                     : busy
-                      ? 'Mettre le message en file d’attente'
+                      ? 'Orienter l’agent sans l’interrompre'
                       : 'Envoyer le message'
                 }
               >
-                {canResumePilotTurn ? '↻ Reprendre' : busy ? '⚡ Mettre en file' : 'Envoyer'}
+                {canResumePilotTurn ? '↻ Reprendre' : busy ? '🧭 Orienter' : 'Envoyer'}
               </button>
             </div>
             <div className="composer-meta">

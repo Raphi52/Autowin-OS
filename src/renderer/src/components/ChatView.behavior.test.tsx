@@ -66,7 +66,10 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     resumePilotChat: vi.fn().mockResolvedValue({ ok: true }),
     markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
     cancelPilotChat: vi.fn().mockResolvedValue(undefined),
-    injectDirective: vi.fn().mockResolvedValue({ ok: true }),
+    // DEFAUT de ces tests : l'injection est INDISPONIBLE, donc un message tape pendant un tour
+    // retombe sur le REPLI file d'attente — c'est ce repli que la majorite d'entre eux exercent.
+    // Les tests qui veulent une injection reussie l'overrident explicitement.
+    injectDirective: vi.fn().mockRejectedValue(new Error('injection indisponible')),
     cancelOrchestration: vi.fn().mockResolvedValue(undefined),
     ...overrides
   }
@@ -723,12 +726,12 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ).toBe('B')
   })
 
-  it('en état busy, le message est MIS EN FILE et les deux boutons de choix sont rendus', async () => {
+  it('injection impossible pendant un tour ⇒ REPLI en file, avec les deux boutons de choix', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
-      pilotChat: vi.fn(() => pilot.promise),
-      injectDirective: vi.fn().mockResolvedValue({ ok: true })
+      pilotChat: vi.fn(() => pilot.promise)
+      // `api()` rend l'injection indisponible → le message tape retombe en file (repli).
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -737,8 +740,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await type('au fait, ajoute un test')
     await click('.composer-send')
 
-    // AUCUNE action appliquée sans choix explicite de l'utilisateur.
-    expect(mockApi.injectDirective).not.toHaveBeenCalled()
+    // L'orientation a bien ete TENTEE (parite claude.exe) ; c'est son echec qui remplit la file.
+    expect(mockApi.injectDirective).toHaveBeenCalled()
     // Le message est en file, avec le bloc de CHOIX (Orienter / Interrompre & envoyer).
     expect(container!.querySelector('.directive-queue')).not.toBeNull()
     expect(container!.querySelector('.directive-queue-text')?.textContent).toBe(
@@ -754,7 +757,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
       pilotChat: vi.fn(() => pilot.promise),
-      injectDirective: vi.fn().mockResolvedValue({ ok: true })
+      // 1re injection (composer) refusee → repli file ; la 2e (bouton Orienter) reussit.
+      injectDirective: injectFailingThen(1)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -786,7 +790,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.composer-send')
     await type('garde cette contrainte')
     await click('.composer-send')
-    await click('.directive-queue-steer')
 
     const receipt = container!.querySelector('.directive-receipt')
     expect(receipt?.querySelector('.msg-body')?.textContent).toBe('garde cette contrainte')
@@ -811,7 +814,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
       pilotChat: vi.fn(() => pilot.promise),
-      injectDirective: vi.fn(() => injection.promise)
+      injectDirective: injectFailingThen(1, () => injection.promise)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -937,7 +940,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     for (let index = 0; index < 21; index += 1) {
       await type(`directive-${index}`)
       await click('.composer-send')
-      await click('.directive-queue-steer')
     }
 
     const receipts = container!.querySelectorAll('.directive-receipt')
@@ -973,7 +975,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     )
     await type('contrainte chronologique')
     await click('.composer-send')
-    await click('.directive-queue-steer')
     await act(async () =>
       pilotHandler?.({
         conversationId: 'A',
@@ -1023,7 +1024,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     )
     await type('nouvelle contrainte')
     await click('.composer-send')
-    await click('.directive-queue-steer')
     await act(async () => {
       pilotHandler?.({
         conversationId: 'A',
@@ -1072,7 +1072,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
       pilotChat: vi.fn(() => pilot.promise),
-      injectDirective: vi.fn(() => injection.promise)
+      injectDirective: injectFailingThen(1, () => injection.promise)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -1095,7 +1095,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
       injection.resolve({ ok: true })
       await flushAnimationFrames()
     })
-    expect((mockApi.injectDirective as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+    // 1 = la tentative d'orientation du composer (refusee → repli file), 2 = l'UNIQUE injection
+    // du bouton malgre le double clic. Un 3 signifierait la directive partie deux fois.
+    expect((mockApi.injectDirective as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2)
     await act(async () => pilot.resolve({ ok: true }))
   })
 
@@ -1114,7 +1116,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
       pilotChat: vi.fn(() => pilot.promise),
-      injectDirective: vi.fn(() => injection.promise)
+      injectDirective: injectFailingThen(1, () => injection.promise)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -1209,7 +1211,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
       pilotChat,
-      injectDirective: vi.fn(() => injection.promise)
+      injectDirective: injectFailingThen(1, () => injection.promise)
     })
     await mount(mockApi)
     const picks = (): NodeListOf<Element> => container!.querySelectorAll('.conv-pick')
@@ -1345,8 +1347,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
       pilotChat: vi.fn(() => pilot.promise),
-      // Le composer n'injecte plus (mise en file + choix) : seuls les clics « Orienter » injectent.
-      injectDirective: injectFailingThen(0, () => injection.promise)
+      // Les 2 messages tapes PENDANT le tour (A, B) voient leur orientation refusee → ils
+      // remplissent la file ; seuls les clics « Orienter » injectent ensuite avec succes.
+      injectDirective: injectFailingThen(2, () => injection.promise)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -1373,7 +1376,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
       pilotChat: vi.fn(() => pilot.promise),
-      injectDirective: injectFailingThen(0, () => injection.promise)
+      injectDirective: injectFailingThen(1, () => injection.promise)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -1388,8 +1391,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
       await Promise.resolve()
     })
 
-    // Le composer met en FILE (0 injection) ; seul le bouton « Orienter » injecte.
-    expect(mockApi.injectDirective).toHaveBeenCalledTimes(1)
+    // 1 tentative refusee (composer → repli file) + 1 injection du bouton « Orienter ».
+    expect(mockApi.injectDirective).toHaveBeenCalledTimes(2)
     expect(container!.querySelector('.directive-queue')).toBeNull()
     await act(async () => injection.resolve({ ok: true }))
     await act(async () => pilot.resolve({ ok: true }))
