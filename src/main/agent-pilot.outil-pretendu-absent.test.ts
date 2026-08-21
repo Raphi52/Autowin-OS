@@ -40,6 +40,12 @@ function harnais(reponses: string[]) {
         description: 'Rejouer la vérification du projet',
         args: {},
         annotations: { readOnlyHint: true }
+      },
+      {
+        name: 'conversation_read',
+        description: "Lire le contenu réel d'une autre conversation",
+        args: {},
+        annotations: { readOnlyHint: true }
       }
     ],
     snapshot: () => ({}),
@@ -94,6 +100,40 @@ describe('AgentPilot — un outil faussement déclaré absent déclenche une rel
     await h.jouer()
     const relances = h.promptsRecus.filter((p) => p.includes('tu affirmes ne pas disposer de'))
     // Insister serait harceler : une seule relance, puis on laisse le tour se terminer.
+    expect(relances.length).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('AgentPilot — une conversation déclarée inaccessible déclenche une relance', () => {
+  it('relance sur la phrase RÉELLE du 21/08', async () => {
+    const h = harnais([
+      "Le scout aux 8 candidats n'existe dans mon contexte qu'à travers le tableau du frame.",
+      'Voici les 8 candidats, relus avec conversation_read.'
+    ])
+    await h.jouer()
+    expect(h.promptsRecus.length).toBeGreaterThanOrEqual(2)
+    const relance = h.promptsRecus[1]
+    expect(relance).toContain('conversation_read')
+    expect(relance).toContain('Ne réponds JAMAIS')
+  })
+
+  it('ne relance PAS quand l’agent a simplement lu la conversation', async () => {
+    const h = harnais(["J'ai relu la conversation conv-1291 : elle contient 8 candidats."])
+    await h.jouer()
+    expect(h.promptsRecus.filter((p) => p.includes('Ne réponds JAMAIS'))).toEqual([])
+  })
+
+  it('une seule relance de forme par tour, toutes formes confondues', async () => {
+    // Les deux formes partagent le meme verrou : nier un outil PUIS nier un acces ne relance qu'une fois.
+    const h = harnais([
+      "`edit_file` n'existe pas.",
+      "et cette conversation n'existe que dans mon contexte",
+      'Bon, terminé.'
+    ])
+    await h.jouer()
+    const relances = h.promptsRecus.filter(
+      (p) => p.includes('tu affirmes ne pas disposer de') || p.includes('Ne réponds JAMAIS')
+    )
     expect(relances.length).toBeLessThanOrEqual(1)
   })
 })

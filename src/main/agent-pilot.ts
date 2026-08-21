@@ -26,7 +26,12 @@ import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { routeSkillRequest } from './skill-routing'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
-import { correctionOutilsPresents, outilsFaussementAbsents } from '../shared/outil-pretendu-absent'
+import {
+  conversationPretendueInaccessible,
+  correctionConversationLisible,
+  correctionOutilsPresents,
+  outilsFaussementAbsents
+} from '../shared/outil-pretendu-absent'
 import { startTurnTimer } from './turn-timing'
 import {
   formatOrchestrationOutcome,
@@ -1257,6 +1262,23 @@ export class AgentPilot {
             relanceDeFormeUtilisee = true
             grantRecoveryIteration('outil-pretendu-absent')
             convo.push(correctionOutilsPresents(faussementAbsents))
+            continue
+          }
+          /*
+           * DEUXIEME FORME : l'agent ne nie aucun outil, il nie l'ACCES a une conversation. Mesure du
+           * 21/08 : « Le scout n'existe dans mon contexte qu'a travers le tableau du frame », alors
+           * que `conversation_read` etait la et que sa description interdit deja cette reponse, mot
+           * pour mot. Meme verrou : une seule relance de forme par tour.
+           */
+          const conversationLisible = conversationPretendueInaccessible(
+            visibleTextThisTurn,
+            catalog.map((commande) => commande.name)
+          )
+          if (conversationLisible) {
+            outilAbsentRecoveryAvailable = false
+            relanceDeFormeUtilisee = true
+            grantRecoveryIteration('outil-pretendu-absent')
+            convo.push(correctionConversationLisible(conversationLisible))
             continue
           }
         }

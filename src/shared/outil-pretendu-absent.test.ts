@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { correctionOutilsPresents, outilsFaussementAbsents } from './outil-pretendu-absent'
+import {
+  conversationPretendueInaccessible,
+  correctionConversationLisible,
+  correctionOutilsPresents,
+  outilsFaussementAbsents
+} from './outil-pretendu-absent'
 
 const CATALOGUE = ['edit_file', 'verify', 'orchestrate', 'read_file', 'brain_query']
 
@@ -85,5 +90,86 @@ describe('correctionOutilsPresents', () => {
 
   it('accorde le verbe au singulier pour un seul outil', () => {
     expect(correctionOutilsPresents(['verify'])).toContain('`verify` est dans le catalogue')
+  })
+})
+
+const AVEC_LECTURE = [...CATALOGUE, 'conversation_read']
+
+describe('conversationPretendueInaccessible — la phrase RÉELLE du 21/08', () => {
+  it('attrape « n’existe dans mon contexte qu’à travers … »', () => {
+    const texte =
+      "Le scout aux 8 candidats n'existe dans mon contexte qu'à travers le tableau de vérification du frame."
+    expect(conversationPretendueInaccessible(texte, AVEC_LECTURE)).toBe('conversation_read')
+  })
+
+  it('attrape la formule que la description de l’outil interdit nommément', () => {
+    expect(
+      conversationPretendueInaccessible('je ne peux pas citer cette conversation', AVEC_LECTURE)
+    ).toBe('conversation_read')
+  })
+
+  it('attrape « je n’ai pas accès à cette conversation » et « hors de mon contexte »', () => {
+    expect(
+      conversationPretendueInaccessible("je n'ai pas accès à cette conversation", AVEC_LECTURE)
+    ).toBe('conversation_read')
+    expect(
+      conversationPretendueInaccessible(
+        'ce tour est hors de mon contexte, conversation perdue',
+        AVEC_LECTURE
+      )
+    ).toBe('conversation_read')
+  })
+})
+
+describe('conversationPretendueInaccessible — la précision avant la couverture', () => {
+  it('se TAIT si l’outil n’est pas au catalogue : la phrase est alors VRAIE', () => {
+    const texte = 'je ne peux pas citer cette conversation'
+    expect(conversationPretendueInaccessible(texte, CATALOGUE)).toBeNull()
+  })
+
+  it('ne déclenche PAS sur un refus d’accès qui n’a rien à voir', () => {
+    // La grande majorite des refus d'acces sont VRAIS : un serveur, un secret, un droit.
+    expect(
+      conversationPretendueInaccessible("je n'ai pas accès au serveur de production", AVEC_LECTURE)
+    ).toBeNull()
+    expect(
+      conversationPretendueInaccessible(
+        "je n'ai pas accès à ce fichier hors du dépôt",
+        AVEC_LECTURE
+      )
+    ).toBeNull()
+  })
+
+  it('ne déclenche PAS quand on PARLE d’une conversation sans nier l’accès', () => {
+    expect(
+      conversationPretendueInaccessible('cette conversation est longue, je résume', AVEC_LECTURE)
+    ).toBeNull()
+    expect(
+      conversationPretendueInaccessible(
+        "j'ai lu la conversation conv-1291 avec conversation_read",
+        AVEC_LECTURE
+      )
+    ).toBeNull()
+  })
+
+  it('ne déclenche pas sur un texte vide ou absent', () => {
+    expect(conversationPretendueInaccessible('', AVEC_LECTURE)).toBeNull()
+    expect(conversationPretendueInaccessible(undefined, AVEC_LECTURE)).toBeNull()
+    expect(
+      conversationPretendueInaccessible(
+        { t: 'je ne peux pas citer cette conversation' },
+        AVEC_LECTURE
+      )
+    ).toBeNull()
+  })
+})
+
+describe('correctionConversationLisible', () => {
+  it('cite l’instruction que l’outil porte déjà, au lieu d’inventer une règle', () => {
+    const message = correctionConversationLisible('conversation_read')
+    expect(message).toContain('conversation_read')
+    expect(message).toContain('Ne réponds JAMAIS')
+    // Et elle laisse une issue honnête : un résultat vide se DIT, il ne se refuse pas.
+    expect(message).toMatch(/c.est une réponse, pas un refus/u)
   })
 })

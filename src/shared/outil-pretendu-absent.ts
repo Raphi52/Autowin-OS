@@ -104,3 +104,72 @@ export function correctionOutilsPresents(noms: readonly string[]): string {
     `quelle tentative a échoué et ce qu'elle a rendu.`
   )
 }
+
+/*
+ * DEUXIEME FORME DU MEME DEFAUT : « je n'ai pas ACCES a cette information ».
+ *
+ * Mesure du 21/08, le lendemain de la premiere garde. L'utilisateur demande « tu peux reconsulter
+ * les resultats de ton scout ? ». Reponse : « Le scout aux 8 candidats n'existe dans mon contexte
+ * qu'a travers le tableau de verification du frame. » Or `conversation_read` etait au catalogue, et
+ * sa description se termine par : « Ne reponds JAMAIS "je ne peux pas citer cette conversation" sans
+ * avoir appele cet outil. » La consigne existait, mot pour mot, et n'a pas suffi.
+ *
+ * La premiere garde ne pouvait pas le voir : elle cherche un NOM d'outil declare absent. Ici l'agent
+ * ne nie aucun outil — il nie l'ACCES a une information. Meme faute, autre formulation.
+ *
+ * PORTEE VOLONTAIREMENT ETROITE. On ne detecte pas « toute information inaccessible » : ce serait un
+ * filet a faux positifs, et une bonne part des refus d'acces sont VRAIS (un serveur, un secret, un
+ * droit). On ne couvre que le cas ou un outil du catalogue rend precisement cette information, et ou
+ * sa propre description interdit deja la reponse : la CONVERSATION.
+ */
+
+/** L'outil qui rend le contenu d'une conversation. Absent du catalogue ⇒ la garde se tait. */
+const OUTIL_CONVERSATION = 'conversation_read'
+
+/**
+ * Ce qui compte comme « je ne peux pas atteindre cette conversation ».
+ *
+ * Chaque motif vient d'une phrase REELLEMENT ecrite, ou de la formule que la description de l'outil
+ * interdit nommement. On exige la mention d'une CONVERSATION (ou d'un scout/tour passe) a proximite :
+ * « je n'ai pas acces au serveur » ne doit rien declencher.
+ */
+const INACCESSIBLE = [
+  /n.existe\s+(?:que\s+)?dans\s+mon\s+contexte/iu,
+  /hors\s+de\s+mon\s+contexte/iu,
+  /je\s+ne\s+peux\s+pas\s+(?:citer|relire|consulter|rouvrir)/iu,
+  /je\s+n.ai\s+pas\s+(?:acc[èe]s\s+[àa]\s+|)(?:cette|la|ces|les)\s+(?:conversation|conversations|tours?)/iu,
+  /je\s+ne\s+vois\s+pas\s+(?:cette|la)\s+conversation/iu,
+  /pas\s+(?:d.acc[èe]s|acc[èe]s)\s+[àa]\s+(?:l.historique|mes\s+conversations)/iu
+]
+
+/** Le sujet doit etre une conversation ou un tour passe, sinon le refus d'acces est peut-etre vrai. */
+const SUJET_CONVERSATION =
+  /conversation|scout|tour\s+pr[ée]c[ée]dent|historique|ce\s+qu.on\s+a\s+dit/iu
+
+/**
+ * L'agent declare-t-il inaccessible une conversation que le catalogue sait lire ?
+ *
+ * Rend le nom de l'outil a lui rappeler, ou `null`. `null` des que l'outil n'est pas la : sans lui,
+ * la phrase est vraie et la reprendre serait une faute.
+ */
+export function conversationPretendueInaccessible(
+  texte: unknown,
+  catalogue: readonly string[]
+): string | null {
+  if (typeof texte !== 'string' || !texte.trim()) return null
+  if (!catalogue.includes(OUTIL_CONVERSATION)) return null
+  if (!SUJET_CONVERSATION.test(texte)) return null
+  return INACCESSIBLE.some((motif) => motif.test(texte)) ? OUTIL_CONVERSATION : null
+}
+
+/** La correction : elle cite l'instruction que l'outil porte deja, pour ne pas inventer une regle. */
+export function correctionConversationLisible(outil: string): string {
+  return (
+    `SYSTÈME: tu affirmes ne pas pouvoir atteindre une conversation ou un tour passé. C'est FAUX : ` +
+    `\`${outil}\` est dans le catalogue de CE tour et rend le contenu réel des messages, depuis ` +
+    `l'état vivant de l'application — plus frais que le fichier sur disque. Sa description te dit ` +
+    `déjà : « Ne réponds JAMAIS "je ne peux pas citer cette conversation" sans avoir appelé cet ` +
+    `outil. » Appelle-le maintenant, puis réponds sur ce qu'il rend. Si son résultat ne contient pas ` +
+    `ce que tu cherches, dis-le en citant ce que tu as lu — c'est une réponse, pas un refus.`
+  )
+}
