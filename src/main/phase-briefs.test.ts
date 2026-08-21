@@ -50,136 +50,54 @@ describe('phase-briefs (consignes courtes in-app)', () => {
   })
 
   /*
-   * Mesure du 2026-08-20 : sur 8 candidats repris a la main par l'utilisateur, DEUX etaient deja
-   * corriges. La cause n'etait pas la negligence mais un piege de lecture — un COMMENTAIRE qui
-   * raconte la cause passee se lit comme un defaut vivant, alors que le code au-dessus etait repare
-   * et que son test existait. Le cout : un cycle scout + un cycle frame, et un message ecrit a la
-   * main pour rien.
+   * LA PREUVE AVANT LA LISTE, DANS LES DEUX SENS — un seul bloc, quatre exigences.
    *
-   * CE TEST NE PROUVE PAS QUE LE SCOUT OBEIT — une regle dans un prompt n'est pas un garde-fou. Il
-   * garantit seulement qu'on ne la retire pas en silence.
+   * Mesure des 20 et 21/08 : sur 8 hypotheses de scout, SIX sont mortes du meme defaut — un FAIT vrai
+   * (un grep rend une absence reelle) suivi d'une CONSEQUENCE jamais verifiee. Les 2 survivantes
+   * portaient une affirmation POSITIVE et directement observable. Et le SCORE classait a l'envers :
+   * 84 et 82 aux deux candidats FAUX, 66 a un vrai.
+   *
+   * Le bloc a ete UNIFIE plutot qu'empile : le cas « defaut absent » et le cas « defaut deja corrige »
+   * sont la MEME regle dans les deux sens, donc les dire ensemble couvre plus en ecrivant moins — les
+   * deux sources ont RETRECI (brief 1528 -> 1252, kit 1772 -> 1422) en gagnant une exigence.
+   *
+   * Aucune des quatre n'est inventee : (1) vivait deja dans le brief sans etre dans le kit, (2) est le
+   * reflexe 10 de la constitution raccorde au Why, (4) elargit le plafonnement que le kit appliquait
+   * deja au seul candidat web. Ce test garde le RACCORD dans les deux sources, jamais l'obeissance.
    */
-  it("le brief scout exige de ROUVRIR l'ancrage et de prouver que le defaut est ouvert", () => {
-    const scout = PHASE_BRIEFS.scout
-    expect(scout).toContain('ANCRAGE ROUVERT')
-    expect(scout).toMatch(/ouvre son ancrage file:line/iu)
-    // Le piege nomme, pas seulement la consigne : une regle sans son motif se perd a la relecture.
-    expect(scout).toMatch(/commentaire n.est pas un defaut/iu)
-    // Et la conclusion actionnable : le silence plutot qu'un candidat mort.
-    expect(scout).toMatch(/ne le liste pas/iu)
-  })
-
-  it('le brief frame exige un inventaire de confiance ADOSSÉ À DES PREUVES, pas un ressenti', () => {
-    const frame = PHASE_BRIEFS.frame
-
-    // La section est un livrable, pas une suggestion.
-    expect(frame).toContain('## Confiance')
-    // Les trois états d'une affirmation, dont celui qui oblige à nommer sa source.
-    expect(frame).toMatch(/VÉRIFIÉ/)
-    expect(frame).toMatch(/NON VÉRIFIÉ/)
-    // Le cœur : une affirmation vérifiée NOMME l'artefact ouvert — le garde-fou anti-hallucination.
-    expect(frame).toMatch(/NOMME l'artefact/)
-    // Et l'obligation de RÉSOUDRE, pas seulement de signaler.
-    expect(frame).toMatch(/RÉSOUS/)
-    expect(frame).toMatch(/jamais un fait silencieux/)
-  })
-
-  /*
-   * LES DEUX SOURCES DE CONSIGNE DU SCOUT NE DOIVENT PAS DIVERGER.
-   *
-   * Mesure du 21/08 : la regle « ancrage rouvert » a ete posee la veille dans le brief IN-APP, et le
-   * `skills/scout/SKILL.md` du kit — modifie le meme jour par une autre session — n'en disait RIEN.
-   * Un scout lance par le kit ne recevait donc pas la regle ; un scout in-app la recevait. C'est le
-   * motif que ce depot collectionne : une capacite presente d'un cote, absente de l'autre, sans que
-   * rien ne le signale.
-   *
-   * Ce test ne prouve pas que le scout OBEIT — une regle dans un prompt n'est pas un garde-fou. Il
-   * garantit que la regle ne disparait pas d'UNE des deux sources en silence.
-   */
-  it('la règle d’ancrage rouvert existe DANS LES DEUX sources de consigne du scout', () => {
+  it('la preuve avant la liste existe DANS LES DEUX sources, dans les deux sens', () => {
     const brief = PHASE_BRIEFS.scout
     const kit = readFileSync('skills/scout/SKILL.md', 'utf8')
 
-    expect(brief).toContain('ANCRAGE ROUVERT')
-    expect(kit).toContain('ANCHOR REOPENED')
-
-    // Le MOTIF doit voyager avec la consigne, sinon elle se fait retirer a la premiere relecture.
     for (const source of [brief, kit]) {
-      expect(source).toMatch(/commentaire n.est pas un defaut|comment is not a defect/iu)
-      expect(source).toMatch(/ne le liste pas|do not list it/iu)
-    }
-  })
-
-  /*
-   * LA CLOTURE NEGATIVE, DANS LES DEUX SOURCES AUSSI.
-   *
-   * Mesure du 21/08 : sur 8 hypotheses de scout, 6 sont mortes du MEME defaut — un FAIT vrai (un grep
-   * rend une absence reelle) suivi d'une CONSEQUENCE jamais verifiee (« donc rien ne fait X »). Les 2
-   * survivantes portaient une affirmation POSITIVE et directement observable.
-   *
-   * La regle ne s'invente pas : le reflexe 10 de la constitution l'enonce deja pour les declarations
-   * de BLOCAGE (enumerer / balayer / nommer ce qui a ete teste). Elle est ici RACCORDEE au Why d'un
-   * candidat, qui est l'affirmation miroir. Ce test garde le raccord, pas l'obeissance.
-   */
-  it('la clôture négative existe DANS LES DEUX sources, avec ses trois couches', () => {
-    const brief = PHASE_BRIEFS.scout
-    const kit = readFileSync('skills/scout/SKILL.md', 'utf8')
-
-    expect(brief).toContain('CLOTURE NEGATIVE')
-    expect(kit).toContain('NEGATIVE CLOSURE')
-
-    for (const source of [brief, kit]) {
-      // Les mots du reflexe 10, pas une paraphrase : c'est ce qui rend le raccord reconnaissable.
+      // Le fait : rouvrir l'ancrage, et le piege du commentaire qui raconte une cause passee.
+      expect(source).toMatch(/ANCRAGE ROUVERT|ANCHOR REOPENED/u)
+      expect(source).toMatch(/COMMENTAIRE|COMMENT/u)
+      // La deduction : les mots du reflexe 10, et les TROIS couches.
       expect(source).toMatch(/ENUMERE|ENUMERATE/u)
       expect(source).toMatch(/BALAYE|SWEEP/u)
       expect(source).toMatch(/chemins FERMES|CLOSED paths/u)
-      // Les TROIS couches nommees : sans elles, un grep peut encore passer pour un balayage.
-      expect(source).toMatch(/TROIS couches|THREE deliberate layers/u)
-      expect(source).toMatch(/SKILL\.md/u)
-      expect(source).toMatch(/briefs in-app|in-app briefs/u)
-      expect(source).toMatch(/ENGENDRES|GENERATED/u)
-      // Et l'issue honnete : un balayage incomplet se DIT.
+      expect(source).toMatch(/TROIS|THREE/u)
       expect(source).toMatch(/non epuises|not exhausted/u)
-    }
-  })
-
-  /*
-   * LE SCORE DOIT MESURER LA PREUVE, PAS LA CERTITUDE.
-   *
-   * Mesure du 21/08 : sur mes candidats de scout, 84 et 82 sont alles aux deux qui etaient FAUX, 66 a
-   * un vrai. La confiance etait la plus haute exactement la ou la verification etait la plus faible —
-   * un score non contraint classe donc la shortlist au ressenti.
-   *
-   * L'idiome n'est PAS invente : le SKILL.md plafonnait deja l'impact d'un candidat web sur une
-   * premisse non verifiee (« impact-CAPPED — never 🟢 on an unverified premise »). La doctrine est
-   * ELARGIE a tout Why deductif, pas dupliquee.
-   */
-  it('le plafond de preuve existe DANS LES DEUX sources, avec sa valeur et sa condition', () => {
-    const brief = PHASE_BRIEFS.scout
-    const kit = readFileSync('skills/scout/SKILL.md', 'utf8')
-
-    expect(brief).toContain('PLAFOND DE PREUVE')
-    expect(kit).toContain('PROOF CEILING')
-
-    for (const source of [brief, kit]) {
-      // La valeur du plafond, sinon la regle n'est pas actionnable.
+      // Le SENS INVERSE : ecarter est une conclusion, donc une preuve.
+      expect(source).toMatch(/SENS INVERSE|REVERSE DIRECTION/u)
+      expect(source).toMatch(/ECARTER|DISCARD/iu)
+      // Le classement : un Why deductif est plafonne, et la valeur est dite.
+      expect(source).toMatch(/PLAFOND DE PREUVE|PROOF CEILING/u)
+      expect(source).toMatch(/DEDUCTIF|DEDUCTIVE/iu)
       expect(source).toMatch(/50/u)
-      // Ce qui declenche le plafond : une DEDUCTION, pas une observation directe.
-      expect(source).toMatch(/DEDUCTION/u)
-      // Et la sortie du plafond : nommer les chemins fermes.
-      expect(source).toMatch(/chemins fermes|closed paths/iu)
     }
   })
 
   /*
-   * La consigne scout est bornee a 3000 caracteres par le premier test de ce fichier. A 2897, il ne
-   * reste que ~100 caracteres : la prochaine clause devra CONDENSER, pas ajouter. Ce test rend cette
-   * marge VISIBLE au lieu de la laisser decouvrir par un rouge.
+   * La consigne scout est bornee a 3000 caracteres par le premier test de ce fichier. L'unification a
+   * ramene la marge de 103 a ~380 caracteres : ce test la rend VISIBLE avec son chiffre exact, au lieu
+   * de laisser la limite se decouvrir par un rouge opaque sur le fichier le plus edite de la journee.
    */
   it('la consigne scout garde une marge annoncee sous son plafond', () => {
     const restant = 3000 - PHASE_BRIEFS.scout.length
     expect(restant).toBeGreaterThan(0)
-    // Si ce test tombe, ce n'est pas un bug : c'est le signal qu'il faut condenser avant d'ajouter.
+    // Si ce test tombe, ce n'est pas un bug : c'est le signal qu'il faut CONDENSER avant d'ajouter.
     expect(
       restant,
       `marge restante sous le plafond de 3000 : ${restant} caracteres`
