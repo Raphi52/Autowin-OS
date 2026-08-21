@@ -2750,6 +2750,20 @@ ol.md-list li {
   cursor: pointer;
 }
 
+.effort-matrix-group + .effort-matrix-group {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.effort-matrix-group-title {
+  margin: 0 0 4px;
+  color: #8b6ae0;
+  font: 700 8px/1 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
 .effort-matrix-columns,
 .effort-matrix-row {
   display: grid;

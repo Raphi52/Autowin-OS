@@ -84,6 +84,49 @@ describe('ModelEffortMatrix', () => {
     expect(autre.querySelectorAll('.effort-cran.is-absent')).toHaveLength(1)
   })
 
+  it('groupe par fournisseur : chaque groupe porte SA propre échelle d’efforts', async () => {
+    // Entrée qui doit faire échouer ce test si l'échelle restait GLOBALE :
+    // `openai:o5` n'expose ni `low` ni `high`, et `xhigh` est inconnu de Claude.
+    // Échelle globale → 5 colonnes partout + crans `is-absent` ; par fournisseur → 3 et 3, aucun absent.
+    const multi: ModelEffortRow[] = [
+      ...rows,
+      {
+        key: 'openai:o5',
+        label: 'O5',
+        model: 'o5',
+        option: {
+          provider: 'openai',
+          model: 'o5',
+          label: 'O5',
+          reasoningEfforts: ['minimal', 'medium', 'xhigh'],
+          defaultReasoningEffort: 'medium'
+        } as ModelEffortRow['option'],
+        efforts: ['minimal', 'medium', 'xhigh']
+      }
+    ]
+    const view = await render(
+      createElement(ModelEffortMatrix, {
+        rows: multi,
+        activeKey: 'openai:o5',
+        activeEffort: 'xhigh',
+        onSelect: vi.fn(),
+        onClose: vi.fn()
+      })
+    )
+
+    const groupes = [...view.querySelectorAll('.effort-matrix-group')]
+    expect(groupes.map((g) => (g as HTMLElement).dataset.provider)).toEqual(['claude', 'openai'])
+    const echelle = (g: Element): (string | null)[] =>
+      [...g.querySelectorAll('.effort-matrix-columns span')].map((n) => n.textContent)
+    expect(echelle(groupes[0])).toEqual(['', 'low', 'medium', 'high', 'max'])
+    expect(echelle(groupes[1])).toEqual(['', 'minimal', 'medium', 'xhigh'])
+    // L'échelle d'un fournisseur ne trahit plus les crans d'un autre.
+    const o5 = view.querySelector('[data-row="openai:o5"]') as HTMLElement
+    expect(o5.querySelectorAll('.effort-cran')).toHaveLength(3)
+    expect(o5.querySelectorAll('.effort-cran.is-absent')).toHaveLength(0)
+    expect(groupes[0].querySelector('[data-row="claude:opus"]')).not.toBeNull()
+  })
+
   it('survole un cran pour en montrer l’aperçu, puis le sélectionne', async () => {
     const onSelect = vi.fn()
     const onClose = vi.fn()

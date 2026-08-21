@@ -39,10 +39,25 @@ export function ModelEffortMatrix({
   onClose: () => void
 }): React.JSX.Element {
   const [preview, setPreview] = useState<{ key: string; effort: string } | null>(null)
-  const columns = useMemo(
-    () => sortEfforts([...new Set(rows.flatMap((row) => row.efforts))]),
-    [rows]
-  )
+  /**
+   * Les échelles d'effort ne sont PAS comparables entre fournisseurs : `xhigh` d'OpenAI
+   * n'existe pas chez Claude. On groupe donc par fournisseur, et chaque groupe porte
+   * SA propre échelle = union ordonnée des efforts de SES modèles.
+   */
+  const groups = useMemo(() => {
+    const byProvider = new Map<string, ModelEffortRow[]>()
+    for (const row of rows) {
+      const provider = row.option.provider
+      const bucket = byProvider.get(provider)
+      if (bucket) bucket.push(row)
+      else byProvider.set(provider, [row])
+    }
+    return [...byProvider.entries()].map(([provider, groupRows]) => ({
+      provider,
+      rows: groupRows,
+      columns: sortEfforts([...new Set(groupRows.flatMap((row) => row.efforts))])
+    }))
+  }, [rows])
   /** Cran mémorisé par ligne : le cran actif pour la ligne active, sinon le défaut du catalogue. */
   const memorized = useMemo(() => {
     const table: Record<string, string> = {}
@@ -88,72 +103,82 @@ export function ModelEffortMatrix({
             ✕
           </button>
         </header>
-        <div className="effort-matrix-columns" aria-hidden="true">
-          <span />
-          {columns.map((effort) => (
-            <span key={effort}>{effort}</span>
-          ))}
-        </div>
-        {rows.map((row) => {
-          const efforts = sortEfforts(row.efforts)
-          const isActiveRow = row.key === activeKey
-          const held = memorized[row.key]
-          const shown =
-            preview && preview.key === row.key && efforts.includes(preview.effort)
-              ? preview.effort
-              : held
-          const filledUntil = shown ? efforts.indexOf(shown) : -1
-          return (
-            <div
-              key={row.key}
-              className={`effort-matrix-row${isActiveRow ? ' is-active' : ''}${row.blocked ? ' is-blocked' : ''}`}
-              data-row={row.key}
-              data-shown={shown}
-              role="radiogroup"
-              aria-label={`Effort pour ${row.label}`}
-            >
-              <span className="effort-matrix-name">
-                <strong>{row.label}</strong>
-                <small>{row.model}</small>
-              </span>
-              <span className="effort-matrix-track">
-                {columns.map((effort) => {
-                  const index = efforts.indexOf(effort)
-                  if (index === -1) {
-                    return (
-                      <span key={effort} className="effort-cran is-absent" aria-hidden="true" />
-                    )
-                  }
-                  const selected = shown === effort
-                  const filled = filledUntil >= 0 && index <= filledUntil
-                  return (
-                    <button
-                      key={effort}
-                      type="button"
-                      role="radio"
-                      aria-checked={isActiveRow && held === effort}
-                      aria-disabled={row.blocked || undefined}
-                      title={row.blocked ? row.blockedReason : effortLabel(effort)}
-                      className={`effort-cran${selected ? ' is-selected' : ''}${filled ? ' is-filled' : ''}${isActiveRow ? ' is-live' : ' is-memorized'}`}
-                      onMouseEnter={() => setPreview({ key: row.key, effort })}
-                      onFocus={() => setPreview({ key: row.key, effort })}
-                      onMouseLeave={() => setPreview(null)}
-                      onBlur={() => setPreview(null)}
-                      onClick={() => {
-                        if (row.blocked) return
-                        onSelect({ ...row.option, reasoningEffort: effort })
-                        onClose()
-                      }}
-                    >
-                      <i aria-hidden="true" />
-                      <em>{effortLabel(effort)}</em>
-                    </button>
-                  )
-                })}
-              </span>
+        {groups.map((group) => (
+          <section
+            key={group.provider}
+            className="effort-matrix-group"
+            data-provider={group.provider}
+            aria-label={`Échelle d’effort ${group.provider}`}
+          >
+            <h4 className="effort-matrix-group-title">{group.provider}</h4>
+            <div className="effort-matrix-columns" aria-hidden="true">
+              <span />
+              {group.columns.map((effort) => (
+                <span key={effort}>{effort}</span>
+              ))}
             </div>
-          )
-        })}
+            {group.rows.map((row) => {
+              const efforts = sortEfforts(row.efforts)
+              const isActiveRow = row.key === activeKey
+              const held = memorized[row.key]
+              const shown =
+                preview && preview.key === row.key && efforts.includes(preview.effort)
+                  ? preview.effort
+                  : held
+              const filledUntil = shown ? efforts.indexOf(shown) : -1
+              return (
+                <div
+                  key={row.key}
+                  className={`effort-matrix-row${isActiveRow ? ' is-active' : ''}${row.blocked ? ' is-blocked' : ''}`}
+                  data-row={row.key}
+                  data-shown={shown}
+                  role="radiogroup"
+                  aria-label={`Effort pour ${row.label}`}
+                >
+                  <span className="effort-matrix-name">
+                    <strong>{row.label}</strong>
+                    <small>{row.model}</small>
+                  </span>
+                  <span className="effort-matrix-track">
+                    {group.columns.map((effort) => {
+                      const index = efforts.indexOf(effort)
+                      if (index === -1) {
+                        return (
+                          <span key={effort} className="effort-cran is-absent" aria-hidden="true" />
+                        )
+                      }
+                      const selected = shown === effort
+                      const filled = filledUntil >= 0 && index <= filledUntil
+                      return (
+                        <button
+                          key={effort}
+                          type="button"
+                          role="radio"
+                          aria-checked={isActiveRow && held === effort}
+                          aria-disabled={row.blocked || undefined}
+                          title={row.blocked ? row.blockedReason : effortLabel(effort)}
+                          className={`effort-cran${selected ? ' is-selected' : ''}${filled ? ' is-filled' : ''}${isActiveRow ? ' is-live' : ' is-memorized'}`}
+                          onMouseEnter={() => setPreview({ key: row.key, effort })}
+                          onFocus={() => setPreview({ key: row.key, effort })}
+                          onMouseLeave={() => setPreview(null)}
+                          onBlur={() => setPreview(null)}
+                          onClick={() => {
+                            if (row.blocked) return
+                            onSelect({ ...row.option, reasoningEffort: effort })
+                            onClose()
+                          }}
+                        >
+                          <i aria-hidden="true" />
+                          <em>{effortLabel(effort)}</em>
+                        </button>
+                      )
+                    })}
+                  </span>
+                </div>
+              )
+            })}
+          </section>
+        ))}
         <footer role="status" aria-live="polite">
           {preview && previewRow
             ? `${previewRow.label} · ${effortLabel(preview.effort)}`
