@@ -89,8 +89,10 @@ describe('budget de retour : ce que le marcheur consomme vs ce que la boucle rel
 
   it('MESURE « panel-critique » (trois juges, retour maxTraversals 3)', () => {
     const { passages, recoveriesLuesParLaBoucle } = passagesBuildDuMarcheur('panel-critique')
+    // Le pire cas est IMPRIME et pas seulement asserte : un chiffre qu'il faut relire dans le code du
+    // test n'est pas une mesure lisible (remarque d'un relecteur externe).
     console.log(
-      `[MESURE panel-critique] passages build du marcheur = ${passages} · recoveries relues par la boucle = ${recoveriesLuesParLaBoucle}`
+      `[MESURE panel-critique] passages build du marcheur = ${passages} · recoveries relues par la boucle = ${recoveriesLuesParLaBoucle} · pire cas cumule = ${passages + (recoveriesLuesParLaBoucle ?? 0)}`
     )
     /**
      * GARDE DU CORRECTIF, et non plus constat du defaut.

@@ -149,7 +149,24 @@ export function estJugeTerminal(
 ): boolean {
   const node = graph.nodes.find((n) => n.id === nodeId)
   if (node?.phase !== 'judge') return false
-  return !graph.edges.some((edge) => edge.from === nodeId && !isReturnEdge(edge, ranks))
+  /**
+   * SEMANTIQUE, et non topologique seule — un relecteur externe a produit le contre-exemple.
+   *
+   * `isReturnEdge` classe une arete par la DISTANCE depuis l'entree (`to <= from`), pas par son sens.
+   * Deux chemins de longueurs differentes vers le meme noeud donnent donc des rangs EGAUX, et une
+   * vraie continuation se retrouve classee « retour ». Reproduit : `e→a(judge)`, `e→b`, `a→b(green)`
+   * rend `rang(a) = rang(b) = 1`, donc `isReturnEdge(a→b) = true` — et ce juge passait pour terminal
+   * alors qu'il CONTINUE vers `b`. Le marcheur aurait abandonne la suite du graphe EN SILENCE : ni
+   * erreur, ni ligne de trace. Aucun des 7 profils livres ne le declenche, mais rien ne l'interdit a
+   * un profil ajoute demain.
+   *
+   * On ne corrige pas `isReturnEdge` (prexistant, lu par le budget d'aretes) : on cesse d'en dependre
+   * SEUL. Une continuation s'exprime par `green` ou `always` ; un retour de reparation par `red`. Un
+   * juge ne termine donc le canevas que si TOUTES ses sorties sont des retours ROUGES.
+   */
+  return graph.edges
+    .filter((edge) => edge.from === nodeId)
+    .every((edge) => edge.when === 'red' && isReturnEdge(edge, ranks))
 }
 
 export function initialBudget(graph: WorkflowGraph, ranks: Map<string, number>): TraversalBudget {

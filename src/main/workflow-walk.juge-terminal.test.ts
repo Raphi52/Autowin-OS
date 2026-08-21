@@ -61,6 +61,54 @@ describe('juge terminal', () => {
     expect(estJugeTerminal(graphe, 'judge-1', rangs)).toBe(false)
   })
 
+  it('un juge qui CONTINUE vers un nœud de même rang n’est PAS terminal', () => {
+    /**
+     * CONTRE-EXEMPLE trouvé par un relecteur externe, et reproduit avant correction.
+     *
+     * `isReturnEdge` classe une arête par la DISTANCE depuis l'entrée (`to <= from`), pas par le sens
+     * de l'arête. Deux chemins de longueurs différentes vers le même nœud donnent donc des rangs
+     * égaux, et une vraie continuation (`when: 'green'`) se retrouve classée RETOUR. Mesuré :
+     * rang(a) = rang(b) = 1, `isReturnEdge(a→b)` = true, donc `estJugeTerminal(a)` rendait true — et
+     * le marcheur ABANDONNAIT `b` en silence, sans erreur ni ligne de trace.
+     *
+     * Aucun des 7 profils livrés ne déclenche ce cas aujourd'hui, mais rien ne l'interdit à un profil
+     * ajouté demain. La définition retenue est donc SÉMANTIQUE et non topologique : une continuation
+     * s'exprime en `green`/`always`, un retour de réparation en `red`.
+     */
+    const graphe = {
+      entry: 'e',
+      nodes: [
+        { id: 'e', phase: 'build' },
+        { id: 'a', phase: 'judge' },
+        { id: 'b', phase: 'clean' }
+      ],
+      edges: [
+        { from: 'e', to: 'a', when: 'always' },
+        { from: 'e', to: 'b', when: 'always' },
+        { from: 'a', to: 'b', when: 'green' }
+      ]
+    } as never
+    const rangs = nodeRanks(graphe)
+    // La cause reste vraie — on ne corrige pas `isReturnEdge`, on cesse d'en dependre seul.
+    expect(rangs.get('a')).toBe(rangs.get('b'))
+    expect(estJugeTerminal(graphe, 'a', rangs)).toBe(false)
+  })
+
+  it('un juge dont la seule sortie est un retour ROUGE reste terminal', () => {
+    const graphe = {
+      entry: 'b1',
+      nodes: [
+        { id: 'b1', phase: 'build' },
+        { id: 'j1', phase: 'judge' }
+      ],
+      edges: [
+        { from: 'b1', to: 'j1', when: 'always' },
+        { from: 'j1', to: 'b1', when: 'red', maxTraversals: 2 }
+      ]
+    } as never
+    expect(estJugeTerminal(graphe, 'j1', nodeRanks(graphe))).toBe(true)
+  })
+
   it('un noeud qui n’est pas un juge n’est jamais « juge terminal »', () => {
     const graphe = DEFAULT_WORKFLOWS.find((p) => p.id === 'correctif')!.graph!
     const rangs = nodeRanks(graphe)

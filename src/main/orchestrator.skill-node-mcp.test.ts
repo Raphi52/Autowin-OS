@@ -126,6 +126,26 @@ describe('serveur d’outils d’un nœud skill — cycle de vie', () => {
     expect(details.some((d) => d.includes('outils natifs fermes'))).toBe(true)
   })
 
+  it("DIT que l'héritage MCP machine est actif — le coût accepté doit être visible", async () => {
+    /**
+     * La garde de la décision d'héritage demandait de « journaliser les serveurs MCP hérités ».
+     * Autowin ne peut PAS les nommer : c'est le CLI qui lit la configuration du poste et il ne rend
+     * pas cette liste. La garde tenable est donc de dire que l'héritage est ACTIF, donc que la
+     * surface d'outils dépend de la machine — nommer ce qu'on ne peut pas voir aurait été une fausse
+     * garde.
+     */
+    const details: string[] = []
+    await orchestrateur(new ProviderMuet(), ['think']).run(
+      'consulte le Brain',
+      (etape: { detail?: string }) => {
+        if (etape.detail) details.push(etape.detail)
+      }
+    )
+    const ligne = details.find((d) => d.includes('heritage MCP machine ACTIF'))
+    expect(ligne, "l'héritage doit être annoncé dans la trace").toBeDefined()
+    expect(ligne).toContain('depend de la configuration du poste')
+  })
+
   it("n'ouvre AUCUN serveur pour un provider qui ne transporte pas l'option, et le DIT", async () => {
     const details: string[] = []
     const provider = new ProviderSansMcp()

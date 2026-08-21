@@ -26,6 +26,9 @@ import { dirname, resolve } from 'node:path'
 
 /** Identifiants réels du catalogue applicatif (src/shared/navigation.ts). */
 export const VUES_CONNUES = [
+  // 'accueil' MANQUAIT alors que c'est la premiere vue du catalogue (src/shared/navigation.ts:2) :
+  // aucune preuve visuelle de la page d'accueil n'etait donc capturable.
+  'accueil',
   'chat',
   'agent-studio',
   'knowledge',
@@ -37,7 +40,7 @@ export const VUES_CONNUES = [
 ]
 
 /** Alias tolérés : le pluriel traîne dans les scripts et la documentation. */
-const ALIAS = { worktrees: 'worktree', 'agent studio': 'agent-studio' }
+const ALIAS = { worktrees: 'worktree', 'agent studio': 'agent-studio', home: 'accueil' }
 
 export const resoudreVue = (valeur) => {
   const brut = String(valeur ?? '')

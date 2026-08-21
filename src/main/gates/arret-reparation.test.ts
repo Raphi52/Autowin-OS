@@ -57,6 +57,24 @@ describe('arrêt de la réparation', () => {
     ).toBeUndefined()
   })
 
+  it('un refus MIXTE (amont + une raison réparable) ne s’arrête PAS', () => {
+    /**
+     * Combinaison signalée par un relecteur externe comme prouvée par lecture de code seulement.
+     * La règle est explicite : on ne coupe que si AUCUNE raison n'est réparable par build. Un refus
+     * qui AJOUTE une raison réparable au refus amont reste donc rejouable — et la longueur inégale
+     * suffit déjà à faire échouer le test d'identité.
+     */
+    expect(
+      arretDeLaReparation({
+        tentative: 1,
+        reparationsAccordees: 5,
+        plafondDur: 10,
+        motifsCourants: [...refusA, 'Promis mais pas fait : « Analyse demandee presente ».'],
+        motifsPrecedents: refusA
+      })
+    ).toBeUndefined()
+  })
+
   it('le plafond DUR mord, et il le DIT — c’est ce qui manquait', () => {
     const motif = arretDeLaReparation({
       tentative: 10,

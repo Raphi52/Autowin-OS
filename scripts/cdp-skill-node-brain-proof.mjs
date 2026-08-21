@@ -212,12 +212,23 @@ socket.close()
 
 console.log('\n=== BILAN ===')
 const avecMcp = resultats.filter((r) => r.mcpPasse).length
-const avecAppel = resultats.filter((r) => r.appels.some((a) => a.endsWith(': ok'))).length
+/**
+ * ABOUTI = `ok` SANS `RIEN`, pas `endsWith(': ok')`.
+ *
+ * Le suffixe exact a cesse de marcher le jour ou la trace a commence a DIRE l'issue metier : une
+ * ligne finit desormais par `: ok — trouve` ou `: ok — RIEN ECRIT — …`. Le test de suffixe rendait
+ * donc ROUGE un aller-retour Brain parfaitement VERT (mesure du 2026-08-21). Ironie utile a garder :
+ * c'est la correction qui empeche un libelle de mentir qui a casse le script verifiant ce libelle.
+ * La vraie propriete est l'ABSENCE de `RIEN` — un `ok` seul reste accepte (une commande sans issue
+ * metier n'en annonce aucune).
+ */
+const aAbouti = (ligne) => /: ok/.test(ligne) && !/RIEN/.test(ligne)
+const avecAppel = resultats.filter((r) => r.appels.some(aAbouti)).length
 const refus = resultats.reduce((n, r) => n + r.refusNatifs.length, 0)
 console.log(`runs ou --mcp-config a ete passe : ${avecMcp}/${nbRuns}`)
 console.log(`runs avec au moins un appel NATIF ok : ${avecAppel}/${nbRuns}`)
 console.log(`refus « No such tool available » cumules : ${refus}`)
-const depot = resultats[0]?.appels.some((a) => a.includes('remember') && a.endsWith(': ok'))
+const depot = resultats[0]?.appels.some((a) => a.includes('remember') && aAbouti(a))
 console.log(`depot remember par le chemin natif au run 1 : ${Boolean(depot)}`)
 const vert = avecMcp === nbRuns && avecAppel === nbRuns && refus === 0
 console.log(
