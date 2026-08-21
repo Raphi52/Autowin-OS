@@ -1,5 +1,4 @@
-﻿# Signal de la vue Accueil : rejoue les tests qui couvrent la pose libre des tuiles, la lecture du
-# snapshot du Task Manager, le rendu de la vue et la navigation.
+﻿# Signal de la vue Accueil et de la passerelle Outlook locale.
 #
 # Existe en SCRIPT et non en ligne de commande parce que le Stop-gate ne rejoue qu'une forme
 # whitelistee (powershell -NoProfile -File <script>) : un signal qu'il ne peut pas rejouer ne prouve
@@ -16,7 +15,9 @@ Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
 $cibles = @(
   'src/renderer/src/components/home-layout.test.ts',
   'src/renderer/src/components/home-widgets-model.test.ts',
+  'src/renderer/src/components/outlook-model.test.ts',
   'src/renderer/src/components/HomeView.test.tsx',
+  'src/main/outlook/outlook-local.test.ts',
   'src/shared/navigation.test.ts',
   'src/renderer/src/App.navigation-sync.test.tsx'
 )

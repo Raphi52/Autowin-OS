@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createDecorScene, type DecorScene } from './home-decor-scene'
 import {
+  formatEventDay,
+  formatEventTime,
+  formatExchangeDate,
+  groupByInterlocutor,
+  parseOutlookResult,
+  splitAgenda,
+  totalUnread,
+  type Agenda,
+  type Interlocuteur
+} from './outlook-model'
+import {
   agentNotices,
   nextDepartures,
   unacknowledgedCount,
@@ -42,6 +53,8 @@ import './HomeView.css'
 
 const LAYOUT_STORAGE_KEY = autowinStorageKey('home.layout.v1')
 const REFRESH_MS = 30_000
+/** Outlook se relit moins souvent : chaque lecture est un dialogue COM avec une application lourde. */
+const OUTLOOK_REFRESH_MS = 120_000
 
 interface TaskSnapshotLike {
   tasks: {
@@ -95,6 +108,9 @@ export function HomeView({
   const [snapshot, setSnapshot] = useState<TaskSnapshotLike | null>(null)
   const [snapshotError, setSnapshotError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const [outlook, setOutlook] = useState<
+    { etat: 'chargement' } | { etat: 'ok'; fils: Interlocuteur[]; agenda: Agenda } | { etat: 'panne'; cause: string }
+  >({ etat: 'chargement' })
   const [held, setHeld] = useState<HomeWidgetId | null>(null)
 
   const surfaceRef = useRef<HTMLDivElement | null>(null)
@@ -253,6 +269,43 @@ export function HomeView({
     }
   }, [active])
 
+  /* ---------------------------------------------------------------- *
+   * Outlook. Lu seulement quand la vue est affichee, et plus lentement que le Task Manager : chaque
+   * lecture est un dialogue COM avec une application lourde.
+   * ---------------------------------------------------------------- */
+  const readOutlook = useCallback(async (force = false): Promise<void> => {
+    const api = (window as unknown as { api?: { outlookSnapshot?: (f?: boolean) => Promise<unknown> } })
+      .api
+    if (!api?.outlookSnapshot) {
+      setOutlook({ etat: 'panne', cause: "la passerelle Outlook n'est pas disponible" })
+      return
+    }
+    try {
+      const resultat = parseOutlookResult(await api.outlookSnapshot(force))
+      if (!resultat.ok) {
+        setOutlook({ etat: 'panne', cause: resultat.erreur })
+        return
+      }
+      setOutlook({
+        etat: 'ok',
+        fils: groupByInterlocutor(resultat.mails),
+        agenda: splitAgenda(resultat.evenements, Date.now())
+      })
+    } catch (error) {
+      setOutlook({
+        etat: 'panne',
+        cause: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!active) return
+    void readOutlook()
+    const timer = window.setInterval(() => void readOutlook(), OUTLOOK_REFRESH_MS)
+    return () => window.clearInterval(timer)
+  }, [active, readOutlook])
+
   const departures = useMemo(
     () => (snapshot ? nextDepartures(snapshot.tasks, now) : []),
     [snapshot, now]
@@ -262,6 +315,7 @@ export function HomeView({
     [snapshot]
   )
   const pending = unacknowledgedCount(notices)
+  const mailsNonLus = outlook.etat === 'ok' ? totalUnread(outlook.fils) : 0
 
   /* ---------------------------------------------------------------- *
    * La pose.
@@ -373,6 +427,11 @@ export function HomeView({
                 {pending}
               </span>
             ) : null}
+            {box.id === 'mails' && mailsNonLus > 0 ? (
+              <span className="home-tile__count" title={`${mailsNonLus} message(s) non lu(s)`}>
+                {mailsNonLus}
+              </span>
+            ) : null}
           </div>
           <div className="home-tile__panel">
             <div className="home-tile__scroll">
@@ -380,6 +439,8 @@ export function HomeView({
                 id={box.id}
                 departures={departures}
                 notices={notices}
+                outlook={outlook}
+                now={now}
                 loading={snapshot === null && snapshotError === null}
                 error={snapshotError}
                 onNavigate={onNavigate}
@@ -401,10 +462,17 @@ export function HomeView({
   )
 }
 
+type OutlookState =
+  | { etat: 'chargement' }
+  | { etat: 'ok'; fils: Interlocuteur[]; agenda: Agenda }
+  | { etat: 'panne'; cause: string }
+
 function WidgetBody({
   id,
   departures,
   notices,
+  outlook,
+  now,
   loading,
   error,
   onNavigate
@@ -412,6 +480,8 @@ function WidgetBody({
   id: HomeWidgetId
   departures: RoutineDeparture[]
   notices: AgentNotice[]
+  outlook: OutlookState
+  now: number
   loading: boolean
   error: string | null
   onNavigate?: (destination: string) => void
@@ -426,15 +496,16 @@ function WidgetBody({
   }
 
   if (id === 'mails' || id === 'agenda') {
-    // Aucune donnée inventée en attendant la passerelle : un widget qui afficherait de faux mails
-    // ferait croire que l'intégration fonctionne, et c'est le pire des états d'avancement.
-    return (
-      <p className="home-hint">
-        En attente de la passerelle Outlook locale.{' '}
-        {id === 'mails'
-          ? 'Vos interlocuteurs s’afficheront ici, un fil par contact.'
-          : 'Vos événements du jour et de la semaine s’afficheront ici.'}
-      </p>
+    if (outlook.etat === 'chargement') return <p className="home-hint">Lecture d’Outlook…</p>
+    if (outlook.etat === 'panne') {
+      // La cause est AFFICHÉE. Une liste vide se lirait « vous n'avez pas de mail » alors qu'elle
+      // veut dire « la lecture a échoué » — et l'utilisateur ne saurait pas quoi faire.
+      return <p className="home-error">Outlook injoignable : {outlook.cause}</p>
+    }
+    return id === 'mails' ? (
+      <InterlocuteursList fils={outlook.fils} now={now} />
+    ) : (
+      <AgendaList agenda={outlook.agenda} />
     )
   }
 
@@ -487,5 +558,101 @@ function WidgetBody({
         </li>
       ))}
     </ul>
+  )
+}
+
+/** Les interlocuteurs : un fil par contact, non lus en tête, comme une messagerie. */
+function InterlocuteursList({
+  fils,
+  now
+}: {
+  fils: Interlocuteur[]
+  now: number
+}): React.JSX.Element {
+  if (fils.length === 0) {
+    return <p className="home-hint">Aucun message dans votre boîte de réception.</p>
+  }
+  return (
+    <ul className="home-threads">
+      {fils.map((fil) => (
+        <li key={fil.cle} data-unread={fil.nonLus > 0 ? 'true' : undefined}>
+          <span className="home-threads__who" aria-hidden="true">
+            {initiales(fil.nom)}
+          </span>
+          <span className="home-threads__lines">
+            <span className="home-threads__name">
+              <b title={fil.adresse}>{fil.nom}</b>
+              <em>{formatExchangeDate(fil.dernierEchange, now)}</em>
+            </span>
+            <span className="home-threads__last">{fil.messages[0]?.sujet}</span>
+          </span>
+          {/* Le compte du fil, pas celui de la boîte : c'est ce qui reste à lire CHEZ ce contact. */}
+          {fil.nonLus > 0 ? <span className="home-threads__tally">{fil.nonLus}</span> : null}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Deux ou trois initiales tirées du nom affiché, pour tenir dans une pastille. */
+function initiales(nom: string): string {
+  const mots = nom
+    .replace(/[<>()"]/g, ' ')
+    .split(/[\s.,;]+/)
+    .filter((mot) => mot.length > 0)
+  if (mots.length === 0) return '?'
+  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase()
+  return (mots[0][0] + mots[mots.length - 1][0]).toUpperCase()
+}
+
+/** L'agenda : aujourd'hui, puis la semaine — et à défaut, le prochain rendez-vous. */
+function AgendaList({ agenda }: { agenda: Agenda }): React.JSX.Element {
+  if (agenda.aujourdHui.length === 0 && agenda.semaine.length === 0) {
+    if (agenda.suivant === null) {
+      return <p className="home-hint">Aucun rendez-vous à venir dans votre agenda.</p>
+    }
+    // Un agenda calme ne doit pas se lire comme une panne : on nomme le prochain rendez-vous.
+    return (
+      <p className="home-hint">
+        Rien cette semaine. Prochain rendez-vous : <b>{agenda.suivant.sujet}</b> le{' '}
+        {new Date(agenda.suivant.debut).toLocaleDateString('fr-FR', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long'
+        })}
+        .
+      </p>
+    )
+  }
+  return (
+    <>
+      {agenda.aujourdHui.length > 0 ? (
+        <ul className="home-list">
+          {agenda.aujourdHui.map((entry) => (
+            <li key={entry.id}>
+              <time>{formatEventTime(entry)}</time>
+              <span>{entry.sujet}</span>
+              <em>{entry.lieu}</em>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="home-hint">Rien d’autre aujourd’hui.</p>
+      )}
+      {agenda.semaine.length > 0 ? (
+        <>
+          <p className="home-subhead">Cette semaine</p>
+          <ul className="home-list">
+            {agenda.semaine.map((entry) => (
+              <li key={entry.id}>
+                <time>{formatEventDay(entry)}</time>
+                <span>{entry.sujet}</span>
+                <em>{formatEventTime(entry)}</em>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </>
   )
 }

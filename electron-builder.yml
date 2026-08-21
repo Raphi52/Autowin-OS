@@ -20,6 +20,10 @@ files:
 asarUnpack:
   - resources/**
   - node_modules/@napi-rs/keyring-*/**
+  # PowerShell ne peut pas executer un fichier situe DANS l'archive asar : le script de lecture
+  # d'Outlook doit exister sur le disque. Sans cette ligne, la passerelle marche en developpement et
+  # est introuvable en package — le pire des deux mondes.
+  - scripts/outlook-local-snapshot.ps1
 win:
   executableName: autowin-os
   icon: build/icon.ico

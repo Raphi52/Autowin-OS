@@ -394,6 +394,7 @@ import {
   windowsRelayTaskName
 } from './task-manager/windows-relay'
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
+import { OutlookLocalGateway } from './outlook/outlook-local'
 import { registerVeilleIpc } from './veille/veille-ipc'
 import { executerPasse } from './veille/passe'
 import { genererCandidatsEnConversation } from './veille/scout-visible'
@@ -4969,6 +4970,20 @@ Le fil reprend ensuite normalement.`
    * est lue par le premier des deux qui atteint son point de drainage, jamais deux fois.
    */
   os.directivesEnAttente = (conversationId) => drainPendingDirectives(conversationId)
+
+  /**
+   * La passerelle Outlook LOCALE, pour les widgets Interlocuteurs et Agenda de la vue Accueil.
+   *
+   * Lecture seule du profil Outlook de la machine, par automation COM. Rien ne sort du poste : c'est
+   * la raison pour laquelle Microsoft Graph a ete ecarte. Elle est construite ICI, une fois, parce
+   * qu'elle porte un cache — en fabriquer une par appel relancerait un dialogue COM a chaque
+   * rafraichissement de la page d'accueil.
+   */
+  const outlookGateway = new OutlookLocalGateway({ appRoot: app.getAppPath() })
+  ipcMain.handle('outlook:snapshot', async (event, force: unknown) => {
+    assertTrustedRendererSender(event, 'Outlook')
+    return outlookGateway.snapshot(force === true)
+  })
 
   registerTaskManagerIpc({
     ipc: ipcMain,

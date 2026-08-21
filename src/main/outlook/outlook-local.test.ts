@@ -1,0 +1,171 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describeFailure, OutlookLocalGateway, resolveOutlookScriptPath } from './outlook-local'
+
+const racines: string[] = []
+
+afterEach(async () => {
+  for (const racine of racines.splice(0)) await rm(racine, { recursive: true, force: true })
+})
+
+/** Un faux script : il ecrit ce qu'on lui dit a l'endroit demande, comme le vrai. */
+function ecrivain(contenu: string | (() => string)) {
+  return vi.fn(async (_script: string, outPath: string) => {
+    await writeFile(outPath, typeof contenu === 'function' ? contenu() : contenu, 'utf8')
+  })
+}
+
+async function racineFactice(): Promise<string> {
+  const racine = await mkdtemp(join(tmpdir(), 'autowin-test-'))
+  racines.push(racine)
+  return racine
+}
+
+describe('passerelle Outlook locale', () => {
+  it('rend l instantane ecrit par le script', async () => {
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [{ id: 'm1' }], evenements: [] }))
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), runner })
+    const resultat = await passerelle.snapshot()
+    expect(resultat.ok).toBe(true)
+    expect((resultat.mails as unknown[]).length).toBe(1)
+  })
+
+  it('conserve les accents lus dans la boite', async () => {
+    // L'encodage est un point de defaillance MESURE sur ce poste (sortie standard en cp1252) : le
+    // canal passe par un fichier UTF-8, et ce test garde cette propriete de bout en bout.
+    const runner = ecrivain(
+      JSON.stringify({ ok: true, boite: 'Boîte de réception', mails: [], evenements: [] })
+    )
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), runner })
+    expect((await passerelle.snapshot()).boite).toBe('Boîte de réception')
+  })
+
+  it('ne relance pas le script tant que le cache est frais', async () => {
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    let horloge = 1000
+    const passerelle = new OutlookLocalGateway({
+      appRoot: await racineFactice(),
+      runner,
+      ttlMs: 5000,
+      now: () => horloge
+    })
+    await passerelle.snapshot()
+    await passerelle.snapshot()
+    expect(runner).toHaveBeenCalledTimes(1)
+    horloge += 6000
+    await passerelle.snapshot()
+    expect(runner).toHaveBeenCalledTimes(2)
+  })
+
+  it('force la relecture quand on le demande', async () => {
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), runner })
+    await passerelle.snapshot()
+    await passerelle.snapshot(true)
+    expect(runner).toHaveBeenCalledTimes(2)
+  })
+
+  it('ne lance QU UN script pour deux demandes simultanees', async () => {
+    // Deux widgets interrogent la passerelle au meme instant : un appel COM par widget serait deux
+    // dialogues avec une application lourde, pour la meme reponse.
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), runner })
+    await Promise.all([passerelle.snapshot(), passerelle.snapshot(), passerelle.snapshot()])
+    expect(runner).toHaveBeenCalledTimes(1)
+  })
+
+  it('ne met PAS une panne en cache', async () => {
+    // Garder l'echec une minute empecherait de voir qu'Outlook vient d'etre ouvert.
+    const runner = ecrivain(JSON.stringify({ ok: false, erreur: 'Outlook est ferme' }))
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), runner })
+    await passerelle.snapshot()
+    await passerelle.snapshot()
+    expect(runner).toHaveBeenCalledTimes(2)
+  })
+
+  it('nomme la panne quand le script echoue', async () => {
+    const runner = vi.fn(async () => {
+      throw new Error('spawn powershell ENOENT')
+    })
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), runner })
+    const resultat = await passerelle.snapshot()
+    expect(resultat.ok).toBe(false)
+    expect(String(resultat.erreur)).toContain('PowerShell est introuvable')
+  })
+
+  it('nomme la panne quand le script n a rien ecrit', async () => {
+    const runner = vi.fn(async () => {})
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), runner })
+    const resultat = await passerelle.snapshot()
+    expect(resultat.ok).toBe(false)
+    expect(String(resultat.erreur).length).toBeGreaterThan(0)
+  })
+
+  it('nomme la panne quand le JSON est tronque', async () => {
+    const runner = ecrivain('{"ok": true, "mails": [')
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), runner })
+    const resultat = await passerelle.snapshot()
+    expect(resultat.ok).toBe(false)
+    expect(String(resultat.erreur)).toContain("s'est interrompue")
+  })
+
+  it('vide le cache sur demande', async () => {
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), runner })
+    await passerelle.snapshot()
+    passerelle.invalidate()
+    await passerelle.snapshot()
+    expect(runner).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('traduction des pannes', () => {
+  it.each([
+    ['spawn powershell ENOENT', 'PowerShell est introuvable'],
+    ['ENOENT: no such file', 'script de lecture'],
+    ['Command failed: timed out', "n'a pas répondu à temps"],
+    ['Unexpected end of JSON input', "s'est interrompue"],
+    ['Erreur 0x80080005 serveur d execution', "a refusé l'accès"],
+    ['Class not registered', "a refusé l'accès"]
+  ])('%s -> %s', (brut, attendu) => {
+    expect(describeFailure(new Error(brut))).toContain(attendu)
+  })
+
+  it('laisse passer un message inconnu plutot que de l effacer', () => {
+    expect(describeFailure(new Error('panne inedite 42'))).toBe('panne inedite 42')
+  })
+})
+
+describe('ou trouver le script de lecture', () => {
+  // PowerShell ne peut pas executer un fichier situe DANS `app.asar`. Sans cette substitution, la
+  // passerelle marche en developpement et est introuvable une fois l'application installee — le pire
+  // des deux mondes, parce que le developpement ne le montre jamais.
+  it('sort de l archive asar en packagé', () => {
+    const resolu = resolveOutlookScriptPath(
+      ['C:', 'Program Files', 'Autowin OS', 'resources', 'app.asar'].join('\\')
+    )
+    expect(resolu).toContain('app.asar.unpacked')
+    // Le segment `app.asar` NU ne doit plus preceder `scripts` : c'est lui qui rendrait le fichier
+    // inatteignable pour PowerShell.
+    expect(resolu).not.toMatch(/app\.asar[\\/]scripts/)
+    expect(resolu.endsWith('outlook-local-snapshot.ps1')).toBe(true)
+  })
+
+  it('gere le separateur POSIX aussi bien que celui de Windows', () => {
+    expect(resolveOutlookScriptPath('/opt/autowin/resources/app.asar')).toContain(
+      'app.asar.unpacked'
+    )
+  })
+
+  it('laisse un chemin de developpement intact', () => {
+    const resolu = resolveOutlookScriptPath(['C:', 'Amitel', 'Autowin OS'].join('\\'))
+    expect(resolu).not.toContain('asar')
+    expect(resolu).toContain('scripts')
+  })
+
+  it('ne touche pas un dossier qui CONTIENT le mot asar sans en etre une', () => {
+    expect(resolveOutlookScriptPath('/home/dev/mon-app.asarnaut')).not.toContain('unpacked')
+  })
+})

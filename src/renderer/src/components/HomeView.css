@@ -375,3 +375,109 @@
 .home-error {
   color: var(--err);
 }
+
+/* Les interlocuteurs : une pastille d'initiales, le nom, le dernier objet, le compte non lu. La
+   forme vient du besoin — « trier comme une messagerie » veut dire une ligne par CONTACT, pas par
+   message. */
+.home-threads {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.home-threads li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--r1, 8px);
+}
+
+.home-threads li:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.home-threads__who {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--gold-bright, #ffdc73);
+  background: rgba(233, 189, 78, 0.08);
+  border: 1px solid rgba(233, 189, 78, 0.3);
+  border-radius: 50%;
+}
+
+.home-threads__lines {
+  flex: 1;
+  min-width: 0;
+}
+
+.home-threads__name {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.home-threads__name b {
+  font-weight: 500;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Un fil qui a du non lu se lit AUSSI a l'epaisseur du nom, pas seulement au compteur : la couleur
+   seule ne suffit pas, et le compteur est a l'autre bout de la ligne. */
+.home-threads li[data-unread='true'] .home-threads__name b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.home-threads__name em {
+  flex: none;
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.home-threads__last {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-threads__tally {
+  flex: none;
+  min-width: 17px;
+  padding: 0 5px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  text-align: center;
+  color: #2a0716;
+  background: var(--rose);
+  border-radius: 999px;
+}
+
+/* Le sous-titre qui separe aujourd'hui de la semaine. */
+.home-subhead {
+  margin: 10px 4px 4px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}

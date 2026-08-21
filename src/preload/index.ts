@@ -434,6 +434,12 @@ const api = {
     ipcRenderer.invoke('veille:generer', conversationId),
   taskManagerSnapshot: (): Promise<TaskManagerSnapshot> =>
     ipcRenderer.invoke('task-manager:snapshot'),
+  /**
+   * Instantane du profil Outlook LOCAL : messages de la boite de reception et rendez-vous.
+   * `force` court-circuite le cache, pour un rafraichissement demande a la main.
+   */
+  outlookSnapshot: (force?: boolean): Promise<unknown> =>
+    ipcRenderer.invoke('outlook:snapshot', force === true),
   taskManagerCreate: (task: unknown): Promise<ScheduledTask> =>
     ipcRenderer.invoke('task-manager:create', task),
   taskManagerUpdate: (id: string, task: unknown): Promise<ScheduledTask> =>

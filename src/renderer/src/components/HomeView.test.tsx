@@ -33,8 +33,62 @@ function snapshot() {
   }
 }
 
+const NOW_MS = Date.now()
+
+function outlookSnapshot() {
+  return {
+    ok: true,
+    luLe: new Date(NOW_MS).toISOString(),
+    boite: 'Boîte de réception',
+    mailsNonLus: 3,
+    mails: [
+      {
+        id: 'm1',
+        adresse: 'julien.mercier@amitel.fr',
+        nom: 'Julien Mercier',
+        sujet: 'RE: bon de commande RIG',
+        recuLe: new Date(NOW_MS - 600_000).toISOString(),
+        nonLu: true,
+        conversation: 'c1'
+      },
+      {
+        id: 'm2',
+        adresse: 'JULIEN.MERCIER@amitel.fr',
+        nom: 'MERCIER Julien',
+        sujet: 'Devis signé',
+        recuLe: new Date(NOW_MS - 7200_000).toISOString(),
+        nonLu: false,
+        conversation: 'c2'
+      },
+      {
+        id: 'm3',
+        adresse: 'sophie.bernard@amitel.fr',
+        nom: 'Sophie Bernard',
+        sujet: 'Planning de la recette',
+        recuLe: new Date(NOW_MS - 300_000).toISOString(),
+        nonLu: false,
+        conversation: 'c3'
+      }
+    ],
+    evenements: [
+      {
+        id: 'e1',
+        sujet: 'Recette EDI lot 3',
+        lieu: 'salle de réunion',
+        debut: new Date(NOW_MS + 3600_000).toISOString(),
+        fin: new Date(NOW_MS + 7200_000).toISOString(),
+        journeeEntiere: false,
+        recurrent: false
+      }
+    ]
+  }
+}
+
 beforeEach(() => {
-  ;(window as unknown as { api: unknown }).api = { taskManagerSnapshot: vi.fn(async () => snapshot()) }
+  ;(window as unknown as { api: unknown }).api = {
+    taskManagerSnapshot: vi.fn(async () => snapshot()),
+    outlookSnapshot: vi.fn(async () => outlookSnapshot())
+  }
 })
 
 afterEach(async () => {
@@ -130,10 +184,16 @@ describe('page d accueil', () => {
     expect(notifications.querySelector('.home-tile__count')?.textContent).toBe('1')
   })
 
-  it('n invente aucun mail en attendant la passerelle Outlook', async () => {
+  it('annonce l absence de passerelle au lieu d une liste vide', async () => {
+    // Sans `api.outlookSnapshot`, les deux widgets doivent DIRE qu ils ne peuvent pas lire. Une liste
+    // vide se lirait « vous n avez pas de mail », ce qui est faux.
+    ;(window as unknown as { api: unknown }).api = {
+      taskManagerSnapshot: vi.fn(async () => snapshot())
+    }
     const container = await mount()
-    expect(tile(container, 'mails').textContent).toContain('passerelle Outlook')
-    expect(tile(container, 'agenda').textContent).toContain('passerelle Outlook')
+    expect(tile(container, 'mails').querySelector('.home-error')).not.toBeNull()
+    expect(tile(container, 'mails').textContent).toContain('pas disponible')
+    expect(tile(container, 'agenda').querySelector('.home-error')).not.toBeNull()
   })
 
   it('annonce la panne au lieu d afficher une liste vide trompeuse', async () => {
@@ -251,5 +311,52 @@ describe('poser une tuile', () => {
     const avant = Number(hublot.style.zIndex)
     await gesture(hublot, [[420, 220]], [400, 200])
     expect(Number(hublot.style.zIndex)).toBeGreaterThan(avant)
+  })
+})
+
+describe('widgets Outlook', () => {
+  it('regroupe les messages par interlocuteur, un fil par contact', async () => {
+    const container = await mount()
+    const mails = tile(container, 'mails')
+    const fils = mails.querySelectorAll('.home-threads li')
+    // Deux messages du meme contact sous deux graphies = UN fil, plus le second contact = 2 lignes.
+    expect(fils.length).toBe(2)
+    expect(mails.textContent).toContain('Julien Mercier')
+    expect(mails.textContent).toContain('Sophie Bernard')
+  })
+
+  it('met le fil qui a du non lu en tete et affiche son compte', async () => {
+    const container = await mount()
+    const premier = tile(container, 'mails').querySelector('.home-threads li')!
+    expect(premier.getAttribute('data-unread')).toBe('true')
+    expect(premier.querySelector('.home-threads__tally')?.textContent).toBe('1')
+  })
+
+  it('porte le compte des non lus sur l etiquette de la tuile', async () => {
+    const container = await mount()
+    expect(tile(container, 'mails').querySelector('.home-tile__count')?.textContent).toBe('1')
+  })
+
+  it('affiche les rendez-vous du jour avec leur lieu, accents intacts', async () => {
+    const container = await mount()
+    const agenda = tile(container, 'agenda')
+    expect(agenda.textContent).toContain('Recette EDI lot 3')
+    expect(agenda.textContent).toContain('salle de réunion')
+  })
+
+  it('affiche la cause quand la passerelle echoue', async () => {
+    ;(window as unknown as { api: unknown }).api = {
+      taskManagerSnapshot: vi.fn(async () => snapshot()),
+      outlookSnapshot: vi.fn(async () => ({ ok: false, erreur: 'Outlook a refusé l’accès' }))
+    }
+    const container = await mount()
+    expect(tile(container, 'mails').textContent).toContain('Outlook a refusé l’accès')
+    expect(tile(container, 'agenda').textContent).toContain('Outlook a refusé l’accès')
+  })
+
+  it('ne lit pas Outlook quand la vue n est pas affichee', async () => {
+    await mount(false)
+    const api = (window as unknown as { api: { outlookSnapshot: ReturnType<typeof vi.fn> } }).api
+    expect(api.outlookSnapshot).not.toHaveBeenCalled()
   })
 })
