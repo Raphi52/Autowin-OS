@@ -264,7 +264,28 @@ export function HomeView({
     if (!scene) return
     host.appendChild(scene.canvas)
 
-    const fit = (): void => scene.resize(host.clientWidth, host.clientHeight)
+    const reduceMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    /**
+     * Redimensionne le decor, PUIS le redessine.
+     *
+     * Le redessin n'est pas une precaution : sans lui, le decor disparait. Cause localisee le
+     * 2026-08-21 apres deux hypotheses fausses, sur une machine ou « reduire les animations » est
+     * ACTIF — celle de l'utilisateur. Dans ce mode la scene ne dessine qu'UNE image au montage, et
+     * `renderer.setSize` realloue le tampon de dessin : redimensionner la fenetre repositionnait donc
+     * correctement tous les elements sur un tampon que plus personne ne remplissait. Mesure : 0,13 %
+     * de pixels de la planete apres redimensionnement, contre 60,42 % apres un rechargement.
+     *
+     * C'est la MEME faute que celle deja corrigee pour les tuiles — une fonction adossee a l'horloge
+     * d'animation — refaite sur le decor. Le redessin est inconditionnel : quand la boucle tourne, une
+     * image de plus ne coute rien ; quand elle ne tourne pas, c'est la seule qui existera.
+     */
+    const fit = (): void => {
+      scene.resize(host.clientWidth, host.clientHeight)
+      scene.render(reduceMotion ? 12 : performance.now() / 1000, { x: 0, y: 0 })
+    }
     fit()
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null
     observer?.observe(host)
@@ -279,10 +300,6 @@ export function HomeView({
     // 1414 px, que le canevas suit, et que les deux evenements se declenchent. La cause de cet ecart
     // n'est PAS localisee. Ce filet reste parce qu'il se defend seul, pas parce qu'il corrige cela.
     window.addEventListener('resize', fit)
-
-    const reduceMotion =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     const aim = { x: 0, y: 0 }
     const look = { x: 0, y: 0 }
@@ -308,12 +325,9 @@ export function HomeView({
       scene.render(reduceMotion ? 12 : time / 1000, reduceMotion ? { x: 0, y: 0 } : look)
     }
 
-    if (reduceMotion) {
-      // Mouvement réduit : une seule image, figée. Le décor reste présent, il ne bouge plus.
-      scene.render(12, { x: 0, y: 0 })
-    } else {
-      frame = requestAnimationFrame(draw)
-    }
+    // Mouvement réduit : `fit()` a déjà dessiné l'image figée, et redessinera à chaque
+    // redimensionnement. Aucune boucle n'est lancée.
+    if (!reduceMotion) frame = requestAnimationFrame(draw)
 
     return () => {
       cancelAnimationFrame(frame)
