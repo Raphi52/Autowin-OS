@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import type { PariPhase } from '../../shared/pari-calibration'
+import type { IssuePhase, PariPhase } from '../../shared/pari-calibration'
 
 /**
  * Journal des paris de phase — append-only, DÉLIBÉRÉMENT séparé du journal outcome-learning.
@@ -44,21 +44,70 @@ export class PariPhaseStore {
     return true
   }
 
-  lire(): PariPhase[] {
+  /**
+   * Inscrit l'ARBITRAGE d'un run : le verdict, une fois connu, rejoint le journal a cote des paris.
+   * Sans cette ligne, la mesure ne vivrait que dans le log d'un run et personne ne pourrait relire
+   * l'historique -- exactement le genre de mecanique presente mais inerte qu'on cherche a eviter.
+   * Comme le pari, un arbitrage ne se revise pas.
+   */
+  arbitrer(runId: string, reussie: boolean): boolean {
+    if (this.lireIssues().some((issue) => issue.runId === runId)) return false
+    const concernes = this.lire().filter((pari) => pari.runId === runId)
+    if (!concernes.length) return false
+    mkdirSync(dirname(this.chemin), { recursive: true })
+    for (const pari of concernes) {
+      const issue: IssuePhase & { arbitrage: true; arbitreA: string } = {
+        arbitrage: true,
+        runId,
+        phase: pari.phase,
+        reussie,
+        jugee: true,
+        arbitreA: new Date().toISOString()
+      }
+      appendFileSync(
+        this.chemin,
+        `${JSON.stringify(issue)}
+`,
+        { encoding: 'utf8', flush: true }
+      )
+    }
+    return true
+  }
+
+  /** Les arbitrages deja inscrits, relus pour l'appariement. */
+  lireIssues(): IssuePhase[] {
+    return this.lignes()
+      .filter((ligne) => ligne.arbitrage === true)
+      .map((ligne) => ({
+        runId: String(ligne.runId),
+        phase: String(ligne.phase),
+        reussie: ligne.reussie === true,
+        jugee: true
+      }))
+  }
+
+  private lignes(): Record<string, unknown>[] {
     this.illisibles = 0
     if (!existsSync(this.chemin)) return []
-    const paris: PariPhase[] = []
+    const lignes: Record<string, unknown>[] = []
     for (const ligne of readFileSync(this.chemin, 'utf8').split('\n')) {
       if (!ligne.trim()) continue
       try {
-        const parse = JSON.parse(ligne) as PariPhase
-        if (typeof parse.runId === 'string' && typeof parse.phase === 'string') paris.push(parse)
+        const parse = JSON.parse(ligne) as Record<string, unknown>
+        if (typeof parse.runId === 'string' && typeof parse.phase === 'string') lignes.push(parse)
         else this.illisibles += 1
       } catch {
         this.illisibles += 1
       }
     }
-    return paris
+    return lignes
+  }
+
+  /** Les PARIS seuls : les lignes d'arbitrage vivent dans le même fichier et n'en sont pas. */
+  lire(): PariPhase[] {
+    return this.lignes()
+      .filter((ligne) => ligne.arbitrage !== true)
+      .map((ligne) => ligne as unknown as PariPhase)
   }
 
   /** Nombre de lignes écartées à la dernière lecture — un compte qui monte est un défaut à regarder. */

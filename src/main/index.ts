@@ -105,6 +105,10 @@ import {
   reconcileCurationIntents
 } from './outcome-learning-curation-transaction'
 import { OutcomeLearningLedger } from './activity/outcome-learning-ledger'
+import { PariPhaseStore } from './activity/pari-phase-store'
+import { issuesDepuisVerdict, verdictEstReussi } from './activity/pari-liaison'
+import { extrairePari } from '../shared/pari-parse'
+import { apparierParisEtIssues, mesurerCalibration } from '../shared/pari-calibration'
 import { OutcomeLearningSupervisor, parseOutcomeLearningMode } from './outcome-learning-supervisor'
 import { WindowsDesktopController } from './desktop-control'
 import { captureElectronDesktop } from './electron-desktop-capture'
@@ -762,6 +766,11 @@ function reportAutoKaizen(input: AutoKaizenIncidentInput): void {
 const desktopController = new WindowsDesktopController({ capture: captureElectronDesktop })
 const outcomeLearningDirectory = join(app.getPath('userData'), 'outcome-learning')
 const outcomeLearningModePath = join(outcomeLearningDirectory, 'mode.txt')
+/**
+ * Journal des paris de phase — voisin du journal outcome-learning, jamais mélangé avec lui (un `kind`
+ * inconnu y ferait échouer la lecture de TOUT le fichier pour une version antérieure d'Autowin).
+ */
+const parisDePhase = new PariPhaseStore(join(outcomeLearningDirectory, 'paris-v1.jsonl'))
 let persistedOutcomeLearningMode: string | undefined
 try {
   persistedOutcomeLearningMode = readFileSync(outcomeLearningModePath, 'utf8')
@@ -1937,6 +1946,52 @@ Le fil reprend ensuite normalement.`
         (step) => {
           if (step.text?.includes('AUTOWIN_LESSON_V1:')) {
             learningAuthor = { model: step.model, role: step.role }
+          }
+          /*
+           * LE PARI ET SON ARBITRE. Une phase qui parie sur « mon travail passera le juge » écrit sa
+           * prédiction AVANT que le verdict existe ; à l'arrivée du verdict, on apparie. Rien de tout
+           * cela ne peut interrompre l'orchestration : chaque geste est enveloppé, et un pari absent
+           * ou illisible se note comme absent. Une métrique qui ferait échouer un run serait pire que
+           * l'absence de métrique.
+           */
+          try {
+            const runIdCourant = currentRunId
+            const phaseCourante = step.execution?.phase
+            if (runIdCourant && step.step !== 'judge' && phaseCourante) {
+              const pari = extrairePari(step.text)
+              if (pari) {
+                parisDePhase.deposer({
+                  runId: runIdCourant,
+                  phase: phaseCourante,
+                  confiance: pari.confiance,
+                  refutateur: pari.refutateur,
+                  emisA: new Date().toISOString()
+                })
+              }
+            }
+            if (runIdCourant && step.step === 'judge' && step.status === 'completed') {
+              const reussie = verdictEstReussi(step.detail, step.text ?? '')
+              if (reussie !== null) {
+                const paris = parisDePhase.lire()
+                const issues = issuesDepuisVerdict(paris, runIdCourant, reussie)
+                if (issues.length) {
+                  // L'arbitrage rejoint le journal : sans lui, la mesure ne vivrait que dans ce log
+                  // et l'historique serait illisible par le lecteur de calibration.
+                  parisDePhase.arbitrer(runIdCourant, reussie)
+                  const mesure = mesurerCalibration(
+                    apparierParisEtIssues(paris, issues).appariements
+                  )
+                  console.log(
+                    `[pari] run ${runIdCourant} : ${issues.length} pari(s) arbitre(s) — ` +
+                      `n=${mesure.n} calibration=${mesure.calibration?.toFixed(3) ?? 'n/a'} ` +
+                      `discrimination=${mesure.discrimination?.toFixed(3) ?? 'n/a'}` +
+                      (mesure.echantillonSuffisant ? '' : ' (echantillon encore trop mince)')
+                  )
+                }
+              }
+            }
+          } catch {
+            /* la mesure d'un pari ne doit JAMAIS interrompre un run */
           }
           pendingExecutionEvidence.push(...(step.evidence ?? []))
           persistOrchestrationStep(

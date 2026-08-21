@@ -60,3 +60,37 @@ describe('journal des paris de phase', () => {
     expect(store().lire()).toEqual([])
   })
 })
+
+describe('arbitrage inscrit au journal', () => {
+  it('inscrit le verdict à côté des paris du run, et le relit', () => {
+    const s = store()
+    s.deposer(pari)
+    s.deposer({ ...pari, phase: 'clean' })
+    expect(s.arbitrer('run-1', true)).toBe(true)
+    expect(s.lireIssues()).toEqual([
+      { runId: 'run-1', phase: 'build', reussie: true, jugee: true },
+      { runId: 'run-1', phase: 'clean', reussie: true, jugee: true }
+    ])
+  })
+
+  it('n’altère PAS la liste des paris : un arbitrage n’est pas un pari', () => {
+    const s = store()
+    s.deposer(pari)
+    s.arbitrer('run-1', false)
+    expect(s.lire()).toEqual([pari])
+  })
+
+  it('REFUSE de réviser un arbitrage déjà inscrit', () => {
+    const s = store()
+    s.deposer(pari)
+    s.arbitrer('run-1', true)
+    expect(s.arbitrer('run-1', false)).toBe(false)
+    expect(s.lireIssues()[0]?.reussie).toBe(true)
+  })
+
+  it('n’inscrit rien pour un run qui n’a jamais parié', () => {
+    const s = store()
+    expect(s.arbitrer('run-inconnu', true)).toBe(false)
+    expect(s.lireIssues()).toEqual([])
+  })
+})
