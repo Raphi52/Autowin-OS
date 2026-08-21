@@ -110,6 +110,39 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     }
   })
 
+  /*
+   * LA CLOTURE NEGATIVE, DANS LES DEUX SOURCES AUSSI.
+   *
+   * Mesure du 21/08 : sur 8 hypotheses de scout, 6 sont mortes du MEME defaut — un FAIT vrai (un grep
+   * rend une absence reelle) suivi d'une CONSEQUENCE jamais verifiee (« donc rien ne fait X »). Les 2
+   * survivantes portaient une affirmation POSITIVE et directement observable.
+   *
+   * La regle ne s'invente pas : le reflexe 10 de la constitution l'enonce deja pour les declarations
+   * de BLOCAGE (enumerer / balayer / nommer ce qui a ete teste). Elle est ici RACCORDEE au Why d'un
+   * candidat, qui est l'affirmation miroir. Ce test garde le raccord, pas l'obeissance.
+   */
+  it('la clôture négative existe DANS LES DEUX sources, avec ses trois couches', () => {
+    const brief = PHASE_BRIEFS.scout
+    const kit = readFileSync('skills/scout/SKILL.md', 'utf8')
+
+    expect(brief).toContain('CLOTURE NEGATIVE')
+    expect(kit).toContain('NEGATIVE CLOSURE')
+
+    for (const source of [brief, kit]) {
+      // Les mots du reflexe 10, pas une paraphrase : c'est ce qui rend le raccord reconnaissable.
+      expect(source).toMatch(/ENUMERE|ENUMERATE/u)
+      expect(source).toMatch(/BALAYE|SWEEP/u)
+      expect(source).toMatch(/chemins FERMES|CLOSED paths/u)
+      // Les TROIS couches nommees : sans elles, un grep peut encore passer pour un balayage.
+      expect(source).toMatch(/TROIS couches|THREE deliberate layers/u)
+      expect(source).toMatch(/SKILL\.md/u)
+      expect(source).toMatch(/briefs in-app|in-app briefs/u)
+      expect(source).toMatch(/ENGENDRES|GENERATED/u)
+      // Et l'issue honnete : un balayage incomplet se DIT.
+      expect(source).toMatch(/non epuises|not exhausted/u)
+    }
+  })
+
   it('phaseBrief enveloppe la consigne avec un en-tête de phase', () => {
     expect(phaseBrief('scout')).toContain('=== CONSIGNE SCOUT ===')
     expect(phaseBrief('scout')).toContain('SCOUT')
