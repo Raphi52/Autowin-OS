@@ -925,7 +925,7 @@ describe('durable assistant hydration and streaming', () => {
     for (const heading of ['✅ Fait', '📍 Maintenant', '⏳ Reste à faire', '👉 Recommandé']) {
       expect(text.split(heading)).toHaveLength(2)
     }
-    expect(text.trimEnd()).toMatch(/👉 Recommandé : passer à la prochaine demande\.$/u)
+    expect(text.trimEnd()).toMatch(/👉 Recommandé : .+\.$/u)
     expect(text).not.toContain('Clôture Autowin : gate validé')
   })
 

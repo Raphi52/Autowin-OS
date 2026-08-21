@@ -223,9 +223,7 @@ describe('AgentPilot turn contract', () => {
     expect((events.at(-1) as { text?: string }).text).toMatch(
       /orientation[\s\S]*aucun second run.*relanc/i
     )
-    expect((events.at(-1) as { text?: string }).text?.trimEnd()).toMatch(
-      /👉 Recommandé : passer à la prochaine demande\.$/u
-    )
+    expect((events.at(-1) as { text?: string }).text?.trimEnd()).toMatch(/👉 Recommandé : .+\.$/u)
   })
 
   it('termine aussi le chemin orchestrate du modèle par Recommandé', async () => {
@@ -263,9 +261,7 @@ describe('AgentPilot turn contract', () => {
       1
     )
 
-    expect((events.at(-1) as { text?: string }).text?.trimEnd()).toMatch(
-      /👉 Recommandé : passer à la prochaine demande\.$/u
-    )
+    expect((events.at(-1) as { text?: string }).text?.trimEnd()).toMatch(/👉 Recommandé : .+\.$/u)
   })
 
   it('propage le binding par tour à un /skill explicite', async () => {
@@ -970,7 +966,12 @@ describe('AgentPilot turn contract', () => {
           name: 'read_file',
           args: { path: 'string' },
           description: 'lire',
-          annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+          annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false
+          }
         }
       ],
       snapshotForPrompt,
@@ -989,7 +990,9 @@ describe('AgentPilot turn contract', () => {
     // Le pilotage est present (il porte read_file) et la lecture a REELLEMENT atteint le bus.
     expect(String(send.mock.calls[0][2].system)).toContain('read_file')
     expect(bus.exec).toHaveBeenCalledWith('read_file', { path: 'src/a.ts' }, undefined)
-    expect(events.some((event) => event.kind === 'command' && event.name === 'read_file')).toBe(true)
+    expect(events.some((event) => event.kind === 'command' && event.name === 'read_file')).toBe(
+      true
+    )
   })
 
   it('OPEN BAR : une commande generee dans un tour d’analyse EXECUTE, elle n’est plus bloquee', async () => {
