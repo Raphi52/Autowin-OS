@@ -411,7 +411,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
         detail: 'phase frame',
         text: [
           '## Besoin',
-          "- Hypothèse : le store est vide au premier lancement",
+          '- Hypothèse : le store est vide au premier lancement',
           '## Confiance',
           '- le module existe — VÉRIFIÉ (lu)',
           '- le sanitizeur refuse les contrôles — NON VÉRIFIÉ'
@@ -426,9 +426,11 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
         phaseOutputs: []
       }
     }
-    await new AppCommandBus(os, (event) =>
-      broadcasts.push(event as Record<string, unknown>)
-    ).exec('orchestrate', { task: `/frame cadre ceci ${Date.now()}` }, 'conv-1')
+    await new AppCommandBus(os, (event) => broadcasts.push(event as Record<string, unknown>)).exec(
+      'orchestrate',
+      { task: `/frame cadre ceci ${Date.now()}` },
+      'conv-1'
+    )
 
     const emis = broadcasts.filter((event) => event.type === 'orchestrate-hypotheses')
     expect(emis).toHaveLength(1)
@@ -1570,7 +1572,25 @@ describe('AppCommandBus command execution policy', () => {
       rmSync(repo, { recursive: true, force: true })
       rmSync(wtRoot, { recursive: true, force: true })
     }
-  })
+    /*
+     * BUDGET PROPORTIONNE A CE QUE CE TEST FAIT REELLEMENT, et non a une moyenne de suite.
+     *
+     * Mesure du 21/08 sur machine au repos : 9,6 s de temps de test. Il enchaine une quinzaine
+     * d'appels `git` reels (init, config, add, commit, worktree add, publication) et une
+     * verification qui passe par `npm run test:unit` — le demarrage de npm sur Windows coute a lui
+     * seul plusieurs secondes, et la liste blanche de `verify` n'autorise que des commandes npm,
+     * donc ce cout est inherent a ce que le test PROUVE.
+     *
+     * Le plafond par defaut de 20 s ne laissait que 2x cette mesure. Constate le meme jour dans une
+     * suite complete reelle : le test a depasse 20 s et rendu la suite ROUGE alors que le code etait
+     * bon — la machine faisait tourner l'application et une autre session, et la suite entiere est
+     * passee de 466 s a 648 s. Rejoue seul juste apres : vert en 9,6 s. Faux rouge, donc, et un faux
+     * rouge sur CE test empeche l'application de publier un travail correct.
+     *
+     * 60 s = ~6x la mesure au repos. Ce n'est pas l'absence de plafond : un test reellement pendu
+     * echoue toujours.
+     */
+  }, 60_000)
 
   it('bloque graphify avant exécution quand aucun bureau isolé n’est disponible', async () => {
     const graphify = vi.fn(async () => ({
