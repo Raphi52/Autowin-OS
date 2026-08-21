@@ -1,4 +1,5 @@
 import { forgetChatSession, loadChatSessions, saveChatSession } from './runs/chat-session-store'
+import { chargerMurs, enregistrerMur } from './runs/murs-store'
 import type { ProviderRegistry } from './providers/registry'
 import type { RoleBinding, RoleModelConfig } from './roles'
 import type { AppCommandBus, CommandResult } from './commands'
@@ -870,7 +871,12 @@ export class AgentPilot {
      * escalade qui interdit la repetition et exige de capitaliser la lecon.
      */
     let reprisesApresEchecRestantes = 2
-    const signaturesDEchecVues: string[] = []
+    /*
+     * AMORCE depuis le disque : sans elle le registre mourait a la frontiere du tour, et l'agent
+     * remangeait le meme mur au tour suivant en croyant le decouvrir. `chargerMurs` est fail-open —
+     * un cache illisible vaut « aucun mur connu », jamais une exception dans le tour.
+     */
+    const signaturesDEchecVues: string[] = conversationId ? chargerMurs(conversationId) : []
     let derniereSignatureDEchec = ''
     let dernierEchecEstUnRejeu = false
     let echecTuRecoveryAvailable = true
@@ -1563,6 +1569,13 @@ export class AgentPilot {
           dernierEchecEstUnRejeu = signaturesDEchecVues.includes(signature)
           derniereSignatureDEchec = signature
           signaturesDEchecVues.push(signature)
+          if (conversationId) {
+            try {
+              enregistrerMur(conversationId, signature)
+            } catch {
+              /* best-effort : c'est un cache d'indice, il ne doit jamais casser le tour */
+            }
+          }
         }
         results.push(
           `${token.name} → ${

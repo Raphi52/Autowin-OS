@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { configureAutowinAppDataBase } from './app-data'
 import { AgentPilot } from './agent-pilot'
 import type { Message, SendOptions, SendResult } from './providers/types'
 
@@ -40,6 +44,22 @@ const ask = undefined
 const history: Message[] = [{ role: 'user', content: 'corrige le fichier de config' }]
 // Les gardes d'experience sont une OPTION (`false` par defaut) : sans ce drapeau, tout est inerte.
 const SOIGNEE = true
+/*
+ * ISOLATION OBLIGATOIRE : le registre des murs PERSISTE sur disque. Sans racine temporaire, ces
+ * tours ecriraient dans l'APPDATA reel de l'utilisateur — et se liraient les uns les autres, donc
+ * l'escalade tomberait au deuxieme test parce que le premier a laisse son mur. Un harnais qui
+ * modifie ce qu'il mesure invalide la mesure.
+ */
+let racine = ''
+beforeEach(() => {
+  racine = mkdtempSync(join(tmpdir(), 'murs-corr-'))
+  configureAutowinAppDataBase(racine)
+})
+afterEach(() => {
+  configureAutowinAppDataBase(undefined)
+  if (racine) rmSync(racine, { recursive: true, force: true })
+})
+
 const MARQUEUR = 'ta dernière action a ÉCHOUÉ et tu t’arrêtes sur ce constat'
 
 describe('après un échec, l’agent CORRIGE et POURSUIT au lieu de s’arrêter', () => {
