@@ -121,6 +121,7 @@
 .rail.is-collapsed {
   width: 54px;
   padding-inline: 9px;
+  padding-right: 3px;
 }
 .rail.is-collapsed .brand {
   justify-content: center;
