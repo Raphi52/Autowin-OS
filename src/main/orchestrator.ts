@@ -3921,6 +3921,20 @@ ${empreinteDepot}`
             role: 'subagent',
             detail: `outils natifs servis a ${phase} : ${serveurOutils.nomsExposes().join(', ')}`
           })
+          /**
+           * L'HERITAGE EST DIT, parce qu'il change la surface d'outils du noeud.
+           *
+           * La garde demandait de « journaliser les serveurs MCP herites ». Autowin ne PEUT PAS les
+           * nommer : c'est le CLI qui lit la configuration de la machine, et il ne rend pas cette
+           * liste. Ce qui est dans nos moyens — et qui sert le meme but, rendre le cout accepte
+           * VISIBLE — c'est de dire que l'heritage est ACTIF pour cet appel, donc que la surface
+           * d'outils depend du poste. Nommer ce qu'on ne peut pas voir aurait ete une fausse garde.
+           */
+          push({
+            step: 'exec',
+            role: 'subagent',
+            detail: `heritage MCP machine ACTIF pour ${phase} : la surface d'outils de ce noeud depend de la configuration du poste, en plus des deux commandes du bus`
+          })
         } catch (error) {
           push({
             step: 'exec',
@@ -4837,6 +4851,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       })
       if (arret) {
         gate.reasons.push(arret)
+        /**
+         * LE MOTIF EST AUSSI POUSSE DANS LA TRACE, et pas seulement dans le resultat.
+         *
+         * Defaut trouve sur le run reel conv-1355 : le motif etait ajoute a `gate.reasons` APRES que
+         * la ligne « Arrete au controle final » ait deja ete poussee. Il atteignait donc le resultat
+         * du run mais JAMAIS la trace — la revendication « une borne qui mord doit se dire » n'etait
+         * tenue qu'a moitie, et c'est precisement la moitie que l'on relit apres coup.
+         */
+        push({ step: 'gate', role: 'gate', detail: arret })
         break
       }
       motifsPrecedents = [...gate.reasons]
