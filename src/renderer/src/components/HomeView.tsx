@@ -6,6 +6,7 @@ import {
   formatExchangeDate,
   groupByInterlocutor,
   parseOutlookResult,
+  splitByExchange,
   splitAgenda,
   totalUnread,
   type Agenda,
@@ -74,6 +75,18 @@ interface TaskSnapshotLike {
   }[]
 }
 
+/**
+ * L'etat de la passerelle Outlook, en UN seul type.
+ *
+ * Il etait declare deux fois -- une fois pour l'etat du composant, une fois pour le corps du widget --
+ * et les deux ont diverge des que `luLe` a ete ajoute. Un type porte a deux endroits est un type qui
+ * finira faux a l'un des deux.
+ */
+export type OutlookState =
+  | { etat: 'chargement' }
+  | { etat: 'ok'; fils: Interlocuteur[]; agenda: Agenda; luLe: number }
+  | { etat: 'panne'; cause: string }
+
 interface HoldState {
   id: HomeWidgetId
   edge: ResizeEdge | 'move'
@@ -82,11 +95,20 @@ interface HoldState {
   from: HomeWidgetBox
 }
 
-function readStoredLayout(viewport: { width: number; height: number }): HomeLayout {
+/**
+ * L'AGENCEMENT enregistré, tel quel.
+ *
+ * Volontairement SANS recadrage : c'est la source de vérité, celle que l'utilisateur a posée. Ce qui
+ * s'affiche en est dérivé pour la surface du moment (`reconcileLayout`), mais on ne remplace jamais
+ * la source par sa dérivée — sinon un simple passage sur fenêtre étroite détruit l'agencement pour
+ * toujours. Défaut relevé le 2026-08-21 par un scout lancé dans Autowin : la disposition était
+ * remplacée PUIS persistée immédiatement, donc ré-agrandir la fenêtre ne rendait rien.
+ */
+function readStoredArrangement(viewport: { width: number; height: number }): HomeLayout {
   try {
     const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY)
     if (raw === null) return defaultHomeLayout(viewport)
-    return reconcileLayout(parseHomeLayout(JSON.parse(raw), viewport), viewport)
+    return parseHomeLayout(JSON.parse(raw), viewport)
   } catch {
     // Une disposition illisible ne doit pas empêcher l'accueil de s'ouvrir : on repart du défaut.
     return defaultHomeLayout(viewport)
@@ -100,18 +122,22 @@ export function HomeView({
   active: boolean
   onNavigate?: (destination: string) => void
 }): React.JSX.Element {
-  // Au premier rendu la surface n'est pas encore mesurée : on part de la fenêtre, et l'effet de
-  // recadrage ci-dessous corrige dès que les dimensions réelles sont connues.
-  const [layout, setLayout] = useState<HomeLayout>(() =>
-    readStoredLayout({ width: window.innerWidth || 1440, height: window.innerHeight || 900 })
+  // Au premier rendu la surface n'est pas encore mesurée : on part de la fenêtre, et la mesure
+  // ci-dessous corrige dès que les dimensions réelles sont connues.
+  const [arrangement, setArrangement] = useState<HomeLayout>(() =>
+    readStoredArrangement({ width: window.innerWidth || 1440, height: window.innerHeight || 900 })
   )
+  const [surface, setSurface] = useState<{ width: number; height: number; top: number }>(() => ({
+    width: window.innerWidth || 1440,
+    height: window.innerHeight || 900,
+    top: 142
+  }))
   const [snapshot, setSnapshot] = useState<TaskSnapshotLike | null>(null)
   const [snapshotError, setSnapshotError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
-  const [outlook, setOutlook] = useState<
-    { etat: 'chargement' } | { etat: 'ok'; fils: Interlocuteur[]; agenda: Agenda } | { etat: 'panne'; cause: string }
-  >({ etat: 'chargement' })
+  const [outlook, setOutlook] = useState<OutlookState>({ etat: 'chargement' })
   const [held, setHeld] = useState<HomeWidgetId | null>(null)
+  const [outlookEnCours, setOutlookEnCours] = useState(false)
 
   const surfaceRef = useRef<HTMLDivElement | null>(null)
   const decorHostRef = useRef<HTMLDivElement | null>(null)
@@ -126,13 +152,15 @@ export function HomeView({
   activeRef.current = active
 
 
+  // Seul l'AGENCEMENT est enregistré. Écrire ce qui s'affiche graverait le mode compact d'une fenêtre
+  // étroite et l'utilisateur ne retrouverait jamais son organisation.
   useEffect(() => {
     try {
-      window.localStorage.setItem(LAYOUT_STORAGE_KEY, serializeHomeLayout(layout))
+      window.localStorage.setItem(LAYOUT_STORAGE_KEY, serializeHomeLayout(arrangement))
     } catch {
       // Pas d'écriture possible : la disposition vivra le temps de la session, sans casser la vue.
     }
-  }, [layout])
+  }, [arrangement])
 
   const viewport = useCallback((): { width: number; height: number; top: number } => {
     const surface = surfaceRef.current
@@ -147,37 +175,46 @@ export function HomeView({
   }, [])
 
   /* ---------------------------------------------------------------- *
-   * Le recadrage. Au montage et à chaque redimensionnement de la vue.
+   * La surface. Mesurée au montage et à chaque redimensionnement.
    *
-   * Sans lui, une disposition posée sur un écran large laisse les tuiles ENTIÈREMENT hors champ
-   * quand la fenêtre rétrécit : mesuré le 2026-08-21 dans l'app, quatre tuiles sur cinq étaient
-   * inatteignables dans une fenêtre de 491 px, et rien ne le signalait.
+   * Elle ne MODIFIE PAS la disposition : elle est une entrée de son calcul. C'est la différence entre
+   * « la fenêtre a changé, j'adapte l'affichage » et « la fenêtre a changé, j'écrase ton
+   * organisation ».
    * ---------------------------------------------------------------- */
   useEffect(() => {
-    const surface = surfaceRef.current
-    if (!surface) return
-    const refit = (): void => {
-      const size = viewport()
-      if (size.width === 0 || size.height === 0) return
-      setLayout((current) => {
-        const fitted = reconcileLayout(current, size)
-        // Comparaison avant écriture : un recadrage sans effet ne doit pas provoquer un rendu, ni
-        // réécrire la disposition enregistrée à chaque pixel de redimensionnement.
-        const changed = fitted.some(
-          (box, index) =>
-            box.x !== current[index].x ||
-            box.y !== current[index].y ||
-            box.w !== current[index].w ||
-            box.h !== current[index].h
-        )
-        return changed ? fitted : current
-      })
+    const element = surfaceRef.current
+    if (!element) return
+    const mesurer = (): void => {
+      const taille = viewport()
+      if (taille.width === 0 || taille.height === 0) return
+      setSurface((courante) =>
+        courante.width === taille.width &&
+        courante.height === taille.height &&
+        courante.top === taille.top
+          ? courante
+          : taille
+      )
     }
-    refit()
-    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(refit) : null
-    observer?.observe(surface)
-    return () => observer?.disconnect()
+    mesurer()
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(mesurer) : null
+    observer?.observe(element)
+    // `resize` de fenêtre EN PLUS de l'observateur : sans lui, un environnement sans `ResizeObserver`
+    // (et c'est le cas des tests) ne mesurerait jamais rien, donc la règle ci-dessus ne serait
+    // vérifiable nulle part.
+    window.addEventListener('resize', mesurer)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', mesurer)
+    }
   }, [viewport])
+
+  /**
+   * Ce qui s'AFFICHE : l'agencement, adapté à la surface du moment.
+   *
+   * Recalculé, jamais enregistré. Réduire puis ré-agrandir la fenêtre repasse donc exactement par la
+   * même dérivation et rend les positions d'origine au pixel.
+   */
+  const layout = useMemo(() => reconcileLayout(arrangement, surface), [arrangement, surface])
 
   /* ---------------------------------------------------------------- *
    * Le décor. Monté une fois, suspendu quand la vue n'est pas affichée.
@@ -274,6 +311,7 @@ export function HomeView({
    * lecture est un dialogue COM avec une application lourde.
    * ---------------------------------------------------------------- */
   const readOutlook = useCallback(async (force = false): Promise<void> => {
+    if (force) setOutlookEnCours(true)
     const api = (window as unknown as { api?: { outlookSnapshot?: (f?: boolean) => Promise<unknown> } })
       .api
     if (!api?.outlookSnapshot) {
@@ -288,14 +326,17 @@ export function HomeView({
       }
       setOutlook({
         etat: 'ok',
-        fils: groupByInterlocutor(resultat.mails),
-        agenda: splitAgenda(resultat.evenements, Date.now())
+        fils: groupByInterlocutor(resultat.mails, resultat.adressesEchangees),
+        agenda: splitAgenda(resultat.evenements, Date.now()),
+        luLe: Date.now()
       })
     } catch (error) {
       setOutlook({
         etat: 'panne',
         cause: error instanceof Error ? error.message : String(error)
       })
+    } finally {
+      setOutlookEnCours(false)
     }
   }, [])
 
@@ -350,7 +391,9 @@ export function HomeView({
         hold.edge === 'move'
           ? moveWidgetBox(hold.from, dx, dy, viewport())
           : resizeWidgetBox(hold.from, hold.edge, dx, dy, viewport())
-      setLayout((current) => replaceWidget(current, box))
+      // Un geste de l'utilisateur fait AUTORITE : il ecrit l'agencement. C'est la difference avec un
+      // redimensionnement de fenetre, qui n'exprime aucune intention sur la disposition.
+      setArrangement((current) => replaceWidget(current, box))
     }
     const onUp = (): void => {
       // Rien d'autre à faire : la tuile est déjà exactement là où elle a été lâchée. Aucun élan,
@@ -371,9 +414,9 @@ export function HomeView({
     }
   }, [held, viewport])
 
-  const resetLayout = useCallback(() => setLayout(defaultHomeLayout(viewport())), [viewport])
+  const resetLayout = useCallback(() => setArrangement(defaultHomeLayout(viewport())), [viewport])
   const scatter = useCallback(
-    () => setLayout((current) => scatterHomeLayout(current, viewport(), Math.random)),
+    () => setArrangement((current) => scatterHomeLayout(current, viewport(), Math.random)),
     [viewport]
   )
 
@@ -394,6 +437,22 @@ export function HomeView({
           </p>
         </div>
         <div className="home-view__tools">
+          {/* Outlook n'est relu que toutes les deux minutes : sans ce bouton, un mail qui vient
+              d'arriver reste invisible sans qu'on puisse rien y faire. Friction relevee par un scout
+              lance dans Autowin (score 86). L'horodatage rend l'effet du clic VISIBLE. */}
+          <button
+            type="button"
+            onClick={() => void readOutlook(true)}
+            disabled={outlookEnCours}
+            data-testid="home-refresh-outlook"
+            title={
+              outlook.etat === 'ok'
+                ? `Outlook lu à ${new Date(outlook.luLe).toLocaleTimeString('fr-FR')}`
+                : 'Relire Outlook maintenant'
+            }
+          >
+            {outlookEnCours ? 'Lecture…' : 'Actualiser Outlook'}
+          </button>
           <button type="button" onClick={scatter}>
             Disperser
           </button>
@@ -462,11 +521,6 @@ export function HomeView({
   )
 }
 
-type OutlookState =
-  | { etat: 'chargement' }
-  | { etat: 'ok'; fils: Interlocuteur[]; agenda: Agenda }
-  | { etat: 'panne'; cause: string }
-
 function WidgetBody({
   id,
   departures,
@@ -518,7 +572,16 @@ function WidgetBody({
 
   if (id === 'routines') {
     if (departures.length === 0) {
-      return <p className="home-hint">Aucune routine horaire n’est programmée.</p>
+      // Un widget vide occupe autant de place qu'un widget plein : autant qu'il serve à quelque
+      // chose. Relevé en pilotant l'app — trois quarts de l'écran affichaient des phrases de vide.
+      return (
+        <p className="home-hint">
+          Aucune routine horaire n’est programmée.{' '}
+          <button type="button" className="home-lien" onClick={() => onNavigate?.('planification')}>
+            En créer une
+          </button>
+        </p>
+      )
     }
     return (
       <ul className="home-list">
@@ -539,7 +602,14 @@ function WidgetBody({
   }
 
   if (notices.length === 0) {
-    return <p className="home-hint">Rien à signaler. Vos agents n’ont rien remonté.</p>
+    return (
+      <p className="home-hint">
+        Rien à signaler. Vos agents n’ont rien remonté.{' '}
+        <button type="button" className="home-lien" onClick={() => onNavigate?.('watchdog')}>
+          Voir le Watchdog
+        </button>
+      </p>
+    )
   }
   return (
     <ul className="home-notices">
@@ -561,7 +631,14 @@ function WidgetBody({
   )
 }
 
-/** Les interlocuteurs : un fil par contact, non lus en tête, comme une messagerie. */
+/**
+ * Les interlocuteurs : un fil par contact, non lus en tête, comme une messagerie.
+ *
+ * Les PERSONNES d'abord, les automates ensuite et annoncés comme tels. Mesure du 2026-08-21 en
+ * pilotant l'app sur une vraie boîte : sur 23 émetteurs, 3 étaient des personnes — le reste était
+ * des codes à usage unique, des ajouts à des groupes et des robots de suivi. Un widget qui promet
+ * « mes échanges par interlocuteur » et livre cela rate sa promesse.
+ */
 function InterlocuteursList({
   fils,
   now
@@ -572,10 +649,36 @@ function InterlocuteursList({
   if (fils.length === 0) {
     return <p className="home-hint">Aucun message dans votre boîte de réception.</p>
   }
+  const { personnes, automates, indistinct } = splitByExchange(fils)
+  return (
+    <>
+      {personnes.length > 0 ? <FilsList fils={personnes} now={now} /> : null}
+      {personnes.length === 0 && !indistinct ? (
+        <p className="home-hint">
+          Aucun message d’une personne à qui vous avez déjà écrit. Ci-dessous, les envois
+          automatiques.
+        </p>
+      ) : null}
+      {automates.length > 0 ? (
+        <>
+          {/* Nommé, pas masqué : ces messages existent, ils ne sont simplement pas des échanges. */}
+          <p className="home-subhead">Envois automatiques</p>
+          <FilsList fils={automates} now={now} />
+        </>
+      ) : null}
+    </>
+  )
+}
+
+function FilsList({ fils, now }: { fils: Interlocuteur[]; now: number }): React.JSX.Element {
   return (
     <ul className="home-threads">
       {fils.map((fil) => (
-        <li key={fil.cle} data-unread={fil.nonLus > 0 ? 'true' : undefined}>
+        <li
+          key={fil.cle}
+          data-unread={fil.nonLus > 0 ? 'true' : undefined}
+          data-echange={fil.echange === true ? 'true' : undefined}
+        >
           <span className="home-threads__who" aria-hidden="true">
             {initiales(fil.nom)}
           </span>

@@ -243,15 +243,29 @@ describe('la disposition d origine ne se chevauche pas', () => {
     expect(chevauchements(defaultHomeLayout(surface))).toEqual([])
   })
 
-  it('laisse une bande de decor visible sur les cotes', () => {
-    // Sans plafond de largeur, les tuiles s etiraient jusqu aux bords et masquaient le decor 3D en
-    // entier : mesure du 2026-08-21 sur capture de l app.
+  it('laisse UNE bande de decor, a droite, et colle le bloc a gauche', () => {
+    // Deux exigences, et la seconde a change apres avoir PILOTE l app le 2026-08-21 : le bloc etait
+    // centre, ce qui laissait ~420 px de vide entre la barre laterale et la premiere colonne pendant
+    // que les sujets de mails etaient tronques faute de place. Deux bandes depareillees se lisent
+    // comme une erreur ; une seule, du cote ou le decor porte ses planetes, se lit comme un choix.
     const surface = { width: 1600, height: 900 }
     const layout = defaultHomeLayout(surface)
     const gauche = Math.min(...layout.map((entry) => entry.x))
     const droite = Math.max(...layout.map((entry) => entry.x + entry.w))
-    expect(gauche).toBeGreaterThan(60)
-    expect(surface.width - droite).toBeGreaterThan(60)
+    // Le bloc commence a la marge, pas au milieu.
+    expect(gauche).toBeLessThan(40)
+    // Et la bande de droite reste franche : le decor 3D doit rester visible, c'est une demande
+    // explicite de l utilisateur.
+    expect(surface.width - droite).toBeGreaterThan(80)
+  })
+
+  it('elargit les colonnes quand la surface le permet', () => {
+    // Plafonner a 384 px gaspillait la place ET tronquait les sujets en meme temps.
+    const etroite = defaultHomeLayout({ width: 1100, height: 900 })
+    const large = defaultHomeLayout({ width: 1900, height: 900 })
+    const l = (layout: typeof etroite): number => layout.find((e) => e.id === 'mails')!.w
+    expect(l(large)).toBeGreaterThan(l(etroite))
+    expect(l(large)).toBeGreaterThan(384)
   })
 
   it('ne laisse aucune tuile sous la plaque de titre', () => {
@@ -346,5 +360,36 @@ describe('le haut reserve est mesure, pas suppose', () => {
     // Un en-tete plus haut ne doit pas faire deborder la pile en bas.
     expect(hauteur(long)).toBeLessThanOrEqual(surface.height)
     expect(hauteur(court)).toBeLessThanOrEqual(surface.height)
+  })
+})
+
+describe('un agencement ne doit pas deborder du cadre', () => {
+  // Trou mesure le 2026-08-21 dans l app : `layoutFitsViewport` ne verifiait que l aire cumulee et la
+  // largeur d une tuile. Un agencement de trois colonnes issu d un ecran de 1920 px passait les deux
+  // controles ET depassait le bord droit de 180 px. Un debordement que personne n a choisi n est pas
+  // une disposition valide.
+  it('refuse un agencement issu d un ecran plus large qui depasse a droite', () => {
+    const large = defaultHomeLayout({ width: 1920, height: 1000 })
+    const ecran = { width: 1514, height: 952 }
+    const debordeAvant = large.some((box) => box.x + box.w > ecran.width)
+    expect(debordeAvant).toBe(true)
+    expect(layoutFitsViewport(large, ecran)).toBe(false)
+    // Reconcilie, il tient : chaque tuile est DANS le cadre.
+    for (const box of reconcileLayout(large, ecran)) {
+      expect(box.x + box.w).toBeLessThanOrEqual(ecran.width)
+    }
+  })
+
+  it('accepte un agencement calcule pour la surface', () => {
+    const ecran = { width: 1514, height: 952 }
+    expect(layoutFitsViewport(defaultHomeLayout(ecran), ecran)).toBe(true)
+  })
+
+  it('n empeche PAS l utilisateur de garer une tuile a moitie hors champ', () => {
+    // Le controle porte sur la RECONCILIATION automatique, pas sur les gestes : une tuile posee a la
+    // main en bord d ecran reste ou elle est. Sinon on retomberait dans le defaut d origine.
+    const ecran = { width: 1440, height: 900 }
+    const gare = moveWidgetBox(box({ x: 1300, w: 300 }), 0, 0, ecran)
+    expect(gare.x + gare.w).toBeGreaterThan(ecran.width)
   })
 })

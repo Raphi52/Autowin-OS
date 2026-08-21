@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatEventTime,
+  splitByExchange,
   formatExchangeDate,
   groupByInterlocutor,
   parseOutlookResult,
@@ -225,5 +226,66 @@ describe('validation de la reponse de la passerelle', () => {
       expect(resultat.ok).toBe(false)
       if (!resultat.ok) expect(resultat.erreur.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('une personne n est pas un automate', () => {
+  // Friction relevee en PILOTANT l app sur la vraie boite le 2026-08-21 : le widget promettait « mes
+  // echanges par interlocuteur » et livrait surtout du bruit machine -- codes a usage unique, ajouts
+  // a des groupes, robots de suivi. Sur 23 emetteurs, 3 personnes.
+  //
+  // Le critere n est PAS une liste noire de domaines : elle serait fausse le jour ou un collegue
+  // ecrit depuis un domaine inattendu. C est un fait verifiable -- les adresses auxquelles
+  // l utilisateur a ECRIT.
+  const messages = [
+    mail({ id: 'p', adresse: 'collegue@amitel.fr', nom: 'Collegue', nonLu: false,
+      recuLe: new Date(NOW - 5 * JOUR).toISOString() }),
+    mail({ id: 'r', adresse: 'otp@notifications.example', nom: 'Codes', nonLu: true,
+      recuLe: new Date(NOW).toISOString() })
+  ]
+
+  it('place la PERSONNE devant l automate, meme quand l automate a du non lu et est plus recent', () => {
+    const fils = groupByInterlocutor(messages, ['collegue@amitel.fr'])
+    expect(fils.map((f) => f.cle)).toEqual(['collegue@amitel.fr', 'otp@notifications.example'])
+    expect(fils[0].echange).toBe(true)
+    expect(fils[1].echange).toBe(false)
+  })
+
+  it('ignore la casse de l adresse dans la comparaison', () => {
+    const fils = groupByInterlocutor(messages, ['  COLLEGUE@Amitel.FR '])
+    expect(fils[0].echange).toBe(true)
+  })
+
+  it('ne PRETEND pas savoir quand l information manque', () => {
+    // `null` veut dire « je n ai pas pu savoir », ce qui n est pas « aucune personne ». Confondre les
+    // deux ferait passer tous les vrais collegues pour des automates.
+    for (const inconnu of [undefined, null]) {
+      const fils = groupByInterlocutor(messages, inconnu)
+      expect(fils.every((f) => f.echange === null)).toBe(true)
+      // L ordre retombe alors sur le comportement d avant : non lu d abord.
+      expect(fils[0].cle).toBe('otp@notifications.example')
+      expect(splitByExchange(fils).indistinct).toBe(true)
+    }
+  })
+
+  it('separe les deux populations pour l affichage', () => {
+    const { personnes, automates, indistinct } = splitByExchange(
+      groupByInterlocutor(messages, ['collegue@amitel.fr'])
+    )
+    expect(personnes.map((f) => f.cle)).toEqual(['collegue@amitel.fr'])
+    expect(automates.map((f) => f.cle)).toEqual(['otp@notifications.example'])
+    expect(indistinct).toBe(false)
+  })
+
+  it('transporte les adresses echangees depuis la passerelle, et distingue absent de vide', () => {
+    const avec = parseOutlookResult({
+      ok: true, luLe: '', boite: '', mailsNonLus: 0, mails: [], evenements: [],
+      adressesEchangees: ['a@x.fr']
+    })
+    expect(avec.ok && avec.adressesEchangees).toEqual(['a@x.fr'])
+    const sans = parseOutlookResult({
+      ok: true, luLe: '', boite: '', mailsNonLus: 0, mails: [], evenements: []
+    })
+    expect(sans.ok && sans.adressesEchangees).toBeNull()
   })
 })

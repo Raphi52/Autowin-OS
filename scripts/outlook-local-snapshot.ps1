@@ -70,6 +70,37 @@ try {
     })
   }
 
+  # --- avec QUI l'utilisateur echange vraiment
+  #
+  # La boite de reception seule ne distingue pas une personne d'un automate : releve du 2026-08-21 sur
+  # une vraie boite, sur 23 emetteurs, la majorite etaient des notifications (codes a usage unique,
+  # ajouts a des groupes, robots de suivi). Un widget qui promet "mes echanges par interlocuteur" et
+  # livre cela rate sa promesse.
+  #
+  # Le critere retenu n'est PAS une liste noire de domaines -- elle serait fausse le jour ou un
+  # collegue ecrit depuis un domaine inattendu. C'est un fait : les adresses AUXQUELLES l'utilisateur
+  # a ecrit. Un echange va dans les deux sens ; une notification, non.
+  $connus = New-Object System.Collections.Generic.HashSet[string]
+  try {
+    $envoyes = $session.GetDefaultFolder(5).Items
+    $envoyes.Sort('[SentOn]', $true)
+    $vus = 0
+    foreach ($envoye in $envoyes) {
+      if ($vus -ge 400) { break }
+      $vus++
+      try {
+        foreach ($destinataire in $envoye.Recipients) {
+          $adresseDest = [string]$destinataire.Address
+          if ($adresseDest) { [void]$connus.Add($adresseDest.ToLowerInvariant()) }
+        }
+      } catch { }
+    }
+  } catch {
+    # Pas de dossier Elements envoyes accessible : on ne sait pas qui est une personne, et on le DIT
+    # plutot que de deviner. Le cote application affichera alors tout sans distinction.
+    $connus = $null
+  }
+
   # --- rendez-vous
   #
   # Trois pieges d'Outlook, tous les trois mesures sur ce poste :
@@ -109,6 +140,8 @@ try {
     mailsNonLus = [int]$inbox.UnReadItemCount
     mails = @($mails)
     evenements = @($evenements)
+    # `$null` signifie "je n'ai pas pu savoir", ce qui n'est PAS la meme chose qu'un ensemble vide.
+    adressesEchangees = if ($null -eq $connus) { $null } else { @($connus) }
   })
   Write-Host ("OK - " + $mails.Count + " messages, " + $evenements.Count + " evenements")
   exit 0

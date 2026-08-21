@@ -360,3 +360,72 @@ describe('widgets Outlook', () => {
     expect(api.outlookSnapshot).not.toHaveBeenCalled()
   })
 })
+
+describe('la disposition personnelle survit a un redimensionnement', () => {
+  // Friction relevee le 2026-08-21 par un scout lance DANS Autowin, score 92, et c'etait un defaut
+  // que j'avais introduit puis defendu : `reconcileLayout` remplacait la disposition ET elle etait
+  // persistee aussitot. Passer une fois par une fenetre etroite -- ou deplacer la fenetre entre deux
+  // ecrans -- detruisait l'agencement DEFINITIVEMENT.
+  //
+  // Le signal mesurable est celui que le scout a formule : reduire puis re-agrandir restaure
+  // exactement les positions initiales.
+  const largeur = (w: number, h: number): void => {
+    ;(window as unknown as { innerWidth: number }).innerWidth = w
+    ;(window as unknown as { innerHeight: number }).innerHeight = h
+  }
+
+  it('rend les positions au PIXEL apres reduction puis re-agrandissement', async () => {
+    largeur(1440, 900)
+    const container = await mount()
+    const boites = (): Record<string, { x: number; y: number; w: number; h: number }> =>
+      Object.fromEntries(
+        ['mails', 'agenda', 'routines', 'notifications', 'hublot'].map((id) => [
+          id,
+          boxOf(tile(container, id))
+        ])
+      )
+    const avant = boites()
+
+    largeur(430, 900)
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+    })
+    const pendant = boites()
+    // La vue s'est bien adaptee : sinon le test ne prouverait rien. On observe la LARGEUR et non
+    // l'abscisse -- le bloc etant colle a la marge gauche, `x` vaut la meme chose dans les deux
+    // arrangements et ne temoignerait de rien.
+    expect(pendant.mails.w).not.toBe(avant.mails.w)
+    expect(pendant.mails.w).toBeLessThan(avant.mails.w)
+
+    largeur(1440, 900)
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(boites()).toEqual(avant)
+  })
+
+  it('n ECRIT jamais la disposition compacte dans l enregistrement', async () => {
+    largeur(1440, 900)
+    const container = await mount()
+    const agenda = tile(container, 'agenda')
+    // Une position posee a la main, qui doit survivre a tout.
+    await gesture(agenda, [[537, 341]], [500, 300])
+    const enregistreApresGeste = window.localStorage.getItem(LAYOUT_KEY)
+
+    largeur(430, 900)
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+    })
+    // C'EST le coeur du defaut : le redimensionnement ne doit rien graver.
+    expect(window.localStorage.getItem(LAYOUT_KEY)).toBe(enregistreApresGeste)
+  })
+
+  it('garde le geste de l utilisateur comme autorite, lui', async () => {
+    largeur(1440, 900)
+    const container = await mount()
+    const avant = window.localStorage.getItem(LAYOUT_KEY)
+    await gesture(tile(container, 'hublot'), [[700, 600]], [600, 500])
+    // Un geste, contrairement a un redimensionnement, exprime une intention : il s enregistre.
+    expect(window.localStorage.getItem(LAYOUT_KEY)).not.toBe(avant)
+  })
+})

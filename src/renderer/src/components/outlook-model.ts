@@ -36,6 +36,8 @@ export interface OutlookSnapshot {
   mailsNonLus: number
   mails: OutlookRawMail[]
   evenements: OutlookRawEvent[]
+  /** Adresses auxquelles l'utilisateur a ecrit. `null` = information indisponible, pas « aucune ». */
+  adressesEchangees: string[] | null
 }
 
 export interface OutlookFailure {
@@ -46,6 +48,17 @@ export interface OutlookFailure {
 export type OutlookResult = OutlookSnapshot | OutlookFailure
 
 export interface Interlocuteur {
+  /**
+   * `true` quand l'utilisateur a DEJA ECRIT a cette adresse.
+   *
+   * C'est ce qui distingue une personne d'un automate, et le critere n'est pas une liste noire de
+   * domaines — elle serait fausse le jour ou un collegue ecrit depuis un domaine inattendu. Un
+   * echange va dans les deux sens ; une notification, non. Releve du 2026-08-21 sur une vraie boite :
+   * 23 emetteurs, 3 personnes.
+   *
+   * `null` = on n'a pas pu savoir (dossier Elements envoyes inaccessible). Ce n'est PAS « non ».
+   */
+  echange: boolean | null
   /** Clé stable : l'adresse en minuscules, ou le nom affiché à défaut. */
   cle: string
   nom: string
@@ -68,7 +81,16 @@ export interface Interlocuteur {
  * À défaut d'adresse (notification système, convocation), le nom affiché sert de clé : jeter ces
  * messages ferait disparaître des informations réelles sans le dire.
  */
-export function groupByInterlocutor(mails: readonly OutlookRawMail[]): Interlocuteur[] {
+export function groupByInterlocutor(
+  mails: readonly OutlookRawMail[],
+  adressesEchangees?: readonly string[] | null
+): Interlocuteur[] {
+  // `undefined` ou `null` : on ne sait pas qui est une personne. On n'invente pas de reponse — tous
+  // les fils restent au meme rang, ce qui est le comportement d'avant cette distinction.
+  const connues =
+    adressesEchangees === null || adressesEchangees === undefined
+      ? null
+      : new Set(adressesEchangees.map((adresse) => adresse.trim().toLowerCase()).filter(Boolean))
   const fils = new Map<string, Interlocuteur>()
 
   for (const mail of mails) {
@@ -99,6 +121,7 @@ export function groupByInterlocutor(mails: readonly OutlookRawMail[]): Interlocu
         cle,
         nom: nom || adresse || cle,
         adresse,
+        echange: connues === null ? null : connues.has(cle),
         messages: [message],
         nonLus: mail.nonLu ? 1 : 0,
         dernierEchange: instant ?? 0
@@ -110,9 +133,16 @@ export function groupByInterlocutor(mails: readonly OutlookRawMail[]): Interlocu
     fil.messages.sort((a, b) => (b.recuLe ?? 0) - (a.recuLe ?? 0))
   }
 
-  // Les fils qui ont du NON LU passent devant, quelle que soit leur date : trier par date seule
-  // enterrerait un message jamais lu sous une pile de fils déjà traités.
+  // L'ordre, du plus fort au plus faible :
+  //  1. une PERSONNE avant un automate — c'est la promesse du widget, « mes echanges » ;
+  //  2. du NON LU avant du deja lu, quelle que soit la date : trier par date seule enterrerait un
+  //     message jamais lu sous une pile de fils deja traites ;
+  //  3. le plus recent.
   return [...fils.values()].sort((a, b) => {
+    if (a.echange !== b.echange) {
+      if (a.echange === true) return -1
+      if (b.echange === true) return 1
+    }
     if ((a.nonLus > 0) !== (b.nonLus > 0)) return a.nonLus > 0 ? -1 : 1
     return b.dernierEchange - a.dernierEchange
   })
@@ -237,6 +267,25 @@ export function parseOutlookResult(raw: unknown): OutlookResult {
     boite: typeof candidate.boite === 'string' ? candidate.boite : '',
     mailsNonLus: typeof candidate.mailsNonLus === 'number' ? candidate.mailsNonLus : 0,
     mails: candidate.mails as OutlookRawMail[],
-    evenements: candidate.evenements as OutlookRawEvent[]
+    evenements: candidate.evenements as OutlookRawEvent[],
+    adressesEchangees: Array.isArray(candidate.adressesEchangees)
+      ? (candidate.adressesEchangees as string[])
+      : null
+  }
+}
+
+/** Les vrais interlocuteurs, et le reste. Sert a separer les deux dans l'affichage. */
+export function splitByExchange(fils: readonly Interlocuteur[]): {
+  personnes: Interlocuteur[]
+  automates: Interlocuteur[]
+  /** `true` quand la distinction n'a pas pu etre faite : l'affichage ne doit alors pas la pretendre. */
+  indistinct: boolean
+} {
+  const indistinct = fils.length > 0 && fils.every((fil) => fil.echange === null)
+  if (indistinct) return { personnes: [...fils], automates: [], indistinct: true }
+  return {
+    personnes: fils.filter((fil) => fil.echange === true),
+    automates: fils.filter((fil) => fil.echange !== true),
+    indistinct: false
   }
 }

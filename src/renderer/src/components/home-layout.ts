@@ -110,6 +110,15 @@ const GAP = 20
  * elles. Le bloc est alors CENTRE, ce qui laisse une bande de decor symetrique de chaque cote.
  */
 const MAX_COLUMN_WIDTH = 384
+/**
+ * Part de la largeur utile laissee au decor, a DROITE.
+ *
+ * Le bloc etait CENTRE : sur une surface de 1514 px, cela laissait ~420 px de vide a gauche, entre la
+ * barre laterale et la premiere colonne, pendant que les sujets de mails etaient tronques faute de
+ * place. Deux bandes depareillees se lisent comme une erreur de mise en page ; une seule bande, du
+ * cote ou le decor porte ses planetes, se lit comme un choix. Releve en pilotant l'app le 2026-08-21.
+ */
+const DECOR_BAND = 0.1
 
 /**
  * Materialise la disposition d'origine pour une surface donnee.
@@ -154,12 +163,17 @@ export function defaultHomeLayout(
   }
 
   const spec = columns === 3 ? WIDE : MEDIUM
-  const columnWidth = Math.min(
-    MAX_COLUMN_WIDTH,
-    Math.round((usableWidth - GAP * (columns - 1)) / columns)
+  // La largeur des colonnes suit la surface, avec un plancher a `MAX_COLUMN_WIDTH` : sur un grand
+  // ecran, plafonner a 384 px gaspillait la place ET tronquait les sujets en meme temps.
+  const largeurBloc = usableWidth * (1 - DECOR_BAND)
+  const columnWidth = Math.max(
+    MIN_WIDGET_WIDTH,
+    Math.min(
+      Math.round((usableWidth - GAP * (columns - 1)) / columns),
+      Math.max(MAX_COLUMN_WIDTH, Math.round((largeurBloc - GAP * (columns - 1)) / columns))
+    )
   )
-  const blockWidth = columnWidth * columns + GAP * (columns - 1)
-  const originX = PAD_X + Math.round(Math.max(0, usableWidth - blockWidth) / 2)
+  const originX = PAD_X
   // Deux colonnes demandent une ligne de plus, pour la bande du hublot en bas.
   const gridRows = columns === 3 ? ROWS : ROWS + 1
   const rowHeight = Math.max(
@@ -337,7 +351,14 @@ export function layoutFitsViewport(
   const couvert = layout.reduce((total, box) => total + box.w * box.h, 0)
   if (couvert > surface * 1.12) return false
   // Une tuile plus large que la surface utile ne pourra jamais s'y poser proprement.
-  return layout.every((box) => box.w <= viewport.width)
+  if (layout.some((box) => box.w > viewport.width)) return false
+  // Et aucune tuile ne doit DEBORDER du cadre a droite.
+  //
+  // Ce controle manquait, et le trou etait exactement du meme genre que celui qu'il devait empecher :
+  // mesure du 2026-08-21 dans l'app, un agencement issu d'un ecran de 1920 px « tenait » par son aire
+  // (0,93 de la surface) et par la largeur de chaque tuile, tout en depassant le bord droit de 180 px.
+  // Un debordement que PERSONNE n'a choisi n'est pas une disposition valide pour cette surface.
+  return layout.every((box) => box.x + box.w <= viewport.width)
 }
 
 /**
