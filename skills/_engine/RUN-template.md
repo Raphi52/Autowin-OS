@@ -19,7 +19,9 @@ gate: on                    <!-- on (default) | off — opt-out for a throwaway 
 **Scope IN** : <what is covered> / **Scope OUT** : <what is not, and why>
 **Critere de succes (DoD cochable)** : les conditions de SORTIE, chacune verifiable + sa PREUVE — le judge la coche item par item ; une case a contenu reel NON cochee = item non tenu -> le **stop-gate BLOQUE le green** (deterministe, hors-modele) ; la PREUVE derriere une case cochee -> verifiee par **judge + humain** (le gate ne lit pas la substance). NE PAS recopier un signal/check : y POINTER. (disposable : une phrase suffit ; standard/critical : items, chacun avec une VRAIE preuve — pas de prose generique.) **Les `- [ ]` sous `## Besoin` sont RESERVEES a la DoD** ; risques / angles-morts / hypotheses en PROSE ou puces `-`, JAMAIS `- [ ]` (une case non-DoD bloquerait a raison comme condition non tenue ; le gate ne ferme le scope DoD que sur un heading `##` de niveau 2, pas sur `###`).
   - [ ] <condition de sortie 1> (preuve: <artefact / "cf. signal-cmd" / "cf. check:" / prose falsifiable>)
+    > G/W/N (reco) : Given <etat initial> / When <action> / Then <resultat verifiable> — l'exemple FALSIFIABLE qui nourrit le red->green du build ; une case COCHEE dont la preuve reste un placeholder `(preuve: <...>)` -> le **stop-gate BLOQUE** (coche sans preuve nommee).
   - [ ] <condition de sortie 2> (preuve: ...)
+**Clarifications** : une ambiguite NON resolue qui bloque le cadrage -> `[NEEDS CLARIFICATION: <quoi>]` ici meme (## Besoin). Tant qu'un marqueur a CONTENU REEL est present, le **stop-gate BLOQUE le green** (comme une case DoD non tenue) ; un placeholder `[NEEDS CLARIFICATION: <...>]` est ignore. Resous-la (reponse + retrait du marqueur) avant de clore.
 **Decisions deliberees** : <deliberate choices the review should not re-flag>
 **Hypotheses annoncees** : <"I am assuming X (fact: ...) — correct me">
 
@@ -53,6 +55,7 @@ Hypothesis:
 Tried:
 Next:
 Blockers:
+Contexte gele (reco standard · OBLIGATOIRE critical) : fichiers touches · decisions actees · liens (RUN/commits/docs) — de quoi REPRENDRE sans le fil de session (anti context-collapse multi-session).
 
 ## Cicatrices
 <!-- lessons from the run (volatile -> treat as HYPOTHESIS); promote to check: or memory when durable (ENGINE ch.3) -->
