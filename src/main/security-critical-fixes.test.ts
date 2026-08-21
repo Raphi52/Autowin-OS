@@ -153,7 +153,18 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     // A noter pour la prochaine fois : le compte est assert AVANT `unguarded`, donc un fil-piege qui
     // saute masque la garantie de securite au lieu de la reveler. Le compte a echoue ici sans qu'on
     // sache, jusqu'a relecture manuelle, si un canal etait non garde.
-    expect(handlers).toHaveLength(136)
+    //
+    // MISE A JOUR 2026-08-21 — 136 -> 138. DEUX canaux ajoutes par la vue Accueil, et la relecture a
+    // ete faite AVANT de toucher le compte, dans cet ordre precis puisque le fichier previent lui-meme
+    // du piege :
+    //   `outlook:snapshot` — lecture SEULE du profil Outlook local (messages et rendez-vous) ;
+    //   `outlook:ouvrir`   — ouvre UN element dans Outlook, par son identifiant.
+    // Les deux portent `assertTrustedRendererSender(event, 'Outlook')` des leur PREMIERE ligne, et
+    // `outlook:ouvrir` valide son identifiant par expression reguliere des DEUX cotes de la frontiere
+    // (ici et dans le script PowerShell). Ils sont deliberement SEPARES : lire n'est pas agir, et la
+    // garantie « lecture seule » de la passerelle est ce qui rend cette integration acceptable.
+    // `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(138)
     expect(unguarded).toEqual([])
   })
 

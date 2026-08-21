@@ -11,6 +11,7 @@
  */
 import { writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 
 const value = (name, fallback) => {
   const index = process.argv.indexOf(name)
@@ -95,12 +96,14 @@ if (reload) {
 // toucher a la fenetre de l'utilisateur — on ne redimensionne pas l'app de quelqu'un pour se prendre
 // en photo.
 const VIEWPORT = { width: Number(value('--width', '1440')), height: Number(value('--height', '900')) }
-await send('Emulation.setDeviceMetricsOverride', {
-  width: VIEWPORT.width,
-  height: VIEWPORT.height,
-  deviceScaleFactor: 1,
-  mobile: false
-})
+
+// Le bail garantit la RESTAURATION, meme si la preuve echoue en cours de route. Sans lui, un `throw`
+// entre la surcharge et le nettoyage laissait l'application de l'utilisateur coincee dans une taille
+// emulee -- et ce script en contient plusieurs. Un garde-fou du depot l'exige, et il a raison.
+const verdict = await withDeviceMetricsOverride(
+  send,
+  { width: VIEWPORT.width, height: VIEWPORT.height, deviceScaleFactor: 1, mobile: false },
+  async () => {
 await wait(400)
 
 // --- 1. atteindre l'accueil PAR L'INTERFACE, comme un humain : si la pastille de navigation ne
@@ -239,18 +242,19 @@ if (analyse.status !== 0) throw new Error(`Analyse de la capture impossible : ${
 const [pixelsZone, pixelsAllumes] = analyse.stdout.trim().split(/\s+/).map(Number)
 const partAllumee = pixelsAllumes / pixelsZone
 
-const verdict = {
-  port,
-  emulation: VIEWPORT,
-  navigation: reached,
-  decor: { ...decor, pixelsZone, pixelsAllumes, partAllumee: Number(partAllumee.toFixed(4)) },
-  pose,
-  erreursConsole: consoleErrors.slice(0, 5),
-  capture: output
-}
+    return {
+      port,
+      emulation: VIEWPORT,
+      navigation: reached,
+      decor: { ...decor, pixelsZone, pixelsAllumes, partAllumee: Number(partAllumee.toFixed(4)) },
+      pose,
+      erreursConsole: consoleErrors.slice(0, 5),
+      capture: output
+    }
+  }
+)
 console.log(JSON.stringify(verdict, null, 2))
-
-await send('Emulation.clearDeviceMetricsOverride')
+const { pose, partAllumee } = verdict
 
 const echecs = []
 if (pose.deplacementObtenu[0] !== GESTE.dx || pose.deplacementObtenu[1] !== GESTE.dy) {

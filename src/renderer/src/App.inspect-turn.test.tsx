@@ -58,9 +58,17 @@ describe('App inspect-turn navigation', () => {
       await Promise.resolve()
     })
 
+    // L'application ouvre desormais sur l'ACCUEIL, et les vues sont montees a la demande : `ChatView`
+    // n'existe donc pas encore, ni son bouton. On y navigue d'abord, comme le ferait quelqu'un.
+    // Ce que le test verifie -- inspecter un tour ouvre l'Observatoire sur le bon focus -- est inchange.
+    await act(async () => {
+      ;(container.querySelector('[data-testid="nav-chat"]') as HTMLButtonElement).click()
+    })
+
     const inspect = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Inspecter ce tour'
     ) as HTMLButtonElement
+    expect(inspect).toBeDefined()
     await act(async () => inspect.click())
 
     expect(container.querySelector('output')?.textContent).toBe('conv-7:turn-8')
@@ -68,7 +76,7 @@ describe('App inspect-turn navigation', () => {
     await act(async () => root.unmount())
   })
 
-  it('renders exactly the seven canonical product destinations', async () => {
+  it('renders exactly the nine canonical product destinations', async () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -87,6 +95,8 @@ describe('App inspect-turn navigation', () => {
 
     const navItems = [...container.querySelectorAll('.nav-item')]
     const expectedLabels = [
+      // L'Accueil ouvre la liste : c'est la vue d'ouverture de l'application, pas un ecran accessoire.
+      'Accueil',
       'Chat',
       'Agent Studio',
       'Knowledge',
@@ -99,6 +109,7 @@ describe('App inspect-turn navigation', () => {
     expect(navItems).toHaveLength(expectedLabels.length)
     expectedLabels.forEach((label, index) => expect(navItems[index].textContent).toContain(label))
     for (const id of [
+      'accueil',
       'chat',
       'agent-studio',
       'knowledge',
