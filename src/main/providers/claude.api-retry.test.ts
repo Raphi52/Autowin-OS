@@ -82,6 +82,43 @@ describe('ClaudeCliAdapter — surcharge API (529) rendue visible', () => {
     expect(reasoning[1]).toContain('2/10')
   })
 
+  it("ne persiste PAS la surcharge API dans le champ raisonnement", async () => {
+    // Mesure du 2026-08-21 : sur les 60 traces les plus recentes, 155 etapes `exec` et UNE SEULE avec
+    // un `thinking` non vide — qui ne contenait pas du raisonnement mais « API 529 overloaded ». Le
+    // relais direct (teste au-dessus) reste ; c'est sa PERSISTANCE qui mentait, l'UI affichant apres
+    // coup une erreur reseau sous l'etiquette « Raisonnement ».
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'system',
+        subtype: 'api_retry',
+        attempt: 1,
+        max_retries: 10,
+        retry_delay_ms: 514,
+        error_status: 529,
+        error: 'overloaded'
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'ok',
+        session_id: 's',
+        is_error: false,
+        usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0 }
+      }
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
+    const streame: string[] = []
+    let step = await gen.next()
+    while (!step.done) {
+      if (step.value.reasoning) streame.push(step.value.reasoning)
+      step = await gen.next()
+    }
+
+    expect(streame.join(' ')).toContain('529') // vu en DIRECT
+    expect(step.value.thinking ?? '').not.toContain('529') // jamais garde comme raisonnement
+  })
+
   it("échoue explicitement quand les tentatives sont épuisées sans réponse", async () => {
     // L'autre moitié du défaut : le CLI meurt après le dernier retry SANS event `result`, exit 0 →
     // le tour se terminait « réussi » et vide, donc l'UI ne sortait jamais de l'état réflexion.

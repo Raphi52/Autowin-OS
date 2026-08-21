@@ -1011,7 +1011,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const note =
           `API${status} ${String(o['error'] ?? 'indisponible')} — nouvelle tentative ` +
           `${attempt}/${maxRetries}${delayMs ? ` dans ${(delayMs / 1000).toFixed(1)}s` : ''}`
-        reasoningFragments.push(note)
+        // Relayee en DIRECT seulement : une surcharge API n'est pas du raisonnement, et la persister
+        // dans `thinking` faisait afficher « Raisonnement : API 529 overloaded » apres coup (mesure le
+        // 2026-08-21 : sur 155 etapes reelles, l'UNIQUE champ non vide ne contenait que ce bruit).
         queue.push({ delta: '', reasoning: note })
         return
       }
