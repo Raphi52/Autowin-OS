@@ -20,6 +20,39 @@ const CYAN = 0x49cfff
 const GOLD = 0xe9bd4e
 const VIOLET = 0x8f7cff
 
+/**
+ * Les directions visuelles du décor, entre lesquelles l'utilisateur choisit.
+ *
+ * Ce ne sont PAS des variantes cosmétiques : chacune se distingue des autres sur au moins deux axes —
+ * le sujet dominant, la densité de matière, le langage formel (matière diffuse contre ligne), l'usage
+ * de l'accent, et le régime de mouvement. Toutes restent dans le monde déjà validé par l'utilisateur :
+ * centre noir, nébuleuses roses et cyan, or pour la structure.
+ */
+export type DecorVariant = 'actuel' | 'limbe' | 'poussiere' | 'orbites'
+
+export const DECOR_VARIANTS: readonly { id: DecorVariant; nom: string; resume: string }[] = [
+  {
+    id: 'actuel',
+    nom: 'Actuel',
+    resume: 'quatre nébuleuses aux angles, trois planètes annelées, arcs discrets'
+  },
+  {
+    id: 'limbe',
+    nom: 'Limbe',
+    resume: 'UNE géante annelée au bord, cadrée serré, peu de matière, mouvement lent'
+  },
+  {
+    id: 'poussiere',
+    nom: 'Poussière',
+    resume: 'que de la matière : filaments sur six plans, forte parallaxe, aucune silhouette'
+  },
+  {
+    id: 'orbites',
+    nom: 'Orbites',
+    resume: 'géométrie plutôt que matière : arcs fins en or et cyan, satellites qui glissent dessus'
+  }
+]
+
 export interface DecorScene {
   /** Avance la scène. `elapsed` en secondes, `look` = regard normalisé dans [-1, 1]. */
   render(elapsed: number, look: { x: number; y: number }): void
@@ -293,11 +326,11 @@ function buildPlanet(options: {
  * Sur le fond d'écran d'origine, ce sont eux qui donnent l'échelle — sans ces traits, les planètes
  * flottent sans rien qui les relie. Rendus en lignes, ce qui coûte presque rien.
  */
-function buildOrbits(random: () => number): THREE.Group {
+function buildOrbits(random: () => number, count = 7): THREE.Group {
   const group = new THREE.Group()
   const palette = [ROSE, CYAN, GOLD, VIOLET]
 
-  for (let i = 0; i < 7; i += 1) {
+  for (let i = 0; i < count; i += 1) {
     const radius = 12 + random() * 22
     const points: THREE.Vector3[] = []
     // Un arc, pas un cercle complet : un cercle entier se lit comme un cerceau posé sur l'image.
@@ -330,6 +363,81 @@ function buildOrbits(random: () => number): THREE.Group {
   return group
 }
 
+
+/**
+ * Des points qui glissent le long d'orbites, à des vitesses différentes.
+ *
+ * Le mouvement est calculé DANS le vertex shader depuis une phase par point : une animation en
+ * JavaScript sur deux cents objets coûterait un parcours de tableau par image, pour un résultat
+ * identique. Chaque satellite porte son rayon, son inclinaison et sa vitesse propre.
+ */
+function buildSatellites(random: () => number, count: number): THREE.Points {
+  const positions = new Float32Array(count * 3)
+  const colors = new Float32Array(count * 3)
+  // x = rayon, y = vitesse, z = phase de départ. Les positions servent d'axe d'inclinaison.
+  const orbites = new Float32Array(count * 3)
+  const teinte = new THREE.Color()
+
+  for (let i = 0; i < count; i += 1) {
+    const o = i * 3
+    const inclinaison = (random() - 0.5) * 1.1
+    positions[o] = Math.cos(inclinaison)
+    positions[o + 1] = Math.sin(inclinaison)
+    positions[o + 2] = random() * Math.PI * 2
+    orbites[o] = 0.18 + random() * 0.9
+    // Vitesse décroissante avec le rayon : une orbite lointaine qui va vite se lit comme une erreur.
+    orbites[o + 1] = (0.25 + random() * 0.5) / (0.4 + orbites[o])
+    orbites[o + 2] = random() * Math.PI * 2
+    teinte.setHex(random() > 0.45 ? GOLD : CYAN)
+    colors[o] = teinte.r
+    colors[o + 1] = teinte.g
+    colors[o + 2] = teinte.b
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  geometry.setAttribute('aOrbite', new THREE.BufferAttribute(orbites, 3))
+
+  const material = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: { uTime: { value: 0 }, uPixelRatio: { value: 1 }, uEchelle: { value: 1 } },
+    vertexShader: [
+      'attribute vec3 aOrbite;',
+      'varying vec3 vColor;',
+      'uniform float uTime;',
+      'uniform float uPixelRatio;',
+      'uniform float uEchelle;',
+      'void main() {',
+      '  vColor = color;',
+      '  float rayon = aOrbite.x * uEchelle;',
+      '  float angle = aOrbite.z + uTime * aOrbite.y;',
+      '  vec3 plan = normalize(vec3(position.x, position.y, 0.0));',
+      '  vec3 normale = normalize(cross(plan, vec3(0.0, 0.0, 1.0)));',
+      '  vec3 p = (plan * cos(angle) + normale * sin(angle)) * rayon;',
+      '  p.z += sin(position.z + uTime * 0.1) * rayon * 0.12;',
+      '  vec4 view = modelViewMatrix * vec4(p, 1.0);',
+      '  gl_Position = projectionMatrix * view;',
+      '  gl_PointSize = uPixelRatio * (34.0 / -view.z);',
+      '}'
+    ].join('\n'),
+    fragmentShader: [
+      'varying vec3 vColor;',
+      'void main() {',
+      '  float d = length(gl_PointCoord - vec2(0.5));',
+      '  float falloff = 1.0 - smoothstep(0.08, 0.5, d);',
+      '  if (falloff <= 0.002) discard;',
+      '  gl_FragColor = vec4(vColor, falloff * 0.95);',
+      '}'
+    ].join('\n'),
+    vertexColors: true
+  })
+
+  return new THREE.Points(geometry, material)
+}
+
 /**
  * Monte la scène complète dans un canevas.
  *
@@ -337,7 +445,10 @@ function buildOrbits(random: () => number): THREE.Group {
  * perdu. Le décor est un DÉCOR : son absence ne doit jamais empêcher la page d'accueil de s'afficher
  * ni un test de rendu de passer.
  */
-export function createDecorScene(): DecorScene | null {
+/** La direction par DEFAUT, choisie par l'utilisateur le 2026-08-21 sur rendus compares. */
+export const DECOR_DEFAUT: DecorVariant = 'limbe'
+
+export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorScene | null {
   let renderer: THREE.WebGLRenderer
   try {
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'default' })
@@ -367,24 +478,114 @@ export function createDecorScene(): DecorScene | null {
    * — elles etaient donc INTEGRALEMENT hors champ, et le decor paraissait absent. Une composition
    * doit se declarer par rapport au cadre qui la montre.
    */
-  const nebulaSpecs = [
-    { fx: -0.86, fy: 0.62, z: -11, color: ROSE, secondary: VIOLET, k: 0.38 },
-    { fx: -0.78, fy: -0.68, z: -8, color: CYAN, secondary: 0x2b6cff, k: 0.34 },
-    { fx: 0.86, fy: 0.68, z: -12, color: CYAN, secondary: VIOLET, k: 0.36 },
-    { fx: 0.8, fy: -0.64, z: -8, color: ROSE, secondary: 0xff6bd6, k: 0.32 }
-  ]
+  /**
+   * La composition, par direction. Chaque entrée dit OÙ se posent les éléments, en FRACTIONS du cadre
+   * visible — jamais en coordonnées monde, sinon un cadre étroit les met hors champ (défaut mesuré).
+   */
+  interface Composition {
+    nebuleuses: { fx: number; fy: number; z: number; color: number; secondary: number; k: number }[]
+    planetes: {
+      fx: number
+      fy: number
+      z: number
+      radius: number
+      color: number
+      ringColor: number
+      rings: number
+      tilt: number
+    }[]
+    arcs: number
+    satellites: number
+    /** Multiplicateur de vitesse : le régime de mouvement fait partie de la direction. */
+    tempo: number
+    /** Amplitude de la parallaxe de caméra. */
+    parallaxe: number
+  }
+
+  const compositions: Record<DecorVariant, Composition> = {
+    actuel: {
+      nebuleuses: [
+        { fx: -0.86, fy: 0.62, z: -11, color: ROSE, secondary: VIOLET, k: 0.38 },
+        { fx: -0.78, fy: -0.68, z: -8, color: CYAN, secondary: 0x2b6cff, k: 0.34 },
+        { fx: 0.86, fy: 0.68, z: -12, color: CYAN, secondary: VIOLET, k: 0.36 },
+        { fx: 0.8, fy: -0.64, z: -8, color: ROSE, secondary: 0xff6bd6, k: 0.32 }
+      ],
+      planetes: [
+        { fx: 0.72, fy: -0.74, z: -5, radius: 0.2, color: 0xc98a4a, ringColor: GOLD, rings: 3, tilt: 0.42 },
+        { fx: 0.82, fy: 0.6, z: -8, radius: 0.15, color: 0x3f6fa8, ringColor: CYAN, rings: 2, tilt: -0.3 },
+        { fx: -0.8, fy: -0.6, z: -7, radius: 0.12, color: 0x7a4a72, ringColor: ROSE, rings: 2, tilt: 0.55 }
+      ],
+      arcs: 7,
+      satellites: 0,
+      tempo: 1,
+      parallaxe: 1
+    },
+    // UN sujet dominant au lieu de plusieurs, et beaucoup moins de matière : le contraste vient de la
+    // silhouette et du terminateur, pas de l'accumulation.
+    limbe: {
+      nebuleuses: [
+        { fx: -0.7, fy: 0.4, z: -16, color: VIOLET, secondary: 0x2b6cff, k: 0.5 },
+        { fx: 0.15, fy: -0.85, z: -14, color: ROSE, secondary: VIOLET, k: 0.42 }
+      ],
+      planetes: [
+        { fx: 0.98, fy: -0.12, z: -2, radius: 0.66, color: 0xc98a4a, ringColor: GOLD, rings: 4, tilt: 0.34 },
+        { fx: -0.9, fy: 0.74, z: -13, radius: 0.07, color: 0x3f6fa8, ringColor: CYAN, rings: 1, tilt: -0.4 }
+      ],
+      arcs: 3,
+      satellites: 0,
+      tempo: 0.45,
+      parallaxe: 0.7
+    },
+    // Que de la matière, sur six plans de profondeur : la parallaxe fait tout le relief, aucune forme
+    // dure ne vient l'aider.
+    poussiere: {
+      nebuleuses: [
+        { fx: -0.9, fy: 0.5, z: -20, color: VIOLET, secondary: 0x2b6cff, k: 0.62 },
+        { fx: -0.35, fy: -0.6, z: -14, color: CYAN, secondary: VIOLET, k: 0.5 },
+        { fx: 0.3, fy: 0.62, z: -9, color: ROSE, secondary: 0xff6bd6, k: 0.44 },
+        { fx: 0.92, fy: -0.35, z: -5, color: ROSE, secondary: VIOLET, k: 0.4 },
+        { fx: 0.5, fy: 0.1, z: -2, color: CYAN, secondary: 0x8fd0ff, k: 0.26 },
+        { fx: -0.55, fy: 0.0, z: -3, color: VIOLET, secondary: ROSE, k: 0.24 }
+      ],
+      planetes: [],
+      arcs: 2,
+      satellites: 0,
+      tempo: 1.4,
+      parallaxe: 2.2
+    },
+    // La ligne remplace le grain : arcs fins et satellites qui glissent dessus. L'or structurel domine,
+    // la matière se retire.
+    orbites: {
+      nebuleuses: [
+        { fx: -0.85, fy: -0.62, z: -18, color: VIOLET, secondary: 0x2b6cff, k: 0.34 },
+        { fx: 0.85, fy: 0.62, z: -18, color: CYAN, secondary: VIOLET, k: 0.3 }
+      ],
+      planetes: [
+        { fx: 0.06, fy: -0.04, z: -9, radius: 0.13, color: 0x2c3f66, ringColor: GOLD, rings: 3, tilt: 0.5 }
+      ],
+      arcs: 16,
+      satellites: 220,
+      tempo: 0.8,
+      parallaxe: 1.3
+    }
+  }
+
+  const composition = compositions[variante] ?? compositions[DECOR_DEFAUT]
+  const nebulaSpecs = composition.nebuleuses
+
   const nebulas = nebulaSpecs.map((spec) =>
-    buildNebula(random, { center: new THREE.Vector3(0, 0, 0), color: spec.color, secondary: spec.secondary, scale: 1 })
+    buildNebula(random, {
+      center: new THREE.Vector3(0, 0, 0),
+      color: spec.color,
+      secondary: spec.secondary,
+      scale: 1
+    })
   )
   for (const nebula of nebulas) scene.add(nebula)
 
   // Meme regle pour les planetes, avec une nuance : leur ECHELLE reste UNIFORME (`min` des deux
   // demi-extensions). Les etirer avec le cadre en ferait des ellipses, ce qui se voit tout de suite.
-  const planetSpecs = [
-    { fx: 0.72, fy: -0.74, z: -5, radius: 0.2, color: 0xc98a4a, ringColor: GOLD, rings: 3, tilt: 0.42 },
-    { fx: 0.82, fy: 0.6, z: -8, radius: 0.15, color: 0x3f6fa8, ringColor: CYAN, rings: 2, tilt: -0.3 },
-    { fx: -0.8, fy: -0.6, z: -7, radius: 0.12, color: 0x7a4a72, ringColor: ROSE, rings: 2, tilt: 0.55 }
-  ]
+  const planetSpecs = composition.planetes
   const planets = planetSpecs.map((spec) =>
     buildPlanet({
       radius: 1,
@@ -397,8 +598,12 @@ export function createDecorScene(): DecorScene | null {
   )
   for (const planet of planets) scene.add(planet)
 
-  const orbits = buildOrbits(random)
+  const orbits = buildOrbits(random, composition.arcs)
   scene.add(orbits)
+
+  const satellites =
+    composition.satellites > 0 ? buildSatellites(random, composition.satellites) : null
+  if (satellites) scene.add(satellites)
 
   // Éclairage rasant : c'est le terminateur qui donne le volume. Un éclairage frontal aplatirait
   // les planètes exactement comme une image plaquée.
@@ -410,7 +615,8 @@ export function createDecorScene(): DecorScene | null {
 
   const pointRatios: THREE.ShaderMaterial[] = [
     stars.material as THREE.ShaderMaterial,
-    ...nebulas.map((nebula) => nebula.material as THREE.ShaderMaterial)
+    ...nebulas.map((nebula) => nebula.material as THREE.ShaderMaterial),
+    ...(satellites ? [satellites.material as THREE.ShaderMaterial] : [])
   ]
 
   let width = 1
@@ -442,6 +648,11 @@ export function createDecorScene(): DecorScene | null {
         planet.scale.setScalar(size)
       })
       orbits.scale.setScalar(Math.max(halfWidth, halfHeight) * 0.62)
+      if (satellites) {
+        // Les satellites partagent l'échelle des arcs : sinon ils glisseraient à côté d'eux.
+        const material = satellites.material as THREE.ShaderMaterial
+        material.uniforms.uEchelle.value = Math.max(halfWidth, halfHeight) * 0.62
+      }
       stars.scale.setScalar(Math.max(1, Math.max(halfWidth, halfHeight) / 12))
       // Plafonné à 1.75 : au-delà, le coût par pixel monte sans que ça se voie sur un écran de
       // travail — et cette vue reste allumée toute la journée.
@@ -454,18 +665,22 @@ export function createDecorScene(): DecorScene | null {
     },
 
     render(elapsed, look) {
-      for (const material of pointRatios) material.uniforms.uTime.value = elapsed
+      // Le TEMPO appartient à la direction : « Limbe » dérive lentement, « Poussière » respire vite.
+      const temps = elapsed * composition.tempo
+      for (const material of pointRatios) material.uniforms.uTime.value = temps
       // Rotations lentes et de vitesses différentes : synchronisées, elles se liraient comme un
       // seul bloc qui tourne.
-      stars.rotation.y = elapsed * 0.004
-      orbits.rotation.y = elapsed * 0.012
-      planets[0].rotation.y = elapsed * 0.06
-      planets[1].rotation.y = -elapsed * 0.045
-      planets[2].rotation.y = elapsed * 0.08
+      stars.rotation.y = temps * 0.004
+      orbits.rotation.y = temps * 0.012
+      // Vitesses différentes et NOMBRE variable selon la direction : « Poussière » n'a aucune
+      // planète, et indexer en dur ferait planter la boucle de rendu.
+      planets.forEach((planet, index) => {
+        planet.rotation.y = temps * (index % 2 === 0 ? 0.06 : -0.045) * (1 + index * 0.3)
+      })
       // La caméra suit le regard, amortie en amont par l'appelant. C'est LE signal de profondeur :
       // un décor fixe se lit comme une texture, même en 3D.
-      camera.position.x = look.x * 2.6
-      camera.position.y = look.y * -1.8
+      camera.position.x = look.x * 2.6 * composition.parallaxe
+      camera.position.y = look.y * -1.8 * composition.parallaxe
       camera.lookAt(0, 0, 0)
       renderer.render(scene, camera)
     },

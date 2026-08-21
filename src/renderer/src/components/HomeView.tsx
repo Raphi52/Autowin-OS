@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createDecorScene, type DecorScene } from './home-decor-scene'
+import { createDecorScene, DECOR_DEFAUT, type DecorScene, type DecorVariant } from './home-decor-scene'
 import {
   formatEventDay,
   formatEventTime,
@@ -62,6 +62,8 @@ const LAYOUT_STORAGE_KEY = autowinStorageKey('home.layout.v1')
  * aide sans laisser le moyen de la revoir échange une friction contre une autre.
  */
 const NOTICE_STORAGE_KEY = autowinStorageKey('home.notice-vue.v1')
+/** La direction visuelle du decor. Un reglage, pas une constante : l'utilisateur en choisit une. */
+const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v1')
 const NOTICE_OUVERTURES = 4
 /** Pas de déplacement au clavier, en pixels. Assez grand pour avancer, assez petit pour viser. */
 const PAS_CLAVIER = 16
@@ -255,7 +257,8 @@ export function HomeView({
   useEffect(() => {
     const host = decorHostRef.current
     if (!host) return
-    const scene: DecorScene | null = createDecorScene()
+    const choisie = (window.localStorage.getItem(DECOR_STORAGE_KEY) ?? DECOR_DEFAUT) as DecorVariant
+    const scene: DecorScene | null = createDecorScene(choisie)
     // Pas de WebGL (happy-dom en test, pilote absent) : la page s'affiche sans décor, ce qui est le
     // comportement voulu — un décor n'est pas une dépendance de la fonction.
     if (!scene) return
@@ -265,6 +268,17 @@ export function HomeView({
     fit()
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null
     observer?.observe(host)
+    // `resize` de fenetre EN PLUS de l'observateur, comme pour la disposition.
+    //
+    // Filet de coherence, et RIEN DE PLUS : un environnement sans `ResizeObserver` ne recalculerait
+    // jamais le cadrage, alors que le decor place tous ses elements en fractions du cadre VISIBLE.
+    //
+    // Honnetement : je l'ai d'abord ajoute en croyant expliquer un ecart de rendu mesure le
+    // 2026-08-21 (0,13 % de pixels ambres contre 60,42 % selon qu'on rechargeait ou non la page avant
+    // la capture). Cette explication est REFUTEE — une sonde a montre que l'hote passe bien de 1834 a
+    // 1414 px, que le canevas suit, et que les deux evenements se declenchent. La cause de cet ecart
+    // n'est PAS localisee. Ce filet reste parce qu'il se defend seul, pas parce qu'il corrige cela.
+    window.addEventListener('resize', fit)
 
     const reduceMotion =
       typeof window.matchMedia === 'function' &&
@@ -304,6 +318,7 @@ export function HomeView({
     return () => {
       cancelAnimationFrame(frame)
       window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('resize', fit)
       observer?.disconnect()
       scene.dispose()
     }
