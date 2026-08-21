@@ -15,6 +15,8 @@ Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
 $cibles = @(
   'src/renderer/src/components/home-layout.test.ts',
   'src/renderer/src/components/home-widgets-model.test.ts',
+  'src/renderer/src/components/home-history.test.ts',
+  'src/renderer/src/components/HomeView.actions.test.tsx',
   'src/renderer/src/components/outlook-model.test.ts',
   'src/renderer/src/components/HomeView.test.tsx',
   'src/main/outlook/outlook-local.test.ts',

@@ -34,6 +34,7 @@ import {
   type HomeWidgetId,
   type ResizeEdge
 } from './home-layout'
+import { canUndo, emptyHistory, remember, undo, type ArrangementHistory } from './home-history'
 import { autowinStorageKey } from '../storage-keys'
 import './HomeView.css'
 
@@ -53,6 +54,17 @@ import './HomeView.css'
  */
 
 const LAYOUT_STORAGE_KEY = autowinStorageKey('home.layout.v1')
+/**
+ * Combien de fois la notice d'usage s'affiche avant de s'effacer.
+ *
+ * Un mode d'emploi PERMANENT est un aveu que l'interface ne se comprend pas seule, et il occupait
+ * l'en-tête pour toujours en poussant tout le contenu vers le bas. Il reste rappelable : effacer une
+ * aide sans laisser le moyen de la revoir échange une friction contre une autre.
+ */
+const NOTICE_STORAGE_KEY = autowinStorageKey('home.notice-vue.v1')
+const NOTICE_OUVERTURES = 4
+/** Pas de déplacement au clavier, en pixels. Assez grand pour avancer, assez petit pour viser. */
+const PAS_CLAVIER = 16
 const REFRESH_MS = 30_000
 /** Outlook se relit moins souvent : chaque lecture est un dialogue COM avec une application lourde. */
 const OUTLOOK_REFRESH_MS = 120_000
@@ -138,6 +150,14 @@ export function HomeView({
   const [outlook, setOutlook] = useState<OutlookState>({ etat: 'chargement' })
   const [held, setHeld] = useState<HomeWidgetId | null>(null)
   const [outlookEnCours, setOutlookEnCours] = useState(false)
+  const [histoire, setHistoire] = useState<ArrangementHistory>(() => emptyHistory())
+  const [ouvertureEnCours, setOuvertureEnCours] = useState<string | null>(null)
+  const [erreurOuverture, setErreurOuverture] = useState<string | null>(null)
+  const [noticeVue, setNoticeVue] = useState(() => {
+    const lu = Number(window.localStorage.getItem(NOTICE_STORAGE_KEY) ?? '0')
+    return Number.isFinite(lu) ? lu : 0
+  })
+  const [noticeForcee, setNoticeForcee] = useState(false)
 
   const surfaceRef = useRef<HTMLDivElement | null>(null)
   const decorHostRef = useRef<HTMLDivElement | null>(null)
@@ -151,6 +171,19 @@ export function HomeView({
   const activeRef = useRef(active)
   activeRef.current = active
 
+
+  // La notice se compte a l'OUVERTURE de la vue, une fois par montage.
+  useEffect(() => {
+    setNoticeVue((vu) => {
+      const suivant = vu + 1
+      try {
+        window.localStorage.setItem(NOTICE_STORAGE_KEY, String(suivant))
+      } catch {
+        // Sans persistance la notice restera : c'est le comportement le moins surprenant.
+      }
+      return suivant
+    })
+  }, [])
 
   // Seul l'AGENCEMENT est enregistré. Écrire ce qui s'affiche graverait le mode compact d'une fenêtre
   // étroite et l'utilisateur ne retrouverait jamais son organisation.
@@ -356,7 +389,21 @@ export function HomeView({
     [snapshot]
   )
   const pending = unacknowledgedCount(notices)
-  const mailsNonLus = outlook.etat === 'ok' ? totalUnread(outlook.fils) : 0
+  /**
+   * Le compteur de la tuile Mails ne compte QUE les personnes.
+   *
+   * Friction relevée en pilotant l'app : 85 des 106 non lus venaient d'un seul robot. Un compteur
+   * écrasé par un automate n'informe pas — il n'indique jamais qu'il faut aller voir. Le total reste
+   * lisible dans l'infobulle : on n'efface pas une information, on choisit celle qui alerte.
+   */
+  const compteurs = useMemo(() => {
+    if (outlook.etat !== 'ok') return { personnes: 0, total: 0 }
+    const { personnes, indistinct } = splitByExchange(outlook.fils)
+    return {
+      personnes: totalUnread(indistinct ? outlook.fils : personnes),
+      total: totalUnread(outlook.fils)
+    }
+  }, [outlook])
 
   /* ---------------------------------------------------------------- *
    * La pose.
@@ -372,6 +419,12 @@ export function HomeView({
       const from = layout.find((entry) => entry.id === id)
       if (!from) return
       event.stopPropagation()
+      // L'etat AVANT le geste est memorise ICI, une seule fois par geste — et non a chaque
+      // `pointermove`, ce qui remplirait l'historique de centaines d'etats intermediaires.
+      setArrangement((courant) => {
+        setHistoire((h) => remember(h, courant))
+        return courant
+      })
       holdRef.current = { id, edge, startX: event.clientX, startY: event.clientY, from }
       frontRef.current += 1
       zIndexRef.current.set(id, frontRef.current)
@@ -414,11 +467,116 @@ export function HomeView({
     }
   }, [held, viewport])
 
-  const resetLayout = useCallback(() => setArrangement(defaultHomeLayout(viewport())), [viewport])
-  const scatter = useCallback(
-    () => setArrangement((current) => scatterHomeLayout(current, viewport(), Math.random)),
-    [viewport]
+  const resetLayout = useCallback(() => {
+    setArrangement((courant) => {
+      setHistoire((h) => remember(h, courant))
+      return defaultHomeLayout(viewport())
+    })
+  }, [viewport])
+  const scatter = useCallback(() => {
+    setArrangement((courant) => {
+      setHistoire((h) => remember(h, courant))
+      return scatterHomeLayout(courant, viewport(), Math.random)
+    })
+  }, [viewport])
+  const annuler = useCallback(() => {
+    setHistoire((h) => {
+      const defait = undo(h)
+      if (!defait) return h
+      setArrangement(defait.arrangement)
+      return defait.history
+    })
+  }, [])
+
+  /** Ouvre un élément dans Outlook. La cause d'un échec est AFFICHÉE, pas avalée. */
+  const ouvrirDansOutlook = useCallback(async (id: string): Promise<void> => {
+    const api = (window as unknown as {
+      api?: { outlookOuvrir?: (id: string) => Promise<{ ok: boolean; erreur?: string }> }
+    }).api
+    if (!api?.outlookOuvrir) {
+      setErreurOuverture("Cette version ne sait pas encore ouvrir un élément dans Outlook.")
+      return
+    }
+    setOuvertureEnCours(id)
+    setErreurOuverture(null)
+    try {
+      const resultat = await api.outlookOuvrir(id)
+      if (!resultat.ok) setErreurOuverture(resultat.erreur ?? "Outlook n'a pas pu ouvrir cet élément.")
+    } catch (error) {
+      setErreurOuverture(error instanceof Error ? error.message : String(error))
+    } finally {
+      setOuvertureEnCours(null)
+    }
+  }, [])
+
+  /** Acquitte une alerte d'agent depuis l'accueil, sans aller la chercher ailleurs. */
+  const acquitter = useCallback(async (alertId: string): Promise<void> => {
+    const api = (window as unknown as {
+      api?: { taskManagerAcknowledge?: (id: string) => Promise<boolean> }
+    }).api
+    if (!api?.taskManagerAcknowledge) return
+    await api.taskManagerAcknowledge(alertId)
+    // Relecture immédiate : sans elle, le compteur ne bougerait qu'au prochain cycle de 30 s et le
+    // clic paraîtrait sans effet.
+    const snapshotApi = (window as unknown as {
+      api?: { taskManagerSnapshot?: () => Promise<unknown> }
+    }).api
+    if (snapshotApi?.taskManagerSnapshot) {
+      setSnapshot((await snapshotApi.taskManagerSnapshot()) as TaskSnapshotLike)
+    }
+  }, [])
+
+  /**
+   * Déplacer et redimensionner AU CLAVIER.
+   *
+   * Friction relevée par un scout lancé dans Autowin (score 50) : tout reposait sur `PointerEvent` et
+   * huit poignées sans sémantique clavier. Une personne sans souris ne pouvait pas personnaliser un
+   * tableau annoncé comme libre.
+   *
+   * Pas de `Ctrl` : l'app s'en sert déjà pour naviguer entre les vues (Ctrl+N). Les flèches déplacent,
+   * `Maj` + flèches redimensionnent.
+   */
+  const auClavier = useCallback(
+    (event: React.KeyboardEvent, id: HomeWidgetId): void => {
+      const pas: Record<string, [number, number]> = {
+        ArrowLeft: [-PAS_CLAVIER, 0],
+        ArrowRight: [PAS_CLAVIER, 0],
+        ArrowUp: [0, -PAS_CLAVIER],
+        ArrowDown: [0, PAS_CLAVIER]
+      }
+      const delta = pas[event.key]
+      if (!delta || event.ctrlKey || event.altKey || event.metaKey) return
+      const from = layout.find((entry) => entry.id === id)
+      if (!from) return
+      event.preventDefault()
+      const taille = viewport()
+      const box = event.shiftKey
+        ? resizeWidgetBox(from, 'se', delta[0], delta[1], taille)
+        : moveWidgetBox(from, delta[0], delta[1], taille)
+      setArrangement((courant) => {
+        setHistoire((h) => remember(h, courant))
+        return replaceWidget(courant, box)
+      })
+    },
+    [layout, viewport]
   )
+
+  const noticeVisible = noticeForcee || noticeVue <= NOTICE_OUVERTURES
+
+  /**
+   * Marque un panneau dont le contenu DEBORDE, et s'il reste quelque chose plus bas.
+   *
+   * Mesure du 2026-08-21 en pilotant l'app : le widget des interlocuteurs portait 1149 px de contenu
+   * pour 788 px visibles, et rien ne l'annoncait — il fallait deviner qu'on pouvait defiler. L'etat
+   * est pose en attribut plutot qu'en etat React : il change a chaque pixel de defilement, et un rendu
+   * par pixel serait un cout pour une information qui n'est que visuelle.
+   */
+  const marquerDebordement = useCallback((element: HTMLDivElement | null): void => {
+    if (!element) return
+    const reste = element.scrollHeight - element.clientHeight - element.scrollTop
+    element.dataset.deborde = element.scrollHeight > element.clientHeight + 2 ? 'true' : 'false'
+    element.dataset.resteEnBas = reste > 8 ? 'true' : 'false'
+  }, [])
 
   return (
     <div className="home-view" ref={surfaceRef} data-testid="home-view">
@@ -431,10 +589,17 @@ export function HomeView({
           <h1>
             Autowin <b>Accueil</b>
           </h1>
-          <p>
-            Prenez une tuile n’importe où et posez-la : elle reste exactement là où vous la lâchez.
-            Les huit bords la redimensionnent.
-          </p>
+          {noticeVisible ? (
+            <p>
+              Prenez une tuile n’importe où et posez-la : elle reste exactement là où vous la lâchez.
+              Les huit bords la redimensionnent, les flèches aussi (Maj pour la taille).
+            </p>
+          ) : null}
+          {erreurOuverture !== null ? (
+            <p className="home-view__alerte" role="status">
+              {erreurOuverture}
+            </p>
+          ) : null}
         </div>
         <div className="home-view__tools">
           {/* Outlook n'est relu que toutes les deux minutes : sans ce bouton, un mail qui vient
@@ -453,12 +618,31 @@ export function HomeView({
           >
             {outlookEnCours ? 'Lecture…' : 'Actualiser Outlook'}
           </button>
+          <button
+            type="button"
+            onClick={annuler}
+            disabled={!canUndo(histoire)}
+            data-testid="home-undo"
+            title="Défaire le dernier déplacement ou redimensionnement"
+          >
+            Annuler
+          </button>
           <button type="button" onClick={scatter}>
             Disperser
           </button>
           <button type="button" onClick={resetLayout}>
             Rétablir la disposition
           </button>
+          {!noticeVisible ? (
+            <button
+              type="button"
+              onClick={() => setNoticeForcee(true)}
+              title="Rappeler comment manipuler les tuiles"
+              data-testid="home-rappel-notice"
+            >
+              ?
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -470,6 +654,10 @@ export function HomeView({
           data-held={held === box.id ? 'true' : undefined}
           data-window={box.id === 'hublot' ? 'true' : undefined}
           data-testid={`home-widget-${box.id}`}
+          tabIndex={0}
+          role="group"
+          aria-label={`${HOME_WIDGET_TITLES[box.id]} — flèches pour déplacer, Maj+flèches pour redimensionner`}
+          onKeyDown={(event) => auClavier(event, box.id)}
           style={{
             width: `${box.w}px`,
             height: `${box.h}px`,
@@ -486,14 +674,21 @@ export function HomeView({
                 {pending}
               </span>
             ) : null}
-            {box.id === 'mails' && mailsNonLus > 0 ? (
-              <span className="home-tile__count" title={`${mailsNonLus} message(s) non lu(s)`}>
-                {mailsNonLus}
+            {box.id === 'mails' && compteurs.personnes > 0 ? (
+              <span
+                className="home-tile__count"
+                title={`${compteurs.personnes} non lu(s) de personnes — ${compteurs.total} au total avec les envois automatiques`}
+              >
+                {compteurs.personnes}
               </span>
             ) : null}
           </div>
           <div className="home-tile__panel">
-            <div className="home-tile__scroll">
+            <div
+              className="home-tile__scroll"
+              ref={(element) => marquerDebordement(element)}
+              onScroll={(event) => marquerDebordement(event.currentTarget)}
+            >
               <WidgetBody
                 id={box.id}
                 departures={departures}
@@ -503,6 +698,9 @@ export function HomeView({
                 loading={snapshot === null && snapshotError === null}
                 error={snapshotError}
                 onNavigate={onNavigate}
+                onOuvrir={ouvrirDansOutlook}
+                onAcquitter={acquitter}
+                ouvertureEnCours={ouvertureEnCours}
               />
             </div>
             {(['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'] as ResizeEdge[]).map((edge) => (
@@ -529,7 +727,10 @@ function WidgetBody({
   now,
   loading,
   error,
-  onNavigate
+  onNavigate,
+  onOuvrir,
+  onAcquitter,
+  ouvertureEnCours
 }: {
   id: HomeWidgetId
   departures: RoutineDeparture[]
@@ -539,14 +740,14 @@ function WidgetBody({
   loading: boolean
   error: string | null
   onNavigate?: (destination: string) => void
+  onOuvrir: (id: string) => Promise<void>
+  onAcquitter: (alertId: string) => Promise<void>
+  ouvertureEnCours: string | null
 }): React.JSX.Element {
   if (id === 'hublot') {
-    return (
-      <p className="home-hint">
-        Ce cadre est un hublot : il n’opacifie pas son fond, le décor le traverse. Posez-le sur une
-        nébuleuse.
-      </p>
-    )
+    // Il occupait 357x298 px pour EXPLIQUER ce qu'il était. Un widget qui parle de lui-même ne sert
+    // personne : il porte maintenant l'heure et la date, que le décor traverse toujours.
+    return <Hublot now={now} />
   }
 
   if (id === 'mails' || id === 'agenda') {
@@ -557,9 +758,14 @@ function WidgetBody({
       return <p className="home-error">Outlook injoignable : {outlook.cause}</p>
     }
     return id === 'mails' ? (
-      <InterlocuteursList fils={outlook.fils} now={now} />
+      <InterlocuteursList
+        fils={outlook.fils}
+        now={now}
+        onOuvrir={onOuvrir}
+        ouvertureEnCours={ouvertureEnCours}
+      />
     ) : (
-      <AgendaList agenda={outlook.agenda} />
+      <AgendaList agenda={outlook.agenda} onOuvrir={onOuvrir} ouvertureEnCours={ouvertureEnCours} />
     )
   }
 
@@ -619,12 +825,29 @@ function WidgetBody({
           data-kind={notice.kind}
           data-read={notice.acknowledged ? 'true' : undefined}
         >
-          <button type="button" onClick={() => onNavigate?.('watchdog')} title="Ouvrir le Watchdog">
+          <button
+            type="button"
+            onClick={() => onNavigate?.('watchdog')}
+            title={`Ouvrir le Watchdog — ${notice.origin}`}
+          >
             <span>{notice.message}</span>
             <small>
               {notice.origin} · {notice.kind === 'missed' ? 'occurrence ratée' : 'échec'}
             </small>
           </button>
+          {/* Solder l'alerte SANS quitter l'accueil : sinon traiter une alerte demandait de la
+              retrouver ailleurs, alors que son identifiant est déjà là. Relevé par le scout (78). */}
+          {!notice.acknowledged ? (
+            <button
+              type="button"
+              className="home-notices__acquitter"
+              onClick={() => void onAcquitter(notice.id)}
+              title="Acquitter : l’alerte sort du compteur"
+              data-testid={`home-acquitter-${notice.id}`}
+            >
+              Acquitter
+            </button>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -641,10 +864,14 @@ function WidgetBody({
  */
 function InterlocuteursList({
   fils,
-  now
+  now,
+  onOuvrir,
+  ouvertureEnCours
 }: {
   fils: Interlocuteur[]
   now: number
+  onOuvrir: (id: string) => Promise<void>
+  ouvertureEnCours: string | null
 }): React.JSX.Element {
   if (fils.length === 0) {
     return <p className="home-hint">Aucun message dans votre boîte de réception.</p>
@@ -652,7 +879,9 @@ function InterlocuteursList({
   const { personnes, automates, indistinct } = splitByExchange(fils)
   return (
     <>
-      {personnes.length > 0 ? <FilsList fils={personnes} now={now} /> : null}
+      {personnes.length > 0 ? (
+        <FilsList fils={personnes} now={now} onOuvrir={onOuvrir} ouvertureEnCours={ouvertureEnCours} />
+      ) : null}
       {personnes.length === 0 && !indistinct ? (
         <p className="home-hint">
           Aucun message d’une personne à qui vous avez déjà écrit. Ci-dessous, les envois
@@ -663,37 +892,82 @@ function InterlocuteursList({
         <>
           {/* Nommé, pas masqué : ces messages existent, ils ne sont simplement pas des échanges. */}
           <p className="home-subhead">Envois automatiques</p>
-          <FilsList fils={automates} now={now} />
+          <FilsList fils={automates} now={now} onOuvrir={onOuvrir} ouvertureEnCours={ouvertureEnCours} />
         </>
       ) : null}
     </>
   )
 }
 
-function FilsList({ fils, now }: { fils: Interlocuteur[]; now: number }): React.JSX.Element {
+function FilsList({
+  fils,
+  now,
+  onOuvrir,
+  ouvertureEnCours
+}: {
+  fils: Interlocuteur[]
+  now: number
+  onOuvrir: (id: string) => Promise<void>
+  ouvertureEnCours: string | null
+}): React.JSX.Element {
   return (
     <ul className="home-threads">
-      {fils.map((fil) => (
-        <li
-          key={fil.cle}
-          data-unread={fil.nonLus > 0 ? 'true' : undefined}
-          data-echange={fil.echange === true ? 'true' : undefined}
-        >
-          <span className="home-threads__who" aria-hidden="true">
-            {initiales(fil.nom)}
-          </span>
-          <span className="home-threads__lines">
-            <span className="home-threads__name">
-              <b title={fil.adresse}>{fil.nom}</b>
-              <em>{formatExchangeDate(fil.dernierEchange, now)}</em>
-            </span>
-            <span className="home-threads__last">{fil.messages[0]?.sujet}</span>
-          </span>
-          {/* Le compte du fil, pas celui de la boîte : c'est ce qui reste à lire CHEZ ce contact. */}
-          {fil.nonLus > 0 ? <span className="home-threads__tally">{fil.nonLus}</span> : null}
-        </li>
-      ))}
+      {fils.map((fil) => {
+        const dernier = fil.messages[0]
+        return (
+          <li
+            key={fil.cle}
+            data-unread={fil.nonLus > 0 ? 'true' : undefined}
+            data-echange={fil.echange === true ? 'true' : undefined}
+          >
+            {/* Un VRAI bouton, pas un `<li>` décoré : l'accueil informait puis renvoyait chercher
+                l'élément à la main dans Outlook. Relevé en pilotant l'app ET par le scout (score 82). */}
+            <button
+              type="button"
+              className="home-threads__ouvrir"
+              onClick={() => void onOuvrir(dernier?.id ?? '')}
+              disabled={!dernier || ouvertureEnCours === dernier.id}
+              title={`Ouvrir dans Outlook — ${fil.adresse || fil.nom}`}
+              data-testid={`home-ouvrir-mail-${fil.cle}`}
+            >
+              <span className="home-threads__who" aria-hidden="true">
+                {initiales(fil.nom)}
+              </span>
+              <span className="home-threads__lines">
+                <span className="home-threads__name">
+                  <b>{fil.nom}</b>
+                  <em>{formatExchangeDate(fil.dernierEchange, now)}</em>
+                </span>
+                <span className="home-threads__last">
+                  {ouvertureEnCours === dernier?.id ? 'Ouverture…' : dernier?.sujet}
+                </span>
+              </span>
+              {/* Le compte du fil, pas celui de la boîte : c'est ce qui reste à lire CHEZ ce contact. */}
+              {fil.nonLus > 0 ? <span className="home-threads__tally">{fil.nonLus}</span> : null}
+            </button>
+          </li>
+        )
+      })}
     </ul>
+  )
+}
+
+/** L'heure et la date, que le décor traverse. Le hublot ne parle plus de lui-même. */
+function Hublot({ now }: { now: number }): React.JSX.Element {
+  const date = new Date(now)
+  return (
+    <div className="home-hublot">
+      <time className="home-hublot__heure">
+        {date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+      </time>
+      <span className="home-hublot__date">
+        {date.toLocaleDateString('fr-FR', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long'
+        })}
+      </span>
+    </div>
   )
 }
 
@@ -709,7 +983,15 @@ function initiales(nom: string): string {
 }
 
 /** L'agenda : aujourd'hui, puis la semaine — et à défaut, le prochain rendez-vous. */
-function AgendaList({ agenda }: { agenda: Agenda }): React.JSX.Element {
+function AgendaList({
+  agenda,
+  onOuvrir,
+  ouvertureEnCours
+}: {
+  agenda: Agenda
+  onOuvrir: (id: string) => Promise<void>
+  ouvertureEnCours: string | null
+}): React.JSX.Element {
   if (agenda.aujourdHui.length === 0 && agenda.semaine.length === 0) {
     if (agenda.suivant === null) {
       return <p className="home-hint">Aucun rendez-vous à venir dans votre agenda.</p>
@@ -730,12 +1012,20 @@ function AgendaList({ agenda }: { agenda: Agenda }): React.JSX.Element {
   return (
     <>
       {agenda.aujourdHui.length > 0 ? (
-        <ul className="home-list">
+        <ul className="home-list home-list--cliquable">
           {agenda.aujourdHui.map((entry) => (
             <li key={entry.id}>
-              <time>{formatEventTime(entry)}</time>
-              <span>{entry.sujet}</span>
-              <em>{entry.lieu}</em>
+              <button
+                type="button"
+                onClick={() => void onOuvrir(entry.id)}
+                disabled={ouvertureEnCours === entry.id}
+                title="Ouvrir le rendez-vous dans Outlook"
+                data-testid={`home-ouvrir-rdv-${entry.id}`}
+              >
+                <time>{formatEventTime(entry)}</time>
+                <span>{ouvertureEnCours === entry.id ? 'Ouverture…' : entry.sujet}</span>
+                <em>{entry.lieu}</em>
+              </button>
             </li>
           ))}
         </ul>
@@ -745,12 +1035,20 @@ function AgendaList({ agenda }: { agenda: Agenda }): React.JSX.Element {
       {agenda.semaine.length > 0 ? (
         <>
           <p className="home-subhead">Cette semaine</p>
-          <ul className="home-list">
+          <ul className="home-list home-list--cliquable">
             {agenda.semaine.map((entry) => (
               <li key={entry.id}>
-                <time>{formatEventDay(entry)}</time>
-                <span>{entry.sujet}</span>
-                <em>{formatEventTime(entry)}</em>
+                <button
+                  type="button"
+                  onClick={() => void onOuvrir(entry.id)}
+                  disabled={ouvertureEnCours === entry.id}
+                  title="Ouvrir le rendez-vous dans Outlook"
+                  data-testid={`home-ouvrir-rdv-${entry.id}`}
+                >
+                  <time>{formatEventDay(entry)}</time>
+                  <span>{ouvertureEnCours === entry.id ? 'Ouverture…' : entry.sujet}</span>
+                  <em>{formatEventTime(entry)}</em>
+                </button>
               </li>
             ))}
           </ul>

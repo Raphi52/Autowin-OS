@@ -25,6 +25,11 @@ export interface OutlookGatewayResult {
   [key: string]: unknown
 }
 
+export interface OutlookOpenResult {
+  ok: boolean
+  erreur?: string
+}
+
 export interface OutlookGatewayOptions {
   /** Racine du dépôt / de l'application, d'où le script est résolu. */
   appRoot: string
@@ -32,6 +37,8 @@ export interface OutlookGatewayOptions {
   ttlMs?: number
   /** Injection pour les tests : évite de dépendre d'un Outlook installé. */
   runner?: (scriptPath: string, outPath: string) => Promise<void>
+  /** Idem pour l'ouverture d'un élément. Rend le code de sortie du script. */
+  opener?: (scriptPath: string, id: string) => Promise<number>
   now?: () => number
 }
 
@@ -65,10 +72,39 @@ function defaultRunner(scriptPath: string, outPath: string): Promise<void> {
   })
 }
 
+/**
+ * Codes de sortie du script d'ouverture, traduits en phrases.
+ *
+ * Ils sont explicites côté script pour que la cause survive au passage de frontière : un code de
+ * sortie nu ne dirait pas la différence entre « cet identifiant n'a pas la bonne forme » et « cet
+ * élément a été supprimé entre-temps », et ces deux-là appellent des réactions opposées.
+ */
+const OPEN_FAILURES: Readonly<Record<number, string>> = {
+  1: "Outlook n'a pas pu ouvrir cet élément.",
+  2: "Cet identifiant n'a pas la forme d'un élément Outlook.",
+  3: 'Cet élément n’existe plus dans Outlook — il a peut-être été supprimé ou déplacé.'
+}
+
+function defaultOpener(scriptPath: string, id: string): Promise<number> {
+  return new Promise((resolve) => {
+    execFile(
+      'powershell',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-Id', id],
+      { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 256 * 1024 },
+      (error) => {
+        // Le code de sortie porte la cause : c'est lui qu'on veut, pas le message d'`execFile`.
+        const code = (error as { code?: number } | null)?.code
+        resolve(typeof code === 'number' ? code : error ? 1 : 0)
+      }
+    )
+  })
+}
+
 export class OutlookLocalGateway {
   private readonly appRoot: string
   private readonly ttlMs: number
   private readonly runner: (scriptPath: string, outPath: string) => Promise<void>
+  private readonly opener: (scriptPath: string, id: string) => Promise<number>
   private readonly now: () => number
   private cache: { at: number; result: OutlookGatewayResult } | null = null
   /** Lecture en cours : deux widgets qui interrogent en même temps ne doivent lancer QU'UN script. */
@@ -78,6 +114,7 @@ export class OutlookLocalGateway {
     this.appRoot = options.appRoot
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS
     this.runner = options.runner ?? defaultRunner
+    this.opener = options.opener ?? defaultOpener
     this.now = options.now ?? (() => Date.now())
   }
 
@@ -119,6 +156,32 @@ export class OutlookLocalGateway {
       return { ok: false, erreur: describeFailure(error) }
     } finally {
       if (dossier) await rm(dossier, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
+  /**
+   * Ouvre un élément dans Outlook.
+   *
+   * Passe par un script SÉPARÉ de la lecture. Lire n'est pas agir : mélanger les deux dans le même
+   * script aurait dilué la garantie « lecture seule » que porte la passerelle, alors que c'est elle
+   * qui rend l'intégration acceptable. Ouvrir une fenêtre ne modifie rien dans la boîte.
+   */
+  async openItem(id: unknown): Promise<OutlookOpenResult> {
+    // La validation est ici AUSSI, et pas seulement dans le script : cet identifiant vient du
+    // renderer par IPC, et une frontière de confiance ne se garde pas d'un seul côté.
+    if (typeof id !== 'string' || !/^[0-9A-Fa-f]{16,512}$/.test(id)) {
+      return { ok: false, erreur: OPEN_FAILURES[2] }
+    }
+    try {
+      const script = resolveOutlookScriptPath(this.appRoot).replace(
+        'outlook-local-snapshot.ps1',
+        'outlook-local-open.ps1'
+      )
+      const code = await this.opener(script, id)
+      if (code === 0) return { ok: true }
+      return { ok: false, erreur: OPEN_FAILURES[code] ?? OPEN_FAILURES[1] }
+    } catch (error) {
+      return { ok: false, erreur: describeFailure(error) }
     }
   }
 

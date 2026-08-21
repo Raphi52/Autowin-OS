@@ -24,6 +24,7 @@ asarUnpack:
   # d'Outlook doit exister sur le disque. Sans cette ligne, la passerelle marche en developpement et
   # est introuvable en package — le pire des deux mondes.
   - scripts/outlook-local-snapshot.ps1
+  - scripts/outlook-local-open.ps1
 win:
   executableName: autowin-os
   icon: build/icon.ico

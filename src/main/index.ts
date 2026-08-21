@@ -4984,6 +4984,12 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Outlook')
     return outlookGateway.snapshot(force === true)
   })
+  // Canal DISTINCT de la lecture : ouvrir est un acte, lire n'en est pas un. Les separer garde la
+  // garantie « lecture seule » de la passerelle lisible d'un coup d'oeil.
+  ipcMain.handle('outlook:ouvrir', async (event, id: unknown) => {
+    assertTrustedRendererSender(event, 'Outlook')
+    return outlookGateway.openItem(id)
+  })
 
   registerTaskManagerIpc({
     ipc: ipcMain,

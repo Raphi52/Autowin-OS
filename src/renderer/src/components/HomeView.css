@@ -194,6 +194,9 @@
 
 .home-tile__panel {
   position: relative;
+  /* Declare pour que `cqw` resolve : l'heure du hublot suit la taille de SA tuile, pas celle de la
+     fenetre. Sans cette ligne l'unite ne resout rien et le texte reste minuscule. */
+  container-type: inline-size;
   flex: 1;
   min-height: 0;
   padding: 8px 5px 8px 7px;
@@ -517,4 +520,155 @@
   color: var(--text);
   border-bottom-color: var(--text);
   outline: none;
+}
+
+/* Un fil est un BOUTON : il ouvre le message dans Outlook. Il doit donc se comporter comme tel sans
+   ressembler à un bouton — le contenu est une ligne de liste, pas une commande. */
+.home-threads__ouvrir {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.home-threads__ouvrir:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.home-threads__ouvrir:focus-visible {
+  outline: 1px solid var(--line-strong);
+  outline-offset: 2px;
+  border-radius: var(--r1, 8px);
+}
+
+.home-list--cliquable li {
+  padding: 0;
+}
+
+.home-list--cliquable button {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--r1, 8px);
+  cursor: pointer;
+}
+
+.home-list--cliquable button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.home-list--cliquable button:focus-visible {
+  outline: 1px solid var(--line-strong);
+  outline-offset: -1px;
+}
+
+.home-notices li {
+  position: relative;
+}
+
+/* Acquitter : discret au repos, franc au survol. Une action de solde ne doit pas crier, mais elle ne
+   doit pas non plus se cacher. */
+.home-notices__acquitter {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  padding: 1px 7px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  background: var(--bg-inset, rgba(0, 0, 0, 0.58));
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.home-notices li:hover .home-notices__acquitter,
+.home-notices__acquitter:focus-visible {
+  opacity: 1;
+  color: var(--text);
+  outline: none;
+}
+
+/* Le débordement se DIT : un dégradé en bas du panneau quand il reste du contenu. Mesuré le
+   2026-08-21 — 1149 px de contenu pour 788 visibles, et rien ne l'annonçait. */
+.home-tile__scroll[data-reste-en-bas='true'] {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent 100%);
+}
+
+.home-tile__panel:has(.home-tile__scroll[data-reste-en-bas='true'])::after {
+  content: '▾ plus bas';
+  position: absolute;
+  right: 12px;
+  bottom: 4px;
+  padding: 0 5px;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+/* La tuile prend le focus au clavier : le contour doit le dire, sinon la navigation est aveugle. */
+.home-tile:focus-visible {
+  outline: none;
+}
+
+.home-tile:focus-visible .home-tile__panel {
+  border-color: var(--cyan);
+  box-shadow:
+    0 0 0 1px var(--cyan),
+    0 20px 46px rgba(0, 0, 0, 0.6);
+}
+
+/* Le hublot : l'heure et la date, que le décor traverse. */
+.home-hublot {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  user-select: none;
+}
+
+.home-hublot__heure {
+  font-family: var(--mono);
+  font-size: clamp(24px, 12cqw, 46px);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9);
+}
+
+.home-hublot__date {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+  color: var(--text-dim);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9);
+}
+
+/* Une alerte d'ouverture dans l'en-tête : la cause d'un clic sans effet doit être dite. */
+.home-view__alerte {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--err);
 }

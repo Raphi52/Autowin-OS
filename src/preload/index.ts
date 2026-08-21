@@ -440,6 +440,9 @@ const api = {
    */
   outlookSnapshot: (force?: boolean): Promise<unknown> =>
     ipcRenderer.invoke('outlook:snapshot', force === true),
+  /** Ouvre un element (message ou rendez-vous) dans Outlook, par son identifiant. */
+  outlookOuvrir: (id: string): Promise<{ ok: boolean; erreur?: string }> =>
+    ipcRenderer.invoke('outlook:ouvrir', id),
   taskManagerCreate: (task: unknown): Promise<ScheduledTask> =>
     ipcRenderer.invoke('task-manager:create', task),
   taskManagerUpdate: (id: string, task: unknown): Promise<ScheduledTask> =>
