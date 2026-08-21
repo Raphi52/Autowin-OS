@@ -4,6 +4,9 @@ import {
   boundedTurnHistory,
   buildTurnMessages,
   exigeAgirPasAnnoncer,
+  consigneApresEchec,
+  exigeCorrigerEtPoursuivre,
+  signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie
 } from './chat-turn-messages'
@@ -345,5 +348,67 @@ describe('exigeAgirPasAnnoncer — il parle sans agir', () => {
         false
       )
     ).toBe(false)
+  })
+})
+
+describe('exigeCorrigerEtPoursuivre — il voit son erreur, la raconte, et abandonne', () => {
+  const ECHEC_NON_CORRIGE = true
+
+  it('mord quand la dernière action a échoué et que le tour se termine sur le constat', () => {
+    const vecu =
+      'La commande a échoué : le test `pari-liaison` est rouge. ✅ Fait\n📍 Maintenant : le test ne passe pas.'
+    expect(exigeCorrigerEtPoursuivre(ECHEC_NON_CORRIGE, vecu)).toBe(true)
+  })
+
+  it('ne mord PAS quand la dernière itération a réussi — la reprise a fonctionné', () => {
+    // Le discriminant : un échec RATTRAPÉ ne doit plus rien réclamer, sinon la garde harcèle.
+    expect(exigeCorrigerEtPoursuivre(false, 'La deuxième tentative est passée : test vert.')).toBe(
+      false
+    )
+  })
+
+  it('ne mord PAS quand la reprise dépend VRAIMENT de l’utilisateur', () => {
+    const bloque =
+      'La suppression a échoué : il me faut ton autorisation explicite pour toucher la base de prod.'
+    expect(exigeCorrigerEtPoursuivre(ECHEC_NON_CORRIGE, bloque)).toBe(false)
+  })
+
+  it('ne mord PAS sur une réponse vide — le tour muet a sa propre garde', () => {
+    expect(exigeCorrigerEtPoursuivre(ECHEC_NON_CORRIGE, '   ')).toBe(false)
+  })
+})
+
+describe('auto-kaizen en cours de tour — la MÊME erreur ne se rejoue pas', () => {
+  it('normalise chemins, nombres et casse : deux occurrences du même mur ont une seule signature', () => {
+    const a = signatureDEchec('edit_file', 'ENOENT: C:\Amitel\Autowin OS\src\a.ts introuvable')
+    const b = signatureDEchec('edit_file', 'enoent: C:\Amitel\Autowin OS\src\b.ts introuvable')
+    expect(a).toBe(b)
+  })
+
+  it('deux murs DIFFÉRENTS gardent des signatures distinctes', () => {
+    const enoent = signatureDEchec('edit_file', 'ENOENT: chemin introuvable')
+    const droits = signatureDEchec('edit_file', 'EACCES: permission refusée')
+    expect(enoent).not.toBe(droits)
+  })
+
+  it('la même erreur sur DEUX outils différents reste distincte', () => {
+    expect(signatureDEchec('edit_file', 'ENOENT: x')).not.toBe(signatureDEchec('run_tests', 'ENOENT: x'))
+  })
+
+  it('la consigne ESCALADE à la deuxième rencontre du même mur', () => {
+    const sig = signatureDEchec('edit_file', 'ENOENT: chemin introuvable')
+    const premiere = consigneApresEchec([], sig)
+    const seconde = consigneApresEchec([sig], sig)
+    expect(premiere).not.toBe(seconde)
+    // La première demande de corriger ; la seconde interdit de rejouer et EXIGE de capitaliser.
+    expect(premiere).toContain('CAUSE')
+    expect(seconde).toContain('DÉJÀ')
+    expect(seconde).toContain('remember')
+  })
+
+  it('un mur JAMAIS vu ne déclenche pas l’escalade', () => {
+    const vu = signatureDEchec('edit_file', 'ENOENT: chemin introuvable')
+    const neuf = signatureDEchec('run_tests', 'assertion rouge')
+    expect(consigneApresEchec([vu], neuf)).toBe(consigneApresEchec([], neuf))
   })
 })

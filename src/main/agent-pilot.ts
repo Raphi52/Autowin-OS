@@ -15,6 +15,9 @@ import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-mem
 import {
   buildTurnMessages,
   exigeAgirPasAnnoncer,
+  consigneApresEchec,
+  exigeCorrigerEtPoursuivre,
+  signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
   exigeUneConclusion
@@ -797,6 +800,7 @@ export class AgentPilot {
       | 'chiffre-non-verifie'
       | 'conclusion-absente'
       | 'echec-taise'
+      | 'correction-apres-echec'
       | 'annonce-sans-action'
       | 'outil-pretendu-absent'
     > = []
@@ -808,6 +812,7 @@ export class AgentPilot {
         | 'chiffre-non-verifie'
         | 'conclusion-absente'
         | 'echec-taise'
+        | 'correction-apres-echec'
         | 'annonce-sans-action'
         | 'outil-pretendu-absent'
     ): void => {
@@ -852,6 +857,22 @@ export class AgentPilot {
     let relanceDeFormeUtilisee = false
     /** Une action de CE tour a-t-elle echoue ? Un « Fait » pose dessus serait un mensonge. */
     let anyActionFailed = false
+    /*
+     * L'echec de la DERNIERE iteration, distinct de `anyActionFailed` qui cumule tout le tour.
+     * Une commande plantee puis rejouee avec succes doit desarmer la reprise : c'est exactement
+     * le comportement qu'on veut encourager, pas un motif de relance.
+     */
+    let echecDeLaDerniereIteration = false
+    /*
+     * AUTO-KAIZEN EN COURS DE TOUR. Le registre des murs deja rencontres : sans lui, corriger-et-
+     * poursuivre autorise le pire des retours — rejouer la meme commande, remanger le meme mur, et
+     * bruler les iterations dans un trou de lapin. DEUX reprises au plus : la correction, puis UNE
+     * escalade qui interdit la repetition et exige de capitaliser la lecon.
+     */
+    let reprisesApresEchecRestantes = 2
+    const signaturesDEchecVues: string[] = []
+    let derniereSignatureDEchec = ''
+    let dernierEchecEstUnRejeu = false
     let echecTuRecoveryAvailable = true
     /** Une seule relance pour un outil faussement declare absent : au-dela, on n'insiste pas. */
     let outilAbsentRecoveryAvailable = true
@@ -1300,6 +1321,30 @@ export class AgentPilot {
           )
           continue
         }
+        /*
+         * CORRIGE, PUIS POURSUIS — passe AVANT l'aveu d'echec, et c'est deliberé.
+         *
+         * `exigeDireLEchec` obtient un constat honnete mais ordonne de reformuler « SANS aucune
+         * commande » : elle FIGE le tour sur son echec. Celle-ci est la seule relance de la famille
+         * qui REND la main aux commandes — l'agent repart de l'erreur reelle, la corrige, et termine
+         * la tache. Si la reprise echoue a son tour, l'aveu d'echec reste en second rideau.
+         */
+        if (
+          exigerExperienceSoignee &&
+          !relanceDeFormeUtilisee &&
+          reprisesApresEchecRestantes > 0 &&
+          exigeCorrigerEtPoursuivre(echecDeLaDerniereIteration, visibleTextThisTurn)
+        ) {
+          reprisesApresEchecRestantes -= 1
+          grantRecoveryIteration('correction-apres-echec')
+          convo.push(
+            consigneApresEchec(
+              dernierEchecEstUnRejeu ? [derniereSignatureDEchec] : [],
+              derniereSignatureDEchec
+            )
+          )
+          continue
+        }
         if (
           exigerExperienceSoignee &&
           !relanceDeFormeUtilisee &&
@@ -1368,6 +1413,7 @@ export class AgentPilot {
       }
 
       const results: string[] = []
+      echecDeLaDerniereIteration = false
       let commandIndex = 0
       let tokenIndex = 0
       let streamedPrefixRemaining = successfulStreamedPrefix
@@ -1505,7 +1551,19 @@ export class AgentPilot {
           return
         }
         const commandSucceeded = commandResultSucceeded(r)
-        if (!commandSucceeded) anyActionFailed = true
+        if (!commandSucceeded) {
+          anyActionFailed = true
+          echecDeLaDerniereIteration = true
+          const signature = signatureDEchec(
+            token.name,
+            String(r.ok ? JSON.stringify(r.data) : (r.error ?? ''))
+          )
+          // Le test d'appartenance passe AVANT l'enregistrement, sinon le mur courant serait
+          // toujours « deja vu » et la premiere rencontre declencherait l'escalade a tort.
+          dernierEchecEstUnRejeu = signaturesDEchecVues.includes(signature)
+          derniereSignatureDEchec = signature
+          signaturesDEchecVues.push(signature)
+        }
         results.push(
           `${token.name} → ${
             commandSucceeded

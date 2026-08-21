@@ -197,6 +197,92 @@ export function exigeUneConclusion(aAgi: boolean, reponse: string): boolean {
  * qu'il dise la vérité produit un « ✅ Fait » posé sur un échec — pire que pas de bloc du tout,
  * parce qu'il RASSURE. La forme ne vaut que si le fond est honnête.
  */
+/**
+ * AUTO-KAIZEN EN COURS DE TOUR : la MEME erreur ne doit pas se rejouer.
+ *
+ * Corriger-et-poursuivre est l'etage tactique ; sans memoire, il autorise le pire des retours —
+ * l'agent rejoue la commande a l'identique, remange le meme mur, et brule ses iterations dans un
+ * trou de lapin optimiste. Chaque echec laisse donc une SIGNATURE, et la deuxieme rencontre du
+ * meme mur change la consigne au lieu de la repeter.
+ *
+ * La signature normalise ce qui varie sans changer le mur — casse, chemins, nombres — et garde ce
+ * qui le distingue : l'outil et la nature de l'erreur. Deux `ENOENT` sur deux fichiers sont LE meme
+ * mur ; un `ENOENT` et un `EACCES` ne le sont pas.
+ */
+export function signatureDEchec(nom: string, erreur: string): string {
+  const noyau = (erreur ?? '')
+    .toLowerCase()
+    .replace(/[a-z]:\[^\s'"]*/g, '<chemin>')
+    .replace(/\/[^\s'"]*\//g, '<chemin>')
+    // Un chemin Windows contient des ESPACES (`C:\Amitel\Autowin OS\...`) : la regle de chemin
+    // s'arrete au premier, laissant le nom de fichier — qui est justement ce qui varie d'une
+    // occurrence a l'autre du MEME mur. On le neutralise donc a part.
+    .replace(/[^\s'"\/]*\.[a-z0-9]{1,5}\b/g, '<fichier>')
+    .replace(/\d+/g, '<n>')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80)
+  return `${nom}::${noyau}`
+}
+
+/**
+ * La consigne de reprise, ESCALADEE quand le mur a deja ete rencontre dans ce tour.
+ *
+ * Premiere rencontre : remonter a la cause et poursuivre. Deuxieme : interdire la repetition,
+ * exiger un chemin DIFFERENT, et surtout CAPITALISER via `remember` — c'est la seule moitie qui
+ * survit au tour, donc la seule qui transforme une correction en apprentissage.
+ */
+export function consigneApresEchec(dejaRencontres: readonly string[], signature: string): string {
+  const rejoue = dejaRencontres.includes(signature)
+  if (!rejoue) {
+    return (
+      'SYSTÈME: ta dernière action a ÉCHOUÉ et tu t’arrêtes sur ce constat — la demande n’est ' +
+      'donc PAS satisfaite. Tu as le droit d’ÉMETTRE DES COMMANDES maintenant : relis le message ' +
+      'd’erreur exact ci-dessus, identifie la CAUSE (pas le symptôme), corrige-la, puis REPRENDS ' +
+      'la tâche là où elle s’est interrompue et va jusqu’au bout. Ne te contente pas de réessayer ' +
+      'à l’identique. Si et seulement si la reprise est hors de ta portée — droits, autorisation, ' +
+      'dépendance externe — dis lequel de ces murs te bloque, précisément.'
+    )
+  }
+  return (
+    'SYSTÈME: tu as DÉJÀ rencontré exactement cette erreur dans ce tour, et ta correction ne l’a ' +
+    'pas levée — tu tournes en rond. INTERDIT de rejouer la même approche. Change de chemin : ' +
+    'remonte d’un cran (vérifie ce que tu CROIS vrai — le fichier existe-t-il vraiment, la ' +
+    'commande est-elle la bonne, l’hypothèse de départ tient-elle ?) et attaque autrement. Puis, ' +
+    'AVANT de conclure, appelle `remember` pour enregistrer la leçon apprise sur ce mur, afin de ' +
+    'ne pas le rejouer au prochain tour. Si aucun autre chemin n’existe, dis-le et nomme le mur.'
+  )
+}
+
+/**
+ * IL VOIT SON ERREUR, LA RACONTE — ET ABANDONNE LA TÂCHE.
+ *
+ * La garde jumelle `exigeDireLEchec` a un revers coûteux : sa relance ordonne de reformuler
+ * « SANS aucune commande ». Elle obtient donc un aveu HONNÊTE, mais elle INTERDIT la reprise —
+ * l'agent constate proprement son échec et rend la main, la demande non satisfaite. Dire l'échec
+ * était le premier étage ; le corriger puis poursuivre est celui qui manquait.
+ *
+ * Le discriminant est l'échec de la DERNIÈRE itération, pas l'échec cumulé du tour : une commande
+ * qui a planté puis été rejouée avec succès ne doit plus rien réclamer, sinon la garde harcèle un
+ * tour qui s'est déjà rattrapé tout seul — exactement ce qu'on veut encourager.
+ *
+ * Elle se tait quand la reprise dépend RÉELLEMENT de l'humain (autorisation, droits, arbitrage) :
+ * relancer un agent contre un mur externe brûle des itérations sans rien produire.
+ */
+export function exigeCorrigerEtPoursuivre(
+  echecNonCorrige: boolean,
+  reponse: string
+): boolean {
+  if (!echecNonCorrige) return false
+  const texte = (reponse ?? '').trim()
+  if (!texte) return false // le tour muet a sa propre garde
+  const attendUneDecisionHumaine =
+    /(autoris|droits?|mot de passe|identifiant|dois-je|veux-tu|confirmes?-tu|ton feu vert|ton accord)/i.test(
+      texte
+    )
+  return !attendUneDecisionHumaine
+}
+
 export function exigeDireLEchec(uneActionAEchoue: boolean, reponse: string): boolean {
   if (!uneActionAEchoue) return false
   const texte = (reponse ?? '').trim()
