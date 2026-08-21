@@ -180,3 +180,93 @@ describe('auto-kaizen en cours de tour : le MÊME mur deux fois change la consig
     expect(sent.some((c) => c.includes(MARQUEUR))).toBe(true)
   })
 })
+
+describe('bornes et interactions — les trous trouves par l’audit du 2026-08-21', () => {
+  const rep = (n: number): string[] => {
+    const r: string[] = []
+    for (let i = 0; i < n; i++) {
+      r.push('Tentative.<cmd>{"name":"get_state","args":{}}</cmd>')
+      r.push('La commande a échoué : chemin introuvable.')
+    }
+    const LF = String.fromCharCode(10)
+    r.push(['✅ Fait.', '⏳ Reste à faire : rien.', '👉 Recommandé : rien.'].join(LF))
+    return r
+  }
+
+  it('les reprises restent BORNEES a 2 meme sur cinq murs TOUS DIFFERENTS', async () => {
+    /*
+     * Ce que ce test prouve, et ce qu'il ne prouve PAS. Il prouve la propriete qui compte pour
+     * l'utilisateur : un tour ne peut pas empiler les reprises payantes, quel que soit le motif.
+     * Il ne prouve PAS le compteur `reprisesApresEchecRestantes` : en le portant a 99, le nombre
+     * observe ne bouge pas — c'est le verrou d'escalade (mur repete) ou le flux lui-meme (murs
+     * distincts) qui borne en premier. Le compteur reste un FILET, non exerce par les tests ; le
+     * dire vaut mieux qu'un test complaisant qui ferait croire le contraire.
+     */
+    const reponses: string[] = []
+    for (let i = 0; i < 5; i++) {
+      reponses.push('Tentative.<cmd>{"name":"get_state","args":{}}</cmd>')
+      reponses.push(`La commande a échoué : erreur de type E${i} sur un composant distinct.`)
+    }
+    reponses.push(['✅ Fait.', '⏳ Reste à faire : rien.', '👉 Recommandé : rien.'].join(String.fromCharCode(10)))
+    const sent: string[] = []
+    let appels = 0
+    const registry = {
+      send: vi.fn(async (_p: string, messages: Message[], _o: SendOptions): Promise<SendResult> => {
+        sent.push(messages.at(-1)?.content ?? '')
+        // Fixture INEPUISABLE : une liste trop courte rendait '' et le tour muet consommait le
+        // verrou, si bien que le test mesurait la longueur de la liste au lieu du cap.
+        const suite = reponses.shift()
+        return {
+          text: suite ?? ['✅ Fait.', '⏳ Reste à faire : rien.', '👉 Recommandé : rien.'].join(String.fromCharCode(10)),
+          sessionId: 'sess'
+        } as SendResult
+      }),
+      describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 't' }))
+    }
+    const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) }
+    const bus = {
+      catalog: vi.fn(() => [{ name: 'get_state', args: {}, description: 'état' }]),
+      snapshotForPrompt: vi.fn(async () => ({ tab: 'chat' })),
+      exec: vi.fn(async () => {
+        appels += 1
+        return { ok: false, error: `panne numero ${appels} sur un composant distinct` }
+      })
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = new AgentPilot(registry as any, roles as any, bus as any)
+    await p.chat(history, () => {}, ask, 12, 'conv-CAPD', undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, SOIGNEE)
+    const fil = sent.at(-1) ?? ''
+    const reprises = fil.split(MARQUEUR).length - 1
+    expect(reprises).toBeGreaterThan(0)
+    expect(reprises).toBeLessThanOrEqual(2)
+  })
+
+  it('le meme mur repete est borne lui aussi', async () => {
+    // La DoD cochait « borne » sur la seule LECTURE du code : aucun test ne poussait 3 echecs, donc
+    // un test aurait passe a l'identique si le cap avait ete retire. C'est le faux vert typique.
+    const { pilot: p, sent } = pilot(rep(5), 99)
+    await p.chat(history, () => {}, ask, 12, 'conv-CAP', undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, SOIGNEE)
+    // `sent` capture le prompt CUMULE : compter les messages qui contiennent le marqueur compterait
+    // des envois, pas des reprises. On compte donc les occurrences dans le fil final.
+    const fil = sent.at(-1) ?? ''
+    const occurrences = (motif: string): number => fil.split(motif).length - 1
+    const reprises =
+      occurrences(MARQUEUR) + occurrences('tu as DÉJÀ rencontré exactement cette erreur')
+    expect(reprises).toBe(2)
+  })
+
+  it('l’escalade consomme le verrou de relance : aucune relance de forme ne s’y ajoute', async () => {
+    // Le depot impose « UNE SEULE relance de forme par tour, toutes gardes confondues » (verrou pose
+    // apres un incident du 2026-08-15). La reprise d'ACTION est une exception assumee — mais
+    // l'ESCALADE, elle, signifie « on tourne en rond » : elle ne doit plus rien debloquer derriere.
+    const { pilot: p, sent } = pilot(rep(5), 99)
+    await p.chat(history, () => {}, ask, 12, 'conv-CAP2', undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, SOIGNEE)
+    const fil = sent.at(-1) ?? ''
+    const posEscalade = fil.indexOf('tu as DÉJÀ rencontré exactement cette erreur')
+    expect(posEscalade).toBeGreaterThan(-1)
+    expect(fil.slice(posEscalade).includes('Reformule')).toBe(false)
+  })
+})

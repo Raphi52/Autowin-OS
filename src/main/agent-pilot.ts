@@ -869,6 +869,11 @@ export class AgentPilot {
      * poursuivre autorise le pire des retours — rejouer la meme commande, remanger le meme mur, et
      * bruler les iterations dans un trou de lapin. DEUX reprises au plus : la correction, puis UNE
      * escalade qui interdit la repetition et exige de capitaliser la lecon.
+     *
+     * FILET, non exerce par les tests, et c'est dit exprès : mesure du 2026-08-21, en portant ce
+     * compteur a 99 le nombre de reprises observe ne bouge pas — le verrou d'escalade (mur repete)
+     * ou le flux lui-meme (murs distincts) borne toujours en premier. Il est garde comme garde-fou
+     * d'un chemin non enumere, pas presente comme le mecanisme de bornage.
      */
     let reprisesApresEchecRestantes = 2
     /*
@@ -1342,6 +1347,15 @@ export class AgentPilot {
           exigeCorrigerEtPoursuivre(echecDeLaDerniereIteration, visibleTextThisTurn)
         ) {
           reprisesApresEchecRestantes -= 1
+          /*
+           * Le depot impose « UNE SEULE relance de forme par tour, toutes gardes confondues ». La
+           * reprise d'ACTION en est une exception ASSUMEE : elle rend la main aux commandes, ce
+           * qu'aucune relance de forme ne fait, et la brider reviendrait a re-figer le tour sur son
+           * echec — le defaut d'origine. L'ESCALADE, elle, signifie « tu tournes en rond » : a ce
+           * stade plus rien ne doit se debloquer derriere, sinon on empile des appels payants sur un
+           * tour deja en difficulte (audit du 2026-08-21).
+           */
+          if (dernierEchecEstUnRejeu) relanceDeFormeUtilisee = true
           grantRecoveryIteration('correction-apres-echec')
           convo.push(
             consigneApresEchec(
@@ -1420,6 +1434,9 @@ export class AgentPilot {
 
       const results: string[] = []
       echecDeLaDerniereIteration = false
+      // Remis a plat a chaque iteration, comme son jumeau : sinon un rejeu d'une iteration
+      // precedente ferait escalader une iteration qui n'a rencontre qu'un mur neuf.
+      dernierEchecEstUnRejeu = false
       let commandIndex = 0
       let tokenIndex = 0
       let streamedPrefixRemaining = successfulStreamedPrefix
@@ -1566,7 +1583,11 @@ export class AgentPilot {
           )
           // Le test d'appartenance passe AVANT l'enregistrement, sinon le mur courant serait
           // toujours « deja vu » et la premiere rencontre declencherait l'escalade a tort.
-          dernierEchecEstUnRejeu = signaturesDEchecVues.includes(signature)
+          // AGREGE sur l'iteration : si AU MOINS UN echec de cette iteration est un rejeu connu,
+          // l'escalade est due. Ne garder que le dernier perdait silencieusement l'escalade quand
+          // une iteration enchainait un mur deja connu PUIS un mur neuf (audit du 2026-08-21).
+          dernierEchecEstUnRejeu =
+            dernierEchecEstUnRejeu || signaturesDEchecVues.includes(signature)
           derniereSignatureDEchec = signature
           signaturesDEchecVues.push(signature)
           if (conversationId) {

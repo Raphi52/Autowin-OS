@@ -412,3 +412,59 @@ describe('auto-kaizen en cours de tour — la MÊME erreur ne se rejoue pas', ()
     expect(consigneApresEchec([vu], neuf)).toBe(consigneApresEchec([], neuf))
   })
 })
+
+describe('signatureDEchec — les pieges de normalisation trouves par l’audit', () => {
+  it('deux occurrences du MÊME mur differant par un segment de CHEMIN non numerique fusionnent', () => {
+    // Trouve par l'audit du 2026-08-21 : la regle de chemin ne matchait jamais (un antislash au
+    // lieu de deux), et le test d'origine passait grace a la regle de NOM DE FICHIER ajoutee
+    // ensuite — vert pour la mauvaise raison. Ici aucun nom de fichier ne peut masquer la panne.
+    // L'antislash est construit, jamais ecrit en litteral : un echappement mal transmis a
+    // DEJA fabrique ce defaut une fois, il ne doit pas pouvoir le refabriquer dans le test.
+    const SEP = String.fromCharCode(92)
+    const chemin = (run: string): string =>
+      `ENOENT: dossier absent C:${SEP}tmp${SEP}${run}${SEP}sortie`
+    const a = signatureDEchec('fs', chemin('runA'))
+    const b = signatureDEchec('fs', chemin('runB'))
+    expect(a).toBe(b)
+  })
+
+  it('deux erreurs DIFFERENTES a long prefixe commun ne fusionnent PAS', () => {
+    // La troncature a 80 caracteres jetait le suffixe DISCRIMINANT : une coupure reseau transitoire
+    // et une panne de destination devenaient le meme mur, donc « interdit de rejouer » sur un
+    // diagnostic faux.
+    const prefixe =
+      'Erreur reseau lors de la connexion au service distant apres plusieurs tentatives, motif: '
+    expect(signatureDEchec('net', prefixe + 'ECONNRESET')).not.toBe(
+      signatureDEchec('net', prefixe + 'ETIMEDOUT')
+    )
+  })
+
+  it('la signature reste bornee en longueur', () => {
+    const enorme = 'x'.repeat(5000)
+    expect(signatureDEchec('outil', enorme).length).toBeLessThanOrEqual(120)
+  })
+})
+
+describe('exigeCorrigerEtPoursuivre — le mur humain doit etre une VRAIE attente, pas un mot-clé', () => {
+  it('ne se tait PAS quand l’agent annonce qu’il corrige, meme si le mot « autorise » apparait', () => {
+    // Trouve par l'audit : la co-occurrence lexicale suffisait a desarmer la garde, donc l'agent
+    // pouvait abandonner sans etre relance — exactement le defaut qu'elle devait supprimer.
+    const texte =
+      'La commande a échoué car le fichier de configuration n’autorise pas ce caractère.'
+    expect(exigeCorrigerEtPoursuivre(true, texte)).toBe(true)
+  })
+
+  it('se tait sur une vraie question suspensive adressee a l’utilisateur', () => {
+    expect(
+      exigeCorrigerEtPoursuivre(true, 'Échec : veux-tu que je force la suppression ?')
+    ).toBe(false)
+  })
+
+  it('se tait quand l’agent declare la tache HORS DE SA PORTEE, sans mot-clé de permission', () => {
+    // Signale par l'audit « nuisance » : un agent qui a RAISON de s'arreter se faisait relancer
+    // deux fois puis accuser de tourner en rond, et devait polluer `remember` pour rien.
+    const horsPerimetre =
+      'La commande a échoué : cette fonctionnalité n’existe pas dans cette application, je ne peux pas le faire.'
+    expect(exigeCorrigerEtPoursuivre(true, horsPerimetre)).toBe(false)
+  })
+})

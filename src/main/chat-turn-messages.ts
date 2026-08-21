@@ -212,7 +212,7 @@ export function exigeUneConclusion(aAgi: boolean, reponse: string): boolean {
 export function signatureDEchec(nom: string, erreur: string): string {
   const noyau = (erreur ?? '')
     .toLowerCase()
-    .replace(/[a-z]:\[^\s'"]*/g, '<chemin>')
+    .replace(/[a-z]:\\[^\s'"]*/g, '<chemin>')
     .replace(/\/[^\s'"]*\//g, '<chemin>')
     // Un chemin Windows contient des ESPACES (`C:\Amitel\Autowin OS\...`) : la regle de chemin
     // s'arrete au premier, laissant le nom de fichier — qui est justement ce qui varie d'une
@@ -221,8 +221,16 @@ export function signatureDEchec(nom: string, erreur: string): string {
     .replace(/\d+/g, '<n>')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 80)
-  return `${nom}::${noyau}`
+  /*
+   * On tronque par les DEUX bouts, jamais par la fin seule. Trouve par l'audit du 2026-08-21 : deux
+   * erreurs authentiquement differentes partageant un long prefixe commun (« Erreur reseau ... motif:
+   * ECONNRESET » vs « ... ETIMEDOUT ») fusionnaient en une seule signature — une coupure transitoire
+   * et une panne de destination devenaient LE MEME mur, donc « interdit de rejouer » sur un
+   * diagnostic faux. Le suffixe est justement la ou vit le discriminant.
+   */
+  const borne =
+    noyau.length <= 80 ? noyau : `${noyau.slice(0, 40)}…${noyau.slice(-40)}`
+  return `${nom}::${borne}`
 }
 
 /**
@@ -276,11 +284,25 @@ export function exigeCorrigerEtPoursuivre(
   if (!echecNonCorrige) return false
   const texte = (reponse ?? '').trim()
   if (!texte) return false // le tour muet a sa propre garde
-  const attendUneDecisionHumaine =
-    /(autoris|droits?|mot de passe|identifiant|dois-je|veux-tu|confirmes?-tu|ton feu vert|ton accord)/i.test(
+  /*
+   * Trois formes de mur, et AUCUNE n'est une simple co-occurrence de mot-cle. L'audit du 2026-08-21
+   * a montre les deux erreurs symetriques de la version precedente : « le fichier de configuration
+   * n'AUTORISE pas ce caractere » desarmait la garde alors que la cause etait parfaitement
+   * corrigeable (l'agent pouvait abandonner sans etre relance, exactement le defaut a supprimer) ;
+   * et a l'inverse un agent qui declarait correctement la tache hors de sa portee, sans employer un
+   * mot de la liste, se faisait relancer deux fois puis accuser de tourner en rond.
+   */
+  const demandeExpliciteALHumain =
+    /(il me faut|j[’']ai besoin d|n[ée]cessite|requiert|exige)[^.]{0,40}(autoris|accord|droits?|feu vert|validation|mot de passe|identifiant)/i.test(
       texte
     )
-  return !attendUneDecisionHumaine
+  const questionSuspensive =
+    texte.includes('?') && /(dois-je|veux-tu|confirmes?-tu|souhaites?-tu|faut-il|puis-je)/i.test(texte)
+  const declareHorsDePortee =
+    /(n[’']existe pas|je ne peux pas|impossible|hors de (ma|mon) (port[ée]e|p[ée]rim[èe]tre)|pas dans mon p[ée]rim[èe]tre)/i.test(
+      texte
+    )
+  return !(demandeExpliciteALHumain || questionSuspensive || declareHorsDePortee)
 }
 
 export function exigeDireLEchec(uneActionAEchoue: boolean, reponse: string): boolean {
