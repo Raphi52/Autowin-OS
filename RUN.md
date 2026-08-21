@@ -1,4 +1,4 @@
-status: open
+status: degraded-closed
 CausalHypothesis: `ChatView.tsx` rend `openRun.content` dans un `<pre>` brut ; l'inspecteur doit réutiliser `BrainMarkdown` et exposer les sections et compteurs déjà disponibles.
 CausalHypothesis: `src/main/models.ts` réécrit un cache inchangé après indisponibilité ; la sauvegarde doit être conditionnée à une différence réelle.
 session: local-scout-2026-07-21
@@ -29,15 +29,29 @@ Faits observés :
 | 1 | 🟢 | 🟡 | 🆕 new | Inspecteur RUN structuré : synthèse, navigation de sections et contenu Markdown lisible. | Le détail actuel force la lecture d’un `<pre>` alors que les signaux de santé existent déjà. | Prototyper dans `ChatView` à partir de `parseRun` et réemployer `BrainMarkdown`; vérifier par test de rendu et capture CDP. |
 | 2 | 🟡 | 🟢 | 🔧 fix | Afficher événements Journal et défauts sur chaque carte de run. | `parseRun` les calcule mais `ChatView` ne montre que la DoD (`ChatView.tsx:1925-1963`). | Ajouter deux compteurs et un test qui rend un run avec journal/défaut. |
 | 3 | 🟡 | 🟡 | 🆕 new | Timeline de phases avec état courant et verdict. | La trace montre les appels, mais `STEP_META` ne présente que trois rôles techniques. | Définir un modèle de phase stable dans `chat-view-model.ts`, puis le rendre dans le détail. |
-| 4 | 🟢 | 🔴 | 🆕 new | Vue « prochain geste » : synthèse de Reprise, bloqueurs et preuves récentes, au-dessus du journal. | Elle réduit le coût de reprise d’un run interrompu. | Étendre le parseur à `## Reprise`, puis définir les règles de priorité des signaux. |
+| 4 | 🟢 | 🔴 | 🆕 new | Vue « prochain geste » : synthèse de Reprise, bloqueurs et preuves récentes, au-dessus du journal. | Elle réduit le coût de reprise d’un run interrompu. | Étendre le parseur à `[2026-08-21] REOUVERT depuis une autre session : ce RUN etait reste `open` a la racine du depot
+depuis le 27/07, et un agent l'a lu en croyant y retrouver un scout tout autre — il y a perdu un
+tour. Verification faite avant de le clore, plutot que de le clore sur sa parole :
+  - `RunInspector.tsx` existe ET est RENDU (`WorkflowsPanel.tsx:369`), ses 3 tests passent → DoD 1 tenue.
+  - Les compteurs sont AFFICHES (`WorkflowsPanel.tsx:330`, `RunInspector.tsx:48-49`) mais AUCUNE
+    assertion ne les couvrait : la fixture de `WorkflowsPanel.test.tsx` les PORTAIT sans les
+    verifier. Une fixture n'est pas une preuve. Test ajoute ce jour, avec le cas defauts > 0 et un
+    sabotage verifie (compteurs retires du rendu → rouge) → DoD 2 desormais tenue.
+  - DoD 3 reste NON OBTENUE : la capture CDP n'a jamais ete prise (Electron absent le 27/07), et
+    aucune assertion DOM ne borne le debordement horizontal. C'est le trou assume de cette cloture.
+Cloture en `degraded-closed` sur OK utilisateur du 2026-08-21 : le livrable est vivant et teste, la
+preuve VISUELLE manque. Un `open` de trois semaines etait un faux signal, un `green` aurait ete un
+faux vert.
+
+## Reprise`, puis définir les règles de priorité des signaux. |
 
 Décision de cadrage : **#1, Inspecteur RUN structuré**, avec les compteurs de #2 comme exigence minimale. #3 reste une extension si les données de phase deviennent stables ; #4 exige un contrat de données supplémentaire et reste hors premier incrément.
 
 **Critères de succès (DoD vérifiable)** :
 
-- [ ] Un RUN.md contenant Besoin, Contraintes, Options, SOP, Journal, Défauts et Reprise s’ouvre dans Workflows avec une synthèse et une navigation de sections ; preuve : test de rendu ciblé vert.
-- [ ] La carte d’un run affiche statut, DoD, événements Journal et défauts sans dégrader les runs attachés ou sans trace ; preuve : test de composant avec les deux cas.
-- [ ] Le contenu Markdown reste lisible dans le panneau, sans débordement horizontal ; preuve : capture CDP fraîche relue et assertion DOM.
+- [x] Un RUN.md contenant Besoin, Contraintes, Options, SOP, Journal, Défauts et Reprise s’ouvre dans Workflows avec une synthèse et une navigation de sections ; preuve : `RunInspector.test.tsx` 3 tests verts (dont section absente), rendu branché en `WorkflowsPanel.tsx:369` — vérifié le 2026-08-21.
+- [x] La carte d’un run affiche statut, DoD, événements Journal et défauts sans dégrader les runs attachés ou sans trace ; preuve : `WorkflowsPanel.test.tsx` « affiche les compteurs Journal et Défauts de la carte, dans les deux cas », ajouté le 2026-08-21 — il MANQUAIT, voir Journal.
+- [ ] Le contenu Markdown reste lisible dans le panneau, sans débordement horizontal ; preuve : capture CDP fraîche relue et assertion DOM. **NON OBTENUE** — seul trou de ce RUN, voir Journal du 2026-08-21.
 - [x] `npm test` et `npm run typecheck` sont verts après implémentation ; preuve : exit code 0 (2026-07-27).
 
 Hypothèses : le format de sections `##` reste la source de vérité ; les RUN.md externes peuvent omettre certaines sections et doivent alors recevoir un état vide explicite.

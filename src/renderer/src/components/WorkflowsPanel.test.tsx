@@ -100,6 +100,33 @@ describe('WorkflowsPanel', () => {
     expect(container.querySelector('.status-dot.st-ok')).not.toBeNull()
   })
 
+  /*
+   * LA DoD DEMANDAIT « un test de composant avec les deux cas » — il n'existait pas.
+   *
+   * Mesure du 21/08 en rouvrant le RUN.md du 27/07 reste ouvert a la racine : la carte AFFICHE bien
+   * les compteurs (WorkflowsPanel.tsx:330), la fixture de ce fichier les PORTE deja
+   * (`journalEvents`, `defauts`)... et aucune assertion ne les vérifiait. Une fixture n'est pas une
+   * preuve : le compteur pouvait disparaitre du rendu sans qu'un seul test tombe.
+   */
+  it('affiche les compteurs Journal et Défauts de la carte, dans les deux cas', () => {
+    render(baseProps({ runs: [run()] }))
+    expect(container.textContent).toContain('J 2')
+    expect(container.textContent).toContain('D 0')
+
+    // Second cas : un run qui PORTE des defauts doit les montrer, pas seulement le zero rassurant.
+    render(
+      baseProps({
+        runs: [
+          run({
+            summary: { status: 'red', dodTotal: 4, dodChecked: 1, journalEvents: 7, defauts: 3 }
+          })
+        ]
+      })
+    )
+    expect(container.textContent).toContain('J 7')
+    expect(container.textContent).toContain('D 3')
+  })
+
   it('affiche le message vide quand aucune conversation active n’a de run', () => {
     render(baseProps({ runs: [], activeId: null }))
     expect(container.textContent).toContain(
