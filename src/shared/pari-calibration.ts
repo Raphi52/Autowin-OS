@@ -149,9 +149,7 @@ function aireSousCourbe(reussites: readonly number[], echecs: readonly number[])
   return concordantes / (reussites.length * echecs.length)
 }
 
-export function mesurerCalibration(
-  appariements: readonly AppariementPari[]
-): MesureCalibration {
+export function mesurerCalibration(appariements: readonly AppariementPari[]): MesureCalibration {
   const n = appariements.length
   if (n === 0) {
     return {
