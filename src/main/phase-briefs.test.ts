@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { PHASE_BRIEFS, phaseBrief } from './phase-briefs'
 import { PIPELINE_PHASES } from './skill-pipeline'
@@ -81,6 +82,32 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     // Et l'obligation de RÉSOUDRE, pas seulement de signaler.
     expect(frame).toMatch(/RÉSOUS/)
     expect(frame).toMatch(/jamais un fait silencieux/)
+  })
+
+  /*
+   * LES DEUX SOURCES DE CONSIGNE DU SCOUT NE DOIVENT PAS DIVERGER.
+   *
+   * Mesure du 21/08 : la regle « ancrage rouvert » a ete posee la veille dans le brief IN-APP, et le
+   * `skills/scout/SKILL.md` du kit — modifie le meme jour par une autre session — n'en disait RIEN.
+   * Un scout lance par le kit ne recevait donc pas la regle ; un scout in-app la recevait. C'est le
+   * motif que ce depot collectionne : une capacite presente d'un cote, absente de l'autre, sans que
+   * rien ne le signale.
+   *
+   * Ce test ne prouve pas que le scout OBEIT — une regle dans un prompt n'est pas un garde-fou. Il
+   * garantit que la regle ne disparait pas d'UNE des deux sources en silence.
+   */
+  it('la règle d’ancrage rouvert existe DANS LES DEUX sources de consigne du scout', () => {
+    const brief = PHASE_BRIEFS.scout
+    const kit = readFileSync('skills/scout/SKILL.md', 'utf8')
+
+    expect(brief).toContain('ANCRAGE ROUVERT')
+    expect(kit).toContain('ANCHOR REOPENED')
+
+    // Le MOTIF doit voyager avec la consigne, sinon elle se fait retirer a la premiere relecture.
+    for (const source of [brief, kit]) {
+      expect(source).toMatch(/commentaire n.est pas un defaut|comment is not a defect/iu)
+      expect(source).toMatch(/ne le liste pas|do not list it/iu)
+    }
   })
 
   it('phaseBrief enveloppe la consigne avec un en-tête de phase', () => {
