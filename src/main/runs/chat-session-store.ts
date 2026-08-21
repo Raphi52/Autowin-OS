@@ -1,6 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
+import { creerIndexStore } from './json-index-store'
 
 /**
  * INDEX PERSISTANT des sessions CLI du chat — le maillon manquant du levier de coût déjà en place.
@@ -20,6 +19,11 @@ import { ensureAutowinAppData } from '../app-data'
  * illisible ou de forme inattendue vaut donc « aucune session connue », et surtout PAS une exception
  * qui casserait le tour de l'utilisateur pour un cache. Sur une autorite on ferme ; sur un cache on
  * ouvre. Confondre les deux est la faute classique.
+ *
+ * La mecanique de l'index (lecture fail-open, ecriture atomique, oubli) a ete extraite dans
+ * `json-index-store.ts` le 2026-08-21 : elle etait dupliquee ligne pour ligne avec `murs-store.ts`.
+ * Le comportement decrit ci-dessus est INCHANGE — c'est le contrat que les tests de ce fichier
+ * verifient, et la seule preuve valable pour un refactor qui ne doit rien modifier.
  */
 
 export interface ChatSessionRecord {
@@ -30,14 +34,16 @@ export interface ChatSessionRecord {
 
 export type ChatSessionIndex = Record<string, ChatSessionRecord>
 
-export function chatSessionStorePath(base = ensureAutowinAppData()): string {
-  return join(base, 'chat-sessions.json')
-}
-
 function estRecord(valeur: unknown): valeur is ChatSessionRecord {
   if (!valeur || typeof valeur !== 'object' || Array.isArray(valeur)) return false
   const r = valeur as Record<string, unknown>
   return typeof r.key === 'string' && !!r.key && typeof r.sessionId === 'string' && !!r.sessionId
+}
+
+const store = creerIndexStore<ChatSessionRecord>('chat-sessions.json', estRecord)
+
+export function chatSessionStorePath(base = ensureAutowinAppData()): string {
+  return store.chemin(base)
 }
 
 /**
@@ -47,31 +53,7 @@ function estRecord(valeur: unknown): valeur is ChatSessionRecord {
  * (renvoyer l'historique) est toujours correct.
  */
 export function loadChatSessions(base = ensureAutowinAppData()): ChatSessionIndex {
-  const chemin = chatSessionStorePath(base)
-  if (!existsSync(chemin)) return {}
-  let brut: unknown
-  try {
-    brut = JSON.parse(readFileSync(chemin, 'utf8'))
-  } catch {
-    return {}
-  }
-  if (!brut || typeof brut !== 'object' || Array.isArray(brut)) return {}
-  const entrees = Object.entries(brut as Record<string, unknown>)
-  if (entrees.some(([, valeur]) => !estRecord(valeur))) return {}
-  return Object.fromEntries(entrees) as ChatSessionIndex
-}
-
-/**
- * Ecriture ATOMIQUE (fichier temporaire puis `rename`), meme discipline que
- * `store/conversations-disk.ts:408` : une interruption ne doit jamais laisser un index tronque, qui
- * serait alors relu comme corrompu et ferait perdre TOUTES les sessions, pas seulement la derniere.
- */
-function ecrire(index: ChatSessionIndex, base: string): void {
-  const chemin = chatSessionStorePath(base)
-  mkdirSync(base, { recursive: true })
-  const temporaire = `${chemin}.tmp`
-  writeFileSync(temporaire, `${JSON.stringify(index, null, 1)}\n`, 'utf8')
-  renameSync(temporaire, chemin)
+  return store.lire(base)
 }
 
 /**
@@ -89,24 +71,12 @@ export function saveChatSession(
   if (!conversationId) throw new Error('conversation manquante')
   if (!key) throw new Error('binding (key) manquant')
   if (!sessionId) throw new Error('sessionId manquant')
-  const index = loadChatSessions(base)
+  const index = store.lire(base)
   index[conversationId] = { key, sessionId }
-  ecrire(index, base)
+  store.ecrire(index, base)
 }
 
 /** Oublie une conversation. Sans effet si elle est inconnue — oublier deux fois n'est pas une erreur. */
 export function forgetChatSession(conversationId: string, base = ensureAutowinAppData()): void {
-  const index = loadChatSessions(base)
-  if (!(conversationId in index)) return
-  delete index[conversationId]
-  if (Object.keys(index).length === 0) {
-    const chemin = chatSessionStorePath(base)
-    try {
-      if (existsSync(chemin)) unlinkSync(chemin)
-    } catch {
-      /* best-effort : un index vide laisse sur disque est inoffensif */
-    }
-    return
-  }
-  ecrire(index, base)
+  store.oublier(conversationId, base)
 }
