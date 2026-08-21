@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { createDecorScene, DECOR_DEFAUT, DECOR_VARIANTS } from './home-decor-scene'
+import {
+  COMPOSITIONS,
+  createDecorScene,
+  DECOR_DEFAUT,
+  DECOR_VARIANTS
+} from './home-decor-scene'
 
 /**
  * Le catalogue des directions du décor.
@@ -19,9 +24,31 @@ describe('directions du decor', () => {
     }
   })
 
-  it('a « limbe » pour defaut — la direction choisie par l utilisateur sur rendus compares', () => {
-    expect(DECOR_DEFAUT).toBe('limbe')
+  it('a « poussiere » pour defaut — la direction choisie par l utilisateur sur rendus compares', () => {
+    expect(DECOR_DEFAUT).toBe('poussiere')
     expect(DECOR_VARIANTS.some((v) => v.id === DECOR_DEFAUT)).toBe(true)
+  })
+
+  /**
+   * La direction par defaut n'est pas qu'un identifiant : elle PROMET une image. Ces assertions
+   * portent sur la composition reellement montee, pas sur le libelle — c'est ce qui casserait si
+   * quelqu'un remettait une silhouette ou aplatissait la parallaxe en gardant le nom.
+   */
+  it('tient la promesse de « poussiere » : aucune silhouette, six plans, forte parallaxe', () => {
+    const poussiere = COMPOSITIONS[DECOR_DEFAUT]
+    // Aucune silhouette : ni planete, ni satellite — que de la matiere.
+    expect(poussiere.planetes).toHaveLength(0)
+    expect(poussiere.satellites).toBe(0)
+    // Six plans de profondeur DISTINCTS : c'est la profondeur etagee qui fait le relief.
+    expect(poussiere.nebuleuses).toHaveLength(6)
+    expect(new Set(poussiere.nebuleuses.map((n) => n.z)).size).toBe(6)
+    // Forte parallaxe : strictement au-dessus des autres directions, sinon « forte » ne veut rien dire.
+    for (const autre of DECOR_VARIANTS.filter((v) => v.id !== DECOR_DEFAUT)) {
+      expect(poussiere.parallaxe).toBeGreaterThan(COMPOSITIONS[autre.id].parallaxe)
+    }
+    // Le resume affiche a l'utilisateur doit decrire CETTE image.
+    const entree = DECOR_VARIANTS.find((v) => v.id === DECOR_DEFAUT)
+    expect(entree?.resume).toMatch(/aucune silhouette/)
   })
 
   it('rend null sans WebGL plutot que de jeter', () => {

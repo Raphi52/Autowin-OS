@@ -438,6 +438,111 @@ function buildSatellites(random: () => number, count: number): THREE.Points {
   return new THREE.Points(geometry, material)
 }
 
+// Les nébuleuses vivent dans les ANGLES et le centre reste noir : c'est la composition du fond
+// d'écran, et c'est aussi ce qui garde les widgets lisibles au milieu.
+/**
+ * Les elements du decor sont declares en FRACTIONS du cadre visible, jamais en coordonnees monde.
+ *
+ * Mesure du 2026-08-21 dans l'app : avec des positions monde fixes, une surface de 405x956 (rapport
+ * 0,42) reduisait la demi-largeur visible a ~5 unites alors que les nebuleuses etaient posees a 13
+ * — elles etaient donc INTEGRALEMENT hors champ, et le decor paraissait absent. Une composition
+ * doit se declarer par rapport au cadre qui la montre.
+ */
+/**
+ * La composition, par direction. Chaque entrée dit OÙ se posent les éléments, en FRACTIONS du cadre
+ * visible — jamais en coordonnées monde, sinon un cadre étroit les met hors champ (défaut mesuré).
+ */
+interface Composition {
+  nebuleuses: { fx: number; fy: number; z: number; color: number; secondary: number; k: number }[]
+  planetes: {
+    fx: number
+    fy: number
+    z: number
+    radius: number
+    color: number
+    ringColor: number
+    rings: number
+    tilt: number
+  }[]
+  arcs: number
+  satellites: number
+  /** Multiplicateur de vitesse : le régime de mouvement fait partie de la direction. */
+  tempo: number
+  /** Amplitude de la parallaxe de caméra. */
+  parallaxe: number
+}
+
+export const COMPOSITIONS: Record<DecorVariant, Composition> = {
+  actuel: {
+    nebuleuses: [
+      { fx: -0.86, fy: 0.62, z: -11, color: ROSE, secondary: VIOLET, k: 0.38 },
+      { fx: -0.78, fy: -0.68, z: -8, color: CYAN, secondary: 0x2b6cff, k: 0.34 },
+      { fx: 0.86, fy: 0.68, z: -12, color: CYAN, secondary: VIOLET, k: 0.36 },
+      { fx: 0.8, fy: -0.64, z: -8, color: ROSE, secondary: 0xff6bd6, k: 0.32 }
+    ],
+    planetes: [
+      { fx: 0.72, fy: -0.74, z: -5, radius: 0.2, color: 0xc98a4a, ringColor: GOLD, rings: 3, tilt: 0.42 },
+      { fx: 0.82, fy: 0.6, z: -8, radius: 0.15, color: 0x3f6fa8, ringColor: CYAN, rings: 2, tilt: -0.3 },
+      { fx: -0.8, fy: -0.6, z: -7, radius: 0.12, color: 0x7a4a72, ringColor: ROSE, rings: 2, tilt: 0.55 }
+    ],
+    arcs: 7,
+    satellites: 0,
+    tempo: 1,
+    parallaxe: 1
+  },
+  // UN sujet dominant au lieu de plusieurs, et beaucoup moins de matière : le contraste vient de la
+  // silhouette et du terminateur, pas de l'accumulation.
+  limbe: {
+    nebuleuses: [
+      { fx: -0.7, fy: 0.4, z: -16, color: VIOLET, secondary: 0x2b6cff, k: 0.5 },
+      { fx: 0.15, fy: -0.85, z: -14, color: ROSE, secondary: VIOLET, k: 0.42 }
+    ],
+    planetes: [
+      { fx: 0.98, fy: -0.12, z: -2, radius: 0.66, color: 0xc98a4a, ringColor: GOLD, rings: 4, tilt: 0.34 },
+      { fx: -0.9, fy: 0.74, z: -13, radius: 0.07, color: 0x3f6fa8, ringColor: CYAN, rings: 1, tilt: -0.4 }
+    ],
+    arcs: 3,
+    satellites: 0,
+    tempo: 0.45,
+    parallaxe: 0.7
+  },
+  // Que de la matière, sur six plans de profondeur : la parallaxe fait tout le relief, aucune forme
+  // dure ne vient l'aider.
+  poussiere: {
+    nebuleuses: [
+      { fx: -0.9, fy: 0.5, z: -20, color: VIOLET, secondary: 0x2b6cff, k: 0.62 },
+      { fx: -0.35, fy: -0.6, z: -14, color: CYAN, secondary: VIOLET, k: 0.5 },
+      { fx: 0.3, fy: 0.62, z: -9, color: ROSE, secondary: 0xff6bd6, k: 0.44 },
+      { fx: 0.92, fy: -0.35, z: -5, color: ROSE, secondary: VIOLET, k: 0.4 },
+      { fx: 0.5, fy: 0.1, z: -2, color: CYAN, secondary: 0x8fd0ff, k: 0.26 },
+      { fx: -0.55, fy: 0.0, z: -3, color: VIOLET, secondary: ROSE, k: 0.24 }
+    ],
+    planetes: [],
+    arcs: 2,
+    satellites: 0,
+    tempo: 1.4,
+    parallaxe: 2.2
+  },
+  // La ligne remplace le grain : arcs fins et satellites qui glissent dessus. L'or structurel domine,
+  // la matière se retire.
+  orbites: {
+    nebuleuses: [
+      { fx: -0.85, fy: -0.62, z: -18, color: VIOLET, secondary: 0x2b6cff, k: 0.34 },
+      { fx: 0.85, fy: 0.62, z: -18, color: CYAN, secondary: VIOLET, k: 0.3 }
+    ],
+    planetes: [
+      { fx: 0.06, fy: -0.04, z: -9, radius: 0.13, color: 0x2c3f66, ringColor: GOLD, rings: 3, tilt: 0.5 }
+    ],
+    arcs: 16,
+    satellites: 220,
+    tempo: 0.8,
+    parallaxe: 1.3
+  }
+}
+
+/** La direction par DEFAUT, choisie par l'utilisateur le 2026-08-21 sur rendus compares. */
+export const DECOR_DEFAUT: DecorVariant = 'poussiere'
+
 /**
  * Monte la scène complète dans un canevas.
  *
@@ -445,9 +550,6 @@ function buildSatellites(random: () => number, count: number): THREE.Points {
  * perdu. Le décor est un DÉCOR : son absence ne doit jamais empêcher la page d'accueil de s'afficher
  * ni un test de rendu de passer.
  */
-/** La direction par DEFAUT, choisie par l'utilisateur le 2026-08-21 sur rendus compares. */
-export const DECOR_DEFAUT: DecorVariant = 'limbe'
-
 export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorScene | null {
   let renderer: THREE.WebGLRenderer
   try {
@@ -468,109 +570,7 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
   const stars = buildStars(random)
   scene.add(stars)
 
-  // Les nébuleuses vivent dans les ANGLES et le centre reste noir : c'est la composition du fond
-  // d'écran, et c'est aussi ce qui garde les widgets lisibles au milieu.
-  /**
-   * Les elements du decor sont declares en FRACTIONS du cadre visible, jamais en coordonnees monde.
-   *
-   * Mesure du 2026-08-21 dans l'app : avec des positions monde fixes, une surface de 405x956 (rapport
-   * 0,42) reduisait la demi-largeur visible a ~5 unites alors que les nebuleuses etaient posees a 13
-   * — elles etaient donc INTEGRALEMENT hors champ, et le decor paraissait absent. Une composition
-   * doit se declarer par rapport au cadre qui la montre.
-   */
-  /**
-   * La composition, par direction. Chaque entrée dit OÙ se posent les éléments, en FRACTIONS du cadre
-   * visible — jamais en coordonnées monde, sinon un cadre étroit les met hors champ (défaut mesuré).
-   */
-  interface Composition {
-    nebuleuses: { fx: number; fy: number; z: number; color: number; secondary: number; k: number }[]
-    planetes: {
-      fx: number
-      fy: number
-      z: number
-      radius: number
-      color: number
-      ringColor: number
-      rings: number
-      tilt: number
-    }[]
-    arcs: number
-    satellites: number
-    /** Multiplicateur de vitesse : le régime de mouvement fait partie de la direction. */
-    tempo: number
-    /** Amplitude de la parallaxe de caméra. */
-    parallaxe: number
-  }
-
-  const compositions: Record<DecorVariant, Composition> = {
-    actuel: {
-      nebuleuses: [
-        { fx: -0.86, fy: 0.62, z: -11, color: ROSE, secondary: VIOLET, k: 0.38 },
-        { fx: -0.78, fy: -0.68, z: -8, color: CYAN, secondary: 0x2b6cff, k: 0.34 },
-        { fx: 0.86, fy: 0.68, z: -12, color: CYAN, secondary: VIOLET, k: 0.36 },
-        { fx: 0.8, fy: -0.64, z: -8, color: ROSE, secondary: 0xff6bd6, k: 0.32 }
-      ],
-      planetes: [
-        { fx: 0.72, fy: -0.74, z: -5, radius: 0.2, color: 0xc98a4a, ringColor: GOLD, rings: 3, tilt: 0.42 },
-        { fx: 0.82, fy: 0.6, z: -8, radius: 0.15, color: 0x3f6fa8, ringColor: CYAN, rings: 2, tilt: -0.3 },
-        { fx: -0.8, fy: -0.6, z: -7, radius: 0.12, color: 0x7a4a72, ringColor: ROSE, rings: 2, tilt: 0.55 }
-      ],
-      arcs: 7,
-      satellites: 0,
-      tempo: 1,
-      parallaxe: 1
-    },
-    // UN sujet dominant au lieu de plusieurs, et beaucoup moins de matière : le contraste vient de la
-    // silhouette et du terminateur, pas de l'accumulation.
-    limbe: {
-      nebuleuses: [
-        { fx: -0.7, fy: 0.4, z: -16, color: VIOLET, secondary: 0x2b6cff, k: 0.5 },
-        { fx: 0.15, fy: -0.85, z: -14, color: ROSE, secondary: VIOLET, k: 0.42 }
-      ],
-      planetes: [
-        { fx: 0.98, fy: -0.12, z: -2, radius: 0.66, color: 0xc98a4a, ringColor: GOLD, rings: 4, tilt: 0.34 },
-        { fx: -0.9, fy: 0.74, z: -13, radius: 0.07, color: 0x3f6fa8, ringColor: CYAN, rings: 1, tilt: -0.4 }
-      ],
-      arcs: 3,
-      satellites: 0,
-      tempo: 0.45,
-      parallaxe: 0.7
-    },
-    // Que de la matière, sur six plans de profondeur : la parallaxe fait tout le relief, aucune forme
-    // dure ne vient l'aider.
-    poussiere: {
-      nebuleuses: [
-        { fx: -0.9, fy: 0.5, z: -20, color: VIOLET, secondary: 0x2b6cff, k: 0.62 },
-        { fx: -0.35, fy: -0.6, z: -14, color: CYAN, secondary: VIOLET, k: 0.5 },
-        { fx: 0.3, fy: 0.62, z: -9, color: ROSE, secondary: 0xff6bd6, k: 0.44 },
-        { fx: 0.92, fy: -0.35, z: -5, color: ROSE, secondary: VIOLET, k: 0.4 },
-        { fx: 0.5, fy: 0.1, z: -2, color: CYAN, secondary: 0x8fd0ff, k: 0.26 },
-        { fx: -0.55, fy: 0.0, z: -3, color: VIOLET, secondary: ROSE, k: 0.24 }
-      ],
-      planetes: [],
-      arcs: 2,
-      satellites: 0,
-      tempo: 1.4,
-      parallaxe: 2.2
-    },
-    // La ligne remplace le grain : arcs fins et satellites qui glissent dessus. L'or structurel domine,
-    // la matière se retire.
-    orbites: {
-      nebuleuses: [
-        { fx: -0.85, fy: -0.62, z: -18, color: VIOLET, secondary: 0x2b6cff, k: 0.34 },
-        { fx: 0.85, fy: 0.62, z: -18, color: CYAN, secondary: VIOLET, k: 0.3 }
-      ],
-      planetes: [
-        { fx: 0.06, fy: -0.04, z: -9, radius: 0.13, color: 0x2c3f66, ringColor: GOLD, rings: 3, tilt: 0.5 }
-      ],
-      arcs: 16,
-      satellites: 220,
-      tempo: 0.8,
-      parallaxe: 1.3
-    }
-  }
-
-  const composition = compositions[variante] ?? compositions[DECOR_DEFAUT]
+  const composition = COMPOSITIONS[variante] ?? COMPOSITIONS[DECOR_DEFAUT]
   const nebulaSpecs = composition.nebuleuses
 
   const nebulas = nebulaSpecs.map((spec) =>
