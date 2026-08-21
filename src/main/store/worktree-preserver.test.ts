@@ -50,6 +50,51 @@ const manager = (base: string, worktreeRoot: string): WorktreeManager =>
   new WorktreeManager({ baseRepo: base, worktreeRoot } as never)
 
 describe('préserver puis libérer une copie abandonnée', () => {
+  it("REFUSE d'agir quand la copie n'a plus de .git : git remonterait sur l'arbre partagé", () => {
+    // MESURÉ le 2026-08-21 sur l'installation de l'utilisateur. Une copie `agent__command-edit-*`
+    // s'est retrouvée SANS fichier `.git`. Un répertoire sans `.git` fait remonter git dans
+    // l'arborescence — et comme la racine des copies vit DANS le dépôt
+    // (`.autowin-data/autowin-os/worktrees/...`), le dépôt trouvé est l'arbre principal PARTAGÉ.
+    // Consequence reelle : `switch -C` a fait basculer la branche de l'utilisateur, puis `add -A` a
+    // committe le travail non committe de TROIS sessions concurrentes dans un seul commit
+    // « travail préservé » (32849a15) — melangeant module Outlook, dashboard kaizen et mon propre
+    // correctif, dont 3 fichiers de tests rouges. La garde d'appartenance ne pouvait pas le voir :
+    // elle compare les répertoires git COMMUNS, identiques par construction ici.
+    //
+    // Les suites existantes ne pouvaient pas l'attraper : elles placent la racine des copies HORS du
+    // dépôt, donc la remontée ne tombe jamais sur la base. Ce test reproduit la topologie REELLE.
+    const racine = mkdtempSync(join(tmpdir(), 'wt-preserve-interne-'))
+    racines.push(racine)
+    const base = join(racine, 'base')
+    mkdirSync(base, { recursive: true })
+    git(base, 'init', '-q', '-b', 'main')
+    git(base, 'config', 'user.email', 't@t')
+    git(base, 'config', 'user.name', 'T')
+    git(base, 'config', 'commit.gpgsign', 'false')
+    writeFileSync(join(base, 'a.txt'), 'base')
+    git(base, 'add', '-A')
+    git(base, 'commit', '-q', '-m', 'base')
+    const shaAvant = git(base, 'rev-parse', 'HEAD')
+
+    // La racine des copies vit DANS le dépôt, comme en production.
+    const worktreeRoot = join(base, '.autowin-data', 'worktrees')
+    const agentId = 'command-edit-sans-git'
+    const copie = join(worktreeRoot, `agent__${agentId}`)
+    mkdirSync(copie, { recursive: true }) // copie amputée : AUCUN `.git`
+    writeFileSync(join(copie, 'reste.txt'), 'résidu')
+
+    // Le travail non committé d'une AUTRE session, qui ne doit surtout pas être happé.
+    writeFileSync(join(base, 'autre-session.txt'), 'travail concurrent')
+
+    const r = manager(base, worktreeRoot).preserverEtLiberer(agentId)
+
+    expect(r.outcome).toBe('refuse')
+    // L'arbre partagé est INTACT : même HEAD, même branche, travail concurrent toujours non committé.
+    expect(git(base, 'rev-parse', 'HEAD')).toBe(shaAvant)
+    expect(git(base, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
+    expect(git(base, 'status', '--porcelain')).toContain('autre-session.txt')
+  })
+
   it('libère une copie SANS travail, sans créer de branche inutile', () => {
     // 16 des 49 copies mesurées étaient dans ce cas : rien d'unique, 30 Mo chacune.
     const { base, worktreeRoot, agentId, copie } = depot()

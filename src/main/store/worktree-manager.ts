@@ -706,9 +706,38 @@ export class WorktreeManager {
     return `La copie appartient à un autre dépôt (${copyCommon}) que la base (${baseCommon}) : aucune écriture n’y est faite.`
   }
 
+  /**
+   * La copie est-elle bien SA PROPRE racine de travail — et non un simple dossier DANS le depot ?
+   *
+   * MESURE le 2026-08-21 : une copie `agent__command-edit-*` s'est retrouvee SANS fichier `.git`
+   * (creation interrompue, ou balayage partiel). Un repertoire sans `.git` fait remonter git dans
+   * l'arborescence, et comme la racine des copies vit DANS le depot
+   * (`.autowin-data/autowin-os/worktrees/...`), le depot trouve est l'arbre principal PARTAGE.
+   * `foreignCopyDetail` ne pouvait rien voir : il compare les `--git-common-dir`, identiques par
+   * construction dans ce cas precis.
+   *
+   * Degat reel constate : `switch -C` a fait basculer la branche de l'utilisateur sur
+   * `autowin/recovery/<agentId>`, puis `add -A` a committe le travail non committe de TROIS sessions
+   * concurrentes dans un seul commit « travail preserve » (32849a15) — rendant tout push contaminant.
+   *
+   * Le discriminant est la racine de travail : pour une copie legitime, `--show-toplevel` rend la
+   * copie elle-meme ; pour un dossier ampute, il rend le depot de base.
+   */
+  private copieSansRacinePropre(path: string): string | undefined {
+    const top = this.tryGitFn(path, ['rev-parse', '--show-toplevel'])
+    if (top.code !== 0) {
+      return `Impossible de prouver la racine de travail de la copie ${path} : aucune écriture n’y est faite.`
+    }
+    const racine = canonicalPath(top.stdout.trim())
+    if (racine === canonicalPath(path)) return undefined
+    return `La copie ${path} n’est pas une racine de travail : git remonte sur ${racine} (arbre partagé) — aucune écriture n’y est faite.`
+  }
+
   private ownershipIssue(path: string): string | undefined {
     const foreign = this.foreignCopyDetail(path)
     if (foreign) return foreign
+    const sansRacine = this.copieSansRacinePropre(path)
+    if (sansRacine) return sansRacine
     if (!this.gitCommonDir(path) || !this.gitCommonDir(this.baseRepo)) {
       return `Impossible de prouver l’appartenance Git de la copie ${path} : aucune écriture n’y est faite.`
     }

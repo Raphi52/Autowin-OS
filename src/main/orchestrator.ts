@@ -379,6 +379,7 @@ import { isShellMutation, isStateOracle } from './providers/evidence-vocabulary'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
+import { evidenceDeLErreur } from './providers/evidence-portee-par-erreur'
 import { describeFanoutFailure, explainRoleFailure } from './provider-failure-diagnosis'
 import { alignReportWithDisk, dispositionPourIssue } from './worktree-path-rewrite'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
@@ -2764,6 +2765,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                   model: phaseBinding.model,
                   text: '',
                   status: 'failed',
+                  evidence: evidenceDeLErreur(error),
                   error: explained,
                   durationMs: performance.now() - startedAt,
                   detail:
@@ -3607,6 +3609,7 @@ ${empreinteDepot}`
                 model: member.model,
                 text: '',
                 status: 'failed',
+                evidence: evidenceDeLErreur(error),
                 error: error instanceof Error ? error.message : String(error),
                 durationMs: performance.now() - startedAt,
                 detail: `phase ${phase} · modèle ${member.model ?? member.provider}`,
@@ -4041,6 +4044,7 @@ ${empreinteDepot}`
           text: '',
           prompt: execPrompt,
           status: 'failed',
+          evidence: evidenceDeLErreur(error),
           error: explained,
           durationMs: performance.now() - phaseStartedAt,
           execution
@@ -4611,6 +4615,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 model: member.model,
                 text: '',
                 status: 'failed',
+                evidence: evidenceDeLErreur(error),
                 error: error instanceof Error ? error.message : String(error),
                 durationMs: performance.now() - startedAt,
                 execution
@@ -4668,6 +4673,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
             text: '',
             prompt: judgeEnvelope,
             status: 'failed',
+            evidence: evidenceDeLErreur(error),
             error: error instanceof Error ? error.message : String(error),
             durationMs: performance.now() - judgeStartedAt,
             execution: singleJudgeExecution
