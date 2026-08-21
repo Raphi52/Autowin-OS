@@ -66,6 +66,129 @@ export function doitArreterLaReparation(
   return motifsCourants.every((motif) => motif === CLOSURE_UPSTREAM_REFUSAL)
 }
 
+/**
+ * Le PLAFOND DUR des réparations : la seule source, lue par la boucle ET par le devis.
+ *
+ * Il laisse volontairement de la marge au-delà des réparations provisionnées, parce que c'est tout
+ * l'objet du chantier : un run dont le refus CHANGE à chaque passage progresse, et l'arrêter parce
+ * qu'un compteur est arrivé au bout était le reproche d'origine.
+ *
+ * Il reste FINI, et ce n'est pas de la prudence décorative : `spendEnforcement` vaut `metering-only`
+ * par défaut, donc le budget ne bloque rien. Sans ce plafond, plus rien n'arrêterait un run qui
+ * reformule indéfiniment son refus.
+ *
+ * POURQUOI UNE FONCTION PARTAGÉE plutôt qu'un calcul recopié de chaque côté : le défaut que ce
+ * chantier corrige était précisément deux mécaniques lisant le même budget sans le savoir — 5 à 7
+ * passages `build` là où le profil en annonçait 2 ou 3, et un devis qui sous-provisionnait d'autant.
+ * Relever le plafond sans le dire au devis recréerait ce défaut à l'identique.
+ */
+export function plafondDurReparations(reparationsAccordees: number): number {
+  const accordees = Math.max(0, Math.floor(reparationsAccordees))
+  /**
+   * ZÉRO ACCORDÉ ⇒ ZÉRO PLAFOND. Un plafond BORNE un run autorisé à réparer, il n'accorde rien.
+   *
+   * Ma première version posait un plancher de 2, et NEUF tests existants l'ont refusée à raison : ce
+   * plancher détruisait trois décisions délibérées — le régime jetable (`maxRecoveries: 0`), un graphe
+   * SANS arête rouge (« aucune réparation ne se déclenche »), et le mode bloquant (« aucune reprise
+   * automatique sans un nouveau tour humain »). Accorder deux passages là où la politique en refusait
+   * zéro n'était pas une marge de progrès : c'était contourner la politique.
+   */
+  if (accordees === 0) return 0
+  return accordees * 2
+}
+
+/**
+ * Faut-il ARRÊTER de réparer — et si oui, pour quelle raison DITE ?
+ *
+ * Rend `undefined` pour continuer, ou le MOTIF de l'arrêt. Le motif n'est pas décoratif : la boucle
+ * avait trois sorties dont une, l'épuisement du compte, était SILENCIEUSE. Un run rendait donc
+ * « bloqué » sans dire s'il avait renoncé faute de progrès ou faute de tours — deux causes qui
+ * n'envoient pas chercher au même endroit.
+ *
+ * LE RENVERSEMENT : le PROGRÈS décide, le compte devient un garde-fou de dernier ressort.
+ *  - un refus qui CHANGE d'un passage à l'autre est un progrès : on continue, même au-delà du nombre
+ *    de réparations accordées. C'est précisément ce qu'un compte fixe empêchait ;
+ *  - un refus IDENTIQUE et entièrement hors de portée de `build` ne peut pas évoluer : on s'arrête
+ *    au premier constat (mesuré conv-1242 : trois passages, le même refus mot pour mot, deux minutes
+ *    brûlées). Cette règle vit dans `doitArreterLaReparation` et n'est pas rejouée ici ;
+ *  - le plafond DUR reste, parce que le budget ne bloque pas par défaut : sans lui, plus rien
+ *    n'arrêterait un run qui reformule indéfiniment son refus.
+ */
+export function arretDeLaReparation(entree: {
+  /** Nombre de réparations DÉJÀ tentées. */
+  tentative: number
+  /** Ce que la politique de dépense accordait — désormais indicatif, plus décisif. */
+  reparationsAccordees: number
+  /** Le garde-fou de dernier ressort. Zéro interdit toute réparation. */
+  plafondDur: number
+  motifsCourants: readonly string[]
+  motifsPrecedents: readonly string[]
+}): string | undefined {
+  if (entree.tentative >= entree.plafondDur) {
+    return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`
+  }
+  if (doitArreterLaReparation(entree.motifsCourants, entree.motifsPrecedents)) {
+    return 'Réparation interrompue : refus identique et hors de portée de build, rejouer ne peut rien changer.'
+  }
+  return undefined
+}
+
+/** Ce qui décide combien de fois on rejoue après un refus, et pourquoi on n'en accorde aucune. */
+export interface ReparationsAutorisees {
+  reparations: number
+  /** Renseigné dès que le compte est ZÉRO : un plafond qui mord doit se DIRE, jamais se subir. */
+  motif?: string
+}
+
+/**
+ * Combien de réparations ce run a-t-il le droit de payer ?
+ *
+ * DEUX DÉFAUTS CORRIGÉS ICI, mesurés le 2026-08-20 sur la formule qui vivait en ligne dans
+ * l'orchestrateur (`!enforceSpend && isMutationTask(task) ? … : 0`) :
+ *
+ * 1. Une tâche NON-MUTATION n'obtenait AUCUNE réparation. Or le gate peut parfaitement refuser un
+ *    run d'analyse pour « analyse absente du livrable » ou « DoD non cochée » — deux motifs qu'un
+ *    nouveau passage répare. Le contrat racine adapte DÉJÀ ses exigences à un run en lecture seule
+ *    (il ne lui demande pas de preuve de mutation) : lui refuser en plus la réparation était une
+ *    double peine sans motif. La nature de la tâche ne dit donc plus si l'on peut réparer.
+ * 2. Sous budget BLOQUANT, le compte tombait à zéro EN SILENCE. La politique est défendable — pas de
+ *    nouvelle dépense sans un tour humain — mais un plafond qui mord sans se nommer envoie chercher
+ *    la cause ailleurs. Il porte désormais son motif, destiné à la trace du run.
+ *
+ * Fonction PURE et extraite : la politique de relance se teste sans rejouer un run, et un test n'a
+ * plus besoin de recopier la formule pour la vérifier — il appellerait alors son propre miroir.
+ */
+export function reparationsAutorisees(entree: {
+  /** La tâche mute-t-elle ? Conservé pour la TRACE et le devis, il ne décide plus du droit. */
+  mutation: boolean
+  /** Le budget refuse-t-il toute dépense supplémentaire sans un nouveau tour humain ? */
+  budgetBloquant: boolean
+  /** Le `maxTraversals` de l'arête de retour du graphe, quand un graphe pilote. */
+  retoursDuGraphe?: number
+  /** Le plafond du devis, quand aucun graphe ne pilote. */
+  retoursDuDevis?: number
+}): ReparationsAutorisees {
+  if (entree.budgetBloquant) {
+    return {
+      reparations: 0,
+      motif:
+        'aucune réparation : le budget est en mode bloquant, une nouvelle dépense demande un nouveau tour humain'
+    }
+  }
+  const source = entree.retoursDuGraphe ?? entree.retoursDuDevis
+  if (source === undefined) {
+    return {
+      reparations: 0,
+      motif: 'aucune réparation : ni le graphe ni le devis ne déclarent de retour possible'
+    }
+  }
+  const reparations = Math.max(0, Math.floor(source))
+  if (reparations === 0) {
+    return { reparations: 0, motif: 'aucune réparation : le plafond déclaré vaut zéro' }
+  }
+  return { reparations, motif: undefined }
+}
+
 /** Résultat de l'évaluation : bloqué ou non, avec toutes les raisons cumulées. */
 export interface ClosureEvaluation {
   blocked: boolean

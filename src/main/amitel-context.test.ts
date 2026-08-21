@@ -16,9 +16,18 @@ const TEST_CORPUS = [
 // sur la GED le 2026-08-04, il n'existe aucun répertoire `autowin-os/`. Les fixtures décrivaient ce
 // répertoire inexistant : le scope les écartait à raison, et le test accusait le code.
 
-function signed(context: string): Record<string, unknown> {
+function signed(contexteDemande: string): Record<string, unknown> {
+  /**
+   * La fixture CONSTRUIT la frontière canonique au lieu de la retaper.
+   *
+   * Elle signait un contexte portant `\n\n---\n\n` AVANT la première source — la convention du
+   * client, jamais celle du serveur. Elle se vérifiait donc contre sa propre dérive, et c'est ainsi
+   * que le défaut a survécu : le serveur ne sépare qu'ENTRE les sources. On normalise ici, si bien
+   * qu'une fixture ne peut plus figer une frontière que le serveur ne produit pas.
+   */
+  const context = contexteDemande.replace(/\n\n---\n\n(?=### Source \d+ — )/, '\n\n')
   const headerAt = context.search(/^### Source \d+ — /m)
-  const preamble = headerAt >= 0 ? context.slice(0, headerAt).replace(/\n\n---\n\n$/, '') : ''
+  const preamble = headerAt >= 0 ? context.slice(0, headerAt).replace(/\s+$/, '') : ''
   const content = headerAt >= 0 ? context.slice(headerAt) : context
   const path =
     /^### Source \d+ — (.+)$/m.exec(content)?.[1] ?? 'knowledge/domain/autowin-os-test.md'

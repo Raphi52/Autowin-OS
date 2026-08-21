@@ -153,9 +153,7 @@ export function compteRenduDesOutils(appels: readonly AppelOutil[]): string {
  * seulement les commandes : mieux vaut un prompt incomplet qu'un prompt FAUX.
  */
 export function promptOutilsNoeudSkill(specs: readonly SpecCommandeSkill[] = []): string {
-  const autorisees = specs.filter((s) =>
-    (OUTILS_NOEUD_SKILL as readonly string[]).includes(s.name)
-  )
+  const autorisees = specs.filter((s) => (OUTILS_NOEUD_SKILL as readonly string[]).includes(s.name))
   const lignes = autorisees.length
     ? autorisees.map((s) => {
         const args = Object.entries(s.args ?? {})
@@ -171,6 +169,13 @@ export function promptOutilsNoeudSkill(specs: readonly SpecCommandeSkill[] = [])
     `Tu peux appeler des commandes de l'application au FORMAT EXACT : ` +
     `<cmd>{"name":"...","args":{...}}</cmd>. Tout texte hors commande est ton livrable.\n` +
     `Commandes autorisees ici, et AUCUNE autre :\n${lignes.join('\n')}\n` +
+    `Ces memes commandes peuvent aussi t'etre servies comme OUTILS NATIFS, prefixes ` +
+    `\`mcp__autowin__\` (par exemple \`mcp__autowin__brain_query\`). Si tu les vois dans tes outils, ` +
+    `appelle-les NATIVEMENT — c'est le chemin fiable. Le format \`<cmd>\` reste valable et execute ` +
+    `pour les modeles qui n'ont pas d'outils natifs : les DEUX chemins fonctionnent, aucun n'est un ` +
+    `piege. C'est voulu : avant, un seul des deux etait branche, et le modele choisissait l'autre ` +
+    `une fois sur deux.
+` +
     `Respecte le nom EXACT de chaque argument ci-dessus. ` +
     `Le resultat de tes commandes t'est rendu, puis tu produis ton livrable. ` +
     `Tu disposes de ${TOURS_OUTILS_MAX} tours d'outils au maximum : au-dela, conclus avec ce que tu as.\n`

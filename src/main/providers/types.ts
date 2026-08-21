@@ -36,6 +36,33 @@ export interface SendOptions {
   maxBudgetUsd?: number
   /** Surface d'outils imposee par le controleur pour les tours automatiques sensibles. */
   toolProfile?: 'watchdog-read-only'
+  /**
+   * Outils Brain d'un nœud SKILL, à poser sur le canal NATIF de l'adaptateur.
+   *
+   * INTENTION EXPLICITE, jamais déduite. La présence d'un bloc `execution` ne dit PAS qu'on sert un
+   * nœud skill : les huit phases du pipeline en portent un aussi, et elles doivent rester SANS aucun
+   * outil externe (contrainte posée par l'utilisateur, vérifiée hors-modèle le 2026-08-20 — sans
+   * `--mcp-config`, le CLI rend bien « outil absent »). Un adaptateur qui déduirait l'intention
+   * ouvrirait donc les outils aux huit phases par accident.
+   *
+   * Le CONTENU est calculé par le serveur d'outils (`skill-node-mcp`), jamais écrit à la main ici :
+   * la forme exacte de la configuration et les noms exposés sont sa responsabilité. Cette option ne
+   * fait que les TRANSPORTER jusqu'au canal du provider — même règle que `system` (cf. plus bas) :
+   * l'équivalence est au niveau CONTENU, pas protocole.
+   */
+  skillNodeTools?: {
+    /** La configuration MCP, déjà sérialisée par le serveur d'outils. */
+    mcpConfig: string
+    /** Les noms tels que le CLI les expose (`mcp__autowin__…`), pour l'autorisation d'usage. */
+    allowedTools: string[]
+    /**
+     * Hériter EN PLUS des serveurs MCP configurés sur la machine (décision utilisateur du
+     * 2026-08-20). Conséquence assumée et à tracer : la surface d'outils d'un nœud devient
+     * machine-dépendante. Le refus runtime du lanceur reste donc la barrière AUTORITAIRE sur
+     * `orchestrate` — la fermeture du catalogue, elle, ne tient plus.
+     */
+    inheritMachineMcp?: boolean
+  }
   /** Niveau d'effort choisi dans Agents, si le provider le supporte. */
   reasoningEffort?: string
   /**

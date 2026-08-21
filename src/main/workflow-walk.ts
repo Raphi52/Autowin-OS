@@ -49,10 +49,7 @@ function matches(when: EdgeCondition, verdict: NodeVerdict): boolean {
  * n'enchaînait pas. Le forcer produirait des phases jouées pour rien, ce que le devis paierait.
  */
 export type ModelChoice =
-  | { kind: 'node'; id: string }
-  | { kind: 'phase'; phase: string }
-  | { kind: 'stop' }
-  | undefined
+  { kind: 'node'; id: string } | { kind: 'phase'; phase: string } | { kind: 'stop' } | undefined
 
 /**
  * Résout le souhait du modèle en un nœud du graphe. Rend `undefined` s'il ne désigne rien de
@@ -127,6 +124,34 @@ export function readModelChoice(text: string): ModelChoice {
 }
 
 /** Budget initial : chaque arête de retour part avec sa borne. Une arête avant n'a pas de budget. */
+/**
+ * Ce noeud est-il le juge TERMINAL du canevas ?
+ *
+ * Le juge terminal EST le gate final, joue juste apres la marche : le marcheur doit donc s'arreter
+ * AVANT lui. Le jouer aux deux endroits produit deux appels identiques — constate sur le run reel
+ * conv-1071, ou le premier portait en plus le sandbox d'une phase de mutation.
+ *
+ * LA DEFINITION QUI ETAIT FAUSSE : « un juge sans aucune arete sortante ». Or un profil exprime
+ * « sur rouge, retourne au build » PAR une arete sortante. Aucun des sept profils livres n'a donc de
+ * juge sans sortie, et la garde ne se declenchait JAMAIS : le marcheur consommait le budget de
+ * retour, puis la boucle de reparation relisait le MEME `maxTraversals` comme s'il etait intact.
+ * Mesure (`workflow-walk.recovery-budget.test.ts`) : 5 a 7 passages `build` la ou le profil en
+ * annonce 2 ou 3, et un devis qui sous-provisionne d'autant.
+ *
+ * LA DEFINITION JUSTE est celle de la marche AVANT : un juge termine le canevas quand il n'a plus
+ * aucune arete qui AVANCE. Ses aretes de RETOUR appartiennent a la boucle de reparation, pas a la
+ * marche — elles ne l'empechent donc pas d'etre terminal.
+ */
+export function estJugeTerminal(
+  graph: WorkflowGraph,
+  nodeId: string,
+  ranks: Map<string, number>
+): boolean {
+  const node = graph.nodes.find((n) => n.id === nodeId)
+  if (node?.phase !== 'judge') return false
+  return !graph.edges.some((edge) => edge.from === nodeId && !isReturnEdge(edge, ranks))
+}
+
 export function initialBudget(graph: WorkflowGraph, ranks: Map<string, number>): TraversalBudget {
   const budget: TraversalBudget = new Map()
   for (const edge of graph.edges) {

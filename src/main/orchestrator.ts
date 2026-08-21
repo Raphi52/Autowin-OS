@@ -54,7 +54,12 @@ import { resolvePhaseBinding } from './roles'
 import { defaultQuorumThreshold } from './quorum'
 import type { CostAggregator } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
-import { doitArreterLaReparation, evaluateClosure } from './gates/stopgate'
+import {
+  arretDeLaReparation,
+  evaluateClosure,
+  plafondDurReparations,
+  reparationsAutorisees
+} from './gates/stopgate'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
@@ -106,6 +111,7 @@ import {
   type RouteVerdict
 } from './route-drift'
 import {
+  estJugeTerminal,
   initialBudget,
   nextNode,
   readModelChoice,
@@ -389,6 +395,11 @@ import {
   promptOutilsNoeudSkill,
   type LanceurCommandeSkill
 } from './skill-node-tools'
+import {
+  demarrerServeurOutilsNoeudSkill,
+  porteLesOutilsNatifs,
+  type ServeurOutilsNoeudSkill
+} from './skill-node-mcp'
 
 function canonicalCausalPath(root: string, path: string): string {
   const normalized = resolve(root, path).replaceAll('\\', '/')
@@ -3105,12 +3116,21 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       // qu'un graphe corrompu (arête vers un nœud absent, budget incohérent) ne fige pas le process.
       for (let pas = 0; pas < 200 && courant && parId.has(courant); pas++) {
         const node = parId.get(courant)!
-        // Le juge TERMINAL du canevas est le gate final exécuté juste après cette marche. Le jouer
-        // ici aussi ferait deux appels identiques (constaté sur le run réel conv-1071), dont le
-        // premier avait en plus le sandbox d'une phase de mutation. Après retrait du retour rouge
-        // pris en charge par la boucle de réparation, l'absence d'arête sortante prouve qu'il s'agit
-        // bien de ce juge terminal. Un juge intermédiaire garde son comportement de routage.
-        if (node.phase === 'judge' && !graphePilote.edges.some((edge) => edge.from === courant)) {
+        /**
+         * Le juge TERMINAL du canevas est le gate final exécuté juste après cette marche. Le jouer
+         * ici aussi ferait deux appels identiques (constaté sur le run réel conv-1071), dont le
+         * premier avait en plus le sandbox d'une phase de mutation. Un juge INTERMÉDIAIRE, lui,
+         * garde son comportement de routage.
+         *
+         * La condition était « aucune arête sortante » — et elle ne s'est JAMAIS déclenchée : un
+         * profil exprime « sur rouge, retourne au build » PAR une arête sortante, donc aucun des
+         * sept profils livrés n'a de juge sans sortie. Le marcheur consommait alors le budget de
+         * retour, puis la boucle de réparation relisait le MÊME `maxTraversals` comme s'il était
+         * intact : 5 à 7 passages `build` mesurés là où le profil en annonce 2 ou 3, et un devis qui
+         * sous-provisionnait d'autant. `estJugeTerminal` porte la définition juste — plus aucune
+         * arête qui AVANCE — et la mesure vit dans `workflow-walk.recovery-budget.test.ts`.
+         */
+        if (estJugeTerminal(graphePilote, courant, rangs)) {
           return
         }
         yield node.phase
@@ -3828,6 +3848,86 @@ ${empreinteDepot}`
       const systemBlocks = parts
         .filter((p) => p.text)
         .map((p) => ({ name: p.name, chars: p.text.length }))
+      /**
+       * LE SERVEUR D'OUTILS DU NŒUD SKILL — ouvert avec la phase, fermé avec elle.
+       *
+       * Portée volontairement courte : le port n'est joignable que pendant le nœud qui s'en sert.
+       * Un serveur à la durée du RUN resterait ouvert pendant les huit phases du pipeline, qui ne
+       * doivent précisément disposer d'aucun outil.
+       *
+       * Son échec n'est JAMAIS fatal : sans serveur, la boucle à protocole texte reste en place et
+       * la phase se déroule normalement — on trace la privation au lieu de perdre le run.
+       */
+      const lanceurDuNoeud = isPipelinePhase(phase) ? undefined : this.deps.skillCommands?.()
+      let serveurOutils: ServeurOutilsNoeudSkill | undefined
+      /**
+       * On n'ouvre un serveur que pour un provider qui le CONSOMME reellement.
+       *
+       * `codex` fait un POST direct (aucun CLI, donc aucun `--mcp-config`), `gemini` et `kimi`
+       * spawnent un CLI sans drapeau MCP. Ouvrir un port pour eux annoncait « outils natifs servis »
+       * sur un appel qui ne les recevrait jamais — le meme mensonge de trace que ce chantier a
+       * corrige pour `describePrompt`, reproduit pour trois providers sur quatre. On dit desormais
+       * la PRIVATION, et le repli texte reste en place.
+       */
+      if (lanceurDuNoeud && !porteLesOutilsNatifs(providerDeLaPhase)) {
+        push({
+          step: 'exec',
+          role: 'subagent',
+          detail: `outils natifs indisponibles sur ${providerDeLaPhase} pour ${phase} — repli sur le protocole texte`
+        })
+      }
+      /**
+       * Fermer ET LE DIRE, par un seul point de passage.
+       *
+       * La fermeture existait a un seul endroit et n'etait pas tracee : un port laisse ouvert par un
+       * chemin d'exception ne se voyait donc NULLE PART, et aucun test ne pouvait l'attraper. Trois
+       * relecteurs independants ont trouve ce chemin ; la trace est ce qui rend le correctif
+       * verifiable au lieu d'etre affirme.
+       */
+      const fermerOutilsNatifs = async (motif: string): Promise<void> => {
+        if (!serveurOutils) return
+        const ouvert = serveurOutils
+        serveurOutils = undefined
+        await ouvert.arreter()
+        push({
+          step: 'exec',
+          role: 'subagent',
+          detail: `outils natifs fermes pour ${phase} (${motif})`
+        })
+      }
+      if (lanceurDuNoeud && porteLesOutilsNatifs(providerDeLaPhase)) {
+        try {
+          serveurOutils = await demarrerServeurOutilsNoeudSkill(lanceurDuNoeud, {
+            observer: (appel) =>
+              push({
+                step: 'exec',
+                role: 'subagent',
+                /**
+                 * L'ISSUE METIER est dite, pas seulement le transport. Mesure du 2026-08-20 sur
+                 * conv-1346 : cette ligne affichait `remember : ok` pendant que le Brain refusait
+                 * l'ecriture (`stored: false`). Un artefact de preuve qui annonce « ok » sur un
+                 * no-op est pire qu'une absence de trace.
+                 */
+                detail: `outil natif ${appel.outil} (${phase}) : ${
+                  appel.refuse ? 'refuse' : appel.ok ? 'ok' : 'echec'
+                }${appel.issue ? ` — ${appel.issue}` : ''}`
+              })
+          })
+          push({
+            step: 'exec',
+            role: 'subagent',
+            detail: `outils natifs servis a ${phase} : ${serveurOutils.nomsExposes().join(', ')}`
+          })
+        } catch (error) {
+          push({
+            step: 'exec',
+            role: 'subagent',
+            detail: `outils natifs indisponibles pour ${phase} : ${
+              error instanceof Error ? error.message : String(error)
+            } — repli sur le protocole texte`
+          })
+        }
+      }
       const subOptions: SendOptions = {
         system: parts.map((p) => p.text).join(''),
         systemBlocks,
@@ -3846,6 +3946,26 @@ ${empreinteDepot}`
           providerDeLaPhase
         ),
         signal,
+        /**
+         * INTENTION EXPLICITE. On ne laisse pas l'adaptateur deduire « noeud skill » depuis la
+         * presence d'un bloc `execution` : les huit phases du pipeline en portent un aussi, et elles
+         * seraient toutes outillees par accident.
+         */
+        ...(serveurOutils
+          ? {
+              skillNodeTools: {
+                mcpConfig: serveurOutils.configMcp(),
+                allowedTools: serveurOutils.nomsExposes(),
+                /**
+                 * Heriter des serveurs MCP de la machine EN PLUS des notres — decision explicite de
+                 * l'utilisateur (2026-08-20), le cout lui ayant ete dit : la surface d'outils d'un
+                 * noeud devient machine-dependante. D'ou le refus runtime du lanceur comme barriere
+                 * AUTORITAIRE sur `orchestrate`, et la journalisation des outils reellement servis.
+                 */
+                inheritMachineMcp: true
+              }
+            }
+          : {}),
         observePrompt: (observed) => {
           observed.systemBlocks = systemBlocks
           execPrompt = observed
@@ -3925,6 +4045,20 @@ ${empreinteDepot}`
           durationMs: performance.now() - phaseStartedAt,
           execution
         })
+        /**
+         * LE SERVEUR D'OUTILS SE FERME AUSSI QUAND LA PHASE ECHOUE.
+         *
+         * Ce `throw` est la SEULE sortie non locale entre l'ouverture du serveur et sa fermeture
+         * plus bas : un echec provider, un timeout, ou une annulation par le signal sautait donc la
+         * fermeture, et le port loopback — avec son jeton — survivait au noeud qui le justifiait,
+         * pour toute la duree de vie du process principal. Trois relecteurs independants ont
+         * converge sur ce chemin ; il est reproduit par un test qui fait echouer l'appel provider.
+         *
+         * `arreter()` est idempotent : le fermer ici ET en fin de phase ne peut pas nuire, alors
+         * qu'envelopper toute la region dans un `try/finally` deplacerait la portee des variables
+         * declarees entre les deux et changerait bien plus que ce defaut.
+         */
+        await fermerOutilsNatifs('echec de la phase')
         throw new Error(explained)
       }
       // Chaîne la session pour la phase suivante (fallback : garde l'ancien id si le provider n'en
@@ -4080,6 +4214,11 @@ ${empreinteDepot}`
           }
         }
       }
+      /**
+       * Fermeture du serveur d'outils : la phase est terminee, tours d'outils compris. Un port laisse
+       * ouvert survivrait au noeud qui le justifiait.
+       */
+      await fermerOutilsNatifs('fin de phase')
       if (derive) {
         const constat = `dérive détectée (${derive.signal}) — ${derive.detail}`
         onDelta?.(
@@ -4613,19 +4752,43 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const enforceSpend =
       (this.deps.currentExecutionQuote?.()?.limits.spendEnforcement ?? 'metering-only') ===
       'blocking'
-    const allowedRecoveries =
-      !enforceSpend && isMutationTask(task)
-        ? grapheBrut
-          ? (graphRecoveries ?? 0)
-          : (this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
-        : 0
-    const MAX_ATTEMPTS = 1 + Math.max(0, Math.floor(allowedRecoveries))
+    /**
+     * La politique de relance vit dans `gates/stopgate` (`reparationsAutorisees`), pas ici.
+     *
+     * Elle y corrige deux defauts mesures le 2026-08-20 : une tache NON-MUTATION n'obtenait AUCUNE
+     * reparation — alors qu'un refus « analyse absente » ou « DoD non cochee » se repare par un
+     * nouveau passage — et un budget bloquant ramenait le compte a zero EN SILENCE. Le motif est
+     * desormais rendu, et POUSSE dans la trace : un plafond qui mord doit se dire.
+     */
+    const politique = reparationsAutorisees({
+      mutation: isMutationTask(task),
+      budgetBloquant: enforceSpend,
+      ...(grapheBrut
+        ? { retoursDuGraphe: graphRecoveries ?? 0 }
+        : { retoursDuDevis: this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1 })
+    })
+    if (politique.motif) {
+      push({ step: 'gate', role: 'gate', detail: politique.motif })
+    }
+    /**
+     * LE PLAFOND DUR, et non plus le nombre de tentatives permises.
+     *
+     * Avant, la boucle s'arretait quand `MAX_ATTEMPTS` etait atteint — EN SILENCE. Desormais c'est le
+     * PROGRES qui decide (`arretDeLaReparation`) et ce plafond n'est qu'un garde-fou de dernier
+     * ressort : il existe parce que le budget ne bloque PAS par defaut, donc sans lui rien
+     * n'arreterait un run qui reformule indefiniment son refus. Quand il mord, il le DIT.
+     *
+     * Il est genereux par rapport aux reparations accordees (le double, au moins deux) : un run qui
+     * PROGRESSE a le droit d'aller au-dela de ce que la politique de depense provisionnait, ce qui
+     * etait precisement le reproche. Il reste fini.
+     */
+    const PLAFOND_DUR = plafondDurReparations(politique.reparations)
     let valid = false
     let gate!: ReturnType<typeof evaluateClosure>
     let learningAttestations: IndependentLearningAttestation[] = []
     /** Motifs du refus precedent : sert a reconnaitre un refus qu'un rejeu ne peut pas faire evoluer. */
     let motifsPrecedents: string[] = []
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    for (let attempt = 0; attempt <= PLAFOND_DUR; attempt++) {
       if (attempt > 0) {
         // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
         // donc son panel, sa synthèse, sa concurrence et sa télémétrie.
@@ -4649,14 +4812,25 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       gate = r.gate
       learningAttestations = r.learningAttestations
       if (!gate.blocked) break
-      // Un refus IDENTIQUE et entierement hors de portee de build ne peut pas evoluer : chaque tour
-      // de plus rejoue un build complet, les phases post-build et un panel de juge, pour le meme
-      // resultat (mesure conv-1242 : 3 passages, 2 min+ brulees). La regle vit dans `stopgate` et
-      // laisse passer tout refus dont au moins une raison est reparable.
-      if (doitArreterLaReparation(gate.reasons, motifsPrecedents)) {
-        gate.reasons.push(
-          'Reparation interrompue : refus identique et hors de portee de build, rejouer ne peut rien changer.'
-        )
+      /**
+       * LE PROGRES decide, le plafond n'est qu'un garde-fou — et les DEUX se disent.
+       *
+       * Un refus qui CHANGE d'un passage a l'autre est un progres : on continue, meme au-dela des
+       * reparations provisionnees. Un refus identique et entierement hors de portee de build ne peut
+       * pas evoluer : on s'arrete (mesure conv-1242 : 3 passages, le meme refus mot pour mot, 2 min
+       * brulees). Et si le plafond dur mord, il le DIT — avant, cette sortie etait muette, si bien
+       * qu'un run rendait « bloque » sans qu'on sache s'il avait renonce faute de progres ou faute de
+       * tours.
+       */
+      const arret = arretDeLaReparation({
+        tentative: attempt + 1,
+        reparationsAccordees: politique.reparations,
+        plafondDur: PLAFOND_DUR,
+        motifsCourants: gate.reasons,
+        motifsPrecedents
+      })
+      if (arret) {
+        gate.reasons.push(arret)
         break
       }
       motifsPrecedents = [...gate.reasons]

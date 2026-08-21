@@ -33,10 +33,24 @@ const boucle: WorkflowGraph = {
  * graphe à boucles rejoue des nœuds : sans ce provisionnement, le run est accepté puis coupé en plein milieu.
  */
 describe('provisionner un graphe à boucles', () => {
-  it('un pipeline linéaire compte ses phases, comme avant', () => {
+  it('un pipeline linéaire provisionne ses phases, ses passes de juge ET ses réparations', () => {
+    /**
+     * ATTENDAIT 3 — « 2 phases + 1 passe de juge » — parce que le devis n'accordait AUCUNE
+     * réparation à une tâche non-mutation (`requete()` porte `mutation: false`). C'était le miroir
+     * d'une règle de l'orchestrateur qui refusait de réparer un run d'analyse, corrigée le
+     * 2026-08-20 : un refus « analyse absente » ou « DoD non cochée » se répare par un nouveau
+     * passage, et le contrat racine adapte déjà ses exigences à un run en lecture seule.
+     *
+     * Le devis provisionne donc maintenant ces passages, sans quoi la dépense serait NON PROVISIONNÉE
+     * et le run coupé en plein milieu. La composition, pour un pipeline plat :
+     *   2 phases + (1 + 1) passes de juge + 1 build de réparation = 5.
+     */
     const quote = compileExecutionQuote('corrige le bug')
+    expect(quote.limits.maxRecoveries).toBe(1) // la source du chiffre, pas une constante magique
     const alloc = allocateExecutionTopology(quote, requete())
-    expect(alloc.reservedMandatoryAgents).toBe(3) // 2 phases + 1 passe de juge
+    expect(alloc.reservedMandatoryAgents).toBe(
+      2 + (1 + quote.limits.maxRecoveries) + quote.limits.maxRecoveries
+    )
   })
 
   it('un graphe à boucles provisionne son PIRE CAS, pas sa liste de phases', () => {

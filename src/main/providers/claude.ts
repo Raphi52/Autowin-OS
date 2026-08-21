@@ -458,6 +458,63 @@ export function claudeTransportEnvelope(
   }
 }
 
+/**
+ * Les arguments MCP d'un appel — la SEULE decision de ce fichier sur les outils d'un noeud skill.
+ *
+ * Extraite en fonction PURE parce que la garantie qu'elle porte est une ABSENCE : « une phase du
+ * pipeline ne recoit aucun serveur MCP ». Une absence ne se prouve pas en lisant la sortie d'un run,
+ * et `describePrompt` ne rend pas l'argv. Sans ce point d'extraction, le test aurait du RECOPIER la
+ * construction des arguments — il aurait alors verifie son propre miroir, pas le code qui tourne.
+ *
+ * `send` l'appelle et ne decide rien d'autre : c'est ce qui fait du test une preuve sur le chemin de
+ * production plutot que sur une reconstitution.
+ */
+export function argumentsMcpNoeudSkill(opts: SendOptions): {
+  /** `--strict-mcp-config`, ou rien s'il est retire pour cet appel. */
+  strict: string[]
+  /** `--mcp-config <config>`, ou rien. */
+  mcp: string[]
+  /** Les noms a FUSIONNER dans l'unique `--allowedTools` de la branche. */
+  autorises: string[]
+} {
+  const noeud = opts.skillNodeTools
+  // `--strict-mcp-config` est pose PARTOUT sauf pour un noeud skill dont l'heritage est demande.
+  // C'est lui qui prive les huit phases du pipeline de tout serveur externe (verifie hors-modele :
+  // sans `--mcp-config`, le CLI rend « outil absent »).
+  const strict = noeud?.inheritMachineMcp === true ? [] : ['--strict-mcp-config']
+  if (!noeud) return { strict, mcp: [], autorises: [] }
+  return { strict, mcp: ['--mcp-config', noeud.mcpConfig], autorises: [...noeud.allowedTools] }
+}
+
+/**
+ * Ecrit la configuration MCP dans un FICHIER temporaire et rend son chemin.
+ *
+ * POURQUOI PAS DIRECTEMENT DANS L'ARGV. La configuration porte le jeton du serveur d'outils. Sous
+ * Windows, la ligne de commande d'un process est lisible par tout process de la MEME session sans
+ * elevation (`Get-CimInstance Win32_Process | Select CommandLine`) : le jeton etait donc offert a
+ * n'importe quel logiciel deja present sur le poste pendant toute la duree de l'appel. Et l'argv est
+ * lui-meme trace, donc le secret atterrissait aussi dans un fichier durable.
+ *
+ * `--mcp-config` accepte « JSON files or strings » (aide du CLI) : le fichier est donc la MEME
+ * capacite, sans le canal de fuite. C'est aussi le motif que ce fichier applique deja pour les
+ * settings et le prompt systeme — un secret transite par le disque borne, jamais par argv.
+ *
+ * Rend `undefined` si l'ecriture echoue : l'appelant retombe alors sur la chaine inline (capacite
+ * preservee, fuite signalee) plutot que de perdre l'outillage du noeud.
+ */
+export function ecrireConfigMcp(
+  config: string
+): { chemin: string; nettoyer: () => void } | undefined {
+  try {
+    const dossier = mkdtempSync(join(tmpdir(), 'autowin-os-mcp-'))
+    const chemin = join(dossier, 'mcp.json')
+    writeFileSync(chemin, config, 'utf8')
+    return { chemin, nettoyer: () => rmSync(dossier, { recursive: true, force: true }) }
+  } catch {
+    return undefined
+  }
+}
+
 export class ClaudeCliAdapter implements ProviderAdapter {
   readonly id = 'claude'
   // B — Claude EST un exécuteur outillé (Claude Code). Quand `opts.execution` est fourni, on lance
@@ -492,7 +549,31 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       messages: lastUser ? [lastUser] : [],
       options: {
         toolsDisabled: true,
-        strictMcpConfig: true,
+        /**
+         * LU depuis les options, plus annonce en dur.
+         *
+         * Ce champ valait `true` inconditionnellement — vrai tant que le drapeau etait pose sur tous
+         * les appels. Il ne l'est plus : un noeud skill en heritage part SANS `--strict-mcp-config`.
+         * Laisse en dur, ce champ aurait affirme le contraire de ce qui est envoye, et c'est la
+         * regle que ce fichier s'impose ailleurs : une observabilite qui MENT sur ce qui a ete
+         * envoye est pire qu'une absente.
+         */
+        strictMcpConfig: opts.skillNodeTools?.inheritMachineMcp !== true,
+        /** Les outils du noeud skill, s'il y en a — sinon le champ est absent, pas `false`. */
+        ...(opts.skillNodeTools
+          ? {
+              skillNodeTools: opts.skillNodeTools.allowedTools,
+              /**
+               * Le JETON NE SORT PAS D'ICI. La version precedente copiait `mcpConfig` entier dans
+               * l'enveloppe — or `index.ts` persiste ces options dans la trace causale sur disque,
+               * donc le jeton du serveur se retrouvait EN CLAIR dans un artefact durable (verifie
+               * dans `conv-1346`). On annonce que le canal MCP est actif, jamais son secret : le
+               * champ utile a l'observabilite est « y a-t-il des outils, lesquels », pas la creance.
+               */
+              mcpActif: true,
+              inheritMachineMcp: opts.skillNodeTools.inheritMachineMcp === true
+            }
+          : {}),
         resumed: Boolean(opts.resumeSessionId),
         effort: opts.reasoningEffort
       },
@@ -535,12 +616,26 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // Le PROMPT n'est PLUS passé en argv (`-p <prompt>`) : une longue conversation dépassait la limite
     // de ligne de commande Windows (~32 ko) → `spawn ENAMETOOLONG`, tout le run cassait. Claude Code lit
     // le prompt sur STDIN quand `-p` n'a pas de valeur positionnelle → on l'y écrit (cf. child.stdin plus bas).
+    /**
+     * OUTILS D'UN NŒUD SKILL — posés sur le canal NATIF du CLI, et sur AUCUN autre appel.
+     *
+     * L'intention est LUE, jamais déduite (`opts.skillNodeTools`) : les huit phases du pipeline
+     * passent par ce même `send()` avec un bloc `execution`, et doivent rester privées de tout outil
+     * externe. Déduire l'intention depuis `execution` les outillerait toutes par accident.
+     *
+     * `--strict-mcp-config` reste posé PARTOUT AILLEURS — c'est lui qui garantit qu'une phase de
+     * pipeline ne voit aucun serveur MCP (vérifié hors-modèle : sans `--mcp-config`, le CLI rend
+     * « outil absent »). Il n'est retiré que pour un nœud skill dont l'héritage est demandé, et
+     * seulement pour cet appel.
+     */
+    const argsMcp = argumentsMcpNoeudSkill(opts)
     const args = [
       '-p',
       '--output-format',
       'stream-json',
       '--verbose',
-      '--strict-mcp-config',
+      // Retiré UNIQUEMENT pour un nœud skill en héritage : voir `argumentsMcpNoeudSkill`.
+      ...argsMcp.strict,
       '--setting-sources',
       '',
       // Les slash-commands et skills du CLI ne servent JAMAIS ici : Autowin pilote par prompt et
@@ -549,6 +644,31 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // pas. Elles etaient donc payees a chaque appel sans jamais etre utilisees.
       '--disable-slash-commands'
     ]
+    let mcpConfigDir: { chemin: string; nettoyer: () => void } | undefined
+    if (argsMcp.mcp.length > 0) {
+      /**
+       * `--mcp-config` déclare le serveur, `--allowedTools` autorise l'USAGE : les deux, sinon
+       * l'outil est annoncé et refusé à l'appel (ou l'inverse) sans que rien ne le signale.
+       *
+       * Les noms MCP ne vont PAS dans `--tools` : ce drapeau restreint les outils du jeu INTÉGRÉ,
+       * et y mêler un nom `mcp__…` n'a pas de sens. Mesuré : `--mcp-config` + `--allowedTools`
+       * suffisent, l'outil est appelé pour de vrai (témoin non devinable rendu par le CLI).
+       */
+      /**
+       * Le jeton passe par un FICHIER, pas par argv (cf. `ecrireConfigMcp`). Si l'ecriture echoue on
+       * garde la chaine inline : l'outillage du noeud vaut mieux que sa perte, et le repli est ICI,
+       * visible, plutot que silencieux.
+       */
+      mcpConfigDir = ecrireConfigMcp(argsMcp.mcp[1]!)
+      args.push('--mcp-config', mcpConfigDir?.chemin ?? argsMcp.mcp[1]!)
+    }
+    /**
+     * Les noms MCP sont FUSIONNES dans l'unique `--allowedTools` de la branche, jamais pousses dans
+     * un SECOND drapeau : deux occurrences du meme drapeau laissent le CLI arbitrer lequel gagne, et
+     * si c'est la derniere, les outils MCP seraient DECLARES par `--mcp-config` puis refuses a
+     * l'usage — precisement le defaut « annonce et inutilisable » que ce chantier corrige.
+     */
+    const outilsMcpAutorises = argsMcp.autorises
     /**
      * LE WEB EST UNE CAPACITÉ DE BASE, sur TOUS les chemins d'agent.
      *
@@ -599,14 +719,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         '--tools',
         tools,
         '--allowedTools',
-        ...autorises(tools)
+        ...autorises(tools),
+        ...outilsMcpAutorises
       )
     } else if (materialized) {
       args.push(
         '--tools',
         'Read,' + OUTILS_WEB,
         '--allowedTools',
-        ...autorises('Read,' + OUTILS_WEB)
+        ...autorises('Read,' + OUTILS_WEB),
+        ...outilsMcpAutorises
       )
     } else {
       /**
@@ -639,7 +761,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             'Grep',
             'Glob',
             'WebFetch',
-            'WebSearch'
+            'WebSearch',
+            ...outilsMcpAutorises
           )
         } else {
           args.push(
@@ -656,7 +779,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             // Bash n'est JAMAIS autorisé nu ici : uniquement par périmètres incapables de muter
             // (voir CHAT_READ_ONLY_SHELL). Sans eux, une question sur l'état du dépôt forçait une
             // orchestration, qui répond depuis un worktree isolé — donc à côté de la question.
-            ...CHAT_READ_ONLY_SHELL
+            ...CHAT_READ_ONLY_SHELL,
+            ...outilsMcpAutorises
           )
         }
       } else {
@@ -666,7 +790,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // La MEME valeur aux deux drapeaux, comme dans les autres branches : `--tools` charge,
         // `--allowedTools` autorise, et une asymetrie entre les deux laisse un outil declare mais
         // refuse (ou l'inverse) sans que rien ne le signale.
-        args.push('--tools', OUTILS_WEB, '--allowedTools', ...autorises(OUTILS_WEB))
+        args.push(
+          '--tools',
+          OUTILS_WEB,
+          '--allowedTools',
+          ...autorises(OUTILS_WEB),
+          ...outilsMcpAutorises
+        )
       }
     }
     /**
@@ -1056,6 +1186,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // Meme hygiene que le system prompt : un dossier temporaire par appel ne doit pas s'accumuler
       // (c'est exactement la fuite disque constatee ce jour sur run-stdout/).
       if (settingsDir) rmSync(settingsDir, { recursive: true, force: true })
+      // Le fichier de config MCP porte le jeton : il ne survit pas a l'appel qui l'a justifie.
+      mcpConfigDir?.nettoyer()
       if (invocation.inputPath) rmSync(invocation.inputPath, { force: true })
       // Journal de sortie resté VIDE = le CLI n'a rien écrit (échec de lancement, appel avorté). Il
       // n'apporte rien à une reprise et fait croire à un run existant : mesuré 3 journaux vides sur 7

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   CLOSURE_UPSTREAM_REFUSAL,
+  arretDeLaReparation,
   doitArreterLaReparation,
   evaluateClosure
 } from './gates/stopgate'
@@ -83,8 +84,32 @@ describe('boucle de réparation : arrêt sur un refus hors de portée de build',
    * une règle que personne n'applique. Une seule assertion de structure, assumée comme telle.
    */
   it('la boucle de réparation consulte cette décision', () => {
+    /**
+     * DEUX assertions, parce qu'une seule ne suffisait plus.
+     *
+     * La boucle n'appelle plus `doitArreterLaReparation` directement : elle passe par
+     * `arretDeLaReparation`, qui unifie les trois sorties (succès, non-progrès, plafond dur) et rend
+     * un MOTIF — l'ancienne sortie par épuisement du compte était muette. Le grep littéral de l'appel
+     * a donc cessé de voir la règle, alors qu'elle est bien appliquée : un test de structure ne voit
+     * pas à travers une couche.
+     *
+     * On vérifie donc (1) le COMPORTEMENT de bout en bout — la porte d'entrée de la boucle arrête bien
+     * sur un refus amont répété — et (2) le CÂBLAGE, pour qu'une règle juste ne reste pas inappliquée.
+     */
+    const amont = [CLOSURE_UPSTREAM_REFUSAL]
+    const motif = arretDeLaReparation({
+      tentative: 1,
+      reparationsAccordees: 5,
+      plafondDur: 10,
+      motifsCourants: amont,
+      motifsPrecedents: amont
+    })
+    expect(motif, 'la porte d’entrée de la boucle doit relayer la règle').toContain(
+      'hors de portée'
+    )
+
     const source = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
-    expect(source).toContain('doitArreterLaReparation(gate.reasons, motifsPrecedents)')
+    expect(source).toContain('arretDeLaReparation({')
     expect(source).toContain('motifsPrecedents = [...gate.reasons]')
   })
 })

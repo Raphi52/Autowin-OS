@@ -262,8 +262,15 @@ describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
   }
 
   it('préserve exactement la frontière canonique entre préambule et première source', () => {
+    /**
+     * La frontière canonique est celle du SERVEUR : une ligne vide entre le préambule et la première
+     * source, le séparateur `---` seulement ENTRE les sources. Ce test attendait un séparateur dès la
+     * première source — écrit d'après le rendu du client, jamais confronté au serveur — et figeait
+     * ainsi la dérive qui faisait rejeter TOUTE réponse du Brain (mesuré le 2026-08-20 : le serveur
+     * rend 1890 caractères, le client en attendait 1897).
+     */
     const selector = 'knowledge/domain/autowin-os-'
-    const context = 'Préambule\n\n---\n\nExtrait source'
+    const context = 'Préambule\n\nExtrait source'
     const result = scopeBrainRetrieval(
       {
         context,

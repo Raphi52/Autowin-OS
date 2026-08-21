@@ -178,9 +178,21 @@ describe('spawn CLI — regime de contexte', () => {
     // disque, seul le web reste. Changement demande par l'utilisateur le 2026-08-13.
     const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
     expect(chatBranch).not.toContain("'--add-dir', readOnlyWorkspace, '--tools', 'Read'")
-    expect(chatBranch).toMatch(
-      /'--tools', OUTILS_WEB, '--allowedTools', \.\.\.autorises\(OUTILS_WEB\)/
-    )
+    /**
+     * Assertion recalee sur la PROPRIETE, pas sur la mise en forme.
+     *
+     * L'ancienne regex exigeait les deux drapeaux sur UNE SEULE ligne, espaces compris. Le
+     * 2026-08-20, l'ajout des outils MCP d'un noeud skill a reparti l'appel sur plusieurs lignes
+     * (prettier) : le test est tombe alors que la propriete — web CHARGE et web AUTORISE, aucun
+     * dossier devine — etait intacte. C'est le deuxieme piege de forme sur cette meme assertion
+     * (cf. le commentaire du test voisin, ou une regex trop litterale rendait une liste VIDE).
+     *
+     * On verifie donc les deux drapeaux SEPAREMENT, tolerants aux sauts de ligne. Ce n'est pas un
+     * assouplissement : les deux exigences restent, et la seule chose qu'on cesse d'imposer est
+     * l'endroit ou prettier place ses retours a la ligne.
+     */
+    expect(chatBranch).toMatch(/'--tools',\s*OUTILS_WEB/)
+    expect(chatBranch).toMatch(/'--allowedTools',\s*\.\.\.autorises\(OUTILS_WEB\)/)
     expect(chatBranch).toContain('existsSync(')
   })
 

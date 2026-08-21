@@ -167,7 +167,36 @@ export function allocateExecutionTopology(
     Math.max(0, quote.limits.maxAgents - startedAgents),
     Math.max(0, quote.limits.maxProviderCalls - startedCalls)
   )
-  const recoveries = request.mutation ? quote.limits.maxRecoveries : 0
+  /**
+   * Les reparations sont provisionnees pour TOUTE tache, mutation ou non.
+   *
+   * `request.mutation` conditionnait ce provisionnement, en miroir d'une regle de l'orchestrateur qui
+   * refusait toute reparation a une tache non-mutation. Cette regle etait un defaut (mesure du
+   * 2026-08-20 : un run d'analyse refuse pour « analyse absente » ou « DoD non cochee » est
+   * parfaitement reparable, et le contrat racine adapte deja ses exigences a un run en lecture
+   * seule). Depuis que `reparationsAutorisees` accorde ces passages, les laisser hors du devis
+   * produirait une depense NON PROVISIONNEE : le run serait coupe en plein milieu au lieu d'etre
+   * refuse proprement avant de depenser.
+   */
+  /**
+   * Les reparations sont provisionnees pour TOUTE tache, mutation ou non — mais on provisionne ce qui
+   * est ACCORDE, pas le plafond dur.
+   *
+   * `request.mutation` conditionnait ce provisionnement, en miroir d'une regle de l'orchestrateur qui
+   * refusait toute reparation a une tache non-mutation. C'etait un defaut (mesure du 2026-08-20 : un
+   * run d'analyse refuse pour « analyse absente » ou « DoD non cochee » est parfaitement reparable,
+   * et le contrat racine adapte deja ses exigences a un run en lecture seule).
+   *
+   * EN REVANCHE, provisionner le PLAFOND DUR de la boucle a ete essaye puis ANNULE, sur mesure :
+   *  - en mode `blocking`, la politique n'accorde AUCUNE reparation, donc ce plafond ne peut jamais
+   *    mordre ; provisionner pour lui ne protegeait de rien et faisait REFUSER des runs avant leur
+   *    premier appel (« Devis impossible avant execution », 4 tests tombes) ;
+   *  - en `metering-only` (le defaut), un depassement ne coupe pas le run : le devis S'AGRANDIT a la
+   *    demande, et la depense reste visible par l'agregateur de cout.
+   * Le devis dit donc le cas ACCORDE, et la marge de progres se paie a la demande — c'est la lecture
+   * juste de « le devis dit le vrai ».
+   */
+  const recoveries = quote.limits.maxRecoveries
   const judgePasses = 1 + recoveries
   // Un graphe à boucles rejoue des nœuds : provisionner sa liste de phases reviendrait à laisser le run se faire
   // couper en plein milieu au lieu d'être refusé proprement avant de dépenser quoi que ce soit.

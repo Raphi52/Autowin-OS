@@ -145,12 +145,40 @@ function parseRequestBinding(value: unknown): VerifiedBrainPayload['request'] | 
   return { query: request.query, traceId: request.trace_id }
 }
 
+/**
+ * Rend le contexte structuré EXACTEMENT comme le serveur, sinon rien ne passe.
+ *
+ * `verifySignedBrainPayload` re-rend le contexte localement et exige une égalité au CARACTÈRE PRÈS
+ * avec celui rendu par le serveur : c'est une garde d'intégrité, pas une commodité. Deux moteurs de
+ * rendu du même objet — l'un en Python côté serveur, l'autre ici — doivent donc produire la même
+ * chaîne, et la moindre dérive rejette TOUTE la réponse.
+ *
+ * Ils avaient dérivé. Mesure du 2026-08-20 sur le serveur vivant : sa réponse rendait 1890
+ * caractères, ce rendu-ci 1897 — 7 de trop, soit exactement un séparateur inséré entre le préambule
+ * et la PREMIÈRE source. Le serveur (`brain_context.py` : `separator = "\n\n---\n\n" if rendered
+ * else ""`) ne sépare qu'ENTRE les sources et joint le préambule par un simple saut de paragraphe.
+ *
+ * Conséquence de ces 7 caractères : chaque `brain_query` revenait « identité ou intégrité invalide »
+ * et TOUT le savoir rendu par le serveur — réel, non vide — était jeté. La commande n'était ni lente
+ * ni imprécise : elle était muette.
+ */
 export function renderStructuredBrainContext(
   structured: NonNullable<VerifiedBrainPayload['structuredContext']>
 ): string {
-  return [structured.preamble, ...structured.sources.map((source) => source.content)]
+  const corps = structured.sources
+    .map((source) => source.content)
     .filter(Boolean)
     .join('\n\n---\n\n')
+  if (!structured.preamble) return corps
+  if (!corps) return structured.preamble
+  /**
+   * Le préambule porte DÉJÀ sa propre fin de paragraphe : le serveur le concatène tel quel. Une
+   * jointure naïve ajoutait donc deux sauts de ligne de trop (mesuré : 1892 contre 1890), ce qui
+   * suffisait à faire rejeter toute la réponse. On normalise la jointure à exactement une ligne
+   * vide, quelle que soit la façon dont le préambule se termine — ainsi ni un préambule sans saut
+   * final ni un préambule qui en porte deux ne peut faire dériver le rendu.
+   */
+  return `${structured.preamble.replace(/\s+$/, '')}\n\n${corps}`
 }
 
 /** Lit une réponse JSON avec une borne avant allocation si Content-Length est disponible. */
