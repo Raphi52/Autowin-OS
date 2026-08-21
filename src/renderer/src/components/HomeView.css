@@ -22,7 +22,13 @@
      translation dans l'espace, et non un simple changement d'échelle. */
   perspective: 1600px;
   perspective-origin: 50% 40%;
-  background: #000;
+  /* TRANSPARENT, pas noir : le fond d ecran de l app (theme.css -> autowin-galaxy-bg-hq.png, pose sur
+     body) doit transparaitre ici comme dans les autres vues. Toute la chaine au-dessus est deja
+     transparente (#root, .main, .view-slot) et le canevas du decor efface en alpha 0 : un
+     background: #000 etait donc la SEULE couche qui masquait l image. Constat utilisateur
+     (conv-1358) : « sur la vue accueil je vois pas le fond d ecran ». La lisibilite reste portee par
+     l assombrissement du centre (.home-view::after) et par le fond opaque de chaque tuile. */
+  background: transparent;
   border-radius: var(--container-radius-page, 16px);
 }
 
