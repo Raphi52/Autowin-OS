@@ -2682,3 +2682,213 @@ ol.md-list li {
   font-size: 17px;
   line-height: 1;
 }
+
+/* ── Matrice MODEL × EFFORT ─────────────────────────────────────────────
+   Overlay sombre : une ligne par modèle, un slider discret de crans d'effort.
+   Complète le sous-menu `.model-effort-menu` (qui reste le chemin rapide). */
+.model-select-matrix-open {
+  display: block;
+  width: calc(100% - 10px);
+  margin: 5px;
+  padding: 6px 8px;
+  border: 1px solid rgba(139, 106, 224, 0.4);
+  border-radius: 7px;
+  color: #cbb8ff;
+  background: rgba(139, 106, 224, 0.1);
+  font: 700 8px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.model-select-matrix-open:hover,
+.model-select-matrix-open:focus-visible {
+  border-color: rgba(139, 106, 224, 0.75);
+  color: #fff;
+  background: rgba(139, 106, 224, 0.2);
+  outline: none;
+}
+
+.effort-matrix-overlay {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 4, 6, 0.72);
+  inset: 0;
+}
+
+.effort-matrix {
+  width: min(620px, 100%);
+  padding: 14px 16px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: #0a0a0c;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+.effort-matrix header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.effort-matrix header strong {
+  color: #ddd;
+  font: 700 9px/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.effort-matrix header button {
+  border: 0;
+  color: #85898d;
+  background: none;
+  cursor: pointer;
+}
+
+.effort-matrix-columns,
+.effort-matrix-row {
+  display: grid;
+  grid-template-columns: 118px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.effort-matrix-columns {
+  grid-template-columns: 118px repeat(auto-fit, minmax(0, 1fr));
+  margin-bottom: 4px;
+  color: #6d7278;
+  font: 700 7px/1 var(--mono);
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.effort-matrix-row {
+  padding: 5px 0;
+}
+
+.effort-matrix-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.effort-matrix-name strong {
+  color: #e6e6e6;
+  font: 700 10px/1.1 var(--mono);
+  text-transform: uppercase;
+}
+
+.effort-matrix-name small {
+  overflow: hidden;
+  color: #6d7278;
+  font: 400 8px/1 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.effort-matrix-track {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: center;
+}
+
+.effort-matrix-track::before {
+  position: absolute;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  content: '';
+  inset: calc(50% - 1px) 8px auto 8px;
+}
+
+.effort-cran {
+  position: relative;
+  display: flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.effort-cran i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3a3d42;
+  transition:
+    width 0.12s ease,
+    height 0.12s ease,
+    background 0.12s ease;
+}
+
+.effort-cran em {
+  position: absolute;
+  bottom: -9px;
+  color: #55585d;
+  font: 700 6px/1 var(--mono);
+  text-transform: uppercase;
+  opacity: 0;
+}
+
+.effort-cran.is-filled i {
+  background: rgba(139, 106, 224, 0.45);
+}
+
+.effort-cran.is-memorized.is-selected i {
+  background: rgba(139, 106, 224, 0.7);
+}
+
+.effort-matrix-row.is-active .effort-cran.is-filled i {
+  background: #8b6ae0;
+}
+
+.effort-cran.is-live.is-selected i {
+  width: 15px;
+  height: 15px;
+  background: #a98cff;
+  box-shadow: 0 0 0 4px rgba(139, 106, 224, 0.18);
+}
+
+.effort-cran:hover em,
+.effort-cran:focus-visible em {
+  color: #cbb8ff;
+  opacity: 1;
+}
+
+.effort-cran.is-absent {
+  cursor: default;
+}
+
+.effort-cran.is-absent i {
+  width: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.effort-matrix-row.is-blocked {
+  opacity: 0.45;
+}
+
+.effort-matrix-row.is-blocked .effort-cran {
+  cursor: not-allowed;
+}
+
+.effort-matrix footer {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  color: #85898d;
+  font: 400 8px/1.4 var(--mono);
+  text-transform: uppercase;
+}
