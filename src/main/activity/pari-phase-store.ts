@@ -39,6 +39,13 @@ export class PariPhaseStore {
     if (this.lire().some((existant) => `${existant.runId}/${existant.phase}` === identite)) {
       return false
     }
+    /*
+     * UN PARI POSTERIEUR AU VERDICT N'EST PAS UNE PREDICTION. Sans cette garde, une boucle
+     * juge -> correction -> nouvelle phase du meme run pouvait deposer un pari alors que l'issue
+     * etait deja connue : la non-revisabilite n'etait qu'apparente, puisqu'il suffisait de parier
+     * sur une AUTRE phase du meme run pour predire un resultat deja tombe.
+     */
+    if (this.lireIssues().some((issue) => issue.runId === pari.runId)) return false
     mkdirSync(dirname(this.chemin), { recursive: true })
     appendFileSync(this.chemin, `${JSON.stringify(pari)}\n`, { encoding: 'utf8', flush: true })
     return true
@@ -51,26 +58,40 @@ export class PariPhaseStore {
    * Comme le pari, un arbitrage ne se revise pas.
    */
   arbitrer(runId: string, reussie: boolean): boolean {
-    if (this.lireIssues().some((issue) => issue.runId === runId)) return false
-    const concernes = this.lire().filter((pari) => pari.runId === runId)
-    if (!concernes.length) return false
+    /*
+     * GARDE A LA MAILLE PHASE, PAS RUN. Avec une garde au niveau du run, un arbitrage interrompu
+     * apres la premiere ligne (crash, disque plein, arret de l'app) devenait definitivement
+     * irrattrapable : les paris restants du run n'auraient plus jamais d'issue, alors que leur
+     * verdict etait connu. A la maille phase, la reprise complete ce qui manque et ne touche pas
+     * ce qui est deja inscrit.
+     */
+    const dejaArbitrees = new Set(
+      this.lireIssues()
+        .filter((issue) => issue.runId === runId)
+        .map((issue) => issue.phase)
+    )
+    const aInscrire = this.lire().filter(
+      (pari) => pari.runId === runId && !dejaArbitrees.has(pari.phase)
+    )
+    if (!aInscrire.length) return false
     mkdirSync(dirname(this.chemin), { recursive: true })
-    for (const pari of concernes) {
-      const issue: IssuePhase & { arbitrage: true; arbitreA: string } = {
-        arbitrage: true,
-        runId,
-        phase: pari.phase,
-        reussie,
-        jugee: true,
-        arbitreA: new Date().toISOString()
-      }
-      appendFileSync(
-        this.chemin,
-        `${JSON.stringify(issue)}
-`,
-        { encoding: 'utf8', flush: true }
+    /*
+     * UNE SEULE ecriture pour les N lignes : un append par phase laissait une fenetre ou l'arbitrage
+     * etait a moitie inscrit.
+     */
+    const bloc = aInscrire
+      .map((pari) =>
+        JSON.stringify({
+          arbitrage: true,
+          runId,
+          phase: pari.phase,
+          reussie,
+          jugee: true,
+          arbitreA: new Date().toISOString()
+        })
       )
-    }
+      .join('\n')
+    appendFileSync(this.chemin, `${bloc}\n`, { encoding: 'utf8', flush: true })
     return true
   }
 

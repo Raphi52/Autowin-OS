@@ -16,6 +16,7 @@
  */
 
 const MARQUEUR = 'AUTOWIN_PARI_V1:'
+const SAUT = String.fromCharCode(10)
 
 export interface PariEmis {
   confiance: number
@@ -26,8 +27,25 @@ export interface PariEmis {
 export function extrairePari(texte: string | undefined | null): PariEmis | null {
   if (!texte) return null
   let trouve: PariEmis | null = null
-  for (const ligne of texte.split('\n')) {
-    const debut = ligne.indexOf(MARQUEUR)
+  let dansUnBloc = false
+  for (const ligne of texte.split(SAUT)) {
+    /*
+     * UN EXEMPLE N'EST PAS UN PARI. Une phase qui documente le format, recopie son brief ou explique
+     * la mecanique a l'utilisateur cite la ligne dans un bloc de code : sans ce compteur de cloture,
+     * un « exemple pedagogique » a 0,99 entrait dans la mesure comme un vrai pari, et c'est
+     * exactement le bruit qui rend un score de Brier inexploitable.
+     */
+    if (ligne.trimStart().startsWith('```')) {
+      dansUnBloc = !dansUnBloc
+      continue
+    }
+    if (dansUnBloc) continue
+    /*
+     * `lastIndexOf` et non `indexOf` : deux marqueurs sur la MEME ligne (un modele qui reformule)
+     * faisaient echouer le `JSON.parse` sur la concatenation, et le pari pourtant declare
+     * disparaissait en silence.
+     */
+    const debut = ligne.lastIndexOf(MARQUEUR)
     if (debut < 0) continue
     const brut = ligne.slice(debut + MARQUEUR.length).trim()
     let parse: unknown

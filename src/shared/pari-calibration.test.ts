@@ -55,13 +55,13 @@ describe('appariement pari <-> issue', () => {
   it("N'APPARIE RIEN quand la phase n'a pas été jugée — une phase sans verdict n'a pas d'issue falsifiable", () => {
     const resultat = apparierParisEtIssues([pari('scout', 0.9)], [issue('scout', true, false)])
     expect(resultat.appariements).toEqual([])
-    expect(resultat.issuesNonJugees).toEqual(['scout'])
+    expect(resultat.issuesNonJugees).toEqual(['run-1/scout'])
   })
 
   it('note une issue sans pari comme « pas de pari » au lieu de la compter comme un pari raté', () => {
     const resultat = apparierParisEtIssues([], [issue('build', false)])
     expect(resultat.appariements).toEqual([])
-    expect(resultat.issuesSansPari).toEqual(['build'])
+    expect(resultat.issuesSansPari).toEqual(['run-1/build'])
   })
 
   it('ne confond pas deux runs qui portent le même nom de phase', () => {
@@ -145,5 +145,63 @@ describe('robustesse des entrées', () => {
     )
     expect(resultat.appariements.map((a) => a.phase)).toEqual(['clean'])
     expect(resultat.parisInvalides).toEqual(['run-1/build'])
+  })
+})
+
+describe('cohérence des comptes — trous trouvés par l’audit', () => {
+  it('ne compte PAS deux fois la même phase pariée deux fois', () => {
+    const resultat = apparierParisEtIssues(
+      [pari('build', 0.9), pari('build', 0.1)],
+      [issue('build', true)]
+    )
+    expect(resultat.appariements).toHaveLength(1)
+    expect(resultat.appariements[0]?.confiance).toBe(0.9)
+    expect(resultat.parisDoublons).toEqual(['run-1/build'])
+  })
+
+  it("n'étiquette PAS « sans pari » une issue dont le pari a été rejeté pour confiance invalide", () => {
+    const resultat = apparierParisEtIssues([pari('build', 1.5)], [issue('build', true)])
+    expect(resultat.parisInvalides).toEqual(['run-1/build'])
+    expect(resultat.issuesSansPari).toEqual([])
+  })
+
+  it('nomme les issues avec leur run, pour qu’un écart de comptes soit diagnosticable', () => {
+    const resultat = apparierParisEtIssues(
+      [],
+      [
+        { runId: 'run-A', phase: 'build', reussie: true, jugee: true },
+        { runId: 'run-B', phase: 'build', reussie: true, jugee: false }
+      ]
+    )
+    expect(resultat.issuesSansPari).toEqual(['run-A/build'])
+    expect(resultat.issuesNonJugees).toEqual(['run-B/build'])
+  })
+
+  it('ÉCARTE une phase dont deux issues se contredisent, au lieu de trancher au hasard', () => {
+    const resultat = apparierParisEtIssues(
+      [pari('build', 0.9)],
+      [issue('build', true), issue('build', false)]
+    )
+    expect(resultat.appariements).toEqual([])
+    expect(resultat.issuesContradictoires).toEqual(['run-1/build'])
+  })
+
+  it('tolère une issue répétée à l’IDENTIQUE sans la traiter comme une contradiction', () => {
+    const resultat = apparierParisEtIssues(
+      [pari('build', 0.9)],
+      [issue('build', true), issue('build', true)]
+    )
+    expect(resultat.appariements).toHaveLength(1)
+    expect(resultat.issuesContradictoires).toEqual([])
+  })
+
+  it('refuse une discrimination sur trop peu de cas dans la classe minoritaire', () => {
+    const { appariements } = apparierParisEtIssues(
+      [pari('a', 0.51), pari('b', 0.5)],
+      [issue('a', true), issue('b', false)]
+    )
+    const mesure = mesurerCalibration(appariements)
+    expect(mesure.discrimination).toBeNull()
+    expect(mesure.motifIndisponible).toMatch(/trop peu|minoritaire/i)
   })
 })

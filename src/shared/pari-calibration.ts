@@ -54,6 +54,10 @@ export interface ResultatAppariement {
   issuesNonJugees: string[]
   /** Paris rejetés parce que la confiance sort de [0, 1] — une valeur folle polluerait la mesure. */
   parisInvalides: string[]
+  /** Une même phase pariée deux fois : le second est écarté, jamais compté en double. */
+  parisDoublons: string[]
+  /** Phases dont deux issues se contredisent : écartées, car trancher au hasard serait pire. */
+  issuesContradictoires: string[]
 }
 
 export interface MesureCalibration {
@@ -77,6 +81,9 @@ export interface MesureCalibration {
 /** En dessous, la mesure existe mais ne conclut rien : ordre de grandeur du critère d'abandon. */
 export const SEUIL_ECHANTILLON = 20
 
+/** Sous ce nombre de cas dans la classe minoritaire, l'ordre n'est pas mesurable (voir plus bas). */
+export const MINIMUM_PAR_CLASSE = 5
+
 const cle = (runId: string, phase: string): string => `${runId}/${phase}`
 
 const confianceValide = (valeur: number): boolean =>
@@ -96,19 +103,47 @@ export function apparierParisEtIssues(
   const issuesSansPari: string[] = []
   const issuesNonJugees: string[] = []
   const parisInvalides: string[] = []
+  const parisDoublons: string[] = []
+  const issuesContradictoires: string[] = []
 
+  /*
+   * LES DEUX INDEX SONT NOMMES PAR CLE COMPLETE `runId/phase`. Une liste qui ne porterait que le nom
+   * de phase serait indechiffrable des que deux runs partagent une phase — or ces listes existent
+   * precisement pour diagnostiquer un ecart dans les comptes.
+   */
   const parIssue = new Map<string, IssuePhase>()
   for (const issue of issues) {
+    const identite = cle(issue.runId, issue.phase)
     if (!issue.jugee) {
-      issuesNonJugees.push(issue.phase)
+      issuesNonJugees.push(identite)
       continue
     }
-    parIssue.set(cle(issue.runId, issue.phase), issue)
+    const connue = parIssue.get(identite)
+    if (connue) {
+      /*
+       * Deux arbitrages CONTRADICTOIRES pour la meme phase (deux instances de l'app ayant conclu en
+       * sens inverse) : on ECARTE la cle. Garder « la derniere ligne du fichier » ferait dependre la
+       * mesure de l'ordre d'ecriture, c'est-a-dire du hasard.
+       */
+      if (connue.reussie !== issue.reussie) {
+        issuesContradictoires.push(identite)
+        parIssue.delete(identite)
+      }
+      continue
+    }
+    if (issuesContradictoires.includes(identite)) continue
+    parIssue.set(identite, issue)
   }
 
-  const parisRetenus = new Set<string>()
+  const clesVues = new Set<string>()
+  const clesAppariees = new Set<string>()
   for (const pari of paris) {
     const identite = cle(pari.runId, pari.phase)
+    if (clesVues.has(identite)) {
+      parisDoublons.push(identite)
+      continue
+    }
+    clesVues.add(identite)
     if (!confianceValide(pari.confiance)) {
       parisInvalides.push(identite)
       continue
@@ -118,7 +153,7 @@ export function apparierParisEtIssues(
       parisSansIssue.push(identite)
       continue
     }
-    parisRetenus.add(identite)
+    clesAppariees.add(identite)
     appariements.push({
       runId: pari.runId,
       phase: pari.phase,
@@ -127,11 +162,24 @@ export function apparierParisEtIssues(
     })
   }
 
-  for (const [identite, issue] of parIssue) {
-    if (!parisRetenus.has(identite)) issuesSansPari.push(issue.phase)
+  for (const identite of parIssue.keys()) {
+    /*
+     * « Sans pari » veut dire SANS PARI. Une issue dont le pari existait mais a ete rejete (confiance
+     * hors bornes) n'y a pas sa place : elle etait comptee dans deux compartiments a la fois, et le
+     * controle de coherence des comptes que ce module se donne pour mission devenait faux.
+     */
+    if (!clesAppariees.has(identite) && !clesVues.has(identite)) issuesSansPari.push(identite)
   }
 
-  return { appariements, parisSansIssue, issuesSansPari, issuesNonJugees, parisInvalides }
+  return {
+    appariements,
+    parisSansIssue,
+    issuesSansPari,
+    issuesNonJugees,
+    parisInvalides,
+    parisDoublons,
+    issuesContradictoires
+  }
 }
 
 /**
@@ -178,6 +226,21 @@ export function mesurerCalibration(appariements: readonly AppariementPari[]): Me
       motifIndisponible:
         'une seule classe observée (que des réussites ou que des échecs) : aucun ordre à mesurer',
       echantillonSuffisant: n >= SEUIL_ECHANTILLON
+    }
+  }
+  /*
+   * UN +1 SUR UNE SEULE PAIRE N'EST PAS UNE DISCRIMINATION. Avec une reussite et un echec, l'aire
+   * vaut 1 des que les deux confiances diffèrent d'un millieme : le chiffre etait affiche en clair
+   * (« discrimination=1.000 ») alors qu'il ne reposait sur rien. On refuse de le rendre sous un
+   * minimum dans la classe MINORITAIRE, plutot que de l'accompagner d'une reserve que personne ne lit.
+   */
+  if (Math.min(reussites.length, echecs.length) < MINIMUM_PAR_CLASSE) {
+    return {
+      n,
+      calibration: brier,
+      discrimination: null,
+      motifIndisponible: `trop peu de cas dans la classe minoritaire (< ${MINIMUM_PAR_CLASSE}) : l'ordre ne se mesure pas encore`,
+      echantillonSuffisant: false
     }
   }
 

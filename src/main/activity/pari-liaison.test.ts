@@ -58,3 +58,20 @@ describe('issues dérivées du verdict', () => {
     expect(issuesDepuisVerdict([], 'run-1', true)).toEqual([])
   })
 })
+
+describe('pièges du verdict — entrées trouvées par l’audit', () => {
+  it('« invalide » CONTIENT « valide » : ne doit PAS être lu comme une réussite', () => {
+    expect(verdictEstReussi('verdict invalide', '')).not.toBe(true)
+    expect(verdictEstReussi('défaut : preuve invalide', '')).toBe(false)
+    expect(verdictEstReussi('BLOQUÉ: preuve invalide', '')).not.toBe(true)
+  })
+
+  it('« non validé » n’est pas « validé »', () => {
+    expect(verdictEstReussi('non validé', '')).not.toBe(true)
+  })
+
+  it('le VOTE d’un membre du panel n’est pas le verdict de synthèse', () => {
+    expect(verdictEstReussi('vote: VALIDE', '')).toBeNull()
+    expect(verdictEstReussi('vote: DEFAUT', '')).toBeNull()
+  })
+})

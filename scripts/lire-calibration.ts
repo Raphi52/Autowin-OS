@@ -8,20 +8,24 @@
  *
  *   npx tsx scripts/lire-calibration.ts [chemin-du-journal]
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   apparierParisEtIssues,
   mesurerCalibration,
   SEUIL_ECHANTILLON
 } from '../src/shared/pari-calibration'
+import { PariPhaseStore } from '../src/main/activity/pari-phase-store'
+import { autowinAppDataRoot, portableAppDataBase } from '../src/main/app-data'
 
-const defaut = join(
-  process.env.APPDATA ?? process.env.HOME ?? '.',
-  'autowin-os',
-  'outcome-learning',
-  'paris-v1.jsonl'
-)
+/*
+ * LA MEME RACINE QUE L'APPLICATION. Le defaut pointait sur `%APPDATA%\autowin-os`, un emplacement
+ * vestigial : l'app redirige son userData vers le stockage PORTABLE du depot (app-data.ts), donc le
+ * lecteur annoncait « aucun pari » indefiniment sur une machine qui avait pourtant parie -- et cette
+ * branche vide avait ete prise pour une preuve que le lecteur fonctionnait.
+ */
+const racine = autowinAppDataRoot(portableAppDataBase(process.cwd(), process.cwd(), false))
+const defaut = join(racine, 'outcome-learning', 'paris-v1.jsonl')
 const chemin = process.argv[2] ?? defaut
 
 if (!existsSync(chemin)) {
@@ -30,26 +34,11 @@ if (!existsSync(chemin)) {
   process.exit(0)
 }
 
-const paris = []
-let illisibles = 0
-for (const ligne of readFileSync(chemin, 'utf8').split('\n')) {
-  if (!ligne.trim()) continue
-  try {
-    paris.push(JSON.parse(ligne))
-  } catch {
-    illisibles += 1
-  }
-}
-
-/**
- * Les issues ne vivent pas dans ce journal : elles sont deduites du verdict, cote application. Ce
- * lecteur ne sait donc rendre l'appariement que si le journal porte deja le champ `reussie` (ecrit
- * par une passe ulterieure). Tant que ce n'est pas le cas, il rend le COMPTE et le dit, plutot que
- * d'inventer une mesure -- un chiffre invente serait pire qu'un silence.
- */
-const issues = paris
-  .filter((p) => typeof p.reussie === 'boolean')
-  .map((p) => ({ runId: p.runId, phase: p.phase, reussie: p.reussie, jugee: true }))
+/* On relit par le MEME store que l'application, pour qu'aucun parseur parallele ne puisse divarger. */
+const store = new PariPhaseStore(chemin)
+const paris = store.lire()
+const issues = store.lireIssues()
+const illisibles = store.lignesIllisibles()
 
 console.log(`Journal : ${chemin}`)
 console.log(
@@ -65,7 +54,16 @@ if (!issues.length) {
 
 const { appariements } = apparierParisEtIssues(paris, issues)
 const mesure = mesurerCalibration(appariements)
-console.log(`Paris arbitres : ${mesure.n} (seuil de lecture : ${SEUIL_ECHANTILLON})`)
+const verdicts = new Set(appariements.map((a) => a.runId)).size
+console.log(
+  `Paris arbitres : ${mesure.n} sur ${verdicts} verdict(s) distinct(s) ` +
+    `(seuil de lecture : ${SEUIL_ECHANTILLON})`
+)
+if (verdicts < mesure.n) {
+  console.log(
+    "Attention : les phases d'un meme run partagent son verdict, donc les tirages ne sont pas independants."
+  )
+}
 console.log(`Calibration (Brier, 0 = parfait) : ${mesure.calibration?.toFixed(3) ?? 'n/a'}`)
 console.log(
   `Discrimination (+1 separe, 0 n'informe pas, -1 a contresens) : ${mesure.discrimination?.toFixed(3) ?? 'n/a'}`

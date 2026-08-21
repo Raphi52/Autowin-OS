@@ -94,3 +94,55 @@ describe('arbitrage inscrit au journal', () => {
     expect(s.lireIssues()).toEqual([])
   })
 })
+
+describe('non-révisabilité RÉELLE — trous trouvés par l’audit', () => {
+  it('REFUSE un pari sur un run déjà arbitré : une prédiction postérieure au verdict n’en est pas une', () => {
+    const s = store()
+    s.deposer(pari)
+    s.arbitrer('run-1', true)
+    expect(s.deposer({ ...pari, phase: 'clean' })).toBe(false)
+    expect(s.lire()).toEqual([pari])
+  })
+
+  it('laisse parier un AUTRE run déjà commencé', () => {
+    const s = store()
+    s.deposer(pari)
+    s.arbitrer('run-1', true)
+    expect(s.deposer({ ...pari, runId: 'run-2' })).toBe(true)
+  })
+
+  it('un arbitrage PARTIEL reste rattrapable phase par phase', () => {
+    const s = store()
+    s.deposer(pari)
+    s.deposer({ ...pari, phase: 'clean' })
+    // Simule un arbitrage interrompu : une seule ligne écrite.
+    writeFileSync(
+      s.chemin,
+      `${readFileSync(s.chemin, 'utf8')}${JSON.stringify({
+        arbitrage: true,
+        runId: 'run-1',
+        phase: 'build',
+        reussie: true,
+        jugee: true,
+        arbitreA: '2026-08-21T11:00:00.000Z'
+      })}\n`,
+      'utf8'
+    )
+    expect(s.arbitrer('run-1', true)).toBe(true)
+    expect(
+      s
+        .lireIssues()
+        .map((i) => i.phase)
+        .sort()
+    ).toEqual(['build', 'clean'])
+  })
+
+  it('ne réécrit PAS une phase déjà arbitrée', () => {
+    const s = store()
+    s.deposer(pari)
+    s.arbitrer('run-1', true)
+    expect(s.arbitrer('run-1', false)).toBe(false)
+    expect(s.lireIssues()).toHaveLength(1)
+    expect(s.lireIssues()[0]?.reussie).toBe(true)
+  })
+})
