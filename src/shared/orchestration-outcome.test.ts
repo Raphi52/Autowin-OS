@@ -821,9 +821,15 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     })
     const footer = text.slice(text.lastIndexOf('✅ Fait'))
 
-    expect(footer).toContain(
-      '📍 Maintenant : la tâche demandée est terminée et son résultat est disponible.'
-    )
+    /*
+     * L'INTENTION de ce test est le second assert : le pied ne doit pas exposer le vocabulaire
+     * interne. Elle est intacte. La phrase exacte, elle, a change le 21/08 : cette fixture n'a pas
+     * de `phaseOutputs`, donc la portee du run est INCONNUE — et une portee inconnue ne peut plus
+     * affirmer que la tache est terminee. Mesure ce jour-la : un run qui ne joue que le juge a
+     * `phaseOutputs` vide, et l'ancienne phrase lui faisait dire « reste a faire : rien ».
+     */
+    expect(footer).toContain('📍 Maintenant :')
+    expect(footer).not.toContain('Reste à faire : rien')
     expect(footer).not.toMatch(/workflow|gate|RUN|build|judge/iu)
   })
 

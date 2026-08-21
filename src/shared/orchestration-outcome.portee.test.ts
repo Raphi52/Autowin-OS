@@ -51,9 +51,25 @@ describe('clôture d’un run qui a MUTÉ — comportement d’origine, intact',
     expect(texte).toContain('passer à la prochaine demande')
   })
 
-  it('sans phase connue, on ne devine pas : clôture d’origine', () => {
+  /*
+   * TEST RETOURNE le 21/08, et c'est lui qui avait laisse passer le trou.
+   *
+   * J'avais ecrit « sans phase connue, on ne devine pas » et assert la cloture d'ORIGINE. Mesure du
+   * lendemain, l'utilisateur ayant redemarre l'app avec le correctif dans le bundle : le mensonge
+   * est revenu. Un run qui ne joue QUE LE JUGE a `phaseOutputs` VIDE — `jugeSeul` le definit ainsi —
+   * donc ma prudence rendait « reste a faire : rien » sur le cas le plus frequent.
+   *
+   * L'absence de preuve de mutation n'est pas une preuve d'achevement. Quand la portee est inconnue,
+   * on ne dit surtout pas « rien ».
+   */
+  it('portée INCONNUE ⇒ jamais « rien », mais jamais une phase inventée non plus', () => {
     const texte = formatOrchestrationOutcome(true, livre([]))
-    expect(texte).toContain('Reste à faire : rien.')
+    expect(texte).not.toContain('Reste à faire : rien')
+    expect(texte).not.toContain('passer à la prochaine demande')
+    expect(texte).toContain('Reste à faire : inconnu ici')
+    expect(texte).toMatch(/AUCUNE étape d.exécution/u)
+    // On n'invente pas une phase : le bloc ne nomme ni frame ni terrain.
+    expect(texte).not.toContain('phase frame')
   })
 })
 

@@ -943,6 +943,32 @@ export function phasesJouees(outcome: OrchestrationOutcome | undefined): string[
  */
 function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
   const phases = phasesJouees(outcome)
+  /*
+   * PORTEE INCONNUE — et c'est le trou que mon premier correctif portait.
+   *
+   * J'avais choisi « sans phase connue, on ne devine pas » et rendu le bloc d'origine. Mesure du
+   * 21/08, l'utilisateur ayant redemarre l'app avec le correctif dans le bundle : le mensonge est
+   * revenu. Un run qui ne joue QUE LE JUGE a `phaseOutputs` VIDE (`jugeSeul` le definit ainsi,
+   * orchestrator.ts:4431) — ma prudence produisait donc exactement l'affirmation qu'elle devait
+   * empecher.
+   *
+   * Le defaut n'etait pas la regle mais son DEFAUT : l'absence de preuve de mutation n'est pas une
+   * preuve d'achevement. Quand on ne sait pas, on ne dit surtout pas « rien ».
+   *
+   * VOCABULAIRE : ce pied ne dit ni « run », ni « workflow », ni « gate », ni le nom d'une phase
+   * interne — un test l'interdit depuis longtemps, et il avait raison contre ma premiere redaction.
+   * L'utilisateur lit un resultat, pas la plomberie qui l'a produit.
+   */
+  if (!phases.length) {
+    return [
+      '---',
+      '✅ Fait',
+      '1. Le résultat demandé a été produit et validé.',
+      "📍 Maintenant : AUCUNE étape d'exécution n'a été jouée — ce verdict porte sur ce qui a été lu, pas sur un besoin réalisé.",
+      '⏳ Reste à faire : inconnu ici — rien ne prouve que le besoin est fait.',
+      "👉 Recommandé : faire exécuter le travail si le besoin n'est pas encore réalisé."
+    ]
+  }
   if (runDAnalyseSeule(phases)) {
     const restantes = phasesRestantes(phases)
     const suite = restantes.length ? restantes.join(' → ') : 'la suite du pipeline'
