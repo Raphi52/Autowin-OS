@@ -16,11 +16,19 @@
  * teste sur des donnees fabriquees et rend le meme verdict partout.
  *
  * POURQUOI UN LECTEUR PROPRE plutot que `parseJsonl` de `dashboards/kaizen` : mesure du
- * 2026-08-21, ce dernier retient **0 ligne sur 522** du fichier reel. Il exige un champ `outcome`
- * ('block' | 'pass' | 'revert') que la telemetrie n'ecrit pas — elle porte `blocked` — et il ne
- * tolere pas le BOM de la premiere ligne. Reutiliser une brique existante etait le bon reflexe ;
- * la mesurer avant de s'y appuyer l'etait aussi. Le defaut de `parseJsonl` est signale a part et
- * n'est pas corrige ici : ce garde ne doit pas dependre de sa reparation pour fonctionner.
+ * 2026-08-21, ce dernier retenait **0 ligne sur 522** du fichier reel, parce qu'il exigeait un
+ * champ `outcome` ('block' | 'pass' | 'revert') que la telemetrie n'ecrit pas : elle porte
+ * `blocked`. Reutiliser une brique existante etait le bon reflexe ; la mesurer avant de s'y
+ * appuyer l'etait aussi.
+ *
+ * CORRIGE DEPUIS : `parseJsonl` derive desormais l'issue du nom du gate et retient 536/536. Ce
+ * lecteur-ci reste independant a dessein -- ce garde ne doit pas dependre d'un autre module pour
+ * fonctionner -- mais il n'accuse plus une brique reparee.
+ *
+ * RECTIFICATION : la version precedente de ce commentaire imputait aussi le defaut au BOM de la
+ * premiere ligne. C'ETAIT FAUX, et mesure comme tel le meme jour : `trim()` retire deja le BOM,
+ * U+FEFF etant un blanc au sens ECMAScript. La cause etait UNIQUE. Une explication en trop, meme
+ * plausible, fait passer pour cause verifiee ce qui n'a jamais ete teste.
  */
 
 /** Un evenement de telemetrie de gate, au format REELLEMENT ecrit sur disque. */
