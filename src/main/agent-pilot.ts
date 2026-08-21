@@ -531,6 +531,33 @@ export class AgentPilot {
         ? this.bus.exec(name, args, conversationId, undefined, turnId)
         : this.bus.exec(name, args, conversationId)
     }
+    /**
+     * Une commande qui JETTE est un echec comme un autre — sauf l'annulation.
+     *
+     * Trouve par l'audit du 2026-08-21 : `execCommand` n'avait aucun try/catch. Un timeout, un gate
+     * implemente par un `throw` plutot que par un `{ok:false}`, ou n'importe quelle exception d'un
+     * outil faisait remonter l'erreur HORS du tour — sans reprise, sans aveu, sans enregistrement du
+     * mur. C'est exactement la classe de cas que ce chantier devait couvrir, et elle passait
+     * entierement a cote du mecanisme parce que celui-ci ne regarde que `commandResultSucceeded`.
+     *
+     * L'ANNULATION, elle, doit continuer a remonter. C'est le piege de ce correctif : elle voyage
+     * elle aussi par exception (`signal.throwIfAborted`), et l'avaler ferait repartir l'agent —
+     * « corrige la cause et reprends la tache » — sur un travail que l'utilisateur vient d'arreter.
+     */
+    const estUneAnnulation = (erreur: unknown): boolean =>
+      signal?.aborted === true ||
+      (typeof erreur === 'object' && erreur !== null && (erreur as { name?: string }).name === 'AbortError')
+    const execCommandTolerante = async (
+      name: string,
+      args: Record<string, unknown>
+    ): Promise<CommandResult> => {
+      try {
+        return await execCommand(name, args)
+      } catch (erreur) {
+        if (estUneAnnulation(erreur)) throw erreur
+        return { ok: false, error: erreur instanceof Error ? erreur.message : String(erreur) }
+      }
+    }
     const provider = binding.provider
     // Autorite du tour : une demande utilisateur ne peut ouvrir qu'un run. Une reparation ou reprise
     // appartient au controleur du run courant ; un second run exige un nouveau message utilisateur.
@@ -1536,7 +1563,7 @@ export class AgentPilot {
                   ? { attachments: settledAction.attachments }
                   : {})
               }
-          : await execCommand(token.name, authoritativeArgs)
+          : await execCommandTolerante(token.name, authoritativeArgs)
         if (r.attachments?.length) commandAttachments.push(...r.attachments)
         if (!settledAction)
           emit({

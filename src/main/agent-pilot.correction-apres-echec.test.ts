@@ -270,3 +270,71 @@ describe('bornes et interactions — les trous trouves par l’audit du 2026-08-
     expect(fil.slice(posEscalade).includes('Reformule')).toBe(false)
   })
 })
+
+describe('une commande qui JETTE est un echec comme un autre — sauf l’annulation', () => {
+  const LF = String.fromCharCode(10)
+  const CLOTURE = ['✅ Fait.', '⏳ Reste à faire : rien.', '👉 Recommandé : rien.'].join(LF)
+
+  function harnaisJetant(jet: () => never | Promise<never>, reponses: string[]) {
+    const sent: string[] = []
+    let appels = 0
+    const registry = {
+      send: vi.fn(async (_p: string, messages: Message[], _o: SendOptions): Promise<SendResult> => {
+        sent.push(messages.at(-1)?.content ?? '')
+        return { text: reponses.shift() ?? CLOTURE, sessionId: 'sess' } as SendResult
+      }),
+      describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 't' }))
+    }
+    const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) }
+    const bus = {
+      catalog: vi.fn(() => [{ name: 'get_state', args: {}, description: 'état' }]),
+      snapshotForPrompt: vi.fn(async () => ({ tab: 'chat' })),
+      exec: vi.fn(async () => {
+        appels += 1
+        if (appels === 1) return jet()
+        return { ok: true, data: { ok: true } }
+      })
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { pilot: new AgentPilot(registry as any, roles as any, bus as any), sent }
+  }
+
+  it('une exception ordinaire devient un echec visible et declenche la reprise', async () => {
+    // Trouve par l'audit : `execCommand` n'avait aucun try/catch. Un timeout ou un gate implemente
+    // par un `throw` faisait exploser le tour SANS reprise, SANS aveu, et sans rien enregistrer —
+    // exactement la classe de cas que ce chantier devait couvrir.
+    const { pilot: p, sent } = harnaisJetant(
+      () => {
+        throw new Error('ETIMEDOUT: la commande n’a pas repondu')
+      },
+      [
+        'Tentative.<cmd>{"name":"get_state","args":{}}</cmd>',
+        'La commande a échoué : delai depasse.',
+        'Autre approche.<cmd>{"name":"get_state","args":{}}</cmd>',
+        CLOTURE
+      ]
+    )
+    await p.chat(history, () => {}, ask, 10, 'conv-JET', undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, SOIGNEE)
+    const fil = sent.at(-1) ?? ''
+    expect(fil.includes(MARQUEUR)).toBe(true)
+    // L'erreur jetee doit apparaitre dans le fil : l'agent doit POUVOIR lire ce qui a casse.
+    expect(fil).toContain('ETIMEDOUT')
+  })
+
+  it('une ANNULATION continue de remonter : on ne relance pas un tour interrompu', async () => {
+    // Le piege du correctif : l'annulation utilisateur passe par une exception elle aussi. L'avaler
+    // ferait repartir l'agent sur une tache que l'utilisateur vient d'arreter.
+    const annulation = Object.assign(new Error('interrompu'), { name: 'AbortError' })
+    const { pilot: p } = harnaisJetant(
+      () => {
+        throw annulation
+      },
+      ['Tentative.<cmd>{"name":"get_state","args":{}}</cmd>']
+    )
+    await expect(
+      p.chat(history, () => {}, ask, 10, 'conv-ABORT', undefined, undefined, undefined,
+        undefined, undefined, undefined, undefined, undefined, undefined, undefined, SOIGNEE)
+    ).rejects.toThrow('interrompu')
+  })
+})
