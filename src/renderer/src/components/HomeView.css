@@ -1,0 +1,377 @@
+/**
+ * La page d'accueil : des tuiles de verre posées librement au-dessus d'un décor 3D.
+ *
+ * La tension à tenir est nommée : un décor animé sous du texte dense. La réponse n'est pas de baisser
+ * le décor, c'est de poser une couche opaque sous chaque texte — le fond des panneaux est assez sombre
+ * pour que la lisibilité ne dépende pas de ce qui passe derrière, et c'est le CADRE des tuiles, pas
+ * leur intérieur, qui laisse voir la scène.
+ *
+ * Cette vue ne consomme PAS `ViewPage.css` : son cadre de page opaque masquerait le décor, et sa
+ * mise en page en colonne s'oppose au positionnement libre. C'est la seule vue dans ce cas, et c'est
+ * assumé — elle n'a ni barre de sections ni contenu qui défile.
+ */
+
+.home-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  /* La perspective vit ici : c'est ce qui fait que la profondeur d'une tuile est une vraie
+     translation dans l'espace, et non un simple changement d'échelle. */
+  perspective: 1600px;
+  perspective-origin: 50% 40%;
+  background: #000;
+  border-radius: var(--container-radius-page, 16px);
+}
+
+.home-view__decor {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.home-view__decor canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Assombrissement du CENTRE seulement : le décor porte ses nébuleuses sur les bords et garde le
+   milieu noir, donc la lisibilité se gagne là où les tuiles se posent, sans éteindre la scène. */
+.home-view::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(58% 48% at 50% 46%, rgba(0, 0, 4, 0.46), transparent 78%);
+}
+
+/* L'en-tête : UNE rangée qui se replie, et non deux blocs posés en absolu chacun dans son coin.
+   Mesuré le 2026-08-21 dans la fenêtre réelle (491 px) : les deux blocs se recouvraient et les
+   boutons passaient par-dessus le titre. Une rangée qui se replie rend la collision impossible. */
+.home-view__header {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  left: 18px;
+  right: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3, 12px);
+  pointer-events: none;
+}
+
+/* La plaque : posé à même le décor, le titre tombait sur une nébuleuse et devenait illisible. */
+.home-view__masthead {
+  flex: 1 1 260px;
+  max-width: 52ch;
+  padding: 9px 14px 11px;
+  background: var(--bg-1, rgba(0, 0, 0, 0.56));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.18));
+  border-radius: var(--r2, 12px);
+  backdrop-filter: blur(16px);
+}
+
+.home-view__masthead h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.home-view__masthead h1 b {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.home-view__masthead p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-faint);
+}
+
+.home-view__tools {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s2, 8px);
+  /* Le conteneur laisse passer les clics ; seuls les boutons les prennent. */
+  pointer-events: auto;
+}
+
+.home-view__tools button {
+  padding: 6px 12px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  background: var(--bg-1, rgba(0, 0, 0, 0.56));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.18));
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.home-view__tools button:hover,
+.home-view__tools button:focus-visible {
+  color: var(--text);
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+/* Une tuile = une ÉTIQUETTE au-dessus, puis le panneau. Le titre n'est pas une barre DANS la boîte :
+   il est sorti du cadre et flotte devant — décision de l'utilisateur, « interlocuteur est dedans au
+   lieu d'au-dessus du contenu ». */
+.home-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  transform-style: preserve-3d;
+  /* La tuile se prend N'IMPORTE OÙ : chercher une zone de préhension est la friction à supprimer. */
+  cursor: grab;
+  touch-action: none;
+}
+
+.home-tile[data-held='true'] {
+  cursor: grabbing;
+}
+
+.home-tile__label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+  /* Doit rester en phase avec `WIDGET_LABEL_HEIGHT` de home-layout.ts, qui borne la descente d'une
+     tuile pour qu'elle reste attrapable. */
+  height: 24px;
+  padding: 0 4px 0 2px;
+  user-select: none;
+}
+
+.home-tile__label h2 {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.95);
+  white-space: nowrap;
+}
+
+/* Le filet est doré comme toute la structure dans ce thème. */
+.home-tile__rule {
+  flex: 1;
+  height: 1px;
+  min-width: 12px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  opacity: 0.55;
+}
+
+.home-tile__count {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 7px;
+  color: #2a0716;
+  background: var(--rose);
+  border-radius: 999px;
+}
+
+.home-tile__panel {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 8px 5px 8px 7px;
+  background: var(--bg-1, rgba(0, 0, 0, 0.56));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.18));
+  border-radius: var(--r2, 12px);
+  backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow:
+    0 20px 46px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  /* AUCUNE transition sur la taille ni sur la position : la tuile suit la main au pixel. Une
+     transition ici produirait le gonflement élastique qui a fait rejeter une première version. */
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    box-shadow 200ms var(--ease);
+  overflow: hidden;
+}
+
+.home-tile[data-held='true'] .home-tile__panel {
+  border-color: var(--line-strong);
+  box-shadow:
+    0 40px 84px rgba(0, 0, 0, 0.74),
+    0 0 0 1px rgba(233, 189, 78, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+/* Le hublot est le seul panneau à ne PAS opacifier son fond : il sert de fenêtre sur le décor. */
+.home-tile[data-window='true'] .home-tile__panel {
+  background: rgba(0, 0, 0, 0.18);
+  backdrop-filter: none;
+  border-style: dashed;
+}
+
+.home-tile__scroll {
+  height: 100%;
+  padding-right: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+/* Huit prises, sans aucun pas : la taille est celle du pixel lâché. */
+.home-tile__grip {
+  position: absolute;
+  z-index: 2;
+}
+.home-tile__grip[data-edge='n'] { top: -3px; left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
+.home-tile__grip[data-edge='s'] { bottom: -3px; left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
+.home-tile__grip[data-edge='w'] { left: -3px; top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
+.home-tile__grip[data-edge='e'] { right: -3px; top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
+.home-tile__grip[data-edge='nw'] { top: -3px; left: -3px; width: 17px; height: 17px; cursor: nwse-resize; }
+.home-tile__grip[data-edge='ne'] { top: -3px; right: -3px; width: 17px; height: 17px; cursor: nesw-resize; }
+.home-tile__grip[data-edge='sw'] { bottom: -3px; left: -3px; width: 17px; height: 17px; cursor: nesw-resize; }
+.home-tile__grip[data-edge='se'] { bottom: -3px; right: -3px; width: 17px; height: 17px; cursor: nwse-resize; }
+
+.home-tile__grip[data-edge='se']::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 9px;
+  height: 9px;
+  border-right: 1.5px solid var(--gold);
+  border-bottom: 1.5px solid var(--gold);
+  border-bottom-right-radius: 3px;
+  opacity: 0.4;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.home-tile:hover .home-tile__grip[data-edge='se']::after {
+  opacity: 1;
+}
+
+/* Contenus */
+.home-list,
+.home-notices {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.home-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--r1, 8px);
+  font-size: 12.5px;
+}
+
+.home-list li:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.home-list time {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-list span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-list em {
+  flex: none;
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.home-list li[data-suspended='true'] span,
+.home-list li[data-suspended='true'] time {
+  color: var(--text-faint);
+}
+
+.home-notices li {
+  margin-bottom: 4px;
+}
+
+.home-notices button {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 7px 10px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: rgba(239, 63, 145, 0.07);
+  border: 0;
+  border-left: 2px solid var(--rose);
+  border-radius: 0 var(--r1, 8px) var(--r1, 8px) 0;
+  cursor: pointer;
+}
+
+.home-notices li[data-kind='missed'] button {
+  border-left-color: var(--gold);
+  background: rgba(233, 189, 78, 0.06);
+}
+
+.home-notices li[data-read='true'] button {
+  border-left-color: var(--line);
+  background: none;
+}
+
+.home-notices button span {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.home-notices button small {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.home-hint,
+.home-error {
+  margin: 4px 4px 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+
+.home-error {
+  color: var(--err);
+}

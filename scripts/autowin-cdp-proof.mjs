@@ -17,6 +17,14 @@ const skipScreenshot = process.argv.includes('--skip-screenshot')
 const collapseRail = process.argv.includes('--collapse-rail')
 const canonicalDestinations = [
   {
+    // L'accueil est la vue d'OUVERTURE : si sa pastille ne mene pas a sa vue, l'app s'ouvre sur du
+    // vide. Elle appartient donc a la verification canonique comme les huit autres.
+    id: 'accueil',
+    navSelector: '[data-testid="nav-accueil"]',
+    viewSelector: '[data-testid="home-view"]',
+    expectedText: 'Autowin'
+  },
+  {
     id: 'chat',
     navSelector: '[data-testid="nav-chat"]',
     viewSelector: '[data-testid="chat-view"]',

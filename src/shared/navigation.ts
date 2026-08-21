@@ -1,4 +1,5 @@
 export const APP_DESTINATIONS = [
+  { id: 'accueil', label: 'Accueil', icon: '🏠' },
   { id: 'chat', label: 'Chat', icon: '💬' },
   { id: 'agent-studio', label: 'Agent Studio', icon: '🤖' },
   { id: 'knowledge', label: 'Knowledge', icon: '🧠' },
@@ -42,6 +43,12 @@ export interface AppLocation {
 const DESTINATION_IDS = new Set<string>(APP_DESTINATIONS.map(({ id }) => id))
 
 const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
+  // Un agent pilote l'app par des NOMS : sans ces alias, « va sur l'accueil » en anglais ou en
+  // jargon tableau-de-bord retomberait sur `chat`.
+  home: 'accueil',
+  accueil: 'accueil',
+  dashboard: 'accueil',
+  'tableau-de-bord': 'accueil',
   memory: 'knowledge',
   graph: 'knowledge',
   brain: 'knowledge',

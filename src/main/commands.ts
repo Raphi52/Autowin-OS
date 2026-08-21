@@ -795,7 +795,15 @@ function redactedArgs(name: string, args: Record<string, unknown>): Record<strin
 const ORCHESTRATE_PHASES = new Set(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
 
 export class AppCommandBus {
-  private tab: AppDestination = 'chat'
+  /**
+   * La vue d'OUVERTURE, et elle doit etre la meme que celle du renderer.
+   *
+   * Le renderer ouvre sur `accueil` ; laisser `chat` ici faisait diverger les deux cotes tant que
+   * l'utilisateur n'avait pas navigue une premiere fois — un agent qui lisait `appState().tab`
+   * croyait donc l'app sur le chat alors qu'elle affichait l'accueil. Verifie hors-modele par
+   * `autowin-cdp-proof.mjs --verify-navigation`, qui compare exactement ces deux valeurs.
+   */
+  private tab: AppDestination = 'accueil'
   private traceStore?: TraceStore
   /** Hook de traçage (ledger) — chaque commande exécutée y laisse une ligne. */
   trace?: (name: string, args: Record<string, unknown>, ok: boolean) => void

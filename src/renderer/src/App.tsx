@@ -8,6 +8,7 @@ declare const __BUILD_SHA__: string
 const buildNumber = typeof __BUILD_NUMBER__ === 'string' ? __BUILD_NUMBER__ : 'dev'
 const buildSha = typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'local'
 import { ChatView } from './components/ChatView'
+import { HomeView } from './components/HomeView'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
 // L'onglet Worktrees porte la vue à FRISE D'HISTORIQUE GIT (`WorktreeView`), restaurée sur demande de
@@ -116,14 +117,17 @@ function TaskManagerIcon(): React.JSX.Element {
 
 export function MainApp(): React.JSX.Element {
   const testInstance = new URLSearchParams(window.location.search).get('instance') === 'test'
-  const [tab, setTab] = useState<Tab>('chat')
+  // L'accueil est la vue d'ouverture : c'est l'endroit ou l'on lit l'etat de sa journee d'un coup
+  // d'oeil. Le repli d'une destination INCONNUE reste `chat` (voir `normalizeDestination`) : un agent
+  // qui se trompe de nom doit atterrir la ou il peut parler, pas sur un tableau de bord.
+  const [tab, setTab] = useState<Tab>('accueil')
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   // #11 — l'état replié/déplié de la rail est PERSISTÉ (comme le zoom), pour ne pas re-replier à
   // chaque lancement.
   const [railCollapsed, setRailCollapsed] = useState<boolean>(
     () => localStorage.getItem('autowin:rail-collapsed') === '1'
   )
-  const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['chat']))
+  const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['accueil']))
   const [observatoryFocus, setObservatoryFocus] = useState<ObservatoryFocus | null>(null)
   const [agentStudioSection, setAgentStudioSection] = useState<AgentStudioSection>('topology')
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('capabilities')
@@ -491,6 +495,11 @@ export function MainApp(): React.JSX.Element {
         </div>
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
+        {visitedTabs.has('accueil') && (
+          <div className={`view-slot${tab === 'accueil' ? ' is-active' : ''}`}>
+            <HomeView active={tab === 'accueil'} onNavigate={applyLocation} />
+          </div>
+        )}
         {visitedTabs.has('chat') && (
           <div className={`view-slot${tab === 'chat' ? ' is-active' : ''}`}>
             <ChatView isActive={tab === 'chat'} onInspectTurn={inspectTurn} />

@@ -127,9 +127,20 @@ describe('navigation humaine synchronisée avec le main', () => {
       trigger: (container: HTMLElement) =>
         (container.querySelector('[data-testid="nav-knowledge"]') as HTMLButtonElement).click()
     },
+    // Ctrl+N indexe POSITIONNELLEMENT `APP_DESTINATIONS`. L'ajout de l'Accueil en tete decale donc
+    // chaque rang d'un cran, ce qui est le comportement voulu : Ctrl+1 ouvre l'accueil. Ce test ne
+    // garde pas une touche pour une vue, il garde l'INVARIANT « ce qu'on voit == appState().tab ».
+    {
+      interaction: 'le raccourci Ctrl+1',
+      destination: 'accueil',
+      trigger: (_container: HTMLElement) =>
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', { key: '1', ctrlKey: true, bubbles: true })
+        )
+    },
     {
       interaction: 'le raccourci Ctrl+4',
-      destination: 'observatory',
+      destination: 'knowledge',
       trigger: (_container: HTMLElement) =>
         window.dispatchEvent(
           new KeyboardEvent('keydown', { key: '4', ctrlKey: true, bubbles: true })
@@ -137,7 +148,7 @@ describe('navigation humaine synchronisée avec le main', () => {
     },
     {
       interaction: 'le raccourci Cmd+6',
-      destination: 'worktree',
+      destination: 'task-manager',
       trigger: (_container: HTMLElement) =>
         window.dispatchEvent(
           new KeyboardEvent('keydown', { key: '6', metaKey: true, bubbles: true })
