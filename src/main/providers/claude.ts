@@ -516,6 +516,15 @@ export function ecrireConfigMcp(
   }
 }
 
+/** Duree d'un battement d'outil, rendue lisible : « 45 s », « 2 min 30 s », « 3 min ». */
+function dureeLisible(secondes: number): string {
+  const total = Math.round(secondes)
+  if (total < 60) return `${total} s`
+  const minutes = Math.floor(total / 60)
+  const reste = total % 60
+  return reste ? `${minutes} min ${reste} s` : `${minutes} min`
+}
+
 export class ClaudeCliAdapter implements ProviderAdapter {
   readonly id = 'claude'
   // B — Claude EST un exécuteur outillé (Claude Code). Quand `opts.execution` est fourni, on lance
@@ -1016,6 +1025,18 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // dans `thinking` faisait afficher « Raisonnement : API 529 overloaded » apres coup (mesure le
         // 2026-08-21 : sur 155 etapes reelles, l'UNIQUE champ non vide ne contenait que ce bruit).
         queue.push({ delta: '', reasoning: note })
+        return
+      }
+      if (t === 'tool_progress') {
+        // Un outil long (suite de tests, build) n'emet RIEN pendant des minutes : le CLI comble ce
+        // silence par un battement toutes les 30 s. Sans ce relais, la carte du fil restait sur
+        // « 1 action en cours » et l'utilisateur concluait a un blocage (vecu le 2026-08-22 sur
+        // run-f173a3f73600-1 : `npx vitest run`, 15 min, flux VIVANT mais invisible).
+        // Relaye en DIRECT seulement, jamais persiste : un battement n'est pas du raisonnement.
+        const elapsed = Number(o['elapsed_time_seconds'])
+        if (!Number.isFinite(elapsed) || elapsed <= 0) return
+        const outil = typeof o['tool_name'] === 'string' && o['tool_name'] ? o['tool_name'] : 'outil'
+        queue.push({ delta: '', reasoning: `${outil} en cours — ${dureeLisible(elapsed)}` })
         return
       }
       if (t === 'result') resultSeen = true

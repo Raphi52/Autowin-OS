@@ -42,6 +42,20 @@ vi.mock('../runs/survivable-spawn', () => ({
 
 import { CodexAdapter } from './codex'
 
+/**
+ * Draine le flux jusqu'a sa fin, puis rend la promesse a assertion.
+ *
+ * Le generateur relaie desormais la PROGRESSION au fil de l'eau (2026-08-22) : `command_execution`
+ * sort en note avant que la terminaison en exit 1 ne jette. L'invariant sous test est inchange —
+ * l'exception FINALE porte le diagnostic — mais il ne se lit plus sur le premier chunk.
+ */
+async function draine(stream: AsyncGenerator<unknown, unknown, void>): Promise<unknown> {
+  for (;;) {
+    const step = await stream.next()
+    if (step.done) return step.value
+  }
+}
+
 describe('CodexAdapter — baseline exit 1 avec diagnostic JSONL structuré', () => {
   it('remonte le diagnostic de command_execution dans l’exception finale', async () => {
     const previousCodexBin = process.env.CODEX_BIN
@@ -51,7 +65,7 @@ describe('CodexAdapter — baseline exit 1 avec diagnostic JSONL structuré', ()
         execution: { cwd: process.cwd(), sandbox: 'read-only' }
       })
 
-      await expect(stream.next()).rejects.toThrow('Tests 1 failed | 10 passed')
+      await expect(draine(stream)).rejects.toThrow('Tests 1 failed | 10 passed')
     } finally {
       if (previousCodexBin === undefined) delete process.env.CODEX_BIN
       else process.env.CODEX_BIN = previousCodexBin
@@ -65,7 +79,7 @@ describe('CodexAdapter — baseline exit 1 avec diagnostic JSONL structuré', ()
       const stream = new CodexAdapter().send([{ role: 'user', content: 'stderr-brut' }], {
         execution: { cwd: process.cwd(), sandbox: 'read-only' }
       })
-      await expect(stream.next()).rejects.toThrow('stderr=fatal: ligne non JSON')
+      await expect(draine(stream)).rejects.toThrow('stderr=fatal: ligne non JSON')
     } finally {
       if (previousCodexBin === undefined) delete process.env.CODEX_BIN
       else process.env.CODEX_BIN = previousCodexBin
@@ -79,7 +93,7 @@ describe('CodexAdapter — baseline exit 1 avec diagnostic JSONL structuré', ()
       const stream = new CodexAdapter().send([{ role: 'user', content: 'sans-diagnostic' }], {
         execution: { cwd: process.cwd(), sandbox: 'read-only' }
       })
-      await expect(stream.next()).rejects.toThrow('diagnostic=diagnostic-absent')
+      await expect(draine(stream)).rejects.toThrow('diagnostic=diagnostic-absent')
     } finally {
       if (previousCodexBin === undefined) delete process.env.CODEX_BIN
       else process.env.CODEX_BIN = previousCodexBin

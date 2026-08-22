@@ -373,11 +373,24 @@ export function codexExecSpec(
   return { executable: 'node', cwd, args: [entrypoint, ...commonArgs] }
 }
 
+/**
+ * Note LISIBLE d'un item d'exécution Codex, pour le relais live. Rend `undefined` quand l'item
+ * n'apprend rien d'affichable — mieux vaut le silence qu'une ligne vide dans le fil.
+ */
+function noteDeProgression(item: { type?: string; command?: string }, ok: boolean): string | undefined {
+  const libelle = item.command?.trim() || item.type
+  if (!libelle) return undefined
+  return `${libelle} — ${ok ? 'terminé' : 'échec'}`
+}
+
 async function runCodexExec(
   messages: Message[],
   opts: SendOptions,
   model: string,
-  fallbackTimeoutMs: number
+  fallbackTimeoutMs: number,
+  // Relais LIVE de la progression. Sans lui, l'adaptateur absorbait tout le grain fin du CLI et ne
+  // rendait la main qu'a la fin : la carte du fil restait muette pendant TOUT l'appel (2026-08-22).
+  onProgress?: (chunk: StreamChunk) => void
 ): Promise<SendResult> {
   opts.signal?.throwIfAborted()
   const execution = opts.execution
@@ -508,15 +521,23 @@ async function runCodexExec(
                   changes?: unknown
                 }
               | undefined
+            // Le message final part par `delta` a la fin du generateur : le relayer ici aussi
+            // l'afficherait DEUX fois.
             if (item?.type === 'agent_message' && item.text) finalText = item.text
             else if (item?.type === 'reasoning') {
-              // Raisonnement CONSERVÉ (plus jeté) : accumulé pour l'observation post-mortem.
-              if (item.text) reasoningFragments.push(item.text)
+              // Raisonnement CONSERVÉ (plus jeté) : accumulé pour l'observation post-mortem, ET
+              // relayé en direct — c'est la seule chose qui se passe pendant l'attente.
+              if (item.text) {
+                reasoningFragments.push(item.text)
+                onProgress?.({ delta: '', reasoning: item.text })
+              }
             } else if (item?.type) {
               const itemEvidence = codexExecutionEvidenceFromItem(item, spec.cwd)
               executionEvidence.push(...itemEvidence)
               const ok = itemEvidence.every((entry) => entry.ok)
               if (!ok) lastStructuredError = JSON.stringify(event).slice(-4_000)
+              const note = noteDeProgression(item, ok)
+              if (note) onProgress?.({ delta: '', reasoning: note })
             }
           }
           if (event.type === 'turn.completed') {
@@ -734,7 +755,44 @@ export class CodexAdapter implements ProviderAdapter {
     opts: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
     if (opts.execution) {
-      const result = await runCodexExec(messages, opts, opts.model ?? this.model, this.timeoutMs)
+      // Pompe : le grain fin du CLI sort AU FIL DE L'EAU, le texte final ferme le flux. Même forme
+      // que l'adaptateur Claude ; avant, un unique `yield` après l'attente rendait le sous-agent
+      // muet du début à la fin.
+      const queue: StreamChunk[] = []
+      let resolveWait: (() => void) | undefined
+      let done = false
+      const reveiller = (): void => {
+        resolveWait?.()
+        resolveWait = undefined
+      }
+      const running = runCodexExec(
+        messages,
+        opts,
+        opts.model ?? this.model,
+        this.timeoutMs,
+        (chunk) => {
+          queue.push(chunk)
+          reveiller()
+        }
+      )
+      // Rattaché TOUT DE SUITE : une promesse rejetée pendant que la pompe attend serait un rejet
+      // non géré. L'erreur est relancée plus bas, à l'await.
+      const settled = running.then(
+        () => undefined,
+        () => undefined
+      )
+      void settled.then(() => {
+        done = true
+        reveiller()
+      })
+      while (!done || queue.length > 0) {
+        if (queue.length > 0) {
+          yield queue.shift()!
+          continue
+        }
+        await new Promise<void>((r) => (resolveWait = r))
+      }
+      const result = await running
       yield { delta: result.text }
       return result
     }
