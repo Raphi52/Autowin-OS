@@ -23,12 +23,17 @@ import {
   capVerifyOutput,
   decideRelatedVerify,
   decideVerifyCommand,
+  porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
   verifyTimeoutMs,
   verifyTimeoutOutcome,
   type VerifyOutcome
 } from './verify-command'
+import { readGitState } from './git-read-main'
 import type { AutowinOS } from './os'
+
+/** Deux sauts de ligne, sans séquence d'échappement — même règle que `SAUT` dans verify-command.ts. */
+const SAUT_PORTEE = String.fromCharCode(10, 10)
 import { lastUserMessageAt } from './store/conversations'
 import type { Message } from './providers/types'
 import type { Role, RoleBinding } from './roles'
@@ -2461,7 +2466,27 @@ export class AppCommandBus {
         output: ''
       }
     }
-    return await this.spawnVerify(decision.command.split(' '), decision.cwd, decision.command)
+    const resultat = await this.spawnVerify(
+      decision.command.split(' '),
+      decision.cwd,
+      decision.command
+    )
+    // Le verdict NOMME sa portee. Sans cela, un vert obtenu dans un arbre sale se lit comme un
+    // vert du depot : mesure du 2026-08-22 (conv-1371), « exit 0, 713 fichiers » a ete conclu
+    // « pret pour la fusion » alors qu'`origin/main` portait 3 rouges au meme instant.
+    const portee = porteeDuVert(await this.fichiersNonCommites(decision.cwd))
+    return portee ? { ...resultat, output: `${portee}${SAUT_PORTEE}${resultat.output}` } : resultat
+  }
+
+  /** Fichiers non commites de la base, lus par le lecteur git DEJA en place (aucun doublon). */
+  private async fichiersNonCommites(cwd: string): Promise<string[]> {
+    try {
+      const etat = await readGitState(cwd, 1)
+      return (etat.state?.changes ?? []).map((c) => c.path)
+    } catch {
+      // Pas de git, pas de depot : on ne bloque pas la verification pour autant.
+      return []
+    }
   }
 
   /**

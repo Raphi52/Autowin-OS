@@ -270,3 +270,36 @@ export function capVerifyOutput(raw: string, cap: number = VERIFY_OUTPUT_CAP): s
   const fin = queue > 0 ? text.slice(-queue) : ''
   return verdict ? marker + verdict + SAUT + fin : marker + fin
 }
+
+/** Au-delà, la note inonderait le contexte du tour : on nomme les premiers, on compte le reste. */
+const PORTEE_FICHIERS_NOMMES = 5
+
+/**
+ * NOMME LA PORTÉE D'UN VERT — rend `undefined` quand il n'y a rien à nuancer.
+ *
+ * Une suite lancée dans un arbre de travail SALE mesure l'arbre, jamais l'état commité : les deux
+ * diffèrent exactement de la valeur du `git status`. Sur un dépôt où plusieurs sessions écrivent,
+ * cet écart n'est pas théorique — il contient les correctifs en vol des autres, ET leurs
+ * suppressions, qui masquent un rouge en empêchant un test de s'exécuter.
+ *
+ * Mesuré le 2026-08-22 (conv-1371) : « exit 0, 713 fichiers / 7754 tests » a été rendu, puis lu
+ * comme « base unitaire prouvée verte, prête pour la fusion » — alors que `origin/main` portait
+ * 3 tests rouges au même instant. `verify` ne peut pas empêcher cette conclusion, mais il peut
+ * cesser de la laisser paraître fondée.
+ *
+ * Reprend la règle déjà posée par `edit_file` : un vert dont on ignore l'étendue se lit plus large
+ * qu'il n'est. Et celle du gate : NOMMER, pas compter — « 14 fichiers » n'est pas actionnable.
+ */
+export function porteeDuVert(fichiersNonCommites: readonly string[]): string | undefined {
+  const sales = fichiersNonCommites.map((f) => f.trim()).filter((f) => f.length > 0)
+  if (sales.length === 0) return undefined
+  const nommes = sales.slice(0, PORTEE_FICHIERS_NOMMES)
+  const reste = sales.length - nommes.length
+  const liste = nommes.map((f) => `« ${f} »`).join(', ') + (reste > 0 ? ` et ${reste} autre(s)` : '')
+  return (
+    `Portée de ce résultat : il mesure l'ARBRE DE TRAVAIL, qui contient ${sales.length} fichier(s) ` +
+    `non commité(s) — ${liste}. Il n'atteste pas l'état commité, et ne suffit donc pas à conclure ` +
+    `avant une fusion : un fichier de test supprimé mais non commité ne rend pas vert, il se tait. ` +
+    `Pour juger la cible de fusion, rejouer sur une copie propre de cette base.`
+  )
+}
