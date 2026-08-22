@@ -63,7 +63,7 @@ export function Markdown({
    * le champ de saisie. La retirer ici, au plus pres du rendu, evite de la filtrer dans chaque
    * appelant -- et de la laisser clignoter caractere par caractere pendant le streaming.
    */
-  const brut = continuationPrefix ? `${continuationPrefix}'+chr(92)+'n${text}` : text
+  const brut = continuationPrefix ? `${continuationPrefix}\n${text}` : text
   const source = retirerLignePromptSuivant(brut)
   const finalSummary = highlightFinalSummary ? splitFinalSummary(source) : null
   return (
