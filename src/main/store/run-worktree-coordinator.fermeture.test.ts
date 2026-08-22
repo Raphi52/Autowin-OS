@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
@@ -318,6 +318,9 @@ describe('C — quand le balayage emporte une copie, l’etat part avec elle', (
     const root = mkdtempSync(join(tmpdir(), 'fermeture-balayage-'))
     try {
       const store = new WorktreeRunStateStore(root, 'repo-a')
+      // La copie EXISTE : sans elle, la passe des manifestes orphelins emporterait ce manifeste pour
+      // une raison etrangere a ce test, qui n'isolerait plus le comportement du balayage.
+      mkdirSync(join(root, 'agent__run-garde'), { recursive: true })
       store.save({
         version: 1,
         repoId: 'repo-a',
@@ -342,6 +345,105 @@ describe('C — quand le balayage emporte une copie, l’etat part avec elle', (
         nowFn: () => 30
       })
       expect(store.get('run-garde')).toBeTruthy()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('D — un etat dont la COPIE a disparu ne survit plus tout seul', () => {
+  const etat = (over: Record<string, unknown> = {}) => ({
+    version: 1 as const,
+    repoId: 'repo-a',
+    runId: 'run-sans-copie',
+    agentName: 'Builder',
+    baseBranch: 'main',
+    baseSha: SHA,
+    verdict: 'green' as const,
+    publication: 'blocked' as const,
+    worktreePath: '',
+    files: [],
+    createdAtMs: 10,
+    updatedAtMs: 20,
+    ...over
+  })
+
+  it('supprime un etat orphelin dont le travail est DEJA dans l’historique', () => {
+    /*
+     * Variante residuelle trouvee le 2026-08-22 en verifiant la derniere case de DoD : 22 manifestes
+     * subsistaient pour ZERO dossier de copie. Le balayage ne peut emporter un manifeste que quand il
+     * emporte SA COPIE ; une copie disparue par un autre chemin (nettoyage manuel, suppression
+     * externe) laissait donc son manifeste orphelin pour toujours.
+     */
+    const root = mkdtempSync(join(tmpdir(), 'fermeture-orphelin-'))
+    try {
+      const store = new WorktreeRunStateStore(root, 'repo-a')
+      store.save(etat({ worktreePath: join(root, 'agent__run-sans-copie'), sourceSha: PUBLIE }))
+      // eslint-disable-next-line no-new
+      new RunWorktreeCoordinator({
+        manager: manager(root, { listAgentIds: () => [], commitDejaReference: () => true }),
+        stateStore: store,
+        nowFn: () => 30
+      })
+      expect(store.get('run-sans-copie')).toBeUndefined()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('CONSERVE un etat orphelin dont le commit n’est atteignable par AUCUNE reference', () => {
+    // La garde dure : ce manifeste est alors la seule adresse vers un travail. On ne le touche pas.
+    const root = mkdtempSync(join(tmpdir(), 'fermeture-orphelin-'))
+    try {
+      const store = new WorktreeRunStateStore(root, 'repo-a')
+      store.save(etat({ worktreePath: join(root, 'agent__run-sans-copie'), sourceSha: PUBLIE }))
+      // eslint-disable-next-line no-new
+      new RunWorktreeCoordinator({
+        manager: manager(root, { listAgentIds: () => [], commitDejaReference: () => false }),
+        stateStore: store,
+        nowFn: () => 30
+      })
+      expect(store.get('run-sans-copie')).toBeTruthy()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('CONSERVE un etat dont la copie EXISTE encore', () => {
+    const root = mkdtempSync(join(tmpdir(), 'fermeture-orphelin-'))
+    try {
+      const store = new WorktreeRunStateStore(root, 'repo-a')
+      const copie = join(root, 'agent__run-sans-copie')
+      mkdirSync(copie, { recursive: true })
+      store.save(etat({ worktreePath: copie, sourceSha: PUBLIE }))
+      // eslint-disable-next-line no-new
+      new RunWorktreeCoordinator({
+        manager: manager(root, { listAgentIds: () => [], commitDejaReference: () => true }),
+        stateStore: store,
+        nowFn: () => 30
+      })
+      expect(store.get('run-sans-copie')).toBeTruthy()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('CONSERVE un etat orphelin si un processus est encore VIVANT', () => {
+    const root = mkdtempSync(join(tmpdir(), 'fermeture-orphelin-'))
+    try {
+      const store = new WorktreeRunStateStore(root, 'repo-a')
+      store.save(etat({ worktreePath: join(root, 'agent__run-sans-copie'), sourceSha: PUBLIE }))
+      // eslint-disable-next-line no-new
+      new RunWorktreeCoordinator({
+        manager: manager(root, {
+          listAgentIds: () => [],
+          commitDejaReference: () => true,
+          hasActiveProcesses: () => true
+        }),
+        stateStore: store,
+        nowFn: () => 30
+      })
+      expect(store.get('run-sans-copie')).toBeTruthy()
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

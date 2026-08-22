@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from './worktree-manager'
 import type {
@@ -49,6 +50,7 @@ export interface RunWorktreeCoordinatorDeps {
     Partial<
       Pick<
         WorktreeManager,
+        | 'commitDejaReference'
         | 'reconcileResidues'
         | 'reconcileResiduesAsync'
         | 'cleanupPublished'
@@ -161,6 +163,18 @@ function stateFromFinalize(res: FinalizeResult): WorktreeState {
 }
 
 const MAX_AUTOMATIC_RETRIES = 6
+/**
+ * Les publications qu'une reprise peut encore reveiller — donc dont le manifeste porte encore une
+ * information vivante, meme si la copie a disparu du disque.
+ */
+const ETATS_ENCORE_RECUPERABLES: ReadonlySet<string> = new Set([
+  'pending',
+  'integrating',
+  'published',
+  'cleanup-pending',
+  'complete',
+  'held'
+])
 
 export class RunWorktreeCoordinator {
   private readonly manager: RunWorktreeCoordinatorDeps['manager']
@@ -1497,6 +1511,58 @@ export class RunWorktreeCoordinator {
     }
   }
 
+  /**
+   * UN MANIFESTE DONT LA COPIE A DISPARU NE SURVIT PLUS TOUT SEUL.
+   *
+   * Variante residuelle trouvee le 2026-08-22 en verifiant la derniere case de la DoD : 22
+   * manifestes subsistaient pour ZERO dossier de copie. Le balayage ne peut emporter un manifeste
+   * que lorsqu'il emporte SA COPIE ; une copie disparue par un autre chemin — nettoyage manuel,
+   * suppression externe, disque remis a plat — laissait donc son manifeste orphelin pour toujours.
+   *
+   * Trois gardes, toutes falsifiables : la copie doit reellement avoir disparu du disque, aucun
+   * processus ne doit la revendiquer, et si le manifeste cite un commit, ce commit doit deja etre
+   * retenu par une reference du depot. Ce dernier point reutilise `commitDejaReference`, la SEULE
+   * definition de « deja dans l'historique » — en avoir deux qui divergent serait pire qu'aucune.
+   *
+   * Le cas sans commit cite est sur lui aussi : un manifeste qui ne nomme aucun commit n'est
+   * l'adresse de rien. Et quand git ne repond pas, `commitDejaReference` rend `undefined` : on
+   * s'abstient, parce que l'ignorance n'est pas une reponse negative.
+   */
+  private oublierLesEtatsSansCopie(
+    records: Map<string, WorktreeRunRecord>,
+    managerIds: readonly string[]
+  ): void {
+    if (!this.stateStore) return
+    for (const [runId, record] of [...records]) {
+      /*
+       * DEUX signaux independants, jamais un seul. Un `existsSync` transitoirement faux — disque
+       * lent, chemin reseau, copie en cours de creation — suffirait a detruire le manifeste d'un run
+       * bien vivant : c'est trop mince pour autoriser une suppression definitive. On exige donc AUSSI
+       * que le gestionnaire de copies ne connaisse pas ce run : deux sources qui se trompent en meme
+       * temps, de la meme facon, c'est un autre ordre d'improbabilite.
+       */
+      if (managerIds.includes(runId)) continue
+      if (!record.worktreePath || existsSync(record.worktreePath)) continue
+      if (this.manager.hasActiveProcesses?.(runId)) continue
+      /*
+       * Et seuls les etats qui ne participent A AUCUNE reprise sont concernes.
+       *
+       * Deux tests l'ont impose, chacun sur un cas different : un `complete` non acquitte est
+       * l'adresse de rejeu d'un callback perdu, et un run interrompu en pleine publication reste
+       * reconnaissable apres un crash par sa reference de recuperation — dans les deux cas la copie
+       * n'a rien a voir dans l'affaire, le manifeste seul porte l'information. « Copie disparue » ne
+       * dit donc rien sur la recuperabilite : il faut le verifier a part.
+       */
+      if (ETATS_ENCORE_RECUPERABLES.has(record.publication)) continue
+      const commit = record.sourceSha ?? record.publishedSha
+      if (commit) {
+        if (this.manager.commitDejaReference?.(commit) !== true) continue
+      }
+      this.stateStore.remove(runId)
+      records.delete(runId)
+    }
+  }
+
   private reconcileExisting(
     inventory?: WorktreeRecoveryInventory,
     residuesPrecalcules?: ReturnType<WorktreeManager['reconcileResidues']>
@@ -1511,6 +1577,7 @@ export class RunWorktreeCoordinator {
     const observed = new Map(inventory?.agents.map((agent) => [agent.agentId, agent]) ?? [])
     const managerIds =
       inventory?.agents.map((agent) => agent.agentId) ?? this.manager.listAgentIds()
+    this.oublierLesEtatsSansCopie(records, managerIds)
     const ids = [
       ...managerIds,
       ...[...records.keys()].filter((runId) => !managerIds.includes(runId))

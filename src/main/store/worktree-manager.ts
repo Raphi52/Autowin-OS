@@ -1020,15 +1020,9 @@ export class WorktreeManager {
     if (head.code !== 0) return undefined
     const sha = head.stdout.trim()
     if (!/^[0-9a-f]{40,64}$/i.test(sha)) return undefined
-    const containing = this.tryGitFn(this.baseRepo, [
-      'for-each-ref',
-      '--contains',
-      sha,
-      '--count=1',
-      '--format=%(refname)'
-    ])
-    if (containing.code !== 0) return undefined
-    if (!containing.stdout.trim()) {
+    const reference = this.commitDejaReference(sha)
+    if (reference === undefined) return undefined
+    if (!reference) {
       /**
        * Commit atteignable par AUCUNE reference : on le RATTACHE avant de liberer.
        *
@@ -1099,6 +1093,29 @@ export class WorktreeManager {
     return existsSync(this.worktreeRoot)
       ? readdirSync(this.worktreeRoot, { withFileTypes: true })
       : []
+  }
+
+  /**
+   * Le commit est-il deja retenu par une reference du depot ?
+   *
+   * UNE seule definition de « deja dans l'historique », partagee par le balayage de copies et par la
+   * fermeture des manifestes orphelins. En avoir deux qui divergent serait pire que n'en avoir
+   * aucune : c'est ce test qui autorise a supprimer, donc il ne doit exister qu'a un endroit.
+   *
+   * Rend `undefined` quand git ne repond pas — l'ignorance n'est pas une reponse negative, et
+   * l'appelant doit s'abstenir plutot que de supposer.
+   */
+  commitDejaReference(sha: string): boolean | undefined {
+    if (!/^[0-9a-f]{40,64}$/i.test(sha)) return undefined
+    const containing = this.tryGitFn(this.baseRepo, [
+      'for-each-ref',
+      '--contains',
+      sha,
+      '--count=1',
+      '--format=%(refname)'
+    ])
+    if (containing.code !== 0) return undefined
+    return Boolean(containing.stdout.trim())
   }
 
   private sweepAbandonedAgentCopies(): string[] {
