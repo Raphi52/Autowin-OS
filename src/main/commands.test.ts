@@ -774,7 +774,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     })
     await oldRun
 
-    expect(bus.abortOrchestration('conv-1')).toBe(true)
+    expect(bus.abortOrchestration('conv-1', 'test')).toBe(true)
     expect(signals.get('nouveau')!.aborted).toBe(true)
 
     second.resolve({
@@ -791,16 +791,16 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
   it('register → abort coupe le signal ; clear le retire (le chemin direct devient stoppable)', () => {
     const bus = new AppCommandBus(fakeOs(), () => {})
     // Avant : aucune orchestration → abort est un no-op honnête.
-    expect(bus.abortOrchestration('conv-1')).toBe(false)
+    expect(bus.abortOrchestration('conv-1', 'test')).toBe(false)
     // register arme un AbortController dans le MÊME registre que le chemin interne.
     const controller = bus.registerOrchestration('conv-1')
     expect(controller.signal.aborted).toBe(false)
     // abort le coupe réellement.
-    expect(bus.abortOrchestration('conv-1')).toBe(true)
+    expect(bus.abortOrchestration('conv-1', 'test')).toBe(true)
     expect(controller.signal.aborted).toBe(true)
     // clear le retire → un nouvel abort ne trouve plus rien.
     bus.clearOrchestration('conv-1')
-    expect(bus.abortOrchestration('conv-1')).toBe(false)
+    expect(bus.abortOrchestration('conv-1', 'test')).toBe(false)
   })
 
   it('register coupe une orchestration précédente pendante sur la même conversation', () => {
@@ -819,8 +819,8 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     expect(a.signal.aborted).toBe(true)
     expect(b.signal.aborted).toBe(true)
     // Registre vidé → plus rien à couper.
-    expect(bus.abortOrchestration('conv-1')).toBe(false)
-    expect(bus.abortOrchestration('conv-2')).toBe(false)
+    expect(bus.abortOrchestration('conv-1', 'test')).toBe(false)
+    expect(bus.abortOrchestration('conv-2', 'test')).toBe(false)
   })
 
   it('clearOrchestration par IDENTITÉ : le finally d’un run écrasé n’efface pas le run courant (Corrector #2)', () => {
@@ -830,7 +830,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     // Le finally de A arrive APRÈS et ne doit PAS supprimer l'entrée de B.
     bus.clearOrchestration('conv-1', a)
     // Le cancel doit toujours couper B (entrée préservée).
-    expect(bus.abortOrchestration('conv-1')).toBe(true)
+    expect(bus.abortOrchestration('conv-1', 'test')).toBe(true)
     expect(b.signal.aborted).toBe(true)
   })
 })

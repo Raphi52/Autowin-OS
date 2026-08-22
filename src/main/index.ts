@@ -1900,7 +1900,8 @@ Le fil reprend ensuite normalement.`
     // build→judge SUR cette conversation ; sinon on retombe sur la conversation active (comportement historique).
     const conversationId = targetConversationId ?? bus.activeConversationId ?? '__autonomous__'
     // #2 — run STOPPABLE : on enregistre un AbortController dans le registre du bus pour que
-    // `os:orchestrate:cancel` → abortOrchestration(conversationId) le coupe réellement (sinon no-op).
+    // `os:orchestrate:cancel` → `abortOrchestration(conversationId, motif)` le coupe réellement
+    // (sinon no-op), et le MOTIF traverse jusqu'au message que l'utilisateur lit.
     const controller = bus.registerOrchestration(conversationId)
     const turnId = randomUUID()
     // FRONTIÈRE DE PERSISTANCE : le run direct n'écrivait que le ledger et `orchestrate:step` (canal
@@ -5051,7 +5052,10 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Pilot chat cancel')
     const conversationId = guardString(rawConversationId, 'conversationId')
     // Stoppe le tour pilote ET le sous-agent en vol rattaché à cette conversation.
-    const orchestrationAborted = bus.abortOrchestration(conversationId)
+    const orchestrationAborted = bus.abortOrchestration(
+      conversationId,
+      "arret demande par l'utilisateur (Stop du chat)"
+    )
     const pilotAborted = activeChatTurns.abort(conversationId, 'user')
     return { ok: pilotAborted || orchestrationAborted }
   })
@@ -5078,7 +5082,12 @@ Le fil reprend ensuite normalement.`
     // Ce chemin ne coupe QUE l'orchestration, donc ne passe pas par `activeChatTurns.abort` : sans ce
     // marquage explicite, la moitié des arrêts resterait indiscernable d'une panne.
     activeChatTurns.markDeliberateStop(conversationId)
-    return { ok: bus.abortOrchestration(conversationId) }
+    return {
+      ok: bus.abortOrchestration(
+        conversationId,
+        "arret demande par l'utilisateur (Stop de l'orchestration)"
+      )
+    }
   })
   // Injection LIVE : une directive envoyée pendant un tour atteint la boucle pilote
   // au prochain point d'itération (pilotage continu, sans attendre la fin du tour).

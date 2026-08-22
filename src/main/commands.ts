@@ -862,11 +862,22 @@ export class AppCommandBus {
   /** Sérialise écriture → snapshot → journal : aucune autre conversation ne peut s'intercaler. */
   private editFileTail: Promise<void> = Promise.resolve()
 
-  /** Abort l'orchestration (sous-agent/juge) en cours pour une conversation. */
-  abortOrchestration(convId: string): boolean {
+  /**
+   * Abort l'orchestration (sous-agent/juge) en cours pour une conversation.
+   *
+   * La RAISON est obligatoire, et ce n'est pas une politesse. Mesure sur conv-1369 : un run de 28 min
+   * s'est termine par « [abort] claude CLI interrompu : raison non rapportee par l'appelant », et
+   * l'application ne pouvait pas dire a l'utilisateur pourquoi son travail avait ete coupe. Le motif
+   * existait UNE LIGNE plus haut chez l'appelant (`os:pilotChat:cancel` passe deja 'user' au tour de
+   * chat) et il etait jete ici — or c'est CE signal-la que le provider observe.
+   *
+   * Rendre le parametre obligatoire plutot que facultatif est delibere : un defaut par defaut se
+   * reintroduit au prochain appelant, en silence.
+   */
+  abortOrchestration(convId: string, reason: string): boolean {
     const controller = this.activeOrchestrations.get(convId)
     if (!controller) return false
-    controller.abort()
+    controller.abort(reason)
     return true
   }
 
@@ -876,10 +887,10 @@ export class AppCommandBus {
    * AbortControllers resteraient dans le registre et `abortOrchestration` deviendrait un no-op
    * permanent jusqu'au redémarrage. (Faithful minor.)
    */
-  abortAllOrchestrations(): void {
+  abortAllOrchestrations(reason = 'filet de crash : exception non catchee dans le process principal'): void {
     for (const controller of this.activeOrchestrations.values()) {
       try {
-        controller.abort()
+        controller.abort(reason)
       } catch {
         /* best-effort : couper les autres même si l'un jette */
       }
@@ -898,7 +909,11 @@ export class AppCommandBus {
    */
   registerOrchestration(convId: string): AbortController {
     // Coupe une orchestration précédente laissée pendante sur la même conversation avant d'en armer une.
-    this.activeOrchestrations.get(convId)?.abort()
+    // Le motif est DIT : c'est precisement l'hypothese que le diagnostic suggerait a l'utilisateur
+    // (« verifie qu'un second lancement n'a pas interrompu le premier ») sans pouvoir la confirmer.
+    this.activeOrchestrations
+      .get(convId)
+      ?.abort('remplacee par un nouveau lancement sur la meme conversation')
     const controller = new AbortController()
     this.claimOrchestration(convId, ++this.orchestrationRank, controller)
     return controller
