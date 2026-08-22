@@ -299,6 +299,13 @@ export class AutowinOS {
   readonly worktrees?: RunWorktreeCoordinator
   private worktreeRuntimeStatus!: WorktreeRuntimeStatus
   private worktreeActivityListener?: (a: WorktreeAgentActivity[]) => void
+  private refusIntegrationListener?: (refus: {
+    cause: string
+    agentId: string
+    files: readonly string[]
+    tentative: number
+    detail?: string
+  }) => void
   private recoveredCausalClaimsListener?: WatchdogMutationClaimsSink
   private readonly pendingRecoveredCausalClaims: WatchdogMutationClaims[] = []
   private causalMemoryRetriever?: (conversationId: string) => string
@@ -405,6 +412,9 @@ export class AutowinOS {
           },
           onActivity: (a) => {
             this.worktreeActivityListener?.(a)
+          },
+          onRefusIntegration: (refus) => {
+            this.refusIntegrationListener?.(refus)
           }
         })
         this.worktreeRuntimeStatus = {
@@ -705,6 +715,20 @@ export class AutowinOS {
   /** Abonne l'IPC aux changements d'activité worktree (push live vers le cockpit). Idempotent. */
   onWorktreeActivity(listener: (a: WorktreeAgentActivity[]) => void): void {
     this.worktreeActivityListener = listener
+  }
+
+  /**
+   * Abonne un puits de mesure aux REFUS d'integration. Emis a chaque tentative : l'abonne distingue
+   * incidents et reessais par `tentative`. Existe parce que rien ne comptait ces refus.
+   */
+  onRefusIntegration(listener: (refus: {
+    cause: string
+    agentId: string
+    files: readonly string[]
+    tentative: number
+    detail?: string
+  }) => void): void {
+    this.refusIntegrationListener = listener
   }
 
   /** Rebranche sur le watchdog les publications reprises dont le callback originel est mort. */

@@ -123,7 +123,7 @@ import { buildContinuationProviderHistory } from './chat-continuation'
 import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'
 import type { ChatTurnEvent } from '../shared/chat-turn'
 import type { RunLifecycleEvent } from '../shared/run-execution'
-import { TraceLedger } from './activity/ledger'
+import { TraceLedger, evenementRefusIntegration } from './activity/ledger'
 import {
   listSessionsAsync,
   parseSession,
@@ -2327,6 +2327,12 @@ Le fil reprend ensuite normalement.`
     for (const w of BrowserWindow.getAllWindows())
       w.webContents.send('worktree:activity-changed', activity)
   })
+  // COMPTER les refus d'intégration. Rien ne les comptait : `trace.json` n'a pas de champ `reason`
+  // (ses occurrences du mot sont du code source cité par des agents), les 1995 RUN.md n'en gardent
+  // rien, et le journal de conversations est rotatif. Un chantier antérieur s'est pourtant priorisé
+  // sur un décompte tiré de cet artefact. Ici l'événement est ÉMIS, jamais lu d'un fichier : il ne
+  // peut pas se polluer de la même façon.
+  os.onRefusIntegration((refus) => ledger.append(evenementRefusIntegration(refus)))
   ipcMain.handle('os:roles', async (event) => {
     assertTrustedRendererSender(event, 'Roles')
     await agentModelsReady

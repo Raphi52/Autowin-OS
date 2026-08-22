@@ -22,6 +22,56 @@ export interface TraceEvent {
   name: string
   detail?: string
   ok?: boolean
+  /**
+   * Charge STRUCTUREE, quand l'evenement doit se compter et non se lire.
+   *
+   * `detail` est une chaine libre plafonnee : parfaite pour un humain, inutilisable pour une
+   * mesure. Cadrage du 2026-08-22 : trois tentatives de repartir les causes de refus d'integration
+   * ont echoue faute d'un champ sur lequel comparer — on grepait de la prose, et les occurrences
+   * trouvees etaient du CODE SOURCE cite par des agents. Un champ egalable ferme cette porte.
+   */
+  data?: Record<string, string | number | boolean | string[]>
+}
+
+/** Nom canonique de l'evenement « une integration a ete refusee ». */
+export const REFUS_INTEGRATION = 'integration-refusee'
+
+/** Au-dela, la liste gonfle le ledger sans rien apprendre — le TOTAL, lui, reste exact. */
+const REFUS_FICHIERS_MAX = 20
+
+/**
+ * Construit l'evenement de refus d'integration. Fonction PURE : elle ne sait pas ecrire, donc elle
+ * se teste sans disque et le meme evenement peut partir vers un autre puits demain.
+ */
+export function evenementRefusIntegration(refus: {
+  cause: string
+  agentId: string
+  files: readonly string[]
+  /**
+   * Rang de la tentative. Le coordinateur reessaie jusqu'a 6 fois : sans ce champ, compter les
+   * evenements donnerait la CHURN des reessais et non le nombre de runs touches — l'exacte
+   * confusion qui a invalide trois mesures le 2026-08-22. Avec lui : incidents = `agentId`
+   * distincts, churn = evenements. Defaut 1, jamais absent : un champ parfois la oblige le
+   * consommateur a deviner.
+   */
+  tentative?: number
+  detail?: string
+}): Omit<TraceEvent, 'ts'> {
+  return {
+    source: 'orchestrate',
+    name: REFUS_INTEGRATION,
+    // Un refus n'est JAMAIS un succes : sans ce faux, un comptage naif le rangerait avec les
+    // integrations reussies.
+    ok: false,
+    ...(refus.detail ? { detail: refus.detail } : {}),
+    data: {
+      cause: refus.cause,
+      agentId: refus.agentId,
+      files: refus.files.slice(0, REFUS_FICHIERS_MAX),
+      filesTotal: refus.files.length,
+      tentative: refus.tentative ?? 1
+    }
+  }
 }
 
 const DETAIL_CAP = 200
@@ -133,7 +183,8 @@ export class TraceLedger {
         source: e.source,
         name: e.name,
         detail: e.detail ? e.detail.slice(0, DETAIL_CAP) : undefined,
-        ok: e.ok
+        ok: e.ok,
+        ...(e.data ? { data: e.data } : {})
       }
       appendFileSync(this.fileFor(new Date()), `${JSON.stringify(ev)}\n`, 'utf8')
     } catch (erreur) {

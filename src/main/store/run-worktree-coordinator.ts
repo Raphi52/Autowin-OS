@@ -76,6 +76,18 @@ export interface RunWorktreeCoordinatorDeps {
   nowFn?: () => number
   /** Appelé à chaque changement d'activité → l'app pousse vers le renderer (IPC). */
   onActivity?: (activity: WorktreeAgentActivity[]) => void
+  /**
+   * Un refus d'integration vient de se produire. Emis a CHAQUE tentative, y compris les reessais :
+   * le consommateur distingue incidents (agentId distincts) et churn (evenements). Existe parce que
+   * RIEN ne comptait ces refus — cadrage du 2026-08-22, trois instruments essayes, trois invalides.
+   */
+  onRefusIntegration?: (refus: {
+    cause: string
+    agentId: string
+    files: readonly string[]
+    tentative: number
+    detail?: string
+  }) => void
   /** Publication reprise après redémarrage, quand le callback mémoire du run n'existe plus. */
   onRecoveredPublication?: (publication: {
     runId: string
@@ -187,6 +199,7 @@ export class RunWorktreeCoordinator {
   >()
   private readonly now: () => number
   private readonly onActivity?: (a: WorktreeAgentActivity[]) => void
+  private readonly onRefusIntegration?: RunWorktreeCoordinatorDeps['onRefusIntegration']
   private readonly onRecoveredPublication?: RunWorktreeCoordinatorDeps['onRecoveredPublication']
   private readonly stateStore?: WorktreeRunStateStore
   private readonly runs = new Map<string, Tracked>()
@@ -200,6 +213,7 @@ export class RunWorktreeCoordinator {
     this.manager = deps.manager
     this.now = deps.nowFn ?? Date.now
     this.onActivity = deps.onActivity
+    this.onRefusIntegration = deps.onRefusIntegration
     this.onRecoveredPublication = deps.onRecoveredPublication
     this.stateStore = deps.stateStore
     if (this.manager.operationsAreIsolated?.() && this.manager.recoveryInventoryAsync) {
@@ -1167,6 +1181,21 @@ export class RunWorktreeCoordinator {
   }
 
   private applyFinalize(tracked: Tracked, res: FinalizeResult): void {
+    // Point de passage UNIQUE de tout refus d'integration : c'est donc ici qu'on le COMPTE, une fois
+    // par tentative. Le tracage ne doit jamais casser l'action tracee — d'ou le try muet.
+    if (res.outcome === 'blocked' || res.outcome === 'conflict') {
+      try {
+        this.onRefusIntegration?.({
+          cause: res.outcome === 'conflict' ? 'conflict' : res.reason,
+          agentId: tracked.runId,
+          files: res.files,
+          tentative: (this.retryCounts.get(tracked.runId) ?? 0) + 1,
+          ...(res.outcome === 'blocked' && res.detail ? { detail: res.detail } : {})
+        })
+      } catch {
+        /* un puits d'observation defaillant ne fait pas echouer une publication */
+      }
+    }
     tracked.state = stateFromFinalize(res)
     tracked.attentionReason = undefined
     const retryable =
