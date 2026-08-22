@@ -278,6 +278,55 @@ export function consumeStreamedPrefix(
   return { visible: '', prefixRemaining: '' }
 }
 
+/**
+ * COLLAGE DES DELTAS — deux textes émis à la suite sur le MÊME `streamId` sont concaténés tels quels
+ * par le réducteur de tour (`reduceChatTurn`). Quand le premier ne finit pas par un saut de ligne et
+ * que le suivant OUVRE une fence (« Voici :» + « ```html-render »), la fence se retrouve en milieu
+ * de ligne : le rendu Markdown ne la reconnaît plus et l'utilisateur lit du HTML brut.
+ *
+ * La séparation est décidée à l'ÉMISSION, sur le texte DÉJÀ émis pour ce flux — on n'insère rien
+ * quand le texte finit déjà par un saut de ligne, et JAMAIS au milieu d'un mot en cours de stream.
+ */
+export function separationDeltaCollee(dejaEmis: string, suivant: string): string {
+  if (!dejaEmis || !suivant) return ''
+  if (/\n[ \t]*$/.test(dejaEmis)) return ''
+  // Seule une OUVERTURE de fence en tête du nouveau delta justifie de couper une ligne en cours.
+  return /^[ \t]*(?:```|~~~)/.test(suivant) ? '\n\n' : ''
+}
+
+/**
+ * Mémoire du texte déjà émis par `streamId`, pour deux cas de collage :
+ * (1) un delta qui ouvre une fence juste après un préambule sans saut de ligne ;
+ * (2) un delta qui REPREND un streamId après qu'un autre flux ait parlé — la reprise est recollée
+ *     dans la même part alors que le lecteur attend un nouveau paragraphe.
+ * À l'intérieur d'une fence déjà ouverte, aucune séparation n'est insérée : ``` y est du contenu.
+ */
+export class DeltaCollageTracker {
+  private readonly emis = new Map<string, string>()
+  private dernierStreamId: string | undefined
+
+  separation(streamId: string, texte: string): string {
+    const dejaEmis = this.emis.get(streamId) ?? ''
+    let separation = ''
+    if (dejaEmis && !this.fenceOuverte(dejaEmis)) {
+      separation =
+        this.dernierStreamId !== undefined && this.dernierStreamId !== streamId
+          ? /\n[ \t]*$/.test(dejaEmis)
+            ? ''
+            : '\n\n'
+          : separationDeltaCollee(dejaEmis, texte)
+    }
+    this.emis.set(streamId, dejaEmis + separation + texte)
+    this.dernierStreamId = streamId
+    return separation
+  }
+
+  private fenceOuverte(texte: string): boolean {
+    const ouvertures = texte.match(/^[ \t]*(?:```|~~~)/gm)
+    return ouvertures !== null && ouvertures.length % 2 === 1
+  }
+}
+
 function retirerConclusionBloquantePrematuree(texte: string): string {
   let resultat = texte
   while (true) {
@@ -518,7 +567,19 @@ export class AgentPilot {
     // Frontière de typage T2 : chaque évènement construit ici doit correspondre EXACTEMENT à une
     // variante de `PilotEventVariant` (excess-property-check compris) avant d'atteindre le
     // consommateur externe `onEvent: (e: PilotEvent) => void`.
-    const emit = (e: PilotEventVariant): void => onEvent(e)
+    // Anti-collage : un delta qui ouvre une fence, ou qui reprend un flux interrompu, doit tomber
+    // sur une ligne NEUVE — sinon la fence ```html-render finit en milieu de ligne (HTML brut à l'écran).
+    const collage = new DeltaCollageTracker()
+    const emit = (e: PilotEventVariant): void => {
+      if (e.kind === 'delta' && e.streamId && e.text) {
+        const separation = collage.separation(e.streamId, e.text)
+        if (separation) {
+          onEvent({ ...e, text: separation + e.text })
+          return
+        }
+      }
+      onEvent(e)
+    }
     let timingWritten = false
     const binding = runtimeBinding ?? bindingOverride ?? this.roles.getBinding('orchestrator')
     const execCommand = (name: string, args: Record<string, unknown>): Promise<CommandResult> => {
