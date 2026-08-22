@@ -305,12 +305,38 @@ export function exigeCorrigerEtPoursuivre(
   return !(demandeExpliciteALHumain || questionSuspensive || declareHorsDePortee)
 }
 
+/**
+ * NIER UN ECHEC N'EST PAS LE NOMMER — et c'est ce que la version precedente confondait.
+ *
+ * Elle testait la simple PRESENCE d'un mot d'echec, si bien qu'une NEGATION la desarmait : mesure du
+ * 2026-08-22, `exigeDireLEchec(true, '✅ Fait — tous les tests passent sans erreur.')` rendait
+ * `false`. Une action reellement plantee cloturait donc le tour sans etre ni corrigee ni meme avouee
+ * — le faux « Fait » que cette garde existe precisement pour attraper.
+ *
+ * Deux corrections, toutes deux sur la CAUSE (« presence du mot » au lieu de « aveu de son propre
+ * echec ») :
+ *  - les occurrences NIEES sont retirees avant le test, chirurgicalement : une reponse qui nomme un
+ *    echec ET nie ailleurs (« l'edition a echoue, en revanche la suite passe sans erreur ») garde son
+ *    aveu et n'est pas relancee ;
+ *  - la comparaison se fait sans accents, sinon « a echoue » ecrit sans accent n'etait pas reconnu et
+ *    un agent parfaitement honnete se faisait harceler.
+ */
+function sansAccents(texte: string): string {
+  return texte.normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
+/** Les tournures qui NIENT un echec, donc n'en avouent aucun. */
+const NEGATIONS_DECHEC =
+  /(sans|aucune?|pas d[’']|nulle|z[ée]ro|0)\s+(erreurs?|[ée]checs?|probl[èe]mes?|souci)/gi
+
 export function exigeDireLEchec(uneActionAEchoue: boolean, reponse: string): boolean {
   if (!uneActionAEchoue) return false
   const texte = (reponse ?? '').trim()
   if (!texte) return false // le tour muet a sa propre garde
-  const nommeLEchec = /(échou|erreur|impossible|n[’']a pas (pu|fonctionné)|refus|bloqu)/i.test(
-    texte
+  // Retire d'abord ce qui NIE un echec : ce qui reste, s'il reste un mot, est un vrai aveu.
+  const sansNegations = sansAccents(texte).replace(NEGATIONS_DECHEC, ' ')
+  const nommeLEchec = /(echou|erreur|impossible|n[’']a pas (pu|fonctionne)|refus|bloqu)/i.test(
+    sansNegations
   )
   return !nommeLEchec
 }

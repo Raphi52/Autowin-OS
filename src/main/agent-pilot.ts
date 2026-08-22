@@ -953,6 +953,21 @@ export class AgentPilot {
      */
     let echecDeLaDerniereIteration = false
     /*
+     * LES ECHECS ENCORE NON REPARES, par nom de commande. Demande de l'utilisateur du 2026-08-22 :
+     * « toutes les actions avec erreur captees en cours de run et corrigees avant la fin du tour ».
+     *
+     * `echecDeLaDerniereIteration` ne suffisait pas : remis a plat a chaque iteration, il laissait un
+     * echec enjambe a l'iteration 2 sortir du champ de la correction des l'iteration 3. Cet echec
+     * tombait alors dans l'aveu, qui reformule « SANS aucune commande » — capte, mais explicitement
+     * NON corrige.
+     *
+     * Le suivi se fait par NOM DE COMMANDE et non par signature : une signature agrege le nom ET le
+     * texte d'erreur, donc un succes ulterieur ne peut jamais s'y apparier. C'est aussi exactement
+     * l'intention deja ecrite pour le drapeau jumeau — « une commande plantee puis rejouee avec
+     * succes doit desarmer la reprise » — simplement tenue sur tout le tour au lieu d'une iteration.
+     */
+    const commandesEnEchecNonRattrape = new Set<string>()
+    /*
      * AUTO-KAIZEN EN COURS DE TOUR. Le registre des murs deja rencontres : sans lui, corriger-et-
      * poursuivre autorise le pire des retours — rejouer la meme commande, remanger le meme mur, et
      * bruler les iterations dans un trou de lapin. DEUX reprises au plus : la correction, puis UNE
@@ -1432,7 +1447,10 @@ export class AgentPilot {
           exigerExperienceSoignee &&
           !relanceDeFormeUtilisee &&
           reprisesApresEchecRestantes > 0 &&
-          exigeCorrigerEtPoursuivre(echecDeLaDerniereIteration, visibleTextThisTurn)
+          exigeCorrigerEtPoursuivre(
+            echecDeLaDerniereIteration || commandesEnEchecNonRattrape.size > 0,
+            visibleTextThisTurn
+          )
         ) {
           reprisesApresEchecRestantes -= 1
           /*
@@ -1662,9 +1680,12 @@ export class AgentPilot {
           return
         }
         const commandSucceeded = commandResultSucceeded(r)
+        // Rejouee avec succes : l'echec est REPARE, il ne doit plus peser sur la cloture du tour.
+        if (commandSucceeded) commandesEnEchecNonRattrape.delete(token.name)
         if (!commandSucceeded) {
           anyActionFailed = true
           echecDeLaDerniereIteration = true
+          commandesEnEchecNonRattrape.add(token.name)
           const signature = signatureDEchec(
             token.name,
             String(r.ok ? JSON.stringify(r.data) : (r.error ?? ''))
