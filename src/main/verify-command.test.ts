@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ALLOWED_COMMANDS,
+  decideRelatedVerify,
   capVerifyOutput,
   decideVerifyCommand,
   VERIFY_OUTPUT_CAP
@@ -235,5 +236,43 @@ describe('capVerifyOutput — le verdict survit aussi quand la sortie est color�
 
   it('respecte toujours le plafond', () => {
     expect(capVerifyOutput(sortieColoree).length).toBeLessThanOrEqual(VERIFY_OUTPUT_CAP)
+  })
+})
+
+/**
+ * Les chemins viennent de `decideEdit` (déjà bornés) et jamais du modèle — mais ils traversent ici
+ * une frontière d'ARGUMENTS, ce que la voie globale ne faisait pas. Un chemin commençant par `-`
+ * deviendrait un DRAPEAU de vitest : c'est la seule façon dont cette extension pourrait élargir ce
+ * que la commande fait. On la ferme, plutôt que de la supposer impossible.
+ */
+describe('decideRelatedVerify — la portée s’ajoute sans ouvrir la commande', () => {
+  const vitest = (): Record<string, string> => ({ 'test:unit': 'vitest run' })
+
+  it('construit une commande FIXE, chemins en argv séparés', () => {
+    const d = decideRelatedVerify('/repo', ['src/a.ts', 'src/b.ts'], vitest)
+    expect(d).toMatchObject({ allowed: true })
+    if (!d.allowed) throw new Error('inattendu')
+    expect(d.argv).toEqual(['vitest', 'related', 'src/a.ts', 'src/b.ts', '--run'])
+  })
+
+  it('refuse un chemin qui se ferait passer pour une option', () => {
+    expect(decideRelatedVerify('/repo', ['--reporter=json'], vitest).allowed).toBe(false)
+    expect(decideRelatedVerify('/repo', ['../ailleurs.ts'], vitest).allowed).toBe(false)
+    expect(decideRelatedVerify('/repo', ['C:/hors/depot.ts'], vitest).allowed).toBe(false)
+    expect(decideRelatedVerify('/repo', ['/etc/passwd'], vitest).allowed).toBe(false)
+  })
+
+  it('un seul chemin refusé suffit à rendre la portée indéterminable', () => {
+    expect(decideRelatedVerify('/repo', ['src/a.ts', '--bad'], vitest).allowed).toBe(false)
+  })
+
+  it('projet sans vitest ⇒ pas de portée dérivable (l’appelant retombe sur la suite globale)', () => {
+    expect(decideRelatedVerify('/repo', ['src/a.ts'], () => ({ test: 'jest' })).allowed).toBe(false)
+    expect(decideRelatedVerify('/repo', ['src/a.ts'], () => null).allowed).toBe(false)
+  })
+
+  it('sans workspace, rien à vérifier', () => {
+    expect(decideRelatedVerify(undefined, ['src/a.ts'], vitest).allowed).toBe(false)
+    expect(decideRelatedVerify('/repo', [], vitest).allowed).toBe(false)
   })
 })
