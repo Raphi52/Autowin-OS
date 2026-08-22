@@ -13,6 +13,13 @@ import type { Message, SendOptions, SendResult } from './providers/types'
  * commande » : l'agent constatait proprement son échec et RENDAIT LA MAIN, demande non satisfaite.
  * Ces tests vérifient le comportement, pas la fonction pure : la relance doit RE-AUTORISER les
  * commandes, et le tour doit se terminer sur le travail RÉELLEMENT abouti après reprise.
+ *
+ * PERIMETRE DE CE FICHIER, dit explicitement apres un audit externe du 2026-08-22 : il garde la
+ * relance declenchee par l ECHEC DE LA DERNIERE ITERATION. Il ne garde PAS le registre des echecs
+ * NON RATTRAPES (`commandesEnEchecNonRattrape`, echec ancien enjambe, clef par nom+cible)
+ * — saboter ce mecanisme laissait ce fichier entierement vert malgre son nom. Il est garde par
+ * `erreur-captee-en-cours-de-tour.test.ts`, verifie par sabotage. Deux fichiers, deux mecanismes :
+ * le dire vaut mieux que dupliquer la couverture.
  */
 function pilot(responses: string[], echecs: number) {
   const sent: string[] = []

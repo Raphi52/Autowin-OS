@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { configureAutowinAppDataBase } from './app-data'
 import { AgentPilot } from './agent-pilot'
-import { exigeDireLEchec } from './chat-turn-messages'
+import { exigeCorrigerEtPoursuivre, exigeDireLEchec } from './chat-turn-messages'
 import type { Message, SendOptions, SendResult } from './providers/types'
 
 /**
@@ -138,6 +138,167 @@ describe('un echec ANCIEN et jamais repare est corrige avant la fin du tour', ()
         '✅ Fait — reprise aboutie.\n⏳ Reste à faire : rien.\n👉 Recommandé : rien.'
       ],
       (nom, appel) => nom === 'edit_file' && appel === 1
+    )
+    await lancer(p)
+    expect(sent.some((c) => c.includes(MARQUEUR))).toBe(false)
+  })
+})
+
+/**
+ * LA NEGATION EST UNE CLASSE, PAS UNE LISTE DE COUPLES.
+ *
+ * Trois juges externes ont mesure la meme faille le 2026-08-22, sur la version qui enumerait des
+ * paires « quantifieur + substantif » : « rien n'a echoue », « aucun refus », « pas eu d'erreur »,
+ * « rien d'impossible », « l'edition n'a pas echoue » traversaient tous la garde. Le mot d'echec
+ * restait dans le texte, donc il etait lu comme un AVEU alors qu'il etait un DENI.
+ *
+ * Ma DoD annoncait « 3 negations couvertes » : litteralement vrai, fonctionnellement trompeur — trois
+ * formes choisies DANS la classe, pas la classe. Ces cas sont la classe.
+ */
+describe('toute tournure qui NIE un echec declenche la garde', () => {
+  const DENIS = [
+    "Rien n'a échoué durant ce tour.",
+    "L'édition n'a pas échoué, tout est en ordre.",
+    'Fait — aucun refus.',
+    "Fait — pas eu d'erreur.",
+    "Fait — rien d'impossible.",
+    'Sans erreur, tout est vert.',
+    'Aucune erreur rencontrée.',
+    'Build terminé : 0 erreur, 0 warning.',
+    "Il n'y a pas d'échec à signaler ici.",
+    'Sans aucun souci particulier, tout roule.'
+  ]
+  for (const deni of DENIS) {
+    it(`nie sans avouer : ${deni}`, () => {
+      expect(exigeDireLEchec(true, deni)).toBe(true)
+    })
+  }
+
+  const AVEUX = [
+    "L'édition a échoué : le chemin est introuvable.",
+    "je n'ai pas pu corriger, l'édition a échoué",
+    'La suppression a été refusée par le système.',
+    'Le patch a échoué, la ligne visée est impossible à localiser.',
+    'Le build est bloqué sur une dépendance.'
+  ]
+  for (const aveu of AVEUX) {
+    it(`avoue vraiment, on ne le harcele pas : ${aveu}`, () => {
+      expect(exigeDireLEchec(true, aveu)).toBe(false)
+    })
+  }
+
+  it('la fenetre reste BORNEE : un aveu eloigne d un negateur survit', () => {
+    // « je n'ai pas pu corriger, l'edition a echoue » — le negateur `pas` est loin du mot d'echec.
+    // Une fenetre large retirerait cet aveu et harcelerait un agent honnete.
+    expect(exigeDireLEchec(true, "je n'ai pas pu corriger, l'édition a échoué")).toBe(false)
+  })
+
+  it('la regex globale reutilisee ne derive pas entre appels', () => {
+    // `NEGATIONS_DECHEC` porte le drapeau /g et vit au niveau module : un juge a soupconne une derive
+    // de `lastIndex` entre deux appels. `String.replace` le remet a zero — mesure, pas croyance.
+    const texte = 'Fait — aucune erreur.'
+    expect([
+      exigeDireLEchec(true, texte),
+      exigeDireLEchec(true, texte),
+      exigeDireLEchec(true, texte)
+    ]).toEqual([true, true, true])
+  })
+})
+
+describe('« impossible » ne desarme plus la reprise par sa seule presence', () => {
+  it('un echec DECRIT avec le mot impossible arme encore la reprise', () => {
+    // Mesure du 2026-08-22 : cette phrase desarmait les DEUX gardes — la reprise (le mot satisfaisait
+    // `declareHorsDePortee`) et l'aveu (il satisfaisait la detection d'aveu). L'echec finissait
+    // CONSTATE et jamais corrige, ce qui est exactement le mot que la demande visait.
+    expect(
+      exigeCorrigerEtPoursuivre(true, 'Le patch a échoué, la ligne visée est impossible à localiser.')
+    ).toBe(true)
+  })
+
+  it('un vrai hors-perimetre desarme toujours', () => {
+    expect(
+      exigeCorrigerEtPoursuivre(true, "Cette fonctionnalité n'existe pas, je ne peux pas le faire.")
+    ).toBe(false)
+  })
+
+  it('une tournure performative desarme aussi', () => {
+    expect(
+      exigeCorrigerEtPoursuivre(true, "Il m'est impossible de continuer sans un accès à la base.")
+    ).toBe(false)
+  })
+
+  it('une vraie attente humaine desarme toujours', () => {
+    expect(
+      exigeCorrigerEtPoursuivre(
+        true,
+        'La suppression a échoué : il me faut ton autorisation pour la prod.'
+      )
+    ).toBe(false)
+  })
+})
+
+/**
+ * UN SUCCES SUR UNE AUTRE CIBLE NE REPARE PAS L'ECHEC.
+ *
+ * Defaut mesure le 2026-08-22 par deux juges externes independants : le registre etait clef par NOM
+ * de commande seul, si bien qu'un `edit_file` reussi sur `b.ts` purgeait l'echec jamais rejoue sur
+ * `a.ts`. Mes deux tests d'origine portaient tous les deux sur la MEME cible — ils ne pouvaient pas
+ * voir le trou.
+ */
+describe('la reparation se juge par CIBLE, pas par nom de commande', () => {
+  function pilotCible(reponses: string[], echoue: (chemin: string) => boolean) {
+    const sent: string[] = []
+    const registry = {
+      send: vi.fn(async (_p: string, messages: Message[], _o: SendOptions): Promise<SendResult> => {
+        sent.push(messages.at(-1)?.content ?? '')
+        return { text: reponses.shift() ?? '', sessionId: 'sess' } as SendResult
+      }),
+      describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 't' }))
+    }
+    const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) }
+    const bus = {
+      catalog: vi.fn(() => [{ name: 'edit_file', args: {}, description: 'edite' }]),
+      snapshotForPrompt: vi.fn(async () => ({ tab: 'chat' })),
+      exec: vi.fn(async (_nom: string, args: Record<string, unknown>) =>
+        echoue(String(args?.path ?? ''))
+          ? { ok: false, error: 'ENOENT: le chemin cible n existe pas' }
+          : { ok: true, data: { ok: true } }
+      )
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { pilot: new AgentPilot(registry as any, roles as any, bus as any), sent }
+  }
+
+  it('un succes sur b.ts ne fait PAS disparaitre l echec sur a.ts', async () => {
+    const { pilot: p, sent } = pilotCible(
+      [
+        'Je corrige a.<cmd>{"name":"edit_file","args":{"path":"a.ts"}}</cmd>',
+        'Je fais b.<cmd>{"name":"edit_file","args":{"path":"b.ts"}}</cmd>',
+        '✅ Fait — tout est corrige.\n📍 Maintenant : vert.\n⏳ Reste à faire : rien.\n👉 Recommandé : commit.',
+        'Je reprends a.<cmd>{"name":"edit_file","args":{"path":"a.ts"}}</cmd>',
+        '✅ Fait — a.ts corrige.\n⏳ Reste à faire : rien.\n👉 Recommandé : rien.'
+      ],
+      (chemin) => chemin === 'a.ts'
+    )
+    await lancer(p)
+    expect(
+      sent.find((c) => c.includes(MARQUEUR)),
+      'un succes sur une AUTRE cible ne repare pas a.ts'
+    ).toBeDefined()
+  })
+
+  it('une reprise de la MEME cible, contenu corrige, ne relance PAS', async () => {
+    // La contrepartie qui borne le correctif : la clef ne retient que les arguments IDENTIFIANTS,
+    // donc un second essai sur a.ts avec un contenu different reste la MEME cible — sinon l'agent se
+    // ferait relancer alors qu'il vient justement de reparer.
+    let essais = 0
+    const { pilot: p, sent } = pilotCible(
+      [
+        'Essai 1.<cmd>{"name":"edit_file","args":{"path":"a.ts","content":"v1"}}</cmd>',
+        'Je corrige le contenu.<cmd>{"name":"edit_file","args":{"path":"a.ts","content":"v2"}}</cmd>',
+        '✅ Fait — a.ts corrige au second essai.\n⏳ Reste à faire : rien.\n👉 Recommandé : rien.'
+      ],
+      () => ++essais === 1
     )
     await lancer(p)
     expect(sent.some((c) => c.includes(MARQUEUR))).toBe(false)

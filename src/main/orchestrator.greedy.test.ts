@@ -567,3 +567,58 @@ describe('chemin pipeline : une sous-tache non livree bloque la cloture', () => 
     expect((result.gateReasons ?? []).join(' ')).not.toContain('pas livré')
   })
 })
+
+/**
+ * LA REPARATION REND LA MAIN — la preuve qui manquait, et un juge externe l'a dit.
+ *
+ * Le 2026-08-22, la case de DoD « une sous-tache REPAREE sort du registre » etait cochee alors
+ * qu'AUCUN test n'exercait la ligne qui la realise (`else travauxNonLivres.delete(noeud.id)`). Or
+ * c'est la SEULE chose qui empeche le nouveau gate de bloquer definitivement un run reparable : le
+ * risque le plus cher du chantier etait le seul non garde. Case cochee, preuve absente.
+ *
+ * Ce test couvre aussi ce que je declarais « non prouve en reel » : qu'une passe de REPARATION tourne
+ * effectivement APRES un blocage.
+ */
+class ProviderQuiRepareALaSecondePasse extends GreedyProvider {
+  private vues = 0
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const contenu = String(messages[messages.length - 1]?.content ?? '')
+    if (/\[sous-tâche A\]/.test(contenu)) {
+      this.vues += 1
+      // Premiere passe : A echoue. Passe de reparation : A aboutit.
+      if (this.vues === 1) {
+        this.contents.push(contenu)
+        throw new Error('sous-agent en échec (simulé, première passe)')
+      }
+    }
+    return yield* super.send(messages, options)
+  }
+}
+
+describe('une sous-tache reparee sort du registre et laisse la cloture se faire', () => {
+  it('passe 1 : A echoue et bloque ; passe de reparation : A aboutit et la cloture est autorisee', async () => {
+    const provider = new ProviderQuiRepareALaSecondePasse()
+    const result = await makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A' },
+        { id: 'B', deps: [], prompt: 'fais B' }
+      ],
+      () => ['frame', 'build']
+    ).run('analyse le projet en plusieurs volets')
+
+    // A a bien echoue puis ete rejoue : l'union de RAPPORT le garde (elle est cumulative a dessein).
+    expect(result.failedTasks).toContain('A')
+    // Une passe de REPARATION a reellement tourne — ce que je declarais non prouve.
+    expect(
+      result.trace.some((step) => /RÉPARATION/i.test(step.detail ?? '')) ||
+        provider.contents.filter((c) => /\[sous-tâche A\]/.test(c)).length >= 2
+    ).toBe(true)
+    // ET LE POINT : le registre s'est vide, donc la cloture n'est plus bloquee par « pas livré ».
+    expect((result.gateReasons ?? []).join(' ')).not.toContain('pas livré')
+    expect(result.gateBlocked).toBe(false)
+  })
+})

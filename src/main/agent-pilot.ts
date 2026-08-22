@@ -18,6 +18,7 @@ import {
   exigeAgirPasAnnoncer,
   consigneApresEchec,
   exigeCorrigerEtPoursuivre,
+  cleDEchec,
   signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
@@ -1663,6 +1664,25 @@ export class AgentPilot {
             ? (r.data as OrchestrationOutcome | undefined)
             : failedOrchestrationOutcome(r.error)
           const deliveryClosed = r.ok && isDeliveredOrchestrationOutcome(outcome ?? {})
+          /*
+           * LA COMPTABILITE D'ECHEC EST TENUE MEME ICI, avant le retour anticipe.
+           *
+           * La cloture mecanique du tour sur l'issue structuree est DELIBEREE (voir juste au-dessus) et
+           * n'est pas remise en cause : l'echec est bel et bien DIT a l'utilisateur par
+           * `formatOrchestrationOutcome` (« Echec du workflow », « ARRETE au controle final », « la
+           * livraison n'est pas prouvee »), et la REPARATION d'une orchestration appartient a la
+           * boucle de l'orchestrateur, pas au tour de chat.
+           *
+           * Mais sauter ce bloc laissait `anyActionFailed` a false sur l'echec le plus couteux de
+           * l'application. Aujourd'hui c'est inerte — on retourne juste apres. Demain, toute garde
+           * ajoutee en aval raterait silencieusement les orchestrations plantees. Signale par un juge
+           * externe le 2026-08-22 ; on tient la comptabilite juste plutot que de laisser un piege.
+           */
+          if (!deliveryClosed) {
+            anyActionFailed = true
+            echecDeLaDerniereIteration = true
+            commandesEnEchecNonRattrape.add(cleDEchec(token.name, authoritativeArgs as Record<string, unknown>))
+          }
           const closureNotice = deliveryClosed
             ? 'Clôture Autowin : gate validé, RUN fermé green ; aucune autre orchestration ni aucun second judge ne sont nécessaires dans ce tour.'
             : 'Clôture Autowin : résultat terminal rendu ; aucune autre orchestration n’est relancée dans ce tour.'
@@ -1680,12 +1700,20 @@ export class AgentPilot {
           return
         }
         const commandSucceeded = commandResultSucceeded(r)
-        // Rejouee avec succes : l'echec est REPARE, il ne doit plus peser sur la cloture du tour.
-        if (commandSucceeded) commandesEnEchecNonRattrape.delete(token.name)
+        /*
+         * La clef porte le nom ET LA CIBLE. Avec le nom seul, un `edit_file` reussi sur `b.ts`
+         * purgeait l'echec jamais rejoue sur `a.ts` — defaut mesure le 2026-08-22 par deux juges
+         * externes independants, et mon commentaire revendiquait alors une garantie que la clef ne
+         * pouvait pas donner. `cleDEchec` ne retient que les arguments IDENTIFIANTS, pour qu'une
+         * reprise du meme fichier avec un contenu corrige rende la MEME clef.
+         */
+        const cleCible = cleDEchec(token.name, authoritativeArgs as Record<string, unknown>)
+        // Rejouee avec succes sur la MEME cible : l'echec est repare, il ne pese plus sur la cloture.
+        if (commandSucceeded) commandesEnEchecNonRattrape.delete(cleCible)
         if (!commandSucceeded) {
           anyActionFailed = true
           echecDeLaDerniereIteration = true
-          commandesEnEchecNonRattrape.add(token.name)
+          commandesEnEchecNonRattrape.add(cleCible)
           const signature = signatureDEchec(
             token.name,
             String(r.ok ? JSON.stringify(r.data) : (r.error ?? ''))

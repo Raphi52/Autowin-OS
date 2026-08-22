@@ -4408,9 +4408,17 @@ ${empreinteDepot}`
       // run qui n'a joue que scout/frame/terrain n'a aucune mutation a prouver, meme si la phrase de
       // l'utilisateur en annoncait une pour la suite.
       const cloture = etatDeCloture(task, phaseOutputs, evidenceOk, isMutationTask(task))
+        /*
+         * Le travail NON LIVRE compte a CHAQUE sortie de cloture, pas seulement a la derniere.
+         * Un juge externe a compte le 2026-08-22 : six sites `evaluateClosure` dans ce fichier, DEUX
+         * cables. Le pre-gate et le juge repris d'un CLI detache retournent tous deux en avance, donc
+         * une sous-tache en echec les traversait et le run se rendait « succeeded ». Bloquer au
+         * pre-gate est en prime moins cher : cela coupe AVANT de payer le juge.
+         */
       const preGate = evaluateClosure({
         status: hookOutcome.blocked ? 'red' : cloture.status,
-        dod: cloture.dod.map((check) => ({ ...check, hasContent: true }))
+        dod: cloture.dod.map((check) => ({ ...check, hasContent: true })),
+        travauxNonLivres: [...travauxNonLivres]
       })
       if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
       if (preGate.blocked) {
@@ -4450,7 +4458,9 @@ ${empreinteDepot}`
         onPhase?.({ step: 'gate' })
         const recoveredGate = evaluateClosure({
           status: ok ? 'green' : 'red',
-          dod: [{ checked: ok, hasContent: true }]
+          dod: [{ checked: ok, hasContent: true }],
+          // Meme raison qu'au pre-gate : un verdict REPRIS ne rend pas livre ce qui n'a pas ete livre.
+          travauxNonLivres: [...travauxNonLivres]
         })
         push({
           step: 'gate',

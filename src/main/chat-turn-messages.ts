@@ -209,6 +209,47 @@ export function exigeUneConclusion(aAgi: boolean, reponse: string): boolean {
  * qui le distingue : l'outil et la nature de l'erreur. Deux `ENOENT` sur deux fichiers sont LE meme
  * mur ; un `ENOENT` et un `EACCES` ne le sont pas.
  */
+/**
+ * L'IDENTITE DE LA CIBLE d'une commande — a ne pas confondre avec `signatureDEchec` juste dessous.
+ *
+ * Les deux existent pour des raisons OPPOSEES, et c'est la clef du sujet. `signatureDEchec` identifie
+ * un MUR (la meme erreur revue deux fois) et neutralise donc chemins et noms de fichiers, qui ne sont
+ * que du bruit pour cette question. Ici on veut l'inverse : savoir si l'echec sur `a.ts` a ete
+ * reellement repare, ou si c'est un succes sur `b.ts` qui a fait disparaitre le probleme du registre.
+ *
+ * Defaut mesure le 2026-08-22 par deux juges externes independants : la clef etait le NOM SEUL de la
+ * commande, si bien qu'un `edit_file` reussi sur `b.ts` purgeait l'echec jamais rejoue sur `a.ts`. Le
+ * commentaire du code revendiquait une garantie (« l'echec est REPARE ») que la clef ne pouvait pas
+ * fournir.
+ *
+ * On ne prend que les arguments IDENTIFIANTS, jamais l'ensemble : une reprise du meme fichier avec un
+ * contenu corrige doit rendre la MEME clef, sinon la reprise passerait pour une cible neuve et
+ * l'agent se ferait relancer alors qu'il vient de reparer.
+ */
+const ARGUMENTS_DE_CIBLE = [
+  'path',
+  'filePath',
+  'file',
+  'chemin',
+  'target',
+  'cible',
+  'url',
+  'id',
+  'nom',
+  'name'
+]
+
+export function cleDEchec(nom: string, args?: Record<string, unknown>): string {
+  for (const cle of ARGUMENTS_DE_CIBLE) {
+    const valeur = args?.[cle]
+    if (typeof valeur === 'string' && valeur.trim().length > 0) {
+      return nom + '::' + valeur.trim().toLowerCase()
+    }
+  }
+  // Aucun argument identifiant : le nom seul reste la meilleure clef disponible, et c'est dit.
+  return nom
+}
+
 export function signatureDEchec(nom: string, erreur: string): string {
   const noyau = (erreur ?? '')
     .toLowerCase()
@@ -298,8 +339,15 @@ export function exigeCorrigerEtPoursuivre(
     )
   const questionSuspensive =
     texte.includes('?') && /(dois-je|veux-tu|confirmes?-tu|souhaites?-tu|faut-il|puis-je)/i.test(texte)
+  /*
+   * `impossible` ne desarme plus la reprise par sa seule PRESENCE. Defaut mesure le 2026-08-22 :
+   * « le patch a echoue, la ligne visee est impossible a localiser » decrivait l'echec lui-meme, et
+   * desarmait pourtant les DEUX gardes — la reprise (par ce motif) et l'aveu (le mot satisfaisant la
+   * detection d'aveu). L'echec finissait donc CONSTATE et jamais corrige, ce qui est precisement le
+   * mot que la demande visait. Il faut desormais une tournure PERFORMATIVE portant sur la tache.
+   */
   const declareHorsDePortee =
-    /(n[’']existe pas|je ne peux pas|impossible|hors de (ma|mon) (port[ée]e|p[ée]rim[èe]tre)|pas dans mon p[ée]rim[èe]tre)/i.test(
+    /(n[’']existe pas|je ne peux pas|m[’']est impossible|impossible (?:de|d[’'])\s*(?:le |la |les |l[’'])?(?:faire|continuer|proc[ée]der|acc[ée]der)|hors de (ma|mon) (port[ée]e|p[ée]rim[èe]tre)|pas dans mon p[ée]rim[èe]tre)/i.test(
       texte
     )
   return !(demandeExpliciteALHumain || questionSuspensive || declareHorsDePortee)
@@ -325,9 +373,37 @@ function sansAccents(texte: string): string {
   return texte.normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-/** Les tournures qui NIENT un echec, donc n'en avouent aucun. */
-const NEGATIONS_DECHEC =
-  /(sans|aucune?|pas d[’']|nulle|z[ée]ro|0)\s+(erreurs?|[ée]checs?|probl[èe]mes?|souci)/gi
+/**
+ * Les mots par lesquels une reponse AVOUE un echec. Une seule liste, partagee par la detection
+ * d'aveu et par le retrait des negations : deux listes desynchronisees etaient le defaut d'origine.
+ */
+const MOTS_DECHEC = 'echou|echec|erreur|impossible|refus|bloqu|probleme|souci'
+
+/**
+ * NIER un echec n'est pas l'avouer — et la NEGATION est une CLASSE, pas une liste de couples.
+ *
+ * La version precedente enumerait des paires « quantifieur + substantif » (`sans erreur`,
+ * `aucune erreur`, `0 erreur`). Trois juges externes ont mesure la meme faille le 2026-08-22 :
+ * « rien n'a echoue », « aucun refus », « pas eu d'erreur », « rien d'impossible », « l'edition n'a
+ * pas echoue » traversaient tous la garde. Le mot d'echec restait dans le texte, donc il etait lu
+ * comme un AVEU alors qu'il etait un DENI — l'exact inverse. Ma DoD annoncait « 3 negations
+ * couvertes » : litteralement vrai, fonctionnellement trompeur, puisque j'avais coche trois formes
+ * choisies dans la classe et non la classe.
+ *
+ * Le motif accepte donc un NEGATEUR puis jusqu'a DEUX mots avant le mot d'echec. La fenetre est
+ * bornee a deux exprès : elle couvre « rien n'a echoue » et « pas eu d'erreur », et laisse intact
+ * « je n'ai pas pu corriger, l'edition a echoue » — ou le mot d'echec arrive plus loin et reste un
+ * vrai aveu. Une fenetre large retirerait cet aveu et harcelerait un agent honnete.
+ *
+ * NON COUVERT, et c'est une DECISION : l'ordre inverse (« Erreurs : aucune. »). Le motif symetrique
+ * retirerait aussi « l'edition a echoue, aucun autre souci » — un aveu authentique — donc il
+ * echangerait un faux negatif rare contre un faux positif courant. Signale plutot que corrige de
+ * travers.
+ */
+const NEGATIONS_DECHEC = new RegExp(
+  `(?:rien|aucune?|pas|sans|jamais|nulle?|zero|0)\\b(?:\\W+\\w+){0,2}\\W+(?:${MOTS_DECHEC})\\w*`,
+  'gi'
+)
 
 export function exigeDireLEchec(uneActionAEchoue: boolean, reponse: string): boolean {
   if (!uneActionAEchoue) return false
@@ -335,7 +411,7 @@ export function exigeDireLEchec(uneActionAEchoue: boolean, reponse: string): boo
   if (!texte) return false // le tour muet a sa propre garde
   // Retire d'abord ce qui NIE un echec : ce qui reste, s'il reste un mot, est un vrai aveu.
   const sansNegations = sansAccents(texte).replace(NEGATIONS_DECHEC, ' ')
-  const nommeLEchec = /(echou|erreur|impossible|n[’']a pas (pu|fonctionne)|refus|bloqu)/i.test(
+  const nommeLEchec = new RegExp(`(?:${MOTS_DECHEC}|n[’']a pas (?:pu|fonctionne))`, 'i').test(
     sansNegations
   )
   return !nommeLEchec
