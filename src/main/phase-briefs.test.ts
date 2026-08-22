@@ -164,4 +164,48 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     expect(juge).toMatch(/TOUTE cible ancree non couverte/)
     expect(juge).toMatch(/couverture partielle/i)
   })
+
+  /*
+   * La consigne PARI est la SEULE cause d'existence d'un pari : supprimee, tout l'appareil de mesure
+   * (parse, journal, liaison, lecteur) tourne a vide EN SILENCE, puisque le dispositif est fail-open
+   * par choix. Aucun rouge ne le signalerait. La taille du brief est gardee par le test suivant,
+   * ecrit par une session concurrente : il exige la place SANS autoriser a sacrifier une clause.
+   */
+  it('le brief build EXIGE le pari, et garde une marge visible sous le plafond', () => {
+    expect(PHASE_BRIEFS.build).toContain('AUTOWIN_PARI_V1')
+    expect(PHASE_BRIEFS.build).toMatch(/confiance/i)
+    expect(PHASE_BRIEFS.build).toMatch(/refutateur|réfutateur/i)
+  })
+
+  /*
+   * LA MARGE ETAIT UNE FICTION — mesure du 2026-08-21 : brief build a 2949 caracteres pour un garde
+   * a 2960. Onze caracteres. La prochaine clause ne « heurtera » pas la limite : elle la creve, et
+   * l'arbitrage se fera dans l'urgence, sur la clause la plus recente plutot que sur la plus faible.
+   *
+   * Ce test achete de la place SANS payer en exigences. Les deux assertions sont indissociables :
+   * la longueur seule inviterait a supprimer une regle, la liste seule laisserait le brief enfler.
+   *
+   * L'ENTREE QUI DOIT LE FAIRE TOMBER si le raccourcissement etait faux : un brief qui atteint la
+   * cible de taille en sacrifiant une clause — le bloc PARI, un item ANTI-BLOCAGE, le contrat
+   * lecture-seule ou le gabarit d'echec de la lecon. Chacune est reclamee nommement ci-dessous.
+   */
+  it('la consigne build tient sous 2600 caracteres SANS perdre une exigence', () => {
+    const build = PHASE_BRIEFS.build
+    const exigences: Array<[string, RegExp]> = [
+      ['rouge avant le fix', /rouge AVANT/],
+      ['fix minimal', /fix minimal/],
+      ['dire bloque sans le deguiser', /d[ée]guise/],
+      ['lecture seule : pas d exit-code invente', /LECTURE SEULE/],
+      ['demande elliptique', /ELLIPTIQUE/],
+      ['pas de question derivable du fil', /d[ée]rivable/],
+      ['introuvable n est pas bloque', /Introuvable/],
+      ['enumerer avant de dire bloque', /[EÉ]NUM[ÈE]RE/],
+      ['un outil qui echoue n est pas un mur', /mur/],
+      ['pari', /AUTOWIN_PARI_V1/],
+      ['lecon', /AUTOWIN_LESSON_V1/],
+      ['gabarit d echec de la lecon', /Cause \(prouv[ée]e\)/]
+    ]
+    for (const [nom, motif] of exigences) expect(build, nom).toMatch(motif)
+    expect(build.length, 'place reelle pour la prochaine clause').toBeLessThan(2600)
+  })
 })
