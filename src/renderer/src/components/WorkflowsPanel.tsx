@@ -248,6 +248,16 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                               </button>
                             </span>
                           </div>
+                          {/*
+                            Activité courante, AVANT le texte : quand un outil tourne quinze
+                            minutes, c'est la seule chose qui distingue « travaille » de « mort ».
+                            Le texte du livrable, lui, peut rester vide tout ce temps.
+                          */}
+                          {liveRun.note && (
+                            <div className="subagent-live-note" title="Activité en cours du sous-agent">
+                              {liveRun.note}
+                            </div>
+                          )}
                           {liveRun.liveText && (
                             <pre className="subagent-live-text">{liveRun.liveText}</pre>
                           )}

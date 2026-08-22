@@ -780,6 +780,16 @@
   color: #fff;
 }
 /* Texte streamé du sous-agent en cours : il « écrit » sous nos yeux. */
+/* Activité en cours : discrète, mono comme le texte qu'elle précède, mais sans cadre — c'est un
+   état passager, pas un bloc de contenu. */
+.subagent-live-note {
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
 .subagent-live-text {
   margin-top: 6px;
   max-height: 220px;

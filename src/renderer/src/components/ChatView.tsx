@@ -913,6 +913,15 @@ export function ChatView({
             }
           })
         )
+      } else if (e.type === 'orchestrate-delta' && typeof e.note === 'string' && e.note && e.convId) {
+        // NOTE d'activité : elle ne passe PAS par le batcher de deltas, qui accumule du livrable.
+        // Elle remplace l'état courant, pour que la carte cesse d'être muette pendant qu'un outil
+        // tourne 15 min — le défaut vécu le 2026-08-22, où l'utilisateur concluait à un blocage.
+        const convId = e.convId
+        const note = e.note
+        setLiveRuns((current) =>
+          reduceScopedLiveRuns(current, { type: 'note', convId, runPath: e.runPath, note })
+        )
       } else if (e.type === 'orchestrate-delta' && typeof e.delta === 'string' && e.convId) {
         deltaBatcher.enqueue({ convId: e.convId, runPath: e.runPath, delta: e.delta })
       } else if (e.type === 'orchestrate-step' && e.step && e.convId) {

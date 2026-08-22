@@ -845,7 +845,7 @@ export class AutowinOS {
     task: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
     signal?: AbortSignal,
     collectedContext?: string,
     /** SURVIE NIVEAU 3 : acquis d'un run interrompu → reprise à la phase suivante. */

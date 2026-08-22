@@ -1043,12 +1043,21 @@ export interface ScopedLiveRun<TStep = unknown> {
   phase?: LiveRunPhase
   /** Texte streamé de la phase en cours (réinitialisé à chaque nouvelle phase/étape). */
   liveText?: string
+  /**
+   * Activité COURANTE de la phase, hors livrable : « Bash en cours — 2 min 30 s ».
+   *
+   * Champ SÉPARÉ de `liveText` à dessein. Un battement d'outil n'est pas une partie de la réponse :
+   * le mêler au texte le ferait persister puis relire comme du contenu. C'est un état, pas un
+   * journal — chaque note remplace la précédente, et la phase qui s'achève l'efface.
+   */
+  note?: string
 }
 
 export type ScopedLiveRunEvent<TStep = unknown> =
   | { type: 'start'; convId: string; runPath?: string; task: string }
   | { type: 'phase'; convId: string; runPath?: string; phase: LiveRunPhase }
   | { type: 'delta'; convId: string; runPath?: string; delta: string }
+  | { type: 'note'; convId: string; runPath?: string; note: string }
   | { type: 'step'; convId: string; runPath?: string; step: TStep }
   | { type: 'end'; convId: string; runPath?: string; status: 'green' | 'red' }
   | { type: 'clear'; convId: string; runPath?: string }
@@ -1376,8 +1385,11 @@ export function reduceScopedLiveRuns<TStep>(
     return current
   }
   if (event.type === 'phase') {
-    // Nouvelle phase → on repart d'un texte streamé vierge.
-    return { ...current, [event.convId]: { ...existing, phase: event.phase, liveText: '' } }
+    // Nouvelle phase → on repart d'un texte streamé vierge, et l'activité de l'ancienne s'efface.
+    return {
+      ...current,
+      [event.convId]: { ...existing, phase: event.phase, liveText: '', note: undefined }
+    }
   }
   if (event.type === 'delta') {
     return {
@@ -1385,15 +1397,21 @@ export function reduceScopedLiveRuns<TStep>(
       [event.convId]: { ...existing, liveText: (existing.liveText ?? '') + event.delta }
     }
   }
+  if (event.type === 'note') {
+    // REMPLACE : un battement toutes les 30 s pendant un quart d'heure empilerait trente lignes,
+    // alors qu'on ne veut que l'état courant.
+    return { ...current, [event.convId]: { ...existing, note: event.note } }
+  }
   if (event.type === 'step') {
-    // L'étape est enregistrée → la phase active et son texte streamé sont terminés.
+    // L'étape est enregistrée → phase active, texte streamé ET activité sont terminés.
     return {
       ...current,
       [event.convId]: {
         ...existing,
         steps: [...existing.steps, event.step],
         phase: undefined,
-        liveText: undefined
+        liveText: undefined,
+        note: undefined
       }
     }
   }

@@ -407,6 +407,12 @@ interface ChatApi {
       phase?: { step: string; provider?: string; role?: string }
       deltaStep?: 'exec' | 'judge'
       delta?: string
+      /**
+       * Activite courante de la phase, hors livrable : « Bash en cours — 2 min 30 s ».
+       * Voyage sur `orchestrate-delta` mais dans son propre champ — le texte est la reponse et
+       * finit persiste, la note dit seulement que le sous-agent travaille encore.
+       */
+      note?: string
       /** Affirmations non verifiees sur lesquelles le cadrage repose (evenement `orchestrate-hypotheses`). */
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
     }) => void

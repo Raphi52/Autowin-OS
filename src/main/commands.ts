@@ -254,6 +254,14 @@ export type AppEvent =
       runPath?: string
       deltaStep: 'exec' | 'judge'
       delta: string
+      /**
+       * Activité courante de la phase, hors livrable : « Bash en cours — 2 min 30 s ».
+       *
+       * Champ distinct de `delta` : le texte est la réponse et finit persisté, la note dit
+       * seulement que le sous-agent travaille encore. Les mêler ferait entrer un battement
+       * d'outil dans le livrable.
+       */
+      note?: string
     }
   | { type: 'orchestrate-step'; convId?: string; runPath?: string; step: OrchestrationStep }
   | {
@@ -1537,8 +1545,17 @@ export class AppCommandBus {
               }
               this.broadcast({ type: 'orchestrate-phase', convId, runPath, phase })
             },
-            (step, delta) => {
-              this.broadcast({ type: 'orchestrate-delta', convId, runPath, deltaStep: step, delta })
+            (step, delta, note) => {
+              // Une NOTE (« Bash en cours — 2 min 30 s ») voyage sur le meme evenement mais dans
+              // son propre champ : le renderer la range hors du texte, qui est le livrable.
+              this.broadcast({
+                type: 'orchestrate-delta',
+                convId,
+                runPath,
+                deltaStep: step,
+                delta,
+                ...(note ? { note } : {})
+              })
             },
             abortController.signal,
             collectedContext,

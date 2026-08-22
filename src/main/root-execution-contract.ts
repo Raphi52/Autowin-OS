@@ -1,6 +1,6 @@
 import type { ExecutionEvidence } from './providers/types'
 import { attributedPaths, normalized } from './providers/causal-verification-evidence'
-import { classifyMutationConfidence, isMutationTask } from './task-mutation-classifier'
+import { classifyMutationConfidence } from './task-mutation-classifier'
 
 export const ROOT_DOD = {
   analysis: 'Analyse demandee presente dans le livrable',

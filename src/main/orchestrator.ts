@@ -1497,7 +1497,7 @@ export class Orchestrator {
     task: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
     signal?: AbortSignal,
     collectedContext = '',
     /**
@@ -2206,7 +2206,7 @@ export class Orchestrator {
     runId: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
     signal?: AbortSignal,
     collectedContext = '',
     bindingOverride?: RoleBinding,
@@ -2275,7 +2275,7 @@ export class Orchestrator {
     runId: string,
     push: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
     signal?: AbortSignal,
     bindingOverride?: RoleBinding,
     runtimeSnapshot?: OrchestrationRuntimeSnapshot
@@ -2395,7 +2395,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     })
     const startedAt = performance.now()
     const res = await this.sendWithRoleContext('jugement', 'judge', judgeProvider, opts.model, () =>
-      registry.send(judgeProvider, messages, opts, (c) => onDelta?.('judge', c.delta))
+      registry.send(judgeProvider, messages, opts, (c) =>
+        c.reasoning ? onDelta?.('judge', '', c.reasoning) : onDelta?.('judge', c.delta)
+      )
     )
     if (res.usage) {
       cost.add({
@@ -2486,7 +2488,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     phase: NodePhase,
     push: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
     signal?: AbortSignal,
     bindingOverride?: RoleBinding,
     runtimeSnapshot?: OrchestrationRuntimeSnapshot
@@ -2680,9 +2682,12 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                 forward: (delta) => onDelta?.('exec', delta)
               })
               try {
-                const result = await registry.send(subProvider, messages, options, (chunk) =>
+                const result = await registry.send(subProvider, messages, options, (chunk) => {
                   supervision.onDelta(chunk.delta)
-                )
+                  // La NOTE remonte a l'interface, jamais au livrable : un battement d'outil dit
+                  // que le sous-agent travaille, il ne fait pas partie de sa reponse.
+                  if (chunk.reasoning) onDelta?.('exec', '', chunk.reasoning)
+                })
                 const derive = supervision.trip()
                 if (derive) {
                   onDelta?.(
@@ -2982,7 +2987,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     workCwd: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
-    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
     signal?: AbortSignal,
     greedyPlan?: GreedyTaskNode[],
     collectedContext = '',
@@ -3558,9 +3563,10 @@ ${empreinteDepot}`
               forward: (delta) => onDelta?.('exec', delta)
             })
             try {
-              const res = await registry.send(member.provider, fanMessages, opts, (c) =>
+              const res = await registry.send(member.provider, fanMessages, opts, (c) => {
                 supervision.onDelta(c.delta)
-              )
+                if (c.reasoning) onDelta?.('exec', '', c.reasoning)
+              })
               const derive = supervision.trip()
               if (derive) {
                 onDelta?.(
@@ -4027,9 +4033,10 @@ ${empreinteDepot}`
       })
       let phaseRes
       try {
-        phaseRes = await registry.send(providerDeLaPhase, phaseMessages, subOptions, (c) =>
+        phaseRes = await registry.send(providerDeLaPhase, phaseMessages, subOptions, (c) => {
           supervision.onDelta(c.delta)
-        )
+          if (c.reasoning) onDelta?.('exec', '', c.reasoning)
+        })
       } catch (error) {
         supervision.dispose()
         // L'erreur brute dit la cause mais pas QUEL role l'a subie ni son binding : on prefixe.
