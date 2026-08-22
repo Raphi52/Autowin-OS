@@ -487,3 +487,83 @@ describe("Orchestrator — l'issue de décomposition est OBSERVABLE, pas seuleme
     expect(steps.filter((s) => s.role === 'decompose')).toHaveLength(0)
   })
 })
+
+/**
+ * UNE SOUS-TACHE NON LIVREE EMPECHE D'ANNONCER LA REUSSITE.
+ *
+ * Mesure du 2026-08-22 sur ce meme harnais : `A` echoue, `C` est sautee en cascade, et le run rendait
+ * `gateBlocked: false` avec `gateReasons: []`. Autrement dit `failedTasks` et `skippedTasks` etaient
+ * calcules, accumules avec soin, retournes... et lus par AUCUN consommateur de production. Or c'est
+ * `gateBlocked` qui decide du statut rendu a l'utilisateur (`commands.ts` : `valid && !gateBlocked ?
+ * 'succeeded' : 'failed'`) : du travail nomme et jamais livre etait donc rapporte comme un succes.
+ */
+describe('un travail annonce mais pas livre ne se cloture pas en succes', () => {
+  it('une sous-tache en echec et une sautee bloquent la cloture, et sont NOMMEES', async () => {
+    const provider = new GreedyProvider()
+    const plan: GreedyTaskNode[] = [
+      { id: 'A', deps: [], prompt: 'fais A CRASH' },
+      { id: 'B', deps: [], prompt: 'fais B' },
+      { id: 'C', deps: ['A'], prompt: 'fais C' }
+    ]
+    const result = await makeGreedy(provider, async () => plan).run('analyse le projet')
+    expect(result.gateBlocked).toBe(true)
+    const raisons = (result.gateReasons ?? []).join(' ')
+    // Nommer, pas compter : sans le nom il faut rouvrir la trace pour savoir laquelle a lache.
+    expect(raisons).toContain('A')
+    expect(raisons).toContain('C')
+    // B a bien tourne : on ne transforme pas un echec partiel en echec total.
+    expect(provider.contents.some((c) => /\[sous-tâche B\]/.test(c))).toBe(true)
+  })
+
+  it('un DAG entierement livre n est PAS bloque par cette garde', async () => {
+    // Le discriminant : sans ce test, la garde pourrait bloquer tous les runs et personne ne le verrait.
+    const provider = new GreedyProvider()
+    const plan: GreedyTaskNode[] = [
+      { id: 'A', deps: [], prompt: 'fais A' },
+      { id: 'B', deps: ['A'], prompt: 'fais B' }
+    ]
+    const result = await makeGreedy(provider, async () => plan).run('analyse le projet')
+    expect(result.failedTasks).toEqual([])
+    expect((result.gateReasons ?? []).join(' ')).not.toContain('pas livré')
+  })
+})
+
+/**
+ * LE CHEMIN PIPELINE, celui qui porte la boucle de reparation — et qu'aucun test n'exercait avec un
+ * echec. Instrumente le 2026-08-22 : les 4 passages existants sur ce chemin rendaient tous
+ * `failed=[] skipped=[]`. Mon cablage y etait donc inpreuve, sur la branche meme qui doit CORRIGER.
+ */
+describe('chemin pipeline : une sous-tache non livree bloque la cloture', () => {
+  // NOTE d'honnetete : ce bloc prouve le BLOCAGE et son libelle, pas qu'une passe de reparation a
+  // effectivement tourne. Le blocage est ce qui DONNE prise a la boucle existante (elle se declenche
+  // sur `gate.blocked`) ; prouver la reparation elle-meme demande un devis et un graphe montes, et
+  // n'est pas fait ici. Un libelle qui promettait « et declenche la reparation » a ete corrige.
+  it('bloque en NOMMANT la sous-tache, sur le chemin a phases', async () => {
+    const provider = new GreedyProvider()
+    const result = await makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A CRASH' },
+        { id: 'B', deps: [], prompt: 'fais B' }
+      ],
+      () => ['frame', 'build']
+    ).run('analyse le projet en plusieurs volets')
+
+    expect(result.gateBlocked).toBe(true)
+    expect((result.gateReasons ?? []).join(' ')).toContain('A')
+  })
+
+  it('le meme plan SANS echec ne declenche pas la garde', async () => {
+    const provider = new GreedyProvider()
+    const result = await makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A' },
+        { id: 'B', deps: [], prompt: 'fais B' }
+      ],
+      () => ['frame', 'build']
+    ).run('analyse le projet en plusieurs volets')
+
+    expect((result.gateReasons ?? []).join(' ')).not.toContain('pas livré')
+  })
+})

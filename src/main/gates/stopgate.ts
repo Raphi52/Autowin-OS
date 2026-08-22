@@ -20,6 +20,20 @@ export interface ClosureState {
   dod: DodItem[]
   /** Code de sortie du signal de vérification (test/build/script), s'il existe. */
   signalExitCode?: number
+  /**
+   * Les travaux NOMMES que le run n'a pas livres : sous-taches en echec, ou sautees en cascade parce
+   * qu'une dependance a echoue, et jamais reprises depuis.
+   *
+   * Mesure du 2026-08-22 : un run dont la sous-tache `A` echouait et dont `C` etait sautee se
+   * cloturait `valid: true`, `gateBlocked: false`, ZERO raison. `failedTasks` et `skippedTasks`
+   * etaient calcules, accumules avec soin, retournes dans le resultat — et lus par AUCUN
+   * consommateur de production. Le gate est le seul endroit qui decide de bloquer : c'est donc ici
+   * que l'information devait entrer, plutot que dans une troisieme machinerie de reprise.
+   *
+   * Cette liste ne contient que ce qui reste EN ATTENTE : une sous-tache rejouee avec succes en sort,
+   * sinon la boucle de reparation ne pourrait jamais rendre la main.
+   */
+  travauxNonLivres?: string[]
 }
 
 /**
@@ -230,6 +244,15 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
       libelles.length > 0
         ? `Promis mais pas fait : ${libelles.map((l) => `« ${l} »`).join(', ')}.`
         : `Promis mais pas fait : ${uncheckedContentItems.length} point(s) annoncé(s) au départ ne sont pas faits.`
+    )
+  }
+
+  const nonLivres = (state.travauxNonLivres ?? []).filter((id) => id.trim().length > 0)
+  if (nonLivres.length > 0) {
+    // NOMMER, pas compter — la meme regle que pour la DoD juste au-dessus : « 1 sous-tache en echec »
+    // n'est pas actionnable, il faut rouvrir la trace pour savoir laquelle.
+    reasons.push(
+      `Travail annoncé mais pas livré : ${nonLivres.map((id) => `« ${id} »`).join(', ')}.`
     )
   }
 

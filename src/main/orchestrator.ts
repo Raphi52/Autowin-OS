@@ -2244,7 +2244,9 @@ export class Orchestrator {
       onDelta,
       signal,
       bindingOverride,
-      runtimeSnapshot
+      runtimeSnapshot,
+      // Ni en echec ni saute = livre. Une sous-tache absente de ces deux listes ne bloque rien.
+      [...new Set([...greedy.failed, ...greedy.skipped])]
     )
 
     return {
@@ -2278,7 +2280,16 @@ export class Orchestrator {
     onDelta?: (step: 'exec' | 'judge', delta: string, note?: string) => void,
     signal?: AbortSignal,
     bindingOverride?: RoleBinding,
-    runtimeSnapshot?: OrchestrationRuntimeSnapshot
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot,
+    /**
+     * Les sous-taches NOMMEES que cette passe n'a pas livrees (echec, ou saut en cascade).
+     *
+     * Ce chemin ne fait qu'UNE passe sur l'agregat : il n'a pas de boucle de reparation, donc bloquer
+     * ici ne repare rien — cela rend l'echec VISIBLE au lieu d'annoncer une reussite. C'est le
+     * defaut mesure le 2026-08-22 : `A` en echec, `C` sautee, et pourtant `valid: true` avec zero
+     * raison.
+     */
+    travauxNonLivres: string[] = []
   ): Promise<{
     valid: boolean
     gate: ReturnType<typeof evaluateClosure>
@@ -2441,7 +2452,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     // du juge. Un défaut de preuve constaté en amont ne devient pas vert parce que le juge, lui, a
     // trouvé le livrable convaincant — il s'AJOUTE, il ne se substitue pas.
     const okFinal = ok && motifsPreGate.length === 0
-    const gate = evaluateClosure({ status: okFinal ? 'green' : 'red', dod: [] })
+    const gate = evaluateClosure({
+      status: okFinal ? 'green' : 'red',
+      dod: [],
+      travauxNonLivres
+    })
     if (motifsPreGate.length > 0) gate.reasons.push(...motifsPreGate)
     push({
       step: 'gate',
@@ -3269,6 +3284,19 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     }
     let failedTasks: string[] | undefined
     let skippedTasks: string[] | undefined
+    /*
+     * CE QUI RESTE EN ATTENTE, distinct des deux unions ci-dessus.
+     *
+     * Elles cumulent DELIBEREMENT tout ce qui a echoue dans le run (« une phase suivante reussie ne
+     * doit pas effacer les echecs deja observes »), ce qui est juste pour rendre compte mais
+     * inutilisable pour decider : gater dessus interdirait a toute reparation de rendre la main, une
+     * sous-tache reparee restant marquee en echec pour toujours.
+     *
+     * Ce registre-ci ne garde que le travail ENCORE non livre : une sous-tache rejouee avec succes en
+     * sort. C'est lui que le gate lit, et c'est ce qui permet a la boucle de reparation existante de
+     * conclure vert quand elle a effectivement repare.
+     */
+    const travauxNonLivres = new Set<string>()
     // RAG Brain : 1×/run, on récupère du cerveau Amitel la connaissance pertinente (retriever
     // hybride chaud du brain_server) et on l'injecte en tête de contexte. Le sous-agent part du
     // savoir CURÉ au lieu de brute-forcer le repo. Dégrade à '' si le serveur est absent.
@@ -3452,6 +3480,13 @@ ${empreinteDepot}`
         // effacer les échecs/skips déjà observés (sinon un Terrain rouge disparaît après Build).
         failedTasks = [...new Set([...(failedTasks ?? []), ...greedy.failed])]
         skippedTasks = [...new Set([...(skippedTasks ?? []), ...greedy.skipped])]
+        // Reussi CETTE passe = present au plan, ni en echec ni saute. Une sous-tache reparee sort donc
+        // du registre, et le gate peut rendre la main.
+        const enAttenteCettePasse = new Set([...greedy.failed, ...greedy.skipped])
+        for (const noeud of greedyPlan) {
+          if (enAttenteCettePasse.has(noeud.id)) travauxNonLivres.add(noeud.id)
+          else travauxNonLivres.delete(noeud.id)
+        }
         prevSessionId = undefined
         return
       }
@@ -4749,7 +4784,10 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       onPhase?.({ step: 'gate' })
       const g = evaluateClosure({
         status: ok ? 'green' : 'red',
-        dod: [{ checked: ok, hasContent: true }]
+        dod: [{ checked: ok, hasContent: true }],
+        // Une sous-tache en echec ou sautee est du travail ANNONCE et non livre : elle bloque, et la
+        // boucle de reparation ci-dessous s'en saisit comme de n'importe quel refus du gate.
+        travauxNonLivres: [...travauxNonLivres]
       })
       push({
         step: 'gate',
