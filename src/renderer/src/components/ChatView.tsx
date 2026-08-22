@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { extractRecommendation } from './Markdown'
+import { extrairePromptSuivant } from '../../../shared/prompt-suivant'
 import { SuggestionGrid } from './SuggestionGrid'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
@@ -191,8 +192,15 @@ export function ChatView({
   // Palette de MENTIONS (`@run…`, `@fichier…`) : même mécanique d'état que la palette slash.
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentionDismissed, setMentionDismissed] = useState(false)
-  // Ghost-text (façon CLI) : la recommandation « 👉 Recommandé » du DERNIER message assistant,
-  // proposée en placeholder grisé quand le champ est vide et acceptée par Tab. null si aucune.
+  /*
+   * Ghost-text (façon CLI) du DERNIER message assistant : placeholder grisé quand le champ est vide,
+   * accepté par Tab.
+   *
+   * D'ABORD le PROMPT que le modèle a écrit POUR ce champ, ENSUITE seulement la rubrique
+   * « 👉 Recommandé » en repli. Les deux ne disent pas la même chose : la rubrique est un état
+   * adressé au lecteur (« passer en terrain »), donc la recopier ici donnait une phrase qu'il fallait
+   * réécrire avant de l'envoyer. Le repli garantit qu'un tour sans prompt garde l'ancien comportement.
+   */
   const ghostRecommendation = useMemo(() => {
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant') as
       AsstMsg | undefined
@@ -201,7 +209,7 @@ export function ChatView({
       .filter((p): p is Extract<ChatPart, { kind: 'text' }> => p.kind === 'text')
       .map((p) => p.text)
       .join('\n')
-    return extractRecommendation(text)
+    return extrairePromptSuivant(text) ?? extractRecommendation(text)
   }, [messages])
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
@@ -1388,18 +1396,16 @@ export function ChatView({
     else await reloadActiveFromStore(activeId) // fork refusé : on reste où on est
   }
   /**
-   * CHOIX EXPLICITE (tour en cours) : le message tapé pendant un run est MIS EN FILE, jamais
-   * appliqué automatiquement. Le bloc de file affiche alors les deux actions — 🧭 Orienter
-   * (injecte dans le tour sans l'interrompre) et ⏹ Interrompre et envoyer. Le raccourci `/btw`
-   * reste, lui, une injection explicite immédiate.
+   * PARITÉ claude.exe (demande du 2026-08-21) : le message tapé pendant un tour ORIENTE le tour en
+   * cours, il n'est PLUS mis en file. C'est exactement le chemin `/btw` — même IPC `injectDirective`,
+   * même reçu — donc plus deux comportements pour un seul geste. La file survit uniquement comme
+   * REPLI de `submitBtw` quand l'injection est refusée (rien n'est perdu), et ses actions manuelles
+   * (🧭 Orienter, ⏹ Interrompre et envoyer) restent disponibles sur ces entrées de repli.
    */
   function queueCurrentMessage(): void {
     if (!activeId) return
-    const text = input.trim()
-    if (!text) return
-    const id = activeId
-    setDraftInput(id, '')
-    enqueueMessage(id, text)
+    if (!input.trim()) return
+    void submitBtw(input, 'normal')
   }
 
   /**
@@ -1635,7 +1641,14 @@ export function ChatView({
    * Repli : si l'injection échoue (tour non injectable), on enfile pour ne rien perdre.
    * Idle (aucun tour) → envoi normal.
    */
-  async function submitBtw(body: string): Promise<void> {
+  async function submitBtw(
+    body: string,
+    // Mode du REPLI en file si l'injection échoue. `/btw` garde 'btw' (« celui-là passe en dernier ») ;
+    // un message ORDINAIRE tapé pendant le tour doit, lui, retomber en file NORMALE — sinon le repli
+    // le marquait btw et l'ordre de la file mentait sur ce que l'utilisateur avait tapé.
+    repli: 'btw' | 'normal' = 'btw'
+  ): Promise<void> {
+    const replimode: QueuedDirective['mode'] = repli === 'btw' ? 'btw' : undefined
     const text = body.trim()
     if (!text) {
       setDraftInput(composerDraftKeyRef.current, '') // "/btw" seul → rien à injecter, on nettoie
@@ -1654,7 +1667,7 @@ export function ChatView({
     // réponse ». Une divergence entre deux chemins du même mécanisme, pas un oubli isolé.
     // Même compteur que la file : un reçu et une entrée de file ne doivent jamais partager un id,
     // sinon le repli en file (ci-dessous) écraserait le reçu qu'on vient de poser.
-    const entry: QueuedDirective = { id: nextQueueEntryIdRef.current++, text, mode: 'btw' }
+    const entry: QueuedDirective = { id: nextQueueEntryIdRef.current++, text, mode: replimode }
     setDirectiveReceipt(id, entry, 'sending')
     let injected = false
     try {
@@ -1664,7 +1677,7 @@ export function ChatView({
       injected = false
     }
     // Repli explicite : l'injection a échoué → file d'attente (drainée en fin de tour), rien n'est perdu.
-    if (!injected) enqueueMessage(id, text, 'btw')
+    if (!injected) enqueueMessage(id, text, replimode)
     setDirectiveReceipt(id, entry, injected ? issueDeLInjection(id) : 'failed')
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
@@ -1721,11 +1734,26 @@ export function ChatView({
   const forkRef = useRef(forkFromMessage)
   forkRef.current = forkFromMessage
   const handleFork = useCallback((messageId: string) => void forkRef.current(messageId), [])
+  /**
+   * Un choix cliqué se comporte comme un message TAPÉ, tour en cours ou non.
+   *
+   * DÉFAUT VÉCU le 22/08 (conv-1363) : `ask` ne SUSPEND pas le tour — le pilote enchaîne son
+   * itération suivante sans attendre la réponse. Le bloc reste donc affiché pendant que la
+   * conversation est occupée, et le clic partait dans `send()`, qui sort EN SILENCE sur `busy` :
+   * ni file, ni reçu, ni message. « Je clique dans le bloc ask, il se passe rien » — littéralement.
+   * Le composer traite déjà ce cas (`submitBtw`, parité claude.exe) ; c'est le même geste, donc le
+   * même chemin, y compris son repli en file si l'injection est refusée.
+   */
   // `send` est recréé à chaque render → une prop instable casserait le memo de ChatMessageRow.
-  // On la stabilise via un ref (même pattern que forkRef) → onPickSuggestion référentiellement stable.
+  // On la stabilise via un ref (même pattern que forkRef), ici comme pour la relance gratuite.
   const sendRef = useRef(send)
   sendRef.current = send
-  const pickSuggestion = useCallback((prompt: string) => void sendRef.current(prompt), [])
+  const pickRef = useRef<(prompt: string) => void>(() => {})
+  pickRef.current = (prompt: string) => {
+    if (busy) void submitBtw(prompt, 'normal')
+    else void sendRef.current(prompt)
+  }
+  const pickSuggestion = useCallback((prompt: string) => pickRef.current(prompt), [])
   /**
    * « Reprendre en précisant… » : REMPLIT le composer (prompt d'origine + motif), et s'arrête là.
    * Aucun envoi, aucune orchestration — le geste appartient à l'utilisateur.
@@ -3226,7 +3254,7 @@ export function ChatView({
                 }}
                 placeholder={
                   busy && activeId !== null
-                    ? 'Mettre en file… envoyé à la fin du tour (Entrée)'
+                    ? 'Orienter l’agent sans l’interrompre (Entrée)'
                     : ghostRecommendation
                       ? `⇥ ${ghostRecommendation}`
                       : 'Écrire à l’agent ou déposer des fichiers…'
@@ -3276,11 +3304,11 @@ export function ChatView({
                   canResumePilotTurn
                     ? 'Reprendre la réponse'
                     : busy
-                      ? 'Mettre le message en file d’attente'
+                      ? 'Orienter l’agent sans l’interrompre'
                       : 'Envoyer le message'
                 }
               >
-                {canResumePilotTurn ? '↻ Reprendre' : busy ? '⚡ Mettre en file' : 'Envoyer'}
+                {canResumePilotTurn ? '↻ Reprendre' : busy ? '🧭 Orienter' : 'Envoyer'}
               </button>
             </div>
             <div className="composer-meta">

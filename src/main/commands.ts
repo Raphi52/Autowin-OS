@@ -19,7 +19,13 @@ import { brainCorpusForWorkspace, scopeBrainRetrieval, workspaceSlug } from './b
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
-import { capVerifyOutput, decideVerifyCommand, type VerifyOutcome } from './verify-command'
+import {
+  capVerifyOutput,
+  decideVerifyCommand,
+  verifyTimeoutMs,
+  verifyTimeoutOutcome,
+  type VerifyOutcome
+} from './verify-command'
 import type { AutowinOS } from './os'
 import { lastUserMessageAt } from './store/conversations'
 import type { Message } from './providers/types'
@@ -2426,23 +2432,45 @@ export class AppCommandBus {
       }
       child.stdout?.on('data', collect)
       child.stderr?.on('data', collect)
+      /*
+       * HORLOGE. Sans elle, une suite lente bloque le pilote DANS la commande : il ne draine plus
+       * ses directives, le chat n'a plus aucune prise (defaut vecu le 22/08, conv-1363). L'arbre
+       * entier est tue — sous Windows le `cmd.exe /c` n'est qu'un parent, tuer le seul pid laissait
+       * le runner vivant et le `close` ne venait jamais.
+       */
+      const plafond = verifyTimeoutMs()
+      let expire = false
+      const horloge = setTimeout(() => {
+        expire = true
+        if (process.platform === 'win32' && child.pid) {
+          spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true })
+        } else {
+          child.kill('SIGKILL')
+        }
+        resolve({ allowed: true, ...verifyTimeoutOutcome(decision.command, plafond) })
+      }, plafond)
+      horloge.unref?.()
       child.on('error', (error) =>
+        expire ||
+        (clearTimeout(horloge),
         resolve({
           allowed: true,
           ok: false,
           exitCode: null,
           command: decision.command,
           output: capVerifyOutput(`lancement impossible : ${String(error)}`)
-        })
+        }))
       )
       child.on('close', (code) =>
+        expire ||
+        (clearTimeout(horloge),
         resolve({
           allowed: true,
           ok: code === 0,
           exitCode: code,
           command: decision.command,
           output: capVerifyOutput(output)
-        })
+        }))
       )
     })
   }

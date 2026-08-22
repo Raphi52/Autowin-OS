@@ -57,6 +57,38 @@ export const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
   'npm run tests'
 ])
 
+/**
+ * PLAFOND de la verification — le temps au bout duquel on ARRETE la suite et on le DIT.
+ *
+ * DEFAUT VECU le 22/08 (conv-1363) : chaque `edit_file` rejoue toute la suite unitaire dans un
+ * bureau isole (`withIsolatedMutation`), et ce `spawn` n'avait AUCUNE horloge. La suite a tourne
+ * 6 min 40 ; pendant ce temps le pilote etait bloque DANS la commande, donc il ne drainait plus
+ * ses directives, le bloc `ask` restait affiche et le chat semblait mort — sans qu'aucune borne
+ * n'existe pour y mettre fin. Une attente sans plafond n'est pas une attente, c'est un blocage.
+ *
+ * Genereux volontairement : le but n'est pas de couper une suite honnete, c'est d'empecher un
+ * blocage INFINI. `AUTOWIN_VERIFY_TIMEOUT_MS` permet de le regler (et aux tests de le rendre court).
+ */
+export const VERIFY_TIMEOUT_MS = 600_000
+
+export function verifyTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const brut = Number(env.AUTOWIN_VERIFY_TIMEOUT_MS)
+  return Number.isFinite(brut) && brut > 0 ? brut : VERIFY_TIMEOUT_MS
+}
+
+/**
+ * Le verdict d'une verification ARRETEE au plafond. `ok: false` sans discussion : une suite
+ * interrompue n'a rien prouve, et un `exitCode: null` seul se lirait comme une panne de lancement.
+ */
+export function verifyTimeoutOutcome(command: string, ms: number): VerifyOutcome {
+  return {
+    ok: false,
+    exitCode: null,
+    command,
+    output: `vérification arrêtée après ${Math.round(ms / 1000)} s (plafond) — rien n'est prouvé, la suite n'a pas rendu son verdict`
+  }
+}
+
 /** Sortie d'une verification, telle qu'elle est rendue a l'agent. */
 export interface VerifyOutcome {
   ok: boolean
