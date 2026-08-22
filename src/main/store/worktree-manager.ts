@@ -3640,6 +3640,28 @@ exit 0
     return { ok: true, decision: 'resume-publication' }
   }
 
+  /**
+   * PRÉ-VOL : fichiers non committés de la BASE, en LECTURE SEULE.
+   *
+   * `blockingDirtyFiles` répond à la même question mais à la FINALISATION, filtrée par les fichiers
+   * que l'agent a touchés — impossible avant le run, où ces fichiers ne sont pas encore connus. Ce
+   * pré-vol donne donc l'état brut de la base ; c'est l'appelant qui décide d'en faire un refus.
+   *
+   * Aucune écriture : un seul `git status`. Ni `stash`, ni `checkout`, ni ref. Une base illisible
+   * rend une liste VIDE plutôt qu'une exception : un pré-vol en panne ne doit pas bloquer un run
+   * qui, sans lui, serait parti (le refus de fin de course reste le filet).
+   */
+  baseDirtyFiles(): string[] {
+    const status = this.tryGitFn(this.baseRepo, [
+      'status',
+      '--porcelain=v1',
+      '-z',
+      '--untracked-files=all'
+    ])
+    if (status.code !== 0) return []
+    return parsePorcelainPaths(status.stdout)
+  }
+
   changedFiles(agentId: string): string[] {
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return []

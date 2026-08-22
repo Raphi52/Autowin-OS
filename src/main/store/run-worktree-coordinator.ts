@@ -70,6 +70,7 @@ export interface RunWorktreeCoordinatorDeps {
         | 'readConflictDiffAsync'
         | 'discardAsync'
         | 'sweepAbandonedAgentCopiesAsync'
+        | 'baseDirtyFiles'
       >
     >
   stateStore?: WorktreeRunStateStore
@@ -904,6 +905,14 @@ export class RunWorktreeCoordinator {
     this.emit()
     this.scheduleRecoveryRetry()
     return this.activity().find((activity) => activity.agentId === runId)
+  }
+
+  /**
+   * Pré-vol LECTURE SEULE relayé à la base : fichiers non committés de l'utilisateur. Un manager qui
+   * ne l'expose pas (doubles de test au contrat minimal) rend une liste vide — pas de refus inventé.
+   */
+  baseDirtyFiles(): readonly string[] {
+    return this.manager.baseDirtyFiles?.() ?? []
   }
 
   /** Activité courante, prête pour le modèle du cockpit UI. */
