@@ -19,7 +19,15 @@ import { brainCorpusForWorkspace, scopeBrainRetrieval, workspaceSlug } from './b
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
-import { capVerifyOutput, decideVerifyCommand, type VerifyOutcome } from './verify-command'
+import {
+  capVerifyOutput,
+  decideRelatedVerify,
+  decideVerifyCommand,
+  VERIFY_RELATED_ANGLE_MORT,
+  verifyTimeoutMs,
+  verifyTimeoutOutcome,
+  type VerifyOutcome
+} from './verify-command'
 import type { AutowinOS } from './os'
 import { lastUserMessageAt } from './store/conversations'
 import type { Message } from './providers/types'
@@ -2175,9 +2183,27 @@ export class AppCommandBus {
     if (!workspaceRoot) throw new Error(`isolation workspace indisponible : ${command} refusé`)
     let completed = false
     try {
-      const result = await action(workspaceRoot)
+      let result: Awaited<T> = await action(workspaceRoot)
       if (command === 'edit_file') {
-        const verification = await this.runVerifyAt(workspaceRoot)
+        /*
+         * On juge ce que l'EDITION a pu casser, pas l'etat general du depot.
+         *
+         * DEFAUT VECU le 22/08 (conv-1363) : le verdict etait GLOBAL, donc une edition SAINE de
+         * `orchestration-outcome.ts` a ete jetee parce que `Markdown.test.tsx` echouait — 11 tests
+         * sur 62, sur le commit COMMITTE, sans rapport avec elle. « Le depot est-il vert ? » et
+         * « cette edition a-t-elle casse quelque chose ? » ne sont pas la meme question des que la
+         * base cesse d'etre verte.
+         *
+         * Le REPLI est la suite globale, jamais l'absence de verification : une portee
+         * indeterminable doit couter cher, pas ouvrir une porte. La garantie « publie seulement si
+         * prouve » est intacte — un test qui importe le fichier edite est joue, donc une vraie
+         * regression est toujours refusee.
+         */
+        const edite = (result as { path?: unknown } | undefined)?.path
+        const cible = typeof edite === 'string' ? [edite] : []
+        const parPortee = cible.length ? await this.runRelatedVerifyAt(workspaceRoot, cible) : null
+        const verification =
+          parPortee && parPortee.allowed ? parPortee : await this.runVerifyAt(workspaceRoot)
         if (!verification.allowed) {
           throw new Error(`Vérification du bureau impossible : ${verification.reason}`)
         }
@@ -2185,6 +2211,15 @@ export class AppCommandBus {
           throw new Error(
             `Vérification du bureau échouée (${verification.command}) : ${verification.output}`
           )
+        }
+        // Le verdict NOMME sa portee et son angle mort. Un vert dont on ignore l'etendue se lit
+        // comme une preuve plus large qu'elle ne l'est — c'est ainsi qu'on fabrique un faux vert.
+        if (result && typeof result === 'object') {
+          result = {
+            ...result,
+            verifie: verification.command,
+            portee: verification === parPortee ? VERIFY_RELATED_ANGLE_MORT : 'suite complète'
+          } as Awaited<T>
         }
       }
       const finalized = this.os.worktrees.endAsync
@@ -2394,7 +2429,40 @@ export class AppCommandBus {
         output: ''
       }
     }
-    const [file, ...rest] = decision.command.split(' ')
+    return await this.spawnVerify(decision.command.split(' '), decision.cwd, decision.command)
+  }
+
+  /**
+   * VERIFICATION DE PORTEE — ce que l'edition a REELLEMENT pu casser.
+   *
+   * Voie SEPAREE de `runVerifyAt`, et c'est deliberate : la commande `verify` nue, exposee au
+   * modele, doit garder son verdict GLOBAL (elle repond « le depot est-il vert ? », une question
+   * legitime et differente). Les fusionner aurait couple les deux sens du mot « verifier ».
+   */
+  private async runRelatedVerifyAt(
+    workspaceRoot: string | undefined,
+    paths: readonly string[]
+  ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
+    const decision = decideRelatedVerify(workspaceRoot, paths)
+    if (!decision.allowed) {
+      return {
+        allowed: false,
+        reason: decision.reason,
+        ok: false,
+        exitCode: null,
+        command: '',
+        output: ''
+      }
+    }
+    return await this.spawnVerify(decision.argv, decision.cwd, decision.command)
+  }
+
+  private async spawnVerify(
+    argv: string[],
+    cwd: string,
+    label: string
+  ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
+    const [file, ...rest] = argv
     const sharedBin = this.os.executionWorkspace
       ? join(this.os.executionWorkspace, 'node_modules', '.bin')
       : undefined
@@ -2416,33 +2484,55 @@ export class AppCommandBus {
           ? spawn('cmd.exe', ['/c', file, ...rest], {
               shell: false,
               windowsHide: true,
-              cwd: decision.cwd,
+              cwd,
               env
             })
-          : spawn(file, rest, { shell: false, cwd: decision.cwd, env })
+          : spawn(file, rest, { shell: false, cwd, env })
       let output = ''
       const collect = (chunk: Buffer): void => {
         output += chunk.toString('utf8')
       }
       child.stdout?.on('data', collect)
       child.stderr?.on('data', collect)
+      /*
+       * HORLOGE. Sans elle, une suite lente bloque le pilote DANS la commande : il ne draine plus
+       * ses directives, le chat n'a plus aucune prise (defaut vecu le 22/08, conv-1363). L'arbre
+       * entier est tue — sous Windows le `cmd.exe /c` n'est qu'un parent, tuer le seul pid laissait
+       * le runner vivant et le `close` ne venait jamais.
+       */
+      const plafond = verifyTimeoutMs()
+      let expire = false
+      const horloge = setTimeout(() => {
+        expire = true
+        if (process.platform === 'win32' && child.pid) {
+          spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true })
+        } else {
+          child.kill('SIGKILL')
+        }
+        resolve({ allowed: true, ...verifyTimeoutOutcome(label, plafond) })
+      }, plafond)
+      horloge.unref?.()
       child.on('error', (error) =>
+        expire ||
+        (clearTimeout(horloge),
         resolve({
           allowed: true,
           ok: false,
           exitCode: null,
-          command: decision.command,
+          command: label,
           output: capVerifyOutput(`lancement impossible : ${String(error)}`)
-        })
+        }))
       )
       child.on('close', (code) =>
+        expire ||
+        (clearTimeout(horloge),
         resolve({
           allowed: true,
           ok: code === 0,
           exitCode: code,
-          command: decision.command,
+          command: label,
           output: capVerifyOutput(output)
-        })
+        }))
       )
     })
   }

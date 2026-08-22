@@ -1734,11 +1734,26 @@ export function ChatView({
   const forkRef = useRef(forkFromMessage)
   forkRef.current = forkFromMessage
   const handleFork = useCallback((messageId: string) => void forkRef.current(messageId), [])
+  /**
+   * Un choix cliqué se comporte comme un message TAPÉ, tour en cours ou non.
+   *
+   * DÉFAUT VÉCU le 22/08 (conv-1363) : `ask` ne SUSPEND pas le tour — le pilote enchaîne son
+   * itération suivante sans attendre la réponse. Le bloc reste donc affiché pendant que la
+   * conversation est occupée, et le clic partait dans `send()`, qui sort EN SILENCE sur `busy` :
+   * ni file, ni reçu, ni message. « Je clique dans le bloc ask, il se passe rien » — littéralement.
+   * Le composer traite déjà ce cas (`submitBtw`, parité claude.exe) ; c'est le même geste, donc le
+   * même chemin, y compris son repli en file si l'injection est refusée.
+   */
   // `send` est recréé à chaque render → une prop instable casserait le memo de ChatMessageRow.
-  // On la stabilise via un ref (même pattern que forkRef) → onPickSuggestion référentiellement stable.
+  // On la stabilise via un ref (même pattern que forkRef), ici comme pour la relance gratuite.
   const sendRef = useRef(send)
   sendRef.current = send
-  const pickSuggestion = useCallback((prompt: string) => void sendRef.current(prompt), [])
+  const pickRef = useRef<(prompt: string) => void>(() => {})
+  pickRef.current = (prompt: string) => {
+    if (busy) void submitBtw(prompt, 'normal')
+    else void sendRef.current(prompt)
+  }
+  const pickSuggestion = useCallback((prompt: string) => pickRef.current(prompt), [])
   /**
    * « Reprendre en précisant… » : REMPLIT le composer (prompt d'origine + motif), et s'arrête là.
    * Aucun envoi, aucune orchestration — le geste appartient à l'utilisateur.

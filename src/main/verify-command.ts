@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 
 /**
@@ -56,6 +58,133 @@ export const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
   'npm run test:run',
   'npm run tests'
 ])
+
+/**
+ * PLAFOND de la verification — le temps au bout duquel on ARRETE la suite et on le DIT.
+ *
+ * DEFAUT VECU le 22/08 (conv-1363) : chaque `edit_file` rejoue toute la suite unitaire dans un
+ * bureau isole (`withIsolatedMutation`), et ce `spawn` n'avait AUCUNE horloge. La suite a tourne
+ * 6 min 40 ; pendant ce temps le pilote etait bloque DANS la commande, donc il ne drainait plus
+ * ses directives, le bloc `ask` restait affiche et le chat semblait mort — sans qu'aucune borne
+ * n'existe pour y mettre fin. Une attente sans plafond n'est pas une attente, c'est un blocage.
+ *
+ * Genereux volontairement : le but n'est pas de couper une suite honnete, c'est d'empecher un
+ * blocage INFINI. `AUTOWIN_VERIFY_TIMEOUT_MS` permet de le regler (et aux tests de le rendre court).
+ */
+export const VERIFY_TIMEOUT_MS = 600_000
+
+export function verifyTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const brut = Number(env.AUTOWIN_VERIFY_TIMEOUT_MS)
+  return Number.isFinite(brut) && brut > 0 ? brut : VERIFY_TIMEOUT_MS
+}
+
+/**
+ * Le verdict d'une verification ARRETEE au plafond. `ok: false` sans discussion : une suite
+ * interrompue n'a rien prouve, et un `exitCode: null` seul se lirait comme une panne de lancement.
+ */
+export function verifyTimeoutOutcome(command: string, ms: number): VerifyOutcome {
+  return {
+    ok: false,
+    exitCode: null,
+    command,
+    output: `vérification arrêtée après ${Math.round(ms / 1000)} s (plafond) — rien n'est prouvé, la suite n'a pas rendu son verdict`
+  }
+}
+
+
+/**
+ * VERIFICATION DE PORTEE — ce que l'edition a REELLEMENT pu casser, et rien d'autre.
+ *
+ * DEFAUT VECU le 22/08 (conv-1363). `edit_file` conditionnait sa publication a un verdict GLOBAL :
+ * la suite entiere devait sortir a 0. Or ce verdict repond « le depot est-il vert ? », jamais
+ * « cette edition a-t-elle casse quelque chose ? ». Les deux questions coincident tant que la base
+ * est verte, et divergent totalement des qu'elle ne l'est plus : une edition SAINE de
+ * `orchestration-outcome.ts` a ete jetee parce que `Markdown.test.tsx` echouait — 11 tests sur 62,
+ * sur le commit COMMITTE, sans aucun rapport avec l'edition (le bureau isole part d'`origin` et
+ * EXCLUT les fichiers sales, donc aucune contamination locale n'etait en cause).
+ *
+ * `vitest related` rejoue les tests qui DEPENDENT du fichier edite, par le graphe d'imports.
+ * L'immunite aux rouges sans rapport est donc obtenue par CONSTRUCTION, pas par une exception qui
+ * avalerait des echecs. Mesure sur le cas reel : 134 fichiers, 1498 tests, 69,7 s VERT, contre
+ * 6 min 40 ROUGE pour la suite entiere.
+ *
+ * ANGLE MORT ASSUME : un test qui n'exerce le fichier que par un chemin d'EXECUTION (import
+ * dynamique, processus lance) sort du graphe d'imports et n'est pas rejoue. Il est NOMME dans le
+ * verdict rendu au modele — un angle mort tu se lirait comme une preuve.
+ */
+export const VERIFY_RELATED_ANGLE_MORT =
+  'portée = les tests qui importent le(s) fichier(s) édité(s) ; un test qui ne les exerce que par un chemin d’exécution (import dynamique, processus lancé) n’est pas rejoué'
+
+function scriptsDeclares(dir: string): Record<string, string> | null {
+  const chemin = join(dir, 'package.json')
+  if (!existsSync(chemin)) return null
+  try {
+    return (JSON.parse(readFileSync(chemin, 'utf8')) as { scripts?: Record<string, string> })
+      .scripts ?? {}
+  } catch {
+    return null
+  }
+}
+
+export type RelatedVerifyDecision =
+  | { allowed: true; argv: string[]; cwd: string; command: string }
+  | { allowed: false; reason: string }
+
+/**
+ * Un chemin ne doit jamais pouvoir se faire passer pour une OPTION.
+ *
+ * Les chemins viennent de `decideEdit` (deja borne : pas de traversee, pas de `.git`, pas de
+ * secrets) et jamais du modele — mais ils traversent ici une frontiere d'ARGUMENTS. Un chemin
+ * commencant par `-` deviendrait un drapeau de vitest : c'est la seule facon dont cette extension
+ * pourrait elargir ce que la commande fait, et elle est fermee ici plutot que supposee impossible.
+ */
+const ANTISLASH = String.fromCharCode(92)
+
+const cheminUtilisable = (chemin: unknown): chemin is string =>
+  typeof chemin === 'string' &&
+  chemin.trim().length > 0 &&
+  !chemin.startsWith('-') &&
+  !chemin.includes('..') &&
+  !chemin.includes(String.fromCharCode(0)) &&
+  !/^[a-zA-Z]:/.test(chemin) &&
+  !chemin.startsWith('/') &&
+  !chemin.startsWith(ANTISLASH)
+
+/**
+ * Decide la verification de PORTEE. La commande est FIXE (`vitest related … --run`) : seuls des
+ * chemins valides s'y injectent, en argv SEPARES — aucune chaine interpolee, donc aucune surface
+ * d'injection, exactement comme la voie globale.
+ */
+export function decideRelatedVerify(
+  cwd: string | undefined,
+  paths: readonly unknown[],
+  lireScripts: (dir: string) => Record<string, string> | null = scriptsDeclares
+): RelatedVerifyDecision {
+  if (!cwd || !cwd.trim()) {
+    return { allowed: false, reason: 'aucun workspace résolu — rien à vérifier' }
+  }
+  /*
+   * `related` est une notion de VITEST. Un projet qui teste autrement n'a pas de graphe d'imports a
+   * interroger : lui envoyer cette commande fabriquerait un « lancement impossible » — donc un REFUS
+   * de publier — sur un projet parfaitement sain. On ne prend cette voie que si le projet declare
+   * reellement vitest, et le repli global couvre tous les autres.
+   */
+  const scripts = lireScripts(cwd)
+  const declare = scripts
+    ? ['test:unit', 'test:run', 'tests', 'test'].some((nom) => (scripts[nom] ?? '').includes('vitest'))
+    : false
+  if (!declare) {
+    return { allowed: false, reason: 'le projet ne déclare pas vitest — portée non dérivable' }
+  }
+  const retenus = paths.filter(cheminUtilisable)
+  // Un SEUL chemin refuse suffit a rendre la portee incomplete : verifier les autres et publier
+  // quand meme donnerait un vert qui ne couvre pas tout ce que l'edition a touche.
+  if (!retenus.length || retenus.length !== paths.length) {
+    return { allowed: false, reason: 'aucun chemin édité exploitable — portée indéterminable' }
+  }
+  const argv = ['vitest', 'related', ...retenus.map((c) => c.split(ANTISLASH).join('/')), '--run']
+  return { allowed: true, argv, cwd, command: argv.join(' ') }
+}
 
 /** Sortie d'une verification, telle qu'elle est rendue a l'agent. */
 export interface VerifyOutcome {
