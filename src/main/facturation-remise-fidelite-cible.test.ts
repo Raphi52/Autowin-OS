@@ -39,11 +39,24 @@ describe('cible facturation/remise-fidelite (absente du dépôt)', () => {
       if (statut !== 1) throw erreur
     }
 
+    /*
+      Un fichier qui ne peut que CITER le symbole ne prouve pas sa présence : ce fichier-ci, et tout
+      artefact de test ou de preuve. Mesuré le 2026-08-22 — l'oracle est passé rouge parce que
+      `scripts/cdp-relance-jusquau-vert-proof.mjs:81` porte le symbole dans une CHAÎNE DE PROMPT
+      (« Corrige le bug de la fonction `calculerRemiseFidelite` dans … »), pas dans du code.
+
+      Une autre session a « réparé » en SUPPRIMANT ce fichier. Supprimer un oracle parce qu'il sonne,
+      c'est desserrer une assertion jusqu'à ce qu'elle passe. On le RESSERRE plutôt : il reste
+      falsifiable sur la SOURCE — le jour où la cible apparaît vraiment dans `src/`, il redevient
+      rouge — et il cesse de compter les citations.
+    */
+    const citationSeule = (chemin: string): boolean =>
+      /\.test\.[cm]?[jt]sx?$/.test(chemin) || chemin.startsWith('scripts/')
+
     const suivis = sortie
       .split('\n')
       .map((l) => l.trim())
-      // Ce fichier-ci cite forcément le symbole : il ne compte pas.
-      .filter((l) => l.length > 0 && !l.endsWith('facturation-remise-fidelite-cible.test.ts'))
+      .filter((l) => l.length > 0 && !citationSeule(l))
 
     expect(suivis).toEqual([])
   })
