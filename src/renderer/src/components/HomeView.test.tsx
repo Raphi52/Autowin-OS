@@ -11,7 +11,10 @@ import { defaultHomeLayout, parseHomeLayout } from './home-layout'
 ).IS_REACT_ACT_ENVIRONMENT = true
 
 const LAYOUT_KEY = autowinStorageKey('home.layout.v1')
-const NOW = Date.now()
+// Horloge FIGEE : un rendez-vous a "maintenant + 1 h" tombait le lendemain quand la suite
+// tournait apres 23 h, et le test du jour echouait une heure par nuit. On ne lit plus l'heure reelle.
+const CLOCK = new Date(2026, 7, 22, 10, 0, 0)
+const NOW = CLOCK.getTime()
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
 function snapshot() {
@@ -33,7 +36,7 @@ function snapshot() {
   }
 }
 
-const NOW_MS = Date.now()
+const NOW_MS = NOW
 
 function outlookSnapshot() {
   return {
@@ -85,6 +88,8 @@ function outlookSnapshot() {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(CLOCK)
   ;(window as unknown as { api: unknown }).api = {
     taskManagerSnapshot: vi.fn(async () => snapshot()),
     outlookSnapshot: vi.fn(async () => outlookSnapshot())
@@ -97,6 +102,7 @@ afterEach(async () => {
     item.container.remove()
   }
   window.localStorage.clear()
+  vi.useRealTimers()
 })
 
 async function mount(active = true): Promise<HTMLDivElement> {
