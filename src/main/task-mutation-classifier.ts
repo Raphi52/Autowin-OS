@@ -1,8 +1,14 @@
 const MUTATION_STEM =
   'ajout|add|modifi|chang|corrig|fix|cre|create|implement|refactor|supprim|remove|renomm|rename|update|build|ger|ecri|write|edit|patch|apply|delete|move|remplac|configur|repar|nettoi|deplac|mets|met|fai'
 const MUTATION_TASK = new RegExp(`\\b(?:${MUTATION_STEM})\\w*`, 'i')
+/*
+  Les negateurs. `aucun(e)`, `zero` et `pas de` MANQUAIENT alors que `NEGATED_MENTION_PREFIX`
+  (root-execution-contract.ts) les reconnait depuis toujours : deux listes divergentes pour la meme
+  notion. Consequence mesuree le 2026-08-22 — ecrire « aucune ecriture » rendait la tache MUTANTE,
+  le mot `ecriture` etant compte comme une demande d'ecrire. Dire qu'on n'ecrit pas rendait mutant.
+*/
 const NEGATED_MUTATION = new RegExp(
-  `\\b(?:sans(?:\\s+rien)?\\s+(?:\\w+\\s+){0,2}|n['e]?\\s*(?:\\w+\\s+){0,2})(?:${MUTATION_STEM})\\w*(?:\\s+pas)?`,
+  `\\b(?:sans(?:\\s+rien)?\\s+(?:\\w+\\s+){0,2}|aucun(?:e|s|es)?\\s+(?:\\w+\\s+){0,2}|zero\\s+(?:\\w+\\s+){0,2}|pas\\s+de\\s+(?:\\w+\\s+){0,2}|n['e]?\\s*(?:\\w+\\s+){0,2})(?:${MUTATION_STEM})\\w*(?:\\s+pas)?`,
   'gi'
 )
 const CLAUSE_SPLIT =

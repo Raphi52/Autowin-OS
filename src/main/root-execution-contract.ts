@@ -1,6 +1,6 @@
 import type { ExecutionEvidence } from './providers/types'
 import { attributedPaths, normalized } from './providers/causal-verification-evidence'
-import { isMutationTask } from './task-mutation-classifier'
+import { classifyMutationConfidence, isMutationTask } from './task-mutation-classifier'
 
 export const ROOT_DOD = {
   analysis: 'Analyse demandee presente dans le livrable',
@@ -62,14 +62,20 @@ export function rootExecutionRequirements(
   phasesProgrammees?: readonly string[]
 ): RootExecutionRequirements {
   const normalized = task.normalize('NFD').replace(/\p{Diacritic}/gu, '')
-  const demandee = isMutationTask(task)
+  const confiance = classifyMutationConfidence(task)
+  const demandee = confiance !== 'read-only'
   // Le TEXTE dit ce que l'utilisateur envisage ; le PROGRAMME dit ce que le run va jouer. Un run
   // limite a frame/scout/terrain n'ecrit rien : lui demander une mutation, un test ou un commit est
   // insatisfaisable par construction. L'ANALYSE, elle, reste due : il peut la tenir.
   const ecrit = !programmeSansEcriture(phasesProgrammees)
   return {
     analysis: demandee && hasRequestedAction(normalized, ANALYSIS_REQUEST),
-    mutation: demandee && ecrit,
+    // La MUTATION exige la confiance PLEINE, pas la simple absence de lecture seule. `uncertain`
+    // veut dire « on ne sait pas » : en tirer une obligation prouvable est un faux rouge garanti
+    // (mesure du 2026-08-22, deux mesures perdues sur ce refus). On desarme l'OBLIGATION, jamais la
+    // CAPACITE : `isMutationTask` reste vrai sur `uncertain`, donc worktree isole et catalogue de
+    // commandes sont conserves — meme compromis que celui documente pour `verifi`.
+    mutation: confiance === 'mutation' && ecrit,
     tests: demandee && ecrit && hasRequestedAction(normalized, TEST_REQUEST),
     commit: demandee && ecrit && hasRequestedAction(normalized, COMMIT_REQUEST)
   }
