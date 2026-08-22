@@ -52,6 +52,26 @@ describe('un travail nomme mais non livre bloque la cloture', () => {
     expect(g.reasons).toEqual([])
   })
 
+  it('un identifiant vide ou blanc ne bloque pas et n est pas nomme', () => {
+    /*
+     * Cas ECRIT PAR UN AGENT AUTOWIN (run-704c6e80ab5c-1, juge validé, score 92) pendant le dogfood
+     * du 2026-08-22 : le filtre `id.trim().length > 0` existait dans `evaluateClosure` mais n'etait
+     * teste par rien. Un id vide vient d'une trace tronquee, pas d'un travail promis — le bloquer
+     * produirait un motif « Travail annoncé mais pas livré : «  » » que personne ne peut actionner.
+     *
+     * RESSERRE par rapport a la version de l'agent, sur l'objection du juge lui-meme : on verifie
+     * l'absence du MOTIF, et pas seulement que `reasons` est vide — sur un etat green sans autre
+     * motif les deux coincident, mais seul le premier reste vrai si un autre refus s'ajoute un jour.
+     */
+    const g = evaluateClosure({
+      status: 'green',
+      dod: [{ checked: true, hasContent: true }],
+      travauxNonLivres: ['', '   ']
+    })
+    expect(g.blocked).toBe(false)
+    expect(g.reasons.join(' ')).not.toContain('pas livré')
+  })
+
   it('une cloture degradee assumee par l humain reste souveraine', () => {
     // L'autorite de cloture externe a deja ete exercee : le gate ne la contredit pas.
     const g = evaluateClosure({
