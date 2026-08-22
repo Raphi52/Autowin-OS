@@ -88,13 +88,20 @@ export function isolatedWorkNotice(worktreeCwd: string, rescueRef?: string): str
  *   2. Le geste proposé était `git show`, une commande d'INSPECTION qui déverse un diff : elle ne
  *      RAPATRIE rien. On donne la commande qui récupère réellement les fichiers.
  *
+ * TROISIÈME correction, 2026-08-22 : ce geste était `git checkout <ref> -- .`, qui ÉCRASE l'arbre de
+ * travail. Sur un refus `base-dirty` — dont la raison d'être est de protéger des fichiers non
+ * commités — il détruirait précisément ce que la garde venait de sauver. C'est ce qui rendait
+ * dangereux le fait de poser une adresse sur ce refus, et donc ce qui justifiait l'exclusion.
+ * `git worktree add` rapatrie tout aussi réellement, mais AILLEURS : l'intention du 18/08 (récupérer,
+ * pas inspecter) est conservée, sa propriété destructrice disparaît.
+ *
  * Rien n'est promis sans adresse : `undefined` rend une chaîne vide, jamais une phrase creuse.
  */
 export function adresseDeSecours(rescueRef?: string): string {
   if (!rescueRef) return ''
   return (
     `\nLe travail est ATTEIGNABLE et ne dépend plus de cette copie : \`${rescueRef}\`. ` +
-    `Pour le récupérer dans ton dossier : \`git checkout ${rescueRef} -- .\` ` +
+    `Pour le récupérer sans rien écraser : \`git worktree add ../recup ${rescueRef}\` ` +
     `(ou \`git diff HEAD ${rescueRef}\` pour le lire d'abord).`
   )
 }

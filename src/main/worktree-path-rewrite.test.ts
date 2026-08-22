@@ -272,8 +272,10 @@ describe('l’adresse de secours atteint l’utilisateur', () => {
   it('intégration différée : la note porte l’adresse ET une commande qui RÉCUPÈRE', () => {
     const aligned = alignReportWithDisk({ result: 'Rapport.' }, WT2, BASE2, 'pending', REF)
     expect(aligned.result).toContain(REF)
-    // Un geste de récupération, pas d'inspection : `git show` ne rapatrie rien.
-    expect(aligned.result).toMatch(/git checkout .* -- \./)
+    // Un geste de récupération, pas d'inspection : `git show` ne rapatrie rien. Le geste a CHANGÉ
+    // le 2026-08-22 (`git checkout -- .` → `git worktree add`) parce que l'ancien ÉCRASAIT l'arbre ;
+    // l'intention testée ici — récupérer et non inspecter — est intacte, seule la commande diffère.
+    expect(aligned.result).toMatch(/git worktree add .* refs\/autowin/)
   })
 
   it('blocage DÉFINITIF : l’adresse sort AUSSI — c’est le refus que nulle reprise ne rattrape', () => {
@@ -287,7 +289,9 @@ describe('l’adresse de secours atteint l’utilisateur', () => {
     const kept = alignReportWithDisk({ result: 'Rapport.' }, WT2, BASE2, 'kept')
     for (const texte of [pending.result, kept.result]) {
       expect(texte).not.toMatch(/ATTEIGNABLE/)
-      expect(texte).not.toMatch(/git checkout/)
+      // Suit le geste courant : ancré sur `git checkout`, cette assertion serait devenue VIDE
+      // le jour où le geste a changé — elle aurait passé sans rien vérifier.
+      expect(texte).not.toMatch(/git worktree add/)
       expect(texte).not.toMatch(/refs\/autowin/)
     }
   })
@@ -298,6 +302,6 @@ describe('l’adresse de secours atteint l’utilisateur', () => {
     expect(deux.result.match(/DIFFÉRÉE/g)).toHaveLength(1)
     // La propriete qui compte : la NOTE n'est pas dupliquee. L'adresse y figure plusieurs fois par
     // conception (la reference, puis les deux commandes). On compte donc la note et son geste.
-    expect(deux.result.match(/git checkout/g)).toHaveLength(1)
+    expect(deux.result.match(/git worktree add/g)).toHaveLength(1)
   })
 })
