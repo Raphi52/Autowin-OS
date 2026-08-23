@@ -576,6 +576,9 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     expect(result.ok).toBe(true)
     expect(collected).toMatch(/^\[COLLECTE DE CONTEXTE — effectuée avant RUN.md et délégation\]/)
     expect(collected).toContain('Conversation: conv-1 — A garder')
+    // Le FIL, pas seulement l'étiquette de la conversation : sans lui le sous-agent recevait la
+    // phrase-tâche nue et devait DEVINER l'intention (défaut mesuré le 2026-08-23, conv-1376).
+    expect(collected).toContain('le worktree est resté ouvert')
   })
 
   it('met la preuve watchdog en quarantaine sans la transformer en ordre provider', async () => {

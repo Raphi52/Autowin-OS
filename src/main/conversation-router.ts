@@ -6,10 +6,9 @@ import type { Conversation, ConversationStore, Msg } from './store/conversations
 import { compileExecutionQuote } from './execution-quote'
 import type { ExecutionSupervisor } from './execution-supervisor'
 import { routeSkillRequest } from './skill-routing'
+import { CONTEXT_MESSAGE_CHARS, CONTEXT_MESSAGE_LIMIT, clip } from './conversation-window'
 
 const ROUTE_CONFIDENCE_THRESHOLD = 0.9
-const CONTEXT_MESSAGE_LIMIT = 10
-const CONTEXT_MESSAGE_CHARS = 600
 const TITLE_CHARS = 60
 
 const ROUTER_SYSTEM = `Tu es le routeur de conversations d’Autowin OS.
@@ -42,11 +41,6 @@ export interface ConversationRouteDecision {
   model?: string
   reasoningEffort?: string
   usage?: Usage
-}
-
-function clip(value: string, cap: number): string {
-  const normalized = value.replace(/\s+/g, ' ').trim()
-  return normalized.length > cap ? `${normalized.slice(0, cap)}…` : normalized
 }
 
 function parseDecision(text: string): Omit<ConversationRouteDecision, 'provider' | 'model'> | null {
