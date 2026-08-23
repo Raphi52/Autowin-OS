@@ -164,7 +164,24 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     // (ici et dans le script PowerShell). Ils sont deliberement SEPARES : lire n'est pas agir, et la
     // garantie « lecture seule » de la passerelle est ce qui rend cette integration acceptable.
     // `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(138)
+    //
+    // MISE A JOUR 2026-08-23 — 138 -> 140. DEUX canaux ajoutes, et la relecture a ete faite AVANT de
+    // toucher le compte, comme ce fichier le reclame lui-meme :
+    //   `worktree:travaux-non-publies` — liste des travaux termines mais jamais publies, avec leurs
+    //     fichiers. Lecture SEULE, sans argument.
+    //   `worktree:patch-non-publie`    — le patch d'un de ces travaux, pour le lire avant d'en
+    //     decider. Lecture SEULE.
+    // Les deux portent `assertTrustedRendererSender` des leur PREMIERE ligne. Le second valide son
+    // argument DEUX fois : type `string` ici, puis expression reguliere `SAFE_ID` dans le
+    // gestionnaire de copies avant toute interpolation dans une commande git.
+    //
+    // POURQUOI ces canaux existent : le 2026-08-23, 14 travaux termines attendaient sur des branches
+    // `autowin/recovery/`, et AUCUNE vue ne les montrait -- la seule qui porte des actions ne connait
+    // que les bureaux vivants, et affichait « 0 bureau ». La seule option offerte etait donc de
+    // fusionner ou supprimer A L'AVEUGLE. Ces deux canaux ne font que MONTRER, et c'est deliberement
+    // tout ce qu'ils font : aucun ne mute quoi que ce soit.
+    // `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(140)
     expect(unguarded).toEqual([])
   })
 

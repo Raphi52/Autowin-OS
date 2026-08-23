@@ -53,6 +53,7 @@ export interface RunWorktreeCoordinatorDeps {
         | 'commitDejaReference'
         | 'travauxNonPublies'
         | 'apercuTravauxNonPublies'
+        | 'patchTravailNonPublie'
         | 'reconcileResidues'
         | 'reconcileResiduesAsync'
         | 'cleanupPublished'
@@ -970,6 +971,17 @@ export class RunWorktreeCoordinator {
     )
     this.cacheNonPublies = { a: maintenant, ids, apercu }
     return { ids, apercu }
+  }
+
+  /** Tous les travaux finis mais non publies, avec leurs fichiers. Lecture seule, a la demande. */
+  travauxNonPublies(): Array<{ agentId: string; date: string; fichiers: string[] }> {
+    // Sans borne ici : c'est un geste EXPLICITE de l'utilisateur, pas un rafraichissement d'ecran.
+    return this.manager.apercuTravauxNonPublies?.('HEAD', 100) ?? []
+  }
+
+  /** Le patch d'un travail non publie, pour le lire avant d'en decider. */
+  patchTravailNonPublie(agentId: string): { patch: string; tronque: boolean } {
+    return this.manager.patchTravailNonPublie?.(agentId) ?? { patch: '', tronque: false }
   }
 
   activity(): WorktreeAgentActivity[] {

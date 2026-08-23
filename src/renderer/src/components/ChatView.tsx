@@ -119,6 +119,7 @@ export type { RunEntry, CheckpointEntry } from './chat-view-types'
 import type { CheckpointEntry } from './chat-view-types'
 import { useSkillsCatalog } from './useSkillsInventory'
 import { messageTravailNonPublie } from './travail-non-publie'
+import { TravauxNonPublies } from './TravauxNonPublies'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
 /* ---------- Constantes ---------- */
@@ -188,16 +189,10 @@ function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
 
 export function ChatView({
   isActive = true,
-  onInspectTurn,
-  onOuvrirWorktrees
+  onInspectTurn
 }: {
   isActive?: boolean
   onInspectTurn?: (target: InspectTurnTarget) => void
-  /**
-   * Emmener vers la vue Worktrees, qui porte DEJA les actions sur un travail bloque (relancer la
-   * publication, voir le diff, resoudre, abandonner). Le bandeau ne les refait pas : il y conduit.
-   */
-  onOuvrirWorktrees?: () => void
 }): React.JSX.Element {
   const [convs, setConvs] = useState<Conv[]>([])
   /** Miroir stable de `convs` pour les écouteurs d'événements (pas de re-abonnement à chaque render). */
@@ -262,6 +257,13 @@ export function ChatView({
    * qu'il faut penser a ouvrir.
    */
   const [travailNonPublie, setTravailNonPublie] = useState<string | null>(null)
+  /**
+   * La LISTE des travaux non publies. Deux versions de ce bouton ont echoue avant : la premiere
+   * ouvrait la vue Worktrees, la seconde la vue Workspace -- toutes deux ne montrent que les bureaux
+   * VIVANTS, et affichaient donc « 0 bureau » pendant que 14 travaux attendaient. Il fallait une vue
+   * qui montre les BRANCHES, pas les copies.
+   */
+  const [listeNonPubliee, setListeNonPubliee] = useState(false)
   useEffect(() => {
     let vivant = true
     const relever = async (): Promise<void> => {
@@ -2869,18 +2871,17 @@ export function ChatView({
             role="status"
           >
             <span>{travailNonPublie}</span>
-            {onOuvrirWorktrees && (
-              <button
-                type="button"
-                data-testid="chat-travail-non-publie-ouvrir"
-                onClick={onOuvrirWorktrees}
-                title="Ouvrir la vue Worktrees pour relancer, voir le diff ou abandonner"
-              >
-                Voir
-              </button>
-            )}
+            <button
+              type="button"
+              data-testid="chat-travail-non-publie-ouvrir"
+              onClick={() => setListeNonPubliee((v) => !v)}
+              title="Lister ces travaux et lire leur diff"
+            >
+              Traiter
+            </button>
           </div>
         )}
+        {listeNonPubliee && <TravauxNonPublies onFermer={() => setListeNonPubliee(false)} />}
 
         {appNotice && (
           <div className="chat-workflow-notice" data-testid="chat-workflow-notice" role="alert">

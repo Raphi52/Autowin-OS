@@ -167,6 +167,9 @@ interface ChatApi {
   cancelTickets: (requestId: string) => Promise<boolean>
   listTicketPeople: (source: unknown) => Promise<string[]>
   getWorktreeActivity: (conversationId?: string) => Promise<WorktreeAgentActivity[]>
+  /** Travaux terminés mais jamais publiés — lecture seule, sur geste explicite. */
+  getTravauxNonPublies?: () => Promise<Array<{ agentId: string; date: string; fichiers: string[] }>>
+  getPatchTravailNonPublie?: (agentId: string) => Promise<{ patch: string; tronque: boolean }>
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   getWorktreeConflictDiff: (agentId: string) => Promise<WorktreeConflictDiffResult>
   resolveWorktreeConflict: (

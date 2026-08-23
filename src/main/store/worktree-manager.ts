@@ -820,6 +820,35 @@ export class WorktreeManager {
       })
   }
 
+  /**
+   * Le PATCH d'un travail non publie, pour le lire avant d'en decider.
+   *
+   * Constate le 2026-08-23 : aucune vue de l'app ne listait ces travaux. La vue Workspace ne montre
+   * que les bureaux VIVANTS -- elle affichait « 0 bureau » alors que 14 travaux attendaient. Sans un
+   * moyen de les LIRE, la seule option restante etait de fusionner ou supprimer a l'aveugle.
+   *
+   * Borne en taille : un patch de plusieurs milliers de lignes n'est pas lisible dans un panneau, et
+   * le transporter par IPC pour rien coute. On tronque, et on le DIT.
+   */
+  patchTravailNonPublie(
+    agentId: string,
+    baseRef = 'HEAD',
+    maxCaracteres = 20_000
+  ): { patch: string; tronque: boolean } {
+    if (!SAFE_ID.test(agentId)) return { patch: '', tronque: false }
+    try {
+      const patch = this.git(this.baseRepo, [
+        'diff',
+        `${baseRef}...autowin/recovery/${agentId}`
+      ])
+      return patch.length > maxCaracteres
+        ? { patch: patch.slice(0, maxCaracteres), tronque: true }
+        : { patch, tronque: false }
+    } catch {
+      return { patch: '', tronque: false }
+    }
+  }
+
   listAgentIds(): string[] {
     const directories = existsSync(this.worktreeRoot)
       ? readdirSync(this.worktreeRoot, { withFileTypes: true })

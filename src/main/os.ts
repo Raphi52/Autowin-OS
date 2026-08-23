@@ -664,6 +664,16 @@ export class AutowinOS {
   }
 
   /** Activité worktree courante (volet A) — snapshot pour l'IPC/renderer. */
+  /** Tous les travaux termines mais jamais publies, avec leurs fichiers. Lecture seule. */
+  travauxNonPublies(): Array<{ agentId: string; date: string; fichiers: string[] }> {
+    return this.worktrees?.travauxNonPublies() ?? []
+  }
+
+  /** Le patch d'un de ces travaux, pour le lire avant d'en decider. Lecture seule. */
+  patchTravailNonPublie(agentId: string): { patch: string; tronque: boolean } {
+    return this.worktrees?.patchTravailNonPublie(agentId) ?? { patch: '', tronque: false }
+  }
+
   getWorktreeActivity(): WorktreeAgentActivity[] {
     return this.worktrees ? this.worktrees.activity() : []
   }

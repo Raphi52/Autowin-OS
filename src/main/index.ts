@@ -2265,6 +2265,14 @@ Le fil reprend ensuite normalement.`
       typeof conversationId === 'string' && conversationId.trim() ? conversationId : undefined
     )
   })
+  ipcMain.handle('worktree:travaux-non-publies', (event) => {
+    assertTrustedRendererSender(event, 'TravauxNonPublies')
+    return os.travauxNonPublies()
+  })
+  ipcMain.handle('worktree:patch-non-publie', (event, agentId?: unknown) => {
+    assertTrustedRendererSender(event, 'PatchTravailNonPublie')
+    return typeof agentId === 'string' ? os.patchTravailNonPublie(agentId) : { patch: '', tronque: false }
+  })
   ipcMain.handle('worktree:status', (event) => {
     assertTrustedRendererSender(event, 'WorktreeStatus')
     return worktreeFixture?.status ?? os.getWorktreeRuntimeStatus()

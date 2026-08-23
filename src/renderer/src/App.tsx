@@ -502,11 +502,7 @@ export function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('chat') && (
           <div className={`view-slot${tab === 'chat' ? ' is-active' : ''}`}>
-            <ChatView
-              isActive={tab === 'chat'}
-              onInspectTurn={inspectTurn}
-              onOuvrirWorktrees={() => activateTab('worktree')}
-            />
+            <ChatView isActive={tab === 'chat'} onInspectTurn={inspectTurn} />
           </div>
         )}
         {visitedTabs.has('agent-studio') && (

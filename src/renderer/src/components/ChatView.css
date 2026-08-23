@@ -2959,3 +2959,16 @@ ol.md-list li {
 .chat-travail-non-publie button:hover {
   border-color: rgba(212, 175, 55, 0.85);
 }
+
+/* Liste des travaux finis mais non publiés : montrer avant de décider. Lecture seule. */
+.tnp { border-left: 2px solid rgba(212, 175, 55, 0.55); font-size: 12px; margin: 0 12px 8px; padding: 6px 0 6px 10px; }
+.tnp-tete { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+.tnp-tete button { background: transparent; border: 0; color: inherit; cursor: pointer; font-size: 15px; }
+.tnp-liste { list-style: none; margin: 6px 0 0; max-height: 40vh; overflow-y: auto; padding: 0; }
+.tnp-ligne-tete { align-items: baseline; display: flex; gap: 8px; padding: 3px 0; }
+.tnp-nom { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tnp-date { opacity: 0.6; }
+.tnp-ligne-tete button { background: transparent; border: 1px solid rgba(212, 175, 55, 0.4); border-radius: 3px; color: inherit; cursor: pointer; font: inherit; padding: 0 8px; }
+.tnp-patch { background: rgba(0, 0, 0, 0.28); max-height: 40vh; overflow: auto; padding: 8px; white-space: pre; }
+.tnp-note { opacity: 0.65; }
+.tnp-erreur { color: #e08b8b; }

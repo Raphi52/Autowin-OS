@@ -171,6 +171,11 @@ const api = {
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
   getWorktreeActivity: (conversationId?: string): Promise<WorktreeAgentActivity[]> =>
     ipcRenderer.invoke('worktree:activity', conversationId),
+  /** Travaux termines mais jamais publies — lecture seule, sur geste explicite. */
+  getTravauxNonPublies: (): Promise<Array<{ agentId: string; date: string; fichiers: string[] }>> =>
+    ipcRenderer.invoke('worktree:travaux-non-publies'),
+  getPatchTravailNonPublie: (agentId: string): Promise<{ patch: string; tronque: boolean }> =>
+    ipcRenderer.invoke('worktree:patch-non-publie', agentId),
   getWorktreeStatus: (): Promise<WorktreeRuntimeStatus> => ipcRenderer.invoke('worktree:status'),
   getWorktreeConflictDiff: (agentId: string): Promise<WorktreeConflictDiffResult> =>
     ipcRenderer.invoke('worktree:conflict-diff', agentId),
