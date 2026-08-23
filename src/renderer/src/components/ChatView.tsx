@@ -34,6 +34,7 @@ import {
   type OrchestratorModelOption,
   type RunRequestIdentity,
   type ScopedLiveRun,
+  type StoredAssistantMessage,
   settleOrchestrationOnRunEnd
 } from './chat-view-model'
 import { buildHomeSuggestions } from './chat-home-suggestions'
@@ -54,7 +55,8 @@ import type {
   PilotEvent,
   QueuedDirective,
   RunEntry,
-  SendOptions
+  SendOptions,
+  UserMsg
 } from './chat-view-types'
 import {
   applyMention,
@@ -151,6 +153,32 @@ function newestNotice(current: AppNotice | null, incoming: AppNotice): AppNotice
     return current
   }
   return incoming
+}
+
+/**
+ * Fil PERSISTÉ → fil live. Extrait de `loadConv` parce qu'un second appelant en a besoin : l'amorce
+ * d'un tour initié côté main doit partir du store, sinon elle écrase l'historique dans le cache live
+ * — qui fait autorité à la réouverture (conv-1376, « ma conversation était tronquée »).
+ */
+type MessageStocke = Partial<StoredAssistantMessage> & {
+  role: string
+  content: string
+  messageId?: string
+  attachments?: UserMsg['attachments']
+  done?: boolean
+}
+
+function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
+  return messages.map((m) =>
+    m.role === 'user'
+      ? {
+          role: 'user' as const,
+          content: m.content,
+          attachments: m.attachments,
+          messageId: m.messageId
+        }
+      : { ...hydrateStoredAssistant(m as StoredAssistantMessage), messageId: m.messageId }
+  )
 }
 
 export function ChatView({
@@ -1019,6 +1047,11 @@ export function ChatView({
       if (!busyConversationsRef.current.has(conversationId)) {
         if (e.kind === 'done' || e.kind === 'error') return
         setConversationBusy(conversationId, true)
+        // Le cache live fait AUTORITÉ à la réouverture (`loadConv` le préfère au store). S'il est
+        // ABSENT ici, l'amorce ci-dessous en ferait un fil réduit au seul tour en cours : la
+        // conversation rouvrait TRONQUÉE de tout son historique (conv-1376). D'où l'amorce du cache
+        // depuis le store, faite AVANT d'y écrire l'amorce du tour.
+        const cacheAbsent = !liveMessagesRef.current.has(conversationId)
         const fil = liveMessagesRef.current.get(conversationId) ?? []
         if (!fil.some((message) => message.role === 'assistant' && !message.done)) {
           const amorce = [
@@ -1028,21 +1061,24 @@ export function ChatView({
           liveMessagesRef.current.set(conversationId, amorce)
           if (activeRef.current === conversationId) setMessages(amorce)
         }
-        // Le MESSAGE ENVOYÉ (le prompt du tour) vit dans le store, pas dans les événements : sans ce
-        // rattrapage, le fil montrait la réponse sans la demande (« j'ai pas vu le message envoyé »,
-        // 14/08). On le met en tête du fil adopté, sans écraser les patchs déjà arrivés.
-        if (!fil.some((message) => message.role === 'user')) {
+        // L'HISTORIQUE — dont le MESSAGE ENVOYÉ du tour — vit dans le store, pas dans les événements :
+        // sans ce rattrapage, le fil montrait la réponse sans la demande (« j'ai pas vu le message
+        // envoyé », 14/08), et le cache tronquait la conversation à la réouverture (conv-1376).
+        // On met le fil persisté en tête du fil adopté, sans écraser les patchs déjà arrivés.
+        if (cacheAbsent) {
           void window.api
             .conversation(conversationId)
             .then((conversation) => {
-              const enregistres = ((conversation as { messages?: Msg[] })?.messages ?? []).filter(
-                (message) => message.role === 'user'
+              const historique = hydraterFilStocke(
+                (conversation as { messages?: MessageStocke[] })?.messages ?? []
+              ).filter(
+                // Un tour en vol peut être persisté NON CLOS : il ferait doublon avec l'amorce.
+                (message) => message.role !== 'assistant' || (message as AsstMsg).done === true
               )
-              const dernierUtilisateur = enregistres.at(-1)
-              if (!dernierUtilisateur) return
+              if (historique.length === 0) return
               const courant = liveMessagesRef.current.get(conversationId) ?? []
               if (courant.some((message) => message.role === 'user')) return
-              const complet = [dernierUtilisateur, ...courant]
+              const complet = [...historique, ...courant]
               liveMessagesRef.current.set(conversationId, complet)
               if (activeRef.current === conversationId) setMessages(complet)
             })
@@ -1145,21 +1181,7 @@ export function ChatView({
     activeRef.current = c.id
     setActiveId(c.id)
     const branchMessages = detailed.messages ?? []
-    const stored =
-      liveMessagesRef.current.get(c.id) ??
-      branchMessages.map((m) =>
-        m.role === 'user'
-          ? {
-              role: 'user' as const,
-              content: m.content,
-              attachments: m.attachments,
-              messageId: m.messageId
-            }
-          : {
-              ...hydrateStoredAssistant(m),
-              messageId: m.messageId
-            }
-      )
+    const stored = liveMessagesRef.current.get(c.id) ?? hydraterFilStocke(branchMessages)
     liveMessagesRef.current.set(c.id, stored)
     setMessages(stored)
     switchComposerDraft(c.id)
