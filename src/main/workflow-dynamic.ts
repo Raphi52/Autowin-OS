@@ -1,4 +1,5 @@
 import { graphDefects, worstCaseNodeExecutions, type WorkflowGraph } from './workflow-graph'
+import { demandeEstUnSymptome } from './option-lecture-ou-solution'
 import { estInvocable, workflowProfileIssues, type WorkflowProfile } from './workflow-profiles'
 
 /**
@@ -178,4 +179,27 @@ function extraireJson(text: string): unknown {
     }
   }
   return undefined
+}
+
+/**
+ * UN PROFIL DE RÉPARATION DOIT-IL S'EFFACER DEVANT LE RÉGIME ?
+ *
+ * Mesuré le 2026-08-23 : sur 205 demandes libres, 9 seulement ont joué une phase `frame` — 4 %.
+ * La cause n'est PAS l'absence de workflow, et c'est le point contre-intuitif : répondre « aucun »
+ * aurait donné `frame`+`build`, puisque sans profil le régime s'applique (`orchestrator.ts:1264`).
+ * C'est le CHOIX d'un profil de réparation qui supprime le cadrage — `correctif` vaut
+ * `[build, judge]`, `eclair` vaut `[build]`, et le graphe d'un profil ÉCRASE le régime
+ * (`orchestrator.ts:1262`). Dit autrement : « fais le correctif » sur une cause inconnue fait sauter
+ * l'étape qui aurait dit QUOI corriger. Le prompt du sélecteur, plus haut, ne distingue nulle part
+ * un symptôme d'une correction évidente — il l'invite même à n'en choisir aucun pour « une
+ * correction évidente », ce qu'un bug non diagnostiqué n'est pas.
+ *
+ * On ne crée donc AUCUN profil et on n'en modifie aucun : on rend simplement la main au régime, qui
+ * portait déjà la bonne réponse. Et on se tait dès que l'utilisateur a nommé sa cible — il a
+ * tranché, lui imposer une enquête serait le sur-traiter.
+ */
+export function profilEcraseLeCadrage(task: string, phases: readonly string[]): boolean {
+  if (!phases.length) return false
+  if (phases.some((phase) => phase === 'frame' || phase === 'scout')) return false
+  return demandeEstUnSymptome(task)
 }

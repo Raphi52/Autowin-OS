@@ -15,7 +15,7 @@ import type { Message } from './providers/types'
 import { CONSTITUTION } from './constitution'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import { RoleModelConfig, type Role, type RoleBinding, type ReasoningEffort } from './roles'
-import { dynamicPrompt, meriteUneDecision, readWorkflowDecision } from './workflow-dynamic'
+import { dynamicPrompt, profilEcraseLeCadrage, meriteUneDecision, readWorkflowDecision } from './workflow-dynamic'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 // fix-ok: refonte qualité (demande user « refais comme en fable ») — purge du mort, pas un blind-fix.
 import { CostAggregator } from './dashboards/cost'
@@ -264,6 +264,11 @@ export class AutowinOS {
     if (decision.kind === 'none') return undefined
     if (decision.kind === 'existing') {
       const effectif = applyWorkflowProfile({ roles: {} }, decision.profile)
+      // Un profil de REPARATION ne doit pas ecraser le cadrage quand la cause est inconnue : on rend
+      // la main au regime, qui portait deja la bonne reponse (`workflow-dynamic.ts`, fonction dediee).
+      const phasesDuProfil =
+        graphOf(decision.profile)?.nodes.map((node) => node.phase) ?? effectif.phases ?? []
+      if (profilEcraseLeCadrage(task, phasesDuProfil)) return undefined
       return {
         identity: { name: decision.profile.name, source: 'modele' },
         ...(graphOf(decision.profile) ? { graph: graphOf(decision.profile) } : {}),
@@ -276,6 +281,7 @@ export class AutowinOS {
     // Le nom que le modèle lui a donné était JETÉ ici : un workflow inventé pilotait le run sans que
     // rien à l'écran ne puisse dire lequel — le cas où l'utilisateur a le moins décidé était aussi
     // le plus muet.
+    if (profilEcraseLeCadrage(task, decision.graph.nodes.map((node) => node.phase))) return undefined
     return {
       identity: { name: decision.name, source: 'compose' },
       graph: decision.graph,
