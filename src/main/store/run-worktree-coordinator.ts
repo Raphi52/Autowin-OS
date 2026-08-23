@@ -188,6 +188,20 @@ const ETATS_ENCORE_RECUPERABLES: ReadonlySet<string> = new Set([
   'held'
 ])
 
+/**
+ * La copie est-elle encore sur disque ? `undefined` quand la question n'a pas de sens (aucun chemin
+ * connu) : on ne repond jamais `false` faute d'information -- ce serait affirmer une disparition.
+ */
+function copiePresente(worktreePath: string | undefined): boolean | undefined {
+  if (!worktreePath) return undefined
+  try {
+    return existsSync(worktreePath)
+  } catch {
+    // Un disque qui refuse de repondre ne prouve pas une disparition.
+    return undefined
+  }
+}
+
 export class RunWorktreeCoordinator {
   private readonly manager: RunWorktreeCoordinatorDeps['manager']
   private readonly publicationCallbacks = new Map<
@@ -938,7 +952,18 @@ export class RunWorktreeCoordinator {
       role: t.role,
       workspacePath: t.workspacePath,
       worktreePath: t.worktreePath,
-      worktreeAvailable: t.worktreeAvailable,
+      /*
+       * DIRE si la copie est encore la, au lieu de laisser `undefined` -- « on n'a jamais regarde ».
+       * Ce champ n'etait ecrit qu'a `true`, sur les chemins heureux : rien ne le mettait jamais a
+       * `false`. Mesure sur l'app le 2026-08-23 : 21 des 22 entrees « bloquees » le portaient a
+       * `undefined`, donc rien ne distinguait une copie presente d'une copie balayee depuis deux
+       * jours -- et l'app annoncait 26 worktrees pour 4 dossiers reels.
+       *
+       * On NE SUPPRIME rien : ni la branche de secours (elle porte peut-etre du travail), ni
+       * l'entree (elle reste l'adresse d'une reprise). On repond juste honnetement a la question.
+       * Une valeur deja posee par le flux normal gagne toujours : on ne comble qu'un silence.
+       */
+      worktreeAvailable: t.worktreeAvailable ?? copiePresente(t.worktreePath),
       baseBranch: t.baseBranch,
       baseSha: t.baseSha,
       sourceSha: t.sourceSha,
@@ -1716,7 +1741,10 @@ export class RunWorktreeCoordinator {
                   : record.publication === 'blocked'
                     ? 'blocked'
                     : 'ready',
-          files: record?.files.length
+          // `?.` sur `files` AUSSI : l'optionnel ne protegeait que `record`, donc un manifeste sans
+          // ce champ (ecrit par une version anterieure, ou tronque) faisait planter TOUTE la
+          // reconciliation -- et avec elle l'inventaire de reprise. Trouve en ecrivant le test voisin.
+          files: record?.files?.length
             ? record.files
             : inventory
               ? this.fileRecords(observed.get(runId)?.changedFiles ?? [])
