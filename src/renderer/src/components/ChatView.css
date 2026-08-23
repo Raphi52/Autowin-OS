@@ -2916,3 +2916,25 @@ ol.md-list li {
   font: 400 8px/1.4 var(--mono);
   text-transform: uppercase;
 }
+
+/* Bouton d'export Markdown de l'entete du chat. Classe PROPRE (pas `workflow-toggle`) : le panneau
+   Workflows est cible par cette classe dans les tests et l'aurait confondu avec son toggle. */
+.chat-export-md {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: #a8b1ba;
+  font: 700 10px/1 var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chat-export-md:hover:not(:disabled) {
+  color: #e6edf3;
+}
+.chat-export-md:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
