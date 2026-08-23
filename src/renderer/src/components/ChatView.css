@@ -2945,3 +2945,17 @@ ol.md-list li {
   border-left: 2px solid rgba(212, 175, 55, 0.55);
   color: rgba(232, 226, 214, 0.92);
 }
+
+.chat-travail-non-publie button {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 3px;
+  color: rgba(232, 226, 214, 0.92);
+  cursor: pointer;
+  font: inherit;
+  padding: 1px 10px;
+}
+.chat-travail-non-publie button:hover {
+  border-color: rgba(212, 175, 55, 0.85);
+}

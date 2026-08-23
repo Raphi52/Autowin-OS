@@ -188,10 +188,16 @@ function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
 
 export function ChatView({
   isActive = true,
-  onInspectTurn
+  onInspectTurn,
+  onOuvrirWorktrees
 }: {
   isActive?: boolean
   onInspectTurn?: (target: InspectTurnTarget) => void
+  /**
+   * Emmener vers la vue Worktrees, qui porte DEJA les actions sur un travail bloque (relancer la
+   * publication, voir le diff, resoudre, abandonner). Le bandeau ne les refait pas : il y conduit.
+   */
+  onOuvrirWorktrees?: () => void
 }): React.JSX.Element {
   const [convs, setConvs] = useState<Conv[]>([])
   /** Miroir stable de `convs` pour les écouteurs d'événements (pas de re-abonnement à chaque render). */
@@ -2863,6 +2869,16 @@ export function ChatView({
             role="status"
           >
             <span>{travailNonPublie}</span>
+            {onOuvrirWorktrees && (
+              <button
+                type="button"
+                data-testid="chat-travail-non-publie-ouvrir"
+                onClick={onOuvrirWorktrees}
+                title="Ouvrir la vue Worktrees pour relancer, voir le diff ou abandonner"
+              >
+                Voir
+              </button>
+            )}
           </div>
         )}
 
