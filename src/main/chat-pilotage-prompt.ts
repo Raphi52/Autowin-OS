@@ -36,6 +36,15 @@ export function buildChatPilotagePrompt(
     `l'utilisateur a retaper ce que tu viens d'enumerer. N'appelle pas \`ask\` pour une question ` +
     `dont tu as deja la reponse, ni pour faire valider ce que tu allais faire de toute facon.
 ` +
+    `QUAND LA DEMANDE EST UN SYMPTOME — l'utilisateur decrit ce qu'il CONSTATE (« je vois plus X », ` +
+    `« ca marche plus ») sans nommer de fichier — tes reponses doivent etre des LECTURES DU BESOIN, ` +
+    `pas des solutions techniques deja choisies. « C'est une perte de donnees » / « c'est un bug ` +
+    `d'affichage » : oui. « Corrige tel fichier, piste A » : non, tant qu'il n'a pas nomme sa cible. ` +
+    `Mesure du 2026-08-23 (conv-1376) : le texte de l'option cliquee DEVIENT son message, puis ` +
+    `l'objectif du run. Une option qui nomme un fichier lui fait donc ACCEPTER un choix technique ` +
+    `qu'il n'a pas fait — et la machine l'executera a la lettre. Des qu'il a nomme sa cible ` +
+    `lui-meme, il a tranche : propose alors ce que tu veux.
+` +
     `EXPRESSION VISUELLE : tu peux répondre en HTML mis en forme, et c'est souvent le meilleur ` +
     `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +
     `avant/après, récapitulatif, arborescence — préfère un bloc fermé \`\`\`html-render contenant une ` +

@@ -82,6 +82,8 @@ import {
 } from '../shared/orchestration-outcome'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { collectOrchestrationContext } from './orchestration-context'
+import { optionsQuiPresupposentUneSolution } from './option-lecture-ou-solution'
+import { CONTEXT_MESSAGE_LIMIT } from './conversation-window'
 import { rememberFact } from './brain-remember'
 import { noteRemembered } from './session-memory-echo'
 import { brainServiceToken } from './brain-retrieval'
@@ -1250,6 +1252,24 @@ export class AppCommandBus {
         // forme obtient un bloc degrade, jamais une erreur.
         const options = normaliserReponsesAsk(a.options)
         if (options.length < 2) throw new Error('Une question cliquable demande 2 a 4 reponses')
+        // SIGNAL, JAMAIS REFUS. Quand le fil part d'un symptome et que l'utilisateur n'a nomme
+        // aucune cible, une option qui envoie deja un chemin de fichier lui fait ACCEPTER une
+        // solution qu'il n'a pas choisie — mesure conv-1376 du 2026-08-23 : le texte clique devient
+        // le message de l'utilisateur, puis l'objectif du run. On le trace pour pouvoir le compter.
+        // Aucun refus : le precedent du 2026-08-18 (`conversation-task-contract.ts`) a montre qu'une
+        // heuristique locale qui BLOQUE produit onze faux blocages sur du travail legitime.
+        const filUtilisateur = (this.os.conversations.get(conversationId ?? '')?.messages ?? [])
+          .filter((message) => message.role === 'user')
+          .slice(-CONTEXT_MESSAGE_LIMIT)
+          .map((message) => message.content)
+        const presupposees = optionsQuiPresupposentUneSolution(filUtilisateur, options)
+        if (presupposees.length) {
+          this.trace?.(
+            'ask_option_presuppose_une_solution',
+            { conversationId: conversationId ?? '', signaux: presupposees },
+            true
+          )
+        }
         const choixMultiple = choixMultipleDemande(a.choixMultiple)
         return { question: s('question'), options, ...(choixMultiple && { choixMultiple }) }
       }
