@@ -15,7 +15,7 @@ import { verifyTimeoutMs, VERIFY_TIMEOUT_MS } from './verify-command'
  * rend JAMAIS la main. Sans horloge, la promesse ne se resout pas et le test expire (rouge) ; le
  * processus lance survit meme au test. Avec, la commande rend un verdict borne, `ok: false`.
  */
-const temporaires: string[] = []
+const temporaires: string[] = [] // preuve d’usage 22/08
 
 afterEach(() => {
   for (const chemin of temporaires.splice(0)) {
