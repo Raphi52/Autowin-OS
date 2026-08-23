@@ -45,10 +45,17 @@ $ErrorActionPreference = 'Stop'
 #>
 function Git-OuEchouer {
   param([Parameter(Mandatory = $true)][string[]]$Arguments, [string]$Contexte)
-  $sortie = & git @Arguments 2>&1
+  <#
+    PAS de `2>&1` sur une commande NATIVE. Sous PowerShell 5.1, rediriger stderr d'un exe emballe
+    CHAQUE ligne dans un ErrorRecord : `git push`, qui ecrit sa progression sur stderr, faisait
+    donc echouer le script alors que le push avait REUSSI (mesure du 2026-08-23 -- commit d4211f54
+    pousse, et le script signalant une erreur). Le code de retour, lui, ne ment pas : on ne lit
+    que lui.
+  #>
+  $sortie = & git @Arguments
   if ($LASTEXITCODE -ne 0) {
     throw ("git " + ($Arguments -join ' ') + " a echoue (code $LASTEXITCODE)" +
-      $(if ($Contexte) { " -- $Contexte" }) + "`n" + ($sortie -join "`n"))
+      $(if ($Contexte) { " -- $Contexte" }))
   }
   return $sortie
 }
