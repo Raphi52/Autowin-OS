@@ -1,3 +1,4 @@
+import { ESSAIS_MAX } from './delai-de-reprise'
 import { describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -214,7 +215,7 @@ describe('B — un run a bout de reprises cesse d’etre suspendu', () => {
         publication: 'cleanup-pending',
         publishedSha: PUBLIE,
         attentionReason: 'retry-exhausted',
-        retryCount: 6,
+        retryCount: ESSAIS_MAX,
         files: [],
         createdAtMs: 10,
         updatedAtMs: 20

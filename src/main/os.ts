@@ -4,6 +4,7 @@
  * Principe : rien d'exposé ici n'est mort — chaque méthode a un appelant réel
  * (chat, orchestration, dashboards, graphe 3D).
  */
+import { Notification } from 'electron'
 import { interfaceVisible } from './startup-gate'
 import { ProviderRegistry } from './providers/registry'
 import { claudeActiveAccountId, claudeRotateAccount } from './claude-accounts'
@@ -373,6 +374,25 @@ export class AutowinOS {
           deferRecoveryUntil: interfaceVisible,
           manager,
           stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
+          /**
+           * PREVENIR quand un travail est abandonne. Verifie le 2026-08-23 : l'application ne
+           * comportait AUCUNE notification -- un travail fini pouvait mourir en silence, et trois
+           * l'ont fait le meme jour. On sonne sur l'ABANDON seulement, jamais sur un refus
+           * ordinaire : 1649 refus sont traces, en notifier une fraction noierait le signal.
+           */
+          onAbandon: ({ tache, runId }) => {
+            try {
+              if (!Notification.isSupported()) return
+              new Notification({
+                title: 'Autowin — un travail a ete abandonne',
+                body: tache
+                  ? `« ${tache.slice(0, 120)} » n'a pas pu etre integre. Son travail reste sur sa branche de secours.`
+                  : `${runId} n'a pas pu etre integre. Son travail reste sur sa branche de secours.`
+              }).show()
+            } catch {
+              // Une notification qui echoue ne doit jamais faire tomber la reconciliation.
+            }
+          },
           onRecoveredPublication: async (publication) => {
             if (this.autoClose) {
               this.lastAutoClose = await closeGreenRunOnDisk({

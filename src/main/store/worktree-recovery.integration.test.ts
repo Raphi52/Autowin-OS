@@ -1,3 +1,4 @@
+import { ESSAIS_MAX } from './delai-de-reprise'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -621,13 +622,15 @@ describe('récupération des worktrees après redémarrage', () => {
       outcome: 'blocked',
       reason: 'base-in-progress'
     })
-    for (let attempt = 0; attempt < 5; attempt += 1) coordinator.retryRecovery()
+    // Épuiser le barème, quel que soit son plafond : `end()` compte pour le premier essai, d'où
+    // le « -1 ». Écrit en dur (5), ce compte a rougi le jour où le barème est passé à sept.
+    for (let attempt = 0; attempt < ESSAIS_MAX - 1; attempt += 1) coordinator.retryRecovery()
 
     expect(store.get(runId)).toMatchObject({
       verdict: 'green',
       publication: 'pending',
       attentionReason: 'retry-exhausted',
-      retryCount: 6
+      retryCount: ESSAIS_MAX
     })
 
     rmSync(operationMarker, { force: true })

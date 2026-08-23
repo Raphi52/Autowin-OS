@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from './worktree-manager'
+import { delaiDeReprise, ESSAIS_MAX } from './delai-de-reprise'
 import type {
   WorktreeAgentActivity,
   WorktreeConflictDiffResult,
@@ -85,6 +86,15 @@ export interface RunWorktreeCoordinatorDeps {
    * le consommateur distingue incidents (agentId distincts) et churn (evenements). Existe parce que
    * RIEN ne comptait ces refus — cadrage du 2026-08-22, trois instruments essayes, trois invalides.
    */
+  /**
+   * PREVENIR quand un travail est ABANDONNE apres epuisement des reprises.
+   *
+   * Verifie le 2026-08-23 : aucune notification n'existait dans toute l'application. Un travail
+   * fini pouvait donc mourir en silence, et trois l'ont fait le meme jour. Le seuil est
+   * DELIBERE -- l'abandon, jamais un refus ordinaire : les traces comptent 1649 refus, et en
+   * notifier une fraction noierait le signal.
+   */
+  onAbandon?: (info: { runId: string; tache?: string; raison?: string }) => void
   onRefusIntegration?: (refus: {
     cause: string
     agentId: string
@@ -178,7 +188,19 @@ function stateFromFinalize(res: FinalizeResult): WorktreeState {
   return 'merged'
 }
 
-const MAX_AUTOMATIC_RETRIES = 6
+/**
+ * Le nombre d'essais n'est plus un chiffre isole : il DECOULE du bareme d'attentes
+ * (`delai-de-reprise.ts`). Deux verites separees auraient diverge au premier reglage -- l'une
+ * disant « six essais », l'autre en proposant sept delais.
+ */
+const MAX_AUTOMATIC_RETRIES = ESSAIS_MAX
+
+/**
+ * Le repli quand le bareme ne propose plus rien (tous les runs en attente ont epuise leurs essais)
+ * : on garde une minuterie COURTE plutot qu'aucune. `waitingForProcess` contient aussi des runs qui
+ * attendent la fin d'un processus, pas un reessai -- les laisser sans reveil les figerait.
+ */
+const DELAIS_REPRISE_PLANCHER = 5_000
 /**
  * Les publications qu'une reprise peut encore reveiller — donc dont le manifeste porte encore une
  * information vivante, meme si la copie a disparu du disque.
@@ -217,6 +239,7 @@ export class RunWorktreeCoordinator {
   >()
   private readonly now: () => number
   private readonly onActivity?: (a: WorktreeAgentActivity[]) => void
+  private readonly onAbandon?: RunWorktreeCoordinatorDeps['onAbandon']
   private readonly onRefusIntegration?: RunWorktreeCoordinatorDeps['onRefusIntegration']
   private readonly onRecoveredPublication?: RunWorktreeCoordinatorDeps['onRecoveredPublication']
   private readonly stateStore?: WorktreeRunStateStore
@@ -232,6 +255,7 @@ export class RunWorktreeCoordinator {
     this.now = deps.nowFn ?? Date.now
     this.onActivity = deps.onActivity
     this.onRefusIntegration = deps.onRefusIntegration
+    this.onAbandon = deps.onAbandon
     this.onRecoveredPublication = deps.onRecoveredPublication
     this.stateStore = deps.stateStore
     if (this.manager.operationsAreIsolated?.() && this.manager.recoveryInventoryAsync) {
@@ -1617,6 +1641,9 @@ export class RunWorktreeCoordinator {
       if (this.manager.hasActiveProcesses?.(runId)) continue
       const abandonne: WorktreeRunRecord = { ...record, abandoned: true }
       this.stateStore.save(abandonne)
+      // Une seule fois : `abandoned: true` est persiste, et la boucle saute deja les records
+      // portant ce marqueur. Une reconciliation suivante ne re-sonnera donc pas.
+      this.onAbandon?.({ runId, tache: record.task, raison: record.attentionReason })
       records.set(runId, abandonne)
     }
   }
@@ -2349,12 +2376,25 @@ export class RunWorktreeCoordinator {
       this.recoveryTimer
     )
       return
+    /*
+     * L'ATTENTE CROÎT avec le nombre d'essais déjà faits, au lieu des 5 s fixes d'avant.
+     *
+     * La minuterie est PARTAGÉE par tous les runs en attente : on prend donc le délai du MOINS
+     * avancé d'entre eux. Sinon un run patient (30 min) retarderait un run tout frais qui n'a
+     * besoin que de cinq secondes — la file entière avancerait au rythme du plus lent.
+     */
+    const essaisDuMoinsAvance = Math.min(
+      ...[...this.waitingForRetry, ...this.waitingForProcess].map(
+        (runId) => this.retryCounts.get(runId) ?? 0
+      )
+    )
+    const attente = delaiDeReprise(essaisDuMoinsAvance) ?? DELAIS_REPRISE_PLANCHER
     this.recoveryTimer = setTimeout(() => {
       this.recoveryTimer = undefined
       if (this.manager.operationsAreIsolated?.()) {
         void this.retryRecoveryAsync().catch((error) => this.recordRecoveryFailure(error))
       } else this.retryRecovery()
-    }, 5_000)
+    }, attente)
     this.recoveryTimer.unref?.()
   }
 }

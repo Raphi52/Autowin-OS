@@ -1,3 +1,4 @@
+import { ESSAIS_MAX } from './delai-de-reprise'
 import { describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1175,37 +1176,37 @@ describe('RunWorktreeCoordinator (flip live)', () => {
       files: ['a.txt'],
       reason: 'base-in-progress' as const
     }
-    const finalize = vi
-      .fn<(id: string) => FinalizeResult>()
-      .mockReturnValueOnce(blocked)
-      .mockReturnValueOnce(blocked)
-      .mockReturnValueOnce(blocked)
-      .mockReturnValueOnce(blocked)
-      .mockReturnValueOnce(blocked)
-      .mockReturnValueOnce(blocked)
-      .mockReturnValueOnce({
-        outcome: 'merged',
-        agentId: 'run-busy',
-        committed: true
-      })
+    // Refuser EXACTEMENT jusqu'au plafond, puis accepter : la liste était écrite à la main pour six
+    // essais, donc le septième tombait sur « fusionné » et le test mesurait le contraire de son nom.
+    let finalize = vi.fn<(id: string) => FinalizeResult>()
+    for (let index = 0; index < ESSAIS_MAX; index += 1) {
+      finalize = finalize.mockReturnValueOnce(blocked)
+    }
+    finalize.mockReturnValueOnce({
+      outcome: 'merged',
+      agentId: 'run-busy',
+      committed: true
+    })
     const co = new RunWorktreeCoordinator({ manager: fakeManager({ finalize }), nowFn: () => 9 })
     co.begin('run-busy', 'Builder', true)
     co.end('run-busy')
-    for (let index = 0; index < 8; index += 1) co.retryRecovery()
+    // Une itération de plus que le plafond : on veut prouver que ça S'ARRÊTE, pas que ça compte.
+    for (let index = 0; index < ESSAIS_MAX + 1; index += 1) co.retryRecovery()
 
-    expect(finalize).toHaveBeenCalledTimes(6)
+    expect(finalize).toHaveBeenCalledTimes(ESSAIS_MAX)
     expect(co.activity()[0]).toMatchObject({
       state: 'blocked',
       publication: 'pending',
       attentionReason: 'retry-exhausted',
-      retryCount: 6
+      retryCount: ESSAIS_MAX
     })
 
     expect(co.retryRun('run-busy')).toMatchObject({
       state: 'merged',
       publication: 'complete'
     })
-    expect(finalize).toHaveBeenCalledTimes(7)
+    // Le plafond, plus la reprise manuelle qui aboutit.
+    expect(finalize).toHaveBeenCalledTimes(ESSAIS_MAX + 1)
   })
 
   it("réessaie manuellement une publication verte bloquée après correction de l'environnement", () => {
@@ -1408,7 +1409,10 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     }
   })
 
-  it('borne durablement les retries de rangement à six tentatives', () => {
+  // Le CONTRAT est que les reprises soient BORNÉES, pas qu'elles soient six : le chiffre découle du
+  // barème d'attentes (`delai-de-reprise.ts`). L'écrire en dur ici a fait rougir ce test le jour où
+  // le barème est passé à sept — un test qui code une constante d'un autre module la fige à son insu.
+  it('borne durablement les retries de rangement au plafond du barème', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-cleanup-budget-'))
     try {
       const stateStore = new WorktreeRunStateStore(root, 'repo-a')
@@ -1445,10 +1449,10 @@ describe('RunWorktreeCoordinator (flip live)', () => {
       for (let index = 0; index < 10; index += 1) first.retryRecovery()
 
       expect(finalize).toHaveBeenCalledTimes(1)
-      expect(cleanupPublished).toHaveBeenCalledTimes(5)
+      expect(cleanupPublished).toHaveBeenCalledTimes(ESSAIS_MAX - 1)
       expect(first.activity()[0]).toMatchObject({
         publication: 'cleanup-pending',
-        retryCount: 6,
+        retryCount: ESSAIS_MAX,
         attentionReason: 'retry-exhausted',
         worktreeAvailable: false
       })
@@ -1474,7 +1478,7 @@ describe('RunWorktreeCoordinator (flip live)', () => {
       expect(restarted.activity()[0]).toMatchObject({
         state: 'ready',
         publication: 'cleanup-pending',
-        retryCount: 6,
+        retryCount: ESSAIS_MAX,
         attentionReason: 'retry-exhausted',
         worktreeAvailable: false
       })
