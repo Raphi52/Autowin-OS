@@ -1007,6 +1007,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       forceSettle(abortFailure('claude CLI', opts.signal))
     })
 
+    /*
+     * Le resume d'une commande de fond. Toutes commencent par `cd "$(pwd)" && `, qui n'apprend rien et
+     * mange la place ; et une ligne de 400 caracteres dans une carte de fil est illisible. On garde le
+     * DEBUT de la commande reelle — c'est la qu'est le verbe (`vitest run`, `eslint`, `prettier`).
+     */
+    const resumerCommandeDeFond = (brut: string): string => {
+      const sansCd = brut.replace(/^cd\s+"?\$\(pwd\)"?\s*&&\s*/i, '').trim()
+      const uneLigne = sansCd.split(/\r?\n/)[0]?.trim() ?? ''
+      return uneLigne.length > 70 ? uneLigne.slice(0, 70).trimEnd() + '…' : uneLigne
+    }
+
     const handleEvent = (o: Record<string, unknown>): void => {
       const t = o['type']
       if (t === 'system' && o['subtype'] === 'api_retry') {
@@ -1037,6 +1048,40 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (!Number.isFinite(elapsed) || elapsed <= 0) return
         const outil = typeof o['tool_name'] === 'string' && o['tool_name'] ? o['tool_name'] : 'outil'
         queue.push({ delta: '', reasoning: `${outil} en cours — ${dureeLisible(elapsed)}` })
+        return
+      }
+      if (t === 'system' && (o['subtype'] === 'task_started' || o['subtype'] === 'task_notification')) {
+        /*
+         * UNE TACHE DE FOND EST MUETTE — meme defaut que le battement d'outil juste au-dessus, un cran
+         * plus loin. Quand le sous-agent lance sa commande EN ARRIERE-PLAN, le CLI n'emet AUCUN
+         * `tool_progress` : seulement `task_started`, puis `task_notification` a la toute fin.
+         *
+         * Mesure du 2026-08-22, run signale par l'utilisateur (« ca reste bloque visuellement sur cette
+         * etape pendant tres longtemps ») : la queue du journal ne contenait que `thinking_tokens`,
+         * `task_started` et `task_notification`, zero `tool_progress`. Le flux etait VIVANT — +17 Ko en
+         * 40 s, mesure directe — et la carte figee. La commande etait `vitest run` sur toute la suite,
+         * ~9 min ce jour-la. Aucun des deux evenements n'etait lu nulle part dans le depot.
+         *
+         * Relaye en DIRECT seulement, jamais persiste : un battement n'est pas du raisonnement.
+         */
+        const demarre = o['subtype'] === 'task_started'
+        const brut = String((demarre ? o['description'] : o['summary']) ?? '').trim()
+        const commande = resumerCommandeDeFond(brut)
+        if (demarre) {
+          queue.push({
+            delta: '',
+            reasoning: commande ? `tache de fond en cours — ${commande}` : 'tache de fond en cours'
+          })
+          return
+        }
+        const statut = String(o['status'] ?? '').toLowerCase()
+        // On NOMME l'echec au lieu de rendre le meme libelle qu'une reussite : une tache de fond qui
+        // rate en silence est exactement ce que ce relais existe pour supprimer.
+        const issue = statut === 'completed' ? 'terminee' : statut === 'failed' ? 'en echec' : statut || 'terminee'
+        queue.push({
+          delta: '',
+          reasoning: commande ? `tache de fond ${issue} — ${commande}` : `tache de fond ${issue}`
+        })
         return
       }
       if (t === 'result') resultSeen = true

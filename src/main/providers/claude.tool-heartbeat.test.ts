@@ -112,3 +112,87 @@ describe('ClaudeCliAdapter — un outil long donne signe de vie', () => {
     expect(await drainReasoning()).toHaveLength(0)
   })
 })
+
+/**
+ * UNE TACHE DE FOND EST TOUT AUSSI MUETTE — et c'est le meme defaut, un cran plus loin.
+ *
+ * Le relais ci-dessus couvre l'outil de PREMIER PLAN, qui recoit un `tool_progress` toutes les 30 s.
+ * Mais quand le sous-agent lance sa commande EN ARRIERE-PLAN, le CLI n'emet aucun `tool_progress` :
+ * il emet `system/task_started` puis, a la fin seulement, `system/task_notification`.
+ *
+ * Mesure du 2026-08-22 sur `run-stdout/162bdf21-….stdout.jsonl`, run en cours au moment du signalement
+ * de l'utilisateur (« ca reste bloque visuellement sur cette etape pendant tres longtemps ») : la
+ * queue du journal ne contenait QUE `thinking_tokens`, `task_started` et `task_notification` — zero
+ * `tool_progress`. Le flux etait VIVANT (+17 Ko en 40 s, mesure directe) et la carte figee. La
+ * commande en cours etait `./node_modules/.bin/vitest run`, soit la suite complete : ~9 min mesurees
+ * ce jour sur 713 fichiers.
+ *
+ * `task_started` / `task_notification` n'etaient traites NULLE PART dans le depot.
+ */
+describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
+  it('annonce la tache de fond lancee, en disant QUELLE commande', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'system',
+        subtype: 'task_started',
+        task_id: 'b6vl4y8jf',
+        task_type: 'local_bash',
+        description: 'cd "$(pwd)" && ./node_modules/.bin/vitest run 2>&1 | tail -6'
+      },
+      succes
+    ]
+    const reasoning = await drainReasoning()
+
+    expect(reasoning).toHaveLength(1)
+    expect(reasoning[0]).toContain('fond')
+    // La commande, pas un libelle generique : « une tache tourne » ne dit pas s'il faut attendre
+    // 3 secondes ou 9 minutes.
+    expect(reasoning[0]).toContain('vitest')
+    // Le `cd "$(pwd)" &&` qui prefixe toutes les commandes n'apprend rien et mange la place.
+    expect(reasoning[0]).not.toContain('$(pwd)')
+  })
+
+  it('annonce la fin de la tache de fond', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'system',
+        subtype: 'task_notification',
+        task_id: 'b6vl4y8jf',
+        status: 'completed',
+        summary: 'cd "$(pwd)" && npx eslint src/renderer/src/components/home-decor-scene.ts'
+      },
+      succes
+    ]
+    const reasoning = await drainReasoning()
+
+    expect(reasoning).toHaveLength(1)
+    expect(reasoning[0]).toContain('eslint')
+  })
+
+  it('sans description, dit quand meme qu une tache tourne — sans rien inventer', async () => {
+    spawnCapture.stdoutEvents = [
+      { type: 'system', subtype: 'task_started', task_id: 'x1', task_type: 'local_bash' },
+      succes
+    ]
+    const reasoning = await drainReasoning()
+
+    expect(reasoning).toHaveLength(1)
+    expect(reasoning[0]).toContain('fond')
+  })
+
+  it('une tache de fond en ECHEC le dit, au lieu de se taire', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'system',
+        subtype: 'task_notification',
+        task_id: 'x2',
+        status: 'failed',
+        summary: 'npx vitest run'
+      },
+      succes
+    ]
+    const reasoning = await drainReasoning()
+
+    expect(reasoning[0]).toMatch(/échec|echec|failed/i)
+  })
+})
