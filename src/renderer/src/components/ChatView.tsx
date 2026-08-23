@@ -118,6 +118,7 @@ import type { InspectTurnTarget } from '../observatory-focus'
 export type { RunEntry, CheckpointEntry } from './chat-view-types'
 import type { CheckpointEntry } from './chat-view-types'
 import { useSkillsCatalog } from './useSkillsInventory'
+import { messageTravailNonPublie } from './travail-non-publie'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
 /* ---------- Constantes ---------- */
@@ -246,6 +247,32 @@ export function ChatView({
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [appNotice, setAppNotice] = useState<AppNotice | null>(null)
+  /**
+   * TRAVAIL FINI, JAMAIS PUBLIE. Mesure du 2026-08-23 : trois travaux termines et prouves ont ete
+   * perdus de vue le meme jour, chacun sur une branche que personne n'a fusionnee -- pendant que
+   * l'utilisateur ecrivait « T'as toujours pas fais le fond d'ecran de l'accueuil ». Pire : un run
+   * bloque a la PUBLICATION s'affiche en rouge, donc comme un echec, alors que son travail est fait.
+   * Ce bandeau vit dans le chat parce que c'est la que l'utilisateur regarde, pas dans une vue
+   * qu'il faut penser a ouvrir.
+   */
+  const [travailNonPublie, setTravailNonPublie] = useState<string | null>(null)
+  useEffect(() => {
+    let vivant = true
+    const relever = async (): Promise<void> => {
+      try {
+        const agents = (await window.api.getWorktreeActivity?.()) ?? []
+        if (vivant) setTravailNonPublie(messageTravailNonPublie(agents))
+      } catch {
+        // Une activite indisponible ne prouve AUCUNE perte : on se tait plutot que d'alarmer.
+      }
+    }
+    void relever()
+    const minuterie = setInterval(() => void relever(), 30_000)
+    return () => {
+      vivant = false
+      clearInterval(minuterie)
+    }
+  }, [])
   const [openImage, setOpenImage] = useState<{ src: string; name: string } | null>(null)
   const [dragActive, setDragActive] = useState(false)
 
@@ -2828,6 +2855,16 @@ export function ChatView({
             </button>
           </div>
         </header>
+
+        {travailNonPublie && (
+          <div
+            className="chat-workflow-notice chat-travail-non-publie"
+            data-testid="chat-travail-non-publie"
+            role="status"
+          >
+            <span>{travailNonPublie}</span>
+          </div>
+        )}
 
         {appNotice && (
           <div className="chat-workflow-notice" data-testid="chat-workflow-notice" role="alert">

@@ -84,6 +84,20 @@ export interface WorktreeAgentActivity {
   worktreePath?: string
   /** Faux quand la ref est protégée mais que le dossier doit encore être rematérialisé. */
   worktreeAvailable?: boolean
+  /**
+   * Le travail de ce run est TERMINE mais n'a jamais ete publie : sa branche de secours existe
+   * et n'est pas fusionnee. Mesure du 2026-08-23 : 14 branches dans ce cas, pendant que
+   * l'utilisateur croyait le travail jamais fait.
+   */
+  travailNonPublie?: boolean
+  /**
+   * Les fichiers de ce travail non publie -- renseigne pour les PREMIERS seulement (les afficher
+   * tous couterait un appel git par branche). Un UUID ne dit rien a personne ; « app-shell.css »,
+   * si.
+   */
+  fichiersNonPublies?: string[]
+  /** Date du travail non publie, `AAAA-MM-JJ`. */
+  dateNonPublie?: string
   workspacePath?: string
   baseBranch?: string
   baseSha?: string

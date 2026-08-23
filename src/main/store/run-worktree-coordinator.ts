@@ -51,6 +51,8 @@ export interface RunWorktreeCoordinatorDeps {
       Pick<
         WorktreeManager,
         | 'commitDejaReference'
+        | 'travauxNonPublies'
+        | 'apercuTravauxNonPublies'
         | 'reconcileResidues'
         | 'reconcileResiduesAsync'
         | 'cleanupPublished'
@@ -935,7 +937,45 @@ export class RunWorktreeCoordinator {
   }
 
   /** Activité courante, prête pour le modèle du cockpit UI. */
+  /**
+   * Le lot des travaux non publies, avec un CACHE court.
+   *
+   * `activity()` est lu a chaque rafraichissement d'interface. Sans ce cache, chaque lecture paierait
+   * un appel git pour le compte plus deux par branche affichee -- sept processus, plusieurs fois par
+   * minute, pour une reponse qui ne change qu'a la minute. Un ensemble de branches ne bouge pas vite.
+   */
+  private cacheNonPublies?: {
+    a: number
+    ids: Set<string>
+    apercu: Map<string, { date: string; fichiers: string[] }>
+  }
+
+  private travauxNonPubliesCaches(): {
+    ids: Set<string>
+    apercu: Map<string, { date: string; fichiers: string[] }>
+  } {
+    const maintenant = this.now()
+    if (this.cacheNonPublies && maintenant - this.cacheNonPublies.a < 60_000) {
+      return { ids: this.cacheNonPublies.ids, apercu: this.cacheNonPublies.apercu }
+    }
+    const ids = new Set(this.manager.travauxNonPublies?.() ?? [])
+    const apercu = new Map(
+      // SIX apercus pour TROIS lignes affichees : le dedoublonnage consomme des entrees (des reprises
+      // du meme travail produisent plusieurs branches), et sans marge la troisieme ligne retombait
+      // sur un UUID -- constate a l'ecran. La marge est bornee : six branches, mise en cache 60 s.
+      (this.manager.apercuTravauxNonPublies?.('HEAD', 6) ?? []).map((entree) => [
+        entree.agentId,
+        { date: entree.date, fichiers: entree.fichiers }
+      ])
+    )
+    this.cacheNonPublies = { a: maintenant, ids, apercu }
+    return { ids, apercu }
+  }
+
   activity(): WorktreeAgentActivity[] {
+    // UNE seule interrogation git pour tout le lot, pas une par entree : la question est posee a
+    // chaque affichage, elle doit rester gratuite.
+    const { ids: nonPublies, apercu } = this.travauxNonPubliesCaches()
     return [...this.runs.values()].map((t) => ({
       agentId: t.runId,
       agentName: t.agentName,
@@ -964,6 +1004,9 @@ export class RunWorktreeCoordinator {
        * Une valeur deja posee par le flux normal gagne toujours : on ne comble qu'un silence.
        */
       worktreeAvailable: t.worktreeAvailable ?? copiePresente(t.worktreePath),
+      travailNonPublie: nonPublies.has(t.runId) || undefined,
+      fichiersNonPublies: apercu.get(t.runId)?.fichiers,
+      dateNonPublie: apercu.get(t.runId)?.date,
       baseBranch: t.baseBranch,
       baseSha: t.baseSha,
       sourceSha: t.sourceSha,

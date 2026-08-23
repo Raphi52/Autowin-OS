@@ -2938,3 +2938,10 @@ ol.md-list li {
   opacity: 0.4;
   cursor: default;
 }
+
+/* Travail fini mais jamais publié : une information, pas une alarme. Le bandeau d'avertissement
+   existant crie en rouge ; celui-ci dit qu'il y a quelque chose à aller chercher, et où. */
+.chat-travail-non-publie {
+  border-left: 2px solid rgba(212, 175, 55, 0.55);
+  color: rgba(232, 226, 214, 0.92);
+}

@@ -745,6 +745,81 @@ export class WorktreeManager {
   }
 
   /** Inventorie les copies Autowin récupérables après un arrêt du processus. */
+  /**
+   * Les runs dont le travail est TERMINE mais JAMAIS PUBLIE : leur branche de secours existe et
+   * n'est pas fusionnee dans la base.
+   *
+   * Mesure du 2026-08-23 : trois travaux finis et prouves ont ete perdus de vue le meme jour -- un
+   * fond d'ecran, un correctif d'historique, un export Markdown. Chacun dormait sur une branche que
+   * personne n'a fusionnee, pendant que l'utilisateur ecrivait « T'as toujours pas fais le fond
+   * d'ecran ». Le travail existait ; rien ne le disait.
+   *
+   * UNE seule commande git repond, et c'est ce qui rend la question posable a chaque affichage :
+   * `for-each-ref --no-merged <base>` filtre deja cote git. Ce jour-la : 14 non fusionnees sur 22.
+   */
+  travauxNonPublies(baseRef = 'HEAD'): string[] {
+    try {
+      return this.git(this.baseRepo, [
+        'for-each-ref',
+        '--no-merged',
+        baseRef,
+        '--format=%(refname:strip=4)',
+        'refs/heads/autowin/recovery/'
+      ])
+        .split('\n')
+        .map((ligne) => ligne.trim())
+        .filter((agentId) => SAFE_ID.test(agentId))
+    } catch {
+      // Un depot qui ne repond pas ne prouve AUCUNE perte : on n'annonce rien plutot que d'alarmer.
+      return []
+    }
+  }
+
+  /**
+   * De quoi est fait un travail non publie -- pour les PREMIERS seulement.
+   *
+   * Le sujet du commit de secours ne sert a rien : il repete l'identifiant de la copie (« travail
+   * preserve de la copie command-edit-04789dcc… »). Verifie le 2026-08-23 sur les 14 branches. Le
+   * seul label qu'un humain reconnait, ce sont les FICHIERS touches -- « app-shell.css », il sait
+   * ce que c'est ; un UUID, non.
+   *
+   * BORNE a `limite` branches, et c'est le point de conception : lister les fichiers coute un appel
+   * git PAR branche. On ne paie donc que ce qui sera reellement AFFICHE (trois), jamais les
+   * quatorze. Le COMPTE, lui, reste gratuit -- une seule commande, cf. `travauxNonPublies`.
+   */
+  apercuTravauxNonPublies(
+    baseRef = 'HEAD',
+    limite = 3
+  ): Array<{ agentId: string; date: string; fichiers: string[] }> {
+    return this.travauxNonPublies(baseRef)
+      .slice(0, Math.max(0, limite))
+      .map((agentId) => {
+        const branche = `autowin/recovery/${agentId}`
+        let fichiers: string[] = []
+        let date = ''
+        try {
+          fichiers = this.git(this.baseRepo, [
+            'diff',
+            '--name-only',
+            `${baseRef}...${branche}`
+          ])
+            .split('\n')
+            .map((ligne) => ligne.trim())
+            .filter(Boolean)
+          date = this.git(this.baseRepo, [
+            'log',
+            '-1',
+            '--format=%cd',
+            '--date=short',
+            branche
+          ]).trim()
+        } catch {
+          // Une branche illisible ne doit pas faire disparaitre les autres du bandeau.
+        }
+        return { agentId, date, fichiers }
+      })
+  }
+
   listAgentIds(): string[] {
     const directories = existsSync(this.worktreeRoot)
       ? readdirSync(this.worktreeRoot, { withFileTypes: true })
