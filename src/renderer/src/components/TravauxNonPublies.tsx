@@ -9,8 +9,11 @@ import { useEffect, useState } from 'react'
  * la copie de ces travaux avait été balayée. Il ne restait que la branche.
  *
  * Conséquence : la seule option offerte à l'utilisateur était de fusionner ou de supprimer À
- * L'AVEUGLE. Ce panneau ne fait donc qu'une chose, et c'est le préalable à toute décision : il
- * MONTRE. Aucune fusion, aucune suppression — un travail qu'on ne peut pas lire ne se jette pas.
+ * L'AVEUGLE. Ce panneau MONTRE d'abord — c'est le préalable à toute décision — puis offre le seul
+ * geste qui ne détruit rien : réintégrer, c'est-à-dire retenter la publication.
+ *
+ * La frontière est tenue par un test qui lit ce fichier : supprimer, écraser ou trancher un conflit
+ * restent interdits ici. Un travail qu'on ne peut pas lire ne se jette pas.
  */
 export interface TravailNonPublie {
   agentId: string
@@ -35,6 +38,8 @@ export function TravauxNonPublies({
   const [erreur, setErreur] = useState<string | null>(null)
   const [ouvert, setOuvert] = useState<string | null>(null)
   const [patch, setPatch] = useState<{ patch: string; tronque: boolean } | null>(null)
+  const [enCours, setEnCours] = useState<string | null>(null)
+  const [resultat, setResultat] = useState<string | null>(null)
 
   useEffect(() => {
     let vivant = true
@@ -66,6 +71,41 @@ export function TravauxNonPublies({
     }
   }
 
+  /**
+   * RÉINTÉGRER : le seul geste offert ici, et il n'est pas destructeur — il tente de reprendre la
+   * publication du travail. Il reste ENTIÈREMENT à l'initiative de l'utilisateur, après lecture du
+   * diff : la machine ne réintègre rien toute seule.
+   *
+   * Ce bouton n'existait pas avant le 2026-08-23 parce qu'il aurait été mort-né : la garde de reprise
+   * exigeait `verdict === 'green'`, or 11 des 14 travaux bloqués sont des `command-edit` que personne
+   * ne juge jamais. La garde distingue désormais « jamais jugé » de « jugé mauvais ».
+   */
+  const reintegrer = async (agentId: string): Promise<void> => {
+    setEnCours(agentId)
+    setResultat(null)
+    try {
+      const rendu = await window.api.retryWorktreeRecovery?.(agentId)
+      /*
+       * LIRE L'ISSUE, pas le fait qu'un objet soit revenu. Première version : ce message annonçait
+       * « Reprise lancée » dès que l'appel rendait quelque chose — or il rend l'activité MISE À JOUR,
+       * y compris quand elle est retombée en `blocked`. Le bouton félicitait donc l'utilisateur d'un
+       * échec. Le motif réel, lui, est dans `detail` : par exemple « la copie ne descend pas du SHA
+       * de départ autorisé », qui dit exactement quoi faire (rebaser) au lieu d'un « échec » opaque.
+       */
+      if (!rendu) {
+        setResultat(`Reprise refusée pour ${agentId} — travail jugé rouge, ou déjà repris.`)
+      } else if (rendu.state === 'blocked') {
+        setResultat(`Reprise bloquée : ${rendu.detail ?? 'motif non précisé par le moteur.'}`)
+      } else {
+        setResultat(`Reprise lancée. Suis son avancement dans Source control.`)
+      }
+    } catch (cause) {
+      setResultat(String(cause))
+    } finally {
+      setEnCours(null)
+    }
+  }
+
   return (
     <div className="tnp" data-testid="travaux-non-publies">
       <header className="tnp-tete">
@@ -76,6 +116,11 @@ export function TravauxNonPublies({
       </header>
 
       {erreur && <p className="tnp-erreur">{erreur}</p>}
+      {resultat && (
+        <p className="tnp-resultat" data-testid="tnp-resultat">
+          {resultat}
+        </p>
+      )}
       {!travaux && !erreur && <p className="tnp-vide">Lecture des branches…</p>}
       {travaux?.length === 0 && <p className="tnp-vide">Tout est publié.</p>}
 
@@ -94,6 +139,15 @@ export function TravauxNonPublies({
               >
                 {ouvert === travail.agentId ? 'Masquer' : 'Voir le diff'}
               </button>
+              <button
+                type="button"
+                data-testid={`tnp-reintegrer-${travail.agentId}`}
+                disabled={enCours === travail.agentId}
+                onClick={() => void reintegrer(travail.agentId)}
+                title="Retenter la publication de ce travail"
+              >
+                {enCours === travail.agentId ? '…' : 'Réintégrer'}
+              </button>
             </div>
             {ouvert === travail.agentId && (
               <pre className="tnp-patch" data-testid="tnp-patch">
@@ -106,8 +160,8 @@ export function TravauxNonPublies({
       </ul>
 
       <p className="tnp-note">
-        Lecture seule : rien n’est fusionné ni supprimé ici. Pour reprendre un travail :
-        <code> git merge autowin/recovery/&lt;id&gt;</code>
+        Rien n’est supprimé ici : « Réintégrer » retente la publication, il ne détruit jamais. À la
+        main : <code>git merge autowin/recovery/&lt;id&gt;</code>
       </p>
     </div>
   )

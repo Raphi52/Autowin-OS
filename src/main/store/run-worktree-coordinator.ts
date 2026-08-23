@@ -54,6 +54,7 @@ export interface RunWorktreeCoordinatorDeps {
         | 'travauxNonPublies'
         | 'apercuTravauxNonPublies'
         | 'patchTravailNonPublie'
+        | 'restaurerCopieDepuisSecours'
         | 'reconcileResidues'
         | 'reconcileResiduesAsync'
         | 'cleanupPublished'
@@ -864,9 +865,10 @@ export class RunWorktreeCoordinator {
       !!tracked &&
       ['pending', 'cleanup-pending'].includes(tracked.publication ?? '') &&
       tracked.attentionReason === 'retry-exhausted'
+    // Même correction que dans `retryRunAsync` : `unknown` = jamais jugé, pas mauvais.
     if (
       !tracked ||
-      tracked.verdict !== 'green' ||
+      tracked.verdict === 'red' ||
       (!retryBlockedPublication && !retryExhaustedPublication)
     ) {
       return undefined
@@ -905,9 +907,24 @@ export class RunWorktreeCoordinator {
       !!tracked &&
       ['pending', 'cleanup-pending'].includes(tracked.publication ?? '') &&
       tracked.attentionReason === 'retry-exhausted'
+    /*
+     * `unknown` veut dire « JAMAIS JUGÉ », pas « jugé mauvais » — et confondre les deux fermait la
+     * porte à la majorité des travaux bloqués.
+     *
+     * Mesuré le 2026-08-23 : 14 travaux terminés attendaient sur des branches `autowin/recovery/`,
+     * et AUCUN n'était reprenable. Onze sont des `command-edit` — des éditions demandées dans le
+     * chat, qui ne passent jamais par un juge, donc qui ne peuvent PAS être vertes. Exiger le vert
+     * les condamnait par construction : aucun appel de reprise n'aurait jamais pu les servir.
+     *
+     * Seul `red` interdit encore : celui-là a été jugé, et négativement. La garde de `discardHeld`
+     * reste, elle, sur `green` — on desserre la porte qui RÉCUPÈRE, jamais celle qui DÉTRUIT.
+     *
+     * La reprise demeure un GESTE DE L'UTILISATEUR, jamais automatique : il décide après avoir lu
+     * le diff. On rend une porte, on ne pousse personne à travers.
+     */
     if (
       !tracked ||
-      tracked.verdict !== 'green' ||
+      tracked.verdict === 'red' ||
       (!retryBlockedPublication && !retryExhaustedPublication)
     ) {
       return undefined
@@ -923,6 +940,20 @@ export class RunWorktreeCoordinator {
       retryPublication,
       'Nouvel essai de recréation demandé depuis le Hub.'
     )
+    /*
+     * RECRÉER la copie si le balayeur l'a supprimée. Sans cela, la reprise repartait aussitôt en
+     * `merge-failed` — mesuré le 2026-08-23 : desserrer la garde ouvrait la porte sur une route
+     * coupée. Le travail vit sur `autowin/recovery/<id>` ; on le remet sur un bureau pour pouvoir le
+     * fusionner. Si la restauration échoue, la reprise suit son cours et échouera proprement, comme
+     * avant : on n'a rien cassé, on a seulement tenté.
+     */
+    // On INTERROGE le disque plutôt que de lire `tracked.worktreeAvailable` : ce champ n'est calculé
+    // qu'au moment de l'AFFICHAGE (`activity()`), il vaut donc `undefined` ici. Première version de
+    // ce correctif : la restauration ne se déclenchait jamais, et la reprise repartait en
+    // `merge-failed` sans que rien ne l'explique.
+    if (!copiePresente(tracked.worktreePath)) {
+      this.manager.restaurerCopieDepuisSecours?.(runId)
+    }
     const active = this.manager.hasActiveProcessesAsync
       ? await this.manager.hasActiveProcessesAsync(runId)
       : this.manager.hasActiveProcesses(runId)

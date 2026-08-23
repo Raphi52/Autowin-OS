@@ -27,13 +27,17 @@ describe('le panneau ne peut RIEN casser', () => {
    * capable de détruire du travail non publié depuis un simple survol de liste. Ce test échoue
    * alors, et c'est le but.
    */
-  it('n’appelle aucune API qui modifie quoi que ce soit', () => {
+  it('n’appelle aucune API DESTRUCTRICE — réintégrer est permis, détruire ne l’est pas', () => {
     const source = readFileSync('src/renderer/src/components/TravauxNonPublies.tsx', 'utf8')
     for (const interdit of [
+      // `retryWorktreeRecovery` est VOLONTAIREMENT absent de cette liste depuis le 2026-08-23 :
+      // réintégrer un travail ne détruit rien, et c'était le geste qui manquait. Ces quatre-là, en
+      // revanche, suppriment, écrasent ou tranchent un conflit — ils n'ont rien à faire dans une vue
+      // dont le rôle est de MONTRER avant de décider.
       'resolveWorktreeConflict',
       'discardHeldWorktree',
-      'retryWorktreeRecovery',
-      'preserveReleaseWorktree'
+      'preserveReleaseWorktree',
+      'removeWorktree'
     ]) {
       expect(source).not.toContain(interdit)
     }

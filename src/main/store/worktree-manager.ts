@@ -849,6 +849,30 @@ export class WorktreeManager {
     }
   }
 
+  /**
+   * RECREER la copie d'un travail a partir de sa branche de secours.
+   *
+   * Le chemin etait DOCUMENTE (« restaure par `git worktree add <chemin> autowin/recovery/<id>` »)
+   * mais jamais cable. Consequence mesuree le 2026-08-23 : une fois la garde de reprise desserree,
+   * la reprise partait quand meme en `merge-failed` -- il n'y avait plus de copie a partir de
+   * laquelle fusionner. Ouvrir la porte ne sert a rien si la route derriere est coupee.
+   *
+   * Rend `true` si une copie utilisable existe apres l'appel -- y compris si elle existait deja.
+   */
+  restaurerCopieDepuisSecours(agentId: string): boolean {
+    if (!SAFE_ID.test(agentId)) return false
+    const chemin = join(this.worktreeRoot, `agent__${agentId}`)
+    if (existsSync(chemin)) return true
+    try {
+      // `git worktree add` echoue si la branche est deja extraite ailleurs : c'est une protection,
+      // pas un obstacle a contourner. On laisse l'echec remonter en `false`.
+      this.git(this.baseRepo, ['worktree', 'add', chemin, `autowin/recovery/${agentId}`])
+      return existsSync(chemin)
+    } catch {
+      return false
+    }
+  }
+
   listAgentIds(): string[] {
     const directories = existsSync(this.worktreeRoot)
       ? readdirSync(this.worktreeRoot, { withFileTypes: true })
