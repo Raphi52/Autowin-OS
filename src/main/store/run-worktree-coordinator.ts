@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from './worktree-manager'
 import { delaiDeReprise, ESSAIS_MAX } from './delai-de-reprise'
+import { INTERVALLE_BALAYAGE_MS, travauxARepecher } from './repechage-automatique'
 import type {
   WorktreeAgentActivity,
   WorktreeConflictDiffResult,
@@ -248,7 +249,10 @@ export class RunWorktreeCoordinator {
   private readonly waitingForRetry = new Set<string>()
   private readonly retryCounts = new Map<string, number>()
   private readonly resumeClaims = new Set<string>()
+  /** Quand chaque run a été repêché AUTOMATIQUEMENT pour la dernière fois, pour ne pas le marteler. */
+  private readonly derniersRepechages = new Map<string, number>()
   private recoveryTimer?: ReturnType<typeof setTimeout>
+  private balayageTimer?: ReturnType<typeof setInterval>
 
   constructor(deps: RunWorktreeCoordinatorDeps) {
     this.manager = deps.manager
@@ -258,6 +262,15 @@ export class RunWorktreeCoordinator {
     this.onAbandon = deps.onAbandon
     this.onRecoveredPublication = deps.onRecoveredPublication
     this.stateStore = deps.stateStore
+    /*
+     * ARMER LE FILET DES LA CONSTRUCTION, et pas depuis un point de cablage lointain.
+     *
+     * Le cas reellement observe est « l'app demarre et quatorze travaux dorment deja » : aucun run
+     * ne se termine, donc aucun evenement ne viendrait declencher un repechage. Un filet qu'il faut
+     * penser a tendre est un filet qu'on oublie de tendre -- c'est exactement ainsi que
+     * `retryRunAsync` s'est retrouve sans le moindre appelant automatique.
+     */
+    this.demarrerLeBalayageAutomatique()
     if (this.manager.operationsAreIsolated?.() && this.manager.recoveryInventoryAsync) {
       void this.manager
         .recoveryInventoryAsync()
@@ -2368,6 +2381,59 @@ export class RunWorktreeCoordinator {
         error instanceof Error ? error.message : String(error)
       )
     }
+  }
+
+  /**
+   * Repêcher, sans qu'on le demande, les travaux qui dorment.
+   *
+   * LE DÉFAUT : republier n'existait QUE comme un bouton — aucun appelant automatique de
+   * `retryRunAsync` dans tout `src/main`. Quatorze travaux terminés attendaient donc sur des
+   * branches `autowin/recovery/` qu'un humain devine qu'il faut ouvrir le bon panneau et clique,
+   * une fois par travail.
+   *
+   * Le tri est délégué à `travauxARepecher`, testé à part : c'est lui qui est risqué. Ici on ne
+   * fait qu'exécuter, en série — chaque reprise touche l'arbre git, les lancer en parallèle les
+   * ferait se refuser mutuellement pour arbre occupé.
+   *
+   * Un échec n'interrompt pas le lot : un travail définitivement incapable de passer ne doit pas
+   * condamner les treize autres.
+   */
+  async repecherLesTravauxEnAttente(): Promise<string[]> {
+    const aRepecher = travauxARepecher([...this.runs.values()], this.derniersRepechages, this.now())
+    const tentes: string[] = []
+    for (const runId of aRepecher) {
+      // Marquer AVANT de tenter : si la reprise jette, le run doit quand même respecter le délai,
+      // sinon le balayage suivant le reprend aussitôt et boucle sur le même échec.
+      this.derniersRepechages.set(runId, this.now())
+      tentes.push(runId)
+      try {
+        await this.retryRunAsync(runId)
+      } catch (error) {
+        this.recordRecoveryFailure(error)
+      }
+    }
+    return tentes
+  }
+
+  /**
+   * Arme le filet. Idempotent : deux appels ne créent pas deux minuteries.
+   *
+   * `unref()` pour la même raison que la minuterie de reprise : ce balayage ne doit JAMAIS retenir
+   * l'application ouverte. Un filet de fond n'est pas une raison de ne pas pouvoir quitter.
+   */
+  demarrerLeBalayageAutomatique(): void {
+    if (this.balayageTimer) return
+    this.balayageTimer = setInterval(() => {
+      void this.repecherLesTravauxEnAttente().catch((error) => this.recordRecoveryFailure(error))
+    }, INTERVALLE_BALAYAGE_MS)
+    this.balayageTimer.unref?.()
+  }
+
+  /** Désarme le filet — fermeture de l'application, ou test qui ne veut pas d'une minuterie vivante. */
+  arreterLeBalayageAutomatique(): void {
+    if (!this.balayageTimer) return
+    clearInterval(this.balayageTimer)
+    this.balayageTimer = undefined
   }
 
   private scheduleRecoveryRetry(): void {

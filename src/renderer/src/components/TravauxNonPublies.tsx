@@ -159,9 +159,15 @@ export function TravauxNonPublies({
         ))}
       </ul>
 
+      {/*
+        La version précédente finissait par « À la main : `git merge autowin/recovery/<id>` » — une
+        commande à recopier dans un terminal. Deux défauts en une phrase : elle exposait du git
+        brut, et elle est devenue fausse. Autowin repasse maintenant tout seul sur ces travaux et
+        retente leur publication ; le bouton ne sert plus qu'à ne pas attendre le prochain passage.
+      */}
       <p className="tnp-note">
-        Rien n’est supprimé ici : « Réintégrer » retente la publication, il ne détruit jamais. À la
-        main : <code>git merge autowin/recovery/&lt;id&gt;</code>
+        Rien n’est supprimé ici. Autowin retente ces publications tout seul, régulièrement —
+        « Réintégrer » ne fait que passer devant tout le monde.
       </p>
     </div>
   )
