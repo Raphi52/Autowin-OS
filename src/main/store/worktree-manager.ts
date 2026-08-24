@@ -757,6 +757,36 @@ export class WorktreeManager {
    * UNE seule commande git repond, et c'est ce qui rend la question posable a chaque affichage :
    * `for-each-ref --no-merged <base>` filtre deja cote git. Ce jour-la : 14 non fusionnees sur 22.
    */
+  /**
+   * Cette branche apporte-t-elle quelque chose que la base n'a PAS deja ?
+   *
+   * `--no-merged` juge sur l'ASCENDANCE, et c'est insuffisant : une branche dont le contenu est deja
+   * dans la base -- parce qu'il a ete republie, repris a la main, ou passe par un cherry-pick --
+   * reste signalee comme « travail non publie » pour toujours. Mesure le 2026-08-24 : l'utilisateur a
+   * vu ce bandeau sur un travail bel et bien publie, et le seul moyen de l'eteindre etait une fusion
+   * de scellement dont le diff etait VIDE.
+   *
+   * `git cherry` repond a la bonne question : il compare par `patch-id`, donc il reconnait un commit
+   * REAPPLIQUE sous un autre SHA -- exactement ce qu'un cherry-pick produit. Une ligne prefixee `+`
+   * est un commit dont aucun equivalent n'existe dans la base ; sans aucune, la branche n'apporte
+   * rien et n'a rien a annoncer.
+   *
+   * COUT : un appel git par branche DEJA signalee, pas par branche existante. Le lot est petit par
+   * construction, et le coordinateur met ce resultat en cache soixante secondes
+   * (`travauxNonPubliesCaches`) -- ce qui etait precisement la raison d'etre de ce cache.
+   *
+   * En cas d'echec on repond OUI. Le bandeau doit se tromper du cote qui n'efface rien : signaler un
+   * travail deja publie coute une verification, en taire un qui ne l'est pas coute le travail.
+   */
+  private apporteQuelqueChose(agentId: string, baseRef: string): boolean {
+    try {
+      const sortie = this.git(this.baseRepo, ['cherry', baseRef, `autowin/recovery/${agentId}`])
+      return sortie.split(/\r?\n/).some((ligne) => ligne.trim().startsWith('+'))
+    } catch {
+      return true
+    }
+  }
+
   travauxNonPublies(baseRef = 'HEAD'): string[] {
     try {
       return this.git(this.baseRepo, [
@@ -769,6 +799,7 @@ export class WorktreeManager {
         .split('\n')
         .map((ligne) => ligne.trim())
         .filter((agentId) => SAFE_ID.test(agentId))
+        .filter((agentId) => this.apporteQuelqueChose(agentId, baseRef))
     } catch {
       // Un depot qui ne repond pas ne prouve AUCUNE perte : on n'annonce rien plutot que d'alarmer.
       return []
