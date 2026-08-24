@@ -931,6 +931,12 @@ export interface RunWorktrees {
       onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     }
   ): Promise<unknown>
+  /**
+   * PRÉ-VOL, strictement en LECTURE : fichiers non committés de la BASE, tels que `git status` les
+   * voit. N'écrit rien — ni `stash`, ni `checkout`, ni ref. Optionnel : un coordinateur qui ne
+   * l'implémente pas garde exactement l'ancien comportement (aucun refus inventé).
+   */
+  baseDirtyFiles?(): readonly string[]
   /** Snapshot d'observation du coordinateur ; ne pilote jamais la finalisation. */
   activity?(): WorktreeAgentActivity[]
   /** Attache/détache un processus CLI réel au lease durable du run. */
@@ -1681,6 +1687,25 @@ export class Orchestrator {
       throw new Error(
         'Isolation bloquée : le moteur de bureaux workspace est indisponible pour ce projet.'
       )
+    }
+    // PRÉ-VOL BASE-DIRTY — le même refus qu'à la finalisation (`worktree-manager`, reason
+    // `base-dirty`), mais AVANT que le run coûte quoi que ce soit. Jusqu'ici la base sale n'était
+    // constatée qu'au retour : l'utilisateur payait un run entier pour apprendre que rien ne serait
+    // publié. On refuse tôt, en NOMMANT les fichiers en cause.
+    //
+    // LECTURE SEULE, délibérément : aucun `stash`, aucun `checkout`, aucune ref écrite. Le travail
+    // non committé de l'utilisateur lui appartient — Autowin le constate, ne le déplace jamais.
+    // Ce refus ne concerne QUE les runs isolés (mutation / publication tenue) : un run de lecture
+    // ne publiera rien et n'a donc aucune raison d'exiger une base propre.
+    if (requiresIsolatedWorkspace) {
+      const baseDirty = this.deps.worktrees?.baseDirtyFiles?.() ?? []
+      if (baseDirty.length > 0) {
+        throw new Error(
+          `Base non propre : ${baseDirty.length} fichier(s) non committé(s) dans le dépôt de travail — ` +
+            `${baseDirty.join(', ')}. Committez-les ou mettez-les de côté vous-même, puis relancez ; ` +
+            `Autowin ne touche pas à votre travail non committé.`
+        )
+      }
     }
     // Verdict du run, lu dans le `finally` : seul un run VERT ramène son travail dans la base.
     let green = false
