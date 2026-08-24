@@ -3658,7 +3658,23 @@ exit 0
         decision?: 'resume-publication' | 'cleanup-only'
         publishedSha?: string
       }
-    | { ok: false; detail: string } {
+    | {
+        ok: false
+        detail: string
+        /*
+         * VRAI quand le refus ne pourra JAMAIS reussir, quoi qu'on retente -- par opposition a un
+         * refus transitoire (arbre occupe, base qui bouge) qui se repare tout seul.
+         *
+         * MESURE le 2026-08-24 sur l'app reelle : vingt-et-une copies occupaient le disque et
+         * polluaient le Hub, toutes refusees pour ascendance rompue. Le systeme connaissait le
+         * verdict et n'en faisait rien : il gardait la copie, et la RESTAURAIT meme au demarrage.
+         *
+         * Ce champ existe pour que l'appelant puisse AGIR sur le verdict sans avoir a reconnaitre
+         * une phrase francaise dans `detail` -- ce qui serait une rustine, et casserait a la
+         * premiere reformulation.
+         */
+        definitif?: true
+      } {
     try {
       assertSafeId(agentId, 'agentId')
     } catch (error) {
@@ -3773,7 +3789,21 @@ exit 0
       !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(head.stdout.trim()) ||
       this.tryGitFn(path, ['merge-base', '--is-ancestor', sourceSha, head.stdout.trim()]).code !== 0
     ) {
-      return { ok: false, detail: 'La copie ne descend pas du SHA de départ autorisé.' }
+      /*
+       * DEFINITIF, et c'est le seul cas qu'on marque ainsi. Verifie a la main le 2026-08-24 sur
+       * `agent__command-edit-04789dcc-...` : `git merge-base --is-ancestor <baseSha> <HEAD>` echoue
+       * REELLEMENT -- la garde a raison, ce n'est pas un faux positif. Aucun reessai ne rendra la
+       * copie descendante de sa base ; le travail, lui, reste joignable sur sa branche de secours.
+       *
+       * On reste CONSERVATEUR : les autres refus (propriete, copie absente, commit prepare qui a
+       * bouge) ne sont PAS marques, parce qu'ils peuvent se reparer. Marquer trop large libererait
+       * une copie encore publiable.
+       */
+      return {
+        ok: false,
+        detail: 'La copie ne descend pas du SHA de départ autorisé.',
+        definitif: true
+      }
     }
     if (preparedAgentSha && head.stdout.trim() !== preparedAgentSha) {
       return { ok: false, detail: 'La copie ne porte plus exactement le commit préparé.' }

@@ -482,6 +482,22 @@ export class RunWorktreeCoordinator {
           publication: 'pending'
         })
         if (!validation.ok || validation.decision === 'cleanup-only') {
+          /*
+           * NE PAS GARDER UNE COPIE QUE LA GARDE CONDAMNE POUR DE BON.
+           *
+           * MESURE le 2026-08-24 sur l'app reelle : vingt-et-une copies occupaient le disque et
+           * polluaient le Hub, toutes refusees pour ascendance rompue. Le verdict etait connu a
+           * CHAQUE tentative, et on n'en faisait rien -- la copie restait, et le demarrage la
+           * restaurait meme depuis sa branche de secours. C'est l'« usine a worktrees ».
+           *
+           * On ne touche PAS au verdict de la garde : elle a raison de refuser, verifie a la main.
+           * On agit seulement sur ce qu'on en FAIT. Et on ne perd rien : `preserverEtLiberer` met
+           * le travail a l'abri sur `autowin/recovery/<id>` avant de rendre le disque, et garde la
+           * copie si la preservation echoue.
+           *
+           * On refuse toujours la reprise juste apres : elle a genuinement echoue.
+           */
+          if (!validation.ok && validation.definitif) this.libererLaCopieEnConflit(runId)
           throw new Error(
             !validation.ok
               ? `Reprise du worktree refusée : ${validation.detail}`
@@ -599,6 +615,22 @@ export class RunWorktreeCoordinator {
               publication: 'pending'
             })
         if (!validation.ok || validation.decision === 'cleanup-only') {
+          /*
+           * NE PAS GARDER UNE COPIE QUE LA GARDE CONDAMNE POUR DE BON.
+           *
+           * MESURE le 2026-08-24 sur l'app reelle : vingt-et-une copies occupaient le disque et
+           * polluaient le Hub, toutes refusees pour ascendance rompue. Le verdict etait connu a
+           * CHAQUE tentative, et on n'en faisait rien -- la copie restait, et le demarrage la
+           * restaurait meme depuis sa branche de secours. C'est l'« usine a worktrees ».
+           *
+           * On ne touche PAS au verdict de la garde : elle a raison de refuser, verifie a la main.
+           * On agit seulement sur ce qu'on en FAIT. Et on ne perd rien : `preserverEtLiberer` met
+           * le travail a l'abri sur `autowin/recovery/<id>` avant de rendre le disque, et garde la
+           * copie si la preservation echoue.
+           *
+           * On refuse toujours la reprise juste apres : elle a genuinement echoue.
+           */
+          if (!validation.ok && validation.definitif) this.libererLaCopieEnConflit(runId)
           throw new Error(
             !validation.ok
               ? `Reprise du worktree refusée : ${validation.detail}`
