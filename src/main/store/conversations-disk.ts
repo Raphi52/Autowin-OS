@@ -329,6 +329,7 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
   const byId = new Map(base.map((conversation) => [conversation.id, conversation]))
   const lines = readFileSync(journal, 'utf8').split(/\r?\n/)
   const lastContentIndex = lines.reduce((last, line, index) => (line ? index : last), -1)
+  const ecartees: string[] = []
   for (const [index, line] of lines.entries()) {
     if (!line) continue
     try {
@@ -372,12 +373,42 @@ function applyConversationJournal(base: Conversation[], path: string): Conversat
       }
     } catch (error) {
       if (index === lastContentIndex && error instanceof SyntaxError) break
-      throw new ConversationPersistenceError(
-        `Journal conversations corrompu ligne ${index + 1}: ${journal}`,
-        journal,
-        { cause: error }
+      /*
+       * UNE LIGNE FAUTIVE NE VAUT PAS LE DEMARRAGE ENTIER.
+       *
+       * VECU le 2026-08-24 sur les donnees reelles de l'utilisateur : un enregistrement sans
+       * `title` ni `provider` a rendu l'application DEFINITIVEMENT inbootable -- fenetre « Error »,
+       * 1175 conversations inaccessibles, et il a fallu retirer la ligne a la main. Ce fichier
+       * portait DEJA, quelques lignes plus bas, le recit du meme piege : `category` etait exige
+       * alors qu'il n'etait plus ecrit, et « un seul champ manquant faisait declarer le store ENTIER
+       * corrompu ». La lecon avait ete ecrite, pas appliquee.
+       *
+       * LA COUPURE, et elle n'est pas un desserrage : un JSON ILLISIBLE reste fatal, parce qu'il
+       * signale un fichier abime au niveau de l'ecriture -- on n'a aucune idee de ce qu'on perd. Un
+       * rejet de FORME, lui, dit seulement que l'ecrivain et le lecteur n'appliquent pas le meme
+       * contrat : la ligne est mise en quarantaine, nommee dans les traces, et le reste est charge.
+       *
+       * Perdre une conversation vaut infiniment mieux que perdre l'acces a mille cent
+       * soixante-quinze.
+       */
+      if (error instanceof SyntaxError) {
+        throw new ConversationPersistenceError(
+          `Journal conversations corrompu ligne ${index + 1}: ${journal}`,
+          journal,
+          { cause: error }
+        )
+      }
+      ecartees.push(
+        `ligne ${index + 1}: ${error instanceof Error ? error.message : String(error)}`
       )
     }
+  }
+  if (ecartees.length) {
+    // BRUYANT a dessein : une donnee ecartee en silence est une donnee perdue sans temoin.
+    console.warn(
+      `[conversations] ${ecartees.length} ligne(s) de journal ecartee(s) dans ${journal} — ` +
+        `le reste est charge. ${ecartees.slice(0, 5).join(' | ')}`
+    )
   }
   return [...byId.values()].sort((left, right) => right.updatedAt - left.updatedAt)
 }
