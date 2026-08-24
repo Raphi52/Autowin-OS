@@ -139,20 +139,29 @@ export class OutcomeLearningLedger {
     return true
   }
 
-  read(): { events: OutcomeLearningEventV1[]; truncatedTail: boolean } {
-    if (!existsSync(this.path)) return { events: [], truncatedTail: false }
+  /**
+   * `ecartees` = nombre de lignes refusees POUR LEUR FORME et laissees de cote.
+   *
+   * Ce compte est rendu, pas seulement journalise, et c'est deliberé. Sur le journal des
+   * conversations, une ligne ecartee est une conversation perdue -- VISIBLE. Ici c'est un evenement
+   * d'apprentissage en moins : la degradation est INVISIBLE, donc elle doit etre representable par
+   * l'appelant plutot que noyee dans un `console.warn`.
+   */
+  read(): { events: OutcomeLearningEventV1[]; truncatedTail: boolean; ecartees: number } {
+    if (!existsSync(this.path)) return { events: [], truncatedTail: false, ecartees: 0 }
     const size = statSync(this.path).size
     if (size > MAX_LEDGER_BYTES) {
       throw new Error(`journal outcome-learning trop volumineux (${size} octets)`)
     }
     const raw = readFileSync(this.path, 'utf8')
-    if (!raw) return { events: [], truncatedTail: false }
+    if (!raw) return { events: [], truncatedTail: false, ecartees: 0 }
     const completeTail = raw.endsWith('\n')
     const lines = raw.split('\n')
     if (completeTail) lines.pop()
     const events: OutcomeLearningEventV1[] = []
     const ids = new Set<string>()
     let truncatedTail = false
+    const ecartees: string[] = []
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index]
       if (!line.trim()) continue
@@ -169,16 +178,36 @@ export class OutcomeLearningLedger {
       try {
         assertEvent(parsed)
       } catch (error) {
-        throw new Error(
-          `journal outcome-learning invalide à la ligne ${index + 1} : ${error instanceof Error ? error.message : String(error)}`
+        /*
+         * UNE LIGNE REFUSEE POUR SA FORME NE CONDAMNE PAS LE REGISTRE ENTIER.
+         *
+         * Meme classe de defaut que celui vecu le 2026-08-24 sur le journal des conversations : un
+         * seul enregistrement mal forme y avait rendu l'application inbootable, 1175 conversations
+         * inaccessibles. Ici le cout est un evenement contre TOUTE la fonction d'apprentissage.
+         *
+         * LA COUPURE N'EST PAS UN DESSERRAGE : un JSON ILLISIBLE reste fatal juste au-dessus, parce
+         * qu'on ne sait pas ce qu'il contenait. Une forme refusee, elle, est identifiee -- on sait
+         * exactement quelle ligne on ecarte, on la nomme, et on la COMPTE.
+         */
+        ecartees.push(
+          `ligne ${index + 1}: ${error instanceof Error ? error.message : String(error)}`
         )
+        continue
       }
       const id = eventId(parsed)
       if (ids.has(id)) continue
       ids.add(id)
       events.push(parsed)
     }
-    return { events, truncatedTail }
+    if (ecartees.length) {
+      // BRUYANT a dessein : un evenement d'apprentissage ecarte en silence biaise l'apprentissage
+      // sans temoin. Le compte rendu ci-dessous rend la degradation lisible par l'appelant.
+      console.warn(
+        `[outcome-learning] ${ecartees.length} ligne(s) ecartee(s) dans ${this.path} — ` +
+          `le reste est charge. ${ecartees.slice(0, 5).join(' | ')}`
+      )
+    }
+    return { events, truncatedTail, ecartees: ecartees.length }
   }
 }
 
