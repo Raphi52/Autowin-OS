@@ -944,6 +944,14 @@ export function phasesJouees(outcome: OrchestrationOutcome | undefined): string[
 function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
   const phases = phasesJouees(outcome)
   /*
+   * DE QUOI parle cette cloture — defaut rapporte le 23/08 (conv-1376) : « ce bloc est trop
+   * generique il ne me donne pas d'info sur la task ». Le sujet du travail est deja porte par
+   * l'issue (`runPath`) et deja lu ailleurs ici (mention du livrable tronque) ; il n'etait
+   * simplement pas rendu dans le pied. On ne le DEVINE jamais : sans chemin de run, pas de sujet.
+   */
+  const sujet = runLabelFromPath(asString(outcome?.runPath))
+  const surSujet = sujet ? ` — sujet : « ${sujet} »` : ''
+  /*
    * PORTEE INCONNUE — et c'est le trou que mon premier correctif portait.
    *
    * J'avais choisi « sans phase connue, on ne devine pas » et rendu le bloc d'origine. Mesure du
@@ -963,7 +971,7 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
     return [
       '---',
       '✅ Fait',
-      '1. Le résultat demandé a été produit et validé.',
+      `1. Le résultat demandé a été produit et validé${surSujet}.`,
       "📍 Maintenant : AUCUNE étape d'exécution n'a été jouée — ce verdict porte sur ce qui a été lu, pas sur un besoin réalisé.",
       '⏳ Reste à faire : inconnu ici — rien ne prouve que le besoin est fait.',
       "👉 Recommandé : faire exécuter le travail si le besoin n'est pas encore réalisé."
@@ -975,7 +983,7 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
     return [
       '---',
       '✅ Fait',
-      `1. Le livrable de la phase ${phases.join(', ')} a été produit et validé.`,
+      `1. Le livrable de la phase ${phases.join(', ')} a été produit et validé${surSujet}.`,
       "📍 Maintenant : cette phase est rendue — le besoin lui-même n'est PAS réalisé, rien n'a été muté.",
       `⏳ Reste à faire : ${suite}.`,
       `👉 Recommandé : lancer ${restantes[0] ?? 'la phase suivante'}.`
@@ -984,7 +992,7 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
   return [
     '---',
     '✅ Fait',
-    '1. Le résultat demandé a été produit et validé.',
+    `1. Le résultat demandé a été produit et validé${surSujet}.`,
     '📍 Maintenant : la tâche demandée est terminée et son résultat est disponible.',
     '⏳ Reste à faire : rien.',
     '👉 Recommandé : passer à la prochaine demande.'
@@ -1008,11 +1016,18 @@ function authoritativeDeliveredClosingBlockSpan(
    * le RETIRAIT au rechargement, faisant disparaitre la cloture corrigee. C'est la regression que
    * le correctif du gabarit portait sans le dire : un bloc qu'on ecrit doit aussi etre relu.
    */
-  const formeAnalyse = /^1\. Le livrable de la phase .+ a été produit et validé\.$/u
+  const formeAnalyse = /^1\. Le livrable de la phase .+ a été produit et validé( — sujet : .+)?\.$/u
+  /*
+   * Le SUJET du travail est desormais suffixe a cette premiere ligne (« … validé — sujet : « X ». »),
+   * parce qu'un pied identique pour tout travail ne disait pas de QUOI il parlait (conv-1376, 23/08).
+   * Une egalite stricte ne reconnaitrait plus le bloc enrichi et `reconcileClosedOrchestrationText`
+   * le RETIRERAIT au rechargement — exactement la regression deja vecue le 21/08.
+   */
+  const formeLivree = /^1\. Le résultat demandé a été produit et validé( — sujet : .+)?\.$/u
   if (
     fact < 0 ||
     (factLine !== '1. Workflow livré : gate validé et RUN fermé green.' &&
-      factLine !== '1. Le résultat demandé a été produit et validé.' &&
+      !(factLine && formeLivree.test(factLine)) &&
       !(factLine && formeAnalyse.test(factLine)))
   ) {
     return undefined
