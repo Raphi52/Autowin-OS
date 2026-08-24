@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 import { signalerInterfaceVisible } from './startup-gate'
 import type { AutowinOS } from './os'
@@ -28,6 +28,9 @@ import type { ProviderAdapter } from './providers/types'
  *  - sans `core.autocrlf false`, la copie porte CRLF quand la base porte LF : une comparaison de
  *    contenu echouerait pour une raison etrangere a ce qui est teste.
  */
+
+/** Racine `APPDATA` d'origine, restauree au demontage (le montage la remplace par une racine propre). */
+let appDataPrecedent: string | undefined
 
 /** Un depot jetable, deja pousse sur son propre `origin` bare local. */
 export interface DepotJetable {
@@ -73,11 +76,26 @@ export function creerDepotJetable(cible: string, contenuInitial: string): DepotJ
  * resout son workspace une fois pour toutes et ne cree son coordinateur que si `<workspace>/.git`
  * existe.
  */
-export async function monterOsReel(
-  depot: string,
-  adaptateur: ProviderAdapter
-): Promise<AutowinOS> {
+export async function monterOsReel(depot: string, adaptateur: ProviderAdapter): Promise<AutowinOS> {
   process.env[AUTOWIN_WORKSPACE_ENV] = depot
+  /**
+   * RACINE DE DONNEES PROPRE A CETTE EXECUTION — sinon ce test se suicide d'une passe a l'autre.
+   *
+   * `vitest.config.ts` fixe `APPDATA` a un chemin STABLE et partage par toute la suite, ce qui est
+   * voulu. Mais un run d'orchestration y depose un etat NON TERMINAL (`run-state/<runId>.json`) qui
+   * survit au depot temporaire : mesure du 2026-08-21, cinq etats `conv-1` portant la tache exacte
+   * de ce e2e dormaient la depuis le 20/08. La passe suivante en REPREND un, exige sa copie durable
+   * — disparue avec le tmp — et la chaine sort en `red` (« Reprise du worktree impossible … copie
+   * durable absente ou incomplete »), sans lancer une seule phase d'execution.
+   *
+   * On ne desarme donc rien du produit : on donne a CE montage sa propre racine, sous le depot
+   * jetable, que `demonterOs` emporte avec le reste. Elle est posee AVANT la construction, qui
+   * resout `run-state` une fois pour toutes.
+   */
+  const racineDonnees = join(dirname(depot), 'appdata')
+  mkdirSync(racineDonnees, { recursive: true })
+  appDataPrecedent = process.env.APPDATA
+  process.env.APPDATA = racineDonnees
   const { AutowinOS } = await import('./os')
   const os = new AutowinOS()
   /**
@@ -130,5 +148,8 @@ export async function demonterOs(
     }
   }
   delete process.env[AUTOWIN_WORKSPACE_ENV]
+  if (appDataPrecedent === undefined) delete process.env.APPDATA
+  else process.env.APPDATA = appDataPrecedent
+  appDataPrecedent = undefined
   if (jetable) rmSync(jetable.racine, { recursive: true, force: true })
 }
