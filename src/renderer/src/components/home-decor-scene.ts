@@ -665,7 +665,18 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
 }
 
 /** La direction par DEFAUT, choisie par l'utilisateur le 2026-08-21 sur rendus compares. */
-export const DECOR_DEFAUT: DecorVariant = 'poussiere'
+/*
+ * LA COMPOSITION A PLANETES, demandee le 2026-08-24 et assumee comme un CHANGEMENT de decision.
+ *
+ * `poussiere` etait le defaut, choisi par l'utilisateur sur rendus compares -- une vraie decision,
+ * encodee dans le test voisin. Elle est remplacee, pas contournee : la demande « bascule le decor sur
+ * la composition a planetes, avec la parallaxe curseur dessus » a ete formulee deux fois, et le test
+ * qui gardait l'ancien choix a refuse l'edition d'un agent qui n'avait pas lu la decision.
+ *
+ * La promesse de `poussiere` reste testee, sous son nom propre : changer de defaut ne doit pas
+ * effacer la garantie d'une direction qu'on peut encore choisir.
+ */
+export const DECOR_DEFAUT: DecorVariant = 'actuel'
 
 /**
  * Monte la scène complète dans un canevas.

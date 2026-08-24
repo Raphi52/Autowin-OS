@@ -31,9 +31,25 @@ describe('directions du decor', () => {
     }
   })
 
-  it('a « poussiere » pour defaut — la direction choisie par l utilisateur sur rendus compares', () => {
-    expect(DECOR_DEFAUT).toBe('poussiere')
+  it('a « actuel » pour defaut — la composition a PLANETES, demandee le 2026-08-24', () => {
+    // CHANGEMENT DE DECISION, assume. `poussiere` etait le defaut, choisi sur rendus compares ; la
+    // demande « bascule le decor sur la composition a planetes » l'a remplace. Ce test encode la
+    // nouvelle decision au lieu d'etre desserre -- c'est lui qui avait refuse l'edition d'un agent
+    // qui n'avait pas lu l'ancienne, et il doit continuer de refuser une bascule non decidee.
+    expect(DECOR_DEFAUT).toBe('actuel')
     expect(DECOR_VARIANTS.some((v) => v.id === DECOR_DEFAUT)).toBe(true)
+  })
+
+  it('tient la promesse de « actuel » : des PLANETES annelees, ce que « poussiere » n avait pas', () => {
+    const actuel = COMPOSITIONS[DECOR_DEFAUT]
+    // Ce que la demande visait : des silhouettes de planetes, pas seulement de la matiere.
+    expect(actuel.planetes.length).toBeGreaterThanOrEqual(3)
+    // Annelees : une planete sans anneau ne tiendrait pas le resume affiche.
+    for (const planete of actuel.planetes) expect(planete.rings).toBeGreaterThan(0)
+    // Etagees en profondeur, sinon la parallaxe curseur n'a rien a separer.
+    expect(new Set(actuel.planetes.map((p) => p.z)).size).toBeGreaterThan(1)
+    // Le resume affiche a l'utilisateur doit decrire CETTE image.
+    expect(DECOR_VARIANTS.find((v) => v.id === DECOR_DEFAUT)?.resume).toMatch(/plan[eè]tes/)
   })
 
   /**
@@ -42,7 +58,10 @@ describe('directions du decor', () => {
    * quelqu'un remettait une silhouette ou aplatissait la parallaxe en gardant le nom.
    */
   it('tient la promesse de « poussiere » : aucune silhouette, six plans, forte parallaxe', () => {
-    const poussiere = COMPOSITIONS[DECOR_DEFAUT]
+    // Vise `poussiere` par son NOM et non par `DECOR_DEFAUT` : elle n'est plus le defaut depuis le
+    // 2026-08-24, mais elle reste choisissable -- et une direction qu'on peut choisir doit tenir sa
+    // promesse. Perdre cette garantie en changeant de defaut aurait ete un dommage collateral.
+    const poussiere = COMPOSITIONS['poussiere']
     // Aucune silhouette : ni planete, ni satellite — que de la matiere.
     expect(poussiere.planetes).toHaveLength(0)
     expect(poussiere.satellites).toBe(0)
@@ -50,11 +69,11 @@ describe('directions du decor', () => {
     expect(poussiere.nebuleuses).toHaveLength(6)
     expect(new Set(poussiere.nebuleuses.map((n) => n.z)).size).toBe(6)
     // Forte parallaxe : strictement au-dessus des autres directions, sinon « forte » ne veut rien dire.
-    for (const autre of DECOR_VARIANTS.filter((v) => v.id !== DECOR_DEFAUT)) {
+    for (const autre of DECOR_VARIANTS.filter((v) => v.id !== 'poussiere')) {
       expect(poussiere.parallaxe).toBeGreaterThan(COMPOSITIONS[autre.id].parallaxe)
     }
     // Le resume affiche a l'utilisateur doit decrire CETTE image.
-    const entree = DECOR_VARIANTS.find((v) => v.id === DECOR_DEFAUT)
+    const entree = DECOR_VARIANTS.find((v) => v.id === 'poussiere')
     expect(entree?.resume).toMatch(/aucune silhouette/)
   })
 

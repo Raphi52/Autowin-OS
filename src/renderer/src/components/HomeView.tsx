@@ -322,12 +322,31 @@ export function HomeView({
       last = time
       look.x += (aim.x - look.x) * 0.05
       look.y += (aim.y - look.y) * 0.05
-      scene.render(reduceMotion ? 12 : time / 1000, reduceMotion ? { x: 0, y: 0 } : look)
+      /*
+       * « MOUVEMENT REDUIT » REDUIT LE MOUVEMENT, il n'efface pas le decor.
+       *
+       * Avant, cette preference coupait TOUT : aucune boucle, parallaxe curseur annulee, une seule
+       * image figee. Mesure le 2026-08-24 sur la machine de l'utilisateur, ou
+       * `SPI_GETCLIENTAREAANIMATION` vaut False : il ne voyait donc AUCUN des decors qu'il
+       * demandait, et croyait que ses demandes echouaient. Elles aboutissaient ; l'ecran restait
+       * muet.
+       *
+       * La coupure retenue distingue les deux natures de mouvement. Le temps est FIGE, donc plus
+       * aucune derive autonome -- c'est ce que la preference vise, une image qui bouge toute seule
+       * sous des yeux qui ne l'ont pas demande. La parallaxe curseur, elle, reste : elle ne bouge
+       * QUE quand l'utilisateur bouge, c'est de la manipulation directe, et la supprimer retirait
+       * une fonctionnalite au lieu de calmer une animation.
+       */
+      scene.render(reduceMotion ? 12 : time / 1000, look)
     }
 
-    // Mouvement réduit : `fit()` a déjà dessiné l'image figée, et redessinera à chaque
-    // redimensionnement. Aucune boucle n'est lancée.
-    if (!reduceMotion) frame = requestAnimationFrame(draw)
+    /*
+     * La boucle tourne MEME en mouvement reduit, et c'est le coeur du correctif : sans elle, le
+     * curseur ne pouvait rien deplacer. Elle reste bon marche -- suspendue hors de la vue active
+     * (voir `draw`), plafonnee a ~40 images/s, et le temps qu'elle passe a la scene est constant,
+     * donc le GPU ne recalcule qu'une parallaxe, pas une derive.
+     */
+    frame = requestAnimationFrame(draw)
 
     return () => {
       cancelAnimationFrame(frame)
