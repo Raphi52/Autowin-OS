@@ -57,6 +57,10 @@ export interface RunWorktreeCoordinatorDeps {
         | 'apercuTravauxNonPublies'
         | 'patchTravailNonPublie'
         | 'restaurerCopieDepuisSecours'
+        // Ranger une copie en PRESERVANT son travail. Absent de cette liste, l'appel compilait
+        // quand meme (`?.()`) mais `npm run typecheck` le refusait -- vitest ne typecheck pas, la
+        // suite etait donc verte sur du code qui ne compilait pas.
+        | 'preserverEtLiberer'
         | 'reconcileResidues'
         | 'reconcileResiduesAsync'
         | 'cleanupPublished'

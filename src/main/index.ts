@@ -3053,7 +3053,20 @@ Le fil reprend ensuite normalement.`
       }
     ) => {
       assertTrustedRendererSender(event, 'Conversation create')
-      const conversation = os.conversations.create({ title: p.title, provider: p.provider })
+      /*
+       * VALIDER AVANT D'ECRIRE, comme le voisin `routeMessage` le fait deja.
+       *
+       * VECU le 2026-08-24 : un appel passant une CHAINE au lieu de l'objet attendu a cree une
+       * conversation sans `title` ni `provider`, persistee dans le journal — que `isConversation`
+       * refuse ensuite. L'application est devenue DEFINITIVEMENT inbootable, 1175 conversations
+       * inaccessibles, jusqu'a retrait manuel de la ligne.
+       *
+       * Un ecrivain et un lecteur qui n'appliquent pas le meme contrat sur le meme fichier, c'est
+       * une bombe a retardement. `guardString` etait deja la, dix lignes plus bas.
+       */
+      const title = guardString((p as { title?: unknown } | undefined)?.title, 'title')
+      const provider = guardString((p as { provider?: unknown } | undefined)?.provider, 'provider')
+      const conversation = os.conversations.create({ title, provider })
       broadcast({ type: 'refresh', scope: 'conversations' })
       return conversation
     }

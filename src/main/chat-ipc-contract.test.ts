@@ -233,7 +233,14 @@ describe('renderer chat IPC contract', () => {
       // `create(p)` est devenu `create({ title, provider })` : le champ persiste `category`,
       // doublon en ecriture seule de `provider`, n'est plus transmis au store (il reste accepte
       // dans la charge utile IPC — contrat renderer inchange).
-      /'os:conversations:create'[\s\S]*?os\.conversations\.create\(\{ title: p\.title, provider: p\.provider \}\)[\s\S]*?scope: 'conversations'/
+      //
+      // ASSERTION RESSERREE le 2026-08-24, pas desserree. Avant, elle figeait
+      // `create({ title: p.title, provider: p.provider })` — la charge utile passait telle quelle,
+      // NON VALIDEE. Un appel mal forme a ainsi persiste une conversation sans `title` ni
+      // `provider`, que le chargeur refuse ensuite : l'app est devenue inbootable, 1175
+      // conversations inaccessibles. On exige donc desormais que les deux champs traversent
+      // `guardString` AVANT d'atteindre le store.
+      /'os:conversations:create'[\s\S]*?guardString\([\s\S]*?'title'\)[\s\S]*?guardString\([\s\S]*?'provider'\)[\s\S]*?os\.conversations\.create\(\{ title, provider \}\)[\s\S]*?scope: 'conversations'/
     )
     expect(sources.main).toMatch(
       /'os:conversations:remove'[\s\S]*?os\.conversations\.remove\(id\)[\s\S]*?scope: 'conversations'/
