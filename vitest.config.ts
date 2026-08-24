@@ -63,6 +63,20 @@ export default defineConfig({
       'Audit/**',
       'artifacts/**',
       '**/worktrees/**',
+      // LA RACINE DE DONNEES DE L'APP, en entier. L'exclusion des worktrees juste au-dessus ne
+      // suffit pas : mesure le 2026-08-24, une orchestration a cree `.autowin-data/tmp-fusion-main/`
+      // -- une copie COMPLETE du depot, hors de tout dossier de worktrees. La suite est passee de 737
+      // a 1421 fichiers, et 4 des 5 echecs venaient de cette copie. Exactement la panne que le
+      // commentaire ci-dessus decrit, par un chemin que son exclusion ne couvrait pas.
+      //
+      // Aucun test de SOURCE ne vit sous `.autowin-data` : c'est de la donnee d'execution.
+      //
+      // COMMENTAIRES DE LIGNE A DESSEIN : la premiere version de cette note etait un bloc `/* */`
+      // citant un motif glob. Or ce motif contient la sous-chaine qui FERME un bloc, donc le
+      // commentaire se terminait au milieu et cassait la syntaxe du fichier. `npm run typecheck` est
+      // passe a zero malgre tout -- il ne couvre pas ce fichier. Seule l'execution de la suite l'a dit.
+      '.autowin-data/**',
+      '**/.autowin-data/**',
       '**/.claude/**',
       // Harnais Node autonome, couvert par cdp-verdict-collection.test.mjs.
       'scripts/cdp-verdict.test.mjs',
