@@ -160,14 +160,21 @@ export function TravauxNonPublies({
       </ul>
 
       {/*
-        La version précédente finissait par « À la main : `git merge autowin/recovery/<id>` » — une
-        commande à recopier dans un terminal. Deux défauts en une phrase : elle exposait du git
-        brut, et elle est devenue fausse. Autowin repasse maintenant tout seul sur ces travaux et
-        retente leur publication ; le bouton ne sert plus qu'à ne pas attendre le prochain passage.
+        DEUX VERSIONS DE CE TEXTE ONT MENTI, toutes deux ecrites le 2026-08-24, et l'historique vaut
+        d'etre garde ici.
+
+        La premiere finissait par « A la main : `git merge autowin/recovery/<id>` » -- une commande a
+        recopier dans un terminal. Elle exposait du git brut, et elle etait fausse.
+
+        La seconde annoncait « Autowin retente ces publications tout seul, regulierement ». Vrai pour
+        un refus TRANSITOIRE, faux pour ceux-ci : mesure le meme jour sur les quatorze travaux reels
+        de cette liste, tous etaient refuses pour ascendance rompue, donc « Reintegrer » echouait sur
+        les quatorze, en silence. Promettre une reprise automatique qui ne peut pas aboutir est pire
+        que ne rien dire -- l'utilisateur a d'ailleurs demande « et apres je fais quoi avec ca ? ».
       */}
       <p className="tnp-note">
-        Rien n’est supprimé ici. Autowin retente ces publications tout seul, régulièrement —
-        « Réintégrer » ne fait que passer devant tout le monde.
+        Rien n’est supprimé ici. Autowin retente les publications qui peuvent encore aboutir ;
+        certaines ne peuvent plus l’être, et « Traiter » est là pour faire trancher ces cas.
       </p>
     </div>
   )
