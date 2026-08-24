@@ -280,7 +280,7 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { guardAttachments, guardBoolean, guardString } from './ipc-guards'
+import { guardAttachments, guardBoolean, guardProfile, guardString, guardStringOrNull } from './ipc-guards'
 import { parseTicketSourceProfile } from '../shared/tickets'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
@@ -2868,8 +2868,19 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:profiles:save', async (event, profile: AutowinProfile) => {
     assertTrustedRendererSender(event, 'Profiles')
     await agentModelsReady
+    /*
+     * VALIDER A LA FRONTIERE avant de persister. `ProfileStore.save` ne verifie RIEN et ecrit la
+     * charge utile telle quelle -- et il compose `[profile, ...list().filter(...)]`, donc un `id`
+     * absent fait atterrir l'objet douteux EN TETE de liste. Le lecteur etant tolerant, le degat est
+     * silencieux : pas un plantage, de la donnee pourrie.
+     *
+     * Meme classe que l'incident du meme jour sur les conversations, ou le lecteur etait STRICT et
+     * l'app en est devenue inbootable. Le cout differe, la cause est identique : un ecrivain qui
+     * accepte une forme que rien ne verifie.
+     */
+    const verifie = guardProfile(profile)
     const safe = {
-      ...profile,
+      ...verifie,
       topology: agentTopology,
       roles: os.roles.all(),
       updatedAt: new Date().toISOString()
@@ -5183,9 +5194,11 @@ Le fil reprend ensuite normalement.`
     return loadConvRunTrace(guardString(path, 'path'))
   })
   // L'UI signale la conversation active → les orchestrations lancées s'y rattachent.
-  ipcMain.handle('os:setActiveConversation', (event, convId: string | null) => {
+  ipcMain.handle('os:setActiveConversation', (event, convId: unknown) => {
     assertTrustedRendererSender(event, 'Active conversation')
-    bus.activeConversationId = convId ?? undefined
+    // Etat en memoire seulement, donc pas de donnee pourrie persistee -- mais une garde d'une ligne
+    // vaut mieux qu'un `activeConversationId` portant un objet ou un nombre.
+    bus.activeConversationId = guardStringOrNull(convId, 'convId') ?? undefined
     return { ok: true }
   })
   // Activité (scopée conversation) : timeline des étapes facturées + coût tokens.
