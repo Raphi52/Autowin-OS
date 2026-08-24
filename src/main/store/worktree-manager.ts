@@ -3685,7 +3685,14 @@ exit 0
       return { ok: false, detail: 'Le contexte durable ne correspond pas à ce dépôt.' }
     }
     if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(context.baseSha)) {
-      return { ok: false, detail: 'Le SHA de départ durable est invalide.' }
+      /*
+       * DEFINITIF : une base absente ou illisible est une valeur STOCKEE, pas un aleas. Aucun
+       * reessai ne la rendra valide. Depuis que la reconstruction cesse de FABRIQUER une base pour
+       * un run sans fiche, ce refus est le chemin honnete de ces runs -- et le marquer definitif
+       * fait ranger leur copie au lieu de la laisser occuper le disque indefiniment. Le travail,
+       * lui, reste joignable sur `autowin/recovery/<id>`.
+       */
+      return { ok: false, detail: 'Le SHA de départ durable est invalide.', definitif: true }
     }
     const sourceSha = context.sourceSha ?? context.baseSha
     if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(sourceSha) || !this.revisionExists(sourceSha)) {
