@@ -103,4 +103,28 @@ describe('trois conversations sur la même chose', () => {
 
     expect(appels.restaures).toEqual(['conv-2'])
   })
+
+  it('un run qui n’a RIEN écrit ne laisse pas de bureau derrière lui', () => {
+    // MESURÉ dans l'app réelle : trois conversations finissent `ready` / `not-requested` avec
+    // `files: 0`, et leurs trois copies restaient sur le disque. Il n'y a aucune décision humaine
+    // à prendre au sujet de rien.
+    const { co, appels } = coordinateur({})
+    co.begin('vide', 'Builder', true)
+
+    co.end('vide', { merge: false } as never)
+
+    expect(appels.preserves).toEqual(['vide'])
+  })
+
+  it('un run qui a écrit QUELQUE CHOSE garde son bureau — c’est là qu’une décision existe', () => {
+    // L'entrée qui doit faire échouer un rangement trop large.
+    const { co, appels } = coordinateur({})
+    const manager = (co as unknown as { manager: Record<string, unknown> }).manager
+    manager.changedFiles = () => ['a.txt']
+    co.begin('avec-travail', 'Builder', true)
+
+    co.end('avec-travail', { merge: false } as never)
+
+    expect(appels.preserves).toEqual([])
+  })
 })
