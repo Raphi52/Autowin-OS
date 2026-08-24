@@ -39,7 +39,11 @@ describe('OutcomeLearningLedger', () => {
     expect(ledger.append(proposal('b'))).toBe(true)
     expect(ledger.read()).toEqual({
       events: [proposal('a'), proposal('b')],
-      truncatedTail: false
+      truncatedTail: false,
+      // Champ ajoute avec la tolerance par ligne. On COMPLETE l'attente au lieu de passer en
+      // `toMatchObject` : l'egalite stricte est la bonne exigence, et la relacher masquerait tout
+      // champ futur ajoute par erreur.
+      ecartees: 0
     })
   })
 
@@ -80,7 +84,7 @@ describe('OutcomeLearningLedger', () => {
     const ledger = new OutcomeLearningLedger(file)
     ledger.append(proposal('safe'))
     appendFileSync(file, '{"kind":"proposal"', 'utf8')
-    expect(ledger.read()).toEqual({ events: [proposal('safe')], truncatedTail: true })
+    expect(ledger.read()).toEqual({ events: [proposal('safe')], truncatedTail: true, ecartees: 0 })
   })
 
   it('échoue fermé sur une ligne corrompue au milieu du journal', () => {
@@ -90,6 +94,57 @@ describe('OutcomeLearningLedger', () => {
       `${JSON.stringify(proposal('a'))}\nnot-json\n${JSON.stringify(proposal('b'))}\n`
     )
     expect(() => new OutcomeLearningLedger(file).read()).toThrow(/ligne 2/i)
+  })
+
+  /*
+   * LE DEFAUT, meme classe que celui vecu le 2026-08-24 sur le journal des conversations : une
+   * seule ligne refusee POUR SA FORME faisait echouer tout le chargement. Cout dispropportionne --
+   * un evenement contre le registre entier, donc contre toute la fonction d'apprentissage.
+   *
+   * LA COUPURE est celle deja eprouvee ailleurs, et ce n'est PAS un desserrage : un JSON ILLISIBLE
+   * reste fatal (le test « echoue ferme » juste au-dessus le verrouille, il ecrit `not-json`), parce
+   * qu'on ne sait pas ce qu'on perd. Une forme REFUSEE, elle, est identifiee ligne par ligne : on
+   * l'ecarte, on la compte, on la journalise, et on charge le reste.
+   *
+   * DIFFERENCE ASSUMEE avec les conversations : la-bas une ligne ecartee est une conversation
+   * perdue, VISIBLE. Ici c'est un apprentissage biaise, INVISIBLE. D'ou le compte rendu dans
+   * `read()` plutot qu'un simple `console.warn` -- la degradation doit etre representable, pas
+   * seulement tracee.
+   */
+  it('ecarte une ligne de FORME refusee au lieu de perdre tout le registre', () => {
+    const file = path()
+    appendFileSync(
+      file,
+      `${JSON.stringify(proposal('a'))}
+${JSON.stringify({ kind: 'proposal', value: { pas: 'la bonne forme' } })}
+${JSON.stringify(proposal('b'))}
+`
+    )
+
+    const relu = new OutcomeLearningLedger(file).read()
+
+    expect(relu.events.map((e) => e.value.eventId)).toEqual(['a', 'b'])
+  })
+
+  it('COMPTE les lignes ecartees, pour que la degradation soit visible', () => {
+    const file = path()
+    appendFileSync(
+      file,
+      `${JSON.stringify(proposal('a'))}
+${JSON.stringify({ kind: 'proposal', value: {} })}
+`
+    )
+
+    expect(new OutcomeLearningLedger(file).read().ecartees).toBe(1)
+  })
+
+  it('ne compte RIEN quand le journal est sain', () => {
+    // L'entree qui doit faire echouer un comptage bavard.
+    const file = path()
+    const ledger = new OutcomeLearningLedger(file)
+    ledger.append(proposal('a'))
+
+    expect(ledger.read().ecartees).toBe(0)
   })
 
   it('refuse une version future inconnue avant toute écriture', () => {
