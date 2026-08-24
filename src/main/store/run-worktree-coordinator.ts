@@ -255,6 +255,12 @@ export class RunWorktreeCoordinator {
   private readonly resumeClaims = new Set<string>()
   /** Quand chaque run a été repêché AUTOMATIQUEMENT pour la dernière fois, pour ne pas le marteler. */
   private readonly derniersRepechages = new Map<string, number>()
+  /**
+   * Combien de fois le BALAYAGE a retente chaque run. Distinct de `retryCounts`, que `retryRunAsync`
+   * remet a zero a chaque appel -- ce qui privait le balayage de tout plafond et l'a fait recreer
+   * 682 Mo de copies pour des travaux impubliables.
+   */
+  private readonly essaisAutomatiques = new Map<string, number>()
   private recoveryTimer?: ReturnType<typeof setTimeout>
   private balayageTimer?: ReturnType<typeof setInterval>
 
@@ -2523,12 +2529,18 @@ export class RunWorktreeCoordinator {
    * condamner les treize autres.
    */
   async repecherLesTravauxEnAttente(): Promise<string[]> {
-    const aRepecher = travauxARepecher([...this.runs.values()], this.derniersRepechages, this.now())
+    const aRepecher = travauxARepecher(
+      [...this.runs.values()],
+      this.derniersRepechages,
+      this.now(),
+      this.essaisAutomatiques
+    )
     const tentes: string[] = []
     for (const runId of aRepecher) {
       // Marquer AVANT de tenter : si la reprise jette, le run doit quand même respecter le délai,
       // sinon le balayage suivant le reprend aussitôt et boucle sur le même échec.
       this.derniersRepechages.set(runId, this.now())
+      this.essaisAutomatiques.set(runId, (this.essaisAutomatiques.get(runId) ?? 0) + 1)
       tentes.push(runId)
       try {
         await this.retryRunAsync(runId)
