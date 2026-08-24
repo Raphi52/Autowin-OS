@@ -1643,13 +1643,26 @@ export class WorktreeManager {
       }
       return undefined
     }
+    /*
+     * UN FETCH QUI ÉCHOUE N'EST PAS UNE RAISON DE NE PAS TRAVAILLER.
+     *
+     * Avant, tout échec de `fetch` levait « Lancement bloqué » — donc lancer une conversation
+     * exigeait le réseau, à chaque fois. Hors ligne, VPN coupé, origin momentanément injoignable :
+     * l'application refusait de commencer, alors que `origin/main` était parfaitement connu en
+     * local. Trois conversations lancées, trois fetch, trois occasions d'échouer avant tout travail.
+     * C'est le « j'ai une erreur avant de se lancer au travail » signalé par l'utilisateur, et il
+     * n'était couvert par aucun test.
+     *
+     * On DÉGRADE au lieu de bloquer : si une référence canonique résout déjà en local, on part de
+     * celle-là. La garde n'est pas desserrée pour autant — il faut toujours qu'origin existe ET
+     * qu'`origin/main` ou `origin/master` résolve ; sans ça, l'échec plus bas reste fatal. Le seul
+     * changement est qu'une panne RÉSEAU cesse d'être traitée comme une absence de dépôt.
+     *
+     * Contrepartie assumée : on peut alors démarrer d'un `origin/main` légèrement en retard. C'est
+     * le compromis explicite — la publication, elle, revérifie sa base et refusera si elle a bougé.
+     */
     const fetched = this.tryGitFn(this.baseRepo, ['fetch', '--no-tags', '--prune', 'origin'])
-    if (fetched.code !== 0) {
-      const detail = (fetched.stderr || fetched.stdout).trim()
-      throw new Error(
-        `Lancement bloqué : origin est impossible à synchroniser${detail ? ` (${detail})` : ''}.`
-      )
-    }
+    const detailFetch = fetched.code === 0 ? '' : (fetched.stderr || fetched.stdout).trim()
 
     const symbolic = this.tryGitFn(this.baseRepo, [
       'symbolic-ref',
@@ -1669,7 +1682,13 @@ export class WorktreeManager {
         return { ref, sha: resolved.stdout.trim() }
       }
     }
-    throw new Error('Lancement bloqué : origin/main ou origin/master est introuvable après fetch.')
+    // Aucune référence canonique, MÊME en local. Là, le refus est légitime — et il nomme la cause
+    // réelle quand c'est le réseau qui a lâché, au lieu de laisser croire à un dépôt mal formé.
+    throw new Error(
+      detailFetch
+        ? `Lancement bloqué : origin est injoignable et aucune référence locale ne le supplée (${detailFetch}).`
+        : 'Lancement bloqué : origin/main ou origin/master est introuvable après fetch.'
+    )
   }
 
   private isExpectedBaseBranch(expectedBaseBranch: string): boolean {
