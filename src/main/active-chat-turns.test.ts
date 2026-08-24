@@ -163,7 +163,9 @@ describe('ActiveChatTurns', () => {
     const childA = bus.registerOrchestration('A')
     const childB = bus.registerOrchestration('B')
 
-    const orchestrationAborted = bus.abortOrchestration('A')
+    // `abortOrchestration` exige désormais un MOTIF (cf. `commands.ts`) : sans lui, la typecheck du
+    // dépôt est rouge indépendamment de ce chantier. Même motif que l'annulation utilisateur voisine.
+    const orchestrationAborted = bus.abortOrchestration('A', 'user')
     const parentAborted = turns.abort('A', 'user')
 
     expect(orchestrationAborted || parentAborted).toBe(true)
