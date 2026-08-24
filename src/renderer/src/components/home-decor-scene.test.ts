@@ -3,7 +3,8 @@ import {
   COMPOSITIONS,
   createDecorScene,
   DECOR_DEFAUT,
-  DECOR_VARIANTS
+  DECOR_VARIANTS,
+  NAPPE_FRAGMENT_SHADER
 } from './home-decor-scene'
 
 /**
@@ -15,8 +16,14 @@ import {
  * le fait qu'une valeur inconnue ne fasse pas tomber la vue.
  */
 describe('directions du decor', () => {
-  it('expose les quatre directions, chacune avec un nom et un resume', () => {
-    expect(DECOR_VARIANTS.map((v) => v.id)).toEqual(['actuel', 'limbe', 'poussiere', 'orbites'])
+  it('expose les cinq directions, chacune avec un nom et un resume', () => {
+    expect(DECOR_VARIANTS.map((v) => v.id)).toEqual([
+      'actuel',
+      'limbe',
+      'poussiere',
+      'orbites',
+      'nappe'
+    ])
     for (const variante of DECOR_VARIANTS) {
       expect(variante.nom.length).toBeGreaterThan(2)
       // Le resume sert a CHOISIR : une entree sans description ne serait qu'un identifiant.
@@ -49,6 +56,39 @@ describe('directions du decor', () => {
     // Le resume affiche a l'utilisateur doit decrire CETTE image.
     const entree = DECOR_VARIANTS.find((v) => v.id === DECOR_DEFAUT)
     expect(entree?.resume).toMatch(/aucune silhouette/)
+  })
+
+  /**
+   * La promesse de « nappe » : une NAPPE de bruit organique, or sur anthracite, TRES LENTE.
+   *
+   * Ces assertions portent sur la composition et sur le shader reellement monte, pas sur le
+   * libelle. Entrees qui feraient echouer ce test si la correction etait fausse :
+   *   - `tempo: 1` (ou toute valeur >= au tempo d'une autre direction) → « tres lente » ne tiendrait plus ;
+   *   - une nappe coloree en ROSE/CYAN comme le reste du decor → l'assertion or/anthracite tombe ;
+   *   - une nappe posee sans bruit fractal (un simple `mix()` de gradient) → l'assertion fbm tombe ;
+   *   - une planete ou un arc laisse dans la composition → l'assertion « aucune silhouette » tombe.
+   */
+  it('tient la promesse de « nappe » : bruit fractal or/anthracite, aucune silhouette, la plus lente', () => {
+    const nappe = COMPOSITIONS.nappe
+    // Une nappe, rien d'autre : pas de silhouette, pas de ligne, pas de satellite.
+    expect(nappe.planetes).toHaveLength(0)
+    expect(nappe.arcs).toBe(0)
+    expect(nappe.satellites).toBe(0)
+    // La nappe existe et porte le duo or/anthracite — pas la palette rose/cyan du reste du decor.
+    expect(nappe.nappe).toBeDefined()
+    expect(nappe.nappe?.or).toBe(0xe9bd4e)
+    expect(nappe.nappe?.anthracite).toBe(0x1b222c)
+    // « Tres lente » : STRICTEMENT plus lente que toutes les autres directions.
+    for (const autre of DECOR_VARIANTS.filter((v) => v.id !== 'nappe')) {
+      expect(nappe.tempo).toBeLessThan(COMPOSITIONS[autre.id].tempo)
+    }
+    // Bruit ORGANIQUE : somme d'octaves, pas un degrade lineaire.
+    expect(NAPPE_FRAGMENT_SHADER).toMatch(/fbm/)
+    expect(NAPPE_FRAGMENT_SHADER.match(/octave|for \(/)).toBeTruthy()
+    expect(NAPPE_FRAGMENT_SHADER).toMatch(/uOr/)
+    expect(NAPPE_FRAGMENT_SHADER).toMatch(/uAnthracite/)
+    // Le resume affiche a l'utilisateur doit decrire CETTE image.
+    expect(DECOR_VARIANTS.find((v) => v.id === 'nappe')?.resume).toMatch(/or/)
   })
 
   it('rend null sans WebGL plutot que de jeter', () => {

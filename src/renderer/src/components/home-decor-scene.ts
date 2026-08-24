@@ -19,6 +19,8 @@ const ROSE = 0xef3f91
 const CYAN = 0x49cfff
 const GOLD = 0xe9bd4e
 const VIOLET = 0x8f7cff
+/** L'anthracite des surfaces sombres de `theme.css` — la nappe reste dans le monde de l'app. */
+const ANTHRACITE = 0x1b222c
 
 /**
  * Les directions visuelles du décor, entre lesquelles l'utilisateur choisit.
@@ -28,7 +30,7 @@ const VIOLET = 0x8f7cff
  * de l'accent, et le régime de mouvement. Toutes restent dans le monde déjà validé par l'utilisateur :
  * centre noir, nébuleuses roses et cyan, or pour la structure.
  */
-export type DecorVariant = 'actuel' | 'limbe' | 'poussiere' | 'orbites'
+export type DecorVariant = 'actuel' | 'limbe' | 'poussiere' | 'orbites' | 'nappe'
 
 export const DECOR_VARIANTS: readonly { id: DecorVariant; nom: string; resume: string }[] = [
   {
@@ -50,6 +52,12 @@ export const DECOR_VARIANTS: readonly { id: DecorVariant; nom: string; resume: s
     id: 'orbites',
     nom: 'Orbites',
     resume: 'géométrie plutôt que matière : arcs fins en or et cyan, satellites qui glissent dessus'
+  },
+  {
+    id: 'nappe',
+    nom: 'Nappe',
+    resume:
+      'une seule nappe de bruit organique, dégradé or sur anthracite, dérive très lente, aucune silhouette'
   }
 ]
 
@@ -321,6 +329,100 @@ function buildPlanet(options: {
 }
 
 /**
+ * Le shader de la NAPPE : un champ de bruit fractal (fbm) qui module un dégradé or → anthracite.
+ *
+ * Trois choix portent tout le rendu, et chacun se voit s'il est retiré :
+ *  1. le bruit est FRACTAL (somme d'octaves de valeur-bruit) — un simple `mix()` de gradient donne
+ *     une bande dégradée « fond d'écran de 2010 », pas une matière ;
+ *  2. l'or n'arrive que sur les CRÊTES, en puissance élevée : appliqué à plat, il jaunit tout
+ *     l'écran et écrase la lisibilité des widgets posés dessus ;
+ *  3. un grain fin (bruit haute fréquence, très faible amplitude) casse le banding des dégradés
+ *     sombres, qui est LE défaut visible d'un shader anthracite sur un écran 8 bits.
+ *
+ * Exporté pour être RELU par le test : happy-dom n'a pas de WebGL, mais le contrat du shader —
+ * fbm, or, anthracite — est du texte, et il se vérifie.
+ */
+export const NAPPE_FRAGMENT_SHADER = [
+  'precision highp float;',
+  'varying vec2 vUv;',
+  'uniform float uTime;',
+  'uniform vec3 uOr;',
+  'uniform vec3 uAnthracite;',
+  'uniform float uGrain;',
+  // Valeur-bruit interpolée en douceur : la base organique.
+  'float hash(vec2 p) {',
+  '  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);',
+  '}',
+  'float bruit(vec2 p) {',
+  '  vec2 i = floor(p);',
+  '  vec2 f = fract(p);',
+  '  vec2 u = f * f * (3.0 - 2.0 * f);',
+  '  float a = hash(i);',
+  '  float b = hash(i + vec2(1.0, 0.0));',
+  '  float c = hash(i + vec2(0.0, 1.0));',
+  '  float d = hash(i + vec2(1.0, 1.0));',
+  '  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);',
+  '}',
+  // Cinq octaves : en dessous de quatre, la nappe se lit comme des taches ; au-dessus de six, le
+  // gain visuel disparaît et le coût par pixel reste, or cette vue tourne toute la journée.
+  'float fbm(vec2 p) {',
+  '  float somme = 0.0;',
+  '  float amplitude = 0.5;',
+  '  for (int octave = 0; octave < 5; octave++) {',
+  '    somme += amplitude * bruit(p);',
+  '    p = p * 2.03 + vec2(17.3, 9.1);',
+  '    amplitude *= 0.5;',
+  '  }',
+  '  return somme;',
+  '}',
+  'void main() {',
+  '  vec2 p = vUv * 3.0;',
+  // Domain warping : le bruit déforme ses propres coordonnées. C'est ce qui fait les volutes
+  // continues plutôt qu'un moutonnement régulier.
+  '  vec2 derive = vec2(uTime * 0.011, uTime * -0.007);',
+  '  float w1 = fbm(p + derive);',
+  '  float w2 = fbm(p + vec2(5.2, 1.3) + derive * 1.7);',
+  '  float champ = fbm(p + vec2(w1, w2) * 1.6 + derive * 0.5);',
+  '  float crete = pow(clamp(champ * 1.25, 0.0, 1.0), 3.2);',
+  // Vignette douce : le centre reste sombre, les widgets restent lisibles au milieu.
+  '  vec2 c = vUv - 0.5;',
+  '  float vignette = smoothstep(0.12, 0.72, length(c));',
+  '  vec3 couleur = mix(uAnthracite, uOr, crete * (0.35 + 0.65 * vignette));',
+  '  couleur += (hash(vUv * 2048.0) - 0.5) * uGrain;',
+  '  float alpha = 0.55 + 0.45 * crete;',
+  '  gl_FragColor = vec4(couleur, alpha);',
+  '}'
+].join('\n')
+
+const NAPPE_VERTEX_SHADER = [
+  'varying vec2 vUv;',
+  'void main() {',
+  '  vUv = uv;',
+  '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+  '}'
+].join('\n')
+
+/** La nappe : un plan unique, posé loin derrière, qui porte tout le shader. */
+function buildNappe(spec: { or: number; anthracite: number }): THREE.Mesh {
+  const material = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: {
+      uTime: { value: 0 },
+      uOr: { value: new THREE.Color(spec.or) },
+      uAnthracite: { value: new THREE.Color(spec.anthracite) },
+      uGrain: { value: 0.012 }
+    },
+    vertexShader: NAPPE_VERTEX_SHADER,
+    fragmentShader: NAPPE_FRAGMENT_SHADER
+  })
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2, 1, 1), material)
+  // Rendue en premier : c'est un fond, elle ne doit jamais masquer les étoiles.
+  mesh.renderOrder = -1
+  return mesh
+}
+
+/**
  * Les arcs orbitaux : de longues courbes fines qui traversent le champ.
  *
  * Sur le fond d'écran d'origine, ce sont eux qui donnent l'échelle — sans ces traits, les planètes
@@ -362,7 +464,6 @@ function buildOrbits(random: () => number, count = 7): THREE.Group {
 
   return group
 }
-
 
 /**
  * Des points qui glissent le long d'orbites, à des vitesses différentes.
@@ -466,6 +567,11 @@ interface Composition {
   }[]
   arcs: number
   satellites: number
+  /**
+   * La nappe de bruit, quand la direction en a une. Absente pour toutes les autres : c'est une
+   * MATIÈRE de fond, pas un calque ajouté partout.
+   */
+  nappe?: { or: number; anthracite: number; z: number; k: number }
   /** Multiplicateur de vitesse : le régime de mouvement fait partie de la direction. */
   tempo: number
   /** Amplitude de la parallaxe de caméra. */
@@ -537,6 +643,24 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
     satellites: 220,
     tempo: 0.8,
     parallaxe: 1.3
+  },
+  // Le haut de gamme par SOUSTRACTION : plus de silhouette, plus de ligne, plus d'accumulation. Une
+  // seule nappe de bruit fractal or/anthracite, qui dérive assez lentement pour qu'on ne la
+  // surprenne jamais en mouvement — c'est cette lenteur qui fait la matière, pas l'animation.
+  nappe: {
+    // Deux voiles très étalés et très profonds : ils donnent à la nappe une épaisseur, sans
+    // ramener la palette rose/cyan au premier plan.
+    nebuleuses: [
+      { fx: -0.75, fy: 0.35, z: -24, color: VIOLET, secondary: 0x2b6cff, k: 0.7 },
+      { fx: 0.7, fy: -0.4, z: -22, color: CYAN, secondary: VIOLET, k: 0.6 }
+    ],
+    planetes: [],
+    arcs: 0,
+    satellites: 0,
+    // Strictement la plus lente du catalogue : « très lente » est une propriété vérifiable, pas un mot.
+    tempo: 0.12,
+    parallaxe: 0.35,
+    nappe: { or: GOLD, anthracite: ANTHRACITE, z: -30, k: 1.15 }
   }
 }
 
@@ -572,6 +696,10 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
 
   const composition = COMPOSITIONS[variante] ?? COMPOSITIONS[DECOR_DEFAUT]
   const nebulaSpecs = composition.nebuleuses
+
+  const nappeSpec = composition.nappe
+  const nappe = nappeSpec ? buildNappe(nappeSpec) : null
+  if (nappe) scene.add(nappe)
 
   const nebulas = nebulaSpecs.map((spec) =>
     buildNebula(random, {
@@ -647,6 +775,15 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
         const size = Math.max(0.6, uniform * spec.radius)
         planet.scale.setScalar(size)
       })
+      // La nappe couvre TOUT le cadre à sa profondeur, avec une marge : un bord visible la
+      // trahirait comme un plan posé, au lieu d'une matière de fond.
+      if (nappe && nappeSpec) {
+        const distanceNappe = camera.position.z - nappeSpec.z
+        const demiHauteur = Math.tan((camera.fov * Math.PI) / 360) * distanceNappe
+        const demiLargeur = demiHauteur * (nextWidth / nextHeight)
+        nappe.position.set(0, 0, nappeSpec.z)
+        nappe.scale.set(demiLargeur * nappeSpec.k, demiHauteur * nappeSpec.k, 1)
+      }
       orbits.scale.setScalar(Math.max(halfWidth, halfHeight) * 0.62)
       if (satellites) {
         // Les satellites partagent l'échelle des arcs : sinon ils glisseraient à côté d'eux.
@@ -668,6 +805,7 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
       // Le TEMPO appartient à la direction : « Limbe » dérive lentement, « Poussière » respire vite.
       const temps = elapsed * composition.tempo
       for (const material of pointRatios) material.uniforms.uTime.value = temps
+      if (nappe) (nappe.material as THREE.ShaderMaterial).uniforms.uTime.value = temps
       // Rotations lentes et de vitesses différentes : synchronisées, elles se liraient comme un
       // seul bloc qui tourne.
       stars.rotation.y = temps * 0.004
