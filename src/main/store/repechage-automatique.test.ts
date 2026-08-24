@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DELAI_ENTRE_DEUX_REPECHAGES_MS,
+  ESSAIS_AUTOMATIQUES_MAX,
   estRepechable,
   travauxARepecher,
   type CandidatAuRepechage
@@ -104,5 +105,31 @@ describe('à quelle cadence le balayage repasse', () => {
       candidat({ runId: 'publie', publication: 'published' })
     ]
     expect(travauxARepecher(lot, new Map(), 1_000_000)).toEqual(['dormant'])
+  })
+})
+
+describe('le plafond du balayage', () => {
+  const dormant = candidat({
+    runId: 'dormant',
+    publication: 'blocked',
+    attentionReason: 'merge-failed'
+  })
+
+  it('RENONCE apres trois essais automatiques, au lieu de s’acharner', () => {
+    // LE DEFAUT que ce plafond corrige, mesuré sur l'app le 2026-08-24 : sans lui, le balayage
+    // repêchait indéfiniment 21 travaux qu'aucune reprise ne pouvait publier, RESTAURANT leur copie
+    // à chaque passage — 682 Mo recréés, soit exactement les orphelins qu'on voulait supprimer.
+    const essais = new Map([['dormant', ESSAIS_AUTOMATIQUES_MAX]])
+    expect(travauxARepecher([dormant], new Map(), 9_000_000, essais)).toEqual([])
+  })
+
+  it('accepte encore juste AVANT le plafond — on ne renonce pas trop tôt', () => {
+    // L'entrée qui doit faire échouer un plafond posé un cran trop bas.
+    const essais = new Map([['dormant', ESSAIS_AUTOMATIQUES_MAX - 1]])
+    expect(travauxARepecher([dormant], new Map(), 9_000_000, essais)).toEqual(['dormant'])
+  })
+
+  it('sans compteur fourni, se comporte comme avant — aucun travail bloqué par surprise', () => {
+    expect(travauxARepecher([dormant], new Map(), 9_000_000)).toEqual(['dormant'])
   })
 })

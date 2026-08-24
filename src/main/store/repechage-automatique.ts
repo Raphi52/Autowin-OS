@@ -40,6 +40,24 @@ export const DELAI_ENTRE_DEUX_REPECHAGES_MS = 10 * 60_000
 export const INTERVALLE_BALAYAGE_MS = 5 * 60_000
 
 /**
+ * Combien de fois le balayage retente le MEME travail avant de renoncer.
+ *
+ * MESURE le 2026-08-24, et c'est un defaut que j'ai introduit le matin meme : sans plafond, le
+ * balayage repechait indefiniment vingt-et-un travaux qu'aucune reprise ne pouvait publier
+ * (ascendance rompue, garde verifiee correcte). Chaque passage RESTAURAIT leur copie depuis la
+ * branche de secours avant d'echouer -- 682 Mo de copies recreees, soit exactement les
+ * « workspaces orphelins » que ce chantier devait faire disparaitre.
+ *
+ * Le compteur de reprise du coordinateur ne pouvait pas servir de garde-fou : `retryRunAsync` le
+ * REMET A ZERO a chaque appel. Il fallait donc un compteur propre au balayage, que lui seul ecrit.
+ *
+ * Trois essais : de quoi absorber une cause transitoire qui met du temps a disparaitre, sans
+ * s'acharner. Un travail que trois passages n'ont pas publie ne le sera pas au quatrieme ; il reste
+ * repechable A LA MAIN, par le bouton, qui n'est pas concerne par ce plafond.
+ */
+export const ESSAIS_AUTOMATIQUES_MAX = 3
+
+/**
  * Ce travail peut-il être republié sans rien décider à la place de l'utilisateur ?
  *
  * Le prédicat REPRODUIT celui de `retryRun` / `retryRunAsync` — il était déjà écrit deux fois là-bas,
@@ -77,11 +95,14 @@ export function estRepechable(candidat: CandidatAuRepechage): boolean {
 export function travauxARepecher(
   candidats: readonly CandidatAuRepechage[],
   derniersEssais: ReadonlyMap<string, number>,
-  maintenant: number
+  maintenant: number,
+  essaisFaits: ReadonlyMap<string, number> = new Map()
 ): string[] {
   return candidats
     .filter((candidat) => {
       if (!estRepechable(candidat)) return false
+      // Le plafond d'abord : inutile de regarder l'horloge d'un travail auquel on a renonce.
+      if ((essaisFaits.get(candidat.runId) ?? 0) >= ESSAIS_AUTOMATIQUES_MAX) return false
       const dernier = derniersEssais.get(candidat.runId)
       if (dernier === undefined) return true
       // Une horloge qui recule (changement d'heure, test) ne doit pas geler un travail pour
