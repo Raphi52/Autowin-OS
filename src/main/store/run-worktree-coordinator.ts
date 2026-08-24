@@ -3,6 +3,11 @@ import { basename } from 'node:path'
 import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from './worktree-manager'
 import { delaiDeReprise, ESSAIS_MAX } from './delai-de-reprise'
 import { INTERVALLE_BALAYAGE_MS, travauxARepecher } from './repechage-automatique'
+import {
+  messageSansSigneDeVie,
+  runsSansSigneDeVie,
+  SILENCE_SUSPECT_MS
+} from './run-sans-signe-de-vie'
 import type {
   WorktreeAgentActivity,
   WorktreeConflictDiffResult,
@@ -143,6 +148,12 @@ interface Tracked {
   isMutation: boolean
   startedAtMs: number
   endedAtMs?: number
+  /**
+   * Dernier signe de vie observe. Ecrit a CHAQUE `persist`, c'est-a-dire a chaque changement d'etat
+   * reellement enregistre -- le seul battement dont ce niveau dispose. Sans lui, un run `working`
+   * etait indistinguable d'un run mort : mesure le 2026-08-24, un run l'a affiche six minutes.
+   */
+  derniereVieMs?: number
   state: WorktreeState
   files: { path: string; kind: 'add' | 'mod' | 'del' }[]
   conflictWith?: string[]
@@ -1547,6 +1558,12 @@ export class RunWorktreeCoordinator {
     tracked.verdict = verdict
     tracked.publication = publication
     tracked.detail = detail
+    /*
+     * BATTEMENT. Estampiller ICI et pas ailleurs : `persist` est le seul point par lequel passe tout
+     * changement d'etat reellement enregistre, donc le seul battement fiable de ce niveau. Pose avant
+     * le retour anticipe ci-dessous, sinon un run non-mutation n'en aurait jamais.
+     */
+    tracked.derniereVieMs = this.now()
     if (!this.stateStore || !tracked.isMutation) return
     const previous = this.stateStore.get(tracked.runId)
     const now = this.now()
@@ -2557,7 +2574,43 @@ export class RunWorktreeCoordinator {
         this.recordRecoveryFailure(error)
       }
     }
+    this.signalerLesRunsSansSigneDeVie()
     return tentes
+  }
+
+  /**
+   * DIRE qu'un run affiche « en cours » alors que plus rien ne le porte.
+   *
+   * Greffe sur le balayage existant plutot que sur une minuterie de plus : le probleme n'est pas la
+   * cadence, c'est que personne ne posait la question.
+   *
+   * On n'annule RIEN et on ne conclut pas a la mort -- un run peut attendre le modele sans processus.
+   * On ecrit un fait verifiable dans `detail`, la ou l'interface le lit deja, et l'humain tranche.
+   * Le defaut a corriger etait le silence : l'utilisateur a demande « ca tourne la ? on dirait pas »
+   * sur un run mort depuis six minutes, et rien dans l'app ne pouvait lui repondre.
+   */
+  private signalerLesRunsSansSigneDeVie(): void {
+    const suspects = runsSansSigneDeVie(
+      [...this.runs.values()],
+      (runId) => {
+        try {
+          return this.manager.hasActiveProcesses?.(runId) === true
+        } catch {
+          // Une sonde de processus indisponible ne doit pas transformer un run sain en suspect.
+          return true
+        }
+      },
+      this.now()
+    )
+    if (!suspects.length) return
+    const message = messageSansSigneDeVie(SILENCE_SUSPECT_MS)
+    for (const runId of suspects) {
+      const tracked = this.runs.get(runId)
+      // Ne pas ecraser un detail deja pose, ni re-signaler en boucle le meme run.
+      if (!tracked || tracked.detail) continue
+      tracked.detail = message
+    }
+    this.emit()
   }
 
   /**
