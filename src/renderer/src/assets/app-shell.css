@@ -214,6 +214,7 @@
   font-size: 17px;
   line-height: 1;
   filter: saturate(1.15);
+  transform: translateX(-3px);
 }
 .nav-item > span:not(.space-toy-icon) {
   flex: 1;
