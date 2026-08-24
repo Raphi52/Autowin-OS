@@ -65,3 +65,56 @@ export function messageTravailNonPublie(entrees: readonly EntreeTravail[]): stri
     '.'
   )
 }
+
+/** Au-delà, le prompt devient un mur : l'agent ira lire la liste complète lui-même. */
+const TRAVAUX_CITES_DANS_LE_PROMPT = 12
+
+/**
+ * LE PROMPT que le bouton « Traiter » dépose dans une conversation neuve.
+ *
+ * POURQUOI il remplace l'ouverture d'une liste. L'utilisateur a cliqué « Traiter », lu la liste, et
+ * demandé : « et après je fais quoi avec ça ? » — la question qui condamne l'ancien geste. La liste
+ * montrait quatorze lignes et deux boutons par ligne sans dire ce qui était faisable. Un panneau qui
+ * informe sans permettre d'agir ne fait que déplacer le problème sur l'utilisateur.
+ *
+ * Le prompt, lui, DÉLÈGUE : il donne l'inventaire, l'adresse de chaque travail, et l'état réel de la
+ * question — y compris le fait qu'un simple réessai peut ne PAS suffire. Mesuré le 2026-08-24 : les
+ * quatorze travaux de cette liste étaient tous refusés pour ascendance rompue, donc « Réintégrer »
+ * échouait sur les quatorze, en silence. Le prompt demande donc un DIAGNOSTIC avant toute
+ * republication, au lieu de promettre que ça va marcher.
+ *
+ * Il n'est PAS envoyé : l'utilisateur le lit et décide. Même règle que la vue Tickets, pour la même
+ * raison — préparer un prompt qu'il ne voit pas serait inutile.
+ */
+export function promptTravauxNonPublies(entrees: readonly EntreeTravail[]): string | null {
+  const enAttente = entrees.filter((entree) => entree.travailNonPublie === true)
+  if (!enAttente.length) return null
+
+  const lignes = enAttente.slice(0, TRAVAUX_CITES_DANS_LE_PROMPT).map((entree) => {
+    const fichiers = entree.fichiersNonPublies ?? []
+    const quoi = fichiers.length ? fichiers.join(', ') : '(fichiers inconnus)'
+    const date = entree.dateNonPublie ? ` — ${entree.dateNonPublie}` : ''
+    return `- autowin/recovery/${entree.agentId}${date} : ${quoi}`
+  })
+  const reste = enAttente.length - lignes.length
+
+  return [
+    `${enAttente.length} travaux terminés n’ont jamais été publiés. Chacun vit sur une branche de`,
+    'secours : rien n’est perdu, mais rien n’arrive dans main non plus.',
+    '',
+    ...lignes,
+    ...(reste > 0 ? [`- … et ${reste} autres.`] : []),
+    '',
+    'CE QU’IL FAUT FAIRE, dans cet ordre — et ne saute pas le premier point :',
+    '',
+    '1. DIAGNOSTIQUE avant de republier. Un réessai peut échouer PAR CONSTRUCTION : si la copie ne',
+    '   descend pas du SHA de départ enregistré, aucune reprise ne passera jamais. Vérifie-le avec',
+    '   git merge-base --is-ancestor <baseSha> <HEAD de la branche de secours> avant de promettre',
+    '   quoi que ce soit.',
+    '2. Republie ceux qui SONT publiables.',
+    '3. Pour les autres, dis-moi POURQUOI et ce que tu proposes — fusion manuelle depuis la branche,',
+    '   abandon assumé, ou autre. Ne supprime AUCUNE branche autowin/recovery/* : c’est le seul',
+    '   endroit où ce travail existe encore.',
+    '4. Rends un compte-rendu court : publiés, impubliables avec la raison, et ce qui reste.'
+  ].join('\n')
+}
