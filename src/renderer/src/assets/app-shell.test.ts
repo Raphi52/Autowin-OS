@@ -85,3 +85,35 @@ describe('collapsed navigation rail', () => {
     expect(css).not.toMatch(/(?:^|\n)\.space-toy-icon\s*{[^}]*translateX\(-3px\)/s)
   })
 })
+
+describe('nappe de bruit organique (or/anthracite)', () => {
+  const theme = () => readFileSync(new URL('./theme.css', import.meta.url), 'utf8')
+
+  it('anime la nappe de fond sur une durée très lente (>= 120s)', () => {
+    const before = theme().match(/body::before\s*{([^}]*)}/s)?.[1] ?? ''
+    // Entrée qui doit faire échouer si la correction est fausse :
+    // `animation: autowin-nappe 12s ...` (nappe rapide) ou aucune animation du tout.
+    const duration = Number(before.match(/animation:\s*autowin-nappe\s+(\d+)s/)?.[1])
+    expect(Number.isFinite(duration)).toBe(true)
+    expect(duration).toBeGreaterThanOrEqual(120)
+    expect(before).toMatch(/animation:\s*autowin-nappe\s+\d+s[^;]*\binfinite\b[^;]*\balternate\b/)
+  })
+
+  it('mêle or et anthracite dans la nappe, en plus du grain existant', () => {
+    const before = theme().match(/body::before\s*{([^}]*)}/s)?.[1] ?? ''
+    expect(before).toMatch(/var\(--gold\)/)
+    expect(before).toMatch(/#1b1d22/i) // anthracite
+    expect(before).toMatch(/feTurbulence/) // le grain d'origine n'est pas perdu
+    expect(before).toMatch(/radial-gradient/)
+  })
+
+  it('déclare les keyframes de dérive et respecte prefers-reduced-motion', () => {
+    const css = theme()
+    const frames = css.match(/@keyframes autowin-nappe\s*{([\s\S]*?)\n}/)?.[1] ?? ''
+    expect(frames).toMatch(/from\s*{/)
+    expect(frames).toMatch(/to\s*{/)
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*{[^}]*body::before\s*{[^}]*animation:\s*none/s
+    )
+  })
+})

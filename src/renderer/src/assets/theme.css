@@ -75,10 +75,43 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.055;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
+  opacity: 0.075;
+  /* Grain d'origine + nappe organique or/anthracite, dérive très lente. */
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E"),
+    radial-gradient(60% 55% at 22% 28%, var(--gold) 0%, transparent 62%),
+    radial-gradient(70% 60% at 78% 72%, #1b1d22 0%, transparent 66%);
+  background-size:
+    180px 180px,
+    220% 220%,
+    240% 240%;
+  background-position:
+    0 0,
+    0% 0%,
+    100% 100%;
   mix-blend-mode: soft-light;
+  animation: autowin-nappe 240s ease-in-out infinite alternate;
+  will-change: background-position;
+}
+
+@keyframes autowin-nappe {
+  from {
+    background-position:
+      0 0,
+      0% 0%,
+      100% 100%;
+  }
+  to {
+    background-position:
+      0 0,
+      100% 60%,
+      0% 20%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none;
+  }
 }
 
 body::after {
