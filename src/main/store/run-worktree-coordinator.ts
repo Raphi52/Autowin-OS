@@ -1184,6 +1184,18 @@ export class RunWorktreeCoordinator {
     }
     const finalizeAsync = this.manager.finalizeAsync
     if (!finalizeAsync) return { resolved: false, reason: 'unsupported' }
+    /*
+     * REMETTRE LA COPIE avant d'arbitrer. Depuis que `applyFinalize` libère le disque sur un
+     * conflit — le travail étant à l'abri sur `autowin/recovery/<id>` —, le bureau n'est plus là
+     * quand l'utilisateur tranche. Sans cette ligne, ranger le disque casserait le bouton de
+     * résolution : c'est la contrepartie qui rend la libération légitime, pas une précaution.
+     *
+     * Même geste que `retryRunAsync`, et pour la même raison : on interroge le DISQUE, car
+     * `worktreeAvailable` n'est calculé qu'à l'affichage et vaut `undefined` ici.
+     */
+    if (!copiePresente(tracked.worktreePath)) {
+      this.manager.restaurerCopieDepuisSecours?.(runId)
+    }
     // Les SHA de conflit décrivent l'état BLOQUÉ. `isRecord` ne les autorise QU'avec
     // `publication: 'blocked'` ; les garder en passant à `integrating` faisait échouer le tout
     // premier `save()` de la résolution — « Manifeste de bureau invalide », mesuré le 2026-08-12
@@ -1328,6 +1340,21 @@ export class RunWorktreeCoordinator {
     if (published || !retryable) this.publicationCallbacks.delete(runId)
   }
 
+  /**
+   * Range la copie d'un run parti en conflit, en mettant son travail à l'abri d'abord.
+   *
+   * Muet en cas d'échec À DESSEIN : ranger le disque ne doit jamais faire échouer la publication
+   * qu'on est en train de conclure. Une copie non libérée reste visible dans le Hub, ce qui est
+   * exactement l'état d'avant — on ne régresse sur rien.
+   */
+  private libererLaCopieEnConflit(runId: string): void {
+    try {
+      this.manager.preserverEtLiberer?.(runId)
+    } catch (error) {
+      this.recordRecoveryFailure(error)
+    }
+  }
+
   private applyFinalize(tracked: Tracked, res: FinalizeResult): void {
     // Point de passage UNIQUE de tout refus d'integration : c'est donc ici qu'on le COMPTE, une fois
     // par tentative. Le tracage ne doit jamais casser l'action tracee — d'ou le try muet.
@@ -1358,6 +1385,23 @@ export class RunWorktreeCoordinator {
       tracked.conflictBaseSha = res.baseSha
       tracked.conflictAgentSha = res.agentSha
       tracked.files = res.files.map((path) => ({ path, kind: 'mod' as const }))
+      /*
+       * LIBÉRER LE DISQUE SANS PERDRE LE TRAVAIL.
+       *
+       * Mesuré le 2026-08-24 en jouant le scénario réel de l'utilisateur — trois conversations sur
+       * la même chose : la première publie, les deux autres partent en `conflict`, et LEURS COPIES
+       * RESTAIENT SUR LE DISQUE. C'est l'« usine à worktrees » qu'il signale depuis longtemps ;
+       * vingt-deux commits ont visé ce thème sans jamais jouer ce scénario de bout en bout.
+       *
+       * Supprimer la copie serait une PERTE : `resolveConflictAsync` en a besoin pour arbitrer.
+       * `preserverEtLiberer` fait exactement le bon geste — le travail part d'abord sur
+       * `autowin/recovery/<id>`, et le dossier n'est retiré QUE si la préservation a réussi ; sinon
+       * il rend `refuse` et la copie reste. On ne peut donc pas perdre du travail ici.
+       *
+       * L'arbitrage, lui, restaure la copie depuis la branche de secours au moment où on en a
+       * besoin — comme `retryRunAsync` le fait déjà.
+       */
+      this.libererLaCopieEnConflit(tracked.runId)
     }
     if (res.outcome === 'merged' && res.publishedSha) tracked.publishedSha = res.publishedSha
     if (res.outcome === 'cleanup-pending') {
