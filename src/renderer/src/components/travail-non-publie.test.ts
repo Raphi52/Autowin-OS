@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { messageTravailNonPublie } from './travail-non-publie'
+import {
+  messageTravailNonPublie,
+  promptTravauxNonPublies,
+  type EntreeTravail
+} from './travail-non-publie'
 
 /**
  * Mesuré le 2026-08-23 : trois travaux finis, testés et prouvés ont été perdus de vue le même jour —
@@ -93,5 +97,79 @@ describe('ne pas gâcher les trois places avec la même information', () => {
     expect(m).toContain('autre.css')
     // Le total reste celui des branches RÉELLES : c'est ce qu'il y a à aller chercher.
     expect(m).toContain('4 travaux')
+  })
+})
+
+describe('le prompt que « Traiter » dépose', () => {
+  /*
+   * POURQUOI ce prompt existe : l'utilisateur a cliqué « Traiter », lu la liste de quatorze lignes,
+   * et demandé « et après je fais quoi avec ça ? ». Un panneau qui informe sans permettre d'agir
+   * déplace le problème sur lui.
+   */
+  const enAttente = (agentId: string, fichiers: string[], date?: string): EntreeTravail => ({
+    agentId,
+    travailNonPublie: true,
+    fichiersNonPublies: fichiers,
+    ...(date ? { dateNonPublie: date } : {})
+  })
+
+  it('ne dit rien quand il n’y a rien à publier', () => {
+    expect(promptTravauxNonPublies([])).toBeNull()
+    expect(promptTravauxNonPublies([{ agentId: 'a' }])).toBeNull()
+  })
+
+  it('donne l’adresse de chaque travail, pas seulement leur nombre', () => {
+    const prompt = promptTravauxNonPublies([enAttente('run-1', ['src/a.ts'], '2026-08-20')])
+
+    expect(prompt).toContain('autowin/recovery/run-1')
+    expect(prompt).toContain('src/a.ts')
+    expect(prompt).toContain('2026-08-20')
+  })
+
+  it('EXIGE un diagnostic avant republication — sinon il promettrait ce qui ne peut pas marcher', () => {
+    // Mesuré le 2026-08-24 : les quatorze travaux réels étaient TOUS refusés pour ascendance rompue.
+    // Un prompt qui dirait « republie-les » enverrait l'agent contre un mur, quatorze fois.
+    const prompt = promptTravauxNonPublies([enAttente('run-1', ['src/a.ts'])]) ?? ''
+
+    expect(prompt).toMatch(/merge-base --is-ancestor/)
+    /*
+     * PIEGE TROUVE PAR SABOTAGE : la premiere version de ce test se contentait de
+     * `indexOf('DIAGNOSTIQUE') < indexOf('Republie')`. Retirer l'exigence de diagnostic rendait donc
+     * `indexOf` = -1, et `-1 < n` reste VRAI : le test passait au vert sur un prompt qui envoyait
+     * l'agent republier quatorze travaux impubliables. On exige donc la PRESENCE avant l'ordre.
+     */
+    const positionDiagnostic = prompt.indexOf('DIAGNOSTIQUE')
+    const positionRepublie = prompt.indexOf('Republie')
+    expect(positionDiagnostic).toBeGreaterThanOrEqual(0)
+    expect(positionRepublie).toBeGreaterThanOrEqual(0)
+    expect(positionDiagnostic).toBeLessThan(positionRepublie)
+  })
+
+  it('INTERDIT de supprimer une branche de secours — c’est le seul endroit où le travail existe', () => {
+    const prompt = promptTravauxNonPublies([enAttente('run-1', ['src/a.ts'])]) ?? ''
+
+    expect(prompt).toMatch(/Ne supprime AUCUNE branche/)
+  })
+
+  it('borne la liste et dit combien il en reste, au lieu de produire un mur', () => {
+    const beaucoup = Array.from({ length: 20 }, (_, i) => enAttente(`run-${i}`, [`src/f${i}.ts`]))
+
+    const prompt = promptTravauxNonPublies(beaucoup) ?? ''
+
+    expect(prompt).toContain('20 travaux')
+    expect(prompt).toMatch(/et 8 autres/)
+    expect(prompt).not.toContain('autowin/recovery/run-19')
+  })
+
+  it('compte les travaux EN ATTENTE, sans se laisser gonfler par les autres entrées', () => {
+    const prompt =
+      promptTravauxNonPublies([
+        enAttente('run-1', ['src/a.ts']),
+        { agentId: 'vivant' },
+        { agentId: 'publie', travailNonPublie: false }
+      ]) ?? ''
+
+    expect(prompt).toContain('1 travaux')
+    expect(prompt).not.toContain('vivant')
   })
 })

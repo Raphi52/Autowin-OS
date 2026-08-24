@@ -118,7 +118,7 @@ import type { InspectTurnTarget } from '../observatory-focus'
 export type { RunEntry, CheckpointEntry } from './chat-view-types'
 import type { CheckpointEntry } from './chat-view-types'
 import { useSkillsCatalog } from './useSkillsInventory'
-import { messageTravailNonPublie } from './travail-non-publie'
+import { messageTravailNonPublie, promptTravauxNonPublies } from './travail-non-publie'
 import { TravauxNonPublies } from './TravauxNonPublies'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
@@ -1254,6 +1254,32 @@ export function ChatView({
       message.done = true
       if (message.status === 'streaming') message.status = 'interrupted'
     })
+  }
+
+  /**
+   * « Traiter » DELEGUE, au lieu d'ouvrir une liste.
+   *
+   * L'utilisateur a clique, lu les quatorze lignes, et demande « et apres je fais quoi avec ca ? ».
+   * La liste informait sans permettre d'agir : elle deplacait le probleme sur lui. Le bouton depose
+   * desormais un prompt dans une conversation NEUVE, sans l'envoyer -- meme regle que la vue Tickets,
+   * pour la meme raison : preparer un prompt qu'il ne voit pas serait inutile.
+   *
+   * La liste reste accessible par « Voir la liste » : elle sert a LIRE un diff, et supprimer cet
+   * acces aurait ete une perte silencieuse.
+   */
+  async function traiterTravauxNonPublies(): Promise<void> {
+    let prompt: string | null = null
+    try {
+      const agents = (await window.api.getWorktreeActivity?.()) ?? []
+      prompt = promptTravauxNonPublies(agents)
+    } catch {
+      // Activite indisponible : on ne fabrique PAS un prompt qui parlerait de travaux inconnus.
+      return
+    }
+    if (!prompt) return
+    newConv()
+    setDraftInput(NEW_DRAFT_KEY, prompt)
+    requestAnimationFrame(() => composerInputRef.current?.focus())
   }
 
   function newConv(): void {
@@ -2873,11 +2899,19 @@ export function ChatView({
             <span>{travailNonPublie}</span>
             <button
               type="button"
+              data-testid="chat-travail-non-publie-traiter"
+              onClick={() => void traiterTravauxNonPublies()}
+              title="Ouvrir une conversation neuve avec un prompt pret a envoyer"
+            >
+              Traiter
+            </button>
+            <button
+              type="button"
               data-testid="chat-travail-non-publie-ouvrir"
               onClick={() => setListeNonPubliee((v) => !v)}
               title="Lister ces travaux et lire leur diff"
             >
-              Traiter
+              Voir la liste
             </button>
           </div>
         )}
