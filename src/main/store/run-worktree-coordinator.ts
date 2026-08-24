@@ -690,6 +690,28 @@ export class RunWorktreeCoordinator {
             ? 'Solution conservée par un tournoi ; aucune publication automatique.'
             : undefined
         )
+        /*
+         * UN RUN QUI N'A RIEN ECRIT NE LAISSE PAS DE BUREAU DERRIERE LUI.
+         *
+         * MESURE DANS L'APPLICATION REELLE le 2026-08-24, en lancant trois conversations sur la
+         * meme chose comme le fait l'utilisateur : les trois finissent `ready` / `not-requested`
+         * avec `files: 0` -- aucun fichier change -- et leurs trois copies restaient sur le disque.
+         * L'etat signifie « en attente d'une decision humaine » ; or il n'y a AUCUNE decision a
+         * prendre au sujet de rien. Trois dossiers pour zero travail.
+         *
+         * On ne range QUE le vide, et c'est ce qui rend le geste sur : `retainGreen` (un tournoi
+         * conserve sa solution) est exclu, et une copie portant le moindre changement suit le
+         * chemin normal, intacte. `preserverEtLiberer` distingue lui-meme les deux cas -- il rend
+         * `libere` quand il n'y a rien a sauver et `preserve-et-libere` sinon -- donc meme une
+         * erreur d'appreciation ici ne peut pas faire perdre de travail.
+         *
+         * APPLIQUE AUX DEUX JUMEAUX (`end` et `endAsync`) a dessein : la production emprunte
+         * l'asynchrone, mais ce fichier a deja paye le prix d'un correctif pose sur une seule des
+         * deux copies.
+         */
+        if (!options.retainGreen && tracked.files.length === 0) {
+          this.libererLaCopieEnConflit(tracked.runId)
+        }
       }
       this.emit()
       return undefined
@@ -771,6 +793,28 @@ export class RunWorktreeCoordinator {
             ? 'Solution conservée par un tournoi ; aucune publication automatique.'
             : undefined
         )
+        /*
+         * UN RUN QUI N'A RIEN ECRIT NE LAISSE PAS DE BUREAU DERRIERE LUI.
+         *
+         * MESURE DANS L'APPLICATION REELLE le 2026-08-24, en lancant trois conversations sur la
+         * meme chose comme le fait l'utilisateur : les trois finissent `ready` / `not-requested`
+         * avec `files: 0` -- aucun fichier change -- et leurs trois copies restaient sur le disque.
+         * L'etat signifie « en attente d'une decision humaine » ; or il n'y a AUCUNE decision a
+         * prendre au sujet de rien. Trois dossiers pour zero travail.
+         *
+         * On ne range QUE le vide, et c'est ce qui rend le geste sur : `retainGreen` (un tournoi
+         * conserve sa solution) est exclu, et une copie portant le moindre changement suit le
+         * chemin normal, intacte. `preserverEtLiberer` distingue lui-meme les deux cas -- il rend
+         * `libere` quand il n'y a rien a sauver et `preserve-et-libere` sinon -- donc meme une
+         * erreur d'appreciation ici ne peut pas faire perdre de travail.
+         *
+         * APPLIQUE AUX DEUX JUMEAUX (`end` et `endAsync`) a dessein : la production emprunte
+         * l'asynchrone, mais ce fichier a deja paye le prix d'un correctif pose sur une seule des
+         * deux copies.
+         */
+        if (!options.retainGreen && tracked.files.length === 0) {
+          this.libererLaCopieEnConflit(tracked.runId)
+        }
       }
       this.emit()
       return undefined
