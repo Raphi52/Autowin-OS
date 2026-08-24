@@ -334,7 +334,19 @@ export class ConversationStore {
       const n = Number(c.id.replace(/^conv-/, ''))
       if (Number.isFinite(n) && n > max) max = n
     }
-    this.nextId = max + 1
+    /*
+     * PLANCHER MONOTONE, jamais un simple recalcul.
+     *
+     * `max + 1` sur les conversations VIVANTES fait RECULER le compteur des qu'on supprime la plus
+     * haute. Vecu le 2026-08-24 : `conv-1393` supprimee le matin, l'identifiant redevenu libre, et
+     * la conversation creee l'apres-midi l'a recupere -- avec, dans son graphe, un run de six heures
+     * plus vieux portant un verdict ROUGE. L'utilisateur a legitimement lu « echec » sur un travail
+     * qui n'etait pas le sien et qui, lui, tournait encore.
+     *
+     * La cause n'est pas la suppression : c'est qu'un identifiant reste REFERENCE par des runs
+     * longtemps apres la mort de sa conversation. On ne le reattribue donc jamais.
+     */
+    this.nextId = Math.max(this.nextId, max + 1)
     return migrated
   }
 
@@ -372,6 +384,21 @@ export class ConversationStore {
     this.conversations.set(conversation.id, conversation)
     this.changed(conversation.id)
     return conversation
+  }
+
+  /**
+   * Le plus petit identifiant que ce store s'autorise encore a attribuer.
+   *
+   * Rendu pour que la couche disque le PERSISTE : sans ca le plancher repart de zero a chaque
+   * demarrage, et un identifiant supprime redevient attribuable -- le defaut meme qu'il corrige.
+   */
+  idFloor(): number {
+    return this.nextId
+  }
+
+  /** Releve le plancher (jamais le baisse) depuis une valeur persistee. */
+  raiseIdFloor(valeur: number): void {
+    if (Number.isSafeInteger(valeur) && valeur > this.nextId) this.nextId = valeur
   }
 
   /** Alloue un id de conversation sans collision, même après épuisement du compteur sûr. */

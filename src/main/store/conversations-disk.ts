@@ -298,6 +298,63 @@ function loadConversationSnapshot(path: string): Conversation[] {
   }
 }
 
+/**
+ * Le PLANCHER d'identifiants, dans un fichier voisin.
+ *
+ * Pourquoi un fichier a part plutot qu'un champ dans `conversations.json` : ce fichier est un
+ * TABLEAU, et y ajouter un champ aurait change le format persiste -- exactement le mur rencontre le
+ * meme jour sur `baseSha`, ou une correction evidente a du etre annulee pour cette raison. Un voisin
+ * est additif : son absence retombe simplement sur l'ancien comportement.
+ *
+ * Il ne descend JAMAIS. Un identifiant supprime ne doit pas etre reattribue, parce que des runs
+ * continuent de le referencer longtemps apres la mort de leur conversation.
+ */
+export function conversationIdFloorPath(path = conversationsPath()): string {
+  return `${path}.next-id`
+}
+
+/** Le plancher persiste, ou 0 si le fichier est absent/illisible : jamais une erreur bloquante. */
+export function readConversationIdFloor(path = conversationsPath()): number {
+  try {
+    const brut = readFileSync(conversationIdFloorPath(path), 'utf8').trim()
+    const valeur = Number.parseInt(brut, 10)
+    return Number.isSafeInteger(valeur) && valeur > 0 ? valeur : 0
+  } catch {
+    // Absent au premier demarrage, ou illisible : on retombe sur le calcul depuis les vivantes.
+    return 0
+  }
+}
+
+/**
+ * Le dernier plancher REELLEMENT ecrit, par chemin.
+ *
+ * Sans ce cache, chaque vidage de journal payait une LECTURE puis une ECRITURE disque, meme quand
+ * rien n'avait bouge. Mesure le 2026-08-24 : cette agitation supplementaire dans l'appdata des tests
+ * a rendu instable un test sensible au timing (1 echec sur 5, contre 0 sur 5 sans mon changement).
+ * Un correctif ne doit pas acheter sa garantie avec de la flakiness ailleurs.
+ */
+const plancherEcrit = new Map<string, number>()
+
+/** Ecrit le plancher, sans jamais le faire descendre. Un echec disque ne casse pas la conversation. */
+export function writeConversationIdFloor(valeur: number, path = conversationsPath()): void {
+  if (!Number.isSafeInteger(valeur)) return
+  // Chemin CHAUD : rien n'a monte depuis la derniere ecriture, donc aucun acces disque.
+  const connu = plancherEcrit.get(path)
+  if (connu !== undefined && valeur <= connu) return
+  if (valeur <= readConversationIdFloor(path)) {
+    plancherEcrit.set(path, valeur)
+    return
+  }
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(conversationIdFloorPath(path), String(valeur), 'utf8')
+    plancherEcrit.set(path, valeur)
+  } catch {
+    // Perdre le plancher degrade (des ids pourront etre reattribues) mais ne doit JAMAIS empecher
+    // d'ecrire une conversation. On se tait plutot que de faire echouer la mutation.
+  }
+}
+
 export function conversationJournalPath(path = conversationsPath()): string {
   return `${path}.journal.jsonl`
 }
@@ -526,6 +583,10 @@ export function persistConversations(
 ): () => void {
   const journalPresentAtStartup = existsSync(conversationJournalPath(path))
   const migrated = store.hydrate(loadConversations(path), options)
+  // Le plancher persiste est releve APRES l'hydratation : hydrate calcule le sien depuis les
+  // conversations vivantes, et c'est le PLUS HAUT des deux qui doit gagner.
+  store.raiseIdFloor(readConversationIdFloor(path))
+  writeConversationIdFloor(store.idFloor(), path)
   const pending: ConversationChange[] = []
   let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -536,6 +597,9 @@ export function persistConversations(
     const changes = [...pending]
     // Effacement APRES succes uniquement : une erreur disque transitoire reste rejouable.
     appendConversationChanges(changes, store.list(), path)
+    // Une creation a pu faire monter le plancher : on le fige tout de suite, sinon un arret brutal
+    // le perdrait et l'identifiant redeviendrait attribuable.
+    writeConversationIdFloor(store.idFloor(), path)
     pending.splice(0, changes.length)
   }
 
