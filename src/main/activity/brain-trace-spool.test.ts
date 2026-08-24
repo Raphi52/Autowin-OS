@@ -18,6 +18,60 @@ import {
   readBrainTraces
 } from './brain-trace-spool'
 
+describe('perte de trace Brain observable', () => {
+  const roots: string[] = []
+
+  afterEach(() => {
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  })
+
+  it('compte la trace perdue quand l ecriture echoue, sans jeter', () => {
+    // Un fichier en guise de base : la creation du dossier de spool echoue forcement.
+    const fauxBase = join(mkdtempSync(join(tmpdir(), 'autowin-brain-perte-')), 'base')
+    roots.push(fauxBase)
+    writeFileSync(fauxBase, 'pas un dossier', 'utf8')
+    const avant = brainTraceSpoolHealth().tracesPerdues
+
+    const rendu = appendBrainTrace(
+      {
+        timestamp: '2026-08-19T09:00:00.000Z',
+        conversationId: 'conv-perdue',
+        turnId: 'turn-perdu',
+        query: 'trace condamnee',
+        injectedChars: 7
+      },
+      fauxBase
+    )
+
+    expect(rendu).toBeUndefined()
+    const sante = brainTraceSpoolHealth()
+    expect(sante.tracesPerdues).toBe(avant + 1)
+    expect(sante.enBonneSante).toBe(false)
+    expect(sante.derniereErreur).toBeTruthy()
+  })
+
+  it('ne signale aucun incident en marche normale', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-brain-nominal-'))
+    roots.push(root)
+    const avant = brainTraceSpoolHealth().tracesPerdues
+
+    const rendu = appendBrainTrace(
+      {
+        timestamp: '2026-08-19T09:01:00.000Z',
+        conversationId: 'conv-saine',
+        turnId: 'turn-sain',
+        query: 'trace ecrite',
+        injectedChars: 42
+      },
+      root
+    )
+
+    expect(rendu?.id).toBeTruthy()
+    expect(readBrainTraces('conv-saine', root)).toHaveLength(1)
+    expect(brainTraceSpoolHealth().tracesPerdues).toBe(avant)
+  })
+})
+
 describe('brain trace spool causal identity', () => {
   const roots: string[] = []
 
