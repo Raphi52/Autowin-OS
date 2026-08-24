@@ -71,3 +71,43 @@ export function guardAttachments(value: unknown): GuardedAttachment[] {
     return candidate as GuardedAttachment
   })
 }
+
+/**
+ * Un profil recu du renderer, valide A LA FRONTIERE avant toute persistance.
+ *
+ * LE DEFAUT, mesure le 2026-08-24 : `ProfileStore.save` ne valide RIEN et ecrit la charge utile
+ * telle quelle. Pire, il compose `[profile, ...list().filter(i => i.id !== profile.id)]` -- avec un
+ * `id` absent, l'objet douteux atterrit EN TETE de liste. Le lecteur etant tolerant (`list()` rend
+ * `[]` sur erreur), le degat n'est pas un plantage mais de la donnee pourrie, silencieuse.
+ *
+ * Meme classe que l'incident du meme jour sur les conversations : un ecrivain qui accepte une forme
+ * que rien ne verifie. La difference est que la-bas le lecteur etait STRICT, donc l'app est devenue
+ * inbootable ; ici il est tolerant, donc personne ne s'en apercoit.
+ *
+ * On ne valide QUE les champs que l'appelant controle reellement : `topology`, `roles` et
+ * `updatedAt` sont ecrases par le handler juste apres, les valider serait du theatre.
+ */
+export function guardProfile(value: unknown): {
+  schema: 'autowin.profile/v1'
+  id: string
+  name: string
+  description?: string
+} {
+  if (!value || typeof value !== 'object') throw new Error('IPC profile: objet attendu')
+  const candidat = value as Record<string, unknown>
+  if (candidat.schema !== 'autowin.profile/v1') throw new Error('IPC profile: schema inattendu')
+  const id = guardString(candidat.id, 'profile.id')
+  if (!id.trim()) throw new Error('IPC profile.id: identifiant vide')
+  const name = guardString(candidat.name, 'profile.name')
+  const description =
+    candidat.description === undefined
+      ? undefined
+      : guardString(candidat.description, 'profile.description')
+  return { schema: 'autowin.profile/v1', id, name, ...(description ? { description } : {}) }
+}
+
+/** `string | null` tel que le renderer l'envoie pour « aucune conversation active ». */
+export function guardStringOrNull(value: unknown, name: string): string | null {
+  if (value === null || value === undefined) return null
+  return guardString(value, name)
+}
