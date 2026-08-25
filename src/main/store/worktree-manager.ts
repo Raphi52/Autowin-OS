@@ -27,6 +27,12 @@ import { isSameProcessIdentity } from '../process-identity'
 import { parsePorcelainPaths } from '../run-autoclose'
 import { WorktreeOperationClient } from './worktree-operation-client'
 import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
+import {
+  delierLesDependances,
+  lierLesDependances,
+  messageLiaison,
+  type LiaisonDependances
+} from './dependances-copie-agent'
 
 /**
  * Moteur worktree "par défaut, sans intervention" (volet B du cockpit worktree).
@@ -436,6 +442,11 @@ export function resoudreCheminWorker(
 }
 
 export class WorktreeManager {
+  /**
+   * Ce qu'a donné la dernière liaison des dépendances d'une copie, pour que la trace du run puisse
+   * le DIRE. Un lien posé en silence ne s'explique pas le jour où il manque.
+   */
+  private derniereLiaisonDependances?: LiaisonDependances
   private readonly baseRepo: string
   private readonly worktreeRoot: string
   /** Voir {@link gitCommonDir} : mémorisé pour le dépôt de base seul, échec compris. */
@@ -3540,6 +3551,17 @@ exit 0
   }
 
   private cleanupWorktree(path: string, force = true): { ok: boolean; detail?: string } {
+    /*
+     * On retire D'ABORD ce que NOUS avons ajouté : le lien vers les dépendances.
+     *
+     * Mesuré le 2026-08-25 : `git worktree remove --force` rend 0 mais ne touche pas au
+     * `node_modules` qu'il ne suit pas. Le dossier de la copie SURVIT alors, ne contenant plus que
+     * la jonction — et ce nettoyage, qui conclut `ok` dès que git a rendu 0, ne s'en aperçoit pas.
+     * Chaque run laisserait une coquille orpheline, précisément ce qu'il doit empêcher.
+     *
+     * `delierLesDependances` refuse de toucher à un VRAI dossier de modules : seul un lien part.
+     */
+    delierLesDependances(path)
     const remove = this.tryGitFn(this.baseRepo, [
       'worktree',
       'remove',
@@ -3607,7 +3629,31 @@ exit 0
       this.cleanupWorktree(path)
       throw new Error('La copie créée ne correspond pas à la révision capturée.')
     }
+    /*
+     * Les dépendances sont reliées AVANT que l'agent ne travaille, sinon il ne pourra rien prouver.
+     *
+     * Une copie agent est un `git worktree add` : elle ne porte que les fichiers suivis, et
+     * `node_modules` est ignoré par git. Mesuré le 2026-08-25 dans une copie fraîche :
+     * `npx vitest run` échoue sur « Cannot find module 'vitest/config' » — vitest ne charge même
+     * pas sa configuration. Sans preuve exécutable, `etatDeCloture` rend `red` et le contrôle final
+     * affiche « Échec déjà déclaré », sur un travail pourtant fait et prouvé.
+     *
+     * Le résultat n'est pas jeté : une copie sans dépendances reste utilisable pour lire et éditer.
+     */
+    this.derniereLiaisonDependances = lierLesDependances(this.baseRepo, path)
     return path
+  }
+
+  /**
+   * L'état des dépendances de la dernière copie créée, en une phrase destinée à la trace du run.
+   *
+   * `undefined` tant qu'aucune copie n'a été créée par cette instance : on ne rend pas une phrase
+   * rassurante sur un geste qui n'a pas eu lieu.
+   */
+  etatDesDependances(): string | undefined {
+    return this.derniereLiaisonDependances
+      ? messageLiaison(this.derniereLiaisonDependances)
+      : undefined
   }
 
   /** Contexte figé au début d'un run ; le coordinateur le persiste avant toute publication. */
