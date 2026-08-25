@@ -592,14 +592,33 @@ export class AgentPilot {
       args: Record<string, unknown>,
       onProgress?: (text: string) => void
     ): Promise<CommandResult> => {
-      if (bindingOverride) {
+      /*
+       * NE PAS BOURRER LA FIN D'ARGUMENTS `undefined`.
+       *
+       * L'ajout d'`onProgress` avait rendu l'appel TOUJOURS a six arguments, la queue comblee par
+       * des `undefined`. Or `bus.exec` est espionne par onze tests qui asservissent l'appel EXACT --
+       * un appel a trois arguments cessait d'en etre un, et la suite du pilote est passee au rouge
+       * sur la branche partagee (mesure le 2026-08-25 : 11 echecs, tous des decalages d'arite, aucune
+       * regression fonctionnelle).
+       *
+       * On ne touche donc ni aux assertions ni au comportement : on rend simplement a l'appel sa
+       * forme MINIMALE quand il n'y a rien de plus a passer. Un argument optionnel absent ne doit
+       * pas s'ecrire.
+       */
+      const binding = bindingOverride
+      if (onProgress) {
+        return binding
+          ? this.bus.exec(name, args, conversationId, binding, turnId, onProgress)
+          : this.bus.exec(name, args, conversationId, undefined, turnId, onProgress)
+      }
+      if (binding) {
         return turnId
-          ? this.bus.exec(name, args, conversationId, bindingOverride, turnId, onProgress)
-          : this.bus.exec(name, args, conversationId, bindingOverride, undefined, onProgress)
+          ? this.bus.exec(name, args, conversationId, binding, turnId)
+          : this.bus.exec(name, args, conversationId, binding)
       }
       return turnId
-        ? this.bus.exec(name, args, conversationId, undefined, turnId, onProgress)
-        : this.bus.exec(name, args, conversationId, undefined, undefined, onProgress)
+        ? this.bus.exec(name, args, conversationId, undefined, turnId)
+        : this.bus.exec(name, args, conversationId)
     }
     /**
      * Une commande qui JETTE est un echec comme un autre — sauf l'annulation.
