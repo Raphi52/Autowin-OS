@@ -30,6 +30,19 @@ const CMD_LABEL: Record<string, string> = {
   get_state: 'Lecture d’état'
 }
 
+/** Sortie texte d'un sous-agent : repliée par défaut (160px), dépliable sur demande. */
+export function SubAgentText({ text }: { text: string }): React.JSX.Element {
+  const [ouvert, setOuvert] = useState(false)
+  return (
+    <div className={`subagent-text-wrap${ouvert ? ' open' : ''}`}>
+      <div className={`subagent-text c-dim${ouvert ? ' open' : ''}`}>{text}</div>
+      <button type="button" className="subagent-text-toggle" onClick={() => setOuvert(!ouvert)}>
+        {ouvert ? 'Replier' : 'Déplier'}
+      </button>
+    </div>
+  )
+}
+
 /** Rendu d'UN step de sous-agent (prompt, raisonnement, echec, texte, preuves). */
 export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element {
   const meta = STEP_META[s.step] ?? { icon: '•', label: s.step }
