@@ -457,7 +457,13 @@ function normalizedCommand(command: string | undefined): string {
   return (command ?? '').replace(/\s+/gu, ' ').trim()
 }
 
-function evidenceRefs(evidence: readonly ExecutionEvidence[]): LearningEvidenceRef[] {
+/**
+ * EXPORTE pour etre testable : c'est le maillon CENTRAL de la chaine causale, celui qui reporte
+ * `oracleAttestation` de la preuve brute vers la reference que lit la politique. Les deux bouts
+ * etaient couverts (l'attestation d'un cote, la decision de l'autre) et ce maillon ne l'etait pas
+ * — or c'est precisement lui qui doit porter le champ dont l'absence bloquait 22 lecons sur 22.
+ */
+export function evidenceRefs(evidence: readonly ExecutionEvidence[]): LearningEvidenceRef[] {
   return evidence.map((item, sequence) => {
     const mutationFingerprints = [
       ...Object.values(item.pathFingerprints ?? {}),

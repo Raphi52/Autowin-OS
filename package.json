@@ -51,6 +51,36 @@
           "src/renderer/src/components/BehaviourView.test.tsx",
           "src/renderer/src/components/GraphView.panels.test.tsx"
         ]
+      },
+      {
+        "command": "npm run test:unit",
+        "covers": [
+          "src/**"
+        ],
+        "attests": [
+          "vitest.config.ts",
+          "package.json"
+        ]
+      },
+      {
+        "command": "npx vitest run",
+        "covers": [
+          "src/**"
+        ],
+        "attests": [
+          "vitest.config.ts",
+          "package.json"
+        ]
+      },
+      {
+        "command": "vitest run",
+        "covers": [
+          "src/**"
+        ],
+        "attests": [
+          "vitest.config.ts",
+          "package.json"
+        ]
       }
     ]
   },
