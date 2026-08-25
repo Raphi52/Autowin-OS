@@ -13,10 +13,23 @@ import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
 
 /**
- * PRÉ-VOL BASE-DIRTY — le refus doit tomber AVANT que le run coûte quoi que ce soit, et il doit être
- * strictement en LECTURE : aucun `stash`, aucun `checkout`, aucune écriture de ref. Jusqu'ici la
- * saleté de la base n'était constatée qu'à la FINALISATION (`worktree-manager`, `reason:
- * 'base-dirty'`) : l'utilisateur payait un run entier pour apprendre que rien ne serait publié.
+ * PLUS DE PRÉ-VOL BASE-DIRTY — un run de mutation PART sur une base sale.
+ *
+ * Le pré-vol refusait sur l'état BRUT de `git status` : TOUS les fichiers non committés, sans
+ * exception. La garde qu'il prétendait anticiper, elle, est CHIRURGICALE : `blockingDirtyFiles`
+ * (`worktree-manager.ts:1455`) ne refuse que sur l'INTERSECTION entre les fichiers touchés par
+ * l'agent et les fichiers sales de l'utilisateur. Le pré-vol était donc strictement plus dur que la
+ * garde de fin de course, et refusait des runs qui n'auraient JAMAIS touché au travail en cours.
+ *
+ * Il sur-refusait par nécessité, pas par excès de prudence : au lancement, les fichiers que l'agent
+ * va toucher ne sont pas encore connus (`worktree-manager.ts:3906`), donc l'intersection est
+ * incalculable à cet instant. Le choix posé ici est d'assumer ce coût — un run gaspillé quand la
+ * collision est RÉELLE — plutôt que de refuser en masse des runs inoffensifs.
+ *
+ * CE QUI NE BOUGE PAS, et ces tests l'exigent : la copie remise à l'agent exclut déjà les fichiers
+ * sales du snapshot (`worktree-manager.ts:3703`), et la garde `base-dirty` de la PUBLICATION reste
+ * souveraine (`worktree-manager.publication.test.ts`). Le travail non committé n'est jamais déplacé,
+ * jamais stashé, jamais écrasé — c'est le filet de fin de course qui le garantit, pas le pré-vol.
  */
 class SpyProvider implements ProviderAdapter {
   readonly id = 'preflight'
@@ -50,32 +63,40 @@ function makeOrchestrator(worktrees: RunWorktrees): {
     roles,
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    executionWorkspace: 'C:\\base',
+    executionWorkspace: 'C:\base',
     worktrees
   })
   return { orch, provider }
 }
 
-describe('Orchestrator — pré-vol base-dirty (lecture seule)', () => {
-  it('refuse AVANT begin() et NOMME les fichiers en cause', async () => {
-    const begin = vi.fn(() => 'C:\\wt\\run-1')
+describe('Orchestrator — base sale : le run PART (plus de pré-vol)', () => {
+  it('mutation + base sale : la copie est créée et l’agent travaille', async () => {
+    const begin = vi.fn(() => 'C:\wt\run-1')
     const end = vi.fn()
     const baseDirtyFiles = vi.fn(() => ['src/main/orchestrator.ts', 'docs/note.md'])
     const { orch, provider } = makeOrchestrator({ begin, end, baseDirtyFiles })
 
-    await expect(orch.run('modifie le projet')).rejects.toThrow(
-      /src\/main\/orchestrator\.ts.*docs\/note\.md/s
-    )
+    await orch.run('modifie le projet')
 
-    expect(baseDirtyFiles).toHaveBeenCalledTimes(1)
-    // Refus TÔT : aucune copie n'est créée, aucune finalisation n'est demandée, aucun agent n'est payé.
-    expect(begin).not.toHaveBeenCalled()
-    expect(end).not.toHaveBeenCalled()
-    expect(provider.calls).toHaveLength(0)
+    expect(begin).toHaveBeenCalledTimes(1)
+    expect(provider.calls.length).toBeGreaterThan(0)
   })
 
-  it('base propre : le run part normalement (le pré-vol ne bloque pas tout)', async () => {
-    const begin = vi.fn(() => 'C:\\wt\\run-1')
+  it('la saleté de la base n’est même plus CONSULTÉE au lancement', async () => {
+    const begin = vi.fn(() => 'C:\wt\run-1')
+    const end = vi.fn()
+    // Un pré-vol résiduel se trahirait ici : la seule raison de lire cette liste au lancement était
+    // d'en faire un refus. Personne d'autre ne la consulte sur ce chemin.
+    const baseDirtyFiles = vi.fn(() => ['sale.ts'])
+    const { orch } = makeOrchestrator({ begin, end, baseDirtyFiles })
+
+    await orch.run('modifie le projet')
+
+    expect(baseDirtyFiles).not.toHaveBeenCalled()
+  })
+
+  it('base propre : rien ne change, le run part comme avant', async () => {
+    const begin = vi.fn(() => 'C:\wt\run-1')
     const end = vi.fn()
     const { orch, provider } = makeOrchestrator({ begin, end, baseDirtyFiles: () => [] })
 
@@ -85,7 +106,7 @@ describe('Orchestrator — pré-vol base-dirty (lecture seule)', () => {
     expect(provider.calls.length).toBeGreaterThan(0)
   })
 
-  it('run NON-mutation : la base sale ne refuse RIEN (aucune isolation demandée)', async () => {
+  it('run NON-mutation sur base sale : inchangé, aucun refus', async () => {
     const begin = vi.fn(() => undefined)
     const end = vi.fn()
     const baseDirtyFiles = vi.fn(() => ['sale.ts'])
@@ -96,8 +117,8 @@ describe('Orchestrator — pré-vol base-dirty (lecture seule)', () => {
     expect(begin).toHaveBeenCalledTimes(1)
   })
 
-  it('coordinateur sans pré-vol (ancien contrat) : aucun refus inventé', async () => {
-    const begin = vi.fn(() => 'C:\\wt\\run-1')
+  it('coordinateur sans pré-vol (ancien contrat) : toujours aucun refus inventé', async () => {
+    const begin = vi.fn(() => 'C:\wt\run-1')
     const end = vi.fn()
     const { orch } = makeOrchestrator({ begin, end })
 

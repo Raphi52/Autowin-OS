@@ -1688,25 +1688,26 @@ export class Orchestrator {
         'Isolation bloquée : le moteur de bureaux workspace est indisponible pour ce projet.'
       )
     }
-    // PRÉ-VOL BASE-DIRTY — le même refus qu'à la finalisation (`worktree-manager`, reason
-    // `base-dirty`), mais AVANT que le run coûte quoi que ce soit. Jusqu'ici la base sale n'était
-    // constatée qu'au retour : l'utilisateur payait un run entier pour apprendre que rien ne serait
-    // publié. On refuse tôt, en NOMMANT les fichiers en cause.
+    // PAS DE PRÉ-VOL BASE-DIRTY — un run de mutation PART sur une base sale, délibérément.
     //
-    // LECTURE SEULE, délibérément : aucun `stash`, aucun `checkout`, aucune ref écrite. Le travail
-    // non committé de l'utilisateur lui appartient — Autowin le constate, ne le déplace jamais.
-    // Ce refus ne concerne QUE les runs isolés (mutation / publication tenue) : un run de lecture
-    // ne publiera rien et n'a donc aucune raison d'exiger une base propre.
-    if (requiresIsolatedWorkspace) {
-      const baseDirty = this.deps.worktrees?.baseDirtyFiles?.() ?? []
-      if (baseDirty.length > 0) {
-        throw new Error(
-          `Base non propre : ${baseDirty.length} fichier(s) non committé(s) dans le dépôt de travail — ` +
-            `${baseDirty.join(', ')}. Committez-les ou mettez-les de côté vous-même, puis relancez ; ` +
-            `Autowin ne touche pas à votre travail non committé.`
-        )
-      }
-    }
+    // Un pré-vol a refusé ici, du 2026-08-18 au 2026-08-25, tout run isolé dès que `git status` de
+    // la base rendait la moindre ligne. Il refusait sur l'état BRUT : TOUS les fichiers non
+    // committés. Or la garde qu'il prétendait anticiper est CHIRURGICALE — `blockingDirtyFiles`
+    // (`worktree-manager.ts:1455`) ne bloque que sur l'INTERSECTION entre les fichiers touchés par
+    // l'agent et les fichiers sales de l'utilisateur. Le pré-vol était donc strictement plus dur
+    // que le refus qu'il annonçait, et tuait des runs qui n'auraient jamais approché le travail en
+    // cours. Sur un dépôt où l'utilisateur travaille en continu, ce refus était la NORME.
+    //
+    // Il sur-refusait par NÉCESSITÉ, pas par excès de zèle : au lancement, les fichiers que l'agent
+    // va toucher ne sont pas encore connus (`worktree-manager.ts:3906`), donc l'intersection est
+    // incalculable à cet instant. Le choix assumé ici est de payer un run gaspillé quand la
+    // collision est RÉELLE, plutôt que de refuser en masse des runs inoffensifs.
+    //
+    // CE QUI PROTÈGE LE TRAVAIL NON COMMITTÉ N'EST PAS CE PRÉ-VOL, et c'est pourquoi le retirer ne
+    // cède rien : la copie remise à l'agent EXCLUT déjà les fichiers sales du snapshot
+    // (`worktree-manager.ts:3703`), et la garde `base-dirty` de la PUBLICATION reste souveraine —
+    // elle prime même sur le ref de secours (`worktree-manager.ts:4013`). Aucun `stash`, aucun
+    // `checkout` : le travail de l'utilisateur n'est jamais déplacé.
     // Verdict du run, lu dans le `finally` : seul un run VERT ramène son travail dans la base.
     let green = false
     // Reference du rapport rendu : le `finally` doit pouvoir aligner ses chemins APRES avoir su ce que
