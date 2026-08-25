@@ -277,8 +277,7 @@ describe('ModelEffortMatrix — pastille verte « recommandé »', () => {
     }))
     expect(marques).toEqual([
       { row: 'claude:claude-opus-5', effort: 'low' },
-      { row: 'codex:gpt-5.6-sol', effort: 'xhigh' },
-      { row: 'codex:gpt-5.6-terra', effort: 'xhigh' }
+      { row: 'codex:gpt-5.6-sol', effort: 'xhigh' }
     ])
   })
 

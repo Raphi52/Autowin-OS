@@ -8,11 +8,9 @@
  */
 const RECOMMENDATIONS: { provider: string; model: RegExp; effort: string }[] = [
   { provider: 'claude', model: /^(claude-)?opus-5$/, effort: 'low' },
-  // « Sol » n'existe PAS dans le catalogue du compte Codex connecte (releve live le 2026-08-25 :
-  // terra, luna, gpt-5.5, gpt-5.4-mini). La reco « codex xhigh » vise donc le modele phare
-  // REELLEMENT expose (`gpt-5.6-terra`, isDefault). La ligne `sol` reste pour le jour ou le
-  // fournisseur l'expose : une reco ne s'affiche que si le modele est dans le catalogue.
-  { provider: 'codex', model: /^gpt-5\.6-terra$/, effort: 'xhigh' },
+  // Cote ChatGPT la pastille va sur SOL et sur lui seul (demande utilisateur du 2026-08-25).
+  // `gpt-5.6-sol` est ajoute au catalogue codex par `withCodexNamedSupplements` quand le listing
+  // live ne l'expose pas encore ; terra n'est plus recommande.
   { provider: 'codex', model: /^gpt-5\.6-sol$/, effort: 'xhigh' }
 ]
 
