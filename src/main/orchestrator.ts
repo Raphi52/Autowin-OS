@@ -3338,10 +3338,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const scopedBrain = scopeBrainRetrieval(brain, brainCorpus)
     const brainContext = scopedBrain.context
     /**
-     * SKILL `load` INTÉGRÉE AU WORKFLOW (demande utilisateur du 14/08) : en plus de la récupération
-     * par tâche ci-dessus, l'EMPREINTE DURABLE du dépôt (écrite par `/save` : ce qu'il est, ce
+     * SKILL `think` INTÉGRÉE AU WORKFLOW (demande utilisateur du 14/08) : en plus de la récupération
+     * par tâche ci-dessus, l'EMPREINTE DURABLE du dépôt (écrite par `/learn` : ce qu'il est, ce
      * qu'il fait, architecture, décisions) est chargée à CHAQUE run, et l'action est VISIBLE comme
-     * step dans le fil de sous-agents — plus un geste implicite. Le load ne bloque jamais un run.
+     * step dans le fil de sous-agents — plus un geste implicite. Elle ne bloque jamais un run.
+     *
+     * LES NOMS ÉTAIENT MORTS, signalé le 2026-08-25 : le fil affichait « load » et le message
+     * renvoyait vers une commande `save`, alors que ni `load` ni `save` n'existent dans `skills/` — seules
+     * `think` et `learn` sont sur disque. Un nom qui désigne une commande supprimée est un mensonge
+     * qui ne se voit qu'à l'usage ; `etape-think.test.ts` relie désormais ces noms au disque.
      */
     let empreinteDepot = ''
     if (brainCorpus?.length !== 0) {
@@ -3356,13 +3361,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       }
       push({
         step: 'exec',
-        role: 'load',
+        role: 'think',
         provider: 'brain',
         text: empreinteDepot
           ? `Empreinte du dépôt chargée (${empreinteDepot.length} caractères) — injectée en tête de contexte des phases.`
-          : 'Aucune empreinte de dépôt dans le Brain — /save en fin de run l’écrira pour les prochains.',
+          : 'Aucune empreinte de dépôt dans le Brain — /learn en fin de run l’écrira pour les prochains.',
         status: 'completed',
-        detail: empreinteDepot ? 'load : empreinte chargée' : 'load : aucune empreinte'
+        detail: empreinteDepot ? 'think : empreinte chargée' : 'think : aucune empreinte'
       })
     }
     const memoryEcho = sessionMemoryBlock(
