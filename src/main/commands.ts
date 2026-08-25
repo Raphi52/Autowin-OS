@@ -22,6 +22,7 @@ import { spawn } from 'node:child_process'
 import {
   capVerifyOutput,
   decideRelatedVerify,
+  cibleDeVerification,
   decideVerifyCommand,
   porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
@@ -505,10 +506,25 @@ const CATALOG: CommandSpec[] = [
   },
   {
     name: 'verify',
-    // Aucun argument : le modele demande « verifie », il ne choisit JAMAIS la commande.
+    /*
+     * Le modele ne choisit JAMAIS la commande -- seulement, s'il le souhaite, la CIBLE.
+     *
+     * Vecu le 2026-08-25 : un agent devait prouver UN fichier de test. Sans argument, `verify`
+     * rejouait la suite entiere, plafonnee a 600 s, qu'elle depasse -- quatre tentatives, quatre
+     * refus. Faute de pouvoir executer, il a diagnostique par lecture statique et affirme un defaut
+     * « certain » que l'execution a ensuite refute.
+     *
+     * La frontiere ne bouge pas pour autant : `cibleDeVerification` valide le chemin (relatif, dans
+     * le depot, hors `.git`, fichier de TEST, existant, sans joker) et l'argv est construit ici,
+     * `shell: false`, arguments separes. Donner Bash aurait ete l'autre voie : mesuree sur le vrai
+     * binaire, `--allowedTools "Bash(npm test)"` ne restreint RIEN.
+     */
     description:
-      'Rejouer la vérification déclarée par le projet (script « test ») et rendre son exit code — la seule façon de prouver « vert »',
-    args: {},
+      'Rejouer la vérification déclarée par le projet (script « test ») et rendre son exit code — la seule façon de prouver « vert ». Une CIBLE optionnelle (un fichier de test du dépôt) restreint la vérification à ce seul fichier : quelques secondes au lieu de la suite entière',
+    args: {
+      cible:
+        'facultatif — UN fichier de test du dépôt (chemin relatif, ex. `src/main/x.test.ts`). Absent = suite complète'
+    },
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -1923,7 +1939,7 @@ export class AppCommandBus {
       case 'get_state':
         return await this.snapshot()
       case 'verify':
-        return await this.runVerify(onProgress)
+        return await this.runVerify(onProgress, typeof a.cible === 'string' ? a.cible : undefined)
       case 'brain_query':
         return await this.runBrainQuery(a.question, conversationId, turnId)
       case 'ticket_create':
@@ -2473,14 +2489,16 @@ export class AppCommandBus {
   }
 
   private async runVerify(
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    cible?: string
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
-    return this.runVerifyAt(this.os.executionWorkspace, onProgress)
+    return this.runVerifyAt(this.os.executionWorkspace, onProgress, cible)
   }
 
   private async runVerifyAt(
     workspaceRoot: string | undefined,
-    onProgress?: (text: string) => void
+    onProgress?: (text: string) => void,
+    cible?: string
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideVerifyCommand(workspaceRoot)
     if (!decision.allowed) {
@@ -2493,12 +2511,32 @@ export class AppCommandBus {
         output: ''
       }
     }
-    const resultat = await this.spawnVerify(
-      decision.command.split(' '),
-      decision.cwd,
-      decision.command,
-      onProgress
-    )
+    /*
+     * LA CIBLE, validee ici et nulle part ailleurs. Un refus est RENDU avec son motif plutot
+     * qu'ignore en silence : un refus muet renverrait le modele a la devinette, et c'est exactement
+     * ce qui a produit le diagnostic statique errone du 2026-08-25.
+     *
+     * `-- <fichier>` : npm transmet ce qui suit `--` au script, donc a vitest. L'argv reste construit
+     * ICI, argument par argument, `shell: false` -- le chemin valide n'est jamais interpole.
+     */
+    let argv = decision.command.split(' ')
+    let etiquette = decision.command
+    if (cible !== undefined && cible.trim() !== '') {
+      const verdict = cibleDeVerification(cible, decision.cwd)
+      if (!verdict.ok) {
+        return {
+          allowed: false,
+          reason: `cible refusée : ${verdict.raison}`,
+          ok: false,
+          exitCode: null,
+          command: '',
+          output: ''
+        }
+      }
+      argv = [...argv, '--', verdict.chemin]
+      etiquette = `${decision.command} -- ${verdict.chemin}`
+    }
+    const resultat = await this.spawnVerify(argv, decision.cwd, etiquette, onProgress)
     // Le verdict NOMME sa portee. Sans cela, un vert obtenu dans un arbre sale se lit comme un
     // vert du depot : mesure du 2026-08-22 (conv-1371), « exit 0, 713 fichiers » a ete conclu
     // « pret pour la fusion » alors qu'`origin/main` portait 3 rouges au meme instant.

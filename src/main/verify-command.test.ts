@@ -104,13 +104,37 @@ describe('cablage de la commande verify', () => {
     return fs.readFileSync(path.join(__dirname, 'commands.ts'), 'utf8')
   }
 
-  it('la commande est DECLAREE sans aucun argument (le modele ne choisit pas)', () => {
+  it('le modele ne choisit JAMAIS la commande — son seul argument est une CIBLE, validee', () => {
+    /*
+     * CE TEST A CHANGE D'ASSERTION LE 2026-08-25, PAS D'INVARIANT.
+     *
+     * Il exigeait `args: {}`. C'etait un PROXY, ecrit quand « aucun argument » et « ne choisit pas
+     * la commande » etaient la meme chose. Ils ne le sont plus : un agent de chat devait prouver UN
+     * fichier de test et ne pouvait pas -- `verify` rejouait la suite entiere, plafonnee a 600 s,
+     * qu'elle depasse. Quatre tentatives, quatre refus ; faute de pouvoir executer, il a diagnostique
+     * par lecture statique et affirme un defaut que l'execution a ensuite refute.
+     *
+     * L'INVARIANT PROTEGE reste entier et c'est lui qu'on asserte desormais : la commande vient de
+     * `ALLOWED_COMMANDS` via `decideVerifyCommand`, jamais du modele. Le seul argument accepte est
+     * une CIBLE, et elle traverse `cibleDeVerification` (relative, dans le depot, hors `.git`,
+     * fichier de test, existante, sans joker — 9 tests de refus dediees).
+     *
+     * L'assertion est plus PRECISE que la precedente : elle nomme la surface exacte autorisee, au
+     * lieu de compter les arguments. Elle est plus permissive d'un argument, et refuse tous les
+     * autres.
+     */
     const source = commands()
     const spec = source.slice(
       source.indexOf("name: 'verify'"),
-      source.indexOf("name: 'verify'") + 500
+      source.indexOf("name: 'verify'") + 2000
     )
-    expect(spec).toContain('args: {}')
+    const args = spec.slice(spec.indexOf('args: {'), spec.indexOf('annotations:'))
+    expect(args).toContain('cible')
+    // AUCUNE autre entree : ni commande, ni script, ni argument libre.
+    for (const interdit of ['command', 'commande', 'script', 'args:  {', 'shell']) {
+      expect(args.includes(`${interdit}:`)).toBe(false)
+    }
+    expect(source).toContain('cibleDeVerification(cible, decision.cwd)')
   })
 
   it('la decision passe par le module teste, jamais par une commande recue', () => {

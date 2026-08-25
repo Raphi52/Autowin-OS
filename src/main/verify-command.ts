@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 
 /**
@@ -320,4 +320,75 @@ export function porteeDuVert(fichiersNonCommites: readonly string[]): string | u
     `avant une fusion : un fichier de test supprimé mais non commité ne rend pas vert, il se tait. ` +
     `Pour juger la cible de fusion, rejouer sur une copie propre de cette base.`
   )
+}
+
+/** Le verdict d'une cible proposee par le modele : acceptee, ou refusee AVEC son motif. */
+export type VerdictDeCible =
+  | { ok: true; chemin: string }
+  | { ok: false; raison: string }
+
+/**
+ * Motifs de fichier de TEST acceptes. Volontairement etroits : ce point d'entree ne doit jamais
+ * pouvoir executer un fichier quelconque du depot.
+ */
+const MOTIF_FICHIER_DE_TEST = /\.(test|spec)\.[cm]?[jt]sx?$/
+
+/**
+ * VALIDE une cible de verification proposee par le modele.
+ *
+ * POURQUOI CE POINT EXISTE, vecu le 2026-08-25 : un agent de chat devait prouver UN fichier de test.
+ * Il ne pouvait pas -- `verify` ne prenait aucun argument et rejouait la suite entiere, plafonnee a
+ * 600 s, qu'elle depasse. Quatre tentatives, quatre refus. Faute de pouvoir executer, il a
+ * diagnostique par lecture statique et affirme un defaut « certain » que l'execution a refute.
+ *
+ * ON NE DONNE PAS BASH POUR AUTANT : la voie `--allowedTools "Bash(npm test)"` a ete mesuree sur le
+ * vrai binaire et INVALIDEE -- le pattern ne restreint rien, `echo BONJOUR` passait, avec et sans
+ * bypassPermissions. « Bash mais seulement npm test » n'existe pas ; c'est Bash tout court.
+ *
+ * On donne donc le droit de NOMMER, pas d'executer. La frontiere ne bouge pas : Autowin construit
+ * l'argv, `shell: false`, arguments separes -- aucune interpolation, donc aucune injection, meme si
+ * ces gardes evoluaient. Le modele ne fournit qu'un chemin, et ce chemin doit etre :
+ *   - RELATIF et contenu dans le depot (ni absolu, ni remontant) ;
+ *   - hors de `.git` -- un nom peut ressembler a un test tout en visant le depot lui-meme ;
+ *   - un fichier de TEST, pas du code quelconque ;
+ *   - EXISTANT : un fichier absent fait sortir vitest en erreur, mais compter sur ce hasard serait
+ *     fragile, et un « vert » sur une suite vide serait le pire des resultats ;
+ *   - un fichier UNIQUE, pas un joker.
+ *
+ * Chaque refus porte son MOTIF : un refus muet renvoie le modele a la devinette, et c'est exactement
+ * ce qui a produit le diagnostic statique errone.
+ */
+export function cibleDeVerification(
+  cible: string,
+  racine: string,
+  existe: (chemin: string) => boolean = existsSync
+): VerdictDeCible {
+  const brut = (cible ?? '').trim()
+  if (!brut) return { ok: false, raison: 'aucune cible fournie' }
+  const normalise = brut.split('\\').join('/')
+
+  if (normalise.includes('*') || normalise.includes('?')) {
+    return { ok: false, raison: 'une cible est UN fichier, pas un motif — les jokers sont refusés' }
+  }
+  // `isAbsolute` seul laisserait passer `C:/…` sur une machine POSIX : on teste les deux formes.
+  if (isAbsolute(normalise) || /^[a-zA-Z]:\//.test(normalise) || normalise.startsWith('/')) {
+    return { ok: false, raison: 'la cible doit être un chemin RELATIF au dépôt' }
+  }
+  const segments = normalise.split('/').filter(Boolean)
+  if (segments.includes('..')) {
+    return { ok: false, raison: 'la cible ne peut pas remonter hors du dépôt' }
+  }
+  if (segments.includes('.git')) {
+    return { ok: false, raison: 'la cible ne peut pas viser le dépôt git lui-même' }
+  }
+  if (!MOTIF_FICHIER_DE_TEST.test(normalise)) {
+    return {
+      ok: false,
+      raison: 'la cible doit être un fichier de test (`.test.ts`, `.spec.ts`…) — ce point d’entrée n’exécute pas du code au choix'
+    }
+  }
+  if (!existe(join(racine, ...segments))) {
+    return { ok: false, raison: `la cible n’existe pas : ${normalise}` }
+  }
+  return { ok: true, chemin: segments.join('/') }
 }
