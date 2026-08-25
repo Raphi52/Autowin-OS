@@ -86,7 +86,7 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
           <pre>{s.thinking}</pre>
         </details>
       )}
-      {s.text && <div className="subagent-text c-dim">{s.text}</div>}
+      {s.text && <SubAgentText text={s.text} />}
       {s.prompt && (
         <details className="prompt-envelope">
           <summary>Voir le prompt envoyé</summary>
