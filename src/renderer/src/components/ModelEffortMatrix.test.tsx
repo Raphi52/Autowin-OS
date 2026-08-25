@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ModelEffortMatrix, type ModelEffortRow } from './ModelEffortMatrix'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
@@ -254,8 +256,8 @@ describe('ModelEffortMatrix — pastille verte « recommandé »', () => {
   })
 
   it('marque le cran recommandé, et LUI SEUL', async () => {
-    // Entrées qui feraient échouer ce test si la reco débordait :
-    // `claude-opus-4-5` (voisin de famille) et `gpt-5.6-terra` ne doivent porter AUCUNE pastille.
+    // Entrée qui ferait échouer ce test si la reco débordait :
+    // `claude-opus-4-5` (voisin de famille) ne doit porter AUCUNE pastille.
     const view = await render(
       createElement(ModelEffortMatrix, {
         rows: [
@@ -275,7 +277,37 @@ describe('ModelEffortMatrix — pastille verte « recommandé »', () => {
     }))
     expect(marques).toEqual([
       { row: 'claude:claude-opus-5', effort: 'low' },
-      { row: 'codex:gpt-5.6-sol', effort: 'xhigh' }
+      { row: 'codex:gpt-5.6-sol', effort: 'xhigh' },
+      { row: 'codex:gpt-5.6-terra', effort: 'xhigh' }
     ])
+  })
+
+  it('REMPLACE le point du cran par la pastille verte, au lieu de la poser a cote', async () => {
+    const view = await render(
+      createElement(ModelEffortMatrix, {
+        rows: [ligne('claude', 'claude-opus-5', ['low', 'medium', 'high'])],
+        activeKey: null,
+        onSelect: vi.fn(),
+        onClose: vi.fn()
+      })
+    )
+    const recommande = view.querySelector('.effort-cran.is-recommended') as HTMLElement
+    expect(recommande).toBeTruthy()
+    // Entree qui ferait echouer ce test si la correction etait fausse : un second marqueur
+    // `.effort-cran-reco` rendu EN PLUS du point `i` (l'etat d'avant) -> 2 pastilles cote a cote.
+    expect(recommande.querySelectorAll('.effort-cran-reco')).toHaveLength(0)
+    expect(recommande.querySelectorAll('i')).toHaveLength(1)
+    // Le cran NON recommande garde son point normal : la correction ne supprime pas les points.
+    const normal = view.querySelector('.effort-cran:not(.is-recommended):not(.is-absent)')!
+    expect(normal.querySelectorAll('i')).toHaveLength(1)
+  })
+
+  it('colore le point du cran recommande via la feuille de style (pas un second element)', () => {
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/renderer/src/components/ChatView.css'),
+      'utf8'
+    )
+    expect(css).toContain('.effort-cran.is-recommended i')
+    expect(css).not.toContain('.effort-cran-reco')
   })
 })

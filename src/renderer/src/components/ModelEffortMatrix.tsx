@@ -186,7 +186,6 @@ export function ModelEffortMatrix({
                         }}
                       >
                         <i aria-hidden="true" />
-                        {recommande && <b className="effort-cran-reco" aria-hidden="true" />}
                         <em>{effortLabel(effort)}</em>
                       </button>
                     )
