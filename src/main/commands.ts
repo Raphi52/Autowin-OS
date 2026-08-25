@@ -15,7 +15,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { brainCorpusForWorkspace, scopeBrainRetrieval, workspaceSlug } from './brain-corpus-scope'
+import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
@@ -111,6 +111,7 @@ import {
 import {
   OUTCOME_LESSON_MARKER,
   learningProposalAttestation,
+  porteeDeLecon,
   parseAttestedLearningProposal,
   verifyIndependentLearningAttestation,
   type IndependentLearningAttestation
@@ -964,10 +965,9 @@ export class AppCommandBus {
       const trustedProposal = attestedProposal
         ? {
             ...attestedProposal,
-            scope:
-              attestedProposal.scope.trim().toLowerCase() === 'global'
-                ? 'global'
-                : workspaceSlug(this.os.executionWorkspace)
+            // MEME definition que du cote attestation : c'est leur divergence qui vidait les 256
+            // observations. Deux calculs de la meme valeur, c'est un defaut qui attend son heure.
+            scope: porteeDeLecon(attestedProposal.scope, this.os.executionWorkspace)
           }
         : undefined
       const proposalHash = trustedProposal

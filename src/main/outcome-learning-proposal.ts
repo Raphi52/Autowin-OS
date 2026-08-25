@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { LearningJudgeAttestationV1 } from '../shared/run-learning'
+import { workspaceSlug } from './brain-corpus-scope'
+import { racineHorsCopieAgent } from './app-data'
 
 export const OUTCOME_LESSON_MARKER = 'AUTOWIN_LESSON_V1:'
 
@@ -118,4 +120,28 @@ export function verifyIndependentLearningAttestation(
     attestorId: value.attestorId
   }
   return value.attestation === independentAttestationDigest(unsigned)
+}
+
+/**
+ * LA PORTEE d'une lecon -- UNE seule definition, appelee par les DEUX cotes.
+ *
+ * LE DEFAUT, mesure le 2026-08-25 : la portee etait calculee a deux endroits depuis deux chemins
+ * differents. L'attestation (`orchestrator.ts`) partait de `workCwd`, qui vaut
+ * `isolatedCwd ?? executionWorkspace` -- donc, sur tout run ISOLE (c'est-a-dire tout run de
+ * mutation), le chemin de la COPIE AGENT. Le consommateur (`commands.ts`) partait du depot reel.
+ * Mesure sur un chemin reel : `agent-run-d66740cfa68e-1` d'un cote, `autowin-os` de l'autre. Deux
+ * portees, deux empreintes, et `verifyIndependentLearningAttestation` echouait TOUJOURS -- 256
+ * observations sur 256 sans la moindre attestation, et le dernier verrou entre `inbox` et `publish`
+ * qui ne pouvait jamais tomber.
+ *
+ * LA BONNE PORTEE est celle du DEPOT. Une lecon decrit un projet, pas la copie jetable ou elle a ete
+ * apprise : une portee par run polluerait le Brain de valeurs que rien ne pourrait jamais relire.
+ *
+ * On REMONTE donc hors de la copie plutot que de faire confiance au chemin recu. C'est deliberement
+ * plus robuste que « passer le bon argument » : l'appelant qui se trompe est precisement ce qui a
+ * cause le defaut, et un argument juste ne se verifie pas au type.
+ */
+export function porteeDeLecon(scope: string, workspacePath: string): string {
+  if (scope.trim().toLowerCase() === 'global') return 'global'
+  return workspaceSlug(racineHorsCopieAgent(workspacePath))
 }

@@ -66,6 +66,7 @@ import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 import { loadTrustedLearningOracles } from './providers/learning-oracle-manifest'
 import { workspaceSlug } from './brain-corpus-scope'
 import {
+  porteeDeLecon,
   createIndependentLearningAttestation,
   learningProposalAttestation,
   parseAttestedLearningProposal,
@@ -578,7 +579,7 @@ function attestJudgeApprovedLearning(
   if (!parsed) return []
   const proposal = {
     ...parsed,
-    scope: parsed.scope.trim().toLowerCase() === 'global' ? 'global' : workspaceSlug(workspace)
+    scope: porteeDeLecon(parsed.scope, workspace)
   }
   return [
     createIndependentLearningAttestation(
