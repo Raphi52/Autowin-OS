@@ -36,8 +36,15 @@ export function SubAgentText({ text }: { text: string }): React.JSX.Element {
   return (
     <div className={`subagent-text-wrap${ouvert ? ' open' : ''}`}>
       <div className={`subagent-text c-dim${ouvert ? ' open' : ''}`}>{text}</div>
-      <button type="button" className="subagent-text-toggle" onClick={() => setOuvert(!ouvert)}>
-        {ouvert ? 'Replier' : 'Déplier'}
+      <button
+        type="button"
+        className="subagent-text-toggle"
+        onClick={() => setOuvert(!ouvert)}
+        aria-expanded={ouvert}
+        aria-label={ouvert ? 'Replier la sortie' : 'Déplier la sortie'}
+        title={ouvert ? 'Replier la sortie' : 'Déplier la sortie'}
+      >
+        {ouvert ? '▾' : '▸'}
       </button>
     </div>
   )
