@@ -29,6 +29,7 @@ import {
   verifyTimeoutOutcome,
   type VerifyOutcome
 } from './verify-command'
+import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement'
 import { readGitState } from './git-read-main'
 import type { AutowinOS } from './os'
 
@@ -1195,7 +1196,9 @@ export class AppCommandBus {
     args: Record<string, unknown> = {},
     conversationId?: string,
     bindingOverride?: RoleBinding,
-    turnId?: string
+    turnId?: string,
+    /** Signe de vie d'une commande LONGUE, relaye tel quel au fil (voir `verify-battement`). */
+    onProgress?: (text: string) => void
   ): Promise<CommandResult> {
     try {
       const specification = CATALOG.find((command) => command.name === name)
@@ -1207,7 +1210,7 @@ export class AppCommandBus {
         this.trace?.(name, redactedArgs(name, args), true)
         return { ok: true, data: observed.data, attachments: [observed.attachment] }
       }
-      const data = await this.run(name, args, conversationId, bindingOverride, turnId)
+      const data = await this.run(name, args, conversationId, bindingOverride, turnId, onProgress)
       this.trace?.(name, redactedArgs(name, args), true)
       return { ok: true, data }
     } catch (e) {
@@ -1221,7 +1224,8 @@ export class AppCommandBus {
     a: Record<string, unknown>,
     conversationId?: string,
     bindingOverride?: RoleBinding,
-    turnId?: string
+    turnId?: string,
+    onProgress?: (text: string) => void
   ): Promise<unknown> {
     const s = (k: string): string => String(a[k] ?? '')
     switch (name) {
@@ -1919,7 +1923,7 @@ export class AppCommandBus {
       case 'get_state':
         return await this.snapshot()
       case 'verify':
-        return await this.runVerify()
+        return await this.runVerify(onProgress)
       case 'brain_query':
         return await this.runBrainQuery(a.question, conversationId, turnId)
       case 'ticket_create':
@@ -2468,12 +2472,15 @@ export class AppCommandBus {
     return { allowed: true, ...outcome }
   }
 
-  private async runVerify(): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
-    return this.runVerifyAt(this.os.executionWorkspace)
+  private async runVerify(
+    onProgress?: (text: string) => void
+  ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
+    return this.runVerifyAt(this.os.executionWorkspace, onProgress)
   }
 
   private async runVerifyAt(
-    workspaceRoot: string | undefined
+    workspaceRoot: string | undefined,
+    onProgress?: (text: string) => void
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideVerifyCommand(workspaceRoot)
     if (!decision.allowed) {
@@ -2489,7 +2496,8 @@ export class AppCommandBus {
     const resultat = await this.spawnVerify(
       decision.command.split(' '),
       decision.cwd,
-      decision.command
+      decision.command,
+      onProgress
     )
     // Le verdict NOMME sa portee. Sans cela, un vert obtenu dans un arbre sale se lit comme un
     // vert du depot : mesure du 2026-08-22 (conv-1371), « exit 0, 713 fichiers » a ete conclu
@@ -2537,7 +2545,8 @@ export class AppCommandBus {
   private async spawnVerify(
     argv: string[],
     cwd: string,
-    label: string
+    label: string,
+    onProgress?: (text: string) => void
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const [file, ...rest] = argv
     const sharedBin = this.os.executionWorkspace
@@ -2577,10 +2586,26 @@ export class AppCommandBus {
        * entier est tue — sous Windows le `cmd.exe /c` n'est qu'un parent, tuer le seul pid laissait
        * le runner vivant et le `close` ne venait jamais.
        */
+      /*
+       * BATTEMENT — la seule chose qui distingue, A L'ECRAN, une suite qui travaille d'une suite
+       * bloquee. Mesure le 2026-08-25 (conv-1400) : dix minutes de « 1 action en cours » sans une
+       * ligne de plus, puis un plafond. Le tampon est deja collecte ci-dessus ; on n'ajoute donc
+       * aucune lecture, juste une projection periodique de son etat vers le fil.
+       */
+      const debut = Date.now()
+      const battement = onProgress
+        ? setInterval(
+            () => onProgress(battementDeVerification(output, Date.now() - debut)),
+            VERIFY_BATTEMENT_MS
+          )
+        : undefined
+      // Ne PAS retenir la boucle d'evenements en vie pour un simple signe de vie.
+      battement?.unref?.()
       const plafond = verifyTimeoutMs()
       let expire = false
       const horloge = setTimeout(() => {
         expire = true
+        clearInterval(battement)
         if (process.platform === 'win32' && child.pid) {
           spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true })
         } else {
@@ -2594,6 +2619,7 @@ export class AppCommandBus {
       child.on('error', (error) =>
         expire ||
         (clearTimeout(horloge),
+        clearInterval(battement),
         resolve({
           allowed: true,
           ok: false,
@@ -2605,6 +2631,7 @@ export class AppCommandBus {
       child.on('close', (code) =>
         expire ||
         (clearTimeout(horloge),
+        clearInterval(battement),
         resolve({
           allowed: true,
           ok: code === 0,

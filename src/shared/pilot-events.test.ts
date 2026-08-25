@@ -8,6 +8,7 @@ const PILOT_EVENT_KINDS = [
   'think',
   'reasoning',
   'command',
+  'action-progress',
   'result',
   'done',
   'error',
@@ -38,6 +39,7 @@ describe('vocabulaire des évènements du pilote — une seule source', () => {
       think: true,
       reasoning: true,
       command: true,
+      'action-progress': true,
       result: true,
       done: true,
       error: true,
@@ -52,7 +54,7 @@ describe('vocabulaire des évènements du pilote — une seule source', () => {
 
   it('n’a ni doublon ni trou', () => {
     expect(new Set(PILOT_EVENT_KINDS).size).toBe(PILOT_EVENT_KINDS.length)
-    expect(PILOT_EVENT_KINDS).toHaveLength(12)
+    expect(PILOT_EVENT_KINDS).toHaveLength(13)
   })
 
   it('le renderer accepte TOUS les kinds que le main peut émettre', () => {

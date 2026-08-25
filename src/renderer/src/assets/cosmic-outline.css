@@ -645,6 +645,21 @@
   white-space: nowrap;
 }
 
+/*
+ * SIGNE DE VIE d'une action en cours — une ligne discrete, monospacee parce qu'elle porte des
+ * compteurs qui changent toutes les 5 s : une chasse fixe evite que la ligne tressaute a chaque
+ * battement. Elle ne doit jamais voler l'attention au titre du groupe, seulement prouver que ca vit.
+ */
+.cosmic-outline .activity-progress {
+  overflow: hidden;
+  padding: 2px 10px 5px 24px;
+  color: #7d8b98;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cosmic-outline .chat-jump-latest {
   position: absolute;
   z-index: 8;

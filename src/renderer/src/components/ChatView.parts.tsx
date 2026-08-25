@@ -275,6 +275,16 @@ export function AssistantActivityGroup({
   const interruptedCount = actions.filter((action) => action.interrupted).length
   const completedCount = actions.filter((action) => action.ok === true).length
   const running = runningCount > 0
+  /*
+   * SIGNE DE VIE de l'action encore en vol. Sans lui, le groupe se resume a « 1 action en cours »
+   * et rien d'autre — c'est litteralement ce que l'utilisateur a rapporte le 2026-08-25 : « ca me
+   * met une action en cours mais je le vois rien faire », devant un `verify` qui rejouait la suite
+   * unitaire depuis dix minutes. On prend la DERNIERE action vivante qui en porte un : c'est celle
+   * qui travaille encore, les precedentes ont deja rendu leur verdict.
+   */
+  const battement = [...actions]
+    .reverse()
+    .find((action) => action.ok === undefined && !action.interrupted && action.progress)?.progress
   const plural = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`
   const status = running
     ? completedCount > 0
@@ -392,6 +402,12 @@ export function AssistantActivityGroup({
             )
           )}
         </button>
+        {/* Hors du bouton : c'est une INFORMATION qui change toute seule, pas une cible de clic. */}
+        {battement && (
+          <div className="activity-progress" data-testid="activity-progress" title={battement}>
+            {battement}
+          </div>
+        )}
         {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre bouton,
             sinon deplier couterait l'acces a la trace complete. */}
         {why.length > 0 && runConsultable && (

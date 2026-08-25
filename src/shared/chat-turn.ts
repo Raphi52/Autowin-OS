@@ -23,6 +23,17 @@ export interface PersistedChatActionPart {
    * « N action en cours » collé indéfiniment.
    */
   interrupted?: boolean
+  /**
+   * SIGNE DE VIE d'une action encore en cours — remplace a chaque battement, efface par le verdict.
+   *
+   * DEFAUT VECU le 2026-08-25 (conv-1400) : `verify` a rejoue la suite unitaire pendant dix minutes
+   * et le fil n'a affiche que « 1 action en cours », sans une ligne de plus jusqu'au plafond. Rien
+   * ne distinguait, a l'oeil, une suite qui TRAVAILLE d'une suite BLOQUEE ou d'une app plantee.
+   *
+   * Transitoire par nature : il ne survit jamais au resultat, sinon le fil garderait un compteur
+   * mort sous un verdict deja rendu.
+   */
+  progress?: string
 }
 
 export interface PersistedChatArtifactPart {
@@ -78,6 +89,8 @@ export type ChatTurnEvent =
       /** Payload brut durable, reserve a la reprise du modele et jamais projete dans la vue. */
       attachments?: ChatAttachment[]
     }
+  /** Battement d'avancement d'une action en cours : ne resout rien, ne cree rien. */
+  | { kind: 'progress'; actionId: string; text: string }
   | { kind: 'artifact'; artifact: ChatArtifact }
   | { kind: 'done'; sessionId?: string }
   | { kind: 'failed'; error: string }
@@ -178,13 +191,30 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
       ]
     }
 
+  if (event.kind === 'progress') {
+    const parts = state.parts.slice()
+    for (let index = parts.length - 1; index >= 0; index -= 1) {
+      const part = parts[index]
+      if (part.kind !== 'action' || part.actionId !== event.actionId) continue
+      // Une action DEJA close ne redevient pas vivante parce qu'un battement arrive en retard :
+      // la course est reelle (le tampon est vide par intervalle, le verdict par la fin du process).
+      if (part.ok !== undefined || part.interrupted) break
+      parts[index] = { ...part, progress: event.text }
+      break
+    }
+    return { ...state, parts }
+  }
+
   if (event.kind === 'result') {
     const parts = state.parts.slice()
     for (let index = parts.length - 1; index >= 0; index -= 1) {
       const part = parts[index]
       if (part.kind !== 'action' || part.actionId !== event.actionId) continue
+      // `progress` est retire explicitement : le verdict REMPLACE le signe de vie, il ne cohabite
+      // pas avec lui.
+      const { progress: _vivant, ...sansSigneDeVie } = part
       parts[index] = {
-        ...part,
+        ...sansSigneDeVie,
         ok: event.ok,
         ...(event.data === undefined ? {} : { data: sanitizePersistedValue(event.data) })
       }

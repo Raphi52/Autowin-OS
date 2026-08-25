@@ -449,7 +449,11 @@ export function reduceAssistantPilotEvent(
       ok: event.ok,
       data: event.data
     }
-  } else if (event.kind === 'artifact' && event.artifact)
+  } else if (event.kind === 'action-progress' && event.actionId && event.text)
+    // Signe de vie d'une action longue : il ne resout rien, et le reducteur l'ignore si l'action est
+    // deja close (course reelle entre le dernier battement et le verdict).
+    turnEvent = { kind: 'progress', actionId: event.actionId, text: event.text }
+  else if (event.kind === 'artifact' && event.artifact)
     turnEvent = { kind: 'artifact', artifact: event.artifact }
   else if (event.kind === 'done') turnEvent = { kind: 'done' }
   else if (event.kind === 'error')

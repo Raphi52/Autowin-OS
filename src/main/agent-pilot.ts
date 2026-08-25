@@ -104,6 +104,8 @@ export type PilotEventVariant =
   /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté dans le message. */
   | { kind: 'reasoning'; text: string; iteration: number }
   | { kind: 'command'; actionId: string; name: string; args: unknown }
+  /** Signe de vie d'une action LONGUE encore en cours : ne resout rien, remplace le precedent. */
+  | { kind: 'action-progress'; actionId: string; text: string }
   | {
       kind: 'result'
       actionId: string
@@ -585,15 +587,19 @@ export class AgentPilot {
     }
     let timingWritten = false
     const binding = runtimeBinding ?? bindingOverride ?? this.roles.getBinding('orchestrator')
-    const execCommand = (name: string, args: Record<string, unknown>): Promise<CommandResult> => {
+    const execCommand = (
+      name: string,
+      args: Record<string, unknown>,
+      onProgress?: (text: string) => void
+    ): Promise<CommandResult> => {
       if (bindingOverride) {
         return turnId
-          ? this.bus.exec(name, args, conversationId, bindingOverride, turnId)
-          : this.bus.exec(name, args, conversationId, bindingOverride)
+          ? this.bus.exec(name, args, conversationId, bindingOverride, turnId, onProgress)
+          : this.bus.exec(name, args, conversationId, bindingOverride, undefined, onProgress)
       }
       return turnId
-        ? this.bus.exec(name, args, conversationId, undefined, turnId)
-        : this.bus.exec(name, args, conversationId)
+        ? this.bus.exec(name, args, conversationId, undefined, turnId, onProgress)
+        : this.bus.exec(name, args, conversationId, undefined, undefined, onProgress)
     }
     /**
      * Une commande qui JETTE est un echec comme un autre — sauf l'annulation.
@@ -613,10 +619,11 @@ export class AgentPilot {
       (typeof erreur === 'object' && erreur !== null && (erreur as { name?: string }).name === 'AbortError')
     const execCommandTolerante = async (
       name: string,
-      args: Record<string, unknown>
+      args: Record<string, unknown>,
+      onProgress?: (text: string) => void
     ): Promise<CommandResult> => {
       try {
-        return await execCommand(name, args)
+        return await execCommand(name, args, onProgress)
       } catch (erreur) {
         if (estUneAnnulation(erreur)) throw erreur
         return { ok: false, error: erreur instanceof Error ? erreur.message : String(erreur) }
@@ -1664,7 +1671,9 @@ export class AgentPilot {
                   ? { attachments: settledAction.attachments }
                   : {})
               }
-          : await execCommandTolerante(token.name, authoritativeArgs)
+          : await execCommandTolerante(token.name, authoritativeArgs, (text) =>
+              emit({ kind: 'action-progress', actionId, text })
+            )
         if (r.attachments?.length) commandAttachments.push(...r.attachments)
         if (!settledAction)
           emit({

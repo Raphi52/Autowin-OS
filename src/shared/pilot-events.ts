@@ -19,6 +19,8 @@ export type PilotEventKind =
   /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté. */
   | 'reasoning'
   | 'command'
+  /** Signe de vie d'une action LONGUE encore en cours : ne resout rien. */
+  | 'action-progress'
   | 'result'
   | 'done'
   | 'error'
