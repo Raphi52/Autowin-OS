@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { OrchestratorModelOption } from './chat-view-model'
 import { effortLabel, sortEfforts } from './model-effort-labels'
+import { recommendedEffort } from './model-effort-recommendations'
 
 /**
  * Une ligne de la matrice : un modèle du catalogue et les crans d'effort qu'il expose.
@@ -131,6 +132,9 @@ export function ModelEffortMatrix({
                 ? preview.effort
                 : held
             const filledUntil = shown ? efforts.indexOf(shown) : -1
+            // Pastille verte : cran conseillé pour CE modèle, s'il existe vraiment dans son catalogue.
+            const conseille = recommendedEffort(row.option.provider, row.model)
+            const cranConseille = conseille && efforts.includes(conseille) ? conseille : undefined
             return (
               <div
                 key={row.key}
@@ -154,15 +158,23 @@ export function ModelEffortMatrix({
                     }
                     const selected = shown === effort
                     const filled = filledUntil >= 0 && index <= filledUntil
+                    const recommande = cranConseille === effort
                     return (
                       <button
                         key={effort}
                         type="button"
                         role="radio"
+                        data-effort={effort}
                         aria-checked={isActiveRow && held === effort}
                         aria-disabled={row.blocked || undefined}
-                        title={row.blocked ? row.blockedReason : effortLabel(effort)}
-                        className={`effort-cran${selected ? ' is-selected' : ''}${filled ? ' is-filled' : ''}${isActiveRow ? ' is-live' : ' is-memorized'}`}
+                        title={
+                          row.blocked
+                            ? row.blockedReason
+                            : recommande
+                              ? `${effortLabel(effort)} — effort recommandé pour ${row.label}`
+                              : effortLabel(effort)
+                        }
+                        className={`effort-cran${selected ? ' is-selected' : ''}${filled ? ' is-filled' : ''}${isActiveRow ? ' is-live' : ' is-memorized'}${recommande ? ' is-recommended' : ''}`}
                         onMouseEnter={() => setPreview({ key: row.key, effort })}
                         onFocus={() => setPreview({ key: row.key, effort })}
                         onMouseLeave={() => setPreview(null)}
@@ -174,6 +186,7 @@ export function ModelEffortMatrix({
                         }}
                       >
                         <i aria-hidden="true" />
+                        {recommande && <b className="effort-cran-reco" aria-hidden="true" />}
                         <em>{effortLabel(effort)}</em>
                       </button>
                     )

@@ -2878,11 +2878,25 @@ ol.md-list li {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #3a3d42;
+  background: #4a3a46;
+  box-shadow: 0 0 4px rgba(255, 122, 199, 0.25);
   transition:
     width 0.12s ease,
     height 0.12s ease,
-    background 0.12s ease;
+    background 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+/* Pastille verte « effort recommande » : posee sur le cran, jamais a la place du cran. */
+.effort-cran-reco {
+  position: absolute;
+  top: 2px;
+  right: calc(50% - 11px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #35d07f;
+  box-shadow: 0 0 6px rgba(53, 208, 127, 0.75);
 }
 
 .effort-cran em {
@@ -2895,28 +2909,38 @@ ol.md-list li {
 }
 
 .effort-cran.is-filled i {
-  background: rgba(139, 106, 224, 0.45);
+  background: rgba(255, 122, 199, 0.45);
+  box-shadow: 0 0 6px rgba(255, 122, 199, 0.35);
 }
 
 .effort-cran.is-memorized.is-selected i {
-  background: rgba(139, 106, 224, 0.7);
+  background: rgba(255, 122, 199, 0.75);
+  box-shadow: 0 0 9px rgba(255, 122, 199, 0.5);
 }
 
 .effort-matrix-row.is-active .effort-cran.is-filled i {
-  background: #8b6ae0;
+  background: #ff7ac7;
+  box-shadow: 0 0 10px rgba(255, 122, 199, 0.55);
 }
 
 .effort-cran.is-live.is-selected i {
   width: 15px;
   height: 15px;
-  background: #a98cff;
-  box-shadow: 0 0 0 4px rgba(139, 106, 224, 0.18);
+  background: #ff9ad6;
+  box-shadow:
+    0 0 0 4px rgba(255, 122, 199, 0.18),
+    0 0 16px rgba(255, 122, 199, 0.7);
 }
 
 .effort-cran:hover em,
 .effort-cran:focus-visible em {
-  color: #cbb8ff;
+  color: #ffb8e0;
   opacity: 1;
+}
+
+.effort-cran:hover i {
+  background: #ff9ad6;
+  box-shadow: 0 0 12px rgba(255, 122, 199, 0.6);
 }
 
 .effort-cran.is-absent {

@@ -215,3 +215,67 @@ describe('ModelEffortMatrix', () => {
     expect((view.querySelector('details') as HTMLDetailsElement).open).toBe(false)
   })
 })
+
+describe('ModelEffortMatrix — pastille verte « recommandé »', () => {
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  })
+
+  let root: Root | null = null
+  let host: HTMLDivElement | null = null
+
+  afterEach(async () => {
+    if (root) await act(async () => root?.unmount())
+    host?.remove()
+    root = null
+    host = null
+  })
+
+  const render = async (element: React.JSX.Element): Promise<HTMLDivElement> => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root?.render(element))
+    return host
+  }
+
+  const ligne = (provider: string, model: string, efforts: string[]): ModelEffortRow => ({
+    key: `${provider}:${model}`,
+    label: model,
+    model,
+    option: {
+      provider,
+      model,
+      label: model,
+      reasoningEfforts: efforts,
+      defaultReasoningEffort: 'medium'
+    } as ModelEffortRow['option'],
+    efforts
+  })
+
+  it('marque le cran recommandé, et LUI SEUL', async () => {
+    // Entrées qui feraient échouer ce test si la reco débordait :
+    // `claude-opus-4-5` (voisin de famille) et `gpt-5.6-terra` ne doivent porter AUCUNE pastille.
+    const view = await render(
+      createElement(ModelEffortMatrix, {
+        rows: [
+          ligne('claude', 'claude-opus-5', ['low', 'medium', 'high']),
+          ligne('claude', 'claude-opus-4-5', ['low', 'medium', 'high']),
+          ligne('codex', 'gpt-5.6-sol', ['low', 'medium', 'high', 'xhigh']),
+          ligne('codex', 'gpt-5.6-terra', ['low', 'medium', 'high', 'xhigh'])
+        ],
+        activeKey: null,
+        onSelect: vi.fn(),
+        onClose: vi.fn()
+      })
+    )
+    const marques = [...view.querySelectorAll('.effort-cran.is-recommended')].map((n) => ({
+      row: (n.closest('.effort-matrix-row') as HTMLElement).dataset.row,
+      effort: (n as HTMLElement).dataset.effort
+    }))
+    expect(marques).toEqual([
+      { row: 'claude:claude-opus-5', effort: 'low' },
+      { row: 'codex:gpt-5.6-sol', effort: 'xhigh' }
+    ])
+  })
+})
