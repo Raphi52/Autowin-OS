@@ -2739,6 +2739,20 @@ ol.md-list li {
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 }
 
+/* Variante EN LIGNE : la matrice vit dans la popup du chat, elle n'est plus un panneau flottant. */
+.effort-matrix.is-inline {
+  width: 100%;
+  padding: 2px 2px 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+/* La popup fait 310px : trop étroit pour une matrice. Elle s'élargit quand elle en héberge une. */
+.model-select-menu:has(.effort-matrix.is-inline) {
+  width: min(600px, 92vw);
+}
+
 .effort-matrix header {
   display: flex;
   align-items: center;
