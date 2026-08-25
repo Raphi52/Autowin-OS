@@ -37,6 +37,14 @@ import type { AutowinOS } from './os'
 
 /** Deux sauts de ligne, sans séquence d'échappement — même règle que `SAUT` dans verify-command.ts. */
 const SAUT_PORTEE = String.fromCharCode(10, 10)
+
+/*
+ * La consigne « ton code ne compile pas » doit se DETACHER de la sortie brute qui suit, sinon elle
+ * s'y noie. Rendue absente par le commit qui l'introduisait (`SAUT_NATURE` utilise, jamais defini,
+ * typecheck rouge sur la branche partagee le 2026-08-25) : reparee ici parce qu'elle vit dans la
+ * fonction meme qu'on corrige, pas parce qu'on elargit le lot.
+ */
+const SAUT_NATURE = String.fromCharCode(10, 10)
 import { lastUserMessageAt } from './store/conversations'
 import type { Message } from './providers/types'
 import type { Role, RoleBinding } from './roles'

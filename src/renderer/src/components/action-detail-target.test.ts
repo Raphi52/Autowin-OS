@@ -215,9 +215,32 @@ describe('localActionDetails — la sortie brute devient lisible', () => {
   const detail = (): string =>
     localActionDetails([{ name: 'edit_file', ok: false, data: SORTIE_REELLE }])[0].text
 
-  it('ne montre plus AUCUN code de couleur du terminal', () => {
+  /*
+   * ON CHERCHE L'ECHAPPEMENT NU, PAS `ESC[`.
+   *
+   * Un depouillement qui retire `[31m` en laissant l'octet `ESC` seul produit des petits carres a
+   * l'ecran ET passe une assertion ecrite sur `ESC[`. Ce chemin-ci depouille bien (l'octet est dans
+   * le motif), mais l'assertion doit rester celle qui ne peut pas mentir : la forme la PLUS faible
+   * qu'un texte propre doive satisfaire.
+   */
+  it("ne montre plus AUCUN caractere d'echappement du terminal, meme seul", () => {
     // eslint-disable-next-line no-control-regex
-    expect(detail()).not.toMatch(/\u001b\[/)
+    expect(detail()).not.toMatch(//)
+  })
+
+  /*
+   * Un motif de depouillement SANS son ancre `ESC` mordrait tout crochet LEGITIME : un separateur
+   * vitest (`[1/10]`), un index de tableau dans un message d'erreur. Ce garde-fou fige la frontiere
+   * — on ne retire que des sequences de terminal — pour que l'ancre ne puisse pas disparaitre du
+   * motif sans qu'un test tombe.
+   */
+  it('ne mange PAS un crochet legitime du message', () => {
+    const avecCrochets = localActionDetails([
+      { name: 'edit_file', ok: false, data: 'FAIL parce que items[3] est vide — [1/10]' }
+    ])[0].text
+
+    expect(avecCrochets).toContain('items[3]')
+    expect(avecCrochets).toContain('[1/10]')
   })
 
   it('garde la CAUSE, en tete', () => {

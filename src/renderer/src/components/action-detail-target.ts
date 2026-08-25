@@ -12,6 +12,8 @@
  * s'il n'y a pas de run, le detail doit s'afficher SUR PLACE, pas ailleurs.
  */
 
+import { sansSequencesAnsi } from '../../../shared/ansi'
+
 /** Commandes qui produisent un run consultable dans Workflows. */
 const RUN_PRODUCING = new Set(['orchestrate'])
 
@@ -45,10 +47,6 @@ export interface LocalActionDetail {
 /** Au-dela, on ne lit plus : on noie. Mesure reelle sur une sortie de suite complete : 187 000 car. */
 const MAX_DETAIL_CHARS = 3_000
 
-/** Sequences de couleur du terminal : elles ne veulent rien dire dans une interface. */
-// eslint-disable-next-line no-control-regex
-const ANSI = /\[[0-9;]*[A-Za-z]/gu
-
 /**
  * Lignes qui PORTENT l'echec. Tout le reste d'une sortie de suite — les tests verts, les compteurs
  * de duree, les journaux d'etape — enterre le signal sous des milliers de lignes.
@@ -71,8 +69,7 @@ const LIGNE_VERTE = /(^|\s)(✓|OK\s|passed\b|TOUS VERTS)/u
  * mieux vaut du brut que du vide.
  */
 function resumeLisible(brut: string): string {
-  const lignes = brut
-    .replace(ANSI, '')
+  const lignes = sansSequencesAnsi(brut)
     .split('\n')
     .map((ligne) => ligne.replace(/\s+$/u, ''))
     .filter((ligne) => ligne.trim().length > 0)

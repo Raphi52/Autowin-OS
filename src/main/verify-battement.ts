@@ -12,6 +12,8 @@
  * d'origine vivait justement dans du code impossible a observer autrement qu'en attendant 600 s.
  */
 
+import { sansSequencesAnsi } from '../shared/ansi'
+
 /** Au-dela, la ligne deformerait le fil ; elle doit rester une ligne, pas un paragraphe. */
 const LARGEUR_MAX = 140
 
@@ -32,7 +34,16 @@ export function dureeCourte(ms: number): string {
  * etats concatenes — « Tests 10/900Tests 411/900Tests 412/900 », illisible.
  */
 function derniereLigneUtile(sortie: string): string | undefined {
-  const lignes = sortie
+  /*
+   * DEPOUILLER D'ABORD, MESURER ENSUITE.
+   *
+   * DEFAUT VECU le 2026-08-25 (conv-1404) : le fil affichait « 9 min 27 s · <ESC>[33m<ESC>[2m … ».
+   * Deux degats et non un : les codes salissent la ligne, ET ils sont COMPTES dans la largeur max,
+   * donc le texte utile etait coupe bien avant sa vraie longueur. Depouiller avant le decoupage
+   * traite les deux d'un coup — et une ligne qui ne contenait QUE des codes redevient vide, donc
+   * elle ne peut plus voler la place de la derniere ligne reellement utile.
+   */
+  const lignes = sansSequencesAnsi(sortie)
     .split(/[\r\n]+/)
     .map((ligne) => ligne.trim())
     .filter((ligne) => ligne.length > 0)

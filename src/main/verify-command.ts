@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
+import { sansSequencesAnsi } from '../shared/ansi'
 
 /**
  * COMMANDE DE VERIFICATION exposee a l'agent — pour qu'il puisse PROUVER au lieu de promettre.
@@ -233,19 +234,8 @@ const SAUT = String.fromCharCode(10)
 const LIGNES_DE_VERDICT =
   /^\s*(?:FAIL|×|✗|✕|Test Files|Tests\s|Duration|error TS\d+|Error:|AssertionError|exit code)/
 
-/**
- * Retire les sequences ANSI d'une ligne avant de la comparer.
- *
- * Revele par la sortie REELLE de l'app le 2026-08-19 : vitest prefixe ses lignes de `ESC[32m`,
- * donc un motif ancre sur le debut de ligne ne matchait JAMAIS et le verdict etait perdu malgre le
- * correctif. Le premier test utilisait du texte propre — un fixture qui ne ressemblait pas a la
- * production, donc un vert qui ne prouvait rien.
- */
-// eslint-disable-next-line no-control-regex -- matcher l'echappement ANSI est precisement l'objet : la regle vise un caractere de controle ACCIDENTEL.
-const SEQUENCE_ANSI = /\x1b\[[0-9;]*m/g
-
 function sansCouleur(ligne: string): string {
-  return ligne.replace(SEQUENCE_ANSI, '')
+  return sansSequencesAnsi(ligne)
 }
 
 function verdictDe(texte: string, budget: number): string {
@@ -278,7 +268,16 @@ function verdictDe(texte: string, budget: number): string {
  * le plafond : la valeur rendue ne le depasse jamais.
  */
 export function capVerifyOutput(raw: string, cap: number = VERIFY_OUTPUT_CAP): string {
-  const text = raw.trim()
+  /*
+   * DEPOUILLER A L'ENTREE, une fois pour toutes.
+   *
+   * DEFAUT VECU le 2026-08-25 (conv-1404) : le panneau de `verify` affichait des lignes entieres de
+   * codes de couleur. `sansCouleur` existait — mais elle ne servait qu'a TESTER la ligne contre le
+   * motif de verdict : la ligne RETENUE gardait ses couleurs, et la queue aussi. Depouiller ici, au
+   * seul entonnoir de ce qui est rendu, rend le geste inratable ; et le plafond se mesure enfin sur
+   * du texte VISIBLE, au lieu de laisser les octets d'echappement manger le budget.
+   */
+  const text = sansSequencesAnsi(raw).trim()
   if (text.length <= cap) return text
   const omitted = text.length - cap
   const marker = `…[tronqué — ${omitted} caractères omis]` + SAUT
