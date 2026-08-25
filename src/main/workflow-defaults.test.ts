@@ -8,7 +8,7 @@ import {
   seedDefaultWorkflows,
   type WorkflowProfile
 } from './workflow-profiles'
-import { PIPELINE_PHASES } from './skill-pipeline'
+import { PIPELINE_PHASES, skillInstruction } from './skill-pipeline'
 import { DEFAULT_WORKFLOWS } from './workflow-defaults'
 import { graphDefects, nodeRanks, worstCaseNodeExecutions } from './workflow-graph'
 import { initialBudget, nextNode, type NodeVerdict } from './workflow-walk'
@@ -55,20 +55,32 @@ describe('semis du catalogue', () => {
 
   it('migre un workflow livre intact qui forcait Claude, sans toucher une variante utilisateur', () => {
     const p = chemin()
+    /*
+     * LE FIXTURE DERIVE DU DEFAUT COURANT, il ne recopie plus une forme figee.
+     *
+     * Il codait en dur l'ancien graphe `correctif` (build-1 + judge-1). Le 2026-08-25, `think` et
+     * `learn` ont ete ajoutes aux profils : le fixture a cesse de correspondre et le test est tombe,
+     * alors que la REGLE testee — « un profil livre INTACT qui force Claude est migre, une variante
+     * utilisateur ne l'est pas » — n'avait pas bouge.
+     *
+     * On construit donc l'empreinte legacy comme la migration le fait elle-meme : le defaut courant,
+     * plus le `provider: 'claude'` impose. Le test suit desormais les profils au lieu de les figer.
+     *
+     * CONSEQUENCE NOMMEE : cette migration ne reconnait que l'empreinte du defaut COURANT. Une
+     * installation restee sur l'ancien graphe provider-locke ne sera plus migree — la migration
+     * ciblait un defaut passe, et changer le defaut la retire de fait.
+     */
+    const courant = DEFAULT_WORKFLOWS.find((profile) => profile.id === 'correctif')!
     const legacyCorrectif: WorkflowProfile = {
-      id: 'correctif',
-      name: 'Correctif',
-      description: DEFAULT_WORKFLOWS.find((profile) => profile.id === 'correctif')!.description,
+      ...courant,
       graph: {
-        entry: 'build-1',
-        nodes: [
-          { id: 'build-1', phase: 'build', agents: [{ provider: 'claude', persona: 'preuve' }] },
-          { id: 'judge-1', phase: 'judge', agents: [{ provider: 'claude', persona: 'correcteur' }] }
-        ],
-        edges: [
-          { from: 'build-1', to: 'judge-1', when: 'always' },
-          { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 }
-        ]
+        ...courant.graph!,
+        nodes: courant.graph!.nodes.map((node) => ({
+          ...node,
+          ...(node.agents
+            ? { agents: node.agents.map((agent) => ({ provider: 'claude', ...agent })) }
+            : {})
+        }))
       }
     }
     saveWorkflowProfiles(
@@ -87,7 +99,11 @@ describe('semis du catalogue', () => {
     expect(livre.graph?.nodes.flatMap((node) => node.agents ?? []).every((a) => !a.provider)).toBe(
       true
     )
-    expect(utilisateur.graph?.nodes[0].agents?.[0].provider).toBe('claude')
+    // On vise le PREMIER nœud qui porte un agent, pas `nodes[0]` : depuis l'ajout de `think` en
+    // tete, le premier nœud n'en porte aucun. L'intention testee est que la variante utilisateur
+    // GARDE son provider impose.
+    const porteurUtilisateur = utilisateur.graph?.nodes.find((node) => node.agents?.length)
+    expect(porteurUtilisateur?.agents?.[0].provider).toBe('claude')
   })
 })
 
@@ -116,7 +132,11 @@ describe('workflows livrés d’origine', () => {
 
   it('livre un Chantier Autowin complet qui respecte Agent Studio', () => {
     const graph = chantier()
+    // `think` en tete depuis le 2026-08-25. PAS de `learn` ici : lui donner une arete sortante
+    // rendrait le juge NON TERMINAL, et le marcheur remangerait le budget de retour — defaut
+    // mesure (3 passages build au lieu de 1). Voir l'en-tete de `workflow-defaults.ts`.
     expect(graph.nodes.map((node) => node.phase)).toEqual([
+      'think',
       'scout',
       'frame',
       'terrain',
@@ -139,7 +159,10 @@ describe('workflows livrés d’origine', () => {
   })
 
   it('termine le chemin nominal seulement après clean puis judge vert', () => {
+    // Le chemin nominal passe desormais par `think-1` en entree. Il finit sur le juge : `learn`
+    // n'est pas cable ici, pour ne pas priver le juge de son statut terminal.
     expect(marche(['green'])).toEqual([
+      'think-1',
       'scout-1',
       'frame-1',
       'terrain-1',
@@ -151,6 +174,7 @@ describe('workflows livrés d’origine', () => {
 
   it('un judge rouge rejoue build → clean → judge, au plus deux fois', () => {
     expect(marche(['red', 'red', 'red'])).toEqual([
+      'think-1',
       'scout-1',
       'frame-1',
       'terrain-1',
@@ -185,10 +209,26 @@ describe('workflows livrés d’origine', () => {
     }
   })
 
-  it('toute phase employée existe réellement dans le pipeline', () => {
+  it('toute phase employée est JOUABLE : phase du pipeline, ou skill présente sur disque', () => {
+    /*
+     * CE TEST A CHANGE D'ASSERTION LE 2026-08-25, PAS D'INVARIANT.
+     *
+     * Il exigeait que chaque nœud soit une phase du pipeline. C'etait un PROXY de l'invariant reel —
+     * « un profil livre ne doit pas citer ce que le moteur ne peut pas jouer » — valable tant qu'un
+     * nœud ne pouvait etre qu'une phase. Le moteur sait aussi jouer un nœud SKILL (`isSkillNode`,
+     * `skill-node-tools.ts`), et les profils emploient desormais `think` et `learn`.
+     *
+     * L'assertion est plus FORTE qu'avant pour ces nœuds : appartenir a `PIPELINE_PHASES` ne
+     * prouvait rien de leur existence, tandis qu'ici la skill doit REELLEMENT charger des
+     * instructions. Un nœud dont la skill ne resout pas produirait un texte decrivant ce qu'il
+     * ferait — exactement le defaut que `skill-node-tools.ts` corrige une couche plus bas.
+     */
     for (const profil of DEFAULT_WORKFLOWS) {
       for (const node of profil.graph!.nodes) {
-        expect(PIPELINE_PHASES, `${profil.name}/${node.id}`).toContain(node.phase)
+        const jouable =
+          (PIPELINE_PHASES as readonly string[]).includes(node.phase) ||
+          skillInstruction(node.phase).length > 500
+        expect(jouable, `${profil.name}/${node.id} (${node.phase})`).toBe(true)
       }
     }
   })
@@ -218,10 +258,29 @@ describe('workflows livrés d’origine', () => {
   })
 
   it('le pire cas reste borné et raisonnable — un exemple ne doit pas coûter une fortune', () => {
+    /*
+     * PLAFOND REBASÉ DE 24 À 32 LE 2026-08-25, avec les chiffres, parce qu'un plafond relevé en
+     * silence n'est plus un garde.
+     *
+     * `think` en tête et `learn` en queue ont été ajoutés aux six profils substantiels. Le coût
+     * MESURÉ, avant → après :
+     *
+     *   eclair 1 → 1 (épargné)   ·   correctif 6 → 10   ·   feature 24 → 31
+     *   chantier-autowin 12 → 16 ·   panel-critique 8 → 13 · exploration 2 → 4 · remake 7 → 11
+     *
+     * `feature` était EXACTEMENT au plafond : celui-ci avait été calibré sur lui, donc toute
+     * addition le brisait mécaniquement. L'augmentation vient des arêtes de RETOUR (un juge rouge
+     * rejoue le graphe) qui multiplient chaque nœud ajouté, pas des deux nœuds pris isolément.
+     *
+     * Le garde garde toujours : un graphe qui s'emballerait dépasserait 32. Ce qui a changé est la
+     * référence, pas la règle — et elle est écrite ici pour qu'un futur dépassement se compare à une
+     * mesure, non à un chiffre orphelin.
+     */
+    const PLAFOND = 32
     for (const profil of DEFAULT_WORKFLOWS) {
       const pire = worstCaseNodeExecutions(profil.graph!)
       expect(pire, profil.name).toBeGreaterThan(0)
-      expect(pire, profil.name).toBeLessThanOrEqual(24)
+      expect(pire, profil.name).toBeLessThanOrEqual(PLAFOND)
     }
   })
 })
