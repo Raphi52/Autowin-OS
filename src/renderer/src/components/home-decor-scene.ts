@@ -834,6 +834,14 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
       // planète, et indexer en dur ferait planter la boucle de rendu.
       planets.forEach((planet, index) => {
         planet.rotation.y = temps * (index % 2 === 0 ? 0.06 : -0.045) * (1 + index * 0.3)
+        // Glissement DANS LE PLAN au curseur, autour de la position cadree par `resize`.
+        // L'amplitude croit avec l'index : les planetes ne bougent pas en bloc, et ce decalage
+        // relatif est ce qui se lit comme de la profondeur. Volontairement faible pour rester un
+        // fremissement, jamais un deplacement qui decadre la composition.
+        const amplitude = (0.9 + index * 0.55) * composition.parallaxe
+        const base = planetBases[index]
+        planet.position.x = base.x + look.x * amplitude
+        planet.position.y = base.y + look.y * amplitude * 0.7
       })
       // La caméra suit le regard, amortie en amont par l'appelant. C'est LE signal de profondeur :
       // un décor fixe se lit comme une texture, même en 3D.
