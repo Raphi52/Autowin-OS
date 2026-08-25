@@ -22,6 +22,8 @@ import {
   signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
+  questionPoseeSansAvoirLu,
+  RELANCE_QUESTION_SANS_LECTURE,
   exigeUneConclusion
 } from './chat-turn-messages'
 import { invokedSkillId, skillInstruction } from './skill-pipeline'
@@ -893,6 +895,7 @@ export class AgentPilot {
       | 'correction-apres-echec'
       | 'annonce-sans-action'
       | 'outil-pretendu-absent'
+      | 'question-sans-lecture'
     > = []
     const grantRecoveryIteration = (
       reason:
@@ -905,6 +908,7 @@ export class AgentPilot {
         | 'correction-apres-echec'
         | 'annonce-sans-action'
         | 'outil-pretendu-absent'
+        | 'question-sans-lecture'
     ): void => {
       recoveryReasons.push(reason)
       iterationLimit += 1
@@ -930,6 +934,13 @@ export class AgentPilot {
     let conclusionRecoveryAvailable = true
     /** Une LECTURE a-t-elle eu lieu ? Un chiffre sans lecture est une supposition, pas une reponse. */
     let anyReadExecuted = false
+    /**
+     * Une QUESTION a-t-elle ete posee ce tour ? Mesure du 2026-08-25 (conv-1399) : une question a
+     * quatre options posee sans avoir lu un seul fichier, dont une option DEJA implementee et
+     * committee. L'utilisateur a attendu pour une reponse qui etait a portee de lecture.
+     */
+    let questionPoseeCeTour = false
+    let questionSansLectureRecoveryAvailable = true
     /** Dernier texte visible du tour, pour juger s'il avance un nombre non verifie. */
     let visibleTextThisTurn = ''
     let chiffreNonVerifieRecoveryAvailable = true
@@ -1508,6 +1519,15 @@ export class AgentPilot {
           continue
         }
         if (
+          questionSansLectureRecoveryAvailable &&
+          questionPoseeSansAvoirLu(questionPoseeCeTour, anyReadExecuted)
+        ) {
+          questionSansLectureRecoveryAvailable = false
+          grantRecoveryIteration('question-sans-lecture')
+          convo.push(RELANCE_QUESTION_SANS_LECTURE)
+          continue
+        }
+        if (
           chiffreNonVerifieRecoveryAvailable &&
           exigeUnChiffreVerifie(latestUserMessage, visibleTextThisTurn, anyReadExecuted)
         ) {
@@ -1604,6 +1624,7 @@ export class AgentPilot {
           token.name === 'find_in_files'
         )
           anyReadExecuted = true
+        if (token.name === 'ask') questionPoseeCeTour = true
         const settledAction = recoveredHere?.settledActions?.find(
           (action) => action.actionId === actionId && action.name === token.name
         )

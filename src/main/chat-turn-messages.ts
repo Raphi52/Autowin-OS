@@ -458,3 +458,40 @@ export function exigeAgirPasAnnoncer(
     /\bje (procède|démarre|attaque) (maintenant|par)\b/i.test(texte)
   return annonceAuFutur
 }
+
+/**
+ * Une QUESTION a-t-elle ete posee sans que rien n'ait ete LU ?
+ *
+ * LE DEFAUT, mesure le 2026-08-25 sur conv-1399. L'utilisateur demande « je vois toujours le fond
+ * d'ecran [...] je veux une reproduction en 3d ». L'agent repond par un choix a quatre options
+ * (« profondeur sur l'image existante » ou « vraie scene 3D qui remplace l'image ») en ayant lu
+ * ZERO fichier -- et l'une de ses options etait DEJA implementee et committee dans le depot. Il a
+ * donc fait attendre l'utilisateur pour une reponse qui etait a portee de lecture.
+ *
+ * Preuve que la consigne ne suffit pas : la regle existe deja en prose dans la constitution donnee a
+ * l'agent (reflexe 1, « avant de poser une question -> board-gate : un fait CITE peut repondre ? »).
+ * Elle a ete enfreinte quand meme. C'est le motif connu du garde-fou PASSIF : une regle qu'aucun
+ * mecanisme ne verifie finit par ne plus etre suivie. On la rend donc MECANIQUE, comme la relance du
+ * chiffre devine juste au-dessus -- dont ce garde est le jumeau exact.
+ *
+ * LE DECLENCHEUR est l'ABSENCE TOTALE de lecture, jamais la forme de la question. C'est volontaire
+ * et c'est ce qui rend le garde sur : une question de GOUT (« laquelle de ces trois directions
+ * preferes-tu ? ») appartient legitimement a l'humain, et une fois la lecture faite elle passe. Ce
+ * qui est refuse, c'est uniquement de demander AVANT d'avoir regarde.
+ */
+export function questionPoseeSansAvoirLu(
+  questionPosee: boolean,
+  lectureEffectuee: boolean
+): boolean {
+  return questionPosee && !lectureEffectuee
+}
+
+/** Ce qu'on renvoie a l'agent : l'ordre de REGARDER, puis de decider lui-meme si possible. */
+export const RELANCE_QUESTION_SANS_LECTURE =
+  'SYSTÈME: tu viens de poser une question à l’utilisateur SANS avoir lu un seul fichier. ' +
+  'Une partie de ce que tu demandes est peut-être déjà dans le code — mesuré le 25/08 sur ' +
+  'conv-1399, où une des options proposées était déjà implémentée et committée. Appelle ' +
+  'MAINTENANT `list_files` / `read_file` / `find_in_files` sur la zone concernée, puis : si la ' +
+  'lecture répond, avance sur une hypothèse énoncée (« je suppose X — corrige-moi ») au lieu de ' +
+  'demander ; si un vrai choix subsiste (goût, arbitrage que seul l’utilisateur possède), repose ' +
+  'la question en citant ce que tu as lu.'
