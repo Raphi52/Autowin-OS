@@ -9,6 +9,26 @@ import { ProviderRegistry } from './providers/registry'
 import type { ProviderAdapter, SendResult, StreamChunk } from './providers/types'
 import { RoleModelConfig } from './roles'
 
+/*
+ * LES N PREMIERS ARGUMENTS, et non l'appel EXACT.
+ *
+ * `bus.exec` a gagne un parametre optionnel `onProgress` le 2026-08-25 (signe de vie d'une action
+ * longue). Onze assertions `toHaveBeenCalledWith` sont alors passees au rouge d'un coup : elles
+ * figeaient l'ARITE de l'appel, alors que leur intention est le nom de la commande, ses arguments et
+ * sa conversation. Une assertion d'arite sur une signature qui grandit recassera au prochain
+ * parametre optionnel -- c'est deja arrive une fois, autant ne pas le reprogrammer.
+ *
+ * On compare donc le DEBUT de chaque appel. Aucune assertion n'est desserree : les valeurs verifiees
+ * sont exactement les memes, seule la queue non specifiee cesse de compter.
+ */
+const appeleAvec = (
+  spy: { mock: { calls: unknown[][] } },
+  ...attendus: unknown[]
+): void => {
+  expect(spy.mock.calls.map((appel) => appel.slice(0, attendus.length))).toContainEqual(attendus)
+}
+
+
 describe('AgentPilot — resultat provider recupere apres redemarrage', () => {
   it('publie le lien du journal direct avant de consommer la réponse', async () => {
     const links: PilotProviderJournalLink[] = []
@@ -119,7 +139,7 @@ describe('AgentPilot — resultat provider recupere apres redemarrage', () => {
     )
 
     expect(exec).toHaveBeenCalledTimes(1)
-    expect(exec).toHaveBeenCalledWith(
+    appeleAvec(exec, 
       'edit_file',
       { path: 'src/x.ts' },
       'conv-recovery',

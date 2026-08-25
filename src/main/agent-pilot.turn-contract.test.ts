@@ -6,6 +6,35 @@ import { join } from 'node:path'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { forgetEcho, noteRemembered } from './session-memory-echo'
 
+/*
+ * LES N PREMIERS ARGUMENTS, et non l'appel EXACT.
+ *
+ * `bus.exec` a gagne un parametre optionnel `onProgress` le 2026-08-25 (signe de vie d'une action
+ * longue). Onze assertions `toHaveBeenCalledWith` sont alors passees au rouge d'un coup : elles
+ * figeaient l'ARITE de l'appel, alors que leur intention est le nom de la commande, ses arguments et
+ * sa conversation. Une assertion d'arite sur une signature qui grandit recassera au prochain
+ * parametre optionnel -- c'est deja arrive une fois, autant ne pas le reprogrammer.
+ *
+ * On compare donc le DEBUT de chaque appel. Aucune assertion n'est desserree : les valeurs verifiees
+ * sont exactement les memes, seule la queue non specifiee cesse de compter.
+ */
+/** Le N-ieme appel, compare sur ses premiers arguments. Meme raison que `appeleAvec`. */
+const nieme = (
+  spy: { mock: { calls: unknown[][] } },
+  rang: number,
+  ...attendus: unknown[]
+): void => {
+  expect(spy.mock.calls[rang - 1]?.slice(0, attendus.length)).toEqual(attendus)
+}
+
+const appeleAvec = (
+  spy: { mock: { calls: unknown[][] } },
+  ...attendus: unknown[]
+): void => {
+  expect(spy.mock.calls.map((appel) => appel.slice(0, attendus.length))).toContainEqual(attendus)
+}
+
+
 const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   tab: 'chat',
   providers: [],
@@ -104,7 +133,7 @@ describe('AgentPilot turn contract', () => {
     )
 
     expect(bus.exec).toHaveBeenCalledTimes(1)
-    expect(bus.exec).toHaveBeenCalledWith(
+    appeleAvec(bus.exec, 
       'orchestrate',
       { task: 'premier run', rootTask: 'fais la tache' },
       'conv-unique',
@@ -144,7 +173,7 @@ describe('AgentPilot turn contract', () => {
       bus as never
     ).chat([{ role: 'user', content: rootTask }], () => undefined, undefined, 2, 'conv-root')
 
-    expect(bus.exec).toHaveBeenCalledWith(
+    appeleAvec(bus.exec, 
       'orchestrate',
       { task: 'liste les defauts', phase: 'scout', rootTask },
       'conv-root'
@@ -178,7 +207,7 @@ describe('AgentPilot turn contract', () => {
     )
 
     expect(registry.send).not.toHaveBeenCalled()
-    expect(bus.exec).toHaveBeenCalledWith(
+    appeleAvec(bus.exec, 
       'orchestrate',
       { task: '/scout trouve les risques du repo' },
       'conv-1'
@@ -291,7 +320,7 @@ describe('AgentPilot turn contract', () => {
       binding
     )
 
-    expect(bus.exec).toHaveBeenCalledWith(
+    appeleAvec(bus.exec, 
       'orchestrate',
       { task: '/build corrige puis teste' },
       'conv-task',
@@ -401,7 +430,7 @@ describe('AgentPilot turn contract', () => {
       'conv-1'
     )
 
-    expect(bus.exec).toHaveBeenCalledWith('remove_conversation', { id: 'conv-1' }, 'conv-1')
+    appeleAvec(bus.exec, 'remove_conversation', { id: 'conv-1' }, 'conv-1')
   })
 
   it('does not interrupt the user for a structured question without an admitted blocker', async () => {
@@ -989,7 +1018,7 @@ describe('AgentPilot turn contract', () => {
     )
     // Le pilotage est present (il porte read_file) et la lecture a REELLEMENT atteint le bus.
     expect(String(send.mock.calls[0][2].system)).toContain('read_file')
-    expect(bus.exec).toHaveBeenCalledWith('read_file', { path: 'src/a.ts' }, undefined)
+    appeleAvec(bus.exec, 'read_file', { path: 'src/a.ts' }, undefined)
     expect(events.some((event) => event.kind === 'command' && event.name === 'read_file')).toBe(
       true
     )
@@ -1079,8 +1108,7 @@ describe('AgentPilot turn contract', () => {
       registry.send.mock.calls.every((call) => call[2].toolProfile !== 'watchdog-read-only')
     ).toBe(true)
     expect(bus.exec).toHaveBeenCalledTimes(4)
-    expect(bus.exec).toHaveBeenNthCalledWith(
-      1,
+    nieme(bus.exec, 1,
       'orchestrate',
       {
         task: 'corrige package.json',
@@ -1088,14 +1116,12 @@ describe('AgentPilot turn contract', () => {
       },
       undefined
     )
-    expect(bus.exec).toHaveBeenNthCalledWith(
-      2,
+    nieme(bus.exec, 2,
       'orchestrate',
       { task: 'corrige package.json', rootTask: "Documente l'API dans README.md" },
       undefined
     )
-    expect(bus.exec).toHaveBeenNthCalledWith(
-      3,
+    nieme(bus.exec, 3,
       'orchestrate',
       {
         task: 'corrige package.json',
@@ -1103,8 +1129,7 @@ describe('AgentPilot turn contract', () => {
       },
       undefined
     )
-    expect(bus.exec).toHaveBeenNthCalledWith(
-      4,
+    nieme(bus.exec, 4,
       'orchestrate',
       {
         task: 'corrige package.json',
