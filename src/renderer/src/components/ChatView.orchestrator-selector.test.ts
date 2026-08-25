@@ -288,12 +288,12 @@ describe('selecteur orchestrateur Chat', () => {
       { id: 'm6', provider: 'gateway', model: 'auto/claude-opus', label: 'Auto Claude Opus' }
     ])
     const anthropic = result.groups.find((group) => group.key === 'anthropic')
-    // Fable en tête ; no-think masqué ; Opus décroissant puis Sonnet ; auto/claude ABSENT d’ici.
+    // Fable en tête ; no-think masqué ; auto/claude ABSENT d’ici.
+    // Seule la DERNIÈRE version de chaque famille est proposée (demande utilisateur 2026-08-25) :
+    // Opus 4.7 et Opus 4.5 sont désormais couverts par Opus 4.8 ; Sonnet, autre famille, reste.
     expect(anthropic?.options.map((option) => option.model)).toEqual([
       'cc/claude-fable-5',
       'cc/claude-opus-4-8',
-      'cc/claude-opus-4-7',
-      'cc/claude-opus-4-5-20251101',
       'cc/claude-sonnet-4-6'
     ])
     // La route auto/claude-opus vit dans la catégorie « Sélection automatique ».
