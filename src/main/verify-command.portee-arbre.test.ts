@@ -63,8 +63,21 @@ describe('la note de portée est réellement branchée sur `verify`', () => {
   const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
 
   it('`runVerifyAt` appelle porteeDuVert', () => {
-    const bloc = source.slice(source.indexOf('private async runVerifyAt'))
-    expect(bloc.slice(0, 1600)).toContain('porteeDuVert(')
+    /*
+     * LA FENETRE EST DELIMITEE PAR LA METHODE, plus par un nombre de caracteres.
+     *
+     * Ce test decoupait 1600 caracteres apres la signature. Le 2026-08-25, `runVerifyAt` a grandi de
+     * ~25 lignes (validation d'une cible de verification) et l'appel s'est retrouve HORS fenetre :
+     * rouge, alors que le cablage etait intact. Un test qui tombe parce que la methode a grossi
+     * mesure sa longueur, pas son comportement.
+     *
+     * On borne desormais a la methode SUIVANTE. La fenetre suit la methode au lieu de la contraindre.
+     */
+    const debut = source.indexOf('private async runVerifyAt')
+    expect(debut).toBeGreaterThan(-1)
+    const suite = source.indexOf(`${String.fromCharCode(10)}  private `, debut + 1)
+    const bloc = source.slice(debut, suite > debut ? suite : undefined)
+    expect(bloc).toContain('porteeDuVert(')
   })
 
   it('la liste des fichiers vient du lecteur git EXISTANT, pas d’un doublon', () => {
