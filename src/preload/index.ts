@@ -206,6 +206,9 @@ const api = {
     ipcRenderer.invoke('preflight:repair', checkId),
   recheckPreflight: (force?: boolean): Promise<PreflightResult> =>
     ipcRenderer.invoke('preflight:recheck', force),
+  /** Le moteur qui tourne contient-il encore les sources ? Voir `shared/moteur-perime`. */
+  etatDuMoteur: (): Promise<{ perime: boolean; fichier?: string; retardMs?: number }> =>
+    ipcRenderer.invoke('os:moteur:etat'),
   orchestrationBudget: (): Promise<{
     maxUsd: number | null
     maxProviderCalls: number

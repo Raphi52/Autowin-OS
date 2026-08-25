@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import packageManifest from '../../../package.json'
+import { messageMoteurPerime } from '../../shared/moteur-perime'
 
 // Gravés au build par `electron.vite.config.ts` (remplacement littéral Vite). Hors build (tests
 // unitaires happy-dom, où `define` ne s'applique pas), ils sont indéfinis → repli lisible.
@@ -127,7 +128,23 @@ export function MainApp(): React.JSX.Element {
   const [railCollapsed, setRailCollapsed] = useState<boolean>(
     () => localStorage.getItem('autowin:rail-collapsed') === '1'
   )
+  /**
+   * L'AVERTISSEMENT « moteur perime », ou `null` quand tout est sain.
+   *
+   * Interroge UNE FOIS a l'ouverture : la reponse compare l'instant de demarrage du processus aux
+   * dates des sources, et ni l'un ni les autres ne bougent tant que l'app tourne. Repeter la
+   * question ne changerait rien -- sauf a payer un balayage disque pour le meme resultat.
+   */
+  const [moteurPerime, setMoteurPerime] = useState<string | null>(null)
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['accueil']))
+  useEffect(() => {
+    // Un pied de page ne fait jamais tomber l'interface : toute panne laisse l'avertissement absent
+    // plutot que de propager une erreur. Silence = rien a signaler, jamais « on ne sait pas ».
+    void window.api
+      .etatDuMoteur?.()
+      .then((etat) => setMoteurPerime(messageMoteurPerime(etat) ?? null))
+      .catch(() => setMoteurPerime(null))
+  }, [])
   const [observatoryFocus, setObservatoryFocus] = useState<ObservatoryFocus | null>(null)
   const [agentStudioSection, setAgentStudioSection] = useState<AgentStudioSection>('topology')
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('capabilities')
@@ -493,6 +510,16 @@ export function MainApp(): React.JSX.Element {
         <div className="rail-foot c-faint" title={`commit ${buildSha}`}>
           {`v${packageManifest.version} · build ${buildNumber} · ${buildSha}`}
         </div>
+        {/* MOTEUR PÉRIMÉ — mesuré le 25/08 : `electron-vite dev` ne reconstruit PAS le processus
+            principal, donc un correctif reste invisible jusqu'à un redémarrage manuel. Le renderer,
+            lui, est bien rechargé à chaud : l'interface bouge, le moteur non, et rien ne le disait.
+            On MONTRE au lieu de redémarrer — `--watch` tuait l'app pendant le travail
+            (`dev-sans-watch.test.ts`). Rien n'est rendu quand l'état est sain. */}
+        {moteurPerime && (
+          <div className="rail-foot rail-foot--perime" role="status" title={moteurPerime}>
+            ⚠ {moteurPerime}
+          </div>
+        )}
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
         {visitedTabs.has('accueil') && (

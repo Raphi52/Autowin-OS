@@ -221,6 +221,22 @@
   font-size: 11px;
   padding: 0 var(--s2);
 }
+/* MOTEUR PERIME — un avertissement, pas une alarme. Il doit se remarquer sans happer l'oeil : il
+   apparait pendant le developpement, a cote d'une identite de build, et il ne concerne jamais un
+   utilisateur d'une version empaquetee. Le texte peut etre long (il NOMME un fichier) : on le laisse
+   revenir a la ligne plutot que de le tronquer, un avertissement coupe ne dit plus ou chercher. */
+.rail-foot--perime {
+  color: #d4a94f;
+  line-height: 1.35;
+  padding-top: var(--s1);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* Rail replie : le pied est deja masque par la regle d'au-dessus, celle-ci evite qu'un avertissement
+   long ne reapparaisse en debordant. */
+.rail.is-collapsed .rail-foot--perime {
+  display: none;
+}
 .main {
   flex: 1;
   min-width: 0;

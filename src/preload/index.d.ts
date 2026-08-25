@@ -90,6 +90,8 @@ interface ChatApi {
   getPreflight: () => Promise<PreflightResult | null>
   repairPreflight: (checkId: string) => Promise<PreflightRepairOutcome>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
+  /** Le moteur qui tourne contient-il encore les sources ? Voir `shared/moteur-perime`. */
+  etatDuMoteur: () => Promise<{ perime: boolean; fichier?: string; retardMs?: number }>
   orchestrationBudget: () => Promise<{
     maxUsd: number | null
     maxProviderCalls: number

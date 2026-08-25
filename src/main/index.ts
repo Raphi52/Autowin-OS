@@ -1,4 +1,5 @@
 import { signalerInterfaceVisible } from './startup-gate'
+import { observerLeMoteur } from './observer-les-sources'
 import { spawn } from 'node:child_process'
 import { readGitGraph } from './git-graph-main'
 /**
@@ -1400,6 +1401,12 @@ os.setCausalMemoryRetriever((conversationId) =>
 )
 
 const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json'))
+/**
+ * L'INSTANT ou ce processus a demarre. Un processus ne peut pas contenir un fichier ecrit
+ * APRES lui : c'est le seul discriminant necessaire, et il couvre les deux formes de
+ * peremption (bundle non reconstruit, ou bundle reconstruit sans relance du processus).
+ */
+const demarrageDuMoteurMs = Date.now()
 const orchestrationBudgetPath = join(app.getPath('userData'), 'orchestration-budget.json')
 const ticketSources = new TicketSourceStore(join(app.getPath('userData'), 'ticket-sources.json'))
 const ticketCredentials = createTicketCredentialStore()
@@ -2533,6 +2540,26 @@ Le fil reprend ensuite normalement.`
         undefined,
         { workflowOverride, publication, sourceSnapshot }
       )
+  })
+  /*
+   * ETAT DU MOTEUR — le pied de page doit pouvoir dire que le code qui tourne n'est plus celui des
+   * sources. Mesure du 2026-08-25 : `electron-vite dev` ne reconstruit PAS le processus principal,
+   * donc un correctif reste invisible jusqu'a un redemarrage manuel, sans que rien ne le signale.
+   *
+   * On MONTRE au lieu de redemarrer : `--watch` a deja ete essaye et tuait l'application pendant le
+   * travail (`dev-sans-watch.test.ts` l'interdit depuis).
+   *
+   * Le balayage est fait A LA DEMANDE et non au demarrage : appele une fois par ouverture de
+   * fenetre, il ne coute rien, et la reponse reste fraiche si l'utilisateur laisse l'app ouverte.
+   */
+  ipcMain.handle('os:moteur:etat', (event) => {
+    assertTrustedRendererSender(event, 'Etat du moteur')
+    try {
+      return observerLeMoteur(app.getAppPath(), demarrageDuMoteurMs, app.isPackaged)
+    } catch {
+      // Un pied de page ne fait jamais tomber l'application : sans reponse, il n'affiche rien.
+      return { perime: false }
+    }
   })
   ipcMain.handle('os:orchestrationBudget:get', (event) => {
     assertTrustedRendererSender(event, 'Orchestration budget')
