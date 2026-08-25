@@ -90,16 +90,16 @@ describe('selecteur orchestrateur Chat', () => {
       onSelect
     })
     expect(dom.querySelector('summary')?.textContent).toContain('GPT-5.6 TerraÉlevé')
+    // Les efforts vivent désormais DANS la popup, en matrice par provider : aucun sous-menu.
+    expect(dom.querySelector('.model-effort-menu')).toBeNull()
+    const crans = [...dom.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+    expect(crans.map((item) => item.querySelector('em')?.textContent)).toEqual([
+      'Léger',
+      'Élevé',
+      'Ultra'
+    ])
     await act(async () => {
-      dom.querySelector<HTMLButtonElement>('[role="option"]')?.click()
-    })
-    expect(
-      [...dom.querySelectorAll('.model-effort-menu button')].map((item) => item.textContent)
-    ).toEqual(['low', 'high✓', 'ultra'])
-    await act(async () => {
-      ;[...dom.querySelectorAll<HTMLButtonElement>('.model-effort-menu button')]
-        .find((item) => item.textContent === 'ultra')
-        ?.click()
+      crans.find((item) => item.querySelector('em')?.textContent === 'Ultra')?.click()
     })
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -127,11 +127,8 @@ describe('selecteur orchestrateur Chat', () => {
     )!
     selector.setAttribute('open', '')
 
-    await act(async () => {
-      selector.querySelector<HTMLButtonElement>('[role="option"]')?.click()
-    })
     expect(selector.open).toBe(true)
-    expect(dom.querySelector('.model-effort-menu')).not.toBeNull()
+    expect(selector.querySelector('[data-testid="effort-matrix"]')).not.toBeNull()
 
     await act(async () => {
       document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))

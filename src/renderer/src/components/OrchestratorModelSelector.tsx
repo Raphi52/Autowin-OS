@@ -55,7 +55,6 @@ export function OrchestratorModelSelector({
     statuses?.find((s) => s.provider === provider)?.status
   const dropdownRef = useRef<HTMLDetailsElement>(null)
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
-  const [matrixOpen, setMatrixOpen] = useState(false)
   useEffect(() => {
     const closeOnOutsideClick = (event: MouseEvent): void => {
       const dropdown = dropdownRef.current
@@ -160,115 +159,113 @@ export function OrchestratorModelSelector({
         </summary>
         <div className="model-select-menu" role="listbox" aria-label="Modèle orchestrateur">
           {matrixRows.length > 0 && (
-            <button
-              type="button"
-              className="model-select-matrix-open"
-              onClick={(event) => {
-                event.preventDefault()
-                dropdownRef.current?.removeAttribute('open')
-                setExpandedModel(null)
-                setMatrixOpen(true)
-              }}
-            >
-              MODEL × EFFORT
-            </button>
+            <ModelEffortMatrix
+              variant="inline"
+              title="MODEL × EFFORT"
+              rows={matrixRows}
+              activeKey={activeMatrixKey}
+              activeEffort={
+                binding?.reasoningEffort && binding.reasoningEffort !== 'none'
+                  ? binding.reasoningEffort
+                  : undefined
+              }
+              onSelect={onSelect}
+              onClose={() => dropdownRef.current?.removeAttribute('open')}
+            />
           )}
-          {grouped.groups.map((group) => (
-            <section key={group.key} className="model-select-group">
-              <span>{group.label}</span>
-              {group.options.map((option) => {
-                const optionKey = `${option.provider}:${option.model}`
-                const selectableEfforts = option.reasoningEfforts.filter(
-                  (effort) => effort !== 'none'
-                )
-                const active =
-                  option.provider === binding?.provider &&
-                  option.model === (currentCatalogModel ?? binding?.model)
-                const statut = statutDe(option.provider)
-                const injoignable = statut !== undefined && STATUTS_BLOQUANTS.has(statut)
-                return (
-                  <div key={optionKey} className="model-select-option">
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={active}
-                      data-provider-status={statut}
-                      aria-disabled={injoignable || undefined}
-                      title={
-                        injoignable
-                          ? `${option.provider} : ${STATUT_LABEL[statut] ?? statut} — reconnecte ce provider dans Routage avant de l’imposer par défaut`
-                          : undefined
-                      }
-                      aria-expanded={
-                        selectableEfforts.length > 0 ? expandedModel === optionKey : undefined
-                      }
-                      onClick={() => {
-                        // Un provider expiré, absent ou en standby échouerait au premier prompt :
-                        // le choix est REFUSÉ au moment où il se fait, pas découvert à l'envoi.
-                        if (injoignable) return
-                        if (selectableEfforts.length === 0) {
-                          dropdownRef.current?.removeAttribute('open')
-                          setExpandedModel(null)
-                          onSelect({ ...option, reasoningEffort: 'none' })
-                          return
+          {grouped.groups.map((group) => {
+            // Les modèles À EFFORTS vivent dans la matrice ci-dessus : ne rester ici que ceux
+            // qui n'exposent aucun cran (sinon le même choix existerait deux fois).
+            const sansEffort = group.options.filter(
+              (option) => option.reasoningEfforts.filter((effort) => effort !== 'none').length === 0
+            )
+            if (sansEffort.length === 0) return null
+            return (
+              <section key={group.key} className="model-select-group">
+                <span>{group.label}</span>
+                {sansEffort.map((option) => {
+                  const optionKey = `${option.provider}:${option.model}`
+                  const selectableEfforts = option.reasoningEfforts.filter(
+                    (effort) => effort !== 'none'
+                  )
+                  const active =
+                    option.provider === binding?.provider &&
+                    option.model === (currentCatalogModel ?? binding?.model)
+                  const statut = statutDe(option.provider)
+                  const injoignable = statut !== undefined && STATUTS_BLOQUANTS.has(statut)
+                  return (
+                    <div key={optionKey} className="model-select-option">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        data-provider-status={statut}
+                        aria-disabled={injoignable || undefined}
+                        title={
+                          injoignable
+                            ? `${option.provider} : ${STATUT_LABEL[statut] ?? statut} — reconnecte ce provider dans Routage avant de l’imposer par défaut`
+                            : undefined
                         }
-                        setExpandedModel((current) => (current === optionKey ? null : optionKey))
-                      }}
-                    >
-                      <span>
-                        <strong>{option.label}</strong>
-                        <small>{option.model}</small>
-                        {statut && statut !== 'authenticated' && (
-                          <small className={`model-option-status is-${statut}`}>
-                            {STATUT_LABEL[statut] ?? statut}
-                          </small>
-                        )}
-                      </span>
-                      {selectableEfforts.length > 0 && <i className="model-option-chevron">›</i>}
-                    </button>
-                    {selectableEfforts.length > 0 && expandedModel === optionKey && (
-                      <div className="model-effort-menu" aria-label={`Effort pour ${option.label}`}>
-                        {selectableEfforts.map((effort) => {
-                          const effortActive = active && effort === binding?.reasoningEffort
-                          return (
-                            <button
-                              key={effort}
-                              type="button"
-                              className={effortActive ? 'is-active' : ''}
-                              onClick={() => {
-                                dropdownRef.current?.removeAttribute('open')
-                                setExpandedModel(null)
-                                onSelect({ ...option, reasoningEffort: effort })
-                              }}
-                            >
-                              <span>{effort}</span>
-                              {effortActive && <i>✓</i>}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </section>
-          ))}
+                        aria-expanded={
+                          selectableEfforts.length > 0 ? expandedModel === optionKey : undefined
+                        }
+                        onClick={() => {
+                          // Un provider expiré, absent ou en standby échouerait au premier prompt :
+                          // le choix est REFUSÉ au moment où il se fait, pas découvert à l'envoi.
+                          if (injoignable) return
+                          if (selectableEfforts.length === 0) {
+                            dropdownRef.current?.removeAttribute('open')
+                            setExpandedModel(null)
+                            onSelect({ ...option, reasoningEffort: 'none' })
+                            return
+                          }
+                          setExpandedModel((current) => (current === optionKey ? null : optionKey))
+                        }}
+                      >
+                        <span>
+                          <strong>{option.label}</strong>
+                          <small>{option.model}</small>
+                          {statut && statut !== 'authenticated' && (
+                            <small className={`model-option-status is-${statut}`}>
+                              {STATUT_LABEL[statut] ?? statut}
+                            </small>
+                          )}
+                        </span>
+                        {selectableEfforts.length > 0 && <i className="model-option-chevron">›</i>}
+                      </button>
+                      {selectableEfforts.length > 0 && expandedModel === optionKey && (
+                        <div
+                          className="model-effort-menu"
+                          aria-label={`Effort pour ${option.label}`}
+                        >
+                          {selectableEfforts.map((effort) => {
+                            const effortActive = active && effort === binding?.reasoningEffort
+                            return (
+                              <button
+                                key={effort}
+                                type="button"
+                                className={effortActive ? 'is-active' : ''}
+                                onClick={() => {
+                                  dropdownRef.current?.removeAttribute('open')
+                                  setExpandedModel(null)
+                                  onSelect({ ...option, reasoningEffort: effort })
+                                }}
+                              >
+                                <span>{effort}</span>
+                                {effortActive && <i>✓</i>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </section>
+            )
+          })}
         </div>
       </details>
-      {matrixOpen && (
-        <ModelEffortMatrix
-          title="MODEL × EFFORT"
-          rows={matrixRows}
-          activeKey={activeMatrixKey}
-          activeEffort={
-            binding?.reasoningEffort && binding.reasoningEffort !== 'none'
-              ? binding.reasoningEffort
-              : undefined
-          }
-          onSelect={onSelect}
-          onClose={() => setMatrixOpen(false)}
-        />
-      )}
       <span id="chat-orchestrator-model-help" className="model-select-help">
         {busy
           ? 'Sélecteur verrouillé pendant le tour en cours de cette conversation.'

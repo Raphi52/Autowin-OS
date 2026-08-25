@@ -197,11 +197,12 @@ describe('ModelEffortMatrix', () => {
       })
     )
 
-    expect(view.querySelector('[data-testid="effort-matrix"]')).toBeNull()
-    const ouvrir = view.querySelector('.model-select-matrix-open') as HTMLButtonElement
-    expect(ouvrir).not.toBeNull()
-    await act(async () => ouvrir.click())
-    const matrice = view.querySelector('[data-testid="effort-matrix"]') as HTMLElement
+    // La matrice est EN LIGNE dans la popup : plus de bouton d'ouverture, plus de modale.
+    expect(view.querySelector('.model-select-matrix-open')).toBeNull()
+    expect(view.querySelector('.effort-matrix-overlay')).toBeNull()
+    const matrice = view.querySelector(
+      '.model-select-menu [data-testid="effort-matrix"]'
+    ) as HTMLElement
     expect(matrice).not.toBeNull()
     expect((matrice.querySelector('.effort-matrix-row') as HTMLElement).dataset.shown).toBe('high')
 
@@ -210,6 +211,7 @@ describe('ModelEffortMatrix', () => {
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'opus', reasoningEffort: 'medium' })
     )
-    expect(view.querySelector('[data-testid="effort-matrix"]')).toBeNull()
+    // en ligne, le clic referme la POPUP hôte (details), la matrice reste dans son menu
+    expect((view.querySelector('details') as HTMLDetailsElement).open).toBe(false)
   })
 })

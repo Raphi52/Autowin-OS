@@ -19,7 +19,7 @@ describe('OrchestratorModelSelector', () => {
     host = null
   })
 
-  it('ferme le menu et son sous-menu au pointerdown extérieur', async () => {
+  it('ferme le menu et sa matrice au pointerdown extérieur', async () => {
     host = document.createElement('div')
     const outside = document.createElement('button')
     outside.textContent = 'Chat'
@@ -50,18 +50,14 @@ describe('OrchestratorModelSelector', () => {
     })
 
     const details = host.querySelector('details') as HTMLDetailsElement
-    const option = host.querySelector('[role="option"]') as HTMLButtonElement
     details.open = true
-    await act(async () => option.click())
-    expect(details.open).toBe(true)
-    expect(host.querySelector('.model-effort-menu')).not.toBeNull()
+    expect(host.querySelector('.model-select-menu [data-testid="effort-matrix"]')).not.toBeNull()
 
     await act(async () => {
       outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
     })
 
     expect(details.open).toBe(false)
-    expect(host.querySelector('.model-effort-menu')).toBeNull()
     outside.remove()
   })
 
