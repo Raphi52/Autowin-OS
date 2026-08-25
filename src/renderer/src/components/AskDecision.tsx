@@ -68,6 +68,23 @@ export function AskDecisionBlock({
       return suivant
     })
 
+  /*
+   * UNE QUESTION NE SE REPOND QU'UNE FOIS.
+   *
+   * VECU le 2026-08-25 : rien ne marquait ce bloc comme repondu, donc chaque clic renvoyait la
+   * reponse. L'utilisateur a cliqué quatre fois sur la meme option et quatre envois sont partis, le
+   * bloc restant aussi cliquable qu'avant -- rien ne disait que sa reponse avait atterri, donc il a
+   * recliqué. Le defaut fabriquait lui-meme sa propre repetition.
+   *
+   * Etat LOCAL au bloc : la reponse est un evenement de cette question-la, pas du fil.
+   */
+  const [repondu, setRepondu] = useState<string | undefined>(undefined)
+  const repondre = (prompt: string): void => {
+    if (repondu !== undefined) return
+    setRepondu(prompt)
+    onPick?.(prompt)
+  }
+
   const auMoinsUnDetail = decision.options.some((option) => option.detail)
   /*
    * CHOIX MULTIPLE. Certaines questions ne sont pas exclusives (« lesquels de ces correctifs ? ») :
@@ -85,7 +102,8 @@ export function AskDecisionBlock({
   const selection = decision.options.filter((_, index) => cochees.has(index))
   const envoyerLaSelection = (): void => {
     if (!selection.length) return
-    onPick?.(promptDesOptions(selection))
+    // Meme verrou que le choix simple : `repondre` refuse un second envoi.
+    repondre(promptDesOptions(selection))
   }
 
   return (
@@ -140,7 +158,10 @@ export function AskDecisionBlock({
                   <button
                     type="button"
                     className="askd-choix"
-                    onClick={() => onPick?.(promptDeLOption(option))}
+                    disabled={repondu !== undefined}
+                    aria-disabled={repondu !== undefined}
+                    data-choisi={repondu === promptDeLOption(option) ? 'oui' : undefined}
+                    onClick={() => repondre(promptDeLOption(option))}
                   >
                     <span className="askd-libelle">
                       {option.libelle}
@@ -172,7 +193,7 @@ export function AskDecisionBlock({
               type="button"
               className="askd-envoyer"
               onClick={envoyerLaSelection}
-              disabled={selection.length === 0}
+              disabled={selection.length === 0 || repondu !== undefined}
               data-testid="ask-decision-envoyer"
             >
               Envoyer {selection.length > 0 ? `(${selection.length})` : ''}
