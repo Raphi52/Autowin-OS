@@ -2588,8 +2588,23 @@ export class AppCommandBus {
           output: ''
         }
       }
-      argv = [...argv, '--', verdict.chemin]
-      etiquette = `${decision.command} -- ${verdict.chemin}`
+      /*
+       * UNE SOURCE PASSE PAR LA PORTEE, un test se joue directement.
+       *
+       * Corrige le 2026-08-25 apres conv-1404 : ce point refusait une cible source, alors qu'un agent
+       * qui vient d'editer un fichier demande naturellement a le verifier. `runRelatedVerifyAt` joue
+       * `vitest related <fichier> --run` -- les tests qui IMPORTENT le fichier -- et il existait deja.
+       * On ROUTE donc, au lieu de refuser.
+       */
+      if (verdict.parPortee) {
+        const parPortee = await this.runRelatedVerifyAt(decision.cwd, [verdict.chemin])
+        // Portee indeterminable (projet sans vitest, chemin non exploitable) : on retombe sur la
+        // suite complete plutot que de rendre un refus. Un vert plus large n'est jamais un faux vert.
+        if (parPortee.allowed) return parPortee
+      } else {
+        argv = [...argv, '--', verdict.chemin]
+        etiquette = `${decision.command} -- ${verdict.chemin}`
+      }
     }
     const resultat = await this.spawnVerify(argv, decision.cwd, etiquette, onProgress)
     // Le verdict NOMME sa portee. Sans cela, un vert obtenu dans un arbre sale se lit comme un

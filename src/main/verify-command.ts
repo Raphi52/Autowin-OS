@@ -321,9 +321,15 @@ export function porteeDuVert(fichiersNonCommites: readonly string[]): string | u
   )
 }
 
-/** Le verdict d'une cible proposee par le modele : acceptee, ou refusee AVEC son motif. */
+/**
+ * Le verdict d'une cible proposee par le modele : acceptee, ou refusee AVEC son motif.
+ *
+ * `parPortee` distingue les deux façons de verifier une cible ACCEPTEE :
+ *   - absent  -> la cible EST un test : on le joue directement ;
+ *   - `true`  -> la cible est une SOURCE : on joue les tests qui l'IMPORTENT (`vitest related`).
+ */
 export type VerdictDeCible =
-  | { ok: true; chemin: string }
+  | { ok: true; chemin: string; parPortee?: true }
   | { ok: false; raison: string }
 
 /**
@@ -380,14 +386,26 @@ export function cibleDeVerification(
   if (segments.includes('.git')) {
     return { ok: false, raison: 'la cible ne peut pas viser le dépôt git lui-même' }
   }
-  if (!MOTIF_FICHIER_DE_TEST.test(normalise)) {
-    return {
-      ok: false,
-      raison: 'la cible doit être un fichier de test (`.test.ts`, `.spec.ts`…) — ce point d’entrée n’exécute pas du code au choix'
-    }
-  }
   if (!existe(join(racine, ...segments))) {
     return { ok: false, raison: `la cible n’existe pas : ${normalise}` }
   }
-  return { ok: true, chemin: segments.join('/') }
+  /*
+   * UNE SOURCE EST ROUTEE, PAS REFUSEE -- corrige le 2026-08-25 apres conv-1404.
+   *
+   * Ce point refusait tout ce qui n'etait pas un fichier de test. Or un agent qui vient d'editer
+   * `chat-pilotage-prompt.ts` demande naturellement a verifier CE fichier : le refus le laissait sans
+   * issue (« la cible doit etre un fichier de test » ne dit pas quoi faire), le run echouait, et son
+   * bureau restait conserve, publication incomplete. Refuser une cible valide faute d'avoir pense a
+   * son cas est un FAUX refus, et il coute un run entier.
+   *
+   * Le mecanisme existait deja : `decideRelatedVerify` joue `vitest related <fichier> --run`, soit
+   * les tests qui IMPORTENT le fichier edite. Il n'y avait donc pas a refuser, mais a ROUTER.
+   *
+   * Les gardes qui PROTEGENT restent intactes : remontee de chemin, chemin absolu, `.git`, joker,
+   * fichier absent. Ce qui s'elargit est le TYPE de fichier, jamais la zone atteignable.
+   */
+  const chemin = segments.join('/')
+  return MOTIF_FICHIER_DE_TEST.test(normalise)
+    ? { ok: true, chemin }
+    : { ok: true, chemin, parPortee: true }
 }
