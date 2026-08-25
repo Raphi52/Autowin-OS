@@ -158,7 +158,9 @@ export function ModelEffortMatrix({
                     }
                     const selected = shown === effort
                     const filled = filledUntil >= 0 && index <= filledUntil
-                    const recommande = cranConseille === effort
+                    // Le point SÉLECTIONNÉ (gros et brillant) est prioritaire : la pastille verte de
+                    // recommandation s'efface sous lui plutôt que de coexister avec deux signaux.
+                    const recommande = cranConseille === effort && !selected
                     return (
                       <button
                         key={effort}
