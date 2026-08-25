@@ -62,6 +62,7 @@ import type { Message } from './providers/types'
 import type { Role, RoleBinding } from './roles'
 import {
   closeConvRun,
+  convRunsRoot,
   reuseOrCreateConvRun,
   populateConvRunSections,
   saveConvRunTrace
@@ -105,6 +106,7 @@ import {
 } from '../shared/orchestration-outcome'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { collectOrchestrationContext } from './orchestration-context'
+import { memoireDesRunsPrecedents, resumeDesTours } from './orchestration-memoire'
 import { optionsQuiPresupposentUneSolution } from './option-lecture-ou-solution'
 import { CONTEXT_MESSAGE_LIMIT } from './conversation-window'
 import { rememberFact } from './brain-remember'
@@ -1433,9 +1435,20 @@ export class AppCommandBus {
             unavailable.push('état application')
           }
           if (!conversation) unavailable.push('conversation')
+          // MÉMOIRE INTER-RUNS (conv-1405) : les objections du juge sont intra-run et mouraient
+          // avec leur run ; les tours antérieurs à la fenêtre disparaissaient sans trace. Lecture
+          // best-effort — une mémoire illisible ne bloque jamais le lancement.
+          let runsPrecedents: ReturnType<typeof memoireDesRunsPrecedents> = []
+          try {
+            runsPrecedents = memoireDesRunsPrecedents(convRunsRoot(), convId)
+          } catch {
+            unavailable.push('mémoire des runs précédents')
+          }
           collectedContext = collectOrchestrationContext({
             task,
             conversation,
+            runsPrecedents,
+            toursAnterieurs: resumeDesTours(conversation?.messages ?? [], CONTEXT_MESSAGE_LIMIT),
             app: app && { tab: app.tab },
             runs: app?.runs,
             unavailable
