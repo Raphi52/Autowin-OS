@@ -34,6 +34,7 @@ import {
 import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement'
 import { natureDeLEchec } from './verify-echec-nature'
 import { bornerLigneDeVie } from './verify-battement'
+import { refusAvecIssue } from './issue-de-refus'
 import { readLastCommitFiles } from './git-read-main'
 import { readGitState } from './git-read-main'
 import type { AutowinOS } from './os'
@@ -1241,8 +1242,8 @@ export class AppCommandBus {
   ): Promise<CommandResult> {
     try {
       const specification = CATALOG.find((command) => command.name === name)
-      if (!specification) throw new Error(`Commande inconnue: ${name}`)
-      if (!this.isCommandEnabled(name)) throw new Error(`Capacité désactivée: ${name}`)
+      if (!specification) throw new Error(refusAvecIssue('commande-inconnue', name))
+      if (!this.isCommandEnabled(name)) throw new Error(refusAvecIssue('capacite-desactivee', name))
       if (name === 'desktop_observe') {
         if (!this.desktop) throw new Error('Controle desktop indisponible')
         const observed = await this.desktop.observe({ display: parseDisplayArg(args.display) })
@@ -2292,7 +2293,7 @@ export class AppCommandBus {
     action: (workspaceRoot: string) => T | Promise<T>
   ): Promise<T> {
     if (!this.os.worktrees) {
-      throw new Error(`isolation workspace indisponible : ${command} refusé`)
+      throw new Error(refusAvecIssue('isolation-indisponible', command))
     }
     const runId = `command-${command === 'edit_file' ? 'edit' : 'graphify'}-${randomUUID()}`
     const beginOptions = {
@@ -2303,7 +2304,7 @@ export class AppCommandBus {
     const workspaceRoot = this.os.worktrees.beginAsync
       ? await this.os.worktrees.beginAsync(runId, `Commande ${command}`, true, beginOptions)
       : this.os.worktrees.begin(runId, `Commande ${command}`, true, beginOptions)
-    if (!workspaceRoot) throw new Error(`isolation workspace indisponible : ${command} refusé`)
+    if (!workspaceRoot) throw new Error(refusAvecIssue('isolation-indisponible', command))
     let completed = false
     try {
       let result: Awaited<T> = await action(workspaceRoot)
@@ -2328,7 +2329,7 @@ export class AppCommandBus {
         const verification =
           parPortee && parPortee.allowed ? parPortee : await this.runVerifyAt(workspaceRoot)
         if (!verification.allowed) {
-          throw new Error(`Vérification du bureau impossible : ${verification.reason}`)
+          throw new Error(refusAvecIssue('verification-indisponible', verification.reason))
         }
         if (!verification.ok) {
           /*
@@ -2392,7 +2393,7 @@ export class AppCommandBus {
         finalized.outcome !== 'cleanup-pending' &&
         finalized.outcome !== 'published-residue'
       ) {
-        throw new Error(`Le bureau ${command} a été conservé : publication automatique incomplète`)
+        throw new Error(refusAvecIssue('publication-differee', command))
       }
       return result
     } catch (error) {

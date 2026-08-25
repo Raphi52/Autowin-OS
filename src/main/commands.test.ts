@@ -1755,7 +1755,12 @@ describe('AppCommandBus command execution policy', () => {
       model: 'gemini-2.5-pro'
     })
 
-    expect(result).toMatchObject({ ok: false, error: 'Commande inconnue: set_role' })
+    // Le refus porte desormais sa sortie (2026-08-25) : on exige le constat ET le geste, plutot
+    // qu'une egalite exacte qui se satisfaisait d'un cul-de-sac.
+    expect(result).toMatchObject({ ok: false })
+    expect((result as { error: string }).error).toContain('Commande inconnue')
+    expect((result as { error: string }).error).toContain('set_role')
+    expect((result as { error: string }).error).toMatch(/catalogue|choisis la plus proche/i)
     expect(os.calls.setRole).toBe(0)
   })
 

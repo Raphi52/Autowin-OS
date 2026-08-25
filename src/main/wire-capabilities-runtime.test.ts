@@ -12,10 +12,14 @@ describe('capability registry runtime gate', () => {
       (name) => name !== 'navigate'
     )
 
-    await expect(bus.exec('navigate', { tab: 'settings' })).resolves.toEqual({
-      ok: false,
-      error: 'Capacité désactivée: navigate'
-    })
+    // Le refus NOMME desormais sa sortie : un refus nu faisait boucler l'agent (huit tentatives
+    // identiques mesurees le 2026-08-25). On exige donc le constat ET le geste — plus strict que
+    // l'egalite exacte d'avant, qui se satisfaisait d'un cul-de-sac.
+    const refus = await bus.exec('navigate', { tab: 'settings' })
+    expect(refus.ok).toBe(false)
+    expect(refus.error).toContain('Capacité désactivée')
+    expect(refus.error).toContain('navigate')
+    expect(refus.error).toMatch(/Ouvre les reglages|choisis une commande/i)
     expect(broadcast).not.toHaveBeenCalled()
   })
 
