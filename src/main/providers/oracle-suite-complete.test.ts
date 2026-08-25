@@ -43,6 +43,9 @@ import {
 
 const RACINE = join(__dirname, '..', '..', '..')
 
+/** Chargees UNE fois, avant tout `describe` qui les lit : ne pas dependre de l ordre de collecte. */
+const oraclesDeclarees = loadTrustedLearningOracles(RACINE)
+
 const preuve = (partiel: Partial<ExecutionEvidence>): ExecutionEvidence => ({
   type: 'command_execution',
   kind: 'verification',
@@ -143,8 +146,6 @@ describe('ce que la suite complète atteste vraiment', () => {
  * Ce test rejoue un run ordinaire — rouge, mutation, deux verts — avec de VRAIES commandes, et
  * vérifie que `causality-not-proven` disparaît des motifs.
  */
-const oraclesDeclarees = loadTrustedLearningOracles(RACINE)
-
 const runOrdinairePartage = (commande: string): ExecutionEvidence[] => [
   preuve({ command: commande, exitCode: 1, ok: false }),
   // `pathFingerprints` n'est pas decoratif : c'est LUI qui rend la mutation « materielle » aux yeux
