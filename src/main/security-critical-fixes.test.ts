@@ -181,7 +181,23 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     // fusionner ou supprimer A L'AVEUGLE. Ces deux canaux ne font que MONTRER, et c'est deliberement
     // tout ce qu'ils font : aucun ne mute quoi que ce soit.
     // `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(140)
+    //
+    // MISE A JOUR 2026-08-25 — 140 -> 141. UN canal ajoute, relu AVANT de toucher le compte, comme
+    // ce fichier le reclame :
+    //   `os:moteur:etat` — le processus principal qui tourne contient-il encore les sources ?
+    //     Lecture SEULE, SANS ARGUMENT (donc aucune surface d'injection), et sa reponse ne porte
+    //     qu'un booleen, un chemin RELATIF au projet et une duree. Il ne lit que les DATES de
+    //     `src/main` et `src/preload` — jamais le contenu d'un fichier, jamais un chemin fourni par
+    //     l'appelant. En mode empaquete il rend immediatement « non perime » sans toucher au disque.
+    //     Il porte `assertTrustedRendererSender(event, 'Etat du moteur')` des sa PREMIERE ligne, et
+    //     toute exception y est ravalee en « non perime » : un pied de page ne fait pas tomber l'app.
+    //
+    // POURQUOI ce canal existe : mesure du 2026-08-25, `electron-vite dev` ne reconstruit PAS le
+    // processus principal, donc un correctif reste invisible dans l'application qui tourne sans que
+    // rien ne le signale -- deux conclusions fausses ont ete tirees d'un binaire perime dans la
+    // meme journee. Il ne fait que MONTRER, et c'est deliberement tout ce qu'il fait.
+    // `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(141)
     expect(unguarded).toEqual([])
   })
 
