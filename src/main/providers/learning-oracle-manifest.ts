@@ -46,7 +46,16 @@ export function loadTrustedLearningOracles(cwd: string): TrustedLearningOracle[]
             )
           ].slice(0, 64)
         : []
-      if (!command || command.length > 500 || covers.length === 0 || attestedPaths.length === 0)
+      const parArguments = record.couvreSesArguments === true
+      // `covers` reste EXIGE pour la forme classique : sans lui, un oracle exact n'atteste rien et
+      // le declarer serait un piege silencieux. La forme par arguments en est dispensee, sa portee
+      // venant de la commande elle-meme.
+      if (
+        !command ||
+        command.length > 500 ||
+        (!parArguments && covers.length === 0) ||
+        attestedPaths.length === 0
+      )
         return []
       let attestedFiles: Array<{ path: string; sha256: string }>
       try {
@@ -60,9 +69,23 @@ export function loadTrustedLearningOracles(cwd: string): TrustedLearningOracle[]
         return []
       }
       const attestation = createHash('sha256')
-        .update(JSON.stringify({ index, command, covers, attestedFiles }))
+        .update(JSON.stringify({ index, command, covers, attestedFiles, parArguments }))
         .digest('hex')
-      return [{ command, covers, attestedFiles: attestedPaths, attestation }]
+      /*
+       * `couvreSesArguments` autorise UNE seule chose : que la couverture vienne des arguments de la
+       * commande au lieu de `covers`. Elle est donc lue STRICTEMENT (`=== true`), et une entree qui
+       * la porte n'a pas besoin de `covers` -- sa portee se prouve, elle ne se declare pas.
+       */
+      const couvreSesArguments = record.couvreSesArguments === true
+      return [
+        {
+          command,
+          covers,
+          attestedFiles: attestedPaths,
+          attestation,
+          ...(couvreSesArguments ? { couvreSesArguments } : {})
+        }
+      ]
     })
   } catch {
     return []
