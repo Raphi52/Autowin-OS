@@ -1,4 +1,8 @@
 import * as THREE from 'three'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 
 /**
  * Le décor 3D de la page d'accueil : la scène, sans React.
@@ -31,6 +35,179 @@ const ANTHRACITE = 0x1b222c
  * le noir est celui du centre du fond d'ecran, donc la jonction avec les bords reste invisible.
  */
 export const FOND_DECOR = { couleur: 0x000000, alpha: 1 } as const
+
+/**
+ * La CHAÎNE CINÉMATIQUE du décor (demande conv-1402 : « ultra magnifique, effet wow »).
+ *
+ * Ce qui manquait n'était pas de la matière — la scène en avait déjà beaucoup — mais l'étage qui
+ * transforme une accumulation de points additifs en IMAGE. Trois réglages, chacun visible s'il est
+ * retiré :
+ *  1. `bloom` — les hautes lumières (cœurs de nébuleuse, étoiles franches, limbes de planète)
+ *     débordent. C'est LE marqueur d'un rendu de jeu récent ; sans lui, un point additif reste un
+ *     point. `seuil` bien au-dessus de zéro : seules les hautes lumières débordent, sinon tout
+ *     l'écran laiteux et le texte posé dessus devient illisible ;
+ *  2. `exposition` — au-dessus de 1, parce que le tone mapping filmique COMPRIME les hautes
+ *     lumières : à exposition 1, l'image sortirait plus sombre qu'avant le changement, ce qui se
+ *     lirait comme une régression ;
+ *  3. `toneMapping` ACES filmique — les additions saturaient en blanc plat ; ACES tient les
+ *     couleurs jusque dans les surbrillances, ce qui garde le rose et le cyan dans les cœurs.
+ *
+ * Exporté pour être RELU par le test : happy-dom n'a pas de WebGL, mais le réglage est une donnée.
+ */
+export const POST_TRAITEMENT = {
+  toneMapping: 'ACESFilmic',
+  exposition: 1.18,
+  bloom: { force: 0.72, rayon: 0.62, seuil: 0.42 }
+} as const
+
+/**
+ * Les ÉTOILES FILANTES : l'événement rare du décor.
+ *
+ * C'est ce qui sépare un fond d'écran d'une image — quelque chose ARRIVE. Le réglage est tenu du
+ * côté de la rareté : peu de filantes, une traînée courte, et une période longue par filante, avec
+ * une phase propre. À période courte, il en passe une toutes les deux secondes et le décor devient
+ * bruyant ; synchronisées, elles partiraient en salve, ce qui se lit immédiatement comme un effet.
+ */
+export const FILANTES = {
+  nombre: 7,
+  /** Secondes entre deux passages d'une MÊME filante. */
+  periode: 26,
+  /** Durée d'un passage, en secondes. Fraction de la période : c'est ce rapport qui fait la rareté. */
+  duree: 1.5,
+  /** Nombre de points qui composent la traînée d'une filante. */
+  segments: 28
+} as const
+
+const FILANTE_VERTEX_SHADER = [
+  'attribute float aTrainee;',
+  'attribute vec3 aDirection;',
+  'attribute vec2 aCycle;', // x = phase de départ (s), y = longueur de la traînée
+  'uniform float uTime;',
+  'uniform float uFilantePeriode;',
+  'uniform float uFilanteDuree;',
+  'uniform float uPixelRatio;',
+  'uniform float uEchelle;',
+  'varying float vTrainee;',
+  'varying float vIntensite;',
+  'varying vec3 vColor;',
+  'void main() {',
+  '  vColor = color;',
+  '  vTrainee = aTrainee;',
+  '  float cycle = mod(uTime + aCycle.x, uFilantePeriode);',
+  '  float t = cycle / uFilanteDuree;',
+  // Hors de sa fenêtre, la filante n'existe pas : intensité nulle, le fragment sera jeté. Une
+  // filante qui reste visible entre deux passages serait une barre fixe dans le ciel.
+  '  float active = step(t, 1.0);',
+  // Allumage et extinction progressifs : un saut d'opacité se voit comme une apparition.
+  '  float fondu = sin(clamp(t, 0.0, 1.0) * 3.14159265) ;',
+  '  vIntensite = active * fondu * (1.0 - aTrainee * 0.92);',
+  // La tête avance le long de la trajectoire ; chaque point de la traînée traîne derrière elle.
+  '  vec3 dir = normalize(aDirection);',
+  '  float parcours = (t * 2.1 - aTrainee * aCycle.y) * uEchelle;',
+  '  vec3 p = position * uEchelle + dir * parcours;',
+  '  vec4 view = modelViewMatrix * vec4(p, 1.0);',
+  '  gl_Position = projectionMatrix * view;',
+  // La tête est plus grosse que la queue : c'est ce dégradé de TAILLE, autant que d'opacité, qui
+  // fait lire une traînée plutôt qu'un chapelet de points.
+  '  gl_PointSize = uPixelRatio * (1.0 - aTrainee * 0.75) * (46.0 / -view.z);',
+  '}'
+].join('\n')
+
+/**
+ * Le fragment d'une filante : un grain rond, dégradé le long de la traînée.
+ *
+ * Exporté pour être RELU par le test — sans gradient sur `vTrainee`, une étoile filante n'est
+ * qu'un point qui se déplace.
+ */
+export const FILANTE_FRAGMENT_SHADER = [
+  'precision highp float;',
+  'varying float vTrainee;',
+  'varying float vIntensite;',
+  'varying vec3 vColor;',
+  'void main() {',
+  '  if (vIntensite <= 0.001) discard;',
+  '  float d = length(gl_PointCoord - vec2(0.5));',
+  '  float falloff = 1.0 - smoothstep(0.0, 0.5, d);',
+  '  if (falloff <= 0.002) discard;',
+  // La tête tire vers le blanc chaud, la queue garde la teinte : une traînée monochrome est plate.
+  '  vec3 couleur = mix(vColor, vec3(1.0, 0.96, 0.88), pow(1.0 - vTrainee, 3.0));',
+  '  gl_FragColor = vec4(couleur, pow(falloff, 1.6) * vIntensite);',
+  '}'
+].join('\n')
+
+/**
+ * La couche des filantes : UNE géométrie de points pour toutes, animée dans le vertex shader.
+ *
+ * Tout est calculé sur le GPU depuis la phase de chaque filante : côté JavaScript, une filante ne
+ * coûte rien par image, et il n'y a aucun état à synchroniser avec la boucle de rendu.
+ */
+function buildFilantes(random: () => number): THREE.Points {
+  const total = FILANTES.nombre * FILANTES.segments
+  const positions = new Float32Array(total * 3)
+  const colors = new Float32Array(total * 3)
+  const directions = new Float32Array(total * 3)
+  const trainees = new Float32Array(total)
+  const cycles = new Float32Array(total * 2)
+  const teinte = new THREE.Color()
+
+  for (let f = 0; f < FILANTES.nombre; f += 1) {
+    // Un départ dans le champ, jamais au centre : le milieu de l'écran porte les widgets.
+    const depart = new THREE.Vector3(
+      (random() - 0.5) * 1.8,
+      0.35 + random() * 0.75,
+      -0.5 - random() * 0.5
+    )
+    // Une descente en biais : une filante horizontale ou verticale se lit comme une barre.
+    const direction = new THREE.Vector3(random() > 0.5 ? -1 : 1, -0.45 - random() * 0.5, 0)
+    const phase = random() * FILANTES.periode
+    const longueur = 0.18 + random() * 0.22
+    teinte.setHex(random() > 0.6 ? CYAN : 0xffffff)
+    teinte.lerp(new THREE.Color(GOLD), random() * 0.35)
+
+    for (let s = 0; s < FILANTES.segments; s += 1) {
+      const i = f * FILANTES.segments + s
+      const o = i * 3
+      positions[o] = depart.x
+      positions[o + 1] = depart.y
+      positions[o + 2] = depart.z
+      directions[o] = direction.x
+      directions[o + 1] = direction.y
+      directions[o + 2] = direction.z
+      colors[o] = teinte.r
+      colors[o + 1] = teinte.g
+      colors[o + 2] = teinte.b
+      trainees[i] = s / (FILANTES.segments - 1)
+      cycles[i * 2] = phase
+      cycles[i * 2 + 1] = longueur
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  geometry.setAttribute('aDirection', new THREE.BufferAttribute(directions, 3))
+  geometry.setAttribute('aTrainee', new THREE.BufferAttribute(trainees, 1))
+  geometry.setAttribute('aCycle', new THREE.BufferAttribute(cycles, 2))
+
+  return new THREE.Points(
+    geometry,
+    new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexColors: true,
+      uniforms: {
+        uTime: { value: 0 },
+        uPixelRatio: { value: 1 },
+        uEchelle: { value: 1 },
+        uFilantePeriode: { value: FILANTES.periode },
+        uFilanteDuree: { value: FILANTES.duree }
+      },
+      vertexShader: FILANTE_VERTEX_SHADER,
+      fragmentShader: FILANTE_FRAGMENT_SHADER
+    })
+  )
+}
 
 /**
  * Les directions visuelles du décor, entre lesquelles l'utilisateur choisit.
@@ -960,6 +1137,11 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
   }
 
   renderer.setClearColor(FOND_DECOR.couleur, FOND_DECOR.alpha)
+  // L'étage cinématique : ACES filmique tient les couleurs dans les surbrillances, l'exposition
+  // compense la compression qu'il applique. Les deux viennent de POST_TRAITEMENT — un réglage écrit
+  // en dur ici serait un réglage qu'on croit pouvoir changer et qui ne change rien.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = POST_TRAITEMENT.exposition
   const canvas = renderer.domElement
 
   const scene = new THREE.Scene()
@@ -1020,6 +1202,11 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
     composition.satellites > 0 ? buildSatellites(random, composition.satellites) : null
   if (satellites) scene.add(satellites)
 
+  // Les filantes appartiennent à TOUTES les directions : c'est l'événement du décor, pas un motif
+  // d'une composition. Leur rareté vient de FILANTES, pas de leur absence.
+  const filantes = buildFilantes(random)
+  scene.add(filantes)
+
   // Éclairage rasant : c'est le terminateur qui donne le volume. Un éclairage frontal aplatirait
   // les planètes exactement comme une image plaquée.
   const sun = new THREE.DirectionalLight(0xfff0dd, 2.3)
@@ -1031,8 +1218,25 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
   const pointRatios: THREE.ShaderMaterial[] = [
     stars.material as THREE.ShaderMaterial,
     ...nebulas.map((nebula) => nebula.material as THREE.ShaderMaterial),
-    ...(satellites ? [satellites.material as THREE.ShaderMaterial] : [])
+    ...(satellites ? [satellites.material as THREE.ShaderMaterial] : []),
+    filantes.material as THREE.ShaderMaterial
   ]
+
+  /**
+   * La chaîne de post-traitement. Ordre imposé : la scène est rendue, le bloom lit ses hautes
+   * lumières, puis OutputPass applique tone mapping et conversion sRGB EN FIN de chaîne — c'est lui
+   * qui manque quand une image post-traitée ressort délavée.
+   */
+  const composer = new EffectComposer(renderer)
+  composer.addPass(new RenderPass(scene, camera))
+  const bloom = new UnrealBloomPass(
+    new THREE.Vector2(1, 1),
+    POST_TRAITEMENT.bloom.force,
+    POST_TRAITEMENT.bloom.rayon,
+    POST_TRAITEMENT.bloom.seuil
+  )
+  composer.addPass(bloom)
+  composer.addPass(new OutputPass())
 
   let width = 1
   let height = 1
@@ -1081,9 +1285,19 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
       stars.scale.setScalar(Math.max(1, Math.max(halfWidth, halfHeight) / 12))
       // Plafonné à 1.75 : au-delà, le coût par pixel monte sans que ça se voie sur un écran de
       // travail — et cette vue reste allumée toute la journée.
+      // Les filantes traversent le CADRE : à échelle fixe, elles seraient minuscules sur un grand
+      // écran et sortiraient du champ sur un cadre étroit.
+      ;(filantes.material as THREE.ShaderMaterial).uniforms.uEchelle.value = Math.max(
+        halfWidth,
+        halfHeight
+      )
       const ratio = Math.min(window.devicePixelRatio || 1, 1.75)
       renderer.setPixelRatio(ratio)
       renderer.setSize(width, height, false)
+      // Le composer possède ses propres cibles de rendu : sans ce setSize, l'image reste à la taille
+      // précédente et se retrouve étirée par le canevas.
+      composer.setSize(width, height)
+      bloom.resolution.set(width, height)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
       for (const material of pointRatios) material.uniforms.uPixelRatio.value = ratio
@@ -1093,6 +1307,9 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
       // Le TEMPO appartient à la direction : « Limbe » dérive lentement, « Poussière » respire vite.
       const temps = elapsed * composition.tempo
       for (const material of pointRatios) material.uniforms.uTime.value = temps
+      // Les filantes vivent en temps RÉEL, hors tempo : sur « Nappe » (tempo 0,12) une filante
+      // n'arriverait qu'une fois toutes les trois minutes, donc jamais pendant qu'on regarde.
+      ;(filantes.material as THREE.ShaderMaterial).uniforms.uTime.value = elapsed
       if (nappe) (nappe.material as THREE.ShaderMaterial).uniforms.uTime.value = temps
       // Rotations lentes et de vitesses différentes : synchronisées, elles se liraient comme un
       // seul bloc qui tourne.
@@ -1116,7 +1333,9 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
       camera.position.x = look.x * 2.6 * composition.parallaxe
       camera.position.y = look.y * -1.8 * composition.parallaxe
       camera.lookAt(0, 0, 0)
-      renderer.render(scene, camera)
+      // Le rendu passe par la chaîne cinématique, jamais par le renderer directement : deux chemins
+      // de rendu, c'est un des deux qui est mort et une image qui ne change pas.
+      composer.render()
     },
 
     dispose() {
@@ -1127,6 +1346,9 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
         if (Array.isArray(material)) material.forEach((entry) => entry.dispose())
         else material?.dispose?.()
       })
+      // Le composer détient des cibles de rendu plein écran : les oublier fuit de la VRAM à chaque
+      // ouverture de l'accueil.
+      composer.dispose()
       renderer.dispose()
       canvas.remove()
     }
