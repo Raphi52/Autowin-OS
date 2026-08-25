@@ -736,6 +736,14 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
     })
   )
   for (const planet of planets) scene.add(planet)
+  /**
+   * La position CADREE de chaque planete, posee par `resize`.
+   *
+   * Elle est memorisee parce que `render` deplace ensuite les planetes autour d'elle pour suivre le
+   * curseur : sans base stable, chaque image repartirait de la position deja decalee de la
+   * precedente et les planetes deriveraient hors du cadre.
+   */
+  const planetBases = planetSpecs.map(() => new THREE.Vector3())
 
   const orbits = buildOrbits(random, composition.arcs)
   scene.add(orbits)
