@@ -59,9 +59,22 @@ function derniereLigneUtile(sortie: string): string | undefined {
 export function battementDeVerification(sortie: string, ecouleMs: number): string {
   const duree = dureeCourte(ecouleMs)
   const ligne = derniereLigneUtile(sortie) ?? 'démarrage…'
-  const battement = `${duree} · ${ligne}`
-  if (battement.length <= LARGEUR_MAX) return battement
-  return `${battement.slice(0, LARGEUR_MAX - 1)}…`
+  return bornerLigneDeVie(`${duree} · ${ligne}`)
+}
+
+/**
+ * LA BORNE COMMUNE A TOUTE LIGNE DE VIE, quelle que soit sa source.
+ *
+ * Elle existe parce qu'il y en a desormais DEUX : la sortie d'une verification, et la note
+ * d'activite d'une orchestration (« Bash en cours — 2 min 30 s »). Les deux atterrissent au meme
+ * endroit du fil et doivent donc obeir aux memes regles — depouiller les codes de terminal AVANT de
+ * mesurer la largeur, puis tenir sur une ligne. Deux bornes divergentes auraient produit deux
+ * apparences pour un meme role.
+ */
+export function bornerLigneDeVie(texte: string): string {
+  const propre = sansSequencesAnsi(texte).replace(/\s+/g, ' ').trim()
+  if (propre.length <= LARGEUR_MAX) return propre
+  return `${propre.slice(0, LARGEUR_MAX - 1)}…`
 }
 
 /**

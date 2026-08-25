@@ -33,6 +33,7 @@ import {
 } from './verify-command'
 import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement'
 import { natureDeLEchec } from './verify-echec-nature'
+import { bornerLigneDeVie } from './verify-battement'
 import { readLastCommitFiles } from './git-read-main'
 import { readGitState } from './git-read-main'
 import type { AutowinOS } from './os'
@@ -1628,6 +1629,14 @@ export class AppCommandBus {
             (step, delta, note) => {
               // Une NOTE (« Bash en cours — 2 min 30 s ») voyage sur le meme evenement mais dans
               // son propre champ : le renderer la range hors du texte, qui est le livrable.
+              //
+              // ELLE PART AUSSI DANS LE FIL, et c'est le correctif du 2026-08-25. Mesure dans l'app
+              // reelle : « 1 action en cours · Orchestration » est reste muet ONZE minutes, parce
+              // que cette note n'alimentait que la carte du panneau Workflows. Le battement livre la
+              // veille ne couvrait que `verify` : le trou noir n'avait pas disparu, il s'etait
+              // deplace d'un cran. On REUTILISE la note existante — en fabriquer une seconde ferait
+              // diverger deux verites sur le meme fait.
+              if (note) onProgress?.(bornerLigneDeVie(note))
               this.broadcast({
                 type: 'orchestrate-delta',
                 convId,
