@@ -93,15 +93,18 @@ interface ChatApi {
   orchestrationBudget: () => Promise<{
     maxUsd: number | null
     maxProviderCalls: number
+    maxChatProviderCalls: number
     maxTotalTokens: number
   }>
   setOrchestrationBudget: (settings: {
     maxUsd: number | null
     maxProviderCalls: number
+    maxChatProviderCalls: number
     maxTotalTokens: number
   }) => Promise<{
     maxUsd: number | null
     maxProviderCalls: number
+    maxChatProviderCalls: number
     maxTotalTokens: number
   }>
   /** Opt-in persistant du pilote de routage shadow (mesure verte/coût par route). */

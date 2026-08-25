@@ -813,10 +813,21 @@ export class AutowinOS {
     const envCalls = Number(process.env.AUTOWIN_CHAT_CALL_CAP)
     const envTokens = Number(process.env.AUTOWIN_CHAT_TOKEN_CAP)
     const envUsd = Number(process.env.AUTOWIN_CHAT_USD_CAP)
+    /*
+     * Le plafond d'un tour de chat vient du REGLAGE (`maxChatProviderCalls`, 50 par defaut), plus
+     * d'un `6` cable ici.
+     *
+     * Mesure le 2026-08-25 sur conv-1397 : le tour a ete coupe sur « Budget d'appels provider
+     * atteint (6) » APRES cinq editions reussies, juste avant sa verification. Le 6 datait de
+     * l'epoque ou un tour de chat valait UN appel provider ; un tour agentique en consomme un par
+     * ETAPE, donc ce plafond comptait des coups et tuait le travail en plein milieu.
+     *
+     * Le cap d'environnement continue de RESSERRER : un plafond pose explicitement reste un contrat.
+     */
     const maxProviderCalls =
       Number.isSafeInteger(envCalls) && envCalls > 0
-        ? Math.min(settings.maxProviderCalls, envCalls)
-        : Math.min(settings.maxProviderCalls, 6)
+        ? Math.min(settings.maxChatProviderCalls, envCalls)
+        : settings.maxChatProviderCalls
     const maxTotalTokens =
       Number.isSafeInteger(envTokens) && envTokens > 0
         ? Math.min(settings.maxTotalTokens, envTokens)

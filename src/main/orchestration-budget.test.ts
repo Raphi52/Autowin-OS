@@ -21,6 +21,7 @@ describe('orchestration budget settings', () => {
     expect(settings).toEqual({
       maxUsd: null,
       maxProviderCalls: 24,
+      maxChatProviderCalls: 50,
       maxTotalTokens: 15_000_000
     })
   })
@@ -30,6 +31,7 @@ describe('orchestration budget settings', () => {
     expect(saveOrchestrationBudget(path, { maxUsd: 1.5 })).toEqual({
       maxUsd: 1.5,
       maxProviderCalls: 24,
+      maxChatProviderCalls: 50,
       maxTotalTokens: 15_000_000
     })
     expect(loadOrchestrationBudget(path).maxUsd).toBe(1.5)

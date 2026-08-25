@@ -25,6 +25,7 @@ describe('OrchestrationBudgetSettings', () => {
         orchestrationBudget: vi.fn().mockResolvedValue({
           maxUsd: null,
           maxProviderCalls: 24,
+          maxChatProviderCalls: 50,
           maxTotalTokens: 15_000_000
         }),
         setOrchestrationBudget: vi.fn()
@@ -40,8 +41,8 @@ describe('OrchestrationBudgetSettings', () => {
     })
 
     const inputs = [...container.querySelectorAll('input')]
-    expect(inputs).toHaveLength(3)
-    expect(inputs.map((input) => input.value)).toEqual(['24', '15000000', ''])
+    expect(inputs).toHaveLength(4)
+    expect(inputs.map((input) => input.value)).toEqual(['24', '50', '15000000', ''])
     expect(container.textContent).toContain('appels fournisseur')
     expect(container.textContent).toContain('tokens totaux')
     expect(container.textContent).toContain('optionnel')
@@ -54,7 +55,7 @@ describe('OrchestrationBudgetSettings — échec de chargement', () => {
     const orchestrationBudget = vi
       .fn()
       .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValue({ maxUsd: null, maxProviderCalls: 24, maxTotalTokens: 15_000_000 })
+      .mockResolvedValue({ maxUsd: null, maxProviderCalls: 24, maxChatProviderCalls: 50, maxTotalTokens: 15_000_000 })
     const setOrchestrationBudget = vi.fn()
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -85,6 +86,7 @@ describe('OrchestrationBudgetSettings — échec de chargement', () => {
     expect(orchestrationBudget).toHaveBeenCalledTimes(2)
     expect([...container.querySelectorAll('input')].map((input) => input.value)).toEqual([
       '24',
+      '50',
       '15000000',
       ''
     ])
@@ -99,10 +101,10 @@ describe('OrchestrationBudgetSettings — échec de chargement', () => {
     const orchestrationBudget = vi
       .fn()
       .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValue({ maxUsd: null, maxProviderCalls: 24, maxTotalTokens: 15_000_000 })
+      .mockResolvedValue({ maxUsd: null, maxProviderCalls: 24, maxChatProviderCalls: 50, maxTotalTokens: 15_000_000 })
     const setOrchestrationBudget = vi
       .fn()
-      .mockResolvedValue({ maxUsd: null, maxProviderCalls: 12, maxTotalTokens: 7 })
+      .mockResolvedValue({ maxUsd: null, maxProviderCalls: 12, maxChatProviderCalls: 50, maxTotalTokens: 7 })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { orchestrationBudget, setOrchestrationBudget }
@@ -121,8 +123,13 @@ describe('OrchestrationBudgetSettings — échec de chargement', () => {
     await act(async () => {
       setter?.call(inputs[0], '12')
       inputs[0].dispatchEvent(new Event('input', { bubbles: true }))
-      setter?.call(inputs[1], '7')
+      // Le champ du tour de chat est renseigne lui aussi : apres un chargement en ECHEC les champs
+      // restent vides, et un champ vide vaut `Number('') = 0`, que la validation refuse -- comme
+      // pour les autres plafonds. Sans cela le test n'observerait plus un save, mais un refus.
+      setter?.call(inputs[1], '50')
       inputs[1].dispatchEvent(new Event('input', { bubbles: true }))
+      setter?.call(inputs[2], '7')
+      inputs[2].dispatchEvent(new Event('input', { bubbles: true }))
     })
     const retry = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Réessayer'
@@ -140,6 +147,7 @@ describe('OrchestrationBudgetSettings — échec de chargement', () => {
     })
     expect(setOrchestrationBudget).toHaveBeenCalledWith({
       maxProviderCalls: 12,
+      maxChatProviderCalls: 50,
       maxTotalTokens: 7,
       maxUsd: null
     })
@@ -151,7 +159,7 @@ describe('OrchestrationBudgetSettings — échec de chargement', () => {
       value: {
         orchestrationBudget: vi
           .fn()
-          .mockResolvedValue({ maxUsd: null, maxProviderCalls: 24, maxTotalTokens: 15_000_000 }),
+          .mockResolvedValue({ maxUsd: null, maxProviderCalls: 24, maxChatProviderCalls: 50, maxTotalTokens: 15_000_000 }),
         setOrchestrationBudget: vi.fn()
       }
     })

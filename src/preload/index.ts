@@ -209,15 +209,18 @@ const api = {
   orchestrationBudget: (): Promise<{
     maxUsd: number | null
     maxProviderCalls: number
+    maxChatProviderCalls: number
     maxTotalTokens: number
   }> => ipcRenderer.invoke('os:orchestrationBudget:get'),
   setOrchestrationBudget: (settings: {
     maxUsd: number | null
     maxProviderCalls: number
+    maxChatProviderCalls: number
     maxTotalTokens: number
   }): Promise<{
     maxUsd: number | null
     maxProviderCalls: number
+    maxChatProviderCalls: number
     maxTotalTokens: number
   }> => ipcRenderer.invoke('os:orchestrationBudget:set', settings),
   /** Opt-in persistant du pilote de routage shadow (mesure verte/coût par route). */

@@ -4,12 +4,14 @@ import './OrchestrationBudgetSettings.css'
 
 interface BudgetSettings {
   maxProviderCalls: number
+  maxChatProviderCalls: number
   maxTotalTokens: number
   maxUsd: number | null
 }
 
 export function OrchestrationBudgetSettings(): React.JSX.Element {
   const [calls, setCalls] = useState('')
+  const [chatCalls, setChatCalls] = useState('')
   const [tokens, setTokens] = useState('')
   const [usd, setUsd] = useState('')
   const [loading, setLoading] = useState(true)
@@ -29,6 +31,7 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
 
   const show = (settings: BudgetSettings): void => {
     setCalls(String(settings.maxProviderCalls))
+    setChatCalls(String(settings.maxChatProviderCalls))
     setTokens(String(settings.maxTotalTokens))
     setUsd(settings.maxUsd === null ? '' : String(settings.maxUsd))
   }
@@ -56,10 +59,15 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
 
   const save = async (): Promise<void> => {
     const maxProviderCalls = Number(calls)
+    const maxChatProviderCalls = Number(chatCalls)
     const maxTotalTokens = Number(tokens)
     const maxUsd = usd.trim() === '' ? null : Number(usd)
     if (!Number.isSafeInteger(maxProviderCalls) || maxProviderCalls <= 0) {
       setMessage("Le plafond d'appels doit être un entier strictement positif.")
+      return
+    }
+    if (!Number.isSafeInteger(maxChatProviderCalls) || maxChatProviderCalls <= 0) {
+      setMessage("Le plafond d'appels par tour de chat doit etre un entier strictement positif.")
       return
     }
     if (!Number.isSafeInteger(maxTotalTokens) || maxTotalTokens <= 0) {
@@ -75,6 +83,7 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
     try {
       const saved = await window.api.setOrchestrationBudget({
         maxProviderCalls,
+        maxChatProviderCalls,
         maxTotalTokens,
         maxUsd
       })
@@ -98,8 +107,10 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
     <section className="orchestration-budget surface-panel" aria-label="Budget d'orchestration">
       <ModuleHeader eyebrow="Protection des runs" title="Budget d'orchestration" />
       <p>
-        Trois plafonds par run. Un nouvel appel est refusé avant son départ dès que le budget est
-        atteint, même quand le fournisseur ne communique aucun prix.
+        Des plafonds par run. Un nouvel appel est refusé avant son départ dès que le budget est
+        atteint, même quand le fournisseur ne communique aucun prix. Le plafond du tour de chat est
+        séparé : un tour agentique consomme un appel PAR ÉTAPE, il en faut donc beaucoup plus que
+        pour un run — le mettre trop bas coupe le travail en plein milieu.
       </p>
       {loadError && (
         <div className="orchestration-budget-failure">
@@ -119,6 +130,20 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
             value={calls}
             disabled={inputsDisabled}
             onChange={(event) => edit(setCalls)(event.target.value)}
+          />
+          <b>appels</b>
+        </div>
+      </label>
+      <label>
+        <span>Maximum d&apos;appels par tour de chat</span>
+        <div className="orchestration-budget-input">
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={chatCalls}
+            disabled={inputsDisabled}
+            onChange={(event) => edit(setChatCalls)(event.target.value)}
           />
           <b>appels</b>
         </div>
