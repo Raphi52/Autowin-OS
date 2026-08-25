@@ -98,7 +98,20 @@ export function verifyTimeoutOutcome(
   ms: number,
   partiel: string = ''
 ): VerifyOutcome {
-  const plafond = `vérification arrêtée après ${Math.round(ms / 1000)} s (plafond) — rien n'est prouvé, la suite n'a pas rendu son verdict`
+  /*
+   * UN PLAFOND DOIT DIRE QUOI FAIRE.
+   *
+   * « rien n'est prouve » est exact mais sterile : l'agent relance la MEME commande et reperd le
+   * meme temps. Mesure du 2026-08-25 : trois occurrences en une journee (conv-1400, conv-1404,
+   * conv-1405), la meme commande relancee a chaque fois. Un message qui ne nomme aucune issue
+   * fabrique la boucle qu'il constate.
+   */
+  const plafond =
+    `vérification arrêtée après ${Math.round(ms / 1000)} s (plafond) — rien n'est prouvé, ` +
+    `la suite n'a pas rendu son verdict.${SAUT}` +
+    `Ne relance pas la même commande : donne-lui une cible (« verify <fichier> » rejoue les tests ` +
+    `qui importent ce fichier, mesuré 20 à 70 s), ou relève le plafond via ` +
+    `AUTOWIN_VERIFY_TIMEOUT_MS si la suite entière est vraiment ce qu'il faut prouver.`
   const acquis = capVerifyOutput(partiel)
   return {
     ok: false,

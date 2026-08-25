@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
-import { porteeDerivableDesChangements } from './verify-command'
+import { porteeDerivableDesChangements, verifyTimeoutOutcome } from './verify-command'
 
 /**
  * DEFAUT VECU le 2026-08-25 (conv-1404) : `verify` sans cible a rendu
@@ -150,5 +150,72 @@ describe('porteeDerivableDesChangements', () => {
     expect(porteeDerivableDesChangements(['src' + String.fromCharCode(92) + 'a.ts'])).toEqual([
       'src/a.ts'
     ])
+  })
+})
+
+/**
+ * DEFAUT VECU le 2026-08-25 (conv-1405), APRES le correctif ci-dessus : arbre PROPRE, donc plus
+ * rien a cibler, donc suite entiere, donc plafond — « rien n'est prouve » une fois de plus. Le
+ * ménage du depot avait rendu ce chemin actif.
+ *
+ * Mesure du meme jour : la suite entiere tourne PLUS DE 40 MINUTES sans finir, sous un plafond de
+ * 600 s. Lancer une action dont l'echec est CERTAIN n'est pas une verification : c'est dix minutes
+ * d'attente pour apprendre qu'on ne sait rien.
+ *
+ * Sur un arbre propre, la question naturelle n'est pas « le depot entier est-il vert ? » mais « ce
+ * que je viens de COMMITTER casse-t-il quelque chose ? ». Cette portee-la est derivable du dernier
+ * commit, et elle est NOMMEE — un vert plus etroit qui s'annonce vaut mieux qu'un plafond muet.
+ */
+describe('verify sans cible sur arbre PROPRE — la portee vient du dernier commit', () => {
+  it('cible les fichiers du dernier commit plutot que la suite entiere', async () => {
+    const { repo } = depot()
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
+    writeFileSync(join(repo, 'sujet.ts'), 'export const valeur = (): number => 3' + SAUT, 'utf8')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'change le sujet')
+
+    const result = await busSur(repo).exec('verify', {}, 'conv-1')
+
+    const data = result.data as { command?: string }
+    expect(data.command).toContain('vitest related')
+    expect(data.command).toContain('sujet.ts')
+  }, 120_000)
+
+  it('un dernier commit SANS code retombe sur la suite entiere (aucune portee derivable)', async () => {
+    const { repo } = depot()
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
+    writeFileSync(join(repo, 'LISEZMOI.md'), 'du texte' + SAUT, 'utf8')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'doc seule')
+
+    const result = await busSur(repo).exec('verify', {}, 'conv-1')
+
+    const data = result.data as { command?: string }
+    expect(data.command).not.toContain('related')
+    expect(data.command).toContain('test:unit')
+  }, 120_000)
+})
+
+/**
+ * Un plafond atteint doit dire QUOI FAIRE. « rien n'est prouve » est exact mais sterile : l'agent
+ * relance la meme commande et reperd dix minutes. Mesure du 2026-08-25 : trois occurrences en une
+ * journee (conv-1400, conv-1404, conv-1405), la meme commande relancee a chaque fois.
+ */
+describe('verifyTimeoutOutcome — le plafond nomme la sortie de secours', () => {
+  it('propose de cibler un fichier, au lieu de laisser relancer la meme commande', () => {
+    const out = verifyTimeoutOutcome('npm run test:unit', 600_000)
+
+    expect(out.ok).toBe(false)
+    expect(out.output).toContain('cible')
+    expect(out.output).toMatch(/AUTOWIN_VERIFY_TIMEOUT_MS/)
+  })
+
+  it('garde le message de plafond en TETE de ce que la suite avait ecrit (retrocompat)', () => {
+    const out = verifyTimeoutOutcome('npm run test:unit', 600_000, 'des lignes deja tombees')
+
+    expect(out.output.startsWith('vérification arrêtée')).toBe(true)
+    expect(out.output).toContain('des lignes deja tombees')
   })
 })

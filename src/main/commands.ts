@@ -33,6 +33,7 @@ import {
 } from './verify-command'
 import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement'
 import { natureDeLEchec } from './verify-echec-nature'
+import { readLastCommitFiles } from './git-read-main'
 import { readGitState } from './git-read-main'
 import type { AutowinOS } from './os'
 
@@ -2628,7 +2629,25 @@ export class AppCommandBus {
      * Et l'angle mort reste NOMME par la voie de portee elle-meme : un vert dont on ignore l'etendue
      * se lit plus large qu'il n'est.
      */
-    const derivee = porteeDerivableDesChangements(await this.fichiersNonCommites(decision.cwd))
+    /*
+     * ARBRE PROPRE : LA PORTEE VIENT DU DERNIER COMMIT.
+     *
+     * DEFAUT VECU le 2026-08-25 (conv-1405), APRES le correctif ci-dessus : plus rien de sale a
+     * cibler, donc suite entiere, donc plafond — « rien n'est prouve » une fois de plus. Le menage
+     * du depot avait rendu ce chemin actif. Mesure du meme jour : la suite entiere tourne PLUS DE
+     * 40 MINUTES sans finir, sous un plafond de 600 s. Lancer une action dont l'echec est CERTAIN
+     * n'est pas une verification.
+     *
+     * Sur un arbre propre la question naturelle n'est pas « le depot entier est-il vert ? » mais
+     * « ce que je viens de COMMITTER casse-t-il quelque chose ? ». La portee est NOMMEE au verdict :
+     * un vert plus etroit qui s'annonce vaut mieux qu'un plafond muet.
+     *
+     * Meme regle stricte : un commit qui touche autre chose que du code n'a pas de portee derivable,
+     * et la suite entiere reprend la main.
+     */
+    const derivee =
+      porteeDerivableDesChangements(await this.fichiersNonCommites(decision.cwd)) ??
+      porteeDerivableDesChangements(await readLastCommitFiles(decision.cwd))
     if (etiquette === decision.command && derivee) {
       const parPortee = await this.runRelatedVerifyAt(decision.cwd, derivee)
       // Portee indeterminable (projet sans vitest, chemin non exploitable) : on retombe sur la suite
