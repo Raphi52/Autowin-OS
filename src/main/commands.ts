@@ -2586,7 +2586,9 @@ export class AppCommandBus {
         } else {
           child.kill('SIGKILL')
         }
-        resolve({ allowed: true, ...verifyTimeoutOutcome(label, plafond) })
+        // La sortie deja collectee part AVEC le verdict : le plafond borne l'attente, il n'efface
+        // pas ce que la suite avait prouve avant d'etre coupee (conv-1400, 2026-08-25).
+        resolve({ allowed: true, ...verifyTimeoutOutcome(label, plafond, output) })
       }, plafond)
       horloge.unref?.()
       child.on('error', (error) =>

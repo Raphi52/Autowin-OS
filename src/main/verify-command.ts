@@ -81,13 +81,31 @@ export function verifyTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
 /**
  * Le verdict d'une verification ARRETEE au plafond. `ok: false` sans discussion : une suite
  * interrompue n'a rien prouve, et un `exitCode: null` seul se lirait comme une panne de lancement.
+ *
+ * `partiel` = ce que la suite avait DEJA ecrit avant la coupure, et il revient avec le verdict.
+ * DEFAUT VECU le 2026-08-25 (conv-1400) : la sortie collectee etait jetee et REMPLACEE par le seul
+ * message de plafond. Apres dix minutes d'attente, l'utilisateur recevait « rien n'est prouve » et
+ * pas une ligne de plus — impossible de distinguer une suite trop LENTE d'une suite BLOQUEE sur un
+ * test qui ne rend jamais la main, ni de voir les rouges deja tombes. Le plafond doit borner
+ * l'attente, pas effacer les faits acquis pendant cette attente.
+ *
+ * Le verdict, lui, ne bouge pas d'un pouce : une sortie partielle pleine de coches ne se lit JAMAIS
+ * comme un vert, et le message de plafond reste en TETE pour que la raison de l'arret prime.
  */
-export function verifyTimeoutOutcome(command: string, ms: number): VerifyOutcome {
+export function verifyTimeoutOutcome(
+  command: string,
+  ms: number,
+  partiel: string = ''
+): VerifyOutcome {
+  const plafond = `vérification arrêtée après ${Math.round(ms / 1000)} s (plafond) — rien n'est prouvé, la suite n'a pas rendu son verdict`
+  const acquis = capVerifyOutput(partiel)
   return {
     ok: false,
     exitCode: null,
     command,
-    output: `vérification arrêtée après ${Math.round(ms / 1000)} s (plafond) — rien n'est prouvé, la suite n'a pas rendu son verdict`
+    output: acquis
+      ? `${plafond}${SAUT}${SAUT}Ce que la suite avait écrit avant d'être coupée :${SAUT}${acquis}`
+      : plafond
   }
 }
 
