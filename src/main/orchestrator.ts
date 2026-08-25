@@ -113,6 +113,7 @@ import {
 } from './route-drift'
 import {
   estJugeTerminal,
+  noeudApprentissageApresJuge,
   initialBudget,
   nextNode,
   readModelChoice,
@@ -4918,7 +4919,45 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       valid = r.valid
       gate = r.gate
       learningAttestations = r.learningAttestations
-      if (!gate.blocked) break
+      if (!gate.blocked) {
+        /*
+         * CAPITALISATION APRES LE GATE — jamais avant, et seulement sur un verdict qui PASSE.
+         *
+         * `learn` ne peut pas etre un noeud de la marche : un juge joue par le marcheur PUIS par le
+         * gate final produit deux appels identiques (conv-1071), et un juge non terminal fait
+         * consommer au marcheur le budget de retour que la boucle de reparation relit ensuite
+         * (mesure du 2026-08-25 : `correctif` a 3 passages build la ou le profil en annonce 1).
+         * `estJugeTerminal` ignore donc l'arete vers `learn`, et c'est ICI qu'elle se joue.
+         *
+         * TROIS bornes, chacune fermant une facon de nuire :
+         *   - seulement si le profil le DECLARE (`noeudApprentissageApresJuge`) — opt-in, car cela
+         *     coute un appel fournisseur et `eclair` promet « aucun ceremonial » ;
+         *   - seulement sur gate NON BLOQUE — on ne tire pas de lecon d'un travail refuse ;
+         *   - une panne de capitalisation NE ROUGIT PAS le run : la lecon n'est pas le livrable, et
+         *     faire echouer un travail valide parce que le Brain a hoquete serait un faux rouge.
+         *     `valid` et `gate` ne sont plus touches apres ce point.
+         */
+        const apprentissage = graphePilote
+          ? noeudApprentissageApresJuge(graphePilote)
+          : undefined
+        if (apprentissage) {
+          const noeud = graphePilote?.nodes.find((n) => n.id === apprentissage)
+          if (noeud) {
+            try {
+              await executePipelinePhase(noeud.phase)
+            } catch (erreur) {
+              push({
+                step: 'exec',
+                role: 'subagent',
+                detail: `capitalisation impossible (${
+                  erreur instanceof Error ? erreur.message : String(erreur)
+                }) — le verdict du run n'en est pas affecte`
+              })
+            }
+          }
+        }
+        break
+      }
       /**
        * LE PROGRES decide, le plafond n'est qu'un garde-fou — et les DEUX se disent.
        *

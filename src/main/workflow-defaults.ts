@@ -42,7 +42,8 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
   {
     id: 'eclair',
     name: 'Éclair',
-    description: 'Une question, une réponse. Aucun cérémonial — pour ce qui ne mérite pas un pipeline.',
+    description:
+      'Une question, une réponse. Aucun cérémonial — pour ce qui ne mérite pas un pipeline.',
     graph: {
       entry: 'build-1',
       nodes: [{ id: 'build-1', phase: 'build' }],
@@ -59,12 +60,14 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
       nodes: [
         { id: 'think-1', phase: 'think' },
         { id: 'build-1', phase: 'build', agents: [agentStudio('preuve')] },
-        { id: 'judge-1', phase: 'judge', agents: [agentStudio('correcteur')] }
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('correcteur')] },
+        { id: 'learn-1', phase: 'learn' }
       ],
       edges: [
         { from: 'think-1', to: 'build-1', when: 'always' },
         { from: 'build-1', to: 'judge-1', when: 'always' },
-        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 }
+        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
+        { from: 'judge-1', to: 'learn-1', when: 'green' }
       ]
     }
   },
@@ -80,7 +83,8 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'frame-1', phase: 'frame', agents: [agentStudio('probleme')] },
         { id: 'build-1', phase: 'build', agents: [agentStudio('minimal')] },
         { id: 'clean-1', phase: 'clean' },
-        { id: 'judge-1', phase: 'judge', agents: [agentStudio('fidele')] }
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('fidele')] },
+        { id: 'learn-1', phase: 'learn' }
       ],
       edges: [
         { from: 'think-1', to: 'frame-1', when: 'always' },
@@ -88,7 +92,8 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'build-1', to: 'clean-1', when: 'always' },
         { from: 'clean-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
-        { from: 'judge-1', to: 'frame-1', when: 'red', maxTraversals: 1 }
+        { from: 'judge-1', to: 'frame-1', when: 'red', maxTraversals: 1 },
+        { from: 'judge-1', to: 'learn-1', when: 'green' }
       ]
     }
   },
@@ -108,7 +113,8 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'terrain-1', phase: 'terrain' },
         { id: 'build-1', phase: 'build' },
         { id: 'clean-1', phase: 'clean' },
-        { id: 'judge-1', phase: 'judge' }
+        { id: 'judge-1', phase: 'judge' },
+        { id: 'learn-1', phase: 'learn' }
       ],
       edges: [
         { from: 'think-1', to: 'scout-1', when: 'always' },
@@ -117,7 +123,8 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { from: 'terrain-1', to: 'build-1', when: 'always' },
         { from: 'build-1', to: 'clean-1', when: 'always' },
         { from: 'clean-1', to: 'judge-1', when: 'always' },
-        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 }
+        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
+        { from: 'judge-1', to: 'learn-1', when: 'green' }
       ]
     }
   },
@@ -135,17 +142,15 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
           id: 'judge-1',
           phase: 'judge',
           quorum: 2,
-          agents: [
-            agentStudio('correcteur'),
-            agentStudio('gardien'),
-            agentStudio('lean')
-          ]
-        }
+          agents: [agentStudio('correcteur'), agentStudio('gardien'), agentStudio('lean')]
+        },
+        { id: 'learn-1', phase: 'learn' }
       ],
       edges: [
         { from: 'think-1', to: 'build-1', when: 'always' },
         { from: 'build-1', to: 'judge-1', when: 'always' },
-        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 3 }
+        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 3 },
+        { from: 'judge-1', to: 'learn-1', when: 'green' }
       ]
     }
   },
@@ -189,13 +194,15 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
         { id: 'think-1', phase: 'think' },
         { id: 'remake-1', phase: 'remake' },
         { id: 'build-1', phase: 'build', agents: [agentStudio('minimal')] },
-        { id: 'judge-1', phase: 'judge', agents: [agentStudio('lean')] }
+        { id: 'judge-1', phase: 'judge', agents: [agentStudio('lean')] },
+        { id: 'learn-1', phase: 'learn' }
       ],
       edges: [
         { from: 'think-1', to: 'remake-1', when: 'always' },
         { from: 'remake-1', to: 'build-1', when: 'always' },
         { from: 'build-1', to: 'judge-1', when: 'always' },
-        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 }
+        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
+        { from: 'judge-1', to: 'learn-1', when: 'green' }
       ]
     }
   }

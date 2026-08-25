@@ -132,9 +132,9 @@ describe('workflows livrés d’origine', () => {
 
   it('livre un Chantier Autowin complet qui respecte Agent Studio', () => {
     const graph = chantier()
-    // `think` en tete depuis le 2026-08-25. PAS de `learn` ici : lui donner une arete sortante
-    // rendrait le juge NON TERMINAL, et le marcheur remangerait le budget de retour — defaut
-    // mesure (3 passages build au lieu de 1). Voir l'en-tete de `workflow-defaults.ts`.
+    // `think` en tete et `learn` en queue depuis le 2026-08-25. `estJugeTerminal` ignore l'arete
+    // verte vers `learn`, donc le juge reste terminal (joue une fois, par le gate) et la
+    // capitalisation est jouee APRES lui par l'orchestrateur.
     expect(graph.nodes.map((node) => node.phase)).toEqual([
       'think',
       'scout',
@@ -142,7 +142,8 @@ describe('workflows livrés d’origine', () => {
       'terrain',
       'build',
       'clean',
-      'judge'
+      'judge',
+      'learn'
     ])
     // Aucun fournisseur, modèle ou fan-out caché : le moteur reprend la configuration Agent Studio.
     expect(graph.nodes.every((node) => node.agents === undefined)).toBe(true)
@@ -159,8 +160,15 @@ describe('workflows livrés d’origine', () => {
   })
 
   it('termine le chemin nominal seulement après clean puis judge vert', () => {
-    // Le chemin nominal passe desormais par `think-1` en entree. Il finit sur le juge : `learn`
-    // n'est pas cable ici, pour ne pas priver le juge de son statut terminal.
+    /*
+     * CE HELPER MESURE LES ARETES, PAS LA MARCHE REELLE — il n'applique pas `estJugeTerminal`.
+     *
+     * La marche reelle s'arrete AVANT le juge (mesure : `think-1 > scout-1 > frame-1 > terrain-1 >
+     * build-1 > clean-1`, puis arret sur `judge-1`), et l'orchestrateur joue le juge via le gate
+     * puis `learn-1` apres lui. Ici on suit `nextNode` seul, donc la sequence inclut le juge et
+     * l'arete verte qui mene a `learn-1`. Les deux lectures sont justes ; elles ne mesurent pas la
+     * meme chose, et le distinguer evite de conclure a une double execution.
+     */
     expect(marche(['green'])).toEqual([
       'think-1',
       'scout-1',
@@ -168,7 +176,8 @@ describe('workflows livrés d’origine', () => {
       'terrain-1',
       'build-1',
       'clean-1',
-      'judge-1'
+      'judge-1',
+      'learn-1'
     ])
   })
 

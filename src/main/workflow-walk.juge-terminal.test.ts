@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isReturnEdge, nodeRanks } from './workflow-graph'
 import { DEFAULT_WORKFLOWS } from './workflow-defaults'
-import { estJugeTerminal } from './workflow-walk'
+import { estJugeTerminal, noeudApprentissageApresJuge } from './workflow-walk'
 
 /**
  * QUI est le juge TERMINAL du canevas — et pourquoi la reponse actuelle est fausse.
@@ -31,12 +31,24 @@ describe('juge terminal', () => {
       const juges = graphe.nodes.filter((n) => n.phase === 'judge')
       expect(juges.length, `${id} doit avoir un juge pour que ce test prouve quelque chose`).toBe(1)
       const juge = juges[0]!
-      // Le juge de ces profils n'a que des retours en sortie : il termine bien le canevas.
+      /*
+       * LE JUGE DE CES PROFILS N'A QUE DES RETOURS EN SORTIE — a UNE exception nommee, ajoutee le
+       * 2026-08-25 : l'arete verte vers le noeud `learn` terminal.
+       *
+       * Cette arete n'appartient pas au canevas parcouru : `learn` est joue APRES le gate, une fois
+       * le verdict rendu. La compter ferait revenir l'un des deux defauts mesures — le juge joue
+       * DEUX fois (conv-1071), ou le marcheur consommant le budget de retour que la boucle de
+       * reparation relit ensuite. Voir `juge-terminal-avec-learn.test.ts`.
+       *
+       * On asserte donc la forme EXACTE des sorties autorisees, pas un « tout est retour » devenu
+       * faux a la lettre alors que sa conclusion tient.
+       */
       const sorties = graphe.edges.filter((e) => e.from === juge.id)
       expect(sorties.length, `${id} : le juge a bien des aretes sortantes`).toBeGreaterThan(0)
+      const apprentissage = noeudApprentissageApresJuge(graphe)
       expect(
-        sorties.every((e) => isReturnEdge(e, rangs)),
-        `${id} : toutes ses sorties sont des retours`
+        sorties.every((e) => isReturnEdge(e, rangs) || e.to === apprentissage),
+        `${id} : ses sorties sont des retours, ou l'arete verte vers la capitalisation`
       ).toBe(true)
       expect(estJugeTerminal(graphe, juge.id, rangs), `${id} : donc TERMINAL`).toBe(true)
     }

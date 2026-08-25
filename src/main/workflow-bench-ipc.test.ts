@@ -481,11 +481,11 @@ describe('overrideFor — le workflow livré « Chantier Autowin » arrive intac
     expect(chantier).toBeDefined()
   })
 
-  it('transmet ses SEPT phases dans l’ordre du profil', () => {
+  it('transmet ses HUIT phases dans l’ordre du profil', () => {
     // `think` en tete depuis le 2026-08-25 : le contexte de la tache est charge avant de decouvrir.
-    // Pas de `learn` ici — lui donner une arete depuis le juge priverait celui-ci de son statut
-    // terminal, et le marcheur remangerait le budget de retour (mesure : 3 passages build au lieu
-    // de 1). Voir `workflow-defaults.think-learn.test.ts`.
+    // `learn` en queue : `estJugeTerminal` ignore l'arete verte qui y mene, donc le juge reste
+    // terminal et l'orchestrateur joue ce noeud APRES le gate. Voir
+    // `juge-terminal-avec-learn.test.ts`.
     const graphe = overrideFor(chantier)?.graph
     expect(graphe?.nodes.map((node) => node.phase)).toEqual([
       'think',
@@ -494,7 +494,8 @@ describe('overrideFor — le workflow livré « Chantier Autowin » arrive intac
       'terrain',
       'build',
       'clean',
-      'judge'
+      'judge',
+      'learn'
     ])
     expect(graphe?.entry).toBe('think-1')
   })

@@ -164,9 +164,51 @@ export function estJugeTerminal(
    * SEUL. Une continuation s'exprime par `green` ou `always` ; un retour de reparation par `red`. Un
    * juge ne termine donc le canevas que si TOUTES ses sorties sont des retours ROUGES.
    */
+  /*
+   * EXCEPTION NOMMEE, ajoutee le 2026-08-25 : une arete verte vers un noeud `learn` TERMINAL
+   * n'appartient pas au canevas parcouru.
+   *
+   * `learn` n'est pas joue par la marche. Il est joue APRES le gate, une fois le verdict rendu --
+   * capitaliser suppose un travail valide. Compter cette arete comme « arete qui avance » produirait
+   * l'un des deux defauts que ce module documente : soit le juge joue DEUX FOIS (conv-1071, le
+   * marcheur puis le gate final), soit le marcheur consomme le budget de retour que la boucle de
+   * reparation relit ensuite (mesure : `correctif` a 3 passages build la ou le profil en annonce 1).
+   *
+   * L'exception est BORNEE a un `learn` terminal. Un `learn` qui aurait une sortie serait une vraie
+   * continuation, et le juge cesserait a juste titre d'etre terminal -- sinon on rouvrirait le
+   * contre-exemple decrit juste au-dessus, ou le marcheur abandonne la suite du graphe EN SILENCE.
+   */
+  const apprentissage = noeudApprentissageApresJuge(graph)
   return graph.edges
     .filter((edge) => edge.from === nodeId)
+    .filter((edge) => !(apprentissage !== undefined && edge.to === apprentissage))
     .every((edge) => edge.when === 'red' && isReturnEdge(edge, ranks))
+}
+
+/**
+ * LE NOEUD DE CAPITALISATION a jouer APRES le gate, ou `undefined` si le profil n'en declare pas.
+ *
+ * Opt-in par profil, deliberement : capitaliser coute un appel fournisseur, et tous les profils n'ont
+ * pas vocation a le payer (`eclair` promet « aucun ceremonial »).
+ *
+ * TROIS conditions, chacune fermant une facon de se tromper :
+ *   - l'arete part d'un JUGE : on ne capitalise pas ce qu'aucun verdict n'a valide ;
+ *   - elle est conditionnee VERT : capitaliser apres un refus enregistrerait une lecon tiree d'un
+ *     travail invalide ;
+ *   - le noeud est TERMINAL : s'il continuait, il appartiendrait a la marche, pas a l'apres-gate.
+ */
+export function noeudApprentissageApresJuge(graph: WorkflowGraph): string | undefined {
+  const juges = new Set(
+    graph.nodes.filter((node) => node.phase === 'judge').map((node) => node.id)
+  )
+  for (const edge of graph.edges) {
+    if (!juges.has(edge.from) || edge.when !== 'green') continue
+    const cible = graph.nodes.find((node) => node.id === edge.to)
+    if (cible?.phase !== 'learn') continue
+    if (graph.edges.some((sortante) => sortante.from === cible.id)) continue
+    return cible.id
+  }
+  return undefined
 }
 
 export function initialBudget(graph: WorkflowGraph, ranks: Map<string, number>): TraversalBudget {

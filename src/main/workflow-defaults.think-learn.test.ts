@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_WORKFLOWS } from './workflow-defaults'
 import { graphDefects, nodeRanks } from './workflow-graph'
@@ -35,7 +37,7 @@ const AVEC_THINK = [
 ]
 
 /**
- * `learn` NE PEUT PAS suivre un juge, et c'est MESURÉ — pas une préférence.
+ * `learn` NE POUVAIT PAS suivre un juge, et c'était MESURÉ — pas une préférence.
  *
  * Donner au juge une arête sortante le rend NON TERMINAL (`estJugeTerminal` : « un juge ne termine
  * le canevas que si TOUTES ses sorties sont des retours ROUGES »). Le marcheur continue alors au-delà
@@ -43,9 +45,20 @@ const AVEC_THINK = [
  * mécanisme a été écrit pour corriger. Mesuré le 2026-08-25 en posant l'arête : `correctif` passe à
  * **3 passages build** là où le profil en annonce 1 côté marcheur, `panel-critique` à 4.
  *
- * `exploration` n'a AUCUN juge : `learn` y est donc sûr, et le budget de retour reste vert.
+ * RÉSOLU LE MÊME JOUR, autrement : `estJugeTerminal` IGNORE désormais une arête verte vers un `learn`
+ * terminal, et l'orchestrateur joue ce nœud APRÈS le gate. Le juge reste donc terminal — joué une
+ * seule fois, budget de retour intact — et la capitalisation a lieu quand le verdict est rendu. La
+ * borne est nominative : un `learn` qui CONTINUE, ou une arête verte vers autre chose, rendent le juge
+ * non terminal comme avant (`juge-terminal-avec-learn.test.ts`).
  */
-const AVEC_LEARN = ['exploration']
+const AVEC_LEARN = [
+  'correctif',
+  'feature',
+  'chantier-autowin',
+  'panel-critique',
+  'exploration',
+  'remake'
+]
 
 const profil = (id: string): (typeof DEFAULT_WORKFLOWS)[number] => {
   const trouve = DEFAULT_WORKFLOWS.find((candidat) => candidat.id === id)
@@ -114,6 +127,19 @@ describe('ce qui ne doit PAS changer', () => {
 
     expect(graphe.nodes).toHaveLength(1)
     expect(graphe.nodes[0]!.phase).toBe('build')
+  })
+
+  it('le nœud `learn` est réellement JOUÉ après le gate, pas seulement déclaré', () => {
+    /*
+     * Un nœud déclaré et jamais joué serait pire que pas de nœud : le graphe afficherait une brique
+     * qui a l'air d'avoir travaillé. C'est exactement le défaut que `skill-node-tools.ts` corrige une
+     * couche plus bas, et il ne doit pas revenir une couche plus haut.
+     */
+    const orchestrateur = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+    expect(orchestrateur).toContain('noeudApprentissageApresJuge(graphePilote)')
+    // Joué SEULEMENT sur gate non bloqué, et une panne n'y rougit pas le run.
+    expect(orchestrateur).toMatch(/if \(!gate\.blocked\) \{[\s\S]{0,2200}?executePipelinePhase\(noeud\.phase\)/)
+    expect(orchestrateur).toContain("le verdict du run n'en est pas affecte")
   })
 
   it('tous les graphes livrés restent valides pour le moteur', () => {
