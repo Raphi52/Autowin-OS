@@ -45,6 +45,15 @@ const SAUT_PORTEE = String.fromCharCode(10, 10)
  * fonction meme qu'on corrige, pas parce qu'on elargit le lot.
  */
 const SAUT_NATURE = String.fromCharCode(10, 10)
+
+/**
+ * Ce que l'agent DOIT lire quand la finalisation est reportee : le changement est ecrit et verifie,
+ * son integration attend la fin des processus de la copie. Ni un vert (rien n'est encore dans la
+ * base) ni un echec (rien n'est perdu) — et surtout pas un silence.
+ */
+const PUBLICATION_DIFFEREE =
+  'différée — le changement est vérifié ; son intégration attend la fin des processus du bureau, ' +
+  'Autowin la reprend seul. Ne pas rejouer cette édition.'
 import { lastUserMessageAt } from './store/conversations'
 import type { Message } from './providers/types'
 import type { Role, RoleBinding } from './roles'
@@ -2323,11 +2332,37 @@ export class AppCommandBus {
         ? await this.os.worktrees.endAsync(runId, { merge: true })
         : this.os.worktrees.end(runId, { merge: true })
       completed = true
+      /*
+       * UN REPORT N'EST PAS UN ECHEC.
+       *
+       * DEFAUT VECU le 2026-08-25 (conv-1404) : trois `edit_file` sur quatre ont rendu « publication
+       * automatique incomplete » alors que les trois manifestes portaient `verdict: green,
+       * publication: complete` et que les trois commits etaient dans `HEAD`. Le coordinateur rend
+       * `undefined` quand la copie a encore des processus actifs — typiquement les workers `vitest`
+       * que la verification vient elle-meme de lancer : elle passe en attente et `retryRecovery` la
+       * publie ensuite. Cette absence d'issue tombait dans le `throw`.
+       *
+       * Le cout n'etait pas cosmetique : face a un faux echec l'agent RECOMMENCE — quatre appels
+       * pour deux changements utiles, quatre bureaux sur le disque, trois branches de recuperation.
+       *
+       * On ne blanchit RIEN d'autre : une issue reellement bloquee (`blocked`, `conflict`, `refuse`)
+       * continue d'echouer bruyamment. Et l'attente est NOMMEE plutot que tue — un differe passe
+       * pour un vert exactement comme un faux echec passe pour un rouge.
+       */
+      if (finalized === undefined) {
+        if (result && typeof result === 'object') {
+          return {
+            ...result,
+            publication: PUBLICATION_DIFFEREE
+          } as Awaited<T>
+        }
+        return result
+      }
       if (
-        finalized?.outcome !== 'merged' &&
-        finalized?.outcome !== 'nothing' &&
-        finalized?.outcome !== 'cleanup-pending' &&
-        finalized?.outcome !== 'published-residue'
+        finalized.outcome !== 'merged' &&
+        finalized.outcome !== 'nothing' &&
+        finalized.outcome !== 'cleanup-pending' &&
+        finalized.outcome !== 'published-residue'
       ) {
         throw new Error(`Le bureau ${command} a été conservé : publication automatique incomplète`)
       }
