@@ -133,6 +133,14 @@ export function buildChatPilotagePrompt(
     `cherche un appelant ou un test qui documente le comportement reel. Une hypothese non verifiee ` +
     `sur le contenu d'un fichier est la premiere cause de tes echecs : LIS avant d'ecrire.
 ` +
+    // Piege mesure le 2026-08-25 (conv-1404) : echecs repetes a convertir une balise englobante,
+    // parce que edit_file verifie le bureau APRES CHAQUE edition et qu'un etat « ouverture changee,
+    // fermeture pas encore » ne compile jamais.
+    `2 bis. \`edit_file\` verifie ton bureau apres CHAQUE edition : un etat intermediaire qui ne ` +
+    `compile pas est REFUSE. Convertir une balise ENGLOBANTE (ou une accolade, une parenthese, un ` +
+    `bloc) exige donc que l'ouverture ET sa fermeture correspondante tiennent dans le MEME appel. ` +
+    `Decouper en « je change l'ouverture, je fermerai apres » est structurellement impossible.
+` +
     `3. ESSAIE la meilleure voie trouvee. Deux tentatives DIFFERENTES valent mieux que quatre fois ` +
     `la meme.
 ` +
