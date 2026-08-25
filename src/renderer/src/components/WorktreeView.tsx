@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GitGraphSnapshot } from '../../../shared/git-graph'
+import { BureauxConserves } from './BureauxConserves'
 import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
 import { ViewTopBar } from './ViewTopBar'
 import { layoutGitGraph, projectGitGraphAxes, type GitGraphLayout } from './GitGraphLayout'
@@ -363,6 +364,11 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
         </div>
       ) : (
         <div className="cockpit-scroll">
+          {/* Les bureaux CONSERVES apres echec, avec leur prise. Places haut et non en bas de page :
+              c'est ici que l'utilisateur vient les chercher, et deux messages de refus le renvoient
+              explicitement a cette vue. Un renvoi vers une section invisible vaut un renvoi vers
+              rien. */}
+          <BureauxConserves />
           <section className={`project-strip is-${health.state}`} aria-label="Santé du projet">
             <div>
               <span>Santé du projet</span>

@@ -14,6 +14,13 @@
  * REGLE, tenue par le test d'exhaustivite : un motif ajoute ici SANS sortie fait echouer la suite.
  * Une paraphrase polie du probleme ne compte pas — la sortie doit contenir un VERBE D'ACTION.
  *
+ * DEFAUT DE CE MODULE, corrige le 2026-08-25 quelques heures apres sa livraison : deux sorties
+ * renvoyaient vers un « bouton de nettoyage » et une reprise « depuis le panneau Worktrees » qui
+ * N'EXISTAIENT PAS — la vue n'avait que « choisir un depot » et « rafraichir ». Orienter vers un
+ * geste impossible coute PLUS qu'un refus nu : on fait chercher avant de laisser au meme mur. Les
+ * gestes existent desormais (`BureauxConserves.tsx`) et le test `issue-de-refus.affordances`
+ * verifie que chaque geste nomme ici correspond a un bouton reellement rendu.
+ *
  * CE QUE CE MODULE N'EST PAS : une facon d'assouplir une garde. Les refus gardes ici restent des
  * refus ; ils cessent seulement d'etre des culs-de-sac. Quand un refus peut etre EVITE, la reponse
  * n'est pas une meilleure phrase, c'est de le supprimer — comme le pre-vol `base-dirty` ce meme jour.
@@ -59,11 +66,11 @@ export const ISSUES_CONNUES: Record<MotifRefus, string> = {
   'isolation-indisponible':
     "Le moteur de bureaux n'est pas actif pour ce projet. Ouvre le panneau Worktrees pour l'activer, ou relance l'edition une fois le projet rattache a un depot git.",
   'isolation-impossible':
-    "Le bureau n'a pas pu etre cree. Verifie qu'aucun autre bureau du meme nom ne traine (panneau Worktrees, bouton de nettoyage), puis relance — le travail deja fait n'est pas perdu.",
+    "Le bureau n'a pas pu etre cree. Ouvre Worktrees, section « Bureaux conserves », et purge un bureau qui ne sert plus, puis relance — le travail deja fait n'est pas perdu.",
   'verification-indisponible':
     "Rien ne prouve cette edition : le projet ne declare aucun script « test ». Declare-le dans package.json pour obtenir une preuve, ou reprends l'edition en assumant explicitement l'absence de verification.",
   'publication-differee':
-    "Le bureau est conserve : rien n'est perdu. Reprends-le depuis le panneau Worktrees pour le publier, ou committe toi-meme depuis ce bureau.",
+    "Le bureau est conserve : rien n'est perdu. Ouvre Worktrees, section « Bureaux conserves » : « Voir le diff » pour juger, « Reprendre » pour republier, « Purger » pour jeter.",
   'budget-appels':
     "Le tour a consomme tous ses appels. Reprends avec « Reprendre en precisant » pour repartir du travail deja fait, ou decoupe la demande en deux etapes plus courtes.",
   'budget-depense':
