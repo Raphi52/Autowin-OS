@@ -1030,6 +1030,20 @@ export class AgentPilot {
     let outilAbsentRecoveryAvailable = true
     let annonceSansActionRecoveryAvailable = true
     let commandAttachments: NonNullable<Message['attachments']> = []
+    /**
+     * Le texte d'un tour qui se termine — JAMAIS vide.
+     *
+     * Cause racine des « conversations qui echouent » (conv-1141) : un tour ayant AGI sans rien DIRE
+     * produisait une bulle vide, et l'utilisateur renvoyait le meme prompt en boucle sans jamais
+     * savoir ce qui ratait. Deux sites cloturent un tour ; ils partagent ce repli plutot que d'en
+     * garder chacun une copie qui divergerait.
+     */
+    const texteDeCloture = (spoken: string): string =>
+      spoken ||
+      (anyActionExecuted
+        ? 'J’ai agi mais je n’ai pas produit de conclusion en clair — vois les cartes ' +
+          'd’action ci-dessus pour le detail (et leurs eventuels echecs).'
+        : 'Aucune reponse produite pour ce tour.')
     for (let i = recoveredProviderCall?.iteration ?? 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
       // point d'itération (priorité immédiate, sans attendre la fin du tour).
@@ -1572,16 +1586,7 @@ export class AgentPilot {
         // le tour a AGI (« [a execute exec (echec)] ») mais n'a rien DIT, la reprise de conclusion
         // etait deja consommee, et `spoken` vide produisait une bulle VIDE — l'utilisateur renvoyait
         // alors le meme prompt en boucle sans jamais savoir ce qui ratait.
-        emit({
-          kind: 'done',
-          text:
-            spoken ||
-            (anyActionExecuted
-              ? 'J’ai agi mais je n’ai pas produit de conclusion en clair — vois les cartes ' +
-                'd’action ci-dessus pour le detail (et leurs eventuels echecs).'
-              : 'Aucune reponse produite pour ce tour.'),
-          usage
-        })
+        emit({ kind: 'done', text: texteDeCloture(spoken), usage })
         return
       }
 
@@ -1801,6 +1806,43 @@ export class AgentPilot {
         // Le modele a livre sa reponse ET sauve une memoire. On emettait VIDE — donc on JETAIT son
         // texte reel, laissant une bulle vide (conv-1141). `spoken` est garanti non vide ici.
         emit({ kind: 'done', text: spoken, usage })
+        return
+      }
+
+      /*
+       * UNE QUESTION CLOT LE TOUR.
+       *
+       * `ask` ne suspendait rien : la commande rendait la question et le pilote enchainait. La
+       * conversation restait donc OCCUPEE, et repondre passait par une DIRECTIVE -- affichee
+       * « ORIENTÉ », avec un composer bloque sur « Orienter l'agent sans l'interrompre ». Vecu dans
+       * `conv-1400` : l'utilisateur repondait a une question et le systeme enregistrait une
+       * orientation. Toute cette gymnastique n'existait que parce qu'un `ask` ne terminait pas le tour.
+       *
+       * L'agent vient de dire qu'il lui manque une entree : son tour est fini, c'est celui de
+       * l'utilisateur. La conversation cesse d'etre occupee, donc la reponse arrive comme un message
+       * ORDINAIRE. On ne fait attendre PERSONNE -- pas de run suspendu, pas de delai a choisir, pas
+       * d'echappatoire a prevoir.
+       *
+       * APRES l'execution de l'iteration, jamais a la rencontre du token : le modele peut poser une
+       * question ET avoir produit du travail utile dans le meme souffle. On clot apres le travail, on
+       * ne l'annule pas.
+       *
+       * LA GARDE « question sans lecture » PASSE DEVANT, et ce n'est pas un detail : elle vit dans la
+       * branche SANS commande, donc cloturer ici sans la consulter la rendrait INATTEIGNABLE -- on
+       * aurait echange un defaut contre un autre. Un modele qui questionne sans avoir rien lu est
+       * donc relance, comme avant ; on ne clot que la question legitime.
+       */
+      if (questionPoseeCeTour) {
+        if (
+          questionSansLectureRecoveryAvailable &&
+          questionPoseeSansAvoirLu(questionPoseeCeTour, anyReadExecuted)
+        ) {
+          questionSansLectureRecoveryAvailable = false
+          grantRecoveryIteration('question-sans-lecture')
+          convo.push(RELANCE_QUESTION_SANS_LECTURE)
+          continue
+        }
+        emit({ kind: 'done', text: texteDeCloture(spoken), usage })
         return
       }
 
