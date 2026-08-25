@@ -182,8 +182,13 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                 className={`card live-run stripe stripe-accent fade-in`}
                 data-live-run-conversation-id={liveRun.convId}
               >
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div className="row gap2" style={{ minWidth: 0 }}>
+                <details className="live-run-fold" open={liveRun.status === 'running'}>
+                <summary
+                  className="row"
+                  style={{ justifyContent: 'space-between', cursor: 'pointer' }}
+                  title="Replier / déplier ce sous-agent"
+                >
+                  <span className="row gap2" style={{ minWidth: 0 }}>
                     {liveRun.status === 'running' ? (
                       <span className="spinner" />
                     ) : (
@@ -194,8 +199,8 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                     <span className="run-subject live-subject" title={liveRun.task}>
                       {liveRun.task}
                     </span>
-                  </div>
-                </div>
+                  </span>
+                </summary>
                 <div style={{ marginTop: 'var(--s2)' }}>
                   <StepThread steps={liveRun.steps} />
                   {liveRun.status === 'running' &&
@@ -265,6 +270,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                       )
                     })()}
                 </div>
+                </details>
               </div>
             ))}
           {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
