@@ -22,13 +22,15 @@
      translation dans l'espace, et non un simple changement d'échelle. */
   perspective: 1600px;
   perspective-origin: 50% 40%;
-  /* TRANSPARENT, pas noir : le fond d ecran de l app (theme.css -> autowin-galaxy-bg-hq.png, pose sur
-     body) doit transparaitre ici comme dans les autres vues. Toute la chaine au-dessus est deja
-     transparente (#root, .main, .view-slot) et le canevas du decor efface en alpha 0 : un
-     background: #000 etait donc la SEULE couche qui masquait l image. Constat utilisateur
-     (conv-1358) : « sur la vue accueil je vois pas le fond d ecran ». La lisibilite reste portee par
-     l assombrissement du centre (.home-view::after) et par le fond opaque de chaque tuile. */
-  background: transparent;
+  /* NOIR OPAQUE, pas transparent — decision INVERSEE par rapport a conv-1358. L accueil ne montre pas
+     l image plate du fond d ecran (theme.css -> autowin-galaxy-bg-hq.png, posee sur body) : il en
+     montre la REPRODUCTION 3D. Constat utilisateur (conv-1397) : « je vois toujours le fond d ecran
+     qui est present dans toutes les vues dans la vue accueil, ce n est pas ce que je veux, je veux une
+     reproduction en 3d ». Toute la chaine au-dessus est transparente (#root, .main, .view-slot), donc
+     cette regle est la seule couche capable de masquer l image ; le canevas du decor efface desormais
+     en opaque (home-decor-scene.ts -> FOND_DECOR). La lisibilite reste portee par l assombrissement
+     du centre (.home-view::after) et par le fond opaque de chaque tuile. */
+  background: #000;
   border-radius: var(--container-radius-page, 16px);
 }
 

@@ -1,11 +1,38 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   COMPOSITIONS,
   createDecorScene,
   DECOR_DEFAUT,
   DECOR_VARIANTS,
+  FOND_DECOR,
   NAPPE_FRAGMENT_SHADER
 } from './home-decor-scene'
+
+/**
+ * Le decor 3D est le FOND de l'accueil, pas une surcouche posee sur l'image plate.
+ *
+ * Constat utilisateur conv-1397 : « je vois toujours le fond d'ecran qui est present dans toutes les
+ * vues dans la vue accueil […] je veux une reproduction en 3d ». Le canevas s'effacait en alpha 0
+ * (`setClearColor(0x000000, 0)`), donc l'image `autowin-galaxy-bg-hq.png` de `body` passait au
+ * travers. Un effacement OPAQUE fait du decor la seule source du fond.
+ *
+ * ENTREES QUI DOIVENT FAIRE ECHOUER CE TEST si la correction est fausse :
+ *   - `FOND_DECOR.alpha = 0` (ou toute valeur < 1) → l'image plate repasse au travers ;
+ *   - `setClearColor(0x000000, 0)` ecrit en dur a cote de la constante → l'assertion sur la source tombe.
+ */
+describe('le decor efface son canevas de maniere OPAQUE', () => {
+  it('expose un fond noir opaque', () => {
+    expect(FOND_DECOR.couleur).toBe(0x000000)
+    expect(FOND_DECOR.alpha).toBe(1)
+  })
+
+  it('utilise cette constante pour l effacement, sans alpha 0 en dur', () => {
+    const source = readFileSync(new URL('./home-decor-scene.ts', import.meta.url), 'utf8')
+    expect(source).toMatch(/setClearColor\(\s*FOND_DECOR\.couleur\s*,\s*FOND_DECOR\.alpha\s*\)/)
+    expect(source).not.toMatch(/setClearColor\([^)]*,\s*0(\.0+)?\s*\)/)
+  })
+})
 
 /**
  * Le catalogue des directions du décor.

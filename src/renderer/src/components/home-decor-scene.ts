@@ -23,6 +23,16 @@ const VIOLET = 0x8f7cff
 const ANTHRACITE = 0x1b222c
 
 /**
+ * L'effacement du canevas, OPAQUE et noir.
+ *
+ * Ce n'est pas un detail cosmetique : en alpha 0, l'image plate `autowin-galaxy-bg-hq.png` posee sur
+ * `body` par `theme.css` passait au travers du canevas, et l'utilisateur voyait l'image au lieu de sa
+ * reproduction 3D (conv-1397). Un fond opaque fait du decor la SEULE source du fond sur l'accueil ;
+ * le noir est celui du centre du fond d'ecran, donc la jonction avec les bords reste invisible.
+ */
+export const FOND_DECOR = { couleur: 0x000000, alpha: 1 } as const
+
+/**
  * Les directions visuelles du décor, entre lesquelles l'utilisateur choisit.
  *
  * Ce ne sont PAS des variantes cosmétiques : chacune se distingue des autres sur au moins deux axes —
@@ -693,7 +703,7 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
     return null
   }
 
-  renderer.setClearColor(0x000000, 0)
+  renderer.setClearColor(FOND_DECOR.couleur, FOND_DECOR.alpha)
   const canvas = renderer.domElement
 
   const scene = new THREE.Scene()
