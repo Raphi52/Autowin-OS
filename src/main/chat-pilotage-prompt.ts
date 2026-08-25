@@ -139,7 +139,10 @@ export function buildChatPilotagePrompt(
     `2 bis. \`edit_file\` verifie ton bureau apres CHAQUE edition : un etat intermediaire qui ne ` +
     `compile pas est REFUSE. Convertir une balise ENGLOBANTE (ou une accolade, une parenthese, un ` +
     `bloc) exige donc que l'ouverture ET sa fermeture correspondante tiennent dans le MEME appel. ` +
-    `Decouper en « je change l'ouverture, je fermerai apres » est structurellement impossible.
+    `Decouper en « je change l'ouverture, je fermerai apres » est structurellement impossible. ` +
+    `MEME PIEGE, autre forme : une reference vers un symbole qui n'existe pas encore (composant, ` +
+    `fonction, constante) ne compile pas non plus. Quand deux editions se tiennent, DEFINIR vient ` +
+    `avant CABLER : ecris d'abord ce qui doit exister, branche-le seulement ensuite.
 ` +
     `3. ESSAIE la meilleure voie trouvee. Deux tentatives DIFFERENTES valent mieux que quatre fois ` +
     `la meme.
