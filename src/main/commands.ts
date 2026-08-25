@@ -106,7 +106,7 @@ import {
 } from '../shared/orchestration-outcome'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { collectOrchestrationContext } from './orchestration-context'
-import { memoireDesRunsPrecedents, resumeDesTours } from './orchestration-memoire'
+import { memoireDesRunsPrecedents, phasesAvecJuge, resumeDesTours } from './orchestration-memoire'
 import { optionsQuiPresupposentUneSolution } from './option-lecture-ou-solution'
 import { CONTEXT_MESSAGE_LIMIT } from './conversation-window'
 import { rememberFact } from './brain-remember'
@@ -1804,7 +1804,11 @@ export class AppCommandBus {
                 // Le save est un bonus de capitalisation : il n'a pas le droit de toucher au run.
               }
             }
-            populateConvRunSections(runPath, r.phaseOutputs, { publishedCommitSha }) // J2 — RUN.md peuplé du vrai livrable
+            // J2 — RUN.md peuplé du vrai livrable, VERDICT DU JUGE COMPRIS : c'est la seule
+            // source que `orchestration-memoire` sait relire au run suivant (conv-1405).
+            populateConvRunSections(runPath, phasesAvecJuge(r.phaseOutputs, r.judgeText), {
+              publishedCommitSha
+            })
             const runStatus =
               terminalLifecycle && terminalLifecycle.closure.status !== 'open'
                 ? terminalLifecycle.closure.status

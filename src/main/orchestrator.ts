@@ -541,6 +541,8 @@ export interface OrchestrationResult {
     agentToken?: string
     executionEvidence?: ExecutionEvidence[]
   }[]
+  /** Verdict terminal du juge, tel qu'écrit — annexé au RUN.md pour la mémoire inter-runs. */
+  judgeText?: string
   /** Attestation locale émise uniquement depuis le retour d'un rôle judge distinct de l'auteur. */
   learningAttestations?: IndependentLearningAttestation[]
   /** Requête envoyée au Brain (RAG 1×/run) — pour la traçabilité Observatory. */
@@ -5003,6 +5005,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       gateBlocked: gate.blocked,
       gateReasons: gate.reasons,
       phaseOutputs,
+      // Le verdict SORT du run : sans ce champ il mourait dans `lastJudgeText` et n'atteignait
+      // jamais le RUN.md, donc jamais la mémoire inter-runs (conv-1405).
+      ...(lastJudgeText.trim() ? { judgeText: lastJudgeText.trim() } : {}),
       ...(learningAttestations.length ? { learningAttestations } : {}),
       brainQuery,
       brainRetrievedAt,

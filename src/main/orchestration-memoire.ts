@@ -48,6 +48,27 @@ export function findingsDuJuge(md: string): FindingsDuJuge {
   return verdict ? { verdict, findings } : { findings }
 }
 
+/**
+ * LE CHAÎNON : ajoute le verdict du juge aux sorties de phases écrites dans le RUN.md.
+ *
+ * Sans lui, `findingsDuJuge` cherche une section que PERSONNE n'écrit : `orchestrator.ts` garde le
+ * verdict dans `lastJudgeText` et ne le pousse pas dans `phaseOutputs`, seul tableau annexé par
+ * `populateConvRunSections`. Mesuré sur conv-1405 : 5 RUN.md, 0 section `### phase judge`, mémoire
+ * inter-runs vide en production.
+ *
+ * Un verdict VIDE n'écrit rien : une section juge fantôme ferait hériter le run suivant d'un
+ * souvenir inexistant. Une phase `judge` déjà présente n'est pas doublée.
+ */
+export function phasesAvecJuge<T extends { phase: string; text: string }>(
+  phaseOutputs: readonly T[],
+  judgeText: string | undefined
+): Array<T | { phase: string; text: string }> {
+  const verdict = (judgeText ?? '').trim()
+  if (!verdict) return [...phaseOutputs]
+  if (phaseOutputs.some((p) => /^(judge|juge)$/i.test(p.phase))) return [...phaseOutputs]
+  return [...phaseOutputs, { phase: 'judge', text: verdict }]
+}
+
 /** Un run passé de la conversation, réduit à ce qui sert au run suivant. */
 export interface RunPasse extends FindingsDuJuge {
   besoin: string
