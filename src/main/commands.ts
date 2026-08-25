@@ -26,6 +26,7 @@ import {
   decideVerifyCommand,
   porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
+  porteeDerivableDesChangements,
   verifyTimeoutMs,
   verifyTimeoutOutcome,
   type VerifyOutcome
@@ -2604,6 +2605,39 @@ export class AppCommandBus {
       } else {
         argv = [...argv, '--', verdict.chemin]
         etiquette = `${decision.command} -- ${verdict.chemin}`
+      }
+    }
+    /*
+     * SANS CIBLE, LA PORTEE VIENT DE CE QUI A CHANGE.
+     *
+     * DEFAUT VECU le 2026-08-25 (conv-1404) : `verify` nu a rendu « verification arretee apres 600 s
+     * (plafond) — rien n'est prouve ». Ce n'est pas un rouge, c'est une ABSENCE de verdict : dix
+     * minutes d'attente pour apprendre qu'on ne sait rien. Et c'est le repli d'`edit_file` quand la
+     * portee n'est pas derivable, donc une edition saine peut se faire refuser par un chronometre.
+     *
+     * La question que l'agent pose en pratique n'est pas « le depot entier est-il vert ? » mais
+     * « est-ce que ce que je viens de changer casse quelque chose ? ». Cette portee-la existait deja
+     * pour `edit_file` (2026-08-22) et pour une cible SOURCE (2026-08-25, plus haut dans cette
+     * fonction) : elle manquait au seul cas sans cible. Les deux precedents mesurent 20 a 70 s la ou
+     * la suite entiere depasse le plafond.
+     *
+     * ARBRE PROPRE : rien a cibler, donc la suite complete reste la reponse. C'est deliberate — sur
+     * un arbre propre, « rien n'est casse » n'est PAS une reponse a « le depot est-il vert ? », et la
+     * confondre fabriquerait exactement le faux vert que `porteeDuVert` sert a empecher.
+     *
+     * Et l'angle mort reste NOMME par la voie de portee elle-meme : un vert dont on ignore l'etendue
+     * se lit plus large qu'il n'est.
+     */
+    const derivee = porteeDerivableDesChangements(await this.fichiersNonCommites(decision.cwd))
+    if (etiquette === decision.command && derivee) {
+      const parPortee = await this.runRelatedVerifyAt(decision.cwd, derivee)
+      // Portee indeterminable (projet sans vitest, chemin non exploitable) : on retombe sur la suite
+      // complete plutot que de rendre un refus. Un vert plus large n'est jamais un faux vert.
+      if (parPortee.allowed) {
+        return {
+          ...parPortee,
+          output: `${VERIFY_RELATED_ANGLE_MORT}${SAUT_PORTEE}${parPortee.output}`
+        }
       }
     }
     const resultat = await this.spawnVerify(argv, decision.cwd, etiquette, onProgress)

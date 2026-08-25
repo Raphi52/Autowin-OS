@@ -205,6 +205,33 @@ export function decideRelatedVerify(
   return { allowed: true, argv, cwd, command: argv.join(' ') }
 }
 
+/**
+ * LA PORTEE DERIVEE DE CE QUI A CHANGE — ou rien, et alors la suite complete reprend la main.
+ *
+ * `vitest related` raisonne sur un graphe d'IMPORTS : seul un fichier de code y a une place. Un
+ * dossier non suivi (`node_modules/`, `.autowin-data/`), un `.md`, un `.json` de configuration n'y
+ * entrent pas — les router vers la portee fabriquerait un vert qui n'a rien mesure.
+ *
+ * ATTRAPE PAR SON PROPRE TEST DE RETROCOMPAT le 2026-08-25 : sur un arbre cense etre propre, le
+ * `node_modules` non suivi devenait la cible et la commande jouee etait
+ * `vitest related node_modules/ --run`. Un vert vide est pire qu'une suite lente.
+ *
+ * REGLE STRICTE, et c'est le point : la portee n'est derivable que si TOUT ce qui a change est du
+ * code. Des qu'un seul chemin echappe au graphe d'imports, la portee ne couvre plus ce qui a bouge —
+ * et une portee incomplete presentee comme un verdict est exactement le faux vert qu'on evite.
+ * Meme regle que `decideRelatedVerify`, qui refuse deja un lot de chemins partiellement exploitable.
+ */
+const EXTENSIONS_DE_CODE = /[.](?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/
+
+export function porteeDerivableDesChangements(
+  chemins: readonly string[]
+): readonly string[] | undefined {
+  if (chemins.length === 0) return undefined
+  const normalises = chemins.map((chemin) => chemin.split(ANTISLASH).join('/'))
+  if (!normalises.every((chemin) => EXTENSIONS_DE_CODE.test(chemin))) return undefined
+  return normalises
+}
+
 /** Sortie d'une verification, telle qu'elle est rendue a l'agent. */
 export interface VerifyOutcome {
   ok: boolean
