@@ -35,6 +35,7 @@ import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement
 import { natureDeLEchec } from './verify-echec-nature'
 import { bornerLigneDeVie } from './verify-battement'
 import { refusAvecIssue } from './issue-de-refus'
+import { cleDeBureau, decisionDeReutilisation } from './bureau-reutilisable'
 import { readLastCommitFiles } from './git-read-main'
 import { readGitState } from './git-read-main'
 import type { AutowinOS } from './os'
@@ -2287,15 +2288,51 @@ export class AppCommandBus {
    * ambigue, creation de fichier) — jamais dans un outil du CLI, dont les patterns d'autorisation ont
    * ete mesures inoperants le meme jour.
    */
+  /**
+   * L'IDENTITE DU BUREAU : stable par tache, aleatoire seulement en dernier recours.
+   *
+   * DEFAUT MESURE le 2026-08-25 : un `randomUUID()` par appel, donc DIX bureaux (~50 Mo piece) pour
+   * dix tentatives d'UNE edition, tous porteurs du meme JSX non compilable. La source des residus
+   * n'est pas l'echec, c'est qu'un echec fabriquait un objet neuf au lieu de reprendre le sien.
+   *
+   * REGLE, tranchee par l'utilisateur : reinitialiser le bureau retrouve, SAUF s'il porte du travail
+   * qu'aucune tentative precedente sur cette cible n'explique — auquel cas on ne le touche pas et la
+   * nouvelle tentative va ailleurs. Les deux branches naives etaient mauvaises : heriter du contenu
+   * fait repartir l'agent de son propre code casse, reinitialiser toujours detruit du travail non
+   * trie.
+   */
+  private async identiteDeBureau(
+    famille: string,
+    conversationId: string | undefined,
+    cible: string | undefined
+  ): Promise<string> {
+    const aleatoire = `command-${famille}-${randomUUID()}`
+    const cle = cleDeBureau(famille, conversationId, cible)
+    if (!cle) return aleatoire
+    const retenus = this.os.worktrees?.travauxNonPublies?.() ?? []
+    const existant = retenus.find((travail) => travail.agentId === cle)
+    if (!existant) return cle
+    const decision = decisionDeReutilisation(existant.fichiers, cible ? [cible] : [])
+    if (decision === 'preserver') return aleatoire
+    // Reinitialisation = liberer le brouillon precedent AVANT de reprendre sa place. Si la liberation
+    // echoue, on ne force RIEN : un bureau qu'on n'a pas pu liberer reste intact, et la tentative va
+    // ailleurs plutot que d'ecrire par-dessus.
+    const libere = await this.os.worktrees?.discardHeldAsync?.(cle)
+    return libere ? cle : aleatoire
+  }
+
   private async withIsolatedMutation<T>(
     command: 'edit_file' | 'graphify',
     conversationId: string | undefined,
-    action: (workspaceRoot: string) => T | Promise<T>
+    action: (workspaceRoot: string) => T | Promise<T>,
+    /** Fichier vise par la tache : c'est lui qui donne au bureau une IDENTITE stable. */
+    cible?: string
   ): Promise<T> {
     if (!this.os.worktrees) {
       throw new Error(refusAvecIssue('isolation-indisponible', command))
     }
-    const runId = `command-${command === 'edit_file' ? 'edit' : 'graphify'}-${randomUUID()}`
+    const famille = command === 'edit_file' ? 'edit' : 'graphify'
+    const runId = await this.identiteDeBureau(famille, conversationId, cible)
     const beginOptions = {
       task: command,
       role: 'command',
@@ -2481,7 +2518,10 @@ export class AppCommandBus {
       const outcome = await this.withIsolatedMutation(
         'edit_file',
         conversationId,
-        (workspaceRoot) => this.runEditFile(input, workspaceRoot)
+        (workspaceRoot) => this.runEditFile(input, workspaceRoot),
+        typeof (input as { path?: unknown }).path === 'string'
+          ? ((input as { path?: string }).path as string)
+          : undefined
       )
       const path =
         outcome.allowed && outcome.path
