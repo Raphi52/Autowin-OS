@@ -11,7 +11,7 @@ describe('ExecutionQuote', () => {
       phases: ['frame', 'build'],
       decomposition: { mode: 'disabled', maxNodes: 1 },
       limits: {
-        maxProviderCalls: 12,
+        maxProviderCalls: 40,
         maxFreshTokens: 750_000,
         maxTotalTokens: 6_000_000,
         // frame + build + juge, puis une reparation et son re-jugement autorises par maxRecoveries=1.
@@ -32,7 +32,7 @@ describe('ExecutionQuote', () => {
     expect(quote.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean'])
     expect(quote.decomposition).toEqual({ mode: 'build-only', maxNodes: 5 })
     expect(quote.limits).toMatchObject({
-      maxProviderCalls: 24,
+      maxProviderCalls: 80,
       maxFreshTokens: 2_000_000,
       maxTotalTokens: 15_000_000,
       maxConcurrency: 4,
