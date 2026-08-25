@@ -170,12 +170,39 @@ export function createAutowinAppDataRoot(base = appDataBase()): string {
  * jeton AmitelBrain, installation codex, skills) restent à leur place : les rediriger casserait
  * l'app sans rien nettoyer.
  */
+/**
+ * REMONTE HORS D'UNE COPIE AGENT, pour que la racine de donnees ne se replique pas en profondeur.
+ *
+ * LE DEFAUT, mesure le 2026-08-24 : la racine est `join(appPath, '.autowin-data')`, donc elle SUIT
+ * l'app qui tourne. Un agent qui lance l'app depuis sa propre copie
+ * (`.autowin-data/<app>/worktrees/<h>/agent__X`) creait donc un `.autowin-data` DEDANS -- 66 Mo
+ * observes -- avec ses propres worktrees a l'interieur. La structure se replique a chaque niveau.
+ *
+ * Degats constates : des copies imbriquees qu'aucun balayage ne retrouve (elles ne sont pas la ou on
+ * les cherche), et une suite de tests passee de 743 a 1421 fichiers parce que vitest ramassait la
+ * copie complete du depot -- 4 des 5 echecs venaient de cette copie, pas du code.
+ *
+ * LE DISCRIMINANT est le segment `.autowin-data` lui-meme : il n'apparait dans un chemin d'app QUE
+ * lorsqu'on tourne a l'interieur d'une racine de donnees. On coupe donc au PREMIER, ce qui rend le
+ * depot reel meme sur une imbrication de plusieurs niveaux.
+ */
+export function racineHorsCopieAgent(appPath: string): string {
+  const normalise = appPath.split('\\').join('/')
+  const marqueur = `/${PORTABLE_APP_DATA_DIR}/`
+  const coupe = normalise.indexOf(marqueur)
+  if (coupe < 0) return appPath
+  // On rend le chemin dans la forme d'origine : couper la chaine normalisee suffit, les separateurs
+  // conserves sont ceux du prefixe, que l'appelant a fourni.
+  return appPath.slice(0, coupe)
+}
+
 export function portableAppDataBase(
   appPath: string,
   executableDir: string,
   isPackaged: boolean
 ): string {
-  return join(isPackaged ? executableDir : appPath, PORTABLE_APP_DATA_DIR)
+  const racine = isPackaged ? executableDir : racineHorsCopieAgent(appPath)
+  return join(racine, PORTABLE_APP_DATA_DIR)
 }
 
 export function resolveAutowinAppDataBase(
