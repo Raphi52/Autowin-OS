@@ -31,6 +31,7 @@ import {
   type VerifyOutcome
 } from './verify-command'
 import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement'
+import { natureDeLEchec } from './verify-echec-nature'
 import { readGitState } from './git-read-main'
 import type { AutowinOS } from './os'
 
@@ -2285,8 +2286,19 @@ export class AppCommandBus {
           throw new Error(`Vérification du bureau impossible : ${verification.reason}`)
         }
         if (!verification.ok) {
+          /*
+           * LA NATURE DE L'ECHEC EN TETE, avant la sortie brute.
+           *
+           * Mesure le 2026-08-25 (conv-1404) : ce message etait generique, et une edition qui avait
+           * produit du JSX aux balises desequilibrees se lisait comme « un test casse ». L'agent a
+           * donc retente une correction de LOGIQUE, reproduisant huit fois la meme faute de balises
+           * jusqu'a ce que le budget d'appels coupe le tour. Les deux natures appellent des gestes
+           * opposes ; les confondre garantit la boucle.
+           */
+          const { consigne } = natureDeLEchec(verification.output)
           throw new Error(
-            `Vérification du bureau échouée (${verification.command}) : ${verification.output}`
+            `Vérification du bureau échouée (${verification.command}) : ` +
+              `${consigne ? `${consigne}${SAUT_NATURE}` : ''}${verification.output}`
           )
         }
         // Le verdict NOMME sa portee et son angle mort. Un vert dont on ignore l'etendue se lit
