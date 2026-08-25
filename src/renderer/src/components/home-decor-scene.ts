@@ -790,7 +790,8 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
       })
       planetSpecs.forEach((spec, index) => {
         const planet = planets[index]
-        planet.position.set(spec.fx * halfWidth, spec.fy * halfHeight, spec.z)
+        planetBases[index].set(spec.fx * halfWidth, spec.fy * halfHeight, spec.z)
+        planet.position.copy(planetBases[index])
         const size = Math.max(0.6, uniform * spec.radius)
         planet.scale.setScalar(size)
       })
