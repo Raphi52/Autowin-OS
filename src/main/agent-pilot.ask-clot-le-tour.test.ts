@@ -83,7 +83,8 @@ describe('une question clôt le tour', () => {
 
     const fin = evenements.filter((event) => event.kind === 'done')
     expect(fin).toHaveLength(1)
-    expect(fin[0].kind === 'done' ? fin[0].text.trim() : '').not.toBe('')
+    const cloture = fin[0]
+    expect(cloture && cloture.kind === 'done' ? cloture.text.trim() : '').not.toBe('')
   })
 
   it('exécute QUAND MÊME le travail de la même itération avant de fermer', async () => {
