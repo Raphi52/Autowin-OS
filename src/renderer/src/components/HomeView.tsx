@@ -63,7 +63,15 @@ const LAYOUT_STORAGE_KEY = autowinStorageKey('home.layout.v1')
  */
 const NOTICE_STORAGE_KEY = autowinStorageKey('home.notice-vue.v1')
 /** La direction visuelle du decor. Un reglage, pas une constante : l'utilisateur en choisit une. */
-const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v1')
+/*
+ * `v2` et non `v1` : la cle est VOLONTAIREMENT changee le 2026-08-25.
+ *
+ * Cause de la plainte « je vois des poussieres » : le defaut du decor est passe a `actuel` (planetes
+ * annelees), mais une machine qui avait deja choisi `poussiere` gardait ce choix en localStorage et
+ * continuait d'afficher l'ancienne direction — le nouveau defaut n'atteignait jamais l'ecran.
+ * Repartir sur une cle neuve rend la main a `DECOR_DEFAUT` sans effacer l'ancienne valeur.
+ */
+const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v2')
 const NOTICE_OUVERTURES = 4
 /** Pas de déplacement au clavier, en pixels. Assez grand pour avancer, assez petit pour viser. */
 const PAS_CLAVIER = 16
