@@ -146,6 +146,7 @@ import {
   reuseOrCreateConvRun,
   saveConvRunTrace
 } from './runs/conv-runs'
+import { phasesAvecJuge } from './orchestration-memoire'
 import { deleteListedRun } from './dashboards/runs-scan'
 import { regimePhases } from './task-regime'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
@@ -6197,9 +6198,11 @@ app.whenReady().then(async () => {
           const deliveryStatus = result.gateBlocked || !result.valid ? 'red' : 'green'
           if (resumedRunFile) {
             saveConvRunTrace(resumedRunFile.path, resumedSteps)
-            populateConvRunSections(resumedRunFile.path, result.phaseOutputs, {
-              publishedCommitSha: resumedPublishedSha
-            })
+            populateConvRunSections(
+              resumedRunFile.path,
+              phasesAvecJuge(result.phaseOutputs, result.judgeText),
+              { publishedCommitSha: resumedPublishedSha }
+            )
             const closureStatus =
               resumedTerminalLifecycle && resumedTerminalLifecycle.closure.status !== 'open'
                 ? resumedTerminalLifecycle.closure.status
