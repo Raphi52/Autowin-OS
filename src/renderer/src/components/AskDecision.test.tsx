@@ -87,13 +87,25 @@ describe('AskDecisionBlock — une ligne par réponse, jamais côte à côte', (
     expect(regle).not.toMatch(/grid-template-columns\s*:\s*(?!1fr\s*;?\s*$)/)
   })
 
-  it('renvoie `envoi` au clic, et le libellé quand `envoi` manque', () => {
+  /*
+   * DEUX RENDUS, un clic chacun -- et non deux clics dans le meme bloc comme avant.
+   *
+   * Depuis le 2026-08-25 un bloc `ask` se VERROUILLE des la premiere reponse : l'utilisateur avait
+   * clique quatre fois la meme option et quatre envois etaient partis (conv-1400). Les assertions de
+   * ce test sont INCHANGEES -- il verifie la derivation du prompt (`envoi`, sinon le libelle), pas le
+   * droit de repondre deux fois ; les deux clics n'etaient qu'une commodite.
+   */
+  it('renvoie `envoi` au clic', () => {
     const choisi = vi.fn()
     rendre(choisi)
-    const boutons = [...hote.querySelectorAll<HTMLButtonElement>('.askd-choix')]
-    act(() => boutons[0].click())
+    act(() => [...hote.querySelectorAll<HTMLButtonElement>('.askd-choix')][0].click())
     expect(choisi).toHaveBeenCalledWith('applique les deux correctifs')
-    act(() => boutons[2].click())
+  })
+
+  it('renvoie le libellé quand `envoi` manque', () => {
+    const choisi = vi.fn()
+    rendre(choisi)
+    act(() => [...hote.querySelectorAll<HTMLButtonElement>('.askd-choix')][2].click())
     expect(choisi).toHaveBeenLastCalledWith('Ne rien changer')
   })
 
