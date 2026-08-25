@@ -191,7 +191,8 @@ function buildNebula(
     const angle = random() * Math.PI * 2
     const arm = Math.sin(angle * 2.5 + t * 5.5)
     positions[o] = options.center.x + (Math.cos(angle) * spread * 2.4 + arm * 0.7) * options.scale
-    positions[o + 1] = options.center.y + (Math.sin(angle) * spread * 1.7 + arm * 0.5) * options.scale
+    positions[o + 1] =
+      options.center.y + (Math.sin(angle) * spread * 1.7 + arm * 0.5) * options.scale
     positions[o + 2] = options.center.z + (random() - 0.5) * 0.9 * options.scale
 
     scratch.copy(primary).lerp(secondary, Math.pow(random(), 1.4))
@@ -249,10 +250,168 @@ function buildNebula(
 }
 
 /**
- * Une planète annelée. Sphère éclairée en rasant, plus deux ou trois anneaux fins.
+ * La DIRECTION de la lumière du monde, normalisée — la même valeur que la `DirectionalLight` de la
+ * scène, en une seule source.
  *
- * Les anneaux sont des cercles FILAIRES et non des disques texturés : c'est ainsi qu'ils sont dessinés
- * sur le fond d'écran d'origine — des traits d'orbite, pas des anneaux de Saturne photoréalistes.
+ * Les shaders de planète et d'anneau éclairent EUX-MÊMES leur surface (ils ne passent pas par le
+ * pipeline standard). Sans constante partagée, un terminateur peint d'un côté et une ombre d'anneau
+ * portée de l'autre : le défaut se voit tout de suite, et rien ne le rattrape.
+ */
+const SOLEIL = new THREE.Vector3(-9, 5, 7).normalize()
+
+/** Bruit fractal 3D, partagé par la surface et les anneaux : valeur-bruit sur 5 octaves. */
+const GLSL_FBM = [
+  'float hash31(vec3 p) {',
+  '  p = fract(p * 0.3183099 + vec3(0.1, 0.71, 0.37));',
+  '  p *= 17.0;',
+  '  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));',
+  '}',
+  'float bruit(vec3 x) {',
+  '  vec3 i = floor(x);',
+  '  vec3 f = fract(x);',
+  '  f = f * f * (3.0 - 2.0 * f);',
+  '  return mix(mix(mix(hash31(i + vec3(0.0, 0.0, 0.0)), hash31(i + vec3(1.0, 0.0, 0.0)), f.x),',
+  '                 mix(hash31(i + vec3(0.0, 1.0, 0.0)), hash31(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),',
+  '             mix(mix(hash31(i + vec3(0.0, 0.0, 1.0)), hash31(i + vec3(1.0, 0.0, 1.0)), f.x),',
+  '                 mix(hash31(i + vec3(0.0, 1.0, 1.0)), hash31(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);',
+  '}',
+  'float fbm(vec3 p) {',
+  '  float somme = 0.0;',
+  '  float amplitude = 0.5;',
+  '  for (int o = 0; o < 5; o += 1) {',
+  '    somme += amplitude * bruit(p);',
+  '    p *= 2.03;',
+  '    amplitude *= 0.5;',
+  '  }',
+  '  return somme;',
+  '}'
+].join('\n')
+
+const PLANETE_VERTEX_SHADER = [
+  'varying vec3 vObjet;',
+  'varying vec3 vNormaleMonde;',
+  'varying vec3 vVue;',
+  'void main() {',
+  '  vObjet = normalize(position);',
+  '  vNormaleMonde = normalize(mat3(modelMatrix) * normal);',
+  '  vec4 vue = modelViewMatrix * vec4(position, 1.0);',
+  '  vVue = -vue.xyz;',
+  '  gl_Position = projectionMatrix * vue;',
+  '}'
+].join('\n')
+
+/**
+ * La SURFACE d'une planète, calculée pixel par pixel (refonte demandée en conv-1400).
+ *
+ * Avant, le globe était une couleur UNIE sur une sphère : une bille de plastique. Quatre choix
+ * portent le détail, et chacun se voit s'il est retiré :
+ *  1. le bruit est FRACTAL (5 octaves) — une seule octave donne des taches molles, pas des continents ;
+ *  2. il est ÉTIRÉ en latitude par uBandes : c'est l'étirement qui fait la géante gazeuse ; un bruit
+ *     isotrope donne du camouflage militaire ;
+ *  3. la lumière vient de uLumiere, la MÊME que la scène, avec un terminateur ADOUCI (bascule
+ *     commencée sous zéro) — une coupure nette donne un croissant de carton ;
+ *  4. la face nuit garde uNuit, une braise très basse : à zéro, la planète est amputée sur le fond
+ *     noir et la silhouette disparaît.
+ *
+ * uSeed est ce qui rend chaque planète unique : même code, relief différent.
+ *
+ * Exporté pour être RELU par le test : happy-dom n'a pas de WebGL, mais le contrat du shader est du
+ * texte, et il se vérifie.
+ */
+export const PLANETE_FRAGMENT_SHADER = [
+  'precision highp float;',
+  'uniform vec3 uBase;',
+  'uniform vec3 uClair;',
+  'uniform vec3 uSombre;',
+  'uniform vec3 uNuit;',
+  'uniform vec3 uLumiere;',
+  'uniform float uBandes;',
+  'uniform float uSeed;',
+  'uniform float uTime;',
+  'varying vec3 vObjet;',
+  'varying vec3 vNormaleMonde;',
+  'varying vec3 vVue;',
+  GLSL_FBM,
+  'void main() {',
+  '  vec3 graine = vec3(uSeed * 13.7, uSeed * 7.1, uSeed * 3.3);',
+  '  vec3 p = vec3(vObjet.x, vObjet.y * uBandes, vObjet.z) * 2.4 + graine;',
+  '  float turbulence = fbm(p + vec3(uTime * 0.02, 0.0, 0.0));',
+  '  float volute = fbm(p * 0.45 + turbulence * 1.7 + graine.zxy);',
+  '  float matiere = clamp(turbulence * 0.62 + volute * 0.52, 0.0, 1.0);',
+  '  float cretes = pow(smoothstep(0.46, 0.88, matiere), 1.25);',
+  '  vec3 albedo = mix(uSombre, uBase, smoothstep(0.22, 0.64, matiere));',
+  '  albedo = mix(albedo, uClair, cretes);',
+  '  albedo *= 0.97 + 0.06 * bruit(vObjet * 140.0 + graine);',
+  '  vec3 n = normalize(vNormaleMonde);',
+  '  vec3 v = normalize(vVue);',
+  '  float incidence = dot(n, normalize(uLumiere));',
+  '  float jour = smoothstep(-0.22, 0.45, incidence);',
+  '  vec3 couleur = albedo * (0.08 + 1.15 * jour);',
+  '  couleur += uNuit * (1.0 - jour) * (0.25 + 0.35 * cretes);',
+  '  float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.4);',
+  '  couleur += uClair * rim * (0.35 + 0.65 * jour) * 0.9;',
+  '  gl_FragColor = vec4(couleur, 1.0);',
+  '}'
+].join('\n')
+
+const ANNEAU_VERTEX_SHADER = [
+  'uniform mat3 uOrientation;',
+  'uniform float uInterieur;',
+  'uniform float uExterieur;',
+  'varying float vRadius;',
+  'varying vec3 vRelatif;',
+  'void main() {',
+  '  float r = length(position.xy);',
+  '  vRadius = clamp((r - uInterieur) / max(uExterieur - uInterieur, 0.0001), 0.0, 1.0);',
+  '  vRelatif = uOrientation * position;',
+  '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+  '}'
+].join('\n')
+
+/**
+ * Les ANNEAUX, en matière et non plus en fil de fer.
+ *
+ * Avant la refonte, c'étaient des lignes : des cercles d'un pixel. Ici, un disque de géométrie dont
+ * la densité est calculée le long du RAYON :
+ *  1. des sillons concentriques par bruit fractal — l'anneau a un grain ;
+ *  2. des DIVISIONS franches (discard) : une lacune de type Cassini est un TROU, pas une baisse
+ *     d'opacité, qui se lirait comme une salissure ;
+ *  3. l'OMBRE PORTÉE du globe sur l'anneau, calculée depuis la position du point relative au centre :
+ *     sans elle, l'anneau brille derrière la face nuit, et c'est CE détail qui trahit un anneau
+ *     décoratif.
+ */
+export const ANNEAU_FRAGMENT_SHADER = [
+  'precision highp float;',
+  'uniform vec3 uCouleur;',
+  'uniform vec3 uLumiere;',
+  'uniform float uRayonGlobe;',
+  'uniform float uOmbre;',
+  'uniform float uSeed;',
+  'uniform float uOpacite;',
+  'varying float vRadius;',
+  'varying vec3 vRelatif;',
+  GLSL_FBM,
+  'void main() {',
+  '  float grain = fbm(vec3(vRadius * 26.0, uSeed * 5.0, 0.0));',
+  '  float sillons = fbm(vec3(vRadius * 90.0, uSeed, 0.0));',
+  '  float densite = grain * 0.75 + sillons * 0.45;',
+  '  densite *= smoothstep(0.0, 0.12, vRadius) * (1.0 - smoothstep(0.82, 1.0, vRadius));',
+  '  if (densite < 0.2) discard;',
+  '  vec3 l = normalize(uLumiere);',
+  '  float t = dot(vRelatif, l);',
+  '  float distanceAxe = length(vRelatif - l * t);',
+  '  float ombre = t < 0.0 ? smoothstep(uRayonGlobe * 1.05, uRayonGlobe * 0.72, distanceAxe) : 0.0;',
+  '  vec3 couleur = uCouleur * (0.55 + 0.9 * densite) * mix(1.0, 1.0 - uOmbre, ombre);',
+  '  gl_FragColor = vec4(couleur, clamp(densite, 0.0, 1.0) * uOpacite);',
+  '}'
+].join('\n')
+
+/**
+ * Une planète annelée, ULTRA détaillée (demande conv-1400).
+ *
+ * Le globe porte un shader de surface (continents fractals, bandes, terminateur adouci, limbe) ; ses
+ * anneaux sont des disques de matière troués par des divisions, sur lesquels le globe projette son
+ * ombre. Rien n'est texturé : tout est CALCULÉ — le décor reste synthétique, comme décidé en conv-1399.
  */
 function buildPlanet(options: {
   radius: number
@@ -261,20 +420,36 @@ function buildPlanet(options: {
   ringColor: number
   rings: number
   tilt: number
+  seed: number
+  bandes: number
 }): THREE.Group {
   const group = new THREE.Group()
   group.position.copy(options.position)
 
-  const globe = new THREE.Mesh(
-    new THREE.SphereGeometry(options.radius, 48, 32),
-    new THREE.MeshStandardMaterial({
-      color: options.color,
-      roughness: 0.86,
-      metalness: 0.06,
-      // Nuit non noire : sans cette trace de lumière, la moitié sombre est un trou dans l'image.
-      emissive: new THREE.Color(options.color).multiplyScalar(0.06)
-    })
-  )
+  const base = new THREE.Color(options.color)
+  // Les trois tons de la surface DÉRIVENT de la couleur de la planète : la palette du décor reste
+  // celle de theme.css, le détail ne l'élargit pas.
+  const clair = base.clone().lerp(new THREE.Color(0xfff2dc), 0.55)
+  const sombre = base.clone().multiplyScalar(0.42)
+
+  const surface = new THREE.ShaderMaterial({
+    vertexShader: PLANETE_VERTEX_SHADER,
+    fragmentShader: PLANETE_FRAGMENT_SHADER,
+    uniforms: {
+      uBase: { value: base },
+      uClair: { value: clair },
+      uSombre: { value: sombre },
+      uNuit: { value: new THREE.Color(options.ringColor).multiplyScalar(0.22) },
+      uLumiere: { value: SOLEIL.clone() },
+      uBandes: { value: options.bandes },
+      uSeed: { value: options.seed },
+      uTime: { value: 0 }
+    }
+  })
+
+  // 96x64 : à 48x32 (l'ancien maillage), la silhouette d'une grande planète était un polygone
+  // visible — aucun détail de surface ne rattrape un contour facetté.
+  const globe = new THREE.Mesh(new THREE.SphereGeometry(options.radius, 96, 64), surface)
   group.add(globe)
 
   // Halo atmosphérique : une seconde sphère à peine plus grande, rendue par sa FACE INTERNE, dont
@@ -287,52 +462,60 @@ function buildPlanet(options: {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       uniforms: { uColor: { value: new THREE.Color(options.ringColor) } },
-      vertexShader: `
-        varying vec3 vNormal;
-        varying vec3 vView;
-        void main() {
-          vNormal = normalize(normalMatrix * normal);
-          vec4 view = modelViewMatrix * vec4(position, 1.0);
-          vView = -view.xyz;
-          gl_Position = projectionMatrix * view;
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 uColor;
-        varying vec3 vNormal;
-        varying vec3 vView;
-        void main() {
-          float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vView)));
-          gl_FragColor = vec4(uColor, pow(rim, 3.2) * 0.55);
-        }
-      `
+      vertexShader: [
+        'varying vec3 vNormal;',
+        'varying vec3 vView;',
+        'void main() {',
+        '  vNormal = normalize(normalMatrix * normal);',
+        '  vec4 view = modelViewMatrix * vec4(position, 1.0);',
+        '  vView = -view.xyz;',
+        '  gl_Position = projectionMatrix * view;',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform vec3 uColor;',
+        'varying vec3 vNormal;',
+        'varying vec3 vView;',
+        'void main() {',
+        '  float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vView)));',
+        '  gl_FragColor = vec4(uColor, pow(rim, 3.2) * 0.55);',
+        '}'
+      ].join('\n')
     })
   )
   group.add(halo)
 
   for (let i = 0; i < options.rings; i += 1) {
-    const ring = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(
-        new THREE.EllipseCurve(
-          0,
-          0,
-          options.radius * (1.55 + i * 0.22),
-          options.radius * (1.55 + i * 0.22),
-          0,
-          Math.PI * 2
-        ).getPoints(128)
-      ),
-      new THREE.LineBasicMaterial({
-        color: options.ringColor,
-        transparent: true,
-        opacity: 0.34 - i * 0.07,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      })
-    )
-    ring.rotation.x = Math.PI / 2 - options.tilt
-    ring.rotation.z = options.tilt * 0.4
-    group.add(ring)
+    const interieur = options.radius * (1.45 + i * 0.42)
+    const exterieur = interieur + options.radius * (0.44 + i * 0.1)
+    const materiau = new THREE.ShaderMaterial({
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: ANNEAU_VERTEX_SHADER,
+      fragmentShader: ANNEAU_FRAGMENT_SHADER,
+      uniforms: {
+        uCouleur: { value: new THREE.Color(options.ringColor) },
+        uLumiere: { value: SOLEIL.clone() },
+        uRayonGlobe: { value: options.radius },
+        uOmbre: { value: 0.82 },
+        uSeed: { value: options.seed + i * 4.3 },
+        uOpacite: { value: 0.62 - i * 0.09 },
+        uInterieur: { value: interieur },
+        uExterieur: { value: exterieur },
+        uOrientation: { value: new THREE.Matrix3() }
+      }
+    })
+    // 256 segments : en dessous, le bord de l'anneau devient un polygone à l'écran.
+    const anneau = new THREE.Mesh(new THREE.RingGeometry(interieur, exterieur, 256, 3), materiau)
+    anneau.rotation.x = Math.PI / 2 - options.tilt
+    anneau.rotation.z = options.tilt * 0.4
+    // L'orientation de l'anneau, figée dans un uniform : le shader en a besoin pour replacer chaque
+    // point dans le repère du globe et savoir s'il tombe dans son ombre.
+    anneau.updateMatrix()
+    materiau.uniforms.uOrientation.value.setFromMatrix4(anneau.matrix)
+    group.add(anneau)
   }
 
   return group
@@ -574,6 +757,13 @@ interface Composition {
     ringColor: number
     rings: number
     tilt: number
+    /**
+     * Le grain de la surface. Deux planètes de même `seed` portent le MÊME relief au pixel près :
+     * à l'écran, cela se lit immédiatement comme un copier-coller.
+     */
+    seed: number
+    /** Étirement du bruit en latitude : c'est lui qui fait la géante gazeuse plutôt qu'une tache. */
+    bandes: number
   }[]
   arcs: number
   satellites: number
@@ -597,9 +787,42 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
       { fx: 0.8, fy: -0.64, z: -8, color: ROSE, secondary: 0xff6bd6, k: 0.32 }
     ],
     planetes: [
-      { fx: 0.72, fy: -0.74, z: -5, radius: 0.2, color: 0xc98a4a, ringColor: GOLD, rings: 3, tilt: 0.42 },
-      { fx: 0.82, fy: 0.6, z: -8, radius: 0.15, color: 0x3f6fa8, ringColor: CYAN, rings: 2, tilt: -0.3 },
-      { fx: -0.8, fy: -0.6, z: -7, radius: 0.12, color: 0x7a4a72, ringColor: ROSE, rings: 2, tilt: 0.55 }
+      {
+        fx: 0.72,
+        fy: -0.74,
+        z: -5,
+        radius: 0.2,
+        color: 0xc98a4a,
+        ringColor: GOLD,
+        rings: 3,
+        tilt: 0.42,
+        seed: 1.7,
+        bandes: 5.2
+      },
+      {
+        fx: 0.82,
+        fy: 0.6,
+        z: -8,
+        radius: 0.15,
+        color: 0x3f6fa8,
+        ringColor: CYAN,
+        rings: 2,
+        tilt: -0.3,
+        seed: 8.3,
+        bandes: 3.4
+      },
+      {
+        fx: -0.8,
+        fy: -0.6,
+        z: -7,
+        radius: 0.12,
+        color: 0x7a4a72,
+        ringColor: ROSE,
+        rings: 2,
+        tilt: 0.55,
+        seed: 14.9,
+        bandes: 6.8
+      }
     ],
     arcs: 7,
     satellites: 0,
@@ -614,8 +837,30 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
       { fx: 0.15, fy: -0.85, z: -14, color: ROSE, secondary: VIOLET, k: 0.42 }
     ],
     planetes: [
-      { fx: 0.98, fy: -0.12, z: -2, radius: 0.66, color: 0xc98a4a, ringColor: GOLD, rings: 4, tilt: 0.34 },
-      { fx: -0.9, fy: 0.74, z: -13, radius: 0.07, color: 0x3f6fa8, ringColor: CYAN, rings: 1, tilt: -0.4 }
+      {
+        fx: 0.98,
+        fy: -0.12,
+        z: -2,
+        radius: 0.66,
+        color: 0xc98a4a,
+        ringColor: GOLD,
+        rings: 4,
+        tilt: 0.34,
+        seed: 3.1,
+        bandes: 7.5
+      },
+      {
+        fx: -0.9,
+        fy: 0.74,
+        z: -13,
+        radius: 0.07,
+        color: 0x3f6fa8,
+        ringColor: CYAN,
+        rings: 1,
+        tilt: -0.4,
+        seed: 21.4,
+        bandes: 3.2
+      }
     ],
     arcs: 3,
     satellites: 0,
@@ -647,7 +892,18 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
       { fx: 0.85, fy: 0.62, z: -18, color: CYAN, secondary: VIOLET, k: 0.3 }
     ],
     planetes: [
-      { fx: 0.06, fy: -0.04, z: -9, radius: 0.13, color: 0x2c3f66, ringColor: GOLD, rings: 3, tilt: 0.5 }
+      {
+        fx: 0.06,
+        fy: -0.04,
+        z: -9,
+        radius: 0.13,
+        color: 0x2c3f66,
+        ringColor: GOLD,
+        rings: 3,
+        tilt: 0.5,
+        seed: 5.6,
+        bandes: 4.1
+      }
     ],
     arcs: 16,
     satellites: 220,
@@ -742,7 +998,9 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
       color: spec.color,
       ringColor: spec.ringColor,
       rings: spec.rings,
-      tilt: spec.tilt
+      tilt: spec.tilt,
+      seed: spec.seed,
+      bandes: spec.bandes
     })
   )
   for (const planet of planets) scene.add(planet)
