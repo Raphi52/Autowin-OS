@@ -163,10 +163,20 @@ export function HomeView({
   const [histoire, setHistoire] = useState<ArrangementHistory>(() => emptyHistory())
   const [ouvertureEnCours, setOuvertureEnCours] = useState<string | null>(null)
   const [erreurOuverture, setErreurOuverture] = useState<string | null>(null)
-  const [noticeVue, setNoticeVue] = useState(() => {
+  /**
+   * Nombre d'ouvertures DEJA comptees, lu une fois et fige pour toute la vie du montage.
+   *
+   * C'etait un etat qu'un effet incrementait aussitot -- donc un `setState` synchrone dans un effet,
+   * signale par le React Compiler : le premier rendu affichait la notice sur l'ancienne valeur, un
+   * second rendu suivait immediatement. Rien ici n'a besoin de re-rendre : l'ouverture courante est
+   * connue des le montage, et la persistance est un effet de bord.
+   */
+  const [ouverturesDejaComptees] = useState(() => {
     const lu = Number(window.localStorage.getItem(NOTICE_STORAGE_KEY) ?? '0')
     return Number.isFinite(lu) ? lu : 0
   })
+  /** Celle-ci comprise : c'est ce nombre que l'affichage compare, comme avant ce correctif. */
+  const noticeVue = ouverturesDejaComptees + 1
   const [noticeForcee, setNoticeForcee] = useState(false)
 
   const surfaceRef = useRef<HTMLDivElement | null>(null)
@@ -190,18 +200,15 @@ export function HomeView({
   }, [active])
 
 
-  // La notice se compte a l'OUVERTURE de la vue, une fois par montage.
+  // La notice se compte a l'OUVERTURE de la vue, une fois par montage. L'effet ne fait plus que
+  // PERSISTER : le compte affiché est déjà connu au montage, il n'a jamais eu besoin d'un rendu.
   useEffect(() => {
-    setNoticeVue((vu) => {
-      const suivant = vu + 1
-      try {
-        window.localStorage.setItem(NOTICE_STORAGE_KEY, String(suivant))
-      } catch {
-        // Sans persistance la notice restera : c'est le comportement le moins surprenant.
-      }
-      return suivant
-    })
-  }, [])
+    try {
+      window.localStorage.setItem(NOTICE_STORAGE_KEY, String(noticeVue))
+    } catch {
+      // Sans persistance la notice restera : c'est le comportement le moins surprenant.
+    }
+  }, [noticeVue])
 
   // Seul l'AGENCEMENT est enregistré. Écrire ce qui s'affiche graverait le mode compact d'une fenêtre
   // étroite et l'utilisateur ne retrouverait jamais son organisation.
