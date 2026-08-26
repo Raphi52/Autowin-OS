@@ -1,3 +1,4 @@
+import { causeGit } from './cause-git'
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
@@ -1323,7 +1324,7 @@ export class WorktreeManager {
       }
       result.blocked.push({
         path: existsSync(originalPath) ? originalPath : quarantinedPath,
-        detail: (repair.stderr || repair.stdout).trim() || 'Réparation Git impossible.'
+        detail: causeGit(repair) || 'Réparation Git impossible.'
       })
     }
     return result
@@ -1951,7 +1952,7 @@ export class WorktreeManager {
      * le compromis explicite — la publication, elle, revérifie sa base et refusera si elle a bougé.
      */
     const fetched = this.tryGitFn(this.baseRepo, ['fetch', '--no-tags', '--prune', 'origin'])
-    const detailFetch = fetched.code === 0 ? '' : (fetched.stderr || fetched.stdout).trim()
+    const detailFetch = fetched.code === 0 ? '' : causeGit(fetched)
 
     const symbolic = this.tryGitFn(this.baseRepo, [
       'symbolic-ref',
@@ -3896,7 +3897,7 @@ exit 0
       return { ok: true }
     }
     if (!force) {
-      return { ok: false, detail: (remove.stderr || remove.stdout).trim() || undefined }
+      return { ok: false, detail: causeGit(remove) || undefined }
     }
 
     let filesystemDetail = ''
@@ -3910,13 +3911,7 @@ exit 0
 
     return {
       ok: false,
-      detail: [
-        (remove.stderr || remove.stdout).trim(),
-        filesystemDetail,
-        (prune.stderr || prune.stdout).trim()
-      ]
-        .filter(Boolean)
-        .join('\n')
+      detail: [causeGit(remove), filesystemDetail, causeGit(prune)].filter(Boolean).join('\n')
     }
   }
 
@@ -4558,7 +4553,7 @@ exit 0
         agentId,
         files: agentFiles,
         reason: 'merge-failed',
-        detail: (integrationAdd.stderr || integrationAdd.stdout).trim() || undefined
+        detail: causeGit(integrationAdd) || undefined
       }
     }
     let integrationResult: FinalizeResult
@@ -4578,8 +4573,8 @@ exit 0
           if (operationFiles) {
             const abort = this.tryGitFn(integrationPath, ['merge', '--abort'])
             if (abort.code !== 0) {
-              const mergeDetail = (merge.stderr || merge.stdout).trim()
-              const abortDetail = (abort.stderr || abort.stdout).trim()
+              const mergeDetail = causeGit(merge)
+              const abortDetail = causeGit(abort)
               return {
                 outcome: 'blocked',
                 agentId,
@@ -4600,7 +4595,7 @@ exit 0
             agentId,
             files: agentFiles,
             reason: 'merge-failed',
-            detail: (merge.stderr || merge.stdout).trim() || undefined
+            detail: causeGit(merge) || undefined
           }
         }
 
@@ -4692,7 +4687,7 @@ exit 0
             integratedSha
           ])
           if (marker.code !== 0) {
-            const markerDetail = (marker.stderr || marker.stdout).trim()
+            const markerDetail = causeGit(marker)
             const guarded = markerDetail.includes('AUTOWIN_GUARD:')
             return {
               outcome: 'blocked',
@@ -4748,7 +4743,7 @@ exit 0
         if (publish.code === 0) {
           return { outcome: 'merged', agentId, committed, baseSha, publishedSha: publicationSha }
         }
-        const publishDetail = (publish.stderr || publish.stdout).trim()
+        const publishDetail = causeGit(publish)
         if (existsSync(join(publishHooksPath, 'post-hook-change'))) {
           const hookRejected = existsSync(join(publishHooksPath, 'post-hook-rejected'))
           const compensation = this.compensatePostHookChange(

@@ -190,9 +190,40 @@ export function orchestrationOutcomesFromMessages(
  * commande) ne distingue une reprise d'une action indépendante. La règle d'origine est donc
  * restaurée telle quelle, et le cas de conv-76 est désormais gardé par un test.
  */
+/**
+ * UN DEPOT BRAIN REFUSE, dit comme tel.
+ *
+ * Defaut vu par l'utilisateur le 2026-08-26 : l'en-tete affichait « 1 action terminee · remember »
+ * AU-DESSUS de l'erreur rouge. La cause etait un trou de couverture — ce module ne connaissait que
+ * `verify` et `orchestrate`, donc un `remember` refuse ne produisait AUCUN resume et l'en-tete
+ * retombait sur son defaut. Or `failed` s'y calcule sur `action.ok === false` : un depot refuse est
+ * une commande qui a parfaitement REUSSI a rendre un refus. Techniquement terminee, faux au seul
+ * sens qui compte pour le lecteur.
+ *
+ * Le mot « terminee » pose au-dessus d'un refus est ce qui rend le faux vert credible : c'est
+ * l'erreur commise sur conv-1086, ou l'agent a annonce un depot qui n'avait pas eu lieu. L'interface
+ * la repetait au lieu de la contredire.
+ */
+function rememberOutcomeSummary(action: ActionLike): OutcomeSummary | undefined {
+  if (action.name !== 'remember') return undefined
+  const data = action.data as { allowed?: unknown; reason?: unknown } | undefined
+  if (!data || data.allowed !== false) return undefined
+  const motif = typeof data.reason === 'string' ? data.reason.trim() : ''
+  return {
+    label: motif ? `rien retenu — ${motif}` : 'rien retenu — depot refuse',
+    state: 'refused',
+    ...(motif ? { why: [motif] } : {})
+  }
+}
+
 export function groupOutcomeSummary(actions: readonly ActionLike[]): OutcomeSummary | undefined {
   const summaries = actions
-    .map((action) => verifyOutcomeSummary(action) ?? orchestrateOutcomeSummary(action))
+    .map(
+      (action) =>
+        verifyOutcomeSummary(action) ??
+        orchestrateOutcomeSummary(action) ??
+        rememberOutcomeSummary(action)
+    )
     .filter((summary): summary is OutcomeSummary => summary !== undefined)
   return (
     summaries.find((summary) => summary.state === 'failed') ??

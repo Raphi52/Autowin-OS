@@ -310,7 +310,19 @@ export function AssistantActivityGroup({
    * fallait viser son propre `<summary>`. Le clic du bloc pilote donc aussi ce pli, faute de `why`.
    */
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const failed = actions.some((action) => action.ok === false)
+  /*
+   * UNE ACTION QUI PORTE UN REFUS N'EST PAS « TERMINEE ».
+   *
+   * Vu par l'utilisateur le 2026-08-26 : « 1 action terminee · remember » ecrit AU-DESSUS de
+   * l'erreur rouge. `action.ok === false` ne suffit pas — un depot Brain refuse est une commande qui
+   * a parfaitement REUSSI a rendre un refus. Le resume, lui, le sait deja (`state: 'refused'`) ; il
+   * etait simplement calcule plus bas et l'en-tete ne le lisait pas.
+   *
+   * Le mot « terminee » pose au-dessus d'un refus est ce qui rend un faux vert credible.
+   */
+  const resumeDesActions = groupOutcomeSummary(actions)
+  const failed =
+    actions.some((action) => action.ok === false) || resumeDesActions?.state === 'refused'
   // « En cours » = sans résultat ET non interrompue. Une action interrompue (tour clos sans son
   // résultat) n'est PAS en cours : c'est ce qui laissait l'indicateur tourner indéfiniment.
   const runningCount = actions.filter(
@@ -335,7 +347,9 @@ export function AssistantActivityGroup({
       ? `${plural(completedCount, 'action')} terminée${completedCount > 1 ? 's' : ''} · ${plural(runningCount, 'action')} en cours`
       : `${plural(actions.length, 'action')} en cours`
     : failed
-      ? `${plural(actions.length, 'action')} avec erreur`
+      ? resumeDesActions?.state === 'refused' && !actions.some((action) => action.ok === false)
+        ? `${plural(actions.length, 'action')} sans effet`
+        : `${plural(actions.length, 'action')} avec erreur`
       : interruptedCount > 0
         ? completedCount > 0
           ? `${plural(completedCount, 'action')} terminée${completedCount > 1 ? 's' : ''} · ${plural(interruptedCount, 'action')} interrompue${interruptedCount > 1 ? 's' : ''}`
@@ -353,7 +367,7 @@ export function AssistantActivityGroup({
    * restait invisible. On n'ouvre rien de plus (le detail vit toujours dans Workflows), on montre la
    * ligne qui porte le verdict. Un echec passe devant une reussite.
    */
-  const outcome = groupOutcomeSummary(actions)
+  const outcome = resumeDesActions
   const why = outcome?.why ?? []
   /**
    * Ne PROMETTRE Workflows que s'il y a un run a y voir. Constate en usage reel : sur

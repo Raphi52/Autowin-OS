@@ -321,9 +321,22 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
     ? (rawType as RememberType)
     : undefined
   if (!type) {
+    /*
+     * UN REFUS QUI NE DIT PAS CE QU'IL A RECU SE REPRODUIT — mesure deux fois, le 2026-08-20
+     * (conv-1086, valeur `cause-racine`) puis le 2026-08-26. Le motif ne nommait jamais la valeur
+     * recue, et un champ ABSENT rendait exactement le meme libelle qu'un champ FAUX (`text(undefined)`
+     * donne `''`, qui tombe hors de l'enumeration). Deux causes, un message, aucun indice.
+     *
+     * Le modele LIT ce motif : il repart en resultat d'outil (`commands.ts`). Le rendre actionnable
+     * est donc un vrai correctif, pas du confort d'affichage. On ne touche pas a `REMEMBER_TYPES` :
+     * le vocabulaire est un contrat externe, l'elargir deplacerait le refus cote serveur.
+     */
+    const attendus = `attendu l'un de : ${REMEMBER_TYPES.join(', ')}`
     return {
       allowed: false,
-      reason: `type invalide — attendu l'un de : ${REMEMBER_TYPES.join(', ')}`
+      reason: rawType
+        ? `type invalide — recu « ${rawType} », ${attendus}`
+        : `type manquant — ${attendus}`
     }
   }
 
