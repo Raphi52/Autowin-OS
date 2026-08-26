@@ -22,9 +22,16 @@ import { ConversationStore } from './conversations'
  * le re-classement reste donc neutre et le score decide correctement. Les quatre formulations qui
  * echouaient en reel (48 a 71 sur 120) passent toutes sur ce banc.
  *
- * Autrement dit : ce banc suffit a falsifier ce qui depend de la CALIBRATION de la rarete, pas ce qui
- * depend de la RICHESSE du vocabulaire. Pour ce second usage, il faudrait peupler le bruit de mots
- * semi-rares en concurrence avec le sujet -- et c'est ce qui manque pour tester le bonus de tete.
+ * ENRICHI le meme jour pour repondre a ce manque : le bruit tire desormais deux tiers de ses mots
+ * d'une queue longue de 40 000 formes, et seme rarement des mots d'ADRESSE. Profil obtenu sur 250
+ * conversations : ~7 000 mots distincts, 48 % d'hapax (55,6 % en reel), et « rappelle » a une
+ * frequence documentaire de l'ordre de dix, contre quatre en reel -- il concurrence donc vraiment le
+ * sujet, ce qu'un bruit de quinze mots ne permettait pas.
+ *
+ * CE QUI RESTE HORS DE SA PORTEE : le cas d'un terme cherche NOYE DANS SES PROPRES VARIANTES. Dans le
+ * reel, « ecriture » n'a que deux conversations en token exact mais 94 en sous-chaine ; c'est ce qui
+ * rend son choix comme porteur si delicat. Le reproduire demanderait de generer des variantes
+ * morphologiques du sujet dans le bruit -- non fait.
  *
  * Il est DETERMINISTE : meme graine, meme corpus. Un banc d'essai qui bouge entre deux executions ne
  * falsifie rien.
@@ -60,6 +67,35 @@ const COURANT = [
   'resultat'
 ]
 
+/**
+ * Les mots d'ADRESSE, ceux qui ouvrent une demande sans en porter le sujet.
+ *
+ * Ils sont ici pour une raison mesuree : dans le corpus reel, « rappelle » a une frequence
+ * documentaire de QUATRE -- exactement la tranche des termes qu'on cherche (deux a cinq
+ * conversations). C'est pourquoi il rivalise avec eux, et c'est ce qu'un bruit de quinze mots
+ * courants ne pouvait pas reproduire. Ils sont donc semes rarement, pour tomber dans cette tranche.
+ */
+const ADRESSE = ['rappelle', 'retrouve', 'souviens', 'cherche', 'redis']
+
+/**
+ * Un vocabulaire de remplissage a queue longue, comme le corpus reel.
+ *
+ * Profil mesure le 2026-08-26 sur 1203 conversations : 29 524 mots distincts, dont 55,6 % presents
+ * dans UNE seule conversation, 27,5 % dans deux a cinq, 11,1 % dans six a vingt. Un bruit uniforme de
+ * quinze mots ne cree aucune concurrence ; c'est cette queue qui la fait.
+ */
+function vocabulaire(alea: () => number, taille: number): string[] {
+  const syllabes = ['ta', 'ro', 'mi', 'ka', 'lu', 'se', 'pi', 'no', 'dra', 'vel', 'sim', 'qua']
+  const mots: string[] = []
+  for (let i = 0; i < taille; i++) {
+    let mot = ''
+    const n = 2 + Math.floor(alea() * 3)
+    for (let s = 0; s < n; s++) mot += syllabes[Math.floor(alea() * syllabes.length)]
+    mots.push(mot)
+  }
+  return mots
+}
+
 export interface BancOptions {
   /** Combien de conversations de bruit. 250 suffit a calibrer la rarete ; 1200 imite le reel. */
   conversations?: number
@@ -77,6 +113,10 @@ export function bancDEssai(options: BancOptions = {}): ConversationStore {
   let horloge = 1_000_000
   const store = new ConversationStore(() => horloge++)
 
+  // Une queue TRES longue : il faut que la majorite des mots n'apparaisse qu'une fois, comme dans le
+  // reel (55,6 % du vocabulaire y est un hapax). Avec 3 000 mots pour ~37 000 tirages, chaque mot
+  // ressortait six a vingt fois et la queue n'en etait plus une -- mesure du 2026-08-26.
+  const queue = vocabulaire(alea, 40000)
   for (let i = 0; i < nombre; i++) {
     const conversation = store.create({ title: `Bruit ${i}`, provider: 'claude' })
     // Cinq messages en mediane, comme le corpus reel.
@@ -87,8 +127,15 @@ export function bancDEssai(options: BancOptions = {}): ConversationStore {
       const cible = tirage < 0.25 ? 92 : tirage < 0.75 ? 120 : 564
       const mots: string[] = []
       while (mots.join(' ').length < cible) {
-        mots.push(COURANT[Math.floor(alea() * COURANT.length)])
+        const tirageMot = alea()
+        // Un tiers de mots courants, deux tiers tires de la queue longue : c'est elle qui cree la
+        // concurrence lexicale, et sans elle un mot d'adresse ne rivalise avec rien.
+        if (tirageMot < 0.34) mots.push(COURANT[Math.floor(alea() * COURANT.length)])
+        else mots.push(queue[Math.floor(alea() * queue.length)])
       }
+      // Les mots d'adresse sont semes RAREMENT, pour atterrir dans la tranche de frequence des
+      // termes qu'on cherche -- deux a cinq conversations, comme « rappelle » dans le corpus reel.
+      if (alea() < 0.02) mots.unshift(ADRESSE[Math.floor(alea() * ADRESSE.length)])
       store.append(conversation.id, {
         role: m % 2 === 0 ? 'user' : 'assistant',
         content: mots.join(' ')
