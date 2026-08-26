@@ -5,7 +5,7 @@ import { join, relative } from 'node:path'
 
 /** Chemin lisible dans un message d'échec : `src/main/...` plutôt qu'un absolu illisible. */
 const entreeCourte = (chemin: string): string => relative(__dirname, chemin).replace(/\\/gu, '/')
-import { loadTokens, saveTokens, type Tokens } from './providers/codex-auth'
+import { loadTokens, saveTokens, type Tokens, type TokenVault } from './providers/codex-auth'
 
 const dir = mkdtempSync(join(tmpdir(), 'secfix-'))
 const authPath = join(dir, 'auth.json')
@@ -19,15 +19,27 @@ afterEach(() => {
 
 describe('critique #1 — persistance auth.json durcie', () => {
   const tok: Tokens = { accessToken: 'a', refreshToken: 'r', obtainedAt: 1, expiresInSec: 3600 }
+  const secrets = new Map<string, string>()
+  const vault: TokenVault = {
+    get: (account) => secrets.get(account) ?? null,
+    set: (account, value) => {
+      secrets.set(account, value)
+    }
+  }
 
-  it('save→load round-trip (hors electron : repli clair 0o600)', () => {
-    saveTokens(tok, authPath)
-    expect(loadTokens(authPath)).toEqual(tok)
+  it('save→load chiffre toujours les tokens sur disque, meme hors Electron', () => {
+    const secret: Tokens = {
+      ...tok,
+      accessToken: 'SECRET_NE_DOIT_PAS_ETRE_EN_CLAIR'
+    }
+    saveTokens(secret, authPath, vault)
+    expect(readFileSync(authPath).includes(Buffer.from(secret.accessToken))).toBe(false)
+    expect(loadTokens(authPath, vault)).toEqual(secret)
   })
 
   it('migre un ancien fichier EN CLAIR (legacy) au chargement', () => {
     writeFileSync(authPath, JSON.stringify(tok, null, 2), 'utf8')
-    expect(loadTokens(authPath)).toEqual(tok) // lu + re-sauvé (migration best-effort)
+    expect(loadTokens(authPath, vault)).toEqual(tok) // lu + re-sauvé (migration best-effort)
   })
 
   it('fichier absent → null', () => {
