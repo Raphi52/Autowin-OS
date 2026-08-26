@@ -5,6 +5,7 @@ import type {
   ModelQuotaSnapshot,
   ModelQuotaWindow
 } from '../../../shared/model-quotas'
+import type { ContextGauge } from '../../../shared/context-gauge'
 import './ModelQuotaIndicator.css'
 
 const providerLabels: Record<string, string> = {
@@ -185,7 +186,56 @@ function observedLabel(observedAt: string | undefined, stale: boolean): string {
   })}`
 }
 
-export function ModelQuotaIndicator({ provider }: { provider?: string }): React.JSX.Element {
+/**
+ * La jauge de CONTEXTE, rendue dans la popup — ou RIEN.
+ *
+ * `undefined` signifie « on ne sait pas » (fenêtre du modèle non déclarée, ou entrée non mesurée) :
+ * on n'affiche alors aucune barre. Un 0 % affirmerait « ce fil est vide » là où la vérité est
+ * « on l'ignore » — même discipline que dans ChatView, d'où vient cette jauge.
+ */
+function ContextGaugeRow({ gauge }: { gauge?: ContextGauge }): React.JSX.Element | null {
+  if (!gauge) return null
+  const pourcent = Math.round(gauge.ratio * 100)
+  const titre =
+    `Contexte : ${gauge.used.toLocaleString('fr-FR')} tokens sur ` +
+    `${gauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
+    `${gauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
+  return (
+    <article
+      className={`model-quota-row quota-context-gauge is-${gauge.level}`}
+      data-testid="quota-context-gauge"
+      aria-label={titre}
+      title={titre}
+    >
+      <div className="model-quota-name">
+        <span>
+          <strong>Contexte de cette conversation</strong>
+          <small>
+            {gauge.used.toLocaleString('fr-FR')} / {gauge.limit.toLocaleString('fr-FR')} tokens ·{' '}
+            {gauge.cacheRead.toLocaleString('fr-FR')} relus du cache
+          </small>
+        </span>
+      </div>
+      <div className="model-quota-window">
+        <div className="quota-context-gauge-track" aria-hidden="true">
+          <i className="quota-context-gauge-fill" style={{ width: `${pourcent}%` }} />
+        </div>
+        <strong className="model-quota-values">
+          <span>{pourcent} % occupé</span>
+          <small>fenêtre du modèle servi</small>
+        </strong>
+      </div>
+    </article>
+  )
+}
+
+export function ModelQuotaIndicator({
+  provider,
+  contextGauge
+}: {
+  provider?: string
+  contextGauge?: ContextGauge
+}): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<ModelQuotaSnapshot>()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -321,6 +371,7 @@ export function ModelQuotaIndicator({ provider }: { provider?: string }): React.
           </header>
           {error && <p className="model-quota-error">{error}</p>}
           <div className="model-quota-list">
+            <ContextGaugeRow gauge={contextGauge} />
             {providerQuotas.map((model) => (
               <article key={model.modelId} className="model-quota-row">
                 <div className="model-quota-name">
