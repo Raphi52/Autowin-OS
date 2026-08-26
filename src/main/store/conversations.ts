@@ -1145,7 +1145,31 @@ export class ConversationStore {
      * Le tri est STABLE, donc le score reste le second critere : ce re-classement ne remplace pas
      * le classement, il le corrige la ou un seul mot decide du sens.
      */
-    const PROFONDEUR_RECLASSEMENT = 50
+    /*
+     * PROFONDEUR : 400, et non 50 comme a la premiere version.
+     *
+     * Anatomie mesuree des echecs, le 2026-08-26 : sur les douze cas que le re-classement ratait
+     * encore, les DOUZE avaient le bon porteur -- le choix du mot n'etait plus en cause. Sept avaient
+     * simplement leur cible HORS des cinquante candidats soumis au tri. Le re-classement ne remonte
+     * pas ce qu'on ne lui donne pas.
+     *
+     *   profondeur    mot@8   phrase top-3   duree mediane (20 mesures)
+     *          50     36/40      28/40            64 ms
+     *         400     38/40      32/40            70 ms
+     *        1200     38/40      33/40            75 ms
+     *        2000     38/40      33/40           104 ms
+     *      100000     38/40      33/40           176 ms
+     *
+     * Le gain PLAFONNE a 33/40 des qu'on depasse la taille du corpus (1201 conversations) : au-dela,
+     * on paie sans rien gagner. 400 est retenu parce que son cout est mesure STABLE (+6 ms) pour
+     * quatre cas gagnes, alors que le cas supplementaire coute entre +5 et +100 ms selon les mesures --
+     * trop incertain pour etre paye a chaque tour de chat, ou ce calcul est synchrone.
+     *
+     * La borne ne depend PAS de la taille du corpus, et c'est voulu : `trouvees` ne contient que les
+     * conversations de score non nul, donc une demande precise en produit peu et la borne ne mord
+     * jamais ; une demande vague en produit beaucoup, et c'est precisement le cas ou il faut arreter.
+     */
+    const PROFONDEUR_RECLASSEMENT = 400
     // Le mot ENTIER, jamais sa racine :  tronque a six caracteres, donc « updatebanner »
     // devenait « update » -- present partout, et le re-classement ne discriminait plus rien (2/40,
     // soit aucun gain, alors que le mot entier donne 25/40). La rarete est indexee sur les deux.
@@ -1155,12 +1179,32 @@ export class ConversationStore {
     // « inconnus » de l’index, et  rend 1 pour chacun. Sans ce depart, tous les mots de la
     // demande etaient a egalite a 1 et le porteur retenu etait le PREMIER, c’est-a-dire un mot
     // d’adresse : mesure 1/40, soit pire que de ne rien faire.
+    // LE PLUS LONG mot de la demande. Ce critere est un fait de LANGUE, non une propriete de
+    // l’index : dans « rappelle moi ce qu’on a dit a propos de X », les mots d’adresse sont courts et
+    // grammaticaux, le terme qui porte le sujet est long. Il ne depend donc pas du corpus.
+    //
+    // La rarete a ete essayee d’abord, et MESUREE moins bonne : 21/40 contre 25/40. Elle ne separe
+    // pas -- « rappelle » vit dans 4 messages du corpus, « mutantes » et « habillage » dans 3,
+    // « updatebanner » dans 1. Un mot d’adresse y est aussi rare qu’un terme technique. Pire, la
+    // variante par rarete ne marchait que parce que les termes rares sont ABSENTS de l’index (voir
+    // LONGUEUR_UTILE dans voisinage.ts) et recevaient donc la valeur « inconnu » : une propriete
+    // accidentelle, pas un critere. Un critere explicite vaut mieux qu’un accident favorable.
+    //
+    // LIMITE ASSUMEE : une demande dont le sujet est un mot COURT (« le bug X ») n’en profite pas.
+    // La LONGUEUR d'abord, la RARETE pour departager. Les deux comptent, et dans cet ordre :
+    //   - la longueur seule echoue sur « statut zephyr », deux mots de six lettres : `reduce` garde
+    //     alors le premier, qui se trouve etre le mot omnipresent. C'est `rarete-isole.test.ts`,
+    //     ecrit le matin meme, qui l'a attrape -- avant publication ;
+    //   - la rarete seule echoue sur une phrase d'adresse : « rappelle » vit dans 4 messages du
+    //     corpus, « habillage » dans 3, « updatebanner » dans 1. Elle ne separe pas les mots
+    //     d'adresse des termes techniques (21/40 contre 25/40 pour la longueur).
     const porteur = entiers.reduce((meilleur, mot) => {
-      const r = index.rarete(mot)
-      const rm = index.rarete(meilleur)
-      if (r > rm) return mot
-      if (r === rm && mot.length > meilleur.length) return mot
-      return meilleur
+      if (mot.length !== meilleur.length) return mot.length > meilleur.length ? mot : meilleur
+      // A egalite PARFAITE (meme longueur, meme rarete -- typiquement deux mots absents de l'index),
+      // le plus TARDIF gagne : la formule d'adresse ouvre la phrase, le sujet suit la preposition.
+      // Un fait de structure, non une liste de mots a entretenir. Mesure : 25/40 -> 28/40.
+      if (index.rarete(mot) === index.rarete(meilleur)) return mot
+      return index.rarete(mot) > index.rarete(meilleur) ? mot : meilleur
     }, entiers[0] ?? demandes[0])
     const candidats = trouvees.slice(0, Math.max(limite, PROFONDEUR_RECLASSEMENT))
     // Le contenu ENTIER, pas l’extrait : un premier essai lisait les extraits, qui sont des fenetres
