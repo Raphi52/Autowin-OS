@@ -239,6 +239,18 @@ export interface AppSnapshot {
    */
   worktrees: Array<{ workspacePath: string; state: string; conversationId?: string }>
   /**
+   * LES TRAVAUX QUI ATTENDENT — des runs finis dont le code n'a jamais rejoint la base.
+   *
+   * DEFAUT VECU le 2026-08-26 (run `ef845009a251-1`) : l'utilisateur demande « fusionne », l'agent
+   * repond « rien a fusionner », et le commit dort dans son propre bureau. Le recensement existait
+   * (`os.travauxNonPublies`) et son IPC servait le renderer -- mais `get_state`, le seul etat que
+   * l'agent sache lire, ne le portait pas. Reparer le recensement sans l'exposer ICI laisse le
+   * defaut intact a l'endroit exact ou il se produit.
+   *
+   * `fichiers` est ce qui rend l'entree reconnaissable : un `agentId` seul ne dit rien a personne.
+   */
+  travauxNonPublies: Array<{ agentId: string; date: string; fichiers: string[] }>
+  /**
    * Coût cumulé RÉELLEMENT tarifé. C'est un PLANCHER, pas un total : les tours sans `costUsd`
    * comptent 0. Les deux champs suivants disent de combien ce plancher est en dessous du réel —
    * sans eux, `budgetUsd` se lit comme un total complet et ment (sur les données réelles,
@@ -527,7 +539,10 @@ const CATALOG: CommandSpec[] = [
     description:
       'Relire l’état courant de l’app. Chaque conversation porte `updatedAt` (dernière touche, y ' +
       'compris non-utilisateur) et `lastUserMessageAt` (dernier tour de l’utilisateur) : pour « la ' +
-      'dernière conversation », trie sur `lastUserMessageAt`, ne te fie pas à l’ordre de la liste.',
+      'dernière conversation », trie sur `lastUserMessageAt`, ne te fie pas à l’ordre de la liste. ' +
+      '`travauxNonPublies` liste les travaux de runs terminés qui n’ont JAMAIS rejoint la base, ' +
+      'avec leurs fichiers : consulte-le avant de répondre « rien à fusionner » — un `git status` ' +
+      'dans l’arbre principal ne les voit pas, ils vivent dans leur propre copie isolée.',
     args: {}
   },
   {
@@ -938,7 +953,9 @@ export class AppCommandBus {
    * AbortControllers resteraient dans le registre et `abortOrchestration` deviendrait un no-op
    * permanent jusqu'au redémarrage. (Faithful minor.)
    */
-  abortAllOrchestrations(reason = 'filet de crash : exception non catchee dans le process principal'): void {
+  abortAllOrchestrations(
+    reason = 'filet de crash : exception non catchee dans le process principal'
+  ): void {
     for (const controller of this.activeOrchestrations.values()) {
       try {
         controller.abort(reason)
@@ -1214,6 +1231,9 @@ export class AppCommandBus {
         state: String(w.state),
         ...(w.conversationId ? { conversationId: w.conversationId } : {})
       })),
+      // Absent = rien n'attend. Un OS qui n'expose pas le recensement ne doit pas faire tomber
+      // `get_state` : on rend un tableau vide, jamais `undefined`.
+      travauxNonPublies: this.os.travauxNonPublies?.() ?? [],
       ...budgetSnapshot(this.os.budget())
     }
   }
@@ -1468,7 +1488,13 @@ export class AppCommandBus {
         // une demande limitée à `/frame` se voyait semer des cases « mutation / tests / commit »
         // qu'aucune phase de lecture ne peut cocher (« DoD 0/1 » sur un livrable complet).
         const runReady = substantial
-          ? reuseOrCreateConvRun(convId, requestedTask, undefined, undefined, regimePhases(requestedTask))
+          ? reuseOrCreateConvRun(
+              convId,
+              requestedTask,
+              undefined,
+              undefined,
+              regimePhases(requestedTask)
+            )
           : Promise.resolve(undefined)
         this.activeOrchestrationByFingerprint.set(fingerprint, runReady)
         let run: { path: string; reused: boolean } | undefined
@@ -2849,31 +2875,35 @@ export class AppCommandBus {
         resolve({ allowed: true, ...verifyTimeoutOutcome(label, plafond, output) })
       }, plafond)
       horloge.unref?.()
-      child.on('error', (error) =>
-        expire ||
-        (oublierLArbre(),
-        clearTimeout(horloge),
-        clearInterval(battement),
-        resolve({
-          allowed: true,
-          ok: false,
-          exitCode: null,
-          command: label,
-          output: capVerifyOutput(`lancement impossible : ${String(error)}`)
-        }))
+      child.on(
+        'error',
+        (error) =>
+          expire ||
+          (oublierLArbre(),
+          clearTimeout(horloge),
+          clearInterval(battement),
+          resolve({
+            allowed: true,
+            ok: false,
+            exitCode: null,
+            command: label,
+            output: capVerifyOutput(`lancement impossible : ${String(error)}`)
+          }))
       )
-      child.on('close', (code) =>
-        expire ||
-        (oublierLArbre(),
-        clearTimeout(horloge),
-        clearInterval(battement),
-        resolve({
-          allowed: true,
-          ok: code === 0,
-          exitCode: code,
-          command: label,
-          output: capVerifyOutput(output)
-        }))
+      child.on(
+        'close',
+        (code) =>
+          expire ||
+          (oublierLArbre(),
+          clearTimeout(horloge),
+          clearInterval(battement),
+          resolve({
+            allowed: true,
+            ok: code === 0,
+            exitCode: code,
+            command: label,
+            output: capVerifyOutput(output)
+          }))
       )
     })
   }
