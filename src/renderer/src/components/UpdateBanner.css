@@ -101,11 +101,15 @@
   border: 0;
 }
 
+/* Or et non rose : le fond et la bordure de ce bouton sont deja or, et il porte le geste d'un
+   AVERTISSEMENT de mise a jour -- le role que le theme donne a l'or (--warn: var(--gold)). Il
+   lisait `var(--accent, ...)`, donc rose sur fond or, avec un repli mort : --accent est toujours
+   defini, la couleur de repli ne pouvait jamais s'appliquer et ne servait qu'a masquer l'ecart. */
 .rail-update-repair {
   margin-top: 4px;
   padding: 3px 8px;
   font-size: 11px;
-  color: var(--accent, var(--gold-doux));
+  color: var(--gold-doux);
   background: rgba(212, 169, 79, 0.08);
   border: 1px solid rgba(212, 169, 79, 0.28);
   border-radius: 5px;
