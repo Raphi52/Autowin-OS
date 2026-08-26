@@ -130,4 +130,13 @@ export type DirectiveReceipt = {
   afterMessageIndex: number
   afterPartIndex: number
   afterTextOffset?: number
+  /**
+   * Ce texte REPOND a une question `ask`, il n'oriente rien.
+   *
+   * VECU le 2026-08-26 : repondre a une question pendant qu'un run tournait passait par le meme
+   * chemin qu'une orientation en vol, donc la reponse s'affichait « ✓ Orienté ». L'utilisateur
+   * repondait, l'ecran lui disait qu'il avait oriente. Le TRANSPORT est bien le meme (injection
+   * dans le tour) ; c'est le LIBELLE qui mentait.
+   */
+  reponse?: boolean
 }

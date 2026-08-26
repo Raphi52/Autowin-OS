@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './AskDecision.css'
 import { promptDeLOption, promptDesOptions, type AskDecision, type AskOption } from './ask-choices'
 
@@ -51,9 +51,16 @@ function Detail({ detail }: { detail: NonNullable<AskOption['detail']> }): React
 
 export function AskDecisionBlock({
   decision,
+  dejaRepondu,
   onPick
 }: {
   decision: AskDecision
+  /**
+   * La question a DEJA sa reponse dans le fil (un message utilisateur suit ce tour). Source
+   * DURABLE, calculee depuis les messages : elle survit a un remontage, a un changement de
+   * conversation et a un redemarrage, contrairement a l'etat local qui, lui, repartait a zero.
+   */
+  dejaRepondu?: boolean
   onPick?: (prompt: string) => void
 }): React.JSX.Element {
   // La recommandee s'ouvre d'office : c'est celle dont la justification compte le plus.
@@ -69,18 +76,29 @@ export function AskDecisionBlock({
     })
 
   /*
-   * UNE QUESTION NE SE REPOND QU'UNE FOIS.
+   * UNE QUESTION NE SE REPOND QU'UNE FOIS -- verrou a DEUX etages.
    *
-   * VECU le 2026-08-25 : rien ne marquait ce bloc comme repondu, donc chaque clic renvoyait la
-   * reponse. L'utilisateur a cliqué quatre fois sur la meme option et quatre envois sont partis, le
-   * bloc restant aussi cliquable qu'avant -- rien ne disait que sa reponse avait atterri, donc il a
-   * recliqué. Le defaut fabriquait lui-meme sa propre repetition.
+   * VECU le 2026-08-25 puis le 2026-08-26 : le premier verrou etait un `useState` local. Deux
+   * fuites, et le spam-clic passait par les deux. (1) `setState` est ASYNCHRONE : deux clics dans
+   * le meme lot de rendu lisaient tous les deux `repondu === undefined` et deux envois partaient.
+   * (2) le bloc etait monte sous une cle d'INDEX ; la moindre part ajoutee au flux le remontait et
+   * l'etat local disparaissait avec lui -- le bloc redevenait vierge alors que la reponse etait
+   * deja partie.
    *
-   * Etat LOCAL au bloc : la reponse est un evenement de cette question-la, pas du fil.
+   * Etage 1 : un `ref`, ecrit SYNCHRONEMENT au premier clic -- il ferme la porte avant meme que
+   * React ait re-rendu, donc le second clic du double-clic ne trouve plus rien d'ouvert.
+   * Etage 2 : `dejaRepondu`, derive du FIL (un message utilisateur apres ce tour). C'est la source
+   * durable : rien a persister, et elle est vraie apres un remontage comme apres un redemarrage.
    */
   const [repondu, setRepondu] = useState<string | undefined>(undefined)
+  const verrou = useRef(false)
+  const hote = useRef<HTMLDivElement>(null)
+  // Lu au RENDU : l'etat et le fil seulement. Le `ref` ne sert qu'au clic (garde synchrone) —
+  // le lire ici serait une lecture de ref pendant le rendu, que React interdit.
+  const verrouille = repondu !== undefined || dejaRepondu === true
   const repondre = (prompt: string): void => {
-    if (repondu !== undefined) return
+    if (verrou.current || repondu !== undefined || dejaRepondu === true) return
+    verrou.current = true
     setRepondu(prompt)
     onPick?.(prompt)
   }
@@ -101,13 +119,56 @@ export function AskDecisionBlock({
     })
   const selection = decision.options.filter((_, index) => cochees.has(index))
   const envoyerLaSelection = (): void => {
-    if (!selection.length) return
+    if (!selection.length || verrouille) return
     // Meme verrou que le choix simple : `repondre` refuse un second envoi.
     repondre(promptDesOptions(selection))
   }
 
+  /*
+   * LES TOUCHES 1..N REPONDENT VRAIMENT.
+   *
+   * Le bloc AFFICHAIT deja `1`, `2`, `3` a droite de chaque ligne — sans aucun gestionnaire
+   * derriere. Une etiquette qui ment : l'utilisateur tape `2`, rien ne se passe, et il retourne a
+   * la souris. Parite claude.exe, qui repond au chiffre. Le raccourci ne mord PAS quand la frappe
+   * appartient a un champ (composer, recherche) ni quand un modificateur est enfonce, et il meurt
+   * avec le verrou — un bloc repondu n'ecoute plus rien.
+   */
+  useEffect(() => {
+    if (verrouille) return
+    const auClavier = (event: KeyboardEvent): void => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const cible = event.target as HTMLElement | null
+      if (cible?.isContentEditable) return
+      const balise = cible?.tagName
+      if (balise === 'INPUT' || balise === 'TEXTAREA' || balise === 'SELECT') return
+      /*
+       * UNE SEULE question ecoute : la DERNIERE encore ouverte. Deux blocs `ask` dans le fil
+       * auraient sinon repondu tous les deux au meme chiffre, envoyant deux messages pour une
+       * frappe. Le fil place deja la decision courante en dernier ; on s'aligne dessus.
+       */
+      const ouverts = document.querySelectorAll('[data-testid="ask-decision"]:not([data-repondu])')
+      if (ouverts.length && ouverts[ouverts.length - 1] !== hote.current) return
+      const rang = Number(event.key)
+      if (!Number.isInteger(rang) || rang < 1 || rang > decision.options.length) return
+      event.preventDefault()
+      const option = decision.options[rang - 1]
+      // Choix multiple : le chiffre COCHE, il n'envoie pas — l'envoi reste un geste explicite.
+      if (decision.choixMultiple) cocher(rang - 1)
+      else repondre(promptDeLOption(option))
+    }
+    document.addEventListener('keydown', auClavier)
+    return () => document.removeEventListener('keydown', auClavier)
+  })
+
+
   return (
-    <div className="askd" data-testid="ask-decision">
+    <div
+      ref={hote}
+      className={`askd${verrouille ? ' est-repondu' : ''}`}
+      data-testid="ask-decision"
+      data-repondu={verrouille ? 'oui' : undefined}
+      aria-disabled={verrouille}
+    >
       <div className="askd-tete">
         <span className="askd-badge">ask</span>
         <span className="askd-question">{decision.question}</span>
@@ -142,6 +203,7 @@ export function AskDecisionBlock({
                     <input
                       type="checkbox"
                       checked={cochees.has(index)}
+                      disabled={verrouille}
                       onChange={() => cocher(index)}
                     />
                     <span>
@@ -158,8 +220,8 @@ export function AskDecisionBlock({
                   <button
                     type="button"
                     className="askd-choix"
-                    disabled={repondu !== undefined}
-                    aria-disabled={repondu !== undefined}
+                    disabled={verrouille}
+                    aria-disabled={verrouille}
                     data-choisi={repondu === promptDeLOption(option) ? 'oui' : undefined}
                     onClick={() => repondre(promptDeLOption(option))}
                   >
@@ -187,13 +249,17 @@ export function AskDecisionBlock({
         })}
       </div>
       <div className="askd-pied">
-        {decision.choixMultiple ? (
+        {verrouille ? (
+          /* Ce que claude.exe fait aussi : la question reste LISIBLE, mais elle est close. Le bloc
+             ne redevient jamais cliquable -- la suite de la conversation est la reponse. */
+          <span data-testid="ask-decision-close">Répondu — écrivez la suite dans le composer</span>
+        ) : decision.choixMultiple ? (
           <>
             <button
               type="button"
               className="askd-envoyer"
               onClick={envoyerLaSelection}
-              disabled={selection.length === 0 || repondu !== undefined}
+              disabled={selection.length === 0 || verrouille}
               data-testid="ask-decision-envoyer"
             >
               Envoyer {selection.length > 0 ? `(${selection.length})` : ''}
