@@ -1145,7 +1145,31 @@ export class ConversationStore {
      * Le tri est STABLE, donc le score reste le second critere : ce re-classement ne remplace pas
      * le classement, il le corrige la ou un seul mot decide du sens.
      */
-    const PROFONDEUR_RECLASSEMENT = 50
+    /*
+     * PROFONDEUR : 400, et non 50 comme a la premiere version.
+     *
+     * Anatomie mesuree des echecs, le 2026-08-26 : sur les douze cas que le re-classement ratait
+     * encore, les DOUZE avaient le bon porteur -- le choix du mot n'etait plus en cause. Sept avaient
+     * simplement leur cible HORS des cinquante candidats soumis au tri. Le re-classement ne remonte
+     * pas ce qu'on ne lui donne pas.
+     *
+     *   profondeur    mot@8   phrase top-3   duree mediane (20 mesures)
+     *          50     36/40      28/40            64 ms
+     *         400     38/40      32/40            70 ms
+     *        1200     38/40      33/40            75 ms
+     *        2000     38/40      33/40           104 ms
+     *      100000     38/40      33/40           176 ms
+     *
+     * Le gain PLAFONNE a 33/40 des qu'on depasse la taille du corpus (1201 conversations) : au-dela,
+     * on paie sans rien gagner. 400 est retenu parce que son cout est mesure STABLE (+6 ms) pour
+     * quatre cas gagnes, alors que le cas supplementaire coute entre +5 et +100 ms selon les mesures --
+     * trop incertain pour etre paye a chaque tour de chat, ou ce calcul est synchrone.
+     *
+     * La borne ne depend PAS de la taille du corpus, et c'est voulu : `trouvees` ne contient que les
+     * conversations de score non nul, donc une demande precise en produit peu et la borne ne mord
+     * jamais ; une demande vague en produit beaucoup, et c'est precisement le cas ou il faut arreter.
+     */
+    const PROFONDEUR_RECLASSEMENT = 400
     // Le mot ENTIER, jamais sa racine :  tronque a six caracteres, donc « updatebanner »
     // devenait « update » -- present partout, et le re-classement ne discriminait plus rien (2/40,
     // soit aucun gain, alors que le mot entier donne 25/40). La rarete est indexee sur les deux.
