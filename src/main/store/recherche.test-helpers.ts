@@ -28,10 +28,11 @@ import { ConversationStore } from './conversations'
  * frequence documentaire de l'ordre de dix, contre quatre en reel -- il concurrence donc vraiment le
  * sujet, ce qu'un bruit de quinze mots ne permettait pas.
  *
- * CE QUI RESTE HORS DE SA PORTEE : le cas d'un terme cherche NOYE DANS SES PROPRES VARIANTES. Dans le
- * reel, « ecriture » n'a que deux conversations en token exact mais 94 en sous-chaine ; c'est ce qui
- * rend son choix comme porteur si delicat. Le reproduire demanderait de generer des variantes
- * morphologiques du sujet dans le bruit -- non fait.
+ * ET LE TROISIEME ETAT, ajoute ensuite : un terme ni present ni absent, mais NOYE dans ses propres
+ * variantes. Le bruit applique desormais des SUFFIXES aux mots de la queue, si bien que ~1 200 formes
+ * y sont rares en token exact et repandues en sous-chaine -- le cas d'« ecriture », deux conversations
+ * en token contre 94 en sous-chaine. C'est ce qui manquait pour que le banc FASSE ECHOUER une
+ * recherche comme le reel la fait echouer ; un test le verifie explicitement.
  *
  * Il est DETERMINISTE : meme graine, meme corpus. Un banc d'essai qui bouge entre deux executions ne
  * falsifie rien.
@@ -76,6 +77,16 @@ const COURANT = [
  * courants ne pouvait pas reproduire. Ils sont donc semes rarement, pour tomber dans cette tranche.
  */
 const ADRESSE = ['rappelle', 'retrouve', 'souviens', 'cherche', 'redis']
+
+/**
+ * Les SUFFIXES qui fabriquent des variantes d'un meme radical.
+ *
+ * Sans eux, un terme cherche est soit present soit absent, jamais NOYE. Le corpus reel connait ce
+ * troisieme etat et c'est le plus difficile : « ecriture » n'a que deux conversations en token exact
+ * mais 94 en sous-chaine -- ecritures, ecriturier, reecriture. Le re-classement compte par
+ * sous-chaine ; sans variantes dans le bruit, il ne rencontre jamais ce cas.
+ */
+const SUFFIXES = ['', '', '', 's', 'e', 'es', 'er', 'ion', 'ure', 'ment', 'able']
 
 /**
  * Un vocabulaire de remplissage a queue longue, comme le corpus reel.
@@ -131,7 +142,10 @@ export function bancDEssai(options: BancOptions = {}): ConversationStore {
         // Un tiers de mots courants, deux tiers tires de la queue longue : c'est elle qui cree la
         // concurrence lexicale, et sans elle un mot d'adresse ne rivalise avec rien.
         if (tirageMot < 0.34) mots.push(COURANT[Math.floor(alea() * COURANT.length)])
-        else mots.push(queue[Math.floor(alea() * queue.length)])
+        else {
+          const radical = queue[Math.floor(alea() * queue.length)]
+          mots.push(radical + SUFFIXES[Math.floor(alea() * SUFFIXES.length)])
+        }
       }
       // Les mots d'adresse sont semes RAREMENT, pour atterrir dans la tranche de frequence des
       // termes qu'on cherche -- deux a cinq conversations, comme « rappelle » dans le corpus reel.
