@@ -107,43 +107,25 @@ export function normalizeClaudeUsage(
  * / inspection), miroir de codex. Contrat provider-agnostique : tout exécuteur émet ce même shape.
  */
 /**
- * Le shell LECTURE SEULE d'un tour de chat.
+ * HISTORIQUE — le shell LECTURE SEULE d'un tour de chat (RETIRÉ le 2026-08-26).
  *
- * Le chat n'avait aucun shell, par décision délibérée : « ni Write/Edit, ni Bash (qui rouvrirait
- * les effets de bord par `cat`, `rm`, `git`…) ». L'intention était juste, la conséquence non :
- * incapable de lancer `git status`, l'agent devait router vers une orchestration — qui s'exécute
- * dans un worktree ISOLÉ, donc au mauvais endroit pour une question portant sur le dépôt réel.
- * Mesuré le 2026-08-04 : l'utilisateur demande « met toi à jour », l'agent ne peut pas constater
- * l'état de son propre dépôt et lui renvoie la charge de taper les commandes.
+ * Il a existé une constante `CHAT_READ_ONLY_SHELL` : cinq périmètres `Bash(git …:*)` qui étaient le
+ * SEUL shell d'un tour de chat, sans Write ni Edit. Elle est supprimée, pas oubliée, sur décision
+ * explicite de l'utilisateur (2026-08-26, conv-1410) : « Tout ouvrir : Bash + Write + Edit ».
+ * Motivation mesurée : une édition d'une ligne exigeait une orchestration, qui répond depuis un
+ * worktree ISOLÉ — donc à côté du dépôt que l'utilisateur regarde.
  *
- * On ne remplace donc pas la propriété par rien, mais par une PLUS FORTE : le shell est ouvert
- * uniquement sur des commandes dont aucune forme ne peut muter. Chaque entrée est un périmètre
- * `Bash(<préfixe>:*)` — le CLI ne l'autorise que pour ce préfixe, tout le reste retombe sur la
- * demande d'autorisation, donc échoue en mode non interactif.
+ * Ce que ce paragraphe conserve, parce que c'est une CONNAISSANCE et non une politique :
+ *  - un périmètre par préfixe ne borne QUE le verbe, jamais ses options : `git diff --output=x` et
+ *    `git show --output=x` ÉCRIVENT (vérifié : un fichier de 9 octets ramené à 0) ;
+ *  - la façon dont le CLI traite une commande CHAÎNÉE face à un périmètre par préfixe n'a jamais été
+ *    établie ; la sonde rejouable est `scripts/probe-chat-shell-permissions.mjs` ;
+ *  - `NON_INTERACTIVE_ENV` (ci-dessous) reste en vigueur et agit sur le PROCESSUS FILS, donc
+ *    indépendamment de l'interprétation du CLI.
  *
- * NON ÉTABLI — à ne pas prendre pour un fait : la façon dont le CLI traite une commande CHAÎNÉE
- * (`git status; rm -rf x`, `&&`, `|`, `$(…)`) face à un périmètre par préfixe n'a PAS été vérifiée.
- * J'avais d'abord écrit « fail-closed » comme un acquis ; ce n'en était pas un. Deux tentatives de
- * vérification le 2026-08-04 se sont soldées par `API Error: 529 Overloaded`, donc la question
- * reste ouverte. La sonde rejouable est `scripts/probe-chat-shell-permissions.mjs` : la lancer dès
- * que l'API répond, et remplacer ce paragraphe par le résultat OBSERVÉ.
- *
- * C'est pourquoi la défense ne repose PAS sur cette propriété : les verbes retenus n'ont aucune
- * option écrivante dans la liste refusée ci-dessous, et NON_INTERACTIVE_ENV neutralise pagers, visualiseurs
- * d'aide et invites d'identifiants au niveau du PROCESSUS FILS — indépendamment du CLI.
- *
- * SONT EXCLUS À DESSEIN, bien qu'ils commencent par `git` : `branch` (`-d` supprime), `remote`
- * (`add`/`set-url` écrivent), `stash` nu (`push`/`pop` mutent — seul `stash list` est ici), et
- * évidemment `checkout`, `reset`, `clean`, `commit`. Une mutation reste le travail d'une
- * orchestration, avec sa preuve et son gate.
+ * La frontière de sécurité qui demeure fermée est celle du fond autonome (`watchdog-read-only`) :
+ * son contexte d'événement n'est pas fiable et aucun humain ne le déclenche.
  */
-export const CHAT_READ_ONLY_SHELL = [
-  'Bash(git status:*)',
-  'Bash(git stash list:*)',
-  'Bash(git rev-parse:*)',
-  'Bash(git ls-files:*)',
-  'Bash(git worktree list:*)'
-]
 
 /**
  * RETIRÉS après audit de sécurité, chacun pour une raison PROUVÉE — ne pas les remettre sans
@@ -742,7 +724,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       )
     } else {
       /**
-       * TOUR DE CHAT : lecture seule du workspace, au lieu d'etre AVEUGLE.
+       * TOUR DE CHAT : PLEINEMENT OUTILLE (lecture + shell + ecriture).
+       *
+       * DECISION UTILISATEUR du 2026-08-26 (conv-1410) : « Tout ouvrir : Bash + Write + Edit ».
+       * L'historique ci-dessous explique d'ou l'on vient ; il ne decrit plus la politique en vigueur.
+       * Mesure qui a motive l'ouverture : une correction d'une ligne dans `home-decor-scene.ts` a
+       * exige une orchestration complete, qui repond depuis un worktree ISOLE — donc a cote du depot
+       * que l'utilisateur regarde — et plusieurs tours ont ete depenses a expliquer un refus.
+       *
+       * La frontiere de securite qui RESTE fermee est celle du fond autonome
+       * (`watchdog-read-only`, juste en dessous) : son contexte d'evenement n'est pas fiable, aucun
+       * humain ne le declenche. Le tour de chat, lui, est une demande DIRECTE de l'utilisateur.
+       *
+       * HISTORIQUE — lecture seule du workspace, au lieu d'etre AVEUGLE.
        *
        * Avant, le chat partait avec `--disallowedTools '*'` : l'agent ne pouvait rien lire, donc
        * toute question factuelle (« que fait ce fichier ? ») exigeait une ORCHESTRATION complete.
@@ -779,17 +773,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             '--add-dir',
             readOnlyWorkspace,
             '--tools',
-            'Read,Grep,Glob,Bash,' + OUTILS_WEB,
+            'Read,Grep,Glob,Bash,Write,Edit,' + OUTILS_WEB,
             '--allowedTools',
             'Read',
             'Grep',
             'Glob',
             'WebFetch',
             'WebSearch',
-            // Bash n'est JAMAIS autorisé nu ici : uniquement par périmètres incapables de muter
-            // (voir CHAT_READ_ONLY_SHELL). Sans eux, une question sur l'état du dépôt forçait une
-            // orchestration, qui répond depuis un worktree isolé — donc à côté de la question.
-            ...CHAT_READ_ONLY_SHELL,
+            // Bash, Write et Edit sont autorisés NUS depuis le 2026-08-26 : le périmètre par préfixe
+            // ne bornait que le verbe, jamais ses options, et il forçait une orchestration pour la
+            // moindre édition — orchestration qui répond depuis un worktree isolé, donc à côté.
+            'Bash',
+            'Write',
+            'Edit',
             ...outilsMcpAutorises
           )
         }

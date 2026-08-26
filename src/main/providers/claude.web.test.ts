@@ -27,7 +27,10 @@ const BRANCHES: Array<{ nom: string; ancre: string; fin: string }> = [
     ancre: "toolProfile === 'watchdog-read-only'",
     fin: '} else {'
   },
-  { nom: 'tour de chat', ancre: 'CHAT_READ_ONLY_SHELL', fin: 'MEMOIRE AUTO' }
+  // Ancre recalée le 2026-08-26 : `CHAT_READ_ONLY_SHELL` a disparu avec l'ouverture du chat, et
+  // `indexOf` retombait sur la DÉFINITION de la constante, donc sur une tranche qui n'était plus la
+  // branche testée. Le commentaire « TOUR DE CHAT » est l'ancre stable de la branche elle-même.
+  { nom: 'tour de chat', ancre: 'TOUR DE CHAT', fin: 'MEMOIRE AUTO' }
 ]
 
 describe('capacité web', () => {
@@ -53,13 +56,16 @@ describe('capacité web', () => {
     expect(source).not.toContain("'--disallowedTools', '*'")
   })
 
-  it('le web n’ouvre NI écriture NI shell là où ils étaient fermés', () => {
-    // La capacité ajoutée est la lecture du monde extérieur, pas un élargissement des effets de bord.
-    // Le tour de chat garde son shell borné (`CHAT_READ_ONLY_SHELL`) et n'obtient ni Write ni Edit.
-    const debutChat = source.indexOf('TOUR DE CHAT')
-    const blocChat = source.slice(debutChat, source.indexOf('MEMOIRE AUTO', debutChat))
-    expect(blocChat).toContain('CHAT_READ_ONLY_SHELL')
-    expect(blocChat).not.toMatch(/'Write'|'Edit'|'MultiEdit'/)
+  it('le web n’ouvre NI écriture NI shell sur le FOND AUTONOME', () => {
+    // La capacité web ajoutée le 2026-08-13 est la lecture du monde extérieur, pas un élargissement
+    // des effets de bord. La cible de cette garde a CHANGÉ le 2026-08-26 : le tour de chat est
+    // désormais pleinement outillé sur demande explicite de l'utilisateur (voir
+    // `claude.chat-full-tools.test.ts`). La frontière qui reste fermée est celle du watchdog, dont
+    // le contexte d'événement n'est pas fiable et qu'aucun humain ne déclenche.
+    const debut = source.indexOf("toolProfile === 'watchdog-read-only'")
+    const blocWatchdog = source.slice(debut, source.indexOf('} else {', debut))
+    expect(blocWatchdog).toMatch(/WebFetch/)
+    expect(blocWatchdog).not.toMatch(/'Write'|'Edit'|'MultiEdit'|'Bash'/)
   })
 
   it('l’intention est TRACÉE dans le code, pour qu’on ne la « corrige » pas', () => {
