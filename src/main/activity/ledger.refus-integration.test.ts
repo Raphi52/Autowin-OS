@@ -1,4 +1,5 @@
 import { mkdtempSync, readFileSync, readdirSync } from 'node:fs'
+import { corpsDeBloc } from '../../shared/corps-source'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -127,8 +128,12 @@ describe('le compteur de refus est branché de bout en bout', () => {
 
   it('le coordinateur ÉMET, au point de passage unique des refus', () => {
     const src = lire('store/run-worktree-coordinator.ts')
-    const bloc = src.slice(src.indexOf('private applyFinalize'))
-    expect(bloc.slice(0, 900)).toContain('this.onRefusIntegration?.(')
+    // La fenetre etait FIXE (900 premiers caracteres) : un commentaire ajoute plus haut a repousse
+    // l'appel a 1034 et ce garde est passe au ROUGE alors que le cablage etait intact. On borne
+    // desormais sur la vraie fin de methode — elargir la fenetre n'aurait fait que repousser la
+    // prochaine fausse alerte.
+    const bloc = corpsDeBloc(src, 'private applyFinalize')
+    expect(bloc).toContain('this.onRefusIntegration?.(')
   })
 
   it('l’OS RELAIE vers un abonné', () => {
