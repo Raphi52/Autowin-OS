@@ -15,6 +15,7 @@ import { canonicalProjectPath } from '../../shared/project-path'
 import { motsDe, replier } from '../../shared/mots'
 import { memeFamille } from './synonymes'
 import { construireVoisinage, type IndexVoisinage } from './voisinage'
+import { creerIndexInverse, type IndexInverse } from './index-inverse'
 
 // Store en mémoire des conversations : un PROVIDER qui répond, un DOSSIER qui range.
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -381,6 +382,9 @@ export class ConversationStore {
    */
   hydrate(saved: Conversation[], options?: { resumableTurnIds?: ReadonlySet<string> }): boolean {
     this.voisinageCache = undefined
+    // Le corpus entier change de forme : la pre-selection ne peut pas etre rattrapee
+    // par une mise a jour, elle est jetee.
+    this.indexInverseCache = undefined
     const resumable = options?.resumableTurnIds
     this.conversations.clear()
     let max = 0
@@ -545,7 +549,9 @@ export class ConversationStore {
     provider: string
     autoKaizen?: AutoKaizenConversationLink
   }): Conversation {
-    this.voisinageCache = undefined
+    // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
+    // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
+    // principal -- le poste dominant du gel de l'interface.
     const ts = this.now()
     const id = this.nextUniqueConversationId()
     const conversation: Conversation = {
@@ -615,7 +621,9 @@ export class ConversationStore {
     id: string,
     m: { role: 'user' | 'assistant'; content: string; attachments?: AttachmentMeta[] }
   ): Conversation {
-    this.voisinageCache = undefined
+    // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
+    // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
+    // principal -- le poste dominant du gel de l'interface.
     const conversation = this.conversations.get(id)
     if (!conversation) {
       throw new Error(`Conversation inconnue: ${id}`)
@@ -631,6 +639,7 @@ export class ConversationStore {
       ...(m.attachments?.length ? { attachments: m.attachments } : {})
     }
     conversation.messages.push(message)
+    this.indexerMessage(conversation.id, message.content)
     conversation.updatedAt = ts
     this.changed(id, 'immediate', {
       op: 'append-messages',
@@ -648,7 +657,9 @@ export class ConversationStore {
   ): Conversation {
     // Le chemin REEL des messages passe ICI, pas par `append` : l'index doit suivre celui-la
     // en premier. Corrige apres audit -- j'avais invalide les chemins que mes tests exercaient.
-    this.voisinageCache = undefined
+    // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
+    // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
+    // principal -- le poste dominant du gel de l'interface.
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
@@ -663,6 +674,7 @@ export class ConversationStore {
       ...(user.attachments?.length ? { attachments: user.attachments } : {})
     }
     conversation.messages.push(userMessage)
+    this.indexerMessage(conversation.id, userMessage.content)
     const turn = createChatTurn(assistant.turnId, assistant.runtime)
     const assistantMessage: Msg = {
       messageId: this.nextUniqueMessageId(conversation),
@@ -676,6 +688,7 @@ export class ConversationStore {
       ...(turn.runtime ? { runtime: turn.runtime } : {})
     }
     conversation.messages.push(assistantMessage)
+    this.indexerMessage(conversation.id, assistantMessage.content)
     conversation.schemaVersion = 3
     conversation.updatedAt = ts
     this.changed(id, 'immediate', {
@@ -693,7 +706,9 @@ export class ConversationStore {
   ): Conversation {
     // Le chemin REEL des messages passe ICI, pas par `append` : l'index doit suivre celui-la
     // en premier. Corrige apres audit -- j'avais invalide les chemins que mes tests exercaient.
-    this.voisinageCache = undefined
+    // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
+    // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
+    // principal -- le poste dominant du gel de l'interface.
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
@@ -711,6 +726,7 @@ export class ConversationStore {
       ...(turn.runtime ? { runtime: turn.runtime } : {})
     }
     conversation.messages.push(assistantMessage)
+    this.indexerMessage(conversation.id, assistantMessage.content)
     conversation.schemaVersion = 3
     conversation.updatedAt = ts
     this.changed(id, 'immediate', {
@@ -723,7 +739,9 @@ export class ConversationStore {
 
   /** Applique un événement au tour structuré ; les deltas demandent un checkpoint regroupé. */
   applyTurnEvent(id: string, turnId: string, event: ChatTurnEvent): Conversation {
-    this.voisinageCache = undefined
+    // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
+    // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
+    // principal -- le poste dominant du gel de l'interface.
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const message = applyTurnEventToMessages(conversation.messages, turnId, event)
@@ -753,6 +771,39 @@ export class ConversationStore {
    * corpus est deja entierement en memoire ; ce cache ajoute les mots, pas les textes.
    */
   private readonly motsParMessage = new Map<string, string[]>()
+
+  /**
+   * Pre-selection des conversations candidates.
+   *
+   * Repond « ces trois-la » au lieu de faire relire les 1197. Construit une fois, puis mis a jour a
+   * l'AJOUT d'un message -- jamais jete. C'est ce qui supprime le parcours du corpus a chaque tour,
+   * au lieu de le deporter ailleurs.
+   */
+  private indexInverseCache?: IndexInverse
+
+  private indexInverse(): IndexInverse {
+    if (!this.indexInverseCache) {
+      const index = creerIndexInverse()
+      for (const conversation of this.conversations.values()) {
+        for (const message of conversation.messages) {
+          if (typeof message.content !== 'string') continue
+          index.ajouter(conversation.id, this.motsMemoises(message.content).map(racine))
+        }
+      }
+      this.indexInverseCache = index
+    }
+    return this.indexInverseCache
+  }
+
+  /** Enregistre un message dans l'index sans rien reconstruire. Sans effet si l'index n'existe pas. */
+  private indexerMessage(conversationId: string, contenu: unknown): void {
+    if (typeof contenu !== 'string') return
+    // Le voisinage ABSORBE le message au lieu d'etre jete : c'etait le poste dominant du gel
+    // (~90 ms par tour a reconstruire tout le corpus, contre O(mots du message) ici).
+    this.voisinageCache?.ajouter(contenu)
+    if (!this.indexInverseCache) return
+    this.indexInverseCache.ajouter(conversationId, this.motsMemoises(contenu).map(racine))
+  }
 
   private motsMemoises(contenu: string): string[] {
     const connu = this.motsParMessage.get(contenu)
@@ -832,7 +883,11 @@ export class ConversationStore {
       Math.min(20, Math.floor(options?.extraitsParConversation ?? 3) || 3)
     )
     const trouvees: Array<ConversationRecherche & { score: number }> = []
+    // La pre-selection porte sur les mots DEMANDES et AJOUTES : une conversation absente de l'index
+    // pour tous ces mots ne peut pas correspondre, il est inutile de la relire.
+    const candidates = this.indexInverse().candidates([...demandes, ...elargis])
     for (const conversation of this.list()) {
+      if (candidates && !candidates.has(conversation.id)) continue
       const extraits: ConversationExtrait[] = []
       /** Rangs des messages retenus : sert a chercher un revirement APRES le dernier extrait. */
       const derniersRangs: number[] = []
@@ -1111,6 +1166,9 @@ export class ConversationStore {
   /** Supprime une conversation. Retourne true si elle existait. */
   remove(id: string): boolean {
     this.voisinageCache = undefined
+    // Le corpus entier change de forme : la pre-selection ne peut pas etre rattrapee
+    // par une mise a jour, elle est jetee.
+    this.indexInverseCache = undefined
     const existed = this.conversations.delete(id)
     if (existed) this.changed(id)
     return existed
