@@ -178,3 +178,49 @@ describe('penalite de longueur, bornee au 3e quartile', () => {
     expect(titres).toEqual(['Courte', 'Longue'])
   })
 })
+
+/**
+ * LE MOT PORTEUR DECIDE, MEME QUAND LE SCORE NE LE VOIT PAS.
+ *
+ * Defaut mesure le 2026-08-26 sur le corpus reel (1201 conversations, oracle de 40 cas aux cibles
+ * etablies par comptage de tokens). Le rappel injecte a chaque tour demande TROIS conversations, et
+ * sur une demande en langage naturel la bonne a un rang MEDIAN de 12 : il ratait 38 fois sur 40.
+ * La cible n'etait pourtant jamais exclue -- a profondeur 50, la phrase retrouvait presque aussi bien
+ * que le mot-cle seul. C'etait le CLASSEMENT qui echouait, pas la recherche. Le re-classement par
+ * presence du mot porteur a porte ce top-3 de 2/40 a 21/40, et le mot-cle seul de 31/40 a 36/40,
+ * pour un surcout nul (61 ms contre 60).
+ */
+describe('re-classement par le mot porteur', () => {
+  function magasin(): ConversationStore {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    // Le bruit : des messages COURTS qui portent les mots d'adresse, donc un score de densite eleve.
+    for (let i = 0; i < 12; i++) {
+      const b = store.create({ title: `Adresse ${i}`, provider: 'claude' })
+      store.append(b.id, { role: 'user', content: 'rappelle moi ce qu on a dit dans le projet' })
+    }
+    // La cible : le terme porteur, noye dans un message long -- la forme normale d'une explication.
+    const cible = store.create({ title: 'Cible', provider: 'claude' })
+    const long = 'contexte technique sans rapport particulier avec la demande. '.repeat(80)
+    store.append(cible.id, {
+      role: 'assistant',
+      content: `${long}${SAUT}le detail decisif porte sur zarbitrophage${SAUT}${long}`
+    })
+    return store
+  }
+
+  it('remonte dans les trois premiers la conversation qui porte vraiment le terme', () => {
+    const res = magasin().search(
+      'rappelle moi ce qu on a dit a propos de zarbitrophage dans le projet',
+      { limite: 3 }
+    )
+    expect(res.map((r) => r.title)).toContain('Cible')
+  })
+
+  it('sans terme distinctif, le classement par score est preserve', () => {
+    // Contre-epreuve : quand aucun mot ne se distingue, le re-classement ne doit rien bouleverser.
+    const res = magasin().search('rappelle moi ce qu on a dit dans le projet', { limite: 3 })
+    expect(res.length).toBe(3)
+    expect(res.every((r) => r.title.startsWith('Adresse'))).toBe(true)
+  })
+})
