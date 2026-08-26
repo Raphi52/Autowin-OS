@@ -102,6 +102,7 @@ import {
 // La classe `.lisere-dessus` vit dans cette feuille : importee ICI et non « heritee » d'une
 // autre vue, sinon l'apparence de Chat dependrait de l'ordre de chargement des AUTRES vues.
 import './ViewPage.css'
+import { contextGauge, type ContextGauge } from '../../../shared/context-gauge'
 import './ChatView.css'
 import './SlashPalette.css'
 import './ChatComposerExtras.css'
@@ -313,6 +314,14 @@ export function ChatView({
   const [runtimeIdentity, setRuntimeIdentity] = useState<ChatRuntimeIdentity | null>(null)
   // Coût-eq du dernier tour par conversation → pastille coût live.
   const [lastTurnCost, setLastTurnCost] = useState<Record<string, number>>({})
+  /*
+   * Occupation de la fenetre de contexte, par conversation.
+   *
+   * Voisine du cout, et pourtant l'inverse : le cout dit ce que le tour a DEPENSE, la jauge dit
+   * ce que le fil PORTE encore. Autowin savait repondre a la premiere question et pas a la
+   * seconde -- un fil pouvait s'approcher de la saturation sans qu'un ecran ne l'indique.
+   */
+  const [contextGauges, setContextGauges] = useState<Record<string, ContextGauge>>({})
   // Menu ⋮ d'une conversation, rendu en position fixe (déborde du conteneur scrollable).
   const [convMenu, setConvMenu] = useState<{ conv: Conv; top: number; left: number } | null>(null)
   const [convFolderMenu, setConvFolderMenu] = useState<{
@@ -1133,6 +1142,10 @@ export function ChatView({
       if (e.kind === 'done' && e.usage) {
         const cost = turnCostEq(e.usage)
         setLastTurnCost((current) => ({ ...current, [conversationId]: cost }))
+        // `inputTokens` du dernier tour EST l'occupation courante : le prefixe est renvoye a chaque
+        // appel, donc le dernier tour porte le fil entier. Une somme des tours le compterait N fois.
+        const jauge = contextGauge(e.usage)
+        if (jauge) setContextGauges((current) => ({ ...current, [conversationId]: jauge }))
       }
       if (e.kind === 'stream-reset' && e.streamId)
         rebaseDirectiveReceiptsAfterStreamReset(conversationId, e.streamId)
@@ -2855,6 +2868,38 @@ export function ChatView({
                       </span>
                     )
                   })()}
+                {(() => {
+                  /*
+                    LA JAUGE DE CONTEXTE.
+
+                    Absente tant qu'on ne SAIT pas — fenetre du modele non declaree, ou entree non
+                    mesuree. Afficher 0 % dirait « ce fil est vide », une affirmation la ou la
+                    verite est « on l'ignore ».
+                  */
+                  const jauge = activeId != null ? contextGauges[activeId] : undefined
+                  if (!jauge) return null
+                  const pourcent = Math.round(jauge.ratio * 100)
+                  const titre =
+                    `Contexte : ${jauge.used.toLocaleString('fr-FR')} tokens sur ` +
+                    `${jauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
+                    `${jauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
+                  return (
+                    <span
+                      className={`chat-context-gauge is-${jauge.level}`}
+                      title={titre}
+                      aria-label={titre}
+                      data-testid="chat-context-gauge"
+                    >
+                      <span className="chat-context-gauge-track">
+                        <span
+                          className="chat-context-gauge-fill"
+                          style={{ width: `${pourcent}%` }}
+                        />
+                      </span>
+                      {pourcent} %
+                    </span>
+                  )
+                })()}
                 {runtimeIdentity?.reasoningEffort && (
                   <span>effort {runtimeIdentity.reasoningEffort}</span>
                 )}

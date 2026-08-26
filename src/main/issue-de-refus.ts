@@ -35,6 +35,12 @@ export type MotifRefus =
   | 'budget-depense'
   | 'commande-inconnue'
   | 'capacite-desactivee'
+  | 'publication-copie-absente'
+  | 'publication-non-publiee'
+  | 'publication-conflit'
+  | 'publication-copie-liberee'
+  | 'publication-sur-branche'
+  | 'publication-copie-verrouillee'
 
 /**
  * Constat court, en tete du message : ce qui vient de se passer.
@@ -52,7 +58,18 @@ const CONSTATS: Record<MotifRefus, string> = {
   'budget-appels': "Budget d'appels provider atteint",
   'budget-depense': 'Budget USD atteint',
   'commande-inconnue': 'Commande inconnue',
-  'capacite-desactivee': 'Capacité désactivée'
+  'capacite-desactivee': 'Capacité désactivée',
+  'publication-copie-absente': 'Publication impossible (outcome absente) : le bureau n’existe plus',
+  'publication-non-publiee':
+    'Publication non aboutie (outcome blocked) : le travail n’est pas arrivé sur la base',
+  'publication-conflit':
+    'Publication en conflit (outcome conflict) : la base a changé sous le bureau',
+  'publication-copie-liberee':
+    'Rien à publier (outcome libere) : le bureau a été libéré sans travail à porter',
+  'publication-sur-branche':
+    'Bureau libéré, travail SAUVEGARDÉ (outcome preserve-et-libere) : il vit sur une branche',
+  'publication-copie-verrouillee':
+    'Bureau verrouillé (outcome refuse) : la copie n’a pas pu être fermée'
 }
 
 /**
@@ -78,7 +95,19 @@ export const ISSUES_CONNUES: Record<MotifRefus, string> = {
   'commande-inconnue':
     "Cette commande n'existe pas dans le catalogue. Relis la liste des commandes disponibles et choisis la plus proche.",
   'capacite-desactivee':
-    "Cette capacite est desactivee pour ce projet. Ouvre les reglages pour l'activer, ou choisis une commande equivalente encore active."
+    "Cette capacite est desactivee pour ce projet. Ouvre les reglages pour l'activer, ou choisis une commande equivalente encore active.",
+  'publication-copie-absente':
+    "Ne cherche pas ce bureau, il n'existe plus : ton edition n'a rien ecrit. Relance-la depuis le debut ; si elle echoue encore ici, appelle `retrospective` sur cette conversation pour voir ce que les tours precedents ont deja tente.",
+  'publication-non-publiee':
+    "Le travail est dans le bureau mais pas sur la base. Ouvre Worktrees, section « Bureaux conserves », « Voir le diff » pour juger puis « Reprendre » pour republier -- ne refais pas l'edition, elle est deja ecrite.",
+  'publication-conflit':
+    "La base a bouge pendant ton edition : republier a l'identique echouera pareil. Ouvre Worktrees, section « Bureaux conserves », « Voir le diff » pour voir ce qui s'oppose, et resous le conflit avant de reprendre.",
+  'publication-copie-liberee':
+    "Il n'y a rien a recuperer : le bureau a ete libere sans aucun changement a porter. Verifie que ton edition visait bien un fichier existant, puis relance-la.",
+  'publication-sur-branche':
+    "Ton travail n'est PAS perdu : il a ete pousse sur une branche dediee avant que le bureau soit libere. Ouvre Worktrees pour retrouver cette branche et la fusionner -- refaire l'edition creerait un doublon.",
+  'publication-copie-verrouillee':
+    "Un processus tient encore la copie (souvent un test ou un watcher encore vivant). Attends qu'il se termine et relance la MEME edition ; si elle echoue a nouveau, ferme ce qui tourne sur ce bureau avant de reprendre."
 }
 
 /** La sortie du motif, ou une chaine vide si le motif est inconnu — on n'invente pas un geste. */
@@ -95,4 +124,45 @@ export function refusAvecIssue(motif: MotifRefus, detail?: string): string {
   const tete = detail ? `${constat} : ${detail}` : constat
   const issue = issuePour(motif)
   return issue ? `${tete} — ${issue}` : tete
+}
+
+/**
+ * Les issues de publication d'un bureau, telles que les rend `WorktreeManager`.
+ *
+ * Seules figurent ici celles qui font ECHOUER la mutation. `merged`, `nothing`, `cleanup-pending`
+ * et `published-residue` sont des succes ou des reports : elles ne produisent aucun refus.
+ */
+export type OutcomeDePublication =
+  | 'absente'
+  | 'blocked'
+  | 'conflict'
+  | 'libere'
+  | 'preserve-et-libere'
+  | 'refuse'
+
+/**
+ * Chaque issue a SON motif, donc son constat et son geste.
+ *
+ * Les six retombaient sur `publication-differee`, un message unique qui promettait « Ouvre
+ * Worktrees, section Bureaux conserves » -- geste IMPOSSIBLE sur `absente` et `libere`, ou le
+ * bureau n'existe plus, et geste FAUX sur `preserve-et-libere`, ou le travail vit sur une branche.
+ */
+const MOTIF_PAR_OUTCOME: Record<OutcomeDePublication, MotifRefus> = {
+  absente: 'publication-copie-absente',
+  blocked: 'publication-non-publiee',
+  conflict: 'publication-conflit',
+  libere: 'publication-copie-liberee',
+  'preserve-et-libere': 'publication-sur-branche',
+  refuse: 'publication-copie-verrouillee'
+}
+
+/**
+ * Le refus d'une publication, nomme par CE QUI s'est passe.
+ *
+ * `detail` sert a ce que le message porte la circonstance (fichiers en conflit, nom de branche),
+ * jamais le nom de l'outil : `edit_file` est deja affiche au-dessus du message, le repeter
+ * consommait la seule place ou une information utile pouvait tenir.
+ */
+export function refusPourOutcome(outcome: OutcomeDePublication, detail?: string): string {
+  return refusAvecIssue(MOTIF_PAR_OUTCOME[outcome], detail)
 }

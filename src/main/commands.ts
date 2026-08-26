@@ -35,7 +35,8 @@ import {
 import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement'
 import { natureDeLEchec } from './verify-echec-nature'
 import { bornerLigneDeVie } from './verify-battement'
-import { refusAvecIssue } from './issue-de-refus'
+import { refusAvecIssue, refusPourOutcome, type OutcomeDePublication } from './issue-de-refus'
+import { rappelDesEchangesPasses } from './rappel-conversations'
 import { cleDeBureau, decisionDeReutilisation } from './bureau-reutilisable'
 import { readLastCommitFiles } from './git-read-main'
 import { readGitState } from './git-read-main'
@@ -347,6 +348,31 @@ export function parseDisplayArg(raw: unknown): number | undefined {
   return value
 }
 
+/**
+ * La CIRCONSTANCE d'un echec de publication : ce que le message doit porter en plus du motif.
+ *
+ * L'ancien detail etait le nom de l'outil (`edit_file`), deja affiche au-dessus du message : il
+ * consommait la seule place ou une information utile pouvait tenir. Ici, chaque issue donne ce
+ * qu'elle SAIT -- les fichiers qui s'opposent, la raison du blocage, la branche qui porte le
+ * travail -- pour que le lecteur n'ait pas a le deviner.
+ */
+function circonstanceDePublication(finalized: Record<string, unknown>): string | undefined {
+  const liste = (valeur: unknown): string | undefined =>
+    Array.isArray(valeur) && valeur.length > 0 ? valeur.slice(0, 5).join(', ') : undefined
+  const texte = (valeur: unknown): string | undefined =>
+    typeof valeur === 'string' && valeur.trim() ? valeur.trim() : undefined
+  switch (finalized.outcome) {
+    case 'conflict':
+      return liste(finalized.files)
+    case 'blocked':
+      return texte(finalized.reason) ?? liste(finalized.files)
+    case 'preserve-et-libere':
+      return texte(finalized.branche)
+    default:
+      return texte(finalized.detail)
+  }
+}
+
 const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
@@ -422,6 +448,78 @@ const CATALOG: CommandSpec[] = [
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    /**
+     * REGARDER son propre travail, sans avoir a le refaire.
+     *
+     * Defaut vecu conv-1407 (2026-08-26), second volet. Autowin collecte deja tout ce qu'il faut
+     * pour une retrospective — conversation, activite, traces Brain, evenements causaux, RUN.md
+     * natifs — en UN appel (`collectAutowinKaizenEvidence`). Mais ce dossier n'etait atteignable
+     * que par une tache commencant par `/kaizen`, donc en LANCANT un run complet : couteux,
+     * delegue, asynchrone.
+     *
+     * L'orchestrateur decide lui-meme s'il traite ou s'il delegue. Un agent qui doit deleguer POUR
+     * S'INFORMER decide a l'aveugle : la seule facon de savoir lui coutait un run. Meme forme que
+     * `conversation_read` avant le 18/08 — branche pour l'oeil et pour un pipeline, jamais pour le
+     * modele qui decide.
+     *
+     * Lecture SEULE : regarder n'engage rien, et doit donc etre le geste le moins cher du catalogue.
+     */
+    name: 'retrospective',
+    description:
+      "Regarder ce qui s'est REELLEMENT passe dans une conversation : ses messages, l'activite de " +
+      'ses tours, ses evenements causaux (outils appeles, refus, verdicts) et ses RUN.md. Appelle-le ' +
+      "des qu'on te demande pourquoi un tour a echoue, ce qui a ete tente, ce qui a coute, ou avant " +
+      "de relancer un travail deja tente : tu sauras ce qui a DEJA ete essaye au lieu de le refaire. " +
+      "C'est de la LECTURE — cela ne lance aucun run et ne coute aucun appel de modele.",
+    args: {
+      id: 'identifiant de la conversation a examiner (ex. « conv-1407 »)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    /**
+     * CHERCHER par contenu dans TOUTES les conversations.
+     *
+     * Defaut vecu le 2026-08-26 (conv-1407). L'orchestrateur recoit « remake les pastilles de
+     * couleurs » : quatre mots qui referent a un tour tenu dans une AUTRE conversation. Pour le
+     * retrouver il lui fallait chercher par CONTENU dans le corpus -- or son catalogue n'offrait
+     * cela que sur les FICHIERS du depot (`find_in_files`). `get_state` ne rend que des titres
+     * tronques, et `conversation_read` exige un id connu d'avance : pour lire, il fallait deja
+     * savoir OU lire.
+     *
+     * Il a donc cherche son propre besoin dans le CODE SOURCE : 20 inspections, zero conversation
+     * lue, run arrete a 0,96 $. Meme forme que `list_files` et `classer_conversation` avant lui --
+     * une capacite absente ne rend pas l'agent prudent, elle le pousse vers un chemin desespere.
+     *
+     * C'est la PORTE d'entree de `conversation_read` : celle-ci trouve l'id, celle-la ouvre.
+     */
+    name: 'conversation_search',
+    description:
+      'Chercher un mot ou une phrase dans le CONTENU de TOUTES les conversations, et recevoir les ' +
+      'extraits qui le portent avec leur identifiant. Appelle-le des que la demande suppose un ' +
+      'echange passe sans en donner l identifiant : « comme on avait dit », « reprends ce truc ' +
+      'd hier », une demande courte qui refere a un tour precedent, une retrospective, ou quand tu ' +
+      'ne sais plus de quoi parle la demande. Cherche ICI avant de fouiller le code : le code dit ' +
+      'ce que l app FAIT, les conversations disent ce qui a ete DEMANDE. Les identifiants rendus ' +
+      's ouvrent ensuite avec `conversation_read`.',
+    args: {
+      terme: 'mot ou phrase a chercher (insensible a la casse et aux accents)',
+      limite: 'nombre maximum de conversations rendues (defaut 10, borne 50)',
+      extraits: 'extraits par conversation (defaut 3, borne 20)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: false
     }
   },
@@ -1189,6 +1287,22 @@ export class AppCommandBus {
     private readonly outcomeLearning?: OutcomeLearningSupervisor
   ) {}
 
+  /**
+   * Les echanges passes que la demande suppose connus, prets a etre injectes dans le tour.
+   *
+   * Passe par le bus plutot que d'exposer le store : l'appelant (`agent-pilot`) n'a pas a connaitre
+   * la forme des conversations pour poser une question aussi simple que « de quoi parle-t-on ».
+   */
+  rappelPourDemande(demande: string | undefined, conversationCouranteId?: string): string {
+    try {
+      return rappelDesEchangesPasses(this.os.conversations, demande, conversationCouranteId)
+    } catch {
+      // Un rappel est un CONFORT : s'il echoue, le tour doit partir quand meme. L'inverse ferait
+      // dependre chaque message d'une commodite.
+      return ''
+    }
+  }
+
   catalog(): CommandSpec[] {
     return CATALOG.filter((command) => this.isCommandEnabled(command.name)).map((command) => ({
       ...command,
@@ -1946,6 +2060,40 @@ export class AppCommandBus {
         this.broadcast({ type: 'refresh', scope: 'conversations' })
         return { id: c.id, titre: c.title, dossier: c.projectPath ?? null }
       }
+      case 'retrospective': {
+        const id = s('id')
+        const conversation = this.os.conversations.get(id)
+        // Une conversation absente est un ECHEC franc. Rendre un dossier vide ferait conclure
+        // « il ne s'est rien passe » sur un identifiant simplement faux -- la conclusion inverse
+        // de celle qu'une retrospective doit produire.
+        if (!conversation) throw new Error(`Conversation introuvable: ${id}`)
+        const dossier = collectAutowinKaizenEvidence(conversation)
+        return {
+          ...dossier,
+          note:
+            `${dossier.conversation.messages.length} message(s), ` +
+            `${dossier.causalEvents.length} evenement(s) causal(aux), ` +
+            `${dossier.activity.length} entree(s) d'activite, ${dossier.runs.length} RUN.md. ` +
+            `Lecture seule : aucun run lance.`
+        }
+      }
+      case 'conversation_search': {
+        const terme = s('terme')
+        const trouvees = this.os.conversations.search(terme, {
+          limite: Number(a.limite) || undefined,
+          extraitsParConversation: Number(a.extraits) || undefined
+        })
+        // Le vide est DIT comme un vide, jamais rendu en silence : un agent qui recoit une liste
+        // vide sans phrase conclut qu'il a mal appele l'outil, et retente au lieu d'elargir.
+        return {
+          terme,
+          conversations: trouvees,
+          note:
+            trouvees.length === 0
+              ? `Aucune conversation ne contient « ${terme} ». Essaie un terme plus court ou un synonyme.`
+              : `${trouvees.length} conversation(s) portent « ${terme} » ; ouvre-les avec conversation_read.`
+        }
+      }
       case 'conversation_read': {
         const id = s('id')
         const conversation = this.os.conversations.get(id)
@@ -2457,7 +2605,18 @@ export class AppCommandBus {
         finalized.outcome !== 'cleanup-pending' &&
         finalized.outcome !== 'published-residue'
       ) {
-        throw new Error(refusAvecIssue('publication-differee', command))
+        // CHAQUE issue porte son propre message. Les six retombaient sur « publication differee »,
+        // un texte unique qui ne nommait jamais la cause et promettait un geste impossible sur
+        // `absente` et `libere`. Mesure conv-1407 : le meme refus mot pour mot, trois fois, puis un
+        // run arrete a 0,96 $ -- face a un refus qui ne dit pas ce qui s'est passe, l'agent ne peut
+        // que retenter a l'identique. Le detail porte la CIRCONSTANCE, jamais le nom de l'outil :
+        // `edit_file` est deja affiche au-dessus du message.
+        throw new Error(
+          refusPourOutcome(
+            finalized.outcome as OutcomeDePublication,
+            circonstanceDePublication(finalized)
+          )
+        )
       }
       return result
     } catch (error) {

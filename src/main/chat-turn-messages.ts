@@ -19,6 +19,14 @@ export interface TurnMessageParts {
   /** Écho des faits retenus dans ce fil. Peut être vide. */
   memoryEcho: string
   /**
+   * Extraits d'échanges PASSÉS que la demande suppose connus. Vide la plupart du temps.
+   *
+   * Injecté plutôt que laissé à un appel d'outil : le modèle ne sait pas qu'il ignore quelque
+   * chose — « remake les pastilles de couleurs » se lit comme une demande complète — donc il ne
+   * va pas chercher. Voir `rappel-conversations.ts`.
+   */
+  rappelConversations?: string
+  /**
    * Corps de la skill invoquée en tête du message (`/remake …`), déjà mis en forme. Vide sinon.
    *
    * Ici et non dans le `system`, pour la raison qui gouverne tout ce fichier : ce contenu APPARAÎT et
@@ -102,18 +110,20 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
         `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`,
         parts.brainContext,
         parts.memoryEcho,
+        parts.rappelConversations ?? '',
         parts.skillBody ?? '',
         // La phrase CHANGE quand un tour manque : garder « tu connais déjà l'historique » au-dessus
         // d'un tour jamais vu serait conserver le mensonge tout en ajoutant le remède.
         nonVu
           ? `Suite de NOTRE conversation en cours. Ta session en contient l'historique, À UNE EXCEPTION : le tour ci-dessous a été exécuté par l'application SANS passer par toi, il est donc absent de ta session. Traite-le comme un fait établi de cette conversation.\n\nTOI (tour exécuté par l'app, hors de ta session):\n${nonVu}`
-          : `Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).`,
+          : `Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle conversation_search sur les mots de la demande, puis conversation_read sur l'identifiant rendu. L'identifiant de la conversation courante est activeConversationId, dans l'ETAT DE L'APP ci-dessus.`,
         `UTILISATEUR: ${parts.lastUserMessage ?? ''}`
       ]
     : [
         `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`,
         parts.brainContext,
         parts.memoryEcho,
+        parts.rappelConversations ?? '',
         parts.skillBody ?? '',
         ...parts.history.map((m) => `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}`)
       ]

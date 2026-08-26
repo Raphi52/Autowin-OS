@@ -836,7 +836,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--gold);
+  color: var(--gold-doux);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3159,4 +3159,46 @@ ol.md-list li {
 .model-effort-menu button.is-active {
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/*
+  JAUGE DE CONTEXTE — ce que le fil PORTE, a cote de ce qu'il a coute.
+
+  Trois paliers nommes par le modele (`context-gauge.ts`), jamais decides ici : la vue peint, elle
+  ne juge pas. Or a l'aise, or vif quand ca se tend, rouge quand la place manque -- l'echelle de
+  l'avertissement du theme, pas une couleur inventee pour l'occasion.
+*/
+.chat-context-gauge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+.chat-context-gauge-track {
+  width: 34px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.chat-context-gauge-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gold-doux);
+  transition: width var(--dur) var(--ease);
+}
+.chat-context-gauge.is-tendu {
+  color: var(--gold-clair);
+}
+.chat-context-gauge.is-tendu .chat-context-gauge-fill {
+  background: var(--gold-clair);
+}
+.chat-context-gauge.is-critique {
+  color: var(--err);
+}
+.chat-context-gauge.is-critique .chat-context-gauge-fill {
+  background: var(--err);
 }

@@ -12,6 +12,9 @@ import { hasInterruptionNotice, interruptionNotice } from '../runs/run-interrupt
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
 import { canonicalProjectPath } from '../../shared/project-path'
+import { motsDe, replier } from '../../shared/mots'
+import { memeFamille } from './synonymes'
+import { construireVoisinage, type IndexVoisinage } from './voisinage'
 
 // Store en mémoire des conversations : un PROVIDER qui répond, un DOSSIER qui range.
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -108,6 +111,168 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
 }
 
 /** Date du dernier tour de l'utilisateur, ou `undefined` s'il n'a encore rien écrit. */
+/** Un passage d'une conversation qui porte le terme cherche, avec de quoi le situer. */
+export interface ConversationExtrait {
+  role: string
+  ts: number
+  extrait: string
+}
+
+/** Une conversation qui porte le terme, et les passages qui le portent. */
+export interface ConversationRecherche {
+  id: string
+  title: string
+  provider: string
+  updatedAt: number
+  messageCount: number
+  extraits: ConversationExtrait[]
+}
+
+
+/**
+ * Les mots CHERCHABLES d'une demande.
+ *
+ * La recherche prenait la demande comme UNE chaine : « remake les pastilles de couleurs » ne
+ * trouvait rien, alors que « code couleur de la pastille » disait exactement ce qu'il fallait. Une
+ * demande n'est presque jamais formulee comme la reponse -- exiger la phrase entiere revenait a
+ * exiger que l'utilisateur se cite lui-meme.
+ *
+ * Les mots de moins de trois lettres sont ecartes : « de », « la », « et » sont dans tout, donc ne
+ * discriminent rien, et un mot present partout ferait remonter tout le corpus.
+ */
+/** Les mots de la demande, et ceux qu'on y ajoute pour rattraper une autre formulation. */
+interface MotsDeRecherche {
+  /** Ce que l'utilisateur a REELLEMENT ecrit. */
+  demandes: string[]
+  /** Ce qu'on ajoute : familles connues et voisinage appris. Moins sur, donc moins lourd. */
+  elargis: string[]
+}
+
+/**
+ * DEUX POIDS, PAS UN.
+ *
+ * Mesure sur le corpus reel (1190 conversations) : en melangeant les mots demandes et les mots
+ * ajoutes, la requete montait a quarante termes -- et les conversations FOURRE-TOUT, dont un seul
+ * message fait des milliers de caracteres, en contenaient forcement quatre ou cinq. Un scout de
+ * veille sortait avant la conversation qui parlait justement de pastilles.
+ *
+ * Un mot AJOUTE est une hypothese ; un mot DEMANDE est une donnee. Les compter pareil laissait
+ * l'hypothese decider.
+ */
+function motsCherchables(terme: string, voisinage: IndexVoisinage): MotsDeRecherche {
+  // Les mots ENTIERS d'abord : le lexique des familles et l'index de voisinage sont indexes sur des
+  // mots, pas sur des racines. Raciner avant de les consulter faisait chercher « worktr » dans une
+  // table qui contient « worktree » -- l'expansion rendait alors silencieusement zero.
+  const entiers = motsDe(terme).slice(0, 12)
+  const demandes = [...new Set(entiers.map(racine))]
+  const vus = new Set(demandes)
+  const elargis: string[] = []
+  for (const mot of entiers) {
+    // Deux voisins par mot, pas trois : au-dela l'elargissement pese plus que la demande.
+    // Chaque table avec SA cle : le lexique est indexe sur des mots entiers, l'index de voisinage sur
+    // des racines (il est construit a partir des memes racines que la recherche). Les interroger avec
+    // la mauvaise cle rend zero, sans erreur -- une expansion muette qui n'elargit rien.
+    for (const proche of [...memeFamille(mot), ...voisinage.voisins(racine(mot)).slice(0, 2)]) {
+      const rac = racine(proche)
+      if (vus.has(rac)) continue
+      vus.add(rac)
+      elargis.push(rac)
+    }
+  }
+  return { demandes, elargis: elargis.slice(0, 12) }
+}
+
+/**
+ * Longueur de la racine.
+ *
+ * Six lettres collisionnaient sur le mot le plus frequent de ce corpus : `racine('conversation')`
+ * et `racine('conversion')` valaient tous deux « conver ». Chercher « conversion d'un fichier »
+ * remontait donc toute conversation parlant de... conversations, c'est-a-dire presque toutes. Neuf
+ * lettres separent les deux (« conversat » / « conversio ») tout en absorbant encore les pluriels et
+ * les accords, qui portent sur la FIN du mot.
+ */
+const SEUIL_RACINE = 6
+
+/**
+ * La RACINE d'un mot : ses premieres lettres.
+ *
+ * « pastilles » ne trouvait pas « pastille », ni « couleurs » « couleur » : une demande est
+ * rarement au meme nombre que la reponse. Tronquer garde le discriminant tout en absorbant les
+ * pluriels et les accords -- et c'est un simple `indexOf`, donc instantane sur un corpus de 28 Mo
+ * parcouru a chaque tour.
+ *
+ * Ce n'est PAS de la recherche semantique : « badges » ne trouvera jamais « pastilles ». Pour un
+ * vrai synonyme, le Brain reste l'outil.
+ */
+function racine(mot: string): string {
+  return mot.length > SEUIL_RACINE ? mot.slice(0, SEUIL_RACINE) : mot
+}
+
+/**
+ * Les mots qui annoncent que ce qui precede n'est PLUS vrai.
+ *
+ * Un extrait coupe juste avant l'un d'eux fait passer un choix abandonne pour le choix actuel. Ce
+ * n'est pas une imprecision, c'est un contresens : le lecteur agit sur une consigne revoquee.
+ */
+const REVIREMENTS =
+  /\b(mais|cependant|toutefois|neanmoins|finalement|en fait|plutot|abandonn\w*|remplac\w*|annul\w*|revenu|desormais|depuis)\b/i
+
+/**
+ * Le mot du MESSAGE qui correspond a une racine cherchee, ou rien.
+ *
+ * Un `indexOf` de la racine dans le texte suffisait a savoir SI ca matche, jamais QUOI. Or c'est le
+ * mot rencontre qui dit la valeur du match : « conversion » retrouve « conversations » par leurs
+ * sept premieres lettres, mais « conversations » est le mot le plus frequent de ce corpus -- ce
+ * match n'apprend rien. « notification » retrouve « notifier » par six lettres, et « notifier » est
+ * rare : ce match, lui, vaut quelque chose.
+ *
+ * Ponderer la racine ne pouvait pas les distinguer : les deux partagent la MEME racine, donc la
+ * meme rarete. Il faut le mot entier. C'est ce qui permet de tenir les deux bords que l'audit a
+ * montres inconciliables avec un simple seuil -- separer « conversion » de « conversation » SANS
+ * casser « notification » -> « notifier ».
+ */
+function motCorrespondant(motsDuMessage: readonly string[], racineCherchee: string): string | undefined {
+  return motsDuMessage.find((mot) => mot.startsWith(racineCherchee))
+}
+
+/**
+ * La FENETRE autour du terme trouve, prise sur le texte d'ORIGINE (accents et casse intacts).
+ *
+ * Rendre le message entier noierait le terme dans des milliers de caracteres ; n'en rendre que le
+ * terme ne dirait pas dans quelle phrase il se trouve. Les bords coupes sont marques : une
+ * troncature muette se lit comme un texte complet.
+ *
+ * ET SURTOUT : si la suite du message REVIENT sur ce qui vient d'etre dit, la fenetre s'etend pour
+ * l'inclure. Sans cela « on utilisait l'ambre [...] mais on a ABANDONNE cette convention » se
+ * lisait comme une affirmation encore valide -- le mode d'echec meme que ce rappel doit eviter, et
+ * qu'un simple « ... » ne signalait pas (il ne distingue pas « coupe sans consequence » de « coupe
+ * au point d'inverser le sens »).
+ */
+function fenetre(origine: string, position: number, longueur: number): string {
+  const MARGE = 120
+  /** Jusqu'ou chercher un revirement au-dela de la marge : une phrase ou deux, pas le message. */
+  const PORTEE_REVIREMENT = 400
+  const debut = Math.max(0, position - MARGE)
+  let fin = Math.min(origine.length, position + longueur + MARGE)
+
+  // La suite immediate revient-elle sur ce qui precede ? Si oui, on l'inclut jusqu'a la fin de sa
+  // phrase -- mieux vaut un extrait plus long qu'un extrait qui dit le contraire du message.
+  const suite = origine.slice(fin, Math.min(origine.length, fin + PORTEE_REVIREMENT))
+  // Cherche sur la forme REPLIEE : la liste est en ASCII, la suite garde ses accents. « plutôt » et
+  // « néanmoins » -- les formes normales en francais -- ne matchaient pas, donc le correctif etait
+  // MUET sur les connecteurs les plus courants. Les positions se correspondent : `replier` ne change
+  // ni la longueur ni l'ordre des caracteres (NFD puis suppression des seuls diacritiques isoles).
+  const contraste = replier(suite).match(REVIREMENTS)
+  if (contraste?.index !== undefined) {
+    const finDePhrase = suite.indexOf('.', contraste.index)
+    const jusqua = finDePhrase >= 0 ? finDePhrase + 1 : suite.length
+    fin = Math.min(origine.length, fin + jusqua)
+  }
+
+  const coeur = origine.slice(debut, fin).replace(/\s+/g, ' ').trim()
+  return (debut > 0 ? '...' : '') + coeur + (fin < origine.length ? '...' : '')
+}
+
 export function lastUserMessageAt(messages: readonly Msg[]): number | undefined {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
@@ -205,6 +370,7 @@ export class ConversationStore {
    * reprendre au démarrage — l'annoncer interrompu serait faux. Absent = plus rien ne reprend.
    */
   hydrate(saved: Conversation[], options?: { resumableTurnIds?: ReadonlySet<string> }): boolean {
+    this.voisinageCache = undefined
     const resumable = options?.resumableTurnIds
     this.conversations.clear()
     let max = 0
@@ -369,6 +535,7 @@ export class ConversationStore {
     provider: string
     autoKaizen?: AutoKaizenConversationLink
   }): Conversation {
+    this.voisinageCache = undefined
     const ts = this.now()
     const id = this.nextUniqueConversationId()
     const conversation: Conversation = {
@@ -438,6 +605,7 @@ export class ConversationStore {
     id: string,
     m: { role: 'user' | 'assistant'; content: string; attachments?: AttachmentMeta[] }
   ): Conversation {
+    this.voisinageCache = undefined
     const conversation = this.conversations.get(id)
     if (!conversation) {
       throw new Error(`Conversation inconnue: ${id}`)
@@ -468,6 +636,9 @@ export class ConversationStore {
     user: { content: string; attachments?: AttachmentMeta[] },
     assistant: { turnId: string; runtime?: ChatTurnRuntime }
   ): Conversation {
+    // Le chemin REEL des messages passe ICI, pas par `append` : l'index doit suivre celui-la
+    // en premier. Corrige apres audit -- j'avais invalide les chemins que mes tests exercaient.
+    this.voisinageCache = undefined
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
@@ -510,6 +681,9 @@ export class ConversationStore {
     id: string,
     assistant: { turnId: string; runtime?: ChatTurnRuntime }
   ): Conversation {
+    // Le chemin REEL des messages passe ICI, pas par `append` : l'index doit suivre celui-la
+    // en premier. Corrige apres audit -- j'avais invalide les chemins que mes tests exercaient.
+    this.voisinageCache = undefined
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
@@ -539,6 +713,7 @@ export class ConversationStore {
 
   /** Applique un événement au tour structuré ; les deltas demandent un checkpoint regroupé. */
   applyTurnEvent(id: string, turnId: string, event: ChatTurnEvent): Conversation {
+    this.voisinageCache = undefined
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const message = applyTurnEventToMessages(conversation.messages, turnId, event)
@@ -554,6 +729,29 @@ export class ConversationStore {
     return conversation
   }
 
+  /**
+   * Index de voisinage, construit a la PREMIERE recherche puis garde.
+   *
+   * Invalide des qu'un message arrive : un index perime rapprocherait selon un corpus qui n'existe
+   * plus, et c'est exactement le genre d'oracle en retard qui fait conclure faux avec assurance.
+   */
+  private voisinageCache?: IndexVoisinage
+
+  private voisinage(): IndexVoisinage {
+    if (!this.voisinageCache) {
+      const textes: string[] = []
+      for (const conversation of this.conversations.values()) {
+        for (const message of conversation.messages) {
+          if (typeof message.content === 'string') textes.push(message.content)
+        }
+      }
+      // Les mots ENTIERS au decoupage, la racine fournie a part : l'index compte alors la presence
+      // des deux, ce dont la ponderation par le mot rencontre a besoin pour discriminer.
+      this.voisinageCache = construireVoisinage(textes, (texte) => motsDe(texte), racine)
+    }
+    return this.voisinageCache
+  }
+
   /** Récupère une conversation par id, ou undefined si absente. */
   get(id: string): Conversation | undefined {
     return this.conversations.get(id)
@@ -562,6 +760,137 @@ export class ConversationStore {
   /** Liste toutes les conversations, triées par updatedAt décroissant. */
   list(): Conversation[] {
     return [...this.conversations.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+
+  /**
+   * CHERCHER par CONTENU dans tout le corpus.
+   *
+   * La capacité qui manquait, et dont l'absence poussait au pire chemin. Mesuré en conv-1407 le
+   * 2026-08-26 : l'orchestrateur, incapable de retrouver de quoi parlait « remake les pastilles de
+   * couleurs », a fouillé le CODE SOURCE — `find_in_files` était la seule recherche par contenu de
+   * son catalogue. Vingt inspections, zéro conversation lue, un run arrêté à 0,96 $.
+   *
+   * Littérale et non sémantique, délibérément : le corpus est déjà en mémoire, un parcours est
+   * instantané et se PROUVE par un test, là où un index sémantique ajoute une latence et un état à
+   * tenir à jour. Le Brain reste là pour ce que le littéral ne sait pas trouver.
+   *
+   * Insensible à la casse ET aux accents : celui qui tape « a jour » cherche « à jour ». Une
+   * recherche qui punit la frappe rapide n'est pas utilisée deux fois.
+   */
+  search(
+    terme: string,
+    options?: { limite?: number; extraitsParConversation?: number }
+  ): ConversationRecherche[] {
+    const { demandes, elargis } = motsCherchables(terme, this.voisinage())
+    // Un terme vide rendrait TOUT le corpus : ce n'est pas une recherche, c'est un dump.
+    if (demandes.length === 0) return []
+    // Un mot demande vaut trois mots ajoutes : l'hypothese aide, elle ne decide pas.
+    const POIDS_DEMANDE = 3
+    const index = this.voisinage()
+    const limite = Math.max(1, Math.min(50, Math.floor(options?.limite ?? 10) || 10))
+    const parConversation = Math.max(
+      1,
+      Math.min(20, Math.floor(options?.extraitsParConversation ?? 3) || 3)
+    )
+    const trouvees: Array<ConversationRecherche & { score: number }> = []
+    for (const conversation of this.list()) {
+      const extraits: ConversationExtrait[] = []
+      /*
+       * Le score est le meilleur score d'UN SEUL message, pas le cumul de la conversation.
+       *
+       * Mesure sur le corpus REEL (1191 conversations) : cumule, le score favorisait les
+       * conversations les plus LONGUES -- elles finissent par contenir tous les mots, disperses sur
+       * des centaines de messages sans rapport entre eux. « badges » remontait un scout de veille
+       * avant la conversation qui expliquait justement le code couleur. Les mots comptent quand ils
+       * sont ENSEMBLE : c'est la proximite qui fait le sens, pas la presence.
+       */
+      let meilleurScore = 0
+      for (const [rang, message] of conversation.messages.entries()) {
+        if (typeof message.content !== 'string') continue
+        const replie = replier(message.content)
+        const motsDuMessage = motsDe(message.content)
+        let premierePosition = -1
+        let motsIci = 0
+        /*
+         * La ponderation porte sur le mot RENCONTRE, pas sur la racine cherchee.
+         *
+         * L'audit a montre que deux exigences tiraient en sens inverse : separer « conversion » de
+         * « conversation » (sept lettres communes) sans casser « notification » -> « notifier »
+         * (six lettres communes). Aucun seuil de racine ne peut les satisfaire toutes deux. Mais
+         * « conversations » est omnipresent ici et « notifier » est rare : c'est la rarete du mot
+         * TROUVE qui les separe, et elle ne dependait pas du seuil.
+         */
+        const peser = (racineCherchee: string, poids: number): void => {
+          const trouve = motCorrespondant(motsDuMessage, racineCherchee)
+          if (!trouve) return
+          const position = replie.indexOf(racineCherchee)
+          motsIci += poids * index.rarete(racine(trouve)) * index.rarete(trouve)
+          if (position >= 0 && (premierePosition < 0 || position < premierePosition)) {
+            premierePosition = position
+          }
+        }
+        for (const mot of demandes) peser(mot, POIDS_DEMANDE)
+        for (const mot of elargis) peser(mot, 1)
+        if (premierePosition < 0) continue
+        /*
+         * NORMALISE PAR LA LONGUEUR.
+         *
+         * Un message de 50 000 caracteres contient forcement « pastille », « badge » et « puce » --
+         * sans parler de pastilles pour autant. Une phrase de dix mots qui en contient deux, si.
+         * C'est la DENSITE qui dit la pertinence, pas le compte brut.
+         *
+         * J'avais ecrit puis ANNULE ce critere plus tot dans ce chantier, faute d'oracle : je le
+         * reglais sur un `conversations.json` en retard sur la memoire vive, qui ne contenait meme
+         * pas la cible. Il revient ici mesure sur un corpus A JOUR de 1190 conversations, ou
+         * l'absence de normalisation faisait sortir un scout de veille avant la conversation qui
+         * parlait justement de pastilles.
+         *
+         * Racine carree et non division directe : penaliser proportionnellement ecraserait tout
+         * message long, y compris celui qui repond vraiment.
+         */
+        const densite = motsIci / Math.sqrt(Math.max(60, message.content.length))
+        if (densite > meilleurScore) meilleurScore = densite
+        if (extraits.length < parConversation) {
+          extraits.push({
+            role: message.role,
+            ts: message.ts,
+            extrait: fenetre(message.content, premierePosition, 0)
+          })
+          // La REPONSE qui suit la question porte le sens que la question demandait. « le code
+          // couleur de la pastille » retrouve la conversation ; « ambre = en cours » est ce dont le
+          // lecteur a besoin. Rendre la question sans la reponse obligerait a un second aller-retour
+          // pour la moitie utile de l'echange.
+          const suivant = conversation.messages[rang + 1]
+          if (
+            message.role === 'user' &&
+            suivant?.role === 'assistant' &&
+            typeof suivant.content === 'string' &&
+            suivant.content.trim() &&
+            extraits.length < parConversation
+          ) {
+            extraits.push({
+              role: suivant.role,
+              ts: suivant.ts,
+              extrait: fenetre(suivant.content, 0, 0)
+            })
+          }
+        }
+      }
+      if (meilleurScore === 0) continue
+      trouvees.push({
+        id: conversation.id,
+        title: conversation.title,
+        provider: conversation.provider,
+        updatedAt: conversation.updatedAt,
+        messageCount: conversation.messages.length,
+        extraits,
+        score: meilleurScore
+      })
+    }
+    // Classe par NOMBRE DE MOTS retrouves avant la recence : une conversation qui porte trois mots
+    // de la demande l'eclaire mieux qu'une plus recente qui n'en porte qu'un.
+    trouvees.sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt)
+    return trouvees.slice(0, limite).map(({ score: _score, ...reste }) => reste)
   }
 
   /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */
@@ -714,6 +1043,7 @@ export class ConversationStore {
 
   /** Supprime une conversation. Retourne true si elle existait. */
   remove(id: string): boolean {
+    this.voisinageCache = undefined
     const existed = this.conversations.delete(id)
     if (existed) this.changed(id)
     return existed

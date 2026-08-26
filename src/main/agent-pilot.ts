@@ -886,10 +886,29 @@ export class AgentPilot {
       ? this.comptesRendusNonVus.get(conversationId)
       : undefined
     if (conversationId) this.comptesRendusNonVus.delete(conversationId)
+    /*
+     * LE RAPPEL EST INJECTE, PAS ATTENDU.
+     *
+     * Les outils de recherche existent (`conversation_search`, `conversation_read`), mais rien ne
+     * garantit que le modele PENSE a les appeler -- et il n'y pensera pas, parce qu'il ne sait pas
+     * qu'il ignore quelque chose : « remake les pastilles de couleurs » se lit comme une demande
+     * complete. Attendre qu'il s'en avise, c'est reconduire conv-1407 en esperant mieux.
+     *
+     * Ne se declenche que sur une demande BREVE, et exclut la conversation courante : voir les
+     * bornes dans `rappel-conversations.ts`.
+     */
+    // Dependance OPTIONNELLE, et assumee comme telle : un rappel est un CONFORT. Un tour qui
+    // echouerait faute de rappel ferait dependre chaque message d'une commodite -- et les bus
+    // factices des tests, qui n'implementent que ce qu'ils exercent, tomberaient avec lui.
+    const rappelConversations =
+      typeof this.bus.rappelPourDemande === 'function'
+        ? this.bus.rappelPourDemande(lastUserMessage?.content, conversationId)
+        : ''
     const convo: string[] = buildTurnMessages({
       snapshot,
       brainContext,
       memoryEcho,
+      rappelConversations,
       skillBody,
       history,
       resumeSessionId,
