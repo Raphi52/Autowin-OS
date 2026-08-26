@@ -24,10 +24,24 @@ import { useCallback, useEffect, useState, type JSX } from 'react'
  * le seul indice qui permet de deviner qu'un bureau contient du travail sans l'ouvrir.
  */
 
+type VerdictBureau = 'a-reprendre' | 'trie' | 'sans-valeur'
+
+/**
+ * Le verdict est DERIVE cote principal (`verdict-bureau.ts`), jamais stocke : un etat ecrit a cote
+ * du reel s'en desynchronise, un etat derive ne peut pas mentir plus longtemps que sa preuve.
+ * Optionnel ici parce qu'un preload plus ancien ne le porte pas — la vue reste lisible sans.
+ */
+const LIBELLE_VERDICT: Record<VerdictBureau, string> = {
+  'a-reprendre': 'À reprendre',
+  trie: 'Trié',
+  'sans-valeur': 'Sans valeur'
+}
+
 interface TravailNonPublie {
   agentId: string
   date: string
   fichiers: string[]
+  verdict?: VerdictBureau
 }
 
 export function BureauxConserves(): JSX.Element {
@@ -104,6 +118,14 @@ export function BureauxConserves(): JSX.Element {
           {bureaux.map((bureau) => (
             <li key={bureau.agentId} className="bureaux-conserves-item">
               <span className="bureaux-conserves-nom">{bureau.agentId}</span>
+              {bureau.verdict && (
+                <span
+                  className={`bureaux-conserves-verdict is-${bureau.verdict}`}
+                  data-testid={`verdict-${bureau.agentId}`}
+                >
+                  {LIBELLE_VERDICT[bureau.verdict]}
+                </span>
+              )}
               <span className="bureaux-conserves-meta">
                 {bureau.date} · {bureau.fichiers.length} fichiers
               </span>

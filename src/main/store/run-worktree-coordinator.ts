@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
+import type { VerdictBureau } from './verdict-bureau'
 import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from './worktree-manager'
 import { delaiDeReprise, ESSAIS_MAX } from './delai-de-reprise'
 import { INTERVALLE_BALAYAGE_MS, travauxARepecher } from './repechage-automatique'
@@ -1217,7 +1218,12 @@ export class RunWorktreeCoordinator {
   }
 
   /** Tous les travaux finis mais non publies, avec leurs fichiers. Lecture seule, a la demande. */
-  travauxNonPublies(): Array<{ agentId: string; date: string; fichiers: string[] }> {
+  travauxNonPublies(): Array<{
+    agentId: string
+    date: string
+    fichiers: string[]
+    verdict?: VerdictBureau
+  }> {
     // Sans borne ici : c'est un geste EXPLICITE de l'utilisateur, pas un rafraichissement d'ecran.
     return this.manager.apercuTravauxNonPublies?.('HEAD', 100) ?? []
   }
@@ -1419,6 +1425,8 @@ export class RunWorktreeCoordinator {
   }
 
   async discardHeldAsync(runId: string): Promise<boolean> {
+    // Jeter un travail retenu le fait SORTIR du recensement : meme raison qu'en `applyFinalize`.
+    this.invaliderRecensement()
     const tracked = this.runs.get(runId)
     if (
       !tracked ||
@@ -1531,6 +1539,17 @@ export class RunWorktreeCoordinator {
   }
 
   private applyFinalize(tracked: Tracked, res: FinalizeResult): void {
+    /*
+     * LE COTE SORTIE DU RECENSEMENT, oublie au cycle 1.
+     *
+     * Mon commentaire disait « un travail retenu y ENTRE, un travail fusionne en SORT » et je
+     * n'avais cable que l'entree (`end`/`endAsync`). Deux chemins prouves passaient a cote : la
+     * resolution de conflit appelle `finalizeAsync` DIRECTEMENT sans passer par `endAsync`, et une
+     * fusion reussie depuis le Hub laissait donc le cache annoncer jusqu'a 60 s un travail deja
+     * integre. C'est le defaut d'origine EN MIROIR : l'agent propose de fusionner ce qui n'existe
+     * plus. `applyFinalize` est le point de passage que TOUS les chemins traversent.
+     */
+    this.invaliderRecensement()
     // Point de passage UNIQUE de tout refus d'integration : c'est donc ici qu'on le COMPTE, une fois
     // par tentative. Le tracage ne doit jamais casser l'action tracee — d'ou le try muet.
     if (res.outcome === 'blocked' || res.outcome === 'conflict') {
