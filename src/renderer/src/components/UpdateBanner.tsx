@@ -27,6 +27,17 @@ interface UpdateInfo {
  */
 const POLL_INTERVAL_MS = 180_000
 
+/**
+ * Rail REPLIÉ : le libellé plein débordait du bouton (36 px de large). Une icône par voie, le nom
+ * reste porté par `aria-label` / `title` — le sens n'est pas perdu, il est déplacé.
+ */
+const UPDATE_STRATEGY_GLYPHS: Record<UpdateStrategy, string> = {
+  'fast-forward': '⇧',
+  merge: '⑃',
+  rebase: '⤳',
+  'switch-main': '⎇'
+}
+
 function errorMessage(reason: unknown, fallback: string): string {
   return reason instanceof Error && reason.message ? reason.message : fallback
 }
@@ -263,13 +274,18 @@ export function UpdateBanner({
             <button
               key={strategy}
               type="button"
-              className="rail-update-choice"
+              className={`rail-update-choice${collapsed ? ' is-glyph' : ''}`}
               data-testid={`update-choice-${strategy}`}
               disabled={applying !== null}
-              title={UPDATE_STRATEGY_HINTS[strategy]}
+              aria-label={`${UPDATE_STRATEGY_LABELS[strategy]} — ${UPDATE_STRATEGY_HINTS[strategy]}`}
+              title={`${UPDATE_STRATEGY_LABELS[strategy]} — ${UPDATE_STRATEGY_HINTS[strategy]}`}
               onClick={() => void apply(strategy)}
             >
-              {UPDATE_STRATEGY_LABELS[strategy]}
+              {collapsed ? (
+                <span aria-hidden="true">{UPDATE_STRATEGY_GLYPHS[strategy]}</span>
+              ) : (
+                UPDATE_STRATEGY_LABELS[strategy]
+              )}
             </button>
           ))}
         </div>
