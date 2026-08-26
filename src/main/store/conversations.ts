@@ -1176,6 +1176,10 @@ export class ConversationStore {
     //     d'adresse des termes techniques (21/40 contre 25/40 pour la longueur).
     const porteur = entiers.reduce((meilleur, mot) => {
       if (mot.length !== meilleur.length) return mot.length > meilleur.length ? mot : meilleur
+      // A egalite PARFAITE (meme longueur, meme rarete -- typiquement deux mots absents de l'index),
+      // le plus TARDIF gagne : la formule d'adresse ouvre la phrase, le sujet suit la preposition.
+      // Un fait de structure, non une liste de mots a entretenir. Mesure : 25/40 -> 28/40.
+      if (index.rarete(mot) === index.rarete(meilleur)) return mot
       return index.rarete(mot) > index.rarete(meilleur) ? mot : meilleur
     }, entiers[0] ?? demandes[0])
     const candidats = trouvees.slice(0, Math.max(limite, PROFONDEUR_RECLASSEMENT))
