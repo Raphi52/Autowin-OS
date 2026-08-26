@@ -12,6 +12,7 @@ import { hasInterruptionNotice, interruptionNotice } from '../runs/run-interrupt
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
 import { canonicalProjectPath } from '../../shared/project-path'
+import { memeFamille } from './synonymes'
 
 // Store en mémoire des conversations : un PROVIDER qui répond, un DOSSIER qui range.
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -152,14 +153,14 @@ function replier(texte: string): string {
  * discriminent rien, et un mot present partout ferait remonter tout le corpus.
  */
 function motsCherchables(terme: string): string[] {
-  return [
-    ...new Set(
-      replier(terme)
-        .split(/[^a-z0-9_.:-]+/)
-        .filter((mot) => mot.length >= 3)
-        .map(racine)
-    )
-  ].slice(0, 12)
+  const mots = replier(terme)
+    .split(/[^a-z0-9_.:-]+/)
+    .filter((mot) => mot.length >= 3)
+  // Chaque mot tire avec lui les AUTRES facons de le dire dans ce produit : « badges » cherche aussi
+  // « pastille ». Sans cette expansion, retrouver un echange exige de se souvenir de sa propre
+  // formulation -- ce que l'on vient precisement chercher.
+  const elargis = mots.flatMap((mot) => [mot, ...memeFamille(mot)])
+  return [...new Set(elargis.map(racine))].slice(0, 40)
 }
 
 /**
