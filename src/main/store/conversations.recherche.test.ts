@@ -127,3 +127,54 @@ describe('recherche par contenu dans le corpus des conversations', () => {
     expect(store.search('terme commun', { limite: 5 }).length).toBe(5)
   })
 })
+
+/**
+ * LA PENALITE DE LONGUEUR EST BORNEE EN HAUT.
+ *
+ * Mesure du 2026-08-26 sur le corpus reel (1201 conversations), avec un oracle de 10 requetes dont
+ * les cibles sont etablies par comptage de tokens et non par intuition : le rappel@8 valait 7/10 sur
+ * le mot seul mais 2/10 des que ce mot etait pose dans une phrase -- et la phrase ramenait les MEMES
+ * quatre conversations quel que soit le terme distinctif, preuve que ce terme ne pesait rien. Les
+ * messages qui portaient le terme rare faisaient 1677 a 7886 caracteres (diviseur 41 a 89) ; les
+ * gagnantes constantes avaient une mediane de 93 a 609 (diviseur 8 a 25) : un facteur onze offert a
+ * la brievete, quel que soit le contenu. Diviseur borne au 3e quartile -> 8/10 et 4/10.
+ *
+ * COMMENT CE TEST DISCRIMINE, car ce n'est pas evident et une premiere version ne discriminait RIEN.
+ * Au-dela du plafond, deux messages qui portent le meme terme obtiennent le MEME score : l'ordre est
+ * alors decide par la recence. Le montage exploite exactement cela -- la plus longue est creee EN
+ * DERNIER, donc la plus recente. Avec le plafond elle passe devant (scores egaux, recence tranche) ;
+ * sans lui, sa longueur la fait reculer derriere la courte malgre sa recence. L'ordre S'INVERSE :
+ * mesure dans les deux etats avant d'ecrire l'assertion, et le sabotage du plafond fait bien rougir.
+ */
+describe('penalite de longueur, bornee au 3e quartile', () => {
+  const PLAFOND = 564
+  const bourre = (n: number): string => 'contexte neutre sans rapport. '.repeat(Math.ceil(n / 30))
+
+  /** La COURTE est creee d'abord : la longue est donc la plus recente des deux. */
+  function magasin(courte: number, longue: number): ConversationStore {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const c = store.create({ title: 'Courte', provider: 'claude' })
+    store.append(c.id, { role: 'assistant', content: `zarbitrophage ${bourre(courte)}` })
+    const l = store.create({ title: 'Longue', provider: 'claude' })
+    store.append(l.id, { role: 'assistant', content: `zarbitrophage ${bourre(longue)}` })
+    return store
+  }
+
+  it('au-dela du plafond, la longueur ne decide plus : la plus recente passe devant', () => {
+    const titres = magasin(PLAFOND * 2, PLAFOND * 12).search('zarbitrophage').map((r) => r.title)
+    expect(titres).toEqual(['Longue', 'Courte'])
+  })
+
+  it('et l’ecart de longueur, meme multiplie par vingt, n’y change rien', () => {
+    const titres = magasin(PLAFOND * 2, PLAFOND * 40).search('zarbitrophage').map((r) => r.title)
+    expect(titres).toEqual(['Longue', 'Courte'])
+  })
+
+  it('en DESSOUS du plafond, la longueur discrimine encore -- l’original est preserve', () => {
+    // Contre-epreuve : le plafond ne doit pas avoir aplani la normalisation la ou elle sert
+    // vraiment. Ici la courte doit devancer la longue MALGRE sa moindre recence.
+    const titres = magasin(60, PLAFOND - 120).search('zarbitrophage').map((r) => r.title)
+    expect(titres).toEqual(['Courte', 'Longue'])
+  })
+})
