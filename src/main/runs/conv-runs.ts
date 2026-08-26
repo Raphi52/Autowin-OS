@@ -134,6 +134,24 @@ Blockers:
   return path
 }
 
+/**
+ * Plafond de RUN.md LUS en cherchant un workflow réutilisable. Distinct de `CONV_RUNS_READ_LIMIT`
+ * (qui borne l'AFFICHAGE d'une liste) : ici on ne cherche qu'UN candidat, et les candidats sont
+ * déjà réduits à ceux qui portent le slug de la tâche.
+ */
+export const CONV_RUN_REUSE_READ_LIMIT = 200
+
+/**
+ * `<slug>-<ts36>-workspace` → l'instant de création porté par le NOM du dossier. Lire le nom évite
+ * un `stat` par dossier, c'est-à-dire exactement l'I/O que cette borne existe pour supprimer.
+ * Un nom sans horodatage (dossier écrit à la main) est traité comme le plus ancien possible.
+ */
+function workspaceStamp(name: string): number {
+  const marque = /-([0-9a-z]+)-workspace$/.exec(name)
+  const ts = marque ? Number.parseInt(marque[1], 36) : Number.NaN
+  return Number.isFinite(ts) ? ts : 0
+}
+
 /** Réutilise un workflow ouvert de la même conversation/tâche, sinon en crée un. */
 export async function reuseOrCreateConvRun(
   convId: string,
@@ -146,7 +164,39 @@ export async function reuseOrCreateConvRun(
     // Les RUN d'une conversation vivent sous leur propre dossier : borner le scan ici évite
     // de relire tout l'historique Autowin avant chaque envoi.
     const conversationRoot = join(root, convId)
-    for (const workspace of await readdir(conversationRoot)) {
+    /*
+     * DEUX BORNES, PARCE QU'IL Y A DEUX FAÇONS DE FAIRE ENFLER CE DOSSIER.
+     *
+     * Sans elles, la recherche lisait chaque `RUN.md` jusqu'à trouver un run ouvert apparié — donc
+     * TOUS quand aucun n'apparie, ce qui est le cas ORDINAIRE d'une nouvelle tâche. Mesuré le
+     * 2026-08-26 : 10 037 workspaces sous une seule conversation, 8,0 s à froid et 1,2 s à chaud
+     * pour UN appel, deux appels par envoi. Le coût grandissait avec l'historique de la
+     * conversation. `listConvRuns` avait reçu sa borne le 2026-08-18 ; celle-ci avait été oubliée.
+     *
+     * 1. SLUG — un run réutilisable porte forcément le même nom de dossier que la tâche demandée :
+     *    `slugify` et `comparableTask` dérivent de la MÊME suite de tokens normalisés, donc deux
+     *    tâches appariables produisent le même slug. Filtrer sur le nom écarte les tâches sans
+     *    rapport sans ouvrir un seul fichier. (Un dossier écrit par une version antérieure de
+     *    `slugify` cesserait d'être candidat : on créerait un nouveau workflow au lieu d'en rouvrir
+     *    un ancien — une dégradation visible, jamais une perte.)
+     * 2. RÉCENCE — la même tâche relancée sans fin resterait, elle, non bornée. On garde les
+     *    `CONV_RUN_REUSE_READ_LIMIT` plus récents, et la troncature est JOURNALISÉE, jamais muette :
+     *    même parti pris que le listage.
+     */
+    const prefixe = `${slugify(task)}-`
+    const tous = (await readdir(conversationRoot)).filter((nom) => nom.startsWith(prefixe))
+    const candidats = tous
+      .sort((a, b) => workspaceStamp(b) - workspaceStamp(a))
+      .slice(0, CONV_RUN_REUSE_READ_LIMIT)
+    if (tous.length > candidats.length) {
+      console.warn(
+        '[conv-runs]',
+        convId,
+        `recherche de workflow tronquée : ${candidats.length} runs examinés, ` +
+          `${tous.length - candidats.length} plus anciens non lus`
+      )
+    }
+    for (const workspace of candidats) {
       const path = join(conversationRoot, workspace, 'RUN.md')
       try {
         const md = await readFile(path, 'utf8')
