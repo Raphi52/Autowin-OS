@@ -370,13 +370,20 @@
   content: '';
   animation: conversation-state-ring 1.15s ease-out infinite;
 }
+.conversation-state.is-completed {
+  color: #2fd47a;
+}
 .conversation-state.is-failed {
   color: #ff4057;
 }
-.conversation-state.is-interrupted,
-.conversation-state.is-waiting,
-.conversation-state.is-cancelled {
+.conversation-state.is-interrupted {
   color: #ffb020;
+}
+.conversation-state.is-waiting {
+  color: #a78bfa;
+}
+.conversation-state.is-cancelled {
+  color: #8b93a7;
 }
 .conversation-state.is-empty {
   opacity: 0.4;

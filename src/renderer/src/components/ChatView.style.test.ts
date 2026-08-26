@@ -87,7 +87,7 @@ describe('minimal conversation status lights', () => {
     )
     expect(css).toMatch(/\.conversation-state\.is-failed\s*{[^}]*color:\s*#ff4057/s)
     expect(css).toMatch(
-      /\.conversation-state\.is-interrupted,[^}]*\.conversation-state\.is-cancelled\s*{[^}]*color:\s*#ffb020/s
+      /\.conversation-state\.is-interrupted\s*{[^}]*color:\s*#ffb020/s
     )
     expect(css).toMatch(
       /@media \(prefers-reduced-motion: reduce\)[^{]*{[^}]*\.conversation-state\.is-running,[^}]*animation:\s*none/s
