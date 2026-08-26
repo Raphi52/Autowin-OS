@@ -372,3 +372,38 @@ describe('choix du porteur : un terme court bat le mot d’adresse', () => {
     expect(titres).toContain('Cible')
   })
 })
+
+/**
+ * LA POSITION SATURE : le dernier mot de la demande n'est pas forcement le sujet.
+ *
+ * Sans plafond, le mot le plus tardif recoit l'avantage maximal -- or « rappelle moi ... dans le
+ * projet » se termine par « projet », qui n'est pas le sujet. Mesure du 2026-08-26 : sur le cas
+ * « entoure », « projet » l'emportait de 0,1 point. Reduire le poids de la position degradait
+ * l'ensemble (116 -> 114) ; le plafonner le corrige (115 -> 116 sur l'oracle strict, 105/106 -> 106/106
+ * sur l'oracle a cibles morphologiques). Le probleme n'etait pas que la position pese trop, c'est
+ * qu'elle pesait SANS FIN.
+ */
+describe('la position sature au-dela de quelques mots', () => {
+  it('le sujet au milieu l’emporte sur le mot qui termine la phrase', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const long = 'contexte technique sans rapport particulier avec la demande. '.repeat(30)
+
+    // Douze conversations parlent du « projet » : le mot qui TERMINE la demande.
+    for (let i = 0; i < 12; i++) {
+      const b = store.create({ title: `Projet ${i}`, provider: 'claude' })
+      store.append(b.id, { role: 'user', content: `${long}${SAUT}on avance sur le projet, le projet, toujours le projet${SAUT}${long}` })
+    }
+    // La cible porte le sujet reel, place AU MILIEU de la demande.
+    const cible = store.create({ title: 'Sujet', provider: 'claude' })
+    store.append(cible.id, {
+      role: 'assistant',
+      content: `${long}${SAUT}zarbitro, zarbitro et encore zarbitro${SAUT}${long}`
+    })
+
+    const titres = store
+      .search('rappelle moi ce qu on a dit a propos de zarbitro dans le projet', { limite: 3 })
+      .map((r) => r.title)
+    expect(titres).toContain('Sujet')
+  })
+})
