@@ -124,6 +124,13 @@ export interface ConversationRecherche {
   id: string
   title: string
   provider: string
+  /**
+   * Dossier de travail, quand la conversation en a un.
+   *
+   * Expose parce qu'un appelant doit pouvoir refuser de franchir cette frontiere : sans lui, le
+   * rappel injecte pouvait porter un extrait du projet A dans le prompt du projet B.
+   */
+  projectPath?: string
   updatedAt: number
   messageCount: number
   extraits: ConversationExtrait[]
@@ -186,11 +193,18 @@ function motsCherchables(terme: string, voisinage: IndexVoisinage): MotsDeRecher
 /**
  * Longueur de la racine.
  *
- * Six lettres collisionnaient sur le mot le plus frequent de ce corpus : `racine('conversation')`
- * et `racine('conversion')` valaient tous deux « conver ». Chercher « conversion d'un fichier »
- * remontait donc toute conversation parlant de... conversations, c'est-a-dire presque toutes. Neuf
- * lettres separent les deux (« conversat » / « conversio ») tout en absorbant encore les pluriels et
- * les accords, qui portent sur la FIN du mot.
+ * SIX lettres, et il faut dire pourquoi : neuf avaient ete essayees pour separer « conversation » de
+ * « conversion », et elles cassaient `couleur`/`couleurs` et `pastille`/`pastilles` -- les deux
+ * exemples qui justifient l'existence de ce mecanisme. Aucun seuil ne satisfait les deux bords :
+ * « conversation » et « conversion » partagent SEPT lettres, « notification » et « notifier » SIX.
+ *
+ * La collision subsiste donc a ce niveau, et elle est rattrapee AILLEURS : la ponderation porte sur
+ * la rarete du mot RENCONTRE (voir `motCorrespondant`), et « conversations » est omnipresent dans ce
+ * corpus tandis que « notifier » est rare. C'est ce qui separe les deux cas, pas le seuil.
+ *
+ * Ce commentaire annonçait « neuf lettres » alors que le code en appliquait six -- un audit l'a
+ * releve. Un commentaire qui decrit une valeur que le code ne porte pas est pire qu'un code nu : il
+ * fait renoncer le lecteur a verifier.
  */
 const SEUIL_RACINE = 6
 
@@ -1014,6 +1028,7 @@ export class ConversationStore {
         id: conversation.id,
         title: conversation.title,
         provider: conversation.provider,
+        ...(conversation.projectPath ? { projectPath: conversation.projectPath } : {}),
         updatedAt: conversation.updatedAt,
         messageCount: conversation.messages.length,
         extraits,

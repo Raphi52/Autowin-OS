@@ -1,3 +1,4 @@
+import { canonicalProjectPath } from '../shared/project-path'
 import type { ConversationStore } from './store/conversations'
 
 /**
@@ -65,8 +66,21 @@ export function rappelDesEchangesPasses(
    * Absent (appelant qui ne le connait pas) : aucun rappel. Se taire coute une commodite ; deviner
    * coute une fuite.
    */
-  fournisseurCourant: string | undefined
+  fournisseurCourant: string | undefined,
+  /**
+   * Dossier de travail de la conversation COURANTE. Le rappel ne franchit pas cette frontiere.
+   *
+   * Le cloisonnement par fournisseur fermait la fuite vers un TIERS. Il ne fermait pas la fuite vers
+   * un AUTRE CLIENT : deux conversations servies par le meme moteur mais rattachees a deux projets
+   * differents pouvaient se rappeler l'une l'autre. Dans un cabinet qui travaille pour plusieurs
+   * clients, un extrait du projet A entre alors dans le prompt du projet B et part sur le reseau.
+   *
+   * `undefined` des DEUX cotes signifie « aucun projet », le cas courant : ces conversations
+   * continuent de se rappeler. La frontiere ne se dresse qu'entre deux projets NOMMES.
+   */
+  projetCourant?: string
 ): string {
+  const projetVoulu = canonicalProjectPath(projetCourant)
   const terme = (demande ?? '').trim()
   if (!terme || terme.length > LONGUEUR_QUI_SE_SUFFIT) return ''
   if (!fournisseurCourant) return ''
@@ -75,6 +89,10 @@ export function rappelDesEchangesPasses(
     .search(terme, { limite: 3, extraitsParConversation: 2 })
     .filter((conversation) => conversation.id !== conversationCouranteId)
     .filter((conversation) => conversation.provider === fournisseurCourant)
+    // Les deux cotes sous forme CANONIQUE : le store normalise `projectPath` a l'ecriture, comparer
+    // une forme brute aurait produit un cloisonnement TROP DUR -- jamais aucun rappel, sans erreur ni
+    // message. Un filtre qui refuse tout ressemble a un filtre qui marche.
+    .filter((conversation) => canonicalProjectPath(conversation.projectPath) === projetVoulu)
   if (trouvees.length === 0) return ''
 
   const lignes: string[] = [EN_TETE]
