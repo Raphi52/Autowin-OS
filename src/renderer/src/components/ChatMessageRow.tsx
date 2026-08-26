@@ -30,9 +30,13 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
         <span className="msg-role">Toi</span>
         <span className="directive-receipt-status" role="status">
           {receipt.status === 'sending'
-            ? '⏳ Orientation…'
+            ? receipt.reponse
+              ? '⏳ Réponse…'
+              : '⏳ Orientation…'
             : receipt.status === 'sent'
-              ? '✓ Orienté'
+              ? receipt.reponse
+                ? '✓ Répondu'
+                : '✓ Orienté'
               : receipt.status === 'differee'
                 ? '⏸ Reçue — l’agent la lira à la phase suivante du run'
                 : '⚠ Échec — remis en file'}
@@ -247,7 +251,9 @@ export const ChatMessageRow = memo(
     directiveReceipts,
     retryPrompt,
     onResend,
-    onRefineResume
+    onRefineResume,
+    askRepondu,
+    onAnswerAsk
   }: {
     message: Msg
     conversationId: string | null
@@ -262,6 +268,13 @@ export const ChatMessageRow = memo(
     onPickSuggestion?: (prompt: string) => void
     onOpenLiveAction?: (mode: 'live' | 'history') => void
     directiveReceipts?: DirectiveReceipt[]
+    /** Une question de ce tour a deja sa reponse dans le fil (message utilisateur posterieur). */
+    askRepondu?: boolean
+    /**
+     * Reponse a une question `ask`. Chemin DEDIE, jamais celui des suggestions : une reponse a une
+     * question est un message ORDINAIRE, pas une orientation en vol (pastille « ✓ Orienté »).
+     */
+    onAnswerAsk?: (prompt: string) => void
   }): React.JSX.Element {
     if (message.role === 'user') {
       return (
@@ -368,10 +381,14 @@ export const ChatMessageRow = memo(
                         onPick={(prompt) => onPickSuggestion?.(prompt)}
                       />
                     ) : part.kind === 'ask-decision' ? (
+                      /* Cle STABLE = l'identite de l'action `ask`. Avec `key={index}` le bloc etait
+                         remonte des que le flux se regroupait, et son verrou « deja repondu »
+                         repartait a zero : c'est ce qui rendait le spam-clic possible. */
                       <AskDecisionBlock
-                        key={index}
+                        key={`ask-${part.askId}`}
                         decision={part.decision}
-                        onPick={(prompt) => onPickSuggestion?.(prompt)}
+                        dejaRepondu={askRepondu}
+                        onPick={(prompt) => onAnswerAsk?.(prompt)}
                       />
                     ) : part.kind === 'candidats-pick' ? (
                       <CandidatsPickPanel
@@ -521,5 +538,6 @@ export const ChatMessageRow = memo(
     prev.message === next.message &&
     prev.conversationId === next.conversationId &&
     prev.retryPrompt === next.retryPrompt &&
+    prev.askRepondu === next.askRepondu &&
     prev.directiveReceipts === next.directiveReceipts
 )

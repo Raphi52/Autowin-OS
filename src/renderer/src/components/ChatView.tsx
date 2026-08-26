@@ -43,7 +43,7 @@ import { buildScopeEcho, formatScopeEcho } from './chat-scope-echo'
 import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
-import { lastUserPromptBefore, messageKey } from './chat-message-keys'
+import { aUneReponseApres, lastUserPromptBefore, messageKey } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
 import type {
   AsstMsg,
@@ -625,7 +625,10 @@ export function ChatView({
   function setDirectiveReceipt(
     conversationId: string,
     entry: QueuedDirective,
-    status: DirectiveReceipt['status']
+    status: DirectiveReceipt['status'],
+    // Une REPONSE a une question `ask` emprunte le meme transport qu'une orientation, mais ce
+    // n'en est pas une : sans ce drapeau, le fil affichait « ✓ Orienté » sur une reponse.
+    reponse?: boolean
   ): void {
     const liveMessages = liveMessagesRef.current.get(conversationId) ?? []
     const afterMessageIndex = liveMessages.length - 1
@@ -649,6 +652,7 @@ export function ChatView({
                 id: entry.id,
                 text: entry.text,
                 status,
+                ...(reponse ? { reponse: true as const } : {}),
                 afterMessageIndex,
                 afterPartIndex,
                 ...(anchorPart?.kind === 'text' ? { afterTextOffset: anchorPart.text.length } : {})
@@ -1742,7 +1746,9 @@ export function ChatView({
     // Mode du REPLI en file si l'injection échoue. `/btw` garde 'btw' (« celui-là passe en dernier ») ;
     // un message ORDINAIRE tapé pendant le tour doit, lui, retomber en file NORMALE — sinon le repli
     // le marquait btw et l'ordre de la file mentait sur ce que l'utilisateur avait tapé.
-    repli: 'btw' | 'normal' = 'btw'
+    repli: 'btw' | 'normal' = 'btw',
+    /** Ce texte repond a une question `ask` — le reçu doit dire « Répondu », pas « Orienté ». */
+    reponse = false
   ): Promise<void> {
     const replimode: QueuedDirective['mode'] = repli === 'btw' ? 'btw' : undefined
     const text = body.trim()
@@ -1764,7 +1770,7 @@ export function ChatView({
     // Même compteur que la file : un reçu et une entrée de file ne doivent jamais partager un id,
     // sinon le repli en file (ci-dessous) écraserait le reçu qu'on vient de poser.
     const entry: QueuedDirective = { id: nextQueueEntryIdRef.current++, text, mode: replimode }
-    setDirectiveReceipt(id, entry, 'sending')
+    setDirectiveReceipt(id, entry, 'sending', reponse)
     let injected = false
     try {
       injected = (await window.api.injectDirective(id, text))?.ok === true
@@ -1774,7 +1780,7 @@ export function ChatView({
     }
     // Repli explicite : l'injection a échoué → file d'attente (drainée en fin de tour), rien n'est perdu.
     if (!injected) enqueueMessage(id, text, replimode)
-    setDirectiveReceipt(id, entry, injected ? issueDeLInjection(id) : 'failed')
+    setDirectiveReceipt(id, entry, injected ? issueDeLInjection(id) : 'failed', reponse)
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
   function handleBtw(): boolean {
@@ -1850,6 +1856,20 @@ export function ChatView({
     else void sendRef.current(prompt)
   }
   const pickSuggestion = useCallback((prompt: string) => pickRef.current(prompt), [])
+  /**
+   * REPONDRE A UNE QUESTION `ask` — parite claude.exe : c'est un MESSAGE, jamais une orientation.
+   *
+   * `ask` clot desormais le tour (cf. `agent-pilot`), donc le cas normal est un envoi ordinaire.
+   * Un run peut malgre tout tourner encore (orchestration en vol) : le transport passe alors par
+   * l'injection, comme le composer, mais le reçu est marque `reponse` — le fil affiche
+   * « ✓ Répondu » et non « ✓ Orienté », qui decrivait un geste que l'utilisateur n'avait pas fait.
+   */
+  const answerAskRef = useRef<(prompt: string) => void>(() => {})
+  answerAskRef.current = (prompt: string) => {
+    if (busy) void submitBtw(prompt, 'normal', true)
+    else void sendRef.current(prompt)
+  }
+  const answerAsk = useCallback((prompt: string) => answerAskRef.current(prompt), [])
   /**
    * « Reprendre en précisant… » : REMPLIT le composer (prompt d'origine + motif), et s'arrête là.
    * Aucun envoi, aucune orchestration — le geste appartient à l'utilisateur.
@@ -3097,6 +3117,13 @@ export function ChatView({
             <Fragment key={messageKey(message, index)}>
               <ChatMessageRow
                 onPickSuggestion={pickSuggestion}
+                onAnswerAsk={answerAsk}
+                /* VERROU DURABLE : un message utilisateur posterieur EST la reponse. Derive du fil,
+                   donc vrai apres un remontage comme apres un redemarrage — la ou l'etat local du
+                   bloc, lui, disparaissait et rouvrait la porte au spam-clic. */
+                askRepondu={
+                  message.role === 'assistant' ? aUneReponseApres(messages, index) : undefined
+                }
                 message={message}
                 conversationId={activeId}
                 onInspectTurn={onInspectTurn}

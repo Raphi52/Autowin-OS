@@ -46,7 +46,19 @@ type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart | ChatEr
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
 export type ChatCandidatsPickBlock = { kind: 'candidats-pick'; candidats: CandidatAffiche[] }
-export type ChatAskDecisionBlock = { kind: 'ask-decision'; decision: AskDecision }
+export type ChatAskDecisionBlock = {
+  kind: 'ask-decision'
+  decision: AskDecision
+  /**
+   * IDENTITE STABLE de la question, celle de l'action `ask` qui l'a produite.
+   *
+   * VECU le 2026-08-26 : le bloc etait rendu avec `key={index}` et son verrou « deja repondu »
+   * vivait en etat LOCAL. Tout re-groupement du flux (une part de texte qui arrive, un reçu de
+   * directive insere) decalait l'index, React demontait/remontait le bloc, et le verrou repartait
+   * a zero -- d'ou le spam-clic qui envoyait autant de reponses que de clics.
+   */
+  askId: string
+}
 export type ChatRenderBlock =
   | ChatTextPart
   | ChatArtifactPart
@@ -1255,7 +1267,11 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
     // sinon le libelle, comme prompt ordinaire.
     const askDecision = parseAskDecision(part)
     if (askDecision) {
-      blocks.push({ kind: 'ask-decision', decision: askDecision })
+      blocks.push({
+        kind: 'ask-decision',
+        decision: askDecision,
+        askId: part.kind === 'action' && part.actionId ? part.actionId : `ask:${blocks.length}`
+      })
       continue
     }
     if (part.kind === 'artifact' || part.kind === 'error') {

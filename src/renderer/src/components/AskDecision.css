@@ -421,3 +421,34 @@
   border: 1px solid rgba(255, 255, 255, 0.14);
   cursor: not-allowed;
 }
+
+/*
+ * BLOC REPONDU. Le verrou etait MUET : les lignes gardaient leur liseré, leur survol et leur
+ * touche, donc rien a l'ecran ne distinguait une question ouverte d'une question close — et
+ * l'utilisateur recliquait. Ce que le bloc dit maintenant : la question est passee, une seule
+ * ligne compte, et plus rien ne s'y clique.
+ */
+.askd.est-repondu .askd-item {
+  opacity: 0.45;
+}
+.askd.est-repondu .askd-item:hover .askd-ligne::before,
+.askd.est-repondu .askd-choix:hover {
+  /* Aucune promesse de clic sur un bloc clos. */
+  cursor: default;
+}
+.askd.est-repondu .askd-choix,
+.askd.est-repondu .askd-coche input {
+  cursor: default;
+}
+/* La reponse retenue reste PLEINEMENT lisible : c'est la seule chose que le bloc raconte encore. */
+.askd.est-repondu .askd-item:has(.askd-choix[data-choisi='oui']) {
+  opacity: 1;
+}
+.askd.est-repondu .askd-choix[data-choisi='oui'] .askd-libelle::after {
+  content: '✓';
+  margin-left: 0.5rem;
+  color: #e3ba55;
+}
+.askd.est-repondu .askd-entree {
+  visibility: hidden;
+}
