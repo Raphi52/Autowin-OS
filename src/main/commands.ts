@@ -1277,7 +1277,17 @@ export class AppCommandBus {
    */
   rappelPourDemande(demande: string | undefined, conversationCouranteId?: string): string {
     try {
-      return rappelDesEchangesPasses(this.os.conversations, demande, conversationCouranteId)
+      // Le fournisseur de la conversation COURANTE borne le rappel : on ne rappelle que ce qui a
+      // deja ete servi par lui. Inconnu -> aucun rappel (voir `rappelDesEchangesPasses`).
+      const courante = conversationCouranteId
+        ? this.os.conversations.get(conversationCouranteId)
+        : undefined
+      return rappelDesEchangesPasses(
+        this.os.conversations,
+        demande,
+        conversationCouranteId,
+        courante?.provider
+      )
     } catch {
       // Un rappel est un CONFORT : s'il echoue, le tour doit partir quand meme. L'inverse ferait
       // dependre chaque message d'une commodite.

@@ -41,18 +41,18 @@ function corpus(): ConversationStore {
 
 describe('le tour porte deja ce que la demande suppose', () => {
   it('rappelle l echange ou le sens a ete donne', () => {
-    const rappel = rappelDesEchangesPasses(corpus(), 'remake les pastilles de couleurs', 'conv-2')
+    const rappel = rappelDesEchangesPasses(corpus(), 'remake les pastilles de couleurs', 'conv-2', 'claude')
     expect(rappel).toContain('ambre')
     expect(rappel).toContain('conv-1')
   })
 
   it('exclut la conversation COURANTE, que le modele a deja', () => {
-    const rappel = rappelDesEchangesPasses(corpus(), 'remake les pastilles de couleurs', 'conv-2')
+    const rappel = rappelDesEchangesPasses(corpus(), 'remake les pastilles de couleurs', 'conv-2', 'claude')
     expect(rappel).not.toContain('conv-2')
   })
 
   it('ne rappelle rien quand la demande ne renvoie a rien de connu', () => {
-    expect(rappelDesEchangesPasses(corpus(), 'installe kubernetes', 'conv-2')).toBe('')
+    expect(rappelDesEchangesPasses(corpus(), 'installe kubernetes', 'conv-2', 'claude')).toBe('')
   })
 
   it('se tait sur une demande LONGUE, qui se suffit a elle-meme', () => {
@@ -61,7 +61,7 @@ describe('le tour porte deja ce que la demande suppose', () => {
       'bouton de depliage inconditionnellement, y compris pour un texte de deux lignes qui tient ' +
       'dans les 160px de la classe subagent-text ; il faut le rendre conditionnel et couvrir la ' +
       'decision par un test unitaire dedie qui exerce le cas court et le cas long des pastilles.'
-    expect(rappelDesEchangesPasses(corpus(), longue, 'conv-2')).toBe('')
+    expect(rappelDesEchangesPasses(corpus(), longue, 'conv-2', 'claude')).toBe('')
   })
 
   it('reste borne en volume, meme sur un corpus bavard', () => {
@@ -71,6 +71,6 @@ describe('le tour porte deja ce que la demande suppose', () => {
       const c = store.create({ title: 'sujet ' + i, provider: 'claude' })
       store.append(c.id, { role: 'user', content: 'pastille '.repeat(400) })
     }
-    expect(rappelDesEchangesPasses(store, 'pastille', 'conv-999').length).toBeLessThan(4_000)
+    expect(rappelDesEchangesPasses(store, 'pastille', 'conv-999', 'claude').length).toBeLessThan(4_000)
   })
 })
