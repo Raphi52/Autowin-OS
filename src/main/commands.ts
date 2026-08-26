@@ -288,6 +288,24 @@ export interface PromptSnapshot {
   providers: string[]
   runsBlocked: Array<{ subject: string; status: string }>
   conversationsCount: number
+  /**
+   * DU TRAVAIL NON FUSIONNE, et la consigne pour le trier — ABSENT quand il n'y en a pas.
+   *
+   * Le recensement repare le 2026-08-26 rend ces travaux VISIBLES dans `get_state`. Mais voir n'est
+   * pas agir : le defaut d'origine (« rien a fusionner » repondu alors que le commit existait)
+   * venait d'un agent sans procedure, pas d'un agent mal informe.
+   *
+   * La consigne vit donc ICI, dans le snapshot serialise a CHAQUE tour — et non dans une regle
+   * permanente du prompt, qui se dilue quand elle est vraie une fois sur cent. Presente seulement
+   * quand du travail attend reellement : zero bruit le reste du temps.
+   */
+  travauxNonFusionnes?: {
+    compte: number
+    /** Nomme le skill a invoquer ; une consigne qui decrit un devoir sans outil n'est pas suivie. */
+    consigne: string
+    /** De quoi reconnaitre les travaux sans relancer le recensement. */
+    apercu: Array<{ agentId: string; date: string; fichiers: string[] }>
+  }
 }
 
 export type AppEvent =
@@ -1380,7 +1398,21 @@ export class AppCommandBus {
       runsBlocked: full.runs
         .filter((r) => r.blocked)
         .map((r) => ({ subject: r.subject, status: r.status })),
-      conversationsCount: full.conversations.length
+      conversationsCount: full.conversations.length,
+      ...(full.travauxNonPublies.length > 0
+        ? {
+            travauxNonFusionnes: {
+              compte: full.travauxNonPublies.length,
+              consigne:
+                `${full.travauxNonPublies.length} travail(aux) terminé(s) ne sont PAS dans la base. ` +
+                'Invoque le skill `salvage` pour les trier un par un (fusionner / jeter / laisser) : ' +
+                'il juge sur le CONTENU, car le plus souvent le travail est déjà présent sous une ' +
+                'autre implémentation. Ne conclus JAMAIS « rien à fusionner » sans l’avoir fait — un ' +
+                '`git status` dans l’arbre principal ne voit pas ces copies isolées.',
+              apercu: full.travauxNonPublies
+            }
+          }
+        : {})
     }
   }
 
@@ -1959,6 +1991,17 @@ export class AppCommandBus {
             role: lessonStep?.role ?? 'orchestrator',
             proposalAttestations: r.learningAttestations
           })
+          const terminalStatus =
+            r.gateBlocked || !r.valid
+              ? 'red'
+              : terminalLifecycle && terminalLifecycle.closure.status !== 'open'
+                ? terminalLifecycle.closure.status
+                : 'green'
+          const terminalDetail = r.gateBlocked
+            ? `Gate BLOQUÉ: ${r.gateReasons.join('; ')}`
+            : !r.valid
+              ? 'Livrable refusé par le juge.'
+              : undefined
           if (runPath) {
             const costCoverage = formatExecutionCostCoverage({
               costUsd: r.costUsd,
@@ -1978,26 +2021,23 @@ export class AppCommandBus {
             populateConvRunSections(runPath, phasesAvecJuge(r.phaseOutputs, r.judgeText), {
               publishedCommitSha
             })
-            const runStatus =
-              terminalLifecycle && terminalLifecycle.closure.status !== 'open'
-                ? terminalLifecycle.closure.status
-                : r.gateBlocked
-                  ? 'red'
-                  : 'green'
             closeConvRun(
               runPath,
-              runStatus,
-              r.gateBlocked
-                ? `Gate BLOQUÉ: ${r.gateReasons.join('; ')}`
-                : `Juge: validé — clôture autorisée (${costCoverage ?? 'coût non rapporté'}).`
+              terminalStatus,
+              terminalDetail ??
+                `Juge: validé — clôture autorisée (${costCoverage ?? 'coût non rapporté'}).`
             )
           }
           this.broadcast({
             type: 'orchestrate-end',
             convId,
             runPath,
-            status: r.gateBlocked ? 'red' : 'green',
-            ...(r.gateBlocked ? { detail: r.gateReasons.join('; ') } : {})
+            // L'EVENEMENT reste binaire (son contrat est `'green' | 'red'`), mais il compte
+            // desormais le refus du juge : `!r.valid` valait « vert » jusqu'ici, alors que le
+            // livrable avait ete REFUSE. Le statut de cloture, lui, garde toute sa finesse
+            // (`degraded-closed` compris) et part dans `closeConvRun` juste au-dessus.
+            status: r.gateBlocked || !r.valid ? 'red' : 'green',
+            ...(terminalDetail ? { detail: terminalDetail } : {})
           })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           this.broadcast({ type: 'refresh', scope: 'orchestration' })

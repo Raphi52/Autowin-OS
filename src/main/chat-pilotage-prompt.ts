@@ -232,6 +232,10 @@ export function buildChatPilotagePrompt(
     `Omets \`phase\` si tu n'es pas sûr : le pipeline choisira. Et une tâche à risque ` +
     `(architecture, sécurité, migration) garde toutes ses phases même si tu en nommes une seule — ` +
     `c'est voulu.\n` +
+    `DEMANDE SANS OBJET : si l'utilisateur demande d'agir mais ne nomme AUCUN livrable ni aucune cible ` +
+    `(par exemple « fais un truc parfait »), ne lance PAS \`orchestrate\` et n'invente pas de ` +
+    `modification. Avec \`ask\`, demande un choix concret entre fonctionnalité, correction, ` +
+    `document ou autre livrable. Cette information est indispensable à toute preuve vérifiable.\n` +
     `DEMANDE OUVERTE : ne renvoie JAMAIS la question à l'utilisateur, diverge toi-même. Si elle ` +
     `porte sur le CODE et demande d'y TRAVAILLER (écrire à plusieurs endroits, mener un chantier), ` +
     `lance \`orchestrate\` avec la demande ` +
