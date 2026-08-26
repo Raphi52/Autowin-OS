@@ -1063,6 +1063,14 @@ export class WorktreeManager {
         return { outcome: 'refuse', detail: 'le travail n’a pas pu être préservé' }
       }
     }
+    /*
+     * LE TRAVAIL DEJA COMMITTE, l'angle mort de `aDuTravail`.
+     *
+     * `unpublishedFiles()` ne compte que le NON committe. Un bureau dont l'agent a deja committe son
+     * travail en HEAD detache rend donc zero, se lit « rien a preserver », et son commit partait avec
+     * le dossier. C'est la signature exacte des trois bureaux perdus le 2026-08-26.
+     */
+    if (!aDuTravail) this.ancrerAvantSuppression(agentId, path)
     if (!this.balayerLeChemin(path)) {
       return { outcome: 'refuse', detail: 'la copie n’a pas pu être supprimée' }
     }
@@ -1635,6 +1643,28 @@ export class WorktreeManager {
       return { ok: false, advanced: true, files }
     }
 
+    /*
+     * LA REF NE SE SUPPRIME QUE SI ELLE NE PROTEGE RIEN.
+     *
+     * CausalHypothesis (verifiee le 2026-08-26) : `deleteRecoveryRefIfExpected` demande « HEAD a-t-il
+     * bouge depuis mon `rev-parse` ? ». Or `expectedSha` EST le commit de l'agent : pour un bureau
+     * dont le travail est deja committe en HEAD detache, l'egalite est garantie, donc la ref etait
+     * supprimee A TOUS LES COUPS. Le dossier venait d'etre balaye juste au-dessus : le commit se
+     * retrouvait sans dossier ET sans ref, hors de tout `for-each-ref` -- invisible au recensement, et
+     * candidat au prochain `gc`.
+     *
+     * MESURE en rangeant cette installation : trois bureaux ont perdu leur ref ainsi, dont `7467f237`
+     * (lunes/nuage + son test de contrat, vert). Ils n'ont survecu qu'a un `git branch` pose a la main.
+     * C'est aussi la cause du « rien a fusionner » repete : l'agent cherche ce qu'aucune ref ne porte
+     * plus.
+     *
+     * La bonne question vit deja dans ce fichier : `apporteQuelqueChose` (patch-id contre la base) --
+     * celle que le recensement pose. Un bureau qui n'apporte rien laisse toujours son ref partir : on
+     * ne garde pas une adresse pour du vide, c'est l'intention d'origine et elle est preservee.
+     */
+    if (this.apporteQuelqueChose(branch, 'HEAD')) {
+      return { ok: true, advanced: false, files: [] }
+    }
     const deleteRef = this.deleteRecoveryRefIfExpected(branch, expectedSha)
     if (deleteRef.advanced) {
       this.tryGitFn(this.baseRepo, ['worktree', 'add', path, branch])
@@ -5057,7 +5087,33 @@ exit 0
     }
   }
 
-  /** Abandon EXPLICITE d'un bureau retenu ; appelé seulement après confirmation UI. */
+  /**
+   * ANCRE le commit d'un bureau sur sa branche de secours, s'il apporte quelque chose.
+   *
+   * Le dossier d'un bureau en HEAD DETACHE est la SEULE chose qui rend son commit joignable : Git
+   * compte le HEAD d'un worktree parmi ses racines, mais aucun `for-each-ref` ne le voit. Supprimer
+   * le dossier sans avoir pose de ref, c'est donc rendre le commit invisible au recensement et
+   * candidat au `gc` -- meme geste, meme perte, quelle que soit la porte de sortie emprunte.
+   *
+   * Idempotent, et volontairement SILENCIEUX en cas d'echec : poser une adresse est un filet, pas une
+   * condition. Un bureau qui n'apporte rien par rapport a la base n'en recoit pas -- on ne garde pas
+   * d'adresse pour du vide.
+   */
+  private ancrerAvantSuppression(agentId: string, path: string): void {
+    const branche = `autowin/recovery/${agentId}`
+    const tete = this.tryGitFn(path, ['rev-parse', 'HEAD'])
+    if (tete.code !== 0) return
+    if (!this.apporteQuelqueChose(tete.stdout.trim(), 'HEAD')) return
+    this.tryGitFn(this.baseRepo, ['branch', '-f', branche, tete.stdout.trim()])
+  }
+
+  /**
+   * Abandon d'un bureau retenu.
+   *
+   * Se documentait « appele seulement apres confirmation UI » — ce n'etait plus vrai : `identiteDeBureau`
+   * l'appelle pour RECYCLER un bureau a la tentative suivante, sans qu'aucun humain ne voie rien. On
+   * ancre donc avant de balayer, comme les autres portes de sortie.
+   */
   discard(agentId: string): void {
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return
@@ -5066,6 +5122,7 @@ exit 0
     }
     const ownershipIssue = this.ownershipIssue(path)
     if (ownershipIssue) throw new Error(ownershipIssue)
+    this.ancrerAvantSuppression(agentId, path)
     const cleanup = this.cleanupWorktree(path, true)
     if (!cleanup.ok) {
       throw new Error(cleanup.detail ?? `La copie ${agentId} n’a pas pu être supprimée.`)
