@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
+import { verdictDeBureau, type VerdictBureau } from './verdict-bureau'
 import type { Dirent } from 'node:fs'
 import {
   chmodSync,
@@ -972,11 +973,12 @@ export class WorktreeManager {
   apercuTravauxNonPublies(
     baseRef = 'HEAD',
     limite = 3
-  ): Array<{ agentId: string; date: string; fichiers: string[] }> {
+  ): Array<{ agentId: string; date: string; fichiers: string[]; verdict: VerdictBureau }> {
     return this.travauxNonPublies(baseRef)
       .slice(0, Math.max(0, limite))
       .map((agentId) => {
-        const branche = this.commitDuTravail(agentId) ?? `autowin/recovery/${agentId}`
+        const commit = this.commitDuTravail(agentId)
+        const branche = commit ?? `autowin/recovery/${agentId}`
         let fichiers: string[] = []
         let date = ''
         try {
@@ -994,7 +996,9 @@ export class WorktreeManager {
         } catch {
           // Une branche illisible ne doit pas faire disparaitre les autres du bandeau.
         }
-        return { agentId, date, fichiers }
+        // Le VERDICT accompagne la liste : sans lui, il faut ouvrir chaque patch pour savoir si
+        // un bureau vaut quelque chose — le tri manuel que ce chantier existe pour supprimer.
+        return { agentId, date, fichiers, verdict: verdictDeBureau({ fichiers, aUnCommit: !!commit }) }
       })
   }
 

@@ -172,7 +172,15 @@ const api = {
   getWorktreeActivity: (conversationId?: string): Promise<WorktreeAgentActivity[]> =>
     ipcRenderer.invoke('worktree:activity', conversationId),
   /** Travaux termines mais jamais publies — lecture seule, sur geste explicite. */
-  getTravauxNonPublies: (): Promise<Array<{ agentId: string; date: string; fichiers: string[] }>> =>
+  getTravauxNonPublies: (): Promise<
+    Array<{
+      agentId: string
+      date: string
+      fichiers: string[]
+      /** Verdict DERIVE (pas stocke) : a-reprendre / trie / sans-valeur. */
+      verdict?: 'a-reprendre' | 'trie' | 'sans-valeur'
+    }>
+  > =>
     ipcRenderer.invoke('worktree:travaux-non-publies'),
   getPatchTravailNonPublie: (agentId: string): Promise<{ patch: string; tronque: boolean }> =>
     ipcRenderer.invoke('worktree:patch-non-publie', agentId),

@@ -37,8 +37,18 @@ type ApiDouble = {
 function poserApi(surcharge: Partial<ApiDouble> = {}): ApiDouble {
   const api: ApiDouble = {
     getTravauxNonPublies: vi.fn().mockResolvedValue([
-      { agentId: 'run-thinking-1', date: '2026-08-24', fichiers: ['a.ts', 'b.test.ts'] },
-      { agentId: 'command-edit-casse', date: '2026-08-25', fichiers: ['WorkflowsPanel.tsx'] }
+      {
+        agentId: 'run-thinking-1',
+        date: '2026-08-24',
+        fichiers: ['a.ts', 'b.test.ts'],
+        verdict: 'a-reprendre'
+      },
+      {
+        agentId: 'command-edit-casse',
+        date: '2026-08-25',
+        fichiers: ['WorkflowsPanel.tsx'],
+        verdict: 'a-reprendre'
+      }
     ]),
     getPatchTravailNonPublie: vi.fn().mockResolvedValue({ patch: 'diff --git a b', tronque: false }),
     retryWorktreeRecovery: vi.fn().mockResolvedValue({ agentId: 'run-thinking-1' }),
@@ -140,5 +150,36 @@ describe('BureauxConserves — la prise qui manquait', () => {
     await rendre()
 
     expect(container.textContent).toMatch(/aucun bureau conservé/i)
+  })
+})
+
+describe('BureauxConserves — le verdict, sans ouvrir le patch', () => {
+  it('affiche le verdict de chaque bureau en toutes lettres', async () => {
+    poserApi({
+      getTravauxNonPublies: vi.fn().mockResolvedValue([
+        { agentId: 'porteur', date: '2026-08-24', fichiers: ['a.ts'], verdict: 'a-reprendre' },
+        { agentId: 'deja-dans-la-base', date: '2026-08-24', fichiers: [], verdict: 'trie' },
+        { agentId: 'rien-dedans', date: '2026-08-24', fichiers: [], verdict: 'sans-valeur' }
+      ])
+    })
+    await rendre()
+
+    // Le defaut mesure le 2026-08-25 : il fallait ouvrir seize patchs a la main pour savoir
+    // lesquels valaient quelque chose. Le verdict doit etre LISIBLE, pas a decoder.
+    expect(container.textContent).toContain('À reprendre')
+    expect(container.textContent).toContain('Trié')
+    expect(container.textContent).toContain('Sans valeur')
+  })
+
+  it('un verdict absent (preload plus ancien) laisse la vue lisible', async () => {
+    poserApi({
+      getTravauxNonPublies: vi
+        .fn()
+        .mockResolvedValue([{ agentId: 'sans-verdict', date: '2026-08-24', fichiers: ['a.ts'] }])
+    })
+    await rendre()
+
+    expect(container.textContent).toContain('sans-verdict')
+    expect(container.querySelector('.bureaux-conserves-verdict')).toBeNull()
   })
 })
