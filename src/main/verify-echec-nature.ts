@@ -17,7 +17,9 @@
  * reponse legitime : deviner une nature ferait pire que le message generique qu'on remplace.
  */
 
-export type NatureEchec = 'syntaxe' | 'tests' | 'inconnue'
+import { VERIFY_PLAFOND_MARQUEUR } from './verify-command'
+
+export type NatureEchec = 'syntaxe' | 'tests' | 'timeout' | 'inconnue'
 
 export interface EchecClasse {
   nature: NatureEchec
@@ -38,6 +40,19 @@ const MARQUEUR_TRANSFORMATION = /Transform failed|Failed to parse source|Express
 const EMPLACEMENT = /([\w.@-]+\.(?:mts|cts|tsx|ts|jsx|js)):(\d+):(\d+):\s*(?:ERROR:\s*)?(.+)/g
 
 const MARQUEUR_TESTS = /Tests\s+\d+\s+failed|AssertionError|✕|×\s|FAIL\s/
+
+/**
+ * CausalHypothesis (verifiee, conv-1410) : une sortie de PLAFOND contient « ce que la suite avait
+ * ecrit avant d'etre coupee », donc des lignes `× …`. `MARQUEUR_TESTS` matchait, et la consigne
+ * rendue en TETE disait « corrige la logique » juste au-dessus de « rien n'est prouve ». Les deux
+ * `edit_file` du 26/08 sur `home-decor-scene.ts` sont partis dans cette contradiction et ont ete
+ * perdus avec leur bureau.
+ *
+ * Un plafond est une TROISIEME nature, et la seule dont le geste n'est pas une correction : il n'y
+ * a rien a corriger tant qu'aucun verdict n'a ete rendu. Le marqueur vit dans `verify-command`, a
+ * cote de la phrase qu'il reconnait, pour que les deux ne derivent pas.
+ */
+const MARQUEUR_PLAFOND = VERIFY_PLAFOND_MARQUEUR
 
 function emplacements(sortie: string): string[] {
   const trouves: string[] = []
@@ -65,6 +80,20 @@ export function natureDeLEchec(sortie: string): EchecClasse {
         ` reprendre la meme edition reproduira la meme faute.`
     }
   }
+  /*
+   * APRES la syntaxe, AVANT les tests. Une faute de compilation visible dans une sortie coupee est
+   * reelle et actionnable — le plafond ne l'efface pas. Les coches d'une sortie coupee, elles, ne
+   * prouvent rien : la suite n'est pas allee au bout, et les rouges deja tombes peuvent tout autant
+   * appartenir a une base deja rouge qu'a l'edition.
+   */
+  if (MARQUEUR_PLAFOND.test(sortie))
+    return {
+      nature: 'timeout',
+      consigne:
+        `La verification a ete coupee au plafond : aucun verdict n'a ete rendu, donc il n'y a` +
+        ` rien a corriger — ni la logique, ni la syntaxe. Les rouges visibles ci-dessous sont` +
+        ` partiels et peuvent appartenir a la base. Reduis la PORTEE au lieu de re-editer.`
+    }
   if (MARQUEUR_TESTS.test(sortie))
     return {
       nature: 'tests',

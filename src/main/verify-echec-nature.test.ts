@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { natureDeLEchec } from './verify-echec-nature'
+import { verifyTimeoutOutcome } from './verify-command'
 
 /**
  * DISTINGUER « TON CODE NE COMPILE PAS » DE « UN TEST ÉCHOUE ».
@@ -61,5 +62,58 @@ describe('natureDeLEchec', () => {
     const rouge = '× rend une ERROR lisible\nTests  1 failed (1)'
 
     expect(natureDeLEchec(rouge).nature).toBe('tests')
+  })
+
+  /**
+   * UN PLAFOND N'EST NI UNE FAUTE DE LOGIQUE NI UNE FAUTE DE SYNTAXE.
+   *
+   * DÉFAUT VÉCU le 2026-08-26 (conv-1410). Deux `edit_file` sur `home-decor-scene.ts` ont été
+   * refusés après 600 s exactement : la suite GLOBALE a été jouée, coupée au plafond, donc rien
+   * n'était prouvé. Mais la sortie de plafond embarque « ce que la suite avait écrit avant d'être
+   * coupée » — donc des lignes `× …`. `MARQUEUR_TESTS` a matché, et la consigne rendue en TÊTE
+   * disait « le code compile, mais un test échoue — corrige la logique », juste au-dessus de la
+   * phrase « rien n'est prouvé ». Contradiction en deux lignes : l'agent est parti corriger une
+   * logique intacte, et les deux éditions ont été perdues avec le bureau.
+   */
+  const sortiePlafond = [
+    "vérification arrêtée après 600 s (plafond) — rien n'est prouvé, la suite n'a pas rendu son verdict.",
+    'Ne relance pas la même commande : donne-lui une cible.',
+    '',
+    "Ce que la suite avait écrit avant d'être coupée :",
+    '× la reprise persiste sa trace dans le RUN.md de la conversation (panneau Juges) 14ms',
+    '× edit_file — le verdict juge l’ÉDITION, pas l’état général du dépôt 1503ms'
+  ].join('\n')
+
+  it('une vérification coupée au plafond n’est PAS classée « tests »', () => {
+    expect(natureDeLEchec(sortiePlafond).nature).toBe('timeout')
+  })
+
+  it('la consigne d’un plafond ne demande NI logique NI syntaxe', () => {
+    const { consigne } = natureDeLEchec(sortiePlafond)
+
+    expect(consigne).not.toContain('corrige la logique')
+    expect(consigne).not.toContain('ne compile pas')
+    // Ce qu'il faut DIRE : aucun verdict n'a été rendu, donc il n'y a rien à corriger.
+    expect(consigne).toContain('aucun verdict')
+  })
+
+  it('une faute de compilation visible dans une sortie coupée reste « syntaxe »', () => {
+    // Un plafond n'efface pas un code qui ne compile pas : la faute est réelle et actionnable.
+    const melange = [
+      sortiePlafond,
+      'Error: Transform failed with 1 error:',
+      '/w/src/a.tsx:1:2: ERROR: Unterminated string literal'
+    ].join('\n')
+
+    expect(natureDeLEchec(melange).nature).toBe('syntaxe')
+  })
+
+  it('reconnaît la sortie RÉELLE du plafond, pas seulement une phrase recopiée', () => {
+    // GARDE ANTI-DÉRIVE : le marqueur et le message vivent dans deux fonctions. Sans ce test, une
+    // reformulation du message rebasculerait silencieusement les plafonds en « tests » — le défaut
+    // de conv-1410 reviendrait sans qu'aucun test ne bouge.
+    const reelle = verifyTimeoutOutcome('npm run test:unit', 600_000, '× un test 14ms')
+
+    expect(natureDeLEchec(reelle.output).nature).toBe('timeout')
   })
 })
