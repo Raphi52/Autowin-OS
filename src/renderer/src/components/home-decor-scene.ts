@@ -700,9 +700,13 @@ function buildLune(seed: number, teinte: number): THREE.Mesh {
       fragmentShader: PLANETE_FRAGMENT_SHADER,
       uniforms: {
         uBase: { value: base },
-        uClair: { value: base.clone().lerp(new THREE.Color(0xffffff), 0.6) },
-        uSombre: { value: base.clone().multiplyScalar(0.34) },
-        uNuit: { value: base.clone().multiplyScalar(0.12) },
+        // `uClair` sert AUSSI de couleur de rim dans PLANETE_FRAGMENT_SHADER. Sur un globe de 0,15
+        // rayon, ce rim recouvre presque tout le disque à l'écran : à 0,6 de blanc la lune ne se lit
+        // plus que comme une boule de lumière (« on dirait des soleils », conv-1410). Rester proche
+        // de la teinte de base garde le relief sans allumer la lune.
+        uClair: { value: base.clone().lerp(new THREE.Color(0xffffff), 0.14) },
+        uSombre: { value: base.clone().multiplyScalar(0.28) },
+        uNuit: { value: base.clone().multiplyScalar(0.07) },
         uLumiere: { value: SOLEIL.clone() },
         uBandes: { value: 1.1 },
         uSeed: { value: seed },
