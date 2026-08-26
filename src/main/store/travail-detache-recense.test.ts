@@ -114,6 +114,27 @@ describe('le recensement voit le travail resté sur un HEAD détaché', () => {
     expect(wm.travauxNonPublies()).not.toContain('run-vieille-base')
   })
 
+  it('reste MUET sur un bureau posé sur une branche NON NÉE (SHA nul)', () => {
+    /*
+     * Cas RÉEL sur le dépôt de production : `git worktree list --porcelain` rend
+     * `HEAD 0000000000000000000000000000000000000000` pour un bureau attaché à une branche jamais
+     * commitée. Ce SHA passait `HEX_SHA` ; le recensement ne restait correct que parce que
+     * `for-each-ref --contains 000…` LÈVE (exit 129) et que le court-circuit du `&&` s'arrêtait là.
+     * Un refactor inversant l'ordre aurait réintroduit un faux signal. On l'écarte explicitement.
+     *
+     * RÉSERVE HONNÊTE : l'autre moitié du correctif — le `catch` de `estOrphelin` qui rend
+     * désormais `true` au lieu de `false`, pour ne pas EFFACER un travail sur une panne git
+     * transitoire — n'est PAS couverte par ce test. Forcer un échec de `for-each-ref` sur un dépôt
+     * sain n'est pas reproductible ici. Le choix est argumenté (aligné sur `apporteQuelqueChose` et
+     * sur la règle écrite dans le fichier), il n'est pas prouvé par exécution.
+     */
+    const { repo, racine, wm } = monter()
+    git(repo, 'worktree', 'add', '-q', '--detach', join(racine, 'agent__run-non-nee'), 'HEAD')
+    git(join(racine, 'agent__run-non-nee'), 'checkout', '-q', '--orphan', 'jamais-nee')
+
+    expect(wm.travauxNonPublies()).not.toContain('run-non-nee')
+  })
+
   it('reste MUET sur un bureau détaché dont le commit est DÉJÀ dans la base', () => {
     // Un travail repris à la main (cherry-pick, apply) ne doit plus être signalé : sinon le bandeau
     // crie pour toujours et personne ne l'écoute plus. C'est le défaut du 2026-08-24, à ne pas rouvrir.

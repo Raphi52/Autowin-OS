@@ -1345,9 +1345,11 @@ export class AppCommandBus {
         state: String(w.state),
         ...(w.conversationId ? { conversationId: w.conversationId } : {})
       })),
-      // Absent = rien n'attend. Un OS qui n'expose pas le recensement ne doit pas faire tomber
-      // `get_state` : on rend un tableau vide, jamais `undefined`.
-      travauxNonPublies: this.os.travauxNonPublies?.() ?? [],
+      // La variante BORNEE (cache 60 s, six entrees) — jamais celle sans borne, reservee au geste
+      // explicite de l'utilisateur : `snapshotForPrompt()` passe ici a CHAQUE tour d'agent, et le
+      // recensement complet coute 76 processus git / 10,4 s sur ce depot (mesure du 2026-08-26).
+      // Absent = rien n'attend : un tableau vide, jamais `undefined`.
+      travauxNonPublies: this.os.travauxNonPubliesBornes?.() ?? [],
       ...budgetSnapshot(this.os.budget())
     }
   }

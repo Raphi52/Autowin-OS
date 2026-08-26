@@ -33,7 +33,10 @@ const osAvecTravaux = (travaux: Travail[], recense = true): OsDouble =>
     runsWithGate: async () => [],
     budget: () => ({ pricedSpendUsd: 0 }),
     getWorktreeActivity: () => [],
-    ...(recense ? { travauxNonPublies: () => travaux } : {})
+    // `get_state` lit la variante BORNEE depuis le correctif de perf du 2026-08-26 (la complete
+    // coutait 76 processus git / 10,4 s a chaque tour d'agent). Le double suit son original :
+    // exposer l'ancien nom ici aurait laisse ce test vert sur un chemin que plus personne n'emprunte.
+    ...(recense ? { travauxNonPubliesBornes: () => travaux } : {})
   }) as unknown as OsDouble
 
 describe('get_state porte les travaux non publiés', () => {
