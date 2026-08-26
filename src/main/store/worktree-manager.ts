@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { estCoquilleVide } from './coquilles-vides'
+import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
 import type { Dirent } from 'node:fs'
 import {
   chmodSync,
@@ -5268,6 +5268,20 @@ exit 0
    * l'appelle pour RECYCLER un bureau a la tentative suivante, sans qu'aucun humain ne voie rien. On
    * ancre donc avant de balayer, comme les autres portes de sortie.
    */
+  /**
+   * Retire les coquilles vides deja accumulees dans la racine des bureaux.
+   *
+   * La garde de `cleanupWorktree` tarit la PRODUCTION ; celle-ci nettoie le STOCK -- les coquilles
+   * laissees avant qu'elle existe, ou par un chemin qui ne passe pas par le nettoyage (une session
+   * concurrente, un `git worktree remove` lance a la main). `git worktree prune` ne les voit pas :
+   * elles ne sont deja plus au registre.
+   *
+   * Ne retire QUE ce dont l'absence de valeur est demontree : aucun fichier hors `.git`.
+   */
+  balayerLesCoquilles(): string[] {
+    return balayerCoquillesVides(this.worktreeRoot)
+  }
+
   discard(agentId: string): void {
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return
