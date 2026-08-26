@@ -288,6 +288,24 @@ export interface PromptSnapshot {
   providers: string[]
   runsBlocked: Array<{ subject: string; status: string }>
   conversationsCount: number
+  /**
+   * DU TRAVAIL NON FUSIONNE, et la consigne pour le trier — ABSENT quand il n'y en a pas.
+   *
+   * Le recensement repare le 2026-08-26 rend ces travaux VISIBLES dans `get_state`. Mais voir n'est
+   * pas agir : le defaut d'origine (« rien a fusionner » repondu alors que le commit existait)
+   * venait d'un agent sans procedure, pas d'un agent mal informe.
+   *
+   * La consigne vit donc ICI, dans le snapshot serialise a CHAQUE tour — et non dans une regle
+   * permanente du prompt, qui se dilue quand elle est vraie une fois sur cent. Presente seulement
+   * quand du travail attend reellement : zero bruit le reste du temps.
+   */
+  travauxNonFusionnes?: {
+    compte: number
+    /** Nomme le skill a invoquer ; une consigne qui decrit un devoir sans outil n'est pas suivie. */
+    consigne: string
+    /** De quoi reconnaitre les travaux sans relancer le recensement. */
+    apercu: Array<{ agentId: string; date: string; fichiers: string[] }>
+  }
 }
 
 export type AppEvent =
@@ -1380,7 +1398,21 @@ export class AppCommandBus {
       runsBlocked: full.runs
         .filter((r) => r.blocked)
         .map((r) => ({ subject: r.subject, status: r.status })),
-      conversationsCount: full.conversations.length
+      conversationsCount: full.conversations.length,
+      ...(full.travauxNonPublies.length > 0
+        ? {
+            travauxNonFusionnes: {
+              compte: full.travauxNonPublies.length,
+              consigne:
+                `${full.travauxNonPublies.length} travail(aux) terminé(s) ne sont PAS dans la base. ` +
+                'Invoque le skill `salvage` pour les trier un par un (fusionner / jeter / laisser) : ' +
+                'il juge sur le CONTENU, car le plus souvent le travail est déjà présent sous une ' +
+                'autre implémentation. Ne conclus JAMAIS « rien à fusionner » sans l’avoir fait — un ' +
+                '`git status` dans l’arbre principal ne voit pas ces copies isolées.',
+              apercu: full.travauxNonPublies
+            }
+          }
+        : {})
     }
   }
 
