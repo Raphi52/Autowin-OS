@@ -1155,12 +1155,28 @@ export class ConversationStore {
     // « inconnus » de l’index, et  rend 1 pour chacun. Sans ce depart, tous les mots de la
     // demande etaient a egalite a 1 et le porteur retenu etait le PREMIER, c’est-a-dire un mot
     // d’adresse : mesure 1/40, soit pire que de ne rien faire.
+    // LE PLUS LONG mot de la demande. Ce critere est un fait de LANGUE, non une propriete de
+    // l’index : dans « rappelle moi ce qu’on a dit a propos de X », les mots d’adresse sont courts et
+    // grammaticaux, le terme qui porte le sujet est long. Il ne depend donc pas du corpus.
+    //
+    // La rarete a ete essayee d’abord, et MESUREE moins bonne : 21/40 contre 25/40. Elle ne separe
+    // pas -- « rappelle » vit dans 4 messages du corpus, « mutantes » et « habillage » dans 3,
+    // « updatebanner » dans 1. Un mot d’adresse y est aussi rare qu’un terme technique. Pire, la
+    // variante par rarete ne marchait que parce que les termes rares sont ABSENTS de l’index (voir
+    // LONGUEUR_UTILE dans voisinage.ts) et recevaient donc la valeur « inconnu » : une propriete
+    // accidentelle, pas un critere. Un critere explicite vaut mieux qu’un accident favorable.
+    //
+    // LIMITE ASSUMEE : une demande dont le sujet est un mot COURT (« le bug X ») n’en profite pas.
+    // La LONGUEUR d'abord, la RARETE pour departager. Les deux comptent, et dans cet ordre :
+    //   - la longueur seule echoue sur « statut zephyr », deux mots de six lettres : `reduce` garde
+    //     alors le premier, qui se trouve etre le mot omnipresent. C'est `rarete-isole.test.ts`,
+    //     ecrit le matin meme, qui l'a attrape -- avant publication ;
+    //   - la rarete seule echoue sur une phrase d'adresse : « rappelle » vit dans 4 messages du
+    //     corpus, « habillage » dans 3, « updatebanner » dans 1. Elle ne separe pas les mots
+    //     d'adresse des termes techniques (21/40 contre 25/40 pour la longueur).
     const porteur = entiers.reduce((meilleur, mot) => {
-      const r = index.rarete(mot)
-      const rm = index.rarete(meilleur)
-      if (r > rm) return mot
-      if (r === rm && mot.length > meilleur.length) return mot
-      return meilleur
+      if (mot.length !== meilleur.length) return mot.length > meilleur.length ? mot : meilleur
+      return index.rarete(mot) > index.rarete(meilleur) ? mot : meilleur
     }, entiers[0] ?? demandes[0])
     const candidats = trouvees.slice(0, Math.max(limite, PROFONDEUR_RECLASSEMENT))
     // Le contenu ENTIER, pas l’extrait : un premier essai lisait les extraits, qui sont des fenetres
