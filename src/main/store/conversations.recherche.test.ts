@@ -224,3 +224,43 @@ describe('re-classement par le mot porteur', () => {
     expect(res.every((r) => r.title.startsWith('Adresse'))).toBe(true)
   })
 })
+
+/**
+ * LE PORTEUR EST LE MOT LE PLUS LONG, PAS LE PLUS RARE.
+ *
+ * Mesure du 2026-08-26 sur le corpus reel : la rarete ne SEPARE pas. « rappelle » vit dans 4 messages,
+ * « mutantes » et « habillage » dans 3, « updatebanner » dans 1 -- un mot d'adresse y est aussi rare
+ * qu'un terme technique. Le critere par rarete donnait 21/40 contre 25/40 pour la longueur, et il ne
+ * fonctionnait que parce que les termes rares sont ABSENTS de l'index (LONGUEUR_UTILE, voisinage.ts)
+ * et recevaient la valeur « inconnu ». Une propriete accidentelle, pas un critere.
+ *
+ * Ce test SEPARE les deux : le mot le plus rare de la demande est ici un mot COURT, present dans une
+ * seule conversation ; le mot long, lui, est present dans deux. Un porteur choisi par la rarete
+ * designerait le court et remonterait la mauvaise conversation.
+ */
+describe('choix du mot porteur', () => {
+  it('designe le mot long, meme quand un mot court est plus rare', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    for (let i = 0; i < 12; i++) {
+      const b = store.create({ title: `Adresse ${i}`, provider: 'claude' })
+      store.append(b.id, { role: 'user', content: 'rappelle moi ce qu on a dit dans le projet' })
+    }
+    const long = 'contexte technique sans rapport particulier avec la demande. '.repeat(80)
+    // La CIBLE porte le mot long. Deux conversations le portent : il n'est donc pas le plus rare.
+    for (const nom of ['Cible', 'Cible bis']) {
+      const c = store.create({ title: nom, provider: 'claude' })
+      store.append(c.id, {
+        role: 'assistant',
+        content: `${long}${SAUT}le detail porte sur zarbitrophage${SAUT}${long}`
+      })
+    }
+    // Le LEURRE porte un mot court present nulle part ailleurs : le plus rare de la demande.
+    const leurre = store.create({ title: 'Leurre', provider: 'claude' })
+    store.append(leurre.id, { role: 'assistant', content: `${long}${SAUT}mention de wug${SAUT}${long}` })
+
+    const res = store.search('rappelle moi wug et zarbitrophage dans le projet', { limite: 3 })
+    const titres = res.map((r) => r.title)
+    expect(titres.some((t) => t.startsWith('Cible'))).toBe(true)
+  })
+})
