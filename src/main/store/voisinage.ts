@@ -65,6 +65,17 @@ const TROP_COURANTS = new Set([
 export interface IndexVoisinage {
   /** Les mots qui accompagnent habituellement celui-ci, du plus proche au moins proche. */
   voisins(mot: string): readonly string[]
+  /**
+   * Ce que vaut ce mot pour DISTINGUER une conversation d'une autre.
+   *
+   * Un mot present dans la moitie du corpus ne discrimine rien : le trouver n'apprend rien. Un mot
+   * rare, si. Mesure sur le corpus reel (1190 conversations) : sans cette ponderation, les
+   * conversations FOURRE-TOUT sortaient premieres sur n'importe quelle demande -- elles contiennent
+   * un peu de tout, donc toujours quelque chose.
+   *
+   * Rend une valeur entre 0 et 1 : proche de 1 pour un mot rare, proche de 0 pour un mot partout.
+   */
+  rarete(mot: string): number
 }
 
 /**
@@ -79,6 +90,9 @@ export function construireVoisinage(
   decoupe: (texte: string) => string[]
 ): IndexVoisinage {
   const paires = new Map<string, Map<string, number>>()
+  // Dans combien de messages chaque mot apparait : la base de sa rarete.
+  const presence = new Map<string, number>()
+  let messagesVus = 0
   const compter = (a: string, b: string): void => {
     let ligne = paires.get(a)
     if (!ligne) {
@@ -90,6 +104,8 @@ export function construireVoisinage(
   for (const texte of messages) {
     if (!texte || texte.length > LONGUEUR_UTILE) continue
     const mots = [...new Set(decoupe(texte).filter((mot) => !TROP_COURANTS.has(mot)))].slice(0, 30)
+    messagesVus += 1
+    for (const mot of mots) presence.set(mot, (presence.get(mot) ?? 0) + 1)
     for (let i = 0; i < mots.length; i++) {
       for (let j = i + 1; j < mots.length; j++) {
         compter(mots[i], mots[j])
@@ -106,5 +122,17 @@ export function construireVoisinage(
       .map(([voisin]) => voisin)
     if (assez.length > 0) retenus.set(mot, assez)
   }
-  return { voisins: (mot) => retenus.get(mot) ?? [] }
+  /*
+   * La rarete, en logarithme : entre « present dans 1 message » et « present dans 10 », l'ecart
+   * compte ; entre 500 et 510, non. Un mot INCONNU du corpus recoit 1 -- on ne le penalise pas
+   * d'etre absent, c'est peut-etre le seul mot precis de la demande.
+   */
+  const rarete = (mot: string): number => {
+    if (messagesVus === 0) return 1
+    const vu = presence.get(mot)
+    if (!vu) return 1
+    const part = vu / messagesVus
+    return Math.max(0.05, Math.min(1, Math.log(1 / part) / Math.log(messagesVus + 1)))
+  }
+  return { voisins: (mot) => retenus.get(mot) ?? [], rarete }
 }

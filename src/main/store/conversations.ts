@@ -153,26 +153,52 @@ function replier(texte: string): string {
  * Les mots de moins de trois lettres sont ecartes : « de », « la », « et » sont dans tout, donc ne
  * discriminent rien, et un mot present partout ferait remonter tout le corpus.
  */
-function motsCherchables(terme: string, voisinage: IndexVoisinage): string[] {
-  const mots = replier(terme)
-    .split(/[^a-z0-9_.:-]+/)
-    .filter((mot) => mot.length >= 3)
-  /*
-   * Chaque mot tire avec lui les AUTRES facons de le dire. Deux sources, dans cet ordre :
-   *
-   *  - le lexique des familles connues de ce produit (« badges » -> « pastille ») : une amorce, sure
-   *    mais finie ;
-   *  - le VOISINAGE appris du corpus, qui n'a besoin de personne pour s'etendre -- les mots que
-   *    l'utilisateur emploie ensemble se rapprochent d'eux-memes, a chaque message ajoute.
-   *
-   * Sans cette expansion, retrouver un echange exige de se souvenir de sa propre formulation --
-   * ce que l'on vient precisement chercher.
-   */
-  const elargis = mots.flatMap((mot) => {
-    const rac = racine(mot)
-    return [mot, ...memeFamille(mot), ...voisinage.voisins(rac)]
-  })
-  return [...new Set(elargis.map(racine))].slice(0, 40)
+/** Les mots de la demande, et ceux qu'on y ajoute pour rattraper une autre formulation. */
+interface MotsDeRecherche {
+  /** Ce que l'utilisateur a REELLEMENT ecrit. */
+  demandes: string[]
+  /** Ce qu'on ajoute : familles connues et voisinage appris. Moins sur, donc moins lourd. */
+  elargis: string[]
+}
+
+/**
+ * DEUX POIDS, PAS UN.
+ *
+ * Mesure sur le corpus reel (1190 conversations) : en melangeant les mots demandes et les mots
+ * ajoutes, la requete montait a quarante termes -- et les conversations FOURRE-TOUT, dont un seul
+ * message fait des milliers de caracteres, en contenaient forcement quatre ou cinq. Un scout de
+ * veille sortait avant la conversation qui parlait justement de pastilles.
+ *
+ * Un mot AJOUTE est une hypothese ; un mot DEMANDE est une donnee. Les compter pareil laissait
+ * l'hypothese decider.
+ */
+function motsCherchables(terme: string, voisinage: IndexVoisinage): MotsDeRecherche {
+  // Les mots ENTIERS d'abord : le lexique des familles et l'index de voisinage sont indexes sur des
+  // mots, pas sur des racines. Raciner avant de les consulter faisait chercher « worktr » dans une
+  // table qui contient « worktree » -- l'expansion rendait alors silencieusement zero.
+  const entiers = [
+    ...new Set(
+      replier(terme)
+        .split(/[^a-z0-9_.:-]+/)
+        .filter((mot) => mot.length >= 3)
+    )
+  ].slice(0, 12)
+  const demandes = [...new Set(entiers.map(racine))]
+  const vus = new Set(demandes)
+  const elargis: string[] = []
+  for (const mot of entiers) {
+    // Deux voisins par mot, pas trois : au-dela l'elargissement pese plus que la demande.
+    // Chaque table avec SA cle : le lexique est indexe sur des mots entiers, l'index de voisinage sur
+    // des racines (il est construit a partir des memes racines que la recherche). Les interroger avec
+    // la mauvaise cle rend zero, sans erreur -- une expansion muette qui n'elargit rien.
+    for (const proche of [...memeFamille(mot), ...voisinage.voisins(racine(mot)).slice(0, 2)]) {
+      const rac = racine(proche)
+      if (vus.has(rac)) continue
+      vus.add(rac)
+      elargis.push(rac)
+    }
+  }
+  return { demandes, elargis: elargis.slice(0, 12) }
 }
 
 /**
@@ -710,9 +736,12 @@ export class ConversationStore {
     terme: string,
     options?: { limite?: number; extraitsParConversation?: number }
   ): ConversationRecherche[] {
-    const mots = motsCherchables(terme, this.voisinage())
+    const { demandes, elargis } = motsCherchables(terme, this.voisinage())
     // Un terme vide rendrait TOUT le corpus : ce n'est pas une recherche, c'est un dump.
-    if (mots.length === 0) return []
+    if (demandes.length === 0) return []
+    // Un mot demande vaut trois mots ajoutes : l'hypothese aide, elle ne decide pas.
+    const POIDS_DEMANDE = 3
+    const index = this.voisinage()
     const limite = Math.max(1, Math.min(50, Math.floor(options?.limite ?? 10) || 10))
     const parConversation = Math.max(
       1,
@@ -736,14 +765,38 @@ export class ConversationStore {
         const replie = replier(message.content)
         let premierePosition = -1
         let motsIci = 0
-        for (const mot of mots) {
+        for (const mot of demandes) {
           const position = replie.indexOf(mot)
           if (position < 0) continue
-          motsIci += 1
+          // Pondere par la RARETE : trouver un mot present partout n'apprend rien sur ce message.
+          motsIci += POIDS_DEMANDE * index.rarete(mot)
+          if (premierePosition < 0 || position < premierePosition) premierePosition = position
+        }
+        for (const mot of elargis) {
+          const position = replie.indexOf(mot)
+          if (position < 0) continue
+          motsIci += index.rarete(mot)
           if (premierePosition < 0 || position < premierePosition) premierePosition = position
         }
         if (premierePosition < 0) continue
-        if (motsIci > meilleurScore) meilleurScore = motsIci
+        /*
+         * NORMALISE PAR LA LONGUEUR.
+         *
+         * Un message de 50 000 caracteres contient forcement « pastille », « badge » et « puce » --
+         * sans parler de pastilles pour autant. Une phrase de dix mots qui en contient deux, si.
+         * C'est la DENSITE qui dit la pertinence, pas le compte brut.
+         *
+         * J'avais ecrit puis ANNULE ce critere plus tot dans ce chantier, faute d'oracle : je le
+         * reglais sur un `conversations.json` en retard sur la memoire vive, qui ne contenait meme
+         * pas la cible. Il revient ici mesure sur un corpus A JOUR de 1190 conversations, ou
+         * l'absence de normalisation faisait sortir un scout de veille avant la conversation qui
+         * parlait justement de pastilles.
+         *
+         * Racine carree et non division directe : penaliser proportionnellement ecraserait tout
+         * message long, y compris celui qui repond vraiment.
+         */
+        const densite = motsIci / Math.sqrt(Math.max(60, message.content.length))
+        if (densite > meilleurScore) meilleurScore = densite
         if (extraits.length < parConversation) {
           extraits.push({
             role: message.role,
