@@ -66,6 +66,7 @@ export interface RunWorktreeCoordinatorDeps {
         // quand meme (`?.()`) mais `npm run typecheck` le refusait -- vitest ne typecheck pas, la
         // suite etait donc verte sur du code qui ne compilait pas.
         | 'preserverEtLiberer'
+        | 'balayerLesCoquilles'
         | 'reconcileResidues'
         | 'reconcileResiduesAsync'
         | 'cleanupPublished'
@@ -728,6 +729,9 @@ export class RunWorktreeCoordinator {
   ): FinalizeResult | undefined {
     const tracked = this.runs.get(runId)
     if (!tracked) return undefined
+    // TOUTE fin de run change le recensement : un travail retenu y entre, un travail fusionne en
+    // sort. On oublie avant de decider quoi que ce soit — l'invalidation ne coute qu'un recalcul.
+    this.invaliderRecensement()
     if (options.onPrepared || options.onPublished) this.publicationCallbacks.set(runId, options)
     if (options.merge === false) {
       this.publicationCallbacks.delete(runId)
@@ -827,6 +831,9 @@ export class RunWorktreeCoordinator {
     }
     const tracked = this.runs.get(runId)
     if (!tracked) return undefined
+    // TOUTE fin de run change le recensement : un travail retenu y entre, un travail fusionne en
+    // sort. On oublie avant de decider quoi que ce soit — l'invalidation ne coute qu'un recalcul.
+    this.invaliderRecensement()
     if (options.onPrepared || options.onPublished) this.publicationCallbacks.set(runId, options)
     if (options.merge === false) {
       this.publicationCallbacks.delete(runId)
@@ -1125,6 +1132,21 @@ export class RunWorktreeCoordinator {
     apercu: Map<string, { date: string; fichiers: string[] }>
   }
 
+  /**
+   * OUBLIER le recensement parce qu'un EVENEMENT l'a rendu faux — pas parce que le temps a passe.
+   *
+   * Defaut trouve par l'audit du 2026-08-26 : le cache 60 s etait tolerable tant qu'il ne servait
+   * qu'au bandeau, qui se redessine. Depuis que `get_state` le lit, `snapshotForPrompt()` le remplit
+   * a CHAQUE tour d'agent, donc PENDANT le run — avant que l'agent isole n'ait committe. Le run
+   * finit a T, l'utilisateur dit « fusionne » a T+5 s, et l'agent lit l'instantane de T-40 s : `[]`.
+   * Il repond « rien a fusionner ». C'est le defaut d'origine, rejoue par sa propre reparation.
+   *
+   * La TTL est un pari sur le temps ; la fin d'un run est un fait connu d'ici. On invalide dessus.
+   */
+  invaliderRecensement(): void {
+    this.cacheNonPublies = undefined
+  }
+
   private travauxNonPubliesCaches(): {
     ids: Set<string>
     apercu: Map<string, { date: string; fichiers: string[] }>
@@ -1145,6 +1167,53 @@ export class RunWorktreeCoordinator {
     )
     this.cacheNonPublies = { a: maintenant, ids, apercu }
     return { ids, apercu }
+  }
+
+  /**
+   * La version BORNEE et CACHEE, pour les chemins CHAUDS (`get_state`, injection de prompt).
+   *
+   * Defaut mesure le 2026-08-26 : `get_state` avait ete cable sur la variante sans borne ci-dessous,
+   * dont le commentaire dit pourtant « geste EXPLICITE de l'utilisateur, pas un rafraichissement
+   * d'ecran ». Or `snapshotForPrompt()` appelle `snapshot()` a CHAQUE tour d'agent. Sur ce depot
+   * (19 bureaux) : 76 processus git, 10,4 secondes -- par tour.
+   *
+   * Le cache 60 s et la borne a six entrees sont ceux du bandeau : la meme question, la meme reponse.
+   */
+  travauxNonPubliesBornes(): Array<{ agentId: string; date: string; fichiers: string[] }> {
+    const { ids, apercu } = this.travauxNonPubliesCaches()
+    /*
+     * ON NE REND QUE CE QU'ON SAIT DECRIRE.
+     *
+     * Defaut du 2026-08-26 : cette methode mappait `ids` (COMPLET) sur `apercu` (borne a six), donc
+     * la septieme entree sortait avec `date: ''` et `fichiers: []` -- indistinguable d'un travail
+     * vide. Or `commands.ts` promet a l'agent la liste « avec leurs fichiers », et un `fichiers: []`
+     * se lit « rien dedans » : le defaut d'origine rejoue, avec une entree presente mais muette.
+     *
+     * Le COMPTE, lui, reste gratuit (`ids` vient d'une seule commande) : on le garde donc en dernier
+     * element plutot que de laisser croire que la liste est complete.
+     */
+    const decrits = [...ids].filter((agentId) => apercu.has(agentId))
+    const restants = ids.size - decrits.length
+    const rendu = decrits.map((agentId) => ({
+      agentId,
+      date: apercu.get(agentId)?.date ?? '',
+      fichiers: apercu.get(agentId)?.fichiers ?? []
+    }))
+    if (restants > 0) {
+      rendu.push({
+        agentId:
+          restants > 1
+            ? `… et ${restants} autres travaux non publiés`
+            : '… et 1 autre travail non publié',
+        date: '',
+        fichiers: [
+          restants > 1
+            ? `${restants} entrées non détaillées — ouvrir le panneau Workspace pour les voir`
+            : '1 entrée non détaillée — ouvrir le panneau Workspace pour la voir'
+        ]
+      })
+    }
+    return rendu
   }
 
   /** Tous les travaux finis mais non publies, avec leurs fichiers. Lecture seule, a la demande. */
@@ -1749,6 +1818,15 @@ export class RunWorktreeCoordinator {
   }
 
   private async reconcileExistingAsync(): Promise<void> {
+    // Les coquilles vides d'abord : elles MENTENT a tout ce qui les mesure ensuite. Un `git status`
+    // lance dans l'une d'elles ne repond pas « vide » -- git remonte l'arborescence et rapporte
+    // l'etat du depot PARENT. Reconcilier avant de les retirer, c'est reconcilier sur douze faux
+    // rapports (mesure le 2026-08-25).
+    try {
+      this.manager.balayerLesCoquilles?.()
+    } catch {
+      /* Menage best-effort : ne jamais empecher un demarrage pour un dossier vide. */
+    }
     const residues = this.manager.reconcileResiduesAsync
       ? await this.manager.reconcileResiduesAsync()
       : this.manager.reconcileResidues?.()

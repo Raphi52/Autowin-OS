@@ -572,9 +572,26 @@ function removeStaleWorkerLifecycleAdvice(
 
 type ClosingMarker = 'fait' | 'maintenant' | 'reste' | 'recommande'
 
-function structuredClosingMarker(line: string): ClosingMarker | undefined {
-  const text = line
+/**
+ * LE DEPOUILLEMENT, defini UNE FOIS pour la detection ET pour l'extraction.
+ *
+ * Deux defauts du 2026-08-26 avaient la meme cause : la detection depouillait le prefixe, pas
+ * l'extraction. Une puce (`- 👉 Recommandé`) n'etait donc pas reconnue du tout, et un titre
+ * (`### 👉 Recommandé`) etait reconnu puis recopie AVEC ses dieses dans la phrase annotee. Un
+ * seul point de normalisation supprime la CLASSE, pas seulement les deux formes vues.
+ */
+function sansDecorationDeCloture(line: string): string {
+  return line
     .trim()
+    .replace(/^(?:[-*+]|\d+[.)])\s+/u, '')
+    .replace(/^#{1,6}\s*/u, '')
+    .replace(/^(?:\*\*|__)/u, '')
+    .replace(/(?:\*\*|__)(?=\s*(?:[:：—–-]|$))/u, '')
+    .trim()
+}
+
+function structuredClosingMarker(line: string): ClosingMarker | undefined {
+  const text = sansDecorationDeCloture(line)
     .replace(/^#{1,6}\s*/u, '')
     .replace(/^\*\*/u, '')
     .replace(/\*\*(?=\s*(?:[:：—–-]|$))/u, '')
@@ -699,7 +716,19 @@ export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): 
     asString(outcome.status) === 'succeeded' &&
     outcome.valid === true &&
     outcome.gateBlocked === false &&
-    outcome.reused === false
+    outcome.reused === false &&
+    /*
+     * LIVRE VEUT DIRE ARRIVE QUELQUE PART.
+     *
+     * Trou trouve par l'audit du 2026-08-26, reproduit a l'execution. `orchestrator.ts:2012` pose
+     * `retained = green && ... && publication === 'hold'` : un travail RETENU est donc forcement
+     * VERT, et `orchestrator.ts:2113` l'exclut de la mise en gate. Les quatre conditions ci-dessus
+     * repondaient donc OUI sur du code reste dans sa copie isolee, et l'utilisateur lisait
+     * « ✅ Workflow terminé » sur un travail qui n'existait nulle part chez lui.
+     *
+     * C'etait aussi ce qui rendait MUET le correctif du `👉 Recommandé` : il vit derriere ce test.
+     */
+    !travailRestePrisonnier(outcome)
   )
 }
 
@@ -767,11 +796,11 @@ export function demoteUnvalidatedSuccessClaims(
        * rapport, et la retirer laisserait l'utilisateur sans rien. On lui accroche sa precondition,
        * pour qu'il ne se lise plus comme une action immediatement faisable.
        */
-      const conseil = line
-        .replace(
-          /^\s*(?:[*_`]*\s*)?👉\s*(?:\*\*|__)?\s*Recommand[ée](?:\*\*|__)?\s*(?:[—:–-]\s*)?/u,
-          ''
-        )
+      // MEME depouillement que la detection : c'est leur divergence qui recopiait les dieses
+      // d'un titre dans la phrase annotee.
+      const conseil = sansDecorationDeCloture(line)
+        .replace(/^👉\s*Recommand[ée]/u, '')
+        .replace(/^\s*(?:[—:：–-]\s*)?/u, '')
         .trim()
       return conseil
         ? `👉 Recommandé — AUTO-DÉCLARÉ, non validé (${cause}), à faire seulement une fois la cause levée et le travail récupéré : ${conseil}`

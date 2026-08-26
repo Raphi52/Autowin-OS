@@ -16,7 +16,12 @@ import type { Message } from './providers/types'
 import { CONSTITUTION } from './constitution'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import { RoleModelConfig, type Role, type RoleBinding, type ReasoningEffort } from './roles'
-import { dynamicPrompt, profilEcraseLeCadrage, meriteUneDecision, readWorkflowDecision } from './workflow-dynamic'
+import {
+  dynamicPrompt,
+  profilEcraseLeCadrage,
+  meriteUneDecision,
+  readWorkflowDecision
+} from './workflow-dynamic'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 // fix-ok: refonte qualité (demande user « refais comme en fable ») — purge du mort, pas un blind-fix.
 import { CostAggregator } from './dashboards/cost'
@@ -282,7 +287,13 @@ export class AutowinOS {
     // Le nom que le modèle lui a donné était JETÉ ici : un workflow inventé pilotait le run sans que
     // rien à l'écran ne puisse dire lequel — le cas où l'utilisateur a le moins décidé était aussi
     // le plus muet.
-    if (profilEcraseLeCadrage(task, decision.graph.nodes.map((node) => node.phase))) return undefined
+    if (
+      profilEcraseLeCadrage(
+        task,
+        decision.graph.nodes.map((node) => node.phase)
+      )
+    )
+      return undefined
     return {
       identity: { name: decision.name, source: 'compose' },
       graph: decision.graph,
@@ -689,6 +700,11 @@ export class AutowinOS {
     return this.worktrees?.travauxNonPublies() ?? []
   }
 
+  /** La version BORNEE et CACHEE, pour les chemins chauds (`get_state`). Lecture seule. */
+  travauxNonPubliesBornes(): Array<{ agentId: string; date: string; fichiers: string[] }> {
+    return this.worktrees?.travauxNonPubliesBornes?.() ?? []
+  }
+
   /** Le patch d'un de ces travaux, pour le lire avant d'en decider. Lecture seule. */
   patchTravailNonPublie(agentId: string): { patch: string; tronque: boolean } {
     return this.worktrees?.patchTravailNonPublie(agentId) ?? { patch: '', tronque: false }
@@ -757,13 +773,15 @@ export class AutowinOS {
    * Abonne un puits de mesure aux REFUS d'integration. Emis a chaque tentative : l'abonne distingue
    * incidents et reessais par `tentative`. Existe parce que rien ne comptait ces refus.
    */
-  onRefusIntegration(listener: (refus: {
-    cause: string
-    agentId: string
-    files: readonly string[]
-    tentative: number
-    detail?: string
-  }) => void): void {
+  onRefusIntegration(
+    listener: (refus: {
+      cause: string
+      agentId: string
+      files: readonly string[]
+      tentative: number
+      detail?: string
+    }) => void
+  ): void {
     this.refusIntegrationListener = listener
   }
 
