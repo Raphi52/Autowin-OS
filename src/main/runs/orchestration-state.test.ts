@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, readdirSync, readFileSync } from 'node:fs'
-import { corpsDeBloc } from '../../shared/corps-source'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { compileExecutionQuote } from '../execution-quote'
@@ -37,18 +36,13 @@ afterEach(() => {
 })
 
 /**
- * Le source PRIVE DE SA MISE EN FORME, pour chercher un appel sans dependre de la facon dont
- * Prettier l'a coupe.
- *
- * Mesure le 2026-08-26 : `populateConvRunSections(resumedRunFile.path` etait cherche sur UNE ligne
- * alors que le formateur venait de renvoyer l'argument a la ligne suivante. Le comportement etait
- * intact (index.ts appelle toujours cet appel, au bon endroit) ; seul le test etait rouge, et il
- * accusait le code. Un test qui tombe sur un retour a la ligne ne mesure pas ce qu'il annonce.
- *
- * Applique DES DEUX COTES de l'assertion, donc jamais plus permissif sur le contenu : ce qui
- * disparait est l'espace, pas un caractere du motif.
+ * `sansMiseEnForme` et `corpsDeBloc` vivaient ici pour rendre les gardes textuels moins fragiles :
+ * chercher un appel sans dependre de la facon dont Prettier l'avait coupe, borner un bloc par ses
+ * accolades plutot que par un repere interieur. Deux rustines sur le SYMPTOME — le declencheur le
+ * plus frequent — pas sur la nature du test : une assertion qui cherche une chaine ne prouve
+ * toujours aucun comportement. Les gardes de la relance ont depuis ete remplaces par des tests qui
+ * l'EXERCENT (`relaunch-resumable-run.test.ts`), et ces deux aides n'ont plus d'emploi ici.
  */
-const sansMiseEnForme = (source: string): string => source.replace(/\s+/g, '')
 
 describe('état reprenable d’orchestration (survie niveau 3)', () => {
   it('persiste puis relit un run, et l’efface à la clôture', () => {
@@ -73,9 +67,8 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
       model: 'claude-sonnet',
       reasoningEffort: 'high'
     })
-    expect(readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')).toContain(
-      'resumableRun.bindingOverride'
-    )
+    // Que ce modele fige atteigne bien `runTask` est desormais EXERCE, pas relu :
+    // relaunch-resumable-run.test.ts > « transmet a runTask le modele fige persiste ».
   })
 
   it('persiste puis restaure la topologie runtime complete du run', () => {
@@ -546,7 +539,9 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     expect(indexSource).toContain('const resumeTurnId = liveReattachment.turnId')
     expect(indexSource).toContain('resumeExisting: liveReattachment.resumeExisting')
-    expect(indexSource).toContain('durableResumeTurn.begin(')
+    // L'ouverture du tour de RELANCE est exercee dans relaunch-resumable-run.test.ts
+    // (« reprend le tour d origine quand son identite concorde, en ouvre un neuf sinon ») :
+    // le texte ne montrait pas QUEL tour etait ouvert, le test comportemental si.
   })
 
   it('n’écrit pas de fichier temporaire résiduel (écriture atomique)', () => {
@@ -1171,19 +1166,14 @@ describe('identité du modèle lors d’une reprise de conversation', () => {
 })
 
 describe('admission de la reprise automatique au démarrage', () => {
-  it('restaure la topologie persistee et isole la migration des anciens tours', () => {
-    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
-    const relaunchEnd = indexSource.indexOf("if (reprise === 'bloquer')", relaunchStart)
-    const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
+  /**
+   * Cote RELANCE, la topologie persistee est desormais EXERCEE et non plus relue :
+   * relaunch-resumable-run.test.ts > « passe a runTask la topologie PERSISTEE du run, jamais celle
+   * capturee au demarrage » distingue les deux topologies, ce qu'aucun `toContain` ne pouvait
+   * faire. Reste ici la moitie qui vit dans `os.ts`, hors du module extrait.
+   */
+  it('persiste le snapshot avec l acquis a chaque phase terminee', () => {
     const osSource = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
-
-    expect(relaunchSource).toContain('admitAutomaticResumeRuntime(')
-    expect(relaunchSource).toContain('runtime: {')
-    expect(relaunchSource).toMatch(/resumedRuntime\s*\.run\(\(runtimeSnapshot\) =>/)
-    const runTaskSource = relaunchSource.slice(relaunchSource.indexOf('.runTask('))
-    expect(runTaskSource).toContain('runtimeSnapshot')
-    expect(runTaskSource).not.toContain('os.captureOrchestrationRuntime()')
     expect(osSource).toMatch(
       /onPhaseCompleted:[\s\S]*runtimeSnapshot,[\s\S]*saveOrchestrationState/
     )
@@ -1224,64 +1214,22 @@ describe('admission de la reprise automatique au démarrage', () => {
     expect(closeAt).toBeLessThan(relaunchAt)
   })
 
-  it('ne supprime le checkpoint historique qu’après le premier lifecycle admis', () => {
-    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
-    const relaunchEnd = indexSource.indexOf("if (reprise === 'bloquer')", relaunchStart)
-    const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
-    const runTaskAt = relaunchSource.indexOf('.runTask(')
-    const lifecycleAt = relaunchSource.indexOf('(lifecycle) =>')
-    const forgetAt = relaunchSource.indexOf('os.forgetResumableOrchestration')
-
-    expect(relaunchStart).toBeGreaterThanOrEqual(0)
-    expect(relaunchEnd).toBeGreaterThan(relaunchStart)
-    expect(runTaskAt).toBeGreaterThanOrEqual(0)
-    expect(lifecycleAt).toBeGreaterThan(runTaskAt)
-    expect(forgetAt).toBeGreaterThan(lifecycleAt)
-    expect(relaunchSource).toContain('resumedCurrentRunId !== resumableRun.runId')
-  })
-
-  it('la reprise persiste sa trace dans le RUN.md de la conversation (panneau Juges)', () => {
-    // Mesuré 14/08 : un run repris rejouait ses phases SANS toucher son RUN.md — trace.json jamais
-    // écrite → le panneau des juges restait vide sur tout run relancé après redémarrage.
-    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    // La borne de fin etait `indexOf("if (reprise === 'bloquer')")`, un repere INTERIEUR a la
-    // fonction : du code s'etant deplace, la tranche coupait AVANT `populateConvRunSections` et ce
-    // garde criait au loup sur du cablage intact (verifie le 2026-08-26 : l'appel est bien la).
-    // On borne sur les accolades. Les autres tests de ce fichier gardent leur tranche courte a
-    // DESSEIN — plusieurs verifient qu'une chose est ABSENTE, et les elargir les rendrait faux.
-    const relaunchSource = corpsDeBloc(indexSource, 'const relaunchResumableRun =')
-
-    const relaunchCompact = sansMiseEnForme(relaunchSource)
-
-    // Le RUN.md est rattaché AVANT le runTask (même workflow ouvert que l'orchestration d'origine).
-    const reuseAt = relaunchSource.indexOf('reuseOrCreateConvRun(')
-    const runTaskAt = relaunchSource.indexOf('.runTask(')
-    expect(reuseAt).toBeGreaterThanOrEqual(0)
-    expect(reuseAt).toBeLessThan(runTaskAt)
-    // Chaque step est accumulé, puis persisté et le run clos — sur le succès ET sur l'échec.
-    expect(relaunchCompact).toContain(sansMiseEnForme('resumedSteps.push(step)'))
-    expect(
-      relaunchCompact.split(sansMiseEnForme('saveConvRunTrace(resumedRunFile.path, resumedSteps)'))
-    ).toHaveLength(3)
-    // Cherchees en CHAINE LITTERALE, ces assertions exigeaient que l'appel tienne sur une ligne. Le
-    // formateur l'a reparti sur quatre — et le garde est passe au rouge sur du code intact. On
-    // compare desormais hors mise en forme (sansMiseEnForme), comme le reste de ce bloc.
-    expect(relaunchCompact).toContain(sansMiseEnForme('closeConvRun('))
-    expect(relaunchCompact).toContain(sansMiseEnForme('populateConvRunSections(resumedRunFile.path'))
-  })
-
-  it('repersiste un règlement tardif sur la reprise automatique', () => {
-    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
-    const relaunchEnd = indexSource.indexOf("if (reprise === 'bloquer')", relaunchStart)
-    const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
-
-    expect(relaunchSource).toContain('reconcileLateRunLifecycle(')
-    expect(relaunchSource).toContain(
-      "broadcast({ type: 'orchestrate-usage', convId: conversationId })"
-    )
-  })
+  /**
+   * LES TROIS GARDES QUI VIVAIENT ICI SONT PARTIS DANS relaunch-resumable-run.test.ts.
+   *
+   * Ils lisaient le TEXTE de `index.ts` — ordre des `indexOf`, `toContain('closeConvRun(')` — donc
+   * ils prouvaient qu'une suite de caracteres etait presente, jamais qu'un effet se produisait. La
+   * fonction gardee vit desormais dans son propre module et est APPELEE par ses tests :
+   *  - « ne supprime le checkpoint qu apres le premier lifecycle admis » →
+   *    « ne retire le checkpoint historique que si la relance a change d identite de run », qui
+   *    exerce les DEUX branches de la comparaison au lieu de constater qu'elle est ecrite ;
+   *  - « la reprise persiste sa trace dans le RUN.md » → « rattache le RUN.md AVANT de lancer
+   *    runTask » + les deux tests succes/echec, qui verifient le chemin recu, les steps sauves et
+   *    le statut de cloture ;
+   *  - « repersiste un reglement tardif » → « repersiste un reglement tardif et rafraichit les
+   *    vues », qui exige la diffusion reellement emise.
+   * Chacun est accompagne d'un sabotage prouvant qu'il tombe quand l'effet disparait.
+   */
 })
 
 /**
