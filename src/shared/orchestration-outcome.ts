@@ -39,6 +39,23 @@ export interface OrchestrationOutcome {
   gateReasons?: unknown
   runPath?: unknown
   runId?: unknown
+  /**
+   * Le travail est-il RESTE dans la copie isolee ? Signal, jamais une devinette de vocabulaire.
+   *
+   * Il existe parce qu'un conseil du worker n'a pas la meme valeur selon que son code est dans
+   * l'arbre de l'utilisateur ou non (cf. `demoteUnvalidatedSuccessClaims`). Sans ce champ, la seule
+   * facon de trancher aurait ete de deviner d'apres les mots du conseil -- ce qui aurait aussi
+   * annote « relire le diff », parfaitement faisable, et casse le contre-exemple qui le protege.
+   */
+  workRetained?: unknown
+  /**
+   * La copie conservee elle-meme, telle que l'orchestrateur la rend. Deux des trois lignees qui
+   * construisent cette issue font `...result` et la portent donc deja ; la troisieme
+   * (`commands.ts`) recompose champ par champ et pose `workRetained`. Lire les DEUX evite d'avoir
+   * a cabler le meme signal a trois endroits — et d'en oublier un, ce qui est exactement comme un
+   * correctif meurt en silence sur une lignee.
+   */
+  retainedWorkspace?: unknown
   result?: unknown
   reused?: unknown
   learning?: {
@@ -690,6 +707,11 @@ export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): 
  * Retrograde l'etiquette de succes d'un rapport worker que la gate ou le juge a refuse.
  * Les preuves (tests, diffs, diagnostics) restent INTACTES : seul le ✅ mensonger tombe.
  */
+/** Le travail est-il reste dans la copie isolee ? Vrai des qu'UNE des deux lignees le dit. */
+function travailRestePrisonnier(outcome: OrchestrationOutcome): boolean {
+  return outcome.workRetained === true || Boolean(outcome.retainedWorkspace)
+}
+
 export function demoteUnvalidatedSuccessClaims(
   report: string,
   outcome: OrchestrationOutcome
@@ -725,8 +747,35 @@ export function demoteUnvalidatedSuccessClaims(
     if (marker === 'reste' && affirmeQuIlNeResteRien(line)) {
       return `⏳ Reste à faire — AUTO-DÉCLARÉ, non validé (${cause}) : lever la cause avant toute clôture`
     }
-    if (marker === 'recommande' && affirmeQuIlNeResteRien(line)) {
-      return `👉 Recommandé — AUTO-DÉCLARÉ, non validé (${cause}) : traiter le motif du refus`
+    if (marker === 'recommande') {
+      if (affirmeQuIlNeResteRien(line)) {
+        return `👉 Recommandé — AUTO-DÉCLARÉ, non validé (${cause}) : traiter le motif du refus`
+      }
+      if (!travailRestePrisonnier(outcome)) return line
+      /*
+       * UN CONSEIL NE S'ADRESSE PAS A UN ARBRE QUI N'A RIEN RECU.
+       *
+       * Defaut signale par l'utilisateur le 2026-08-26 (run `ef845009a251-1`) : « dans le meme bloc
+       * il me dit qu'il a pas fusionne mais qu'il faut tester ». Le message portait
+       * « 👉 Recommandé — lancer l'app et regarder l'accueil » et, quelques lignes plus bas,
+       * « Travail NON fusionne : il reste dans la copie isolee ». Les deux sont vrais separement et
+       * se contredisent ensemble : on envoie l'utilisateur observer un resultat qui n'est chez
+       * personne.
+       *
+       * Le worker redige AVANT la gate et AVANT la fusion : son conseil ne sait ni le verdict, ni
+       * ou son code a fini. On ne le CENSURE pas -- c'est souvent la seule piste concrete du
+       * rapport, et la retirer laisserait l'utilisateur sans rien. On lui accroche sa precondition,
+       * pour qu'il ne se lise plus comme une action immediatement faisable.
+       */
+      const conseil = line
+        .replace(
+          /^\s*(?:[*_`]*\s*)?👉\s*(?:\*\*|__)?\s*Recommand[ée](?:\*\*|__)?\s*(?:[—:–-]\s*)?/u,
+          ''
+        )
+        .trim()
+      return conseil
+        ? `👉 Recommandé — AUTO-DÉCLARÉ, non validé (${cause}), à faire seulement une fois la cause levée et le travail récupéré : ${conseil}`
+        : line
     }
     // `📍 Maintenant` aussi : « tout est livré » survivait sous un en-tete de blocage. Ici la ligne
     // decrit un ETAT, donc on ne la remplace que si elle affirme la completude — une ligne qui
