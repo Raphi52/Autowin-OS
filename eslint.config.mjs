@@ -52,8 +52,28 @@ export default defineConfig(
   {
     // Configuration et utilitaires JavaScript : TypeScript ne peut pas y garantir les annotations de retour.
     files: ['**/*.mjs'],
+    /*
+     * DECLARER LE LANGAGE, plutot que de faire taire la regle qui s'en plaint.
+     *
+     * Ces fichiers sont des modules ES et emploient l'`await` de premier niveau. Parses comme des
+     * SCRIPTS, leurs portees sont mal resolues : `no-undef` signalait des variables declarees au
+     * niveau du module (`GESTE` de `cdp-accueil-3d-proof.mjs`) comme non definies, alors que
+     * `node --check` accepte le fichier. Un faux positif qui vient d'une lacune de configuration,
+     * pas du code -- et qui empechait `npm test` de conclure.
+     */
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module'
+    },
     rules: {
-      '@typescript-eslint/explicit-function-return-type': 'off'
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      // Meme convention que pour les `.ts` : un `_` en tete dit « volontairement non lu ».
+      // Sans cette reprise, la regle venait du preset SANS options, et un outil de diagnostic
+      // garde expres (`_contenus`) etait signale comme un oubli.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }
+      ]
     }
   },
   {

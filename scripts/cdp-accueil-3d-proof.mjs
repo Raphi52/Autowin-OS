@@ -100,6 +100,17 @@ const VIEWPORT = { width: Number(value('--width', '1440')), height: Number(value
 // Le bail garantit la RESTAURATION, meme si la preuve echoue en cours de route. Sans lui, un `throw`
 // entre la surcharge et le nettoyage laissait l'application de l'utilisateur coincee dans une taille
 // emulee -- et ce script en contient plusieurs. Un garde-fou du depot l'exige, et il a raison.
+/**
+ * Deplacement demande a la tuile. Declare au niveau MODULE parce que le VERDICT le relit, apres
+ * la fermeture du bloc qui pilote le navigateur.
+ *
+ * Il vivait DANS ce bloc, et la comparaison finale y accedait donc hors de sa portee : une
+ * `ReferenceError` a l'execution, sur un script dont le seul role est de PROUVER que l'accueil
+ * rend. `node --check` ne l'attrapait pas -- il valide la syntaxe, pas la resolution des portees.
+ * C'est eslint (`no-undef`) qui avait raison.
+ */
+const GESTE = { dx: 73, dy: 41 }
+
 const verdict = await withDeviceMetricsOverride(
   send,
   { width: VIEWPORT.width, height: VIEWPORT.height, deviceScaleFactor: 1, mobile: false },
@@ -185,7 +196,6 @@ if (!tuile.prisePropre) {
   )
 }
 
-const GESTE = { dx: 73, dy: 41 }
 await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: tuile.cx, y: tuile.cy, button: 'left', clickCount: 1 })
 for (let step = 1; step <= 6; step += 1) {
   await send('Input.dispatchMouseEvent', {

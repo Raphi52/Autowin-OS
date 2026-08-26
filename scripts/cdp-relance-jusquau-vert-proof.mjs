@@ -156,8 +156,14 @@ const lignesPoussees = (conversationId) => {
   return sorties
 }
 
-/** Tous les contenus, gardes uniquement pour le diagnostic quand rien n'est trouve. */
-const contenus = (conversationId) => {
+/**
+ * Tous les contenus, gardes uniquement pour le diagnostic quand rien n'est trouve.
+ *
+ * Prefixe `_` : elle n'est appelee par personne AUJOURD'HUI, et c'est voulu -- on la decommente au
+ * besoin. Le prefixe dit cette intention a l'outil, la ou une suppression aurait detruit un outil
+ * de diagnostic que son auteur a garde exprès.
+ */
+const _contenus = (conversationId) => {
   const chemin = join(traces, `${conversationId}.jsonl`)
   if (!existsSync(chemin)) return []
   return readFileSync(chemin, 'utf8')
