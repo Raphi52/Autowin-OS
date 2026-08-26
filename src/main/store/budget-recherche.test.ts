@@ -47,3 +47,29 @@ describe('la recherche respecte un budget de temps', () => {
     expect(avec.map((c) => c.id)).toEqual(sans.map((c) => c.id))
   })
 })
+
+describe('le budget borne AUSSI une conversation tres longue', () => {
+  it('coupe a l interieur d un seul fil de plusieurs milliers de messages', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const fleuve = store.create({ title: 'Fleuve', provider: 'claude' })
+    for (let index = 0; index < 3_000; index++) {
+      store.append(fleuve.id, { role: 'user', content: `message ${index} sur les pastilles` })
+    }
+
+    // Compter les CONVERSATIONS ne bornait rien ici : il n'y en a qu'UNE. Seul un compteur de
+    // MESSAGES peut couper. Sans cela, un unique fleuve ignorait le budget a lui seul.
+    const trouve = store.search('pastilles', { limite: 5, extraitsParConversation: 20, budgetMs: 0 })
+    expect(trouve.length).toBe(0)
+  })
+
+  it('sans budget, le meme fil est parcouru entierement', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const fleuve = store.create({ title: 'Fleuve', provider: 'claude' })
+    for (let index = 0; index < 500; index++) {
+      store.append(fleuve.id, { role: 'user', content: `message ${index} sur les pastilles` })
+    }
+    expect(store.search('pastilles', { limite: 5 }).length).toBe(1)
+  })
+})

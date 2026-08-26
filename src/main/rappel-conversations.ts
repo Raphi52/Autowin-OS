@@ -41,6 +41,12 @@ const PLAFOND = 3_000
  * qu'elle a trouve : le rappel est un CONFORT, et un rappel partiel arrive a temps vaut mieux qu'une
  * interface qui se figeait. 60 ms laisse largement la place au cout mesure tout en garantissant que
  * l'utilisateur ne sentira jamais ce chemin, quel que soit son historique.
+ *
+ * CONSEQUENCE A DIRE, que j'avais omise : sous budget ATTEINT, le rappel devient NON DETERMINISTE.
+ * Deux tours portant la meme demande peuvent rendre des extraits differents selon la charge de la
+ * machine. « Le resultat peut etre incomplet » ne suffisait pas a le dire -- pour qui cherchera un
+ * jour pourquoi un rappel a disparu d'un tour a l'autre, c'est precisement l'information qui manque.
+ * Acceptable pour un confort ; ce serait inacceptable pour une reponse dont on tire une conclusion.
  */
 const BUDGET_MS = 60
 
