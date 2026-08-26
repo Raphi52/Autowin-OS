@@ -125,3 +125,60 @@ describe('un bureau ne disparaît jamais en emportant son commit', () => {
     expect(git(repo, 'branch', '--list', `autowin/recovery/${agentId}`).trim()).toBe('')
   })
 })
+
+/**
+ * DEUX TENTATIVES, UN SEUL agentId — le trou que le premier correctif laissait.
+ *
+ * Signale par un juge contrarian, puis VERIFIE ici plutot que cru sur parole. `cleDeBureau` donne au
+ * bureau une identite STABLE par tache (c'est tout le levier anti-residus du 2026-08-25) : deux
+ * tentatives sur la meme cible retombent donc sur le MEME `agentId`, donc sur la MEME branche de
+ * secours `autowin/recovery/<agentId>`. Un `branch -f` y ecrit sans regarder ce qu'elle portait.
+ *
+ * Consequence : le travail de la tentative 1, correctement ancre, est DESANCRE par l'ancrage de la
+ * tentative 2 — orphelin, invisible, candidat au `gc`. Exactement la perte que ce fichier existe pour
+ * interdire, deplacee d'un cran : on ne perd plus au premier balayage, on perd au second.
+ */
+describe('deux tentatives sur le meme bureau ne s’écrasent pas', () => {
+  it('garde les DEUX travaux joignables quand un agentId est recyclé', () => {
+    const { repo, racine, wm } = monter()
+    const agentId = 'run-recycle-1'
+
+    // Tentative 1 : un travail précieux, ancré puis le bureau balayé.
+    const premier = bureauCommitteEtPropre(repo, racine, agentId)
+    wm.discard(agentId)
+    expect(joignableParUneRef(repo, premier.sha)).toBe(true)
+
+    // Tentative 2 : MÊME agentId, bureau recréé depuis la base, travail DIFFÉRENT.
+    const chemin = join(racine, `agent__${agentId}`)
+    git(repo, 'worktree', 'add', '-q', '--detach', chemin, 'HEAD')
+    writeFileSync(join(chemin, 'autre-travail.txt'), 'la seconde tentative, tout aussi précieuse')
+    git(chemin, 'add', '-A')
+    git(chemin, 'commit', '-q', '-m', `agent ${agentId} bis`)
+    const second = git(chemin, 'rev-parse', 'HEAD')
+    wm.discard(agentId)
+
+    // Le second est ancré — et le PREMIER ne doit pas avoir été désancré au passage.
+    expect(joignableParUneRef(repo, second)).toBe(true)
+    expect(joignableParUneRef(repo, premier.sha)).toBe(true)
+  })
+
+  it('preserverEtLiberer ne déplace pas une adresse portant un AUTRE travail', () => {
+    // `switch -C` déplace la branche exactement comme `branch -f` : même écrasement, même perte.
+    // Ici l'adresse porte déjà le travail d'une tentative précédente, et le bureau à préserver
+    // porte du NON committé — donc le chemin `aDuTravail`, l'autre porte que le test ci-dessus.
+    const { repo, racine, wm } = monter()
+    const agentId = 'run-recycle-2'
+
+    const premier = bureauCommitteEtPropre(repo, racine, agentId)
+    wm.discard(agentId)
+    expect(joignableParUneRef(repo, premier.sha)).toBe(true)
+
+    const chemin = join(racine, `agent__${agentId}`)
+    git(repo, 'worktree', 'add', '-q', '--detach', chemin, 'HEAD')
+    writeFileSync(join(chemin, 'non-committe.txt'), 'du travail jamais committé')
+
+    wm.preserverEtLiberer(agentId)
+
+    expect(joignableParUneRef(repo, premier.sha)).toBe(true)
+  })
+})
