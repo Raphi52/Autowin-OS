@@ -1291,7 +1291,8 @@ export class AppCommandBus {
         this.os.conversations,
         demande,
         conversationCouranteId,
-        courante?.provider
+        courante?.provider,
+        courante?.projectPath ?? undefined
       )
     } catch {
       // Un rappel est un CONFORT : s'il echoue, le tour doit partir quand meme. L'inverse ferait
