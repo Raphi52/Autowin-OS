@@ -96,8 +96,16 @@ describe('withIsolatedMutation — un bureau par tâche', () => {
       {
         agentId: cle,
         date: '2026-08-24',
-        // Le cas réel à ne jamais détruire : des tests neufs jamais publiés.
-        fichiers: [CIBLE, 'src/main/runs/conv-runs.trace-thinking.test.ts']
+        // CAS REEL, verifie le 2026-08-25 dans le bureau `agent__run-72dc0b358158-1` : un test de
+        // 105 lignes sur `deriveConversationState`, absent du depot ET de tout commit. Le travail
+        // publie sur ce sujet (`399c19a9`) porte un AUTRE fichier, plus court — celui-ci n'a donc
+        // jamais ete publie et serait perdu pour de bon.
+        //
+        // Ce fichier remplace un ancrage FAUX que j'avais ecrit ici puis repete dans le message de
+        // commit `d58b2be6` : `conv-runs.trace-thinking.test.ts`, qui n'existe nulle part. Il venait
+        // d'un `git status` lance dans une coquille de bureau VIDE — git remonte alors l'arborescence
+        // et rapporte l'etat du depot PARENT. Douze coquilles ont ainsi paru porter du travail.
+        fichiers: [CIBLE, 'src/renderer/src/components/ChatView.pastilles.test.ts']
       }
     ])
 
