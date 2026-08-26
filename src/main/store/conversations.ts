@@ -1036,8 +1036,25 @@ export class ConversationStore {
          *
          * Racine carree et non division directe : penaliser proportionnellement ecraserait tout
          * message long, y compris celui qui repond vraiment.
+         * BORNEE EN HAUT, et c’est aussi important que la normalisation elle-meme.
+         *
+         * Mesure du 2026-08-26 sur le corpus reel : sans plafond, la penalite de longueur ANEANTIT
+         * le terme rare. Un oracle de 10 requetes, dont les cibles sont etablies par comptage de
+         * tokens et non par intuition, donnait un rappel@8 de 7/10 sur le mot seul mais 2/10 des
+         * que le mot etait pose dans une phrase -- et la phrase ramenait les MEMES quatre
+         * conversations quel que soit le terme distinctif, preuve que ce terme ne pesait rien. Les
+         * messages qui portaient le terme rare faisaient 1677 a 7886 caracteres (diviseur 41 a 89) ;
+         * les quatre gagnantes constantes avaient une mediane de 93 a 609 (diviseur 8 a 25). Un
+         * facteur onze en faveur de la brievete, quel que soit le contenu.
+         *
+         * Le plafond est le 3e QUARTILE mesure du corpus (564 caracteres ; q50=120, q90=1476,
+         * max=160291). Au-dela de ce quartile, la longueur ne dit plus rien de la pertinence : c’est
+         * la forme normale d’un message qui porte du code ou une explication. Continuer a punir
+         * revient a preferer la brievete a la precision. En dessous, le comportement est INCHANGE.
          */
-        const densite = motsIci / Math.sqrt(Math.max(60, message.content.length))
+        const PLAFOND_LONGUEUR = 564
+        const densite =
+          motsIci / Math.sqrt(Math.max(60, Math.min(message.content.length, PLAFOND_LONGUEUR)))
         if (densite > meilleurScore) meilleurScore = densite
         if (extraits.length < parConversation) {
           extraits.push({
