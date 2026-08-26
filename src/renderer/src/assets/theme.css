@@ -19,6 +19,12 @@
   /* Or = structure/autorité ; rose = activité/sélection */
   --gold: #e9bd4e;
   --gold-bright: #ffdc73;
+  /* Or SOBRE, l'autre echelle : la paire des accents de contenu (kickers, chiffres cles,
+     filets). Plus eteinte que --gold, elle vient de la direction « transparence totale »
+     du 14/08 et est reprise telle quelle par les mini-pages html-render, qui n'ont pas
+     acces a ces variables -- d'ou les memes hex ecrits en clair dans les prompts. */
+  --gold-doux: #d4a94f;
+  --gold-clair: #e3ba55;
   --rose: #ef3f91;
   --rose-bright: #ff5cab;
   --cyan: #49cfff;

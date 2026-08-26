@@ -105,7 +105,7 @@
   margin-top: 4px;
   padding: 3px 8px;
   font-size: 11px;
-  color: var(--accent, #d4a94f);
+  color: var(--accent, var(--gold-doux));
   background: rgba(212, 169, 79, 0.08);
   border: 1px solid rgba(212, 169, 79, 0.28);
   border-radius: 5px;
