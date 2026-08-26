@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { delimiter, join } from 'node:path'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
@@ -21,9 +21,26 @@ import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
  *    la verification est simplement affaiblie — elle passe, et c'est un faux vert publie d'office.
  * Les deux ensemble sont le point : on change ce que le verdict MESURE, pas s'il existe.
  *
- * Le bureau isole doit vivre SOUS ce depot : vitest s'y resout par remontee de `node_modules`.
+ * Le bureau isole vit SOUS ce depot : ses fichiers de test resolvent `import 'vitest'` par remontee
+ * de `node_modules`. Cette remontee ne vaut QUE pour les MODULES : le BINAIRE `vitest`, lui, est un
+ * nom nu resolu par le PATH du process — `cmd.exe` ne remonte aucun `node_modules/.bin` (c'est une
+ * facilite d'npm-script, pas du shell). `spawnVerify` prefixe le PATH avec le `.bin` de
+ * l'`executionWorkspace`, absent d'un depot temporaire : sans le rappel ci-dessous, la verification
+ * echouait pour une raison d'ENVIRONNEMENT (« 'vitest' n'est pas reconnu ») et ne prouvait plus rien.
  */
+/** Saut de ligne sans sequence d'echappement : elle a deja fui telle quelle dans ce fichier. */
+const SAUT = String.fromCharCode(10)
+
 const RACINE = join(process.cwd(), '.autowin-data', 'tests-portee')
+
+/** Le `.bin` REEL de ce depot, rendu visible au bureau temporaire — le vrai runner, pas un stub. */
+const BIN_REEL = join(process.cwd(), 'node_modules', '.bin')
+beforeAll(() => {
+  if (!existsSync(BIN_REEL)) throw new Error(`node_modules/.bin introuvable : ${BIN_REEL}`)
+  if (!(process.env.PATH ?? '').split(delimiter).includes(BIN_REEL)) {
+    process.env.PATH = `${BIN_REEL}${delimiter}${process.env.PATH ?? ''}`
+  }
+})
 
 const temporaires: string[] = []
 afterEach(() => {
@@ -48,6 +65,13 @@ function depotDejaRouge(): { repo: string; git: (...a: string[]) => string } {
     JSON.stringify({ name: 'depot-rouge', scripts: { 'test:unit': 'vitest run' } }),
     'utf8'
   )
+  /*
+   * Sans cela, le cache que vitest ecrit dans le bureau isole (`node_modules/.vite/vitest/<hash>/`)
+   * devient un fichier SUIVI a republier : git echoue en « Filename too long » et l'edition est
+   * rejetee pour une raison d'ENVIRONNEMENT. Tout depot reel ignore `node_modules` ; le fixture
+   * doit lui ressembler, pas etre plus permissif.
+   */
+  writeFileSync(join(repo, '.gitignore'), ['node_modules/', ''].join(SAUT), 'utf8')
   writeFileSync(join(repo, 'sujet.ts'), 'export const valeur = (): number => 1\n', 'utf8')
   writeFileSync(
     join(repo, 'sujet.test.ts'),
