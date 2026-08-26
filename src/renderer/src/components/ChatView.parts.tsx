@@ -31,21 +31,45 @@ const CMD_LABEL: Record<string, string> = {
 }
 
 /** Sortie texte d'un sous-agent : repliée par défaut (160px), dépliable sur demande. */
+/**
+ * `.subagent-text` plafonne a 160px pour une ligne de 16.5px (11px x 1.5), soit ~9 lignes visibles.
+ * On ESTIME le nombre de lignes rendues plutot que de le MESURER (scrollHeight via une ref + effet) :
+ * la mesure ne rend rien sous jsdom/happy-dom (pas de layout, scrollHeight = 0), donc intestable, la
+ * ou le seuil est une fonction pure verifiable. Largeur du panneau approchee a 100 caracteres par
+ * ligne : surestimer masquerait le bouton sur un texte qui deborde (le bloc reste scrollable, degat
+ * mineur), sous-estimer ramenerait le bouton sans effet qu'on corrige ici.
+ */
+const LIGNES_VISIBLES = 9
+const CHARS_PAR_LIGNE = 100
+
+export function sortieDebordante(text: string): boolean {
+  let lignes = 0
+  for (const brute of text.split('\n')) {
+    lignes += Math.max(1, Math.ceil(brute.length / CHARS_PAR_LIGNE))
+    if (lignes > LIGNES_VISIBLES) return true
+  }
+  return false
+}
+
 export function SubAgentText({ text }: { text: string }): React.JSX.Element {
   const [ouvert, setOuvert] = useState(false)
+  // Pas de bouton quand tout tient deja : promettre un depliage sans effet visible se lit comme casse.
+  const depliable = sortieDebordante(text)
   return (
     <div className={`subagent-text-wrap${ouvert ? ' open' : ''}`}>
       <div className={`subagent-text c-dim${ouvert ? ' open' : ''}`}>{text}</div>
-      <button
-        type="button"
-        className="subagent-text-toggle"
-        onClick={() => setOuvert(!ouvert)}
-        aria-expanded={ouvert}
-        aria-label={ouvert ? 'Replier la sortie' : 'Déplier la sortie'}
-        title={ouvert ? 'Replier la sortie' : 'Déplier la sortie'}
-      >
-        {ouvert ? '▾' : '▸'}
-      </button>
+      {depliable && (
+        <button
+          type="button"
+          className="subagent-text-toggle"
+          onClick={() => setOuvert(!ouvert)}
+          aria-expanded={ouvert}
+          aria-label={ouvert ? 'Replier la sortie' : 'Déplier la sortie'}
+          title={ouvert ? 'Replier la sortie' : 'Déplier la sortie'}
+        >
+          {ouvert ? '▾' : '▸'}
+        </button>
+      )}
     </div>
   )
 }
