@@ -72,4 +72,21 @@ describe('popup orchestrateur — dernière version seulement', () => {
     ]).groups
     expect(modelsDe(groups)).toHaveLength(3)
   })
+
+  it('ne garde que la version la plus haute même si l’ancienne arrive EN PREMIER', () => {
+    // GREFFE du bureau `refs/autowin/rescue/run-ea8bccd9824f-1`, seule part de ce fichier que main
+    // ne couvrait pas. Les autres cas du bureau renommaient des propriétés déjà testées ici, et sa
+    // version PERDAIT cinq cas que main possède (date de snapshot, routes auto/*) : seul celui-ci
+    // est repris.
+    //
+    // CE QUI LE REND DISCRIMINANT : les cas existants listent les versions DÉCROISSANTES, donc la
+    // plus haute arrive d'abord — une implémentation « garde la première vue » les passerait tous.
+    // Ici l'ancienne vient en tête.
+    const groups = buildOrchestratorModelGroups([
+      m('cli', 'claude-opus-4-5'),
+      m('cli', 'claude-opus-4-8'),
+      m('cli', 'claude-sonnet-4-5')
+    ]).groups
+    expect(modelsDe(groups)).toEqual(['cli:claude-opus-4-8', 'cli:claude-sonnet-4-5'])
+  })
 })

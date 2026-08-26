@@ -36,22 +36,70 @@ export type DecisionBureau = 'reinitialiser' | 'preserver'
  * façons selon l'appelant, et que deux écritures d'un même chemin fabriqueraient deux bureaux —
  * exactement le défaut qu'on corrige.
  */
+/**
+ * Longueur maximale d'une cle de bureau.
+ *
+ * CE N'EST PAS UNE COQUETTERIE : la cle nomme un DOSSIER (`<racine>/agent__<cle>`), donc elle
+ * consomme le budget de chemin de Windows. Mesure le 2026-08-26 sur le depot reel — la cle
+ * `command-edit-conv-1412-src-renderer-src-components-updatebanner-tsx` portait le bureau a 147
+ * caracteres AVANT le fichier edite ; en ajoutant le fichier (~44) puis le cache que la verification
+ * ecrit dans `node_modules/.vite/vitest/<hash>/results.json` (~65), on atteignait ~256 pour une
+ * limite de 260. Les publications echouaient alors en `merge-failed : Filename too long`, REFUSANT
+ * des editions saines, et le travail partait dans une `refs/autowin/rescue/…` que rien n'affiche.
+ */
+export const LONGUEUR_MAX_CLE_BUREAU = 64
+
+/** Ce qui reste d'un texte une fois reduit aux caracteres surs pour un nom de dossier. */
+function jetons(texte: string): string {
+  return texte.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+/**
+ * Empreinte courte et STABLE d'un chemin — stable entre deux executions, sinon la reutilisation
+ * d'un bureau par tache (tout le levier anti-residus du 25/08) s'effondrerait.
+ *
+ * FNV-1a plutot qu'un hash cryptographique : ce module est pur et sans dependance, et on ne cherche
+ * ici ni resistance aux collisions adverses ni secret — seulement a separer des chemins de projet.
+ */
+function empreinteStable(texte: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < texte.length; i++) {
+    h ^= texte.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(36).padStart(7, '0').slice(0, 8)
+}
+
 export function cleDeBureau(
   commande: string,
   conversationId: string | undefined,
   cible: string | undefined
 ): string | undefined {
   const chemin = (cible ?? '').trim()
-  // Sans cible, aucune identité de tâche : l'appelant doit garder son identifiant aléatoire plutôt
-  // que de faire collisionner des tâches distinctes sur un même bureau.
+  // Sans cible, aucune identite de tache : l'appelant doit garder son identifiant aleatoire plutot
+  // que de faire collisionner des taches distinctes sur un meme bureau.
   if (!chemin) return undefined
-  const normalise = chemin.replace(/\\/g, '/').toLowerCase()
-  const empreinte = normalise
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(-60)
-  const conversation = (conversationId ?? 'sans-conversation').replace(/[^A-Za-z0-9_-]/g, '')
-  return `command-${commande}-${conversation}-${empreinte}`
+  // Separateur Windows -> POSIX. `String.fromCharCode(92)` evite un antislash echappe, illisible ici.
+  const normalise = chemin.split(String.fromCharCode(92)).join('/').toLowerCase()
+  /*
+   * LA SIGNATURE DISTINGUE, LE LIBELLE RENSEIGNE — et il faut les deux.
+   *
+   * L'empreinte gardait les 60 DERNIERS caracteres du chemin. Deux defauts en un : elle n'etait
+   * bornee que par ce nombre (une conversation a identifiant long debordait quand meme), et surtout
+   * deux fichiers DIFFERENTS dont les queues de chemin coincident recevaient la MEME cle, donc le
+   * MEME bureau. Verifie sur des chemins reels : `…/renderer/…/widgets/accueil/panneau-de-
+   * configuration.tsx` et `…/main/…/widgets/accueil/panneau-de-configuration.tsx` etaient confondus.
+   * Deux taches sans rapport ecrivant au meme endroit, c'est du travail ecrase.
+   *
+   * La signature porte le chemin ENTIER, donc elle separe ce que la queue confondait. Le libelle,
+   * lui, ne sert qu'a l'oeil humain qui inspecte le dossier : un bureau que personne ne sait
+   * rattacher a sa tache est un residu de plus.
+   */
+  const signature = empreinteStable(normalise)
+  const fichier = jetons(normalise.slice(normalise.lastIndexOf('/') + 1)).slice(0, 24)
+  // Tronquee par la QUEUE : c'est le numero qui distingue deux conversations, pas leur prefixe.
+  const conversation = jetons((conversationId ?? 'sans-conversation').toLowerCase()).slice(-12)
+  return `command-${commande}-${conversation}-${fichier}-${signature}`
 }
 
 /**
