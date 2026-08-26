@@ -1013,7 +1013,7 @@ export class WorktreeManager {
           agentId,
           date,
           fichiers,
-          verdict: verdictDeBureau({ fichiers, aUnCommit: !!commit }),
+          verdict: verdictDeBureau({ fichiers, aUnCommit: !!commit, lectureEchouee }),
           ...(lectureEchouee ? { lectureEchouee } : {})
         }
       })

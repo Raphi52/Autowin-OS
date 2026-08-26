@@ -49,3 +49,29 @@ describe('verdictDeBureau — le tri manuel, rendu automatique', () => {
     }
   })
 })
+
+describe('verdictDeBureau — une lecture ratée n’est PAS un constat de vide', () => {
+  it('lecture échouée : verdict INCONNU, jamais « trié »', () => {
+    // DEFAUT DE MON PROPRE MODULE, trouve le 2026-08-26 par un audit concurrent sur le module
+    // voisin. `apercuTravauxNonPublies` enveloppe son `git diff` dans un catch muet qui laisse
+    // `fichiers = []`. Un index verrouille par une session concurrente suffit donc a faire lire
+    // « rien a ajouter » — et, avec un commit existant, a afficher TRIE sur un bureau qui porte
+    // peut-etre du travail. Un verdict rassurant faux invite a purger : c'est la pire des sorties.
+    expect(verdictDeBureau({ fichiers: [], aUnCommit: true, lectureEchouee: true })).toBe('inconnu')
+  })
+
+  it('lecture échouée sans commit non plus : INCONNU, pas « sans valeur »', () => {
+    expect(verdictDeBureau({ fichiers: [], aUnCommit: false, lectureEchouee: true })).toBe('inconnu')
+  })
+
+  it('lecture échouée MAIS des fichiers lus : À REPRENDRE — ce qu’on a vu prime', () => {
+    // Ce qui a ete effectivement lu reste une constatation : ne pas le degrader en « inconnu ».
+    expect(
+      verdictDeBureau({ fichiers: ['src/a.ts'], aUnCommit: true, lectureEchouee: true })
+    ).toBe('a-reprendre')
+  })
+
+  it('« inconnu » porte lui aussi un libellé lisible', () => {
+    expect(LIBELLE_VERDICT.inconnu).toBeTruthy()
+  })
+})
