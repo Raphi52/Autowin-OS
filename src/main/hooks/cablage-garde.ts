@@ -48,7 +48,7 @@ export interface MorsureGate {
 export function lireMorsures(texte: string): MorsureGate[] {
   const morsures: MorsureGate[] = []
   for (const ligneBrute of texte.split('\n')) {
-    const ligne = ligneBrute.replace(/^﻿/, '').trim()
+    const ligne = ligneBrute.replace(/^\uFEFF/, '').trim()
     if (ligne === '') continue
     let objet: unknown
     try {

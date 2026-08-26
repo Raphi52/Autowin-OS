@@ -35,6 +35,10 @@ class ProviderDeTest implements ProviderAdapter {
   async auth(): Promise<boolean> {
     return true
   }
+  // AUCUN `yield` a dessein : ce double simule un provider qui repond SANS streamer, ce que le
+  // contrat `AsyncGenerator` autorise -- le consommateur recoit `{done:true, value}` des le premier
+  // `next()`. La regle existe pour attraper un `yield` OUBLIE ; ici il n'y en a jamais eu.
+  // eslint-disable-next-line require-yield
   async *send(
     _m: Message[],
     _options: SendOptions = {}

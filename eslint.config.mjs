@@ -27,7 +27,26 @@ export default defineConfig(
     },
     rules: {
       ...eslintPluginReactHooks.configs.recommended.rules,
-      ...eslintPluginReactRefresh.configs.vite.rules
+      ...eslintPluginReactRefresh.configs.vite.rules,
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          /*
+           * `ignoreRestSiblings` couvre la DESTRUCTURATION POUR OMISSION : l'idiome
+           * `const { cle: _ignoree, ...reste } = objet`, qui retire une cle sans jamais la lire --
+           * ne PAS la lire est tout son propos. Trois sites legitimes du depot etaient signales en
+           * erreur (`_score`, `_vivant`, `_ignore`), et un `npm test` qui inclut le lint ne pouvait
+           * donc pas conclure.
+           *
+           * La regle continue d'attraper les vraies variables inutilisees : elle ne se tait que la
+           * ou un `...reste` rend l'omission EXPLICITE. Posee ici et non dans le bloc des tests --
+           * ces trois sites sont en PRODUCTION.
+           */
+          ignoreRestSiblings: true
+        }
+      ]
     }
   },
   {
@@ -41,11 +60,7 @@ export default defineConfig(
     // Tests et probes non expédiés : privilégier l'inférence des doubles et callbacks locaux.
     files: ['**/*.test.{ts,tsx}', 'scripts/**/*.{mts,ts}'],
     rules: {
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
-      ]
+      '@typescript-eslint/explicit-function-return-type': 'off'
     }
   },
   {
