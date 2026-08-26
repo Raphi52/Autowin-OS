@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { AppCommandBus, isolateWatchdogPromptPaths } from './commands'
 import { APP_DESTINATIONS } from '../shared/navigation'
@@ -16,6 +16,41 @@ import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 import { TraceStore } from './activity/trace-store'
 import type { BrainRetrievalOptions } from './brain-retrieval'
 import type { OrchestrationStep } from './orchestrator'
+
+/*
+ * RACINE APP-DATA PROPRE A CE FICHIER.
+ *
+ * `exec('orchestrate')` appelle `reuseOrCreateConvRun` AVANT `runTask` : cette fonction LIT tous les
+ * `RUN.md` deja presents sous `runs/<convId>`. La racine de test partagee (`%TEMP%/autowin-tests-appdata`,
+ * cf. vitest.config.ts) n'est jamais purgee, et chaque passe de la suite y ajoute des workspaces sous
+ * `conv-1` — l'identifiant que ce fichier utilise partout. Mesure du 2026-08-26 : 10 037 workspaces,
+ * dont AUCUN n'apparie la tache, donc un scan integral a chaque appel : 1,2 s cache chaud, 8,0 s a
+ * froid, deux fois par test. Sous la suite complete, l'attente sur `runTask` expirait avant l'appel et
+ * le test lisait un compteur encore a 0 (« expected +0 to be 1 »).
+ *
+ * Le cout croissait a CHAQUE execution de la suite : un plafond plus long n'aurait fait que reculer la
+ * date du rouge. La racine isolee remet le scan a O(1) — et ce fichier cesse d'alimenter le tas.
+ *
+ * L'isolation passe par `process.env.APPDATA`, PAS par `configureAutowinAppDataBase` : la base
+ * configuree l'emporte sur l'environnement, donc elle neutraliserait le `process.env.APPDATA` que
+ * plusieurs tests d'ici posent deja pour s'isoler (3 d'entre eux virent au rouge, leurs spools de
+ * traces fuyant les uns dans les autres). Meme levier que le leur : leur surcharge locale gagne.
+ *
+ * Les attentes restent des attentes sur CONDITION (`vi.waitFor`, pas de delai fixe) ; leur plafond de
+ * 15 s est un filet, garde SOUS le `testTimeout` de 20 s pour que l'assertion parle avant le timeout.
+ */
+let racineAppData: string
+let appDataPrecedent: string | undefined
+beforeAll(() => {
+  racineAppData = mkdtempSync(join(tmpdir(), 'aos-commands-appdata-'))
+  appDataPrecedent = process.env.APPDATA
+  process.env.APPDATA = racineAppData
+})
+afterAll(() => {
+  if (appDataPrecedent === undefined) delete process.env.APPDATA
+  else process.env.APPDATA = appDataPrecedent
+  rmSync(racineAppData, { recursive: true, force: true })
+})
 
 function fakeOs(): any {
   const conversations = new Map<
@@ -673,7 +708,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       })
     const bus = new AppCommandBus(os, () => {})
     const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1')
-    await vi.waitFor(() => expect(os.calls.runTask).toBe(1), { timeout: 10_000 })
+    await vi.waitFor(() => expect(os.calls.runTask).toBe(1), { timeout: 15_000, interval: 25 })
 
     const second = await bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1')
 
@@ -714,12 +749,12 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     const codex = { provider: 'codex', model: 'gpt-5.6-sol' }
 
     const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', claude)
-    await vi.waitFor(() => expect(os.calls.runTask).toBe(1), { timeout: 5_000 })
+    await vi.waitFor(() => expect(os.calls.runTask).toBe(1), { timeout: 15_000, interval: 25 })
     const second = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', codex)
 
     let waitFailure: unknown
     try {
-      await vi.waitFor(() => expect(os.calls.runTask).toBe(2), { timeout: 5_000 })
+      await vi.waitFor(() => expect(os.calls.runTask).toBe(2), { timeout: 15_000, interval: 25 })
     } catch (error) {
       waitFailure = error
     } finally {
@@ -765,7 +800,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
 
     const oldRun = bus.exec('orchestrate', { task: 'ancien' }, 'conv-1')
     const newRun = bus.exec('orchestrate', { task: 'nouveau' }, 'conv-1')
-    await vi.waitFor(() => expect(signals.size).toBe(2), { timeout: 10_000 })
+    await vi.waitFor(() => expect(signals.size).toBe(2), { timeout: 15_000, interval: 25 })
 
     first.resolve({
       gateBlocked: false,
