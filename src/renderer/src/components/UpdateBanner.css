@@ -207,6 +207,17 @@
   cursor: pointer;
 }
 
+/* Rail replié : l'icône seule, centrée, dans la MÊME largeur que le bouton principal (36 px). */
+.rail-update-choice.is-glyph {
+  width: 36px;
+  align-self: center;
+  padding-inline: 0;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1;
+  overflow: hidden;
+}
+
 .rail-update-choice:hover:not(:disabled) {
   border-color: var(--gold, #e9bd4e);
   color: var(--gold, #e9bd4e);
