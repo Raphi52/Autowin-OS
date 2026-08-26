@@ -122,7 +122,11 @@ import { ConversationRouteCoordinator, ConversationRouter } from './conversation
 import { boundedContinuationHistory, boundedTurnHistory } from './chat-turn-messages'
 import { buildContinuationProviderHistory } from './chat-continuation'
 import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'
-import type { ChatTurnEvent } from '../shared/chat-turn'
+import {
+  flattenChatPartsForModel,
+  type ChatTurnEvent,
+  type PersistedChatPart
+} from '../shared/chat-turn'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger, evenementRefusIntegration } from './activity/ledger'
 import {
@@ -3615,13 +3619,36 @@ Le fil reprend ensuite normalement.`
       const continuationWindow = continuation
         ? boundedContinuationHistory(rawMessages, 40)
         : undefined
-      const safe = (continuationWindow?.history ?? boundedTurnHistory(rawMessages, 40)).map(
-        (m) => ({
+      // HISTORIQUE AMNESIQUE — le modele doit revoir le RESULTAT de ses propres actions.
+      //
+      // Ce qui arrive ici est le `content` des messages, produit par `flattenChatParts`, qui reduit
+      // une action REUSSIE a `[a execute verify]` et jette son resultat. Au tour suivant le modele
+      // ne voyait ni code de sortie ni resume de ce qu'il avait lui-meme fait — alors il relancait
+      // l'action pour rien.
+      //
+      // On reconstruit donc le contenu des messages ASSISTANT depuis leurs `parts`, avec la version
+      // destinee au modele. L'affichage n'est pas touche : `message.content` reste ce qu'il etait,
+      // seule l'entree du modele change. C'est l'entonnoir unique de l'historique (4 appelants).
+      const partsParContenu = new Map<string, PersistedChatPart[]>()
+      if (conversationId) {
+        for (const stocke of os.conversations.get(conversationId)?.messages ?? []) {
+          const parts = (stocke as { parts?: PersistedChatPart[] }).parts
+          if (stocke.role === 'assistant' && parts?.length && typeof stocke.content === 'string') {
+            partsParContenu.set(stocke.content, parts)
+          }
+        }
+      }
+      const safe = (continuationWindow?.history ?? boundedTurnHistory(rawMessages, 40)).map((m) => {
+        const parts = m.role === 'assistant' ? partsParContenu.get(m.content) : undefined
+        // Repli sur le contenu d'origine : un message sans `parts` retrouvables (fil hydrate,
+        // message d'un ancien format) doit passer tel quel, jamais disparaitre.
+        const pourLeModele = parts ? flattenChatPartsForModel(parts) || m.content : m.content
+        return {
           role: m.role,
-          content: guardString(m.content, 'content'),
+          content: guardString(pourLeModele, 'content'),
           ...(m.attachments?.length ? { attachments: guardAttachments(m.attachments) } : {})
-        })
-      )
+        }
+      })
       let traceParentId: string | undefined
       let traceSequence = conversationId ? causalTrace.nextSequence(conversationId) : 0
       let traceActionIndex = 0

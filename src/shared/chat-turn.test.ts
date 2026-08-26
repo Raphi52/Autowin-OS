@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createChatTurn,
   flattenChatParts,
+  flattenChatPartsForModel,
   reduceChatTurn,
   sanitizePersistedValue
 } from './chat-turn'
@@ -131,5 +132,56 @@ describe('clôture « interrompu » d’un tour', () => {
     // Discriminant : une action déjà résolue n'est pas réécrite en interrompue.
     expect(actions[1]).toMatchObject({ name: 'gate', ok: true })
     expect(actions[1]).not.toHaveProperty('interrupted')
+  })
+})
+
+/**
+ * CHANTIER 1 — HISTORIQUE AMNESIQUE. `flattenChatParts` reduit une action a l'etiquette
+ * `[a execute X]` : au tour suivant, le modele ne voit plus AUCUN resultat de ses propres
+ * actions et les relance pour rien. `flattenChatPartsForModel` garde le resultat, borne.
+ */
+describe('model-facing history keeps bounded action evidence', () => {
+  it('preserves the action result instead of a bare label', () => {
+    const flat = flattenChatPartsForModel([
+      { kind: 'text', text: 'Je verifie.' },
+      {
+        kind: 'action',
+        actionId: 'a1',
+        name: 'verify',
+        ok: true,
+        data: { exitCode: 0, summary: '42 tests passed' }
+      }
+    ])
+    expect(flat).toContain('42 tests passed')
+    expect(flat).toContain('exitCode')
+  })
+
+  it('bounds a huge result instead of replaying it whole', () => {
+    const flat = flattenChatPartsForModel([
+      { kind: 'action', actionId: 'a2', name: 'verify', ok: true, data: 'x'.repeat(50_000) }
+    ])
+    expect(flat.length).toBeLessThan(2_000)
+    expect(flat).toContain('…')
+  })
+
+  it('keeps failed and interrupted actions honest', () => {
+    expect(
+      flattenChatPartsForModel([
+        { kind: 'action', actionId: 'a3', name: 'orchestrate', ok: false, data: { error: 'boom' } }
+      ])
+    ).toContain('échec')
+    expect(
+      flattenChatPartsForModel([
+        { kind: 'action', actionId: 'a4', name: 'verify', interrupted: true }
+      ])
+    ).toContain('interrompu')
+  })
+
+  it('leaves the display-facing flatten untouched', () => {
+    expect(
+      flattenChatParts([
+        { kind: 'action', actionId: 'a5', name: 'verify', ok: true, data: { exitCode: 0 } }
+      ])
+    ).toBe('[a exécuté verify]')
   })
 })
