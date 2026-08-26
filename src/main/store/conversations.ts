@@ -270,7 +270,17 @@ function fenetre(origine: string, position: number, longueur: number): string {
   }
 
   const coeur = origine.slice(debut, fin).replace(/\s+/g, ' ').trim()
-  return (debut > 0 ? '...' : '') + coeur + (fin < origine.length ? '...' : '')
+  /*
+   * QUAND L'EXTRAIT S'ARRETE AVANT LA FIN, IL LE DIT — en mots, pas par trois points.
+   *
+   * Un « ... » ne distingue pas « coupe sans consequence » de « coupe au point d'inverser le sens ».
+   * Or aucune liste de connecteurs ne captera tous les revirements : « le violet a pris sa place »
+   * n'en contient aucun. Plutot que d'empiler des motifs en esperant couvrir la langue, l'extrait
+   * AVOUE qu'il est partiel. Une incertitude declaree se verifie ; une affirmation tronquee, non.
+   */
+  const debutCoupe = debut > 0 ? '...' : ''
+  const finCoupee = fin < origine.length ? ` […suite du message non montree — ouvre la conversation avant de t'y fier]` : ''
+  return debutCoupe + coeur + finCoupee
 }
 
 export function lastUserMessageAt(messages: readonly Msg[]): number | undefined {
@@ -730,6 +740,31 @@ export class ConversationStore {
   }
 
   /**
+   * Tokenisation MEMOISEE par message.
+   *
+   * Mesure d'un juge performance sur le corpus reel (1193 conversations, 28,8 Mo) : `search` coutait
+   * ~150 ms par appel contre 40 ms avant ce chantier, parce qu'elle re-tokenisait CHAQUE message de
+   * CHAQUE conversation a CHAQUE appel -- un `normalize('NFD')`, deux regex et un `Set` par message,
+   * jamais mis en cache. Le commentaire de l'index de voisinage laissait croire que ce cout etait
+   * couvert ; il ne l'etait pas.
+   *
+   * La clef est le contenu lui-meme, pas le `messageId` : un message edite change de contenu et
+   * obtient donc naturellement une autre entree, sans qu'aucune invalidation soit a ecrire. Le
+   * corpus est deja entierement en memoire ; ce cache ajoute les mots, pas les textes.
+   */
+  private readonly motsParMessage = new Map<string, string[]>()
+
+  private motsMemoises(contenu: string): string[] {
+    const connu = this.motsParMessage.get(contenu)
+    if (connu) return connu
+    const mots = motsDe(contenu)
+    // Borne de securite : un corpus qui grossit ne doit pas faire grossir ce cache sans fin.
+    if (this.motsParMessage.size > 40_000) this.motsParMessage.clear()
+    this.motsParMessage.set(contenu, mots)
+    return mots
+  }
+
+  /**
    * Index de voisinage, construit a la PREMIERE recherche puis garde.
    *
    * Invalide des qu'un message arrive : un index perime rapprocherait selon un corpus qui n'existe
@@ -747,7 +782,11 @@ export class ConversationStore {
       }
       // Les mots ENTIERS au decoupage, la racine fournie a part : l'index compte alors la presence
       // des deux, ce dont la ponderation par le mot rencontre a besoin pour discriminer.
-      this.voisinageCache = construireVoisinage(textes, (texte) => motsDe(texte), racine)
+      this.voisinageCache = construireVoisinage(
+        textes,
+        (texte) => this.motsMemoises(texte),
+        racine
+      )
     }
     return this.voisinageCache
   }
@@ -795,6 +834,8 @@ export class ConversationStore {
     const trouvees: Array<ConversationRecherche & { score: number }> = []
     for (const conversation of this.list()) {
       const extraits: ConversationExtrait[] = []
+      /** Rangs des messages retenus : sert a chercher un revirement APRES le dernier extrait. */
+      const derniersRangs: number[] = []
       /*
        * Le score est le meilleur score d'UN SEUL message, pas le cumul de la conversation.
        *
@@ -808,7 +849,7 @@ export class ConversationStore {
       for (const [rang, message] of conversation.messages.entries()) {
         if (typeof message.content !== 'string') continue
         const replie = replier(message.content)
-        const motsDuMessage = motsDe(message.content)
+        const motsDuMessage = this.motsMemoises(message.content)
         let premierePosition = -1
         let motsIci = 0
         /*
@@ -856,6 +897,7 @@ export class ConversationStore {
             ts: message.ts,
             extrait: fenetre(message.content, premierePosition, 0)
           })
+          derniersRangs.push(rang)
           // La REPONSE qui suit la question porte le sens que la question demandait. « le code
           // couleur de la pastille » retrouve la conversation ; « ambre = en cours » est ce dont le
           // lecteur a besoin. Rendre la question sans la reponse obligerait a un second aller-retour
@@ -877,6 +919,31 @@ export class ConversationStore {
         }
       }
       if (meilleurScore === 0) continue
+      /*
+       * UN REVIREMENT PEUT VIVRE DANS UN AUTRE MESSAGE.
+       *
+       * La fenetre ne regarde qu'un message ; or le message qui revient sur une decision ne reprend
+       * presque jamais les mots de la demande -- « finalement le violet a pris la place » ne contient
+       * ni « ambre » ni « pastille », donc il n'est meme pas candidat. L'audit l'a montre : le
+       * rappel citait la decision initiale seule, sans rien signaler.
+       *
+       * On regarde donc les messages qui SUIVENT le dernier extrait retenu, et on annexe le premier
+       * qui porte un connecteur de contraste. Mieux vaut un extrait de plus qu'un rappel qui affirme
+       * un choix revoque.
+       */
+      const dernierRang = derniersRangs.at(-1)
+      if (extraits.length > 0 && dernierRang !== undefined) {
+        for (const suivant of conversation.messages.slice(dernierRang + 1)) {
+          if (typeof suivant.content !== 'string') continue
+          if (!REVIREMENTS.test(replier(suivant.content))) continue
+          extraits.push({
+            role: suivant.role,
+            ts: suivant.ts,
+            extrait: `[la suite revient sur ce qui precede] ${fenetre(suivant.content, 0, 0)}`
+          })
+          break
+        }
+      }
       trouvees.push({
         id: conversation.id,
         title: conversation.title,
