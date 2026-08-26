@@ -1,56 +1,25 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { classifierRefusDeReprise, type RefusDeReprise } from './resume-refusal'
 
 /**
- * Le classificateur ne sert à RIEN s'il n'est pas câblé sur l'oubli du checkpoint : c'est
- * `os.forgetResumableOrchestration` qui tarit la source du bandeau ⛔ rejoué à chaque boot.
+ * CE FICHIER A PERDU SES ASSERTIONS TEXTUELLES, ET C'EST LE POINT.
  *
- * POURQUOI UNE ASSERTION SUR LA SOURCE et pas un espion runtime : le `catch` vit au milieu de
- * `src/main/index.ts`, module Electron monolithique (>6000 lignes, `app`/`BrowserWindow` au
- * chargement) qu'aucun test n'importe. Extraire le handler serait un refactor hors périmètre.
- * Ce test reste DISCRIMINANT : retirer l'appel d'une branche, ou ajouter une classe de refus
- * définitif sans la câbler, le fait rougir. Sa limite est déclarée — il prouve le CÂBLAGE, pas
- * l'exécution.
+ * Il decoupait le `catch` de reprise dans `src/main/index.ts` par `indexOf`, puis cherchait
+ * `os.forgetResumableOrchestration(resumableRun.runId)` dans chaque branche. Son propre en-tete
+ * declarait la limite — « il prouve le CABLAGE, pas l'execution » — et la justifiait ainsi :
+ * « le `catch` vit au milieu de `src/main/index.ts` [...] qu'aucun test n'importe. Extraire le
+ * handler serait un refactor hors perimetre. »
+ *
+ * Ce refactor a ete fait : la relance vit dans `relaunch-resumable-run.ts`, dependances injectees.
+ * Chaque classe de refus y est donc REELLEMENT jouee — voir
+ * `relaunch-resumable-run.test.ts` > « un refus definitif tarit le checkpoint au lieu de le
+ * rejouer » : le checkpoint oublie, le tour conclu une seule fois, le statut diffuse, et le cas
+ * temoin d'un echec NON classe qui, lui, garde le checkpoint.
+ *
+ * Reste ici ce qui n'a jamais eu besoin de lire du texte : ce que le classificateur PRODUIT.
  */
-const INDEX = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
-
-function corpsDuCatchDeReprise(): string {
-  const debut = INDEX.indexOf('const refus = classifierRefusDeReprise(message)')
-  expect(debut).toBeGreaterThan(-1)
-  const fin = INDEX.indexOf('await bus.observeOutcomeLearning(', debut)
-  expect(fin).toBeGreaterThan(debut)
-  return INDEX.slice(debut, fin)
-}
-
-describe('câblage du refus définitif sur l’oubli du checkpoint', () => {
-  const corps = corpsDuCatchDeReprise()
-  const branches = corps.split(/if \(refus === /).slice(1)
-
-  it('le catch de reprise possède bien des branches de refus classé', () => {
-    expect(branches.length).toBeGreaterThanOrEqual(2)
-  })
-
-  it.each(branches.map((b, i) => [i, b] as const))(
-    'la branche %i oublie le checkpoint',
-    (_i, branche) => {
-      expect(branche).toContain('os.forgetResumableOrchestration(resumableRun.runId)')
-    }
-  )
-
-  it('chaque classe de refus définitif est câblée dans le catch', () => {
-    const classes: RefusDeReprise[] = [
-      'publication-acquise',
-      'copie-durable-absente',
-      'contexte-de-reprise-invalide'
-    ]
-    for (const classe of classes) {
-      expect(corps).toContain(`refus === '${classe}'`)
-    }
-  })
-
-  it('les classes câblées sont exactement celles que le classificateur produit', () => {
+describe('classes de refus definitif produites par le classificateur', () => {
+  it('les classes produites sont exactement celles que la relance sait tarir', () => {
     const produites = new Set(
       [
         'Reprise du worktree refusée pour run-x : publication complete déjà engagée.',
@@ -65,5 +34,9 @@ describe('câblage du refus définitif sur l’oubli du checkpoint', () => {
         'contexte-de-reprise-invalide'
       ])
     )
+  })
+
+  it('un echec ordinaire n est classe dans aucun refus definitif', () => {
+    expect(classifierRefusDeReprise('provider injoignable, socket fermee')).toBeUndefined()
   })
 })
