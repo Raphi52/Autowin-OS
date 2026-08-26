@@ -64,7 +64,16 @@ export function BureauxConserves(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    void charger()
+    // L'appel est enveloppe dans une fonction async DECLAREE : `charger` n'atteint jamais un
+    // `setState` avant son premier `await`, mais l'ecrire ainsi le rend visible au compilateur React
+    // (sinon il suppose un `setState` synchrone dans l'effet, et des rendus en cascade).
+    // Un `setTimeout(0)` avait ete essaye d'abord : il satisfaisait la regle et cassait SIX tests,
+    // parce qu'il repoussait le chargement au-dela du rendu — la regle etait respectee, le
+    // composant devenu moins bon. On ne plie pas le produit pour un linter.
+    const amorcer = async (): Promise<void> => {
+      await charger()
+    }
+    void amorcer()
   }, [charger])
 
   const nommerErreur = (agentId: string, cause: unknown): void =>
