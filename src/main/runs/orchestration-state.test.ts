@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, readdirSync, readFileSync } from 'node:fs'
+import { corpsDeBloc } from '../../shared/corps-source'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { compileExecutionQuote } from '../execution-quote'
@@ -1230,9 +1231,12 @@ describe('admission de la reprise automatique au démarrage', () => {
     // Mesuré 14/08 : un run repris rejouait ses phases SANS toucher son RUN.md — trace.json jamais
     // écrite → le panneau des juges restait vide sur tout run relancé après redémarrage.
     const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
-    const relaunchEnd = indexSource.indexOf("if (reprise === 'bloquer')", relaunchStart)
-    const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
+    // La borne de fin etait `indexOf("if (reprise === 'bloquer')")`, un repere INTERIEUR a la
+    // fonction : du code s'etant deplace, la tranche coupait AVANT `populateConvRunSections` et ce
+    // garde criait au loup sur du cablage intact (verifie le 2026-08-26 : l'appel est bien la).
+    // On borne sur les accolades. Les autres tests de ce fichier gardent leur tranche courte a
+    // DESSEIN — plusieurs verifient qu'une chose est ABSENTE, et les elargir les rendrait faux.
+    const relaunchSource = corpsDeBloc(indexSource, 'const relaunchResumableRun =')
 
     // Le RUN.md est rattaché AVANT le runTask (même workflow ouvert que l'orchestration d'origine).
     const reuseAt = relaunchSource.indexOf('reuseOrCreateConvRun(')
@@ -1245,7 +1249,12 @@ describe('admission de la reprise automatique au démarrage', () => {
       relaunchSource.split('saveConvRunTrace(resumedRunFile.path, resumedSteps)')
     ).toHaveLength(3)
     expect(relaunchSource).toContain('closeConvRun(')
-    expect(relaunchSource).toContain('populateConvRunSections(resumedRunFile.path')
+    // Cherchee en CHAINE LITTERALE, cette assertion exigeait que l'appel tienne sur une ligne. Le
+    // formateur l'a reparti sur quatre — et le garde est passe au rouge sur du code intact et
+    // correct (verifie le 2026-08-26 : l'appel est bien la, avec ses trois arguments). Un garde
+    // couple a la MISE EN FORME finit toujours par accuser a tort. On cherche l'appel, pas sa mise
+    // en page.
+    expect(relaunchSource).toMatch(/populateConvRunSections\(\s*resumedRunFile\.path/)
   })
 
   it('repersiste un règlement tardif sur la reprise automatique', () => {

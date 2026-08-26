@@ -18,7 +18,11 @@ const EXCLUDED = new Set([
   'Audit',
   '.git',
   '.autowin-data',
-  'artifacts'
+  'artifacts',
+  // Les worktrees des sessions Claude sont des COPIES du depot posees DANS l'arbre. Les scanner
+  // faisait remonter 12 fausses violations le 2026-08-26 — le fichier de compatibilite legitime,
+  // vu douze fois a travers quatre copies. Un garde qui accuse des copies de lui-meme n'accuse rien.
+  '.claude'
 ])
 const TEXT_EXTENSIONS = new Set([
   '.ts',
