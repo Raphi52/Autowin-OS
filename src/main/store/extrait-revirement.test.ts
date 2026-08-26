@@ -45,6 +45,26 @@ describe('un extrait porte le revirement, ou le signale', () => {
     expect(porteLeRevirement || avertit).toBe(true)
   })
 
+  it('detecte un connecteur ACCENTUE, la forme normale en francais', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const c = store.create({ title: 'Accents', provider: 'claude' })
+    store.append(c.id, {
+      role: 'user',
+      content:
+        "on utilisait l'ambre pour signaler un travail en cours, " +
+        CONTEXTE +
+        'néanmoins on a plutôt choisi le violet au final'
+    })
+
+    // La liste des connecteurs est en ASCII, le message garde ses accents : sans replier() sur la
+    // suite, « néanmoins » et « plutôt » ne matchaient pas -- le correctif etait muet sur les
+    // formes les plus courantes, et mes premiers tests le cachaient en n'utilisant que « mais »
+    // et « finalement », qui n'ont pas d'accent.
+    const extrait = store.search('ambre')[0].extraits[0].extrait
+    expect(extrait).toMatch(/néanmoins|plutôt|violet/)
+  })
+
   it('ne gonfle pas un extrait qui n a aucun revirement', () => {
     let horloge = 1000
     const store = new ConversationStore(() => horloge++)

@@ -61,11 +61,12 @@ describe('recherche par contenu dans le corpus des conversations', () => {
     const vraie = store.create({ title: 'Vraie cible', provider: 'claude' })
     store.append(vraie.id, { role: 'user', content: 'la conversion du fichier a echoue' })
 
-    // Racine a six lettres, « conversation » et « conversion » donnaient tous deux « conver » :
-    // chercher une conversion remontait presque tout le corpus, dont le sujet EST la conversation.
+    // Le mecanisme est un CLASSEMENT, pas un filtre : exiger l'ABSENCE du parasite demandait plus
+    // que ce qu'il promet, et sur un corpus de deux conversations « conversations » n'est pas
+    // omnipresent, donc rien ne doit l'ecarter. Ce qui compte est le RANG. Le cas ou le parasite
+    // EST omnipresent -- le vrai defaut -- est tenu par derivation.test.ts.
     const trouve = store.search('conversion').map((c) => c.title)
-    expect(trouve).toContain('Vraie cible')
-    expect(trouve).not.toContain('Parasite')
+    expect(trouve[0]).toBe('Vraie cible')
   })
 
   it('retrouve une REFORMULATION : la demande n est jamais formulee comme la reponse', () => {

@@ -103,6 +103,13 @@ function nodeField(node: GraphNode, ...keys: string[]): string {
  * « pastilles », et « conversation » doit trouver « conversations ». Resserrer jusqu'a l'egalite
  * echangerait un bruit contre un silence -- le test de pertinence garde ce bord.
  */
+/*
+ * COUPLAGE ASSUME, ecrit ici pour qu'il ne se re-ouvre pas en silence : `searchable` est construit
+ * par `motsDe` sans deuxieme argument, donc avec son seuil par defaut de trois lettres. L'ancienne
+ * version locale ne filtrait rien. C'est sans consequence AUJOURD'HUI -- un mot de moins de trois
+ * lettres ne peut plus satisfaire ni l'un ni l'autre cote du test ci-dessous -- mais les deux
+ * regles vivent dans deux fichiers differents. Si l'une bouge, relire l'autre.
+ */
 function porteLeToken(mots: readonly string[], token: string): boolean {
   // Le prefixe INVERSE (`token.startsWith(mot)`) n'est admis que pour un mot d'au moins trois
   // lettres. Sans ce garde, un mot court du noeud -- « a », « id », « ts », courants dans un chemin
