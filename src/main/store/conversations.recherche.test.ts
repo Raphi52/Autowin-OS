@@ -264,3 +264,40 @@ describe('choix du mot porteur', () => {
     expect(titres.some((t) => t.startsWith('Cible'))).toBe(true)
   })
 })
+
+/**
+ * A LONGUEUR ET RARETE EGALES, LA POSITION DANS LA PHRASE DEPARTAGE.
+ *
+ * Anatomie mesuree des echecs restants, le 2026-08-26 : sur quinze cas rates, DIX avaient pour porteur
+ * « rappelle » et non le terme cherche -- et tous ces termes faisaient EXACTEMENT huit caracteres,
+ * soit la longueur de « rappelle ». A longueur egale la rarete devait departager, mais les deux mots
+ * sont absents de l'index (LONGUEUR_UTILE, voisinage.ts) donc tous deux a 1, et le premier gagnait :
+ * le mot d'adresse, qui OUVRE la phrase. Verifie directement : `search('mutantes')` rend les bonnes
+ * conversations, `search('rappelle mutantes')` rend les memes trois quel que soit le second mot.
+ *
+ * Le depart retenu est un fait de STRUCTURE de phrase, pas une liste de mots a entretenir : la formule
+ * d'adresse ouvre, le sujet suit la preposition. A egalite parfaite, le plus TARDIF gagne. Mesure :
+ * 25/40 -> 28/40, sans rien perdre sur le mot-cle seul (36/40) ni sur rarete-isole.
+ */
+describe('departage par la position quand tout le reste est egal', () => {
+  it('retient le mot de fin de phrase, pas celui qui l’ouvre', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const long = 'contexte technique sans rapport particulier avec la demande. '.repeat(80)
+
+    // Les deux mots font HUIT lettres et vivent dans des messages longs : absents de l'index, donc
+    // de rarete egale. Seule la position peut les departager.
+    for (let i = 0; i < 12; i++) {
+      const b = store.create({ title: `Ouverture ${i}`, provider: 'claude' })
+      store.append(b.id, { role: 'assistant', content: `${long}${SAUT}il est question de zephyrus${SAUT}${long}` })
+    }
+    const cible = store.create({ title: 'Sujet', provider: 'claude' })
+    store.append(cible.id, {
+      role: 'assistant',
+      content: `${long}${SAUT}il est question de zarbitro${SAUT}${long}`
+    })
+
+    const titres = store.search('zephyrus et zarbitro', { limite: 3 }).map((r) => r.title)
+    expect(titres).toContain('Sujet')
+  })
+})
