@@ -490,3 +490,26 @@ describe('exigeCorrigerEtPoursuivre — le mur humain doit etre une VRAIE attent
     expect(exigeCorrigerEtPoursuivre(true, horsPerimetre)).toBe(false)
   })
 })
+
+describe('exigeUnChiffreVerifie — « total » demande un compte comme « combien »', () => {
+  it('mord quand le compte est demandé comme un total', () => {
+    // Recupere du bureau `autowin/recovery/run-80f9ddeb5982-1` (2026-08-18). Le garde reconnaissait
+    // combien / nombre / compte / liste / inventaire, mais PAS « total » : la question passait au
+    // travers et un chiffre devine pouvait sortir sans lecture pour l'etayer.
+    expect(
+      exigeUnChiffreVerifie(
+        'Quel est le total de fichiers .test.ts dans src/main ?',
+        'Le total est indisponible.',
+        false
+      )
+    ).toBe(true)
+  })
+
+  it('une lecture EFFECTUEE desarme le garde, « total » ou pas', () => {
+    // L'entree qui doit faire echouer une garde trop large : le garde existe pour reclamer une
+    // lecture, pas pour bloquer une reponse qui en a deja une.
+    expect(
+      exigeUnChiffreVerifie('Quel est le total de fichiers ?', 'Il y en a 42.', true)
+    ).toBe(false)
+  })
+})
