@@ -178,8 +178,16 @@ export function HomeView({
 
   // `active` est lu par la boucle de rendu, qui ne doit PAS se remonter à chaque bascule d'onglet :
   // recréer la scène coûterait plus cher que le rendu qu'on économise.
+  //
+  // L'affectation vit dans un EFFET et non dans le corps du composant. Écrire une ref pendant le
+  // rendu fonctionne tant que React rend une fois et jusqu'au bout ; il abandonne et rejoue des
+  // rendus en mode concurrent, et la ref se désynchronise alors sans que rien ne le signale. Le
+  // décalage introduit est d'au plus une frame, invisible pour une boucle `requestAnimationFrame`.
+  // Signalé par le React Compiler (« Cannot access refs during render »), vérifié au rendu.
   const activeRef = useRef(active)
-  activeRef.current = active
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
 
 
   // La notice se compte a l'OUVERTURE de la vue, une fois par montage.
