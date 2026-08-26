@@ -14,9 +14,21 @@
  *   2. si AUCUNE ligne ne se déclare, on rend le texte INTACT. Filtrer sur un préfixe rendrait muet
  *      tout échec qui n'emploie pas le vocabulaire attendu — l'erreur classique des gardes trop
  *      sûres d'elles.
+ *
+ * `causeGit` est un réducteur d'AFFICHAGE : il JETTE des lignes. Ne jamais y chercher un marqueur
+ * de contrôle. Mesuré le 2026-08-26 : brancher `causeGit` sur les deux sites qui testaient
+ * `AUTOWIN_GUARD:` a fait rougir 4 tests — quand git émettait AUSSI un `fatal:`, la ligne sentinelle
+ * du hook disparaissait, et un refus TEMPORAIRE (`base-in-progress`, réessayable) se rapportait en
+ * refus DÉFINITIF (`merge-failed`). Pour décider, lire `sortieGit` ; pour montrer, `causeGit`.
  */
+
+/** La sortie de git, INTACTE (stderr sinon stdout). À lire dès qu'on cherche un marqueur. */
+export function sortieGit(res: { stdout?: string; stderr?: string }): string {
+  return ((res.stderr ?? '').trim() || (res.stdout ?? '').trim()).trim()
+}
+
 export function causeGit(res: { stdout?: string; stderr?: string }): string {
-  const brut = ((res.stderr ?? '').trim() || (res.stdout ?? '').trim()).trim()
+  const brut = sortieGit(res)
   if (!brut) return ''
   const causes = brut
     .split(/\r?\n/)

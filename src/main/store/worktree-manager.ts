@@ -1,4 +1,4 @@
-import { causeGit } from './cause-git'
+import { causeGit, sortieGit } from './cause-git'
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
@@ -4688,7 +4688,7 @@ exit 0
           ])
           if (marker.code !== 0) {
             const markerDetail = causeGit(marker)
-            const guarded = markerDetail.includes('AUTOWIN_GUARD:')
+            const guarded = sortieGit(marker).includes('AUTOWIN_GUARD:')
             return {
               outcome: 'blocked',
               agentId,
@@ -4787,7 +4787,7 @@ exit 0
             detail: 'La transaction refusée n’a pas pu être libérée sans course.'
           }
         }
-        if (publishDetail.includes('AUTOWIN_GUARD:index-changed')) {
+        if (sortieGit(publish).includes('AUTOWIN_GUARD:index-changed')) {
           return {
             outcome: 'blocked',
             agentId,

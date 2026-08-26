@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { causeGit } from './cause-git'
+import { causeGit, sortieGit } from './cause-git'
 
 /**
  * LE DIAGNOSTIC QUI MONTRAIT DU BRUIT À LA PLACE DE LA CAUSE.
@@ -58,5 +58,37 @@ describe('causeGit remonte la ligne qui porte la cause', () => {
 
   it('rend une chaîne vide quand git n’a rien dit', () => {
     expect(causeGit({ stdout: '   ', stderr: '' })).toBe('')
+  })
+})
+
+/**
+ * POURQUOI UN MARQUEUR DE CONTRÔLE NE SE LIT PAS DANS LA CAUSE.
+ *
+ * Régression vécue le 2026-08-26, quelques heures après avoir introduit `causeGit` : elle avait été
+ * branchée sur les deux sites de `worktree-manager` qui testent `AUTOWIN_GUARD:` pour décider si un
+ * refus est TEMPORAIRE (`base-in-progress`, réessayable) ou DÉFINITIF (`merge-failed`). Or `causeGit`
+ * JETTE des lignes. Dès que git émettait aussi un `fatal:`, la sentinelle du hook disparaissait et un
+ * refus réessayable se rapportait comme perdu — 4 tests rouges, verts à nouveau une fois la décision
+ * rebranchée sur la sortie intacte. Le défaut n'était pas dans `causeGit` mais dans son EMPLOI : un
+ * réducteur d'affichage placé sur un chemin de décision.
+ */
+describe('sortieGit — la sortie intacte, pour DÉCIDER', () => {
+  const avecSentinelle = ['AUTOWIN_GUARD:index-changed', 'fatal: refus du hook'].join('\n')
+
+  it('garde la sentinelle que causeGit jette', () => {
+    expect(sortieGit({ stdout: '', stderr: avecSentinelle })).toContain('AUTOWIN_GUARD:')
+  })
+
+  it('et causeGit la jette bien — c’est pour cela qu’elle ne décide de rien', () => {
+    expect(causeGit({ stdout: '', stderr: avecSentinelle })).not.toContain('AUTOWIN_GUARD:')
+  })
+
+  it('rend le texte entier, pas seulement la ligne décisive', () => {
+    expect(sortieGit({ stdout: '', stderr: avecSentinelle })).toBe(avecSentinelle)
+  })
+
+  it('retombe sur stdout, et rend vide quand git n’a rien dit', () => {
+    expect(sortieGit({ stdout: 'dit sur stdout', stderr: '' })).toBe('dit sur stdout')
+    expect(sortieGit({ stdout: '  ', stderr: '' })).toBe('')
   })
 })
