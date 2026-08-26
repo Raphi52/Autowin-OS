@@ -301,3 +301,39 @@ describe('departage par la position quand tout le reste est egal', () => {
     expect(titres).toContain('Sujet')
   })
 })
+
+/**
+ * COMBIEN DE FOIS, ET NON PLUS SEULEMENT SI.
+ *
+ * Anatomie mesuree des cinq derniers echecs, le 2026-08-26 : dans QUATRE, les trois premieres
+ * conversations portaient AUSSI le mot porteur. Le signal binaire ne discriminait donc plus -- ces
+ * termes sont portes par 14 a 94 conversations du corpus, tout le monde etait dans le groupe
+ * « porte », et a l'interieur seul le score decidait. Compter redonne du relief la ou la presence est
+ * saturee : 38/40 -> 39/40 sur le mot-cle, 35/40 -> 36/40 sur la phrase.
+ */
+describe('le re-classement compte les occurrences', () => {
+  it('prefere la conversation qui TRAITE le sujet a celle qui l’effleure', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const long = 'contexte technique sans rapport particulier avec la demande. '.repeat(30)
+
+    // Douze conversations effleurent le terme : une seule mention chacune. Elles sont plus RECENTES
+    // que la cible, donc a egalite de compte elles passeraient devant.
+    const effleure = store.create({ title: 'Effleure', provider: 'claude' })
+    store.append(effleure.id, { role: 'assistant', content: `${long}${SAUT}une mention de zarbitrophage${SAUT}${long}` })
+
+    // La cible en parle vraiment : trois mentions, le seuil utile.
+    const traite = store.create({ title: 'Traite', provider: 'claude' })
+    store.append(traite.id, {
+      role: 'assistant',
+      content: `${long}${SAUT}zarbitrophage ici, zarbitrophage la, et encore zarbitrophage${SAUT}${long}`
+    })
+    // Une troisieme, plus recente que les deux, qui ne fait qu'effleurer : sans le comptage elle
+    // passerait devant « Traite » a egalite de presence.
+    const tardive = store.create({ title: 'Tardive', provider: 'claude' })
+    store.append(tardive.id, { role: 'assistant', content: `${long}${SAUT}zarbitrophage cite une fois${SAUT}${long}` })
+
+    const titres = store.search('rappelle moi zarbitrophage', { limite: 3 }).map((r) => r.title)
+    expect(titres[0]).toBe('Traite')
+  })
+})
