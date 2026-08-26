@@ -85,6 +85,38 @@ describe('conv-1407 : une demande de quatre mots retrouve son sens', () => {
     expect(textes.some((texte) => texte.includes('ambre'))).toBe(true)
   })
 
+  it('LE TOUR PORTE DEJA le sens, sans qu aucun outil soit appele', () => {
+    const { conversations, bus } = corpusDeConv1407()
+    const courante = conversations.list()[0]
+
+    // Exactement ce que fait `agent-pilot` avant d'envoyer le tour au modele.
+    const rappel = bus.rappelPourDemande('remake les pastilles de couleurs', courante.id)
+    const message = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      rappelConversations: rappel,
+      history: [],
+      resumeSessionId: 'session-x',
+      lastUserMessage: 'remake les pastilles de couleurs'
+    }).join('\n')
+
+    // Le sens de la demande est DANS le tour. Le modele n'a rien a decider pour l'avoir.
+    expect(message).toContain('ambre')
+    expect(message).toContain('code couleur')
+  })
+
+  it('mais se tait quand la demande se suffit a elle-meme', () => {
+    const { conversations, bus } = corpusDeConv1407()
+    const courante = conversations.list()[0]
+    const explicite =
+      'Dans src/renderer/src/components/ChatView.parts.tsx, rends le bouton de depliage des ' +
+      'pastilles conditionnel a la longueur du texte, et couvre la decision par un test dedie ' +
+      'qui exerce le cas court et le cas long, sans toucher au reste du composant.'
+
+    expect(bus.rappelPourDemande(explicite, courante.id)).toBe('')
+  })
+
   it('la connaissance injectee ne remplit plus sa place de bruit', async () => {
     const { graphifyEvidence } = await import('./amitel-context')
     const graphe = JSON.stringify({

@@ -141,6 +141,43 @@ function replier(texte: string): string {
 }
 
 /**
+ * Les mots CHERCHABLES d'une demande.
+ *
+ * La recherche prenait la demande comme UNE chaine : « remake les pastilles de couleurs » ne
+ * trouvait rien, alors que « code couleur de la pastille » disait exactement ce qu'il fallait. Une
+ * demande n'est presque jamais formulee comme la reponse -- exiger la phrase entiere revenait a
+ * exiger que l'utilisateur se cite lui-meme.
+ *
+ * Les mots de moins de trois lettres sont ecartes : « de », « la », « et » sont dans tout, donc ne
+ * discriminent rien, et un mot present partout ferait remonter tout le corpus.
+ */
+function motsCherchables(terme: string): string[] {
+  return [
+    ...new Set(
+      replier(terme)
+        .split(/[^a-z0-9_.:-]+/)
+        .filter((mot) => mot.length >= 3)
+        .map(racine)
+    )
+  ].slice(0, 12)
+}
+
+/**
+ * La RACINE d'un mot : ses six premieres lettres.
+ *
+ * « pastilles » ne trouvait pas « pastille », ni « couleurs » « couleur » : une demande est
+ * rarement au meme nombre que la reponse. Six lettres suffisent a rester discriminant
+ * (« couleu », « pastil ») tout en absorbant pluriels et accords -- et c'est un simple `indexOf`,
+ * donc instantane sur un corpus de 28 Mo parcouru a chaque tour.
+ *
+ * Ce n'est PAS de la recherche semantique : « badges » ne trouvera jamais « pastilles ». Pour un
+ * vrai synonyme, le Brain reste l'outil.
+ */
+function racine(mot: string): string {
+  return mot.length > 6 ? mot.slice(0, 6) : mot
+}
+
+/**
  * La FENETRE autour du terme trouve, prise sur le texte d'ORIGINE (accents et casse intacts).
  *
  * Rendre le message entier noierait le terme dans des milliers de caracteres ; n'en rendre que le
@@ -630,40 +667,70 @@ export class ConversationStore {
     terme: string,
     options?: { limite?: number; extraitsParConversation?: number }
   ): ConversationRecherche[] {
-    const aiguille = replier(terme)
+    const mots = motsCherchables(terme)
     // Un terme vide rendrait TOUT le corpus : ce n'est pas une recherche, c'est un dump.
-    if (aiguille.length === 0) return []
+    if (mots.length === 0) return []
     const limite = Math.max(1, Math.min(50, Math.floor(options?.limite ?? 10) || 10))
     const parConversation = Math.max(
       1,
       Math.min(20, Math.floor(options?.extraitsParConversation ?? 3) || 3)
     )
-    const trouvees: ConversationRecherche[] = []
+    const trouvees: Array<ConversationRecherche & { score: number }> = []
     for (const conversation of this.list()) {
       const extraits: ConversationExtrait[] = []
-      for (const message of conversation.messages) {
+      const motsVus = new Set<string>()
+      for (const [rang, message] of conversation.messages.entries()) {
         if (typeof message.content !== 'string') continue
-        const position = replier(message.content).indexOf(aiguille)
-        if (position < 0) continue
-        extraits.push({
-          role: message.role,
-          ts: message.ts,
-          extrait: fenetre(message.content, position, aiguille.length)
-        })
-        if (extraits.length >= parConversation) break
+        const replie = replier(message.content)
+        let premierePosition = -1
+        for (const mot of mots) {
+          const position = replie.indexOf(mot)
+          if (position < 0) continue
+          motsVus.add(mot)
+          if (premierePosition < 0 || position < premierePosition) premierePosition = position
+        }
+        if (premierePosition < 0) continue
+        if (extraits.length < parConversation) {
+          extraits.push({
+            role: message.role,
+            ts: message.ts,
+            extrait: fenetre(message.content, premierePosition, 0)
+          })
+          // La REPONSE qui suit la question porte le sens que la question demandait. « le code
+          // couleur de la pastille » retrouve la conversation ; « ambre = en cours » est ce dont le
+          // lecteur a besoin. Rendre la question sans la reponse obligerait a un second aller-retour
+          // pour la moitie utile de l'echange.
+          const suivant = conversation.messages[rang + 1]
+          if (
+            message.role === 'user' &&
+            suivant?.role === 'assistant' &&
+            typeof suivant.content === 'string' &&
+            suivant.content.trim() &&
+            extraits.length < parConversation
+          ) {
+            extraits.push({
+              role: suivant.role,
+              ts: suivant.ts,
+              extrait: fenetre(suivant.content, 0, 0)
+            })
+          }
+        }
       }
-      if (extraits.length === 0) continue
+      if (motsVus.size === 0) continue
       trouvees.push({
         id: conversation.id,
         title: conversation.title,
         provider: conversation.provider,
         updatedAt: conversation.updatedAt,
         messageCount: conversation.messages.length,
-        extraits
+        extraits,
+        score: motsVus.size
       })
-      if (trouvees.length >= limite) break
     }
-    return trouvees
+    // Classe par NOMBRE DE MOTS retrouves avant la recence : une conversation qui porte trois mots
+    // de la demande l'eclaire mieux qu'une plus recente qui n'en porte qu'un.
+    trouvees.sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt)
+    return trouvees.slice(0, limite).map(({ score: _score, ...reste }) => reste)
   }
 
   /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */

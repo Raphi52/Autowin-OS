@@ -35,6 +35,7 @@ import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement
 import { natureDeLEchec } from './verify-echec-nature'
 import { bornerLigneDeVie } from './verify-battement'
 import { refusAvecIssue, refusPourOutcome, type OutcomeDePublication } from './issue-de-refus'
+import { rappelDesEchangesPasses } from './rappel-conversations'
 import { cleDeBureau, decisionDeReutilisation } from './bureau-reutilisable'
 import { readLastCommitFiles } from './git-read-main'
 import { readGitState } from './git-read-main'
@@ -1267,6 +1268,22 @@ export class AppCommandBus {
     /** Ledger causal des leçons de run. Dernier paramètre pour préserver les appels positionnels. */
     private readonly outcomeLearning?: OutcomeLearningSupervisor
   ) {}
+
+  /**
+   * Les echanges passes que la demande suppose connus, prets a etre injectes dans le tour.
+   *
+   * Passe par le bus plutot que d'exposer le store : l'appelant (`agent-pilot`) n'a pas a connaitre
+   * la forme des conversations pour poser une question aussi simple que « de quoi parle-t-on ».
+   */
+  rappelPourDemande(demande: string | undefined, conversationCouranteId?: string): string {
+    try {
+      return rappelDesEchangesPasses(this.os.conversations, demande, conversationCouranteId)
+    } catch {
+      // Un rappel est un CONFORT : s'il echoue, le tour doit partir quand meme. L'inverse ferait
+      // dependre chaque message d'une commodite.
+      return ''
+    }
+  }
 
   catalog(): CommandSpec[] {
     return CATALOG.filter((command) => this.isCommandEnabled(command.name)).map((command) => ({

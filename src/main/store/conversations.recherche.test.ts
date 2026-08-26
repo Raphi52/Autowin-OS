@@ -53,6 +53,32 @@ describe('recherche par contenu dans le corpus des conversations', () => {
     expect(store.search('a jour').length).toBe(1)
   })
 
+  it('retrouve une REFORMULATION : la demande n est jamais formulee comme la reponse', () => {
+    const store = magasinPeuple()
+    // Ce que l utilisateur a tape en conv-1407, contre ce qui avait ete dit en conv-1405.
+    // Cherchee comme UNE chaine, cette demande ne trouvait rien ; ni au pluriel, ni dans le desordre.
+    const trouve = store.search('remake les pastilles de couleurs')
+    expect(trouve.map((c) => c.title)).toContain('Pastilles')
+  })
+
+  it('rend la REPONSE avec la question : le sens est dans la reponse', () => {
+    const store = magasinPeuple()
+    const trouve = store.search('code couleur pastille')
+    const textes = trouve[0].extraits.map((e) => e.extrait).join(' ')
+    expect(textes).toContain('ambre')
+  })
+
+  it('classe en tete ce qui porte le PLUS de mots de la demande', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const faible = store.create({ title: 'Un seul mot', provider: 'claude' })
+    store.append(faible.id, { role: 'user', content: 'juste une pastille ici' })
+    const fort = store.create({ title: 'Trois mots', provider: 'claude' })
+    store.append(fort.id, { role: 'user', content: 'le code couleur de la pastille, remake' })
+    // « Un seul mot » est PLUS ANCIEN mais porte moins : la pertinence passe avant la recence.
+    expect(store.search('remake les pastilles de couleurs')[0].title).toBe('Trois mots')
+  })
+
   it('rend un resultat vide plutot que tout le corpus sur un terme absent', () => {
     const store = magasinPeuple()
     expect(store.search('kubernetes')).toEqual([])
