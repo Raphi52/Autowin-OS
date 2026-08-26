@@ -88,6 +88,29 @@ describe('le recensement ne sert pas une réponse périmée après la fin d’un
     }
   })
 
+  it('recalcule aussi quand un travail retenu est JETÉ (côté SORTIE)', () => {
+    /*
+     * LE CÔTÉ SORTIE, oublié au cycle 1. Mon commentaire annonçait « un travail retenu y entre, un
+     * travail fusionné en sort » — seule l'entrée était câblée. Un travail jeté ou fusionné depuis
+     * le Hub laissait donc le cache annoncer jusqu'à 60 s un travail qui n'existe plus : le défaut
+     * d'origine EN MIROIR, l'agent proposant de fusionner du vide.
+     */
+    const racine = mkdtempSync(join(tmpdir(), 'recensement-'))
+    try {
+      const { coord, recense } = monter(racine)
+      coord.begin('run-1', 'Builder', true, { task: 'edit', role: 'build' })
+      coord.travauxNonPubliesBornes()
+      expect(recense).toHaveBeenCalledTimes(1)
+
+      void coord.discardHeldAsync('run-1')
+      coord.travauxNonPubliesBornes()
+
+      expect(recense).toHaveBeenCalledTimes(2)
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
+  })
+
   it('garde le cache tant qu’aucun run ne se termine (la borne de coût tient)', () => {
     const racine = mkdtempSync(join(tmpdir(), 'recensement-'))
     try {

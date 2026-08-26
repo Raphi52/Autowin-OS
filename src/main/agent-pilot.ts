@@ -43,6 +43,7 @@ import { startTurnTimer } from './turn-timing'
 import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
+  orchestrationEnEchec,
   ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
   type OrchestrationOutcome
 } from '../shared/orchestration-outcome'
@@ -635,7 +636,9 @@ export class AgentPilot {
      */
     const estUneAnnulation = (erreur: unknown): boolean =>
       signal?.aborted === true ||
-      (typeof erreur === 'object' && erreur !== null && (erreur as { name?: string }).name === 'AbortError')
+      (typeof erreur === 'object' &&
+        erreur !== null &&
+        (erreur as { name?: string }).name === 'AbortError')
     const execCommandTolerante = async (
       name: string,
       args: Record<string, unknown>,
@@ -1751,10 +1754,21 @@ export class AgentPilot {
            * ajoutee en aval raterait silencieusement les orchestrations plantees. Signale par un juge
            * externe le 2026-08-22 ; on tient la comptabilite juste plutot que de laisser un piege.
            */
-          if (!deliveryClosed) {
+          /*
+           * LA COMPTABILITE LIT SON PROPRE PREDICAT, pas celui de l'affichage.
+           *
+           * Regression trouvee au cycle 2 de l'audit du 2026-08-26 : `isDeliveredOrchestrationOutcome`
+           * avait ete resserre pour que l'UI cesse d'ecrire « ✅ Workflow terminé » sur un travail
+           * reste dans sa copie isolee. Effet de bord non trace : un run VERT en `publication: 'hold'`
+           * tombait ici comme un ECHEC et armait `exigeCorrigerEtPoursuivre` — l'agent repartait
+           * reparer ce qui n'avait pas casse, sur le chemin le plus courant du travail retenu.
+           */
+          if (orchestrationEnEchec(outcome ?? {})) {
             anyActionFailed = true
             echecDeLaDerniereIteration = true
-            commandesEnEchecNonRattrape.add(cleDEchec(token.name, authoritativeArgs as Record<string, unknown>))
+            commandesEnEchecNonRattrape.add(
+              cleDEchec(token.name, authoritativeArgs as Record<string, unknown>)
+            )
           }
           const closureNotice = deliveryClosed
             ? 'Clôture Autowin : gate validé, RUN fermé green ; aucune autre orchestration ni aucun second judge ne sont nécessaires dans ce tour.'

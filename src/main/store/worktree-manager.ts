@@ -973,7 +973,14 @@ export class WorktreeManager {
   apercuTravauxNonPublies(
     baseRef = 'HEAD',
     limite = 3
-  ): Array<{ agentId: string; date: string; fichiers: string[]; verdict: VerdictBureau }> {
+  ): Array<{
+    agentId: string
+    date: string
+    fichiers: string[]
+    verdict: VerdictBureau
+    /** VRAI quand `fichiers` est l'echo d'une lecture ratee, pas une constatation de vide. */
+    lectureEchouee?: boolean
+  }> {
     return this.travauxNonPublies(baseRef)
       .slice(0, Math.max(0, limite))
       .map((agentId) => {
@@ -981,6 +988,7 @@ export class WorktreeManager {
         const branche = commit ?? `autowin/recovery/${agentId}`
         let fichiers: string[] = []
         let date = ''
+        let lectureEchouee = false
         try {
           fichiers = this.git(this.baseRepo, ['diff', '--name-only', `${baseRef}...${branche}`])
             .split('\n')
@@ -994,11 +1002,20 @@ export class WorktreeManager {
             branche
           ]).trim()
         } catch {
-          // Une branche illisible ne doit pas faire disparaitre les autres du bandeau.
+          // Une branche illisible ne doit pas faire disparaitre les autres du bandeau -- mais elle
+          // ne doit PAS NON PLUS passer pour un bureau vide : en aval, `decisionDeReutilisation`
+          // jetait le bureau sur ce silence. On DIT que la lecture a echoue.
+          lectureEchouee = true
         }
         // Le VERDICT accompagne la liste : sans lui, il faut ouvrir chaque patch pour savoir si
         // un bureau vaut quelque chose — le tri manuel que ce chantier existe pour supprimer.
-        return { agentId, date, fichiers, verdict: verdictDeBureau({ fichiers, aUnCommit: !!commit }) }
+        return {
+          agentId,
+          date,
+          fichiers,
+          verdict: verdictDeBureau({ fichiers, aUnCommit: !!commit }),
+          ...(lectureEchouee ? { lectureEchouee } : {})
+        }
       })
   }
 
@@ -5254,7 +5271,11 @@ exit 0
    * d'adresse pour du vide.
    */
   private mettreAlAbriSiDivergente(branche: string, nouveauSha: string): void {
-    const existant = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', `refs/heads/${branche}`])
+    const existant = this.tryGitFn(this.baseRepo, [
+      'rev-parse',
+      '--verify',
+      `refs/heads/${branche}`
+    ])
     if (existant.code !== 0) return
     const ancien = existant.stdout.trim()
     if (!ancien || ancien === nouveauSha) return
@@ -5283,6 +5304,33 @@ exit 0
    * Ne retire QUE ce dont l'absence de valeur est demontree : aucun fichier hors `.git`.
    */
   balayerLesCoquilles(): string[] {
+    /*
+     * ANCRER AVANT DE BALAYER — la meme porte que `discard`, qui l'appelle deja.
+     *
+     * Trou trouve au cycle 2 de l'audit du 2026-08-26, a la couture de deux chantiers menes en
+     * parallele. `estCoquilleVide` juge sur les FICHIERS ; or le residu que ce balayage existe pour
+     * ramasser (un `git worktree remove` interrompu) laisse justement un dossier sans fichier de
+     * travail mais avec un `.git` et un HEAD sur un commit ORPHELIN. La doc promettait qu'« un
+     * bureau porteur de travail non repris n'est JAMAIS purge par ce chemin » : vrai quand la valeur
+     * est dans les fichiers, FAUX quand elle est dans le commit.
+     *
+     * Et le recensement des bureaux detaches ne voit un commit que par `existsSync(bureau)` : le
+     * dossier parti, le commit devient invisible pour toujours. Les deux reparations de la perte de
+     * travail se detruisaient l'une l'autre a leur jonction.
+     *
+     * `ancrerAvantSuppression` ne pose une branche que si le commit APPORTE quelque chose : une
+     * coquille sans travail propre est balayee comme avant, sans laisser de ref derriere elle.
+     */
+    if (existsSync(this.worktreeRoot)) {
+      for (const entry of readdirSync(this.worktreeRoot, { withFileTypes: true })) {
+        if (!entry.isDirectory() || !entry.name.startsWith('agent__')) continue
+        const agentId = entry.name.slice('agent__'.length)
+        if (!SAFE_ID.test(agentId)) continue
+        const chemin = join(this.worktreeRoot, entry.name)
+        if (!estCoquilleVide(chemin)) continue
+        this.ancrerAvantSuppression(agentId, chemin)
+      }
+    }
     return balayerCoquillesVides(this.worktreeRoot)
   }
 

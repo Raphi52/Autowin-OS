@@ -772,6 +772,20 @@ export class RunWorktreeCoordinator {
           this.libererLaCopieEnConflit(tracked.runId)
         }
       }
+      /*
+       * ON REINVALIDE A LA SORTIE, pas seulement a l'entree.
+       *
+       * Trou trouve au cycle 2 de l'audit, sur le chemin le PLUS important : `merge: false`, le
+       * travail RETENU. L'invalidation posee en tete de `endAsync` est suivie de plusieurs `await`,
+       * or `snapshotForPrompt()` lit le recensement a CHAQUE tour d'agent : une lecture qui tombe
+       * dans cette fenetre re-gele le cache sur l'etat d'AVANT la fin du run, pour 60 s — et l'agent
+       * repond « rien a fusionner ». Le defaut d'origine, mot pour mot, par la porte de derriere.
+       *
+       * L'invariant n'est pas « on oublie avant de commencer » mais « le cache ne survit pas a une
+       * transition d'etat ». Cette branche ne passe pas par `applyFinalize`, qui couvre les autres.
+       * Pose sur les DEUX jumeaux, comme le demande le commentaire juste au-dessus.
+       */
+      this.invaliderRecensement()
       this.emit()
       return undefined
     }
@@ -878,6 +892,20 @@ export class RunWorktreeCoordinator {
           this.libererLaCopieEnConflit(tracked.runId)
         }
       }
+      /*
+       * ON REINVALIDE A LA SORTIE, pas seulement a l'entree.
+       *
+       * Trou trouve au cycle 2 de l'audit, sur le chemin le PLUS important : `merge: false`, le
+       * travail RETENU. L'invalidation posee en tete de `endAsync` est suivie de plusieurs `await`,
+       * or `snapshotForPrompt()` lit le recensement a CHAQUE tour d'agent : une lecture qui tombe
+       * dans cette fenetre re-gele le cache sur l'etat d'AVANT la fin du run, pour 60 s — et l'agent
+       * repond « rien a fusionner ». Le defaut d'origine, mot pour mot, par la porte de derriere.
+       *
+       * L'invariant n'est pas « on oublie avant de commencer » mais « le cache ne survit pas a une
+       * transition d'etat ». Cette branche ne passe pas par `applyFinalize`, qui couvre les autres.
+       * Pose sur les DEUX jumeaux, comme le demande le commentaire juste au-dessus.
+       */
+      this.invaliderRecensement()
       this.emit()
       return undefined
     }
@@ -1223,6 +1251,8 @@ export class RunWorktreeCoordinator {
     date: string
     fichiers: string[]
     verdict?: VerdictBureau
+    /** VRAI quand `fichiers` est l'echo d'une lecture ratee, pas une constatation de vide. */
+    lectureEchouee?: boolean
   }> {
     // Sans borne ici : c'est un geste EXPLICITE de l'utilisateur, pas un rafraichissement d'ecran.
     return this.manager.apercuTravauxNonPublies?.('HEAD', 100) ?? []

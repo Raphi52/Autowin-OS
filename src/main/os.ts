@@ -696,7 +696,13 @@ export class AutowinOS {
 
   /** Activité worktree courante (volet A) — snapshot pour l'IPC/renderer. */
   /** Tous les travaux termines mais jamais publies, avec leurs fichiers. Lecture seule. */
-  travauxNonPublies(): Array<{ agentId: string; date: string; fichiers: string[] }> {
+  travauxNonPublies(): Array<{
+    agentId: string
+    date: string
+    fichiers: string[]
+    /** VRAI quand `fichiers` est l'echo d'une lecture ratee, pas une constatation de vide. */
+    lectureEchouee?: boolean
+  }> {
     return this.worktrees?.travauxNonPublies() ?? []
   }
 

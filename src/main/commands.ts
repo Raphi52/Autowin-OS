@@ -2509,7 +2509,11 @@ export class AppCommandBus {
     const retenus = this.os.worktrees?.travauxNonPublies?.() ?? []
     const existant = retenus.find((travail) => travail.agentId === cle)
     if (!existant) return cle
-    const decision = decisionDeReutilisation(existant.fichiers, cible ? [cible] : [])
+    // On transmet l'INDETERMINATION : sans elle, une lecture git ratee se lisait « bureau vide »
+    // et faisait jeter un bureau porteur de travail (cycle 2 de l'audit du 2026-08-26).
+    const decision = decisionDeReutilisation(existant.fichiers, cible ? [cible] : [], {
+      lectureEchouee: existant.lectureEchouee === true
+    })
     if (decision === 'preserver') return aleatoire
     // Reinitialisation = liberer le brouillon precedent AVANT de reprendre sa place. Si la liberation
     // echoue, on ne force RIEN : un bureau qu'on n'a pas pu liberer reste intact, et la tentative va
