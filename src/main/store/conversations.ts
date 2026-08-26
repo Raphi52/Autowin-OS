@@ -679,18 +679,29 @@ export class ConversationStore {
     const trouvees: Array<ConversationRecherche & { score: number }> = []
     for (const conversation of this.list()) {
       const extraits: ConversationExtrait[] = []
-      const motsVus = new Set<string>()
+      /*
+       * Le score est le meilleur score d'UN SEUL message, pas le cumul de la conversation.
+       *
+       * Mesure sur le corpus REEL (1191 conversations) : cumule, le score favorisait les
+       * conversations les plus LONGUES -- elles finissent par contenir tous les mots, disperses sur
+       * des centaines de messages sans rapport entre eux. « badges » remontait un scout de veille
+       * avant la conversation qui expliquait justement le code couleur. Les mots comptent quand ils
+       * sont ENSEMBLE : c'est la proximite qui fait le sens, pas la presence.
+       */
+      let meilleurScore = 0
       for (const [rang, message] of conversation.messages.entries()) {
         if (typeof message.content !== 'string') continue
         const replie = replier(message.content)
         let premierePosition = -1
+        let motsIci = 0
         for (const mot of mots) {
           const position = replie.indexOf(mot)
           if (position < 0) continue
-          motsVus.add(mot)
+          motsIci += 1
           if (premierePosition < 0 || position < premierePosition) premierePosition = position
         }
         if (premierePosition < 0) continue
+        if (motsIci > meilleurScore) meilleurScore = motsIci
         if (extraits.length < parConversation) {
           extraits.push({
             role: message.role,
@@ -717,7 +728,7 @@ export class ConversationStore {
           }
         }
       }
-      if (motsVus.size === 0) continue
+      if (meilleurScore === 0) continue
       trouvees.push({
         id: conversation.id,
         title: conversation.title,
@@ -725,7 +736,7 @@ export class ConversationStore {
         updatedAt: conversation.updatedAt,
         messageCount: conversation.messages.length,
         extraits,
-        score: motsVus.size
+        score: meilleurScore
       })
     }
     // Classe par NOMBRE DE MOTS retrouves avant la recence : une conversation qui porte trois mots

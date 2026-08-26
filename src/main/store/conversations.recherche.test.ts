@@ -84,6 +84,23 @@ describe('recherche par contenu dans le corpus des conversations', () => {
     expect(store.search('kubernetes')).toEqual([])
   })
 
+  it('compte les mots ENSEMBLE, pas disperses dans une longue conversation', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    // Une conversation fourre-tout : chaque mot y est, mais dans des messages sans rapport.
+    const fourreTout = store.create({ title: 'Fourre-tout', provider: 'claude' })
+    store.append(fourreTout.id, { role: 'user', content: 'on parle de couleur ici' })
+    store.append(fourreTout.id, { role: 'user', content: 'et de pastille, mais bien plus tard' })
+    store.append(fourreTout.id, { role: 'user', content: 'un remake, sans lien avec ce qui precede' })
+    // Une phrase qui dit les trois choses A LA FOIS.
+    const precise = store.create({ title: 'Precise', provider: 'claude' })
+    store.append(precise.id, { role: 'user', content: 'remake de la pastille de couleur' })
+
+    // Cumules sur la conversation, les deux scoreraient 3 et la plus recente gagnerait. C'est la
+    // PROXIMITE qui fait le sens : trois mots dans une phrase valent mieux que trois mots eparpilles.
+    expect(store.search('remake pastille couleur')[0].title).toBe('Precise')
+  })
+
   it('borne le nombre de conversations rendues', () => {
     let horloge = 1000
     const store = new ConversationStore(() => horloge++)
