@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ConversationStore } from './conversations'
+import { construireVoisinage } from './voisinage'
 
 /**
  * LES RAPPROCHEMENTS SE DERIVENT DU CORPUS, ILS NE S'ECRIVENT PAS A LA MAIN.
@@ -88,5 +89,28 @@ describe('le corpus enseigne ses propres rapprochements', () => {
 
   it('un mot absent du corpus entier ne rend rien -- il n y a rien a retrouver', () => {
     expect(corpusQuiPorteLeLien().search('zzzabsentpartout')).toEqual([])
+  })
+})
+
+/**
+ * UN MOT ECARTE POUR BANALITE N'EST PAS UN MOT INCONNU.
+ *
+ * `TROP_COURANTS` retire du comptage les mots qui voisinent avec tout ; `rarete` leur rendait donc 1
+ * -- la valeur du doute, qui est aussi la plus favorable. Le systeme les declarait non discriminants
+ * d'un cote et les sacrait les plus rares de tous de l'autre. Mesure du 2026-08-26 : « dans » arrivait
+ * juste derriere « projet » au score de porteur, alors qu'il ne porte aucun sujet.
+ */
+describe('rarete : banalite et ignorance ne se confondent pas', () => {
+  it('un mot trop courant recoit le plancher, un mot inconnu garde le benefice du doute', () => {
+    const index = construireVoisinage(
+      ['le statut du travail avance bien ici', 'un autre message avec des mots dedans'],
+      (texte) => texte.toLowerCase().split(/[^a-z0-9]+/).filter((m) => m.length >= 3)
+    )
+    // « dans » est dans TROP_COURANTS : il ne peut pas etre le mot le plus rare de la demande.
+    expect(index.rarete('dans')).toBeLessThan(0.2)
+    // Un mot jamais vu garde 1 : on ne le penalise pas d'etre absent, c'est peut-etre le seul precis.
+    expect(index.rarete('zarbitrophage')).toBe(1)
+    // Et il doit rester STRICTEMENT au-dessus du mot banal, sinon le choix du porteur les confond.
+    expect(index.rarete('zarbitrophage')).toBeGreaterThan(index.rarete('dans'))
   })
 })
