@@ -76,6 +76,15 @@ export interface IndexVoisinage {
    * Rend une valeur entre 0 et 1 : proche de 1 pour un mot rare, proche de 0 pour un mot partout.
    */
   rarete(mot: string): number
+  /**
+   * Enregistre un message SANS reconstruire l'index.
+   *
+   * Mesure : reconstruire l'index a chaque tour de chat coutait ~90 ms synchrones dans le processus
+   * principal d'Electron -- le poste DOMINANT, devant le scan lui-meme. Une pre-selection des
+   * conversations candidates n'y avait presque rien change (108 -> 90 ms) : ce n'etait pas le bon
+   * coupable. Les compteurs, eux, s'incrementent en O(mots du message).
+   */
+  ajouter(texte: string): void
 }
 
 /**
@@ -99,6 +108,8 @@ export function construireVoisinage(
   racineDe: (mot: string) => string = (mot) => mot
 ): IndexVoisinage {
   const paires = new Map<string, Map<string, number>>()
+  /** Oublie le calcul garde d'un mot : renseigne par `absorber`, defini plus bas. */
+  let retenusOublier: (mot: string) => void = () => {}
   // Dans combien de messages chaque mot apparait : la base de sa rarete.
   const presence = new Map<string, number>()
   let messagesVus = 0
@@ -110,14 +121,17 @@ export function construireVoisinage(
     }
     ligne.set(b, (ligne.get(b) ?? 0) + 1)
   }
-  for (const texte of messages) {
-    if (!texte || texte.length > LONGUEUR_UTILE) continue
+  const absorber = (texte: string): void => {
+    if (!texte || texte.length > LONGUEUR_UTILE) return
     const mots = [...new Set(decoupe(texte).filter((mot) => !TROP_COURANTS.has(mot)))].slice(0, 30)
     messagesVus += 1
     for (const mot of mots) {
       presence.set(mot, (presence.get(mot) ?? 0) + 1)
       const rac = racineDe(mot)
       if (rac !== mot) presence.set(rac, (presence.get(rac) ?? 0) + 1)
+      // Les voisins de ce mot changent : on oublie le calcul garde, il sera refait a la demande.
+      retenusOublier(rac)
+      retenusOublier(mot)
     }
     const racines = [...new Set(mots.map(racineDe))]
     for (let i = 0; i < racines.length; i++) {
@@ -127,14 +141,28 @@ export function construireVoisinage(
       }
     }
   }
+  for (const texte of messages) absorber(texte)
+  /*
+   * Les voisins sont calcules A LA DEMANDE et gardes, plutot que tous d'avance.
+   *
+   * Tout pre-calculer obligeait a TOUT refaire des qu'un message arrivait. Une demande n'interroge
+   * qu'une poignee de mots : les calculer a l'appel coute un tri sur une seule ligne de compteurs,
+   * et un message ajoute n'invalide que les mots qu'il touche.
+   */
   const retenus = new Map<string, string[]>()
-  for (const [mot, ligne] of paires) {
-    const assez = [...ligne.entries()]
-      .filter(([, n]) => n >= RENCONTRES_MINIMUM)
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, VOISINS_PAR_MOT)
-      .map(([voisin]) => voisin)
-    if (assez.length > 0) retenus.set(mot, assez)
+  const voisinsDe = (mot: string): string[] => {
+    const connu = retenus.get(mot)
+    if (connu) return connu
+    const ligne = paires.get(mot)
+    const assez = ligne
+      ? [...ligne.entries()]
+          .filter(([, n]) => n >= RENCONTRES_MINIMUM)
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, VOISINS_PAR_MOT)
+          .map(([voisin]) => voisin)
+      : []
+    retenus.set(mot, assez)
+    return assez
   }
   /*
    * La rarete, en logarithme : entre « present dans 1 message » et « present dans 10 », l'ecart
@@ -148,5 +176,8 @@ export function construireVoisinage(
     const part = vu / messagesVus
     return Math.max(0.05, Math.min(1, Math.log(1 / part) / Math.log(messagesVus + 1)))
   }
-  return { voisins: (mot) => retenus.get(mot) ?? [], rarete }
+  retenusOublier = (mot) => {
+    retenus.delete(mot)
+  }
+  return { voisins: voisinsDe, rarete, ajouter: absorber }
 }

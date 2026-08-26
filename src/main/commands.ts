@@ -364,8 +364,13 @@ function circonstanceDePublication(finalized: Record<string, unknown>): string |
   switch (finalized.outcome) {
     case 'conflict':
       return liste(finalized.files)
-    case 'blocked':
-      return texte(finalized.reason) ?? liste(finalized.files)
+    case 'blocked': {
+      // `reason` nomme la CATEGORIE (« merge-failed »), `detail` la cause reelle (« Filename too
+      // long »). Le diagnostic du 2026-08-26 a demande les DEUX : la categorie seule laisse
+      // rediagnostiquer a chaque fois.
+      const motif = [texte(finalized.reason), texte(finalized.detail)].filter(Boolean).join(' — ')
+      return motif || liste(finalized.files)
+    }
     case 'preserve-et-libere':
       return texte(finalized.branche)
     default:
@@ -1295,7 +1300,18 @@ export class AppCommandBus {
    */
   rappelPourDemande(demande: string | undefined, conversationCouranteId?: string): string {
     try {
-      return rappelDesEchangesPasses(this.os.conversations, demande, conversationCouranteId)
+      // Le fournisseur de la conversation COURANTE borne le rappel : on ne rappelle que ce qui a
+      // deja ete servi par lui. Inconnu -> aucun rappel (voir `rappelDesEchangesPasses`).
+      const courante = conversationCouranteId
+        ? this.os.conversations.get(conversationCouranteId)
+        : undefined
+      return rappelDesEchangesPasses(
+        this.os.conversations,
+        demande,
+        conversationCouranteId,
+        courante?.provider,
+        courante?.projectPath ?? undefined
+      )
     } catch {
       // Un rappel est un CONFORT : s'il echoue, le tour doit partir quand meme. L'inverse ferait
       // dependre chaque message d'une commodite.

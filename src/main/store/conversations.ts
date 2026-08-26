@@ -16,6 +16,7 @@ import { motsDe, replier } from '../../shared/mots'
 import { parseAskDecision } from '../../renderer/src/components/ask-choices'
 import { memeFamille } from './synonymes'
 import { construireVoisinage, type IndexVoisinage } from './voisinage'
+import { creerIndexInverse, type IndexInverse } from './index-inverse'
 
 // Store en mémoire des conversations : un PROVIDER qui répond, un DOSSIER qui range.
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -145,6 +146,13 @@ export interface ConversationRecherche {
   id: string
   title: string
   provider: string
+  /**
+   * Dossier de travail, quand la conversation en a un.
+   *
+   * Expose parce qu'un appelant doit pouvoir refuser de franchir cette frontiere : sans lui, le
+   * rappel injecte pouvait porter un extrait du projet A dans le prompt du projet B.
+   */
+  projectPath?: string
   updatedAt: number
   messageCount: number
   extraits: ConversationExtrait[]
@@ -207,11 +215,18 @@ function motsCherchables(terme: string, voisinage: IndexVoisinage): MotsDeRecher
 /**
  * Longueur de la racine.
  *
- * Six lettres collisionnaient sur le mot le plus frequent de ce corpus : `racine('conversation')`
- * et `racine('conversion')` valaient tous deux « conver ». Chercher « conversion d'un fichier »
- * remontait donc toute conversation parlant de... conversations, c'est-a-dire presque toutes. Neuf
- * lettres separent les deux (« conversat » / « conversio ») tout en absorbant encore les pluriels et
- * les accords, qui portent sur la FIN du mot.
+ * SIX lettres, et il faut dire pourquoi : neuf avaient ete essayees pour separer « conversation » de
+ * « conversion », et elles cassaient `couleur`/`couleurs` et `pastille`/`pastilles` -- les deux
+ * exemples qui justifient l'existence de ce mecanisme. Aucun seuil ne satisfait les deux bords :
+ * « conversation » et « conversion » partagent SEPT lettres, « notification » et « notifier » SIX.
+ *
+ * La collision subsiste donc a ce niveau, et elle est rattrapee AILLEURS : la ponderation porte sur
+ * la rarete du mot RENCONTRE (voir `motCorrespondant`), et « conversations » est omnipresent dans ce
+ * corpus tandis que « notifier » est rare. C'est ce qui separe les deux cas, pas le seuil.
+ *
+ * Ce commentaire annonçait « neuf lettres » alors que le code en appliquait six -- un audit l'a
+ * releve. Un commentaire qui decrit une valeur que le code ne porte pas est pire qu'un code nu : il
+ * fait renoncer le lecteur a verifier.
  */
 const SEUIL_RACINE = 6
 
@@ -292,7 +307,17 @@ function fenetre(origine: string, position: number, longueur: number): string {
   }
 
   const coeur = origine.slice(debut, fin).replace(/\s+/g, ' ').trim()
-  return (debut > 0 ? '...' : '') + coeur + (fin < origine.length ? '...' : '')
+  /*
+   * QUAND L'EXTRAIT S'ARRETE AVANT LA FIN, IL LE DIT — en mots, pas par trois points.
+   *
+   * Un « ... » ne distingue pas « coupe sans consequence » de « coupe au point d'inverser le sens ».
+   * Or aucune liste de connecteurs ne captera tous les revirements : « le violet a pris sa place »
+   * n'en contient aucun. Plutot que d'empiler des motifs en esperant couvrir la langue, l'extrait
+   * AVOUE qu'il est partiel. Une incertitude declaree se verifie ; une affirmation tronquee, non.
+   */
+  const debutCoupe = debut > 0 ? '...' : ''
+  const finCoupee = fin < origine.length ? ` […suite du message non montree — ouvre la conversation avant de t'y fier]` : ''
+  return debutCoupe + coeur + finCoupee
 }
 
 export function lastUserMessageAt(messages: readonly Msg[]): number | undefined {
@@ -393,6 +418,9 @@ export class ConversationStore {
    */
   hydrate(saved: Conversation[], options?: { resumableTurnIds?: ReadonlySet<string> }): boolean {
     this.voisinageCache = undefined
+    // Le corpus entier change de forme : la pre-selection ne peut pas etre rattrapee
+    // par une mise a jour, elle est jetee.
+    this.indexInverseCache = undefined
     const resumable = options?.resumableTurnIds
     this.conversations.clear()
     let max = 0
@@ -557,7 +585,9 @@ export class ConversationStore {
     provider: string
     autoKaizen?: AutoKaizenConversationLink
   }): Conversation {
-    this.voisinageCache = undefined
+    // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
+    // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
+    // principal -- le poste dominant du gel de l'interface.
     const ts = this.now()
     const id = this.nextUniqueConversationId()
     const conversation: Conversation = {
@@ -627,7 +657,9 @@ export class ConversationStore {
     id: string,
     m: { role: 'user' | 'assistant'; content: string; attachments?: AttachmentMeta[] }
   ): Conversation {
-    this.voisinageCache = undefined
+    // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
+    // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
+    // principal -- le poste dominant du gel de l'interface.
     const conversation = this.conversations.get(id)
     if (!conversation) {
       throw new Error(`Conversation inconnue: ${id}`)
@@ -643,6 +675,7 @@ export class ConversationStore {
       ...(m.attachments?.length ? { attachments: m.attachments } : {})
     }
     conversation.messages.push(message)
+    this.indexerMessage(conversation.id, message.content)
     conversation.updatedAt = ts
     this.changed(id, 'immediate', {
       op: 'append-messages',
@@ -660,7 +693,9 @@ export class ConversationStore {
   ): Conversation {
     // Le chemin REEL des messages passe ICI, pas par `append` : l'index doit suivre celui-la
     // en premier. Corrige apres audit -- j'avais invalide les chemins que mes tests exercaient.
-    this.voisinageCache = undefined
+    // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
+    // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
+    // principal -- le poste dominant du gel de l'interface.
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
@@ -675,6 +710,7 @@ export class ConversationStore {
       ...(user.attachments?.length ? { attachments: user.attachments } : {})
     }
     conversation.messages.push(userMessage)
+    this.indexerMessage(conversation.id, userMessage.content)
     const turn = createChatTurn(assistant.turnId, assistant.runtime)
     const assistantMessage: Msg = {
       messageId: this.nextUniqueMessageId(conversation),
@@ -688,6 +724,7 @@ export class ConversationStore {
       ...(turn.runtime ? { runtime: turn.runtime } : {})
     }
     conversation.messages.push(assistantMessage)
+    this.indexerMessage(conversation.id, assistantMessage.content)
     conversation.schemaVersion = 3
     conversation.updatedAt = ts
     this.changed(id, 'immediate', {
@@ -705,7 +742,9 @@ export class ConversationStore {
   ): Conversation {
     // Le chemin REEL des messages passe ICI, pas par `append` : l'index doit suivre celui-la
     // en premier. Corrige apres audit -- j'avais invalide les chemins que mes tests exercaient.
-    this.voisinageCache = undefined
+    // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
+    // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
+    // principal -- le poste dominant du gel de l'interface.
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
@@ -723,6 +762,7 @@ export class ConversationStore {
       ...(turn.runtime ? { runtime: turn.runtime } : {})
     }
     conversation.messages.push(assistantMessage)
+    this.indexerMessage(conversation.id, assistantMessage.content)
     conversation.schemaVersion = 3
     conversation.updatedAt = ts
     this.changed(id, 'immediate', {
@@ -735,10 +775,23 @@ export class ConversationStore {
 
   /** Applique un événement au tour structuré ; les deltas demandent un checkpoint regroupé. */
   applyTurnEvent(id: string, turnId: string, event: ChatTurnEvent): Conversation {
-    this.voisinageCache = undefined
+    // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
+    // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
+    // principal -- le poste dominant du gel de l'interface.
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const message = applyTurnEventToMessages(conversation.messages, turnId, event)
+    /*
+     * LE CONTENU MUTE ICI, il n'est pas pousse : `indexerMessage` doit donc etre appele DEPUIS ce
+     * chemin, et pas seulement la ou un message est ajoute.
+     *
+     * J'avais retire l'invalidation de l'index de cette methode en ecrivant que `indexerMessage`
+     * l'alimenterait -- sans le brancher ici. Le texte reellement produit par l'assistant, la plus
+     * grande part du corpus, n'entrait donc JAMAIS dans les index une fois construits : la recherche
+     * ratait silencieusement l'essentiel de son propre corpus. Aucun des 6060 tests ne le voyait, et
+     * le commentaire affirmait le contraire de ce que le code faisait.
+     */
+    this.indexerMessage(id, message?.content)
     if (!message) throw new Error(`Tour assistant inconnu: ${turnId}`)
     conversation.updatedAt = this.now()
     const terminal = ['done', 'failed', 'cancelled', 'interrupted'].includes(event.kind)
@@ -749,6 +802,64 @@ export class ConversationStore {
       updatedAt: conversation.updatedAt
     })
     return conversation
+  }
+
+  /**
+   * Tokenisation MEMOISEE par message.
+   *
+   * Mesure d'un juge performance sur le corpus reel (1193 conversations, 28,8 Mo) : `search` coutait
+   * ~150 ms par appel contre 40 ms avant ce chantier, parce qu'elle re-tokenisait CHAQUE message de
+   * CHAQUE conversation a CHAQUE appel -- un `normalize('NFD')`, deux regex et un `Set` par message,
+   * jamais mis en cache. Le commentaire de l'index de voisinage laissait croire que ce cout etait
+   * couvert ; il ne l'etait pas.
+   *
+   * La clef est le contenu lui-meme, pas le `messageId` : un message edite change de contenu et
+   * obtient donc naturellement une autre entree, sans qu'aucune invalidation soit a ecrire. Le
+   * corpus est deja entierement en memoire ; ce cache ajoute les mots, pas les textes.
+   */
+  private readonly motsParMessage = new Map<string, string[]>()
+
+  /**
+   * Pre-selection des conversations candidates.
+   *
+   * Repond « ces trois-la » au lieu de faire relire les 1197. Construit une fois, puis mis a jour a
+   * l'AJOUT d'un message -- jamais jete. C'est ce qui supprime le parcours du corpus a chaque tour,
+   * au lieu de le deporter ailleurs.
+   */
+  private indexInverseCache?: IndexInverse
+
+  private indexInverse(): IndexInverse {
+    if (!this.indexInverseCache) {
+      const index = creerIndexInverse()
+      for (const conversation of this.conversations.values()) {
+        for (const message of conversation.messages) {
+          if (typeof message.content !== 'string') continue
+          index.ajouter(conversation.id, this.motsMemoises(message.content).map(racine))
+        }
+      }
+      this.indexInverseCache = index
+    }
+    return this.indexInverseCache
+  }
+
+  /** Enregistre un message dans l'index sans rien reconstruire. Sans effet si l'index n'existe pas. */
+  private indexerMessage(conversationId: string, contenu: unknown): void {
+    if (typeof contenu !== 'string') return
+    // Le voisinage ABSORBE le message au lieu d'etre jete : c'etait le poste dominant du gel
+    // (~90 ms par tour a reconstruire tout le corpus, contre O(mots du message) ici).
+    this.voisinageCache?.ajouter(contenu)
+    if (!this.indexInverseCache) return
+    this.indexInverseCache.ajouter(conversationId, this.motsMemoises(contenu).map(racine))
+  }
+
+  private motsMemoises(contenu: string): string[] {
+    const connu = this.motsParMessage.get(contenu)
+    if (connu) return connu
+    const mots = motsDe(contenu)
+    // Borne de securite : un corpus qui grossit ne doit pas faire grossir ce cache sans fin.
+    if (this.motsParMessage.size > 40_000) this.motsParMessage.clear()
+    this.motsParMessage.set(contenu, mots)
+    return mots
   }
 
   /**
@@ -769,7 +880,11 @@ export class ConversationStore {
       }
       // Les mots ENTIERS au decoupage, la racine fournie a part : l'index compte alors la presence
       // des deux, ce dont la ponderation par le mot rencontre a besoin pour discriminer.
-      this.voisinageCache = construireVoisinage(textes, (texte) => motsDe(texte), racine)
+      this.voisinageCache = construireVoisinage(
+        textes,
+        (texte) => this.motsMemoises(texte),
+        racine
+      )
     }
     return this.voisinageCache
   }
@@ -801,7 +916,24 @@ export class ConversationStore {
    */
   search(
     terme: string,
-    options?: { limite?: number; extraitsParConversation?: number }
+    options?: {
+      limite?: number
+      extraitsParConversation?: number
+      /**
+       * Temps maximum accorde au parcours. Absent = pas de limite.
+       *
+       * Le cout croit avec le corpus : ~35 ms sur 1197 conversations aujourd'hui, le triple sur un
+       * corpus triple. Une garantie qui depend d'une taille de donnees est un sursis, pas une
+       * garantie. Sous budget, la recherche rend ce qu'elle a TROUVE au lieu de finir a tout prix.
+       *
+       * Compromis assume et nomme : le resultat peut etre INCOMPLET. Pour un rappel -- un confort,
+       * jamais une autorite -- un resultat partiel rendu a temps vaut mieux qu'une interface qui se
+       * figeait. C'est pourquoi ce budget est un PARAMETRE et non une valeur en dur : il serait
+       * inacceptable pour `conversation_search`, que l'agent appelle en attendant une reponse
+       * complete.
+       */
+      budgetMs?: number
+    }
   ): ConversationRecherche[] {
     const { demandes, elargis } = motsCherchables(terme, this.voisinage())
     // Un terme vide rendrait TOUT le corpus : ce n'est pas une recherche, c'est un dump.
@@ -815,8 +947,39 @@ export class ConversationStore {
       Math.min(20, Math.floor(options?.extraitsParConversation ?? 3) || 3)
     )
     const trouvees: Array<ConversationRecherche & { score: number }> = []
+    // La pre-selection porte sur les mots DEMANDES et AJOUTES : une conversation absente de l'index
+    // pour tous ces mots ne peut pas correspondre, il est inutile de la relire.
+    const candidates = this.indexInverse().candidates([...demandes, ...elargis])
+    const budget = options?.budgetMs
+    // Un budget de zero ou negatif veut dire « ne cherche pas » : l'echeance est deja passee. Sans
+    // ce cas explicite, `now + 0` valait `now` et le premier controle ne declenchait pas -- un
+    // budget nul aurait cherche partout, ce qui est l'inverse de ce qu'il demande.
+    const echeance = budget === undefined ? undefined : budget <= 0 ? 0 : Date.now() + budget
+    /*
+     * Le compteur porte sur les MESSAGES parcourus, pas sur les conversations.
+     *
+     * Compter les conversations ne garantissait l'independance qu'au NOMBRE de conversations, pas a
+     * leur taille : trente-et-une conversations de plusieurs milliers de messages pouvaient etre
+     * parcourues entierement entre deux consultations de l'horloge, et faire deborder le budget d'un
+     * facteur non borne. Un audit l'a releve -- mon commentaire promettait « independant de la taille
+     * des donnees », le code ne tenait que la moitie de cette promesse.
+     *
+     * Le message est l'unite de COUT reelle : c'est lui qu'on tokenise et qu'on lit.
+     */
+    let messagesParcourus = 0
+    const budgetEpuise = (): boolean => {
+      // L'horloge n'est consultee qu'un message sur 256 : l'appeler a chaque message couterait plus
+      // cher que ce qu'on economise, et 256 messages se parcourent en bien moins d'une milliseconde.
+      if (echeance === undefined) return false
+      if ((messagesParcourus & 255) !== 0) return false
+      return Date.now() > echeance
+    }
     for (const conversation of this.list()) {
+      if (candidates && !candidates.has(conversation.id)) continue
+      if (budgetEpuise()) break
       const extraits: ConversationExtrait[] = []
+      /** Rangs des messages retenus : sert a chercher un revirement APRES le dernier extrait. */
+      const derniersRangs: number[] = []
       /*
        * Le score est le meilleur score d'UN SEUL message, pas le cumul de la conversation.
        *
@@ -829,8 +992,12 @@ export class ConversationStore {
       let meilleurScore = 0
       for (const [rang, message] of conversation.messages.entries()) {
         if (typeof message.content !== 'string') continue
+        messagesParcourus += 1
+        // Coupe AUSSI a l'interieur d'une conversation tres longue : sans cela, une seule
+        // conversation de dix mille messages ignorait le budget a elle seule.
+        if (budgetEpuise()) break
         const replie = replier(message.content)
-        const motsDuMessage = motsDe(message.content)
+        const motsDuMessage = this.motsMemoises(message.content)
         let premierePosition = -1
         let motsIci = 0
         /*
@@ -878,6 +1045,7 @@ export class ConversationStore {
             ts: message.ts,
             extrait: fenetre(message.content, premierePosition, 0)
           })
+          derniersRangs.push(rang)
           // La REPONSE qui suit la question porte le sens que la question demandait. « le code
           // couleur de la pastille » retrouve la conversation ; « ambre = en cours » est ce dont le
           // lecteur a besoin. Rendre la question sans la reponse obligerait a un second aller-retour
@@ -899,10 +1067,36 @@ export class ConversationStore {
         }
       }
       if (meilleurScore === 0) continue
+      /*
+       * UN REVIREMENT PEUT VIVRE DANS UN AUTRE MESSAGE.
+       *
+       * La fenetre ne regarde qu'un message ; or le message qui revient sur une decision ne reprend
+       * presque jamais les mots de la demande -- « finalement le violet a pris la place » ne contient
+       * ni « ambre » ni « pastille », donc il n'est meme pas candidat. L'audit l'a montre : le
+       * rappel citait la decision initiale seule, sans rien signaler.
+       *
+       * On regarde donc les messages qui SUIVENT le dernier extrait retenu, et on annexe le premier
+       * qui porte un connecteur de contraste. Mieux vaut un extrait de plus qu'un rappel qui affirme
+       * un choix revoque.
+       */
+      const dernierRang = derniersRangs.at(-1)
+      if (extraits.length > 0 && dernierRang !== undefined) {
+        for (const suivant of conversation.messages.slice(dernierRang + 1)) {
+          if (typeof suivant.content !== 'string') continue
+          if (!REVIREMENTS.test(replier(suivant.content))) continue
+          extraits.push({
+            role: suivant.role,
+            ts: suivant.ts,
+            extrait: `[la suite revient sur ce qui precede] ${fenetre(suivant.content, 0, 0)}`
+          })
+          break
+        }
+      }
       trouvees.push({
         id: conversation.id,
         title: conversation.title,
         provider: conversation.provider,
+        ...(conversation.projectPath ? { projectPath: conversation.projectPath } : {}),
         updatedAt: conversation.updatedAt,
         messageCount: conversation.messages.length,
         extraits,
@@ -1067,6 +1261,16 @@ export class ConversationStore {
   /** Supprime une conversation. Retourne true si elle existait. */
   remove(id: string): boolean {
     this.voisinageCache = undefined
+    // Le corpus entier change de forme : la pre-selection ne peut pas etre rattrapee
+    // par une mise a jour, elle est jetee.
+    // Une conversation part : l'index inverse sait la DESINSCRIRE en temps proportionnel a ses
+    // mots, il n'y a pas besoin de jeter le corpus entier. `retirer` existait, teste, et n'etait
+    // appele nulle part en production -- une capacite branchee pour rien, relevee par l'audit.
+    this.indexInverseCache?.retirer(id)
+    // Le cache de tokenisation garde une entree par CONTENU vu, et les etats intermediaires du
+    // streaming en laissent beaucoup. Il n'etait purge nulle part : une conversation qui part est
+    // le bon moment pour le remettre a plat.
+    this.motsParMessage.clear()
     const existed = this.conversations.delete(id)
     if (existed) this.changed(id)
     return existed

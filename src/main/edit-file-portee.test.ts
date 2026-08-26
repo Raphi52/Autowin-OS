@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { WorktreeManager } from './store/worktree-manager'
@@ -33,10 +33,31 @@ const SAUT = String.fromCharCode(10)
 
 const RACINE = join(process.cwd(), '.autowin-data', 'tests-portee')
 
-/** Le `.bin` REEL de ce depot, rendu visible au bureau temporaire — le vrai runner, pas un stub. */
-const BIN_REEL = join(process.cwd(), 'node_modules', '.bin')
+/**
+ * Le `.bin` REEL de ce depot, rendu visible au bureau temporaire — le vrai runner, pas un stub.
+ *
+ * REMONTE les dossiers parents, comme le fait la resolution Node elle-meme. Le chercher uniquement
+ * sous `process.cwd()` supposait un `node_modules/.bin` local : un WORKTREE git n'en a pas (il
+ * partage celui du depot principal), donc les trois tests de ce fichier y etaient SAUTES et le
+ * fichier comptait FAIL — pour une raison d'environnement, celle-la meme que le `.gitignore`
+ * ci-dessous existe pour ecarter.
+ */
+function binLePlusProche(depart: string): string | undefined {
+  let courant = depart
+  for (;;) {
+    const candidat = join(courant, 'node_modules', '.bin')
+    if (existsSync(candidat)) return candidat
+    const parent = dirname(courant)
+    if (parent === courant) return undefined
+    courant = parent
+  }
+}
+
+const BIN_REEL = binLePlusProche(process.cwd())
 beforeAll(() => {
-  if (!existsSync(BIN_REEL)) throw new Error(`node_modules/.bin introuvable : ${BIN_REEL}`)
+  if (!BIN_REEL) {
+    throw new Error(`node_modules/.bin introuvable depuis ${process.cwd()} ni dans ses parents`)
+  }
   if (!(process.env.PATH ?? '').split(delimiter).includes(BIN_REEL)) {
     process.env.PATH = `${BIN_REEL}${delimiter}${process.env.PATH ?? ''}`
   }
@@ -70,6 +91,9 @@ function depotDejaRouge(): { repo: string; git: (...a: string[]) => string } {
    * devient un fichier SUIVI a republier : git echoue en « Filename too long » et l'edition est
    * rejetee pour une raison d'ENVIRONNEMENT. Tout depot reel ignore `node_modules` ; le fixture
    * doit lui ressembler, pas etre plus permissif.
+   *
+   * Le test etait de surcroit sensible a la PROFONDEUR du cwd : la meme mise en scene passe depuis
+   * le depot principal et echoue depuis un worktree, dont le chemin est 47 caracteres plus long.
    */
   writeFileSync(join(repo, '.gitignore'), ['node_modules/', ''].join(SAUT), 'utf8')
   writeFileSync(join(repo, 'sujet.ts'), 'export const valeur = (): number => 1\n', 'utf8')
@@ -137,6 +161,51 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     // Le rouge préexistant n’a pas été « réparé » au passage : il est resté INTACT.
     expect(readFileSync(join(repo, 'etranger.test.ts'), 'utf8')).toContain('toBe(2)')
     expect(git('status', '--porcelain')).toBe('')
+  }, 180_000)
+
+  it('nomme le MOTIF quand la publication du bureau échoue', async () => {
+    const { repo } = depotDejaRouge()
+    const wtRoot = mkdtempSync(join(RACINE, 'wt-'))
+    temporaires.push(wtRoot)
+    const coordinator = new RunWorktreeCoordinator({
+      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+    })
+    /*
+     * Publication FORCEE en echec, avec le motif que la finalisation etablit deja. C'est le seul
+     * moyen d'exercer ce chemin : un merge qui echoue vraiment depend de la longueur du chemin de
+     * la machine, donc d'un detail d'environnement, pas du contrat qu'on veut verrouiller ici.
+     */
+    ;(coordinator as unknown as { endAsync: (id: string) => Promise<unknown> }).endAsync = async (
+      runId: string
+    ) => ({
+      outcome: 'blocked',
+      agentId: runId,
+      files: ['sujet.ts'],
+      reason: 'merge-failed',
+      detail: "fatal: cannot create directory at 'node_modules/.vite': Filename too long"
+    })
+    const bus = new AppCommandBus(
+      { executionWorkspace: repo, worktrees: coordinator } as never,
+      () => undefined
+    )
+
+    const result = await bus.exec(
+      'edit_file',
+      {
+        path: 'sujet.ts',
+        oldText: 'export const valeur = (): number => 1',
+        newText: 'export const valeur = (): number => 1 // commentaire sans effet'
+      },
+      'conv-1'
+    )
+
+    expect(result).toMatchObject({ ok: false })
+    // Un bureau conserve SANS motif se rediagnostique a chaque fois : il a fallu patcher le produit
+    // pour apprendre ce que la finalisation savait deja (2026-08-26).
+    const erreur = (result as { error?: string }).error ?? ''
+    expect(erreur).toContain('blocked')
+    expect(erreur).toContain('merge-failed')
+    expect(erreur).toContain('Filename too long')
   }, 180_000)
 
   it('refuse toujours une édition qui casse RÉELLEMENT le test de son fichier', async () => {
