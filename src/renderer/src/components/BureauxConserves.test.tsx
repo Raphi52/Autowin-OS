@@ -171,6 +171,22 @@ describe('BureauxConserves — le verdict, sans ouvrir le patch', () => {
     expect(container.textContent).toContain('Sans valeur')
   })
 
+  it('une lecture impossible est DITE, jamais déguisée en « trié »', async () => {
+    poserApi({
+      getTravauxNonPublies: vi
+        .fn()
+        .mockResolvedValue([
+          { agentId: 'illisible', date: '2026-08-26', fichiers: [], verdict: 'inconnu' }
+        ])
+    })
+    await rendre()
+
+    expect(container.textContent).toContain('Lecture impossible')
+    // L'entrée qui compte : surtout PAS un verdict rassurant sur un bureau qu'on n'a pas su lire.
+    expect(container.textContent).not.toContain('Trié')
+    expect(container.textContent).not.toContain('Sans valeur')
+  })
+
   it('un verdict absent (preload plus ancien) laisse la vue lisible', async () => {
     poserApi({
       getTravauxNonPublies: vi

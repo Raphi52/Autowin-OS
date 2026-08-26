@@ -178,7 +178,7 @@ const api = {
       date: string
       fichiers: string[]
       /** Verdict DERIVE (pas stocke) : a-reprendre / trie / sans-valeur. */
-      verdict?: 'a-reprendre' | 'trie' | 'sans-valeur'
+      verdict?: 'a-reprendre' | 'trie' | 'sans-valeur' | 'inconnu'
     }>
   > =>
     ipcRenderer.invoke('worktree:travaux-non-publies'),

@@ -24,7 +24,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react'
  * le seul indice qui permet de deviner qu'un bureau contient du travail sans l'ouvrir.
  */
 
-type VerdictBureau = 'a-reprendre' | 'trie' | 'sans-valeur'
+type VerdictBureau = 'a-reprendre' | 'trie' | 'sans-valeur' | 'inconnu'
 
 /**
  * Le verdict est DERIVE cote principal (`verdict-bureau.ts`), jamais stocke : un etat ecrit a cote
@@ -34,7 +34,9 @@ type VerdictBureau = 'a-reprendre' | 'trie' | 'sans-valeur'
 const LIBELLE_VERDICT: Record<VerdictBureau, string> = {
   'a-reprendre': 'À reprendre',
   trie: 'Trié',
-  'sans-valeur': 'Sans valeur'
+  'sans-valeur': 'Sans valeur',
+  // « On n'a pas pu lire » n'est pas « il n'y a rien » : le dire plutôt que de rassurer à tort.
+  inconnu: 'Lecture impossible'
 }
 
 interface TravailNonPublie {
