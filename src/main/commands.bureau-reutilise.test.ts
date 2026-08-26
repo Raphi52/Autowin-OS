@@ -10,8 +10,24 @@ import { cleDeBureau } from './bureau-reutilisable'
  * le brouillon précédent au lieu d'en créer un onzième. Sans lui, on aurait une décision correcte
  * que personne n'appelle : exposé mais pas intégré, le défaut le plus coûteux de ce dépôt.
  */
+/**
+ * Le double minimal que `exec('edit_file')` consulte — meme forme que
+ * `commands.travaux-non-publies-dans-get-state.test.ts`, qui a deja renonce a `any` ici. Un `any`
+ * laisserait passer une signature qui a change sous le test sans que rien ne le dise.
+ */
+type OsDouble = ConstructorParameters<typeof AppCommandBus>[0]
+
+interface DoubleWorktrees {
+  travauxNonPublies: () => Array<{ agentId: string; date: string; fichiers: string[] }>
+  discardHeldAsync: (id: string) => Promise<boolean>
+  beginAsync: (id: string) => Promise<string | undefined>
+  endAsync: () => Promise<undefined>
+}
+
+type OsAvecBureaux = OsDouble & { worktrees: DoubleWorktrees }
+
 function osAvecBureaux(retenus: Array<{ agentId: string; date: string; fichiers: string[] }>): {
-  os: any
+  os: OsAvecBureaux
   begins: string[]
   discards: string[]
 } {
@@ -49,13 +65,13 @@ function osAvecBureaux(retenus: Array<{ agentId: string; date: string; fichiers:
       endAsync: async () => undefined
     }
   }
-  return { os, begins, discards }
+  return { os: os as unknown as OsAvecBureaux, begins, discards }
 }
 
 const CIBLE = 'src/renderer/src/components/WorkflowsPanel.tsx'
 
-async function editer(os: any): Promise<void> {
-  const bus = new AppCommandBus(os, () => {})
+async function editer(os: OsAvecBureaux): Promise<void> {
+  const bus = new AppCommandBus(os as OsDouble, () => {})
   await bus.exec('edit_file', { path: CIBLE, old: 'a', new: 'b' }, 'conv-1')
 }
 
