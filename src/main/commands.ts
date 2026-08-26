@@ -19,6 +19,7 @@ import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-sco
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
+import { suivreArbre, tuerArbre } from './verify-extinction'
 import {
   capVerifyOutput,
   decideRelatedVerify,
@@ -2802,6 +2803,12 @@ export class AppCommandBus {
               env
             })
           : spawn(file, rest, { shell: false, cwd, env })
+      /*
+       * L'arbre est SUIVI tant qu'il vit : si ce process s'arrete avant que l'horloge ci-dessous
+       * ne tire, c'est la seule chose qui l'eteindra (defaut mesure le 2026-08-26 : trois chaines
+       * `npm -> cmd -> node` survivantes depuis la veille, ~267 Mo, Autowin meme pas lance).
+       */
+      const oublierLArbre = suivreArbre(child.pid)
       let output = ''
       const collect = (chunk: Buffer): void => {
         output += chunk.toString('utf8')
@@ -2834,11 +2841,9 @@ export class AppCommandBus {
       const horloge = setTimeout(() => {
         expire = true
         clearInterval(battement)
-        if (process.platform === 'win32' && child.pid) {
-          spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true })
-        } else {
-          child.kill('SIGKILL')
-        }
+        oublierLArbre()
+        if (child.pid) tuerArbre(child.pid)
+        else child.kill('SIGKILL')
         // La sortie deja collectee part AVEC le verdict : le plafond borne l'attente, il n'efface
         // pas ce que la suite avait prouve avant d'etre coupee (conv-1400, 2026-08-25).
         resolve({ allowed: true, ...verifyTimeoutOutcome(label, plafond, output) })
@@ -2846,7 +2851,8 @@ export class AppCommandBus {
       horloge.unref?.()
       child.on('error', (error) =>
         expire ||
-        (clearTimeout(horloge),
+        (oublierLArbre(),
+        clearTimeout(horloge),
         clearInterval(battement),
         resolve({
           allowed: true,
@@ -2858,7 +2864,8 @@ export class AppCommandBus {
       )
       child.on('close', (code) =>
         expire ||
-        (clearTimeout(horloge),
+        (oublierLArbre(),
+        clearTimeout(horloge),
         clearInterval(battement),
         resolve({
           allowed: true,
