@@ -104,6 +104,31 @@ function nodeField(node: GraphNode, ...keys: string[]): string {
   return ''
 }
 
+/**
+ * Decoupe un texte en MOTS comparables, avec les memes separateurs que `queryTokens`.
+ *
+ * Le score se calculait en SOUS-CHAINE (`searchable.includes(token)`). Mesure conv-1407 : sur
+ * « remake les pastilles de couleurs », le mot vide « les » est une sous-chaine de « roles.ts », et
+ * faisait entrer `.all()` de `roles.ts` dans le contexte injecte a chaque tour. Un seul token
+ * suffisait a faire entrer un noeud.
+ */
+function motsDe(texte: string): string[] {
+  return normalized(texte)
+    .split(/[^a-z0-9_.:-]+/)
+    .filter(Boolean)
+}
+
+/**
+ * Le token correspond-il a un MOT du noeud ?
+ *
+ * Par PREFIXE dans les deux sens, et non par egalite stricte : « pastille » doit trouver
+ * « pastilles », et « conversation » doit trouver « conversations ». Resserrer jusqu'a l'egalite
+ * echangerait un bruit contre un silence -- le test de pertinence garde ce bord.
+ */
+function porteLeToken(mots: readonly string[], token: string): boolean {
+  return mots.some((mot) => mot.startsWith(token) || token.startsWith(mot))
+}
+
 function renderGraphifyEvidence(nodes: readonly GraphNode[], query: string, limit = 6): string {
   const tokens = queryTokens(query)
   if (tokens.length === 0) return ''
@@ -120,8 +145,11 @@ function renderGraphifyEvidence(nodes: readonly GraphNode[], query: string, limi
     const id = nodeField(node, 'id').slice(0, 1_024)
     const label = (nodeField(node, 'label', 'name') || id).slice(0, 1_024)
     const source = nodeField(node, 'source_file', 'file', 'path').slice(0, 1_024)
-    const searchable = normalized(`${label}\n${id}\n${source}`)
-    const score = tokens.reduce((total, token) => total + (searchable.includes(token) ? 1 : 0), 0)
+    const searchable = motsDe(`${label}\n${id}\n${source}`)
+    const score = tokens.reduce(
+      (total, token) => total + (porteLeToken(searchable, token) ? 1 : 0),
+      0
+    )
     if (score === 0 || !label) continue
     ranked.push({ id, label, source, score })
     ranked.sort(compare)
