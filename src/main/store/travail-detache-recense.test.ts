@@ -114,6 +114,34 @@ describe('le recensement voit le travail resté sur un HEAD détaché', () => {
     expect(wm.travauxNonPublies()).not.toContain('run-vieille-base')
   })
 
+  it('SIGNALE encore quand git ne répond pas — le repli ne doit rien effacer', () => {
+    /*
+     * LE TROU DE COUVERTURE, confirmé par l'audit du cycle 2 : saboter le `catch` d'`estOrphelin`
+     * (`return true` → `return false`) ne faisait rougir AUCUN test. Le correctif était donc
+     * argumenté mais non prouvé, et je l'avais laissé en réserve au lieu de le fermer.
+     *
+     * Ce que ça protège : sur cet arbre partagé, un `for-each-ref` peut échouer transitoirement
+     * (index verrouillé par une session concurrente, dépôt occupé, timeout). Répondre « pas
+     * orphelin » sur ce silence EFFACE le bureau du recensement — l'inverse de la règle écrite deux
+     * fois dans le fichier : « se tromper du côté qui n'efface rien ».
+     *
+     * On force donc la panne au lieu de l'espérer : `git` lève sur `for-each-ref`, et passe pour
+     * tout le reste. C'est la seule façon d'exercer une branche de repli.
+     */
+    const { repo, racine, wm } = monter()
+    bureauDetacheAvecTravail(repo, racine, 'run-git-muet', 'apport.txt', 'du vrai travail\n')
+
+    const vrai = (wm as unknown as { git: (d: string, a: string[]) => string }).git.bind(wm)
+    ;(wm as unknown as { git: (d: string, a: string[]) => string }).git = (d, args) => {
+      if (args[0] === 'for-each-ref' && args.includes('--contains')) {
+        throw new Error('simulation : index verrouillé par une session concurrente')
+      }
+      return vrai(d, args)
+    }
+
+    expect(wm.travauxNonPublies()).toContain('run-git-muet')
+  })
+
   it('reste MUET sur un bureau posé sur une branche NON NÉE (SHA nul)', () => {
     /*
      * Cas RÉEL sur le dépôt de production : `git worktree list --porcelain` rend

@@ -46,7 +46,10 @@ export function cleDeBureau(
   // que de faire collisionner des tâches distinctes sur un même bureau.
   if (!chemin) return undefined
   const normalise = chemin.replace(/\\/g, '/').toLowerCase()
-  const empreinte = normalise.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(-60)
+  const empreinte = normalise
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(-60)
   const conversation = (conversationId ?? 'sans-conversation').replace(/[^A-Za-z0-9_-]/g, '')
   return `command-${commande}-${conversation}-${empreinte}`
 }
@@ -60,8 +63,22 @@ export function cleDeBureau(
  */
 export function decisionDeReutilisation(
   fichiersDuBureau: readonly string[],
-  ciblesDeLaTache: readonly string[]
+  ciblesDeLaTache: readonly string[],
+  /**
+   * La liste des fichiers est-elle une CONSTATATION, ou l'echo d'une lecture qui a echoue ?
+   *
+   * Chemin destructeur trouve au cycle 2 de l'audit du 2026-08-26 : `apercuTravauxNonPublies`
+   * enveloppe son `git diff` dans un catch muet qui laisse `fichiers = []`. Un index verrouille par
+   * une session concurrente suffisait donc a faire lire « bureau vide » ici, donc `reinitialiser`,
+   * donc `discardHeldAsync` — un bureau porteur de travail JETE sur une panne passagere, et le
+   * commentaire de l'appelant precise « sans qu'aucun humain ne voie rien ».
+   *
+   * « Aucun fichier » et « on n'a pas pu lire » ne sont pas la meme chose. Le premier autorise a
+   * reinitialiser, le second impose de preserver.
+   */
+  etat: { lectureEchouee?: boolean } = {}
 ): DecisionBureau {
+  if (etat.lectureEchouee) return 'preserver'
   if (fichiersDuBureau.length === 0) return 'reinitialiser'
   const attendus = new Set(ciblesDeLaTache.map((c) => c.replace(/\\/g, '/').toLowerCase()))
   if (attendus.size === 0) return 'preserver'

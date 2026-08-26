@@ -592,10 +592,6 @@ function sansDecorationDeCloture(line: string): string {
 
 function structuredClosingMarker(line: string): ClosingMarker | undefined {
   const text = sansDecorationDeCloture(line)
-    .replace(/^#{1,6}\s*/u, '')
-    .replace(/^\*\*/u, '')
-    .replace(/\*\*(?=\s*(?:[:：—–-]|$))/u, '')
-    .trim()
   if (/^✅\s*Fait(?=\s|[:：—–-]|$)/u.test(text)) return 'fait'
   if (/^📍️?\s*Maintenant(?=\s|[:：—–-]|$)/u.test(text)) return 'maintenant'
   if (/^⏳️?\s*Reste à faire(?=\s|[:：—–-]|$)/u.test(text)) return 'reste'
@@ -636,7 +632,11 @@ function removeExistingStructuredClosingBlock(
   // Le dernier intitulé contient normalement sa recommandation sur la même ligne. Si elle est
   // portée par le paragraphe suivant, retire aussi ce paragraphe, mais jamais les preuves placées
   // après une ligne vide : elles appartiennent au rapport, pas à l'ancien footer.
-  const recommendedLine = lines[end - 1].trim().replace(/^#{1,6}\s*/u, '')
+  // MEME depouillement que la DETECTION. Le cycle 1 avait elargi la detection aux puces sans
+  // migrer ce site : le libelle `^👉` echouait alors sur `- 👉`, la recommandation etait crue
+  // absente, et la boucle de rattrapage ci-dessous AVALAIT le paragraphe de preuves qui suivait.
+  // Elargir une detection sans elargir ce qui la CONSOMME transforme une reparation en destruction.
+  const recommendedLine = sansDecorationDeCloture(lines[end - 1])
   const recommendedLabel = /^👉\s*(?:\*\*)?Recommandé(?:\*\*)?/u.exec(recommendedLine)?.[0]
   const inlineRecommendation = recommendedLabel
     ? recommendedLine
@@ -650,10 +650,8 @@ function removeExistingStructuredClosingBlock(
 
   // Le contenu sous « Fait » porte les preuves du worker (tests, fichiers, checksum). Conserve-le
   // comme corps du rapport ; seuls l'ancien intitulé et les rubriques de cycle de vie sont remplacés.
-  const inlineFact = lines[start]
-    .trim()
-    .replace(/^#{1,6}\s*/u, '')
-    .replace(/^(?:\*\*)?✅\s*Fait(?:\*\*)?\s*(?:[:：—–-]\s*)?/u, '')
+  const inlineFact = sansDecorationDeCloture(lines[start])
+    .replace(/^✅\s*Fait\s*(?:[:：—–-]\s*)?/u, '')
     .trim()
   const facts = [...(inlineFact ? [inlineFact] : []), ...lines.slice(start + 1, now)]
   return [...lines.slice(0, start), ...facts, ...lines.slice(end)].join('\n').trimEnd()
@@ -709,6 +707,29 @@ function boundedMarkdownResult(result: string, maxLength = 4_000, runPath?: stri
   const label = runLabelFromPath(runPath)
   const ou = label ? ` — livrable entier dans le run « ${label} »` : ''
   return `${truncated}${closure}\n…[tronqué : ${reste} caractères de plus${ou}]`
+}
+
+/**
+ * L'ORCHESTRATION A-T-ELLE ECHOUE ? Question DISTINCTE de « le travail est-il arrive quelque part ».
+ *
+ * Erreur de conception trouvee au cycle 2 de l'audit. Pour fermer un faux vert d'AFFICHAGE, j'ai
+ * fait rendre `false` a `isDeliveredOrchestrationOutcome` sur un travail retenu — sans regarder ses
+ * CINQ appelants. `agent-pilot.ts:1739` s'en sert pour la comptabilite d'echec : un run VERT dont la
+ * publication est en `hold` (le cas central de ce besoin) etait donc compte comme un echec, ce qui
+ * arme la relance « corriger et poursuivre ». L'agent repartait reparer ce qui n'avait pas casse.
+ *
+ * Un travail vert mis de cote exprES repond NON aux deux questions : il n'est pas livre, il n'a pas
+ * echoue. Un predicat partage ne se reinterprete pas sans tracer qui le lit.
+ */
+export function orchestrationEnEchec(outcome: OrchestrationOutcome): boolean {
+  if (isDeliveredOrchestrationOutcome(outcome)) return false
+  return !(
+    asString(outcome.status) === 'succeeded' &&
+    outcome.valid === true &&
+    outcome.gateBlocked === false &&
+    outcome.reused === false &&
+    travailRestePrisonnier(outcome)
+  )
 }
 
 export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): boolean {
