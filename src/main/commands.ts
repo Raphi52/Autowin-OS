@@ -473,7 +473,7 @@ const CATALOG: CommandSpec[] = [
       "Regarder ce qui s'est REELLEMENT passe dans une conversation : ses messages, l'activite de " +
       'ses tours, ses evenements causaux (outils appeles, refus, verdicts) et ses RUN.md. Appelle-le ' +
       "des qu'on te demande pourquoi un tour a echoue, ce qui a ete tente, ce qui a coute, ou avant " +
-      "de relancer un travail deja tente : tu sauras ce qui a DEJA ete essaye au lieu de le refaire. " +
+      'de relancer un travail deja tente : tu sauras ce qui a DEJA ete essaye au lieu de le refaire. ' +
       "C'est de la LECTURE — cela ne lance aucun run et ne coute aucun appel de modele.",
     args: {
       id: 'identifiant de la conversation a examiner (ex. « conv-1407 »)'
@@ -2005,6 +2005,10 @@ export class AppCommandBus {
             runPath,
             status: r.gateBlocked ? 'failed' : 'succeeded',
             reused: run?.reused ?? false,
+            // Le travail est-il reste dans la copie isolee ? C'est ce signal — jamais le vocabulaire
+            // du conseil — qui decide si le `👉 Recommandé` du worker s'adresse encore a un arbre
+            // qui a recu son code (cf. `demoteUnvalidatedSuccessClaims`).
+            workRetained: r.retainedWorkspace !== undefined,
             ...(learning ? { learning } : {})
           }
         } catch (e) {
