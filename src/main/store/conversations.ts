@@ -745,6 +745,17 @@ export class ConversationStore {
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const message = applyTurnEventToMessages(conversation.messages, turnId, event)
+    /*
+     * LE CONTENU MUTE ICI, il n'est pas pousse : `indexerMessage` doit donc etre appele DEPUIS ce
+     * chemin, et pas seulement la ou un message est ajoute.
+     *
+     * J'avais retire l'invalidation de l'index de cette methode en ecrivant que `indexerMessage`
+     * l'alimenterait -- sans le brancher ici. Le texte reellement produit par l'assistant, la plus
+     * grande part du corpus, n'entrait donc JAMAIS dans les index une fois construits : la recherche
+     * ratait silencieusement l'essentiel de son propre corpus. Aucun des 6060 tests ne le voyait, et
+     * le commentaire affirmait le contraire de ce que le code faisait.
+     */
+    this.indexerMessage(id, message?.content)
     if (!message) throw new Error(`Tour assistant inconnu: ${turnId}`)
     conversation.updatedAt = this.now()
     const terminal = ['done', 'failed', 'cancelled', 'interrupted'].includes(event.kind)
@@ -1168,7 +1179,14 @@ export class ConversationStore {
     this.voisinageCache = undefined
     // Le corpus entier change de forme : la pre-selection ne peut pas etre rattrapee
     // par une mise a jour, elle est jetee.
-    this.indexInverseCache = undefined
+    // Une conversation part : l'index inverse sait la DESINSCRIRE en temps proportionnel a ses
+    // mots, il n'y a pas besoin de jeter le corpus entier. `retirer` existait, teste, et n'etait
+    // appele nulle part en production -- une capacite branchee pour rien, relevee par l'audit.
+    this.indexInverseCache?.retirer(id)
+    // Le cache de tokenisation garde une entree par CONTENU vu, et les etats intermediaires du
+    // streaming en laissent beaucoup. Il n'etait purge nulle part : une conversation qui part est
+    // le bon moment pour le remettre a plat.
+    this.motsParMessage.clear()
     const existed = this.conversations.delete(id)
     if (existed) this.changed(id)
     return existed
