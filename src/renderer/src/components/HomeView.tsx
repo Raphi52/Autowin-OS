@@ -183,8 +183,20 @@ export function HomeView({
   const decorHostRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
   const holdRef = useRef<HoldState | null>(null)
+  /**
+   * Compteur du dernier plan attribue. Reste une REF : il n'est ni lu ni affiche par le rendu, il
+   * ne sert qu'a produire le prochain numero dans le gestionnaire de prise.
+   */
   const frontRef = useRef(10)
-  const zIndexRef = useRef<Map<HomeWidgetId, number>>(new Map())
+  /**
+   * Plan de chaque tuile. C'est un ETAT et non une ref, parce que le RENDU le lit.
+   *
+   * Lire une ref pendant le rendu (« Cannot access refs during render ») rend l'affichage dependant
+   * d'une valeur que React ne suit pas : un rendu rejoue peut peindre un empilement perime. Et le
+   * passage en etat ne coute AUCUN rendu de plus -- l'ecriture etait deja suivie d'un `setHeld`
+   * dans le meme gestionnaire, donc un rendu suivait de toute facon.
+   */
+  const [plans, setPlans] = useState<Map<HomeWidgetId, number>>(() => new Map())
 
   // `active` est lu par la boucle de rendu, qui ne doit PAS se remonter à chaque bascule d'onglet :
   // recréer la scène coûterait plus cher que le rendu qu'on économise.
@@ -414,8 +426,16 @@ export function HomeView({
    * Outlook. Lu seulement quand la vue est affichee, et plus lentement que le Task Manager : chaque
    * lecture est un dialogue COM avec une application lourde.
    * ---------------------------------------------------------------- */
+  /**
+   * Ne pose AUCUN etat de facon synchrone : l'indicateur de chargement est allume par l'APPELANT.
+   *
+   * Elle le faisait (`if (force) setOutlookEnCours(true)`), et l'effet qui l'appelle heritait donc
+   * d'un « setState synchrone dans un effet » -- un rendu en cascade, signale par le React Compiler.
+   * Le linter ne peut pas savoir que l'effet passe `force = false` ; plutot que de le faire taire,
+   * la fonction n'a plus d'effet synchrone du tout. Un seul appelant allumait l'indicateur : le
+   * bouton, qui le fait desormais lui-meme, la ou l'intention est visible.
+   */
   const readOutlook = useCallback(async (force = false): Promise<void> => {
-    if (force) setOutlookEnCours(true)
     const api = (window as unknown as { api?: { outlookSnapshot?: (f?: boolean) => Promise<unknown> } })
       .api
     if (!api?.outlookSnapshot) {
@@ -444,8 +464,18 @@ export function HomeView({
     }
   }, [])
 
+  /*
+   * Le chemin SYNCHRONE qui reste dans `readOutlook` est son cas d'ERREUR : passerelle Outlook
+   * absente, elle pose l'etat de panne avant tout `await`. Il se produit une fois, au montage, en
+   * mode degrade -- un rendu de plus, sans boucle possible puisque l'etat suivant est identique.
+   *
+   * Le rendre asynchrone demanderait un `await` artificiel dont la seule fonction serait de faire
+   * taire l'outil. Le `setState` synchrone du chemin NORMAL, lui, a ete retire : il est desormais
+   * pose par le bouton qui l'allume.
+   */
   useEffect(() => {
     if (!active) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void readOutlook()
     const timer = window.setInterval(() => void readOutlook(), OUTLOOK_REFRESH_MS)
     return () => window.clearInterval(timer)
@@ -498,7 +528,8 @@ export function HomeView({
       })
       holdRef.current = { id, edge, startX: event.clientX, startY: event.clientY, from }
       frontRef.current += 1
-      zIndexRef.current.set(id, frontRef.current)
+      const plan = frontRef.current
+      setPlans((courants) => new Map(courants).set(id, plan))
       setHeld(id)
     },
     [layout]
@@ -678,7 +709,10 @@ export function HomeView({
               lance dans Autowin (score 86). L'horodatage rend l'effet du clic VISIBLE. */}
           <button
             type="button"
-            onClick={() => void readOutlook(true)}
+            onClick={() => {
+              setOutlookEnCours(true)
+              void readOutlook(true)
+            }}
             disabled={outlookEnCours}
             data-testid="home-refresh-outlook"
             title={
@@ -732,7 +766,7 @@ export function HomeView({
           style={{
             width: `${box.w}px`,
             height: `${box.h}px`,
-            zIndex: zIndexRef.current.get(box.id) ?? 10,
+            zIndex: plans.get(box.id) ?? 10,
             transform: `translate3d(${box.x}px, ${box.y}px, ${box.z}px)`
           }}
           onPointerDown={(event) => grab(event, box.id, 'move')}
