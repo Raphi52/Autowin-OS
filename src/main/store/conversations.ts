@@ -1222,17 +1222,46 @@ export class ConversationStore {
     const candidats = trouvees.slice(0, Math.max(limite, PROFONDEUR_RECLASSEMENT))
     // Le contenu ENTIER, pas l’extrait : un premier essai lisait les extraits, qui sont des fenetres
     // tronquees, et le mot porteur pouvait se trouver juste apres la coupe -- 4/40 au lieu de 25/40.
-    const porte = (id: string): boolean => {
+    /*
+     * COMBIEN DE FOIS, et non PLUS SEULEMENT si. Une conversation qui traite le sujet nomme le mot
+     * plusieurs fois ; celle qui l’effleure une seule.
+     *
+     * Anatomie mesuree des cinq derniers echecs : dans QUATRE, les trois premieres conversations
+     * portaient AUSSI le porteur. Le signal binaire ne discriminait donc plus rien -- ces termes sont
+     * portes par 14 a 94 conversations, tout le monde etait dans le groupe « porte », et a l’interieur
+     * c’est le score seul qui decidait. Le compte redonne du relief la ou la presence est saturee.
+     *
+     *   cap    mot@8   phrase top-3   duree mediane
+     *     -    38/40      35/40           70 ms      (presence binaire)
+     *     2    39/40      35/40           76 ms
+     *     3    39/40      36/40           89 ms      <- retenu
+     *     5    39/40      36/40          105 ms
+     *    12    39/40      36/40          118 ms
+     *
+     * Le cap est indispensable : sans lui, un message qui repete le mot cent fois coute cent fois
+     * plus cher pour une information qu’on a des la troisieme. Au-dela de 3 on ne gagne plus rien et
+     * on paie -- ce calcul est synchrone a chaque tour de chat, et 89 ms approche deja du seuil de
+     * perception.
+     */
+    const OCCURRENCES_UTILES = 3
+    const porte = (id: string): number => {
       const conversation = this.conversations.get(id)
-      if (!conversation) return false
+      if (!conversation) return 0
+      let n = 0
       for (const message of conversation.messages) {
         if (typeof message.content !== 'string') continue
-        if (replier(message.content).includes(porteur)) return true
+        const texte = replier(message.content)
+        let i = texte.indexOf(porteur)
+        while (i !== -1) {
+          n += 1
+          if (n >= OCCURRENCES_UTILES) return n
+          i = texte.indexOf(porteur, i + porteur.length)
+        }
       }
-      return false
+      return n
     }
     const marques = candidats.map((c) => ({ c, porte: porte(c.id) }))
-    marques.sort((a, b) => Number(b.porte) - Number(a.porte))
+    marques.sort((a, b) => b.porte - a.porte)
     return marques.slice(0, limite).map(({ c: { score: _score, ...reste } }) => reste)
   }
 
