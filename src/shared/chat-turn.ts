@@ -314,6 +314,70 @@ export function retirerAnnonceEnTete(texte: string): string {
  * Les ERREURS et les actions ECHOUEES restent toujours visibles : un echec n'est pas du bruit
  * technique, c'est le fait le plus important du tour. Seules les actions REUSSIES s'effacent.
  */
+/** Plafond par resultat d'action dans l'historique du modele. */
+const CAP_RESULTAT_MODELE = 1200
+
+/**
+ * L'HISTORIQUE AMNESIQUE — ce que le MODELE doit voir de ses propres actions.
+ *
+ * DEFAUT MESURE le 2026-08-26 : `flattenChatParts` reduit une action REUSSIE a l'etiquette
+ * `[a execute verify]` et JETTE son resultat. Au tour suivant, le modele ne voit ni code de sortie,
+ * ni resume, ni preuve de ce qu'il a lui-meme fait — alors il relance l'action pour rien. Seuls les
+ * echecs gardaient une trace, et encore : juste `(echec)`.
+ *
+ * POURQUOI UNE FONCTION SEPAREE plutot qu'un correctif de `flattenChatParts` : cette derniere
+ * alimente aussi le rendu (`message.content`). Y verser le resultat brut ferait deborder la sortie
+ * verbeuse dans l'interface. L'affichage veut une etiquette courte, le modele veut la PREUVE : deux
+ * besoins opposes, deux fonctions. Un test verrouille que l'affichage reste inchange.
+ *
+ * BORNE PAR RESULTAT, pas par total : rejouer 50 000 caracteres a chaque tour couterait plus cher
+ * que la relance qu'on evite. Ce qui est coupe est DIT (« … ») — une troncature muette ferait lire
+ * un extrait comme s'il etait le tout.
+ */
+export function flattenChatPartsForModel(parts: PersistedChatPart[]): string {
+  const lignes: string[] = []
+  for (const part of parts) {
+    if (part.kind === 'text') {
+      if (part.text) lignes.push(part.text)
+      continue
+    }
+    if (part.kind === 'artifact') {
+      lignes.push(`[artefact ${part.artifact.name}]`)
+      continue
+    }
+    if (part.kind === 'error') {
+      lignes.push(`⚠️ ${part.message}`)
+      continue
+    }
+    // Une action dont l'issue n'arrivera JAMAIS ne doit pas passer pour un succes muet.
+    if (part.interrupted) {
+      lignes.push(`[${part.name} : interrompu, issue inconnue]`)
+      continue
+    }
+    const issue = part.ok === false ? 'échec' : 'ok'
+    const resultat = resumerResultat(part.data)
+    lignes.push(resultat ? `[${part.name} : ${issue}] ${resultat}` : `[${part.name} : ${issue}]`)
+  }
+  return lignes.filter(Boolean).join('\n')
+}
+
+/** Le resultat d'une action, rendu lisible et BORNE. Rend '' quand il n'y a rien a dire. */
+function resumerResultat(data: unknown): string {
+  if (data === undefined || data === null) return ''
+  const texte = typeof data === 'string' ? data : safeStringify(data)
+  if (!texte) return ''
+  return texte.length > CAP_RESULTAT_MODELE ? `${texte.slice(0, CAP_RESULTAT_MODELE)}…` : texte
+}
+
+/** `JSON.stringify` ne doit jamais faire echouer un tour : un cycle rend une chaine vide. */
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 export function flattenChatParts(parts: PersistedChatPart[]): string {
   const lisible: string[] = []
   const etiquettes: string[] = []
