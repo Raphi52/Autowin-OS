@@ -15,12 +15,16 @@ import { AppCommandBus } from './commands'
  * qu'elle existe.
  */
 
-/** Le double minimal que `snapshot()` consulte : rien de plus, pour que le test dise ce qu'il teste. */
+/**
+ * Le double minimal que `snapshot()` consulte : rien de plus, pour que le test dise ce qu'il teste.
+ * `recense: false` retire la methode pour exercer le bord « OS plus ancien », sans qu'aucun appelant
+ * n'ait a fabriquer un `undefined` que le type du constructeur refuse.
+ */
 type OsDouble = ConstructorParameters<typeof AppCommandBus>[0]
 
-const osAvecTravaux = (
-  travaux: Array<{ agentId: string; date: string; fichiers: string[] }>
-): OsDouble & { travauxNonPublies?: () => typeof travaux } =>
+type Travail = { agentId: string; date: string; fichiers: string[] }
+
+const osAvecTravaux = (travaux: Travail[], recense = true): OsDouble =>
   ({
     executionWorkspace: process.cwd(),
     conversations: { list: () => [] },
@@ -29,8 +33,8 @@ const osAvecTravaux = (
     runsWithGate: async () => [],
     budget: () => ({ pricedSpendUsd: 0 }),
     getWorktreeActivity: () => [],
-    travauxNonPublies: () => travaux
-  }) as unknown as OsDouble & { travauxNonPublies?: () => typeof travaux }
+    ...(recense ? { travauxNonPublies: () => travaux } : {})
+  }) as unknown as OsDouble
 
 describe('get_state porte les travaux non publiés', () => {
   it('NOMME le travail qui attend, avec ses fichiers', async () => {
@@ -56,9 +60,7 @@ describe('get_state porte les travaux non publiés', () => {
 
   it('rend un tableau VIDE si l’OS n’expose pas le recensement', async () => {
     // Un OS plus ancien ou un double de test ne doit pas faire tomber `get_state`.
-    const os = osAvecTravaux([])
-    os.travauxNonPublies = undefined
-    const bus = new AppCommandBus(os, () => undefined)
+    const bus = new AppCommandBus(osAvecTravaux([], false), () => undefined)
     await expect(bus.snapshot()).resolves.toMatchObject({ travauxNonPublies: [] })
   })
 })
