@@ -111,6 +111,16 @@ export function buildChatPilotagePrompt(
     `un succès ou une clôture avant son résultat observable : reused:true signifie réutilisation, ` +
     `running signifie « en cours » avec runId, failed signifie échec. Ne dis « fait », ` +
     `« terminé » ou « vert » pour un travail orchestré qu'après succeeded avec son runId.\n` +
+    // MESURE le 2026-08-20 (conv-1086) : la regle ci-dessus ne parle que d'ORCHESTRATION — elle cite
+    // reused/running/failed/succeeded/runId. Une commande ORDINAIRE n'y etait pas couverte. L'agent a
+    // ecrit « je depose le diagnostic au Brain », `remember` a ete REFUSE (type invalide), rien n'a
+    // ete retenu — et l'utilisateur est reparti en croyant une lecon acquise, donc sans la redonner.
+    // Le piege : une commande peut REUSSIR en portant un REFUS (`ok:true` n'est pas « effet obtenu »).
+    `Cela vaut pour TOUTE commande, pas seulement l'orchestration : annoncer un effet, c'est deja ` +
+    `le declarer fait. Avant d'ecrire « j'ai enregistre », « c'est depose » ou « le fichier est ` +
+    `ecrit », tu dois avoir LU le compte-rendu de la commande : une commande peut REUSSIR en ` +
+    `portant un refus, donc l'absence d'erreur ne prouve aucun effet. Tant que ce compte-rendu ` +
+    `n'est pas lu, la seule formulation honnete est « je tente … », jamais un passe ni un accompli.\n` +
     // BORNÉ au code/workspace : « propose » ou « des options » suffisait à déclencher un pipeline
     // scout complet sur une simple demande d'avis. La divergence reste obligatoire (on ne renvoie
     // pas la question à l'utilisateur), mais elle se fait EN RÉPONDANT quand rien n'est à modifier.
