@@ -170,6 +170,20 @@ export function construireVoisinage(
    * d'etre absent, c'est peut-etre le seul mot precis de la demande.
    */
   const rarete = (mot: string): number => {
+    /*
+     * UN MOT ECARTE POUR BANALITE N'EST PAS UN MOT INCONNU.
+     *
+     * `TROP_COURANTS` retire du corpus les mots qui « voisinent avec tout » -- ils ne sont donc jamais
+     * comptes, et `rarete` leur rendait 1, la valeur du DOUTE, qui est aussi la valeur la plus
+     * favorable. Le systeme declarait un mot non discriminant d'un cote et le sacrait le plus rare de
+     * tous de l'autre. Mesure du 2026-08-26 sur un oracle de 120 cas : « dans » obtenait 9.0 au score
+     * de porteur, juste derriere « projet » 9.3, alors qu'il ne porte aucun sujet.
+     *
+     * Ils recoivent donc le PLANCHER. Deterministe, sans budget : 114/120 -> 115/120. Le gain est
+     * d'un cas, mais la correction est de SENS et non de reglage -- et elle vaut aussi pour le score,
+     * ou ces mots pesaient bien plus qu'ils ne le meritaient.
+     */
+    if (TROP_COURANTS.has(mot)) return 0.05
     if (messagesVus === 0) return 1
     const vu = presence.get(mot)
     if (!vu) return 1
