@@ -35,6 +35,20 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
+/**
+ * Le source PRIVE DE SA MISE EN FORME, pour chercher un appel sans dependre de la facon dont
+ * Prettier l'a coupe.
+ *
+ * Mesure le 2026-08-26 : `populateConvRunSections(resumedRunFile.path` etait cherche sur UNE ligne
+ * alors que le formateur venait de renvoyer l'argument a la ligne suivante. Le comportement etait
+ * intact (index.ts appelle toujours cet appel, au bon endroit) ; seul le test etait rouge, et il
+ * accusait le code. Un test qui tombe sur un retour a la ligne ne mesure pas ce qu'il annonce.
+ *
+ * Applique DES DEUX COTES de l'assertion, donc jamais plus permissif sur le contenu : ce qui
+ * disparait est l'espace, pas un caractere du motif.
+ */
+const sansMiseEnForme = (source: string): string => source.replace(/\s+/g, '')
+
 describe('état reprenable d’orchestration (survie niveau 3)', () => {
   it('persiste puis relit un run, et l’efface à la clôture', () => {
     saveOrchestrationState(root, state('run-a-1', 1000, ['frame']))
@@ -1234,18 +1248,20 @@ describe('admission de la reprise automatique au démarrage', () => {
     const relaunchEnd = indexSource.indexOf("if (reprise === 'bloquer')", relaunchStart)
     const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
 
+    const relaunchCompact = sansMiseEnForme(relaunchSource)
+
     // Le RUN.md est rattaché AVANT le runTask (même workflow ouvert que l'orchestration d'origine).
     const reuseAt = relaunchSource.indexOf('reuseOrCreateConvRun(')
     const runTaskAt = relaunchSource.indexOf('.runTask(')
     expect(reuseAt).toBeGreaterThanOrEqual(0)
     expect(reuseAt).toBeLessThan(runTaskAt)
     // Chaque step est accumulé, puis persisté et le run clos — sur le succès ET sur l'échec.
-    expect(relaunchSource).toContain('resumedSteps.push(step)')
+    expect(relaunchCompact).toContain(sansMiseEnForme('resumedSteps.push(step)'))
     expect(
-      relaunchSource.split('saveConvRunTrace(resumedRunFile.path, resumedSteps)')
+      relaunchCompact.split(sansMiseEnForme('saveConvRunTrace(resumedRunFile.path, resumedSteps)'))
     ).toHaveLength(3)
-    expect(relaunchSource).toContain('closeConvRun(')
-    expect(relaunchSource).toContain('populateConvRunSections(resumedRunFile.path')
+    expect(relaunchCompact).toContain(sansMiseEnForme('closeConvRun('))
+    expect(relaunchCompact).toContain(sansMiseEnForme('populateConvRunSections(resumedRunFile.path'))
   })
 
   it('repersiste un règlement tardif sur la reprise automatique', () => {
