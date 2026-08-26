@@ -375,7 +375,7 @@ export function parseDisplayArg(raw: unknown): number | undefined {
  * qu'elle SAIT -- les fichiers qui s'opposent, la raison du blocage, la branche qui porte le
  * travail -- pour que le lecteur n'ait pas a le deviner.
  */
-function circonstanceDePublication(finalized: Record<string, unknown>): string | undefined {
+export function circonstanceDePublication(finalized: Record<string, unknown>): string | undefined {
   const liste = (valeur: unknown): string | undefined =>
     Array.isArray(valeur) && valeur.length > 0 ? valeur.slice(0, 5).join(', ') : undefined
   const texte = (valeur: unknown): string | undefined =>
@@ -387,8 +387,30 @@ function circonstanceDePublication(finalized: Record<string, unknown>): string |
       // `reason` nomme la CATEGORIE (« merge-failed »), `detail` la cause reelle (« Filename too
       // long »). Le diagnostic du 2026-08-26 a demande les DEUX : la categorie seule laisse
       // rediagnostiquer a chaque fois.
+      /*
+       * ET LES FICHIERS, AVEC LEUR PROVENANCE.
+       *
+       * `motif || liste(files)` : des qu'une `reason` existe — TOUJOURS sur `blocked` — le `||`
+       * court-circuitait, et la liste que le manager avait pourtant calculee n'arrivait jamais.
+       * Mesure en direct le 2026-08-26 : une edition d'UN SEUL fichier refusee en `base-dirty`, un
+       * message reduit a « base-dirty », et l'agent a comble le vide en devinant — il a annonce que
+       * le bureau portait « 10 fichiers dont 9 sans rapport », a refuse de publier et pose quatre
+       * questions. Verifie apres coup : le bureau n'apportait qu'un fichier. Le travail etait
+       * publiable ; le message a fait croire l'inverse.
+       *
+       * La PROVENANCE est dite explicitement : ces fichiers sont ceux de la BASE, non commites — le
+       * code le sait deja (« Les fichiers remontes diagnostiquent la base », worktree-manager.ts),
+       * il ne le disait a personne. Sans ce mot, la liste se lit comme le contenu du bureau, et
+       * c'est exactement l'erreur qui a ete commise.
+       */
       const motif = [texte(finalized.reason), texte(finalized.detail)].filter(Boolean).join(' — ')
-      return motif || liste(finalized.files)
+      const fichiers = liste(finalized.files)
+      if (!fichiers) return motif || undefined
+      const provenance =
+        finalized.reason === 'base-dirty'
+          ? `bloque par ${fichiers} — non commite(s) dans la BASE, pas dans le bureau`
+          : `fichiers : ${fichiers}`
+      return motif ? `${motif} — ${provenance}` : provenance
     }
     case 'preserve-et-libere':
       return texte(finalized.branche)
