@@ -400,8 +400,10 @@ describe('exigeCorrigerEtPoursuivre — il voit son erreur, la raconte, et aband
 
 describe('auto-kaizen en cours de tour — la MÊME erreur ne se rejoue pas', () => {
   it('normalise chemins, nombres et casse : deux occurrences du même mur ont une seule signature', () => {
-    const a = signatureDEchec('edit_file', 'ENOENT: C:\Amitel\Autowin OS\src\a.ts introuvable')
-    const b = signatureDEchec('edit_file', 'enoent: C:\Amitel\Autowin OS\src\b.ts introuvable')
+    // Antislashs DOUBLES a dessein : `\\A` n'est pas un echappement valide, JS le lisait `A` et la
+    // chaine ne portait donc AUCUN antislash -- ce test passait sans jamais exercer un chemin Windows.
+    const a = signatureDEchec('edit_file', 'ENOENT: C:\\Amitel\\Autowin OS\\src\\a.ts introuvable')
+    const b = signatureDEchec('edit_file', 'enoent: C:\\Amitel\\Autowin OS\\src\\b.ts introuvable')
     expect(a).toBe(b)
   })
 

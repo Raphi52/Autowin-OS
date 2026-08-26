@@ -268,7 +268,7 @@ export function signatureDEchec(nom: string, erreur: string): string {
     // Un chemin Windows contient des ESPACES (`C:\Amitel\Autowin OS\...`) : la regle de chemin
     // s'arrete au premier, laissant le nom de fichier — qui est justement ce qui varie d'une
     // occurrence a l'autre du MEME mur. On le neutralise donc a part.
-    .replace(/[^\s'"\/]*\.[a-z0-9]{1,5}\b/g, '<fichier>')
+    .replace(/[^\s'"/]*\.[a-z0-9]{1,5}\b/g, '<fichier>')
     .replace(/\d+/g, '<n>')
     .replace(/\s+/g, ' ')
     .trim()
