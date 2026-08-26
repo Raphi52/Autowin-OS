@@ -1123,7 +1123,60 @@ export class ConversationStore {
     // Classe par NOMBRE DE MOTS retrouves avant la recence : une conversation qui porte trois mots
     // de la demande l'eclaire mieux qu'une plus recente qui n'en porte qu'un.
     trouvees.sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt)
-    return trouvees.slice(0, limite).map(({ score: _score, ...reste }) => reste)
+    /*
+     * RE-CLASSEMENT PAR LE MOT PORTEUR -- le tri, non le score.
+     *
+     * Defaut mesure le 2026-08-26 sur le corpus reel (1201 conversations, oracle de 40 cas dont les
+     * cibles sont etablies par comptage de tokens). Le rappel injecte a chaque tour demande TROIS
+     * conversations ; sur une demande en langage naturel, la bonne a un rang MEDIAN de 12. Il
+     * regardait donc trois places pour une reponse en douzieme, et ratait 38 fois sur 40.
+     *
+     * La cible n’est jamais EXCLUE : a profondeur 50 la phrase retrouve presque aussi bien que le
+     * mot-cle seul (33/40 contre 37/40). C’est le CLASSEMENT qui echoue, pas la recherche. Trois
+     * tentatives de mieux SCORER l’ont confirme en echouant : durcir la rarete degrade (4/10 -> 3/10),
+     * relever le plancher de longueur gagne deux cas sur quarante en touchant 63 % des messages, et
+     * filtrer les mots non porteurs avant le score ne change rien (12/40) voire degrade (7/40).
+     *
+     * Ce qui marche est ailleurs : le score est un sac de mots ou le mot porteur se NOIE parmi les
+     * mots d’adresse (« rappelle moi ce qu’on a dit a propos de X »), mais sa PRESENCE, elle, ne se
+     * noie pas. On reprend donc les candidats plausibles et on fait passer devant ceux qui portent
+     * vraiment le mot le plus rare de la demande. Mesure : 2/40 -> 25/40 sur le top-3.
+     *
+     * Le tri est STABLE, donc le score reste le second critere : ce re-classement ne remplace pas
+     * le classement, il le corrige la ou un seul mot decide du sens.
+     */
+    const PROFONDEUR_RECLASSEMENT = 50
+    // Le mot ENTIER, jamais sa racine :  tronque a six caracteres, donc « updatebanner »
+    // devenait « update » -- present partout, et le re-classement ne discriminait plus rien (2/40,
+    // soit aucun gain, alors que le mot entier donne 25/40). La rarete est indexee sur les deux.
+    const entiers = motsDe(terme)
+    // A rarete EGALE, le plus LONG. Ce depart n’est pas cosmetique :  n’indexe pas les
+    // messages trop longs, or c’est justement la que vivent les termes distinctifs -- ils sont donc
+    // « inconnus » de l’index, et  rend 1 pour chacun. Sans ce depart, tous les mots de la
+    // demande etaient a egalite a 1 et le porteur retenu etait le PREMIER, c’est-a-dire un mot
+    // d’adresse : mesure 1/40, soit pire que de ne rien faire.
+    const porteur = entiers.reduce((meilleur, mot) => {
+      const r = index.rarete(mot)
+      const rm = index.rarete(meilleur)
+      if (r > rm) return mot
+      if (r === rm && mot.length > meilleur.length) return mot
+      return meilleur
+    }, entiers[0] ?? demandes[0])
+    const candidats = trouvees.slice(0, Math.max(limite, PROFONDEUR_RECLASSEMENT))
+    // Le contenu ENTIER, pas l’extrait : un premier essai lisait les extraits, qui sont des fenetres
+    // tronquees, et le mot porteur pouvait se trouver juste apres la coupe -- 4/40 au lieu de 25/40.
+    const porte = (id: string): boolean => {
+      const conversation = this.conversations.get(id)
+      if (!conversation) return false
+      for (const message of conversation.messages) {
+        if (typeof message.content !== 'string') continue
+        if (replier(message.content).includes(porteur)) return true
+      }
+      return false
+    }
+    const marques = candidats.map((c) => ({ c, porte: porte(c.id) }))
+    marques.sort((a, b) => Number(b.porte) - Number(a.porte))
+    return marques.slice(0, limite).map(({ c: { score: _score, ...reste } }) => reste)
   }
 
   /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */
