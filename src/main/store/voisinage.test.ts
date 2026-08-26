@@ -114,3 +114,26 @@ describe('rarete : banalite et ignorance ne se confondent pas', () => {
     expect(index.rarete('zarbitrophage')).toBeGreaterThan(index.rarete('dans'))
   })
 })
+
+/**
+ * UN VERBE D'ADRESSE NE PORTE PAS DE SUJET.
+ *
+ * Mesure du 2026-08-26 : « on avait parle de X, tu te souviens ? » rendait 71/120, parce que
+ * « souviens » (8 lettres, position 3) battait « mutantes » (8 lettres, position 2) au score de
+ * porteur -- meme longueur, meme rarete, et la position seule tranchait en faveur du mot d'adresse.
+ * La formule d'adresse peut FERMER la phrase autant que l'ouvrir. Ecarter ces verbes porte la forme a
+ * 120/120 et la moyenne des onze formulations de 110,8 a 115,8.
+ */
+describe('les verbes d’adresse sont ecartes comme les mots outils', () => {
+  it('ils recoivent le plancher, donc ne peuvent pas etre elus porteurs', () => {
+    const index = construireVoisinage(
+      ['on avait parle de mutantes tu te souviens', 'un autre message avec des mots dedans'],
+      (texte) => texte.toLowerCase().split(/[^a-z0-9]+/).filter((m) => m.length >= 3)
+    )
+    for (const adresse of ['souviens', 'rappelle', 'retrouve', 'cherche']) {
+      expect(index.rarete(adresse)).toBeLessThan(0.2)
+    }
+    // Le sujet, lui, garde le benefice du doute -- et doit rester tres au-dessus.
+    expect(index.rarete('mutantes')).toBeGreaterThan(index.rarete('souviens') * 4)
+  })
+})

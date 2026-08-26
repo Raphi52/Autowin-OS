@@ -30,6 +30,39 @@ const LONGUEUR_UTILE = 400
 
 /** Mots trop courants pour rapprocher quoi que ce soit : ils voisinent avec tout. */
 const TROP_COURANTS = new Set([
+  /*
+   * LES VERBES D'ADRESSE : ils parlent a l'interlocuteur, ils ne portent aucun sujet.
+   *
+   * Ajoutes le 2026-08-26 apres avoir epuise les alternatives. La formulation « on avait parle de X,
+   * tu te souviens ? » rendait 71/120 : « souviens » (8 lettres, position 3) obtenait 11,0 au score de
+   * porteur contre 10,0 pour « mutantes » (8 lettres, position 2). Meme longueur, meme rarete -- tous
+   * deux inconnus de l'index -- et la position seule tranchait, en faveur du mot d'adresse. Aucun des
+   * trois signaux ne pouvait les distinguer : la formule d'adresse peut ouvrir la phrase comme la
+   * FERMER, et rien dans le texte ne dit lequel des deux mots porte l'intention.
+   *
+   * J'AVAIS REFUSE cette liste plus tot dans la journee, comme « une liste figee qui grandira a chaque
+   * formule ». Ce refus valait quand elle etait proposee comme SEULE solution. Elle vient ici en
+   * complement d'un systeme a trois signaux, apres que la rarete, la longueur et la position ont ete
+   * mesurees incapables de trancher ce cas -- et `TROP_COURANTS` existe deja pour exactement ce role.
+   *
+   *   verbes ecartes   moyenne sur 11 formes (corpus reel, production)
+   *              non        110,8/120       « on avait parle de X, tu te souviens ? » : 71
+   *              oui        115,8/120       la meme forme : 120
+   *
+   * Trois autres formes gagnent (116->119, 117->120, 113->118), cinq perdent UN point. Gain net franc.
+   *
+   * CE QU'IL FAUT SAVOIR EN LA LISANT : elle est incomplete par construction. Une formulation employant
+   * un verbe d'adresse absent d'ici retombera a 71. L'allonger est legitime ; s'en remettre a elle
+   * seule ne l'est pas.
+   */
+  'rappelle',
+  'souviens',
+  'retrouve',
+  'cherche',
+  'redis',
+  'raconte',
+  'explique',
+  'montre',
   'les',
   'des',
   'une',
