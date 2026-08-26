@@ -894,7 +894,24 @@ export class ConversationStore {
    */
   search(
     terme: string,
-    options?: { limite?: number; extraitsParConversation?: number }
+    options?: {
+      limite?: number
+      extraitsParConversation?: number
+      /**
+       * Temps maximum accorde au parcours. Absent = pas de limite.
+       *
+       * Le cout croit avec le corpus : ~35 ms sur 1197 conversations aujourd'hui, le triple sur un
+       * corpus triple. Une garantie qui depend d'une taille de donnees est un sursis, pas une
+       * garantie. Sous budget, la recherche rend ce qu'elle a TROUVE au lieu de finir a tout prix.
+       *
+       * Compromis assume et nomme : le resultat peut etre INCOMPLET. Pour un rappel -- un confort,
+       * jamais une autorite -- un resultat partiel rendu a temps vaut mieux qu'une interface qui se
+       * figeait. C'est pourquoi ce budget est un PARAMETRE et non une valeur en dur : il serait
+       * inacceptable pour `conversation_search`, que l'agent appelle en attendant une reponse
+       * complete.
+       */
+      budgetMs?: number
+    }
   ): ConversationRecherche[] {
     const { demandes, elargis } = motsCherchables(terme, this.voisinage())
     // Un terme vide rendrait TOUT le corpus : ce n'est pas une recherche, c'est un dump.
@@ -911,8 +928,18 @@ export class ConversationStore {
     // La pre-selection porte sur les mots DEMANDES et AJOUTES : une conversation absente de l'index
     // pour tous ces mots ne peut pas correspondre, il est inutile de la relire.
     const candidates = this.indexInverse().candidates([...demandes, ...elargis])
+    const budget = options?.budgetMs
+    // Un budget de zero ou negatif veut dire « ne cherche pas » : l'echeance est deja passee. Sans
+    // ce cas explicite, `now + 0` valait `now` et le premier controle ne declenchait pas -- un
+    // budget nul aurait cherche partout, ce qui est l'inverse de ce qu'il demande.
+    const echeance = budget === undefined ? undefined : budget <= 0 ? 0 : Date.now() + budget
+    let examinees = 0
     for (const conversation of this.list()) {
       if (candidates && !candidates.has(conversation.id)) continue
+      // Le temps n'est consulte qu'une conversation sur trente-deux : appeler l'horloge a chaque tour
+      // couterait plus cher que ce qu'on economise.
+      if (echeance !== undefined && (examinees & 31) === 0 && Date.now() > echeance) break
+      examinees += 1
       const extraits: ConversationExtrait[] = []
       /** Rangs des messages retenus : sert a chercher un revirement APRES le dernier extrait. */
       const derniersRangs: number[] = []

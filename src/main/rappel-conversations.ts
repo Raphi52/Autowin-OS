@@ -30,6 +30,21 @@ const LONGUEUR_QUI_SE_SUFFIT = 160
 const PLAFOND = 3_000
 
 /**
+ * Temps maximum accorde a la recherche du rappel.
+ *
+ * Ce calcul est SYNCHRONE sur le thread qui sert l'interface. Il coute ~35 ms sur le corpus actuel
+ * (1197 conversations), sous le seuil de perception -- mais ce chiffre est une photo, pas une
+ * garantie : il croit avec le corpus, et a corpus dix fois plus gros il gelerait l'interface un tiers
+ * de seconde.
+ *
+ * Le budget rend le pire cas independant de la taille des donnees. Au-dela, la recherche rend ce
+ * qu'elle a trouve : le rappel est un CONFORT, et un rappel partiel arrive a temps vaut mieux qu'une
+ * interface qui se figeait. 60 ms laisse largement la place au cout mesure tout en garantissant que
+ * l'utilisateur ne sentira jamais ce chemin, quel que soit son historique.
+ */
+const BUDGET_MS = 60
+
+/**
  * L'en-tete AVERTIT, il ne rassure pas.
  *
  * Ce bloc entre dans le meme prompt que les blocs graphify et Brain, qui portent tous deux un
@@ -86,7 +101,7 @@ export function rappelDesEchangesPasses(
   if (!fournisseurCourant) return ''
 
   const trouvees = conversations
-    .search(terme, { limite: 3, extraitsParConversation: 2 })
+    .search(terme, { limite: 3, extraitsParConversation: 2, budgetMs: BUDGET_MS })
     .filter((conversation) => conversation.id !== conversationCouranteId)
     .filter((conversation) => conversation.provider === fournisseurCourant)
     // Les deux cotes sous forme CANONIQUE : le store normalise `projectPath` a l'ecriture, comparer
