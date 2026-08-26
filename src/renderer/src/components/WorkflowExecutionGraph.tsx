@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
 import {
+  settleStrandedExecutionStatus,
+  statusLabel
+} from './execution-interrupted-status'
+import {
   buildHarnessTimelineFromTrace,
   type HarnessTimelineEvent,
   type HarnessTraceEvent
@@ -46,16 +50,6 @@ function costLabel(costUsd: number | undefined): string {
   return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 }).format(costUsd)} $`
 }
 
-function statusLabel(status: string | undefined): string {
-  if (status === 'running') return 'en cours'
-  if (status === 'failed') return 'échec'
-  if (status === 'cancelled') return 'annulé'
-  if (status === 'pending') return 'en attente'
-  // Un run tué avec l'app est réconcilié en `interrupted` au démarrage. Sans ce cas, l'étape
-  // tombait dans le défaut « terminé » : le graphe affirmait achevé ce qui ne le sera jamais.
-  if (status === 'interrupted') return 'interrompu'
-  return 'terminé'
-}
 
 function skillLabel(event: HarnessTimelineEvent): string | undefined {
   if (event.display?.skillName) return `skill · ${event.display.skillName}`
@@ -408,7 +402,17 @@ export function WorkflowExecutionGraph({
     })
   }, [active, conversationId, load])
 
-  const graph = useMemo(() => buildCausalPath(events), [events])
+  // RECONCILIATION AVANT construction : `persistOrchestrationPhaseStart` ecrit `running` au
+  // DEMARRAGE d'une phase et compte sur l'evenement terminal pour dire la suite. L'app tuee en
+  // pleine phase, ce terminal n'arrive jamais — le `running` reste sur disque et le graphe le
+  // relisait indefiniment comme une etape active (« je vois encore des choses en cours », conv-1056).
+  // Le composant CONNAISSAIT deja la reponse via `live` ; elle n'etait simplement pas consultee.
+  // Rien n'est reecrit sur disque : la trace reste un fait historique, on corrige ce qu'on AFFICHE.
+  const settledEvents = useMemo(
+    () => settleStrandedExecutionStatus(events, { live }),
+    [events, live]
+  )
+  const graph = useMemo(() => buildCausalPath(settledEvents), [settledEvents])
   const nodes = useMemo(() => flattenCausalNodes(graph.roots), [graph.roots])
   const selected = selectedId ? graph.byId.get(selectedId) : undefined
   const runCount = new Set(
