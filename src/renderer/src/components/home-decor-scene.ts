@@ -359,6 +359,33 @@ export const ECLAT_LUNES = {
 } as const
 
 /**
+ * La SURFACE des petites lunes (`buildLune`), corrigée le 2026-08-26 : « on dirait des soleils ».
+ *
+ * `buildLune` réutilise le shader des planètes ; or ce shader ajoute `uClair` sur le LIMBE
+ * (`couleur += uClair * rim * …`). Sur une bille de rayon 0,15, le limbe couvre presque tout le
+ * disque à l'écran : avec un `uClair` à 60 % de blanc, il ne restait qu'un halo blanc. On atténue
+ * donc DEUX choses, et seulement pour les lunes : le mélange vers le blanc, et le poids du limbe.
+ */
+export const SURFACE_LUNE = {
+  /**
+   * Part de blanc dans le ton clair des crêtes (planètes : 0,6 vers un blanc chaud).
+   *
+   * 0,14 et non 0,22 : c'est la valeur de `86baa8f6`, celle qui est À L'ÉCRAN et que l'utilisateur
+   * a choisi de garder. L'auteur de la branche visait 0,22 avec un limbe à 0,22, soit un rendu
+   * environ trois fois plus sombre — une intention légitime, mais que seul son œil pouvait valider.
+   */
+  clair: 0.14,
+  /**
+   * Poids du limbe, INDÉPENDANT de la couleur. 1 = celui des planètes.
+   *
+   * À 1 ce curseur n'atténue rien aujourd'hui — et c'est assumé : sa valeur n'est pas dans son
+   * réglage actuel mais dans son EXISTENCE. Avant lui, assombrir le limbe obligeait à toucher la
+   * couleur, les deux effets étant confondus dans un seul nombre. C'est l'apport réel de la branche.
+   */
+  rim: 1
+} as const
+
+/**
  * La MATIÈRE du nuage (les nébuleuses), refaite le 2026-08-26 : « le nuage est moche ».
  *
  * Le défaut nommé : un amas presque isotrope dont le cœur était blanchi (lerp 0,42 vers le blanc) et
@@ -558,6 +585,7 @@ export const PLANETE_FRAGMENT_SHADER = [
   'uniform vec3 uNuit;',
   'uniform vec3 uLumiere;',
   'uniform float uBandes;',
+  'uniform float uRim;',
   'uniform float uSeed;',
   'uniform float uTime;',
   'varying vec3 vObjet;',
@@ -581,7 +609,7 @@ export const PLANETE_FRAGMENT_SHADER = [
   '  vec3 couleur = albedo * (0.08 + 1.15 * jour);',
   '  couleur += uNuit * (1.0 - jour) * (0.25 + 0.35 * cretes);',
   '  float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.4);',
-  '  couleur += uClair * rim * (0.35 + 0.65 * jour) * 0.9;',
+  '  couleur += uClair * rim * uRim * (0.35 + 0.65 * jour) * 0.9;',
   '  gl_FragColor = vec4(couleur, 1.0);',
   '}'
 ].join('\n')
@@ -702,13 +730,19 @@ function buildLune(seed: number, teinte: number): THREE.Mesh {
         uBase: { value: base },
         // `uClair` sert AUSSI de couleur de rim dans PLANETE_FRAGMENT_SHADER. Sur un globe de 0,15
         // rayon, ce rim recouvre presque tout le disque à l'écran : à 0,6 de blanc la lune ne se lit
-        // plus que comme une boule de lumière (« on dirait des soleils », conv-1410). Rester proche
-        // de la teinte de base garde le relief sans allumer la lune.
-        uClair: { value: base.clone().lerp(new THREE.Color(0xffffff), 0.14) },
+        // plus que comme une boule de lumière (« on dirait des soleils », conv-1410).
+        //
+        // FUSION de deux corrections concurrentes du MÊME défaut, le 2026-08-26. `86baa8f6` (déjà
+        // dans l'arbre) baissait `uClair` à 0,14 sans test ; la branche de secours
+        // `run-aac6581e8933-1`, restée non publiée, apportait DEUX curseurs séparés et un test de
+        // contrat. On garde sa structure — meilleure — et le rendu de `86baa8f6`, que l'utilisateur
+        // a sous les yeux et a explicitement choisi de conserver.
+        uClair: { value: base.clone().lerp(new THREE.Color(0xffffff), SURFACE_LUNE.clair) },
         uSombre: { value: base.clone().multiplyScalar(0.28) },
         uNuit: { value: base.clone().multiplyScalar(0.07) },
         uLumiere: { value: SOLEIL.clone() },
         uBandes: { value: 1.1 },
+        uRim: { value: SURFACE_LUNE.rim },
         uSeed: { value: seed },
         uTime: { value: 0 }
       }
@@ -753,6 +787,7 @@ function buildPlanet(options: {
       uNuit: { value: new THREE.Color(options.ringColor).multiplyScalar(0.22) },
       uLumiere: { value: SOLEIL.clone() },
       uBandes: { value: options.bandes },
+      uRim: { value: 1 },
       uSeed: { value: options.seed },
       uTime: { value: 0 }
     }

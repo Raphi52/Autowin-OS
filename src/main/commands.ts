@@ -1525,8 +1525,16 @@ export class AppCommandBus {
         const suppliedRootTask =
           typeof a.rootTask === 'string' && a.rootTask.trim() ? a.rootTask.trim() : undefined
         // Le prompt utilisateur est l'autorite du run. `phase` et `task` sont produits par le modele
-        // conversationnel : ils peuvent aider a deleguer, jamais reduire le contrat racine.
-        const authoritativeTask = suppliedRootTask ?? delegatedTask
+        // conversationnel : ils peuvent aider a deleguer, jamais reduire le contrat racine. Une
+        // reprise sans objet nomme transporte aussi la cible contextualisee par le pilote.
+        const rootNeedsContext =
+          suppliedRootTask !== undefined &&
+          /^(?:(?:fais|fait)\s+)?(?:ça|ca|ceci|cela|un truc|le truc)(?:\s+(?:bien|parfait|parfaitement))?[.!?]*$|^(?:vas-y|go)[.!?]*$|^fais ce qu['’]il faut pour que (?:ça|ca|ceci|cela)(?: se)? fasse (?:ça|ca|ceci|cela) la prochaine fois[.!?]*$|^finis? (?:ça|ca|ceci|cela)(?: une bonne fois pour toutes)?[.!?]*$/i.test(
+            suppliedRootTask
+          )
+        const authoritativeTask = rootNeedsContext
+          ? `${suppliedRootTask}\n\nCIBLE CONTEXTUALISEE : ${delegatedTask}`
+          : (suppliedRootTask ?? delegatedTask)
         /**
          * UNE PHASE CHOISIE PAR LE MODÈLE N'AMPUTE PAS UNE TÂCHE À RISQUE.
          *
