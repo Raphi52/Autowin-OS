@@ -145,6 +145,58 @@ describe('edit_file — une publication DIFFEREE n’est pas un echec', () => {
     expect(data.publication).toMatch(/différée|differee/)
   }, 180_000)
 
+  /**
+   * LE MESSAGE DOIT ARRIVER JUSQU'A L'AGENT, pas seulement exister dans un module.
+   *
+   * Le quatrieme volet de conv-1407 a donne un motif propre a chacune des six issues. Prouver la
+   * FONCTION ne prouve pas le CHEMIN : ces trois cas passent par `edit_file` REEL et lisent l'erreur
+   * telle que l'orchestrateur la recevra. Sans eux, « expose » aurait ete pris pour « integre ».
+   */
+  it('un CONFLIT dit qu il est un conflit, nomme les fichiers, et ne dit pas de republier', async () => {
+    const repo = depotSain()
+
+    const result = await busSur(repo, {
+      outcome: 'conflict',
+      files: ['sujet.ts'],
+      agentId: 'a',
+      baseSha: 'x',
+      agentSha: 'y'
+    }).exec('edit_file', EDITION, 'conv-1')
+
+    expect(result).toMatchObject({ ok: false })
+    const message = String((result as { error?: string }).error)
+    expect(message).toContain('conflict')
+    expect(message).toContain('sujet.ts')
+    // Le defaut d'origine : « Reprendre pour republier » sur un conflit, republier a l'identique
+    // echouant exactement pareil.
+    expect(message.toLowerCase()).toContain('resous')
+  }, 180_000)
+
+  it('une copie ABSENTE n envoie pas chercher un bureau qui n existe plus', async () => {
+    const repo = depotSain()
+
+    const result = await busSur(repo, { outcome: 'absente' }).exec('edit_file', EDITION, 'conv-1')
+
+    expect(result).toMatchObject({ ok: false })
+    const message = String((result as { error?: string }).error).toLowerCase()
+    expect(message).toContain('absente')
+    expect(message).not.toContain('bureaux conserves')
+  }, 180_000)
+
+  it('un travail SAUVE SUR UNE BRANCHE le dit, au lieu de faire refaire l edition', async () => {
+    const repo = depotSain()
+
+    const result = await busSur(repo, {
+      outcome: 'preserve-et-libere',
+      branche: 'autowin/sauvegarde/xyz'
+    }).exec('edit_file', EDITION, 'conv-1')
+
+    expect(result).toMatchObject({ ok: false })
+    const message = String((result as { error?: string }).error)
+    expect(message).toContain('autowin/sauvegarde/xyz')
+    expect(message.toLowerCase()).toContain('branche')
+  }, 180_000)
+
   it('continue de REFUSER une issue reellement bloquee', async () => {
     const repo = depotSain()
 
