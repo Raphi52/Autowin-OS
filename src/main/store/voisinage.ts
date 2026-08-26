@@ -87,7 +87,16 @@ export interface IndexVoisinage {
  */
 export function construireVoisinage(
   messages: Iterable<string>,
-  decoupe: (texte: string) => string[]
+  decoupe: (texte: string) => string[],
+  /**
+   * Comment reduire un mot a sa racine. Fourni par l'appelant, qui possede cette regle.
+   *
+   * La presence est comptee pour le mot ENTIER **et** pour sa racine. Sans les deux, la rarete d'un
+   * mot entier valait toujours 1 (absent de l'index, donc « inconnu, on ne penalise pas ») -- et la
+   * ponderation par le mot rencontre ne discriminait rien du tout. Un index qui repond 1 a chaque
+   * question est plus trompeur qu'un index absent : il a l'air de fonctionner.
+   */
+  racineDe: (mot: string) => string = (mot) => mot
 ): IndexVoisinage {
   const paires = new Map<string, Map<string, number>>()
   // Dans combien de messages chaque mot apparait : la base de sa rarete.
@@ -105,11 +114,16 @@ export function construireVoisinage(
     if (!texte || texte.length > LONGUEUR_UTILE) continue
     const mots = [...new Set(decoupe(texte).filter((mot) => !TROP_COURANTS.has(mot)))].slice(0, 30)
     messagesVus += 1
-    for (const mot of mots) presence.set(mot, (presence.get(mot) ?? 0) + 1)
-    for (let i = 0; i < mots.length; i++) {
-      for (let j = i + 1; j < mots.length; j++) {
-        compter(mots[i], mots[j])
-        compter(mots[j], mots[i])
+    for (const mot of mots) {
+      presence.set(mot, (presence.get(mot) ?? 0) + 1)
+      const rac = racineDe(mot)
+      if (rac !== mot) presence.set(rac, (presence.get(rac) ?? 0) + 1)
+    }
+    const racines = [...new Set(mots.map(racineDe))]
+    for (let i = 0; i < racines.length; i++) {
+      for (let j = i + 1; j < racines.length; j++) {
+        compter(racines[i], racines[j])
+        compter(racines[j], racines[i])
       }
     }
   }

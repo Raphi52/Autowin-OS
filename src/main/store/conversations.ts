@@ -191,7 +191,7 @@ function motsCherchables(terme: string, voisinage: IndexVoisinage): MotsDeRecher
  * lettres separent les deux (« conversat » / « conversio ») tout en absorbant encore les pluriels et
  * les accords, qui portent sur la FIN du mot.
  */
-const SEUIL_RACINE = 9
+const SEUIL_RACINE = 6
 
 /**
  * La RACINE d'un mot : ses premieres lettres.
@@ -218,6 +218,24 @@ const REVIREMENTS =
   /\b(mais|cependant|toutefois|neanmoins|finalement|en fait|plutot|abandonn\w*|remplac\w*|annul\w*|revenu|desormais|depuis)\b/i
 
 /**
+ * Le mot du MESSAGE qui correspond a une racine cherchee, ou rien.
+ *
+ * Un `indexOf` de la racine dans le texte suffisait a savoir SI ca matche, jamais QUOI. Or c'est le
+ * mot rencontre qui dit la valeur du match : « conversion » retrouve « conversations » par leurs
+ * sept premieres lettres, mais « conversations » est le mot le plus frequent de ce corpus -- ce
+ * match n'apprend rien. « notification » retrouve « notifier » par six lettres, et « notifier » est
+ * rare : ce match, lui, vaut quelque chose.
+ *
+ * Ponderer la racine ne pouvait pas les distinguer : les deux partagent la MEME racine, donc la
+ * meme rarete. Il faut le mot entier. C'est ce qui permet de tenir les deux bords que l'audit a
+ * montres inconciliables avec un simple seuil -- separer « conversion » de « conversation » SANS
+ * casser « notification » -> « notifier ».
+ */
+function motCorrespondant(motsDuMessage: readonly string[], racineCherchee: string): string | undefined {
+  return motsDuMessage.find((mot) => mot.startsWith(racineCherchee))
+}
+
+/**
  * La FENETRE autour du terme trouve, prise sur le texte d'ORIGINE (accents et casse intacts).
  *
  * Rendre le message entier noierait le terme dans des milliers de caracteres ; n'en rendre que le
@@ -240,7 +258,11 @@ function fenetre(origine: string, position: number, longueur: number): string {
   // La suite immediate revient-elle sur ce qui precede ? Si oui, on l'inclut jusqu'a la fin de sa
   // phrase -- mieux vaut un extrait plus long qu'un extrait qui dit le contraire du message.
   const suite = origine.slice(fin, Math.min(origine.length, fin + PORTEE_REVIREMENT))
-  const contraste = suite.match(REVIREMENTS)
+  // Cherche sur la forme REPLIEE : la liste est en ASCII, la suite garde ses accents. « plutôt » et
+  // « néanmoins » -- les formes normales en francais -- ne matchaient pas, donc le correctif etait
+  // MUET sur les connecteurs les plus courants. Les positions se correspondent : `replier` ne change
+  // ni la longueur ni l'ordre des caracteres (NFD puis suppression des seuls diacritiques isoles).
+  const contraste = replier(suite).match(REVIREMENTS)
   if (contraste?.index !== undefined) {
     const finDePhrase = suite.indexOf('.', contraste.index)
     const jusqua = finDePhrase >= 0 ? finDePhrase + 1 : suite.length
@@ -723,9 +745,9 @@ export class ConversationStore {
           if (typeof message.content === 'string') textes.push(message.content)
         }
       }
-      this.voisinageCache = construireVoisinage(textes, (texte) =>
-        motsDe(texte).map(racine)
-      )
+      // Les mots ENTIERS au decoupage, la racine fournie a part : l'index compte alors la presence
+      // des deux, ce dont la ponderation par le mot rencontre a besoin pour discriminer.
+      this.voisinageCache = construireVoisinage(textes, (texte) => motsDe(texte), racine)
     }
     return this.voisinageCache
   }
@@ -786,21 +808,29 @@ export class ConversationStore {
       for (const [rang, message] of conversation.messages.entries()) {
         if (typeof message.content !== 'string') continue
         const replie = replier(message.content)
+        const motsDuMessage = motsDe(message.content)
         let premierePosition = -1
         let motsIci = 0
-        for (const mot of demandes) {
-          const position = replie.indexOf(mot)
-          if (position < 0) continue
-          // Pondere par la RARETE : trouver un mot present partout n'apprend rien sur ce message.
-          motsIci += POIDS_DEMANDE * index.rarete(mot)
-          if (premierePosition < 0 || position < premierePosition) premierePosition = position
+        /*
+         * La ponderation porte sur le mot RENCONTRE, pas sur la racine cherchee.
+         *
+         * L'audit a montre que deux exigences tiraient en sens inverse : separer « conversion » de
+         * « conversation » (sept lettres communes) sans casser « notification » -> « notifier »
+         * (six lettres communes). Aucun seuil de racine ne peut les satisfaire toutes deux. Mais
+         * « conversations » est omnipresent ici et « notifier » est rare : c'est la rarete du mot
+         * TROUVE qui les separe, et elle ne dependait pas du seuil.
+         */
+        const peser = (racineCherchee: string, poids: number): void => {
+          const trouve = motCorrespondant(motsDuMessage, racineCherchee)
+          if (!trouve) return
+          const position = replie.indexOf(racineCherchee)
+          motsIci += poids * index.rarete(racine(trouve)) * index.rarete(trouve)
+          if (position >= 0 && (premierePosition < 0 || position < premierePosition)) {
+            premierePosition = position
+          }
         }
-        for (const mot of elargis) {
-          const position = replie.indexOf(mot)
-          if (position < 0) continue
-          motsIci += index.rarete(mot)
-          if (premierePosition < 0 || position < premierePosition) premierePosition = position
-        }
+        for (const mot of demandes) peser(mot, POIDS_DEMANDE)
+        for (const mot of elargis) peser(mot, 1)
         if (premierePosition < 0) continue
         /*
          * NORMALISE PAR LA LONGUEUR.
