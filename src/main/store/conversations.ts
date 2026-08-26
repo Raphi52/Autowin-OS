@@ -13,6 +13,7 @@ import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
 import { canonicalProjectPath } from '../../shared/project-path'
 import { memeFamille } from './synonymes'
+import { construireVoisinage, type IndexVoisinage } from './voisinage'
 
 // Store en mémoire des conversations : un PROVIDER qui répond, un DOSSIER qui range.
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -152,14 +153,25 @@ function replier(texte: string): string {
  * Les mots de moins de trois lettres sont ecartes : « de », « la », « et » sont dans tout, donc ne
  * discriminent rien, et un mot present partout ferait remonter tout le corpus.
  */
-function motsCherchables(terme: string): string[] {
+function motsCherchables(terme: string, voisinage: IndexVoisinage): string[] {
   const mots = replier(terme)
     .split(/[^a-z0-9_.:-]+/)
     .filter((mot) => mot.length >= 3)
-  // Chaque mot tire avec lui les AUTRES facons de le dire dans ce produit : « badges » cherche aussi
-  // « pastille ». Sans cette expansion, retrouver un echange exige de se souvenir de sa propre
-  // formulation -- ce que l'on vient precisement chercher.
-  const elargis = mots.flatMap((mot) => [mot, ...memeFamille(mot)])
+  /*
+   * Chaque mot tire avec lui les AUTRES facons de le dire. Deux sources, dans cet ordre :
+   *
+   *  - le lexique des familles connues de ce produit (« badges » -> « pastille ») : une amorce, sure
+   *    mais finie ;
+   *  - le VOISINAGE appris du corpus, qui n'a besoin de personne pour s'etendre -- les mots que
+   *    l'utilisateur emploie ensemble se rapprochent d'eux-memes, a chaque message ajoute.
+   *
+   * Sans cette expansion, retrouver un echange exige de se souvenir de sa propre formulation --
+   * ce que l'on vient precisement chercher.
+   */
+  const elargis = mots.flatMap((mot) => {
+    const rac = racine(mot)
+    return [mot, ...memeFamille(mot), ...voisinage.voisins(rac)]
+  })
   return [...new Set(elargis.map(racine))].slice(0, 40)
 }
 
@@ -290,6 +302,7 @@ export class ConversationStore {
    * reprendre au démarrage — l'annoncer interrompu serait faux. Absent = plus rien ne reprend.
    */
   hydrate(saved: Conversation[], options?: { resumableTurnIds?: ReadonlySet<string> }): boolean {
+    this.voisinageCache = undefined
     const resumable = options?.resumableTurnIds
     this.conversations.clear()
     let max = 0
@@ -454,6 +467,7 @@ export class ConversationStore {
     provider: string
     autoKaizen?: AutoKaizenConversationLink
   }): Conversation {
+    this.voisinageCache = undefined
     const ts = this.now()
     const id = this.nextUniqueConversationId()
     const conversation: Conversation = {
@@ -523,6 +537,7 @@ export class ConversationStore {
     id: string,
     m: { role: 'user' | 'assistant'; content: string; attachments?: AttachmentMeta[] }
   ): Conversation {
+    this.voisinageCache = undefined
     const conversation = this.conversations.get(id)
     if (!conversation) {
       throw new Error(`Conversation inconnue: ${id}`)
@@ -624,6 +639,7 @@ export class ConversationStore {
 
   /** Applique un événement au tour structuré ; les deltas demandent un checkpoint regroupé. */
   applyTurnEvent(id: string, turnId: string, event: ChatTurnEvent): Conversation {
+    this.voisinageCache = undefined
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const message = applyTurnEventToMessages(conversation.messages, turnId, event)
@@ -637,6 +653,32 @@ export class ConversationStore {
       updatedAt: conversation.updatedAt
     })
     return conversation
+  }
+
+  /**
+   * Index de voisinage, construit a la PREMIERE recherche puis garde.
+   *
+   * Invalide des qu'un message arrive : un index perime rapprocherait selon un corpus qui n'existe
+   * plus, et c'est exactement le genre d'oracle en retard qui fait conclure faux avec assurance.
+   */
+  private voisinageCache?: IndexVoisinage
+
+  private voisinage(): IndexVoisinage {
+    if (!this.voisinageCache) {
+      const textes: string[] = []
+      for (const conversation of this.conversations.values()) {
+        for (const message of conversation.messages) {
+          if (typeof message.content === 'string') textes.push(message.content)
+        }
+      }
+      this.voisinageCache = construireVoisinage(textes, (texte) =>
+        replier(texte)
+          .split(/[^a-z0-9_.:-]+/)
+          .filter((mot) => mot.length >= 3)
+          .map(racine)
+      )
+    }
+    return this.voisinageCache
   }
 
   /** Récupère une conversation par id, ou undefined si absente. */
@@ -668,7 +710,7 @@ export class ConversationStore {
     terme: string,
     options?: { limite?: number; extraitsParConversation?: number }
   ): ConversationRecherche[] {
-    const mots = motsCherchables(terme)
+    const mots = motsCherchables(terme, this.voisinage())
     // Un terme vide rendrait TOUT le corpus : ce n'est pas une recherche, c'est un dump.
     if (mots.length === 0) return []
     const limite = Math.max(1, Math.min(50, Math.floor(options?.limite ?? 10) || 10))
@@ -895,6 +937,7 @@ export class ConversationStore {
 
   /** Supprime une conversation. Retourne true si elle existait. */
   remove(id: string): boolean {
+    this.voisinageCache = undefined
     const existed = this.conversations.delete(id)
     if (existed) this.changed(id)
     return existed
