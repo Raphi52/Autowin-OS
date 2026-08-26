@@ -48,6 +48,9 @@ import {
  */
 
 const SAFE_ID = /^[A-Za-z0-9_-]+$/
+
+/** Un SHA git tel que `rev-parse` le rend : c'est ce qu'on accepte comme adresse de travail. */
+const HEX_SHA = /^[0-9a-f]{7,40}$/i
 const GIT_COMMAND_TIMEOUT_MS = 30_000
 
 /**
@@ -789,18 +792,65 @@ export class WorktreeManager {
    * En cas d'echec on repond OUI. Le bandeau doit se tromper du cote qui n'efface rien : signaler un
    * travail deja publie coute une verification, en taire un qui ne l'est pas coute le travail.
    */
-  private apporteQuelqueChose(agentId: string, baseRef: string): boolean {
+  private apporteQuelqueChose(travail: string, baseRef: string): boolean {
     try {
-      const sortie = this.git(this.baseRepo, ['cherry', baseRef, `autowin/recovery/${agentId}`])
+      const sortie = this.git(this.baseRepo, ['cherry', baseRef, travail])
       return sortie.split(/\r?\n/).some((ligne) => ligne.trim().startsWith('+'))
     } catch {
       return true
     }
   }
 
+  /**
+   * OU VIT le travail d'un agent -- sa branche de secours, ou son bureau reste en HEAD DETACHE.
+   *
+   * DEFAUT VECU le 2026-08-26 (run `ef845009a251-1`). Le recensement ne connaissait qu'une seule
+   * adresse : `autowin/recovery/<id>`. Or l'orchestrateur laisse aussi des bureaux en HEAD detache,
+   * dont le commit n'est reference par AUCUNE ref -- invisible a tout `for-each-ref`, donc invisible
+   * au bandeau, a l'IPC et a l'agent. L'utilisateur a demande « fusionne », l'agent a repondu « rien
+   * a fusionner », et le commit `7467f237` etait la, dans le bureau, a cote.
+   *
+   * La branche de secours PRIME quand elle existe : c'est l'adresse durable, celle qui survit a la
+   * suppression du bureau. Le HEAD detache n'est que le dernier recours -- mais c'est precisement
+   * celui qui manquait.
+   */
+  private commitDuTravail(agentId: string): string | undefined {
+    if (!SAFE_ID.test(agentId)) return undefined
+    const secours = `autowin/recovery/${agentId}`
+    if (this.revisionExists(secours)) return secours
+    const bureau = join(this.worktreeRoot, `agent__${agentId}`)
+    if (!existsSync(bureau)) return undefined
+    try {
+      const sha = this.git(bureau, ['rev-parse', 'HEAD']).trim()
+      if (!HEX_SHA.test(sha)) return undefined
+      /*
+       * LE DISCRIMINANT : un bureau ne compte que si son commit est ORPHELIN.
+       *
+       * Faux positif mesure sur le vrai depot juste apres le premier jet : SIX bureaux signales pour
+       * UN seul vrai travail. Un bureau simplement OUVERT sur une base divergente « apporte » des
+       * commits au sens de `git cherry`, sans avoir rien produit -- et cinq cris pour un signal,
+       * c'est le defaut du 2026-08-24 rouvert (un bandeau qu'on n'ecoute plus).
+       *
+       * Un commit fabrique par l'agent dans son bureau detache n'est contenu dans AUCUNE ref ; une
+       * base, par construction, en a une. `--contains` tranche donc exactement la bonne question.
+       */
+      const refs = this.git(this.baseRepo, [
+        'for-each-ref',
+        '--contains',
+        sha,
+        '--count=1',
+        '--format=%(refname)'
+      ]).trim()
+      return refs ? undefined : sha
+    } catch {
+      // Un bureau sans `.git` lisible ne prouve aucune perte : on ne l'invente pas.
+      return undefined
+    }
+  }
+
   travauxNonPublies(baseRef = 'HEAD'): string[] {
     try {
-      return this.git(this.baseRepo, [
+      const branches = this.git(this.baseRepo, [
         'for-each-ref',
         '--no-merged',
         baseRef,
@@ -810,7 +860,19 @@ export class WorktreeManager {
         .split('\n')
         .map((ligne) => ligne.trim())
         .filter((agentId) => SAFE_ID.test(agentId))
-        .filter((agentId) => this.apporteQuelqueChose(agentId, baseRef))
+      /*
+       * LES BUREAUX EN HEAD DETACHE, l'autre moitie du recensement (cf. `commitDuTravail`).
+       *
+       * Le scan de dossiers est le SEUL moyen de les voir : leur commit n'a pas de ref. Le cout est
+       * un `rev-parse` par bureau -- borne par le nombre de bureaux vivants, et paye seulement ici.
+       * `apporteQuelqueChose` (patch-id) fait ensuite le tri, exactement comme pour les branches :
+       * un bureau vide, ou dont le travail a deja ete repris a la main, ne dit rien.
+       */
+      const detaches = this.listAgentIds().filter((agentId) => !branches.includes(agentId))
+      return [...branches, ...detaches].filter((agentId) => {
+        const travail = this.commitDuTravail(agentId)
+        return travail !== undefined && this.apporteQuelqueChose(travail, baseRef)
+      })
     } catch {
       // Un depot qui ne repond pas ne prouve AUCUNE perte : on n'annonce rien plutot que d'alarmer.
       return []
@@ -836,15 +898,11 @@ export class WorktreeManager {
     return this.travauxNonPublies(baseRef)
       .slice(0, Math.max(0, limite))
       .map((agentId) => {
-        const branche = `autowin/recovery/${agentId}`
+        const branche = this.commitDuTravail(agentId) ?? `autowin/recovery/${agentId}`
         let fichiers: string[] = []
         let date = ''
         try {
-          fichiers = this.git(this.baseRepo, [
-            'diff',
-            '--name-only',
-            `${baseRef}...${branche}`
-          ])
+          fichiers = this.git(this.baseRepo, ['diff', '--name-only', `${baseRef}...${branche}`])
             .split('\n')
             .map((ligne) => ligne.trim())
             .filter(Boolean)
@@ -878,11 +936,10 @@ export class WorktreeManager {
     maxCaracteres = 20_000
   ): { patch: string; tronque: boolean } {
     if (!SAFE_ID.test(agentId)) return { patch: '', tronque: false }
+    const travail = this.commitDuTravail(agentId)
+    if (!travail) return { patch: '', tronque: false }
     try {
-      const patch = this.git(this.baseRepo, [
-        'diff',
-        `${baseRef}...autowin/recovery/${agentId}`
-      ])
+      const patch = this.git(this.baseRepo, ['diff', `${baseRef}...${travail}`])
       return patch.length > maxCaracteres
         ? { patch: patch.slice(0, maxCaracteres), tronque: true }
         : { patch, tronque: false }
