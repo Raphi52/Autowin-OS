@@ -933,13 +933,28 @@ export class ConversationStore {
     // ce cas explicite, `now + 0` valait `now` et le premier controle ne declenchait pas -- un
     // budget nul aurait cherche partout, ce qui est l'inverse de ce qu'il demande.
     const echeance = budget === undefined ? undefined : budget <= 0 ? 0 : Date.now() + budget
-    let examinees = 0
+    /*
+     * Le compteur porte sur les MESSAGES parcourus, pas sur les conversations.
+     *
+     * Compter les conversations ne garantissait l'independance qu'au NOMBRE de conversations, pas a
+     * leur taille : trente-et-une conversations de plusieurs milliers de messages pouvaient etre
+     * parcourues entierement entre deux consultations de l'horloge, et faire deborder le budget d'un
+     * facteur non borne. Un audit l'a releve -- mon commentaire promettait « independant de la taille
+     * des donnees », le code ne tenait que la moitie de cette promesse.
+     *
+     * Le message est l'unite de COUT reelle : c'est lui qu'on tokenise et qu'on lit.
+     */
+    let messagesParcourus = 0
+    const budgetEpuise = (): boolean => {
+      // L'horloge n'est consultee qu'un message sur 256 : l'appeler a chaque message couterait plus
+      // cher que ce qu'on economise, et 256 messages se parcourent en bien moins d'une milliseconde.
+      if (echeance === undefined) return false
+      if ((messagesParcourus & 255) !== 0) return false
+      return Date.now() > echeance
+    }
     for (const conversation of this.list()) {
       if (candidates && !candidates.has(conversation.id)) continue
-      // Le temps n'est consulte qu'une conversation sur trente-deux : appeler l'horloge a chaque tour
-      // couterait plus cher que ce qu'on economise.
-      if (echeance !== undefined && (examinees & 31) === 0 && Date.now() > echeance) break
-      examinees += 1
+      if (budgetEpuise()) break
       const extraits: ConversationExtrait[] = []
       /** Rangs des messages retenus : sert a chercher un revirement APRES le dernier extrait. */
       const derniersRangs: number[] = []
@@ -955,6 +970,10 @@ export class ConversationStore {
       let meilleurScore = 0
       for (const [rang, message] of conversation.messages.entries()) {
         if (typeof message.content !== 'string') continue
+        messagesParcourus += 1
+        // Coupe AUSSI a l'interieur d'une conversation tres longue : sans cela, une seule
+        // conversation de dix mille messages ignorait le budget a elle seule.
+        if (budgetEpuise()) break
         const replie = replier(message.content)
         const motsDuMessage = this.motsMemoises(message.content)
         let premierePosition = -1
