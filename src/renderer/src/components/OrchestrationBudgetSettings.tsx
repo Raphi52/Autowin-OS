@@ -107,10 +107,17 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
     <section className="orchestration-budget surface-panel" aria-label="Budget d'orchestration">
       <ModuleHeader eyebrow="Protection des runs" title="Budget d'orchestration" />
       <p>
-        Des plafonds par run. Un nouvel appel est refusé avant son départ dès que le budget est
-        atteint, même quand le fournisseur ne communique aucun prix. Le plafond du tour de chat est
-        séparé : un tour agentique consomme un appel PAR ÉTAPE, il en faut donc beaucoup plus que
-        pour un run — le mettre trop bas coupe le travail en plein milieu.
+        Des plafonds par run, de <strong>deux natures différentes</strong>. Les plafonds d’
+        <strong>appels</strong> coupent : un nouvel appel est refusé avant son départ dès qu’ils sont
+        atteints, même quand le fournisseur ne communique aucun prix. Les plafonds de{' '}
+        <strong>coût et de tokens</strong> ne coupent pas : ils <strong>mesurent</strong>. Un run les
+        dépasse sans être arrêté — c’est voulu, pour qu’une réparation puisse enchaîner sans
+        attendre une décision, et c’est le nombre d’appels qui borne alors la dépense.
+      </p>
+      <p>
+        Le plafond du tour de chat est séparé : un tour agentique consomme un appel PAR ÉTAPE, il en
+        faut donc beaucoup plus que pour un run — le mettre trop bas coupe le travail en plein
+        milieu.
       </p>
       {loadError && (
         <div className="orchestration-budget-failure">
@@ -149,7 +156,7 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
         </div>
       </label>
       <label>
-        <span>Budget de tokens totaux</span>
+        <span>Budget de tokens totaux (mesure, ne coupe pas)</span>
         <div className="orchestration-budget-input">
           <input
             type="number"
@@ -163,7 +170,7 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
         </div>
       </label>
       <label>
-        <span>Maximum de coût connu (optionnel)</span>
+        <span>Maximum de coût connu (optionnel — mesure, ne coupe pas)</span>
         <div className="orchestration-budget-input">
           <input
             type="number"
