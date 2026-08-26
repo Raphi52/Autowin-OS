@@ -53,6 +53,21 @@ describe('recherche par contenu dans le corpus des conversations', () => {
     expect(store.search('a jour').length).toBe(1)
   })
 
+  it('ne confond pas « conversion » avec « conversation », le mot le plus frequent d ici', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const parasite = store.create({ title: 'Parasite', provider: 'claude' })
+    store.append(parasite.id, { role: 'user', content: 'range mes conversations par dossier' })
+    const vraie = store.create({ title: 'Vraie cible', provider: 'claude' })
+    store.append(vraie.id, { role: 'user', content: 'la conversion du fichier a echoue' })
+
+    // Racine a six lettres, « conversation » et « conversion » donnaient tous deux « conver » :
+    // chercher une conversion remontait presque tout le corpus, dont le sujet EST la conversation.
+    const trouve = store.search('conversion').map((c) => c.title)
+    expect(trouve).toContain('Vraie cible')
+    expect(trouve).not.toContain('Parasite')
+  })
+
   it('retrouve une REFORMULATION : la demande n est jamais formulee comme la reponse', () => {
     const store = magasinPeuple()
     // Ce que l utilisateur a tape en conv-1407, contre ce qui avait ete dit en conv-1405.

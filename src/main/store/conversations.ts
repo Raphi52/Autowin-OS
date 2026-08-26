@@ -12,6 +12,7 @@ import { hasInterruptionNotice, interruptionNotice } from '../runs/run-interrupt
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
 import { canonicalProjectPath } from '../../shared/project-path'
+import { motsDe, replier } from '../../shared/mots'
 import { memeFamille } from './synonymes'
 import { construireVoisinage, type IndexVoisinage } from './voisinage'
 
@@ -127,20 +128,6 @@ export interface ConversationRecherche {
   extraits: ConversationExtrait[]
 }
 
-/**
- * Replie un texte sur sa forme comparable : minuscules, accents retires.
- *
- * `NFD` separe la lettre de son accent, la plage `U+0300-U+036F` supprime les accents ainsi
- * isoles. « À jour » et « a jour » deviennent la meme chaine -- celui qui tape vite cherche la
- * meme chose que celui qui tape juste.
- */
-function replier(texte: string): string {
-  return texte
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim()
-}
 
 /**
  * Les mots CHERCHABLES d'une demande.
@@ -176,13 +163,7 @@ function motsCherchables(terme: string, voisinage: IndexVoisinage): MotsDeRecher
   // Les mots ENTIERS d'abord : le lexique des familles et l'index de voisinage sont indexes sur des
   // mots, pas sur des racines. Raciner avant de les consulter faisait chercher « worktr » dans une
   // table qui contient « worktree » -- l'expansion rendait alors silencieusement zero.
-  const entiers = [
-    ...new Set(
-      replier(terme)
-        .split(/[^a-z0-9_.:-]+/)
-        .filter((mot) => mot.length >= 3)
-    )
-  ].slice(0, 12)
+  const entiers = motsDe(terme).slice(0, 12)
   const demandes = [...new Set(entiers.map(racine))]
   const vus = new Set(demandes)
   const elargis: string[] = []
@@ -202,19 +183,39 @@ function motsCherchables(terme: string, voisinage: IndexVoisinage): MotsDeRecher
 }
 
 /**
- * La RACINE d'un mot : ses six premieres lettres.
+ * Longueur de la racine.
+ *
+ * Six lettres collisionnaient sur le mot le plus frequent de ce corpus : `racine('conversation')`
+ * et `racine('conversion')` valaient tous deux « conver ». Chercher « conversion d'un fichier »
+ * remontait donc toute conversation parlant de... conversations, c'est-a-dire presque toutes. Neuf
+ * lettres separent les deux (« conversat » / « conversio ») tout en absorbant encore les pluriels et
+ * les accords, qui portent sur la FIN du mot.
+ */
+const SEUIL_RACINE = 9
+
+/**
+ * La RACINE d'un mot : ses premieres lettres.
  *
  * « pastilles » ne trouvait pas « pastille », ni « couleurs » « couleur » : une demande est
- * rarement au meme nombre que la reponse. Six lettres suffisent a rester discriminant
- * (« couleu », « pastil ») tout en absorbant pluriels et accords -- et c'est un simple `indexOf`,
- * donc instantane sur un corpus de 28 Mo parcouru a chaque tour.
+ * rarement au meme nombre que la reponse. Tronquer garde le discriminant tout en absorbant les
+ * pluriels et les accords -- et c'est un simple `indexOf`, donc instantane sur un corpus de 28 Mo
+ * parcouru a chaque tour.
  *
  * Ce n'est PAS de la recherche semantique : « badges » ne trouvera jamais « pastilles ». Pour un
  * vrai synonyme, le Brain reste l'outil.
  */
 function racine(mot: string): string {
-  return mot.length > 6 ? mot.slice(0, 6) : mot
+  return mot.length > SEUIL_RACINE ? mot.slice(0, SEUIL_RACINE) : mot
 }
+
+/**
+ * Les mots qui annoncent que ce qui precede n'est PLUS vrai.
+ *
+ * Un extrait coupe juste avant l'un d'eux fait passer un choix abandonne pour le choix actuel. Ce
+ * n'est pas une imprecision, c'est un contresens : le lecteur agit sur une consigne revoquee.
+ */
+const REVIREMENTS =
+  /\b(mais|cependant|toutefois|neanmoins|finalement|en fait|plutot|abandonn\w*|remplac\w*|annul\w*|revenu|desormais|depuis)\b/i
 
 /**
  * La FENETRE autour du terme trouve, prise sur le texte d'ORIGINE (accents et casse intacts).
@@ -222,11 +223,30 @@ function racine(mot: string): string {
  * Rendre le message entier noierait le terme dans des milliers de caracteres ; n'en rendre que le
  * terme ne dirait pas dans quelle phrase il se trouve. Les bords coupes sont marques : une
  * troncature muette se lit comme un texte complet.
+ *
+ * ET SURTOUT : si la suite du message REVIENT sur ce qui vient d'etre dit, la fenetre s'etend pour
+ * l'inclure. Sans cela « on utilisait l'ambre [...] mais on a ABANDONNE cette convention » se
+ * lisait comme une affirmation encore valide -- le mode d'echec meme que ce rappel doit eviter, et
+ * qu'un simple « ... » ne signalait pas (il ne distingue pas « coupe sans consequence » de « coupe
+ * au point d'inverser le sens »).
  */
 function fenetre(origine: string, position: number, longueur: number): string {
   const MARGE = 120
+  /** Jusqu'ou chercher un revirement au-dela de la marge : une phrase ou deux, pas le message. */
+  const PORTEE_REVIREMENT = 400
   const debut = Math.max(0, position - MARGE)
-  const fin = Math.min(origine.length, position + longueur + MARGE)
+  let fin = Math.min(origine.length, position + longueur + MARGE)
+
+  // La suite immediate revient-elle sur ce qui precede ? Si oui, on l'inclut jusqu'a la fin de sa
+  // phrase -- mieux vaut un extrait plus long qu'un extrait qui dit le contraire du message.
+  const suite = origine.slice(fin, Math.min(origine.length, fin + PORTEE_REVIREMENT))
+  const contraste = suite.match(REVIREMENTS)
+  if (contraste?.index !== undefined) {
+    const finDePhrase = suite.indexOf('.', contraste.index)
+    const jusqua = finDePhrase >= 0 ? finDePhrase + 1 : suite.length
+    fin = Math.min(origine.length, fin + jusqua)
+  }
+
   const coeur = origine.slice(debut, fin).replace(/\s+/g, ' ').trim()
   return (debut > 0 ? '...' : '') + coeur + (fin < origine.length ? '...' : '')
 }
@@ -594,6 +614,9 @@ export class ConversationStore {
     user: { content: string; attachments?: AttachmentMeta[] },
     assistant: { turnId: string; runtime?: ChatTurnRuntime }
   ): Conversation {
+    // Le chemin REEL des messages passe ICI, pas par `append` : l'index doit suivre celui-la
+    // en premier. Corrige apres audit -- j'avais invalide les chemins que mes tests exercaient.
+    this.voisinageCache = undefined
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
@@ -636,6 +659,9 @@ export class ConversationStore {
     id: string,
     assistant: { turnId: string; runtime?: ChatTurnRuntime }
   ): Conversation {
+    // Le chemin REEL des messages passe ICI, pas par `append` : l'index doit suivre celui-la
+    // en premier. Corrige apres audit -- j'avais invalide les chemins que mes tests exercaient.
+    this.voisinageCache = undefined
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
@@ -698,10 +724,7 @@ export class ConversationStore {
         }
       }
       this.voisinageCache = construireVoisinage(textes, (texte) =>
-        replier(texte)
-          .split(/[^a-z0-9_.:-]+/)
-          .filter((mot) => mot.length >= 3)
-          .map(racine)
+        motsDe(texte).map(racine)
       )
     }
     return this.voisinageCache
