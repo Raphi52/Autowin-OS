@@ -72,6 +72,23 @@ describe('decideVerifyCommand — AUTORISATION (le seul cas qui passe)', () => {
 })
 
 describe('capVerifyOutput — la sortie n’inonde pas le tour', () => {
+  /*
+   * DEFAUT VECU le 2026-08-25 (conv-1404) : le panneau de `verify` affichait des lignes entieres de
+   * `<ESC>[33m<ESC>[2m…`. `sansCouleur` existait deja dans ce fichier, mais elle ne servait qu'a
+   * TESTER la ligne contre le motif de verdict — la ligne RETENUE gardait ses couleurs, et la queue
+   * aussi. Un depouillement qui ne s'applique pas a ce qui est RENDU ne depouille rien.
+   */
+  it('ne rend AUCUN code de couleur du terminal, verdict comme queue', () => {
+    const ESC = String.fromCharCode(27)
+    const raw = [
+      ESC + '[31m FAIL ' + ESC + '[39m src/a.test.ts',
+      ESC + '[2m Tests ' + ESC + '[22m ' + ESC + '[31m2 failed' + ESC + '[39m',
+      'z'.repeat(5_000)
+    ].join(String.fromCharCode(10))
+
+    expect(capVerifyOutput(raw)).not.toContain(ESC)
+  })
+
   it('garde une sortie courte telle quelle', () => {
     expect(capVerifyOutput('  3 tests passed  ')).toBe('3 tests passed')
   })

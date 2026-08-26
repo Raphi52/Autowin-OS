@@ -182,6 +182,39 @@ async function discoverCodexModels(
   }
 }
 
+/**
+ * Modèles codex NOMMÉS ajoutés par demande explicite de l'utilisateur, quand le listing de l'App
+ * Server ne les rend pas encore. C'est une exception ASSUMÉE à la règle « aucun modèle inventé » :
+ * l'utilisateur a demandé Sol trois fois, catalogue live à l'appui (terra, luna, gpt-5.5,
+ * gpt-5.4-mini). Un seul id, cité, jamais une famille — et jamais en doublon du live.
+ */
+const CODEX_MODELES_DEMANDES: { model: string; label: string }[] = [
+  { model: 'gpt-5.6-sol', label: 'GPT-5.6 Sol · ChatGPT' }
+]
+
+export function withCodexNamedSupplements(models: ImportedModel[]): ImportedModel[] {
+  const gabarit = models.find((m) => m.provider === 'codex')
+  // Catalogue codex VIDE = provider injoignable : on n'ajoute rien, sinon l'UI proposerait une
+  // cible unique et non joignable (la regle « aucun modele invente hors listing » tient toujours).
+  if (!gabarit) return models
+  const efforts = (gabarit?.reasoningEfforts ?? ['low', 'medium', 'high', 'xhigh']).filter(
+    (effort): effort is ReasoningEffort => CODEX_VALID_EFFORTS.has(effort)
+  )
+  const manquants = CODEX_MODELES_DEMANDES.filter(
+    (demande) => !models.some((m) => m.provider === 'codex' && m.model === demande.model)
+  ).map<ImportedModel>((demande) => ({
+    id: `codex/${demande.model}`,
+    provider: 'codex',
+    model: demande.model,
+    label: demande.label,
+    reasoningEfforts: efforts.length > 0 ? efforts : ['high'],
+    defaultReasoningEffort: efforts.includes('xhigh') ? 'xhigh' : efforts[0],
+    visibility: 'list',
+    dynamicallyLoaded: true
+  }))
+  return [...manquants, ...models]
+}
+
 function labelClaudeModel(id: string): string {
   const version = parseClaudeVersion(id)
   if (!version) return `${id} · CLI`
@@ -462,7 +495,7 @@ export async function discoverImportedModels(
       : [...claude.models, ...(readCatalogCache(cachePath, 'claude') ?? [])]
   const resolvedClaudeModels = resolveClaudeAliasLabels(uniqueModels(discoveredClaudeModels))
   return [
-    ...codexModels,
+    ...withCodexNamedSupplements(codexModels),
     ...resolvedClaudeModels,
     ...DEFAULT_IMPORTED_MODELS.filter(
       (model) => model.provider === 'kimi' || model.provider === 'gemini'

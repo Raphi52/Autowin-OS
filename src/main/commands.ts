@@ -26,21 +26,46 @@ import {
   decideVerifyCommand,
   porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
+  porteeDerivableDesChangements,
   verifyTimeoutMs,
   verifyTimeoutOutcome,
   type VerifyOutcome
 } from './verify-command'
 import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement'
+import { natureDeLEchec } from './verify-echec-nature'
+import { bornerLigneDeVie } from './verify-battement'
+import { refusAvecIssue, refusPourOutcome, type OutcomeDePublication } from './issue-de-refus'
+import { rappelDesEchangesPasses } from './rappel-conversations'
+import { cleDeBureau, decisionDeReutilisation } from './bureau-reutilisable'
+import { readLastCommitFiles } from './git-read-main'
 import { readGitState } from './git-read-main'
 import type { AutowinOS } from './os'
 
 /** Deux sauts de ligne, sans séquence d'échappement — même règle que `SAUT` dans verify-command.ts. */
 const SAUT_PORTEE = String.fromCharCode(10, 10)
+
+/*
+ * La consigne « ton code ne compile pas » doit se DETACHER de la sortie brute qui suit, sinon elle
+ * s'y noie. Rendue absente par le commit qui l'introduisait (`SAUT_NATURE` utilise, jamais defini,
+ * typecheck rouge sur la branche partagee le 2026-08-25) : reparee ici parce qu'elle vit dans la
+ * fonction meme qu'on corrige, pas parce qu'on elargit le lot.
+ */
+const SAUT_NATURE = String.fromCharCode(10, 10)
+
+/**
+ * Ce que l'agent DOIT lire quand la finalisation est reportee : le changement est ecrit et verifie,
+ * son integration attend la fin des processus de la copie. Ni un vert (rien n'est encore dans la
+ * base) ni un echec (rien n'est perdu) — et surtout pas un silence.
+ */
+const PUBLICATION_DIFFEREE =
+  'différée — le changement est vérifié ; son intégration attend la fin des processus du bureau, ' +
+  'Autowin la reprend seul. Ne pas rejouer cette édition.'
 import { lastUserMessageAt } from './store/conversations'
 import type { Message } from './providers/types'
 import type { Role, RoleBinding } from './roles'
 import {
   closeConvRun,
+  convRunsRoot,
   reuseOrCreateConvRun,
   populateConvRunSections,
   saveConvRunTrace
@@ -84,6 +109,7 @@ import {
 } from '../shared/orchestration-outcome'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { collectOrchestrationContext } from './orchestration-context'
+import { memoireDesRunsPrecedents, phasesAvecJuge, resumeDesTours } from './orchestration-memoire'
 import { optionsQuiPresupposentUneSolution } from './option-lecture-ou-solution'
 import { CONTEXT_MESSAGE_LIMIT } from './conversation-window'
 import { rememberFact } from './brain-remember'
@@ -309,6 +335,31 @@ export function parseDisplayArg(raw: unknown): number | undefined {
   return value
 }
 
+/**
+ * La CIRCONSTANCE d'un echec de publication : ce que le message doit porter en plus du motif.
+ *
+ * L'ancien detail etait le nom de l'outil (`edit_file`), deja affiche au-dessus du message : il
+ * consommait la seule place ou une information utile pouvait tenir. Ici, chaque issue donne ce
+ * qu'elle SAIT -- les fichiers qui s'opposent, la raison du blocage, la branche qui porte le
+ * travail -- pour que le lecteur n'ait pas a le deviner.
+ */
+function circonstanceDePublication(finalized: Record<string, unknown>): string | undefined {
+  const liste = (valeur: unknown): string | undefined =>
+    Array.isArray(valeur) && valeur.length > 0 ? valeur.slice(0, 5).join(', ') : undefined
+  const texte = (valeur: unknown): string | undefined =>
+    typeof valeur === 'string' && valeur.trim() ? valeur.trim() : undefined
+  switch (finalized.outcome) {
+    case 'conflict':
+      return liste(finalized.files)
+    case 'blocked':
+      return texte(finalized.reason) ?? liste(finalized.files)
+    case 'preserve-et-libere':
+      return texte(finalized.branche)
+    default:
+      return texte(finalized.detail)
+  }
+}
+
 const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
@@ -384,6 +435,78 @@ const CATALOG: CommandSpec[] = [
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: false
+    }
+  },
+  {
+    /**
+     * REGARDER son propre travail, sans avoir a le refaire.
+     *
+     * Defaut vecu conv-1407 (2026-08-26), second volet. Autowin collecte deja tout ce qu'il faut
+     * pour une retrospective — conversation, activite, traces Brain, evenements causaux, RUN.md
+     * natifs — en UN appel (`collectAutowinKaizenEvidence`). Mais ce dossier n'etait atteignable
+     * que par une tache commencant par `/kaizen`, donc en LANCANT un run complet : couteux,
+     * delegue, asynchrone.
+     *
+     * L'orchestrateur decide lui-meme s'il traite ou s'il delegue. Un agent qui doit deleguer POUR
+     * S'INFORMER decide a l'aveugle : la seule facon de savoir lui coutait un run. Meme forme que
+     * `conversation_read` avant le 18/08 — branche pour l'oeil et pour un pipeline, jamais pour le
+     * modele qui decide.
+     *
+     * Lecture SEULE : regarder n'engage rien, et doit donc etre le geste le moins cher du catalogue.
+     */
+    name: 'retrospective',
+    description:
+      "Regarder ce qui s'est REELLEMENT passe dans une conversation : ses messages, l'activite de " +
+      'ses tours, ses evenements causaux (outils appeles, refus, verdicts) et ses RUN.md. Appelle-le ' +
+      "des qu'on te demande pourquoi un tour a echoue, ce qui a ete tente, ce qui a coute, ou avant " +
+      "de relancer un travail deja tente : tu sauras ce qui a DEJA ete essaye au lieu de le refaire. " +
+      "C'est de la LECTURE — cela ne lance aucun run et ne coute aucun appel de modele.",
+    args: {
+      id: 'identifiant de la conversation a examiner (ex. « conv-1407 »)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    /**
+     * CHERCHER par contenu dans TOUTES les conversations.
+     *
+     * Defaut vecu le 2026-08-26 (conv-1407). L'orchestrateur recoit « remake les pastilles de
+     * couleurs » : quatre mots qui referent a un tour tenu dans une AUTRE conversation. Pour le
+     * retrouver il lui fallait chercher par CONTENU dans le corpus -- or son catalogue n'offrait
+     * cela que sur les FICHIERS du depot (`find_in_files`). `get_state` ne rend que des titres
+     * tronques, et `conversation_read` exige un id connu d'avance : pour lire, il fallait deja
+     * savoir OU lire.
+     *
+     * Il a donc cherche son propre besoin dans le CODE SOURCE : 20 inspections, zero conversation
+     * lue, run arrete a 0,96 $. Meme forme que `list_files` et `classer_conversation` avant lui --
+     * une capacite absente ne rend pas l'agent prudent, elle le pousse vers un chemin desespere.
+     *
+     * C'est la PORTE d'entree de `conversation_read` : celle-ci trouve l'id, celle-la ouvre.
+     */
+    name: 'conversation_search',
+    description:
+      'Chercher un mot ou une phrase dans le CONTENU de TOUTES les conversations, et recevoir les ' +
+      'extraits qui le portent avec leur identifiant. Appelle-le des que la demande suppose un ' +
+      'echange passe sans en donner l identifiant : « comme on avait dit », « reprends ce truc ' +
+      'd hier », une demande courte qui refere a un tour precedent, une retrospective, ou quand tu ' +
+      'ne sais plus de quoi parle la demande. Cherche ICI avant de fouiller le code : le code dit ' +
+      'ce que l app FAIT, les conversations disent ce qui a ete DEMANDE. Les identifiants rendus ' +
+      's ouvrent ensuite avec `conversation_read`.',
+    args: {
+      terme: 'mot ou phrase a chercher (insensible a la casse et aux accents)',
+      limite: 'nombre maximum de conversations rendues (defaut 10, borne 50)',
+      extraits: 'extraits par conversation (defaut 3, borne 20)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: false
     }
   },
@@ -1146,6 +1269,22 @@ export class AppCommandBus {
     private readonly outcomeLearning?: OutcomeLearningSupervisor
   ) {}
 
+  /**
+   * Les echanges passes que la demande suppose connus, prets a etre injectes dans le tour.
+   *
+   * Passe par le bus plutot que d'exposer le store : l'appelant (`agent-pilot`) n'a pas a connaitre
+   * la forme des conversations pour poser une question aussi simple que « de quoi parle-t-on ».
+   */
+  rappelPourDemande(demande: string | undefined, conversationCouranteId?: string): string {
+    try {
+      return rappelDesEchangesPasses(this.os.conversations, demande, conversationCouranteId)
+    } catch {
+      // Un rappel est un CONFORT : s'il echoue, le tour doit partir quand meme. L'inverse ferait
+      // dependre chaque message d'une commodite.
+      return ''
+    }
+  }
+
   catalog(): CommandSpec[] {
     return CATALOG.filter((command) => this.isCommandEnabled(command.name)).map((command) => ({
       ...command,
@@ -1218,8 +1357,8 @@ export class AppCommandBus {
   ): Promise<CommandResult> {
     try {
       const specification = CATALOG.find((command) => command.name === name)
-      if (!specification) throw new Error(`Commande inconnue: ${name}`)
-      if (!this.isCommandEnabled(name)) throw new Error(`Capacité désactivée: ${name}`)
+      if (!specification) throw new Error(refusAvecIssue('commande-inconnue', name))
+      if (!this.isCommandEnabled(name)) throw new Error(refusAvecIssue('capacite-desactivee', name))
       if (name === 'desktop_observe') {
         if (!this.desktop) throw new Error('Controle desktop indisponible')
         const observed = await this.desktop.observe({ display: parseDisplayArg(args.display) })
@@ -1412,9 +1551,20 @@ export class AppCommandBus {
             unavailable.push('état application')
           }
           if (!conversation) unavailable.push('conversation')
+          // MÉMOIRE INTER-RUNS (conv-1405) : les objections du juge sont intra-run et mouraient
+          // avec leur run ; les tours antérieurs à la fenêtre disparaissaient sans trace. Lecture
+          // best-effort — une mémoire illisible ne bloque jamais le lancement.
+          let runsPrecedents: ReturnType<typeof memoireDesRunsPrecedents> = []
+          try {
+            runsPrecedents = memoireDesRunsPrecedents(convRunsRoot(), convId)
+          } catch {
+            unavailable.push('mémoire des runs précédents')
+          }
           collectedContext = collectOrchestrationContext({
             task,
             conversation,
+            runsPrecedents,
+            toursAnterieurs: resumeDesTours(conversation?.messages ?? [], CONTEXT_MESSAGE_LIMIT),
             app: app && { tab: app.tab },
             runs: app?.runs,
             unavailable
@@ -1608,6 +1758,14 @@ export class AppCommandBus {
             (step, delta, note) => {
               // Une NOTE (« Bash en cours — 2 min 30 s ») voyage sur le meme evenement mais dans
               // son propre champ : le renderer la range hors du texte, qui est le livrable.
+              //
+              // ELLE PART AUSSI DANS LE FIL, et c'est le correctif du 2026-08-25. Mesure dans l'app
+              // reelle : « 1 action en cours · Orchestration » est reste muet ONZE minutes, parce
+              // que cette note n'alimentait que la carte du panneau Workflows. Le battement livre la
+              // veille ne couvrait que `verify` : le trou noir n'avait pas disparu, il s'etait
+              // deplace d'un cran. On REUTILISE la note existante — en fabriquer une seconde ferait
+              // diverger deux verites sur le meme fait.
+              if (note) onProgress?.(bornerLigneDeVie(note))
               this.broadcast({
                 type: 'orchestrate-delta',
                 convId,
@@ -1762,7 +1920,11 @@ export class AppCommandBus {
                 // Le save est un bonus de capitalisation : il n'a pas le droit de toucher au run.
               }
             }
-            populateConvRunSections(runPath, r.phaseOutputs, { publishedCommitSha }) // J2 — RUN.md peuplé du vrai livrable
+            // J2 — RUN.md peuplé du vrai livrable, VERDICT DU JUGE COMPRIS : c'est la seule
+            // source que `orchestration-memoire` sait relire au run suivant (conv-1405).
+            populateConvRunSections(runPath, phasesAvecJuge(r.phaseOutputs, r.judgeText), {
+              publishedCommitSha
+            })
             const runStatus =
               terminalLifecycle && terminalLifecycle.closure.status !== 'open'
                 ? terminalLifecycle.closure.status
@@ -1870,6 +2032,40 @@ export class AppCommandBus {
         if (!c) throw new Error(`conversation introuvable: ${s('id')}`)
         this.broadcast({ type: 'refresh', scope: 'conversations' })
         return { id: c.id, titre: c.title, dossier: c.projectPath ?? null }
+      }
+      case 'retrospective': {
+        const id = s('id')
+        const conversation = this.os.conversations.get(id)
+        // Une conversation absente est un ECHEC franc. Rendre un dossier vide ferait conclure
+        // « il ne s'est rien passe » sur un identifiant simplement faux -- la conclusion inverse
+        // de celle qu'une retrospective doit produire.
+        if (!conversation) throw new Error(`Conversation introuvable: ${id}`)
+        const dossier = collectAutowinKaizenEvidence(conversation)
+        return {
+          ...dossier,
+          note:
+            `${dossier.conversation.messages.length} message(s), ` +
+            `${dossier.causalEvents.length} evenement(s) causal(aux), ` +
+            `${dossier.activity.length} entree(s) d'activite, ${dossier.runs.length} RUN.md. ` +
+            `Lecture seule : aucun run lance.`
+        }
+      }
+      case 'conversation_search': {
+        const terme = s('terme')
+        const trouvees = this.os.conversations.search(terme, {
+          limite: Number(a.limite) || undefined,
+          extraitsParConversation: Number(a.extraits) || undefined
+        })
+        // Le vide est DIT comme un vide, jamais rendu en silence : un agent qui recoit une liste
+        // vide sans phrase conclut qu'il a mal appele l'outil, et retente au lieu d'elargir.
+        return {
+          terme,
+          conversations: trouvees,
+          note:
+            trouvees.length === 0
+              ? `Aucune conversation ne contient « ${terme} ». Essaie un terme plus court ou un synonyme.`
+              : `${trouvees.length} conversation(s) portent « ${terme} » ; ouvre-les avec conversation_read.`
+        }
       }
       case 'conversation_read': {
         const id = s('id')
@@ -2240,15 +2436,51 @@ export class AppCommandBus {
    * ambigue, creation de fichier) — jamais dans un outil du CLI, dont les patterns d'autorisation ont
    * ete mesures inoperants le meme jour.
    */
+  /**
+   * L'IDENTITE DU BUREAU : stable par tache, aleatoire seulement en dernier recours.
+   *
+   * DEFAUT MESURE le 2026-08-25 : un `randomUUID()` par appel, donc DIX bureaux (~50 Mo piece) pour
+   * dix tentatives d'UNE edition, tous porteurs du meme JSX non compilable. La source des residus
+   * n'est pas l'echec, c'est qu'un echec fabriquait un objet neuf au lieu de reprendre le sien.
+   *
+   * REGLE, tranchee par l'utilisateur : reinitialiser le bureau retrouve, SAUF s'il porte du travail
+   * qu'aucune tentative precedente sur cette cible n'explique — auquel cas on ne le touche pas et la
+   * nouvelle tentative va ailleurs. Les deux branches naives etaient mauvaises : heriter du contenu
+   * fait repartir l'agent de son propre code casse, reinitialiser toujours detruit du travail non
+   * trie.
+   */
+  private async identiteDeBureau(
+    famille: string,
+    conversationId: string | undefined,
+    cible: string | undefined
+  ): Promise<string> {
+    const aleatoire = `command-${famille}-${randomUUID()}`
+    const cle = cleDeBureau(famille, conversationId, cible)
+    if (!cle) return aleatoire
+    const retenus = this.os.worktrees?.travauxNonPublies?.() ?? []
+    const existant = retenus.find((travail) => travail.agentId === cle)
+    if (!existant) return cle
+    const decision = decisionDeReutilisation(existant.fichiers, cible ? [cible] : [])
+    if (decision === 'preserver') return aleatoire
+    // Reinitialisation = liberer le brouillon precedent AVANT de reprendre sa place. Si la liberation
+    // echoue, on ne force RIEN : un bureau qu'on n'a pas pu liberer reste intact, et la tentative va
+    // ailleurs plutot que d'ecrire par-dessus.
+    const libere = await this.os.worktrees?.discardHeldAsync?.(cle)
+    return libere ? cle : aleatoire
+  }
+
   private async withIsolatedMutation<T>(
     command: 'edit_file' | 'graphify',
     conversationId: string | undefined,
-    action: (workspaceRoot: string) => T | Promise<T>
+    action: (workspaceRoot: string) => T | Promise<T>,
+    /** Fichier vise par la tache : c'est lui qui donne au bureau une IDENTITE stable. */
+    cible?: string
   ): Promise<T> {
     if (!this.os.worktrees) {
-      throw new Error(`isolation workspace indisponible : ${command} refusé`)
+      throw new Error(refusAvecIssue('isolation-indisponible', command))
     }
-    const runId = `command-${command === 'edit_file' ? 'edit' : 'graphify'}-${randomUUID()}`
+    const famille = command === 'edit_file' ? 'edit' : 'graphify'
+    const runId = await this.identiteDeBureau(famille, conversationId, cible)
     const beginOptions = {
       task: command,
       role: 'command',
@@ -2257,7 +2489,7 @@ export class AppCommandBus {
     const workspaceRoot = this.os.worktrees.beginAsync
       ? await this.os.worktrees.beginAsync(runId, `Commande ${command}`, true, beginOptions)
       : this.os.worktrees.begin(runId, `Commande ${command}`, true, beginOptions)
-    if (!workspaceRoot) throw new Error(`isolation workspace indisponible : ${command} refusé`)
+    if (!workspaceRoot) throw new Error(refusAvecIssue('isolation-indisponible', command))
     let completed = false
     try {
       let result: Awaited<T> = await action(workspaceRoot)
@@ -2282,11 +2514,22 @@ export class AppCommandBus {
         const verification =
           parPortee && parPortee.allowed ? parPortee : await this.runVerifyAt(workspaceRoot)
         if (!verification.allowed) {
-          throw new Error(`Vérification du bureau impossible : ${verification.reason}`)
+          throw new Error(refusAvecIssue('verification-indisponible', verification.reason))
         }
         if (!verification.ok) {
+          /*
+           * LA NATURE DE L'ECHEC EN TETE, avant la sortie brute.
+           *
+           * Mesure le 2026-08-25 (conv-1404) : ce message etait generique, et une edition qui avait
+           * produit du JSX aux balises desequilibrees se lisait comme « un test casse ». L'agent a
+           * donc retente une correction de LOGIQUE, reproduisant huit fois la meme faute de balises
+           * jusqu'a ce que le budget d'appels coupe le tour. Les deux natures appellent des gestes
+           * opposes ; les confondre garantit la boucle.
+           */
+          const { consigne } = natureDeLEchec(verification.output)
           throw new Error(
-            `Vérification du bureau échouée (${verification.command}) : ${verification.output}`
+            `Vérification du bureau échouée (${verification.command}) : ` +
+              `${consigne ? `${consigne}${SAUT_NATURE}` : ''}${verification.output}`
           )
         }
         // Le verdict NOMME sa portee et son angle mort. Un vert dont on ignore l'etendue se lit
@@ -2303,13 +2546,50 @@ export class AppCommandBus {
         ? await this.os.worktrees.endAsync(runId, { merge: true })
         : this.os.worktrees.end(runId, { merge: true })
       completed = true
+      /*
+       * UN REPORT N'EST PAS UN ECHEC.
+       *
+       * DEFAUT VECU le 2026-08-25 (conv-1404) : trois `edit_file` sur quatre ont rendu « publication
+       * automatique incomplete » alors que les trois manifestes portaient `verdict: green,
+       * publication: complete` et que les trois commits etaient dans `HEAD`. Le coordinateur rend
+       * `undefined` quand la copie a encore des processus actifs — typiquement les workers `vitest`
+       * que la verification vient elle-meme de lancer : elle passe en attente et `retryRecovery` la
+       * publie ensuite. Cette absence d'issue tombait dans le `throw`.
+       *
+       * Le cout n'etait pas cosmetique : face a un faux echec l'agent RECOMMENCE — quatre appels
+       * pour deux changements utiles, quatre bureaux sur le disque, trois branches de recuperation.
+       *
+       * On ne blanchit RIEN d'autre : une issue reellement bloquee (`blocked`, `conflict`, `refuse`)
+       * continue d'echouer bruyamment. Et l'attente est NOMMEE plutot que tue — un differe passe
+       * pour un vert exactement comme un faux echec passe pour un rouge.
+       */
+      if (finalized === undefined) {
+        if (result && typeof result === 'object') {
+          return {
+            ...result,
+            publication: PUBLICATION_DIFFEREE
+          } as Awaited<T>
+        }
+        return result
+      }
       if (
-        finalized?.outcome !== 'merged' &&
-        finalized?.outcome !== 'nothing' &&
-        finalized?.outcome !== 'cleanup-pending' &&
-        finalized?.outcome !== 'published-residue'
+        finalized.outcome !== 'merged' &&
+        finalized.outcome !== 'nothing' &&
+        finalized.outcome !== 'cleanup-pending' &&
+        finalized.outcome !== 'published-residue'
       ) {
-        throw new Error(`Le bureau ${command} a été conservé : publication automatique incomplète`)
+        // CHAQUE issue porte son propre message. Les six retombaient sur « publication differee »,
+        // un texte unique qui ne nommait jamais la cause et promettait un geste impossible sur
+        // `absente` et `libere`. Mesure conv-1407 : le meme refus mot pour mot, trois fois, puis un
+        // run arrete a 0,96 $ -- face a un refus qui ne dit pas ce qui s'est passe, l'agent ne peut
+        // que retenter a l'identique. Le detail porte la CIRCONSTANCE, jamais le nom de l'outil :
+        // `edit_file` est deja affiche au-dessus du message.
+        throw new Error(
+          refusPourOutcome(
+            finalized.outcome as OutcomeDePublication,
+            circonstanceDePublication(finalized)
+          )
+        )
       }
       return result
     } catch (error) {
@@ -2397,7 +2677,10 @@ export class AppCommandBus {
       const outcome = await this.withIsolatedMutation(
         'edit_file',
         conversationId,
-        (workspaceRoot) => this.runEditFile(input, workspaceRoot)
+        (workspaceRoot) => this.runEditFile(input, workspaceRoot),
+        typeof (input as { path?: unknown }).path === 'string'
+          ? ((input as { path?: string }).path as string)
+          : undefined
       )
       const path =
         outcome.allowed && outcome.path
@@ -2533,8 +2816,74 @@ export class AppCommandBus {
           output: ''
         }
       }
-      argv = [...argv, '--', verdict.chemin]
-      etiquette = `${decision.command} -- ${verdict.chemin}`
+      /*
+       * UNE SOURCE PASSE PAR LA PORTEE, un test se joue directement.
+       *
+       * Corrige le 2026-08-25 apres conv-1404 : ce point refusait une cible source, alors qu'un agent
+       * qui vient d'editer un fichier demande naturellement a le verifier. `runRelatedVerifyAt` joue
+       * `vitest related <fichier> --run` -- les tests qui IMPORTENT le fichier -- et il existait deja.
+       * On ROUTE donc, au lieu de refuser.
+       */
+      if (verdict.parPortee) {
+        const parPortee = await this.runRelatedVerifyAt(decision.cwd, [verdict.chemin])
+        // Portee indeterminable (projet sans vitest, chemin non exploitable) : on retombe sur la
+        // suite complete plutot que de rendre un refus. Un vert plus large n'est jamais un faux vert.
+        if (parPortee.allowed) return parPortee
+      } else {
+        argv = [...argv, '--', verdict.chemin]
+        etiquette = `${decision.command} -- ${verdict.chemin}`
+      }
+    }
+    /*
+     * SANS CIBLE, LA PORTEE VIENT DE CE QUI A CHANGE.
+     *
+     * DEFAUT VECU le 2026-08-25 (conv-1404) : `verify` nu a rendu « verification arretee apres 600 s
+     * (plafond) — rien n'est prouve ». Ce n'est pas un rouge, c'est une ABSENCE de verdict : dix
+     * minutes d'attente pour apprendre qu'on ne sait rien. Et c'est le repli d'`edit_file` quand la
+     * portee n'est pas derivable, donc une edition saine peut se faire refuser par un chronometre.
+     *
+     * La question que l'agent pose en pratique n'est pas « le depot entier est-il vert ? » mais
+     * « est-ce que ce que je viens de changer casse quelque chose ? ». Cette portee-la existait deja
+     * pour `edit_file` (2026-08-22) et pour une cible SOURCE (2026-08-25, plus haut dans cette
+     * fonction) : elle manquait au seul cas sans cible. Les deux precedents mesurent 20 a 70 s la ou
+     * la suite entiere depasse le plafond.
+     *
+     * ARBRE PROPRE : rien a cibler, donc la suite complete reste la reponse. C'est deliberate — sur
+     * un arbre propre, « rien n'est casse » n'est PAS une reponse a « le depot est-il vert ? », et la
+     * confondre fabriquerait exactement le faux vert que `porteeDuVert` sert a empecher.
+     *
+     * Et l'angle mort reste NOMME par la voie de portee elle-meme : un vert dont on ignore l'etendue
+     * se lit plus large qu'il n'est.
+     */
+    /*
+     * ARBRE PROPRE : LA PORTEE VIENT DU DERNIER COMMIT.
+     *
+     * DEFAUT VECU le 2026-08-25 (conv-1405), APRES le correctif ci-dessus : plus rien de sale a
+     * cibler, donc suite entiere, donc plafond — « rien n'est prouve » une fois de plus. Le menage
+     * du depot avait rendu ce chemin actif. Mesure du meme jour : la suite entiere tourne PLUS DE
+     * 40 MINUTES sans finir, sous un plafond de 600 s. Lancer une action dont l'echec est CERTAIN
+     * n'est pas une verification.
+     *
+     * Sur un arbre propre la question naturelle n'est pas « le depot entier est-il vert ? » mais
+     * « ce que je viens de COMMITTER casse-t-il quelque chose ? ». La portee est NOMMEE au verdict :
+     * un vert plus etroit qui s'annonce vaut mieux qu'un plafond muet.
+     *
+     * Meme regle stricte : un commit qui touche autre chose que du code n'a pas de portee derivable,
+     * et la suite entiere reprend la main.
+     */
+    const derivee =
+      porteeDerivableDesChangements(await this.fichiersNonCommites(decision.cwd)) ??
+      porteeDerivableDesChangements(await readLastCommitFiles(decision.cwd))
+    if (etiquette === decision.command && derivee) {
+      const parPortee = await this.runRelatedVerifyAt(decision.cwd, derivee)
+      // Portee indeterminable (projet sans vitest, chemin non exploitable) : on retombe sur la suite
+      // complete plutot que de rendre un refus. Un vert plus large n'est jamais un faux vert.
+      if (parPortee.allowed) {
+        return {
+          ...parPortee,
+          output: `${VERIFY_RELATED_ANGLE_MORT}${SAUT_PORTEE}${parPortee.output}`
+        }
+      }
     }
     const resultat = await this.spawnVerify(argv, decision.cwd, etiquette, onProgress)
     // Le verdict NOMME sa portee. Sans cela, un vert obtenu dans un arbre sale se lit comme un

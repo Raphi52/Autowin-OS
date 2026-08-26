@@ -63,3 +63,45 @@ describe('collecte de contexte d’orchestration', () => {
     expect(context).toContain('Sources indisponibles (fallback sûr): état application')
   })
 })
+
+/**
+ * Défaut mesuré (conv-1405) : les objections du juge sont INTRA-run (`phaseOutputs`), donc perdues
+ * au run suivant de la même conversation, et tout tour antérieur à la fenêtre reprise disparaît
+ * sans trace. Le contexte doit porter les deux — c'est le seul texte qui traverse vers les phases.
+ */
+describe('mémoire inter-runs dans le contexte', () => {
+  it('porte les findings du juge des runs précédents de la conversation', () => {
+    const context = collectOrchestrationContext({
+      task: 'reprendre le travail',
+      conversation: { id: 'conv-1405' },
+      runsPrecedents: [
+        {
+          besoin: 'cadrer la mémoire',
+          status: 'red',
+          verdict: 'REJET',
+          findings: ['F1 aucun test rouge fourni', 'F2 le wiring n’est pas prouvé']
+        }
+      ]
+    })
+    expect(context).toContain('FINDINGS DU JUGE — runs précédents de cette conversation')
+    expect(context).toContain('REJET')
+    expect(context).toContain('F1 aucun test rouge fourni')
+    expect(context).toContain('F2 le wiring n’est pas prouvé')
+  })
+
+  it('porte un résumé d’une ligne des tours antérieurs à la fenêtre', () => {
+    const context = collectOrchestrationContext({
+      task: 'reprendre',
+      conversation: { id: 'conv-1405' },
+      toursAnterieurs: ['U: premier besoin exprimé au tour 1', 'A: diagnostic initial']
+    })
+    expect(context).toContain('Tours antérieurs (résumé — hors fenêtre reprise)')
+    expect(context).toContain('premier besoin exprimé au tour 1')
+  })
+
+  it('n’ajoute aucun bloc quand la conversation n’a ni run passé ni tour hors fenêtre', () => {
+    const context = collectOrchestrationContext({ task: 'x', conversation: { id: 'conv-1' } })
+    expect(context).not.toContain('FINDINGS DU JUGE')
+    expect(context).not.toContain('Tours antérieurs')
+  })
+})

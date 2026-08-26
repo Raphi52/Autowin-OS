@@ -12,6 +12,8 @@
  * d'origine vivait justement dans du code impossible a observer autrement qu'en attendant 600 s.
  */
 
+import { sansSequencesAnsi } from '../shared/ansi'
+
 /** Au-dela, la ligne deformerait le fil ; elle doit rester une ligne, pas un paragraphe. */
 const LARGEUR_MAX = 140
 
@@ -32,7 +34,16 @@ export function dureeCourte(ms: number): string {
  * etats concatenes — « Tests 10/900Tests 411/900Tests 412/900 », illisible.
  */
 function derniereLigneUtile(sortie: string): string | undefined {
-  const lignes = sortie
+  /*
+   * DEPOUILLER D'ABORD, MESURER ENSUITE.
+   *
+   * DEFAUT VECU le 2026-08-25 (conv-1404) : le fil affichait « 9 min 27 s · <ESC>[33m<ESC>[2m … ».
+   * Deux degats et non un : les codes salissent la ligne, ET ils sont COMPTES dans la largeur max,
+   * donc le texte utile etait coupe bien avant sa vraie longueur. Depouiller avant le decoupage
+   * traite les deux d'un coup — et une ligne qui ne contenait QUE des codes redevient vide, donc
+   * elle ne peut plus voler la place de la derniere ligne reellement utile.
+   */
+  const lignes = sansSequencesAnsi(sortie)
     .split(/[\r\n]+/)
     .map((ligne) => ligne.trim())
     .filter((ligne) => ligne.length > 0)
@@ -48,9 +59,22 @@ function derniereLigneUtile(sortie: string): string | undefined {
 export function battementDeVerification(sortie: string, ecouleMs: number): string {
   const duree = dureeCourte(ecouleMs)
   const ligne = derniereLigneUtile(sortie) ?? 'démarrage…'
-  const battement = `${duree} · ${ligne}`
-  if (battement.length <= LARGEUR_MAX) return battement
-  return `${battement.slice(0, LARGEUR_MAX - 1)}…`
+  return bornerLigneDeVie(`${duree} · ${ligne}`)
+}
+
+/**
+ * LA BORNE COMMUNE A TOUTE LIGNE DE VIE, quelle que soit sa source.
+ *
+ * Elle existe parce qu'il y en a desormais DEUX : la sortie d'une verification, et la note
+ * d'activite d'une orchestration (« Bash en cours — 2 min 30 s »). Les deux atterrissent au meme
+ * endroit du fil et doivent donc obeir aux memes regles — depouiller les codes de terminal AVANT de
+ * mesurer la largeur, puis tenir sur une ligne. Deux bornes divergentes auraient produit deux
+ * apparences pour un meme role.
+ */
+export function bornerLigneDeVie(texte: string): string {
+  const propre = sansSequencesAnsi(texte).replace(/\s+/g, ' ').trim()
+  if (propre.length <= LARGEUR_MAX) return propre
+  return `${propre.slice(0, LARGEUR_MAX - 1)}…`
 }
 
 /**

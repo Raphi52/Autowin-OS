@@ -90,16 +90,16 @@ describe('selecteur orchestrateur Chat', () => {
       onSelect
     })
     expect(dom.querySelector('summary')?.textContent).toContain('GPT-5.6 TerraÉlevé')
+    // Les efforts vivent désormais DANS la popup, en matrice par provider : aucun sous-menu.
+    expect(dom.querySelector('.model-effort-menu')).toBeNull()
+    const crans = [...dom.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+    expect(crans.map((item) => item.querySelector('em')?.textContent)).toEqual([
+      'Léger',
+      'Élevé',
+      'Ultra'
+    ])
     await act(async () => {
-      dom.querySelector<HTMLButtonElement>('[role="option"]')?.click()
-    })
-    expect(
-      [...dom.querySelectorAll('.model-effort-menu button')].map((item) => item.textContent)
-    ).toEqual(['low', 'high✓', 'ultra'])
-    await act(async () => {
-      ;[...dom.querySelectorAll<HTMLButtonElement>('.model-effort-menu button')]
-        .find((item) => item.textContent === 'ultra')
-        ?.click()
+      crans.find((item) => item.querySelector('em')?.textContent === 'Ultra')?.click()
     })
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -127,11 +127,8 @@ describe('selecteur orchestrateur Chat', () => {
     )!
     selector.setAttribute('open', '')
 
-    await act(async () => {
-      selector.querySelector<HTMLButtonElement>('[role="option"]')?.click()
-    })
     expect(selector.open).toBe(true)
-    expect(dom.querySelector('.model-effort-menu')).not.toBeNull()
+    expect(selector.querySelector('[data-testid="effort-matrix"]')).not.toBeNull()
 
     await act(async () => {
       document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -291,12 +288,12 @@ describe('selecteur orchestrateur Chat', () => {
       { id: 'm6', provider: 'gateway', model: 'auto/claude-opus', label: 'Auto Claude Opus' }
     ])
     const anthropic = result.groups.find((group) => group.key === 'anthropic')
-    // Fable en tête ; no-think masqué ; Opus décroissant puis Sonnet ; auto/claude ABSENT d’ici.
+    // Fable en tête ; no-think masqué ; auto/claude ABSENT d’ici.
+    // Seule la DERNIÈRE version de chaque famille est proposée (demande utilisateur 2026-08-25) :
+    // Opus 4.7 et Opus 4.5 sont désormais couverts par Opus 4.8 ; Sonnet, autre famille, reste.
     expect(anthropic?.options.map((option) => option.model)).toEqual([
       'cc/claude-fable-5',
       'cc/claude-opus-4-8',
-      'cc/claude-opus-4-7',
-      'cc/claude-opus-4-5-20251101',
       'cc/claude-sonnet-4-6'
     ])
     // La route auto/claude-opus vit dans la catégorie « Sélection automatique ».

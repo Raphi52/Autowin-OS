@@ -36,16 +36,26 @@ describe('verifyTimeoutOutcome — le plafond rend ce qui a déjà été écrit'
     expect(res.exitCode).toBeNull()
   })
 
-  it('sans sortie partielle, le message du plafond est rendu seul', () => {
+  /*
+   * L'ASSERTION D'ORIGINE COMPTAIT LES LIGNES — une approximation de l'intention, qui a cesse de
+   * tenir le 2026-08-25 quand le message de plafond a gagne sa consigne de sortie de secours
+   * (conv-1405 : « rien n'est prouve » sterile faisait relancer la meme commande). L'intention n'a
+   * pas bouge d'un pouce : PAS de section « ce que la suite avait ecrit » quand il n'y a rien a y
+   * mettre. On l'exige donc directement, au lieu de la deduire d'un nombre de lignes.
+   */
+  it('sans sortie partielle, aucune section « ce qui a été écrit » n’est fabriquée', () => {
     const res = verifyTimeoutOutcome('npm run test:unit', VERIFY_TIMEOUT_MS)
 
     expect(res.output).toContain('plafond')
-    expect(res.output.trim().split('\n')).toHaveLength(1)
+    expect(res.output).not.toContain('avait écrit')
   })
 
   it('une sortie partielle vide ou blanche ne fabrique pas de section creuse', () => {
-    const res = verifyTimeoutOutcome('npm run test:unit', VERIFY_TIMEOUT_MS, '   \n  \n')
+    const blanc = ['   ', '  ', ''].join(String.fromCharCode(10))
+    const res = verifyTimeoutOutcome('npm run test:unit', VERIFY_TIMEOUT_MS, blanc)
 
-    expect(res.output.trim().split('\n')).toHaveLength(1)
+    expect(res.output).not.toContain('avait écrit')
+    // Et rien de plus que le message de plafond lui-meme : aucun blanc traine en queue.
+    expect(res.output).toBe(verifyTimeoutOutcome('npm run test:unit', VERIFY_TIMEOUT_MS).output)
   })
 })

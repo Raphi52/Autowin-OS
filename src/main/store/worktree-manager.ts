@@ -1080,6 +1080,49 @@ export class WorktreeManager {
       }
 
       this.tryGitFn(this.baseRepo, ['worktree', 'repair', quarantinedPath])
+      /*
+       * UN BUREAU PUBLIE NE REDEVIENT PAS UN BUREAU EN ATTENTE.
+       *
+       * DEFAUT MESURE le 2026-08-25 sur cinq bureaux. La publication qui aboutit SUPPRIME la branche
+       * de recuperation du bureau : cette disparition est son signal de succes. Mais le dossier de
+       * quarantaine peut survivre au nettoyage (un verrou de fichier suffit) et ce balayage le
+       * remettait alors en place comme un bureau ACTIF, sans jamais demander si sa branche existait
+       * encore. Son HEAD ne resolvait plus, donc `git status` rendait le depot ENTIER en nouveau
+       * (1564 a 1572 fichiers dans les manifestes), le bureau repassait « en attente de
+       * publication », et le repechage automatique le reprenait trois fois en restaurant une copie a
+       * chaque passage — la famille des « 682 Mo de copies recreees » du 2026-08-24.
+       *
+       * CE QUI EST DECIDE ICI, et la nuance est tout le sujet : une branche disparue ne PROUVE PAS
+       * qu'un travail est publie (une ref peut se perdre autrement). On exige donc une preuve
+       * POSITIVE — le dernier commit du bureau, lu dans son propre reflog, doit se retrouver dans la
+       * base. Sans cette preuve, le bureau est CONSERVE et son motif est nomme : ce mecanisme existe
+       * pour ne rien perdre, et « ne pas restaurer » ne doit jamais glisser vers « supprimer ».
+       */
+      const refManquante = this.refManquanteDeHead(quarantinedPath)
+      if (refManquante) {
+        const sha = this.shaDuReflog(quarantinedPath)
+        const publie =
+          sha !== undefined &&
+          this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', sha, 'HEAD']).code === 0
+        if (!publie) {
+          result.blocked.push({
+            path: quarantinedPath,
+            detail: `Bureau conservé : ${refManquante} a disparu et son travail n’est pas prouvé publié.`
+          })
+          continue
+        }
+        const menage = this.cleanupWorktree(quarantinedPath)
+        if (menage.ok) result.cleaned += 1
+        else {
+          result.blocked.push({
+            path: quarantinedPath,
+            detail:
+              menage.detail ??
+              'Bureau publié, mais sa copie de quarantaine n’a pas pu être supprimée.'
+          })
+        }
+        continue
+      }
       const ownershipIssue = this.ownershipIssue(quarantinedPath)
       if (ownershipIssue) {
         result.blocked.push({ path: quarantinedPath, detail: ownershipIssue })
@@ -3550,6 +3593,57 @@ exit 0
     }
   }
 
+  /**
+   * LA REF QUE HEAD DESIGNE ET QUI N'EXISTE PLUS — sinon `undefined`.
+   *
+   * Quand la publication d'un bureau aboutit, sa branche de recuperation est SUPPRIMEE : cette
+   * disparition EST le signal du succes. Le dossier, lui, peut survivre (un verrou de fichier
+   * suffit sous Windows). Son HEAD designe alors une ref absente, et tout ce qui le relit ensuite
+   * lit un bureau sans base : `git status` rend le depot ENTIER en nouveau.
+   *
+   * `symbolic-ref` continue de repondre quand `rev-parse HEAD` echoue — c'est ce qui permet de
+   * distinguer « HEAD casse » d'un simple bureau vide.
+   */
+  private refManquanteDeHead(path: string): string | undefined {
+    if (this.tryGitFn(path, ['rev-parse', '--verify', 'HEAD']).code === 0) return undefined
+    const ref = this.tryGitFn(path, ['symbolic-ref', 'HEAD'])
+    if (ref.code !== 0) return undefined
+    const nom = ref.stdout.trim()
+    return nom.length > 0 ? nom : undefined
+  }
+
+  /**
+   * LE DERNIER COMMIT D'UN BUREAU DONT HEAD NE RESOUT PLUS, lu dans son propre reflog.
+   *
+   * C'est la SEULE preuve positive disponible pour decider si son travail est deja dans la base. On
+   * ne se contente pas de l'absence de branche : une ref peut se perdre autrement, et « branche
+   * disparue » ne prouve pas « travail publie ». Sans cette lecture, un correctif qui range les
+   * bureaux publies rangerait aussi des bureaux irremplacables.
+   *
+   * Le fichier de reflog vit dans le repertoire git PROPRE au bureau, que son `.git` designe.
+   */
+  private shaDuReflog(path: string): string | undefined {
+    try {
+      const pointeur = readFileSync(join(path, '.git'), 'utf8').trim()
+      const prefixe = 'gitdir:'
+      if (!pointeur.startsWith(prefixe)) return undefined
+      const gitdir = pointeur.slice(prefixe.length).trim()
+      // Decoupage par le CODE du saut de ligne : un caractere de controle ecrit a la main dans un
+      // patch a deja fige un defaut dans ce depot (voir `SAUT`, `ANTISLASH`). Le `trim` par ligne
+      // absorbe le retour chariot de Windows.
+      const lignes = readFileSync(join(gitdir, 'logs', 'HEAD'), 'utf8')
+        .split(String.fromCharCode(10))
+        .map((ligne) => ligne.trim())
+        .filter((ligne) => ligne.length > 0)
+      const derniere = lignes[lignes.length - 1]
+      if (!derniere) return undefined
+      const apres = derniere.split(' ')[1]
+      return apres && /^[0-9a-f]{40}$/.test(apres) ? apres : undefined
+    } catch {
+      return undefined
+    }
+  }
+
   private cleanupWorktree(path: string, force = true): { ok: boolean; detail?: string } {
     /*
      * On retire D'ABORD ce que NOUS avons ajouté : le lien vers les dépendances.
@@ -3926,6 +4020,19 @@ exit 0
   changedFiles(agentId: string): string[] {
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return []
+    /*
+     * UN HEAD ILLISIBLE NE VEUT PAS DIRE « TOUT A CHANGE ».
+     *
+     * MESURE le 2026-08-25 : cinq bureaux dont la branche avait disparu se sont retrouves porteurs de
+     * 1564 a 1572 fichiers « modifies » — le depot entier. `git status --untracked-files=all` sans
+     * HEAD resoluble n'a aucune base de comparaison, donc il rend TOUT en nouveau. Ce lot fantome
+     * repassait ensuite le bureau en attente de publication, et le repechage automatique le
+     * reprenait trois fois.
+     *
+     * Rendre une liste VIDE est le seul verdict honnete : ce bureau n'a rien de publiable qu'on
+     * puisse nommer. L'etat anormal, lui, n'est pas tu — `reconcileResidues` le NOMME.
+     */
+    if (this.refManquanteDeHead(path)) return []
     return [...new Set([...this.workingTreeFiles(path), ...this.preservedIgnoredFiles(path)])]
   }
 

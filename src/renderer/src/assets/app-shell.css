@@ -226,7 +226,7 @@
    utilisateur d'une version empaquetee. Le texte peut etre long (il NOMME un fichier) : on le laisse
    revenir a la ligne plutot que de le tronquer, un avertissement coupe ne dit plus ou chercher. */
 .rail-foot--perime {
-  color: #d4a94f;
+  color: var(--gold-doux);
   line-height: 1.35;
   padding-top: var(--s1);
   white-space: normal;

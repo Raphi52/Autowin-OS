@@ -99,9 +99,25 @@ interface RegimePreset {
   decomposition: DecompositionPolicy
 }
 
+/*
+ * PLAFONDS D'APPELS — ils comptent des ETAPES, jamais de la depense.
+ *
+ * Releves le 2026-08-25 (4/12/24 -> 10/40/80) apres DEUX tours tues dans la meme journee :
+ * conv-1397 coupe sur « Budget d'appels provider atteint (6) » apres cinq editions reussies, juste
+ * avant sa verification ; conv-1404 coupe sur « (12) » apres 3 reussites et 8 echecs. Les deux ont
+ * rendu la pire issue possible : paye, et rien de fini.
+ *
+ * Ces valeurs datent de l'epoque ou un tour valait UN appel provider. Un tour agentique en consomme
+ * un PAR ETAPE — lire, editer, verifier, corriger — donc le compteur mesurait des COUPS, un mauvais
+ * proxy de la depense.
+ *
+ * LES FREINS REELS N'ONT PAS BOUGE : `maxFreshTokens`, `maxTotalTokens` et `maxUsd` bornent toujours
+ * exactement ce qu'ils bornaient. Et `stricter` continue de faire gagner tout cap pose a la main :
+ * relever un prereglage n'ouvre aucune porte a un budget explicite.
+ */
 const PRESETS: Record<TaskRegime, RegimePreset> = {
   trivial: {
-    maxProviderCalls: 4,
+    maxProviderCalls: 10,
     maxFreshTokens: 250_000,
     maxTotalTokens: 2_000_000,
     maxAgents: 2,
@@ -111,7 +127,7 @@ const PRESETS: Record<TaskRegime, RegimePreset> = {
     decomposition: { mode: 'disabled', maxNodes: 1 }
   },
   standard: {
-    maxProviderCalls: 12,
+    maxProviderCalls: 40,
     maxFreshTokens: 750_000,
     maxTotalTokens: 6_000_000,
     maxAgents: 5,
@@ -122,7 +138,7 @@ const PRESETS: Record<TaskRegime, RegimePreset> = {
     decomposition: { mode: 'disabled', maxNodes: 1 }
   },
   critical: {
-    maxProviderCalls: 24,
+    maxProviderCalls: 80,
     maxFreshTokens: 2_000_000,
     maxTotalTokens: 15_000_000,
     maxAgents: 10,

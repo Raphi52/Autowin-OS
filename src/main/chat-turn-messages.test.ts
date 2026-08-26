@@ -153,7 +153,12 @@ describe('buildTurnMessages', () => {
     })
     expect(entries).toEqual([
       `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
-      "Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).",
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est "
+        + "PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que "
+        + "tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle "
+        + "conversation_search sur les mots de la demande, puis conversation_read sur "
+        + "l'identifiant rendu. L'identifiant de la conversation courante est "
+        + "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
       'UTILISATEUR: dernier message'
     ])
   })
@@ -216,7 +221,12 @@ describe('buildTurnMessages', () => {
     })
     expect(entries).toEqual([
       `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
-      "Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).",
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est "
+        + "PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que "
+        + "tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle "
+        + "conversation_search sur les mots de la demande, puis conversation_read sur "
+        + "l'identifiant rendu. L'identifiant de la conversation courante est "
+        + "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
       'UTILISATEUR: ok'
     ])
   })
@@ -232,7 +242,12 @@ describe('buildTurnMessages', () => {
     // 'UTILISATEUR: ' + '' a un contenu non vide (le prefixe) : PAS filtre.
     expect(entries).toEqual([
       `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
-      "Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).",
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est "
+        + "PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que "
+        + "tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle "
+        + "conversation_search sur les mots de la demande, puis conversation_read sur "
+        + "l'identifiant rendu. L'identifiant de la conversation courante est "
+        + "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
       'UTILISATEUR: '
     ])
   })
@@ -248,7 +263,12 @@ describe('buildTurnMessages', () => {
     })
     expect(entries).toEqual([
       `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
-      "Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).",
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est "
+        + "PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que "
+        + "tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle "
+        + "conversation_search sur les mots de la demande, puis conversation_read sur "
+        + "l'identifiant rendu. L'identifiant de la conversation courante est "
+        + "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
       'UTILISATEUR: ok'
     ])
   })

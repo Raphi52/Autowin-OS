@@ -16,7 +16,7 @@
 .jpan-kicker {
   font: 600 10.5px Consolas, monospace;
   letter-spacing: 1.8px;
-  color: #d4a94f;
+  color: var(--gold-doux);
   text-transform: uppercase;
 }
 .jpan-compte {
@@ -37,7 +37,7 @@
 .jpan-deplier {
   background: none;
   border: none;
-  color: #d4a94f;
+  color: var(--gold-doux);
   cursor: pointer;
   font-size: 12px;
   padding: 0 2px;
@@ -65,7 +65,7 @@
 }
 .jpan-score {
   font: 700 13px Consolas, monospace;
-  color: #d4a94f;
+  color: var(--gold-doux);
   min-width: 30px;
   text-align: right;
 }
@@ -94,7 +94,7 @@
 .jpan-verdict b {
   display: block;
   font: 600 10.5px 'Segoe UI', sans-serif;
-  color: #d4a94f;
+  color: var(--gold-doux);
   text-transform: uppercase;
   letter-spacing: 0.8px;
   margin-bottom: 2px;

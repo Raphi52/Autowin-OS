@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
+import { sansSequencesAnsi } from '../shared/ansi'
 
 /**
  * COMMANDE DE VERIFICATION exposee a l'agent — pour qu'il puisse PROUVER au lieu de promettre.
@@ -97,7 +98,20 @@ export function verifyTimeoutOutcome(
   ms: number,
   partiel: string = ''
 ): VerifyOutcome {
-  const plafond = `vérification arrêtée après ${Math.round(ms / 1000)} s (plafond) — rien n'est prouvé, la suite n'a pas rendu son verdict`
+  /*
+   * UN PLAFOND DOIT DIRE QUOI FAIRE.
+   *
+   * « rien n'est prouve » est exact mais sterile : l'agent relance la MEME commande et reperd le
+   * meme temps. Mesure du 2026-08-25 : trois occurrences en une journee (conv-1400, conv-1404,
+   * conv-1405), la meme commande relancee a chaque fois. Un message qui ne nomme aucune issue
+   * fabrique la boucle qu'il constate.
+   */
+  const plafond =
+    `vérification arrêtée après ${Math.round(ms / 1000)} s (plafond) — rien n'est prouvé, ` +
+    `la suite n'a pas rendu son verdict.${SAUT}` +
+    `Ne relance pas la même commande : donne-lui une cible (« verify <fichier> » rejoue les tests ` +
+    `qui importent ce fichier, mesuré 20 à 70 s), ou relève le plafond via ` +
+    `AUTOWIN_VERIFY_TIMEOUT_MS si la suite entière est vraiment ce qu'il faut prouver.`
   const acquis = capVerifyOutput(partiel)
   return {
     ok: false,
@@ -204,6 +218,33 @@ export function decideRelatedVerify(
   return { allowed: true, argv, cwd, command: argv.join(' ') }
 }
 
+/**
+ * LA PORTEE DERIVEE DE CE QUI A CHANGE — ou rien, et alors la suite complete reprend la main.
+ *
+ * `vitest related` raisonne sur un graphe d'IMPORTS : seul un fichier de code y a une place. Un
+ * dossier non suivi (`node_modules/`, `.autowin-data/`), un `.md`, un `.json` de configuration n'y
+ * entrent pas — les router vers la portee fabriquerait un vert qui n'a rien mesure.
+ *
+ * ATTRAPE PAR SON PROPRE TEST DE RETROCOMPAT le 2026-08-25 : sur un arbre cense etre propre, le
+ * `node_modules` non suivi devenait la cible et la commande jouee etait
+ * `vitest related node_modules/ --run`. Un vert vide est pire qu'une suite lente.
+ *
+ * REGLE STRICTE, et c'est le point : la portee n'est derivable que si TOUT ce qui a change est du
+ * code. Des qu'un seul chemin echappe au graphe d'imports, la portee ne couvre plus ce qui a bouge —
+ * et une portee incomplete presentee comme un verdict est exactement le faux vert qu'on evite.
+ * Meme regle que `decideRelatedVerify`, qui refuse deja un lot de chemins partiellement exploitable.
+ */
+const EXTENSIONS_DE_CODE = /[.](?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/
+
+export function porteeDerivableDesChangements(
+  chemins: readonly string[]
+): readonly string[] | undefined {
+  if (chemins.length === 0) return undefined
+  const normalises = chemins.map((chemin) => chemin.split(ANTISLASH).join('/'))
+  if (!normalises.every((chemin) => EXTENSIONS_DE_CODE.test(chemin))) return undefined
+  return normalises
+}
+
 /** Sortie d'une verification, telle qu'elle est rendue a l'agent. */
 export interface VerifyOutcome {
   ok: boolean
@@ -233,19 +274,8 @@ const SAUT = String.fromCharCode(10)
 const LIGNES_DE_VERDICT =
   /^\s*(?:FAIL|×|✗|✕|Test Files|Tests\s|Duration|error TS\d+|Error:|AssertionError|exit code)/
 
-/**
- * Retire les sequences ANSI d'une ligne avant de la comparer.
- *
- * Revele par la sortie REELLE de l'app le 2026-08-19 : vitest prefixe ses lignes de `ESC[32m`,
- * donc un motif ancre sur le debut de ligne ne matchait JAMAIS et le verdict etait perdu malgre le
- * correctif. Le premier test utilisait du texte propre — un fixture qui ne ressemblait pas a la
- * production, donc un vert qui ne prouvait rien.
- */
-// eslint-disable-next-line no-control-regex -- matcher l'echappement ANSI est precisement l'objet : la regle vise un caractere de controle ACCIDENTEL.
-const SEQUENCE_ANSI = /\x1b\[[0-9;]*m/g
-
 function sansCouleur(ligne: string): string {
-  return ligne.replace(SEQUENCE_ANSI, '')
+  return sansSequencesAnsi(ligne)
 }
 
 function verdictDe(texte: string, budget: number): string {
@@ -278,7 +308,16 @@ function verdictDe(texte: string, budget: number): string {
  * le plafond : la valeur rendue ne le depasse jamais.
  */
 export function capVerifyOutput(raw: string, cap: number = VERIFY_OUTPUT_CAP): string {
-  const text = raw.trim()
+  /*
+   * DEPOUILLER A L'ENTREE, une fois pour toutes.
+   *
+   * DEFAUT VECU le 2026-08-25 (conv-1404) : le panneau de `verify` affichait des lignes entieres de
+   * codes de couleur. `sansCouleur` existait — mais elle ne servait qu'a TESTER la ligne contre le
+   * motif de verdict : la ligne RETENUE gardait ses couleurs, et la queue aussi. Depouiller ici, au
+   * seul entonnoir de ce qui est rendu, rend le geste inratable ; et le plafond se mesure enfin sur
+   * du texte VISIBLE, au lieu de laisser les octets d'echappement manger le budget.
+   */
+  const text = sansSequencesAnsi(raw).trim()
   if (text.length <= cap) return text
   const omitted = text.length - cap
   const marker = `…[tronqué — ${omitted} caractères omis]` + SAUT
@@ -322,9 +361,15 @@ export function porteeDuVert(fichiersNonCommites: readonly string[]): string | u
   )
 }
 
-/** Le verdict d'une cible proposee par le modele : acceptee, ou refusee AVEC son motif. */
+/**
+ * Le verdict d'une cible proposee par le modele : acceptee, ou refusee AVEC son motif.
+ *
+ * `parPortee` distingue les deux façons de verifier une cible ACCEPTEE :
+ *   - absent  -> la cible EST un test : on le joue directement ;
+ *   - `true`  -> la cible est une SOURCE : on joue les tests qui l'IMPORTENT (`vitest related`).
+ */
 export type VerdictDeCible =
-  | { ok: true; chemin: string }
+  | { ok: true; chemin: string; parPortee?: true }
   | { ok: false; raison: string }
 
 /**
@@ -381,14 +426,26 @@ export function cibleDeVerification(
   if (segments.includes('.git')) {
     return { ok: false, raison: 'la cible ne peut pas viser le dépôt git lui-même' }
   }
-  if (!MOTIF_FICHIER_DE_TEST.test(normalise)) {
-    return {
-      ok: false,
-      raison: 'la cible doit être un fichier de test (`.test.ts`, `.spec.ts`…) — ce point d’entrée n’exécute pas du code au choix'
-    }
-  }
   if (!existe(join(racine, ...segments))) {
     return { ok: false, raison: `la cible n’existe pas : ${normalise}` }
   }
-  return { ok: true, chemin: segments.join('/') }
+  /*
+   * UNE SOURCE EST ROUTEE, PAS REFUSEE -- corrige le 2026-08-25 apres conv-1404.
+   *
+   * Ce point refusait tout ce qui n'etait pas un fichier de test. Or un agent qui vient d'editer
+   * `chat-pilotage-prompt.ts` demande naturellement a verifier CE fichier : le refus le laissait sans
+   * issue (« la cible doit etre un fichier de test » ne dit pas quoi faire), le run echouait, et son
+   * bureau restait conserve, publication incomplete. Refuser une cible valide faute d'avoir pense a
+   * son cas est un FAUX refus, et il coute un run entier.
+   *
+   * Le mecanisme existait deja : `decideRelatedVerify` joue `vitest related <fichier> --run`, soit
+   * les tests qui IMPORTENT le fichier edite. Il n'y avait donc pas a refuser, mais a ROUTER.
+   *
+   * Les gardes qui PROTEGENT restent intactes : remontee de chemin, chemin absolu, `.git`, joker,
+   * fichier absent. Ce qui s'elargit est le TYPE de fichier, jamais la zone atteignable.
+   */
+  const chemin = segments.join('/')
+  return MOTIF_FICHIER_DE_TEST.test(normalise)
+    ? { ok: true, chemin }
+    : { ok: true, chemin, parPortee: true }
 }

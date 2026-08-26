@@ -81,6 +81,15 @@
           "vitest.config.ts",
           "package.json"
         ]
+      },
+      {
+        "command": "vitest related",
+        "couvreSesArguments": true,
+        "covers": [],
+        "attests": [
+          "vitest.config.ts",
+          "package.json"
+        ]
       }
     ]
   },

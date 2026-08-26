@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { Usage } from './providers/types'
 import type { ExecutionQuote } from './execution-quote'
 import { splitInputTokens } from '../shared/cost-estimate'
+import { refusAvecIssue } from './issue-de-refus'
 
 export type TokenCoverage = 'complete' | 'partial'
 
@@ -365,7 +366,7 @@ export class ExecutionSupervisor {
       runtime.pricedCalls > 0 &&
       runtime.knownCostUsd >= limits.maxUsd
     ) {
-      deny(`Budget USD atteint (${limits.maxUsd} USD)`, false)
+      deny(refusAvecIssue('budget-depense', `${limits.maxUsd} USD`), false)
     }
     // Le NOMBRE d'appels et d'agents est une invariante STRUCTURELLE, pas une limite de dépense :
     // un tour de chat vaut UN appel provider (`maxProviderCalls: 1` posé par os.ts et par le
@@ -373,7 +374,7 @@ export class ExecutionSupervisor {
     // Régression attrapée le 2026-08-12 par `os.chat-supervisor.test.ts` après avoir rangé ces
     // deux compteurs avec les jetons : ce sont les JETONS et l'USD qui tuaient des runs, pas eux.
     if (runtime.startedCalls >= limits.maxProviderCalls) {
-      deny(`Budget d'appels provider atteint (${limits.maxProviderCalls})`)
+      deny(refusAvecIssue('budget-appels', `${limits.maxProviderCalls} appels`))
     }
     if (launchesAgent && runtime.startedAgents >= limits.maxAgents) {
       deny(`Budget d'agents atteint (${limits.maxAgents})`)

@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ModelEffortMatrix, type ModelEffortRow } from './ModelEffortMatrix'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
@@ -197,11 +199,12 @@ describe('ModelEffortMatrix', () => {
       })
     )
 
-    expect(view.querySelector('[data-testid="effort-matrix"]')).toBeNull()
-    const ouvrir = view.querySelector('.model-select-matrix-open') as HTMLButtonElement
-    expect(ouvrir).not.toBeNull()
-    await act(async () => ouvrir.click())
-    const matrice = view.querySelector('[data-testid="effort-matrix"]') as HTMLElement
+    // La matrice est EN LIGNE dans la popup : plus de bouton d'ouverture, plus de modale.
+    expect(view.querySelector('.model-select-matrix-open')).toBeNull()
+    expect(view.querySelector('.effort-matrix-overlay')).toBeNull()
+    const matrice = view.querySelector(
+      '.model-select-menu [data-testid="effort-matrix"]'
+    ) as HTMLElement
     expect(matrice).not.toBeNull()
     expect((matrice.querySelector('.effort-matrix-row') as HTMLElement).dataset.shown).toBe('high')
 
@@ -210,6 +213,100 @@ describe('ModelEffortMatrix', () => {
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'opus', reasoningEffort: 'medium' })
     )
-    expect(view.querySelector('[data-testid="effort-matrix"]')).toBeNull()
+    // en ligne, le clic referme la POPUP hôte (details), la matrice reste dans son menu
+    expect((view.querySelector('details') as HTMLDetailsElement).open).toBe(false)
+  })
+})
+
+describe('ModelEffortMatrix — pastille verte « recommandé »', () => {
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  })
+
+  let root: Root | null = null
+  let host: HTMLDivElement | null = null
+
+  afterEach(async () => {
+    if (root) await act(async () => root?.unmount())
+    host?.remove()
+    root = null
+    host = null
+  })
+
+  const render = async (element: React.JSX.Element): Promise<HTMLDivElement> => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root?.render(element))
+    return host
+  }
+
+  const ligne = (provider: string, model: string, efforts: string[]): ModelEffortRow => ({
+    key: `${provider}:${model}`,
+    label: model,
+    model,
+    option: {
+      provider,
+      model,
+      label: model,
+      reasoningEfforts: efforts,
+      defaultReasoningEffort: 'medium'
+    } as ModelEffortRow['option'],
+    efforts
+  })
+
+  it('marque le cran recommandé, et LUI SEUL', async () => {
+    // Entrée qui ferait échouer ce test si la reco débordait :
+    // `claude-opus-4-5` (voisin de famille) ne doit porter AUCUNE pastille.
+    const view = await render(
+      createElement(ModelEffortMatrix, {
+        rows: [
+          ligne('claude', 'claude-opus-5', ['low', 'medium', 'high']),
+          ligne('claude', 'claude-opus-4-5', ['low', 'medium', 'high']),
+          ligne('codex', 'gpt-5.6-sol', ['low', 'medium', 'high', 'xhigh']),
+          ligne('codex', 'gpt-5.6-terra', ['low', 'medium', 'high', 'xhigh'])
+        ],
+        activeKey: null,
+        onSelect: vi.fn(),
+        onClose: vi.fn()
+      })
+    )
+    const marques = [...view.querySelectorAll('.effort-cran.is-recommended')].map((n) => ({
+      row: (n.closest('.effort-matrix-row') as HTMLElement).dataset.row,
+      effort: (n as HTMLElement).dataset.effort
+    }))
+    expect(marques).toEqual([
+      { row: 'claude:claude-opus-5', effort: 'low' },
+      { row: 'codex:gpt-5.6-sol', effort: 'xhigh' }
+    ])
+  })
+
+  it('REMPLACE le point du cran par la pastille verte, au lieu de la poser a cote', async () => {
+    const view = await render(
+      createElement(ModelEffortMatrix, {
+        rows: [ligne('claude', 'claude-opus-5', ['low', 'medium', 'high'])],
+        activeKey: null,
+        onSelect: vi.fn(),
+        onClose: vi.fn()
+      })
+    )
+    const recommande = view.querySelector('.effort-cran.is-recommended') as HTMLElement
+    expect(recommande).toBeTruthy()
+    // Entree qui ferait echouer ce test si la correction etait fausse : un second marqueur
+    // `.effort-cran-reco` rendu EN PLUS du point `i` (l'etat d'avant) -> 2 pastilles cote a cote.
+    expect(recommande.querySelectorAll('.effort-cran-reco')).toHaveLength(0)
+    expect(recommande.querySelectorAll('i')).toHaveLength(1)
+    // Le cran NON recommande garde son point normal : la correction ne supprime pas les points.
+    const normal = view.querySelector('.effort-cran:not(.is-recommended):not(.is-absent)')!
+    expect(normal.querySelectorAll('i')).toHaveLength(1)
+  })
+
+  it('colore le point du cran recommande via la feuille de style (pas un second element)', () => {
+    const css = readFileSync(
+      resolve(process.cwd(), 'src/renderer/src/components/ChatView.css'),
+      'utf8'
+    )
+    expect(css).toContain('.effort-cran.is-recommended i')
+    expect(css).not.toContain('.effort-cran-reco')
   })
 })

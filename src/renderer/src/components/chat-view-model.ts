@@ -845,6 +845,51 @@ export function modelRecencyKey(model: string): [number, number] {
   return [family, versionScore]
 }
 
+/**
+ * Clé de FAMILLE d'un modèle : son id privé de tout ce qui n'est qu'une version
+ * (numéros, dates, `latest`, `preview`). `claude-opus-4-8` et `claude-opus-4-1` partagent
+ * la même clé ; `claude-sonnet-4-5` et `gpt-5-mini` gardent la leur.
+ */
+export function modelFamilyKey(model: string): string {
+  return model
+    .toLowerCase()
+    .replace(/\d+([._-]\d+)*/g, '-')
+    .replace(/\b(latest|preview|exp|snapshot)\b/g, '-')
+    .replace(/[._\-/\s]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+/**
+ * Ne conserve que la version la PLUS RÉCENTE de chaque famille, par fournisseur.
+ * Le modèle actuellement lié est toujours gardé — sinon le menu perdrait sa propre sélection.
+ */
+export function keepLatestVersionPerFamily(
+  options: OrchestratorModelOption[],
+  current?: { provider: string; model?: string }
+): OrchestratorModelOption[] {
+  const meilleur = new Map<string, OrchestratorModelOption>()
+  for (const option of options) {
+    const cle = `${option.provider}|${modelFamilyKey(option.model)}`
+    const tenant = meilleur.get(cle)
+    if (!tenant) {
+      meilleur.set(cle, option)
+      continue
+    }
+    // Les snapshots datés (`…-4-20250514`) ne sont PAS des versions : une date de 8 chiffres
+    // lue comme un numéro placerait le plus VIEUX modèle en tête. Mesuré sur le catalogue réel.
+    const sansDate = (id: string): string => id.replace(/\d{5,}/g, '')
+    const a = modelRecencyKey(sansDate(option.model))
+    const b = modelRecencyKey(sansDate(tenant.model))
+    if (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])) meilleur.set(cle, option)
+  }
+  const gardés = new Set(meilleur.values())
+  return options.filter(
+    (option) =>
+      gardés.has(option) ||
+      (current?.provider === option.provider && current?.model === option.model)
+  )
+}
+
 /** Seuils de coût-équivalent par tour (dérivés de 78k tours réels : p33/p66). */
 export const COST_EQ_LOW = 18_000
 export const COST_EQ_HIGH = 47_000
@@ -972,7 +1017,11 @@ export function buildOrchestratorModelGroups(
       key,
       label: bucket.label,
       rank: bucket.rank,
-      options: sortOptions(key, bucket.options)
+      // Les routes auto/* ne sont pas des versions : elles ne se réduisent pas.
+      options: sortOptions(
+        key,
+        key === 'auto' ? bucket.options : keepLatestVersionPerFamily(bucket.options, current)
+      )
     }))
     .sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label, 'fr'))
     .map(({ key, label, options }) => ({ key, label, options }))

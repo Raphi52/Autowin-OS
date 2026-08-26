@@ -20,6 +20,19 @@ export interface OrchestrationContextInput {
     /** Fin du fil, dans l'ordre chronologique. Bornée à la lecture, jamais par l'appelant. */
     messages?: Array<{ role: 'user' | 'assistant'; content: string }>
   }
+  /**
+   * Findings du JUGE des runs précédents de la MÊME conversation (le plus récent d'abord).
+   * Le chaînage `phaseOutputs` est intra-run : sans ce champ, une objection de juge meurt avec son
+   * run et le run suivant refait l'erreur. Source : `orchestration-memoire.ts`.
+   */
+  runsPrecedents?: Array<{
+    besoin: string
+    status: string
+    verdict?: string
+    findings: string[]
+  }>
+  /** Une ligne par tour ANTÉRIEUR à la fenêtre reprise en entier — sinon il disparaît sans trace. */
+  toursAnterieurs?: string[]
   app?: { tab: string }
   runs?: Array<{ subject: string; status: string; blocked: boolean }>
   unavailable?: string[]
@@ -46,15 +59,35 @@ export function collectOrchestrationContext(input: OrchestrationContextInput): s
       )
     }
   }
+  if (input.toursAnterieurs?.length) {
+    lines.push(
+      'Tours antérieurs (résumé — hors fenêtre reprise) :',
+      ...input.toursAnterieurs.map((tour) => `  ${tour}`)
+    )
+  }
+  if (input.runsPrecedents?.length) {
+    lines.push(
+      'FINDINGS DU JUGE — runs précédents de cette conversation (objections déjà émises : ne les refais pas, traite-les ou dis pourquoi elles ne s’appliquent plus) :'
+    )
+    for (const run of input.runsPrecedents) {
+      lines.push(
+        `  • run « ${run.besoin} » [${run.status}${run.verdict ? `, verdict ${run.verdict}` : ''}]`,
+        ...run.findings.map((finding) => `     - ${finding}`)
+      )
+    }
+  }
   if (input.app) {
     lines.push(`État application: onglet ${input.app.tab}`)
   }
-  const relevantRuns = (input.runs ?? []).filter((run) => run.blocked || run.status === 'open').slice(0, 8)
+  const relevantRuns = (input.runs ?? [])
+    .filter((run) => run.blocked || run.status === 'open')
+    .slice(0, 8)
   lines.push(
     relevantRuns.length
       ? `Runs en cours/bloqués: ${relevantRuns.map((run) => `${run.subject} (${run.status}${run.blocked ? ', bloqué' : ''})`).join('; ')}`
       : 'Runs en cours/bloqués: aucun observé'
   )
-  if (input.unavailable?.length) lines.push(`Sources indisponibles (fallback sûr): ${input.unavailable.join(', ')}`)
+  if (input.unavailable?.length)
+    lines.push(`Sources indisponibles (fallback sûr): ${input.unavailable.join(', ')}`)
   return lines.join('\n')
 }

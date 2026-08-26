@@ -264,6 +264,16 @@ export interface TrustedLearningOracle {
   covers: string[]
   attestedFiles: string[]
   attestation: string
+  /**
+   * La couverture vient des ARGUMENTS de la commande, pas de `covers`.
+   *
+   * Une seule forme le justifie aujourd'hui : `vitest related <chemins>` joue precisement les tests
+   * qui IMPORTENT les fichiers qu'on lui nomme. Sa couverture est donc PROUVEE par construction --
+   * on confronte ses arguments aux chemins reellement mutes -- au lieu d'etre declaree dans une liste
+   * qu'il faudrait croire. C'est un oracle plus fort que les autres, pas un assouplissement : si UN
+   * SEUL chemin mute manque aux arguments, l'attestation est refusee.
+   */
+  couvreSesArguments?: boolean
 }
 
 /** Résultat final d'un tour, après consommation du stream. */

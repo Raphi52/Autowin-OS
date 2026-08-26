@@ -102,7 +102,7 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #0b0e14;
-  background: linear-gradient(90deg, #d4a94f, #e3ba55);
+  background: linear-gradient(90deg, var(--gold-doux), var(--gold-clair));
   border-radius: 3px;
   padding: 3px 5px;
 }
@@ -135,7 +135,7 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  background: linear-gradient(180deg, #d4a94f, rgba(212, 169, 79, 0.12));
+  background: linear-gradient(180deg, var(--gold-doux), rgba(212, 169, 79, 0.12));
   transform: scaleY(1);
   transform-origin: top;
   opacity: 0.38;
@@ -192,7 +192,7 @@
 .askd-item:hover .askd-tri,
 .askd-item.est-reco .askd-tri,
 .askd-item:focus-within .askd-tri {
-  color: #e3ba55;
+  color: var(--gold-clair);
 }
 /* Invisible mais presente : sans repere, une option sans detail n'aurait pas la meme grille. */
 .askd-tri[aria-hidden='true'] {
@@ -257,7 +257,7 @@
     monospace;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #e3ba55;
+  color: var(--gold-clair);
   margin-left: 8px;
   vertical-align: 1px;
 }
@@ -281,7 +281,7 @@
 .askd-item:hover .askd-touche,
 .askd-item:focus-within .askd-touche,
 .askd-item.est-reco .askd-touche {
-  color: #e3ba55;
+  color: var(--gold-clair);
 }
 .askd-entree {
   font:
@@ -289,7 +289,7 @@
     Consolas,
     monospace;
   letter-spacing: 0.1em;
-  color: #e3ba55;
+  color: var(--gold-clair);
   opacity: 0;
   transition: opacity 0.16s ease-out;
 }
@@ -325,7 +325,7 @@
   line-height: 1.65;
 }
 .askd-q.est-residuel b {
-  color: #d4a94f;
+  color: var(--gold-doux);
 }
 .askd-q.est-residuel p {
   color: #a9b2c4;
@@ -347,7 +347,7 @@
     600 11px/1 ui-monospace,
     Consolas,
     monospace;
-  color: #e3ba55;
+  color: var(--gold-clair);
 }
 
 /* Sous ~420 px le detail passe en une colonne : le libelle court tient, le triplet s'empile. */
@@ -385,7 +385,7 @@
 .askd-coche input {
   /* La case garde son apparence native : un faux carre dessine en CSS ne dit pas son etat aux
      lecteurs d'ecran, et l'accent suffit a l'accorder au theme. */
-  accent-color: #d4a94f;
+  accent-color: var(--gold-doux);
   width: 14px;
   height: 14px;
   margin: 0;
@@ -401,7 +401,7 @@
     monospace;
   letter-spacing: 0.06em;
   color: #0b0e14;
-  background: linear-gradient(90deg, #d4a94f, #e3ba55);
+  background: linear-gradient(90deg, var(--gold-doux), var(--gold-clair));
   border: 0;
   border-radius: 4px;
   padding: 7px 12px;

@@ -15,7 +15,7 @@ import { promptDeLOption, promptDesOptions, type AskDecision, type AskOption } f
  * ETATS       repos : aucune surface. survol : liseré or qui pousse du haut (scaleY 0→1, 160 ms)
  *             + lavis blanc 3 % + touche qui passe en or. focus clavier : idem + filet or interne.
  *             recommandee : liseré permanent a pleine opacite, donc distincte d'un simple survol.
- * TOKENS      or #d4a94f → #e3ba55 · texte #dde3ee · secondaire #a9b2c4 · separateur blanc 7 %
+ * TOKENS      or --gold-doux → --gold-clair · texte #dde3ee · secondaire #a9b2c4 · separateur blanc 7 %
  * GARDE-FOUS  aucun panneau, aucun halo, aucune ombre decorative ; le seul ornement est le filet
  *             or et il est fonctionnel. Moins de deux reponses = pas de bloc (un bouton unique
  *             ressemblerait a une validation) — garde anterieure, conservee dans le parseur.

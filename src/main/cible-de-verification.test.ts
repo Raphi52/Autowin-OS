@@ -85,10 +85,25 @@ describe('la cible d’une vérification ciblée', () => {
     expect(cibleDeVerification('.git/config.test.ts', racine).ok).toBe(false)
   })
 
-  it('REFUSE un fichier qui n’est pas un test — ce point d’entrée n’exécute pas du code au choix', () => {
+  it('ACCEPTE un fichier source, en le marquant à vérifier PAR PORTÉE', () => {
+    /*
+     * CETTE ASSERTION DISAIT L'INVERSE, et elle encodait mon erreur.
+     *
+     * Elle exigeait le refus de tout fichier non-test. Vécu le 2026-08-25 sur conv-1404 : un agent
+     * qui venait d'éditer un fichier source a demandé à le vérifier, s'est fait refuser, et le run a
+     * échoué en laissant son bureau conservé. Refuser le cas le plus naturel — vérifier ce qu'on
+     * vient de changer — était un faux refus.
+     *
+     * La bonne réponse était de ROUTER vers `vitest related`, qui existait déjà. Les gardes qui
+     * protègent (remontée, absolu, `.git`, joker, absent) sont testées à part et restent des refus.
+     */
     const racine = bac()
 
-    expect(cibleDeVerification('src/main/chose.ts', racine).ok).toBe(false)
+    expect(cibleDeVerification('src/main/chose.ts', racine)).toEqual({
+      ok: true,
+      chemin: 'src/main/chose.ts',
+      parPortee: true
+    })
   })
 
   it('REFUSE un fichier absent, au lieu de lancer une suite vide qui rendrait « vert »', () => {
@@ -110,7 +125,7 @@ describe('la cible d’une vérification ciblée', () => {
     // diagnostic statique erroné.
     const racine = bac()
 
-    for (const mauvais of ['../voisin/secret.test.ts', 'src/main/chose.ts', 'src/main/absent.test.ts']) {
+    for (const mauvais of ['../voisin/secret.test.ts', 'C:/Windows/x.ts', 'src/main/absent.test.ts']) {
       const verdict = cibleDeVerification(mauvais, racine)
       expect(verdict.ok).toBe(false)
       if (!verdict.ok) expect(verdict.raison.length).toBeGreaterThan(10)
@@ -144,6 +159,69 @@ describe('le chat peut réellement nommer une cible', () => {
   })
 
   it('l’argv est construit ICI, argument par argument — jamais une chaîne interpolée', () => {
+    expect(source).toContain("argv = [...argv, '--', verdict.chemin]")
+  })
+})
+
+/**
+ * UN FICHIER SOURCE EST UNE CIBLE LÉGITIME — vécu le 2026-08-25 sur conv-1404.
+ *
+ * Un agent venait d'éditer `chat-pilotage-prompt.ts` et a demandé à vérifier CE fichier. Mon garde
+ * l'a refusé : « la cible doit être un fichier de test ». C'était le cas le plus naturel qui soit —
+ * on vérifie ce qu'on vient de changer — et le refus ne disait pas quoi faire à la place. Le run a
+ * donc échoué, et son bureau `edit_file` est resté conservé, publication incomplète.
+ *
+ * Le mécanisme manquant existait DÉJÀ : `decideRelatedVerify` lance `vitest related <fichier> --run`,
+ * c'est-à-dire les tests qui IMPORTENT le fichier édité. Mon garde n'avait pas à refuser, il avait à
+ * ROUTER. Refuser une cible valide parce qu'on n'a pas pensé à son cas est un faux refus, et un faux
+ * refus coûte un run entier.
+ */
+describe('une cible source est routée, pas refusée', () => {
+  it('accepte un fichier SOURCE du dépôt, et le dit routable', () => {
+    const racine = bac()
+
+    expect(cibleDeVerification('src/main/chose.ts', racine)).toEqual({
+      ok: true,
+      chemin: 'src/main/chose.ts',
+      parPortee: true
+    })
+  })
+
+  it('un fichier de TEST reste joué directement, sans passer par la portée', () => {
+    const racine = bac()
+
+    expect(cibleDeVerification('src/main/chose.test.ts', racine)).toEqual({
+      ok: true,
+      chemin: 'src/main/chose.test.ts'
+    })
+  })
+
+  it('les refus qui PROTÈGENT restent des refus', () => {
+    // Élargir aux sources ne doit pas ouvrir la porte à autre chose : ce sont les gardes qui
+    // empêchent de désigner n'importe quoi sur le disque.
+    const racine = bac()
+
+    expect(cibleDeVerification('../voisin/secret.test.ts', racine).ok).toBe(false)
+    expect(cibleDeVerification('C:/Windows/x.ts', racine).ok).toBe(false)
+    expect(cibleDeVerification('.git/config', racine).ok).toBe(false)
+    expect(cibleDeVerification('src/**/*.ts', racine).ok).toBe(false)
+    expect(cibleDeVerification('src/main/jamais-ecrit.ts', racine).ok).toBe(false)
+  })
+})
+
+describe('le routage est réellement branché', () => {
+  const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+
+  it('une cible marquée `parPortee` passe par la vérification de portée', () => {
+    expect(source).toMatch(/verdict\.parPortee[\s\S]{0,400}?runRelatedVerifyAt\(decision\.cwd, \[verdict\.chemin\]\)/)
+  })
+
+  it('une portée indéterminable retombe sur la suite, elle ne rend pas un refus', () => {
+    // Un refus ici recréerait le faux refus de conv-1404 par une autre porte.
+    expect(source).toMatch(/if \(parPortee\.allowed\) return parPortee/)
+  })
+
+  it('un fichier de test continue de se jouer directement', () => {
     expect(source).toContain("argv = [...argv, '--', verdict.chemin]")
   })
 })

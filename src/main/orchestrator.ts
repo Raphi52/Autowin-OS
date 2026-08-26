@@ -113,6 +113,7 @@ import {
 } from './route-drift'
 import {
   estJugeTerminal,
+  noeudApprentissageApresJuge,
   initialBudget,
   nextNode,
   readModelChoice,
@@ -540,6 +541,8 @@ export interface OrchestrationResult {
     agentToken?: string
     executionEvidence?: ExecutionEvidence[]
   }[]
+  /** Verdict terminal du juge, tel qu'écrit — annexé au RUN.md pour la mémoire inter-runs. */
+  judgeText?: string
   /** Attestation locale émise uniquement depuis le retour d'un rôle judge distinct de l'auteur. */
   learningAttestations?: IndependentLearningAttestation[]
   /** Requête envoyée au Brain (RAG 1×/run) — pour la traçabilité Observatory. */
@@ -3338,10 +3341,15 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const scopedBrain = scopeBrainRetrieval(brain, brainCorpus)
     const brainContext = scopedBrain.context
     /**
-     * SKILL `load` INTÉGRÉE AU WORKFLOW (demande utilisateur du 14/08) : en plus de la récupération
-     * par tâche ci-dessus, l'EMPREINTE DURABLE du dépôt (écrite par `/save` : ce qu'il est, ce
+     * SKILL `think` INTÉGRÉE AU WORKFLOW (demande utilisateur du 14/08) : en plus de la récupération
+     * par tâche ci-dessus, l'EMPREINTE DURABLE du dépôt (écrite par `/learn` : ce qu'il est, ce
      * qu'il fait, architecture, décisions) est chargée à CHAQUE run, et l'action est VISIBLE comme
-     * step dans le fil de sous-agents — plus un geste implicite. Le load ne bloque jamais un run.
+     * step dans le fil de sous-agents — plus un geste implicite. Elle ne bloque jamais un run.
+     *
+     * LES NOMS ÉTAIENT MORTS, signalé le 2026-08-25 : le fil affichait « load » et le message
+     * renvoyait vers une commande `save`, alors que ni `load` ni `save` n'existent dans `skills/` — seules
+     * `think` et `learn` sont sur disque. Un nom qui désigne une commande supprimée est un mensonge
+     * qui ne se voit qu'à l'usage ; `etape-think.test.ts` relie désormais ces noms au disque.
      */
     let empreinteDepot = ''
     if (brainCorpus?.length !== 0) {
@@ -3356,13 +3364,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       }
       push({
         step: 'exec',
-        role: 'load',
+        role: 'think',
         provider: 'brain',
         text: empreinteDepot
           ? `Empreinte du dépôt chargée (${empreinteDepot.length} caractères) — injectée en tête de contexte des phases.`
-          : 'Aucune empreinte de dépôt dans le Brain — /save en fin de run l’écrira pour les prochains.',
+          : 'Aucune empreinte de dépôt dans le Brain — /learn en fin de run l’écrira pour les prochains.',
         status: 'completed',
-        detail: empreinteDepot ? 'load : empreinte chargée' : 'load : aucune empreinte'
+        detail: empreinteDepot ? 'think : empreinte chargée' : 'think : aucune empreinte'
       })
     }
     const memoryEcho = sessionMemoryBlock(
@@ -4913,7 +4921,45 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       valid = r.valid
       gate = r.gate
       learningAttestations = r.learningAttestations
-      if (!gate.blocked) break
+      if (!gate.blocked) {
+        /*
+         * CAPITALISATION APRES LE GATE — jamais avant, et seulement sur un verdict qui PASSE.
+         *
+         * `learn` ne peut pas etre un noeud de la marche : un juge joue par le marcheur PUIS par le
+         * gate final produit deux appels identiques (conv-1071), et un juge non terminal fait
+         * consommer au marcheur le budget de retour que la boucle de reparation relit ensuite
+         * (mesure du 2026-08-25 : `correctif` a 3 passages build la ou le profil en annonce 1).
+         * `estJugeTerminal` ignore donc l'arete vers `learn`, et c'est ICI qu'elle se joue.
+         *
+         * TROIS bornes, chacune fermant une facon de nuire :
+         *   - seulement si le profil le DECLARE (`noeudApprentissageApresJuge`) — opt-in, car cela
+         *     coute un appel fournisseur et `eclair` promet « aucun ceremonial » ;
+         *   - seulement sur gate NON BLOQUE — on ne tire pas de lecon d'un travail refuse ;
+         *   - une panne de capitalisation NE ROUGIT PAS le run : la lecon n'est pas le livrable, et
+         *     faire echouer un travail valide parce que le Brain a hoquete serait un faux rouge.
+         *     `valid` et `gate` ne sont plus touches apres ce point.
+         */
+        const apprentissage = graphePilote
+          ? noeudApprentissageApresJuge(graphePilote)
+          : undefined
+        if (apprentissage) {
+          const noeud = graphePilote?.nodes.find((n) => n.id === apprentissage)
+          if (noeud) {
+            try {
+              await executePipelinePhase(noeud.phase)
+            } catch (erreur) {
+              push({
+                step: 'exec',
+                role: 'subagent',
+                detail: `capitalisation impossible (${
+                  erreur instanceof Error ? erreur.message : String(erreur)
+                }) — le verdict du run n'en est pas affecte`
+              })
+            }
+          }
+        }
+        break
+      }
       /**
        * LE PROGRES decide, le plafond n'est qu'un garde-fou — et les DEUX se disent.
        *
@@ -4959,6 +5005,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       gateBlocked: gate.blocked,
       gateReasons: gate.reasons,
       phaseOutputs,
+      // Le verdict SORT du run : sans ce champ il mourait dans `lastJudgeText` et n'atteignait
+      // jamais le RUN.md, donc jamais la mémoire inter-runs (conv-1405).
+      ...(lastJudgeText.trim() ? { judgeText: lastJudgeText.trim() } : {}),
       ...(learningAttestations.length ? { learningAttestations } : {}),
       brainQuery,
       brainRetrievedAt,

@@ -219,7 +219,7 @@
 .veille-deplier {
   background: none;
   border: none;
-  color: #d4a94f;
+  color: var(--gold-doux);
   cursor: pointer;
   font-size: 12px;
   padding: 0 2px;
@@ -237,7 +237,7 @@
 .veille-q b {
   display: block;
   font: 600 10.5px 'Segoe UI', sans-serif;
-  color: #d4a94f;
+  color: var(--gold-doux);
   text-transform: uppercase;
   letter-spacing: 0.8px;
   margin-bottom: 2px;
