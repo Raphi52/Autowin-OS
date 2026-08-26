@@ -584,6 +584,80 @@ export const ANNEAU_FRAGMENT_SHADER = [
 ].join('\n')
 
 /**
+ * LES LUNES (demande conv-1408 : « des lunes autour des planetes »).
+ *
+ * Réglage tenu en fractions du RAYON de la planète, parce qu'une lune vit dans le repère local de sa
+ * planète : le groupe est mis à l'échelle par `resize`, donc une distance en unités monde produirait
+ * une lune collée sur une petite planète et perdue autour d'une grande.
+ *
+ * `rayonMin` est au-delà des anneaux les plus proches (premier anneau intérieur = 1,45 rayon) : une
+ * lune posée en dessous serait enfouie dans la matière de l'anneau au lieu de tourner autour.
+ */
+export const LUNES = {
+  /** Rayon d'orbite minimal, en rayons de planète. */
+  rayonMin: 1.9,
+  /** Écart entre deux orbites successives : c'est lui qui empêche deux lunes de se superposer. */
+  ecart: 0.55,
+  /** Vitesse angulaire de référence ; divisée par le rayon, comme une orbite réelle. */
+  vitesse: 0.85,
+  /** Taille d'une lune, en rayons de planète. Petite : une lune de la taille du globe se lit comme une seconde planète. */
+  taille: 0.15
+} as const
+
+/**
+ * La position d'une lune sur son orbite, dans le repère LOCAL de sa planète.
+ *
+ * Fonction PURE, et c'est délibéré : happy-dom n'a pas de WebGL, donc « elles tournent » ne peut se
+ * prouver que sur une valeur calculable hors GPU. Deux propriétés portent la demande — la position
+ * change avec le temps (elle tourne), le RAYON ne change pas (elle ne s'échappe pas).
+ */
+export function orbiteLune(
+  index: number,
+  total: number,
+  temps: number
+): { x: number; y: number; z: number } {
+  const rayon = LUNES.rayonMin + (index + 1) * LUNES.ecart
+  // Une phase de départ propre par lune : à phase égale, les lunes d'une planète partent en file.
+  const phase = (index / Math.max(total, 1)) * Math.PI * 2
+  const angle = phase + (temps * LUNES.vitesse) / rayon
+  // Chaque orbite a son inclinaison : coplanaires, les lunes se liraient comme un collier plat.
+  const inclinaison = 0.32 + index * 0.44
+  return {
+    x: Math.cos(angle) * rayon,
+    y: Math.sin(angle) * rayon * Math.sin(inclinaison),
+    z: Math.sin(angle) * rayon * Math.cos(inclinaison)
+  }
+}
+
+/**
+ * Une lune : un petit globe, éclairé par le MÊME soleil que sa planète.
+ *
+ * Elle réutilise le shader de surface des planètes plutôt qu'une couleur unie : une bille lisse à
+ * côté d'un globe détaillé se voit immédiatement. `bandes` bas — une lune n'est pas une géante
+ * gazeuse, son relief est cratérisé donc isotrope.
+ */
+function buildLune(seed: number, teinte: number): THREE.Mesh {
+  const base = new THREE.Color(teinte)
+  return new THREE.Mesh(
+    new THREE.SphereGeometry(LUNES.taille, 32, 20),
+    new THREE.ShaderMaterial({
+      vertexShader: PLANETE_VERTEX_SHADER,
+      fragmentShader: PLANETE_FRAGMENT_SHADER,
+      uniforms: {
+        uBase: { value: base },
+        uClair: { value: base.clone().lerp(new THREE.Color(0xffffff), 0.6) },
+        uSombre: { value: base.clone().multiplyScalar(0.34) },
+        uNuit: { value: base.clone().multiplyScalar(0.12) },
+        uLumiere: { value: SOLEIL.clone() },
+        uBandes: { value: 1.1 },
+        uSeed: { value: seed },
+        uTime: { value: 0 }
+      }
+    })
+  )
+}
+
+/**
  * Une planète annelée, ULTRA détaillée (demande conv-1400).
  *
  * Le globe porte un shader de surface (continents fractals, bandes, terminateur adouci, limbe) ; ses
@@ -599,7 +673,8 @@ function buildPlanet(options: {
   tilt: number
   seed: number
   bandes: number
-}): THREE.Group {
+  lunes: number
+}): { group: THREE.Group; lunes: THREE.Mesh[] } {
   const group = new THREE.Group()
   group.position.copy(options.position)
 
@@ -695,7 +770,137 @@ function buildPlanet(options: {
     group.add(anneau)
   }
 
-  return group
+  // Les lunes sont AJOUTÉES AU GROUPE de la planète : c'est ce qui les fait suivre son cadrage et sa
+  // parallaxe. Posées dans la scène, elles resteraient au centre du monde pendant que la planète
+  // migre vers son coin — donc « autour de rien ».
+  const lunes: THREE.Mesh[] = []
+  for (let i = 0; i < options.lunes; i += 1) {
+    const lune = buildLune(options.seed * 3.1 + i * 9.7, i % 2 === 0 ? 0xbfc6d4 : 0x9aa2b4)
+    const p = orbiteLune(i, options.lunes, 0)
+    lune.position.set(p.x, p.y, p.z)
+    group.add(lune)
+    lunes.push(lune)
+  }
+
+  return { group, lunes }
+}
+
+/**
+ * LE NUAGE COSMIQUE CENTRAL (demande conv-1408 : « un nuage cosmique bleu violet au milieu qui se
+ * déplace »).
+ *
+ * La composition tenait le centre NOIR par principe — les nébuleuses vivent dans les angles pour que
+ * les widgets du milieu restent lisibles. La demande change ce principe, pas la contrainte : le nuage
+ * occupe le milieu, mais reste translucide et sans bord dur, sinon il rend le texte posé dessus
+ * illisible et se lit comme un rectangle collé.
+ */
+export const NUAGE_COSMIQUE = {
+  /** Bleu profond : canal bleu dominant, c'est ce qui fait le « bleu » de la demande. */
+  couleur: 0x4a6cff,
+  /** Le violet de theme.css : c'est lui qui apporte le rouge, donc le « violet ». */
+  secondaire: VIOLET,
+  /** Opacité maximale du cœur. Basse : le centre porte les widgets de l'accueil. */
+  opacite: 0.42,
+  /** Profondeur : derrière les planètes, devant les nébuleuses d'angle. */
+  z: -14,
+  /** Taille, en fraction du demi-cadre. */
+  k: 1.15,
+  /**
+   * LA DÉRIVE — « qui se déplace ». Amplitude en fraction du demi-cadre : elle doit rester bien
+   * inférieure à 1, sinon le nuage quitte le milieu et la demande n'est plus tenue.
+   */
+  derive: { amplitude: 0.22, vitesseX: 0.037, vitesseY: 0.029 }
+} as const
+
+/**
+ * La position du nuage à l'instant `temps`, en unités monde.
+ *
+ * Deux sinus de périodes non harmoniques : une seule fréquence donnerait un va-et-vient de métronome,
+ * qui se lit comme une animation. Fonction PURE — c'est la seule façon de PROUVER le déplacement sans
+ * GPU (happy-dom n'a pas de WebGL).
+ */
+export function positionNuage(
+  temps: number,
+  cadre: { halfWidth: number; halfHeight: number }
+): { x: number; y: number } {
+  const { amplitude, vitesseX, vitesseY } = NUAGE_COSMIQUE.derive
+  const ondeX = Math.sin(temps * vitesseX) * 0.6 + Math.sin(temps * vitesseX * 0.62 + 1.3) * 0.4
+  const ondeY = Math.cos(temps * vitesseY) * 0.55 + Math.sin(temps * vitesseY * 1.47 + 0.7) * 0.45
+  return {
+    x: ondeX * amplitude * cadre.halfWidth,
+    y: ondeY * amplitude * cadre.halfHeight
+  }
+}
+
+/**
+ * Le nuage lui-même : un plan billboard dont la matière est un bruit fractal à coordonnées déformées.
+ *
+ * Trois choix portent le rendu :
+ *  1. fbm avec DOMAIN WARPING — sans la déformation, on voit un moutonnement régulier, pas des volutes ;
+ *  2. un masque RADIAL doux : le plan n'a pas de bord visible, sinon c'est une vignette rectangulaire ;
+ *  3. le cœur tire vers le blanc bleuté : un nuage d'une seule teinte est un aplat coloré.
+ */
+export const NUAGE_FRAGMENT_SHADER = [
+  'precision highp float;',
+  'varying vec2 vUv;',
+  'uniform float uTime;',
+  'uniform vec3 uBleu;',
+  'uniform vec3 uViolet;',
+  'uniform float uOpacite;',
+  'float hashN(vec2 p) {',
+  '  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);',
+  '}',
+  'float bruitN(vec2 p) {',
+  '  vec2 i = floor(p);',
+  '  vec2 f = fract(p);',
+  '  vec2 u = f * f * (3.0 - 2.0 * f);',
+  '  return mix(mix(hashN(i), hashN(i + vec2(1.0, 0.0)), u.x),',
+  '             mix(hashN(i + vec2(0.0, 1.0)), hashN(i + vec2(1.0, 1.0)), u.x), u.y);',
+  '}',
+  'float fbm(vec2 p) {',
+  '  float somme = 0.0;',
+  '  float amplitude = 0.5;',
+  '  for (int octave = 0; octave < 5; octave++) {',
+  '    somme += amplitude * bruitN(p);',
+  '    p = p * 2.03 + vec2(11.7, 5.3);',
+  '    amplitude *= 0.5;',
+  '  }',
+  '  return somme;',
+  '}',
+  'void main() {',
+  '  vec2 c = vUv - 0.5;',
+  // Le masque radial : hors du disque, le nuage n'existe pas. C'est ce discard qui supprime le bord.
+  '  float masque = 1.0 - smoothstep(0.16, 0.5, length(c));',
+  '  if (masque <= 0.001) discard;',
+  '  vec2 p = vUv * 3.4;',
+  '  vec2 derive = vec2(uTime * 0.017, uTime * -0.011);',
+  '  float w1 = fbm(p + derive);',
+  '  float w2 = fbm(p + vec2(3.7, 8.1) + derive * 1.6);',
+  '  float champ = fbm(p + vec2(w1, w2) * 1.9 + derive * 0.4);',
+  '  float densite = pow(clamp(champ * 1.35, 0.0, 1.0), 1.9);',
+  '  vec3 couleur = mix(uBleu, uViolet, clamp(champ * 1.6, 0.0, 1.0));',
+  '  couleur = mix(couleur, vec3(0.86, 0.9, 1.0), pow(densite, 3.0) * 0.55);',
+  '  gl_FragColor = vec4(couleur, densite * masque * uOpacite);',
+  '}'
+].join('\n')
+
+/** Le nuage central : un plan porté par NUAGE_FRAGMENT_SHADER, replacé chaque image par `positionNuage`. */
+function buildNuage(): THREE.Mesh {
+  const material = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uBleu: { value: new THREE.Color(NUAGE_COSMIQUE.couleur) },
+      uViolet: { value: new THREE.Color(NUAGE_COSMIQUE.secondaire) },
+      uOpacite: { value: NUAGE_COSMIQUE.opacite }
+    },
+    vertexShader: NAPPE_VERTEX_SHADER,
+    fragmentShader: NUAGE_FRAGMENT_SHADER
+  })
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2, 1, 1), material)
+  return mesh
 }
 
 /**
@@ -941,9 +1146,17 @@ interface Composition {
     seed: number
     /** Étirement du bruit en latitude : c'est lui qui fait la géante gazeuse plutôt qu'une tache. */
     bandes: number
+    /** Nombre de LUNES en orbite autour d'elle (conv-1408). 0 = aucune. */
+    lunes: number
   }[]
   arcs: number
   satellites: number
+  /**
+   * LE NUAGE COSMIQUE CENTRAL, quand la direction en a un. `fx`/`fy` sont son point d'ancrage en
+   * fractions du cadre : la demande dit « au milieu », donc proche de (0, 0) — c'est la dérive de
+   * `positionNuage` qui l'écarte, pas l'ancrage.
+   */
+  nuage?: { fx: number; fy: number }
   /**
    * La nappe de bruit, quand la direction en a une. Absente pour toutes les autres : c'est une
    * MATIÈRE de fond, pas un calque ajouté partout.
@@ -974,7 +1187,8 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
         rings: 3,
         tilt: 0.42,
         seed: 1.7,
-        bandes: 5.2
+        bandes: 5.2,
+        lunes: 3
       },
       {
         fx: 0.82,
@@ -986,7 +1200,8 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
         rings: 2,
         tilt: -0.3,
         seed: 8.3,
-        bandes: 3.4
+        bandes: 3.4,
+        lunes: 2
       },
       {
         fx: -0.8,
@@ -998,11 +1213,14 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
         rings: 2,
         tilt: 0.55,
         seed: 14.9,
-        bandes: 6.8
+        bandes: 6.8,
+        lunes: 1
       }
     ],
     arcs: 7,
     satellites: 0,
+    // Le nuage cosmique demandé en conv-1408 : ancré au milieu, il DÉRIVE autour de ce point.
+    nuage: { fx: 0, fy: 0 },
     tempo: 1,
     parallaxe: 1
   },
@@ -1024,7 +1242,8 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
         rings: 4,
         tilt: 0.34,
         seed: 3.1,
-        bandes: 7.5
+        bandes: 7.5,
+        lunes: 4
       },
       {
         fx: -0.9,
@@ -1036,7 +1255,8 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
         rings: 1,
         tilt: -0.4,
         seed: 21.4,
-        bandes: 3.2
+        bandes: 3.2,
+        lunes: 1
       }
     ],
     arcs: 3,
@@ -1079,7 +1299,8 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
         rings: 3,
         tilt: 0.5,
         seed: 5.6,
-        bandes: 4.1
+        bandes: 4.1,
+        lunes: 2
       }
     ],
     arcs: 16,
@@ -1172,8 +1393,14 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
 
   // Meme regle pour les planetes, avec une nuance : leur ECHELLE reste UNIFORME (`min` des deux
   // demi-extensions). Les etirer avec le cadre en ferait des ellipses, ce qui se voit tout de suite.
+  // Le nuage central : monté avant les planètes pour rester DERRIÈRE elles dans l'ordre de rendu
+  // additif — un nuage devant une planète l'effacerait au lieu de l'entourer.
+  const nuageSpec = composition.nuage
+  const nuage = nuageSpec ? buildNuage() : null
+  if (nuage) scene.add(nuage)
+
   const planetSpecs = composition.planetes
-  const planets = planetSpecs.map((spec) =>
+  const planetesMontees = planetSpecs.map((spec) =>
     buildPlanet({
       radius: 1,
       position: new THREE.Vector3(0, 0, 0),
@@ -1182,9 +1409,12 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
       rings: spec.rings,
       tilt: spec.tilt,
       seed: spec.seed,
-      bandes: spec.bandes
+      bandes: spec.bandes,
+      lunes: spec.lunes
     })
   )
+  const planets = planetesMontees.map((entry) => entry.group)
+  const lunesParPlanete = planetesMontees.map((entry) => entry.lunes)
   for (const planet of planets) scene.add(planet)
   /**
    * La position CADREE de chaque planete, posee par `resize`.
@@ -1240,6 +1470,14 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
 
   let width = 1
   let height = 1
+  /**
+   * Le demi-cadre visible à la profondeur du nuage, mémorisé par `resize`.
+   *
+   * `render` en a besoin pour convertir la dérive de `positionNuage` (exprimée en fractions du cadre)
+   * en unités monde : sans lui, la même dérive sortirait du champ sur une fenêtre étroite — c'est
+   * exactement le défaut déjà mesuré le 2026-08-21 sur les nébuleuses posées en coordonnées monde.
+   */
+  const cadreNuage = { halfWidth: 1, halfHeight: 1 }
 
   return {
     canvas,
@@ -1276,6 +1514,18 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
         nappe.position.set(0, 0, nappeSpec.z)
         nappe.scale.set(demiLargeur * nappeSpec.k, demiHauteur * nappeSpec.k, 1)
       }
+      if (nuage) {
+        const distanceNuage = camera.position.z - NUAGE_COSMIQUE.z
+        const demiHauteur = Math.tan((camera.fov * Math.PI) / 360) * distanceNuage
+        const demiLargeur = demiHauteur * (nextWidth / nextHeight)
+        cadreNuage.halfWidth = demiLargeur
+        cadreNuage.halfHeight = demiHauteur
+        // Échelle UNIFORME : un nuage étiré avec le cadre devient une bande horizontale sur un écran
+        // large, et le masque radial du shader ne le lit plus comme un nuage.
+        const taille = Math.min(demiLargeur, demiHauteur) * NUAGE_COSMIQUE.k
+        nuage.scale.set(taille, taille, 1)
+        nuage.position.set(0, 0, NUAGE_COSMIQUE.z)
+      }
       orbits.scale.setScalar(Math.max(halfWidth, halfHeight) * 0.62)
       if (satellites) {
         // Les satellites partagent l'échelle des arcs : sinon ils glisseraient à côté d'eux.
@@ -1311,6 +1561,15 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
       // n'arriverait qu'une fois toutes les trois minutes, donc jamais pendant qu'on regarde.
       ;(filantes.material as THREE.ShaderMaterial).uniforms.uTime.value = elapsed
       if (nappe) (nappe.material as THREE.ShaderMaterial).uniforms.uTime.value = temps
+      // LE NUAGE SE DÉPLACE : deux mouvements distincts, et il faut les deux. Le shader fait vivre sa
+      // matière sur place (volutes), `positionNuage` déplace le nuage LUI-MÊME dans le cadre. Sans le
+      // second, la matière bouillonne mais le nuage reste planté au centre.
+      if (nuage && nuageSpec) {
+        ;(nuage.material as THREE.ShaderMaterial).uniforms.uTime.value = temps
+        const derive = positionNuage(temps, cadreNuage)
+        nuage.position.x = nuageSpec.fx * cadreNuage.halfWidth + derive.x
+        nuage.position.y = nuageSpec.fy * cadreNuage.halfHeight + derive.y
+      }
       // Rotations lentes et de vitesses différentes : synchronisées, elles se liraient comme un
       // seul bloc qui tourne.
       stars.rotation.y = temps * 0.004
@@ -1327,6 +1586,16 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
         const base = planetBases[index]
         planet.position.x = base.x + look.x * amplitude
         planet.position.y = base.y + look.y * amplitude * 0.7
+        // Les LUNES tournent autour de leur planète, dans SON repère : la position est locale, donc
+        // le cadrage et la parallaxe du groupe les emportent sans calcul supplémentaire.
+        const lunes = lunesParPlanete[index]
+        lunes.forEach((lune, rang) => {
+          const p = orbiteLune(rang, lunes.length, temps)
+          lune.position.set(p.x, p.y, p.z)
+          // Rotation propre lente : une lune qui orbite sans tourner est un point de matière figé.
+          lune.rotation.y = temps * 0.09 * (1 + rang * 0.4)
+          ;(lune.material as THREE.ShaderMaterial).uniforms.uTime.value = temps
+        })
       })
       // La caméra suit le regard, amortie en amont par l'appelant. C'est LE signal de profondeur :
       // un décor fixe se lit comme une texture, même en 3D.
