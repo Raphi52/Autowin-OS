@@ -93,6 +93,16 @@ export function verifyTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
  * Le verdict, lui, ne bouge pas d'un pouce : une sortie partielle pleine de coches ne se lit JAMAIS
  * comme un vert, et le message de plafond reste en TETE pour que la raison de l'arret prime.
  */
+/**
+ * LE MARQUEUR D'UN ARRET AU PLAFOND, place a cote du texte qui le produit.
+ *
+ * `natureDeLEchec` doit reconnaitre un plafond pour ne pas le classer « tests » (conv-1410). Il ne
+ * peut le faire qu'en lisant la sortie -- donc en dependant de cette phrase. La declarer ICI, sous
+ * les yeux de qui edite le message, est la seule facon d'empecher les deux de deriver en silence ;
+ * un test de derive verifie que le marqueur reconnait bien la sortie reelle de cette fonction.
+ */
+export const VERIFY_PLAFOND_MARQUEUR = /arr[eê]t[eé]e apr[eè]s \d+ s \(plafond\)/i
+
 export function verifyTimeoutOutcome(
   command: string,
   ms: number,
