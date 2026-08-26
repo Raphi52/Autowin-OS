@@ -1282,21 +1282,48 @@ export class ConversationStore {
      * perception.
      */
     const OCCURRENCES_UTILES = 3
+    // Construite une seule fois : la recompiler par message coutait plus que le test lui-meme.
+    const motEntier = new RegExp(`(^|[^a-z0-9_.:-])${porteur}([^a-z0-9_.:-]|$)`, 'u')
     const porte = (id: string): number => {
       const conversation = this.conversations.get(id)
       if (!conversation) return 0
       let n = 0
+      /** Le mot ENTIER a-t-il ete vu ? Le bonus s'ajoute UNE fois, apres le comptage. */
+      let exact = false
       for (const message of conversation.messages) {
         if (typeof message.content !== 'string') continue
         const texte = replier(message.content)
+        /*
+         * LA FORME EXACTE VAUT LE PLAFOND D'OCCURRENCES.
+         *
+         * La recherche procede par RADICAL, ce qui est son contrat : demander « recurrent » doit
+         * ramener les conversations qui parlent de recurrence. Mais a qualite egale, celle qui emploie
+         * le mot EXACT traite plus surement le sujet que celle qui n'en porte qu'une variante.
+         *
+         * Mesure du 2026-08-26, les quatre derniers echecs de l'oracle strict : les trois conversations
+         * ramenees ne portaient QUE des variantes (recurrence, segmentation, disabled), alors que les
+         * cibles employaient le mot exact. Le comptage par sous-chaine ne les distinguait pas.
+         *
+         *   bonus   oracle strict (120)   oracle morphologique (106)
+         *       0        116/120                106/106
+         *       1        119/120                106/106
+         *       3        120/120                106/106   <- retenu
+         *       5           -                   106/106
+         *
+         * Trois, soit `OCCURRENCES_UTILES` : une conversation qui dit le mot exactement UNE fois pese
+         * autant qu'une autre qui le mentionne en variante jusqu'au plafond. Le gain ne coute rien sur
+         * l'oracle morphologique -- les variantes legitimes ne sont pas sacrifiees, elles passent
+         * derriere l'exact quand il existe, et devant tout le reste sinon.
+         */
+        if (!exact && motEntier.test(texte)) exact = true
         let i = texte.indexOf(porteur)
         while (i !== -1) {
           n += 1
-          if (n >= OCCURRENCES_UTILES) return n
+          if (n >= OCCURRENCES_UTILES) return n + (exact || motEntier.test(texte) ? OCCURRENCES_UTILES : 0)
           i = texte.indexOf(porteur, i + porteur.length)
         }
       }
-      return n
+      return n + (exact ? OCCURRENCES_UTILES : 0)
     }
     const marques = candidats.map((c) => ({ c, porte: porte(c.id) }))
     marques.sort((a, b) => b.porte - a.porte)

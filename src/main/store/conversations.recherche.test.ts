@@ -407,3 +407,37 @@ describe('la position sature au-dela de quelques mots', () => {
     expect(titres).toContain('Sujet')
   })
 })
+
+/**
+ * A QUALITE EGALE, LA FORME EXACTE PASSE DEVANT LA VARIANTE.
+ *
+ * La recherche procede par RADICAL, ce qui est son contrat : demander « recurrent » doit ramener les
+ * conversations qui parlent de recurrence. Mais celle qui emploie le mot EXACT traite plus surement le
+ * sujet. Mesure du 2026-08-26 : les quatre derniers echecs de l'oracle strict ramenaient trois
+ * conversations ne portant QUE des variantes (recurrence, segmentation, disabled) alors que les cibles
+ * employaient le mot exact -- le comptage par sous-chaine ne les distinguait pas. Bonus applique :
+ * 116/120 -> 120/120, sans rien perdre sur l'oracle a cibles morphologiques (106/106).
+ *
+ * Le bonus s'ajoute UNE fois, APRES le comptage. Une premiere version l'ajoutait pendant, ce qui
+ * atteignait le plafond des le premier message et NEUTRALISAIT le comptage : le test « prefere la
+ * conversation qui TRAITE le sujet a celle qui l'effleure » l'a attrape.
+ */
+describe('forme exacte contre variante', () => {
+  it('la conversation qui emploie le mot exact devance celle qui n’en a que la variante', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const long = 'contexte technique sans rapport particulier avec la demande. '.repeat(30)
+
+    // La variante est plus RECENTE et plus REPETEE : sans le bonus, elle gagne.
+    const exact = store.create({ title: 'Exact', provider: 'claude' })
+    store.append(exact.id, { role: 'assistant', content: `${long}${SAUT}le sujet est zarbitro${SAUT}${long}` })
+    const variante = store.create({ title: 'Variante', provider: 'claude' })
+    store.append(variante.id, {
+      role: 'assistant',
+      content: `${long}${SAUT}zarbitrologie, zarbitrologie et zarbitrologie encore${SAUT}${long}`
+    })
+
+    const titres = store.search('rappelle moi zarbitro', { limite: 2 }).map((r) => r.title)
+    expect(titres[0]).toBe('Exact')
+  })
+})
