@@ -414,6 +414,40 @@ const CATALOG: CommandSpec[] = [
   },
   {
     /**
+     * REGARDER son propre travail, sans avoir a le refaire.
+     *
+     * Defaut vecu conv-1407 (2026-08-26), second volet. Autowin collecte deja tout ce qu'il faut
+     * pour une retrospective — conversation, activite, traces Brain, evenements causaux, RUN.md
+     * natifs — en UN appel (`collectAutowinKaizenEvidence`). Mais ce dossier n'etait atteignable
+     * que par une tache commencant par `/kaizen`, donc en LANCANT un run complet : couteux,
+     * delegue, asynchrone.
+     *
+     * L'orchestrateur decide lui-meme s'il traite ou s'il delegue. Un agent qui doit deleguer POUR
+     * S'INFORMER decide a l'aveugle : la seule facon de savoir lui coutait un run. Meme forme que
+     * `conversation_read` avant le 18/08 — branche pour l'oeil et pour un pipeline, jamais pour le
+     * modele qui decide.
+     *
+     * Lecture SEULE : regarder n'engage rien, et doit donc etre le geste le moins cher du catalogue.
+     */
+    name: 'retrospective',
+    description:
+      "Regarder ce qui s'est REELLEMENT passe dans une conversation : ses messages, l'activite de " +
+      'ses tours, ses evenements causaux (outils appeles, refus, verdicts) et ses RUN.md. Appelle-le ' +
+      "des qu'on te demande pourquoi un tour a echoue, ce qui a ete tente, ce qui a coute, ou avant " +
+      "de relancer un travail deja tente : tu sauras ce qui a DEJA ete essaye au lieu de le refaire. " +
+      "C'est de la LECTURE — cela ne lance aucun run et ne coute aucun appel de modele.",
+    args: {
+      id: 'identifiant de la conversation a examiner (ex. « conv-1407 »)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    /**
      * CHERCHER par contenu dans TOUTES les conversations.
      *
      * Defaut vecu le 2026-08-26 (conv-1407). L'orchestrateur recoit « remake les pastilles de
@@ -1956,6 +1990,23 @@ export class AppCommandBus {
         if (!c) throw new Error(`conversation introuvable: ${s('id')}`)
         this.broadcast({ type: 'refresh', scope: 'conversations' })
         return { id: c.id, titre: c.title, dossier: c.projectPath ?? null }
+      }
+      case 'retrospective': {
+        const id = s('id')
+        const conversation = this.os.conversations.get(id)
+        // Une conversation absente est un ECHEC franc. Rendre un dossier vide ferait conclure
+        // « il ne s'est rien passe » sur un identifiant simplement faux -- la conclusion inverse
+        // de celle qu'une retrospective doit produire.
+        if (!conversation) throw new Error(`Conversation introuvable: ${id}`)
+        const dossier = collectAutowinKaizenEvidence(conversation)
+        return {
+          ...dossier,
+          note:
+            `${dossier.conversation.messages.length} message(s), ` +
+            `${dossier.causalEvents.length} evenement(s) causal(aux), ` +
+            `${dossier.activity.length} entree(s) d'activite, ${dossier.runs.length} RUN.md. ` +
+            `Lecture seule : aucun run lance.`
+        }
       }
       case 'conversation_search': {
         const terme = s('terme')
