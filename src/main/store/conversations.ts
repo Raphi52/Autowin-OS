@@ -1225,8 +1225,29 @@ export class ConversationStore {
      * assaini qui restait donnait 33/33 -- un score parfait qui cachait 76 % reels. Un oracle qu'on ne
      * remet pas en question est un plafond qu'on se donne.
      */
+    /*
+     * LA POSITION SATURE : au-dela de quelques mots, etre PLUS loin ne dit rien de plus.
+     *
+     * Sans plafond, le dernier mot de la demande recoit l'avantage maximal -- et dans « ... dans le
+     * projet », ce dernier mot est « projet », qui n'est pas le sujet. Mesure du 2026-08-26 : sur le
+     * cas « entoure », « projet » l'emportait de 0,1 point (9,3 contre 9,2).
+     *
+     * J'avais d'abord essaye de REDUIRE le poids de la position ; cela degrade (116 -> 114 a poids
+     * demi). Le probleme n'etait pas que la position pese trop, c'est qu'elle pese SANS FIN.
+     *
+     *   plafond    oracle strict (120)   oracle morphologique (106)
+     *     aucun         115/120                105/106
+     *         6         115/120                    -
+     *         5         116/120                106/106
+     *         3         116/120                    -
+     *
+     * Cinq : une demande place son sujet apres trois a cinq mots d'adresse ; au-dela on n'observe plus
+     * que la longueur de la formule. Meme saturation que pour le comptage des occurrences -- un signal
+     * graduel qui cesse d'informer passe un seuil.
+     */
+    const POSITION_UTILE = 5
     const porteurScore = (mot: string, position: number): number =>
-      index.rarete(mot) * (mot.length + position)
+      index.rarete(mot) * (mot.length + Math.min(position, POSITION_UTILE))
     let porteur = entiers[0] ?? demandes[0]
     let meilleurPorteur = -1
     for (const [position, mot] of entiers.entries()) {
