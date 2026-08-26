@@ -1203,7 +1203,20 @@ export class ConversationStore {
       // A egalite PARFAITE (meme longueur, meme rarete -- typiquement deux mots absents de l'index),
       // le plus TARDIF gagne : la formule d'adresse ouvre la phrase, le sujet suit la preposition.
       // Un fait de structure, non une liste de mots a entretenir. Mesure : 25/40 -> 28/40.
-      if (index.rarete(mot) === index.rarete(meilleur)) return mot
+      // A LONGUEUR EGALE, TOUJOURS LE PLUS TARDIF -- la rarete ne departage plus ici.
+      //
+      // Mesure du 2026-08-26 : consulter la rarete a longueur egale faisait choisir « rappelle »
+      // comme porteur dans cinq des huit derniers echecs, parce qu'il se trouve PLUS RARE que le
+      // terme cherche (il vit dans 4 messages du corpus, la ou « ecriture » en occupe 94). Preuve
+      // directe : retirer le seul mot « rappelle » de la demande suffisait a ramener les bonnes
+      // conversations -- « cosmique » rendait conv-1408 et conv-23, « thinking » conv-1404 et 1405.
+      // La rarete est un mauvais juge du SUJET : elle mesure la frequence, pas l'intention.
+      //
+      //   phrase top-3   32/40 -> 35/40      mot-cle seul   38/40 (inchange)
+      //
+      // La rarete reste indispensable au SCORE (voir la ponderation plus haut, et `rarete-isole`
+      // qui l'isole vraiment depuis qu'il a ete reecrit) ; elle ne sert plus qu'a cela.
+      return mot
       return index.rarete(mot) > index.rarete(meilleur) ? mot : meilleur
     }, entiers[0] ?? demandes[0])
     const candidats = trouvees.slice(0, Math.max(limite, PROFONDEUR_RECLASSEMENT))
