@@ -38,6 +38,15 @@ export type TicketsSection = 'externes' | 'autowin'
 export interface AppLocation {
   destination: AppDestination
   section?: AgentStudioSection | SettingsSection | TaskManagerSection | WorktreeSection
+  /**
+   * FAUX quand la valeur demandee n'a ete comprise par AUCUNE regle et qu'on a repli sur `chat`.
+   *
+   * Le repli reste — refuser produirait des faux blocages — mais il ne doit plus SE TAIRE. Mesure du
+   * 2026-08-26 : un agent a demande « worktrees », a recu `{tab: 'chat'}` sans la moindre erreur, et
+   * a cru avoir navigue alors que l'app n'avait pas bouge. Un echec deguise en succes coute plus
+   * cher qu'un echec.
+   */
+  reconnu?: boolean
 }
 
 const DESTINATION_IDS = new Set<string>(APP_DESTINATIONS.map(({ id }) => id))
@@ -100,6 +109,28 @@ export function isAppDestination(value: string): value is AppDestination {
   return DESTINATION_IDS.has(value)
 }
 
+/**
+ * Le nom AFFICHE est une adresse valide.
+ *
+ * Un agent qui pilote l'app lit la barre laterale : il connait « Worktrees » et « Agent Studio », pas
+ * `worktree` ni `agent-studio`. Ces libelles retombaient sur `chat`, donc la navigation echouait en
+ * silence (mesure du 2026-08-26, deux libelles sur neuf inatteignables). L'index est DERIVE de
+ * `APP_DESTINATIONS` : ajouter une destination l'y inscrit sans liste a maintenir en double.
+ *
+ * Le pluriel est accepte parce que le libelle est au pluriel la ou l'identifiant est au singulier —
+ * c'est exactement l'ecart qui a produit le defaut.
+ */
+const DESTINATIONS_PAR_LIBELLE: Readonly<Record<string, AppDestination>> = Object.fromEntries(
+  APP_DESTINATIONS.flatMap(({ id, label }) => {
+    const nom = label.toLowerCase()
+    return [
+      [nom, id],
+      [`${nom}s`, id],
+      [id.replace(/-/g, ' '), id]
+    ] as Array<[string, AppDestination]>
+  })
+)
+
 /** Converge les anciens noms émis par les agents et versions précédentes vers le shell courant. */
 export function normalizeDestination(value: string): AppDestination {
   if (isAppDestination(value)) return value
@@ -107,6 +138,14 @@ export function normalizeDestination(value: string): AppDestination {
 }
 
 export function resolveAppLocation(value: string): AppLocation {
-  const normalized = value.toLowerCase()
-  return LEGACY_LOCATIONS[normalized] ?? { destination: normalizeDestination(normalized) }
+  const normalized = value.toLowerCase().trim()
+  const heritee = LEGACY_LOCATIONS[normalized]
+  if (heritee) return heritee
+  const parLibelle = DESTINATIONS_PAR_LIBELLE[normalized]
+  if (parLibelle) return { destination: parLibelle }
+  if (isAppDestination(normalized) || LEGACY_DESTINATIONS[normalized]) {
+    return { destination: normalizeDestination(normalized) }
+  }
+  // Repli conserve, mais AVOUE : l'appelant peut distinguer « chat demande » de « rien compris ».
+  return { destination: 'chat', reconnu: false }
 }

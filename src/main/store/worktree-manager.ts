@@ -1,4 +1,4 @@
-import { causeGit } from './cause-git'
+import { causeGit, sortieGit } from './cause-git'
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
@@ -447,6 +447,20 @@ export function resoudreCheminWorker(
   return candidats.find((candidat) => existe(candidat)) ?? candidats[0]
 }
 
+/**
+ * Le CHEMIN d'une ligne `git status --porcelain`, sans son statut.
+ *
+ * Couper trois caracteres en dur ne marche pas : la sortie est trimee globalement, donc la PREMIERE
+ * ligne perd son espace de tete et se retrouve decalee d'un cran. Defaut introduit puis mesure le
+ * 2026-08-26 — l'apercu rendait « rc/renderer/... » au lieu de « src/renderer/... », soit un chemin
+ * qui n'existe nulle part. Un renommage (`R  ancien -> nouveau`) rend le NOUVEAU nom, seul utile.
+ */
+export function cheminDeStatutPorcelain(ligne: string): string {
+  const sansStatut = ligne.replace(/^[ADMRCU?! ]{1,2}[ ]+/, '')
+  const fleche = sansStatut.lastIndexOf(' -> ')
+  return (fleche >= 0 ? sansStatut.slice(fleche + 4) : sansStatut).trim()
+}
+
 export class WorktreeManager {
   /**
    * Ce qu'a donné la dernière liaison des dépendances d'une copie, pour que la trace du run puisse
@@ -878,12 +892,57 @@ export class WorktreeManager {
     }
   }
 
+  /**
+   * Un bureau porte-t-il du travail JAMAIS COMMITTE ?
+   *
+   * Tout le reste du recensement juge sur des commits — branche de secours, commit orphelin, ref de
+   * sauvetage. Reproduit en direct le 2026-08-26 : une demande reelle a produit un livrable
+   * (`HomeView.css`, +7/-3, plus un test neuf), l'orchestration s'est arretee au controle final, et
+   * l'agent a repondu « le livrable est en place et vert ». Le travail n'a jamais ete committe : il
+   * dormait, modifie, dans son bureau, invisible de tous les ecrans.
+   *
+   * C'est le cas le plus couteux des trois, parce qu'il suit une annonce de succes.
+   */
+  private bureauPorteDuTravailNonCommitte(agentId: string): boolean {
+    if (!SAFE_ID.test(agentId)) return false
+    const bureau = join(this.worktreeRoot, `agent__${agentId}`)
+    if (!existsSync(bureau)) return false
+    try {
+      /*
+       * UN HEAD NON NE N'EST PAS DU TRAVAIL. `checkout --orphan` laisse l'index rempli des fichiers
+       * de la base : `status --porcelain` les rend tous AJOUTES, et le bureau parait porter un
+       * chantier entier alors qu'il n'a rien produit. Un test existant protegeait deja ce bord
+       * (`reste MUET sur un bureau pose sur une branche NON NEE`) et il a bien mordu.
+       *
+       * `rev-parse HEAD` leve sur une branche jamais commitee : c'est exactement le discriminant.
+       */
+      const tete = this.git(bureau, ['rev-parse', 'HEAD']).trim()
+      if (!HEX_SHA.test(tete) || /^0+$/.test(tete)) return false
+      return this.git(bureau, ['status', '--porcelain']).trim().length > 0
+    } catch {
+      // Un bureau illisible ne prouve AUCUNE perte : on n'invente pas un travail pour alarmer.
+      return false
+    }
+  }
+
   private commitDuTravail(agentId: string): string | undefined {
     if (!SAFE_ID.test(agentId)) return undefined
     const secours = `autowin/recovery/${agentId}`
     if (this.revisionExists(secours)) return secours
+    /*
+     * LE SAUVETAGE EST UN PORTEUR LEGITIME, pas un residu.
+     *
+     * Quand la publication echoue, le travail est pose sur `refs/autowin/rescue/<agentId>` pour
+     * rester atteignable APRES disparition du bureau. Sans cette lecture, un travail correctement
+     * sauve devient introuvable des que sa copie est nettoyee : douze refs accumulees depuis le
+     * 16/08 sur le depot reel, dont trois du 2026-08-26, qu'aucun ecran ne montrait.
+     *
+     * En DERNIER recours : un bureau encore present porte l'etat le plus recent, le sauvetage n'est
+     * qu'un filet.
+     */
+    const sauvetage = `refs/autowin/rescue/${agentId}`
     const bureau = join(this.worktreeRoot, `agent__${agentId}`)
-    if (!existsSync(bureau)) return undefined
+    if (!existsSync(bureau)) return this.revisionExists(sauvetage) ? sauvetage : undefined
     try {
       const sha = this.git(bureau, ['rev-parse', 'HEAD']).trim()
       if (!HEX_SHA.test(sha)) return undefined
@@ -944,14 +1003,49 @@ export class WorktreeManager {
         verdictParSha.set(sha, verdict)
         return verdict
       }
+      /*
+       * LE TROISIEME GISEMENT : les travaux SAUVES dont le bureau n'existe plus.
+       *
+       * Les deux recensements ci-dessus couvrent les branches de secours et les bureaux encore
+       * poses sur le disque. Ils manquent le cas ou la publication a echoue PUIS la copie a ete
+       * nettoyee : le commit ne survit alors que par `refs/autowin/rescue/<agentId>`, qu'aucun des
+       * deux ne regarde. C'est exactement le travail que l'utilisateur finit par refaire.
+       *
+       * Meme filtre de CONTENU que les autres (`apporteQuelqueChose`, patch-id) : un sauvetage deja
+       * repris dans la base se tait. Les deux bords comptent — taire un travail perdu le fait
+       * refaire, crier sur un travail publie fabrique le bandeau qu'on n'ecoute plus.
+       */
+      const sauvetages = this.git(this.baseRepo, [
+        'for-each-ref',
+        '--format=%(refname:strip=3)',
+        'refs/autowin/rescue/'
+      ])
+        .split('\n')
+        .map((ligne) => ligne.trim())
+        .filter((agentId) => SAFE_ID.test(agentId))
+        .filter((agentId) => !branches.includes(agentId) && !detaches.includes(agentId))
+        .filter((agentId) =>
+          this.apporteQuelqueChose(`refs/autowin/rescue/${agentId}`, baseRef)
+        )
+      /*
+       * QUATRIEME GISEMENT : le travail jamais committe. Un bureau simplement PROPRE reste tu — sinon
+       * chaque bureau ouvert crierait, et c'est ainsi qu'on fabrique le bandeau qu'on n'ecoute plus.
+       */
+      const salis = this.listAgentIds().filter((agentId) =>
+        this.bureauPorteDuTravailNonCommitte(agentId)
+      )
       return [
-        ...branches.filter((agentId) =>
-          this.apporteQuelqueChose(`autowin/recovery/${agentId}`, baseRef)
-        ),
-        ...detaches.filter((agentId) => {
-          const sha = heads.get(agentId)
-          return sha !== undefined && apporte(sha)
-        })
+        ...new Set([
+          ...branches.filter((agentId) =>
+            this.apporteQuelqueChose(`autowin/recovery/${agentId}`, baseRef)
+          ),
+          ...detaches.filter((agentId) => {
+            const sha = heads.get(agentId)
+            return sha !== undefined && apporte(sha)
+          }),
+          ...sauvetages,
+          ...salis
+        ])
       ]
     } catch {
       // Un depot qui ne repond pas ne prouve AUCUNE perte : on n'annonce rien plutot que d'alarmer.
@@ -1007,6 +1101,31 @@ export class WorktreeManager {
           // ne doit PAS NON PLUS passer pour un bureau vide : en aval, `decisionDeReutilisation`
           // jetait le bureau sur ce silence. On DIT que la lecture a echoue.
           lectureEchouee = true
+        }
+        /*
+         * REPLI : LES FICHIERS DU BUREAU, quand il n'y a aucun commit a diffuser.
+         *
+         * Un bureau au travail jamais committe n'a ni branche de secours ni commit orphelin : le
+         * `diff` ci-dessus ne peut RIEN nommer. Sans ce repli, le bandeau annonce « travail non
+         * publie » sans dire lequel — or le seul label qu'un humain reconnait, ce sont les fichiers.
+         * Constate le 2026-08-26 : trois bureaux recenses, trois fois `fichiers: []`.
+         */
+        if (!fichiers.length) {
+          const bureau = join(this.worktreeRoot, `agent__${agentId}`)
+          if (existsSync(bureau)) {
+            try {
+              const sales = this.git(bureau, ['status', '--porcelain'])
+                .split('\n')
+                .map((ligne) => cheminDeStatutPorcelain(ligne))
+                .filter(Boolean)
+              if (sales.length) {
+                fichiers = sales
+                lectureEchouee = false
+              }
+            } catch {
+              // Le bureau ne repond pas : on garde l'indetermination deja posee, on n'invente rien.
+            }
+          }
         }
         // Le VERDICT accompagne la liste : sans lui, il faut ouvrir chaque patch pour savoir si
         // un bureau vaut quelque chose — le tri manuel que ce chantier existe pour supprimer.
@@ -4688,7 +4807,7 @@ exit 0
           ])
           if (marker.code !== 0) {
             const markerDetail = causeGit(marker)
-            const guarded = markerDetail.includes('AUTOWIN_GUARD:')
+            const guarded = sortieGit(marker).includes('AUTOWIN_GUARD:')
             return {
               outcome: 'blocked',
               agentId,
@@ -4787,7 +4906,7 @@ exit 0
             detail: 'La transaction refusée n’a pas pu être libérée sans course.'
           }
         }
-        if (publishDetail.includes('AUTOWIN_GUARD:index-changed')) {
+        if (sortieGit(publish).includes('AUTOWIN_GUARD:index-changed')) {
           return {
             outcome: 'blocked',
             agentId,
