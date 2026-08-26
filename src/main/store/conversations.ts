@@ -13,6 +13,7 @@ import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
 import { canonicalProjectPath } from '../../shared/project-path'
 import { motsDe, replier } from '../../shared/mots'
+import { parseAskDecision } from '../../renderer/src/components/ask-choices'
 import { memeFamille } from './synonymes'
 import { construireVoisinage, type IndexVoisinage } from './voisinage'
 
@@ -108,6 +109,27 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
    * `updatedAt` répond à « la dernière touchée », ce qui n'est pas la même question.
    */
   lastUserMessageAt?: number
+  /**
+   * Le DERNIER tour est une question à choix restée sans réponse : la conversation attend
+   * l'utilisateur, pas le modèle. Absent tant que ce n'est pas le cas — un `false` partout
+   * ferait grossir chaque résumé IPC sans rien dire de plus.
+   */
+  lastAssistantAsksUser?: true
+}
+
+/**
+ * Vrai quand le DERNIER message est un tour assistant portant une question à choix encore
+ * ouverte. Un message utilisateur postérieur ferme la question : elle a été répondue. La
+ * reconnaissance d'une vraie question est déléguée à `parseAskDecision` — même règle que le
+ * rendu du bloc de décision (deux options minimum), pour qu'aucune pastille n'apparaisse sur
+ * une question que la vue n'affiche pas comme telle.
+ */
+export function attendUneDecision(messages: readonly Msg[]): boolean {
+  const dernier = messages.at(-1)
+  if (!dernier || dernier.role !== 'assistant') return false
+  const parts = (dernier as { parts?: PersistedChatPart[] }).parts
+  if (!Array.isArray(parts)) return false
+  return parts.some((part) => parseAskDecision(part as Parameters<typeof parseAskDecision>[0]) !== null)
 }
 
 /** Date du dernier tour de l'utilisateur, ou `undefined` s'il n'a encore rien écrit. */
@@ -903,7 +925,8 @@ export class ConversationStore {
         ?.status,
       ...(lastUserMessageAt(messages) !== undefined
         ? { lastUserMessageAt: lastUserMessageAt(messages) }
-        : {})
+        : {}),
+      ...(attendUneDecision(messages) ? { lastAssistantAsksUser: true as const } : {})
     }))
   }
 

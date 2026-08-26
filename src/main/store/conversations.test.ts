@@ -432,4 +432,53 @@ describe('réconciliation au chargement des tours interrompus', () => {
       lastAssistantStatus: 'interrupted'
     })
   })
+
+  /**
+   * Ces deux tests passaient par `store.append(... as never)` pour poser `parts` et `status`.
+   * Ca ne pouvait PAS marcher : `append` reconstruit le message a partir d'une liste blanche de
+   * champs (role, content, attachments) et jette silencieusement le reste. Le `as never` masquait
+   * le refus du typage au lieu de le reveler. Le chemin REEL est `beginTurn` + `applyTurnEvent`,
+   * ce que le code dit deja en toutes lettres a `beginTurn` : « Le chemin REEL des messages passe
+   * ICI, pas par `append` ». C'est probablement pour ca que ce travail n'a jamais ete publie.
+   */
+  function poserUneQuestion(
+    store: ConversationStore,
+    id: string,
+    options: string[]
+  ): void {
+    store.beginTurn(id, { content: 'go' }, { turnId: 'turn-ask' })
+    store.applyTurnEvent(id, 'turn-ask', { kind: 'command', actionId: 'a1', name: 'ask', args: {} })
+    store.applyTurnEvent(id, 'turn-ask', {
+      kind: 'result',
+      actionId: 'a1',
+      name: 'ask',
+      ok: true,
+      data: { question: 'On fait quoi ?', options }
+    })
+    store.applyTurnEvent(id, 'turn-ask', { kind: 'done' })
+  }
+
+  it('signale une conversation dont le DERNIER tour pose une question a choix a l’utilisateur', () => {
+    const store = new ConversationStore(makeClock())
+    const id = store.create({ title: 'A', provider: 'claude' }).id
+    poserUneQuestion(store, id, ['A', 'B'])
+
+    expect(store.listSummaries().find((s) => s.id === id)!.lastAssistantAsksUser).toBe(true)
+  })
+
+  it('ne signale PAS une question deja repondue ni un faux ask (une seule option)', () => {
+    const store = new ConversationStore(makeClock())
+    const repondue = store.create({ title: 'A', provider: 'claude' }).id
+    poserUneQuestion(store, repondue, ['A', 'B'])
+    // L'entree qui doit faire echouer une correction trop large : l'utilisateur A repondu.
+    store.append(repondue, { role: 'user', content: 'A' })
+
+    const uneSeule = store.create({ title: 'B', provider: 'claude' }).id
+    // Une seule option n'est pas une question : `parseAskDecision` exige deux choix.
+    poserUneQuestion(store, uneSeule, ['A'])
+
+    const resumes = store.listSummaries()
+    expect(resumes.find((s) => s.id === repondue)!.lastAssistantAsksUser).toBe(undefined)
+    expect(resumes.find((s) => s.id === uneSeule)!.lastAssistantAsksUser).toBe(undefined)
+  })
 })

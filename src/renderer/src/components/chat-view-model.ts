@@ -94,7 +94,14 @@ export interface StoredAssistantMessage {
 }
 
 export type ConversationStateKey =
-  'running' | 'completed' | 'failed' | 'interrupted' | 'cancelled' | 'waiting' | 'empty'
+  | 'running'
+  | 'asking'
+  | 'completed'
+  | 'failed'
+  | 'interrupted'
+  | 'cancelled'
+  | 'waiting'
+  | 'empty'
 
 export interface ConversationState {
   key: ConversationStateKey
@@ -108,6 +115,8 @@ export function deriveConversationState(input: {
   messageCount: number
   lastMessageRole?: 'user' | 'assistant'
   lastAssistantStatus?: ChatTurnStatus
+  /** Le dernier tour pose une question à choix encore ouverte (servi par le résumé IPC). */
+  asksUser?: boolean
 }): ConversationState {
   if (input.busy || input.lastAssistantStatus === 'streaming') {
     return {
@@ -142,6 +151,17 @@ export function deriveConversationState(input: {
       label: 'Arrêtée',
       detail: 'Le dernier tour a été arrêté',
       glyph: '×'
+    }
+  }
+  // Place APRES echec/interruption/arret : ces trois-la sont plus informatifs qu'une question
+  // restee ouverte, et un tour qui a echoue n'attend plus rien de l'utilisateur. Place AVANT
+  // `completed` : un tour termine qui POSE une question n'est pas « a jour », il rend la main.
+  if (input.asksUser) {
+    return {
+      key: 'asking',
+      label: 'Ta réponse attendue',
+      detail: 'Le dernier tour pose une question à choix restée ouverte',
+      glyph: '?'
     }
   }
   if (input.lastAssistantStatus === 'completed') {

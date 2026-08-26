@@ -382,6 +382,12 @@
 .conversation-state.is-waiting {
   color: #a78bfa;
 }
+/* La question en attente porte un JAUNE qui lui est propre. La confondre avec l'ambre des tours
+   interrompus (#ffb020) reviendrait a ne rien signaler de nouveau : « interrompu » dit que le tour
+   s'est arrete, « ta reponse attendue » dit que la machine rend la main. Deux sens, deux couleurs. */
+.conversation-state.is-asking {
+  color: #facc15;
+}
 .conversation-state.is-cancelled {
   color: #8b93a7;
 }

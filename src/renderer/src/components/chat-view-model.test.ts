@@ -134,6 +134,33 @@ describe('conversation state indicator', () => {
       })
     ).toMatchObject({ key: 'waiting', label: 'Sans réponse', glyph: '·' })
   })
+
+  it('marque une conversation qui attend une décision de l’utilisateur', () => {
+    expect(
+      deriveConversationState({
+        busy: false,
+        messageCount: 2,
+        lastMessageRole: 'assistant',
+        lastAssistantStatus: 'completed',
+        asksUser: true
+      })
+    ).toMatchObject({ key: 'asking', label: 'Ta réponse attendue', glyph: '?' })
+  })
+
+  it('ne marque pas « attend ta réponse » quand un tour tourne ou que l’utilisateur a repris la main', () => {
+    // Entrées qui feraient échouer une correction trop large :
+    expect(
+      deriveConversationState({ busy: true, messageCount: 2, asksUser: true })
+    ).toMatchObject({ key: 'running' })
+    expect(
+      deriveConversationState({
+        busy: false,
+        messageCount: 3,
+        lastMessageRole: 'user',
+        asksUser: true
+      })
+    ).toMatchObject({ key: 'waiting' })
+  })
 })
 
 describe('assistant reasoning sanitization', () => {

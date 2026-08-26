@@ -89,6 +89,9 @@ describe('minimal conversation status lights', () => {
     expect(css).toMatch(
       /\.conversation-state\.is-interrupted\s*{[^}]*color:\s*#ffb020/s
     )
+    // La question en attente porte un JAUNE qui lui est propre : la confondre avec l'ambre des
+    // tours interrompus reviendrait a ne rien signaler de nouveau.
+    expect(css).toMatch(/\.conversation-state\.is-asking\s*{[^}]*color:\s*#facc15/s)
     expect(css).toMatch(
       /@media \(prefers-reduced-motion: reduce\)[^{]*{[^}]*\.conversation-state\.is-running,[^}]*animation:\s*none/s
     )

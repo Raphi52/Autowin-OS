@@ -93,6 +93,18 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
           messageCount: 2,
           lastMessageRole: 'assistant',
           lastAssistantStatus: 'completed'
+        }).key,
+        // LIMITE DE CE TEST, a connaitre : cette liste est ENUMEREE A LA MAIN, elle ne derive pas
+        // les cles du type `ConversationStateKey`. Un etat ajoute au modele lui reste donc INVISIBLE
+        // tant que personne ne l'inscrit ici — verifie le 2026-08-25 : `asking` est passe au travers
+        // sans aucune couleur CSS. Ce n'est pas le garde de couplage automatique qu'il parait etre.
+        // Ajouter un etat au modele impose d'ajouter sa ligne ci-dessous.
+        deriveConversationState({
+          busy: false,
+          messageCount: 2,
+          lastMessageRole: 'assistant',
+          lastAssistantStatus: 'completed',
+          asksUser: true
         }).key
       ].filter((k) => k !== 'empty')
     )
