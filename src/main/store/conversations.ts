@@ -108,6 +108,53 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
 }
 
 /** Date du dernier tour de l'utilisateur, ou `undefined` s'il n'a encore rien écrit. */
+/** Un passage d'une conversation qui porte le terme cherche, avec de quoi le situer. */
+export interface ConversationExtrait {
+  role: string
+  ts: number
+  extrait: string
+}
+
+/** Une conversation qui porte le terme, et les passages qui le portent. */
+export interface ConversationRecherche {
+  id: string
+  title: string
+  provider: string
+  updatedAt: number
+  messageCount: number
+  extraits: ConversationExtrait[]
+}
+
+/**
+ * Replie un texte sur sa forme comparable : minuscules, accents retires.
+ *
+ * `NFD` separe la lettre de son accent, la plage `U+0300-U+036F` supprime les accents ainsi
+ * isoles. « À jour » et « a jour » deviennent la meme chaine -- celui qui tape vite cherche la
+ * meme chose que celui qui tape juste.
+ */
+function replier(texte: string): string {
+  return texte
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+/**
+ * La FENETRE autour du terme trouve, prise sur le texte d'ORIGINE (accents et casse intacts).
+ *
+ * Rendre le message entier noierait le terme dans des milliers de caracteres ; n'en rendre que le
+ * terme ne dirait pas dans quelle phrase il se trouve. Les bords coupes sont marques : une
+ * troncature muette se lit comme un texte complet.
+ */
+function fenetre(origine: string, position: number, longueur: number): string {
+  const MARGE = 120
+  const debut = Math.max(0, position - MARGE)
+  const fin = Math.min(origine.length, position + longueur + MARGE)
+  const coeur = origine.slice(debut, fin).replace(/\s+/g, ' ').trim()
+  return (debut > 0 ? '...' : '') + coeur + (fin < origine.length ? '...' : '')
+}
+
 export function lastUserMessageAt(messages: readonly Msg[]): number | undefined {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
@@ -562,6 +609,61 @@ export class ConversationStore {
   /** Liste toutes les conversations, triées par updatedAt décroissant. */
   list(): Conversation[] {
     return [...this.conversations.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+  }
+
+  /**
+   * CHERCHER par CONTENU dans tout le corpus.
+   *
+   * La capacité qui manquait, et dont l'absence poussait au pire chemin. Mesuré en conv-1407 le
+   * 2026-08-26 : l'orchestrateur, incapable de retrouver de quoi parlait « remake les pastilles de
+   * couleurs », a fouillé le CODE SOURCE — `find_in_files` était la seule recherche par contenu de
+   * son catalogue. Vingt inspections, zéro conversation lue, un run arrêté à 0,96 $.
+   *
+   * Littérale et non sémantique, délibérément : le corpus est déjà en mémoire, un parcours est
+   * instantané et se PROUVE par un test, là où un index sémantique ajoute une latence et un état à
+   * tenir à jour. Le Brain reste là pour ce que le littéral ne sait pas trouver.
+   *
+   * Insensible à la casse ET aux accents : celui qui tape « a jour » cherche « à jour ». Une
+   * recherche qui punit la frappe rapide n'est pas utilisée deux fois.
+   */
+  search(
+    terme: string,
+    options?: { limite?: number; extraitsParConversation?: number }
+  ): ConversationRecherche[] {
+    const aiguille = replier(terme)
+    // Un terme vide rendrait TOUT le corpus : ce n'est pas une recherche, c'est un dump.
+    if (aiguille.length === 0) return []
+    const limite = Math.max(1, Math.min(50, Math.floor(options?.limite ?? 10) || 10))
+    const parConversation = Math.max(
+      1,
+      Math.min(20, Math.floor(options?.extraitsParConversation ?? 3) || 3)
+    )
+    const trouvees: ConversationRecherche[] = []
+    for (const conversation of this.list()) {
+      const extraits: ConversationExtrait[] = []
+      for (const message of conversation.messages) {
+        if (typeof message.content !== 'string') continue
+        const position = replier(message.content).indexOf(aiguille)
+        if (position < 0) continue
+        extraits.push({
+          role: message.role,
+          ts: message.ts,
+          extrait: fenetre(message.content, position, aiguille.length)
+        })
+        if (extraits.length >= parConversation) break
+      }
+      if (extraits.length === 0) continue
+      trouvees.push({
+        id: conversation.id,
+        title: conversation.title,
+        provider: conversation.provider,
+        updatedAt: conversation.updatedAt,
+        messageCount: conversation.messages.length,
+        extraits
+      })
+      if (trouvees.length >= limite) break
+    }
+    return trouvees
   }
 
   /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */

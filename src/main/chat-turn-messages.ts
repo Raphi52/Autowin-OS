@@ -107,7 +107,7 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
         // d'un tour jamais vu serait conserver le mensonge tout en ajoutant le remède.
         nonVu
           ? `Suite de NOTRE conversation en cours. Ta session en contient l'historique, À UNE EXCEPTION : le tour ci-dessous a été exécuté par l'application SANS passer par toi, il est donc absent de ta session. Traite-le comme un fait établi de cette conversation.\n\nTOI (tour exécuté par l'app, hors de ta session):\n${nonVu}`
-          : `Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).`,
+          : `Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle conversation_search sur les mots de la demande, puis conversation_read sur l'identifiant rendu. L'identifiant de la conversation courante est activeConversationId, dans l'ETAT DE L'APP ci-dessus.`,
         `UTILISATEUR: ${parts.lastUserMessage ?? ''}`
       ]
     : [
