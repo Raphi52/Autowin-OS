@@ -351,8 +351,13 @@ function circonstanceDePublication(finalized: Record<string, unknown>): string |
   switch (finalized.outcome) {
     case 'conflict':
       return liste(finalized.files)
-    case 'blocked':
-      return texte(finalized.reason) ?? liste(finalized.files)
+    case 'blocked': {
+      // `reason` nomme la CATEGORIE (« merge-failed »), `detail` la cause reelle (« Filename too
+      // long »). Le diagnostic du 2026-08-26 a demande les DEUX : la categorie seule laisse
+      // rediagnostiquer a chaque fois.
+      const motif = [texte(finalized.reason), texte(finalized.detail)].filter(Boolean).join(' — ')
+      return motif || liste(finalized.files)
+    }
     case 'preserve-et-libere':
       return texte(finalized.branche)
     default:
