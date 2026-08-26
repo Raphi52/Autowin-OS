@@ -34,7 +34,7 @@ import {
 import { battementDeVerification, VERIFY_BATTEMENT_MS } from './verify-battement'
 import { natureDeLEchec } from './verify-echec-nature'
 import { bornerLigneDeVie } from './verify-battement'
-import { refusAvecIssue } from './issue-de-refus'
+import { refusAvecIssue, refusPourOutcome, type OutcomeDePublication } from './issue-de-refus'
 import { cleDeBureau, decisionDeReutilisation } from './bureau-reutilisable'
 import { readLastCommitFiles } from './git-read-main'
 import { readGitState } from './git-read-main'
@@ -332,6 +332,31 @@ export function parseDisplayArg(raw: unknown): number | undefined {
     throw new Error(`display invalide: ${JSON.stringify(raw)} (entier >= 1 attendu)`)
   }
   return value
+}
+
+/**
+ * La CIRCONSTANCE d'un echec de publication : ce que le message doit porter en plus du motif.
+ *
+ * L'ancien detail etait le nom de l'outil (`edit_file`), deja affiche au-dessus du message : il
+ * consommait la seule place ou une information utile pouvait tenir. Ici, chaque issue donne ce
+ * qu'elle SAIT -- les fichiers qui s'opposent, la raison du blocage, la branche qui porte le
+ * travail -- pour que le lecteur n'ait pas a le deviner.
+ */
+function circonstanceDePublication(finalized: Record<string, unknown>): string | undefined {
+  const liste = (valeur: unknown): string | undefined =>
+    Array.isArray(valeur) && valeur.length > 0 ? valeur.slice(0, 5).join(', ') : undefined
+  const texte = (valeur: unknown): string | undefined =>
+    typeof valeur === 'string' && valeur.trim() ? valeur.trim() : undefined
+  switch (finalized.outcome) {
+    case 'conflict':
+      return liste(finalized.files)
+    case 'blocked':
+      return texte(finalized.reason) ?? liste(finalized.files)
+    case 'preserve-et-libere':
+      return texte(finalized.branche)
+    default:
+      return texte(finalized.detail)
+  }
 }
 
 const CATALOG: CommandSpec[] = [
@@ -2536,7 +2561,18 @@ export class AppCommandBus {
         finalized.outcome !== 'cleanup-pending' &&
         finalized.outcome !== 'published-residue'
       ) {
-        throw new Error(refusAvecIssue('publication-differee', command))
+        // CHAQUE issue porte son propre message. Les six retombaient sur « publication differee »,
+        // un texte unique qui ne nommait jamais la cause et promettait un geste impossible sur
+        // `absente` et `libere`. Mesure conv-1407 : le meme refus mot pour mot, trois fois, puis un
+        // run arrete a 0,96 $ -- face a un refus qui ne dit pas ce qui s'est passe, l'agent ne peut
+        // que retenter a l'identique. Le detail porte la CIRCONSTANCE, jamais le nom de l'outil :
+        // `edit_file` est deja affiche au-dessus du message.
+        throw new Error(
+          refusPourOutcome(
+            finalized.outcome as OutcomeDePublication,
+            circonstanceDePublication(finalized)
+          )
+        )
       }
       return result
     } catch (error) {
