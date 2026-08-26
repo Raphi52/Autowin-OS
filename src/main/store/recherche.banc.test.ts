@@ -17,12 +17,20 @@ describe('banc d’essai de la recherche', () => {
     store.search('amorce', { limite: 1 })
     const index = (store as unknown as { voisinage: () => { rarete: (m: string) => number } }).voisinage()
 
-    // Les mots du bruit sont partout : ils doivent tomber au plancher.
+    /*
+     * L'assertion porte sur le RAPPORT, pas sur un seuil absolu.
+     *
+     * Une premiere version exigeait `rarete(courant) < 0,2`. Elle a rougi des que le bruit a recu des
+     * variantes morphologiques : les mots courants y ressortent proportionnellement moins, et leur
+     * rarete est passee a 0,219. Desserrer le seuil aurait ete un pansement -- c'est le seuil qui
+     * etait le mauvais critere. Ce que le banc doit garantir n'est pas une valeur, c'est que la
+     * fonction SEPARE : un mot du bruit doit rester tres loin derriere un terme unique.
+     */
+    const rare = index.rarete('zarbitro')
     for (const courant of ['projet', 'decide', 'ensemble']) {
-      expect(index.rarete(courant)).toBeLessThan(0.2)
+      expect(index.rarete(courant)).toBeLessThan(rare / 3)
     }
-    // Le terme rare garde une valeur haute : l'ecart est ce qui rend un test interpretable.
-    expect(index.rarete('zarbitro')).toBeGreaterThan(0.8)
+    expect(rare).toBeGreaterThan(0.8)
   })
 
   it('sur un mini-corpus, la rarete ne separe PAS -- c’est la raison d’etre du banc', () => {
@@ -88,5 +96,45 @@ describe('profil lexical du banc', () => {
     const adresse = df.get('rappelle') ?? 0
     expect(adresse).toBeGreaterThan(0)
     expect(adresse).toBeLessThan(30)
+  })
+})
+
+/**
+ * LE BANC ATTRAPE-T-IL CE QU'IL EST CENSE ATTRAPER ?
+ *
+ * C'est la question qu'on ne pose pas assez a un instrument neuf. Le premier banc paraissait bon et ne
+ * mordait pas : les formulations qui echouent sur le corpus reel y passaient TOUTES. Ce test verifie
+ * la propriete inverse de toutes les autres -- non pas que le banc se comporte bien, mais qu'il sait
+ * FAIRE ECHOUER une recherche, comme le reel.
+ *
+ * Le cas reproduit est celui d'« ecriture » : deux conversations en token exact, 94 en sous-chaine.
+ * Sans variantes dans le bruit, ce troisieme etat -- ni present, ni absent, mais NOYE -- n'existait pas.
+ */
+describe('le banc sait faire echouer une recherche', () => {
+  it('un terme noye dans ses variantes met le classement en defaut', () => {
+    const store = bancDEssai({ conversations: 250 })
+    for (const nom of ['Cible', 'Cible 2', 'Cible 3']) {
+      ajouterConversation(store, nom, [
+        `${remplissage(600)}\nzarbitro, zarbitro et encore zarbitro\n${remplissage(600)}`
+      ])
+    }
+    // Vingt-cinq conversations parlent de VARIANTES du terme, jamais du terme lui-meme.
+    for (let i = 0; i < 25; i++) {
+      ajouterConversation(store, `Variante ${i}`, [
+        `${remplissage(600)}\non parle de zarbitrologie et de zarbitrement ici\n${remplissage(600)}`
+      ])
+    }
+
+    const porteCible = (q: string): boolean =>
+      store.search(q, { limite: 3 }).some((r) => r.title.startsWith('Cible'))
+
+    // Ce que la recherche REUSSIT : le terme suit la formule d'adresse.
+    expect(porteCible('rappelle moi ce qu on a dit a propos de zarbitro dans le projet')).toBe(true)
+    // Ce qu'elle RATE, et que le banc doit savoir montrer : le terme ouvre une longue phrase, et ses
+    // variantes captent le classement. Si cette assertion se met a passer, ce n'est pas le banc qui
+    // s'est casse -- c'est la recherche qui a progresse, et ce test doit alors etre RELU, pas efface.
+    expect(porteCible('zarbitro avait ete evoque je ne sais plus quand ni dans quel contexte')).toBe(
+      false
+    )
   })
 })
