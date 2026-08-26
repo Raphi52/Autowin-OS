@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { libelleTravail, type TravailNonPublie } from './travail-non-publie'
 
 /**
  * LA LISTE DES TRAVAUX FINIS MAIS JAMAIS PUBLIÉS — et le moyen de les LIRE.
@@ -15,19 +16,6 @@ import { useEffect, useState } from 'react'
  * La frontière est tenue par un test qui lit ce fichier : supprimer, écraser ou trancher un conflit
  * restent interdits ici. Un travail qu'on ne peut pas lire ne se jette pas.
  */
-export interface TravailNonPublie {
-  agentId: string
-  date: string
-  fichiers: string[]
-}
-
-/** Le nom qu'un humain reconnaît : ses fichiers. L'identifiant de copie ne dit rien à personne. */
-export function libelleTravail(travail: TravailNonPublie): string {
-  if (!travail.fichiers.length) return travail.agentId
-  const premier = travail.fichiers[0]
-  const reste = travail.fichiers.length > 1 ? ` +${travail.fichiers.length - 1} fichiers` : ''
-  return `${premier}${reste}`
-}
 
 export function TravauxNonPublies({
   onFermer

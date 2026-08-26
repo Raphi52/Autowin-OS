@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { libelleTravail } from './TravauxNonPublies'
+import { libelleTravail } from './travail-non-publie'
 
 describe('nommer un travail non publié dans la liste', () => {
   it('montre le chemin complet — dans une liste, on a la place, contrairement au bandeau', () => {

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -95,10 +95,7 @@ describe('le tour de chat consomme bien ce réglage, pas une constante', () => {
   it('`os.ts` ne rabote plus le plafond du chat à une valeur câblée', () => {
     // Contrat sur le source : la garantie vit dans une methode qui exige tout l'OS pour tourner.
     // C'est la forme EXACTE qui a cause le defaut — la reintroduire recouperait les tours.
-    const source = new TextDecoder().decode(
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      require('node:fs').readFileSync(join(__dirname, 'os.ts'))
-    )
+    const source = new TextDecoder().decode(readFileSync(join(__dirname, 'os.ts')))
     expect(source).not.toMatch(/Math\.min\(settings\.maxProviderCalls,\s*6\)/)
     expect(source).toMatch(/settings\.maxChatProviderCalls/)
   })

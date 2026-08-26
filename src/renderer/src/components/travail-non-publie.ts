@@ -118,3 +118,27 @@ export function promptTravauxNonPublies(entrees: readonly EntreeTravail[]): stri
     '4. Rends un compte-rendu court : publiés, impubliables avec la raison, et ce qui reste.'
   ].join('\n')
 }
+
+/**
+ * Un travail d'agent qui n'a pas rejoint la base. Vit ICI et non dans le composant : le type et son
+ * libelle sont de la logique, pas du rendu.
+ */
+export interface TravailNonPublie {
+  agentId: string
+  date: string
+  fichiers: string[]
+}
+
+/**
+ * Le nom qu'un humain reconnait : ses fichiers. L'identifiant de copie ne dit rien a personne.
+ *
+ * Deplacee du composant : un fichier de composants qui exporte AUTRE CHOSE qu'un composant casse le
+ * rechargement a chaud (`react-refresh`), et son test l'importait -- l'export etait donc necessaire,
+ * seule sa place ne l'etait pas.
+ */
+export function libelleTravail(travail: TravailNonPublie): string {
+  if (!travail.fichiers.length) return travail.agentId
+  const premier = travail.fichiers[0]
+  const reste = travail.fichiers.length > 1 ? ` +${travail.fichiers.length - 1} fichiers` : ''
+  return `${premier}${reste}`
+}

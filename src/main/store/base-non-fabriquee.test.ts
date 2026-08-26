@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -78,9 +79,7 @@ describe('une base de départ absente', () => {
     // Le contexte est incohérent par ailleurs, donc le refus tombe pour une AUTRE raison, et celle-là
     // ne doit pas être définitive.
     const { repo, wm, racine } = monter()
-    const sha = require('node:child_process')
-      .execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' })
-      .trim()
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim()
 
     const verdict = wm.validateRecoveryContext('run-base-valide', {
       worktreePath: cheminAttendu(racine, 'run-base-valide'),

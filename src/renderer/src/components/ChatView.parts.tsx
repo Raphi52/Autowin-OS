@@ -42,7 +42,7 @@ const CMD_LABEL: Record<string, string> = {
 const LIGNES_VISIBLES = 9
 const CHARS_PAR_LIGNE = 100
 
-export function sortieDebordante(text: string): boolean {
+function sortieDebordante(text: string): boolean {
   let lignes = 0
   for (const brute of text.split('\n')) {
     lignes += Math.max(1, Math.ceil(brute.length / CHARS_PAR_LIGNE))

@@ -17,7 +17,16 @@ import { AppCommandBus } from './commands'
  * Ce test exige le câblage, pas la surface : la note passée par l'orchestrateur doit ressortir par
  * le `onProgress` de la commande, celui-là même qui devient le battement de l'action.
  */
-function osQuiEmetUneNote(note: string): any {
+/**
+ * Le double d'OS, type par le CONTRAT qu'il honore au lieu d'un `any`.
+ *
+ * Meme motif que `commands.travaux-non-publies-dans-get-state.test.ts` (commit 24fd1498) : le type
+ * se DEDUIT du constructeur -- il suit ses evolutions au lieu de mentir des la premiere -- et le
+ * cast final assume que le double n'implemente que ce que CE test traverse.
+ */
+type OsDouble = ConstructorParameters<typeof AppCommandBus>[0]
+
+function osQuiEmetUneNote(note: string): OsDouble {
   // Meme forme que le double des tests voisins : un double plus pauvre que le contrat teste une
   // fiction — `orchestrate` consulte `conversations`, `roles` et `budget` avant d'atteindre le run.
   const conversations = new Map<string, unknown>([
@@ -64,7 +73,7 @@ function osQuiEmetUneNote(note: string): any {
         phaseOutputs: []
       }
     }
-  }
+  } as unknown as OsDouble
 }
 
 describe('orchestrate — la note d’activité devient le battement de l’action', () => {
