@@ -1959,6 +1959,17 @@ export class AppCommandBus {
             role: lessonStep?.role ?? 'orchestrator',
             proposalAttestations: r.learningAttestations
           })
+          const terminalStatus =
+            r.gateBlocked || !r.valid
+              ? 'red'
+              : terminalLifecycle && terminalLifecycle.closure.status !== 'open'
+                ? terminalLifecycle.closure.status
+                : 'green'
+          const terminalDetail = r.gateBlocked
+            ? `Gate BLOQUÉ: ${r.gateReasons.join('; ')}`
+            : !r.valid
+              ? 'Livrable refusé par le juge.'
+              : undefined
           if (runPath) {
             const costCoverage = formatExecutionCostCoverage({
               costUsd: r.costUsd,
@@ -1978,26 +1989,23 @@ export class AppCommandBus {
             populateConvRunSections(runPath, phasesAvecJuge(r.phaseOutputs, r.judgeText), {
               publishedCommitSha
             })
-            const runStatus =
-              terminalLifecycle && terminalLifecycle.closure.status !== 'open'
-                ? terminalLifecycle.closure.status
-                : r.gateBlocked
-                  ? 'red'
-                  : 'green'
             closeConvRun(
               runPath,
-              runStatus,
-              r.gateBlocked
-                ? `Gate BLOQUÉ: ${r.gateReasons.join('; ')}`
-                : `Juge: validé — clôture autorisée (${costCoverage ?? 'coût non rapporté'}).`
+              terminalStatus,
+              terminalDetail ??
+                `Juge: validé — clôture autorisée (${costCoverage ?? 'coût non rapporté'}).`
             )
           }
           this.broadcast({
             type: 'orchestrate-end',
             convId,
             runPath,
-            status: r.gateBlocked ? 'red' : 'green',
-            ...(r.gateBlocked ? { detail: r.gateReasons.join('; ') } : {})
+            // L'EVENEMENT reste binaire (son contrat est `'green' | 'red'`), mais il compte
+            // desormais le refus du juge : `!r.valid` valait « vert » jusqu'ici, alors que le
+            // livrable avait ete REFUSE. Le statut de cloture, lui, garde toute sa finesse
+            // (`degraded-closed` compris) et part dans `closeConvRun` juste au-dessus.
+            status: r.gateBlocked || !r.valid ? 'red' : 'green',
+            ...(terminalDetail ? { detail: terminalDetail } : {})
           })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           this.broadcast({ type: 'refresh', scope: 'orchestration' })
