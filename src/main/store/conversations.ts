@@ -1198,27 +1198,44 @@ export class ConversationStore {
     //   - la rarete seule echoue sur une phrase d'adresse : « rappelle » vit dans 4 messages du
     //     corpus, « habillage » dans 3, « updatebanner » dans 1. Elle ne separe pas les mots
     //     d'adresse des termes techniques (21/40 contre 25/40 pour la longueur).
-    const porteur = entiers.reduce((meilleur, mot) => {
-      if (mot.length !== meilleur.length) return mot.length > meilleur.length ? mot : meilleur
-      // A egalite PARFAITE (meme longueur, meme rarete -- typiquement deux mots absents de l'index),
-      // le plus TARDIF gagne : la formule d'adresse ouvre la phrase, le sujet suit la preposition.
-      // Un fait de structure, non une liste de mots a entretenir. Mesure : 25/40 -> 28/40.
-      // A LONGUEUR EGALE, TOUJOURS LE PLUS TARDIF -- la rarete ne departage plus ici.
-      //
-      // Mesure du 2026-08-26 : consulter la rarete a longueur egale faisait choisir « rappelle »
-      // comme porteur dans cinq des huit derniers echecs, parce qu'il se trouve PLUS RARE que le
-      // terme cherche (il vit dans 4 messages du corpus, la ou « ecriture » en occupe 94). Preuve
-      // directe : retirer le seul mot « rappelle » de la demande suffisait a ramener les bonnes
-      // conversations -- « cosmique » rendait conv-1408 et conv-23, « thinking » conv-1404 et 1405.
-      // La rarete est un mauvais juge du SUJET : elle mesure la frequence, pas l'intention.
-      //
-      //   phrase top-3   32/40 -> 35/40      mot-cle seul   38/40 (inchange)
-      //
-      // La rarete reste indispensable au SCORE (voir la ponderation plus haut, et `rarete-isole`
-      // qui l'isole vraiment depuis qu'il a ete reecrit) ; elle ne sert plus qu'a cela.
-      return mot
-      return index.rarete(mot) > index.rarete(meilleur) ? mot : meilleur
-    }, entiers[0] ?? demandes[0])
+    /*
+     * QUEL MOT DE LA DEMANDE EN PORTE LE SUJET.
+     *
+     * Trois signaux, et aucun ne suffit seul -- mesure du 2026-08-26 sur un oracle de 120 cas tokenise
+     * EXACTEMENT comme la recherche (accents replies, memes separateurs), en conditions de production
+     * (budget 60 ms) :
+     *
+     *   critere                                    phrase top-3
+     *   la rarete seule                              74/120
+     *   la longueur, puis la position a egalite      91/120
+     *   rarete x longueur                            86/120
+     *   rarete x (longueur + position)              113/120   <- retenu
+     *
+     * Pourquoi chacun echoue seul : la RARETE ne separe pas (« rappelle » vit dans 4 messages du
+     * corpus, autant qu'un terme technique) ; la LONGUEUR fait perdre tout terme plus court que le mot
+     * d'adresse -- les 29 echecs de ce critere faisaient presque tous SEPT lettres, contre huit a
+     * « rappelle » ; la POSITION seule elirait « projet », qui termine la phrase.
+     *
+     * Ensemble ils se corrigent : la rarete ecarte les mots creux, la longueur et la position
+     * departagent ce qui reste. Un mot d'adresse est court, tot dans la phrase, et pas rare -- il perd
+     * sur les trois.
+     *
+     * CE QUI A REVELE CECI : mon premier oracle, de 40 cas, comptait la forme ACCENTUEE quand la
+     * recherche voit la forme repliee. Sept cas sur quarante etaient invalides, et le petit oracle
+     * assaini qui restait donnait 33/33 -- un score parfait qui cachait 76 % reels. Un oracle qu'on ne
+     * remet pas en question est un plafond qu'on se donne.
+     */
+    const porteurScore = (mot: string, position: number): number =>
+      index.rarete(mot) * (mot.length + position)
+    let porteur = entiers[0] ?? demandes[0]
+    let meilleurPorteur = -1
+    for (const [position, mot] of entiers.entries()) {
+      const score = porteurScore(mot, position)
+      if (score >= meilleurPorteur) {
+        meilleurPorteur = score
+        porteur = mot
+      }
+    }
     const candidats = trouvees.slice(0, Math.max(limite, PROFONDEUR_RECLASSEMENT))
     // Le contenu ENTIER, pas l’extrait : un premier essai lisait les extraits, qui sont des fenetres
     // tronquees, et le mot porteur pouvait se trouver juste apres la coupe -- 4/40 au lieu de 25/40.

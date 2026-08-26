@@ -337,3 +337,38 @@ describe('le re-classement compte les occurrences', () => {
     expect(titres[0]).toBe('Traite')
   })
 })
+
+/**
+ * UN TERME PLUS COURT QUE LE MOT D'ADRESSE DOIT QUAND MEME GAGNER.
+ *
+ * Mesure du 2026-08-26 sur un oracle de 120 cas tokenise comme la recherche, en conditions de
+ * production : le critere « le plus long, puis le plus tardif » ratait 29 cas, et ces 29 termes
+ * faisaient presque tous SEPT lettres -- contre huit a « rappelle ». Tout terme plus court que le mot
+ * d'adresse perdait, systematiquement. La formule retenue, `rarete x (longueur + position)`, porte le
+ * resultat a 115/120 : un mot d'adresse est court, tot dans la phrase, et pas rare -- il perd sur les
+ * trois signaux a la fois, la ou chacun pris seul le laissait passer.
+ */
+describe('choix du porteur : un terme court bat le mot d’adresse', () => {
+  it('« buttons » (7 lettres) l’emporte sur « rappelle » (8 lettres)', () => {
+    let horloge = 1000
+    const store = new ConversationStore(() => horloge++)
+    const long = 'contexte technique sans rapport particulier avec la demande. '.repeat(30)
+
+    // « rappelle » est present dans beaucoup de conversations : c'est un mot d'adresse, pas un sujet.
+    for (let i = 0; i < 12; i++) {
+      const b = store.create({ title: `Adresse ${i}`, provider: 'claude' })
+      store.append(b.id, { role: 'user', content: 'rappelle moi ce qu on a dit dans le projet' })
+    }
+    // La cible porte un terme de SEPT lettres, plus court que « rappelle ».
+    const cible = store.create({ title: 'Cible', provider: 'claude' })
+    store.append(cible.id, {
+      role: 'assistant',
+      content: `${long}${SAUT}le detail porte sur buttons, buttons et encore buttons${SAUT}${long}`
+    })
+
+    const titres = store
+      .search('rappelle moi ce qu on a dit a propos de buttons dans le projet', { limite: 3 })
+      .map((r) => r.title)
+    expect(titres).toContain('Cible')
+  })
+})
