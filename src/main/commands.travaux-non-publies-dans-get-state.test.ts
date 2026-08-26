@@ -15,18 +15,22 @@ import { AppCommandBus } from './commands'
  * qu'elle existe.
  */
 
+/** Le double minimal que `snapshot()` consulte : rien de plus, pour que le test dise ce qu'il teste. */
+type OsDouble = ConstructorParameters<typeof AppCommandBus>[0]
+
 const osAvecTravaux = (
   travaux: Array<{ agentId: string; date: string; fichiers: string[] }>
-): any => ({
-  executionWorkspace: process.cwd(),
-  conversations: { list: () => [] },
-  registry: { ids: () => ['claude'] },
-  roles: { all: () => ({}), getBinding: () => undefined },
-  runsWithGate: async () => [],
-  budget: () => ({ pricedSpendUsd: 0 }),
-  getWorktreeActivity: () => [],
-  travauxNonPublies: () => travaux
-})
+): OsDouble & { travauxNonPublies?: () => typeof travaux } =>
+  ({
+    executionWorkspace: process.cwd(),
+    conversations: { list: () => [] },
+    registry: { ids: () => ['claude'] },
+    roles: { all: () => ({}), getBinding: () => undefined },
+    runsWithGate: async () => [],
+    budget: () => ({ pricedSpendUsd: 0 }),
+    getWorktreeActivity: () => [],
+    travauxNonPublies: () => travaux
+  }) as unknown as OsDouble & { travauxNonPublies?: () => typeof travaux }
 
 describe('get_state porte les travaux non publiés', () => {
   it('NOMME le travail qui attend, avec ses fichiers', async () => {
