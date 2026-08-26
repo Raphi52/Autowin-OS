@@ -109,9 +109,16 @@ describe('profil lexical du banc', () => {
  *
  * Le cas reproduit est celui d'« ecriture » : deux conversations en token exact, 94 en sous-chaine.
  * Sans variantes dans le bruit, ce troisieme etat -- ni present, ni absent, mais NOYE -- n'existait pas.
+ *
+ * RELU LE 2026-08-26, comme sa version precedente le prescrivait. Ce test portait l'assertion
+ * « ce cas RATE », et elle s'est mise a passer : ce n'est pas le banc qui s'est casse, c'est la
+ * recherche qui a progresse. Le banc avait d'abord REFUTE le correctif -- la condition « tete
+ * strictement la plus rare » ne se declenchait jamais ici, tous les mots inconnus etant a egalite --
+ * puis valide la version qui departage a egalite par la longueur. L'assertion est donc inversee, et sa
+ * valeur d'origine conservee ci-dessous : c'est elle qui donne son sens au test.
  */
 describe('le banc sait faire echouer une recherche', () => {
-  it('un terme noye dans ses variantes met le classement en defaut', () => {
+  it('un terme noye dans ses variantes est desormais retrouve -- il ne l’etait pas', () => {
     const store = bancDEssai({ conversations: 250 })
     for (const nom of ['Cible', 'Cible 2', 'Cible 3']) {
       ajouterConversation(store, nom, [
@@ -128,13 +135,13 @@ describe('le banc sait faire echouer une recherche', () => {
     const porteCible = (q: string): boolean =>
       store.search(q, { limite: 3 }).some((r) => r.title.startsWith('Cible'))
 
-    // Ce que la recherche REUSSIT : le terme suit la formule d'adresse.
+    // Le terme suit la formule d'adresse : ce cas a toujours reussi.
     expect(porteCible('rappelle moi ce qu on a dit a propos de zarbitro dans le projet')).toBe(true)
-    // Ce qu'elle RATE, et que le banc doit savoir montrer : le terme ouvre une longue phrase, et ses
-    // variantes captent le classement. Si cette assertion se met a passer, ce n'est pas le banc qui
-    // s'est casse -- c'est la recherche qui a progresse, et ce test doit alors etre RELU, pas efface.
+    // Le terme OUVRE une longue phrase et ses variantes peuplent le bruit. Ce cas RATAIT -- il rendait
+    // « Variante 24, Variante 23, Variante 22 » -- jusqu'au bonus de tete conditionnel. Si cette
+    // assertion se remet a echouer, c'est ce bonus qui a ete perdu ou neutralise.
     expect(porteCible('zarbitro avait ete evoque je ne sais plus quand ni dans quel contexte')).toBe(
-      false
+      true
     )
   })
 })

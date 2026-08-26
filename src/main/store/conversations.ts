@@ -1246,8 +1246,54 @@ export class ConversationStore {
      * graduel qui cesse d'informer passe un seuil.
      */
     const POSITION_UTILE = 5
+    /*
+     * LE SUJET PEUT OUVRIR LA PHRASE -- mais seulement s'il se distingue.
+     *
+     * Angle mort trouve le 2026-08-26 : mes 120 cas employaient TOUS la meme phrase-gabarit, ou le
+     * sujet SUIT la formule d'adresse. Sur onze formulations reelles, celles qui le THEMATISENT en
+     * tete s'effondraient -- « X avait ete evoque, je ne sais plus quand » rendait 42/120.
+     *
+     * DEUX VERSIONS DE CE CORRECTIF ONT ETE JETEES AVANT CELLE-CI :
+     *   1. bonus a TOUT mot en tete -- cassait deux invariants : il le donnait aussi a « rappelle ».
+     *   2. bonus si la tete est STRICTEMENT la plus rare -- ne se declenchait JAMAIS dans le cas vise.
+     *      Sur « zarbitro avait ete evoque je ne sais plus quand », `avait`, `ete`, `evoque`, `sais`
+     *      et `quel` sont tous inconnus de l'index, donc tous a 1 comme le sujet : aucune stricte
+     *      superiorite possible. Le gain que j'avais mesure venait d'autres cas. C'est le banc d'essai
+     *      -- construit pour cela -- qui l'a montre.
+     *
+     * La condition retenue ajoute le departage qui manquait : a EGALITE de rarete, la tete doit etre
+     * la plus LONGUE. Parmi des mots egalement inconnus, le plus long porte plus probablement le sujet
+     * (`zarbitro` contre `avait`, `ete`, `sais`). Un mot d'adresse, lui, reste battu par la rarete.
+     *
+     *   bonus de tete   moyenne sur 11 formes (corpus reel, production)
+     *               0        102,5/120
+     *               3        110,7/120   <- retenu
+     *               5        103,3/120
+     *
+     * COMPROMIS ASSUME : « X avait ete evoque » passe de 42 a 103 et « X : qu est ce qu on avait
+     * decide » de 65 a 109, tandis que trois formes deja bonnes perdent trois a six points
+     * (120 -> 115, 120 -> 117, 119 -> 113). Sauver deux formes a moitie perdues vaut mieux que
+     * perfectionner celles qui marchaient.
+     *
+     * CE QUI RESTE : « on avait parle de X, tu te souviens ? » reste a 71 -- le sujet y est au MILIEU,
+     * ni tete ni fin. Et ces onze formulations, je les ai ecrites : elles varient les structures, elles
+     * ne sont pas un echantillon d'usage reel.
+     */
+    const BONUS_TETE = 3
+    const teteEstSujet =
+      entiers.length > 1 &&
+      entiers[0].length >= 5 &&
+      entiers
+        .slice(1)
+        .every(
+          (m) =>
+            index.rarete(m) < index.rarete(entiers[0]) ||
+            (index.rarete(m) === index.rarete(entiers[0]) && m.length < entiers[0].length)
+        )
     const porteurScore = (mot: string, position: number): number =>
-      index.rarete(mot) * (mot.length + Math.min(position, POSITION_UTILE))
+      index.rarete(mot) *
+      (mot.length +
+        (position === 0 && teteEstSujet ? BONUS_TETE : Math.min(position, POSITION_UTILE)))
     let porteur = entiers[0] ?? demandes[0]
     let meilleurPorteur = -1
     for (const [position, mot] of entiers.entries()) {
