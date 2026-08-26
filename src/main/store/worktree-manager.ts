@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { estCoquilleVide } from './coquilles-vides'
 import type { Dirent } from 'node:fs'
 import {
   chmodSync,
@@ -814,6 +815,67 @@ export class WorktreeManager {
    * suppression du bureau. Le HEAD detache n'est que le dernier recours -- mais c'est precisement
    * celui qui manquait.
    */
+  /**
+   * Le HEAD de CHAQUE bureau, en UNE commande. `git worktree list --porcelain` rend deja tout ce
+   * qu'un `rev-parse` par dossier allait rechercher un par un.
+   */
+  private headsDesBureaux(): Map<string, string> {
+    const heads = new Map<string, string>()
+    let dossier: string | undefined
+    try {
+      for (const ligne of this.git(this.baseRepo, ['worktree', 'list', '--porcelain']).split(
+        /\r?\n/
+      )) {
+        if (ligne.startsWith('worktree ')) {
+          const nom = ligne
+            .slice('worktree '.length)
+            .trim()
+            .replace(/[\\/]+$/, '')
+          const base = nom.split(/[\\/]/).pop() ?? ''
+          dossier = base.startsWith('agent__') ? base.slice('agent__'.length) : undefined
+          if (dossier !== undefined && !SAFE_ID.test(dossier)) dossier = undefined
+        } else if (ligne.startsWith('HEAD ') && dossier !== undefined) {
+          const sha = ligne.slice('HEAD '.length).trim()
+          if (HEX_SHA.test(sha)) heads.set(dossier, sha)
+          dossier = undefined
+        }
+      }
+    } catch {
+      // Un depot qui ne repond pas ne prouve AUCUNE perte : on n'annonce rien plutot que d'alarmer.
+    }
+    return heads
+  }
+
+  /**
+   * Un commit qu'AUCUNE ref ne contient : la signature d'un travail fabrique dans un bureau.
+   *
+   * LA POLARITE DU REPLI EST LE POINT. L'audit du 2026-08-26 a releve que ce `catch` rendait
+   * `false` -- donc « pas orphelin », donc INVISIBLE -- alors que son voisin `apporteQuelqueChose`
+   * rend `true`, et que ce fichier ecrit deux fois la regle : « le bandeau doit se tromper du cote
+   * qui n'efface rien ». Sur cet arbre partage ou plusieurs sessions verrouillent l'index, un
+   * `for-each-ref` qui echoue transitoirement faisait donc disparaitre un travail reel, sans trace.
+   *
+   * Le SHA nul (`0000…`) est un cas a part et il est REEL sur ce depot : un bureau pose sur une
+   * branche non nee. `for-each-ref --contains` leve dessus (exit 129), et le rattraper en « a
+   * signaler » inventerait un travail qui n'existe pas. On l'ecarte explicitement, au lieu de
+   * dependre de l'ordre d'evaluation du `&&` en aval.
+   */
+  private estOrphelin(sha: string): boolean {
+    if (/^0+$/.test(sha)) return false
+    try {
+      return !this.git(this.baseRepo, [
+        'for-each-ref',
+        '--contains',
+        sha,
+        '--count=1',
+        '--format=%(refname)'
+      ]).trim()
+    } catch {
+      // Se tromper du cote qui n'efface rien : un depot qui ne repond pas ne prouve pas l'absence.
+      return true
+    }
+  }
+
   private commitDuTravail(agentId: string): string | undefined {
     if (!SAFE_ID.test(agentId)) return undefined
     const secours = `autowin/recovery/${agentId}`
@@ -834,14 +896,7 @@ export class WorktreeManager {
        * Un commit fabrique par l'agent dans son bureau detache n'est contenu dans AUCUNE ref ; une
        * base, par construction, en a une. `--contains` tranche donc exactement la bonne question.
        */
-      const refs = this.git(this.baseRepo, [
-        'for-each-ref',
-        '--contains',
-        sha,
-        '--count=1',
-        '--format=%(refname)'
-      ]).trim()
-      return refs ? undefined : sha
+      return this.estOrphelin(sha) ? sha : undefined
     } catch {
       // Un bureau sans `.git` lisible ne prouve aucune perte : on ne l'invente pas.
       return undefined
@@ -869,10 +924,33 @@ export class WorktreeManager {
        * un bureau vide, ou dont le travail a deja ete repris a la main, ne dit rien.
        */
       const detaches = this.listAgentIds().filter((agentId) => !branches.includes(agentId))
-      return [...branches, ...detaches].filter((agentId) => {
-        const travail = this.commitDuTravail(agentId)
-        return travail !== undefined && this.apporteQuelqueChose(travail, baseRef)
-      })
+      /*
+       * UN SEUL `git worktree list` POUR TOUS LES HEADS, et un verdict MEMOISE PAR SHA.
+       *
+       * Mesure du 2026-08-26 sur ce depot : la version naive faisait quatre processus git par
+       * bureau -- 76 au total, 10,4 SECONDES. Deux gachis se cumulaient : un `rev-parse` par bureau
+       * alors qu'une seule commande les rend tous, et le meme sha reteste autant de fois qu'il y a
+       * de bureaux poses dessus (dix-neuf bureaux ne portaient que six shas distincts, la plupart
+       * des bases partagees).
+       */
+      const heads = this.headsDesBureaux()
+      const verdictParSha = new Map<string, boolean>()
+      const apporte = (sha: string): boolean => {
+        const connu = verdictParSha.get(sha)
+        if (connu !== undefined) return connu
+        const verdict = this.estOrphelin(sha) && this.apporteQuelqueChose(sha, baseRef)
+        verdictParSha.set(sha, verdict)
+        return verdict
+      }
+      return [
+        ...branches.filter((agentId) =>
+          this.apporteQuelqueChose(`autowin/recovery/${agentId}`, baseRef)
+        ),
+        ...detaches.filter((agentId) => {
+          const sha = heads.get(agentId)
+          return sha !== undefined && apporte(sha)
+        })
+      ]
     } catch {
       // Un depot qui ne repond pas ne prouve AUCUNE perte : on n'annonce rien plutot que d'alarmer.
       return []
@@ -1045,6 +1123,15 @@ export class WorktreeManager {
     const branche = `autowin/recovery/${agentId}`
     const aDuTravail = this.unpublishedFiles(path).length > 0
     if (aDuTravail) {
+      /*
+       * `switch -C` DEPLACE la branche : meme ecrasement que `branch -f`, meme perte.
+       *
+       * L'identite d'un bureau etant stable par tache, cette adresse peut deja porter le travail
+       * d'une tentative precedente. On la gare avant de la deplacer, sur la meme regle que
+       * `ancrerAvantSuppression` : on n'ecrase que ce qui ne perd rien.
+       */
+      const teteAvant = this.tryGitFn(path, ['rev-parse', 'HEAD'])
+      if (teteAvant.code === 0) this.mettreAlAbriSiDivergente(branche, teteAvant.stdout.trim())
       // `switch -C` : on se place sur la branche de recuperation SANS toucher aux fichiers, puis on
       // committe. Un echec ici interrompt tout — mieux vaut garder la copie que perdre le travail.
       if (this.tryGitFn(path, ['switch', '-C', branche]).code !== 0) {
@@ -1661,6 +1748,15 @@ export class WorktreeManager {
      * La bonne question vit deja dans ce fichier : `apporteQuelqueChose` (patch-id contre la base) --
      * celle que le recensement pose. Un bureau qui n'apporte rien laisse toujours son ref partir : on
      * ne garde pas une adresse pour du vide, c'est l'intention d'origine et elle est preservee.
+     *
+     * LA BASE EST 'HEAD', DELIBEREMENT, et ce n'est PAS `main` : c'est la branche courante du depot de
+     * base, donc une reference MOUVANTE sur un arbre partage. C'est exactement la base que
+     * `travauxNonPublies` utilise (son parametre `baseRef` vaut 'HEAD' par defaut) : garder ou
+     * supprimer une adresse doit repondre a la MEME question que « ce travail est-il encore a
+     * publier ? », sinon le rangement et le recensement divergent — une adresse gardee que le
+     * recensement ignore, ou l'inverse. Angle mort assume : deux commits au patch-id identique se
+     * lisent comme un seul, donc un travail dont le diff est deja dans HEAD par une autre voie laisse
+     * son adresse partir. C'est le comportement voulu (il n'apporte rien), pas un oubli.
      */
     if (this.apporteQuelqueChose(branch, 'HEAD')) {
       return { ok: true, advanced: false, files: [] }
@@ -3749,7 +3845,35 @@ exit 0
       ...(force ? ['--force'] : []),
       path
     ])
-    if (remove.code === 0) return { ok: true }
+    if (remove.code === 0) {
+      /*
+       * GIT A RENDU 0 — CA NE PROUVE PAS QUE LE DOSSIER EST PARTI.
+       *
+       * Mesure le 2026-08-25 : deux bureaux liberes par `git worktree remove --force` (code 0) ont
+       * laisse leur dossier en place, zero fichier utile, un `.git` orphelin, ~1 Mo piece. Le
+       * commentaire ci-dessus decrivait deja ce risque, mais ce `return` concluait `ok` sur le seul
+       * code de sortie, sans jamais REGARDER. C'est tres probablement l'origine des douze coquilles
+       * trouvees le meme jour dans ce depot.
+       *
+       * Et une coquille ne coute pas que du disque : un `git status` lance dedans ne repond pas
+       * « vide », git remonte l'arborescence et rapporte l'etat du depot PARENT. Douze coquilles ont
+       * ainsi paru porter du travail, et cette fausse lecture a ete propagee jusque dans un message
+       * de commit avant d'etre rattrapee.
+       *
+       * On ne retire QUE ce dont l'absence de valeur est demontree : le dossier ne contient AUCUN
+       * fichier hors `.git`. Un residu qui porte quoi que ce soit reste en place et fait echouer le
+       * nettoyage, plutot que d'etre efface en silence.
+       */
+      if (existsSync(path) && estCoquilleVide(path)) {
+        try {
+          this.removeDirFn(path)
+        } catch {
+          /* La coquille sera revue au prochain balayage : ne pas faire echouer une liberation
+             reussie pour un dossier vide qu'on n'a pas pu retirer maintenant. */
+        }
+      }
+      return { ok: true }
+    }
     if (!force) {
       return { ok: false, detail: (remove.stderr || remove.stdout).trim() || undefined }
     }
@@ -5104,7 +5228,37 @@ exit 0
     const tete = this.tryGitFn(path, ['rev-parse', 'HEAD'])
     if (tete.code !== 0) return
     if (!this.apporteQuelqueChose(tete.stdout.trim(), 'HEAD')) return
+    this.mettreAlAbriSiDivergente(branche, tete.stdout.trim())
     this.tryGitFn(this.baseRepo, ['branch', '-f', branche, tete.stdout.trim()])
+  }
+
+  /**
+   * GARE le travail qu'une adresse de secours porte DEJA, avant qu'on ecrive par-dessus.
+   *
+   * DEFAUT VECU le 2026-08-26, signale par un juge contrarian puis REPRODUIT par un test : l'identite
+   * d'un bureau est STABLE par tache (`cleDeBureau` — c'est tout le levier anti-residus du 25/08), donc
+   * deux tentatives sur la meme cible partagent le meme `agentId`, donc la meme adresse de secours. Un
+   * `branch -f` y ecrivait sans regarder : le travail de la tentative 1, correctement ancre, etait
+   * DESANCRE par l'ancrage de la tentative 2. La perte n'etait pas supprimee, seulement decalee d'un
+   * cran — on ne perdait plus au premier balayage, on perdait au second.
+   *
+   * On n'ecrase que ce qui ne perd rien : une adresse absente, identique, ou dont le nouveau commit
+   * DESCEND (fast-forward). Sinon l'ancien sommet part sous une adresse distincte, dans le meme espace
+   * `autowin/recovery/` — donc toujours vue par le recensement, dont le filtre accepte ce nom.
+   *
+   * Un ancien sommet qui n'apporte plus rien par rapport a la base n'est pas gare : on ne garde pas
+   * d'adresse pour du vide.
+   */
+  private mettreAlAbriSiDivergente(branche: string, nouveauSha: string): void {
+    const existant = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', `refs/heads/${branche}`])
+    if (existant.code !== 0) return
+    const ancien = existant.stdout.trim()
+    if (!ancien || ancien === nouveauSha) return
+    const descend =
+      this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', ancien, nouveauSha]).code === 0
+    if (descend) return
+    if (!this.apporteQuelqueChose(ancien, 'HEAD')) return
+    this.tryGitFn(this.baseRepo, ['branch', '-f', `${branche}-${ancien.slice(0, 12)}`, ancien])
   }
 
   /**
