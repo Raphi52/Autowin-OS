@@ -460,3 +460,43 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
     expect(container.querySelector('[data-testid="update-repair"]')).toBeNull()
   })
 })
+
+describe('rail replié : les alternatives tiennent dans la largeur d’une icône', () => {
+  const onFeature = {
+    available: true,
+    behind: 3,
+    branch: 'feat/x',
+    reference: 'origin/main',
+    strategies: ['merge', 'rebase', 'switch-main']
+  }
+
+  it('les boutons d’alternative n’affichent PLUS leur libellé plein, mais restent nommés', async () => {
+    api({ checkUpdate: vi.fn().mockResolvedValue(onFeature) })
+    await render(true)
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="update-more"]')!.click()
+    })
+    for (const [strategy, label] of [
+      ['rebase', 'Rebaser sur origin/main'],
+      ['switch-main', 'Basculer sur main']
+    ] as const) {
+      const bouton = container.querySelector<HTMLButtonElement>(
+        `[data-testid="update-choice-${strategy}"]`
+      )!
+      expect(bouton.textContent).not.toContain(label)
+      expect(bouton.textContent!.trim().length).toBeLessThanOrEqual(2)
+      expect(bouton.getAttribute('aria-label')).toContain(label)
+    }
+  })
+
+  it('rail DÉPLIÉ : le libellé plein reste affiché (entrée qui casse un fix trop large)', async () => {
+    api({ checkUpdate: vi.fn().mockResolvedValue(onFeature) })
+    await render(false)
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="update-more"]')!.click()
+    })
+    expect(
+      container.querySelector('[data-testid="update-choice-rebase"]')!.textContent
+    ).toContain('Rebaser sur origin/main')
+  })
+})
