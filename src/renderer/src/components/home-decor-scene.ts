@@ -341,6 +341,43 @@ function buildStars(random: () => number): THREE.Points {
 }
 
 /**
+ * L'ÉCLAT des lunes (les corps annelés du décor), demandé en baisse le 2026-08-26 : « les lunes
+ * sont trop lumineuses ».
+ *
+ * Ce qui brillait n'était pas la surface — elle est éclairée par un terminateur — mais deux couches
+ * ADDITIVES dont l'opacité était écrite en dur dans les shaders : le halo atmosphérique (0,55) et
+ * les anneaux (0,62). Additives et reprises par le bloom, elles se cumulaient en une auréole
+ * laiteuse. Réglages sortis en constante pour être relus par le test, faute de WebGL en test.
+ */
+export const ECLAT_LUNES = {
+  /** Opacité du halo sur le limbe. */
+  halo: 0.3,
+  /** Puissance du limbe : plus haute = lueur collée au bord au lieu de baigner le disque. */
+  limbe: 4.2,
+  /** Opacité du premier anneau ; les suivants décroissent. */
+  anneau: 0.42
+} as const
+
+/**
+ * La MATIÈRE du nuage (les nébuleuses), refaite le 2026-08-26 : « le nuage est moche ».
+ *
+ * Le défaut nommé : un amas presque isotrope dont le cœur était blanchi (lerp 0,42 vers le blanc) et
+ * rendu à alpha 0,5 — sous le bloom, cela se lit comme du coton gris, pas comme un filament. La
+ * correction garde le même nombre de points mais les organise : étirement franchement anisotrope,
+ * plusieurs bras de filament, cœur beaucoup moins désaturé, alpha plus bas.
+ */
+export const MATIERE_NUAGE = {
+  /** Combien de bras de filament structurent l'amas. 1 = boule de coton. */
+  filaments: 3,
+  /** Étirement du nuage : x nettement > y, sinon c'est une boule. */
+  etirement: { x: 3.1, y: 1.15, z: 0.7 },
+  /** Blanchiment du cœur du filament. Trop haut = aplat laiteux. */
+  blancCoeur: 0.24,
+  /** Opacité d'un grain. */
+  alpha: 0.34
+} as const
+
+/**
  * Une nébuleuse : un amas de points colorés, étiré et posé dans un angle du champ.
  *
  * C'est le motif dominant du fond d'écran d'origine — des filaments roses et cyan qui montent des
@@ -366,15 +403,28 @@ function buildNebula(
     const t = random()
     const spread = Math.pow(t, 2)
     const angle = random() * Math.PI * 2
-    const arm = Math.sin(angle * 2.5 + t * 5.5)
-    positions[o] = options.center.x + (Math.cos(angle) * spread * 2.4 + arm * 0.7) * options.scale
+    // Plusieurs bras au lieu d'un seul, et un pli secondaire plus rapide : c'est ce qui donne au
+    // nuage un dessin de filament plutôt qu'un contour de boule.
+    const arm = Math.sin(angle * MATIERE_NUAGE.filaments + t * 5.5)
+    const pli = Math.sin(angle * (MATIERE_NUAGE.filaments * 2 + 1) + t * 9.1) * 0.35
+    // Le grain se serre vers le coeur du bras : `bras` proche de 1 = sur le filament.
+    const bras = Math.pow(Math.abs(arm), 1.6)
+    positions[o] =
+      options.center.x +
+      (Math.cos(angle) * spread * MATIERE_NUAGE.etirement.x + (arm + pli) * 0.9) * options.scale
     positions[o + 1] =
-      options.center.y + (Math.sin(angle) * spread * 1.7 + arm * 0.5) * options.scale
-    positions[o + 2] = options.center.z + (random() - 0.5) * 0.9 * options.scale
+      options.center.y +
+      (Math.sin(angle) * spread * MATIERE_NUAGE.etirement.y + (arm - pli) * 0.45) * options.scale
+    positions[o + 2] =
+      options.center.z + (random() - 0.5) * MATIERE_NUAGE.etirement.z * options.scale
 
     scratch.copy(primary).lerp(secondary, Math.pow(random(), 1.4))
     // Le coeur du filament est plus clair : sans ce gradient, la nébuleuse est un aplat coloré.
-    scratch.lerp(new THREE.Color(0xffffff), Math.max(0, 0.42 - spread) * 0.6)
+    // Le blanchiment suit le BRAS, pas seulement le centre : la lumière dessine la structure.
+    scratch.lerp(
+      new THREE.Color(0xffffff),
+      Math.max(0, MATIERE_NUAGE.blancCoeur - spread * 0.5) * bras
+    )
     colors[o] = scratch.r
     colors[o + 1] = scratch.g
     colors[o + 2] = scratch.b
@@ -390,7 +440,11 @@ function buildNebula(
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { uTime: { value: 0 }, uPixelRatio: { value: 1 } },
+    uniforms: {
+      uTime: { value: 0 },
+      uPixelRatio: { value: 1 },
+      uAlpha: { value: MATIERE_NUAGE.alpha }
+    },
     vertexShader: `
       attribute float aSize;
       varying vec3 vColor;
@@ -412,12 +466,13 @@ function buildNebula(
     `,
     fragmentShader: `
       varying vec3 vColor;
+      uniform float uAlpha;
       void main() {
         float d = length(gl_PointCoord - vec2(0.5));
         float falloff = 1.0 - smoothstep(0.0, 0.5, d);
         if (falloff <= 0.002) discard;
-        // Puissance 1.8 : un dégradé linéaire donne des disques nets, donc du confetti.
-        gl_FragColor = vec4(vColor, pow(falloff, 1.8) * 0.5);
+        // Puissance 2.4 : un dégradé trop plat donne des disques nets, donc du confetti.
+        gl_FragColor = vec4(vColor, pow(falloff, 2.4) * uAlpha);
       }
     `,
     vertexColors: true
@@ -638,7 +693,11 @@ function buildPlanet(options: {
       side: THREE.BackSide,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uColor: { value: new THREE.Color(options.ringColor) } },
+      uniforms: {
+        uColor: { value: new THREE.Color(options.ringColor) },
+        uOpaciteHalo: { value: ECLAT_LUNES.halo },
+        uLimbe: { value: ECLAT_LUNES.limbe }
+      },
       vertexShader: [
         'varying vec3 vNormal;',
         'varying vec3 vView;',
@@ -651,11 +710,13 @@ function buildPlanet(options: {
       ].join('\n'),
       fragmentShader: [
         'uniform vec3 uColor;',
+        'uniform float uOpaciteHalo;',
+        'uniform float uLimbe;',
         'varying vec3 vNormal;',
         'varying vec3 vView;',
         'void main() {',
         '  float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vView)));',
-        '  gl_FragColor = vec4(uColor, pow(rim, 3.2) * 0.55);',
+        '  gl_FragColor = vec4(uColor, pow(rim, uLimbe) * uOpaciteHalo);',
         '}'
       ].join('\n')
     })
@@ -678,7 +739,7 @@ function buildPlanet(options: {
         uRayonGlobe: { value: options.radius },
         uOmbre: { value: 0.82 },
         uSeed: { value: options.seed + i * 4.3 },
-        uOpacite: { value: 0.62 - i * 0.09 },
+        uOpacite: { value: ECLAT_LUNES.anneau - i * 0.09 },
         uInterieur: { value: interieur },
         uExterieur: { value: exterieur },
         uOrientation: { value: new THREE.Matrix3() }
