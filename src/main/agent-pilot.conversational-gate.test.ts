@@ -88,6 +88,14 @@ describe('chat() — gate conversationnel', () => {
     expect(prompt).toContain("porte sur le CODE et demande d'y TRAVAILLER")
   })
 
+  it('ne lance pas build quand aucun livrable ni cible ne sont nommes', () => {
+    // Entrée discriminante : « fais un truc parfait ». Sans cette garde, le modèle peut inventer
+    // un livrable et lancer BUILD alors qu'aucun changement vérifiable n'a été demandé.
+    expect(prompt).toContain('AUCUN livrable ni aucune cible')
+    expect(prompt).toContain('ne lance PAS `orchestrate`')
+    expect(prompt).toContain('demande un choix concret')
+  })
+
   it('n’exige jamais de renvoyer la question a l’utilisateur (divergence preservee)', () => {
     expect(prompt).toContain('ne renvoie JAMAIS la question')
     expect(prompt).toContain('options concrètes et scorées')

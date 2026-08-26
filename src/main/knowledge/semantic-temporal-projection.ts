@@ -119,7 +119,12 @@ function nodeId(kind: SemanticTemporalNodeKind, sourceKind: string, sourceId: st
 
 function eventKind(event: TraceEventV1): SemanticTemporalNodeKind {
   if (event.observation.boundary === 'Autowin orchestration outcome') return 'outcome'
-  if (event.type === 'decision' || event.type === 'gate' || event.type === 'verdict')
+  if (
+    event.type === 'decision' ||
+    event.type === 'handoff' ||
+    event.type === 'gate' ||
+    event.type === 'verdict'
+  )
     return 'decision'
   if (event.type === 'tool-call' || event.type === 'tool-result') return 'evidence'
   if (event.type === 'artifact') return 'artifact'

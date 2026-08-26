@@ -123,4 +123,38 @@ describe('appendObservedOrchestrationOutcome', () => {
       'judge · claude/sonnet · issue completed'
     )
   })
+
+  it('conserve phase et route quand une phase exec en échec est portée par un handoff', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-outcome-handoff-'))
+    roots.push(root)
+    const store = new TraceStore(root)
+    store.append({
+      schema: 'autowin.trace/v1',
+      id: 'build-handoff-1',
+      conversationId: 'conv1',
+      turnId: 'turn1',
+      timestamp: '2026-08-16T10:00:00.000Z',
+      sequence: 0,
+      type: 'handoff',
+      status: 'failed',
+      actor: { id: 'builder', kind: 'agent', label: 'builder' },
+      recipient: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+      channel: 'internal',
+      payloads: [{ kind: 'app-state', content: 'build en échec' }],
+      observation: { boundary: 'Autowin orchestration exec', fidelity: 'exact' },
+      execution: { runId: 'run-2', phase: 'build', agentId: 'builder' },
+      provider: { id: 'codex', model: 'gpt-5' }
+    })
+
+    appendObservedOrchestrationOutcome(store, {
+      conversationId: 'conv1',
+      turnId: 'turn1',
+      outcome: { runId: 'run-2', status: 'red', valid: false }
+    })
+
+    const context = causalLearningContext(store.readConversation('conv1'))
+    expect(context).toContain('build · codex/gpt-5 · issue failed')
+    expect(context).not.toContain('phase inconnue')
+    expect(context).not.toContain('route inconnue')
+  })
 })
