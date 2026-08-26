@@ -20,4 +20,17 @@ describe('guardBrokenProcessPipes', () => {
     stdout.emit('error', error)
     expect(report).toHaveBeenCalledWith(error)
   })
+
+  it('ne crashe pas si le callback de diagnostic échoue', () => {
+    const stdout = new EventEmitter()
+    const stderr = new EventEmitter()
+    const report = vi.fn(() => {
+      throw new Error('diagnostic indisponible')
+    })
+    guardBrokenProcessPipes(stdout, stderr, report)
+    const error = Object.assign(new Error('I/O réel'), { code: 'EIO' })
+
+    expect(() => stdout.emit('error', error)).not.toThrow()
+    expect(report).toHaveBeenCalledWith(error)
+  })
 })

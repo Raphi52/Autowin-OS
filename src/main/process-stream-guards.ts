@@ -14,7 +14,13 @@ export function guardBrokenProcessPipes(
   report: (error: NodeJS.ErrnoException) => void = () => undefined
 ): void {
   const handle = (error: NodeJS.ErrnoException): void => {
-    if (error.code !== 'EPIPE') report(error)
+    if (error.code !== 'EPIPE') {
+      try {
+        report(error)
+      } catch {
+        /* un diagnostic défaillant ne doit jamais faire crasher le process */
+      }
+    }
   }
   stdout.on('error', handle)
   stderr.on('error', handle)

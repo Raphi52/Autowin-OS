@@ -686,7 +686,7 @@ describe('Orchestrator — flip live worktree', () => {
     const worktrees: RunWorktrees = {
       begin: (runId) => {
         currentRunId = runId
-        return 'C:\wt\run-cause'
+        return 'C:\\wt\\run-cause'
       },
       // Aucun `detail` ici : la cause ne vit que dans l'activite persistee.
       end: () => ({
@@ -705,7 +705,7 @@ describe('Orchestrator — flip live worktree', () => {
           startedAtMs: 100,
           endedAtMs: 200,
           workspacePath: 'C:\base',
-          worktreePath: 'C:\wt\run-cause',
+          worktreePath: 'C:\\wt\\run-cause',
           baseBranch: 'main',
           baseSha: 'abc123',
           detail: SENTINELLE
@@ -1038,7 +1038,7 @@ describe('Orchestrator — flip live worktree', () => {
         worktrees: {
           begin: (id: string) => {
             runId = id
-            return 'C:\wt\run-1'
+            return 'C:\\wt\\run-1'
           },
           activity: () => [
             {

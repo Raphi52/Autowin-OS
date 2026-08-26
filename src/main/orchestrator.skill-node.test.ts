@@ -227,8 +227,8 @@ describe('boucle d’outils d’un nœud skill, dans un run réel', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      executionWorkspace: 'C:\workspace',
-      worktrees: makeTestWorktrees('C:\workspace'),
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace'),
       execPhases: ['build'],
       skillCommands: () => lanceur
     })

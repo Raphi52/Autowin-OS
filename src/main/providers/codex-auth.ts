@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { Entry } from '@napi-rs/keyring'
 import { ensureAutowinAppData } from '../app-data'
 
 const nodeRequire = createRequire(__filename)
@@ -40,6 +42,22 @@ export interface Tokens {
 /** Injection de dépendance pour tester hors-ligne (fetch mocké). */
 export type FetchLike = typeof fetch
 
+export interface TokenVault {
+  get(account: string): string | null
+  set(account: string, value: string): void
+}
+
+const KEYRING_SERVICE = 'Autowin OS Codex'
+const KEYRING_FORMAT = 'autowin-keyring-v1'
+const defaultTokenVault: TokenVault = {
+  get: (account) => new Entry(KEYRING_SERVICE, account).getPassword(),
+  set: (account, value) => new Entry(KEYRING_SERVICE, account).setPassword(value)
+}
+
+function keyringAccount(path: string): string {
+  return createHash('sha256').update(path).digest('hex')
+}
+
 export function defaultAuthPath(): string {
   return join(ensureAutowinAppData(), 'auth.json')
 }
@@ -67,16 +85,22 @@ function safeStorageOrNull(): {
   }
 }
 
-export function loadTokens(path = defaultAuthPath()): Tokens | null {
+export function loadTokens(path = defaultAuthPath(), vault: TokenVault = defaultTokenVault): Tokens | null {
   if (!existsSync(path)) return null
   try {
     const buf = readFileSync(path)
     const text = buf.toString('utf8')
-    // Legacy : ancien fichier en clair (JSON) → lu puis RE-CHIFFRÉ à la volée (migration transparente).
+    // Legacy : ancien fichier en clair (JSON) → lu puis placé dans le coffre OS à la volée.
     if (text.trimStart().startsWith('{')) {
-      const legacy = JSON.parse(text) as Tokens
+      const stored = JSON.parse(text) as Tokens | { format: string; account: string }
+      if ('format' in stored) {
+        if (stored.format !== KEYRING_FORMAT) return null
+        const secret = vault.get(stored.account)
+        return secret ? (JSON.parse(secret) as Tokens) : null
+      }
+      const legacy = stored
       try {
-        saveTokens(legacy, path)
+        saveTokens(legacy, path, vault)
       } catch {
         /* migration best-effort */
       }
@@ -90,13 +114,25 @@ export function loadTokens(path = defaultAuthPath()): Tokens | null {
   }
 }
 
-export function saveTokens(t: Tokens, path = defaultAuthPath()): void {
+export function saveTokens(
+  t: Tokens,
+  path = defaultAuthPath(),
+  vault: TokenVault = defaultTokenVault
+): void {
   mkdirSync(dirname(path), { recursive: true })
   const json = JSON.stringify(t, null, 2)
   const ss = safeStorageOrNull()
-  // Chiffré si le coffre OS est dispo (prod Electron) ; sinon repli clair mais permissions restreintes.
+  // Electron chiffre directement le fichier. Hors Electron, le secret va dans le coffre système :
+  // auth.json ne contient qu'un pointeur non secret et il n'existe plus de repli en clair.
   if (ss) writeFileSync(path, ss.encryptString(json), { mode: 0o600 })
-  else writeFileSync(path, json, { encoding: 'utf8', mode: 0o600 })
+  else {
+    const account = keyringAccount(path)
+    vault.set(account, json)
+    writeFileSync(path, JSON.stringify({ format: KEYRING_FORMAT, account }), {
+      encoding: 'utf8',
+      mode: 0o600
+    })
+  }
 }
 
 /** Étape 1 : demande un user_code. L'app doit afficher userCode + VERIFY_URL. */

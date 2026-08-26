@@ -27,25 +27,60 @@ export default defineConfig(
     },
     rules: {
       ...eslintPluginReactHooks.configs.recommended.rules,
-      ...eslintPluginReactRefresh.configs.vite.rules
+      ...eslintPluginReactRefresh.configs.vite.rules,
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          /*
+           * `ignoreRestSiblings` couvre la DESTRUCTURATION POUR OMISSION : l'idiome
+           * `const { cle: _ignoree, ...reste } = objet`, qui retire une cle sans jamais la lire --
+           * ne PAS la lire est tout son propos. Trois sites legitimes du depot etaient signales en
+           * erreur (`_score`, `_vivant`, `_ignore`), et un `npm test` qui inclut le lint ne pouvait
+           * donc pas conclure.
+           *
+           * La regle continue d'attraper les vraies variables inutilisees : elle ne se tait que la
+           * ou un `...reste` rend l'omission EXPLICITE. Posee ici et non dans le bloc des tests --
+           * ces trois sites sont en PRODUCTION.
+           */
+          ignoreRestSiblings: true
+        }
+      ]
     }
   },
   {
     // Configuration et utilitaires JavaScript : TypeScript ne peut pas y garantir les annotations de retour.
     files: ['**/*.mjs'],
+    /*
+     * DECLARER LE LANGAGE, plutot que de faire taire la regle qui s'en plaint.
+     *
+     * Ces fichiers sont des modules ES et emploient l'`await` de premier niveau. Parses comme des
+     * SCRIPTS, leurs portees sont mal resolues : `no-undef` signalait des variables declarees au
+     * niveau du module (`GESTE` de `cdp-accueil-3d-proof.mjs`) comme non definies, alors que
+     * `node --check` accepte le fichier. Un faux positif qui vient d'une lacune de configuration,
+     * pas du code -- et qui empechait `npm test` de conclure.
+     */
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module'
+    },
     rules: {
-      '@typescript-eslint/explicit-function-return-type': 'off'
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      // Meme convention que pour les `.ts` : un `_` en tete dit « volontairement non lu ».
+      // Sans cette reprise, la regle venait du preset SANS options, et un outil de diagnostic
+      // garde expres (`_contenus`) etait signale comme un oubli.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }
+      ]
     }
   },
   {
     // Tests et probes non expédiés : privilégier l'inférence des doubles et callbacks locaux.
     files: ['**/*.test.{ts,tsx}', 'scripts/**/*.{mts,ts}'],
     rules: {
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
-      ]
+      '@typescript-eslint/explicit-function-return-type': 'off'
     }
   },
   {

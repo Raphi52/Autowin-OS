@@ -156,7 +156,11 @@ export function exigeUnChiffreVerifie(
     /\bnombre\b/.test(q) ||
     /\bcompte[rz]?\b/.test(q) ||
     /\bliste[rz]?\b/.test(q) ||
-    /\binventaire\b/.test(q)
+    /\binventaire\b/.test(q) ||
+    // « le TOTAL de fichiers » demande un compte aussi surement que « combien ». Manquant
+    // jusqu'au 2026-08-26 : la question passait au travers du garde, et un chiffre devine
+    // pouvait sortir sans qu'aucune lecture ne l'etaye.
+    /\btotal\b/.test(q)
   if (!demandeUnCompte) return false
   /*
     AUCUN chiffre n'est exigé dans la réponse, et c'est une CORRECTION mesurée.
