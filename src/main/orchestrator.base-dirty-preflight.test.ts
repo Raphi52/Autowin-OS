@@ -71,7 +71,7 @@ function makeOrchestrator(worktrees: RunWorktrees): {
 
 describe('Orchestrator — base sale : le run PART (plus de pré-vol)', () => {
   it('mutation + base sale : la copie est créée et l’agent travaille', async () => {
-    const begin = vi.fn(() => 'C:\wt\run-1')
+    const begin = vi.fn(() => 'C:\\wt\\run-1')
     const end = vi.fn()
     const baseDirtyFiles = vi.fn(() => ['src/main/orchestrator.ts', 'docs/note.md'])
     const { orch, provider } = makeOrchestrator({ begin, end, baseDirtyFiles })
@@ -83,7 +83,7 @@ describe('Orchestrator — base sale : le run PART (plus de pré-vol)', () => {
   })
 
   it('la saleté de la base n’est même plus CONSULTÉE au lancement', async () => {
-    const begin = vi.fn(() => 'C:\wt\run-1')
+    const begin = vi.fn(() => 'C:\\wt\\run-1')
     const end = vi.fn()
     // Un pré-vol résiduel se trahirait ici : la seule raison de lire cette liste au lancement était
     // d'en faire un refus. Personne d'autre ne la consulte sur ce chemin.
@@ -96,7 +96,7 @@ describe('Orchestrator — base sale : le run PART (plus de pré-vol)', () => {
   })
 
   it('base propre : rien ne change, le run part comme avant', async () => {
-    const begin = vi.fn(() => 'C:\wt\run-1')
+    const begin = vi.fn(() => 'C:\\wt\\run-1')
     const end = vi.fn()
     const { orch, provider } = makeOrchestrator({ begin, end, baseDirtyFiles: () => [] })
 
@@ -118,7 +118,7 @@ describe('Orchestrator — base sale : le run PART (plus de pré-vol)', () => {
   })
 
   it('coordinateur sans pré-vol (ancien contrat) : toujours aucun refus inventé', async () => {
-    const begin = vi.fn(() => 'C:\wt\run-1')
+    const begin = vi.fn(() => 'C:\\wt\\run-1')
     const end = vi.fn()
     const { orch } = makeOrchestrator({ begin, end })
 

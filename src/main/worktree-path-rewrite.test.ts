@@ -166,9 +166,11 @@ describe('câblage — l’alignement a lieu APRÈS le verdict de fusion', () =>
  * une seule fois, à la clôture. La reprise fusionnait ensuite sans que personne ne réécrive la phrase.
  */
 describe('intégration différée ≠ intégration ratée', () => {
-  const WT = 'C:\repo\.autowin-data\autowin-os\worktrees\h\agent__run-5ee1ad825286-1'
-  const BASE = 'C:\repo'
-  const report = { result: `Rapport. Fichier ${WT}\src\a.ts modifié.` }
+  // Antislashs DOUBLES : simples, `\r` etait un RETOUR CHARIOT et les autres disparaissaient --
+  // ce test de reecriture de chemins Windows ne portait donc aucun antislash. Verifie par execution.
+  const WT = 'C:\\repo\\.autowin-data\\autowin-os\\worktrees\\h\\agent__run-5ee1ad825286-1'
+  const BASE = 'C:\\repo'
+  const report = { result: `Rapport. Fichier ${WT}\\src\\a.ts modifié.` }
 
   it('n’affirme PAS « rien n’est publié » quand une reprise est programmée', () => {
     const aligned = alignReportWithDisk(report, WT, BASE, 'pending')
@@ -186,7 +188,7 @@ describe('intégration différée ≠ intégration ratée', () => {
 
   it('les chemins de la copie restent VALIDES : on ne les réécrit pas', () => {
     const aligned = alignReportWithDisk(report, WT, BASE, 'pending')
-    expect(aligned.result).toContain(`${WT}\src\a.ts`)
+    expect(aligned.result).toContain(`${WT}\\src\\a.ts`)
   })
 
   it('la note différée n’est pas ajoutée deux fois', () => {
@@ -265,8 +267,8 @@ describe('intégration différée ≠ intégration ratée', () => {
  * convergence de deux lentilles orthogonales sur le même point n'est pas un artefact de lecture.
  */
 describe('l’adresse de secours atteint l’utilisateur', () => {
-  const WT2 = 'C:\repo\.autowin-data\autowin-os\worktrees\h\agent__run-9'
-  const BASE2 = 'C:\repo'
+  const WT2 = 'C:\\repo\\.autowin-data\\autowin-os\\worktrees\\h\\agent__run-9'
+  const BASE2 = 'C:\\repo'
   const REF = 'refs/autowin/rescue/run-9'
 
   it('intégration différée : la note porte l’adresse ET une commande qui RÉCUPÈRE', () => {

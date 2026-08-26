@@ -91,8 +91,8 @@ const orchestrateur = (provider: ProviderAdapter, phases: string[]): Orchestrato
     }),
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    executionWorkspace: 'C:\workspace',
-    worktrees: makeTestWorktrees('C:\workspace'),
+    executionWorkspace: 'C:\\workspace',
+    worktrees: makeTestWorktrees('C:\\workspace'),
     execPhases: phases as never,
     skillCommands: () => lanceur
   })

@@ -14,7 +14,7 @@ vi.mock('../runs/survivable-spawn', () => ({
       child,
       pid: child.pid,
       spawnToken: 'codex-progression',
-      journalPath: 'C:\journals\codex-progression.jsonl',
+      journalPath: 'C:\\journals\\codex-progression.jsonl',
       survivable: true,
       release: vi.fn(),
       tail: async (onLine: (line: string) => void) => {
