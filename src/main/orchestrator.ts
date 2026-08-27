@@ -2054,11 +2054,21 @@ export class Orchestrator {
               if (!raw.reason) return undefined
               const files = raw.files?.slice(0, 5) ?? []
               const filesPart = files.length > 0 ? ` — fichiers en cause: ${files.join(', ')}` : ''
+              // `reason` nomme la CATEGORIE (« merge-failed »), `detail` porte la CAUSE. Sans elle,
+              // le journal que l'humain lit ne dit pas quoi reparer : mesure le 2026-08-27
+              // (conv-1427), un run vert clos en `red` sur le seul mot « merge-failed », dont le
+              // travail a du etre recupere a la main. Le recu Git exposait deja `detail` ; cette
+              // ligne le fait remonter la ou la decision se prend. Borne a 300 caracteres — une
+              // sortie git entiere rendrait le journal illisible.
+              const cause = (raw.detail ?? '').trim()
+              const causePart = cause
+                ? ` — cause: ${cause.length > 300 ? `${cause.slice(0, 297)}...` : cause}`
+                : ''
               // L'adresse du travail ne passe PLUS par ici : ce diagnostic n'est poussé dans le
               // rapport que sous `if (green && …)`, donc un run rouge ne l'aurait jamais vue. Elle
               // vit désormais dans la note de disposition (`adresseDeSecours`), rendue quel que soit
               // l'état du run. Ce message garde son seul rôle : nommer la CAUSE du blocage.
-              return `blocage d’intégration: ${raw.reason}${filesPart}`
+              return `blocage d’intégration: ${raw.reason}${causePart}${filesPart}`
             })()
           : undefined
       const finalActivity = activityForRun()

@@ -1397,3 +1397,36 @@ describe('le rapport ne pointe pas vers une copie supprimée', () => {
     expect(result.result).not.toContain('NON fusionné')
   })
 })
+
+/**
+ * LA CAUSE DOIT ATTEINDRE LE `RUN.md`, PAS SEULEMENT LE RECU.
+ *
+ * Mesure le 2026-08-27 (conv-1427) : un run vert — rouge->vert prouve, typecheck exit 0, juge
+ * VALIDE, 2,47 $ — s'est clos en `red`. Le `RUN.md` portait pour tout diagnostic
+ * « blocage d'integration: merge-failed ». Or `reason` nomme la CATEGORIE, `detail` porte la cause
+ * reelle ; `detail` etait destructure ici puis jamais employe. Le recu Git l'exposait, le journal
+ * que l'humain LIT ne le voyait pas — et le travail a du etre recupere a la main.
+ */
+describe('la cause d’un blocage atteint le journal du run', () => {
+  it('joint le `detail` de la finalisation aux raisons du gate', async () => {
+    const CAUSE = 'Filename too long: src/tres/long/chemin.ts'
+    const { orch } = makeOrchestrator({
+      begin: () => 'C:\wt\run-cause-journal',
+      end: () => ({
+        outcome: 'blocked' as const,
+        agentId: 'run-cause-journal',
+        files: ['src/a.ts'],
+        reason: 'merge-failed' as const,
+        detail: CAUSE
+      })
+    })
+
+    const result = await runWithLifecycle(orch, 'modifie le projet', () => {})
+
+    expect(result.gateBlocked).toBe(true)
+    const diagnostic = result.gateReasons.find((r) => r.includes('merge-failed'))
+    expect(diagnostic).toBeDefined()
+    // La categorie ne suffit pas : sans la cause, le journal ne dit pas quoi reparer.
+    expect(diagnostic).toContain(CAUSE)
+  })
+})
