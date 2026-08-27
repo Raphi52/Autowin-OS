@@ -63,11 +63,19 @@
   box-sizing: border-box;
 }
 
+/*
+ * PLUS DE FOND D'ECRAN 2D, et c'est la demande de l'utilisateur, formulee deux fois : « faut enlever
+ * le fond d'ecran 2d et tout remplacer par du 3d », puis « ya encore le fond decran 2d ». Il avait
+ * raison les deux fois -- le `body` peignait ici `autowin-galaxy-bg-hq.png` en `cover fixed`, une
+ * image PLATE, sans profondeur ni reaction au pointeur, et sur TOUTES les vues.
+ *
+ * Le fond est desormais la scene three.js (`DecorDeFond`), montee a la racine de la coque. Le `body`
+ * ne porte plus qu'une base sombre : elle reste visible tant que WebGL n'a pas rendu sa premiere
+ * image, et sur les machines sans WebGL, ou le decor ne monte pas du tout.
+ */
 body {
   margin: 0;
-  background:
-    linear-gradient(rgba(1, 2, 9, 0.1), rgba(0, 0, 5, 0.16)),
-    url('./autowin-galaxy-bg-hq.png') center / cover fixed;
+  background: #05060c;
   color: var(--text);
   font-family: var(--font);
   font-size: 13px;
@@ -430,4 +438,24 @@ button.card:hover {
 }
 .fade-in {
   animation: fadeIn var(--dur) var(--ease);
+}
+
+/*
+ * L'HOTE DU DECOR 3D, fond de toute l'application.
+ *
+ * `fixed` et non `absolute` : il ne suit aucun defilement, il EST le fond. `z-index: 0` le place
+ * sous le contenu (la coque et ses vues montent au-dessus), et `pointer-events: none` garantit qu'un
+ * fond ne vole jamais un clic.
+ */
+.decor-de-fond {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.decor-de-fond canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }

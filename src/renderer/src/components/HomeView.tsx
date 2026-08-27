@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createDecorScene, DECOR_DEFAUT, type DecorScene, type DecorVariant } from './home-decor-scene'
 import {
   formatEventDay,
   formatEventTime,
@@ -62,16 +61,6 @@ const LAYOUT_STORAGE_KEY = autowinStorageKey('home.layout.v1')
  * aide sans laisser le moyen de la revoir échange une friction contre une autre.
  */
 const NOTICE_STORAGE_KEY = autowinStorageKey('home.notice-vue.v1')
-/** La direction visuelle du decor. Un reglage, pas une constante : l'utilisateur en choisit une. */
-/*
- * `v2` et non `v1` : la cle est VOLONTAIREMENT changee le 2026-08-25.
- *
- * Cause de la plainte « je vois des poussieres » : le defaut du decor est passe a `actuel` (planetes
- * annelees), mais une machine qui avait deja choisi `poussiere` gardait ce choix en localStorage et
- * continuait d'afficher l'ancienne direction — le nouveau defaut n'atteignait jamais l'ecran.
- * Repartir sur une cle neuve rend la main a `DECOR_DEFAUT` sans effacer l'ancienne valeur.
- */
-const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v2')
 const NOTICE_OUVERTURES = 4
 /** Pas de déplacement au clavier, en pixels. Assez grand pour avancer, assez petit pour viser. */
 const PAS_CLAVIER = 16
@@ -180,7 +169,6 @@ export function HomeView({
   const [noticeForcee, setNoticeForcee] = useState(false)
 
   const surfaceRef = useRef<HTMLDivElement | null>(null)
-  const decorHostRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
   const holdRef = useRef<HoldState | null>(null)
   /**
@@ -287,110 +275,11 @@ export function HomeView({
   const layout = useMemo(() => reconcileLayout(arrangement, surface), [arrangement, surface])
 
   /* ---------------------------------------------------------------- *
-   * Le décor. Monté une fois, suspendu quand la vue n'est pas affichée.
+   * Le décor a QUITTÉ cette vue le 2026-08-27 : il est devenu le fond de toute
+   * l’application (`DecorDeFond`, monté par `App`). Le monter ici AUSSI ferait tourner deux
+   * scènes WebGL sur le même écran — deux contextes, deux boucles, un GPU pour un seul fond.
+   * La direction visuelle choisie reste lue à la même source unique : `DECOR_STORAGE_KEY`.
    * ---------------------------------------------------------------- */
-  useEffect(() => {
-    const host = decorHostRef.current
-    if (!host) return
-    const choisie = (window.localStorage.getItem(DECOR_STORAGE_KEY) ?? DECOR_DEFAUT) as DecorVariant
-    const scene: DecorScene | null = createDecorScene(choisie)
-    // Pas de WebGL (happy-dom en test, pilote absent) : la page s'affiche sans décor, ce qui est le
-    // comportement voulu — un décor n'est pas une dépendance de la fonction.
-    if (!scene) return
-    host.appendChild(scene.canvas)
-
-    const reduceMotion =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-    /**
-     * Redimensionne le decor, PUIS le redessine.
-     *
-     * Le redessin n'est pas une precaution : sans lui, le decor disparait. Cause localisee le
-     * 2026-08-21 apres deux hypotheses fausses, sur une machine ou « reduire les animations » est
-     * ACTIF — celle de l'utilisateur. Dans ce mode la scene ne dessine qu'UNE image au montage, et
-     * `renderer.setSize` realloue le tampon de dessin : redimensionner la fenetre repositionnait donc
-     * correctement tous les elements sur un tampon que plus personne ne remplissait. Mesure : 0,13 %
-     * de pixels de la planete apres redimensionnement, contre 60,42 % apres un rechargement.
-     *
-     * C'est la MEME faute que celle deja corrigee pour les tuiles — une fonction adossee a l'horloge
-     * d'animation — refaite sur le decor. Le redessin est inconditionnel : quand la boucle tourne, une
-     * image de plus ne coute rien ; quand elle ne tourne pas, c'est la seule qui existera.
-     */
-    const fit = (): void => {
-      scene.resize(host.clientWidth, host.clientHeight)
-      scene.render(reduceMotion ? 12 : performance.now() / 1000, { x: 0, y: 0 })
-    }
-    fit()
-    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null
-    observer?.observe(host)
-    // `resize` de fenetre EN PLUS de l'observateur, comme pour la disposition.
-    //
-    // Filet de coherence, et RIEN DE PLUS : un environnement sans `ResizeObserver` ne recalculerait
-    // jamais le cadrage, alors que le decor place tous ses elements en fractions du cadre VISIBLE.
-    //
-    // Honnetement : je l'ai d'abord ajoute en croyant expliquer un ecart de rendu mesure le
-    // 2026-08-21 (0,13 % de pixels ambres contre 60,42 % selon qu'on rechargeait ou non la page avant
-    // la capture). Cette explication est REFUTEE — une sonde a montre que l'hote passe bien de 1834 a
-    // 1414 px, que le canevas suit, et que les deux evenements se declenchent. La cause de cet ecart
-    // n'est PAS localisee. Ce filet reste parce qu'il se defend seul, pas parce qu'il corrige cela.
-    window.addEventListener('resize', fit)
-
-    const aim = { x: 0, y: 0 }
-    const look = { x: 0, y: 0 }
-    const onPointerMove = (event: PointerEvent): void => {
-      aim.x = (event.clientX / window.innerWidth - 0.5) * 2
-      aim.y = (event.clientY / window.innerHeight - 0.5) * 2
-    }
-    window.addEventListener('pointermove', onPointerMove)
-
-    let frame = 0
-    let last = 0
-    const draw = (time: number): void => {
-      frame = requestAnimationFrame(draw)
-      // Suspendu hors de la vue active : faire tourner un rendu 3D pour une page que personne ne
-      // regarde coûte un GPU entier pour rien.
-      if (!activeRef.current) return
-      // ~40 images/s : la scène dérive lentement, doubler la cadence ne se voit pas et double la
-      // facture d'une vue qui reste ouverte toute la journée.
-      if (time - last < 25) return
-      last = time
-      look.x += (aim.x - look.x) * 0.05
-      look.y += (aim.y - look.y) * 0.05
-      /*
-       * « MOUVEMENT REDUIT » REDUIT LE MOUVEMENT, il n'efface pas le decor.
-       *
-       * Avant, cette preference coupait TOUT : aucune boucle, parallaxe curseur annulee, une seule
-       * image figee. Mesure le 2026-08-24 sur la machine de l'utilisateur, ou
-       * `SPI_GETCLIENTAREAANIMATION` vaut False : il ne voyait donc AUCUN des decors qu'il
-       * demandait, et croyait que ses demandes echouaient. Elles aboutissaient ; l'ecran restait
-       * muet.
-       *
-       * La coupure retenue distingue les deux natures de mouvement. Le temps est FIGE, donc plus
-       * aucune derive autonome -- c'est ce que la preference vise, une image qui bouge toute seule
-       * sous des yeux qui ne l'ont pas demande. La parallaxe curseur, elle, reste : elle ne bouge
-       * QUE quand l'utilisateur bouge, c'est de la manipulation directe, et la supprimer retirait
-       * une fonctionnalite au lieu de calmer une animation.
-       */
-      scene.render(reduceMotion ? 12 : time / 1000, look)
-    }
-
-    /*
-     * La boucle tourne MEME en mouvement reduit, et c'est le coeur du correctif : sans elle, le
-     * curseur ne pouvait rien deplacer. Elle reste bon marche -- suspendue hors de la vue active
-     * (voir `draw`), plafonnee a ~40 images/s, et le temps qu'elle passe a la scene est constant,
-     * donc le GPU ne recalcule qu'une parallaxe, pas une derive.
-     */
-    frame = requestAnimationFrame(draw)
-
-    return () => {
-      cancelAnimationFrame(frame)
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('resize', fit)
-      observer?.disconnect()
-      scene.dispose()
-    }
-  }, [])
 
   /* ---------------------------------------------------------------- *
    * Les données. Lues seulement quand la vue est affichée.
@@ -682,7 +571,6 @@ export function HomeView({
 
   return (
     <div className="home-view" ref={surfaceRef} data-testid="home-view">
-      <div className="home-view__decor" ref={decorHostRef} aria-hidden="true" />
       {/* UNE seule rangée, qui se replie. Deux blocs positionnés en absolu se recouvraient dès que la
           fenêtre devenait étroite : le titre passait sous les boutons. Une rangée qui se replie rend
           ce chevauchement impossible, quelle que soit la largeur. */}
