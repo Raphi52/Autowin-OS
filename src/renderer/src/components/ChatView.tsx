@@ -94,6 +94,7 @@ import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { conversationEnMarkdown, nomFichierExportMarkdown } from './conversation-markdown'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { WorkflowsPanel } from './WorkflowsPanel'
+import { ThinkingPanel } from './ThinkingPanel'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
   mergeLiveAndPersisted,
@@ -385,6 +386,8 @@ export function ChatView({
   /* Fil remonté : le saut vers le dernier message ne dépend pas d'une nouvelle activité. */
   const [scrolledAwayFromTail, setScrolledAwayFromTail] = useState(false)
   const [showRuns, setShowRuns] = useState(false)
+  // Panneau « Réflexion » : le raisonnement du modèle, hors du fil (colonne droite).
+  const [showThinking, setShowThinking] = useState(false)
   const [runsPaneWidth, setRunsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.runsPaneWidth'))
     const value = Number.isFinite(saved) && saved > 0 ? saved : 340
@@ -3068,6 +3071,15 @@ export function ChatView({
             </button>
             <button
               type="button"
+              className={`thinking-toggle${showThinking ? ' is-active' : ''}`}
+              data-testid="chat-thinking-toggle"
+              onClick={() => setShowThinking((v) => !v)}
+              title="Réflexion de l’agent (panneau dédié)"
+            >
+              Réflexion
+            </button>
+            <button
+              type="button"
               className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
               onClick={() => setShowRuns((v) => !v)}
               title="Workflows (RUN.md)"
@@ -3734,6 +3746,10 @@ export function ChatView({
           </div>
         </div>
       </section>
+
+      {showThinking && (
+        <ThinkingPanel messages={messages} onClose={() => setShowThinking(false)} />
+      )}
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
       {showRuns && (

@@ -76,6 +76,34 @@ describe('vue Tickets', () => {
     vi.restoreAllMocks()
   })
 
+  it('charge 75 fiches par défaut et sait trier par ID décroissant', async () => {
+    // Le parametre est DECLARE (meme s'il n'est pas lu ici) : sans lui, `vi.fn` deduit un tuple
+    // d'arguments VIDE et `mock.calls[0][0]` ne compile pas (TS2493) — l'assertion sur `pageSize`
+    // porte precisement sur cet argument. Meme forme qu'a la ligne 421 de ce fichier.
+    const listTickets = vi.fn(async (_requete: { pageSize?: number }): Promise<TicketPage> => ({
+      items: [item('1'), item('2'), item('3')],
+      hasMore: false
+    }))
+    api({ listTickets })
+    const { root, container } = await render()
+
+    // La FENÊTRE demandée au fournisseur : trop petite, elle cachait les fiches récentes.
+    expect(listTickets.mock.calls[0]?.[0]).toMatchObject({ pageSize: 75 })
+
+    const sort = container.querySelector('[data-testid="tickets-sort"]') as HTMLSelectElement
+    await act(async () => {
+      sort.value = 'id-desc'
+      sort.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+    const ids = [...container.querySelectorAll('[data-testid="ticket-row"]')].map(
+      (row) => row.querySelector('.tickets-id')?.textContent
+    )
+    expect(ids).toEqual(['#3', '#2', '#1'])
+
+    root.unmount()
+  })
+
   it('désactive « Traiter la sélection » sans coche puis tout sélectionne/désélectionne', async () => {
     api()
     const { root, container } = await render()

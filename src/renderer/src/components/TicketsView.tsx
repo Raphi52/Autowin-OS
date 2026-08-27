@@ -65,7 +65,7 @@ const EMPTY_DRAFT: SourceDraft = {
   baseUrl: ''
 }
 
-type SortKey = 'recent' | 'priority' | 'id' | 'title'
+type SortKey = 'recent' | 'priority' | 'id-desc' | 'id' | 'title'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible de charger les tickets.'
@@ -346,7 +346,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             source,
             requestId,
             ...(nextCursor ? { cursor: nextCursor } : {}),
-            pageSize: 50,
+            pageSize: 75,
             titleContains: serverQueryRef.current
           })
         )) as TicketPage
@@ -515,6 +515,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       sorted.sort((a, b) => Date.parse(b.updatedAt ?? '') - Date.parse(a.updatedAt ?? ''))
     else if (sortKey === 'priority')
       sorted.sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
+    else if (sortKey === 'id-desc') sorted.sort((a, b) => Number(b.id) - Number(a.id))
     else if (sortKey === 'id') sorted.sort((a, b) => Number(a.id) - Number(b.id))
     else if (sortKey === 'title') sorted.sort((a, b) => a.title.localeCompare(b.title))
     return sorted
@@ -1151,6 +1152,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             >
               <option value="recent">Plus récents</option>
               <option value="priority">Priorité</option>
+              <option value="id-desc">ID décroissant</option>
               <option value="id">ID croissant</option>
               <option value="title">Titre A→Z</option>
             </select>
