@@ -944,6 +944,24 @@ export const NUAGE_COSMIQUE = {
 } as const
 
 /**
+ * LA SILHOUETTE du nuage (conv-1455 : « le container du nuage est un cercle, c'est moche »).
+ *
+ * Le masque etait un `smoothstep` sur `length(c)` : un cercle parfait, donc un bord de disque visible
+ * des que la matiere est dense. Ici le rayon du masque est DEFORME par le meme champ fractal que la
+ * matiere : la nebuleuse n'a plus de contour geometrique, elle finit en lambeaux.
+ */
+export const SILHOUETTE_NUAGE = {
+  /** Amplitude de la deformation du rayon. 0 = cercle. Bornee : au-dela, le nuage se disloque. */
+  chaos: 0.42,
+  /** Frequence du champ qui deforme le bord. Bas = grosses echancrures, haut = dentelle. */
+  frequenceBord: 2.9,
+  /** Largeur du fondu du bord. Large : un bord net redessine un contour. */
+  fondu: 0.34,
+  /** Saturation des teintes (conv-1455 : « plus colore »). 1 = teintes d'origine. */
+  saturation: 1.45
+} as const
+
+/**
  * L'ETOILE au coeur du nuage (conv-1449) : dans l'image de reference, une etoile blanche a branches
  * perce la nebuleuse. Elle est reglee ici parce qu'un eclat en dur dans le shader n'est ni relisible
  * ni bornable, et un coeur trop blanc rendrait illisibles les widgets poses au milieu.
@@ -1029,6 +1047,10 @@ export const NUAGE_FRAGMENT_SHADER = [
   'uniform float uEtoileRayon;',
   'uniform float uBranches;',
   'uniform float uPulsation;',
+  'uniform float uChaos;',
+  'uniform float uFreqBord;',
+  'uniform float uFondu;',
+  'uniform float uSaturation;',
   'float hashN(vec2 p) {',
   '  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));',
   '  q += dot(q, q.yzx + 33.33);',
@@ -1054,7 +1076,13 @@ export const NUAGE_FRAGMENT_SHADER = [
   '}',
   'void main() {',
   '  vec2 c = vUv - 0.5;',
-  '  float masque = 1.0 - smoothstep(0.10, 0.5, length(c));',
+  '  float dist = length(c);',
+  '  if (dist > 0.5 + uChaos * 0.5) discard;',
+  '  float angleBord = atan(c.y, c.x);',
+  '  vec2 pBord = vec2(cos(angleBord), sin(angleBord)) * uFreqBord + vec2(uTime * 0.03, -uTime * 0.021);',
+  '  float lobes = fbm(pBord) - 0.5;',
+  '  float rayon = 0.42 + lobes * uChaos;',
+  '  float masque = 1.0 - smoothstep(rayon - uFondu, rayon + uFondu * 0.55, dist);',
   '  if (masque <= 0.001) discard;',
   // Rotation lente du champ : la nebuleuse de reference TOURNE, elle ne glisse pas de biais.
   '  float spin = uTime * uWarp * 0.35;',
@@ -1094,6 +1122,8 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  float etoile = (coeur + pointes * 0.85) * uEtoile * scintille;',
   '  couleur += vec3(1.0, 0.97, 0.92) * etoile;',
   '  alpha = clamp(alpha + etoile * 0.9, 0.0, 1.0);',
+  '  float lum = dot(couleur, vec3(0.299, 0.587, 0.114));',
+  '  couleur = max(vec3(0.0), mix(vec3(lum), couleur, uSaturation));',
   '  gl_FragColor = vec4(couleur, alpha);',
   '}'
 ].join('\n')
@@ -1118,7 +1148,11 @@ function buildNuage(): THREE.Mesh {
       uEtoile: { value: ETOILE_NUAGE.eclat },
       uEtoileRayon: { value: ETOILE_NUAGE.rayon },
       uBranches: { value: ETOILE_NUAGE.branches },
-      uPulsation: { value: ETOILE_NUAGE.pulsation }
+      uPulsation: { value: ETOILE_NUAGE.pulsation },
+      uChaos: { value: SILHOUETTE_NUAGE.chaos },
+      uFreqBord: { value: SILHOUETTE_NUAGE.frequenceBord },
+      uFondu: { value: SILHOUETTE_NUAGE.fondu },
+      uSaturation: { value: SILHOUETTE_NUAGE.saturation }
     },
     vertexShader: NAPPE_VERTEX_SHADER,
     fragmentShader: NUAGE_FRAGMENT_SHADER
