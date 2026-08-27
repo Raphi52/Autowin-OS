@@ -33,6 +33,18 @@ const LABELS: Record<ArtifactKind, string> = {
   binary: 'Binaire'
 }
 
+/**
+ * Le libellé ne doit pas AFFIRMER une génération que rien ne prouve : une image publiée par un
+ * outil (capture, lecture de fichier) n'est pas une image produite par le modèle. On nomme donc
+ * l'outil quand il existe, et on ne dit « générée » que pour une sortie directe du modèle.
+ */
+function kindLabel(artifact: ChatArtifact): string {
+  const base = LABELS[artifact.kind]
+  if (artifact.kind !== 'image' && artifact.kind !== 'vector') return base
+  if (artifact.source.tool) return `${base} · ${artifact.source.tool}`
+  return `${base} générée`
+}
+
 function fileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
@@ -259,6 +271,7 @@ export function ArtifactPreview({
   onOpenImage,
   displayName,
   sourceLabel,
+  provenanceLabel,
   previewError
 }: {
   artifact: ChatArtifact
@@ -267,9 +280,14 @@ export function ArtifactPreview({
   onOpenImage?: (image: { src: string; name: string }) => void
   displayName?: string
   sourceLabel?: string
+  /** Libellé de provenance imposé par l'appelant (ex. « Image envoyée »). Prime sur l'inférence. */
+  provenanceLabel?: string
   previewError?: string
 }): React.JSX.Element {
   const cardRef = useRef<HTMLElement>(null)
+  // Les aperçus visuels mangeaient tout le fil : repliés par défaut, dépliables à la demande.
+  const isCollapsible = artifact.kind === 'image' || artifact.kind === 'vector'
+  const [isExpanded, setIsExpanded] = useState(false)
   const [loadState, setLoadState] = useState<{
     key: string
     artifact?: ChatArtifact
@@ -337,28 +355,46 @@ export function ArtifactPreview({
   const resolved = loaded ?? artifact
 
   return (
-    <article ref={cardRef} className="artifact-preview" data-artifact-kind={artifact.kind}>
+    <article
+      ref={cardRef}
+      className="artifact-preview"
+      data-artifact-kind={artifact.kind}
+      data-collapsed={isCollapsible && !isExpanded ? 'true' : undefined}
+    >
       <header className="artifact-preview__header">
-        <span className="artifact-preview__kind">{LABELS[artifact.kind]}</span>
+        <span className="artifact-preview__kind">{provenanceLabel ?? kindLabel(resolved)}</span>
         <strong title={artifact.name}>{displayName ?? artifact.name}</strong>
         <span>{fileSize(artifact.size)}</span>
-      </header>
-      <div className="artifact-preview__body">
-        {previewError ? (
-          <div className="artifact-preview__blocked">{previewError}</div>
-        ) : mustLoad && !isNearViewport ? (
-          <div className="artifact-preview__placeholder">Aperçu chargé à l’approche</div>
-        ) : mustLoad && !loaded && !loadError ? (
-          <div className="artifact-preview__placeholder" role="status">
-            Chargement de l’aperçu…
-          </div>
-        ) : loadError ? (
-          <div className="artifact-preview__blocked">{loadError}</div>
-        ) : (
-          <ArtifactBody artifact={resolved} onOpenImage={onOpenImage} />
+        {isCollapsible && (
+          <button
+            type="button"
+            className="artifact-preview__toggle"
+            aria-expanded={isExpanded}
+            onClick={() => setIsExpanded((current) => !current)}
+          >
+            {isExpanded ? 'Réduire' : 'Déplier'}
+          </button>
         )}
-      </div>
-      <footer className="artifact-preview__footer">
+      </header>
+      {/* Replié = plus AUCUN pixel d'aperçu : seul le bandeau reste (choix utilisateur du 27/08). */}
+      {isCollapsible && !isExpanded && !previewError ? null : (
+        <div className="artifact-preview__body">
+          {previewError ? (
+            <div className="artifact-preview__blocked">{previewError}</div>
+          ) : mustLoad && !isNearViewport ? (
+            <div className="artifact-preview__placeholder">Aperçu chargé à l’approche</div>
+          ) : mustLoad && !loaded && !loadError ? (
+            <div className="artifact-preview__placeholder" role="status">
+              Chargement de l’aperçu…
+            </div>
+          ) : loadError ? (
+            <div className="artifact-preview__blocked">{loadError}</div>
+          ) : (
+            <ArtifactBody artifact={resolved} onOpenImage={onOpenImage} />
+          )}
+        </div>
+      )}
+      <footer className="artifact-preview__footer" hidden={isCollapsible && !isExpanded}>
         <span>{resolved.mimeType}</span>
         <span>
           {sourceLabel ??

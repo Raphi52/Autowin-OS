@@ -2313,6 +2313,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
       'image/png'
     )
     expect(container!.querySelector('.msg.user .attachment-chip')).toBeNull()
+    // Les visuels sont repliés par défaut : seul le bandeau est visible avant dépliage.
+    expect(sentImage?.querySelector('img')).toBeNull()
+    await click('.msg.user .artifact-preview__toggle')
     expect(sentImage?.querySelector('img')?.getAttribute('src')).toBe(fullImage)
     expect(readChatArtifact).toHaveBeenCalledWith('A', 'turn-user-image', 'user-image-1')
 
@@ -2400,6 +2403,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.conv-pick')
 
     expect(container!.querySelector('[data-artifact-kind="image"]')).not.toBeNull()
+    await click('.artifact-preview__toggle')
     expect(container!.querySelector('img.artifact-preview__image')).not.toBeNull()
     expect(container!.textContent).toContain('gpt-test')
   })

@@ -174,6 +174,17 @@ export function parseScoutTable(text: string): ScoutRow[] | null {
     if (!isTableRow(lines[i])) break
     const c = cells(lines[i])
     if (separateur(c) || memeQueEntete(c)) continue
+    /**
+     * UNE LIGNE INCOMPLETE N'EST PAS UN CANDIDAT.
+     *
+     * `isTableRow` accepte une ligne sur son SEUL `|` d'ouverture : la derniere ligne d'un tableau
+     * coupe par un stream interrompu la franchit, et le repli `at(idx, '')` remplissait alors de
+     * vides les colonnes absentes. Mesure du 2026-08-27 (conv-1475) : un 7e candidat dont le
+     * « Pourquoi » s'arretait en plein mot (« chaque onglet visite reste MONTE dan ») est devenu
+     * COCHABLE et a lance une chaine `/frame` sur un besoin ampute, sans aucun signal. Mieux vaut
+     * six candidats entiers qu'un septieme qu'on croit lisible.
+     */
+    if (c.length < headers.length) continue
     const at = (idx: number, fallback = ''): string =>
       idx >= 0 && idx < c.length ? c[idx] : fallback
     const note = iScore >= 0 ? scoreSur100(at(iScore)) : undefined

@@ -312,3 +312,17 @@ describe('« Recentes » et le sens du tri', () => {
     expect(doitAfficherRecentes('recente', 'enterree', 'desc')).toBe(true)
   })
 })
+
+describe('recherche par identifiant', () => {
+  const base = { provider: 'claude', updatedAt: 1, messages: [] }
+  it('retrouve une conversation par son numéro, absent du titre', () => {
+    const convs = [
+      { ...base, id: 'conv-1455', title: 'on voit que le container du nuage' },
+      { ...base, id: 'conv-1200', title: 'autre sujet' }
+    ]
+    expect(searchConversations(convs, '1455').map((h) => h.conversation.id)).toEqual(['conv-1455'])
+    expect(searchConversations(convs, 'conv-1455').map((h) => h.conversation.id)).toEqual([
+      'conv-1455'
+    ])
+  })
+})

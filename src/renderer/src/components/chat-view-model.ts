@@ -655,13 +655,9 @@ export interface SlashCommand {
  * invisible, donc réputée morte. Vécu le 2026-08-20 avec `think`/`learn`. La palette se déduit
  * désormais de l'inventaire réel (`skillSlashCommands`), pour qu'une skill future apparaisse seule.
  */
-export const SLASH_COMMANDS: SlashCommand[] = [
-  {
-    name: 'btw',
-    hint: 'Au fait… — ajoute à la file d’attente (traité après le tour en cours)',
-    insert: '/btw '
-  }
-]
+// `/btw` reste FONCTIONNELLE (parseBtw/submitBtw : on peut la taper) mais n'est plus PROPOSÉE dans
+// la palette — retrait demandé par l'utilisateur le 2026-08-27. Aucune commande intégrée listée.
+export const SLASH_COMMANDS: SlashCommand[] = []
 
 /**
  * Palette « / » : renvoie les commandes à proposer pour l'input courant. Ouverte UNIQUEMENT quand

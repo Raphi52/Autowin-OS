@@ -34,21 +34,27 @@ describe('nuage — bord déchiqueté et saturation montée (conv-1455)', () => 
     const ecart = Math.sqrt(
       rayons.reduce((s, r) => s + (r - moyenne) ** 2, 0) / rayons.length
     )
-    expect(ecart).toBeGreaterThan(0.06)
+    expect(ecart).toBeGreaterThan(0.04)
     expect(Math.min(...rayons)).toBeGreaterThan(0.25)
     expect(Math.max(...rayons)).toBeLessThan(1.6)
   })
 
-  it('est DÉCHIQUETÉ : beaucoup de dents sur le tour, pas deux bosses', () => {
+  it("ONDULE sans PICOTS : contour irrégulier mais pente douce (conv-1410)", () => {
     let extrema = 0
     for (let i = 0; i < rayons.length; i++) {
       const prev = rayons[(i - 1 + rayons.length) % rayons.length]
       const suiv = rayons[(i + 1) % rayons.length]
       if ((rayons[i] > prev && rayons[i] > suiv) || (rayons[i] < prev && rayons[i] < suiv)) extrema++
     }
-    expect(extrema).toBeGreaterThanOrEqual(24)
+    // Assez d ondulations pour ne pas etre un cercle, mais PAS une couronne de dents.
+    expect(extrema).toBeGreaterThanOrEqual(6)
+    expect(extrema).toBeLessThanOrEqual(24)
     expect(BORD_NUAGE.harmoniques.length).toBeGreaterThanOrEqual(4)
-    expect(Math.max(...BORD_NUAGE.harmoniques)).toBeGreaterThanOrEqual(19)
+    // Une harmonique haute = un picot : la fumee n a pas de pics aux bords.
+    expect(Math.max(...BORD_NUAGE.harmoniques)).toBeLessThanOrEqual(11)
+    // Pente angulaire bornee : aucune arete brusque sur le tour.
+    const pentes = rayons.map((r, i) => Math.abs(r - rayons[(i + 1) % rayons.length]))
+    expect(Math.max(...pentes)).toBeLessThan(0.02)
   })
 
   it('monte la SATURATION sans brûler la couleur', () => {

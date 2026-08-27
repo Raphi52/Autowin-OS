@@ -479,3 +479,21 @@ describe('ClaudeCliAdapter — prompt sur stdin (anti spawn ENAMETOOLONG)', () =
     expect(spawnCapture.stdin).toBe(longPrompt)
   })
 })
+
+describe('claudeContentArtifacts — un artefact d’outil n’est pas « généré »', () => {
+  const imageBlock = [
+    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAA' } }
+  ]
+
+  it('nomme « capture-écran » une image issue d’une observation d’écran', () => {
+    expect(claudeContentArtifacts(imageBlock, 'desktop_observe')[0].name).toBe('capture-écran')
+  })
+
+  it('nomme l’outil réel pour une image publiée par un autre outil', () => {
+    expect(claudeContentArtifacts(imageBlock, 'read_file')[0].name).toBe('image-read_file')
+  })
+
+  it('ne dit « générée » que pour une sortie directe du modèle', () => {
+    expect(claudeContentArtifacts(imageBlock)[0].name).toBe('image-générée')
+  })
+})

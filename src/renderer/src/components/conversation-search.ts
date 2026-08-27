@@ -28,7 +28,13 @@ const normalize = (value: unknown): string =>
  * \u00c9vite de renormaliser titre + TOUT le contenu de TOUTES les conversations \u00e0 CHAQUE
  * frappe : le co\u00fbt par frappe retombe \u00e0 O(conversations) au lieu de O(caract\u00e8res stock\u00e9s).
  */
-type NormalizedConversation = { updatedAt: number; title: string; contents: string[] }
+type NormalizedConversation = {
+  updatedAt: number
+  title: string
+  /** Identifiant normalisé : « 1455 » doit retrouver `conv-1455`, dont le titre ne porte pas le numéro. */
+  id: string
+  contents: string[]
+}
 // Clé = l'OBJET conversation (WeakMap) : deux objets distincts ne collisionnent jamais
 // (même en cas d'id réutilisé), et la garde updatedAt couvre une mutation en place.
 const normalizationCache = new WeakMap<ConversationSearchSource, NormalizedConversation>()
@@ -40,6 +46,7 @@ function normalizedFor(conversation: ConversationSearchSource): NormalizedConver
   const entry: NormalizedConversation = {
     updatedAt: conversation.updatedAt,
     title: normalize(conversation.title),
+    id: normalize(conversation.id),
     contents: messages.map((message) => normalize(message.content))
   }
   normalizationCache.set(conversation, entry)
@@ -98,7 +105,12 @@ export function searchConversations<T extends ConversationSearchSource>(
           break
         }
       }
-      const titleMatches = tokens.every((token) => norm.title.includes(token))
+      // L'IDENTIFIANT est une clé de recherche à part entière : l'utilisateur désigne
+      // couramment une conversation par son numéro (« 1455 »), qui n'apparaît nulle part
+      // dans son titre ni dans ses messages. Sans cela, la chercher rendait ZÉRO résultat
+      // et la conversation paraissait disparue alors qu'elle est bien en base.
+      const idMatches = tokens.every((token) => norm.id.includes(token))
+      const titleMatches = idMatches || tokens.every((token) => norm.title.includes(token))
       if (!titleMatches && matchingIdx < 0) return []
       return [
         {

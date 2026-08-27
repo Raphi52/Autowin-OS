@@ -266,15 +266,81 @@ function seededRandom(seed: number): () => number {
 }
 
 /**
+ * Les ÉTOILES PRINCIPALES (demande conv-1410, 2026-08-27 : « rajoute quelques étoiles principales
+ * au loin »). Une poignée d'astres nommables, posés sur le BORD EXTERNE de la coquille : au loin,
+ * elles ne passent jamais devant les planètes, et leur rareté est ce qui les rend principales —
+ * une dizaine de plus et le ciel redevient un semis uniforme.
+ */
+export const ETOILES_PRINCIPALES = {
+  /** Combien : assez pour structurer le ciel, trop peu pour faire population. */
+  nombre: 7,
+  /**
+   * Taille du grain, en unités de `aSize`.
+   *
+   * ATTENTION au piège corrigé le 2026-08-27 (« je ne les vois pas ») : le vertex shader applique
+   * `gl_PointSize = aSize * uPixelRatio * (52 / -view.z)`, donc la taille À L'ÉCRAN dépend de la
+   * DISTANCE. Posées au bord de la coquille (z ~82) au lieu de ~42, les principales perdaient
+   * exactement le facteur 2 que leur `aSize` leur donnait : à 4,2-6,4 elles rendaient ~2,7-4,1 px,
+   * soit la taille d'une étoile franche ordinaire — invisibles en tant que principales.
+   * Ces valeurs sont donc calibrées EN PIXELS RENDUS (~15-19,5 px au bord), pas en absolu.
+   */
+  tailleMin: 24,
+  tailleMax: 31,
+  /** Fraction du rayon de coquille : 1 = le plus loin possible, donc derrière tout le décor. */
+  eloignement: 0.94
+} as const
+
+/**
  * Le champ d'étoiles. Deux populations distinctes : une poussière dense et fine partout, et quelques
  * étoiles franches. Une seule population donne soit un brouillard, soit un ciel troué — jamais un
  * ciel.
  */
+/** Placements des étoiles principales, en fractions du demi-cadre visible à leur profondeur. */
+const PLACEMENTS_ECRAN: readonly (readonly [number, number])[] = [
+  [-0.78, 0.42],
+  [-0.34, -0.55],
+  [0.12, 0.62],
+  [0.55, -0.28],
+  [0.86, 0.24],
+  [-0.6, -0.12],
+  [0.3, 0.06]
+]
+
+/**
+ * Pose les étoiles principales en COORDONNÉES D'ÉCRAN, échelle du champ compensée.
+ *
+ * PIÈGE CORRIGÉ le 2026-08-27 (« nan je les vois toujours pas », après deux hausses de taille sans
+ * effet) : ce n'était pas la taille, c'était `stars.scale.setScalar(...)` dans `resize`. Le champ
+ * entier est mis à l'échelle (~1,5 à 3 selon la fenêtre) ; une principale posée à z = -83 partait
+ * donc à z = -125 … -250, DERRIÈRE le plan lointain de la caméra (far = 200) — clippée, jamais
+ * dessinée — et son x sortait du cadre. Les positions sont donc DIVISÉES par l'échelle courante et
+ * recalculées à chaque `resize` avec l'aspect réel.
+ */
+function placerEtoilesPrincipales(
+  positions: Float32Array,
+  offset: number,
+  aspect: number,
+  echelle: number
+): void {
+  const profondeur = -(42 + 46) * ETOILES_PRINCIPALES.eloignement
+  // Demi-hauteur du cadre à cette profondeur (caméra 52°, z = 26).
+  const demiHauteur = Math.tan((52 * Math.PI) / 360) * (26 - profondeur)
+  const demiLargeur = demiHauteur * aspect
+  for (let i = 0; i < ETOILES_PRINCIPALES.nombre; i += 1) {
+    const o = (offset + i) * 3
+    const [sx, sy] = PLACEMENTS_ECRAN[i % PLACEMENTS_ECRAN.length]
+    positions[o] = (sx * demiLargeur * 0.88) / echelle
+    positions[o + 1] = (sy * demiHauteur * 0.88) / echelle
+    positions[o + 2] = profondeur / echelle
+  }
+}
+
 function buildStars(random: () => number): THREE.Points {
   const COUNT = 2600
-  const positions = new Float32Array(COUNT * 3)
-  const colors = new Float32Array(COUNT * 3)
-  const sizes = new Float32Array(COUNT)
+  const TOTAL = COUNT + ETOILES_PRINCIPALES.nombre
+  const positions = new Float32Array(TOTAL * 3)
+  const colors = new Float32Array(TOTAL * 3)
+  const sizes = new Float32Array(TOTAL)
   const tint = new THREE.Color()
 
   for (let i = 0; i < COUNT; i += 1) {
@@ -296,6 +362,30 @@ function buildStars(random: () => number): THREE.Points {
     colors[o + 1] = tint.g
     colors[o + 2] = tint.b
   }
+
+  // Les étoiles principales, ajoutées APRÈS la population de fond : même géométrie, même
+  // scintillement, mais grosses et repoussées au fond du CHAMP DE LA CAMÉRA.
+  //
+  // PIÈGE CORRIGÉ le 2026-08-27 (« nan je les vois toujours pas », après deux hausses de taille
+  // sans effet) : ce n'était pas la taille, c'était le CADRAGE. Réparties sur un tour d'horizon
+  // complet (theta sur 2*PI), sept étoiles autour d'une caméra de 52° posée en z = 26 et regardant
+  // l'origine tombaient presque toutes DERRIÈRE ou HORS du cadre. Elles sont donc placées en
+  // COORDONNÉES D'ÉCRAN sur le fond (z négatif, devant le regard), assez loin pour rester derrière
+  // les planètes.
+  for (let i = 0; i < ETOILES_PRINCIPALES.nombre; i += 1) {
+    const index = COUNT + i
+    const o = index * 3
+    sizes[index] =
+      ETOILES_PRINCIPALES.tailleMin +
+      random() * (ETOILES_PRINCIPALES.tailleMax - ETOILES_PRINCIPALES.tailleMin)
+    tint.setHex(i % 3 === 0 ? GOLD : i % 3 === 1 ? CYAN : 0xffffff)
+    tint.lerp(new THREE.Color(0xffffff), 0.3)
+    colors[o] = tint.r
+    colors[o + 1] = tint.g
+    colors[o + 2] = tint.b
+  }
+  // Positions posées par la fonction dédiée, qui seule connaît l'échelle appliquée au champ.
+  placerEtoilesPrincipales(positions, COUNT, 16 / 9, 1)
 
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
@@ -922,7 +1012,7 @@ export const NUAGE_COSMIQUE = {
   /** Le violet de theme.css : c'est lui qui apporte le rouge, donc le « violet ». */
   secondaire: VIOLET,
   /** Opacité maximale du cœur. Basse : le centre porte les widgets de l'accueil. */
-  opacite: 0.55,
+  opacite: 0.30,
   /** Rose magenta : la troisieme teinte de la nebuleuse, portee par les seuls filaments. */
   accent: 0xff4fa3,
   /** Turquoise : la teinte froide des bords, ce qui empeche la nebuleuse de virer monochrome. */
@@ -934,8 +1024,13 @@ export const NUAGE_COSMIQUE = {
   chaud: 0xff8a2b,
   /** Profondeur : derrière les planètes, devant les nébuleuses d'angle. */
   z: -14,
-  /** Taille, en fraction du demi-cadre. */
-  k: 1.15,
+  /**
+   * Taille du PLAN, en fraction du GRAND demi-cote du cadre (conv-1455 : « le nuage est coupe net »).
+   * Le plan doit etre plus GRAND que le nuage : le fondu du masque s'eteint vers 0.46 en UV, il doit
+   * donc finir avant le bord du plan (0.5 sur les cotes). k=2.9 avec un rayon nominal de 0.20 UV donne
+   * un nuage qui couvre le grand cote de l'ecran, fondu compris.
+   */
+  k: 2.9,
   /**
    * LA DÉRIVE — « qui se déplace ». Amplitude en fraction du demi-cadre : elle doit rester bien
    * inférieure à 1, sinon le nuage quitte le milieu et la demande n'est plus tenue.
@@ -946,15 +1041,16 @@ export const NUAGE_COSMIQUE = {
 /**
  * LE BORD (conv-1455 : « le container du nuage est un cercle c moche »). Le masque etait un disque
  * parfait ; il devient un profil polaire DENTELE : rayon = 1 + somme d'harmoniques hautes. Les
- * harmoniques sont hautes (>= 19) parce que 2 ou 3 donnent un ovale mou, pas un bord dechiquete.
+ * harmoniques restent BASSES (<= 11) : conv-1410 « les picots sur les cotes me derangent, la fumee
+ * ca fait jamais des pics aux bords ». Le contour reste irregulier, en ondulations LARGES.
  */
 export const BORD_NUAGE = {
   /** Harmoniques angulaires du profil. Nombres premiers : leurs battements ne se repetent pas. */
-  harmoniques: [7, 13, 19, 29, 43],
+  harmoniques: [2, 3, 5, 7, 11],
   /** Amplitude totale du decoupage, en fraction du rayon. Bornee : au-dela le masque se troue. */
-  amplitude: 0.34,
+  amplitude: 0.16,
   /** Profondeur du grignotage par le bruit anime dans le shader : le bord VIT, il ne tourne pas rigide. */
-  erosion: 0.3
+  erosion: 0.85
 } as const
 
 /** Phases fixes, une par harmonique : sans elles, tous les sinus culminent au meme angle. */
@@ -981,23 +1077,7 @@ export function profilBordNuage(angle: number): number {
  */
 export const SATURATION_NUAGE = {
   /** Gain de chroma autour de la luminance. 1 = aucune montee. */
-  gain: 1.75
-} as const
-
-/**
- * L'ETOILE au coeur du nuage (conv-1449) : dans l'image de reference, une etoile blanche a branches
- * perce la nebuleuse. Elle est reglee ici parce qu'un eclat en dur dans le shader n'est ni relisible
- * ni bornable, et un coeur trop blanc rendrait illisibles les widgets poses au milieu.
- */
-export const ETOILE_NUAGE = {
-  /** Intensite du coeur additif. */
-  eclat: 0.85,
-  /** Nombre de branches. 4 minimum : deux branches font une croix, pas une etoile. */
-  branches: 6,
-  /** Rayon du halo, en fraction de la demi-taille du plan. Petit : l'etoile ponctue, elle n'inonde pas. */
-  rayon: 0.055,
-  /** Amplitude du scintillement : sans elle, l'etoile est un point colle sur le nuage. */
-  pulsation: 0.22
+  gain: 1.45
 } as const
 
 /**
@@ -1066,10 +1146,6 @@ export const NUAGE_FRAGMENT_SHADER = [
   'uniform float uVitesse;',
   'uniform float uWarp;',
   'uniform float uRespiration;',
-  'uniform float uEtoile;',
-  'uniform float uEtoileRayon;',
-  'uniform float uBranches;',
-  'uniform float uPulsation;',
   'uniform float uSaturation;',
   'uniform float uBordAmplitude;',
   'uniform float uBordErosion;',
@@ -1101,7 +1177,7 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  float poids = 0.0;',
   '  float harmoniques[5];',
   '  float phases[5];',
-  '  harmoniques[0] = 7.0; harmoniques[1] = 13.0; harmoniques[2] = 19.0; harmoniques[3] = 29.0; harmoniques[4] = 43.0;',
+  '  harmoniques[0] = 2.0; harmoniques[1] = 3.0; harmoniques[2] = 5.0; harmoniques[3] = 7.0; harmoniques[4] = 11.0;',
   '  phases[0] = 0.0; phases[1] = 1.7; phases[2] = 3.1; phases[3] = 4.6; phases[4] = 5.9;',
   '  for (int i = 0; i < 5; i++) {',
   '    float amp = 1.0 / float(i + 1);',
@@ -1115,15 +1191,23 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  float rayonAngle = length(c);',
   '  float theta = atan(c.y, c.x);',
   // Le bord : profil dentele + grignotage par le bruit anime. Un disque parfait se lit comme un cercle colle.
-  '  float bord = 0.5 * profilBord(theta);',
-  '  bord *= 1.0 + uBordErosion * (fbm(vec2(cos(theta), sin(theta)) * 5.0 + uTime * 0.05) - 0.5);',
+  // 0.20 et non 0.5 : le rayon nominal laisse la place au profil dentele (x1.44), a l'erosion et au
+  // fondu long DANS le plan. A 0.5, la matiere sortait du plan et etait tranchee par son bord.
+  '  float bord = 0.20 * profilBord(theta);',
+  '  vec2 dir = vec2(cos(theta), sin(theta));',
+  // Le bord ne TOURNE pas rigide : trois echelles de bruit anime a vitesses differentes le mangent,
+  // donc la rosace harmonique n'est plus reconnaissable et la limite bouge sans glisser en bloc.
+  '  float erode = (fbm(dir * 2.3 + uTime * 0.031) - 0.5);',
+  '  erode += (fbm(dir * 6.1 + vec2(19.3, 4.1) - uTime * 0.047) - 0.5) * 0.6;',
+  '  erode += (fbm(dir * 7.5 + vec2(3.9, 27.7) + uTime * 0.083) - 0.5) * 0.2;',
+  '  bord *= 1.0 + uBordErosion * erode;',
   // Le bord ne se COUPE pas : il s'eteint. Un smoothstep qui finit a `bord` laisse une arete parce que
   // la densite fbm y est encore forte. Trois corrections : fondu LONG (des 35 % du rayon), courbe en
   // puissance (derivee nulle au bord), et grignotage par un bruit 2D pour que la limite ne soit pas lisse.
-  '  float grain = fbm(vec2(cos(theta), sin(theta)) * 3.1 + rayonAngle * 4.0 + uTime * 0.03) - 0.5;',
+  '  float grain = fbm(dir * 3.1 + rayonAngle * 9.0 + uTime * 0.037) - 0.5;',
   '  float bordDoux = bord * (1.0 + uBordErosion * grain * 0.9);',
-  '  float masque = 1.0 - smoothstep(bordDoux * 0.35, bordDoux * 1.12, rayonAngle);',
-  '  masque = pow(clamp(masque, 0.0, 1.0), 1.9);',
+  '  float masque = 1.0 - smoothstep(bordDoux * 0.10, bordDoux * 1.30, rayonAngle);',
+  '  masque = pow(clamp(masque, 0.0, 1.0), 2.6);',
   '  if (masque <= 0.0015) discard;',
   // Rotation lente du champ : la nebuleuse de reference TOURNE, elle ne glisse pas de biais.
   '  float spin = uTime * uWarp * 0.35;',
@@ -1148,24 +1232,14 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  float versant = smoothstep(-0.28, 0.30, -c.x + (w1 - 0.5) * 0.8);',
   '  couleur = mix(couleur, uChaud, versant * smoothstep(0.22, 0.80, champ) * 0.78);',
   '  couleur = mix(couleur, uAccent, smoothstep(0.48, 0.92, filaments) * 0.85);',
-  '  couleur += mix(uAccent, uChaud, versant) * pow(clamp(filaments, 0.0, 1.0), 3.0) * 1.3;',
+  '  couleur += mix(uAccent, uChaud, versant) * pow(clamp(filaments, 0.0, 1.0), 3.0) * 0.55;',
   '  float chaud = pow(smoothstep(0.70, 1.0, champ * 0.6 + filaments * 0.6), 2.2);',
-  '  couleur += mix(uChaud, vec3(1.0, 0.95, 0.86), 0.45) * chaud * 1.15;',
+  '  couleur += mix(uChaud, vec3(1.0, 0.95, 0.86), 0.45) * chaud * 0.50;',
   // Le coeur ne BLANCHIT plus : un mix vers le blanc a 0.72 sature la nebuleuse en brouillard laiteux,
   // et un aplat sature dessine sa propre limite franche la ou la densite tombe. On garde un souffle clair.
-  '  couleur = mix(couleur, vec3(0.90, 0.94, 1.0), pow(densite, 3.4) * 0.30);',
-  '  float alpha = clamp(densite + chaud * 0.55, 0.0, 1.0) * masque * uOpacite;',
-  // L'ETOILE : un coeur gaussien plus un diffracteur a uBranches, qui scintille.
-  '  float d = length(c);',
-  '  float angle = atan(c.y, c.x);',
-  '  float scintille = 1.0 + uPulsation * sin(uTime * 1.7);',
-  '  float coeur = exp(-pow(d / max(uEtoileRayon, 0.001), 2.0));',
-  '  float pointes = pow(max(0.0, abs(cos(angle * uBranches * 0.5))), 8.0);',
-  '  pointes *= exp(-d / max(uEtoileRayon * 3.2, 0.001));',
-  '  float etoile = (coeur + pointes * 0.85) * uEtoile * scintille;',
-  '  couleur += vec3(1.0, 0.97, 0.92) * etoile;',
-  '  alpha = clamp(alpha + etoile * 0.9, 0.0, 1.0);',
-  // Saturation : chroma etiree autour de la luminance, apres l'etoile pour ne pas la teinter.
+  '  couleur = mix(couleur, vec3(0.90, 0.94, 1.0), pow(densite, 3.4) * 0.14);',
+  '  float alpha = clamp(densite * 0.85 + chaud * 0.28, 0.0, 1.0) * masque * uOpacite;',
+  // Saturation : chroma etiree autour de la luminance, juste avant la sortie.
   '  float luma = dot(couleur, vec3(0.2126, 0.7152, 0.0722));',
   '  couleur = max(vec3(0.0), mix(vec3(luma), couleur, uSaturation));',
   '  gl_FragColor = vec4(couleur, alpha);',
@@ -1189,10 +1263,6 @@ function buildNuage(): THREE.Mesh {
       uVitesse: { value: NUAGE_DYNAMIQUE.vitesseMatiere },
       uWarp: { value: NUAGE_DYNAMIQUE.vitesseWarp },
       uRespiration: { value: NUAGE_DYNAMIQUE.respiration },
-      uEtoile: { value: ETOILE_NUAGE.eclat },
-      uEtoileRayon: { value: ETOILE_NUAGE.rayon },
-      uBranches: { value: ETOILE_NUAGE.branches },
-      uPulsation: { value: ETOILE_NUAGE.pulsation },
       uSaturation: { value: SATURATION_NUAGE.gain },
       uBordAmplitude: { value: BORD_NUAGE.amplitude },
       uBordErosion: { value: BORD_NUAGE.erosion }
@@ -1823,7 +1893,9 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
         cadreNuage.halfHeight = demiHauteur
         // Échelle UNIFORME : un nuage étiré avec le cadre devient une bande horizontale sur un écran
         // large, et le masque radial du shader ne le lit plus comme un nuage.
-        const taille = Math.min(demiLargeur, demiHauteur) * NUAGE_COSMIQUE.k
+        // Le GRAND cote, pas le petit : sur un ecran large, min() faisait un plan plus petit que le
+        // fond, et le nuage s'arretait net sur son bord. max() couvre tout le fond d'ecran.
+        const taille = Math.max(demiLargeur, demiHauteur) * NUAGE_COSMIQUE.k
         nuage.scale.set(taille, taille, 1)
         nuage.position.set(0, 0, NUAGE_COSMIQUE.z)
       }
@@ -1834,6 +1906,19 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
         material.uniforms.uEchelle.value = Math.max(halfWidth, halfHeight) * 0.62
       }
       stars.scale.setScalar(Math.max(1, Math.max(halfWidth, halfHeight) / 12))
+      // Les principales sont posées en coordonnées d'écran : elles doivent annuler cette échelle,
+      // sinon elles passent derrière le plan lointain de la caméra et disparaissent.
+      {
+        const echelleChamp = Math.max(1, Math.max(halfWidth, halfHeight) / 12)
+        const attribut = stars.geometry.getAttribute('position') as THREE.BufferAttribute
+        placerEtoilesPrincipales(
+          attribut.array as Float32Array,
+          attribut.count - ETOILES_PRINCIPALES.nombre,
+          nextWidth / nextHeight,
+          echelleChamp
+        )
+        attribut.needsUpdate = true
+      }
       // Plafonné à 1.75 : au-delà, le coût par pixel monte sans que ça se voie sur un écran de
       // travail — et cette vue reste allumée toute la journée.
       // Les filantes traversent le CADRE : à échelle fixe, elles seraient minuscules sur un grand

@@ -49,7 +49,7 @@ describe('commandes slash — découvrabilité du kit', () => {
   it('aucun doublon entre commandes intégrées et skills', () => {
     const tous = matchSlashCommands('/', palette()).map((c) => c.name)
     expect(tous).toHaveLength(new Set(tous).size)
-    expect(tous).toContain(SLASH_COMMANDS[0].name)
+    for (const integree of SLASH_COMMANDS) expect(tous).toContain(integree.name)
   })
 
   it('chaque entrée insère bien sa propre commande', () => {

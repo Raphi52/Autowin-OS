@@ -29,3 +29,19 @@ export function aUneReponseApres(messages: Msg[], index: number): boolean {
   }
   return false
 }
+
+/**
+ * Une question `ask` attend-elle encore sa reponse au bout du fil ?
+ *
+ * Meme verrou que `aUneReponseApres`, vu depuis le COMPOSER : taper la reponse a la main emprunte
+ * le transport d'orientation, et le reçu affichait « ✓ Orienté » alors que l'utilisateur REPONDAIT
+ * a une question — seul le clic sur un bouton etait reconnu comme reponse.
+ */
+export function askEnAttente(messages: Msg[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i]
+    if (message.role === 'user') return false
+    if (message.parts.some((part) => part.kind === 'ask-decision')) return true
+  }
+  return false
+}

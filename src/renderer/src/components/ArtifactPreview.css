@@ -319,3 +319,24 @@
 .artifact-preview .brain-markdown {
   padding: 14px 16px;
 }
+
+/* Aperçu visuel replié : le bandeau SEUL, aucune image ni pied de carte. */
+.artifact-preview[data-collapsed='true'] .artifact-preview__header {
+  border-bottom: none;
+}
+
+.artifact-preview__toggle {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 5px;
+  background: transparent;
+  color: #c6cad3;
+  font: inherit;
+  cursor: pointer;
+}
+
+.artifact-preview__toggle:hover {
+  border-color: rgb(242 201 76 / 48%);
+  color: #f2c94c;
+}

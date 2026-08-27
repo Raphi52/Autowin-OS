@@ -53,6 +53,7 @@ describe('ArtifactPreview', () => {
       conversationId?: string
       turnId?: string
       onOpenImage?: (image: { src: string; name: string }) => void
+      provenanceLabel?: string
     } = {}
   ): void {
     act(() => root.render(<ArtifactPreview artifact={value} {...props} />))
@@ -68,6 +69,7 @@ describe('ArtifactPreview', () => {
         content: 'YWJj'
       })
     )
+    act(() => container.querySelector<HTMLButtonElement>('.artifact-preview__toggle')!.click())
     expect(container.querySelector('img.artifact-preview__image')).not.toBeNull()
 
     render(
@@ -432,6 +434,8 @@ A`
         onOpenImage
       }
     )
+    // Les visuels sont repliés par défaut : il faut déplier avant de cliquer l'image.
+    act(() => container.querySelector<HTMLButtonElement>('.artifact-preview__toggle')!.click())
     act(() =>
       container.querySelector<HTMLButtonElement>('.artifact-preview__image-button')?.click()
     )
@@ -445,6 +449,49 @@ A`
     expect(container.textContent).toContain('claude')
     act(() => container.querySelector<HTMLButtonElement>('.artifact-preview__reveal')?.click())
     expect(reveal).toHaveBeenCalledWith('conv-1', 'turn-1', 'svg-1')
+  })
+
+  it('nomme la provenance reelle : image d outil differe d une image generee', () => {
+    render(
+      artifact({
+        id: 'img-tool',
+        name: 'capture.png',
+        mimeType: 'image/png',
+        kind: 'image',
+        encoding: 'base64',
+        content: 'aW1n',
+        source: { provider: 'claude', tool: 'ui-capture' }
+      })
+    )
+    expect(container.querySelector('.artifact-preview__kind')?.textContent).toBe('Image · ui-capture')
+    act(() => root.unmount())
+    root = createRoot(container)
+    render(
+      artifact({
+        id: 'img-gen',
+        name: 'render.png',
+        mimeType: 'image/png',
+        kind: 'image',
+        encoding: 'base64',
+        content: 'aW1n'
+      })
+    )
+    expect(container.querySelector('.artifact-preview__kind')?.textContent).toBe('Image générée')
+  })
+
+  it('n annonce pas « générée » pour une image envoyée par l utilisateur', () => {
+    render(
+      artifact({
+        id: 'img-sent',
+        name: 'photo.png',
+        mimeType: 'image/png',
+        kind: 'image',
+        encoding: 'base64',
+        content: 'aW1n'
+      }),
+      { provenanceLabel: 'Image envoyée' }
+    )
+    expect(container.querySelector('.artifact-preview__kind')?.textContent).toBe('Image envoyée')
   })
 
   it('ne charge un fichier durable qu’à proximité du viewport', async () => {
@@ -504,5 +551,63 @@ A`
     await act(async () => {})
     expect(read).toHaveBeenCalledTimes(1)
     expect(container.querySelector('pre.is-text')?.textContent).toBe('contenu différé')
+  })
+})
+
+describe('ArtifactPreview — aperçus visuels repliés par défaut', () => {
+  it('replie une image par défaut et la déplie au clic', () => {
+    const artifact: ChatArtifact = {
+      id: 'img-collapse',
+      kind: 'image',
+      name: 'capture-écran',
+      mimeType: 'image/png',
+      size: 12,
+      encoding: 'base64',
+      content: 'AAAA',
+      source: { provider: 'claude' }
+    } as ChatArtifact
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => root.render(<ArtifactPreview artifact={artifact} />))
+
+    const card = container.querySelector('.artifact-preview')!
+    expect(card.getAttribute('data-collapsed')).toBe('true')
+    const toggle = container.querySelector<HTMLButtonElement>('.artifact-preview__toggle')!
+    expect(toggle.textContent).toBe('Déplier')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    // Replié : aucune image dans le DOM, pied masqué — seul le bandeau reste.
+    expect(container.querySelector('.artifact-preview__body')).toBe(null)
+    expect(container.querySelector('img')).toBe(null)
+    expect(container.querySelector<HTMLElement>('.artifact-preview__footer')!.hidden).toBe(true)
+
+    act(() => toggle.click())
+    expect(card.getAttribute('data-collapsed')).toBe(null)
+    expect(container.querySelector('img')).not.toBe(null)
+    expect(container.querySelector('.artifact-preview__toggle')!.textContent).toBe('Réduire')
+
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('ne replie PAS un artefact texte', () => {
+    const artifact: ChatArtifact = {
+      id: 'txt-1',
+      kind: 'text',
+      name: 'note.txt',
+      mimeType: 'text/plain',
+      size: 4,
+      encoding: 'utf8',
+      content: 'abcd',
+      source: { provider: 'claude' }
+    } as ChatArtifact
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => root.render(<ArtifactPreview artifact={artifact} />))
+    expect(container.querySelector('.artifact-preview')!.getAttribute('data-collapsed')).toBe(null)
+    expect(container.querySelector('.artifact-preview__toggle')).toBe(null)
+    act(() => root.unmount())
+    container.remove()
   })
 })

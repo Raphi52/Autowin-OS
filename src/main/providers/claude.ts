@@ -255,6 +255,20 @@ export function claudeWrittenLineFingerprints(
   return fingerprints
 }
 
+/**
+ * Un bloc image/document sans nom n'est PAS forcément « généré » : quand il arrive
+ * d'un résultat d'outil (capture d'écran, lecture de fichier, analyse), le nommer
+ * « généré » est un mensonge d'affichage. On dérive donc le libellé de l'outil réel,
+ * et « généré » ne reste que pour une sortie directe du modèle (aucun outil).
+ */
+export function untitledArtifactName(blockType?: string, tool?: string): string {
+  const isImage = blockType === 'image'
+  const base = isImage ? 'image' : 'document'
+  if (!tool) return isImage ? 'image-générée' : 'document-généré'
+  if (/observe|capture|screenshot/i.test(tool)) return 'capture-écran'
+  return base + '-' + tool
+}
+
 /** Images/documents structurés éventuellement remontés par Claude ou un résultat d'outil. */
 export function claudeContentArtifacts(
   content: unknown,
@@ -277,10 +291,7 @@ export function claudeContentArtifacts(
       typeof block.source.data === 'string'
     ) {
       artifacts.push({
-        name:
-          block.name ??
-          block.filename ??
-          (block.type === 'image' ? 'image-générée' : 'document-généré'),
+        name: block.name ?? block.filename ?? untitledArtifactName(block.type, tool),
         mimeType:
           block.source.media_type ??
           (block.type === 'image' ? 'image/png' : 'application/octet-stream'),
@@ -290,7 +301,7 @@ export function claudeContentArtifacts(
       })
     } else if (block.file && typeof block.file.data === 'string') {
       artifacts.push({
-        name: block.file.name ?? 'fichier-généré',
+        name: block.file.name ?? untitledArtifactName('file', tool),
         mimeType: block.file.media_type ?? 'application/octet-stream',
         encoding: 'base64',
         content: block.file.data,

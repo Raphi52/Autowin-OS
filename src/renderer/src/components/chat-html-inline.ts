@@ -176,8 +176,8 @@ const ALLOWED_STYLE_PROPS = new Set([
  * sur des ecrans de vide pour lire trois lignes. On ne supprime pas l'espacement — on le PLAFONNE,
  * cote inline comme cote feuille de style, seul endroit ou le rendu du fil peut trancher.
  */
-const MAX_VERTICAL_SPACE_PX = 18
-const MAX_LINE_HEIGHT = 1.6
+const MAX_VERTICAL_SPACE_PX = 12
+const MAX_LINE_HEIGHT = 1.55
 
 const VERTICAL_SPACE_PROPS = new Set([
   'margin-top',

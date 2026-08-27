@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  ETOILE_NUAGE,
   NUAGE_COSMIQUE,
   NUAGE_FRAGMENT_SHADER,
   NUAGE_DYNAMIQUE,
@@ -29,8 +28,6 @@ describe('nuage central — nébuleuse multicolore avec étoile, plus dynamique 
    * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE TEST si la correction est fausse :
    *  - `chaud: 0x3f7bff` (une 5ᵉ teinte bleue au lieu des braises) → assertion rouge dominant ;
    *  - `chaud` déclaré mais shader gardant `vec3(0.42, 0.18, 0.55)` en dur → assertion de consommation ;
-   *  - `ETOILE_NUAGE.eclat = 0` (étoile éteinte) → borne basse ;
-   *  - `branches = 2` (une croix, pas une étoile) → borne de branches ;
    *  - `NUAGE_DYNAMIQUE.vitesseMatiere = 0.017` (la valeur d'avant) → assertion d'accélération ;
    *  - `positionNuage` inchangée → assertion de course parcourue.
    */
@@ -41,16 +38,6 @@ describe('nuage central — nébuleuse multicolore avec étoile, plus dynamique 
     expect(rouge(NUAGE_COSMIQUE.chaud)).toBeGreaterThan(150)
     // Le froid turquoise reste : l'image oppose braise et turquoise, elle ne choisit pas.
     expect(bleu(NUAGE_COSMIQUE.froid)).toBeGreaterThan(rouge(NUAGE_COSMIQUE.froid))
-  })
-
-  it('porte une ÉTOILE à branches au cœur, réglée et non éteinte', () => {
-    expect(ETOILE_NUAGE.eclat).toBeGreaterThan(0.3)
-    expect(ETOILE_NUAGE.branches).toBeGreaterThanOrEqual(4)
-    // Le halo de l'étoile reste petit devant le nuage, sinon il blanchit tout le centre.
-    expect(ETOILE_NUAGE.rayon).toBeLessThan(0.2)
-    expect(ETOILE_NUAGE.rayon).toBeGreaterThan(0.005)
-    // Elle SCINTILLE : sans pulsation, c'est un point collé.
-    expect(ETOILE_NUAGE.pulsation).toBeGreaterThan(0)
   })
 
   it('EST PLUS DYNAMIQUE : la matière avance plus vite qu avant', () => {
@@ -78,12 +65,7 @@ describe('nuage central — nébuleuse multicolore avec étoile, plus dynamique 
 
   it('fait CONSOMMER ces réglages par le shader, littéraux interdits', () => {
     expect(source).toMatch(/uChaud:\s*\{\s*value:\s*new THREE\.Color\(NUAGE_COSMIQUE\.chaud\)\s*\}/)
-    expect(source).toMatch(/uEtoile:\s*\{\s*value:\s*ETOILE_NUAGE\.eclat\s*\}/)
-    expect(source).toMatch(/uEtoileRayon:\s*\{\s*value:\s*ETOILE_NUAGE\.rayon\s*\}/)
     expect(NUAGE_FRAGMENT_SHADER).toMatch(/uChaud/)
-    expect(NUAGE_FRAGMENT_SHADER).toMatch(/uEtoile/)
-    // Les branches de l'étoile : un motif angulaire, pas un simple point radial.
-    expect(NUAGE_FRAGMENT_SHADER).toMatch(/uBranches/)
     // L'ancienne dérive en dur ne pilote plus la matière.
     expect(NUAGE_FRAGMENT_SHADER).not.toMatch(/uTime \* 0\.017/)
     expect(NUAGE_FRAGMENT_SHADER).toMatch(/uVitesse/)

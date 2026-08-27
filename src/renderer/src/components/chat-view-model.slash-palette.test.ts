@@ -21,8 +21,13 @@ describe('palette slash générique', () => {
     expect(SLASH_COMMANDS.map((c) => c.name)).not.toContain('think')
   })
 
-  it("n'invente rien quand l'inventaire est vide : seules les commandes intégrées restent", () => {
-    expect(matchSlashCommands('/').map((c) => c.name)).toEqual(['btw'])
+  it("n'invente rien quand l'inventaire est vide : la palette est alors vide", () => {
+    expect(matchSlashCommands('/')).toEqual([])
+  })
+
+  it('ne propose plus /btw — retiré de la palette le 2026-08-27 (la commande reste tap-able)', () => {
+    const noms = matchSlashCommands('/b', skillSlashCommands(inventaire)).map((c) => c.name)
+    expect(noms).not.toContain('btw')
   })
 
   it('écarte une skill désactivée — proposer ce qui ne s’exécutera pas serait le même mensonge', () => {
@@ -39,12 +44,15 @@ describe('palette slash générique', () => {
     expect(items[0].insert).toBe('/think ')
   })
 
-  it("ne double pas une commande intégrée qu'une skill homonyme porterait aussi", () => {
+  it('ne double pas deux entrées homonymes de la palette', () => {
     const noms = matchSlashCommands(
-      '/btw',
-      skillSlashCommands([{ id: 'btw', description: 'homonyme', enabled: true }])
+      '/think',
+      skillSlashCommands([
+        { id: 'think', description: 'un', enabled: true },
+        { id: 'think', description: 'deux', enabled: true }
+      ])
     ).map((c) => c.name)
-    expect(noms).toEqual(['btw'])
+    expect(noms).toEqual(['think'])
   })
 
   it('borne le libellé à la première phrase : une consigne entière rendrait la palette illisible', () => {
