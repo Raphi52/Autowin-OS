@@ -19,7 +19,7 @@ import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'no
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { suivreArbre, tuerArbre } from './verify-extinction'
 import {
   capVerifyOutput,
@@ -29,6 +29,8 @@ import {
   porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
   porteeDerivableDesChangements,
+  verdictDifferentiel,
+  noteDeDifferentiel,
   verifyTimeoutMs,
   verifyTimeoutOutcome,
   type VerifyOutcome
@@ -2823,7 +2825,46 @@ export class AppCommandBus {
         if (!verification.allowed) {
           throw new Error(refusAvecIssue('verification-indisponible', verification.reason))
         }
+        /*
+         * LA MEME VOIE, REJOUEE — sinon le differentiel comparerait deux mesures differentes.
+         *
+         * `verdictDifferentiel` refuse tout ecart de commande entre AVANT et APRES : c'est ce qui
+         * empeche la voie globale (dont la portee derive des fichiers sales du bureau, donc CHANGE
+         * quand on restaure l'etat pre-edition) de produire une comparaison qui n'en est pas une.
+         */
+        const rejouerLaMemeVoie =
+          parPortee && parPortee.allowed
+            ? (): Promise<VerifyOutcome & { allowed: boolean }> =>
+                this.runRelatedVerifyAt(workspaceRoot, cible)
+            : (): Promise<VerifyOutcome & { allowed: boolean }> => this.runVerifyAt(workspaceRoot)
+        let noteDifferentielle: string | undefined
         if (!verification.ok) {
+          /*
+           * UN ROUGE N'EST PAS UNE PREUVE D'AVOIR CASSE QUELQUE CHOSE.
+           *
+           * DEFAUT DE CAPACITE, cadre le 2026-08-27 : ce point jetait l'edition sur tout rouge, sans
+           * jamais avoir mesure l'etat AVANT. Il ne pouvait donc pas distinguer sa propre regression
+           * d'un rouge deja present sur la base — alors que le prompt du pilote lui ORDONNE cette
+           * distinction. Consequence observee dans le produit : le modele routait ses retouches par
+           * `orchestrate`, la seule voie qui publie sur une base bruyante, faute d'une mesure ici.
+           *
+           * La baseline n'est mesuree QUE sur rouge : le chemin vert ne coute pas un test de plus.
+           * Et elle ne compare pas des COMPTEURS mais des ECHECS NOMMES — « 11 avant, 11 apres »
+           * peut cacher un echange, donc publier une regression.
+           */
+          const avant =
+            typeof edite === 'string'
+              ? await this.baselineAvantEdition(
+                  workspaceRoot,
+                  edite,
+                  rejouerLaMemeVoie,
+                  verification.command
+                )
+              : undefined
+          const verdict = verdictDifferentiel(verification, avant)
+          if (verdict.publiable) noteDifferentielle = noteDeDifferentiel(verdict)
+        }
+        if (!verification.ok && noteDifferentielle === undefined) {
           /*
            * LA NATURE DE L'ECHEC EN TETE, avant la sortie brute.
            *
@@ -2845,7 +2886,8 @@ export class AppCommandBus {
           result = {
             ...result,
             verifie: verification.command,
-            portee: verification === parPortee ? VERIFY_RELATED_ANGLE_MORT : 'suite complète'
+            portee: verification === parPortee ? VERIFY_RELATED_ANGLE_MORT : 'suite complète',
+            ...(noteDifferentielle ? { differentiel: noteDifferentielle } : {})
           } as Awaited<T>
         }
       }
@@ -2905,6 +2947,55 @@ export class AppCommandBus {
         else this.os.worktrees.end(runId, { merge: false })
       }
       throw error
+    }
+  }
+
+  /**
+   * L'ETAT D'AVANT, MESURE — pas suppose.
+   *
+   * Rejoue la MEME verification sur le contenu que le fichier avait AVANT l'edition, pour que le
+   * verdict puisse distinguer un rouge IMPUTABLE d'un rouge deja present. Rend `undefined` des que
+   * la mesure n'est pas fiable : `verdictDifferentiel` traite alors le cas comme non concluant, donc
+   * comme un REFUS. Aucune branche d'ici ne peut ouvrir la publication par defaut.
+   *
+   * L'etat d'avant vient de `git show HEAD:<chemin>` et JAMAIS d'une reconstruction par
+   * remplacement inverse : le bureau isole part de la base, donc `HEAD` porte exactement le contenu
+   * pre-edition. Un fichier NOUVEAU n'a pas de version a `HEAD` — la commande echoue, et on refuse
+   * plutot que de deviner.
+   *
+   * Le contenu edite est RESTAURE dans un `finally` : cette mesure ne doit jamais laisser le bureau
+   * dans l'etat d'avant, sans quoi elle publierait l'annulation de l'edition qu'elle verifie.
+   */
+  private async baselineAvantEdition(
+    workspaceRoot: string,
+    cheminRelatif: string,
+    rejouer: () => Promise<VerifyOutcome & { allowed: boolean }>,
+    commandeAttendue: string
+  ): Promise<(VerifyOutcome & { allowed: boolean }) | undefined> {
+    const absolu = join(workspaceRoot, cheminRelatif)
+    let apres: string
+    let avant: string
+    try {
+      apres = readFileSync(absolu, 'utf8')
+      avant = execFileSync('git', ['show', `HEAD:${cheminRelatif.split(sep).join('/')}`], {
+        cwd: workspaceRoot,
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024
+      })
+    } catch {
+      // Fichier nouveau, dépôt inaccessible, binaire illisible : on ne sait pas, donc on refuse.
+      return undefined
+    }
+    try {
+      writeFileSync(absolu, avant, 'utf8')
+      const mesure = await rejouer()
+      // Une commande DIFFERENTE ne mesure pas la même chose : ce n'est pas une baseline.
+      if (!mesure.allowed || mesure.command !== commandeAttendue) return undefined
+      return mesure
+    } catch {
+      return undefined
+    } finally {
+      writeFileSync(absolu, apres, 'utf8')
     }
   }
 
