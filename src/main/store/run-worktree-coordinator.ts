@@ -1107,8 +1107,7 @@ export class RunWorktreeCoordinator {
      * — la porte qui DETRUIT — n'est pas touchee.
      */
     const retryBlockedPublication =
-      tracked?.publication === 'blocked' &&
-      CAUSES_REESSAYABLES.has(tracked.attentionReason ?? '')
+      tracked?.publication === 'blocked' && CAUSES_REESSAYABLES.has(tracked.attentionReason ?? '')
     const retryExhaustedPublication =
       !!tracked &&
       ['pending', 'cleanup-pending'].includes(tracked.publication ?? '') &&
@@ -1146,8 +1145,7 @@ export class RunWorktreeCoordinator {
   async retryRunAsync(runId: string): Promise<WorktreeAgentActivity | undefined> {
     const tracked = this.runs.get(runId)
     const retryBlockedPublication =
-      tracked?.publication === 'blocked' &&
-      CAUSES_REESSAYABLES.has(tracked.attentionReason ?? '')
+      tracked?.publication === 'blocked' && CAUSES_REESSAYABLES.has(tracked.attentionReason ?? '')
     const retryExhaustedPublication =
       !!tracked &&
       ['pending', 'cleanup-pending'].includes(tracked.publication ?? '') &&
@@ -1954,7 +1952,20 @@ export class RunWorktreeCoordinator {
       preserverEtLiberer?: (id: string) => { outcome: string; branche?: string; detail?: string }
     }
     if (!manager.preserverEtLiberer) return { outcome: 'refuse', detail: 'capacite indisponible' }
-    return manager.preserverEtLiberer(agentId)
+    const issue = manager.preserverEtLiberer(agentId)
+    // LIBERER DOIT LEVER LE BLOCAGE. Vecu le 2026-08-27 : cette methode rendait `libere` et
+    // supprimait la copie du disque, mais l'activite continuait d'annoncer `blocked / base-dirty` —
+    // pour une copie disparue, donc qu'aucun geste ne pouvait plus debloquer (un retry n'a plus de
+    // copie a republier). Le meme geste que `discardHeldAsync`, a ceci pres que le travail est
+    // PRESERVE sur sa branche avant de rendre le disque. Un `refuse` ne clot rien : la copie est
+    // toujours la, son blocage est reel.
+    if (issue.outcome === 'libere' || issue.outcome === 'preserve-et-libere') {
+      this.invaliderRecensement()
+      this.runs.delete(agentId)
+      this.stateStore?.remove(agentId)
+      this.emit()
+    }
+    return issue
   }
 
   async balayerLesCopiesAbandonnees(): Promise<string[]> {
