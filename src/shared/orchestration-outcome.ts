@@ -1179,6 +1179,78 @@ function statutLisible(statut: string): string {
 }
 
 /**
+ * CE QUE LE BLOCAGE VEUT DIRE, ET CE QU'IL FAUT EN FAIRE.
+ *
+ * « ⛔ Workflow ARRÊTÉ au contrôle final — résultat non validé » ne dit rien à personne. Vécu le
+ * 2026-08-27 (conv-1425) : l'utilisateur lit ça après 3,22 $ de travail, et répond « ça m'a encore
+ * bloqué au lieu de finir le travail ». Il n'avait ni la cause, ni le geste, ni l'information
+ * qu'une reprise allait se faire toute seule.
+ *
+ * La cause était pourtant là depuis toujours : `gateReasons` porte « blocage d'intégration:
+ * <cause> — fichiers en cause: … ». Le commentaire de ce champ le disait lui-même — « Présents
+ * depuis toujours, jamais affichés jusqu'ici ». Ils n'étaient rendus que dans un panneau détaillé
+ * qu'il faut penser à ouvrir, donc jamais lus.
+ *
+ * On ne supprime PAS le message : un travail non intégré doit continuer à le dire, sinon on
+ * fabrique le faux vert. On le rend utilisable. Et on ne promet une reprise automatique QUE
+ * lorsqu'elle est réellement armée — annoncer une reprise qui n'aura pas lieu serait pire que se
+ * taire (c'est le défaut du bouton « Reprendre » qui ne faisait rien, mesuré le 2026-08-26).
+ */
+interface LectureDuBlocage {
+  cause: string
+  action: string
+  /** VRAI seulement si une boucle automatique reprend réellement cette cause. */
+  repriseArmee: boolean
+}
+
+const BLOCAGES: Record<string, LectureDuBlocage> = {
+  'base-dirty': {
+    cause: 'ton arbre principal a une base sale (des fichiers non committés)',
+    action: 'committe-les ou range-les',
+    repriseArmee: true
+  },
+  'base-in-progress': {
+    cause: 'une opération git est en cours dans ton arbre principal',
+    action: 'laisse-la se terminer — aucun geste de plus',
+    repriseArmee: true
+  },
+  'merge-failed': {
+    cause: 'la fusion dans la base a été refusée',
+    action: 'si elle ne passe toujours pas, ouvre Worktrees et republie à la main',
+    repriseArmee: true
+  },
+  'ignored-deliverables': {
+    cause: 'la copie contient un fichier ignoré nommé un par un dans .gitignore',
+    action: 'déplace-le ou retire-le pour que le reste publie',
+    repriseArmee: true
+  },
+  conflict: {
+    cause: 'un conflit de contenu réel',
+    action: 'à toi d’arbitrer : aucune reprise automatique ne décidera à ta place',
+    repriseArmee: false
+  }
+}
+
+/** La cause du blocage telle que l'orchestrateur l'a écrite, et les fichiers qu'il a nommés. */
+function lireLeBlocage(
+  gateReasons: unknown
+): { lecture?: LectureDuBlocage; brut?: string; fichiers: string[] } {
+  const motifs = Array.isArray(gateReasons)
+    ? gateReasons.filter((motif): motif is string => typeof motif === 'string')
+    : []
+  const diagnostic = motifs.find((motif) => motif.includes('blocage d’intégration:'))
+  if (!diagnostic) return { fichiers: [] }
+  const apres = diagnostic.split('blocage d’intégration:')[1] ?? ''
+  const [causePart, fichiersPart] = apres.split('— fichiers en cause:')
+  const brut = causePart.trim()
+  const fichiers = (fichiersPart ?? '')
+    .split(',')
+    .map((fichier) => fichier.trim())
+    .filter(Boolean)
+  return { ...(BLOCAGES[brut] ? { lecture: BLOCAGES[brut] } : {}), brut, fichiers }
+}
+
+/**
  * Texte de clôture d'une orchestration. Ne prétend JAMAIS un succès : `gateBlocked` ou `valid: false`
  * sont dits explicitement, même quand l'appel a « réussi » techniquement. Un gate qui bloque est un
  * échec de livraison, pas un détail.
@@ -1204,8 +1276,13 @@ export function formatOrchestrationOutcome(
   const learningState = asString(outcome.learning?.state)
   const learningDetail = asString(outcome.learning?.detail)
 
+  const blocage = gateBlocked ? lireLeBlocage(outcome.gateReasons) : { fichiers: [] }
   const headline = gateBlocked
-    ? '⛔ Workflow ARRÊTÉ au contrôle final — résultat non validé'
+    ? blocage.lecture
+      ? `⛔ Travail NON intégré — ${blocage.lecture.cause}`
+      : blocage.brut
+        ? `⛔ Travail NON intégré — blocage : ${blocage.brut}`
+        : '⛔ Workflow ARRÊTÉ au contrôle final — résultat non validé'
     : invalid
       ? '⚠️ Workflow terminé mais le juge a REFUSÉ le résultat'
       : outcome.reused === true
@@ -1221,6 +1298,19 @@ export function formatOrchestrationOutcome(
   ].filter((fact): fact is string => Boolean(fact))
 
   const lines = [facts.length ? `${headline} · ${facts.join(' · ')}` : headline]
+  if (blocage.fichiers.length > 0) {
+    lines.push(`Fichiers en cause : ${blocage.fichiers.join(', ')}`)
+  }
+  if (blocage.lecture) {
+    // L'action d'abord, la promesse de reprise ensuite — et seulement quand elle est vraie.
+    lines.push(
+      `À faire : ${blocage.lecture.action}.${
+        blocage.lecture.repriseArmee
+          ? ' Le travail sera repris automatiquement ensuite, tu n’as pas à le relancer.'
+          : ''
+      }`
+    )
+  }
   if (learningState) {
     const learningLabels: Record<string, string> = {
       none: 'aucune leçon proposée',
