@@ -123,7 +123,7 @@ import { boundedContinuationHistory, boundedTurnHistory } from './chat-turn-mess
 import { buildContinuationProviderHistory } from './chat-continuation'
 import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'
 import { parseFileRef, resolveFileRef } from '../shared/file-ref'
-import { commandeEditeur, racinesRevelation } from './reveal-file'
+import { commandeEditeur, ligneDemandee, racinesRevelation } from './reveal-file'
 import {
   flattenChatPartsForModel,
   type ChatTurnEvent,
@@ -3503,7 +3503,9 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Reveal file')
     const cible = parseFileRef(guardString(rawPath, 'path'))
     if (!cible) return { ok: false, reason: 'cible-non-fichier' }
-    void rawLine // La ligne vient de la cible RE-parsee ici : le renderer n'est jamais cru.
+    // Le renderer envoie `revealFile(path, line)` : le chemin n'a plus son suffixe `:80`. On prend
+    // donc l'argument separe, APRES validation, et la cible ne sert que de repli.
+    const ligne = ligneDemandee(rawLine, cible.line)
 
     // Un agent cite ce qu'il voit depuis SA copie. Chercher dans le seul workspace rendait
     // `introuvable` sur tout fichier cree pendant le run — la plainte d'origine (conv-1427).
@@ -3541,7 +3543,7 @@ Le fil reprend ensuite normalement.`
     const editeur = commandeEditeur({
       editeur: process.env.AUTOWIN_OS_EDITOR,
       chemin: absolu,
-      ligne: cible.line
+      ligne
     })
     if (editeur) {
       try {
@@ -3556,7 +3558,7 @@ Le fil reprend ensuite normalement.`
       shell.showItemInFolder(absolu)
       return { ok: true, reason: 'revele-dans-explorateur' }
     }
-    return cible.line === undefined ? { ok: true } : { ok: true, reason: 'ligne-non-honoree' }
+    return ligne === undefined ? { ok: true } : { ok: true, reason: 'ligne-non-honoree' }
   })
 
   // --- Plan de contrôle : l'app pilotable par les agents ---

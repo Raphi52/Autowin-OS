@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
  *    chemins relatifs à SA copie (`worktrees/<hash>/agent__run-*`), pas au cwd du processus
  *    principal. Le clic rendait `introuvable` — c'est-à-dire exactement la plainte d'origine.
  */
-import { commandeEditeur, racinesRevelation } from './reveal-file'
+import { commandeEditeur, ligneDemandee, racinesRevelation } from './reveal-file'
 
 describe('racines de résolution d’une référence citée par un agent', () => {
   it('cherche dans le workspace PUIS dans les copies des agents, jamais ailleurs', () => {
@@ -62,5 +62,62 @@ describe('honorer le numéro de ligne', () => {
 
   it('refuse un gabarit qui n’emploie pas {file} : ouvrirait autre chose que la cible', () => {
     expect(commandeEditeur({ editeur: 'notepad', chemin: 'C:/a.ts', ligne: 80 })).toBeNull()
+  })
+})
+
+describe('quelle ligne le renderer demande vraiment', () => {
+  /**
+   * ATTRAPE PAR UN VRAI CLIC, PAS PAR UN TEST (2026-08-27). Le premier correctif lisait la ligne
+   * dans la cible RE-parsee (`cible.line`) et ignorait `rawLine`. Or le renderer appelle
+   * `revealFile(ref.path, ref.line)` : le chemin arrive SANS son suffixe `:80`. `cible.line` etait
+   * donc toujours `undefined` et la route editeur ne pouvait jamais s'armer. Sonde CDP sur l'app
+   * reelle : `revealFile("package.json", 3)` rendait `{ok:true}` au lieu de `ligne-non-honoree`.
+   */
+  it('prend la ligne passee a part quand le chemin ne la porte pas', () => {
+    expect(ligneDemandee(3, undefined)).toBe(3)
+  })
+
+  it('prend celle du chemin quand la cible la porte', () => {
+    expect(ligneDemandee(undefined, 80)).toBe(80)
+  })
+
+  it('refuse ce qui n’est pas un numero de ligne exploitable', () => {
+    for (const brut of ['80', 0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, null, {}]) {
+      expect(ligneDemandee(brut, undefined)).toBeUndefined()
+    }
+  })
+
+  it('borne la valeur : un entier absurde ne devient pas un argument d’editeur', () => {
+    expect(ligneDemandee(10_000_000, undefined)).toBeUndefined()
+  })
+})
+
+describe('un chemin d’éditeur avec des espaces', () => {
+  /**
+   * ATTRAPE PAR LA VERIFICATION DANS L'APP (2026-08-27). Le decoupage se faisait sur les espaces
+   * nus : `"C:/Program Files/Microsoft VS Code/Code.exe" -g {file}:{line}` — l'editeur le plus
+   * courant sous Windows — se serait scinde en cinq morceaux et n'aurait jamais demarre.
+   */
+  it('respecte les guillemets autour du chemin', () => {
+    expect(
+      commandeEditeur({
+        editeur: '"C:/Program Files/Microsoft VS Code/Code.exe" -g {file}:{line}',
+        chemin: 'C:/repo/a.ts',
+        ligne: 80
+      })
+    ).toEqual({
+      commande: 'C:/Program Files/Microsoft VS Code/Code.exe',
+      args: ['-g', 'C:/repo/a.ts:80']
+    })
+  })
+
+  it('substitue aussi a l’interieur d’un argument entre guillemets', () => {
+    expect(
+      commandeEditeur({
+        editeur: 'edit "{file}" --line {line}',
+        chemin: 'C:/mes docs/a.ts',
+        ligne: 5
+      })
+    ).toEqual({ commande: 'edit', args: ['C:/mes docs/a.ts', '--line', '5'] })
   })
 })

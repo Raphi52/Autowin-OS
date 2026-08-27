@@ -54,9 +54,38 @@ export function commandeEditeur(opts: {
   const gabarit = (opts.editeur ?? '').trim()
   // Sans `{file}`, le gabarit ouvrirait autre chose que la cible : mieux vaut ne rien lancer.
   if (!gabarit || !gabarit.includes('{file}')) return null
-  const morceaux = gabarit
-    .split(/\s+/)
+  // Decoupage qui HONORE les guillemets : sous Windows le chemin d'un editeur contient presque
+  // toujours un espace (`"C:/Program Files/Microsoft VS Code/Code.exe"`), et `spawn` sans shell
+  // recevrait sinon cinq arguments au lieu d'un. Constate en verifiant dans l'app reelle.
+  const morceaux = (gabarit.match(/"[^"]*"|[^\s"]+/g) ?? [])
+    .map((m) => (m.startsWith('"') && m.endsWith('"') ? m.slice(1, -1) : m))
     .map((m) => m.replace(/\{file\}/g, opts.chemin).replace(/\{line\}/g, String(opts.ligne)))
   const [commande, ...args] = morceaux
   return commande ? { commande, args } : null
+}
+
+/**
+ * La ligne reellement demandee, ou `undefined`.
+ *
+ * Le renderer appelle `revealFile(ref.path, ref.line)` : le chemin arrive SANS son suffixe `:80`.
+ * Lire la ligne dans la seule cible re-parsee la rendait donc toujours absente — defaut attrape par
+ * un clic reel dans l'app le 2026-08-27, jamais par un test. On prend l'argument separe quand il
+ * est exploitable, la cible sinon.
+ *
+ * `rawLine` vient du renderer : on ne la croit qu'apres l'avoir validee — entier strictement
+ * positif et borne, parce qu'elle finit en argument de ligne de commande d'un editeur.
+ */
+export function ligneDemandee(
+  rawLine: unknown,
+  ligneCible: number | undefined
+): number | undefined {
+  if (
+    typeof rawLine === 'number' &&
+    Number.isInteger(rawLine) &&
+    rawLine > 0 &&
+    rawLine <= 9_999_999
+  ) {
+    return rawLine
+  }
+  return ligneCible
 }
