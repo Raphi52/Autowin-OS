@@ -8,7 +8,42 @@ import { MODEL_QUESTION_INSTRUCTION } from './model-questions'
  * reponse directe, dans une concatenation de 40 lignes que AUCUN test ne couvrait. Le reste du repo
  * (constitution.ts, response-style.ts, pipeline-discipline.ts) traite deja les prompts comme des
  * modules nommes et testables ; `chat()` etait l'exception. Le texte est repris a l'identique.
+ *
+ * (Ce bloc documente `buildChatPilotagePrompt`, plus bas ; `signatureDeCommande` le précède parce
+ * qu'il en est une brique.)
  */
+
+/**
+ * Un argument dont la description ÉNUMÈRE ses valeurs légales (`a | b | c`).
+ *
+ * On ne reconnaît que cette forme, et volontairement : elle est le contrat, tout le reste est de la
+ * prose. Les bornes évitent d'attraper une description qui contiendrait un « | » par accident (une
+ * regex, un exemple de code) : des jetons courts, six au plus, et rien d'autre autour.
+ */
+const ENUMERATION = /^(?:facultatif\s+—\s+)?([\p{L}\d_-]+(?:\s\|\s[\p{L}\d_-]+){1,5})$/u
+
+/**
+ * La signature d'une commande TELLE QUE LE MODÈLE LA LIT.
+ *
+ * `Object.keys` seul était la cause d'une famille de refus : le catalogue déclarait
+ * `type: 'lesson | decision | preference | domain'`, le prompt n'en gardait que le mot « type », et
+ * le modèle inventait une valeur — mesuré trois fois (voir `chat-pilotage-prompt.enum-arguments.test.ts`).
+ *
+ * On rend donc les valeurs attendues, mais SEULEMENT elles. Déverser la prose de chaque argument
+ * coûterait à chaque tour pour un gain nul : un modèle n'invente pas un « titre court », il invente
+ * une valeur d'énumération.
+ */
+export function signatureDeCommande(commande: {
+  name: string
+  args: Record<string, unknown>
+}): string {
+  const parametres = Object.entries(commande.args).map(([nom, description]) => {
+    const valeurs = typeof description === 'string' ? ENUMERATION.exec(description.trim()) : null
+    return valeurs ? `${nom}: ${valeurs[1]}` : nom
+  })
+  return `${commande.name}(${parametres.join(', ')})`
+}
+
 export function buildChatPilotagePrompt(
   catalog: ReadonlyArray<{ name: string; args: Record<string, unknown>; description: string }>
 ): string {
@@ -81,9 +116,7 @@ export function buildChatPilotagePrompt(
     `orchestré, pas pour décider s'il faut orchestrer.\n` +
     `Tu peux faire modifier le code du workspace par la commande orchestrate. Ne dis jamais que tu ne peux pas modifier le code lorsque cette commande est disponible : utilise-la avec la demande complète de l'utilisateur — mais SEULEMENT quand la demande porte vraiment sur une modification, jamais pour répondre à une question.\n` +
     `Commandes disponibles :\n` +
-    catalog
-      .map((c) => `- ${c.name}(${Object.keys(c.args).join(', ')}) : ${c.description}`)
-      .join('\n') +
+    catalog.map((c) => `- ${signatureDeCommande(c)} : ${c.description}`).join('\n') +
     // LIRE N'EST PAS AGIR — distinction ajoutée le 2026-08-15 sur mesure. La règle disait « n'utilise
     // des commandes QUE si l'objectif demande d'agir sur l'app », et les outils de LECTURE tombaient
     // sous cette interdiction. Constaté en pilotant l'app : à « combien de fichiers .test.ts dans
