@@ -370,11 +370,10 @@ export const SURFACE_LUNE = {
   /**
    * Part de blanc dans le ton clair des crêtes (planètes : 0,6 vers un blanc chaud).
    *
-   * 0,14 et non 0,22 : c'est la valeur de `86baa8f6`, celle qui est À L'ÉCRAN et que l'utilisateur
-   * a choisi de garder. L'auteur de la branche visait 0,22 avec un limbe à 0,22, soit un rendu
-   * environ trois fois plus sombre — une intention légitime, mais que seul son œil pouvait valider.
+   * 0,06 : plancher pratique. Le test de contrat exige `> 0,05`, garde-fou contre une lune plate ;
+   * on s'y range au plus près après trois passes « encore trop lumineuses » (conv-1410, conv-1426).
    */
-  clair: 0.14,
+  clair: 0.06,
   /**
    * Poids du limbe, INDÉPENDANT de la couleur. 1 = celui des planètes.
    *
@@ -382,7 +381,15 @@ export const SURFACE_LUNE = {
    * réglage actuel mais dans son EXISTENCE. Avant lui, assombrir le limbe obligeait à toucher la
    * couleur, les deux effets étant confondus dans un seul nombre. C'est l'apport réel de la branche.
    */
-  rim: 1
+  rim: 0.12,
+  /**
+   * Gain appliqué à la TEINTE de la lune avant tout éclairage (1 = teinte nominale).
+   *
+   * Troisième curseur, ajouté le 2026-08-27 parce que les deux autres touchaient leur plancher et
+   * que la lune restait trop claire : `clair` et `rim` ne portent que les crêtes et le limbe,
+   * jamais le corps du globe. Ce facteur assombrit la matière elle-même — le seul levier restant.
+   */
+  gain: 0.45
 } as const
 
 /**
@@ -720,7 +727,7 @@ export function orbiteLune(
  * gazeuse, son relief est cratérisé donc isotrope.
  */
 function buildLune(seed: number, teinte: number): THREE.Mesh {
-  const base = new THREE.Color(teinte)
+  const base = new THREE.Color(teinte).multiplyScalar(SURFACE_LUNE.gain)
   return new THREE.Mesh(
     new THREE.SphereGeometry(LUNES.taille, 32, 20),
     new THREE.ShaderMaterial({
