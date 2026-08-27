@@ -34,6 +34,7 @@ export const VUES_CONNUES = [
   // aucune preuve visuelle de la page d'accueil n'etait donc capturable.
   'accueil',
   'chat',
+  'tests',
   'agent-studio',
   'knowledge',
   'observatory',

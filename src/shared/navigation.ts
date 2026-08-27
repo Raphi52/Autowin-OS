@@ -7,6 +7,7 @@ export const APP_DESTINATIONS = [
   { id: 'task-manager', label: 'Task Manager', icon: '◷' },
   { id: 'worktree', label: 'Worktrees', icon: '🌳' },
   { id: 'tickets', label: 'Tickets', icon: '🎫' },
+  { id: 'tests', label: 'Tests', icon: '🧪' },
   { id: 'settings', label: 'Settings', icon: '⚙️' }
 ] as const
 
@@ -81,7 +82,13 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   scheduler: 'task-manager',
   planning: 'task-manager',
   planification: 'task-manager',
-  watchdog: 'task-manager'
+  watchdog: 'task-manager',
+  // La vue Tests est multi-projets : un agent l'adresse aussi par « suite » ou « vitest ».
+  test: 'tests',
+  suite: 'tests',
+  suites: 'tests',
+  vitest: 'tests',
+  jest: 'tests'
 }
 
 const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {

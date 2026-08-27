@@ -27,6 +27,7 @@ import { WorktreeView } from './components/WorktreeView'
 import { UpdateBanner } from './components/UpdateBanner'
 import { pickTurnToResume } from './components/resume-unfinished'
 import { TicketsView } from './components/TicketsView'
+import { TestsView } from './components/TestsView'
 import { TaskManagerView } from './components/TaskManagerView'
 import { AgentStudioView } from './components/AgentStudioView'
 import { KnowledgeView } from './components/KnowledgeView'
@@ -577,6 +578,11 @@ export function MainApp(): React.JSX.Element {
         {visitedTabs.has('tickets') && (
           <div className={`view-slot${tab === 'tickets' ? ' is-active' : ''}`}>
             <TicketsView active={tab === 'tickets'} />
+          </div>
+        )}
+        {visitedTabs.has('tests') && (
+          <div className={`view-slot${tab === 'tests' ? ' is-active' : ''}`}>
+            <TestsView active={tab === 'tests'} />
           </div>
         )}
         {visitedTabs.has('settings') && (

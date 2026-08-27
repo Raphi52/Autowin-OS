@@ -383,6 +383,12 @@ import { artifactsFromExecutionEvidence } from './providers/artifacts'
 import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
 import { readGitState, readGitDiff } from './git-read-main'
 import {
+  inspectProject,
+  loadTestProjects,
+  runProjectTests,
+  saveTestProjects
+} from './tests-view-main'
+import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker
 } from './providers/workspace-mutation-evidence'
@@ -2257,7 +2263,35 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'GitDiff')
     return readGitDiff(cwd && typeof cwd === 'string' ? cwd : process.cwd(), String(path ?? ''))
   })
-  // Sélecteur de dépôt (dialogue dossier, read-only) → renvoie le chemin choisi ou null si annulé.
+  // Vue Tests — MULTI-PROJETS. Le registre porte des racines quelconques : la vue ne connait pas
+  // « le » depot de l'app, elle connait une liste. Le workspace courant y est seme au premier appel
+  // pour que l'ecran ne soit pas vide, mais il n'y a aucun privilege attache a cette entree.
+  ipcMain.handle('tests:projects', (event) => {
+    assertTrustedRendererSender(event, 'TestsProjects')
+    let projets = loadTestProjects()
+    if (projets.length === 0) {
+      projets = saveTestProjects([{ root: os.executionWorkspace }])
+    }
+    return projets.map((projet) => inspectProject(projet))
+  })
+  ipcMain.handle('tests:saveProjects', (event, projects: unknown) => {
+    assertTrustedRendererSender(event, 'TestsSaveProjects')
+    return saveTestProjects(projects).map((projet) => inspectProject(projet))
+  })
+  ipcMain.handle('tests:pickProject', async (event) => {
+    assertTrustedRendererSender(event, 'TestsPickProject')
+    return pickDirectory(event.sender)
+  })
+  ipcMain.handle('tests:run', (event, root: unknown, filter?: unknown) => {
+    assertTrustedRendererSender(event, 'TestsRun')
+    const racine = String(root ?? '')
+    const projet = loadTestProjects().find((p) => p.root === racine)
+    if (!projet) throw new Error('projet inconnu du registre des tests')
+    return runProjectTests(projet, {
+      ...(typeof filter === 'string' && filter.trim() ? { filter: filter.trim() } : {})
+    })
+  })
+  // Selecteur de depot (dialogue dossier, read-only) → renvoie le chemin choisi ou null si annulé.
   ipcMain.handle('git:pickRepo', async (event) => {
     assertTrustedRendererSender(event, 'GitPickRepo')
     return pickDirectory(event.sender)

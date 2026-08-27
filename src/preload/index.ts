@@ -121,6 +121,13 @@ const api = {
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
+  // Vue Tests (multi-projets) : registre de racines + execution du harnais du projet demande.
+  testProjects: () => ipcRenderer.invoke('tests:projects'),
+  saveTestProjects: (projects: Array<{ root: string; label?: string }>) =>
+    ipcRenderer.invoke('tests:saveProjects', projects),
+  pickTestProject: (): Promise<string | null> => ipcRenderer.invoke('tests:pickProject'),
+  runProjectTests: (root: string, filter?: string) =>
+    ipcRenderer.invoke('tests:run', root, filter),
   getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:get'),
   setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>

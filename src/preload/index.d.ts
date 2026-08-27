@@ -128,6 +128,30 @@ interface ChatApi {
     repoPath?: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
+  testProjects: () => Promise<
+    Array<
+      import('../shared/test-projects').TestProject & {
+        runner: import('../shared/test-projects').TestRunner
+        runnable: boolean
+        reason?: string
+      }
+    >
+  >
+  saveTestProjects: (
+    projects: Array<{ root: string; label?: string }>
+  ) => ReturnType<Api['testProjects']>
+  pickTestProject: () => Promise<string | null>
+  runProjectTests: (
+    root: string,
+    filter?: string
+  ) => Promise<{
+    root: string
+    runner: import('../shared/test-projects').TestRunner
+    exitCode: number | null
+    durationMs: number
+    totals: import('../shared/test-projects').TestTotals
+    report: import('../shared/test-projects').TestReport
+  }>
   getAutoClose: () => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   setAutoClose: (enabled: boolean) => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   unfinishedTurns: () => Promise<
