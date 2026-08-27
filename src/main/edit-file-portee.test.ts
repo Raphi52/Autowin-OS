@@ -155,15 +155,9 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     expect(result).toMatchObject({ ok: true })
     expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).toContain('commentaire sans effet')
     // Le verdict NOMME sa portée : un vert dont on ignore l’étendue se lit plus large qu’il n’est.
-    const data = result.data as { verifie?: string; portee?: string; differentiel?: string }
+    const data = result.data as { verifie?: string; portee?: string }
     expect(data.verifie).toContain('vitest related')
     expect(data.portee).toContain('importent')
-    /*
-     * LE CHEMIN VERT NE MESURE AUCUNE BASELINE. C'est la preuve observable que le differentiel ne
-     * coute rien sur le cas courant : la note n'existe que si une baseline a tourne, et un vert ne
-     * doit jamais en declencher une (contrainte SOFT de latence, deja payee trois fois ici).
-     */
-    expect(data.differentiel).toBeUndefined()
     // Le rouge préexistant n’a pas été « réparé » au passage : il est resté INTACT.
     expect(readFileSync(join(repo, 'etranger.test.ts'), 'utf8')).toContain('toBe(2)')
     expect(git('status', '--porcelain')).toBe('')
@@ -243,71 +237,12 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     )
 
     // `vitest related notes.md` n'a AUCUN test a jouer : ce verdict ne doit jamais servir de preuve.
-    // C'EST L'INVARIANT DE CE TEST, et il ne bouge pas.
-    const data = (result.data ?? {}) as { verifie?: string; differentiel?: string }
+    const data = (result.data ?? {}) as { verifie?: string }
     expect(data.verifie ?? '').not.toContain('related')
-    /*
-     * Le REPLI joue la suite COMPLETE. Ce test attendait d'abord `ok: false` — mais c'etait une
-     * consequence de l'ETAT du fixture (base au rouge preexistant), pas l'invariant : depuis la
-     * baseline differentielle, ce rouge est ECARTE parce qu'il n'est pas imputable a l'edition, et
-     * la publication a lieu. C'est exactement le cout que B' assumait et que A leve. Ce qui reste
-     * verrouille ici, et qui est le point : la preuve ne vient JAMAIS d'une portee vide.
-     */
-    expect(data.verifie ?? '').toContain('test:unit')
-    expect(data.differentiel ?? '').toContain('rouge deja committe, sans rapport')
-    expect(readFileSync(join(repo, 'notes.md'), 'utf8')).toContain('texte corrigé')
-  }, 300_000)
-
-  /*
-   * LE VETO QUI MORDAIT REELLEMENT `edit_file` : un rouge PREEXISTANT a l'INTERIEUR de la portee.
-   *
-   * L'immunite « par construction » de `vitest related` ne couvre que les rouges HORS graphe
-   * d'imports. Un test deja rouge qui IMPORTE le fichier edite est, lui, rejoue — et son rouge
-   * faisait jeter une edition parfaitement saine. C'est ce blocage que le pilote contournait en
-   * routant ses retouches par `orchestrate`.
-   *
-   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST SI LA MESURE EST FAUSSE : comparer des COMPTEURS au lieu
-   * d'ECHECS NOMMES, ou traiter une baseline absente comme « rien de nouveau ». Le test frere
-   * ci-dessous (« casse REELLEMENT ») est l'autre moitie : ensemble ils prouvent qu'on a change ce
-   * que le verdict MESURE, pas s'il refuse.
-   */
-  it('publie une édition saine malgré un rouge préexistant DANS sa portée', async () => {
-    const { repo, git } = depotDejaRouge()
-    // Ce test IMPORTE `sujet.ts` : il est donc dans la portée de l'édition — et il est déjà rouge.
-    writeFileSync(
-      join(repo, 'sujet-deja-rouge.test.ts'),
-      [
-        "import { expect, it } from 'vitest'",
-        "import { valeur } from './sujet'",
-        "it('rouge preexistant DANS la portee', () => expect(valeur()).toBe(99))",
-        ''
-      ].join(SAUT),
-      'utf8'
-    )
-    git('add', '-A')
-    git('commit', '-q', '-m', 'rouge preexistant dans la portee')
-
-    const result = await busSur(repo).exec(
-      'edit_file',
-      {
-        path: 'sujet.ts',
-        oldText: 'export const valeur = (): number => 1',
-        newText: 'export const valeur = (): number => 1 // commentaire sans effet'
-      },
-      'conv-1'
-    )
-
-    expect(result).toMatchObject({ ok: true })
-    expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).toContain('commentaire sans effet')
-    // Le verdict NOMME ce qu'il a écarté, et son propre angle mort.
-    const data = result.data as { differentiel?: string }
-    expect(data.differentiel ?? '').toContain('rouge preexistant DANS la portee')
-    expect(data.differentiel ?? '').toContain('MASQUER')
-    // La mesure de baseline a RESTAURÉ l'édition : elle ne publie pas son propre état d'avant.
-    expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).not.toContain(`=> 1${SAUT}`)
-    // Le rouge préexistant est resté INTACT : rien n'a été « réparé » au passage.
-    expect(readFileSync(join(repo, 'sujet-deja-rouge.test.ts'), 'utf8')).toContain('toBe(99)')
-    expect(git('status', '--porcelain')).toBe('')
+    // Le depot est deja rouge, donc le repli (suite complete) refuse — et c'est le comportement
+    // attendu ici : aucune publication ne peut s'appuyer sur une portee qui n'a rien mesure.
+    expect(result).toMatchObject({ ok: false })
+    expect(readFileSync(join(repo, 'notes.md'), 'utf8')).toContain('texte initial')
   }, 300_000)
 
   it('refuse toujours une édition qui casse RÉELLEMENT le test de son fichier', async () => {
