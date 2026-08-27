@@ -819,6 +819,59 @@ export class WorktreeManager {
    * En cas d'echec on repond OUI. Le bandeau doit se tromper du cote qui n'efface rien : signaler un
    * travail deja publie coute une verification, en taire un qui ne l'est pas coute le travail.
    */
+  /** La ref durable qui porte le verdict TRIE d'un travail. Un namespace a part : jamais fusionnee,
+   * jamais poussee, et invisible de `git branch` — elle annote, elle ne represente pas du travail. */
+  private refTravailTrie(agentId: string): string {
+    return `refs/autowin/trie/${agentId}`
+  }
+
+  /** Le SHA marque TRIE pour ce travail, ou `undefined`. */
+  shaTravailTrie(agentId: string): string | undefined {
+    if (!SAFE_ID.test(agentId)) return undefined
+    const sortie = this.tryGitFn(this.baseRepo, [
+      'rev-parse',
+      '--verify',
+      `${this.refTravailTrie(agentId)}^{commit}`
+    ])
+    return sortie.code === 0 ? sortie.stdout.trim() : undefined
+  }
+
+  /**
+   * Enregistre « ce travail a ete TRIE » — fusion manuelle, reecriture, abandon assume.
+   *
+   * NE SUPPRIME RIEN, et c'est le point : la branche de secours reste le seul endroit ou ce travail
+   * existe encore. On pose une annotation a cote, sur le SHA exact qui a ete juge. Rend `false`
+   * quand aucun travail de ce nom n'est trouvable — marquer le vide fabriquerait un acquittement
+   * qui ne protege rien.
+   */
+  marquerTravailTrie(agentId: string): boolean {
+    if (!SAFE_ID.test(agentId)) return false
+    const candidats = [
+      `refs/heads/autowin/recovery/${agentId}`,
+      `refs/autowin/rescue/${agentId}`
+    ]
+    let sha: string | undefined
+    for (const ref of candidats) {
+      const sortie = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', `${ref}^{commit}`])
+      if (sortie.code === 0) {
+        sha = sortie.stdout.trim()
+        break
+      }
+    }
+    // Le bureau en HEAD detache est l'autre moitie du recensement : son commit n'a aucune ref.
+    if (!sha) sha = this.headsDesBureaux().get(agentId)
+    if (!sha) return false
+    return (
+      this.tryGitFn(this.baseRepo, ['update-ref', this.refTravailTrie(agentId), sha]).code === 0
+    )
+  }
+
+  /** Retire le verdict TRIE : le travail redevient un candidat a part entiere. */
+  oublierTravailTrie(agentId: string): boolean {
+    if (!SAFE_ID.test(agentId)) return false
+    return this.tryGitFn(this.baseRepo, ['update-ref', '-d', this.refTravailTrie(agentId)]).code === 0
+  }
+
   private apporteQuelqueChose(travail: string, baseRef: string): boolean {
     try {
       const sortie = this.git(this.baseRepo, ['cherry', baseRef, travail])
@@ -1044,16 +1097,40 @@ export class WorktreeManager {
       const salis = this.listAgentIds().filter((agentId) =>
         this.bureauPorteDuTravailNonCommitte(agentId)
       )
+      /*
+       * LE TROISIEME VERDICT, celui qui manquait : TRIE.
+       *
+       * `git cherry` ne connait que deux reponses — applique au patch-id pres, ou pas. Il ne voit
+       * donc PAS une reecriture : un travail deja repris dans la base sous une meilleure forme
+       * compte comme non publie, a jamais. Mesure le 2026-08-27 (conv-1424) : deux salvages
+       * successifs concluent « SUPERSEDED, deja dans main », conservent les branches comme le
+       * protocole l'exige, et le bandeau repasse identique trente secondes plus tard. Aucun geste
+       * ne pouvait le refermer, parce que rien n'enregistrait la conclusion.
+       *
+       * Le marquage porte le SHA du travail trie, jamais l'identifiant seul : une branche qui
+       * REPREND ressort d'elle-meme. Un marquage « pour toujours » aurait remplace un bandeau qui
+       * crie par un bandeau qui se tait, ce qui est pire — c'est le defaut d'origine du 2026-08-23.
+       */
+      const trie = (agentId: string, sha: string | undefined): boolean =>
+        sha !== undefined && this.shaTravailTrie(agentId) === sha
+      const shaDe = (ref: string): string | undefined => {
+        const sortie = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', `${ref}^{commit}`])
+        return sortie.code === 0 ? sortie.stdout.trim() : undefined
+      }
       return [
         ...new Set([
-          ...branches.filter((agentId) =>
-            this.apporteQuelqueChose(`autowin/recovery/${agentId}`, baseRef)
+          ...branches.filter(
+            (agentId) =>
+              this.apporteQuelqueChose(`autowin/recovery/${agentId}`, baseRef) &&
+              !trie(agentId, shaDe(`refs/heads/autowin/recovery/${agentId}`))
           ),
           ...detaches.filter((agentId) => {
             const sha = heads.get(agentId)
-            return sha !== undefined && apporte(sha)
+            return sha !== undefined && apporte(sha) && !trie(agentId, sha)
           }),
-          ...sauvetages,
+          ...sauvetages.filter(
+            (agentId) => !trie(agentId, shaDe(`refs/autowin/rescue/${agentId}`))
+          ),
           ...salis
         ])
       ]

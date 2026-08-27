@@ -677,6 +677,34 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'marquer_travail_trie',
+    /*
+     * LE GESTE QUI MANQUAIT AU BOUT DU SALVAGE.
+     *
+     * Vecu le 2026-08-27 (conv-1424) : le bandeau annonce des travaux non publies, « Traiter »
+     * lance un `/salvage`, le salvage conclut deux fois « SUPERSEDED — deja dans main sous une
+     * meilleure implementation », conserve les branches comme le protocole l'exige, et le bandeau
+     * repasse identique trente secondes plus tard. `git cherry` ne voit pas une REECRITURE, donc
+     * l'inventaire criait a jamais et l'utilisateur n'avait aucun moyen de refermer.
+     */
+    description:
+      'Enregistrer qu’un travail non publié a été TRIÉ : déjà repris dans la base sous une autre ' +
+      'forme, fusionné à la main, ou abandonné en connaissance de cause. NE SUPPRIME RIEN — la ' +
+      'branche de secours reste le seul endroit où ce travail existe. Le marquage porte le SHA ' +
+      'jugé : si le travail reprend sur la même branche, il ressort de lui-même. À n’appeler ' +
+      'qu’APRÈS un diagnostic par contenu, jamais pour faire taire une liste qu’on n’a pas lue.',
+    args: {
+      agentId: 'identifiant du travail, tel que `get_state.travauxNonPublies` le nomme',
+      oublier: 'true pour RETIRER le marquage et faire ressortir le travail (optionnel)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'get_state',
     // La donnee ne sert que si l'agent sait qu'elle existe : sans cette phrase, il continue de
     // deduire la recence de l'ordre du tableau au lieu de lire les dates (mesure conv-1291).
@@ -2274,6 +2302,27 @@ export class AppCommandBus {
         const g = this.os.loadBrainGraph(brain.path, 300)
         this.broadcast({ type: 'navigate', tab: 'memory' })
         return { brain: brain.id, nodes: g.nodes.length, links: g.links.length }
+      }
+      case 'marquer_travail_trie': {
+        const agentId = s('agentId').trim()
+        if (!agentId) throw new Error('`agentId` est requis.')
+        const worktrees = this.os.worktrees
+        if (!worktrees?.marquerTravailTrie) {
+          throw new Error('Le recensement des travaux non publiés est indisponible.')
+        }
+        if (a.oublier === true) {
+          const oublie = worktrees.oublierTravailTrie?.(agentId) === true
+          return { agentId, trie: false, oublie }
+        }
+        const marque = worktrees.marquerTravailTrie(agentId)
+        if (!marque) {
+          // Un identifiant qu'aucune branche, aucun sauvetage et aucun bureau ne porte : le dire,
+          // plutot que de rendre un acquittement qui ne protege rien.
+          throw new Error(
+            `Aucun travail trouvable sous « ${agentId} » : rien n’a été marqué. Vérifie l’identifiant dans get_state.travauxNonPublies.`
+          )
+        }
+        return { agentId, trie: true, sha: worktrees.shaTravailTrie?.(agentId) }
       }
       case 'get_state':
         return await this.snapshot()

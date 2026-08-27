@@ -60,6 +60,9 @@ export interface RunWorktreeCoordinatorDeps {
         WorktreeManager,
         | 'commitDejaReference'
         | 'travauxNonPublies'
+        | 'marquerTravailTrie'
+        | 'oublierTravailTrie'
+        | 'shaTravailTrie'
         | 'apercuTravauxNonPublies'
         | 'patchTravailNonPublie'
         | 'restaurerCopieDepuisSecours'
@@ -1282,6 +1285,31 @@ export class RunWorktreeCoordinator {
    *
    * Le cache 60 s et la borne a six entrees sont ceux du bandeau : la meme question, la meme reponse.
    */
+  /**
+   * Enregistre le verdict TRIE d'un travail non publie — sans rien supprimer.
+   *
+   * Le bandeau du chat relit `travauxNonPublies` toutes les 30 s. Sans ce geste, un travail juge
+   * « deja repris dans la base sous une autre forme » revenait au tick suivant, indefiniment :
+   * `git cherry` ne voit pas une reecriture. Mesure du 2026-08-27 (conv-1424).
+   */
+  marquerTravailTrie(agentId: string): boolean {
+    const marque = this.manager.marquerTravailTrie?.(agentId) === true
+    if (marque) this.invaliderRecensement()
+    return marque
+  }
+
+  /** Retire le verdict TRIE : le travail redevient un candidat a part entiere. */
+  oublierTravailTrie(agentId: string): boolean {
+    const oublie = this.manager.oublierTravailTrie?.(agentId) === true
+    if (oublie) this.invaliderRecensement()
+    return oublie
+  }
+
+  /** Le SHA marque TRIE pour ce travail, ou `undefined`. */
+  shaTravailTrie(agentId: string): string | undefined {
+    return this.manager.shaTravailTrie?.(agentId)
+  }
+
   travauxNonPubliesBornes(): Array<{ agentId: string; date: string; fichiers: string[] }> {
     const { ids, apercu } = this.travauxNonPubliesCaches()
     /*
