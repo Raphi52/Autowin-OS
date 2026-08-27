@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 import type { VerdictBureau } from './verdict-bureau'
 import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from './worktree-manager'
 import { delaiDeReprise, ESSAIS_MAX } from './delai-de-reprise'
+import { CAUSES_REESSAYABLES } from './repechage-automatique'
 import { INTERVALLE_BALAYAGE_MS, travauxARepecher } from './repechage-automatique'
 import {
   messageSansSigneDeVie,
@@ -272,12 +273,8 @@ function copiePresente(worktreePath: string | undefined): boolean | undefined {
  * La garde qui compte reste entiere : `verdict === 'red'` interdit toujours, et `discardHeld` — la
  * porte qui DETRUIT — n'est pas touchee. On desserre ce qui RECUPERE, jamais ce qui efface.
  */
-const CAUSES_REESSAYABLES: ReadonlySet<string> = new Set([
-  'merge-failed',
-  'ignored-deliverables',
-  'base-dirty',
-  'base-in-progress'
-])
+// La liste vit desormais dans `repechage-automatique.ts`, avec le balayage qui la lit aussi :
+// une seule definition, donc plus de derive possible entre le bouton et la boucle automatique.
 
 export class RunWorktreeCoordinator {
   private readonly manager: RunWorktreeCoordinatorDeps['manager']

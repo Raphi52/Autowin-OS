@@ -19,6 +19,30 @@
  * fallait pas est bien pire que repêcher trop tard.
  */
 
+/**
+ * LES CAUSES QU'UNE MACHINE PEUT LEVER — la définition UNIQUE, lue par le bouton ET par le balayage.
+ *
+ * Elle vivait en double : `CAUSES_REESSAYABLES` dans le coordinateur pour le bouton « Reprendre »,
+ * et une condition recopiée à la main ici pour le balayage. Les deux ont dérivé, exactement comme ce
+ * module l'avait redouté par écrit — « Toute divergence entre le bouton et le balayage serait un
+ * piège : l'un repêcherait ce que l'autre refuse. »
+ *
+ * Le trou mesuré par lecture le 2026-08-27 : `base-dirty` était accepté par le bouton, réarmé par
+ * AUCUNE des deux boucles automatiques. Il n'existait que derrière un clic, alors que
+ * `delai-de-reprise.ts` chiffre sa fréquence à 86 refus (contre 216 pour `base-in-progress`).
+ *
+ * Ce qu'elles ont en commun, et qui justifie de rejouer : leur cause DISPARAÎT d'elle-même —
+ * l'utilisateur committe, l'opération git se termine, la copie de preuve n'est plus comptée comme un
+ * livrable. Rejouer change donc réellement l'état qui bloque. Ce n'est pas le cas d'un conflit de
+ * contenu, qui reste dehors : l'arbitrer, c'est décider à la place de l'utilisateur.
+ */
+export const CAUSES_REESSAYABLES: ReadonlySet<string> = new Set([
+  'merge-failed',
+  'ignored-deliverables',
+  'base-dirty',
+  'base-in-progress'
+])
+
 /** L'état d'un run, réduit aux seuls champs qui décident du repêchage. */
 export interface CandidatAuRepechage {
   runId: string
@@ -72,12 +96,10 @@ export const ESSAIS_AUTOMATIQUES_MAX = 3
 export function estRepechable(candidat: CandidatAuRepechage): boolean {
   if (candidat.verdict === 'red') return false
 
-  // Un refus pour fichiers ignorés se répare hors de l'app (déplacer la preuve) ; il reste
-  // réessayable, exactement comme `merge-failed`.
+  // La liste ci-dessus est la SEULE source : plus de condition recopiée qui dérive du bouton.
   const bloqueMaisReprenable =
     candidat.publication === 'blocked' &&
-    (candidat.attentionReason === 'merge-failed' ||
-      candidat.attentionReason === 'ignored-deliverables')
+    CAUSES_REESSAYABLES.has(candidat.attentionReason ?? '')
 
   const repriseEpuisee =
     ['pending', 'cleanup-pending'].includes(candidat.publication ?? '') &&
