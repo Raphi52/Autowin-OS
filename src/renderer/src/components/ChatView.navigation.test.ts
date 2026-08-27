@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
 const modelsSource = readFileSync(new URL('./AgentsTopologyView.tsx', import.meta.url), 'utf8')
+// Le composer est un composant a part depuis conv-1466 : l invariant de Stop se lit sur les deux.
+const composerSource = readFileSync(new URL('./ChatComposer.tsx', import.meta.url), 'utf8')
 
 describe('navigation pendant une reponse', () => {
   it('ne propose plus le selecteur de permissions defectueux', () => {
@@ -69,10 +71,17 @@ describe('navigation pendant une reponse', () => {
     // defaut — arreter exigeait d aller vider la barre de prompt, donc l action la plus urgente
     // dependait de ce qui etait tape. Nouvel invariant : l arret est un bouton DEDIE, conditionne au
     // seul `busy`, et le bouton principal ne fait plus qu une chose a la fois (Reprendre/File/Envoyer).
+    // Depuis l extraction du composer (conv-1466), le bouton d envoi vit dans `ChatComposer` et
+    // Stop reste rendu par `ChatView` (il ne depend que de `busy`). L invariant, lui, ne bouge pas.
     expect(source).toContain('data-testid="composer-stop"')
-    expect(source.match(/data-testid="composer-send"/g)).toHaveLength(1)
+    expect(composerSource.match(/data-testid="composer-send"/g)).toHaveLength(1)
+    expect(source.match(/data-testid="composer-send"/g)).toBeNull()
     expect(source).toContain('stopPilotTurn()')
     expect(source).toContain('resumePilotTurn()')
-    expect(source).toContain('queueCurrentMessage()')
+    expect(source).toContain('onQueue={queueCurrentMessage}')
+    // Le bouton principal ne fait qu une chose a la fois : Reprendre, File, ou Envoyer.
+    expect(composerSource).toContain('props.onResume()')
+    expect(composerSource).toContain('props.onQueue()')
+    expect(composerSource).toContain('props.onSend()')
   })
 })

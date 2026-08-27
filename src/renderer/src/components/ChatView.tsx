@@ -25,7 +25,6 @@ import {
   costEqTier,
   phaseLabel,
   parseBtw,
-  matchSlashCommands,
   skillSlashCommands,
   type SlashCommand,
   type OrchStep,
@@ -39,9 +38,9 @@ import {
 } from './chat-view-model'
 import { buildHomeSuggestions } from './chat-home-suggestions'
 import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
-import { buildScopeEcho, formatScopeEcho } from './chat-scope-echo'
 import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
+import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import {
   aUneReponseApres,
@@ -63,13 +62,7 @@ import type {
   SendOptions,
   UserMsg
 } from './chat-view-types'
-import {
-  applyMention,
-  buildMentionSources,
-  matchMentions,
-  resolveMentionsForSend,
-  type MentionCandidate
-} from './chat-mentions'
+import { buildMentionSources, resolveMentionsForSend } from './chat-mentions'
 import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-sections'
 import { ForkIcon } from './chat-view-icons'
 import {
@@ -211,7 +204,14 @@ export function ChatView({
   const [conversationDateOrder, setConversationDateOrder] = useState<'desc' | 'asc'>('desc')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Msg[]>([])
-  const [input, setInput] = useState('')
+  /**
+   * Le TEXTE en cours de frappe ne vit plus ici : il appartient à `ChatComposer` (conv-1466).
+   * ChatView ne garde que la carte des brouillons (`composerDraftsRef`, source de vérité) et ce
+   * handle, par lequel il RÉIMPOSE une valeur — sans qu'une frappe le re-rende.
+   */
+  const composerRef = useRef<ChatComposerHandle | null>(null)
+  /** Seule retombée d'une frappe sur la vue : vide ↔ non-vide (la home s'y accroche). */
+  const [brouillonPresent, setBrouillonPresent] = useState(false)
   /*
    * Les suppositions du cadrage en cours, par conversation. Vivantes seulement : elles viennent d'un
    * evenement de run, disparaissent quand l'utilisateur les masque ou quand un nouveau cadrage
@@ -230,11 +230,6 @@ export function ChatView({
     () => skillSlashCommands(skillsInstallees ?? []),
     [skillsInstallees]
   )
-  const [slashIndex, setSlashIndex] = useState(0)
-  const [slashDismissed, setSlashDismissed] = useState(false)
-  // Palette de MENTIONS (`@run…`, `@fichier…`) : même mécanique d'état que la palette slash.
-  const [mentionIndex, setMentionIndex] = useState(0)
-  const [mentionDismissed, setMentionDismissed] = useState(false)
   /*
    * Ghost-text (façon CLI) du DERNIER message assistant : placeholder grisé quand le champ est vide,
    * accepté par Tab.
@@ -430,8 +425,6 @@ export function ChatView({
    * Chips d'accueil dérivées de l'état RÉEL (runs bloqués, brouillon repris) ; repli
    * statique si rien à dire. Rendues par le `SuggestionGrid` déjà existant.
    */
-  /** Récapitulatif de visée affiché au-dessus du composer (null = rien à dire, pas de bruit). */
-  const scopeEcho = useMemo(() => buildScopeEcho(input, mentionSources), [input, mentionSources])
   /**
    * FRICTION sur une série d'orchestrations sans livraison. Mesuré (conv-1302, 2026-08-18) : douze
    * runs d'affilée sur la même demande, plus de 20 $, et rien à l'écran ne disait qu'on était dans
@@ -444,8 +437,9 @@ export function ChatView({
     [messages]
   )
   const homeSuggestions = useMemo(
-    () => buildHomeSuggestions({ runs, resumedDraft: input }),
-    [runs, input]
+    // `brouillonPresent` et non le texte : `buildHomeSuggestions` ne teste que sa présence.
+    () => buildHomeSuggestions({ runs, resumedDraft: brouillonPresent ? 'brouillon' : '' }),
+    [runs, brouillonPresent]
   )
   const [openRun, setOpenRun] = useState<{ path: string; content: string } | null>(null)
   const [openTrace, setOpenTrace] = useState<OrchStep[] | null>(null)
@@ -492,7 +486,6 @@ export function ChatView({
   const [runDeletePending, setRunDeletePending] = useState(false)
   const [runDeleteError, setRunDeleteError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const composerInputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const liveMessagesRef = useRef(new Map<string, Msg[]>())
   const busyConversationsRef = useRef(new Set<string>())
@@ -513,13 +506,18 @@ export function ChatView({
   const runsRequestRef = useRef<RunRequestIdentity>({ id: 0, scope: 'conv', convId: null })
   const followTailRef = useRef(true)
 
+  /** Le texte en cours de frappe, lu dans la carte des brouillons (le composer y écrit à chaque touche). */
+  function texteDuComposer(): string {
+    return getComposerDraft(composerDraftKeyRef.current).input
+  }
+
   function getComposerDraft(key: string): ComposerDraft {
     return composerDraftsRef.current.get(key) ?? { input: '', attachments: [], error: null }
   }
 
   function setDraftInput(key: string, value: string): void {
     composerDraftsRef.current.set(key, { ...getComposerDraft(key), input: value })
-    if (composerDraftKeyRef.current === key) setInput(value)
+    if (composerDraftKeyRef.current === key) composerRef.current?.setInput(value)
   }
 
   function setDraftAttachments(
@@ -542,7 +540,7 @@ export function ChatView({
     composerDraftKeyRef.current = key
     const draft = getComposerDraft(key)
     composerDraftsRef.current.set(key, draft)
-    setInput(draft.input)
+    composerRef.current?.setInput(draft.input)
     setAttachments(draft.attachments)
     setAttachmentError(draft.error)
   }
@@ -1217,13 +1215,6 @@ export function ChatView({
     })
   }, [messages, activeDirectiveReceipts])
 
-  useEffect(() => {
-    const inputElement = composerInputRef.current
-    if (!inputElement) return
-    inputElement.style.height = 'auto'
-    inputElement.style.height = `${Math.min(inputElement.scrollHeight, 180)}px`
-  }, [input])
-
   /* --- conversations : sélection = fil rechargé depuis le store --- */
 
   /**
@@ -1344,7 +1335,7 @@ export function ChatView({
     if (!prompt) return
     newConv()
     setDraftInput(NEW_DRAFT_KEY, prompt)
-    requestAnimationFrame(() => composerInputRef.current?.focus())
+    requestAnimationFrame(() => composerRef.current?.focus())
   }
 
   function newConv(): void {
@@ -1365,7 +1356,7 @@ export function ChatView({
       if (!prompt) return
       newConv()
       setDraftInput(NEW_DRAFT_KEY, prompt)
-      requestAnimationFrame(() => composerInputRef.current?.focus())
+      requestAnimationFrame(() => composerRef.current?.focus())
     }
     /**
      * Tickets → Chat (refonte du 2026-07-28). Ouvre la conversation de la sélection et y PRÉ-REMPLIT
@@ -1409,7 +1400,7 @@ export function ChatView({
       switchComposerDraft(draftKey)
       setDraftInput(draftKey, detail.prompt)
       if (detail.send) void send(detail.prompt, { targetConversationId: id })
-      else requestAnimationFrame(() => composerInputRef.current?.focus())
+      else requestAnimationFrame(() => composerRef.current?.focus())
     }
     window.addEventListener('autowin:prefill-conversation', prefill)
     window.addEventListener('autowin:brainwash', openBrainwash)
@@ -1597,6 +1588,7 @@ export function ChatView({
    */
   function queueCurrentMessage(): void {
     if (!activeId) return
+    const input = texteDuComposer()
     if (!input.trim()) return
     // Une question `ask` encore ouverte au bout du fil : ce texte y REPOND, meme tape a la main.
     // Sans ce test, seul le clic sur un bouton comptait comme reponse et le reçu disait « Orienté ».
@@ -1879,30 +1871,10 @@ export function ChatView({
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
   function handleBtw(): boolean {
-    const parsed = parseBtw(input)
+    const parsed = parseBtw(texteDuComposer())
     if (!parsed.isBtw) return false
     void submitBtw(parsed.body)
     return true
-  }
-  /** Palette « / » : insère la commande choisie dans le composer, l'utilisateur complète le corps. */
-  function acceptSlash(cmd: SlashCommand): void {
-    setDraftInput(composerDraftKeyRef.current, cmd.insert)
-    setSlashIndex(0)
-    requestAnimationFrame(() => composerInputRef.current?.focus())
-  }
-  /** Palette « @ » : remplace la frappe par la référence RÉSOLUE de la cible choisie. */
-  function acceptMention(candidate: MentionCandidate): void {
-    const caret = composerInputRef.current?.selectionStart ?? input.length
-    const { text, caret: nextCaret } = applyMention(input, candidate, caret)
-    setDraftInput(composerDraftKeyRef.current, text)
-    setMentionIndex(0)
-    setMentionDismissed(true)
-    requestAnimationFrame(() => {
-      const el = composerInputRef.current
-      if (!el) return
-      el.focus()
-      el.setSelectionRange(nextCaret, nextCaret)
-    })
   }
   // À la libération de `busy` (render frais, busy=false), on draine la FILE D'ATTENTE — un message
   // par tour (chacun = sa propre paire Q/R). Vaut aussi bien pour l'auto-drain fin de tour que pour
@@ -1975,12 +1947,7 @@ export function ChatView({
   >(() => {})
   refineDraftRef.current = (prompt, status, reason) => {
     setDraftInput(composerDraftKeyRef.current, buildRefineDraft(prompt, status, reason))
-    requestAnimationFrame(() => {
-      const el = composerInputRef.current
-      if (!el) return
-      el.focus()
-      el.setSelectionRange(el.value.length, el.value.length)
-    })
+    requestAnimationFrame(() => composerRef.current?.focusAt(-1))
   }
   const refineResumeDraft = useCallback(
     (prompt: string, status: TerminalStatus, reason?: string | null) =>
@@ -2035,7 +2002,7 @@ export function ChatView({
    * attente au message de la FILE — deux pertes silencieuses, aucune reliée à une action visible.
    */
   async function send(text?: string, options?: SendOptions): Promise<void> {
-    const value = (text ?? input).trim()
+    const value = (text ?? texteDuComposer()).trim()
     const sourceConversationId = options?.targetConversationId ?? activeId
     const sendDraftKey = options?.targetConversationId ?? composerDraftKeyRef.current
     const keepComposerDraft = options?.keepComposerDraft === true
@@ -2351,11 +2318,10 @@ export function ChatView({
   const latestAssistant = [...messages]
     .reverse()
     .find((message): message is AsstMsg => message.role === 'assistant')
-  const canResumePilotTurn =
+  // Le composer y ajoute « et rien n'est tapé, aucune pièce jointe » : ces deux-là sont chez lui.
+  const resumeAvailable =
     !busy &&
     Boolean(activeId) &&
-    !input.trim() &&
-    attachments.length === 0 &&
     (latestAssistant?.status === 'cancelled' || latestAssistant?.status === 'interrupted')
   // « Plus récentes » = là où L'UTILISATEUR a parlé en dernier, pas la dernière touche : ranger une
   // conversation dans un dossier bougeait `updatedAt` et la propulsait en tête (2026-08-18).
@@ -3434,9 +3400,25 @@ export function ChatView({
           moveQueuedMessageToBtw={moveQueuedMessageToBtw}
           restoreQueuedMessageToDraft={restoreQueuedMessageToDraft}
         />
-        <div className="composer">
-          <div className="composer-field">
-            {attachments.length > 0 && (
+        <ChatComposer
+          ref={composerRef}
+          busy={busy}
+          hasActiveConversation={Boolean(activeId)}
+          resumeAvailable={resumeAvailable}
+          attachmentCount={attachments.length}
+          mentionSources={mentionSources}
+          skillCommands={skillCommands}
+          ghostRecommendation={ghostRecommendation}
+          placeholderPendantTour={busy && activeId !== null}
+          onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
+          onDraftPresence={setBrouillonPresent}
+          onBtw={handleBtw}
+          onSend={() => send()}
+          onQueue={queueCurrentMessage}
+          onResume={() => void resumePilotTurn()}
+          onPaste={(files) => void addFiles(files)}
+          attachmentsNode={
+            attachments.length > 0 ? (
               <div className="attachment-list pending">
                 {attachments.map((file, fileIndex) => (
                   <span
@@ -3482,11 +3464,15 @@ export function ChatView({
                   </span>
                 ))}
               </div>
-            )}
-            {attachmentError && <div className="attachment-error">{attachmentError}</div>}
-            {/* CADRAGE : ce sur quoi le run repose SANS l'avoir vérifié, montré pendant qu'il
-                tourne. Ne bloque rien ; un clic pré-remplit le composer pour corriger. */}
-            {activeId && hypothesesCadrage[activeId]?.length ? (
+            ) : null
+          }
+          errorNode={
+            attachmentError ? <div className="attachment-error">{attachmentError}</div> : null
+          }
+          cadrageNode={
+            /* CADRAGE : ce sur quoi le run repose SANS l'avoir vérifié, montré pendant qu'il
+               tourne. Ne bloque rien ; un clic pré-remplit le composer pour corriger. */
+            activeId && hypothesesCadrage[activeId]?.length ? (
               <CadrageHypotheses
                 hypotheses={hypothesesCadrage[activeId]}
                 onCorriger={(amorce) => setDraftInput(composerDraftKeyRef.current, amorce)}
@@ -3498,10 +3484,12 @@ export function ChatView({
                   })
                 }
               />
-            ) : null}
-            {/* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
-                suivante. Ne bloque rien — la décision reste humaine. */}
-            {friction && (
+            ) : null
+          }
+          frictionNode={
+            /* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
+               suivante. Ne bloque rien — la décision reste humaine. */
+            friction ? (
               <div
                 className="composer-friction"
                 data-testid="friction-echecs-repetes"
@@ -3509,71 +3497,10 @@ export function ChatView({
               >
                 <span aria-hidden="true">⚠</span> {friction.message}
               </div>
-            )}
-            {/* Écho de PÉRIMÈTRE : ce que le tour va probablement faire, et sur quoi — AVANT
-                l'envoi, pour pouvoir corriger la visée plutôt que de découvrir l'écart après. */}
-            {scopeEcho && (
-              <div className="composer-scope-echo" data-testid="scope-echo">
-                <span aria-hidden="true">◎</span> {formatScopeEcho(scopeEcho)}
-              </div>
-            )}
-            {(() => {
-              const items = matchMentions(input, mentionSources)
-              if (mentionDismissed || items.length === 0) return null
-              const sel = Math.min(mentionIndex, items.length - 1)
-              return (
-                <ul
-                  className="slash-palette mention-palette"
-                  role="listbox"
-                  aria-label="Cibles"
-                  data-testid="mention-palette"
-                >
-                  {items.map((c, i) => (
-                    <li
-                      key={`${c.kind}:${c.id}`}
-                      role="option"
-                      aria-selected={i === sel}
-                      className={`slash-item${i === sel ? ' is-selected' : ''}`}
-                      data-testid="mention-item"
-                      onMouseDown={(ev) => {
-                        ev.preventDefault() // garde le focus du composer
-                        acceptMention(c)
-                      }}
-                    >
-                      <span className="slash-name mono">
-                        {c.kind === 'run' ? '@run' : '@fichier'} {c.label}
-                      </span>
-                      {c.hint && <span className="slash-hint">{c.hint}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )
-            })()}
-            {(() => {
-              const items = matchSlashCommands(input, skillCommands)
-              if (slashDismissed || items.length === 0) return null
-              const sel = Math.min(slashIndex, items.length - 1)
-              return (
-                <ul className="slash-palette" role="listbox" aria-label="Commandes">
-                  {items.map((c, i) => (
-                    <li
-                      key={c.name}
-                      role="option"
-                      aria-selected={i === sel}
-                      className={`slash-item${i === sel ? ' is-selected' : ''}`}
-                      onMouseDown={(ev) => {
-                        ev.preventDefault() // garde le focus du composer
-                        acceptSlash(c)
-                      }}
-                    >
-                      <span className="slash-name mono">/{c.name}</span>
-                      <span className="slash-hint">{c.hint}</span>
-                    </li>
-                  ))}
-                </ul>
-              )
-            })()}
-            <div className="composer-input-row">
+            ) : null
+          }
+          leadingNode={
+            <>
               <button
                 type="button"
                 className="attachment-button"
@@ -3610,147 +3537,28 @@ export function ChatView({
                 }}
                 disabled={busy}
               />
-              <textarea
-                ref={composerInputRef}
-                className="input grow"
-                rows={1}
-                value={input}
-                onChange={(e) => {
-                  setDraftInput(composerDraftKeyRef.current, e.target.value)
-                  setSlashDismissed(false)
-                  setSlashIndex(0)
-                  setMentionDismissed(false)
-                  setMentionIndex(0)
-                }}
-                onKeyDown={(e) => {
-                  // La palette de MENTIONS passe avant la slash : les deux ne peuvent pas être
-                  // ouvertes en même temps (une mention exclut un `/` en tête de frappe).
-                  const mentions = matchMentions(input, mentionSources)
-                  if (!mentionDismissed && mentions.length > 0) {
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault()
-                      setMentionIndex((i) => (i + 1) % mentions.length)
-                      return
-                    }
-                    if (e.key === 'ArrowUp') {
-                      e.preventDefault()
-                      setMentionIndex((i) => (i - 1 + mentions.length) % mentions.length)
-                      return
-                    }
-                    if (e.key === 'Enter' || e.key === 'Tab') {
-                      e.preventDefault()
-                      acceptMention(mentions[Math.min(mentionIndex, mentions.length - 1)])
-                      return
-                    }
-                    if (e.key === 'Escape') {
-                      e.preventDefault()
-                      setMentionDismissed(true)
-                      return
-                    }
-                  }
-                  const items = matchSlashCommands(input, skillCommands)
-                  if (!slashDismissed && items.length > 0) {
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault()
-                      setSlashIndex((i) => (i + 1) % items.length)
-                      return
-                    }
-                    if (e.key === 'ArrowUp') {
-                      e.preventDefault()
-                      setSlashIndex((i) => (i - 1 + items.length) % items.length)
-                      return
-                    }
-                    if (e.key === 'Enter' || e.key === 'Tab') {
-                      e.preventDefault()
-                      acceptSlash(items[Math.min(slashIndex, items.length - 1)])
-                      return
-                    }
-                    if (e.key === 'Escape') {
-                      e.preventDefault()
-                      setSlashDismissed(true)
-                      return
-                    }
-                  }
-                  // Ghost-text (CLI-like) : Tab accepte la recommandation quand le champ est vide
-                  // et qu'aucun menu slash n'est actif. Remplit l'input avec l'étape recommandée.
-                  if (e.key === 'Tab' && ghostRecommendation && input.trim() === '') {
-                    e.preventDefault()
-                    setDraftInput(composerDraftKeyRef.current, ghostRecommendation)
-                    return
-                  }
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    if (handleBtw()) return
-                    if (busy && activeId) queueCurrentMessage()
-                    else send()
-                  }
-                }}
-                onPaste={(e) => {
-                  const pasted = e.clipboardData?.files
-                  if (pasted && pasted.length > 0) {
-                    e.preventDefault()
-                    void addFiles(pasted)
-                  }
-                }}
-                placeholder={
-                  busy && activeId !== null
-                    ? 'Orienter l’agent sans l’interrompre (Entrée)'
-                    : ghostRecommendation
-                      ? `⇥ ${ghostRecommendation}`
-                      : 'Écrire à l’agent ou déposer des fichiers…'
-                }
-              />
-              {/*
-                ARRÊTER ne doit dépendre de RIEN d'autre que « un tour est en cours ». Avant, un SEUL
-                bouton portait trois rôles : `busy && !input.trim()` → Stop, `busy && input.trim()` →
-                Mettre en file, sinon Envoyer. Conséquence : dès qu'on avait tapé quelque chose, il
-                fallait d'abord VIDER la barre de prompt pour que le clic agisse comme stop — l'action
-                la plus urgente masquée derrière un état accessoire. Stop a désormais son propre bouton.
-              */}
-              {busy && (
-                <button
-                  className="btn composer-stop"
-                  data-testid="composer-stop"
-                  onClick={() => stopPilotTurn()}
-                  disabled={!activeId || interruptingConversations.has(activeId ?? '')}
-                  aria-label="Arrêter la réponse"
-                  title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
-                >
-                  {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : '■ Stop'}
-                </button>
-              )}
+            </>
+          }
+          stopNode={
+            /*
+              ARRÊTER ne doit dépendre de RIEN d'autre que « un tour est en cours » : ni du texte
+              tapé, ni d'un état accessoire. Stop a donc son propre bouton, et il reste dans le
+              parent — il ne dépend pas de la frappe.
+            */
+            busy ? (
               <button
-                className={`btn-accent btn composer-send${canResumePilotTurn ? ' is-resume' : ''}`}
-                data-testid="composer-send"
-                onClick={() => {
-                  if (handleBtw()) return
-                  // Plus de branche « composer vide → arrêter » : Stop a son propre bouton, ce bouton
-                  // ne fait plus qu'une chose à la fois — reprendre, mettre en file, ou envoyer.
-                  if (canResumePilotTurn) {
-                    void resumePilotTurn()
-                    return
-                  }
-                  if (busy && activeId) queueCurrentMessage()
-                  else send()
-                }}
-                disabled={
-                  busy
-                    ? !activeId || !input.trim()
-                    : canResumePilotTurn
-                      ? false
-                      : !input.trim() && attachments.length === 0
-                }
-                aria-label={
-                  canResumePilotTurn
-                    ? 'Reprendre la réponse'
-                    : busy
-                      ? 'Orienter l’agent sans l’interrompre'
-                      : 'Envoyer le message'
-                }
+                className="btn composer-stop"
+                data-testid="composer-stop"
+                onClick={() => stopPilotTurn()}
+                disabled={!activeId || interruptingConversations.has(activeId ?? '')}
+                aria-label="Arrêter la réponse"
+                title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
               >
-                {canResumePilotTurn ? '↻ Reprendre' : busy ? '🧭 Orienter' : 'Envoyer'}
+                {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : '■ Stop'}
               </button>
-            </div>
+            ) : null
+          }
+          metaNode={
             <div className="composer-meta">
               <span className="composer-hint">
                 Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
@@ -3774,8 +3582,8 @@ export function ChatView({
                 />
               </div>
             </div>
-          </div>
-        </div>
+          }
+        />
       </section>
 
       {showThinking && (
