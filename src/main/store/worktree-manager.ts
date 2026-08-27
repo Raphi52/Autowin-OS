@@ -146,6 +146,45 @@ function tryGit(repo: string, args: string[]): { code: number; stdout: string; s
   }
 }
 
+/**
+ * Rend une exception de finalisation LISIBLE par celui qui devra reparer le run.
+ *
+ * Mesure le 2026-08-27 (conv-1427) : un `catch` sans parametre remplacait l'erreur reelle par une
+ * phrase constante. Le run - vert, juge VALIDE, 2,47 $ - s'est clos en `red` sur « La finalisation
+ * Git a echoue de facon inattendue. », et plus personne, ni l'utilisateur ni la trace, ne pouvait
+ * savoir ce qui avait echoue. La categorie (`merge-failed`) survivait ; la cause etait jetee.
+ *
+ * On garde la phrase - elle nomme la categorie - et on lui rend son complement : le message, puis
+ * le premier cadre de pile, qui suffit a situer le point de rupture. Borne a 600 caracteres : ce
+ * `detail` traverse le ledger et l'UI, une pile entiere y serait illisible.
+ */
+export function detailFinalisationJetee(erreur: unknown): string {
+  const prefixe = 'La finalisation Git a échoué de façon inattendue'
+  const message =
+    erreur instanceof Error
+      ? erreur.message
+      : typeof erreur === 'string'
+        ? erreur
+        : (() => {
+            try {
+              return JSON.stringify(erreur) ?? String(erreur)
+            } catch {
+              return String(erreur)
+            }
+          })()
+  const cadre =
+    erreur instanceof Error && erreur.stack
+      ? (erreur.stack
+          .split(/\r?\n/)
+          .map((ligne) => ligne.trim())
+          .find((ligne) => ligne.startsWith('at ')) ?? '')
+      : ''
+  const corps = [message, cadre].filter((part) => part.length > 0).join(' — ')
+  if (!corps) return prefixe + '.'
+  const texte = prefixe + ' : ' + corps
+  return texte.length > 600 ? texte.slice(0, 597) + '...' : texte
+}
+
 export type FinalizeResult =
   | {
       outcome: 'merged'
@@ -2084,8 +2123,24 @@ export class WorktreeManager {
   }
 
   /**
-   * Fichiers ignorés qui peuvent être de vrais livrables locaux. Les dépendances, caches et sorties
-   * de build explicitement bornés sont régénérables ; tout autre fichier ignoré bloque le nettoyage.
+   * Fichiers ignorés qui peuvent être de vrais LIVRABLES locaux — donc ceux qui bloquent la
+   * publication. La question n'est pas « ce fichier est-il ignoré », c'est « est-il JETABLE ».
+   *
+   * LA RÈGLE SE DÉRIVE, ELLE NE S'ÉNUMÈRE PLUS, et c'est une récidive qui l'a imposé. Cette liste
+   * nommait les dossiers un par un. Le 2026-08-21 (conv-1362) un run vert a bloqué sa propre
+   * publication parce que sa preuve vivait dans `Audit/` ; on a ajouté `Audit/` à la liste. Le
+   * 2026-08-27 (conv-1425) le MÊME défaut est revenu par `artifacts/` — la ligne SUIVANTE du même
+   * `.gitignore` — trois refus, 3,22 $, zéro livraison. Corriger un dossier ne corrige pas un
+   * défaut : il revient par le dossier d'à côté.
+   *
+   * Ce que le dépôt DÉCLARE lui-même sert désormais de source. `--directory` demande à git de
+   * replier tout dossier entièrement ignoré en UNE entrée terminée par `/` : ces zones-là,
+   * l'auteur du projet les a désignées jetables (`out/`, `dist/`, `artifacts/`, `Audit/`, et tout
+   * dossier qu'on ajoutera demain sans toucher à ce code). Ce qui ressort en FICHIER a été nommé un
+   * par un dans `.gitignore` : c'est peut-être un vrai livrable, et il continue de bloquer.
+   *
+   * La garde reste donc entière du côté qui compte — un fichier ignoré individuellement bloque
+   * toujours — et c'est la seule direction où se tromper coûte du travail perdu.
    */
   private preservedIgnoredFiles(repo: string): string[] {
     const out = this.git(repo, [
@@ -2094,24 +2149,20 @@ export class WorktreeManager {
       '--others',
       '--ignored',
       '--exclude-standard',
+      // Replie chaque dossier entièrement ignoré en une seule entrée « <dossier>/ ». Sans lui, cette
+      // commande énumérerait les 33 preuves d'`artifacts/` — et, sur un dépôt installé, node_modules
+      // en entier.
+      '--directory',
       '--',
-      '.',
-      ':(exclude,glob)**/node_modules/**',
-      ':(exclude,glob)**/__pycache__/**',
-      ':(exclude,glob)out/**',
-      ':(exclude,glob)dist/**',
-      ':(exclude,glob)dist-*/**',
-      ':(exclude,glob)graphify-out/**',
-      // Dossier de preuves du harnais (`ui-capture`, `cdp-*-proof`) : une capture se REFAIT en
-      // relançant le script. Mesuré le 2026-08-21 (conv-1362) : un run vert a bloqué sa propre
-      // publication parce que SA preuve, `Audit/accueil-3d-anime.png`, comptait comme livrable.
-      ':(exclude,glob)Audit/**',
-      ':(exclude,glob)**/.eslintcache',
-      ':(exclude,glob)*.tsbuildinfo',
-      ':(exclude,glob)**/*.tsbuildinfo',
-      ':(exclude,glob)**/.DS_Store'
+      '.'
     ])
-    return parseNullSeparatedPaths(out)
+    return parseNullSeparatedPaths(out).filter((chemin) => {
+      // Une entrée repliée en dossier = zone déclarée jetable par `.gitignore`. Rien à protéger.
+      if (chemin.endsWith('/')) return false
+      // Bruit régénérable nommé fichier par fichier : caches et empreintes de build. Ceux-là ne sont
+      // pas des livrables, et ils étaient déjà écartés avant ce correctif — on ne change rien pour eux.
+      return !/(?:^|\/)(?:\.eslintcache|\.DS_Store)$|\.tsbuildinfo$/.test(chemin)
+    })
   }
 
   private workingTreeFiles(repo: string): string[] {
@@ -5049,13 +5100,13 @@ exit 0
           detail: publishDetail || undefined
         }
       })()
-    } catch {
+    } catch (erreur) {
       integrationResult = {
         outcome: 'blocked',
         agentId,
         files: agentFiles,
         reason: 'merge-failed',
-        detail: 'La finalisation Git a échoué de façon inattendue.'
+        detail: detailFinalisationJetee(erreur)
       }
     }
 
