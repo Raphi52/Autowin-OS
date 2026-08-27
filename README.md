@@ -183,4 +183,3 @@ src/
 <div align="center">
 <sub>Autowin OS — cockpit d'orchestration d'agents · Electron + React + TypeScript</sub>
 </div>
-<!-- preuve attente integration 2 -->
