@@ -308,6 +308,43 @@ export interface MaterializedAttachments {
   cleanup: () => void
 }
 
+/**
+ * Extension a garantir sur le fichier ecrit, deduite du TYPE reel.
+ *
+ * Un fichier dont le nom ne finit pas par une extension reconnue est lu en OCTETS par l'outil Read,
+ * pas en image. Mesure du 2026-08-27 : une piece jointe nommee « capture.png (miniature) » — le
+ * libelle ajoute APRES l'extension — revenait au modele en JPEG brut, et il repondait, a juste
+ * titre, qu'aucune image ne lui etait parvenue. Le libelle appartient au PROMPT, jamais au nom de
+ * fichier ; le nom de fichier appartient au type.
+ */
+export function extensionPourType(mimeType: string, nom: string): string {
+  const parType: Record<string, string> = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+    'image/bmp': '.bmp',
+    'application/pdf': '.pdf'
+  }
+  const attendue = parType[(mimeType ?? '').toLowerCase()]
+  if (attendue) return attendue
+  const dernier = /[.]([A-Za-z0-9]{1,6})$/.exec(nom)
+  return dernier ? '.' + dernier[1].toLowerCase() : ''
+}
+
+/** Nom de fichier PROPRE : sans libelle entre parentheses, avec l'extension du type reel. */
+export function nomDeFichierPourPieceJointe(nom: string, mimeType: string): string {
+  const ext = extensionPourType(mimeType, nom)
+  const sansLibelles = nom.replace(/[ ]*[(][^)]*[)]/g, '').trim()
+  // On retire l'extension EXISTANTE, quelle qu'elle soit : une miniature jpeg portant un nom en
+  // .png donnerait sinon « x.png.jpg » — lisible, mais qui affiche encore le type faux au modele.
+  const base = ext ? sansLibelles.replace(/[.][A-Za-z0-9]{1,6}$/, '') : sansLibelles
+  const propre = base.replace(/[ .]+$/, '')
+  return (propre || 'fichier') + ext
+}
+
+
 export function materializeClaudeAttachments(attachments: Attachment[]): MaterializedAttachments {
   const dir = mkdtempSync(join(tmpdir(), 'autowin-os-attachments-'))
   const paths = attachments.map((attachment, index) => {
@@ -317,7 +354,10 @@ export function materializeClaudeAttachments(attachments: Attachment[]): Materia
       )
         .join('')
         .replace(/^\.+/, '') || 'fichier'
-    const path = join(dir, `${index + 1}-${safeName}`)
+    const path = join(
+      dir,
+      `${index + 1}-${nomDeFichierPourPieceJointe(safeName, attachment.mimeType ?? '')}`
+    )
     const data =
       attachment.kind === 'text' ? attachment.content : Buffer.from(attachment.content, 'base64')
     writeFileSync(path, data)
@@ -327,8 +367,8 @@ export function materializeClaudeAttachments(attachments: Attachment[]): Materia
     dir,
     paths,
     promptSuffix:
-      '\n\nPIÈCES JOINTES EXPLICITEMENT FOURNIES PAR L’UTILISATEUR :\n' +
-      paths.map((path) => `- ${path}`).join('\n') +
+      '\n\nPIÈCES JOINTES FOURNIES PAR L’UTILISATEUR (celles marquées « message precedent » viennent d’un tour ANTÉRIEUR de cette conversation, pas du message ci-dessus) :\n' +
+      paths.map((path, index) => `- ${path} — ${attachments[index]?.name ?? ''}`).join('\n') +
       '\nUtilise Read uniquement pour consulter ces fichiers si nécessaire.',
     cleanup: () => rmSync(dir, { recursive: true, force: true })
   }

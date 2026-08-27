@@ -59,7 +59,9 @@ describe('AgentPilot — pieces jointes de l historique', () => {
     )
 
     const attachments = sent.at(0)?.[0]?.attachments ?? []
-    expect(attachments.map((a) => a.name)).toContain('maquette.png')
+    expect(attachments.map((a) => a.name)).toEqual([
+      'maquette.png (jointe a un message precedent)'
+    ])
   })
 
   it('donne la priorite a la piece jointe du tour courant et borne le total a 8', async () => {
@@ -85,9 +87,9 @@ describe('AgentPilot — pieces jointes de l historique', () => {
 
     const names = (sent.at(0)?.[0]?.attachments ?? []).map((a) => a.name)
     expect(names.length).toBeLessThanOrEqual(8)
-    expect(names).toContain('courante.png')
+    expect(names).toContain('courante.png')  // le message COURANT garde son nom nu
     // La plus ANCIENNE est celle qu'on sacrifie, jamais la plus recente.
-    expect(names).not.toContain('vieille-0.png')
+    expect(names.some((n) => n.startsWith('vieille-0.png'))).toBe(false)
   })
 
   it('ne duplique pas une piece jointe presente deux fois dans le fil', async () => {
@@ -106,7 +108,7 @@ describe('AgentPilot — pieces jointes de l historique', () => {
     )
 
     const names = (sent.at(0)?.[0]?.attachments ?? []).map((a) => a.name)
-    expect(names.filter((n) => n === 'memo.png')).toHaveLength(1)
+    expect(names.filter((n) => n.startsWith('memo.png'))).toHaveLength(1)
   })
 
   it('ecarte une piece jointe sans binaire et se replie sur sa miniature', async () => {
@@ -141,7 +143,7 @@ describe('AgentPilot — pieces jointes de l historique', () => {
     const jointes = sent.at(0)?.[0]?.attachments ?? []
     // Aucune piece jointe vide ne part : elle ferait ecrire un fichier de 0 octet chez le provider.
     expect(jointes.every((a) => (a.content ?? '').length > 0)).toBe(true)
-    expect(jointes.map((a) => a.name)).not.toContain('perdue.png')
+    expect(jointes.some((a) => a.name.startsWith('perdue.png'))).toBe(false)
     const miniature = jointes.find((a) => a.name.startsWith('gardee.png'))
     expect(miniature?.content).toBe('bWluaQ==')
     // Jamais presentee comme l original.

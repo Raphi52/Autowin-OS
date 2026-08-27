@@ -103,3 +103,59 @@ export async function encodeAttachment(file: File): Promise<EncodedChatAttachmen
     ...(thumbnail && { thumbnail })
   }
 }
+
+/**
+ * Pieces jointes d'un message PASSE, telles qu'elles doivent traverser l'IPC.
+ *
+ * CAUSE RACINE mesuree le 2026-08-27 : `flatten()` (ChatView) reduisait chaque message a
+ * `{ role, content }`, puis rattachait a la main les seules pieces jointes du message COURANT.
+ * Le process principal ne recevait donc JAMAIS celles des tours passes — et le correctif pose en
+ * aval, dans `agent-pilot`, collectait un tuyau vide. Une image jointe au tour 1 etait invisible
+ * au tour 2, quoi qu'en dise le code du dessous.
+ *
+ * On ne renvoie que la MINIATURE, jamais le binaire d'origine, pour deux raisons :
+ *  - le volume : 40 messages porteurs d'images franchiraient les gardes IPC (8 fichiers, 20 Mo par
+ *    message) et alourdiraient chaque tour d'un fil ancien ;
+ *  - la COHERENCE : le fil ne PERSISTE que la miniature, donc renvoyer l'original pour un fil vivant
+ *    et la miniature pour un fil rehydrate ferait dependre la reponse du fait que l'app a redemarre.
+ * Le nom porte la mention : une reduction ne doit jamais passer pour sa source.
+ */
+export function pieceJointePasseePourLeFil(piece: {
+  name: string
+  mimeType?: string
+  size?: number
+  kind?: string
+  content?: string
+  thumbnail?: string
+}): { name: string; mimeType: string; size: number; kind: 'image'; content: string } | undefined {
+  /*
+   * L'ORIGINAL D'ABORD quand il est encore la.
+   *
+   * Mesure du 2026-08-27 : en ne faisant voyager que la miniature, le modele a lu 3 bandes sur 4 et
+   * s'est trompe sur la quatriere (cyan annonce « vert fluo ») — une perte de fidelite payee pour
+   * rien quand le binaire d'origine est encore en memoire du fil. La miniature reste le repli des
+   * messages rehydrates du disque, ou l'original n'existe plus.
+   */
+  if (piece.kind === 'image' && typeof piece.content === 'string' && piece.content.length > 0) {
+    return {
+      name: piece.name,
+      mimeType: piece.mimeType ?? 'image/png',
+      size: piece.size ?? piece.content.length,
+      kind: 'image',
+      content: piece.content
+    }
+  }
+  const thumbnail = piece.thumbnail
+  if (typeof thumbnail !== 'string' || !thumbnail.startsWith('data:image/')) return undefined
+  const virgule = thumbnail.indexOf(',')
+  const content = virgule >= 0 ? thumbnail.slice(virgule + 1) : ''
+  if (!content) return undefined
+  const pointVirgule = thumbnail.indexOf(';')
+  return {
+    name: `${piece.name} (miniature)`,
+    mimeType: pointVirgule > 5 ? thumbnail.slice(5, pointVirgule) : 'image/png',
+    size: content.length,
+    kind: 'image',
+    content
+  }
+}

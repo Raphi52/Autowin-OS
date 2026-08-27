@@ -983,9 +983,24 @@ export class AgentPilot {
            * remplace par leur MINIATURE quand elle existe -- degradee, mais lisible et NOMMEE
            * comme telle, jamais presentee comme l'original.
            */
-          const piece = aPieceJointeLisible(brute) ? brute : replierSurLaMiniature(brute)
-          if (!piece) continue
-          const cle = `${piece.name}|${piece.content}`
+          const lisible = aPieceJointeLisible(brute) ? brute : replierSurLaMiniature(brute)
+          if (!lisible) continue
+          /*
+           * DIRE D'OU ELLE VIENT, sinon elle passe pour une piece jointe du message COURANT.
+           *
+           * Mesure du 2026-08-27 : le binaire arrivait bien au tour 2 (trace de prompt : chemin
+           * present), et le modele repondait pourtant « AUCUNE IMAGE ». Sur une session reprise, le
+           * fil textuel n'est pas renvoye — rien ne reliait donc le fichier remis au message
+           * precedent, et l'entete du provider l'annonce comme « fournie par l'utilisateur »,
+           * comprendre : maintenant. Le nom porte desormais la provenance.
+           */
+          const piece =
+            index === history.length - 1
+              ? lisible
+              : { ...lisible, name: `${lisible.name} (jointe a un message precedent)` }
+          // Cle calculee sur la piece AVANT renommage : sinon la meme image, jointe au message
+          // courant ET a un message passe, produit deux cles et part deux fois (attrape par le test).
+          const cle = `${lisible.name}|${lisible.content}`
           if (vues.has(cle)) continue
           vues.add(cle)
           retenues.push(piece)

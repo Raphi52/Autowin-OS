@@ -67,7 +67,11 @@ import {
 } from './chat-mentions'
 import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-sections'
 import { ForkIcon } from './chat-view-icons'
-import { formatFileSize, encodeAttachment } from './chat-attachments'
+import {
+  formatFileSize,
+  encodeAttachment,
+  pieceJointePasseePourLeFil
+} from './chat-attachments'
 import { derniereConversationOuverte, memoriserDerniereConversation } from './derniere-conversation'
 import {
   conversationsRecentes,
@@ -1975,9 +1979,31 @@ export function ChatView({
 
   /* --- envoi --- */
 
-  function flatten(msgs: Msg[]): Array<{ role: 'user' | 'assistant'; content: string }> {
+  function flatten(
+    msgs: Msg[]
+  ): Array<{ role: 'user' | 'assistant'; content: string; attachments?: ChatAttachment[] }> {
     return msgs.map((m) => {
-      if (m.role === 'user') return { role: 'user' as const, content: m.content }
+      if (m.role === 'user') {
+        /*
+         * LES PIECES JOINTES DES TOURS PASSES TRAVERSENT L'IPC.
+         *
+         * Avant, cette fonction rendait `{ role, content }` : le process principal ne voyait que
+         * les pieces jointes du message COURANT, rattachees a la main juste apres l'appel. Une
+         * image jointe au tour 1 etait donc invisible au tour 2 — mesure le 2026-08-27, avec la
+         * trace de prompt pour preuve : le tour 2 ne portait AUCUN chemin de piece jointe.
+         *
+         * Miniature seulement, et jamais le binaire : voir `pieceJointePasseePourLeFil`. Le message
+         * courant, lui, garde son original — il est rattache apres coup par l'appelant.
+         */
+        const passees = (m.attachments ?? [])
+          .map((piece) => pieceJointePasseePourLeFil(piece))
+          .filter((piece): piece is NonNullable<typeof piece> => piece !== undefined)
+        return {
+          role: 'user' as const,
+          content: m.content,
+          ...(passees.length ? { attachments: passees as ChatAttachment[] } : {})
+        }
+      }
       const content = m.parts
         .map((p) => {
           if (p.kind === 'text') return p.text

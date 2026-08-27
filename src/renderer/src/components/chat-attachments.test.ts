@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
-import { bytesToBase64, encodeAttachment, fileKind, formatFileSize } from './chat-attachments'
+import {
+  bytesToBase64,
+  encodeAttachment,
+  fileKind,
+  formatFileSize,
+  pieceJointePasseePourLeFil
+} from './chat-attachments'
 
 describe('formatFileSize', () => {
   it('affiche les octets en dessous de 1024', () => {
@@ -95,5 +101,66 @@ describe('encodeAttachment', () => {
     const file = new File(['x'], 'noext', { type: '' })
     const encoded = await encodeAttachment(file)
     expect(encoded.mimeType).toBe('application/octet-stream')
+  })
+})
+
+describe('pieceJointePasseePourLeFil', () => {
+  it('rend la miniature, nommee comme telle', () => {
+    const rendu = pieceJointePasseePourLeFil({
+      name: 'maquette.png',
+      mimeType: 'image/png',
+      size: 4096,
+      kind: 'image',
+      thumbnail: 'data:image/jpeg;base64,bWluaQ=='
+    })
+    expect(rendu).toEqual({
+      name: 'maquette.png (miniature)',
+      mimeType: 'image/jpeg',
+      size: 8,
+      kind: 'image',
+      content: 'bWluaQ=='
+    })
+  })
+
+  it('rend undefined sans miniature exploitable', () => {
+    expect(pieceJointePasseePourLeFil({ name: 'perdue.png' })).toBeUndefined()
+    expect(
+      pieceJointePasseePourLeFil({ name: 'x.txt', thumbnail: 'data:text/plain;base64,YQ==' })
+    ).toBeUndefined()
+    expect(
+      pieceJointePasseePourLeFil({ name: 'vide.png', thumbnail: 'data:image/png;base64,' })
+    ).toBeUndefined()
+  })
+})
+
+describe('pieceJointePasseePourLeFil — original prioritaire', () => {
+  it('rend l ORIGINAL quand le binaire est encore dans le fil', () => {
+    expect(
+      pieceJointePasseePourLeFil({
+        name: 'maquette.png',
+        mimeType: 'image/png',
+        size: 1072,
+        kind: 'image',
+        content: 'T1JJRw==',
+        thumbnail: 'data:image/jpeg;base64,bWluaQ=='
+      })
+    ).toEqual({
+      name: 'maquette.png',
+      mimeType: 'image/png',
+      size: 1072,
+      kind: 'image',
+      content: 'T1JJRw=='
+    })
+  })
+
+  it('retombe sur la miniature quand l original a disparu', () => {
+    const rendu = pieceJointePasseePourLeFil({
+      name: 'maquette.png',
+      mimeType: 'image/png',
+      kind: 'image',
+      thumbnail: 'data:image/jpeg;base64,bWluaQ=='
+    })
+    expect(rendu?.name).toBe('maquette.png (miniature)')
+    expect(rendu?.content).toBe('bWluaQ==')
   })
 })
