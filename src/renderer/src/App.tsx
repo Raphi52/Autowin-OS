@@ -10,7 +10,6 @@ const buildNumber = typeof __BUILD_NUMBER__ === 'string' ? __BUILD_NUMBER__ : 'd
 const buildSha = typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'local'
 import { ChatView } from './components/ChatView'
 import { HomeView } from './components/HomeView'
-import { DecorDeFond } from './components/DecorDeFond'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
 // L'onglet Worktrees porte la vue à FRISE D'HISTORIQUE GIT (`WorktreeView`), restaurée sur demande de
@@ -443,8 +442,6 @@ export function MainApp(): React.JSX.Element {
           INSTANCE DE TEST — AUTOMATISATION EN COURS
         </div>
       )}
-      {/* Le fond 3D de l'application, sous tout le reste. Voir `DecorDeFond`. */}
-      <DecorDeFond />
       <FirstRunWizard />
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
