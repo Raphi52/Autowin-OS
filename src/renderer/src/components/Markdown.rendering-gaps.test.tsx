@@ -67,9 +67,12 @@ describe('Markdown — les trous qui rendaient les tableaux de skill illisibles'
     // Le symptome exact rapporte : les crochets et la cible s'affichaient litteralement.
     expect(container.textContent).not.toContain('](')
     expect(container.textContent).not.toContain('[orchestrator.ts:80]')
-    expect(byText('orchestrator.ts:80').tagName).toBe('CODE')
-    // Une cible relative ne devient pas un lien : elle se resoudrait contre l'origine de l'app.
-    expect(container.querySelector('a')).toBeNull()
+    // Depuis 2026-08-27 la reference est CLIQUABLE : le clic passe par window.api.revealFile,
+    // qui resout le chemin cote main (pas d'href relatif, qui se resoudrait contre l'origine).
+    const ref = byText('orchestrator.ts:80')
+    expect(ref.tagName).toBe('A')
+    expect(ref.getAttribute('href')).toBe('#')
+    expect(ref.getAttribute('data-path')).toBe('src/main/orchestrator.ts')
   })
 
   it('(b-bis) laisse un vrai lien http cliquable et externe', () => {

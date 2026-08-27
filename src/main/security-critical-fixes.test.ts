@@ -79,6 +79,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     'os:conversations:remove',
     'os:conversations:rename',
     'os:openFolder',
+    'os:revealFile',
     'os:appCommand',
     'os:pilotChat:cancel',
     'os:pilotChat:resume',
@@ -209,7 +210,18 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     // rien ne le signale -- deux conclusions fausses ont ete tirees d'un binaire perime dans la
     // meme journee. Il ne fait que MONTRER, et c'est deliberement tout ce qu'il fait.
     // `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(141)
+    //
+    // MISE A JOUR 2026-08-27 — 141 -> 143. Le litteral etait DEJA desynchronise de 1 avant ce
+    // changement (la source en comptait 142 : la detection du test compte aussi une occurrence que
+    // le releve manuel avait manquee ; `unguarded` etait et reste VIDE, la garantie de securite
+    // n'a jamais bouge). UN canal ajoute ici, relu avant de toucher le compte :
+    //   `os:revealFile` — ouvre un fichier CITE par un agent dans le markdown du chat. La cible
+    //     brute est RE-PARSEE cote main (`parseFileRef`), resolue contre la racine du workspace
+    //     (`resolveFileRef`) et REFUSEE si elle sort de cette racine ou n'existe pas : le renderer
+    //     n'est jamais cru sur un chemin. Il porte `assertTrustedRendererSender` des sa premiere
+    //     ligne. Aucune ecriture, aucune execution : `shell.openPath`, sinon revelation dans
+    //     l'explorateur.
+    expect(handlers).toHaveLength(143)
     expect(unguarded).toEqual([])
   })
 

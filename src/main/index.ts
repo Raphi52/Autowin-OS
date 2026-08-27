@@ -51,7 +51,7 @@ import {
   type WebContents
 } from 'electron'
 import { dirname, join } from 'path'
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { buildExport, readImport, suggestedFileName } from './workflow-transfer'
 import { createHash, randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -122,6 +122,7 @@ import { ConversationRouteCoordinator, ConversationRouter } from './conversation
 import { boundedContinuationHistory, boundedTurnHistory } from './chat-turn-messages'
 import { buildContinuationProviderHistory } from './chat-continuation'
 import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'
+import { parseFileRef, resolveFileRef } from '../shared/file-ref'
 import {
   flattenChatPartsForModel,
   type ChatTurnEvent,
@@ -3491,6 +3492,27 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:openFolder', (event, path: string) => {
     assertTrustedRendererSender(event, 'Open folder')
     shell.showItemInFolder(guardString(path, 'path'))
+  })
+
+  // Liens de fichiers du markdown : le renderer envoie la cible BRUTE citee par l'agent, le main
+  // decide. Il re-parse (le renderer n'est pas cru), resout contre la racine du workspace et
+  // REFUSE tout ce qui sort de cette racine ou n'existe pas. Ouvre le fichier ; a defaut le
+  // revele dans l'explorateur.
+  ipcMain.handle('os:revealFile', async (event, rawPath: unknown, rawLine?: unknown) => {
+    assertTrustedRendererSender(event, 'Reveal file')
+    const cible = parseFileRef(guardString(rawPath, 'path'))
+    if (!cible) return { ok: false, reason: 'cible-non-fichier' }
+    const racine = process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd()
+    const absolu = resolveFileRef(racine, cible.path)
+    if (!absolu) return { ok: false, reason: 'hors-racine' }
+    if (!existsSync(absolu)) return { ok: false, reason: 'introuvable' }
+    void rawLine
+    const erreur = await shell.openPath(absolu)
+    if (erreur) {
+      shell.showItemInFolder(absolu)
+      return { ok: true, reason: 'revele-dans-explorateur' }
+    }
+    return { ok: true }
   })
 
   // --- Plan de contrôle : l'app pilotable par les agents ---

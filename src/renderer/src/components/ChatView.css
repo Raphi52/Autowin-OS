@@ -1519,12 +1519,21 @@ h6.md-h {
   border-color: rgba(243, 139, 139, 0.35);
   background: rgba(243, 139, 139, 0.12);
 }
-/* Référence de preuve `[fichier.ts:80](chemin)` : citée, donc lisible, mais non cliquable —
-   il n'y a pas de navigation fichier ici. Teinte neutre pour ne pas se faire passer pour un lien. */
+/* Référence de preuve `[fichier.ts:80](chemin)` : citée, donc lisible. Teinte neutre par défaut ;
+   `.md-ref-link` marque celle qui ouvre RÉELLEMENT le fichier (window.api.revealFile). */
 .md-ref {
   color: #9fb3c8;
   font-size: 11px;
   opacity: 0.9;
+}
+a.md-ref-link {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+a.md-ref-link:hover {
+  color: #cfe3f5;
+  opacity: 1;
 }
 .md-hr {
   height: 0;

@@ -359,6 +359,8 @@ interface ChatApi {
   taskManagerAcknowledge: (alertId: string) => Promise<boolean>
   taskManagerRunNow: (id: string) => Promise<{ started: boolean }>
   openFolder: (path: string) => Promise<void>
+  /** Ouvre un fichier cite par un agent (`[a.ts:80](src/main/a.ts:80)`). Chemin resolu cote main. */
+  revealFile: (path: string, line?: number) => Promise<{ ok: boolean; reason?: string }>
   appState: () => Promise<AppSnapshot>
   appCommand: (name: string, args?: Record<string, unknown>) => Promise<CommandResult>
   pilotChat: (

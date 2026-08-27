@@ -13,6 +13,7 @@ import {
 } from '../../../shared/orchestration-outcome'
 import { MAX_INLINE_HTML_CHARS, prepareChatHtml } from './chat-html-inline'
 import { retirerLignePromptSuivant } from '../../../shared/prompt-suivant'
+import { parseFileRef } from '../../../shared/file-ref'
 
 type MarkdownProps = {
   text: string
@@ -563,10 +564,36 @@ function renderTextBlock(block: string): React.ReactNode[] {
  * La cible d'un lien markdown n'est plus restreinte a http(s). Les skills citent leurs preuves en
  * `[orchestrator.ts:80](src/main/orchestrator.ts:80)` : le motif http-seul ne matchait pas, donc la
  * ligne sortait LITTERALEMENT, crochets et parentheses compris, encombrant chaque cellule de tableau.
- * Une cible non-http n'est PAS rendue cliquable pour autant — il n'existe pas de navigation fichier
- * ici, et un `href` relatif se resoudrait contre l'origine de l'app. On rend le libelle en `code`,
- * ce qui supprime le bruit sans promettre un clic qui ne marcherait pas.
+ * Une cible qui DESIGNE un fichier (`parseFileRef`) est maintenant cliquable : le clic passe par
+ * `window.api.revealFile`, qui resout le chemin contre la racine du workspace COTE MAIN et ouvre le
+ * fichier. Pas de `href` relatif (il se resoudrait contre l'origine de l'app) : on garde
+ * `href="#"` + `preventDefault`. Une cible qui n'est pas un fichier (ancre, mailto, dossier) reste
+ * rendue en `code`, ce qui supprime le bruit sans promettre un clic qui ne marcherait pas.
  */
+/**
+ * Reference de fichier citee par un agent. Cliquable UNIQUEMENT si la cible ressemble a un
+ * fichier ; sinon on retombe sur l'ancien rendu `code` (aucun clic promis a tort).
+ */
+function FileRefLink({ label, target }: { label: string; target: string }): React.ReactElement {
+  const ref = parseFileRef(target)
+  if (!ref) return <code className="md-ref">{label}</code>
+  return (
+    <a
+      className="md-ref md-ref-link"
+      href="#"
+      data-path={ref.path}
+      data-line={ref.line === undefined ? undefined : String(ref.line)}
+      title={ref.line === undefined ? ref.path : `${ref.path}:${ref.line}`}
+      onClick={(e) => {
+        e.preventDefault()
+        void window.api?.revealFile?.(ref.path, ref.line)
+      }}
+    >
+      {label}
+    </a>
+  )
+}
+
 function inline(line: string): React.ReactNode[] {
   const out: React.ReactNode[] = []
   const re =
@@ -585,9 +612,7 @@ function inline(line: string): React.ReactNode[] {
             {m[1]}
           </a>
         ) : (
-          <code key={k++} className="md-ref">
-            {m[1]}
-          </code>
+          <FileRefLink key={k++} label={m[1]} target={m[2]} />
         )
       )
     } else if (m[3] !== undefined) {

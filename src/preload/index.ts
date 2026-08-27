@@ -476,6 +476,10 @@ const api = {
   taskManagerRunNow: (id: string): Promise<{ started: boolean }> =>
     ipcRenderer.invoke('task-manager:run-now', id),
   openFolder: (path: string): Promise<void> => ipcRenderer.invoke('os:openFolder', path),
+  // Liens de fichiers cites dans le markdown des agents : ouverture reelle (resolution + garde
+  // de racine cote main, le renderer n'est jamais cru sur un chemin).
+  revealFile: (path: string, line?: number): Promise<{ ok: boolean; reason?: string }> =>
+    ipcRenderer.invoke('os:revealFile', path, line),
   // Plan de contrôle (app pilotable par les agents) + pilotage in-model
   appState: (): Promise<AppSnapshot> => ipcRenderer.invoke('os:appState'),
   appCommand: (name: string, args?: Record<string, unknown>): Promise<CommandResult> =>
