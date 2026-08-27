@@ -51,7 +51,7 @@ import {
   type WebContents
 } from 'electron'
 import { dirname, join } from 'path'
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { buildExport, readImport, suggestedFileName } from './workflow-transfer'
 import { createHash, randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -123,6 +123,7 @@ import { boundedContinuationHistory, boundedTurnHistory } from './chat-turn-mess
 import { buildContinuationProviderHistory } from './chat-continuation'
 import { BOOT_SPLASH_DOCUMENT } from '../shared/boot-splash'
 import { parseFileRef, resolveFileRef } from '../shared/file-ref'
+import { commandeEditeur, racinesRevelation } from './reveal-file'
 import {
   flattenChatPartsForModel,
   type ChatTurnEvent,
@@ -3502,17 +3503,60 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Reveal file')
     const cible = parseFileRef(guardString(rawPath, 'path'))
     if (!cible) return { ok: false, reason: 'cible-non-fichier' }
-    const racine = process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd()
-    const absolu = resolveFileRef(racine, cible.path)
-    if (!absolu) return { ok: false, reason: 'hors-racine' }
-    if (!existsSync(absolu)) return { ok: false, reason: 'introuvable' }
-    void rawLine
+    void rawLine // La ligne vient de la cible RE-parsee ici : le renderer n'est jamais cru.
+
+    // Un agent cite ce qu'il voit depuis SA copie. Chercher dans le seul workspace rendait
+    // `introuvable` sur tout fichier cree pendant le run — la plainte d'origine (conv-1427).
+    const worktreesRoot = join(ensureAutowinAppData(appDataRoot), 'worktrees')
+    const racines = racinesRevelation({
+      workspace: process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd(),
+      worktreesRoot: existsSync(worktreesRoot) ? worktreesRoot : undefined,
+      lister: (dir) => {
+        try {
+          return readdirSync(dir, { withFileTypes: true })
+            .filter((e) => e.isDirectory())
+            .map((e) => e.name)
+        } catch {
+          return []
+        }
+      }
+    })
+
+    let absolu: string | null = null
+    let horsRacine = true
+    for (const racine of racines) {
+      const candidat = resolveFileRef(racine, cible.path)
+      if (!candidat) continue
+      horsRacine = false
+      if (existsSync(candidat)) {
+        absolu = candidat
+        break
+      }
+    }
+    if (horsRacine) return { ok: false, reason: 'hors-racine' }
+    if (!absolu) return { ok: false, reason: 'introuvable' }
+
+    // Ouvrir A LA LIGNE demande de savoir quel editeur : `shell.openPath` ne le peut pas. Quand on
+    // ne sait pas, on ouvre quand meme ET on le DIT — taire l'ecart etait le defaut d'origine.
+    const editeur = commandeEditeur({
+      editeur: process.env.AUTOWIN_OS_EDITOR,
+      chemin: absolu,
+      ligne: cible.line
+    })
+    if (editeur) {
+      try {
+        spawn(editeur.commande, editeur.args, { detached: true, stdio: 'ignore' }).unref()
+        return { ok: true, reason: 'ouvert-a-la-ligne' }
+      } catch {
+        // Editeur mal configure : on retombe sur l'ouverture simple plutot que de ne rien faire.
+      }
+    }
     const erreur = await shell.openPath(absolu)
     if (erreur) {
       shell.showItemInFolder(absolu)
       return { ok: true, reason: 'revele-dans-explorateur' }
     }
-    return { ok: true }
+    return cible.line === undefined ? { ok: true } : { ok: true, reason: 'ligne-non-honoree' }
   })
 
   // --- Plan de contrôle : l'app pilotable par les agents ---
