@@ -218,3 +218,27 @@
   border-top: 1px solid rgba(224, 238, 244, 0.1);
   border-bottom: 0;
 }
+
+/* La jauge de CONTEXTE : même grammaire visuelle que les fenêtres de quota, couleur par palier. */
+.quota-context-gauge-track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
+  overflow: hidden;
+}
+
+.quota-context-gauge-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #4ade80;
+}
+
+.quota-context-gauge.is-tendu .quota-context-gauge-fill {
+  background: #fbbf24;
+}
+
+.quota-context-gauge.is-critique .quota-context-gauge-fill {
+  background: #f87171;
+}

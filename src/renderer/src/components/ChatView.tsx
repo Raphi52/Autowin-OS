@@ -3552,7 +3552,10 @@ export function ChatView({
                   onSelect={(option) => void changeOrchestratorModel(option)}
                 />
                 <ConversationCostIndicator conversationId={activeId ?? undefined} busy={busy} />
-                <ModelQuotaIndicator provider={runtimeIdentity?.provider} />
+                <ModelQuotaIndicator
+                  provider={runtimeIdentity?.provider}
+                  contextGauge={activeId != null ? contextGauges[activeId] : undefined}
+                />
               </div>
             </div>
           </div>
