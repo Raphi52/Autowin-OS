@@ -37,8 +37,17 @@ const blocWatchdog = () => {
 }
 
 describe('tour de chat — outils de mutation ouverts', () => {
-  it('charge Bash, Write et Edit', () => {
-    expect(blocChat()).toMatch(/'--tools',\s*'Read,Grep,Glob,Bash,Write,Edit,' \+ OUTILS_WEB/)
+  it('charge Bash, Write, Edit et MultiEdit', () => {
+    // MultiEdit ajouté le 2026-08-27 par greffe de la copie isolée run-f2f7fec8c587-1 (0734729).
+    expect(blocChat()).toMatch(
+      /'--tools',\s*'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,' \+ OUTILS_WEB/
+    )
+  })
+
+  it('passe bypassPermissions — sans lui, les outils sont déclarés mais refusés', () => {
+    // Même greffe : `--tools`/`--allowedTools` déclarent et autorisent, mais le CLI retombe sur une
+    // demande d'autorisation interactive sans ce mode — donc échoue en spawn non interactif.
+    expect(blocChat()).toMatch(/'--permission-mode',\s*'bypassPermissions'/)
   })
 
   it('AUTORISE Bash, Write et Edit nus (pas seulement chargés)', () => {

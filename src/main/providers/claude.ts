@@ -770,10 +770,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           )
         } else {
           args.push(
+            // GREFFE du 2026-08-27 (copie isolée run-f2f7fec8c587-1, 0734729) : `bypassPermissions`
+            // sur le TOUR DE CHAT, assumé explicitement par l'utilisateur. Sans lui, Bash/Write/Edit
+            // étaient DÉCLARÉS mais retombaient sur une demande d'autorisation — donc échouaient en
+            // mode non interactif. La frontière qui reste fermée est `watchdog-read-only` ci-dessus.
+            '--permission-mode',
+            'bypassPermissions',
             '--add-dir',
             readOnlyWorkspace,
             '--tools',
-            'Read,Grep,Glob,Bash,Write,Edit,' + OUTILS_WEB,
+            'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,' + OUTILS_WEB,
             '--allowedTools',
             'Read',
             'Grep',
@@ -786,6 +792,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             'Bash',
             'Write',
             'Edit',
+            'MultiEdit',
             ...outilsMcpAutorises
           )
         }
