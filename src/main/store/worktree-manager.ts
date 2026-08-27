@@ -12,6 +12,7 @@ import {
   fsyncSync,
   linkSync,
   mkdirSync,
+  mkdtempSync,
   openSync,
   readFileSync,
   readdirSync,
@@ -22,7 +23,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
-import { platform } from 'node:os'
+import { platform, tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { WorktreeConflictDiffResult } from '../../shared/worktree-activity-model'
@@ -1017,6 +1018,19 @@ export class WorktreeManager {
     if (!SAFE_ID.test(agentId)) return false
     const bureau = join(this.worktreeRoot, `agent__${agentId}`)
     if (!existsSync(bureau)) return false
+    /*
+     * SANS SON `.git`, UN DOSSIER DE BUREAU N'EST PLUS UN BUREAU — et git ne dit pas non pour
+     * autant : il REMONTE au depot parent. `rev-parse HEAD` rend alors le HEAD de la base et
+     * `status --porcelain` les modifications de l'ARBRE PRINCIPAL, attribuees a un bureau qui
+     * n'existe plus. Le garde-fou du HEAD non ne ne mord pas : ce sha est parfaitement valide.
+     *
+     * DEFAUT VECU le 2026-08-27 (conv-1428) : apres `git worktree remove`, le dossier survivait
+     * en portant son seul `node_modules` (non versionne, donc non supprime par git). Le
+     * recensement a signale les quatre fichiers en cours de l'utilisateur dans main comme
+     * « travail non publie » du bureau `run-bac93a8f28b6-1`. Le `.git` d'un worktree lie est un
+     * FICHIER : sa presence est le discriminant exact entre un bureau et une coquille.
+     */
+    if (!existsSync(join(bureau, '.git'))) return false
     try {
       /*
        * UN HEAD NON NE N'EST PAS DU TRAVAIL. `checkout --orphan` laisse l'index rempli des fichiers
@@ -4599,6 +4613,16 @@ exit 0
        * `theirs` garde la version de l'agent. Absent = merge strict (comportement automatique).
        */
       conflictStrategy?: 'ours' | 'theirs'
+      /**
+       * BARREAU 2 — autorise a ECRIRE dans l'arbre de l'utilisateur pour faire atterrir le travail
+       * malgre son edition non committee, en la preservant par une fusion a 3 branches.
+       *
+       * FAUX par defaut, et ce defaut est la garde : ecrire chez lui sans son accord est la seule
+       * chose que ce chantier n'a jamais eu le droit de faire. L'utilisateur l'a autorise
+       * explicitement le 2026-08-27 (QCM « l'echelle complete ») ; l'appelant porte cette
+       * autorisation, ce fichier ne se l'accorde pas.
+       */
+      preserverEditionLocale?: boolean
       onPrepared?: (agentSha: string, baseSha: string) => void
       onIntegrated?: (integratedSha: string, agentSha: string, baseSha: string) => void
     } = {}
@@ -4611,6 +4635,20 @@ exit 0
     // on pose une adresse d'ATTENTE sur le commit deja produit, sans rien ecrire chez l'utilisateur.
     // Le tour cesse ainsi de finir sur un echec sec (conv-1450). Voir `poserAttenteDIntegration`.
     if (issue.outcome === 'blocked' && issue.reason === 'base-dirty') {
+      /*
+       * L'ECHELLE, dans l'ordre : le barreau qui ATTERRIT d'abord, l'attente ensuite.
+       *
+       * Le barreau 2 n'est tente que si l'appelant porte l'autorisation de l'utilisateur, et il rend
+       * `undefined` au moindre doute — arbre restaure, rien d'abime. On descend alors au barreau 1,
+       * qui pose une adresse d'attente. Aucun de ces deux chemins ne rend un echec sec : c'est la
+       * demande explicite du 2026-08-27, « on ne finit jamais un tour sur un echec comme ca ».
+       */
+      if (options.preserverEditionLocale === true) {
+        const atterri = this.fusionEnPreservantLEditionLocale(agentId, issue.files, () =>
+          this.finalizeSansSecours(agentId, { ...options, preserverEditionLocale: false })
+        )
+        if (atterri) return atterri
+      }
       const attente = this.poserAttenteDIntegration(agentId)
       return attente ? { ...issue, stagedRef: attente } : issue
     }
@@ -4619,6 +4657,172 @@ exit 0
     return this.secureWorkBeforeRefusal(agentId, path)
       ? { ...issue, rescueRef: this.rescueRef(agentId) }
       : issue
+  }
+
+  /**
+   * BARREAU 2 DE L'ECHELLE — faire atterrir le travail SANS ecraser l'edition non committee.
+   *
+   * Le refus `base-dirty` protege une chose precise : les lignes que l'utilisateur n'a pas encore
+   * committees, sur les fichiers que la copie veut publier. Les deux apports ne sont pourtant pas
+   * forcement incompatibles — l'un edite une extremite du fichier, l'autre l'autre bout. Git sait
+   * fusionner cela ; ce qui manquait, c'est de le lui demander sans jamais risquer son travail.
+   *
+   * L'ORDRE EST LA GARANTIE, et il n'est pas negociable :
+   *  1. une SAUVEGARDE de son etat exact est ecrite AVANT toute modification (`stash create` ne
+   *     touche pas l'arbre : il fabrique un commit et rend son sha) ;
+   *  2. ses editions sont rangees, la publication normale s'execute, puis ses editions reviennent en
+   *     fusion a 3 branches ;
+   *  3. au moindre echec — rangement impossible, publication refusee, fusion conflictuelle — son
+   *     fichier est RESTAURE depuis la sauvegarde et on rend `undefined` : l'appelant retombe sur
+   *     l'attente du barreau 1. Jamais un arbre a moitie fusionne, jamais un marqueur de conflit
+   *     dans un fichier qu'il n'a pas demande a arbitrer.
+   *
+   * Ce que ce barreau ne fait PAS : committer son travail (il reste non committe, comme il l'a
+   * laisse), ni arbitrer un conflit de contenu reel — celui-la lui appartient.
+   */
+  /**
+   * La fusion a 3 branches passerait-elle, SANS rien ecrire dans le depot ?
+   *
+   * Les trois versions (base commune, celle de l'utilisateur, celle de la copie) sont extraites dans
+   * un dossier temporaire, et `git merge-file` rend un code de sortie : 0 = fusion propre, > 0 =
+   * conflits. Rien n'est ecrit dans l'arbre, l'index, ni un ref. En cas de doute — extraction
+   * impossible, fichier binaire, erreur de git — on rend FAUX : ne pas savoir vaut refuser.
+   */
+  private fusionEstPropreABlanc(agentId: string, fichiers: string[]): boolean {
+    const chemin = this.pathFor(agentId)
+    if (!existsSync(chemin)) return false
+    const agentSha = this.tryGitFn(chemin, ['rev-parse', 'HEAD'])
+    if (agentSha.code !== 0) return false
+    const baseSha = this.tryGitFn(this.baseRepo, ['rev-parse', 'HEAD'])
+    if (baseSha.code !== 0) return false
+    const bac = mkdtempSync(join(tmpdir(), 'autowin-fusion-blanc-'))
+    try {
+      for (const fichier of fichiers) {
+        const versions: Record<string, string> = {}
+        for (const [nom, revision] of [
+          ['base', `${baseSha.stdout.trim()}:${fichier}`],
+          ['agent', `${agentSha.stdout.trim()}:${fichier}`]
+        ] as const) {
+          const contenu = this.tryGitFn(this.baseRepo, ['show', revision])
+          // Un fichier absent d'un cote (ajout pur) n'est pas un conflit de contenu : cote vide.
+          versions[nom] = contenu.code === 0 ? contenu.stdout : ''
+        }
+        const local = join(this.baseRepo, fichier)
+        if (!existsSync(local)) return false
+        const cheminsBac = {
+          local: join(bac, 'local'),
+          base: join(bac, 'base'),
+          agent: join(bac, 'agent')
+        }
+        writeFileSync(cheminsBac.local, readFileSync(local))
+        writeFileSync(cheminsBac.base, versions.base ?? '')
+        writeFileSync(cheminsBac.agent, versions.agent ?? '')
+        const essai = this.tryGitFn(this.baseRepo, [
+          'merge-file',
+          '-q',
+          '-p',
+          cheminsBac.local,
+          cheminsBac.base,
+          cheminsBac.agent
+        ])
+        if (essai.code !== 0) return false
+      }
+      return true
+    } catch {
+      return false
+    } finally {
+      rmSync(bac, { recursive: true, force: true })
+    }
+  }
+
+  private fusionEnPreservantLEditionLocale(
+    agentId: string,
+    fichiers: string[],
+    publier: () => FinalizeResult
+  ): FinalizeResult | undefined {
+    if (fichiers.length === 0) return undefined
+    /*
+     * PRE-VOL : DECIDER AVANT DE TOUCHER, pas apres.
+     *
+     * Premiere version ecrite ce jour, et fausse : elle rangeait, publiait, puis tentait le retour —
+     * et sur conflit elle rendait « bloque » alors que la publication avait DEJA atterri. Un rapport
+     * faux, exactement ce que ce chantier existe pour supprimer. Et rattraper cela en annulant une
+     * publication deja faite ouvrirait une fenetre pire encore sur un arbre partage.
+     *
+     * On essaie donc la fusion A BLANC — trois versions extraites hors du depot, `git merge-file` qui
+     * n'ecrit rien dans l'arbre — et on ne touche a rien tant qu'elle n'est pas propre. Un conflit
+     * reel se solde alors par un `undefined` immediat : l'echelle descend a l'attente, et l'arbre de
+     * l'utilisateur n'a pas bouge d'un octet.
+     */
+    if (!this.fusionEstPropreABlanc(agentId, fichiers)) return undefined
+    // 1. SAUVEGARDE D'ABORD. `stash create` n'ecrit rien dans l'arbre ni dans l'index : il rend le
+    //    sha d'un commit qui porte l'etat sale. Sans ce sha, on n'ecrit pas une seule ligne.
+    const snapshot = this.tryGitFn(this.baseRepo, ['stash', 'create'])
+    const sauvegarde = snapshot.code === 0 ? snapshot.stdout.trim() : ''
+    if (!sauvegarde) return undefined
+    const refSauvegarde = `refs/autowin/safety/${agentId}`
+    if (this.tryGitFn(this.baseRepo, ['update-ref', refSauvegarde, sauvegarde]).code !== 0)
+      return undefined
+
+    /** Remet son fichier exactement comme il l'avait laisse, depuis la sauvegarde. */
+    const restaurer = (): void => {
+      /*
+       * `-c core.autocrlf=false -c core.eol=lf` : restaurer OCTET POUR OCTET.
+       *
+       * Sans ces deux options, git reecrit les fins de ligne selon la configuration du depot — et
+       * la restauration rendait un fichier « equivalent » mais MODIFIE (mesure du 2026-08-27 :
+       * LF devenus CRLF). Rendre a l'utilisateur autre chose que ce qu'il avait, meme
+       * semantiquement identique, c'est deja avoir touche a son travail.
+       */
+      this.tryGitFn(this.baseRepo, [
+        '-c',
+        'core.autocrlf=false',
+        '-c',
+        'core.eol=lf',
+        'checkout',
+        sauvegarde,
+        '--',
+        ...fichiers
+      ])
+      // `checkout <commit> -- <chemins>` met aussi l'index a jour : on le remet a HEAD pour que son
+      // travail reste NON COMMITTE, ce qu'il etait avant qu'on y touche.
+      this.tryGitFn(this.baseRepo, ['reset', '--quiet', 'HEAD', '--', ...fichiers])
+    }
+
+    // 2. Ranger ses editions pour degager la publication. `--` limite le rangement aux fichiers en
+    //    collision : le reste de son travail en cours n'est pas deplace.
+    const rangement = this.tryGitFn(this.baseRepo, [
+      'stash',
+      'push',
+      '--quiet',
+      '--include-untracked',
+      '--',
+      ...fichiers
+    ])
+    if (rangement.code !== 0) {
+      restaurer()
+      return undefined
+    }
+
+    const publie = publier()
+    if (publie.outcome !== 'merged') {
+      // La publication n'a pas eu lieu : on rend son arbre a l'identique et on n'invente rien.
+      this.tryGitFn(this.baseRepo, ['stash', 'pop', '--quiet'])
+      restaurer()
+      return undefined
+    }
+
+    // 3. Ses editions reviennent, fusionnees a 3 branches par git lui-meme.
+    const retour = this.tryGitFn(this.baseRepo, ['stash', 'pop', '--quiet'])
+    if (retour.code !== 0) {
+      // Conflit REEL. On ne laisse aucun marqueur : son fichier revient a son etat exact, le stash
+      // est retire, et le travail publie reste publie — il est deja dans l'historique.
+      this.tryGitFn(this.baseRepo, ['checkout', '--', ...fichiers])
+      this.tryGitFn(this.baseRepo, ['stash', 'drop', '--quiet'])
+      restaurer()
+      return undefined
+    }
+    return publie
   }
 
   /**
@@ -4659,6 +4863,7 @@ exit 0
       baseBranch?: string
       expectedAgentSha?: string
       conflictStrategy?: 'ours' | 'theirs'
+      preserverEditionLocale?: boolean
       onPrepared?: (agentSha: string, baseSha: string) => void
       onIntegrated?: (integratedSha: string, agentSha: string, baseSha: string) => void
     } = {}

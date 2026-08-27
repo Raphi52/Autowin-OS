@@ -100,6 +100,16 @@ export function buildChatPilotagePrompt(
     `nécessaires. Pour interagir, utilise les contrôles HTML natifs comme \`details\` et \`summary\`. ` +
     `Au-delà d'environ 1 Mo, fournis plutôt la page comme artefact \`.html\`. N'utilise jamais ce ` +
     `bloc pour un simple exemple de code HTML.\n` +
+    // PREUVE VISUELLE FRONT (conv-1450, 2026-08-27). Le canal existait (agent-pilot republie en
+    // artefact toute piece jointe image d'un resultat d'outil), mais rien n'obligeait a OBSERVER :
+    // l'utilisateur ne voyait donc jamais l'image sur laquelle reposait le verdict. Le tuyau sans
+    // l'obligation ne montre rien.
+    `PREUVE VISUELLE FRONT : une modification VISIBLE (interface, mise en page, couleur, animation) ` +
+    `n'est pas validee par un test qui passe — elle se REGARDE. Appelle donc \`desktop_observe\` sur ` +
+    `le resultat rendu avant de dire « fait », « valide » ou « c'est bon » : la capture part ` +
+    `automatiquement dans le fil de l'utilisateur, qui voit alors exactement ce que tu as vu. Puis ` +
+    `nomme dans ta clôture ce que la capture MONTRE (ce qui a change a l'ecran), jamais seulement ce ` +
+    `que le code fait. Si tu n'as pas pu observer, dis-le : « non observe » plutot qu'un verdict.\n` +
     // GATE CONVERSATIONNEL (mesure 2026-07-28 : 114 spawns CLI / 26,65 $ en 1h d'usage reel, dont
     // un juge a 1,5 $ pour 89 tokens de verdict). La cause n'etait pas la mecanique mais CE prompt:
     // trois consignes poussaient vers `orchestrate` et ecrasaient la seule ligne autorisant la

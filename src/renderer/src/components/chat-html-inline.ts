@@ -170,6 +170,73 @@ const ALLOWED_STYLE_PROPS = new Set([
   'word-break'
 ])
 
+/**
+ * Rythme vertical BORNE. Un bloc `html-render` arrive avec les marges genereuses que le modele
+ * ecrit (sections a 40px, `line-height` a 2) : additionnees, elles forcent l'utilisateur a scroller
+ * sur des ecrans de vide pour lire trois lignes. On ne supprime pas l'espacement — on le PLAFONNE,
+ * cote inline comme cote feuille de style, seul endroit ou le rendu du fil peut trancher.
+ */
+const MAX_VERTICAL_SPACE_PX = 18
+const MAX_LINE_HEIGHT = 1.6
+
+const VERTICAL_SPACE_PROPS = new Set([
+  'margin-top',
+  'margin-bottom',
+  'margin-block',
+  'margin-block-start',
+  'margin-block-end',
+  'padding-top',
+  'padding-bottom',
+  'padding-block',
+  'padding-block-start',
+  'padding-block-end',
+  'gap',
+  'row-gap'
+])
+
+const BOX_SHORTHAND_PROPS = new Set(['margin', 'padding'])
+
+/** Rend la longueur plafonnee, ou la valeur telle quelle si elle n'est pas une longueur bornable. */
+function clampLength(token: string): string {
+  const match = /^(-?\d*\.?\d+)(px|rem|em)$/i.exec(token.trim())
+  if (!match) return token
+  const value = Number(match[1])
+  const unit = match[2].toLowerCase()
+  const pixels = unit === 'px' ? value : value * 16
+  if (!(pixels > MAX_VERTICAL_SPACE_PX)) return token
+  return `${MAX_VERTICAL_SPACE_PX}px`
+}
+
+/** Plafonne la valeur d'une declaration d'espacement vertical. Toute autre propriete ressort intacte. */
+export function clampVerticalRhythm(property: string, value: string): string {
+  const raw = value.trim()
+  if (/var\(|calc\(|!important/i.test(raw)) return value
+
+  if (property === 'line-height') {
+    const numeric = /^(\d*\.?\d+)$/.exec(raw)
+    if (numeric && Number(numeric[1]) > MAX_LINE_HEIGHT) return String(MAX_LINE_HEIGHT)
+    const relative = /^(\d*\.?\d+)(em|rem)$/i.exec(raw)
+    if (relative && Number(relative[1]) > MAX_LINE_HEIGHT) return String(MAX_LINE_HEIGHT)
+    return value
+  }
+
+  if (VERTICAL_SPACE_PROPS.has(property))
+    return raw.split(/\s+/).map(clampLength).join(' ')
+
+  if (BOX_SHORTHAND_PROPS.has(property)) {
+    const parts = raw.split(/\s+/)
+    // Les composantes VERTICALES seules sont plafonnees : un retrait lateral voulu reste intact.
+    if (parts.length === 1) return clampLength(parts[0])
+    if (parts.length === 2) return `${clampLength(parts[0])} ${parts[1]}`
+    if (parts.length === 3) return `${clampLength(parts[0])} ${parts[1]} ${clampLength(parts[2])}`
+    if (parts.length === 4)
+      return `${clampLength(parts[0])} ${parts[1]} ${clampLength(parts[2])} ${parts[3]}`
+    return value
+  }
+
+  return value
+}
+
 /** `display` sert la mise en page, mais `display:none` cache du contenu — texte invisible copiable. */
 const FORBIDDEN_STYLE_VALUES = /url\s*\(|expression\s*\(|@import|position\s*:|\\/i
 
@@ -183,7 +250,7 @@ function sanitizeStyle(value: string): string {
     if (!ALLOWED_STYLE_PROPS.has(property)) continue
     if (!propertyValue || FORBIDDEN_STYLE_VALUES.test(propertyValue)) continue
     if (property === 'display' && /none/i.test(propertyValue)) continue
-    kept.push(`${property}: ${propertyValue}`)
+    kept.push(`${property}: ${clampVerticalRhythm(property, propertyValue)}`)
   }
   return kept.join('; ')
 }
@@ -301,6 +368,12 @@ export function scopeChatStyleSheet(css: string, scope: string): string {
         const property = declaration.slice(0, declaration.indexOf(':')).trim().toLowerCase()
         if (property === 'position' || property === 'z-index') return false
         return !/url\s*\(|expression\s*\(/i.test(declaration)
+      })
+      .map((declaration) => {
+        const separator = declaration.indexOf(':')
+        const property = declaration.slice(0, separator).trim().toLowerCase()
+        const propertyValue = declaration.slice(separator + 1).trim()
+        return `${property}:${clampVerticalRhythm(property, propertyValue)}`
       })
     if (!declarations.length) continue
 

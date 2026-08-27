@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { autowinStorageKey } from '../storage-keys'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
@@ -604,19 +605,34 @@ export const PLANETE_FRAGMENT_SHADER = [
   '  vec3 p = vec3(vObjet.x, vObjet.y * uBandes, vObjet.z) * 2.4 + graine;',
   '  float turbulence = fbm(p + vec3(uTime * 0.02, 0.0, 0.0));',
   '  float volute = fbm(p * 0.45 + turbulence * 1.7 + graine.zxy);',
+  // WARP DE DOMAINE : le bruit est replié sur lui-même avant d'être re-échantillonné. C'est ce pli
+  // qui donne des bords de continents SINUEUX ; sans lui, le fbm seul fait des taches convexes.
+  '  vec3 pw = p + vec3(volute, turbulence, volute * 0.7) * 1.35;',
+  // CRÊTES RIDGED (1 - |2f-1|) : des lignes de relief au lieu de nappes molles — chaînes de
+  // montagnes et bords de tempêtes.
+  '  float ridged = pow(clamp(1.0 - abs(fbm(pw * 1.9) * 2.0 - 1.0), 0.0, 1.0), 2.1);',
   '  float matiere = clamp(turbulence * 0.62 + volute * 0.52, 0.0, 1.0);',
   '  float cretes = pow(smoothstep(0.46, 0.88, matiere), 1.25);',
   '  vec3 albedo = mix(uSombre, uBase, smoothstep(0.22, 0.64, matiere));',
-  '  albedo = mix(albedo, uClair, cretes);',
-  '  albedo *= 0.97 + 0.06 * bruit(vObjet * 140.0 + graine);',
+  '  albedo = mix(albedo, uClair, cretes * 0.72 + ridged * 0.20);',
+  // VEINAGE fin : une troisième échelle assombrissante, sinon la surface n'a que deux fréquences.
+  '  albedo = mix(albedo, uSombre, 0.32 * pow(clamp(fbm(p * 3.7 + graine.yzx), 0.0, 1.0), 1.6));',
+  // GRAIN serré (320 au lieu de 140) : le pixel proche cesse d'être lisse à l écran.
+  '  albedo *= 0.94 + 0.10 * bruit(vObjet * 320.0 + graine);',
   '  vec3 n = normalize(vNormaleMonde);',
   '  vec3 v = normalize(vVue);',
-  '  float incidence = dot(n, normalize(uLumiere));',
+  // Le relief MORD sur l éclairage : les crêtes projettent leur propre ombre approchée, ce qui
+  // sculpte le terminateur au lieu de le laisser lisse.
+  '  float relief = (ridged - 0.5) * 0.55 + (matiere - 0.5) * 0.35;',
+  '  float incidence = dot(n, normalize(uLumiere)) - relief * 0.11;',
   '  float jour = smoothstep(-0.22, 0.45, incidence);',
-  '  vec3 couleur = albedo * (0.08 + 1.15 * jour);',
-  '  couleur += uNuit * (1.0 - jour) * (0.25 + 0.35 * cretes);',
-  '  float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.4);',
-  '  couleur += uClair * rim * uRim * (0.35 + 0.65 * jour) * 0.9;',
+  // LUMINOSITÉ BAISSÉE (demande conv-1451) : gain de jour 1.15 -> 0.70, ambiante 0.08 -> 0.05,
+  // braise de nuit et limbe atténués dans la même proportion. Les planètes se posent dans le fond
+  // sombre au lieu de brûler ; le détail ci-dessus reste lisible parce qu il vient de l ALBEDO.
+  '  vec3 couleur = albedo * (0.05 + 0.70 * jour);',
+  '  couleur += uNuit * (1.0 - jour) * (0.16 + 0.24 * cretes);',
+  '  float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.8);',
+  '  couleur += uClair * rim * uRim * (0.30 + 0.55 * jour) * 0.45;',
   '  gl_FragColor = vec4(couleur, 1.0);',
   '}'
 ].join('\n')
@@ -781,7 +797,7 @@ function buildPlanet(options: {
   const base = new THREE.Color(options.color)
   // Les trois tons de la surface DÉRIVENT de la couleur de la planète : la palette du décor reste
   // celle de theme.css, le détail ne l'élargit pas.
-  const clair = base.clone().lerp(new THREE.Color(0xfff2dc), 0.55)
+  const clair = base.clone().lerp(new THREE.Color(0xffeecd), 0.44)
   const sombre = base.clone().multiplyScalar(0.42)
 
   const surface = new THREE.ShaderMaterial({
@@ -929,6 +945,47 @@ export const NUAGE_COSMIQUE = {
 } as const
 
 /**
+ * LE BORD (conv-1455 : « le container du nuage est un cercle c moche »). Le masque etait un disque
+ * parfait ; il devient un profil polaire DENTELE : rayon = 1 + somme d'harmoniques hautes. Les
+ * harmoniques sont hautes (>= 19) parce que 2 ou 3 donnent un ovale mou, pas un bord dechiquete.
+ */
+export const BORD_NUAGE = {
+  /** Harmoniques angulaires du profil. Nombres premiers : leurs battements ne se repetent pas. */
+  harmoniques: [7, 13, 19, 29, 43],
+  /** Amplitude totale du decoupage, en fraction du rayon. Bornee : au-dela le masque se troue. */
+  amplitude: 0.34,
+  /** Profondeur du grignotage par le bruit anime dans le shader : le bord VIT, il ne tourne pas rigide. */
+  erosion: 0.3
+} as const
+
+/** Phases fixes, une par harmonique : sans elles, tous les sinus culminent au meme angle. */
+const BORD_PHASES = [0.0, 1.7, 3.1, 4.6, 5.9]
+
+/**
+ * Le rayon du bord a l'angle `angle`, en fraction du rayon nominal. FONCTION PURE : c'est la seule
+ * facon de PROUVER que le bord n'est plus un cercle sans GPU. Le shader applique la MEME formule.
+ */
+export function profilBordNuage(angle: number): number {
+  let somme = 0
+  let poids = 0
+  BORD_NUAGE.harmoniques.forEach((h, i) => {
+    const amp = 1 / (i + 1)
+    somme += amp * Math.sin(h * angle + BORD_PHASES[i])
+    poids += amp
+  })
+  return 1 + (somme / poids) * BORD_NUAGE.amplitude
+}
+
+/**
+ * LA SATURATION (conv-1455 : « plus coloré », puis « saturation montée »). Le gain s'applique autour
+ * de la luminance : au-dela de 3, les teintes clippent et la nebuleuse devient un aplat fluo.
+ */
+export const SATURATION_NUAGE = {
+  /** Gain de chroma autour de la luminance. 1 = aucune montee. */
+  gain: 1.75
+} as const
+
+/**
  * L'ETOILE au coeur du nuage (conv-1449) : dans l'image de reference, une etoile blanche a branches
  * perce la nebuleuse. Elle est reglee ici parce qu'un eclat en dur dans le shader n'est ni relisible
  * ni bornable, et un coeur trop blanc rendrait illisibles les widgets poses au milieu.
@@ -1014,6 +1071,9 @@ export const NUAGE_FRAGMENT_SHADER = [
   'uniform float uEtoileRayon;',
   'uniform float uBranches;',
   'uniform float uPulsation;',
+  'uniform float uSaturation;',
+  'uniform float uBordAmplitude;',
+  'uniform float uBordErosion;',
   'float hashN(vec2 p) {',
   '  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));',
   '  q += dot(q, q.yzx + 33.33);',
@@ -1037,9 +1097,28 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  }',
   '  return somme;',
   '}',
+  'float profilBord(float angle) {',
+  '  float somme = 0.0;',
+  '  float poids = 0.0;',
+  '  float harmoniques[5];',
+  '  float phases[5];',
+  '  harmoniques[0] = 7.0; harmoniques[1] = 13.0; harmoniques[2] = 19.0; harmoniques[3] = 29.0; harmoniques[4] = 43.0;',
+  '  phases[0] = 0.0; phases[1] = 1.7; phases[2] = 3.1; phases[3] = 4.6; phases[4] = 5.9;',
+  '  for (int i = 0; i < 5; i++) {',
+  '    float amp = 1.0 / float(i + 1);',
+  '    somme += amp * sin(harmoniques[i] * angle + phases[i]);',
+  '    poids += amp;',
+  '  }',
+  '  return 1.0 + (somme / poids) * uBordAmplitude;',
+  '}',
   'void main() {',
   '  vec2 c = vUv - 0.5;',
-  '  float masque = 1.0 - smoothstep(0.10, 0.5, length(c));',
+  '  float rayonAngle = length(c);',
+  '  float theta = atan(c.y, c.x);',
+  // Le bord : profil dentele + grignotage par le bruit anime. Un disque parfait se lit comme un cercle colle.
+  '  float bord = 0.5 * profilBord(theta);',
+  '  bord *= 1.0 + uBordErosion * (fbm(vec2(cos(theta), sin(theta)) * 5.0 + uTime * 0.05) - 0.5);',
+  '  float masque = 1.0 - smoothstep(bord * 0.22, bord, rayonAngle);',
   '  if (masque <= 0.001) discard;',
   // Rotation lente du champ : la nebuleuse de reference TOURNE, elle ne glisse pas de biais.
   '  float spin = uTime * uWarp * 0.35;',
@@ -1079,6 +1158,9 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  float etoile = (coeur + pointes * 0.85) * uEtoile * scintille;',
   '  couleur += vec3(1.0, 0.97, 0.92) * etoile;',
   '  alpha = clamp(alpha + etoile * 0.9, 0.0, 1.0);',
+  // Saturation : chroma etiree autour de la luminance, apres l'etoile pour ne pas la teinter.
+  '  float luma = dot(couleur, vec3(0.2126, 0.7152, 0.0722));',
+  '  couleur = max(vec3(0.0), mix(vec3(luma), couleur, uSaturation));',
   '  gl_FragColor = vec4(couleur, alpha);',
   '}'
 ].join('\n')
@@ -1103,7 +1185,10 @@ function buildNuage(): THREE.Mesh {
       uEtoile: { value: ETOILE_NUAGE.eclat },
       uEtoileRayon: { value: ETOILE_NUAGE.rayon },
       uBranches: { value: ETOILE_NUAGE.branches },
-      uPulsation: { value: ETOILE_NUAGE.pulsation }
+      uPulsation: { value: ETOILE_NUAGE.pulsation },
+      uSaturation: { value: SATURATION_NUAGE.gain },
+      uBordAmplitude: { value: BORD_NUAGE.amplitude },
+      uBordErosion: { value: BORD_NUAGE.erosion }
     },
     vertexShader: NAPPE_VERTEX_SHADER,
     fragmentShader: NUAGE_FRAGMENT_SHADER
@@ -1549,6 +1634,23 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
  * La promesse de `poussiere` reste testee, sous son nom propre : changer de defaut ne doit pas
  * effacer la garantie d'une direction qu'on peut encore choisir.
  */
+/**
+ * LA CLE DE LA DIRECTION VISUELLE CHOISIE — declaree ICI, une seule fois, et exportee.
+ *
+ * Elle vivait en local dans `HomeView`. Le decor devenant le fond de TOUTE l'application, un second
+ * lecteur est apparu (`DecorDeFond`) : le travail recupere le 2026-08-27 la RECOPIAIT, et sur
+ * `home.decor.v1` alors que la vue etait passee a `v2` — la direction choisie par l'utilisateur
+ * aurait ete ignoree en silence, exactement le defaut que le commentaire de ce fichier redoutait pour
+ * lui-meme. Une cle de stockage se derive d'une source unique, elle ne se recopie pas.
+ *
+ * POURQUOI `v2` ET NON `v1` — motif conserve depuis `HomeView`, ou cette constante vivait : la cle a
+ * ete VOLONTAIREMENT changee le 2026-08-25. Cause de la plainte « je vois des poussieres » : le defaut
+ * est passe a `actuel` (planetes annelees), mais une machine ayant deja choisi `poussiere` gardait ce
+ * choix en localStorage et continuait d'afficher l'ancienne direction — le nouveau defaut n'atteignait
+ * jamais l'ecran. Repartir sur une cle neuve rend la main a `DECOR_DEFAUT` sans effacer l'ancienne.
+ */
+export const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v2')
+
 export const DECOR_DEFAUT: DecorVariant = 'actuel'
 
 /**

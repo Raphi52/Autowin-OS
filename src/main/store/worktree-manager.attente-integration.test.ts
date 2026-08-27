@@ -1,9 +1,18 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { git, manager, nettoyerRacines, tempRepo } from './worktree-manager.test-helpers'
 
 afterEach(nettoyerRacines)
+/*
+ * Suites git REELLES : `vi.setConfig` comme les autres suites `worktree-manager.*` (convention
+ * maison, cf. `worktree-manager.publication.test.ts:31`). Un depot temporaire, un worktree, un
+ * merge : 15 a 30 s seuls, davantage quand quatre workers tournent en parallele. Le plafond global
+ * de 20 s les faisait echouer en LOT alors qu'elles passent seules — un faux rouge de charge, qui
+ * ferait douter de tests parfaitement valides.
+ */
+vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
+
 
 /**
  * BARREAU 1 DE L'ECHELLE — un travail refuse en `base-dirty` est MIS EN ATTENTE D'INTEGRATION,
