@@ -1277,9 +1277,26 @@ export function formatOrchestrationOutcome(
   const learningDetail = asString(outcome.learning?.detail)
 
   const blocage = gateBlocked ? lireLeBlocage(outcome.gateReasons) : { fichiers: [] }
+  /*
+   * UNE CAUSE REPARABLE N'EST PAS UN ECHEC — c'est une ATTENTE.
+   *
+   * Vecu le 2026-08-27 (conv-1450) : « ⛔ Travail NON integre — ton arbre principal a une base sale
+   * · statut echoue · cout 1,32 $ », et la reponse de l'utilisateur : « je ne veux plus jamais voir
+   * ce panneau sens interdit », « on ne finit jamais un tour sur un echec comme ca ». Le message
+   * disait VRAI, mais il le disait comme un point final — alors que la cause se repare, que la
+   * reprise est armee, et que le travail est intact et atteignable (`stagedRef`).
+   *
+   * Le defaut n'etait donc pas la franchise, c'etait la FINALITE. On ne fabrique pas le faux vert :
+   * « EN ATTENTE » n'est pas « integre », la cause et les fichiers restent nommes, et une cause que
+   * l'app ne peut PAS reparer seule (un conflit de contenu) garde son panneau d'arret — la sortie
+   * honnete y est l'arbitrage humain, pas une attente qui n'aboutira jamais.
+   */
+  const attenteReparable = blocage.lecture?.repriseArmee === true
   const headline = gateBlocked
     ? blocage.lecture
-      ? `⛔ Travail NON intégré — ${blocage.lecture.cause}`
+      ? attenteReparable
+        ? `⏳ Travail PAS ENCORE intégré, EN ATTENTE — ${blocage.lecture.cause}`
+        : `⛔ Travail NON intégré — ${blocage.lecture.cause}`
       : blocage.brut
         ? `⛔ Travail NON intégré — blocage : ${blocage.brut}`
         : '⛔ Workflow ARRÊTÉ au contrôle final — résultat non validé'
@@ -1292,7 +1309,9 @@ export function formatOrchestrationOutcome(
           : '⚠️ Workflow terminé — la livraison n’est pas prouvée'
 
   const facts = [
-    status && `statut ${statutLisible(status)}`,
+    // « statut echoue » sur une cause reparable est le mot qui a fait dire « ce panneau me rend
+    // fou » : le run n'a pas echoue, sa publication attend. On dit l'attente, pas l'echec.
+    status && (attenteReparable ? 'statut en attente d’intégration' : `statut ${statutLisible(status)}`),
     cost && (cost.startsWith('coût ') ? cost : `coût ${cost}`),
     run && `run « ${run} »`
   ].filter((fact): fact is string => Boolean(fact))

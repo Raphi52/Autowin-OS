@@ -241,6 +241,14 @@ export type FinalizeResult =
        * promesse creuse : l'appelant ne doit annoncer une adresse que s'il en reçoit une.
        */
       rescueRef?: string
+      /**
+       * Adresse git durable posee sur le commit que la copie a DEJA produit, quand la publication est
+       * refusee pour une cause REPARABLE (`base-dirty`). Le travail est donc ATTEIGNABLE et attend
+       * son atterrissage, au lieu d'etre rendu comme un echec sec — vecu conv-1450, 1,32 $ payes pour
+       * un « statut echoue ». N'ecrit RIEN dans l'arbre de l'utilisateur : voir
+       * `worktree-manager.attente-integration.test.ts`.
+       */
+      stagedRef?: string
       detail?: string
     }
 
@@ -4598,15 +4606,51 @@ exit 0
     const issue = this.finalizeSansSecours(agentId, options)
     if (issue.outcome !== 'blocked' && issue.outcome !== 'conflict') return issue
     if ('rescueRef' in issue && issue.rescueRef) return issue
-    // JAMAIS sur `base-dirty` : ce refus protège du travail NON COMMITTÉ de l'utilisateur sur les
-    // mêmes fichiers. Y committer la copie contredirait la garde qu'on vient d'honorer, et la DoD de
-    // ce chantier exige explicitement qu'aucun ref ne soit écrit dans ce cas.
-    if (issue.outcome === 'blocked' && issue.reason === 'base-dirty') return issue
+    // `base-dirty` ne prend PAS le chemin du sauvetage : celui-ci committe le travail en cours de la
+    // copie, ce qui contredirait la garde qu'on vient d'honorer. Mais ce n'est plus un cul-de-sac —
+    // on pose une adresse d'ATTENTE sur le commit deja produit, sans rien ecrire chez l'utilisateur.
+    // Le tour cesse ainsi de finir sur un echec sec (conv-1450). Voir `poserAttenteDIntegration`.
+    if (issue.outcome === 'blocked' && issue.reason === 'base-dirty') {
+      const attente = this.poserAttenteDIntegration(agentId)
+      return attente ? { ...issue, stagedRef: attente } : issue
+    }
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return issue
     return this.secureWorkBeforeRefusal(agentId, path)
       ? { ...issue, rescueRef: this.rescueRef(agentId) }
       : issue
+  }
+
+  /**
+   * BARREAU 1 DE L'ECHELLE — poser une adresse d'attente, sans rien toucher chez l'utilisateur.
+   *
+   * `base-dirty` refuse la publication parce que l'utilisateur a du travail non committe sur les
+   * MEMES fichiers. Jusqu'ici le tour s'arretait la, sur un echec. Sur un arbre partage par plusieurs
+   * sessions la cause ne disparait pas d'elle-meme : mesure du 2026-08-27, le fichier en cause etait
+   * `src/main/agent-pilot.ts`, qu'une autre session editait, et le repechage a rejoue trois fois la
+   * MEME publication avant de renoncer.
+   *
+   * Ce que fait ce barreau : `update-ref` sur le commit que la copie a DEJA produit. Aucun fichier
+   * ecrit, aucun merge, aucun commit du travail de l'utilisateur, aucun `checkout`. Le travail devient
+   * ATTEIGNABLE (`git show <ref>`) et l'etat rendu cesse d'etre un echec terminal.
+   *
+   * Ce qu'il ne fait pas, et qui reste interdit : le ref de SAUVETAGE (`refs/autowin/rescue/*`), qui
+   * COMMITTE le travail en cours de la copie, n'est toujours pas ecrit sur cette cause — c'est cela
+   * que la regle « la garde base-dirty n'ecrit AUCUN ref » protegeait vraiment.
+   *
+   * Fail-open : si l'adresse ne peut pas etre ecrite, on rend `undefined` et l'appelant n'annonce
+   * rien. Une adresse promise mais absente serait pire que pas d'adresse (defaut du bouton
+   * « Reprendre » qui ne faisait rien, mesure du 2026-08-26).
+   */
+  private poserAttenteDIntegration(agentId: string): string | undefined {
+    const ref = `refs/autowin/integration/${agentId}`
+    const path = this.pathFor(agentId)
+    if (!existsSync(path)) return undefined
+    const sha = this.tryGitFn(path, ['rev-parse', 'HEAD'])
+    if (sha.code !== 0) return undefined
+    const commit = sha.stdout.trim()
+    if (!commit || !this.revisionExists(commit)) return undefined
+    return this.tryGitFn(this.baseRepo, ['update-ref', ref, commit]).code === 0 ? ref : undefined
   }
 
   private finalizeSansSecours(

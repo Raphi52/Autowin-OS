@@ -43,6 +43,26 @@ export const CAUSES_REESSAYABLES: ReadonlySet<string> = new Set([
   'base-in-progress'
 ])
 
+/**
+ * LES CAUSES DONT L'ETAT SE RELIT A MOINDRE FRAIS — celles qu'on peut ATTENDRE au lieu de compter.
+ *
+ * Le plafond de trois essais protege un defaut mesure (2026-08-24 : vingt-et-un travaux impubliables
+ * repeches sans fin, 682 Mo de copies restaurees pour rien). Mais il ferme aussi la porte au cas vecu
+ * le 2026-08-27 (conv-1450) : un `base-dirty` sur un arbre partage, ou la cause ne disparait pas en
+ * trente minutes — trois essais a l'aveugle, puis un echec DEFINITIF, alors que le travail attendait
+ * seulement que l'utilisateur committe son fichier.
+ *
+ * `base-dirty` a ceci de particulier : son etat se relit exactement, par un `git status` croise avec
+ * les FICHIERS que ce run voulait publier (ils sont conserves sur le run). On peut donc remplacer le
+ * comptage par l'OBSERVATION — ne rien tenter tant que la cause est la (donc aucune copie restauree
+ * pour rien, aucun essai brule), et tenter DES qu'elle a disparu, sans plafond.
+ *
+ * `base-in-progress` n'y est PAS, et c'est deliberé : aucune sonde publique ne rend son etat, et
+ * annoncer une observation qu'on ne fait pas serait pire que le plafond qu'elle remplace. Elle garde
+ * donc le comportement d'avant, comme toute cause qu'on ne sait pas observer.
+ */
+export const CAUSES_OBSERVABLES: ReadonlySet<string> = new Set(['base-dirty'])
+
 /** L'état d'un run, réduit aux seuls champs qui décident du repêchage. */
 export interface CandidatAuRepechage {
   runId: string
@@ -118,11 +138,32 @@ export function travauxARepecher(
   candidats: readonly CandidatAuRepechage[],
   derniersEssais: ReadonlyMap<string, number>,
   maintenant: number,
-  essaisFaits: ReadonlyMap<string, number> = new Map()
+  essaisFaits: ReadonlyMap<string, number> = new Map(),
+  /**
+   * La cause de ce blocage est-elle TOUJOURS presente ? Ne concerne que `CAUSES_OBSERVABLES`.
+   * Absent, ou jette : on retombe sur plafond + delai, le comportement d'avant. Un observateur en
+   * panne ne doit pas geler le filet — il ne doit pas non plus le rendre plus permissif en silence.
+   */
+  causeEncoreLa?: (candidat: CandidatAuRepechage) => boolean
 ): string[] {
   return candidats
     .filter((candidat) => {
       if (!estRepechable(candidat)) return false
+      /*
+       * ATTENTE ACTIVE plutot que comptage, quand l'etat se relit.
+       *
+       * Cause toujours la -> on ne tente RIEN : c'est ce qui evite les 682 Mo de copies restaurees
+       * pour rien, et cela ne brule aucun essai. Cause disparue -> on tente TOUT DE SUITE, sans
+       * plafond ni delai : c'est ce qui empeche l'echec definitif de conv-1450.
+       */
+      if (causeEncoreLa && CAUSES_OBSERVABLES.has(candidat.attentionReason ?? '')) {
+        try {
+          return !causeEncoreLa(candidat)
+        } catch {
+          // Observation indisponible : on ne conclut ni « c'est libre » ni « c'est bloque pour
+          // toujours ». On redonne la main au plafond et au delai, ci-dessous.
+        }
+      }
       // Le plafond d'abord : inutile de regarder l'horloge d'un travail auquel on a renonce.
       if ((essaisFaits.get(candidat.runId) ?? 0) >= ESSAIS_AUTOMATIQUES_MAX) return false
       const dernier = derniersEssais.get(candidat.runId)

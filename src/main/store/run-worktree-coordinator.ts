@@ -2792,11 +2792,32 @@ export class RunWorktreeCoordinator {
    * condamner les treize autres.
    */
   async repecherLesTravauxEnAttente(): Promise<string[]> {
+    /*
+     * L'OBSERVATEUR — sans lui, l'attente active serait exposee et jamais alimentee.
+     *
+     * Il repond exactement a « la cause de CE blocage est-elle toujours la ? » : l'intersection entre
+     * les fichiers que ce run voulait publier (conserves sur le run au moment du refus) et les
+     * fichiers actuellement sales de la base. Cette precision est ce qui evite les deux pieges
+     * symetriques : un arbre sale sur un fichier SANS RAPPORT ne doit pas faire attendre ce run
+     * (l'attente serait sans fin pour rien), et un fichier encore en collision ne doit pas declencher
+     * une tentative qui echouerait a l'identique.
+     *
+     * Lecture seule (`git status`), et une base illisible rend une liste VIDE : dans ce cas
+     * `travauxARepecher` retombe sur plafond + delai, jamais sur une conclusion inventee.
+     */
+    const causeEncoreLa = (candidat: { runId: string; attentionReason?: string }): boolean => {
+      if (candidat.attentionReason !== 'base-dirty') return true
+      const bloquants = (this.runs.get(candidat.runId)?.files ?? []).map((fichier) => fichier.path)
+      if (bloquants.length === 0) return true
+      const sales = new Set(this.baseDirtyFiles())
+      return bloquants.some((chemin) => sales.has(chemin))
+    }
     const aRepecher = travauxARepecher(
       [...this.runs.values()],
       this.derniersRepechages,
       this.now(),
-      this.essaisAutomatiques
+      this.essaisAutomatiques,
+      causeEncoreLa
     )
     const tentes: string[] = []
     for (const runId of aRepecher) {
