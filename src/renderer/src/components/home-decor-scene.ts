@@ -912,6 +912,11 @@ export const NUAGE_COSMIQUE = {
   accent: 0xff4fa3,
   /** Turquoise : la teinte froide des bords, ce qui empeche la nebuleuse de virer monochrome. */
   froid: 0x2fe6ff,
+  /**
+   * Les BRAISES (conv-1449, image jointe) : l'or-orange qui occupe la moitie chaude de la nebuleuse
+   * de reference. Sans elle, le nuage reste un camaieu bleu-violet et ne ressemble pas a l'image.
+   */
+  chaud: 0xff8a2b,
   /** Profondeur : derrière les planètes, devant les nébuleuses d'angle. */
   z: -14,
   /** Taille, en fraction du demi-cadre. */
@@ -920,7 +925,37 @@ export const NUAGE_COSMIQUE = {
    * LA DÉRIVE — « qui se déplace ». Amplitude en fraction du demi-cadre : elle doit rester bien
    * inférieure à 1, sinon le nuage quitte le milieu et la demande n'est plus tenue.
    */
-  derive: { amplitude: 0.22, vitesseX: 0.037, vitesseY: 0.029 }
+  derive: { amplitude: 0.3, vitesseX: 0.062, vitesseY: 0.049 }
+} as const
+
+/**
+ * L'ETOILE au coeur du nuage (conv-1449) : dans l'image de reference, une etoile blanche a branches
+ * perce la nebuleuse. Elle est reglee ici parce qu'un eclat en dur dans le shader n'est ni relisible
+ * ni bornable, et un coeur trop blanc rendrait illisibles les widgets poses au milieu.
+ */
+export const ETOILE_NUAGE = {
+  /** Intensite du coeur additif. */
+  eclat: 0.85,
+  /** Nombre de branches. 4 minimum : deux branches font une croix, pas une etoile. */
+  branches: 6,
+  /** Rayon du halo, en fraction de la demi-taille du plan. Petit : l'etoile ponctue, elle n'inonde pas. */
+  rayon: 0.055,
+  /** Amplitude du scintillement : sans elle, l'etoile est un point colle sur le nuage. */
+  pulsation: 0.22
+} as const
+
+/**
+ * LA DYNAMIQUE de la matiere (conv-1449 : « qu'il soit plus dynamique »). Les vitesses etaient en dur
+ * dans le fragment (0.017 / 0.011), donc invisibles et non reglables ; elles remontent ici et passent
+ * par des uniforms.
+ */
+export const NUAGE_DYNAMIQUE = {
+  /** Vitesse de defilement du champ. Ancienne valeur : 0,017 — quasi immobile a l'oeil. */
+  vitesseMatiere: 0.085,
+  /** Vitesse propre du domain warping : c'est elle qui fait TOURNER les volutes sur elles-memes. */
+  vitesseWarp: 0.14,
+  /** Respiration de la densite. Bornee : au-dela, le nuage clignote au lieu de respirer. */
+  respiration: 0.18
 } as const
 
 /**
@@ -970,7 +1005,15 @@ export const NUAGE_FRAGMENT_SHADER = [
   'uniform vec3 uViolet;',
   'uniform vec3 uAccent;',
   'uniform vec3 uFroid;',
+  'uniform vec3 uChaud;',
   'uniform float uOpacite;',
+  'uniform float uVitesse;',
+  'uniform float uWarp;',
+  'uniform float uRespiration;',
+  'uniform float uEtoile;',
+  'uniform float uEtoileRayon;',
+  'uniform float uBranches;',
+  'uniform float uPulsation;',
   'float hashN(vec2 p) {',
   '  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));',
   '  q += dot(q, q.yzx + 33.33);',
@@ -998,23 +1041,44 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  vec2 c = vUv - 0.5;',
   '  float masque = 1.0 - smoothstep(0.10, 0.5, length(c));',
   '  if (masque <= 0.001) discard;',
-  '  vec2 p = vUv * 7.5;',
-  '  vec2 derive = vec2(uTime * 0.017, uTime * -0.011);',
+  // Rotation lente du champ : la nebuleuse de reference TOURNE, elle ne glisse pas de biais.
+  '  float spin = uTime * uWarp * 0.35;',
+  '  mat2 tourne = mat2(cos(spin), -sin(spin), sin(spin), cos(spin));',
+  '  vec2 p = (tourne * c + 0.5) * 7.5;',
+  '  vec2 derive = vec2(uTime * uVitesse, uTime * -uVitesse * 0.65);',
   '  float w1 = fbm(p + derive);',
   '  float w2 = fbm(p + vec2(3.7, 8.1) + derive * 1.6);',
-  '  vec2 q = p + vec2(w1, w2) * 2.4 + derive * 0.4;',
+  // Le warp lui-meme respire : c'est ce mouvement-la qui fait vivre les volutes sur place.
+  '  float pulseWarp = 2.4 + 0.7 * sin(uTime * uWarp);',
+  '  vec2 q = p + vec2(w1, w2) * pulseWarp + derive * 0.4;',
   '  float champ = fbm(q);',
-  '  float filaments = fbm(q * 2.6 + vec2(w2, w1));',
+  '  float filaments = fbm(q * 2.6 + vec2(w2, w1) + derive * 2.0);',
   '  float densite = pow(clamp(champ * 1.45, 0.0, 1.0), 1.7);',
   '  densite *= 0.72 + 0.55 * filaments;',
+  '  densite *= 1.0 + uRespiration * sin(uTime * uWarp * 0.7 + champ * 6.0);',
+  '  densite = clamp(densite, 0.0, 1.0);',
+  // Quatre teintes comme l'image : bleu-violet au fond, turquoise aux bords, braises sur un versant,
+  // magenta porte par les seuls filaments. Deux teintes donnent un aplat.
   '  vec3 couleur = mix(uBleu, uViolet, smoothstep(0.18, 0.72, champ));',
   '  couleur = mix(couleur, uFroid, smoothstep(0.62, 0.12, champ) * 0.55);',
+  '  float versant = smoothstep(-0.28, 0.30, -c.x + (w1 - 0.5) * 0.8);',
+  '  couleur = mix(couleur, uChaud, versant * smoothstep(0.22, 0.80, champ) * 0.78);',
   '  couleur = mix(couleur, uAccent, smoothstep(0.48, 0.92, filaments) * 0.85);',
-  '  couleur += vec3(0.42, 0.18, 0.55) * pow(clamp(filaments, 0.0, 1.0), 3.0) * 1.3;',
+  '  couleur += mix(uAccent, uChaud, versant) * pow(clamp(filaments, 0.0, 1.0), 3.0) * 1.3;',
   '  float chaud = pow(smoothstep(0.70, 1.0, champ * 0.6 + filaments * 0.6), 2.2);',
-  '  couleur += mix(uAccent, vec3(1.0, 0.95, 0.86), 0.45) * chaud * 2.1;',
+  '  couleur += mix(uChaud, vec3(1.0, 0.95, 0.86), 0.45) * chaud * 2.1;',
   '  couleur = mix(couleur, vec3(0.96, 0.97, 1.0), pow(densite, 2.6) * 0.72);',
   '  float alpha = clamp(densite + chaud * 0.55, 0.0, 1.0) * masque * uOpacite;',
+  // L'ETOILE : un coeur gaussien plus un diffracteur a uBranches, qui scintille.
+  '  float d = length(c);',
+  '  float angle = atan(c.y, c.x);',
+  '  float scintille = 1.0 + uPulsation * sin(uTime * 1.7);',
+  '  float coeur = exp(-pow(d / max(uEtoileRayon, 0.001), 2.0));',
+  '  float pointes = pow(max(0.0, abs(cos(angle * uBranches * 0.5))), 8.0);',
+  '  pointes *= exp(-d / max(uEtoileRayon * 3.2, 0.001));',
+  '  float etoile = (coeur + pointes * 0.85) * uEtoile * scintille;',
+  '  couleur += vec3(1.0, 0.97, 0.92) * etoile;',
+  '  alpha = clamp(alpha + etoile * 0.9, 0.0, 1.0);',
   '  gl_FragColor = vec4(couleur, alpha);',
   '}'
 ].join('\n')
@@ -1031,7 +1095,15 @@ function buildNuage(): THREE.Mesh {
       uViolet: { value: new THREE.Color(NUAGE_COSMIQUE.secondaire) },
       uAccent: { value: new THREE.Color(NUAGE_COSMIQUE.accent) },
       uFroid: { value: new THREE.Color(NUAGE_COSMIQUE.froid) },
-      uOpacite: { value: NUAGE_COSMIQUE.opacite }
+      uChaud: { value: new THREE.Color(NUAGE_COSMIQUE.chaud) },
+      uOpacite: { value: NUAGE_COSMIQUE.opacite },
+      uVitesse: { value: NUAGE_DYNAMIQUE.vitesseMatiere },
+      uWarp: { value: NUAGE_DYNAMIQUE.vitesseWarp },
+      uRespiration: { value: NUAGE_DYNAMIQUE.respiration },
+      uEtoile: { value: ETOILE_NUAGE.eclat },
+      uEtoileRayon: { value: ETOILE_NUAGE.rayon },
+      uBranches: { value: ETOILE_NUAGE.branches },
+      uPulsation: { value: ETOILE_NUAGE.pulsation }
     },
     vertexShader: NAPPE_VERTEX_SHADER,
     fragmentShader: NUAGE_FRAGMENT_SHADER
