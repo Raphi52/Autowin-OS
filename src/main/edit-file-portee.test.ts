@@ -208,6 +208,43 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     expect(erreur).toContain('Filename too long')
   }, 180_000)
 
+  /*
+   * MESURE DU 2026-08-27, hors modele, dans le depot reel :
+   *   npx vitest related README.md --run  ->  EXIT=0, « No test files found, exiting with code 0 »
+   *
+   * `vitest related` raisonne sur un graphe d'IMPORTS : un `.md`, un `.json`, un dossier non suivi
+   * n'y ont aucune place. La commande sort donc a 0 SANS EXECUTER UN SEUL TEST, et `edit_file`
+   * publiait sur cette portee vide. Un vert vide est pire qu'une suite lente : il porte le mot
+   * « verifie » sans qu'aucun test ait tourne.
+   *
+   * La garde existait deja — `porteeDerivableDesChangements`, qui exige que TOUT ce qui a change
+   * soit du code — mais elle n'etait cablee que sur `runVerifyAt`, jamais sur le chemin `edit_file`.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST SI LA CORRECTION EST FAUSSE : rebrancher la portee sur le
+   * chemin non-code (ou retirer le filtre) rend `ok: true` avec `verifie: vitest related …` — c'est
+   * exactement le faux vert mesure ci-dessus.
+   */
+  it('ne publie JAMAIS une édition non-code sur une portée vide', async () => {
+    const { repo, git } = depotDejaRouge()
+    writeFileSync(join(repo, 'notes.md'), '# Notes\n\ntexte initial\n', 'utf8')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'notes')
+
+    const result = await busSur(repo).exec(
+      'edit_file',
+      { path: 'notes.md', oldText: 'texte initial', newText: 'texte corrigé' },
+      'conv-1'
+    )
+
+    // `vitest related notes.md` n'a AUCUN test a jouer : ce verdict ne doit jamais servir de preuve.
+    const data = (result.data ?? {}) as { verifie?: string }
+    expect(data.verifie ?? '').not.toContain('related')
+    // Le depot est deja rouge, donc le repli (suite complete) refuse — et c'est le comportement
+    // attendu ici : aucune publication ne peut s'appuyer sur une portee qui n'a rien mesure.
+    expect(result).toMatchObject({ ok: false })
+    expect(readFileSync(join(repo, 'notes.md'), 'utf8')).toContain('texte initial')
+  }, 300_000)
+
   it('refuse toujours une édition qui casse RÉELLEMENT le test de son fichier', async () => {
     const { repo } = depotDejaRouge()
 

@@ -2794,8 +2794,29 @@ export class AppCommandBus {
          * prouve » est intacte — un test qui importe le fichier edite est joue, donc une vraie
          * regression est toujours refusee.
          */
+        /*
+         * UNE PORTEE VIDE N'EST PAS UNE PORTEE.
+         *
+         * CausalHypothesis MESUREE le 2026-08-27, hors modele, dans le depot reel :
+         *   npx vitest related README.md --run  ->  EXIT=0, « No test files found, exiting with
+         *   code 0 »
+         * `vitest related` raisonne sur un graphe d'IMPORTS : un `.md`, un `.json`, un dossier non
+         * suivi n'y ont aucune place. La commande sortait donc a 0 SANS EXECUTER UN SEUL TEST, et ce
+         * point publiait sur cette portee vide en annoncant `verifie: vitest related …`. Un vert vide
+         * est pire qu'une suite lente : il porte le mot « verifie » alors que rien n'a tourne.
+         *
+         * La garde existait DEJA — `porteeDerivableDesChangements` exige que TOUT ce qui a change
+         * soit du code — mais elle n'etait cablee que sur `runVerifyAt` (voie `verify`), jamais ici.
+         * On la branche donc, plutot que d'en ecrire une seconde : meme regle, un seul endroit ou
+         * elle est definie.
+         *
+         * Le repli reste la suite COMPLETE, jamais l'absence de verification. Cout assume et connu :
+         * sur une base au rouge preexistant, une edition non-code se fait refuser par ce repli. C'est
+         * le prix de ne pas fabriquer de faux vert, et c'est le probleme que la baseline
+         * differentielle (option A du cadrage) doit lever ensuite.
+         */
         const edite = (result as { path?: unknown } | undefined)?.path
-        const cible = typeof edite === 'string' ? [edite] : []
+        const cible = porteeDerivableDesChangements(typeof edite === 'string' ? [edite] : []) ?? []
         const parPortee = cible.length ? await this.runRelatedVerifyAt(workspaceRoot, cible) : null
         const verification =
           parPortee && parPortee.allowed ? parPortee : await this.runVerifyAt(workspaceRoot)
