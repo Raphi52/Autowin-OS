@@ -87,10 +87,7 @@ import {
 } from './conversation-groups'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
-import {
-  conversationEnMarkdown,
-  nomFichierExportMarkdown
-} from './conversation-markdown'
+import { conversationEnMarkdown, nomFichierExportMarkdown } from './conversation-markdown'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { WorkflowsPanel } from './WorkflowsPanel'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
@@ -465,6 +462,15 @@ export function ChatView({
     )
   }, [])
   const [deleteCandidate, setDeleteCandidate] = useState<Conv | null>(null)
+  /**
+   * Purge en LOT. `selectedConvIds` n'existe QUE en mode sélection : hors mode, aucune case n'est
+   * rendue et la liste retrouve son comportement de clic unique. Sortir du mode vide la sélection —
+   * une sélection invisible qui survit est un piège à suppression accidentelle.
+   */
+  const [convSelectionMode, setConvSelectionMode] = useState(false)
+  const [selectedConvIds, setSelectedConvIds] = useState<ReadonlySet<string>>(new Set())
+  const [bulkDeleteAsking, setBulkDeleteAsking] = useState(false)
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null)
   const [deleteRunCandidate, setDeleteRunCandidate] = useState<{
     run: RunEntry
     scope: 'conv' | 'tous'
@@ -1002,7 +1008,12 @@ export function ChatView({
             }
           })
         )
-      } else if (e.type === 'orchestrate-delta' && typeof e.note === 'string' && e.note && e.convId) {
+      } else if (
+        e.type === 'orchestrate-delta' &&
+        typeof e.note === 'string' &&
+        e.note &&
+        e.convId
+      ) {
         // NOTE d'activité : elle ne passe PAS par le batcher de deltas, qui accumule du livrable.
         // Elle remplace l'état courant, pour que la carte cesse d'être muette pendant qu'un outil
         // tourne 15 min — le défaut vécu le 2026-08-22, où l'utilisateur concluait à un blocage.
@@ -1460,6 +1471,38 @@ export function ChatView({
     composerDraftsRef.current.delete(c.id)
     if (activeId === c.id) newConv()
     await refreshConvs()
+  }
+
+  function toggleConvSelection(id: string): void {
+    setSelectedConvIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function quitterModeSelection(): void {
+    setConvSelectionMode(false)
+    setSelectedConvIds(new Set())
+    setBulkDeleteError(null)
+  }
+
+  /** Supprime le LOT sélectionné en UNE confirmation. Les ids non sélectionnés restent intacts. */
+  async function confirmBulkDelete(): Promise<void> {
+    const ids = [...selectedConvIds]
+    if (ids.length === 0) return
+    setBulkDeleteError(null)
+    try {
+      const removed = await window.api.conversationsRemoveMany(ids)
+      for (const id of removed) composerDraftsRef.current.delete(id)
+      if (activeId && removed.includes(activeId)) newConv()
+      setBulkDeleteAsking(false)
+      quitterModeSelection()
+      await refreshConvs()
+    } catch (error) {
+      setBulkDeleteError(error instanceof Error ? error.message : String(error))
+    }
   }
 
   function requestDeleteRun(run: RunEntry): void {
@@ -2519,6 +2562,28 @@ export function ChatView({
           <span aria-hidden="true">{conversationDateOrder === 'desc' ? '↓' : '↑'}</span>
           {conversationDateOrder === 'desc' ? 'Plus récentes' : 'Plus anciennes'}
         </button>
+        <div className="conv-bulk-bar">
+          <button
+            type="button"
+            className="conv-date-sort"
+            aria-pressed={convSelectionMode}
+            onClick={() =>
+              convSelectionMode ? quitterModeSelection() : setConvSelectionMode(true)
+            }
+          >
+            {convSelectionMode ? 'Annuler la sélection' : 'Sélectionner'}
+          </button>
+          {convSelectionMode && (
+            <button
+              type="button"
+              className="conv-date-sort"
+              disabled={selectedConvIds.size === 0}
+              onClick={() => setBulkDeleteAsking(true)}
+            >
+              Supprimer ({selectedConvIds.size})
+            </button>
+          )}
+        </div>
         <div className="conv-list scroll-y">
           <button
             className={`conv-new-row${activeId === null ? ' active' : ''}`}
@@ -2607,6 +2672,15 @@ export function ChatView({
                           e.dataTransfer.effectAllowed = 'move'
                         }}
                       >
+                        {convSelectionMode && (
+                          <input
+                            type="checkbox"
+                            className="conv-select-box"
+                            checked={selectedConvIds.has(c.id)}
+                            onChange={() => toggleConvSelection(c.id)}
+                            aria-label={`Sélectionner « ${c.title} »`}
+                          />
+                        )}
                         <button className="conv-pick" onClick={() => void loadConv(c)}>
                           <span
                             className={`conversation-state is-${conversationState.key}`}
@@ -3047,6 +3121,45 @@ export function ChatView({
                 <button
                   className="btn delete-confirm-danger"
                   onClick={() => void confirmRemoveConv()}
+                >
+                  Supprimer définitivement
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {bulkDeleteAsking && (
+          <div
+            className="delete-confirm-layer"
+            role="presentation"
+            onClick={() => setBulkDeleteAsking(false)}
+          >
+            <section
+              className="delete-confirm-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="bulk-delete-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <span className="delete-confirm-kicker">ACTION IRRÉVERSIBLE</span>
+              <h2 id="bulk-delete-title">Supprimer {selectedConvIds.size} conversations ?</h2>
+              <p>
+                Leur historique local sera retiré de cet appareil. Les conversations non
+                sélectionnées ne sont pas touchées.
+              </p>
+              {bulkDeleteError && <p className="c-danger">{bulkDeleteError}</p>}
+              <div className="delete-confirm-actions">
+                <button
+                  className="btn delete-confirm-cancel"
+                  onClick={() => setBulkDeleteAsking(false)}
+                  autoFocus
+                >
+                  Garder
+                </button>
+                <button
+                  className="btn delete-confirm-danger"
+                  onClick={() => void confirmBulkDelete()}
                 >
                   Supprimer définitivement
                 </button>

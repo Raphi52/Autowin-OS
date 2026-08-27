@@ -130,7 +130,9 @@ export function attendUneDecision(messages: readonly Msg[]): boolean {
   if (!dernier || dernier.role !== 'assistant') return false
   const parts = (dernier as { parts?: PersistedChatPart[] }).parts
   if (!Array.isArray(parts)) return false
-  return parts.some((part) => parseAskDecision(part as Parameters<typeof parseAskDecision>[0]) !== null)
+  return parts.some(
+    (part) => parseAskDecision(part as Parameters<typeof parseAskDecision>[0]) !== null
+  )
 }
 
 /** Date du dernier tour de l'utilisateur, ou `undefined` s'il n'a encore rien écrit. */
@@ -157,7 +159,6 @@ export interface ConversationRecherche {
   messageCount: number
   extraits: ConversationExtrait[]
 }
-
 
 /**
  * Les mots CHERCHABLES d'une demande.
@@ -268,7 +269,10 @@ const REVIREMENTS =
  * montres inconciliables avec un simple seuil -- separer « conversion » de « conversation » SANS
  * casser « notification » -> « notifier ».
  */
-function motCorrespondant(motsDuMessage: readonly string[], racineCherchee: string): string | undefined {
+function motCorrespondant(
+  motsDuMessage: readonly string[],
+  racineCherchee: string
+): string | undefined {
   return motsDuMessage.find((mot) => mot.startsWith(racineCherchee))
 }
 
@@ -316,7 +320,10 @@ function fenetre(origine: string, position: number, longueur: number): string {
    * AVOUE qu'il est partiel. Une incertitude declaree se verifie ; une affirmation tronquee, non.
    */
   const debutCoupe = debut > 0 ? '...' : ''
-  const finCoupee = fin < origine.length ? ` […suite du message non montree — ouvre la conversation avant de t'y fier]` : ''
+  const finCoupee =
+    fin < origine.length
+      ? ` […suite du message non montree — ouvre la conversation avant de t'y fier]`
+      : ''
   return debutCoupe + coeur + finCoupee
 }
 
@@ -394,6 +401,13 @@ export function applyTurnEventToMessages(
 }
 
 /** Store en mémoire de conversations, avec horloge et générateur d'id injectables pour les tests. */
+/**
+ * Plafond d'un lot de suppression. Valeur OPÉRABLE : la confirmation nomme le nombre, et un humain
+ * relit « 200 » ; au-delà, l'intention est probablement un filtre mal posé, pas une purge voulue.
+ * Le refus vit dans le store, donc aucun appelant (IPC compris) ne peut le contourner.
+ */
+export const LOT_SUPPRESSION_MAX = 200
+
 export class ConversationStore {
   private readonly conversations = new Map<string, Conversation>()
   private readonly now: () => number
@@ -880,11 +894,7 @@ export class ConversationStore {
       }
       // Les mots ENTIERS au decoupage, la racine fournie a part : l'index compte alors la presence
       // des deux, ce dont la ponderation par le mot rencontre a besoin pour discriminer.
-      this.voisinageCache = construireVoisinage(
-        textes,
-        (texte) => this.motsMemoises(texte),
-        racine
-      )
+      this.voisinageCache = construireVoisinage(textes, (texte) => this.motsMemoises(texte), racine)
     }
     return this.voisinageCache
   }
@@ -1365,7 +1375,8 @@ export class ConversationStore {
         let i = texte.indexOf(porteur)
         while (i !== -1) {
           n += 1
-          if (n >= OCCURRENCES_UTILES) return n + (exact || motEntier.test(texte) ? OCCURRENCES_UTILES : 0)
+          if (n >= OCCURRENCES_UTILES)
+            return n + (exact || motEntier.test(texte) ? OCCURRENCES_UTILES : 0)
           i = texte.indexOf(porteur, i + porteur.length)
         }
       }
@@ -1523,6 +1534,27 @@ export class ConversationStore {
       candidate = `message-${randomUUID()}`
     } while (allocatedIds.has(candidate))
     return candidate
+  }
+
+  /**
+   * Supprime un LOT d'ids NOMMÉS. Retourne les ids réellement supprimés, dans l'ordre reçu.
+   *
+   * Contrat volontairement étroit : ids inconnus ignorés, doublons dédupliqués, aucune conversation
+   * non nommée touchée. Le plafond `LOT_SUPPRESSION_MAX` est un refus AVANT toute suppression —
+   * un lot trop grand n'est pas tronqué en silence, il est rejeté (rien de partiel à expliquer).
+   */
+  removeMany(ids: readonly string[]): string[] {
+    if (ids.length > LOT_SUPPRESSION_MAX) {
+      throw new Error(`lot de suppression trop grand : ${ids.length} > ${LOT_SUPPRESSION_MAX}`)
+    }
+    const removed: string[] = []
+    const vus = new Set<string>()
+    for (const id of ids) {
+      if (vus.has(id)) continue
+      vus.add(id)
+      if (this.remove(id)) removed.push(id)
+    }
+    return removed
   }
 
   /** Supprime une conversation. Retourne true si elle existait. */

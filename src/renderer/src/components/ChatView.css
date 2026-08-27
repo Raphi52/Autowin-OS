@@ -3226,3 +3226,18 @@ ol.md-list li {
 .chat-context-gauge.is-critique .chat-context-gauge-fill {
   background: var(--err);
 }
+
+/* Purge en lot : la barre n'occupe une ligne que dans la barre latérale, au-dessus de la liste. */
+.conv-bulk-bar {
+  display: flex;
+  gap: 6px;
+  padding: 0 var(--s2) 4px;
+}
+.conv-bulk-bar .conv-date-sort[aria-pressed='true'] {
+  color: var(--danger, #e06c6c);
+}
+.conv-select-box {
+  margin: 0 4px 0 6px;
+  flex: 0 0 auto;
+  accent-color: var(--danger, #e06c6c);
+}

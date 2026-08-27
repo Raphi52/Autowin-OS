@@ -327,6 +327,8 @@ interface ChatApi {
   conversationsSetProject: (id: string, path?: string | null) => Promise<string | null>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
   conversationsRemove: (id: string) => Promise<boolean>
+  /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */
+  conversationsRemoveMany: (ids: readonly string[]) => Promise<string[]>
   readChatArtifact: (
     conversationId: string,
     turnId: string,

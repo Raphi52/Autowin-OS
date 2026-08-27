@@ -135,6 +135,7 @@ import {
   resolveListedSessionAsync,
   resolveListedSessionImage
 } from './activity/transcripts'
+import { LOT_SUPPRESSION_MAX } from './store/conversations'
 import { persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
 import { collectRunWorkspaces } from './runs/workspace-gc'
@@ -3215,6 +3216,29 @@ Le fil reprend ensuite normalement.`
     return removed
   })
 
+  /**
+   * Purge en LOT. Même travail que `os:conversations:remove` par conversation (abandon du tour en
+   * vol, artefacts, trace causale, appels de prompt), mais UN SEUL broadcast à la fin : à 200 ids,
+   * un rafraîchissement par suppression écroulerait la liste latérale.
+   */
+  ipcMain.handle('os:conversations:removeMany', async (event, rawIds: unknown) => {
+    assertTrustedRendererSender(event, 'Conversations')
+    if (!Array.isArray(rawIds)) throw new Error('ids: tableau attendu')
+    const ids = rawIds.map((id, index) => guardString(id, `ids[${index}]`))
+    if (ids.length > LOT_SUPPRESSION_MAX) {
+      throw new Error(`lot de suppression trop grand : ${ids.length} > ${LOT_SUPPRESSION_MAX}`)
+    }
+    for (const id of ids) await activeChatTurns.abortAndWait(id, 'conversation-deleted')
+    const removed = os.conversations.removeMany(ids)
+    for (const id of removed) {
+      removeConversationArtifacts(id)
+      causalTrace.deleteConversation(id)
+      deletePromptCalls(id)
+    }
+    if (removed.length > 0) broadcast({ type: 'refresh', scope: 'conversations' })
+    return removed
+  })
+
   // --- Graphe brain 3D (données réelles disque) + workflow ---
   ipcMain.handle('os:listBrains', (event) => {
     assertTrustedRendererSender(event, 'Brain')
@@ -5368,7 +5392,7 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:promptTraceSummary', (event) => {
     assertTrustedRendererSender(event, 'Native trace summary')
     // La requête brute est volontairement exclue de ce résumé IPC.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     return loadNativeTraces().map(({ request: _request, ...metadata }) => metadata)
   })
   ipcMain.handle('os:authorizeDiagnostics', (event) => {

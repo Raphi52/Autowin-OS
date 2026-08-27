@@ -429,6 +429,9 @@ const api = {
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
+  /** Purge en lot. Rend les ids RÉELLEMENT supprimés (inconnus ignorés). */
+  conversationsRemoveMany: (ids: readonly string[]): Promise<string[]> =>
+    ipcRenderer.invoke('os:conversations:removeMany', ids),
   readChatArtifact: (
     conversationId: string,
     turnId: string,
