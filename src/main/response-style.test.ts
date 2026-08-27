@@ -51,3 +51,52 @@ describe('prompt suivant prérempli dans le composer', () => {
     )
   })
 })
+
+/**
+ * AGIR PLUTOT QUE RECOMMANDER.
+ *
+ * Defaut mesure le 2026-08-27 dans conv-1422, trois tours d'affilee. Le profil rendait le bloc de
+ * cloture OBLIGATOIRE sur tout travail substantiel, « 👉 Recommandé » y contient « une seule
+ * prochaine action », et `AUTOWIN_PROMPT_V1` la reecrit a l'imperatif pour que l'utilisateur la
+ * renvoie. Rien n'indiquait quand cette action doit simplement etre FAITE. Le tour 3 s'est donc
+ * clos sur « Diagnostique les branches ... puis dis-moi lesquelles je peux supprimer » : un
+ * diagnostic en LECTURE SEULE, a un SHA connu, deja execute deux fois dans le meme fil. Sur
+ * 13 679 caracteres produits, 11 118 (81 %) etaient de la mise en forme.
+ *
+ * CES ASSERTIONS PORTENT SUR LE LIVRABLE LUI-MEME. Le livrable EST ce texte de consigne : verifier
+ * qu'une regle y figure n'est pas un proxy, contrairement a un test qui lirait le source d'un
+ * module pour deviner son comportement. Leur limite est reelle et declaree : elles prouvent que la
+ * consigne est ECRITE et qu'elle atteint les points d'injection, jamais que le modele y obeit —
+ * seule une execution reelle le montre.
+ */
+describe('agir plutot que recommander — la cloture ne sert pas a rendre le travail', () => {
+  const consigne = CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
+
+  it('pose la regle AVANT la rubrique Recommandé, la ou la decision se prend', () => {
+    const regle = consigne.search(/AGIR PLUT[ÔO]T QUE RECOMMANDER/u)
+    expect(regle).toBeGreaterThanOrEqual(0)
+    expect(regle).toBeLessThan(consigne.indexOf('👉 Recommandé'))
+  })
+
+  it('ordonne d EXECUTER l action sure, bornee et reversible au lieu de l ecrire', () => {
+    expect(consigne).toMatch(/ex[ée]cute-la|fais-la|EX[ÉE]CUTE/u)
+    expect(consigne).toMatch(/s[ûu]re|born[ée]e|r[ée]versible/u)
+  })
+
+  it('reserve « Recommandé » a ce que l agent ne peut PAS faire lui-meme', () => {
+    expect(consigne).toMatch(/destructe?/iu)
+    expect(consigne).toMatch(/hors p[ée]rim[èe]tre/iu)
+    expect(consigne).toMatch(/d[ée]cision qui appartient|appartient [àa] l'utilisateur/iu)
+  })
+
+  it('nomme les actes qui ne se recommandent JAMAIS : lecture seule, diagnostic, verification', () => {
+    expect(consigne).toMatch(/lecture seule/iu)
+    expect(consigne).toMatch(/diagnostic/iu)
+    expect(consigne).toMatch(/v[ée]rification/iu)
+  })
+
+  it('interdit la question dont l agent prendrait lui-meme l option recommandee', () => {
+    expect(consigne).toMatch(/ne pose pas.*question|ne demande pas/iu)
+    expect(consigne).toMatch(/tu prendrais de toute fa/iu)
+  })
+})
