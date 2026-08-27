@@ -30,12 +30,16 @@ const POLL_INTERVAL_MS = 180_000
 /**
  * Rail REPLIÉ : le libellé plein débordait du bouton (36 px de large). Une icône par voie, le nom
  * reste porté par `aria-label` / `title` — le sens n'est pas perdu, il est déplacé.
+ *
+ * Salvage du 2026-08-27 (branche autowin/recovery/command-edit-…-updatebanner-tsx, f4a52bb) : la
+ * STRUCTURE de main est conservée (table + classe `is-glyph`), seules les VALEURS sont reprises du
+ * travail bloqué — ⤳ et ⑃ tombent en glyphe de substitution sur les polices Windows par défaut.
  */
 const UPDATE_STRATEGY_GLYPHS: Record<UpdateStrategy, string> = {
   'fast-forward': '⇧',
-  merge: '⑃',
-  rebase: '⤳',
-  'switch-main': '⎇'
+  merge: '⎇',
+  rebase: '↻',
+  'switch-main': '↰'
 }
 
 function errorMessage(reason: unknown, fallback: string): string {
