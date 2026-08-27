@@ -138,11 +138,36 @@ function busSur(repo: string): AppCommandBus {
   )
 }
 
+/**
+ * COMPTE LES EXECUTIONS REELLES DE VERIFICATION d'un bus.
+ *
+ * La v1 pretendait prouver « le chemin vert ne mesure aucune baseline » avec
+ * `expect(data.differentiel).toBeUndefined()`. Un juge externe a montre que cette assertion ne
+ * discrimine RIEN : la note est aussi absente sur un rouge non concluant, et le sabotage evident
+ * (sortir l'appel de baseline du `if (!verification.ok)`) laissait le test VERT. Ce compteur est la
+ * preuve promise : il compte les lancements du runner, pas la presence d'un texte.
+ */
+function compteurDExecutions(bus: AppCommandBus): () => number {
+  const interne = bus as unknown as {
+    mesurerAvecRapport: (...args: unknown[]) => Promise<unknown>
+  }
+  const vraie = interne.mesurerAvecRapport.bind(interne)
+  let appels = 0
+  interne.mesurerAvecRapport = async (...args: unknown[]) => {
+    appels += 1
+    return await vraie(...args)
+  }
+  return () => appels
+}
+
 describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du dépôt', () => {
   it('publie une édition saine alors qu’un test SANS RAPPORT est déjà rouge', async () => {
     const { repo, git } = depotDejaRouge()
 
-    const result = await busSur(repo).exec(
+    const bus = busSur(repo)
+    const executions = compteurDExecutions(bus)
+
+    const result = await bus.exec(
       'edit_file',
       {
         path: 'sujet.ts',
@@ -154,6 +179,12 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
 
     expect(result).toMatchObject({ ok: true })
     expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).toContain('commentaire sans effet')
+    /*
+     * LE CHEMIN VERT NE MESURE AUCUNE BASELINE — prouve par le COMPTEUR, pas par l'absence d'un
+     * texte. Sabotage qui doit rougir : sortir l'appel de baseline du `if (!verification.ok)` dans
+     * `withIsolatedMutation` (l'option « baseline systematique », ecartee pour son cout).
+     */
+    expect(executions()).toBe(1)
     // Le verdict NOMME sa portée : un vert dont on ignore l’étendue se lit plus large qu’il n’est.
     const data = result.data as { verifie?: string; portee?: string }
     expect(data.verifie).toContain('vitest related')
@@ -236,13 +267,128 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
       'conv-1'
     )
 
-    // `vitest related notes.md` n'a AUCUN test a jouer : ce verdict ne doit jamais servir de preuve.
-    const data = (result.data ?? {}) as { verifie?: string }
-    expect(data.verifie ?? '').not.toContain('related')
-    // Le depot est deja rouge, donc le repli (suite complete) refuse — et c'est le comportement
-    // attendu ici : aucune publication ne peut s'appuyer sur une portee qui n'a rien mesure.
+    /*
+     * L'INVARIANT, rendu POSITIF et autoporteur. Un juge a note que la forme precedente
+     * (`not.toContain` sur un champ optionnel) est vraie a vide, donc ne mord que par accident.
+     * Ici on EXIGE la commande jouee : la suite complete, jamais une portee vide.
+     */
+    expect(result).toMatchObject({ ok: true })
+    const data = (result.data ?? {}) as { verifie?: string; differentiel?: string }
+    expect(data.verifie).toBe('npm run test:unit')
+    // Le rouge preexistant est ECARTE parce qu'il est identique avant/apres, et il est NOMME.
+    expect(data.differentiel ?? '').toContain('rouge deja committe, sans rapport')
+    expect(readFileSync(join(repo, 'notes.md'), 'utf8')).toContain('texte corrigé')
+  }, 300_000)
+
+  /*
+   * LE REFUS SUR LA VOIE DE REPLI GLOBAL — trou de couverture nomme par un juge : tous les tests
+   * d'integration de la v1 attendaient une PUBLICATION sur cette voie, et le seul qui exigeait un
+   * refus passait par `vitest related`. Si la baseline mesurait en fait l'etat APRES (ecriture sans
+   * effet, commande jamais egale, exception avalee), `avant === apres` et TOUT rouge serait publie
+   * sur toute edition non-code — la suite entiere resterait verte.
+   *
+   * Ici l'edition non-code CASSE reellement la suite : le script de test est remplace par un runner
+   * qui echoue toujours. Le differentiel ne peut pas conclure (aucun rapport JSON exploitable), donc
+   * il REFUSE.
+   */
+  it('REFUSE une édition non-code qui casse la suite, sur la voie de repli global', async () => {
+    const { repo, git } = depotDejaRouge()
+    writeFileSync(join(repo, 'notes.md'), '# Notes' + SAUT + SAUT + 'texte initial' + SAUT, 'utf8')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'notes')
+
+    const result = await busSur(repo).exec(
+      'edit_file',
+      { path: 'package.json', oldText: '"vitest run"', newText: '"node -e process.exit(3)"' },
+      'conv-1'
+    )
+
     expect(result).toMatchObject({ ok: false })
-    expect(readFileSync(join(repo, 'notes.md'), 'utf8')).toContain('texte initial')
+    // La base reste INTACTE : le script d'origine n'a pas ete publie casse.
+    expect(readFileSync(join(repo, 'package.json'), 'utf8')).toContain('"vitest run"')
+  }, 300_000)
+
+  /*
+   * LE VETO QUI MORDAIT REELLEMENT `edit_file` : un rouge PREEXISTANT a l'INTERIEUR de la portee.
+   * L'immunite « par construction » de `vitest related` ne couvre que les rouges HORS graphe
+   * d'imports ; un test deja rouge qui IMPORTE le fichier edite est rejoue, et son rouge faisait
+   * jeter une edition saine. C'est ce blocage que le pilote contournait via `orchestrate`.
+   */
+  it('publie une édition saine malgré un rouge préexistant DANS sa portée', async () => {
+    const { repo, git } = depotDejaRouge()
+    writeFileSync(
+      join(repo, 'sujet-deja-rouge.test.ts'),
+      [
+        "import { expect, it } from 'vitest'",
+        "import { valeur } from './sujet'",
+        "it('rouge preexistant DANS la portee', () => expect(valeur()).toBe(99))",
+        ''
+      ].join(SAUT),
+      'utf8'
+    )
+    git('add', '-A')
+    git('commit', '-q', '-m', 'rouge preexistant dans la portee')
+
+    const result = await busSur(repo).exec(
+      'edit_file',
+      {
+        path: 'sujet.ts',
+        oldText: 'export const valeur = (): number => 1',
+        newText: 'export const valeur = (): number => 1 // commentaire sans effet'
+      },
+      'conv-1'
+    )
+
+    expect(result).toMatchObject({ ok: true })
+    expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).toContain('commentaire sans effet')
+    const data = result.data as { differentiel?: string }
+    // Le rouge ecarte est NOMME, avec sa raison — c'est l'identite que compare le differentiel.
+    expect(data.differentiel ?? '').toContain('rouge preexistant DANS la portee')
+    // La mesure de baseline a RESTAURE l'edition : elle ne publie pas son propre etat d'avant.
+    expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).not.toContain(`=> 1${SAUT}`)
+    expect(readFileSync(join(repo, 'sujet-deja-rouge.test.ts'), 'utf8')).toContain('toBe(99)')
+    expect(git('status', '--porcelain')).toBe('')
+  }, 300_000)
+
+  /*
+   * DEFAUT N°5 DE LA V1, en integration : le NOM d'un test ne porte pas la RAISON de son echec. Un
+   * test deja rouge pour une cause A, qui echoue APRES pour la regression, avait un nom identique
+   * donc etait classe « preexistant » et la regression etait PUBLIEE (contre-exemple execute par un
+   * juge). Ici le test deja rouge assere DEUX choses : une egalite fausse d'origine, puis le contrat
+   * que l'edition casse. L'identite (nom + raison) doit voir la difference.
+   */
+  it('REFUSE quand un test déjà rouge échoue pour une RAISON NOUVELLE', async () => {
+    const { repo, git } = depotDejaRouge()
+    writeFileSync(
+      join(repo, 'sujet.test.ts'),
+      [
+        "import { expect, it } from 'vitest'",
+        "import { valeur } from './sujet'",
+        "it('contrat de valeur', () => {",
+        '  expect(valeur()).toBe(1)',
+        '})',
+        ''
+      ].join(SAUT),
+      'utf8'
+    )
+    // Rouge PREEXISTANT sur ce meme test, pour une cause qui n'a rien a voir avec l'edition.
+    writeFileSync(join(repo, 'sujet.ts'), 'export const valeur = (): number => 7' + SAUT, 'utf8')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'sujet deja rouge sur son propre contrat')
+
+    const result = await busSur(repo).exec(
+      'edit_file',
+      {
+        path: 'sujet.ts',
+        oldText: 'export const valeur = (): number => 7',
+        newText: 'export const valeur = (): number => 42'
+      },
+      'conv-1'
+    )
+
+    // Meme test, meme nom, mais « expected 42 to be 1 » n'est pas « expected 7 to be 1 ».
+    expect(result).toMatchObject({ ok: false })
+    expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).toContain('=> 7')
   }, 300_000)
 
   it('refuse toujours une édition qui casse RÉELLEMENT le test de son fichier', async () => {

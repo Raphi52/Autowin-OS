@@ -168,6 +168,27 @@ function scriptsDeclares(dir: string): Record<string, string> | null {
   }
 }
 
+/**
+ * LE PROJET TESTE-T-IL AVEC VITEST ? — la seule question qui autorise une notion vitest.
+ *
+ * `related` et le rapport `--reporter=json` sont des notions de VITEST. Les envoyer a un projet qui
+ * teste autrement fabrique un « lancement impossible », donc un REFUS de publier, sur un projet
+ * parfaitement sain. DEFAUT ATTRAPE PAR LA NON-REGRESSION le 2026-08-27 : cinq tests de
+ * `commands.test.ts` declarent `test:unit: node -e "process.exit(0)"` et se sont mis a echouer des
+ * que des drapeaux de rapport ont ete ajoutes a leur commande — node les recevait comme des
+ * arguments inconnus. Un projet non-vitest doit garder EXACTEMENT le comportement d'avant.
+ */
+export function declareVitest(
+  cwd: string,
+  lireScripts: (dir: string) => Record<string, string> | null = scriptsDeclares
+): boolean {
+  const scripts = lireScripts(cwd)
+  if (!scripts) return false
+  return ['test:unit', 'test:run', 'tests', 'test'].some((nom) =>
+    (scripts[nom] ?? '').includes('vitest')
+  )
+}
+
 export type RelatedVerifyDecision =
   | { allowed: true; argv: string[]; cwd: string; command: string }
   | { allowed: false; reason: string }
@@ -211,11 +232,7 @@ export function decideRelatedVerify(
    * de publier — sur un projet parfaitement sain. On ne prend cette voie que si le projet declare
    * reellement vitest, et le repli global couvre tous les autres.
    */
-  const scripts = lireScripts(cwd)
-  const declare = scripts
-    ? ['test:unit', 'test:run', 'tests', 'test'].some((nom) => (scripts[nom] ?? '').includes('vitest'))
-    : false
-  if (!declare) {
+  if (!declareVitest(cwd, lireScripts)) {
     return { allowed: false, reason: 'le projet ne déclare pas vitest — portée non dérivable' }
   }
   const retenus = paths.filter(cheminUtilisable)
@@ -458,4 +475,191 @@ export function cibleDeVerification(
   return MOTIF_FICHIER_DE_TEST.test(normalise)
     ? { ok: true, chemin }
     : { ok: true, chemin, parPortee: true }
+}
+
+/**
+ * L'ARTEFACT STRUCTURE DE VITEST, lu comme un ENSEMBLE D'ECHECS IDENTIFIES.
+ *
+ * POURQUOI CE MODULE EXISTE SOUS CETTE FORME. Une premiere version (revert `97f2e9dc`) fondait la
+ * decision de publier sur le parsing de la sortie HUMAINE du runner. Cinq juges externes ont PROUVE,
+ * contre-exemples executes a l'appui, qu'elle publiait des regressions par cinq voies :
+ *   1. la sortie est PLAFONNEE a 4000 caracteres avant la comparaison -> au-dela d'environ 23
+ *      echecs, un echec NOUVEAU sortait de la fenetre lue (mesure : n=20 detecte, n=30/40/60/80
+ *      publie). Le regime ou elle cassait etait exactement celui qu'elle servait : une base bruyante.
+ *   2. une suite coupee au plafond de TEMPS rend une sortie PARTIELLE contenant deja des lignes
+ *      d'echec -> tous presents « avant », donc publiable, alors que la suite n'a rendu aucun verdict.
+ *   3. toute ligne ressemblant a un echec entrait dans l'ensemble, `console.log` COMPRIS -> vecteur
+ *      d'attaque en deux appels : poser la ligne forgee (vert, publie), puis casser le test (classe
+ *      « preexistant »).
+ *   4. le NOM d'un test ne porte pas la RAISON de son echec -> meme nom, autre cause = « preexistant ».
+ *   5. un fichier deja en echec de COLLECTE masquait toute regression de ce fichier, en un appel.
+ *
+ * Les quatre premieres tombent par CHANGEMENT DE SOURCE : un fichier JSON n'est pas tronque, une
+ * absence de fichier est detectable, et `console.log` n'y fabrique aucune entree. La cinquieme est
+ * traitee ici comme un REFUS, jamais comme un rouge ecarte.
+ *
+ * REGLE GENERALE DE CE MODULE : ce qu'on n'a pas su lire ne devient jamais « rien de nouveau ». Toute
+ * anomalie rend `concluant: false`, et un differentiel non concluant REFUSE la publication.
+ */
+export interface RapportDeTests {
+  concluant: boolean
+  /** Pourquoi le rapport n'est pas exploitable — rendu au modele, jamais tu. */
+  raison?: string
+  /** Identites des echecs : `<fichier> > <nom complet> :: <empreinte de la raison>`. */
+  echecs: ReadonlySet<string>
+}
+
+const RAPPORT_VIDE = (raison: string): RapportDeTests => ({
+  concluant: false,
+  raison,
+  echecs: new Set<string>()
+})
+
+/**
+ * L'EMPREINTE D'UNE RAISON D'ECHEC — la premiere ligne significative du message.
+ *
+ * C'est ce qui distingue « ce test etait deja rouge » de « ce test est rouge POUR UNE AUTRE RAISON ».
+ * Volontairement la premiere ligne seule : elle porte l'assertion (`AssertionError: expected 1 to
+ * be 2`) et rien de ce qui varie d'une execution a l'autre (durees, chemins absolus de la pile).
+ */
+function empreinteDeRaison(messages: unknown): string {
+  if (!Array.isArray(messages) || messages.length === 0) return 'sans-message'
+  const premier = typeof messages[0] === 'string' ? messages[0] : ''
+  for (const ligne of sansSequencesAnsi(premier).split(SAUT)) {
+    const propre = ligne.trim()
+    if (propre.length > 0) return propre.slice(0, 200)
+  }
+  return 'sans-message'
+}
+
+export function echecsDuRapport(brut: string | undefined): RapportDeTests {
+  if (!brut || !brut.trim()) {
+    return RAPPORT_VIDE('aucun rapport de tests produit — rien à comparer')
+  }
+  let racine: unknown
+  try {
+    racine = JSON.parse(brut)
+  } catch {
+    return RAPPORT_VIDE('rapport de tests illisible (JSON invalide)')
+  }
+  if (typeof racine !== 'object' || racine === null || Array.isArray(racine)) {
+    return RAPPORT_VIDE('rapport de tests de forme inattendue')
+  }
+  const objet = racine as Record<string, unknown>
+  // La FORME est validee, jamais supposee : une evolution du format doit REFUSER, pas retrecir
+  // silencieusement l'ensemble lu.
+  if (typeof objet.success !== 'boolean' || !Array.isArray(objet.testResults)) {
+    return RAPPORT_VIDE('rapport de tests incomplet (ni verdict ni résultats exploitables)')
+  }
+  const echecs = new Set<string>()
+  for (const suite of objet.testResults) {
+    if (typeof suite !== 'object' || suite === null) {
+      return RAPPORT_VIDE('rapport de tests de forme inattendue')
+    }
+    const s = suite as Record<string, unknown>
+    const fichier = typeof s.name === 'string' ? s.name.split(ANTISLASH).join('/') : '?'
+    const assertions = Array.isArray(s.assertionResults) ? s.assertionResults : []
+    /*
+     * UN FICHIER QUI N'A PAS COLLECTE REFUSE TOUT LE DIFFERENTIEL. Le compter comme « un rouge de
+     * plus » laisserait une seule erreur de syntaxe preexistante couvrir n'importe quelle regression
+     * de ce fichier : ses tests ne tournent pas, donc ils ne peuvent pas apparaitre comme nouveaux.
+     */
+    if (s.status === 'failed' && assertions.length === 0) {
+      return RAPPORT_VIDE(`échec de collecte sur « ${fichier} » — aucun différentiel n'est fiable`)
+    }
+    for (const assertion of assertions) {
+      if (typeof assertion !== 'object' || assertion === null) {
+        return RAPPORT_VIDE('rapport de tests de forme inattendue')
+      }
+      const a = assertion as Record<string, unknown>
+      if (a.status !== 'failed') continue
+      const nom = typeof a.fullName === 'string' && a.fullName.trim() ? a.fullName : String(a.title)
+      echecs.add(`${fichier} > ${nom} :: ${empreinteDeRaison(a.failureMessages)}`)
+    }
+  }
+  /*
+   * CONTROLE CROISE. Un rapport dont le compte ANNONCE ne correspond pas aux echecs EXTRAITS est un
+   * rapport qu'on n'a pas su lire, meme si chaque entree lue est valide. Sans cette garde, une
+   * evolution du format retrecirait l'ensemble en silence — et un ensemble retreci se lit
+   * exactement comme « rien de nouveau ». C'est la forme generale du defaut n°1 de la v1.
+   */
+  const annonce = objet.numFailedTests
+  if (typeof annonce !== 'number' || !Number.isFinite(annonce)) {
+    return RAPPORT_VIDE('rapport de tests sans compte d’échecs — impossible de vérifier la lecture')
+  }
+  if (annonce !== echecs.size) {
+    return RAPPORT_VIDE(
+      `rapport de tests incohérent : ${annonce} échec(s) annoncé(s), ${echecs.size} identifié(s)`
+    )
+  }
+  return { concluant: true, echecs }
+}
+
+/**
+ * Le verdict d'un differentiel : ce que l'EDITION a casse, distinct de ce qui etait DEJA casse.
+ *
+ * `concluant: false` veut dire « on ne sait pas » — et « on ne sait pas » REFUSE. C'est la contrainte
+ * qui empeche cette mesure de devenir une fabrique de faux verts.
+ */
+export interface VerdictDifferentiel {
+  concluant: boolean
+  /** Echecs presents APRES et absents AVANT : les seuls imputables a l'edition. */
+  nouvelles: readonly string[]
+  /** Echecs presents dans les DEUX : le bruit de la base, ecarte mais NOMME. */
+  preexistants: readonly string[]
+  /** Vrai seulement si le differentiel conclut ET n'impute aucun echec nouveau. */
+  publiable: boolean
+  /** Pourquoi il ne conclut pas — pour que le refus ENSEIGNE au lieu d'envoyer a la devinette. */
+  raison?: string
+}
+
+export function verdictDifferentiel(
+  apresEstVert: boolean,
+  apres: RapportDeTests,
+  avant: RapportDeTests | undefined
+): VerdictDifferentiel {
+  const vide = { nouvelles: [] as string[], preexistants: [] as string[] }
+  // Un APRES vert n'a rien a differencier — et ce chemin ne mesure aucune baseline.
+  if (apresEstVert) return { concluant: true, ...vide, publiable: true }
+  if (!avant) {
+    return { concluant: false, ...vide, publiable: false, raison: 'baseline non mesurée' }
+  }
+  if (!apres.concluant) {
+    return { concluant: false, ...vide, publiable: false, raison: `après : ${apres.raison}` }
+  }
+  if (!avant.concluant) {
+    return { concluant: false, ...vide, publiable: false, raison: `avant : ${avant.raison}` }
+  }
+  /*
+   * LE RUNNER DIT ROUGE MAIS LE RAPPORT NE PORTE AUCUN ECHEC. Crash apres ecriture, echec hors
+   * test, runner introuvable : on ne sait pas ce qui s'est passe, donc on refuse.
+   */
+  if (apres.echecs.size === 0) {
+    return {
+      concluant: false,
+      ...vide,
+      publiable: false,
+      raison: 'verdict rouge sans aucun échec identifié — cause hors des tests'
+    }
+  }
+  const nouvelles = [...apres.echecs].filter((id) => !avant.echecs.has(id))
+  const preexistants = [...apres.echecs].filter((id) => avant.echecs.has(id))
+  return { concluant: true, nouvelles, preexistants, publiable: nouvelles.length === 0 }
+}
+
+/** Le verdict, dit au modele : ce qui a ete ECARTE est NOMME, et l'angle mort avec. */
+export function noteDeDifferentiel(verdict: VerdictDifferentiel): string {
+  const nommes = verdict.preexistants.slice(0, PORTEE_FICHIERS_NOMMES)
+  const reste = verdict.preexistants.length - nommes.length
+  return (
+    `Verdict DIFFÉRENTIEL : ${verdict.preexistants.length} échec(s) étaient DÉJÀ rouges avant cette ` +
+    `édition, à l'identique (même test, même raison), et ont été écartés — ` +
+    `${nommes.map((n) => `« ${n} »`).join(', ')}` +
+    (reste > 0 ? ` et ${reste} autre(s)` : '') +
+    `. Aucun échec NOUVEAU n'est imputable à l'édition.${SAUT}` +
+    `Ce résultat n’atteste PAS que la base est verte : il dit seulement que cette édition n'a rien ` +
+    `cassé de plus. Et un rouge préexistant peut MASQUER une régression que ce différentiel ne peut ` +
+    `pas voir — un test déjà rouge dont l'édition change la cause est compté comme nouveau, mais un ` +
+    `test qui ne tourne pas ne peut rien signaler.`
+  )
 }

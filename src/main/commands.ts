@@ -13,6 +13,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
   writeFileSync
 } from 'node:fs'
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -20,6 +21,7 @@ import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-sco
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { suivreArbre, tuerArbre } from './verify-extinction'
 import {
   capVerifyOutput,
@@ -29,6 +31,10 @@ import {
   porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
   porteeDerivableDesChangements,
+  declareVitest,
+  echecsDuRapport,
+  verdictDifferentiel,
+  noteDeDifferentiel,
   verifyTimeoutMs,
   verifyTimeoutOutcome,
   type VerifyOutcome
@@ -1086,6 +1092,40 @@ function redactedArgs(name: string, args: Record<string, unknown>): Record<strin
  * phase parfaitement valide au seul motif qu'on avait oublie de l'ecrire ici.
  */
 const ORCHESTRATE_PHASES = new Set<string>(PIPELINE_PHASES)
+
+/**
+ * Une verification QUI PORTE SON ARTEFACT. `rapport` est le contenu du fichier JSON du runner —
+ * absent des que l'execution n'a pas pu en produire un (plafond de temps, crash, projet sans
+ * reporter). Cette absence est un FAIT lisible, et elle refuse : c'est la voie par laquelle la
+ * premiere version publiait une suite coupee en la lisant comme un ensemble d'echecs complet.
+ */
+interface MesureVerifiee {
+  allowed: boolean
+  reason?: string
+  ok: boolean
+  exitCode: number | null
+  command: string
+  output: string
+  /** Vrai quand la mesure a porte sur la PORTEE (tests important le fichier), non sur la suite. */
+  parPortee: boolean
+  rapport?: string
+}
+
+/**
+ * Rend les octets a leur place, ou dit NON. Un reessai unique couvre le verrou passager (un worker
+ * de test qui vient de lire le fichier, un antivirus) sans transformer un echec durable en attente.
+ */
+function restaurer(absolu: string, octets: Buffer): boolean {
+  for (let essai = 0; essai < 2; essai += 1) {
+    try {
+      writeFileSync(absolu, octets)
+      return true
+    } catch {
+      /* on retente une fois, puis on renonce en le disant */
+    }
+  }
+  return false
+}
 
 export class AppCommandBus {
   /**
@@ -2760,7 +2800,9 @@ export class AppCommandBus {
     conversationId: string | undefined,
     action: (workspaceRoot: string) => T | Promise<T>,
     /** Fichier vise par la tache : c'est lui qui donne au bureau une IDENTITE stable. */
-    cible?: string
+    cible?: string,
+    /** Octets du fichier AVANT l'edition, lus APRES l'action — socle de la baseline. */
+    lireOctetsAvant?: () => Buffer | undefined
   ): Promise<T> {
     if (!this.os.worktrees) {
       throw new Error(refusAvecIssue('isolation-indisponible', command))
@@ -2815,15 +2857,67 @@ export class AppCommandBus {
          * le prix de ne pas fabriquer de faux vert, et c'est le probleme que la baseline
          * differentielle (option A du cadrage) doit lever ensuite.
          */
+        const octetsAvantEdition = lireOctetsAvant?.()
         const edite = (result as { path?: unknown } | undefined)?.path
         const cible = porteeDerivableDesChangements(typeof edite === 'string' ? [edite] : []) ?? []
-        const parPortee = cible.length ? await this.runRelatedVerifyAt(workspaceRoot, cible) : null
-        const verification =
-          parPortee && parPortee.allowed ? parPortee : await this.runVerifyAt(workspaceRoot)
+        const mesurer = (): Promise<MesureVerifiee> => this.mesurerAvecRapport(workspaceRoot, cible)
+        const verification = await mesurer()
         if (!verification.allowed) {
           throw new Error(refusAvecIssue('verification-indisponible', verification.reason))
         }
-        if (!verification.ok) {
+        const parPortee = verification.parPortee ? verification : null
+        /*
+         * UN ROUGE N'EST PAS UNE PREUVE D'AVOIR CASSE QUELQUE CHOSE.
+         *
+         * Ce point jetait l'edition sur TOUT rouge, sans jamais avoir mesure l'etat AVANT : il ne
+         * pouvait donc pas distinguer sa propre regression d'un rouge deja present sur la base,
+         * alors que le prompt du pilote lui ORDONNE cette distinction. Consequence observee dans le
+         * produit : le modele routait ses retouches par `orchestrate`, la seule voie qui publie sur
+         * une base bruyante, faute d'une mesure ici.
+         *
+         * La baseline n'est mesuree QUE sur rouge — le chemin vert ne coute pas un test de plus, et
+         * un compteur d'executions le VERIFIE dans les tests. La comparaison porte sur l'ARTEFACT
+         * STRUCTURE du runner, jamais sur sa sortie humaine : la premiere version de ce mecanisme a
+         * ete DEFAITE (revert `97f2e9dc`) parce que le parsing de texte publiait des regressions par
+         * cinq voies prouvees. Le detail vit dans `verify-command.ts`, en tete de `echecsDuRapport`.
+         */
+        let noteDifferentielle: string | undefined
+        /*
+         * ON NE MESURE UNE BASELINE QUE SI ELLE PEUT CONCLURE.
+         *
+         * DEFAUT ATTRAPE PAR LA NON-REGRESSION le 2026-08-27 : sur un projet qui ne teste pas avec
+         * vitest, aucun rapport n'est produit — le differentiel ne pourra donc JAMAIS conclure, mais
+         * la baseline etait quand meme mesuree. Resultat : le temps de la suite DOUBLE pour rien, et
+         * un test du depot est passe de 1,4 s a un plafond de 20 s. Lire le rapport d'APRES d'abord
+         * rend le cout nul quand la mesure est de toute facon impossible.
+         */
+        const rapportApres = verification.ok
+          ? undefined
+          : echecsDuRapport(verification.rapport)
+        if (rapportApres?.concluant && octetsAvantEdition && typeof edite === 'string') {
+          const avant = await this.baselineAvantEdition(
+            join(workspaceRoot, edite),
+            octetsAvantEdition,
+            mesurer,
+            verification.command
+          )
+          const verdict = verdictDifferentiel(
+            false,
+            rapportApres,
+            avant ? echecsDuRapport(avant.rapport) : undefined
+          )
+          if (verdict.publiable) noteDifferentielle = noteDeDifferentiel(verdict)
+          else if (verdict.raison) {
+            // Le refus ENSEIGNE : « baseline non mesurable » n'est pas « regression imputable ».
+            // Sans cette distinction, le modele est envoye corriger un test qu'il n'a pas touche.
+            throw new Error(
+              `Vérification du bureau échouée (${verification.command}) — différentiel non ` +
+                `concluant (${verdict.raison}), donc publication refusée par précaution :` +
+                `${SAUT_NATURE}${verification.output}`
+            )
+          }
+        }
+        if (!verification.ok && noteDifferentielle === undefined) {
           /*
            * LA NATURE DE L'ECHEC EN TETE, avant la sortie brute.
            *
@@ -2845,7 +2939,8 @@ export class AppCommandBus {
           result = {
             ...result,
             verifie: verification.command,
-            portee: verification === parPortee ? VERIFY_RELATED_ANGLE_MORT : 'suite complète'
+            portee: parPortee ? VERIFY_RELATED_ANGLE_MORT : 'suite complète',
+            ...(noteDifferentielle ? { differentiel: noteDifferentielle } : {})
           } as Awaited<T>
         }
       }
@@ -2934,9 +3029,139 @@ export class AppCommandBus {
     return { ...result, graph: destination }
   }
 
+  /**
+   * UNE MESURE QUI PORTE SON ARTEFACT — la sortie pour l'humain, le rapport pour la decision.
+   *
+   * Deux reporters a la fois (`default` + `json`), verifie hors modele le 2026-08-27 : la sortie
+   * lisible survit ET le fichier JSON est ecrit. C'est ce qui permet de garder le message d'echec
+   * rendu au modele sans faire dependre la DECISION d'un texte tronque et falsifiable.
+   *
+   * Le rapport est ecrit HORS du bureau isole : dedans, il deviendrait un fichier a publier.
+   *
+   * CONTRAINTE HARD INTACTE : le modele ne choisit toujours JAMAIS la commande. `decideRelatedVerify`
+   * et `decideVerifyCommand` decident, l'argv est construit ici argument par argument, `shell: false`.
+   */
+  /** Rend unique le nom de chaque rapport de tests, y compris entre deux mesures du meme tour. */
+  private compteurDeRapports = 0
+
+  private async mesurerAvecRapport(
+    workspaceRoot: string,
+    cible: readonly string[]
+  ): Promise<MesureVerifiee> {
+    const rapportVers = join(
+      tmpdir(),
+      `autowin-verdict-${process.pid}-${this.compteurDeRapports++}.json`
+    )
+    /*
+     * PAS DE VITEST, PAS DE RAPPORT — et donc pas de differentiel, donc le comportement d'AVANT.
+     * Les drapeaux de rapport sont une notion vitest : les ajouter a un `test:unit` qui lance autre
+     * chose fabrique un refus sur un projet sain (cinq tests l'ont prouve le 2026-08-27).
+     */
+    const drapeauxDeRapport = declareVitest(workspaceRoot)
+      ? ['--reporter=default', '--reporter=json', `--outputFile=${rapportVers}`]
+      : []
+    let argv: string[]
+    let etiquette: string
+    let parPortee = false
+    const parPorteeDecision = cible.length
+      ? decideRelatedVerify(workspaceRoot, cible)
+      : { allowed: false as const, reason: 'aucune portée dérivable' }
+    if (parPorteeDecision.allowed) {
+      argv = [...parPorteeDecision.argv, ...drapeauxDeRapport]
+      etiquette = parPorteeDecision.command
+      parPortee = true
+    } else {
+      const globale = decideVerifyCommand(workspaceRoot)
+      if (!globale.allowed) {
+        return {
+          allowed: false,
+          reason: globale.reason,
+          ok: false,
+          exitCode: null,
+          command: '',
+          output: '',
+          parPortee: false
+        }
+      }
+      // `--` fait passer ce qui suit du script npm au runner. La cible n'est jamais interpolee.
+      argv = drapeauxDeRapport.length
+        ? [...globale.command.split(' '), '--', ...drapeauxDeRapport]
+        : globale.command.split(' ')
+      etiquette = globale.command
+    }
+    try {
+      const issue = await this.spawnVerify(argv, workspaceRoot, etiquette)
+      /*
+       * PAS DE FICHIER = PAS DE DIFFERENTIEL. C'est exactement le cas du plafond de temps : le
+       * process est tue, aucun rapport complet n'est ecrit. La v1 lisait alors la sortie PARTIELLE,
+       * y trouvait des echecs deja emis, et publiait. Ici l'absence est un fait lisible.
+       */
+      const rapport = existsSync(rapportVers) ? readFileSync(rapportVers, 'utf8') : undefined
+      return { ...issue, command: etiquette, parPortee, ...(rapport ? { rapport } : {}) }
+    } finally {
+      try {
+        if (existsSync(rapportVers)) rmSync(rapportVers, { force: true })
+      } catch {
+        /* Un rapport qui traine dans le dossier temporaire ne change aucun verdict. */
+      }
+    }
+  }
+
+  /**
+   * L'ETAT D'AVANT, MESURE — pas suppose.
+   *
+   * Rejoue la MEME verification sur les octets que le fichier portait AVANT l'edition, pour que le
+   * verdict puisse distinguer un rouge IMPUTABLE d'un rouge deja present. Rend `undefined` des que
+   * la mesure n'est pas fiable : `verdictDifferentiel` traite alors le cas comme non concluant, donc
+   * comme un REFUS. Aucune branche d'ici ne peut ouvrir la publication par defaut.
+   *
+   * Les octets viennent de `runEditFile`, qui les a lus juste avant d'ecrire — jamais d'un `git show`
+   * (qui supposerait un bureau propre, alors qu'ils sont REUTILISES) ni d'une reconstruction par
+   * remplacement inverse.
+   */
+  private async baselineAvantEdition(
+    absolu: string,
+    octetsAvant: Buffer,
+    rejouer: () => Promise<MesureVerifiee>,
+    commandeAttendue: string
+  ): Promise<MesureVerifiee | undefined> {
+    let octetsApres: Buffer
+    try {
+      octetsApres = readFileSync(absolu)
+    } catch {
+      return undefined
+    }
+    let mesure: MesureVerifiee | undefined
+    try {
+      writeFileSync(absolu, octetsAvant)
+      const issue = await rejouer()
+      // Une commande DIFFERENTE ne mesure pas la meme chose : ce n'est pas une baseline.
+      if (issue.allowed && issue.command === commandeAttendue) mesure = issue
+    } catch {
+      mesure = undefined
+    }
+    /*
+     * LA RESTAURATION NE PEUT PAS ECHOUER EN SILENCE. Un `finally` nu qui jette ecraserait
+     * l'exception en cours et laisserait le bureau dans l'etat D'AVANT — donc publierait
+     * l'ANNULATION de l'edition. On reessaie une fois, puis on REFUSE en le NOMMANT : un etat
+     * incertain n'est jamais publiable.
+     */
+    if (!restaurer(absolu, octetsApres)) {
+      throw new Error(
+        refusAvecIssue(
+          'verification-indisponible',
+          'état pré-édition non restauré après la mesure de baseline — rien n’est publié'
+        )
+      )
+    }
+    return mesure
+  }
+
   private runEditFile(
     input: { path: unknown; oldText: unknown; newText: unknown },
-    workspaceRoot: string
+    workspaceRoot: string,
+    /** Reçoit les octets du fichier AVANT l'écriture — socle de la baseline différentielle. */
+    avantEdition?: (octets: Buffer) => void
   ): {
     allowed: boolean
     reason?: string
@@ -2947,7 +3172,23 @@ export class AppCommandBus {
       existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
     )
     if (!decision.allowed) return { allowed: false, reason: decision.reason }
-    const content = readFileSync(decision.absolutePath, 'utf8')
+    /*
+     * LES OCTETS D'AVANT, RENDUS A L'APPELANT — pas relus plus tard.
+     *
+     * La baseline differentielle a besoin de l'etat PRE-EDITION. Une premiere version le redemandait
+     * a `git show HEAD:<chemin>`, ce qui supposait un bureau propre (faux : les bureaux sont
+     * REUTILISES par (conversation, cible)), suivait les liens symboliques, et lancait un process
+     * synchrone non borne dans le main d'Electron. Le contenu est ICI, lu une fois, sur le chemin
+     * deja borne par `decideEdit` : le passer coute zero et supprime les trois problemes.
+     *
+     * En BUFFER : la restauration doit etre une identite d'OCTETS. (L'edition elle-meme normalise
+     * encore en utf8 — defaut PREEXISTANT a ce changement, mesure le 2026-08-27 : un fichier cp1252
+     * voit son octet `e9` devenir `efbfbd` des `applyEdit`. Il est dispatche a part ; on ne
+     * l'aggrave pas ici.)
+     */
+    const octetsAvant = readFileSync(decision.absolutePath)
+    avantEdition?.(octetsAvant)
+    const content = octetsAvant.toString('utf8')
     writeFileSync(
       decision.absolutePath,
       applyEdit(content, decision.oldText, decision.newText),
@@ -2981,13 +3222,22 @@ export class AppCommandBus {
         ? readFileSync(baseDecision.absolutePath, 'utf8')
         : undefined
       const before = await captureWorkspaceMutationSnapshot(this.os.executionWorkspace)
+      /*
+       * Les octets d'AVANT sont CAPTURES, pas remis dans le resultat : le resultat part au modele, et
+       * y coller le contenu entier d'un fichier inonderait son contexte pour rien.
+       */
+      let octetsAvantEdition: Buffer | undefined
       const outcome = await this.withIsolatedMutation(
         'edit_file',
         conversationId,
-        (workspaceRoot) => this.runEditFile(input, workspaceRoot),
+        (workspaceRoot) =>
+          this.runEditFile(input, workspaceRoot, (octets) => {
+            octetsAvantEdition = octets
+          }),
         typeof (input as { path?: unknown }).path === 'string'
           ? ((input as { path?: string }).path as string)
-          : undefined
+          : undefined,
+        () => octetsAvantEdition
       )
       const path =
         outcome.allowed && outcome.path
