@@ -1117,8 +1117,14 @@ export const NUAGE_FRAGMENT_SHADER = [
   // Le bord : profil dentele + grignotage par le bruit anime. Un disque parfait se lit comme un cercle colle.
   '  float bord = 0.5 * profilBord(theta);',
   '  bord *= 1.0 + uBordErosion * (fbm(vec2(cos(theta), sin(theta)) * 5.0 + uTime * 0.05) - 0.5);',
-  '  float masque = 1.0 - smoothstep(bord * 0.22, bord, rayonAngle);',
-  '  if (masque <= 0.001) discard;',
+  // Le bord ne se COUPE pas : il s'eteint. Un smoothstep qui finit a `bord` laisse une arete parce que
+  // la densite fbm y est encore forte. Trois corrections : fondu LONG (des 35 % du rayon), courbe en
+  // puissance (derivee nulle au bord), et grignotage par un bruit 2D pour que la limite ne soit pas lisse.
+  '  float grain = fbm(vec2(cos(theta), sin(theta)) * 3.1 + rayonAngle * 4.0 + uTime * 0.03) - 0.5;',
+  '  float bordDoux = bord * (1.0 + uBordErosion * grain * 0.9);',
+  '  float masque = 1.0 - smoothstep(bordDoux * 0.35, bordDoux * 1.12, rayonAngle);',
+  '  masque = pow(clamp(masque, 0.0, 1.0), 1.9);',
+  '  if (masque <= 0.0015) discard;',
   // Rotation lente du champ : la nebuleuse de reference TOURNE, elle ne glisse pas de biais.
   '  float spin = uTime * uWarp * 0.35;',
   '  mat2 tourne = mat2(cos(spin), -sin(spin), sin(spin), cos(spin));',
