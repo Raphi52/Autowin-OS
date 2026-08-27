@@ -5,6 +5,7 @@ import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from '.
 import { delaiDeReprise, ESSAIS_MAX } from './delai-de-reprise'
 import { CAUSES_REESSAYABLES } from './repechage-automatique'
 import { INTERVALLE_BALAYAGE_MS, travauxARepecher } from './repechage-automatique'
+import { avertissementCollisionProbable } from './avertissement-collision-probable'
 import {
   messageSansSigneDeVie,
   runsSansSigneDeVie,
@@ -595,7 +596,15 @@ export class RunWorktreeCoordinator {
         tracked.worktreePath = cwd
         tracked.worktreeAvailable = true
         tracked.state = 'working'
-        this.persist(tracked, 'running', 'not-requested')
+        // MEME avertissement que dans `beginAsync` : deux chemins de demarrage existent, et n'en
+        // cabler qu'un donnerait un avertissement qui apparait ou non selon la route prise — pire
+        // qu'une absence, parce qu'on croirait l'arbre propre quand c'est la route qui se taisait.
+        const avertissementSync = avertissementCollisionProbable(tracked.excludedDirtyFiles, {
+          total: tracked.excludedDirtyFileCount,
+          tronquee: tracked.excludedDirtyFilesTruncated
+        })
+        if (avertissementSync) tracked.detail = avertissementSync
+        this.persist(tracked, 'running', 'not-requested', avertissementSync || undefined)
       } catch (error) {
         tracked.state = 'blocked'
         tracked.endedAtMs = this.now()
@@ -723,7 +732,24 @@ export class RunWorktreeCoordinator {
       tracked.worktreePath = prepared.path
       tracked.worktreeAvailable = true
       tracked.state = 'working'
-      this.persist(tracked, 'running', 'not-requested')
+      /*
+       * L'AVERTISSEMENT AU DEMARRAGE — dire maintenant ce qu'on decouvrait a l'arrivee.
+       *
+       * `excludedDirtyFiles` est deja calcule ici : ce sont les changements non committes que la
+       * copie a ECARTES, donc exactement les candidats a la collision. L'information existait,
+       * affichee dans un `<details>` du panneau Worktrees qu'il faut penser a ouvrir — le meme
+       * defaut que les motifs de blocage, « jamais lus ». On la met dans `detail`, la ou
+       * l'interface la lit deja sans qu'on ait rien a deplier.
+       *
+       * Ni refus ni prediction : voir `avertissement-collision-probable.ts`, qui porte les trois
+       * decisions (pas de porte, pas d'affirmation, silence sur un arbre propre).
+       */
+      const avertissement = avertissementCollisionProbable(tracked.excludedDirtyFiles, {
+        total: tracked.excludedDirtyFileCount,
+        tronquee: tracked.excludedDirtyFilesTruncated
+      })
+      if (avertissement) tracked.detail = avertissement
+      this.persist(tracked, 'running', 'not-requested', avertissement || undefined)
       this.emit()
       return prepared.path
     } catch (error) {
