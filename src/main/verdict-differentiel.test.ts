@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { echecsDuRapport, noteDeDifferentiel, verdictDifferentiel } from './verify-command'
+import {
+  echecsDuRapport,
+  noteDeDifferentiel,
+  verdictDifferentiel,
+  verifyTimeoutOutcome
+} from './verify-command'
 
 /**
  * CE FICHIER EST LA V2. La v1 a ete DEFAITE (revert `97f2e9dc`) apres qu'un panel de cinq juges
@@ -93,6 +98,26 @@ describe('echecsDuRapport — l’identité vient de l’ARTEFACT, jamais du tex
   it('REFUSE un rapport ABSENT — c’est le cas du plafond de temps, qui n’écrit aucun fichier', () => {
     expect(echecsDuRapport(undefined).concluant).toBe(false)
     expect(echecsDuRapport('').concluant).toBe(false)
+  })
+
+  /*
+   * LE PLAFOND DE TEMPS, avec sa VRAIE sortie. La v1 pretendait couvrir ce cas avec un fixture sans
+   * sortie partielle — c'est-a-dire la seule variante que le produit ne peut PAS emettre des que la
+   * suite a commence a echouer. `verifyTimeoutOutcome` CONCATENE les echecs deja imprimes au message
+   * de plafond, donc la v1 y trouvait un ensemble d'echecs et publiait. Ce test lui donne la sortie
+   * REELLE : elle ne doit produire AUCUN echec, parce qu'on ne lit plus de texte du tout.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : revenir a un parsing de la sortie du runner.
+   */
+  it('REFUSE la vraie sortie d’un plafond de temps, sortie partielle COMPRISE', () => {
+    const partiel = [' FAIL  src/a.test.ts > suite A > rend 1', 'AssertionError: expected 1 to be 2'].join(SAUT)
+    const coupee = verifyTimeoutOutcome('npm run test:unit', 600_000, partiel)
+    expect(coupee.ok).toBe(false)
+    // La sortie contient bien des lignes d'echec : c'est ce qui piegeait la v1.
+    expect(coupee.output).toContain('FAIL')
+    const lu = echecsDuRapport(coupee.output)
+    expect(lu.concluant).toBe(false)
+    expect(lu.echecs.size).toBe(0)
   })
 
   it('REFUSE un rapport illisible ou de forme inattendue (le format de vitest peut changer)', () => {
