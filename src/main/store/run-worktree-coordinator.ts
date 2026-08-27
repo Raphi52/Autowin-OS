@@ -987,12 +987,43 @@ export class RunWorktreeCoordinator {
       this.emit()
       return res
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      /*
+       * UNE INTERRUPTION APRES LA FUSION N'EST PAS UNE FUSION ECHOUEE.
+       *
+       * `finalize` est une SEQUENCE : commit dans la copie, fusion dans la base, crochets, puis
+       * rangement du dossier. Le worker signale `integrated` des que la fusion tient ; ce qui suit
+       * peut encore etre coupe (budget d'UNE commande git donne a la sequence entiere). Mesure le
+       * 2026-08-27 (conv-1423) : `acfe64dd` etait dans `main` a 09:09:50, et le refus
+       * `merge-failed / interrompue apres 32000 ms` est trace a 09:10:21 — le rapport CONTREDISAIT
+       * le depot, et tous les workflows finissaient sur « ARRETE au controle final ».
+       *
+       * On ne relit pas le disque pour deviner : on lit le SHA que `onIntegrated` vient d'ecrire.
+       * Sans ce SHA, aucune fusion n'a ete annoncee et le refus reste entier.
+       */
+      const publishedSha = tracked.publishedSha
+      if (publishedSha) {
+        const merged: FinalizeResult = {
+          outcome: 'merged',
+          agentId: runId,
+          files: tracked.files.map((file) => file.path),
+          committed: true,
+          publishedSha,
+          ...(tracked.publicationAgentSha ? { agentSha: tracked.publicationAgentSha } : {}),
+          ...(tracked.publicationBaseSha ? { baseSha: tracked.publicationBaseSha } : {}),
+          detail: `Fusion publiée, puis rangement interrompu : ${detail}`
+        } as FinalizeResult
+        this.applyFinalize(tracked, merged)
+        this.persistFinalize(tracked, merged)
+        this.emit()
+        return merged
+      }
       const blocked: FinalizeResult = {
         outcome: 'blocked',
         agentId: runId,
         files: tracked.files.map((file) => file.path),
         reason: 'merge-failed',
-        detail: error instanceof Error ? error.message : String(error)
+        detail
       }
       this.applyFinalize(tracked, blocked)
       this.persistFinalize(tracked, blocked)

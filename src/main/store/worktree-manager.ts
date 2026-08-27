@@ -66,6 +66,15 @@ const GIT_COMMAND_TIMEOUT_MS = 30_000
  * donc large sans être infini — un worker vraiment pendu reste tué.
  */
 const INVENTAIRE_RECUPERATION_TIMEOUT_MS = 300_000
+/**
+ * `finalize` n'est pas UNE commande git, c'est une SEQUENCE : commit dans la copie, fusion dans la
+ * base, crochets du depot, puis suppression du dossier de travail. Lui donner le budget d'une seule
+ * commande (32 s) est la meme erreur de CATEGORIE que celle deja corrigee pour l'inventaire de
+ * recuperation. Mesure du 2026-08-27 (conv-1423) : la fusion a bien atterri dans `main`
+ * (`acfe64dd`, 09:09:50) et le client a coupe pendant le rangement, a 09:10:21 — le run est reparti
+ * en `merge-failed` alors que le travail etait publie.
+ */
+const FINALIZE_TIMEOUT_MS = 300_000
 function assertSafeId(value: string, label: string): void {
   if (!SAFE_ID.test(value))
     throw new Error(`${label} invalide (caractères non autorisés): ${value}`)
@@ -549,7 +558,8 @@ export class WorktreeManager {
     const { onPrepared, onIntegrated, ...serializable } = options
     return this.operationClient.run(
       { operation: 'finalize', agentId, options: serializable },
-      { onPrepared, onIntegrated }
+      { onPrepared, onIntegrated },
+      { timeoutMs: FINALIZE_TIMEOUT_MS }
     )
   }
 
