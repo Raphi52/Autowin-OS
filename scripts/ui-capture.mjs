@@ -20,6 +20,10 @@
  * capture d'écran noire ne peut pas se faire passer pour une preuve.
  *
  * Usage : node scripts/ui-capture.mjs --view worktree --out artifacts/preuve.png [--port 9231]
+ *         [--click <selecteur CSS>]  ouvre ce que la vue seule ne montre pas (popover, menu,
+ *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
+ *                                    un declencheur absent ou inerte est un echec nomme, jamais
+ *                                    une capture silencieuse de la vue fermee.
  */
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -65,6 +69,18 @@ export const verdictCapture = (mesures) => {
   }
   if ((mesures.longueurTexte ?? 0) < SEUILS.texte) echecs.push('vue-vide-texte')
   if ((mesures.elements ?? 0) < SEUILS.elements) echecs.push('vue-vide-elements')
+  if (mesures.declencheur) {
+    // Un declencheur introuvable ne doit JAMAIS se solder par une capture de la vue fermee : la
+    // preuve montrerait autre chose que ce qu'elle affirme, et le juge la croirait.
+    if (!mesures.declencheurTrouve) {
+      echecs.push(`declencheur-absent(${mesures.declencheur})`)
+    } else if ((mesures.elementsAvantClic ?? 0) >= (mesures.elements ?? 0)) {
+      // Le declencheur existe, le clic part, et rien ne s'ouvre — deja ouvert, clic absorbe,
+      // handler non pose. Sans cette garde le verdict dirait « prouve » sur une vue inchangee.
+      // Le DELTA est ce qui rend le clic falsifiable ; « j'ai clique » ne l'est pas.
+      echecs.push(`clic-sans-effet(${mesures.declencheur})`)
+    }
+  }
   if ((mesures.octetsPng ?? 0) < SEUILS.octetsPng) echecs.push('png-trop-petit')
   return { ok: echecs.length === 0, echecs }
 }
@@ -201,7 +217,7 @@ const main = async () => {
   }
   await new Promise((r) => setTimeout(r, 1_200))
 
-  const mesuresDom = await evaluer(`(() => {
+  const mesurerDom = () => evaluer(`(() => {
     const actif = [...document.querySelectorAll('[data-testid^="nav-"]')]
       .find((b) => b.className.includes('active') || b.getAttribute('aria-current'))
     return {
@@ -210,6 +226,27 @@ const main = async () => {
       elements: document.querySelectorAll('main *').length || document.querySelectorAll('body *').length
     }
   })()`)
+  let mesuresDom = await mesurerDom()
+
+  // Ce que le harnais ne savait pas faire, et qui a coute deux runs le 2026-08-26 (conv-1420) : un
+  // popover, un menu, un onglet n'existent dans le DOM qu'APRES un clic. On mesure donc le DOM
+  // avant, on declenche, on laisse le rendu se poser, et le verdict exige un DELTA -- un clic sans
+  // effet ne doit pas produire une capture de la vue fermee portant un verdict vert.
+  const declencheur = argument('--click')
+  let declencheurTrouve
+  let elementsAvantClic
+  if (declencheur) {
+    elementsAvantClic = mesuresDom.elements
+    declencheurTrouve = await evaluer(`(() => {
+      const cible = document.querySelector(${JSON.stringify(declencheur)})
+      cible?.click()
+      return Boolean(cible)
+    })()`)
+    if (declencheurTrouve) {
+      await new Promise((r) => setTimeout(r, 600))
+      mesuresDom = await mesurerDom()
+    }
+  }
 
   const capture = await envoyer('Page.captureScreenshot', { format: 'png', fromSurface: true })
   mkdirSync(dirname(sortie), { recursive: true })
@@ -217,7 +254,12 @@ const main = async () => {
   const octetsPng = statSync(sortie).size
   socket.close()
 
-  const mesures = { vue, ...mesuresDom, octetsPng }
+  const mesures = {
+    vue,
+    ...mesuresDom,
+    octetsPng,
+    ...(declencheur ? { declencheur, declencheurTrouve, elementsAvantClic } : {})
+  }
   const verdict = verdictCapture(mesures)
   rendre(
     {
