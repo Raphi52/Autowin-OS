@@ -3035,6 +3035,24 @@ ol.md-list li {
   border-color: rgba(212, 175, 55, 0.85);
 }
 
+/*
+ * La croix n'est pas une action metier. « Traiter » et « Voir la liste » proposent quelque chose ;
+ * fermer ne fait que ranger. Elle perd donc le cadre des deux autres et gagne du blanc autour --
+ * sans quoi trois boutons encadres se ressemblent, et l'oeil ne sait plus lequel decide.
+ * Le `margin-left: auto` de la regle generale ne s'applique qu'au PREMIER bouton du flex : la croix
+ * reste donc collee a « Voir la liste », a l'extremite du bandeau.
+ */
+.chat-travail-non-publie__fermer {
+  border: 1px solid transparent;
+  padding: 1px 6px;
+  color: rgba(232, 226, 214, 0.62);
+  line-height: 1;
+}
+.chat-travail-non-publie__fermer:hover {
+  border-color: transparent;
+  color: rgba(232, 226, 214, 0.95);
+}
+
 /* Liste des travaux finis mais non publiés : montrer avant de décider. Lecture seule. */
 .tnp {
   border-left: 2px solid rgba(212, 175, 55, 0.55);
