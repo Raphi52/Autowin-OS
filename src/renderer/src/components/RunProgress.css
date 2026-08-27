@@ -1,0 +1,79 @@
+.run-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2, 8px);
+}
+.run-progress__recap {
+  display: flex;
+  align-items: center;
+  gap: var(--s2, 8px);
+  flex-wrap: wrap;
+}
+.run-progress__live {
+  opacity: 0.8;
+  font-style: italic;
+}
+.run-progress__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 14px;
+  border-left: 1px solid var(--border, #3333);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2, 8px);
+}
+.run-progress__step {
+  position: relative;
+  display: flex;
+  gap: var(--s2, 8px);
+}
+.run-progress__dot {
+  position: absolute;
+  left: -19px;
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok, #3a7);
+}
+.run-progress__step[data-state='failed'] .run-progress__dot {
+  background: var(--err, #d55);
+}
+.run-progress__step[data-state='running'] .run-progress__dot {
+  background: var(--accent, #58f);
+  animation: run-progress-pulse 1.2s infinite;
+}
+@keyframes run-progress-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+.run-progress__body {
+  flex: 1;
+  min-width: 0;
+}
+.run-progress__head {
+  display: flex;
+  gap: var(--s2, 8px);
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.run-progress__obstacles,
+.run-progress__evidence {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 0.92em;
+}
+.run-progress__obstacles li {
+  color: var(--warn, #c96);
+}
+.run-progress__thinking pre {
+  white-space: pre-wrap;
+  margin: 4px 0 0;
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+.run-progress__empty {
+  opacity: 0.7;
+  padding: var(--s2, 8px);
+}

@@ -12,7 +12,11 @@ import {
   RunTrashIcon
 } from './chat-view-icons'
 import { StepThread } from './ChatView.parts'
+import { RunProgress } from './RunProgress'
 import { RunInspector } from './RunInspector'
+
+/** Onglets du détail d'un RUN. `progress` = suivi vivant (avancée), `runmd` = fichier produit. */
+export type RunDetailTab = 'progress' | 'trace' | 'runmd'
 import { SourceControlPane } from './SourceControlPane'
 import { WorkflowExecutionGraph } from './WorkflowExecutionGraph'
 // `.lisere-dessus` vit dans cette feuille (voir ViewPage.css) : import explicite, pas d'heritage
@@ -58,8 +62,8 @@ export type WorkflowsPanelProps = {
   setOpenTrace: (value: OrchStep[] | null) => void
   requestDeleteRun: (run: RunEntry) => void
   openTrace: OrchStep[] | null
-  runDetailTab: 'trace' | 'runmd'
-  setRunDetailTab: (tab: 'trace' | 'runmd') => void
+  runDetailTab: RunDetailTab
+  setRunDetailTab: (tab: RunDetailTab) => void
   liveRunCardRef: React.RefObject<HTMLDivElement | null>
 }
 
@@ -183,93 +187,96 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                 data-live-run-conversation-id={liveRun.convId}
               >
                 <details className="live-run-fold" open={liveRun.status === 'running'}>
-                <summary
-                  className="row"
-                  style={{ justifyContent: 'space-between', cursor: 'pointer' }}
-                  title="Replier / déplier ce sous-agent"
-                >
-                  <span className="row gap2" style={{ minWidth: 0 }}>
-                    {liveRun.status === 'running' ? (
-                      <span className="spinner" />
-                    ) : (
-                      <span
-                        className={`status-dot ${liveRun.status === 'green' ? 'st-ok' : 'st-err'}`}
-                      />
-                    )}
-                    <span className="run-subject live-subject" title={liveRun.task}>
-                      {liveRun.task}
+                  <summary
+                    className="row"
+                    style={{ justifyContent: 'space-between', cursor: 'pointer' }}
+                    title="Replier / déplier ce sous-agent"
+                  >
+                    <span className="row gap2" style={{ minWidth: 0 }}>
+                      {liveRun.status === 'running' ? (
+                        <span className="spinner" />
+                      ) : (
+                        <span
+                          className={`status-dot ${liveRun.status === 'green' ? 'st-ok' : 'st-err'}`}
+                        />
+                      )}
+                      <span className="run-subject live-subject" title={liveRun.task}>
+                        {liveRun.task}
+                      </span>
                     </span>
-                  </span>
-                </summary>
-                <div style={{ marginTop: 'var(--s2)' }}>
-                  <StepThread steps={liveRun.steps} />
-                  {liveRun.status === 'running' &&
-                    (() => {
-                      const phase = liveRun.phase
-                      const meta = phase ? STEP_META[phase.step] : undefined
-                      const label = phase ? phaseLabel(phase) : 'sous-agent'
-                      // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair.
-                      const shortModel = phase?.model?.split('/').pop()
-                      const eff =
-                        phase?.reasoningEffort &&
-                        phase.reasoningEffort !== 'none' &&
-                        phase.reasoningEffort !== 'auto'
-                          ? (EFFORT_FR[phase.reasoningEffort] ?? phase.reasoningEffort)
-                          : undefined
-                      const detail = shortModel
-                        ? `${shortModel}${eff ? ` · ${eff}` : ''}`
-                        : phase?.provider
-                      return (
-                        <div className="subagent-step live-subagent-step">
-                          <div
-                            className="row gap2"
-                            style={{ justifyContent: 'space-between', fontSize: 11 }}
-                          >
-                            <span className="c-faint">
-                              <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
-                              {detail && <span className="mono c-accent"> {detail}</span>}
-                            </span>
-                            <span className="row gap2">
-                              <span className="badge">en cours</span>
-                              <button
-                                className="btn btn-sm btn-danger"
-                                title="Stopper le sous-agent en cours"
-                                onClick={(event) => {
-                                  // Sans ce retour, un échec d'annulation laissait le run affiché
-                                  // « en cours » sans explication : l'utilisateur croit avoir stoppé
-                                  // le sous-agent alors qu'il tourne toujours. Le composant est
-                                  // sans état → on reporte l'échec sur le bouton lui-même (libellé
-                                  // + title), visible et sans introduire de store local.
-                                  const button = event.currentTarget
-                                  void window.api
-                                    .cancelOrchestration(liveRun.convId)
-                                    .catch((error: unknown) => {
-                                      button.textContent = '⚠ Stop échoué'
-                                      button.title = `Annulation impossible : ${error instanceof Error ? error.message : String(error)}`
-                                    })
-                                }}
-                              >
-                                ⏹ Stop
-                              </button>
-                            </span>
-                          </div>
-                          {/*
+                  </summary>
+                  <div style={{ marginTop: 'var(--s2)' }}>
+                    <StepThread steps={liveRun.steps} />
+                    {liveRun.status === 'running' &&
+                      (() => {
+                        const phase = liveRun.phase
+                        const meta = phase ? STEP_META[phase.step] : undefined
+                        const label = phase ? phaseLabel(phase) : 'sous-agent'
+                        // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair.
+                        const shortModel = phase?.model?.split('/').pop()
+                        const eff =
+                          phase?.reasoningEffort &&
+                          phase.reasoningEffort !== 'none' &&
+                          phase.reasoningEffort !== 'auto'
+                            ? (EFFORT_FR[phase.reasoningEffort] ?? phase.reasoningEffort)
+                            : undefined
+                        const detail = shortModel
+                          ? `${shortModel}${eff ? ` · ${eff}` : ''}`
+                          : phase?.provider
+                        return (
+                          <div className="subagent-step live-subagent-step">
+                            <div
+                              className="row gap2"
+                              style={{ justifyContent: 'space-between', fontSize: 11 }}
+                            >
+                              <span className="c-faint">
+                                <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
+                                {detail && <span className="mono c-accent"> {detail}</span>}
+                              </span>
+                              <span className="row gap2">
+                                <span className="badge">en cours</span>
+                                <button
+                                  className="btn btn-sm btn-danger"
+                                  title="Stopper le sous-agent en cours"
+                                  onClick={(event) => {
+                                    // Sans ce retour, un échec d'annulation laissait le run affiché
+                                    // « en cours » sans explication : l'utilisateur croit avoir stoppé
+                                    // le sous-agent alors qu'il tourne toujours. Le composant est
+                                    // sans état → on reporte l'échec sur le bouton lui-même (libellé
+                                    // + title), visible et sans introduire de store local.
+                                    const button = event.currentTarget
+                                    void window.api
+                                      .cancelOrchestration(liveRun.convId)
+                                      .catch((error: unknown) => {
+                                        button.textContent = '⚠ Stop échoué'
+                                        button.title = `Annulation impossible : ${error instanceof Error ? error.message : String(error)}`
+                                      })
+                                  }}
+                                >
+                                  ⏹ Stop
+                                </button>
+                              </span>
+                            </div>
+                            {/*
                             Activité courante, AVANT le texte : quand un outil tourne quinze
                             minutes, c'est la seule chose qui distingue « travaille » de « mort ».
                             Le texte du livrable, lui, peut rester vide tout ce temps.
                           */}
-                          {liveRun.note && (
-                            <div className="subagent-live-note" title="Activité en cours du sous-agent">
-                              {liveRun.note}
-                            </div>
-                          )}
-                          {liveRun.liveText && (
-                            <pre className="subagent-live-text">{liveRun.liveText}</pre>
-                          )}
-                        </div>
-                      )
-                    })()}
-                </div>
+                            {liveRun.note && (
+                              <div
+                                className="subagent-live-note"
+                                title="Activité en cours du sous-agent"
+                              >
+                                {liveRun.note}
+                              </div>
+                            )}
+                            {liveRun.liveText && (
+                              <pre className="subagent-live-text">{liveRun.liveText}</pre>
+                            )}
+                          </div>
+                        )
+                      })()}
+                  </div>
                 </details>
               </div>
             ))}
@@ -361,8 +368,15 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                   </div>
                   {isOpen && (
                     <div className="run-detail-box fade-in">
-                      {openTrace && openRun && (
+                      {openTrace && (
                         <div className="run-detail-tabs">
+                          <button
+                            type="button"
+                            className={`run-detail-tab${runDetailTab === 'progress' ? ' is-active' : ''}`}
+                            onClick={() => setRunDetailTab('progress')}
+                          >
+                            Avancée
+                          </button>
                           <button
                             type="button"
                             className={`run-detail-tab${runDetailTab === 'trace' ? ' is-active' : ''}`}
@@ -370,16 +384,28 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                           >
                             Fil des sous-agents
                           </button>
-                          <button
-                            type="button"
-                            className={`run-detail-tab${runDetailTab === 'runmd' ? ' is-active' : ''}`}
-                            onClick={() => setRunDetailTab('runmd')}
-                          >
-                            RUN.md
-                          </button>
+                          {openRun && (
+                            <button
+                              type="button"
+                              className={`run-detail-tab${runDetailTab === 'runmd' ? ' is-active' : ''}`}
+                              onClick={() => setRunDetailTab('runmd')}
+                            >
+                              RUN.md
+                            </button>
+                          )}
                         </div>
                       )}
-                      {openTrace && (runDetailTab === 'trace' || !openRun) ? (
+                      {openTrace &&
+                      (runDetailTab === 'progress' || (!openRun && runDetailTab === 'runmd')) ? (
+                        <RunProgress
+                          steps={openTrace}
+                          activePhase={
+                            visibleLiveRuns.find(
+                              ([, lr]) => lr.status === 'running' && lr.runPath === openRun?.path
+                            )?.[1].phase
+                          }
+                        />
+                      ) : openTrace && runDetailTab === 'trace' ? (
                         <StepThread steps={openTrace} />
                       ) : (
                         openRun && <RunInspector content={openRun.content} summary={r.summary} />

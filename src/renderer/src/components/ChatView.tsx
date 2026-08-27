@@ -72,11 +72,7 @@ import {
 } from './chat-mentions'
 import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-sections'
 import { ForkIcon } from './chat-view-icons'
-import {
-  formatFileSize,
-  encodeAttachment,
-  pieceJointePasseePourLeFil
-} from './chat-attachments'
+import { formatFileSize, encodeAttachment, pieceJointePasseePourLeFil } from './chat-attachments'
 import { derniereConversationOuverte, memoriserDerniereConversation } from './derniere-conversation'
 import {
   conversationsRecentes,
@@ -99,7 +95,7 @@ import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { conversationEnMarkdown, nomFichierExportMarkdown } from './conversation-markdown'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
-import { WorkflowsPanel } from './WorkflowsPanel'
+import { WorkflowsPanel, type RunDetailTab } from './WorkflowsPanel'
 import { ThinkingPanel } from './ThinkingPanel'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
@@ -450,7 +446,7 @@ export function ChatView({
   const [openRun, setOpenRun] = useState<{ path: string; content: string } | null>(null)
   const [openTrace, setOpenTrace] = useState<OrchStep[] | null>(null)
   // Détail d'un run : bascule entre le fil des sous-agents (trace) et le RUN.md brut.
-  const [runDetailTab, setRunDetailTab] = useState<'trace' | 'runmd'>('trace')
+  const [runDetailTab, setRunDetailTab] = useState<RunDetailTab>('progress')
   const [liveRuns, setLiveRuns] = useState<Record<string, ScopedLiveRun<OrchStep>>>({})
   // Carte de l'orchestration EN COURS dans le panneau Workflows : cible du clic sur
   // l'indicateur « action en cours » d'un message (ouvre le panneau + cadre le run/step actif).
@@ -3778,9 +3774,7 @@ export function ChatView({
         </div>
       </section>
 
-      {showThinking && (
-        <ThinkingPanel messages={messages} onClose={() => setShowThinking(false)} />
-      )}
+      {showThinking && <ThinkingPanel messages={messages} onClose={() => setShowThinking(false)} />}
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
       {showRuns && (
