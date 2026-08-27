@@ -604,19 +604,34 @@ export const PLANETE_FRAGMENT_SHADER = [
   '  vec3 p = vec3(vObjet.x, vObjet.y * uBandes, vObjet.z) * 2.4 + graine;',
   '  float turbulence = fbm(p + vec3(uTime * 0.02, 0.0, 0.0));',
   '  float volute = fbm(p * 0.45 + turbulence * 1.7 + graine.zxy);',
+  // WARP DE DOMAINE : le bruit est replié sur lui-même avant d'être re-échantillonné. C'est ce pli
+  // qui donne des bords de continents SINUEUX ; sans lui, le fbm seul fait des taches convexes.
+  '  vec3 pw = p + vec3(volute, turbulence, volute * 0.7) * 1.35;',
+  // CRÊTES RIDGED (1 - |2f-1|) : des lignes de relief au lieu de nappes molles — chaînes de
+  // montagnes et bords de tempêtes.
+  '  float ridged = pow(clamp(1.0 - abs(fbm(pw * 1.9) * 2.0 - 1.0), 0.0, 1.0), 2.1);',
   '  float matiere = clamp(turbulence * 0.62 + volute * 0.52, 0.0, 1.0);',
   '  float cretes = pow(smoothstep(0.46, 0.88, matiere), 1.25);',
   '  vec3 albedo = mix(uSombre, uBase, smoothstep(0.22, 0.64, matiere));',
-  '  albedo = mix(albedo, uClair, cretes);',
-  '  albedo *= 0.97 + 0.06 * bruit(vObjet * 140.0 + graine);',
+  '  albedo = mix(albedo, uClair, cretes * 0.72 + ridged * 0.20);',
+  // VEINAGE fin : une troisième échelle assombrissante, sinon la surface n'a que deux fréquences.
+  '  albedo = mix(albedo, uSombre, 0.32 * pow(clamp(fbm(p * 3.7 + graine.yzx), 0.0, 1.0), 1.6));',
+  // GRAIN serré (320 au lieu de 140) : le pixel proche cesse d'être lisse à l écran.
+  '  albedo *= 0.94 + 0.10 * bruit(vObjet * 320.0 + graine);',
   '  vec3 n = normalize(vNormaleMonde);',
   '  vec3 v = normalize(vVue);',
-  '  float incidence = dot(n, normalize(uLumiere));',
+  // Le relief MORD sur l éclairage : les crêtes projettent leur propre ombre approchée, ce qui
+  // sculpte le terminateur au lieu de le laisser lisse.
+  '  float relief = (ridged - 0.5) * 0.55 + (matiere - 0.5) * 0.35;',
+  '  float incidence = dot(n, normalize(uLumiere)) - relief * 0.11;',
   '  float jour = smoothstep(-0.22, 0.45, incidence);',
-  '  vec3 couleur = albedo * (0.08 + 1.15 * jour);',
-  '  couleur += uNuit * (1.0 - jour) * (0.25 + 0.35 * cretes);',
-  '  float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.4);',
-  '  couleur += uClair * rim * uRim * (0.35 + 0.65 * jour) * 0.9;',
+  // LUMINOSITÉ BAISSÉE (demande conv-1451) : gain de jour 1.15 -> 0.70, ambiante 0.08 -> 0.05,
+  // braise de nuit et limbe atténués dans la même proportion. Les planètes se posent dans le fond
+  // sombre au lieu de brûler ; le détail ci-dessus reste lisible parce qu il vient de l ALBEDO.
+  '  vec3 couleur = albedo * (0.05 + 0.70 * jour);',
+  '  couleur += uNuit * (1.0 - jour) * (0.16 + 0.24 * cretes);',
+  '  float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.8);',
+  '  couleur += uClair * rim * uRim * (0.30 + 0.55 * jour) * 0.45;',
   '  gl_FragColor = vec4(couleur, 1.0);',
   '}'
 ].join('\n')
@@ -781,7 +796,7 @@ function buildPlanet(options: {
   const base = new THREE.Color(options.color)
   // Les trois tons de la surface DÉRIVENT de la couleur de la planète : la palette du décor reste
   // celle de theme.css, le détail ne l'élargit pas.
-  const clair = base.clone().lerp(new THREE.Color(0xfff2dc), 0.55)
+  const clair = base.clone().lerp(new THREE.Color(0xffeecd), 0.44)
   const sombre = base.clone().multiplyScalar(0.42)
 
   const surface = new THREE.ShaderMaterial({

@@ -1017,6 +1017,19 @@ export class WorktreeManager {
     if (!SAFE_ID.test(agentId)) return false
     const bureau = join(this.worktreeRoot, `agent__${agentId}`)
     if (!existsSync(bureau)) return false
+    /*
+     * SANS SON `.git`, UN DOSSIER DE BUREAU N'EST PLUS UN BUREAU — et git ne dit pas non pour
+     * autant : il REMONTE au depot parent. `rev-parse HEAD` rend alors le HEAD de la base et
+     * `status --porcelain` les modifications de l'ARBRE PRINCIPAL, attribuees a un bureau qui
+     * n'existe plus. Le garde-fou du HEAD non ne ne mord pas : ce sha est parfaitement valide.
+     *
+     * DEFAUT VECU le 2026-08-27 (conv-1428) : apres `git worktree remove`, le dossier survivait
+     * en portant son seul `node_modules` (non versionne, donc non supprime par git). Le
+     * recensement a signale les quatre fichiers en cours de l'utilisateur dans main comme
+     * « travail non publie » du bureau `run-bac93a8f28b6-1`. Le `.git` d'un worktree lie est un
+     * FICHIER : sa presence est le discriminant exact entre un bureau et une coquille.
+     */
+    if (!existsSync(join(bureau, '.git'))) return false
     try {
       /*
        * UN HEAD NON NE N'EST PAS DU TRAVAIL. `checkout --orphan` laisse l'index rempli des fichiers
