@@ -2,8 +2,9 @@
 /**
  * Sonde : le périmètre `Bash(git status:*)` résiste-t-il à une commande CHAÎNÉE ?
  *
- * Le shell du chat (CHAT_READ_ONLY_SHELL, src/main/providers/claude.ts) n'autorise Bash que par
- * périmètres de préfixe. La question NON RÉSOLUE est de savoir comment le CLI traite
+ * HISTORIQUE : le shell du chat n'autorisait Bash que par périmètres de préfixe
+ * (`CHAT_READ_ONLY_SHELL`, retirée le 2026-08-26 — le chat a désormais Bash/Write/Edit).
+ * La sonde RESTE utile : les périmètres par préfixe sont encore la forme employée ailleurs. La question NON RÉSOLUE est de savoir comment le CLI traite
  * `git status; <commande interdite>` : refus global, ou exécution parce que le préfixe matche ?
  *
  * Cette sonde tranche par l'OBSERVATION, pas par la lecture : elle crée un dépôt jetable, y place
@@ -12,8 +13,8 @@
  * fait foi.
  *
  * Deux tentatives du 2026-08-04 ont échoué sur `API Error: 529 Overloaded` : le fait reste à
- * établir. Relancer dès que l'API répond, puis reporter le RÉSULTAT OBSERVÉ dans le commentaire de
- * CHAT_READ_ONLY_SHELL.
+ * établir. Relancer dès que l'API répond, puis reporter le RÉSULTAT OBSERVÉ dans le commentaire
+ * HISTORIQUE de src/main/providers/claude.ts.
  *
  *   node scripts/probe-chat-shell-permissions.mjs
  *

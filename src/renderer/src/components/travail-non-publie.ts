@@ -98,24 +98,44 @@ export function promptTravauxNonPublies(entrees: readonly EntreeTravail[]): stri
   })
   const reste = enAttente.length - lignes.length
 
+  /*
+   * « TRAITER » LANCE UN SALVAGE — il ne redecrit pas la procedure.
+   *
+   * Ce prompt deroulait ses propres quatre etapes, ecrites a la main. Deux procedures existaient
+   * donc pour le meme travail : celle-ci, redigee une fois et jamais eprouvee, et celle du skill
+   * `salvage`, qui balaie TOUTES les cachettes (worktrees detaches, stashes, objets pendants,
+   * branches non fusionnees), juge par CONTENU et non par le message, et exige un SHA consigne
+   * avant toute suppression. Quand deux procedures se concurrencent, c'est la moins tenue qui gagne.
+   *
+   * L'INVOCATION DOIT ETRE EN TETE : `invokedSkillId` ne reconnait un skill qu'en debut de message.
+   * Une mention au milieu du texte parlerait de salvage sans jamais le lancer — exactement le genre
+   * d'etiquette qui ment.
+   *
+   * Le prompt ne garde donc que ce que le skill NE PEUT PAS deviner : quels travaux attendent, et
+   * ou ils vivent.
+   */
   return [
+    '/salvage',
+    '',
     `${enAttente.length} travaux terminés n’ont jamais été publiés. Chacun vit sur une branche de`,
     'secours : rien n’est perdu, mais rien n’arrive dans main non plus.',
     '',
     ...lignes,
     ...(reste > 0 ? [`- … et ${reste} autres.`] : []),
     '',
-    'CE QU’IL FAUT FAIRE, dans cet ordre — et ne saute pas le premier point :',
+    'DIAGNOSTIQUE l’ascendance avant de promettre une republication : une copie qui ne descend pas',
+    'du SHA de départ enregistré ne pourra JAMAIS être reprise, quel que soit le nombre d’essais.',
+    'Vérifie-le par `git merge-base --is-ancestor <baseSha> <HEAD de la branche de secours>`.',
+    'Mesuré le 2026-08-24 : les quatorze travaux réels étaient TOUS refusés pour cette raison — un',
+    'prompt qui dirait « republie-les » enverrait l’agent contre un mur, quatorze fois. C’est la',
+    'seule chose que le skill ne peut pas deviner : elle tient à la façon dont CE dépôt pose ses',
+    'copies isolées.',
     '',
-    '1. DIAGNOSTIQUE avant de republier. Un réessai peut échouer PAR CONSTRUCTION : si la copie ne',
-    '   descend pas du SHA de départ enregistré, aucune reprise ne passera jamais. Vérifie-le avec',
-    '   git merge-base --is-ancestor <baseSha> <HEAD de la branche de secours> avant de promettre',
-    '   quoi que ce soit.',
-    '2. Republie ceux qui SONT publiables.',
-    '3. Pour les autres, dis-moi POURQUOI et ce que tu proposes — fusion manuelle depuis la branche,',
-    '   abandon assumé, ou autre. Ne supprime AUCUNE branche autowin/recovery/* : c’est le seul',
-    '   endroit où ce travail existe encore.',
-    '4. Rends un compte-rendu court : publiés, impubliables avec la raison, et ce qui reste.'
+    'Republie ensuite ceux qui SONT publiables, et pour les autres dis pourquoi — fusion manuelle,',
+    'abandon assumé, ou autre. L’ordre compte : diagnostiquer d’abord, republier après.',
+    '',
+    'Ne supprime AUCUNE branche `autowin/recovery/*` sans avoir consigné son SHA : c’est le seul',
+    'endroit où ce travail existe encore.'
   ].join('\n')
 }
 

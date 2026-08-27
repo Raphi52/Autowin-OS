@@ -173,3 +173,48 @@ describe('le prompt que « Traiter » dépose', () => {
     expect(prompt).not.toContain('vivant')
   })
 })
+
+describe('« Traiter » lance un SALVAGE, il ne réinvente pas la procédure', () => {
+  const enAttente = [
+    {
+      agentId: 'run-aaa-1',
+      travailNonPublie: true as const,
+      fichiersNonPublies: ['src/renderer/src/components/UpdateBanner.tsx'],
+      dateNonPublie: '2026-08-26'
+    },
+    {
+      agentId: 'run-bbb-1',
+      travailNonPublie: true as const,
+      fichiersNonPublies: ['src/renderer/src/components/HomeView.css'],
+      dateNonPublie: '2026-08-26'
+    }
+  ]
+
+  it('INVOQUE la compétence dès le premier caractère', () => {
+    // `invokedSkillId` ne reconnaît un skill qu'en TÊTE de message (`/^\s*\/nom\b/`). Une mention
+    // au milieu du texte ne déclencherait rien : le prompt parlerait de salvage sans le lancer.
+    const prompt = promptTravauxNonPublies(enAttente) ?? ''
+
+    expect(prompt.startsWith('/salvage')).toBe(true)
+  })
+
+  it('porte le CONTEXTE que la compétence ne peut pas deviner', () => {
+    const prompt = promptTravauxNonPublies(enAttente) ?? ''
+
+    expect(prompt).toContain('run-aaa-1')
+    expect(prompt).toContain('UpdateBanner.tsx')
+  })
+
+  it('ne réécrit PAS une procédure concurrente de celle du skill', () => {
+    // Le prompt d'avant déroulait ses 4 étapes à la main. Deux procédures pour un même travail, et
+    // c'est la moins tenue qui gagne — celle du prompt, écrite une fois, jamais éprouvée.
+    const prompt = promptTravauxNonPublies(enAttente) ?? ''
+
+    expect(prompt).not.toContain('CE QU’IL FAUT FAIRE, dans cet ordre')
+    expect(prompt).not.toMatch(/^\s*1\.\s/m)
+  })
+
+  it('rend null quand rien n’attend — pas de bandeau vide', () => {
+    expect(promptTravauxNonPublies([])).toBeNull()
+  })
+})

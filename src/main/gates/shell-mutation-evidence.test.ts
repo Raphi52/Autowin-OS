@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  CHAT_READ_ONLY_SHELL,
-  NON_INTERACTIVE_ENV,
-  claudeToolEvidenceKind
-} from '../providers/claude'
+import { NON_INTERACTIVE_ENV, claudeToolEvidenceKind } from '../providers/claude'
 import { evidenceSatisfiesTask } from '../orchestrator'
 import type { ExecutionEvidence } from '../providers/types'
 
@@ -274,30 +270,17 @@ describe('les mutations voisines ne sont plus invisibles', () => {
   })
 })
 
-describe('le shell du chat ne porte aucune primitive d’écriture', () => {
-  it('exclut les sous-commandes qui acceptent --output', () => {
-    // PROUVÉ : `git diff --output=victim.txt HEAD HEAD` ramène un fichier à 0 octet, et
-    // `git show --output=…` en crée un. Le préfixe autorisé est pourtant respecté : le périmètre
-    // portait lui-même la primitive de destruction.
-    for (const verb of ['git diff', 'git show', 'git log']) {
-      expect(
-        CHAT_READ_ONLY_SHELL.some((spec) => spec.startsWith(`Bash(${verb}`)),
-        `${verb} accepte --output=<chemin> : il ne peut pas être autorisé par simple préfixe`
-      ).toBe(false)
-    }
-  })
-
-  it('n’ouvre aucun accès réseau depuis un tour de chat', () => {
-    for (const spec of CHAT_READ_ONLY_SHELL) {
-      expect(spec).not.toMatch(/ls-remote|fetch|clone|push|pull/)
-    }
-  })
-
-  it('garde ce qui est réellement inoffensif', () => {
-    expect(CHAT_READ_ONLY_SHELL).toContain('Bash(git status:*)')
-    expect(CHAT_READ_ONLY_SHELL).toContain('Bash(git stash list:*)')
-  })
-
+describe('le shell du chat — connaissance conservée après l’ouverture du 2026-08-26', () => {
+  /**
+   * Les trois tests qui gardaient `CHAT_READ_ONLY_SHELL` (périmètres sans `--output`, sans réseau,
+   * `git status` conservé) sont RETIRÉS avec la constante : leur prémisse — le chat n'a qu'un shell
+   * borné par préfixes — a été abrogée par décision utilisateur ("Tout ouvrir : Bash + Write +
+   * Edit"). Les garder verts sur une constante que plus aucune branche n'utilise aurait été un
+   * faux-vert : « ça a l'air branché, ça ne l'est pas ».
+   *
+   * Ce qui SURVIT ici est ce qui protège encore un processus réel : l'environnement non interactif,
+   * appliqué au fils, indépendant de l'interprétation des règles par le CLI.
+   */
   it('neutralise pager, visualiseur d’aide et invites au niveau du processus fils', () => {
     // `git status --help` respecte le périmètre autorisé et pourtant LANCE un visualiseur. Cette
     // défense agit sur l'environnement du fils, donc elle tient quelle que soit la façon dont le

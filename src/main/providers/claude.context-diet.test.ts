@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { CHAT_READ_ONLY_SHELL } from './claude'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -85,89 +84,42 @@ describe('spawn CLI — regime de contexte', () => {
     expect(source).toMatch(/if \(settingsDir\) rmSync\(settingsDir/)
   })
 
-  it('donne la LECTURE SEULE au tour de chat (il n’est plus aveugle)', () => {
-    // Avant : `--disallowedTools '*'` -> l'agent ne pouvait rien lire, donc toute question factuelle
-    // exigeait une orchestration (conv-75 : 38,68 $). Verifie en reel : sans outils il repond « Je
-    // dois verifier le fichier » ; avec Read/Grep/Glob il repond juste, pour ~0,12 $.
+  it('donne le PLEIN OUTILLAGE au tour de chat (il n’est ni aveugle ni manchot)', () => {
+    // Etape 1 (avant le 2026-08-04) : `--disallowedTools '*'` -> l'agent ne pouvait rien lire, donc
+    // toute question factuelle exigeait une orchestration (conv-75 : 38,68 $).
+    // Etape 2 : lecture seule + 5 perimetres git. Il pouvait constater, pas agir.
+    // Etape 3 (2026-08-26, decision utilisateur, conv-1410) : Bash + Write + Edit ouverts. Une
+    // correction d'une ligne ne doit plus couter une orchestration qui repond depuis un worktree
+    // ISOLE, donc a cote du depot que l'utilisateur regarde.
+    //
+    // La propriete « aucune ECRITURE » a donc ete RETIREE ici volontairement, pas cassee par
+    // accident : ce qui la remplace est verifie par `claude.chat-full-tools.test.ts`, et la garde
+    // d'ecriture reste, elle, sur le fond autonome (watchdog).
     const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
     expect(chatBranch).toContain("'--add-dir'")
-    // JAMAIS d'ECRITURE sur un tour de chat : un dialogue ne mute rien.
-    const toolLists = [...chatBranch.matchAll(/'([A-Z][A-Za-z]*(?:,[A-Z][A-Za-z]*)*)'/g)].map(
-      (m) => m[1]
-    )
-    expect(toolLists.length).toBeGreaterThan(0)
-    for (const list of toolLists) {
-      for (const mutating of ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']) {
-        expect(list.split(',')).not.toContain(mutating)
-      }
+    for (const outil of ['Read', 'Grep', 'Glob', 'Bash', 'Write', 'Edit']) {
+      expect(chatBranch, `${outil} doit etre autorise sur le tour de chat`).toMatch(
+        new RegExp(`(?<![A-Za-z,])'${outil}'`)
+      )
     }
   })
 
-  it('ouvre le shell du chat UNIQUEMENT sur des commandes incapables de muter', () => {
-    // Le contrat a CHANGÉ le 2026-08-04 : avant, aucun shell du tout. L'intention (un dialogue ne
-    // mute rien) était juste, mais l'agent ne pouvait pas constater l'état du dépôt et devait
-    // router vers une orchestration, qui répond depuis un worktree ISOLÉ — à côté de la question.
-    // La propriété remplaçante est PLUS FORTE : shell ouvert, mais par périmètres vérifiés.
+  it('ouvre le shell du chat en ENTIER, et garde le fond autonome ferme', () => {
+    // Ce test verrouillait l'inverse : Bash uniquement par perimetres `Bash(git …:*)`. La decision
+    // utilisateur du 2026-08-26 l'a renverse. Ce qui reste FALSIFIABLE, et qui est le vrai risque :
+    // que l'ouverture ait ete faite « en gros » et ait emporte le fond autonome avec elle.
     const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
-    // Bash n'est jamais autorisé NU dans la branche chat (ce serait `rm`, `git checkout`, …).
-    /**
-     * La propriete est INCHANGEE : Bash n'apparait que dans la liste CHARGEE (`--tools`), jamais parmi
-     * les outils AUTORISES nus — il n'est autorise que par perimetres verifies.
-     *
-     * Ce qui change est la FORME de la liste chargee : elle est desormais concatenee avec les outils web
-     * (`'Read,Grep,Glob,Bash,' + OUTILS_WEB`), suite a la decision utilisateur du 2026-08-13 « je veux
-     * que les agents soient florissants, expansifs, libres ». L'ancienne regex ne cherchait qu'un
-     * litteral entierement majuscule-separe-de-virgules, donc elle ne voyait plus rien et rendait une
-     * liste VIDE : un test qui passe a cote de sa propriete au lieu de la contredire.
-     */
-    expect(chatBranch).toMatch(/'--tools',\s*'Read,Grep,Glob,Bash,' \+ OUTILS_WEB/)
-    // Et le point dur : aucun `'Bash'` isole dans cette branche, ce qui signalerait un Bash AUTORISE nu.
-    const bashNu = [...chatBranch.matchAll(/(?<![A-Za-z,])'Bash'/g)]
-    expect(bashNu).toHaveLength(0)
-    expect(chatBranch).toContain('CHAT_READ_ONLY_SHELL')
+    // Bash est desormais autorise NU sur le chat (plus aucun perimetre par prefixe).
+    expect([...chatBranch.matchAll(/(?<![A-Za-z,])'Bash'/g)]).toHaveLength(1)
+    expect(chatBranch).not.toContain('CHAT_READ_ONLY_SHELL')
 
-    // Chaque périmètre est scopé, et sur un verbe git strictement lisible.
-    const READ_ONLY_VERBS = [
-      'status',
-      'log',
-      'diff',
-      'show',
-      'stash list',
-      'rev-parse',
-      'ls-files',
-      'ls-remote',
-      'worktree list'
-    ]
-    expect(CHAT_READ_ONLY_SHELL.length).toBeGreaterThan(0)
-    for (const spec of CHAT_READ_ONLY_SHELL) {
-      const scoped = spec.match(/^Bash\(git (.+?):\*\)$/)
-      expect(scoped, `${spec} doit être un périmètre Bash(git …:*)`).not.toBeNull()
-      expect(READ_ONLY_VERBS).toContain(scoped![1])
-    }
-
-    // DISCRIMINANT : aucun verbe mutant ne doit être atteignable, y compris ceux qui commencent
-    // par un préfixe autorisé (`git stash list` est permis, `git stash push` ne doit PAS l'être).
-    for (const mutating of [
-      'checkout',
-      'reset',
-      'clean',
-      'commit',
-      'push',
-      'pull',
-      'branch',
-      'remote',
-      'stash push',
-      'stash pop',
-      'rm',
-      'mv'
-    ]) {
-      for (const spec of CHAT_READ_ONLY_SHELL) {
-        const prefix = spec.replace(/^Bash\(git /, '').replace(/:\*\)$/, '')
-        expect(
-          mutating.startsWith(prefix),
-          `${mutating} ne doit pas être couvert par le périmètre « ${prefix} »`
-        ).toBe(false)
-      }
+    // DISCRIMINANT : la sous-branche `watchdog-read-only`, elle, ne recoit ni shell ni ecriture.
+    const debutWatchdog = source.indexOf("toolProfile === 'watchdog-read-only'")
+    const watchdog = source.slice(debutWatchdog, source.indexOf('} else {', debutWatchdog))
+    for (const interdit of ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit']) {
+      expect(watchdog, `${interdit} ne doit pas etre ouvert au fond autonome`).not.toMatch(
+        new RegExp(`'${interdit}'`)
+      )
     }
   })
 

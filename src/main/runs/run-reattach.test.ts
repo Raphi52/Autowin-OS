@@ -2531,9 +2531,7 @@ describe('câblage — le démarrage consulte la garde avant de relancer', () =>
   })
 
   it('terminalise les PID morts avant de décider quels tours restent streaming', () => {
-    const reconciliation = source.indexOf(
-      'os.terminalizeAbandonedOrchestrations('
-    )
+    const reconciliation = source.indexOf('os.terminalizeAbandonedOrchestrations(')
     const hydration = source.indexOf('const resumableTurnIds = new Set([')
     expect(reconciliation).toBeGreaterThanOrEqual(0)
     expect(hydration).toBeGreaterThan(reconciliation)
@@ -2553,13 +2551,18 @@ describe('câblage — le démarrage consulte la garde avant de relancer', () =>
 
   it('serialise globalement les reprises de plusieurs conversations', () => {
     expect(source).toContain('const startupResumeQueue = new StartupResumeQueue()')
-    expect(source).toContain('await resumedRuntime')
     expect(source).toContain('await startupResumeQueue.enqueue(() => relaunchResumableRun(latest))')
+    // `await resumedRuntime` vivait ici : la relance est sortie dans son propre module et le fait
+    // qu'elle ATTENDE la fin de son run — la condition qui rend cette file serialisable — est
+    // desormais exerce : relaunch-resumable-run.test.ts > « ne rend la main qu une fois le run
+    // termine ». Une chaine presente ne prouvait pas que la promesse etait reellement attendue.
   })
 
-  it('réconcilie et persiste les appels morts avant de passer le snapshot au superviseur', () => {
-    expect(source).toContain('os.reconcileResumableOrchestrationForRelaunch(')
-  })
+  /**
+   * La reconciliation des appels morts est APPELEE dans le test du module extrait, et son REFUS y
+   * arrete la relance (« n engage rien quand la reconciliation refuse le checkpoint ») — plus fort
+   * qu'un `toContain` qui survivait a un resultat ignore.
+   */
 
   it('un agent encore au travail est SIGNALÉ, pas passé sous silence', () => {
     expect(source).toContain('un agent travaille ENCORE')

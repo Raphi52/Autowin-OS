@@ -247,6 +247,35 @@ function copiePresente(worktreePath: string | undefined): boolean | undefined {
   }
 }
 
+/**
+ * Les causes de blocage qu'un utilisateur peut REESSAYER a la main.
+ *
+ * UNE SEULE definition, et c'est le point : la regle vivait en double, recopiee a l'identique dans
+ * `retryRun` et `retryRunAsync`. Corriger l'une laissait l'autre — verifie le 2026-08-26, le
+ * correctif pose sur la variante synchrone n'a rien change au bouton, qui passe par l'asynchrone.
+ *
+ * TOUTES ces causes se reparent HORS de l'app, donc toutes doivent rendre la porte. N'en admettre
+ * que deux fermait celle du refus LE PLUS FREQUENT : observe en direct, une edition refusee en
+ * `base-dirty` laissait un bureau « A reprendre » et un message qui promet « puis « Reprendre » pour
+ * republier », alors que le bouton rendait `undefined` et ne faisait RIEN. Le renderer n'en regarde
+ * pas le resultat, donc l'ecran ne disait rien non plus : clic reel, aucune erreur, aucun changement.
+ * L'app promettait un geste inoperant — et c'est ainsi qu'on refait un travail deja ecrit.
+ *
+ * `base-dirty` et `base-in-progress` se reparent comme `merge-failed` : l'utilisateur committe ou
+ * range sa base, attend la fin de l'operation en cours, puis republie. `delai-de-reprise.ts` note
+ * leur frequence — « 216 refus base-in-progress contre 86 base-dirty » : ce sont precisement les
+ * deux qui avaient le plus besoin de cette porte.
+ *
+ * La garde qui compte reste entiere : `verdict === 'red'` interdit toujours, et `discardHeld` — la
+ * porte qui DETRUIT — n'est pas touchee. On desserre ce qui RECUPERE, jamais ce qui efface.
+ */
+const CAUSES_REESSAYABLES: ReadonlySet<string> = new Set([
+  'merge-failed',
+  'ignored-deliverables',
+  'base-dirty',
+  'base-in-progress'
+])
+
 export class RunWorktreeCoordinator {
   private readonly manager: RunWorktreeCoordinatorDeps['manager']
   private readonly publicationCallbacks = new Map<
@@ -1026,12 +1055,29 @@ export class RunWorktreeCoordinator {
   /** Réarme manuellement un seul rangement épuisé, sans jamais republier sa SHA. */
   retryRun(runId: string): WorktreeAgentActivity | undefined {
     const tracked = this.runs.get(runId)
+    /*
+     * TOUTES LES CAUSES DE BLOCAGE SE REPARENT HORS DE L'APP — donc toutes doivent rester
+     * reessayables. N'en admettre que deux fermait la porte au refus LE PLUS FREQUENT.
+     *
+     * Observe en direct le 2026-08-26 : une edition refusee en `base-dirty` laisse un bureau
+     * « A reprendre », et le message de refus dit « Ouvre Worktrees … puis « Reprendre » pour
+     * republier ». Or `base-dirty` n'etait pas dans cette liste : le bouton rendait `undefined` et ne
+     * faisait RIEN. Le renderer n'en regarde pas le resultat, donc l'ecran ne disait rien non plus —
+     * clic reel verifie, aucune erreur, aucun changement, le fichier de la base inchange. L'app
+     * promettait un geste inoperant, et c'est ainsi qu'on refait un travail deja ecrit.
+     *
+     * `base-dirty` et `base-in-progress` se reparent exactement comme `merge-failed` : l'utilisateur
+     * committe ou range sa base, attend la fin de l'operation en cours, puis republie. Le code note
+     * ailleurs leur frequence — « 216 refus base-in-progress contre 86 base-dirty, parce que
+     * l'utilisateur travaille en continu » (`delai-de-reprise.ts`) : ce sont les deux causes qui
+     * avaient le plus besoin de cette porte.
+     *
+     * La garde qui compte reste intacte : `verdict === 'red'` interdit toujours, et `discardHeld`
+     * — la porte qui DETRUIT — n'est pas touchee.
+     */
     const retryBlockedPublication =
       tracked?.publication === 'blocked' &&
-      // Un refus pour fichiers ignorés se répare hors de l'app (déplacer/supprimer la preuve) :
-      // il doit rester réessayable à la main, comme `merge-failed`, sinon le Hub perd le bouton.
-      (tracked.attentionReason === 'merge-failed' ||
-        tracked.attentionReason === 'ignored-deliverables')
+      CAUSES_REESSAYABLES.has(tracked.attentionReason ?? '')
     const retryExhaustedPublication =
       !!tracked &&
       ['pending', 'cleanup-pending'].includes(tracked.publication ?? '') &&
@@ -1070,10 +1116,7 @@ export class RunWorktreeCoordinator {
     const tracked = this.runs.get(runId)
     const retryBlockedPublication =
       tracked?.publication === 'blocked' &&
-      // Un refus pour fichiers ignorés se répare hors de l'app (déplacer/supprimer la preuve) :
-      // il doit rester réessayable à la main, comme `merge-failed`, sinon le Hub perd le bouton.
-      (tracked.attentionReason === 'merge-failed' ||
-        tracked.attentionReason === 'ignored-deliverables')
+      CAUSES_REESSAYABLES.has(tracked.attentionReason ?? '')
     const retryExhaustedPublication =
       !!tracked &&
       ['pending', 'cleanup-pending'].includes(tracked.publication ?? '') &&

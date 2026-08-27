@@ -1,4 +1,5 @@
 import { applyEdit, decideEdit, editDiff } from './edit-file-command'
+import { decisionDeCommande } from './autorisation-commande'
 import {
   decideRead,
   enumererFichiersLisibles,
@@ -288,6 +289,24 @@ export interface PromptSnapshot {
   providers: string[]
   runsBlocked: Array<{ subject: string; status: string }>
   conversationsCount: number
+  /**
+   * DU TRAVAIL NON FUSIONNE, et la consigne pour le trier — ABSENT quand il n'y en a pas.
+   *
+   * Le recensement repare le 2026-08-26 rend ces travaux VISIBLES dans `get_state`. Mais voir n'est
+   * pas agir : le defaut d'origine (« rien a fusionner » repondu alors que le commit existait)
+   * venait d'un agent sans procedure, pas d'un agent mal informe.
+   *
+   * La consigne vit donc ICI, dans le snapshot serialise a CHAQUE tour — et non dans une regle
+   * permanente du prompt, qui se dilue quand elle est vraie une fois sur cent. Presente seulement
+   * quand du travail attend reellement : zero bruit le reste du temps.
+   */
+  travauxNonFusionnes?: {
+    compte: number
+    /** Nomme le skill a invoquer ; une consigne qui decrit un devoir sans outil n'est pas suivie. */
+    consigne: string
+    /** De quoi reconnaitre les travaux sans relancer le recensement. */
+    apercu: Array<{ agentId: string; date: string; fichiers: string[] }>
+  }
 }
 
 export type AppEvent =
@@ -356,7 +375,7 @@ export function parseDisplayArg(raw: unknown): number | undefined {
  * qu'elle SAIT -- les fichiers qui s'opposent, la raison du blocage, la branche qui porte le
  * travail -- pour que le lecteur n'ait pas a le deviner.
  */
-function circonstanceDePublication(finalized: Record<string, unknown>): string | undefined {
+export function circonstanceDePublication(finalized: Record<string, unknown>): string | undefined {
   const liste = (valeur: unknown): string | undefined =>
     Array.isArray(valeur) && valeur.length > 0 ? valeur.slice(0, 5).join(', ') : undefined
   const texte = (valeur: unknown): string | undefined =>
@@ -368,8 +387,30 @@ function circonstanceDePublication(finalized: Record<string, unknown>): string |
       // `reason` nomme la CATEGORIE (« merge-failed »), `detail` la cause reelle (« Filename too
       // long »). Le diagnostic du 2026-08-26 a demande les DEUX : la categorie seule laisse
       // rediagnostiquer a chaque fois.
+      /*
+       * ET LES FICHIERS, AVEC LEUR PROVENANCE.
+       *
+       * `motif || liste(files)` : des qu'une `reason` existe — TOUJOURS sur `blocked` — le `||`
+       * court-circuitait, et la liste que le manager avait pourtant calculee n'arrivait jamais.
+       * Mesure en direct le 2026-08-26 : une edition d'UN SEUL fichier refusee en `base-dirty`, un
+       * message reduit a « base-dirty », et l'agent a comble le vide en devinant — il a annonce que
+       * le bureau portait « 10 fichiers dont 9 sans rapport », a refuse de publier et pose quatre
+       * questions. Verifie apres coup : le bureau n'apportait qu'un fichier. Le travail etait
+       * publiable ; le message a fait croire l'inverse.
+       *
+       * La PROVENANCE est dite explicitement : ces fichiers sont ceux de la BASE, non commites — le
+       * code le sait deja (« Les fichiers remontes diagnostiquent la base », worktree-manager.ts),
+       * il ne le disait a personne. Sans ce mot, la liste se lit comme le contenu du bureau, et
+       * c'est exactement l'erreur qui a ete commise.
+       */
       const motif = [texte(finalized.reason), texte(finalized.detail)].filter(Boolean).join(' — ')
-      return motif || liste(finalized.files)
+      const fichiers = liste(finalized.files)
+      if (!fichiers) return motif || undefined
+      const provenance =
+        finalized.reason === 'base-dirty'
+          ? `bloque par ${fichiers} — non commite(s) dans la BASE, pas dans le bureau`
+          : `fichiers : ${fichiers}`
+      return motif ? `${motif} — ${provenance}` : provenance
     }
     case 'preserve-et-libere':
       return texte(finalized.branche)
@@ -647,6 +688,29 @@ const CATALOG: CommandSpec[] = [
       'avec leurs fichiers : consulte-le avant de répondre « rien à fusionner » — un `git status` ' +
       'dans l’arbre principal ne les voit pas, ils vivent dans leur propre copie isolée.',
     args: {}
+  },
+  {
+    name: 'run',
+    /*
+     * LA COMMANDE QUE L'UTILISATEUR AUTORISE — la reponse a un defaut vecu, rapporte le 2026-08-26
+     * apres des SEMAINES : « Autorise les commandes git » ecrit dans le chat, et l'agent repond que
+     * cette autorisation « ne leve pas le garde d'execution de son outil Bash ».
+     *
+     * Il n'y avait aucun garde. Il n'y avait aucune capacite : ce catalogue exposait 26 commandes,
+     * aucune n'etait un shell, et `verify` ne laisse passer aucun parametre du modele. L'agent a
+     * donc INVENTE une permission manquante pour expliquer une commande absente — et a envoye
+     * l'utilisateur chercher pendant des semaines un reglage qui n'existait pas.
+     *
+     * Ce qui borne cette ouverture n'est plus « le modele ne choisit jamais » mais une autorisation
+     * REELLE : refus par defaut, par BINAIRE, ecrite par l'UTILISATEUR dans le fil, et lue cote
+     * principal (`autorisation-commande.ts`). Le modele ne peut pas se l'accorder — ses propres
+     * messages ne sont jamais consultes, et un test de cablage le verrouille.
+     */
+    description:
+      "Lancer une commande que l'UTILISATEUR a autorisée dans cette conversation (ex. `git status`). Refusée par défaut : l'autorisation se donne par binaire, en écrivant « autorise les commandes git ». Un seul programme à la fois — les enchaînements (`&&`, `|`, `;`) sont refusés",
+    args: {
+      commande: 'la ligne à lancer, un seul programme et ses arguments (ex. `git status --porcelain`)'
+    }
   },
   {
     name: 'verify',
@@ -1380,7 +1444,21 @@ export class AppCommandBus {
       runsBlocked: full.runs
         .filter((r) => r.blocked)
         .map((r) => ({ subject: r.subject, status: r.status })),
-      conversationsCount: full.conversations.length
+      conversationsCount: full.conversations.length,
+      ...(full.travauxNonPublies.length > 0
+        ? {
+            travauxNonFusionnes: {
+              compte: full.travauxNonPublies.length,
+              consigne:
+                `${full.travauxNonPublies.length} travail(aux) terminé(s) ne sont PAS dans la base. ` +
+                'Invoque le skill `salvage` pour les trier un par un (fusionner / jeter / laisser) : ' +
+                'il juge sur le CONTENU, car le plus souvent le travail est déjà présent sous une ' +
+                'autre implémentation. Ne conclus JAMAIS « rien à fusionner » sans l’avoir fait — un ' +
+                '`git status` dans l’arbre principal ne voit pas ces copies isolées.',
+              apercu: full.travauxNonPublies
+            }
+          }
+        : {})
     }
   }
 
@@ -2199,6 +2277,43 @@ export class AppCommandBus {
       }
       case 'get_state':
         return await this.snapshot()
+      case 'run': {
+        /**
+         * LA COMMANDE QUE L'UTILISATEUR AUTORISE — et personne d'autre.
+         *
+         * Defaut vecu, rapporte le 2026-08-26 apres des semaines : « Autorise les commandes git »
+         * ecrit dans le chat, et l'agent repond que cette autorisation « ne leve pas le garde
+         * d'execution ». Il n'y avait AUCUN garde : il n'y avait aucune capacite. L'agent a invente
+         * une permission manquante pour expliquer une commande absente, et a envoye l'utilisateur
+         * chercher pendant des semaines un reglage qui n'existait pas.
+         *
+         * Le droit vient d'ICI : les messages de role `user` de cette conversation, lus cote
+         * principal. Le modele ne peut pas se l'accorder — ses propres messages ne sont jamais
+         * passes a la decision. C'est la seule propriete qui rend cette ouverture sure, et elle est
+         * verrouillee par un test de cablage.
+         */
+        const ligne = typeof a.commande === 'string' ? a.commande.trim() : ''
+        const messagesUtilisateur = (
+          conversationId ? (this.os.conversations.get(conversationId)?.messages ?? []) : []
+        )
+          .filter((message) => message.role === 'user')
+          .map((message) => (typeof message.content === 'string' ? message.content : ''))
+        const decision = decisionDeCommande(ligne, messagesUtilisateur)
+        if (!decision.autorise) {
+          // Le refus NOMME la cause et le geste qui l'ouvre. Un refus muet renvoie a la devinette —
+          // c'est exactement ce qui a coute des semaines ici.
+          return { lance: false, detail: `Commande refusée : ${decision.motif ?? 'non autorisée'}` }
+        }
+        const cwd = this.os.executionWorkspace
+        if (!cwd) return { lance: false, detail: 'Commande refusée : aucun workspace résolu' }
+        const issue = await this.spawnVerify(ligne.split(/\s+/), cwd, ligne, onProgress)
+        return {
+          lance: true,
+          commande: ligne,
+          exitCode: issue.exitCode,
+          detail: issue.output ?? `${ligne} — code ${issue.exitCode ?? '?'}`
+        }
+      }
       case 'verify':
         return await this.runVerify(onProgress, typeof a.cible === 'string' ? a.cible : undefined)
       case 'brain_query':
@@ -3019,8 +3134,11 @@ export class AppCommandBus {
       // Windows : depuis le correctif CVE-2024-27980, Node REFUSE de spawner un `.cmd` sans shell
       // (`spawn EINVAL`) — constate en essai reel, l'agent recevait un echec d'environnement alors
       // que sa correction etait bonne. On passe donc par `cmd.exe /c` avec des ARGV SEPARES : pas de
-      // chaine interpolee, donc aucune surface d'injection — et de toute façon la commande vient
-      // d'une liste blanche, le modele ne la choisit jamais.
+      // chaine interpolee, donc aucune surface d'injection. ATTENTION : depuis l'ouverture de `run`
+      // (2026-08-26) la commande PEUT venir du modele. Ce qui la borne n'est plus « le modele ne
+      // choisit jamais » mais `decisionDeCommande` : refus par defaut, autorisation par binaire
+      // ecrite par l'UTILISATEUR, et aucun enchainement shell. Le commentaire d'avant est conserve
+      // ici sous sa forme corrigee plutot que supprime : il disait vrai, et ce n'est plus le cas.
       const child =
         process.platform === 'win32'
           ? spawn('cmd.exe', ['/c', file, ...rest], {

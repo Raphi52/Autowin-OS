@@ -177,7 +177,10 @@
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--text-dim);
+  /* Le titre etait plus eteint que son propre contenu : hierarchie inversee (conv-1417). Il passe en
+     --text, l'echelon dim reste pour le CONTENU secondaire. Meme graisse, meme gabarit : seule la
+     couleur monte, d'un cran au-dessus de --text-dim. */
+  color: var(--text);
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.95);
   white-space: nowrap;
 }
@@ -208,8 +211,10 @@
   flex: 1;
   min-height: 0;
   padding: 8px 5px 8px 7px;
-  background: var(--bg-1, rgba(0, 0, 0, 0.56));
-  border: 1px solid var(--line, rgba(255, 255, 255, 0.18));
+  /* Fond et contour RENFORCES (conv-1417) : c'est le CADRE qui porte la lisibilite ici, et un alpha
+     0.56 / 0.18 laissait les nebuleuses claires traverser le texte. Geometrie inchangee. */
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: var(--r2, 12px);
   backdrop-filter: blur(18px) saturate(1.2);
   box-shadow:
