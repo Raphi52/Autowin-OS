@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { autowinStorageKey } from '../storage-keys'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
@@ -1549,6 +1550,23 @@ export const COMPOSITIONS: Record<DecorVariant, Composition> = {
  * La promesse de `poussiere` reste testee, sous son nom propre : changer de defaut ne doit pas
  * effacer la garantie d'une direction qu'on peut encore choisir.
  */
+/**
+ * LA CLE DE LA DIRECTION VISUELLE CHOISIE — declaree ICI, une seule fois, et exportee.
+ *
+ * Elle vivait en local dans `HomeView`. Le decor devenant le fond de TOUTE l'application, un second
+ * lecteur est apparu (`DecorDeFond`) : le travail recupere le 2026-08-27 la RECOPIAIT, et sur
+ * `home.decor.v1` alors que la vue etait passee a `v2` — la direction choisie par l'utilisateur
+ * aurait ete ignoree en silence, exactement le defaut que le commentaire de ce fichier redoutait pour
+ * lui-meme. Une cle de stockage se derive d'une source unique, elle ne se recopie pas.
+ *
+ * POURQUOI `v2` ET NON `v1` — motif conserve depuis `HomeView`, ou cette constante vivait : la cle a
+ * ete VOLONTAIREMENT changee le 2026-08-25. Cause de la plainte « je vois des poussieres » : le defaut
+ * est passe a `actuel` (planetes annelees), mais une machine ayant deja choisi `poussiere` gardait ce
+ * choix en localStorage et continuait d'afficher l'ancienne direction — le nouveau defaut n'atteignait
+ * jamais l'ecran. Repartir sur une cle neuve rend la main a `DECOR_DEFAUT` sans effacer l'ancienne.
+ */
+export const DECOR_STORAGE_KEY = autowinStorageKey('home.decor.v2')
+
 export const DECOR_DEFAUT: DecorVariant = 'actuel'
 
 /**
