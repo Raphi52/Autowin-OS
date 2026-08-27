@@ -221,8 +221,19 @@ export function buildChatPilotagePrompt(
     // facade, defaut rencontre trois fois le 2026-07-29. D'ou ce bloc, et sa PARTIE HONNETE : ce qui est
     // retenu n'est PAS relu au tour suivant, contrairement a claude.exe.
     `MÉMOIRE : tu peux RETENIR un fait avec \`remember\`, et RELIRE l'acquis avec \`brain_query\`. ` +
-    `Retiens quand tu viens d'établir quelque chose de DURABLE et de partageable : une cause racine ` +
-    `vérifiée, une décision technique tranchée, une contrainte d'un système, un chiffre mesuré. ` +
+    // LA PROSE SOUFFLAIT UN MOT ILLEGAL. Elle enumerait « une cause racine verifiee, une decision
+    // technique tranchee, une CONTRAINTE d'un systeme, un chiffre mesure » — quatre situations en
+    // francais, dont AUCUNE n'est une valeur de `REMEMBER_TYPES`. Le modele y prenait le mot le plus
+    // proche de son fait (`contrainte`, `cause-racine`) et se faisait refuser : trois fois mesure,
+    // 2026-08-20 (conv-1086), 2026-08-26, 2026-08-27 (conv-1426). La signature du catalogue porte
+    // desormais l'enumeration (`signatureDeCommande`), mais elle DISPARAIT quand `remember` n'est pas
+    // dans le catalogue courant — et surtout, deux vocabulaires concurrents dans un meme prompt
+    // laissent le choix au modele. On rattache donc chaque situation a SON type legal.
+    `Retiens quand tu viens d'établir quelque chose de DURABLE et de partageable, en prenant le ` +
+    `\`type\` dans ces QUATRE valeurs et jamais un mot à toi : \`lesson\` — une leçon réutilisable, ` +
+    `y compris une cause racine vérifiée · \`decision\` — un choix technique tranché et son motif · ` +
+    `\`preference\` — un goût ou une règle de l'utilisateur · \`domain\` — un fait du système : une ` +
+    `contrainte, un invariant, un chiffre mesuré. ` +
     `Ne retiens PAS une règle de comportement te concernant, ni ce qui ne vaut que ce tour-ci, ni une ` +
     `hypothèse non vérifiée. Le fait doit être AUTOPORTÉ (relisible dans 3 mois sans cette ` +
     `conversation) et porter une source traçable. Les formes acceptées, en ENTIER : ` +
