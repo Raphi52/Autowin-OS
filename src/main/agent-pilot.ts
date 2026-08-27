@@ -1810,6 +1810,32 @@ export class AgentPilot {
               emit({ kind: 'action-progress', actionId, text })
             )
         if (r.attachments?.length) commandAttachments.push(...r.attachments)
+        /*
+         * LA CAPTURE QUI SERT A VALIDER EST MONTREE (conv-1450).
+         *
+         * `attachments` alimentait uniquement le prochain prompt du modele : l'utilisateur ne voyait
+         * jamais l'image sur laquelle reposait le verdict « c'est bon ». On la republie donc comme
+         * ARTEFACT, seul canal deja rendu et persiste par le fil. Restreint aux IMAGES : un log ou un
+         * payload texte n'est pas une preuve visuelle et n'a rien a faire en apercu.
+         */
+        for (const piece of r.attachments ?? []) {
+          if (piece.kind !== 'image' || !piece.content) continue
+          emit({
+            kind: 'artifact',
+            iteration: i,
+            artifact: {
+              id: `tool-capture-${actionId}-${commandAttachments.length}-${piece.name}`,
+              name: piece.name,
+              mimeType: piece.mimeType,
+              kind: 'image',
+              size: piece.size,
+              createdAt: Date.now(),
+              encoding: 'base64',
+              content: piece.content,
+              source: { provider, tool: token.name }
+            }
+          })
+        }
         if (!settledAction)
           emit({
             kind: 'result',
