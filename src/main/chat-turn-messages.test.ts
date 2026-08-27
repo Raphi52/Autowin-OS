@@ -8,7 +8,8 @@ import {
   exigeCorrigerEtPoursuivre,
   signatureDEchec,
   exigeDireLEchec,
-  exigeUnChiffreVerifie
+  exigeUnChiffreVerifie,
+  nommerPiecesJointes
 } from './chat-turn-messages'
 
 describe('boundedTurnHistory', () => {
@@ -511,5 +512,35 @@ describe('exigeUnChiffreVerifie — « total » demande un compte comme « combi
     expect(
       exigeUnChiffreVerifie('Quel est le total de fichiers ?', 'Il y en a 42.', true)
     ).toBe(false)
+  })
+})
+
+describe('buildTurnMessages — pieces jointes nommees dans le fil', () => {
+  const base = { snapshot: { tab: 'chat' }, brainContext: '', memoryEcho: '' }
+
+  it('nomme la piece jointe du message qui la portait', () => {
+    const entries = buildTurnMessages({
+      ...base,
+      history: [
+        {
+          role: 'user',
+          content: 'Voici la maquette',
+          attachments: [{ name: 'maquette.png', kind: 'image' }]
+        },
+        { role: 'assistant', content: 'Bien recu.' },
+        { role: 'user', content: 'reprends la palette' }
+      ]
+    } as never)
+
+    const maquette = entries.find((e) => e.includes('Voici la maquette'))
+    expect(maquette).toContain('[pieces jointes de ce message: maquette.png]')
+    // Un message sans piece jointe ne recoit AUCUNE mention : pas de crochet vide dans le fil.
+    expect(entries.find((e) => e.includes('reprends la palette'))).not.toContain('pieces jointes')
+  })
+
+  it('ne rend rien pour un tableau vide ou des noms vides', () => {
+    expect(nommerPiecesJointes([])).toBe('')
+    expect(nommerPiecesJointes(undefined)).toBe('')
+    expect(nommerPiecesJointes([{ name: '  ' }])).toBe('')
   })
 })

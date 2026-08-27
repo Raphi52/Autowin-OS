@@ -424,6 +424,39 @@ function waitForAnswer(answer: Promise<string>, signal?: AbortSignal): Promise<s
   })
 }
 
+type PieceJointeDuFil = NonNullable<Message['attachments']>[number] & { thumbnail?: string }
+
+/** Le binaire est-il REELLEMENT la ? Un `content` vide produirait un fichier vide chez le provider. */
+export function aPieceJointeLisible(piece: PieceJointeDuFil | undefined): boolean {
+  return typeof piece?.content === 'string' && piece.content.length > 0
+}
+
+/**
+ * Repli sur la MINIATURE persistee quand l'original n'a pas survecu a la relecture du fil.
+ *
+ * Le fil ne persiste que `AttachmentMeta` : nom, type, taille, miniature. Rouvrir une conversation
+ * perd donc le binaire d'origine. La miniature, elle, est une vraie image (data URL) : degradee mais
+ * LISIBLE. Le nom porte la mention pour que le modele ne prenne jamais la reduction pour la source.
+ */
+export function replierSurLaMiniature(
+  piece: PieceJointeDuFil | undefined
+): PieceJointeDuFil | undefined {
+  const thumbnail = piece?.thumbnail
+  if (!piece || typeof thumbnail !== 'string' || !thumbnail.startsWith('data:image/')) return undefined
+  const virgule = thumbnail.indexOf(',')
+  const mimeType = thumbnail.slice(5, thumbnail.indexOf(';')) || 'image/png'
+  const content = virgule >= 0 ? thumbnail.slice(virgule + 1) : ''
+  if (!content) return undefined
+  return {
+    ...piece,
+    name: `${piece.name} (miniature — original non conserve)`,
+    mimeType,
+    kind: 'image',
+    size: content.length,
+    content
+  }
+}
+
 export class AgentPilot {
   constructor(
     private readonly registry: ProviderRegistry,
@@ -919,7 +952,48 @@ export class AgentPilot {
       compteRenduNonVu,
       tourCoupePourCeMessage
     })
-    const currentAttachments = history.at(-1)?.attachments
+    /**
+     * LES PIECES JOINTES DE TOUT LE FIL, PAS SEULEMENT DU DERNIER MESSAGE.
+     *
+     * Avant : `history.at(-1)?.attachments`. Une image jointe a un tour ANTERIEUR n'atteignait
+     * jamais le modele — vecu par l'utilisateur le 2026-08-27 : il joint une image, en reparle au
+     * tour suivant, et l'orchestrateur repond qu'aucune image ne lui est parvenue. Elle etait bien
+     * stockee, affichee, et remise dans `history` par `index.ts` ; elle mourait ici.
+     *
+     * Le plus RECENT d'abord, puis on borne : les gardes IPC plafonnent a 8 pieces jointes, et la
+     * question du tour porte presque toujours sur la derniere image. Sacrifier la plus ancienne est
+     * une perte bornee et lisible ; jeter la courante serait reconduire le defaut.
+     *
+     * Dedoublonnage par (nom, contenu) : un fil ou l'utilisateur renvoie la meme capture deux fois
+     * ne doit pas payer deux fois le meme binaire, ni consommer deux places sur les 8.
+     */
+    const MAX_PIECES_JOINTES_DU_FIL = 8
+    const currentAttachments = ((): NonNullable<Message['attachments']> => {
+      const vues = new Set<string>()
+      const retenues: NonNullable<Message['attachments']> = []
+      for (let index = history.length - 1; index >= 0; index--) {
+        for (const brute of history[index]?.attachments ?? []) {
+          /*
+           * UNE PIECE JOINTE SANS BINAIRE N'EST PAS UNE PIECE JOINTE.
+           *
+           * Le fil PERSISTE `AttachmentMeta` (nom, type, taille, miniature) — le contenu original
+           * n'y est PAS. Un fil rehydrate apres relecture rend donc des pieces jointes sans
+           * `content` ; les envoyer telles quelles ferait ecrire un fichier vide au provider
+           * (`materializeClaudeAttachments` fait `Buffer.from(content, 'base64')`). On les
+           * remplace par leur MINIATURE quand elle existe -- degradee, mais lisible et NOMMEE
+           * comme telle, jamais presentee comme l'original.
+           */
+          const piece = aPieceJointeLisible(brute) ? brute : replierSurLaMiniature(brute)
+          if (!piece) continue
+          const cle = `${piece.name}|${piece.content}`
+          if (vues.has(cle)) continue
+          vues.add(cle)
+          retenues.push(piece)
+          if (retenues.length >= MAX_PIECES_JOINTES_DU_FIL) return retenues
+        }
+      }
+      return retenues
+    })()
 
     // Coût cumulé du tour (toutes les itérations LLM du même message utilisateur).
     const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0 }

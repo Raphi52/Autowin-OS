@@ -35,7 +35,16 @@ export interface TurnMessageParts {
    */
   skillBody?: string
   /** Le fil complet, utilisé quand aucune session CLI n'est reprise. */
-  history: ReadonlyArray<{ role: string; content: string }>
+  history: ReadonlyArray<{
+    role: string
+    content: string
+    /**
+     * Pieces jointes du message. Presentes ici pour etre NOMMEES dans le fil aplati : le binaire
+     * lui-meme voyage a part (`attachments` du message provider), mais sans ce nom rien n'indique
+     * QUEL tour portait l'image — le modele ne peut alors ni la situer, ni savoir qu'elle existe.
+     */
+    attachments?: ReadonlyArray<{ name: string; kind?: string }>
+  }>
   /** Renseigné quand une session CLI existante est reprise : le modèle connaît déjà l'historique. */
   resumeSessionId?: string
   /** Dernier message utilisateur — le seul renvoyé quand la session est reprise. */
@@ -103,6 +112,23 @@ export function boundedContinuationHistory<T extends { role: 'user' | 'assistant
  * Une entrée vide (pas de contexte récupéré, pas d'écho) laisserait un trou de deux sauts de ligne dans
  * le prompt final : on filtre, on ne laisse pas le hasard décider.
  */
+/**
+ * Nomme les pieces jointes d'un message dans le fil aplati.
+ *
+ * Le fil est du TEXTE : sans cette mention, une image jointe a un tour passe est invisible dans
+ * l'historique meme quand son binaire accompagne le prompt — le modele voit N images sans savoir
+ * laquelle repond a « l'image que je t'ai envoyee tout a l'heure ». Le nom est la seule ancre qui
+ * relie un tour du fil a un binaire du payload.
+ */
+export function nommerPiecesJointes(
+  attachments?: ReadonlyArray<{ name: string; kind?: string }>
+): string {
+  if (!attachments?.length) return ''
+  const noms = attachments.map((piece) => piece.name).filter((nom) => nom.trim().length > 0)
+  return noms.length ? `
+[pieces jointes de ce message: ${noms.join(', ')}]` : ''
+}
+
 export function buildTurnMessages(parts: TurnMessageParts): string[] {
   const nonVu = parts.compteRenduNonVu?.trim()
   const entries = parts.resumeSessionId
@@ -125,7 +151,10 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
         parts.memoryEcho,
         parts.rappelConversations ?? '',
         parts.skillBody ?? '',
-        ...parts.history.map((m) => `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}`)
+        ...parts.history.map(
+          (m) =>
+            `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}${nommerPiecesJointes(m.attachments)}`
+        )
       ]
   return entries.filter((entry) => entry.trim().length > 0)
 }
