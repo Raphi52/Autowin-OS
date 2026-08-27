@@ -65,6 +65,25 @@ describe('parseTestReport', () => {
     expect(parseTestReport(`> projet@1 test\n> vitest run\n${brut}\n`).cases).toHaveLength(3)
   })
 
+  // ROUGE attendu avant correction : extractJson decoupait de la PREMIERE { a la DERNIERE }.
+  // Un harnais reel encadre son rapport de bruit qui porte des accolades (avertissement node,
+  // stderr concatene apres le JSON) : la tranche devenait insyntaxique et la vue affichait
+  // « sortie illisible » alors que le rapport etait bien la.
+  it('lit le rapport meme entoure de bruit portant des accolades', () => {
+    const bruite = '(node:12) Warning {experimental}\n' + brut + '\nstderr: leak { unclosed\n'
+    const r = parseTestReport(bruite)
+    expect(r.invalid).toBeUndefined()
+    expect(r.cases).toHaveLength(3)
+  })
+
+  // ENTREE REFUTANTE : si la correction se contentait de prendre le PREMIER objet parsable, ce
+  // bruit (JSON valide mais SANS testResults) passerait pour un rapport vide => faux vert.
+  it('refuse un objet JSON qui n est pas un rapport de test', () => {
+    const r = parseTestReport('{"npm":"warn","code":1}\nno report here\n')
+    expect(r.invalid).toBeTruthy()
+    expect(r.cases).toEqual([])
+  })
+
   it('avoue une sortie illisible au lieu d inventer un vert', () => {
     const r = parseTestReport('Error: cannot find module vitest')
     expect(r.invalid).toBeTruthy()

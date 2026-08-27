@@ -163,7 +163,10 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
 
       <div className="tests-body">
         <aside className="tests-projects">
-          {projets.length === 0 && (
+          {/* Un canal mort ne doit pas coexister avec une invite a ajouter un projet : l'invite
+              ne vaut que si le registre a REELLEMENT repondu vide. */}
+          {erreur && <p className="tests-error">{erreur}</p>}
+          {projets.length === 0 && !erreur && (
             <p className="tests-empty">
               Aucun projet enregistré. « + Projet » ajoute n’importe quelle racine (Autowin OS ou un
               autre dépôt).
@@ -200,7 +203,6 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
         </aside>
 
         <div className="tests-results">
-          {erreur && <p className="tests-error">{erreur}</p>}
           {!resultat && projetActif && (
             <p className="tests-empty">
               {projetActif.runnable

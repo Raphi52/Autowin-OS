@@ -129,4 +129,28 @@ describe('TestsView — multi-projets', () => {
       'illisible'
     )
   })
+
+  // ROUGE issu de la capture /see : l'ecran affichait EN MEME TEMPS « canal tests:projects
+  // indisponible » et l'invite « Aucun projet enregistre » — deux messages contradictoires,
+  // dont un qui invite a agir alors que le canal est mort.
+  it('sur canal absent, avoue la panne et n invite PAS a ajouter un projet', async () => {
+    Object.defineProperty(window, 'api', { configurable: true, value: {} })
+    const container = monter()
+    await rendre(container)
+    expect(container.textContent).toContain('canal tests:projects indisponible')
+    expect(container.textContent).not.toContain('Aucun projet enregistr')
+  })
+
+  // ENTREE REFUTANTE : canal PRESENT rendant une liste vide. Si la correction supprimait l'invite
+  // en toutes circonstances, l'utilisateur n'aurait plus aucun point d'entree — ce test echouerait.
+  it('canal present et registre vide : l invite d ajout reste affichee', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { testProjects: vi.fn(async () => []) }
+    })
+    const container = monter()
+    await rendre(container)
+    expect(container.textContent).toContain('Aucun projet enregistr')
+    expect(container.textContent).not.toContain('indisponible')
+  })
 })

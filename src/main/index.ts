@@ -383,6 +383,7 @@ import { artifactsFromExecutionEvidence } from './providers/artifacts'
 import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
 import { readGitState, readGitDiff } from './git-read-main'
 import {
+  ensureTestProjects,
   inspectProject,
   loadTestProjects,
   runProjectTests,
@@ -2268,11 +2269,7 @@ Le fil reprend ensuite normalement.`
   // pour que l'ecran ne soit pas vide, mais il n'y a aucun privilege attache a cette entree.
   ipcMain.handle('tests:projects', (event) => {
     assertTrustedRendererSender(event, 'TestsProjects')
-    let projets = loadTestProjects()
-    if (projets.length === 0) {
-      projets = saveTestProjects([{ root: os.executionWorkspace }])
-    }
-    return projets.map((projet) => inspectProject(projet))
+    return ensureTestProjects(os.executionWorkspace).map((projet) => inspectProject(projet))
   })
   ipcMain.handle('tests:saveProjects', (event, projects: unknown) => {
     assertTrustedRendererSender(event, 'TestsSaveProjects')

@@ -70,16 +70,53 @@ export function detectTestRunner(pkg: unknown): DetectedRunner {
   return { runner: 'none', command: '', args: [] }
 }
 
-/** Isole l'objet JSON dans une sortie qui porte aussi les lignes de npm/npx. */
-function extractJson(raw: string): unknown {
-  const start = raw.indexOf('{')
-  const end = raw.lastIndexOf('}')
-  if (start < 0 || end <= start) return undefined
-  try {
-    return JSON.parse(raw.slice(start, end + 1))
-  } catch {
-    return undefined
+/** Fin de l'objet ouvert en `start`, en ignorant les accolades qui vivent DANS une chaine. */
+function objectEnd(raw: string, start: number): number {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < raw.length; i += 1) {
+    const c = raw[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (c === '\\') escaped = true
+      else if (c === '"') inString = false
+      continue
+    }
+    if (c === '"') inString = true
+    else if (c === '{') depth += 1
+    else if (c === '}') {
+      depth -= 1
+      if (depth === 0) return i
+    }
   }
+  return -1
+}
+
+/**
+ * Isole le RAPPORT dans une sortie qui porte aussi le bruit de npm/npx et du stderr. Decouper de la
+ * premiere `{` a la derniere `}` etait faux des qu'une ligne de bruit portait une accolade : la
+ * tranche devenait insyntaxique et un rapport bien present passait pour illisible. On balaie donc
+ * les objets equilibres et on retient celui qui porte `testResults` — un objet JSON quelconque
+ * (avertissement npm serialise) n'est jamais promu en rapport vide.
+ */
+function extractJson(raw: string): unknown {
+  let fallback: unknown
+  for (let i = raw.indexOf('{'); i >= 0; i = raw.indexOf('{', i + 1)) {
+    const end = objectEnd(raw, i)
+    if (end < 0) continue
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw.slice(i, end + 1))
+    } catch {
+      continue
+    }
+    const obj = record(parsed)
+    if (obj && Array.isArray(obj.testResults)) return parsed
+    if (fallback === undefined) fallback = parsed
+    i = end
+  }
+  return fallback
 }
 
 function statusOf(value: unknown): TestCaseStatus {

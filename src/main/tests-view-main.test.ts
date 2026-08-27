@@ -1,8 +1,9 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  ensureTestProjects,
   inspectProject,
   loadTestProjects,
   runProjectTests,
@@ -110,5 +111,32 @@ describe('runProjectTests', () => {
     })
     expect(r.report.invalid).toMatch(/harnais/)
     expect(r.exitCode).toBeNull()
+  })
+})
+
+describe('ensureTestProjects', () => {
+  // La capture /see montrait une vue Tests VIDE : registre absent => aucun projet => ecran mort.
+  // Le semis du workspace courant doit donc etre une fonction TESTEE, pas une ligne dans index.ts.
+  it('seme le workspace courant quand le registre est absent', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'reg-seed-')), 'test-projects.json')
+    const projets = ensureTestProjects('C:/dev/mon-app', path)
+    expect(projets.map((p) => p.root)).toEqual(['C:/dev/mon-app'])
+    // persiste : un second appel relit, il ne re-seme pas
+    expect(loadTestProjects(path).map((p) => p.root)).toEqual(['C:/dev/mon-app'])
+  })
+
+  // ENTREE REFUTANTE : registre DEJA peuplé d'une autre racine. Un semis inconditionnel (ou un
+  // ajout « tant qu'on y est ») ferait apparaitre C:/dev/mon-app ici — ce test doit alors echouer.
+  it('ne touche pas un registre deja peuple', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'reg-keep-')), 'test-projects.json')
+    saveTestProjects([{ root: 'D:/autre-projet', label: 'Autre' }], path)
+    const projets = ensureTestProjects('C:/dev/mon-app', path)
+    expect(projets.map((p) => p.root)).toEqual(['D:/autre-projet'])
+  })
+
+  it('rend une liste vide sans semer quand aucune racine n est fournie', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'reg-none-')), 'test-projects.json')
+    expect(ensureTestProjects('   ', path)).toEqual([])
+    expect(existsSync(path)).toBe(false)
   })
 })

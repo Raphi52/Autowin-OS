@@ -55,6 +55,19 @@ export function saveTestProjects(projects: unknown, path = registryPath()): Test
   return normalized
 }
 
+/**
+ * Garantit que la vue n'ouvre pas sur un ecran mort : registre absent ou vide => le workspace
+ * COURANT est seme, une fois, et persiste. Un registre deja peuple n'est jamais touche (aucune
+ * racine ajoutee d'office), et sans racine fournie on rend une liste vide plutot qu'une devinette.
+ */
+export function ensureTestProjects(workspaceRoot: string, path = registryPath()): TestProject[] {
+  const existants = loadTestProjects(path)
+  if (existants.length > 0) return existants
+  const root = String(workspaceRoot ?? '').trim()
+  if (!root) return []
+  return saveTestProjects([{ root }], path)
+}
+
 /** Lit le package.json de la racine pour dire QUEL harnais la vue pourra lancer. */
 export function inspectProject(project: TestProject): InspectedProject {
   const manifest = join(project.root, 'package.json')
