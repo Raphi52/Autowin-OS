@@ -105,3 +105,18 @@ export function contextGauge(usage: TokenUsage): ContextGauge | undefined {
     fresh
   }
 }
+
+/**
+ * LA DEMANDE DE COMPACTION — un message adresse a l'agent, pas une troncature muette.
+ *
+ * Ce depot n'a AUCUNE mecanique de compaction cote moteur : la seule reponse a la saturation etait
+ * la troncature brute des quarante derniers messages (`chat-turn-messages.ts`). Inventer ici un
+ * elagage silencieux ferait disparaitre du contexte sans trace. Le bouton envoie donc un TOUR
+ * normal, visible dans le fil et journalise comme tout autre message : l'agent produit le resume,
+ * et c'est ce resume qui porte le fil ensuite.
+ */
+export const COMPACT_REQUEST =
+  'Compacte ce fil : produis un resume dense et autonome de la conversation jusqu ici — objectif ' +
+  'poursuivi, decisions prises et leurs raisons, fichiers et artefacts touches, preuves obtenues, ' +
+  'et le reste a faire. Ecris-le pour qu un agent qui n aurait PAS lu les messages precedents ' +
+  'puisse reprendre le travail a partir de ce seul message. N execute aucune autre action.'

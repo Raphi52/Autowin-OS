@@ -193,7 +193,15 @@ function observedLabel(observedAt: string | undefined, stale: boolean): string {
  * on n'affiche alors aucune barre. Un 0 % affirmerait « ce fil est vide » là où la vérité est
  * « on l'ignore » — même discipline que dans ChatView, d'où vient cette jauge.
  */
-function ContextGaugeRow({ gauge }: { gauge?: ContextGauge }): React.JSX.Element | null {
+function ContextGaugeRow({
+  gauge,
+  onCompact,
+  busy
+}: {
+  gauge?: ContextGauge
+  onCompact?: () => void
+  busy?: boolean
+}): React.JSX.Element | null {
   if (!gauge) return null
   const pourcent = Math.round(gauge.ratio * 100)
   const titre =
@@ -224,6 +232,25 @@ function ContextGaugeRow({ gauge }: { gauge?: ContextGauge }): React.JSX.Element
           <span>{pourcent} % occupé</span>
           <small>fenêtre du modèle servi</small>
         </strong>
+        {/* Le bouton n'existe QUE si l'occupation est MESURÉE (on est déjà dans `gauge`) et qu'un
+            gestionnaire est câblé : proposer de compacter un fil dont on ignore le remplissage, ou
+            sans destinataire, serait un bouton qui ment. */}
+        {onCompact && (
+          <button
+            type="button"
+            className="quota-context-compact"
+            data-testid="quota-context-compact"
+            disabled={busy === true}
+            title={
+              busy === true
+                ? 'Compaction indisponible : un tour est déjà en cours'
+                : 'Demander à l’agent un résumé dense du fil, puis repartir de ce résumé'
+            }
+            onClick={onCompact}
+          >
+            Compacter
+          </button>
+        )}
       </div>
     </article>
   )
@@ -231,10 +258,15 @@ function ContextGaugeRow({ gauge }: { gauge?: ContextGauge }): React.JSX.Element
 
 export function ModelQuotaIndicator({
   provider,
-  contextGauge
+  contextGauge,
+  onCompact,
+  busy
 }: {
   provider?: string
   contextGauge?: ContextGauge
+  /** Absent = AUCUN bouton Compacter : la popup ne fabrique pas une action sans destinataire. */
+  onCompact?: () => void
+  busy?: boolean
 }): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<ModelQuotaSnapshot>()
   const [open, setOpen] = useState(false)
@@ -371,7 +403,18 @@ export function ModelQuotaIndicator({
           </header>
           {error && <p className="model-quota-error">{error}</p>}
           <div className="model-quota-list">
-            <ContextGaugeRow gauge={contextGauge} />
+            <ContextGaugeRow
+              gauge={contextGauge}
+              busy={busy}
+              onCompact={
+                onCompact
+                  ? () => {
+                      setOpen(false)
+                      onCompact()
+                    }
+                  : undefined
+              }
+            />
             {providerQuotas.map((model) => (
               <article key={model.modelId} className="model-quota-row">
                 <div className="model-quota-name">
