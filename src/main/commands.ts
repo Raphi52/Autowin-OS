@@ -11,6 +11,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -31,7 +32,7 @@ import {
   porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
   porteeDerivableDesChangements,
-  declareVitest,
+  scriptVitestUnique,
   echecsDuRapport,
   verdictDifferentiel,
   noteDeDifferentiel,
@@ -1115,13 +1116,27 @@ interface MesureVerifiee {
  * Rend les octets a leur place, ou dit NON. Un reessai unique couvre le verrou passager (un worker
  * de test qui vient de lire le fichier, un antivirus) sans transformer un echec durable en attente.
  */
-function restaurer(absolu: string, octets: Buffer): boolean {
+export function restaurer(
+  absolu: string,
+  octets: Buffer,
+  /** Injectable pour les tests : c'est le SEUL moyen de prouver la branche d'echec. */
+  ecrire: (chemin: string, contenu: Buffer) => void = writeFileSync
+): boolean {
+  /*
+   * DEUX ESSAIS, ET LA MESURE DE LEUR ECART. Un juge a chronometre la fenetre entre les deux
+   * tentatives : 0,367 ms. Le commentaire d'origine pretendait couvrir « un verrou passager (worker
+   * de test, antivirus) », dont l'ordre de grandeur est de 10 ms a plusieurs secondes : la
+   * justification ecrite n'etait donc PAS tenue par le code. Deux choix s'offraient — attendre
+   * vraiment, ou cesser de promettre. Attendre dans le fil principal d'Electron pour un cas non
+   * mesure serait payer cher une hypothese ; on garde donc le second essai (il couvre une ecriture
+   * qui echoue une fois sans cause durable) et on NOMME ce qu'il ne couvre pas.
+   */
   for (let essai = 0; essai < 2; essai += 1) {
     try {
-      writeFileSync(absolu, octets)
+      ecrire(absolu, octets)
       return true
     } catch {
-      /* on retente une fois, puis on renonce en le disant */
+      /* un second essai immediat ; un verrou DURABLE n'est pas couvert, et le refus le dira */
     }
   }
   return false
@@ -2860,8 +2875,46 @@ export class AppCommandBus {
         const octetsAvantEdition = lireOctetsAvant?.()
         const edite = (result as { path?: unknown } | undefined)?.path
         const cible = porteeDerivableDesChangements(typeof edite === 'string' ? [edite] : []) ?? []
-        const mesurer = (): Promise<MesureVerifiee> => this.mesurerAvecRapport(workspaceRoot, cible)
-        const verification = await mesurer()
+        /*
+         * LA BASELINE EMPRUNTE LA MEME VOIE QUE LA MESURE — par CONSTRUCTION, pas par verification.
+         *
+         * `cibleEffective` retient la voie reellement suivie. Sans elle, un repli sur la suite
+         * complete cote APRES laissait la baseline retenter la PORTEE : deux voies differentes, donc
+         * deux perimetres, donc un refus (juste, mais evitable). Mesure par repetition : 2 rouges sur
+         * 12 avec un code md5-identique, tous deux sur cette asymetrie.
+         *
+         * La garde `issue.command === commandeAttendue` reste en aval, comme ceinture : elle
+         * verifiait cet invariant APRES coup, il est desormais tenu AVANT.
+         */
+        let cibleEffective: readonly string[] = cible
+        const mesurer = (): Promise<MesureVerifiee> =>
+          this.mesurerAvecRapport(workspaceRoot, cibleEffective)
+        let verification = await mesurer()
+        /*
+         * UNE PORTEE QUI N'A JOUE AUCUN TEST CEDE LA PLACE A LA SUITE COMPLETE — elle ne refuse pas.
+         *
+         * DEFAUT DE MON PROPRE CORRECTIF, mesure par repetition : le refus « 0 test joue » est juste,
+         * mais applique a la voie de PORTEE il transforme une intermittence benigne en refus de
+         * publication. `vitest related sujet.ts --run` a rendu 0 test collecte sur un depot ou
+         * `sujet.test.ts` importe pourtant `sujet.ts` — 1 run sur 2 dans la mesure. Le refus est alors
+         * un FAUX refus, et il aurait mordu en production.
+         *
+         * C'est la doctrine deja ecrite dans ce module : « le repli est la suite globale, jamais
+         * l'absence de verification ». Une portee vide n'est pas une preuve, mais ce n'est pas une
+         * faute de l'edition : on remesure plus large. Si la suite COMPLETE ne joue elle non plus
+         * aucun test, alors le projet n'a rien a prouver et le refus, lui, est fonde.
+         */
+        if (verification.allowed && verification.ok && verification.parPortee) {
+          const compte = echecsDuRapport(verification.rapport)
+          if (compte.concluant && compte.testsJoues === 0) {
+            const globale = await this.mesurerAvecRapport(workspaceRoot, [])
+            if (globale.allowed) {
+              verification = globale
+              // La voie a BASCULE : la baseline suivra la meme, sinon elle mesure autre chose.
+              cibleEffective = []
+            }
+          }
+        }
         if (!verification.allowed) {
           throw new Error(refusAvecIssue('verification-indisponible', verification.reason))
         }
@@ -2882,6 +2935,7 @@ export class AppCommandBus {
          * cinq voies prouvees. Le detail vit dans `verify-command.ts`, en tete de `echecsDuRapport`.
          */
         let noteDifferentielle: string | undefined
+        let testsJouesMesures: number | undefined
         /*
          * ON NE MESURE UNE BASELINE QUE SI ELLE PEUT CONCLURE.
          *
@@ -2891,29 +2945,111 @@ export class AppCommandBus {
          * un test du depot est passe de 1,4 s a un plafond de 20 s. Lire le rapport d'APRES d'abord
          * rend le cout nul quand la mesure est de toute facon impossible.
          */
-        const rapportApres = verification.ok
-          ? undefined
-          : echecsDuRapport(verification.rapport)
-        if (rapportApres?.concluant && octetsAvantEdition && typeof edite === 'string') {
+        /*
+         * LE RAPPORT EST LU AUSSI SUR UN VERT — pour savoir COMBIEN de tests ont tourne.
+         *
+         * Mesure hors modele : `vitest related <fichier de code sans test associe> --run` rend
+         * EXIT 0, `numTotalTests: 0`. Toute edition qu'aucun test n'exerce etait donc publiee sous
+         * l'etiquette « verifie ». La lecture ne coute rien (le fichier est deja la) et c'est
+         * `verdictDifferentiel` qui tranche : un exit 0 sans test joue n'est pas un vert.
+         *
+         * La sanite des fichiers cites est branchee ici : un rapport qui designe une suite absente du
+         * bureau n'a pas ete produit par la mesure qu'on croit lire.
+         */
+        /*
+         * VITEST NOMME SES SUITES EN CHEMIN ABSOLU. Mesure : la garde de sanite, ecrite pour des
+         * chemins relatifs, declarait donc TOUTE suite « introuvable » et rendait le differentiel
+         * non concluant en permanence — un faux refus total, attrape par les tests d'integration
+         * alors que les tests unitaires (fixture a chemins relatifs) restaient verts. Les deux formes
+         * sont acceptees ici, et un test unitaire verrouille desormais la forme ABSOLUE.
+         */
+        const fichierExiste = (chemin: string): boolean =>
+          existsSync(isAbsolute(chemin) ? chemin : join(workspaceRoot, chemin))
+        let rapportApres = echecsDuRapport(verification.rapport, fichierExiste)
+        if (!verification.ok && rapportApres.concluant && octetsAvantEdition && typeof edite === 'string') {
           const avant = await this.baselineAvantEdition(
             join(workspaceRoot, edite),
             octetsAvantEdition,
             mesurer,
             verification.command
           )
-          const verdict = verdictDifferentiel(
-            false,
-            rapportApres,
-            avant ? echecsDuRapport(avant.rapport) : undefined
-          )
-          if (verdict.publiable) noteDifferentielle = noteDeDifferentiel(verdict)
-          else if (verdict.raison) {
+          let rapportAvant = avant ? echecsDuRapport(avant.rapport, fichierExiste) : undefined
+          let verdict = verdictDifferentiel(false, rapportApres, rapportAvant)
+          /*
+           * LA PORTEE S'EST REVELEE NON FIABLE : ON REMESURE LES DEUX PLUS LARGE.
+           *
+           * `vitest related` peut collecter 0 test par intermittence. Quand cela frappe la BASELINE,
+           * le differentiel ne peut rien conclure — et refuser ici serait un faux refus au hasard,
+           * exactement ce que la repetition a mesure. On rejoue donc les DEUX mesures sur la suite
+           * complete, ENSEMBLE : le perimetre reste commun par construction.
+           */
+          if (
+            !verdict.publiable &&
+            !verdict.concluant &&
+            verification.parPortee &&
+            rapportAvant?.concluant === true &&
+            rapportAvant.testsJoues === 0
+          ) {
+            cibleEffective = []
+            const globale = await mesurer()
+            if (globale.allowed) {
+              verification = globale
+              rapportApres = echecsDuRapport(globale.rapport, fichierExiste)
+              const avantGlobal = await this.baselineAvantEdition(
+                join(workspaceRoot, edite),
+                octetsAvantEdition,
+                mesurer,
+                globale.command
+              )
+              rapportAvant = avantGlobal
+                ? echecsDuRapport(avantGlobal.rapport, fichierExiste)
+                : undefined
+              verdict = verification.ok
+                ? verdictDifferentiel(true, rapportApres, rapportAvant)
+                : verdictDifferentiel(false, rapportApres, rapportAvant)
+            }
+          }
+          if (verdict.publiable) {
+            noteDifferentielle = noteDeDifferentiel(verdict)
+            // Le compte joue est une PREUVE, pas un ornement : il doit accompagner les deux chemins.
+            testsJouesMesures = verdict.testsJoues
+          }
+          else if (verdict.nouvelles.length > 0) {
+            /*
+             * LE REFUS NOMME CE QU'IL IMPUTE. Un « vérification échouée » nu renvoie le modele a la
+             * devinette : il ne sait pas lesquels des rouges affiches sont DE LUI. Mineur releve par
+             * le panel, et c'est aussi ce qui rend ce refus diagnosticable de l'exterieur.
+             */
+            throw new Error(
+              `Vérification du bureau échouée (${verification.command}) — ` +
+                `${verdict.nouvelles.length} échec(s) NOUVEAU(X) imputable(s) à cette édition : ` +
+                `${verdict.nouvelles.slice(0, 5).map((n) => `« ${n} »`).join(', ')}` +
+                `${SAUT_NATURE}${verification.output}`
+            )
+          } else if (verdict.raison) {
             // Le refus ENSEIGNE : « baseline non mesurable » n'est pas « regression imputable ».
             // Sans cette distinction, le modele est envoye corriger un test qu'il n'a pas touche.
             throw new Error(
               `Vérification du bureau échouée (${verification.command}) — différentiel non ` +
                 `concluant (${verdict.raison}), donc publication refusée par précaution :` +
                 `${SAUT_NATURE}${verification.output}`
+            )
+          }
+        }
+        /*
+         * LE CHEMIN VERT PASSE PAR LE MEME JUGE. Il ne mesure toujours AUCUNE baseline (le compteur
+         * d'executions le prouve), mais il doit refuser un exit 0 qui n'a joue aucun test.
+         */
+        let testsJoues: number | undefined = testsJouesMesures
+        if (verification.ok) {
+          const verdictDuVert = verdictDifferentiel(true, rapportApres, undefined)
+          testsJoues = verdictDuVert.testsJoues
+          if (!verdictDuVert.publiable) {
+            throw new Error(
+              refusAvecIssue(
+                'verification-indisponible',
+                `${verdictDuVert.raison} (${verification.command})`
+              )
             )
           }
         }
@@ -2936,10 +3072,13 @@ export class AppCommandBus {
         // Le verdict NOMME sa portee et son angle mort. Un vert dont on ignore l'etendue se lit
         // comme une preuve plus large qu'elle ne l'est — c'est ainsi qu'on fabrique un faux vert.
         if (result && typeof result === 'object') {
+          // Le verdict porte le COMPTE de tests joues : « verifie » sans ce chiffre laissait croire
+          // a une preuve dont l'etendue etait inconnue — y compris quand elle etait nulle.
           result = {
             ...result,
             verifie: verification.command,
             portee: parPortee ? VERIFY_RELATED_ANGLE_MORT : 'suite complète',
+            ...(testsJoues === undefined ? {} : { testsJoues }),
             ...(noteDifferentielle ? { differentiel: noteDifferentielle } : {})
           } as Awaited<T>
         }
@@ -3062,23 +3201,31 @@ export class AppCommandBus {
    * CONTRAINTE HARD INTACTE : le modele ne choisit toujours JAMAIS la commande. `decideRelatedVerify`
    * et `decideVerifyCommand` decident, l'argv est construit ici argument par argument, `shell: false`.
    */
-  /** Rend unique le nom de chaque rapport de tests, y compris entre deux mesures du meme tour. */
-  private compteurDeRapports = 0
+  /** Ecriture de fichier, remplacable par un test pour prouver la branche « non restaure ». */
+  private ecrireFichier: (chemin: string, contenu: Buffer) => void = writeFileSync
 
   private async mesurerAvecRapport(
     workspaceRoot: string,
     cible: readonly string[]
   ): Promise<MesureVerifiee> {
-    const rapportVers = join(
-      tmpdir(),
-      `autowin-verdict-${process.pid}-${this.compteurDeRapports++}.json`
-    )
+    /*
+     * UN DOSSIER A NOM ALEATOIRE, PAS UN NOM DERIVE DU PID.
+     *
+     * La v2 ecrivait `autowin-verdict-<pid>-<compteur>.json` dans le dossier temporaire : un chemin
+     * DEVINABLE, et un panel a prouve par execution qu'un test peut le reecrire pour fabriquer le
+     * verdict. `mkdtempSync` ne FERME pas cette voie — le chemin reste publie sur l'argv du process
+     * fils, donc lisible par tout descendant — mais il en releve le cout et supprime deux defauts
+     * reels : la collision entre deux instances de bus dans le meme process (pid partage, compteur
+     * par instance), et la substitution par un lien pose a l'avance sur un chemin previsible.
+     */
+    const dossierDeRapport = mkdtempSync(join(tmpdir(), 'autowin-verdict-'))
+    const rapportVers = join(dossierDeRapport, 'rapport.json')
     /*
      * PAS DE VITEST, PAS DE RAPPORT — et donc pas de differentiel, donc le comportement d'AVANT.
      * Les drapeaux de rapport sont une notion vitest : les ajouter a un `test:unit` qui lance autre
      * chose fabrique un refus sur un projet sain (cinq tests l'ont prouve le 2026-08-27).
      */
-    const drapeauxDeRapport = declareVitest(workspaceRoot)
+    const drapeauxDeRapport = scriptVitestUnique(workspaceRoot)
       ? ['--reporter=default', '--reporter=json', `--outputFile=${rapportVers}`]
       : []
     let argv: string[]
@@ -3117,11 +3264,22 @@ export class AppCommandBus {
        * process est tue, aucun rapport complet n'est ecrit. La v1 lisait alors la sortie PARTIELLE,
        * y trouvait des echecs deja emis, et publiait. Ici l'absence est un fait lisible.
        */
-      const rapport = existsSync(rapportVers) ? readFileSync(rapportVers, 'utf8') : undefined
+      /*
+       * UNE EXECUTION COUPEE AU PLAFOND NE LIVRE AUCUN ARTEFACT — `exitCode === null` le dit.
+       *
+       * La v2 se reposait sur « pas de fichier = pas de differentiel », en supposant que seul vitest
+       * pouvait creer ce fichier. Un panel a prouve le contraire par execution : un test peut ecrire
+       * le rapport PUIS pendre jusqu'au plafond, et le seul fichier present a ce chemin est alors le
+       * sien. Un plafond est deterministe et provocable ; on ne lit donc rien dans ce cas, quelle que
+       * soit la presence du fichier.
+       */
+      const coupeAuPlafond = issue.exitCode === null
+      const rapport =
+        !coupeAuPlafond && existsSync(rapportVers) ? readFileSync(rapportVers, 'utf8') : undefined
       return { ...issue, command: etiquette, parPortee, ...(rapport ? { rapport } : {}) }
     } finally {
       try {
-        if (existsSync(rapportVers)) rmSync(rapportVers, { force: true })
+        rmSync(dossierDeRapport, { recursive: true, force: true })
       } catch {
         /* Un rapport qui traine dans le dossier temporaire ne change aucun verdict. */
       }
@@ -3167,7 +3325,7 @@ export class AppCommandBus {
      * l'ANNULATION de l'edition. On reessaie une fois, puis on REFUSE en le NOMMANT : un etat
      * incertain n'est jamais publiable.
      */
-    if (!restaurer(absolu, octetsApres)) {
+    if (!restaurer(absolu, octetsApres, this.ecrireFichier)) {
       throw new Error(
         refusAvecIssue(
           'verification-indisponible',

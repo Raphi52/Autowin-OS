@@ -1,5 +1,14 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
@@ -31,7 +40,25 @@ import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 /** Saut de ligne sans sequence d'echappement : elle a deja fui telle quelle dans ce fichier. */
 const SAUT = String.fromCharCode(10)
 
-const RACINE = join(process.cwd(), '.autowin-data', 'tests-portee')
+/*
+ * LA RACINE DES FIXTURES VIT HORS DU DEPOT MESURE.
+ *
+ * Elle etait sous `process.cwd()`, donc les depots jetables et leurs bureaux isoles se creaient DANS
+ * le depot que la suite mesure — collecte, watchers et menage s'y melangeaient.
+ */
+const RACINE = mkdtempSync(join(tmpdir(), 'autowin-portee-'))
+
+/*
+ * CHAQUE TEST A SA PROPRE CONVERSATION — cause NOMMEE de la non-determinance mesuree.
+ *
+ * Un juge externe a mesure la suite FLAKY : un run a 5 echecs / 2 passes, puis cinq runs a 7/7, avec
+ * le md5 des fichiers de production verifie IDENTIQUE avant chaque lancement. Les sept tests
+ * employaient le meme `conversationId` ('conv-1') et la meme cible ('sujet.ts') — or le produit
+ * REUTILISE les bureaux par (conversation, cible) : deux tests concurrents se partageaient donc le
+ * MEME bureau isole. Un identifiant distinct par test supprime ce partage.
+ */
+let numeroDeConversation = 0
+const conversationUnique = (): string => `conv-portee-${(numeroDeConversation += 1)}`
 
 /**
  * Le `.bin` REEL de ce depot, rendu visible au bureau temporaire — le vrai runner, pas un stub.
@@ -126,6 +153,22 @@ function depotDejaRouge(): { repo: string; git: (...a: string[]) => string } {
   return { repo, git }
 }
 
+/**
+ * COMPTE LES RAPPORTS DE VERDICT LAISSES DANS LE DOSSIER TEMPORAIRE.
+ *
+ * MECANISME QUE LE PANEL A SABOTE SANS FAIRE ROUGIR UN SEUL TEST : neutraliser la suppression du
+ * rapport laissait les 7 tests verts, et le juge a MESURE 2 fichiers accumules apres un seul appel.
+ * Chaque rapport porte le detail complet des echecs du depot, dans un dossier partage : c'est une
+ * accumulation illimitee doublee d'une fuite d'information.
+ */
+function rapportsResiduels(): number {
+  try {
+    return readdirSync(tmpdir()).filter((nom) => nom.startsWith('autowin-verdict-')).length
+  } catch {
+    return 0
+  }
+}
+
 function busSur(repo: string): AppCommandBus {
   const wtRoot = mkdtempSync(join(RACINE, 'wt-'))
   temporaires.push(wtRoot)
@@ -147,13 +190,26 @@ function busSur(repo: string): AppCommandBus {
  * (sortir l'appel de baseline du `if (!verification.ok)`) laissait le test VERT. Ce compteur est la
  * preuve promise : il compte les lancements du runner, pas la presence d'un texte.
  */
-function compteurDExecutions(bus: AppCommandBus): () => number {
+
+/**
+ * COMPTE LES BASELINES REELLEMENT MESUREES par un bus.
+ *
+ * PREMIERE VERSION : elle comptait les EXECUTIONS de vérification et exigeait `1` sur le chemin vert.
+ * La REPETITION l'a refutee — `expected 3 to be 1`, 1 run sur 15, code md5-identique : quand
+ * `vitest related` collecte 0 test (intermittence mesuree), le repli rejoue en suite complete, celle-ci
+ * est rouge a cause du bruit preexistant du fixture, une baseline est alors LEGITIME, et l'edition est
+ * publiee correctement — avec 3 executions. L'assertion etait donc plus rigide que l'invariant.
+ *
+ * L'INVARIANT REEL est : une verification VERTE ne mesure AUCUNE baseline. On compte donc les
+ * baselines, pas les executions. Le sabotage discriminant reste le meme (baseline systematique : 0 -> 1).
+ */
+function compteurDeBaselines(bus: AppCommandBus): () => number {
   const interne = bus as unknown as {
-    mesurerAvecRapport: (...args: unknown[]) => Promise<unknown>
+    baselineAvantEdition: (...args: unknown[]) => Promise<unknown>
   }
-  const vraie = interne.mesurerAvecRapport.bind(interne)
+  const vraie = interne.baselineAvantEdition.bind(interne)
   let appels = 0
-  interne.mesurerAvecRapport = async (...args: unknown[]) => {
+  interne.baselineAvantEdition = async (...args: unknown[]) => {
     appels += 1
     return await vraie(...args)
   }
@@ -165,7 +221,7 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     const { repo, git } = depotDejaRouge()
 
     const bus = busSur(repo)
-    const executions = compteurDExecutions(bus)
+    const baselines = compteurDeBaselines(bus)
 
     const result = await bus.exec(
       'edit_file',
@@ -174,7 +230,7 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
         oldText: 'export const valeur = (): number => 1',
         newText: 'export const valeur = (): number => 1 // commentaire sans effet'
       },
-      'conv-1'
+      conversationUnique()
     )
 
     expect(result).toMatchObject({ ok: true })
@@ -184,7 +240,7 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
      * texte. Sabotage qui doit rougir : sortir l'appel de baseline du `if (!verification.ok)` dans
      * `withIsolatedMutation` (l'option « baseline systematique », ecartee pour son cout).
      */
-    expect(executions()).toBe(1)
+    expect(baselines()).toBe(0)
     // Le verdict NOMME sa portée : un vert dont on ignore l’étendue se lit plus large qu’il n’est.
     const data = result.data as { verifie?: string; portee?: string }
     expect(data.verifie).toContain('vitest related')
@@ -227,7 +283,7 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
         oldText: 'export const valeur = (): number => 1',
         newText: 'export const valeur = (): number => 1 // commentaire sans effet'
       },
-      'conv-1'
+      conversationUnique()
     )
 
     expect(result).toMatchObject({ ok: false })
@@ -264,7 +320,7 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     const result = await busSur(repo).exec(
       'edit_file',
       { path: 'notes.md', oldText: 'texte initial', newText: 'texte corrigé' },
-      'conv-1'
+      conversationUnique()
     )
 
     /*
@@ -300,7 +356,7 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     const result = await busSur(repo).exec(
       'edit_file',
       { path: 'package.json', oldText: '"vitest run"', newText: '"node -e process.exit(3)"' },
-      'conv-1'
+      conversationUnique()
     )
 
     expect(result).toMatchObject({ ok: false })
@@ -315,6 +371,7 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
    * jeter une edition saine. C'est ce blocage que le pilote contournait via `orchestrate`.
    */
   it('publie une édition saine malgré un rouge préexistant DANS sa portée', async () => {
+    const residusAvant = rapportsResiduels()
     const { repo, git } = depotDejaRouge()
     writeFileSync(
       join(repo, 'sujet-deja-rouge.test.ts'),
@@ -329,16 +386,19 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     git('add', '-A')
     git('commit', '-q', '-m', 'rouge preexistant dans la portee')
 
-    const result = await busSur(repo).exec(
+    const bus = busSur(repo)
+    const baselines = compteurDeBaselines(bus)
+    const result = await bus.exec(
       'edit_file',
       {
         path: 'sujet.ts',
         oldText: 'export const valeur = (): number => 1',
         newText: 'export const valeur = (): number => 1 // commentaire sans effet'
       },
-      'conv-1'
+      conversationUnique()
     )
 
+    expect((result as { error?: string }).error ?? 'pas d’erreur').toBe('pas d’erreur')
     expect(result).toMatchObject({ ok: true })
     expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).toContain('commentaire sans effet')
     const data = result.data as { differentiel?: string }
@@ -348,6 +408,14 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).not.toContain(`=> 1${SAUT}`)
     expect(readFileSync(join(repo, 'sujet-deja-rouge.test.ts'), 'utf8')).toContain('toBe(99)')
     expect(git('status', '--porcelain')).toBe('')
+    /*
+     * DEUX MESURES ONT EU LIEU (une pour l'edition, une pour la baseline), donc DEUX rapports ont
+     * ete ecrits — et il ne doit en rester AUCUN. Sabotage qui doit rougir : neutraliser le `rmSync`
+     * du `finally` de `mesurerAvecRapport`.
+     */
+    expect(rapportsResiduels()).toBe(residusAvant)
+    // Le chemin ROUGE mesure exactement UNE baseline — ni zero (sinon rien n'est ecarte), ni deux.
+    expect(baselines()).toBe(1)
   }, 300_000)
 
   /*
@@ -383,12 +451,108 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
         oldText: 'export const valeur = (): number => 7',
         newText: 'export const valeur = (): number => 42'
       },
-      'conv-1'
+      conversationUnique()
     )
 
     // Meme test, meme nom, mais « expected 42 to be 1 » n'est pas « expected 7 to be 1 ».
     expect(result).toMatchObject({ ok: false })
     expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).toContain('=> 7')
+  }, 300_000)
+
+  /*
+   * LE FAUX VERT LE PLUS RENTABLE A FERMER, mesure hors modele le 2026-08-27 :
+   *   npx vitest related <fichier de code sans test associe> --run
+   *   -> EXIT=0, success: true, numTotalTests: 0
+   *
+   * Toute edition d'un fichier de code qu'AUCUN test n'exerce etait donc publiee sous l'etiquette
+   * « verifie ». B' n'avait ferme que le cas des fichiers NON-CODE : un `.ts` passe la garde de
+   * portee derivable, et `vitest related` sur lui ne collecte rien.
+   *
+   * C'est aussi le PREMIER MAILLON d'une chaine prouvee par un juge en deux appels : editer la
+   * CONFIGURATION de vitest (un `.ts`, donc accepte) pour neutraliser la verification, puis publier
+   * n'importe quelle regression sous un exit 0. Refuser un vert sans test joue coupe la chaine a son
+   * premier maillon, sans avoir a interdire l'edition de la configuration.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : rendre `publiable: true` sur tout `apresEstVert`.
+   */
+  /*
+   * PORTEE VIDE : ON REMESURE PLUS LARGE, ON NE REFUSE PAS.
+   *
+   * Mesure hors modele : `vitest related <fichier de code sans test associe> --run` rend EXIT 0 avec
+   * `numTotalTests: 0`. Une premiere version de ce correctif REFUSAIT dans ce cas — et la repetition
+   * a montre que c'etait un FAUX refus : `related` collecte parfois 0 test sur un fichier pourtant
+   * couvert (2 rouges sur 12, code md5-identique). Le refus mordait donc au hasard.
+   *
+   * Le comportement juste suit la doctrine du module : une portee qui n'a rien mesure CEDE la place a
+   * la suite complete. Ici la suite complete joue 5 tests, aucun casse par l'edition : la mesure est
+   * REELLE, donc la publication est fondee. Ce qui est verrouille : la preuve ne vient jamais d'une
+   * portee vide, et la voie de la baseline est la MEME que celle de la mesure.
+   */
+  it('remesure en suite COMPLÈTE quand la portée ne joue aucun test, puis publie sur cette preuve', async () => {
+    const { repo, git } = depotDejaRouge()
+    writeFileSync(join(repo, 'orphelin.ts'), 'export const orphelin = (): number => 1' + SAUT, 'utf8')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'fichier de code sans test associe')
+
+    const result = await busSur(repo).exec(
+      'edit_file',
+      {
+        path: 'orphelin.ts',
+        oldText: 'export const orphelin = (): number => 1',
+        newText: 'export const orphelin = (): number => 42'
+      },
+      conversationUnique()
+    )
+
+    expect((result as { error?: string }).error ?? 'pas d’erreur').toBe('pas d’erreur')
+    const data = result.data as { verifie?: string; testsJoues?: number; differentiel?: string }
+    // La preuve vient de la SUITE COMPLETE, jamais de la portee vide.
+    expect(data.verifie).toBe('npm run test:unit')
+    expect(data.testsJoues ?? 0).toBeGreaterThan(0)
+    expect(data.differentiel ?? '').toContain('rouge deja committe, sans rapport')
+  }, 300_000)
+
+  /*
+   * LE VRAI VECTEUR, celui qu'un juge a prouve en deux appels : neutraliser la verification puis
+   * publier n'importe quoi. Ici le depot ne peut RIEN prouver — sa suite ne contient aucun test —
+   * donc meme le repli global joue 0 test. C'est le seul cas ou « 0 test joue » est un fait etabli,
+   * et il doit REFUSER.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : rendre `publiable: true` sur tout `apresEstVert`.
+   */
+  it('REFUSE quand même la suite COMPLÈTE ne joue aucun test — vérification neutralisée', async () => {
+    const { repo, git } = depotDejaRouge()
+    /*
+     * ON REPRODUIT LE VECTEUR, pas une approximation : le juge a prouve une chaine en deux appels ou
+     * le PREMIER edite la configuration de la verification pour la neutraliser. Ici le script de test
+     * est neutralise (`--passWithNoTests`) et les fichiers de test retires : la commande sort a 0 en
+     * n'ayant joue AUCUN test. C'est le seul cas ou « 0 test joue » est un fait etabli — et le seul
+     * ou refuser est fonde.
+     */
+    rmSync(join(repo, 'sujet.test.ts'))
+    rmSync(join(repo, 'etranger.test.ts'))
+    writeFileSync(
+      join(repo, 'package.json'),
+      JSON.stringify({ name: 'depot-neutralise', scripts: { 'test:unit': 'vitest run --passWithNoTests' } }),
+      'utf8'
+    )
+    writeFileSync(join(repo, 'orphelin.ts'), 'export const orphelin = (): number => 1' + SAUT, 'utf8')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'depot sans aucun test')
+
+    const result = await busSur(repo).exec(
+      'edit_file',
+      {
+        path: 'orphelin.ts',
+        oldText: 'export const orphelin = (): number => 1',
+        newText: 'export const orphelin = (): number => 42'
+      },
+      conversationUnique()
+    )
+
+    expect(result).toMatchObject({ ok: false })
+    expect((result as { error?: string }).error ?? '').toContain('aucun test')
+    expect(readFileSync(join(repo, 'orphelin.ts'), 'utf8')).toContain('=> 1')
   }, 300_000)
 
   it('refuse toujours une édition qui casse RÉELLEMENT le test de son fichier', async () => {
@@ -401,7 +565,7 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
         oldText: 'export const valeur = (): number => 1',
         newText: 'export const valeur = (): number => 42'
       },
-      'conv-1'
+      conversationUnique()
     )
 
     expect(result).toMatchObject({ ok: false })
