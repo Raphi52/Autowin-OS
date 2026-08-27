@@ -93,6 +93,7 @@ import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { conversationEnMarkdown, nomFichierExportMarkdown } from './conversation-markdown'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
+import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel } from './WorkflowsPanel'
 import { ThinkingPanel } from './ThinkingPanel'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
@@ -3740,6 +3741,8 @@ export function ChatView({
                 <ModelQuotaIndicator
                   provider={runtimeIdentity?.provider}
                   contextGauge={activeId != null ? contextGauges[activeId] : undefined}
+                  busy={busy}
+                  onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
                 />
               </div>
             </div>

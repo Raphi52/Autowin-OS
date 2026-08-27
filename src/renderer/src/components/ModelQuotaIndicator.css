@@ -242,3 +242,23 @@
 .quota-context-gauge.is-critique .quota-context-gauge-fill {
   background: #f87171;
 }
+
+
+/* Bouton Compacter : action sobre, alignee sous la jauge de contexte. */
+.quota-context-gauge .quota-context-compact {
+  border: 1px solid var(--border, #3a3a3a);
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.quota-context-gauge .quota-context-compact:hover:not(:disabled) {
+  background: rgba(127, 127, 127, 0.18);
+}
+.quota-context-gauge .quota-context-compact:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
