@@ -57,7 +57,7 @@ export const FOND_DECOR = { couleur: 0x000000, alpha: 1 } as const
 export const POST_TRAITEMENT = {
   toneMapping: 'ACESFilmic',
   exposition: 1.18,
-  bloom: { force: 0.72, rayon: 0.62, seuil: 0.42 }
+  bloom: { force: 1.05, rayon: 0.78, seuil: 0.24 }
 } as const
 
 /**
@@ -903,11 +903,15 @@ function buildPlanet(options: {
  */
 export const NUAGE_COSMIQUE = {
   /** Bleu profond : canal bleu dominant, c'est ce qui fait le « bleu » de la demande. */
-  couleur: 0x4a6cff,
+  couleur: 0x3f7bff,
   /** Le violet de theme.css : c'est lui qui apporte le rouge, donc le « violet ». */
   secondaire: VIOLET,
   /** Opacité maximale du cœur. Basse : le centre porte les widgets de l'accueil. */
-  opacite: 0.42,
+  opacite: 0.55,
+  /** Rose magenta : la troisieme teinte de la nebuleuse, portee par les seuls filaments. */
+  accent: 0xff4fa3,
+  /** Turquoise : la teinte froide des bords, ce qui empeche la nebuleuse de virer monochrome. */
+  froid: 0x2fe6ff,
   /** Profondeur : derrière les planètes, devant les nébuleuses d'angle. */
   z: -14,
   /** Taille, en fraction du demi-cadre. */
@@ -947,47 +951,71 @@ export function positionNuage(
  *  2. un masque RADIAL doux : le plan n'a pas de bord visible, sinon c'est une vignette rectangulaire ;
  *  3. le cœur tire vers le blanc bleuté : un nuage d'une seule teinte est un aplat coloré.
  */
+/**
+ * Le nuage : un fbm a coordonnees deformees, rendu en NEBULEUSE.
+ *
+ * Les GROS CARRES venaient de trois causes cumulees, corrigees ici :
+ *  1. hash en sin(dot(...)) — sature en float et fabrique des cellules alignees sur les axes ;
+ *  2. fade CUBIQUE — discontinuite de derivee, donc arete de cellule visible ; passe en QUINTIQUE ;
+ *  3. octaves non tournees a frequence de base 3.4 — une cellule couvrait des dizaines de pixels ;
+ *     desormais rotation par octave, 7 octaves, base 7.5.
+ * La couleur ajoute une TROISIEME teinte (uAccent) portee par les seuls filaments : deux teintes
+ * donnent un aplat, trois donnent une nebuleuse.
+ */
 export const NUAGE_FRAGMENT_SHADER = [
   'precision highp float;',
   'varying vec2 vUv;',
   'uniform float uTime;',
   'uniform vec3 uBleu;',
   'uniform vec3 uViolet;',
+  'uniform vec3 uAccent;',
+  'uniform vec3 uFroid;',
   'uniform float uOpacite;',
   'float hashN(vec2 p) {',
-  '  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);',
+  '  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));',
+  '  q += dot(q, q.yzx + 33.33);',
+  '  return fract((q.x + q.y) * q.z);',
   '}',
   'float bruitN(vec2 p) {',
   '  vec2 i = floor(p);',
   '  vec2 f = fract(p);',
-  '  vec2 u = f * f * (3.0 - 2.0 * f);',
+  '  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);',
   '  return mix(mix(hashN(i), hashN(i + vec2(1.0, 0.0)), u.x),',
   '             mix(hashN(i + vec2(0.0, 1.0)), hashN(i + vec2(1.0, 1.0)), u.x), u.y);',
   '}',
   'float fbm(vec2 p) {',
+  '  mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);',
   '  float somme = 0.0;',
   '  float amplitude = 0.5;',
-  '  for (int octave = 0; octave < 5; octave++) {',
+  '  for (int octave = 0; octave < 7; octave++) {',
   '    somme += amplitude * bruitN(p);',
-  '    p = p * 2.03 + vec2(11.7, 5.3);',
+  '    p = rot * p * 2.07 + vec2(11.7, 5.3);',
   '    amplitude *= 0.5;',
   '  }',
   '  return somme;',
   '}',
   'void main() {',
   '  vec2 c = vUv - 0.5;',
-  // Le masque radial : hors du disque, le nuage n'existe pas. C'est ce discard qui supprime le bord.
-  '  float masque = 1.0 - smoothstep(0.16, 0.5, length(c));',
+  '  float masque = 1.0 - smoothstep(0.10, 0.5, length(c));',
   '  if (masque <= 0.001) discard;',
-  '  vec2 p = vUv * 3.4;',
+  '  vec2 p = vUv * 7.5;',
   '  vec2 derive = vec2(uTime * 0.017, uTime * -0.011);',
   '  float w1 = fbm(p + derive);',
   '  float w2 = fbm(p + vec2(3.7, 8.1) + derive * 1.6);',
-  '  float champ = fbm(p + vec2(w1, w2) * 1.9 + derive * 0.4);',
-  '  float densite = pow(clamp(champ * 1.35, 0.0, 1.0), 1.9);',
-  '  vec3 couleur = mix(uBleu, uViolet, clamp(champ * 1.6, 0.0, 1.0));',
-  '  couleur = mix(couleur, vec3(0.86, 0.9, 1.0), pow(densite, 3.0) * 0.55);',
-  '  gl_FragColor = vec4(couleur, densite * masque * uOpacite);',
+  '  vec2 q = p + vec2(w1, w2) * 2.4 + derive * 0.4;',
+  '  float champ = fbm(q);',
+  '  float filaments = fbm(q * 2.6 + vec2(w2, w1));',
+  '  float densite = pow(clamp(champ * 1.45, 0.0, 1.0), 1.7);',
+  '  densite *= 0.72 + 0.55 * filaments;',
+  '  vec3 couleur = mix(uBleu, uViolet, smoothstep(0.18, 0.72, champ));',
+  '  couleur = mix(couleur, uFroid, smoothstep(0.62, 0.12, champ) * 0.55);',
+  '  couleur = mix(couleur, uAccent, smoothstep(0.48, 0.92, filaments) * 0.85);',
+  '  couleur += vec3(0.42, 0.18, 0.55) * pow(clamp(filaments, 0.0, 1.0), 3.0) * 1.3;',
+  '  float chaud = pow(smoothstep(0.70, 1.0, champ * 0.6 + filaments * 0.6), 2.2);',
+  '  couleur += mix(uAccent, vec3(1.0, 0.95, 0.86), 0.45) * chaud * 2.1;',
+  '  couleur = mix(couleur, vec3(0.96, 0.97, 1.0), pow(densite, 2.6) * 0.72);',
+  '  float alpha = clamp(densite + chaud * 0.55, 0.0, 1.0) * masque * uOpacite;',
+  '  gl_FragColor = vec4(couleur, alpha);',
   '}'
 ].join('\n')
 
@@ -1001,6 +1029,8 @@ function buildNuage(): THREE.Mesh {
       uTime: { value: 0 },
       uBleu: { value: new THREE.Color(NUAGE_COSMIQUE.couleur) },
       uViolet: { value: new THREE.Color(NUAGE_COSMIQUE.secondaire) },
+      uAccent: { value: new THREE.Color(NUAGE_COSMIQUE.accent) },
+      uFroid: { value: new THREE.Color(NUAGE_COSMIQUE.froid) },
       uOpacite: { value: NUAGE_COSMIQUE.opacite }
     },
     vertexShader: NAPPE_VERTEX_SHADER,
