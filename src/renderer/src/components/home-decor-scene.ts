@@ -1150,7 +1150,7 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  couleur = mix(couleur, uAccent, smoothstep(0.48, 0.92, filaments) * 0.85);',
   '  couleur += mix(uAccent, uChaud, versant) * pow(clamp(filaments, 0.0, 1.0), 3.0) * 1.3;',
   '  float chaud = pow(smoothstep(0.70, 1.0, champ * 0.6 + filaments * 0.6), 2.2);',
-  '  couleur += mix(uChaud, vec3(1.0, 0.95, 0.86), 0.45) * chaud * 2.1;',
+  '  couleur += mix(uChaud, vec3(1.0, 0.95, 0.86), 0.45) * chaud * 1.15;',
   // Le coeur ne BLANCHIT plus : un mix vers le blanc a 0.72 sature la nebuleuse en brouillard laiteux,
   // et un aplat sature dessine sa propre limite franche la ou la densite tombe. On garde un souffle clair.
   '  couleur = mix(couleur, vec3(0.90, 0.94, 1.0), pow(densite, 3.4) * 0.30);',
