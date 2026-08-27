@@ -1067,10 +1067,23 @@ describe('AgentPilot turn contract', () => {
   })
 
   it('conserve le pilotage et les commandes pour une demande qui modifie le workspace', async () => {
+    /*
+     * DEUX appels par tour depuis le 2026-08-27 : apres une orchestration, le modele reprend la
+     * parole pour ecrire la cloture (elle n'est plus un gabarit). Le mock repond donc la commande
+     * PUIS la cloture, comme un modele reel. Ce que ce test verrouille est inchange : le profil
+     * d'outils reste complet, et chaque tour joue exactement une orchestration.
+     */
+    let appels = 0
     const registry = {
-      send: vi.fn().mockResolvedValue({
-        text: '<cmd>{"name":"orchestrate","args":{"task":"corrige package.json"}}</cmd>',
-        provider: 'claude'
+      send: vi.fn(async (_provider: string, _messages: unknown, _options: { toolProfile?: string }) => {
+        appels += 1
+        return {
+          text:
+            appels % 2 === 1
+              ? '<cmd>{"name":"orchestrate","args":{"task":"corrige package.json"}}</cmd>'
+              : 'Scripts corrigés.',
+          provider: 'claude'
+        }
       }),
       describePrompt: () => ({
         provider: 'claude',
@@ -1103,7 +1116,8 @@ describe('AgentPilot turn contract', () => {
       await pilot.chat([{ role: 'user', content }], () => undefined)
     }
 
-    expect(registry.send).toHaveBeenCalledTimes(4)
+    // 4 tours x 2 appels : la commande, puis la cloture ecrite par le modele.
+    expect(registry.send).toHaveBeenCalledTimes(8)
     expect(
       registry.send.mock.calls.every((call) => call[2].toolProfile !== 'watchdog-read-only')
     ).toBe(true)

@@ -688,6 +688,25 @@ export class AgentPilot {
     // Autorite du tour : une demande utilisateur ne peut ouvrir qu'un run. Une reparation ou reprise
     // appartient au controleur du run courant ; un second run exige un nouveau message utilisateur.
     let orchestrationIssued = false
+    /**
+     * L'ISSUE de l'orchestration jouee dans ce tour, gardee pour la joindre au `done` FINAL.
+     *
+     * Le tour n'est plus clos mecaniquement sur cette issue (le modele redige desormais la cloture),
+     * mais la comptabilite en aval — persistance du texte de cloture, cout, tracabilite — lit
+     * `done.outcome`. La perdre en rendant la parole au modele aurait casse ces consommateurs sans
+     * qu'aucun texte affiche ne le montre.
+     */
+    let orchestrationOutcome: Record<string, unknown> | undefined
+    /**
+     * Le compte-rendu AUTORITATIF de cette orchestration, garde comme REPLI.
+     *
+     * Contrepartie indispensable de la parole rendue au modele : un modele qui n'ecrit rien — ou qui
+     * s'obstine a redemander une orchestration, refusee par `orchestrationIssued` — brulait les
+     * iterations jusqu'a « Cap d'iterations atteint sans reponse finale », et l'utilisateur perdait le
+     * compte-rendu qu'il avait AVANT ce changement, au prix d'un run complet. Le modele a la parole ;
+     * il n'a pas le pouvoir de faire disparaitre le resultat.
+     */
+    let compteRenduOrchestration: string | undefined
     const catalog = this.bus.catalog()
     const snapshot = await this.bus.snapshotForPrompt()
     timer.mark('snapshot')
@@ -1697,7 +1716,16 @@ export class AgentPilot {
         // le tour a AGI (« [a execute exec (echec)] ») mais n'a rien DIT, la reprise de conclusion
         // etait deja consommee, et `spoken` vide produisait une bulle VIDE — l'utilisateur renvoyait
         // alors le meme prompt en boucle sans jamais savoir ce qui ratait.
-        emit({ kind: 'done', text: texteDeCloture(spoken), usage })
+        emit({
+          kind: 'done',
+          // Un tour MUET apres une orchestration retombe sur son compte-rendu, jamais sur du vide :
+          // le resultat est paye, il doit s'afficher meme si le modele n'a rien redige.
+          text: spoken.trim()
+            ? texteDeCloture(spoken)
+            : (compteRenduOrchestration ?? texteDeCloture(spoken)),
+          ...(orchestrationOutcome ? { outcome: orchestrationOutcome } : {}),
+          usage
+        })
         return
       }
 
@@ -1862,18 +1890,46 @@ export class AgentPilot {
           const closureNotice = deliveryClosed
             ? 'Clôture Autowin : gate validé, RUN fermé green ; aucune autre orchestration ni aucun second judge ne sont nécessaires dans ce tour.'
             : 'Clôture Autowin : résultat terminal rendu ; aucune autre orchestration n’est relancée dans ce tour.'
-          emit({
-            kind: 'done',
-            text: formatOrchestrationOutcome(
-              r.ok,
-              outcome,
-              r.ok ? undefined : String(r.error ?? ''),
-              closureNotice
-            ),
-            outcome: outcome as Record<string, unknown> | undefined,
-            usage
-          })
-          return
+          /*
+           * LE MODELE REPREND LA PAROLE — decision utilisateur du 2026-08-27, et le contraire de ce
+           * que ce chemin faisait.
+           *
+           * Constate sur conv-1449 : le pied gabarit annoncait « 👉 Recommandé : faire exécuter le
+           * travail si le besoin n'est pas encore réalisé » quand le RUN.md du meme run portait
+           * `### phase build` + `### phase judge`, la DoD cochee et `status: green`. Le gabarit DEVINE
+           * la portee depuis `phaseOutputs` ; vide, il avoue une ignorance qui n'existe pas — tout en
+           * affirmant « ✅ Fait » deux lignes plus haut. Trois mensonges deja (20/08, 21/08, 23/08),
+           * trois branches de rustine : c'est la METHODE qui est fausse. Un gabarit ne peut pas
+           * savoir ce qui a ete fait ; celui qui vient de le faire, si.
+           *
+           * Le risque que la cloture mecanique couvrait est NOMME et couvert autrement : le modele
+           * suivait parfois le rapport PROVISOIRE du worker (« RUN open, lance judge ») contre l'issue
+           * reelle. On lui rend donc le compte-rendu AUTORITATIF (`formatOrchestrationOutcome`, la
+           * meme source qui s'affichait) explicitement etiquete comme faisant foi.
+           *
+           * Le risque de second run payant, lui, etait DEJA couvert avant ce changement :
+           * `orchestrationIssued` (plus haut) refuse toute 2e orchestration dans le meme tour.
+           */
+          orchestrationOutcome = outcome as Record<string, unknown> | undefined
+          const compteRenduAutoritatif = formatOrchestrationOutcome(
+            r.ok,
+            outcome,
+            r.ok ? undefined : String(r.error ?? ''),
+            closureNotice
+          )
+          compteRenduOrchestration = compteRenduAutoritatif
+          results.push(
+            `${token.name} → ISSUE AUTORITATIVE DU PIPELINE (elle fait foi contre tout rapport ` +
+              `provisoire d'un worker ; aucune autre orchestration ne sera acceptée dans ce tour) :
+` +
+              compteRenduAutoritatif +
+              `
+
+Écris maintenant ta clôture pour l'utilisateur à partir de CES faits, sans en ` +
+              `inventer d'autres et sans contredire cette issue.`
+          )
+          tokenIndex += 1
+          continue
         }
         const commandSucceeded = commandResultSucceeded(r)
         /*
@@ -1964,7 +2020,16 @@ export class AgentPilot {
           convo.push(RELANCE_QUESTION_SANS_LECTURE)
           continue
         }
-        emit({ kind: 'done', text: texteDeCloture(spoken), usage })
+        emit({
+          kind: 'done',
+          // Un tour MUET apres une orchestration retombe sur son compte-rendu, jamais sur du vide :
+          // le resultat est paye, il doit s'afficher meme si le modele n'a rien redige.
+          text: spoken.trim()
+            ? texteDeCloture(spoken)
+            : (compteRenduOrchestration ?? texteDeCloture(spoken)),
+          ...(orchestrationOutcome ? { outcome: orchestrationOutcome } : {}),
+          usage
+        })
         return
       }
 
@@ -1977,6 +2042,17 @@ export class AgentPilot {
     // ayant reellement tourne neuf fois annoncait « Cap d'iterations (6) », donc le seul nombre que
     // l'utilisateur peut utiliser pour comprendre etait faux.
     const capError = `Cap d'itérations (${iterationLimit}) atteint sans réponse finale`
+    // REPLI : une orchestration a bel et bien tourne dans ce tour. Mourir sur le cap jetterait son
+    // compte-rendu — un resultat paye, deja calcule, que le modele a seulement omis de commenter.
+    if (compteRenduOrchestration) {
+      emit({
+        kind: 'done',
+        text: compteRenduOrchestration,
+        ...(orchestrationOutcome ? { outcome: orchestrationOutcome } : {}),
+        usage
+      })
+      return
+    }
     emit({
       kind: 'error',
       text: capError,

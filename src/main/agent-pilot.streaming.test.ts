@@ -172,7 +172,26 @@ describe('AgentPilot chat streaming', () => {
     })
   })
 
-  it('clôt mécaniquement un orchestrate terminal sans repayer un appel ni demander un second judge', async () => {
+  /*
+   * CE TEST A CHANGE D'INVARIANT le 2026-08-27, sur decision utilisateur, et il faut le dire.
+   *
+   * Il verrouillait « clot mecaniquement sans repayer un appel » : le tour se fermait sur l'issue
+   * structuree et le modele n'ecrivait jamais la cloture. Constat sur conv-1449 : le pied GABARIT
+   * annoncait « Recommandé : faire exécuter le travail si le besoin n'est pas encore réalisé » alors
+   * que le run avait joue build ET judge, DoD cochee, status green. Un gabarit qui devine la portee
+   * se trompe des que le champ qu'il lit arrive vide — trois mensonges, trois rustines. Le modele
+   * reprend donc la parole, au prix ASSUME d'un appel de generation de plus par orchestration.
+   *
+   * CE QUI RESTE VERROUILLE, et qui etait la vraie valeur de ce test : une seule orchestration par
+   * tour, et le rapport PROVISOIRE du worker (« Next: commit final ») reste expurge de ce qui est
+   * rendu au modele — c'etait le defaut que la cloture mecanique protegeait.
+   */
+  it('rend la parole au modèle sans laisser passer le rapport provisoire du worker', async () => {
+    const reponses = [
+      'Je lance.<cmd>{"name":"orchestrate","args":{"task":"corrige puis teste","phase":"build"}}</cmd>' +
+        ' Je lancerai ensuite judge.',
+      'Corrigé et testé : 11 tests ciblés verts, le run est fermé.'
+    ]
     const send = vi.fn(
       async (
         _provider: string,
@@ -180,9 +199,7 @@ describe('AgentPilot chat streaming', () => {
         _options: unknown,
         onChunk?: (chunk: { delta: string }) => void
       ) => {
-        const text =
-          'Je lance.<cmd>{"name":"orchestrate","args":{"task":"corrige puis teste","phase":"build"}}</cmd>' +
-          ' Je lancerai ensuite judge.'
+        const text = reponses.shift() ?? 'Terminé.'
         onChunk?.({ delta: text })
         return { text, provider: 'codex' }
       }
@@ -225,14 +242,20 @@ describe('AgentPilot chat streaming', () => {
       'conv-1'
     )
 
-    expect(send).toHaveBeenCalledTimes(1)
+    // Le modele reprend la parole : un appel de plus, c'est le prix assume de la cloture ecrite.
+    expect(send).toHaveBeenCalledTimes(2)
+    // UNE seule orchestration : la garde `orchestrationIssued` n'est pas relachee.
     expect(bus.exec).toHaveBeenCalledTimes(1)
     expect(events.filter((event) => event.kind === 'command')).toHaveLength(1)
     const done = events.find((event) => event.kind === 'done')
-    expect(done?.text).toContain('Workflow terminé')
-    expect(done?.text).toContain('aucune autre orchestration')
-    expect(done?.text).toContain('Tests cibles 11/11 verts.')
-    expect(done?.text).not.toContain('Next:')
+    // La cloture affichee est celle du MODELE, plus le pied devine.
+    expect(done?.text).toContain('11 tests ciblés verts')
+    expect(done?.text).not.toContain('faire exécuter le travail')
+    // Ce qui est RENDU au modele : l'issue autoritative, expurgee du « Next: » provisoire du worker.
+    const secondAppel = JSON.stringify(send.mock.calls[1]?.[1] ?? '')
+    expect(secondAppel).toContain('ISSUE AUTORITATIVE')
+    expect(secondAppel).toContain('Tests cibles 11/11 verts.')
+    expect(secondAppel).not.toContain('Next:')
     expect(done?.text).not.toContain('commit final')
   })
 
