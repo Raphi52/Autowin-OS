@@ -131,12 +131,12 @@ export function summarizeReport(report: TestReport): TestTotals {
 }
 
 function labelOf(root: string): string {
-  const parts = root.replace(/[\/]+$/, '').split(/[\/]/)
+  const parts = root.replace(/[\\/]+$/, '').split(/[\\/]/)
   return parts[parts.length - 1] || root
 }
 
 export function projectId(root: string): string {
-  return root.replace(/[\/]+$/, '').toLowerCase()
+  return root.replace(/[\\/]+$/, '').toLowerCase()
 }
 
 /** Registre tolérant : ignore ce qui n'est pas une racine utilisable, dédoublonne, garde l'ordre. */

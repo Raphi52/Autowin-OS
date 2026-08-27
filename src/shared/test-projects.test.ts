@@ -8,7 +8,10 @@ import {
 
 describe('detectTestRunner', () => {
   it('reconnait vitest via devDependencies', () => {
-    const d = detectTestRunner({ scripts: { test: 'vitest run' }, devDependencies: { vitest: '^2' } })
+    const d = detectTestRunner({
+      scripts: { test: 'vitest run' },
+      devDependencies: { vitest: '^2' }
+    })
     expect(d.runner).toBe('vitest')
     expect(d.args).toContain('--reporter=json')
   })

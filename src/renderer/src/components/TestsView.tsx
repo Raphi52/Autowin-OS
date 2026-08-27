@@ -65,6 +65,12 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   const [seulsEchecs, setSeulsEchecs] = useState(false)
 
   const charger = useCallback(async () => {
+    // Un canal ABSENT (moteur non reconstruit, preload périmé) ne doit pas se déguiser en « aucun
+    // projet » : c'est le faux-vert exact que la vue est censée rendre impossible.
+    if (typeof api().testProjects !== 'function') {
+      setErreur('canal tests:projects indisponible (moteur non reconstruit ?)')
+      return
+    }
     try {
       const liste = (await api().testProjects?.()) ?? []
       setProjets(liste)
@@ -75,6 +81,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (active) void charger()
   }, [active, charger])
 

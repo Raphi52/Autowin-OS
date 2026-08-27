@@ -137,7 +137,12 @@ const main = async () => {
 
   if (!vue) {
     rendre(
-      { ok: false, echecs: ['vue-inconnue'], vueDemandee: argument('--view'), vuesConnues: VUES_CONNUES },
+      {
+        ok: false,
+        echecs: ['vue-inconnue'],
+        vueDemandee: argument('--view'),
+        vuesConnues: VUES_CONNUES
+      },
       2
     )
   }
@@ -150,7 +155,12 @@ const main = async () => {
     portUtilise = trouve.portUtilise
   } catch (erreur) {
     rendre(
-      { ok: false, echecs: ['cdp-injoignable'], port: String(port), detail: String(erreur).slice(0, 200) },
+      {
+        ok: false,
+        echecs: ['cdp-injoignable'],
+        port: String(port),
+        detail: String(erreur).slice(0, 200)
+      },
       3
     )
   }
@@ -218,7 +228,8 @@ const main = async () => {
   }
   await new Promise((r) => setTimeout(r, 1_200))
 
-  const mesurerDom = () => evaluer(`(() => {
+  const mesurerDom = () =>
+    evaluer(`(() => {
     const actif = [...document.querySelectorAll('[data-testid^="nav-"]')]
       .find((b) => b.className.includes('active') || b.getAttribute('aria-current'))
     return {

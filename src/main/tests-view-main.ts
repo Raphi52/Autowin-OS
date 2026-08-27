@@ -41,7 +41,7 @@ function registryPath(): string {
 export function loadTestProjects(path = registryPath()): TestProject[] {
   if (!existsSync(path)) return []
   try {
-    const raw = readFileSync(path, 'utf8').replace(/^﻿/, '')
+    const raw = readFileSync(path, 'utf8').replace(/^\uFEFF/, '')
     return normalizeProjects((JSON.parse(raw) as { projects?: unknown }).projects)
   } catch {
     return [] // registre corrompu : liste vide, jamais une racine devinée
@@ -66,7 +66,7 @@ export function inspectProject(project: TestProject): InspectedProject {
   }
   let pkg: unknown
   try {
-    pkg = JSON.parse(readFileSync(manifest, 'utf8').replace(/^﻿/, ''))
+    pkg = JSON.parse(readFileSync(manifest, 'utf8').replace(/^\uFEFF/, ''))
   } catch {
     return { ...project, runner: 'none', runnable: false, reason: 'package.json illisible' }
   }
@@ -125,7 +125,7 @@ export async function runProjectTests(
     }
   }
   const pkg = JSON.parse(
-    readFileSync(join(project.root, 'package.json'), 'utf8').replace(/^﻿/, '')
+    readFileSync(join(project.root, 'package.json'), 'utf8').replace(/^\uFEFF/, '')
   ) as unknown
   const detected = detectTestRunner(pkg)
   const filter = options.filter?.trim()

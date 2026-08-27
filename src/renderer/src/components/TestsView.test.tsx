@@ -20,7 +20,13 @@ async function rendre(container: HTMLDivElement): Promise<void> {
 }
 
 const projets = [
-  { id: 'c:/dev/autowin', label: 'Autowin OS', root: 'C:/dev/autowin', runner: 'vitest', runnable: true },
+  {
+    id: 'c:/dev/autowin',
+    label: 'Autowin OS',
+    root: 'C:/dev/autowin',
+    runner: 'vitest',
+    runnable: true
+  },
   { id: 'c:/dev/rig', label: 'RIG', root: 'C:/dev/rig', runner: 'vitest', runnable: true },
   {
     id: 'c:/dev/vide',

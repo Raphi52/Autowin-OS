@@ -3784,7 +3784,11 @@ Le fil reprend ensuite normalement.`
           if (stocke.role === 'assistant' && parts?.length && typeof stocke.content === 'string') {
             partsParContenu.set(stocke.content, parts)
           }
-          if (stocke.role === 'user' && stocke.attachments?.length && !metasParContenu.has(stocke.content)) {
+          if (
+            stocke.role === 'user' &&
+            stocke.attachments?.length &&
+            !metasParContenu.has(stocke.content)
+          ) {
             // Premier message gagnant sur un contenu repete : la meme convention que `partsParContenu`
             // juste au-dessus. Deux messages au texte identique ET aux images differentes restent un cas
             // que cet index ne separe pas — assume, et sans consequence : l'appariement final se fait
@@ -3802,7 +3806,9 @@ Le fil reprend ensuite normalement.`
         if (!metas?.length) return undefined
         // Le renderer suffixe « (miniature) » quand il n'a que la vignette : on compare les noms nus.
         const nu = piece.name.replace(/\s*\(miniature\)\s*$/, '')
-        const meta = metas.find((candidate) => candidate.name === nu) ?? metas.find((candidate) => candidate.name === piece.name)
+        const meta =
+          metas.find((candidate) => candidate.name === nu) ??
+          metas.find((candidate) => candidate.name === piece.name)
         return meta ? rechargerContenuPieceJointe(meta) : undefined
       }
       const safe = (continuationWindow?.history ?? boundedTurnHistory(rawMessages, 40)).map((m) => {

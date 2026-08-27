@@ -126,8 +126,7 @@ const api = {
   saveTestProjects: (projects: Array<{ root: string; label?: string }>) =>
     ipcRenderer.invoke('tests:saveProjects', projects),
   pickTestProject: (): Promise<string | null> => ipcRenderer.invoke('tests:pickProject'),
-  runProjectTests: (root: string, filter?: string) =>
-    ipcRenderer.invoke('tests:run', root, filter),
+  runProjectTests: (root: string, filter?: string) => ipcRenderer.invoke('tests:run', root, filter),
   getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:get'),
   setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
@@ -187,8 +186,7 @@ const api = {
       /** Verdict DERIVE (pas stocke) : a-reprendre / trie / sans-valeur. */
       verdict?: 'a-reprendre' | 'trie' | 'sans-valeur' | 'inconnu'
     }>
-  > =>
-    ipcRenderer.invoke('worktree:travaux-non-publies'),
+  > => ipcRenderer.invoke('worktree:travaux-non-publies'),
   getPatchTravailNonPublie: (agentId: string): Promise<{ patch: string; tronque: boolean }> =>
     ipcRenderer.invoke('worktree:patch-non-publie', agentId),
   getWorktreeStatus: (): Promise<WorktreeRuntimeStatus> => ipcRenderer.invoke('worktree:status'),
