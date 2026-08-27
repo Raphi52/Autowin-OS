@@ -767,7 +767,11 @@ export function HomeView({
             width: `${box.w}px`,
             height: `${box.h}px`,
             zIndex: plans.get(box.id) ?? 10,
-            transform: `translate3d(${box.x}px, ${box.y}px, ${box.z}px)`
+            // Z RAMENE A 0 au rendu : avec `perspective: 1600px`, un z negatif mettait la tuile a
+            // l'echelle 1600/(1600+|z|) (0.93 a 0.98) et rasterisait son texte hors grille pixel —
+            // d'ou des widgets plus FLOUS que « mails » (seul z: 0). La profondeur reste portee par
+            // `zIndex` (plans) et les ombres, sans mise a l'echelle fractionnaire.
+            transform: `translate3d(${box.x}px, ${box.y}px, 0)`
           }}
           onPointerDown={(event) => grab(event, box.id, 'move')}
         >

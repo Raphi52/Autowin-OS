@@ -300,6 +300,7 @@ export const ChatMessageRow = memo(
                     key={`${file.name}-${fileIndex}`}
                     artifact={artifact}
                     displayName="image envoyée"
+                    provenanceLabel="Image envoyée"
                     sourceLabel={`Envoyée · ${file.name}`}
                     previewError={
                       file.originalUnavailable
