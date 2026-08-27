@@ -63,7 +63,11 @@ const PUBLICATION_DIFFEREE =
   'différée — le changement est vérifié ; son intégration attend la fin des processus du bureau, ' +
   'Autowin la reprend seul. Ne pas rejouer cette édition.'
 import { lastUserMessageAt } from './store/conversations'
-import { piecesJointesDuDernierTour } from './store/pieces-jointes-orchestration'
+import {
+  piecesJointesDuDernierTour,
+  porteDesPiecesJointes,
+  referencesDesPiecesJointes
+} from './store/pieces-jointes-orchestration'
 import type { Message } from './providers/types'
 import type { Role, RoleBinding } from './roles'
 import {
@@ -2245,13 +2249,25 @@ export class AppCommandBus {
         })
         // Le vide est DIT comme un vide, jamais rendu en silence : un agent qui recoit une liste
         // vide sans phrase conclut qu'il a mal appele l'outil, et retente au lieu d'elargir.
+        //
+        // Les pieces jointes sont ANNONCEES des la recherche : un extrait textuel ne montre pas
+        // qu'une conversation porte une image, et l'agent n'a alors aucune raison de l'ouvrir pour
+        // ca. Dire « il y a des pieces jointes ici » est ce qui declenche la lecture.
+        const avecJointes = trouvees
+          .filter((trouvee) =>
+            porteDesPiecesJointes(this.os.conversations.get(trouvee.id)?.messages ?? [])
+          )
+          .map((trouvee) => trouvee.id)
         return {
           terme,
           conversations: trouvees,
           note:
             trouvees.length === 0
               ? `Aucune conversation ne contient « ${terme} ». Essaie un terme plus court ou un synonyme.`
-              : `${trouvees.length} conversation(s) portent « ${terme} » ; ouvre-les avec conversation_read.`
+              : `${trouvees.length} conversation(s) portent « ${terme} » ; ouvre-les avec conversation_read.` +
+                (avecJointes.length
+                  ? ` ${avecJointes.length} d'entre elles portent des pieces jointes (${avecJointes.join(', ')}) : conversation_read en rend les chemins lisibles.`
+                  : '')
         }
       }
       case 'conversation_read': {
@@ -2267,16 +2283,31 @@ export class AppCommandBus {
         const messages = tous.slice(-combien).map((message) => {
           const texte = typeof message.content === 'string' ? message.content : ''
           const coupe = texte.length > CAP_PAR_MESSAGE
+          /*
+           * LES PIECES JOINTES TRAVERSENT LA LECTURE — elles ne la traversaient pas.
+           *
+           * Test delibere de l'utilisateur le 2026-08-27 : image jointe dans une conversation,
+           * question posee depuis une AUTRE « expres, pour voir si la knowledge traversait ».
+           * Cette fonction rendait le seul `text` : l'agent lisait un fil ou l'image etait
+           * mentionnee sans etre atteignable, et concluait qu'il ne pouvait rien en dire. Le
+           * binaire etait pourtant sur le disque depuis l'envoi. Il suffisait de le DIRE — le
+           * meme geste, la meme fonction, que pour le tour courant et l'orchestration.
+           */
+          const jointes = referencesDesPiecesJointes(message)
           return {
             role: message.role,
             ts: message.ts,
             text: coupe ? texte.slice(0, CAP_PAR_MESSAGE) : texte,
-            ...(coupe ? { tronque: true, longueurReelle: texte.length } : {})
+            ...(coupe ? { tronque: true, longueurReelle: texte.length } : {}),
+            ...(jointes.length ? { piecesJointes: jointes } : {})
           }
         })
         // Ce qui est coupe est DIT : une troncature muette ferait analyser un extrait comme s'il
         // etait le tout — la conclusion fausse qu'une retrospective doit precisement eviter.
         const coupes = messages.filter((message) => message.tronque).length
+        const toutesJointes = messages.flatMap((message) => message.piecesJointes ?? [])
+        const lisibles = toutesJointes.filter((jointe) => jointe.chemin).length
+        const perdues = toutesJointes.length - lisibles
         return {
           id: conversation.id,
           title: conversation.title,
@@ -2290,7 +2321,13 @@ export class AppCommandBus {
           messages,
           note:
             `${tous.length} message(s) au total, ${messages.length} rendu(s)` +
-            (coupes > 0 ? `, ${coupes} tronque(s) a ${CAP_PAR_MESSAGE} caracteres` : '')
+            (coupes > 0 ? `, ${coupes} tronque(s) a ${CAP_PAR_MESSAGE} caracteres` : '') +
+            (lisibles > 0
+              ? `. ${lisibles} piece(s) jointe(s) LISIBLE(S) : ouvre le champ 'chemin' avec Read avant de repondre a leur sujet — ne devine jamais leur contenu.`
+              : '') +
+            (perdues > 0
+              ? `. ${perdues} piece(s) jointe(s) mentionnee(s) mais introuvable(s) sur le disque : dis-le franchement plutot que d'inventer.`
+              : '')
         }
       }
       case 'rename_conversation': {

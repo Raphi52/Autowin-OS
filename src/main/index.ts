@@ -138,6 +138,7 @@ import {
   resolveListedSessionImage
 } from './activity/transcripts'
 import { LOT_SUPPRESSION_MAX } from './store/conversations'
+import type { AttachmentMeta } from './store/conversations'
 import { persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
 import { collectRunWorkspaces } from './runs/workspace-gc'
@@ -319,7 +320,8 @@ import {
   materializeUserImageArtifact,
   readConversationArtifact,
   removeConversationArtifacts,
-  revealableConversationArtifactPath
+  revealableConversationArtifactPath,
+  rechargerContenuPieceJointe
 } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -3731,13 +3733,43 @@ Le fil reprend ensuite normalement.`
       // destinee au modele. L'affichage n'est pas touche : `message.content` reste ce qu'il etait,
       // seule l'entree du modele change. C'est l'entonnoir unique de l'historique (4 appelants).
       const partsParContenu = new Map<string, PersistedChatPart[]>()
+      /*
+       * IMAGES D'UN TOUR PASSE : le renderer n'a plus le binaire, le STORE l'a toujours.
+       *
+       * Le fil affiche est rehydrate depuis le disque, ou seule la metadonnee vit (nom, type, taille,
+       * vignette) — le renderer ne peut donc envoyer qu'une vignette pour un message d'avant le
+       * dernier redemarrage. Le binaire ORIGINAL, lui, est persiste a l'envoi sous `chat-artifacts/`
+       * et attache a la metadonnee : on le recharge ICI, seul endroit qui voit a la fois l'historique
+       * remis par le renderer et le store. Sans cela le modele lisait une vignette compressee et se
+       * trompait sur ce qu'il voyait (mesure du 2026-08-27 : 3 bandes de couleur sur 4).
+       */
+      const metasParContenu = new Map<string, AttachmentMeta[]>()
       if (conversationId) {
         for (const stocke of os.conversations.get(conversationId)?.messages ?? []) {
           const parts = (stocke as { parts?: PersistedChatPart[] }).parts
           if (stocke.role === 'assistant' && parts?.length && typeof stocke.content === 'string') {
             partsParContenu.set(stocke.content, parts)
           }
+          if (stocke.role === 'user' && stocke.attachments?.length && !metasParContenu.has(stocke.content)) {
+            // Premier message gagnant sur un contenu repete : la meme convention que `partsParContenu`
+            // juste au-dessus. Deux messages au texte identique ET aux images differentes restent un cas
+            // que cet index ne separe pas — assume, et sans consequence : l'appariement final se fait
+            // sur le NOM de la piece jointe.
+            metasParContenu.set(stocke.content, stocke.attachments)
+          }
         }
+      }
+      /** Retrouve le binaire d'origine d'une piece jointe remise par le renderer, sinon `undefined`. */
+      const contenuOriginal = (
+        contenuDuMessage: string,
+        piece: { name: string; mimeType?: string }
+      ): { content: string; mimeType: string } | undefined => {
+        const metas = metasParContenu.get(contenuDuMessage)
+        if (!metas?.length) return undefined
+        // Le renderer suffixe « (miniature) » quand il n'a que la vignette : on compare les noms nus.
+        const nu = piece.name.replace(/\s*\(miniature\)\s*$/, '')
+        const meta = metas.find((candidate) => candidate.name === nu) ?? metas.find((candidate) => candidate.name === piece.name)
+        return meta ? rechargerContenuPieceJointe(meta) : undefined
       }
       const safe = (continuationWindow?.history ?? boundedTurnHistory(rawMessages, 40)).map((m) => {
         const parts = m.role === 'assistant' ? partsParContenu.get(m.content) : undefined
@@ -3747,7 +3779,26 @@ Le fil reprend ensuite normalement.`
         return {
           role: m.role,
           content: guardString(pourLeModele, 'content'),
-          ...(m.attachments?.length ? { attachments: guardAttachments(m.attachments) } : {})
+          ...(m.attachments?.length
+            ? {
+                attachments: guardAttachments(
+                  m.role === 'user'
+                    ? m.attachments.map((piece) => {
+                        const original = contenuOriginal(m.content, piece)
+                        return original
+                          ? {
+                              ...piece,
+                              name: piece.name.replace(/\s*\(miniature\)\s*$/, ''),
+                              mimeType: original.mimeType,
+                              size: Buffer.byteLength(original.content, 'base64'),
+                              content: original.content
+                            }
+                          : piece
+                      })
+                    : m.attachments
+                )
+              }
+            : {})
         }
       })
       let traceParentId: string | undefined

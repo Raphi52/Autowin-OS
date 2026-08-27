@@ -85,3 +85,55 @@ export function piecesJointesDuDernierTour(
   }
   return { chemins, introuvables, suffixe: lignes.join('\n') }
 }
+
+/**
+ * PRINCIPE GLOBAL D'OMNISCIENCE — ce qu'une conversation CONTIENT, un lecteur peut l'ATTEINDRE.
+ *
+ * Vécu le 2026-08-27, en test délibéré de l'utilisateur : il joint une image dans une conversation,
+ * puis pose la question depuis une AUTRE « exprès, pour voir si la knowledge traversait ». Elle n'a
+ * pas traversé. `conversation_read` rendait le TEXTE des messages et jetait leurs pièces jointes —
+ * l'agent lisait donc un fil où l'image était mentionnée sans jamais être atteignable, et concluait,
+ * honnêtement, qu'il ne pouvait rien en dire.
+ *
+ * La règle, désormais, ne dépend plus du CHEMIN par lequel on arrive à un message : tour courant,
+ * orchestration, ou lecture d'une conversation tierce empruntent la MÊME fonction. Un seul endroit
+ * décide ce qui est lisible, un seul endroit dit ce qui manque — sinon on recâble le tour de chat et
+ * on oublie la lecture croisée, ce qui est exactement ce qui vient d'arriver.
+ */
+export interface ReferenceDePieceJointe {
+  name: string
+  mimeType?: string
+  size?: number
+  /** Chemin réellement lisible sur le disque, absent si l'original ne l'est pas. */
+  chemin?: string
+  /** L'original n'est pas atteignable — dit, jamais tu. */
+  indisponible?: boolean
+}
+
+/**
+ * Les pièces jointes d'UN message, rendues atteignables.
+ *
+ * Le chemin cité est celui du STORE (`chat-artifacts/…`), pas une copie temporaire : il survit au
+ * tour, au redémarrage, et à la conversation qui le lit.
+ */
+export function referencesDesPiecesJointes(
+  message: Pick<Msg, 'attachments'>,
+  fichierExiste: (chemin: string) => boolean = existsSync
+): ReferenceDePieceJointe[] {
+  return (message.attachments ?? []).map((jointe) => {
+    const chemin = jointe.artifact?.path
+    const lisible =
+      jointe.originalUnavailable !== true && typeof chemin === 'string' && fichierExiste(chemin)
+    return {
+      name: jointe.name,
+      ...(jointe.mimeType ? { mimeType: jointe.mimeType } : {}),
+      ...(typeof jointe.size === 'number' ? { size: jointe.size } : {}),
+      ...(lisible ? { chemin } : { indisponible: true })
+    }
+  })
+}
+
+/** Y a-t-il quelque chose à annoncer ? Évite d'alourdir une réponse qui n'a aucune pièce jointe. */
+export function porteDesPiecesJointes(messages: readonly Pick<Msg, 'attachments'>[]): boolean {
+  return messages.some((message) => (message.attachments?.length ?? 0) > 0)
+}
