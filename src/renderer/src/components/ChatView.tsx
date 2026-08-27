@@ -274,6 +274,10 @@ export function ChatView({
    */
   const [listeNonPubliee, setListeNonPubliee] = useState(false)
   useEffect(() => {
+    // La vue Chat reste MONTÉE quand un autre onglet est à l'écran (App.tsx : isActive={tab==='chat'}).
+    // Sonder les worktrees toutes les 30 s pour une vue invisible, c'est un IPC + une énumération git
+    // payés pour un bandeau que personne ne regarde. La sonde suit donc la visibilité.
+    if (!isActive) return
     let vivant = true
     const relever = async (): Promise<void> => {
       try {
@@ -289,7 +293,7 @@ export function ChatView({
       vivant = false
       clearInterval(minuterie)
     }
-  }, [])
+  }, [isActive])
   const [openImage, setOpenImage] = useState<{ src: string; name: string } | null>(null)
   const [dragActive, setDragActive] = useState(false)
 
@@ -1118,6 +1122,40 @@ export function ChatView({
   }
 
   useEffect(() => {
+    /*
+     * UN RE-RENDU PAR FRAME, PAS PAR TOKEN.
+     *
+     * Chaque delta pilote arrive dans sa propre tâche IPC et appelait `patchLast` → `setMessages` :
+     * 300 tokens = 300 recopies du fil et 300 rendus, chacun en O(taille du message). Le batcher
+     * existait déjà (branché sur `orchestrate-delta`) ; le chemin le PLUS fréquent — le streaming du
+     * chat — ne l'utilisait pas.
+     *
+     * Ce qui est batché : seulement le TEXTE qui s'accumule (`delta`, `reasoning`, `think`). Tout le
+     * reste — `command`, `result`, `stream-reset`, `done`, `error`, `cancellation` — vide le tampon
+     * puis s'applique IMMÉDIATEMENT : une clôture ne doit jamais dormir une frame, et l'ordre des
+     * événements dans le réducteur est préservé par ce flush.
+     */
+    const pilotBatcher = createLiveRunDeltaBatcher<{
+      conversationId: string
+      event: PilotEvent
+    }>(
+      (batch) => {
+        const parConversation = new Map<string, PilotEvent[]>()
+        for (const item of batch) {
+          const liste = parConversation.get(item.conversationId) ?? []
+          liste.push(item.event)
+          parConversation.set(item.conversationId, liste)
+        }
+        for (const [conversationId, events] of parConversation)
+          patchLast(conversationId, (message) => {
+            let etat = message as AsstMsg
+            for (const event of events) etat = reduceAssistantPilotEvent(etat, event) as AsstMsg
+            Object.assign(message, etat)
+          })
+      },
+      (flush) => window.requestAnimationFrame(flush),
+      (handle) => window.cancelAnimationFrame(handle)
+    )
     const off = window.api.onPilotEvent((raw) => {
       const e = raw as PilotEvent
       const conversationId = e.conversationId
@@ -1180,11 +1218,21 @@ export function ChatView({
       }
       if (e.kind === 'stream-reset' && e.streamId)
         rebaseDirectiveReceiptsAfterStreamReset(conversationId, e.streamId)
+      if (e.kind === 'delta' || e.kind === 'reasoning' || e.kind === 'think') {
+        pilotBatcher.enqueue({ conversationId, event: e })
+        return
+      }
+      pilotBatcher.flush()
       patchLast(conversationId, (message) =>
         Object.assign(message, reduceAssistantPilotEvent(message, e))
       )
     })
-    return off
+    return () => {
+      // `cancel` et non `flush` : poser un état sur une vue démontée n'aide personne, et le fil
+      // persisté par le main reste la source de vérité à la réouverture.
+      pilotBatcher.cancel()
+      off()
+    }
   }, [])
 
   useEffect(() => {

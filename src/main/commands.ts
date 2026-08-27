@@ -2996,6 +2996,27 @@ export class AppCommandBus {
       return result
     } catch (error) {
       if (!completed) {
+        /*
+         * UN ECHEC GRAPHIFY GARDE SON BUREAU — sinon il n'est pas diagnosticable.
+         *
+         * DEFAUT VECU (conv-1478) : `graphify` a echoue sur « graphe Graphify invalide » en nommant
+         * un chemin dans `worktrees/<id>/agent__command-graphify-<uuid>/`. Ce bureau etait supprime
+         * ici, dans ce catch, avant que l'erreur ne parvienne au chat : le graphe fautif, la sortie
+         * du CLI et le contenu de `graphify-out` disparaissaient avec lui. Resultat mesure : deux
+         * relances a l'identique, puis aucune conclusion possible.
+         *
+         * Graphify n'ecrit qu'un cache regenerable : conserver le bureau ne risque aucune
+         * publication involontaire (on ne fusionne pas), et l'erreur NOMME le chemin conserve pour
+         * qu'il soit lu puis range. Cout assume : un dossier de bureau reste sur le disque apres un
+         * echec — c'est le prix d'un echec inspectable. `edit_file` garde son comportement.
+         */
+        if (command === 'graphify') {
+          throw new Error(
+            `${error instanceof Error ? error.message : String(error)}${SAUT_NATURE}` +
+              `bureau isole CONSERVE pour diagnostic : ${workspaceRoot} ` +
+              `(cache regenerable, non fusionne — a supprimer apres lecture)`
+          )
+        }
         if (this.os.worktrees.endAsync) await this.os.worktrees.endAsync(runId, { merge: false })
         else this.os.worktrees.end(runId, { merge: false })
       }

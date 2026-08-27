@@ -274,7 +274,43 @@ function assertGraphPathWithinTarget(target: string, graphPath: string): void {
   }
 }
 
-async function readGraphSummary(graphPath: string): Promise<{
+/**
+ * UN GRAPHE INVALIDE DOIT DIRE POURQUOI.
+ *
+ * DEFAUT VECU (conv-1478) : le CLI Graphify sortait a 0 en ecrivant un graph.json non conforme, et
+ * ce point rendait « graphe Graphify invalide : <chemin> ». Ce chemin vit dans un bureau isole
+ * SUPPRIME juste apres l'echec : plus rien a inspecter, donc deux relances a l'identique. La sortie
+ * du CLI etait DEJA capturee par `executeGraphifyProcess` ; elle etait simplement jetee des lors que
+ * le process sortait a 0. On la remonte ici, bornee, avec la taille du fichier et son debut.
+ */
+function grapheInvalide(
+  graphPath: string,
+  raison: string,
+  sortie: GraphifyProcessResult | undefined
+): Error {
+  const details: string[] = [`raison : ${raison}`]
+  try {
+    const taille = statSync(graphPath).size
+    details.push(`taille : ${taille} octets`)
+    if (taille > 0) {
+      const debut = readFileSync(graphPath, 'utf8').slice(0, 300).replace(/s+/g, ' ').trim()
+      if (debut) details.push(`debut : ${debut}`)
+    }
+  } catch {
+    // Le fichier peut disparaitre entre la lecture et le diagnostic : on reste sur ce qu'on a.
+  }
+  const stderr = sortie?.stderr?.trim()
+  const stdout = sortie?.stdout?.trim()
+  if (stderr) details.push(`stderr Graphify : ${stderr.slice(-1200)}`)
+  if (stdout) details.push(`stdout Graphify : ${stdout.slice(-600)}`)
+  if (!stderr && !stdout) details.push("le CLI Graphify n'a rien ecrit sur stdout ni stderr")
+  return new Error(`graphe Graphify invalide : ${graphPath} — ${details.join(' | ')}`)
+}
+
+async function readGraphSummary(
+  graphPath: string,
+  sortie?: GraphifyProcessResult
+): Promise<{
   nodes: number
   links: number
   builtAtCommit?: string
@@ -292,14 +328,18 @@ async function readGraphSummary(graphPath: string): Promise<{
   try {
     parsed = JSON.parse(await readFile(graphPath, 'utf8'))
   } catch {
-    throw new Error(`graphe Graphify invalide : ${graphPath}`)
+    throw grapheInvalide(graphPath, 'JSON illisible', sortie)
   }
   if (!parsed || typeof parsed !== 'object') {
-    throw new Error(`graphe Graphify invalide : ${graphPath}`)
+    throw grapheInvalide(graphPath, 'racine JSON non objet', sortie)
   }
   const graph = parsed as { nodes?: unknown; links?: unknown; built_at_commit?: unknown }
   if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
-    throw new Error(`graphe Graphify invalide : ${graphPath}`)
+    throw grapheInvalide(
+      graphPath,
+      `tableaux nodes/links absents (cles : ${Object.keys(graph).join(', ') || 'aucune'})`,
+      sortie
+    )
   }
   return {
     nodes: graph.nodes.length,
@@ -338,8 +378,9 @@ export async function runGraphify(
         ? resolveGraphifyLaunch()
         : { executable: 'graphify', prefixArgs: [], source: 'local' }
   const startedAt = performance.now()
+  let sortie: GraphifyProcessResult | undefined
   try {
-    await run(launch.executable, [...launch.prefixArgs, ...args], {
+    sortie = await run(launch.executable, [...launch.prefixArgs, ...args], {
       cwd: target,
       env: { ...process.env, GRAPHIFY_OUT: 'graphify-out' },
       timeoutMs: dependencies.timeoutMs
@@ -358,7 +399,7 @@ export async function runGraphify(
     throw error
   }
   assertGraphPathWithinTarget(target, graphPath)
-  const summary = await readGraphSummary(graphPath)
+  const summary = await readGraphSummary(graphPath, sortie)
   return {
     action,
     target: portableRelative(workspace, target),

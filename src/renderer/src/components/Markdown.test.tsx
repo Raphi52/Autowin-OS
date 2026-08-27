@@ -38,7 +38,7 @@ function renderHydrated(
         'div',
         null,
         ...texts.map((part, index) =>
-          createElement(Markdown as React.ComponentType<Record<string, unknown>>, {
+          createElement(Markdown as unknown as React.ComponentType<Record<string, unknown>>, {
             key: index,
             text: part.text,
             continuationPrefix: (part as { markdownContinuationPrefix?: string })

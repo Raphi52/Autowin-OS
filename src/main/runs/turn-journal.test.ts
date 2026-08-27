@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   appendTurnEvent,
+  flushTurnJournal,
   isTurnFinished,
   listUnfinishedTurns,
   pruneFinishedTurnJournals,
@@ -32,6 +33,10 @@ describe('turn-journal — écriture / relecture', () => {
 
   it('IGNORE une ligne tronquée (crash en pleine écriture) sans perdre le reste', () => {
     appendTurnEvent(root, 'conv-1', 'turn-1', { kind: 'delta', text: 'ok' })
+    // Le journal écrit désormais par LOTS : ce test simule un SECOND écrivain (le crash) qui append
+    // derrière nous. Il doit donc partir d'un fichier déjà à jour, sinon il mesure l'entrelacement
+    // des deux écrivains et non ce qu'il prétend mesurer (une ligne tronquée est ignorée).
+    flushTurnJournal(root, 'conv-1', 'turn-1')
     appendFileSync(turnJournalPath(root, 'conv-1', 'turn-1'), '{"kind":"delta","text":"tronq', 'utf8')
     const events = readTurnJournal(root, 'conv-1', 'turn-1')
     expect(events).toHaveLength(1)

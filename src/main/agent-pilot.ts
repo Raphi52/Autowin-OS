@@ -1053,6 +1053,7 @@ export class AgentPilot {
       | 'annonce-sans-action'
       | 'outil-pretendu-absent'
       | 'question-sans-lecture'
+      | 'commande-illisible'
     > = []
     const grantRecoveryIteration = (
       reason:
@@ -1066,6 +1067,7 @@ export class AgentPilot {
         | 'annonce-sans-action'
         | 'outil-pretendu-absent'
         | 'question-sans-lecture'
+        | 'commande-illisible'
     ): void => {
       recoveryReasons.push(reason)
       iterationLimit += 1
@@ -1160,6 +1162,18 @@ export class AgentPilot {
     /** Une seule relance pour un outil faussement declare absent : au-dela, on n'insiste pas. */
     let outilAbsentRecoveryAvailable = true
     let annonceSansActionRecoveryAvailable = true
+    /**
+     * BLOC `<cmd>` INEXPLOITABLE ET AUCUNE COMMANDE VALIDE — le TOUR PARASITE.
+     *
+     * Mesure sur `conv-1472` (2026-08-27, tour `c73fd638`) : le modele emet
+     * `<cmd>{"name":"orchestrate","args":{...}` — une accolade fermante MANQUANTE. Le parseur en fait
+     * bien un token `invalid`, mais le signalement (evenement visible + reinjection) vivait
+     * EXCLUSIVEMENT dans la boucle d'execution, gardee par `hasCommand` qui ne compte QUE les tokens
+     * `command`. Resultat : le bloc brut s'affichait tel quel, RIEN n'etait execute, aucune relance
+     * n'etait armee, et le tour se cloturait sur « Je lance la fusion en build. » — l'utilisateur
+     * devait retaper « go ». Une relance MECANIQUE, bornee a une fois, rend la main aux commandes.
+     */
+    let commandeIllisibleRecoveryAvailable = true
     let commandAttachments: NonNullable<Message['attachments']> = []
     /**
      * Le texte d'un tour qui se termine — JAMAIS vide.
@@ -1509,6 +1523,41 @@ export class AgentPilot {
               text: remainder,
               iteration: i
             })
+        }
+        /*
+         * TOUR PARASITE : un `<cmd>` casse, zero commande valide (voir la declaration de
+         * `commandeIllisibleRecoveryAvailable`). On SIGNALE l'echec dans le fil, on le REINJECTE, et
+         * on rend la main aux commandes — c'est la seule issue qui evite de faire retaper « go ».
+         */
+        const blocsIllisibles = ordered.filter(
+          (token): token is Extract<OrderedPilotToken, { kind: 'invalid' }> =>
+            token.kind === 'invalid'
+        )
+        if (blocsIllisibles.length && commandeIllisibleRecoveryAvailable) {
+          commandeIllisibleRecoveryAvailable = false
+          let illisibleIndex = 0
+          for (const bloc of blocsIllisibles) {
+            const actionId = `${i}:illisible:${illisibleIndex++}`
+            emit({ kind: 'command', actionId, name: 'commande illisible', args: {} })
+            emit({
+              kind: 'result',
+              actionId,
+              name: 'commande illisible',
+              ok: false,
+              data: `${bloc.reason} — aucune action n'a été exécutée`
+            })
+          }
+          grantRecoveryIteration('commande-illisible')
+          convo.push(`TOI: ${texteProvider}`)
+          convo.push(
+            'SYSTÈME: ton bloc <cmd> est INEXPLOITABLE (' +
+              blocsIllisibles.map((bloc) => bloc.reason).join(' ; ') +
+              ') — AUCUNE action n’a été exécutée, la demande n’est donc PAS satisfaite, malgré ce ' +
+              'que ton texte annonce. Vérifie que le JSON est COMPLET (accolades équilibrées, ' +
+              'guillemets échappés) et RÉ-ÉMETS MAINTENANT la commande au format exact ' +
+              '<cmd>{"name":"...","args":{...}}</cmd>. N’annonce rien : agis.'
+          )
+          continue
         }
         // Le tour a AGI mais n'a rien dit : on redemande la conclusion plutot que de livrer des
         // etiquettes nues. Borne a une relance pour ne jamais boucler.

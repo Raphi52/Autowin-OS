@@ -457,7 +457,15 @@ export function sanitizeChatHtml(source: string, scopeSelector_ = ''): string {
  * Prepare un bloc `html-render` pour le fil : un identifiant de domaine propre au bloc, et le HTML
  * assaini dont la feuille de style est confinee a ce domaine.
  */
+import { createBoundedCache } from './bounded-cache'
+
+const preparedCache = createBoundedCache<{ html: string; scopeId: string }>(40)
+
 export function prepareChatHtml(source: string): { html: string; scopeId: string } {
-  const scopeId = scopeToken(source)
-  return { html: sanitizeChatHtml(source, `[data-html-scope="${scopeId}"]`), scopeId }
+  // L'assainissement + le confinement CSS d'un bloc `html-render` est PUR : même source, même
+  // sortie. Le fil le rejouait à chaque frame de streaming pour des blocs inchangés.
+  return preparedCache.get(source, (cle) => {
+    const scopeId = scopeToken(cle)
+    return { html: sanitizeChatHtml(cle, `[data-html-scope="${scopeId}"]`), scopeId }
+  })
 }

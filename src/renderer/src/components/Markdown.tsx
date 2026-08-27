@@ -6,6 +6,7 @@
  * Les liens ne sont créés que pour les schémas http/https (ouverts en externe par
  * le setWindowOpenHandler du main). Suffisant pour des réponses de chat.
  */
+import { memo } from 'react'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import {
   authoritativeOrchestrationClosureSpan,
@@ -14,6 +15,7 @@ import {
 import { MAX_INLINE_HTML_CHARS, prepareChatHtml } from './chat-html-inline'
 import { retirerLignePromptSuivant } from '../../../shared/prompt-suivant'
 import { parseFileRef } from '../../../shared/file-ref'
+import { createBoundedCache } from './bounded-cache'
 
 type MarkdownProps = {
   text: string
@@ -78,7 +80,12 @@ export function extractRecommendation(text: string): string | null {
   return null
 }
 
-export function Markdown({
+/**
+ * MÉMOÏSATION DU RENDU — le fil se re-rend à chaque lot de deltas ; sans `memo`, les bulles déjà
+ * figées repayaient un parse CommonMark complet à chaque frame alors que leur texte n'a pas bougé.
+ * Les props sont des primitives : la comparaison superficielle de `memo` est ici exacte.
+ */
+export const Markdown = memo(function Markdown({
   text,
   continuationPrefix,
   highlightFinalSummary = false
@@ -106,7 +113,7 @@ export function Markdown({
       )}
     </div>
   )
-}
+})
 
 type MarkdownBlock = { kind: 'text' | 'code' | 'html-render'; content: string }
 
@@ -144,7 +151,18 @@ function hasClosingFence(source: string, content: string): boolean {
   return sourceMarkers > contentMarkers
 }
 
+/**
+ * Tokenisation CACHÉE par contenu : c'est elle qui appelle `fromMarkdown`. Deux rendus du MÊME
+ * texte (re-rendu du fil, remontage, bulle figée) partagent donc le même découpage. Cache borné
+ * (`createBoundedCache`) : le streaming crée une clé par lot de deltas, un cache infini fuirait.
+ */
+const tokenCache = createBoundedCache<MarkdownBlock[]>(120)
+
 function tokenizeMarkdownCodeBlocks(text: string): MarkdownBlock[] {
+  return tokenCache.get(text, computeMarkdownCodeBlocks)
+}
+
+function computeMarkdownCodeBlocks(text: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = []
   const spans: MarkdownCodeSpan[] = []
   let tree: MarkdownAstNode
