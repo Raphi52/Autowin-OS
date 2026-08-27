@@ -109,9 +109,9 @@ describe('recherche Azure par titre — la clause WIQL', () => {
     )
 
     const q = wiqlOf(fetchFn)
-    expect(q).toContain('[System.Id] > 100')
+    expect(q).toContain('[System.Id] < 100')
     expect(q).toContain("[System.Title] CONTAINS 'facture'")
-    expect(q).toContain('ORDER BY [System.Id] ASC')
+    expect(q).toContain('ORDER BY [System.Id] DESC')
   })
 
   it('une recherche vide ou blanche est IGNORÉE (pas de clause vide qui ramène tout)', async () => {

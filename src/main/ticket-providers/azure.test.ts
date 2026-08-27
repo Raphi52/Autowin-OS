@@ -62,7 +62,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
     )
     const wiqlBody = JSON.parse(String(wiqlInit?.body)) as { query: string }
     expect(wiqlBody.query).toContain('[System.TeamProject] = @project')
-    expect(wiqlBody.query).toContain('ORDER BY [System.Id] ASC')
+    expect(wiqlBody.query).toContain('ORDER BY [System.Id] DESC')
     expect(wiqlBody.query).not.toMatch(/WorkItemType|System\.State/)
     expect(page.items.map(({ type, state }) => [type, state])).toEqual([
       ['Fiche Team', 'En cours'],
@@ -94,7 +94,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
       { token: 'pat-secret', fetchFn: nextFetch as typeof fetch }
     )
     const nextBody = JSON.parse(String(nextFetch.mock.calls[0][1]?.body)) as { query: string }
-    expect(nextBody.query).toContain('[System.Id] > 12')
+    expect(nextBody.query).toContain('[System.Id] < 12')
     expect(nextPage).toMatchObject({ cursor: undefined, hasMore: false })
   })
 

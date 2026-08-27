@@ -386,12 +386,18 @@ export const azureTicketProvider: TicketProviderAdapter = {
     const organization = encodeURIComponent(source.organization)
     const project = encodeURIComponent(source.project)
     const baseUrl = `https://dev.azure.com/${organization}/${project}`
-    const cursorClause = cursor === undefined ? '' : ` AND [System.Id] > ${cursor}`
+    /**
+     * ORDRE DÉCROISSANT — la fenêtre chargée doit être celle des fiches les PLUS RÉCENTES.
+     * En ASC, la première page ramenait les plus VIEUX identifiants du projet : la vue triait
+     * ensuite « plus récents » sur cet échantillon ancien, donc l'utilisateur ne voyait jamais
+     * les fiches du jour. Le curseur suit l'ordre : il DESCEND (`<`) au lieu de monter.
+     */
+    const cursorClause = cursor === undefined ? '' : ` AND [System.Id] < ${cursor}`
     const searchClause = wiqlTitleClause(request.titleContains)
     const query =
       'SELECT [System.Id] FROM WorkItems ' +
       `WHERE [System.TeamProject] = @project${cursorClause}${searchClause} ` +
-      'ORDER BY [System.Id] ASC'
+      'ORDER BY [System.Id] DESC'
 
     const wiqlResponse = await fetchTicketJson<unknown>(
       `${baseUrl}/_apis/wit/wiql?$top=${pageSize + 1}&api-version=${API_VERSION}`,
