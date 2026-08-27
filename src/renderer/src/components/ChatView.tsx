@@ -965,6 +965,9 @@ export function ChatView({
         if (e.scope === 'roles') refreshRuntimeIdentity()
         if (refreshesActiveConversation(e, activeRef.current)) {
           const id = activeRef.current!
+          // Le fil affiché est GARDÉ comme repli : la relecture qui suit peut rendre un fil vide
+          // (tour en vol non persisté) et effacerait sinon la conversation à l'écran.
+          const filAffiche = liveMessagesRef.current.get(id)
           liveMessagesRef.current.delete(id)
           // `.catch` obligatoire : ce handler tourne à CHAQUE event `refresh` ; si la conversation a
           // été supprimée entre l'émission et l'appel (course normale), le rejet produisait un
@@ -973,7 +976,8 @@ export function ChatView({
           void window.api
             .conversation(id)
             .then((conversation) => {
-              if (conversation && activeRef.current === id) void loadConv(conversation as Conv)
+              if (conversation && activeRef.current === id)
+                void loadConv(conversation as Conv, filAffiche)
             })
             .catch(() => {})
         }
@@ -1222,7 +1226,13 @@ export function ChatView({
   const resetConvLoad = (): void =>
     setConvLoad((prev) => (prev.status === 'idle' ? prev : { status: 'idle' }))
 
-  async function loadConv(c: Conv): Promise<void> {
+  /**
+   * `filDeRepli` : le fil AFFICHÉ juste avant un rechargement qui a invalidé le cache live. Un store
+   * qui répond un fil VIDE (tour en vol pas encore persisté, écriture en cours) ne fait PAS foi : sans
+   * ce repli, la conversation « arrêtait de s'afficher » et l'écran retombait sur l'accueil « Parle à
+   * l'agent » avec ses chips de runs, alors que les messages étaient bien là (constaté le 27/08).
+   */
+  async function loadConv(c: Conv, filDeRepli?: readonly Msg[]): Promise<void> {
     // Retenu ICI : `loadConv` est le point de passage unique de toute ouverture (clic, reprise,
     // inbox d'agents), donc le seul endroit ou la memoire ne peut pas se desynchroniser.
     memoriserDerniereConversation(c.id)
@@ -1257,7 +1267,12 @@ export function ChatView({
     activeRef.current = c.id
     setActiveId(c.id)
     const branchMessages = detailed.messages ?? []
-    const stored = liveMessagesRef.current.get(c.id) ?? hydraterFilStocke(branchMessages)
+    const duStore = hydraterFilStocke(branchMessages)
+    // Un rechargement ne RÉTRÉCIT pas le fil à zéro : le vide du store est une absence d'information,
+    // pas une conversation vidée.
+    const relu =
+      duStore.length === 0 && filDeRepli && filDeRepli.length > 0 ? [...filDeRepli] : duStore
+    const stored = liveMessagesRef.current.get(c.id) ?? relu
     liveMessagesRef.current.set(c.id, stored)
     setMessages(stored)
     switchComposerDraft(c.id)

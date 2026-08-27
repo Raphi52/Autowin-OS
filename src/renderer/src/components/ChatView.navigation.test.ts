@@ -44,7 +44,7 @@ describe('navigation pendant une reponse', () => {
 
   it('synchronise le routage live avant de publier une nouvelle selection', () => {
     const load = source.match(
-      /async function loadConv\(c: Conv\): Promise<void> \{[\s\S]*?\n\s{2}\}/
+      /async function loadConv\(c: Conv[^)]*\): Promise<void> \{[\s\S]*?\n\s{2}\}/
     )?.[0]
     const fresh = source.match(/function newConv\(\): void \{[\s\S]*?\n\s{2}\}/)?.[0]
 
