@@ -2605,31 +2605,63 @@ ol.md-list li {
   color: var(--err, #ef5c5c);
 }
 
-/* Réflexion live du modèle : visible pendant l'attente du premier mot, discrète (ce n'est pas la
-   réponse), défilement borné pour ne jamais pousser la conversation. */
-.msg-reasoning {
+/* PANNEAU « Réflexion » : le raisonnement du modèle, colonne dédiée à droite du fil.
+   Il n'est plus dans la bulle — le fil garde la réponse, ce panneau garde la pensée. */
+.thinking-pane {
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  min-width: 220px;
+  border-left: 1px solid var(--line, #2a2a2a);
+  background: var(--bg-1, #141414);
+  overflow: hidden;
+}
+.thinking-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line, #2a2a2a);
+}
+.thinking-pane-head button {
+  background: none;
+  border: 0;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 15px;
+}
+.thinking-pane-body {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 12px;
+  overflow: auto;
+}
+.thinking-block {
   display: grid;
   gap: 4px;
-  max-height: 140px;
-  overflow: auto;
   padding: 8px 11px;
   border: 1px dashed color-mix(in srgb, var(--text-faint) 45%, transparent);
   border-radius: var(--r3);
   background: color-mix(in srgb, var(--bg-2) 70%, transparent);
 }
-.msg-reasoning-label {
+.thinking-block.is-live {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--acc, #6aa9ff) 55%, transparent);
+}
+.thinking-block-label {
   color: var(--text-faint);
   font-size: 9px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-.msg-reasoning p {
+.thinking-block p {
   margin: 0;
   color: var(--text-dim);
   font-size: 11.5px;
   line-height: 1.5;
   white-space: pre-wrap;
-  opacity: 0.85;
 }
 
 /* Verdict d'une vérification, affiché dans le bloc d'activité. La preuve doit se lire sans quitter
@@ -3249,4 +3281,23 @@ ol.md-list li {
   margin: 0 4px 0 6px;
   flex: 0 0 auto;
   accent-color: var(--danger, #e06c6c);
+}
+
+/* Bouton d'ouverture du panneau « Réflexion ». Classe DISTINCTE de `.workflow-toggle` :
+   les tests de portée des runs sélectionnent `.workflow-toggle` et prendraient ce bouton. */
+.thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line, #2a2a2a);
+  border-radius: var(--r3);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11.5px;
+}
+.thinking-toggle.is-active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--acc, #6aa9ff) 55%, transparent);
 }

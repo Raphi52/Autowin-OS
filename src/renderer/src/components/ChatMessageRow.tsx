@@ -344,14 +344,7 @@ export const ChatMessageRow = memo(
           <span className="msg-role">Agent</span>
           {!message.done && <span className="spinner" />}
         </div>
-        {/* Réflexion EN DIRECT : seule chose qui se passe pendant les secondes d'attente avant le
-            premier mot. Disparaît dès que la réponse arrive (transitoire, jamais persistée). */}
-        {!message.done && message.reasoning && message.parts.length === 0 && (
-          <div className="msg-reasoning" data-testid="msg-reasoning">
-            <span className="msg-reasoning-label">réflexion</span>
-            <p>{message.reasoning}</p>
-          </div>
-        )}
+        {/* Le raisonnement n'est PLUS dans la bulle : il vit dans le panneau « Réflexion » (droite). */}
         <div className="msg-turn">
           {message.parts.length === 0 && !message.done && (
             <div className="msg-body c-faint">réflexion…</div>
