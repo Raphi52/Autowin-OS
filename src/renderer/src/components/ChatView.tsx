@@ -259,6 +259,15 @@ export function ChatView({
    */
   const [travailNonPublie, setTravailNonPublie] = useState<string | null>(null)
   /**
+   * LE MESSAGE QU'ON A REFERME, et non un simple « ferme ». Le releve repasse toutes les 30 s et
+   * reecrit `travailNonPublie` : un booleen laisserait le bandeau revenir au tick suivant, donc une
+   * croix qui ne promet rien. En retenant le TEXTE, la fermeture tient tant que la situation ne
+   * bouge pas -- et un travail de plus, qui change le message, rouvre l'alerte. Ce bandeau existe
+   * parce que trois travaux finis ont ete perdus de vue le 2026-08-23 : le masquer pour toujours
+   * etoufferait le prochain.
+   */
+  const [messageNonPublieMasque, setMessageNonPublieMasque] = useState<string | null>(null)
+  /**
    * La LISTE des travaux non publies. Deux versions de ce bouton ont echoue avant : la premiere
    * ouvrait la vue Worktrees, la seconde la vue Workspace -- toutes deux ne montrent que les bureaux
    * VIVANTS, et affichaient donc « 0 bureau » pendant que 14 travaux attendaient. Il fallait une vue
@@ -2955,7 +2964,7 @@ export function ChatView({
           </div>
         </header>
 
-        {travailNonPublie && (
+        {travailNonPublie && travailNonPublie !== messageNonPublieMasque && (
           <div
             className="chat-workflow-notice chat-travail-non-publie"
             data-testid="chat-travail-non-publie"
@@ -2977,6 +2986,16 @@ export function ChatView({
               title="Lister ces travaux et lire leur diff"
             >
               Voir la liste
+            </button>
+            <button
+              type="button"
+              data-testid="chat-travail-non-publie-fermer"
+              className="chat-travail-non-publie__fermer"
+              onClick={() => setMessageNonPublieMasque(travailNonPublie)}
+              aria-label="Fermer cet avertissement"
+              title="Masquer jusqu’au prochain changement"
+            >
+              ×
             </button>
           </div>
         )}
