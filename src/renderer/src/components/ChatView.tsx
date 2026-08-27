@@ -43,7 +43,12 @@ import { buildScopeEcho, formatScopeEcho } from './chat-scope-echo'
 import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
-import { aUneReponseApres, lastUserPromptBefore, messageKey } from './chat-message-keys'
+import {
+  aUneReponseApres,
+  askEnAttente,
+  lastUserPromptBefore,
+  messageKey
+} from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
 import type {
   AsstMsg,
@@ -1592,7 +1597,9 @@ export function ChatView({
   function queueCurrentMessage(): void {
     if (!activeId) return
     if (!input.trim()) return
-    void submitBtw(input, 'normal')
+    // Une question `ask` encore ouverte au bout du fil : ce texte y REPOND, meme tape a la main.
+    // Sans ce test, seul le clic sur un bouton comptait comme reponse et le reçu disait « Orienté ».
+    void submitBtw(input, 'normal', askEnAttente(liveMessagesRef.current.get(activeId) ?? []))
   }
 
   /**
@@ -2537,6 +2544,60 @@ export function ChatView({
     persistedRuns.filter((run) => run.convId === activeId)
   )
 
+  /**
+   * FIL RENDU, MÉMOÏSÉ. Mesuré (conv-1464) : chaque caractère tapé dans le composer re-rendait la
+   * liste ENTIÈRE, et `aUneReponseApres`/`lastUserPromptBefore` balaient le fil pour CHAQUE
+   * message → O(n²) balayages par touche (400 pour 5 caractères sur 80 messages, mesuré par
+   * `ChatView.frappe-cout.test.tsx`). D'où le gel à la frappe sur une conversation longue.
+   * `input` n'est VOLONTAIREMENT pas une dépendance : le composer ne touche pas au fil.
+   */
+  const filRendu = useMemo(
+    () =>
+      messages.map((message, index) => (
+        <Fragment key={messageKey(message, index)}>
+          <ChatMessageRow
+            onPickSuggestion={pickSuggestion}
+            onAnswerAsk={answerAsk}
+            /* VERROU DURABLE : un message utilisateur posterieur EST la reponse. Derive du fil,
+             donc vrai apres un remontage comme apres un redemarrage — la ou l'etat local du
+             bloc, lui, disparaissait et rouvrait la porte au spam-clic. */
+            askRepondu={
+              message.role === 'assistant' ? aUneReponseApres(messages, index) : undefined
+            }
+            message={message}
+            conversationId={activeId}
+            onInspectTurn={onInspectTurn}
+            onFork={handleFork}
+            onOpenImage={setOpenImage}
+            onOpenLiveAction={revealLiveAction}
+            retryPrompt={
+              message.role === 'assistant' ? lastUserPromptBefore(messages, index) : undefined
+            }
+            onResend={pickSuggestion}
+            onRefineResume={refineResumeDraft}
+            directiveReceipts={
+              message.role === 'assistant' ? activeDirectiveReceiptsByMessage.get(index) : undefined
+            }
+          />
+          {message.role === 'user' &&
+            (activeDirectiveReceiptsByMessage.get(index) ?? []).map((receipt) => (
+              <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
+            ))}
+        </Fragment>
+      )),
+    [
+      messages,
+      activeId,
+      activeDirectiveReceiptsByMessage,
+      pickSuggestion,
+      answerAsk,
+      onInspectTurn,
+      handleFork,
+      revealLiveAction,
+      refineResumeDraft
+    ]
+  )
+
   return (
     <div
       className={`chat-layout${showRuns ? '' : ' is-runs-collapsed'}`}
@@ -3343,40 +3404,7 @@ export function ChatView({
               <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
             ))}
 
-          {messages.map((message, index) => (
-            <Fragment key={messageKey(message, index)}>
-              <ChatMessageRow
-                onPickSuggestion={pickSuggestion}
-                onAnswerAsk={answerAsk}
-                /* VERROU DURABLE : un message utilisateur posterieur EST la reponse. Derive du fil,
-                   donc vrai apres un remontage comme apres un redemarrage — la ou l'etat local du
-                   bloc, lui, disparaissait et rouvrait la porte au spam-clic. */
-                askRepondu={
-                  message.role === 'assistant' ? aUneReponseApres(messages, index) : undefined
-                }
-                message={message}
-                conversationId={activeId}
-                onInspectTurn={onInspectTurn}
-                onFork={handleFork}
-                onOpenImage={setOpenImage}
-                onOpenLiveAction={revealLiveAction}
-                retryPrompt={
-                  message.role === 'assistant' ? lastUserPromptBefore(messages, index) : undefined
-                }
-                onResend={pickSuggestion}
-                onRefineResume={refineResumeDraft}
-                directiveReceipts={
-                  message.role === 'assistant'
-                    ? activeDirectiveReceiptsByMessage.get(index)
-                    : undefined
-                }
-              />
-              {message.role === 'user' &&
-                (activeDirectiveReceiptsByMessage.get(index) ?? []).map((receipt) => (
-                  <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
-                ))}
-            </Fragment>
-          ))}
+          {filRendu}
         </div>
 
         {(hasNewActivity || scrolledAwayFromTail) && (
