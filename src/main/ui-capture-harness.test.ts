@@ -77,3 +77,54 @@ describe('seuils', () => {
     expect(SEUILS.octetsPng).toBeGreaterThanOrEqual(4 * 1024)
   })
 })
+
+/**
+ * PROUVER UN ETAT QU'IL FAUT OUVRIR.
+ *
+ * Defaut vecu le 2026-08-26 (conv-1420) : un travail juste — test rouge puis vert, falsifiabilite
+ * demontree par mutation — a ete refuse par le juge, qui exigeait « une capture du popover OUVERT
+ * montrant la jauge ». Le harnais navigue par le bouton `nav-<vue>` puis capture : il ne peut donc
+ * prouver QUE des etats atteignables sans interaction. Popover, menu, onglet, modale : hors de
+ * portee. Deux runs, 1,95 $, pour un code qui n'avait rien a se reprocher.
+ *
+ * Le declencheur seul ne suffit pas. Un selecteur TROUVE mais inerte — deja ouvert, clic absorbe,
+ * handler non pose — rendrait une capture de la vue FERMEE avec un verdict vert : exactement le
+ * faux vert que ce harnais existe pour rendre impossible. Le verdict exige donc un DELTA DOM.
+ */
+describe('verdict quand la preuve exige un clic', () => {
+  const ouvert = {
+    vue: 'chat',
+    destinationActive: 'chat',
+    longueurTexte: 800,
+    elements: 260,
+    octetsPng: 40_000,
+    declencheur: '[data-testid="quota-indicator"]',
+    declencheurTrouve: true,
+    elementsAvantClic: 240
+  }
+
+  it('accepte une capture dont le clic a REELLEMENT change la vue', () => {
+    expect(verdictCapture(ouvert)).toEqual({ ok: true, echecs: [] })
+  })
+
+  it('nomme le declencheur introuvable au lieu de capturer la vue fermee', () => {
+    const verdict = verdictCapture({ ...ouvert, declencheurTrouve: false })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.echecs).toContain('declencheur-absent([data-testid="quota-indicator"])')
+  })
+
+  it('refuse un clic SANS EFFET — le piege du vert creux', () => {
+    // Le declencheur existe, le clic part, et rien ne s'ouvre. Sans cette garde, la capture
+    // montrerait la vue fermee et le verdict dirait « prouve ».
+    const verdict = verdictCapture({ ...ouvert, elementsAvantClic: 260 })
+    expect(verdict.ok).toBe(false)
+    expect(verdict.echecs).toContain('clic-sans-effet([data-testid="quota-indicator"])')
+  })
+
+  it('laisse INTACTES les captures sans clic', () => {
+    // Sans `--click`, aucune des deux gardes ne doit mordre : le comportement d'origine est le
+    // contrat de tous les appels existants.
+    const sansClic = { vue: 'chat', destinationActive: 'chat', longueurTexte: 800, elements: 240, octetsPng: 40_000 }
+    expect(verdictCapture(sansClic)).toEqual({ ok: true, echecs: [] })
+  })
+})
