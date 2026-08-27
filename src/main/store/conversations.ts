@@ -805,10 +805,24 @@ export class ConversationStore {
      * ratait silencieusement l'essentiel de son propre corpus. Aucun des 6060 tests ne le voyait, et
      * le commentaire affirmait le contraire de ce que le code faisait.
      */
-    this.indexerMessage(id, message?.content)
     if (!message) throw new Error(`Tour assistant inconnu: ${turnId}`)
     conversation.updatedAt = this.now()
     const terminal = ['done', 'failed', 'cancelled', 'interrupted'].includes(event.kind)
+    /*
+     * INDEXATION SUR L'EVENEMENT TERMINAL SEULEMENT -- cause mesuree du gel du chat.
+     *
+     * `message.content` est le texte ACCUMULE (`flattenChatParts`), et cette methode est appelee une
+     * fois par TOKEN. Indexer ici a chaque delta re-tokenisait le message ENTIER a chaque token :
+     * cout O(n^2) SYNCHRONE dans le processus principal, plus une entree neuve par delta dans le memo
+     * `motsParMessage` (dont la clef est la CHAINE) et N copies partielles du meme message dans le
+     * voisinage. Compte reel : 301 appels a `motsDe` pour 301 deltas avant, 1 apres.
+     *
+     * Rien n'est perdu : un tour se termine TOUJOURS par done/failed/cancelled/interrupted, et le
+     * contenu complet entre dans les index a ce moment. La regression racontee juste au-dessus (le
+     * texte assistant absent des index) reste couverte par le test « indexe quand meme le contenu
+     * final » de `indexation-par-token.test.ts`.
+     */
+    if (terminal) this.indexerMessage(id, message.content)
     this.changed(id, terminal ? 'immediate' : 'checkpoint', {
       op: 'turn-event',
       turnId,
