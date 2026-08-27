@@ -944,21 +944,44 @@ export const NUAGE_COSMIQUE = {
 } as const
 
 /**
- * LA SILHOUETTE du nuage (conv-1455 : « le container du nuage est un cercle, c'est moche »).
- *
- * Le masque etait un `smoothstep` sur `length(c)` : un cercle parfait, donc un bord de disque visible
- * des que la matiere est dense. Ici le rayon du masque est DEFORME par le meme champ fractal que la
- * matiere : la nebuleuse n'a plus de contour geometrique, elle finit en lambeaux.
+ * LE BORD (conv-1455 : « le container du nuage est un cercle c moche »). Le masque etait un disque
+ * parfait ; il devient un profil polaire DENTELE : rayon = 1 + somme d'harmoniques hautes. Les
+ * harmoniques sont hautes (>= 19) parce que 2 ou 3 donnent un ovale mou, pas un bord dechiquete.
  */
-export const SILHOUETTE_NUAGE = {
-  /** Amplitude de la deformation du rayon. 0 = cercle. Bornee : au-dela, le nuage se disloque. */
-  chaos: 0.42,
-  /** Frequence du champ qui deforme le bord. Bas = grosses echancrures, haut = dentelle. */
-  frequenceBord: 2.9,
-  /** Largeur du fondu du bord. Large : un bord net redessine un contour. */
-  fondu: 0.34,
-  /** Saturation des teintes (conv-1455 : « plus colore »). 1 = teintes d'origine. */
-  saturation: 1.45
+export const BORD_NUAGE = {
+  /** Harmoniques angulaires du profil. Nombres premiers : leurs battements ne se repetent pas. */
+  harmoniques: [7, 13, 19, 29, 43],
+  /** Amplitude totale du decoupage, en fraction du rayon. Bornee : au-dela le masque se troue. */
+  amplitude: 0.34,
+  /** Profondeur du grignotage par le bruit anime dans le shader : le bord VIT, il ne tourne pas rigide. */
+  erosion: 0.3
+} as const
+
+/** Phases fixes, une par harmonique : sans elles, tous les sinus culminent au meme angle. */
+const BORD_PHASES = [0.0, 1.7, 3.1, 4.6, 5.9]
+
+/**
+ * Le rayon du bord a l'angle `angle`, en fraction du rayon nominal. FONCTION PURE : c'est la seule
+ * facon de PROUVER que le bord n'est plus un cercle sans GPU. Le shader applique la MEME formule.
+ */
+export function profilBordNuage(angle: number): number {
+  let somme = 0
+  let poids = 0
+  BORD_NUAGE.harmoniques.forEach((h, i) => {
+    const amp = 1 / (i + 1)
+    somme += amp * Math.sin(h * angle + BORD_PHASES[i])
+    poids += amp
+  })
+  return 1 + (somme / poids) * BORD_NUAGE.amplitude
+}
+
+/**
+ * LA SATURATION (conv-1455 : « plus coloré », puis « saturation montée »). Le gain s'applique autour
+ * de la luminance : au-dela de 3, les teintes clippent et la nebuleuse devient un aplat fluo.
+ */
+export const SATURATION_NUAGE = {
+  /** Gain de chroma autour de la luminance. 1 = aucune montee. */
+  gain: 1.75
 } as const
 
 /**
@@ -1047,10 +1070,9 @@ export const NUAGE_FRAGMENT_SHADER = [
   'uniform float uEtoileRayon;',
   'uniform float uBranches;',
   'uniform float uPulsation;',
-  'uniform float uChaos;',
-  'uniform float uFreqBord;',
-  'uniform float uFondu;',
   'uniform float uSaturation;',
+  'uniform float uBordAmplitude;',
+  'uniform float uBordErosion;',
   'float hashN(vec2 p) {',
   '  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));',
   '  q += dot(q, q.yzx + 33.33);',
@@ -1074,15 +1096,28 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  }',
   '  return somme;',
   '}',
+  'float profilBord(float angle) {',
+  '  float somme = 0.0;',
+  '  float poids = 0.0;',
+  '  float harmoniques[5];',
+  '  float phases[5];',
+  '  harmoniques[0] = 7.0; harmoniques[1] = 13.0; harmoniques[2] = 19.0; harmoniques[3] = 29.0; harmoniques[4] = 43.0;',
+  '  phases[0] = 0.0; phases[1] = 1.7; phases[2] = 3.1; phases[3] = 4.6; phases[4] = 5.9;',
+  '  for (int i = 0; i < 5; i++) {',
+  '    float amp = 1.0 / float(i + 1);',
+  '    somme += amp * sin(harmoniques[i] * angle + phases[i]);',
+  '    poids += amp;',
+  '  }',
+  '  return 1.0 + (somme / poids) * uBordAmplitude;',
+  '}',
   'void main() {',
   '  vec2 c = vUv - 0.5;',
-  '  float dist = length(c);',
-  '  if (dist > 0.5 + uChaos * 0.5) discard;',
-  '  float angleBord = atan(c.y, c.x);',
-  '  vec2 pBord = vec2(cos(angleBord), sin(angleBord)) * uFreqBord + vec2(uTime * 0.03, -uTime * 0.021);',
-  '  float lobes = fbm(pBord) - 0.5;',
-  '  float rayon = 0.42 + lobes * uChaos;',
-  '  float masque = 1.0 - smoothstep(rayon - uFondu, rayon + uFondu * 0.55, dist);',
+  '  float rayonAngle = length(c);',
+  '  float theta = atan(c.y, c.x);',
+  // Le bord : profil dentele + grignotage par le bruit anime. Un disque parfait se lit comme un cercle colle.
+  '  float bord = 0.5 * profilBord(theta);',
+  '  bord *= 1.0 + uBordErosion * (fbm(vec2(cos(theta), sin(theta)) * 5.0 + uTime * 0.05) - 0.5);',
+  '  float masque = 1.0 - smoothstep(bord * 0.22, bord, rayonAngle);',
   '  if (masque <= 0.001) discard;',
   // Rotation lente du champ : la nebuleuse de reference TOURNE, elle ne glisse pas de biais.
   '  float spin = uTime * uWarp * 0.35;',
@@ -1122,8 +1157,9 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  float etoile = (coeur + pointes * 0.85) * uEtoile * scintille;',
   '  couleur += vec3(1.0, 0.97, 0.92) * etoile;',
   '  alpha = clamp(alpha + etoile * 0.9, 0.0, 1.0);',
-  '  float lum = dot(couleur, vec3(0.299, 0.587, 0.114));',
-  '  couleur = max(vec3(0.0), mix(vec3(lum), couleur, uSaturation));',
+  // Saturation : chroma etiree autour de la luminance, apres l'etoile pour ne pas la teinter.
+  '  float luma = dot(couleur, vec3(0.2126, 0.7152, 0.0722));',
+  '  couleur = max(vec3(0.0), mix(vec3(luma), couleur, uSaturation));',
   '  gl_FragColor = vec4(couleur, alpha);',
   '}'
 ].join('\n')
@@ -1149,10 +1185,9 @@ function buildNuage(): THREE.Mesh {
       uEtoileRayon: { value: ETOILE_NUAGE.rayon },
       uBranches: { value: ETOILE_NUAGE.branches },
       uPulsation: { value: ETOILE_NUAGE.pulsation },
-      uChaos: { value: SILHOUETTE_NUAGE.chaos },
-      uFreqBord: { value: SILHOUETTE_NUAGE.frequenceBord },
-      uFondu: { value: SILHOUETTE_NUAGE.fondu },
-      uSaturation: { value: SILHOUETTE_NUAGE.saturation }
+      uSaturation: { value: SATURATION_NUAGE.gain },
+      uBordAmplitude: { value: BORD_NUAGE.amplitude },
+      uBordErosion: { value: BORD_NUAGE.erosion }
     },
     vertexShader: NAPPE_VERTEX_SHADER,
     fragmentShader: NUAGE_FRAGMENT_SHADER
