@@ -63,6 +63,7 @@ const PUBLICATION_DIFFEREE =
   'différée — le changement est vérifié ; son intégration attend la fin des processus du bureau, ' +
   'Autowin la reprend seul. Ne pas rejouer cette édition.'
 import { lastUserMessageAt } from './store/conversations'
+import { piecesJointesDuDernierTour } from './store/pieces-jointes-orchestration'
 import type { Message } from './providers/types'
 import type { Role, RoleBinding } from './roles'
 import {
@@ -1671,8 +1672,23 @@ export class AppCommandBus {
                 collectAutowinKaizenEvidence(kaizenEvidenceConversation)
               )
             : requestedTask
+        /*
+         * L'IMAGE JOINTE ENTRE DANS LE PIPELINE — elle n'y entrait pas.
+         *
+         * Vecu le 2026-08-27 : « fais un truc comme l'image que je t'ai envoye » repond « Je n'ai
+         * pas l'image dans ce tour ». Le sous-agent disait vrai : l'orchestrateur ne transporte que
+         * `task: string`, et ses quatorze sites d'appel construisent tous
+         * `[{ role: 'user', content }]` sans jamais porter `attachments` — alors que le tour de CHAT,
+         * lui, les materialise et cite leurs chemins. Le fichier existait pourtant sur le disque,
+         * sous `chat-artifacts/<conversation>/<tour>/`.
+         *
+         * On ne change pas le contrat de l'orchestrateur pour autant : on lui DIT ou regarder, dans
+         * la tache elle-meme. L'agent a `Read`, cela suffit — et cela couvre du meme geste les
+         * quatorze sites, au lieu d'en cabler treize et d'en oublier un.
+         */
+        const piecesJointes = piecesJointesDuDernierTour(conversation?.messages ?? [])
         const task = isolateWatchdogPromptPaths(
-          rawTask,
+          piecesJointes.suffixe ? `${rawTask}${piecesJointes.suffixe}` : rawTask,
           causalWatchPaths,
           this.os.executionWorkspace
         )
