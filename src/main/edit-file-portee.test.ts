@@ -39,6 +39,8 @@ import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
  */
 /** Saut de ligne sans sequence d'echappement : elle a deja fui telle quelle dans ce fichier. */
 const SAUT = String.fromCharCode(10)
+/** CRLF litteral — un fichier herite Windows le porte, et il doit survivre intact. */
+const CRLF = String.fromCharCode(13, 10)
 
 /*
  * LA RACINE DES FIXTURES VIT HORS DU DEPOT MESURE.
@@ -572,5 +574,52 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     // La base reste INTACTE : rien de rouge n’est publié, la garantie n’est pas seulement assouplie.
     expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).toContain('=> 1\n')
     expect(existsSync(join(repo, 'sujet.ts'))).toBe(true)
+  }, 180_000)
+
+  /*
+   * DEFAUT PREEXISTANT MESURE le 2026-08-27 sur les octets reels : `readFileSync(p).toString('utf8')`
+   * ne jette PAS sur une entree invalide, Node substitue U+FFFD. Un fichier cp1252 edite via
+   * `edit_file` ressortait donc avec chaque octet accentue remplace par `ef bf bd` — TRES LOIN de la
+   * zone editee — et le bureau isole publiait la corruption dans le depot.
+   *   avant : ...63756c **e9** 20766965757820...   apres : ...63756c **efbfbd** 2076696575...
+   *
+   * ENTREE QUI FAIT ECHOUER CE TEST SI LA GARDE EST FAUSSE : ce meme fichier cp1252, dont la zone
+   * editee est pourtant PUREMENT ASCII — l'edition « reussissait » et detruisait le reste.
+   */
+  it('refuse une édition sur un fichier non UTF-8, sans toucher un seul octet', async () => {
+    const { repo, git } = depotDejaRouge()
+    // `é` = 0xE9 en cp1252 : un octet qu'aucune lecture utf8 ne sait rendre.
+    const octetsLegacy = Buffer.concat([
+      Buffer.from('// calcul', 'latin1'),
+      Buffer.from([0xe9]),
+      // CRLF sans sequence d'echappement, comme le reste de ce fichier (cf. `SAUT`).
+      Buffer.from(' vieux fichier' + CRLF + 'export const legacy = (): number => 1' + CRLF, 'latin1')
+    ])
+    writeFileSync(join(repo, 'legacy.ts'), octetsLegacy)
+    git('add', '-A')
+    git('commit', '-q', '-m', 'fichier hérité en cp1252')
+
+    const result = await busSur(repo).exec(
+      'edit_file',
+      {
+        // La zone visée est ASCII : rien dans la DEMANDE ne signale l'encodage du fichier.
+        path: 'legacy.ts',
+        oldText: 'export const legacy = (): number => 1',
+        newText: 'export const legacy = (): number => 42'
+      },
+      conversationUnique()
+    )
+
+    /*
+     * Un refus de `decideEdit` remonte dans l'ENVELOPPE (`ok: true`, `data.allowed: false`) : c'est
+     * une reponse rendue au modele, pas une panne de la commande. Seule la verification jette.
+     */
+    const refus = (result.data ?? {}) as { allowed?: boolean; reason?: string }
+    expect(refus.allowed).toBe(false)
+    // Le refus NOMME sa raison — il enseigne, comme les autres refus de cette commande.
+    expect(refus.reason ?? '').toContain('non UTF-8')
+    // Identite d'OCTETS : c'est la propriete detruite par le defaut, pas « le fichier existe ».
+    expect(readFileSync(join(repo, 'legacy.ts')).equals(octetsLegacy)).toBe(true)
+    expect(git('status', '--porcelain')).toBe('')
   }, 180_000)
 })
