@@ -56,6 +56,21 @@ Registration is PROVED, not assumed: after declaring, RE-READ the catalogue the 
 consults and find the new name in it. A declaration written in a file the app never reads is the
 same dead end forge was invoked for, one layer deeper.
 
+**Autowin OS has TWO registration surfaces, and the bus alone is not enough.**
+1. **The command bus** — publishing there makes the tool visible to the CHAT agent, whose prompt is
+   generated from the live catalogue (`src/main/chat-pilotage-prompt.ts`). Nothing else to do there.
+2. **`OUTILS_NOEUD_SKILL`** in `src/main/skill-node-tools.ts` — a HARD-CODED allow-list. It filters
+   the skill-node prompt, the `<cmd>` execution path (an unlisted name is RETURNED as `refuse`), the
+   native `mcp__autowin__*` tools, and the bus wiring in `src/main/index.ts`. A tool absent from
+   this array is invisible AND refused inside every workflow node — the orchestrator that plays the
+   skills will never pick it, however correctly it is published on the bus.
+
+So: add the exact tool name to `OUTILS_NOEUD_SKILL`, then PROVE it on BOTH surfaces — the name
+appears in the generated skill-node prompt (`promptOutilsNoeudSkill`, with its real argument names),
+and a node call comes back OK instead of « REFUSÉ — indisponible depuis un nœud de workflow ».
+Registering on the bus only, then reporting the tool as available to the orchestrator, is a false
+green.
+
 ### 4. PROVE
 
 Run `verify`, targeted on the new test file. Report the exit code. « auto-déclaré, non vérifié »
