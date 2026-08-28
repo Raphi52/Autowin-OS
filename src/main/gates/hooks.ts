@@ -6,7 +6,12 @@
  */
 
 export interface HookViolation {
-  hook: 'anti-flaky' | 'fix-gate' | 'done-without-proof' | 'visual-proof-missing'
+  hook:
+    | 'anti-flaky'
+    | 'fix-gate'
+    | 'done-without-proof'
+    | 'visual-proof-missing'
+    | 'motion-proof-missing'
   line?: number
   detail: string
 }
@@ -38,7 +43,11 @@ export function detectRawSleep(diff: string): HookViolation[] {
     else if (startSleepMs && Number(startSleepMs[1]) >= 1000)
       out.push({ hook: 'anti-flaky', line: i + 1, detail: `Start-Sleep ${startSleepMs[1]}ms` })
     else if (threadSleep)
-      out.push({ hook: 'anti-flaky', line: i + 1, detail: `Thread.Sleep/Task.Delay ${threadSleep[1]}` })
+      out.push({
+        hook: 'anti-flaky',
+        line: i + 1,
+        detail: `Thread.Sleep/Task.Delay ${threadSleep[1]}`
+      })
   })
   return out
 }
@@ -100,6 +109,49 @@ export function requireVisualProofForFrontDiff(
   ]
 }
 
+/**
+ * motion-proof : une capture FIXE satisfait `visual-proof` tout en etant aveugle a la seule chose
+ * qu'un diff d'animation modifie — le mouvement. Mesure du 2026-08-28 (chantier « spinner »,
+ * conv-1507 puis conv-1498) : l'animation a ete livree comme correcte sur un `tsc` vert et un PNG
+ * immobile ; c'est l'utilisateur qui a du signaler « c'est cense bouger, la il est static », puis
+ * refuter l'hypothese de cause qui a suivi. Le fil s'est arrete sans verdict.
+ *
+ * Un diff qui AJOUTE de l'animation exige donc une preuve d'un autre genre : `ui-capture --motion`,
+ * qui mesure la fraction de pixels changeant entre frames, a la taille de rendu reelle.
+ *
+ * Deux bornes deliberees. Les lignes SUPPRIMEES sont ignorees — retirer une animation ne demande
+ * pas de prouver qu'elle bouge. Les fichiers de TEST aussi : ils n'affichent rien. Fonction PURE ;
+ * opt-in via `requireMotionProof`, zero regression sur les runs qui n'animent rien.
+ */
+const ANIMATION_AJOUTEE =
+  /^\+(?!\+\+).*(?:@keyframes|animation\s*:|animation-name\s*:|transition\s*:)/
+export function requireMotionProofForAnimationDiff(
+  diff: string,
+  motionProofOkCount: number
+): HookViolation[] {
+  const lignes = diff.split(/\r?\n/)
+  const touched = new Set<string>()
+  let fichier: string | undefined
+  for (const ligne of lignes) {
+    if (ligne.startsWith('+++ ')) {
+      const nom = ligne.replace(/^\+\+\+\s+(?:b\/)?/, '').trim()
+      fichier = /\.(?:test|spec)\.[tj]sx?$/.test(nom) ? undefined : nom
+      continue
+    }
+    if (fichier && ANIMATION_AJOUTEE.test(ligne)) touched.add(fichier)
+  }
+  if (touched.size === 0 || motionProofOkCount > 0) return []
+  return [
+    {
+      hook: 'motion-proof-missing',
+      detail:
+        `animation modifiee sans preuve de MOUVEMENT (${[...touched].join(', ')}) — une capture ` +
+        `fixe ne peut pas dire si ca tourne ; mesure attendue via ` +
+        `node scripts/ui-capture.mjs --view <vue> --motion <selecteur CSS> --out <png>`
+    }
+  ]
+}
+
 /** Agrège tous les hooks ; retourne les violations (vide = laisser passer). */
 export function runHooks(input: {
   producedDiff?: string
@@ -109,13 +161,16 @@ export function runHooks(input: {
   requireProof?: boolean
   requireVisualProof?: boolean
   visualProofOkCount?: number
+  requireMotionProof?: boolean
+  motionProofOkCount?: number
 }): HookViolation[] {
   const v: HookViolation[] = []
   if (input.producedDiff) v.push(...detectRawSleep(input.producedDiff))
-  if (input.editsByFile)
-    v.push(...detectBlindFixLoop(input.editsByFile, input.causeTokensByFile))
+  if (input.editsByFile) v.push(...detectBlindFixLoop(input.editsByFile, input.causeTokensByFile))
   if (input.requireProof) v.push(...requireProofBeforeGreen(input.evidenceOkCount ?? 0))
   if (input.requireVisualProof && input.producedDiff)
     v.push(...requireVisualProofForFrontDiff(input.producedDiff, input.visualProofOkCount ?? 0))
+  if (input.requireMotionProof && input.producedDiff)
+    v.push(...requireMotionProofForAnimationDiff(input.producedDiff, input.motionProofOkCount ?? 0))
   return v
 }

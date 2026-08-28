@@ -70,4 +70,19 @@ describe('discipline de pipeline canonique', () => {
     )
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/JUDGE dit « bloqué », et il reste obligatoire/)
   })
+
+  /**
+   * Mesure du 2026-08-28 (chantier « spinner », conv-1507 puis conv-1498) : le prompt annoncait un
+   * harnais de capture FIXE comme LA preuve UI. Le producteur s'en est servi, l'a cite, et a
+   * declare correcte une animation qui ne bougeait pas — une image immobile ne peut pas dire si ce
+   * qu'elle montre tourne. L'utilisateur a du le signaler lui-meme.
+   *
+   * Un outil que le prompt ne nomme pas n'est jamais appele : le gate `motion-proof` serait un mur
+   * sans porte si l'instrument qui le leve n'etait pas annonce ici.
+   */
+  it('annonce l instrument qui prouve le MOUVEMENT, pas seulement la capture fixe', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('--motion')
+    // Et il doit dire POURQUOI, sinon il sera lu comme une option decorative.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/capture fixe ne (?:peut|prouve)/i)
+  })
 })

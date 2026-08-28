@@ -24,6 +24,15 @@
  *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
  *                                    un declencheur absent ou inerte est un echec nomme, jamais
  *                                    une capture silencieuse de la vue fermee.
+ *         [--motion <selecteur CSS>] PROUVE QUE CA BOUGE. Capture N frames de chaque occurrence du
+ *                                    selecteur, a sa taille de rendu REELLE, et rend la fraction de
+ *                                    pixels qui change entre frames. Un element immobile est un
+ *                                    echec nomme. Options : --frames (defaut 4), --interval ms
+ *                                    (defaut 220). La planche de contact ecrite dans --out agrandit
+ *                                    les vignettes pour l'oeil ; le DIFF, lui, est mesure au rendu
+ *                                    vrai (scale 1) — un agrandi ressusciterait un detail
+ *                                    sous-pixel et rendrait « ca bouge » sur un ecran ou l'humain
+ *                                    ne voit rien.
  */
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -56,7 +65,57 @@ export const resoudreVue = (valeur) => {
 }
 
 /** Seuils au-dessus desquels une vue est considérée comme ayant réellement rendu. */
-export const SEUILS = { texte: 40, elements: 12, octetsPng: 8 * 1024 }
+export const SEUILS = {
+  texte: 40,
+  elements: 12,
+  octetsPng: 8 * 1024,
+  /**
+   * Fraction de pixels devant changer entre deux frames pour qu'un element soit dit MOBILE.
+   *
+   * Le cas mesure separe franchement : une orbite qui tourne deplace ~20 % des pixels de sa boite,
+   * un rendu fige en deplace 0. Le seuil est place bas — assez pour accepter une rotation lente,
+   * assez haut pour ne pas prendre le bruit d'anticrenelage d'un rendu identique pour du mouvement.
+   */
+  mouvement: 0.004
+}
+
+/**
+ * Verdict PUR de mouvement, par OCCURRENCE.
+ *
+ * Chaque occurrence porte sa taille de rendu REELLE et les fractions de pixels ayant change entre
+ * frames consecutives. Le verdict accuse l'occurrence fautive nommement : une moyenne, ou un « au
+ * moins une bouge », rendrait vert le defaut exact rapporte le 2026-08-28 — le rail tourne, la
+ * pastille de la sidebar est morte.
+ *
+ * L'ordre des gardes n'est pas cosmetique. Une occurrence de taille nulle est INVISIBLE, pas
+ * immobile : l'accuser aussi d'immobilite enverrait corriger l'animation d'un element qui n'est
+ * meme pas affiche.
+ */
+export const verdictMouvement = ({ selecteur, occurrences }) => {
+  const liste = occurrences ?? []
+  if (liste.length === 0) return { ok: false, echecs: [`selecteur-sans-occurrence(${selecteur})`] }
+  const echecs = []
+  liste.forEach((occurrence, index) => {
+    const nom = `${selecteur}#${index + 1}`
+    const largeur = occurrence.largeur ?? 0
+    const hauteur = occurrence.hauteur ?? 0
+    const taille = `${largeur}x${hauteur}`
+    if (largeur < 1 || hauteur < 1) {
+      echecs.push(`occurrence-invisible(${nom}, ${taille})`)
+      return
+    }
+    const ratios = occurrence.ratios ?? []
+    if (ratios.length === 0) {
+      // Une seule frame ne prouve rien : sans deuxieme instant, « immobile » et « pas mesure » sont
+      // le meme JSON. On les separe.
+      echecs.push(`frames-insuffisantes(${nom})`)
+      return
+    }
+    const max = Math.max(...ratios)
+    if (max < SEUILS.mouvement) echecs.push(`mouvement-absent(${nom}, ${taille}, max=${max})`)
+  })
+  return { ok: echecs.length === 0, echecs }
+}
 
 /**
  * Verdict PUR à partir des mesures — testable sans app. Rend `ok:false` ET l'étape fautive, jamais
@@ -258,6 +317,168 @@ const main = async () => {
       await new Promise((r) => setTimeout(r, 600))
       mesuresDom = await mesurerDom()
     }
+  }
+
+  // --------------------------------------------------------------------
+  // MOUVEMENT — la seule chose qu'une capture fixe ne peut pas prouver.
+  // --------------------------------------------------------------------
+  const selecteurMouvement = argument('--motion')
+  if (selecteurMouvement) {
+    const frames = Math.min(8, Math.max(2, Number(argument('--frames', '4')) || 4))
+    const intervalle = Math.min(2_000, Math.max(60, Number(argument('--interval', '220')) || 220))
+    // Plafond d'occurrences : un selecteur large (`.spinner` en compte des dizaines a l'ecran)
+    // ferait exploser le nombre de captures. On borne, et on DIT ce qu'on a laisse de cote —
+    // une troncature muette se lirait comme « tout est couvert ».
+    const PLAFOND = 6
+
+    const boites = await evaluer(`(() => {
+      const noeuds = [...document.querySelectorAll(${JSON.stringify(selecteurMouvement)})]
+      return {
+        total: noeuds.length,
+        boites: noeuds.slice(0, ${PLAFOND}).map((n) => {
+          const r = n.getBoundingClientRect()
+          return {
+            x: r.left + window.scrollX,
+            y: r.top + window.scrollY,
+            largeur: Math.round(r.width),
+            hauteur: Math.round(r.height)
+          }
+        })
+      }
+    })()`)
+
+    // Le comparateur vit DANS la page : Chrome sait decoder un PNG, Node sans dependance non.
+    // Un pixel compte comme change des qu'un canal bouge de plus de 12/255 — au-dessus du bruit
+    // d'anticrenelage, tres en dessous d'un deplacement reel.
+    await evaluer(`(() => {
+      window.__awCharger = (url) => new Promise((ok, ko) => {
+        const img = new Image()
+        img.onload = () => ok(img)
+        img.onerror = ko
+        img.src = url
+      })
+      window.__awDiff = async (a, b) => {
+        const [ia, ib] = await Promise.all([window.__awCharger(a), window.__awCharger(b)])
+        const w = Math.min(ia.naturalWidth, ib.naturalWidth)
+        const h = Math.min(ia.naturalHeight, ib.naturalHeight)
+        if (w < 1 || h < 1) return 0
+        const lire = (img) => {
+          const c = document.createElement('canvas')
+          c.width = w
+          c.height = h
+          const ctx = c.getContext('2d')
+          ctx.drawImage(img, 0, 0)
+          return ctx.getImageData(0, 0, w, h).data
+        }
+        const pa = lire(ia)
+        const pb = lire(ib)
+        let changes = 0
+        for (let i = 0; i < pa.length; i += 4) {
+          if (
+            Math.abs(pa[i] - pb[i]) > 12 ||
+            Math.abs(pa[i + 1] - pb[i + 1]) > 12 ||
+            Math.abs(pa[i + 2] - pb[i + 2]) > 12 ||
+            Math.abs(pa[i + 3] - pb[i + 3]) > 12
+          ) changes++
+        }
+        return changes / (w * h)
+      }
+      window.__awPlanche = []
+      return true
+    })()`)
+
+    const occurrences = []
+    for (const boite of boites.boites) {
+      if (boite.largeur < 1 || boite.hauteur < 1) {
+        occurrences.push({ ...boite, ratios: [] })
+        continue
+      }
+      const clip = { x: boite.x, y: boite.y, width: boite.largeur, height: boite.hauteur }
+      const prises = []
+      for (let f = 0; f < frames; f++) {
+        // scale 1 : le rendu VRAI. C'est ici que se joue l'honnetete de l'outil.
+        const brut = await envoyer('Page.captureScreenshot', {
+          format: 'png',
+          fromSurface: true,
+          captureBeyondViewport: false,
+          clip: { ...clip, scale: 1 }
+        })
+        prises.push(`data:image/png;base64,${brut.data}`)
+        if (f < frames - 1) await new Promise((r) => setTimeout(r, intervalle))
+      }
+      const ratios = []
+      for (let f = 1; f < prises.length; f++) {
+        ratios.push(
+          Number(
+            await evaluer(
+              `window.__awDiff(${JSON.stringify(prises[f - 1])}, ${JSON.stringify(prises[f])})`
+            )
+          )
+        )
+      }
+      occurrences.push({ ...boite, ratios })
+      await evaluer(`(() => { window.__awPlanche.push(${JSON.stringify(prises)}); return true })()`)
+    }
+
+    if (boites.boites.length > 0) {
+      // Planche de contact : les vignettes sont AGRANDIES sans lissage pour l'oeil humain. Elle
+      // ILLUSTRE, elle ne juge pas — le verdict vient des ratios mesures a scale 1 ci-dessus.
+      const planche = await evaluer(`(async () => {
+        const G = window.__awPlanche
+        const CELL = 96
+        const MARGE = 8
+        const lignes = G.length
+        const colonnes = Math.max(...G.map((r) => r.length))
+        const c = document.createElement('canvas')
+        c.width = colonnes * (CELL + MARGE) + MARGE
+        c.height = lignes * (CELL + MARGE) + MARGE
+        const ctx = c.getContext('2d')
+        ctx.fillStyle = '#0b0d13'
+        ctx.fillRect(0, 0, c.width, c.height)
+        ctx.imageSmoothingEnabled = false
+        for (let l = 0; l < lignes; l++) {
+          for (let col = 0; col < G[l].length; col++) {
+            const img = await window.__awCharger(G[l][col])
+            const x = MARGE + col * (CELL + MARGE)
+            const y = MARGE + l * (CELL + MARGE)
+            ctx.strokeStyle = 'rgba(255,255,255,.14)'
+            ctx.strokeRect(x - 0.5, y - 0.5, CELL + 1, CELL + 1)
+            ctx.drawImage(img, x, y, CELL, CELL)
+          }
+        }
+        return c.toDataURL('image/png')
+      })()`)
+      mkdirSync(dirname(sortie), { recursive: true })
+      writeFileSync(sortie, Buffer.from(String(planche).split(',')[1], 'base64'))
+    }
+
+    const verdictM = verdictMouvement({ selecteur: selecteurMouvement, occurrences })
+    socket.close()
+    rendre(
+      {
+        ...verdictM,
+        vue,
+        planche: boites.boites.length > 0 ? sortie : null,
+        portUtilise,
+        selecteur: selecteurMouvement,
+        frames,
+        intervalle,
+        occurrencesTotal: boites.total,
+        occurrencesMesurees: occurrences.length,
+        ...(boites.total > occurrences.length
+          ? { tronque: `${boites.total - occurrences.length} occurrence(s) non mesuree(s)` }
+          : {}),
+        occurrences,
+        erreursConsole: erreursConsole.slice(0, 5),
+        preuve: verdictM.ok
+          ? `mouvement mesure sur ${occurrences.length} occurrence(s) de « ${selecteurMouvement} » : ` +
+            occurrences
+              .map((o, i) => `#${i + 1} ${o.largeur}x${o.hauteur} max=${Math.max(...o.ratios, 0)}`)
+              .join(', ')
+          : null
+      },
+      verdictM.ok ? 0 : 6
+    )
   }
 
   const capture = await envoyer('Page.captureScreenshot', { format: 'png', fromSurface: true })
