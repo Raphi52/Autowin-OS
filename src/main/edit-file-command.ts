@@ -188,3 +188,37 @@ export function applyEdit(content: string, oldText: string, newText: string): st
   if (index < 0) return content
   return content.slice(0, index) + newText + content.slice(index + oldText.length)
 }
+
+/**
+ * REFUSE une edition sur un fichier qui n'est pas de l'UTF-8 valide.
+ *
+ * MESURE le 2026-08-27 sur les octets reels : `readFileSync(p).toString('utf8')` ne JETTE pas sur
+ * une entree invalide — Node substitue U+FFFD. Un fichier cp1252 (`e9` pour « é ») reecrit ensuite
+ * en utf8 ressortait donc en `ef bf bd` : chaque octet non-UTF-8 du fichier etait DETRUIT, y compris
+ * TRES LOIN de la zone editee, et le bureau isole publiait la corruption dans le depot.
+ *   avant : 2f2f2063616c63756c **e9** 20766965757820666963686965720d0a
+ *   apres : 2f2f2063616c63756c **efbfbd** 206e65756620666963686965720d0a
+ *
+ * POURQUOI REFUSER plutot que preserver l'encodage : preserver imposerait de DEVINER le jeu de
+ * caracteres (aucun n'est marque dans le fichier), et l'`oldText` fourni par le modele est de
+ * l'UTF-8 — le faire correspondre a un contenu transcode ajoute une seconde devinette. Une
+ * substitution silencieuse sur une DEVINETTE est exactement le defaut qu'on corrige. Le refus est
+ * exact, sans perte, et il ENSEIGNE (comme les autres refus de cette commande) : l'agent sait quoi
+ * faire ensuite. Il ecarte au passage les fichiers BINAIRES, qu'une edition texte detruit toujours.
+ *
+ * Le decodeur est en mode `fatal` : il distingue un octet reellement invalide d'un U+FFFD
+ * LEGITIMEMENT encode (ef bf bd) dans un fichier UTF-8 valide, que le seul test de presence du
+ * caractere de remplacement confondrait — et ferait refuser a tort.
+ */
+export function refusSiPasUtf8(octets: Uint8Array, relativePath: string): string | undefined {
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(octets)
+    return undefined
+  } catch {
+    return (
+      `contenu non UTF-8 : ${relativePath} contient des octets qu'une écriture UTF-8 détruirait ` +
+      `(fichier en encodage hérité type cp1252/latin-1, ou binaire). Édition refusée pour ne pas ` +
+      `corrompre le reste du fichier — convertis-le en UTF-8 d'abord, ou modifie-le autrement.`
+    )
+  }
+}

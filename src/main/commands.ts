@@ -1,4 +1,4 @@
-import { applyEdit, decideEdit, editDiff } from './edit-file-command'
+import { applyEdit, decideEdit, editDiff, refusSiPasUtf8 } from './edit-file-command'
 import { decisionDeCommande } from './autorisation-commande'
 import {
   decideRead,
@@ -2836,6 +2836,16 @@ export class AppCommandBus {
     let completed = false
     try {
       let result: Awaited<T> = await action(workspaceRoot)
+      /*
+       * UNE ACTION REFUSEE N'A RIEN ECRIT — donc il n'y a RIEN a verifier, ni a publier.
+       *
+       * Sans ce point de sortie, un refus de `runEditFile` (chemin hors bureau, encodage non UTF-8,
+       * extrait ambigu) tombait quand meme dans la verification : portee vide -> repli sur la suite
+       * COMPLETE -> sur une base au rouge preexistant, le motif rendu au modele devenait
+       * « Verification du bureau echouee », et la VRAIE raison du refus etait perdue. Un refus qui
+       * n'enseigne plus renvoie l'agent a la devinette, exactement ce que `decideEdit` evite.
+       */
+      if ((result as { allowed?: unknown } | undefined)?.allowed === false) return result
       if (command === 'edit_file') {
         /*
          * On juge ce que l'EDITION a pu casser, pas l'etat general du depot.
@@ -3366,6 +3376,14 @@ export class AppCommandBus {
      * l'aggrave pas ici.)
      */
     const octetsAvant = readFileSync(decision.absolutePath)
+    /*
+     * GARDE D'ENCODAGE — avant toute ecriture, et avant meme de rendre les octets a l'appelant :
+     * un contenu non-UTF-8 ne survit pas au `toString('utf8')` ci-dessous (substitution silencieuse
+     * en U+FFFD, jamais une exception). On refuse en le NOMMANT plutot que de detruire des octets
+     * hors de la zone editee. Voir `refusSiPasUtf8`.
+     */
+    const refusEncodage = refusSiPasUtf8(octetsAvant, decision.relativePath)
+    if (refusEncodage) return { allowed: false, reason: refusEncodage }
     avantEdition?.(octetsAvant)
     const content = octetsAvant.toString('utf8')
     writeFileSync(
