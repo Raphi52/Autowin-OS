@@ -1095,6 +1095,23 @@ export const NUAGE_DYNAMIQUE = {
 } as const
 
 /**
+ * MOUVEMENT RÉDUIT : un décor RALENTI, jamais figé.
+ *
+ * Cause localisée le 2026-08-28 (conv-1476, « le nuage est statique ») : `HomeView` passait au
+ * décor un temps CONSTANT quand `prefers-reduced-motion: reduce` est actif — ce qui EST le cas sur
+ * la machine de l'utilisateur. Or le nuage n'a pas d'autre horloge : son shader et `positionNuage`
+ * sont tous deux fonctions de `temps`. Temps constant = nuage immobile. Le facteur tient les deux
+ * exigences : la préférence est respectée (mouvement divisé par quatre, plus aucune dérive rapide
+ * sous des yeux qui ne l'ont pas demandée) et le décor reste VIVANT.
+ */
+export const MOUVEMENT_REDUIT = { facteur: 0.25 } as const
+
+/** Le temps que voit le décor : l'horloge réelle, ralentie en mouvement réduit. Fonction PURE. */
+export function tempsDecor(secondes: number, mouvementReduit: boolean): number {
+  return mouvementReduit ? secondes * MOUVEMENT_REDUIT.facteur : secondes
+}
+
+/**
  * La position du nuage à l'instant `temps`, en unités monde.
  *
  * Deux sinus de périodes non harmoniques : une seule fréquence donnerait un va-et-vient de métronome,

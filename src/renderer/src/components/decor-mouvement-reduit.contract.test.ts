@@ -36,13 +36,17 @@ describe('« mouvement réduit » réduit le mouvement, il n’efface pas le dé
 
   it('transmet toujours le regard du curseur à la scène, sans le neutraliser', () => {
     // C'est `{ x: 0, y: 0 }` en second argument qui annulait la parallaxe. Le regard doit passer.
-    expect(source).toMatch(/scene\.render\([^)]*,\s*look\s*\)/)
+    expect(source).toMatch(/scene\.render\(.*,\s*look\s*\)/)
     expect(source).not.toMatch(/scene\.render\([^)]*reduceMotion\s*\?\s*\{\s*x:\s*0,\s*y:\s*0\s*\}/)
   })
 
-  it('FIGE tout de même le temps sous la préférence — sinon on ne la respecterait plus', () => {
-    // Le bord qui compte autant : la préférence doit continuer d'empêcher la dérive AUTONOME.
-    // Sans cette assertion, « ne pas effacer le décor » pourrait devenir « ignorer la préférence ».
-    expect(source).toMatch(/scene\.render\(\s*reduceMotion\s*\?\s*\d+\s*:/)
+  it('RALENTIT le temps sous la préférence, sans le figer (conv-1476)', () => {
+    // Le bord qui compte autant : la préférence doit continuer de CALMER la dérive autonome. Mais
+    // la FIGER rendait le nuage immobile — c'était la plainte « le nuage est statique », le décor
+    // n'ayant pas d'autre horloge. Le ralentissement vit dans `tempsDecor` (facteur testé par
+    // `home-decor-mouvement-vivant.test.ts`) ; ici, on vérifie qu'aucune CONSTANTE ne reprend la
+    // place de l'horloge.
+    expect(source).toMatch(/tempsDecor\(\s*time\s*\/\s*1000\s*,\s*reduceMotion\s*\)/)
+    expect(source).not.toMatch(/scene\.render\(\s*reduceMotion\s*\?\s*\d+\s*:/)
   })
 })
