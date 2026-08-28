@@ -2,8 +2,17 @@ import { ESSAIS_MAX } from './delai-de-reprise'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-/** Vrais dépôts git en tmp : sous charge parallèle, le budget vitest par défaut (5 s) est trop court. */
-vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
+/**
+ * Vrais dépôts git en tmp : le budget vitest par défaut (5 s) ne couvre pas ces cas.
+ *
+ * MESURÉ le 2026-08-28 : le fichier prend 152 s EN ISOLATION, et son cas le plus lourd
+ * (« publie une seule fois apres un retry manuel epuise avant publication ») 27 s à lui seul — il
+ * épuise le barème de reprise, donc ESSAIS_MAX passages de vrais processus git. Dans la suite
+ * complète (934 fichiers, 4 workers), ce cas dépassait 60 s et sortait en « Test timed out », vert
+ * dès qu'il était rejoué seul : le budget mesurait la CONTENTION, pas un blocage. 180 s laisse ~6x
+ * la durée isolée ; un test réellement pendu échoue toujours.
+ */
+vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
