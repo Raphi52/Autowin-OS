@@ -260,24 +260,50 @@
 }
 
 .tickets-spinner {
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
   width: 34px;
   height: 34px;
-  border: 2px solid color-mix(in srgb, var(--rose) 24%, transparent);
-  border-top-color: var(--rose);
-  border-right-color: var(--gold);
+  border: 2px solid transparent;
+  border-top-color: #3ad6ff;
+  border-bottom-color: rgba(58, 214, 255, 0.32);
   border-radius: 50%;
-  animation: tickets-spin 0.85s linear infinite;
-  box-shadow: 0 0 22px color-mix(in srgb, var(--rose) 28%, transparent);
+  background: radial-gradient(
+    circle at 50% 50%,
+    #ffd23f 0 14%,
+    rgba(255, 210, 63, 0.32) 26%,
+    transparent 48%
+  );
+  box-shadow: none;
+  animation: aw-spin 1.15s linear infinite;
 }
-
-@keyframes tickets-spin {
-  to {
-    transform: rotate(360deg);
-  }
+.tickets-spinner::before,
+.tickets-spinner::after {
+  position: absolute;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  content: '';
+}
+.tickets-spinner::before {
+  inset: -2px;
+  border-right-color: #ff2e93;
+  border-left-color: rgba(255, 46, 147, 0.3);
+  animation: aw-spin-rev 1.75s linear infinite;
+}
+.tickets-spinner::after {
+  inset: 2px;
+  border-top-color: #ffd23f;
+  border-right-color: rgba(255, 210, 63, 0.28);
+  background: none;
+  box-shadow: none;
+  animation: aw-spin 0.85s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .tickets-spinner {
-    animation-duration: 2.4s;
+  .tickets-spinner,
+  .tickets-spinner::before,
+  .tickets-spinner::after {
+    animation-duration: 3.2s;
   }
 }
 

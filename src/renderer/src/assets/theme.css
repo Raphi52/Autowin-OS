@@ -83,7 +83,8 @@ body::before {
   z-index: 0;
   opacity: 0.075;
   /* Grain d'origine + nappe organique or/anthracite, dérive très lente. */
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E"),
+  background-image:
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E"),
     radial-gradient(60% 55% at 22% 28%, var(--gold) 0%, transparent 62%),
     radial-gradient(70% 60% at 78% 72%, #1b1d22 0%, transparent 66%);
   background-size:
@@ -401,20 +402,61 @@ button.card:hover {
   overflow-y: auto;
 }
 
-/* Spinner discret */
-@keyframes spin {
+/* Spinner Autowin — atome du logo : trois orbites (cyan / rose / or) autour d'un cœur doré. */
+@keyframes aw-spin {
   to {
     transform: rotate(360deg);
   }
 }
+@keyframes aw-spin-rev {
+  to {
+    transform: rotate(-360deg);
+  }
+}
 .spinner {
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--line-strong);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+  position: relative;
   display: inline-block;
+  box-sizing: border-box;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid transparent;
+  border-top-color: #3ad6ff;
+  border-bottom-color: rgba(58, 214, 255, 0.32);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    #ffd23f 0 14%,
+    rgba(255, 210, 63, 0.32) 26%,
+    transparent 48%
+  );
+  vertical-align: -2px;
+  animation: aw-spin 1.15s linear infinite;
+}
+.spinner::before,
+.spinner::after {
+  position: absolute;
+  border: 1.5px solid transparent;
+  border-radius: 50%;
+  content: '';
+}
+.spinner::before {
+  inset: -1.5px;
+  border-right-color: #ff2e93;
+  border-left-color: rgba(255, 46, 147, 0.3);
+  animation: aw-spin-rev 1.75s linear infinite;
+}
+.spinner::after {
+  inset: 1.5px;
+  border-top-color: #ffd23f;
+  border-right-color: rgba(255, 210, 63, 0.28);
+  animation: aw-spin 0.85s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .spinner::before,
+  .spinner::after {
+    animation-duration: 3.2s;
+  }
 }
 
 /* Apparition douce des éléments de liste */

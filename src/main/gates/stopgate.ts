@@ -108,7 +108,14 @@ export function plafondDurReparations(reparationsAccordees: number): number {
    * zéro n'était pas une marge de progrès : c'était contourner la politique.
    */
   if (accordees === 0) return 0
-  return accordees * 2
+  /**
+   * LARGE ET NON BLOQUANT (choix utilisateur du 2026-08-28) : le facteur 2 coupait des runs qui
+   * PROGRESSAIENT encore — du temps et de l'argent perdus a relancer a la main. Le vrai arret est
+   * le refus IDENTIQUE hors de portee de build (`doitArreterLaReparation`) : c'est lui qui doit
+   * mordre, pas un compteur. Le plafond reste FINI (le budget ne bloque pas par defaut) mais assez
+   * haut pour ne jamais etre la raison d'un arret en pratique.
+   */
+  return Math.max(24, accordees * 12)
 }
 
 /**

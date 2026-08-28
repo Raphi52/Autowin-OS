@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ViewTopBar } from './ViewTopBar'
+import './ViewPage.css'
 import './TestsView.css'
 
 /**
@@ -219,38 +221,44 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   )
 
   return (
-    <section className="tests-view" data-testid="tests-view">
-      <header className="tests-head">
-        <h2>Tests</h2>
-        <div className="tests-actions">
-          <input
-            className="tests-filter"
-            data-testid="tests-filter"
-            placeholder="Filtrer (motif de fichier)"
-            value={filtre}
-            onChange={(e) => setFiltre(e.target.value)}
-          />
-          <label className="tests-toggle">
+    <section className="view-page tests-view" data-testid="tests-view">
+      <ViewTopBar
+        eyebrow="QUALITÉ"
+        title="Tests"
+        description="Lance les suites de tes projets et lis le verdict réel du harnais."
+        detail={projetActif?.root}
+        actions={
+          <div className="tests-actions">
             <input
-              type="checkbox"
-              checked={seulsEchecs}
-              onChange={(e) => setSeulsEchecs(e.target.checked)}
+              className="tests-filter"
+              data-testid="tests-filter"
+              placeholder="Filtrer (motif de fichier)"
+              value={filtre}
+              onChange={(e) => setFiltre(e.target.value)}
             />
-            Échecs seuls
-          </label>
-          <button data-testid="tests-add" onClick={() => void ajouter()}>
-            + Projet
-          </button>
-          <button
-            data-testid="tests-run"
-            className="tests-run"
-            disabled={!projetActif || Boolean(encours)}
-            onClick={() => void lancer()}
-          >
-            {encours ? 'Exécution…' : 'Lancer la suite'}
-          </button>
-        </div>
-      </header>
+            <label className="tests-toggle">
+              <input
+                type="checkbox"
+                checked={seulsEchecs}
+                onChange={(e) => setSeulsEchecs(e.target.checked)}
+              />
+              Échecs seuls
+            </label>
+            <button type="button" data-testid="tests-add" onClick={() => void ajouter()}>
+              + Projet
+            </button>
+            <button
+              type="button"
+              data-testid="tests-run"
+              className="tests-run"
+              disabled={!projetActif || Boolean(encours)}
+              onClick={() => void lancer()}
+            >
+              {encours ? 'Exécution…' : 'Lancer la suite'}
+            </button>
+          </div>
+        }
+      />
 
       {encours && (
         <p className="tests-progress" data-testid="tests-progress">

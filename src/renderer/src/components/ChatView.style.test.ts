@@ -83,7 +83,7 @@ describe('minimal conversation status lights', () => {
       /\.conversation-state\s*{[^}]*width:\s*7px;[^}]*height:\s*7px;[^}]*background:\s*currentColor;[^}]*color:\s*#38bdf8;[^}]*box-shadow:/s
     )
     expect(css).toMatch(
-      /\.conversation-state\.is-running\s*{[^}]*animation:\s*conversation-state-pulse/s
+      /\.conversation-state\.is-running::after\s*{[^}]*animation:\s*conversation-state-spin/s
     )
     expect(css).toMatch(/\.conversation-state\.is-failed\s*{[^}]*color:\s*#ff4057/s)
     expect(css).toMatch(
@@ -93,7 +93,7 @@ describe('minimal conversation status lights', () => {
     // tours interrompus reviendrait a ne rien signaler de nouveau.
     expect(css).toMatch(/\.conversation-state\.is-asking\s*{[^}]*color:\s*#facc15/s)
     expect(css).toMatch(
-      /@media \(prefers-reduced-motion: reduce\)[^{]*{[^}]*\.conversation-state\.is-running,[^}]*animation:\s*none/s
+      /@media \(prefers-reduced-motion: reduce\)[^{]*{[^}]*\.conversation-state\.is-running::after[^}]*animation:\s*none/s
     )
   })
 })

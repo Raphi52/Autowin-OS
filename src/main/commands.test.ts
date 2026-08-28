@@ -2099,3 +2099,33 @@ describe('AppCommandBus — les preuves des phases remontent au suivi d’issue'
     ])
   })
 })
+
+/**
+ * PORTEE JOUEE DANS L'ISSUE. Cette lignee recompose l'issue champ par champ et perdait
+ * `phaseOutputs` : le pied de cloture, qui derive de ce champ la portee du travail, tombait alors
+ * dans sa branche « portee inconnue » et annoncait « rien ne prouve que le besoin est fait » APRES
+ * un `/frame` parfaitement joue (mesure du 2026-08-28). Le gabarit n'etait pas en cause : la donnee
+ * n'arrivait pas jusqu'a lui.
+ */
+describe('issue d’orchestration', () => {
+  it('porte les phases réellement jouées', async () => {
+    const os = fakeOs()
+    os.runTask = async () => ({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      result: 'cadrage rendu',
+      phaseOutputs: [{ phase: 'frame', text: 'le cadrage complet' }]
+    })
+    const bus = new AppCommandBus(os, () => {})
+
+    const res = (await bus.exec(
+      'orchestrate',
+      { task: `/frame porte les phases ${Date.now()}` },
+      'conv-1'
+    )) as { data?: { phaseOutputs?: { phase: string }[] } }
+
+    expect(res.data?.phaseOutputs?.map((sortie) => sortie.phase)).toEqual(['frame'])
+  })
+})

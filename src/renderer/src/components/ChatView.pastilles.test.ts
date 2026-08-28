@@ -55,13 +55,15 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
   })
 
   it('l’animation reste réservée au travail EN COURS, et se coupe en reduced-motion', () => {
-    expect(css).toMatch(/\.conversation-state\.is-running\s*\{[^}]*animation:\s*conversation-state-pulse/s)
+    expect(css).toMatch(
+      /\.conversation-state\.is-running::after\s*\{[^}]*animation:\s*conversation-state-spin/s
+    )
     for (const key of ['completed', 'failed', 'interrupted', 'cancelled', 'waiting']) {
       const bloc = css.match(new RegExp(`\\.conversation-state\\.is-${key}\\s*\\{[^}]*\\}`, 's'))
       expect(bloc?.[0] ?? '', `is-${key} ne doit pas s'animer`).not.toMatch(/animation:/)
     }
     expect(css).toMatch(
-      /@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.conversation-state\.is-running,[^}]*animation:\s*none/s
+      /@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.conversation-state\.is-running::after[^}]*animation:\s*none/s
     )
   })
 

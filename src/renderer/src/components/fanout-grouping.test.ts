@@ -14,14 +14,14 @@ describe('matchSlashCommands (palette /)', () => {
       { id: 'scout', description: 'Chercher.', enabled: true },
       { id: 'think', description: 'Charger le contexte.', enabled: true }
     ])
-    expect(matchSlashCommands('/', skills).map((c) => c.name)).toEqual(['btw', 'scout', 'think'])
+    expect(matchSlashCommands('/', skills).map((c) => c.name)).toEqual(['scout', 'think'])
     // Sans inventaire, seules les commandes câblées dans l'interface subsistent.
-    expect(matchSlashCommands('/').map((c) => c.name)).toEqual(['btw'])
+    expect(matchSlashCommands('/').map((c) => c.name)).toEqual([])
   })
   it('filtre par préfixe (casse-insensible)', () => {
     const skills = skillSlashCommands([{ id: 'build', description: 'Implémenter.', enabled: true }])
-    expect(matchSlashCommands('/b', skills).map((c) => c.name)).toEqual(['btw', 'build'])
-    expect(matchSlashCommands('/BT', skills).map((c) => c.name)).toEqual(['btw'])
+    expect(matchSlashCommands('/b', skills).map((c) => c.name)).toEqual(['build'])
+    expect(matchSlashCommands('/BT', skills).map((c) => c.name)).toEqual([])
   })
   it('préfixe sans correspondance → []', () => {
     expect(matchSlashCommands('/zzz')).toEqual([])

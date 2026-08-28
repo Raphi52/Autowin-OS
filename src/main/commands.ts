@@ -667,6 +667,18 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'remove_conversations',
+    description:
+      'Supprimer un LOT de conversations NOMMEES par leurs ids (max 200). Irreversible : les satellites disque (artefacts, trace causale, prompts) partent aussi. Ids inconnus ignores, doublons dedupliques, aucune conversation non nommee touchee.',
+    args: { ids: 'liste d ids, ex. ["conv-1","conv-2"]' },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'attach_run',
     description: 'Attacher un RUN.md (workflow) existant à la conversation courante',
     args: { path: 'chemin du RUN.md', conversationId: 'id (optionnel, défaut = conv active)' },
@@ -2416,6 +2428,16 @@ export class AppCommandBus {
           this.broadcast({ type: 'refresh', scope: 'conversations' })
         }
         return { removed }
+      }
+      case 'remove_conversations': {
+        const brut = a.ids
+        if (!Array.isArray(brut)) throw new Error('remove_conversations : ids doit etre une liste')
+        const ids = brut.map((v) => String(v))
+        // removeMany REFUSE au-dela du plafond AVANT toute suppression : rien de partiel.
+        const removed = this.os.conversations.removeMany(ids)
+        for (const id of removed) this.onConversationRemoved?.(id)
+        if (removed.length > 0) this.broadcast({ type: 'refresh', scope: 'conversations' })
+        return { removed, count: removed.length }
       }
       case 'attach_run': {
         const convId =

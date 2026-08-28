@@ -85,7 +85,17 @@ describe('ChatView — le composer est isolé : taper ne re-rend pas la vue', ()
   })
 
   it('FALSIFIEUR — les palettes slash et mention répondent encore à la frappe', async () => {
-    h = await mountChat(chatApi({ conversationRuns: vi.fn().mockResolvedValue([RUN]) }))
+    // La palette `/` se deduit de l'inventaire REEL des skills : `/btw` n'y est plus propose
+    // depuis le 2026-08-27. Sans skill installee la palette est legitimement vide — on en stub donc
+    // une, sinon le falsifieur mesurerait l'inventaire vide au lieu de la reactivite a la frappe.
+    h = await mountChat(
+      chatApi({
+        conversationRuns: vi.fn().mockResolvedValue([RUN]),
+        capabilityControls: vi.fn().mockResolvedValue([
+          { id: 'scout', description: 'Chercher.', enabled: true }
+        ])
+      })
+    )
     await h.click('.conv-pick')
     await h.type('/')
     expect(h.container.querySelectorAll('.slash-palette .slash-item').length).toBeGreaterThan(0)

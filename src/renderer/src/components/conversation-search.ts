@@ -170,7 +170,7 @@ export function trierParRecenceUtilisateur<T extends ConversationSearchSource>(
 export const GROUPE_RECENTES = 'recentes'
 
 /** Combien de conversations la catégorie « Récentes » affiche au plus. */
-export const RECENTES_AFFICHEES = 6
+export const RECENTES_AFFICHEES = 20
 
 /**
  * Les N conversations où l'utilisateur a parlé le plus récemment, TOUTES PROVENANCES CONFONDUES.

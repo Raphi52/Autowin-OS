@@ -293,7 +293,7 @@ function grapheInvalide(
     const taille = statSync(graphPath).size
     details.push(`taille : ${taille} octets`)
     if (taille > 0) {
-      const debut = readFileSync(graphPath, 'utf8').slice(0, 300).replace(/s+/g, ' ').trim()
+      const debut = readFileSync(graphPath, 'utf8').slice(0, 300).replace(/\s+/g, ' ').trim()
       if (debut) details.push(`debut : ${debut}`)
     }
   } catch {
@@ -333,8 +333,19 @@ async function readGraphSummary(
   if (!parsed || typeof parsed !== 'object') {
     throw grapheInvalide(graphPath, 'racine JSON non objet', sortie)
   }
-  const graph = parsed as { nodes?: unknown; links?: unknown; built_at_commit?: unknown }
-  if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
+  const graph = parsed as {
+    nodes?: unknown
+    links?: unknown
+    edges?: unknown
+    built_at_commit?: unknown
+  }
+  // Le CLI Graphify nomme ses aretes `edges` ; d'anciens graphes utilisent `links`. Les deux valent.
+  const aretes = Array.isArray(graph.links)
+    ? graph.links
+    : Array.isArray(graph.edges)
+      ? graph.edges
+      : undefined
+  if (!Array.isArray(graph.nodes) || !aretes) {
     throw grapheInvalide(
       graphPath,
       `tableaux nodes/links absents (cles : ${Object.keys(graph).join(', ') || 'aucune'})`,
@@ -343,7 +354,7 @@ async function readGraphSummary(
   }
   return {
     nodes: graph.nodes.length,
-    links: graph.links.length,
+    links: aretes.length,
     ...(typeof graph.built_at_commit === 'string'
       ? { builtAtCommit: graph.built_at_commit }
       : {})

@@ -1282,7 +1282,26 @@ export class RunWorktreeCoordinator {
     if (this.cacheNonPublies && maintenant - this.cacheNonPublies.a < 60_000) {
       return { ids: this.cacheNonPublies.ids, apercu: this.cacheNonPublies.apercu }
     }
-    const ids = new Set(this.manager.travauxNonPublies?.() ?? [])
+    /*
+     * UN RUN QUI TOURNE N'EST PAS UN TRAVAIL OUBLIE.
+     *
+     * Le bandeau dit « travaux TERMINES non fusionnes ». Or un bureau d'agent est SALE par
+     * construction pendant que l'agent ecrit dedans : le quatrieme gisement le recensait donc, et
+     * le bandeau reclamait le tri d'un travail que personne n'avait encore fini. C'est un faux
+     * positif structurel — il n'y a rien a fusionner tant que le run n'a pas rendu.
+     *
+     * Le filtre porte sur l'etat REEL du run (`isolated`/`working`), pas sur une heuristique de
+     * fraicheur : quand le run se termine, `invaliderRecensement()` refait le releve et le travail
+     * reapparait aussitot s'il n'a pas ete publie. On ne perd donc rien, on differe.
+     */
+    const enCours = new Set(
+      [...this.runs.values()]
+        .filter((t) => t.state === 'isolated' || t.state === 'working')
+        .map((t) => t.runId)
+    )
+    const ids = new Set(
+      (this.manager.travauxNonPublies?.() ?? []).filter((agentId) => !enCours.has(agentId))
+    )
     const apercu = new Map(
       // SIX apercus pour TROIS lignes affichees : le dedoublonnage consomme des entrees (des reprises
       // du meme travail produisent plusieurs branches), et sans marge la troisieme ligne retombait

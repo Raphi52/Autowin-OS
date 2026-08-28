@@ -221,7 +221,19 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     n'est jamais cru sur un chemin. Il porte `assertTrustedRendererSender` des sa premiere
     //     ligne. Aucune ecriture, aucune execution : `shell.openPath`, sinon revelation dans
     //     l'explorateur.
-    expect(handlers).toHaveLength(143)
+    //
+    // MISE A JOUR 2026-08-28 — 143 -> 147. QUATRE canaux ajoutes, relus AVANT de toucher le compte :
+    //   `tests:projects` / `tests:saveProjects` / `tests:pickProject` / `tests:run` — le registre
+    //     des projets de la vue Tests et le lancement de leur verification declaree ; plus
+    //     `os:conversations:removeMany` (suppression en lot, meme garde que le canal unitaire).
+    //     Tous portent `assertTrustedRendererSender` des leur PREMIERE ligne. `tests:run` ne CROIT
+    //     PAS la racine recue : elle doit correspondre EXACTEMENT a un projet deja enregistre
+    //     (`loadTestProjects().find`), sinon le canal jette — aucune commande n'est construite
+    //     depuis une chaine libre du renderer. `tests:pickProject` n'ouvre qu'un selecteur de
+    //     dossier natif, sans argument. `os:conversations:removeMany` valide chaque identifiant
+    //     par `guardString`.
+    // `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(147)
     expect(unguarded).toEqual([])
   })
 

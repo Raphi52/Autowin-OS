@@ -76,7 +76,7 @@ describe('App inspect-turn navigation', () => {
     await act(async () => root.unmount())
   })
 
-  it('renders exactly the nine canonical product destinations', async () => {
+  it('renders exactly the ten canonical product destinations', async () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -104,6 +104,7 @@ describe('App inspect-turn navigation', () => {
       'Task Manager',
       'Worktrees',
       'Tickets',
+      'Tests',
       'Settings'
     ]
     expect(navItems).toHaveLength(expectedLabels.length)
@@ -117,6 +118,7 @@ describe('App inspect-turn navigation', () => {
       'task-manager',
       'worktree',
       'tickets',
+      'tests',
       'settings'
     ]) {
       expect(container.querySelector(`[data-testid="nav-${id}"]`)).not.toBeNull()

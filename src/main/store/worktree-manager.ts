@@ -1,6 +1,6 @@
 import { causeGit, sortieGit } from './cause-git'
 import { execFileSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { balayerCoquillesVides, estCoquilleVide } from './coquilles-vides'
 import { verdictDeBureau, type VerdictBureau } from './verdict-bureau'
 import type { Dirent } from 'node:fs'
@@ -908,16 +908,91 @@ export class WorktreeManager {
     }
     // Le bureau en HEAD detache est l'autre moitie du recensement : son commit n'a aucune ref.
     if (!sha) sha = this.headsDesBureaux().get(agentId)
-    if (!sha) return false
-    return (
+    /*
+     * LE QUATRIEME GISEMENT SE MARQUE AUSSI. Un bureau SALI peut n'avoir aucun commit a lui : son
+     * seul travail est le diff non committe. Marquer le SHA de son HEAD ne le refermerait pas — ce
+     * SHA appartient a la base et ne bouge pas. On marque donc l'EMPREINTE du diff, en plus du SHA
+     * quand il existe.
+     */
+    const empreinte = this.empreinteBureauSali(agentId)
+    const empreinteMarquee =
+      empreinte !== undefined &&
+      this.tryGitFn(this.baseRepo, ['config', '--local', this.cleTrieSali(agentId), empreinte])
+        .code === 0
+    if (!sha) return empreinteMarquee
+    const shaMarque =
       this.tryGitFn(this.baseRepo, ['update-ref', this.refTravailTrie(agentId), sha]).code === 0
-    )
+    return shaMarque || empreinteMarquee
   }
 
   /** Retire le verdict TRIE : le travail redevient un candidat a part entiere. */
   oublierTravailTrie(agentId: string): boolean {
     if (!SAFE_ID.test(agentId)) return false
-    return this.tryGitFn(this.baseRepo, ['update-ref', '-d', this.refTravailTrie(agentId)]).code === 0
+    const refOubliee =
+      this.tryGitFn(this.baseRepo, ['update-ref', '-d', this.refTravailTrie(agentId)]).code === 0
+    const empreinteOubliee =
+      this.tryGitFn(this.baseRepo, ['config', '--local', '--unset', this.cleTrieSali(agentId)])
+        .code === 0
+    return refOubliee || empreinteOubliee
+  }
+
+  /**
+   * L'ADRESSE D'UN TRAVAIL QUI N'A PAS DE SHA.
+   *
+   * Un bureau SALI ne porte aucun commit : son travail n'est qu'un diff. Le marquer par le SHA de
+   * son HEAD serait un marquage « pour toujours » — le HEAD ne bouge pas quand l'utilisateur
+   * re-modifie le bureau, donc le travail suivant naitrait deja tu. C'est exactement le defaut que
+   * le verdict TRIE devait eviter pour les branches.
+   *
+   * L'empreinte prend donc ce qui CHANGE : le HEAD, l'etat porcelain (donc les fichiers non
+   * suivis), le diff complet par rapport a HEAD, et le hash de chaque fichier non suivi (sinon un
+   * fichier neuf reecrit garderait la meme empreinte). Rend `undefined` quand le bureau ne porte
+   * rien : il n'y a alors rien a marquer.
+   */
+  empreinteBureauSali(agentId: string): string | undefined {
+    if (!SAFE_ID.test(agentId)) return undefined
+    const bureau = join(this.worktreeRoot, `agent__${agentId}`)
+    if (!existsSync(bureau) || !existsSync(join(bureau, '.git'))) return undefined
+    try {
+      const tete = this.git(bureau, ['rev-parse', 'HEAD']).trim()
+      if (!HEX_SHA.test(tete) || /^0+$/.test(tete)) return undefined
+      const etat = this.git(bureau, ['status', '--porcelain']).trim()
+      if (etat.length === 0) return undefined
+      const diff = this.git(bureau, ['diff', 'HEAD'])
+      const contenus = etat
+        .split(/\r?\n/)
+        .filter((ligne) => ligne.startsWith('?? '))
+        .map((ligne) => ligne.slice(3).trim().replace(/^"|"$/g, ''))
+        .filter((chemin) => chemin.length > 0 && existsSync(join(bureau, chemin)))
+        .map((chemin) => {
+          const sortie = this.tryGitFn(bureau, ['hash-object', '--', chemin])
+          return `${chemin}:${sortie.code === 0 ? sortie.stdout.trim() : 'illisible'}`
+        })
+      return createHash('sha256')
+        .update([tete, etat, diff, ...contenus].join('\u0000'))
+        .digest('hex')
+    } catch {
+      // Un bureau illisible ne prouve rien : sans empreinte, le travail continue de crier.
+      return undefined
+    }
+  }
+
+  /** La cle durable qui porte le verdict TRIE d'un bureau SALI (aucun objet git a creer). */
+  private cleTrieSali(agentId: string): string {
+    return `autowin-trie-sali.${agentId}.empreinte`
+  }
+
+  /** L'empreinte marquee TRIE pour ce bureau sali, ou `undefined`. */
+  empreinteTravailTrie(agentId: string): string | undefined {
+    if (!SAFE_ID.test(agentId)) return undefined
+    const sortie = this.tryGitFn(this.baseRepo, [
+      'config',
+      '--local',
+      '--get',
+      this.cleTrieSali(agentId)
+    ])
+    const valeur = sortie.code === 0 ? sortie.stdout.trim() : ''
+    return /^[0-9a-f]{64}$/.test(valeur) ? valeur : undefined
   }
 
   private apporteQuelqueChose(travail: string, baseRef: string): boolean {
@@ -1155,9 +1230,15 @@ export class WorktreeManager {
        * QUATRIEME GISEMENT : le travail jamais committe. Un bureau simplement PROPRE reste tu — sinon
        * chaque bureau ouvert crierait, et c'est ainsi qu'on fabrique le bandeau qu'on n'ecoute plus.
        */
-      const salis = this.listAgentIds().filter((agentId) =>
-        this.bureauPorteDuTravailNonCommitte(agentId)
-      )
+      const salis = this.listAgentIds().filter((agentId) => {
+        if (!this.bureauPorteDuTravailNonCommitte(agentId)) return false
+        /*
+         * Le verdict TRIE porte ici l'EMPREINTE du diff, jamais l'identifiant seul : re-modifier le
+         * bureau change l'empreinte, donc le travail ressort de lui-meme.
+         */
+        const empreinte = this.empreinteBureauSali(agentId)
+        return empreinte === undefined || this.empreinteTravailTrie(agentId) !== empreinte
+      })
       /*
        * LE TROISIEME VERDICT, celui qui manquait : TRIE.
        *

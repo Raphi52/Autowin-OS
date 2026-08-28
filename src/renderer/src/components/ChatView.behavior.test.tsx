@@ -1043,10 +1043,20 @@ describe('ChatView behavior under concurrent UI actions', () => {
       })
     })
 
+    // Les deltas pilote sont BATCHES (flush sur frame) : le texte recalcule n'est donc PAS dans le
+    // DOM a la sortie du `act` qui emet l'evenement. Sans cette attente, le corps de remplacement
+    // etait parfois `undefined` et `compareDocumentPosition` jetait — un faux rouge de timing, pas
+    // une regression de l'ordre affiche.
+    const corpsAssistants = (): HTMLElement[] =>
+      [...container!.querySelectorAll<HTMLElement>('.msg.assistant .msg-body')].filter(
+        (body) => !body.closest('.directive-receipt') && body.textContent?.includes('réponse')
+      )
+    for (let essai = 0; essai < 20 && corpsAssistants().length === 0; essai += 1) {
+      await act(async () => flushAnimationFrames())
+    }
     const receipt = container!.querySelector('.directive-receipt') as HTMLElement
-    const replacement = [
-      ...container!.querySelectorAll<HTMLElement>('.msg.assistant .msg-body')
-    ].find((body) => !body.closest('.directive-receipt') && body.textContent?.includes('réponse'))!
+    const [replacement] = corpsAssistants()
+    expect(replacement).toBeTruthy()
     expect(container!.textContent).not.toContain('réponse obsolète')
     expect(
       receipt.compareDocumentPosition(replacement) & Node.DOCUMENT_POSITION_FOLLOWING

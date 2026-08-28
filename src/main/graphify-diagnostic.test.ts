@@ -31,7 +31,7 @@ describe('diagnostic d’un graphe Graphify invalide', () => {
   it('remonte le stderr reel du CLI et les cles trouvees quand nodes/links manquent', async () => {
     const root = workspace()
     const run: GraphifyProcessRunner = async () => {
-      ecrire(root, JSON.stringify({ nodes: [], edges: [] }))
+      ecrire(root, JSON.stringify({ nodes: [], modules: [] }))
       return { stdout: 'Merged 3 chunks', stderr: 'WARNING: refused to shrink graph.json (#479)' }
     }
     const echec = await runGraphify({ workspaceRoot: root }, { run }).catch((e: Error) => e)
@@ -40,7 +40,7 @@ describe('diagnostic d’un graphe Graphify invalide', () => {
     expect(message).toContain('graphe Graphify invalide')
     expect(message).toContain('refused to shrink graph.json')
     expect(message).toContain('nodes/links absents')
-    expect(message).toContain('edges')
+    expect(message).toContain('modules')
   })
 
   it('nomme le silence du CLI et la taille du fichier quand le JSON est illisible', async () => {
@@ -54,5 +54,16 @@ describe('diagnostic d’un graphe Graphify invalide', () => {
     expect(message).toContain('JSON illisible')
     expect(message).toContain('octets')
     expect(message).toContain("n'a rien ecrit")
+  })
+
+  it('accepte un graphe dont les aretes sont nommees edges par le CLI', async () => {
+    const root = workspace()
+    const run: GraphifyProcessRunner = async () => {
+      ecrire(root, JSON.stringify({ nodes: [{ id: 'a' }], edges: [{ source: 'a', target: 'a' }] }))
+      return { stdout: 'ok', stderr: '' }
+    }
+    const resultat = await runGraphify({ workspaceRoot: root }, { run })
+    expect(resultat.links).toBe(1)
+    expect(resultat.nodes).toBe(1)
   })
 })
