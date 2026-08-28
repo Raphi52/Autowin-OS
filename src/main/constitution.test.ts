@@ -22,6 +22,15 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).toContain('sécurité, accès, données personnelles ou secrets')
   })
 
+  it("porte le mandat d'autonomie : une seule passe jusqu'au vert, sans relâcher la preuve", () => {
+    expect(CONSTITUTION).toContain("Autonomie — une seule passe jusqu'au vert")
+    expect(CONSTITUTION).toContain('un résultat VÉRIFIÉ ou un blocage NOMMÉ')
+    expect(CONSTITUTION).toContain("plan sans exécution — est un ÉCHEC")
+    expect(CONSTITUTION).toContain("se FABRIQUE ou se contourne toi-même si c'est sûr, borné et réversible")
+    expect(CONSTITUTION).toContain('TOUTES traitées dans la passe')
+    expect(CONSTITUTION).toContain('FAUX vert')
+  })
+
   it('porte les 13 réflexes et la limite honnête', () => {
     expect(CONSTITUTION).toContain('Les 13 réflexes')
     expect(CONSTITUTION).toContain('La limite honnête')
