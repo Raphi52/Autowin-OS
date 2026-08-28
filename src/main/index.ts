@@ -171,6 +171,7 @@ import {
 } from './runs/orchestration-state'
 import {
   appendTurnEvent,
+  flushAllTurnJournals,
   isTurnFinished,
   listUnfinishedTurns,
   pruneFinishedTurnJournals,
@@ -6324,6 +6325,9 @@ let otelQuitDrainStarted = false
 app.on('before-quit', (event) => {
   flushConversations()
   flushScheduledTasks()
+  // Le journal de tour ecrit par LOTS : ce qui dort en tampon doit atteindre le disque avant
+  // l'arret, sinon la reprise d'un tour en vol perdrait ses derniers deltas.
+  flushAllTurnJournals()
   preflightWatchHandle?.stop() // couper la boucle de re-probe démarrage (pas de timer résiduel)
   preflightWatchHandle = null
   if (!otelQuitDrainStarted && otelGenAiExporter.stats().queued > 0) {
