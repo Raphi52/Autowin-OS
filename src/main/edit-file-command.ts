@@ -211,14 +211,28 @@ export function applyEdit(content: string, oldText: string, newText: string): st
  * caractere de remplacement confondrait — et ferait refuser a tort.
  */
 export function refusSiPasUtf8(octets: Uint8Array, relativePath: string): string | undefined {
+  if (decoderUtf8(octets).valide) return undefined
+  return (
+    `contenu non UTF-8 : ${relativePath} contient des octets qu'une écriture UTF-8 détruirait ` +
+    `(fichier en encodage hérité type cp1252/latin-1, ou binaire). Édition refusée pour ne pas ` +
+    `corrompre le reste du fichier — convertis-le en UTF-8 d'abord, ou modifie-le autrement.`
+  )
+}
+
+/**
+ * DECODE en UTF-8 en DISANT si l'entree l'etait vraiment.
+ *
+ * Meme mesure que ci-dessus, cote LECTURE : `readFileSync(p, 'utf8')` rend un texte ou chaque octet
+ * invalide est devenu `�`, sans le moindre signal. Rien n'est detruit sur le disque, mais le
+ * modele recoit une ligne FAUSSE presentee comme le contenu du fichier — et il peut ensuite batir un
+ * `oldText` dessus. On rend donc le texte (les lignes ASCII restent vraies et utiles) ET le drapeau :
+ * une lecture qui ment doit le DIRE, c'est moins couteux que de la refuser et plus honnete que de la
+ * taire. La double passe (stricte puis indulgente) ne s'execute que sur l'entree invalide.
+ */
+export function decoderUtf8(octets: Uint8Array): { texte: string; valide: boolean } {
   try {
-    new TextDecoder('utf-8', { fatal: true }).decode(octets)
-    return undefined
+    return { texte: new TextDecoder('utf-8', { fatal: true }).decode(octets), valide: true }
   } catch {
-    return (
-      `contenu non UTF-8 : ${relativePath} contient des octets qu'une écriture UTF-8 détruirait ` +
-      `(fichier en encodage hérité type cp1252/latin-1, ou binaire). Édition refusée pour ne pas ` +
-      `corrompre le reste du fichier — convertis-le en UTF-8 d'abord, ou modifie-le autrement.`
-    )
+    return { texte: new TextDecoder('utf-8').decode(octets), valide: false }
   }
 }
