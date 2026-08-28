@@ -1400,6 +1400,14 @@ export class AppCommandBus {
    */
   onRunVertPublie?: (resume: { task: string; publishedCommitSha: string }) => void
 
+  /**
+   * Nettoyage des SATELLITES d'une conversation supprimée (artefacts de chat, trace causale, appels
+   * de prompt). Le canal IPC `os:conversations:remove` le faisait déjà ; la commande agent
+   * `remove_conversation` retirait la conversation SEULE et laissait ces fichiers sur le disque.
+   * Câblé tardivement depuis index.ts. Absent → la conversation part quand même, sans nettoyage.
+   */
+  onConversationRemoved?: (id: string) => void
+
   constructor(
     private readonly os: AutowinOS,
     private readonly broadcast: (e: AppEvent) => void,
@@ -2392,7 +2400,12 @@ export class AppCommandBus {
       }
       case 'remove_conversation': {
         const id = s('id')
-        return { removed: this.os.conversations.remove(id) }
+        const removed = this.os.conversations.remove(id)
+        if (removed) {
+          this.onConversationRemoved?.(id)
+          this.broadcast({ type: 'refresh', scope: 'conversations' })
+        }
+        return { removed }
       }
       case 'attach_run': {
         const convId =

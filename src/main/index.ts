@@ -175,6 +175,7 @@ import {
   isTurnFinished,
   listUnfinishedTurns,
   pruneFinishedTurnJournals,
+  removeConversationTurnJournals,
   readTurnJournal
 } from './runs/turn-journal'
 import {
@@ -1421,6 +1422,16 @@ installTraceEventSink((event) => {
   broadcast({ type: 'causal-trace-updated', convId: event.conversationId })
 })
 bus.setTraceStore(causalTrace)
+/**
+ * Les satellites disque d'une conversation supprimée PAR LE MODÈLE (commande `remove_conversation`)
+ * partent avec elle, exactement comme sur le canal IPC de l'interface.
+ */
+bus.onConversationRemoved = (id: string): void => {
+  removeConversationArtifacts(id)
+  causalTrace.deleteConversation(id)
+  deletePromptCalls(id)
+  removeConversationTurnJournals(turnJournalRoot, id)
+}
 os.setCausalMemoryRetriever((conversationId) =>
   causalLearningContext(causalTrace.readConversation(conversationId))
 )
@@ -3247,6 +3258,7 @@ Le fil reprend ensuite normalement.`
       removeConversationArtifacts(id)
       causalTrace.deleteConversation(id)
       deletePromptCalls(id)
+      removeConversationTurnJournals(turnJournalRoot, id)
       broadcast({ type: 'refresh', scope: 'conversations' })
     }
     return removed
@@ -3270,6 +3282,7 @@ Le fil reprend ensuite normalement.`
       removeConversationArtifacts(id)
       causalTrace.deleteConversation(id)
       deletePromptCalls(id)
+      removeConversationTurnJournals(turnJournalRoot, id)
     }
     if (removed.length > 0) broadcast({ type: 'refresh', scope: 'conversations' })
     return removed

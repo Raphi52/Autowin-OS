@@ -222,3 +222,16 @@ export function pruneFinishedTurnJournals(root: string, maxAgeMs = 7 * 24 * 3_60
   }
   return removed
 }
+
+/**
+ * Supprime TOUS les journaux de tour d'une conversation — appelé quand la conversation elle-même
+ * disparaît. Sans cela, un dossier par conversation supprimée restait indéfiniment sur le disque :
+ * le GC par âge (`pruneFinishedTurnJournals`) ne descend jamais jusqu'à retirer le dossier vide,
+ * et un tour INACHEVÉ d'une conversation supprimée n'aurait de toute façon plus rien à reprendre.
+ */
+export function removeConversationTurnJournals(root: string, conversationId: string): boolean {
+  const dir = join(root, safeSegment(conversationId))
+  if (!existsSync(dir)) return false
+  rmSync(dir, { recursive: true, force: true })
+  return true
+}
