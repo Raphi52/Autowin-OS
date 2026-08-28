@@ -140,13 +140,28 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     expect(build).toMatch(/NOMME ce qui a [ée]t[ée] sond[ée]/)
   })
 
-  it('kaizen couvre les mécanismes propres à Autowin et reste en proposition', () => {
+  /**
+   * DOCTRINE TRANCHEE PAR L'UTILISATEUR le 2026-08-28 : « application direct ». kaizen APPLIQUE ses
+   * editions, il n'attend plus un accord humain — l'assertion `/ne modifie|lecture seule/` verrouillait
+   * l'inverse et rendait ce fichier rouge apres 3f0923e0.
+   *
+   * Ce qui remplace le gate n'est PAS rien : c'est la REVERSIBILITE. On verrouille donc les trois
+   * garde-fous qui la rendent vraie, plus stricts qu'un simple mot-cle de lecture seule. Desserrer
+   * ici sans les exiger aurait fait de ce test une coquille.
+   */
+  it('kaizen couvre les mécanismes Autowin et garde ses éditions RÉVERSIBLES', () => {
     const brief = phaseBrief('kaizen')
     expect(brief).toContain('conversation')
     expect(brief).toContain('worktree')
     expect(brief).toContain('RAG')
     expect(brief).toContain('coût')
-    expect(brief).toMatch(/ne modifie|lecture seule/i)
+    // 1. annoncee AVANT d'etre faite — une edition silencieuse est un defaut.
+    expect(brief).toMatch(/ANNONC[ÉE]E avant/i)
+    // 2. prouvee par un signal HORS-MODELE — le producteur ne se decerne pas son vert.
+    expect(brief).toMatch(/hors-mod[èe]le/i)
+    // 3. revocable SEULE — un commit dedie, jamais noyee dans un fourre-tout.
+    expect(brief).toMatch(/COMMIT D[ÉE]DI[ÉE]/i)
+    expect(brief).toMatch(/r[ée]vocable seule|r[ée]versibilit[ée]/i)
   })
   it('ne contient pas de renvois kit qui pendouillent (ENGINE Ch., [[fiche]], → autre-skill)', () => {
     for (const phase of PIPELINE_PHASES) {
