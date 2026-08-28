@@ -1,6 +1,6 @@
 ---
 name: see
-description: Convertit ce qui est AFFICHÉ à l'instant T en texte consultable et réutilisable. Déclencher sur `/see`, « regarde l'écran », « qu'est-ce que tu vois », « décris ce qui est affiché », « vérifie visuellement X », « regarde ce rendu / cette image / ce modèle 3D / cette vidéo », ou avant/après tout geste pointeur et toute modification visible d'interface. Deux paliers : RAPIDE (4 champs, question fermée) et COMPLET (checklist entière). Porte un MODE ART pour itérer sur un visuel produit (image, rendu 3D, photo, vidéo) : axes esthétiques, vues/timecodes couverts, un seul axe modifié par tour. NE PAS utiliser pour raisonner sur du code non rendu (c'est `think`), pour itérer un design non arrêté (c'est `front-converge`), ni pour rendre un verdict de livrable (c'est `judge`).
+description: Convertit ce qui est AFFICHÉ à l'instant T en texte consultable et réutilisable. Déclencher sur `/see`, « regarde l'écran », « qu'est-ce que tu vois », « décris ce qui est affiché », « vérifie visuellement X », « regarde ce rendu / cette image / ce modèle 3D / cette vidéo », À TOUTE LECTURE D'UNE IMAGE (ouvrir un .png/.jpg/.webp ou une capture avec un outil de lecture de fichier vaut déclenchement, au même titre que `desktop_observe`), ou avant/après tout geste pointeur et toute modification visible d'interface. Deux paliers : RAPIDE (4 champs, question fermée) et COMPLET (checklist entière). Porte un MODE ART pour itérer sur un visuel produit (image, rendu 3D, photo, vidéo) : axes esthétiques, vues/timecodes couverts, un seul axe modifié par tour. NE PAS utiliser pour raisonner sur du code non rendu (c'est `think`), pour itérer un design non arrêté (c'est `front-converge`), ni pour rendre un verdict de livrable (c'est `judge`).
 ---
 
 # see — la vision de l'instant T, transformée en texte
@@ -32,8 +32,10 @@ En doute → RAPIDE, et monter en COMPLET si la capture montre autre chose que p
 
 1. **Cadrer la question.** Une phrase : que doit-on trancher en regardant ? Sans question, `see`
    décrit à l'aveugle.
-2. **Capturer.** `desktop_observe`. Plusieurs moniteurs → recapturer ciblé sur le `display`
-   concerné : lire du texte sur un montage multi-écran est une erreur connue.
+2. **Capturer / ouvrir.** `desktop_observe` pour l'écran, ou l'outil de lecture de fichier pour une
+   image sur disque — les deux entrent ici : aucune image ne se commente hors de cette procédure.
+   Plusieurs moniteurs → recapturer ciblé sur le `display` concerné : lire du texte sur un montage
+   multi-écran est une erreur connue.
 3. **Lire la capture** réellement (elle arrive à l'itération suivante). Si l'image n'est PAS
    parvenue lisible, le seul compte-rendu honnête est `CAPTURE NON REÇUE` — jamais une description.
 4. **Remplir la checklist** du palier retenu, intégralement.
