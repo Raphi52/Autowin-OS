@@ -1497,6 +1497,16 @@ export class WorktreeManager {
     const swept = options?.balayer === false ? [] : this.sweepAbandonedAgentCopies()
     if (swept.length > 0) result.swept = swept
 
+    // Un residu qui RESISTE au balayage doit remonter dans l'etat : sans cela il reste invisible et
+    // revient a chaque demarrage (mesure conv-1483 : 10 copies, ~413 Mo, jamais signalees).
+    for (const blocage of this.blocagesDeBalayage()) {
+      if (result.blocked.some((b) => resolve(b.path) === resolve(blocage.path))) continue
+      result.blocked.push({
+        path: blocage.path,
+        detail: `Balayage impossible (${blocage.echecs} echec(s)) : ${blocage.detail}`
+      })
+    }
+
     const quarantineRoot = join(this.worktreeRoot, '.quarantine')
     if (!existsSync(quarantineRoot)) return result
     for (const entry of readdirSync(quarantineRoot, { withFileTypes: true })) {
@@ -1717,19 +1727,53 @@ export class WorktreeManager {
    * ici n'est donc qu'une question de MOYEN de suppression, pas de securite.
    */
   private balayerLeChemin(path: string): boolean {
-    if (this.cleanupWorktree(path, false).ok) return true
-    // Non enregistree : git ne peut rien pour elle, mais le dossier existe et pese. On le retire
-    // directement, puis on elague le registre au cas ou une entree morte y subsisterait.
-    if (!this.estWorktreeEnregistree(path)) {
-      try {
-        this.removeDirFn(path)
-      } catch {
-        return false
-      }
-      this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
-      return !existsSync(path)
+    if (this.cleanupWorktree(path, false).ok) return this.oublierEchecDeBalayage(path)
+
+    /*
+     * ESCALADE plutot qu'abandon silencieux.
+     *
+     * MESURE conv-1483 : 10 copies residuelles (~413 Mo) survivaient a chaque demarrage. Le retrait
+     * DOUX (`worktree remove` sans `--force`) refuse des qu'un fichier non suivi traine — cas
+     * NORMAL d'une copie d'agent. L'ancien code rendait alors `false` sans rien tenter d'autre et
+     * sans laisser la moindre trace : le residu revenait indefiniment, invisible.
+     *
+     * Les protections du travail sont deja passees (age, processus actif, propriete, fichiers non
+     * publies, commit reference) : ce qui reste n'est qu'une question de MOYEN de suppression.
+     */
+    if (this.estWorktreeEnregistree(path) && this.cleanupWorktree(path, true).ok) {
+      return this.oublierEchecDeBalayage(path)
     }
+
+    let detail = ''
+    try {
+      this.removeDirFn(path)
+    } catch (error) {
+      detail = error instanceof Error ? error.message : String(error)
+    }
+    this.tryGitFn(this.baseRepo, ['worktree', 'prune'])
+    if (!existsSync(path)) return this.oublierEchecDeBalayage(path)
+
+    this.noterEchecDeBalayage(path, detail || 'le dossier de la copie survit au balayage')
     return false
+  }
+
+  /** Compteur d'echecs par chemin : un residu qui resiste doit devenir VISIBLE, pas silencieux. */
+  private readonly echecsDeBalayage = new Map<string, { echecs: number; detail: string }>()
+
+  private noterEchecDeBalayage(path: string, detail: string): void {
+    const cle = resolve(path)
+    const precedent = this.echecsDeBalayage.get(cle)
+    this.echecsDeBalayage.set(cle, { echecs: (precedent?.echecs ?? 0) + 1, detail })
+  }
+
+  private oublierEchecDeBalayage(path: string): true {
+    this.echecsDeBalayage.delete(resolve(path))
+    return true
+  }
+
+  /** Les chemins que le balayage n'a PAS pu retirer, avec leur nombre d'echecs et la cause lue. */
+  blocagesDeBalayage(): Array<{ path: string; echecs: number; detail: string }> {
+    return [...this.echecsDeBalayage.entries()].map(([path, etat]) => ({ path, ...etat }))
   }
 
   /** La copie figure-t-elle encore au registre `git worktree list` ? */
