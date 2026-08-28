@@ -1,4 +1,4 @@
-import { applyEdit, decideEdit, editDiff, refusSiPasUtf8 } from './edit-file-command'
+import { applyEdit, decideEdit, decoderUtf8, editDiff, refusSiPasUtf8 } from './edit-file-command'
 import { decisionDeCommande } from './autorisation-commande'
 import {
   decideRead,
@@ -2645,9 +2645,21 @@ export class AppCommandBus {
           this.os.executionWorkspace
         )
         if (!decision.allowed) return { lu: false, detail: `lecture refusée : ${decision.reason}` }
+        /*
+         * LA LECTURE DIT QUAND ELLE NE PEUT PAS ETRE FIDELE.
+         *
+         * `readFileSync(p, 'utf8')` ne jette pas sur une entree invalide : chaque octet non-UTF-8
+         * devient `�` en silence. Rien n'est detruit sur le disque, mais la ligne rendue au
+         * modele est FAUSSE tout en se presentant comme le contenu du fichier — et il peut batir un
+         * `oldText` dessus. On ne REFUSE pas (les lignes ASCII restent vraies et utiles, et un refus
+         * de lecture aveuglerait l'agent sans rien proteger) : on NOMME la substitution.
+         */
+        let encodageNonUtf8 = false
         const lu = executeRead(decision, (absolutePath) => {
           try {
-            return readFileSync(absolutePath, 'utf8')
+            const decode = decoderUtf8(readFileSync(absolutePath))
+            encodageNonUtf8 = !decode.valide
+            return decode.texte
           } catch {
             return null
           }
@@ -2658,7 +2670,15 @@ export class AppCommandBus {
           path: lu.relativePath,
           totalLignes: lu.totalLignes,
           tronque: lu.tronque,
-          contenu: lu.contenu
+          contenu: lu.contenu,
+          ...(encodageNonUtf8
+            ? {
+                encodage:
+                  'non UTF-8 : des octets ont été remplacés par « � » dans ce rendu — les ' +
+                  'caractères accentués affichés ne sont PAS ceux du fichier, et `edit_file` ' +
+                  'refusera de l’écrire tant qu’il n’est pas converti.'
+              }
+            : {})
         }
       }
       case 'list_files': {
@@ -2741,18 +2761,28 @@ export class AppCommandBus {
         const racine = resolve(this.os.executionWorkspace)
         const sousDossier = typeof a.dir === 'string' && a.dir.trim() ? a.dir.trim() : ''
         const fichiers = enumererFichiersLisibles(racine, sousDossier)
+        // MEME CAUSE QUE `read_file` : un fichier non-UTF-8 rend des lignes ou `�` a remplace
+        // des octets. On continue de le chercher (l'ASCII y est vrai) mais on le NOMME.
+        const nonUtf8: string[] = []
         const resultat = rechercherDansFichiers(motif, fichiers, (relatif) => {
           try {
-            return readFileSync(join(racine, relatif), 'utf8')
+            const decode = decoderUtf8(readFileSync(join(racine, relatif)))
+            if (!decode.valide) nonUtf8.push(relatif)
+            return decode.texte
           } catch {
             return null
           }
         })
         if (resultat.erreur) return { trouve: 0, detail: resultat.erreur }
+        const cites = new Set(resultat.correspondances.map((c) => c.chemin))
+        // Seuls les fichiers effectivement CITES comptent : signaler ceux qu'aucune correspondance
+        // ne mentionne noierait l'avertissement dans une liste sans rapport avec la reponse.
+        const suspects = nonUtf8.filter((chemin) => cites.has(chemin))
         return {
           trouve: resultat.correspondances.length,
           tronque: resultat.tronque,
-          correspondances: resultat.correspondances.map((c) => `${c.chemin}:${c.ligne}: ${c.texte}`)
+          correspondances: resultat.correspondances.map((c) => `${c.chemin}:${c.ligne}: ${c.texte}`),
+          ...(suspects.length > 0 ? { fichiersNonUtf8: suspects } : {})
         }
       }
       case 'edit_file': {
