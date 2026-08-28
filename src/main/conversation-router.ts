@@ -9,6 +9,12 @@ import { routeSkillRequest } from './skill-routing'
 import { CONTEXT_MESSAGE_CHARS, CONTEXT_MESSAGE_LIMIT, clip } from './conversation-window'
 
 const ROUTE_CONFIDENCE_THRESHOLD = 0.9
+/**
+ * En dessous de cette longueur, un message est traité comme un suivi local : trop court pour
+ * porter à lui seul la preuve d'une rupture de sujet nette. Garde déterministe, évaluée avant
+ * tout appel au modèle.
+ */
+const MIN_NEW_TOPIC_CHARS = 40
 const TITLE_CHARS = 60
 
 const ROUTER_SYSTEM = `Tu es le routeur de conversations d’Autowin OS.
@@ -109,6 +115,11 @@ export class ConversationRouter {
       return { route: 'current', confidence: 1, reason: 'explicit-command' }
     }
     if (isDeterministicFollowUp(incomingMessage, attachmentNames.length > 0)) {
+      return { route: 'current', confidence: 1, reason: 'local-follow-up' }
+    }
+    // Une pièce jointe porte le sujet à elle seule : la garde de longueur ne s'applique
+    // qu'au texte nu (voir « can route an attachment-only message without inventing text »).
+    if (attachmentNames.length === 0 && incomingMessage.trim().length < MIN_NEW_TOPIC_CHARS) {
       return { route: 'current', confidence: 1, reason: 'local-follow-up' }
     }
 

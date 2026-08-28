@@ -101,7 +101,7 @@ describe('ConversationRouter', () => {
     const router = new ConversationRouter(registry, roles as never, supervisor)
     const current = conversation([message('user', 'Sujet courant', 1)])
 
-    await router.decide(current, 'Suite du même sujet')
+    await router.decide(current, 'Suite du même sujet, avec assez de texte pour dépasser la garde')
 
     expect(provider.calls).toBe(1)
     expect(supervisor.lastSnapshot()).toMatchObject({
@@ -120,7 +120,7 @@ describe('ConversationRouter', () => {
       message('assistant', 'Le graphe est prêt.', 2)
     ])
 
-    await expect(router.decide(current, 'Décale aussi son icône de 3px')).resolves.toMatchObject({
+    await expect(router.decide(current, 'Décale aussi son icône de 3px vers la gauche, comme convenu')).resolves.toMatchObject({
       route: 'current',
       confidence: 0.99,
       reason: 'follow-up'
@@ -155,7 +155,7 @@ describe('ConversationRouter', () => {
     )
     const current = conversation([message('user', 'Sujet courant', 1)])
 
-    await expect(router.decide(current, 'Sujet clairement distinct')).resolves.toMatchObject({
+    await expect(router.decide(current, 'Sujet clairement distinct du contexte actuel, sans aucun lien')).resolves.toMatchObject({
       route
     })
   })
@@ -168,7 +168,7 @@ describe('ConversationRouter', () => {
     const { router } = harness(response)
     const current = conversation([message('user', 'Sujet courant', 1)])
 
-    await expect(router.decide(current, 'Peut-être autre chose')).resolves.toMatchObject({
+    await expect(router.decide(current, 'Peut-être autre chose, mais je ne suis vraiment pas certain du tout')).resolves.toMatchObject({
       route: 'current'
     })
   })
@@ -195,7 +195,7 @@ describe('ConversationRouter', () => {
     vi.spyOn(supervisor, 'currentQuote').mockReturnValue({} as never)
     const current = conversation([message('user', 'Sujet courant', 1)])
 
-    await expect(router.decide(current, 'Un sujet vraiment différent')).resolves.toMatchObject({
+    await expect(router.decide(current, 'Un sujet vraiment différent qui ouvre un autre livrable complet')).resolves.toMatchObject({
       route: 'current',
       reason: 'fallback'
     })
@@ -226,7 +226,7 @@ describe('ConversationRouter', () => {
     )
     const pending = router.decide(
       conversation([message('user', 'Sujet courant', 1)]),
-      'Suite substantielle du sujet'
+      'Suite substantielle du sujet courant, assez longue pour interroger le modèle'
     )
     await Promise.resolve()
     binding = { provider: 'codex', model: 'gpt-5.6-terra', reasoningEffort: 'medium' }
@@ -287,7 +287,7 @@ describe('ConversationRouter', () => {
       )
     )
 
-    await router.decide(current, 'Suite')
+    await router.decide(current, 'Suite du sujet courant, formulée assez longuement pour router')
 
     const calls = registry.send.mock.calls as unknown as Array<
       [string, Array<{ role: string; content: string }>]
@@ -356,5 +356,32 @@ describe('ConversationRouteCoordinator', () => {
       routed: false
     })
     expect(store.list()).toHaveLength(1)
+  })
+it('force route=current sous 40 caractères, sans dépenser d’appel modèle', async () => {
+    const { router, registry } = harness(
+      '{"route":"new","confidence":1,"reason":"new-topic","title":"Jamais"}'
+    )
+    const current = conversation([message('user', 'Sujet courant', 1)])
+    const court = 'Change plutôt la couleur'
+    expect(court.length).toBeLessThan(40)
+
+    await expect(router.decide(current, court)).resolves.toMatchObject({
+      route: 'current',
+      confidence: 1,
+      reason: 'local-follow-up'
+    })
+    expect(registry.send).not.toHaveBeenCalled()
+  })
+
+  it('laisse le modèle trancher dès 40 caractères', async () => {
+    const { router, registry } = harness(
+      '{"route":"new","confidence":1,"reason":"new-topic","title":"Autre"}'
+    )
+    const current = conversation([message('user', 'Sujet courant', 1)])
+    const long = 'Un sujet vraiment différent qui ouvre un autre livrable'
+    expect(long.length).toBeGreaterThanOrEqual(40)
+
+    await expect(router.decide(current, long)).resolves.toMatchObject({ route: 'new' })
+    expect(registry.send).toHaveBeenCalled()
   })
 })
