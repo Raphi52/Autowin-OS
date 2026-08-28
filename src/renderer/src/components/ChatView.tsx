@@ -8,6 +8,13 @@ import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
 import { refreshesActiveConversation } from './chat-event-routing'
 import { pickRunForTrace } from './run-trace-target'
 import {
+  type ConversationsVues,
+  ecrireConversationsVues,
+  estNonVue,
+  lireConversationsVues,
+  marquerVue
+} from './conversation-seen'
+import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
   createLiveRunDeltaBatcher,
@@ -323,6 +330,24 @@ export function ChatView({
     return () => window.cancelAnimationFrame(frame)
   }, [appNotice])
   const [busyConversations, setBusyConversations] = useState<Set<string>>(() => new Set())
+  /**
+   * Conversations DEJA OUVERTES depuis leur derniere mise a jour. Un run vert dont l'utilisateur
+   * n'a pas encore lu le resultat reste jaune (`unread`) et verdit a l'ouverture.
+   */
+  const [conversationsVues, setConversationsVues] = useState<ConversationsVues>(() =>
+    lireConversationsVues(typeof localStorage === 'undefined' ? undefined : localStorage)
+  )
+  const marquerConversationVue = useCallback((id: string, updatedAt?: number): void => {
+    setConversationsVues((actuelles) => {
+      const suivantes = marquerVue(actuelles, id, updatedAt)
+      if (suivantes !== actuelles)
+        ecrireConversationsVues(
+          suivantes,
+          typeof localStorage === 'undefined' ? undefined : localStorage
+        )
+      return suivantes
+    })
+  }, [])
   const [runtimeIdentity, setRuntimeIdentity] = useState<ChatRuntimeIdentity | null>(null)
   // Coût-eq du dernier tour par conversation → pastille coût live.
   const [lastTurnCost, setLastTurnCost] = useState<Record<string, number>>({})
@@ -1284,6 +1309,7 @@ export function ChatView({
     // Retenu ICI : `loadConv` est le point de passage unique de toute ouverture (clic, reprise,
     // inbox d'agents), donc le seul endroit ou la memoire ne peut pas se desynchroniser.
     memoriserDerniereConversation(c.id)
+    marquerConversationVue(c.id, c.updatedAt)
     const requestId = ++loadConversationRequestRef.current
     // Le numéro de requête arbitre AUSSI l'affichage : une réponse (ou un échec) PÉRIMÉ ne
     // repeint plus rien — c'est la dernière sélection de l'utilisateur qui fait foi.
@@ -2771,7 +2797,11 @@ export function ChatView({
                       busy: busyConversations.has(c.id),
                       messageCount: c.messageCount ?? c.messages?.length ?? 0,
                       lastMessageRole: c.lastMessageRole ?? c.messages?.at(-1)?.role,
-                      lastAssistantStatus: c.lastAssistantStatus
+                      lastAssistantStatus: c.lastAssistantStatus,
+                      asksUser: c.lastAssistantAsksUser === true,
+                      // La conversation OUVERTE est lue par definition : elle ne doit jamais
+                      // s'afficher « non lue » sous les yeux de celui qui la regarde.
+                      unseen: c.id !== activeId && estNonVue(c, conversationsVues)
                     })
                     const stateDescription = `${conversationState.label} — ${conversationState.detail}`
                     return (

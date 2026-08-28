@@ -96,6 +96,7 @@ export interface StoredAssistantMessage {
 export type ConversationStateKey =
   | 'running'
   | 'asking'
+  | 'unread'
   | 'completed'
   | 'failed'
   | 'interrupted'
@@ -117,6 +118,11 @@ export function deriveConversationState(input: {
   lastAssistantStatus?: ChatTurnStatus
   /** Le dernier tour pose une question à choix encore ouverte (servi par le résumé IPC). */
   asksUser?: boolean
+  /**
+   * Le travail est fini mais l'utilisateur n'a pas encore OUVERT la conversation depuis. Un run
+   * vert dont personne n'a lu le resultat n'est pas « a jour » : il reclame un coup d'oeil.
+   */
+  unseen?: boolean
 }): ConversationState {
   if (input.busy || input.lastAssistantStatus === 'streaming') {
     return {
@@ -165,6 +171,17 @@ export function deriveConversationState(input: {
     }
   }
   if (input.lastAssistantStatus === 'completed') {
+    // Place APRES echec/interruption/arret/question : ceux-la disent CE QUI s'est passe, le non-lu
+    // ne dit que « tu n'as pas encore regarde ». Un tour termine non visite reste jaune jusqu'a
+    // l'ouverture de la conversation, ou il verdit.
+    if (input.unseen) {
+      return {
+        key: 'unread',
+        label: 'Terminé, non lu',
+        detail: 'Le tour est terminé et la conversation n’a pas été ouverte depuis',
+        glyph: '✓'
+      }
+    }
     return { key: 'completed', label: 'À jour', detail: 'Le dernier tour est terminé', glyph: '✓' }
   }
   if (input.messageCount === 0) {

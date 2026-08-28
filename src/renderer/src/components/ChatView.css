@@ -388,6 +388,12 @@
 .conversation-state.is-asking {
   color: #facc15;
 }
+/* Meme famille JAUNE que la question ouverte — les deux disent « c'est a toi » — mais une teinte
+   propre : « on te demande quelque chose » et « c'est fini, tu ne l'as pas encore lu » n'appellent
+   pas le meme geste. Verdit (is-completed) des l'ouverture de la conversation. */
+.conversation-state.is-unread {
+  color: #fde047;
+}
 .conversation-state.is-cancelled {
   color: #8b93a7;
 }

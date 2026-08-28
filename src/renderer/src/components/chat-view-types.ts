@@ -89,6 +89,12 @@ export type Conv = {
   lastUserMessageAt?: number
   lastMessageRole?: 'user' | 'assistant'
   lastAssistantStatus?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+  /**
+   * Le dernier tour pose une question a choix restee ouverte. Servi par la projection IPC
+   * (`ConversationSummary.lastAssistantAsksUser`) — il etait absent de CE type, si bien que la
+   * pastille `asking` ne pouvait jamais s'allumer dans la liste.
+   */
+  lastAssistantAsksUser?: boolean
   /** Le dossier de travail qui GROUPE la conversation dans la liste. Absent → « Divers ». */
   projectPath?: string
   /** Marque une analyse Auto-Kaizen : elles vivent dans leur propre groupe, replié par défaut. */
