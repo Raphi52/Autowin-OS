@@ -402,80 +402,95 @@ button.card:hover {
   overflow-y: auto;
 }
 
-/* Spinner Autowin — atome du logo : trois orbites (cyan / rose / or) autour d'un cœur doré. */
-@keyframes aw-spin {
+/* Spinner Autowin — atome 5A tempo Rapide : trois orbites croisees (or / cyan / magenta).
+   Traînee = ARC DE BORDURE, volontairement sans mask ni conic-gradient : ces deux proprietes
+   rendaient un carre plein des que le masque ne s'appliquait pas (constate en reel dans le chat). */
+@keyframes aw-orbit-a {
+  from {
+    transform: rotate(0deg) scaleY(0.55);
+  }
   to {
-    transform: rotate(360deg);
+    transform: rotate(360deg) scaleY(0.55);
   }
 }
-@keyframes aw-spin-rev {
+@keyframes aw-orbit-b {
+  from {
+    transform: rotate(58deg) scaleY(0.55);
+  }
   to {
-    transform: rotate(-360deg);
+    transform: rotate(-302deg) scaleY(0.55);
   }
 }
-.spinner {
+@keyframes aw-orbit-c {
+  from {
+    transform: rotate(-58deg) scaleY(0.55);
+  }
+  to {
+    transform: rotate(302deg) scaleY(0.55);
+  }
+}
+/* ATOME 5A — SOURCE UNIQUE du « ca bosse ». Toute pastille d'activite de l'app passe par
+   ce bloc : geometrie, couleurs, vitesses et reduced-motion n'existent QU'ICI.
+   Un lieu qui veut une autre taille ne recopie rien : il pose --aw-spin-size / --aw-spin-ring. */
+.spinner,
+.conversation-state.is-running {
+  --aw-spin-size: 18px;
+  --aw-spin-ring: 1.6px;
   position: relative;
   display: inline-block;
   box-sizing: border-box;
-  width: 15px;
-  height: 15px;
-  border: 1.5px solid transparent;
-  border-top-color: #3ad6ff;
-  border-bottom-color: rgba(58, 214, 255, 0.32);
+  width: var(--aw-spin-size);
+  height: var(--aw-spin-size);
+  vertical-align: -4px;
+  border: var(--aw-spin-ring) solid transparent;
+  border-top-color: #ffc828;
+  border-right-color: rgba(255, 154, 40, 0.4);
   border-radius: 50%;
-  background: radial-gradient(
-    circle at 50% 50%,
-    #ffd23f 0 14%,
-    rgba(255, 210, 63, 0.32) 26%,
-    transparent 48%
-  );
-  vertical-align: -2px;
-  animation: aw-spin 1.15s linear infinite;
+  background: none;
+  box-shadow: none;
+  animation: aw-orbit-a 2.7s linear infinite;
 }
 .spinner::before,
-.spinner::after {
+.spinner::after,
+.conversation-state.is-running::before,
+.conversation-state.is-running::after {
   position: absolute;
-  border: 1.5px solid transparent;
+  inset: calc(-1 * var(--aw-spin-ring));
+  box-sizing: border-box;
+  border: var(--aw-spin-ring) solid transparent;
   border-radius: 50%;
   content: '';
 }
-.spinner::before {
-  inset: -1.5px;
-  border-right-color: #ff2e93;
-  border-left-color: rgba(255, 46, 147, 0.3);
-  animation: aw-spin-rev 1.75s linear infinite;
+.spinner::before,
+.conversation-state.is-running::before {
+  border-top-color: #3ad6ff;
+  border-right-color: rgba(58, 214, 255, 0.4);
+  animation: aw-orbit-b 3.3s linear infinite;
 }
-.spinner::after {
-  inset: 1.5px;
-  border-top-color: #ffd23f;
-  border-right-color: rgba(255, 210, 63, 0.28);
-  animation: aw-spin 0.85s linear infinite;
+.spinner::after,
+.conversation-state.is-running::after {
+  border-top-color: #ff2e93;
+  border-right-color: rgba(190, 70, 255, 0.4);
+  animation: aw-orbit-c 3.9s linear infinite;
 }
-/* Variante large : même atome, taille des états de chargement pleine page. */
+/* Variante large : meme atome, taille des etats de chargement pleine page. */
 .spinner--lg {
-  width: 34px;
-  height: 34px;
-  border-width: 2px;
+  --aw-spin-size: 36px;
+  --aw-spin-ring: 2.4px;
   vertical-align: baseline;
-}
-.spinner--lg::before,
-.spinner--lg::after {
-  border-width: 2px;
-}
-.spinner--lg::before {
-  inset: -2px;
-}
-.spinner--lg::after {
-  inset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .spinner,
   .spinner::before,
-  .spinner::after {
-    animation-duration: 3.2s;
+  .spinner::after,
+  .conversation-state.is-running,
+  .conversation-state.is-running::before,
+  .conversation-state.is-running::after {
+    animation: none;
   }
 }
+
 
 /* Apparition douce des éléments de liste */
 @keyframes fadeIn {

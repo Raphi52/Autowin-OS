@@ -913,6 +913,53 @@ export class ConversationStore {
     return this.voisinageCache
   }
 
+  /**
+   * Recherche LITTERALE, pour les termes que la tokenisation ecarte (moins de trois caracteres).
+   *
+   * Pas d'index, pas de voisinage, pas d'elargissement : une sous-chaine sur la forme repliee. Le
+   * cout est celui d'un parcours du corpus, accepte parce que ce chemin est rare et qu'il remplace
+   * un resultat FAUX (« ca n'existe nulle part ») par un resultat vrai.
+   */
+  private rechercheLitterale(
+    terme: string,
+    options?: { limite?: number; extraitsParConversation?: number }
+  ): ConversationRecherche[] {
+    const aiguille = replier(terme).trim()
+    if (!aiguille) return []
+    const limite = Math.max(1, Math.min(50, Math.floor(options?.limite ?? 10) || 10))
+    const parConversation = Math.max(
+      1,
+      Math.min(20, Math.floor(options?.extraitsParConversation ?? 3) || 3)
+    )
+    const trouvees: ConversationRecherche[] = []
+    for (const conversation of this.list()) {
+      const extraits: ConversationExtrait[] = []
+      for (const message of conversation.messages) {
+        if (typeof message.content !== 'string') continue
+        const position = replier(message.content).indexOf(aiguille)
+        if (position < 0) continue
+        extraits.push({
+          role: message.role,
+          ts: message.ts,
+          extrait: fenetre(message.content, position, aiguille.length)
+        })
+        if (extraits.length >= parConversation) break
+      }
+      if (extraits.length === 0) continue
+      trouvees.push({
+        id: conversation.id,
+        title: conversation.title,
+        provider: conversation.provider,
+        ...(conversation.projectPath ? { projectPath: conversation.projectPath } : {}),
+        updatedAt: conversation.updatedAt,
+        messageCount: conversation.messages.length,
+        extraits
+      })
+      if (trouvees.length >= limite) break
+    }
+    return trouvees
+  }
+
   /** Récupère une conversation par id, ou undefined si absente. */
   get(id: string): Conversation | undefined {
     return this.conversations.get(id)
@@ -960,8 +1007,20 @@ export class ConversationStore {
     }
   ): ConversationRecherche[] {
     const { demandes, elargis } = motsCherchables(terme, this.voisinage())
-    // Un terme vide rendrait TOUT le corpus : ce n'est pas une recherche, c'est un dump.
-    if (demandes.length === 0) return []
+    /*
+     * TERME TROP COURT POUR ETRE TOKENISE : chemin LITTERAL, jamais un silence.
+     *
+     * Defaut vecu le 2026-08-28 (conv-1498) : « 5A » designait une variante que l'agent avait
+     * lui-meme proposee deux tours plus tot. `motsDe` ecarte les mots de moins de trois lettres --
+     * regle saine pour « de / la / et » -- donc la demande ne portait AUCUN mot cherchable et
+     * `search` rendait []. L'agent en a conclu l'ABSENCE : « 5A ne correspond a rien dans les 961
+     * conversations ». Un faux negatif deguise en fait.
+     *
+     * Un terme court ne s'INDEXE pas (il voisinerait avec tout), mais il se CHERCHE : sous-chaine
+     * litterale sur la forme repliee. Le terme VIDE rend toujours [] -- rendre tout le corpus ne
+     * serait pas une recherche, ce serait un dump.
+     */
+    if (demandes.length === 0) return this.rechercheLitterale(terme, options)
     // Un mot demande vaut trois mots ajoutes : l'hypothese aide, elle ne decide pas.
     const POIDS_DEMANDE = 3
     const index = this.voisinage()
