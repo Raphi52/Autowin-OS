@@ -93,3 +93,26 @@ describe('turn-journal — GC', () => {
     expect(pruneFinishedTurnJournals(root)).toBe(0)
   })
 })
+
+describe('pruneFinishedTurnJournals — âge avant lecture', () => {
+  it("n'ouvre JAMAIS un journal encore FRAIS (aucun parse avant le test d'âge)", () => {
+    const root = mkdtempSync(join(tmpdir(), 'prune-order-'))
+    mkdirSync(join(root, 'conv-frais'), { recursive: true })
+    // Piège hors-modèle : une ENTRÉE `.jsonl` illisible par readFileSync (c'est un dossier → EISDIR).
+    // Toute implémentation qui la PARSE avant de tester son âge lève ; celle qui teste l'âge d'abord
+    // la voit fraîche et ne l'ouvre jamais.
+    mkdirSync(join(root, 'conv-frais', 'tour-frais.jsonl'))
+    expect(() => pruneFinishedTurnJournals(root, 7 * 24 * 3_600_000)).not.toThrow()
+    expect(pruneFinishedTurnJournals(root, 7 * 24 * 3_600_000)).toBe(0)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('supprime toujours un journal TERMINÉ et périmé (garde anti-sur-correction)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'prune-order-old-'))
+    mkdirSync(join(root, 'conv-vieux'), { recursive: true })
+    writeFileSync(join(root, 'conv-vieux', 'tour-vieux.jsonl'), `${JSON.stringify({ kind: 'done' })}\n`)
+    const future = Date.now() + 30 * 24 * 3_600_000
+    expect(pruneFinishedTurnJournals(root, 7 * 24 * 3_600_000, future)).toBe(1)
+    rmSync(root, { recursive: true, force: true })
+  })
+})
