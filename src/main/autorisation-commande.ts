@@ -49,9 +49,42 @@ export interface DecisionCommande {
  * volontairement porté par l'appelant : un module qui recevrait tout l'historique laisserait le
  * modèle s'autoriser en écrivant la phrase lui-même.
  */
+export interface AutorisationsLues {
+  general: boolean
+  binaires: readonly string[]
+}
+
+const MOTS_GENERAUX = /autorise\s+(toutes\s+les\s+commandes|tout)\b/
+
+/**
+ * Ce que L'UTILISATEUR a autorisé, lu dans SES messages — et rien d'autre.
+ *
+ * Extrait pour que le droit puisse être MÉMORISÉ hors de la conversation (« dans toutes les
+ * conversations, forever ») sans que la source du droit change : elle reste le message `user`.
+ */
+export function autorisationsLuesDans(messagesUtilisateur: readonly string[]): AutorisationsLues {
+  const texte = messagesUtilisateur.join('\n').toLowerCase()
+  const binaires = new Set<string>()
+  const motif = /autorise\s+(?:les\s+commandes?\s+|la\s+commande\s+)?([a-z0-9._-]+)/g
+  for (const trouve of texte.matchAll(motif)) {
+    const nom = trouve[1]
+    if (!nom || nom === 'toutes' || nom === 'tout' || nom === 'la' || nom === 'les') continue
+    binaires.add(nom)
+  }
+  return { general: MOTS_GENERAUX.test(texte), binaires: [...binaires] }
+}
+
+/**
+ * L'utilisateur a-t-il autorisé CE binaire — ici, ou une fois pour toutes ?
+ *
+ * `messagesUtilisateur` ne doit contenir que des messages de rôle `user` : un module qui recevrait
+ * tout l'historique laisserait le modèle s'autoriser en écrivant la phrase lui-même. `permanentes`
+ * vient du registre disque, qui n'est alimenté que par ces mêmes messages utilisateur.
+ */
 export function decisionDeCommande(
   ligne: string,
-  messagesUtilisateur: readonly string[]
+  messagesUtilisateur: readonly string[],
+  permanentes: AutorisationsLues = { general: false, binaires: [] }
 ): DecisionCommande {
   const binaire = binaireDe(ligne)
   if (!binaire) return { autorise: false, motif: 'aucune commande à lancer' }
@@ -62,21 +95,18 @@ export function decisionDeCommande(
       motif: `enchaînement shell refusé : lance une seule commande à la fois (${binaire})`
     }
   }
-  const texte = messagesUtilisateur.join('\n').toLowerCase()
-  const generale = /autorise\s+(toutes\s+les\s+commandes|tout)/.test(texte)
-  // Le binaire est VALIDE avant d'entrer dans une expression : normalise en minuscules, il ne doit
-  // porter que des caracteres inoffensifs. Un echappement a la main s'etait revele plus fragile que
-  // la validation qu'il remplace — il cassait la classe de caracteres.
+  // Le binaire est VALIDE avant toute comparaison : normalisé en minuscules, il ne doit porter que
+  // des caractères inoffensifs.
   if (!/^[a-z0-9._-]+$/.test(binaire)) {
     return { autorise: false, binaire, motif: `nom de commande inattendu : ${binaire}` }
   }
-  const nominale = new RegExp(
-    `autorise\\s+(?:les\\s+commandes?\\s+|la\\s+commande\\s+)?${binaire}\\b`
-  ).test(texte)
-  if (generale || nominale) return { autorise: true, binaire }
+  const ici = autorisationsLuesDans(messagesUtilisateur)
+  const general = ici.general || permanentes.general
+  const nominale = ici.binaires.includes(binaire) || permanentes.binaires.includes(binaire)
+  if (general || nominale) return { autorise: true, binaire }
   return {
     autorise: false,
     binaire,
-    motif: `${binaire} n'est pas autorisé dans cette conversation — écris « autorise les commandes ${binaire} » pour l'ouvrir`
+    motif: `${binaire} n'est pas autorisé — écris « autorise les commandes ${binaire} » pour l'ouvrir (l'autorisation vaut ensuite pour toutes les conversations)`
   }
 }

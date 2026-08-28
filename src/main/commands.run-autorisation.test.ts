@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { configureAutowinAppDataBase } from './app-data'
 import { AppCommandBus } from './commands'
 
 /**
@@ -39,7 +43,10 @@ function busAvecFil(messages: Message[]): { bus: AppCommandBus; lances: string[]
   return { bus, lances }
 }
 
-const lancer = async (fil: Message[], commande: string): Promise<{ r: string; lances: string[] }> => {
+const lancer = async (
+  fil: Message[],
+  commande: string
+): Promise<{ r: string; lances: string[] }> => {
   const { bus, lances } = busAvecFil(fil)
   // `exec` rend un CommandResult structure : on lit `detail`, la ou le refus NOMME sa cause.
   const brut = (await bus.exec('run', { commande }, 'conv-1')) as { detail?: unknown }
@@ -47,6 +54,10 @@ const lancer = async (fil: Message[], commande: string): Promise<{ r: string; la
 }
 
 describe('run — l’autorisation vient de l’utilisateur, jamais du modèle', () => {
+  // Le droit est MEMORISE hors conversation (« forever ») : chaque cas part donc d'une racine de
+  // donnees neuve, sinon un cas en autoriserait un autre par le registre partage de la machine.
+  beforeEach(() => configureAutowinAppDataBase(mkdtempSync(join(tmpdir(), 'autowin-autoris-'))))
+
   it('l’utilisateur autorise : la commande PART', async () => {
     const { r, lances } = await lancer(
       [{ role: 'user', content: 'Autorise les commandes git : committe mon travail' }],
