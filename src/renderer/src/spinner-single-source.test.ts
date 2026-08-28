@@ -43,6 +43,27 @@ describe('spinner — source unique', () => {
     const theme = readFileSync(join(SRC, 'assets', 'theme.css'), 'utf8')
     expect(theme).toMatch(/\.spinner--lg\s*\{/)
   })
+
+  /**
+   * GREFFE — exigence recuperee de trois bureaux non fusionnes du 2026-08-28
+   * (run-4b878d41753f-1, run-59624aa4eeee-1, run-9d66e3788edf-1).
+   *
+   * Ces bureaux decrivaient une AUTRE implementation de l'atome (orbites inclinees pilotees par
+   * une @property angulaire), superseded par celle qui est en base : leur fichier de test entier
+   * echoue ici (5 cas sur 6), le fusionner aurait regresse theme.css. Mais ils documentaient un
+   * defaut VU en usage reel — le « rendu carre deglingue » — qu'aucun test de la base ne verrouille.
+   * Seule cette exigence est transposee, portee sur la nomenclature actuelle.
+   */
+  it('la forme reste ronde et ne repose sur aucune technique fragile', () => {
+    const theme = readFileSync(join(SRC, 'assets', 'theme.css'), 'utf8')
+    const debut = theme.indexOf('ATOME 5A')
+    expect(debut, 'atome introuvable dans theme.css').toBeGreaterThan(-1)
+    const zone = theme.slice(debut, theme.indexOf('.spinner--lg', debut))
+    // mask et conic-gradient rendent la forme dependante du moteur de rendu.
+    expect(zone).not.toMatch(/mask|conic-gradient/)
+    // L'atome ET ses orbites sont des cercles : au moins deux border-radius: 50%.
+    expect(zone.match(/border-radius:\s*50%/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+  })
 })
 
 /**
