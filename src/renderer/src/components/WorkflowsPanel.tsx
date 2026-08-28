@@ -3,6 +3,10 @@ import type { RunEntry, CheckpointEntry } from './ChatView'
 import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat-view-model'
 import { WorkflowRefreshIcon, WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
 import { StepThread } from './ChatView.parts'
+// Conflit resolu le 2026-09-15 (salvage) : le candidat importait AUSSI `RunProgress`, retire de
+// main depuis (le composant n'existe plus, seuls son CSS et son test subsistent). On ne garde donc
+// que `libelleRun`, qui rend le sujet d'un run lisible a l'affichage.
+import { libelleRun } from './run-label'
 import { RunInspector } from './RunInspector'
 import { TraceRetrospectivePane } from './TraceRetrospectivePane'
 
@@ -471,7 +475,9 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                       <div className="row" style={{ justifyContent: 'space-between' }}>
                         <div className="row gap2" style={{ minWidth: 0 }}>
                           <span className={`status-dot ${RUN_DOT[r.summary.status] ?? ''}`} />
-                          <span className="run-subject">{r.subject}</span>
+                          <span className="run-subject" title={r.subject}>
+                            {libelleRun(r.subject)}
+                          </span>
                         </div>
                         <span className="badge">{r.summary.status}</span>
                       </div>

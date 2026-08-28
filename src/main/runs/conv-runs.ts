@@ -30,14 +30,119 @@ export function convRunsRoot(): string {
   return join(ensureAutowinAppData(), 'runs')
 }
 
+/**
+ * REMPLISSAGE CONVERSATIONNEL. Le sujet d'un run était un bout BRUT de la phrase tapée :
+ * « ensuite de la meme maniere si il veut un nouveau skill… » donnait
+ * `ensuite-de-la-meme-maniere-si-il-veut-un-<ts>` — une pastille illisible et un `@run:`
+ * impossible à recopier. Ces mots-outils ne nomment RIEN : ils sont écartés pour que le libellé
+ * porte les mots PORTEURS. La liste est fermée et courte : aucun verbe, aucun substantif métier
+ * n'y figure, donc une consigne déjà dense la traverse intacte.
+ */
+const MOTS_OUTILS = new Set([
+  'a',
+  'ah',
+  'alors',
+  'apres',
+  'au',
+  'aussi',
+  'aux',
+  'avec',
+  'bien',
+  'bon',
+  'ca',
+  'ce',
+  'cela',
+  'ces',
+  'cette',
+  'coup',
+  'd',
+  'dans',
+  'de',
+  'des',
+  'donc',
+  'du',
+  'elle',
+  'en',
+  'ensuite',
+  'est',
+  'et',
+  'faut',
+  'il',
+  'ils',
+  'j',
+  'je',
+  'juste',
+  'l',
+  'la',
+  'le',
+  'les',
+  'lui',
+  'm',
+  'maniere',
+  'me',
+  'meme',
+  'mon',
+  'n',
+  'ne',
+  'nous',
+  'ok',
+  'on',
+  'ou',
+  'par',
+  'pas',
+  'peut',
+  'peux',
+  'plus',
+  'pour',
+  'puis',
+  'qu',
+  'que',
+  'qui',
+  'quoi',
+  's',
+  'sa',
+  'se',
+  'si',
+  'son',
+  'stp',
+  'sur',
+  't',
+  'ta',
+  'te',
+  'tes',
+  'toi',
+  'ton',
+  'tres',
+  'tu',
+  'un',
+  'une',
+  'vazy',
+  'voila',
+  'vous',
+  'y'
+])
+
+const SLUG_MOTS_MAX = 6
+const SLUG_LONGUEUR_MAX = 40
+
 function slugify(task: string): string {
-  const s = task
+  const tokens = task
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
+    .replace(/\p{Diacritic}/gu, '')
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+  const porteurs = tokens.filter((t) => !MOTS_OUTILS.has(t))
+  // Une phrase FAITE de mots-outils (« vazy stp ») n'a aucun mot porteur : on garde le brut
+  // plutôt que de rendre un dossier anonyme.
+  const retenus = (porteurs.length ? porteurs : tokens).slice(0, SLUG_MOTS_MAX)
+  // Troncature au MOT, jamais au milieu d'un mot : un fragment coupé n'est pas un libellé.
+  const s = retenus
+    .reduce<string[]>((acc, mot) => {
+      const longueur = acc.reduce((n, m) => n + m.length + 1, -1)
+      return longueur + 1 + mot.length <= SLUG_LONGUEUR_MAX ? [...acc, mot] : acc
+    }, [])
+    .join('-')
   return s || 'tache'
 }
 
@@ -90,7 +195,9 @@ export function createConvRun(
   mkdirSync(dir, { recursive: true })
   const path = join(dir, 'RUN.md')
   const date = new Date(now()).toISOString().slice(0, 10)
-  const dod = rootDodLabels(task, phasesProgrammees).map((label) => `- [ ] ${label}`).join('\n')
+  const dod = rootDodLabels(task, phasesProgrammees)
+    .map((label) => `- [ ] ${label}`)
+    .join('\n')
   writeFileSync(
     path,
     `status: open
@@ -202,10 +309,7 @@ export async function reuseOrCreateConvRun(
         const md = await readFile(path, 'utf8')
         const storedTask =
           md.match(/## Besoin\s*\n([\s\S]*?)\n\s*\*\*Critere de succes/i)?.[1]?.trim() ?? ''
-        if (
-          parseRun(md).status === 'open' &&
-          comparableTask(storedTask) === comparableTask(task)
-        ) {
+        if (parseRun(md).status === 'open' && comparableTask(storedTask) === comparableTask(task)) {
           return { path, reused: true }
         }
       } catch {
@@ -239,7 +343,8 @@ export function populateConvRunSections(
   if (!phaseOutputs?.length) return
   try {
     let md = readFileSync(runPath, 'utf8')
-    const rootTask = md.match(/## Besoin\s*\n([\s\S]*?)\n\s*\*\*Critere de succes/i)?.[1]?.trim() ?? ''
+    const rootTask =
+      md.match(/## Besoin\s*\n([\s\S]*?)\n\s*\*\*Critere de succes/i)?.[1]?.trim() ?? ''
     for (const check of rootRequirementChecks(rootTask, {
       phases: phaseOutputs,
       publishedCommitSha: proofs.publishedCommitSha
