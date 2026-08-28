@@ -166,10 +166,11 @@ export function BehaviourView(): React.JSX.Element {
   }, [loadComposition, workspace])
 
   useEffect(() => {
-    queueMicrotask(() =>
-      void loadOutcomeLearning().catch((reason) =>
-        setError(reason instanceof Error ? reason.message : String(reason))
-      )
+    queueMicrotask(
+      () =>
+        void loadOutcomeLearning().catch((reason) =>
+          setError(reason instanceof Error ? reason.message : String(reason))
+        )
     )
   }, [loadOutcomeLearning])
 
@@ -325,7 +326,11 @@ export function BehaviourView(): React.JSX.Element {
           </button>
         </div>
       )}
-      {!composition && !error && <p className="behaviour-empty">Chargement de la composition…</p>}
+      {!composition && !error && (
+        <p className="behaviour-empty">
+          <span className="spinner" aria-hidden="true" /> Chargement de la composition…
+        </p>
+      )}
       {composition?.inspection && (
         <section className="behaviour-inspection" aria-label="Instructions du workspace inspecté">
           <strong>Instructions réellement lues · {composition.inspection.files.length}</strong>

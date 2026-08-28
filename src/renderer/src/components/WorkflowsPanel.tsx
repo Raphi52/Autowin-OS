@@ -230,7 +230,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                               style={{ justifyContent: 'space-between', fontSize: 11 }}
                             >
                               <span className="c-faint">
-                                <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
+                                <span className="spinner" /> {meta?.icon ?? ''} {label}
                                 {detail && <span className="mono c-accent"> {detail}</span>}
                               </span>
                               <span className="row gap2">

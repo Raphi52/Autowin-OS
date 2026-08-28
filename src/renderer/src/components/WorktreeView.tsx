@@ -360,7 +360,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
 
       {loading && !snapshot ? (
         <div className="cockpit-state" role="status">
-          Chargement du cockpit projet…
+          <span className="spinner" /> Chargement du cockpit projet…
         </div>
       ) : (
         <div className="cockpit-scroll">

@@ -204,7 +204,13 @@ export function WorkflowBenchPanel({
           disabled={running || Boolean(empeche)}
           onClick={() => void lancer()}
         >
-          {running ? 'Confrontation en cours…' : 'Confronter'}
+          {running ? (
+            <>
+              <span className="spinner" /> Confrontation en cours…
+            </>
+          ) : (
+            'Confronter'
+          )}
         </button>
         {running && (
           <button

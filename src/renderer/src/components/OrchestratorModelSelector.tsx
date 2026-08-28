@@ -113,11 +113,15 @@ export function OrchestratorModelSelector({
       : null
 
   const disabled = busy || pending || models.length === 0
-  const currentLabel = !catalogLoaded
-    ? 'Chargement des modèles…'
-    : models.length === 0
-      ? 'Aucun modèle disponible'
-      : (grouped.currentMissing?.label ?? currentOption?.label ?? 'Choisir une cible')
+  const currentLabel = !catalogLoaded ? (
+    <>
+      <span className="spinner" /> Chargement des modèles…
+    </>
+  ) : models.length === 0 ? (
+    'Aucun modèle disponible'
+  ) : (
+    (grouped.currentMissing?.label ?? currentOption?.label ?? 'Choisir une cible')
+  )
 
   useEffect(() => {
     const closeOnOutsidePointer = (event: PointerEvent): void => {
@@ -151,11 +155,7 @@ export function OrchestratorModelSelector({
           {binding?.reasoningEffort && binding.reasoningEffort !== 'none' && (
             <em>{EFFORT_LABELS[binding.reasoningEffort] ?? binding.reasoningEffort}</em>
           )}
-          {pending ? (
-            <i className="spinner" />
-          ) : (
-            <i className="model-select-chevron" />
-          )}
+          {pending ? <i className="spinner" /> : <i className="model-select-chevron" />}
         </summary>
         <div className="model-select-menu" role="listbox" aria-label="Modèle orchestrateur">
           {matrixRows.length > 0 && (

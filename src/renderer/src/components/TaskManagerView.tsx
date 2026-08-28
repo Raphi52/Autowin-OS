@@ -569,18 +569,18 @@ export function TaskManagerView({
     ? usesAgentStudioDefault(draftDestination.provider)
       ? AGENT_STUDIO_DEFAULT_PROVIDER
       : (() => {
-        const loaded = models.find(
-          (candidate) =>
-            candidate.provider === draftDestination.provider &&
-            candidate.model === draftDestination.model
-        )
-        if (!loaded) return ''
-        return (
-          selectableModels.find(
-            (candidate) => modelDisplayKey(candidate) === modelDisplayKey(loaded)
-          )?.id ?? ''
-        )
-      })()
+          const loaded = models.find(
+            (candidate) =>
+              candidate.provider === draftDestination.provider &&
+              candidate.model === draftDestination.model
+          )
+          if (!loaded) return ''
+          return (
+            selectableModels.find(
+              (candidate) => modelDisplayKey(candidate) === modelDisplayKey(loaded)
+            )?.id ?? ''
+          )
+        })()
     : ''
   const draftModel = selectableModels.find((candidate) => candidate.id === draftModelId)
   const draftEfforts = draftModel?.reasoningEfforts?.length
@@ -847,7 +847,7 @@ export function TaskManagerView({
             </div>
             {loading ? (
               <div className="task-manager-empty" data-testid="task-manager-loading">
-                <span aria-hidden="true">◷</span>
+                <span className="spinner" />
                 <strong>Chargement des tâches…</strong>
               </div>
             ) : snapshot.tasks.length === 0 ? (
@@ -1465,7 +1465,7 @@ export function TaskManagerView({
               </>
             ) : loading ? (
               <div className="task-manager-empty is-detail" data-testid="task-manager-loading">
-                <span aria-hidden="true">◷</span>
+                <span className="spinner" />
                 <strong>Chargement des tâches…</strong>
               </div>
             ) : (

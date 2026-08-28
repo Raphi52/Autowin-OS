@@ -48,7 +48,13 @@ export function ChatQueuePanel({
             disabled={interrupting}
             onClick={interruptAndFlushQueue}
           >
-            {interrupting ? '⏳ Interruption…' : '⏹ Interrompre et envoyer tout'}
+            {interrupting ? (
+              <>
+                <span className="spinner" aria-hidden="true" /> Interruption…
+              </>
+            ) : (
+              '⏹ Interrompre et envoyer tout'
+            )}
           </button>
         )}
       </div>
@@ -83,7 +89,7 @@ export function ChatQueuePanel({
             {directive.text}
           </span>
           {/* Hors tour actif il n'y a RIEN à interrompre : afficher le bouton donnait un clic
-                    mort qui figeait la file sur « ⏳ Interruption… ». La file se draine alors seule. */}
+                    mort qui figeait la file sur « Interruption… ». La file se draine alors seule. */}
           {busy && (
             <button
               type="button"
@@ -93,7 +99,13 @@ export function ChatQueuePanel({
               disabled={interrupting}
               onClick={interruptAndFlushQueue}
             >
-              {interrupting ? '⏳ Interruption…' : '⏹ Interrompre et envoyer'}
+              {interrupting ? (
+                <>
+                  <span className="spinner" aria-hidden="true" /> Interruption…
+                </>
+              ) : (
+                '⏹ Interrompre et envoyer'
+              )}
             </button>
           )}
           {busy && (
@@ -105,7 +117,13 @@ export function ChatQueuePanel({
               disabled={steeringDirectives.has(directive.id)}
               onClick={() => steerWithoutInterrupt(directive)}
             >
-              {steeringDirectives.has(directive.id) ? '⏳ Orientation…' : '🧭 Orienter'}
+              {steeringDirectives.has(directive.id) ? (
+                <>
+                  <span className="spinner" aria-hidden="true" /> Orientation…
+                </>
+              ) : (
+                '🧭 Orienter'
+              )}
             </button>
           )}
           {busy && (

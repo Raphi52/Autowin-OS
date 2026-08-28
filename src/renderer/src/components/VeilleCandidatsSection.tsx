@@ -262,7 +262,7 @@ export function VeilleCandidatsSection({
     return (
       <section className="veille" data-testid="veille-section">
         <p className="veille-message" role="status" data-testid="veille-attente">
-          Lecture des candidats…
+          <span className="spinner" /> Lecture des candidats…
         </p>
       </section>
     )
@@ -326,7 +326,13 @@ export function VeilleCandidatsSection({
             data-testid="veille-generer"
             title="Scout interne : analyse les conversations loggées, les workflows et le code d’Autowin pour proposer de nouveaux candidats"
           >
-            {generation ? 'Génération en cours…' : 'En générer plus'}
+            {generation ? (
+              <>
+                <span className="spinner" /> Génération en cours…
+              </>
+            ) : (
+              'En générer plus'
+            )}
           </button>
         </div>
       </header>

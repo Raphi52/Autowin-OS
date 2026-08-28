@@ -1370,7 +1370,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                         : undefined
                     }
                   >
-                    {loading ? 'Chargement…' : 'Charger la suite'}
+                    {loading ? (
+                      <>
+                        <span className="spinner" /> Chargement…
+                      </>
+                    ) : (
+                      'Charger la suite'
+                    )}
                   </button>
                 )}
               </div>
@@ -1492,7 +1498,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                           : undefined
                       }
                     >
-                      {loading ? 'Chargement…' : 'Charger la suite'}
+                      {loading ? (
+                        <>
+                          <span className="spinner" /> Chargement…
+                        </>
+                      ) : (
+                        'Charger la suite'
+                      )}
                     </button>
                   ) : (
                     <span data-testid="tickets-page-end" className="tickets-page-end">

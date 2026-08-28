@@ -83,7 +83,15 @@ export function ObservatoryRail({
             : ''}
         </span>
         {runs.length === 0 ? (
-          <p>{runsLoading ? 'Lecture des RUN.md…' : 'Aucun RUN.md.'}</p>
+          <p>
+            {runsLoading ? (
+              <>
+                <span className="spinner" /> Lecture des RUN.md…
+              </>
+            ) : (
+              'Aucun RUN.md.'
+            )}
+          </p>
         ) : (
           runs.slice(0, 12).map((run) => (
             <button

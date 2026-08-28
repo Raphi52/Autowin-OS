@@ -1875,7 +1875,9 @@ export function GraphView({
           </div>
         )}
         {expandingNodeId && !loading && (
-          <div className="graph-status">Chargement des connexions…</div>
+          <div className="graph-status">
+            <span className="spinner" aria-hidden="true" /> Chargement des connexions…
+          </div>
         )}
         {err && (
           <div className="graph-status graph-status--error" role="alert">

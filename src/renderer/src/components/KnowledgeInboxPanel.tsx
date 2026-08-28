@@ -247,11 +247,15 @@ export function KnowledgeInboxPanel({
           role="status"
           aria-live="polite"
         >
-          {indexState.phase === 'reindexing'
-            ? `« ${indexState.title} » — réindexation en cours…`
-            : indexState.action === 'promote'
-              ? `« ${indexState.title} » est promue et trouvable par la recherche.`
-              : `« ${indexState.title} » est rejetée : elle n’est plus trouvable par la recherche.`}
+          {indexState.phase === 'reindexing' ? (
+            <>
+              <span className="spinner" /> {`« ${indexState.title} » — réindexation en cours…`}
+            </>
+          ) : indexState.action === 'promote' ? (
+            `« ${indexState.title} » est promue et trouvable par la recherche.`
+          ) : (
+            `« ${indexState.title} » est rejetée : elle n’est plus trouvable par la recherche.`
+          )}
         </p>
       )}
 

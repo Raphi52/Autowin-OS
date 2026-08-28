@@ -130,7 +130,9 @@ export function ArtifactModel3dPreview({
   if (error) return <div className="artifact-preview__blocked">{error}</div>
   return (
     <div className="artifact-model3d" ref={hostRef}>
-      <span>Chargement de la scène 3D…</span>
+      <span>
+        <span className="spinner" aria-hidden="true" /> Chargement de la scène 3D…
+      </span>
     </div>
   )
 }

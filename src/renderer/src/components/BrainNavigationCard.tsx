@@ -70,7 +70,12 @@ function CandidateRow({
   }
 
   const renderBody = (): React.JSX.Element => {
-    if (state === 'loading') return <p className="brain-nav-note-status">chargement…</p>
+    if (state === 'loading')
+      return (
+        <p className="brain-nav-note-status">
+          <span className="spinner" aria-hidden="true" /> chargement…
+        </p>
+      )
     if (state === 'error') return <p className="brain-nav-note-status">{error}</p>
     if (state !== 'ready') return <></>
     if (!content) return <p className="brain-nav-note-status">note vide ou introuvable</p>

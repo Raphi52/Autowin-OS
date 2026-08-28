@@ -372,7 +372,9 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
           </div>
           <div className="control-list">
             {loading ? (
-              <p className="control-empty">Lecture des sources…</p>
+              <p className="control-empty">
+                <span className="spinner" /> Lecture des sources…
+              </p>
             ) : filtered.length === 0 && hiddenByStatus > 0 ? (
               <div className="control-empty">
                 <p>

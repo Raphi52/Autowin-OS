@@ -472,7 +472,13 @@ export function AgentsTopologyView({
   if (!topology) {
     return (
       <div className="agents-topology-loading">
-        {state === 'error' ? `⛔ ${error}` : 'Chargement de la topologie…'}
+        {state === 'error' ? (
+          `⛔ ${error}`
+        ) : (
+          <>
+            <span className="spinner" aria-hidden="true" /> Chargement de la topologie…
+          </>
+        )}
         {state === 'error' && (
           // Sans ce bouton, une lecture en échec laissait la vue définitivement morte : le seul
           // recours était de redémarrer l'application.

@@ -262,7 +262,8 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
 
       {encours && (
         <p className="tests-progress" data-testid="tests-progress">
-          ⏳ {projets.find((p) => p.id === encours)?.label ?? encours} — exécution en cours ·{' '}
+          <span className="spinner" aria-hidden="true" />{' '}
+          {projets.find((p) => p.id === encours)?.label ?? encours} — exécution en cours ·{' '}
           {(chrono / 1000).toFixed(1)} s
         </p>
       )}

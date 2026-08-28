@@ -198,7 +198,11 @@ export function SettingsView({
                 </button>
               </div>
             )}
-            {providersLoading && <p role="status">Chargement des providers…</p>}
+            {providersLoading && (
+              <p role="status">
+                <span className="spinner" /> Chargement des providers…
+              </p>
+            )}
             {!providersLoading &&
               !providersError &&
               (providers && providers.length > 0 ? (

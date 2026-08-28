@@ -84,7 +84,11 @@ export function ObservatoryCallDetail({
       >
         Comparer en shadow
       </button>
-      {shadowLoading && <small role="status">Comparaison shadow en cours…</small>}
+      {shadowLoading && (
+        <small role="status">
+          <span className="spinner" /> Comparaison shadow en cours…
+        </small>
+      )}
       {shadowError && <small role="alert">Shadow indisponible : {shadowError}</small>}
       {shadowRecommendation != null && (
         <section data-testid="shadow-route-recommendation">

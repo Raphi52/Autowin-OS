@@ -1126,7 +1126,11 @@ export function ObservatoryView({
           data-testid="observatory-stream"
           aria-busy={loading}
         >
-          {loading && <div className="observatory-empty">Lecture des traces…</div>}
+          {loading && (
+            <div className="observatory-empty">
+              <span className="spinner" /> Lecture des traces…
+            </div>
+          )}
           {/* Trois CAUSES distinctes derriere un flux vide : aucune conversation, aucune trace, ou
               filtre trop strict. Un message unique laissait l'utilisateur sans action suivante. */}
           {!loading &&

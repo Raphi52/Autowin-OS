@@ -17,11 +17,7 @@ import { libelleTravail, type TravailNonPublie } from './travail-non-publie'
  * restent interdits ici. Un travail qu'on ne peut pas lire ne se jette pas.
  */
 
-export function TravauxNonPublies({
-  onFermer
-}: {
-  onFermer: () => void
-}): React.JSX.Element {
+export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React.JSX.Element {
   const [travaux, setTravaux] = useState<TravailNonPublie[] | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [ouvert, setOuvert] = useState<string | null>(null)
@@ -139,7 +135,13 @@ export function TravauxNonPublies({
             </div>
             {ouvert === travail.agentId && (
               <pre className="tnp-patch" data-testid="tnp-patch">
-                {patch ? patch.patch || '(diff vide)' : 'Lecture…'}
+                {patch ? (
+                  patch.patch || '(diff vide)'
+                ) : (
+                  <>
+                    <span className="spinner" /> Lecture…
+                  </>
+                )}
                 {patch?.tronque ? '\n\n[…] diff tronqué — trop long pour être lu ici.' : ''}
               </pre>
             )}

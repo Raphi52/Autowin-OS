@@ -29,17 +29,22 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
       <div className="msg-meta">
         <span className="msg-role">Toi</span>
         <span className="directive-receipt-status" role="status">
-          {receipt.status === 'sending'
-            ? receipt.reponse
-              ? '⏳ Réponse…'
-              : '⏳ Orientation…'
-            : receipt.status === 'sent'
-              ? receipt.reponse
-                ? '✓ Répondu'
-                : '✓ Orienté'
-              : receipt.status === 'differee'
-                ? '⏸ Reçue — l’agent la lira à la phase suivante du run'
-                : '⚠ Échec — remis en file'}
+          {receipt.status === 'sending' ? (
+            <>
+              <span className="spinner" aria-hidden="true" />{' '}
+              {receipt.reponse ? 'Réponse…' : 'Orientation…'}
+            </>
+          ) : receipt.status === 'sent' ? (
+            receipt.reponse ? (
+              '✓ Répondu'
+            ) : (
+              '✓ Orienté'
+            )
+          ) : receipt.status === 'differee' ? (
+            '⏸ Reçue — l’agent la lira à la phase suivante du run'
+          ) : (
+            '⚠ Échec — remis en file'
+          )}
         </span>
       </div>
       <div className="msg-body" dir="auto">

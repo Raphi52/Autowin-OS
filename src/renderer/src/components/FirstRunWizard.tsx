@@ -273,7 +273,7 @@ export function FirstRunWizard(): React.JSX.Element | null {
                 <span className="frw-label">{c.label}</span>
                 {pending ? (
                   <span className="frw-detail" role="status">
-                    en cours… la fenêtre se ferme dès que c’est prêt
+                    <span className="spinner" /> en cours… la fenêtre se ferme dès que c’est prêt
                   </span>
                 ) : !c.ok && c.detail ? (
                   <span className="frw-detail">{c.detail}</span>

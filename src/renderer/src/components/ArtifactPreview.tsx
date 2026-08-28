@@ -385,7 +385,7 @@ export function ArtifactPreview({
             <div className="artifact-preview__placeholder">Aperçu chargé à l’approche</div>
           ) : mustLoad && !loaded && !loadError ? (
             <div className="artifact-preview__placeholder" role="status">
-              Chargement de l’aperçu…
+              <span className="spinner" aria-hidden="true" /> Chargement de l’aperçu…
             </div>
           ) : loadError ? (
             <div className="artifact-preview__blocked">{loadError}</div>

@@ -149,7 +149,11 @@ export function NodePanel({
             )}
           </div>
         )}
-        {!file && !fileErr && <div className="node-panel__loading">Chargement du contenu…</div>}
+        {!file && !fileErr && (
+          <div className="node-panel__loading">
+            <span className="spinner" aria-hidden="true" /> Chargement du contenu…
+          </div>
+        )}
         {file &&
           (/\.md$/i.test(file.path) ? (
             <BrainMarkdown source={file.content} />

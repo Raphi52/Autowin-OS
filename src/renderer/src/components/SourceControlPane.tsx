@@ -439,7 +439,9 @@ export function SourceControlPane({
                           </div>
                           <div className="sc-diff-content">
                             {diff === null ? (
-                              <div className="sc-clean">Chargement du diff…</div>
+                              <div className="sc-clean">
+                                <span className="spinner" /> Chargement du diff…
+                              </div>
                             ) : diff.available ? (
                               <DiffView diff={diff.diff ?? ''} />
                             ) : (

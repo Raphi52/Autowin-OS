@@ -217,7 +217,6 @@ export function HomeView({
     activeRef.current = active
   }, [active])
 
-
   // La notice se compte a l'OUVERTURE de la vue, une fois par montage. L'effet ne fait plus que
   // PERSISTER : le compte affiché est déjà connu au montage, il n'a jamais eu besoin d'un rendu.
   useEffect(() => {
@@ -246,7 +245,7 @@ export function HomeView({
     return {
       width: surface?.clientWidth || window.innerWidth || 1440,
       height: surface?.clientHeight || window.innerHeight || 900,
-      top: (headerHeight > 0 ? headerHeight + 32 : 142)
+      top: headerHeight > 0 ? headerHeight + 32 : 142
     }
   }, [])
 
@@ -406,8 +405,9 @@ export function HomeView({
     let cancelled = false
     const load = async (): Promise<void> => {
       try {
-        const api = (window as unknown as { api?: { taskManagerSnapshot?: () => Promise<unknown> } })
-          .api
+        const api = (
+          window as unknown as { api?: { taskManagerSnapshot?: () => Promise<unknown> } }
+        ).api
         if (!api?.taskManagerSnapshot) return
         const result = (await api.taskManagerSnapshot()) as TaskSnapshotLike
         if (cancelled) return
@@ -442,8 +442,9 @@ export function HomeView({
    * bouton, qui le fait desormais lui-meme, la ou l'intention est visible.
    */
   const readOutlook = useCallback(async (force = false): Promise<void> => {
-    const api = (window as unknown as { api?: { outlookSnapshot?: (f?: boolean) => Promise<unknown> } })
-      .api
+    const api = (
+      window as unknown as { api?: { outlookSnapshot?: (f?: boolean) => Promise<unknown> } }
+    ).api
     if (!api?.outlookSnapshot) {
       setOutlook({ etat: 'panne', cause: "la passerelle Outlook n'est pas disponible" })
       return
@@ -598,18 +599,21 @@ export function HomeView({
 
   /** Ouvre un élément dans Outlook. La cause d'un échec est AFFICHÉE, pas avalée. */
   const ouvrirDansOutlook = useCallback(async (id: string): Promise<void> => {
-    const api = (window as unknown as {
-      api?: { outlookOuvrir?: (id: string) => Promise<{ ok: boolean; erreur?: string }> }
-    }).api
+    const api = (
+      window as unknown as {
+        api?: { outlookOuvrir?: (id: string) => Promise<{ ok: boolean; erreur?: string }> }
+      }
+    ).api
     if (!api?.outlookOuvrir) {
-      setErreurOuverture("Cette version ne sait pas encore ouvrir un élément dans Outlook.")
+      setErreurOuverture('Cette version ne sait pas encore ouvrir un élément dans Outlook.')
       return
     }
     setOuvertureEnCours(id)
     setErreurOuverture(null)
     try {
       const resultat = await api.outlookOuvrir(id)
-      if (!resultat.ok) setErreurOuverture(resultat.erreur ?? "Outlook n'a pas pu ouvrir cet élément.")
+      if (!resultat.ok)
+        setErreurOuverture(resultat.erreur ?? "Outlook n'a pas pu ouvrir cet élément.")
     } catch (error) {
       setErreurOuverture(error instanceof Error ? error.message : String(error))
     } finally {
@@ -619,16 +623,20 @@ export function HomeView({
 
   /** Acquitte une alerte d'agent depuis l'accueil, sans aller la chercher ailleurs. */
   const acquitter = useCallback(async (alertId: string): Promise<void> => {
-    const api = (window as unknown as {
-      api?: { taskManagerAcknowledge?: (id: string) => Promise<boolean> }
-    }).api
+    const api = (
+      window as unknown as {
+        api?: { taskManagerAcknowledge?: (id: string) => Promise<boolean> }
+      }
+    ).api
     if (!api?.taskManagerAcknowledge) return
     await api.taskManagerAcknowledge(alertId)
     // Relecture immédiate : sans elle, le compteur ne bougerait qu'au prochain cycle de 30 s et le
     // clic paraîtrait sans effet.
-    const snapshotApi = (window as unknown as {
-      api?: { taskManagerSnapshot?: () => Promise<unknown> }
-    }).api
+    const snapshotApi = (
+      window as unknown as {
+        api?: { taskManagerSnapshot?: () => Promise<unknown> }
+      }
+    ).api
     if (snapshotApi?.taskManagerSnapshot) {
       setSnapshot((await snapshotApi.taskManagerSnapshot()) as TaskSnapshotLike)
     }
@@ -699,8 +707,8 @@ export function HomeView({
           </h1>
           {noticeVisible ? (
             <p>
-              Prenez une tuile n’importe où et posez-la : elle reste exactement là où vous la lâchez.
-              Les huit bords la redimensionnent, les flèches aussi (Maj pour la taille).
+              Prenez une tuile n’importe où et posez-la : elle reste exactement là où vous la
+              lâchez. Les huit bords la redimensionnent, les flèches aussi (Maj pour la taille).
             </p>
           ) : null}
           {erreurOuverture !== null ? (
@@ -727,7 +735,13 @@ export function HomeView({
                 : 'Relire Outlook maintenant'
             }
           >
-            {outlookEnCours ? 'Lecture…' : 'Actualiser Outlook'}
+            {outlookEnCours ? (
+              <>
+                <span className="spinner" /> Lecture…
+              </>
+            ) : (
+              'Actualiser Outlook'
+            )}
           </button>
           <button
             type="button"
@@ -866,7 +880,12 @@ function WidgetBody({
   }
 
   if (id === 'mails' || id === 'agenda') {
-    if (outlook.etat === 'chargement') return <p className="home-hint">Lecture d’Outlook…</p>
+    if (outlook.etat === 'chargement')
+      return (
+        <p className="home-hint">
+          <span className="spinner" aria-hidden="true" /> Lecture d’Outlook…
+        </p>
+      )
     if (outlook.etat === 'panne') {
       // La cause est AFFICHÉE. Une liste vide se lirait « vous n'avez pas de mail » alors qu'elle
       // veut dire « la lecture a échoué » — et l'utilisateur ne saurait pas quoi faire.
@@ -888,7 +907,11 @@ function WidgetBody({
     return <p className="home-error">Task Manager injoignable : {error}</p>
   }
   if (loading) {
-    return <p className="home-hint">Lecture du Task Manager…</p>
+    return (
+      <p className="home-hint">
+        <span className="spinner" /> Lecture du Task Manager…
+      </p>
+    )
   }
 
   if (id === 'routines') {
@@ -995,7 +1018,12 @@ function InterlocuteursList({
   return (
     <>
       {personnes.length > 0 ? (
-        <FilsList fils={personnes} now={now} onOuvrir={onOuvrir} ouvertureEnCours={ouvertureEnCours} />
+        <FilsList
+          fils={personnes}
+          now={now}
+          onOuvrir={onOuvrir}
+          ouvertureEnCours={ouvertureEnCours}
+        />
       ) : null}
       {personnes.length === 0 && !indistinct ? (
         <p className="home-hint">
@@ -1007,7 +1035,12 @@ function InterlocuteursList({
         <>
           {/* Nommé, pas masqué : ces messages existent, ils ne sont simplement pas des échanges. */}
           <p className="home-subhead">Envois automatiques</p>
-          <FilsList fils={automates} now={now} onOuvrir={onOuvrir} ouvertureEnCours={ouvertureEnCours} />
+          <FilsList
+            fils={automates}
+            now={now}
+            onOuvrir={onOuvrir}
+            ouvertureEnCours={ouvertureEnCours}
+          />
         </>
       ) : null}
     </>

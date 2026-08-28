@@ -117,7 +117,12 @@ export function BureauxConserves(): JSX.Element {
     }
   }
 
-  if (bureaux === undefined) return <section className="bureaux-conserves">Lecture…</section>
+  if (bureaux === undefined)
+    return (
+      <section className="bureaux-conserves">
+        <span className="spinner" /> Lecture…
+      </section>
+    )
 
   return (
     <section className="bureaux-conserves" data-testid="bureaux-conserves">

@@ -462,7 +462,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
           aria-busy="true"
           data-testid="workflow-loading"
         >
-          Chargement des workflows…
+          <span className="spinner" /> Chargement des workflows…
         </p>
       ) : file.profiles.length === 0 && !loading ? (
         <p className="workflow-profiles-empty" data-testid="workflow-empty">

@@ -394,11 +394,15 @@ function AgentOffice({
               disabled={action.pending !== null}
               onClick={() => action.run('retry', () => onRetryOffice(agent.agentId))}
             >
-              {action.pending === 'retry'
-                ? 'Nouvel essai en cours…'
-                : agent.worktreeAvailable === false
-                  ? 'Réessayer de recréer le bureau'
-                  : 'Réessayer maintenant'}
+              {action.pending === 'retry' ? (
+                <>
+                  <span className="spinner" /> Nouvel essai en cours…
+                </>
+              ) : agent.worktreeAvailable === false ? (
+                'Réessayer de recréer le bureau'
+              ) : (
+                'Réessayer maintenant'
+              )}
             </button>
           )}
           {action.error && (
