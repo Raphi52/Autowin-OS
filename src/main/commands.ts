@@ -47,6 +47,40 @@ import { refusAvecIssue, refusPourOutcome, type OutcomeDePublication } from './i
 import { rappelDesEchangesPasses } from './rappel-conversations'
 import { cleDeBureau, decisionDeReutilisation } from './bureau-reutilisable'
 import { readLastCommitFiles } from './git-read-main'
+import { nativeSkills } from './native-registry'
+
+/** Longueur du declencheur remis au modele : assez pour reconnaitre le MOMENT, pas le contrat. */
+const DECLENCHEUR_MAX = 200
+
+/**
+ * Skills ACTIVES sur disque, chacune avec son DECLENCHEUR : `id — <debut de description>`.
+ *
+ * Defaut vecu le 2026-08-28 : le snapshot ne portait que des NOMS NUS (`forge`, `heal`, `see`...).
+ * Un nom ne dit pas QUAND s'en servir, donc aucune skill ne pouvait se declencher d'elle-meme : il
+ * fallait que l'utilisateur tape le slash. Or chaque SKILL.md ecrit son propre declencheur dans son
+ * front-matter `description` (« Trigger the MOMENT ... ») : cette phrase existait, elle n'etait
+ * simplement jamais remise au modele. La cause est ici, pas dans les SKILL.md.
+ *
+ * Bornee a DECLENCHEUR_MAX par skill : le declencheur suffit a RECONNAITRE le moment ; le contrat
+ * complet reste charge par `skillInstruction()` a l'invocation, pas a chaque tour.
+ * Une lecture qui echoue n'est jamais fatale : un snapshot sans skills vaut mieux qu'un tour perdu.
+ */
+export function skillsInvocables(): string[] {
+  try {
+    return nativeSkills()
+      .filter((s) => s.enabled)
+      .map((s) => {
+        const brut = (s.description ?? '').replace(/\s+/gu, ' ').trim()
+        if (!brut || brut === 'Skill (SKILL.md)') return s.id
+        const declencheur =
+          brut.length > DECLENCHEUR_MAX ? `${brut.slice(0, DECLENCHEUR_MAX).trimEnd()}…` : brut
+        return `${s.id} — ${declencheur}`
+      })
+      .sort()
+  } catch {
+    return []
+  }
+}
 import { readGitState } from './git-read-main'
 import type { AutowinOS } from './os'
 
@@ -301,6 +335,15 @@ export interface PromptSnapshot {
   providers: string[]
   runsBlocked: Array<{ subject: string; status: string }>
   conversationsCount: number
+  /**
+   * Les commandes `/` REELLEMENT invocables, lues sur disque a chaque tour.
+   *
+   * Defaut vecu le 2026-08-28 : `/see` s'affichait dans la palette, etait routee comme commande
+   * explicite et son SKILL.md etait injecte — mais l'agent du chat ignorait jusqu'a son existence
+   * tant que l'utilisateur ne l'avait pas tapee, et repondait donc « cette skill n'existe pas ».
+   * Seuls les IDENTIFIANTS voyagent ici : le corps d'une skill reste paye a l'invocation.
+   */
+  skillsDisponibles?: string[]
   /**
    * DU TRAVAIL NON FUSIONNE, et la consigne pour le trier — ABSENT quand il n'y en a pas.
    *
@@ -1553,6 +1596,7 @@ export class AppCommandBus {
         .filter((r) => r.blocked)
         .map((r) => ({ subject: r.subject, status: r.status })),
       conversationsCount: full.conversations.length,
+      ...(skillsInvocables().length > 0 ? { skillsDisponibles: skillsInvocables() } : {}),
       ...(full.travauxNonPublies.length > 0
         ? {
             travauxNonFusionnes: {
