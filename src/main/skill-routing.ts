@@ -1,9 +1,38 @@
+import { nativeSkills } from './native-registry'
 import type { PipelinePhase } from './skill-pipeline'
 
 export interface SkillRoute {
   task: string
   explicitPhase?: PipelinePhase
+  /** Skill NOMMEE par son slash, hors phases du pipeline (`/see`, `/think`, `/salvage`...). */
+  skill?: string
   reason: 'explicit-skill' | 'workspace-action'
+}
+
+/**
+ * Slash d'une skill QUELCONQUE decouverte sur disque.
+ *
+ * Defaut vecu le 2026-08-28 : la palette du composer se remplit depuis le registre natif (donc
+ * `/see`, `/think`, `/heal`, `/salvage`... s'affichent et s'envoient), mais ce routeur ne
+ * connaissait que les SEPT phases ecrites en dur. Une commande affichee par l'app repartait donc
+ * comme un message ordinaire : routage possible vers un autre fil, aucune trace d'intention.
+ *
+ * Une skill NON-phase ne porte PAS d'`explicitPhase` : elle ne declenche aucune orchestration
+ * (`/see` est une LECTURE). Elle est seulement RECONNUE comme commande explicite.
+ */
+const SLASH_COMMAND = /^\/([\w-]{1,64})(?=\s|$)(?:\s+([\s\S]*))?$/
+
+let skillNamesCache: Set<string> | undefined
+/** Noms de skills presentes sur disque (cache process ; un echec de lecture n'est jamais fatal). */
+export function knownSkillNames(reload = false): Set<string> {
+  if (!skillNamesCache || reload) {
+    try {
+      skillNamesCache = new Set(nativeSkills().map((s) => s.id.toLowerCase()))
+    } catch {
+      skillNamesCache = new Set<string>()
+    }
+  }
+  return skillNamesCache
 }
 
 const PHASE_COMMAND = /^\/(scout|frame|terrain|build|clean|judge|kaizen)(?=\s|$)(?:\s+([\s\S]*))?$/i
@@ -60,6 +89,15 @@ export function routeSkillRequest(message: string): SkillRoute | undefined {
       task: body ? `/${phase} ${body}` : `/${phase}`,
       explicitPhase: phase,
       reason: 'explicit-skill'
+    }
+  }
+
+  const slash = SLASH_COMMAND.exec(text)
+  if (slash) {
+    const name = slash[1].toLowerCase()
+    if (knownSkillNames().has(name)) {
+      const body = slash[2]?.trim()
+      return { task: body ? `/${name} ${body}` : `/${name}`, skill: name, reason: 'explicit-skill' }
     }
   }
 

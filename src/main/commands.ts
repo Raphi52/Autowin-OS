@@ -1,5 +1,6 @@
 import { applyEdit, decideEdit, decoderUtf8, editDiff, refusSiPasUtf8 } from './edit-file-command'
-import { decisionDeCommande } from './autorisation-commande'
+import { autorisationsLuesDans, decisionDeCommande } from './autorisation-commande'
+import { memoriserAutorisations } from './store/autorisations-permanentes'
 import {
   decideRead,
   enumererFichiersLisibles,
@@ -2544,7 +2545,15 @@ export class AppCommandBus {
         )
           .filter((message) => message.role === 'user')
           .map((message) => (typeof message.content === 'string' ? message.content : ''))
-        const decision = decisionDeCommande(ligne, messagesUtilisateur)
+        // « Dans toutes les conversations, forever » (demandé le 2026-08-28) : ce que l'utilisateur
+        // autorise ICI est mémorisé dans la racine de données, et vaut ensuite partout. La source du
+        // droit ne change pas — seuls des messages `user` alimentent ce registre.
+        const racineDonnees = ensureAutowinAppData()
+        const permanentes = memoriserAutorisations(
+          racineDonnees,
+          autorisationsLuesDans(messagesUtilisateur)
+        )
+        const decision = decisionDeCommande(ligne, messagesUtilisateur, permanentes)
         if (!decision.autorise) {
           // Le refus NOMME la cause et le geste qui l'ouvre. Un refus muet renvoie a la devinette —
           // c'est exactement ce qui a coute des semaines ici.

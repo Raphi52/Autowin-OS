@@ -726,7 +726,11 @@ export class AgentPilot {
     // court-circuitait `chat()` AVANT le modele, donc aucune consigne de prompt ne pouvait corriger
     // l'erreur : c'est le mecanisme exact de la regression du 2026-07-28, qui etait toujours arme.
     // Une commande explicite, elle, ne devine RIEN : l'utilisateur a nomme la phase.
-    if (directRoute?.reason === 'explicit-skill') {
+    // Seule une PHASE nommee (`/scout`, `/build`...) court-circuite vers l'orchestration. Une skill
+    // hors pipeline (`/see`, `/think`, `/remake`...) est reconnue comme commande — elle garde le fil
+    // courant — mais reste jouee par le MODELE avec le corps de sa skill injecte : la router vers un
+    // run payant serait une orchestration que l'utilisateur n'a jamais demandee.
+    if (directRoute?.reason === 'explicit-skill' && directRoute.explicitPhase) {
       const actionId = 'route:0'
       const args = { task: directRoute.task }
       emit({ kind: 'command', actionId, name: 'orchestrate', args })
