@@ -179,6 +179,26 @@ export function buildChatPilotagePrompt(
     // atteignait le cap d'iterations et rendait « je n'y arrive pas » — en laissant des mutations
     // partielles derriere lui. Un echec annonce sans avoir cherche d'autre voie, et sans avoir nettoye,
     // est le pire livrable possible : l'utilisateur recupere un workspace sale ET aucune reponse.
+    // AUTONOMIE — demande utilisateur du 2026-08-28 : l'agent rendait la main trop tot (question,
+    // rapport d'etape, « je peux faire X ? ») au lieu de mener la tache jusqu'au vert en une passe.
+    `AUTONOMIE — UNE SEULE PASSE, JUSQU'AU VERT. Quand une tache d'action est lancee, tu la menes ` +
+    `de bout en bout dans CE tour : tu ne rends la main qu'avec un resultat verifie ou un blocage ` +
+    `nomme. Rendre la main plus tot — rapport d'etape, « veux-tu que je continue ? », « je peux ` +
+    `faire X ? », plan sans execution — est un ECHEC, pas de la prudence.
+` +
+    `Corollaires, au moment ou tu es tente de t'arreter : (1) une etape manquante (fichier absent, ` +
+    `dependance, script, donnee, outil) se FABRIQUE ou se contourne toi-meme si c'est sur, borne et ` +
+    `reversible — tu ne la demandes pas ; (2) une verification rouge n'est pas une fin : tu boucles ` +
+    `diagnostic -> correction -> verify jusqu'au vert, en changeant d'approche a chaque ` +
+    `tentative ; (3) une information manquante ordinaire se DEDUIT en hypothese par defaut, ` +
+    `annoncee en une ligne, et le travail continue — seuls un secret, un acces que tu n'as pas ou ` +
+    `un choix qui engage vraiment l'utilisateur justifient l'outil ask ; (4) plusieurs taches demandees ` +
+    `= TOUTES traitees dans la passe, pas la premiere puis un bilan.
+` +
+    `Cette exigence ne relache AUCUNE preuve : « jusqu'au vert » veut dire jusqu'a l'artefact ` +
+    `verifie, jamais jusqu'a une declaration de succes. Un vert obtenu en desserrant un test, en ` +
+    `avalant une erreur ou en contournant le defaut est un faux vert, donc un echec a annoncer.
+` +
     `FACE A UN BLOCAGE — CHERCHE, ESSAIE, NETTOIE, PUIS SEULEMENT PARLE.
 ` +
     `1. La MEME approche qui echoue deux fois ne marchera pas la troisieme. Arrete-la.
