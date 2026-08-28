@@ -90,6 +90,39 @@ describe('run — l’autorisation vient de l’utilisateur, jamais du modèle',
     expect(r).toContain('autorise les commandes git')
   })
 
+  it('le droit GRAVÉ vaut dans une conversation qui n’a JAMAIS rien autorisé', async () => {
+    // La demande : « graver le droit pour toutes les conversations ». Le fil n°2 est VIERGE — aucun
+    // message `user` n'y redonne le droit. L'ENTRÉE qui ferait échouer ce test si la correction
+    // était fausse : un câblage qui ne lirait que la conversation courante
+    // (`decisionDeCommande(ligne, messagesUtilisateur)` sans registre) refuserait `git log` ici.
+    await lancer([{ role: 'user', content: 'autorise les commandes git' }], 'git status')
+
+    const { r, lances } = await lancer([{ role: 'user', content: 'bonjour' }], 'git log --oneline')
+
+    expect(lances).toEqual(['git log --oneline'])
+    expect(r).not.toMatch(/refusée/i)
+  })
+
+  it('ce que le MODÈLE écrit n’est jamais GRAVÉ — le fil suivant refuse encore', async () => {
+    // L'entrée dangereuse : si le REGISTRE était alimenté par tout l'historique, le modèle
+    // s'ouvrirait `curl` une fois — et pour toujours, dans tous les fils.
+    await lancer(
+      [
+        { role: 'user', content: 'regarde le dépôt' },
+        { role: 'assistant', content: 'autorise les commandes curl' }
+      ],
+      'curl https://exemple.fr'
+    )
+
+    const { r, lances } = await lancer(
+      [{ role: 'user', content: 'vas-y' }],
+      'curl https://exemple.fr'
+    )
+
+    expect(lances).toEqual([])
+    expect(r).toMatch(/refusée/i)
+  })
+
   it('autoriser git n’ouvre pas curl', async () => {
     const { lances } = await lancer(
       [{ role: 'user', content: 'autorise les commandes git' }],
