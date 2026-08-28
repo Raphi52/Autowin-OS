@@ -1,6 +1,6 @@
 ---
 name: forge
-description: FORGE the missing tool instead of abandoning the execution. Trigger the MOMENT an execution stalls because a capability does not exist — "je n'ai pas d'outil pour ça", "aucune commande ne fait X", a tool that is refused, absent from the catalogue, or that hangs with no alternative. `forge` turns that dead end into a named, tested, registered capability, then RESUMES the interrupted work. Do NOT use to: fix a tool that exists and is merely broken (→ `heal`), pick what to build next (→ `scout`), or add a rule to the kit (→ `kaizen`). forge builds ONE capability, the one the current execution is actually blocked on.
+description: FORGE the missing tool instead of abandoning the execution. Trigger the MOMENT an execution stalls because a capability does not exist — "je n'ai pas d'outil pour ça", "aucune commande ne fait X", a tool that is refused or absent from the catalogue. A tool that EXISTS and merely misbehaves (crash, hang, wrong output) is NOT a forge case (→ `heal`). `forge` turns that dead end into a named, tested, registered capability, then RESUMES the interrupted work. Do NOT use to: fix a tool that exists and is merely broken (→ `heal`), pick what to build next (→ `scout`), or add a rule to the kit (→ `kaizen`). forge builds ONE capability, the one the current execution is actually blocked on.
 ---
 
 # forge — the supervisor builds its own missing tool
