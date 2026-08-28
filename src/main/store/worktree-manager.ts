@@ -894,10 +894,7 @@ export class WorktreeManager {
    */
   marquerTravailTrie(agentId: string): boolean {
     if (!SAFE_ID.test(agentId)) return false
-    const candidats = [
-      `refs/heads/autowin/recovery/${agentId}`,
-      `refs/autowin/rescue/${agentId}`
-    ]
+    const candidats = [`refs/heads/autowin/recovery/${agentId}`, `refs/autowin/rescue/${agentId}`]
     let sha: string | undefined
     for (const ref of candidats) {
       const sortie = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', `${ref}^{commit}`])
@@ -1223,9 +1220,7 @@ export class WorktreeManager {
         .map((ligne) => ligne.trim())
         .filter((agentId) => SAFE_ID.test(agentId))
         .filter((agentId) => !branches.includes(agentId) && !detaches.includes(agentId))
-        .filter((agentId) =>
-          this.apporteQuelqueChose(`refs/autowin/rescue/${agentId}`, baseRef)
-        )
+        .filter((agentId) => this.apporteQuelqueChose(`refs/autowin/rescue/${agentId}`, baseRef))
       /*
        * QUATRIEME GISEMENT : le travail jamais committe. Un bureau simplement PROPRE reste tu — sinon
        * chaque bureau ouvert crierait, et c'est ainsi qu'on fabrique le bandeau qu'on n'ecoute plus.
@@ -1413,7 +1408,14 @@ export class WorktreeManager {
     try {
       // `git worktree add` echoue si la branche est deja extraite ailleurs : c'est une protection,
       // pas un obstacle a contourner. On laisse l'echec remonter en `false`.
-      this.git(this.baseRepo, ['worktree', 'add', chemin, `autowin/recovery/${agentId}`])
+      this.git(this.baseRepo, [
+        '-c',
+        'core.longpaths=true',
+        'worktree',
+        'add',
+        chemin,
+        `autowin/recovery/${agentId}`
+      ])
       return existsSync(chemin)
     } catch {
       return false
@@ -2140,7 +2142,7 @@ export class WorktreeManager {
       const files = parseNullSeparatedPaths(
         this.git(this.baseRepo, ['diff', '--name-only', '-z', `${expectedSha}..${durableSha}`])
       )
-      this.tryGitFn(this.baseRepo, ['worktree', 'add', path, branch])
+      this.tryGitFn(this.baseRepo, ['-c', 'core.longpaths=true', 'worktree', 'add', path, branch])
       return { ok: false, advanced: true, files }
     }
 
@@ -2177,7 +2179,7 @@ export class WorktreeManager {
     }
     const deleteRef = this.deleteRecoveryRefIfExpected(branch, expectedSha)
     if (deleteRef.advanced) {
-      this.tryGitFn(this.baseRepo, ['worktree', 'add', path, branch])
+      this.tryGitFn(this.baseRepo, ['-c', 'core.longpaths=true', 'worktree', 'add', path, branch])
       return { ok: false, advanced: true, files: deleteRef.files }
     }
     return { ok: deleteRef.deleted, advanced: false, files: [] }
@@ -2222,7 +2224,14 @@ export class WorktreeManager {
   private restoreRecoveryWorktree(agentId: string, branch: string): boolean {
     const path = this.pathFor(agentId)
     if (!existsSync(path)) {
-      const restored = this.tryGitFn(this.baseRepo, ['worktree', 'add', path, branch])
+      const restored = this.tryGitFn(this.baseRepo, [
+        '-c',
+        'core.longpaths=true',
+        'worktree',
+        'add',
+        path,
+        branch
+      ])
       if (restored.code !== 0) return false
     }
     if (this.ownershipIssue(path)) return false
@@ -4349,7 +4358,15 @@ exit 0
       throw new Error('La révision capturée du bureau n’est plus disponible.')
     }
     mkdirSync(this.worktreeRoot, { recursive: true })
-    this.git(this.baseRepo, ['worktree', 'add', '--detach', path, startRevision])
+    this.git(this.baseRepo, [
+      '-c',
+      'core.longpaths=true',
+      'worktree',
+      'add',
+      '--detach',
+      path,
+      startRevision
+    ])
     if (context && this.git(path, ['rev-parse', 'HEAD']) !== startRevision) {
       this.cleanupWorktree(path)
       throw new Error('La copie créée ne correspond pas à la révision capturée.')
@@ -4999,7 +5016,14 @@ exit 0
       const branch = `autowin/recovery/${agentId}`
       const ref = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', branch])
       if (ref.code !== 0) return { outcome: 'nothing', agentId }
-      const restore = this.tryGitFn(this.baseRepo, ['worktree', 'add', path, branch])
+      const restore = this.tryGitFn(this.baseRepo, [
+        '-c',
+        'core.longpaths=true',
+        'worktree',
+        'add',
+        path,
+        branch
+      ])
       if (restore.code !== 0) {
         return {
           outcome: 'blocked',
@@ -5172,6 +5196,8 @@ exit 0
     // MERGE_HEAD Autowin à attribuer puis à annuler dans la base.
     const integrationPath = join(this.worktreeRoot, `integration__${agentId}__${randomUUID()}`)
     const integrationAdd = this.tryGitFn(this.baseRepo, [
+      '-c',
+      'core.longpaths=true',
       'worktree',
       'add',
       '--detach',
