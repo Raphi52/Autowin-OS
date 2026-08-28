@@ -178,10 +178,10 @@ export function estJugeTerminal(
    * continuation, et le juge cesserait a juste titre d'etre terminal -- sinon on rouvrirait le
    * contre-exemple decrit juste au-dessus, ou le marcheur abandonne la suite du graphe EN SILENCE.
    */
-  const apprentissage = noeudApprentissageApresJuge(graph)
+  const apresGate = new Set(noeudsApresJuge(graph))
   return graph.edges
     .filter((edge) => edge.from === nodeId)
-    .filter((edge) => !(apprentissage !== undefined && edge.to === apprentissage))
+    .filter((edge) => !apresGate.has(edge.to))
     .every((edge) => edge.when === 'red' && isReturnEdge(edge, ranks))
 }
 
@@ -198,17 +198,46 @@ export function estJugeTerminal(
  *   - le noeud est TERMINAL : s'il continuait, il appartiendrait a la marche, pas a l'apres-gate.
  */
 export function noeudApprentissageApresJuge(graph: WorkflowGraph): string | undefined {
-  const juges = new Set(
-    graph.nodes.filter((node) => node.phase === 'judge').map((node) => node.id)
-  )
+  return noeudsApresJuge(graph)[0]
+}
+
+/**
+ * LA CHAINE APRES-GATE, dans l ordre ou elle doit etre jouee ; vide si le profil n en declare pas.
+ *
+ * Elle part d une arete VERTE d un juge vers un noeud `learn`, et se prolonge tant que le maillon
+ * suivant est lui aussi un noeud d apres-gate (`learn` ou `salvage`) atteint par une sortie UNIQUE.
+ * Le DERNIER maillon doit etre terminal : s il continuait, il appartiendrait a la marche.
+ *
+ * `salvage` y a ete ajoute le 2026-08-29 pour une raison mesuree (conv-1521) : un run vert rendait
+ * la main sur « veux-tu que je commit / fusionne ? » et laissait le travail dans une copie isolee.
+ * Trier le travail est un GESTE DU RUN, pas une question a l utilisateur — et, comme la
+ * capitalisation, il ne se joue que sur un verdict VERT.
+ */
+export function noeudsApresJuge(graph: WorkflowGraph): string[] {
+  const juges = new Set(graph.nodes.filter((node) => node.phase === 'judge').map((node) => node.id))
+  const estMaillon = (phase: string | undefined): boolean =>
+    phase === 'learn' || phase === 'salvage'
   for (const edge of graph.edges) {
     if (!juges.has(edge.from) || edge.when !== 'green') continue
-    const cible = graph.nodes.find((node) => node.id === edge.to)
-    if (cible?.phase !== 'learn') continue
-    if (graph.edges.some((sortante) => sortante.from === cible.id)) continue
-    return cible.id
+    const premier = graph.nodes.find((node) => node.id === edge.to)
+    if (premier?.phase !== 'learn') continue
+    const chaine: string[] = []
+    let courant: (typeof graph.nodes)[number] | undefined = premier
+    while (courant) {
+      // Borne dure : un graphe cyclique ne doit pas faire boucler cette lecture.
+      if (chaine.includes(courant.id)) return []
+      chaine.push(courant.id)
+      const noeudCourant = courant
+      const sorties = graph.edges.filter((sortante) => sortante.from === noeudCourant.id)
+      if (sorties.length === 0) return chaine
+      if (sorties.length > 1) return []
+      const suivant = graph.nodes.find((node) => node.id === sorties[0]!.to)
+      if (!suivant || !estMaillon(suivant.phase)) return []
+      courant = suivant
+    }
+    return []
   }
-  return undefined
+  return []
 }
 
 export function initialBudget(graph: WorkflowGraph, ranks: Map<string, number>): TraversalBudget {

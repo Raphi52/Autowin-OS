@@ -86,13 +86,21 @@ describe('`think` ouvre le travail substantiel', () => {
 
 describe('`learn` ferme le travail substantiel', () => {
   for (const id of AVEC_LEARN) {
-    it(`${id} termine sur learn, et rien n’en repart`, () => {
+    it(`${id} capitalise apres le juge, puis passe la main au tri du travail`, () => {
       const graphe = profil(id).graph!
       const learn = graphe.nodes.filter((node) => node.phase === 'learn')
 
       expect(learn).toHaveLength(1)
-      // Terminal : capitaliser est le dernier geste, jamais une étape qu'on traverse.
-      expect(graphe.edges.filter((arete) => arete.from === learn[0]!.id)).toEqual([])
+      /*
+       * CHANGEMENT DE CONTRAT DU 2026-08-29 (conv-1521) : `learn` n est plus le DERNIER maillon,
+       * il est le PREMIER de la chaine d apres-gate. Sa seule sortie va vers `salvage`, qui trie
+       * le travail au lieu de rendre la main sur « veux-tu que je commit ? ». Ce qui reste vrai :
+       * la chaine ne se traverse pas pendant la marche, et son dernier maillon est terminal
+       * (`salvage-apres-kaizen.test.ts`).
+       */
+      const sorties = graphe.edges.filter((arete) => arete.from === learn[0]!.id)
+      expect(sorties).toHaveLength(1)
+      expect(graphe.nodes.find((node) => node.id === sorties[0]!.to)?.phase).toBe('salvage')
       // Et atteignable : un nœud terminal sans arête entrante ne serait jamais joué.
       expect(graphe.edges.some((arete) => arete.to === learn[0]!.id)).toBe(true)
     })
@@ -136,9 +144,11 @@ describe('ce qui ne doit PAS changer', () => {
      * couche plus bas, et il ne doit pas revenir une couche plus haut.
      */
     const orchestrateur = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
-    expect(orchestrateur).toContain('noeudApprentissageApresJuge(graphePilote)')
+    expect(orchestrateur).toContain('noeudsApresJuge(graphePilote)')
     // Joué SEULEMENT sur gate non bloqué, et une panne n'y rougit pas le run.
-    expect(orchestrateur).toMatch(/if \(!gate\.blocked\) \{[\s\S]{0,2200}?executePipelinePhase\(noeud\.phase\)/)
+    expect(orchestrateur).toMatch(
+      /if \(!gate\.blocked\) \{[\s\S]{0,2200}?executePipelinePhase\(noeud\.phase\)/
+    )
     expect(orchestrateur).toContain("le verdict du run n'en est pas affecte")
   })
 

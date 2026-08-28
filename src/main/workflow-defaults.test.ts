@@ -143,7 +143,8 @@ describe('workflows livrés d’origine', () => {
       'build',
       'clean',
       'judge',
-      'learn'
+      'learn',
+      'salvage'
     ])
     // Aucun fournisseur, modèle ou fan-out caché : le moteur reprend la configuration Agent Studio.
     expect(graph.nodes.every((node) => node.agents === undefined)).toBe(true)
@@ -177,7 +178,8 @@ describe('workflows livrés d’origine', () => {
       'build-1',
       'clean-1',
       'judge-1',
-      'learn-1'
+      'learn-1',
+      'salvage-1'
     ])
   })
 
@@ -268,8 +270,14 @@ describe('workflows livrés d’origine', () => {
 
   it('le pire cas reste borné et raisonnable — un exemple ne doit pas coûter une fortune', () => {
     /*
-     * PLAFOND REBASÉ DE 24 À 32 LE 2026-08-25, avec les chiffres, parce qu'un plafond relevé en
-     * silence n'est plus un garde.
+     * PLAFOND REBASÉ DE 24 À 32 LE 2026-08-25, puis DE 32 À 38 LE 2026-08-29 — avec les chiffres,
+     * parce qu'un plafond relevé en silence n'est plus un garde.
+     *
+     * 2026-08-29 (conv-1521) : un nœud `salvage` ferme les six profils substantiels, pour que le run
+     * TRIE le travail au lieu de rendre la main sur « veux-tu que je commit ? ». Coût MESURÉ après :
+     * eclair 1 · correctif 13 · feature 37 · chantier-autowin 19 · panel-critique 17 ·
+     * exploration 5 · remake 14. `feature` reste le majorant, pour la même raison qu'en août : ses
+     * arêtes de RETOUR multiplient chaque nœud ajouté.
      *
      * `think` en tête et `learn` en queue ont été ajoutés aux six profils substantiels. Le coût
      * MESURÉ, avant → après :
@@ -285,7 +293,7 @@ describe('workflows livrés d’origine', () => {
      * référence, pas la règle — et elle est écrite ici pour qu'un futur dépassement se compare à une
      * mesure, non à un chiffre orphelin.
      */
-    const PLAFOND = 32
+    const PLAFOND = 38
     for (const profil of DEFAULT_WORKFLOWS) {
       const pire = worstCaseNodeExecutions(profil.graph!)
       expect(pire, profil.name).toBeGreaterThan(0)

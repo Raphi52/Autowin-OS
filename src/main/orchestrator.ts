@@ -113,7 +113,7 @@ import {
 } from './route-drift'
 import {
   estJugeTerminal,
-  noeudApprentissageApresJuge,
+  noeudsApresJuge,
   initialBudget,
   nextNode,
   readModelChoice,
@@ -1002,7 +1002,10 @@ export function sandboxForPhase(
   task: string,
   phase: NodePhase
 ): NonNullable<SendOptions['execution']>['sandbox'] {
-  return isMutationTask(task) && (phase === 'build' || phase === 'clean')
+  // `salvage` trie le travail (fusionner / jeter / laisser) : en lecture seule il REDIGERAIT ce
+  // qu il ferait, exactement le theatre que ce depot proscrit. Il ecrit donc, aux memes conditions
+  // que build/clean — une tache de MUTATION, et rien d autre.
+  return isMutationTask(task) && (phase === 'build' || phase === 'clean' || phase === 'salvage')
     ? 'danger-full-access'
     : 'read-only'
 }
@@ -4942,30 +4945,27 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
          * `estJugeTerminal` ignore donc l'arete vers `learn`, et c'est ICI qu'elle se joue.
          *
          * TROIS bornes, chacune fermant une facon de nuire :
-         *   - seulement si le profil le DECLARE (`noeudApprentissageApresJuge`) — opt-in, car cela
+         *   - seulement si le profil le DECLARE (`noeudsApresJuge`) — opt-in, car cela
          *     coute un appel fournisseur et `eclair` promet « aucun ceremonial » ;
          *   - seulement sur gate NON BLOQUE — on ne tire pas de lecon d'un travail refuse ;
          *   - une panne de capitalisation NE ROUGIT PAS le run : la lecon n'est pas le livrable, et
          *     faire echouer un travail valide parce que le Brain a hoquete serait un faux rouge.
          *     `valid` et `gate` ne sont plus touches apres ce point.
          */
-        const apprentissage = graphePilote
-          ? noeudApprentissageApresJuge(graphePilote)
-          : undefined
-        if (apprentissage) {
-          const noeud = graphePilote?.nodes.find((n) => n.id === apprentissage)
-          if (noeud) {
-            try {
-              await executePipelinePhase(noeud.phase)
-            } catch (erreur) {
-              push({
-                step: 'exec',
-                role: 'subagent',
-                detail: `capitalisation impossible (${
-                  erreur instanceof Error ? erreur.message : String(erreur)
-                }) — le verdict du run n'en est pas affecte`
-              })
-            }
+        const apresGate = graphePilote ? noeudsApresJuge(graphePilote) : []
+        for (const idNoeud of apresGate) {
+          const noeud = graphePilote?.nodes.find((n) => n.id === idNoeud)
+          if (!noeud) continue
+          try {
+            await executePipelinePhase(noeud.phase)
+          } catch (erreur) {
+            push({
+              step: 'exec',
+              role: 'subagent',
+              detail: `${noeud.phase} impossible (${
+                erreur instanceof Error ? erreur.message : String(erreur)
+              }) — le verdict du run n'en est pas affecte`
+            })
           }
         }
         break
