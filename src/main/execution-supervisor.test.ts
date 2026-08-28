@@ -12,6 +12,31 @@ import type {
   StreamChunk
 } from './providers/types'
 
+class SlowProvider implements ProviderAdapter {
+  readonly id = 'slow'
+  readonly supportsExecution = true
+  calls = 0
+
+  constructor(private readonly dureeMs: number) {}
+
+  async auth(): Promise<boolean> {
+    return true
+  }
+
+  async *send(
+    _messages: Message[],
+    _options?: SendOptions
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    this.calls += 1
+    yield* [] as StreamChunk[]
+    await new Promise((resolve) => {
+      const t = setTimeout(resolve, this.dureeMs)
+      t.unref?.()
+    })
+    return { text: 'ok', provider: this.id, systemInjected: true, usage: undefined }
+  }
+}
+
 class CountedProvider implements ProviderAdapter {
   readonly id = 'counted'
   readonly supportsExecution = true
@@ -717,6 +742,30 @@ describe('ExecutionSupervisor — la duree borne l’immobilite, plus la longueu
    * observe que par un appel provider EN VOL, donc un run bloque sans appel actif restait pendu
    * indefiniment. C'est exactement ce que ce cas verifie : un seul appel, puis plus rien.
    */
+  /**
+   * UN SEUL APPEL, TRES LONG, N'EST PAS UN RUN PENDU.
+   *
+   * Mesure du 2026-08-28 (conv-1511) : un run a ete tue sur « aucune progression depuis 2700000 ms »
+   * apres avoir produit 19 fichiers. Le coeur ne battait qu'au DEMARRAGE et au REGLEMENT d'un appel :
+   * une phase build tenue par un unique appel provider plus long que le budget d'inactivite ne battait
+   * jamais. Un appel EN VOL prouve pourtant que rien n'est pendu.
+   */
+  it('un appel provider EN VOL plus long que le budget n’est pas pris pour une immobilite', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const provider = new SlowProvider(400)
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const quote = devisBloquant('une phase build tenue par un seul appel')
+    quote.limits.maxDurationMs = 120
+
+    await expect(
+      supervisor.run(quote, undefined, async () => {
+        await registry.send('slow', [{ role: 'user', content: 'une phase entiere' }])
+        return 'livre'
+      })
+    ).resolves.toBe('livre')
+    expect(provider.calls).toBe(1)
+  })
+
   it('un run IMMOBILE est ramasse, et la raison dit qu’il est pendu et non trop long', async () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })

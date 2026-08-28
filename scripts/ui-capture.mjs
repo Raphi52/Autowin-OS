@@ -24,7 +24,7 @@
  *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
  *                                    un declencheur absent ou inerte est un echec nomme, jamais
  *                                    une capture silencieuse de la vue fermee.
- *         [--motion <selecteur CSS>] PROUVE QUE CA BOUGE. Capture N frames de chaque occurrence du
+ *         [--motion <selecteur CSS>] [--reduced-motion] PROUVE QUE CA BOUGE. Capture N frames de chaque occurrence du
  *                                    selecteur, a sa taille de rendu REELLE, et rend la fraction de
  *                                    pixels qui change entre frames. Un element immobile est un
  *                                    echec nomme. Options : --frames (defaut 4), --interval ms
@@ -273,6 +273,16 @@ const main = async () => {
 
   await envoyer('Runtime.enable')
   await envoyer('Log.enable')
+
+  // --reduced-motion : rejoue la condition reelle d'un poste ou les effets visuels systeme sont
+  // desactives (Windows > Accessibilite). Sans cette emulation, une preuve de mouvement ne dit
+  // RIEN du poste utilisateur : elle mesure un navigateur ou l'animation n'a jamais ete coupee.
+  const mouvementReduit = process.argv.includes('--reduced-motion')
+  if (mouvementReduit) {
+    await envoyer('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-motion', value: 'reduce' }]
+    })
+  }
 
   // Navigation par le VRAI bouton de navigation, pas par un état interne : on prouve le chemin
   // qu'emprunte l'utilisateur, pas un raccourci que lui n'a pas.

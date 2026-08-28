@@ -7,6 +7,7 @@ import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { ChatArtifact } from '../../../shared/artifacts'
 import { validateModel3dBytes } from './artifact-model3d-validation'
+import { Spinner } from './Spinner'
 
 function artifactBytes(artifact: ChatArtifact): Uint8Array | undefined {
   if (!artifact.content) return undefined
@@ -131,7 +132,7 @@ export function ArtifactModel3dPreview({
   return (
     <div className="artifact-model3d" ref={hostRef}>
       <span>
-        <span className="spinner" aria-hidden="true" /> Chargement de la scène 3D…
+        <Spinner /> Chargement de la scène 3D…
       </span>
     </div>
   )

@@ -34,6 +34,7 @@ import { buildObservatoryExport } from './observatory-export-model'
 import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
 import type { ObservatoryFocus } from '../observatory-focus'
 import { layoutTurnEvents } from './observatory-turn-layout'
+import { Spinner } from './Spinner'
 
 const EMPTY: HarnessTimeline = { turns: [], anomalies: [], totalTokens: 0, totalCostUsd: 0 }
 const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
@@ -1128,7 +1129,7 @@ export function ObservatoryView({
         >
           {loading && (
             <div className="observatory-empty">
-              <span className="spinner" /> Lecture des traces…
+              <Spinner /> Lecture des traces…
             </div>
           )}
           {/* Trois CAUSES distinctes derriere un flux vide : aucune conversation, aucune trace, ou

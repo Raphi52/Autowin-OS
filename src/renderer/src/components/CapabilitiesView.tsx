@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './CapabilitiesView.css'
 import { ModuleHeader } from './ModuleHeader'
+import { Spinner } from './Spinner'
 
 type Kind = 'skills' | 'hooks' | 'tools' | 'plugins'
 type HookModel = 'claude' | 'codex'
@@ -373,7 +374,7 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
           <div className="control-list">
             {loading ? (
               <p className="control-empty">
-                <span className="spinner" /> Lecture des sources…
+                <Spinner /> Lecture des sources…
               </p>
             ) : filtered.length === 0 && hiddenByStatus > 0 ? (
               <div className="control-empty">

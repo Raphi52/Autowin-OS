@@ -3,6 +3,7 @@ import type { CandidatVeille } from '../../../main/veille/candidats'
 import type { StockVeille } from '../../../main/veille/candidats-store'
 import { trierParPertinence, type TriVeille } from './veille-tri'
 import './VeilleCandidatsSection.css'
+import { Spinner } from './Spinner'
 
 /**
  * Les candidats de veille, prêts à être promptés en un clic.
@@ -262,7 +263,7 @@ export function VeilleCandidatsSection({
     return (
       <section className="veille" data-testid="veille-section">
         <p className="veille-message" role="status" data-testid="veille-attente">
-          <span className="spinner" /> Lecture des candidats…
+          <Spinner /> Lecture des candidats…
         </p>
       </section>
     )
@@ -328,7 +329,7 @@ export function VeilleCandidatsSection({
           >
             {generation ? (
               <>
-                <span className="spinner" /> Génération en cours…
+                <Spinner /> Génération en cours…
               </>
             ) : (
               'En générer plus'

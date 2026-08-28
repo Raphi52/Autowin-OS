@@ -21,9 +21,23 @@ import { readGitGraph } from './git-graph-main'
  *
  * L'instant zéro est l'évaluation de ce module — les imports sont déjà résolus à ce point.
  */
+import {
+  instrumenterAppelsSynchrones,
+  instrumenterCanauxIpc,
+  marquerOperation as marquerOperationDemarrage
+} from './gel-main'
+import * as processusEnfant from 'node:child_process'
+
+// Les appels de processus SYNCHRONES sont la famille qui fige reellement la fenetre : ils declarent
+// leur binaire au detecteur avant tout autre import applicatif.
+instrumenterAppelsSynchrones(processusEnfant as unknown as Record<string, unknown>)
+
 const T0_DEMARRAGE = Date.now()
 function jalonDemarrage(etape: string): void {
   console.log(`[demarrage] ${String(Date.now() - T0_DEMARRAGE).padStart(6)} ms  ${etape}`)
+  // Le demarrage est la fenetre ou les gels mesures sont les plus longs (33 s le 2026-08-28) : le
+  // jalon deja pose ici sert aussi a NOMMER la phase au detecteur, sans nouveau point de couture.
+  marquerOperationDemarrage(`demarrage:${etape}`)
 }
 jalonDemarrage('module principal évalué')
 import { resolveClaudeBin } from './providers/claude'
@@ -285,6 +299,8 @@ import {
   resolveAutowinAppDataBase
 } from './app-data'
 import { configureTurnTiming } from './turn-timing'
+import { lireLatenceTours } from './perf-lag-main'
+import { demarrerDetecteurDeGel, lireGels } from './gel-main'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
 import {
   createStorageMigrationReadHandler,
@@ -514,8 +530,13 @@ if (!ownsInstanceLock) {
   // arrêt dur, le perdant construit encore l'OS et peut lire/reprendre les mêmes checkpoints.
   process.exit(0)
 }
+// Chaque canal IPC declare son nom au detecteur AVANT le premier enregistrement : sans cette
+// couture unique, un gel survenu dans un handler ressort sous « inconnu ».
+instrumenterCanauxIpc(ipcMain as unknown as Parameters<typeof instrumenterCanauxIpc>[0])
 configureAutowinAppDataBase(appDataRoot)
 configureTurnTiming(ensureAutowinAppData(appDataRoot))
+// Battement du main : seul instrument capable de dater un « ce programme ne repond pas ».
+demarrerDetecteurDeGel(ensureAutowinAppData(appDataRoot))
 configureSessionMemoryEcho(join(app.getPath('userData'), 'session-memory.json'))
 configureRememberDepositStore(join(app.getPath('userData'), 'remember-deposits.json'))
 
@@ -2290,6 +2311,19 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('tests:pickProject', async (event) => {
     assertTrustedRendererSender(event, 'TestsPickProject')
     return pickDirectory(event.sender)
+  })
+  // Onglet Latence de la vue Tests : rapport LU du journal de jalons ecrit par `turn-timing.ts`.
+  // Lecture seule, bornee aux derniers tours.
+  ipcMain.handle('perf:turnLatency', (event, derniers?: unknown) => {
+    assertTrustedRendererSender(event, 'PerfTurnLatency')
+    const n = typeof derniers === 'number' && derniers > 0 ? Math.floor(derniers) : 200
+    return lireLatenceTours(ensureAutowinAppData(appDataRoot), n)
+  })
+  // Onglet Latence : gels REELS du process main, dates et attribues a une operation.
+  ipcMain.handle('perf:gels', (event, derniers?: unknown) => {
+    assertTrustedRendererSender(event, 'PerfGels')
+    const n = typeof derniers === 'number' && derniers > 0 ? Math.floor(derniers) : 200
+    return lireGels(ensureAutowinAppData(appDataRoot), n)
   })
   ipcMain.handle('tests:run', (event, root: unknown, filter?: unknown) => {
     assertTrustedRendererSender(event, 'TestsRun')

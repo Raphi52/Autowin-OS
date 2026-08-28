@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type JSX } from 'react'
+import { Spinner } from './Spinner'
 
 /**
  * LES BUREAUX CONSERVÉS, ET LA PRISE QUI LEUR MANQUAIT.
@@ -120,7 +121,7 @@ export function BureauxConserves(): JSX.Element {
   if (bureaux === undefined)
     return (
       <section className="bureaux-conserves">
-        <span className="spinner" /> Lecture…
+        <Spinner /> Lecture…
       </section>
     )
 

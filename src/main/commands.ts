@@ -1,4 +1,5 @@
 import { applyEdit, decideEdit, decoderUtf8, editDiff, refusSiPasUtf8 } from './edit-file-command'
+import { pendantOperation } from './gel-main'
 import { autorisationsLuesDans, decisionDeCommande } from './autorisation-commande'
 import { memoriserAutorisations } from './store/autorisations-permanentes'
 import {
@@ -803,7 +804,7 @@ const CATALOG: CommandSpec[] = [
      * messages ne sont jamais consultes, et un test de cablage le verrouille.
      */
     description:
-      "Lancer une commande. `git` est autorisé D'OFFICE : lance-le directement, ne demande JAMAIS l'autorisation. Les AUTRES binaires sont refusés par défaut — l'autorisation se donne par binaire, en écrivant « autorise les commandes curl ». Un seul programme à la fois — les enchaînements (`&&`, `|`, `;`) sont refusés",
+      "Lancer une commande. Tous les binaires sont autorisés D'OFFICE : lance-les directement, ne demande JAMAIS d'autorisation et ne demande jamais à l'utilisateur d'écrire une phrase pour te débloquer. Seule limite : un seul programme à la fois — les enchaînements (`&&`, `|`, `;`) sont refusés, découpe-les en appels successifs",
     args: {
       commande:
         'la ligne à lancer, un seul programme et ses arguments (ex. `git status --porcelain`)'
@@ -1547,8 +1548,14 @@ export class AppCommandBus {
     }))
   }
 
-  async snapshot(): Promise<AppSnapshot> {
+  /**
+   * Marqueur de sous-jalons du snapshot. Optionnel : absent, le snapshot se comporte exactement
+   * comme avant. Présent (chemin chaud du chat), il IMPUTE le temps à la lecture responsable —
+   * `snapshot` seul disait « c'est lent » sans jamais dire OÙ.
+   */
+  async snapshot(jalon?: (nom: string) => void): Promise<AppSnapshot> {
     const runs = await this.os.runsWithGate()
+    jalon?.('snapshot:runs')
     return {
       tab: this.tab,
       activeConversationId: this.activeConversationId,
@@ -1573,23 +1580,43 @@ export class AppCommandBus {
         .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
       // Worktrees encore vivants côté Autowin : ce qui n'y figure plus a été nettoyé/fermé. C'est LA
       // sonde qui manquait pour répondre « le workspace s'est fermé ? » sans hausser les épaules.
-      worktrees: (this.os.getWorktreeActivity?.() ?? []).map((w) => ({
-        workspacePath: w.workspacePath ?? w.worktreePath ?? '',
-        state: String(w.state),
-        ...(w.conversationId ? { conversationId: w.conversationId } : {})
-      })),
+      worktrees: this.jalonne(jalon, 'snapshot:worktrees', () =>
+        (this.os.getWorktreeActivity?.() ?? []).map((w) => ({
+          workspacePath: w.workspacePath ?? w.worktreePath ?? '',
+          state: String(w.state),
+          ...(w.conversationId ? { conversationId: w.conversationId } : {})
+        }))
+      ),
       // La variante BORNEE (cache 60 s, six entrees) — jamais celle sans borne, reservee au geste
       // explicite de l'utilisateur : `snapshotForPrompt()` passe ici a CHAQUE tour d'agent, et le
       // recensement complet coute 76 processus git / 10,4 s sur ce depot (mesure du 2026-08-26).
       // Absent = rien n'attend : un tableau vide, jamais `undefined`.
-      travauxNonPublies: this.os.travauxNonPubliesBornes?.() ?? [],
+      travauxNonPublies: this.jalonne(
+        jalon,
+        'snapshot:travauxNonPublies',
+        () => this.os.travauxNonPubliesBornes?.() ?? []
+      ),
       ...budgetSnapshot(this.os.budget())
     }
   }
 
+  /** Exécute `lecture` puis pose le jalon : le temps mesuré est celui de CETTE lecture. */
+  private jalonne<T>(jalon: ((nom: string) => void) | undefined, nom: string, lecture: () => T): T {
+    /*
+     * L'operation est DECLAREE au detecteur de gel avant d'etre jouee. C'est ce qui permet a un
+     * « ce programme ne repond pas » d'etre ATTRIBUE a une lecture nommee plutot que deduit : si la
+     * boucle d'evenements se fige ici, le battement du main journalise CE nom.
+     */
+    return pendantOperation(nom, () => {
+      const valeur = lecture()
+      jalon?.(nom)
+      return valeur
+    })
+  }
+
   /** Version réduite pour l'injection prompt — voir {@link PromptSnapshot}. */
-  async snapshotForPrompt(): Promise<PromptSnapshot> {
-    const full = await this.snapshot()
+  async snapshotForPrompt(jalon?: (nom: string) => void): Promise<PromptSnapshot> {
+    const full = await this.snapshot(jalon)
     return {
       tab: full.tab,
       activeConversationId: full.activeConversationId,
@@ -2857,7 +2884,9 @@ export class AppCommandBus {
         return {
           trouve: resultat.correspondances.length,
           tronque: resultat.tronque,
-          correspondances: resultat.correspondances.map((c) => `${c.chemin}:${c.ligne}: ${c.texte}`),
+          correspondances: resultat.correspondances.map(
+            (c) => `${c.chemin}:${c.ligne}: ${c.texte}`
+          ),
           ...(suspects.length > 0 ? { fichiersNonUtf8: suspects } : {})
         }
       }
@@ -3105,7 +3134,12 @@ export class AppCommandBus {
         const fichierExiste = (chemin: string): boolean =>
           existsSync(isAbsolute(chemin) ? chemin : join(workspaceRoot, chemin))
         let rapportApres = echecsDuRapport(verification.rapport, fichierExiste)
-        if (!verification.ok && rapportApres.concluant && octetsAvantEdition && typeof edite === 'string') {
+        if (
+          !verification.ok &&
+          rapportApres.concluant &&
+          octetsAvantEdition &&
+          typeof edite === 'string'
+        ) {
           const avant = await this.baselineAvantEdition(
             join(workspaceRoot, edite),
             octetsAvantEdition,
@@ -3152,8 +3186,7 @@ export class AppCommandBus {
             noteDifferentielle = noteDeDifferentiel(verdict)
             // Le compte joue est une PREUVE, pas un ornement : il doit accompagner les deux chemins.
             testsJouesMesures = verdict.testsJoues
-          }
-          else if (verdict.nouvelles.length > 0) {
+          } else if (verdict.nouvelles.length > 0) {
             /*
              * LE REFUS NOMME CE QU'IL IMPUTE. Un « vérification échouée » nu renvoie le modele a la
              * devinette : il ne sait pas lesquels des rouges affiches sont DE LUI. Mineur releve par
@@ -3162,7 +3195,10 @@ export class AppCommandBus {
             throw new Error(
               `Vérification du bureau échouée (${verification.command}) — ` +
                 `${verdict.nouvelles.length} échec(s) NOUVEAU(X) imputable(s) à cette édition : ` +
-                `${verdict.nouvelles.slice(0, 5).map((n) => `« ${n} »`).join(', ')}` +
+                `${verdict.nouvelles
+                  .slice(0, 5)
+                  .map((n) => `« ${n} »`)
+                  .join(', ')}` +
                 `${SAUT_NATURE}${verification.output}`
             )
           } else if (verdict.raison) {

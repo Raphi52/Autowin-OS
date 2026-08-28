@@ -25,6 +25,7 @@ import {
 } from '../../../shared/task-provider'
 import './ViewPage.css'
 import './TaskManagerView.css'
+import { Spinner } from './Spinner'
 
 type ExecutionMode = 'windows' | 'active-only'
 type RecurrenceUnit = 'none' | 'minute' | 'hour' | 'day' | 'week' | 'month'
@@ -847,7 +848,7 @@ export function TaskManagerView({
             </div>
             {loading ? (
               <div className="task-manager-empty" data-testid="task-manager-loading">
-                <span className="spinner" />
+                <Spinner />
                 <strong>Chargement des tâches…</strong>
               </div>
             ) : snapshot.tasks.length === 0 ? (
@@ -1465,7 +1466,7 @@ export function TaskManagerView({
               </>
             ) : loading ? (
               <div className="task-manager-empty is-detail" data-testid="task-manager-loading">
-                <span className="spinner" />
+                <Spinner />
                 <strong>Chargement des tâches…</strong>
               </div>
             ) : (

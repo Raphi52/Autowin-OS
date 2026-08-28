@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ViewTopBar } from './ViewTopBar'
+import { PerfLagPanel } from './PerfLagPanel'
 import './ViewPage.css'
 import './TestsView.css'
+import { Spinner } from './Spinner'
 
 /**
  * Vue Tests — MULTI-PROJETS par construction.
@@ -99,6 +101,9 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   const [replies, setReplies] = useState<Record<string, boolean>>({})
   const [memorises, setMemorises] = useState<Record<string, boolean>>({})
   const [chrono, setChrono] = useState(0)
+  // Onglets : les suites d'un cote, l'outillage de MESURE DES LENTEURS de l'autre. Le panneau de
+  // latence ne monte qu'au clic — sa sonde ne doit rien couter tant qu'on ne la demande pas.
+  const [onglet, setOnglet] = useState<'suites' | 'latence'>('suites')
 
   // MEMOIRE : le dernier run connu est restaure au montage et ETIQUETE, jamais presente comme frais.
   useEffect(() => {
@@ -260,150 +265,181 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
         }
       />
 
-      {encours && (
+      <div className="tests-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          data-testid="tests-tab-suites"
+          aria-selected={onglet === 'suites'}
+          className={onglet === 'suites' ? 'is-active' : ''}
+          onClick={() => setOnglet('suites')}
+        >
+          Suites
+        </button>
+        <button
+          type="button"
+          role="tab"
+          data-testid="tests-tab-latence"
+          aria-selected={onglet === 'latence'}
+          className={onglet === 'latence' ? 'is-active' : ''}
+          onClick={() => setOnglet('latence')}
+        >
+          Latence
+        </button>
+      </div>
+
+      {onglet === 'latence' && <PerfLagPanel />}
+
+      {onglet === 'suites' && encours && (
         <p className="tests-progress" data-testid="tests-progress">
-          <span className="spinner" aria-hidden="true" />{' '}
+          <Spinner />{' '}
           {projets.find((p) => p.id === encours)?.label ?? encours} — exécution en cours ·{' '}
           {(chrono / 1000).toFixed(1)} s
         </p>
       )}
 
-      <div className="tests-body">
-        <aside className="tests-projects">
-          {/* Un canal mort ne doit pas coexister avec une invite a ajouter un projet : l'invite
+      {onglet === 'suites' && (
+        <div className="tests-body">
+          <aside className="tests-projects">
+            {/* Un canal mort ne doit pas coexister avec une invite a ajouter un projet : l'invite
               ne vaut que si le registre a REELLEMENT repondu vide. */}
-          {erreur && <p className="tests-error">{erreur}</p>}
-          {projets.length === 0 && !erreur && (
-            <p className="tests-empty">
-              Aucun projet enregistré. « + Projet » ajoute n’importe quelle racine (Autowin OS ou un
-              autre dépôt).
-            </p>
-          )}
-          {projets.map((p) => {
-            const r = resultats[p.id]
-            return (
-              <div
-                key={p.id}
-                data-testid="test-project"
-                className={`tests-project${p.id === projetActif?.id ? ' is-active' : ''}`}
-              >
-                <button onClick={() => setSelection(p.id)} title={p.root}>
-                  <span className="tests-project-label">{p.label}</span>
-                  <span className="tests-project-runner">{p.runner}</span>
-                  {r && (
-                    <span className="tests-project-totals">
-                      {r.totals.failed > 0 ? `${r.totals.failed} échec(s)` : `${r.totals.passed} ✓`}
-                    </span>
-                  )}
-                  {!p.runnable && <span className="tests-project-reason">{p.reason}</span>}
-                </button>
-                <button
-                  className="tests-project-remove"
-                  title="Retirer du registre"
-                  onClick={() => void retirer(p.id)}
+            {erreur && <p className="tests-error">{erreur}</p>}
+            {projets.length === 0 && !erreur && (
+              <p className="tests-empty">
+                Aucun projet enregistré. « + Projet » ajoute n’importe quelle racine (Autowin OS ou
+                un autre dépôt).
+              </p>
+            )}
+            {projets.map((p) => {
+              const r = resultats[p.id]
+              return (
+                <div
+                  key={p.id}
+                  data-testid="test-project"
+                  className={`tests-project${p.id === projetActif?.id ? ' is-active' : ''}`}
                 >
-                  ×
-                </button>
-              </div>
-            )
-          })}
-        </aside>
+                  <button onClick={() => setSelection(p.id)} title={p.root}>
+                    <span className="tests-project-label">{p.label}</span>
+                    <span className="tests-project-runner">{p.runner}</span>
+                    {r && (
+                      <span className="tests-project-totals">
+                        {r.totals.failed > 0
+                          ? `${r.totals.failed} échec(s)`
+                          : `${r.totals.passed} ✓`}
+                      </span>
+                    )}
+                    {!p.runnable && <span className="tests-project-reason">{p.reason}</span>}
+                  </button>
+                  <button
+                    className="tests-project-remove"
+                    title="Retirer du registre"
+                    onClick={() => void retirer(p.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              )
+            })}
+          </aside>
 
-        <div className="tests-results">
-          {!resultat && projetActif && (
-            <p className="tests-empty">
-              {projetActif.runnable
-                ? 'Aucune exécution pour ce projet. « Lancer la suite » produit le rapport.'
-                : (projetActif.reason ?? 'Projet non exécutable.')}
-            </p>
-          )}
-          {resultat && (
-            <>
-              <div className="tests-summary" data-testid="tests-totals">
-                <span className="ok">{resultat.totals.passed} passés</span>
-                <span className="ko">{resultat.totals.failed} échecs</span>
-                <span className="sk">{resultat.totals.skipped} ignorés</span>
-                <span className="meta">
-                  {resultat.runner} · {resultat.durationMs} ms · exit {String(resultat.exitCode)}
-                </span>
-              </div>
-              {projetActif && memorises[projetActif.id] && (
-                <p className="tests-memo" data-testid="tests-memo">
-                  ↺ dernier run mémorisé (non rejoué)
-                </p>
-              )}
-              {resultat.report.invalid && (
-                <p className="tests-invalid" data-testid="tests-invalid">
-                  ⚠ {resultat.report.invalid}
-                </p>
-              )}
-              <ul className="tests-cases">
-                {groupes.map(([fichier, items]) => {
-                  const replie = replies[fichier] === true
-                  const echecs = items.filter((c) => c.status === 'failed').length
-                  return (
-                    <li key={fichier} className="tests-file" data-testid="tests-file-group">
-                      <div className="tests-file-head">
-                        <button
-                          data-testid="tests-file-toggle"
-                          className="tests-file-toggle"
-                          onClick={() => setReplies((p) => ({ ...p, [fichier]: !replie }))}
-                        >
-                          {replie ? '▸' : '▾'} {fichier}
-                        </button>
-                        <span className="tests-file-count">
-                          {echecs > 0 ? `${echecs} échec(s)` : `${items.length} ✓`}
-                        </span>
-                        <button
-                          data-testid="tests-file-rerun"
-                          className="tests-file-rerun"
-                          disabled={Boolean(encours)}
-                          title="Rejouer ce fichier seul"
-                          onClick={() => void lancer(fichier)}
-                        >
-                          ⟲
-                        </button>
-                      </div>
-                      {!replie && (
-                        <ul className="tests-file-cases">
-                          {items.map((c, i) => (
-                            <li key={`${c.name}-${i}`} className={`tests-case is-${c.status}`}>
-                              <span className="tests-case-status">{LIBELLE_STATUT[c.status]}</span>
-                              <span className="tests-case-name">{c.name}</span>
-                              {typeof c.durationMs === 'number' && (
-                                <span className="tests-case-duration">{c.durationMs} ms</span>
-                              )}
-                              {c.error && (
-                                <>
-                                  <pre className="tests-case-error">{c.error}</pre>
-                                  <span className="tests-case-tools">
-                                    <button
-                                      data-testid="tests-case-copy"
-                                      onClick={() => void copierErreur(c)}
-                                    >
-                                      Copier l’erreur
-                                    </button>
-                                    <button
-                                      data-testid="tests-case-open"
-                                      onClick={() => void ouvrirErreur(c)}
-                                    >
-                                      Ouvrir le fichier
-                                    </button>
-                                  </span>
-                                </>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            </>
-          )}
+          <div className="tests-results">
+            {!resultat && projetActif && (
+              <p className="tests-empty">
+                {projetActif.runnable
+                  ? 'Aucune exécution pour ce projet. « Lancer la suite » produit le rapport.'
+                  : (projetActif.reason ?? 'Projet non exécutable.')}
+              </p>
+            )}
+            {resultat && (
+              <>
+                <div className="tests-summary" data-testid="tests-totals">
+                  <span className="ok">{resultat.totals.passed} passés</span>
+                  <span className="ko">{resultat.totals.failed} échecs</span>
+                  <span className="sk">{resultat.totals.skipped} ignorés</span>
+                  <span className="meta">
+                    {resultat.runner} · {resultat.durationMs} ms · exit {String(resultat.exitCode)}
+                  </span>
+                </div>
+                {projetActif && memorises[projetActif.id] && (
+                  <p className="tests-memo" data-testid="tests-memo">
+                    ↺ dernier run mémorisé (non rejoué)
+                  </p>
+                )}
+                {resultat.report.invalid && (
+                  <p className="tests-invalid" data-testid="tests-invalid">
+                    ⚠ {resultat.report.invalid}
+                  </p>
+                )}
+                <ul className="tests-cases">
+                  {groupes.map(([fichier, items]) => {
+                    const replie = replies[fichier] === true
+                    const echecs = items.filter((c) => c.status === 'failed').length
+                    return (
+                      <li key={fichier} className="tests-file" data-testid="tests-file-group">
+                        <div className="tests-file-head">
+                          <button
+                            data-testid="tests-file-toggle"
+                            className="tests-file-toggle"
+                            onClick={() => setReplies((p) => ({ ...p, [fichier]: !replie }))}
+                          >
+                            {replie ? '▸' : '▾'} {fichier}
+                          </button>
+                          <span className="tests-file-count">
+                            {echecs > 0 ? `${echecs} échec(s)` : `${items.length} ✓`}
+                          </span>
+                          <button
+                            data-testid="tests-file-rerun"
+                            className="tests-file-rerun"
+                            disabled={Boolean(encours)}
+                            title="Rejouer ce fichier seul"
+                            onClick={() => void lancer(fichier)}
+                          >
+                            ⟲
+                          </button>
+                        </div>
+                        {!replie && (
+                          <ul className="tests-file-cases">
+                            {items.map((c, i) => (
+                              <li key={`${c.name}-${i}`} className={`tests-case is-${c.status}`}>
+                                <span className="tests-case-status">
+                                  {LIBELLE_STATUT[c.status]}
+                                </span>
+                                <span className="tests-case-name">{c.name}</span>
+                                {typeof c.durationMs === 'number' && (
+                                  <span className="tests-case-duration">{c.durationMs} ms</span>
+                                )}
+                                {c.error && (
+                                  <>
+                                    <pre className="tests-case-error">{c.error}</pre>
+                                    <span className="tests-case-tools">
+                                      <button
+                                        data-testid="tests-case-copy"
+                                        onClick={() => void copierErreur(c)}
+                                      >
+                                        Copier l’erreur
+                                      </button>
+                                      <button
+                                        data-testid="tests-case-open"
+                                        onClick={() => void ouvrirErreur(c)}
+                                      >
+                                        Ouvrir le fichier
+                                      </button>
+                                    </span>
+                                  </>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   )
 }

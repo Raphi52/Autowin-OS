@@ -300,6 +300,21 @@ export class ExecutionSupervisor {
     }
     let arretPourImmobilite = false
     const arreterPourImmobilite = (): void => {
+      /*
+       * UN APPEL EN VOL N'EST PAS UNE IMMOBILITE. Mesure du 2026-08-28 (conv-1511) : un run a ete tue
+       * sur « aucune progression depuis 2700000 ms » alors qu'il avait deja produit 19 fichiers restes
+       * prisonniers d'un bureau isole. Le coeur ne battait qu'aux BORNES d'un appel (demarrage et
+       * reglement) : une phase build tenue par UN SEUL appel provider de plus de 45 minutes ne battait
+       * donc jamais. Le scenario que ce filet protege — git mort, worker disparu — n'a par construction
+       * AUCUN appel actif ; reglisser l'echeance tant qu'un appel est EN VOL conserve la detection du
+       * pendu sans detruire du travail deja paye.
+       */
+      if (runtime.activeCalls > 0 && !runtime.finished) {
+        runtime.deadlineAtMs = Date.now() + quote.limits.maxDurationMs
+        deadline = setTimeout(arreterPourImmobilite, quote.limits.maxDurationMs)
+        deadline.unref?.()
+        return
+      }
       arretPourImmobilite = true
       runtime.stoppedReason = raisonImmobilite(quote.limits.maxDurationMs)
       controller.abort(runtime.stoppedReason)

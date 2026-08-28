@@ -8,6 +8,7 @@
 import React from 'react'
 import { canMoveQueueEntry } from './chat-queue-order'
 import type { QueuedDirective } from './chat-view-types'
+import { Spinner } from './Spinner'
 
 export function ChatQueuePanel({
   pendingDirectives,
@@ -50,7 +51,7 @@ export function ChatQueuePanel({
           >
             {interrupting ? (
               <>
-                <span className="spinner" aria-hidden="true" /> Interruption…
+                <Spinner /> Interruption…
               </>
             ) : (
               '⏹ Interrompre et envoyer tout'
@@ -101,7 +102,7 @@ export function ChatQueuePanel({
             >
               {interrupting ? (
                 <>
-                  <span className="spinner" aria-hidden="true" /> Interruption…
+                  <Spinner /> Interruption…
                 </>
               ) : (
                 '⏹ Interrompre et envoyer'
@@ -119,7 +120,7 @@ export function ChatQueuePanel({
             >
               {steeringDirectives.has(directive.id) ? (
                 <>
-                  <span className="spinner" aria-hidden="true" /> Orientation…
+                  <Spinner /> Orientation…
                 </>
               ) : (
                 '🧭 Orienter'

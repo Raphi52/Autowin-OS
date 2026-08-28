@@ -118,3 +118,18 @@ export async function deleteListedRun(runPath: string, root = runsRoot()): Promi
   if (!listedRun) throw new Error('RUN non autorisé dans la liste globale')
   await rm(dirname(listedRun.path), { recursive: true, force: false })
 }
+
+/**
+ * Borne du scan sur le CHEMIN CHAUD (`snapshot()` d'un tour de chat).
+ *
+ * Mesure du 2026-08-28 (onglet Latence, 1 290 tours réels) : le segment `snapshot` coûtait p95
+ * 1 288 ms et jusqu'à 19 250 ms par tour, parce que `runsWithGate()` scannait TOUS les RUN.md pour
+ * n'en garder que 12. 24 laisse une marge franche au-dessus de ce que le snapshot affiche, sans
+ * jamais payer la racine entière.
+ */
+export const LIMITE_RUNS_SNAPSHOT = 24
+
+/** Variante BORNÉE destinée au chemin chaud — jamais `scanRuns()` sans borne. */
+export function scanRunsPourSnapshot(root = runsRoot()): Promise<RunEntry[]> {
+  return scanRuns(root, { limit: LIMITE_RUNS_SNAPSHOT })
+}

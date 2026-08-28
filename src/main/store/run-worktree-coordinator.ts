@@ -1279,7 +1279,23 @@ export class RunWorktreeCoordinator {
     apercu: Map<string, { date: string; fichiers: string[] }>
   } {
     const maintenant = this.now()
-    if (this.cacheNonPublies && maintenant - this.cacheNonPublies.a < 60_000) {
+    /*
+     * AUCUNE EXPIRATION PAR LE TEMPS — le relevé ne se refait que sur un FAIT.
+     *
+     * Mesure du 2026-08-28 (détecteur de gel, conv-1511) : l'application se figeait 18 secondes
+     * TOUTES LES 60 SECONDES pendant que l'utilisateur écrivait dans le chat — sept gels consécutifs
+     * journalisés, 45 % du temps d'exécution passé fenêtre morte. La périodicité était exactement
+     * celle de la TTL ci-dessous : à son expiration, `snapshot()` (appelé à chaque tour) relançait un
+     * recensement git ENTIÈREMENT SYNCHRONE — `execFileSync`, des dizaines de processus — sur le
+     * thread main, donc sur la boucle qui pompe les messages de la fenêtre.
+     *
+     * Allonger la TTL n'aurait fait qu'espacer le gel. Elle est SUPPRIMÉE : les onze appels à
+     * `invaliderRecensement()` couvrent déjà tous les faits qui changent la réponse (fin de run,
+     * publication, tri d'un travail). Le commentaire de `invaliderRecensement` le dit lui-même —
+     * « la TTL est un pari sur le temps ; la fin d'un run est un fait connu d'ici ». Ce pari coûtait
+     * 18 secondes de fenêtre morte par minute, pour une réponse que rien n'avait rendue fausse.
+     */
+    if (this.cacheNonPublies) {
       return { ids: this.cacheNonPublies.ids, apercu: this.cacheNonPublies.apercu }
     }
     /*

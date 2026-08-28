@@ -38,6 +38,7 @@ import {
 } from './ticket-auto-mode'
 import './ViewPage.css'
 import './TicketsView.css'
+import { Spinner } from './Spinner'
 
 interface TicketSourceSummary {
   profile: TicketSourceProfile
@@ -1314,7 +1315,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               </div>
             ) : (loading || initialLoading) && items.length === 0 ? (
               <div className="tickets-loading" role="status" aria-label="Chargement des tickets">
-                <span className="spinner spinner--lg" aria-hidden="true" />
+                <Spinner lg />
                 <span>Synchronisation des tickets…</span>
               </div>
             ) : error && items.length === 0 ? (
@@ -1372,7 +1373,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                   >
                     {loading ? (
                       <>
-                        <span className="spinner" /> Chargement…
+                        <Spinner /> Chargement…
                       </>
                     ) : (
                       'Charger la suite'
@@ -1389,7 +1390,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                     role="status"
                     aria-label="Actualisation des tickets en cours"
                   >
-                    <span className="spinner spinner--lg" aria-hidden="true" />
+                    <Spinner lg />
                     <span>Actualisation…</span>
                   </div>
                 )}
@@ -1500,7 +1501,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                     >
                       {loading ? (
                         <>
-                          <span className="spinner" /> Chargement…
+                          <Spinner /> Chargement…
                         </>
                       ) : (
                         'Charger la suite'

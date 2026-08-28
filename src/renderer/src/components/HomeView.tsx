@@ -43,6 +43,7 @@ import {
 import { canUndo, emptyHistory, remember, undo, type ArrangementHistory } from './home-history'
 import { autowinStorageKey } from '../storage-keys'
 import './HomeView.css'
+import { Spinner } from './Spinner'
 
 /**
  * LA page d'accueil : des tuiles qu'on POSE, au-dessus d'un décor spatial rendu en temps réel.
@@ -737,7 +738,7 @@ export function HomeView({
           >
             {outlookEnCours ? (
               <>
-                <span className="spinner" /> Lecture…
+                <Spinner /> Lecture…
               </>
             ) : (
               'Actualiser Outlook'
@@ -883,7 +884,7 @@ function WidgetBody({
     if (outlook.etat === 'chargement')
       return (
         <p className="home-hint">
-          <span className="spinner" aria-hidden="true" /> Lecture d’Outlook…
+          <Spinner /> Lecture d’Outlook…
         </p>
       )
     if (outlook.etat === 'panne') {
@@ -909,7 +910,7 @@ function WidgetBody({
   if (loading) {
     return (
       <p className="home-hint">
-        <span className="spinner" /> Lecture du Task Manager…
+        <Spinner /> Lecture du Task Manager…
       </p>
     )
   }

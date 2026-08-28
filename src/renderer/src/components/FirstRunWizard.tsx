@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import './FirstRunWizard.css'
 import { repairAffordance } from './preflight-repair-affordance'
+import { Spinner } from './Spinner'
 
 /**
  * #5 — Wizard first-run. L'installeur NSIS installe l'APP, mais ne peut pas tout automatiser (OAuth
@@ -261,11 +262,7 @@ export function FirstRunWizard(): React.JSX.Element | null {
                   {c.ok ? (
                     '✓'
                   ) : pending ? (
-                    <span
-                      className="spinner"
-                      data-testid={`frw-spinner-${c.id}`}
-                      aria-hidden="true"
-                    />
+                    <Spinner data-testid={`frw-spinner-${c.id}`} />
                   ) : (
                     '✗'
                   )}
@@ -273,7 +270,7 @@ export function FirstRunWizard(): React.JSX.Element | null {
                 <span className="frw-label">{c.label}</span>
                 {pending ? (
                   <span className="frw-detail" role="status">
-                    <span className="spinner" /> en cours… la fenêtre se ferme dès que c’est prêt
+                    <Spinner /> en cours… la fenêtre se ferme dès que c’est prêt
                   </span>
                 ) : !c.ok && c.detail ? (
                   <span className="frw-detail">{c.detail}</span>

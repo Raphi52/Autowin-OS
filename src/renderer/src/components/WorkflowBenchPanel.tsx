@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { WorkflowVerdict, type VerdictRow } from './WorkflowVerdict'
 import './WorkflowBenchPanel.css'
+import { Spinner } from './Spinner'
 
 /**
  * Lancer un même objectif sous plusieurs workflows, et lire le verdict.
@@ -206,7 +207,7 @@ export function WorkflowBenchPanel({
         >
           {running ? (
             <>
-              <span className="spinner" /> Confrontation en cours…
+              <Spinner /> Confrontation en cours…
             </>
           ) : (
             'Confronter'

@@ -5,6 +5,7 @@ import { profileSummary, promptEffectif } from './workflow-profile-summary'
 import { rolesEffectifs, trackNodes, workflowIssues } from './workflow-executability'
 import { useSkillsInventory } from './useSkillsInventory'
 import './WorkflowProfilesView.css'
+import { Spinner } from './Spinner'
 
 /**
  * Choisir SA façon de travailler.
@@ -462,7 +463,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
           aria-busy="true"
           data-testid="workflow-loading"
         >
-          <span className="spinner" /> Chargement des workflows…
+          <Spinner /> Chargement des workflows…
         </p>
       ) : file.profiles.length === 0 && !loading ? (
         <p className="workflow-profiles-empty" data-testid="workflow-empty">

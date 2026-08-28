@@ -22,6 +22,7 @@ import { WorkflowExecutionGraph } from './WorkflowExecutionGraph'
 // `.lisere-dessus` vit dans cette feuille (voir ViewPage.css) : import explicite, pas d'heritage
 // implicite d'une autre vue.
 import './ViewPage.css'
+import { Spinner } from './Spinner'
 
 const RUN_DOT: Record<string, string> = {
   green: 'st-ok',
@@ -194,7 +195,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                   >
                     <span className="row gap2" style={{ minWidth: 0 }}>
                       {liveRun.status === 'running' ? (
-                        <span className="spinner" />
+                        <Spinner />
                       ) : (
                         <span
                           className={`status-dot ${liveRun.status === 'green' ? 'st-ok' : 'st-err'}`}
@@ -230,7 +231,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                               style={{ justifyContent: 'space-between', fontSize: 11 }}
                             >
                               <span className="c-faint">
-                                <span className="spinner" /> {meta?.icon ?? ''} {label}
+                                <Spinner /> {meta?.icon ?? ''} {label}
                                 {detail && <span className="mono c-accent"> {detail}</span>}
                               </span>
                               <span className="row gap2">

@@ -1,6 +1,7 @@
 import { BrainMarkdown } from './BrainMarkdown'
 import { HumanJson } from './HumanJson'
 import { nodeThemeIds, type GraphNode } from './graph-view-model'
+import { Spinner } from './Spinner'
 
 /**
  * Sous-composants de présentation de l'observatoire 3D (GraphView) : sections de
@@ -151,7 +152,7 @@ export function NodePanel({
         )}
         {!file && !fileErr && (
           <div className="node-panel__loading">
-            <span className="spinner" aria-hidden="true" /> Chargement du contenu…
+            <Spinner /> Chargement du contenu…
           </div>
         )}
         {file &&

@@ -16,6 +16,7 @@ import {
 } from './chat-view-model'
 import './ChatView.css'
 import './Evidence.css'
+import { Spinner } from './Spinner'
 
 const CMD_LABEL: Record<string, string> = {
   navigate: 'Navigation',
@@ -443,7 +444,7 @@ export function AssistantActivityGroup({
               {outcome.label}
             </span>
           )}
-          {running && <span className="spinner" />}
+          {running && <Spinner />}
           {why.length ? (
             <span className="activity-group-go" aria-hidden="true">
               {whyOpen ? '▾' : '▸'}

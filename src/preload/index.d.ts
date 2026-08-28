@@ -152,6 +152,16 @@ interface ChatApi {
     totals: import('../shared/test-projects').TestTotals
     report: import('../shared/test-projects').TestReport
   }>
+  perfTurnLatency: (
+    derniers?: number
+  ) => Promise<
+    import('../shared/perf-lag').RapportLatence & { disponible: boolean; source: string }
+  >
+  perfGels: (
+    derniers?: number
+  ) => Promise<
+    import('../shared/gel-detector').ResumeGels & { disponible: boolean; source: string }
+  >
   getAutoClose: () => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   setAutoClose: (enabled: boolean) => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   unfinishedTurns: () => Promise<

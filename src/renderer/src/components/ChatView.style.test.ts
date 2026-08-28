@@ -93,9 +93,10 @@ describe('minimal conversation status lights', () => {
     // La question en attente porte un JAUNE qui lui est propre : la confondre avec l'ambre des
     // tours interrompus reviendrait a ne rien signaler de nouveau.
     expect(css).toMatch(/\.conversation-state\.is-asking\s*{[^}]*color:\s*#facc15/s)
-    expect(theme).toMatch(
-      /@media \(prefers-reduced-motion: reduce\)[^{]*{[^}]*\.conversation-state\.is-running::after[^}]*animation:\s*none/s
-    )
+    // PLUS DE reduced-motion SUR LE SPINNER — decision du 2026-08-28, verrouillee par
+    // assets/spinner-motion.test.ts : le spinner est un indicateur d'ETAT, pas un effet
+    // decoratif. Fige, il affirme faussement que rien ne tourne. Reintroduire l'assertion
+    // inverse ici ferait echouer ce test-la : les deux ne peuvent pas etre vrais ensemble.
   })
 })
 

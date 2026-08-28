@@ -240,6 +240,24 @@ export function clampVerticalRhythm(property: string, value: string): string {
 /** `display` sert la mise en page, mais `display:none` cache du contenu — texte invisible copiable. */
 const FORBIDDEN_STYLE_VALUES = /url\s*\(|expression\s*\(|@import|position\s*:|\\/i
 
+/**
+ * Une declaration qui rend du contenu INVISIBLE sans le retirer du DOM.
+ *
+ * MESURE du 2026-08-28 (audit de la chaine de rendu) : la regle etait appliquee au seul attribut
+ * `style=`, jamais aux feuilles `<style>`. Une feuille `.h{display:none}` visant un `<p>` conserve
+ * passait donc intacte. Le texte reste selectionnable, copiable et lu par un lecteur d'ecran alors
+ * que l'utilisateur ne le voit pas : le meme defaut que celui nomme ci-dessus, entre par l'autre
+ * porte. Le predicat est PARTAGE pour que les deux portes ne puissent plus diverger.
+ */
+function masqueLeContenu(property: string, value: string): boolean {
+  const brut = value.trim()
+  if (property === 'display') return /none/i.test(brut)
+  if (property === 'visibility') return /hidden/i.test(brut)
+  if (property === 'opacity') return /^0*(?:\.0+)?$/.test(brut)
+  if (property === 'font-size') return /^0(?:\.0+)?(?:px|pt|em|rem|%)?$/i.test(brut)
+  return false
+}
+
 function sanitizeStyle(value: string): string {
   const kept: string[] = []
   for (const declaration of value.split(';')) {
@@ -249,7 +267,7 @@ function sanitizeStyle(value: string): string {
     const propertyValue = declaration.slice(separator + 1).trim()
     if (!ALLOWED_STYLE_PROPS.has(property)) continue
     if (!propertyValue || FORBIDDEN_STYLE_VALUES.test(propertyValue)) continue
-    if (property === 'display' && /none/i.test(propertyValue)) continue
+    if (masqueLeContenu(property, propertyValue)) continue
     kept.push(`${property}: ${clampVerticalRhythm(property, propertyValue)}`)
   }
   return kept.join('; ')
@@ -367,6 +385,7 @@ export function scopeChatStyleSheet(css: string, scope: string): string {
         if (!declaration.includes(':')) return false
         const property = declaration.slice(0, declaration.indexOf(':')).trim().toLowerCase()
         if (property === 'position' || property === 'z-index') return false
+        if (masqueLeContenu(property, declaration.slice(declaration.indexOf(':') + 1))) return false
         return !/url\s*\(|expression\s*\(/i.test(declaration)
       })
       .map((declaration) => {

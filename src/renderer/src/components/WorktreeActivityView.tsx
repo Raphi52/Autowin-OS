@@ -8,6 +8,7 @@ import {
   type WorktreeRuntimeStatus
 } from '../../../shared/worktree-activity-model'
 import './WorktreeActivityView.css'
+import { Spinner } from './Spinner'
 
 function joinNames(names: string[]): string {
   if (names.length === 1) return names[0]
@@ -396,7 +397,7 @@ function AgentOffice({
             >
               {action.pending === 'retry' ? (
                 <>
-                  <span className="spinner" /> Nouvel essai en cours…
+                  <Spinner /> Nouvel essai en cours…
                 </>
               ) : agent.worktreeAvailable === false ? (
                 'Réessayer de recréer le bureau'

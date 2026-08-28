@@ -6,6 +6,7 @@ import type {
   ShadowRouteRecommendation
 } from '../../../main/shadow-router'
 import type { PromptCall } from './observatory-view-types'
+import { Spinner } from './Spinner'
 
 /**
  * Détail d'un appel observé, y compris la comparaison shadow.
@@ -86,7 +87,7 @@ export function ObservatoryCallDetail({
       </button>
       {shadowLoading && (
         <small role="status">
-          <span className="spinner" /> Comparaison shadow en cours…
+          <Spinner /> Comparaison shadow en cours…
         </small>
       )}
       {shadowError && <small role="alert">Shadow indisponible : {shadowError}</small>}

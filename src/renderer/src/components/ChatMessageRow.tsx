@@ -22,6 +22,7 @@ import type { TerminalStatus } from './chat-resume-refine'
 import type { AttachmentMeta, DirectiveReceipt, Msg } from './chat-view-types'
 import type { InspectTurnTarget } from '../observatory-focus'
 import type { ChatArtifact } from '../../../shared/artifacts'
+import { Spinner } from './Spinner'
 
 export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }): React.JSX.Element {
   return (
@@ -31,7 +32,7 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
         <span className="directive-receipt-status" role="status">
           {receipt.status === 'sending' ? (
             <>
-              <span className="spinner" aria-hidden="true" />{' '}
+              <Spinner />{' '}
               {receipt.reponse ? 'Réponse…' : 'Orientation…'}
             </>
           ) : receipt.status === 'sent' ? (
@@ -348,7 +349,7 @@ export const ChatMessageRow = memo(
       <div className="msg assistant fade-in">
         <div className="msg-meta">
           <span className="msg-role">Agent</span>
-          {!message.done && <span className="spinner" />}
+          {!message.done && <Spinner />}
         </div>
         {/* Le raisonnement n'est PLUS dans la bulle : il vit dans le panneau « Réflexion » (droite). */}
         <div className="msg-turn">

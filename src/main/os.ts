@@ -28,7 +28,7 @@ import { CostAggregator } from './dashboards/cost'
 import { isBlocked } from './dashboards/runs'
 import { recurrentPatterns, parseJsonl } from './dashboards/kaizen'
 import { loadBrainGraph, scanBrainGraphs, type BrainGraphRef } from './viz/fs-brains'
-import { scanRuns, type RunEntry } from './dashboards/runs-scan'
+import { scanRuns, scanRunsPourSnapshot, type RunEntry } from './dashboards/runs-scan'
 import { ConversationStore } from './store/conversations'
 import { TrustLedger } from './trust/ledger'
 import {
@@ -1200,9 +1200,16 @@ export class AutowinOS {
   trustRanking(): ReturnType<TrustLedger['ranking']> {
     return this.trust.ranking()
   }
-  /** Gate déterministe évalué sur les VRAIS runs vivants (plus de démo hardcodée). */
+  /**
+   * Gate déterministe évalué sur les VRAIS runs vivants (plus de démo hardcodée).
+   *
+   * BORNÉ : ce chemin est appelé par `snapshot()`, donc à CHAQUE tour de chat. La variante sans
+   * borne (`listRuns()`) lisait tous les RUN.md de la racine pour n'en afficher que 12 — mesuré à
+   * p95 1 288 ms / max 19 250 ms par tour le 2026-08-28. Le geste explicite de l'utilisateur
+   * (Observatoire) garde `listRuns()`, lui, intact.
+   */
   async runsWithGate(): Promise<Array<RunEntry & { blocked: boolean }>> {
-    return (await this.listRuns()).map((r) => ({ ...r, blocked: isBlocked(r.summary) }))
+    return (await scanRunsPourSnapshot()).map((r) => ({ ...r, blocked: isBlocked(r.summary) }))
   }
   kaizenPatterns(jsonl: string): ReturnType<typeof recurrentPatterns> {
     return recurrentPatterns(parseJsonl(jsonl))

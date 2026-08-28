@@ -7,6 +7,7 @@ import { ShadowRoutingPilotSettings } from './ShadowRoutingPilotSettings'
 import { ViewTopBar } from './ViewTopBar'
 import './ViewPage.css'
 import './DomainShell.css'
+import { Spinner } from './Spinner'
 
 type PreflightResult = Awaited<ReturnType<typeof window.api.recheckPreflight>>
 
@@ -200,7 +201,7 @@ export function SettingsView({
             )}
             {providersLoading && (
               <p role="status">
-                <span className="spinner" /> Chargement des providers…
+                <Spinner /> Chargement des providers…
               </p>
             )}
             {!providersLoading &&

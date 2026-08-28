@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { InboxCandidate } from '../../../main/brain-inbox'
 import { brainBusinessError } from './graph-view-model'
+import { Spinner } from './Spinner'
 
 /**
  * BOÎTE DE RÉCEPTION du savoir, dans la vue Knowledge.
@@ -249,7 +250,7 @@ export function KnowledgeInboxPanel({
         >
           {indexState.phase === 'reindexing' ? (
             <>
-              <span className="spinner" /> {`« ${indexState.title} » — réindexation en cours…`}
+              <Spinner /> {`« ${indexState.title} » — réindexation en cours…`}
             </>
           ) : indexState.action === 'promote' ? (
             `« ${indexState.title} » est promue et trouvable par la recherche.`

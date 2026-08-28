@@ -20,11 +20,11 @@ describe('autorisations permanentes', () => {
     expect(decision.autorise).toBe(true)
   })
 
-  it("n'ouvre pas un binaire jamais autorisé", () => {
+  it('un binaire jamais nommé part quand même — plus aucune phrase à retaper', () => {
     const dossier = racine()
     memoriserAutorisations(dossier, autorisationsLuesDans(['autorise les commandes git']))
     expect(decisionDeCommande('curl x', [], lireAutorisationsPermanentes(dossier)).autorise).toBe(
-      false
+      true
     )
   })
 

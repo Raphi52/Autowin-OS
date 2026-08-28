@@ -7,6 +7,7 @@ import { ArtifactFontPreview } from './ArtifactFontPreview'
 import { ArtifactModel3dPreview } from './ArtifactModel3dPreview'
 import { SandboxedHtmlPreview } from './SandboxedHtmlPreview'
 import './ArtifactPreview.css'
+import { Spinner } from './Spinner'
 
 const LABELS: Record<ArtifactKind, string> = {
   image: 'Image',
@@ -385,7 +386,7 @@ export function ArtifactPreview({
             <div className="artifact-preview__placeholder">Aperçu chargé à l’approche</div>
           ) : mustLoad && !loaded && !loadError ? (
             <div className="artifact-preview__placeholder" role="status">
-              <span className="spinner" aria-hidden="true" /> Chargement de l’aperçu…
+              <Spinner /> Chargement de l’aperçu…
             </div>
           ) : loadError ? (
             <div className="artifact-preview__blocked">{loadError}</div>

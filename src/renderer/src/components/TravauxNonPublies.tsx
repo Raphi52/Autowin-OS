@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { libelleTravail, type TravailNonPublie } from './travail-non-publie'
+import { Spinner } from './Spinner'
 
 /**
  * LA LISTE DES TRAVAUX FINIS MAIS JAMAIS PUBLIÉS — et le moyen de les LIRE.
@@ -139,7 +140,7 @@ export function TravauxNonPublies({ onFermer }: { onFermer: () => void }): React
                   patch.patch || '(diff vide)'
                 ) : (
                   <>
-                    <span className="spinner" /> Lecture…
+                    <Spinner /> Lecture…
                   </>
                 )}
                 {patch?.tronque ? '\n\n[…] diff tronqué — trop long pour être lu ici.' : ''}

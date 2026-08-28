@@ -448,6 +448,14 @@ button.card:hover {
   border-radius: 50%;
   background: none;
   box-shadow: none;
+  /* GEOMETRIE STATIQUE, en plus des keyframes — et non a leur place.
+     Defaut CONSTATE le 2026-08-28 par capture CDP de l'app reelle : la machine a
+     `prefers-reduced-motion: reduce` ACTIF, l'animation etait donc neutralisee, et avec elle
+     l'aplatissement + les rotations croisees qui ne vivaient QUE dans les keyframes. Les trois
+     orbites se superposaient alors en UN cercle parfait, dont seule la derniere couche (rose) etait
+     visible : plus d'atome du tout. Portee ici, la geometrie survit a la neutralisation ;
+     l'animation ne fait plus que la faire tourner. */
+  transform: scaleY(0.55);
   animation: aw-orbit-a 2.7s linear infinite;
 }
 .spinner::before,
@@ -465,12 +473,14 @@ button.card:hover {
 .conversation-state.is-running::before {
   border-top-color: #3ad6ff;
   border-right-color: rgba(58, 214, 255, 0.4);
+  transform: rotate(58deg) scaleY(0.55);
   animation: aw-orbit-b 3.3s linear infinite;
 }
 .spinner::after,
 .conversation-state.is-running::after {
   border-top-color: #ff2e93;
   border-right-color: rgba(190, 70, 255, 0.4);
+  transform: rotate(-58deg) scaleY(0.55);
   animation: aw-orbit-c 3.9s linear infinite;
 }
 /* Variante large : meme atome, taille des etats de chargement pleine page. */
@@ -480,17 +490,9 @@ button.card:hover {
   vertical-align: baseline;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .spinner,
-  .spinner::before,
-  .spinner::after,
-  .conversation-state.is-running,
-  .conversation-state.is-running::before,
-  .conversation-state.is-running::after {
-    animation: none;
-  }
-}
-
+/* Exception assumee a prefers-reduced-motion : le spinner est un indicateur
+   d'ETAT, pas un effet decoratif. Fige, il affirme faussement que rien ne
+   tourne. Il reste donc anime meme quand les effets systeme sont desactives. */
 
 /* Apparition douce des éléments de liste */
 @keyframes fadeIn {
@@ -505,4 +507,157 @@ button.card:hover {
 }
 .fade-in {
   animation: fadeIn var(--dur) var(--ease);
+}
+
+/* ============================================================
+   ATOME 5A « tempo Rapide » — rendu React (composant <Spinner/>).
+   Fidele a l'apercu valide : 3 plans elliptiques croises, chacun
+   = une trainee conique + une tete lumineuse, et une etoile a 3
+   couches au centre. Tout est exprime en `em` : la SEULE variable
+   est --aw-atom-size (font-size du conteneur).
+   ============================================================ */
+@keyframes aw-atom-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes aw-atom-tw {
+  0%,
+  100% {
+    transform: scale(0.92);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+.aw-atom {
+  --aw-atom-size: 18px;
+  /* `flex: none` est VITAL : posé dans un conteneur flex (rails, lignes de statut),
+     l'atome se faisait comprimer en largeur alors que ses orbites restent en `em`
+     -> ovale ecrase qui semblait fige. Il ne doit jamais etre retreci. */
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1em;
+  height: 1em;
+  min-width: 1em;
+  min-height: 1em;
+  font-size: var(--aw-atom-size);
+  vertical-align: -0.22em;
+}
+.aw-atom > * {
+  grid-area: 1/1;
+}
+.aw-atom__plane {
+  display: grid;
+  place-items: center;
+  width: 0.8375em;
+  height: 0.8375em;
+}
+.aw-atom__plane > * {
+  grid-area: 1/1;
+}
+.aw-atom__rot {
+  display: grid;
+  place-items: center;
+  width: 0.8375em;
+  height: 0.8375em;
+  animation: aw-atom-spin 2.7s linear infinite;
+}
+.aw-atom__rot > * {
+  grid-area: 1/1;
+}
+.aw-atom__plane--1 {
+  transform: scaleY(0.6);
+}
+.aw-atom__plane--2 {
+  transform: rotate(55deg) scaleY(0.6);
+}
+.aw-atom__plane--3 {
+  transform: rotate(-55deg) scaleY(0.6);
+}
+.aw-atom__rot--2 {
+  animation-duration: 3.3s;
+  animation-delay: -0.9s;
+  animation-direction: reverse;
+}
+.aw-atom__rot--3 {
+  animation-duration: 3.9s;
+  animation-delay: -1.8s;
+}
+.aw-atom__trail {
+  width: 0.8375em;
+  height: 0.8375em;
+  border-radius: 50%;
+  /* Anneau EPAISSI par rapport a l'apercu 160px : a 18px, un lisere de 2% du rayon
+     tombait sous le pixel (0,3 px) et l'atome paraissait fige. */
+  -webkit-mask: radial-gradient(closest-side, transparent 64%, #000 72%, #000 100%);
+  mask: radial-gradient(closest-side, transparent 64%, #000 72%, #000 100%);
+}
+.aw-atom__head {
+  width: 0.17em;
+  height: 0.17em;
+  border-radius: 50%;
+  background: #fff;
+  transform: translateY(-0.394em);
+}
+.aw-atom__trail--1 {
+  background: conic-gradient(
+    from 0deg,
+    rgba(0, 245, 255, 0) 0 16%,
+    rgba(0, 255, 190, 0.6) 58%,
+    rgba(0, 245, 255, 1) 99%,
+    transparent 100%
+  );
+}
+.aw-atom__trail--2 {
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 0, 170, 0) 0 16%,
+    rgba(180, 60, 255, 0.6) 58%,
+    rgba(255, 0, 170, 1) 99%,
+    transparent 100%
+  );
+}
+.aw-atom__trail--3 {
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 240, 0, 0) 0 16%,
+    rgba(255, 120, 0, 0.6) 58%,
+    rgba(255, 240, 0, 1) 99%,
+    transparent 100%
+  );
+}
+.aw-atom__head--1 {
+  box-shadow: 0 0 0.16em 0.05em rgba(0, 245, 255, 1);
+}
+.aw-atom__head--2 {
+  box-shadow: 0 0 0.16em 0.05em rgba(255, 0, 170, 1);
+}
+.aw-atom__head--3 {
+  box-shadow: 0 0 0.16em 0.05em rgba(255, 240, 0, 1);
+}
+.aw-atom__star {
+  clip-path: polygon(50% 0%, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0% 50%, 42% 42%);
+  animation: aw-atom-tw 1.6s ease-in-out infinite;
+}
+.aw-atom__star--edge {
+  width: 0.2875em;
+  height: 0.2875em;
+  background: #ff2d95;
+  box-shadow: 0 0 0.1em 0.025em rgba(255, 45, 149, 0.55);
+}
+.aw-atom__star--core {
+  width: 0.244em;
+  height: 0.244em;
+  background: #ff8a1f;
+}
+.aw-atom__star--hot {
+  width: 0.125em;
+  height: 0.125em;
+  background: #ffd66b;
+}
+.aw-atom--lg {
+  --aw-atom-size: 38px;
+  vertical-align: baseline;
 }

@@ -125,6 +125,7 @@ import type { CheckpointEntry } from './chat-view-types'
 import { useSkillsCatalog } from './useSkillsInventory'
 import { messageTravailNonPublie, promptTravauxNonPublies } from './travail-non-publie'
 import { TravauxNonPublies } from './TravauxNonPublies'
+import { Spinner } from './Spinner'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
 /* ---------- Constantes ---------- */
@@ -2665,7 +2666,7 @@ export function ChatView({
                   }}
                   title={agent.task ?? agent.title}
                 >
-                  <span className="spinner" aria-hidden="true" />
+                  <Spinner />
                   <span className="agent-inbox-copy">
                     <span className="agent-inbox-name">{agent.title}</span>
                     <span className="agent-inbox-state">{agent.state}</span>

@@ -233,7 +233,23 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     dossier natif, sans argument. `os:conversations:removeMany` valide chaque identifiant
     //     par `guardString`.
     // `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(147)
+    //
+    // MISE A JOUR 2026-08-28 (2) — 147 -> 148. UN canal ajoute, relu AVANT de toucher le compte :
+    //   `perf:turnLatency` — onglet Latence de la vue Tests. LECTURE SEULE d'un seul fichier de
+    //     donnees de l'app (`<appdata>/turn-timing.jsonl`, ecrit par `turn-timing.ts`). Aucun
+    //     chemin ne vient du renderer : son unique argument est un NOMBRE de lignes, plafonne par
+    //     `Math.floor` et retombant sur 200 si ce n'est pas un nombre positif. Il porte
+    //     `assertTrustedRendererSender(event, 'PerfTurnLatency')` des sa PREMIERE ligne. Aucune
+    //     ecriture, aucune execution.
+    //
+    // MISE A JOUR 2026-08-28 (3) — 148 -> 149. UN canal ajoute, relu AVANT de toucher le compte :
+    //   `perf:gels` — section « Gels du process principal » de l'onglet Latence. LECTURE SEULE d'un
+    //     seul fichier de donnees de l'app (`<appdata>/gels.jsonl`, ecrit par le battement de
+    //     `gel-main.ts`). Aucun chemin ne vient du renderer : son unique argument est un NOMBRE de
+    //     lignes, plafonne par `Math.floor` et retombant sur 200 si ce n'est pas un nombre positif.
+    //     Il porte `assertTrustedRendererSender(event, 'PerfGels')` des sa PREMIERE ligne. Aucune
+    //     ecriture, aucune execution.
+    expect(handlers).toHaveLength(149)
     expect(unguarded).toEqual([])
   })
 

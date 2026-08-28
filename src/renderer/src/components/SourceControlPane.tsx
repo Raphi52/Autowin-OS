@@ -12,6 +12,7 @@ import {
 import type { GitReadResult, GitChange, GitDiffResult } from '../../../shared/git-read'
 import type { BrainTrace } from '../../../main/activity/brain-trace-spool'
 import './SourceControlPane.css'
+import { Spinner } from './Spinner'
 
 const markGlyph: Record<GitChange['status'], string> = {
   modified: '~',
@@ -440,7 +441,7 @@ export function SourceControlPane({
                           <div className="sc-diff-content">
                             {diff === null ? (
                               <div className="sc-clean">
-                                <span className="spinner" /> Chargement du diff…
+                                <Spinner /> Chargement du diff…
                               </div>
                             ) : diff.available ? (
                               <DiffView diff={diff.diff ?? ''} />

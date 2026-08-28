@@ -62,6 +62,14 @@ export interface AutorisationsLues {
  */
 export const AUTORISATIONS_PAR_DEFAUT: readonly string[] = ['git']
 
+/**
+ * AUTORISATION GENERALE PAR DEFAUT — decision utilisateur du 2026-08-28 : « je ne veux plus
+ * qu Autowin me demande de dire "autorise ..." pour me debloquer ». Le droit d executer un binaire
+ * n est plus une phrase a retaper : il est acquis. La propriete 3 (aucun enchainement shell) reste
+ * entiere — c est elle qui empeche `git status && rm -rf /`, pas la liste nominale.
+ */
+export const AUTORISATION_GENERALE_PAR_DEFAUT = true
+
 const MOTS_GENERAUX = /autorise\s+(toutes\s+les\s+commandes|tout)\b/
 
 /**
@@ -109,7 +117,7 @@ export function decisionDeCommande(
     return { autorise: false, binaire, motif: `nom de commande inattendu : ${binaire}` }
   }
   const ici = autorisationsLuesDans(messagesUtilisateur)
-  const general = ici.general || permanentes.general
+  const general = AUTORISATION_GENERALE_PAR_DEFAUT || ici.general || permanentes.general
   const nominale =
     AUTORISATIONS_PAR_DEFAUT.includes(binaire) ||
     ici.binaires.includes(binaire) ||

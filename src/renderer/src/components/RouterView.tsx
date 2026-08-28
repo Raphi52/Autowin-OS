@@ -6,6 +6,7 @@ import type { RuntimeModel, OrchestratorModelOption } from './chat-view-model'
 import { agentStudioProviderIds } from './provider-catalog'
 import { libraryModels } from './model-library'
 import type { ClaudeAccountEntry } from '../../../preload/index.d'
+import { Spinner } from './Spinner'
 
 /**
  * Page « Routeur » — voir les providers/modèles connectés + leur statut d'auth RÉEL, (ré)authentifier,
@@ -482,7 +483,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
             catalogue réellement vide ou d'une vue cassée. */}
         {!catalogError && !loaded && (
           <p className="router-empty" role="status" aria-busy="true" data-testid="router-loading">
-            <span className="spinner" /> Chargement des providers…
+            <Spinner /> Chargement des providers…
           </p>
         )}
         {!catalogError && loaded && providers.length === 0 && (

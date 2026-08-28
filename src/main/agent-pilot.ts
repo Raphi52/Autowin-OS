@@ -442,7 +442,8 @@ export function replierSurLaMiniature(
   piece: PieceJointeDuFil | undefined
 ): PieceJointeDuFil | undefined {
   const thumbnail = piece?.thumbnail
-  if (!piece || typeof thumbnail !== 'string' || !thumbnail.startsWith('data:image/')) return undefined
+  if (!piece || typeof thumbnail !== 'string' || !thumbnail.startsWith('data:image/'))
+    return undefined
   const virgule = thumbnail.indexOf(',')
   const mimeType = thumbnail.slice(5, thumbnail.indexOf(';')) || 'image/png'
   const content = virgule >= 0 ? thumbnail.slice(virgule + 1) : ''
@@ -708,7 +709,9 @@ export class AgentPilot {
      */
     let compteRenduOrchestration: string | undefined
     const catalog = this.bus.catalog()
-    const snapshot = await this.bus.snapshotForPrompt()
+    // Sous-jalons : `snapshot` recouvre trois lectures (runs, bureaux, recensement git). Les
+    // marquer sépare la cause de l'effet dans l'onglet Latence de la vue Tests.
+    const snapshot = await this.bus.snapshotForPrompt((nom) => timer.mark(nom))
     timer.mark('snapshot')
 
     const latestUserMessage = resolveLatestUserMessage(history, routingUserMessageOverride)

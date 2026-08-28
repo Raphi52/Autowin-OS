@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import './BehaviourView.css'
 import { ModuleHeader } from './ModuleHeader'
+import { Spinner } from './Spinner'
 
 /**
  * Vue « Behaviour » — miroir FIDÈLE (config statique) de TOUT ce qui influe sur le comportement du
@@ -328,7 +329,7 @@ export function BehaviourView(): React.JSX.Element {
       )}
       {!composition && !error && (
         <p className="behaviour-empty">
-          <span className="spinner" aria-hidden="true" /> Chargement de la composition…
+          <Spinner /> Chargement de la composition…
         </p>
       )}
       {composition?.inspection && (

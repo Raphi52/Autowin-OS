@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './AgentsTopologyView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { libraryModels } from './model-library'
+import { Spinner } from './Spinner'
 
 type ImportedModel = {
   id: string
@@ -476,7 +477,7 @@ export function AgentsTopologyView({
           `⛔ ${error}`
         ) : (
           <>
-            <span className="spinner" aria-hidden="true" /> Chargement de la topologie…
+            <Spinner /> Chargement de la topologie…
           </>
         )}
         {state === 'error' && (

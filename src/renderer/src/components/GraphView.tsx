@@ -94,6 +94,7 @@ import { ModuleHeader } from './ModuleHeader'
 import { KnowledgeInboxPanel } from './KnowledgeInboxPanel'
 import { BrainRetrievalBench } from './BrainRetrievalBench'
 import './GraphView.css'
+import { Spinner } from './Spinner'
 
 type PanelTab = 'visibility' | 'node' | 'workbench'
 type ResizableColumn = 'theme' | 'visibility' | 'detail'
@@ -1870,13 +1871,13 @@ export function GraphView({
         </div>
         {loading && (
           <div className="graph-loading" role="status" aria-live="polite">
-            <span className="spinner spinner--lg" aria-hidden="true" />
+            <Spinner lg />
             <span className="graph-loading__label">Chargement du graphe…</span>
           </div>
         )}
         {expandingNodeId && !loading && (
           <div className="graph-status">
-            <span className="spinner" aria-hidden="true" /> Chargement des connexions…
+            <Spinner /> Chargement des connexions…
           </div>
         )}
         {err && (

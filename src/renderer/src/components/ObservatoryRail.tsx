@@ -6,6 +6,7 @@ import type {
   ObservatoryRunEntry
 } from './useObservatorySources'
 import type { ActivitySession, ConversationItem, PromptCall } from './observatory-view-types'
+import { Spinner } from './Spinner'
 
 /**
  * Rail gauche d'Observatory : conversations, appels observés, activité, transcripts, signaux.
@@ -86,7 +87,7 @@ export function ObservatoryRail({
           <p>
             {runsLoading ? (
               <>
-                <span className="spinner" /> Lecture des RUN.md…
+                <Spinner /> Lecture des RUN.md…
               </>
             ) : (
               'Aucun RUN.md.'

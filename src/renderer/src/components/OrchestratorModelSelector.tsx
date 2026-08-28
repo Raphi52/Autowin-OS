@@ -7,6 +7,7 @@ import {
 import { ModelEffortMatrix, type ModelEffortRow } from './ModelEffortMatrix'
 import { EFFORT_LABELS } from './model-effort-labels'
 import './ChatView.css'
+import { Spinner } from './Spinner'
 
 /**
  * L'état d'authentification d'un provider, tel que Routage le charge déjà (`providerStatus()`).
@@ -115,7 +116,7 @@ export function OrchestratorModelSelector({
   const disabled = busy || pending || models.length === 0
   const currentLabel = !catalogLoaded ? (
     <>
-      <span className="spinner" /> Chargement des modèles…
+      <Spinner /> Chargement des modèles…
     </>
   ) : models.length === 0 ? (
     'Aucun modèle disponible'
@@ -155,7 +156,7 @@ export function OrchestratorModelSelector({
           {binding?.reasoningEffort && binding.reasoningEffort !== 'none' && (
             <em>{EFFORT_LABELS[binding.reasoningEffort] ?? binding.reasoningEffort}</em>
           )}
-          {pending ? <i className="spinner" /> : <i className="model-select-chevron" />}
+          {pending ? <Spinner /> : <i className="model-select-chevron" />}
         </summary>
         <div className="model-select-menu" role="listbox" aria-label="Modèle orchestrateur">
           {matrixRows.length > 0 && (

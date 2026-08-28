@@ -13,6 +13,7 @@ import {
 } from './worktree-chef-de-projet'
 import './ViewPage.css'
 import './WorktreeView.css'
+import { Spinner } from './Spinner'
 
 type DataState = 'healthy' | 'unknown' | 'unavailable' | 'stale'
 
@@ -360,7 +361,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
 
       {loading && !snapshot ? (
         <div className="cockpit-state" role="status">
-          <span className="spinner" /> Chargement du cockpit projet…
+          <Spinner /> Chargement du cockpit projet…
         </div>
       ) : (
         <div className="cockpit-scroll">

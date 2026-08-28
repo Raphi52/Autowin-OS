@@ -64,9 +64,9 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
       const bloc = css.match(new RegExp(`\\.conversation-state\\.is-${key}\\s*\\{[^}]*\\}`, 's'))
       expect(bloc?.[0] ?? '', `is-${key} ne doit pas s'animer`).not.toMatch(/animation:/)
     }
-    expect(theme).toMatch(
-      /@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.conversation-state\.is-running::after[^}]*animation:\s*none/s
-    )
+    // PLUS DE reduced-motion SUR LE SPINNER — decision du 2026-08-28, verrouillee en sens
+    // inverse par assets/spinner-motion.test.ts : le spinner est un indicateur d'ETAT, pas un
+    // effet decoratif. Fige, il affirmerait faussement que rien ne tourne.
   })
 
   it('chaque clé produite par le modèle a une couleur (aucun état orphelin)', () => {

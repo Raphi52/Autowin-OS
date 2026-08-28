@@ -13,6 +13,7 @@ import { LatestRequestGate } from './observatory-reliability'
 import { projectLatestRequestExecution } from './request-execution-tree-model'
 import { workflowQuoteLabel } from './workflow-quote-label'
 import './WorkflowExecutionGraph.css'
+import { Spinner } from './Spinner'
 
 interface WorkflowExecutionGraphProps {
   conversationId?: string
@@ -467,7 +468,7 @@ export function WorkflowExecutionGraph({
 
       {loading && nodes.length === 0 && (
         <div className="workflow-execution-loading" role="status">
-          <span className="spinner" aria-hidden="true" />
+          <Spinner />
           Chargement du graphe…
         </div>
       )}

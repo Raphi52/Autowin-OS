@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { BrainTrace } from '../../../main/activity/brain-trace-spool'
 import type { BrainNavigationCandidate } from '../../../main/brain-retrieval'
 import { brainBusinessError } from './graph-view-model'
+import { Spinner } from './Spinner'
 
 export type BrainTraceView = BrainTrace
 
@@ -73,7 +74,7 @@ function CandidateRow({
     if (state === 'loading')
       return (
         <p className="brain-nav-note-status">
-          <span className="spinner" aria-hidden="true" /> chargement…
+          <Spinner /> chargement…
         </p>
       )
     if (state === 'error') return <p className="brain-nav-note-status">{error}</p>

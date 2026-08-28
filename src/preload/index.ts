@@ -127,6 +127,9 @@ const api = {
     ipcRenderer.invoke('tests:saveProjects', projects),
   pickTestProject: (): Promise<string | null> => ipcRenderer.invoke('tests:pickProject'),
   runProjectTests: (root: string, filter?: string) => ipcRenderer.invoke('tests:run', root, filter),
+  // Onglet Latence : rapport LU du journal de jalons de tour (lecture seule, cote main).
+  perfTurnLatency: (derniers?: number) => ipcRenderer.invoke('perf:turnLatency', derniers),
+  perfGels: (derniers?: number) => ipcRenderer.invoke('perf:gels', derniers),
   getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:get'),
   setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>

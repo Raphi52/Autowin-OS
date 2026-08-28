@@ -31,7 +31,12 @@ const estIndicateur = (ligne: string): boolean =>
   !ligne.includes('RegExp') &&
   !ligne.includes(String.fromCharCode(47) + '^')
 
-const SPINNER = /className="[^"]*\bspinner\b|conv-load-skeleton/
+/**
+ * L'atome est rendu par le COMPOSANT <Spinner /> (components/Spinner.tsx) depuis le
+ * 2026-08-28 : ne chercher que la classe litterale faisait passer pour fautifs 30
+ * indicateurs qui portent pourtant l'atome. Les trois formes valides sont reconnues ici.
+ */
+const SPINNER = /<Spinner\b|className="[^"]*\bspinner\b|conv-load-skeleton/
 
 describe('spinner — le nouveau PARTOUT (balayage exhaustif)', () => {
   const cibles = fichiers(SRC)
