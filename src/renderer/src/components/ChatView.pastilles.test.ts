@@ -18,6 +18,8 @@ import { deriveConversationState } from './chat-view-model'
  */
 
 const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+/** L'atome du spinner vit dans theme.css : c'est la SOURCE UNIQUE de l'animation « en cours ». */
+const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
 
 /** Couleur RÉSOLUE d'un état : sa règle propre, sinon la couleur de `.conversation-state`. */
 function couleurEtat(key: string): string | null {
@@ -55,14 +57,14 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
   })
 
   it('l’animation reste réservée au travail EN COURS, et se coupe en reduced-motion', () => {
-    expect(css).toMatch(
-      /\.conversation-state\.is-running::after\s*\{[^}]*animation:\s*conversation-state-spin/s
+    expect(theme).toMatch(
+      /\.conversation-state\.is-running::after\s*\{[^}]*animation:\s*aw-orbit-c/s
     )
     for (const key of ['completed', 'failed', 'interrupted', 'cancelled', 'waiting']) {
       const bloc = css.match(new RegExp(`\\.conversation-state\\.is-${key}\\s*\\{[^}]*\\}`, 's'))
       expect(bloc?.[0] ?? '', `is-${key} ne doit pas s'animer`).not.toMatch(/animation:/)
     }
-    expect(css).toMatch(
+    expect(theme).toMatch(
       /@media \(prefers-reduced-motion: reduce\)[^{]*\{[^}]*\.conversation-state\.is-running::after[^}]*animation:\s*none/s
     )
   })

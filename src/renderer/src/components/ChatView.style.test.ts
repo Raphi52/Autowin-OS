@@ -78,12 +78,13 @@ describe('workflow header toggle', () => {
 
 describe('minimal conversation status lights', () => {
   it('keeps the Native-style dot compact and reserves animation for running work', () => {
+    const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
     expect(css).toMatch(
       /\.conversation-state\s*{[^}]*width:\s*7px;[^}]*height:\s*7px;[^}]*background:\s*currentColor;[^}]*color:\s*#38bdf8;[^}]*box-shadow:/s
     )
-    expect(css).toMatch(
-      /\.conversation-state\.is-running::after\s*{[^}]*animation:\s*conversation-state-spin/s
+    expect(theme).toMatch(
+      /\.conversation-state\.is-running::after\s*{[^}]*animation:\s*aw-orbit-c/s
     )
     expect(css).toMatch(/\.conversation-state\.is-failed\s*{[^}]*color:\s*#ff4057/s)
     expect(css).toMatch(
@@ -92,7 +93,7 @@ describe('minimal conversation status lights', () => {
     // La question en attente porte un JAUNE qui lui est propre : la confondre avec l'ambre des
     // tours interrompus reviendrait a ne rien signaler de nouveau.
     expect(css).toMatch(/\.conversation-state\.is-asking\s*{[^}]*color:\s*#facc15/s)
-    expect(css).toMatch(
+    expect(theme).toMatch(
       /@media \(prefers-reduced-motion: reduce\)[^{]*{[^}]*\.conversation-state\.is-running::after[^}]*animation:\s*none/s
     )
   })

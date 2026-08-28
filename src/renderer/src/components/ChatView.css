@@ -157,22 +157,11 @@
   background: var(--bg-2);
   color: var(--text);
 }
-.agent-inbox-pulse {
+.agent-inbox-row .spinner {
+  --aw-spin-size: 13px;
+  --aw-spin-ring: 1.3px;
   flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #5ff1b2;
-  box-shadow: 0 0 0 0 rgba(95, 241, 178, 0.5);
-  animation: agent-inbox-pulse 1.6s ease-out infinite;
-}
-@keyframes agent-inbox-pulse {
-  70% {
-    box-shadow: 0 0 0 6px rgba(95, 241, 178, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(95, 241, 178, 0);
-  }
+  vertical-align: 0;
 }
 .agent-inbox-copy {
   display: flex;
@@ -358,24 +347,12 @@
     0 0 3px currentColor,
     0 0 7px currentColor;
 }
-/* EN COURS = un SPINNER, pas une pastille : un point bleu fixe ne dit pas « ca bosse ».
-   Seul l'anneau qui tourne reste visible (la pastille est effacee). */
+/* EN COURS = l'ATOME 5A, defini une seule fois dans theme.css. Ici on ne redit QUE la taille :
+   recopier la geometrie avait fait diverger rendu et reduced-motion selon l'endroit. */
 .conversation-state.is-running {
-  width: 10px;
-  height: 10px;
-  color: #38bdf8;
-  background: none;
-  box-shadow: none;
-  animation: none;
-}
-.conversation-state.is-running::after {
-  position: absolute;
-  inset: 0;
-  border: 1.5px solid rgba(56, 189, 248, 0.25);
-  border-top-color: currentColor;
-  border-radius: 50%;
-  content: '';
-  animation: conversation-state-spin 0.7s linear infinite;
+  --aw-spin-size: 12px;
+  --aw-spin-ring: 1.3px;
+  vertical-align: 0;
 }
 .conversation-state.is-completed {
   color: #2fd47a;
@@ -407,16 +384,6 @@
 .conversation-state.is-empty {
   opacity: 0.4;
   box-shadow: 0 0 4px currentColor;
-}
-@keyframes conversation-state-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .conversation-state.is-running::after {
-    animation: none;
-  }
 }
 .conv-label {
   display: block;

@@ -2665,7 +2665,7 @@ export function ChatView({
                   }}
                   title={agent.task ?? agent.title}
                 >
-                  <span className="agent-inbox-pulse" aria-hidden="true" />
+                  <span className="spinner" aria-hidden="true" />
                   <span className="agent-inbox-copy">
                     <span className="agent-inbox-name">{agent.title}</span>
                     <span className="agent-inbox-state">{agent.state}</span>
