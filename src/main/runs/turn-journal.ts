@@ -203,9 +203,18 @@ export function pruneFinishedTurnJournals(root: string, maxAgeMs = 7 * 24 * 3_60
       if (!file.endsWith('.jsonl')) continue
       const path = join(dir, file)
       const turnId = file.slice(0, -'.jsonl'.length)
+      // L'ÂGE d'abord : c'est un statSync, alors que la lecture (flush + readFileSync + JSON.parse
+      // ligne à ligne) coûte tout le fichier. Un journal frais n'est JAMAIS ouvert — il ne peut de
+      // toute façon pas être supprimé.
+      let stale: boolean
+      try {
+        stale = now - statSync(path).mtimeMs > maxAgeMs
+      } catch {
+        continue
+      }
+      if (!stale) continue
       const events = readTurnJournal(root, conversationId, turnId)
-      const stale = now - statSync(path).mtimeMs > maxAgeMs
-      if (stale && isTurnFinished(events)) {
+      if (isTurnFinished(events)) {
         rmSync(path)
         removed += 1
       }
