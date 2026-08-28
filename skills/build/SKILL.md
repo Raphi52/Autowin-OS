@@ -25,6 +25,17 @@ quality verdict (that's `judge`) — so a defect is "done" only when an external
 
 **Produce under anticipated audit (a lever, not theatre)**: work as if an adversarial expert WILL audit this (it will — `judge`) and the gate WILL replay the signal — both REAL + falsifiable, so "looking good" collapses into "being correct": anticipated scrutiny raises the bar, the replay forbids gaming. (The lever sharpens the PRODUCER; it is NEVER applied to the judge/verifier — you want a true verdict, not one that looks good.)
 
+## Autonomy mandate — ONE pass, all the way to green
+
+**A launched defect is carried to a VERIFIED green in THIS pass.** Handing back early — a status report, "should I continue?", "want me to fix X too?", a plan without execution — is a FAILURE, not caution. At the moment you are tempted to stop:
+
+- A missing step (absent file, dependency, script, fixture, tool) is **built or worked around by you** when it is safe, bounded and reversible — you do not request it. No capability at all → `forge` it, don't abandon.
+- A red verification is not an end: loop diagnose → fix → re-verify until green, changing approach on every attempt (never the same one twice — reflex 9: exhaust 2-3 DISTINCT approaches, then parallel resolvers, before interrupting the human).
+- An ordinary missing input is **assumed** as a stated default (one line, "assuming X — correct me") and the work continues. Only a secret, an access you do not hold, or a genuinely destructive/out-of-scope call justifies stopping (see `Don't` → STOP-and-ask).
+- Several defects handed back by `judge` → **all** of them are taken in the pass, one at a time, not the first one plus a summary.
+
+This relaxes NO proof. "To green" means to the out-of-model ARTIFACT (step 4), never to a declaration of success. A green obtained by loosening an assertion, swallowing an error, widening a timeout or guarding around the defect is a FALSE green — therefore a failure to surface, labelled, with the real cause dispatched.
+
 ## Procedure  (per defect — one at a time)
 
 **0. Intake & triage.** One work item = one `RUN.md`; each defect = one entry in its `## Défauts` ledger (cite the proof the judge/hook gave). Several defects → order by severity / blast-radius and fix ONE at a time (a batch fix hides which change did what). Set the RUN header `regime:`. Place the RUN.md at `~\.claude\runs\<session_id>\<subject>-workspace\RUN.md` and set the `session:` header (session-scoping mechanics + legacy fallback: **ENGINE Ch.3 (RUN details) + foundation §1**). **A mono-defect fix has NO approach fork** → DELETE the template's `## Options`/`Décision:` scaffold (a repair scores no options; a leftover `Décision:` **placeholder** — value starting with `<` — is ignored gate-side, but a REAL committed `Décision:` still arms anti-fixation, so DELETE a real prior decision when reusing a RUN).
