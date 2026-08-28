@@ -158,8 +158,8 @@
   color: var(--text);
 }
 .agent-inbox-row .spinner {
-  --aw-spin-size: 13px;
-  --aw-spin-ring: 1.3px;
+  --aw-spin-size: 16px;
+  --aw-spin-ring: 1.5px;
   flex: none;
   vertical-align: 0;
 }
@@ -350,8 +350,10 @@
 /* EN COURS = l'ATOME 5A, defini une seule fois dans theme.css. Ici on ne redit QUE la taille :
    recopier la geometrie avait fait diverger rendu et reduced-motion selon l'endroit. */
 .conversation-state.is-running {
-  --aw-spin-size: 12px;
-  --aw-spin-ring: 1.3px;
+  /* 16px = PLANCHER de lisibilite de l'atome, tenu par spinner-legibility.test.ts : sous cette
+     taille, l'aplatissement a 55 % ecrase les trois orbites en une eraflure sombre. */
+  --aw-spin-size: 16px;
+  --aw-spin-ring: 1.5px;
   vertical-align: 0;
 }
 .conversation-state.is-completed {
