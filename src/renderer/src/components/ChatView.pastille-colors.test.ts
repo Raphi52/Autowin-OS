@@ -2,13 +2,28 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const css = () => readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+/**
+ * `is-running` a migre dans l'ATOME 5A de theme.css (SOURCE UNIQUE du « ca bosse »), et sa couleur y
+ * est portee par `border-top-color` : c'est l'anneau qui est colore, plus un point plein.
+ *
+ * Ce test lisait ChatView.css SEUL et cherchait `color:`. Il annoncait donc « running sans couleur
+ * propre » alors que la couleur existait — ailleurs. Corrige a sa cause : on lit les DEUX sources et
+ * les DEUX proprietes. L'exigence ne bouge pas : chaque etat garde une couleur, les six distinctes.
+ */
+const theme = () => readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
 
 const colorOf = (state: string): string | undefined => {
-  const source = css()
-  const block = source.match(
-    new RegExp(String.raw`\.conversation-state\.is-${state}\s*\{([^}]*)\}`, 's')
-  )?.[1]
-  return block?.match(/color:\s*(#[0-9a-fA-F]{3,8})/)?.[1]?.toLowerCase()
+  const motif = new RegExp(
+    String.raw`\.conversation-state\.is-` + state + String.raw`\b[^{]*\{([^}]*)\}`,
+    'gs'
+  )
+  for (const source of [css(), theme()]) {
+    for (const bloc of source.matchAll(motif)) {
+      const teinte = bloc[1].match(/(?:^|[\s;])(?:border-top-)?color:\s*(#[0-9a-fA-F]{3,8})/)
+      if (teinte) return teinte[1].toLowerCase()
+    }
+  }
+  return undefined
 }
 
 describe('conversation status dot palette', () => {
