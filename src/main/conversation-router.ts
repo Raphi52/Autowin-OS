@@ -30,6 +30,7 @@ export type ConversationRouteReason =
   | 'empty-context'
   | 'explicit-command'
   | 'local-follow-up'
+  | 'meta-instruction'
   | 'fallback'
 
 export interface ConversationRouteDecision {
