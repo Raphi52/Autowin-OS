@@ -783,7 +783,13 @@ exit 0
     const lateSha = detachedCommit(repo, publishedSha, 'late.txt', 'à préserver\n')
     git(repo, 'update-ref', `refs/heads/${recoveryBranch}`, lateSha, publishedSha)
     const tryGitFn = (dir: string, args: string[]) => {
-      if (dir === repo && args[0] === 'worktree' && args[1] === 'add' && args[2] === agentPath) {
+      const iWorktree = args.indexOf('worktree')
+      if (
+        dir === repo &&
+        iWorktree >= 0 &&
+        args[iWorktree + 1] === 'add' &&
+        args[iWorktree + 2] === agentPath
+      ) {
         return { code: 1, stdout: '', stderr: 'verrou temporaire' }
       }
       const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })

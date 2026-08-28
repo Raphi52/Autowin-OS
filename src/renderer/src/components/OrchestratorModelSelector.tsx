@@ -152,7 +152,7 @@ export function OrchestratorModelSelector({
             <em>{EFFORT_LABELS[binding.reasoningEffort] ?? binding.reasoningEffort}</em>
           )}
           {pending ? (
-            <i className="model-select-spinner" />
+            <i className="spinner" />
           ) : (
             <i className="model-select-chevron" />
           )}

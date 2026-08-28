@@ -262,7 +262,7 @@ export function FirstRunWizard(): React.JSX.Element | null {
                     '✓'
                   ) : pending ? (
                     <span
-                      className="frw-spinner"
+                      className="spinner"
                       data-testid={`frw-spinner-${c.id}`}
                       aria-hidden="true"
                     />

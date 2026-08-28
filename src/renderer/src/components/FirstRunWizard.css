@@ -53,55 +53,6 @@
 .frw-checks li.pending .frw-icon {
   color: var(--accent, #7aa2f7);
 }
-.frw-spinner {
-  position: relative;
-  display: inline-block;
-  box-sizing: border-box;
-  width: 11px;
-  height: 11px;
-  border: 1.5px solid transparent;
-  border-top-color: #3ad6ff;
-  border-bottom-color: rgba(58, 214, 255, 0.32);
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 50% 50%,
-    #ffd23f 0 14%,
-    rgba(255, 210, 63, 0.32) 26%,
-    transparent 48%
-  );
-  box-shadow: none;
-  vertical-align: -1px;
-  animation: aw-spin 1.15s linear infinite;
-}
-.frw-spinner::before,
-.frw-spinner::after {
-  position: absolute;
-  border: 1.5px solid transparent;
-  border-radius: 50%;
-  content: '';
-}
-.frw-spinner::before {
-  inset: -1.5px;
-  border-right-color: #ff2e93;
-  border-left-color: rgba(255, 46, 147, 0.3);
-  animation: aw-spin-rev 1.75s linear infinite;
-}
-.frw-spinner::after {
-  inset: 1.5px;
-  border-top-color: #ffd23f;
-  border-right-color: rgba(255, 210, 63, 0.28);
-  background: none;
-  box-shadow: none;
-  animation: aw-spin 0.85s linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .frw-spinner,
-  .frw-spinner::before,
-  .frw-spinner::after {
-    animation-duration: 3.2s;
-  }
-}
-
 .frw-detail {
   width: 100%;
   padding-left: 24px;

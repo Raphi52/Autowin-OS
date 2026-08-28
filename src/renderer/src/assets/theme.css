@@ -451,6 +451,24 @@ button.card:hover {
   border-right-color: rgba(255, 210, 63, 0.28);
   animation: aw-spin 0.85s linear infinite;
 }
+/* Variante large : même atome, taille des états de chargement pleine page. */
+.spinner--lg {
+  width: 34px;
+  height: 34px;
+  border-width: 2px;
+  vertical-align: baseline;
+}
+.spinner--lg::before,
+.spinner--lg::after {
+  border-width: 2px;
+}
+.spinner--lg::before {
+  inset: -2px;
+}
+.spinner--lg::after {
+  inset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spinner,
   .spinner::before,

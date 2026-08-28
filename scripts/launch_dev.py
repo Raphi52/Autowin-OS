@@ -267,6 +267,33 @@ _verrou: int | None = None
 # l'ecran se fermerait en se voyant lui-meme.
 TITRE_SPLASH = "autowin-dev-amorce"
 
+# Executables qui portent LEGITIMEMENT une fenetre de l'application. Le titre seul ne suffit pas :
+# un mail Outlook « ... - AutoWinOS 894 » ou un editeur ouvert sur le depot contient « autowin » dans
+# son titre et faisait refuser tout lancement (constate le 2026-08-28, fenetre OUTLOOK.EXE).
+EXES_APP = {"autowin-os.exe", "electron.exe"}
+
+
+def _exe_de_fenetre(user32, hwnd: int) -> str:
+    """Nom de l'executable proprietaire de `hwnd`, en minuscules ; chaine vide si indisponible."""
+    try:
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        # PROCESS_QUERY_LIMITED_INFORMATION : suffit pour le nom, et marche sans elevation.
+        handle = kernel32.OpenProcess(0x1000, False, pid.value)
+        if not handle:
+            return ""
+        try:
+            tampon = ctypes.create_unicode_buffer(32768)
+            taille = wintypes.DWORD(32768)
+            if not kernel32.QueryFullProcessImageNameW(handle, 0, tampon, ctypes.byref(taille)):
+                return ""
+            return tampon.value.rsplit("\\", 1)[-1].lower()
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:  # noqa: BLE001 - sonde best-effort
+        return ""
+
 
 def fenetres_app() -> set[int]:
     """Handles des fenetres VISIBLES de l'application, hors la notre.
@@ -293,7 +320,11 @@ def fenetres_app() -> set[int]:
                 tampon = ctypes.create_unicode_buffer(300)
                 user32.GetWindowTextW(hwnd, tampon, 300)
                 titre = tampon.value.strip()
-                if "autowin" in titre.lower() and TITRE_SPLASH not in titre:
+                if (
+                    "autowin" in titre.lower()
+                    and TITRE_SPLASH not in titre
+                    and _exe_de_fenetre(user32, hwnd) in EXES_APP
+                ):
                     trouvees.add(int(hwnd))
             return True
 

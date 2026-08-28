@@ -607,8 +607,10 @@ exit 0
     const repo = tempRepo()
     const baseSha = git(repo, 'rev-parse', 'HEAD')
     const isIntegrationAdd = (args: string[]) =>
-      args[0] === 'worktree' &&
-      args[1] === 'add' &&
+      // Les appels réels portent `-c core.longpaths=true` AVANT la sous-commande : on la
+      // reconnaît par sa position relative, pas par l'index 0.
+      args.includes('worktree') &&
+      args[args.indexOf('worktree') + 1] === 'add' &&
       args.some((arg) => arg.includes('integration__builder__'))
     const gitRunner = (dir: string, args: string[]) => {
       if (isIntegrationAdd(args)) throw new Error('worktree add indisponible')

@@ -1870,7 +1870,7 @@ export function GraphView({
         </div>
         {loading && (
           <div className="graph-loading" role="status" aria-live="polite">
-            <span className="graph-loading__spinner" aria-hidden="true" />
+            <span className="spinner spinner--lg" aria-hidden="true" />
             <span className="graph-loading__label">Chargement du graphe…</span>
           </div>
         )}
