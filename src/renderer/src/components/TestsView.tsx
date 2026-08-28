@@ -40,6 +40,7 @@ interface Resultat {
 
 type Api = {
   testProjects?: () => Promise<Projet[]>
+  revealFile?: (path: string, line?: number) => Promise<{ ok: boolean; reason?: string }>
   saveTestProjects?: (projects: Array<{ root: string; label?: string }>) => Promise<Projet[]>
   pickTestProject?: () => Promise<string | null>
   runProjectTests?: (root: string, filter?: string) => Promise<Resultat>
@@ -47,6 +48,36 @@ type Api = {
 
 function api(): Api {
   return ((window as unknown as { api?: Api }).api ?? {}) as Api
+}
+
+/** Cle de la MEMOIRE du dernier run : rouvrir la vue ne doit pas repartir d'un ecran vide. */
+const CLE_MEMOIRE = 'autowin.tests.lastRun'
+
+function lireMemoire(): Record<string, Resultat> {
+  try {
+    const brut = window.localStorage.getItem(CLE_MEMOIRE)
+    if (!brut) return {}
+    const parsed = JSON.parse(brut) as Record<string, Resultat>
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {} // memoire corrompue : rien, jamais un resultat invente
+  }
+}
+
+function ecrireMemoire(resultats: Record<string, Resultat>): void {
+  try {
+    window.localStorage.setItem(CLE_MEMOIRE, JSON.stringify(resultats))
+  } catch {
+    /* stockage indisponible : la memoire est un confort, jamais un verdict */
+  }
+}
+
+/** Numero de ligne LU dans la trace (`fichier:42:3`) - jamais devine. */
+function ligneDeLErreur(fichier: string, erreur?: string): number | undefined {
+  if (!erreur) return undefined
+  const echappe = fichier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const m = new RegExp(echappe + ':(\\d+)').exec(erreur)
+  return m ? Number(m[1]) : undefined
 }
 
 const LIBELLE_STATUT: Record<Statut, string> = {
@@ -63,6 +94,33 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   const [encours, setEncours] = useState<string>('')
   const [erreur, setErreur] = useState<string>('')
   const [seulsEchecs, setSeulsEchecs] = useState(false)
+  const [replies, setReplies] = useState<Record<string, boolean>>({})
+  const [memorises, setMemorises] = useState<Record<string, boolean>>({})
+  const [chrono, setChrono] = useState(0)
+
+  // MEMOIRE : le dernier run connu est restaure au montage et ETIQUETE, jamais presente comme frais.
+  useEffect(() => {
+    const memoire = lireMemoire()
+    const ids = Object.keys(memoire)
+    if (ids.length === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setResultats((prev) => ({ ...memoire, ...prev }))
+
+    setMemorises(Object.fromEntries(ids.map((id) => [id, true])))
+  }, [])
+
+  // Progression VIVANTE : sans flux du harnais, le chrono est le signal honnete que le run avance.
+  // Il nait et meurt avec le run - aucun bandeau code en dur.
+  useEffect(() => {
+    if (!encours) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setChrono(0)
+      return
+    }
+    const debut = Date.now()
+    const t = setInterval(() => setChrono(Date.now() - debut), 200)
+    return () => clearInterval(t)
+  }, [encours])
 
   const charger = useCallback(async () => {
     // Un canal ABSENT (moteur non reconstruit, preload périmé) ne doit pas se déguiser en « aucun
@@ -91,19 +149,31 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   )
   const resultat = projetActif ? resultats[projetActif.id] : undefined
 
-  const lancer = useCallback(async () => {
-    if (!projetActif) return
-    setEncours(projetActif.id)
-    setErreur('')
-    try {
-      const r = await api().runProjectTests?.(projetActif.root, filtre.trim() || undefined)
-      if (r) setResultats((prev) => ({ ...prev, [projetActif.id]: r }))
-    } catch (e) {
-      setErreur(e instanceof Error ? e.message : String(e))
-    } finally {
-      setEncours('')
-    }
-  }, [projetActif, filtre])
+  const lancer = useCallback(
+    async (cible?: string) => {
+      if (!projetActif) return
+      setEncours(projetActif.id)
+      setErreur('')
+      try {
+        // Relance CIBLEE : la cible passee prime ; le filtre global reste INTACT.
+        const motif = cible ?? (filtre.trim() || undefined)
+        const r = await api().runProjectTests?.(projetActif.root, motif)
+        if (r) {
+          setResultats((prev) => {
+            const suite = { ...prev, [projetActif.id]: r }
+            ecrireMemoire(suite)
+            return suite
+          })
+          setMemorises((prev) => ({ ...prev, [projetActif.id]: false }))
+        }
+      } catch (e) {
+        setErreur(e instanceof Error ? e.message : String(e))
+      } finally {
+        setEncours('')
+      }
+    },
+    [projetActif, filtre]
+  )
 
   const ajouter = useCallback(async () => {
     const racine = await api().pickTestProject?.()
@@ -126,6 +196,27 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   )
 
   const cas = (resultat?.report.cases ?? []).filter((c) => !seulsEchecs || c.status === 'failed')
+  const groupes = useMemo(() => {
+    const map = new Map<string, Cas[]>()
+    for (const c of cas) map.set(c.file, [...(map.get(c.file) ?? []), c])
+    return [...map.entries()]
+  }, [cas])
+
+  const copierErreur = useCallback(async (c: Cas) => {
+    try {
+      await navigator.clipboard?.writeText(`${c.file} > ${c.name}\n${c.error ?? ''}`)
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : String(e))
+    }
+  }, [])
+
+  const ouvrirErreur = useCallback(
+    async (c: Cas) => {
+      if (!projetActif) return
+      await api().revealFile?.(`${projetActif.root}/${c.file}`, ligneDeLErreur(c.file, c.error))
+    },
+    [projetActif]
+  )
 
   return (
     <section className="tests-view" data-testid="tests-view">
@@ -160,6 +251,13 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
           </button>
         </div>
       </header>
+
+      {encours && (
+        <p className="tests-progress" data-testid="tests-progress">
+          ⏳ {projets.find((p) => p.id === encours)?.label ?? encours} — exécution en cours ·{' '}
+          {(chrono / 1000).toFixed(1)} s
+        </p>
+      )}
 
       <div className="tests-body">
         <aside className="tests-projects">
@@ -220,23 +318,78 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
                   {resultat.runner} · {resultat.durationMs} ms · exit {String(resultat.exitCode)}
                 </span>
               </div>
+              {projetActif && memorises[projetActif.id] && (
+                <p className="tests-memo" data-testid="tests-memo">
+                  ↺ dernier run mémorisé (non rejoué)
+                </p>
+              )}
               {resultat.report.invalid && (
                 <p className="tests-invalid" data-testid="tests-invalid">
                   ⚠ {resultat.report.invalid}
                 </p>
               )}
               <ul className="tests-cases">
-                {cas.map((c, i) => (
-                  <li key={`${c.file}-${c.name}-${i}`} className={`tests-case is-${c.status}`}>
-                    <span className="tests-case-status">{LIBELLE_STATUT[c.status]}</span>
-                    <span className="tests-case-file">{c.file}</span>
-                    <span className="tests-case-name">{c.name}</span>
-                    {typeof c.durationMs === 'number' && (
-                      <span className="tests-case-duration">{c.durationMs} ms</span>
-                    )}
-                    {c.error && <pre className="tests-case-error">{c.error}</pre>}
-                  </li>
-                ))}
+                {groupes.map(([fichier, items]) => {
+                  const replie = replies[fichier] === true
+                  const echecs = items.filter((c) => c.status === 'failed').length
+                  return (
+                    <li key={fichier} className="tests-file" data-testid="tests-file-group">
+                      <div className="tests-file-head">
+                        <button
+                          data-testid="tests-file-toggle"
+                          className="tests-file-toggle"
+                          onClick={() => setReplies((p) => ({ ...p, [fichier]: !replie }))}
+                        >
+                          {replie ? '▸' : '▾'} {fichier}
+                        </button>
+                        <span className="tests-file-count">
+                          {echecs > 0 ? `${echecs} échec(s)` : `${items.length} ✓`}
+                        </span>
+                        <button
+                          data-testid="tests-file-rerun"
+                          className="tests-file-rerun"
+                          disabled={Boolean(encours)}
+                          title="Rejouer ce fichier seul"
+                          onClick={() => void lancer(fichier)}
+                        >
+                          ⟲
+                        </button>
+                      </div>
+                      {!replie && (
+                        <ul className="tests-file-cases">
+                          {items.map((c, i) => (
+                            <li key={`${c.name}-${i}`} className={`tests-case is-${c.status}`}>
+                              <span className="tests-case-status">{LIBELLE_STATUT[c.status]}</span>
+                              <span className="tests-case-name">{c.name}</span>
+                              {typeof c.durationMs === 'number' && (
+                                <span className="tests-case-duration">{c.durationMs} ms</span>
+                              )}
+                              {c.error && (
+                                <>
+                                  <pre className="tests-case-error">{c.error}</pre>
+                                  <span className="tests-case-tools">
+                                    <button
+                                      data-testid="tests-case-copy"
+                                      onClick={() => void copierErreur(c)}
+                                    >
+                                      Copier l’erreur
+                                    </button>
+                                    <button
+                                      data-testid="tests-case-open"
+                                      onClick={() => void ouvrirErreur(c)}
+                                    >
+                                      Ouvrir le fichier
+                                    </button>
+                                  </span>
+                                </>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             </>
           )}
