@@ -1381,14 +1381,26 @@ export function scrollChatToBottom(
   let frames = 0
   let lastHeight = -1
   let lastTop = Number.NEGATIVE_INFINITY
+  /**
+   * Un re-rendu peut reposer `scrollTop` à 0 SANS changer la hauteur (mise en page recalculée à
+   * l'ouverture d'une conversation déjà mesurée) : la garde par la HAUTEUR ne suffit pas, et le fil
+   * restait en haut — défaut rapporté le 2026-08-28. Un saut BRUTAL au tout début n'est pas un geste
+   * de lecture ; une molette recule progressivement. On tolère donc UN seul retour-à-zéro.
+   */
+  let retourEnHautTolere = true
   const step = (): void => {
     // Le fil a été démonté (changement de conversation, fermeture) : plus rien à faire piloter.
     if ('isConnected' in element && element.isConnected === false) return
     const height = element.scrollHeight
     const heightMoved = height !== lastHeight
+    const reculBrutalEnHaut = element.scrollTop <= 4 && lastTop > element.clientHeight
     if (element.scrollTop < lastTop - 4 && !heightMoved) {
-      onSettled?.(isChatNearBottom(element))
-      return
+      if (!reculBrutalEnHaut || !retourEnHautTolere) {
+        onSettled?.(isChatNearBottom(element))
+        return
+      }
+      retourEnHautTolere = false
+      element.scrollTo({ top: height, behavior: 'auto' })
     }
     const isLastFrame = frames >= maxFrames - 1
     const remaining = height - element.clientHeight - element.scrollTop

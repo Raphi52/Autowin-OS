@@ -1579,6 +1579,66 @@ describe('chat scrolling and layout rules', () => {
   })
 
   /**
+   * OUVERTURE D'UNE CONVERSATION — défaut rapporté le 2026-08-28 : « la scrollbar est tout en haut au
+   * lieu de tout en bas et je dois cliquer dernier message ». Le re-rendu peut reposer `scrollTop` à
+   * 0 SANS que la hauteur bouge : la garde anti-recul, qui ne discrimine que par la HAUTEUR, y voyait
+   * un lecteur et abandonnait le fil en haut.
+   *
+   * Discriminant : un saut BRUTAL à 0 depuis le bas n'est pas un geste de lecture ; une molette recule
+   * progressivement. On tolère donc UN seul retour-à-zéro, puis on redescend.
+   */
+  it('redescend après un retour brutal en haut à hauteur STABLE (ouverture de conversation)', () => {
+    const queue: Array<() => void> = []
+    const targets: Array<{ top: number }> = []
+    const element = {
+      scrollTop: 0,
+      clientHeight: 100,
+      scrollHeight: 1000,
+      scrollTo(options: ScrollToOptions) {
+        targets.push({ top: options.top ?? 0 })
+        element.scrollTop = (options.top ?? 0) - element.clientHeight
+      }
+    }
+
+    scrollChatToBottom(element, (callback) => queue.push(callback))
+    const apresPremiereDescente = targets.length
+    expect(element.scrollTop).toBe(900)
+
+    element.scrollTop = 0
+    queue.shift()?.()
+
+    expect(targets.length).toBeGreaterThan(apresPremiereDescente)
+    expect(targets.at(-1)?.top).toBe(1000)
+  })
+
+  /**
+   * ENTRÉE QUI DOIT FAIRE ÉCHOUER une correction trop large : un lecteur qui remonte à la molette
+   * (recul PARTIEL, hauteur stable) garde la main — on ne le ramène pas en bas.
+   */
+  it('respecte encore un lecteur qui remonte progressivement', () => {
+    const queue: Array<() => void> = []
+    const targets: Array<{ top: number }> = []
+    const element = {
+      scrollTop: 0,
+      clientHeight: 100,
+      scrollHeight: 1000,
+      scrollTo(options: ScrollToOptions) {
+        targets.push({ top: options.top ?? 0 })
+        element.scrollTop = (options.top ?? 0) - element.clientHeight
+      }
+    }
+
+    scrollChatToBottom(element, (callback) => queue.push(callback))
+    const apresPremiereDescente = targets.length
+
+    element.scrollTop = 600
+    queue.shift()?.()
+    while (queue.length > 0) queue.shift()?.()
+
+    expect(targets.length).toBe(apresPremiereDescente)
+  })
+
+  /**
    * FILET DE SECOURS. Le défaut mesuré était SILENCIEUX : le fil se croyait collé au bas, donc aucun
    * bouton ne signalait le texte resté hors champ. Un cas résiduel doit rester visible.
    */
