@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createDecorScene, DECOR_DEFAUT, type DecorScene, type DecorVariant } from './home-decor-scene'
+import {
+  createDecorScene,
+  DECOR_DEFAUT,
+  tempsDecor,
+  type DecorScene,
+  type DecorVariant
+} from './home-decor-scene'
 import {
   formatEventDay,
   formatEventTime,
@@ -319,7 +325,7 @@ export function HomeView({
      */
     const fit = (): void => {
       scene.resize(host.clientWidth, host.clientHeight)
-      scene.render(reduceMotion ? 12 : performance.now() / 1000, { x: 0, y: 0 })
+      scene.render(tempsDecor(performance.now() / 1000, reduceMotion), { x: 0, y: 0 })
     }
     fit()
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null
@@ -372,7 +378,7 @@ export function HomeView({
        * QUE quand l'utilisateur bouge, c'est de la manipulation directe, et la supprimer retirait
        * une fonctionnalite au lieu de calmer une animation.
        */
-      scene.render(reduceMotion ? 12 : time / 1000, look)
+      scene.render(tempsDecor(time / 1000, reduceMotion), look)
     }
 
     /*
