@@ -984,6 +984,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
         text: ' après-orientation'
       })
     )
+    // Le texte de streaming est batché sur une frame (ChatView.tsx: pilotBatcher) : sans attendre la
+    // frame, le second delta n'est pas encore dans le DOM et la recherche du bloc « après » échoue.
+    await act(async () => flushAnimationFrames())
 
     const receipt = container!.querySelector('.directive-receipt') as HTMLElement
     const bodies = [...container!.querySelectorAll<HTMLElement>('.msg.assistant .msg-body')]
@@ -2208,6 +2211,65 @@ describe('ChatView behavior under concurrent UI actions', () => {
     markdownRenderCount.value = 0
     await type('nouveau draft')
     expect(markdownRenderCount.value).toBe(0)
+  })
+
+  /**
+   * MESUREUR DE RENDUS DU STREAMING (DoD du frame « fluidité »).
+   *
+   * Contrat prouvé ici : une rafale de deltas arrivés dans la MÊME frame ne coûte qu'UN rendu du
+   * fil, pas un rendu par token. Entrée qui doit faire échouer ce test si la correction était
+   * fausse : ces 30 deltas appliqués SANS batcher (patchLast direct par delta) → markdownRenderCount
+   * monte à ~30 au lieu de rester ≤ 2. Le test échoue AUSSI si le batcher perd du texte :
+   * l'assertion de contenu final couvre le faux-vert « ne rien rendre ».
+   */
+  it('ne rend le fil qu’une fois par frame pour une rafale de deltas de streaming', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    let pilotHandler: ((event: unknown) => void) | undefined
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      onPilotEvent: vi.fn((callback: (event: unknown) => void) => {
+        pilotHandler = callback
+        return vi.fn()
+      })
+    })
+    // Frames PILOTÉES : sans cela, chaque delta tomberait dans sa propre frame et le batcher ne
+    // serait pas mesuré. Les callbacks sont capturés puis rejoués en UNE fois.
+    const frames: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('mesure de rendus')
+    await click('.composer-send')
+
+    const RAFALE = 30
+    markdownRenderCount.value = 0
+    // Un delta PAR TÂCHE : c'est la réalité IPC. Groupés dans un seul act(), React les batcherait
+    // lui-même et le test passerait même sans batcher applicatif (mutant vérifié).
+    for (let index = 0; index < RAFALE; index += 1)
+      await act(async () => {
+        pilotHandler?.({
+          conversationId: 'A',
+          turnId: 'turn-mesure',
+          kind: 'delta',
+          streamId: '0:0',
+          text: `t${index} `
+        })
+      })
+    const pendantLaRafale = markdownRenderCount.value
+    await act(async () => {
+      const aRejouer = frames.splice(0, frames.length)
+      for (const frame of aRejouer) frame(0)
+    })
+
+    expect(pendantLaRafale).toBe(0)
+    expect(markdownRenderCount.value).toBeLessThanOrEqual(2)
+    expect(container!.textContent).toContain('t0 ')
+    expect(container!.textContent).toContain(`t${RAFALE - 1} `)
+    await act(async () => pilot.resolve({ ok: true }))
   })
 
   it('offers inspection only for persisted assistant turns and reports the exact target', async () => {
