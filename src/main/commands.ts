@@ -2226,6 +2226,16 @@ export class AppCommandBus {
             turnId: orchestrationTurnId,
             runId: runPath ?? orchestrationTurnId,
             runPath,
+            /*
+             * PORTEE REELLEMENT JOUEE. Cette lignee recompose l'issue champ par champ (les deux
+             * autres font `...result`) et OUBLIAIT `phaseOutputs`. Le pied de cloture derive la
+             * portee de ce champ : vide, il tombe dans la branche « portee inconnue » et sort
+             * « rien ne prouve que le besoin est fait » APRES un `/frame` parfaitement joue
+             * (mesure du 2026-08-28, run frame-traite-ensemble-ces-6-candidats). Seuls les NOMS de
+             * phase voyagent : le texte vit deja dans `result` et dans RUN.md, l'y remettre
+             * doublerait le poids de l'issue sur l'IPC.
+             */
+            phaseOutputs: r.phaseOutputs.map((output) => ({ phase: output.phase, text: '' })),
             status: r.gateBlocked ? 'failed' : 'succeeded',
             reused: run?.reused ?? false,
             // Le travail est-il reste dans la copie isolee ? C'est ce signal — jamais le vocabulaire
