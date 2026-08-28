@@ -54,6 +54,14 @@ export interface AutorisationsLues {
   binaires: readonly string[]
 }
 
+/**
+ * AUTORISE D'OFFICE — decision utilisateur du 2026-08-28 : « arrete de me demander de t'autoriser
+ * git, fais-le ». Redemander un droit deja donne a chaque conversation etait le vrai cout. `git`
+ * seul est grave : la liste reste nominale (propriete 2), les enchainements restent refuses
+ * (propriete 3), et tout autre binaire garde le refus par defaut (propriete 1).
+ */
+export const AUTORISATIONS_PAR_DEFAUT: readonly string[] = ['git']
+
 const MOTS_GENERAUX = /autorise\s+(toutes\s+les\s+commandes|tout)\b/
 
 /**
@@ -102,7 +110,10 @@ export function decisionDeCommande(
   }
   const ici = autorisationsLuesDans(messagesUtilisateur)
   const general = ici.general || permanentes.general
-  const nominale = ici.binaires.includes(binaire) || permanentes.binaires.includes(binaire)
+  const nominale =
+    AUTORISATIONS_PAR_DEFAUT.includes(binaire) ||
+    ici.binaires.includes(binaire) ||
+    permanentes.binaires.includes(binaire)
   if (general || nominale) return { autorise: true, binaire }
   return {
     autorise: false,

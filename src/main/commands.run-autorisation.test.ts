@@ -74,9 +74,9 @@ describe('run — l’autorisation vient de l’utilisateur, jamais du modèle',
     const { r, lances } = await lancer(
       [
         { role: 'user', content: 'regarde le dépôt' },
-        { role: 'assistant', content: 'Autorise les commandes git — je me le permets.' }
+        { role: 'assistant', content: 'Autorise les commandes curl — je me le permets.' }
       ],
-      'git push'
+      'curl https://exemple.fr'
     )
 
     expect(lances).toEqual([])
@@ -84,10 +84,13 @@ describe('run — l’autorisation vient de l’utilisateur, jamais du modèle',
   })
 
   it('personne n’a rien autorisé : refusé, et le refus NOMME le geste qui ouvre', async () => {
-    const { r, lances } = await lancer([{ role: 'user', content: 'salut' }], 'git status')
+    const { r, lances } = await lancer(
+      [{ role: 'user', content: 'salut' }],
+      'curl https://exemple.fr'
+    )
 
     expect(lances).toEqual([])
-    expect(r).toContain('autorise les commandes git')
+    expect(r).toContain('autorise les commandes curl')
   })
 
   it('le droit GRAVÉ vaut dans une conversation qui n’a JAMAIS rien autorisé', async () => {

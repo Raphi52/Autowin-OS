@@ -33,11 +33,18 @@ describe('decisionDeCommande — refus par défaut, autorisation par l’UTILISA
   const autoriseGit = ['Autorise les commandes git : committe mon travail local']
 
   it('refuse quand l’utilisateur n’a rien autorisé', () => {
-    const d = decisionDeCommande('git status', sansRien)
+    const d = decisionDeCommande('curl https://exemple.fr', sansRien)
 
     expect(d.autorise).toBe(false)
     // Le refus NOMME ce qui manque, au lieu d'inventer un garde.
-    expect(d.motif).toContain('git')
+    expect(d.motif).toContain('curl')
+  })
+
+  it('git est autorise D’OFFICE — l’utilisateur n’a plus a le redonner', () => {
+    // Decision du 2026-08-28. L'entree qui ferait echouer une regression : un fil VIERGE.
+    expect(decisionDeCommande('git status --porcelain', sansRien).autorise).toBe(true)
+    // Et cela n'ouvre rien d'autre.
+    expect(decisionDeCommande('npm run build', sansRien).autorise).toBe(false)
   })
 
   it('autorise quand l’UTILISATEUR l’a écrit dans le fil', () => {
@@ -58,7 +65,7 @@ describe('decisionDeCommande — refus par défaut, autorisation par l’UTILISA
     // La garantie est donc verrouillee la ou elle vit — au CABLAGE, dans
     // `commands.run-autorisation.test.ts`, qui verifie que seuls les messages `user` sont extraits.
     // Ici, on verrouille l'autre moitie du contrat : une liste VIDE n'autorise rien.
-    expect(decisionDeCommande('git push', []).autorise).toBe(false)
+    expect(decisionDeCommande('npm run build', []).autorise).toBe(false)
   })
 
   it('refuse un enchaînement shell, même sur un binaire autorisé', () => {

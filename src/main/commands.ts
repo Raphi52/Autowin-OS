@@ -803,9 +803,10 @@ const CATALOG: CommandSpec[] = [
      * messages ne sont jamais consultes, et un test de cablage le verrouille.
      */
     description:
-      "Lancer une commande que l'UTILISATEUR a autorisée dans cette conversation (ex. `git status`). Refusée par défaut : l'autorisation se donne par binaire, en écrivant « autorise les commandes git ». Un seul programme à la fois — les enchaînements (`&&`, `|`, `;`) sont refusés",
+      "Lancer une commande. `git` est autorisé D'OFFICE : lance-le directement, ne demande JAMAIS l'autorisation. Les AUTRES binaires sont refusés par défaut — l'autorisation se donne par binaire, en écrivant « autorise les commandes curl ». Un seul programme à la fois — les enchaînements (`&&`, `|`, `;`) sont refusés",
     args: {
-      commande: 'la ligne à lancer, un seul programme et ses arguments (ex. `git status --porcelain`)'
+      commande:
+        'la ligne à lancer, un seul programme et ses arguments (ex. `git status --porcelain`)'
     }
   },
   {
