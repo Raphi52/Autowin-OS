@@ -1102,6 +1102,8 @@ export class AgentPilot {
     let questionSansLectureRecoveryAvailable = true
     /** Dernier texte visible du tour, pour juger s'il avance un nombre non verifie. */
     let visibleTextThisTurn = ''
+    // Index de l'itération pour laquelle la consigne de clôture forcée a déjà été injectée.
+    let consigneClotureInjectee = -1
     let chiffreNonVerifieRecoveryAvailable = true
     let conclusionFormatRecoveryAvailable = true
     /**
@@ -1194,6 +1196,24 @@ export class AgentPilot {
       // point d'itération (priorité immédiate, sans attendre la fin du tour).
       for (const directive of drainDirectives?.() ?? []) {
         convo.push(`UTILISATEUR (DIRECTIVE INJECTÉE EN COURS DE TOUR — PRIORITAIRE): ${directive}`)
+      }
+      /**
+       * CAP RÉINJECTÉ COMME CONSIGNE DE CLÔTURE FORCÉE (conv-1485).
+       *
+       * Le modèle ignorait tout du cap : il continuait d'agir jusqu'à ce que la boucle meure sur
+       * « Cap d'itérations (N) atteint sans réponse finale », en jetant le texte déjà dit. On le
+       * PRÉVIENT à la dernière itération pour qu'il règle/rapporte l'erreur en cours et conclue.
+       * Injectée une seule fois par index : `grantRecoveryIteration` peut relever le cap APRÈS,
+       * auquel cas la nouvelle dernière itération reçoit sa propre consigne.
+       */
+      if (i === iterationLimit - 1 && consigneClotureInjectee !== i) {
+        consigneClotureInjectee = i
+        convo.push(
+          `SYSTÈME — DERNIÈRE ITÉRATION DE CE TOUR (${i + 1}/${iterationLimit}) : c'est ton dernier ` +
+            "appel. N'émets plus de commande : une action de plus fait mourir le tour sans réponse. RÈGLE ou RAPPORTE " +
+            "l'erreur en cours (ce qui a échoué, sa cause, l'état réel laissé), puis CONCLUS en " +
+            'clair. Un tour sans conclusion écrite est perdu pour l’utilisateur.'
+        )
       }
       const iterationAttachments = [
         ...(i === 0 ? (currentAttachments ?? []) : []),
@@ -2124,6 +2144,17 @@ export class AgentPilot {
       emit({
         kind: 'done',
         text: compteRenduOrchestration,
+        ...(orchestrationOutcome ? { outcome: orchestrationOutcome } : {}),
+        usage
+      })
+      return
+    }
+    // Le modèle a PARLÉ pendant ce tour : sa dernière parole EST la clôture. Mourir sur une erreur
+    // terminale jetterait un texte déjà payé et déjà diffusé en flux (conv-1485).
+    if (visibleTextThisTurn.trim()) {
+      emit({
+        kind: 'done',
+        text: texteDeCloture(visibleTextThisTurn),
         ...(orchestrationOutcome ? { outcome: orchestrationOutcome } : {}),
         usage
       })
