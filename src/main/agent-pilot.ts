@@ -902,6 +902,14 @@ export class AgentPilot {
     const providerResumes = this.registry.honoursSessionResume?.(provider) ?? false
     const resumeSessionId =
       providerResumes && known?.key === sessionKey ? known.sessionId : undefined
+    /**
+     * La session VIVANTE du tour : elle avance d'itération en itération.
+     *
+     * `resumeSessionId` décrit l'état AU DÉBUT du tour et sert à décider de l'amputation du prompt ;
+     * il doit rester figé pour ça. Mais l'appel, lui, doit reprendre la dernière session réellement
+     * ouverte — sinon la 2e itération repart à blanc (voir le bloc d'options plus bas).
+     */
+    let sessionEnCours = resumeSessionId
     // Un détour par un autre provider/modèle ajoute des échanges absents de l'ancienne session.
     // Elle devient donc définitivement périmée, même si l'utilisateur revient ensuite au binding initial.
     if (conversationId && known && known.key !== sessionKey) {
@@ -1255,9 +1263,20 @@ export class AgentPilot {
         model: binding.model,
         reasoningEffort: binding.reasoningEffort,
         ...providerLimits,
-        // Repris seulement au PREMIER appel du tour : les itérations suivantes chaînent déjà sur la
-        // session que ce tour vient d'ouvrir (voir la mémorisation après réception).
-        ...(resumeSessionId && i === 0 ? { resumeSessionId } : {}),
+        /**
+         * REPRIS À CHAQUE ITÉRATION, sur la session RÉELLEMENT ouverte.
+         *
+         * Le commentaire précédent affirmait que les itérations suivantes « chaînaient déjà » sur la
+         * session ouverte par ce tour. Elles ne chaînaient rien : `resumeSessionId` n'était passé
+         * qu'à `i === 0`, donc chaque itération suivante démarrait une session VIERGE — avec un
+         * message `convo` construit UNE fois et, sous reprise, volontairement amputé de tout
+         * l'historique (il est censé vivre dans la session CLI). Le modèle qui rédige la réponse
+         * finale, après un appel d'outil, n'avait donc jamais vu le fil.
+         *
+         * Mesuré en conv-1498 le 2026-08-28 : l'agent nie connaître une variante qu'il avait
+         * lui-même proposée deux tours plus tôt. Test : `agent-pilot.session-intra-tour.test.ts`.
+         */
+        ...(sessionEnCours ? { resumeSessionId: sessionEnCours } : {}),
         observePrompt: (observed) => {
           observed.systemBlocks = systemBlocks
           prompt = observed
@@ -1390,6 +1409,9 @@ export class AgentPilot {
       // PERSISTÉ sur disque en plus du cache mémoire : sans ça, le prochain démarrage de l'app oublie
       // la session et re-paie l'historique entier — le gain de la reprise s'évaporait à chaque
       // relance. Le cache mémoire reste la source rapide ; le disque est le filet.
+      // La session avance AUSSI au sein du tour, même sans `conversationId` : l'itération suivante
+      // doit reprendre celle-ci et non repartir à blanc.
+      if (res.sessionId && providerResumes) sessionEnCours = res.sessionId
       if (conversationId) {
         if (res.sessionId && providerResumes) {
           this.chatSessions.set(conversationId, { key: sessionKey, sessionId: res.sessionId })
