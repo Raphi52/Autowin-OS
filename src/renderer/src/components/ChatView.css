@@ -347,13 +347,25 @@
     0 0 3px currentColor,
     0 0 7px currentColor;
 }
-/* EN COURS = l'ATOME 5A, defini une seule fois dans theme.css. Ici on ne redit QUE la taille :
-   recopier la geometrie avait fait diverger rendu et reduced-motion selon l'endroit. */
+/* EN COURS = le composant <Spinner/> (.aw-atom), celui que rend TOUT le reste de l'app.
+   Il porte lui-meme sa geometrie ; ici on ne fait qu'ANNULER les proprietes de la pastille
+   (point lumineux de 7px) qu'il ne doit pas heriter. Recopier une geometrie d'atome ici
+   avait fait diverger l'indicateur des conversations de tous les autres. */
 .conversation-state.is-running {
-  /* 16px = PLANCHER de lisibilite de l'atome, tenu par spinner-legibility.test.ts : sous cette
-     taille, l'aplatissement a 55 % ecrase les trois orbites en une eraflure sombre. */
-  --aw-spin-size: 16px;
-  --aw-spin-ring: 1.5px;
+  /* `display` D'ABORD. .conversation-state et .aw-atom ont la MEME specificite : l'ordre des
+     feuilles faisait gagner la pastille, et l'atome retombait en `block`. Or ses trois plans se
+     SUPERPOSENT par `grid-area: 1/1` — sans conteneur grid ils s'empilent verticalement, et le
+     noyau, non blockifie, tombe a une boite 0x0. Mesure au CDP le 2026-08-29 : atome `block` +
+     noyau 0x0 ici, contre `grid` + noyau 4x4 partout ailleurs. */
+  display: inline-grid;
+  place-items: center;
+  /* 1em = la taille propre de l'atome (--aw-atom-size). Un `auto` laissait la ligne de liste,
+     qui est un conteneur flex, etirer l'atome sur toute sa hauteur : 14x35 mesure au CDP. */
+  width: 1em;
+  height: 1em;
+  align-self: center;
+  background: none;
+  box-shadow: none;
   vertical-align: 0;
 }
 .conversation-state.is-completed {

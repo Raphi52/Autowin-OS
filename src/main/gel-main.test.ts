@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   demarrerDetecteurDeGel,
-  instrumenterAppelsSynchrones,
   instrumenterCanauxIpc,
   lireGels,
   marquerOperation,
@@ -164,33 +163,55 @@ describe('un handler ASYNC ne s’attribue pas les gels qui surviennent pendant 
   })
 })
 
-describe('instrumenterAppelsSynchrones — la famille qui fige vraiment la fenetre se nomme', () => {
-  it('declare le binaire et son premier argument pendant l’appel, sans changer le resultat', () => {
-    let vuPendant = ''
-    const faux: Record<string, unknown> = {
-      execFileSync: (_bin: string, _args: string[]) => {
-        vuPendant = operationDeclaree()
-        return 'sortie git'
+/**
+ * PREUVE plutot que CORRELATION. Le battement designe l'operation OUVERTE au moment du reveil
+ * tardif : c'est une coincidence temporelle, pas une demonstration. Un segment synchrone chronometre
+ * au-dela du seuil, lui, a REELLEMENT tenu la boucle d'evenements pendant ce temps.
+ */
+describe('mesure DIRECTE du segment synchrone d’un canal IPC', () => {
+  it('journalise le canal quand son segment synchrone depasse le seuil', () => {
+    const captures: Gel[] = []
+    const arreter = demarrerDetecteurDeGel(mkdtempSync(join(tmpdir(), 'gel-')), 5_000, (g) =>
+      captures.push(g)
+    )
+    const enregistres = new Map<string, (...a: never[]) => unknown>()
+    const faux = {
+      handle: (canal: string, ecouteur: (...a: never[]) => unknown) => {
+        enregistres.set(canal, ecouteur)
       }
     }
-    instrumenterAppelsSynchrones(faux)
-    const resultat = (faux.execFileSync as (b: string, a: string[]) => unknown)('git', [
-      'for-each-ref',
-      '--no-merged'
-    ])
-    expect(vuPendant).toBe('sync:git for-each-ref')
-    expect(resultat).toBe('sortie git')
-    expect(operationDeclaree()).toBe('inconnu')
+    instrumenterCanauxIpc(faux)
+    faux.handle('os:pilotChat', (() => {
+      // BLOCAGE REEL de la boucle, comme le ferait une lecture disque lente.
+      const fin = Date.now() + 1_050
+      while (Date.now() < fin) {
+        /* on tient la boucle */
+      }
+      return 'ok'
+    }) as unknown as (...a: never[]) => unknown)
+
+    expect((enregistres.get('os:pilotChat') as () => unknown)()).toBe('ok')
+    arreter()
+    const mesure = captures.find((g) => g.operation === 'ipc:os:pilotChat (sync)')
+    expect(mesure).toBeDefined()
+    expect(mesure?.blocageMs).toBeGreaterThanOrEqual(1_000)
   })
 
-  it('depile meme quand le processus enfant JETTE', () => {
-    const faux: Record<string, unknown> = {
-      spawnSync: () => {
-        throw new Error('ENOENT')
+  it('ne journalise RIEN quand le segment synchrone est court', () => {
+    const captures: Gel[] = []
+    const arreter = demarrerDetecteurDeGel(mkdtempSync(join(tmpdir(), 'gel-')), 5_000, (g) =>
+      captures.push(g)
+    )
+    const enregistres = new Map<string, (...a: never[]) => unknown>()
+    const faux = {
+      handle: (canal: string, ecouteur: (...a: never[]) => unknown) => {
+        enregistres.set(canal, ecouteur)
       }
     }
-    instrumenterAppelsSynchrones(faux)
-    expect(() => (faux.spawnSync as (b: string) => unknown)('git')).toThrow('ENOENT')
-    expect(operationDeclaree()).toBe('inconnu')
+    instrumenterCanauxIpc(faux)
+    faux.handle('os:rapide', (() => 'ok') as unknown as (...a: never[]) => unknown)
+    ;(enregistres.get('os:rapide') as () => unknown)()
+    arreter()
+    expect(captures).toEqual([])
   })
 })

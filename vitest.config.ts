@@ -45,6 +45,48 @@ const RACINE_DONNEES_TESTS = join(tmpdir(), 'autowin-tests-appdata')
  * Quatre workers bornent en plus la contention des tests qui créent de vrais dépôts et worktrees Git,
  * y compris quand plusieurs worktrees Autowin valident leurs chantiers en même temps.
  */
+/** Perimetre exclu de la suite — voir la note portee par `exclude` ci-dessous. */
+const EXCLUSIONS = [
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/out/**',
+  'Audit/**',
+  'artifacts/**',
+  '**/worktrees/**',
+  // LA RACINE DE DONNEES DE L'APP, en entier. L'exclusion des worktrees juste au-dessus ne
+  // suffit pas : mesure le 2026-08-24, une orchestration a cree `.autowin-data/tmp-fusion-main/`
+  // -- une copie COMPLETE du depot, hors de tout dossier de worktrees. La suite est passee de 737
+  // a 1421 fichiers, et 4 des 5 echecs venaient de cette copie. Exactement la panne que le
+  // commentaire ci-dessus decrit, par un chemin que son exclusion ne couvrait pas.
+  //
+  // Aucun test de SOURCE ne vit sous `.autowin-data` : c'est de la donnee d'execution.
+  //
+  // COMMENTAIRES DE LIGNE A DESSEIN : la premiere version de cette note etait un bloc `/* */`
+  // citant un motif glob. Or ce motif contient la sous-chaine qui FERME un bloc, donc le
+  // commentaire se terminait au milieu et cassait la syntaxe du fichier. `npm run typecheck` est
+  // passe a zero malgre tout -- il ne couvre pas ce fichier. Seule l'execution de la suite l'a dit.
+  '.autowin-data/**',
+  '**/.autowin-data/**',
+  '**/.claude/**',
+  // Harnais Node autonome, couvert par cdp-verdict-collection.test.mjs.
+  'scripts/cdp-verdict.test.mjs',
+  /**
+   * Tests `*.live.test.*` : ils consomment un VRAI provider (coût réel, réseau, authentification).
+   * Ils répondent à une question qu'aucun mock ne tranche — « le modèle produit-il vraiment ce que
+   * le renderer sait rendre ? » — mais les laisser dans la suite par défaut ferait payer un appel
+   * modèle à chaque `npm test`, et rendrait la suite rouge hors ligne. Lancement EXPLICITE :
+   * `npx vitest run --config vitest.live.config.ts` — `--exclude` en CLI ne surcharge PAS cette
+   * liste (vérifié : « No test files found »), d'où une config dédiée plutôt qu'un drapeau.
+   */
+  '**/*.live.test.*'
+]
+
+/**
+ * Les fichiers qui creent de VRAIS depots git (worktrees, publications, editions verifiees).
+ * Groupes a part pour etre joues sans concurrence : voir `projects` plus bas.
+ */
+const GIT_LOURDS = ['src/main/store/worktree-manager*.test.ts', 'src/main/edit-file-portee.test.ts']
+
 export default defineConfig({
   test: {
     /**
@@ -56,40 +98,7 @@ export default defineConfig({
      * (dependances absentes dans ces copies). Consequence : la suite paraissait massivement rouge des
      * qu'un agent tournait, et le vrai signal devenait illisible.
      */
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/out/**',
-      'Audit/**',
-      'artifacts/**',
-      '**/worktrees/**',
-      // LA RACINE DE DONNEES DE L'APP, en entier. L'exclusion des worktrees juste au-dessus ne
-      // suffit pas : mesure le 2026-08-24, une orchestration a cree `.autowin-data/tmp-fusion-main/`
-      // -- une copie COMPLETE du depot, hors de tout dossier de worktrees. La suite est passee de 737
-      // a 1421 fichiers, et 4 des 5 echecs venaient de cette copie. Exactement la panne que le
-      // commentaire ci-dessus decrit, par un chemin que son exclusion ne couvrait pas.
-      //
-      // Aucun test de SOURCE ne vit sous `.autowin-data` : c'est de la donnee d'execution.
-      //
-      // COMMENTAIRES DE LIGNE A DESSEIN : la premiere version de cette note etait un bloc `/* */`
-      // citant un motif glob. Or ce motif contient la sous-chaine qui FERME un bloc, donc le
-      // commentaire se terminait au milieu et cassait la syntaxe du fichier. `npm run typecheck` est
-      // passe a zero malgre tout -- il ne couvre pas ce fichier. Seule l'execution de la suite l'a dit.
-      '.autowin-data/**',
-      '**/.autowin-data/**',
-      '**/.claude/**',
-      // Harnais Node autonome, couvert par cdp-verdict-collection.test.mjs.
-      'scripts/cdp-verdict.test.mjs',
-      /**
-       * Tests `*.live.test.*` : ils consomment un VRAI provider (coût réel, réseau, authentification).
-       * Ils répondent à une question qu'aucun mock ne tranche — « le modèle produit-il vraiment ce que
-       * le renderer sait rendre ? » — mais les laisser dans la suite par défaut ferait payer un appel
-       * modèle à chaque `npm test`, et rendrait la suite rouge hors ligne. Lancement EXPLICITE :
-       * `npx vitest run --config vitest.live.config.ts` — `--exclude` en CLI ne surcharge PAS cette
-       * liste (vérifié : « No test files found »), d'où une config dédiée plutôt qu'un drapeau.
-       */
-      '**/*.live.test.*'
-    ],
+    exclude: EXCLUSIONS,
     /**
      * HERMETICITE vis-a-vis de l'app EN COURS D'EXECUTION — meme classe de panne que l'exclusion
      * d'`Audit/` ci-dessus : la suite doit mesurer le DEPOT, jamais l'environnement qui la lance.
@@ -113,6 +122,39 @@ export default defineConfig({
     pool: 'threads',
     maxWorkers: 4,
     testTimeout: 20_000,
-    hookTimeout: 20_000
+    hookTimeout: 20_000,
+    /**
+     * TESTS GIT LOURDS — joues SEULS, jamais en concurrence avec les autres.
+     *
+     * MESURE du 2026-08-29 : trois fichiers rouges dans la suite complete, VERTS en isolation
+     * (51/51 puis 10/10). L'erreur n'etait pas une assertion mais `spawnSync git ETIMEDOUT` —
+     * le budget de 30 s d'UN appel git (`GIT_COMMAND_TIMEOUT_MS`, worktree-manager.ts) depasse
+     * parce que quatre workers creaient des depots reels en meme temps.
+     *
+     * Relever ce budget aurait masque la contention ET affaibli une garde de PRODUCTION qui
+     * protege l'app d'un git pendu. On retire donc la contention a sa source : ces fichiers
+     * forment un groupe joue en un seul worker, pendant que le reste garde ses quatre.
+     */
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'git-lourd',
+          include: GIT_LOURDS,
+          // Joue APRES tout le reste (groupOrder 1), dans UN SEUL thread : plus aucun autre
+          // worker ne cree de depot git pendant qu'ils tournent.
+          poolOptions: { threads: { singleThread: true } },
+          sequence: { groupOrder: 1 }
+        }
+      },
+      {
+        extends: true,
+        test: {
+          name: 'unite',
+          exclude: [...EXCLUSIONS, ...GIT_LOURDS],
+          sequence: { groupOrder: 0 }
+        }
+      }
+    ]
   }
 })

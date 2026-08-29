@@ -9,7 +9,9 @@ import { separationDeltaCollee, DeltaCollageTracker } from './agent-pilot'
  */
 describe('separationDeltaCollee', () => {
   it('sépare un préambule sans saut de ligne d’une fence html-render qui suit', () => {
-    expect(separationDeltaCollee('Voici le tableau :', '```html-render\n<p>x</p>\n```')).toBe('\n\n')
+    expect(separationDeltaCollee('Voici le tableau :', '```html-render\n<p>x</p>\n```')).toBe(
+      '\n\n'
+    )
   })
 
   it('sépare aussi une fence ouverte après un préambule indenté en fin de liste', () => {
@@ -40,6 +42,35 @@ describe('separationDeltaCollee', () => {
 })
 
 describe('DeltaCollageTracker', () => {
+  /**
+   * MESURE conv-1517 (2026-08-29, capture utilisateur) : le message persiste portait
+   * `...cote `src/main`.```html-render` — la fence COLLEE en fin de phrase. CommonMark n'y voit
+   * alors aucun bloc : le HTML s'affiche en brut, et le ``` de fermeture reste orphelin, ce qui
+   * protege les lignes suivantes et empeche AUSSI l'encadre du bloc de cloture.
+   *
+   * La cause n'est pas la reprise d'un flux mais son CHANGEMENT : au premier delta d'un NOUVEAU
+   * streamId (iteration suivante), le texte deja emis pour CE flux est vide par definition, donc
+   * l'ancienne garde ne separait rien — alors que les deux textes finissent dans la MEME part.
+   */
+  it('separe le PREMIER delta d’un NOUVEAU flux qui ouvre une fence apres une phrase', () => {
+    const tracker = new DeltaCollageTracker()
+    expect(tracker.separation('0:0', 'Je lance la suite complete.')).toBe('')
+    expect(tracker.separation('1:0', '```html-render\n<div>x</div>\n```')).toBe('\n\n')
+  })
+
+  it('ne separe pas un nouveau flux qui poursuit de la PROSE', () => {
+    // L'entree qui ferait echouer une separation posee trop largement : sans fence, rien a couper.
+    const tracker = new DeltaCollageTracker()
+    expect(tracker.separation('0:0', 'Premiere phrase.')).toBe('')
+    expect(tracker.separation('1:0', ' Suite de la phrase')).toBe('')
+  })
+
+  it('ne separe pas quand le flux precedent est DANS une fence ouverte', () => {
+    const tracker = new DeltaCollageTracker()
+    expect(tracker.separation('0:0', '```html-render\n<div>')).toBe('')
+    expect(tracker.separation('1:0', '```')).toBe('')
+  })
+
   it('sépare quand un delta REPREND un streamId dont le texte ne finit pas par un saut de ligne', () => {
     const tracker = new DeltaCollageTracker()
     expect(tracker.separation('s1', 'Préambule :')).toBe('')
@@ -58,9 +89,7 @@ describe('DeltaCollageTracker', () => {
   it('reste transparent sur un flux continu, chunk par chunk', () => {
     const tracker = new DeltaCollageTracker()
     const chunks = ['Le', ' tab', 'leau', ' est', ' prêt.']
-    const recolle = chunks
-      .map((chunk) => tracker.separation('s1', chunk) + chunk)
-      .join('')
+    const recolle = chunks.map((chunk) => tracker.separation('s1', chunk) + chunk).join('')
     expect(recolle).toBe('Le tableau est prêt.')
   })
 })

@@ -22,15 +22,9 @@ import { readGitGraph } from './git-graph-main'
  * L'instant zéro est l'évaluation de ce module — les imports sont déjà résolus à ce point.
  */
 import {
-  instrumenterAppelsSynchrones,
   instrumenterCanauxIpc,
   marquerOperation as marquerOperationDemarrage
 } from './gel-main'
-import * as processusEnfant from 'node:child_process'
-
-// Les appels de processus SYNCHRONES sont la famille qui fige reellement la fenetre : ils declarent
-// leur binaire au detecteur avant tout autre import applicatif.
-instrumenterAppelsSynchrones(processusEnfant as unknown as Record<string, unknown>)
 
 const T0_DEMARRAGE = Date.now()
 function jalonDemarrage(etape: string): void {

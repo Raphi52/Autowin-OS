@@ -70,6 +70,17 @@ export function operationDeclaree(): string {
   return pile.length > 0 ? (pile[pile.length - 1] as string) : 'inconnu'
 }
 
+/*
+ * UN SEUL PUITS D'ECRITURE. Le battement et les mesures DIRECTES doivent aboutir au meme endroit :
+ * deux chemins d'ecriture, c'est un test qui observe l'un pendant que le produit alimente l'autre.
+ */
+let puits: (gel: Gel) => void = journaliser
+
+/** Depose un gel dans le journal — expose pour les mesures DIRECTES (segments synchrones). */
+export function journaliserGel(gel: Gel): void {
+  puits(gel)
+}
+
 function journaliser(gel: Gel): void {
   if (!dossier) return
   const racine = dossier
@@ -91,6 +102,7 @@ export function demarrerDetecteurDeGel(
   seuilMs = SEUIL_GEL_MS
 ): () => void {
   dossier = dir
+  puits = ecrire
   let precedent = Date.now()
   minuteur = setInterval(() => {
     const maintenant = Date.now()
@@ -104,6 +116,7 @@ export function demarrerDetecteurDeGel(
   return () => {
     if (minuteur) clearInterval(minuteur)
     minuteur = undefined
+    puits = journaliser
   }
 }
 
@@ -149,40 +162,27 @@ export function instrumenterCanauxIpc(ipc: {
        * reellement figer la fenetre.
        */
       const fermer = ouvrirOperation(`ipc:${canal}`)
+      const depart = Date.now()
       try {
         return ecouteur(...args)
       } finally {
         fermer()
+        /*
+         * MESURE DIRECTE, plutot qu'attribution par coincidence.
+         *
+         * Le battement dit QUE la boucle a ete tenue ; il designe l'operation ouverte a cet
+         * instant, ce qui reste une CORRELATION. Ici on chronometre le segment synchrone lui-meme :
+         * s'il depasse le seuil, c'est une PREUVE que ce canal a tenu la boucle pendant ce temps —
+         * le suffixe `(sync)` distingue cette mesure directe de l'attribution du battement.
+         */
+        const dureeMs = Date.now() - depart
+        if (dureeMs >= SEUIL_GEL_MS) {
+          journaliserGel({
+            ts: new Date().toISOString(),
+            blocageMs: dureeMs,
+            operation: `ipc:${canal} (sync)`
+          })
+        }
       }
     })
-}
-
-/**
- * Fait DECLARER leur nom aux appels de processus SYNCHRONES.
- *
- * Apres correction de l'alibi async, la pile est vide la plupart du temps : un gel ressort sous
- * « inconnu » tant qu'aucun code SYNCHRONE ne se declare. Or c'est exactement la famille qui fige la
- * fenetre — \`execFileSync\` / \`spawnSync\` / \`execSync\` tiennent la boucle d'evenements pendant TOUTE
- * la duree du processus enfant, et le depot en compte 763 dans \`src/main\`.
- *
- * Les instrumenter un par un serait 763 occasions d'en oublier un ; on enrobe donc le module. Le
- * nom porte le binaire et son premier argument — assez pour designer \`git for-each-ref\` sans jamais
- * journaliser un chemin complet ni un secret passe en argument.
- */
-export function instrumenterAppelsSynchrones(childProcess: Record<string, unknown>): void {
-  for (const nom of ['execFileSync', 'spawnSync', 'execSync'] as const) {
-    const original = childProcess[nom]
-    if (typeof original !== 'function') continue
-    const appel = original as (...a: unknown[]) => unknown
-    childProcess[nom] = function instrumente(this: unknown, ...args: unknown[]): unknown {
-      const binaire = typeof args[0] === 'string' ? args[0] : '?'
-      const premier = Array.isArray(args[1]) && typeof args[1][0] === 'string' ? args[1][0] : ''
-      const fermer = ouvrirOperation(`sync:${binaire}${premier ? ' ' + premier : ''}`)
-      try {
-        return appel.apply(this, args)
-      } finally {
-        fermer()
-      }
-    }
-  }
 }

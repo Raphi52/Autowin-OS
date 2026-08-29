@@ -83,13 +83,15 @@ describe('minimal conversation status lights', () => {
     expect(css).toMatch(
       /\.conversation-state\s*{[^}]*width:\s*7px;[^}]*height:\s*7px;[^}]*background:\s*currentColor;[^}]*color:\s*#38bdf8;[^}]*box-shadow:/s
     )
-    expect(theme).toMatch(
-      /\.conversation-state\.is-running::after\s*{[^}]*animation:\s*aw-orbit-c/s
-    )
+    // L'etat EN COURS n'est plus un pseudo-element anime : il rend le composant <Spinner/>
+    // (.aw-atom), le MEME atome que partout ailleurs dans l'app. La pastille etait le dernier
+    // endroit a recopier un atome CSS a bordures, d'ou un indicateur qui ne ressemblait a aucun
+    // autre. On verrouille donc la SOURCE UNIQUE, pas la copie.
+    const tsx = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    expect(tsx).toMatch(/conversationState\.key === 'running' \? \(\s*<Spinner/s)
+    expect(theme).toMatch(/\.aw-atom__rot\s*\{[^}]*animation:\s*aw-atom-spin/s)
     expect(css).toMatch(/\.conversation-state\.is-failed\s*{[^}]*color:\s*#ff4057/s)
-    expect(css).toMatch(
-      /\.conversation-state\.is-interrupted\s*{[^}]*color:\s*#ffb020/s
-    )
+    expect(css).toMatch(/\.conversation-state\.is-interrupted\s*{[^}]*color:\s*#ffb020/s)
     // La question en attente porte un JAUNE qui lui est propre : la confondre avec l'ambre des
     // tours interrompus reviendrait a ne rien signaler de nouveau.
     expect(css).toMatch(/\.conversation-state\.is-asking\s*{[^}]*color:\s*#facc15/s)

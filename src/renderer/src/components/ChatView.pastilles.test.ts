@@ -24,7 +24,10 @@ const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf
 /** Couleur RÉSOLUE d'un état : sa règle propre, sinon la couleur de `.conversation-state`. */
 function couleurEtat(key: string): string | null {
   const propre = css.match(
-    new RegExp(`\\.conversation-state\\.is-${key}\\s*\\{[^}]*?\\bcolor:\\s*(#[0-9a-fA-F]{3,8})`, 's')
+    new RegExp(
+      `\\.conversation-state\\.is-${key}\\s*\\{[^}]*?\\bcolor:\\s*(#[0-9a-fA-F]{3,8})`,
+      's'
+    )
   )
   if (propre) return propre[1].toLowerCase()
   const base = css.match(/\.conversation-state\s*\{[^}]*?\bcolor:\s*(#[0-9a-fA-F]{3,8})/s)
@@ -57,9 +60,13 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
   })
 
   it('l’animation reste réservée au travail EN COURS, et se coupe en reduced-motion', () => {
-    expect(theme).toMatch(
-      /\.conversation-state\.is-running::after\s*\{[^}]*animation:\s*aw-orbit-c/s
-    )
+    // L'etat EN COURS n'est plus un pseudo-element anime : il rend le composant <Spinner/>
+    // (.aw-atom), le MEME atome que partout ailleurs dans l'app. La pastille etait le dernier
+    // endroit a recopier un atome CSS a bordures, d'ou un indicateur qui ne ressemblait a aucun
+    // autre. On verrouille donc la SOURCE UNIQUE, pas la copie.
+    const tsx = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    expect(tsx).toMatch(/conversationState\.key === 'running' \? \(\s*<Spinner/s)
+    expect(theme).toMatch(/\.aw-atom__rot\s*\{[^}]*animation:\s*aw-atom-spin/s)
     for (const key of ['completed', 'failed', 'interrupted', 'cancelled', 'waiting']) {
       const bloc = css.match(new RegExp(`\\.conversation-state\\.is-${key}\\s*\\{[^}]*\\}`, 's'))
       expect(bloc?.[0] ?? '', `is-${key} ne doit pas s'animer`).not.toMatch(/animation:/)

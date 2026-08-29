@@ -27,9 +27,6 @@ import {
   reduceAssistantPilotEvent,
   settleIfDone,
   resolveChatRuntimeIdentity,
-  modelCostTier,
-  turnCostEq,
-  costEqTier,
   phaseLabel,
   parseBtw,
   skillSlashCommands,
@@ -88,6 +85,7 @@ import {
   estReplie,
   groupesVisibles,
   grouperConversations,
+  nomDeDossier,
   ordonnerGroupes
 } from './conversation-groups'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
@@ -350,8 +348,30 @@ export function ChatView({
     })
   }, [])
   const [runtimeIdentity, setRuntimeIdentity] = useState<ChatRuntimeIdentity | null>(null)
-  // Coût-eq du dernier tour par conversation → pastille coût live.
-  const [lastTurnCost, setLastTurnCost] = useState<Record<string, number>>({})
+  /*
+    LA BRANCHE GIT COURANTE, en tete de conversation, a la place du niveau d'effort.
+
+    « effort low » ne disait rien d'actionnable ; savoir sur QUELLE branche on travaille change
+    ce qu'on s'autorise a demander a l'agent. Lecture seule (git:read), silencieuse en cas
+    d'echec : mieux vaut rien qu'un nom de branche invente.
+  */
+  const [gitBranch, setGitBranch] = useState<string | null>(null)
+  useEffect(() => {
+    let vivant = true
+    // Appel OPTIONNEL : certaines surfaces (tests, preload partiel) n'exposent pas cette lecture.
+    void Promise.resolve(window.api.getGitState?.())
+      .then((resultat) => {
+        if (!vivant) return
+        setGitBranch(resultat?.available ? (resultat.state?.branch ?? null) : null)
+      })
+      .catch(() => {
+        if (vivant) setGitBranch(null)
+      })
+    return () => {
+      vivant = false
+    }
+  }, [])
+  const [defaultWorkspace, setDefaultWorkspace] = useState<string | undefined>(undefined)
   /*
    * Occupation de la fenetre de contexte, par conversation.
    *
@@ -957,6 +977,13 @@ export function ChatView({
         // L'alignement est un confort : son échec ne doit pas empêcher la vue de fonctionner.
       }
       void refreshRuntimeIdentity()
+      void Promise.resolve(window.api.behaviourComposition?.())
+        .then((comp) => {
+          if (!disposed && comp?.inspection?.workspace) {
+            setDefaultWorkspace(comp.inspection.workspace)
+          }
+        })
+        .catch(() => undefined)
     })
     void Promise.resolve(window.api.workflowProfileNotice?.())
       .then((notice) => {
@@ -1233,10 +1260,7 @@ export function ChatView({
         }
       }
       if (e.kind === 'done' || e.kind === 'error') setConversationBusy(conversationId, false)
-      // Coût du dernier tour → pastille live (coût-eq tokens).
       if (e.kind === 'done' && e.usage) {
-        const cost = turnCostEq(e.usage)
-        setLastTurnCost((current) => ({ ...current, [conversationId]: cost }))
         // `inputTokens` du dernier tour EST l'occupation courante : le prefixe est renvoye a chaque
         // appel, donc le dernier tour porte le fil entier. Une somme des tours le compterait N fois.
         const jauge = contextGauge(e.usage)
@@ -2829,13 +2853,26 @@ export function ChatView({
                           />
                         )}
                         <button className="conv-pick" onClick={() => void loadConv(c)}>
-                          <span
-                            className={`conversation-state is-${conversationState.key}`}
-                            data-conversation-state={conversationState.key}
-                            role="img"
-                            aria-label={`État de la conversation : ${stateDescription}`}
-                            title={stateDescription}
-                          />
+                          {/* EN COURS = le MEME atome que partout ailleurs : le composant
+                              <Spinner/>. La pastille etait le dernier endroit a rendre l'ancien
+                              atome CSS a bordures (.spinner), d'ou un indicateur qui ne
+                              ressemblait a aucun autre. Les autres etats restent une pastille. */}
+                          {conversationState.key === 'running' ? (
+                            <Spinner
+                              size={14}
+                              className="conversation-state is-running"
+                              label={`État de la conversation : ${stateDescription}`}
+                              data-conversation-state={conversationState.key}
+                            />
+                          ) : (
+                            <span
+                              className={`conversation-state is-${conversationState.key}`}
+                              data-conversation-state={conversationState.key}
+                              role="img"
+                              aria-label={`État de la conversation : ${stateDescription}`}
+                              title={stateDescription}
+                            />
+                          )}
                           <span className="conv-copy">
                             <span className="conv-label">{c.title}</span>
                             {convQuery && snippet && (
@@ -3083,21 +3120,25 @@ export function ChatView({
                   {runtimeIdentity?.provider ?? 'connexion…'}
                 </span>
                 <span>{runtimeIdentity?.modelLabel ?? 'modèle en cours de résolution'}</span>
-                {runtimeIdentity?.model &&
-                  (() => {
-                    // Coût-eq du dernier tour (live) si dispo pour la conv active ; sinon palier modèle.
-                    const liveCost = activeId != null ? lastTurnCost[activeId] : undefined
-                    const cost =
-                      liveCost !== undefined
-                        ? costEqTier(liveCost)
-                        : modelCostTier(runtimeIdentity.model)
-                    return (
-                      <span className="chat-cost-dot" title={cost.label} aria-label={cost.label}>
-                        <span className={`status-dot ${cost.dotClass}`} />
-                        {cost.label}
-                      </span>
-                    )
-                  })()}
+                {(() => {
+                  const dossierProjet = active?.projectPath?.trim()
+                  const cheminEffectif = dossierProjet || defaultWorkspace
+                  const labelDossier = cheminEffectif ? nomDeDossier(cheminEffectif) : 'Autowin OS'
+                  const titreDossier = dossierProjet
+                    ? `Dossier de travail assigné à cette conversation : ${dossierProjet}`
+                    : `Dossier racine par défaut de l’agent : ${cheminEffectif ?? 'racine du dépôt'}`
+                  return (
+                    <span
+                      className="chat-cost-dot chat-project-dot"
+                      title={titreDossier}
+                      aria-label={titreDossier}
+                      data-testid="chat-project-dot"
+                    >
+                      <span className={`status-dot ${dossierProjet ? 'st-ok' : 'st-ok'}`} />
+                      📁 {labelDossier}
+                    </span>
+                  )
+                })()}
                 {(() => {
                   /*
                     LA JAUGE DE CONTEXTE.
@@ -3130,8 +3171,13 @@ export function ChatView({
                     </span>
                   )
                 })()}
-                {runtimeIdentity?.reasoningEffort && (
-                  <span>effort {runtimeIdentity.reasoningEffort}</span>
+                {gitBranch && (
+                  <span
+                    data-testid="chat-git-branch"
+                    title={`Branche git courante du depot : ${gitBranch}`}
+                  >
+                    ⑂ {gitBranch}
+                  </span>
                 )}
                 {/*
                   L'IDENTIFIANT de la conversation, a la place de « interface prete ».

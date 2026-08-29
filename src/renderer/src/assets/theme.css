@@ -432,8 +432,7 @@ button.card:hover {
 /* ATOME 5A — SOURCE UNIQUE du « ca bosse ». Toute pastille d'activite de l'app passe par
    ce bloc : geometrie, couleurs, vitesses et reduced-motion n'existent QU'ICI.
    Un lieu qui veut une autre taille ne recopie rien : il pose --aw-spin-size / --aw-spin-ring. */
-.spinner,
-.conversation-state.is-running {
+.spinner {
   --aw-spin-size: 18px;
   --aw-spin-ring: 1.6px;
   position: relative;
@@ -459,9 +458,7 @@ button.card:hover {
   animation: aw-orbit-a 2.7s linear infinite;
 }
 .spinner::before,
-.spinner::after,
-.conversation-state.is-running::before,
-.conversation-state.is-running::after {
+.spinner::after {
   position: absolute;
   inset: calc(-1 * var(--aw-spin-ring));
   box-sizing: border-box;
@@ -469,15 +466,13 @@ button.card:hover {
   border-radius: 50%;
   content: '';
 }
-.spinner::before,
-.conversation-state.is-running::before {
+.spinner::before {
   border-top-color: #3ad6ff;
   border-right-color: rgba(58, 214, 255, 0.4);
   transform: rotate(58deg) scaleY(0.55);
   animation: aw-orbit-b 3.3s linear infinite;
 }
-.spinner::after,
-.conversation-state.is-running::after {
+.spinner::after {
   border-top-color: #ff2e93;
   border-right-color: rgba(190, 70, 255, 0.4);
   transform: rotate(-58deg) scaleY(0.55);

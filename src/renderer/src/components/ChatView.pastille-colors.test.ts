@@ -23,6 +23,18 @@ const colorOf = (state: string): string | undefined => {
       if (teinte) return teinte[1].toLowerCase()
     }
   }
+  /*
+    « running » ne se peint plus dans une regle CSS : la pastille rend le composant <Spinner/>
+    (classe .spinner), atome unique de l'app. Sa couleur vit donc dans le bloc .spinner::before
+    de theme.css. On la lit LA, au lieu de conclure « pas de couleur » — l'exigence (six etats,
+    six couleurs distinctes) est inchangee.
+  */
+  if (state === 'running') {
+    for (const bloc of theme().matchAll(/\.spinner::before\s*\{([^}]*)\}/gs)) {
+      const teinte = bloc[1].match(/border-top-color:\s*(#[0-9a-fA-F]{3,8})/)
+      if (teinte) return teinte[1].toLowerCase()
+    }
+  }
   return undefined
 }
 

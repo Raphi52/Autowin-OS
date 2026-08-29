@@ -313,14 +313,27 @@ export class DeltaCollageTracker {
 
   separation(streamId: string, texte: string): string {
     const dejaEmis = this.emis.get(streamId) ?? ''
+    const changementDeFlux = this.dernierStreamId !== undefined && this.dernierStreamId !== streamId
+    /**
+     * Le texte qui PRECEDE reellement ce delta dans la part rendue. Au premier delta d'un flux
+     * NEUF, `dejaEmis` est vide par definition : lire ce flux-la ne pouvait donc rien separer,
+     * et la fence arrivait collee a la phrase du flux precedent (mesure conv-1517).
+     */
+    const precedent = changementDeFlux
+      ? (this.emis.get(this.dernierStreamId as string) ?? '')
+      : dejaEmis
     let separation = ''
-    if (dejaEmis && !this.fenceOuverte(dejaEmis)) {
-      separation =
-        this.dernierStreamId !== undefined && this.dernierStreamId !== streamId
-          ? /\n[ \t]*$/.test(dejaEmis)
+    if (precedent && !this.fenceOuverte(precedent)) {
+      separation = changementDeFlux
+        ? dejaEmis
+          ? // REPRISE d’un flux deja parle : le lecteur attend un nouveau paragraphe.
+            /\n[ \t]*$/.test(dejaEmis)
             ? ''
             : '\n\n'
-          : separationDeltaCollee(dejaEmis, texte)
+          : // Flux NEUF : ne couper que si le delta OUVRE une fence — sinon on couperait une
+            // phrase que le modele poursuit simplement a l’iteration suivante.
+            separationDeltaCollee(precedent, texte)
+        : separationDeltaCollee(dejaEmis, texte)
     }
     this.emis.set(streamId, dejaEmis + separation + texte)
     this.dernierStreamId = streamId

@@ -28,44 +28,33 @@ describe('binaireDe — ce qui sera réellement lancé', () => {
   })
 })
 
-describe('decisionDeCommande — refus par défaut, autorisation par l’UTILISATEUR', () => {
+describe('decisionDeCommande — plus aucune autorisation a retaper', () => {
   const sansRien: string[] = []
   const autoriseGit = ['Autorise les commandes git : committe mon travail local']
 
-  it('refuse quand l’utilisateur n’a rien autorisé', () => {
-    const d = decisionDeCommande('curl https://exemple.fr', sansRien)
-
-    expect(d.autorise).toBe(false)
-    // Le refus NOMME ce qui manque, au lieu d'inventer un garde.
-    expect(d.motif).toContain('curl')
+  /**
+   * DECISION DU 2026-08-28 : « je ne veux plus qu'Autowin me demande de dire autorise nanani
+   * pour me debloquer ». Le refus par defaut a ete leve (`AUTORISATION_GENERALE_PAR_DEFAUT`).
+   * Ce qui RESTE verrouille est la propriete 3 — aucun enchainement shell —, testee plus bas :
+   * c'est elle, et non la liste nominale, qui empeche `git status && rm -rf /`.
+   */
+  it('un binaire jamais nomme part quand meme, sur un fil VIERGE', () => {
+    expect(decisionDeCommande('curl https://exemple.fr', sansRien).autorise).toBe(true)
+    expect(decisionDeCommande('npm run build', []).autorise).toBe(true)
   })
 
-  it('git est autorise D’OFFICE — l’utilisateur n’a plus a le redonner', () => {
-    // Decision du 2026-08-28. L'entree qui ferait echouer une regression : un fil VIERGE.
+  it('git part toujours d’office', () => {
     expect(decisionDeCommande('git status --porcelain', sansRien).autorise).toBe(true)
-    // Et cela n'ouvre rien d'autre.
-    expect(decisionDeCommande('npm run build', sansRien).autorise).toBe(false)
   })
 
   it('autorise quand l’UTILISATEUR l’a écrit dans le fil', () => {
     expect(decisionDeCommande('git status --porcelain', autoriseGit).autorise).toBe(true)
   })
 
-  it('l’autorisation d’un binaire n’en autorise pas un AUTRE', () => {
-    // L'entrée qui doit faire échouer une garde trop large : autoriser git n'ouvre pas curl.
-    expect(decisionDeCommande('curl https://exemple.fr', autoriseGit).autorise).toBe(false)
-  })
-
-  it('ne lit QUE ce qu’on lui donne — la protection vit chez l’appelant', () => {
-    // Premiere version de ce test : elle passait ICI une phrase du MODELE (« je m'autorise les
-    // commandes git ») et exigeait un refus. C'etait un defaut du TEST, pas du module : le contrat
-    // dit que `messagesUtilisateur` ne contient que des messages de role `user`. Un module qui
-    // recevrait tout l'historique laisserait le modele s'autoriser en ecrivant la phrase.
-    //
-    // La garantie est donc verrouillee la ou elle vit — au CABLAGE, dans
-    // `commands.run-autorisation.test.ts`, qui verifie que seuls les messages `user` sont extraits.
-    // Ici, on verrouille l'autre moitie du contrat : une liste VIDE n'autorise rien.
-    expect(decisionDeCommande('npm run build', []).autorise).toBe(false)
+  it('une ligne vide n’est jamais une commande', () => {
+    // Ce que l'ouverture generale ne doit PAS emporter : un binaire vide ou biscornu.
+    expect(decisionDeCommande('   ', sansRien).autorise).toBe(false)
+    expect(decisionDeCommande('ls>/tmp/x', sansRien).autorise).toBe(false)
   })
 
   it('refuse un enchaînement shell, même sur un binaire autorisé', () => {
