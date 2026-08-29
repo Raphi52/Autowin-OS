@@ -859,12 +859,19 @@
   padding-bottom: var(--s3);
   border-bottom: 1px solid var(--line);
 }
+/*
+ * Typographie de LECTURE du fil (référence : lecture longue type Claude web).
+ * Le fil héritait de la typo d'interface (13px / 1.55) : dense, fatigante sur un tour
+ * d'agent de plusieurs écrans. La colonne de conversation passe en régime prose —
+ * ~15px, interligne 1.7, mesure bornée à 760px — sans toucher au reste de l'app.
+ */
 .chat-scroll {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--s4);
-  padding: var(--s2) var(--s1);
+  row-gap: 28px;
+  padding: var(--s3) var(--s2);
 }
 .msg {
   display: flex;
@@ -890,17 +897,20 @@
 .msg-body {
   min-width: 0;
   max-width: 100%;
-  padding: 10px 13px;
+  padding: 12px 15px;
   border-radius: var(--r3);
   border: 1px solid var(--line);
   background: var(--bg-2);
   white-space: pre-wrap;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.7;
+  letter-spacing: 0.005em;
   word-break: break-word;
 }
 .msg.user .msg-body {
   background: var(--accent-soft);
   border-color: var(--accent-dim);
+  border-radius: 16px 16px 4px 16px;
 }
 /*
  * Le reçu d'orientation était illisible : 10 px sur un fond à 11 %, sans aucun signal d'apparition.
