@@ -1160,6 +1160,21 @@ export class WorktreeManager {
     }
   }
 
+  /*
+   * UNE ARCHIVE DE SALVAGE N'EST PAS DU TRAVAIL EN ATTENTE.
+   *
+   * `salvage` archive tout travail qu'il JETTE sur `autowin/recovery/salvage-<date>-<id>` avant de
+   * nettoyer le bureau : c'est ce qui rend le verdict reversible. Comme le recensement enumere
+   * `refs/heads/autowin/recovery/*` sans regarder l'origine de la branche, il recomptait ces
+   * archives comme du travail a trier. Mesure du 2026-08-29 (conv-1521) : trier 2 travaux faisait
+   * passer le compteur de 2 a CINQ — le tri produisait plus qu'il ne resolvait, et la liste ne
+   * pouvait jamais se vider.
+   *
+   * L'ancre est le PREFIXE, pas une sous-chaine : `run-salvage-du-panier-1` reste du vrai travail.
+   * Rien n'est detruit — la branche archivee reste dans git, seulement hors du recensement.
+   */
+  private static readonly ARCHIVE_SALVAGE = /^salvage-/
+
   travauxNonPublies(baseRef = 'HEAD'): string[] {
     try {
       const branches = this.git(this.baseRepo, [
@@ -1172,6 +1187,7 @@ export class WorktreeManager {
         .split('\n')
         .map((ligne) => ligne.trim())
         .filter((agentId) => SAFE_ID.test(agentId))
+        .filter((agentId) => !WorktreeManager.ARCHIVE_SALVAGE.test(agentId))
       /*
        * LES BUREAUX EN HEAD DETACHE, l'autre moitie du recensement (cf. `commitDuTravail`).
        *
