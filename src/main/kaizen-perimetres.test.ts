@@ -11,14 +11,29 @@ import { bundledSkillsRoot } from './native-registry'
  *
  * Défaut vécu : les axes étaient écrits dans une copie seulement, donc l'app chargeait un kaizen
  * qui ignorait les conversations Autowin, les injections runtime et les lentilles workflow.
- * Contrôle négatif NOMMÉ : le SKILL.md du commit `74501455` (avant les 4 éditions) — s'il passait
- * ces assertions, le test ne prouverait rien.
+ * Contrôle négatif NOMMÉ : le SKILL.md d'avant les 4 éditions (commit `74501455`), figé en
+ * fixture pour ne pas dépendre d'un historique git complet — s'il passait ces assertions, le
+ * test ne prouverait rien.
  */
 const AXES: Array<[string, RegExp]> = [
   ['axe 2 — conversations Autowin', /conversation_read|conversation_search/],
   ['axe 3 — injections runtime', /INJECTED instruction/],
   ['axe 4 — lentilles workflow', /WORKFLOW\/TOPOLOGY lenses/]
 ]
+
+const SHA_AVANT = '74501455'
+
+function repoRoot(): string {
+  return bundledSkillsRoot()!.replace(/[\/]skills$/, '')
+}
+
+function normalise(t: string): string {
+  return t.replace(/\r\n/g, '\n').trimEnd()
+}
+
+function fixtureAvant(): string {
+  return readFileSync(join(__dirname, '__fixtures__', 'kaizen-skill-avant.md'), 'utf8')
+}
 
 function kaizenPackage(): string {
   const root = bundledSkillsRoot()
@@ -42,17 +57,27 @@ describe('kaizen — périmètres d’audit et propagation package→live', () =
   })
 
   it('contrôle négatif : la version d’avant les éditions ÉCHOUE ces axes', () => {
-    const avant = execFileSync('git', ['show', '74501455:skills/kaizen/SKILL.md'], {
-      encoding: 'utf8',
-      cwd: bundledSkillsRoot()!.replace(/[\/]skills$/, '')
-    })
-    const portes = AXES.filter(([, motif]) => motif.test(avant))
+    const portes = AXES.filter(([, motif]) => motif.test(fixtureAvant()))
     expect(portes).toHaveLength(0)
   })
 
-  it('la copie live ~/.claude/skills/kaizen est identique au dépôt', () => {
-    const live = join(homedir(), '.claude', 'skills', 'kaizen', 'SKILL.md')
-    if (!existsSync(live)) return
+  it('la fixture du contrôle négatif EST le SKILL.md du commit 74501455 (si le git est complet)', () => {
+    let reel: string
+    try {
+      reel = execFileSync('git', ['show', `${SHA_AVANT}:skills/kaizen/SKILL.md`], {
+        encoding: 'utf8',
+        cwd: repoRoot()
+      })
+    } catch {
+      return // clone superficiel : la fixture reste l’entrée nommée, le contrôle négatif tient sans git
+    }
+    expect(normalise(reel)).toBe(normalise(fixtureAvant()))
+  })
+
+  const live = join(homedir(), '.claude', 'skills', 'kaizen', 'SKILL.md')
+  // skipIf, PAS un `return` silencieux : sans copie live le runner AFFICHE le test sauté au
+  // lieu de faire passer une parité qui n’a jamais été vérifiée.
+  it.skipIf(!existsSync(live))('la copie live ~/.claude/skills/kaizen est identique au dépôt', () => {
     expect(readFileSync(live, 'utf8')).toBe(texte)
   })
 })
