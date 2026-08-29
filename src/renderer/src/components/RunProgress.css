@@ -77,3 +77,35 @@
   opacity: 0.7;
   padding: var(--s2, 8px);
 }
+
+/* Une ligne par étape, dépliable : le détail vit DANS le <details>. */
+.run-progress__item {
+  position: relative;
+}
+.run-progress__step {
+  display: block;
+}
+.run-progress__step > summary {
+  cursor: pointer;
+  list-style: none;
+  position: relative;
+}
+.run-progress__step > summary::-webkit-details-marker {
+  display: none;
+}
+.run-progress__step > summary::after {
+  content: '▸';
+  opacity: 0.5;
+  font-size: 0.85em;
+}
+.run-progress__step[open] > summary::after {
+  content: '▾';
+}
+.run-progress__step > summary > b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-progress__body {
+  padding-left: 4px;
+}
