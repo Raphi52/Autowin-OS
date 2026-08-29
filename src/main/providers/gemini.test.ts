@@ -92,3 +92,66 @@ describe('GeminiCliAdapter — contrat compte Google via CLI officiel', () => {
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
   })
 })
+
+describe('GeminiCliAdapter — exécution outillée gratuite (Antigravity accept-edits)', () => {
+  const execution = {
+    cwd: process.cwd(),
+    sandbox: 'workspace-write' as const,
+    providerTimeoutMs: 600_000
+  }
+
+  it('déclare supporter l’exécution pour ne plus retomber sur le quota payant', () => {
+    expect(new GeminiCliAdapter().supportsExecution).toBe(true)
+  })
+
+  it('passe en mode mutateur outillé quand le run demande une écriture workspace', () => {
+    const args = buildGeminiArgs([{ role: 'user', content: 'Corrige le bug' }], {
+      execution
+    })
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '--mode',
+        'accept-edits',
+        '--dangerously-skip-permissions',
+        '--add-dir',
+        execution.cwd
+      ])
+    )
+    expect(args).not.toContain('--sandbox')
+  })
+
+  it('retire l’interdiction d’outils du prompt uniquement en exécution', () => {
+    const executing = buildGeminiArgs([{ role: 'user', content: 'Corrige' }], { execution })
+    expect(executing[1]).not.toContain('N’utilise aucun outil')
+    expect(executing[1]).toContain('modifie les fichiers')
+  })
+
+  // Entrée témoin : si la correction était fausse (mode mutateur appliqué partout),
+  // CE cas — chat sans execution — passerait en accept-edits et le test virerait au rouge.
+  it('laisse le chat sans exécution strictement en plan sandboxé', () => {
+    const args = buildGeminiArgs([{ role: 'user', content: 'Bonjour' }], {})
+    expect(args).toEqual(expect.arrayContaining(['--mode', 'plan', '--sandbox']))
+    expect(args).not.toContain('accept-edits')
+    expect(args).not.toContain('--dangerously-skip-permissions')
+    expect(args[1]).toContain('N’utilise aucun outil')
+  })
+
+  // Entrée témoin n°2 : une exécution read-only ne doit JAMAIS ouvrir l'écriture.
+  it('garde le mode plan pour une exécution read-only', () => {
+    const args = buildGeminiArgs([{ role: 'user', content: 'Analyse' }], {
+      execution: { ...execution, sandbox: 'read-only' as const }
+    })
+    expect(args).toEqual(expect.arrayContaining(['--mode', 'plan']))
+    expect(args).not.toContain('--dangerously-skip-permissions')
+  })
+
+  it('exécute dans le cwd du run, pas dans un sandbox temporaire jetable', async () => {
+    const fixture = fileURLToPath(new URL('./fixtures/gemini-cwd-provider.mjs', import.meta.url))
+    const generator = new GeminiCliAdapter({
+      command: { executable: process.execPath, prefix: [fixture] }
+    }).send([{ role: 'user', content: 'où suis-je' }], { execution })
+    let text = ''
+    for await (const chunk of generator) text += chunk.delta ?? ''
+    expect(text).toContain(execution.cwd)
+  })
+})

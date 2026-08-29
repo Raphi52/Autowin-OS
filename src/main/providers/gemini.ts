@@ -34,7 +34,11 @@ export function resolveGeminiCommand(
   return { executable: 'agy', prefix: [] }
 }
 
-export function buildGeminiPrompt(messages: Message[], system?: string): string {
+export function buildGeminiPrompt(
+  messages: Message[],
+  system?: string,
+  tooled = false
+): string {
   const history = messages
     .filter((message) => message.role !== 'system')
     .map(
@@ -46,7 +50,9 @@ export function buildGeminiPrompt(messages: Message[], system?: string): string 
   if (system?.trim())
     parts.push(`INSTRUCTIONS SYSTEME AUTOWIN OS (applique-les) :\n${system.trim()}`)
   parts.push(
-    'Réponds uniquement au contenu conversationnel suivant. N’utilise aucun outil et ne modifie aucun fichier.',
+    tooled
+      ? 'Tu travailles en mode agent outillé dans le dossier de travail fourni : utilise tes outils, lis et modifie les fichiers nécessaires pour accomplir la demande, puis rends compte de ce que tu as fait.'
+      : 'Réponds uniquement au contenu conversationnel suivant. N’utilise aucun outil et ne modifie aucun fichier.',
     history || 'UTILISATEUR:\n'
   )
   return parts.join('\n\n---\n\n')
@@ -64,15 +70,20 @@ export function buildGeminiArgs(messages: Message[], opts: SendOptions): string[
     1,
     Math.ceil(resolveProviderTimeoutMs(opts.execution?.providerTimeoutMs, 120_000) / 60_000)
   )
-  const args = [
-    '--print',
-    buildGeminiPrompt(messages, opts.system),
-    '--mode',
-    'plan',
-    '--sandbox',
-    '--print-timeout',
-    `${timeoutMinutes}m`
-  ]
+  // Antigravity CLI 1.1.x n'accepte que deux modes : `plan` (lecture) et `accept-edits`
+  // (outillé, écriture). L'écriture n'est ouverte QUE pour une exécution orchestrée dont le
+  // sandbox demandé autorise la mutation ; le chat et le read-only restent en plan sandboxé.
+  const tooled =
+    opts.execution?.sandbox === 'workspace-write' ||
+    opts.execution?.sandbox === 'danger-full-access'
+  const args = ['--print', buildGeminiPrompt(messages, opts.system, tooled), '--mode']
+  if (tooled) {
+    args.push('accept-edits', '--dangerously-skip-permissions')
+    if (opts.execution?.cwd) args.push('--add-dir', opts.execution.cwd)
+  } else {
+    args.push('plan', '--sandbox')
+  }
+  args.push('--print-timeout', `${timeoutMinutes}m`)
   if (opts.model) args.push('--model', opts.model)
   return args
 }
@@ -84,6 +95,8 @@ export function isAntigravityAuthProbe(code: number | null, output: string): boo
 /** Pont vers le compte Google détenu par Antigravity ; aucun token n'est lu par Autowin OS. */
 export class GeminiCliAdapter implements ProviderAdapter {
   readonly id = 'gemini'
+  /** Antigravity exécute réellement des outils en `accept-edits` : plus de repli vers un quota payant. */
+  readonly supportsExecution = true
   private readonly command: GeminiCommand
   private readonly timeoutMs: number
 
@@ -196,13 +209,15 @@ export class GeminiCliAdapter implements ProviderAdapter {
     }
     const systemInjected = typeof opts.system === 'string' && opts.system.trim().length > 0
     const sandbox = mkdtempSync(join(tmpdir(), 'autowin-os-gemini-'))
+    // Une exécution orchestrée doit muter le WORKSPACE du run, pas un dossier jetable.
+    const workingDir = opts.execution?.cwd ?? sandbox
     const args = buildGeminiArgs(messages, opts)
     const spawnToken = randomUUID()
     opts.execution?.onSpawnIntent?.(spawnToken, true)
     const run = spawnSurvivable({
       bin: this.command.executable,
       args: [...this.command.prefix, ...args],
-      cwd: sandbox,
+      cwd: workingDir,
       journalRoot: process.env.AUTOWIN_RUN_JOURNAL_ROOT ?? join(sandbox, '.run'),
       runId: spawnToken,
       onJournalPrepared:
