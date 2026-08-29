@@ -4334,7 +4334,9 @@ exit 0
     if (existsSync(path)) {
       const ownershipIssue = this.ownershipIssue(path)
       if (ownershipIssue) throw new Error(ownershipIssue)
-      return path
+      // Un bureau périmé RAFRAÎCHI n'existe plus : on retombe volontairement sur la création
+      // ci-dessous, qui le recrée sur la révision demandée.
+      if (!this.rafraichirSiBasePerimee(agentId, path, context)) return path
     }
     if (
       context &&
@@ -4384,6 +4386,57 @@ exit 0
      */
     this.derniereLiaisonDependances = lierLesDependances(this.baseRepo, path)
     return path
+  }
+
+  /**
+   * UN BUREAU RETROUVÉ NE DOIT PAS RESTER SUR UNE BASE PÉRIMÉE.
+   *
+   * DÉFAUT MESURÉ (conv-1516, 2026-08-29) : la clé de bureau d'`edit_file` est STABLE par tâche
+   * (`cleDeBureau`). À la tentative suivante, ce point retrouvait le DOSSIER de la tentative
+   * précédente et le rendait tel quel — sans jamais comparer sa tête à la révision demandée. Le
+   * bureau restait accroché à une base vieille de plusieurs jours pendant que `read_file` lisait la
+   * branche courante : `ChatView.css` montrait `16px` ligne 355 dans le dépôt et `13px` ligne 161
+   * dans le bureau, MÊME après un commit propre de la base.
+   *
+   * LE CRITÈRE est l'ASCENDANCE, pas l'égalité : un bureau dont la tête est un commit posé par
+   * l'agent AU-DESSUS de la révision demandée est légitime (c'est une reprise), et le recréer
+   * détruirait ce travail. Seul un bureau qui NE DESCEND PAS de la révision demandée est périmé.
+   *
+   * Périmé ne veut pas dire jetable : on ne recrée que s'il n'y a RIEN à perdre (aucun fichier non
+   * publié). Sinon on REFUSE en nommant la cause — un refus lisible vaut mieux que la publication
+   * silencieuse d'une édition faite sur un contenu qui n'existe plus.
+   */
+  private rafraichirSiBasePerimee(
+    agentId: string,
+    path: string,
+    context?: WorktreeRunContext
+  ): boolean {
+    const attendue = context?.sourceSha ?? context?.baseSha
+    if (!attendue) return false
+    if (this.tryGitFn(this.baseRepo, ['cat-file', '-e', `${attendue}^{commit}`]).code !== 0) {
+      return false
+    }
+    const tete = this.tryGitFn(path, ['rev-parse', 'HEAD'])
+    if (tete.code !== 0) return false
+    const descend =
+      this.tryGitFn(path, ['merge-base', '--is-ancestor', attendue, tete.stdout.trim()]).code === 0
+    if (descend) return false
+    const restes = this.unpublishedFiles(path)
+    if (restes.length > 0) {
+      throw new Error(
+        `Bureau ${agentId} sur une base périmée : sa tête ne descend pas de ` +
+          `${attendue.slice(0, 12)}, et il porte ${restes.length} fichier(s) non publié(s). ` +
+          `Publiez ou rangez ce travail.`
+      )
+    }
+    const nettoye = this.cleanupWorktree(path)
+    if (!nettoye.ok || existsSync(path)) {
+      throw new Error(
+        `Bureau ${agentId} sur une base périmée : impossible de le rafraîchir sur ` +
+          `${attendue.slice(0, 12)}.`
+      )
+    }
+    return true
   }
 
   /**
