@@ -92,6 +92,7 @@ export interface RunWorktreeCoordinatorDeps {
         | 'readConflictDiffAsync'
         | 'discardAsync'
         | 'sweepAbandonedAgentCopiesAsync'
+        | 'recensementNonPubliesAsync'
         | 'baseDirtyFiles'
       >
     >
@@ -1299,6 +1300,23 @@ export class RunWorktreeCoordinator {
       return { ids: this.cacheNonPublies.ids, apercu: this.cacheNonPublies.apercu }
     }
     /*
+     * CACHE FROID = LE GEL DE 14 SECONDES.
+     *
+     * Supprimer la TTL a tue le gel PERIODIQUE ; restait le gel A FROID. Mesure du 2026-08-29
+     * (detecteur de gel) : `ipc:worktree:activity (sync)` a bloque la boucle main 14 403 ms au
+     * premier affichage — le recensement git (une commande par branche) etait paye ICI, sur le
+     * thread qui pompe les messages de la fenetre.
+     *
+     * Quand le manager sait recenser hors thread (worker deja en place pour les autres operations
+     * git), on ne l'attend PAS : on rend ce qu'on sait — rien — et le releve remonte ensuite, avec
+     * une re-emission de l'activite. Aucune information n'est perdue, seulement differee de la
+     * duree du recensement. Sans worker, la voie synchrone ci-dessous reste inchangee.
+     */
+    if (this.manager.recensementNonPubliesAsync) {
+      this.demanderRecensement()
+      return { ids: new Set<string>(), apercu: new Map() }
+    }
+    /*
      * UN RUN QUI TOURNE N'EST PAS UN TRAVAIL OUBLIE.
      *
      * Le bandeau dit « travaux TERMINES non fusionnes ». Or un bureau d'agent est SALE par
@@ -1629,6 +1647,38 @@ export class RunWorktreeCoordinator {
     this.stateStore?.remove(runId)
     this.emit()
     return true
+  }
+
+  /** Un seul recensement en vol a la fois : l'ecran le redemande a chaque affichage. */
+  private recensementEnVol?: Promise<void>
+
+  private demanderRecensement(): void {
+    if (this.recensementEnVol) return
+    const releve = this.manager.recensementNonPubliesAsync?.('HEAD', 6)
+    if (!releve) return
+    this.recensementEnVol = releve
+      .then((r) => {
+        const enCours = new Set(
+          [...this.runs.values()]
+            .filter((t) => t.state === 'isolated' || t.state === 'working')
+            .map((t) => t.runId)
+        )
+        this.cacheNonPublies = {
+          a: this.now(),
+          ids: new Set(r.ids.filter((agentId) => !enCours.has(agentId))),
+          apercu: new Map(
+            r.apercu.map((e) => [e.agentId, { date: e.date, fichiers: e.fichiers }])
+          )
+        }
+        this.emit()
+      })
+      .catch(() => {
+        // Un depot qui ne repond pas ne prouve AUCUNE perte : on n'annonce rien, et le prochain
+        // affichage redemandera. Surtout : on ne retombe pas en synchrone, ce serait le gel.
+      })
+      .finally(() => {
+        this.recensementEnVol = undefined
+      })
   }
 
   private emit(): void {

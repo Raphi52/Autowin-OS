@@ -51,6 +51,16 @@ port.on('message', (request: WorktreeOperationRequest) => {
       case 'acknowledgePublication':
         value = manager.acknowledgePublication(request.agentId, request.publishedSha)
         break
+      case 'recensementNonPublies': {
+        const baseRef = request.baseRef ?? 'HEAD'
+        value = {
+          ids: manager.travauxNonPublies(baseRef),
+          apercu: manager
+            .apercuTravauxNonPublies(baseRef, request.limite ?? 6)
+            .map((e) => ({ agentId: e.agentId, date: e.date, fichiers: e.fichiers }))
+        }
+        break
+      }
       case 'recoveryInventory':
         value = manager.recoveryInventory()
         break

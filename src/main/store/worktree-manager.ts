@@ -685,6 +685,30 @@ export class WorktreeManager {
     return { residues, agents }
   }
 
+  /**
+   * Le recensement des travaux non publies, HORS du thread main quand le worker est disponible.
+   *
+   * Le chemin chaud (`worktree:activity`, appele a chaque affichage) le consommait en synchrone :
+   * 14 403 ms de boucle main bloquee au demarrage, mesures le 2026-08-29. Sans worker, on retombe
+   * sur la voie synchrone — meme reponse, meme cout : aucun changement de comportement.
+   */
+  async recensementNonPubliesAsync(
+    baseRef = 'HEAD',
+    limite = 6
+  ): Promise<{ ids: string[]; apercu: Array<{ agentId: string; date: string; fichiers: string[] }> }> {
+    if (this.operationClient) {
+      return this.operationClient.run({ operation: 'recensementNonPublies', baseRef, limite })
+    }
+    return {
+      ids: this.travauxNonPublies(baseRef),
+      apercu: this.apercuTravauxNonPublies(baseRef, limite).map((e) => ({
+        agentId: e.agentId,
+        date: e.date,
+        fichiers: e.fichiers
+      }))
+    }
+  }
+
   async recoveryInventoryAsync(): Promise<WorktreeRecoveryInventory> {
     return this.operationClient
       ? this.operationClient.run(

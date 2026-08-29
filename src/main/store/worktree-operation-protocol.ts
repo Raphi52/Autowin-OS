@@ -36,6 +36,13 @@ export type WorktreeOperationRequest =
     }
   | { operation: 'acknowledgePublication'; agentId: string; publishedSha: string }
   | { operation: 'recoveryInventory' }
+  /**
+   * Le recensement des travaux non publies, ENTIEREMENT dans le worker.
+   *
+   * Il coute une commande git par branche : paye sur le thread main, il a bloque la fenetre
+   * 14 403 ms au demarrage (mesure du 2026-08-29, detecteur de gel, conv-1511).
+   */
+  | { operation: 'recensementNonPublies'; baseRef?: string; limite?: number }
   | { operation: 'describe'; agentId: string }
   | { operation: 'hasActiveProcesses'; agentId: string }
   | { operation: 'discard'; agentId: string }
