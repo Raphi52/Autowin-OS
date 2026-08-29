@@ -1,5 +1,6 @@
 import { applyEdit, decideEdit, decoderUtf8, editDiff, refusSiPasUtf8 } from './edit-file-command'
 import { pendantOperation } from './gel-main'
+import { rechargerEnv } from './env-reload'
 import { autorisationsLuesDans, decisionDeCommande } from './autorisation-commande'
 import { memoriserAutorisations } from './store/autorisations-permanentes'
 import {
@@ -808,6 +809,20 @@ const CATALOG: CommandSpec[] = [
     args: {
       commande:
         'la ligne à lancer, un seul programme et ses arguments (ex. `git status --porcelain`)'
+    }
+  },
+  {
+    name: 'reload_env',
+    description:
+      'Recharger À CHAUD, dans le processus principal, une variable d’environnement déjà persistée par l’utilisateur (setx / variables système) — sans redémarrer l’app. La valeur vient de l’OS, jamais du modèle. Seules les variables de réglage Autowin sont rechargeables (ex. `AUTOWIN_VERIFY_TIMEOUT_MS`, le plafond de `verify`)',
+    args: {
+      nom: 'le nom exact de la variable à recharger (ex. `AUTOWIN_VERIFY_TIMEOUT_MS`)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
     }
   },
   {
@@ -2597,6 +2612,10 @@ export class AppCommandBus {
           detail: issue.output ?? `${ligne} — code ${issue.exitCode ?? '?'}`
         }
       }
+      case 'reload_env':
+        // La valeur lue chez l'OS atterrit dans le `process.env` DU processus principal : le
+        // reglage prend effet au prochain appel qui le lit, sans redemarrage.
+        return rechargerEnv(a.nom)
       case 'verify':
         return await this.runVerify(onProgress, typeof a.cible === 'string' ? a.cible : undefined)
       case 'brain_query':
