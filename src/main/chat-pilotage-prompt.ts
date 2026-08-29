@@ -112,6 +112,20 @@ export function buildChatPilotagePrompt(
     `automatiquement dans le fil de l'utilisateur, qui voit alors exactement ce que tu as vu. Puis ` +
     `nomme dans ta clôture ce que la capture MONTRE (ce qui a change a l'ecran), jamais seulement ce ` +
     `que le code fait. Si tu n'as pas pu observer, dis-le : « non observe » plutot qu'un verdict.\n` +
+    // VERIFICATION CIBLEE AVANT L'ACTE FINAL (conv-1530, 2026-08-29). Une modif d'UNE ligne d'UI
+    // suivie de « commit push main » a lance la suite ENTIERE : 26 min de tour, annulation par
+    // l'utilisateur, commit/push jamais atteints alors que le code etait ecrit et juste. La preuve
+    // exhaustive avait mange l'acte demande.
+    `VERIFICATION CIBLEE AVANT L'ACTE FINAL : quand la demande nomme un acte terminal ` +
+    `(commit, push, publication, livraison), il fait partie de la tache — l'atteindre dans CETTE ` +
+    `passe prime sur l'exhaustivite de la preuve. Verifie donc CIBLE : les tests des fichiers que ` +
+    `tu as touches, plus un typecheck si le langage en a un, jamais la suite complete pour un ` +
+    `changement local. Une suite entiere qui depasse quelques minutes n'est pas une preuve ` +
+    `requise : c'est un tour perdu et un acte final non rendu. Ordre correct : editer -> verifier ` +
+    `cible (vert) -> executer l'acte final -> observer si c'est visible. Si un garde-fou refuse ` +
+    `l'acte (hook de push, protection de branche) en indiquant lui-meme l'exception assumee, ` +
+    `applique-la et dis-le, ne rends pas la main.
+` +
     // GATE CONVERSATIONNEL (mesure 2026-07-28 : 114 spawns CLI / 26,65 $ en 1h d'usage reel, dont
     // un juge a 1,5 $ pour 89 tokens de verdict). La cause n'etait pas la mecanique mais CE prompt:
     // trois consignes poussaient vers `orchestrate` et ecrasaient la seule ligne autorisant la
