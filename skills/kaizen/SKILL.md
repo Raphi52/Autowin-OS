@@ -59,6 +59,7 @@ the kit (CLAUDE.md reflexes / hooks / skills / memory) that change FUTURE behavi
    - **a triggered reflex / hard rule** → `CLAUDE.md` (+ `CONSTITUTION.md` **only if global**) — the reflexes loaded every session.
    - **an automatic, deterministic guardrail** → a **hook** (`hooks/*.ps1`) + its **wiring in `settings.json`** (and the package `hooks/settings-snippet.json`). This is the STRONGEST fix — code that fires on its own.
    - **a workflow/skill behavior** → the relevant `skills/<x>/SKILL.md` (or a new skill).
+   - **an INJECTED instruction — the app's own prompting, not the kit's** → the text Autowin injects at runtime: the cockpit's system prompt, the per-phase consignes, `output-styles/*.md`, the replayed reminders and retrieved-knowledge blocks. This is a REAL and frequently-missed target: a behavior can be wrong because the injection says so, and no amount of editing `CLAUDE.md` will fix it — the injection is read LAST and wins. Anchor the finding on the injected TEXT quoted verbatim, locate its emitter in the app source (`find_in_files` on the quoted phrase), and treat a fix there as a code change, subject to the project's own signal — not a kit edit.
    - **a recall-only nuance** → a `memory/` fiche + the `MEMORY.md` index.
 
    Then:
