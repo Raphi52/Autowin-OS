@@ -8,7 +8,8 @@ description: >-
   invoked in (reconstruct it from its OWN transcript `~/.claude/projects/<project>/<SESSION_ID>.jsonl`, the
   `SESSION_ID` injected each turn by the UserPromptSubmit hook); OR a named PAST session ("kaizen session X /
   the last one I tried to kaizen" → find by first-prompt / topic / a prior `kaizen`-fork); OR a named
-  behavior; OR a recurrent telemetry pattern surfaced by the `kaizen-nudge` Stop hook; (2) AUDIT behaviorally by REUSING
+  behavior; OR an AUTOWIN conversation (`conversation_read` / `conversation_search` / `retrospective`, never the
+  transcripts alone); OR an INJECTED instruction (the app system prompt, phase consignes, output-styles); OR a recurrent telemetry pattern surfaced by the `kaizen-nudge` Stop hook; (2) AUDIT behaviorally by REUSING
   `judge` Mode B (parallel behavioral lenses — anchoring/honesty, communication, scope-drift, cross-session
   state, model-shared blind spot… — each finding 1-2 blind spots with a FALSIFIABLE anchor quoted from the
   transcript + a severity; loop with new lenses until 2 dry rounds); (3) CONSOLIDATE to ONE root cause + a
@@ -19,7 +20,8 @@ description: >-
   `kaizen-treated.jsonl`. Mechanics are CANONICAL in `_engine/ENGINE.md` + `judge` Mode B; kaizen carries only
   the delta: target-location, the self-applied integrate step, sync-kit, and the one-commit-per-edit constraint.
   Trigger on "kaizen this session", "improve the kit from my recurring failures", "audit
-  my habits / workflow / blind spots", "what do I systematically miss", OR right after the `kaizen-nudge` hook
+  my habits / workflow / blind spots", "what do I systematically miss", "analyse les defauts dans les
+  workflows / les conversations / les comportements / les injections", "audite tout Autowin", OR right after the `kaizen-nudge` hook
   surfaces a recurrent failure pattern. Do NOT use to: audit the QUALITY of a one-off deliverable → `judge`
   (Mode A); fix a single code defect → `build`; frame a new need → `frame`. Kaizen targets the BEHAVIOR/kit,
   not a specific artifact.
