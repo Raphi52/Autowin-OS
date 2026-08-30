@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useBrancheCourante } from './branche-courante'
 import { createPortal } from 'react-dom'
 import { extractRecommendation } from './Markdown'
 import { extrairePromptSuivant } from '../../../shared/prompt-suivant'
@@ -349,28 +350,19 @@ export function ChatView({
   }, [])
   const [runtimeIdentity, setRuntimeIdentity] = useState<ChatRuntimeIdentity | null>(null)
   /*
-    LA BRANCHE GIT COURANTE, en tete de conversation, a la place du niveau d'effort.
+    LA BRANCHE GIT COURANTE, en tete de conversation, a la place du niveau d’effort.
 
-    « effort low » ne disait rien d'actionnable ; savoir sur QUELLE branche on travaille change
-    ce qu'on s'autorise a demander a l'agent. Lecture seule (git:read), silencieuse en cas
-    d'echec : mieux vaut rien qu'un nom de branche invente.
+    « effort low » ne disait rien d’actionnable ; savoir sur QUELLE branche on travaille change
+    ce qu’on s’autorise a demander a l’agent. Lecture seule (git:read), silencieuse en cas
+    d’echec : mieux vaut rien qu’un nom de branche invente.
+
+    La RELECTURE vit dans `useBrancheCourante` : lue une seule fois au montage, la valeur
+    affichait `main` des que le depot changeait de branche pendant la session — un nom PERIME,
+    pire que pas de nom sur un badge cense dire ce qu’on s’autorise.
   */
-  const [gitBranch, setGitBranch] = useState<string | null>(null)
-  useEffect(() => {
-    let vivant = true
-    // Appel OPTIONNEL : certaines surfaces (tests, preload partiel) n'exposent pas cette lecture.
-    void Promise.resolve(window.api.getGitState?.())
-      .then((resultat) => {
-        if (!vivant) return
-        setGitBranch(resultat?.available ? (resultat.state?.branch ?? null) : null)
-      })
-      .catch(() => {
-        if (vivant) setGitBranch(null)
-      })
-    return () => {
-      vivant = false
-    }
-  }, [])
+  // Appel OPTIONNEL : certaines surfaces (tests, preload partiel) n’exposent pas cette lecture.
+  const lireEtatGit = useCallback(() => Promise.resolve(window.api.getGitState?.()), [])
+  const gitBranch = useBrancheCourante(lireEtatGit)
   const [defaultWorkspace, setDefaultWorkspace] = useState<string | undefined>(undefined)
   /*
    * Occupation de la fenetre de contexte, par conversation.
