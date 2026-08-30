@@ -73,6 +73,12 @@ import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment, pieceJointePasseePourLeFil } from './chat-attachments'
 import { derniereConversationOuverte, memoriserDerniereConversation } from './derniere-conversation'
 import {
+  memoriserPositionLecture,
+  positionLectureMemorisee,
+  restaurerPositionLecture,
+  type PositionLecture
+} from './position-lecture'
+import {
   conversationsRecentes,
   doitAfficherRecentes,
   GROUPE_RECENTES,
@@ -543,6 +549,12 @@ export function ChatView({
   const runtimeRefreshGenerationRef = useRef(0)
   const runsRequestRef = useRef<RunRequestIdentity>({ id: 0, scope: 'conv', convId: null })
   const followTailRef = useRef(true)
+  /**
+   * Position A RESTAURER a la prochaine peinture du fil : posee par `loadConv` quand la conversation
+   * ouverte avait ete quittee EN COURS de lecture. Un ref et pas un state : l'effet de scroll doit la
+   * consommer sur la meme frame que les messages, sans re-rendu intermediaire.
+   */
+  const positionARestaurerRef = useRef<PositionLecture | null>(null)
 
   /** Le texte en cours de frappe, lu dans la carte des brouillons (le composer y écrit à chaque touche). */
   function texteDuComposer(): string {
@@ -1280,6 +1292,16 @@ export function ChatView({
   useEffect(() => {
     const scroll = scrollRef.current
     if (!scroll) return
+    // REPRISE DE LECTURE : la conversation a ete quittee au milieu du fil. On restaure l'endroit
+    // exact AVANT toute descente, sinon l'ouverture viserait le bas comme avant (defaut du 2026-08-30).
+    const aRestaurer = positionARestaurerRef.current
+    if (aRestaurer) {
+      positionARestaurerRef.current = null
+      followTailRef.current = false
+      setScrolledAwayFromTail(true)
+      requestAnimationFrame(() => restaurerPositionLecture(scroll, aRestaurer))
+      return
+    }
     if (!followTailRef.current) {
       setHasNewActivity(true)
       return
@@ -1353,7 +1375,9 @@ export function ChatView({
       return
     }
     resetConvLoad()
-    followTailRef.current = true
+    const reprise = positionLectureMemorisee(c.id)
+    positionARestaurerRef.current = reprise ?? null
+    followTailRef.current = !reprise
     setHasNewActivity(false)
     activeRef.current = c.id
     setActiveId(c.id)
@@ -3431,6 +3455,9 @@ export function ChatView({
           aria-relevant="additions text"
           onScroll={(event) => {
             const nearBottom = isChatNearBottom(event.currentTarget)
+            // La position de lecture se retient A CHAQUE mouvement : quitter une conversation ne
+            // passe pas toujours par un evenement de fermeture (switch, fermeture brutale de l'app).
+            if (activeRef.current) memoriserPositionLecture(activeRef.current, event.currentTarget)
             followTailRef.current = nearBottom
             setScrolledAwayFromTail(!nearBottom)
             if (nearBottom) setHasNewActivity(false)
