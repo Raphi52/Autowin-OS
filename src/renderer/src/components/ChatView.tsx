@@ -2894,6 +2894,25 @@ export function ChatView({
                   Sortir du dossier
                 </button>
               )}
+              {/*
+                Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau
+                coutait un item d'interface visible toute la journee pour un geste rare.
+              */}
+              <button
+                role="menuitem"
+                data-testid="conv-menu-select-mode"
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  setConvSelectionMode(true)
+                  setSelectedConvIds(new Set([conv.id]))
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  ☑
+                </span>
+                Sélectionner
+              </button>
               <button
                 role="menuitem"
                 className="c-err"
