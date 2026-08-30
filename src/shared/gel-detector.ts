@@ -173,3 +173,24 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
     msNonImputables
   }
 }
+
+/**
+ * NOMME un acces synchrone susceptible de tenir la boucle.
+ *
+ * Le temoin prouve QUE le main est coince dans une entree-sortie ; il ne dit pas LAQUELLE. Un
+ * nom utile doit repondre a deux questions : quel appel, et surtout — disque local ou partage
+ * RESEAU. Un `readFileSync` sur `//ged2` peut tenir la boucle des secondes quand le partage rame ;
+ * le meme appel sur `C:` coute des millisecondes. Le chemin est CONDENSE (racine + fichier) :
+ * l'agregation par operation doit regrouper les acces d'un meme partage, pas les eparpiller.
+ */
+export function nommerAccesBloquant(api: string, cible?: unknown): string {
+  if (typeof cible !== 'string' || !cible) return `io:disque:${api}`
+  const normalise = cible.split(String.fromCharCode(92)).join('/')
+  const reseau = normalise.startsWith('//')
+  const segments = normalise.split('/').filter(Boolean)
+  const racine = reseau ? `//${segments.slice(0, 2).join('/')}` : (segments[0] ?? '')
+  const fichier = segments[segments.length - 1] ?? ''
+  const intermediaire = reseau ? segments.length > 3 : segments.length > 2
+  const condense = intermediaire ? `${racine}/…/${fichier}` : `${racine}/${fichier}`
+  return `io:${reseau ? 'reseau' : 'disque'}:${api} ${condense}`
+}

@@ -296,7 +296,7 @@ import {
 } from './app-data'
 import { configureTurnTiming } from './turn-timing'
 import { lireLatenceTours } from './perf-lag-main'
-import { demarrerDetecteurDeGel, lireGels } from './gel-main'
+import { demarrerDetecteurDeGel, instrumenterEntreesSortiesDuMain, lireGels } from './gel-main'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
 import {
   createStorageMigrationReadHandler,
@@ -533,6 +533,9 @@ configureAutowinAppDataBase(appDataRoot)
 configureTurnTiming(ensureAutowinAppData(appDataRoot))
 // Battement du main : seul instrument capable de dater un « ce programme ne repond pas ».
 demarrerDetecteurDeGel(ensureAutowinAppData(appDataRoot))
+// Le temoin ordonnance a prouve que nos gels sont des « entree-sortie-bloquante » : mesure DIRECTE
+// des appels disque/reseau synchrones pour NOMMER l'appel et le partage en cause.
+instrumenterEntreesSortiesDuMain()
 configureSessionMemoryEcho(join(app.getPath('userData'), 'session-memory.json'))
 configureRememberDepositStore(join(app.getPath('userData'), 'remember-deposits.json'))
 

@@ -1,10 +1,12 @@
 import { appendFile, mkdir } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { createRequire } from 'node:module'
 import { Worker } from 'node:worker_threads'
 import {
   classerGel,
   resumerGels,
+  nommerAccesBloquant,
   PERIODE_BATTEMENT_MS,
   SEUIL_GEL_MS,
   type Gel,
@@ -155,7 +157,6 @@ export function demarrerDetecteurDeGel(
   }
 }
 
-
 /*
  * TEMOIN ORDONNANCE — ce qui permet enfin de distinguer « la machine ne nous donne pas de CPU » de
  * « NOTRE thread principal est coince dans un appel bloquant ».
@@ -273,4 +274,97 @@ export function instrumenterCanauxIpc(ipc: {
         }
       }
     })
+}
+
+/**
+ * INSTRUMENTE des appels SYNCHRONES d'entree-sortie sur un hote (module `fs`, `child_process`…).
+ *
+ * Le temoin ordonnance a prouve (conv-1539, gel de 22 652 ms) que nos gels sont des
+ * `entree-sortie-bloquante` : la boucle est tenue par NOTRE code sans bruler de CPU. L'heuristique
+ * ne peut pas aller plus loin ; seule une mesure DIRECTE du segment synchrone peut nommer l'appel.
+ * On enrobe donc chaque fonction visee : au-dela du seuil, on journalise `io:<reseau|disque>:<api>
+ * <chemin condense>` avec la cause prouvee par construction. La valeur et les jets d'origine
+ * passent intacts, et `defaire()` restaure les fonctions d'origine (aucune fuite entre tests).
+ */
+export function instrumenterAccesBloquants<H extends Record<string, unknown>>(
+  hote: H,
+  fonctions: readonly (keyof H & string)[],
+  seuilMs = SEUIL_GEL_MS,
+  ecrire: (gel: Gel) => void = journaliserGel
+): () => void {
+  const originales = new Map<string, unknown>()
+  for (const nom of fonctions) {
+    const originale = hote[nom]
+    if (typeof originale !== 'function') continue
+    originales.set(nom, originale)
+    const fn = originale as (...a: unknown[]) => unknown
+    ;(hote as Record<string, unknown>)[nom] = function instrumentee(
+      this: unknown,
+      ...args: unknown[]
+    ): unknown {
+      const depart = Date.now()
+      try {
+        return fn.apply(this, args)
+      } finally {
+        const dureeMs = Date.now() - depart
+        if (dureeMs >= seuilMs) {
+          ecrire({
+            ts: new Date().toISOString(),
+            blocageMs: dureeMs,
+            operation: nommerAccesBloquant(nom, args[0]),
+            cause: 'entree-sortie-bloquante'
+          })
+        }
+      }
+    }
+  }
+  return () => {
+    for (const [nom, originale] of originales) (hote as Record<string, unknown>)[nom] = originale
+  }
+}
+
+/**
+ * Cable l'instrumentation sur les entrees-sorties SYNCHRONES reellement utilisees par le main.
+ *
+ * On patche les OBJETS de module (`node:fs`, `node:child_process`) : c'est par eux que passent les
+ * appels du bundle, et cela evite d'instrumenter 149 sites d'appel un par un — la meme couture
+ * unique que pour les canaux IPC. `defaire()` restaure tout.
+ */
+export function instrumenterEntreesSortiesDuMain(
+  seuilMs = SEUIL_GEL_MS,
+  ecrire: (gel: Gel) => void = journaliserGel
+): () => void {
+  const requiert = createRequire(import.meta.url)
+  const defaires: Array<() => void> = []
+  const cibles: Array<[string, readonly string[]]> = [
+    [
+      'node:fs',
+      [
+        'readFileSync',
+        'writeFileSync',
+        'appendFileSync',
+        'readdirSync',
+        'statSync',
+        'lstatSync',
+        'existsSync',
+        'copyFileSync',
+        'renameSync',
+        'rmSync',
+        'mkdirSync',
+        'realpathSync'
+      ]
+    ],
+    ['node:child_process', ['execSync', 'execFileSync', 'spawnSync']]
+  ]
+  for (const [module, fonctions] of cibles) {
+    try {
+      const hote = requiert(module) as Record<string, unknown>
+      defaires.push(instrumenterAccesBloquants(hote, fonctions, seuilMs, ecrire))
+    } catch {
+      /* observabilite best-effort : un module absent ne doit jamais casser le demarrage */
+    }
+  }
+  return () => {
+    for (const defaire of defaires) defaire()
+  }
 }
