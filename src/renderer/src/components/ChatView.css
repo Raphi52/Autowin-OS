@@ -3185,3 +3185,10 @@ ol.md-list li {
   max-height: 180px;
   overflow-y: auto;
 }
+
+
+/* Reprise de lecture : le fil est masque le temps que la position soit tenue, pour supprimer le
+   saut visible (clignotement) pendant les frames de re-application. */
+.chat-scroll--reprise {
+  visibility: hidden;
+}
