@@ -8,7 +8,13 @@ import type { ExecutionSupervisor } from './execution-supervisor'
 import { routeSkillRequest } from './skill-routing'
 import { CONTEXT_MESSAGE_CHARS, CONTEXT_MESSAGE_LIMIT, clip } from './conversation-window'
 
-const ROUTE_CONFIDENCE_THRESHOLD = 0.9
+/**
+ * Seuil de confiance exigé du modèle pour OUVRIR une nouvelle conversation.
+ * Porté de 0.9 à 0.97 : une ouverture à tort scinde un fil et fait perdre son contexte à
+ * l'utilisateur, alors qu'un maintien à tort se corrige d'un simple déplacement. Le coût
+ * étant asymétrique, on n'accepte la rupture de sujet que sur une quasi-certitude.
+ */
+const ROUTE_CONFIDENCE_THRESHOLD = 0.97
 /**
  * En dessous de cette longueur, un message est traité comme un suivi local : trop court pour
  * porter à lui seul la preuve d'une rupture de sujet nette. Garde déterministe, évaluée avant

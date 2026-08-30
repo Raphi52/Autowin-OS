@@ -129,7 +129,7 @@ describe('ConversationRouter', () => {
 
   it('routes a clearly unrelated topic to a titled new conversation', async () => {
     const { router } = harness(
-      '{"route":"new","confidence":0.96,"reason":"new-topic","title":"Programme Mouse Move"}'
+      '{"route":"new","confidence":0.98,"reason":"new-topic","title":"Programme Mouse Move"}'
     )
     const current = conversation([
       message('user', 'Refais le graphe Git des worktrees', 1),
@@ -140,15 +140,15 @@ describe('ConversationRouter', () => {
       router.decide(current, 'Crée un petit exécutable qui bouge la souris')
     ).resolves.toMatchObject({
       route: 'new',
-      confidence: 0.96,
+      confidence: 0.98,
       reason: 'new-topic',
       title: 'Programme Mouse Move'
     })
   })
 
   it.each([
-    [0.89, 'current'],
-    [0.9, 'new']
+    [0.96, 'current'],
+    [0.97, 'new']
   ] as const)('applies the conservative threshold at confidence %s', async (confidence, route) => {
     const { router } = harness(
       JSON.stringify({ route: 'new', confidence, reason: 'new-topic', title: 'Autre sujet' })
@@ -259,7 +259,7 @@ describe('ConversationRouter', () => {
 
   it('can route an attachment-only message without inventing text', async () => {
     const { router, registry } = harness(
-      '{"route":"new","confidence":0.95,"reason":"new-topic","title":"Analyse du document"}'
+      '{"route":"new","confidence":0.98,"reason":"new-topic","title":"Analyse du document"}'
     )
     const current = conversation([message('user', 'Sujet courant', 1)])
 
