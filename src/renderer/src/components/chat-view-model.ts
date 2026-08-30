@@ -1377,7 +1377,14 @@ export function scrollChatToBottom(
    * mesurés le 2026-08-17. Un défaut résiduel doit rester VISIBLE, pas se taire.
    */
   onSettled?: (landed: boolean) => void
-): void {
+  /**
+   * REND UN ANNULEUR. Sans lui, l'effet appelant relançait une descente à CHAQUE delta de streaming
+   * sans arrêter la précédente : plusieurs boucles vivaient sur le même conteneur, chacune avec son
+   * propre `lastTop` et sa propre tolérance de retour-en-haut, et elles se contredisaient frame par
+   * frame — c'est le « tout le chat vibre » rapporté le 2026-08-30 juste après l'envoi d'un message.
+   */
+): () => void {
+  let annule = false
   let frames = 0
   let lastHeight = -1
   let lastTop = Number.NEGATIVE_INFINITY
@@ -1388,7 +1395,11 @@ export function scrollChatToBottom(
    * de lecture ; une molette recule progressivement. On tolère donc UN seul retour-à-zéro.
    */
   let retourEnHautTolere = true
+  /** Une animation `smooth` a été émise et peut être encore en vol. */
+  let smoothEmis = false
   const step = (): void => {
+    // Une descente plus récente a pris la main : celle-ci se tait au lieu de lutter contre elle.
+    if (annule) return
     // Le fil a été démonté (changement de conversation, fermeture) : plus rien à faire piloter.
     if ('isConnected' in element && element.isConnected === false) return
     const height = element.scrollHeight
@@ -1406,7 +1417,14 @@ export function scrollChatToBottom(
     const remaining = height - element.clientHeight - element.scrollTop
     if (heightMoved || (isLastFrame && !isChatNearBottom(element))) {
       const sec = isLastFrame || remaining >= element.clientHeight
-      element.scrollTo({ top: height, behavior: sec ? 'auto' : 'smooth' })
+      // Un `smooth` RELANCÉ à chaque frame repart d'une vitesse nulle : au lieu d'avancer, il fait
+      // trembler le fil. On ne le ré-émet donc que si l'animation en vol n'avance PAS (scrollTop
+      // immobile depuis la frame précédente) ; sinon on la laisse finir sa course.
+      const smoothEnVol = !sec && smoothEmis && element.scrollTop !== lastTop
+      if (!smoothEnVol) {
+        element.scrollTo({ top: height, behavior: sec ? 'auto' : 'smooth' })
+        smoothEmis = !sec
+      }
     }
     lastHeight = height
     lastTop = element.scrollTop
@@ -1415,6 +1433,9 @@ export function scrollChatToBottom(
     else schedule(step)
   }
   step()
+  return () => {
+    annule = true
+  }
 }
 
 export function clampConversationPaneWidth(width: number): number {

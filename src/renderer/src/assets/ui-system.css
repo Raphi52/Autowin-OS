@@ -45,7 +45,8 @@
   line-height: 1.2;
   text-transform: uppercase;
 }
-.module-header > h1 {
+.module-header > h1,
+.module-header-line > h1 {
   margin: 0;
   color: var(--module-title-color);
   font-family: var(--module-title-font);
@@ -60,4 +61,77 @@
   border-radius: var(--container-radius-panel);
   background: var(--surface-panel);
   box-shadow: none;
+}
+
+/* Ligne titre + commandes (switch de vue) — le titre reste a gauche, les actions a droite. */
+.module-header-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.module-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Squelette du switch et de la mosaique : habillage fin a faire en design. */
+.conv-view-switch {
+  display: inline-flex;
+  gap: 2px;
+}
+.conv-view-switch > button {
+  padding: 2px 6px;
+  border: 1px solid var(--container-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.2;
+  opacity: 0.55;
+}
+.conv-view-switch > button[aria-pressed='true'] {
+  opacity: 1;
+}
+/* PLEIN CADRE (choix utilisateur 2026-08-30) : la mosaique remplace la zone de chat.
+   Un panneau de 232 px ne tient pas une mosaique lisible — les autres panneaux se replient. */
+.conv-pane.is-mosaic {
+  flex: 1 1 auto;
+  width: auto;
+}
+.chat-layout.is-mosaic > .chat,
+.chat-layout.is-mosaic > .runs-pane,
+.chat-layout.is-mosaic > .conv-pane-resizer,
+.chat-layout.is-mosaic > .runs-pane-resizer {
+  display: none;
+}
+.conv-mosaic {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  padding: 8px;
+}
+.conv-tile {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--container-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.conv-tile-title {
+  font-weight: 650;
+}
+.conv-tile-meta,
+.conv-mosaic-empty {
+  font-size: 12px;
+  opacity: 0.6;
+}
+.conv-mosaic-empty {
+  padding: 12px;
 }

@@ -1678,6 +1678,53 @@ describe('chat scrolling and layout rules', () => {
     expect(descente(5_000).atterri).toBe(false)
   })
 
+  it('ne fait pas VIBRER le fil : une descente annulée cesse de piloter le conteneur', () => {
+    const queue: Array<() => void> = []
+    const scrolls: ScrollToOptions[] = []
+    const element = {
+      scrollTop: 0,
+      clientHeight: 100,
+      scrollHeight: 1000,
+      scrollTo(options: ScrollToOptions) {
+        scrolls.push(options)
+        this.scrollTop = Math.min(options.top ?? 0, this.scrollHeight - this.clientHeight)
+      }
+    }
+    // Deux descentes concurrentes, comme deux deltas de streaming successifs.
+    const annulerPremiere = scrollChatToBottom(element, (callback) => queue.push(callback))
+    scrollChatToBottom(element, (callback) => queue.push(callback))
+    annulerPremiere()
+    const avant = scrolls.length
+    element.scrollHeight = 2400
+    while (queue.length > 0) queue.shift()?.()
+    // La boucle annulée ne replanifie plus rien : les cibles restent celles de la SEULE survivante.
+    expect(scrolls.slice(avant).every((o) => o.top === 2400)).toBe(true)
+    expect(element.scrollTop).toBe(2300)
+  })
+
+  it("ne relance pas un smooth qui avance déjà (relance par frame = tremblement)", () => {
+    const queue: Array<() => void> = []
+    const scrolls: ScrollToOptions[] = []
+    const element = {
+      scrollTop: 0,
+      clientHeight: 1000,
+      scrollHeight: 1050,
+      scrollTo(options: ScrollToOptions) {
+        scrolls.push(options)
+      }
+    }
+    scrollChatToBottom(element, (callback) => queue.push(callback))
+    expect(scrolls[0]?.behavior).toBe('smooth')
+    // L'animation avance d'elle-même pendant que le fil grandit un peu.
+    for (let i = 1; i <= 3; i += 1) {
+      element.scrollTop += 10
+      element.scrollHeight += 5
+      queue.shift()?.()
+    }
+    // Aucun smooth ré-émis tant qu'il progresse.
+    expect(scrolls.filter((o) => o.behavior === 'smooth')).toHaveLength(1)
+  })
+
   it('câble le filet de secours dans ChatView (exposé sans appelant = théâtre)', () => {
     const vue = readFileSync(join(__dirname, 'ChatView.tsx'), 'utf8')
     expect(vue).toMatch(/scrollChatToBottom\(\s*scroll,\s*requestAnimationFrame,\s*40,/u)
