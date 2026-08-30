@@ -92,11 +92,9 @@ import {
 } from './conversation-groups'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
-import { conversationEnMarkdown, nomFichierExportMarkdown } from './conversation-markdown'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { WorkflowsPanel, type RunDetailTab } from './WorkflowsPanel'
-import { ThinkingPanel } from './ThinkingPanel'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
   mergeLiveAndPersisted,
@@ -427,7 +425,6 @@ export function ChatView({
   const [scrolledAwayFromTail, setScrolledAwayFromTail] = useState(false)
   const [showRuns, setShowRuns] = useState(false)
   // Panneau « Réflexion » : le raisonnement du modèle, hors du fil (colonne droite).
-  const [showThinking, setShowThinking] = useState(false)
   const [runsPaneWidth, setRunsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.runsPaneWidth'))
     const value = Number.isFinite(saved) && saved > 0 ? saved : 340
@@ -2383,26 +2380,6 @@ export function ChatView({
 
   const active = convs.find((c) => c.id === activeId)
 
-  /**
-   * EXPORT MARKDOWN de la conversation affichee : meme fil que l'ecran, ecrit dans un fichier.
-   * Telechargement navigateur (comme l'export de trace de l'Observatoire) — aucun droit ni canal
-   * main supplementaire requis.
-   */
-  const exporterConversationMarkdown = (): void => {
-    if (messages.length === 0) return
-    const titre = active?.title ?? 'Conversation'
-    const id = activeId ?? 'sans-id'
-    const href = URL.createObjectURL(
-      new Blob([conversationEnMarkdown({ titre, id, messages })], {
-        type: 'text/markdown;charset=utf-8'
-      })
-    )
-    const link = document.createElement('a')
-    link.href = href
-    link.download = nomFichierExportMarkdown(titre, id)
-    link.click()
-    URL.revokeObjectURL(href)
-  }
   const latestAssistant = [...messages]
     .reverse()
     .find((message): message is AsstMsg => message.role === 'assistant')
@@ -3203,25 +3180,6 @@ export function ChatView({
           <div className="row gap2 chat-head-actions">
             <button
               type="button"
-              className="chat-export-md"
-              data-testid="chat-export-markdown"
-              disabled={messages.length === 0}
-              onClick={exporterConversationMarkdown}
-              title="Exporter cette conversation en Markdown"
-            >
-              Exporter .md
-            </button>
-            <button
-              type="button"
-              className={`thinking-toggle${showThinking ? ' is-active' : ''}`}
-              data-testid="chat-thinking-toggle"
-              onClick={() => setShowThinking((v) => !v)}
-              title="Réflexion de l’agent (panneau dédié)"
-            >
-              Réflexion
-            </button>
-            <button
-              type="button"
               className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
               onClick={() => setShowRuns((v) => !v)}
               title="Workflows (RUN.md)"
@@ -3700,7 +3658,6 @@ export function ChatView({
         />
       </section>
 
-      {showThinking && <ThinkingPanel messages={messages} onClose={() => setShowThinking(false)} />}
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
       {showRuns && (
