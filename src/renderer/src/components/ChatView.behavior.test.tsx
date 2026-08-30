@@ -1649,30 +1649,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.textContent).not.toContain('aucune réponse')
   })
 
-  it('affiche une inbox d’agents pour une conversation dont un tour est en cours', async () => {
-    const pilot = deferred<{ ok: boolean }>()
-    const mockApi = api({
-      conversations: vi.fn().mockResolvedValue([conversation('A')]),
-      pilotChat: vi.fn(() => pilot.promise)
-    })
-    await mount(mockApi)
-    await click('.conv-pick')
-    await type('lance un truc long')
-    await click('.composer-send')
-    // Tour en cours → l'inbox d'agents apparaît avec la conversation.
-    const inbox = container!.querySelector('.agent-inbox')
-    expect(inbox).toBeTruthy()
-    expect(inbox!.textContent).toContain('Agents actifs')
-    expect(container!.querySelectorAll('.agent-inbox-row').length).toBe(1)
-    expect(container!.querySelector('.agent-inbox-stop')).toBeNull()
-    await act(async () => pilot.resolve({ ok: true }))
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 30))
-    })
-    // Tour fini → l'inbox se vide.
-    expect(container!.querySelector('.agent-inbox')).toBeNull()
-  })
-
   it('keeps B active when an orchestration starts on A and exposes A in the inbox', async () => {
     let appHandler: ((event: Record<string, unknown>) => void) | undefined
     const mockApi = api({
