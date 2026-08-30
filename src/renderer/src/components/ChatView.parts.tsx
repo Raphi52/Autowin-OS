@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { libelleSortieCommande } from './evidence-label'
 import { groupOutcomeSummary } from './action-outcome-summary'
 import { failedActionRunId } from './run-trace-target'
-import { hasConsultableRun, localActionDetails } from './action-detail-target'
+import { hasConsultableRun, localActionDetail, localActionDetails } from './action-detail-target'
 import { HumanJson } from './HumanJson'
 import { BrainMarkdown } from './BrainMarkdown'
 import {
@@ -81,6 +81,117 @@ export function raisonDuLien(
     return 'VÉRIFICATION'
   }
   return undefined
+}
+
+/**
+ * CIBLE d'une action, lue dans ses arguments. Sans elle, deux `edit_file` consecutifs rendent deux
+ * lignes IDENTIQUES : l'utilisateur voit qu'il se passe quelque chose sans savoir SUR QUOI — grief
+ * exact de conv-1536 (« on sait pas ce que le model est en train de faire au premier coup d'oeil »).
+ * Aucun champ connu -> `undefined` : on prefere le seul libelle d'outil a une cible inventee.
+ */
+const CLES_CIBLE = [
+  'path',
+  'file',
+  'filePath',
+  'target',
+  'query',
+  'command',
+  'task',
+  'view',
+  'title',
+  'name',
+  'text'
+] as const
+
+/** Une cible plus longue ne se lit plus dans une sous-ligne : on la coupe par la TETE du chemin. */
+const MAX_CIBLE = 72
+
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur teste avec ce renderer
+export function resumeCible(args: unknown): string | undefined {
+  if (!args || typeof args !== 'object') return undefined
+  const record = args as Record<string, unknown>
+  for (const cle of CLES_CIBLE) {
+    const valeur = record[cle]
+    if (typeof valeur !== 'string') continue
+    const propre = valeur.trim().split(/\r?\n/u)[0]
+    if (!propre) continue
+    return propre.length > MAX_CIBLE ? `…${propre.slice(-MAX_CIBLE)}` : propre
+  }
+  return undefined
+}
+
+/**
+ * UN ETAGE = une action, avec sa pastille de famille, sa cible, et son PROPRE bouton d'extension.
+ *
+ * Le depliage vivait au niveau du GROUPE : ouvrir montrait tous les details en vrac, sans dire
+ * lequel appartient a quelle etape. L'utilisateur a demande l'inverse — « un bouton pour extend et
+ * voir le detail de chaque step ». Le bouton n'existe QUE si l'etape a quelque chose a montrer :
+ * promettre un depliage vide se lit comme casse.
+ */
+function EtageActivite({
+  etape,
+  lien
+}: {
+  etape: ChatActionPart
+  lien?: string
+}): React.JSX.Element {
+  const [ouvert, setOuvert] = useState(false)
+  const detail = localActionDetail(etape)
+  const cible = resumeCible(etape.args)
+  const libelle = CMD_LABEL[etape.name] ?? etape.name
+  return (
+    <li
+      className="activity-step"
+      data-testid="activity-step"
+      data-state={
+        etape.ok === false
+          ? 'ko'
+          : etape.interrupted
+            ? 'interrupted'
+            : etape.ok === true
+              ? 'ok'
+              : 'running'
+      }
+    >
+      <div className="activity-step-head">
+        {lien && (
+          <span className="activity-step-link" data-testid="activity-step-link">
+            {lien}
+          </span>
+        )}
+        <span className="activity-step-icon" data-testid="activity-step-icon" aria-hidden="true">
+          {iconeFamille(etape.name)}
+        </span>
+        <span className="activity-step-label">{libelle}</span>
+        {cible && (
+          <span className="activity-step-target" data-testid="activity-step-target" title={cible}>
+            {cible}
+          </span>
+        )}
+        {etape.ok === undefined && !etape.interrupted && <Spinner />}
+        {detail && (
+          <button
+            type="button"
+            className="activity-step-toggle"
+            data-testid="activity-step-toggle"
+            aria-expanded={ouvert}
+            aria-label={ouvert ? `Replier ${libelle}` : `Déplier le détail de ${libelle}`}
+            onClick={() => setOuvert((etat) => !etat)}
+          >
+            {ouvert ? '▾' : '▸'}
+          </button>
+        )}
+      </div>
+      {ouvert && detail && (
+        <pre
+          className={`activity-step-detail${detail.ok ? '' : ' failed'}`}
+          data-testid="activity-step-detail"
+        >
+          {detail.text}
+        </pre>
+      )}
+    </li>
+  )
 }
 
 /** Sortie texte d'un sous-agent : repliée par défaut (160px), dépliable sur demande. */
@@ -527,47 +638,6 @@ export function AssistantActivityGroup({
             {battement}
           </div>
         )}
-        {/* ETAGES (design converge) : une sous-ligne par action, reliees par un trait POINTILLE,
-            chacune avec sa pastille de famille et, quand une regle s'applique, l'etiquette L4 qui
-            NOMME la raison de l'enchainement. La ligne d'en-tete ne dit que « A · B » : elle perd
-            l'ordre, le verdict de chaque etage et le lien entre eux. */}
-        {actions.length > 1 && (
-          <ol className="activity-steps" data-testid="activity-steps">
-            {actions.map((etape, index) => {
-              const lien = raisonDuLien(actions[index - 1], etape)
-              return (
-                <li
-                  key={`${etape.name}-${index}`}
-                  className="activity-step"
-                  data-testid="activity-step"
-                  data-state={
-                    etape.ok === false
-                      ? 'ko'
-                      : etape.interrupted
-                        ? 'interrupted'
-                        : etape.ok === true
-                          ? 'ok'
-                          : 'running'
-                  }
-                >
-                  {lien && (
-                    <span className="activity-step-link" data-testid="activity-step-link">
-                      {lien}
-                    </span>
-                  )}
-                  <span
-                    className="activity-step-icon"
-                    data-testid="activity-step-icon"
-                    aria-hidden="true"
-                  >
-                    {iconeFamille(etape.name)}
-                  </span>
-                  <span className="activity-step-label">{CMD_LABEL[etape.name] ?? etape.name}</span>
-                </li>
-              )
-            })}
-          </ol>
-        )}
         {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre bouton,
             sinon deplier couterait l'acces a la trace complete. */}
         {why.length > 0 && runConsultable && (
@@ -616,6 +686,21 @@ export function AssistantActivityGroup({
           >
             {resumePending ? `↻ ${retryGerund}…` : resumeError ? '↻ Réessayer' : `↻ ${retryVerb}`}
           </button>
+        )}
+        {/* ETAGES (design converge) : une sous-ligne par action, reliees par un trait POINTILLE,
+            chacune avec sa pastille de famille et, quand une regle s'applique, l'etiquette L4 qui
+            NOMME la raison de l'enchainement. La ligne d'en-tete ne dit que « A · B » : elle perd
+            l'ordre, le verdict de chaque etage et le lien entre eux. */}
+        {actions.length > 0 && (
+          <ol className="activity-steps" data-testid="activity-steps">
+            {actions.map((etape, index) => (
+              <EtageActivite
+                key={`${etape.name}-${index}`}
+                etape={etape}
+                lien={raisonDuLien(actions[index - 1], etape)}
+              />
+            ))}
+          </ol>
         )}
       </div>
       {whyOpen && why.length > 0 && (
