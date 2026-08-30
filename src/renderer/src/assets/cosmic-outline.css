@@ -559,8 +559,25 @@
   background: rgba(0, 0, 0, 0.45);
 }
 
-.cosmic-outline .activity-group.failed {
+/* B3-γ — la CARTE porte la teinte de son statut (bord gauche + fond), pas le seul point.
+   Ces regles vivent DANS le theme : `.cosmic-outline .activity-group` (0,2,0) repeint le fond et
+   le bord, donc une teinte posee dans ChatView.css (0,1,0) serait ecrite mais invisible. */
+.cosmic-outline .activity-group.failed,
+.cosmic-outline .activity-group[data-state='failed'] {
   border-left-color: #ff6d8f;
+  background: rgba(255, 109, 143, 0.1);
+}
+.cosmic-outline .activity-group[data-state='running'] {
+  border-left-color: #5ecaf0;
+  background: rgba(94, 202, 240, 0.09);
+}
+.cosmic-outline .activity-group[data-state='interrupted'] {
+  border-left-color: #e8a33d;
+  background: rgba(232, 163, 61, 0.09);
+}
+.cosmic-outline .activity-group[data-state='done'] {
+  border-left-color: #4ec9a5;
+  background: rgba(78, 201, 165, 0.07);
 }
 
 /* Reprendre : posé À DROITE dans la barre, compact — il ne doit pas concurrencer le bloc. */
