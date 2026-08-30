@@ -93,6 +93,7 @@ import {
   ordonnerGroupes
 } from './conversation-groups'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
+import { ConversationMosaic } from './ConversationMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
@@ -430,6 +431,18 @@ export function ChatView({
   const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false)
   const [modelChangePending, setModelChangePending] = useState(false)
   const [modelChangeError, setModelChangeError] = useState<string | null>(null)
+  /**
+   * Mode d'affichage du panneau conversations. PERSISTE en localStorage comme la largeur du
+   * panneau : c'est une preference locale d'affichage, elle n'a rien a faire dans le store disque.
+   */
+  const [convViewMode, setConvViewMode] = useState<'list' | 'mosaic'>(() =>
+    window.localStorage.getItem('autowin.chat.conversationsViewMode') === 'mosaic'
+      ? 'mosaic'
+      : 'list'
+  )
+  useEffect(() => {
+    window.localStorage.setItem('autowin.chat.conversationsViewMode', convViewMode)
+  }, [convViewMode])
   const [conversationsPaneWidth, setConversationsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.conversationsPaneWidth'))
     return clampConversationPaneWidth(Number.isFinite(saved) && saved > 0 ? saved : 232)
@@ -538,6 +551,12 @@ export function ChatView({
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const liveMessagesRef = useRef(new Map<string, Msg[]>())
+  /*
+   * VIDE LE TAMPON DE STREAMING. Les deltas de texte dorment une frame dans `pilotBatcher` : une
+   * action qui doit ANCRER sur le fil reellement affiche (le recu d'orientation) lisait sinon un
+   * `liveMessagesRef` en retard, et son ancre tombait avant tout le texte deja lu par l'utilisateur.
+   */
+  const pilotFlushRef = useRef<() => void>(() => {})
   const busyConversationsRef = useRef(new Set<string>())
   const interruptingConversationsRef = useRef(new Set<string>())
   const stoppedQueueDrainRef = useRef(new Set<string>())
@@ -1316,7 +1335,8 @@ export function ChatView({
       setHasNewActivity(true)
       return
     }
-    requestAnimationFrame(() => {
+    let annulerDescente: (() => void) | undefined
+    const frame = requestAnimationFrame(() => {
       // L'utilisateur a pu remonter le fil ENTRE la décision et la frame : on relit son intention au
       // lieu de la présumer. Sans cette relecture, un message qui arrive juste avant un scroll vers
       // le haut le ramène de force en bas et efface le bouton de retour.
@@ -1325,12 +1345,19 @@ export function ChatView({
       // le filet. Si la descente n'atterrit PAS (re-rendu qui repose le fil en haut, contenu qui grandit
       // plus vite qu'on ne descend), le texte tardif — typiquement le bloc de clôture — reste hors
       // champ : le bouton « ↓ Dernière réponse » doit alors le dire, au lieu d'un silence.
-      scrollChatToBottom(scroll, requestAnimationFrame, 40, (landed) => {
+      annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 40, (landed) => {
         if (!landed) setHasNewActivity(true)
       })
       setHasNewActivity(false)
       setScrolledAwayFromTail(false)
     })
+    // UNE SEULE descente vivante. Chaque delta de streaming re-déclenche cet effet ; sans cette
+    // annulation, les boucles s'empilaient sur le même conteneur et se contredisaient frame par
+    // frame — le fil VIBRAIT juste après l'envoi (rapporté le 2026-08-30).
+    return () => {
+      cancelAnimationFrame(frame)
+      annulerDescente?.()
+    }
   }, [messages, activeDirectiveReceipts])
 
   /* --- conversations : sélection = fil rechargé depuis le store --- */
@@ -2626,16 +2653,44 @@ export function ChatView({
 
   return (
     <div
-      className={`chat-layout${showRuns ? '' : ' is-runs-collapsed'}`}
+      className={`chat-layout${showRuns ? '' : ' is-runs-collapsed'}${
+        convViewMode === 'mosaic' ? ' is-mosaic' : ''
+      }`}
       data-testid="chat-view"
       data-active-conversation-id={activeId ?? ''}
     >
       {/* ---- Panneau gauche : conversations ---- */}
-      <aside className="lisere-dessus conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
+      <aside
+        className={`lisere-dessus conv-pane${convViewMode === 'mosaic' ? ' is-mosaic' : ''}`}
+        data-view-mode={convViewMode}
+        style={convViewMode === 'mosaic' ? undefined : { width: `${conversationsPaneWidth}px` }}
+      >
         <div className="conv-head">
           <ModuleHeader
             eyebrow="Espace de travail"
             title="Conversations"
+            actions={
+              <div className="conv-view-switch" role="group" aria-label="Mode d'affichage">
+                <button
+                  type="button"
+                  data-testid="conv-view-list"
+                  aria-pressed={convViewMode === 'list'}
+                  title="Vue liste"
+                  onClick={() => setConvViewMode('list')}
+                >
+                  ☰
+                </button>
+                <button
+                  type="button"
+                  data-testid="conv-view-mosaic"
+                  aria-pressed={convViewMode === 'mosaic'}
+                  title="Vue mosaïque"
+                  onClick={() => setConvViewMode('mosaic')}
+                >
+                  ▦
+                </button>
+              </div>
+            }
           />
         </div>
         <div className="conv-search">
@@ -2672,169 +2727,177 @@ export function ChatView({
             </button>
           </div>
         )}
-        <div className="conv-list scroll-y">
-          <button
-            className={`conv-new-row${activeId === null ? ' active' : ''}`}
-            onClick={newConv}
-            title="Démarrer une nouvelle conversation"
-            aria-current={activeId === null ? 'page' : undefined}
-          >
-            <span className="conv-new-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path d="M13.6 5.4 18.6 10.4M4 20l3.7-.8L19.4 7.5a1.8 1.8 0 0 0 0-2.5l-.4-.4a1.8 1.8 0 0 0-2.5 0L4.8 16.3 4 20ZM13 20h7" />
-              </svg>
-            </span>
-            <span className="conv-new-title">Nouveau</span>
-          </button>
-          {convs.length === 0 && (
-            <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-              Aucune conversation — écris un message pour en démarrer une.
-            </div>
-          )}
-          {convs.length > 0 && conversationHits.length === 0 && (
-            <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
-          )}
-          {groupes.map((groupe) => {
-            const replie = estReplie(groupe.key, groupesReplies)
-            return (
-              <Fragment key={groupe.key}>
-                {/*
+        {convViewMode === 'mosaic' ? (
+          <ConversationMosaic
+            conversations={conversationHits.map((hit) => hit.conversation)}
+            activeId={activeId}
+            onOpen={(conv) => void loadConv(conv)}
+          />
+        ) : (
+          <div className="conv-list scroll-y">
+            <button
+              className={`conv-new-row${activeId === null ? ' active' : ''}`}
+              onClick={newConv}
+              title="Démarrer une nouvelle conversation"
+              aria-current={activeId === null ? 'page' : undefined}
+            >
+              <span className="conv-new-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M13.6 5.4 18.6 10.4M4 20l3.7-.8L19.4 7.5a1.8 1.8 0 0 0 0-2.5l-.4-.4a1.8 1.8 0 0 0-2.5 0L4.8 16.3 4 20ZM13 20h7" />
+                </svg>
+              </span>
+              <span className="conv-new-title">Nouveau</span>
+            </button>
+            {convs.length === 0 && (
+              <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
+                Aucune conversation — écris un message pour en démarrer une.
+              </div>
+            )}
+            {convs.length > 0 && conversationHits.length === 0 && (
+              <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
+            )}
+            {groupes.map((groupe) => {
+              const replie = estReplie(groupe.key, groupesReplies)
+              return (
+                <Fragment key={groupe.key}>
+                  {/*
                   L'en-tête est AUSSI la zone de dépôt : viser un titre est plus facile que viser un
                   interstice, et ça évite d'inventer une cible invisible. On ne dépose pas sur un
                   groupe dérivé (« Auto-kaizen » vient du champ `autoKaizen`, « Divers » est l'absence
                   de dossier) — y traîner une conversation ne voudrait rien dire.
                 */}
-                <div
-                  className={`conv-group${replie ? ' is-collapsed' : ''}${
-                    surviole === groupe.key ? ' is-drop' : ''
-                  }`}
-                  data-testid={`conv-group-${groupe.key}`}
-                  data-depth={groupe.depth}
-                  onDragOver={(e) => {
-                    if (groupe.kind !== 'dossier') return
-                    e.preventDefault()
-                    setSurvole(groupe.key)
-                  }}
-                  onDragLeave={() => setSurvole((c) => (c === groupe.key ? null : c))}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    setSurvole(null)
-                    const id = e.dataTransfer.getData('text/autowin-conversation')
-                    if (id && groupe.kind === 'dossier') void rangerDans(id, groupe.key)
-                  }}
-                >
-                  <button
-                    className="conv-group-head"
-                    onClick={() => basculerGroupe(groupe.key, replie)}
-                    aria-expanded={!replie}
-                    title={groupe.kind === 'dossier' ? groupe.key : groupe.label}
-                    style={{ paddingLeft: 8 + groupe.depth * 14 }}
+                  <div
+                    className={`conv-group${replie ? ' is-collapsed' : ''}${
+                      surviole === groupe.key ? ' is-drop' : ''
+                    }`}
+                    data-testid={`conv-group-${groupe.key}`}
+                    data-depth={groupe.depth}
+                    onDragOver={(e) => {
+                      if (groupe.kind !== 'dossier') return
+                      e.preventDefault()
+                      setSurvole(groupe.key)
+                    }}
+                    onDragLeave={() => setSurvole((c) => (c === groupe.key ? null : c))}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      setSurvole(null)
+                      const id = e.dataTransfer.getData('text/autowin-conversation')
+                      if (id && groupe.kind === 'dossier') void rangerDans(id, groupe.key)
+                    }}
                   >
-                    <span className="conv-group-chevron" aria-hidden="true">
-                      {replie ? '▸' : '▾'}
-                    </span>
-                    <span className="conv-group-label">{groupe.label}</span>
-                    <span className="conv-group-count tnum">{groupe.items.length}</span>
-                  </button>
-                </div>
-                {!replie &&
-                  groupe.items.map(({ hit: { conversation: c, snippet } }) => {
-                    const conversationState = deriveConversationState({
-                      busy: busyConversations.has(c.id),
-                      messageCount: c.messageCount ?? c.messages?.length ?? 0,
-                      lastMessageRole: c.lastMessageRole ?? c.messages?.at(-1)?.role,
-                      lastAssistantStatus: c.lastAssistantStatus,
-                      asksUser: c.lastAssistantAsksUser === true,
-                      // La conversation OUVERTE est lue par definition : elle ne doit jamais
-                      // s'afficher « non lue » sous les yeux de celui qui la regarde.
-                      unseen: c.id !== activeId && estNonVue(c, conversationsVues)
-                    })
-                    const stateDescription = `${conversationState.label} — ${conversationState.detail}`
-                    return (
-                      <div
-                        key={c.id}
-                        className={`conv-item${c.id === activeId ? ' active' : ''}`}
-                        style={{ marginLeft: groupe.depth * 14 }}
-                        // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
-                        // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
-                        // ceux qui ne peuvent pas glisser.
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('text/autowin-conversation', c.id)
-                          e.dataTransfer.effectAllowed = 'move'
-                        }}
-                      >
-                        {convSelectionMode && (
-                          <input
-                            type="checkbox"
-                            className="conv-select-box"
-                            checked={selectedConvIds.has(c.id)}
-                            onChange={() => toggleConvSelection(c.id)}
-                            aria-label={`Sélectionner « ${c.title} »`}
-                          />
-                        )}
-                        <button className="conv-pick" onClick={() => void loadConv(c)}>
-                          {/* EN COURS = le MEME atome que partout ailleurs : le composant
+                    <button
+                      className="conv-group-head"
+                      onClick={() => basculerGroupe(groupe.key, replie)}
+                      aria-expanded={!replie}
+                      title={groupe.kind === 'dossier' ? groupe.key : groupe.label}
+                      style={{ paddingLeft: 8 + groupe.depth * 14 }}
+                    >
+                      <span className="conv-group-chevron" aria-hidden="true">
+                        {replie ? '▸' : '▾'}
+                      </span>
+                      <span className="conv-group-label">{groupe.label}</span>
+                      <span className="conv-group-count tnum">{groupe.items.length}</span>
+                    </button>
+                  </div>
+                  {!replie &&
+                    groupe.items.map(({ hit: { conversation: c, snippet } }) => {
+                      const conversationState = deriveConversationState({
+                        busy: busyConversations.has(c.id),
+                        messageCount: c.messageCount ?? c.messages?.length ?? 0,
+                        lastMessageRole: c.lastMessageRole ?? c.messages?.at(-1)?.role,
+                        lastAssistantStatus: c.lastAssistantStatus,
+                        asksUser: c.lastAssistantAsksUser === true,
+                        // La conversation OUVERTE est lue par definition : elle ne doit jamais
+                        // s'afficher « non lue » sous les yeux de celui qui la regarde.
+                        unseen: c.id !== activeId && estNonVue(c, conversationsVues)
+                      })
+                      const stateDescription = `${conversationState.label} — ${conversationState.detail}`
+                      return (
+                        <div
+                          key={c.id}
+                          className={`conv-item${c.id === activeId ? ' active' : ''}`}
+                          style={{ marginLeft: groupe.depth * 14 }}
+                          // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
+                          // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
+                          // ceux qui ne peuvent pas glisser.
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/autowin-conversation', c.id)
+                            e.dataTransfer.effectAllowed = 'move'
+                          }}
+                        >
+                          {convSelectionMode && (
+                            <input
+                              type="checkbox"
+                              className="conv-select-box"
+                              checked={selectedConvIds.has(c.id)}
+                              onChange={() => toggleConvSelection(c.id)}
+                              aria-label={`Sélectionner « ${c.title} »`}
+                            />
+                          )}
+                          <button className="conv-pick" onClick={() => void loadConv(c)}>
+                            {/* EN COURS = le MEME atome que partout ailleurs : le composant
                               <Spinner/>. La pastille etait le dernier endroit a rendre l'ancien
                               atome CSS a bordures (.spinner), d'ou un indicateur qui ne
                               ressemblait a aucun autre. Les autres etats restent une pastille. */}
-                          {conversationState.key === 'running' ? (
-                            <Spinner
-                              size={14}
-                              className="conversation-state is-running"
-                              label={`État de la conversation : ${stateDescription}`}
-                              data-conversation-state={conversationState.key}
-                            />
-                          ) : (
-                            <span
-                              className={`conversation-state is-${conversationState.key}`}
-                              data-conversation-state={conversationState.key}
-                              role="img"
-                              aria-label={`État de la conversation : ${stateDescription}`}
-                              title={stateDescription}
-                            />
-                          )}
-                          <span className="conv-copy">
-                            <span className="conv-label">{c.title}</span>
-                            {convQuery && snippet && (
-                              <span className="conv-snippet">{snippet}</span>
+                            {conversationState.key === 'running' ? (
+                              <Spinner
+                                size={14}
+                                className="conversation-state is-running"
+                                label={`État de la conversation : ${stateDescription}`}
+                                data-conversation-state={conversationState.key}
+                              />
+                            ) : (
+                              <span
+                                className={`conversation-state is-${conversationState.key}`}
+                                data-conversation-state={conversationState.key}
+                                role="img"
+                                aria-label={`État de la conversation : ${stateDescription}`}
+                                title={stateDescription}
+                              />
                             )}
-                            {!convQuery && (
-                              <span className="conv-meta">
-                                <span>{c.provider}</span>
-                                <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
+                            <span className="conv-copy">
+                              <span className="conv-label">{c.title}</span>
+                              {convQuery && snippet && (
+                                <span className="conv-snippet">{snippet}</span>
+                              )}
+                              {!convQuery && (
+                                <span className="conv-meta">
+                                  <span>{c.provider}</span>
+                                  <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
+                                </span>
+                              )}
+                            </span>
+                            {convQuery && (
+                              <span className="conv-count tnum">
+                                {c.messageCount ?? c.messages?.length ?? 0}
                               </span>
                             )}
-                          </span>
-                          {convQuery && (
-                            <span className="conv-count tnum">
-                              {c.messageCount ?? c.messages?.length ?? 0}
-                            </span>
-                          )}
-                        </button>
-                        <button
-                          className="conv-menu-trigger"
-                          title="Actions"
-                          aria-label="Actions de la conversation"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            const rect = event.currentTarget.getBoundingClientRect()
-                            setConvMenu((current) =>
-                              current?.conv.id === c.id
-                                ? null
-                                : { conv: c, top: rect.top, left: rect.right + 6 }
-                            )
-                          }}
-                        >
-                          ⋮
-                        </button>
-                      </div>
-                    )
-                  })}
-              </Fragment>
-            )
-          })}
-        </div>
+                          </button>
+                          <button
+                            className="conv-menu-trigger"
+                            title="Actions"
+                            aria-label="Actions de la conversation"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              const rect = event.currentTarget.getBoundingClientRect()
+                              setConvMenu((current) =>
+                                current?.conv.id === c.id
+                                  ? null
+                                  : { conv: c, top: rect.top, left: rect.right + 6 }
+                              )
+                            }}
+                          >
+                            ⋮
+                          </button>
+                        </div>
+                      )
+                    })}
+                </Fragment>
+              )
+            })}
+          </div>
+        )}
       </aside>
       {convMenu &&
         createPortal(
@@ -3639,7 +3702,6 @@ export function ChatView({
           }
         />
       </section>
-
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
       {showRuns && (
