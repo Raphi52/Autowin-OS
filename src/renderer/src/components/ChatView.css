@@ -21,6 +21,31 @@
   min-height: 0;
   overflow: hidden;
   background: var(--surface-panel);
+  container-type: inline-size;
+  container-name: convpane;
+}
+/* Colonne etroite (telephone / panneau tire au minimum) : le contenu se DENSIFIE au lieu de se
+   chevaucher — extrait de message, compteurs et eyebrow du titre disparaissent, les paddings
+   tombent, et le menu ⋮ passe en surimpression au lieu de voler de la largeur au titre. */
+@container convpane (max-width: 170px) {
+  .conv-head { padding: 0 0 var(--s1); }
+  .conv-head > .module-header > span,
+  .conv-snippet,
+  .conv-count,
+  .conv-group-count { display: none; }
+  .conv-head > .module-header > h1 { font-size: 13px; }
+  .conv-pick { gap: var(--s1); padding: 5px 6px; font-size: 12px; }
+  .conv-group-head { gap: 4px; padding: 4px 6px; }
+  .conv-search { padding: 4px 6px; }
+  .conv-item { position: relative; }
+  .conv-menu-trigger {
+    position: absolute;
+    right: 0;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    background: var(--bg-2);
+  }
 }
 /* Workflows fermé → le fil occupe toute la largeur (plus de cap 760px sur les messages). */
 .chat-layout.is-runs-collapsed .msg {

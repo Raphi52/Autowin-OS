@@ -128,6 +128,18 @@
   min-height: 0;
   padding: 8px;
 }
+/* 1 ou 2 fenetres = UNE seule rangee : elle prend TOUTE la hauteur disponible (demande
+   utilisateur du 30/08) au lieu d etre collee en haut a 320 px. */
+.chat-mosaic[data-count='1'],
+.chat-mosaic[data-count='2'] {
+  align-content: stretch;
+  grid-auto-rows: 1fr;
+}
+.chat-mosaic[data-count='1'] .chat-mosaic-window,
+.chat-mosaic[data-count='2'] .chat-mosaic-window {
+  min-height: 0;
+  max-height: none;
+}
 .chat-mosaic-vide {
   flex: 1 1 auto;
   padding: 16px;
@@ -156,8 +168,14 @@
 .chat-mosaic-window[data-etat='attention'] {
   border-color: rgba(227, 186, 85, 0.5);
 }
-/* Le CADRE dore anime : un anneau degrade pose SUR la bordure, dont le reflet balaie le contour.
-   Le masque 'exclude' evide l interieur pour ne peindre QUE le liseré — sans voiler le contenu. */
+/* Le CADRE dore anime : un anneau conique pose SUR la bordure, dont un eclat BLANC fait le TOUR
+   du cadre (demande utilisateur du 30/08 : « que du blanc fasse le tour du cadre »). Le masque
+   'exclude' evide l interieur pour ne peindre QUE le lisere — sans voiler le contenu. */
+@property --mosaic-shiny-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
 .chat-mosaic-window[data-etat='attention']::after {
   content: '';
   position: absolute;
@@ -166,15 +184,18 @@
   padding: 2px;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(
-    115deg,
-    rgba(160, 120, 40, 0.55) 0%,
-    #d4a94f 32%,
-    #fff3c4 46%,
-    #e3ba55 58%,
-    rgba(160, 120, 40, 0.55) 82%
+  background: conic-gradient(
+    from var(--mosaic-shiny-angle),
+    rgba(212, 169, 79, 0.55) 0%,
+    rgba(227, 186, 85, 0.75) 10%,
+    #fffdf5 15%,
+    #ffffff 17%,
+    #fff3c4 20%,
+    rgba(227, 186, 85, 0.75) 28%,
+    rgba(212, 169, 79, 0.55) 45%,
+    rgba(212, 169, 79, 0.55) 100%
   );
-  background-size: 300% 100%;
+  animation: chat-mosaic-shiny 2.8s linear infinite;
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -183,34 +204,36 @@
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: chat-mosaic-shiny 2.8s linear infinite;
 }
 @keyframes chat-mosaic-shiny {
   from {
-    background-position: 150% 0;
+    --mosaic-shiny-angle: 0deg;
   }
   to {
-    background-position: -150% 0;
+    --mosaic-shiny-angle: 360deg;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .chat-mosaic-window[data-etat='attention']::after {
     animation: none;
-    background-position: 50% 0;
   }
 }
+/* MEME pastille que le fil unique (`.chat-jump-latest`) : CENTREE et OR. Un style different par
+   vue faisait lire deux boutons la ou il n en existe qu un (retour utilisateur du 30/08). */
 .chat-mosaic-window-jump {
   position: absolute;
-  right: 12px;
+  right: 50%;
   bottom: 72px;
   z-index: 2;
-  padding: 4px 10px;
-  border: 1px solid var(--container-border);
+  translate: 50% 0;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 212, 90, 0.5);
   border-radius: 999px;
-  background: var(--surface-inset, rgba(0, 0, 0, 0.9));
-  color: inherit;
+  background: rgba(2, 3, 7, 0.9);
+  color: #f0d98c;
+  font: 700 9px/1 var(--font, inherit);
+  letter-spacing: 0.04em;
   cursor: pointer;
-  font-size: 12px;
 }
 .chat-mosaic-new {
   align-self: start;

@@ -131,6 +131,21 @@ type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
 /* ---------- Constantes ---------- */
 
+
+/**
+ * Ghost-text d'un FIL donne : prompt suivant ecrit par le modele, sinon rubrique Recommande.
+ * Extrait du composant pour que la MOSAIQUE l'obtienne aussi, par conversation (2026-08-30).
+ */
+function ghostDuFil(fil: Msg[]): string | null {
+  const lastAssistant = [...fil].reverse().find((m) => m.role === 'assistant') as AsstMsg | undefined
+  if (!lastAssistant) return null
+  const text = lastAssistant.parts
+    .filter((p): p is Extract<ChatPart, { kind: 'text' }> => p.kind === 'text')
+    .map((p) => p.text)
+    .join('\n')
+  return extrairePromptSuivant(text) ?? extractRecommendation(text)
+}
+
 // Les suggestions d'accueil ne sont plus figées : elles se DÉRIVENT de l'état réel
 // (`buildHomeSuggestions`), le jeu historique restant le repli quand l'état est vide.
 
@@ -256,16 +271,7 @@ export function ChatView({
    * adressé au lecteur (« passer en terrain »), donc la recopier ici donnait une phrase qu'il fallait
    * réécrire avant de l'envoyer. Le repli garantit qu'un tour sans prompt garde l'ancien comportement.
    */
-  const ghostRecommendation = useMemo(() => {
-    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant') as
-      AsstMsg | undefined
-    if (!lastAssistant) return null
-    const text = lastAssistant.parts
-      .filter((p): p is Extract<ChatPart, { kind: 'text' }> => p.kind === 'text')
-      .map((p) => p.text)
-      .join('\n')
-    return extrairePromptSuivant(text) ?? extractRecommendation(text)
-  }, [messages])
+  const ghostRecommendation = useMemo(() => ghostDuFil(messages), [messages])
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [appNotice, setAppNotice] = useState<AppNotice | null>(null)
@@ -2653,7 +2659,7 @@ export function ChatView({
         attachmentCount={fichiers.length}
         mentionSources={mentionSources}
         skillCommands={skillCommands}
-        ghostRecommendation={null}
+        ghostRecommendation={ghostDuFil(mosaicFils[id] ?? [])}
         placeholderPendantTour={occupe}
         onDraftInput={(value) => setDraftInput(id, value)}
         onDraftPresence={() => {}}
@@ -2704,7 +2710,8 @@ export function ChatView({
           occupe ? (
             <button
               type="button"
-              className="composer-stop"
+              className="btn composer-stop"
+              data-testid="composer-stop"
               onClick={() => interruptAndFlushQueue(id)}
               title="Arrêter ce tour"
             >
