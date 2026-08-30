@@ -34,6 +34,11 @@ export function RunProgress({
       <ol className="run-progress__list">
         {view.entries.map((e) => (
           <li key={e.key} className="run-progress__item">
+            {e.linkReason && (
+              <span className="run-progress__link" data-testid="run-progress-link">
+                {e.linkReason}
+              </span>
+            )}
             <details
               className="run-progress__step"
               data-testid="run-progress-step"
