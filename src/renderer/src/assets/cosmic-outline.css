@@ -525,6 +525,9 @@
 .cosmic-outline .activity-group {
   width: min(100%, 720px);
   display: flex;
+  /* Les ETAGES passent SOUS l'en-tete : sans `wrap`, la carte etant une ligne flex, ils se
+     posaient a DROITE du titre (constate a la capture, Chromium reel). */
+  flex-wrap: wrap;
   min-height: 38px;
   align-items: center;
   gap: 8px;
@@ -778,6 +781,7 @@
 /* Etages du fil d'activite dans le theme : `.cosmic-outline X` (0,2,0) prime sur ChatView.css
    (0,1,0) — sans ces regles ici, le plafond de 180px et le pointille seraient ecrits mais ignores. */
 .cosmic-outline .activity-steps {
+  flex-basis: 100%;
   list-style: none;
   margin: 2px 0 6px 12px;
   padding: 0 0 0 10px;

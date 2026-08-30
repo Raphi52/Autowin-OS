@@ -3132,6 +3132,9 @@ ol.md-list li {
    « meme groupe, etapes successives » sans peser comme un bord plein. Le depliage est plafonne a
    180px : au-dela, un groupe long poussait la reponse hors de l'ecran. */
 .activity-steps {
+  /* Occupe toute la largeur de la carte : sur une carte en ligne flex, les etages se posaient
+     sinon a DROITE du titre au lieu de s'empiler dessous. */
+  flex-basis: 100%;
   list-style: none;
   margin: 2px 0 6px 12px;
   padding: 0 0 0 10px;
