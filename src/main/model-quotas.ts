@@ -10,6 +10,7 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { claudeAccountEnv } from './claude-accounts'
 import type { ImportedModel } from './models'
 import type {
   ModelQuotaAvailability,
@@ -275,7 +276,13 @@ async function claudeQuota(
   now: number
 ): Promise<ProviderQuota> {
   try {
-    const credentialsPath = join(home, '.claude', '.credentials.json')
+    // Le token lu doit etre celui du compte ACTIF : le routage bascule les CLI via
+    // `CLAUDE_CONFIG_DIR`, donc lire `~/.claude` en dur affichait le quota de l'ANCIEN compte apres
+    // une bascule. Repli sur le dossier historique quand aucun compte dedie n'est actif.
+    const configDir = claudeAccountEnv().CLAUDE_CONFIG_DIR
+    const credentialsPath = configDir
+      ? join(configDir, '.credentials.json')
+      : join(home, '.claude', '.credentials.json')
     if (!existsSync(credentialsPath) || statSync(credentialsPath).size > MAX_CREDENTIAL_BYTES) {
       throw new Error('Session Claude indisponible')
     }
@@ -527,6 +534,15 @@ function codexQuota(home: string, now: number): ProviderQuota {
           : 'Quota Codex indisponible'
     }
   }
+}
+
+/**
+ * Jette le snapshot memorise. Appele quand l'IDENTITE change (bascule de compte dans le routage) :
+ * le cache de 60 s est indexe sur le temps, pas sur le compte, donc sans cela l'utilisateur voyait
+ * encore le quota du compte precedent apres avoir change.
+ */
+export function invalidateModelQuotaCache(): void {
+  cached = undefined
 }
 
 export async function getModelQuotaSnapshot(

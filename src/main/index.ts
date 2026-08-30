@@ -274,7 +274,11 @@ import {
 import { rebuildSemanticTemporalProjection } from './knowledge/semantic-temporal-store'
 import { causalLearningContext } from './knowledge/semantic-temporal-projection'
 import { ModelCatalogRefresher } from './model-refresh'
-import { buildModelQuotaSnapshot, getModelQuotaSnapshot } from './model-quotas'
+import {
+  buildModelQuotaSnapshot,
+  getModelQuotaSnapshot,
+  invalidateModelQuotaCache
+} from './model-quotas'
 import { loadAgentTopology, saveAgentTopology, type IncidentTopologie } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
@@ -1943,6 +1947,9 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:claudeAccounts:switch', (event, id: unknown) => {
     assertTrustedRendererSender(event, 'Claude accounts switch')
     claudeAccounts.switchTo(guardString(id, 'id'))
+    // Le quota appartient a l'ABONNEMENT : changer de compte rend le snapshot memorise caduc,
+    // sinon l'indicateur affiche encore celui du compte quitte pendant une minute.
+    invalidateModelQuotaCache()
     return claudeAccountsPayload()
   })
   ipcMain.handle('os:claudeAccounts:remove', (event, id: unknown) => {
