@@ -65,7 +65,9 @@ describe('AgentPilot — la reprise de session survit au redémarrage', () => {
     configureAutowinAppDataBase(base)
 
     // Un tour précédent, dans une vie antérieure de l'app, avait mémorisé sa session.
-    saveChatSession('conv-42', 'claude:opus', 'sess-anterieure')
+    // La cle porte AUSSI l'id du compte Claude actif (vide hors configuration) : une session
+    // ouverte sous un autre compte n'existe pas dans son CLAUDE_CONFIG_DIR et ne se reprend pas.
+    saveChatSession('conv-42', 'claude:opus:', 'sess-anterieure')
 
     // Pilote NEUF : sa Map mémoire est vide, comme après un redémarrage.
     const { optionsVues, registry, roles, bus } = harnais()
@@ -133,7 +135,7 @@ describe('AgentPilot — la reprise de session survit au redémarrage', () => {
       'conv-7'
     )
     expect(loadChatSessions()['conv-7']).toEqual({
-      key: 'claude:opus',
+      key: 'claude:opus:',
       sessionId: 'sess-neuve'
     })
   })

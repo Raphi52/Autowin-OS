@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentPilot } from './agent-pilot'
 import { configureAutowinAppDataBase } from './app-data'
+import { configureClaudeActiveAccountId } from './claude-accounts'
 import type { Message, SendOptions, SendResult, StreamChunk } from './providers/types'
 
 /**
@@ -244,5 +245,53 @@ describe('chat() — session-resume par conversation', () => {
     await p.chat(history('a'), () => {}, undefined, 1)
     await p.chat(history('a', 'b', 'c'), () => {}, undefined, 1)
     expect(captured[1].options.resumeSessionId).toBeUndefined()
+  })
+})
+
+/**
+ * BASCULE DE COMPTE — une session CLI vit dans le `CLAUDE_CONFIG_DIR` du compte qui l'a ouverte.
+ * La reprendre depuis un AUTRE compte fait rendre au CLI « No conversation found with session ID »
+ * et le tour meurt a 0 message (vecu le 2026-08-30). La session doit donc etre oubliee a la bascule.
+ */
+describe('chat() — le compte Claude actif fait partie de l’identite de session', () => {
+  beforeEach(() => {
+    configureAutowinAppDataBase(mkdtempSync(join(tmpdir(), 'aos-sessacct-')))
+  })
+  afterEach(() => {
+    configureAutowinAppDataBase(undefined)
+    configureClaudeActiveAccountId(() => undefined)
+  })
+
+  it('changer de compte entre deux tours → PAS de resume, fil complet', async () => {
+    const captured: Captured[] = []
+    const p = pilot(captured)
+    configureClaudeActiveAccountId(() => 'default')
+    await p.chat(history('premier message'), () => {}, undefined, 1, 'conv-ACC')
+    configureClaudeActiveAccountId(() => 'compte-3')
+    await p.chat(
+      history('premier message', 'ma reponse', 'deuxieme message'),
+      () => {},
+      undefined,
+      1,
+      'conv-ACC'
+    )
+    expect(captured).toHaveLength(2)
+    expect(captured[1].options.resumeSessionId).toBeUndefined()
+    expect(captured[1].content).toContain('premier message')
+  })
+
+  it('meme compte entre deux tours → la reprise reste armee', async () => {
+    const captured: Captured[] = []
+    const p = pilot(captured)
+    configureClaudeActiveAccountId(() => 'compte-3')
+    await p.chat(history('premier message'), () => {}, undefined, 1, 'conv-ACC2')
+    await p.chat(
+      history('premier message', 'ma reponse', 'deuxieme message'),
+      () => {},
+      undefined,
+      1,
+      'conv-ACC2'
+    )
+    expect(captured[1].options.resumeSessionId).toBe('sess-1')
   })
 })

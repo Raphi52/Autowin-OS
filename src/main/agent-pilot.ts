@@ -40,6 +40,7 @@ import {
   outilsFaussementAbsents
 } from '../shared/outil-pretendu-absent'
 import { startTurnTimer } from './turn-timing'
+import { claudeActiveAccountId } from './claude-accounts'
 import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
@@ -903,7 +904,17 @@ export class AgentPilot {
     // Session-resume du CHAT (levier coût) : si la conversation a déjà une session CLI ouverte avec
     // le MÊME binding, on la reprend — l'historique y est déjà, on n'envoie donc que le dernier
     // message + l'état courant de l'app (qui, lui, a pu changer). Sinon : fil complet, inchangé.
-    const sessionKey = `${provider}:${binding.model ?? ''}`
+    /**
+     * LE COMPTE FAIT PARTIE DE L'IDENTITE DE LA SESSION.
+     *
+     * Une session CLI Claude vit DANS le `CLAUDE_CONFIG_DIR` du compte qui l'a ouverte. Apres une
+     * bascule de compte, `--resume <id>` pointe sur une session absente du nouveau dossier : le CLI
+     * rend `No conversation found with session ID` et le tour meurt a 0 message — symptome vecu le
+     * 2026-08-30 (compte `max` selectionne, chaque prompt sans reponse). Mettre l'id de compte dans
+     * la cle fait retomber la conversation sur le chemin deja ecrit pour un changement de binding :
+     * la session perimee est oubliee (memoire ET disque) et le fil complet repart a blanc.
+     */
+    const sessionKey = `${provider}:${binding.model ?? ''}:${claudeActiveAccountId() ?? ''}`
     // Hydrate depuis le disque au premier tour du process : c'est ce qui fait survivre la reprise a
     // un redemarrage de l'app. Idempotent, et sans effet si le cache memoire est deja chaud.
     this.hydrateChatSessions()
