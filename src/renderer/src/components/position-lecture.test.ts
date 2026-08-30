@@ -130,3 +130,46 @@ describe('restauration de la position', () => {
     expect(fil.scrollTop).toBe(2000)
   })
 })
+
+describe('ancre structurelle : un tour écrit pendant l’absence ne doit pas déplacer la lecture', () => {
+  it('retient le message affiché en haut, pas seulement le px', () => {
+    memoriserPositionLecture(
+      'conv-a',
+      { scrollTop: 820, scrollHeight: 4000, clientHeight: 600 },
+      [{ offsetTop: 0 }, { offsetTop: 300 }, { offsetTop: 800 }, { offsetTop: 1500 }]
+    )
+    expect(positionLectureMemorisee('conv-a')?.ancre).toEqual({ index: 2, decalage: 20 })
+  })
+
+  it('repose l’œil sur le MÊME message quand les hauteurs au-dessus ont changé', () => {
+    // Le fil a grossi/rétréci au-dessus : le message n°2 est désormais à 1120 px, plus à 800.
+    const messages = [{ offsetTop: 0 }, { offsetTop: 420 }, { offsetTop: 1120 }, { offsetTop: 2000 }]
+    const fil = fauxFil(6000)
+    let landed: boolean | undefined
+    restaurerPositionLecture(
+      fil,
+      { top: 820, hauteur: 4000, ancre: { index: 2, decalage: 20 } },
+      (callback) => callback(),
+      20,
+      (ok) => {
+        landed = ok
+      },
+      () => messages
+    )
+    expect(fil.scrollTop).toBe(1140)
+    expect(landed).toBe(true)
+  })
+
+  it('retombe sur le px quand le message ancré n’existe plus', () => {
+    const fil = fauxFil(6000)
+    restaurerPositionLecture(
+      fil,
+      { top: 820, hauteur: 4000, ancre: { index: 9, decalage: 20 } },
+      (callback) => callback(),
+      20,
+      undefined,
+      () => [{ offsetTop: 0 }]
+    )
+    expect(fil.scrollTop).toBe(820)
+  })
+})

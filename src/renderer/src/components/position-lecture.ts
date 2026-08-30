@@ -18,11 +18,25 @@ import { isChatNearBottom } from './chat-view-model'
 export const CLE_POSITION_LECTURE = 'autowin.chat.positionLecture'
 
 export type PositionLecture = {
-  /** Décalage vertical en px, ancré depuis le HAUT : le contenu grandit par le bas. */
+  /** Décalage vertical en px, ancré depuis le HAUT. REPLI seulement : voir `ancre`. */
   top: number
   /** Hauteur totale au moment de la mémorisation, pour diagnostiquer un fil raccourci. */
   hauteur: number
+  /**
+   * ANCRE STRUCTURELLE : rang du message affiché en haut du champ de lecture, et décalage en px
+   * entre le haut de CE message et le haut du champ.
+   *
+   * Le px absolu ne suffit pas — défaut rapporté le 2026-08-30 : « c'est quand l'agent a écrit
+   * entre temps ». Un tour écrit pendant l'absence change la HAUTEUR du contenu situé AU-DESSUS du
+   * point de lecture (cartes d'activité repliées à la relecture, blocs rendus autrement qu'en
+   * cours de stream) : le même `scrollTop` ne désigne alors plus le même message. Le rang, lui,
+   * survit à l'ajout de messages EN FIN de fil, qui est le seul ajout possible.
+   */
+  ancre?: { index: number; decalage: number }
 }
+
+/** Métriques minimales d'un message rendu : son haut, relatif au conteneur de défilement. */
+export type AncrageMessage = { offsetTop: number }
 
 type Carte = Record<string, PositionLecture>
 
@@ -50,7 +64,8 @@ function ecrireCarte(carte: Carte): void {
 /** Retient la position courante, ou l'OUBLIE si le lecteur est collé au bas. */
 export function memoriserPositionLecture(
   conversationId: string,
-  metrics: Pick<HTMLElement, 'scrollTop' | 'clientHeight' | 'scrollHeight'>
+  metrics: Pick<HTMLElement, 'scrollTop' | 'clientHeight' | 'scrollHeight'>,
+  messages?: readonly AncrageMessage[]
 ): void {
   if (!conversationId) return
   if (isChatNearBottom(metrics)) {
@@ -58,18 +73,49 @@ export function memoriserPositionLecture(
     return
   }
   const carte = lireCarte()
+  const ancre = ancrerSurMessage(metrics.scrollTop, messages)
   carte[conversationId] = {
     top: Math.round(metrics.scrollTop),
-    hauteur: Math.round(metrics.scrollHeight)
+    hauteur: Math.round(metrics.scrollHeight),
+    ...(ancre ? { ancre } : {})
   }
   ecrireCarte(carte)
+}
+
+/**
+ * Dernier message dont le HAUT est encore au-dessus de la ligne de lecture : c'est celui que l'œil
+ * a en haut d'écran. On garde son rang plus le décalage, pour reposer l'œil au même endroit même
+ * si les hauteurs du fil ont bougé entre-temps.
+ */
+export function ancrerSurMessage(
+  scrollTop: number,
+  messages?: readonly AncrageMessage[]
+): { index: number; decalage: number } | undefined {
+  if (!messages || messages.length === 0) return undefined
+  let index = -1
+  for (let i = 0; i < messages.length; i += 1) {
+    if (messages[i].offsetTop <= scrollTop + 1) index = i
+    else break
+  }
+  if (index < 0) return undefined
+  return { index, decalage: Math.round(scrollTop - messages[index].offsetTop) }
 }
 
 export function positionLectureMemorisee(conversationId: string): PositionLecture | undefined {
   const entree = lireCarte()[conversationId]
   if (!entree || typeof entree.top !== 'number' || !Number.isFinite(entree.top)) return undefined
   if (entree.top <= 0) return undefined
-  return { top: entree.top, hauteur: Number(entree.hauteur) || 0 }
+  const ancre = entree.ancre
+  const ancreValide =
+    !!ancre &&
+    Number.isFinite(ancre.index) &&
+    ancre.index >= 0 &&
+    Number.isFinite(ancre.decalage)
+  return {
+    top: entree.top,
+    hauteur: Number(entree.hauteur) || 0,
+    ...(ancreValide ? { ancre: { index: ancre.index, decalage: ancre.decalage } } : {})
+  }
 }
 
 export function oublierPositionLecture(conversationId: string): void {
@@ -99,12 +145,22 @@ export function restaurerPositionLecture(
   position: PositionLecture,
   schedule: (callback: () => void) => void = requestAnimationFrame,
   maxFrames = 20,
-  onSettled?: (landed: boolean) => void
+  onSettled?: (landed: boolean) => void,
+  /** Relit les messages RENDUS à chaque frame : leurs hauteurs bougent pendant le rendu. */
+  lireMessages?: () => readonly AncrageMessage[]
 ): void {
   let frames = 0
   let tenueDepuis = 0
+  const brute = (): number => {
+    const ancre = position.ancre
+    if (!ancre || !lireMessages) return position.top
+    const vise = lireMessages()[ancre.index]
+    // Fil raccourci (message supprimé, fil tronqué) : on retombe sur le px, faute de mieux.
+    if (!vise) return position.top
+    return vise.offsetTop + ancre.decalage
+  }
   const cible = (): number =>
-    Math.max(0, Math.min(position.top, element.scrollHeight - element.clientHeight))
+    Math.max(0, Math.min(brute(), element.scrollHeight - element.clientHeight))
   const step = (): void => {
     if (element.isConnected === false) return
     const but = cible()
