@@ -65,6 +65,17 @@ export function pendantOperation<T>(nom: string, action: () => T): T {
   }
 }
 
+/**
+ * CLOT la phase de demarrage. Mesure du 2026-08-30 : `marquerOperation('demarrage:...')` EMPILE un
+ * jalon que rien ne depilait — la pile gardait donc 'demarrage:interface chargee' indefiniment, et
+ * 49 des 173 gels du journal ont ete attribues au demarrage alors qu'ils survenaient des HEURES
+ * plus tard (rafales de 6 a 10 s a 10h41 sur une app demarree a 7h). L'instrument prouvait le gel
+ * sans jamais nommer le coupable. Une phase qui se termine rend la pile au vide.
+ */
+export function cloreDemarrage(): void {
+  pile.length = 0
+}
+
 /** Rend l'operation la plus INTERNE encore ouverte (utile aux tests et au diagnostic). */
 export function operationDeclaree(): string {
   return pile.length > 0 ? (pile[pile.length - 1] as string) : 'inconnu'

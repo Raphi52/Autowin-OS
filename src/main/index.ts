@@ -22,6 +22,7 @@ import { readGitGraph } from './git-graph-main'
  * L'instant zéro est l'évaluation de ce module — les imports sont déjà résolus à ce point.
  */
 import {
+  cloreDemarrage,
   instrumenterCanauxIpc,
   marquerOperation as marquerOperationDemarrage
 } from './gel-main'
@@ -5788,6 +5789,9 @@ function createWindow(): void {
     // document soit demandé, et les 23 s de réconciliation synchrone repoussaient `loadURL` à 30 400 ms.
     mainWindow.webContents.once('did-finish-load', () => {
       jalonDemarrage('interface chargée')
+      // Le demarrage est FINI : sans cette cloture, son jalon reste en pile et etiquette a tort
+      // tous les gels de la session (49 sur 173 dans le journal du 2026-08-30).
+      cloreDemarrage()
       signalerInterfaceVisible()
     })
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {

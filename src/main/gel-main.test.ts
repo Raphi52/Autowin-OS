@@ -8,6 +8,7 @@ import {
   lireGels,
   marquerOperation,
   operationDeclaree,
+  cloreDemarrage,
   ouvrirOperation,
   pendantOperation
 } from './gel-main'
@@ -213,5 +214,16 @@ describe('mesure DIRECTE du segment synchrone d’un canal IPC', () => {
     ;(enregistres.get('os:rapide') as () => unknown)()
     arreter()
     expect(captures).toEqual([])
+  })
+/*
+   * REGRESSION du 2026-08-30 : le jalon de demarrage restait en pile pour toujours, si bien qu'un
+   * gel survenu des heures plus tard etait etiquete 'demarrage:interface chargee'. La phase de
+   * demarrage doit se CLORE.
+   */
+  it('ne laisse pas le jalon de demarrage etiqueter les gels de la session', () => {
+    marquerOperation('demarrage:interface chargée')
+    expect(operationDeclaree()).toBe('demarrage:interface chargée')
+    cloreDemarrage()
+    expect(operationDeclaree()).toBe('inconnu')
   })
 })
