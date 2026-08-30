@@ -603,6 +603,8 @@
 /* Le POURQUOI déplié : posé sous la barre, texte intégral, lisible sans quitter le fil. */
 .cosmic-outline .activity-why {
   margin: 4px 0 8px 10px;
+  max-height: 180px;
+  overflow-y: auto;
   padding: 8px 10px;
   border-left: 2px solid #ff6d8f;
   border-radius: 0 7px 7px 0;
@@ -771,4 +773,28 @@
 .cosmic-outline .graph-observatory .visibility-sidebar {
   background: transparent;
   backdrop-filter: none;
+}
+
+/* Etages du fil d'activite dans le theme : `.cosmic-outline X` (0,2,0) prime sur ChatView.css
+   (0,1,0) — sans ces regles ici, le plafond de 180px et le pointille seraient ecrits mais ignores. */
+.cosmic-outline .activity-steps {
+  list-style: none;
+  margin: 2px 0 6px 12px;
+  padding: 0 0 0 10px;
+  border-left: 1px dashed rgba(140, 190, 230, 0.35);
+  max-height: 180px;
+  overflow-y: auto;
+}
+.cosmic-outline .activity-step {
+  color: #b9cbdd;
+}
+.cosmic-outline .activity-step[data-state='ko'] {
+  color: #ff8a9c;
+}
+.cosmic-outline .activity-step-icon {
+  background: rgba(140, 190, 230, 0.16);
+}
+.cosmic-outline .activity-step-link {
+  border: 1px dashed rgba(140, 190, 230, 0.4);
+  color: #9fc3de;
 }
