@@ -740,6 +740,9 @@ export function ChatView({
     // n'en est pas une : sans ce drapeau, le fil affichait « ✓ Orienté » sur une reponse.
     reponse?: boolean
   ): void {
+    // L'ancre doit porter sur le fil TEL QU'AFFICHE : sans ce vidage, les deltas encore en tampon
+    // manquaient a l'appel, et le recu se posait AVANT le texte deja lu (un seul bloc au rendu).
+    pilotFlushRef.current()
     const liveMessages = liveMessagesRef.current.get(conversationId) ?? []
     const afterMessageIndex = liveMessages.length - 1
     const anchorMessage = liveMessages[afterMessageIndex]
@@ -2674,26 +2677,18 @@ export function ChatView({
             eyebrow="Espace de travail"
             title="Conversations"
             actions={
-              <div className="conv-view-switch" role="group" aria-label="Mode d'affichage">
-                <button
-                  type="button"
-                  data-testid="conv-view-list"
-                  aria-pressed={convViewMode === 'list'}
-                  title="Vue liste"
-                  onClick={() => setConvViewMode('list')}
-                >
-                  ☰
-                </button>
-                <button
-                  type="button"
-                  data-testid="conv-view-mosaic"
-                  aria-pressed={convViewMode === 'mosaic'}
-                  title="Vue mosaïque"
-                  onClick={() => setConvViewMode('mosaic')}
-                >
-                  ▦
-                </button>
-              </div>
+              <button
+                type="button"
+                className="conv-view-toggle"
+                data-testid="conv-view-toggle"
+                role="switch"
+                aria-checked={convViewMode === 'mosaic'}
+                aria-label="Vue mosaïque"
+                title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
+                onClick={() => setConvViewMode(convViewMode === 'mosaic' ? 'list' : 'mosaic')}
+              >
+                <span className="conv-view-toggle-knob" aria-hidden="true" />
+              </button>
             }
           />
         </div>
