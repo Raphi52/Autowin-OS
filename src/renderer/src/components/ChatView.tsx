@@ -2535,27 +2535,6 @@ export function ChatView({
     ]
   }, [groupes, conversationHits, convs, convQuery, conversationDateOrder])
 
-  /**
-   * Inbox d'agents : conversations avec un agent EN TRAVAIL (tour en cours) ou une
-   * orchestration live — visible en tête, même quand la conv active est ailleurs.
-   */
-  const activeAgents = useMemo(() => {
-    const byId = new Map(convs.map((c) => [c.id, c]))
-    const ids = new Set<string>([
-      ...busyConversations,
-      ...Object.keys(liveRuns).filter((id) => liveRuns[id]?.status === 'running')
-    ])
-    return [...ids].map((id) => {
-      const run = liveRuns[id]
-      const phase = run?.phase ? phaseLabel(run.phase) : undefined
-      return {
-        id,
-        title: byId.get(id)?.title ?? 'Conversation',
-        state: run ? (phase ? `${phase} en cours` : 'orchestration') : 'réponse en cours',
-        task: run?.task
-      }
-    })
-  }, [convs, busyConversations, liveRuns])
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length
   /**
