@@ -2636,7 +2636,6 @@ export function ChatView({
           <ModuleHeader
             eyebrow="Espace de travail"
             title="Conversations"
-            description="Retrouve, organise et reprends tes échanges."
           />
         </div>
         <div className="conv-search">
