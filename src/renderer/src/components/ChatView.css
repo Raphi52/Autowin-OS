@@ -2562,6 +2562,27 @@ ol.md-list li {
   border-color: var(--err, #e5484d);
 }
 /* Le bloc n'ouvre rien quand il n'y a pas de run : le curseur ne doit pas promettre un clic utile. */
+/* B3-γ — la carte d'activite porte la teinte de son statut (bord gauche + fond).
+   Repris du parti pris tranche sur RunProgress, pour que le fil du chat lise comme la barre de
+   phases d'un run : le point seul ne se voyait pas dans un fil dense. */
+.activity-group {
+  border-left: 2px solid color-mix(in srgb, var(--ok, #4ec9a5) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ok, #4ec9a5) 6%, transparent);
+}
+.activity-group[data-state='failed'] {
+  border-left-color: var(--err, #ef6b6b);
+  background: color-mix(in srgb, var(--err, #ef6b6b) 10%, transparent);
+}
+.activity-group[data-state='running'] {
+  border-left-color: var(--accent, #5b8cff);
+  background: color-mix(in srgb, var(--accent, #5b8cff) 9%, transparent);
+}
+.activity-group[data-state='interrupted'] {
+  border-left-color: var(--warn, #e8a33d);
+  background: color-mix(in srgb, var(--warn, #e8a33d) 9%, transparent);
+}
+
 .activity-group[aria-disabled='true'] {
   cursor: default;
 }

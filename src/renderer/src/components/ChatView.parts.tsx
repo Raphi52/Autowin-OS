@@ -395,7 +395,15 @@ export function AssistantActivityGroup({
     <>
       {/* La barre est un CONTENEUR : « voir » et « reprendre » y cohabitent sans s'imbriquer
         (un bouton dans un bouton est invalide, et rendrait un clic « voir » ambigu). */}
-      <div className={`activity-group${failed ? ' failed' : ''}`}>
+      {/* B3-γ : la TEINTE de statut est portee par la CARTE (bord + fond), pas par le seul point.
+        Le point seul se lit mal dans un fil dense : l'utilisateur repere l'etat d'un coup d'oeil
+        sur le bloc, comme dans RunProgress. Un echec prime sur toute action reussie du groupe. */}
+      <div
+        className={`activity-group${failed ? ' failed' : ''}`}
+        data-state={
+          failed ? 'failed' : running ? 'running' : interruptedCount > 0 ? 'interrupted' : 'done'
+        }
+      >
         <button
           type="button"
           className="activity-group-main"
