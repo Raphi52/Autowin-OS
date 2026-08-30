@@ -41,6 +41,7 @@ import {
   type StoredAssistantMessage,
   settleOrchestrationOnRunEnd
 } from './chat-view-model'
+import { shortModelLabel } from './model-display-label'
 import { buildHomeSuggestions } from './chat-home-suggestions'
 import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
 import { moveQueueEntry } from './chat-queue-order'
