@@ -292,6 +292,16 @@ export function buildChatPilotagePrompt(
     `Si l'utilisateur te demande de retenir quelque chose, fais-le sans réclamer les détails : déduis le ` +
     `titre, le type et la portée de la conversation, et prends \`session:\` comme source si tu n'as rien ` +
     `de mieux — ne renonce jamais à retenir faute de source.\n` +
+    // INFORMATIF SPONTANE (conv-1543) : les deux declencheurs ci-dessus — « tu viens d'etablir » et
+    // « l'utilisateur te DEMANDE de retenir » — laissaient dehors le cas le plus frequent :
+    // l'utilisateur ENONCE un fait durable en passant, sans rien demander. Rien n'etait retenu, et le
+    // fait etait reperdu au fil suivant.
+    `INFORMATIF SPONTANÉ : quand l'utilisateur t'énonce un fait en passant, sans te demander de le ` +
+    `retenir (« on est en dev, on push direct sur main », « le client X impose Y »), demande-toi s'il ` +
+    `vaudra encore dans 3 mois : si oui, retiens-le tout de suite, avec \`session:\` comme source si ` +
+    `aucun artefact ne l'atteste. Si c'est un statut du moment ou une consigne qui ne vaut que ce ` +
+    `tour-ci, ne retiens rien. Quand tu retiens, dis-le en une ligne plutôt que de le faire en ` +
+    `silence.\n` +
     `POUR RELIRE : \`brain_query\` interroge le savoir déjà curé (décisions, leçons, contraintes ` +
     `établies). Préfère-le à une exploration du dépôt quand la question porte sur un ACQUIS (« pourquoi ` +
     `a-t-on choisi X ? », « quelle contrainte a Y ? ») ; pour l'état du code courant, lis les fichiers. ` +
