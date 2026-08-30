@@ -1,6 +1,7 @@
 import { appendFile, mkdir } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { Worker } from 'node:worker_threads'
 import {
   classerGel,
   resumerGels,
@@ -122,12 +123,19 @@ export function demarrerDetecteurDeGel(
    * l'operation declaree a cet instant n'est qu'une coincidence.
    */
   let cpuPrecedent = process.cpuUsage()
+  const temoin = demarrerTemoin(periodeMs)
   minuteur = setInterval(() => {
     const maintenant = Date.now()
     const delta = process.cpuUsage(cpuPrecedent)
     cpuPrecedent = process.cpuUsage()
     const cpuMs = (delta.user + delta.system) / 1000
-    const { blocageMs, cause } = classerGel(maintenant - precedent, cpuMs, periodeMs, seuilMs)
+    const { blocageMs, cause } = classerGel(
+      maintenant - precedent,
+      cpuMs,
+      periodeMs,
+      seuilMs,
+      temoin?.retardMaxDepuisLaDerniereLecture()
+    )
     precedent = maintenant
     if (blocageMs > 0) {
       ecrire({
@@ -142,7 +150,58 @@ export function demarrerDetecteurDeGel(
   return () => {
     if (minuteur) clearInterval(minuteur)
     minuteur = undefined
+    temoin?.arreter()
     puits = journaliser
+  }
+}
+
+
+/*
+ * TEMOIN ORDONNANCE — ce qui permet enfin de distinguer « la machine ne nous donne pas de CPU » de
+ * « NOTRE thread principal est coince dans un appel bloquant ».
+ *
+ * Mesure conv-1539 (2026-08-30) : cinq gels de 11,7 a 14,9 s, espaces d'environ une minute, tous
+ * classes `process-prive-de-cpu` — donc « pas notre code ». Or une lecture SYNCHRONE sur le partage
+ * reseau //ged2 produit exactement cette signature : la boucle est tenue par nous, sans bruler un
+ * cycle. Le CPU seul ne peut pas trancher. Un second thread, lui, le peut : s'il bat A L'HEURE
+ * pendant que le main est en retard, l'ordonnanceur nous servait bien — le main etait bloque.
+ *
+ * La mesure transite par un SharedArrayBuffer et non par `postMessage` : un message devrait passer
+ * par la boucle d'evenements du main, precisement celle qui est figee. La memoire partagee se lit
+ * sans elle.
+ */
+const CASE_RETARD_MAX = 0
+
+function demarrerTemoin(
+  periodeMs: number
+): { retardMaxDepuisLaDerniereLecture: () => number; arreter: () => void } | undefined {
+  try {
+    const tampon = new SharedArrayBuffer(4)
+    const vue = new Int32Array(tampon)
+    const worker = new Worker(
+      `const { workerData } = require('worker_threads')
+const vue = new Int32Array(workerData.tampon)
+let precedent = Date.now()
+setInterval(() => {
+  const maintenant = Date.now()
+  const retard = maintenant - precedent - workerData.periodeMs
+  precedent = maintenant
+  if (retard > 0 && retard > Atomics.load(vue, 0)) Atomics.store(vue, 0, retard)
+}, workerData.periodeMs)`,
+      { eval: true, workerData: { tampon, periodeMs } }
+    )
+    // Un instrument d'observabilite ne doit JAMAIS retenir l'application ouverte.
+    worker.unref()
+    worker.on('error', () => {
+      /* best-effort : sans temoin, le classement retombe sur l'heuristique CPU seule */
+    })
+    return {
+      retardMaxDepuisLaDerniereLecture: () => Atomics.exchange(vue, CASE_RETARD_MAX, 0),
+      arreter: () => void worker.terminate()
+    }
+  } catch {
+    /* SharedArrayBuffer ou worker indisponible : on garde le classement historique. */
+    return undefined
   }
 }
 

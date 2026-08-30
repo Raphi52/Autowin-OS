@@ -106,3 +106,45 @@ describe('classerGel — distinguer la boucle TENUE du process PRIVE de CPU', ()
     expect(resume.gelsNonImputables).toBe(0)
   })
 })
+
+/*
+ * ENTREE-SORTIE BLOQUANTE — le trou de l'heuristique CPU, mesure sur conv-1539.
+ *
+ * Journal du 2026-08-30 : cinq gels de 11,7 a 14,9 s, espaces d'environ une minute, tous rendus
+ * `process-prive-de-cpu` donc « pas notre code ». Une lecture SYNCHRONE sur le partage reseau
+ * //ged2 produit EXACTEMENT cette signature : la boucle est tenue par NOUS, sans brûler un cycle.
+ * Le CPU seul ne peut pas trancher ; un TEMOIN ordonnance en parallele le peut. S'il s'est reveille
+ * A L'HEURE pendant que le main etait en retard, la machine nous ordonnancait bien : c'est le
+ * thread principal qui etait coince dans un appel bloquant.
+ */
+describe('classerGel — un TEMOIN a l’heure interdit d’excuser un gel en contention machine', () => {
+  it('temoin a l’heure + aucun CPU : entree-sortie bloquante, pas contention machine', () => {
+    expect(classerGel(PERIODE_BATTEMENT_MS + 12_000, 40, PERIODE_BATTEMENT_MS, SEUIL_GEL_MS, 30).cause).toBe(
+      'entree-sortie-bloquante'
+    )
+  })
+
+  it('temoin AUSSI en retard : la machine ne nous ordonnancait pas — process prive de CPU', () => {
+    expect(
+      classerGel(PERIODE_BATTEMENT_MS + 12_000, 40, PERIODE_BATTEMENT_MS, SEUIL_GEL_MS, 11_500).cause
+    ).toBe('process-prive-de-cpu')
+  })
+
+  it('CPU brule chez nous : le temoin ne change rien, la boucle etait TENUE par notre code', () => {
+    expect(
+      classerGel(PERIODE_BATTEMENT_MS + 12_000, 11_000, PERIODE_BATTEMENT_MS, SEUIL_GEL_MS, 30).cause
+    ).toBe('boucle-tenue')
+  })
+
+  it('sans temoin, le classement historique est INCHANGE (journaux anterieurs relisibles)', () => {
+    expect(classerGel(PERIODE_BATTEMENT_MS + 12_000, 40).cause).toBe('process-prive-de-cpu')
+  })
+
+  it('un gel d’entree-sortie est IMPUTABLE : il compte dans l’attribution par operation', () => {
+    const resume = resumerGels([
+      JSON.stringify({ ts: 'a', blocageMs: 12_000, operation: 'brain:lecture', cause: 'entree-sortie-bloquante' })
+    ])
+    expect(resume.gelsNonImputables).toBe(0)
+    expect(resume.parOperation[0]).toMatchObject({ operation: 'brain:lecture', cumulMs: 12_000 })
+  })
+})

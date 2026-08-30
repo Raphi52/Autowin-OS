@@ -35,7 +35,14 @@ export const PART_CPU_IMPUTABLE = 0.5
  * perdu pour autant — `instrumenterCanauxIpc` le chronometre DIRECTEMENT et le journalise sous le
  * suffixe `(sync)`, sans dependre de cette heuristique.
  */
-export type CauseGel = 'boucle-tenue' | 'process-prive-de-cpu'
+export type CauseGel = 'boucle-tenue' | 'process-prive-de-cpu' | 'entree-sortie-bloquante'
+
+/**
+ * Part du blocage que le TEMOIN doit avoir subie pour que la contention machine soit credible.
+ * En dessous, le temoin s'est reveille A L'HEURE : la machine nous ordonnancait bien, donc le thread
+ * principal etait coince dans un appel bloquant — c'est NOTRE code, pas la machine.
+ */
+export const PART_TEMOIN_EN_RETARD = 0.5
 
 export interface Gel {
   /** Horodatage ISO du reveil tardif. */
@@ -76,14 +83,23 @@ export function classerGel(
   ecouleMs: number,
   cpuMsConsomme: number,
   periodeMs = PERIODE_BATTEMENT_MS,
-  seuilMs = SEUIL_GEL_MS
+  seuilMs = SEUIL_GEL_MS,
+  retardTemoinMs?: number
 ): { blocageMs: number; cause: CauseGel } {
   const blocageMs = blocageDepuisReveil(ecouleMs, periodeMs, seuilMs)
-  const cause: CauseGel =
-    blocageMs > 0 && cpuMsConsomme >= blocageMs * PART_CPU_IMPUTABLE
-      ? 'boucle-tenue'
-      : 'process-prive-de-cpu'
-  return { blocageMs, cause }
+  if (blocageMs > 0 && cpuMsConsomme >= blocageMs * PART_CPU_IMPUTABLE)
+    return { blocageMs, cause: 'boucle-tenue' }
+  /*
+   * Sans temoin, le classement d'origine est STRICTEMENT conserve : les journaux anterieurs restent
+   * relisibles et aucun gel ancien ne change de cause retroactivement.
+   */
+  if (
+    blocageMs > 0 &&
+    retardTemoinMs !== undefined &&
+    retardTemoinMs < blocageMs * PART_TEMOIN_EN_RETARD
+  )
+    return { blocageMs, cause: 'entree-sortie-bloquante' }
+  return { blocageMs, cause: 'process-prive-de-cpu' }
 }
 
 /**

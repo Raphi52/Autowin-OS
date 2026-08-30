@@ -227,3 +227,29 @@ describe('mesure DIRECTE du segment synchrone d’un canal IPC', () => {
     expect(operationDeclaree()).toBe('inconnu')
   })
 })
+
+describe('temoin ordonnance — un blocage SANS CPU n’est plus excuse en contention machine', () => {
+  /*
+   * FALSIFICATION NOMMEE : `Atomics.wait` tient le thread principal SANS bruler un cycle CPU —
+   * exactement la signature d'un `readFileSync` sur le partage reseau //ged2. C'est l'entree qui
+   * ressortait `process-prive-de-cpu` (« pas notre code ») dans le journal de conv-1539. Si le
+   * temoin n'existait pas, ou s'il etait lu apres coup, ce test resterait rouge.
+   */
+  it('classe un blocage sans CPU en entree-sortie-bloquante quand le temoin reste a l’heure', async () => {
+    const captures: Gel[] = []
+    const arreter = demarrerDetecteurDeGel(
+      mkdtempSync(join(tmpdir(), 'gel-')),
+      20,
+      (g) => captures.push(g),
+      30
+    )
+    await new Promise((r) => setTimeout(r, 60))
+    const verrou = new Int32Array(new SharedArrayBuffer(4))
+    Atomics.wait(verrou, 0, 0, 300)
+    await new Promise((r) => setTimeout(r, 80))
+    arreter()
+    const gel = captures.find((g) => g.blocageMs >= 100)
+    expect(gel, `aucun gel >=100ms capte: ${JSON.stringify(captures)}`).toBeDefined()
+    expect(gel?.cause).toBe('entree-sortie-bloquante')
+  })
+})
