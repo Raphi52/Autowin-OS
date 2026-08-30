@@ -1238,6 +1238,8 @@ export function ChatView({
       (flush) => window.requestAnimationFrame(flush),
       (handle) => window.cancelAnimationFrame(handle)
     )
+    // Rend le vidage du tampon atteignable HORS de cet effet (voir `pilotFlushRef`).
+    pilotFlushRef.current = () => pilotBatcher.flush()
     const off = window.api.onPilotEvent((raw) => {
       const e = raw as PilotEvent
       const conversationId = e.conversationId
