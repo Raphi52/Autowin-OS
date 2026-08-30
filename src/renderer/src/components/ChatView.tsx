@@ -551,6 +551,12 @@ export function ChatView({
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const liveMessagesRef = useRef(new Map<string, Msg[]>())
+  /*
+   * VIDE LE TAMPON DE STREAMING. Les deltas de texte dorment une frame dans `pilotBatcher` : une
+   * action qui doit ANCRER sur le fil reellement affiche (le recu d'orientation) lisait sinon un
+   * `liveMessagesRef` en retard, et son ancre tombait avant tout le texte deja lu par l'utilisateur.
+   */
+  const pilotFlushRef = useRef<() => void>(() => {})
   const busyConversationsRef = useRef(new Set<string>())
   const interruptingConversationsRef = useRef(new Set<string>())
   const stoppedQueueDrainRef = useRef(new Set<string>())
