@@ -1701,7 +1701,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
       })
     })
     await act(async () => {
-      ;(container!.querySelector('.agent-inbox-row') as HTMLButtonElement).click()
+      ;(container!.querySelectorAll('.conv-pick')[0] as HTMLElement).click()
     })
     await click('button[title="Workflows (RUN.md)"]')
 
