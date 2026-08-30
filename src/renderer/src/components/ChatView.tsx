@@ -740,6 +740,9 @@ export function ChatView({
     // n'en est pas une : sans ce drapeau, le fil affichait « ✓ Orienté » sur une reponse.
     reponse?: boolean
   ): void {
+    // L'ancre doit porter sur le fil TEL QU'AFFICHE : sans ce vidage, les deltas encore en tampon
+    // manquaient a l'appel, et le recu se posait AVANT le texte deja lu (un seul bloc au rendu).
+    pilotFlushRef.current()
     const liveMessages = liveMessagesRef.current.get(conversationId) ?? []
     const afterMessageIndex = liveMessages.length - 1
     const anchorMessage = liveMessages[afterMessageIndex]
