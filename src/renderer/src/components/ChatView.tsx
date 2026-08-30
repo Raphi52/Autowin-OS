@@ -3089,7 +3089,11 @@ export function ChatView({
                 >
                   {runtimeIdentity?.provider ?? 'connexion…'}
                 </span>
-                <span>{runtimeIdentity?.modelLabel ?? 'modèle en cours de résolution'}</span>
+                <span>
+                  {runtimeIdentity?.modelLabel
+                    ? shortModelLabel(runtimeIdentity.modelLabel, runtimeIdentity.provider)
+                    : 'modèle en cours de résolution'}
+                </span>
                 {(() => {
                   const dossierProjet = active?.projectPath?.trim()
                   const cheminEffectif = dossierProjet || defaultWorkspace

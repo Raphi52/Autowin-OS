@@ -6,6 +6,7 @@ import {
 } from './chat-view-model'
 import { ModelEffortMatrix, type ModelEffortRow } from './ModelEffortMatrix'
 import { EFFORT_LABELS } from './model-effort-labels'
+import { shortModelLabel } from './model-display-label'
 import './ChatView.css'
 import { Spinner } from './Spinner'
 
@@ -121,7 +122,10 @@ export function OrchestratorModelSelector({
   ) : models.length === 0 ? (
     'Aucun modèle disponible'
   ) : (
-    (grouped.currentMissing?.label ?? currentOption?.label ?? 'Choisir une cible')
+    shortModelLabel(
+      grouped.currentMissing?.label ?? currentOption?.label ?? 'Choisir une cible',
+      grouped.currentMissing?.provider ?? currentOption?.provider
+    )
   )
 
   useEffect(() => {
@@ -224,7 +228,7 @@ export function OrchestratorModelSelector({
                         }}
                       >
                         <span>
-                          <strong>{option.label}</strong>
+                          <strong>{shortModelLabel(option.label, option.provider)}</strong>
                           <small>{option.model}</small>
                           {statut && statut !== 'authenticated' && (
                             <small className={`model-option-status is-${statut}`}>

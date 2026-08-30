@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { OrchestratorModelOption } from './chat-view-model'
 import { effortLabel, sortEfforts } from './model-effort-labels'
 import { recommendedEffort } from './model-effort-recommendations'
+import { shortModelLabel } from './model-display-label'
 
 /**
  * Une ligne de la matrice : un modèle du catalogue et les crans d'effort qu'il expose.
@@ -145,7 +146,7 @@ export function ModelEffortMatrix({
                 aria-label={`Effort pour ${row.label}`}
               >
                 <span className="effort-matrix-name">
-                  <strong>{row.label}</strong>
+                  <strong>{shortModelLabel(row.label, row.option.provider)}</strong>
                   <small>{row.model}</small>
                 </span>
                 <span className="effort-matrix-track">

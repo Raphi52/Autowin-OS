@@ -4,7 +4,7 @@ import type { PipelinePhase } from './skill-pipeline'
 export interface SkillRoute {
   task: string
   explicitPhase?: PipelinePhase
-  /** Skill NOMMEE par son slash, hors phases du pipeline (`/see`, `/think`, `/salvage`...). */
+  /** Skill NOMMEE par son slash, hors phases du pipeline (`/look`, `/think`, `/salvage`...). */
   skill?: string
   reason: 'explicit-skill' | 'workspace-action'
 }
@@ -13,12 +13,12 @@ export interface SkillRoute {
  * Slash d'une skill QUELCONQUE decouverte sur disque.
  *
  * Defaut vecu le 2026-08-28 : la palette du composer se remplit depuis le registre natif (donc
- * `/see`, `/think`, `/heal`, `/salvage`... s'affichent et s'envoient), mais ce routeur ne
+ * `/look`, `/think`, `/heal`, `/salvage`... s'affichent et s'envoient), mais ce routeur ne
  * connaissait que les SEPT phases ecrites en dur. Une commande affichee par l'app repartait donc
  * comme un message ordinaire : routage possible vers un autre fil, aucune trace d'intention.
  *
  * Une skill NON-phase ne porte PAS d'`explicitPhase` : elle ne declenche aucune orchestration
- * (`/see` est une LECTURE). Elle est seulement RECONNUE comme commande explicite.
+ * (`/look` est une LECTURE). Elle est seulement RECONNUE comme commande explicite.
  */
 const SLASH_COMMAND = /^\/([\w-]{1,64})(?=\s|$)(?:\s+([\s\S]*))?$/
 

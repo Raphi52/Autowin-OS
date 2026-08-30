@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './AgentsTopologyView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { libraryModels } from './model-library'
+import { shortModelLabel } from './model-display-label'
 import { Spinner } from './Spinner'
 
 type ImportedModel = {
@@ -383,7 +384,7 @@ export function AgentsTopologyView({
                 <ModelMark provider={slot.provider} />
                 <div className="topology-slot-copy">
                   <small>{slot.slotId}</small>
-                  <strong>{model?.label ?? slot.modelId}</strong>
+                  <strong>{model ? shortModelLabel(model.label, model.provider) : slot.modelId}</strong>
                   <span>
                     {slot.provider} · {model?.model ?? slot.modelId}
                   </span>
@@ -704,7 +705,7 @@ export function AgentsTopologyView({
             >
               <ModelMark provider={model.provider} />
               <span>
-                <strong>{model.label}</strong>
+                <strong>{shortModelLabel(model.label, model.provider)}</strong>
                 <small>
                   {model.provider}
                   {(() => {

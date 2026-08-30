@@ -115,7 +115,7 @@ describe('runProjectTests', () => {
 })
 
 describe('ensureTestProjects', () => {
-  // La capture /see montrait une vue Tests VIDE : registre absent => aucun projet => ecran mort.
+  // La capture /look montrait une vue Tests VIDE : registre absent => aucun projet => ecran mort.
   // Le semis du workspace courant doit donc etre une fonction TESTEE, pas une ligne dans index.ts.
   it('seme le workspace courant quand le registre est absent', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'reg-seed-')), 'test-projects.json')

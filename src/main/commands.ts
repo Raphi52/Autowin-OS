@@ -59,7 +59,7 @@ const DECLENCHEUR_MAX = 200
 /**
  * Skills ACTIVES sur disque, chacune avec son DECLENCHEUR : `id — <debut de description>`.
  *
- * Defaut vecu le 2026-08-28 : le snapshot ne portait que des NOMS NUS (`forge`, `heal`, `see`...).
+ * Defaut vecu le 2026-08-28 : le snapshot ne portait que des NOMS NUS (`forge`, `heal`, `look`...).
  * Un nom ne dit pas QUAND s'en servir, donc aucune skill ne pouvait se declencher d'elle-meme : il
  * fallait que l'utilisateur tape le slash. Or chaque SKILL.md ecrit son propre declencheur dans son
  * front-matter `description` (« Trigger the MOMENT ... ») : cette phrase existait, elle n'etait
@@ -342,7 +342,7 @@ export interface PromptSnapshot {
   /**
    * Les commandes `/` REELLEMENT invocables, lues sur disque a chaque tour.
    *
-   * Defaut vecu le 2026-08-28 : `/see` s'affichait dans la palette, etait routee comme commande
+   * Defaut vecu le 2026-08-28 : `/look` s'affichait dans la palette, etait routee comme commande
    * explicite et son SKILL.md etait injecte — mais l'agent du chat ignorait jusqu'a son existence
    * tant que l'utilisateur ne l'avait pas tapee, et repondait donc « cette skill n'existe pas ».
    * Seuls les IDENTIFIANTS voyagent ici : le corps d'une skill reste paye a l'invocation.

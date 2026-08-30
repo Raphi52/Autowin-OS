@@ -5,6 +5,7 @@ import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import type { RuntimeModel, OrchestratorModelOption } from './chat-view-model'
 import { agentStudioProviderIds } from './provider-catalog'
 import { libraryModels } from './model-library'
+import { shortModelLabel } from './model-display-label'
 import type { ClaudeAccountEntry } from '../../../preload/index.d'
 import { Spinner } from './Spinner'
 
@@ -458,7 +459,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                 <ul className="router-models">
                   {list.map((m) => (
                     <li key={m.id}>
-                      <strong>{m.label ?? m.model}</strong>
+                      <strong>{shortModelLabel(m.label ?? m.model, provider)}</strong>
                       {m.reasoningEfforts?.length ? (
                         <span className="router-efforts">{m.reasoningEfforts.join(' · ')}</span>
                       ) : null}

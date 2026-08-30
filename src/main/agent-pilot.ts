@@ -744,7 +744,7 @@ export class AgentPilot {
     // l'erreur : c'est le mecanisme exact de la regression du 2026-07-28, qui etait toujours arme.
     // Une commande explicite, elle, ne devine RIEN : l'utilisateur a nomme la phase.
     // Seule une PHASE nommee (`/scout`, `/build`...) court-circuite vers l'orchestration. Une skill
-    // hors pipeline (`/see`, `/think`, `/remake`...) est reconnue comme commande — elle garde le fil
+    // hors pipeline (`/look`, `/think`, `/remake`...) est reconnue comme commande — elle garde le fil
     // courant — mais reste jouee par le MODELE avec le corps de sa skill injecte : la router vers un
     // run payant serait une orchestration que l'utilisateur n'a jamais demandee.
     if (directRoute?.reason === 'explicit-skill' && directRoute.explicitPhase) {
@@ -1368,7 +1368,21 @@ export class AgentPilot {
               timer.mark(`send${i}:firstToken`) // ← fin de la latence PERÇUE
               if (!timingWritten) {
                 timingWritten = true
-                timer.end({ provider, model: binding.model }) // persiste les jalons du 1er token
+                /*
+                 * TAILLE DU PROMPT ENVOYE, a cote des jalons.
+                 *
+                 * Mesure du 2026-08-29 (turn-timing.jsonl, 1360 tours) : une fois le recensement git
+                 * sorti du thread main (commit 2d9dea86), TOUT le reste de la latence percue vit
+                 * entre `send:start` et `send:firstToken`. Le journal ne portait aucune grandeur
+                 * capable d EXPLIQUER cet ecart : impossible de dire si un tour lent est un gros
+                 * prompt ou un fournisseur lent. On persiste donc la taille reellement envoyee.
+                 */
+                timer.end({
+                  provider,
+                  model: binding.model,
+                  promptChars: messages.reduce((n, m) => n + (m.content?.length ?? 0), 0),
+                  promptMessages: messages.length
+                }) // persiste les jalons du 1er token
               }
             }
             emitVisiblePrefix(visibleFilter.pushSegments(chunk.delta))

@@ -130,7 +130,7 @@ describe('TestsView — multi-projets', () => {
     )
   })
 
-  // ROUGE issu de la capture /see : l'ecran affichait EN MEME TEMPS « canal tests:projects
+  // ROUGE issu de la capture /look : l'ecran affichait EN MEME TEMPS « canal tests:projects
   // indisponible » et l'invite « Aucun projet enregistre » — deux messages contradictoires,
   // dont un qui invite a agir alors que le canal est mort.
   it('sur canal absent, avoue la panne et n invite PAS a ajouter un projet', async () => {

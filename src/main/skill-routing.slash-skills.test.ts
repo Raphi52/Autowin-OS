@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('./native-registry', () => ({
   nativeSkills: () => [
-    { id: 'see' },
+    { id: 'look' },
     { id: 'think' },
     { id: 'salvage' },
     { id: 'front-converge' }
@@ -12,20 +12,20 @@ vi.mock('./native-registry', () => ({
 const { routeSkillRequest, knownSkillNames } = await import('./skill-routing')
 
 describe('slash des skills hors pipeline', () => {
-  it('reconnait /see comme commande explicite SANS phase (aucune orchestration)', () => {
+  it('reconnait /look comme commande explicite SANS phase (aucune orchestration)', () => {
     knownSkillNames(true)
-    expect(routeSkillRequest('/see')).toEqual({
-      task: '/see',
-      skill: 'see',
+    expect(routeSkillRequest('/look')).toEqual({
+      task: '/look',
+      skill: 'look',
       reason: 'explicit-skill'
     })
-    expect(routeSkillRequest("/see regarde l'écran")).toEqual({
-      task: "/see regarde l'écran",
-      skill: 'see',
+    expect(routeSkillRequest("/look regarde l'écran")).toEqual({
+      task: "/look regarde l'écran",
+      skill: 'look',
       reason: 'explicit-skill'
     })
     expect(routeSkillRequest('/front-converge le header')?.skill).toBe('front-converge')
-    expect(routeSkillRequest('/see')?.explicitPhase).toBeUndefined()
+    expect(routeSkillRequest('/look')?.explicitPhase).toBeUndefined()
   })
 
   it("laisse les phases du pipeline porter leur explicitPhase", () => {
