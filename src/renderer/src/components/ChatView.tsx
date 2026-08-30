@@ -1594,7 +1594,17 @@ export function ChatView({
     await ouvrirDansMosaique(creee.id)
   }
 
+  /** Le MEME clic ouvre ou referme : en mosaique la liste est un jeu d'interrupteurs. */
+  async function basculerDansMosaique(id: string): Promise<void> {
+    if (mosaicIdsRef.current.includes(id)) {
+      fermerFenetreMosaique(id)
+      return
+    }
+    await ouvrirDansMosaique(id)
+  }
+
   function fermerFenetreMosaique(id: string): void {
+    mosaicIdsRef.current = mosaicIdsRef.current.filter((autre) => autre !== id)
     setMosaicIds((courant) => courant.filter((autre) => autre !== id))
     setMosaicFils((courant) => {
       const suite = { ...courant }
@@ -2954,7 +2964,7 @@ export function ChatView({
           qu'un bouton « Sélectionner » vu toute la journée pour un geste rare. L'entrée est
           désormais dans le menu contextuel d'une conversation, au-dessus de « Supprimer ».
         */}
-        {convSelectionMode && (
+        {convSelectionMode && convViewMode !== 'mosaic' && (
           <div className="conv-bulk-bar">
             <button type="button" className="conv-date-sort" onClick={() => quitterModeSelection()}>
               Annuler la sélection
@@ -3066,7 +3076,7 @@ export function ChatView({
                           e.dataTransfer.effectAllowed = 'move'
                         }}
                       >
-                        {convSelectionMode && (
+                        {convSelectionMode && convViewMode !== 'mosaic' && (
                           <input
                             type="checkbox"
                             className="conv-select-box"
@@ -3079,7 +3089,7 @@ export function ChatView({
                           className="conv-pick"
                           onClick={() =>
                             convViewMode === 'mosaic'
-                              ? void ouvrirDansMosaique(c.id)
+                              ? void basculerDansMosaique(c.id)
                               : void loadConv(c)
                           }
                         >
@@ -3118,6 +3128,24 @@ export function ChatView({
                           {convQuery && (
                             <span className="conv-count tnum">
                               {c.messageCount ?? c.messages?.length ?? 0}
+                            </span>
+                          )}
+                          {/* En mosaique, la liste n'est plus une SELECTION mais un jeu
+                              d'interrupteurs : l'etat ouvert/ferme se lit a droite du titre. */}
+                          {convViewMode === 'mosaic' && (
+                            <span
+                              className={`conv-mosaic-toggle${mosaicIds.includes(c.id) ? ' is-open' : ''}`}
+                              data-testid={`conv-mosaic-toggle-${c.id}`}
+                              role="img"
+                              aria-pressed={mosaicIds.includes(c.id) ? 'true' : 'false'}
+                              aria-label={
+                                mosaicIds.includes(c.id)
+                                  ? `« ${c.title} » ouverte en mosaïque — cliquer pour fermer`
+                                  : `« ${c.title} » fermée — cliquer pour ouvrir`
+                              }
+                              title={mosaicIds.includes(c.id) ? 'Ouverte' : 'Fermée'}
+                            >
+                              <span className="conv-mosaic-toggle-knob" aria-hidden="true" />
                             </span>
                           )}
                         </button>
@@ -3205,21 +3233,23 @@ export function ChatView({
                 Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau
                 coutait un item d'interface visible toute la journee pour un geste rare.
               */}
-              <button
-                role="menuitem"
-                data-testid="conv-menu-select-mode"
-                onClick={() => {
-                  const conv = convMenu.conv
-                  setConvMenu(null)
-                  setConvSelectionMode(true)
-                  setSelectedConvIds(new Set([conv.id]))
-                }}
-              >
-                <span className="conv-menu-ic" aria-hidden="true">
-                  ☑
-                </span>
-                Sélectionner
-              </button>
+              {convViewMode !== 'mosaic' && (
+                <button
+                  role="menuitem"
+                  data-testid="conv-menu-select-mode"
+                  onClick={() => {
+                    const conv = convMenu.conv
+                    setConvMenu(null)
+                    setConvSelectionMode(true)
+                    setSelectedConvIds(new Set([conv.id]))
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    ☑
+                  </span>
+                  Sélectionner
+                </button>
+              )}
               <button
                 role="menuitem"
                 className="c-err"
