@@ -2669,31 +2669,6 @@ export function ChatView({
             description="Retrouve, organise et reprends tes échanges."
           />
         </div>
-        {activeAgents.length > 0 && (
-          <section className="agent-inbox" aria-label="Agents actifs">
-            <span className="agent-inbox-title">
-              Agents actifs<span className="agent-inbox-count">{activeAgents.length}</span>
-            </span>
-            {activeAgents.map((agent) => (
-              <div className="agent-inbox-item" key={agent.id}>
-                <button
-                  className={`agent-inbox-row${agent.id === activeId ? ' active' : ''}`}
-                  onClick={() => {
-                    const target = convs.find((c) => c.id === agent.id)
-                    if (target) void loadConv(target)
-                  }}
-                  title={agent.task ?? agent.title}
-                >
-                  <Spinner />
-                  <span className="agent-inbox-copy">
-                    <span className="agent-inbox-name">{agent.title}</span>
-                    <span className="agent-inbox-state">{agent.state}</span>
-                  </span>
-                </button>
-              </div>
-            ))}
-          </section>
-        )}
         <div className="conv-search">
           <span aria-hidden="true">⌕</span>
           <input
