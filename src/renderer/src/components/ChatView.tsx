@@ -2652,18 +2652,16 @@ export function ChatView({
             </button>
           )}
         </div>
-        <div className="conv-bulk-bar">
-          <button
-            type="button"
-            className="conv-date-sort"
-            aria-pressed={convSelectionMode}
-            onClick={() =>
-              convSelectionMode ? quitterModeSelection() : setConvSelectionMode(true)
-            }
-          >
-            {convSelectionMode ? 'Annuler la sélection' : 'Sélectionner'}
-          </button>
-          {convSelectionMode && (
+        {/*
+          La barre n'existe QUE pendant une sélection en cours : hors de ce moment elle n'offrait
+          qu'un bouton « Sélectionner » vu toute la journée pour un geste rare. L'entrée est
+          désormais dans le menu contextuel d'une conversation, au-dessus de « Supprimer ».
+        */}
+        {convSelectionMode && (
+          <div className="conv-bulk-bar">
+            <button type="button" className="conv-date-sort" onClick={() => quitterModeSelection()}>
+              Annuler la sélection
+            </button>
             <button
               type="button"
               className="conv-date-sort"
@@ -2672,8 +2670,8 @@ export function ChatView({
             >
               Supprimer ({selectedConvIds.size})
             </button>
-          )}
-        </div>
+          </div>
+        )}
         <div className="conv-list scroll-y">
           <button
             className={`conv-new-row${activeId === null ? ' active' : ''}`}
