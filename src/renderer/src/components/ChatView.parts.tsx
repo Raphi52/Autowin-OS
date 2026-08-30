@@ -31,6 +31,58 @@ const CMD_LABEL: Record<string, string> = {
   get_state: 'Lecture d’état'
 }
 
+/**
+ * PASTILLE D'ICONE PAR FAMILLE D'OUTIL (design converge). Le lisere porte le STATUT, l'icone porte
+ * la NATURE : sans elle, « edit_file · verify » se lit comme deux libelles interchangeables. Un
+ * outil inconnu recoit le point neutre — jamais l'icone d'une famille voisine, qui mentirait.
+ */
+const ICONE_FAMILLE: Record<string, string> = {
+  navigate: '🧭',
+  chat_send: '💬',
+  orchestrate: '🎯',
+  create_conversation: '💬',
+  rename_conversation: '💬',
+  remove_conversation: '💬',
+  set_role: '🎯',
+  resolve_decision: '⚖️',
+  load_graph: '🗺️',
+  get_state: '👁️',
+  edit_file: '🔧',
+  write_file: '🔧',
+  read_file: '👁️',
+  verify: '🧪',
+  remember: '🧠',
+  brain_query: '🔍',
+  search: '🔍'
+}
+
+/** Icone de la famille d'un outil ; '•' (neutre) si la famille est inconnue. */
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur teste avec ce renderer
+export function iconeFamille(name: string): string {
+  return ICONE_FAMILLE[name] ?? '•'
+}
+
+/**
+ * L4 : la RAISON du lien entre deux actions consecutives. `PersistedChatActionPart` ne porte pas de
+ * `parentActionId` — on ne l'invente pas : la raison se DEDUIT de (verdict precedent -> outil
+ * suivant), et sans regle applicable AUCUNE etiquette n'est posee (une etiquette constante
+ * fabriquerait une causalite inexistante).
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur teste avec ce renderer
+export function raisonDuLien(
+  prev: ChatActionPart | undefined,
+  current: ChatActionPart
+): string | undefined {
+  if (!prev) return undefined
+  if (prev.ok === false) {
+    return prev.name === current.name ? '2ᵉ TENTATIVE' : 'REPRISE APRÈS ÉCHEC'
+  }
+  if (prev.ok === true && (current.name === 'verify' || current.name === 'judge')) {
+    return 'VÉRIFICATION'
+  }
+  return undefined
+}
+
 /** Sortie texte d'un sous-agent : repliée par défaut (160px), dépliable sur demande. */
 /**
  * `.subagent-text` plafonne a 160px pour une ligne de 16.5px (11px x 1.5), soit ~9 lignes visibles.
@@ -474,6 +526,47 @@ export function AssistantActivityGroup({
           <div className="activity-progress" data-testid="activity-progress" title={battement}>
             {battement}
           </div>
+        )}
+        {/* ETAGES (design converge) : une sous-ligne par action, reliees par un trait POINTILLE,
+            chacune avec sa pastille de famille et, quand une regle s'applique, l'etiquette L4 qui
+            NOMME la raison de l'enchainement. La ligne d'en-tete ne dit que « A · B » : elle perd
+            l'ordre, le verdict de chaque etage et le lien entre eux. */}
+        {actions.length > 1 && (
+          <ol className="activity-steps" data-testid="activity-steps">
+            {actions.map((etape, index) => {
+              const lien = raisonDuLien(actions[index - 1], etape)
+              return (
+                <li
+                  key={`${etape.name}-${index}`}
+                  className="activity-step"
+                  data-testid="activity-step"
+                  data-state={
+                    etape.ok === false
+                      ? 'ko'
+                      : etape.interrupted
+                        ? 'interrupted'
+                        : etape.ok === true
+                          ? 'ok'
+                          : 'running'
+                  }
+                >
+                  {lien && (
+                    <span className="activity-step-link" data-testid="activity-step-link">
+                      {lien}
+                    </span>
+                  )}
+                  <span
+                    className="activity-step-icon"
+                    data-testid="activity-step-icon"
+                    aria-hidden="true"
+                  >
+                    {iconeFamille(etape.name)}
+                  </span>
+                  <span className="activity-step-label">{CMD_LABEL[etape.name] ?? etape.name}</span>
+                </li>
+              )
+            })}
+          </ol>
         )}
         {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre bouton,
             sinon deplier couterait l'acces a la trace complete. */}

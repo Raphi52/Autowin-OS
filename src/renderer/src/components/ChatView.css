@@ -3127,3 +3127,58 @@ ol.md-list li {
 
 /* Bouton d'ouverture du panneau « Réflexion ». Classe DISTINCTE de `.workflow-toggle` :
    les tests de portée des runs sélectionnent `.workflow-toggle` et prendraient ce bouton. */
+
+/* ETAGES du fil d'activite (design converge). Le trait POINTILLE relie les sous-lignes : il dit
+   « meme groupe, etapes successives » sans peser comme un bord plein. Le depliage est plafonne a
+   180px : au-dela, un groupe long poussait la reponse hors de l'ecran. */
+.activity-steps {
+  list-style: none;
+  margin: 2px 0 6px 12px;
+  padding: 0 0 0 10px;
+  border-left: 1px dashed var(--line2, #31373f);
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.activity-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--muted, #9aa4b2);
+}
+.activity-step[data-state='ko'] {
+  color: var(--err, #ef6b6b);
+}
+.activity-step[data-state='interrupted'] {
+  color: var(--warn, #e8a33d);
+}
+/* Pastille de FAMILLE : ronde, neutre — le statut reste porte par la carte et la couleur du texte. */
+.activity-step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 10px;
+  background: color-mix(in srgb, var(--line2, #31373f) 60%, transparent);
+}
+/* L4 : l'etiquette NOMME la raison de l'enchainement, posee avant l'etage qu'elle explique. */
+.activity-step-link {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px dashed var(--line2, #31373f);
+  color: var(--muted, #9aa4b2);
+}
+/* Le POURQUOI deplie est plafonne comme les etages : meme regle de lecture. */
+.activity-why {
+  margin: 4px 0 8px 10px;
+  max-height: 180px;
+  overflow-y: auto;
+}
