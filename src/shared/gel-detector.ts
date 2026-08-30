@@ -18,6 +18,25 @@ export const SEUIL_GEL_MS = 1000
 /** Periode du battement. Assez courte pour dater un gel, assez longue pour ne rien couter. */
 export const PERIODE_BATTEMENT_MS = 500
 
+/**
+ * Part du retard qui doit avoir ete brulee par NOTRE process pour que le gel lui soit imputable.
+ * En dessous, le temps a passe ailleurs : la boucle n'etait pas tenue, elle n'etait pas ordonnancee.
+ */
+export const PART_CPU_IMPUTABLE = 0.5
+
+/**
+ * Origine d'un gel.
+ *  · `boucle-tenue` — notre process a brule le temps : c'est NOTRE code qui figeait la fenetre.
+ *  · `process-prive-de-cpu` — le retard s'est ecoule sans que nous consommions de CPU (machine
+ *    saturee, mise en veille, process desordonnance). Reel pour l'utilisateur, mais NON imputable a
+ *    une operation : l'operation declaree a cet instant n'est qu'une coincidence.
+ *
+ * Limite assumee : un blocage synchrone d'ENTREE-SORTIE ne brule pas de CPU non plus. Il n'est pas
+ * perdu pour autant — `instrumenterCanauxIpc` le chronometre DIRECTEMENT et le journalise sous le
+ * suffixe `(sync)`, sans dependre de cette heuristique.
+ */
+export type CauseGel = 'boucle-tenue' | 'process-prive-de-cpu'
+
 export interface Gel {
   /** Horodatage ISO du reveil tardif. */
   ts: string
@@ -25,6 +44,8 @@ export interface Gel {
   blocageMs: number
   /** Ce que le main disait faire au moment du gel — `inconnu` si rien n'etait declare. */
   operation: string
+  /** Absent sur les gels journalises avant l'introduction de la preuve par le CPU. */
+  cause?: CauseGel
 }
 
 export interface ResumeGels {
@@ -37,6 +58,32 @@ export interface ResumeGels {
   parOperation: Array<{ operation: string; gels: number; cumulMs: number; pireMs: number }>
   /** Lignes du journal qu'on n'a pas su relire — comptees, jamais jetees en silence. */
   lignesIllisibles: number
+  /** Gels REELS mais non imputables a notre boucle — exclus de l'attribution, jamais caches. */
+  gelsNonImputables: number
+  /** Temps fige total non imputable a notre code. */
+  msNonImputables: number
+}
+
+/**
+ * Classe un reveil tardif : y a-t-il gel, et est-il IMPUTABLE a notre boucle ?
+ *
+ * Mesure du 2026-08-28 (20:37 -> 21:42) : un « gel » de 16 a 22 s toutes les minutes, reparti au
+ * hasard sur `inactif`, `demarrage:interface chargee`, `os:models:quotas`, `os:pilotChat`. Une
+ * boucle tenue par notre propre code ne change pas de coupable a chaque minute. Le CPU consomme
+ * pendant le retard tranche : brule chez nous => c'est nous ; pas brule => c'est la machine.
+ */
+export function classerGel(
+  ecouleMs: number,
+  cpuMsConsomme: number,
+  periodeMs = PERIODE_BATTEMENT_MS,
+  seuilMs = SEUIL_GEL_MS
+): { blocageMs: number; cause: CauseGel } {
+  const blocageMs = blocageDepuisReveil(ecouleMs, periodeMs, seuilMs)
+  const cause: CauseGel =
+    blocageMs > 0 && cpuMsConsomme >= blocageMs * PART_CPU_IMPUTABLE
+      ? 'boucle-tenue'
+      : 'process-prive-de-cpu'
+  return { blocageMs, cause }
 }
 
 /**
@@ -62,6 +109,8 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
   let pireMs = 0
   let cumulMs = 0
   let lignesIllisibles = 0
+  let gelsNonImputables = 0
+  let msNonImputables = 0
   for (const ligne of lignes) {
     const brut = ligne.trim()
     if (!brut) continue
@@ -72,9 +121,17 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
       lignesIllisibles += 1
       continue
     }
-    const ms = typeof gel.blocageMs === 'number' && Number.isFinite(gel.blocageMs) ? gel.blocageMs : 0
+    const ms =
+      typeof gel.blocageMs === 'number' && Number.isFinite(gel.blocageMs) ? gel.blocageMs : 0
     if (ms <= 0) {
       lignesIllisibles += 1
+      continue
+    }
+    // Un gel prouve NON imputable est compte a part : il est reel, mais l'operation declaree a cet
+    // instant n'est qu'une coincidence — l'attribuer ferait chasser un alibi.
+    if (gel.cause === 'process-prive-de-cpu') {
+      gelsNonImputables += 1
+      msNonImputables += ms
       continue
     }
     const operation = typeof gel.operation === 'string' && gel.operation ? gel.operation : 'inconnu'
@@ -90,5 +147,13 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
   const parOperation = [...parOp.entries()]
     .map(([operation, a]) => ({ operation, ...a }))
     .sort((a, b) => b.cumulMs - a.cumulMs)
-  return { gels, pireMs, cumulMs, parOperation, lignesIllisibles }
+  return {
+    gels,
+    pireMs,
+    cumulMs,
+    parOperation,
+    lignesIllisibles,
+    gelsNonImputables,
+    msNonImputables
+  }
 }

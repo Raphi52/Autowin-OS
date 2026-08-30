@@ -2,7 +2,7 @@ import { appendFile, mkdir } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  blocageDepuisReveil,
+  classerGel,
   resumerGels,
   PERIODE_BATTEMENT_MS,
   SEUIL_GEL_MS,
@@ -115,12 +115,27 @@ export function demarrerDetecteurDeGel(
   dossier = dir
   puits = ecrire
   let precedent = Date.now()
+  /*
+   * PREUVE PAR LE CPU. Un reveil tardif dit que le temps a passe, pas OU il a passe. On releve donc
+   * le CPU consomme par NOTRE process pendant l'intervalle : brule chez nous => la boucle etait
+   * tenue par notre code ; pas brule => nous etions desordonnances (machine saturee, veille) et
+   * l'operation declaree a cet instant n'est qu'une coincidence.
+   */
+  let cpuPrecedent = process.cpuUsage()
   minuteur = setInterval(() => {
     const maintenant = Date.now()
-    const blocageMs = blocageDepuisReveil(maintenant - precedent, periodeMs, seuilMs)
+    const delta = process.cpuUsage(cpuPrecedent)
+    cpuPrecedent = process.cpuUsage()
+    const cpuMs = (delta.user + delta.system) / 1000
+    const { blocageMs, cause } = classerGel(maintenant - precedent, cpuMs, periodeMs, seuilMs)
     precedent = maintenant
     if (blocageMs > 0) {
-      ecrire({ ts: new Date(maintenant).toISOString(), blocageMs, operation: operationDeclaree() })
+      ecrire({
+        ts: new Date(maintenant).toISOString(),
+        blocageMs,
+        operation: operationDeclaree(),
+        cause
+      })
     }
   }, periodeMs)
   minuteur.unref?.()
@@ -191,7 +206,10 @@ export function instrumenterCanauxIpc(ipc: {
           journaliserGel({
             ts: new Date().toISOString(),
             blocageMs: dureeMs,
-            operation: `ipc:${canal} (sync)`
+            operation: `ipc:${canal} (sync)`,
+            // Chronometrage DIRECT du segment synchrone : imputable par construction, sans
+            // dependre de l'heuristique CPU (un blocage d'entree-sortie ne brule pas de CPU).
+            cause: 'boucle-tenue'
           })
         }
       }

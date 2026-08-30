@@ -3,7 +3,8 @@ import {
   blocageDepuisReveil,
   resumerGels,
   PERIODE_BATTEMENT_MS,
-  SEUIL_GEL_MS
+  SEUIL_GEL_MS,
+  classerGel
 } from './gel-detector'
 
 describe('blocageDepuisReveil — le retard du battement EST la duree du gel', () => {
@@ -48,5 +49,60 @@ describe('resumerGels — nommer le coupable, pas le deduire', () => {
   it('range un gel sans operation declaree sous « inconnu »', () => {
     const resume = resumerGels([JSON.stringify({ blocageMs: 2000 })])
     expect(resume.parOperation[0]?.operation).toBe('inconnu')
+  })
+})
+
+/*
+ * PREUVE PAR LE CPU — un retard n'est pas une preuve de blocage.
+ *
+ * Journal reel du 2026-08-28 (20:37 -> 21:42) : un « gel » de 16 a 22 s TOUTES LES MINUTES, reparti
+ * au hasard sur `inactif`, `demarrage:interface chargée`, `os:models:quotas`, `os:pilotChat`. Une
+ * boucle reellement tenue par notre propre code ne change pas de coupable a chaque minute : le
+ * process etait DESORDONNANCE (machine saturee / veille), pas bloque. Sans discriminant, /heal
+ * partirait optimiser `os:models:quotas` — un alibi de plus.
+ *
+ * Discriminant FACTUEL : le CPU consomme par NOTRE process pendant le retard. Boucle tenue => le
+ * temps est brule chez nous. Process prive de CPU => il ne l'est pas.
+ */
+describe('classerGel — distinguer la boucle TENUE du process PRIVE de CPU', () => {
+  it('boucle tenue : 17 s de retard, 16,8 s de CPU brule chez nous', () => {
+    expect(classerGel(PERIODE_BATTEMENT_MS + 17_000, 16_800).cause).toBe('boucle-tenue')
+  })
+
+  it('process prive de CPU : 17 s de retard, 40 ms de CPU — ce n’est PAS notre code', () => {
+    expect(classerGel(PERIODE_BATTEMENT_MS + 17_000, 40).cause).toBe('process-prive-de-cpu')
+  })
+
+  it('sous le seuil, il n’y a pas de gel du tout', () => {
+    expect(classerGel(PERIODE_BATTEMENT_MS + 10, 5).blocageMs).toBe(0)
+  })
+
+  it('l’attribution par operation IGNORE les gels non imputables a notre boucle', () => {
+    const resume = resumerGels([
+      JSON.stringify({
+        ts: 'a',
+        blocageMs: 17_000,
+        operation: 'ipc:os:models:quotas',
+        cause: 'process-prive-de-cpu'
+      }),
+      JSON.stringify({
+        ts: 'b',
+        blocageMs: 2_000,
+        operation: 'ipc:git:graph',
+        cause: 'boucle-tenue'
+      })
+    ])
+    expect(resume.parOperation.map((o) => o.operation)).toEqual(['ipc:git:graph'])
+    expect(resume.cumulMs).toBe(2_000)
+    expect(resume.gelsNonImputables).toBe(1)
+    expect(resume.msNonImputables).toBe(17_000)
+  })
+
+  it('un gel ANCIEN sans champ `cause` reste impute : on ne reecrit pas le passe en silence', () => {
+    const resume = resumerGels([
+      JSON.stringify({ ts: 'a', blocageMs: 3_000, operation: 'ipc:git:graph' })
+    ])
+    expect(resume.cumulMs).toBe(3_000)
+    expect(resume.gelsNonImputables).toBe(0)
   })
 })

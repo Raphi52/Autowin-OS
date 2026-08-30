@@ -74,3 +74,43 @@ describe('PerfLagPanel — gels du process principal', () => {
     expect(premiere?.textContent).toContain('snapshot:travauxNonPublies')
   })
 })
+
+/*
+ * Un gel NON imputable (process desordonnance, machine en veille) est reel pour l'utilisateur : il
+ * est exclu de l'ATTRIBUTION par operation, jamais de l'affichage. Sans ce verrou, l'exclusion
+ * transformerait « 36 min figees » en « aucun blocage » — un faux vert.
+ */
+describe('PerfLagPanel — les gels non imputables restent VISIBLES', () => {
+  it('ne dit pas « aucun blocage » quand des gels non imputables existent', async () => {
+    const c = await rendreAvec({
+      gels: 0,
+      pireMs: 0,
+      cumulMs: 0,
+      parOperation: [],
+      lignesIllisibles: 0,
+      gelsNonImputables: 3,
+      msNonImputables: 51_000,
+      disponible: true,
+      source: 'C:/data/gels.jsonl'
+    })
+    expect(c.querySelector('[data-testid="perf-gels-vide"]')).toBeNull()
+    const hors = c.querySelector('[data-testid="perf-gels-non-imputables"]')
+    expect(hors?.textContent).toContain('3')
+    expect(hors?.textContent).toContain('51000')
+  })
+
+  it('reste muet sur cette ligne quand tout est imputable', async () => {
+    const c = await rendreAvec({
+      gels: 1,
+      pireMs: 2000,
+      cumulMs: 2000,
+      parOperation: [{ operation: 'ipc:git:graph', gels: 1, cumulMs: 2000, pireMs: 2000 }],
+      lignesIllisibles: 0,
+      gelsNonImputables: 0,
+      msNonImputables: 0,
+      disponible: true,
+      source: 'C:/data/gels.jsonl'
+    })
+    expect(c.querySelector('[data-testid="perf-gels-non-imputables"]')).toBeNull()
+  })
+})

@@ -134,7 +134,7 @@ export function PerfLagPanel(): React.JSX.Element {
               Aucun journal de gels ({gels.source}) : le détecteur n’a pas encore tourné sur ce
               poste. Rien n’est affiché plutôt qu’un zéro rassurant.
             </p>
-          ) : gels.gels === 0 ? (
+          ) : gels.gels === 0 && !gels.gelsNonImputables ? (
             <p className="perf-suspects" data-testid="perf-gels-vide">
               Aucun blocage au-dessus de {SEUIL_GEL_MS} ms sur la fenêtre observée.
             </p>
@@ -143,6 +143,19 @@ export function PerfLagPanel(): React.JSX.Element {
               <p className="perf-suspects" data-testid="perf-gels-resume">
                 {gels.gels} gel(s) · pire {gels.pireMs} ms · {gels.cumulMs} ms figés au total
               </p>
+              {/*
+                Un gel non imputable est REEL pour l'utilisateur : notre process n'a pas brulé de
+                CPU pendant le blocage (machine saturée, veille). On l'écarte de l'attribution par
+                opération — l'opération déclarée à cet instant n'est qu'une coïncidence — mais on ne
+                l'efface pas : le taire transformerait des minutes figées en « aucun blocage ».
+              */}
+              {gels.gelsNonImputables > 0 && (
+                <p className="perf-suspects" data-testid="perf-gels-non-imputables">
+                  + {gels.gelsNonImputables} gel(s) hors de notre boucle ({gels.msNonImputables} ms)
+                  : le process n’a pas consommé de CPU pendant le blocage — machine saturée ou mise
+                  en veille, non imputable à une opération.
+                </p>
+              )}
               <table className="perf-table">
                 <thead>
                   <tr>
