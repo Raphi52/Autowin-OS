@@ -42,6 +42,13 @@ export function RunProgress({
             >
               <summary className="run-progress__head">
                 <span className="run-progress__dot" aria-hidden="true" />
+                <span
+                  className="run-progress__icon"
+                  data-testid="run-progress-icon"
+                  aria-hidden="true"
+                >
+                  {e.icon}
+                </span>
                 <b>{e.label}</b>
                 {e.model && <span className="mono c-faint">{e.model}</span>}
                 {e.tokens ? <i className="c-faint tnum">{e.tokens} tk</i> : null}
@@ -58,18 +65,23 @@ export function RunProgress({
                 {e.thinking && <span className="badge c-faint">raisonnement</span>}
               </summary>
               <div className="run-progress__body">
-                {e.obstacles.length > 0 && (
-                  <ul className="run-progress__obstacles">
-                    {e.obstacles.map((o, i) => (
-                      <li key={i}>{o}</li>
-                    ))}
-                  </ul>
-                )}
-                {e.evidence.length > 0 && (
-                  <ul className="run-progress__evidence">
-                    {e.evidence.map((ev, i) => (
-                      <li key={i} className={ev.ok ? 'st-ok' : 'st-err'}>
-                        {ev.summary}
+                {e.substeps.length > 0 && (
+                  <ul className="run-progress__substeps" data-testid="run-progress-substeps">
+                    {e.substeps.map((sub, i) => (
+                      <li
+                        key={i}
+                        className="run-progress__substep"
+                        data-testid="run-progress-substep"
+                        data-state={sub.state}
+                      >
+                        <span
+                          className="run-progress__substep-icon"
+                          data-testid="run-progress-substep-icon"
+                          aria-hidden="true"
+                        >
+                          {sub.icon}
+                        </span>
+                        <span className="run-progress__substep-label">{sub.label}</span>
                       </li>
                     ))}
                   </ul>

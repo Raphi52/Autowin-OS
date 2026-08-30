@@ -18,6 +18,10 @@ export type RunProgressEntry = {
   thinking?: string
   obstacles: string[]
   evidence: Array<{ ok: boolean; summary: string }>
+  /** Icône de TYPE d'étape (en plus du liseré, qui porte le statut). */
+  icon: string
+  /** Étages : sous-étapes de la carte (obstacles puis preuves) — vide si l'étape est simple. */
+  substeps: Array<{ icon: string; label: string; state: 'ok' | 'ko' }>
 }
 
 export type RunProgressView = {
@@ -52,24 +56,57 @@ function evidenceSummary(e: NonNullable<OrchStep['evidence']>[number]): string {
   return e.summary || e.type
 }
 
+/** Icône par TYPE d'étape — le statut reste porté par le liseré/le point. */
+const ICONE_PHASE: Record<string, string> = {
+  scout: '🔍',
+  cadrage: '🧭',
+  terrain: '🗺️',
+  build: '🔧',
+  nettoyage: '🧹',
+  juge: '⚖️'
+}
+
+function iconeEtape(label: string): string {
+  const phase = label.split('·').pop()?.trim() ?? ''
+  return ICONE_PHASE[phase] ?? '•'
+}
+
+function iconePreuve(summary: string): string {
+  if (summary.startsWith('$')) return '⌨️'
+  if (summary.startsWith('📝')) return '📄'
+  return '🧪'
+}
+
 export function buildRunProgress(steps: OrchStep[], activePhase?: LiveRunPhase): RunProgressView {
   const entries: RunProgressEntry[] = steps.map((s, i) => {
     const failed = s.status === 'failed'
+    const label = phaseLabel({ step: s.step, phase: phaseOf(s) })
+    const obstacles = [
+      ...(failed && s.error ? [s.error] : []),
+      ...extractObstacles(s.text),
+      ...extractObstacles(s.thinking)
+    ]
+    const evidence = (s.evidence ?? []).map((e) => ({ ok: e.ok, summary: evidenceSummary(e) }))
     return {
       key: `${i}`,
-      label: phaseLabel({ step: s.step, phase: phaseOf(s) }),
+      label,
+      icon: iconeEtape(label),
+      substeps: [
+        ...obstacles.map((o) => ({ icon: '⛔', label: o, state: 'ko' as const })),
+        ...evidence.map((e) => ({
+          icon: iconePreuve(e.summary),
+          label: e.summary,
+          state: (e.ok ? 'ok' : 'ko') as 'ok' | 'ko'
+        }))
+      ],
       role: s.role,
       model: s.model,
       state: failed ? 'failed' : 'done',
       costUsd: s.costUsd,
       tokens: s.tokens,
       thinking: s.thinking,
-      obstacles: [
-        ...(failed && s.error ? [s.error] : []),
-        ...extractObstacles(s.text),
-        ...extractObstacles(s.thinking)
-      ],
-      evidence: (s.evidence ?? []).map((e) => ({ ok: e.ok, summary: evidenceSummary(e) }))
+      obstacles,
+      evidence
     }
   })
 
@@ -80,6 +117,8 @@ export function buildRunProgress(steps: OrchStep[], activePhase?: LiveRunPhase):
       role: activePhase.role,
       model: activePhase.model,
       state: 'running',
+      icon: iconeEtape(phaseLabel(activePhase)),
+      substeps: [],
       obstacles: [],
       evidence: []
     })

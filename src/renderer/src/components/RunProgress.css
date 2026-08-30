@@ -109,3 +109,44 @@
 .run-progress__body {
   padding-left: 4px;
 }
+
+/* Variante A — étages : les sous-étapes vivent DANS la carte, sur un rail vertical. */
+.run-progress__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent, #58f) 14%, transparent);
+  font-size: 11px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.run-progress__substeps {
+  list-style: none;
+  margin: 6px 0 0 8px;
+  padding: 0 0 0 13px;
+  border-left: 1px solid var(--border, #ffffff1a);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.92em;
+}
+.run-progress__substep {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+.run-progress__substep-icon {
+  flex: 0 0 auto;
+  font-size: 0.9em;
+  opacity: 0.9;
+}
+.run-progress__substep-label {
+  overflow-wrap: anywhere;
+}
+.run-progress__substep[data-state='ko'] .run-progress__substep-label {
+  color: var(--err, #d55);
+}
