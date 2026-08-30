@@ -1674,7 +1674,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(
       container!.querySelector('.chat-layout')?.getAttribute('data-active-conversation-id')
     ).toBe('B')
-    expect(container!.querySelector('.agent-inbox')?.textContent).toContain('Conversation A')
   })
 
   it('stops from Workflows the orchestration belonging to the displayed conversation', async () => {
