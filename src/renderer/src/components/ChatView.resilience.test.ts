@@ -37,7 +37,9 @@ describe('ChatView composer resilience', () => {
     expect(source).toContain('composerDraftsRef')
     expect(source).toContain('switchComposerDraft(c.id)')
     expect(source).toContain('switchComposerDraft(NEW_DRAFT_KEY)')
-    expect(source).toContain('const originDraftKey = composerDraftKeyRef.current')
+    // L'origine reste CAPTUREE avant tout await. Depuis la mosaique, elle peut etre une fenetre
+    // NON active (parametre cible) : l'invariant vise le brouillon d'origine, pas le composer courant.
+    expect(source).toContain('const originDraftKey = cible ?? composerDraftKeyRef.current')
     expect(source).toContain('setDraftAttachments(originDraftKey')
   })
 

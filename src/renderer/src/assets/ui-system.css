@@ -66,72 +66,210 @@
 /* Ligne titre + commandes (switch de vue) — le titre reste a gauche, les actions a droite. */
 .module-header-line {
   display: flex;
+  width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 .module-header-actions {
   display: flex;
+  margin-left: auto;
   align-items: center;
   gap: 2px;
 }
 
 /* Squelette du switch et de la mosaique : habillage fin a faire en design. */
-.conv-view-switch {
-  display: inline-flex;
-  gap: 2px;
+/* UN SEUL interrupteur (demande du 2026-08-30) : liste <-> mosaique, pas deux boutons segmentes. */
+.conv-view-toggle {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(212, 169, 79, 0.45);
+  border-radius: 999px;
+  background: rgba(212, 169, 79, 0.08);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
 }
-.conv-view-switch > button {
-  padding: 2px 6px;
+.conv-view-toggle:hover {
+  border-color: var(--gold);
+}
+.conv-view-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--gold-doux);
+  opacity: 0.75;
+  transition:
+    left 120ms ease,
+    opacity 120ms ease;
+}
+.conv-view-toggle[aria-checked='true'] {
+  border-color: var(--gold);
+  background: rgba(233, 189, 78, 0.18);
+}
+.conv-view-toggle[aria-checked='true'] .conv-view-toggle-knob {
+  left: 18px;
+  background: var(--gold-bright);
+  opacity: 1;
+}
+/* MOSAIQUE MULTI-CHAT — remplace la zone de chat ; la liste de gauche reste, car c'est elle
+   qui sert a OUVRIR une fenetre de plus. Les colonnes sont posees en ligne par ChatMosaic. */
+.chat-mosaic {
+  flex: 1 1 auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+}
+.chat-mosaic-vide {
+  flex: 1 1 auto;
+  padding: 16px;
+  font-size: 13px;
+  opacity: 0.6;
+}
+.chat-mosaic-window {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  max-height: calc(100vh - 160px);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
+  overflow: hidden;
+  /* OPAQUE : sur le fond cosmique, un panneau transparent rend le texte illisible (retour
+     utilisateur du 30/08). Meme surface que les autres panneaux de l'app. */
+  background: var(--surface-panel);
+  box-shadow: var(--container-shadow);
+}
+/* Tour EN COURS : bordure or TRES discrete, pour ne pas concurrencer l or vif de la fin de tour. */
+.chat-mosaic-window[data-etat='occupe'] {
+  border-color: rgba(212, 169, 79, 0.28);
+}
+/* Tour TERMINE, pas encore repris : bordure OR VIF, reperable en un coup d oeil. */
+.chat-mosaic-window[data-etat='attention'] {
+  border-color: rgba(227, 186, 85, 0.5);
+}
+/* Le CADRE dore anime : un anneau degrade pose SUR la bordure, dont le reflet balaie le contour.
+   Le masque 'exclude' evide l interieur pour ne peindre QUE le liseré — sans voiler le contenu. */
+.chat-mosaic-window[data-etat='attention']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  padding: 2px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    rgba(160, 120, 40, 0.55) 0%,
+    #d4a94f 32%,
+    #fff3c4 46%,
+    #e3ba55 58%,
+    rgba(160, 120, 40, 0.55) 82%
+  );
+  background-size: 300% 100%;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: chat-mosaic-shiny 2.8s linear infinite;
+}
+@keyframes chat-mosaic-shiny {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-mosaic-window[data-etat='attention']::after {
+    animation: none;
+    background-position: 50% 0;
+  }
+}
+.chat-mosaic-window-jump {
+  position: absolute;
+  right: 12px;
+  bottom: 72px;
+  z-index: 2;
+  padding: 4px 10px;
+  border: 1px solid var(--container-border);
+  border-radius: 999px;
+  background: var(--surface-inset, rgba(0, 0, 0, 0.9));
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+}
+.chat-mosaic-new {
+  align-self: start;
+  padding: 8px 12px;
+  border: 1px dashed var(--container-border);
+  border-radius: var(--container-radius-panel);
+  background: var(--surface-panel);
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+}
+.chat-mosaic-window-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--container-border);
+  font-size: 12px;
+}
+.chat-mosaic-window-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+.chat-mosaic-window-busy {
+  color: var(--gold-bright, currentColor);
+}
+.chat-mosaic-window-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.6;
+}
+.chat-mosaic-window-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px;
+}
+.chat-mosaic-window-empty {
+  font-size: 12px;
+  opacity: 0.6;
+}
+.chat-mosaic-window-composer {
+  border-top: 1px solid var(--container-border);
+  padding: 6px;
+}
+.chat-mosaic-window-composer textarea {
+  width: 100%;
+  resize: none;
   border: 1px solid var(--container-border);
   border-radius: 6px;
   background: transparent;
   color: inherit;
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1.2;
-  opacity: 0.55;
-}
-.conv-view-switch > button[aria-pressed='true'] {
-  opacity: 1;
-}
-/* PLEIN CADRE (choix utilisateur 2026-08-30) : la mosaique remplace la zone de chat.
-   Un panneau de 232 px ne tient pas une mosaique lisible — les autres panneaux se replient. */
-.conv-pane.is-mosaic {
-  flex: 1 1 auto;
-  width: auto;
-}
-.chat-layout.is-mosaic > .chat,
-.chat-layout.is-mosaic > .runs-pane,
-.chat-layout.is-mosaic > .conv-pane-resizer,
-.chat-layout.is-mosaic > .runs-pane-resizer {
-  display: none;
-}
-.conv-mosaic {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
-  padding: 8px;
-}
-.conv-tile {
-  display: grid;
-  gap: 4px;
-  padding: 10px;
-  border: 1px solid var(--container-border);
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-.conv-tile-title {
-  font-weight: 650;
-}
-.conv-tile-meta,
-.conv-mosaic-empty {
-  font-size: 12px;
-  opacity: 0.6;
-}
-.conv-mosaic-empty {
-  padding: 12px;
+  padding: 6px;
+  font: inherit;
+  font-size: 13px;
 }

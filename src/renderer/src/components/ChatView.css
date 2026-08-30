@@ -2336,47 +2336,45 @@ ol.md-list li {
 .conv-new-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
-  min-height: 36px;
-  padding: 5px 8px;
-  border: 1px solid rgba(116, 166, 196, 0.16);
-  border-radius: 6px;
-  background: #03070a;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 0;
+  border-left: 2px solid #d4a94f;
+  border-radius: 0 6px 6px 0;
+  background: rgba(255, 255, 255, 0.045);
   color: var(--text);
   font: inherit;
   cursor: pointer;
   text-align: left;
   transition:
-    border-color 140ms ease,
-    background 140ms ease;
+    background 140ms ease,
+    border-left-color 140ms ease;
 }
 .conv-new-row:hover {
-  border-color: rgba(93, 207, 255, 0.52);
-  background: #071018;
+  border-left-color: #e3ba55;
+  background: rgba(255, 255, 255, 0.08);
 }
 .conv-new-row:focus-visible {
-  outline: 2px solid rgba(93, 207, 255, 0.78);
+  outline: 2px solid rgba(212, 169, 79, 0.78);
   outline-offset: 2px;
 }
 .conv-new-row.active {
-  border-color: rgba(93, 207, 255, 0.34);
-  box-shadow: inset 2px 0 #5dcfff;
+  border-left-color: #e3ba55;
+  background: rgba(212, 169, 79, 0.12);
 }
 .conv-new-icon {
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 22px;
-  height: 22px;
-  border: 1px solid rgba(93, 207, 255, 0.26);
-  border-radius: 5px;
-  background: #07141c;
-  color: #7bdcff;
+  width: 16px;
+  height: 16px;
+  color: #d4a94f;
 }
 .conv-new-icon svg {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -2385,10 +2383,10 @@ ol.md-list li {
 }
 .conv-new-title {
   overflow: hidden;
-  color: #dce9f0;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  color: #dde3ee;
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

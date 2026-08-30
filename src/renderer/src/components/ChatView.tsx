@@ -93,7 +93,7 @@ import {
   ordonnerGroupes
 } from './conversation-groups'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
-import { ConversationMosaic } from './ConversationMosaic'
+import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
@@ -435,6 +435,26 @@ export function ChatView({
    * Mode d'affichage du panneau conversations. PERSISTE en localStorage comme la largeur du
    * panneau : c'est une preference locale d'affichage, elle n'a rien a faire dans le store disque.
    */
+  /**
+   * Conversations OUVERTES en mosaique, dans l'ordre d'ouverture. Persiste : rouvrir l'app doit
+   * rendre le meme plan de travail, comme le mode d'affichage lui-meme.
+   */
+  const [mosaicIds, setMosaicIds] = useState<string[]>(() => {
+    try {
+      const brut = window.localStorage.getItem('autowin.chat.mosaicOpenIds')
+      const lu: unknown = brut ? JSON.parse(brut) : []
+      return Array.isArray(lu) ? lu.filter((id): id is string => typeof id === 'string') : []
+    } catch {
+      return []
+    }
+  })
+  const mosaicIdsRef = useRef(mosaicIds)
+  useEffect(() => {
+    mosaicIdsRef.current = mosaicIds
+    window.localStorage.setItem('autowin.chat.mosaicOpenIds', JSON.stringify(mosaicIds))
+  }, [mosaicIds])
+  /** Fils PEINTS des fenetres ouvertes — le fil actif garde son propre etat `messages`. */
+  const [mosaicFils, setMosaicFils] = useState<Record<string, Msg[]>>({})
   const [convViewMode, setConvViewMode] = useState<'list' | 'mosaic'>(() =>
     window.localStorage.getItem('autowin.chat.conversationsViewMode') === 'mosaic'
       ? 'mosaic'
@@ -563,6 +583,7 @@ export function ChatView({
   const steeringRef = useRef(new Set<number>())
   const sendLocksRef = useRef(new Set<string>())
   const composerDraftKeyRef = useRef(NEW_DRAFT_KEY)
+  const [draftsVersion, setDraftsVersion] = useState(0)
   const composerSelectionGenerationRef = useRef(0)
   const composerDraftsRef = useRef(
     new Map<string, ComposerDraft>([[NEW_DRAFT_KEY, { input: '', attachments: [], error: null }]])
@@ -580,6 +601,12 @@ export function ChatView({
    * consommer sur la meme frame que les messages, sans re-rendu intermediaire.
    */
   const positionARestaurerRef = useRef<PositionLecture | null>(null)
+  /**
+   * MASQUE PENDANT LA REPRISE. La restauration re-applique la cible sur ~20 frames pendant que le
+   * markdown se rend : l'utilisateur voyait le fil sauter (clignotement signale le 2026-08-30).
+   * On masque le fil le temps de la reprise, et on le revele une fois la position tenue.
+   */
+  const [repriseEnCours, setRepriseEnCours] = useState(false)
 
   /** Le texte en cours de frappe, lu dans la carte des brouillons (le composer y écrit à chaque touche). */
   function texteDuComposer(): string {
@@ -603,11 +630,16 @@ export function ChatView({
     const next = update(draft.attachments)
     composerDraftsRef.current.set(key, { ...draft, attachments: next })
     if (composerDraftKeyRef.current === key) setAttachments(next)
+    // Les brouillons vivent dans une REF (une frappe ne doit pas re-rendre la vue). La mosaique
+    // affiche pourtant les pieces jointes de N brouillons a la fois : ce compteur est le SEUL
+    // signal de rendu, et il ne bouge que sur une piece jointe, jamais sur une frappe.
+    setDraftsVersion((n) => n + 1)
   }
 
   function setDraftError(key: string, error: string | null): void {
     composerDraftsRef.current.set(key, { ...getComposerDraft(key), error })
     if (composerDraftKeyRef.current === key) setAttachmentError(error)
+    setDraftsVersion((n) => n + 1)
   }
 
   function switchComposerDraft(key: string): void {
@@ -802,9 +834,10 @@ export function ChatView({
     })
   }
 
-  async function addFiles(files: FileList | File[]): Promise<void> {
-    if (busy) return
-    const originDraftKey = composerDraftKeyRef.current
+  async function addFiles(files: FileList | File[], cible?: string): Promise<void> {
+    if (!cible && busy) return
+    if (cible && busyConversationsRef.current.has(cible)) return
+    const originDraftKey = cible ?? composerDraftKeyRef.current
     const originDraft = getComposerDraft(originDraftKey)
     setDraftError(originDraftKey, null)
     const seen = new Set(originDraft.attachments.map((file) => `${file.name}\u0000${file.size}`))
@@ -1189,6 +1222,18 @@ export function ChatView({
 
   /* --- fil : événements de pilotage → patch de la dernière bulle agent --- */
 
+  /**
+   * ENTONNOIR DE PEINTURE. Avant la mosaique, chaque site faisait `if (actif) setMessages(fil)` :
+   * une conversation non active n'etait jamais peinte, donc une fenetre de mosaique serait restee
+   * figee pendant son propre streaming. Tout passe desormais ICI.
+   */
+  function publierFil(conversationId: string | null, fil: Msg[]): void {
+    if (activeRef.current === conversationId) setMessages(fil)
+    if (conversationId !== null && mosaicIdsRef.current.includes(conversationId)) {
+      setMosaicFils((courant) => ({ ...courant, [conversationId]: fil }))
+    }
+  }
+
   function patchLast(conversationId: string, fn: (m: AsstMsg) => void): void {
     const next = (liveMessagesRef.current.get(conversationId) ?? []).slice()
     for (let i = next.length - 1; i >= 0; i--) {
@@ -1203,7 +1248,7 @@ export function ChatView({
       break
     }
     liveMessagesRef.current.set(conversationId, next)
-    if (activeRef.current === conversationId) setMessages(next)
+    publierFil(conversationId, next)
   }
 
   useEffect(() => {
@@ -1269,7 +1314,7 @@ export function ChatView({
             { role: 'assistant', content: '', parts: [], status: 'streaming' } as unknown as Msg
           ]
           liveMessagesRef.current.set(conversationId, amorce)
-          if (activeRef.current === conversationId) setMessages(amorce)
+          publierFil(conversationId, amorce)
         }
         // L'HISTORIQUE — dont le MESSAGE ENVOYÉ du tour — vit dans le store, pas dans les événements :
         // sans ce rattrapage, le fil montrait la réponse sans la demande (« j'ai pas vu le message
@@ -1290,7 +1335,7 @@ export function ChatView({
               if (courant.some((message) => message.role === 'user')) return
               const complet = [...historique, ...courant]
               liveMessagesRef.current.set(conversationId, complet)
-              if (activeRef.current === conversationId) setMessages(complet)
+              publierFil(conversationId, complet)
             })
             .catch(() => {})
         }
@@ -1331,9 +1376,21 @@ export function ChatView({
       positionARestaurerRef.current = null
       followTailRef.current = false
       setScrolledAwayFromTail(true)
+      setRepriseEnCours(true)
+      // Filet : si la boucle ne rend jamais la main (fil demonte en pleine reprise), le fil ne doit
+      // PAS rester invisible. Le masque tombe de toute facon.
+      const filet = window.setTimeout(() => setRepriseEnCours(false), 800)
       requestAnimationFrame(() =>
-        restaurerPositionLecture(scroll, aRestaurer, requestAnimationFrame, 20, undefined, () =>
-          mesurerMessagesRendus(scroll)
+        restaurerPositionLecture(
+          scroll,
+          aRestaurer,
+          requestAnimationFrame,
+          20,
+          () => {
+            window.clearTimeout(filet)
+            setRepriseEnCours(false)
+          },
+          () => mesurerMessagesRendus(scroll)
         )
       )
       return
@@ -1493,6 +1550,59 @@ export function ChatView({
     requestAnimationFrame(() => composerRef.current?.focus())
   }
 
+  /**
+   * OUVRIR une conversation DE PLUS dans la mosaique (elle ne remplace pas l'active). Le fil vient
+   * du cache vivant s'il existe, sinon du store : une fenetre vide le temps d'un aller-retour IPC
+   * serait indiscernable d'une conversation reellement vide.
+   */
+  async function ouvrirDansMosaique(id: string): Promise<void> {
+    if (!mosaicIdsRef.current.includes(id)) mosaicIdsRef.current = [...mosaicIdsRef.current, id]
+    setMosaicIds((courant) => (courant.includes(id) ? courant : [...courant, id]))
+    const cache = liveMessagesRef.current.get(id)
+    if (cache) {
+      setMosaicFils((courant) => ({ ...courant, [id]: cache }))
+      return
+    }
+    try {
+      const detail = (await window.api.conversation(id)) as Conv | null
+      const fil = hydraterFilStocke(detail?.messages ?? [])
+      liveMessagesRef.current.set(id, fil)
+      setMosaicFils((courant) => ({ ...courant, [id]: fil }))
+    } catch {
+      setMosaicFils((courant) => ({ ...courant, [id]: [] }))
+    }
+  }
+
+  /**
+   * NOUVELLE conversation DANS la mosaique. Elle est creee tout de suite cote store (au lieu d'un
+   * brouillon sans identite) : une fenetre a besoin d'un id des sa premiere frappe — c'est lui qui
+   * porte le brouillon, les pieces jointes, le tour et sa peinture.
+   */
+  async function nouvelleFenetreMosaique(): Promise<void> {
+    const identity = await refreshRuntimeIdentity()
+    const creee = await window.api.conversationsCreate({
+      title: 'Nouvelle conversation',
+      category: identity.provider,
+      provider: identity.provider
+    })
+    setConvs((courant) =>
+      courant.some((c) => c.id === creee.id)
+        ? courant
+        : [{ ...creee, updatedAt: Date.now(), messages: [] } as unknown as Conv, ...courant]
+    )
+    liveMessagesRef.current.set(creee.id, [])
+    await ouvrirDansMosaique(creee.id)
+  }
+
+  function fermerFenetreMosaique(id: string): void {
+    setMosaicIds((courant) => courant.filter((autre) => autre !== id))
+    setMosaicFils((courant) => {
+      const suite = { ...courant }
+      delete suite[id]
+      return suite
+    })
+  }
+
   function newConv(): void {
     loadConversationRequestRef.current += 1
     resetConvLoad()
@@ -1606,7 +1716,7 @@ export function ChatView({
     ]
     replayedTurnsRef.current.add(turnId)
     liveMessagesRef.current.set(conversationId, next)
-    if (activeRef.current === conversationId) setMessages(next)
+    publierFil(conversationId, next)
   }
 
   // Survie niveau 2 : « Reprendre » depuis le bandeau de démarrage ouvre la conversation dont le
@@ -1755,8 +1865,9 @@ export function ChatView({
    * (le message choisi + ses antérieurs partent d'abord ; les postérieurs suivent en auto-drain).
    * Sert au bouton « Interrompre et envoyer tout » (en tête de file) ET aux boutons par-message.
    */
-  function interruptAndFlushQueue(): void {
-    const id = activeRef.current
+  /** `cible` : la mosaique arrete une fenetre NON active — sans elle, Stop viserait l'autre fil. */
+  function interruptAndFlushQueue(cible?: string): void {
+    const id = cible ?? activeRef.current
     if (!id || interruptingConversationsRef.current.has(id)) return
     // Rien à interrompre → ne PAS armer l'état « interruption en cours ». Sans cette garde, le
     // drapeau n'est remis à false que par la transition `busy→false` de l'effet de drain : hors tour
@@ -2200,7 +2311,7 @@ export function ChatView({
     // Commit VISUEL avant tout await : Entrée vide le composer et affiche le prompt sans exposer
     // la latence du classifieur de routage. Ce commit reste local jusqu'à pilotChat.
     if (sourceConversationId) liveMessagesRef.current.set(sourceConversationId, optimisticHistory)
-    if (activeRef.current === sourceConversationId) setMessages(optimisticHistory)
+    publierFil(sourceConversationId, optimisticHistory)
     // La LISTE se reordonne au meme instant que le fil. Sans cela, la recence utilisee par la barre
     // laterale (`lastUserMessageAt`) n'arrive qu'au refresh diffuse par le main, donc la conversation
     // ou l'on vient d'ecrire ne remontait pas en tete — constate le 2026-08-30, capture a l'appui.
@@ -2287,6 +2398,30 @@ export function ChatView({
         }
       }
 
+      /*
+       * Conversation CREEE D'AVANCE (fenetre mosaique, ouverture directe) : elle porte encore le
+       * titre placeholder « Nouvelle conversation », et rien ne la renommait ensuite. C'est le
+       * PREMIER message utilisateur qui la nomme — sinon la barre laterale se remplit d'homonymes.
+       */
+      if (convId && previousMessagesForTarget.length === 0) {
+        const cibleRenommage = convId
+        const existant = convsRef.current.find((c) => c.id === cibleRenommage)
+        if (existant && existant.title === 'Nouvelle conversation') {
+          const sourceTitre = value || outgoingAttachments[0]?.name || ''
+          const titre = sourceTitre.length > 42 ? `${sourceTitre.slice(0, 42)}…` : sourceTitre
+          if (titre.trim()) {
+            try {
+              await window.api.conversationsRename(cibleRenommage, titre)
+              setConvs((courant) =>
+                courant.map((c) => (c.id === cibleRenommage ? { ...c, title: titre } : c))
+              )
+            } catch {
+              /* le titre reste le placeholder : jamais bloquant pour l'envoi */
+            }
+          }
+        }
+      }
+
       const history: Msg[] = [
         ...previousMessagesForTarget,
         {
@@ -2305,7 +2440,7 @@ export function ChatView({
         hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' })
       ]
       liveMessagesRef.current.set(convId, history)
-      if (activeRef.current === convId) setMessages(history)
+      publierFil(convId, history)
       setConversationBusy(convId, true)
       messageCommitted = true
       const payload: Array<{
@@ -2340,7 +2475,7 @@ export function ChatView({
           liveMessagesRef.current.delete(convId)
           setConversationBusy(convId, false)
         }
-        if (activeRef.current === sourceConversationId) setMessages(sourcePreviousMessages)
+        publierFil(sourceConversationId, sourcePreviousMessages)
         setDraftInput(sendDraftKey, value)
         setDraftAttachments(sendDraftKey, () => outgoingAttachments)
         setDraftError(
@@ -2408,7 +2543,7 @@ export function ChatView({
     ]
     sendLocksRef.current.add(conversationId)
     liveMessagesRef.current.set(conversationId, history)
-    if (activeRef.current === conversationId) setMessages(history)
+    publierFil(conversationId, history)
     setConversationBusy(conversationId, true)
     followTailRef.current = true
     try {
@@ -2475,6 +2610,114 @@ export function ChatView({
     (latestAssistant?.status === 'cancelled' || latestAssistant?.status === 'interrupted')
   // « Plus récentes » = là où L'UTILISATEUR a parlé en dernier, pas la dernière touche : ranger une
   // conversation dans un dossier bougeait `updatedAt` et la propulsait en tête (2026-08-18).
+  /** Handles des composers de la mosaique — un par fenetre, pour vider le champ apres envoi. */
+  const composersMosaiqueRef = useRef(new Map<string, ChatComposerHandle>())
+
+  /**
+   * Pieces jointes de CHAQUE brouillon ouvert en mosaique. Recalculees sur `draftsVersion` : la
+   * source de verite reste `composerDraftsRef`, on n'en duplique pas une seconde copie.
+   */
+  const piecesJointesMosaique = useMemo<Record<string, ChatAttachment[]>>(
+    () => Object.fromEntries(mosaicIds.map((id) => [id, getComposerDraft(id).attachments])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mosaicIds, draftsVersion]
+  )
+
+  /**
+   * LE VRAI composer, une instance par fenetre — c'est ce qui garantit zero divergence entre la
+   * mosaique et le chat plein : memes palettes `/` et `@`, memes pieces jointes, meme brouillon
+   * (`composerDraftsRef` est deja indexe par conversation).
+   */
+  function rendreComposerMosaique(id: string): React.ReactNode {
+    const occupe = busyConversations.has(id)
+    const fichiers = piecesJointesMosaique[id] ?? []
+    return (
+      <ChatComposer
+        ref={(handle) => {
+          if (handle) composersMosaiqueRef.current.set(id, handle)
+          else composersMosaiqueRef.current.delete(id)
+        }}
+        busy={occupe}
+        hasActiveConversation
+        resumeAvailable={false}
+        attachmentCount={fichiers.length}
+        mentionSources={mentionSources}
+        skillCommands={skillCommands}
+        ghostRecommendation={null}
+        placeholderPendantTour={occupe}
+        onDraftInput={(value) => setDraftInput(id, value)}
+        onDraftPresence={() => {}}
+        onBtw={() => false}
+        onSend={() => {
+          const texte = getComposerDraft(id).input
+          composersMosaiqueRef.current.get(id)?.setInput('')
+          setDraftInput(id, '')
+          void send(texte, { targetConversationId: id })
+        }}
+        onQueue={() => {}}
+        onResume={() => {}}
+        onPaste={(files) => void addFiles(files, id)}
+        attachmentsNode={
+          fichiers.length > 0 ? (
+            <div className="attachment-list pending">
+              {fichiers.map((file, fileIndex) => (
+                <span
+                  className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
+                  key={`${file.name}-${fileIndex}`}
+                >
+                  <span aria-hidden="true">▤</span>
+                  <span className="attachment-name">{file.name}</span>
+                  <small>{formatFileSize(file.size)}</small>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraftAttachments(id, (current) =>
+                        current.filter((_, index) => index !== fileIndex)
+                      )
+                    }
+                    aria-label={`Retirer ${file.name}`}
+                    title="Retirer"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null
+        }
+        errorNode={
+          getComposerDraft(id).error ? (
+            <div className="attachment-error">{getComposerDraft(id).error}</div>
+          ) : null
+        }
+        stopNode={
+          occupe ? (
+            <button
+              type="button"
+              className="composer-stop"
+              onClick={() => interruptAndFlushQueue(id)}
+              title="Arrêter ce tour"
+            >
+              ■ Stop
+            </button>
+          ) : null
+        }
+      />
+    )
+  }
+
+  /** Fenetres de la mosaique, dans l'ordre d'ouverture, avec leur fil peint et leur etat occupe. */
+  const fenetresMosaique = useMemo<ChatMosaicWindow[]>(
+    () =>
+      mosaicIds.map((id) => ({
+        id,
+        title: convs.find((c) => c.id === id)?.title ?? id,
+        messages: mosaicFils[id] ?? [],
+        busy: busyConversations.has(id)
+      })),
+    [mosaicIds, mosaicFils, convs, busyConversations]
+  )
+
   const conversationHits = useMemo(
     () => trierParRecenceUtilisateur(searchConversations(convs, convQuery), conversationDateOrder),
     [convs, convQuery, conversationDateOrder]
@@ -2668,9 +2911,9 @@ export function ChatView({
     >
       {/* ---- Panneau gauche : conversations ---- */}
       <aside
-        className={`lisere-dessus conv-pane${convViewMode === 'mosaic' ? ' is-mosaic' : ''}`}
+        className="lisere-dessus conv-pane"
         data-view-mode={convViewMode}
-        style={convViewMode === 'mosaic' ? undefined : { width: `${conversationsPaneWidth}px` }}
+        style={{ width: `${conversationsPaneWidth}px` }}
       >
         <div className="conv-head">
           <ModuleHeader
@@ -2726,177 +2969,181 @@ export function ChatView({
             </button>
           </div>
         )}
-        {convViewMode === 'mosaic' ? (
-          <ConversationMosaic
-            conversations={conversationHits.map((hit) => hit.conversation)}
-            activeId={activeId}
-            onOpen={(conv) => void loadConv(conv)}
-          />
-        ) : (
-          <div className="conv-list scroll-y">
-            <button
-              className={`conv-new-row${activeId === null ? ' active' : ''}`}
-              onClick={newConv}
-              title="Démarrer une nouvelle conversation"
-              aria-current={activeId === null ? 'page' : undefined}
-            >
-              <span className="conv-new-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" focusable="false">
-                  <path d="M13.6 5.4 18.6 10.4M4 20l3.7-.8L19.4 7.5a1.8 1.8 0 0 0 0-2.5l-.4-.4a1.8 1.8 0 0 0-2.5 0L4.8 16.3 4 20ZM13 20h7" />
-                </svg>
-              </span>
-              <span className="conv-new-title">Nouveau</span>
-            </button>
-            {convs.length === 0 && (
-              <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-                Aucune conversation — écris un message pour en démarrer une.
-              </div>
-            )}
-            {convs.length > 0 && conversationHits.length === 0 && (
-              <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
-            )}
-            {groupes.map((groupe) => {
-              const replie = estReplie(groupe.key, groupesReplies)
-              return (
-                <Fragment key={groupe.key}>
-                  {/*
+        <div className="conv-list scroll-y">
+          <button
+            className={`conv-new-row${convViewMode !== 'mosaic' && activeId === null ? ' active' : ''}`}
+            onClick={() => {
+              // En mosaique, « Nouveau » doit OUVRIR UNE FENETRE de plus : vider le fil unique,
+              // masque derriere la grille, ne produisait aucun effet visible.
+              if (convViewMode === 'mosaic') void nouvelleFenetreMosaique()
+              else newConv()
+            }}
+            title="Démarrer une nouvelle conversation"
+            aria-current={activeId === null ? 'page' : undefined}
+          >
+            <span className="conv-new-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </span>
+            <span className="conv-new-title">Nouveau fil</span>
+          </button>
+          {convs.length === 0 && (
+            <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
+              Aucune conversation — écris un message pour en démarrer une.
+            </div>
+          )}
+          {convs.length > 0 && conversationHits.length === 0 && (
+            <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
+          )}
+          {groupes.map((groupe) => {
+            const replie = estReplie(groupe.key, groupesReplies)
+            return (
+              <Fragment key={groupe.key}>
+                {/*
                   L'en-tête est AUSSI la zone de dépôt : viser un titre est plus facile que viser un
                   interstice, et ça évite d'inventer une cible invisible. On ne dépose pas sur un
                   groupe dérivé (« Auto-kaizen » vient du champ `autoKaizen`, « Divers » est l'absence
                   de dossier) — y traîner une conversation ne voudrait rien dire.
                 */}
-                  <div
-                    className={`conv-group${replie ? ' is-collapsed' : ''}${
-                      surviole === groupe.key ? ' is-drop' : ''
-                    }`}
-                    data-testid={`conv-group-${groupe.key}`}
-                    data-depth={groupe.depth}
-                    onDragOver={(e) => {
-                      if (groupe.kind !== 'dossier') return
-                      e.preventDefault()
-                      setSurvole(groupe.key)
-                    }}
-                    onDragLeave={() => setSurvole((c) => (c === groupe.key ? null : c))}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      setSurvole(null)
-                      const id = e.dataTransfer.getData('text/autowin-conversation')
-                      if (id && groupe.kind === 'dossier') void rangerDans(id, groupe.key)
-                    }}
+                <div
+                  className={`conv-group${replie ? ' is-collapsed' : ''}${
+                    surviole === groupe.key ? ' is-drop' : ''
+                  }`}
+                  data-testid={`conv-group-${groupe.key}`}
+                  data-depth={groupe.depth}
+                  onDragOver={(e) => {
+                    if (groupe.kind !== 'dossier') return
+                    e.preventDefault()
+                    setSurvole(groupe.key)
+                  }}
+                  onDragLeave={() => setSurvole((c) => (c === groupe.key ? null : c))}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setSurvole(null)
+                    const id = e.dataTransfer.getData('text/autowin-conversation')
+                    if (id && groupe.kind === 'dossier') void rangerDans(id, groupe.key)
+                  }}
+                >
+                  <button
+                    className="conv-group-head"
+                    onClick={() => basculerGroupe(groupe.key, replie)}
+                    aria-expanded={!replie}
+                    title={groupe.kind === 'dossier' ? groupe.key : groupe.label}
+                    style={{ paddingLeft: 8 + groupe.depth * 14 }}
                   >
-                    <button
-                      className="conv-group-head"
-                      onClick={() => basculerGroupe(groupe.key, replie)}
-                      aria-expanded={!replie}
-                      title={groupe.kind === 'dossier' ? groupe.key : groupe.label}
-                      style={{ paddingLeft: 8 + groupe.depth * 14 }}
-                    >
-                      <span className="conv-group-chevron" aria-hidden="true">
-                        {replie ? '▸' : '▾'}
-                      </span>
-                      <span className="conv-group-label">{groupe.label}</span>
-                      <span className="conv-group-count tnum">{groupe.items.length}</span>
-                    </button>
-                  </div>
-                  {!replie &&
-                    groupe.items.map(({ hit: { conversation: c, snippet } }) => {
-                      const conversationState = deriveConversationState({
-                        busy: busyConversations.has(c.id),
-                        messageCount: c.messageCount ?? c.messages?.length ?? 0,
-                        lastMessageRole: c.lastMessageRole ?? c.messages?.at(-1)?.role,
-                        lastAssistantStatus: c.lastAssistantStatus,
-                        asksUser: c.lastAssistantAsksUser === true,
-                        // La conversation OUVERTE est lue par definition : elle ne doit jamais
-                        // s'afficher « non lue » sous les yeux de celui qui la regarde.
-                        unseen: c.id !== activeId && estNonVue(c, conversationsVues)
-                      })
-                      const stateDescription = `${conversationState.label} — ${conversationState.detail}`
-                      return (
-                        <div
-                          key={c.id}
-                          className={`conv-item${c.id === activeId ? ' active' : ''}`}
-                          style={{ marginLeft: groupe.depth * 14 }}
-                          // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
-                          // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
-                          // ceux qui ne peuvent pas glisser.
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData('text/autowin-conversation', c.id)
-                            e.dataTransfer.effectAllowed = 'move'
-                          }}
+                    <span className="conv-group-chevron" aria-hidden="true">
+                      {replie ? '▸' : '▾'}
+                    </span>
+                    <span className="conv-group-label">{groupe.label}</span>
+                    <span className="conv-group-count tnum">{groupe.items.length}</span>
+                  </button>
+                </div>
+                {!replie &&
+                  groupe.items.map(({ hit: { conversation: c, snippet } }) => {
+                    const conversationState = deriveConversationState({
+                      busy: busyConversations.has(c.id),
+                      messageCount: c.messageCount ?? c.messages?.length ?? 0,
+                      lastMessageRole: c.lastMessageRole ?? c.messages?.at(-1)?.role,
+                      lastAssistantStatus: c.lastAssistantStatus,
+                      asksUser: c.lastAssistantAsksUser === true,
+                      // La conversation OUVERTE est lue par definition : elle ne doit jamais
+                      // s'afficher « non lue » sous les yeux de celui qui la regarde.
+                      unseen: c.id !== activeId && estNonVue(c, conversationsVues)
+                    })
+                    const stateDescription = `${conversationState.label} — ${conversationState.detail}`
+                    return (
+                      <div
+                        key={c.id}
+                        className={`conv-item${c.id === activeId ? ' active' : ''}`}
+                        style={{ marginLeft: groupe.depth * 14 }}
+                        // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
+                        // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
+                        // ceux qui ne peuvent pas glisser.
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/autowin-conversation', c.id)
+                          e.dataTransfer.effectAllowed = 'move'
+                        }}
+                      >
+                        {convSelectionMode && (
+                          <input
+                            type="checkbox"
+                            className="conv-select-box"
+                            checked={selectedConvIds.has(c.id)}
+                            onChange={() => toggleConvSelection(c.id)}
+                            aria-label={`Sélectionner « ${c.title} »`}
+                          />
+                        )}
+                        <button
+                          className="conv-pick"
+                          onClick={() =>
+                            convViewMode === 'mosaic'
+                              ? void ouvrirDansMosaique(c.id)
+                              : void loadConv(c)
+                          }
                         >
-                          {convSelectionMode && (
-                            <input
-                              type="checkbox"
-                              className="conv-select-box"
-                              checked={selectedConvIds.has(c.id)}
-                              onChange={() => toggleConvSelection(c.id)}
-                              aria-label={`Sélectionner « ${c.title} »`}
-                            />
-                          )}
-                          <button className="conv-pick" onClick={() => void loadConv(c)}>
-                            {/* EN COURS = le MEME atome que partout ailleurs : le composant
+                          {/* EN COURS = le MEME atome que partout ailleurs : le composant
                               <Spinner/>. La pastille etait le dernier endroit a rendre l'ancien
                               atome CSS a bordures (.spinner), d'ou un indicateur qui ne
                               ressemblait a aucun autre. Les autres etats restent une pastille. */}
-                            {conversationState.key === 'running' ? (
-                              <Spinner
-                                size={14}
-                                className="conversation-state is-running"
-                                label={`État de la conversation : ${stateDescription}`}
-                                data-conversation-state={conversationState.key}
-                              />
-                            ) : (
-                              <span
-                                className={`conversation-state is-${conversationState.key}`}
-                                data-conversation-state={conversationState.key}
-                                role="img"
-                                aria-label={`État de la conversation : ${stateDescription}`}
-                                title={stateDescription}
-                              />
+                          {conversationState.key === 'running' ? (
+                            <Spinner
+                              size={14}
+                              className="conversation-state is-running"
+                              label={`État de la conversation : ${stateDescription}`}
+                              data-conversation-state={conversationState.key}
+                            />
+                          ) : (
+                            <span
+                              className={`conversation-state is-${conversationState.key}`}
+                              data-conversation-state={conversationState.key}
+                              role="img"
+                              aria-label={`État de la conversation : ${stateDescription}`}
+                              title={stateDescription}
+                            />
+                          )}
+                          <span className="conv-copy">
+                            <span className="conv-label">{c.title}</span>
+                            {convQuery && snippet && (
+                              <span className="conv-snippet">{snippet}</span>
                             )}
-                            <span className="conv-copy">
-                              <span className="conv-label">{c.title}</span>
-                              {convQuery && snippet && (
-                                <span className="conv-snippet">{snippet}</span>
-                              )}
-                              {!convQuery && (
-                                <span className="conv-meta">
-                                  <span>{c.provider}</span>
-                                  <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
-                                </span>
-                              )}
-                            </span>
-                            {convQuery && (
-                              <span className="conv-count tnum">
-                                {c.messageCount ?? c.messages?.length ?? 0}
+                            {!convQuery && (
+                              <span className="conv-meta">
+                                <span>{c.provider}</span>
+                                <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
                               </span>
                             )}
-                          </button>
-                          <button
-                            className="conv-menu-trigger"
-                            title="Actions"
-                            aria-label="Actions de la conversation"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              const rect = event.currentTarget.getBoundingClientRect()
-                              setConvMenu((current) =>
-                                current?.conv.id === c.id
-                                  ? null
-                                  : { conv: c, top: rect.top, left: rect.right + 6 }
-                              )
-                            }}
-                          >
-                            ⋮
-                          </button>
-                        </div>
-                      )
-                    })}
-                </Fragment>
-              )
-            })}
-          </div>
-        )}
+                          </span>
+                          {convQuery && (
+                            <span className="conv-count tnum">
+                              {c.messageCount ?? c.messages?.length ?? 0}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          className="conv-menu-trigger"
+                          title="Actions"
+                          aria-label="Actions de la conversation"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            const rect = event.currentTarget.getBoundingClientRect()
+                            setConvMenu((current) =>
+                              current?.conv.id === c.id
+                                ? null
+                                : { conv: c, top: rect.top, left: rect.right + 6 }
+                            )
+                          }}
+                        >
+                          ⋮
+                        </button>
+                      </div>
+                    )
+                  })}
+              </Fragment>
+            )
+          })}
+        </div>
       </aside>
       {convMenu &&
         createPortal(
@@ -3081,111 +3328,121 @@ export function ChatView({
         onPointerDown={beginConversationsResize}
       />
 
-      {/* ---- Centre : fil ---- */}
-      <section
-        className={`lisere-dessus chat${dragActive ? ' is-file-dragging' : ''}`}
-        onDragEnter={(event) => {
-          if (Array.from(event.dataTransfer.types).includes('Files')) {
+      {/* ---- Centre : mosaique multi-chat, ou le fil unique ---- */}
+      {convViewMode === 'mosaic' ? (
+        <ChatMosaic
+          fenetres={fenetresMosaique}
+          onClose={fermerFenetreMosaique}
+          rendreComposer={rendreComposerMosaique}
+          onNouvelleConversation={() => void nouvelleFenetreMosaique()}
+        />
+      ) : (
+        <section
+          className={`lisere-dessus chat${dragActive ? ' is-file-dragging' : ''}`}
+          onDragEnter={(event) => {
+            if (Array.from(event.dataTransfer.types).includes('Files')) {
+              event.preventDefault()
+              setDragActive(true)
+            }
+          }}
+          onDragOver={(event) => {
+            if (Array.from(event.dataTransfer.types).includes('Files')) event.preventDefault()
+          }}
+          onDragLeave={(event) => {
+            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+            setDragActive(false)
+          }}
+          onDrop={(event) => {
             event.preventDefault()
-            setDragActive(true)
-          }
-        }}
-        onDragOver={(event) => {
-          if (Array.from(event.dataTransfer.types).includes('Files')) event.preventDefault()
-        }}
-        onDragLeave={(event) => {
-          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
-          setDragActive(false)
-        }}
-        onDrop={(event) => {
-          event.preventDefault()
-          setDragActive(false)
-          void addFiles(event.dataTransfer.files)
-        }}
-      >
-        {dragActive && (
-          <div className="file-drop-overlay" aria-hidden="true">
-            <strong>Dépose tes fichiers ici</strong>
-            <span>Ils seront joints au prochain message</span>
-          </div>
-        )}
-        <header className="chat-head row">
-          <div className="row gap2" style={{ alignItems: 'center', minWidth: 0 }}>
-            <span className="chat-head-signal" aria-hidden="true" />
-            <div className="col" style={{ gap: 1, minWidth: 0 }}>
-              <span className="chat-head-kicker">Conversation active</span>
-              <b className="chat-conv-title">{active ? active.title : 'Nouvelle conversation'}</b>
-              <div className="chat-runtime" data-testid="chat-runtime-identity">
-                <span
-                  className={`chat-runtime-provider is-${runtimeIdentity?.provider ?? 'loading'}`}
-                >
-                  {runtimeIdentity?.provider ?? 'connexion…'}
-                </span>
-                <span>
-                  {runtimeIdentity?.modelLabel
-                    ? shortModelLabel(runtimeIdentity.modelLabel, runtimeIdentity.provider)
-                    : 'modèle en cours de résolution'}
-                </span>
-                {(() => {
-                  const dossierProjet = active?.projectPath?.trim()
-                  const cheminEffectif = dossierProjet || defaultWorkspace
-                  const labelDossier = cheminEffectif ? nomDeDossier(cheminEffectif) : 'Autowin OS'
-                  const titreDossier = dossierProjet
-                    ? `Dossier de travail assigné à cette conversation : ${dossierProjet}`
-                    : `Dossier racine par défaut de l’agent : ${cheminEffectif ?? 'racine du dépôt'}`
-                  return (
-                    <span
-                      className="chat-cost-dot chat-project-dot"
-                      title={titreDossier}
-                      aria-label={titreDossier}
-                      data-testid="chat-project-dot"
-                    >
-                      <span className={`status-dot ${dossierProjet ? 'st-ok' : 'st-ok'}`} />
-                      📁 {labelDossier}
-                    </span>
-                  )
-                })()}
-                {(() => {
-                  /*
+            setDragActive(false)
+            void addFiles(event.dataTransfer.files)
+          }}
+        >
+          {dragActive && (
+            <div className="file-drop-overlay" aria-hidden="true">
+              <strong>Dépose tes fichiers ici</strong>
+              <span>Ils seront joints au prochain message</span>
+            </div>
+          )}
+          <header className="chat-head row">
+            <div className="row gap2" style={{ alignItems: 'center', minWidth: 0 }}>
+              <span className="chat-head-signal" aria-hidden="true" />
+              <div className="col" style={{ gap: 1, minWidth: 0 }}>
+                <span className="chat-head-kicker">Conversation active</span>
+                <b className="chat-conv-title">{active ? active.title : 'Nouvelle conversation'}</b>
+                <div className="chat-runtime" data-testid="chat-runtime-identity">
+                  <span
+                    className={`chat-runtime-provider is-${runtimeIdentity?.provider ?? 'loading'}`}
+                  >
+                    {runtimeIdentity?.provider ?? 'connexion…'}
+                  </span>
+                  <span>
+                    {runtimeIdentity?.modelLabel
+                      ? shortModelLabel(runtimeIdentity.modelLabel, runtimeIdentity.provider)
+                      : 'modèle en cours de résolution'}
+                  </span>
+                  {(() => {
+                    const dossierProjet = active?.projectPath?.trim()
+                    const cheminEffectif = dossierProjet || defaultWorkspace
+                    const labelDossier = cheminEffectif
+                      ? nomDeDossier(cheminEffectif)
+                      : 'Autowin OS'
+                    const titreDossier = dossierProjet
+                      ? `Dossier de travail assigné à cette conversation : ${dossierProjet}`
+                      : `Dossier racine par défaut de l’agent : ${cheminEffectif ?? 'racine du dépôt'}`
+                    return (
+                      <span
+                        className="chat-cost-dot chat-project-dot"
+                        title={titreDossier}
+                        aria-label={titreDossier}
+                        data-testid="chat-project-dot"
+                      >
+                        <span className={`status-dot ${dossierProjet ? 'st-ok' : 'st-ok'}`} />
+                        📁 {labelDossier}
+                      </span>
+                    )
+                  })()}
+                  {(() => {
+                    /*
                     LA JAUGE DE CONTEXTE.
 
                     Absente tant qu'on ne SAIT pas — fenetre du modele non declaree, ou entree non
                     mesuree. Afficher 0 % dirait « ce fil est vide », une affirmation la ou la
                     verite est « on l'ignore ».
                   */
-                  const jauge = activeId != null ? contextGauges[activeId] : undefined
-                  if (!jauge) return null
-                  const pourcent = Math.round(jauge.ratio * 100)
-                  const titre =
-                    `Contexte : ${jauge.used.toLocaleString('fr-FR')} tokens sur ` +
-                    `${jauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
-                    `${jauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
-                  return (
-                    <span
-                      className={`chat-context-gauge is-${jauge.level}`}
-                      title={titre}
-                      aria-label={titre}
-                      data-testid="chat-context-gauge"
-                    >
-                      <span className="chat-context-gauge-track">
-                        <span
-                          className="chat-context-gauge-fill"
-                          style={{ width: `${pourcent}%` }}
-                        />
+                    const jauge = activeId != null ? contextGauges[activeId] : undefined
+                    if (!jauge) return null
+                    const pourcent = Math.round(jauge.ratio * 100)
+                    const titre =
+                      `Contexte : ${jauge.used.toLocaleString('fr-FR')} tokens sur ` +
+                      `${jauge.limit.toLocaleString('fr-FR')} (${pourcent} %), dont ` +
+                      `${jauge.cacheRead.toLocaleString('fr-FR')} relus du cache.`
+                    return (
+                      <span
+                        className={`chat-context-gauge is-${jauge.level}`}
+                        title={titre}
+                        aria-label={titre}
+                        data-testid="chat-context-gauge"
+                      >
+                        <span className="chat-context-gauge-track">
+                          <span
+                            className="chat-context-gauge-fill"
+                            style={{ width: `${pourcent}%` }}
+                          />
+                        </span>
+                        {pourcent} %
                       </span>
-                      {pourcent} %
+                    )
+                  })()}
+                  {gitBranch && (
+                    <span
+                      data-testid="chat-git-branch"
+                      title={`Branche git courante du depot : ${gitBranch}`}
+                    >
+                      ⑂ {gitBranch}
                     </span>
-                  )
-                })()}
-                {gitBranch && (
-                  <span
-                    data-testid="chat-git-branch"
-                    title={`Branche git courante du depot : ${gitBranch}`}
-                  >
-                    ⑂ {gitBranch}
-                  </span>
-                )}
-                {/*
+                  )}
+                  {/*
                   L'IDENTIFIANT de la conversation, a la place de « interface prete ».
 
                   Ce libelle ne disait rien : une interface affichee est prete, sinon on ne la
@@ -3197,510 +3454,523 @@ export function ChatView({
                   L'etat occupe n'est PAS perdu : il reste porte par la classe `is-busy`, par la
                   pastille, et par la mention ajoutee a la suite de l'id.
                 */}
-                <span
-                  className={`chat-runtime-state${busy ? ' is-busy' : ''}`}
-                  data-testid="chat-runtime-conv"
-                  title={
-                    activeId
-                      ? `Identifiant de cette conversation : ${activeId}. C'est ce nom que l'agent emploie quand il parle d'une conversation.`
-                      : 'Aucune conversation ouverte'
-                  }
-                >
-                  <span className="status-dot" />
-                  {activeId ?? 'aucune conversation'}
-                  {busy && ' · en cours'}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="row gap2 chat-head-actions">
-            <button
-              type="button"
-              className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
-              onClick={() => setShowRuns((v) => !v)}
-              title="Workflows (RUN.md)"
-            >
-              <ForkIcon />
-              Workflows{openRunsCount > 0 ? ` · ${openRunsCount} open` : ''}
-              {greenRunsCount > 0 ? ` · ${greenRunsCount} green` : ''}
-            </button>
-          </div>
-        </header>
-
-        {travailNonPublie && travailNonPublie !== messageNonPublieMasque && (
-          <div
-            className="chat-workflow-notice chat-travail-non-publie"
-            data-testid="chat-travail-non-publie"
-            role="status"
-          >
-            <span>{travailNonPublie}</span>
-            <button
-              type="button"
-              data-testid="chat-travail-non-publie-traiter"
-              onClick={() => void traiterTravauxNonPublies()}
-              title="Ouvrir une conversation neuve avec un prompt pret a envoyer"
-            >
-              Traiter
-            </button>
-            <button
-              type="button"
-              data-testid="chat-travail-non-publie-ouvrir"
-              onClick={() => setListeNonPubliee((v) => !v)}
-              title="Lister ces travaux et lire leur diff"
-            >
-              Voir la liste
-            </button>
-            <button
-              type="button"
-              data-testid="chat-travail-non-publie-fermer"
-              className="chat-travail-non-publie__fermer"
-              onClick={() => setMessageNonPublieMasque(travailNonPublie)}
-              aria-label="Fermer cet avertissement"
-              title="Masquer jusqu’au prochain changement"
-            >
-              ×
-            </button>
-          </div>
-        )}
-        {listeNonPubliee && <TravauxNonPublies onFermer={() => setListeNonPubliee(false)} />}
-
-        {appNotice && (
-          <div className="chat-workflow-notice" data-testid="chat-workflow-notice" role="alert">
-            <span>{appNotice.text}</span>
-            <button
-              type="button"
-              onClick={() => setAppNotice(null)}
-              aria-label="Fermer l’avertissement"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        {deleteCandidate && (
-          <div
-            className="delete-confirm-layer"
-            role="presentation"
-            onClick={() => setDeleteCandidate(null)}
-          >
-            <section
-              className="delete-confirm-card"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-confirm-title"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="delete-confirm-orbit" aria-hidden="true">
-                ✦
-              </div>
-              <span className="delete-confirm-kicker">ACTION IRRÉVERSIBLE</span>
-              <h2 id="delete-confirm-title">Supprimer la conversation ?</h2>
-              <p>
-                <strong>« {deleteCandidate.title} »</strong> et son historique local seront retirés
-                de cet appareil.
-              </p>
-              <div className="delete-confirm-actions">
-                <button
-                  className="btn delete-confirm-cancel"
-                  onClick={() => setDeleteCandidate(null)}
-                  autoFocus
-                >
-                  Garder la conversation
-                </button>
-                <button
-                  className="btn delete-confirm-danger"
-                  onClick={() => void confirmRemoveConv()}
-                >
-                  Supprimer définitivement
-                </button>
-              </div>
-            </section>
-          </div>
-        )}
-
-        {bulkDeleteAsking && (
-          <div
-            className="delete-confirm-layer"
-            role="presentation"
-            onClick={() => setBulkDeleteAsking(false)}
-          >
-            <section
-              className="delete-confirm-card"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="bulk-delete-title"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <span className="delete-confirm-kicker">ACTION IRRÉVERSIBLE</span>
-              <h2 id="bulk-delete-title">Supprimer {selectedConvIds.size} conversations ?</h2>
-              <p>
-                Leur historique local sera retiré de cet appareil. Les conversations non
-                sélectionnées ne sont pas touchées.
-              </p>
-              {bulkDeleteError && <p className="c-danger">{bulkDeleteError}</p>}
-              <div className="delete-confirm-actions">
-                <button
-                  className="btn delete-confirm-cancel"
-                  onClick={() => setBulkDeleteAsking(false)}
-                  autoFocus
-                >
-                  Garder
-                </button>
-                <button
-                  className="btn delete-confirm-danger"
-                  onClick={() => void confirmBulkDelete()}
-                >
-                  Supprimer définitivement
-                </button>
-              </div>
-            </section>
-          </div>
-        )}
-
-        {deleteRunCandidate && (
-          <div
-            className="delete-confirm-layer"
-            role="presentation"
-            onClick={() => {
-              if (!runDeletePending) setDeleteRunCandidate(null)
-            }}
-          >
-            <section
-              className="delete-confirm-card"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="run-delete-confirm-title"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="delete-confirm-orbit" aria-hidden="true">
-                ✦
-              </div>
-              <span className="delete-confirm-kicker">
-                {deleteRunCandidate.scope === 'conv' && deleteRunCandidate.run.session === 'attaché'
-                  ? 'PIÈCE JOINTE EXTERNE'
-                  : 'ACTION IRRÉVERSIBLE'}
-              </span>
-              <h2 id="run-delete-confirm-title">
-                {deleteRunCandidate.scope === 'conv' && deleteRunCandidate.run.session === 'attaché'
-                  ? 'Détacher ce RUN ?'
-                  : 'Supprimer ce RUN ?'}
-              </h2>
-              <p>
-                <strong>« {deleteRunCandidate.run.subject} »</strong>{' '}
-                {deleteRunCandidate.scope === 'conv' && deleteRunCandidate.run.session === 'attaché'
-                  ? 'sera retiré de cette conversation. Son fichier externe restera intact.'
-                  : 'et sa trace locale seront supprimés de cet appareil.'}
-              </p>
-              {runDeleteError && <div className="attachment-error">⚠️ {runDeleteError}</div>}
-              <div className="delete-confirm-actions">
-                <button
-                  className="btn delete-confirm-cancel run-delete-cancel"
-                  onClick={() => setDeleteRunCandidate(null)}
-                  disabled={runDeletePending}
-                  autoFocus
-                >
-                  Annuler
-                </button>
-                <button
-                  className="btn delete-confirm-danger run-delete-confirm"
-                  onClick={() => void confirmDeleteRun()}
-                  disabled={runDeletePending}
-                >
-                  {runDeletePending
-                    ? 'Traitement…'
-                    : deleteRunCandidate.scope === 'conv' &&
-                        deleteRunCandidate.run.session === 'attaché'
-                      ? 'Détacher'
-                      : 'Supprimer définitivement'}
-                </button>
-              </div>
-            </section>
-          </div>
-        )}
-
-        <div
-          className="chat-scroll scroll-y"
-          ref={scrollRef}
-          role="log"
-          aria-live="polite"
-          aria-relevant="additions text"
-          onScroll={(event) => {
-            const nearBottom = isChatNearBottom(event.currentTarget)
-            // La position de lecture se retient A CHAQUE mouvement : quitter une conversation ne
-            // passe pas toujours par un evenement de fermeture (switch, fermeture brutale de l'app).
-            if (activeRef.current)
-              memoriserPositionLecture(
-                activeRef.current,
-                event.currentTarget,
-                mesurerMessagesRendus(event.currentTarget)
-              )
-            followTailRef.current = nearBottom
-            setScrolledAwayFromTail(!nearBottom)
-            if (nearBottom) setHasNewActivity(false)
-          }}
-        >
-          {/* Chargement du fil : squelette pendant l'attente, bandeau ACTIONNABLE en cas d'échec.
-              Un fil vide muet ne disait pas la différence entre « rien à afficher » et « la
-              lecture a planté ». */}
-          {convLoad.status === 'loading' && (
-            <div className="conv-load-skeleton" role="status" aria-label="Chargement du fil…">
-              <span className="conv-load-skeleton-line" />
-              <span className="conv-load-skeleton-line" />
-              <span className="conv-load-skeleton-line" />
-            </div>
-          )}
-          {convLoad.status === 'error' && (
-            <div className="conv-load-error" role="alert">
-              <span className="conv-load-error-text">
-                ⚠️ Conversation illisible : {convLoad.error}
-              </span>
-              {convLoad.target && (
-                <button
-                  type="button"
-                  className="conv-load-retry"
-                  onClick={() => void loadConv(convLoad.target as Conv)}
-                >
-                  ↻ Réessayer
-                </button>
-              )}
-            </div>
-          )}
-
-          {convLoad.status === 'idle' && messages.length === 0 && (!busy || activeId === null) && (
-            <div className="chat-welcome">
-              <div className="empty">
-                <h3>Parle à l’agent</h3>
-                <div className="c-faint">
-                  Il répond ET peut agir sur l’app (naviguer, créer une conversation, régler un
-                  rôle, ouvrir un graphe…). Ses actions apparaissent en direct.
+                  <span
+                    className={`chat-runtime-state${busy ? ' is-busy' : ''}`}
+                    data-testid="chat-runtime-conv"
+                    title={
+                      activeId
+                        ? `Identifiant de cette conversation : ${activeId}. C'est ce nom que l'agent emploie quand il parle d'une conversation.`
+                        : 'Aucune conversation ouverte'
+                    }
+                  >
+                    <span className="status-dot" />
+                    {activeId ?? 'aucune conversation'}
+                    {busy && ' · en cours'}
+                  </span>
                 </div>
               </div>
-              <div className="chat-suggest">
-                <SuggestionGrid groups={homeSuggestions} onPick={pickSuggestion} />
-              </div>
+            </div>
+            <div className="row gap2 chat-head-actions">
+              <button
+                type="button"
+                className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
+                onClick={() => setShowRuns((v) => !v)}
+                title="Workflows (RUN.md)"
+              >
+                <ForkIcon />
+                Workflows{openRunsCount > 0 ? ` · ${openRunsCount} open` : ''}
+                {greenRunsCount > 0 ? ` · ${greenRunsCount} green` : ''}
+              </button>
+            </div>
+          </header>
+
+          {travailNonPublie && travailNonPublie !== messageNonPublieMasque && (
+            <div
+              className="chat-workflow-notice chat-travail-non-publie"
+              data-testid="chat-travail-non-publie"
+              role="status"
+            >
+              <span>{travailNonPublie}</span>
+              <button
+                type="button"
+                data-testid="chat-travail-non-publie-traiter"
+                onClick={() => void traiterTravauxNonPublies()}
+                title="Ouvrir une conversation neuve avec un prompt pret a envoyer"
+              >
+                Traiter
+              </button>
+              <button
+                type="button"
+                data-testid="chat-travail-non-publie-ouvrir"
+                onClick={() => setListeNonPubliee((v) => !v)}
+                title="Lister ces travaux et lire leur diff"
+              >
+                Voir la liste
+              </button>
+              <button
+                type="button"
+                data-testid="chat-travail-non-publie-fermer"
+                className="chat-travail-non-publie__fermer"
+                onClick={() => setMessageNonPublieMasque(travailNonPublie)}
+                aria-label="Fermer cet avertissement"
+                title="Masquer jusqu’au prochain changement"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          {listeNonPubliee && <TravauxNonPublies onFermer={() => setListeNonPubliee(false)} />}
+
+          {appNotice && (
+            <div className="chat-workflow-notice" data-testid="chat-workflow-notice" role="alert">
+              <span>{appNotice.text}</span>
+              <button
+                type="button"
+                onClick={() => setAppNotice(null)}
+                aria-label="Fermer l’avertissement"
+              >
+                ×
+              </button>
             </div>
           )}
 
-          {activeDirectiveReceipts
-            .filter((receipt) => receipt.afterMessageIndex < 0)
-            .map((receipt) => (
-              <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
-            ))}
+          {deleteCandidate && (
+            <div
+              className="delete-confirm-layer"
+              role="presentation"
+              onClick={() => setDeleteCandidate(null)}
+            >
+              <section
+                className="delete-confirm-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-confirm-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="delete-confirm-orbit" aria-hidden="true">
+                  ✦
+                </div>
+                <span className="delete-confirm-kicker">ACTION IRRÉVERSIBLE</span>
+                <h2 id="delete-confirm-title">Supprimer la conversation ?</h2>
+                <p>
+                  <strong>« {deleteCandidate.title} »</strong> et son historique local seront
+                  retirés de cet appareil.
+                </p>
+                <div className="delete-confirm-actions">
+                  <button
+                    className="btn delete-confirm-cancel"
+                    onClick={() => setDeleteCandidate(null)}
+                    autoFocus
+                  >
+                    Garder la conversation
+                  </button>
+                  <button
+                    className="btn delete-confirm-danger"
+                    onClick={() => void confirmRemoveConv()}
+                  >
+                    Supprimer définitivement
+                  </button>
+                </div>
+              </section>
+            </div>
+          )}
 
-          {filRendu}
-        </div>
+          {bulkDeleteAsking && (
+            <div
+              className="delete-confirm-layer"
+              role="presentation"
+              onClick={() => setBulkDeleteAsking(false)}
+            >
+              <section
+                className="delete-confirm-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="bulk-delete-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <span className="delete-confirm-kicker">ACTION IRRÉVERSIBLE</span>
+                <h2 id="bulk-delete-title">Supprimer {selectedConvIds.size} conversations ?</h2>
+                <p>
+                  Leur historique local sera retiré de cet appareil. Les conversations non
+                  sélectionnées ne sont pas touchées.
+                </p>
+                {bulkDeleteError && <p className="c-danger">{bulkDeleteError}</p>}
+                <div className="delete-confirm-actions">
+                  <button
+                    className="btn delete-confirm-cancel"
+                    onClick={() => setBulkDeleteAsking(false)}
+                    autoFocus
+                  >
+                    Garder
+                  </button>
+                  <button
+                    className="btn delete-confirm-danger"
+                    onClick={() => void confirmBulkDelete()}
+                  >
+                    Supprimer définitivement
+                  </button>
+                </div>
+              </section>
+            </div>
+          )}
 
-        {(hasNewActivity || scrolledAwayFromTail) && (
-          <button
-            type="button"
-            className="chat-jump-latest"
-            onClick={() => {
-              followTailRef.current = true
-              setHasNewActivity(false)
-              setScrolledAwayFromTail(false)
-              if (scrollRef.current) scrollChatToBottom(scrollRef.current)
+          {deleteRunCandidate && (
+            <div
+              className="delete-confirm-layer"
+              role="presentation"
+              onClick={() => {
+                if (!runDeletePending) setDeleteRunCandidate(null)
+              }}
+            >
+              <section
+                className="delete-confirm-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="run-delete-confirm-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="delete-confirm-orbit" aria-hidden="true">
+                  ✦
+                </div>
+                <span className="delete-confirm-kicker">
+                  {deleteRunCandidate.scope === 'conv' &&
+                  deleteRunCandidate.run.session === 'attaché'
+                    ? 'PIÈCE JOINTE EXTERNE'
+                    : 'ACTION IRRÉVERSIBLE'}
+                </span>
+                <h2 id="run-delete-confirm-title">
+                  {deleteRunCandidate.scope === 'conv' &&
+                  deleteRunCandidate.run.session === 'attaché'
+                    ? 'Détacher ce RUN ?'
+                    : 'Supprimer ce RUN ?'}
+                </h2>
+                <p>
+                  <strong>« {deleteRunCandidate.run.subject} »</strong>{' '}
+                  {deleteRunCandidate.scope === 'conv' &&
+                  deleteRunCandidate.run.session === 'attaché'
+                    ? 'sera retiré de cette conversation. Son fichier externe restera intact.'
+                    : 'et sa trace locale seront supprimés de cet appareil.'}
+                </p>
+                {runDeleteError && <div className="attachment-error">⚠️ {runDeleteError}</div>}
+                <div className="delete-confirm-actions">
+                  <button
+                    className="btn delete-confirm-cancel run-delete-cancel"
+                    onClick={() => setDeleteRunCandidate(null)}
+                    disabled={runDeletePending}
+                    autoFocus
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    className="btn delete-confirm-danger run-delete-confirm"
+                    onClick={() => void confirmDeleteRun()}
+                    disabled={runDeletePending}
+                  >
+                    {runDeletePending
+                      ? 'Traitement…'
+                      : deleteRunCandidate.scope === 'conv' &&
+                          deleteRunCandidate.run.session === 'attaché'
+                        ? 'Détacher'
+                        : 'Supprimer définitivement'}
+                  </button>
+                </div>
+              </section>
+            </div>
+          )}
+
+          <div
+            className={`chat-scroll scroll-y${repriseEnCours ? ' chat-scroll--reprise' : ''}`}
+            ref={scrollRef}
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+            onScroll={(event) => {
+              const nearBottom = isChatNearBottom(event.currentTarget)
+              // La position de lecture se retient A CHAQUE mouvement : quitter une conversation ne
+              // passe pas toujours par un evenement de fermeture (switch, fermeture brutale de l'app).
+              if (activeRef.current)
+                memoriserPositionLecture(
+                  activeRef.current,
+                  event.currentTarget,
+                  mesurerMessagesRendus(event.currentTarget)
+                )
+              followTailRef.current = nearBottom
+              setScrolledAwayFromTail(!nearBottom)
+              if (nearBottom) setHasNewActivity(false)
             }}
           >
-            {hasNewActivity ? '↓ Dernière réponse' : '↓ Dernier message'}
-          </button>
-        )}
-
-        <ChatQueuePanel
-          pendingDirectives={pendingDirectives}
-          busy={busy}
-          interrupting={interruptingConversations.has(activeId ?? '')}
-          steeringDirectives={steeringDirectives}
-          interruptAndFlushQueue={interruptAndFlushQueue}
-          steerWithoutInterrupt={(directive) => void steerWithoutInterrupt(directive)}
-          moveQueuedMessage={moveQueuedMessage}
-          moveQueuedMessageToBtw={moveQueuedMessageToBtw}
-          restoreQueuedMessageToDraft={restoreQueuedMessageToDraft}
-        />
-        <ChatComposer
-          ref={composerRef}
-          busy={busy}
-          hasActiveConversation={Boolean(activeId)}
-          resumeAvailable={resumeAvailable}
-          attachmentCount={attachments.length}
-          mentionSources={mentionSources}
-          skillCommands={skillCommands}
-          ghostRecommendation={ghostRecommendation}
-          placeholderPendantTour={busy && activeId !== null}
-          onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
-          onDraftPresence={setBrouillonPresent}
-          onBtw={handleBtw}
-          onSend={() => send()}
-          onQueue={queueCurrentMessage}
-          onResume={() => void resumePilotTurn()}
-          onPaste={(files) => void addFiles(files)}
-          attachmentsNode={
-            attachments.length > 0 ? (
-              <div className="attachment-list pending">
-                {attachments.map((file, fileIndex) => (
-                  <span
-                    className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
-                    key={`${file.name}-${fileIndex}`}
+            {/* Chargement du fil : squelette pendant l'attente, bandeau ACTIONNABLE en cas d'échec.
+              Un fil vide muet ne disait pas la différence entre « rien à afficher » et « la
+              lecture a planté ». */}
+            {convLoad.status === 'loading' && (
+              <div className="conv-load-skeleton" role="status" aria-label="Chargement du fil…">
+                <span className="conv-load-skeleton-line" />
+                <span className="conv-load-skeleton-line" />
+                <span className="conv-load-skeleton-line" />
+              </div>
+            )}
+            {convLoad.status === 'error' && (
+              <div className="conv-load-error" role="alert">
+                <span className="conv-load-error-text">
+                  ⚠️ Conversation illisible : {convLoad.error}
+                </span>
+                {convLoad.target && (
+                  <button
+                    type="button"
+                    className="conv-load-retry"
+                    onClick={() => void loadConv(convLoad.target as Conv)}
                   >
-                    {file.kind === 'image' ? (
+                    ↻ Réessayer
+                  </button>
+                )}
+              </div>
+            )}
+
+            {convLoad.status === 'idle' &&
+              messages.length === 0 &&
+              (!busy || activeId === null) && (
+                <div className="chat-welcome">
+                  <div className="empty">
+                    <h3>Parle à l’agent</h3>
+                    <div className="c-faint">
+                      Il répond ET peut agir sur l’app (naviguer, créer une conversation, régler un
+                      rôle, ouvrir un graphe…). Ses actions apparaissent en direct.
+                    </div>
+                  </div>
+                  <div className="chat-suggest">
+                    <SuggestionGrid groups={homeSuggestions} onPick={pickSuggestion} />
+                  </div>
+                </div>
+              )}
+
+            {activeDirectiveReceipts
+              .filter((receipt) => receipt.afterMessageIndex < 0)
+              .map((receipt) => (
+                <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
+              ))}
+
+            {filRendu}
+          </div>
+
+          {(hasNewActivity || scrolledAwayFromTail) && (
+            <button
+              type="button"
+              className="chat-jump-latest"
+              onClick={() => {
+                followTailRef.current = true
+                setHasNewActivity(false)
+                setScrolledAwayFromTail(false)
+                if (scrollRef.current) scrollChatToBottom(scrollRef.current)
+              }}
+            >
+              {hasNewActivity ? '↓ Dernière réponse' : '↓ Dernier message'}
+            </button>
+          )}
+
+          <ChatQueuePanel
+            pendingDirectives={pendingDirectives}
+            busy={busy}
+            interrupting={interruptingConversations.has(activeId ?? '')}
+            steeringDirectives={steeringDirectives}
+            /* Enveloppe OBLIGATOIRE : passe directement, React lui donnerait l evenement
+               comme `cible` et le Stop viserait une conversation inexistante. */
+            interruptAndFlushQueue={() => interruptAndFlushQueue()}
+            steerWithoutInterrupt={(directive) => void steerWithoutInterrupt(directive)}
+            moveQueuedMessage={moveQueuedMessage}
+            moveQueuedMessageToBtw={moveQueuedMessageToBtw}
+            restoreQueuedMessageToDraft={restoreQueuedMessageToDraft}
+          />
+          <ChatComposer
+            ref={composerRef}
+            busy={busy}
+            hasActiveConversation={Boolean(activeId)}
+            resumeAvailable={resumeAvailable}
+            attachmentCount={attachments.length}
+            mentionSources={mentionSources}
+            skillCommands={skillCommands}
+            ghostRecommendation={ghostRecommendation}
+            placeholderPendantTour={busy && activeId !== null}
+            onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
+            onDraftPresence={setBrouillonPresent}
+            onBtw={handleBtw}
+            onSend={() => send()}
+            onQueue={queueCurrentMessage}
+            onResume={() => void resumePilotTurn()}
+            onPaste={(files) => void addFiles(files)}
+            attachmentsNode={
+              attachments.length > 0 ? (
+                <div className="attachment-list pending">
+                  {attachments.map((file, fileIndex) => (
+                    <span
+                      className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
+                      key={`${file.name}-${fileIndex}`}
+                    >
+                      {file.kind === 'image' ? (
+                        <button
+                          type="button"
+                          className="attachment-thumb-button"
+                          aria-label={`Agrandir ${file.name}`}
+                          title="Agrandir"
+                          onClick={() =>
+                            setOpenImage({
+                              src: `data:${file.mimeType};base64,${file.content}`,
+                              name: file.name
+                            })
+                          }
+                        >
+                          <img
+                            className="attachment-thumb"
+                            src={`data:${file.mimeType};base64,${file.content}`}
+                            alt={file.name}
+                          />
+                        </button>
+                      ) : (
+                        <span aria-hidden="true">▤</span>
+                      )}
+                      <span className="attachment-name">{file.name}</span>
+                      <small>{formatFileSize(file.size)}</small>
                       <button
                         type="button"
-                        className="attachment-thumb-button"
-                        aria-label={`Agrandir ${file.name}`}
-                        title="Agrandir"
                         onClick={() =>
-                          setOpenImage({
-                            src: `data:${file.mimeType};base64,${file.content}`,
-                            name: file.name
-                          })
+                          setDraftAttachments(composerDraftKeyRef.current, (current) =>
+                            current.filter((_, index) => index !== fileIndex)
+                          )
                         }
+                        aria-label={`Retirer ${file.name}`}
+                        title="Retirer"
                       >
-                        <img
-                          className="attachment-thumb"
-                          src={`data:${file.mimeType};base64,${file.content}`}
-                          alt={file.name}
-                        />
+                        ×
                       </button>
-                    ) : (
-                      <span aria-hidden="true">▤</span>
-                    )}
-                    <span className="attachment-name">{file.name}</span>
-                    <small>{formatFileSize(file.size)}</small>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDraftAttachments(composerDraftKeyRef.current, (current) =>
-                          current.filter((_, index) => index !== fileIndex)
-                        )
-                      }
-                      aria-label={`Retirer ${file.name}`}
-                      title="Retirer"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            ) : null
-          }
-          errorNode={
-            attachmentError ? <div className="attachment-error">{attachmentError}</div> : null
-          }
-          cadrageNode={
-            /* CADRAGE : ce sur quoi le run repose SANS l'avoir vérifié, montré pendant qu'il
+                    </span>
+                  ))}
+                </div>
+              ) : null
+            }
+            errorNode={
+              attachmentError ? <div className="attachment-error">{attachmentError}</div> : null
+            }
+            cadrageNode={
+              /* CADRAGE : ce sur quoi le run repose SANS l'avoir vérifié, montré pendant qu'il
                tourne. Ne bloque rien ; un clic pré-remplit le composer pour corriger. */
-            activeId && hypothesesCadrage[activeId]?.length ? (
-              <CadrageHypotheses
-                hypotheses={hypothesesCadrage[activeId]}
-                onCorriger={(amorce) => setDraftInput(composerDraftKeyRef.current, amorce)}
-                onMasquer={() =>
-                  setHypothesesCadrage((current) => {
-                    const suivant = { ...current }
-                    delete suivant[activeId]
-                    return suivant
-                  })
-                }
-              />
-            ) : null
-          }
-          frictionNode={
-            /* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
+              activeId && hypothesesCadrage[activeId]?.length ? (
+                <CadrageHypotheses
+                  hypotheses={hypothesesCadrage[activeId]}
+                  onCorriger={(amorce) => setDraftInput(composerDraftKeyRef.current, amorce)}
+                  onMasquer={() =>
+                    setHypothesesCadrage((current) => {
+                      const suivant = { ...current }
+                      delete suivant[activeId]
+                      return suivant
+                    })
+                  }
+                />
+              ) : null
+            }
+            frictionNode={
+              /* FRICTION : une série d'orchestrations sans livraison, visible AVANT la relance
                suivante. Ne bloque rien — la décision reste humaine. */
-            friction ? (
-              <div
-                className="composer-friction"
-                data-testid="friction-echecs-repetes"
-                role="status"
-              >
-                <span aria-hidden="true">⚠</span> {friction.message}
-              </div>
-            ) : null
-          }
-          leadingNode={
-            <>
-              <button
-                type="button"
-                className="attachment-button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={busy}
-                aria-label="Joindre des fichiers"
-                title="Joindre des fichiers"
-              >
-                <svg className="attachment-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="m7.55 15.45 7.16-7.16a1.25 1.25 0 0 1 1.77 1.77l-6.12 6.12"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-              <input
-                ref={fileInputRef}
-                className="attachment-input"
-                type="file"
-                multiple
-                onChange={(event) => {
-                  if (event.currentTarget.files) void addFiles(event.currentTarget.files)
-                  event.currentTarget.value = ''
-                }}
-                disabled={busy}
-              />
-            </>
-          }
-          stopNode={
-            /*
+              friction ? (
+                <div
+                  className="composer-friction"
+                  data-testid="friction-echecs-repetes"
+                  role="status"
+                >
+                  <span aria-hidden="true">⚠</span> {friction.message}
+                </div>
+              ) : null
+            }
+            leadingNode={
+              <>
+                <button
+                  type="button"
+                  className="attachment-button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={busy}
+                  aria-label="Joindre des fichiers"
+                  title="Joindre des fichiers"
+                >
+                  <svg
+                    className="attachment-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="m7.55 15.45 7.16-7.16a1.25 1.25 0 0 1 1.77 1.77l-6.12 6.12"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  className="attachment-input"
+                  type="file"
+                  multiple
+                  onChange={(event) => {
+                    if (event.currentTarget.files) void addFiles(event.currentTarget.files)
+                    event.currentTarget.value = ''
+                  }}
+                  disabled={busy}
+                />
+              </>
+            }
+            stopNode={
+              /*
               ARRÊTER ne doit dépendre de RIEN d'autre que « un tour est en cours » : ni du texte
               tapé, ni d'un état accessoire. Stop a donc son propre bouton, et il reste dans le
               parent — il ne dépend pas de la frappe.
             */
-            busy ? (
-              <button
-                className="btn composer-stop"
-                data-testid="composer-stop"
-                onClick={() => stopPilotTurn()}
-                disabled={!activeId || interruptingConversations.has(activeId ?? '')}
-                aria-label="Arrêter la réponse"
-                title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
-              >
-                {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : '■ Stop'}
-              </button>
-            ) : null
-          }
-          metaNode={
-            <div className="composer-meta">
-              <span className="composer-hint">
-                Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
-              </span>
-              <div className="composer-meta-actions">
-                <OrchestratorModelSelector
-                  busy={busy}
-                  catalogLoaded={modelCatalogLoaded}
-                  models={modelCatalog}
-                  binding={orchestratorBinding}
-                  pending={modelChangePending}
-                  error={modelChangeError}
-                  onSelect={(option) => void changeOrchestratorModel(option)}
-                />
-                <ConversationCostIndicator conversationId={activeId ?? undefined} busy={busy} />
-                <ModelQuotaIndicator
-                  provider={runtimeIdentity?.provider}
-                  contextGauge={activeId != null ? contextGauges[activeId] : undefined}
-                  busy={busy}
-                  onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
-                />
+              busy ? (
+                <button
+                  className="btn composer-stop"
+                  data-testid="composer-stop"
+                  onClick={() => stopPilotTurn()}
+                  disabled={!activeId || interruptingConversations.has(activeId ?? '')}
+                  aria-label="Arrêter la réponse"
+                  title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
+                >
+                  {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : '■ Stop'}
+                </button>
+              ) : null
+            }
+            metaNode={
+              <div className="composer-meta">
+                <span className="composer-hint">
+                  Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
+                </span>
+                <div className="composer-meta-actions">
+                  <OrchestratorModelSelector
+                    busy={busy}
+                    catalogLoaded={modelCatalogLoaded}
+                    models={modelCatalog}
+                    binding={orchestratorBinding}
+                    pending={modelChangePending}
+                    error={modelChangeError}
+                    onSelect={(option) => void changeOrchestratorModel(option)}
+                  />
+                  <ConversationCostIndicator conversationId={activeId ?? undefined} busy={busy} />
+                  <ModelQuotaIndicator
+                    provider={runtimeIdentity?.provider}
+                    contextGauge={activeId != null ? contextGauges[activeId] : undefined}
+                    busy={busy}
+                    onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
+                  />
+                </div>
               </div>
-            </div>
-          }
-        />
-      </section>
+            }
+          />
+        </section>
+      )}
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
       {showRuns && (

@@ -14,11 +14,14 @@ describe('navigation pendant une reponse', () => {
 
   it('laisse Nouveau accessible pendant la reflexion', () => {
     const newConversation = source.match(
-      /<button\s+className=\{`conv-new-row\$\{activeId === null \? ' active' : ''\}`\}[\s\S]*?onClick=\{newConv\}[\s\S]*?<\/button>/
+      // Le className et le onClick portent desormais la variante mosaique : on ancre sur la classe
+      // du bouton, pas sur sa forme exacte — l invariant teste est l absence de disabled={busy}.
+      /<button\s+className=\{`conv-new-row[\s\S]*?<\/button>/
     )?.[0]
 
     expect(newConversation).toBeDefined()
     expect(newConversation).not.toContain('disabled={busy}')
+    expect(newConversation).toContain('newConv()')
     expect(source.match(/function newConv\(\): void \{[\s\S]*?\n\s{2}\}/)?.[0]).not.toContain(
       'if (busy) return'
     )
