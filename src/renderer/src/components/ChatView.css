@@ -2565,22 +2565,45 @@ ol.md-list li {
 /* B3-γ — la carte d'activite porte la teinte de son statut (bord gauche + fond).
    Repris du parti pris tranche sur RunProgress, pour que le fil du chat lise comme la barre de
    phases d'un run : le point seul ne se voyait pas dans un fil dense. */
+/* DEGRADE, pas aplat : la teinte part du liseré de statut et s'éteint vers la droite. Un aplat
+   uniforme rendait la carte plate et faisait disparaître le liseré dans la masse — grief direct de
+   l'utilisateur (« l'actuel n'a pas les dégradés que tu m'avais montré »). */
 .activity-group {
   border-left: 2px solid color-mix(in srgb, var(--ok, #4ec9a5) 70%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--ok, #4ec9a5) 6%, transparent);
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--ok, #4ec9a5) 16%, transparent) 0%,
+    color-mix(in srgb, var(--ok, #4ec9a5) 4%, transparent) 45%,
+    transparent 85%
+  );
 }
 .activity-group[data-state='failed'] {
   border-left-color: var(--err, #ef6b6b);
-  background: color-mix(in srgb, var(--err, #ef6b6b) 10%, transparent);
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--err, #ef6b6b) 22%, transparent) 0%,
+    color-mix(in srgb, var(--err, #ef6b6b) 6%, transparent) 45%,
+    transparent 85%
+  );
 }
 .activity-group[data-state='running'] {
   border-left-color: var(--accent, #5b8cff);
-  background: color-mix(in srgb, var(--accent, #5b8cff) 9%, transparent);
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--accent, #5b8cff) 20%, transparent) 0%,
+    color-mix(in srgb, var(--accent, #5b8cff) 6%, transparent) 45%,
+    transparent 85%
+  );
 }
 .activity-group[data-state='interrupted'] {
   border-left-color: var(--warn, #e8a33d);
-  background: color-mix(in srgb, var(--warn, #e8a33d) 9%, transparent);
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--warn, #e8a33d) 20%, transparent) 0%,
+    color-mix(in srgb, var(--warn, #e8a33d) 6%, transparent) 45%,
+    transparent 85%
+  );
 }
 
 .activity-group[aria-disabled='true'] {
@@ -3147,10 +3170,61 @@ ol.md-list li {
 }
 .activity-step {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 3px;
   font-size: 11.5px;
   color: var(--muted, #9aa4b2);
+}
+/* La ligne cliquable de l'etage : pastille, libelle, CIBLE, puis le chevron pousse a droite. */
+.activity-step-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* La CIBLE porte l'information « sur quoi » ; elle s'efface avant le libelle quand la place manque. */
+.activity-step-target {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.78;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+}
+/* Un chevron par etage : « un bouton pour extend et voir le detail de chaque step ». */
+.activity-step-toggle {
+  flex: none;
+  margin-left: auto;
+  padding: 0 5px;
+  border: 1px solid var(--line2, #31373f);
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.activity-step-toggle:hover {
+  border-color: var(--accent, #5b8cff);
+  color: var(--accent, #5b8cff);
+}
+/* Detail d'UNE etape, plafonne comme le reste du fil : au-dela, on noie la reponse. */
+.activity-step-detail {
+  margin: 0 0 4px 22px;
+  padding: 6px 8px;
+  max-height: 180px;
+  overflow: auto;
+  border-left: 2px solid var(--line2, #31373f);
+  border-radius: 0 5px 5px 0;
+  background: rgb(0 0 0 / 22%);
+  color: var(--muted, #9aa4b2);
+  white-space: pre-wrap;
+  font-size: 10.5px;
+}
+.activity-step-detail.failed {
+  border-left-color: var(--err, #ef6b6b);
 }
 .activity-step[data-state='ko'] {
   color: var(--err, #ef6b6b);

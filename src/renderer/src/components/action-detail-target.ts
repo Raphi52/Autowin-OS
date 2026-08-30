@@ -132,6 +132,22 @@ function resumeMemoire(data: Record<string, unknown>): string | undefined {
 export function localActionDetails(actions: readonly ActionLike[]): LocalActionDetail[] {
   const details: LocalActionDetail[] = []
   for (const action of actions) {
+    const detail = localActionDetail(action)
+    if (detail) details.push(detail)
+  }
+  return details
+}
+
+/**
+ * Detail lisible d'UNE action, ou `undefined` s'il n'y a rien a montrer.
+ *
+ * Extrait de `localActionDetails` (dont il est desormais le corps) parce que le fil deplie
+ * maintenant CHAQUE etape separement : la liste agregee ne dit pas a QUELLE action appartient
+ * chaque entree — elle SAUTE les actions sans detail, donc ses index ne s'alignent plus sur ceux
+ * des etages. Deplier l'etape 2 avec le detail de l'etape 1 serait un mensonge d'interface.
+ */
+export function localActionDetail(action: ActionLike): LocalActionDetail | undefined {
+  {
     /**
      * `data` n'est PAS toujours un objet. Un `edit_file` en echec rend une CHAINE — verifie dans les
      * messages reels (conv-1308, conv-1326) : « Le bureau edit_file a ete conserve : publication
@@ -142,14 +158,13 @@ export function localActionDetails(actions: readonly ActionLike[]): LocalActionD
      */
     if (typeof action.data === 'string') {
       const brut = action.data.trim()
-      if (!brut) continue
+      if (!brut) return undefined
       const texte = resumeLisible(brut)
-      if (!texte) continue
-      details.push({ name: action.name, text: texte, ok: action.ok !== false })
-      continue
+      if (!texte) return undefined
+      return { name: action.name, text: texte, ok: action.ok !== false }
     }
     const data = asRecord(action.data)
-    if (!data) continue
+    if (!data) return undefined
     const ok = action.ok !== false && data.allowed !== false
     // Un refus explique POURQUOI : c'est l'information la plus utile du lot.
     const reason = typeof data.reason === 'string' ? data.reason : undefined
@@ -192,8 +207,7 @@ export function localActionDetails(actions: readonly ActionLike[]): LocalActionD
             .join('\n')
         : undefined) ??
       knowledge
-    if (!text || !text.trim()) continue
-    details.push({ name: action.name, text: text.trim(), ok })
+    if (!text || !text.trim()) return undefined
+    return { name: action.name, text: text.trim(), ok }
   }
-  return details
 }
