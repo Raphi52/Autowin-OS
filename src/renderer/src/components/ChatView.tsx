@@ -81,10 +81,7 @@ import {
 } from './position-lecture'
 import {
   conversationsRecentes,
-  doitAfficherRecentes,
-  GROUPE_RECENTES,
   recenceUtilisateur,
-  RECENTES_AFFICHEES,
   searchConversations,
   trierParRecenceUtilisateur
 } from './conversation-search'
@@ -2499,42 +2496,6 @@ export function ChatView({
     [conversationHits, groupesReplies, conversationDateOrder]
   )
 
-  /**
-   * « Récentes » est une CATÉGORIE comme les autres — même en-tête pliable, même compteur, mêmes
-   * lignes. Un bloc au style propre au milieu de la liste jurait (retour utilisateur du 2026-08-18).
-   *
-   * Elle est PRÉPOSÉE à la liste au lieu d'être classée par `ordonnerGroupes` : ce module range par
-   * nature (dossier → divers → auto-kaizen) avant la date, et c'est précisément ce rang — délibéré,
-   * il protège l'arborescence — qui enterrait la conversation la plus récente au rang 172 sur 182.
-   * On ne renverse donc pas son ordre : on ajoute une catégorie devant.
-   *
-   * Absente pendant une recherche : la liste filtrée EST déjà la réponse.
-   */
-  const groupesAvecRecentes = useMemo(() => {
-    if (convQuery.trim() || conversationHits.length === 0) return groupes
-    const parId = new Map(conversationHits.map((hit) => [hit.conversation.id, hit]))
-    const items = conversationsRecentes(convs, RECENTES_AFFICHEES)
-      .map((conversation) => parId.get(conversation.id))
-      .filter((hit): hit is (typeof conversationHits)[number] => hit !== undefined)
-      .map((hit) => ({
-        id: hit.conversation.id,
-        projectPath: hit.conversation.projectPath,
-        autoKaizen: hit.conversation.autoKaizen,
-        hit
-      }))
-    if (items.length === 0) return groupes
-    // Pas de DOUBLON inutile : si la plus récente ouvre déjà la liste, la catégorie n'a plus d'objet.
-    // Sur une liste courte elle rejouait la liste entière — 6 titres pour 3 conversations.
-    if (!doitAfficherRecentes(items[0].id, groupes[0]?.items[0]?.id, conversationDateOrder))
-      return groupes
-    // `kind: 'divers'` à dessein : un dépôt par glisser sur cet en-tête ne voudrait rien dire
-    // (« récentes » n'est pas un dossier), et `conversation-groups` réserve le dépôt aux dossiers.
-    return [
-      { key: GROUPE_RECENTES, label: 'Récentes', kind: 'divers' as const, depth: 0, items },
-      ...groupes
-    ]
-  }, [groupes, conversationHits, convs, convQuery, conversationDateOrder])
-
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length
   /**
@@ -2721,7 +2682,7 @@ export function ChatView({
           {convs.length > 0 && conversationHits.length === 0 && (
             <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
           )}
-          {groupesAvecRecentes.map((groupe) => {
+          {groupes.map((groupe) => {
             const replie = estReplie(groupe.key, groupesReplies)
             return (
               <Fragment key={groupe.key}>

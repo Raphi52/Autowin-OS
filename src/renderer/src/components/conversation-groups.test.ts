@@ -216,8 +216,15 @@ describe('ordre des groupes quand la date entre en jeu', () => {
     // Entree discriminante : sa date (999) est la plus haute de toutes.
     const ordonnes = ordonnerGroupes(groupes(), dateDe, 'desc')
     expect(ordonnes.at(-1)?.kind).toBe('kaizen')
-    expect(ordonnes.at(-2)?.kind).toBe('divers')
-    expect(ordonnes.map((g) => g.kind).slice(0, 3)).toEqual(['dossier', 'dossier', 'dossier'])
+  })
+
+  it('« Divers » remonte en TETE quand il porte le dernier message', () => {
+    // Regle changee le 2026-08-30 sur demande utilisateur : « Divers » n'est plus enterre sous les
+    // dossiers. Sa date (950) bat AUTRE (500) et PARENT (100), il ouvre donc la liste — c'est la ou
+    // l'utilisateur vient d'ecrire. Seul « Auto-kaizen » (999) reste au fond malgre sa date.
+    const cles = ordonnerGroupes(groupes(), dateDe, 'desc').map((g) => g.key)
+    expect(cles[0]).toBe(GROUPE_DIVERS)
+    expect(cles.at(-1)).toBe(GROUPE_KAIZEN)
   })
 
   it('un sous-dossier RECENT reste sous son parent, jamais au-dessus', () => {
@@ -225,7 +232,7 @@ describe('ordre des groupes quand la date entre en jeu', () => {
     // premier, indente comme s'il etait niche sous un groupe qui n'est pas le sien.
     const cles = ordonnerGroupes(groupes(), dateDe, 'desc').map((g) => g.key)
     expect(cles.indexOf(PARENT)).toBeLessThan(cles.indexOf(ENFANT))
-    expect(cles.slice(0, 3)).toEqual([AUTRE, PARENT, ENFANT])
+    expect(cles.slice(1, 4)).toEqual([AUTRE, PARENT, ENFANT])
   })
 
   it('la date arbitre bien entre freres, dans les deux sens', () => {

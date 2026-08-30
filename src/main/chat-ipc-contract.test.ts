@@ -249,4 +249,14 @@ describe('renderer chat IPC contract', () => {
       /activeChatTurns\.delete\(conversationId, controller\)[\s\S]*?scope: 'conversations'/
     )
   })
+
+  it("l'envoi d'un message rafraichit la LISTE, pas seulement le fil", () => {
+    // Defaut constate le 2026-08-30 : « j'ecris dans cette conversation, ca ne la met pas tout en
+    // haut ». Seul `scope: 'chat'` etait diffuse au debut du tour ; la barre laterale gardait donc
+    // un `lastUserMessageAt` perime jusqu'a la FIN du tour. Le tri etait juste, la donnee arrivait
+    // tard. On exige que les DEUX portees partent au meme endroit, dans cet ordre.
+    expect(readChatContractSources().main).toMatch(
+      /scope: 'chat', convId: conversationId \}\)[\s\S]{0,700}?broadcast\(\{ type: 'refresh', scope: 'conversations' \}\)/
+    )
+  })
 })

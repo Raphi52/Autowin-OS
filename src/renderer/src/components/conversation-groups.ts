@@ -167,8 +167,12 @@ export function ordonnerGroupes<T extends ConversationLike>(
     else racines.push(groupe)
   }
 
-  const rang = (g: ConversationGroup<T>): number =>
-    g.kind === 'dossier' ? 0 : g.kind === 'divers' ? 1 : 2
+  // Seul « Auto-kaizen » garde un rang : c'est du BRUIT automatique, il descend toujours. Entre un
+  // dossier et « Divers », c'est la DATE qui tranche — demande utilisateur du 2026-08-30 : « la ou
+  // j'ai ecrit le dernier message ca la remonte en tete de liste ». Une conversation sans dossier
+  // tombait derriere TOUT le contenu des dossiers, ce qui avait impose une categorie « Recentes »
+  // en doublon ; la categorie est retiree, la regle de tri corrigee a sa source.
+  const rang = (g: ConversationGroup<T>): number => (g.kind === 'kaizen' ? 1 : 0)
 
   const sortie: ConversationGroup<T>[] = []
   const emettre = (groupe: ConversationGroup<T>): void => {

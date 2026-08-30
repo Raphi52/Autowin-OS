@@ -4008,6 +4008,11 @@ Le fil reprend ensuite normalement.`
         // (« je devrais directement voir notre message partir », 14/08) : le tour vient d'être
         // persisté (user + assistant streaming), on prévient la vue tout de suite.
         broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+        // ... et la LISTE aussi. Le fil seul se rafraichissait : la barre laterale garde alors un
+        // `lastUserMessageAt` perime jusqu'a la FIN du tour (le seul autre refresh 'conversations',
+        // dans le `finally`), donc ecrire ici ne remontait PAS la conversation en tete — constate
+        // par l'utilisateur le 2026-08-30. Le tri est correct, c'est la donnee qui arrivait tard.
+        broadcast({ type: 'refresh', scope: 'conversations' })
       }
       const applyDurableEvent = (pilotEvent: PilotEvent): void => {
         if (!conversationId || !os.conversations.get(conversationId)) return
