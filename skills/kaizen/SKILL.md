@@ -16,7 +16,9 @@ description: >-
   ranked table (blind spot · anchor · proposed rule · integration point); (4) STATE the edits it is about to make, in plain words, so they are readable BEFORE and revertable after; then (5) INTEGRATE them itself — no approval wait — preferring
   a WIRED trigger (hook + CLAUDE.md hard rule) over a passive memory fiche (loading ≠ applying — a fiche alone
   was violated twice the same session), VERIFY each edited hook with an out-of-model signal (parse + behavior +
-  negative control), then run your local Autowin clone's `sync-kit.ps1` (live→package) and log the treated signature to
+  negative control), then prove NON-RECURRENCE — replay the exact failing situation against the installed
+  fix and show it now BLOCKED (« ça ne doit pas se reproduire » : an edit that cannot be shown to stop the
+  ORIGINAL failure is not a fix), then run your local Autowin clone's `sync-kit.ps1` (live→package) and log the treated signature to
   `kaizen-treated.jsonl`. Mechanics are CANONICAL in `_engine/ENGINE.md` + `judge` Mode B; kaizen carries only
   the delta: target-location, the self-applied integrate step, sync-kit, and the one-commit-per-edit constraint.
   Trigger on "kaizen this session", "improve the kit from my recurring failures", "audit
@@ -30,7 +32,10 @@ description: >-
 # kaizen — improve the system from its own failures (behavioral audit → state → integrate → verify)
 
 ## Purpose
-**Make the SYSTEM learn from its own failures — so the same mistake doesn't recur next session.** Turn a
+**Make the SYSTEM learn from its own failures — so the same mistake doesn't recur next session.**
+The acceptance criterion is NON-RECURRENCE, not insight: « ça ne doit pas se reproduire ». A finding is only
+treated when the ORIGINAL failing situation, replayed against the installed fix, is now BLOCKED or corrected —
+naming the defect, understanding it, or writing a rule about it changes nothing until that replay is shown. Turn a
 session's blind spots (defects Claude hit, corrections the user gave) into VERIFIED, SELF-APPLIED edits to
 the kit (CLAUDE.md reflexes / hooks / skills / memory) that change FUTURE behavior. It APPLIES its own edits, each in a DEDICATED commit and each backed by an out-of-model verification — the garde-fou is revertability, not a wait.
 
@@ -70,6 +75,7 @@ the kit (CLAUDE.md reflexes / hooks / skills / memory) that change FUTURE behavi
    - **Trim-or-replace, don't just append (kaizen 2026-06-19)** — the constitution/memory has a FINITE attention budget (loading ≠ applying). Every reflex/fiche ADDED must FOLD into an existing one (extend a clause) or RETIRE/merge a stale one — never proliferate a new number for what an existing reflex already frames. A growing rule-count dilutes attention to ALL rules; prefer one tight clause over a new reflex.
    - **VERIFY each edited hook out-of-model** via `~/.claude/hooks/test-hooks.ps1` (per hook: parses, fires on the right input, SILENT on the negative control — it catches a closure hook gone fail-open). Extend its fixtures when you add/edit a hook, and add a `check: powershell -NoProfile -File <…>\hooks\test-hooks.ps1` line to the RUN so closure re-runs it. Never break the closure-authority hooks.
    - **Propagate**: run `sync-kit.ps1` from your local Autowin clone (live→package) after editing any live skill/ENGINE/hook/output-style; a NEW file (skill/hook) must also be ADDED to the sync-kit manifest + the README install steps (the manifest is a fixed list — new items are silently missed otherwise).
+   - **PROVE NON-RECURRENCE (CARDINAL — the closing test)**: for EACH installed edit, rebuild the exact situation that produced the defect (the quoted anchor turned into an input: same hook payload, same prompt shape, same RUN/gate configuration) and replay it. The fix holds only if the replay is now REFUSED / corrected / flagged, AND a negative control that must stay silent still passes. A fix that only reads well, or whose original scenario cannot be replayed, is declared as such (« non rejoué ») — never as treated. If the replay still reproduces the defect, the edit is INSUFFICIENT: escalate the enforcement (fiche → hard rule → wired hook) instead of restating the rule.
    - **Close the loop**: append the mandatory JSONL line to `~/.claude/kaizen-treated.jsonl` (schema in **Output**).
 
 ## Output
@@ -85,13 +91,14 @@ The deliverable is the STATE table (presented in PLAIN words) + the integrated e
 `{"gate":"<fix-gate|anti-flaky|stop>","treatedCount":<count at treatment>,"ts":"<iso>","note":"<what changed>"}`
 `gate` + `treatedCount` are REQUIRED: `kaizen-nudge.ps1` filters by `gate` and reads `treatedCount` to gate the re-nudge (≥ +5) — a line missing either silently breaks the anti-spam. The nudge then goes silent on the resolved (re-nudge only if the count climbs ≥ +5 again).
 
-**Done** — recap in plain words: root cause, what was integrated + where, what was VERIFIED (the out-of-model signal), caveats. **Never report "integrated/done"** without the verification artifact. The net is the commit log: each edit revertable alone.
+**Done** — recap in plain words: root cause, what was integrated + where, what was VERIFIED (the out-of-model signal), **the non-recurrence replay per edit** (situation rejouée → résultat: bloqué / corrigé / non rejoué), caveats. **Never report "integrated/done"** without the verification artifact. The net is the commit log: each edit revertable alone.
 
 ## Don't
 - **The silent edit** — kaizen APPLIES, but never invisibly: an edit that does not appear in the STATE table, or that lands mixed into another commit, is a defect (the user must be able to see it and revert it alone).
 - **Reimplement the audit** — reuse `judge` Mode B; kaizen orchestrates, it doesn't re-derive the lens machinery.
 - **Trust a lens's word** — adjudicate; reject a finding that re-flags a deliberate decision or overstates; edit on the REAL file, never a sub-agent's report.
 - **Prefer a passive fiche to a WIRED trigger** — loading ≠ applying; a hook + hard rule beats a memory fiche alone.
+- **Declare a finding treated without the non-recurrence replay** — « ça ne doit pas se reproduire » is the bar: an edit whose original failing scenario was never replayed against it is "installé, non prouvé", not treated. Restating a rule that already failed once is not an escalation.
 - **Report "integrated/done"** without the out-of-model verification (`test-hooks.ps1`) AND `sync-kit.ps1` propagation AND the `kaizen-treated.jsonl` line.
 
 ## Engine & reflexes
