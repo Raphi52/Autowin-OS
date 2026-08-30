@@ -217,7 +217,7 @@ export function ChatView({
   const convsRef = useRef<Conv[]>([])
   convsRef.current = convs
   const [convQuery, setConvQuery] = useState('')
-  const [conversationDateOrder, setConversationDateOrder] = useState<'desc' | 'asc'>('desc')
+  const conversationDateOrder: 'desc' | 'asc' = 'desc'
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Msg[]>([])
   /**
