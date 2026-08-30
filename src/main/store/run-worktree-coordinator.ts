@@ -1,3 +1,4 @@
+import { pendantOperation } from '../gel-main'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import type { VerdictBureau } from './verdict-bureau'
@@ -2991,7 +2992,11 @@ export class RunWorktreeCoordinator {
   demarrerLeBalayageAutomatique(): void {
     if (this.balayageTimer) return
     this.balayageTimer = setInterval(() => {
-      void this.repecherLesTravauxEnAttente().catch((error) => this.recordRecoveryFailure(error))
+      // DECLARE au detecteur de gel : un balayage periodique est un candidat naturel aux gels en
+      // rafale, et un gel anonyme ne se corrige pas.
+      void pendantOperation('timer:coordinator:repecherTravauxEnAttente', () =>
+        this.repecherLesTravauxEnAttente().catch((error) => this.recordRecoveryFailure(error))
+      )
     }, INTERVALLE_BALAYAGE_MS)
     this.balayageTimer.unref?.()
   }

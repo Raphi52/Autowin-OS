@@ -24,6 +24,7 @@ import { readGitGraph } from './git-graph-main'
 import {
   cloreDemarrage,
   instrumenterCanauxIpc,
+  pendantOperation,
   marquerOperation as marquerOperationDemarrage
 } from './gel-main'
 
@@ -5041,7 +5042,16 @@ Le fil reprend ensuite normalement.`
       }
     })
   autoKaizenSupervisor?.resumePending()
-  const autoKaizenResumeTimer = setInterval(() => autoKaizenSupervisor?.resumePending(), 15_000)
+  /*
+   * DECLARE au detecteur de gel. Mesure du 2026-08-30 : les gels de 6 a 10 s reviennent en RAFALES
+   * espacees d'une dizaine de secondes — la cadence de CE minuteur. `resumePending` traverse
+   * `persist()`, donc `archiveIncidents` + `saveSnapshot`, deux ecritures SYNCHRONES. Suspect, pas
+   * coupable : on le NOMME d'abord, on corrigera ce que le journal designe.
+   */
+  const autoKaizenResumeTimer = setInterval(
+    () => pendantOperation('timer:autoKaizen:resumePending', () => autoKaizenSupervisor?.resumePending()),
+    15_000
+  )
   autoKaizenResumeTimer.unref()
 
   /**
@@ -5055,7 +5065,9 @@ Le fil reprend ensuite normalement.`
    */
   const balayagePeriodiqueTimer = setInterval(
     () => {
-      void os.worktrees?.balayerLesCopiesAbandonnees()
+      void pendantOperation('timer:balayage:copiesAbandonnees', () =>
+        os.worktrees?.balayerLesCopiesAbandonnees()
+      )
     },
     60 * 60 * 1_000
   )
