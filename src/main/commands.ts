@@ -1,4 +1,5 @@
 import { applyEdit, decideEdit, decoderUtf8, editDiff, refusSiPasUtf8 } from './edit-file-command'
+import { decisionDeSynchronisation } from './synchronisation-cible-bureau'
 import { pendantOperation } from './gel-main'
 import { rechargerEnv } from './env-reload'
 import { autorisationsLuesDans, decisionDeCommande } from './autorisation-commande'
@@ -3010,6 +3011,25 @@ export class AppCommandBus {
       ? await this.os.worktrees.beginAsync(runId, `Commande ${command}`, true, beginOptions)
       : this.os.worktrees.begin(runId, `Commande ${command}`, true, beginOptions)
     if (!workspaceRoot) throw new Error(refusAvecIssue('isolation-indisponible', command))
+    /*
+     * LE BUREAU EST RESYNCHRONISE SUR LA CIBLE NOMMEE — voir `synchronisation-cible-bureau.ts`.
+     *
+     * Le bureau est cree sur `baseSha` et EXCLUT les fichiers non committes
+     * (`excludedDirtyFiles`), alors que l'agent lit l'espace de travail VIVANT (`read_file`).
+     * Sans ce geste, `edit_file` edite une copie PERIMEE : soit l’extrait est « introuvable »,
+     * soit — pire — il existe des deux cotes et l’edition publiee ECRASE le travail non
+     * committe. Un seul fichier est copie, celui que la tache NOMME ; le reste du bureau
+     * demeure isole.
+     */
+    if (command === 'edit_file' && typeof cible === 'string' && cible.trim()) {
+      const synchro = decisionDeSynchronisation(
+        cible,
+        this.os.executionWorkspace,
+        workspaceRoot,
+        (chemin) => (existsSync(chemin) ? readFileSync(chemin) : undefined)
+      )
+      if (synchro.action === 'copier') copyFileSync(synchro.cheminWorkspace, synchro.cheminBureau)
+    }
     let completed = false
     try {
       let result: Awaited<T> = await action(workspaceRoot)
