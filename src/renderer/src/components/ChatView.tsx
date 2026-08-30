@@ -28,7 +28,6 @@ import {
   reduceAssistantPilotEvent,
   settleIfDone,
   resolveChatRuntimeIdentity,
-  phaseLabel,
   parseBtw,
   skillSlashCommands,
   type SlashCommand,
@@ -192,6 +191,18 @@ function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
         }
       : { ...hydrateStoredAssistant(m as StoredAssistantMessage), messageId: m.messageId }
   )
+}
+
+/**
+ * Haut de CHAQUE message rendu, relatif au conteneur de défilement — l'ancre structurelle de la
+ * reprise de lecture. `offsetTop` est relatif au parent positionné : on le ramène au conteneur en
+ * retranchant le sien, ce qui reste juste même si un ancêtre intermédiaire est positionné.
+ */
+export function mesurerMessagesRendus(conteneur: HTMLElement): { offsetTop: number }[] {
+  const hautConteneur = conteneur.getBoundingClientRect().top + conteneur.scrollTop
+  return Array.from(conteneur.querySelectorAll<HTMLElement>('.msg')).map((element) => ({
+    offsetTop: Math.round(element.getBoundingClientRect().top + conteneur.scrollTop - hautConteneur)
+  }))
 }
 
 export function ChatView({
@@ -1294,7 +1305,11 @@ export function ChatView({
       positionARestaurerRef.current = null
       followTailRef.current = false
       setScrolledAwayFromTail(true)
-      requestAnimationFrame(() => restaurerPositionLecture(scroll, aRestaurer))
+      requestAnimationFrame(() =>
+        restaurerPositionLecture(scroll, aRestaurer, requestAnimationFrame, 20, undefined, () =>
+          mesurerMessagesRendus(scroll)
+        )
+      )
       return
     }
     if (!followTailRef.current) {
@@ -2152,6 +2167,21 @@ export function ChatView({
     // la latence du classifieur de routage. Ce commit reste local jusqu'à pilotChat.
     if (sourceConversationId) liveMessagesRef.current.set(sourceConversationId, optimisticHistory)
     if (activeRef.current === sourceConversationId) setMessages(optimisticHistory)
+    // La LISTE se reordonne au meme instant que le fil. Sans cela, la recence utilisee par la barre
+    // laterale (`lastUserMessageAt`) n'arrive qu'au refresh diffuse par le main, donc la conversation
+    // ou l'on vient d'ecrire ne remontait pas en tete — constate le 2026-08-30, capture a l'appui.
+    // Valeur OPTIMISTE assumee : le prochain rafraichissement du store l'ecrase par la vraie date.
+    if (sourceConversationId) {
+      const ecritA = Date.now()
+      const rafraichir = (liste: Conv[]): Conv[] =>
+        liste.map((conversation) =>
+          conversation.id === sourceConversationId
+            ? { ...conversation, lastUserMessageAt: ecritA, updatedAt: ecritA }
+            : conversation
+        )
+      convsRef.current = rafraichir(convsRef.current)
+      setConvs(rafraichir)
+    }
     if (!keepComposerDraft) {
       setDraftInput(sendDraftKey, '')
       setDraftAttachments(sendDraftKey, () => [])
@@ -2623,21 +2653,6 @@ export function ChatView({
             </button>
           )}
         </div>
-        <button
-          type="button"
-          className="conv-date-sort"
-          aria-label={
-            conversationDateOrder === 'desc'
-              ? 'Trier les conversations des plus anciennes aux plus récentes'
-              : 'Trier les conversations des plus récentes aux plus anciennes'
-          }
-          onClick={() =>
-            setConversationDateOrder((current) => (current === 'desc' ? 'asc' : 'desc'))
-          }
-        >
-          <span aria-hidden="true">{conversationDateOrder === 'desc' ? '↓' : '↑'}</span>
-          {conversationDateOrder === 'desc' ? 'Plus récentes' : 'Plus anciennes'}
-        </button>
         <div className="conv-bulk-bar">
           <button
             type="button"
@@ -3335,7 +3350,12 @@ export function ChatView({
             const nearBottom = isChatNearBottom(event.currentTarget)
             // La position de lecture se retient A CHAQUE mouvement : quitter une conversation ne
             // passe pas toujours par un evenement de fermeture (switch, fermeture brutale de l'app).
-            if (activeRef.current) memoriserPositionLecture(activeRef.current, event.currentTarget)
+            if (activeRef.current)
+              memoriserPositionLecture(
+                activeRef.current,
+                event.currentTarget,
+                mesurerMessagesRendus(event.currentTarget)
+              )
             followTailRef.current = nearBottom
             setScrolledAwayFromTail(!nearBottom)
             if (nearBottom) setHasNewActivity(false)
