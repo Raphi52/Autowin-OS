@@ -2653,21 +2653,6 @@ export function ChatView({
             </button>
           )}
         </div>
-        <button
-          type="button"
-          className="conv-date-sort"
-          aria-label={
-            conversationDateOrder === 'desc'
-              ? 'Trier les conversations des plus anciennes aux plus récentes'
-              : 'Trier les conversations des plus récentes aux plus anciennes'
-          }
-          onClick={() =>
-            setConversationDateOrder((current) => (current === 'desc' ? 'asc' : 'desc'))
-          }
-        >
-          <span aria-hidden="true">{conversationDateOrder === 'desc' ? '↓' : '↑'}</span>
-          {conversationDateOrder === 'desc' ? 'Plus récentes' : 'Plus anciennes'}
-        </button>
         <div className="conv-bulk-bar">
           <button
             type="button"
