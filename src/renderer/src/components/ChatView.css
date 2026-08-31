@@ -3446,3 +3446,46 @@ ol.md-list li {
   line-height: 1.5;
   color: var(--text-dim, #a9b2c4);
 }
+
+/* Interrupteur de vue liste <-> mosaique — deplace depuis ui-system.css, qui ne porte que
+   des primitives reutilisables (contrat ui-system.test.ts). Consomme par ChatView.tsx. */
+/* Squelette du switch et de la mosaique : habillage fin a faire en design. */
+/* UN SEUL interrupteur (demande du 2026-08-30) : liste <-> mosaique, pas deux boutons segmentes. */
+.conv-view-toggle {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(212, 169, 79, 0.45);
+  border-radius: 999px;
+  background: rgba(212, 169, 79, 0.08);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+.conv-view-toggle:hover {
+  border-color: var(--gold);
+}
+.conv-view-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--gold-doux);
+  opacity: 0.75;
+  transition:
+    left 120ms ease,
+    opacity 120ms ease;
+}
+.conv-view-toggle[aria-checked='true'] {
+  border-color: var(--gold);
+  background: rgba(233, 189, 78, 0.18);
+}
+.conv-view-toggle[aria-checked='true'] .conv-view-toggle-knob {
+  left: 18px;
+  background: var(--gold-bright);
+  opacity: 1;
+}

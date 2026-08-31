@@ -1,0 +1,194 @@
+/* Styles PROPRES a la mosaique multi-chat. Ils vivaient dans ui-system.css, qui ne doit
+   porter QUE des primitives reutilisables (contrat teste par ui-system.test.ts). */
+/* MOSAIQUE MULTI-CHAT — remplace la zone de chat ; la liste de gauche reste, car c'est elle
+   qui sert a OUVRIR une fenetre de plus. Les colonnes sont posees en ligne par ChatMosaic. */
+.chat-mosaic {
+  flex: 1 1 auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+}
+/* 1 ou 2 fenetres = UNE seule rangee : elle prend TOUTE la hauteur disponible (demande
+   utilisateur du 30/08) au lieu d etre collee en haut a 320 px. */
+.chat-mosaic[data-count='1'],
+.chat-mosaic[data-count='2'] {
+  align-content: stretch;
+  grid-auto-rows: 1fr;
+}
+.chat-mosaic[data-count='1'] .chat-mosaic-window,
+.chat-mosaic[data-count='2'] .chat-mosaic-window {
+  min-height: 0;
+  max-height: none;
+}
+.chat-mosaic-vide {
+  flex: 1 1 auto;
+  padding: 16px;
+  font-size: 13px;
+  opacity: 0.6;
+}
+.chat-mosaic-window {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  max-height: calc(100vh - 160px);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
+  overflow: hidden;
+  /* OPAQUE : sur le fond cosmique, un panneau transparent rend le texte illisible (retour
+     utilisateur du 30/08). Meme surface que les autres panneaux de l'app. */
+  background: var(--surface-panel);
+  box-shadow: var(--container-shadow);
+}
+/* Tour EN COURS : bordure or TRES discrete, pour ne pas concurrencer l or vif de la fin de tour. */
+.chat-mosaic-window[data-etat='occupe'] {
+  border-color: rgba(212, 169, 79, 0.28);
+}
+/* Tour TERMINE, pas encore repris : bordure OR VIF, reperable en un coup d oeil. */
+.chat-mosaic-window[data-etat='attention'] {
+  border-color: rgba(227, 186, 85, 0.5);
+}
+/* Le CADRE dore anime : un anneau conique pose SUR la bordure, dont un eclat BLANC fait le TOUR
+   du cadre (demande utilisateur du 30/08 : « que du blanc fasse le tour du cadre »). Le masque
+   'exclude' evide l interieur pour ne peindre QUE le lisere — sans voiler le contenu. */
+@property --mosaic-shiny-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+.chat-mosaic-window[data-etat='attention']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  padding: 2px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--mosaic-shiny-angle),
+    rgba(212, 169, 79, 0.55) 0%,
+    rgba(227, 186, 85, 0.75) 10%,
+    #fffdf5 15%,
+    #ffffff 17%,
+    #fff3c4 20%,
+    rgba(227, 186, 85, 0.75) 28%,
+    rgba(212, 169, 79, 0.55) 45%,
+    rgba(212, 169, 79, 0.55) 100%
+  );
+  animation: chat-mosaic-shiny 2.8s linear infinite;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+@keyframes chat-mosaic-shiny {
+  from {
+    --mosaic-shiny-angle: 0deg;
+  }
+  to {
+    --mosaic-shiny-angle: 360deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-mosaic-window[data-etat='attention']::after {
+    animation: none;
+  }
+}
+/* MEME pastille que le fil unique (`.chat-jump-latest`) : CENTREE et OR. Un style different par
+   vue faisait lire deux boutons la ou il n en existe qu un (retour utilisateur du 30/08). */
+.chat-mosaic-window-jump {
+  position: absolute;
+  right: 50%;
+  bottom: 72px;
+  z-index: 2;
+  translate: 50% 0;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 212, 90, 0.5);
+  border-radius: 999px;
+  background: rgba(2, 3, 7, 0.9);
+  color: #f0d98c;
+  font: 700 9px/1 var(--font, inherit);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.chat-mosaic-new {
+  align-self: start;
+  padding: 8px 12px;
+  border: 1px dashed var(--container-border);
+  border-radius: var(--container-radius-panel);
+  background: var(--surface-panel);
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+}
+.chat-mosaic-window-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--container-border);
+  font-size: 12px;
+}
+.chat-mosaic-window-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+.chat-mosaic-window-busy {
+  color: var(--gold-bright, currentColor);
+}
+.chat-mosaic-window-open {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.6;
+}
+.chat-mosaic-window-open:hover,
+.chat-mosaic-window-close:hover {
+  opacity: 1;
+  color: var(--gold-bright, currentColor);
+}
+.chat-mosaic-window-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.6;
+}
+.chat-mosaic-window-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px;
+}
+.chat-mosaic-window-empty {
+  font-size: 12px;
+  opacity: 0.6;
+}
+.chat-mosaic-window-composer {
+  border-top: 1px solid var(--container-border);
+  padding: 6px;
+}
+.chat-mosaic-window-composer textarea {
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--container-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  padding: 6px;
+  font: inherit;
+  font-size: 13px;
+}

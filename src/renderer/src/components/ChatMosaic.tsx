@@ -14,6 +14,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 import { ChatMessageRow } from './ChatMessageRow'
 import type { Msg } from './chat-view-types'
 import { colonnesPour } from './chat-mosaic-grille'
+import './ChatMosaic.css'
 import {
   marquerConversationEnAttente,
   retirerConversationEnAttente
