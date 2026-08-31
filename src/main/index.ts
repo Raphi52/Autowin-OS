@@ -4110,6 +4110,14 @@ Le fil reprend ensuite normalement.`
           }
           // Le raisonnement accumule entre dans la trace ICI, une seule fois, a la cloture du tour.
           const raisonnement = streamedReasoning.trim()
+          // ... et dans le TOUR lui-meme, sinon le bloc « Reflexion » du fil est vide des qu'on
+          // recharge la conversation : la pensee ne vivait que le temps du stream. Une seule
+          // ecriture a la cloture, pas une par delta — la vue, elle, a deja son direct.
+          if (conversationId && raisonnement)
+            os.conversations.applyTurnEvent(conversationId, turnId, {
+              kind: 'reasoning',
+              text: raisonnement
+            })
           if (conversationId && raisonnement) {
             try {
               traceSequence = rebaseTraceSequence(causalTrace, conversationId, traceSequence)

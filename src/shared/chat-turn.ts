@@ -73,10 +73,21 @@ export interface ChatTurnState {
   parts: PersistedChatPart[]
   runtime?: ChatTurnRuntime
   error?: string
+  /**
+   * Raisonnement du modèle, CONSERVÉ avec le tour — sans lui, le bloc « Réflexion » du fil est
+   * vide dès qu'on recharge la conversation : la pensée n'existait que le temps du stream.
+   * Borné à la FIN (c'est la partie qui conclut) pour ne pas gonfler `conversations.json`.
+   */
+  reasoning?: string
 }
+
+/** Plafond du raisonnement conservé par tour — aligné sur ce que le fil affiche en direct. */
+export const REASONING_MAX = 4_000
 
 export type ChatTurnEvent =
   | { kind: 'delta'; streamId: string; text: string }
+  /** Raisonnement du modèle : s'accumule dans le tour, n'entre JAMAIS dans la réponse (`parts`). */
+  | { kind: 'reasoning'; text: string }
   | { kind: 'stream-reset'; streamId: string }
   | { kind: 'resumed' }
   | { kind: 'command'; actionId: string; name: string; args?: unknown }
@@ -158,6 +169,13 @@ function avecMotSiVide(parts: PersistedChatPart[], mot: string): PersistedChatPa
 
 export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): ChatTurnState {
   if (event.kind === 'resumed') return { ...state, status: 'streaming', error: undefined }
+
+  if (event.kind === 'reasoning') {
+    if (!event.text) return state
+    // Le statut est INCHANGÉ : penser n'est ni parler ni terminer. Un tour déjà clos qui reçoit son
+    // raisonnement (émis à la clôture) doit rester clos.
+    return { ...state, reasoning: `${state.reasoning ?? ''}${event.text}`.slice(-REASONING_MAX) }
+  }
 
   if (event.kind === 'delta') {
     if (!event.text) return state

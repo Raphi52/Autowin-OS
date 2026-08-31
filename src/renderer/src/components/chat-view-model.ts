@@ -91,6 +91,8 @@ export interface StoredAssistantMessage {
   parts?: ChatPart[]
   status?: ChatTurnStatus
   error?: string
+  /** Raisonnement conservé par le tour : c'est lui qui rend le bloc « Réflexion » relisible. */
+  reasoning?: string
 }
 
 export type ConversationStateKey =
@@ -444,7 +446,10 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     parts: terminalParts,
     status,
     done,
-    ...(message.error ? { error: message.error } : {})
+    ...(message.error ? { error: message.error } : {}),
+    // Le raisonnement SURVIT au rechargement : sans cette ligne, le bloc « Réflexion » d'un tour
+    // relu reste vide alors que le tour l'a bien conservé.
+    ...(message.reasoning ? { reasoning: message.reasoning } : {})
   }
 }
 

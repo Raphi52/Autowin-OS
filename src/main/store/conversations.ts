@@ -51,6 +51,8 @@ export interface Msg {
   parts?: PersistedChatPart[]
   runtime?: ChatTurnRuntime
   error?: string
+  /** Raisonnement conservé du tour — alimente le bloc « Réflexion » après un rechargement. */
+  reasoning?: string
 }
 
 /** D'où vient une conversation créée par un fork — trace d'origine, sans lien vivant. */
@@ -388,7 +390,8 @@ export function applyTurnEventToMessages(
       status: message.status ?? 'streaming',
       parts: message.parts ?? [],
       ...(message.runtime ? { runtime: message.runtime } : {}),
-      ...(message.error ? { error: message.error } : {})
+      ...(message.error ? { error: message.error } : {}),
+      ...(message.reasoning ? { reasoning: message.reasoning } : {})
     },
     event
   )
@@ -397,6 +400,7 @@ export function applyTurnEventToMessages(
   message.content = flattenChatParts(next.parts)
   message.runtime = next.runtime
   message.error = next.error
+  message.reasoning = next.reasoning
   return message
 }
 

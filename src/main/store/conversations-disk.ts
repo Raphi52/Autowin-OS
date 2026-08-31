@@ -201,7 +201,7 @@ function isConversationMessage(value: unknown): boolean {
   ) {
     return false
   }
-  if (!isOptionalString(value.error)) return false
+  if (!isOptionalString(value.error) || !isOptionalString(value.reasoning)) return false
   if (value.runtime !== undefined && !isChatTurnRuntime(value.runtime)) return false
   if (
     value.parts !== undefined &&
