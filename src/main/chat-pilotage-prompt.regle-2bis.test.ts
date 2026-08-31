@@ -45,6 +45,26 @@ describe('chat-pilotage-prompt — regle 2 bis (edition atomique des balises eng
     expect(prompt).toMatch(/DEFINIR[\s\S]{0,80}CABLER/u)
   })
 
+  /*
+   * TROISIEME FORME, mesuree le 2026-08-31 (conv-1567). Les deux premieres supposent que c'est TON
+   * edition qui casse le bureau. Ici le bureau etait DEJA rouge (un test d'un autre chantier), donc
+   * deux editions purement cosmetiques — un commentaire d'en-tete, un libelle de `it(...)` — ont ete
+   * refusees l'une apres l'autre sans que rien ne progresse : deux appels perdus alors que la cause
+   * tenait dans UNE assertion.
+   *
+   * Entree qui DOIT faire echouer ce test si la regle etait absente : un prompt qui n'ordonne plus
+   * de traiter l'assertion en echec AVANT tout confort. Verifie en rouge avant d'etre fige.
+   */
+  it('couvre le bureau DEJA rouge : l assertion en echec passe avant le cosmetique', () => {
+    const prompt = buildChatPilotagePrompt([])
+    // L'ETAT est nomme : le rouge peut preexister a ton edition.
+    expect(prompt).toMatch(/DEJA ROUGE/u)
+    // L'interdit : meme une edition anodine est refusee tant que le rouge dure.
+    expect(prompt).toMatch(/pas meme un commentaire ou un renommage/u)
+    // L'ORDRE est donne, pas seulement l'interdit.
+    expect(prompt).toMatch(/PREMIERE edition[\s\S]{0,140}assertion en[\s\S]{0,20}echec/u)
+  })
+
   it('garde la regle a sa place dans le bloc « FACE A UN BLOCAGE »', () => {
     const prompt = buildChatPilotagePrompt([])
     const blocage = prompt.indexOf('FACE A UN BLOCAGE')
