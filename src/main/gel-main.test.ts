@@ -98,13 +98,19 @@ describe('pile d’operations — une operation imbriquee rend la main a celle q
     fermer()
   })
 
-  it('depile une operation ASYNCHRONE seulement quand sa promesse est reglee', async () => {
+  /*
+   * Regression du 2026-08-31 : une action ASYNCHRONE ne doit etre declaree que pendant son segment
+   * SYNCHRONE. Sinon elle reste sur la pile pendant toute son attente et se voit imputer les gels
+   * d'un AUTRE code — c'est ainsi qu'un timer HORAIRE a ramasse 28 gels, dont cinq en vingt
+   * secondes.
+   */
+  it('ne reste PAS declaree pendant l’attente d’une promesse', async () => {
     let resoudre: () => void = () => {}
     const attente = new Promise<void>((r) => {
       resoudre = r
     })
     const promesse = pendantOperation('async:lente', () => attente)
-    expect(operationDeclaree()).toBe('async:lente')
+    expect(operationDeclaree()).toBe('inconnu')
     resoudre()
     await promesse
     expect(operationDeclaree()).toBe('inconnu')
