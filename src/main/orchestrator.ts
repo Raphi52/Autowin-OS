@@ -2074,8 +2074,30 @@ export class Orchestrator {
       const finalizeDiagnosis =
         typeof finalized === 'object' && finalized !== null
           ? (() => {
-              const raw = finalized as { reason?: string; files?: string[]; detail?: string }
-              if (!raw.reason) return undefined
+              const raw = finalized as {
+                reason?: string
+                files?: string[]
+                detail?: string
+                outcome?: string
+              }
+              /*
+               * FINALISATION MUETTE — mesure le 2026-08-31 (conv-1, run « reprend-pardon-mthg437j »,
+               * 2,13 $). Le rapport ne portait QU'UNE raison : « intégration locale non terminée ».
+               * Aucune cause, parce que l'issue ne portait pas de `reason` — et on rendait alors
+               * `undefined`, donc rien. L'utilisateur a paye un run dont les 16 fichiers existaient
+               * sans jamais savoir ce qui bloquait leur arrivee dans la base ; le travail n'a ete
+               * retrouve que par une fouille manuelle des branches de secours.
+               *
+               * « Non terminee » decrit un ETAT, pas une CAUSE. Quand la finalisation se tait, on
+               * nomme au moins ce qu'on OBSERVE — l'issue brute — et on AVOUE que la cause n'a pas
+               * ete rendue, plutot que de laisser un rouge indiagnosticable.
+               */
+              if (!raw.reason) {
+                const issue = (raw.outcome ?? '').trim()
+                return issue
+                  ? `blocage d’intégration: issue « ${issue} » — aucune cause rendue par la finalisation`
+                  : 'blocage d’intégration: aucune cause NI issue rendue par la finalisation'
+              }
               const files = raw.files?.slice(0, 5) ?? []
               const filesPart = files.length > 0 ? ` — fichiers en cause: ${files.join(', ')}` : ''
               // `reason` nomme la CATEGORIE (« merge-failed »), `detail` porte la CAUSE. Sans elle,
