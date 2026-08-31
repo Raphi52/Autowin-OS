@@ -1785,6 +1785,39 @@ ol.md-list li {
   line-height: 1.38;
 }
 
+/* Colonne tiree au minimum, theme cosmic : ce theme repeint conv-pick/meta avec une specificite
+   superieure, donc le mode compact generique ne l'atteint pas — il lui faut son propre bloc. */
+@container convpane (max-width: 170px) {
+  .cosmic-outline .conv-head {
+    min-height: 0;
+  }
+  .cosmic-outline .conv-meta,
+  .cosmic-outline .conv-snippet {
+    display: none;
+  }
+  .cosmic-outline .conv-item,
+  .cosmic-outline .conv-pick {
+    min-height: 0;
+  }
+  .cosmic-outline .conv-pick {
+    gap: 6px;
+    padding: 6px 6px 6px 8px;
+  }
+  .cosmic-outline .conv-list {
+    gap: 3px;
+    padding-right: 0;
+  }
+  .cosmic-outline .conv-search {
+    min-height: 0;
+    padding: 5px 7px;
+  }
+  .cosmic-outline .conv-head > .btn {
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+  }
+}
+
 .cosmic-outline .chat {
   gap: 0;
   background: transparent;
