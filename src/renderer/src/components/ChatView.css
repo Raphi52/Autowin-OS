@@ -3227,10 +3227,17 @@ ol.md-list li {
   flex-direction: column;
   gap: 2px;
 }
+/* CARTE d'etage (demande 2026-08-31) : un bloc par action — nom sur la 1re ligne, CIBLE sous lui.
+   Le lisere gauche porte le statut, comme la carte du groupe : on repere l'etat sans lire. */
 .activity-step {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
+  padding: 5px 8px;
+  border: 1px solid var(--line2, #31373f);
+  border-left-width: 2px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 2.5%);
   font-size: 11.5px;
   color: var(--muted, #9aa4b2);
 }
@@ -3241,15 +3248,43 @@ ol.md-list li {
   gap: 6px;
   min-width: 0;
 }
-/* La CIBLE porte l'information « sur quoi » ; elle s'efface avant le libelle quand la place manque. */
+/* La CIBLE porte l'information « sur quoi ». Posee SOUS le nom de l'action, alignee sur son
+   libelle (16px de pastille + 6px de gouttiere), et cliquable quand elle a un detail a deplier. */
 .activity-step-target {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-left: 22px;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   opacity: 0.78;
+  color: inherit;
+  text-align: left;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10.5px;
+}
+.activity-step-target.is-clickable {
+  cursor: pointer;
+  border-color: var(--line2, #31373f);
+  background: rgb(0 0 0 / 18%);
+}
+.activity-step-target.is-clickable:hover {
+  opacity: 1;
+  border-color: var(--accent, #5b8cff);
+  color: var(--accent, #5b8cff);
+}
+.activity-step-target.is-clickable::before {
+  content: '▸ ';
+  opacity: 0.7;
+}
+.activity-step-target.is-clickable[aria-expanded='true']::before {
+  content: '▾ ';
 }
 /* Un chevron par etage : « un bouton pour extend et voir le detail de chaque step ». */
 .activity-step-toggle {
@@ -3287,9 +3322,17 @@ ol.md-list li {
 }
 .activity-step[data-state='ko'] {
   color: var(--err, #ef6b6b);
+  border-left-color: var(--err, #ef6b6b);
 }
 .activity-step[data-state='interrupted'] {
   color: var(--warn, #e8a33d);
+  border-left-color: var(--warn, #e8a33d);
+}
+.activity-step[data-state='ok'] {
+  border-left-color: color-mix(in srgb, var(--ok, #4ea36b) 55%, transparent);
+}
+.activity-step[data-state='running'] {
+  border-left-color: var(--accent, #5b8cff);
 }
 /* Pastille de FAMILLE : ronde, neutre — le statut reste porte par la carte et la couleur du texte. */
 .activity-step-icon {
@@ -3324,4 +3367,49 @@ ol.md-list li {
    saut visible (clignotement) pendant les frames de re-application. */
 .chat-scroll--reprise {
   visibility: hidden;
+}
+
+/* BLOC « Réflexion » dans la bulle : la pensée du modèle, repliable, écrite en direct.
+   Volontairement DISCRET — c'est un satellite de la réponse, pas la réponse. */
+.thinking-block {
+  margin: 2px 0 8px;
+  border-left: 1px solid rgba(212, 169, 79, 0.35);
+  padding-left: 10px;
+}
+.thinking-block > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-faint, #a9b2c4);
+  user-select: none;
+}
+.thinking-block > summary::-webkit-details-marker {
+  display: none;
+}
+.thinking-block > summary::after {
+  content: '▾';
+  font-size: 10px;
+  opacity: 0.55;
+  transition: transform 0.15s ease;
+}
+.thinking-block[open] > summary::after {
+  transform: rotate(180deg);
+}
+.thinking-block.is-live > summary .thinking-label {
+  color: #d4a94f;
+}
+.thinking-block .thinking-body {
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim, #a9b2c4);
 }

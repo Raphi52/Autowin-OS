@@ -23,6 +23,7 @@ import type { AttachmentMeta, DirectiveReceipt, Msg } from './chat-view-types'
 import type { InspectTurnTarget } from '../observatory-focus'
 import type { ChatArtifact } from '../../../shared/artifacts'
 import { Spinner } from './Spinner'
+import { ThinkingBlock } from './ThinkingBlock'
 
 export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }): React.JSX.Element {
   return (
@@ -351,7 +352,8 @@ export const ChatMessageRow = memo(
           <span className="msg-role">Agent</span>
           {!message.done && <Spinner />}
         </div>
-        {/* Le raisonnement n'est PLUS dans la bulle : il vit dans le panneau « Réflexion » (droite). */}
+        {/* Le raisonnement se lit ICI, repliable, écrit en direct pendant que le modèle pense. */}
+        {message.reasoning && <ThinkingBlock text={message.reasoning} done={message.done} />}
         <div className="msg-turn">
           {message.parts.length === 0 && !message.done && (
             <div className="msg-body c-faint">réflexion…</div>
