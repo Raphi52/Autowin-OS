@@ -1251,8 +1251,19 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  float w1 = fbm(p + derive);',
   '  float w2 = fbm(p + vec2(3.7, 8.1) + derive * 1.6);',
   // Le warp lui-meme respire : c'est ce mouvement-la qui fait vivre les volutes sur place.
-  '  float pulseWarp = 2.4 + 0.7 * sin(uTime * uWarp);',
-  '  vec2 q = p + vec2(w1, w2) * pulseWarp + derive * 0.4;',
+  // L'AMPLITUDE DU WARP, troisieme fabrique de lignes droites (2026-08-31).
+  //
+  // Le domain warping deplace les coordonnees de `vec2(w1, w2) * pulseWarp`. A 2,4-3,1 sur un champ
+  // d'echelle 7,5, ce deplacement valait pres de la moitie du motif : la matiere se REPLIAIT sur
+  // elle-meme, et un repli comprime les iso-lignes du bruit jusqu'a les faire lire comme des aretes.
+  // C'est le meme defaut que l'alignement des octaves, par un autre chemin — d'ou les lignes qui
+  // subsistaient apres la rotation par octave.
+  //
+  // DEUX corrections : l'amplitude tombe a 1,05-1,40 (assez pour les volutes, trop peu pour replier),
+  // et le warp est CENTRE. `w1`/`w2` sont des fbm bruts, de moyenne ~0,5 : les utiliser tels quels
+  // ajoutait un decalage CONSTANT au champ, qui le faisait glisser en bloc au lieu de le deformer.
+  '  float pulseWarp = 1.05 + 0.35 * sin(uTime * uWarp);',
+  '  vec2 q = p + (vec2(w1, w2) - 0.5) * 2.0 * pulseWarp + derive * 0.4;',
   '  float champ = fbm(q);',
   '  float filaments = fbm(q * 2.6 + vec2(w2, w1) + derive * 2.0);',
   // LES APLATS QUI DESSINENT DES FACETTES. `clamp(champ * 1.45)` SATURE des que `champ` depasse 0,69 :
