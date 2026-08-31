@@ -6,6 +6,7 @@ import {
   createConvRun,
   reuseOrCreateConvRun,
   closeConvRun,
+  ligneJournalDErreur,
   deleteConvRun,
   listConvRuns,
   saveConvRunTrace,
@@ -196,5 +197,39 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
       kind: 'detached',
       attachedPath: external
     })
+  })
+})
+
+/**
+ * LA TRACE DURABLE NE DOIT PAS DETRUIRE LA RAISON DE L'ECHEC.
+ *
+ * Mesure du 2026-08-31, run conv-9 : le message reel porte la raison sur sa DEUXIEME ligne, et
+ * `String(e).slice(0, 120)` coupait a « claude CLI interromp » — avant la raison, avant
+ * `last-event=`, avant l'indice de reparation. La diffusion LIVE, deux lignes plus bas dans le meme
+ * code, envoyait le message ENTIER : seule la trace relue apres coup etait aveugle. C'est ce qui a
+ * force une seconde enquete pour expliquer un simple clic sur Stop. Recidive d'un incident deja
+ * nomme dans le code (conv-1369).
+ */
+describe('ligneJournalDErreur — la raison survit, le format tient', () => {
+  const erreurReelle = new Error(
+    [
+      "Fan-out scout (rôle subagent) : aucun modèle n'a produit de sortie",
+      "• claude (opus) : [abort] claude CLI interrompu : arret demande par l'utilisateur (Stop de l'orchestration)",
+      'last-event=none',
+      'stderr=none',
+      "→ Rien à réparer côté provider : l'appel a été coupé."
+    ].join('\n')
+  )
+
+  it('conserve la RAISON, qui vit apres le premier retour a la ligne', () => {
+    expect(ligneJournalDErreur(erreurReelle)).toContain("arret demande par l'utilisateur")
+  })
+
+  it('rend UNE seule ligne — le Journal est un format une-entree-par-ligne', () => {
+    expect(ligneJournalDErreur(erreurReelle)).not.toContain('\n')
+  })
+
+  it('reste borne : un message geant ne noie pas le Journal', () => {
+    expect(ligneJournalDErreur(new Error('x'.repeat(5000))).length).toBeLessThanOrEqual(600)
   })
 })

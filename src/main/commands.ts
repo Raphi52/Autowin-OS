@@ -120,6 +120,7 @@ import {
   convRunsRoot,
   reuseOrCreateConvRun,
   populateConvRunSections,
+  ligneJournalDErreur,
   saveConvRunTrace
 } from './runs/conv-runs'
 import { appendNativeTrace } from './activity/native-trace-spool'
@@ -2400,7 +2401,7 @@ export class AppCommandBus {
           })
           if (runPath) {
             saveConvRunTrace(runPath, steps)
-            closeConvRun(runPath, 'red', `Orchestration en échec: ${String(e).slice(0, 120)}`)
+            closeConvRun(runPath, 'red', `Orchestration en échec: ${ligneJournalDErreur(e)}`)
           }
           this.broadcast({
             type: 'orchestrate-end',
