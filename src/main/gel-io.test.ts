@@ -98,4 +98,28 @@ describe('instrumenterEntreesSortiesDuMain — cablage sur les vrais modules', (
     expect(gels.every((g) => g.cause === 'entree-sortie-bloquante')).toBe(true)
     expect(fs.readFileSync).toBe(avant)
   })
+
+  it('preserve les SOUS-FONCTIONS de l’API patchee (realpathSync.native)', async () => {
+    const { instrumenterEntreesSortiesDuMain } = await import('./gel-main')
+    const { createRequire } = await import('node:module')
+    const fs = createRequire(import.meta.url)('node:fs') as typeof import('node:fs')
+    const avant = fs.realpathSync
+    const defaire = instrumenterEntreesSortiesDuMain(0, () => {})
+    try {
+      /*
+       * REGRESSION DU 2026-08-31 (conv-9). `fs.realpathSync` porte une sous-fonction `.native`, et
+       * un enrobage nu ne la transportait pas : des le demarrage, les dix sites
+       * `realpathSync.native(...)` du main tombaient sur « node_fs.realpathSync.native is not a
+       * function » (`os:semanticTimeline` mort, telemetrie indisponible). Observer un appel ne doit
+       * jamais amputer sa surface d'API.
+       */
+      expect(typeof fs.realpathSync.native).toBe('function')
+      const resolu = fs.realpathSync.native(process.cwd())
+      expect(typeof resolu).toBe('string')
+      expect(resolu.length).toBeGreaterThan(0)
+    } finally {
+      defaire()
+    }
+    expect(fs.realpathSync).toBe(avant)
+  })
 })

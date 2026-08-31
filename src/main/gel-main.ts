@@ -314,10 +314,7 @@ export function instrumenterAccesBloquants<H extends Record<string, unknown>>(
     if (typeof originale !== 'function') continue
     originales.set(nom, originale)
     const fn = originale as (...a: unknown[]) => unknown
-    ;(hote as Record<string, unknown>)[nom] = function instrumentee(
-      this: unknown,
-      ...args: unknown[]
-    ): unknown {
+    const instrumentee = function instrumentee(this: unknown, ...args: unknown[]): unknown {
       const depart = Date.now()
       try {
         return fn.apply(this, args)
@@ -333,6 +330,26 @@ export function instrumenterAccesBloquants<H extends Record<string, unknown>>(
         }
       }
     }
+    /*
+     * L'ENROBAGE REND LA MEME SURFACE D'API — mesure du 2026-08-31 (conv-9).
+     *
+     * `fs.realpathSync` porte une SOUS-FONCTION `realpathSync.native`. Un enrobage nu ne la
+     * transporte pas : des l'appel de `instrumenterEntreesSortiesDuMain` au demarrage, les dix
+     * sites `realpathSync.native(...)` du main tombaient sur « node_fs.realpathSync.native is not a
+     * function » — `os:semanticTimeline` mort, telemetrie annoncee indisponible a l'utilisateur.
+     * OBSERVER UN APPEL NE DOIT JAMAIS AMPUTER SA SURFACE : on recopie ses proprietes propres, hors
+     * identite de fonction (`length`, `name`, `prototype`, que l'enrobage porte deja).
+     *
+     * La sous-fonction ainsi transportee reste l'ORIGINALE : elle n'est pas chronometree, donc un
+     * blocage sur `realpathSync.native` reste invisible au journal. Limite assumee ici — mieux vaut
+     * un angle mort d'observabilite qu'une API cassee.
+     */
+    for (const cle of Object.getOwnPropertyNames(fn)) {
+      if (cle === 'length' || cle === 'name' || cle === 'prototype') continue
+      const descripteur = Object.getOwnPropertyDescriptor(fn, cle)
+      if (descripteur) Object.defineProperty(instrumentee, cle, descripteur)
+    }
+    ;(hote as Record<string, unknown>)[nom] = instrumentee
   }
   return () => {
     for (const [nom, originale] of originales) (hote as Record<string, unknown>)[nom] = originale
