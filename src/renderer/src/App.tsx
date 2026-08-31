@@ -444,8 +444,13 @@ export function MainApp(): React.JSX.Element {
           INSTANCE DE TEST — AUTOMATISATION EN COURS
         </div>
       )}
-      {/* Le fond 3D de l'application, sous tout le reste. Voir `DecorDeFond`. */}
-      <DecorDeFond />
+      {/*
+       * Le fond 3D n'est monte QUE sur l'Accueil (demande utilisateur du 2026-08-31 :
+       * « enleve le fond 3d partout laisse le que sur accueil comme avant »). Ailleurs, le fond
+       * est celui du `body` (theme.css) : une scene WebGL derriere le Chat coutait deux contextes
+       * et une boucle rAF permanente pour un decor que les panneaux recouvrent.
+       */}
+      {tab === 'accueil' && <DecorDeFond />}
       <FirstRunWizard />
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
