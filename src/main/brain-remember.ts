@@ -706,6 +706,22 @@ async function performDepositCandidate(
             : '')
       }
     }
+    /*
+     * UNE ROUTE ABSENTE N'EST PAS UN REFUS. Mesure conv-9 (2026-08-31) : un depot est ressorti
+     * « refusé par le Brain : not found ». Ce texte affirme que le Brain a EXAMINE le fait et l'a
+     * ecarte ; un 404 dit exactement l'inverse — la route de depot n'existe pas sur ce serveur, donc
+     * personne n'a rien lu. Le lecteur cherche alors ce qui cloche dans SON fait (type ? source ?
+     * taille ?) au lieu de regarder le serveur, et il peut reecrire le fait dix fois sans rien
+     * changer. Les deux causes se separent ici ; le motif d'un vrai refus reste rendu VERBATIM.
+     */
+    if (response.status === 404 || response.status === 501)
+      return {
+        allowed: true,
+        stored: false,
+        detail:
+          `dépôt IMPOSSIBLE : la route de dépôt du Brain est absente de ce serveur (HTTP ${response.status}) — ` +
+          'le fait n’a pas été examiné, rien n’a été refusé ; c’est le serveur qu’il faut corriger, pas le fait'
+      }
     // Le motif du refus vient du serveur : on le rend TEL QUEL, sans le reformuler en succès.
     return {
       allowed: true,
