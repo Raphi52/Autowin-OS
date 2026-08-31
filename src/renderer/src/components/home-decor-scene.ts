@@ -1358,13 +1358,24 @@ export const NAPPE_FRAGMENT_SHADER = [
   'uniform vec3 uAnthracite;',
   'uniform float uGrain;',
   // Valeur-bruit interpolée en douceur : la base organique.
+  //
+  // LA NAPPE FABRIQUAIT LES MEMES DROITES QUE LE NUAGE (conv-1582, 2026-08-31). Le nuage a ete
+  // corrige trois fois, et l'utilisateur voyait toujours des aretes rectilignes — y compris LOIN
+  // du nuage, sur le fond etoile. La nappe est l'autre couche PLEIN ECRAN, et son shader avait
+  // garde intacts les trois defauts deja nommes comme fabriques de facettes dans le nuage :
+  // hash `sin(dot(...))` qui sature en float et aligne ses cellules sur les axes, fondu CUBIQUE
+  // dont la derivee saute au bord de cellule, et cinq octaves NON tournees donc toutes alignees.
+  // Mesure (Hough sur laplacien lisse, test home-nappe-sans-facettes) : 0,35 pour l'ancien champ
+  // contre 0,31 pour celui-ci, un champ isotrope valant 0,20-0,29.
   'float hash(vec2 p) {',
-  '  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);',
+  '  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));',
+  '  q += dot(q, q.yzx + 33.33);',
+  '  return fract((q.x + q.y) * q.z);',
   '}',
   'float bruit(vec2 p) {',
   '  vec2 i = floor(p);',
   '  vec2 f = fract(p);',
-  '  vec2 u = f * f * (3.0 - 2.0 * f);',
+  '  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);',
   '  float a = hash(i);',
   '  float b = hash(i + vec2(1.0, 0.0));',
   '  float c = hash(i + vec2(0.0, 1.0));',
@@ -1376,9 +1387,15 @@ export const NAPPE_FRAGMENT_SHADER = [
   'float fbm(vec2 p) {',
   '  float somme = 0.0;',
   '  float amplitude = 0.5;',
+  // Rotation qui AVANCE d'un octave a l'autre, propagee par produit d'une mat2 constante (aucune
+  // transcendante par pixel) : sans elle, les cinq grilles restent alignees et leurs directions se
+  // renforcent au lieu de se brouiller — c'est ce qui dessine de longues aretes droites.
+  '  mat2 pas = mat2(0.44721360, -0.89442719, 0.89442719, 0.44721360);',
+  '  mat2 rot = pas;',
   '  for (int octave = 0; octave < 5; octave++) {',
   '    somme += amplitude * bruit(p);',
-  '    p = p * 2.03 + vec2(17.3, 9.1);',
+  '    p = rot * p * 2.03 + vec2(17.3, 9.1);',
+  '    rot = pas * rot;',
   '    amplitude *= 0.5;',
   '  }',
   '  return somme;',
@@ -1391,7 +1408,10 @@ export const NAPPE_FRAGMENT_SHADER = [
   '  float w1 = fbm(p + derive);',
   '  float w2 = fbm(p + vec2(5.2, 1.3) + derive * 1.7);',
   '  float champ = fbm(p + vec2(w1, w2) * 1.6 + derive * 0.5);',
-  '  float crete = pow(clamp(champ * 1.25, 0.0, 1.0), 3.2);',
+  // `clamp(champ * 1.25)` SATURAIT des que `champ` depassait 0,8 : toute cette zone valait
+  // exactement 1.0, donc un APLAT, et la ligne ou il commence est un iso-contour du bruit de
+  // valeur — anguleux par nature. Le smoothstep monte continument, derivee nulle aux deux bouts.
+  '  float crete = pow(smoothstep(0.02, 0.86, champ), 3.2);',
   // Vignette douce : le centre reste sombre, les widgets restent lisibles au milieu.
   '  vec2 c = vUv - 0.5;',
   '  float vignette = smoothstep(0.12, 0.72, length(c));',
