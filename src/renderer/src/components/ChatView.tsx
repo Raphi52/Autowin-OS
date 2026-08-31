@@ -152,6 +152,10 @@ function ghostDuFil(fil: Msg[]): string | null {
 const MAX_ATTACHMENTS = 8
 /** Cadence de la veille sur un tour declare vivant (sonde d'autorite cote main). */
 const TOUR_VIVANT_SONDE_MS = 4000
+/**
+ * Delai au bout duquel le libelle « Arret... » rend la main quand le tour survit a son annulation.
+ */
+const STOP_REARMEMENT_MS = 10000
 const NEW_DRAFT_KEY = '__new__'
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024
@@ -1905,6 +1909,7 @@ export function ChatView({
       .cancelPilotChat(id)
       .then((result) => {
         if (result?.ok === false) libererTourFantome(id)
+        else armerReprisesStop(id)
       })
       .catch(() => setConversationInterrupting(id, false))
   }
@@ -1993,6 +1998,26 @@ export function ChatView({
     return () => window.clearInterval(timer)
   }, [busyConversations])
 
+  /**
+   * BORNE le libelle « Arret... ».
+   *
+   * DEFAUT VECU : `cancelPilotChat` repond `ok: true` (l'annulation A ete prise en charge) mais le
+   * tour ne meurt pas — le pilote est bloque dans un appel provider ou dans `orchestrate`, sur
+   * lequel l'abort n'a aucune prise. `interrupting` n'est alors relache par PERSONNE : le bouton
+   * reste ecrit « Arret... », DESACTIVE, pour toujours — l'utilisateur ne peut meme plus recliquer.
+   *
+   * On ne masque pas la cause (le tour tourne vraiment) : on rend seulement la MAIN. Passe le delai,
+   * si le tour est encore vivant, le bouton redevient cliquable pour un second Stop ; la veille des
+   * tours fantomes reste seule juge de la liberation de `busy`.
+   */
+  function armerReprisesStop(id: string): void {
+    window.setTimeout(() => {
+      if (!interruptingConversationsRef.current.has(id)) return
+      if (!busyConversationsRef.current.has(id)) return
+      setConversationInterrupting(id, false)
+    }, STOP_REARMEMENT_MS)
+  }
+
   /** Stop simple : annule le tour sans transformer la file en relance automatique. */
   function stopPilotTurn(): void {
     const id = activeRef.current
@@ -2010,6 +2035,7 @@ export function ChatView({
       .cancelPilotChat(id)
       .then((result) => {
         if (result?.ok === false) libererTourFantome(id)
+        else armerReprisesStop(id)
       })
       .catch(() => setConversationInterrupting(id, false))
   }
