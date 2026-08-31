@@ -42,6 +42,7 @@ import {
 } from './home-layout'
 import { canUndo, emptyHistory, remember, undo, type ArrangementHistory } from './home-history'
 import { autowinStorageKey } from '../storage-keys'
+import { JarvisWidget } from './JarvisWidget'
 import './HomeView.css'
 import { Spinner } from './Spinner'
 
@@ -874,6 +875,11 @@ function WidgetBody({
   onAcquitter: (alertId: string) => Promise<void>
   ouvertureEnCours: string | null
 }): React.JSX.Element {
+  if (id === 'jarvis') {
+    // Le seul widget qui PARLE a l'app au lieu de la lire : micro continu et fil du direct.
+    return <JarvisWidget onNavigate={onNavigate} />
+  }
+
   if (id === 'hublot') {
     // Il occupait 357x298 px pour EXPLIQUER ce qu'il était. Un widget qui parle de lui-même ne sert
     // personne : il porte maintenant l'heure et la date, que le décor traverse toujours.

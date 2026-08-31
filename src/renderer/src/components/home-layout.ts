@@ -10,7 +10,7 @@
  * d'interface — c'est là que vivent les défauts, pas dans le rendu.
  */
 
-export type HomeWidgetId = 'mails' | 'agenda' | 'routines' | 'notifications' | 'hublot'
+export type HomeWidgetId = 'mails' | 'agenda' | 'routines' | 'notifications' | 'hublot' | 'jarvis'
 
 export interface HomeWidgetBox {
   id: HomeWidgetId
@@ -38,7 +38,8 @@ export const HOME_WIDGET_TITLES: Readonly<Record<HomeWidgetId, string>> = {
   agenda: 'Agenda du jour',
   routines: 'Départs des routines',
   notifications: 'Remontées des agents',
-  hublot: 'Hublot'
+  hublot: 'Hublot',
+  jarvis: 'Jarvis'
 }
 
 /**
@@ -72,22 +73,33 @@ const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   mails: { col: 0, colSpan: 1, row: 0, rowSpan: 5, z: 0 },
   agenda: { col: 1, colSpan: 1, row: 0, rowSpan: 2, z: -30 },
   routines: { col: 1, colSpan: 1, row: 2, rowSpan: 3, z: -60 },
-  notifications: { col: 2, colSpan: 1, row: 0, rowSpan: 3, z: -20 },
-  hublot: { col: 2, colSpan: 1, row: 3, rowSpan: 2, z: -120 }
+  notifications: { col: 2, colSpan: 1, row: 0, rowSpan: 2, z: -20 },
+  // Jarvis est en colonne de droite, a hauteur d'oeil : c'est l'endroit qu'on regarde en parlant.
+  jarvis: { col: 2, colSpan: 1, row: 2, rowSpan: 2, z: -40 },
+  hublot: { col: 2, colSpan: 1, row: 4, rowSpan: 1, z: -120 }
 }
 
 const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   mails: { col: 0, colSpan: 1, row: 0, rowSpan: 3, z: 0 },
   notifications: { col: 1, colSpan: 1, row: 0, rowSpan: 3, z: -20 },
-  agenda: { col: 0, colSpan: 1, row: 3, rowSpan: 2, z: -30 },
-  routines: { col: 1, colSpan: 1, row: 3, rowSpan: 2, z: -60 },
-  // Le hublot passe DERRIERE en profondeur et occupe toute la largeur en bas : sur deux colonnes il
-  // n'y a plus de place pour une cinquieme tuile a part entiere.
-  hublot: { col: 0, colSpan: 2, row: 5, rowSpan: 1, z: -120 }
+  agenda: { col: 0, colSpan: 1, row: 3, rowSpan: 3, z: -30 },
+  // Jarvis fait face aux mails. Aucune ligne a une seule rangee ici : sous deux rangees,
+  // MIN_WIDGET_HEIGHT (116 px) depasse le pas de la grille et les tuiles se chevauchent des que la
+  // fenetre est courte — c'est le defaut deja mesure le 2026-08-21 sur le hublot.
+  jarvis: { col: 1, colSpan: 1, row: 3, rowSpan: 3, z: -40 },
+  routines: { col: 1, colSpan: 1, row: 6, rowSpan: 2, z: -60 },
+  hublot: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -120 }
 }
 
 /** L'ordre de lecture en colonne unique : ce qu'on regarde en premier, en haut. */
-const NARROW_ORDER: HomeWidgetId[] = ['notifications', 'routines', 'agenda', 'mails', 'hublot']
+const NARROW_ORDER: HomeWidgetId[] = [
+  'jarvis',
+  'notifications',
+  'routines',
+  'agenda',
+  'mails',
+  'hublot'
+]
 
 /**
  * Marges de la surface.
@@ -143,14 +155,21 @@ export function defaultHomeLayout(
         : 1
 
   if (columns === 1) {
-    const height = Math.max(MIN_WIDGET_HEIGHT, Math.round((usableHeight - GAP * 4) / 5))
+    const tuiles = NARROW_ORDER.length
+    const height = Math.max(
+      MIN_WIDGET_HEIGHT,
+      Math.round((usableHeight - GAP * (tuiles - 1)) / tuiles)
+    )
     // Le PAS de l'empilement, distinct de la hauteur des tuiles. Sur une surface trop courte, cinq
     // tuiles a leur hauteur minimale ne tiennent pas : empiler pleine hauteur poussait la derniere
     // etiquette SOUS le bord, donc hors d'atteinte. On resserre alors le pas et les tuiles se
     // chevauchent en cascade — un chevauchement se rattrape a la souris, une tuile hors champ non.
     const pitch = Math.min(
       height + GAP,
-      Math.max(WIDGET_LABEL_HEIGHT + 6, Math.floor((usableHeight - MIN_WIDGET_HEIGHT) / 4))
+      Math.max(
+        WIDGET_LABEL_HEIGHT + 6,
+        Math.floor((usableHeight - MIN_WIDGET_HEIGHT) / (tuiles - 1))
+      )
     )
     return NARROW_ORDER.map((id, index) => ({
       id,
@@ -175,11 +194,10 @@ export function defaultHomeLayout(
   )
   const originX = PAD_X
   // Deux colonnes demandent une ligne de plus, pour la bande du hublot en bas.
-  const gridRows = columns === 3 ? ROWS : ROWS + 1
-  const rowHeight = Math.max(
-    24,
-    Math.round((usableHeight - GAP * (gridRows - 1)) / gridRows)
-  )
+  // Deux colonnes demandent trois rangees de plus : six tuiles a deux rangees minimum tiennent sur
+  // huit rangees, la ou cinq en occupaient six.
+  const gridRows = columns === 3 ? ROWS : ROWS + 3
+  const rowHeight = Math.max(24, Math.round((usableHeight - GAP * (gridRows - 1)) / gridRows))
 
   return HOME_WIDGET_IDS.map((id) => {
     const entry = spec[id]
@@ -190,10 +208,7 @@ export function defaultHomeLayout(
       w: columnWidth * entry.colSpan + GAP * (entry.colSpan - 1),
       // La hauteur inclut les ecarts ENJAMBES : sans eux, une tuile sur trois lignes finit deux
       // ecarts trop courte et la colonne parait mal alignee.
-      h: Math.max(
-        MIN_WIDGET_HEIGHT,
-        rowHeight * entry.rowSpan + GAP * (entry.rowSpan - 1)
-      ),
+      h: Math.max(MIN_WIDGET_HEIGHT, rowHeight * entry.rowSpan + GAP * (entry.rowSpan - 1)),
       z: entry.z
     }
   })
@@ -204,7 +219,8 @@ export const HOME_WIDGET_IDS: HomeWidgetId[] = [
   'agenda',
   'routines',
   'notifications',
-  'hublot'
+  'hublot',
+  'jarvis'
 ]
 
 export function clampWidgetBox(

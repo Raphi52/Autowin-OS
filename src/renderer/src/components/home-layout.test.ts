@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  HOME_WIDGET_IDS,
   clampWidgetBox,
   defaultHomeLayout,
   fitLayoutToViewport,
@@ -99,9 +100,7 @@ describe('persistance de la disposition', () => {
 
   it('rend son defaut a un widget absent de l enregistrement', () => {
     const relu = parseHomeLayout([{ id: 'mails', x: 10, y: 20, w: 300, h: 200, z: 0 }])
-    expect(relu.map((entry) => entry.id)).toEqual(
-      defaultHomeLayout().map((entry) => entry.id)
-    )
+    expect(relu.map((entry) => entry.id)).toEqual(defaultHomeLayout().map((entry) => entry.id))
     expect(relu.find((entry) => entry.id === 'hublot')).toEqual(
       defaultHomeLayout().find((entry) => entry.id === 'hublot')
     )
@@ -136,9 +135,9 @@ describe('persistance de la disposition', () => {
 })
 
 describe('disposition par defaut et dispersion', () => {
-  it('livre les cinq widgets dans la fenetre', () => {
+  it('livre les six widgets dans la fenetre', () => {
     const layout = defaultHomeLayout()
-    expect(layout).toHaveLength(5)
+    expect(layout).toHaveLength(HOME_WIDGET_IDS.length)
     for (const entry of layout) {
       expect(clampWidgetBox(entry, VIEW)).toEqual(entry)
     }
@@ -168,9 +167,9 @@ describe('la disposition suit la surface qui la porte', () => {
     { nom: 'minuscule', width: 260, height: 420 }
   ]
 
-  it.each(surfaces)('garde les cinq tuiles atteignables sur une surface $nom', (surface) => {
+  it.each(surfaces)('garde les six tuiles atteignables sur une surface $nom', (surface) => {
     const layout = defaultHomeLayout(surface)
-    expect(layout).toHaveLength(5)
+    expect(layout).toHaveLength(HOME_WIDGET_IDS.length)
     for (const entry of layout) {
       // Aucune tuile ne commence apres le bord droit, ni ne finit avant le bord gauche.
       expect(entry.x).toBeLessThan(surface.width)
