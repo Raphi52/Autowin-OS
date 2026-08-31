@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildModelQuotaSnapshot,
   getModelQuotaSnapshot,
-  parseLatestCodexRateLimitSample, aggregateClaudeLocalUsage, parseClaudeRateLimitHeaders, parseClaudePlanUsageHistory } from './model-quotas'
+  parseLatestCodexRateLimitSample,
+  aggregateClaudeLocalUsage,
+  parseClaudeRateLimitHeaders,
+  parseClaudePlanUsageHistory
+} from './model-quotas'
 
 const temporaryHomes: string[] = []
 
@@ -50,7 +54,7 @@ const models = [
 ]
 
 describe('quotas modèles', () => {
-  it('prend le dernier événement Codex non nul et classe ses fenêtres', () => {
+  it('prend le dernier événement Codex non nul et classe ses fenêtres', async () => {
     const jsonl = [
       JSON.stringify({
         type: 'event_msg',
@@ -137,7 +141,7 @@ describe('quotas modèles', () => {
     expect(snapshot.summary).toEqual({ remainingPercent: 28, status: 'warning' })
   })
 
-  it('résume la fenêtre courte dans la wheel même si le weekly est plus bas', () => {
+  it('résume la fenêtre courte dans la wheel même si le weekly est plus bas', async () => {
     const snapshot = buildModelQuotaSnapshot(models, {
       claude: {
         status: 'available',
@@ -162,7 +166,7 @@ describe('quotas modèles', () => {
     expect(snapshot.summary).toEqual({ remainingPercent: 64, status: 'healthy' })
   })
 
-  it('n’applique une fenêtre Claude spécifique qu’à sa famille de modèle', () => {
+  it('n’applique une fenêtre Claude spécifique qu’à sa famille de modèle', async () => {
     const snapshot = buildModelQuotaSnapshot(models, {
       claude: {
         status: 'available',
@@ -304,13 +308,29 @@ describe('quotas modèles', () => {
         new Response('{}', {
           headers: {
             'anthropic-ratelimit-unified-5h-utilization': '1',
-            'anthropic-ratelimit-unified-5h-reset': String(Date.parse('2026-07-28T10:30:00Z') / 1000)
+            'anthropic-ratelimit-unified-5h-reset': String(
+              Date.parse('2026-07-28T10:30:00Z') / 1000
+            )
           }
         })
       )
     const now = Date.parse('2026-07-28T10:15:00Z')
     const oldCollection = getModelQuotaSnapshot(models, { home, fetchFn, force: true, now })
-    const freshCollection = getModelQuotaSnapshot(models, { home, fetchFn, force: true, now: now + 1 })
+    /*
+     * On ATTEND que la collecte ancienne ait emis sa requete avant de lancer la recente. Depuis que
+     * la lecture des identifiants est asynchrone (2026-08-31, suppression des I/O bloquantes du
+     * main), l'ordre d'appel de `fetch` n'est plus garanti par l'ordre de DEPART : deux `stat`
+     * concurrents peuvent se terminer dans n'importe quel ordre, et la collecte recente recevait
+     * alors la reponse laissee en attente. Le scenario teste est inchange — la collecte ancienne est
+     * bien encore EN VOL quand la recente demarre — mais l'attribution des reponses redevient sure.
+     */
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1))
+    const freshCollection = getModelQuotaSnapshot(models, {
+      home,
+      fetchFn,
+      force: true,
+      now: now + 1
+    })
     expect((await freshCollection).summary.remainingPercent).toBe(0)
 
     resolveOld(
@@ -364,11 +384,7 @@ describe('quotas modèles', () => {
       })
     )
     utimesSync(oldNamedActive, new Date('2026-07-28T10:28:18Z'), new Date('2026-07-28T10:28:18Z'))
-    utimesSync(
-      recentNamedStale,
-      new Date('2026-07-27T19:34:46Z'),
-      new Date('2026-07-27T19:34:46Z')
-    )
+    utimesSync(recentNamedStale, new Date('2026-07-27T19:34:46Z'), new Date('2026-07-27T19:34:46Z'))
 
     const snapshot = await getModelQuotaSnapshot(models, {
       home,
@@ -439,18 +455,18 @@ describe('usage Claude mesuré localement (repli quand /usage est refusé)', () 
       message: { model: 'claude-opus-5', usage: { input_tokens: tokens, output_tokens: 0 } }
     })
 
-  it('somme les tokens par fenêtre et n’invente aucun pourcentage', () => {
+  it('somme les tokens par fenêtre et n’invente aucun pourcentage', async () => {
     const entries = [
       {
         mtimeMs: now - 1_000,
-        read: () =>
+        read: async () =>
           [
             line('2026-07-28T11:30:00.000Z', 100), // dans 5 h ET 7 j
             line('2026-07-25T12:00:00.000Z', 40) // hors 5 h, dans 7 j
           ].join('\n')
       }
     ]
-    const { windows, truncated } = aggregateClaudeLocalUsage(entries, now, [
+    const { windows, truncated } = await aggregateClaudeLocalUsage(entries, now, [
       { id: 'local-5h', label: '5 h', ms: 5 * 3_600_000 },
       { id: 'local-7d', label: '7 j', ms: 7 * 24 * 3_600_000 }
     ])
@@ -463,17 +479,20 @@ describe('usage Claude mesuré localement (repli quand /usage est refusé)', () 
     expect(windows.every((w) => w.limitKnown === false)).toBe(true)
   })
 
-  it('ignore une ligne illisible (tail coupé) sans perdre les autres', () => {
+  it('ignore une ligne illisible (tail coupé) sans perdre les autres', async () => {
     const entries = [
-      { mtimeMs: now, read: () => ['{"partial":', line('2026-07-28T11:00:00.000Z', 7)].join('\n') }
+      {
+        mtimeMs: now,
+        read: async () => ['{"partial":', line('2026-07-28T11:00:00.000Z', 7)].join('\n')
+      }
     ]
-    const { windows } = aggregateClaudeLocalUsage(entries, now, [
+    const { windows } = await aggregateClaudeLocalUsage(entries, now, [
       { id: 'local-5h', label: '5 h', ms: 5 * 3_600_000 }
     ])
     expect(windows[0].usedTokens).toBe(7)
   })
 
-  it('exclut une fenêtre sans plafond du résumé global (pas de faux « 100 % restant »)', () => {
+  it('exclut une fenêtre sans plafond du résumé global (pas de faux « 100 % restant »)', async () => {
     const snapshot = buildModelQuotaSnapshot(
       [{ id: 'm1', model: 'claude-opus-5', label: 'Opus', provider: 'claude' } as never],
       {
@@ -481,7 +500,14 @@ describe('usage Claude mesuré localement (repli quand /usage est refusé)', () 
           status: 'available',
           source: 'Transcripts Claude Code (local)',
           windows: [
-            { id: 'local-5h', label: '5 h', usedPercent: 0, remainingPercent: 100, limitKnown: false, usedTokens: 9 }
+            {
+              id: 'local-5h',
+              label: '5 h',
+              usedPercent: 0,
+              remainingPercent: 100,
+              limitKnown: false,
+              usedTokens: 9
+            }
           ]
         }
       }

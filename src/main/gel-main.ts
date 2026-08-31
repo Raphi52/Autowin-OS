@@ -351,7 +351,29 @@ export function instrumenterEntreesSortiesDuMain(
         'renameSync',
         'rmSync',
         'mkdirSync',
-        'realpathSync'
+        'realpathSync',
+        /*
+         * ANGLE MORT COMBLE le 2026-08-31. Les deux plus gros gels du journal (32 751 ms et
+         * 33 137 ms, 09:55 et 09:57 locales) sont sortis en 'inconnu' AVEC la cause
+         * 'entree-sortie-bloquante' — donc le temoin n'etait PAS en retard : la machine allait
+         * bien, c'est NOTRE boucle qui etait tenue par une entree-sortie. Aucun des appels
+         * instrumentes ne les a signales, la liste ne couvrait donc pas le chemin coupable.
+         * Les descripteurs bruts et les operations d'entree ci-dessous ferment ce trou.
+         */
+        'openSync',
+        'fstatSync',
+        'readSync',
+        'writeSync',
+        'closeSync',
+        'writevSync',
+        'accessSync',
+        'unlinkSync',
+        'rmdirSync',
+        'readlinkSync',
+        'opendirSync',
+        'cpSync',
+        'utimesSync',
+        'truncateSync'
       ]
     ],
     ['node:child_process', ['execSync', 'execFileSync', 'spawnSync']]

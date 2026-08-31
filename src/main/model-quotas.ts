@@ -1,13 +1,12 @@
-import {
-  closeSync,
-  existsSync,
-  fstatSync,
-  openSync,
-  readFileSync,
-  readdirSync,
-  readSync,
-  statSync
-} from 'node:fs'
+/*
+ * ENTREES-SORTIES ASYNCHRONES, jamais synchrones. Mesure du 2026-08-31 : ce module tenait la
+ * boucle d'evenements du main pendant des dizaines de secondes — `gels.jsonl` attribue 21 gels a
+ * `ipc:os:models:quotas`, le pire a 43 092 ms, classes `entree-sortie-bloquante` (donc thread
+ * temoin a l'heure : la machine allait bien, c'est NOTRE boucle qui etait tenue). Sur ce poste le
+ * balayage coutait 5046 entrees de `readdirSync` recursif, 3741 `statSync`, puis jusqu'a 800
+ * lectures de queue — 56 Mo lus SANS rendre la main. Un `*Sync` reintroduit ici regele l'UI.
+ */
+import { open, readFile, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { claudeAccountEnv } from './claude-accounts'
@@ -32,9 +31,7 @@ const MAX_CODEX_TAIL_BYTES = 2_000_000
 const CACHE_MS = 60_000
 const CODEX_STALE_MS = 15 * 60_000
 
-let cached:
-  | { expiresAt: number; collectionSequence: number; value: ModelQuotaSnapshot }
-  | undefined
+let cached: { expiresAt: number; collectionSequence: number; value: ModelQuotaSnapshot } | undefined
 let collectionSequence = 0
 
 function percent(value: unknown): number | undefined {
@@ -244,14 +241,15 @@ export function parseClaudePlanUsageHistory(
   return windows.length > 0 ? { windows, sampledAt } : undefined
 }
 
-function claudePlanHistoryQuota(home: string, now: number): ProviderQuota {
+async function claudePlanHistoryQuota(home: string, now: number): Promise<ProviderQuota> {
   const source = 'Client Claude Desktop (local)'
   try {
     const path = join(home, 'AppData', 'Roaming', 'Claude', 'plan-usage-history.json')
-    if (!existsSync(path) || statSync(path).size > MAX_USAGE_RESPONSE_CHARS * 4) {
+    const info = await stat(path).catch(() => undefined)
+    if (!info || info.size > MAX_USAGE_RESPONSE_CHARS * 4) {
       throw new Error('Historique de plan absent')
     }
-    const parsed = parseClaudePlanUsageHistory(readFileSync(path, 'utf8'), now)
+    const parsed = parseClaudePlanUsageHistory(await readFile(path, 'utf8'), now)
     if (!parsed) throw new Error('Historique de plan illisible')
     const age = now - parsed.sampledAt
     return {
@@ -283,10 +281,11 @@ async function claudeQuota(
     const credentialsPath = configDir
       ? join(configDir, '.credentials.json')
       : join(home, '.claude', '.credentials.json')
-    if (!existsSync(credentialsPath) || statSync(credentialsPath).size > MAX_CREDENTIAL_BYTES) {
+    const credentialsInfo = await stat(credentialsPath).catch(() => undefined)
+    if (!credentialsInfo || credentialsInfo.size > MAX_CREDENTIAL_BYTES) {
       throw new Error('Session Claude indisponible')
     }
-    const credentials = JSON.parse(readFileSync(credentialsPath, 'utf8')) as {
+    const credentials = JSON.parse(await readFile(credentialsPath, 'utf8')) as {
       claudeAiOauth?: { accessToken?: unknown }
     }
     const accessToken = credentials.claudeAiOauth?.accessToken
@@ -333,11 +332,11 @@ async function claudeQuota(
     // Repli EN CASCADE, du plus fidèle au plus approximatif — jamais un « Non exposé » stérile :
     //  1. client Desktop (vrai % du plan, zéro réseau, ~5 min de fraîcheur, sans date de reset) ;
     //  2. consommation mesurée sur les transcripts (`limitKnown: false` → tokens, pas de %).
-    const history = claudePlanHistoryQuota(home, now)
+    const history = await claudePlanHistoryQuota(home, now)
     if (history.status !== 'unavailable') {
       return { ...history, error: `${message} — repli sur le client Desktop` }
     }
-    const local = claudeLocalQuota(home, now)
+    const local = await claudeLocalQuota(home, now)
     if (local.status === 'available') {
       return { ...local, error: `${message} — repli sur la mesure locale` }
     }
@@ -350,16 +349,16 @@ async function claudeQuota(
   }
 }
 
-function readTail(path: string): string {
-  const descriptor = openSync(path, 'r')
+async function readTail(path: string): Promise<string> {
+  const descriptor = await open(path, 'r')
   try {
-    const size = fstatSync(descriptor).size
+    const size = (await descriptor.stat()).size
     const length = Math.min(size, MAX_CODEX_TAIL_BYTES)
     const buffer = Buffer.alloc(length)
-    readSync(descriptor, buffer, 0, length, size - length)
+    await descriptor.read(buffer, 0, length, size - length)
     return buffer.toString('utf8')
   } finally {
-    closeSync(descriptor)
+    await descriptor.close()
   }
 }
 
@@ -381,11 +380,11 @@ function readTail(path: string): string {
 // (chiffre faux). 800 couvre les deux fenêtres ; l'appel est mis en cache 60 s (CACHE_MS).
 const CLAUDE_LOCAL_MAX_FILES = 800
 
-export function aggregateClaudeLocalUsage(
-  entries: { mtimeMs: number; read: () => string }[],
+export async function aggregateClaudeLocalUsage(
+  entries: { mtimeMs: number; read: () => Promise<string> }[],
   now: number,
   windows: { id: string; label: string; ms: number }[]
-): { windows: ModelQuotaWindow[]; truncated: boolean } {
+): Promise<{ windows: ModelQuotaWindow[]; truncated: boolean }> {
   const widest = Math.max(...windows.map((w) => w.ms))
   const candidates = entries
     .filter((entry) => entry.mtimeMs >= now - widest)
@@ -395,7 +394,7 @@ export function aggregateClaudeLocalUsage(
   for (const entry of candidates.slice(0, CLAUDE_LOCAL_MAX_FILES)) {
     let content: string
     try {
-      content = entry.read()
+      content = await entry.read()
     } catch {
       continue // transcript illisible (verrou, suppression concurrente) → ignoré, jamais fatal
     }
@@ -437,19 +436,27 @@ export function aggregateClaudeLocalUsage(
   }
 }
 
-function claudeLocalQuota(home: string, now: number): ProviderQuota {
+async function claudeLocalQuota(home: string, now: number): Promise<ProviderQuota> {
   const source = 'Transcripts Claude Code (local)'
   try {
     const root = join(home, '.claude', 'projects')
-    if (!existsSync(root)) throw new Error('Aucun transcript local')
-    const entries = (readdirSync(root, { recursive: true }) as string[])
-      .filter((path) => path.endsWith('.jsonl'))
-      .map((relativePath) => {
-        const absolutePath = join(root, relativePath)
-        return { absolutePath, mtimeMs: statSync(absolutePath).mtimeMs }
-      })
+    const noms = (await readdir(root, { recursive: true }).catch(() => {
+      throw new Error('Aucun transcript local')
+    })) as string[]
+    const entries = (
+      await Promise.all(
+        noms
+          .filter((path) => path.endsWith('.jsonl'))
+          .map(async (relativePath) => {
+            const absolutePath = join(root, relativePath)
+            const info = await stat(absolutePath).catch(() => undefined)
+            return info ? { absolutePath, mtimeMs: info.mtimeMs } : undefined
+          })
+      )
+    )
+      .filter((file): file is { absolutePath: string; mtimeMs: number } => file !== undefined)
       .map((file) => ({ mtimeMs: file.mtimeMs, read: () => readTail(file.absolutePath) }))
-    const aggregate = aggregateClaudeLocalUsage(entries, now, [
+    const aggregate = await aggregateClaudeLocalUsage(entries, now, [
       { id: 'local-5h', label: '5 h · tokens neufs', ms: 5 * 3_600_000 },
       { id: 'local-7d', label: '7 j · tokens neufs', ms: 7 * 24 * 3_600_000 }
     ])
@@ -472,15 +479,22 @@ function claudeLocalQuota(home: string, now: number): ProviderQuota {
   }
 }
 
-function codexQuota(home: string, now: number): ProviderQuota {
+async function codexQuota(home: string, now: number): Promise<ProviderQuota> {
   try {
     const root = join(home, '.codex', 'sessions')
-    const candidates = (readdirSync(root, { recursive: true }) as string[])
-      .filter((path) => /(?:^|[\\/])rollout-.*\.jsonl$/.test(path))
-      .map((relativePath) => {
-        const absolutePath = join(root, relativePath)
-        return { absolutePath, mtime: statSync(absolutePath).mtime }
-      })
+    const noms = (await readdir(root, { recursive: true })) as string[]
+    const candidates = (
+      await Promise.all(
+        noms
+          .filter((path) => /(?:^|[\\/])rollout-.*\.jsonl$/.test(path))
+          .map(async (relativePath) => {
+            const absolutePath = join(root, relativePath)
+            const info = await stat(absolutePath).catch(() => undefined)
+            return info ? { absolutePath, mtime: info.mtime } : undefined
+          })
+      )
+    )
+      .filter((file): file is { absolutePath: string; mtime: Date } => file !== undefined)
       .sort((left, right) => right.mtime.valueOf() - left.mtime.valueOf())
       .slice(0, 20)
     type CodexQuotaCandidate = {
@@ -492,7 +506,7 @@ function codexQuota(home: string, now: number): ProviderQuota {
     let latestTimestamped: CodexQuotaCandidate | undefined
     let latestFallback: CodexQuotaCandidate | undefined
     for (const candidate of candidates) {
-      const sample = parseLatestCodexRateLimitSample(readTail(candidate.absolutePath))
+      const sample = parseLatestCodexRateLimitSample(await readTail(candidate.absolutePath))
       if (sample.windows.length > 0) {
         const observedAt = sample.observedAt ?? candidate.mtime.toISOString()
         const observedAtMs = new Date(observedAt).valueOf()
@@ -555,7 +569,7 @@ export async function getModelQuotaSnapshot(
   const home = options.home ?? homedir()
   const [claude, codex] = await Promise.all([
     claudeQuota(options.fetchFn ?? fetch, home, now),
-    Promise.resolve(codexQuota(home, now))
+    codexQuota(home, now)
   ])
   const value = buildModelQuotaSnapshot(models, { claude, codex }, new Date(now).toISOString())
   if (!cached || currentCollectionSequence >= cached.collectionSequence) {
