@@ -6,6 +6,7 @@ import {
   ecouteInitiale,
   evenementsDirects,
   extraireCommandeEveil,
+  reagirAParole,
   type SommaireDirect
 } from './jarvis-voice'
 
@@ -127,5 +128,65 @@ describe('mot d’éveil', () => {
   it('ne retient pas un éveil sans ordre', () => {
     expect(extraireCommandeEveil('jarvis')).toBeNull()
     expect(extraireCommandeEveil('jarvis  ,  ')).toBeNull()
+  })
+})
+
+describe('accusé sonore d’éveil', () => {
+  it('bipe dès que « Jarvis » est entendu, avant même que la phrase soit figée', () => {
+    // L'ENTRÉE QUI CASSERAIT UN FAUX FIX : {texte:'jarvis', final:false}. Un fix qui n'écoute
+    // que les résultats FINAUX ne biperait pas ici — et l'utilisateur, sans signal, croirait
+    // encore que Jarvis ne l'entend pas.
+    const on = basculerEcoute(ecouteInitiale, 1)
+    const r = reagirAParole(on, { texte: 'jarvis', final: false, le: 2 })
+    expect(r.bip).toBe(true)
+    expect(r.etat.eveille).toBe(true)
+    expect(r.ordre).toBeNull()
+  })
+
+  it('ne bipe qu’une fois par phrase, malgré les partiels répétés', () => {
+    // L'ENTRÉE QUI CASSERAIT UN FAUX FIX : deux partiels de suite contenant « jarvis ».
+    // Sans verrou par phrase, le moteur (qui republie le partiel à chaque mot) mitraillerait.
+    const on = basculerEcoute(ecouteInitiale, 1)
+    const a = reagirAParole(on, { texte: 'jarvis', final: false, le: 2 })
+    const b = reagirAParole(a.etat, { texte: 'jarvis ouvre', final: false, le: 3 })
+    expect(b.bip).toBe(false)
+  })
+
+  it('ne bipe pas quand l’écoute est coupée', () => {
+    const r = reagirAParole(ecouteInitiale, { texte: 'jarvis', final: false, le: 2 })
+    expect(r.bip).toBe(false)
+    expect(r.ordre).toBeNull()
+  })
+
+  it('prend la phrase SUIVANTE comme ordre quand l’éveil était seul', () => {
+    // LE DÉFAUT SIGNALÉ : « Jarvis » puis une pause, puis l'ordre. L'ancien code exigeait
+    // l'ordre dans la MÊME phrase et ne faisait rien — d'où « il ne m'entend pas ».
+    const on = basculerEcoute(ecouteInitiale, 1)
+    const eveil = reagirAParole(on, { texte: 'Jarvis', final: true, le: 2 })
+    expect(eveil.ordre).toBeNull()
+    expect(eveil.etat.eveille).toBe(true)
+    const suite = reagirAParole(eveil.etat, { texte: 'ouvre le task manager', final: true, le: 9 })
+    expect(suite.ordre).toBe('ouvre le task manager')
+    expect(suite.etat.eveille).toBe(false)
+  })
+
+  it('garde l’ordre de la même phrase et retombe endormi ensuite', () => {
+    const on = basculerEcoute(ecouteInitiale, 1)
+    const un = reagirAParole(on, { texte: 'Jarvis, ouvre le chat', final: true, le: 2 })
+    expect(un.ordre).toBe('ouvre le chat')
+    expect(un.etat.eveille).toBe(false)
+    // L'ENTRÉE QUI CASSERAIT UN FAUX FIX : une phrase sans éveil après un ordre servi.
+    // Si l'état restait éveillé, une conversation de bureau partirait en run.
+    const deux = reagirAParole(un.etat, { texte: 'passe moi le sel', final: true, le: 3 })
+    expect(deux.ordre).toBeNull()
+  })
+
+  it('couper l’écoute rendort Jarvis', () => {
+    const on = basculerEcoute(ecouteInitiale, 1)
+    const eveil = reagirAParole(on, { texte: 'jarvis', final: true, le: 2 })
+    const off = basculerEcoute(eveil.etat, 3)
+    expect(off.eveille).toBe(false)
+    const rallume = basculerEcoute(off, 4)
+    expect(rallume.eveille).toBe(false)
   })
 })

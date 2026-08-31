@@ -20,12 +20,22 @@ export interface JarvisEcoute {
   partiel: string
   /** Les paroles figées, la plus récente en tête. */
   commandes: JarvisCommande[]
+  /** Le mot d'éveil a été entendu : la prochaine phrase est un ordre, même dite après une pause. */
+  eveille: boolean
+  /** Verrou par phrase : le moteur republie le partiel à chaque mot, on ne bipe qu'une fois. */
+  eveilAnnonce: boolean
 }
 
 /** Au-delà, l'historique parlé n'est plus lu — il ne sert qu'à vérifier ce que Jarvis a entendu. */
 const MAX_COMMANDES = 40
 
-export const ecouteInitiale: JarvisEcoute = { active: false, partiel: '', commandes: [] }
+export const ecouteInitiale: JarvisEcoute = {
+  active: false,
+  partiel: '',
+  commandes: [],
+  eveille: false,
+  eveilAnnonce: false
+}
 
 /**
  * Allume ou coupe l'écoute. Couper VIDE le partiel : une phrase inachevée affichée alors que le
@@ -33,7 +43,9 @@ export const ecouteInitiale: JarvisEcoute = { active: false, partiel: '', comman
  */
 export function basculerEcoute(etat: JarvisEcoute, le: number): JarvisEcoute {
   void le
-  return etat.active ? { ...etat, active: false, partiel: '' } : { ...etat, active: true }
+  return etat.active
+    ? { ...etat, active: false, partiel: '', eveille: false, eveilAnnonce: false }
+    : { ...etat, active: true, eveille: false, eveilAnnonce: false }
 }
 
 export function appliquerParole(
@@ -142,4 +154,52 @@ export function extraireCommandeEveil(texte: string): string | null {
     .replace(/^[\s,.:;!?—-]+/u, '')
     .trim()
   return suite === '' ? null : suite
+}
+
+/** Le mot d'éveil est-il présent, même sans ordre derrière ? */
+export function contientEveil(texte: string): boolean {
+  return /\bjarvis\b/i.test(texte)
+}
+
+export interface ReactionParole {
+  etat: JarvisEcoute
+  /** Il faut faire entendre l'accusé de réception : Jarvis vient de reconnaître son nom. */
+  bip: boolean
+  /** L'ordre à exécuter, s'il y en a un dans cette phrase. */
+  ordre: string | null
+}
+
+/**
+ * Ce que Jarvis FAIT d'une parole. Séparé de `appliquerParole` (qui ne gère que l'affichage)
+ * parce que deux défauts réels vivent ici :
+ *  - l'ordre pouvait arriver dans une phrase SÉPARÉE de l'éveil (« Jarvis. » … « ouvre le chat »).
+ *    L'ancien code exigeait une seule phrase et restait muet : « il ne m'entend pas ».
+ *  - sans accusé sonore, rien ne dit à l'utilisateur QUAND il peut parler. Le bip part sur le
+ *    PARTIEL, dès le mot reconnu, une seule fois par phrase.
+ */
+export function reagirAParole(
+  etat: JarvisEcoute,
+  parole: { texte: string; final: boolean; le: number }
+): ReactionParole {
+  if (!etat.active) return { etat, bip: false, ordre: null }
+  const eveilIci = contientEveil(parole.texte)
+  const bip = eveilIci && !etat.eveilAnnonce
+  let suivant = appliquerParole(etat, parole)
+  if (bip) suivant = { ...suivant, eveille: true, eveilAnnonce: true }
+  if (!parole.final) return { etat: suivant, bip, ordre: null }
+
+  const ordre = eveilIci
+    ? extraireCommandeEveil(parole.texte)
+    : etat.eveille
+      ? parole.texte.trim() || null
+      : null
+  return {
+    etat: {
+      ...suivant,
+      eveilAnnonce: false,
+      eveille: ordre === null && (eveilIci || etat.eveille)
+    },
+    bip,
+    ordre
+  }
 }

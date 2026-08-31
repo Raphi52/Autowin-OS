@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { jouerBipEveil } from './jarvis-bip'
 import {
-  appliquerParole,
   basculerEcoute,
   conversationsEnDirect,
   ecouteInitiale,
   evenementsDirects,
   extraireCommandeEveil,
+  reagirAParole,
   type ConversationDirecte,
   type EvenementDirect,
   type JarvisEcoute,
@@ -123,10 +124,14 @@ export function JarvisWidget({
         const resultat = e.results[i]
         const texte = resultat?.[0]?.transcript ?? ''
         const final = resultat?.isFinal === true
-        setEcoute((precedent) => appliquerParole(precedent, { texte, final, le: Date.now() }))
-        if (!final || !actifRef.current) continue
-        const ordre = extraireCommandeEveil(texte)
-        if (ordre) void envoyer(ordre)
+        setEcoute((precedent) => {
+          const reaction = reagirAParole(precedent, { texte, final, le: Date.now() })
+          // Le bip part sur le PARTIEL : c'est ce qui dit « je t'ai entendu, parle maintenant ».
+          // Attendre la phrase figée le ferait arriver apres que l'utilisateur a deja parle.
+          if (reaction.bip) jouerBipEveil()
+          if (reaction.ordre && actifRef.current) void envoyer(reaction.ordre)
+          return reaction.etat
+        })
       }
     },
     [envoyer]
@@ -218,7 +223,11 @@ export function JarvisWidget({
           {ecoute.active ? '● Écoute en cours — couper' : 'Activer l’écoute'}
         </button>
         <span className="jarvis__aide">
-          {ecoute.active ? 'Dites « Jarvis, … » pour lui parler' : 'Micro coupé'}
+          {!ecoute.active
+            ? 'Micro coupé'
+            : ecoute.eveille
+              ? '🔊 Je vous écoute — dites votre demande'
+              : 'Dites « Jarvis » : un bip vous répondra'}
         </span>
       </div>
 
