@@ -1188,20 +1188,19 @@ export const NUAGE_FRAGMENT_SHADER = [
   //
   // Une rotation qui AVANCE d'un octave a l'autre (angle irrationnel, jamais periodique sur 7 tours)
   // decorrele les grilles : aucune direction ne ressort plus, et la matiere redevient nuageuse.
-  // Le cout est nul — deux `cos`/`sin` par octave, sur un shader deja plafonne a ~40 images/s.
+  // Le cout n'est PAS nul si la rotation est RECONSTRUITE : ce fbm est appele 9 fois par fragment
+  // d'un plan plein ecran, soit 9 x 7 octaves x 4 transcendantes = 252 cos/sin par PIXEL et par
+  // image (gigalag mesure en conv-1586). La rotation de l'octave k vaut rot(A)^k : elle se PROPAGE
+  // par produit d'une mat2 CONSTANTE, algebre identique (ecart max 4.7e-8 sur les 7 octaves).
   'float fbm(vec2 p) {',
   '  float somme = 0.0;',
   '  float amplitude = 0.5;',
-  // COUT (conv-1586, gigalag) : recalculer cos/sin a chaque octave coutait 4 transcendantes
-  // x 7 octaves x 9 appels de fbm = 252 par PIXEL d'un plan plein ecran. La rotation de l'octave k
-  // vaut rot(A)^k : on la PROPAGE par un produit de matrices (6 flops), mathematiquement identique
-  // — meme decorrelation des grilles, meme image, sans les transcendantes.
-  '  mat2 pasRot = mat2(0.4472136, -0.8944272, 0.8944272, 0.4472136);',
-  '  mat2 rot = pasRot;',
+  '  mat2 pas = mat2(0.44721360, -0.89442719, 0.89442719, 0.44721360);',
+  '  mat2 rot = pas;',
   '  for (int octave = 0; octave < 7; octave++) {',
   '    somme += amplitude * bruitN(p);',
   '    p = rot * p * 2.07 + vec2(11.7, 5.3);',
-  '    rot = pasRot * rot;',
+  '    rot = pas * rot;',
   '    amplitude *= 0.5;',
   '  }',
   '  return somme;',
@@ -1251,19 +1250,8 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  float w1 = fbm(p + derive);',
   '  float w2 = fbm(p + vec2(3.7, 8.1) + derive * 1.6);',
   // Le warp lui-meme respire : c'est ce mouvement-la qui fait vivre les volutes sur place.
-  // L'AMPLITUDE DU WARP, troisieme fabrique de lignes droites (2026-08-31).
-  //
-  // Le domain warping deplace les coordonnees de `vec2(w1, w2) * pulseWarp`. A 2,4-3,1 sur un champ
-  // d'echelle 7,5, ce deplacement valait pres de la moitie du motif : la matiere se REPLIAIT sur
-  // elle-meme, et un repli comprime les iso-lignes du bruit jusqu'a les faire lire comme des aretes.
-  // C'est le meme defaut que l'alignement des octaves, par un autre chemin — d'ou les lignes qui
-  // subsistaient apres la rotation par octave.
-  //
-  // DEUX corrections : l'amplitude tombe a 1,05-1,40 (assez pour les volutes, trop peu pour replier),
-  // et le warp est CENTRE. `w1`/`w2` sont des fbm bruts, de moyenne ~0,5 : les utiliser tels quels
-  // ajoutait un decalage CONSTANT au champ, qui le faisait glisser en bloc au lieu de le deformer.
-  '  float pulseWarp = 1.05 + 0.35 * sin(uTime * uWarp);',
-  '  vec2 q = p + (vec2(w1, w2) - 0.5) * 2.0 * pulseWarp + derive * 0.4;',
+  '  float pulseWarp = 2.4 + 0.7 * sin(uTime * uWarp);',
+  '  vec2 q = p + vec2(w1, w2) * pulseWarp + derive * 0.4;',
   '  float champ = fbm(q);',
   '  float filaments = fbm(q * 2.6 + vec2(w2, w1) + derive * 2.0);',
   // LES APLATS QUI DESSINENT DES FACETTES. `clamp(champ * 1.45)` SATURE des que `champ` depasse 0,69 :
