@@ -1040,7 +1040,7 @@ describe('Orchestrator — flip live worktree', () => {
         trust: new TrustLedger(),
         executionWorkspace: 'C:\base',
         worktrees: {
-          begin: () => 'C:\wt\run-1',
+          begin: () => 'C:\\wt\\run-1',
           // Exactement le cas vecu : une issue SANS `reason` ni `detail`.
           end: () => ({ outcome: 'kept' as const, agentId: 'run-1', files: ['src/a.ts'] })
         } as unknown as RunWorktrees
