@@ -949,6 +949,9 @@ export class AgentPilot {
      * ouverte — sinon la 2e itération repart à blanc (voir le bloc d'options plus bas).
      */
     let sessionEnCours = resumeSessionId
+    // Combien de segments de `convo` ont DÉJÀ été expédiés dans ce tour (voir la construction du
+    // message plus bas) : au-delà, la session reprise les porte déjà.
+    let segmentsDejaEnvoyes = 0
     // Un détour par un autre provider/modèle ajoute des échanges absents de l'ancienne session.
     // Elle devient donc définitivement périmée, même si l'utilisateur revient ensuite au binding initial.
     if (conversationId && known && known.key !== sessionKey) {
@@ -1274,10 +1277,27 @@ export class AgentPilot {
         ...commandAttachments
       ]
       commandAttachments = []
+      /**
+       * LE FIL N'EST PAS REPAYÉ À CHAQUE ITÉRATION.
+       *
+       * Mesuré le 2026-08-31 sur conv-1 : le livrable d'une phase `frame` (≈ 6 000 caractères)
+       * repartait VERBATIM à chaque itération suivante du même tour — cinq fois — alors que la
+       * session du provider portait DÉJÀ tous les segments précédents (`resumeSessionId` est armé
+       * à chaque itération depuis conv-1498). On n'expédie donc que les segments NOUVEAUX quand la
+       * reprise est réelle.
+       *
+       * Le repli est le comportement d'avant, et il est SÛR : sans session reprise (provider qui
+       * n'honore pas `--resume`, premier appel, session perdue en cours de tour), le fil entier
+       * repart. Amputer un prompt que le provider ne complète pas est exactement le défaut de
+       * conv-1498 — il reste fermé.
+       */
+      const reprisePorteLeFil = providerResumes && Boolean(sessionEnCours)
+      const segmentsAEnvoyer = reprisePorteLeFil ? convo.slice(segmentsDejaEnvoyes) : convo
+      segmentsDejaEnvoyes = convo.length
       const messages: Message[] = [
         {
           role: 'user',
-          content: `${convo.join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`,
+          content: `${segmentsAEnvoyer.join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`,
           ...(iterationAttachments.length ? { attachments: iterationAttachments } : {})
         }
       ]
