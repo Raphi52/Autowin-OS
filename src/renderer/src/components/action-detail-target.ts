@@ -203,7 +203,7 @@ export function localActionDetail(action: ActionLike): LocalActionDetail | undef
      */
     const memoire = resumeMemoire(data)
     const succeeded = ok && exitCode === 0
-    const text =
+    const corps =
       reason ??
       error ??
       memoire ??
@@ -213,8 +213,102 @@ export function localActionDetail(action: ActionLike): LocalActionDetail | undef
             .filter(Boolean)
             .join('\n')
         : undefined) ??
-      knowledge
-    if (!text || !text.trim()) return undefined
+      knowledge ??
+      /**
+       * REPLI GENERIQUE — toute etape intermediaire doit etre depliable.
+       *
+       * Constate le 2026-08-31 : « 1 action terminee — find_in_files » sans aucun chevron. Cause :
+       * la liste ci-dessus est une liste BLANCHE de champs connus (`reason`, `diff`, `output`…), et
+       * `find_in_files` rend `{ trouve, correspondances }` — aucun de ces noms. Une lecture reussie
+       * n'avait donc RIEN a montrer, alors que son resultat est justement ce que l'utilisateur veut
+       * relire. Meme trou pour `read_file`, `list_files`, `conversation_read`, `sql_query`.
+       *
+       * On rend donc lisible ce qui RESTE du resultat, quel que soit le nom des champs. Les cles de
+       * controle (statut, references de run, champs deja rendus au-dessus) sont exclues : sans ca,
+       * un `{ ok: true }` produirait un deplie vide qui ne dit rien.
+       */
+      resumeGenerique(data)
+    // La CIBLE demandee : sans elle, « find_in_files » ne dit pas QUOI a ete cherche, ni dans quel
+    // fichier. C'est litteralement la demande — « je sais meme pas quelle file a ete lu ».
+    const entete = resumeArguments(action.args)
+    const text = [entete, corps?.trim()].filter(Boolean).join('\n')
+    if (!text.trim()) return undefined
     return { name: action.name, text: text.trim(), ok }
   }
+}
+
+/**
+ * Cles qui ne racontent RIEN a un lecteur : soit du statut (`ok`, `allowed`), soit deja rendues par
+ * un extracteur dedie plus haut. Les laisser passer remplirait le deplie de bruit.
+ */
+const CLES_DE_CONTROLE = new Set([
+  'ok',
+  'allowed',
+  'stored',
+  'error',
+  'reason',
+  'diff',
+  'output',
+  'exitCode',
+  'knowledge',
+  'fact',
+  'detail',
+  'note',
+  'runId',
+  'runPath'
+])
+
+/** Au-dela, une liste de correspondances cesse d'etre lisible : on annonce le reste en une ligne. */
+const MAX_ENTREES_LISTE = 20
+
+function valeurLisible(valeur: unknown): string | undefined {
+  if (valeur === null || valeur === undefined) return undefined
+  if (typeof valeur === 'string') return valeur.trim() || undefined
+  if (typeof valeur === 'number' || typeof valeur === 'boolean') return String(valeur)
+  if (Array.isArray(valeur)) {
+    if (valeur.length === 0) return undefined
+    const entrees = valeur
+      .slice(0, MAX_ENTREES_LISTE)
+      .map((item) => (typeof item === 'string' ? item : JSON.stringify(item)))
+    const reste = valeur.length - entrees.length
+    return entrees.join('\n') + (reste > 0 ? `\n… ${reste} de plus` : '')
+  }
+  const json = JSON.stringify(valeur)
+  return json && json !== '{}' ? json : undefined
+}
+
+/** Rend lisible le RESULTAT d'une commande dont aucun champ n'est connu du lecteur. */
+export function resumeGenerique(data: Record<string, unknown>): string | undefined {
+  const lignes: string[] = []
+  for (const [cle, valeur] of Object.entries(data)) {
+    if (CLES_DE_CONTROLE.has(cle)) continue
+    const rendu = valeurLisible(valeur)
+    if (!rendu) continue
+    lignes.push(rendu.includes('\n') ? `${cle} :\n${rendu}` : `${cle} : ${rendu}`)
+  }
+  const texte = lignes.join('\n')
+  if (!texte.trim()) return undefined
+  return texte.length > MAX_DETAIL_CHARS ? `${texte.slice(0, MAX_DETAIL_CHARS)}…` : texte
+}
+
+/** Une ligne d'arguments longue noie l'entete : on la borne court, c'est un rappel, pas un dump. */
+const MAX_ARG_CHARS = 200
+
+/** Ce qui a ete DEMANDE — chemin lu, motif cherche, cible — en une ligne d'entete du deplie. */
+export function resumeArguments(args: unknown): string | undefined {
+  const record = asRecord(args)
+  if (!record) return undefined
+  const morceaux: string[] = []
+  for (const [cle, valeur] of Object.entries(record)) {
+    if (valeur === null || valeur === undefined || valeur === '') continue
+    const rendu =
+      typeof valeur === 'string' || typeof valeur === 'number' || typeof valeur === 'boolean'
+        ? String(valeur)
+        : JSON.stringify(valeur)
+    if (!rendu) continue
+    morceaux.push(
+      `${cle}=${rendu.length > MAX_ARG_CHARS ? `${rendu.slice(0, MAX_ARG_CHARS)}…` : rendu}`
+    )
+  }
+  return morceaux.length ? `→ ${morceaux.join(' · ')}` : undefined
 }
