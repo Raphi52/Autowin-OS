@@ -1178,6 +1178,25 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               filePath,
               writtenLineFingerprints: claudeWrittenLineFingerprints(part.input)
             })
+            /*
+             * SIGNE DE VIE PAR APPEL D'OUTIL — relaye en DIRECT, jamais persiste (meme regle que le
+             * battement `tool_progress` ci-dessus, qui ne couvre QUE les outils LONGS : le CLI ne
+             * l'emet qu'apres 30 s de silence, donc jamais pour une rafale de lectures rapides).
+             *
+             * Mesure du 2026-08-31, run conv-9 : 52 appels d'outils TOUS reussis (26 Read, 23 Grep,
+             * 3 Glob) en 223 659 ms, et ZERO texte produit — donc 224 s d'ecran muet. L'utilisateur
+             * a stoppe a 3 min 43 et les 52 resultats ont ete jetes (run rouge, livrable vide).
+             * `causal-trace/conv-9.jsonl` porte un seul trou de 224 s sans evenement, puis les 52
+             * enregistrements d'un coup en 12 ms a la fin.
+             *
+             * L'asymetrie corrigee ici : la boucle SAVAIT que le sous-agent vivait — `consumeText`
+             * nourrit `watchdog.beat()` a chaque ligne de stdout, celles-ci comprises — et s'en
+             * servait pour le laisser tourner sans jamais le dire a l'utilisateur.
+             */
+            const cible = (filePath || command).slice(0, 120)
+            queue.push({ delta: '', reasoning: `
+${part.name}${cible ? `
+${cible}` : ''}` })
           }
         }
       } else if (t === 'user') {
