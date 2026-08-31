@@ -300,7 +300,12 @@ import {
 } from './app-data'
 import { configureTurnTiming } from './turn-timing'
 import { lireLatenceTours } from './perf-lag-main'
-import { demarrerDetecteurDeGel, instrumenterEntreesSortiesDuMain, lireGels } from './gel-main'
+import {
+  demarrerDetecteurDeGel,
+  instrumenterEntreesSortiesDuMain,
+  journaliserGel,
+  lireGels
+} from './gel-main'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
 import {
   createStorageMigrationReadHandler,
@@ -2346,6 +2351,28 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'PerfGels')
     const n = typeof derniers === 'number' && derniers > 0 ? Math.floor(derniers) : 200
     return lireGels(ensureAutowinAppData(appDataRoot), n)
+  })
+  /*
+   * Gels du RENDERER, deposes dans le MEME journal que ceux du main.
+   *
+   * Le detecteur de gel ne surveille que le process principal : un freeze de la fenetre cause par
+   * le thread d'interface n'etait attribuable NULLE PART apres coup. Le renderer signale donc ses
+   * taches longues ici, et elles passent par l'unique puits d'ecriture existant — pas de second
+   * chemin d'ecriture. Le prefixe 'renderer:' est ce qui permet enfin de trancher main vs
+   * interface en relisant gels.jsonl.
+   */
+  ipcMain.handle('perf:gelRenderer', (event, dureeMs: unknown) => {
+    assertTrustedRendererSender(event, 'PerfGelRenderer')
+    const ms = typeof dureeMs === 'number' && Number.isFinite(dureeMs) ? Math.floor(dureeMs) : 0
+    if (ms <= 0) return false
+    journaliserGel({
+      ts: new Date().toISOString(),
+      blocageMs: ms,
+      operation: 'renderer:longtask',
+      // Mesure DIRECTE d'une tache longue du thread d'interface : imputable par construction.
+      cause: 'boucle-tenue'
+    })
+    return true
   })
   ipcMain.handle('tests:run', (event, root: unknown, filter?: unknown) => {
     assertTrustedRendererSender(event, 'TestsRun')

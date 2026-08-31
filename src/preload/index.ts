@@ -130,6 +130,8 @@ const api = {
   // Onglet Latence : rapport LU du journal de jalons de tour (lecture seule, cote main).
   perfTurnLatency: (derniers?: number) => ipcRenderer.invoke('perf:turnLatency', derniers),
   perfGels: (derniers?: number) => ipcRenderer.invoke('perf:gels', derniers),
+  // Depose une tache longue du thread d'interface dans le journal de gels commun.
+  signalerGelRenderer: (dureeMs: number) => ipcRenderer.invoke('perf:gelRenderer', dureeMs),
   getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:get'),
   setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>

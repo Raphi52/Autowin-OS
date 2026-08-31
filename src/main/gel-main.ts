@@ -53,18 +53,22 @@ export function ouvrirOperation(nom: string): () => void {
 }
 
 /** Joue `action` en declarant `nom`, quoi qu'il arrive (succes, jet, rejet). */
+/*
+ * SEUL LE SEGMENT SYNCHRONE COMPTE — meme regle que pour les canaux IPC ci-dessous, appliquee ici
+ * le 2026-08-31. La version precedente refermait l'operation au REGLEMENT de la promesse : une
+ * action asynchrone restait donc declaree pendant toute son attente, alors qu'une promesse en
+ * attente ne tient AUCUNEMENT la boucle d'evenements. Preuve dans gels.jsonl :
+ * `timer:balayage:copiesAbandonnees` est arme toutes les HEURES et porte pourtant 28 gels, dont une
+ * rafale de cinq entre 10:47:54 et 10:48:14 — il ramassait les gels causes par un AUTRE code. Un
+ * alibi, pas un coupable : et pendant ce temps les vrais blocages (34 a 56 s) tombaient en
+ * 'inconnu'. On ne declare donc que ce qui s'execute AVANT le premier await.
+ */
 export function pendantOperation<T>(nom: string, action: () => T): T {
   const fermer = ouvrirOperation(nom)
   try {
-    const valeur = action()
-    if (valeur instanceof Promise) {
-      return valeur.finally(fermer) as unknown as T
-    }
+    return action()
+  } finally {
     fermer()
-    return valeur
-  } catch (e) {
-    fermer()
-    throw e
   }
 }
 

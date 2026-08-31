@@ -249,7 +249,17 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     lignes, plafonne par `Math.floor` et retombant sur 200 si ce n'est pas un nombre positif.
     //     Il porte `assertTrustedRendererSender(event, 'PerfGels')` des sa PREMIERE ligne. Aucune
     //     ecriture, aucune execution.
-    expect(handlers).toHaveLength(149)
+    // MISE A JOUR 2026-08-31 — 149 -> 151. Le compte etait DEJA en derive avant ce tour : la
+    //   branche portait 150 handlers pour un inventaire fige a 149, un canal ayant ete ajoute
+    //   sans que ce compteur soit touche. La garde forte, elle, n a jamais cede : la liste des
+    //   canaux NON gardes est restee vide, donc aucun canal sans garde n a ete expose. Le 151e
+    //   est ajoute ici, relu AVANT de toucher le compte :
+    //   perf:gelRenderer — depot d un gel du thread d interface dans le journal commun
+    //     gels.jsonl. Son unique argument est un NOMBRE de millisecondes, plancher a zero et
+    //     tronque par Math.floor ; aucun chemin, aucune chaine ne vient du renderer. Il porte
+    //     assertTrustedRendererSender(event, 'PerfGelRenderer') des sa PREMIERE ligne.
+    //     L ecriture va au seul puits d observabilite existant, best-effort, jamais bloquante.
+    expect(handlers).toHaveLength(151)
     expect(unguarded).toEqual([])
   })
 
