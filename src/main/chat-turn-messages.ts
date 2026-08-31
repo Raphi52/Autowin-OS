@@ -560,3 +560,111 @@ export const RELANCE_QUESTION_SANS_LECTURE =
   'lecture répond, avance sur une hypothèse énoncée (« je suppose X — corrige-moi ») au lieu de ' +
   'demander ; si un vrai choix subsiste (goût, arbitrage que seul l’utilisateur possède), repose ' +
   'la question en citant ce que tu as lu.'
+
+/**
+ * Le tour a AGI, mais sa clôture PROMET un compte-rendu qui n'arrivera jamais.
+ *
+ * LE DÉFAUT, mesuré le 2026-08-31 sur cette conversation. Le tour lance `orchestrate`, puis clôt
+ * sur « Run lancé. Je te rends le résultat vérifié — exit codes réels — dès qu'il rend la main. »
+ * Le tour se termine là : il n'y a AUCUN « dès qu'il rend la main ». Le run a fini
+ * `degraded-closed`, ses 20 fichiers sont restés dans un worktree isolé jamais fusionné, et
+ * l'utilisateur a dû refaire le travail dans une autre session (commit `4bbab009`). Le coût n'est
+ * pas la phrase : c'est le travail perdu derrière elle.
+ *
+ * Preuve que la consigne ne suffit pas : la constitution l'interdit déjà en toutes lettres
+ * (« rendre la main plus tôt — rapport d'étape — est un ÉCHEC ») et le prompt de pilotage aussi
+ * (« n'annonce jamais un lancement avant son résultat observable »). Les deux ont été enfreints
+ * dans le même message. C'est le motif connu du garde-fou PASSIF : une règle qu'aucun mécanisme ne
+ * vérifie finit par ne plus être suivie. On la rend donc MÉCANIQUE, comme ses sœurs au-dessus.
+ *
+ * DISTINCT de `exigeAgirPasAnnoncer`, qui ne mord QUE si aucune action n'a eu lieu. Ici l'action a
+ * bien eu lieu — c'est le RÉSULTAT qui est renvoyé à un futur inexistant, et c'est l'angle mort
+ * exact que sa jumelle laissait ouvert.
+ *
+ * Prudent par construction : deux familles étroites, et jamais un simple « dès que ». La famille B
+ * exige le verbe de restitution et le marqueur d'attente dans la MÊME phrase — « le cache est
+ * invalidé dès que le fichier change » ne promet rien et passe.
+ */
+export function exigePreuveAvantDePromettre(reponse: string, uneActionAEuLieu: boolean): boolean {
+  if (!uneActionAEuLieu) return false // sans action, c'est `exigeAgirPasAnnoncer` qui répond
+  const texte = (reponse ?? '').trim()
+  if (!texte) return false // le tour muet a sa propre garde
+  // Famille A — formules figées : promettre un message ultérieur, sans ambiguïté possible.
+  const promesseFigee =
+    /\bje (?:te |vous )?(?:reviens|reviendrai)\b[^.!?]{0,40}\b(?:avec|dès|des|quand|une fois)\b/i.test(
+      texte
+    ) ||
+    /\bje (?:te |vous )?tiens\b[^.!?]{0,30}\b(?:au courant|informé|informée|au jus)\b/i.test(
+      texte
+    ) ||
+    /\bje (?:te |vous )?(?:dirai|préviendrai|previendrai|informerai|recontacte|recontacterai)\b/i.test(
+      texte
+    )
+  if (promesseFigee) return true
+  // Famille B — verbe de RESTITUTION à la 1re personne ET marqueur d'ATTENTE, dans la même phrase.
+  const RESTITUTION =
+    /\bje (?:te |vous )?(?:rends|rendrai|redonne|redonnerai|donne|donnerai|livre|livrerai|rapporte|rapporterai|remets|remettrai|poste|posterai)\b/i
+  const ATTENTE =
+    /\b(?:dès qu|des qu|dès que|des que|quand (?:il|elle|ce|ça|ca)|une fois qu|à la fin|a la fin|au retour|ensuite)/i
+  return texte
+    .split(/(?<=[.!?])\s+|\n+/u)
+    .some((phrase) => RESTITUTION.test(phrase) && ATTENTE.test(phrase))
+}
+
+/** Ce qu'on renvoie à l'agent : la preuve MAINTENANT, ou l'aveu que le tour s'arrête. */
+export const RELANCE_PREUVE_AVANT_DE_PROMETTRE =
+  'SYSTÈME: ta clôture PROMET un compte-rendu ultérieur — « je te rends le résultat », « je ' +
+  'reviens avec », « je te tiens au courant ». Ce message est le DERNIER du tour : ce futur ' +
+  'n’existe pas, aucun second message ne partira, et l’utilisateur attendra pour rien. Mesuré le ' +
+  '31/08 : un run lancé puis promis a fini `degraded-closed`, son travail est resté dans un ' +
+  'worktree isolé jamais fusionné, et l’utilisateur a dû le refaire ailleurs. Donc MAINTENANT, au ' +
+  'choix : (1) va chercher le résultat dans CE tour — sonde l’état réel (`get_state`, ' +
+  '`retrospective`, `run`, `verify`, lecture de fichier) et rends compte de ce que tu OBSERVES ; ' +
+  'ou (2) si le résultat est réellement hors de ta portée, dis-le explicitement — ce qui est ' +
+  'lancé, où le retrouver, ce que l’utilisateur doit faire — sans promettre de revenir.'
+
+/**
+ * Une fence ```` ```html-render ```` a-t-elle été ouverte sans jamais être refermée ?
+ *
+ * LE DÉFAUT, mesuré le 2026-08-31 sur cette conversation : le bloc visuel a été fermé par une
+ * pseudo-balise `</html-render` au lieu du délimiteur ```` ``` ````. Le renderer dégrade alors
+ * proprement — `Markdown.tsx:hasClosingFence` exige un vrai délimiteur de fermeture — mais la
+ * conséquence est que l'utilisateur voit du HTML BRUT en bloc de code à la place de la page. Le
+ * travail de mise en forme est intégralement payé et intégralement perdu.
+ *
+ * Le prompt le dit déjà (« un bloc fermé ```html-render […] puis ferme-le par ``` ») et ne l'a pas
+ * empêché : même motif de garde-fou passif que ses sœurs, même remède mécanique.
+ *
+ * Ne mord QUE sur `html-render` : un bloc de code ordinaire laissé ouvert reste lisible, et
+ * relancer pour lui coûterait une itération sans rien sauver.
+ */
+export function blocVisuelNonFerme(reponse: string): boolean {
+  const lignes = (reponse ?? '').split(/\r?\n/u)
+  let ouvert: { marqueur: string; longueur: number; visuel: boolean } | undefined
+  for (const ligne of lignes) {
+    const fence = /^\s{0,3}(`{3,}|~{3,})([^\r\n]*)$/u.exec(ligne)
+    if (!fence) continue
+    const marqueur = fence[1][0]
+    const longueur = fence[1].length
+    if (!ouvert) {
+      ouvert = {
+        marqueur,
+        longueur,
+        visuel: fence[2].trim().toLowerCase() === 'html-render'
+      }
+      continue
+    }
+    // Une fermeture est un délimiteur SEUL, du même type et au moins aussi long que l'ouverture.
+    if (marqueur === ouvert.marqueur && longueur >= ouvert.longueur && fence[2].trim() === '')
+      ouvert = undefined
+  }
+  return Boolean(ouvert?.visuel)
+}
+
+/** Ce qu'on renvoie à l'agent : refermer la fence, sinon la page ne s'affiche pas. */
+export const RELANCE_BLOC_VISUEL_NON_FERME =
+  'SYSTÈME: tu as ouvert un bloc ```html-render sans jamais le REFERMER par une ligne ne ' +
+  'contenant que ```. Une pseudo-balise (`</html-render`) n’est pas un délimiteur : le fil rend ' +
+  'alors ton HTML en bloc de code BRUT, et toute ta mise en forme est perdue à l’écran. ' +
+  'Ré-émets MAINTENANT ta réponse complète, SANS aucune commande, avec la fence ouverte par ' +
+  '```html-render et fermée par ``` sur une ligne seule.'

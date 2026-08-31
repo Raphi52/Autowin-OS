@@ -9,6 +9,8 @@ import {
   signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
+  exigePreuveAvantDePromettre,
+  blocVisuelNonFerme,
   nommerPiecesJointes
 } from './chat-turn-messages'
 
@@ -154,12 +156,12 @@ describe('buildTurnMessages', () => {
     })
     expect(entries).toEqual([
       `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
-      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est "
-        + "PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que "
-        + "tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle "
-        + "conversation_search sur les mots de la demande, puis conversation_read sur "
-        + "l'identifiant rendu. L'identifiant de la conversation courante est "
-        + "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est " +
+        'PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que ' +
+        'tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle ' +
+        'conversation_search sur les mots de la demande, puis conversation_read sur ' +
+        "l'identifiant rendu. L'identifiant de la conversation courante est " +
+        "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
       'UTILISATEUR: dernier message'
     ])
   })
@@ -222,12 +224,12 @@ describe('buildTurnMessages', () => {
     })
     expect(entries).toEqual([
       `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
-      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est "
-        + "PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que "
-        + "tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle "
-        + "conversation_search sur les mots de la demande, puis conversation_read sur "
-        + "l'identifiant rendu. L'identifiant de la conversation courante est "
-        + "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est " +
+        'PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que ' +
+        'tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle ' +
+        'conversation_search sur les mots de la demande, puis conversation_read sur ' +
+        "l'identifiant rendu. L'identifiant de la conversation courante est " +
+        "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
       'UTILISATEUR: ok'
     ])
   })
@@ -243,12 +245,12 @@ describe('buildTurnMessages', () => {
     // 'UTILISATEUR: ' + '' a un contenu non vide (le prefixe) : PAS filtre.
     expect(entries).toEqual([
       `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
-      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est "
-        + "PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que "
-        + "tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle "
-        + "conversation_search sur les mots de la demande, puis conversation_read sur "
-        + "l'identifiant rendu. L'identifiant de la conversation courante est "
-        + "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est " +
+        'PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que ' +
+        'tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle ' +
+        'conversation_search sur les mots de la demande, puis conversation_read sur ' +
+        "l'identifiant rendu. L'identifiant de la conversation courante est " +
+        "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
       'UTILISATEUR: '
     ])
   })
@@ -264,12 +266,12 @@ describe('buildTurnMessages', () => {
     })
     expect(entries).toEqual([
       `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
-      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est "
-        + "PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que "
-        + "tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle "
-        + "conversation_search sur les mots de la demande, puis conversation_read sur "
-        + "l'identifiant rendu. L'identifiant de la conversation courante est "
-        + "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est " +
+        'PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que ' +
+        'tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle ' +
+        'conversation_search sur les mots de la demande, puis conversation_read sur ' +
+        "l'identifiant rendu. L'identifiant de la conversation courante est " +
+        "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
       'UTILISATEUR: ok'
     ])
   })
@@ -415,7 +417,9 @@ describe('auto-kaizen en cours de tour — la MÊME erreur ne se rejoue pas', ()
   })
 
   it('la même erreur sur DEUX outils différents reste distincte', () => {
-    expect(signatureDEchec('edit_file', 'ENOENT: x')).not.toBe(signatureDEchec('run_tests', 'ENOENT: x'))
+    expect(signatureDEchec('edit_file', 'ENOENT: x')).not.toBe(
+      signatureDEchec('run_tests', 'ENOENT: x')
+    )
   })
 
   it('la consigne ESCALADE à la deuxième rencontre du même mur', () => {
@@ -478,9 +482,9 @@ describe('exigeCorrigerEtPoursuivre — le mur humain doit etre une VRAIE attent
   })
 
   it('se tait sur une vraie question suspensive adressee a l’utilisateur', () => {
-    expect(
-      exigeCorrigerEtPoursuivre(true, 'Échec : veux-tu que je force la suppression ?')
-    ).toBe(false)
+    expect(exigeCorrigerEtPoursuivre(true, 'Échec : veux-tu que je force la suppression ?')).toBe(
+      false
+    )
   })
 
   it('se tait quand l’agent declare la tache HORS DE SA PORTEE, sans mot-clé de permission', () => {
@@ -509,9 +513,9 @@ describe('exigeUnChiffreVerifie — « total » demande un compte comme « combi
   it('une lecture EFFECTUEE desarme le garde, « total » ou pas', () => {
     // L'entree qui doit faire echouer une garde trop large : le garde existe pour reclamer une
     // lecture, pas pour bloquer une reponse qui en a deja une.
-    expect(
-      exigeUnChiffreVerifie('Quel est le total de fichiers ?', 'Il y en a 42.', true)
-    ).toBe(false)
+    expect(exigeUnChiffreVerifie('Quel est le total de fichiers ?', 'Il y en a 42.', true)).toBe(
+      false
+    )
   })
 })
 
@@ -542,5 +546,64 @@ describe('buildTurnMessages — pieces jointes nommees dans le fil', () => {
     expect(nommerPiecesJointes([])).toBe('')
     expect(nommerPiecesJointes(undefined)).toBe('')
     expect(nommerPiecesJointes([{ name: '  ' }])).toBe('')
+  })
+})
+
+describe('exigePreuveAvantDePromettre — la clôture qui promet un message futur', () => {
+  it('mord quand le tour a lancé une action et promet de rendre compte plus tard', () => {
+    expect(
+      exigePreuveAvantDePromettre(
+        'Run lancé. Je te rends le résultat vérifié — exit codes réels — dès qu’il rend la main.',
+        true
+      )
+    ).toBe(true)
+  })
+
+  it('mord sur « je reviens avec » et « je te tiens au courant »', () => {
+    expect(exigePreuveAvantDePromettre('Je reviens avec le compte-rendu.', true)).toBe(true)
+    expect(exigePreuveAvantDePromettre('Je te tiens au courant du résultat.', true)).toBe(true)
+  })
+
+  it('laisse passer une clôture qui rend compte au PASSÉ', () => {
+    expect(exigePreuveAvantDePromettre('Run terminé : exit code 0, 12 tests verts.', true)).toBe(
+      false
+    )
+  })
+
+  it('laisse passer si aucune action n’a eu lieu (autre garde) et si le texte est vide', () => {
+    expect(exigePreuveAvantDePromettre('Je te rends le résultat dès que possible.', false)).toBe(
+      false
+    )
+    expect(exigePreuveAvantDePromettre('', true)).toBe(false)
+  })
+
+  it('ne mord pas sur un « dès que » qui ne promet aucun compte-rendu de l’agent', () => {
+    expect(
+      exigePreuveAvantDePromettre(
+        'Le cache est invalidé dès que le fichier change ; relance-le quand tu veux.',
+        true
+      )
+    ).toBe(false)
+  })
+})
+
+describe('blocVisuelNonFerme — la fence html-render jamais refermée', () => {
+  it('mord sur une fence fermée par une pseudo-balise au lieu de ```', () => {
+    expect(blocVisuelNonFerme('Voici :\n```html-render\n<p>x</p>\n</html-render\n')).toBe(true)
+  })
+
+  it('ne mord pas sur une fence correctement refermée', () => {
+    expect(blocVisuelNonFerme('```html-render\n<p>x</p>\n```\n')).toBe(false)
+  })
+
+  it('ne mord pas sans bloc html-render, ni sur un bloc de code ordinaire', () => {
+    expect(blocVisuelNonFerme('texte simple')).toBe(false)
+    expect(blocVisuelNonFerme('```ts\nconst a = 1\n```')).toBe(false)
+  })
+
+  it('gère plusieurs blocs : le dernier non fermé suffit à mordre', () => {
+    expect(
+      blocVisuelNonFerme('```html-render\n<p>a</p>\n```\ntexte\n```html-render\n<p>b</p>\n')
+    ).toBe(true)
   })
 })
