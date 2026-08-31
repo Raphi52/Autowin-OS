@@ -22,29 +22,16 @@
      translation dans l'espace, et non un simple changement d'échelle. */
   perspective: 1600px;
   perspective-origin: 50% 40%;
-  /* NOIR OPAQUE, pas transparent — decision INVERSEE par rapport a conv-1358. L accueil ne montre pas
-     l image plate du fond d ecran (theme.css -> autowin-galaxy-bg-hq.png, posee sur body) : il en
-     montre la REPRODUCTION 3D. Constat utilisateur (conv-1397) : « je vois toujours le fond d ecran
-     qui est present dans toutes les vues dans la vue accueil, ce n est pas ce que je veux, je veux une
-     reproduction en 3d ». Toute la chaine au-dessus est transparente (#root, .main, .view-slot), donc
-     cette regle est la seule couche capable de masquer l image ; le canevas du decor efface desormais
-     en opaque (home-decor-scene.ts -> FOND_DECOR). La lisibilite reste portee par l assombrissement
-     du centre (.home-view::after) et par le fond opaque de chaque tuile. */
-  background: #000;
+  /* TRANSPARENT — et c est la TROISIEME position sur cette ligne, chacune correcte en son temps.
+     conv-1358 voulait transparent, conv-1397 a impose NOIR OPAQUE pour masquer l image plate que
+     `body` peignait sous un canevas efface en alpha 0 (theme.css -> autowin-galaxy-bg-hq.png).
+     Cette cause N EXISTE PLUS : le PNG est retire de `body`, et le decor 3D est monte a la racine
+     de la coque (`DecorDeFond`), DERRIERE toutes les vues. Garder un noir opaque ici masquerait
+     desormais ce decor -- l Accueil serait la seule vue SANS fond, exactement l inverse du but.
+     La lisibilite reste portee par l assombrissement du centre (.home-view::after) et par le fond
+     opaque de chaque tuile, pas par une couche pleine. */
+  background: transparent;
   border-radius: var(--container-radius-page, 16px);
-}
-
-.home-view__decor {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.home-view__decor canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 /* Assombrissement du CENTRE seulement : le décor porte ses nébuleuses sur les bords et garde le

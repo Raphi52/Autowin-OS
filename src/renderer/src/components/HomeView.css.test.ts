@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest'
  * `background: transparent` (ou un `rgba(..., 0)`, ou `none`, ou retirer la declaration) dans la
  * regle `.home-view`. Verifie en le reintroduisant : ce test passe au rouge.
  */
-describe('HomeView.css — l image plate ne transparait plus, le decor 3D fait le fond', () => {
+describe('HomeView.css — l accueil laisse passer le decor 3D global', () => {
   const brut = readFileSync(new URL('./HomeView.css', import.meta.url), 'utf8')
   // Les commentaires sont RETIRES avant analyse : sans cela, un commentaire citant la valeur fautive
   // suffisait a faire echouer le test alors que la declaration reelle etait correcte.
@@ -31,17 +31,19 @@ describe('HomeView.css — l image plate ne transparait plus, le decor 3D fait l
     return css.slice(debut, fin)
   }
 
-  it('.home-view masque l image de body avec un fond OPAQUE', () => {
+  it('.home-view ne peint AUCUNE couche opaque par-dessus le decor global', () => {
     const corps = regleRacine()
     const fond = corps.match(/(?<!-)background(-color)?\s*:\s*([^;]+);/)
     expect(fond, 'la regle doit declarer son fond explicitement, pas le laisser implicite').not.toBeNull()
     const valeur = (fond?.[2] ?? '').trim()
-    // Refus explicite de la valeur fautive de conv-1397 et de ses equivalents transparents.
-    expect(valeur).not.toBe('transparent')
-    expect(valeur).not.toMatch(/rgba\([^)]*,\s*0?\.?0+\s*\)/)
-    expect(valeur).not.toMatch(/\bnone\b/)
-    // Opaque, et noir : le centre du decor reproduit est noir, la jonction reste invisible.
-    expect(valeur).toMatch(/^(#000|#000000|black|rgb\(0,\s*0,\s*0\)|rgba\(0,\s*0,\s*0,\s*1(\.0+)?\))$/)
+    // La valeur DEVENUE fautive : toute couleur pleine, qui masquerait le decor monte derriere.
+    expect(valeur).not.toMatch(/^(#[0-9a-f]{3,8}|black|rgb\()/i)
+    expect(valeur).toMatch(/^(transparent|rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0?\.?0+\s*\)|none)$/)
+  })
+
+  it('le decor n est plus possede par l Accueil : plus d hote local', () => {
+    // Le doublon supprime : une seconde scene WebGL montee par la vue elle-meme.
+    expect(brut).not.toMatch(/\.home-view__decor/)
   })
 
   it('la lisibilite reste assuree par l assombrissement du centre, pas par un fond plein', () => {

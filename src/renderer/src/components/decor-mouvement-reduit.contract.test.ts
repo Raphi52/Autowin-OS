@@ -20,7 +20,14 @@ import { describe, expect, it } from 'vitest'
  * empêche seulement qu'on revienne au tout-ou-rien sans s'en apercevoir.
  */
 
-const source = readFileSync(join(__dirname, 'HomeView.tsx'), 'utf8')
+/*
+ * LA CIBLE A DEMENAGE le 2026-08-24 : le decor est passe de `HomeView.tsx` a `DecorDeFond.tsx`, en
+ * devenant le fond de TOUTE l'application (l'utilisateur demandait « tout remplacer par du 3d », et
+ * un decor possede par l'Accueil laissait les autres vues sur un PNG plat). Ce test suit le code
+ * plutot que de rester braque sur un fichier ou la garantie ne vit plus -- un test qui surveille le
+ * mauvais fichier passe au vert en ne verifiant rien.
+ */
+const source = readFileSync(join(__dirname, 'DecorDeFond.tsx'), 'utf8')
 
 describe('« mouvement réduit » réduit le mouvement, il n’efface pas le décor', () => {
   it('ne conditionne PAS la boucle de rendu à la préférence', () => {

@@ -166,12 +166,20 @@ describe('identite Autowin OS', () => {
     expect(readFileSync(join(ROOT, 'electron-builder.yml'), 'utf8')).toContain(
       'icon: build/icon.ico'
     )
-    expect(theme).toContain("url('./autowin-galaxy-bg-hq.png')")
-    const galaxyBackground = readFileSync(
-      join(ROOT, 'src/renderer/src/assets/autowin-galaxy-bg-hq.png')
-    )
-    expect(galaxyBackground.readUInt32BE(16)).toBe(3840)
-    expect(galaxyBackground.readUInt32BE(20)).toBe(2160)
+    /*
+     * LE FOND N'EST PLUS UNE IMAGE. Ce test exigeait ici que `theme.css` peigne
+     * `autowin-galaxy-bg-hq.png` sur le `body`. Cette image PLATE a ete retiree : le fond de
+     * l'application est desormais la scene three.js `DecorDeFond`, montee a la racine de la coque et
+     * visible sur TOUTES les vues -- demande formulee deux fois par l'utilisateur (« enlever le fond
+     * d'ecran 2d et tout remplacer par du 3d »).
+     *
+     * Ce qui reste verifie, et qui compte autant : le `body` garde une base sombre EXPLICITE. Elle
+     * est ce qu'on voit avant la premiere image WebGL, et sur une machine sans WebGL ou le decor ne
+     * monte pas du tout -- sans elle, le fond serait blanc.
+     */
+    expect(theme).not.toContain("url('./autowin-galaxy-bg-hq.png')")
+    expect(theme).toMatch(/body \{[^}]*background:\s*#[0-9a-f]{6}\s*;/i)
+    expect(appShell).toContain('<DecorDeFond />')
     expect(main).not.toContain("process.platform === 'linux' ? { icon } : {}")
     expect(main).toContain("icon: process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon")
     expect(main).toMatch(/titleBarOverlay:\s*\{[\s\S]*?color:\s*'#00000000'/)
