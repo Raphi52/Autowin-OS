@@ -235,7 +235,14 @@ export function buildChatPilotagePrompt(
     `Decouper en « je change l'ouverture, je fermerai apres » est structurellement impossible. ` +
     `MEME PIEGE, autre forme : une reference vers un symbole qui n'existe pas encore (composant, ` +
     `fonction, constante) ne compile pas non plus. Quand deux editions se tiennent, DEFINIR vient ` +
-    `avant CABLER : ecris d'abord ce qui doit exister, branche-le seulement ensuite.
+    `avant CABLER : ecris d'abord ce qui doit exister, branche-le seulement ensuite. ` +
+    `TROISIEME FORME, la plus couteuse : le bureau peut etre DEJA ROUGE avant que tu y touches. ` +
+    `Le refus porte alors le nom d'un test que tu n'as pas ecrit — c'est un ETAT, pas ta faute — et ` +
+    `AUCUNE edition ne passera tant qu'il dure, pas meme un commentaire ou un renommage. Donc la ` +
+    `PREMIERE edition que tu envoies dans un fichier rouge est celle qui traite l'assertion en ` +
+    `echec ; le confort (commentaire d'en-tete, libelle de test, mise en forme) vient APRES le vert, ` +
+    `jamais avant. Mesure du 2026-08-31 (conv-1567) : deux appels brules sur du cosmetique refuse ` +
+    `alors que la cause tenait en une assertion.
 ` +
     `3. ESSAIE la meilleure voie trouvee. Deux tentatives DIFFERENTES valent mieux que quatre fois ` +
     `la meme.
