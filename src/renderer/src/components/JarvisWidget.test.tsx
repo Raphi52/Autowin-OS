@@ -53,17 +53,40 @@ class FakeOscillator {
     FakeAudio.arrets += 1
   }
 }
+class FauxNoeudMicro {
+  onaudioprocess:
+    ((e: { inputBuffer: { getChannelData(c: number): Float32Array } }) => void) | null = null
+  connexions = 0
+  connect(): void {
+    this.connexions += 1
+  }
+  disconnect(): void {
+    this.connexions -= 1
+  }
+}
+
 class FakeAudio {
   static demarrages = 0
   static frequences: number[] = []
   static fermetures = 0
   static connexions = 0
   static arrets = 0
+  /** Le dernier contexte de CAPTURE (celui du moteur Whisper), pour lui injecter de l'audio. */
+  static micro: FakeAudio | null = null
   state = 'running'
   currentTime = 0
+  sampleRate = 16_000
   destination = {}
+  noeud = new FauxNoeudMicro()
   createOscillator(): FakeOscillator {
     return new FakeOscillator()
+  }
+  createMediaStreamSource(): { connect(): void; disconnect(): void } {
+    FakeAudio.micro = this
+    return { connect: () => {}, disconnect: () => {} }
+  }
+  createScriptProcessor(): FauxNoeudMicro {
+    return this.noeud
   }
   createGain() {
     return {
@@ -112,6 +135,7 @@ beforeEach(() => {
   FakeAudio.demarrages = 0
   FakeAudio.frequences = []
   FakeAudio.fermetures = 0
+  FakeAudio.micro = null
   ;(window as never as Record<string, unknown>).AudioContext = FakeAudio
   routeConversationMessage.mockClear()
   conversations.mockClear()
@@ -221,5 +245,128 @@ describe('widget Jarvis', () => {
     })
     expect(conversations).toHaveBeenCalled()
     expect(c.textContent).toContain('Run en cours')
+  })
+
+  describe('écoute LOCALE (whisper.cpp)', () => {
+    /** Rejoue une phrase dans le micro : de la parole, puis le silence qui la termine. */
+    const direAuMicro = async (): Promise<void> => {
+      const contexte = FakeAudio.micro
+      if (!contexte) throw new Error('aucun micro ouvert')
+      const parole = new Float32Array(1_600).map((_, i) => Math.sin(i / 3) * 0.3)
+      const silence = new Float32Array(1_600)
+      await act(async () => {
+        for (let i = 0; i < 8; i += 1) {
+          contexte.noeud.onaudioprocess?.({ inputBuffer: { getChannelData: () => parole } })
+        }
+        for (let i = 0; i < 9; i += 1) {
+          contexte.noeud.onaudioprocess?.({ inputBuffer: { getChannelData: () => silence } })
+        }
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+    }
+
+    const brancherWhisper = (installe: boolean, extra: Record<string, unknown> = {}): void => {
+      const api = (window as never as Record<string, unknown>).api as Record<string, unknown>
+      Object.assign(api, {
+        whisperEtat: vi.fn(async () => ({
+          installe,
+          binaire: installe ? 'C:/w/whisper-cli.exe' : null,
+          modele: installe ? 'C:/w/ggml.bin' : null,
+          racine: 'C:/w',
+          modeleNom: 'ggml-small-q5_1.bin',
+          megaoctets: 215
+        })),
+        ...extra
+      })
+      ;(navigator as never as Record<string, unknown>).mediaDevices = {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: () => {} }] }))
+      }
+    }
+
+    const flush = async (): Promise<void> => {
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+    }
+
+    it('propose l’installation, une seule fois, tant que l’écoute locale est absente', async () => {
+      const whisperInstaller = vi.fn(async () => ({
+        installe: true,
+        binaire: 'C:/w/whisper-cli.exe',
+        modele: 'C:/w/ggml.bin',
+        racine: 'C:/w',
+        modeleNom: 'ggml-small-q5_1.bin',
+        megaoctets: 215
+      }))
+      brancherWhisper(false, { whisperInstaller })
+      const c = rendre()
+      await flush()
+      expect(c.querySelector('[data-testid="jarvis-installer-whisper"]')).not.toBeNull()
+      clic(c, 'jarvis-installer-whisper')
+      await flush()
+      expect(whisperInstaller).toHaveBeenCalledTimes(1)
+      // une fois installé, l'offre disparaît et l'état est annoncé
+      expect(c.querySelector('[data-testid="jarvis-installer-whisper"]')).toBeNull()
+      expect(c.textContent).toContain('Écoute locale prête')
+    })
+
+    it('ÉCOUTE par whisper local — pas par le moteur Chromium — dès qu’il est installé', async () => {
+      // LE DÉFAUT D'ORIGINE : `webkitSpeechRecognition` rend `error: network` dans Electron, donc
+      // le micro s'ouvrait et rien n'était jamais reconnu. L'entrée qui casserait un faux fix :
+      // `window.SpeechRecognition` est TOUJOURS défini ici (voir `beforeEach`) — un widget qui le
+      // préfère instancierait FakeRecognition, et l'utilisateur retrouverait son silence.
+      const whisperTranscrire = vi.fn(async (_wav: Uint8Array) => 'Jarvis, ouvre le task manager')
+      brancherWhisper(true, { whisperTranscrire })
+      const c = rendre()
+      await flush()
+      clic(c, 'jarvis-bascule')
+      await flush()
+      expect(FakeRecognition.instances).toHaveLength(0)
+      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled()
+
+      await direAuMicro()
+      expect(whisperTranscrire).toHaveBeenCalledTimes(1)
+      // le WAV envoyé au processus principal est bien un WAV
+      const wav = whisperTranscrire.mock.calls[0][0]
+      expect(String.fromCharCode(...wav.slice(0, 4))).toBe('RIFF')
+      // ... et la chaîne complète tient : parole → transcription → bip → ordre envoyé à Jarvis
+      expect(FakeAudio.frequences).toEqual([880, 1320])
+      expect(routeConversationMessage).toHaveBeenCalledWith('c-jarvis', 'ouvre le task manager', [])
+      expect(c.textContent).toContain('Jarvis, ouvre le task manager')
+    })
+
+    it('MONTRE l’échec du moteur au lieu d’afficher « écoute en cours » sur un moteur mort', async () => {
+      // LE DÉFAUT MESURÉ : sur cette application, `webkitSpeechRecognition` rend `error: network`
+      // (capture datée du 2026-08-31, chemin dans l'en-tête de `src/main/whisper-local.ts`) ; la
+      // cause de ce code n'est pas établie et n'est pas testée ici. L'erreur était avalée, donc le
+      // widget restait allumé sans rien entendre. L'entrée qui casserait un faux fix : `no-speech`,
+      // qui doit LAISSER l'écoute vivre.
+      brancherWhisper(false)
+      const c = rendre()
+      await flush()
+      clic(c, 'jarvis-bascule')
+      const moteur = FakeRecognition.instances.at(-1)!
+      await act(async () => moteur.onerror?.({ error: 'no-speech' }))
+      expect(c.querySelector('[data-testid="jarvis-bascule"]')?.textContent).toContain('couper')
+
+      await act(async () => moteur.onerror?.({ error: 'network' }))
+      expect(c.textContent).toContain('network')
+      expect(c.textContent).toContain('hors ligne')
+      expect(c.querySelector('[data-testid="jarvis-bascule"]')?.textContent).toContain(
+        'Activer l’écoute'
+      )
+    })
+
+    it('reste sur le moteur du navigateur tant que whisper n’est pas installé', async () => {
+      brancherWhisper(false)
+      const c = rendre()
+      await flush()
+      clic(c, 'jarvis-bascule')
+      await flush()
+      expect(FakeRecognition.instances).toHaveLength(1)
+    })
   })
 })

@@ -224,7 +224,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 
-
 .home-tile__scroll {
   height: 100%;
   padding-right: 4px;
@@ -239,14 +238,62 @@
   position: absolute;
   z-index: 2;
 }
-.home-tile__grip[data-edge='n'] { top: -3px; left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
-.home-tile__grip[data-edge='s'] { bottom: -3px; left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
-.home-tile__grip[data-edge='w'] { left: -3px; top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
-.home-tile__grip[data-edge='e'] { right: -3px; top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
-.home-tile__grip[data-edge='nw'] { top: -3px; left: -3px; width: 17px; height: 17px; cursor: nwse-resize; }
-.home-tile__grip[data-edge='ne'] { top: -3px; right: -3px; width: 17px; height: 17px; cursor: nesw-resize; }
-.home-tile__grip[data-edge='sw'] { bottom: -3px; left: -3px; width: 17px; height: 17px; cursor: nesw-resize; }
-.home-tile__grip[data-edge='se'] { bottom: -3px; right: -3px; width: 17px; height: 17px; cursor: nwse-resize; }
+.home-tile__grip[data-edge='n'] {
+  top: -3px;
+  left: 14px;
+  right: 14px;
+  height: 8px;
+  cursor: ns-resize;
+}
+.home-tile__grip[data-edge='s'] {
+  bottom: -3px;
+  left: 14px;
+  right: 14px;
+  height: 8px;
+  cursor: ns-resize;
+}
+.home-tile__grip[data-edge='w'] {
+  left: -3px;
+  top: 14px;
+  bottom: 14px;
+  width: 8px;
+  cursor: ew-resize;
+}
+.home-tile__grip[data-edge='e'] {
+  right: -3px;
+  top: 14px;
+  bottom: 14px;
+  width: 8px;
+  cursor: ew-resize;
+}
+.home-tile__grip[data-edge='nw'] {
+  top: -3px;
+  left: -3px;
+  width: 17px;
+  height: 17px;
+  cursor: nwse-resize;
+}
+.home-tile__grip[data-edge='ne'] {
+  top: -3px;
+  right: -3px;
+  width: 17px;
+  height: 17px;
+  cursor: nesw-resize;
+}
+.home-tile__grip[data-edge='sw'] {
+  bottom: -3px;
+  left: -3px;
+  width: 17px;
+  height: 17px;
+  cursor: nesw-resize;
+}
+.home-tile__grip[data-edge='se'] {
+  bottom: -3px;
+  right: -3px;
+  width: 17px;
+  height: 17px;
+  cursor: nwse-resize;
+}
 
 .home-tile__grip[data-edge='se']::after {
   content: '';
@@ -727,6 +774,29 @@
   50% {
     box-shadow: 0 0 0 7px rgba(0, 214, 255, 0);
   }
+}
+
+/* L'offre d'installation de l'écoute LOCALE : visible tant que le moteur hors ligne manque. */
+.jarvis__whisper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+}
+
+.jarvis__whisper-bouton {
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.jarvis__whisper-bouton:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 .jarvis__aide,

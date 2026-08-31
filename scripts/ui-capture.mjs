@@ -37,8 +37,9 @@
  *                                    sous-pixel et rendrait « ca bouge » sur un ecran ou l'humain
  *                                    ne voit rien.
  */
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, parse, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /** Identifiants réels du catalogue applicatif (src/shared/navigation.ts). */
 export const VUES_CONNUES = [
@@ -195,6 +196,33 @@ const argument = (nom, defaut) => {
 }
 
 /**
+ * Où vit le `DevToolsActivePort` de l'instance ouverte.
+ *
+ * Ce chemin était CODÉ EN DUR sur une seule installation (`C:/Amitel/Autowin OS/...`). Le harnais
+ * rendait donc `cdp-injoignable` sur toute autre machine ET depuis tout worktree d'agent, alors que
+ * l'application tournait : un instrument de preuve qui impute au produit un défaut qui est le sien.
+ * On REMONTE désormais les parents du script jusqu'à trouver le fichier — depuis un worktree
+ * (`<depot>/.autowin-data/autowin-os/worktrees/…`) comme depuis le dépôt, la remontée croise la
+ * racine réelle. L'ancien chemin reste en dernier recours, et `AUTOWIN_DATA_DIR` passe devant tout.
+ */
+const candidatsDevToolsPort = () => {
+  const candidats = []
+  if (process.env.AUTOWIN_DATA_DIR) {
+    candidats.push(resolve(process.env.AUTOWIN_DATA_DIR, 'DevToolsActivePort'))
+  }
+  let dossier = dirname(fileURLToPath(import.meta.url))
+  const racineDisque = parse(dossier).root
+  for (;;) {
+    candidats.push(resolve(dossier, '.autowin-data/autowin-os/DevToolsActivePort'))
+    const parent = dirname(dossier)
+    if (dossier === racineDisque || parent === dossier) break
+    dossier = parent
+  }
+  candidats.push('C:/Amitel/Autowin OS/.autowin-data/autowin-os/DevToolsActivePort')
+  return candidats
+}
+
+/**
  * Découvre la page à piloter.
  *
  * Le repli sur `DevToolsActivePort` n'est autorisé QUE si l'appelant n'a pas imposé de port.
@@ -213,12 +241,15 @@ const decouvrirCible = async (port, portImpose) => {
     return await lire(port)
   } catch (erreur) {
     if (portImpose) throw erreur
-    const actif = readFileSync(
-      'C:/Amitel/Autowin OS/.autowin-data/autowin-os/DevToolsActivePort',
-      'utf8'
-    )
-      .trim()
-      .split(/\r?\n/)
+    const candidats = candidatsDevToolsPort()
+    const trouve = candidats.find((c) => existsSync(c))
+    if (!trouve) {
+      // On NOMME ce qui a été sondé : un « injoignable » sans inventaire est indébogable.
+      throw new Error(
+        `DevToolsActivePort introuvable. Sondes : ${candidats.join(' | ')}. Amont : ${erreur}`
+      )
+    }
+    const actif = readFileSync(trouve, 'utf8').trim().split(/\r?\n/)
     return lire(actif[0])
   }
 }
