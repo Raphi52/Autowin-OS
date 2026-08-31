@@ -3269,7 +3269,7 @@ export function ChatView({
                             )}
                             {!convQuery && (
                               <span className="conv-meta">
-                                <span>{c.provider}</span>
+                                <span>{c.id}</span>
                                 <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
                               </span>
                             )}
