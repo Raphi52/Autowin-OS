@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { messageEmpreinteBrain } from './brain-empreinte-message'
 
 /**
  * L'ÉTAPE QUI CHARGE LE CONTEXTE S'APPELLE `think`, et celle qui capitalise `learn`.
@@ -26,10 +27,34 @@ describe('l’étape de chargement de contexte s’appelle `think`', () => {
     expect(orchestrateur).not.toContain("role: 'load'")
   })
 
-  it('les détails affichés portent le même nom', () => {
-    // C'est la ligne que l'utilisateur lit : « load : empreinte chargée ».
-    expect(orchestrateur).toMatch(/think : empreinte chargée/)
-    expect(orchestrateur).not.toMatch(/'load : /)
+  it('les détails affichés portent le même nom, quel que soit le sort du Brain', () => {
+    /*
+     * TESTÉ SUR LA SORTIE, plus sur le texte source de l'orchestrateur.
+     *
+     * Ce test cherchait `/think : empreinte chargée/` DANS `orchestrator.ts`. Le libellé a
+     * déménagé dans `brain-empreinte-message.ts` le 2026-08-31 (le message distingue désormais
+     * « la base ne sait rien » d'« on n'a pas pu lui demander ») : le test est tombé rouge alors
+     * que le comportement qu'il protège était intact, et il serait resté vert si le libellé avait
+     * été renommé `load` à l'intérieur du nouveau module.
+     *
+     * Ce qu'il garde, c'est l'invariant : CHAQUE détail affiché nomme l'étape `think`, et aucun ne
+     * ressuscite `load`. Le vérifier sur les quatre sorts possibles du Brain couvre les trois
+     * branches ajoutées, qu'un grep de source ne voyait pas.
+     */
+    const sorts = [
+      messageEmpreinteBrain('found', 1_200),
+      messageEmpreinteBrain('empty', 0),
+      messageEmpreinteBrain('unavailable', 0),
+      messageEmpreinteBrain('invalid', 0)
+    ]
+    expect(sorts).toHaveLength(4)
+    for (const sort of sorts) {
+      expect(sort.detail).toMatch(/^think : /)
+      expect(sort.detail).not.toMatch(/load/)
+      expect(sort.text).not.toMatch(/\/save\b/)
+    }
+    // Le cas nominal reste nommé explicitement : c'est la ligne que l'utilisateur lit le plus.
+    expect(messageEmpreinteBrain('found', 1_200).detail).toBe('think : empreinte chargée')
   })
 })
 
