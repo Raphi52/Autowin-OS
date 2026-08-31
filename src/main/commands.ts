@@ -53,8 +53,16 @@ import { cleDeBureau, decisionDeReutilisation } from './bureau-reutilisable'
 import { readLastCommitFiles } from './git-read-main'
 import { nativeSkills } from './native-registry'
 
-/** Longueur du declencheur remis au modele : assez pour reconnaitre le MOMENT, pas le contrat. */
-const DECLENCHEUR_MAX = 200
+/**
+ * Longueur du declencheur remis au modele : assez pour reconnaitre le MOMENT, pas le contrat.
+ *
+ * Etait a 200. Ramene a 120 le 2026-08-31 : ce bloc est le plus gros volume INVARIANT du prompt
+ * (17 skills a chaque tour) pour un usage rare. La borne n'est pas un gout — elle est MESUREE :
+ * a 90, `commands.declencheur-graft` tombe, le mot « procedure » de graft passant apres la coupe,
+ * et graft devient indistinguable de forge. 120 est donc le plancher qui garde chaque MOMENT
+ * lisible ; descendre plus bas exige de raccourcir d'abord les `description` des SKILL.md.
+ */
+const DECLENCHEUR_MAX = 120
 
 /**
  * Skills ACTIVES sur disque, chacune avec son DECLENCHEUR : `id — <debut de description>`.
