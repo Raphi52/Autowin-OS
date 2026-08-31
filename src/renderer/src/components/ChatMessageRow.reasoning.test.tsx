@@ -25,8 +25,13 @@ describe('ChatMessageRow', () => {
     await act(async () => {
       root.render(createElement(ChatMessageRow, { message, index: 0 } as never))
     })
-    expect(host.querySelector('[data-testid="msg-reasoning"]')).toBeNull()
-    expect(host.textContent).not.toContain('raisonnement en cours')
+    const bloc = host.querySelector<HTMLDetailsElement>('[data-testid="thinking-block"]')
+    expect(bloc, 'le raisonnement doit être rendu dans un bloc « Réflexion »').not.toBeNull()
+    // OUVERT tant que le tour court : replié, la pensée resterait invisible — le défaut d'origine.
+    expect(bloc!.open).toBe(true)
+    expect(host.querySelector('[data-testid="thinking-body"]')?.textContent).toBe(
+      'raisonnement en cours'
+    )
     await act(async () => root.unmount())
     host.remove()
   })
