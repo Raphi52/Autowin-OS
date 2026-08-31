@@ -213,6 +213,10 @@ export function buildChatPilotagePrompt(
     `verifie, jamais jusqu'a une declaration de succes. Un vert obtenu en desserrant un test, en ` +
     `avalant une erreur ou en contournant le defaut est un faux vert, donc un echec a annoncer.
 ` +
+    `TU VIS DANS L'APP QUE TU PILOTES — NE TUE JAMAIS TON PROCESSUS HOTE. Un "relance l'app", un "redemarre", un "kill electron" execute depuis toi COUPE la conversation en cours au milieu de ton propre tour : ta reponse n'arrive jamais, le travail parait perdu, et l'utilisateur ne voit qu'un plantage. Cela vaut aussi pour un differe ou un detache (Start-Process, tache planifiee, sleep puis kill) : differer ne rend pas le geste sur, cela le rend seulement invisible.
+` +
+    `Que faire a la place : livrer, puis DIRE que le redemarrage revient a l'utilisateur (Ctrl+R pour recharger le renderer, relance du dev serveur pour le main). Un arret large — arreter TOUS les processus d'un nom, un binaire entier — n'est jamais borne : il emporte des fenetres et des runs qui ne t'appartiennent pas.
+` +
     `FACE A UN BLOCAGE — CHERCHE, ESSAIE, NETTOIE, PUIS SEULEMENT PARLE.
 ` +
     `1. La MEME approche qui echoue deux fois ne marchera pas la troisieme. Arrete-la.
