@@ -1238,7 +1238,12 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  vec2 q = p + vec2(w1, w2) * pulseWarp + derive * 0.4;',
   '  float champ = fbm(q);',
   '  float filaments = fbm(q * 2.6 + vec2(w2, w1) + derive * 2.0);',
-  '  float densite = pow(clamp(champ * 1.45, 0.0, 1.0), 1.7);',
+  // LES APLATS QUI DESSINENT DES FACETTES. `clamp(champ * 1.45)` SATURE des que `champ` depasse 0,69 :
+  // toute cette zone vaut exactement 1.0, donc c'est un APLAT, et la ligne ou il commence est un
+  // iso-contour du bruit de valeur — anguleux par nature, puisque ce bruit est bati sur une grille.
+  // D'ou l'air « polygonal » signale le 2026-08-31. Un `smoothstep` remplace le clamp : la montee est
+  // continue et sa derivee s'annule aux deux bouts, donc plus aucun plateau ne vient poser son bord.
+  '  float densite = pow(smoothstep(0.04, 0.88, champ), 1.7);',
   '  densite *= 0.72 + 0.55 * filaments;',
   '  densite *= 1.0 + uRespiration * sin(uTime * uWarp * 0.7 + champ * 6.0);',
   '  densite = clamp(densite, 0.0, 1.0);',
