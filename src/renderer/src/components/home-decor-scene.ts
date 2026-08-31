@@ -1178,12 +1178,25 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  return mix(mix(hashN(i), hashN(i + vec2(1.0, 0.0)), u.x),',
   '             mix(hashN(i + vec2(0.0, 1.0)), hashN(i + vec2(1.0, 1.0)), u.x), u.y);',
   '}',
+  // POURQUOI LA ROTATION CHANGE A CHAQUE OCTAVE — c'est LA cause de l'air « polygonal » (2026-08-31).
+  //
+  // `bruitN` est un bruit de VALEUR : il est bati sur une grille entiere, et ses iso-lignes suivent
+  // donc des directions privilegiees, celles de la grille. Tant que chaque octave subissait la MEME
+  // rotation fixe (0.8, 0.6, -0.6, 0.8), les sept grilles restaient alignees entre elles : leurs
+  // directions se RENFORCAIENT au lieu de se brouiller, et la somme dessinait de longues aretes
+  // droites — un nuage a facettes.
+  //
+  // Une rotation qui AVANCE d'un octave a l'autre (angle irrationnel, jamais periodique sur 7 tours)
+  // decorrele les grilles : aucune direction ne ressort plus, et la matiere redevient nuageuse.
+  // Le cout est nul — deux `cos`/`sin` par octave, sur un shader deja plafonne a ~40 images/s.
   'float fbm(vec2 p) {',
-  '  mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);',
   '  float somme = 0.0;',
   '  float amplitude = 0.5;',
+  '  float angle = 0.0;',
   '  for (int octave = 0; octave < 7; octave++) {',
   '    somme += amplitude * bruitN(p);',
+  '    angle += 1.10714872;',
+  '    mat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));',
   '    p = rot * p * 2.07 + vec2(11.7, 5.3);',
   '    amplitude *= 0.5;',
   '  }',
