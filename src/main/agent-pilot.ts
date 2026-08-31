@@ -713,6 +713,17 @@ export class AgentPilot {
      */
     let orchestrationOutcome: Record<string, unknown> | undefined
     /**
+     * Le REFUS d'un `remember` auxiliaire, garde pour ne pas etre avale par la cloture muette.
+     *
+     * `onlyAuxiliaryRemember` clot le tour sans rendre la main au modele — economie voulue. Mais
+     * il jetait AUSSI l'issue du depot : un refus deterministe (type inconnu, source invalide,
+     * Brain injoignable) disparaissait, et le modele venait d'ecrire « je retiens ca ». Vecu le
+     * 31/08 (conv-1569) : deux tentatives, aucun retour, l'utilisateur constate « ca a pas marche »
+     * alors que rien dans le fil ne le disait. On ne repaie pas une generation : on AJOUTE la
+     * verite au texte deja livre.
+     */
+    let refusRememberAuxiliaire: string | undefined
+    /**
      * Le compte-rendu AUTORITATIF de cette orchestration, garde comme REPLI.
      *
      * Contrepartie indispensable de la parole rendue au modele : un modele qui n'ecrit rien — ou qui
@@ -2095,6 +2106,9 @@ export class AgentPilot {
           continue
         }
         const commandSucceeded = commandResultSucceeded(r)
+        if (token.name === 'remember' && !commandSucceeded) {
+          refusRememberAuxiliaire = r.ok ? JSON.stringify(r.data) : String(r.error ?? 'refus')
+        }
         /*
          * La clef porte le nom ET LA CIBLE. Avec le nom seul, un `edit_file` reussi sur `b.ts`
          * purgeait l'echec jamais rejoue sur `a.ts` — defaut mesure le 2026-08-22 par deux juges
@@ -2146,7 +2160,15 @@ export class AgentPilot {
       if (onlyAuxiliaryRemember) {
         // Le modele a livre sa reponse ET sauve une memoire. On emettait VIDE — donc on JETAIT son
         // texte reel, laissant une bulle vide (conv-1141). `spoken` est garanti non vide ici.
-        emit({ kind: 'done', text: spoken, usage })
+        emit({
+          kind: 'done',
+          text: refusRememberAuxiliaire
+            ? `${spoken}
+
+⚠️ Mémoire NON déposée — le Brain a refusé : ${refusRememberAuxiliaire}`
+            : spoken,
+          usage
+        })
         return
       }
 
