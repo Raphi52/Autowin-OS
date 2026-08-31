@@ -24,7 +24,10 @@
  *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
  *                                    un declencheur absent ou inerte est un echec nomme, jamais
  *                                    une capture silencieuse de la vue fermee.
- *         [--motion <selecteur CSS>] [--reduced-motion] PROUVE QUE CA BOUGE. Capture N frames de chaque occurrence du
+ *         [--state attention] [--state-selector <sel>] force un etat DOM (defaut
+ *                                    `.chat-mosaic-window`) que la navigation seule ne produit pas.
+ *                                    Zero element touche = echec nomme (code 7).
+ *         [--motion <selecteur CSS>] [--reduced-motion | --full-motion] PROUVE QUE CA BOUGE. Capture N frames de chaque occurrence du
  *                                    selecteur, a sa taille de rendu REELLE, et rend la fraction de
  *                                    pixels qui change entre frames. Un element immobile est un
  *                                    echec nomme. Options : --frames (defaut 4), --interval ms
@@ -142,6 +145,43 @@ export const verdictCapture = (mesures) => {
     }
   }
   if ((mesures.octetsPng ?? 0) < SEUILS.octetsPng) echecs.push('png-trop-petit')
+  return { ok: echecs.length === 0, echecs }
+}
+
+/**
+ * Etats forcables par `--state`, tels que le composant les ECRIT reellement
+ * (src/renderer/src/components/ChatMosaic.tsx : data-etat = 'occupe' | 'attention').
+ */
+/**
+ * Quelle valeur de `prefers-reduced-motion` emuler, d'apres les drapeaux CLI.
+ * `--reduced-motion` (couper) l'emporte sur `--full-motion` (no-preference) : demander une
+ * preuve dans la condition reduite ne doit jamais etre neutralise par l'autre drapeau.
+ * Mesure du 2026-08-31 : le poste reel repond deja `reduce`, donc sans `--full-motion` une
+ * animation correcte se mesure IMMOBILE — ce qui est vrai, mais ne dit rien du poste standard.
+ */
+export const mediaMouvementEmulee = (argv) => {
+  if (argv.includes('--reduced-motion')) return 'reduce'
+  if (argv.includes('--full-motion')) return 'no-preference'
+  return undefined
+}
+
+export const ETATS_CONNUS = ['attention', 'occupe']
+
+export const resoudreEtat = (valeur) => {
+  const brut = String(valeur ?? '')
+    .trim()
+    .toLowerCase()
+  return ETATS_CONNUS.includes(brut) ? brut : undefined
+}
+
+/**
+ * Un etat force n'est une preuve que s'il a TOUCHE quelque chose. Mosaique vide => appliques: 0 =>
+ * l'anneau dore n'existe pas dans le DOM ; un vert rendu la serait un faux vert.
+ */
+export const verdictEtat = ({ etat, selecteur, appliques }) => {
+  const echecs = []
+  if (!resoudreEtat(etat)) echecs.push(`etat-inconnu(${etat})`)
+  if (!(Number(appliques) > 0)) echecs.push(`etat-sans-cible(${selecteur})`)
   return { ok: echecs.length === 0, echecs }
 }
 
@@ -277,10 +317,10 @@ const main = async () => {
   // --reduced-motion : rejoue la condition reelle d'un poste ou les effets visuels systeme sont
   // desactives (Windows > Accessibilite). Sans cette emulation, une preuve de mouvement ne dit
   // RIEN du poste utilisateur : elle mesure un navigateur ou l'animation n'a jamais ete coupee.
-  const mouvementReduit = process.argv.includes('--reduced-motion')
-  if (mouvementReduit) {
+  const mediaMouvement = mediaMouvementEmulee(process.argv)
+  if (mediaMouvement) {
     await envoyer('Emulation.setEmulatedMedia', {
-      features: [{ name: 'prefers-reduced-motion', value: 'reduce' }]
+      features: [{ name: 'prefers-reduced-motion', value: mediaMouvement }]
     })
   }
 
@@ -313,6 +353,35 @@ const main = async () => {
   // popover, un menu, un onglet n'existent dans le DOM qu'APRES un clic. On mesure donc le DOM
   // avant, on declenche, on laisse le rendu se poser, et le verdict exige un DELTA -- un clic sans
   // effet ne doit pas produire une capture de la vue fermee portant un verdict vert.
+  // --state : amene l'UI dans un etat qu'aucune navigation ne produit a la demande (une fenetre
+  // mosaique passe en data-etat='attention' seulement a la FIN d'un tour). On l'ECRIT sur le DOM,
+  // et le verdict exige que l'ecriture ait touche au moins un element.
+  const etatDemande = argument('--state')
+  let verdictEtatForce
+  if (etatDemande !== undefined) {
+    const etat = resoudreEtat(etatDemande)
+    const selecteurEtat = argument('--state-selector', '.chat-mosaic-window')
+    const appliques = etat
+      ? await evaluer(`(() => {
+      const noeuds = [...document.querySelectorAll(${JSON.stringify(selecteurEtat)})]
+      noeuds.forEach((n) => n.setAttribute('data-etat', ${JSON.stringify(etat)}))
+      return noeuds.length
+    })()`)
+      : 0
+    verdictEtatForce = {
+      ...verdictEtat({ etat: etatDemande, selecteur: selecteurEtat, appliques }),
+      etat: etatDemande,
+      selecteurEtat,
+      appliques
+    }
+    if (!verdictEtatForce.ok) {
+      socket.close()
+      rendre({ ok: false, echecs: verdictEtatForce.echecs, vue, etatForce: verdictEtatForce }, 7)
+    }
+    await new Promise((r) => setTimeout(r, 300))
+    mesuresDom = await mesurerDom()
+  }
+
   const declencheur = argument('--click')
   let declencheurTrouve
   let elementsAvantClic
@@ -468,6 +537,7 @@ const main = async () => {
       {
         ...verdictM,
         vue,
+        ...(verdictEtatForce ? { etatForce: verdictEtatForce } : {}),
         planche: boites.boites.length > 0 ? sortie : null,
         portUtilise,
         selecteur: selecteurMouvement,
@@ -508,6 +578,7 @@ const main = async () => {
     {
       ...verdict,
       vue,
+      ...(verdictEtatForce ? { etatForce: verdictEtatForce } : {}),
       fichier: sortie,
       portUtilise,
       ...mesures,
