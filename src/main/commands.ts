@@ -501,7 +501,9 @@ const CATALOG: CommandSpec[] = [
       "Agir sur le PC Windows apres desktop_observe. Les coordonnees x/y vont de 0 a 1000 dans l'image capturee. Envoyer une courte sequence puis observer de nouveau.",
     args: {
       actions:
-        "tableau (max 20) de {type:'move',x,y}, {type:'click',x,y,button?,clicks?}, {type:'scroll',delta,x?,y?}, {type:'type',text}, {type:'key',keys:['CTRL','A']}, {type:'open',target,args?}, {type:'wait',ms}"
+        "tableau JSON (max 20) de {type:'move',x,y}, {type:'click',x,y,button?,clicks?}, {type:'scroll',delta,x?,y?}, {type:'type',text}, {type:'key',keys:['CTRL','A']}, {type:'open',target,args?}, {type:'wait',ms}. " +
+        "`keys` est un TABLEAU de touches, jamais une chaine : ['CTRL','A'] et non 'CTRL+A'. `ms` est borne a 5000 (au-dela = refus, enchainer deux waits). " +
+        "Exemple complet : [{\"type\":\"click\",\"x\":500,\"y\":320},{\"type\":\"wait\",\"ms\":800},{\"type\":\"key\",\"keys\":[\"CTRL\",\"A\"]},{\"type\":\"type\",\"text\":\"bonjour\"}]"
     },
     annotations: {
       readOnlyHint: false,
@@ -810,7 +812,9 @@ const CATALOG: CommandSpec[] = [
       "Lancer une commande. Tous les binaires sont autorisés D'OFFICE : lance-les directement, ne demande JAMAIS d'autorisation et ne demande jamais à l'utilisateur d'écrire une phrase pour te débloquer. Seule limite : un seul programme à la fois — les enchaînements (`&&`, `|`, `;`) sont refusés, découpe-les en appels successifs",
     args: {
       commande:
-        'la ligne à lancer, un seul programme et ses arguments (ex. `git status --porcelain`)'
+        'la ligne à lancer, un seul programme et ses arguments (ex. `git status --porcelain`). ' +
+        'Aucun opérateur de shell : `a && b`, `a | b`, `a ; b`, redirections et sous-shells sont REFUSÉS — ' +
+        'découper en appels successifs. Contre-exemple refusé : `powershell -c "ls; pwd"` → deux appels séparés.'
     }
   },
   {

@@ -66,6 +66,7 @@ import type { ChatArtifact } from '../shared/artifacts'
  */
 export const CAP_ITERATIONS_TOUR = 12
 import type { PilotEventKind } from '../shared/pilot-events'
+import { blocEtatSuivant, type EtatPrompt } from './etat-diff'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -1241,6 +1242,9 @@ export class AgentPilot {
         ? 'J’ai agi mais je n’ai pas produit de conclusion en clair — vois les cartes ' +
           'd’action ci-dessus pour le detail (et leurs eventuels echecs).'
         : 'Aucune reponse produite pour ce tour.')
+    // L'etat ENTIER part deja dans le premier message du tour : les iterations suivantes n'en
+    // repoussent que le DELTA (voir `etat-diff.ts`).
+    let dernierEtatEnvoye: EtatPrompt = snapshot
     for (let i = recoveredProviderCall?.iteration ?? 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
       // point d'itération (priorité immédiate, sans attendre la fin du tour).
@@ -2219,8 +2223,10 @@ export class AgentPilot {
       }
 
       const state = await this.bus.snapshotForPrompt()
+      const bloc = blocEtatSuivant(dernierEtatEnvoye, state)
+      dernierEtatEnvoye = state
       convo.push(`TU AS ÉMIS: ${text}`)
-      convo.push(`RÉSULTATS:\n${results.join('\n')}\n\nÉTAT MAINTENANT:\n${JSON.stringify(state)}`)
+      convo.push(`RÉSULTATS:\n${results.join('\n')}\n\n${bloc}`)
     }
     // Le cap EFFECTIF, pas le cap initial : `grantRecoveryIteration` en accorde jusqu'a huit de plus
     // (directive tardive, tour muet, chiffre non verifie, conclusion absente, echec taise...). Un tour
