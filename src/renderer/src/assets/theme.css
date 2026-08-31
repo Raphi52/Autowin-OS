@@ -75,7 +75,23 @@
  */
 body {
   margin: 0;
-  background: #05060c;
+  /*
+   * LE FOND 2D EST DE RETOUR, et le detour valait d'etre trace. Il a d'abord ete supprime a la
+   * demande de l'utilisateur (« faut enlever le fond d'ecran 2d et tout remplacer par du 3d »), le
+   * decor three.js prenant le relais sur TOUTES les vues. Puis le decor a ete restreint a l'Accueil,
+   * sur demande egalement (« enleve le fond 3d partout laisse le que sur accueil comme avant »).
+   * Les deux demandes sont legitimes ; leur composition, elle, ne l'etait pas : plus de 3D ailleurs,
+   * et plus de 2D nulle part, donc un aplat noir sur toutes les autres vues -- la regression
+   * signalee le 2026-08-31 (« j'ai perdu mon ancien fond d'ecran 2d sur les vues »).
+   *
+   * « Comme avant » suppose donc que le 2D redevienne le fond PAR DEFAUT. Sur l'Accueil il reste
+   * invisible : le canvas du decor le recouvre. L'aplat sombre demeure sous l'image, comme repli
+   * tant qu'elle n'est pas chargee.
+   */
+  background:
+    linear-gradient(rgba(1, 2, 9, 0.1), rgba(0, 0, 5, 0.16)),
+    url('./autowin-galaxy-bg-hq.png') center / cover fixed,
+    #05060c;
   color: var(--text);
   font-family: var(--font);
   font-size: 13px;
@@ -675,7 +691,18 @@ button.card:hover {
 .decor-de-fond {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  /*
+   * `-1` ET PAS `0` : c'est ce qui rendait le menu de gauche INVISIBLE sur l'Accueil (regression du
+   * 2026-08-31). `.rail` n'est pas positionne et ne porte aucun z-index ; or l'ordre de peinture CSS
+   * traite les blocs statiques (etape 4) AVANT les elements positionnes a z-index 0 (etape 8). Un
+   * fond a z-index 0 recouvre donc tout frere statique, quelle que soit sa place dans le DOM -- et
+   * `pointer-events: none` n'y change rien, il rend le decor transparent aux CLICS, pas au REGARD.
+   *
+   * Un z-index negatif le fait passer derriere ces freres, tout en restant devant le fond du `body`
+   * (l'arriere-plan de l'element racine est toujours peint en premier). D'ou l'empilement voulu :
+   * image 2D, puis decor 3D, puis la coque et ses vues.
+   */
+  z-index: -1;
   pointer-events: none;
 }
 
