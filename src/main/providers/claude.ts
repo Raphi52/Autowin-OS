@@ -677,6 +677,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       '--output-format',
       'stream-json',
       '--verbose',
+      // Sans ce drapeau, le CLI n'emet le raisonnement qu'en BLOCS COMPLETS, dans l'evenement
+      // `assistant` : le bloc « Reflexion » restait donc vide pendant toute la reflexion puis se
+      // remplissait d'un coup, apres coup. Avec `--include-partial-messages`, les `thinking_delta`
+      // arrivent au fil de l'eau et le bloc s'ecrit EN TEMPS REEL (comme kimi).
+      '--include-partial-messages',
       // Retiré UNIQUEMENT pour un nœud skill en héritage : voir `argumentsMcpNoeudSkill`.
       ...argsMcp.strict,
       '--setting-sources',
@@ -994,6 +999,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     let lastRetry: { attempt: number; maxRetries: number; status: string } | null = null
     let resultSeen = false
     const reasoningFragments: string[] = []
+    // Vrai des qu'un `thinking_delta` partiel a ete recu : le bloc complet qui suit est alors un
+    // DOUBLON du flux deja affiche, et ne doit etre ni re-pousse ni re-persiste.
+    let partialThinkingSeen = false
     let resolvedModel: string | undefined
     let sessionId: string | undefined
     let usage: SendResult['usage']
@@ -1138,6 +1146,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         })
         return
       }
+      if (t === 'stream_event') {
+        // Raisonnement INCREMENTAL : la seule source temps reel. `text_delta` est volontairement
+        // ignore ici — le texte de reponse reste pris sur l'evenement `assistant`, sans quoi il
+        // serait compte deux fois.
+        const ev = o['event'] as { type?: string; delta?: { type?: string; thinking?: string } } | undefined
+        const delta = ev?.delta
+        if (ev?.type === 'content_block_delta' && delta?.type === 'thinking_delta' && delta.thinking) {
+          partialThinkingSeen = true
+          reasoningFragments.push(delta.thinking)
+          queue.push({ delta: '', reasoning: delta.thinking })
+        }
+        return
+      }
       if (t === 'result') resultSeen = true
       if (t === 'assistant') {
         const msg = o['message'] as
@@ -1162,6 +1183,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             text += part.text
             queue.push({ delta: part.text })
           } else if (part.type === 'thinking' && part.thinking) {
+            // Deja diffuse morceau par morceau via `stream_event` : le bloc complet est un doublon.
+            if (partialThinkingSeen) continue
             // Raisonnement CONSERVÉ pour l'observation post-mortem ET streamé en direct : c'est la
             // seule chose qui se passe pendant les secondes d'attente avant le premier mot.
             reasoningFragments.push(part.thinking)
