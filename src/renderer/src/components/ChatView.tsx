@@ -54,6 +54,7 @@ import {
   messageKey
 } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
+import { reprendreApresRedemarrage } from './chat-reprise'
 import type {
   AsstMsg,
   ChatAttachment,
@@ -131,13 +132,13 @@ type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
 /* ---------- Constantes ---------- */
 
-
 /**
  * Ghost-text d'un FIL donne : prompt suivant ecrit par le modele, sinon rubrique Recommande.
  * Extrait du composant pour que la MOSAIQUE l'obtienne aussi, par conversation (2026-08-30).
  */
 function ghostDuFil(fil: Msg[]): string | null {
-  const lastAssistant = [...fil].reverse().find((m) => m.role === 'assistant') as AsstMsg | undefined
+  const lastAssistant = [...fil].reverse().find((m) => m.role === 'assistant') as
+    AsstMsg | undefined
   if (!lastAssistant) return null
   const text = lastAssistant.parts
     .filter((p): p is Extract<ChatPart, { kind: 'text' }> => p.kind === 'text')
@@ -465,6 +466,18 @@ export function ChatView({
   }, [mosaicIds])
   /** Fils PEINTS des fenetres ouvertes — le fil actif garde son propre etat `messages`. */
   const [mosaicFils, setMosaicFils] = useState<Record<string, Msg[]>>({})
+  /**
+   * RE-HYDRATATION apres rafraichissement. `mosaicIds` persiste en localStorage, `mosaicFils` non :
+   * au remontage, les fenetres revenaient avec leur titre mais un fil VIDE (« Aucun message. »),
+   * indiscernable d'une perte de donnees. On recharge donc le fil de toute fenetre non peinte.
+   */
+  useEffect(() => {
+    for (const id of mosaicIds) {
+      if (mosaicFils[id]) continue
+      void ouvrirDansMosaique(id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mosaicIds, mosaicFils])
   const [convViewMode, setConvViewMode] = useState<'list' | 'mosaic'>(() =>
     window.localStorage.getItem('autowin.chat.conversationsViewMode') === 'mosaic'
       ? 'mosaic'
@@ -2019,8 +2032,9 @@ export function ChatView({
   }
 
   /** Stop simple : annule le tour sans transformer la file en relance automatique. */
-  function stopPilotTurn(): void {
-    const id = activeRef.current
+  /** `cible` : en mosaique, Stop vise SA fenetre — sinon il couperait le tour de la conversation active. */
+  function stopPilotTurn(cible?: string): void {
+    const id = cible ?? activeRef.current
     if (
       !id ||
       interruptingConversationsRef.current.has(id) ||
@@ -2150,21 +2164,29 @@ export function ChatView({
     // le marquait btw et l'ordre de la file mentait sur ce que l'utilisateur avait tapé.
     repli: 'btw' | 'normal' = 'btw',
     /** Ce texte repond a une question `ask` — le reçu doit dire « Répondu », pas « Orienté ». */
-    reponse = false
+    reponse = false,
+    /**
+     * CIBLE explicite : en mosaique, la fenetre qui oriente n'est pas forcement la conversation
+     * ACTIVE. Sans elle, « Orienter » d'une case n'injectait nulle part (onQueue etait un no-op).
+     */
+    cible?: string
   ): Promise<void> {
     const replimode: QueuedDirective['mode'] = repli === 'btw' ? 'btw' : undefined
     const text = body.trim()
+    const cleDraft = cible ?? composerDraftKeyRef.current
     if (!text) {
-      setDraftInput(composerDraftKeyRef.current, '') // "/btw" seul → rien à injecter, on nettoie
+      setDraftInput(cleDraft, '') // "/btw" seul → rien à injecter, on nettoie
       return
     }
-    if (!busy) {
-      void send(text) // aucun tour en cours → le texte part comme message normal
-      return
-    }
-    const id = activeRef.current
+    const id = cible ?? activeRef.current
     if (!id) return
-    setDraftInput(composerDraftKeyRef.current, '')
+    const occupe = cible ? busyConversationsRef.current.has(cible) : busy
+    if (!occupe) {
+      // aucun tour en cours → le texte part comme message normal
+      void send(text, cible ? { targetConversationId: cible } : undefined)
+      return
+    }
+    setDraftInput(cleDraft, '')
     // REÇU, comme `steerWithoutInterrupt` : les deux chemins appellent la MÊME IPC `injectDirective`,
     // et seul l'autre en rendait compte. Sans ce reçu, le texte quittait le composer et RIEN
     // n'apparaissait dans le fil — d'où « je clique et ça devrait m'envoyer le message et me donner une
@@ -2232,6 +2254,31 @@ export function ChatView({
   // On la stabilise via un ref (même pattern que forkRef), ici comme pour la relance gratuite.
   const sendRef = useRef(send)
   sendRef.current = send
+  /**
+   * REPRISE APRES UN REDEMARRAGE DEMANDE PAR L'AGENT (`restart_app`).
+   *
+   * On attend que la liste des conversations soit chargee : la consigne vise une conversation
+   * precise, et l'ouvrir avant que le store ait repondu la ferait passer pour disparue. Une seule
+   * tentative par demarrage (`repriseTenteeRef`) — le main a deja efface la consigne en la rendant.
+   */
+  const repriseTenteeRef = useRef(false)
+  useEffect(() => {
+    if (repriseTenteeRef.current || convs.length === 0) return
+    repriseTenteeRef.current = true
+    void reprendreApresRedemarrage({
+      lire: async () => (await window.api.repriseEnAttente?.()) ?? null,
+      ouvrir: async (conversationId) => {
+        const cible = convsRef.current.find((conversation) => conversation.id === conversationId)
+        if (!cible) return false
+        await loadConv(cible)
+        return true
+      },
+      envoyer: async (consigne, conversationId) => {
+        await sendRef.current(consigne, { targetConversationId: conversationId })
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convs])
   const pickRef = useRef<(prompt: string) => void>(() => {})
   pickRef.current = (prompt: string) => {
     if (busy) void submitBtw(prompt, 'normal')
@@ -2677,6 +2724,12 @@ export function ChatView({
    * mosaique et le chat plein : memes palettes `/` et `@`, memes pieces jointes, meme brouillon
    * (`composerDraftsRef` est deja indexe par conversation).
    */
+  /** Vide le champ d'UNE fenetre (etat interne du composer + brouillon partage). */
+  function viderComposerMosaique(id: string): void {
+    composersMosaiqueRef.current.get(id)?.setInput('')
+    setDraftInput(id, '')
+  }
+
   function rendreComposerMosaique(id: string): React.ReactNode {
     const occupe = busyConversations.has(id)
     const fichiers = piecesJointesMosaique[id] ?? []
@@ -2696,14 +2749,24 @@ export function ChatView({
         placeholderPendantTour={occupe}
         onDraftInput={(value) => setDraftInput(id, value)}
         onDraftPresence={() => {}}
-        onBtw={() => false}
+        onBtw={() => {
+          const parsed = parseBtw(getComposerDraft(id).input)
+          if (!parsed.isBtw) return false
+          viderComposerMosaique(id)
+          void submitBtw(parsed.body, 'btw', false, id)
+          return true
+        }}
         onSend={() => {
           const texte = getComposerDraft(id).input
-          composersMosaiqueRef.current.get(id)?.setInput('')
-          setDraftInput(id, '')
+          viderComposerMosaique(id)
           void send(texte, { targetConversationId: id })
         }}
-        onQueue={() => {}}
+        onQueue={() => {
+          const texte = getComposerDraft(id).input
+          if (!texte.trim()) return
+          viderComposerMosaique(id)
+          void submitBtw(texte, 'normal', askEnAttente(mosaicFils[id] ?? []), id)
+        }}
         onResume={() => {}}
         onPaste={(files) => void addFiles(files, id)}
         attachmentsNode={
@@ -2745,10 +2808,11 @@ export function ChatView({
               type="button"
               className="btn composer-stop"
               data-testid="composer-stop"
-              onClick={() => interruptAndFlushQueue(id)}
+              onClick={() => stopPilotTurn(id)}
+              disabled={interruptingConversations.has(id)}
               title="Arrêter ce tour"
             >
-              ■ Stop
+              {interruptingConversations.has(id) ? 'Arrêt…' : '■ Stop'}
             </button>
           ) : null
         }

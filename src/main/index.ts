@@ -331,6 +331,7 @@ import { registerTicketsIpc } from './tickets-ipc'
 import { abortUpdateConflict, checkForUpdate, applyUpdate } from './git-update'
 import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
+import { consommerReprise } from './redemarrage-reprise'
 import {
   ChatArtifactPreviewBudget,
   MAX_ARTIFACT_PREVIEW_BYTES,
@@ -1456,6 +1457,13 @@ bus.onConversationRemoved = (id: string): void => {
   deletePromptCalls(id)
   removeConversationTurnJournals(turnJournalRoot, id)
 }
+/**
+ * REDEMARRAGE PILOTE PAR L'AGENT — meme chemin que la relance d'auto-update, donc meme lanceur dev
+ * (`launch_dev.py`) et memes gardes. Cable ici parce que le bus de commandes ne connait ni Electron
+ * ni le lanceur : sans ce branchement, `restart_app` annonce son indisponibilite plutot que de
+ * promettre une relance qui n'arriverait pas.
+ */
+bus.redemarrerApp = (): void => restartApplication(app)
 os.setCausalMemoryRetriever((conversationId) =>
   causalLearningContext(causalTrace.readConversation(conversationId))
 )
@@ -1609,6 +1617,14 @@ function registerChatIpc(): void {
   // alors que la bannière fonctionnait en développement — où le cwd EST le dépôt, par accident.
   // Tout le reste de ce fichier utilise déjà `os.executionWorkspace` ; ces deux appels étaient les
   // seuls à ne pas le faire.
+  /**
+   * La consigne posee avant un redemarrage, rendue UNE SEULE FOIS puis effacee du disque.
+   * Le renderer la rejoue comme un message ordinaire dans la conversation d'origine.
+   */
+  ipcMain.handle('app:reprise-en-attente', (event) => {
+    assertTrustedRendererSender(event, 'Reprise après redémarrage')
+    return consommerReprise(ensureAutowinAppData(appDataRoot))
+  })
   ipcMain.handle('update:check', (event) => {
     assertTrustedRendererSender(event, 'Update')
     return checkForUpdate(os.executionWorkspace)
@@ -5067,7 +5083,10 @@ Le fil reprend ensuite normalement.`
    * coupable : on le NOMME d'abord, on corrigera ce que le journal designe.
    */
   const autoKaizenResumeTimer = setInterval(
-    () => pendantOperation('timer:autoKaizen:resumePending', () => autoKaizenSupervisor?.resumePending()),
+    () =>
+      pendantOperation('timer:autoKaizen:resumePending', () =>
+        autoKaizenSupervisor?.resumePending()
+      ),
     15_000
   )
   autoKaizenResumeTimer.unref()

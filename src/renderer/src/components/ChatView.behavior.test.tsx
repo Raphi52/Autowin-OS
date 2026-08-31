@@ -1941,13 +1941,17 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.runs-pane .workflow-panel-close')
     expect(container!.querySelector('.live-run')).toBeNull()
 
-    // Le bloc d'activité EST le bouton (plus de bloc dépliable dans le fil) : cliquer dessus
-    // renvoie vers Workflows, où vit le détail.
+    // Depuis le 2026-08-31, le chevron de l'en-tete REPLIE les etapes ; l'acces a Workflows garde
+    // son propre bouton ↗ dans la barre, pour ne pas perdre la trace complete.
     const indicator = container!.querySelector(
       '[data-testid="activity-group"]'
     ) as HTMLButtonElement | null
     expect(indicator?.textContent).toContain('en cours')
-    await act(async () => indicator!.click())
+    const ouvrirRun = container!.querySelector(
+      '[data-testid="activity-open-run"]'
+    ) as HTMLButtonElement | null
+    expect(ouvrirRun).toBeTruthy()
+    await act(async () => ouvrirRun!.click())
 
     // Panneau Workflows ouvert, onglet Runs, cadré sur le run/step actif.
     expect(container!.querySelector('.runs-pane')).toBeTruthy()

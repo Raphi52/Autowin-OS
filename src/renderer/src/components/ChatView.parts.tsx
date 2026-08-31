@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { libelleSortieCommande } from './evidence-label'
 import { groupOutcomeSummary } from './action-outcome-summary'
 import { failedActionRunId } from './run-trace-target'
-import { hasConsultableRun, localActionDetail, localActionDetails } from './action-detail-target'
+import { hasConsultableRun, localActionDetail } from './action-detail-target'
 import { HumanJson } from './HumanJson'
 import { BrainMarkdown } from './BrainMarkdown'
 import {
@@ -135,8 +135,10 @@ function EtageActivite({
   etape: ChatActionPart
   lien?: string
 }): React.JSX.Element {
-  const [ouvert, setOuvert] = useState(false)
   const detail = localActionDetail(etape)
+  // Un ECHEC s'ouvre d'office : sa cause est la seule information qui compte quand ca casse.
+  // Un succes attend le clic. (Comportement herite du bloc de details supprime le 2026-08-31.)
+  const [ouvert, setOuvert] = useState(detail ? !detail.ok : false)
   const cible = resumeCible(etape.args)
   const libelle = CMD_LABEL[etape.name] ?? etape.name
   return (
@@ -469,11 +471,12 @@ export function AssistantActivityGroup({
    */
   const [whyOpen, setWhyOpen] = useState(false)
   /**
-   * DEMANDE du 20/08 : « quand je clique sur 1 action terminee remember ca doit deplier ce que ca a
-   * remember ». Le detail local etait rendu HORS du clic : un succes arrivait deja plie, et il
-   * fallait viser son propre `<summary>`. Le clic du bloc pilote donc aussi ce pli, faute de `why`.
+   * PLI DES ETAGES. Le chevron de l'en-tete REPLIE la liste des etapes affichee sous le bloc — c'est
+   * tout ce qu'il doit faire (demande du 2026-08-31 : « c'est juste censé me hide les lignes Run
+   * d'en dessous »). L'ancien pli ouvrait un SECOND bloc de details sous le premier : ce doublon a
+   * ete supprime, chaque etage porte deja son propre depliage.
    */
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [etapesOuvertes, setEtapesOuvertes] = useState(true)
   /*
    * UNE ACTION QUI PORTE UN REFUS N'EST PAS « TERMINEE ».
    *
@@ -540,7 +543,6 @@ export function AssistantActivityGroup({
    * l'utilisateur sans savoir si c'est casse ou si c'est lui ; on montre donc le detail SUR PLACE.
    */
   const runConsultable = hasConsultableRun(actions)
-  const details = runConsultable ? [] : localActionDetails(actions)
   // Action INTERROMPUE -> on REPREND (acquis persisté) ; ÉCHOUÉE -> on RELANCE (re-run). Les deux
   // passent par le même canal `onResume`, seul le mot change. Sans la branche échec, une action en
   // erreur n'offrait AUCUN levier -> « erreur » sans quoi faire (frustration, conv veille 2026-08-14).
@@ -578,11 +580,11 @@ export function AssistantActivityGroup({
                 ? 'Ouvrir cette action en cours dans Workflows'
                 : 'Voir le détail de cette action dans Workflows'
           }
-          aria-disabled={!runConsultable && !why.length && !details.length}
+          aria-disabled={!runConsultable && !why.length && !actions.length}
           {...(why.length
             ? { 'aria-expanded': whyOpen }
-            : details.length
-              ? { 'aria-expanded': detailsOpen }
+            : actions.length
+              ? { 'aria-expanded': etapesOuvertes }
               : {})}
           // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la liste
           // des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
@@ -591,8 +593,8 @@ export function AssistantActivityGroup({
               setWhyOpen((ouvert) => !ouvert)
               return
             }
-            if (details.length) {
-              setDetailsOpen((ouvert) => !ouvert)
+            if (actions.length) {
+              setEtapesOuvertes((ouvert) => !ouvert)
               return
             }
             if (!runConsultable) return
@@ -620,9 +622,9 @@ export function AssistantActivityGroup({
             <span className="activity-group-go" aria-hidden="true">
               {whyOpen ? '▾' : '▸'}
             </span>
-          ) : details.length ? (
+          ) : actions.length ? (
             <span className="activity-group-go" aria-hidden="true">
-              {detailsOpen ? '▾' : '▸'}
+              {etapesOuvertes ? '▾' : '▸'}
             </span>
           ) : (
             runConsultable && (
@@ -640,7 +642,7 @@ export function AssistantActivityGroup({
         )}
         {/* Le clic principal deplie le pourquoi : l'ouverture du run garde donc son propre bouton,
             sinon deplier couterait l'acces a la trace complete. */}
-        {why.length > 0 && runConsultable && (
+        {runConsultable && (
           <button
             type="button"
             className="activity-open-run"
@@ -691,7 +693,7 @@ export function AssistantActivityGroup({
             chacune avec sa pastille de famille et, quand une regle s'applique, l'etiquette L4 qui
             NOMME la raison de l'enchainement. La ligne d'en-tete ne dit que « A · B » : elle perd
             l'ordre, le verdict de chaque etage et le lien entre eux. */}
-        {actions.length > 0 && (
+        {actions.length > 0 && etapesOuvertes && (
           <ol className="activity-steps" data-testid="activity-steps">
             {actions.map((etape, index) => (
               <EtageActivite
@@ -707,24 +709,6 @@ export function AssistantActivityGroup({
         <div className="activity-why" data-testid="activity-why">
           {why.map((ligne, index) => (
             <p key={index}>{ligne}</p>
-          ))}
-        </div>
-      )}
-      {details.length > 0 && (
-        <div className="activity-local-details" data-testid="activity-local-details">
-          {details.map((detail, index) => (
-            <details
-              key={`${detail.name}-${index}`}
-              className={detail.ok ? '' : 'failed'}
-              // Un echec s'ouvre d'office ; un succes attend le clic sur le bloc (ou son summary).
-              open={!detail.ok || detailsOpen}
-            >
-              <summary>
-                <span className={`status-dot ${detail.ok ? 'st-ok' : 'st-err'}`} />
-                {CMD_LABEL[detail.name] ?? detail.name}
-              </summary>
-              <pre>{detail.text}</pre>
-            </details>
           ))}
         </div>
       )}

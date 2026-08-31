@@ -16,6 +16,7 @@ import {
   splitAgenda,
   totalUnread,
   type Agenda,
+  type AgendaEntry,
   type Interlocuteur
 } from './outlook-model'
 import {
@@ -1137,7 +1138,7 @@ function initiales(nom: string): string {
   return (mots[0][0] + mots[mots.length - 1][0]).toUpperCase()
 }
 
-/** L'agenda : aujourd'hui, puis la semaine — et à défaut, le prochain rendez-vous. */
+/** L'agenda : le PROCHAIN rendez-vous en tête, puis le reste d'aujourd'hui et de la semaine. */
 function AgendaList({
   agenda,
   onOuvrir,
@@ -1147,65 +1148,53 @@ function AgendaList({
   onOuvrir: (id: string) => Promise<void>
   ouvertureEnCours: string | null
 }): React.JSX.Element {
-  if (agenda.aujourdHui.length === 0 && agenda.semaine.length === 0) {
-    if (agenda.suivant === null) {
-      return <p className="home-hint">Aucun rendez-vous à venir dans votre agenda.</p>
-    }
-    // Un agenda calme ne doit pas se lire comme une panne : on nomme le prochain rendez-vous.
-    return (
-      <p className="home-hint">
-        Rien cette semaine. Prochain rendez-vous : <b>{agenda.suivant.sujet}</b> le{' '}
-        {new Date(agenda.suivant.debut).toLocaleDateString('fr-FR', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long'
-        })}
-        .
-      </p>
-    )
+  // Le widget n'est plus « du jour » : sa première ligne nomme TOUJOURS le prochain rendez-vous,
+  // quel que soit son jour — c'est la question que l'utilisateur pose en premier.
+  const prochain = agenda.aujourdHui[0] ?? agenda.semaine[0] ?? agenda.suivant
+  const resteAujourdHui = agenda.aujourdHui.filter((entry) => entry.id !== prochain?.id)
+  const resteSemaine = agenda.semaine.filter((entry) => entry.id !== prochain?.id)
+  if (prochain === null || prochain === undefined) {
+    return <p className="home-hint">Aucun rendez-vous à venir dans votre agenda.</p>
   }
+  const ligne = (entry: AgendaEntry, label: string): React.JSX.Element => (
+    <li key={entry.id}>
+      <button
+        type="button"
+        onClick={() => void onOuvrir(entry.id)}
+        disabled={ouvertureEnCours === entry.id}
+        title="Ouvrir le rendez-vous dans Outlook"
+        data-testid={`home-ouvrir-rdv-${entry.id}`}
+      >
+        <time>{label}</time>
+        <span>{ouvertureEnCours === entry.id ? 'Ouverture…' : entry.sujet}</span>
+        <em>{entry.lieu || formatEventTime(entry)}</em>
+      </button>
+    </li>
+  )
   return (
     <>
-      {agenda.aujourdHui.length > 0 ? (
-        <ul className="home-list home-list--cliquable">
-          {agenda.aujourdHui.map((entry) => (
-            <li key={entry.id}>
-              <button
-                type="button"
-                onClick={() => void onOuvrir(entry.id)}
-                disabled={ouvertureEnCours === entry.id}
-                title="Ouvrir le rendez-vous dans Outlook"
-                data-testid={`home-ouvrir-rdv-${entry.id}`}
-              >
-                <time>{formatEventTime(entry)}</time>
-                <span>{ouvertureEnCours === entry.id ? 'Ouverture…' : entry.sujet}</span>
-                <em>{entry.lieu}</em>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="home-hint">Rien d’autre aujourd’hui.</p>
-      )}
-      {agenda.semaine.length > 0 ? (
+      <p className="home-subhead">Prochain</p>
+      <ul className="home-list home-list--cliquable" data-testid="home-agenda-prochain">
+        {ligne(
+          prochain,
+          prochain.aujourdHui
+            ? formatEventTime(prochain)
+            : `${formatEventDay(prochain)} · ${formatEventTime(prochain)}`
+        )}
+      </ul>
+      {resteAujourdHui.length > 0 ? (
+        <>
+          <p className="home-subhead">Aujourd’hui</p>
+          <ul className="home-list home-list--cliquable">
+            {resteAujourdHui.map((entry) => ligne(entry, formatEventTime(entry)))}
+          </ul>
+        </>
+      ) : null}
+      {resteSemaine.length > 0 ? (
         <>
           <p className="home-subhead">Cette semaine</p>
           <ul className="home-list home-list--cliquable">
-            {agenda.semaine.map((entry) => (
-              <li key={entry.id}>
-                <button
-                  type="button"
-                  onClick={() => void onOuvrir(entry.id)}
-                  disabled={ouvertureEnCours === entry.id}
-                  title="Ouvrir le rendez-vous dans Outlook"
-                  data-testid={`home-ouvrir-rdv-${entry.id}`}
-                >
-                  <time>{formatEventDay(entry)}</time>
-                  <span>{ouvertureEnCours === entry.id ? 'Ouverture…' : entry.sujet}</span>
-                  <em>{formatEventTime(entry)}</em>
-                </button>
-              </li>
-            ))}
+            {resteSemaine.map((entry) => ligne(entry, formatEventDay(entry)))}
           </ul>
         </>
       ) : null}

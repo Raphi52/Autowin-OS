@@ -177,6 +177,7 @@ import {
   type GraphifyCommandResult
 } from './graphify-command'
 import { ensureAutowinAppData } from './app-data'
+import { poserReprise } from './redemarrage-reprise'
 import type { TraceStore } from './activity/trace-store'
 import { redactTrace } from './activity/trace-redact'
 import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
@@ -810,6 +811,35 @@ const CATALOG: CommandSpec[] = [
     args: {
       commande:
         'la ligne à lancer, un seul programme et ses arguments (ex. `git status --porcelain`)'
+    }
+  },
+  {
+    name: 'restart_app',
+    /*
+     * REDEMARRER SANS PERDRE LA TACHE.
+     *
+     * Certains travaux exigent un redemarrage du process principal (code de `src/main` modifie,
+     * variable non rechargeable a chaud, dependance native). Jusqu'ici l'agent n'avait aucune
+     * capacite pour ca : il rendait la main en demandant a l'utilisateur de relancer l'app — et la
+     * tache mourait avec le process. La consigne de reprise est donc ECRITE SUR LE DISQUE avant le
+     * `quit`, puis rejouee UNE SEULE FOIS au demarrage suivant (`redemarrage-reprise.ts`).
+     */
+    description:
+      'Redémarrer Autowin OS (mode dev : relance par le lanceur officiel) et REPRENDRE la tâche ' +
+      'ensuite. La `consigne` est réécrite sur le disque avant la fermeture puis renvoyée toute ' +
+      'seule dans cette conversation au redémarrage — rédige-la comme un ordre autonome, elle sera ' +
+      'lue sans le fil courant. À n’utiliser QUE lorsqu’un redémarrage est réellement nécessaire ' +
+      '(code du process principal modifié, variable non rechargeable par `reload_env`) : l’app se ' +
+      'ferme et les runs en cours sont perdus.',
+    args: {
+      consigne: 'la consigne autonome à rejouer après le redémarrage (obligatoire)',
+      raison: 'facultatif — pourquoi le redémarrage est nécessaire (trace lisible)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false
     }
   },
   {
@@ -1481,6 +1511,13 @@ export class AppCommandBus {
    * Câblé tardivement depuis index.ts. Absent → la conversation part quand même, sans nettoyage.
    */
   onConversationRemoved?: (id: string) => void
+
+  /**
+   * Redemarrage REEL de l'application, cable tardivement depuis index.ts (le bus ne connait ni
+   * Electron ni le lanceur dev). Absent -> `restart_app` annonce l'indisponibilite au lieu de
+   * promettre une relance qui n'arrivera pas.
+   */
+  redemarrerApp?: () => void
 
   constructor(
     private readonly os: AutowinOS,
@@ -2611,6 +2648,43 @@ export class AppCommandBus {
           commande: ligne,
           exitCode: issue.exitCode,
           detail: issue.output ?? `${ligne} — code ${issue.exitCode ?? '?'}`
+        }
+      }
+      case 'restart_app': {
+        // La cible de reprise est la conversation COURANTE, jamais un argument du modele : une
+        // consigne rejouee dans un autre fil serait un message fabrique dans le dos de l'utilisateur.
+        const cible = conversationId ?? this.activeConversationId ?? ''
+        if (!cible) {
+          return { redemarre: false, detail: 'Redémarrage refusé : aucune conversation courante.' }
+        }
+        if (!this.redemarrerApp) {
+          return {
+            redemarre: false,
+            detail: 'Redémarrage indisponible : aucun lanceur câblé dans ce processus.'
+          }
+        }
+        const consigne = typeof a.consigne === 'string' ? a.consigne.trim() : ''
+        if (!consigne) {
+          return {
+            redemarre: false,
+            detail:
+              'Redémarrage refusé : `consigne` est obligatoire — sans elle la tâche mourrait avec le process.'
+          }
+        }
+        const reprise = poserReprise(ensureAutowinAppData(), {
+          conversationId: cible,
+          consigne,
+          ...(typeof a.raison === 'string' && a.raison.trim() ? { raison: a.raison.trim() } : {})
+        })
+        // Le quit part APRES la reponse : sans ce delai, le tour se termine dans un process deja
+        // mort et l'utilisateur ne voit jamais l'accuse de redemarrage.
+        const relancer = this.redemarrerApp
+        setTimeout(() => relancer(), 1200)
+        return {
+          redemarre: true,
+          conversationId: cible,
+          consigne: reprise.consigne,
+          detail: 'Redémarrage en cours — la consigne sera rejouée dans cette conversation.'
         }
       }
       case 'reload_env':

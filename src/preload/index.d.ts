@@ -168,6 +168,13 @@ interface ChatApi {
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>
   >
   turnJournal: (conversationId: string, turnId: string) => Promise<Array<Record<string, unknown>>>
+  /** Consigne à rejouer après un redémarrage demandé par l'agent, rendue une seule fois. */
+  repriseEnAttente: () => Promise<{
+    conversationId: string
+    consigne: string
+    raison?: string
+    poseeA: number
+  } | null>
   checkUpdate: () => Promise<{
     available: boolean
     behind: number

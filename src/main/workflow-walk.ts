@@ -247,3 +247,28 @@ export function initialBudget(graph: WorkflowGraph, ranks: Map<string, number>):
   }
   return budget
 }
+
+/**
+ * POURQUOI la chaine d apres-gate (learn) n a PAS ete jouee — rendu comme motif tracable.
+ *
+ * Mesure du 2026-08-31 : sur 2216 RUN.md, `learn` n apparait que 6 fois et plus du tout depuis le
+ * 21/08, sans qu aucune ligne ne dise POURQUOI. Deux causes se confondaient dans le silence : un
+ * verdict non vert (la capitalisation est volontairement reservee au vert) et un run qui ne declare
+ * aucun noeud `learn` (orchestration mono-phase, profil sans capitalisation). Les distinguer est la
+ * seule facon de savoir s il faut corriger le profil ou le livrable.
+ *
+ * Rend `undefined` quand la chaine A ete jouee : il n y a alors rien a expliquer.
+ */
+export function motifChaineApresJugeNonJouee(input: {
+  noeudsDeclares: string[]
+  gateBloque: boolean
+}): string | undefined {
+  const declare = input.noeudsDeclares.length > 0
+  if (input.gateBloque && declare)
+    return 'Chaine apres-juge non jouee : verdict non vert (gate bloque) — learn est declare mais la capitalisation est reservee au vert.'
+  if (input.gateBloque)
+    return 'Chaine apres-juge non jouee : verdict non vert ET aucun noeud learn declare par le profil.'
+  if (!declare)
+    return 'Chaine apres-juge non jouee : aucun noeud learn declare par le profil (run mono-phase ou profil sans capitalisation).'
+  return undefined
+}

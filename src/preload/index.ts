@@ -140,6 +140,16 @@ const api = {
   > => ipcRenderer.invoke('runs:unfinishedTurns'),
   turnJournal: (conversationId: string, turnId: string): Promise<Array<Record<string, unknown>>> =>
     ipcRenderer.invoke('runs:turnJournal', conversationId, turnId),
+  /**
+   * La consigne laissée avant un redémarrage demandé par l'agent (`restart_app`).
+   * Rendue UNE SEULE FOIS : le main l'efface en la lisant.
+   */
+  repriseEnAttente: (): Promise<{
+    conversationId: string
+    consigne: string
+    raison?: string
+    poseeA: number
+  } | null> => ipcRenderer.invoke('app:reprise-en-attente'),
   // Auto-update git au démarrage.
   checkUpdate: (): Promise<{
     available: boolean

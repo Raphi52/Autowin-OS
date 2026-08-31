@@ -35,7 +35,7 @@ export const WIDGET_LABEL_HEIGHT = 24
 
 export const HOME_WIDGET_TITLES: Readonly<Record<HomeWidgetId, string>> = {
   mails: 'Interlocuteurs',
-  agenda: 'Agenda du jour',
+  agenda: 'Agenda',
   routines: 'Départs des routines',
   notifications: 'Remontées des agents',
   hublot: 'Hublot',

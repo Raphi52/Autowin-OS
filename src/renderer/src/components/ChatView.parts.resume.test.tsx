@@ -77,8 +77,12 @@ describe('reprendre une action interrompue sans la retaper', () => {
     const barre = container.querySelector('.activity-group')
     const bouton = container.querySelector('[data-testid="activity-resume"]')
     expect(barre?.contains(bouton ?? null)).toBe(true)
-    // Il vient APRÈS la zone « voir », donc à droite dans une barre en flex.
-    expect(bouton?.previousElementSibling?.getAttribute('data-testid')).toBe('activity-group')
+    // Il vient APRÈS la zone « voir » (le bloc, puis le ↗ d'ouverture du run), donc à droite.
+    expect(
+      ['activity-group', 'activity-open-run'].includes(
+        bouton?.previousElementSibling?.getAttribute('data-testid') ?? ''
+      )
+    ).toBe(true)
   })
 
   it('aucun bouton si rien n’est interrompu', () => {

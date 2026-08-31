@@ -113,6 +113,7 @@ import {
 } from './route-drift'
 import {
   estJugeTerminal,
+  motifChaineApresJugeNonJouee,
   noeudsApresJuge,
   initialBudget,
   nextNode,
@@ -4953,6 +4954,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
          *     `valid` et `gate` ne sont plus touches apres ce point.
          */
         const apresGate = graphePilote ? noeudsApresJuge(graphePilote) : []
+        // Un silence n'est pas une explication : quand la chaine ne se joue pas, la trace DIT laquelle
+        // des deux causes a mordu (verdict non vert / aucun noeud learn declare).
+        const motifSansChaine = motifChaineApresJugeNonJouee({
+          noeudsDeclares: apresGate,
+          gateBloque: false
+        })
+        if (motifSansChaine) push({ step: 'gate', role: 'gate', detail: motifSansChaine })
         for (const idNoeud of apresGate) {
           const noeud = graphePilote?.nodes.find((n) => n.id === idNoeud)
           if (!noeud) continue
@@ -5001,6 +5009,13 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         break
       }
       motifsPrecedents = [...gate.reasons]
+    }
+    if (gate.blocked) {
+      const motifBloque = motifChaineApresJugeNonJouee({
+        noeudsDeclares: graphePilote ? noeudsApresJuge(graphePilote) : [],
+        gateBloque: true
+      })
+      if (motifBloque) push({ step: 'gate', role: 'gate', detail: motifBloque })
     }
     if (gate.blocked && enforceSpend && (graphRecoveries ?? 0) > 0) {
       gate.reasons.push(

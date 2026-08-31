@@ -61,41 +61,42 @@ const bloc = (): HTMLElement => {
   return el
 }
 
+const etapes = (): HTMLElement | null =>
+  container.querySelector<HTMLElement>('[data-testid="activity-steps"]')
+
+const detailEtape = (): HTMLElement | null =>
+  container.querySelector<HTMLElement>('[data-testid="activity-step-detail"]')
+
 describe('clic sur une action remember terminée', () => {
   it('le bloc est ACTIONNABLE (plus aria-disabled)', () => {
     render()
     expect(bloc().getAttribute('aria-disabled')).not.toBe('true')
-    expect(bloc().getAttribute('aria-expanded')).toBe('false')
-  })
-
-  it('le contenu retenu est PLIÉ au départ', () => {
-    render()
-    const pli = container.querySelector<HTMLDetailsElement>(
-      '[data-testid="activity-local-details"] details'
-    )
-    expect(pli).not.toBeNull()
-    expect(pli?.open).toBe(false)
-  })
-
-  it('un clic DÉPLIE ce qui a été mémorisé', () => {
-    render()
-    clicBloc()
-    const pli = container.querySelector<HTMLDetailsElement>(
-      '[data-testid="activity-local-details"] details'
-    )
-    expect(pli?.open).toBe(true)
-    expect(container.textContent).toContain('releaseIdleLease')
-    expect(container.textContent).toContain('deposé au Brain')
     expect(bloc().getAttribute('aria-expanded')).toBe('true')
   })
 
-  it('un second clic REPLIE', () => {
+  it('le contenu retenu est PLIÉ au départ, l’étape visible', () => {
+    render()
+    expect(etapes()).not.toBeNull()
+    expect(detailEtape()).toBeNull()
+  })
+
+  it('le déplié se fait sur l’ÉTAGE, pas sur un second bloc', () => {
+    render()
+    const toggle = container.querySelector<HTMLElement>('[data-testid="activity-step-toggle"]')
+    expect(toggle).not.toBeNull()
+    act(() => toggle!.click())
+    expect(detailEtape()).not.toBeNull()
+    expect(container.textContent).toContain('releaseIdleLease')
+    expect(container.textContent).toContain('deposé au Brain')
+  })
+
+  it('le chevron d’en-tête CACHE les lignes d’étapes, et rien d’autre', () => {
     render()
     clicBloc()
+    expect(etapes()).toBeNull()
+    expect(bloc().getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('[data-testid="activity-local-details"]')).toBeNull()
     clicBloc()
-    const pli = container.querySelector<HTMLDetailsElement>(
-      '[data-testid="activity-local-details"] details'
-    )
-    expect(pli?.open).toBe(false)
+    expect(etapes()).not.toBeNull()
   })
 })

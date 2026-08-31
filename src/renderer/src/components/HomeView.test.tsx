@@ -171,7 +171,7 @@ describe('page d accueil', () => {
     expect(children[0].className).toContain('home-tile__label')
     expect(children[1].className).toContain('home-tile__panel')
     expect(children[1].querySelector('.home-tile__label')).toBeNull()
-    expect(children[0].textContent).toContain('Agenda du jour')
+    expect(children[0].textContent).toContain('Agenda')
   })
 
   it('liste les departs des routines horaires, sans la tache reveillee par evenement', async () => {
@@ -348,6 +348,14 @@ describe('widgets Outlook', () => {
     const agenda = tile(container, 'agenda')
     expect(agenda.textContent).toContain('Recette EDI lot 3')
     expect(agenda.textContent).toContain('salle de réunion')
+  })
+
+  it('met le PROCHAIN rendez-vous en tete du widget agenda', async () => {
+    const container = await mount()
+    const prochain = container.querySelector('[data-testid="home-agenda-prochain"]')
+    expect(prochain).not.toBeNull()
+    expect(prochain?.textContent).toContain('Recette EDI lot 3')
+    expect(tile(container, 'agenda').textContent).toContain('Prochain')
   })
 
   it('affiche la cause quand la passerelle echoue', async () => {

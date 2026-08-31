@@ -106,13 +106,15 @@ describe('cablage du bloc d’activite', () => {
   })
 
   it('le bouton d’ouverture du run n’existe que s’il y a un run à ouvrir', () => {
-    expect(parts()).toContain('why.length > 0 && runConsultable && (')
+    expect(parts()).toContain('{runConsultable && (')
   })
 
-  it('le detail local est rendu dans le fil', () => {
+  it('le detail local est rendu dans le fil, par ETAGE (plus de second bloc en doublon)', () => {
     const source = parts()
-    expect(source).toContain('localActionDetails(actions)')
-    expect(source).toContain('activity-local-details')
+    expect(source).toContain('localActionDetail(etape)')
+    expect(source).toContain('activity-step-detail')
+    // Residu de l'ancienne implementation : le bloc duplique sous le groupe a ete supprime.
+    expect(source).not.toContain('activity-local-details')
   })
 })
 
