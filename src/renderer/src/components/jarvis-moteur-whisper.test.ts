@@ -63,13 +63,27 @@ function monter(transcrire: (wav: Uint8Array) => Promise<string>) {
   const resultats: string[] = []
   const erreurs: string[] = []
   let fins = 0
+  const finaux: boolean[] = []
   moteur.onresult = (e): void => {
-    const evenement = e as { results: ArrayLike<ArrayLike<{ transcript: string }>> }
+    const evenement = e as {
+      results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }>
+    }
     resultats.push(evenement.results[0][0].transcript)
+    finaux.push(evenement.results[0].isFinal === true)
   }
   moteur.onerror = (e): void => void erreurs.push(String((e as { error?: unknown }).error))
   moteur.onend = (): void => void (fins += 1)
-  return { moteur, resultats, erreurs, piste, fins: () => fins }
+  return { moteur, resultats, finaux, erreurs, piste, fins: () => fins }
+}
+
+/** Fait parler SANS terminer la phrase : c'est la fenêtre où un partiel doit vivre. */
+async function parlerSansFinir(blocs: number): Promise<void> {
+  const noeud = FauxContexte.dernier!.noeud
+  for (let i = 0; i < blocs; i += 1) {
+    noeud.onaudioprocess?.({ inputBuffer: { getChannelData: () => parole() } })
+  }
+  await new Promise((r) => setTimeout(r, 0))
+  await new Promise((r) => setTimeout(r, 0))
 }
 
 /** Rejoue une phrase : de la parole, puis le silence qui la termine. */
@@ -97,6 +111,52 @@ describe('moteur Whisper local', () => {
     const wav = transcrire.mock.calls[0][0]
     expect(String.fromCharCode(...wav.slice(0, 4))).toBe('RIFF')
     expect(h.resultats).toEqual(['Jarvis ouvre le task manager'])
+  })
+
+  it('rend un PARTIEL pendant qu’on parle, avant la fin de la phrase', async () => {
+    // LE DÉFAUT : rien ne remontait avant la phrase figée, donc le bip d'éveil — le seul signal qui
+    // dit « parle maintenant » — n'arrivait qu'après 700 ms de silence PLUS la transcription.
+    const h = monter(async () => 'Jarvis ouvre')
+    h.moteur.interimResults = true
+    h.moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    await parlerSansFinir(13) // 1300 ms de parole : au-dessus du minimum, phrase NON terminée
+    expect(h.resultats).toEqual(['Jarvis ouvre'])
+    expect(h.finaux).toEqual([false])
+  })
+
+  it('n’émet AUCUN partiel sous le seuil de parole', async () => {
+    // L'ENTRÉE QUI CASSE UN FAUX FIX : une parole trop courte. Whisper y rend du vide ou du faux,
+    // et un faux partiel ferait biper Jarvis sur du bruit de clavier.
+    const h = monter(async () => 'bruit')
+    h.moteur.interimResults = true
+    h.moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    await parlerSansFinir(8) // 800 ms
+    expect(h.resultats).toEqual([])
+  })
+
+  it('n’émet aucun partiel quand l’appelant n’en veut pas', async () => {
+    const h = monter(async () => 'Jarvis ouvre')
+    h.moteur.interimResults = false
+    h.moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    await parlerSansFinir(20)
+    expect(h.resultats).toEqual([])
+  })
+
+  it('jette un partiel revenu APRÈS l’arrêt : il afficherait de la parole micro éteint', async () => {
+    let libere: ((t: string) => void) | null = null
+    const h = monter(() => new Promise<string>((r) => (libere = r)))
+    h.moteur.interimResults = true
+    h.moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    await parlerSansFinir(13)
+    h.moteur.stop()
+    ;(libere as ((t: string) => void) | null)?.('trop tard')
+    await new Promise((r) => setTimeout(r, 0))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(h.resultats).toEqual([])
   })
 
   it('ne remonte RIEN quand whisper ne rend que du silence', async () => {

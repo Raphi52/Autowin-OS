@@ -156,8 +156,20 @@ export function evenementsDirects(
  * trois lettres derrière. `jarvis`, `jarvie`, `jarvi`, `jarviss`, `jarvice`, `jarvys` réveillent ;
  * `java`, `jardin`, `service`, `harvest`, `jars` ne réveillent RIEN. Le mot d'éveil reste la seule
  * garde entre une pièce bruyante et une exécution réelle : l'élargir davantage la retirerait.
+ *
+ * L'APOSTROPHE. Deuxième mesure du 2026-08-31, même CLI : la même phrase rendue à deux niveaux
+ * d'entrée donne « Jarvie, ouvre le gestionnaire de tâche. » à niveau normal, et
+ * « J'arvie, ouvre le jeu. » à −18 dB. Or `\bjarv` exige `jarv` d'un seul bloc : dans `J'arvie`, la
+ * frontière de mot tombe APRÈS l'apostrophe, donc le moteur avait entendu le nom et l'éveil ne
+ * partait pas quand même. Whisper place volontiers une apostrophe française devant une syllabe
+ * qu'il n'attache pas — c'est un artefact d'orthographe, pas un mot différent.
+ *
+ * Ce que cette tolérance ne rattrape PAS, et il faut le savoir : `J'arrivée` (mesuré sur le même
+ * segment faible) reste hors d'atteinte, parce qu'il n'y a plus de `arv` du tout. Aucune regex ne
+ * répare un segment trop faible pour être entendu ; c'est le niveau d'entrée qu'il faut corriger,
+ * pas le motif.
  */
-const EVEIL = /\bjarv[a-zà-öø-ÿ]{0,3}\b/iu
+const EVEIL = /\bj['’]?arv[a-zà-öø-ÿ]{0,3}\b/iu
 
 export function extraireCommandeEveil(texte: string): string | null {
   const correspondance = EVEIL.exec(texte)

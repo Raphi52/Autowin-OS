@@ -4,8 +4,11 @@ import {
   MS_SILENCE_FIN,
   TAUX_WHISPER,
   avancerVad,
+  CRETE_CIBLE,
+  GAIN_MAX,
   encoderWav16k,
   etatVadInitial,
+  gainNormalisation,
   reechantillonner
 } from './whisper-audio'
 
@@ -57,6 +60,50 @@ describe('encoderWav16k', () => {
     expect(vue.getInt16(44, true)).toBe(32_767)
     expect(vue.getInt16(46, true)).toBe(-32_768)
     expect(vue.getInt16(48, true)).toBe(0)
+  })
+
+  it('REMONTE un segment trop faible — la cause mesurée des ordres faux', () => {
+    // MESURE 2026-08-31 : la même phrase à −18 dB rend « J'arrivée, ouvre le jeu. » au lieu de
+    // « Jarvie, ouvre le gestionnaire de tâche. ». Le pipeline ne remontait jamais le niveau.
+    const faible = parole(16_000, 0.05)
+    const wav = encoderWav16k(faible, TAUX_WHISPER)
+    const vue = new DataView(wav.buffer, wav.byteOffset, wav.byteLength)
+    let crete = 0
+    for (let i = 0; i < 16_000; i += 1)
+      crete = Math.max(crete, Math.abs(vue.getInt16(44 + i * 2, true)))
+    // Sans normalisation la crête plafonnerait vers 0,05 × 32767 ≈ 1638.
+    expect(crete).toBeGreaterThan(10_000)
+  })
+})
+
+describe('gainNormalisation', () => {
+  it('n’amplifie JAMAIS un segment déjà correct, et ne l’atténue pas non plus', () => {
+    expect(gainNormalisation(parole(1000, 0.9))).toBe(1)
+    expect(gainNormalisation(parole(1000, 1))).toBe(1)
+    // Juste sous la cible : la zone morte évite de re-multiplier tout le buffer pour rien.
+    expect(gainNormalisation(parole(1000, 0.88))).toBe(1)
+    // Le bornage à [-1, 1] reste la seule limite haute : pas de réduction déguisée ici.
+    expect(gainNormalisation(Float32Array.from([2, -2]))).toBe(1)
+  })
+
+  it('remonte un segment faible vers la crête cible', () => {
+    // Amplitude choisie SOUS le plafond (0,9 / 0,15 = 6) pour prouver la cible, pas le plafond.
+    const gain = gainNormalisation(parole(1000, 0.15))
+    expect(gain).toBeGreaterThan(1)
+    expect(gain).toBeLessThan(GAIN_MAX)
+    expect(0.15 * gain).toBeCloseTo(CRETE_CIBLE, 1)
+  })
+
+  it('PLAFONNE le gain : du souffle multiplié par 200 deviendrait de la parole inventée', () => {
+    // Sans plafond, whisper transcrit du bruit amplifié — et un ordre inventé s'exécute.
+    // 0,9 / 0,05 = 18 demandé, donc le plafond DOIT mordre ici.
+    expect(gainNormalisation(parole(1000, 0.05))).toBe(GAIN_MAX)
+  })
+
+  it('ne touche pas au silence ni au quasi-silence : y monter le gain ne crée pas de voix', () => {
+    expect(gainNormalisation(new Float32Array(1000))).toBe(1)
+    expect(gainNormalisation(parole(1000, 0.001))).toBe(1)
+    expect(gainNormalisation(new Float32Array(0))).toBe(1)
   })
 })
 

@@ -21,6 +21,7 @@
 import {
   TAUX_WHISPER,
   avancerVad,
+  coller,
   encoderWav16k,
   etatVadInitial,
   type EtatVad
@@ -73,6 +74,35 @@ export interface DependancesWhisper {
  * saturer le fil du renderer. */
 const TAILLE_TAMPON = 4096
 
+/**
+ * LES PARTIELS — ce qui dit « je t'entends » PENDANT que tu parles.
+ *
+ * Le défaut réel : ce moteur ne rendait QUE des phrases figées. Entre le moment où l'utilisateur
+ * commence à parler et le moment où l'ordre part, il fallait attendre la fin de la phrase, puis
+ * 700 ms de silence (`MS_SILENCE_FIN`), puis la transcription. Rien ne bougeait à l'écran, et
+ * surtout le BIP d'éveil — le seul signal qui dit « parle maintenant » — n'arrivait qu'après. Le
+ * widget, lui, était déjà prêt : il pose `interimResults = true` et `reagirAParole` bipe sur le
+ * partiel (`JarvisWidget.tsx`, commentaire de `auResultat`). C'est le moteur qui ne l'a jamais
+ * honoré : `interimResults` y était à `false` en dur et aucun partiel n'était produit.
+ *
+ * Les seuils sont en ÉCHANTILLONS, pas en millisecondes d'horloge : un compteur d'échantillons se
+ * prouve sans micro ni faux temps, et il suit le vrai débit audio plutôt que le temps mural.
+ *
+ * DEUX seuils DISTINCTS, et ils ne se cumulent pas : `MINIMUM` commande le PREMIER partiel de la
+ * phrase, `INTERVALLE` espace les suivants. Les cumuler rendrait le minimum décoratif — le premier
+ * partiel n'arriverait qu'à 1500 ms, et le seuil de 1200 ms ne déciderait jamais de rien.
+ *
+ * TROIS GARDES, chacune pour une panne précise :
+ *  - jamais de partiel sous `MS_PARTIEL_MINIMUM` de parole : sur un fragment plus court, whisper
+ *    rend du vide ou du faux, et un faux partiel ferait biper Jarvis sur du bruit ;
+ *  - un seul partiel en vol, et AUCUN pendant qu'une phrase figée est en transcription : deux CLI
+ *    whisper en parallèle se disputent le CPU, ce qui rendrait tout PLUS lent, à l'envers du but ;
+ *  - un partiel qui revient après `stop()`, ou après la fin de la phrase, est jeté : il afficherait
+ *    de la parole micro éteint.
+ */
+const MS_PARTIEL_MINIMUM = 1200
+const MS_PARTIEL_INTERVALLE = 1500
+
 export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
   return class MoteurWhisper implements MoteurVocal {
     continuous = true
@@ -90,6 +120,18 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
     private vad: EtatVad = etatVadInitial
     /** Les transcriptions sont mises à la queue : deux CLI whisper en parallèle se disputeraient le CPU. */
     private file: Promise<void> = Promise.resolve()
+    /**
+     * Combien de phrases figées attendent ou transcrivent. Un COMPTEUR, pas un booléen : la file est
+     * sérielle, donc pendant que la phrase A transcrit, la phrase B peut déjà être enfilée. Un
+     * booléen remis à false à la fin de A laisserait un partiel démarrer à côté de B.
+     */
+    private figesEnAttente = 0
+    /** Un partiel est-il en vol ? Un seul à la fois, jamais deux. */
+    private partielEnCours = false
+    /** Échantillons de parole écoulés depuis le dernier partiel émis ou tenté. */
+    private depuisPartiel = 0
+    /** Partiels déjà tentés DANS LA PHRASE en cours : c'est ce qui distingue le premier des suivants. */
+    private partielsEmis = 0
 
     start(): void {
       if (this.actif) return
@@ -139,12 +181,61 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
       // COPIE obligatoire : le tampon du noeud est réutilisé au bloc suivant, le garder tel quel
       // ferait transcrire de l'audio écrasé.
       const bloc = new Float32Array(donnees)
-      const pas = avancerVad(this.vad, bloc, this.ctx.sampleRate || TAUX_WHISPER)
+      const taux = this.ctx.sampleRate || TAUX_WHISPER
+      const pas = avancerVad(this.vad, bloc, taux)
+      const parlaitAvant = this.vad.parle
       this.vad = pas.etat
-      if (pas.segment) this.enfiler(pas.segment, this.ctx.sampleRate || TAUX_WHISPER)
+      if (pas.segment) {
+        this.depuisPartiel = 0
+        this.partielsEmis = 0
+        this.enfiler(pas.segment, taux)
+        return
+      }
+      // La phrase s'est terminée sans produire de segment (trop courte) : les compteurs repartent.
+      if (parlaitAvant && !this.vad.parle) {
+        this.depuisPartiel = 0
+        this.partielsEmis = 0
+      }
+      if (this.vad.parle) this.depuisPartiel += bloc.length
+      this.peutEtrePartiel(taux)
+    }
+
+    /** Un partiel part-il maintenant ? Toutes les gardes sont ICI, pas dispersées. */
+    private peutEtrePartiel(taux: number): void {
+      if (!this.interimResults || !this.vad.parle) return
+      if (this.figesEnAttente > 0 || this.partielEnCours) return
+      if (this.vad.echantillonsParole < (MS_PARTIEL_MINIMUM / 1000) * taux) return
+      if (this.partielsEmis > 0 && this.depuisPartiel < (MS_PARTIEL_INTERVALLE / 1000) * taux)
+        return
+      this.depuisPartiel = 0
+      this.partielsEmis += 1
+      this.partielEnCours = true
+      const apercu = coller(this.vad.tampon)
+      void this.transcrirePartiel(apercu, taux)
+    }
+
+    private async transcrirePartiel(apercu: Float32Array, taux: number): Promise<void> {
+      try {
+        const texte = await deps.transcrire(encoderWav16k(apercu, taux))
+        // Le micro peut avoir été coupé, ou la phrase figée pendant la transcription : dans les deux
+        // cas ce partiel est périmé et l'afficher ferait mentir le widget.
+        if (!this.actif || !this.vad.parle) return
+        const propre = texte.trim()
+        if (propre === '') return
+        this.onresult?.({
+          resultIndex: 0,
+          results: [Object.assign([{ transcript: propre }], { isFinal: false })]
+        })
+      } catch {
+        // Un partiel raté ne vaut PAS une erreur remontée : la phrase figée reste le chemin qui
+        // compte, et afficher « transcription impossible » sur un simple aperçu couperait l'écoute.
+      } finally {
+        this.partielEnCours = false
+      }
     }
 
     private enfiler(segment: Float32Array, taux: number): void {
+      this.figesEnAttente += 1
       this.file = this.file.then(async () => {
         if (!this.actif) return
         const wav = encoderWav16k(segment, taux)
@@ -168,6 +259,9 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
           results: [Object.assign([{ transcript: propre }], { isFinal: true })]
         })
       })
+      this.file = this.file.finally(() => {
+        this.figesEnAttente -= 1
+      })
     }
 
     private fermer(): void {
@@ -183,6 +277,8 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
       this.flux = null
       this.ctx = null
       this.vad = etatVadInitial
+      this.depuisPartiel = 0
+      this.partielsEmis = 0
     }
   }
 }

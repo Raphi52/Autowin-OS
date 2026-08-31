@@ -145,12 +145,90 @@ export function etatWhisper(racine: string): EtatWhisper {
 }
 
 /**
+ * LE CONTEXTE AUDIO DE L'ENCODEUR, dimensionné sur la durée RÉELLE du segment.
+ *
+ * POURQUOI. L'encodeur de whisper traite une fenêtre de 30 s quoi qu'on lui donne : une phrase de
+ * 2 s coûte donc autant qu'une de 30 s. MESURE du 2026-08-31 sur cette machine (i5-14400,
+ * small-q5_1, 12 fils) : sur une phrase de 4,2 s, `encode time = 5974 ms` sur 7354 ms de total.
+ * L'encodeur EST le coût ; le reste est du bruit.
+ *
+ * `-ac` borne cette fenêtre. Mesures appariées, texte transcrit IDENTIQUE dans les cinq cas :
+ *   2,37 s → 2287 ms sans, 845 ms avec ac=512   (×2,7)
+ *   3,32 s → 2366 ms sans, 906 ms avec ac=512   (×2,6)
+ *   5,23 s → 2394 ms sans, 1052 ms avec ac=600  (×2,3)
+ *   6,79 s → 2457 ms sans, 1263 ms avec ac=700  (×1,9)
+ *  12,67 s → 2865 ms sans, 2534 ms avec ac=1300 (×1,1)
+ *
+ * POURQUOI PROPORTIONNEL, ET NON UNE CONSTANTE. Un `-ac` trop petit pour l'audio fourni ne dégrade
+ * pas gentiment : il TRONQUE la fin et part en repli de température, donc il devient plus LENT que
+ * pas de drapeau du tout. Mesuré, même machine :
+ *   - ac=512 sur la phrase de 12,67 s : 20 443 ms (au lieu de 2865 ms) ET fin fausse — « et
+ *     preuve-je une preuve » à la place de « et préviens-moi quand tout est terminé » ;
+ *   - ac=256 sur la phrase de 4,2 s : 18 833 ms.
+ * Une constante « qui va bien » est donc un piège : elle marche sur la phrase avec laquelle on l'a
+ * réglée et sabote les autres.
+ *
+ * LE PLANCHER À 512 est mesuré, pas esthétique : c'est en dessous que le repli s'enclenche. La
+ * formule théorique (1500 unités pour 30 s, soit 50/s) donnerait 210 pour 4,2 s — et 256 explose
+ * déjà. On garde donc le DOUBLE de marge, plancher inclus.
+ */
+export const CONTEXTE_PLEIN = 1500
+export const CONTEXTE_MINIMUM = 512
+
+export function contexteAudio(secondes: number): number | null {
+  if (!Number.isFinite(secondes) || secondes <= 0) return null
+  const proportionnel = Math.ceil(secondes) * 100
+  if (proportionnel >= CONTEXTE_PLEIN) return null
+  return Math.max(CONTEXTE_MINIMUM, proportionnel)
+}
+
+/**
  * Les arguments de la CLI. `-nt` (sans horodatage) et `-l fr` sont supportés par les DEUX noms de
  * CLI, ancien comme récent : aucun drapeau récent ici, une archive plus ancienne fonctionnerait.
  * Rien n'est écrit à côté du WAV (`-otxt` absent) : la sortie est lue sur stdout.
+ *
+ * `--prompt` est ABSENT, et doit le rester. Essayé le 2026-08-31 pour biaiser le vocabulaire du
+ * domaine : sur un segment faible (−18 dB), la CLI a RECRACHÉ le prompt mot pour mot
+ * (« Jarvis, ouvre le gestionnaire, lance un run, depot, conversation. ») au lieu de transcrire.
+ * Sur un moteur qui EXÉCUTE ce qu'il entend, un ordre fabriqué de toutes pièces est bien pire
+ * qu'une transcription fausse : l'utilisateur n'a rien dit, et quelque chose s'exécute.
  */
-export function argumentsWhisper(p: { modele: string; wav: string; fils?: number }): string[] {
-  return ['-m', p.modele, '-f', p.wav, '-l', 'fr', '-nt', '-t', String(p.fils ?? filsParDefaut())]
+export function argumentsWhisper(p: {
+  modele: string
+  wav: string
+  fils?: number
+  secondes?: number
+}): string[] {
+  const args = [
+    '-m',
+    p.modele,
+    '-f',
+    p.wav,
+    '-l',
+    'fr',
+    '-nt',
+    '-t',
+    String(p.fils ?? filsParDefaut())
+  ]
+  const contexte = p.secondes === undefined ? null : contexteAudio(p.secondes)
+  if (contexte !== null) args.push('-ac', String(contexte))
+  return args
+}
+
+/**
+ * La durée d'un WAV 16 bits mono, lue dans son en-tête. On ne devine pas : le champ `data` porte la
+ * taille exacte, et c'est cette durée qui dimensionne `-ac`. Un en-tête illisible rend `null` —
+ * l'appelant retombe alors sur le contexte plein, c'est-à-dire le comportement d'avant.
+ */
+export function dureeWavSecondes(wav: Uint8Array): number | null {
+  if (wav.length < 44) return null
+  const vue = new DataView(wav.buffer, wav.byteOffset, wav.byteLength)
+  const octetsParSeconde = vue.getUint32(28, true)
+  const octetsData = vue.getUint32(40, true)
+  if (octetsParSeconde === 0) return null
+  const utiles = Math.min(octetsData, wav.length - 44)
+  if (utiles <= 0) return null
+  return utiles / octetsParSeconde
 }
 
 /**
@@ -355,9 +433,14 @@ export function creerServiceWhisper(options: {
       const fichier = join(dossier, 'segment.wav')
       try {
         await writeFile(fichier, wav)
+        const secondes = dureeWavSecondes(wav)
         const { stdout, stderr } = await executer(
           courant.binaire,
-          argumentsWhisper({ modele: courant.modele, wav: fichier })
+          argumentsWhisper({
+            modele: courant.modele,
+            wav: fichier,
+            ...(secondes === null ? {} : { secondes })
+          })
         )
         // La CLI écrit parfois la transcription sur stderr selon la version : on lit les deux.
         const texte = analyserTranscription(stdout)

@@ -6,11 +6,14 @@ import {
   MODELE_WHISPER,
   analyserTranscription,
   argumentsWhisper,
+  contexteAudio,
   creerServiceWhisper,
+  dureeWavSecondes,
   etatWhisper,
   filsParDefaut,
   trouverExecutable
 } from './whisper-local'
+import { TAUX_WHISPER, encoderWav16k } from '../renderer/src/components/whisper-audio'
 
 const racines: string[] = []
 function racineTemp(): string {
@@ -95,6 +98,92 @@ describe('argumentsWhisper', () => {
   it('demande du français, sans horodatage, et sans écrire de fichier à côté', () => {
     const args = argumentsWhisper({ modele: 'M.bin', wav: 'a.wav', fils: 4 })
     expect(args).toEqual(['-m', 'M.bin', '-f', 'a.wav', '-l', 'fr', '-nt', '-t', '4'])
+  })
+
+  it('borne le contexte de l’encodeur sur la durée du segment', () => {
+    // MESURE 2026-08-31 : phrase de 3,32 s, 2366 ms sans `-ac`, 906 ms avec `-ac 512`, MÊME texte.
+    const args = argumentsWhisper({ modele: 'M.bin', wav: 'a.wav', fils: 4, secondes: 3.32 })
+    expect(args).toEqual(['-m', 'M.bin', '-f', 'a.wav', '-l', 'fr', '-nt', '-t', '4', '-ac', '512'])
+  })
+
+  it('n’ajoute RIEN quand la durée est inconnue : on retombe sur le comportement d’avant', () => {
+    expect(argumentsWhisper({ modele: 'M.bin', wav: 'a.wav', fils: 4 })).not.toContain('-ac')
+  })
+
+  it('laisse le contexte PLEIN aux segments longs, au lieu de les tronquer', () => {
+    // MESURE 2026-08-31 : `-ac 512` sur une phrase de 12,67 s a rendu 20 443 ms ET une fin FAUSSE
+    // (« et preuve-je une preuve »). Un contexte trop petit est pire que pas de drapeau.
+    expect(argumentsWhisper({ modele: 'M.bin', wav: 'a.wav', secondes: 15 })).not.toContain('-ac')
+    expect(argumentsWhisper({ modele: 'M.bin', wav: 'a.wav', secondes: 40 })).not.toContain('-ac')
+  })
+
+  it('n’embarque jamais `--prompt` : il fabrique des ordres jamais prononcés', () => {
+    // MESURE 2026-08-31 : avec `--prompt`, un segment à −18 dB a fait RECRACHER le prompt mot pour
+    // mot par la CLI. Sur un moteur qui exécute ce qu'il entend, c'est un ordre inventé.
+    const args = argumentsWhisper({ modele: 'M.bin', wav: 'a.wav', secondes: 3 })
+    expect(args).not.toContain('--prompt')
+  })
+})
+
+describe('contexteAudio', () => {
+  it('grandit avec la durée, avec le plancher mesuré à 512', () => {
+    // Sous 512, le repli de température s'enclenche : ac=256 sur 4,2 s a mesuré 18 833 ms.
+    expect(contexteAudio(1)).toBe(512)
+    expect(contexteAudio(3.32)).toBe(512)
+    expect(contexteAudio(5.23)).toBe(600)
+    expect(contexteAudio(6.79)).toBe(700)
+    expect(contexteAudio(12.67)).toBe(1300)
+  })
+
+  it('rend null quand le contexte plein est atteint ou la durée absurde', () => {
+    expect(contexteAudio(15)).toBeNull()
+    expect(contexteAudio(30)).toBeNull()
+    expect(contexteAudio(0)).toBeNull()
+    expect(contexteAudio(-1)).toBeNull()
+    expect(contexteAudio(Number.NaN)).toBeNull()
+  })
+})
+
+describe('dureeWavSecondes', () => {
+  /** Un WAV 16 kHz mono 16 bits de `secondes` de long, en-tête compris. */
+  function wavDe(secondes: number): Uint8Array {
+    const echantillons = Math.round(16_000 * secondes)
+    const octets = echantillons * 2
+    const wav = new Uint8Array(44 + octets)
+    const vue = new DataView(wav.buffer)
+    vue.setUint32(24, 16_000, true)
+    vue.setUint32(28, 32_000, true) // octets par seconde
+    vue.setUint32(40, octets, true)
+    return wav
+  }
+
+  it('lit la durée dans l’en-tête, sans deviner', () => {
+    expect(dureeWavSecondes(wavDe(3))).toBeCloseTo(3, 3)
+    expect(dureeWavSecondes(wavDe(0.5))).toBeCloseTo(0.5, 3)
+  })
+
+  it('rend null sur un en-tête inutilisable, plutôt qu’une durée inventée', () => {
+    expect(dureeWavSecondes(new Uint8Array(10))).toBeNull()
+    expect(dureeWavSecondes(new Uint8Array(44))).toBeNull()
+  })
+
+  it('lit la durée du WAV RÉELLEMENT produit par l’encodeur du renderer', () => {
+    // LA COUTURE QUI CASSERAIT EN SILENCE : `-ac` est calculé depuis cette durée. Si l'en-tête écrit
+    // par `encoderWav16k` n'était pas lu ici, `dureeWavSecondes` rendrait null, `-ac` disparaîtrait
+    // sans erreur, et on retomberait aux 2,4 s d'avant — avec tous les autres tests au vert.
+    const deuxSecondes = new Float32Array(TAUX_WHISPER * 2)
+    for (let i = 0; i < deuxSecondes.length; i += 1) deuxSecondes[i] = Math.sin(i / 3) * 0.3
+    const wav = encoderWav16k(deuxSecondes, TAUX_WHISPER)
+    expect(dureeWavSecondes(wav)).toBeCloseTo(2, 2)
+    expect(contexteAudio(dureeWavSecondes(wav)!)).toBe(512)
+  })
+
+  it('ne croit pas un champ `data` plus grand que le fichier reçu', () => {
+    // Un téléchargement coupé ou un WAV tronqué annoncerait 30 s dans 2 s d'octets : dimensionner
+    // `-ac` sur la promesse plutôt que sur le contenu ferait tronquer la transcription.
+    const wav = wavDe(2)
+    new DataView(wav.buffer).setUint32(40, 32_000 * 30, true)
+    expect(dureeWavSecondes(wav)).toBeCloseTo(2, 3)
   })
 })
 

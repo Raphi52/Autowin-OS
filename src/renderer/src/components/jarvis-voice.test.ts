@@ -138,6 +138,16 @@ describe('mot d’éveil', () => {
     }
   })
 
+  it('reconnaît son nom même quand whisper y colle une apostrophe', () => {
+    // MESURE 2026-08-31 : la même phrase, seul le niveau d'entrée change. À niveau normal la CLI
+    // rend « Jarvie, ouvre le gestionnaire de tâche. » ; à −18 dB elle rend « J'arvie, ouvre le
+    // jeu. ». `\bjarv` exigeait `jarv` d'un bloc : la frontière de mot tombant après l'apostrophe,
+    // le nom était ENTENDU et l'éveil ne partait pas.
+    expect(contientEveil("j'arvie, ouvre le jeu.")).toBe(true)
+    expect(contientEveil('j’arvis ouvre le chat')).toBe(true)
+    expect(extraireCommandeEveil("J'arvie, ouvre le chat")).toBe('ouvre le chat')
+  })
+
   it('ne prend PAS n’importe quel mot pour son nom', () => {
     // L'ENTRÉE QUI CASSE UN FAUX FIX : élargir le mot d'éveil jusqu'à l'absurde ferait partir un run
     // sur une conversation ordinaire. Ces mots-là ne réveillent rien.
