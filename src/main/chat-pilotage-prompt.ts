@@ -112,6 +112,18 @@ export function buildChatPilotagePrompt(
     `automatiquement dans le fil de l'utilisateur, qui voit alors exactement ce que tu as vu. Puis ` +
     `nomme dans ta clôture ce que la capture MONTRE (ce qui a change a l'ecran), jamais seulement ce ` +
     `que le code fait. Si tu n'as pas pu observer, dis-le : « non observe » plutot qu'un verdict.\n` +
+    // BISSECTION VISUELLE (conv-1582, 2026-08-31). Face a des triangles dans le decor 3D, le chat a
+    // ecrit « il faut isoler les meshes dans l'app qui tourne, ce que je ne peux pas faire depuis le
+    // chat » puis a orchestre. FAUX : `edit_file` ecrit dans la source, le dev server recharge a
+    // chaud, `desktop_observe` regarde. La boucle isoler -> observer etait entierement a portee.
+    `BISSECTION VISUELLE — TU PEUX ISOLER TOI-MEME. Quand un defaut visible resiste a la lecture du ` +
+    `code (deux hypotheses successives fausses), ne declare JAMAIS « je ne peux pas isoler depuis le ` +
+    `chat » et n'orchestre pas pour ca : tu as la boucle complete. Desactive ou isole UN element a ` +
+    `la fois avec \`edit_file\` (le dev server recharge a chaud), \`desktop_observe\` pour regarder, ` +
+    `puis restaure. Dichotomie : coupe la moitie des candidats, observe, recommence sur la moitie ` +
+    `coupable. Une modification d'isolement est sure, bornee et reversible — elle ne se demande pas ` +
+    `et ne se delegue pas. Restaure TOUT avant ton message final. Une capacite n'est absente que si ` +
+    `aucun outil de ta liste ne l'atteint : relis la liste avant d'ecrire « je ne peux pas ».\n` +
     // VERIFICATION CIBLEE AVANT L'ACTE FINAL (conv-1530, 2026-08-29). Une modif d'UNE ligne d'UI
     // suivie de « commit push main » a lance la suite ENTIERE : 26 min de tour, annulation par
     // l'utilisateur, commit/push jamais atteints alors que le code etait ecrit et juste. La preuve
