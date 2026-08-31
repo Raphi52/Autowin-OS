@@ -5,7 +5,7 @@ import { tempsDecor, MOUVEMENT_REDUIT, positionNuage } from './home-decor-scene'
 
 /**
  * LE DÉFAUT (conv-1476, « le nuage est statique ») : sur la machine de l'utilisateur,
- * `prefers-reduced-motion: reduce` est ACTIF, et `HomeView` passait alors au décor un temps
+ * `prefers-reduced-motion: reduce` est ACTIF, et le décor recevait alors un temps
  * CONSTANT (`reduceMotion ? 12 : time / 1000`). Le shader du nuage et `positionNuage` sont tous
  * deux fonctions du temps : temps figé = nuage figé. La matière n'était pas en cause.
  *
@@ -33,8 +33,13 @@ describe('le décor vit même en mouvement réduit', () => {
     expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThan(0.05)
   })
 
-  it('HomeView passe le temps par tempsDecor, plus par une constante', () => {
-    const source = readFileSync(join(__dirname, 'HomeView.tsx'), 'utf8')
+  /*
+   * LA CIBLE A SUIVI LE CODE : le decor a quitte `HomeView` pour `DecorDeFond`, devenu le fond de
+   * TOUTE l'application. Laisser ce test lire `HomeView.tsx` le rendrait vert en ne verifiant plus
+   * rien — le fichier n'y contient plus une seule ligne de rendu. La garantie se verifie ou elle vit.
+   */
+  it('le decor passe le temps par tempsDecor, plus par une constante', () => {
+    const source = readFileSync(join(__dirname, 'DecorDeFond.tsx'), 'utf8')
     expect(source).not.toMatch(/reduceMotion\s*\?\s*\d+\s*:/)
     expect(source).toMatch(/tempsDecor\(\s*time\s*\/\s*1000\s*,\s*reduceMotion\s*\)/)
   })
