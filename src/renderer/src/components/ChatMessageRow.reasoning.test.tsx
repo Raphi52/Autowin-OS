@@ -1,8 +1,16 @@
 // @vitest-environment happy-dom
 /**
- * La bulle du fil ne porte PLUS le raisonnement : il vit dans le panneau dédié.
- * Entrée qui ferait échouer une correction fausse : un message EN COURS (`done: false`) avec
- * `reasoning` et zéro `parts` — exactement le cas que l'ancien affichage transitoire ciblait.
+ * La bulle du fil PORTE le raisonnement, dans un bloc « Réflexion » repliable (`ThinkingBlock`).
+ *
+ * INVERSION ASSUMEE (2026-08-31). Ce fichier verrouillait la decision inverse — « le raisonnement
+ * vit dans le panneau dedie, jamais dans la bulle ». Ce panneau lateral a ete RETIRE : le
+ * raisonnement etait alors accumule par `chat-view-model` et rendu NULLE PART, donc la pensee
+ * existait et restait invisible. `ThinkingBlock` la ramene dans la bulle (cf. son en-tete).
+ * L'ancien oracle ne decrivait plus aucune intention : il faisait echouer toute edition du chat.
+ *
+ * Entree qui ferait echouer une correction fausse : un message EN COURS (`done: false`) avec
+ * `reasoning` et zero `parts` — le bloc doit etre OUVERT tant que le tour n'est pas termine,
+ * un rendu qui se contenterait de le monter replie laisserait la pensee invisible comme avant.
  */
 import { describe, expect, it } from 'vitest'
 import { act, createElement } from 'react'
