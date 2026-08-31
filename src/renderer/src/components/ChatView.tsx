@@ -1609,6 +1609,13 @@ export function ChatView({
     await ouvrirDansMosaique(id)
   }
 
+  /** Quitter la mosaique EN emportant la conversation cliquee : elle devient le fil unique actif. */
+  async function ouvrirSeuleDepuisMosaique(id: string): Promise<void> {
+    setConvViewMode('list')
+    const cible = convsRef.current.find((c) => c.id === id)
+    if (cible) await loadConv(cible)
+  }
+
   function fermerFenetreMosaique(id: string): void {
     mosaicIdsRef.current = mosaicIdsRef.current.filter((autre) => autre !== id)
     setMosaicIds((courant) => courant.filter((autre) => autre !== id))
@@ -3370,6 +3377,7 @@ export function ChatView({
         <ChatMosaic
           fenetres={fenetresMosaique}
           onClose={fermerFenetreMosaique}
+          onOuvrirSeule={(id) => void ouvrirSeuleDepuisMosaique(id)}
           rendreComposer={rendreComposerMosaique}
           onNouvelleConversation={() => void nouvelleFenetreMosaique()}
         />

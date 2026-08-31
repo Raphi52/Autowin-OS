@@ -1779,7 +1779,7 @@ describe('chat scrolling and layout rules', () => {
   })
 
   it('keeps the conversation library within usable bounds', () => {
-    expect(clampConversationPaneWidth(100)).toBe(CHAT_PANE_LIMITS.conversations.min)
+    expect(clampConversationPaneWidth(60)).toBe(CHAT_PANE_LIMITS.conversations.min)
     expect(clampConversationPaneWidth(999)).toBe(CHAT_PANE_LIMITS.conversations.max)
     expect(clampConversationPaneWidth(344.6)).toBe(345)
   })

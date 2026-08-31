@@ -1172,7 +1172,7 @@ export interface RunRequestIdentity {
 }
 
 export const CHAT_PANE_LIMITS = {
-  conversations: { min: 224, max: 480 },
+  conversations: { min: 96, max: 480 },
   workflows: { min: 280, max: 760 }
 } as const
 

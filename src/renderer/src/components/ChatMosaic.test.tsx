@@ -39,6 +39,7 @@ describe('ChatMosaic', () => {
       <ChatMosaic
         fenetres={[fenetre('a', 'Alpha'), fenetre('b', 'Beta')]}
         onClose={vi.fn()}
+        onOuvrirSeule={vi.fn()}
         rendreComposer={composerFactice}
         onNouvelleConversation={vi.fn()}
       />
@@ -55,6 +56,7 @@ describe('ChatMosaic', () => {
       <ChatMosaic
         fenetres={[fenetre('a', 'Alpha'), fenetre('b', 'Beta')]}
         onClose={onClose}
+        onOuvrirSeule={vi.fn()}
         rendreComposer={composerFactice}
         onNouvelleConversation={vi.fn()}
       />
@@ -66,12 +68,31 @@ describe('ChatMosaic', () => {
     expect(onClose).toHaveBeenCalledWith('a')
   })
 
+  it('ouvre la conversation VISEE seule, hors mosaique', () => {
+    const onOuvrirSeule = vi.fn()
+    const hote = monter(
+      <ChatMosaic
+        fenetres={[fenetre('a', 'Alpha'), fenetre('b', 'Beta')]}
+        onClose={vi.fn()}
+        onOuvrirSeule={onOuvrirSeule}
+        rendreComposer={composerFactice}
+        onNouvelleConversation={vi.fn()}
+      />
+    )
+    act(() => {
+      hote.querySelector<HTMLButtonElement>('[data-conv-id="b"] .chat-mosaic-window-open')!.click()
+    })
+    expect(onOuvrirSeule).toHaveBeenCalledTimes(1)
+    expect(onOuvrirSeule).toHaveBeenCalledWith('b')
+  })
+
   it('offre de creer une conversation, meme quand aucune fenetre n est ouverte', () => {
     const onNouvelle = vi.fn()
     const vide = monter(
       <ChatMosaic
         fenetres={[]}
         onClose={vi.fn()}
+        onOuvrirSeule={vi.fn()}
         rendreComposer={composerFactice}
         onNouvelleConversation={onNouvelle}
       />
@@ -87,6 +108,7 @@ describe('ChatMosaic', () => {
       <ChatMosaic
         fenetres={[fenetre('a', 'Alpha')]}
         onClose={vi.fn()}
+        onOuvrirSeule={vi.fn()}
         rendreComposer={composerFactice}
         onNouvelleConversation={vi.fn()}
       />
@@ -99,6 +121,7 @@ describe('ChatMosaic', () => {
       <ChatMosaic
         fenetres={[fenetre('a', 'Alpha', true), fenetre('b', 'Beta')]}
         onClose={vi.fn()}
+        onOuvrirSeule={vi.fn()}
         rendreComposer={composerFactice}
         onNouvelleConversation={vi.fn()}
       />
@@ -116,6 +139,7 @@ it("colore la bordure de la fenetre dont le tour VIENT de se terminer, jusqu au 
           <ChatMosaic
             fenetres={[fenetre("a", "Alpha", busyA), fenetre("b", "Beta")]}
             onClose={vi.fn()}
+        onOuvrirSeule={vi.fn()}
             rendreComposer={composerFactice}
             onNouvelleConversation={vi.fn()}
           />

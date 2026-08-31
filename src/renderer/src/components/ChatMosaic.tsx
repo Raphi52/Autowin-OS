@@ -25,6 +25,8 @@ export type ChatMosaicWindow = {
 export type ChatMosaicProps = {
   fenetres: readonly ChatMosaicWindow[]
   onClose: (id: string) => void
+  /** Quitte la mosaique et ouvre CETTE conversation seule dans le fil unique. */
+  onOuvrirSeule: (id: string) => void
   /**
    * Composer de la fenetre, FABRIQUE PAR LE PARENT : c'est le vrai `ChatComposer` du chat plein,
    * avec ses palettes, ses pieces jointes et son brouillon. La mosaique n'en reimplemente aucun —
@@ -38,10 +40,12 @@ export type ChatMosaicProps = {
 function FenetreChat({
   fenetre,
   onClose,
+  onOuvrirSeule,
   rendreComposer
 }: {
   fenetre: ChatMosaicWindow
   onClose: (id: string) => void
+  onOuvrirSeule: (id: string) => void
   rendreComposer: (id: string) => React.ReactNode
 }): React.JSX.Element {
   const filRef = useRef<HTMLDivElement>(null)
@@ -89,6 +93,16 @@ function FenetreChat({
         )}
         <button
           type="button"
+          className="chat-mosaic-window-open"
+          data-testid="chat-mosaic-open"
+          aria-label={`Ouvrir ${fenetre.title || 'la conversation'} en plein ecran`}
+          title="Ouvrir cette conversation seule"
+          onClick={() => onOuvrirSeule(fenetre.id)}
+        >
+          ↗
+        </button>
+        <button
+          type="button"
           className="chat-mosaic-window-close"
           aria-label={`Fermer ${fenetre.title || 'la conversation'}`}
           onClick={() => onClose(fenetre.id)}
@@ -132,6 +146,7 @@ function FenetreChat({
 export function ChatMosaic({
   fenetres,
   onClose,
+  onOuvrirSeule,
   rendreComposer,
   onNouvelleConversation
 }: ChatMosaicProps): React.JSX.Element {
@@ -163,6 +178,7 @@ export function ChatMosaic({
           key={fenetre.id}
           fenetre={fenetre}
           onClose={onClose}
+          onOuvrirSeule={onOuvrirSeule}
           rendreComposer={rendreComposer}
         />
       ))}
