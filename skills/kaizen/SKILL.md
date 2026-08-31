@@ -12,8 +12,8 @@ description: >-
   transcripts alone); OR an INJECTED instruction (the app system prompt, phase consignes, output-styles); OR a recurrent telemetry pattern surfaced by the `kaizen-nudge` Stop hook; (2) AUDIT behaviorally by REUSING
   `judge` Mode B (parallel behavioral lenses — anchoring/honesty, communication, scope-drift, cross-session
   state, model-shared blind spot… — each finding 1-2 blind spots with a FALSIFIABLE anchor quoted from the
-  transcript + a severity; loop with new lenses until 2 dry rounds); (3) CONSOLIDATE to ONE root cause + a
-  ranked table (blind spot · anchor · proposed rule · integration point); (4) STATE the edits it is about to make, in plain words, so they are readable BEFORE and revertable after; then (5) INTEGRATE them itself — no approval wait — preferring
+  transcript + a severity; loop with new lenses until 2 dry rounds); (3) DEFINE, for each blind spot, the TARGET BEHAVIOR — what should have happened for a good USER experience — and derive the rule from THAT, not from the symptom; (4) CONSOLIDATE to ONE root cause + a
+  ranked table (blind spot · anchor · target behavior · proposed rule · integration point); (5) STATE the edits it is about to make, in plain words, so they are readable BEFORE and revertable after; then (6) INTEGRATE them itself — no approval wait — preferring
   a WIRED trigger (hook + CLAUDE.md hard rule) over a passive memory fiche (loading ≠ applying — a fiche alone
   was violated twice the same session), VERIFY each edited hook with an out-of-model signal (parse + behavior +
   negative control), then prove NON-RECURRENCE — replay the exact failing situation against the installed
@@ -54,9 +54,11 @@ the kit (CLAUDE.md reflexes / hooks / skills / memory) that change FUTURE behavi
    - **loop economics** — judge→build iterations, cost per turn, a re-run of something already tried (the retrospective shows it).
    Each keeps Mode B's contract: a falsifiable anchor (the RUN path + the line), a severity, a proposed rule, an integration point.
 
-3. **CONSOLIDATE.** Dedup across lenses; surface the ONE root cause (what a single specialist would miss) + a ranked table: `blind spot · anchor · severity · proposed rule · integration point (hook / CLAUDE.md hard-rule / memory / just-known) · scope (global+mirror / local-only / project)`. **Adjudicate** the lenses — reject a finding that re-flags a deliberate decision or overstates (you verify the real artifact, never a lens's word). State honest caveats (same-AI correlation — correlated blind spots not independently ruled out).
-4. **STATE the edits — readable before, revertable after** (CARDINAL). Present the table in PLAIN words: what changes, in which file, why there. This is a DECLARATION, not a request for permission. It exists so the user can read the delta and revert it, not so kaizen can wait. A producer=judge "100" is not proof — which is why every edit carries an out-of-model verification and its OWN commit (lived: "intrinsic" concluded wrongly 3×; a dedicated commit makes that revertable in one command).
-5. **INTEGRATE — edit the kit to change FUTURE behavior, immediately.** The deliverable IS the edit. Before picking a file, run an explicit **placement analysis** per finding — REASON it, don’t look it up, and surface the "why here" in the STATE table. Three axes: **SCOPE** (below), **ENFORCEMENT** (wired hook+rule > recall fiche — see bullets), **FOLD vs NEW** (extend/retire before adding — see bullets).
+3. **DEFINE THE RIGHT BEHAVIOR (UX target) — before proposing any rule.** A defect names what happened; it does NOT say what SHOULD have happened. For each consolidated blind spot, write the **target behavior in one sentence, from the USER's experience**: at that exact moment, what would have been the good response/action for the person in front of the screen (what they get, when, in what form, what they are spared) — and what makes it good (less friction, no wasted turn, nothing to re-type, no false claim, the decision left where it belongs). Derive the rule FROM that target, never straight from the defect: a rule written against a symptom produces a prohibition (« ne fais plus X ») that leaves the agent with no behavior to run; a rule written from the target produces a REFLEX (« au moment où X → fais Y »). If two plausible target behaviors compete (answer directly vs. offer a choice, act vs. ask), name both, pick one with its reason, and record the discarded one — a rule installed on an unarbitrated target is a guess. When the target touches something the user alone can settle (a taste, a trade-off between speed and control), surface it as a question instead of freezing it into the kit. The non-recurrence replay (step 6) then tests the TARGET behavior, not merely the absence of the defect.
+
+4. **CONSOLIDATE.** Dedup across lenses; surface the ONE root cause (what a single specialist would miss) + a ranked table: `blind spot · anchor · severity · proposed rule · integration point (hook / CLAUDE.md hard-rule / memory / just-known) · scope (global+mirror / local-only / project)`. **Adjudicate** the lenses — reject a finding that re-flags a deliberate decision or overstates (you verify the real artifact, never a lens's word). State honest caveats (same-AI correlation — correlated blind spots not independently ruled out).
+5. **STATE the edits — readable before, revertable after** (CARDINAL). Present the table in PLAIN words: what changes, in which file, why there. This is a DECLARATION, not a request for permission. It exists so the user can read the delta and revert it, not so kaizen can wait. A producer=judge "100" is not proof — which is why every edit carries an out-of-model verification and its OWN commit (lived: "intrinsic" concluded wrongly 3×; a dedicated commit makes that revertable in one command).
+6. **INTEGRATE — edit the kit to change FUTURE behavior, immediately.** The deliverable IS the edit. Before picking a file, run an explicit **placement analysis** per finding — REASON it, don’t look it up, and surface the "why here" in the STATE table. Three axes: **SCOPE** (below), **ENFORCEMENT** (wired hook+rule > recall fiche — see bullets), **FOLD vs NEW** (extend/retire before adding — see bullets).
    - **SCOPE decides the file AND whether to mirror** — the most-missed axis:
      - **global** (every machine/project) → `~/.claude/CLAUDE.md` **+ mirror `CONSTITUTION.md`**.
      - **local** (THIS machine only — RIG hooks, paths, project gates) → the **« Local »** section of `~/.claude/CLAUDE.md`, **NOT mirrored** (a machine-specific fact in the shared `CONSTITUTION.md` pollutes the company kit).
@@ -83,9 +85,9 @@ The deliverable is the STATE table (presented in PLAIN words) + the integrated e
 
 **STATE table** — ranked, one row per consolidated blind spot:
 
-| blind spot | anchor | severity | proposed rule | integration point | why here (scope) |
-|---|---|---|---|---|---|
-| what a single specialist would miss | exact quote + line from the transcript | sev | the rule to install | hook / CLAUDE.md hard-rule / memory / just-known | global+mirror / local-only / project — + the one-line reason |
+| blind spot | anchor | severity | target behavior (UX) | proposed rule | integration point | why here (scope) |
+|---|---|---|---|---|---|---|
+| what a single specialist would miss | exact quote + line from the transcript | sev | what SHOULD have happened, seen from the user | the rule to install, derived from that target | hook / CLAUDE.md hard-rule / memory / just-known | global+mirror / local-only / project — + the one-line reason |
 
 **Mandatory `kaizen-treated.jsonl` schema** — append ONE line to `~/.claude/kaizen-treated.jsonl` per treated signal:
 `{"gate":"<fix-gate|anti-flaky|stop>","treatedCount":<count at treatment>,"ts":"<iso>","note":"<what changed>"}`
@@ -94,6 +96,7 @@ The deliverable is the STATE table (presented in PLAIN words) + the integrated e
 **Done** — recap in plain words: root cause, what was integrated + where, what was VERIFIED (the out-of-model signal), **the non-recurrence replay per edit** (situation rejouée → résultat: bloqué / corrigé / non rejoué), caveats. **Never report "integrated/done"** without the verification artifact. The net is the commit log: each edit revertable alone.
 
 ## Don't
+- **Install a rule without having named the target behavior** — a prohibition derived from the symptom (« ne fais plus X ») leaves nothing to DO in its place, and gets violated the next session. Name the good user experience first, then write the reflex that produces it.
 - **The silent edit** — kaizen APPLIES, but never invisibly: an edit that does not appear in the STATE table, or that lands mixed into another commit, is a defect (the user must be able to see it and revert it alone).
 - **Reimplement the audit** — reuse `judge` Mode B; kaizen orchestrates, it doesn't re-derive the lens machinery.
 - **Trust a lens's word** — adjudicate; reject a finding that re-flags a deliberate decision or overstates; edit on the REAL file, never a sub-agent's report.
