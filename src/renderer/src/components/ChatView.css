@@ -79,6 +79,12 @@
 .conv-head .btn {
   margin-left: auto;
 }
+/* L'entete est un item flex : sans flex:1 sa largeur colle au titre et le switch
+   de vue reste plaque contre « Conversations » au lieu du bord droit du panneau. */
+.conv-head > .module-header {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 /* Inbox d'agents : conversations dont un agent travaille, en tête du pane. */
 /* À la taille de fenêtre de démarrage (900 px), trois colonnes fixes plaçaient Workflows hors écran.
    Le panneau devient un tiroir dans le cadre du chat ; la conversation reste dessous et revient intacte
