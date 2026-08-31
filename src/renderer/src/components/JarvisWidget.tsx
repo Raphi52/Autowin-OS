@@ -157,8 +157,16 @@ export function JarvisWidget({
       moteur.interimResults = true
       moteur.lang = 'fr-FR'
       moteur.onresult = auResultat
-      moteur.onerror = () => {
-        // Une erreur ponctuelle (silence, reseau) n'eteint pas le widget : `onend` suit et relance.
+      moteur.onerror = (evenement) => {
+        const code = String((evenement as { error?: unknown } | null)?.error ?? 'inconnue')
+        // `no-speech` / `aborted` = fonctionnement normal d'un micro qui attend : `onend` relance.
+        // Tout le reste EMPECHE d'entendre. L'avaler en silence laissait le widget afficher
+        // « ecoute en cours » sur un moteur mort — c'est exactement le « il ne m'entend pas ».
+        if (code === 'no-speech' || code === 'aborted') return
+        actifRef.current = false
+        moteurRef.current = null
+        setErreur(`Reconnaissance vocale interrompue : ${code}`)
+        setEcoute((precedent) => ({ ...precedent, active: false, partiel: '' }))
       }
       moteur.onend = () => {
         if (actifRef.current && moteurRef.current === moteur) moteur.start()

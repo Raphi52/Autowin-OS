@@ -647,24 +647,19 @@ describe('ExecutionSupervisor', () => {
   })
 
   /**
-   * REMIS le 2026-08-19 sur arbitrage de l'utilisateur, apres avoir ete retire le meme jour : le filet
-   * ne vise QUE l'immobilite, et un budget nul ne laisse aucune place a la moindre progression — le
-   * refus est donc immediat, avant de payer quoi que ce soit.
+   * RETIRE POUR DE BON le 2026-08-31 : plus aucune borne de duree, meme nulle, ne refuse un run.
    */
-  it('refuse synchroniquement un devis qui ne laisse aucune place a la progression', async () => {
+  it('un devis sans place de duree ne refuse plus rien', async () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
     const quote = devisBloquant('corrige la typo')
     quote.limits.maxDurationMs = 0
 
-    await expect(
-      supervisor.run(quote, undefined, () =>
-        registry.send('counted', [{ role: 'user', content: 'trop tard' }])
-      )
-    ).rejects.toThrow(/pendu, pas comme trop long/i)
-
-    expect(provider.calls).toBe(0)
+    await supervisor.run(quote, undefined, () =>
+      registry.send('counted', [{ role: 'user', content: 'toujours a l heure' }])
+    )
+    expect(provider.calls).toBe(1)
   })
 
   it('isole un reveil de fond du devis encore actif dans le contexte parent', async () => {
@@ -766,23 +761,24 @@ describe('ExecutionSupervisor — la duree borne l’immobilite, plus la longueu
     expect(provider.calls).toBe(1)
   })
 
-  it('un run IMMOBILE est ramasse, et la raison dit qu’il est pendu et non trop long', async () => {
+  /**
+   * DECISION UTILISATEUR du 2026-08-31, apres une troisieme coupe d'un run qui travaillait encore :
+   * plus AUCUNE horloge de garde. Un run immobile n'est plus tue par le superviseur.
+   */
+  it('un run immobile plus long que le budget n’est plus tue', async () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
-    const quote = devisBloquant('une tache qui se pend')
-    quote.limits.maxDurationMs = 250
+    const quote = devisBloquant('une tache silencieuse')
+    quote.limits.maxDurationMs = 50
 
-    const abandon = supervisor.run(quote, undefined, async () => {
-      await registry.send('counted', [{ role: 'user', content: 'un seul appel' }])
-      // Puis PLUS RIEN : aucune progression observable, comme un run bloque sur un processus mort.
-      await new Promise((resolve) => {
-        const t = setTimeout(resolve, 10_000)
-        t.unref?.()
+    await expect(
+      supervisor.run(quote, undefined, async () => {
+        await registry.send('counted', [{ role: 'user', content: 'un seul appel' }])
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        return 'livre'
       })
-    })
-
-    await expect(abandon).rejects.toThrow(/aucune progression/i)
-    expect(supervisor.lastSnapshot()?.stoppedReason).toMatch(/pendu, pas comme trop long/i)
+    ).resolves.toBe('livre')
+    expect(supervisor.lastSnapshot()?.stoppedReason).toBeUndefined()
   })
 })

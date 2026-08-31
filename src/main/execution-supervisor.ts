@@ -70,12 +70,6 @@ export function sameExecutionUsage(
 interface ExecutionRuntime {
   executionId: string
   quote: ExecutionQuote
-  deadlineAtMs: number
-  /**
-   * Reamorce l'echeance d'IMMOBILITE. Appele a chaque progression observable d'un appel provider.
-   * Absent hors execution, et retire des la fin du run pour qu'un reglage tardif ne rearme rien.
-   */
-  progresse?: () => void
   controller: AbortController
   signal: AbortSignal
   startedAgents: number
@@ -151,14 +145,6 @@ function snapshot(runtime: ExecutionRuntime): ExecutionUsageSnapshot {
  * Autorite unique d'admission des appels provider d'un run. AsyncLocalStorage garde les compteurs
  * locaux au run, y compris quand plusieurs orchestrations s'entrelacent dans le process principal.
  */
-/**
- * Raison d'un arret par IMMOBILITE. Le texte dit explicitement que ce n'est PAS une coupe pour
- * longueur : c'est le malentendu qui a coute un run de 45 minutes le 2026-08-19.
- */
-function raisonImmobilite(ms: number): string {
-  return `aucune progression depuis ${ms} ms — run considere comme pendu, pas comme trop long`
-}
-
 export class ExecutionSupervisor {
   private readonly storage = new AsyncLocalStorage<ExecutionRuntime>()
   private latest?: ExecutionUsageSnapshot
@@ -213,11 +199,9 @@ export class ExecutionSupervisor {
      * les reprises via `prior` (jetons, appels, agents ci-dessous). Une reprise est un acte
      * délibéré de l'utilisateur ; lui rendre son temps de travail ne lui rend pas son budget.
      */
-    const deadlineAtMs = Date.now() + quote.limits.maxDurationMs
     const runtime: ExecutionRuntime = {
       executionId: randomUUID(),
       quote,
-      deadlineAtMs,
       controller,
       signal: combinedSignal(outerSignal, controller.signal),
       // Les checkpoints antérieurs au compteur agents ne doivent jamais recréer un budget vierge.
@@ -267,82 +251,15 @@ export class ExecutionSupervisor {
       publishTerminalSnapshot()
       throw new ExecutionBudgetExceededError(runtime.stoppedReason)
     }
-    const remainingDurationMs = deadlineAtMs - Date.now()
     /*
-     * FILET CONTRE UN RUN PENDU — et RIEN d'autre.
-     *
-     * Histoire de ce bloc, pour que personne ne le rejoue a l'aveugle. Il bornait la DUREE TOTALE :
-     * mesure du 2026-08-19, l'application a livre un correctif de production en deux commits puis son
-     * tour a ete tue sur « budget duree depasse (2700000 ms) » avant d'ecrire ses tests. Couper une
-     * tache parce qu'elle est LONGUE ne protege rien : ca detruit du travail deja paye. Le guetteur a
-     * donc ete retire entierement par une session concurrente, decision utilisateur assumee et
-     * documentee. Puis l'utilisateur a demande le filet en retour, une fois le cout connu : un run
-     * PENDU — `git` mort, worker disparu — ne consomme aucun jeton, donc aucun plafond de depense ne
-     * l'arrete jamais, et le detecteur de derive (`route-drift.ts`) se declenche sur la SORTIE, donc
-     * il ne voit pas un silence total.
-     *
-     * Ce que ce filet fait, et sa seule justification : l'echeance est REPOUSSEE a chaque progression
-     * observable d'un appel provider. Une tache longue tourne donc librement — y compris pendant une
-     * verification de suite complete, qui dure ~8 min sans regler un seul appel, largement sous le
-     * plus petit budget de regime (15 min). Ce qui reste attrape est l'immobilite complete.
-     *
-     * La course contre l'abort n'est pas un ornement : `controller.abort` n'est observe que par un
-     * appel provider EN VOL. Sans elle, un run pendu sans appel actif restait pendu indefiniment et le
-     * minuteur ne servait a rien — le garde jumeau a l'admission ne mordait qu'au prochain appel,
-     * c'est-a-dire jamais. Elle est armee UNIQUEMENT pour l'immobilite : un refus de depense garde son
-     * chemin d'origine, et transformer son abort en rejet exterieur changerait tous les plafonds.
+     * AUCUNE HORLOGE DE GARDE. Retire pour de bon le 2026-08-31 sur decision explicite et repetee de
+     * l'utilisateur : le filet d'immobilite a tue des runs qui travaillaient encore (mesures des
+     * 2026-08-19, 2026-08-28, puis a nouveau ce jour, « aucune progression depuis 2700000 ms »).
+     * L'arret d'un run pendu revient a l'utilisateur, qui voit son etat. Ne PAS le rejouer.
      */
-    if (remainingDurationMs <= 0) {
-      runtime.stoppedReason = raisonImmobilite(quote.limits.maxDurationMs)
-      controller.abort(runtime.stoppedReason)
-      publishTerminalSnapshot()
-      throw new ExecutionBudgetExceededError(runtime.stoppedReason)
-    }
-    let arretPourImmobilite = false
-    const arreterPourImmobilite = (): void => {
-      /*
-       * UN APPEL EN VOL N'EST PAS UNE IMMOBILITE. Mesure du 2026-08-28 (conv-1511) : un run a ete tue
-       * sur « aucune progression depuis 2700000 ms » alors qu'il avait deja produit 19 fichiers restes
-       * prisonniers d'un bureau isole. Le coeur ne battait qu'aux BORNES d'un appel (demarrage et
-       * reglement) : une phase build tenue par UN SEUL appel provider de plus de 45 minutes ne battait
-       * donc jamais. Le scenario que ce filet protege — git mort, worker disparu — n'a par construction
-       * AUCUN appel actif ; reglisser l'echeance tant qu'un appel est EN VOL conserve la detection du
-       * pendu sans detruire du travail deja paye.
-       */
-      if (runtime.activeCalls > 0 && !runtime.finished) {
-        runtime.deadlineAtMs = Date.now() + quote.limits.maxDurationMs
-        deadline = setTimeout(arreterPourImmobilite, quote.limits.maxDurationMs)
-        deadline.unref?.()
-        return
-      }
-      arretPourImmobilite = true
-      runtime.stoppedReason = raisonImmobilite(quote.limits.maxDurationMs)
-      controller.abort(runtime.stoppedReason)
-    }
-    let deadline = setTimeout(arreterPourImmobilite, remainingDurationMs)
-    deadline.unref?.()
-    runtime.progresse = (): void => {
-      if (runtime.finished) return
-      // La borne LUE A L'ADMISSION doit avancer avec le minuteur, sinon le garde jumeau continue de
-      // refuser au nom d'une echeance que le minuteur vient de lever.
-      runtime.deadlineAtMs = Date.now() + quote.limits.maxDurationMs
-      clearTimeout(deadline)
-      deadline = setTimeout(arreterPourImmobilite, quote.limits.maxDurationMs)
-      deadline.unref?.()
-    }
-    const rejetSurImmobilite = new Promise<never>((_, rejeter) => {
-      const surArret = (): void => {
-        if (!arretPourImmobilite) return
-        rejeter(new ExecutionBudgetExceededError(runtime.stoppedReason ?? 'execution interrompue'))
-      }
-      if (controller.signal.aborted) surArret()
-      else controller.signal.addEventListener('abort', surArret, { once: true })
-    })
     try {
-      return await Promise.race([this.storage.run(runtime, execute), rejetSurImmobilite])
+      return await this.storage.run(runtime, execute)
     } finally {
-      runtime.progresse = undefined
-      clearTimeout(deadline)
       // Publier MEME si le provider s'est regle dans la micro-fenetre entre la cloture
       // orchestrateur et ce finally. Sans cela, la fermeture persistait un faux activeCalls=1.
       publishTerminalSnapshot()
@@ -362,13 +279,8 @@ export class ExecutionSupervisor {
       if (abortRun) runtime.controller.abort(reason)
       throw new ExecutionBudgetExceededError(reason)
     }
-    // L'IMMOBILITE et la CONCURRENCE sont toujours enforcees : la premiere protege d'un run PENDU (et
-    // d'un run pendu seulement — `deadlineAtMs` avance a chaque progression, voir `progresse`), la
-    // seconde de la saturation de la machine en process. Ni l'une ni l'autre ne protege le
-    // portefeuille — elles ne relevent donc pas du reglage ci-dessous.
-    if (Date.now() >= runtime.deadlineAtMs) {
-      deny(raisonImmobilite(limits.maxDurationMs))
-    }
+    // La CONCURRENCE reste enforcee : elle protege de la saturation de la machine en process, pas le
+    // portefeuille — elle ne releve donc pas du reglage ci-dessous. Aucune borne de DUREE n'existe.
     //
     // Plafonds de DÉPENSE : `blocking` refuse l'appel SUIVANT, jamais la finalisation d'un appel
     // déjà payé. `metering-only` continue de tout compter sans refuser.
@@ -437,8 +349,6 @@ export class ExecutionSupervisor {
     if (launchesAgent) runtime.startedAgents += 1
     runtime.startedCalls += 1
     runtime.activeCalls += 1
-    // PROGRESSION : un appel qui demarre prouve que le run n'est pas pendu.
-    runtime.progresse?.()
     runtime.activeReservationIds.add(reservationId)
     runtime.reservedTotalTokens += totalReservation
     runtime.reservedFreshTokens += freshReservation
@@ -452,8 +362,6 @@ export class ExecutionSupervisor {
       runtime.reservedFreshTokens = Math.max(0, runtime.reservedFreshTokens - freshReservation)
       if (failed) runtime.failedCalls += 1
       else runtime.completedCalls += 1
-      // PROGRESSION : un appel qui se REGLE prouve que le run avance, quel qu'en soit le verdict.
-      runtime.progresse?.()
       if (!usage) {
         runtime.unmeteredCalls += 1
         runtime.unpricedCalls += 1
