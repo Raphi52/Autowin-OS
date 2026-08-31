@@ -61,8 +61,23 @@ describe("exhaustivité de l'inventaire des injections", () => {
         // `system: ''` n'injecte rien : il n'y a pas de bloc à nommer.
         if (/^\s*system:\s*(''|"")\s*,?\s*$/.test(ligne)) return
         // La déclaration suit l'envoi de près ; au-delà, elle appartient à un autre littéral.
-        const fenetre = lignes.slice(index, index + 14).join('\n')
-        if (!/systemBlocks[:,\s]/.test(fenetre)) {
+        const fenetre = lignes.slice(index, index + 14)
+        /*
+         * FORME DE CODE EXIGÉE, pas simple présence du mot — corrigé le 2026-08-31.
+         *
+         * Cette assertion cherchait `/systemBlocks[:,\s]/` n'importe où dans la fenêtre, source
+         * BRUTE : un commentaire disant « TODO: rebrancher les systemBlocks » la satisfaisait, donc
+         * elle validait un site dont le code venait d'être retiré. C'est le défaut EXACT qui avait
+         * déjà été trouvé sur les assertions Brain de ce fichier — j'en avais durci une famille et
+         * laissé sa jumelle intacte, vingt lignes plus bas.
+         *
+         * Le remède est ici l'ancrage en DÉBUT de ligne plutôt qu'un filtrage des commentaires :
+         * une ligne de commentaire commence par `//` ou `*`, une clé d'objet non. Plus simple qu'un
+         * analyseur de commentaires, et sans le trou du commentaire de FIN de ligne que celui-ci
+         * laisserait ouvert.
+         */
+        const declaree = fenetre.some((candidate) => /^\s*systemBlocks\s*[:,]/.test(candidate))
+        if (!declaree) {
           manquants.push(`${fichier}:${index + 1} — ${ligne.trim()}`)
         }
       })
