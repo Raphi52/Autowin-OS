@@ -22,6 +22,13 @@ export interface ActionLike {
   ok?: boolean
   interrupted?: boolean
   data?: unknown
+  /**
+   * CE QUI A ETE DEMANDE. Retour du 2026-08-31 : « je sais meme pas quelle file a ete lu ». Le
+   * resultat seul ne dit pas la CIBLE — un `read_file` rend un contenu, pas le chemin ; un
+   * `find_in_files` rend des correspondances, pas le motif. Les arguments sont donc la premiere
+   * ligne du deplie.
+   */
+  args?: unknown
 }
 
 /** Vrai si AU MOINS une action du groupe a produit (ou produit) un run consultable. */
