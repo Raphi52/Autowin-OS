@@ -1028,6 +1028,52 @@ describe('Orchestrator — flip live worktree', () => {
      * « Non terminee » decrit un ETAT, pas une CAUSE. Quand la finalisation se tait, le rapport doit
      * au moins nommer ce qu'on OBSERVE : l'issue brute et le fait qu'aucune cause n'a ete rendue.
      */
+    /*
+     * CAUSE RACINE du poste 5, etablie le 2026-08-31 sur DEUX temoins independants :
+     *
+     * 1. Le manifeste du run vecu (`.runs/run-f42d9a79ad99-1.json`) : `verdict: green`,
+     *    `publication: "blocked"`, `conflictFile: JarvisWidget.tsx`. La finalisation avait donc
+     *    une CAUSE — elle est simplement arrivee APRES le verdict du run.
+     * 2. `commands.ts:3390` documente ce chemin exact, vecu conv-1404 : « Le coordinateur rend
+     *    `undefined` quand la copie a encore des processus actifs — typiquement les workers
+     *    `vitest` que la verification vient elle-meme de lancer : elle passe en attente et
+     *    `retryRecovery` la publie ensuite. »
+     *
+     * `edit_file` a recu son correctif ; l'orchestrateur, NON. Le meme differe y devenait un rouge
+     * sans cause — et face a un faux echec, l'agent RECOMMENCE (2,13 $ sur conv-1).
+     */
+    it('finalisation DIFFÉRÉE → l’attente est NOMMÉE, pas avouée comme une ignorance', async () => {
+      const provider = new CapturingProvider()
+      const orch = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id, model: 'worker' },
+          judge: { provider: provider.id, model: 'judge' }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        executionWorkspace: 'C:\base',
+        worktrees: {
+          begin: () => 'C:\\wt\\run-1',
+          end: () => ({
+            outcome: 'deferred' as const,
+            agentId: 'run-1',
+            files: ['src/a.ts'],
+            reason: 'processes-still-running' as const,
+            detail: 'des processus tournent encore dans la copie'
+          })
+        } as unknown as RunWorktrees
+      })
+
+      const result = await orch.run('modifie le projet')
+      const raisons = result.gateReasons.join(' | ')
+
+      expect(raisons).toContain('processes-still-running')
+      expect(raisons).toContain('des processus tournent encore dans la copie')
+      // L'aveu d'ignorance ne doit PLUS apparaitre : la cause existe et elle est nommee.
+      expect(raisons).not.toContain('aucune cause')
+    })
+
     it('finalisation MUETTE (aucun reason) → le rapport nomme quand même l’issue brute observée', async () => {
       const provider = new CapturingProvider()
       const orch = new Orchestrator({

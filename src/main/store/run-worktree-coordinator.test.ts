@@ -700,7 +700,7 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     })
     co.begin('run-1', 'Builder', true)
 
-    expect(co.end('run-1')).toBeUndefined()
+    expect(co.end('run-1')).toMatchObject({ outcome: 'deferred' })
     expect(finalize).not.toHaveBeenCalled()
     expect(co.activity()[0]).toMatchObject({ state: 'working', endedAtMs: undefined })
 
@@ -731,7 +731,7 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     })
     co.begin('run-deferred', 'Builder', true)
 
-    expect(co.end('run-deferred', { onPublished })).toBeUndefined()
+    expect(co.end('run-deferred', { onPublished })).toMatchObject({ outcome: 'deferred' })
     active = false
     co.retryRecovery()
 
@@ -764,7 +764,9 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         turnId: 'turn-1',
         causalWatchPaths: ['C:/repo/app.log']
       })
-      expect(first.end('run-restart', { onPublished: vi.fn() })).toBeUndefined()
+      expect(first.end('run-restart', { onPublished: vi.fn() })).toMatchObject({
+        outcome: 'deferred'
+      })
 
       active = false
       const onRecoveredPublication = vi.fn()
