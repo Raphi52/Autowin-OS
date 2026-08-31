@@ -11,7 +11,7 @@ import { ChatMessageRow } from './ChatMessageRow'
 import type { Msg } from './chat-view-types'
 
 describe('ChatMessageRow', () => {
-  it('n’affiche pas le raisonnement dans la bulle assistant', async () => {
+  it('affiche le raisonnement dans un bloc Réflexion ouvert tant que le tour court', async () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
