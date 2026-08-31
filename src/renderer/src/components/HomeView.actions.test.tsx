@@ -385,12 +385,11 @@ describe('la notice d usage s efface', () => {
   })
 })
 
-describe('le hublot ne parle plus de lui-meme', () => {
-  it('porte l heure et la date', async () => {
+describe('la tuile des conversations remplace le hublot', () => {
+  it('annonce la liste vide au lieu d une horloge', async () => {
     const container = await mount()
-    const hublot = tile(container, 'hublot')
-    expect(hublot.textContent).not.toContain('hublot')
-    expect(hublot.querySelector('.home-hublot__heure')?.textContent).toMatch(/\d{2}[:h]\d{2}/)
-    expect(hublot.querySelector('.home-hublot__date')).not.toBeNull()
+    const tuile = tile(container, 'conversations')
+    expect(tuile.querySelector('.home-hublot__heure')).toBeNull()
+    expect(tuile.textContent).toContain('Aucune conversation en attente')
   })
 })

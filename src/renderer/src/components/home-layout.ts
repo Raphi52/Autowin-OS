@@ -10,7 +10,8 @@
  * d'interface — c'est là que vivent les défauts, pas dans le rendu.
  */
 
-export type HomeWidgetId = 'mails' | 'agenda' | 'routines' | 'notifications' | 'hublot' | 'jarvis'
+export type HomeWidgetId =
+  'mails' | 'agenda' | 'routines' | 'notifications' | 'conversations' | 'jarvis'
 
 export interface HomeWidgetBox {
   id: HomeWidgetId
@@ -38,7 +39,7 @@ export const HOME_WIDGET_TITLES: Readonly<Record<HomeWidgetId, string>> = {
   agenda: 'Agenda',
   routines: 'Départs des routines',
   notifications: 'Remontées des agents',
-  hublot: 'Hublot',
+  conversations: 'Conversations',
   jarvis: 'Jarvis'
 }
 
@@ -64,7 +65,7 @@ interface RelativeSpec {
  *
  * Une grille a deux lignes obligeait a exprimer les hauteurs en fractions libres, et ces fractions
  * DEBORDAIENT leur ligne : mesure du 2026-08-21 dans l'app, la tuile des remontees d'agents (0,58
- * d'une ligne de 0,5) recouvrait le hublot juste en dessous. Avec des lignes entieres, un
+ * d'une ligne de 0,5) recouvrait la tuile juste en dessous. Avec des lignes entieres, un
  * chevauchement devient impossible par construction — c'est de l'arithmetique, plus du reglage.
  */
 const ROWS = 5
@@ -76,7 +77,7 @@ const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   notifications: { col: 2, colSpan: 1, row: 0, rowSpan: 2, z: -20 },
   // Jarvis est en colonne de droite, a hauteur d'oeil : c'est l'endroit qu'on regarde en parlant.
   jarvis: { col: 2, colSpan: 1, row: 2, rowSpan: 2, z: -40 },
-  hublot: { col: 2, colSpan: 1, row: 4, rowSpan: 1, z: -120 }
+  conversations: { col: 2, colSpan: 1, row: 4, rowSpan: 1, z: -120 }
 }
 
 const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
@@ -85,10 +86,10 @@ const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   agenda: { col: 0, colSpan: 1, row: 3, rowSpan: 3, z: -30 },
   // Jarvis fait face aux mails. Aucune ligne a une seule rangee ici : sous deux rangees,
   // MIN_WIDGET_HEIGHT (116 px) depasse le pas de la grille et les tuiles se chevauchent des que la
-  // fenetre est courte — c'est le defaut deja mesure le 2026-08-21 sur le hublot.
+  // fenetre est courte — c'est le defaut deja mesure le 2026-08-21 sur le hublot (historique).
   jarvis: { col: 1, colSpan: 1, row: 3, rowSpan: 3, z: -40 },
   routines: { col: 1, colSpan: 1, row: 6, rowSpan: 2, z: -60 },
-  hublot: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -120 }
+  conversations: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -120 }
 }
 
 /** L'ordre de lecture en colonne unique : ce qu'on regarde en premier, en haut. */
@@ -98,7 +99,7 @@ const NARROW_ORDER: HomeWidgetId[] = [
   'routines',
   'agenda',
   'mails',
-  'hublot'
+  'conversations'
 ]
 
 /**
@@ -193,7 +194,7 @@ export function defaultHomeLayout(
     )
   )
   const originX = PAD_X
-  // Deux colonnes demandent une ligne de plus, pour la bande du hublot en bas.
+  // Deux colonnes demandent une ligne de plus, pour la bande des conversations en bas.
   // Deux colonnes demandent trois rangees de plus : six tuiles a deux rangees minimum tiennent sur
   // huit rangees, la ou cinq en occupaient six.
   const gridRows = columns === 3 ? ROWS : ROWS + 3
@@ -219,7 +220,7 @@ export const HOME_WIDGET_IDS: HomeWidgetId[] = [
   'agenda',
   'routines',
   'notifications',
-  'hublot',
+  'conversations',
   'jarvis'
 ]
 

@@ -100,9 +100,11 @@ describe('persistance de la disposition', () => {
 
   it('rend son defaut a un widget absent de l enregistrement', () => {
     const relu = parseHomeLayout([{ id: 'mails', x: 10, y: 20, w: 300, h: 200, z: 0 }])
-    expect(relu.map((entry) => entry.id)).toEqual(defaultHomeLayout().map((entry) => entry.id))
-    expect(relu.find((entry) => entry.id === 'hublot')).toEqual(
-      defaultHomeLayout().find((entry) => entry.id === 'hublot')
+    expect(relu.map((entry) => entry.id)).toEqual(
+      defaultHomeLayout().map((entry) => entry.id)
+    )
+    expect(relu.find((entry) => entry.id === 'conversations')).toEqual(
+      defaultHomeLayout().find((entry) => entry.id === 'conversations')
     )
   })
 
@@ -218,7 +220,7 @@ describe('la disposition suit la surface qui la porte', () => {
 
 describe('la disposition d origine ne se chevauche pas', () => {
   // Defaut mesure le 2026-08-21 sur capture de l'app : les hauteurs etaient exprimees en fractions
-  // LIBRES d'une grille a deux lignes, et la tuile des remontees d'agents debordait sur le hublot.
+  // LIBRES d'une grille a deux lignes, et la tuile des remontees d'agents debordait sur la tuile du dessous.
   // Le chevauchement est acceptable APRES un geste de l'utilisateur ; il ne l'est pas a l'ouverture.
   const chevauchements = (layout: ReturnType<typeof defaultHomeLayout>): string[] => {
     const clashes: string[] = []

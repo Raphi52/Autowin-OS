@@ -14,6 +14,10 @@ import { useEffect, useRef, useState } from 'react'
 import { ChatMessageRow } from './ChatMessageRow'
 import type { Msg } from './chat-view-types'
 import { colonnesPour } from './chat-mosaic-grille'
+import {
+  marquerConversationEnAttente,
+  retirerConversationEnAttente
+} from './conversations-attention'
 
 export type ChatMosaicWindow = {
   id: string
@@ -62,10 +66,22 @@ function FenetreChat({
   const [attention, setAttention] = useState(false)
   const busyPrecedent = useRef(fenetre.busy)
   useEffect(() => {
-    if (busyPrecedent.current && !fenetre.busy) setAttention(true)
-    if (fenetre.busy) setAttention(false)
+    // L'etat est aussi PUBLIE : l'accueil affiche la meme liste que ces bordures dorees. Sans cette
+    // publication, l'information restait prisonniere de ce composant.
+    if (busyPrecedent.current && !fenetre.busy) {
+      setAttention(true)
+      marquerConversationEnAttente(fenetre.id, fenetre.title)
+    }
+    if (fenetre.busy) {
+      setAttention(false)
+      retirerConversationEnAttente(fenetre.id)
+    }
     busyPrecedent.current = fenetre.busy
-  }, [fenetre.busy])
+  }, [fenetre.busy, fenetre.id, fenetre.title])
+  const repris = (): void => {
+    setAttention(false)
+    retirerConversationEnAttente(fenetre.id)
+  }
   const surDefilement = (): void => {
     const el = filRef.current
     if (!el) return
@@ -81,8 +97,8 @@ function FenetreChat({
       className="chat-mosaic-window"
       data-conv-id={fenetre.id}
       data-etat={fenetre.busy ? 'occupe' : attention ? 'attention' : undefined}
-      onMouseDown={() => setAttention(false)}
-      onFocusCapture={() => setAttention(false)}
+      onMouseDown={repris}
+      onFocusCapture={repris}
     >
       <header className="chat-mosaic-window-head">
         <span className="chat-mosaic-window-title">{fenetre.title || 'Sans titre'}</span>

@@ -158,7 +158,7 @@ function boxOf(el: HTMLElement): { x: number; y: number; w: number; h: number } 
 describe('page d accueil', () => {
   it('affiche les cinq widgets', async () => {
     const container = await mount()
-    for (const id of ['mails', 'agenda', 'routines', 'notifications', 'hublot']) {
+    for (const id of ['mails', 'agenda', 'routines', 'notifications', 'conversations']) {
       expect(tile(container, id)).not.toBeNull()
     }
   })
@@ -313,10 +313,10 @@ describe('poser une tuile', () => {
 
   it('remonte la tuile saisie au-dessus des autres', async () => {
     const container = await mount()
-    const hublot = tile(container, 'hublot')
-    const avant = Number(hublot.style.zIndex)
-    await gesture(hublot, [[420, 220]], [400, 200])
-    expect(Number(hublot.style.zIndex)).toBeGreaterThan(avant)
+    const tuile = tile(container, 'conversations')
+    const avant = Number(tuile.style.zIndex)
+    await gesture(tuile, [[420, 220]], [400, 200])
+    expect(Number(tuile.style.zIndex)).toBeGreaterThan(avant)
   })
 })
 
@@ -393,7 +393,7 @@ describe('la disposition personnelle survit a un redimensionnement', () => {
     const container = await mount()
     const boites = (): Record<string, { x: number; y: number; w: number; h: number }> =>
       Object.fromEntries(
-        ['mails', 'agenda', 'routines', 'notifications', 'hublot'].map((id) => [
+        ['mails', 'agenda', 'routines', 'notifications', 'conversations'].map((id) => [
           id,
           boxOf(tile(container, id))
         ])
@@ -438,7 +438,7 @@ describe('la disposition personnelle survit a un redimensionnement', () => {
     largeur(1440, 900)
     const container = await mount()
     const avant = window.localStorage.getItem(LAYOUT_KEY)
-    await gesture(tile(container, 'hublot'), [[700, 600]], [600, 500])
+    await gesture(tile(container, 'conversations'), [[700, 600]], [600, 500])
     // Un geste, contrairement a un redimensionnement, exprime une intention : il s enregistre.
     expect(window.localStorage.getItem(LAYOUT_KEY)).not.toBe(avant)
   })

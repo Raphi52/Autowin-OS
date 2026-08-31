@@ -205,7 +205,7 @@
 
 .home-tile__panel {
   position: relative;
-  /* Declare pour que `cqw` resolve : l'heure du hublot suit la taille de SA tuile, pas celle de la
+  /* Declare pour que `cqw` resolve : le contenu suit la taille de SA tuile, pas celle de la
      fenetre. Sans cette ligne l'unite ne resout rien et le texte reste minuscule. */
   container-type: inline-size;
   flex: 1;
@@ -237,12 +237,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 
-/* Le hublot est le seul panneau à ne PAS opacifier son fond : il sert de fenêtre sur le décor. */
-.home-tile[data-window='true'] .home-tile__panel {
-  background: rgba(0, 0, 0, 0.18);
-  backdrop-filter: none;
-  border-style: dashed;
-}
 
 .home-tile__scroll {
   height: 100%;
@@ -651,32 +645,54 @@
     0 20px 46px rgba(0, 0, 0, 0.6);
 }
 
-/* Le hublot : l'heure et la date, que le décor traverse. */
-.home-hublot {
-  height: 100%;
+/* Les conversations en attente : une pastille JAUNE, le titre, tout le rang cliquable. La couleur
+   reprend celle du cadre doré d'une fenêtre de mosaïque — même état, même signal. */
+.home-convs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 2px;
-  user-select: none;
 }
 
-.home-hublot__heure {
-  font-family: var(--mono);
-  font-size: clamp(24px, 12cqw, 46px);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+.home-convs button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
   color: var(--text);
-  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9);
+  background: rgba(233, 189, 78, 0.06);
+  border: 0;
+  border-left: 2px solid var(--gold);
+  border-radius: 0 var(--r1, 8px) var(--r1, 8px) 0;
+  cursor: pointer;
 }
 
-.home-hublot__date {
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: lowercase;
-  color: var(--text-dim);
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9);
+.home-convs button:hover,
+.home-convs button:focus-visible {
+  background: rgba(233, 189, 78, 0.14);
+}
+
+.home-convs__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold-bright, #ffdc73);
+  box-shadow: 0 0 8px rgba(255, 220, 115, 0.75);
+}
+
+.home-convs__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Une alerte d'ouverture dans l'en-tête : la cause d'un clic sans effet doit être dite. */

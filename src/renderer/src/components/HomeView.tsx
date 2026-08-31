@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   createDecorScene,
   DECOR_DEFAUT,
@@ -42,6 +42,12 @@ import {
   type ResizeEdge
 } from './home-layout'
 import { canUndo, emptyHistory, remember, undo, type ArrangementHistory } from './home-history'
+import {
+  instantaneConversationsEnAttente,
+  retirerConversationEnAttente,
+  souscrireConversationsEnAttente,
+  type ConversationEnAttente
+} from './conversations-attention'
 import { autowinStorageKey } from '../storage-keys'
 import { JarvisWidget } from './JarvisWidget'
 import './HomeView.css'
@@ -501,6 +507,24 @@ export function HomeView({
   )
   const pending = unacknowledgedCount(notices)
   /**
+   * Les conversations dont la fenetre de mosaique est en etat « cadre dore / pastille jaune » :
+   * tour termine, l'utilisateur n'y est pas revenu. L'accueil ne les DEDUIT pas — la mosaique les
+   * publie dans un registre partage, seule source qui sache quand la bordure s'allume.
+   */
+  const enAttente = useSyncExternalStore(
+    souscrireConversationsEnAttente,
+    instantaneConversationsEnAttente
+  )
+  const ouvrirConversation = useCallback(
+    (id: string): void => {
+      // Ouvrir, c'est y revenir : la conversation quitte la liste au moment ou on la demande.
+      retirerConversationEnAttente(id)
+      window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: id }))
+      onNavigate?.('chat')
+    },
+    [onNavigate]
+  )
+  /**
    * Le compteur de la tuile Mails ne compte QUE les personnes.
    *
    * Friction relevée en pilotant l'app : 85 des 106 non lus venaient d'un seul robot. Un compteur
@@ -780,7 +804,6 @@ export function HomeView({
           className="home-tile"
           data-widget={box.id}
           data-held={held === box.id ? 'true' : undefined}
-          data-window={box.id === 'hublot' ? 'true' : undefined}
           data-testid={`home-widget-${box.id}`}
           tabIndex={0}
           role="group"
@@ -804,6 +827,14 @@ export function HomeView({
             {box.id === 'notifications' && pending > 0 ? (
               <span className="home-tile__count" title={`${pending} remontée(s) à lire`}>
                 {pending}
+              </span>
+            ) : null}
+            {box.id === 'conversations' && enAttente.length > 0 ? (
+              <span
+                className="home-tile__count"
+                title={`${enAttente.length} conversation(s) en attente de reprise`}
+              >
+                {enAttente.length}
               </span>
             ) : null}
             {box.id === 'mails' && compteurs.personnes > 0 ? (
@@ -830,6 +861,8 @@ export function HomeView({
                 loading={snapshot === null && snapshotError === null}
                 error={snapshotError}
                 onNavigate={onNavigate}
+                enAttente={enAttente}
+                onOuvrirConversation={ouvrirConversation}
                 onOuvrir={ouvrirDansOutlook}
                 onAcquitter={acquitter}
                 ouvertureEnCours={ouvertureEnCours}
@@ -860,6 +893,8 @@ function WidgetBody({
   loading,
   error,
   onNavigate,
+  enAttente,
+  onOuvrirConversation,
   onOuvrir,
   onAcquitter,
   ouvertureEnCours
@@ -872,6 +907,8 @@ function WidgetBody({
   loading: boolean
   error: string | null
   onNavigate?: (destination: string) => void
+  enAttente: readonly ConversationEnAttente[]
+  onOuvrirConversation: (id: string) => void
   onOuvrir: (id: string) => Promise<void>
   onAcquitter: (alertId: string) => Promise<void>
   ouvertureEnCours: string | null
@@ -881,10 +918,10 @@ function WidgetBody({
     return <JarvisWidget onNavigate={onNavigate} />
   }
 
-  if (id === 'hublot') {
-    // Il occupait 357x298 px pour EXPLIQUER ce qu'il était. Un widget qui parle de lui-même ne sert
-    // personne : il porte maintenant l'heure et la date, que le décor traverse toujours.
-    return <Hublot now={now} />
+  if (id === 'conversations') {
+    // Le hublot ne montrait qu'une horloge posée sur le décor — « ça sert à rien ». À sa place, la
+    // seule chose que l'accueil ne pouvait pas dire : où l'agent attend qu'on revienne.
+    return <ConversationsEnAttenteList items={enAttente} onOuvrir={onOuvrirConversation} />
   }
 
   if (id === 'mails' || id === 'agenda') {
@@ -1108,22 +1145,43 @@ function FilsList({
   )
 }
 
-/** L'heure et la date, que le décor traverse. Le hublot ne parle plus de lui-même. */
-function Hublot({ now }: { now: number }): React.JSX.Element {
-  const date = new Date(now)
+/**
+ * Les conversations qui ATTENDENT une reprise, une ligne cliquable chacune.
+ *
+ * La pastille jaune reprend le code couleur de la fenetre de mosaique : ce qui est dore la-bas
+ * est jaune ici, sinon l'accueil parlerait une autre langue que le chat.
+ */
+function ConversationsEnAttenteList({
+  items,
+  onOuvrir
+}: {
+  items: readonly ConversationEnAttente[]
+  onOuvrir: (id: string) => void
+}): React.JSX.Element {
+  if (items.length === 0) {
+    return (
+      <p className="home-hint">
+        Aucune conversation en attente. Les fenêtres dont le tour vient de finir apparaîtront ici.
+      </p>
+    )
+  }
   return (
-    <div className="home-hublot">
-      <time className="home-hublot__heure">
-        {date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-      </time>
-      <span className="home-hublot__date">
-        {date.toLocaleDateString('fr-FR', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long'
-        })}
-      </span>
-    </div>
+    <ul className="home-convs">
+      {items.map((conversation) => (
+        <li key={conversation.id}>
+          <button
+            type="button"
+            data-testid="home-conversation"
+            data-conv-id={conversation.id}
+            onClick={() => onOuvrir(conversation.id)}
+            title="Ouvrir cette conversation dans le chat"
+          >
+            <i className="home-convs__dot" aria-hidden="true" />
+            <span className="home-convs__title">{conversation.titre || 'Sans titre'}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
   )
 }
 
