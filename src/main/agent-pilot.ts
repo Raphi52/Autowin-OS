@@ -22,6 +22,10 @@ import {
   signatureDEchec,
   exigeDireLEchec,
   exigeUnChiffreVerifie,
+  exigePreuveAvantDePromettre,
+  RELANCE_PREUVE_AVANT_DE_PROMETTRE,
+  blocVisuelNonFerme,
+  RELANCE_BLOC_VISUEL_NON_FERME,
   questionPoseeSansAvoirLu,
   RELANCE_QUESTION_SANS_LECTURE,
   exigeUneConclusion
@@ -1126,6 +1130,8 @@ export class AgentPilot {
       | 'outil-pretendu-absent'
       | 'question-sans-lecture'
       | 'commande-illisible'
+      | 'preuve-promise'
+      | 'bloc-visuel-non-ferme'
     > = []
     const grantRecoveryIteration = (
       reason:
@@ -1140,6 +1146,8 @@ export class AgentPilot {
         | 'outil-pretendu-absent'
         | 'question-sans-lecture'
         | 'commande-illisible'
+        | 'preuve-promise'
+        | 'bloc-visuel-non-ferme'
     ): void => {
       recoveryReasons.push(reason)
       iterationLimit += 1
@@ -1236,6 +1244,10 @@ export class AgentPilot {
     /** Une seule relance pour un outil faussement declare absent : au-dela, on n'insiste pas. */
     let outilAbsentRecoveryAvailable = true
     let annonceSansActionRecoveryAvailable = true
+    /** Une clôture qui promet un compte-rendu futur : relance UNE fois, jamais plus. */
+    let preuvePromiseRecoveryAvailable = true
+    /** Une fence ```html-render laissée ouverte : relance UNE fois, jamais plus. */
+    let blocVisuelRecoveryAvailable = true
     /**
      * BLOC `<cmd>` INEXPLOITABLE ET AUCUNE COMMANDE VALIDE — le TOUR PARASITE.
      *
@@ -1843,6 +1855,34 @@ export class AgentPilot {
               'cela empêche. N’écris « Fait » que pour ce qui a RÉELLEMENT abouti — un « ✅ Fait » ' +
               'posé sur un échec est pire que pas de conclusion du tout, parce qu’il rassure à tort.'
           )
+          continue
+        }
+        /*
+         * LA PROMESSE DE COMPTE-RENDU — passe AVANT le bloc visuel, et c'est deliberé : elle porte
+         * un TRAVAIL potentiellement perdu (run non recolté), l'autre ne porte qu'un rendu cassé.
+         */
+        if (
+          exigerExperienceSoignee &&
+          !relanceDeFormeUtilisee &&
+          preuvePromiseRecoveryAvailable &&
+          exigePreuveAvantDePromettre(visibleTextThisTurn, anyActionExecuted)
+        ) {
+          preuvePromiseRecoveryAvailable = false
+          relanceDeFormeUtilisee = true
+          grantRecoveryIteration('preuve-promise')
+          convo.push(RELANCE_PREUVE_AVANT_DE_PROMETTRE)
+          continue
+        }
+        if (
+          exigerExperienceSoignee &&
+          !relanceDeFormeUtilisee &&
+          blocVisuelRecoveryAvailable &&
+          blocVisuelNonFerme(visibleTextThisTurn)
+        ) {
+          blocVisuelRecoveryAvailable = false
+          relanceDeFormeUtilisee = true
+          grantRecoveryIteration('bloc-visuel-non-ferme')
+          convo.push(RELANCE_BLOC_VISUEL_NON_FERME)
           continue
         }
         if (
