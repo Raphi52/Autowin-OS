@@ -15,6 +15,7 @@ import type {
   NativePreflightTrace
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
+import type { EtatWhisper } from '../main/whisper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
 import type { BrainGraphRef, BrainTheme } from '../main/viz/fs-brains'
@@ -344,6 +345,9 @@ interface ChatApi {
   toolUsage: () => Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   >
+  whisperEtat: () => Promise<EtatWhisper>
+  whisperInstaller: () => Promise<EtatWhisper>
+  whisperTranscrire: (wav: Uint8Array) => Promise<string>
   conversations: () => Promise<ConversationSummary[]>
   conversation: (id: string) => Promise<Conversation | null>
   conversationsCreate: (p: { title: string; category: string; provider: string }) => Promise<{

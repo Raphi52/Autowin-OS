@@ -2,6 +2,7 @@ import { signalerInterfaceVisible } from './startup-gate'
 import { observerLeMoteur } from './observer-les-sources'
 import { spawn } from 'node:child_process'
 import { readGitGraph } from './git-graph-main'
+import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -546,6 +547,14 @@ demarrerDetecteurDeGel(ensureAutowinAppData(appDataRoot))
 // Le temoin ordonnance a prouve que nos gels sont des « entree-sortie-bloquante » : mesure DIRECTE
 // des appels disque/reseau synchrones pour NOMMER l'appel et le partage en cause.
 instrumenterEntreesSortiesDuMain()
+/**
+ * Le service de reconnaissance vocale locale, construit PARESSEUSEMENT : au démarrage il ne fait que
+ * lire un dossier, et tant que l'utilisateur n'a pas installé whisper, il ne coûte rien du tout.
+ */
+let whisperMemo: ServiceWhisper | null = null
+const serviceWhisper = (): ServiceWhisper =>
+  (whisperMemo ??= creerServiceWhisper({ racine: racineWhisper(app.getPath('userData')) }))
+
 configureSessionMemoryEcho(join(app.getPath('userData'), 'session-memory.json'))
 configureRememberDepositStore(join(app.getPath('userData'), 'remember-deposits.json'))
 
@@ -5695,6 +5704,33 @@ Le fil reprend ensuite normalement.`
   })
 
   // --- Observatoire d'activité : transcripts Claude Code (lecture seule) + ledger in-app ---
+  /**
+   * RECONNAISSANCE VOCALE LOCALE. MESURÉ sur cette application : le moteur
+   * `webkitSpeechRecognition` rend le code d'erreur `network`, affiché à l'écran et conservé en
+   * capture datée (voir l'en-tête de `whisper-local.ts` pour le chemin de l'artefact) — Jarvis
+   * ouvrait le micro et n'entendait jamais rien. La CAUSE de ce code n'est pas établie ici et
+   * n'est pas nécessaire : ces trois canaux exposent whisper.cpp installé en local — téléchargé
+   * UNE fois, puis plus aucun réseau.
+   */
+  ipcMain.handle('os:whisper:etat', (event) => {
+    assertTrustedRendererSender(event, 'Whisper état')
+    return serviceWhisper().etat()
+  })
+  ipcMain.handle('os:whisper:installer', async (event) => {
+    assertTrustedRendererSender(event, 'Whisper installation')
+    return serviceWhisper().installer()
+  })
+  ipcMain.handle('os:whisper:transcrire', async (event, wav: unknown) => {
+    assertTrustedRendererSender(event, 'Whisper transcription')
+    if (!(wav instanceof Uint8Array) && !Buffer.isBuffer(wav)) {
+      throw new Error('Segment audio invalide')
+    }
+    const octets = wav as Uint8Array
+    // Un WAV de 15 s à 16 kHz/16 bits pèse ~480 Ko : au-delà de 8 Mo, ce n'est plus un segment.
+    if (octets.byteLength > 8_000_000) throw new Error('Segment audio trop volumineux')
+    return serviceWhisper().transcrire(octets)
+  })
+
   ipcMain.handle('os:activity:sessions', (event) => {
     assertTrustedRendererSender(event, 'Activity sessions')
     return listSessionsAsync(60)
