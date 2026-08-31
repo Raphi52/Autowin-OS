@@ -1178,29 +1178,13 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  return mix(mix(hashN(i), hashN(i + vec2(1.0, 0.0)), u.x),',
   '             mix(hashN(i + vec2(0.0, 1.0)), hashN(i + vec2(1.0, 1.0)), u.x), u.y);',
   '}',
-  // POURQUOI LA ROTATION CHANGE A CHAQUE OCTAVE — c'est LA cause de l'air « polygonal » (2026-08-31).
-  //
-  // `bruitN` est un bruit de VALEUR : il est bati sur une grille entiere, et ses iso-lignes suivent
-  // donc des directions privilegiees, celles de la grille. Tant que chaque octave subissait la MEME
-  // rotation fixe (0.8, 0.6, -0.6, 0.8), les sept grilles restaient alignees entre elles : leurs
-  // directions se RENFORCAIENT au lieu de se brouiller, et la somme dessinait de longues aretes
-  // droites — un nuage a facettes.
-  //
-  // Une rotation qui AVANCE d'un octave a l'autre (angle irrationnel, jamais periodique sur 7 tours)
-  // decorrele les grilles : aucune direction ne ressort plus, et la matiere redevient nuageuse.
-  // Le cout n'est PAS nul si la rotation est RECONSTRUITE : ce fbm est appele 9 fois par fragment
-  // d'un plan plein ecran, soit 9 x 7 octaves x 4 transcendantes = 252 cos/sin par PIXEL et par
-  // image (gigalag mesure en conv-1586). La rotation de l'octave k vaut rot(A)^k : elle se PROPAGE
-  // par produit d'une mat2 CONSTANTE, algebre identique (ecart max 4.7e-8 sur les 7 octaves).
   'float fbm(vec2 p) {',
+  '  mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);',
   '  float somme = 0.0;',
   '  float amplitude = 0.5;',
-  '  mat2 pas = mat2(0.44721360, -0.89442719, 0.89442719, 0.44721360);',
-  '  mat2 rot = pas;',
   '  for (int octave = 0; octave < 7; octave++) {',
   '    somme += amplitude * bruitN(p);',
   '    p = rot * p * 2.07 + vec2(11.7, 5.3);',
-  '    rot = pas * rot;',
   '    amplitude *= 0.5;',
   '  }',
   '  return somme;',
@@ -1254,12 +1238,7 @@ export const NUAGE_FRAGMENT_SHADER = [
   '  vec2 q = p + vec2(w1, w2) * pulseWarp + derive * 0.4;',
   '  float champ = fbm(q);',
   '  float filaments = fbm(q * 2.6 + vec2(w2, w1) + derive * 2.0);',
-  // LES APLATS QUI DESSINENT DES FACETTES. `clamp(champ * 1.45)` SATURE des que `champ` depasse 0,69 :
-  // toute cette zone vaut exactement 1.0, donc c'est un APLAT, et la ligne ou il commence est un
-  // iso-contour du bruit de valeur — anguleux par nature, puisque ce bruit est bati sur une grille.
-  // D'ou l'air « polygonal » signale le 2026-08-31. Un `smoothstep` remplace le clamp : la montee est
-  // continue et sa derivee s'annule aux deux bouts, donc plus aucun plateau ne vient poser son bord.
-  '  float densite = pow(smoothstep(0.04, 0.88, champ), 1.7);',
+  '  float densite = pow(clamp(champ * 1.45, 0.0, 1.0), 1.7);',
   '  densite *= 0.72 + 0.55 * filaments;',
   '  densite *= 1.0 + uRespiration * sin(uTime * uWarp * 0.7 + champ * 6.0);',
   '  densite = clamp(densite, 0.0, 1.0);',
@@ -1267,13 +1246,7 @@ export const NUAGE_FRAGMENT_SHADER = [
   // magenta porte par les seuls filaments. Deux teintes donnent un aplat.
   '  vec3 couleur = mix(uBleu, uViolet, smoothstep(0.18, 0.72, champ));',
   '  couleur = mix(couleur, uFroid, smoothstep(0.62, 0.12, champ) * 0.55);',
-  // LA COUPURE DROITE DU VERSANT. `-c.x` est une fonction LINEAIRE de la coordonnee : son smoothstep
-  // dessine une FRONTIERE RECTILIGNE en travers du nuage, que `w1` seul (amplitude 0.8) ne suffisait
-  // pas a tordre. C'est l'une des « lignes cubiques » signalees le 2026-08-31. On la deforme par un
-  // fbm basse frequence d'amplitude double, pris sur les coordonnees DEJA warpees : la limite serpente
-  // au lieu de trancher, et le versant reste un versant.
-  '  float ondeVersant = fbm(q * 0.9 + vec2(31.7, 12.3)) - 0.5;',
-  '  float versant = smoothstep(-0.28, 0.30, -c.x + (w1 - 0.5) * 0.8 + ondeVersant * 1.7);',
+  '  float versant = smoothstep(-0.28, 0.30, -c.x + (w1 - 0.5) * 0.8);',
   '  couleur = mix(couleur, uChaud, versant * smoothstep(0.22, 0.80, champ) * 0.78);',
   '  couleur = mix(couleur, uAccent, smoothstep(0.48, 0.92, filaments) * 0.85);',
   '  couleur += mix(uAccent, uChaud, versant) * pow(clamp(filaments, 0.0, 1.0), 3.0) * 0.55;',
@@ -1340,24 +1313,13 @@ export const NAPPE_FRAGMENT_SHADER = [
   'uniform vec3 uAnthracite;',
   'uniform float uGrain;',
   // Valeur-bruit interpolée en douceur : la base organique.
-  //
-  // LA NAPPE FABRIQUAIT LES MEMES DROITES QUE LE NUAGE (conv-1582, 2026-08-31). Le nuage a ete
-  // corrige trois fois, et l'utilisateur voyait toujours des aretes rectilignes — y compris LOIN
-  // du nuage, sur le fond etoile. La nappe est l'autre couche PLEIN ECRAN, et son shader avait
-  // garde intacts les trois defauts deja nommes comme fabriques de facettes dans le nuage :
-  // hash `sin(dot(...))` qui sature en float et aligne ses cellules sur les axes, fondu CUBIQUE
-  // dont la derivee saute au bord de cellule, et cinq octaves NON tournees donc toutes alignees.
-  // Mesure (Hough sur laplacien lisse, test home-nappe-sans-facettes) : 0,35 pour l'ancien champ
-  // contre 0,31 pour celui-ci, un champ isotrope valant 0,20-0,29.
   'float hash(vec2 p) {',
-  '  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));',
-  '  q += dot(q, q.yzx + 33.33);',
-  '  return fract((q.x + q.y) * q.z);',
+  '  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);',
   '}',
   'float bruit(vec2 p) {',
   '  vec2 i = floor(p);',
   '  vec2 f = fract(p);',
-  '  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);',
+  '  vec2 u = f * f * (3.0 - 2.0 * f);',
   '  float a = hash(i);',
   '  float b = hash(i + vec2(1.0, 0.0));',
   '  float c = hash(i + vec2(0.0, 1.0));',
@@ -1369,15 +1331,9 @@ export const NAPPE_FRAGMENT_SHADER = [
   'float fbm(vec2 p) {',
   '  float somme = 0.0;',
   '  float amplitude = 0.5;',
-  // Rotation qui AVANCE d'un octave a l'autre, propagee par produit d'une mat2 constante (aucune
-  // transcendante par pixel) : sans elle, les cinq grilles restent alignees et leurs directions se
-  // renforcent au lieu de se brouiller — c'est ce qui dessine de longues aretes droites.
-  '  mat2 pas = mat2(0.44721360, -0.89442719, 0.89442719, 0.44721360);',
-  '  mat2 rot = pas;',
   '  for (int octave = 0; octave < 5; octave++) {',
   '    somme += amplitude * bruit(p);',
-  '    p = rot * p * 2.03 + vec2(17.3, 9.1);',
-  '    rot = pas * rot;',
+  '    p = p * 2.03 + vec2(17.3, 9.1);',
   '    amplitude *= 0.5;',
   '  }',
   '  return somme;',
@@ -1390,10 +1346,7 @@ export const NAPPE_FRAGMENT_SHADER = [
   '  float w1 = fbm(p + derive);',
   '  float w2 = fbm(p + vec2(5.2, 1.3) + derive * 1.7);',
   '  float champ = fbm(p + vec2(w1, w2) * 1.6 + derive * 0.5);',
-  // `clamp(champ * 1.25)` SATURAIT des que `champ` depassait 0,8 : toute cette zone valait
-  // exactement 1.0, donc un APLAT, et la ligne ou il commence est un iso-contour du bruit de
-  // valeur — anguleux par nature. Le smoothstep monte continument, derivee nulle aux deux bouts.
-  '  float crete = pow(smoothstep(0.02, 0.86, champ), 3.2);',
+  '  float crete = pow(clamp(champ * 1.25, 0.0, 1.0), 3.2);',
   // Vignette douce : le centre reste sombre, les widgets restent lisibles au milieu.
   '  vec2 c = vUv - 0.5;',
   '  float vignette = smoothstep(0.12, 0.72, length(c));',
