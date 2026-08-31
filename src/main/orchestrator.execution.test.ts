@@ -83,7 +83,7 @@ describe('Orchestrator execution contract', () => {
     try {
       const provider = new CapturingProvider()
       const retrieveBrain = vi.fn(async () => ({ context: 'INTERDIT', status: 'found' as const }))
-      const brainEvents: Array<{ status: string; injectedChars: number }> = []
+      const brainEvents: Array<{ kind?: string; status: string; injectedChars: number }> = []
       const orchestrator = new Orchestrator({
         registry: new ProviderRegistry().register(provider),
         roles: new RoleModelConfig({
@@ -302,7 +302,7 @@ describe('Orchestrator execution contract', () => {
         )
     ) as unknown as typeof fetch
     const provider = new CapturingProvider()
-    const brainEvents: Array<{ status: string; injectedChars: number }> = []
+    const brainEvents: Array<{ kind?: string; status: string; injectedChars: number }> = []
     const orchestrator = new Orchestrator({
       registry: new ProviderRegistry().register(provider),
       roles: new RoleModelConfig({
@@ -335,13 +335,23 @@ describe('Orchestrator execution contract', () => {
 
     const prompt = provider.messages[0].map((message) => message.content).join('\n')
     expect(prompt).not.toContain('oversized-marker')
-    expect(brainEvents).toHaveLength(1)
-    expect(brainEvents[0]).toMatchObject({ status: 'invalid', injectedChars: 0 })
+    /*
+     * DEUX appels Brain, pas un. Ce test attendait `toHaveLength(1)` et il avait tort : le run en
+     * emet deux — la recuperation par tache, puis l'empreinte du depot (skill `think`). Le second
+     * partait deja sur le reseau, il n'etait simplement notifie a personne, si bien que l'assertion
+     * epinglait le SOUS-COMPTE au lieu de le detecter. On verifie donc les deux, par leur `kind`
+     * plutot que par leur rang.
+     */
+    expect(brainEvents.map((event) => event.kind)).toEqual(['automatic', 'empreinte'])
+    expect(brainEvents.find((event) => event.kind === 'automatic')).toMatchObject({
+      status: 'invalid',
+      injectedChars: 0
+    })
   })
 
   it('notifie la récupération Brain avant une erreur ultérieure du provider', async () => {
     const provider = new FailingProvider()
-    const brainEvents: Array<{ query: string; injectedChars: number }> = []
+    const brainEvents: Array<{ kind?: string; query: string; injectedChars: number }> = []
     const orchestrator = new Orchestrator({
       registry: new ProviderRegistry().register(provider),
       roles: new RoleModelConfig({
@@ -368,8 +378,10 @@ describe('Orchestrator execution contract', () => {
       )
     ).rejects.toThrow('échec provider après récupération Brain')
 
-    expect(brainEvents).toHaveLength(1)
-    expect(brainEvents[0].injectedChars).toBeGreaterThanOrEqual(0)
+    // La recuperation par tache ET l'empreinte du depot sont toutes deux notifiees AVANT que le
+    // provider echoue : c'est ce que ce test garantit — l'echec ne doit effacer aucun des deux.
+    expect(brainEvents.map((event) => event.kind)).toEqual(['automatic', 'empreinte'])
+    expect(brainEvents.every((event) => event.injectedChars >= 0)).toBe(true)
   })
 
   it('injecte le vrai skill de chaque phase et nomme les blocs observables', async () => {
@@ -424,17 +436,13 @@ describe('Orchestrator execution contract', () => {
 
     await orchestrator.run('prepare le terrain de verification')
 
-    expect(provider.calls[0].systemBlocks?.map((block) => block.name)).toContain(
-      'consigne:terrain'
-    )
+    expect(provider.calls[0].systemBlocks?.map((block) => block.name)).toContain('consigne:terrain')
     expect(provider.calls[0].systemBlocks?.map((block) => block.name)).not.toContain(
       'skill:terrain'
     )
     expect(provider.calls[0].system).toContain('Livrable : ## SOP')
     expect(provider.calls[0].system).not.toMatch(/\.claude[\\/]runs/)
-    expect(provider.calls[0].system).toContain(
-      'Autowin OS crée et tient le RUN de la conversation'
-    )
+    expect(provider.calls[0].system).toContain('Autowin OS crée et tient le RUN de la conversation')
   })
 
   it('retombe sur la consigne embarquée lorsque le kit est absent', async () => {
@@ -750,7 +758,11 @@ describe('instantané de rôles — opposable tant que sa cible existe', () => {
       phaseFanOut: { build: [claude] },
       judgeFanOut: [claude]
     } as never
-    const r = instantaneAssaini(instantane, { orchestrator: claude, subagent: claude, judge: claude, scout: claude } as never, ['claude'])
+    const r = instantaneAssaini(
+      instantane,
+      { orchestrator: claude, subagent: claude, judge: claude, scout: claude } as never,
+      ['claude']
+    )
     expect(r.instantane).toBe(instantane)
     expect(r.notes).toEqual([])
   })
@@ -763,7 +775,11 @@ describe('instantané de rôles — opposable tant que sa cible existe', () => {
       phaseFanOut: { build: [claude, codex] },
       judgeFanOut: [codex]
     } as never
-    const r = instantaneAssaini(instantane, { orchestrator: claude, subagent: claude, judge: claude, scout: claude } as never, ['claude'])
+    const r = instantaneAssaini(
+      instantane,
+      { orchestrator: claude, subagent: claude, judge: claude, scout: claude } as never,
+      ['claude']
+    )
     expect(r.instantane.phaseFanOut.build).toEqual([claude])
     expect(r.instantane.judgeFanOut).toEqual([])
     expect(r.notes.join(' ')).toMatch(/fan-out/)
@@ -776,11 +792,9 @@ describe('instantané de rôles — opposable tant que sa cible existe', () => {
   })
 
   it('un modèle change à provider égal est aussi une divergence', () => {
-    const r = bindingDePhaseValide(
-      { provider: 'claude', model: 'claude-sonnet-5' },
-      claude,
-      ['claude']
-    )
+    const r = bindingDePhaseValide({ provider: 'claude', model: 'claude-sonnet-5' }, claude, [
+      'claude'
+    ])
     expect(r.note).toMatch(/instantané du run/)
     expect(r.binding.model).toBe('claude-sonnet-5')
   })

@@ -14,7 +14,7 @@ import {
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import {
-  buildTurnMessages,
+  buildTurnMessageBlocks,
   exigeAgirPasAnnoncer,
   consigneApresEchec,
   exigeCorrigerEtPoursuivre,
@@ -1010,7 +1010,21 @@ export class AgentPilot {
       typeof this.bus.rappelPourDemande === 'function'
         ? this.bus.rappelPourDemande(lastUserMessage?.content, conversationId)
         : ''
-    const convo: string[] = buildTurnMessages({
+    /**
+     * LE NOM DE CHAQUE INJECTION DU MESSAGE, tenu a part du texte.
+     *
+     * `convo` est un tableau de chaines qui grossit tout au long du tour (directives arrivees en
+     * cours de route, reponses d'outils, corrections). Ses blocs perdaient leur identite des la
+     * construction : l'Observatory recevait un message compose ou plus rien ne distinguait ce que
+     * l'HUMAIN avait tape de ce qu'Autowin avait pousse — etat de l'app, savoir Brain, echo de
+     * memoire, rappel de conversations, corps de skill.
+     *
+     * Registre PARALLELE plutot qu'un tableau d'objets : `convo` est pousse depuis une quinzaine
+     * d'endroits de ce fichier. En changer la forme pour de l'observabilite aurait touche du code
+     * de decision. Une entree absente du registre n'est jamais devinee : elle ressort sous le nom
+     * generique de l'echange intra-tour, qui est ce qu'elle est.
+     */
+    const blocsDuTour = buildTurnMessageBlocks({
       snapshot,
       brainContext,
       memoryEcho,
@@ -1022,6 +1036,14 @@ export class AgentPilot {
       compteRenduNonVu,
       tourCoupePourCeMessage
     })
+    const nomsDuTour = new Map(blocsDuTour.map((bloc) => [bloc.text, bloc.name]))
+    const convo: string[] = blocsDuTour.map((bloc) => bloc.text)
+    /** Decomposition NOMMEE de ce qui part cote user, relue a l'instant de l'envoi. */
+    const contextBlocksDuTour = (): Array<{ name: string; chars: number }> =>
+      convo.map((entree) => ({
+        name: nomsDuTour.get(entree) ?? 'echangeIntraTour',
+        chars: entree.length
+      }))
     /**
      * LES PIECES JOINTES DE TOUT LE FIL, PAS SEULEMENT DU DERNIER MESSAGE.
      *
@@ -1277,12 +1299,14 @@ export class AgentPilot {
           ...(iterationAttachments.length ? { attachments: iterationAttachments } : {})
         }
       ]
+      const contextBlocks = contextBlocksDuTour()
       let prompt = this.registry.describePrompt(
         provider,
         messages,
         {
           system,
           systemBlocks,
+          contextBlocks,
           model: binding.model,
           reasoningEffort: binding.reasoningEffort,
           ...providerLimits
@@ -1290,6 +1314,7 @@ export class AgentPilot {
         binding.model
       )
       prompt.systemBlocks = systemBlocks
+      prompt.contextBlocks = contextBlocks
       let attempt =
         recoveredProviderCall && i === recoveredProviderCall.iteration
           ? recoveredProviderCall.attempt
@@ -1298,6 +1323,7 @@ export class AgentPilot {
       const options: SendOptions = {
         system,
         systemBlocks,
+        contextBlocks,
         model: binding.model,
         reasoningEffort: binding.reasoningEffort,
         ...providerLimits,
@@ -1317,6 +1343,7 @@ export class AgentPilot {
         ...(sessionEnCours ? { resumeSessionId: sessionEnCours } : {}),
         observePrompt: (observed) => {
           observed.systemBlocks = systemBlocks
+          observed.contextBlocks = contextBlocks
           prompt = observed
         },
         signal,

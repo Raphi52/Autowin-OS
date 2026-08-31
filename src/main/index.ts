@@ -2137,7 +2137,7 @@ Le fil reprend ensuite normalement.`
             ...brain,
             conversationId,
             turnId,
-            kind: 'automatic'
+            kind: brain.kind ?? 'automatic'
           }),
         turnId,
         (lifecycle) => {
@@ -3450,11 +3450,36 @@ Le fil reprend ensuite normalement.`
     // On ne rend plus un tableau nu : le STATUT (found/empty/invalid/unavailable), la NAVIGATION et le
     // BUDGET d'injection étaient calculés puis jetés ici. Le renderer ne pouvait donc pas distinguer
     // une panne d'un « rien trouvé », ni montrer ce que les plafonds avaient coupé.
-    return buildBrainSearchEnvelope({
+    const envelope = buildBrainSearchEnvelope({
       rawQuery: boundedQuery,
       results: resolution.results,
       retrieval: resolution.retrieval
     })
+    /**
+     * CETTE RECHERCHE INTERROGE LE BRAIN, et n'écrivait aucune trace (constaté le 2026-08-31).
+     *
+     * Le spool ne voyait que les appels partis d'un run ou d'une commande du modèle. Une recherche
+     * lancée par l'HUMAIN depuis la vue Knowledge passe pourtant par le même `retrieveBrainContext`,
+     * le même service et les mêmes plafonds d'injection — elle était simplement absente de la liste
+     * qu'Observatory présente comme « ce que le Brain a fait ».
+     *
+     * ATTACHE : la conversation ACTIVE du bus, comme le fait déjà l'activité de configuration. C'est
+     * un point d'accrochage, pas une prétention d'origine — d'où le `kind: 'recherche'`, qui la
+     * distingue d'un appel émis PAR le run. Sans conversation active la trace est tout de même
+     * écrite (`conversationId` vide) : le spool est global, mieux vaut un appel non rattaché qu'un
+     * appel perdu.
+     */
+    appendBrainTrace({
+      timestamp: new Date().toISOString(),
+      conversationId: bus.activeConversationId ?? '',
+      kind: 'recherche',
+      query: resolution.retrieval?.navigation?.query || boundedQuery,
+      found: (resolution.retrieval?.status ?? 'unavailable') === 'found',
+      status: resolution.retrieval?.status ?? 'unavailable',
+      injectedChars: resolution.retrieval?.context?.length ?? 0,
+      ...(resolution.retrieval?.navigation ? { navigation: resolution.retrieval.navigation } : {})
+    })
+    return envelope
   })
   // BOÎTE DE RÉCEPTION du savoir : `brain-remember` dépose en `inbox/` et laisse la promotion à
   // l'humain. Ces trois canaux sont cette main humaine, et ils sont bornés à la racine Brain autorisée.
@@ -4402,6 +4427,11 @@ Le fil reprend ensuite normalement.`
             boundary: 'Autowin OS -> provider adapter',
             limitation: pilotEvent.prompt.limitation,
             system: pilotEvent.prompt.system,
+            // Le chemin CHAT jetait les deux decompositions : `systemBlocks` etait pourtant calcule
+            // par `agent-pilot` depuis F6, mais ce site ne le recopiait pas. L'Observatory affichait
+            // donc les tours de chat — les plus nombreux — sans aucune injection nommee.
+            systemBlocks: pilotEvent.prompt.systemBlocks,
+            contextBlocks: pilotEvent.prompt.contextBlocks,
             messages: pilotEvent.prompt.messages,
             options: pilotEvent.prompt.options,
             response: pilotEvent.response ?? '',

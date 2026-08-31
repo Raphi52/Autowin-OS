@@ -26,6 +26,14 @@ export interface PromptCall {
   boundary: string
   limitation: string
   system?: string
+  /**
+   * Décomposition NOMMÉE de ce qu'Autowin a injecté. Ces deux champs existaient déjà sur
+   * `PromptCallRecord` côté main ; ce type-ci, recopié à la main, les OMETTAIT — c'est la raison
+   * renderer pour laquelle l'Observatory montrait les injections en un seul bloc opaque alors que
+   * leur liste était calculée et persistée à chaque appel.
+   */
+  systemBlocks?: Array<{ name: string; chars: number }>
+  contextBlocks?: Array<{ name: string; chars: number }>
   messages: Array<{ role: string; content: string }>
   options: Record<string, unknown>
   response: string

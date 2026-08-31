@@ -28,6 +28,13 @@ export interface PromptCallRecord {
   system?: string
   /** F6 — décomposition du `system` en blocs nommés (skill/discipline/style/capacités/contexte). */
   systemBlocks?: { name: string; chars: number }[]
+  /**
+   * Décomposition du contexte poussé côté USER en blocs nommés (mémoire de session, mémoire
+   * causale, empreinte du dépôt, savoir Brain, contexte collecté…). Ajouté le 2026-08-31 : ces
+   * injections-là étaient concaténées dans le message utilisateur, donc indiscernables de ce que
+   * l'humain avait écrit — l'Observatory les montrait sans jamais pouvoir les nommer.
+   */
+  contextBlocks?: { name: string; chars: number }[]
   messages: Message[]
   options: Record<string, unknown>
   response: string

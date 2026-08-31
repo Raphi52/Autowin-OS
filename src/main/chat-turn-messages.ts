@@ -125,38 +125,63 @@ export function nommerPiecesJointes(
 ): string {
   if (!attachments?.length) return ''
   const noms = attachments.map((piece) => piece.name).filter((nom) => nom.trim().length > 0)
-  return noms.length ? `
-[pieces jointes de ce message: ${noms.join(', ')}]` : ''
+  return noms.length
+    ? `
+[pieces jointes de ce message: ${noms.join(', ')}]`
+    : ''
+}
+
+/** Un bloc NOMMÉ du message de tour : le texte envoyé, et ce qu'il est. */
+export interface TurnMessageBlock {
+  name: string
+  text: string
+}
+
+/**
+ * LES MÊMES ENTRÉES, NOMMÉES.
+ *
+ * Le chat pousse cinq blocs dans le message utilisateur — état de l'app, savoir Brain, écho de
+ * mémoire, rappel de conversations, corps de skill — puis l'historique. Aucun ne portait de nom :
+ * l'Observatory les affichait donc fondus dans « le message », indiscernables de ce que l'humain
+ * avait réellement tapé. C'est le pendant chat du même défaut corrigé côté orchestration le
+ * 2026-08-31.
+ *
+ * `buildTurnMessages` en DÉRIVE le texte : une seule composition, donc pas de seconde vérité qui
+ * dériverait de la première à la prochaine évolution du format.
+ */
+export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBlock[] {
+  const nonVu = parts.compteRenduNonVu?.trim()
+  const nommes: TurnMessageBlock[] = parts.resumeSessionId
+    ? [
+        { name: 'etatDeLApp', text: `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}` },
+        { name: 'brainContext', text: parts.brainContext },
+        { name: 'memoryEcho', text: parts.memoryEcho },
+        { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
+        { name: 'skillBody', text: parts.skillBody ?? '' },
+        {
+          name: nonVu ? 'repriseSessionAvecTourManquant' : 'repriseSession',
+          text: nonVu
+            ? `Suite de NOTRE conversation en cours. Ta session en contient l'historique, À UNE EXCEPTION : le tour ci-dessous a été exécuté par l'application SANS passer par toi, il est donc absent de ta session. Traite-le comme un fait établi de cette conversation.\n\nTOI (tour exécuté par l'app, hors de ta session):\n${nonVu}`
+            : `Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle conversation_search sur les mots de la demande, puis conversation_read sur l'identifiant rendu. L'identifiant de la conversation courante est activeConversationId, dans l'ETAT DE L'APP ci-dessus.`
+        },
+        { name: 'messageUtilisateur', text: `UTILISATEUR: ${parts.lastUserMessage ?? ''}` }
+      ]
+    : [
+        { name: 'etatDeLApp', text: `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}` },
+        { name: 'brainContext', text: parts.brainContext },
+        { name: 'memoryEcho', text: parts.memoryEcho },
+        { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
+        { name: 'skillBody', text: parts.skillBody ?? '' },
+        ...parts.history.map((m, rang) => ({
+          name: `historique:${m.role === 'user' ? 'utilisateur' : 'agent'}:${rang}`,
+          text: `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}${nommerPiecesJointes(m.attachments)}`
+        }))
+      ]
+  return nommes.filter((bloc) => bloc.text.trim().length > 0)
 }
 
 export function buildTurnMessages(parts: TurnMessageParts): string[] {
-  const nonVu = parts.compteRenduNonVu?.trim()
-  const entries = parts.resumeSessionId
-    ? [
-        `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`,
-        parts.brainContext,
-        parts.memoryEcho,
-        parts.rappelConversations ?? '',
-        parts.skillBody ?? '',
-        // La phrase CHANGE quand un tour manque : garder « tu connais déjà l'historique » au-dessus
-        // d'un tour jamais vu serait conserver le mensonge tout en ajoutant le remède.
-        nonVu
-          ? `Suite de NOTRE conversation en cours. Ta session en contient l'historique, À UNE EXCEPTION : le tour ci-dessous a été exécuté par l'application SANS passer par toi, il est donc absent de ta session. Traite-le comme un fait établi de cette conversation.\n\nTOI (tour exécuté par l'app, hors de ta session):\n${nonVu}`
-          : `Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle conversation_search sur les mots de la demande, puis conversation_read sur l'identifiant rendu. L'identifiant de la conversation courante est activeConversationId, dans l'ETAT DE L'APP ci-dessus.`,
-        `UTILISATEUR: ${parts.lastUserMessage ?? ''}`
-      ]
-    : [
-        `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`,
-        parts.brainContext,
-        parts.memoryEcho,
-        parts.rappelConversations ?? '',
-        parts.skillBody ?? '',
-        ...parts.history.map(
-          (m) =>
-            `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}${nommerPiecesJointes(m.attachments)}`
-        )
-      ]
-  return entries.filter((entry) => entry.trim().length > 0)
+  return buildTurnMessageBlocks(parts).map((bloc) => bloc.text)
 }
 
 /**
@@ -312,8 +337,7 @@ export function signatureDEchec(nom: string, erreur: string): string {
    * et une panne de destination devenaient LE MEME mur, donc « interdit de rejouer » sur un
    * diagnostic faux. Le suffixe est justement la ou vit le discriminant.
    */
-  const borne =
-    noyau.length <= 80 ? noyau : `${noyau.slice(0, 40)}…${noyau.slice(-40)}`
+  const borne = noyau.length <= 80 ? noyau : `${noyau.slice(0, 40)}…${noyau.slice(-40)}`
   return `${nom}::${borne}`
 }
 
@@ -361,10 +385,7 @@ export function consigneApresEchec(dejaRencontres: readonly string[], signature:
  * Elle se tait quand la reprise dépend RÉELLEMENT de l'humain (autorisation, droits, arbitrage) :
  * relancer un agent contre un mur externe brûle des itérations sans rien produire.
  */
-export function exigeCorrigerEtPoursuivre(
-  echecNonCorrige: boolean,
-  reponse: string
-): boolean {
+export function exigeCorrigerEtPoursuivre(echecNonCorrige: boolean, reponse: string): boolean {
   if (!echecNonCorrige) return false
   const texte = (reponse ?? '').trim()
   if (!texte) return false // le tour muet a sa propre garde
@@ -381,7 +402,8 @@ export function exigeCorrigerEtPoursuivre(
       texte
     )
   const questionSuspensive =
-    texte.includes('?') && /(dois-je|veux-tu|confirmes?-tu|souhaites?-tu|faut-il|puis-je)/i.test(texte)
+    texte.includes('?') &&
+    /(dois-je|veux-tu|confirmes?-tu|souhaites?-tu|faut-il|puis-je)/i.test(texte)
   /*
    * `impossible` ne desarme plus la reprise par sa seule PRESENCE. Defaut mesure le 2026-08-22 :
    * « le patch a echoue, la ligne visee est impossible a localiser » decrivait l'echec lui-meme, et

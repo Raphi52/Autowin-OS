@@ -203,6 +203,7 @@ export class ProviderRegistry {
         transport: 'ProviderAdapter.send',
         system: resolved.system,
         systemBlocks: resolved.systemBlocks,
+        contextBlocks: resolved.contextBlocks,
         messages,
         options: { resumed: Boolean(resolved.resumeSessionId) },
         limitation:

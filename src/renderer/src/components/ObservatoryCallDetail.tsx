@@ -6,7 +6,55 @@ import type {
   ShadowRouteRecommendation
 } from '../../../main/shadow-router'
 import type { PromptCall } from './observatory-view-types'
+import { injectionInventory } from './observatory-injection-inventory'
 import { Spinner } from './Spinner'
+
+/**
+ * LA LISTE DES INJECTIONS — ce qu'Autowin a ajouté au prompt, nommé bloc par bloc.
+ *
+ * La vue affichait le `system` en un seul `<pre>` : lisible, mais impossible à inventorier. Le
+ * reste NON ATTRIBUÉ est affiché au même rang que les blocs, jamais masqué : c'est le seul moyen
+ * de distinguer « voici tout ce qui a été injecté » de « voici ce qu'on sait nommer ».
+ */
+function InjectionInventoryList({ call }: { call: PromptCall }): React.JSX.Element | null {
+  const inventory = injectionInventory(call)
+  if (inventory.empty) return null
+  return (
+    <section className="observatory-injections" data-testid="observatory-injections">
+      <b>
+        Injections · {inventory.blocks.length} bloc{inventory.blocks.length > 1 ? 's' : ''} nommé
+        {inventory.blocks.length > 1 ? 's' : ''}
+        {inventory.exhaustive ? '' : ' · liste incomplète'}
+      </b>
+      <ul>
+        {inventory.blocks.map((block) => (
+          <li key={`${block.channel}:${block.name}`}>
+            <span>{block.name}</span>
+            <small>{block.channel === 'system' ? 'système' : 'contexte poussé'}</small>
+            <b>{block.chars.toLocaleString('fr-FR')} car.</b>
+            <small>{block.share}&nbsp;%</small>
+          </li>
+        ))}
+        {inventory.unattributedChars > 0 && (
+          <li data-testid="observatory-injection-unattributed">
+            <span>non attribué</span>
+            <small>
+              système · aucun bloc ne revendique ces caractères, le site d’appel ne déclare pas sa
+              décomposition
+            </small>
+            <b>{inventory.unattributedChars.toLocaleString('fr-FR')} car.</b>
+            <small>
+              {inventory.systemChars > 0
+                ? Math.round((inventory.unattributedChars / inventory.systemChars) * 100)
+                : 0}
+              &nbsp;%
+            </small>
+          </li>
+        )}
+      </ul>
+    </section>
+  )
+}
 
 /**
  * Détail d'un appel observé, y compris la comparaison shadow.
@@ -97,6 +145,7 @@ export function ObservatoryCallDetail({
           <HumanJson value={shadowRecommendation} />
         </section>
       )}
+      <InjectionInventoryList call={call} />
       {call.system && (
         <>
           <b>System</b>

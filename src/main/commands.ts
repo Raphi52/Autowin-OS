@@ -2167,7 +2167,7 @@ export class AppCommandBus {
                 ...brain,
                 conversationId: convId,
                 turnId: orchestrationTurnId,
-                kind: 'automatic'
+                kind: brain.kind ?? 'automatic'
               }),
             orchestrationTurnId,
             (lifecycle) => {
@@ -2800,6 +2800,30 @@ export class AppCommandBus {
           }
         } finally {
           releaseProposal?.()
+        }
+        /**
+         * L'ÉCRITURE VERS LE BRAIN EST UN APPEL AU BRAIN, et elle n'en laissait aucune trace.
+         *
+         * Le spool ne connaissait que la LECTURE (`automatic`, `query`). `remember` fait pourtant un
+         * aller-retour réseau vers le même service, avec le même jeton — mais l'Observatory, qui
+         * annonce « ce que le Brain a fait », n'en montrait rien : un dépôt réussi et un dépôt tombé
+         * dans un service injoignable y étaient également invisibles.
+         *
+         * `injectedChars` vaut 0 À DESSEIN : rien n'est injecté dans le prompt par un dépôt. Le champ
+         * mesure ce qui entre dans le contexte, pas le volume de l'échange — y mettre la taille du
+         * fait ferait grossir des totaux d'injection avec du texte qui n'a jamais été injecté.
+         */
+        if (convId) {
+          appendBrainTrace({
+            timestamp: new Date().toISOString(),
+            conversationId: convId,
+            ...(turnId ? { turnId } : {}),
+            kind: 'depot',
+            query: `remember: ${outcome.fact?.title ?? String(a.title ?? '(sans titre)')}`,
+            found: outcome.stored,
+            status: outcome.stored ? 'found' : outcome.unknown ? 'unavailable' : 'empty',
+            injectedChars: 0
+          })
         }
         /**
          * ÉCHO : sans ça, le modèle écrit sans jamais relire — la moitié manquante de la mécanique de

@@ -148,6 +148,9 @@ export class ConversationRouter {
       const send = (): Promise<SendResult> =>
         this.registry.send(binding.provider, messages, {
           system: ROUTER_SYSTEM,
+          // Le routeur envoie un system, donc il INJECTE : sans bloc declare il etait le seul
+          // appel provider absent de l'inventaire des injections.
+          systemBlocks: [{ name: 'routerSystem', chars: ROUTER_SYSTEM.length }],
           model: binding.model,
           reasoningEffort: binding.reasoningEffort,
           signal,

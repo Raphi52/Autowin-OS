@@ -589,6 +589,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       model: model ?? opts.model,
       transport: 'claude CLI · -p + --system-prompt[-file]',
       system: opts.system,
+      systemBlocks: opts.systemBlocks,
+      contextBlocks: opts.contextBlocks,
       messages: lastUser ? [lastUser] : [],
       options: {
         toolsDisabled: true,

@@ -360,6 +360,9 @@ import { convRunsRoot } from './runs/conv-runs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
+// Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
+// seulement la nature de l'appel pour celui qui écrira la trace.
+import type { BrainTrace } from './activity/brain-trace-spool'
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import {
   ECHO_MAX_BLOCK_CHARS,
@@ -610,6 +613,12 @@ export interface BrainRetrievalEvent {
   status: 'found' | 'empty' | 'invalid' | 'unavailable'
   injectedChars: number
   navigation?: BrainNavigation
+  /**
+   * Nature de l'appel. Absente = `automatic`, la seule que ce canal transportait quand il n'existait
+   * qu'un appel Brain par run. Le run en fait DEUX : la récupération par tâche et l'empreinte du
+   * dépôt — les confondre sous un même libellé rendrait la seconde indiscernable de la première.
+   */
+  kind?: BrainTrace['kind']
 }
 
 /** Snapshot immuable des modeles et panels admis pour un run entier. */
@@ -2905,8 +2914,22 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                   `Fusionne leurs sorties en une UNION DÉDUPLIQUÉE, sans perdre d'angle distinct ni re-décider.\n\n${labelled}`
               }
             ]
+            // Ce site concatenait TROIS injections sans jamais les declarer : l'Observatory
+            // recevait un system opaque de plusieurs milliers de caracteres qu'aucun bloc ne
+            // revendiquait. Meme decomposition nommee que les autres sites d'envoi.
+            const synthNodeParts = [
+              { name: 'constitution', text: CONSTITUTION },
+              { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+              { name: 'projectContext', text: projectContext }
+            ]
             const synthOptions: SendOptions = {
-              system: CONSTITUTION + CONCISE_STRUCTURED_RESPONSE_INSTRUCTION + projectContext,
+              system: synthNodeParts.map((p) => p.text).join(''),
+              systemBlocks: synthNodeParts
+                .filter((p) => p.text)
+                .map((p) => ({ name: p.name, chars: p.text.length })),
+              contextBlocks: [
+                { name: 'fusionPropositions', chars: synthMessages[0].content.length }
+              ],
               model: orchBinding.model,
               reasoningEffort: orchBinding.reasoningEffort,
               execution: this.executionOptions(
@@ -3375,6 +3398,30 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     const scopedBrain = scopeBrainRetrieval(brain, brainCorpus)
     const brainContext = scopedBrain.context
     /**
+     * NOTIFIÉ ICI, à l'endroit où l'appel a EU LIEU — et non trente lignes plus bas comme avant.
+     *
+     * Tant qu'il n'y avait qu'un appel Brain par run, la position de cette notification n'avait
+     * aucune importance. Depuis que l'empreinte du dépôt se déclare elle aussi, elle en a une : la
+     * différer faisait sortir les deux appels dans l'ordre INVERSE de leur exécution, et une
+     * chronologie qui inverse deux évènements ne vaut pas mieux que celle qui en oublie un.
+     */
+    const brainQuery = scopedBrain.navigation?.query || task
+    try {
+      onBrainRetrieved?.({
+        timestamp: brainRetrievedAt,
+        // Le canal transporte DEUX appels par run : chacun se nomme, plutot que de laisser le
+        // premier se reconnaitre a sa seule position dans la liste.
+        kind: 'automatic',
+        query: brainQuery,
+        found: brainContext.length > 0,
+        status: scopedBrain.status,
+        injectedChars: brainContext.length,
+        navigation: scopedBrain.navigation
+      })
+    } catch {
+      // L'observabilité Brain ne doit jamais faire échouer le run.
+    }
+    /**
      * SKILL `think` INTÉGRÉE AU WORKFLOW (demande utilisateur du 14/08) : en plus de la récupération
      * par tâche ci-dessus, l'EMPREINTE DURABLE du dépôt (écrite par `/learn` : ce qu'il est, ce
      * qu'il fait, architecture, décisions) est chargée à CHAQUE run, et l'action est VISIBLE comme
@@ -3387,14 +3434,47 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
      */
     let empreinteDepot = ''
     if (brainCorpus?.length !== 0) {
+      /**
+       * CE DEUXIÈME APPEL BRAIN N'ÉCRIVAIT AUCUNE TRACE (constaté le 2026-08-31).
+       *
+       * Il part à CHAQUE run, exactement comme la récupération par tâche juste au-dessus, et son
+       * résultat est injecté en tête du contexte de toutes les phases — mais seule la première
+       * appelait `onBrainRetrieved`. La liste Brain de l'Observatory montrait donc un appel là où le
+       * run en avait fait deux, ce qui est précisément le défaut qu'une vue d'observabilité ne peut
+       * pas se permettre : sous-compter en silence se lit comme un compte juste.
+       *
+       * Statut par DÉFAUT `unavailable` : si l'appel jette, on ne sait pas si le Brain était absent
+       * ou la requête invalide, et l'échec doit rester visible plutôt que de se confondre avec un
+       * « rien trouvé ».
+       */
+      const empreinteQuery = `empreinte du dépôt ${workspaceSlug(this.deps.executionWorkspace)} — ce qu'il est, ce qu'il fait, architecture, conventions, décisions durables`
+      let empreinteStatut: BrainRetrievalEvent['status'] = 'unavailable'
+      let empreinteNavigation: BrainNavigation | undefined
       try {
-        const chargee = await (this.deps.retrieveBrain ?? retrieveBrainContext)(
-          `empreinte du dépôt ${workspaceSlug(this.deps.executionWorkspace)} — ce qu'il est, ce qu'il fait, architecture, conventions, décisions durables`,
-          { corpus: brainCorpus }
-        )
-        empreinteDepot = scopeBrainRetrieval(chargee, brainCorpus).context.slice(0, 6_000)
+        const chargee = await (this.deps.retrieveBrain ?? retrieveBrainContext)(empreinteQuery, {
+          corpus: brainCorpus
+        })
+        const empreinteScopee = scopeBrainRetrieval(chargee, brainCorpus)
+        empreinteStatut = empreinteScopee.status
+        empreinteNavigation = empreinteScopee.navigation
+        empreinteDepot = empreinteScopee.context.slice(0, 6_000)
       } catch {
         // Le load est un confort de départ, jamais une raison d'échouer.
+      }
+      try {
+        onBrainRetrieved?.({
+          timestamp: new Date().toISOString(),
+          kind: 'empreinte',
+          query: empreinteNavigation?.query || empreinteQuery,
+          found: empreinteDepot.length > 0,
+          status: empreinteStatut,
+          // La TRONCATURE à 6 000 est ce qui est réellement injecté : annoncer la taille récupérée
+          // ferait croire à du contexte que les phases n'ont jamais vu.
+          injectedChars: empreinteDepot.length,
+          ...(empreinteNavigation ? { navigation: empreinteNavigation } : {})
+        })
+      } catch {
+        // L'observabilité Brain ne doit jamais faire échouer le run.
       }
       push({
         step: 'exec',
@@ -3420,42 +3500,54 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
         // Une vue dérivée de la mémoire ne doit jamais empêcher le run courant.
       }
     }
-    const brainQuery = scopedBrain.navigation?.query || task
-    try {
-      onBrainRetrieved?.({
-        timestamp: brainRetrievedAt,
-        query: brainQuery,
-        found: brainContext.length > 0,
-        status: scopedBrain.status,
-        injectedChars: brainContext.length,
-        navigation: scopedBrain.navigation
-      })
-    } catch {
-      // L'observabilité Brain ne doit jamais faire échouer le run.
-    }
     // #1 repo-map graphify RÉFUTÉ par mesure A/B (2026-07-22) : injecter GRAPH_REPORT.md (28k) à
     // chaque phase coûtait +206k tokens (ON 573k vs OFF 367k) SANS réduire la lecture agentique du
     // sous-agent → contre-productif (piège du soft-steer saturé). Levier retiré. Cf. harnais
     // scripts/measure-orchestration-tokens.mjs pour re-mesurer une éventuelle version micro.
     const taskBody = taskForPipelineContext(task)
     const taskContext = `TÂCHE: ${taskBody}`
+    /**
+     * LE NOM DE CHAQUE INJECTION DE CONTEXTE, tenu à part du texte.
+     *
+     * `phaseContext` est un tableau de chaînes qui grossit tout au long du run (acquis d'une reprise,
+     * directives absorbées, sortie de chaque phase). Les blocs y perdaient leur identité dès la
+     * construction : l'Observatory recevait un message utilisateur composé où plus rien ne
+     * distinguait ce que l'HUMAIN avait écrit de ce qu'Autowin avait poussé. On garde donc un
+     * registre texte → nom, alimenté par `pousserContexte`, et on le lit au moment d'envoyer.
+     *
+     * Un registre PARALLÈLE plutôt qu'un tableau d'objets : `phaseContext` est lu et poussé depuis
+     * une douzaine d'endroits de ce fichier (`join`, `find`, `map`), et en changer la forme pour de
+     * l'observabilité aurait touché du code de décision. Une entrée absente du registre n'est jamais
+     * devinée — elle ressort « non nommé » et l'inventaire la compte comme non attribuée.
+     */
+    const phaseContextNames = new Map<string, string>()
+    const contexteNomme = (name: string, text: string): string => {
+      phaseContextNames.set(text, name)
+      return text
+    }
     const phaseContext: string[] = [
-      ...(memoryEcho ? [memoryEcho] : []),
-      ...(causalMemory ? [causalMemory] : []),
+      ...(memoryEcho ? [contexteNomme('memoryEcho', memoryEcho)] : []),
+      ...(causalMemory ? [contexteNomme('causalMemory', causalMemory)] : []),
       ...(empreinteDepot
         ? [
-            `EMPREINTE DU DÉPÔT (skill load) :
+            contexteNomme(
+              'empreinteDepot',
+              `EMPREINTE DU DÉPÔT (skill load) :
 ${empreinteDepot}`
+            )
           ]
         : []),
       ...(brainContext
         ? [
-            brainContext,
-            `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`
+            contexteNomme('brainContext', brainContext),
+            contexteNomme(
+              'brainPriorite',
+              `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`
+            )
           ]
         : []),
-      taskContext,
-      ...(collectedContext ? [collectedContext] : [])
+      contexteNomme('tache', taskContext),
+      ...(collectedContext ? [contexteNomme('collectedContext', collectedContext)] : [])
     ]
     /**
      * Une demande de mutation reste le BUT du workflow, pas la mission immédiate des phases amont.
@@ -3471,15 +3563,33 @@ ${empreinteDepot}`
         `Le BESOIN GLOBAL ci-dessous décrit le résultat final du workflow ; ses verbes de mutation sont réservés à BUILD. N'essaie pas d'écrire ni de préparer un patch, et ne signale pas l'absence de Write/Edit/Bash comme un blocage.`
       ].join(' ')
     }
-    const userContextForPhase = (phase: NodePhase): string => {
+    /**
+     * Le contexte de la phase, DÉCOMPOSÉ. `userContextForPhase` en dérive la chaîne envoyée et
+     * `contextBlocksForPhase` la liste nommée remise à l'observabilité : une seule composition, donc
+     * pas de seconde vérité qui dériverait de la première à la prochaine évolution du format.
+     */
+    const contextEntriesForPhase = (phase: NodePhase): Array<{ name: string; text: string }> => {
       const mission = analysisMission(phase)
-      if (!mission) return phaseContext.join('\n\n')
-      const context = phaseContext.map((entry) =>
-        entry === taskContext
-          ? `BESOIN GLOBAL (contexte, pas une action immédiate) : ${taskBody}`
-          : entry
-      )
-      return [mission, ...context].join('\n\n')
+      const entries = phaseContext.map((entry) => ({
+        name: phaseContextNames.get(entry) ?? 'non nommé',
+        text:
+          mission && entry === taskContext
+            ? `BESOIN GLOBAL (contexte, pas une action immédiate) : ${taskBody}`
+            : entry
+      }))
+      return mission ? [{ name: 'missionAnalyse', text: mission }, ...entries] : entries
+    }
+    const userContextForPhase = (phase: NodePhase): string =>
+      contextEntriesForPhase(phase)
+        .map((entry) => entry.text)
+        .join('\n\n')
+    const contextBlocksForPhase = (phase: NodePhase): Array<{ name: string; chars: number }> =>
+      contextEntriesForPhase(phase).map((entry) => ({
+        name: entry.name,
+        chars: entry.text.length
+      }))
+    const pousserContexte = (name: string, text: string): void => {
+      phaseContext.push(contexteNomme(name, text))
     }
     // Session-resume chaîné (levier coût) : on RÉUTILISE la session de l'exécuteur d'une phase à la
     // suivante quand le provider rend un sessionId. La tâche + le Brain + l'acquis des phases sont
@@ -3492,7 +3602,10 @@ ${empreinteDepot}`
     let prevSessionSandbox: NonNullable<SendOptions['execution']>['sandbox'] | undefined
     // Réinjecte l'acquis d'un run repris pour que la phase suivante l'ait dans son contexte.
     for (const output of usableResume) {
-      phaseContext.push(`[phase ${output.phase}] ${porterVersPhaseSuivante(output.text)}`)
+      pousserContexte(
+        `acquisPhase:${output.phase}`,
+        `[phase ${output.phase}] ${porterVersPhaseSuivante(output.text)}`
+      )
       lastExecText = output.text
     }
     /**
@@ -3507,7 +3620,8 @@ ${empreinteDepot}`
       if (!conversationId) return
       const directives = this.deps.drainDirectives?.(conversationId) ?? []
       for (const directive of directives) {
-        phaseContext.push(
+        pousserContexte(
+          'directiveUtilisateur',
           `DIRECTIVE UTILISATEUR ARRIVEE PENDANT LE RUN — PRIORITAIRE, elle CORRIGE le cadre : ${directive}`
         )
       }
@@ -3544,7 +3658,10 @@ ${empreinteDepot}`
         aggregatedEvidence.push(...greedy.evidence)
         lastExecText = greedy.aggregate
         recordPhase(phase, greedy.aggregate, aggregatedEvidence.slice(evidenceStart))
-        phaseContext.push(`[phase ${phase}] ${porterVersPhaseSuivante(greedy.aggregate)}`)
+        pousserContexte(
+          `acquisPhase:${phase}`,
+          `[phase ${phase}] ${porterVersPhaseSuivante(greedy.aggregate)}`
+        )
         // Plusieurs phases peuvent réutiliser le même DAG. Une phase suivante réussie ne doit pas
         // effacer les échecs/skips déjà observés (sinon un Terrain rouge disparaît après Build).
         failedTasks = [...new Set([...(failedTasks ?? []), ...greedy.failed])]
@@ -3565,6 +3682,7 @@ ${empreinteDepot}`
       const fanMembers = bindingOverride ? [] : this.resolvePhaseFanOut(phase, runtimeSnapshot)
       if (fanMembers.length >= 1) {
         // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
+        const fanContextBlocks = contextBlocksForPhase(phase)
         const fanMessages = [{ role: 'user' as const, content: userContextForPhase(phase) }]
         /**
          * ORDRE = DU PLUS STABLE AU PLUS VOLATILE. Le cache de préfixe du provider s'arrête au
@@ -3632,6 +3750,7 @@ ${empreinteDepot}`
               systemBlocks: personaBloc
                 ? [...fanSystemBlocks, { name: 'persona', chars: personaBloc.length }]
                 : fanSystemBlocks,
+              contextBlocks: fanContextBlocks,
               model: member.model,
               reasoningEffort: member.reasoningEffort,
               execution: this.executionOptions(
@@ -3769,7 +3888,10 @@ ${empreinteDepot}`
           const solo = good[0].text
           lastExecText = solo
           recordPhase(phase, solo, aggregatedEvidence.slice(evidenceStart))
-          phaseContext.push(`[phase ${phase}] ${porterVersPhaseSuivante(solo)}`)
+          pousserContexte(
+            `acquisPhase:${phase}`,
+            `[phase ${phase}] ${porterVersPhaseSuivante(solo)}`
+          )
           prevSessionId = undefined
           return
         }
@@ -3868,7 +3990,10 @@ ${empreinteDepot}`
         lastExecText = synth.text
         lastUsage = synth.usage
         recordPhase(phase, synth.text, aggregatedEvidence.slice(evidenceStart))
-        phaseContext.push(`[phase ${phase}] ${porterVersPhaseSuivante(synth.text)}`)
+        pousserContexte(
+          `acquisPhase:${phase}`,
+          `[phase ${phase}] ${porterVersPhaseSuivante(synth.text)}`
+        )
         prevSessionId = undefined // fan-out : pas de session linéaire à chaîner
         return
       }
@@ -3890,15 +4015,30 @@ ${empreinteDepot}`
       // par provider, cassé par un fan-out) faisait perdre le besoin cadré exactement au moment où
       // la phase suivante en a le plus besoin → prompt de sous-agent dégradé.
       const framed = phaseContext.find((entry) => entry.startsWith('[phase frame]')) ?? ''
-      const userContent = resuming
+      /**
+       * Les blocs poussés côté user sont composés EN MÊME TEMPS que le texte envoyé, y compris sur
+       * la branche `resuming` qui n'emprunte pas `userContextForPhase`. Décrire cette branche-là
+       * depuis le contexte complet aurait annoncé des injections que la reprise ne fait justement
+       * PAS — une observabilité fausse est pire qu'absente.
+       */
+      const userEntries = resuming
         ? [
-            analysisMission(phase),
-            `Phase suivante du pipeline : ${phase}. Continue À PARTIR de l'état de la session (tâche, connaissance Brain et acquis des phases précédentes déjà connus — ne les redemande pas). Applique la consigne de phase et enrichis le livrable existant.`,
-            framed && `RAPPEL DU CADRAGE — c'est LA référence du livrable :\n${framed}`
-          ]
-            .filter(Boolean)
-            .join('\n\n')
-        : userContextForPhase(phase)
+            { name: 'missionAnalyse', text: analysisMission(phase) },
+            {
+              name: 'repriseSession',
+              text: `Phase suivante du pipeline : ${phase}. Continue À PARTIR de l'état de la session (tâche, connaissance Brain et acquis des phases précédentes déjà connus — ne les redemande pas). Applique la consigne de phase et enrichis le livrable existant.`
+            },
+            {
+              name: 'rappelCadrage',
+              text: framed ? `RAPPEL DU CADRAGE — c'est LA référence du livrable :\n${framed}` : ''
+            }
+          ].filter((entry) => entry.text)
+        : contextEntriesForPhase(phase)
+      const userContent = userEntries.map((entry) => entry.text).join('\n\n')
+      const userBlocks = userEntries.map((entry) => ({
+        name: entry.name,
+        chars: entry.text.length
+      }))
       const phaseMessages = [{ role: 'user' as const, content: userContent }]
       // F6 — le system est composé de blocs NOMMÉS : on garde leur décomposition (nom + taille)
       // pour l'observabilité, en plus de la chaîne concaténée réellement envoyée.
@@ -4058,6 +4198,7 @@ ${empreinteDepot}`
       const subOptions: SendOptions = {
         system: parts.map((p) => p.text).join(''),
         systemBlocks,
+        contextBlocks: userBlocks,
         model: phaseBinding.model,
         reasoningEffort: phaseBinding.reasoningEffort,
         // Pas la session de l'exécution pour un juge dédié : elle n'existe pas chez son provider, et
@@ -4095,6 +4236,7 @@ ${empreinteDepot}`
           : {}),
         observePrompt: (observed) => {
           observed.systemBlocks = systemBlocks
+          observed.contextBlocks = userBlocks
           execPrompt = observed
         }
       }
@@ -4105,6 +4247,7 @@ ${empreinteDepot}`
         phaseBinding.model
       )
       execPrompt.systemBlocks = systemBlocks
+      execPrompt.contextBlocks = userBlocks
       const execution = {
         phase,
         agentId: `${phase}:subagent`,
@@ -4355,6 +4498,9 @@ ${empreinteDepot}`
           `\n[dérive] ${constat}. La phase \`${phase}\` est allée au bout, rien n'a été interrompu — arbitrage de la suite…\n`
         )
         let verdict: RouteVerdict = { kind: 'continuer' }
+        // Le brief est compose UNE fois : le declarer en le recalculant ferait de l'inventaire une
+        // seconde evaluation, qui pourrait annoncer une taille differente de celle envoyee.
+        const briefDeLArbitrage = briefArbitrage(derive, phase, task)
         try {
           const arbitre = await this.sendWithRoleContext(
             `arbitrage dérive ${phase}`,
@@ -4363,7 +4509,10 @@ ${empreinteDepot}`
             phaseBinding.model,
             () =>
               registry.send(providerDeLaPhase, [{ role: 'user', content: 'Tranche maintenant.' }], {
-                system: briefArbitrage(derive, phase, task),
+                system: briefDeLArbitrage,
+                // Une seule injection ici, mais elle doit se NOMMER : sans bloc declare, un system
+                // non vide se lisait comme « rien d'inventorie » au lieu de « un brief d'arbitrage ».
+                systemBlocks: [{ name: 'briefArbitrage', chars: briefDeLArbitrage.length }],
                 model: phaseBinding.model,
                 // L'annulation UTILISATEUR est honorée pendant l'arbitrage aussi : sans ce signal
                 // il tournait jusqu'à son terme au moment précis où l'utilisateur veut couper.
@@ -4411,7 +4560,8 @@ ${empreinteDepot}`
       // B4 — le contexte PORTÉ à la phase suivante est borné (la sortie complète reste dans
       // phaseOutputs + la trace) : évite une croissance quadratique du prompt sur les chaînes longues.
       const carried = porterVersPhaseSuivante(texteDePhase)
-      phaseContext.push(
+      pousserContexte(
+        `deriveArbitrage:${phase}`,
         `[phase ${phase}] ${carried}` +
           // L'EXTRAIT part avec le constat : la phase insérée (un `scout`, typiquement) recevait le
           // COMPTE (« la même erreur est revenue 3 fois ») sans le fragment qui l'a montré.
@@ -4477,13 +4627,13 @@ ${empreinteDepot}`
       // run qui n'a joue que scout/frame/terrain n'a aucune mutation a prouver, meme si la phrase de
       // l'utilisateur en annoncait une pour la suite.
       const cloture = etatDeCloture(task, phaseOutputs, evidenceOk, isMutationTask(task))
-        /*
-         * Le travail NON LIVRE compte a CHAQUE sortie de cloture, pas seulement a la derniere.
-         * Un juge externe a compte le 2026-08-22 : six sites `evaluateClosure` dans ce fichier, DEUX
-         * cables. Le pre-gate et le juge repris d'un CLI detache retournent tous deux en avance, donc
-         * une sous-tache en echec les traversait et le run se rendait « succeeded ». Bloquer au
-         * pre-gate est en prime moins cher : cela coupe AVANT de payer le juge.
-         */
+      /*
+       * Le travail NON LIVRE compte a CHAQUE sortie de cloture, pas seulement a la derniere.
+       * Un juge externe a compte le 2026-08-22 : six sites `evaluateClosure` dans ce fichier, DEUX
+       * cables. Le pre-gate et le juge repris d'un CLI detache retournent tous deux en avance, donc
+       * une sous-tache en echec les traversait et le run se rendait « succeeded ». Bloquer au
+       * pre-gate est en prime moins cher : cela coupe AVANT de payer le juge.
+       */
       const preGate = evaluateClosure({
         status: hookOutcome.blocked ? 'red' : cloture.status,
         dod: cloture.dod.map((check) => ({ ...check, hasContent: true })),
@@ -4936,7 +5086,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       if (attempt > 0) {
         // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
         // donc son panel, sa synthèse, sa concurrence et sa télémétrie.
-        phaseContext.push(
+        pousserContexte(
+          `reparation:${attempt}`,
           `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Objections du juge : ${lastJudgeText || '(verdict vide)'}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
         )
         // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire

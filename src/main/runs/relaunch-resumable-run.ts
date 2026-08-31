@@ -266,7 +266,7 @@ export function creerRelanceDeRunReprenable(
               ...brain,
               conversationId,
               ...(resumeTurnId ? { turnId: resumeTurnId } : {}),
-              kind: 'automatic'
+              kind: brain.kind ?? 'automatic'
             }),
           resumeTurnId,
           (lifecycle) => {

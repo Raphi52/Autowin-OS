@@ -74,6 +74,17 @@ export interface SendOptions {
   system?: string
   /** F6 — décomposition observable du `system` (passthrough, jamais transmis au provider). */
   systemBlocks?: SystemBlock[]
+  /**
+   * Décomposition observable du contexte poussé côté USER (mémoire de session, mémoire causale,
+   * empreinte du dépôt, savoir Brain, contexte collecté…). Même parti pris que `systemBlocks` :
+   * passthrough pur, jamais transmis au provider.
+   *
+   * Pourquoi séparément (2026-08-31) : ces blocs-là sont concaténés dans le MESSAGE utilisateur,
+   * pas dans le `system`. Ils étaient donc les seules injections d'Autowin sans aucun nom nulle
+   * part — l'Observatory les affichait fondus dans le message de l'utilisateur, impossibles à
+   * distinguer de ce que l'humain avait réellement écrit.
+   */
+  contextBlocks?: SystemBlock[]
   /** Reprise d'une session existante (cache-friendly) si l'adaptateur le gère. */
   resumeSessionId?: string
   /** Signal d'annulation coopératif. */
@@ -146,6 +157,8 @@ export interface PromptEnvelope {
   system?: string
   /** F6 — décomposition du `system` en blocs nommés, pour auditer ce qui a été injecté. */
   systemBlocks?: SystemBlock[]
+  /** Décomposition du contexte poussé côté user en blocs nommés (cf. `SendOptions.contextBlocks`). */
+  contextBlocks?: SystemBlock[]
   messages: Message[]
   options: Record<string, unknown>
   limitation: string

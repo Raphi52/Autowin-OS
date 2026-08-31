@@ -185,6 +185,8 @@ export class GeminiCliAdapter implements ProviderAdapter {
       model: model ?? opts.model,
       transport: 'Antigravity CLI officiel · --print · compte Google local',
       system: opts.system,
+      systemBlocks: opts.systemBlocks,
+      contextBlocks: opts.contextBlocks,
       messages: messages.filter((message) => message.role !== 'system'),
       options: {
         model: opts.model,

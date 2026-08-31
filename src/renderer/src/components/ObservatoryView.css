@@ -966,6 +966,47 @@
 .observatory-call-metrics b {
   color: #59dcff;
 }
+/* INVENTAIRE DES INJECTIONS : une ligne par bloc nommé, en colonnes alignées pour que les tailles
+   se comparent d'un coup d'œil. La ligne « non attribué » emprunte la même grille — elle doit se
+   lire comme un poste de l'inventaire, pas comme une note de bas de page. */
+.observatory-injections {
+  display: grid;
+  gap: 6px;
+}
+.observatory-injections ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.observatory-injections li {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) auto 46px;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line-soft, rgba(255, 255, 255, 0.06));
+}
+.observatory-injections li > span {
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--text);
+}
+.observatory-injections li > small {
+  color: var(--text-faint);
+}
+.observatory-injections li > b {
+  justify-self: end;
+  color: #59dcff;
+}
+.observatory-injections li > small:last-child {
+  justify-self: end;
+  color: var(--text-dim);
+}
+.observatory-injections li[data-testid='observatory-injection-unattributed'] > span,
+.observatory-injections li[data-testid='observatory-injection-unattributed'] > b {
+  color: var(--warn, #e9bd4e);
+}
 .observatory-event-detail > header {
   display: flex;
   justify-content: space-between;

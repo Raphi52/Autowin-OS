@@ -253,6 +253,7 @@ export function persistOrchestrationStep(
       limitation: step.prompt.limitation,
       system: step.prompt.system,
       systemBlocks: step.prompt.systemBlocks,
+      contextBlocks: step.prompt.contextBlocks,
       messages: step.prompt.messages,
       options: step.prompt.options,
       response: step.text,
