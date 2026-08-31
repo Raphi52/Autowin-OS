@@ -1246,7 +1246,13 @@ export const NUAGE_FRAGMENT_SHADER = [
   // magenta porte par les seuls filaments. Deux teintes donnent un aplat.
   '  vec3 couleur = mix(uBleu, uViolet, smoothstep(0.18, 0.72, champ));',
   '  couleur = mix(couleur, uFroid, smoothstep(0.62, 0.12, champ) * 0.55);',
-  '  float versant = smoothstep(-0.28, 0.30, -c.x + (w1 - 0.5) * 0.8);',
+  // LA COUPURE DROITE DU VERSANT. `-c.x` est une fonction LINEAIRE de la coordonnee : son smoothstep
+  // dessine une FRONTIERE RECTILIGNE en travers du nuage, que `w1` seul (amplitude 0.8) ne suffisait
+  // pas a tordre. C'est l'une des « lignes cubiques » signalees le 2026-08-31. On la deforme par un
+  // fbm basse frequence d'amplitude double, pris sur les coordonnees DEJA warpees : la limite serpente
+  // au lieu de trancher, et le versant reste un versant.
+  '  float ondeVersant = fbm(q * 0.9 + vec2(31.7, 12.3)) - 0.5;',
+  '  float versant = smoothstep(-0.28, 0.30, -c.x + (w1 - 0.5) * 0.8 + ondeVersant * 1.7);',
   '  couleur = mix(couleur, uChaud, versant * smoothstep(0.22, 0.80, champ) * 0.78);',
   '  couleur = mix(couleur, uAccent, smoothstep(0.48, 0.92, filaments) * 0.85);',
   '  couleur += mix(uAccent, uChaud, versant) * pow(clamp(filaments, 0.0, 1.0), 3.0) * 0.55;',
