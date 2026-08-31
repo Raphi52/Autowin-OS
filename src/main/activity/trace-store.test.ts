@@ -238,3 +238,52 @@ describe('TraceStore append-only', () => {
     expect(reader.sequenceScanBytes - warmupBytes).toBeLessThan(2_000)
   })
 })
+
+/*
+ * NON-REGRESSION DU GEL DU 2026-08-31.
+ *
+ * `reserveSequence` attend le verrou par `Atomics.wait` SUR LE THREAD APPELANT — le main. Un `.lock`
+ * orphelin (processus tue pendant un run) n'etait reclame qu'apres STALE_SEQUENCE_LOCK_MS = 30 000 ms :
+ * chaque ecriture de trace attendait alors les 2 000 ms de son budget puis JETAIT
+ * « allocation de sequence verrouillee trop longtemps », fenetre gelee pendant tout ce temps —
+ * signature des sept gels de 25 a 44 s du journal. Le cadavre est desormais reclame au bout d'un
+ * budget d'acquisition : l'ecriture aboutit au lieu d'echouer, et l'attente est bornee.
+ */
+describe('verrou de sequence orphelin', () => {
+  it('reclame un .lock abandonne et ecrit, au lieu de geler puis jeter', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-verrou-orphelin-'))
+    writeFileSync(join(root, '.conv-1.sequence.lock'), '', 'utf8')
+    const store = new TraceStore(root)
+    store.append(event('evt-0', 0))
+    const depart = performance.now()
+    const suivante = store.nextSequence('conv-1')
+    const dureeMs = performance.now() - depart
+    expect(suivante).toBe(1)
+    expect(dureeMs).toBeLessThan(1_500)
+  })
+})
+
+/*
+ * NON-REGRESSION DE LA FUITE DE DESCRIPTEURS.
+ *
+ * `append` gardait un descripteur ouvert PAR conversation, sans borne et sans jamais le refermer
+ * hors `deleteConversation`. Sur l'installation de l'utilisateur, le dossier d'activite compte
+ * 1 472 conversations : une session longue accumulait autant de handles, jusqu'au EMFILE. Le cache
+ * est desormais borne ; ecrire dans beaucoup de conversations puis revenir sur la premiere doit
+ * rester correct — le descripteur referme se rouvre tout seul.
+ */
+describe('descripteurs de trace bornes', () => {
+  it('ecrit dans 200 conversations puis revient sur la premiere sans rien perdre', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-descripteurs-'))
+    const store = new TraceStore(root)
+    for (let i = 0; i < 200; i += 1)
+      store.append({ ...event(`evt-a-${i}`, 0), conversationId: `conv-${i}`, parentId: undefined })
+    store.append({ ...event('evt-b-0', 1), conversationId: 'conv-0', parentId: 'evt-a-0' })
+    expect(store.readConversation('conv-0').map((e) => e.id)).toEqual(['evt-a-0', 'evt-b-0'])
+    expect(store.readConversation('conv-199').map((e) => e.id)).toEqual(['evt-a-199'])
+    // La BORNE elle-meme : sans elle, 200 descripteurs restaient ouverts.
+    expect(
+      (store as unknown as { descriptors: Map<string, number> }).descriptors.size
+    ).toBeLessThanOrEqual(32)
+  })
+})

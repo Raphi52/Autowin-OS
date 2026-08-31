@@ -1101,7 +1101,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const elapsed = Number(o['elapsed_time_seconds'])
         if (!Number.isFinite(elapsed) || elapsed <= 0) return
         const outil = typeof o['tool_name'] === 'string' && o['tool_name'] ? o['tool_name'] : 'outil'
-        queue.push({ delta: '', reasoning: `${outil} en cours — ${dureeLisible(elapsed)}` })
+        queue.push({ delta: '', reasoning: `\n${outil} en cours\n${dureeLisible(elapsed)}` })
         return
       }
       if (t === 'system' && (o['subtype'] === 'task_started' || o['subtype'] === 'task_notification')) {
@@ -1124,7 +1124,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (demarre) {
           queue.push({
             delta: '',
-            reasoning: commande ? `tache de fond en cours — ${commande}` : 'tache de fond en cours'
+            reasoning: commande ? `\ntache de fond en cours\n${commande}` : '\ntache de fond en cours'
           })
           return
         }
@@ -1134,7 +1134,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const issue = statut === 'completed' ? 'terminee' : statut === 'failed' ? 'en echec' : statut || 'terminee'
         queue.push({
           delta: '',
-          reasoning: commande ? `tache de fond ${issue} — ${commande}` : `tache de fond ${issue}`
+          reasoning: commande ? `\ntache de fond ${issue}\n${commande}` : `\ntache de fond ${issue}`
         })
         return
       }

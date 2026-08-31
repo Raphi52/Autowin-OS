@@ -22,30 +22,73 @@ let installedTraceEventSink: TraceEventSink | undefined
 const allocatedSequences = new Map<string, number>()
 const sequenceLockWaitBuffer = new Int32Array(new SharedArrayBuffer(4))
 const SEQUENCE_LOCK_TIMEOUT_MS = 2_000
-const STALE_SEQUENCE_LOCK_MS = 30_000
+/*
+ * DUREE AU-DELA DE LAQUELLE UN VERROU EST TENU POUR MORT.
+ *
+ * Etait 30 000 ms. Or la section critique protegee ici est une lecture puis une ecriture d'un
+ * compteur de quelques octets : elle dure des MICROsecondes, et son acquisition a de toute facon un
+ * budget de SEQUENCE_LOCK_TIMEOUT_MS. Un verrou encore present apres un budget entier d'acquisition
+ * n'est donc pas « detenu » : son proprietaire est mort (processus tue, run interrompu) et le
+ * fichier est un cadavre. Les 30 s d'origine faisaient payer ce cadavre au thread MAIN, qui attend
+ * ici par Atomics.wait — mesure du 2026-08-31 (gels.jsonl) : sept gels de 25 a 44 s, tous classes
+ * 'entree-sortie-bloquante' avec operation 'inconnu', c'est-a-dire boucle d'evenements tenue sans
+ * consommer de CPU : la signature exacte de cette attente. Le seuil doit en outre rester STRICTEMENT SOUS le budget
+ * d'acquisition : a egalite, le cadavre n'est reclame qu'a l'instant ou le budget expire, donc
+ * l'appel jette au lieu d'aboutir. 500 ms laisse trois ordres de grandeur de marge sur une section
+ * critique qui dure des microsecondes.
+ */
+const STALE_SEQUENCE_LOCK_MS = 500
+
+/** Descripteurs de trace gardes ouverts simultanement — voir descripteurOuvert(). */
+const DESCRIPTEURS_MAX = 32
+
+/**
+ * NOMME l'attente, pour que le detecteur de gel cesse de rendre 'inconnu'.
+ *
+ * instrumenterEntreesSortiesDuMain (src/main/gel-main.ts) ne patche que node:fs et
+ * node:child_process : Atomics.wait lui est invisible. Sans cette declaration, le plus gros gel du
+ * journal reste anonyme — l'instrument prouve le gel sans jamais nommer le coupable. La liaison est
+ * best-effort et sans import : la trace ne doit jamais dependre du detecteur.
+ */
+function declarerAttenteVerrou(): () => void {
+  try {
+    const gel = (globalThis as { __autowinGel__?: { ouvrirOperation?: (n: string) => () => void } })
+      .__autowinGel__
+    return gel?.ouvrirOperation?.('trace:attente-verrou-sequence') ?? ((): void => {})
+  } catch {
+    return (): void => {}
+  }
+}
 
 function withSequenceLock<T>(root: string, conversationId: string, action: () => T): T {
   mkdirSync(root, { recursive: true })
   const lockPath = join(root, `.${conversationId}.sequence.lock`)
   const deadline = Date.now() + SEQUENCE_LOCK_TIMEOUT_MS
   let descriptor: number | undefined
-  while (descriptor === undefined) {
-    try {
-      descriptor = openSync(lockPath, 'wx')
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+  let fermerDeclaration: (() => void) | undefined
+  try {
+    while (descriptor === undefined) {
       try {
-        if (Date.now() - statSync(lockPath).mtimeMs > STALE_SEQUENCE_LOCK_MS) {
-          rmSync(lockPath, { force: true })
-          continue
+        descriptor = openSync(lockPath, 'wx')
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+        fermerDeclaration ??= declarerAttenteVerrou()
+        try {
+          if (Date.now() - statSync(lockPath).mtimeMs > STALE_SEQUENCE_LOCK_MS) {
+            rmSync(lockPath, { force: true })
+            continue
+          }
+        } catch (statError) {
+          if ((statError as NodeJS.ErrnoException).code === 'ENOENT') continue
+          throw statError
         }
-      } catch (statError) {
-        if ((statError as NodeJS.ErrnoException).code === 'ENOENT') continue
-        throw statError
+        if (Date.now() >= deadline)
+          throw new Error('allocation de sequence verrouillee trop longtemps')
+        Atomics.wait(sequenceLockWaitBuffer, 0, 0, 2)
       }
-      if (Date.now() >= deadline) throw new Error('allocation de sequence verrouillee trop longtemps')
-      Atomics.wait(sequenceLockWaitBuffer, 0, 0, 2)
     }
+  } finally {
+    fermerDeclaration?.()
   }
   try {
     return action()
@@ -101,6 +144,39 @@ export class TraceStore {
     })
   }
 
+  /**
+   * Le descripteur d'ecriture de la conversation, avec un cache BORNE.
+   *
+   * Defaut : le cache etait non borne et rien ne refermait jamais un descripteur hors
+   * `deleteConversation`. Une session longue qui trace beaucoup de conversations (1 472 fichiers
+   * dans le dossier d'activite sur l'installation de l'utilisateur) gardait donc autant de handles
+   * ouverts — jusqu'a la limite de l'OS, qui se manifeste par un EMFILE tardif et sans rapport
+   * apparent avec la trace. Une trace est un flux d'APPENDS : seules les dernieres conversations
+   * ecrivent, le cache n'a aucune raison de croitre sans fin. Le plus ancien descripteur est referme
+   * quand la borne est franchie ; le rouvrir plus tard ne coute qu'un `openSync`.
+   */
+  private descripteurOuvert(conversationId: string): number {
+    const existant = this.descriptors.get(conversationId)
+    if (existant !== undefined) {
+      // Re-insere pour marquer l'usage recent : Map preserve l'ordre d'insertion.
+      this.descriptors.delete(conversationId)
+      this.descriptors.set(conversationId, existant)
+      return existant
+    }
+    const descriptor = openSync(this.path(conversationId), 'a')
+    this.descriptors.set(conversationId, descriptor)
+    while (this.descriptors.size > DESCRIPTEURS_MAX) {
+      const [plusAncien, handle] = this.descriptors.entries().next().value as [string, number]
+      this.descriptors.delete(plusAncien)
+      try {
+        closeSync(handle)
+      } catch {
+        // Un descripteur deja ferme (ou un fichier disparu) ne doit pas faire echouer une ecriture.
+      }
+    }
+    return descriptor
+  }
+
   append(event: TraceEventV1): this {
     assertTraceEvent(event)
     const existing = this.ids.has(event.conversationId)
@@ -116,9 +192,7 @@ export class TraceStore {
     if (event.parentId && !seen.has(event.parentId))
       throw new Error(`parent causal introuvable: ${event.parentId}`)
     mkdirSync(this.root, { recursive: true })
-    const descriptor =
-      this.descriptors.get(event.conversationId) ?? openSync(this.path(event.conversationId), 'a')
-    this.descriptors.set(event.conversationId, descriptor)
+    const descriptor = this.descripteurOuvert(event.conversationId)
     writeSync(descriptor, `${JSON.stringify(event)}\n`, undefined, 'utf8')
     seen.add(event.id)
     this.ids.set(event.conversationId, seen)
