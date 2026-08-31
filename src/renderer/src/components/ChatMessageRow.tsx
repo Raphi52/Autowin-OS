@@ -352,12 +352,14 @@ export const ChatMessageRow = memo(
           <span className="msg-role">Agent</span>
           {!message.done && <Spinner />}
         </div>
-        {/* Le raisonnement se lit ICI, repliable, écrit en direct pendant que le modèle pense. */}
-        {message.reasoning && <ThinkingBlock text={message.reasoning} done={message.done} />}
+        {/* Le raisonnement se lit ICI, repliable, écrit en direct pendant que le modèle pense.
+            L'attente AVANT le premier fragment de pensée passe par le MÊME bloc (corps vide) :
+            l'ancien placeholder texte « réflexion… » etait un vestige qui court-circuitait le
+            bloc depliable et donnait l'impression d'une retrogradation. */}
+        {(message.reasoning || (!message.done && message.parts.length === 0)) && (
+          <ThinkingBlock text={message.reasoning ?? ''} done={message.done} />
+        )}
         <div className="msg-turn">
-          {message.parts.length === 0 && !message.done && !message.reasoning && (
-            <div className="msg-body c-faint">réflexion…</div>
-          )}
           {splitAssistantTimeline(message.parts, directiveReceipts ?? []).map(
             (timelineItem, timelineIndex) =>
               timelineItem.kind === 'receipt' ? (
