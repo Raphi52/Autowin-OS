@@ -1611,7 +1611,27 @@ export class Orchestrator {
           `Devis impossible avant exécution : workflow exige ${mandatory} appel(s) et ${maxPanel} agent(s) simultané(s), plafonds ${executionQuote.limits.maxProviderCalls}/${executionQuote.limits.maxConcurrency}.`
         )
       }
-      executionQuote.limits.maxAgents = Math.max(executionQuote.limits.maxAgents, mandatory)
+      /*
+       * UN APPEL N EST PAS UN AGENT — corrige le 2026-08-31 (conv-1587).
+       *
+       * `maxAgents` etait cale sur `mandatory`, le nombre d appels OBLIGATOIRES du workflow. Or
+       * une phase en FAN-OUT lance un agent PAR MEMBRE de son panel : le plafond valait donc
+       * exactement le minimum structurel, sans une seule place pour le fan-out. Symptome mesure :
+       * un run tue sur « Budget d agents atteint (6) » — six phases, six places — au tout premier
+       * fan-out de build, AVANT que le moindre modele ait produit une sortie. La pire issue
+       * possible : paye, et rien de fini.
+       *
+       * Le raisonnement est celui deja pose quelques lignes plus haut pour `maxProviderCalls` : un
+       * workflow deterministe plus large que le regime AGRANDIT le devis au lieu d etre refuse
+       * (conv-1148). On dimensionne donc sur le fan-out REEL — chaque appel obligatoire pouvant
+       * etre servi par un panel de `maxPanel` membres — plus les reprises promises.
+       *
+       * AUCUN frein reel ne bouge : `maxTotalTokens`, `maxUsd` et `maxDurationMs` bornent toujours
+       * exactement ce qu ils bornaient, et `maxConcurrency` — qui protege la MACHINE et non le
+       * portefeuille — garde son refus inconditionnel. Ce plafond-ci ne comptait que des tetes.
+       */
+      const placesFanOut = mandatory * Math.max(1, maxPanel) + executionQuote.limits.maxRecoveries
+      executionQuote.limits.maxAgents = Math.max(executionQuote.limits.maxAgents, placesFanOut)
     }
     // Un instantané FOURNI est assaini AVANT tout usage : il est consommé par plusieurs chemins
     // (fan-out de phase, fan-out de juge, phase séquentielle) et le premier qui atteignait le registre

@@ -344,7 +344,45 @@ describe('un graphe pilote le run', () => {
     expect(quote.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
     expect(quote.limits.maxRecoveries).toBe(2)
     expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(11)
-    expect(quote.limits.maxAgents).toBeLessThanOrEqual(quote.limits.maxProviderCalls)
+    /*
+     * Le plafond d agents ne peut PLUS etre borne par le nombre d appels : une phase en fan-out
+     * lance un agent par membre de son panel, et l ancienne egalite « un appel = un agent » tuait
+     * le run au premier fan-out (« Budget d agents atteint (6) », conv-1587). Il doit rester au
+     * moins aussi large que le chemin obligatoire et ses reprises.
+     */
+    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(12 + quote.limits.maxRecoveries)
+  })
+
+  /*
+   * Regression du 2026-08-31 (conv-1587) : un run a ete tue sur « Budget d agents atteint (6) »
+   * au premier fan-out de build, AVANT que le moindre modele ait produit une sortie. La cause :
+   * `maxAgents` etait cale sur le nombre d APPELS obligatoires, alors qu une phase en fan-out
+   * lance un agent PAR MEMBRE de son panel. Un panel de 3 sur six phases a donc besoin de bien
+   * plus de places que six.
+   */
+  it('reserve une place par MEMBRE de panel, pas une par appel', async () => {
+    const graph = {
+      entry: 'build-1',
+      nodes: [
+        { id: 'build-1', phase: 'build' as const },
+        { id: 'judge-1', phase: 'judge' as const }
+      ],
+      edges: [{ from: 'build-1', to: 'judge-1', when: 'always' as const }]
+    }
+    const quote = compileExecutionQuote('corrige le sommaire du README')
+    const avant = quote.limits.maxAgents
+
+    await expect(
+      makeOrchestrator(
+        new Recorder(),
+        { explicit: true, graph, allocation: { phaseMembers: { build: 3 } } },
+        quote
+      ).run('corrige le sommaire du README')
+    ).resolves.toBeDefined()
+
+    // Le panel de 3 doit AGRANDIR le devis : sinon le fan-out se refuse lui-meme.
+    expect(quote.limits.maxAgents).toBeGreaterThan(avant)
+    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(3)
   })
 
   it('un juge terminal du workflow est le gate final, pas un appel de juge en double', async () => {
