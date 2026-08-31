@@ -1192,12 +1192,16 @@ export const NUAGE_FRAGMENT_SHADER = [
   'float fbm(vec2 p) {',
   '  float somme = 0.0;',
   '  float amplitude = 0.5;',
-  '  float angle = 0.0;',
+  // COUT (conv-1586, gigalag) : recalculer cos/sin a chaque octave coutait 4 transcendantes
+  // x 7 octaves x 9 appels de fbm = 252 par PIXEL d'un plan plein ecran. La rotation de l'octave k
+  // vaut rot(A)^k : on la PROPAGE par un produit de matrices (6 flops), mathematiquement identique
+  // — meme decorrelation des grilles, meme image, sans les transcendantes.
+  '  mat2 pasRot = mat2(0.4472136, -0.8944272, 0.8944272, 0.4472136);',
+  '  mat2 rot = pasRot;',
   '  for (int octave = 0; octave < 7; octave++) {',
   '    somme += amplitude * bruitN(p);',
-  '    angle += 1.10714872;',
-  '    mat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));',
   '    p = rot * p * 2.07 + vec2(11.7, 5.3);',
+  '    rot = pasRot * rot;',
   '    amplitude *= 0.5;',
   '  }',
   '  return somme;',
