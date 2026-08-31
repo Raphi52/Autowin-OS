@@ -117,6 +117,18 @@ export function demarrerDetecteurDeGel(
 ): () => void {
   dossier = dir
   puits = ecrire
+  /*
+   * POINT D'ANCRAGE GLOBAL — pour que les attentes qui ne passent par AUCUNE API instrumentee
+   * puissent quand meme se DECLARER. `instrumenterEntreesSortiesDuMain` ne patche que `node:fs` et
+   * `node:child_process` ; une attente `Atomics.wait` (verrou de sequence de trace) leur est
+   * invisible, et ressortait donc en `operation:'inconnu'` — le cas des sept plus gros gels du
+   * 2026-08-31. Un module bas niveau ne doit pas importer le detecteur (cycle, et la trace ne doit
+   * jamais dependre de l'observabilite) : il lit ce point d'ancrage s'il existe, sinon il n'y a
+   * simplement pas de nom.
+   */
+  ;(
+    globalThis as { __autowinGel__?: { ouvrirOperation: (nom: string) => () => void } }
+  ).__autowinGel__ = { ouvrirOperation }
   let precedent = Date.now()
   /*
    * PREUVE PAR LE CPU. Un reveil tardif dit que le temps a passe, pas OU il a passe. On releve donc
@@ -351,7 +363,29 @@ export function instrumenterEntreesSortiesDuMain(
         'renameSync',
         'rmSync',
         'mkdirSync',
-        'realpathSync'
+        'realpathSync',
+        /*
+         * ANGLE MORT COMBLE le 2026-08-31. Les deux plus gros gels du journal (32 751 ms et
+         * 33 137 ms, 09:55 et 09:57 locales) sont sortis en 'inconnu' AVEC la cause
+         * 'entree-sortie-bloquante' — donc le temoin n'etait PAS en retard : la machine allait
+         * bien, c'est NOTRE boucle qui etait tenue par une entree-sortie. Aucun des appels
+         * instrumentes ne les a signales, la liste ne couvrait donc pas le chemin coupable.
+         * Les descripteurs bruts et les operations d'entree ci-dessous ferment ce trou.
+         */
+        'openSync',
+        'fstatSync',
+        'readSync',
+        'writeSync',
+        'closeSync',
+        'writevSync',
+        'accessSync',
+        'unlinkSync',
+        'rmdirSync',
+        'readlinkSync',
+        'opendirSync',
+        'cpSync',
+        'utimesSync',
+        'truncateSync'
       ]
     ],
     ['node:child_process', ['execSync', 'execFileSync', 'spawnSync']]

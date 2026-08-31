@@ -2832,6 +2832,51 @@ export function ChatView({
     [mosaicIds, mosaicFils, convs, busyConversations]
   )
 
+  /**
+   * RAPPELS STABLES POUR LA MOSAIQUE (conv-1581, le gel).
+   *
+   * `ChatMosaic` memoise chaque fenetre : le memo ne mord QUE si les rappels gardent la meme
+   * reference d'un rendu a l'autre. Ces trois-la sont redefinis a chaque rendu de ChatView — d'ou
+   * le passage par une ref « derniere version », le meme motif que `forkRef`/`pickRef`.
+   */
+  const rappelsMosaiqueRef = useRef({
+    fermer: fermerFenetreMosaique,
+    ouvrirSeule: ouvrirSeuleDepuisMosaique,
+    nouvelle: nouvelleFenetreMosaique,
+    composer: rendreComposerMosaique
+  })
+  rappelsMosaiqueRef.current = {
+    fermer: fermerFenetreMosaique,
+    ouvrirSeule: ouvrirSeuleDepuisMosaique,
+    nouvelle: nouvelleFenetreMosaique,
+    composer: rendreComposerMosaique
+  }
+  const fermerFenetreStable = useCallback(
+    (id: string) => rappelsMosaiqueRef.current.fermer(id),
+    []
+  )
+  const ouvrirSeuleStable = useCallback(
+    (id: string) => void rappelsMosaiqueRef.current.ouvrirSeule(id),
+    []
+  )
+  const nouvelleFenetreStable = useCallback(() => void rappelsMosaiqueRef.current.nouvelle(), [])
+  const rendreComposerStable = useCallback(
+    (id: string) => rappelsMosaiqueRef.current.composer(id),
+    []
+  )
+  /**
+   * Ce qui oblige un composer a se redessiner SANS passer par `fenetre` : brouillons et pieces
+   * jointes (`draftsVersion`), palettes `@` et `/`. Le fil et l'etat occupe, eux, sont deja dans
+   * `fenetre` — donc absents d'ici a dessein.
+   */
+  const versionMentionsRef = useRef(0)
+  const mentionsPrecedentesRef = useRef(mentionSources)
+  if (mentionsPrecedentesRef.current !== mentionSources) {
+    mentionsPrecedentesRef.current = mentionSources
+    versionMentionsRef.current += 1
+  }
+  const signatureComposerMosaique = `${draftsVersion}|${versionMentionsRef.current}|${skillCommands.length}`
+
   const conversationHits = useMemo(
     () => trierParRecenceUtilisateur(searchConversations(convs, convQuery), conversationDateOrder),
     [convs, convQuery, conversationDateOrder]
@@ -3466,10 +3511,11 @@ export function ChatView({
       {convViewMode === 'mosaic' ? (
         <ChatMosaic
           fenetres={fenetresMosaique}
-          onClose={fermerFenetreMosaique}
-          onOuvrirSeule={(id) => void ouvrirSeuleDepuisMosaique(id)}
-          rendreComposer={rendreComposerMosaique}
-          onNouvelleConversation={() => void nouvelleFenetreMosaique()}
+          onClose={fermerFenetreStable}
+          onOuvrirSeule={ouvrirSeuleStable}
+          rendreComposer={rendreComposerStable}
+          onNouvelleConversation={nouvelleFenetreStable}
+          signatureComposer={signatureComposerMosaique}
         />
       ) : (
         <section
