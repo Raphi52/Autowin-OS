@@ -10,7 +10,7 @@
  * `@`, les brouillons et la barre technique, tous couples a la conversation ACTIVE unique. Le
  * brancher par fenetre est un chantier a part — a faire quand l'ergonomie de la mosaique est validee.
  */
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { ChatMessageRow } from './ChatMessageRow'
 import type { Msg } from './chat-view-types'
 import { colonnesPour } from './chat-mosaic-grille'
@@ -39,9 +39,15 @@ export type ChatMosaicProps = {
   rendreComposer: (id: string) => React.ReactNode
   /** Ouvre une conversation NEUVE dans une case de plus. */
   onNouvelleConversation: () => void
+  /**
+   * SIGNATURE des entrees du composer qui ne transitent PAS par `fenetre` (brouillons, pieces
+   * jointes, palettes). Elle change quand un composer doit se redessiner, et SEULEMENT alors :
+   * c'est ce qui autorise une fenetre inchangee a ne pas se re-rendre pendant qu'une autre streame.
+   */
+  signatureComposer?: string
 }
 
-function FenetreChat({
+function FenetreChatBrut({
   fenetre,
   onClose,
   onOuvrirSeule,
@@ -51,6 +57,8 @@ function FenetreChat({
   onClose: (id: string) => void
   onOuvrirSeule: (id: string) => void
   rendreComposer: (id: string) => React.ReactNode
+  /** Jamais lue ici : elle n'existe que pour le comparateur du memo ci-dessous. */
+  signatureComposer?: string
 }): React.JSX.Element {
   const filRef = useRef<HTMLDivElement>(null)
   /**
@@ -159,12 +167,33 @@ function FenetreChat({
   )
 }
 
+/**
+ * MEMO PAR FENETRE — mesure (conv-1581, `ChatMosaic.cout-stream.test.tsx`) : pendant qu'UNE fenetre
+ * streame, ChatView refabrique un objet `fenetre` par case a chaque frame. Sans ce memo, les N
+ * fenetres se re-rendaient entierement (fil + `ChatComposer` et ses palettes) 60 fois par seconde —
+ * le gel. Le comparateur regarde le CONTENU de `fenetre` (l'objet est neuf, ses champs ne le sont
+ * pas) : retirer `messages` de cette comparaison figerait la fenetre qui streame.
+ */
+const FenetreChat = memo(FenetreChatBrut, (avant, apres) => {
+  return (
+    avant.fenetre.id === apres.fenetre.id &&
+    avant.fenetre.title === apres.fenetre.title &&
+    avant.fenetre.busy === apres.fenetre.busy &&
+    avant.fenetre.messages === apres.fenetre.messages &&
+    avant.onClose === apres.onClose &&
+    avant.onOuvrirSeule === apres.onOuvrirSeule &&
+    avant.rendreComposer === apres.rendreComposer &&
+    avant.signatureComposer === apres.signatureComposer
+  )
+})
+
 export function ChatMosaic({
   fenetres,
   onClose,
   onOuvrirSeule,
   rendreComposer,
-  onNouvelleConversation
+  onNouvelleConversation,
+  signatureComposer
 }: ChatMosaicProps): React.JSX.Element {
   if (fenetres.length === 0) {
     return (
@@ -196,6 +225,7 @@ export function ChatMosaic({
           onClose={onClose}
           onOuvrirSeule={onOuvrirSeule}
           rendreComposer={rendreComposer}
+          signatureComposer={signatureComposer}
         />
       ))}
     </div>
