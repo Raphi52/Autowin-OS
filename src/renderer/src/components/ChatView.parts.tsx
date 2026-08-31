@@ -184,6 +184,27 @@ function EtageActivite({
           </button>
         )}
       </div>
+      {/* DEMANDE (2026-08-31) : la CIBLE se lit SOUS le nom de l'action, et c'est ELLE qu'on clique
+          pour deplier le detail — viser un chevron de 10px pour savoir « sur quoi ca a agi » etait
+          la friction rapportee. Sans detail a montrer, la cible reste un simple texte : un bouton
+          qui ne deplie rien se lit comme casse. */}
+      {cible &&
+        (detail ? (
+          <button
+            type="button"
+            className="activity-step-target is-clickable"
+            data-testid="activity-step-target"
+            aria-expanded={ouvert}
+            title={ouvert ? `Replier ${cible}` : `Déplier le détail de ${cible}`}
+            onClick={() => setOuvert((etat) => !etat)}
+          >
+            {cible}
+          </button>
+        ) : (
+          <span className="activity-step-target" data-testid="activity-step-target" title={cible}>
+            {cible}
+          </span>
+        ))}
       {ouvert && detail && (
         <pre
           className={`activity-step-detail${detail.ok ? '' : ' failed'}`}
