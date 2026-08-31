@@ -360,6 +360,7 @@ import { convRunsRoot } from './runs/conv-runs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
+import { messageEmpreinteBrain } from './brain-empreinte-message'
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
 import type { BrainTrace } from './activity/brain-trace-spool'
@@ -3476,15 +3477,18 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
       } catch {
         // L'observabilité Brain ne doit jamais faire échouer le run.
       }
+      /*
+       * Le STATUT decide du message, pas la taille du texte. Un Brain injoignable rendait « aucune
+       * empreinte » — une panne annoncee comme un resultat de recherche (mesure conv-9, 2026-08-31).
+       */
+      const empreinteMessage = messageEmpreinteBrain(empreinteStatut, empreinteDepot.length)
       push({
         step: 'exec',
         role: 'think',
         provider: 'brain',
-        text: empreinteDepot
-          ? `Empreinte du dépôt chargée (${empreinteDepot.length} caractères) — injectée en tête de contexte des phases.`
-          : 'Aucune empreinte de dépôt dans le Brain — /learn en fin de run l’écrira pour les prochains.',
+        text: empreinteMessage.text,
         status: 'completed',
-        detail: empreinteDepot ? 'think : empreinte chargée' : 'think : aucune empreinte'
+        detail: empreinteMessage.detail
       })
     }
     const memoryEcho = sessionMemoryBlock(
