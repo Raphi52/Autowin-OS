@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { watch, type FSWatcher } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { realpathSync, watch, type FSWatcher } from 'node:fs'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { readGitDiff, readGitState } from '../git-read-main'
 import type { ExecutionEvidence } from './types'
 import {
@@ -27,13 +27,45 @@ const watcherSessionId = randomUUID()
 const watchedDirectories = new Map<string, FSWatcher>()
 const pathWatchGenerations = new Map<string, number>()
 
+/**
+ * Forme CANONIQUE d'un chemin — la seule que `fs.watch` accepte sans tuer le processus.
+ *
+ * DÉFAUT REPRODUIT (2026-08-31, exit 127) : `fs.watch` sur un dossier dont le chemin traverse un
+ * nom court 8.3 de Windows (`C:\Users\RAPHAE~1.VIL\...`, la forme que rend `os.tmpdir()` sur ce
+ * poste) fait ABORTER le processus — `Assertion failed: !_wcsnicmp(filename, dir, dirlen), file
+ * src\win\fs-event.c, line 72`. libuv compare le nom LONG que Windows lui rend dans l'événement au
+ * chemin COURT qu'on lui a donné : ils diffèrent, il assert. Reproduit en isolation sur 5 fichiers
+ * touchés : chemin court → exit 127 ; MÊME dossier via `realpathSync.native` → exit 0, événements
+ * reçus. Ni le `try/catch` ci-dessous ni `watcher.on('error')` n'y peuvent quoi que ce soit : un
+ * `abort()` en C n'est pas une exception JS. C'est ce qui tuait `vitest run` en cours de suite.
+ *
+ * On canonicalise donc AVANT de watcher, et on le fait dans `filesystemPathKey` pour que la clé de
+ * lecture et la clé d'écriture des générations restent la MÊME chaîne. Un chemin encore absent
+ * (cas normal : on surveille l'apparition d'un fichier) n'a pas de realpath : on canonicalise alors
+ * son parent et on rattache le nom.
+ */
+export function realCanonique(chemin: string): string {
+  try {
+    return realpathSync.native(chemin)
+  } catch {
+    const parent = dirname(chemin)
+    if (parent === chemin) return chemin
+    try {
+      return join(realpathSync.native(parent), basename(chemin))
+    } catch {
+      return chemin
+    }
+  }
+}
+
 function filesystemPathKey(path: string): string {
-  const normalized = resolve(path).replaceAll('\\', '/')
+  const normalized = realCanonique(resolve(path)).replaceAll('\\', '/')
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
 function ensurePathGenerationWatcher(absolutePath: string): void {
-  const parent = dirname(absolutePath)
+  // Le dossier REELLEMENT surveille : jamais la forme courte 8.3 recue en argument.
+  const parent = realCanonique(dirname(absolutePath))
   const parentKey = filesystemPathKey(parent)
   if (watchedDirectories.has(parentKey)) return
   try {
