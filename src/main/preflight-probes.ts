@@ -13,6 +13,7 @@ import {
   type PreflightResult
 } from './preflight'
 import { brainServiceToken } from './brain-retrieval'
+import { resolveBrainRuntime } from './brain-server-launch'
 import { probeClaudeSession } from './claude-session'
 import { loadTokens } from './providers/codex-auth'
 import { codexTokenStatus } from './provider-status'
@@ -109,7 +110,14 @@ export function appPreflightProbes(): PreflightProbes {
     hasCodexSession: () => codexTokenStatus(loadTokens(), Date.now()) === 'authenticated',
     // `claude auth status` est l'autorité : le store de credentials du CLI n'est pas contractuel.
     claudeSession: () => probeClaudeSession(),
-    hasBrainToken: () => brainServiceToken().length > 0
+    hasBrainToken: () => brainServiceToken().length > 0,
+    // MÊME résolution que le lancement (`resolveBrainRuntime`) : sonder un autre chemin que celui
+    // qui sera réellement exécuté produirait un vert qui ne veut rien dire. Chemin vide (pas de
+    // LOCALAPPDATA) = rien à affirmer → on ne fabrique pas un rouge.
+    hasBrainRuntime: () => {
+      const python = resolveBrainRuntime().python
+      return python ? existsSync(python) : true
+    }
   }
 }
 

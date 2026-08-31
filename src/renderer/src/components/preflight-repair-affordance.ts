@@ -21,6 +21,10 @@ export const PREFLIGHT_REPAIRS: Record<string, RepairAffordance> = {
     label: 'Se connecter',
     note: 'Une console s’ouvre : le login Anthropic s’y fait. Rien n’est saisi dans Autowin.'
   },
+  'brain-venv': {
+    label: 'Installer',
+    note: 'Ouvre une console sur scripts/bootstrap-deps.ps1 : il pose le venv et le tooling du Brain (plusieurs minutes).'
+  },
   brain: {
     label: 'Démarrer',
     note: 'Tente de lancer le brain_server local (le port s’ouvre après ~30-40 s de préchauffage).'

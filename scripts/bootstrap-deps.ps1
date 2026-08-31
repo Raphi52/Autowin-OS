@@ -13,9 +13,14 @@
   Ce qu'il GUIDE (manuel, non automatisable) :
     - login OAuth Codex (npm run codex:login), token Brain (AMITEL_BRAIN_TOKEN), Kimi Code (optionnel).
 
-.PARAMETER BrainTooling
-  Dossier `tooling/` du Brain (contient brain_server.py + requirements.txt). Défaut = env
-  AUTOWIN_BRAIN_TOOLING, sinon le partage GED Amitel. Pointer un dossier LOCAL pour un venv par machine.
+.PARAMETER HermesBrainRepo
+  Clone LOCAL du depot Hermes-Brain : la SEULE source de confiance du code Python du Brain. Son
+  install.ps1 pose le runtime exactement la ou l app le cherche (%LOCALAPPDATA%\AmitelBrain).
+  Defaut = env AUTOWIN_HERMES_BRAIN_REPO, sinon %USERPROFILE%\Hermes-Brain.
+
+.PARAMETER BrainRoot
+  Racine du CORPUS (les notes knowledge/), transmise a install.ps1. Defaut = env AMITEL_BRAIN_ROOT,
+  sinon le partage GED Amitel. Le partage porte les DONNEES ; jamais le code que la machine execute.
 
 .PARAMETER SkipCli   Ne pas toucher aux CLI npm.
 .PARAMETER SkipGraphify Ne pas préparer Graphify depuis la GED.
@@ -23,7 +28,8 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$BrainTooling = $(if ($env:AUTOWIN_BRAIN_TOOLING) { $env:AUTOWIN_BRAIN_TOOLING } else { '\\ged2\rig\Projets IA\Amitel Brain\tooling' }),
+  [string]$HermesBrainRepo = $(if ($env:AUTOWIN_HERMES_BRAIN_REPO) { $env:AUTOWIN_HERMES_BRAIN_REPO } else { Join-Path $env:USERPROFILE 'Hermes-Brain' }),
+  [string]$BrainRoot = $(if ($env:AMITEL_BRAIN_ROOT) { $env:AMITEL_BRAIN_ROOT } else { '\\ged2\rig\Projets IA\Amitel Brain' }),
   [string]$GraphifySource = $(if ($env:AUTOWIN_GRAPHIFY_SOURCE) { $env:AUTOWIN_GRAPHIFY_SOURCE } else { '\\ged2\rig\Projets IA\Graphify' }),
   [switch]$SkipCli,
   [switch]$SkipGraphify,
@@ -126,26 +132,39 @@ if (-not $SkipGraphify) {
   Ok "Graphify 0.9.11 installé hors ligne depuis le wheelhouse GED vérifié"
 } else { Step "Graphify partagé — ignoré (-SkipGraphify)" }
 
-# --- Brain venv ---
+# --- Runtime Brain (venv + tooling), DELEGUE a Hermes-Brain ---
+#
+# On ne recree PAS ici ce que install.ps1 sait deja faire. Deux raisons, pas une preference de style :
+#  1. la cible. L app interroge %LOCALAPPDATA%\AmitelBrain\.venv\Scripts\python.exe
+#     (resolveBrainRuntime, brain-server-launch.ts). La version precedente de ce bloc creait le venv
+#     dans le dossier tooling passe en parametre -- dont le defaut etait le partage GED. Lance tel
+#     quel sur une machine neuve, il posait donc un venv que l app ne regarde jamais, et l ecran
+#     d accueil restait rouge apres un bootstrap annonce comme reussi.
+#  2. la source. Le code Python execute vient du clone Hermes-Brain, jamais du partage : la GED est
+#     un corpus de donnees, ecrivable par tout le service. install.ps1 copie le tooling depuis le
+#     clone et ecrit config.json, ce que ce script ne sait pas faire.
 if (-not $SkipBrain) {
-  Step "brain_server (venv Python par machine)"
-  if (-not (Test-Path (Join-Path $BrainTooling 'brain_server.py'))) {
-    Warn "tooling introuvable : $BrainTooling — passer -BrainTooling <chemin> (ou définir AUTOWIN_BRAIN_TOOLING). venv NON créé."
+  Step "runtime Brain (venv + tooling, via Hermes-Brain)"
+  $brainInstaller = Join-Path $HermesBrainRepo "install.ps1"
+  $brainPython = Join-Path $env:LOCALAPPDATA "AmitelBrain\.venv\Scripts\python.exe"
+  if (Test-Path $brainPython) { Ok "runtime deja installe ($brainPython)" }
+  elseif (-not (Test-Path $brainInstaller)) {
+    Warn "clone Hermes-Brain introuvable : $HermesBrainRepo"
+    Warn "  git clone https://github.com/Raphi52/Hermes-Brain.git `"$HermesBrainRepo`""
+    Warn "  puis relancer ce script (ou passer -HermesBrainRepo <chemin>)."
   }
-  elseif (-not (Have 'uv')) {
-    Warn "'uv' absent (gestionnaire venv) → installer : https://docs.astral.sh/uv/ , puis relancer -SkipCli."
+  elseif (-not (Have "uv")) {
+    Warn "uv absent (createur du venv) -> installer https://docs.astral.sh/uv/ , puis relancer -SkipCli -SkipGraphify."
   }
   else {
-    Push-Location $BrainTooling
-    try {
-      if (Test-Path (Join-Path $BrainTooling '.venv\Scripts\python.exe')) { Ok ".venv déjà présent" }
-      else { Warn "création .venv…"; uv venv; Ok ".venv créé" }
-      Warn "installation des requirements (fastembed etc., peut durer)…"
-      uv pip install -r requirements.txt
-      if ($LASTEXITCODE -eq 0) { Ok "requirements installés" } else { Warn "échec uv pip install — vérifier requirements.txt" }
-    } finally { Pop-Location }
+    Warn "installation du runtime Brain (fastembed etc., peut durer plusieurs minutes)..."
+    & $brainInstaller -BrainRoot $BrainRoot
+    # Le VERDICT est le fichier que l app ira chercher, pas le code de sortie de l installeur :
+    # c est la seule chose dont depend reellement l ecran d accueil.
+    if (Test-Path $brainPython) { Ok "runtime Brain installe ($brainPython)" }
+    else { Warn "install.ps1 termine mais $brainPython est absent -- relire sa sortie ci-dessus." }
   }
-} else { Step "brain venv — ignoré (-SkipBrain)" }
+} else { Step "runtime Brain -- ignore (-SkipBrain)" }
 
 # --- À faire manuellement (secrets / interactif) ---
 Step "Manuel (non automatisable)"

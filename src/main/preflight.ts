@@ -10,7 +10,15 @@ import type { ClaudeSessionState } from './claude-session'
 import type { RoutedProvider } from './routed-providers'
 
 export interface PreflightCheck {
-  id: 'brain' | 'codex' | 'codex-session' | 'claude' | 'claude-session' | 'kimi' | 'brain-token'
+  id:
+    | 'brain'
+    | 'brain-venv'
+    | 'codex'
+    | 'codex-session'
+    | 'claude'
+    | 'claude-session'
+    | 'kimi'
+    | 'brain-token'
   label: string
   ok: boolean
   detail?: string
@@ -38,6 +46,13 @@ export interface PreflightProbes {
   claudeSession: () => ClaudeSessionState | Promise<ClaudeSessionState>
   /** Token Brain présent (env ou fichier). */
   hasBrainToken: () => boolean
+  /**
+   * Le runtime Python du Brain est POSÉ sur cette machine (le `python.exe` que le lancement ira
+   * chercher). Sondé à part du ping : « injoignable » et « jamais installé » demandent deux gestes
+   * opposés — redémarrer un service, ou l'installer. Les confondre en un seul rouge « brain_server
+   * injoignable » offrait un bouton « Démarrer » qui ne pouvait pas aboutir, faute de python.
+   */
+  hasBrainRuntime: () => boolean
 }
 
 export interface PreflightOptions {
@@ -123,12 +138,31 @@ export async function runPreflight(
     standby.has(id)
       ? { id, label, ok: true, standby: true, detail: 'standby — diagnostic ignoré' }
       : { id, label, ok, detail: ok ? undefined : missing }
+  let brainRuntime = false
+  try {
+    brainRuntime = probes.hasBrainRuntime()
+  } catch {
+    // Fail-closed, comme le token juste au-dessus : une sonde muette ne vaut pas un vert. Le coût de
+    // l'erreur est asymétrique — un faux rouge propose une installation IDEMPOTENTE (elle répond
+    // « déjà installé »), un faux vert laisse un bouton « Démarrer » qui ne peut pas aboutir.
+    brainRuntime = false
+  }
   const checks: PreflightCheck[] = [
     {
       id: 'brain',
       label: 'brain_server (:8765)',
       ok: brain,
       detail: brain ? undefined : 'injoignable — RAG désactivé'
+    },
+    // Placé APRÈS le brain et AVANT le token : c'est l'ordre du geste. Sans runtime, le serveur ne
+    // peut pas démarrer ; sans token, il démarre mais le RAG reste fermé.
+    {
+      id: 'brain-venv',
+      label: 'runtime Brain (Python)',
+      ok: brainRuntime,
+      detail: brainRuntime
+        ? undefined
+        : 'non installé sur cette machine — venv + tooling à poser une fois'
     },
     {
       id: 'brain-token',

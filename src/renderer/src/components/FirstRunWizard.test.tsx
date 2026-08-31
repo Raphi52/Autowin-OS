@@ -249,6 +249,39 @@ describe('réparer un prérequis rouge depuis la popup', () => {
     expect(container.querySelector('[data-testid="frw-repair-claude"]')).toBeNull()
   })
 
+  /**
+   * L'écran que voit un collègue au premier lancement. Le rouge « runtime Brain » doit porter un
+   * bouton « Installer » — c'est le geste utile ; « Démarrer » un serveur dont le Python n'existe
+   * pas ne peut pas aboutir, et laissait l'utilisateur sans issue dans l'app.
+   */
+  it('« runtime Brain » rouge → bouton « Installer », et il appelle le main', async () => {
+    const { repairCalls } = withChecks(
+      [
+        { id: 'brain', label: 'brain_server (:8765)', ok: false, detail: 'injoignable' },
+        {
+          id: 'brain-venv',
+          label: 'runtime Brain (Python)',
+          ok: false,
+          detail: 'non installé sur cette machine'
+        }
+      ],
+      async () => ({ started: true, detail: 'Console d’installation ouverte (plusieurs minutes).' })
+    )
+    await render()
+    const button = container.querySelector<HTMLButtonElement>(
+      '[data-testid="frw-repair-brain-venv"]'
+    )
+    expect(button).not.toBeNull()
+    expect(button?.textContent).toContain('Installer')
+    await act(async () => button?.click())
+    await flush()
+    expect(repairCalls).toEqual(['brain-venv'])
+    // Le compte-rendu dit ce qui a été LANCÉ, jamais que le prérequis est réglé.
+    expect(
+      container.querySelector('[data-testid="frw-repair-note-brain-venv"]')?.textContent
+    ).not.toMatch(/installé|réparé|résolu/i)
+  })
+
   it('cliquer LANCE la réparation et affiche son compte-rendu, sans dire « réparé »', async () => {
     const { repairCalls } = withChecks(codexKo)
     await render()

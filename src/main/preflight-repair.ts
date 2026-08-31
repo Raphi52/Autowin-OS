@@ -81,6 +81,8 @@ export type PreflightRepairPlan =
   | { kind: 'login'; provider: 'codex' | 'claude'; label: string; note: string }
   /** Tente un démarrage local du brain_server (jamais un kill/restart : instance par machine). */
   | { kind: 'brain-start'; label: string; note: string }
+  /** Ouvre une console sur le bootstrap qui POSE le runtime Python du Brain (venv + tooling). */
+  | { kind: 'brain-install'; label: string; note: string }
 
 export interface PreflightRepairOutcome {
   /** L'action a bien été LANCÉE. Ne dit pas que le prérequis est réparé. */
@@ -114,6 +116,12 @@ export function planPreflightRepair(checkId: string): PreflightRepairPlan | unde
         kind: 'brain-start',
         label: 'Démarrer',
         note: 'Tente de lancer le brain_server local (le port s’ouvre après ~30-40 s de préchauffage).'
+      }
+    case 'brain-venv':
+      return {
+        kind: 'brain-install',
+        label: 'Installer',
+        note: 'Ouvre une console sur scripts/bootstrap-deps.ps1 : il pose le venv et le tooling du Brain (plusieurs minutes).'
       }
     // brain-token : un secret ne s'invente pas. CLI absent : une installation n'est pas un clic.
     default:
@@ -226,6 +234,37 @@ export async function repairPreflightCheck(
       return {
         started: true,
         detail: 'Console de connexion ouverte. Termine le login, puis re-vérifie.'
+      }
+    }
+    if (plan.kind === 'brain-install') {
+      // MÊME résolution que `npm run codex:login` : le script vit dans le repo, et l'identité du
+      // dépôt (`name: autowin-os`) est exigée — sans quoi la remontée pourrait élire un
+      // `package.json` planté dans une racine de volume, puis l'exécuter.
+      const candidates = deps.cwdCandidates ?? [
+        process.env.AUTOWIN_OS_WORKSPACE ?? '',
+        process.cwd(),
+        process.execPath
+      ]
+      const resolve = deps.resolveLoginCwd ?? ((c) => resolveCodexLoginCwd(c))
+      const cwd = resolve(candidates.filter((c) => Boolean(c)))
+      if (!cwd) {
+        return {
+          started: false,
+          detail:
+            'Repo Autowin OS introuvable depuis l’app : lance « powershell -File scripts/bootstrap-deps.ps1 » dans le dossier du repo.'
+        }
+      }
+      const open =
+        deps.openLoginTerminal ??
+        ((command, opts): void => spawnLoginTerminal(command, { ...opts, spawnFn: deps.spawnFn }))
+      // `-SkipCli -SkipGraphify` : le bouton répare CE prérequis, pas les autres. Élargir en douce
+      // ferait installer des CLI que l'utilisateur n'a pas demandées depuis un bouton « Installer »
+      // posé sous « runtime Brain ».
+      open('./scripts/bootstrap-deps.ps1 -SkipCli -SkipGraphify', { cwd })
+      return {
+        started: true,
+        detail:
+          'Console d’installation ouverte (plusieurs minutes). Elle affiche ce qui manque encore, puis re-vérifie.'
       }
     }
     const start =

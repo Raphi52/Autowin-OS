@@ -325,7 +325,7 @@ describe('resolveCodexLoginCwd — on cherche le repo, on ne le suppose pas', ()
 describe('contrat — les deux listes de réparables sont identiques', () => {
   it('même ensemble d’ids, mêmes libellés, mêmes notes', () => {
     const rendererIds = Object.keys(PREFLIGHT_REPAIRS).sort()
-    expect(rendererIds).toEqual(['brain', 'claude-session', 'codex-session'])
+    expect(rendererIds).toEqual(['brain', 'brain-venv', 'claude-session', 'codex-session'])
     for (const id of rendererIds) {
       const plan = planPreflightRepair(id)
       expect(plan, `le renderer propose « ${id} » que le main refuse`).toBeDefined()
@@ -337,6 +337,7 @@ describe('contrat — les deux listes de réparables sont identiques', () => {
   it('aucun réparable du main n’est absent du renderer (bouton manquant)', () => {
     const allIds = [
       'brain',
+      'brain-venv',
       'brain-token',
       'codex',
       'codex-session',
@@ -370,5 +371,50 @@ describe('câblage IPC — la réparation est atteignable et gardée', () => {
       "ipcRenderer.invoke('preflight:repair', checkId)"
     )
     expect(source('../preload/index.d.ts')).toContain('repairPreflight:')
+  })
+})
+
+/**
+ * RUNTIME BRAIN ABSENT — le rouge que voit un collègue au tout premier lancement.
+ *
+ * Constaté le 2026-08-31 : l'écran affichait « brain_server injoignable » avec, en détail, « venv
+ * Python introuvable ». Le seul bouton offert était « Démarrer », qui ne pouvait pas aboutir — il
+ * n'y avait pas de python à lancer. Le geste utile est une INSTALLATION, et elle a son propre check.
+ */
+describe('réparation « runtime Brain » (brain-venv)', () => {
+  it('ouvre le bootstrap dans le repo, sans élargir aux autres dépendances', async () => {
+    const openLoginTerminal = vi.fn()
+    const outcome = await repairPreflightCheck('brain-venv', {
+      openLoginTerminal,
+      cwdCandidates: ['/repo/autowin'],
+      resolveLoginCwd: () => '/repo/autowin'
+    })
+    expect(outcome.started).toBe(true)
+    expect(openLoginTerminal).toHaveBeenCalledWith(
+      './scripts/bootstrap-deps.ps1 -SkipCli -SkipGraphify',
+      { cwd: '/repo/autowin' }
+    )
+  })
+
+  it('repo introuvable → AUCUNE console ouverte, et on dit quoi lancer', async () => {
+    const openLoginTerminal = vi.fn()
+    const outcome = await repairPreflightCheck('brain-venv', {
+      openLoginTerminal,
+      cwdCandidates: ['/ailleurs'],
+      resolveLoginCwd: () => undefined
+    })
+    expect(outcome.started).toBe(false)
+    expect(openLoginTerminal).not.toHaveBeenCalled()
+    expect(outcome.detail).toContain('bootstrap-deps.ps1')
+  })
+
+  it('n’essaie JAMAIS de démarrer le brain quand c’est le runtime qui manque', async () => {
+    const startBrain = vi.fn(async () => ({ status: 'starting', detail: 'lancé' }))
+    await repairPreflightCheck('brain-venv', {
+      openLoginTerminal: vi.fn(),
+      resolveLoginCwd: () => '/repo/autowin',
+      startBrain
+    })
+    expect(startBrain).not.toHaveBeenCalled()
   })
 })

@@ -8,10 +8,11 @@ describe('runPreflight', () => {
       hasBin: async () => true,
       hasCodexSession: () => true,
       claudeSession: () => 'authenticated',
-      hasBrainToken: () => true
+      hasBrainToken: () => true,
+      hasBrainRuntime: () => true
     })
     expect(r.ok).toBe(true)
-    expect(r.checks).toHaveLength(7)
+    expect(r.checks).toHaveLength(8)
     expect(r.summary).toContain('OK')
   })
 
@@ -21,7 +22,8 @@ describe('runPreflight', () => {
       hasBin: async (w) => w === 'claude',
       hasCodexSession: () => true,
       claudeSession: () => 'authenticated',
-      hasBrainToken: () => true
+      hasBrainToken: () => true,
+      hasBrainRuntime: () => true
     })
     expect(r.ok).toBe(false)
     const failed = r.checks.filter((c) => !c.ok).map((c) => c.id)
@@ -36,6 +38,7 @@ describe('runPreflight', () => {
       pingBrain: async () => true,
       hasBin: async () => true,
       hasBrainToken: () => true,
+      hasBrainRuntime: () => true,
       hasCodexSession: () => false,
       claudeSession: () => 'authenticated'
     })
@@ -67,6 +70,9 @@ describe('runPreflight', () => {
       },
       hasBrainToken: () => {
         throw new Error('fs')
+      },
+      hasBrainRuntime: () => {
+        throw new Error('fs')
       }
     })
     expect(r.ok).toBe(false)
@@ -81,7 +87,8 @@ describe('runPreflight', () => {
         hasBin,
         hasCodexSession: () => true,
         claudeSession: () => 'authenticated',
-        hasBrainToken: () => true
+        hasBrainToken: () => true,
+        hasBrainRuntime: () => true
       },
       { standbyProviders: ['kimi'] }
     )
@@ -106,7 +113,8 @@ describe('runPreflight — la session claude n’est plus déduite de la présen
     pingBrain: async () => true,
     hasBin: async () => true,
     hasCodexSession: () => true,
-    hasBrainToken: () => true
+    hasBrainToken: () => true,
+    hasBrainRuntime: () => true
   }
 
   it('LE CAS REPRODUIT : binaire présent, session absente → « CLI claude » vert MAIS diagnostic rouge', async () => {
@@ -164,5 +172,43 @@ describe('runPreflight — la session claude n’est plus déduite de la présen
       expect.objectContaining({ id: 'claude-session', ok: true, standby: true })
     )
     expect(r.ok).toBe(true)
+  })
+})
+
+/**
+ * « injoignable » et « jamais installé » sont DEUX pannes, avec deux gestes opposés. Les confondre
+ * en un seul rouge « brain_server » offrait un bouton « Démarrer » qui ne pouvait pas aboutir.
+ */
+describe('runPreflight — runtime Brain', () => {
+  const sain = {
+    pingBrain: async () => true,
+    hasBin: async () => true,
+    hasCodexSession: () => true,
+    claudeSession: () => 'authenticated' as const,
+    hasBrainToken: () => true,
+    hasBrainRuntime: () => true
+  }
+
+  it('runtime absent → rouge DÉDIÉ, distinct du ping brain', async () => {
+    const r = await runPreflight({ ...sain, hasBrainRuntime: () => false })
+    const venv = r.checks.find((c) => c.id === 'brain-venv')
+    expect(venv?.ok).toBe(false)
+    expect(r.checks.find((c) => c.id === 'brain')?.ok).toBe(true)
+    expect(r.ok).toBe(false)
+  })
+
+  it('runtime présent → aucun rouge d’installation', async () => {
+    const r = await runPreflight(sain)
+    expect(r.checks.find((c) => c.id === 'brain-venv')?.ok).toBe(true)
+  })
+
+  it('sonde muette → fail-closed (jamais un vert non prouvé)', async () => {
+    const r = await runPreflight({
+      ...sain,
+      hasBrainRuntime: () => {
+        throw new Error('fs')
+      }
+    })
+    expect(r.checks.find((c) => c.id === 'brain-venv')?.ok).toBe(false)
   })
 })
