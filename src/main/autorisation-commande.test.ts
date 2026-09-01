@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { binaireDe, decisionDeCommande } from './autorisation-commande'
+import { binaireDe, decisionDeCommande, decouperArguments } from './autorisation-commande'
 
 /**
  * L'AUTORISATION DE L'UTILISATEUR DOIT COMPTER.
