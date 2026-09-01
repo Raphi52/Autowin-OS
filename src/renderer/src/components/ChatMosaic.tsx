@@ -14,7 +14,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 import { ChatMessageRow } from './ChatMessageRow'
 import type { Msg } from './chat-view-types'
 import { colonnesPour } from './chat-mosaic-grille'
-import { aUneReponseApres } from './chat-message-keys'
+import { askDejaRepondu } from './chat-message-keys'
 import './ChatMosaic.css'
 import {
   marquerConversationEnAttente,
@@ -156,7 +156,7 @@ function FenetreChatBrut({
               conversationId={fenetre.id}
               askRepondu={
                 message.role === 'assistant'
-                  ? aUneReponseApres([...fenetre.messages], index)
+                  ? askDejaRepondu([...fenetre.messages], index)
                   : undefined
               }
               onAnswerAsk={

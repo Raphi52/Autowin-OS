@@ -4,6 +4,7 @@
  */
 import type { Msg } from './chat-view-types'
 import { groupAssistantActivity, type ChatPart } from './chat-view-model'
+import { promptDeLOption, type AskDecision } from './ask-choices'
 
 export function messageKey(message: Msg, index: number): string {
   return `${message.role}:${index}`
@@ -18,12 +19,54 @@ export function lastUserPromptBefore(messages: Msg[], index: number): string | u
 }
 
 /**
- * Un message UTILISATEUR suit-il ce tour d'assistant ?
+ * Le texte d'un message utilisateur REPOND-il a CETTE question ?
  *
- * C'est le verrou DURABLE du bloc `ask` : une question a laquelle le fil a deja repondu ne se
- * repond plus. Derive, donc rien a persister — et vrai apres un remontage du bloc comme apres un
- * redemarrage, la ou l'etat local repartait a zero et laissait le spam-clic renvoyer N reponses.
+ * Comparaison au texte que le bloc ENVOIE (`envoi` sinon le libelle) : c'est exactement ce qui part
+ * au clic, donc l'egalite est la seule preuve sure qu'un message est la reponse. Une reponse
+ * multiple part en puces (`- <reponse>` par ligne) : chaque ligne doit alors etre une option.
+ *
+ * Greffe du travail run-f81767873c01-1 (2026-09-01), garde parce que sa regle est plus JUSTE que
+ * celle du drapeau seul : un message ORDINAIRE mais hors sujet ne doit pas fermer la question non
+ * plus, et aucun drapeau ne peut le savoir.
  */
+export function estUneReponseAuBloc(texte: string, decision: AskDecision): boolean {
+  const propre = texte.trim()
+  if (!propre) return false
+  const attendus = decision.options.map((option) => promptDeLOption(option).trim())
+  if (attendus.includes(propre)) return true
+  const lignes = propre
+    .split(String.fromCharCode(10))
+    .map((ligne) => ligne.trim())
+    .filter(Boolean)
+  if (lignes.length < 2) return false
+  return lignes.every((ligne) => ligne.startsWith('- ') && attendus.includes(ligne.slice(2).trim()))
+}
+
+/**
+ * La question `ask` de ce tour a-t-elle DEJA sa reponse dans le fil ?
+ *
+ * VECU le 2026-09-01 (conv-50) : le verrou se fermait sur N'IMPORTE QUEL message utilisateur
+ * posterieur — orientation tapee pendant le tour, ou simple remarque hors sujet. La question
+ * passait « Répondu » sans reponse, et le clic suivant etait AVALE EN SILENCE.
+ *
+ * Le verrou anti-double-envoi reste entier : une VRAIE reponse ferme la porte, y compris apres un
+ * message hors sujet, apres un remontage du bloc et apres un redemarrage.
+ */
+export function askDejaRepondu(messages: Msg[], index: number): boolean {
+  const parts = (messages[index] as { parts?: ChatPart[] }).parts ?? []
+  const decisions = groupAssistantActivity(parts).flatMap((bloc) =>
+    bloc.kind === 'ask-decision' ? [bloc.decision] : []
+  )
+  if (!decisions.length) return false
+  for (let i = index + 1; i < messages.length; i += 1) {
+    const message = messages[i]
+    if (message.role !== 'user') continue
+    if (decisions.some((decision) => estUneReponseAuBloc(message.content ?? '', decision)))
+      return true
+  }
+  return false
+}
+
 /**
  * Ce message utilisateur REPOND-il ? Une orientation écrite pendant le tour, non : elle précise,
  * elle ne choisit pas. Depuis conv-38 (2026-09-01) ces orientations sont de vrais messages du fil,
@@ -31,13 +74,6 @@ export function lastUserPromptBefore(messages: Msg[], index: number): string | u
  */
 function estUneReponse(message: Msg): boolean {
   return message.role === 'user' && (message as { orientation?: boolean }).orientation !== true
-}
-
-export function aUneReponseApres(messages: Msg[], index: number): boolean {
-  for (let i = index + 1; i < messages.length; i += 1) {
-    if (estUneReponse(messages[i])) return true
-  }
-  return false
 }
 
 /**

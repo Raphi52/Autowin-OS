@@ -14,7 +14,7 @@
  * Le verrou existe pour empecher un SECOND envoi, jamais le PREMIER.
  */
 import { describe, expect, it } from 'vitest'
-import { aUneReponseApres, askEnAttente } from './chat-message-keys'
+import { askEnAttente } from './chat-message-keys'
 import type { Msg } from './chat-view-types'
 
 const assistantAvecAsk = (): Msg =>
@@ -32,34 +32,9 @@ const assistantAvecAsk = (): Msg =>
   }) as unknown as Msg
 
 const utilisateur = (content: string): Msg => ({ role: 'user', content }) as Msg
+
 const orientation = (content: string): Msg =>
   ({ role: 'user', content, orientation: true }) as unknown as Msg
-
-describe('aUneReponseApres — une orientation ne verrouille pas la question', () => {
-  it('ne compte PAS une orientation injectee en cours de tour comme une reponse', () => {
-    const messages = [
-      utilisateur('demande initiale'),
-      assistantAvecAsk(),
-      orientation('ca la met juste dans la barre de prompt comme si je la collais pas')
-    ]
-    expect(aUneReponseApres(messages, 1)).toBe(false)
-  })
-
-  it('compte TOUJOURS un message utilisateur ordinaire posterieur (verrou anti-double-envoi)', () => {
-    const messages = [utilisateur('demande initiale'), assistantAvecAsk(), utilisateur('A')]
-    expect(aUneReponseApres(messages, 1)).toBe(true)
-  })
-
-  it('une orientation suivie d’une vraie reponse verrouille bien', () => {
-    const messages = [
-      utilisateur('demande initiale'),
-      assistantAvecAsk(),
-      orientation('au fait...'),
-      utilisateur('A')
-    ]
-    expect(aUneReponseApres(messages, 1)).toBe(true)
-  })
-})
 
 describe('askEnAttente — la question reste en attente apres une orientation', () => {
   it('reste vrai quand la seule suite est une orientation', () => {

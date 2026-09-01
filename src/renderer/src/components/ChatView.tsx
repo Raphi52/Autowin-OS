@@ -48,7 +48,7 @@ import { ChatQueuePanel } from './ChatQueuePanel'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import {
-  aUneReponseApres,
+  askDejaRepondu,
   askEnAttente,
   lastUserPromptBefore,
   messageKey
@@ -3229,7 +3229,7 @@ export function ChatView({
 
   /**
    * FIL RENDU, MÉMOÏSÉ. Mesuré (conv-1464) : chaque caractère tapé dans le composer re-rendait la
-   * liste ENTIÈRE, et `aUneReponseApres`/`lastUserPromptBefore` balaient le fil pour CHAQUE
+   * liste ENTIÈRE, et `askDejaRepondu`/`lastUserPromptBefore` balaient le fil pour CHAQUE
    * message → O(n²) balayages par touche (400 pour 5 caractères sur 80 messages, mesuré par
    * `ChatView.frappe-cout.test.tsx`). D'où le gel à la frappe sur une conversation longue.
    * `input` n'est VOLONTAIREMENT pas une dépendance : le composer ne touche pas au fil.
@@ -3241,11 +3241,11 @@ export function ChatView({
           <ChatMessageRow
             onPickSuggestion={pickSuggestion}
             onAnswerAsk={answerAsk}
-            /* VERROU DURABLE : un message utilisateur posterieur EST la reponse. Derive du fil,
-             donc vrai apres un remontage comme apres un redemarrage — la ou l'etat local du
-             bloc, lui, disparaissait et rouvrait la porte au spam-clic. */
+            /* VERROU DURABLE : seule une VRAIE reponse (le texte que le bloc envoie) ferme la
+             question. Derive du fil, donc vrai apres un remontage comme apres un redemarrage.
+             Se fermer sur n'importe quel message posterieur avalait le clic (conv-50). */
             askRepondu={
-              message.role === 'assistant' ? aUneReponseApres(messages, index) : undefined
+              message.role === 'assistant' ? askDejaRepondu(messages, index) : undefined
             }
             message={message}
             conversationId={activeId}
