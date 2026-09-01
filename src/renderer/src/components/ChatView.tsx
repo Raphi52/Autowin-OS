@@ -682,6 +682,20 @@ export function ChatView({
    */
   const descenteEnVolRef = useRef(false)
   /**
+   * LE LECTEUR A-T-IL BOUGE LE FIL LUI-MEME ?
+   *
+   * DEFAUT VECU le 2026-09-01 (conv-61) : « je clique sur dernier message, je suis en bas ; je
+   * change de conversation, je reviens, et je suis scrolle au MILIEU ». Un evenement `scroll` ne dit
+   * PAS qui l'a provoque. Or l'app en emet beaucoup elle-meme (ouverture d'une conversation, reprise
+   * de lecture, descente automatique pendant un tour) : chacun etait memorise comme une position
+   * CHOISIE, et la derniere frame d'une descente qui n'atterrit pas ecrivait un milieu de fil.
+   *
+   * Ce drapeau ne s'arme que sur un geste REEL — molette, doigt, clavier, ou saisie de la barre de
+   * defilement — et se desarme des que l'app reprend la main sur le fil. Rien d'autre n'ecrit une
+   * position de lecture.
+   */
+  const gesteLecteurRef = useRef(false)
+  /**
    * Position A RESTAURER a la prochaine peinture du fil : posee par `loadConv` quand la conversation
    * ouverte avait ete quittee EN COURS de lecture. Un ref et pas un state : l'effet de scroll doit la
    * consommer sur la meme frame que les messages, sans re-rendu intermediaire.
@@ -1534,6 +1548,8 @@ export function ChatView({
     const aRestaurer = positionARestaurerRef.current
     if (aRestaurer) {
       positionARestaurerRef.current = null
+      // La reprise bouge le fil sur ~20 frames : ces `scroll` sont les NOTRES, pas une lecture.
+      gesteLecteurRef.current = false
       followTailRef.current = false
       setScrolledAwayFromTail(true)
       setRepriseEnCours(true)
@@ -1569,6 +1585,7 @@ export function ChatView({
       // le filet. Si la descente n'atterrit PAS (re-rendu qui repose le fil en haut, contenu qui grandit
       // plus vite qu'on ne descend), le texte tardif — typiquement le bloc de clôture — reste hors
       // champ : le bouton « ↓ Dernière réponse » doit alors le dire, au lieu d'un silence.
+      gesteLecteurRef.current = false
       descenteEnVolRef.current = true
       dernierScrollTopRef.current = scroll.scrollTop
       annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 40, (landed) => {
@@ -1608,6 +1625,7 @@ export function ChatView({
     const scroll = scrollRef.current
     // On ne force RIEN si le lecteur a quitte le bas de lui-meme : sa position lui appartient.
     if (!scroll || !followTailRef.current) return
+    gesteLecteurRef.current = false
     descenteEnVolRef.current = true
     dernierScrollTopRef.current = scroll.scrollTop
     const annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 120, (landed) => {
@@ -4164,12 +4182,27 @@ export function ChatView({
             role="log"
             aria-live="polite"
             aria-relevant="additions text"
+            // LES GESTES QUI COMPTENT : molette, doigt, clavier, prise de la barre de defilement.
+            onWheel={() => {
+              gesteLecteurRef.current = true
+            }}
+            onTouchStart={() => {
+              gesteLecteurRef.current = true
+            }}
+            onPointerDown={() => {
+              gesteLecteurRef.current = true
+            }}
+            onKeyDown={() => {
+              gesteLecteurRef.current = true
+            }}
             onScroll={(event) => {
               const conteneur = event.currentTarget
               const nearBottom = isChatNearBottom(conteneur)
-              // La position de lecture se retient A CHAQUE mouvement : quitter une conversation ne
-              // passe pas toujours par un evenement de fermeture (switch, fermeture brutale de l'app).
-              if (activeRef.current)
+              // La position de lecture se retient a chaque mouvement DU LECTEUR : quitter une
+              // conversation ne passe pas toujours par un evenement de fermeture (changement de
+              // conversation, fermeture brutale de l'app). Un defilement provoque par l'APP, lui,
+              // n'ecrit rien : c'est ce qui rouvrait le fil au milieu (conv-61).
+              if (activeRef.current && gesteLecteurRef.current)
                 memoriserPositionLecture(
                   activeRef.current,
                   conteneur,
