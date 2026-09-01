@@ -26,8 +26,13 @@ const roles = {
 }
 
 function pilote(reponses: string[], queue: string[]) {
-  const send = vi.fn(async () => ({ text: reponses.shift() ?? 'fin', provider: 'codex' }))
-  const exec = vi.fn(async () => ({ ok: true, data: {} }))
+  // Les DEUX faux appels portent leur signature reelle : sans elle, `mock.calls[i][j]` est un
+  // tuple VIDE pour TypeScript, et les assertions qui lisent les arguments ne compilent pas.
+  const send = vi.fn(async (_role: unknown, _messages: unknown[], ..._reste: unknown[]) => ({
+    text: reponses.shift() ?? 'fin',
+    provider: 'codex'
+  }))
+  const exec = vi.fn(async (_nom: string, ..._reste: unknown[]) => ({ ok: true, data: {} }))
   const registry = {
     send,
     describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
