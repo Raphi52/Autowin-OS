@@ -183,8 +183,7 @@ function LogRow({ entry }: { entry: ModelActivityEntry }): React.JSX.Element {
             wordBreak: 'break-word',
             // Le détail n'est plus tronqué (le journal doit contenir TOUT) : c'est la HAUTEUR
             // affichée qui est bornée, et la ligne défile pour livrer le reste.
-            maxHeight: 220,
-            overflowY: 'auto'
+            maxHeight: 220
           }}
         >
           {entry.detail}

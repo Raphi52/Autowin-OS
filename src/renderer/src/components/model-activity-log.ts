@@ -107,7 +107,7 @@ function fromParts(
       return
     }
     if (part.kind === 'action') {
-      const detail = joinDetail(short(part.args), rest(part, 'kind', 'args', 'name', 'ok'))
+      const detail = joinDetail(short(part.args), rest(part, 'args', 'name', 'ok'))
       out.push({
         id,
         turnId,
@@ -121,7 +121,7 @@ function fromParts(
     }
     if (part.kind === 'artifact') {
       const artifact = (part.artifact ?? {}) as Record<string, unknown>
-      const detail = joinDetail(short(artifact), rest(part, 'kind', 'artifact'))
+      const detail = joinDetail(short(artifact), rest(part, 'artifact'))
       out.push({
         id,
         turnId,
@@ -133,7 +133,7 @@ function fromParts(
       return
     }
     if (part.kind === 'error') {
-      const detail = joinDetail(short(part.message), rest(part, 'kind', 'message', 'cause'))
+      const detail = joinDetail(short(part.message), rest(part, 'message', 'cause'))
       out.push({
         id,
         turnId,
@@ -146,7 +146,7 @@ function fromParts(
       return
     }
     // Même règle que pour le journal : une part d'un type non prévu ici reste VISIBLE.
-    const detail = rest(part, 'kind')
+    const detail = rest(part)
     out.push({
       id,
       turnId,
