@@ -7,7 +7,7 @@
 import { Notification } from 'electron'
 import { interfaceVisible } from './startup-gate'
 import { ProviderRegistry } from './providers/registry'
-import { claudeActiveAccountId, claudeRotateAccount } from './claude-accounts'
+import { claudeActiveAccountId, claudeRotateAccount, claudeAccountEnv } from './claude-accounts'
 import { ClaudeCliAdapter } from './providers/claude'
 import { CodexAdapter } from './providers/codex'
 import { KimiCliAdapter } from './providers/kimi'
@@ -918,7 +918,11 @@ export class AutowinOS {
     }
     // `configDir` n'est renseigné que par le multi-comptes Claude : il dirige le login vers le
     // dossier du compte visé, au lieu d'écraser la session du compte courant.
-    const plan = planProviderLogin(provider, undefined, configDir)
+    // Sans cible explicite, le login vise le compte Claude ACTIF. Sinon « Se reconnecter »
+    // authentifiait toujours le dossier par defaut : l'utilisateur, actif sur un second compte,
+    // ecrasait la session de son PREMIER compte sans le voir (incident 2026-09-01).
+    const cible = configDir ?? claudeAccountEnv().CLAUDE_CONFIG_DIR
+    const plan = planProviderLogin(provider, undefined, cible)
     if (plan.kind === 'adapter')
       throw new Error(`Le provider ${provider} n'expose pas de connexion interactive.`)
     // codex : `npm run codex:login` doit tourner à la racine du repo (dev) → cwd = process.cwd().

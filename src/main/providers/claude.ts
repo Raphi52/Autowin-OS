@@ -44,7 +44,7 @@ import {
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
-import { claudeAccountEnv } from '../claude-accounts'
+import { withClaudeAccountEnv } from '../claude-accounts'
 import { abortFailure } from './abort-diagnostic'
 
 /**
@@ -964,12 +964,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       cwd: execution?.cwd ?? readOnlyCwd,
       // Toujours un env EXPLICITE : sans lui le fils hérite du nôtre et peut ouvrir un pager, un
       // navigateur d'aide ou une invite d'identifiants. Voir NON_INTERACTIVE_ENV.
-      // `claudeAccountEnv()` porte le CLAUDE_CONFIG_DIR du compte actif — vide tant qu'un seul
-      // compte existe. Placé AVANT `invocation.env` : une invocation qui fixerait explicitement
-      // une variable garde le dernier mot.
+      // `withClaudeAccountEnv` POSE le CLAUDE_CONFIG_DIR du compte actif, ou le RETIRE pour le
+      // compte par defaut : sans ce retrait, un dir herite du processus ferait tourner le run
+      // sous une AUTRE identite. Place AVANT `invocation.env` : une invocation qui fixerait
+      // explicitement une variable garde le dernier mot.
       env: {
-        ...process.env,
-        ...claudeAccountEnv(),
+        ...withClaudeAccountEnv(process.env),
         ...(invocation.env ?? {}),
         ...NON_INTERACTIVE_ENV
       },

@@ -48,7 +48,8 @@ import {
   configureClaudeAccountRotation,
   describeAccounts,
   parseIdentity,
-  type ClaudeIdentity
+  type ClaudeIdentity,
+  withClaudeAccountEnv
 } from './claude-accounts'
 import {
   app,
@@ -1942,7 +1943,9 @@ Le fil reprend ensuite normalement.`
         const child = spawn(resolveClaudeBin(), ['auth', 'status'], {
           windowsHide: true,
           shell: false,
-          env: { ...process.env, ...accountEnv(account) }
+          // EXPLICITE : pour le compte par defaut, accountEnv rend {} — sans retrait, la sonde
+          // heriterait le CLAUDE_CONFIG_DIR du processus et lirait l'identite d'un AUTRE compte.
+          env: withClaudeAccountEnv(process.env, accountEnv(account))
         })
         child.stdout?.on('data', (chunk: Buffer) => {
           out += chunk.toString('utf8')
