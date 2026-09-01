@@ -861,3 +861,78 @@
   color: var(--text-dim);
   font-size: 10.5px;
 }
+
+/* LA JAUGE DE NIVEAU — une piste fine, aucun panneau, aucun halo : le fond de l'app reste visible. */
+.jarvis__jauge {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.jarvis__jauge-piste {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.jarvis__jauge-barre {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: rgba(221, 227, 238, 0.45);
+  transition: background-color 120ms linear;
+}
+
+/* Au-dessus du seuil, la barre passe en OR : c'est le moment exact où Jarvis considère qu'on parle. */
+.jarvis__jauge-barre[data-parle='true'] {
+  background: linear-gradient(90deg, #d4a94f, #e3ba55);
+}
+
+.jarvis__jauge-seuil {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(212, 169, 79, 0.55);
+}
+
+.jarvis__audio {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.jarvis__audio > summary {
+  cursor: pointer;
+  color: #d4a94f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.jarvis__audio-champ {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.jarvis__audio-champ > span {
+  min-width: 130px;
+  color: #a9b2c4;
+}
+
+.jarvis__audio-champ select,
+.jarvis__audio-champ input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: #d4a94f;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 4px;
+  color: #dde3ee;
+  font-size: 11px;
+  padding: 2px 4px;
+}

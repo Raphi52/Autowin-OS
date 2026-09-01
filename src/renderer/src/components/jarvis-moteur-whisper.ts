@@ -19,11 +19,14 @@
  *    résultat arrivé après l'arrêt ferait agir Jarvis micro éteint.
  */
 import {
+  SEUIL_PAROLE,
   TAUX_WHISPER,
   avancerVad,
   coller,
   encoderWav16k,
   etatVadInitial,
+  niveau,
+  seuilValide,
   type EtatVad
 } from './whisper-audio'
 
@@ -38,6 +41,14 @@ export interface MoteurVocal {
   start(): void
   stop(): void
   abort?(): void
+  /**
+   * OPTIONNELS, et c'est structurel : le contrat est partagé avec `webkitSpeechRecognition`, qui ne
+   * les connaîtra jamais. Les rendre obligatoires casserait la branche de secours et ses tests.
+   *  - `onniveau` : niveau efficace BRUT de chaque bloc (avant toute normalisation) — la jauge.
+   *  - `seuilParole` : sensibilité choisie par l'utilisateur, sinon `SEUIL_PAROLE`.
+   */
+  onniveau?: ((rms: number) => void) | null
+  seuilParole?: number
 }
 
 export type FabriqueMoteur = new () => MoteurVocal
@@ -111,6 +122,8 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
     onresult: ((e: unknown) => void) | null = null
     onend: (() => void) | null = null
     onerror: ((e: unknown) => void) | null = null
+    onniveau: ((rms: number) => void) | null = null
+    seuilParole = SEUIL_PAROLE
 
     private actif = false
     private flux: FluxAudio | null = null
@@ -182,7 +195,10 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
       // ferait transcrire de l'audio écrasé.
       const bloc = new Float32Array(donnees)
       const taux = this.ctx.sampleRate || TAUX_WHISPER
-      const pas = avancerVad(this.vad, bloc, taux)
+      // La jauge est nourrie ICI, sur le signal brut : après `encoderWav16k` le gain de
+      // normalisation aurait déjà remonté un micro faible, et la jauge afficherait « plein ».
+      this.onniveau?.(niveau(bloc))
+      const pas = avancerVad(this.vad, bloc, taux, seuilValide(this.seuilParole))
       const parlaitAvant = this.vad.parle
       this.vad = pas.etat
       if (pas.segment) {
@@ -285,12 +301,20 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
 
 /** Les dépendances RÉELLES du navigateur : ce câblage n'est pas testable hors fenêtre, il reste nu. */
 export function dependancesNavigateur(
-  transcrire: (wav: Uint8Array) => Promise<string>
+  transcrire: (wav: Uint8Array) => Promise<string>,
+  peripherique?: string
 ): DependancesWhisper {
   return {
     micro: () =>
       navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          channelCount: 1,
+          // Sans `deviceId`, Windows impose SON micro par défaut — souvent celui d'une webcam,
+          // c'est-à-dire le niveau trop bas mesuré comme cause du charabia.
+          ...(peripherique ? { deviceId: { exact: peripherique } } : {})
+        }
       }) as unknown as Promise<FluxAudio>,
     contexte: () =>
       new (window as unknown as { AudioContext: new (o?: unknown) => ContexteAudio }).AudioContext({

@@ -144,7 +144,12 @@ export const etatVadInitial: EtatVad = {
   echantillonsSilence: 0
 }
 
-function niveau(bloc: Float32Array): number {
+/**
+ * LE NIVEAU EFFICACE (RMS) d'un bloc. Exporté : c'est la MÊME mesure qui décide « il parle » et qui
+ * alimente la jauge affichée. Deux formules distinctes feraient mentir la jauge exactement là où
+ * elle doit être crue — au seuil.
+ */
+export function niveau(bloc: Float32Array): number {
   if (bloc.length === 0) return 0
   let somme = 0
   for (let i = 0; i < bloc.length; i += 1) somme += bloc[i] * bloc[i]
@@ -220,4 +225,37 @@ export function avancerVad(
     etat: etatVadInitial,
     segment: assezDeParole ? coller(tampon) : null
   }
+}
+
+
+/**
+ * DU RMS À LA JAUGE — pourquoi une échelle logarithmique et pas la valeur brute.
+ *
+ * Le RMS d'une voix normale tourne autour de 0,05 ; SEUIL_PAROLE vaut 0,012. Une barre linéaire
+ * afficherait donc 5 % de large pour une voix parfaitement audible : l'utilisateur conclurait qu'il
+ * parle dans le vide alors que tout va bien — le contraire du but. L'échelle en décibels étale la
+ * plage utile : PLANCHER_DB (silence) → 0, CRETE_DB (voix forte) → 1.
+ *
+ * Cette valeur est calculée sur le signal BRUT, avant `gainNormalisation` : une jauge nourrie après
+ * normalisation afficherait « plein » sur un micro trop faible, et cacherait la cause n°1 mesurée
+ * du charabia.
+ */
+export const PLANCHER_DB = -60
+export const CRETE_DB = -12
+
+export function jaugeDepuisNiveau(rms: number): number {
+  if (!(rms > 0)) return 0
+  const db = 20 * Math.log10(rms)
+  const fraction = (db - PLANCHER_DB) / (CRETE_DB - PLANCHER_DB)
+  return Math.max(0, Math.min(1, fraction))
+}
+
+/** Bornes du réglage de sensibilité exposé à l'utilisateur, autour de `SEUIL_PAROLE`. */
+export const SEUIL_MIN = 0.004
+export const SEUIL_MAX = 0.06
+
+/** Le seuil retenu, borné : une valeur hors bornes rendrait Jarvis sourd ou déclencherait sur le souffle. */
+export function seuilValide(valeur: number): number {
+  if (!Number.isFinite(valeur)) return SEUIL_PAROLE
+  return Math.max(SEUIL_MIN, Math.min(SEUIL_MAX, valeur))
 }

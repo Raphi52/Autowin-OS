@@ -6,6 +6,7 @@ import {
   type FabriqueMoteur,
   type MoteurVocal
 } from './jarvis-moteur-whisper'
+import { SEUIL_MAX, SEUIL_MIN, SEUIL_PAROLE, jaugeDepuisNiveau } from './whisper-audio'
 import type { EtatWhisper } from '../../../main/whisper-local'
 import {
   basculerEcoute,
@@ -44,11 +45,11 @@ import {
  * reglage du widget n y change quoi que ce soit. Whisper local, lui, tourne sur la machine et sans reseau ; il
  * passe donc D'ABORD des qu'il est installe, et Web Speech ne reste qu'un secours.
  */
-function fabriqueMoteur(whisperInstalle: boolean): FabriqueMoteur | null {
+function fabriqueMoteur(whisperInstalle: boolean, peripherique?: string): FabriqueMoteur | null {
   const api = apiJarvis()
   if (whisperInstalle && api?.whisperTranscrire) {
     const transcrire = api.whisperTranscrire.bind(api)
-    return fabriqueWhisper(dependancesNavigateur((wav) => transcrire(wav)))
+    return fabriqueWhisper(dependancesNavigateur((wav) => transcrire(wav), peripherique))
   }
   const w = window as unknown as {
     SpeechRecognition?: FabriqueMoteur
@@ -100,6 +101,18 @@ export function JarvisWidget({
   const actifRef = useRef(false)
   const conversationRef = useRef<string | null>(null)
   const precedentRef = useRef<SommaireDirect[]>([])
+  const [peripheriques, setPeripheriques] = useState<Array<{ id: string; nom: string }>>([])
+  const [peripherique, setPeripherique] = useState('')
+  const [seuil, setSeuil] = useState(SEUIL_PAROLE)
+  const peripheriqueRef = useRef('')
+  const seuilRef = useRef(SEUIL_PAROLE)
+  /**
+   * LA JAUGE NE PASSE PAS PAR REACT. `auBloc` remonte un niveau ~12 fois par seconde : autant de
+   * `setState` re-rendrait tout le direct et le flux à chaque bloc. Le niveau vit donc dans un
+   * `ref`, et une boucle `requestAnimationFrame` écrit la largeur directement sur le noeud.
+   */
+  const niveauRef = useRef(0)
+  const barreRef = useRef<HTMLDivElement | null>(null)
 
   /** Envoie un ordre a Jarvis, dans SA conversation — creee au premier ordre, pas au montage. */
   const envoyer = useCallback(async (texte: string) => {
@@ -177,7 +190,10 @@ export function JarvisWidget({
         moteurRef.current = null
         return suivant
       }
-      const Fabrique = fabriqueMoteur(whisperRef.current?.installe === true)
+      const Fabrique = fabriqueMoteur(
+        whisperRef.current?.installe === true,
+        peripheriqueRef.current || undefined
+      )
       if (!Fabrique) {
         actifRef.current = false
         setErreur(
@@ -190,6 +206,10 @@ export function JarvisWidget({
       moteur.interimResults = true
       moteur.lang = 'fr-FR'
       moteur.onresult = auResultat
+      moteur.seuilParole = seuilRef.current
+      moteur.onniveau = (rms) => {
+        niveauRef.current = rms
+      }
       moteur.onerror = (evenement) => {
         const code = String((evenement as { error?: unknown } | null)?.error ?? 'inconnue')
         // `no-speech` / `aborted` = fonctionnement normal d'un micro qui attend : `onend` relance.
@@ -267,6 +287,70 @@ export function JarvisWidget({
       clearInterval(suivi)
     }
   }, [relireWhisper])
+
+  useEffect(() => {
+    seuilRef.current = seuil
+    if (moteurRef.current) moteurRef.current.seuilParole = seuil
+  }, [seuil])
+
+  useEffect(() => {
+    peripheriqueRef.current = peripherique
+  }, [peripherique])
+
+  /** La liste des micros REELS de la machine. Les libellés n'existent qu'une fois l'autorisation
+   * accordée : avant, le navigateur rend des entrées anonymes — on les nomme alors par rang. */
+  useEffect(() => {
+    if (!navigator.mediaDevices?.enumerateDevices) return
+    let vivant = true
+    const lire = async (): Promise<void> => {
+      try {
+        const tous = await navigator.mediaDevices.enumerateDevices()
+        if (!vivant) return
+        setPeripheriques(
+          tous
+            .filter((d) => d.kind === 'audioinput')
+            .map((d, index) => ({ id: d.deviceId, nom: d.label || `Micro ${index + 1}` }))
+        )
+      } catch {
+        // Pas d'énumération possible (permission refusée, environnement sans micro) : le micro par
+        // défaut reste utilisable, on n'affiche simplement aucun choix.
+      }
+    }
+    void lire()
+    // Un micro branché ou débranché pendant la session doit apparaître sans recharger la vue.
+    navigator.mediaDevices.addEventListener?.('devicechange', lire)
+    return () => {
+      vivant = false
+      navigator.mediaDevices.removeEventListener?.('devicechange', lire)
+    }
+  }, [])
+
+  // La boucle d'affichage de la jauge : elle ne tourne QUE pendant l'écoute, sinon elle brûlerait
+  // une frame par seconde d'affichage pour peindre une barre vide.
+  useEffect(() => {
+    if (!ecoute.active) {
+      niveauRef.current = 0
+      if (barreRef.current) barreRef.current.style.width = '0%'
+      return
+    }
+    let vivant = true
+    let image = 0
+    const peindre = (): void => {
+      if (!vivant) return
+      const barre = barreRef.current
+      if (barre) {
+        const fraction = jaugeDepuisNiveau(niveauRef.current)
+        barre.style.width = `${Math.round(fraction * 100)}%`
+        barre.dataset.parle = niveauRef.current >= seuilRef.current ? 'true' : 'false'
+      }
+      image = requestAnimationFrame(peindre)
+    }
+    image = requestAnimationFrame(peindre)
+    return () => {
+      vivant = false
+      cancelAnimationFrame(image)
+    }
+  }, [ecoute.active])
 
   // Le micro ne survit pas au demontage de la vue.
   useEffect(
@@ -363,6 +447,59 @@ export function JarvisWidget({
           Écoute locale prête — hors ligne
         </p>
       ) : null}
+
+      {/*
+        LA PREUVE QUE LE MICRO ENTEND. Sans elle, un micro trop faible produit un silence qui
+        ressemble trait pour trait à une panne : rien à l'écran ne distinguait « je parle dans le
+        vide » de « Jarvis est cassé ». La barre montre le niveau BRUT, et change d'état dès qu'il
+        dépasse le seuil de parole retenu.
+      */}
+      {ecoute.active ? (
+        <div className="jarvis__jauge" data-testid="jarvis-jauge">
+          <div className="jarvis__jauge-piste">
+            <div className="jarvis__jauge-barre" ref={barreRef} data-testid="jarvis-jauge-barre" />
+            <span
+              className="jarvis__jauge-seuil"
+              style={{ left: `${Math.round(jaugeDepuisNiveau(seuil) * 100)}%` }}
+            />
+          </div>
+          <span className="jarvis__aide">Niveau du micro — parlez pour le voir monter</span>
+        </div>
+      ) : null}
+
+      <details className="jarvis__audio" data-testid="jarvis-audio">
+        <summary>Paramètres audio</summary>
+        <label className="jarvis__audio-champ">
+          <span>Micro</span>
+          <select
+            data-testid="jarvis-peripherique"
+            value={peripherique}
+            onChange={(e) => setPeripherique(e.target.value)}
+          >
+            <option value="">Micro par défaut du système</option>
+            {peripheriques.map((micro) => (
+              <option key={micro.id} value={micro.id}>
+                {micro.nom}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="jarvis__audio-champ">
+          <span>Seuil de déclenchement</span>
+          <input
+            type="range"
+            data-testid="jarvis-seuil"
+            min={SEUIL_MIN}
+            max={SEUIL_MAX}
+            step={0.001}
+            value={seuil}
+            onChange={(e) => setSeuil(Number(e.target.value))}
+          />
+        </label>
+        <span className="jarvis__aide">
+          Un changement de micro s’applique à la prochaine activation de l’écoute.
+        </span>
+      </details>
 
       <p className="jarvis__partiel" data-testid="jarvis-partiel">
         {ecoute.partiel || (ecoute.active ? '…' : '')}

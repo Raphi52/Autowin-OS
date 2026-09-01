@@ -234,3 +234,51 @@ describe('moteur Whisper local', () => {
     expect(h.erreurs).toEqual(['transcription-impossible'])
   })
 })
+
+describe('niveau d’entrée et sensibilité', () => {
+  it('remonte le niveau BRUT de chaque bloc — c’est ce que la jauge affiche', async () => {
+    const { moteur } = monter(async () => 'x')
+    const niveaux: number[] = []
+    moteur.onniveau = (rms): void => void niveaux.push(rms)
+    moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    const noeud = FauxContexte.dernier!.noeud
+    noeud.onaudioprocess?.({ inputBuffer: { getChannelData: () => silence() } })
+    noeud.onaudioprocess?.({ inputBuffer: { getChannelData: () => parole() } })
+    moteur.stop()
+    expect(niveaux).toHaveLength(2)
+    expect(niveaux[0]).toBe(0)
+    // Le bloc de parole doit ressortir NETTEMENT au-dessus du silence, sinon la jauge ne prouverait
+    // rien à l'utilisateur qui parle.
+    expect(niveaux[1]).toBeGreaterThan(0.1)
+  })
+
+  it('un seuil relevé par l’utilisateur rend le moteur sourd à une voix faible', async () => {
+    // RMS ≈ 0,014 : au-dessus du seuil par défaut (0,012), en dessous d'un seuil relevé à 0,03.
+    const faible = (): Float32Array => {
+      const bloc = new Float32Array(TAILLE_BLOC)
+      for (let i = 0; i < TAILLE_BLOC; i += 1) bloc[i] = Math.sin(i / 3) * 0.02
+      return bloc
+    }
+    const jouer = async (moteur: MoteurVocal, echantillon: () => Float32Array): Promise<void> => {
+      moteur.start()
+      await new Promise((r) => setTimeout(r, 0))
+      const noeud = FauxContexte.dernier!.noeud
+      for (let i = 0; i < 8; i += 1)
+        noeud.onaudioprocess?.({ inputBuffer: { getChannelData: echantillon } })
+      for (let i = 0; i < 12; i += 1)
+        noeud.onaudioprocess?.({ inputBuffer: { getChannelData: silence } })
+      await new Promise((r) => setTimeout(r, 0))
+      await new Promise((r) => setTimeout(r, 0))
+    }
+
+    const normal = monter(async () => 'entendu')
+    await jouer(normal.moteur, faible)
+    expect(normal.resultats).toEqual(['entendu'])
+
+    const sourd = monter(async () => 'entendu')
+    sourd.moteur.seuilParole = 0.03
+    await jouer(sourd.moteur, faible)
+    expect(sourd.resultats).toEqual([])
+  })
+})

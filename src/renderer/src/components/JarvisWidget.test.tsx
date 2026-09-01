@@ -374,6 +374,26 @@ describe('widget Jarvis', () => {
       )
     })
 
+    it('affiche la jauge de niveau PENDANT l’écoute, et pas micro coupé', async () => {
+      const c = rendre()
+      await flush()
+      // Micro coupé : rien à jauger — une barre figée se lirait « il n'entend rien ».
+      expect(c.querySelector('[data-testid="jarvis-jauge"]')).toBeNull()
+      clic(c, 'jarvis-bascule')
+      await flush()
+      expect(c.querySelector('[data-testid="jarvis-jauge"]')).not.toBeNull()
+      expect(c.querySelector('[data-testid="jarvis-jauge-barre"]')).not.toBeNull()
+    })
+
+    it('expose les paramètres audio : choix du micro et seuil', async () => {
+      const c = rendre()
+      await flush()
+      const select = c.querySelector('[data-testid="jarvis-peripherique"]')
+      const seuil = c.querySelector('[data-testid="jarvis-seuil"]') as HTMLInputElement | null
+      expect(select).not.toBeNull()
+      expect(seuil?.type).toBe('range')
+    })
+
     it('reste sur le moteur du navigateur tant que whisper n’est pas installé', async () => {
       brancherWhisper(false)
       const c = rendre()

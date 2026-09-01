@@ -9,7 +9,13 @@ import {
   encoderWav16k,
   etatVadInitial,
   gainNormalisation,
-  reechantillonner
+  jaugeDepuisNiveau,
+  niveau,
+  reechantillonner,
+  SEUIL_MAX,
+  SEUIL_MIN,
+  SEUIL_PAROLE,
+  seuilValide
 } from './whisper-audio'
 
 /** Un bloc de « parole » : du bruit franc. Un bloc de silence : des zéros. */
@@ -174,5 +180,48 @@ describe('avancerVad', () => {
     ]
     const { segments } = pousser(etatVadInitial, [...phrase, ...phrase])
     expect(segments).toHaveLength(2)
+  })
+})
+
+describe('jauge de niveau', () => {
+  it('rend 0 sur le silence absolu', () => {
+    expect(jaugeDepuisNiveau(0)).toBe(0)
+  })
+
+  it('rend une fraction VISIBLE pour une voix normale, là où une échelle linéaire mentirait', () => {
+    // RMS 0,05 = voix normale ; en linéaire la barre ferait 5 % et se lirait « il n'entend rien ».
+    expect(jaugeDepuisNiveau(0.05)).toBeGreaterThan(0.5)
+  })
+
+  it('reste borné à 1 sur une saturation', () => {
+    expect(jaugeDepuisNiveau(4)).toBe(1)
+  })
+
+  it('croît avec le niveau', () => {
+    expect(jaugeDepuisNiveau(0.02)).toBeGreaterThan(jaugeDepuisNiveau(0.005))
+  })
+
+  it('reste sous le repère de seuil quand le niveau est sous le seuil de parole', () => {
+    expect(jaugeDepuisNiveau(0.005)).toBeLessThan(jaugeDepuisNiveau(SEUIL_PAROLE))
+  })
+})
+
+describe('seuilValide', () => {
+  it('borne un seuil aberrant plutôt que de rendre Jarvis sourd', () => {
+    expect(seuilValide(99)).toBe(SEUIL_MAX)
+    expect(seuilValide(0)).toBe(SEUIL_MIN)
+    expect(seuilValide(Number.NaN)).toBe(SEUIL_PAROLE)
+  })
+
+  it('laisse passer une valeur dans les bornes', () => {
+    expect(seuilValide(0.02)).toBe(0.02)
+  })
+})
+
+describe('niveau exporté', () => {
+  it('est la MÊME mesure que celle qui décide de la parole', () => {
+    const fort = new Float32Array(64).fill(0.5)
+    expect(niveau(fort)).toBeCloseTo(0.5, 5)
+    expect(niveau(new Float32Array(0))).toBe(0)
   })
 })
