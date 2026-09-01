@@ -1,0 +1,244 @@
+/*
+ * LOGS — la trace geste par geste, lisible d'un coup d'oeil.
+ *
+ * DEFAUT CORRIGE : les entrees etaient un mur de texte indifferencie ou le `detail` (souvent du
+ * JSON brut) noyait le label. Trois regles portent la lisibilite : une GOUTTIERE horaire alignee
+ * a droite pour scanner le temps sans lire ; un CHIP de type colore par nature de geste ; et un
+ * detail CLAMPE a deux lignes, deplie a la demande par un <details> natif — aucun JS.
+ *
+ * Direction visuelle : rien d'opaque, aucun halo. Accent or (#d4a94f) pour le temps et les chips
+ * neutres, couleurs de statut seulement quand elles disent quelque chose (erreur, fin, action).
+ */
+
+.model-log {
+  --log-gutter: 54px;
+  min-height: 0;
+  /* Le panneau droit est REDIMENSIONNABLE a la souris : la gouttiere doit reagir a SA largeur,
+     pas a celle de la fenetre. D'ou un container, et non une media query. */
+  container-type: inline-size;
+}
+
+/* La barre de filtre reste visible pendant le defilement : on filtre en lisant. */
+.model-log-filter {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.model-log-filter input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.model-log-count {
+  font: 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.06em;
+  color: #d4a94f;
+  white-space: nowrap;
+}
+
+.model-log-list {
+  min-height: 0;
+  gap: 0;
+}
+
+/* UNE ENTREE = une grille [heure | corps]. La gouttiere fixe aligne toutes les heures entre
+   elles, ce qu'un flex ne garantit pas des que le label change de longueur. */
+.model-log-row {
+  display: grid;
+  grid-template-columns: var(--log-gutter) 1fr;
+  column-gap: 8px;
+  align-items: baseline;
+  padding: 4px 6px 4px 0;
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(212, 169, 79, 0.28), rgba(212, 169, 79, 0.03)) 1;
+  transition: background-color 120ms ease;
+}
+
+.model-log-row:first-child {
+  border-top-color: transparent;
+  border-image: none;
+}
+
+.model-log-row:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.model-log-time {
+  font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: rgba(169, 178, 196, 0.75);
+  white-space: nowrap;
+}
+
+.model-log-body {
+  min-width: 0;
+}
+
+.model-log-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* CHIP DE TYPE : petites capitales monospace. La couleur vient de --log-tone, posee par
+   [data-log-kind] plus bas — une seule regle de forme, huit teintes. */
+.model-log-kind {
+  flex: none;
+  font: 9px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 5px;
+  border-radius: 3px;
+  color: var(--log-tone, #a9b2c4);
+  border: 1px solid color-mix(in srgb, var(--log-tone, #a9b2c4) 38%, transparent);
+  background: color-mix(in srgb, var(--log-tone, #a9b2c4) 11%, transparent);
+}
+
+.model-log-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #dde3ee;
+}
+
+.model-log-row[data-log-ok='false'] .model-log-label {
+  color: #f0a9a9;
+}
+
+/* DETAIL : deux lignes maximum au repos. Le <details> natif porte le depliage, donc le clamp doit
+   sauter des que le bloc est ouvert — sinon on deplie sur un texte toujours tronque. */
+.model-log-detail {
+  margin-top: 2px;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #a9b2c4;
+  word-break: break-word;
+}
+
+.model-log-detail > summary {
+  display: block;
+  cursor: pointer;
+  list-style: none;
+  white-space: pre-wrap;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.model-log-detail > summary::-webkit-details-marker {
+  display: none;
+}
+
+.model-log-detail[open] > summary {
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  display: block;
+  color: #c3cbda;
+}
+
+.model-log-detail > summary:hover {
+  color: #c3cbda;
+}
+
+/* Le texte complet n'est PAS duplique : summary porte tout et se declampe a l'ouverture. Ce
+   marqueur dit seulement dans quel sens ira le clic. */
+.model-log-more {
+  display: block;
+  margin-top: 1px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(212, 169, 79, 0.7);
+}
+
+.model-log-detail[open] .model-log-more::after {
+  content: 'replier';
+}
+
+.model-log-detail:not([open]) .model-log-more::after {
+  content: 'tout voir';
+}
+
+/* HUIT TEINTES, une par nature de geste. Sobres : le journal doit rester lisible, pas clignoter. */
+.model-log-row[data-log-kind='prompt'] {
+  --log-tone: #d4a94f;
+}
+.model-log-row[data-log-kind='model-call'] {
+  --log-tone: #7fa6d8;
+}
+.model-log-row[data-log-kind='reasoning'] {
+  --log-tone: #a78bd0;
+}
+.model-log-row[data-log-kind='text'] {
+  --log-tone: #8fa3bd;
+}
+.model-log-row[data-log-kind='action'] {
+  --log-tone: #5fb3ab;
+}
+.model-log-row[data-log-kind='artifact'] {
+  --log-tone: #c98fb0;
+}
+.model-log-row[data-log-kind='error'] {
+  --log-tone: #e07b7b;
+}
+.model-log-row[data-log-kind='done'] {
+  --log-tone: #6fbf82;
+}
+
+.model-log-empty {
+  font-size: 12px;
+  padding: var(--s2);
+  color: #a9b2c4;
+}
+
+/* Panneau etroit : la gouttiere horaire mange le label. On la reduit plutot que de tronquer. */
+@container (max-width: 320px) {
+  .model-log-row {
+    --log-gutter: 42px;
+  }
+}
+
+/* QUATRE TEINTES DE PLUS : les natures venues des sources que le journal ignorait jusqu'ici
+   (trace causale, activite facturee) et le fourre-tout `event`, qui garantit qu'aucun geste
+   journalise ne disparait. */
+.model-log-row[data-log-kind='injection'] {
+  --log-tone: #b89b6a;
+}
+.model-log-row[data-log-kind='boundary'] {
+  --log-tone: #9aa0b8;
+}
+.model-log-row[data-log-kind='usage'] {
+  --log-tone: #d4a94f;
+}
+.model-log-row[data-log-kind='event'] {
+  --log-tone: #8b93a6;
+}
+
+/* SOURCE : une preuve sans provenance n'en est pas une. Discret par construction — c'est une
+   mention, pas un second chip qui concurrencerait la nature du geste. */
+.model-log-source {
+  flex: none;
+  font: 9px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.05em;
+  color: rgba(169, 178, 196, 0.6);
+  white-space: nowrap;
+}
+
+/* Les deux selecteurs de filtre restent compacts : la recherche garde la place. */
+.model-log-filter select {
+  flex: none;
+  max-width: 30%;
+  font-size: 11px;
+  padding: 2px 4px;
+}

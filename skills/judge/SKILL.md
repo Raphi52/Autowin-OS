@@ -11,17 +11,16 @@ description: >-
   skill, script, code, doc, architecture, plan, spec — NOT a conversational reply) must be validated BEFORE it is
   considered done, OR when you want an IMPARTIAL quality look. Trigger on "review/audit the QUALITY of X", "is
   this work good?", "validate this deliverable", "is it really done?", "is it up to standard?", or right after a substantial deliverable
-  is produced. ALSO **Mode B — behavioral audit**: trigger on "find my blind spots", "what do I/Claude
-  systematically miss", "audit my workflow/habits". DISAMBIGUATE "audit": QUALITY of a DELIVERABLE → Mode A;
-  WORKFLOW/behavior/habits → Mode B (target is a parameter: Claude's behavior, a codebase, or a skill set — do
-  NOT assume "the repo", derive/ask). Do NOT use to: frame a need (→ `frame`), prepare the autonomous
+  is produced. DISAMBIGUATE "audit": QUALITY of a DELIVERABLE → judge; WORKFLOW / behavior / habits /
+  skill set → `kaizen`, which carries the behavioral lenses (judge's ex-"Mode B", moved there on 2026-09-01
+  because judge may not write to the kit and improving a behavior means editing it). Do NOT use to: frame a need (→ `frame`), prepare the autonomous
   loop/observability (→ `terrain`), run a single-pass code PR (→ code-review), nor to FIX — this skill JUDGES,
   never repairs: fixing goes back to the producer = `build` (executor following ENGINE Ch.4 — BUILD).
 ---
 
 # judge — ORCHESTRATOR, external adversarial review, looped to threshold (step 5)
 
-You are the **ORCHESTRATOR** (main session). Bring the deliverable to its regime threshold under adversarial angles, then **send defects back to the producer — never fix them yourself**. Sole excellence gate of the pipeline. Changing hats is allowed same-session: fix as producer (ENGINE Ch.4 — BUILD) between audits, then relaunch external judges — but a judge NEVER audits work it just produced. Mode A (quality audit) is default; Mode B (behavioral) under `## Modes`.
+You are the **ORCHESTRATOR** (main session). Bring the deliverable to its regime threshold under adversarial angles, then **send defects back to the producer — never fix them yourself**. Sole excellence gate of the pipeline. Changing hats is allowed same-session: fix as producer (ENGINE Ch.4 — BUILD) between audits, then relaunch external judges — but a judge NEVER audits work it just produced. Judge audits the QUALITY of a deliverable; a behavioral/habit target goes to `kaizen`.
 
 ## Purpose
 **Be the EXTERNAL quality gate the producer cannot be for itself.** A model grading its own work is complacent; judge brings independent, adversarial specialists that hunt the REAL defects WITH PROOF, score by dimension, and send them back to the producer, looping to the regime threshold. It never repairs what it audits (that re-makes it the producer); closure stays out-of-model: producer=judge is never proof.
@@ -53,11 +52,11 @@ This relaxes NO independence: autonomy means completing the audit, never softeni
 
 **3. Bar = regime** (header `regime:`). disposable → 1 pass, zero-major (or skip at discretion). standard → zero-major, residual minors listed non-blocking, ROI-stop once zero-major. critical → full panel + doubled [S] draws + ≥1 out-of-model source; closure via engine stops (stagnation/cap/regression), not a self-awarded numeric ceiling.
 
-> Then run the LOOP below. It draws its panel, proof rules, and injected prompt template from **Mode A** under `## Modes`. For a behavioral target, jump to **Mode B**.
+> Then run the LOOP below. It draws its panel, proof rules, and injected prompt template from the quality-audit sub-procedure under `## Modes`. For a behavioral target, route to `kaizen`.
 
 ### The LOOP
 
-**[1] AUDIT** — launch judges in parallel with `## Défauts` ledger + decisions injected (stable summary + last-cycle delta only, never verbatim history — bounds per-cycle cost). (Panel selection, decorrelation, injected prompt template = Mode A.)
+**[1] AUDIT** — launch judges in parallel with `## Défauts` ledger + decisions injected (stable summary + last-cycle delta only, never verbatim history — bounds per-cycle cost). (Panel selection, decorrelation, injected prompt template = the quality-audit sub-procedure.)
 
 **[1b] COUNT & VALIDATE** — N dispatched ⇒ N schema-valid `je-1` replies before aggregating; missing/invalid → 1 retry → else that dimension is **INVALID** (caps the global, blocks the verdict — never silent 100).
 
@@ -85,9 +84,9 @@ Final message to the user (the Report) — **in PLAIN words, NO internal jargon*
 
 ## Modes
 
-Target is a deliverable's quality? → **Mode A** (default — the LOOP's quality-audit sub-procedure). Target is a behavior/habit/skill-set? → **Mode B**.
+Target is a deliverable's quality? → the quality-audit sub-procedure below. Target is a behavior/habit/skill-set? → `kaizen`.
 
-### Mode A — Quality audit (default)
+### Quality audit — the LOOP's sub-procedure
 
 The LOOP runs this machinery: select the panel, confront the real, then launch judges with the injected prompt template.
 
@@ -151,19 +150,17 @@ Launch selected judges **IN PARALLEL** (one message, multiple subagent calls —
 > `{"schema_version":"je-1","dimension":"...","note":0-100,"interval":"...","unstable":bool,"unstable_reason":"...","artifact_based":bool,"defects":[{"severity":"major|minor","nature":"fixable|intrinsic|wont_fix","type":"new|incomplete_fix|regression","description":"...","to_reach_100":"..."}]}`
 > (`je-1` canonical in `_engine/ENGINE.md`. `artifact_based:false` = self-declared, unverified out-of-model. **`unstable_reason`**: non-empty when `unstable:true` — WHY (missing proof vs ill-defined criterion), so the consumer fixes the right thing. **If a fact you'd need is MISSING and would move your note >20 pts → say so and flag it, don't guess a digit.** **`nature`**: `fixable` (producer can correct) · `intrinsic` (design ceiling, NOT a bug — excluded from the global MIN, carried as a risk note) · `wont_fix` (deliberate). `to_reach_100` may be `""` for a minor in a ≤standard regime — do NOT manufacture a cosmetic path to 100.)*
 
-### Mode B — Behavioral audit
+### Behavioral target? → `kaizen`, not judge
 
-Target is a deliverable's quality? → Mode A above. Target is a behavior/habit/skill-set? → here.
+"Find my blind spots", "what do I systematically miss", "audit my workflow/habits" is NOT a judge
+job. Judge grades a DELIVERABLE and is forbidden to write; improving a BEHAVIOR means editing the
+kit. This skill carried that audit as "Mode B" until 2026-09-01 — a doublon of `kaizen` with the
+opposite closing rule (judge proposed and never wrote, kaizen applies its edits). The lens list,
+the "already covered" preload, the 2-dry-rounds convergence and the same-model caveat now live in
+`kaizen` step 2. **Route there and stop** — do not re-derive them here.
 
-**Parameterize the target** — confirm: (i) Claude's behavior/workflow, (ii) a codebase, or (iii) a skill set. Do NOT assume "the repo".
-
-**Preload "already covered"** (replaces ledger round 1): the machine's global `%USERPROFILE%\.claude\CLAUDE.md`, any project CLAUDE.md, the auto-memory index if present, installed skills. Inject into every judge so it does not re-flag the known.
-
-**Behavioral lenses** (6-9, parallel): Anchoring & honesty · Communication & user attention · Cost & efficiency · State/resume/capitalization · Scope & over-engineering · Reversibility & checkpoint · Error & silent failure · Safety/secrets/PII · Tool-use & idempotence · Premature-stop & iteration · **Model-shared blind spot** (assumptions the WHOLE panel holds for granted — same-model ceiling, engine). Each lens finds 1-2 NEW blind spots, high-impact, with a **falsifiable example anchored** in repo/scripts/transcripts (not armchair reasoning), plus a severity.
-
-**Convergence**: re-loop with NEW lenses until a round is dry; **2 dry rounds = stop, cap 3 rounds**.
-**Same-model honesty caveat (MANDATORY)**: this is a self-audit — producer=judge is not proof. Mark the findings **non-conclusive** ("correlated same-model angle — blind spot not excluded") and surface that caveat.
-**Output = PROPOSE, never impose**: table `blind spot | proposed rule | anchor | impact` + a proposed integration point (hard rule / skill guardrail / memory / just known / nowhere). NEVER write to CLAUDE.md, a skill, or memory without user OK.
+**DISAMBIGUATE "audit"**: QUALITY of a DELIVERABLE → judge (this skill). WORKFLOW / behavior /
+habits / skill set → `kaizen`.
 
 ## Don't
 
@@ -172,10 +169,37 @@ Target is a deliverable's quality? → Mode A above. Target is a behavior/habit/
 - **Show raw internal jargon** in the report (`[S]/[F]`, `artifact_based`, `je-1`, "MIN", "ROI-stop") — translate to plain words.
 - **Emit a bare 2-digit /100** as the surfaced verdict — report a band (keep/maybe/drop) + the spread; a self-awarded precision is a judgment, not a measurement (producer=judge).
 - **Disguise a degraded/INVALID state as green** — surface every false-green caveat; same-model panel is not independent confirmation.
-- **Auto-write** in Mode B — PROPOSE only; never edit CLAUDE.md / a skill / memory without user OK.
+- **Audit a BEHAVIOR here** — judge may not write to the kit, and a behavioral finding is worthless unwritten: route to `kaizen`.
 - Frame a need (→ `frame`) · prepare the autonomous loop / observability (→ `terrain`) · run a single-pass code PR (→ code-review).
 
 ## Engine & reflexes
 
-- Every scoring mechanic — proof classes (REPLAYABLE vs ATTESTABLE), `[F]`/`[S]` scoring with decorrelated draws, MIN aggregation, fail-closed `[1b]`, the `je-1` verdict OBJECT, the loop stops (ROI-stop / cap / stagnation / regression / conflict), degraded mode, fallback without subagents — is **CANONICAL in `~/.claude/skills/_engine/ENGINE.md` (Ch.2 JUDGE, Ch.3 RUN)**. Read it at the Prelude. On divergence the engine wins. (Judge's delta = the panel table + exclusion zones + the injected prompt template + the [2b] blind-spot sweep + Mode B.)
-- **Exception — kept INLINE here as operating copy** (NOT in the engine): the full injected judge prompt template, the panel selection table, the exclusion zones, the [S]/[F] doubling rules, the Mode B behavioral-lens list, and the plain-words Report translation rules. The engine carries only the `je-1` schema.
+- Every scoring mechanic — proof classes (REPLAYABLE vs ATTESTABLE), `[F]`/`[S]` scoring with decorrelated draws, MIN aggregation, fail-closed `[1b]`, the `je-1` verdict OBJECT, the loop stops (ROI-stop / cap / stagnation / regression / conflict), degraded mode, fallback without subagents — is **CANONICAL in `~/.claude/skills/_engine/ENGINE.md` (Ch.2 JUDGE, Ch.3 RUN)**. Read it at the Prelude. On divergence the engine wins. (Judge's delta = the panel table + exclusion zones + the injected prompt template + the [2b] blind-spot sweep.)
+- **Exception — kept INLINE here as operating copy** (NOT in the engine): the full injected judge prompt template, the panel selection table, the exclusion zones, the [S]/[F] doubling rules, and the plain-words Report translation rules. The engine carries only the `je-1` schema.
+
+## Les LOGS de conversation — la source de première main
+
+L'app écrit sous `.autowin-data/<profil>/` quatre journaux par conversation. **Les lire est la
+première main ; une sonde agrégée est la seconde.** Ils remplacent l'Observatory : ce que
+l'Observatory affichait, ces fichiers le PORTENT, et eux se lisent sans ouvrir une vue.
+
+| journal | un fichier par | ce qu'il porte |
+|---|---|---|
+| `activity/conv-N.jsonl` | conversation | `chat-usage` : `costUsd`, `durationMs`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `provider`, `model`, `reasoningEffort`, `label` (= le message utilisateur du tour) ; `conversation-route` : la phase choisie |
+| `causal-trace/conv-N.jsonl` | conversation | `message`, `model-response`, `decision`, `injection`, `boundary`, `error`, `response-displayed` — l'enchaînement causal réel |
+| `turn-journals/conv-N/` | tour | le journal fin du tour : appels, commandes, verdicts |
+| `prompt-observability/conv-N.jsonl` | conversation | ce qui est réellement parti au modèle |
+
+**Réflexe.** Au moment où la cible est une conversation NOMMÉE — et TOUJOURS avant d'écrire
+« non mesurable », « pas de données » ou « corpus vide » —, ouvrir son `activity/conv-N.jsonl` et
+son `causal-trace/conv-N.jsonl` avant de conclure. Une sonde agrégée a un corpus FIGÉ : les
+conversations récentes ou en cours n'y sont pas encore, alors que leur journal, lui, est déjà écrit.
+
+**Mesuré le 2026-09-01 (conv-27).** `scout:rendement` couvrait 25 conversations et ignorait
+conv-27, conv-26 et conv-28 — les trois plus récentes. La procédure telle qu'écrite menait à
+« hors corpus ». `activity/conv-27.jsonl` portait pourtant les 19 appels, $9,885 et 63,3 min qui
+ont permis toute l'analyse. Coût de l'omission : l'analyse entière, ou un chiffre inventé.
+
+**Garde-fous.** Lecture seule, jamais d'écriture sur ces journaux. Un tour à `costUsd = 0` est un
+tour NON INSTRUMENTÉ, pas un tour gratuit : l'exclure des moyennes. Et un journal DIT ce qui a été
+consommé, jamais si le livrable était bon — l'acceptation se lit dans le fil, pas dans le coût.

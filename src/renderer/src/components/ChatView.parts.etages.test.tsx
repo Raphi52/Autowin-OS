@@ -31,6 +31,10 @@ const action = (over: Partial<Action>): Action =>
   ({ kind: 'action', name: 'orchestrate', args: { task: 't' }, ...over }) as Action
 function render(actions: Action[]): void {
   act(() => root.render(createElement(AssistantActivityGroup, { actions })))
+  // Un groupe TERMINE arrive PLIE depuis le 2026-09-01 : ces oracles portent sur le CONTENU des
+  // etages, on les deplie donc comme le ferait l'utilisateur avant de les observer.
+  const entete = container.querySelector<HTMLButtonElement>('[data-testid="activity-group"]')
+  if (entete && entete.getAttribute('aria-expanded') === 'false') act(() => entete.click())
 }
 const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'ChatView.css'), 'utf8')
 const theme = readFileSync(

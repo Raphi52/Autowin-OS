@@ -109,6 +109,8 @@ export type PilotEventVariant =
   | { kind: 'command'; actionId: string; name: string; args: unknown }
   /** Signe de vie d'une action LONGUE encore en cours : ne resout rien, remplace le precedent. */
   | { kind: 'action-progress'; actionId: string; text: string }
+  /** Signe de vie TECHNIQUE du provider (outil, tache de fond, retry) — jamais du raisonnement. */
+  | { kind: 'provider-status'; text: string; iteration: number }
   | {
       kind: 'result'
       actionId: string
@@ -222,6 +224,35 @@ export function commandResultSucceeded(result: CommandResult): boolean {
   if (data.ok === false || data.valid === false || data.gateBlocked === true) return false
   if (data.status === 'failed' || data.status === 'red') return false
   return typeof data.exitCode !== 'number' || data.exitCode === 0
+}
+
+/**
+ * Motif d'un depot memoire QUI N'A RIEN ECRIT, ou `undefined` quand la memoire est bien deposee.
+ *
+ * Mesure conv-33 (2026-09-01) : le Brain a rendu `{ok:true, data:{allowed:true, stored:false,
+ * detail:"refuse par le Brain : not found"}}`. Ce resultat passe `commandResultSucceeded` — aucun
+ * `ok:false`, aucun statut rouge, aucun exitCode — donc la garde de visibilite ne s'armait pas : le
+ * tour s'est cloture sur « je depose la lecon » alors que RIEN n'etait ecrit, et l'utilisateur a lu
+ * un tour qui semblait bloque. Le fait porteur est `stored`, jamais la reussite du transport : c'est
+ * la meme lecture que `skill-node-mcp` fait deja cote MCP (« RIEN ECRIT »).
+ */
+/** Consigne unique de relance quand un tour qui a AGI ne conclut pas. Partagee par les DEUX
+ *  chemins de cloture : la branche sans commande ET le raccourci `remember` auxiliaire. */
+export const RELANCE_CONCLUSION_ABSENTE =
+  'SYSTÈME: ta réponse ne CONCLUT pas. Reformule-la MAINTENANT, SANS aucune commande, en ' +
+  'terminant par ce bloc, court et concret : « ✅ Fait » (ce que tu as établi, avec le ' +
+  'résultat), puis l’état en trois lignes — 📍 Maintenant / ⏳ Reste à faire / 👉 ' +
+  'Recommandé. N’écris aucune étiquette technique du type « [a exécuté … ] » et ' +
+  'n’annonce pas ce que tu vas faire : le travail est déjà fait, dis ce qu’il a donné.'
+
+export function motifDepotMemoireNonAbouti(result: CommandResult): string | undefined {
+  if (!result.ok) return String(result.error ?? 'refus')
+  const data = result.data as Record<string, unknown> | undefined
+  if (!data || typeof data !== 'object') return undefined
+  if (data.stored !== false) return undefined
+  return typeof data.detail === 'string' && data.detail.trim()
+    ? data.detail.trim()
+    : JSON.stringify(data)
 }
 
 function failedOrchestrationOutcome(error: unknown): Record<string, unknown> {
@@ -724,6 +755,8 @@ export class AgentPilot {
      * verite au texte deja livre.
      */
     let refusRememberAuxiliaire: string | undefined
+    /** Le raccourci `remember` a AVALE la garde de cloture : une relance est due (voir plus bas). */
+    let consigneClotureApresRemember = false
     /**
      * Le compte-rendu AUTORITATIF de cette orchestration, garde comme REPLI.
      *
@@ -1394,6 +1427,11 @@ export class AgentPilot {
           let sawFirstChunk = false
           res = await this.registry.send(provider, messages, options, (chunk) => {
             // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
+            if (chunk.status) {
+              // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.
+              emit({ kind: 'provider-status', text: chunk.status, iteration: i })
+              return
+            }
             if (chunk.reasoning) {
               emit({ kind: 'reasoning', text: chunk.reasoning, iteration: i })
               return
@@ -1851,13 +1889,7 @@ export class AgentPilot {
           relanceDeFormeUtilisee = true
           conclusionFormatRecoveryAvailable = false
           grantRecoveryIteration('conclusion-absente')
-          convo.push(
-            'SYSTÈME: ta réponse ne CONCLUT pas. Reformule-la MAINTENANT, SANS aucune commande, en ' +
-              'terminant par ce bloc, court et concret : « ✅ Fait » (ce que tu as établi, avec le ' +
-              'résultat), puis l’état en trois lignes — 📍 Maintenant / ⏳ Reste à faire / 👉 ' +
-              'Recommandé. N’écris aucune étiquette technique du type « [a exécuté … ] » et ' +
-              'n’annonce pas ce que tu vas faire : le travail est déjà fait, dis ce qu’il a donné.'
-          )
+          convo.push(RELANCE_CONCLUSION_ABSENTE)
           continue
         }
         if (
@@ -2130,8 +2162,10 @@ export class AgentPilot {
           continue
         }
         const commandSucceeded = commandResultSucceeded(r)
-        if (token.name === 'remember' && !commandSucceeded) {
-          refusRememberAuxiliaire = r.ok ? JSON.stringify(r.data) : String(r.error ?? 'refus')
+        if (token.name === 'remember') {
+          // Sur `stored`, PAS sur la reussite du transport : voir motifDepotMemoireNonAbouti.
+          const motif = motifDepotMemoireNonAbouti(r)
+          if (motif) refusRememberAuxiliaire = motif
         }
         /*
          * La clef porte le nom ET LA CIBLE. Avec le nom seul, un `edit_file` reussi sur `b.ts`
@@ -2181,7 +2215,29 @@ export class AgentPilot {
       // `remember` est une écriture auxiliaire : son résultat est déjà visible dans la carte action.
       // Quand le modèle a livré sa réponse dans le même message, repayer une génération uniquement
       // pour commenter un refus déterministe (type/locator/SHA) ne peut améliorer le travail rendu.
-      if (onlyAuxiliaryRemember) {
+      /*
+       * LE RACCOURCI NE DOIT PAS AVALER LA GARDE DE CLOTURE.
+       *
+       * Mesure conv-34 (2026-09-01) : « j'ai pas eu de bloc de fin ». `exigeUneConclusion` vit dans
+       * la branche SANS commande (plus haut) ; ce `return` la rendait INATTEIGNABLE des qu'un tour
+       * finit par « texte + remember » — le cas le plus courant d'un tour de kaizen, qui depose
+       * justement sa lecon en dernier. Le tour se cloturait sur une phrase d'intention, sans ✅ Fait
+       * et sans reste a faire. On rend la parole UNE fois, pour la seule cloture ; l'economie voulue
+       * (ne pas repayer une generation pour commenter un refus) reste entiere quand le texte livre
+       * conclut deja.
+       */
+      if (
+        onlyAuxiliaryRemember &&
+        exigerExperienceSoignee &&
+        !relanceDeFormeUtilisee &&
+        conclusionFormatRecoveryAvailable &&
+        exigeUneConclusion(true, spoken)
+      ) {
+        relanceDeFormeUtilisee = true
+        conclusionFormatRecoveryAvailable = false
+        grantRecoveryIteration('conclusion-absente')
+        consigneClotureApresRemember = true
+      } else if (onlyAuxiliaryRemember) {
         // Le modele a livre sa reponse ET sauve une memoire. On emettait VIDE — donc on JETAIT son
         // texte reel, laissant une bulle vide (conv-1141). `spoken` est garanti non vide ici.
         emit({
@@ -2189,7 +2245,7 @@ export class AgentPilot {
           text: refusRememberAuxiliaire
             ? `${spoken}
 
-⚠️ Mémoire NON déposée — le Brain a refusé : ${refusRememberAuxiliaire}`
+⚠️ Mémoire NON déposée — ${refusRememberAuxiliaire}`
             : spoken,
           usage
         })
@@ -2247,6 +2303,10 @@ export class AgentPilot {
       dernierEtatEnvoye = state
       convo.push(`TU AS ÉMIS: ${text}`)
       convo.push(`RÉSULTATS:\n${results.join('\n')}\n\n${bloc}`)
+      if (consigneClotureApresRemember) {
+        consigneClotureApresRemember = false
+        convo.push(RELANCE_CONCLUSION_ABSENTE)
+      }
     }
     // Le cap EFFECTIF, pas le cap initial : `grantRecoveryIteration` en accorde jusqu'a huit de plus
     // (directive tardive, tour muet, chiffre non verifie, conclusion absente, echec taise...). Un tour

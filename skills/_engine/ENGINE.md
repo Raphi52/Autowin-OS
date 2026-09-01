@@ -101,7 +101,7 @@ Schema: `{"schema_version":"je-1","dimension","note","interval","unstable","unst
 > *(Ch.4 absorbs the execution mechanics once delegated to third-party skills — the engine is self-contained by design; guarded by `verify-selfcontained.ps1`.)*
 
 ## Telemetry & cadence *(out-of-model measurement — not daily use)*
-Blocks counted in `~/.claude/gate-counters.jsonl` by the hooks — the TREND measures discipline, not self-reporting. Periodic: behavioral audit (Mode B) · memory consolidation (expiry/conflict/dedup) · re-baseline on model bump (trigger-tests + judge calibration).
+Blocks counted in `~/.claude/gate-counters.jsonl` by the hooks — the TREND measures discipline, not self-reporting. Periodic: behavioral audit (`kaizen`) · memory consolidation (expiry/conflict/dedup) · re-baseline on model bump (trigger-tests + judge calibration).
 
 ## Roadmap (named, NOT wired — do not assume coverage)
 Held-out anti-Goodhart (critical) · fresh-judge on saturation · real $ caps + token-bucket 429 · A/B pipeline-vs-bare on real case · mechanical lesson-promotion by hook.

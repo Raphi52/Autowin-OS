@@ -497,7 +497,7 @@ export function AssistantActivityGroup({
    * d'en dessous »). L'ancien pli ouvrait un SECOND bloc de details sous le premier : ce doublon a
    * ete supprime, chaque etage porte deja son propre depliage.
    */
-  const [etapesOuvertes, setEtapesOuvertes] = useState(true)
+  const [pliManuel, setPliManuel] = useState<boolean | null>(null)
   /*
    * UNE ACTION QUI PORTE UN REFUS N'EST PAS « TERMINEE ».
    *
@@ -564,6 +564,15 @@ export function AssistantActivityGroup({
    * l'utilisateur sans savoir si c'est casse ou si c'est lui ; on montre donc le detail SUR PLACE.
    */
   const runConsultable = hasConsultableRun(actions)
+  /**
+   * PLIE PAR DEFAUT QUAND C'EST TERMINE (demande du 2026-09-01 : « les blocs actions terminé doivent
+   * tous être pliés à l'origine et c'est le user qui les déplie si besoin »). Un groupe encore en
+   * vol, en erreur ou interrompu garde ses etapes visibles : c'est la seule chose a regarder. Le
+   * choix EXPLICITE de l'utilisateur (`pliManuel`) prime toujours sur ce defaut.
+   */
+  const termine = !running && !failed && interruptedCount === 0
+  const etapesOuvertes = pliManuel ?? !termine
+  const basculerEtapes = (): void => setPliManuel(!etapesOuvertes)
   // Action INTERROMPUE -> on REPREND (acquis persisté) ; ÉCHOUÉE -> on RELANCE (re-run). Les deux
   // passent par le même canal `onResume`, seul le mot change. Sans la branche échec, une action en
   // erreur n'offrait AUCUN levier -> « erreur » sans quoi faire (frustration, conv veille 2026-08-14).
@@ -615,7 +624,7 @@ export function AssistantActivityGroup({
               return
             }
             if (actions.length) {
-              setEtapesOuvertes((ouvert) => !ouvert)
+              basculerEtapes()
               return
             }
             if (!runConsultable) return

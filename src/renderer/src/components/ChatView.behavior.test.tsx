@@ -1703,7 +1703,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => {
       ;(container!.querySelectorAll('.conv-pick')[0] as HTMLElement).click()
     })
-    await click('button[title="Workflows (RUN.md)"]')
+    await click('button[title="Détails de l’exécution"]')
 
     const liveSubagentCard = container!.querySelector('.live-run .subagent-step')
     expect(liveSubagentCard?.textContent).toContain('en cours')
@@ -1736,21 +1736,30 @@ describe('ChatView behavior under concurrent UI actions', () => {
    * navigation, et le détail dessous découle du nœud choisi. L'assertion est retournée pour que la
    * barre ne puisse pas revenir en silence.
    */
-  it('n’expose plus de barre d’onglets dans Workflows : le graphe est la navigation', async () => {
+  /**
+   * TROIS ONGLETS — Graph / Runs / Logs — redemandes le 2026-09-01. Ce test remplace celui qui
+   * INTERDISAIT toute barre d'onglets : l'interdiction datait de la periode ou le graphe etait la
+   * seule navigation, et elle aurait bloque la separation demandee. Ce qui reste verifie : les
+   * QUATRE anciennes projections ne reviennent pas, et le graphe est toujours l'accueil.
+   */
+  it('expose trois onglets dans le panneau — Graph, Runs, Logs — et ouvre sur le graphe', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
     await click('.conv-pick')
-    await click('button[title="Workflows (RUN.md)"]')
+    await click('button[title="Détails de l’exécution"]')
 
     const pane = container!.querySelector('.runs-pane')
     expect(pane).toBeTruthy()
-    expect(pane!.querySelector('.workflow-section-tabs')).toBeNull()
-    expect(pane!.querySelector('[role="tablist"]')).toBeNull()
-    expect(pane!.querySelectorAll('button[role="tab"]')).toHaveLength(0)
-    // Le graphe est monté d'emblée, et le détail des RUN.md reste atteignable sous lui.
+    expect(pane!.querySelector('[role="tablist"]')).toBeTruthy()
+    expect(
+      Array.from(pane!.querySelectorAll('button[role="tab"]')).map((b) => b.textContent?.trim())
+    ).toEqual(['Graph', 'Runs', 'Logs'])
+    // Le graphe est monté d'emblée, et son détail de sélection reste sous lui.
     expect(pane!.querySelector('.workflow-execution-graph')).toBeTruthy()
     expect(pane!.querySelector('[data-workflow-detail]')).toBeTruthy()
+    // Les anciennes projections en onglets ne reviennent pas par la bande.
     expect(pane!.textContent).not.toContain('Activité')
+    expect(pane!.textContent).not.toContain('Source control')
     expect(pane!.className).not.toContain('wide')
   })
 
@@ -1781,8 +1790,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     await mount(mockApi)
     await click('.conv-pick')
-    await click('button[title="Workflows (RUN.md)"]')
-    // Plus d’onglet à activer : sans sélection dans le graphe, la liste des RUN.md est l’accueil.
+    await click('button[title="Détails de l’exécution"]')
+    // Les RUN.md ont leur propre onglet depuis le 2026-09-01 : il faut l'ouvrir pour les lire.
+    await click('button[role="tab"]:nth-of-type(2)')
 
     const deleteButton = container!.querySelector(
       'button[aria-label="Supprimer le run ancien-run"]'
@@ -1842,13 +1852,23 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ])
     await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]), causalTrace }))
     await click('.conv-pick')
-    await click('button[title="Workflows (RUN.md)"]')
+    await click('button[title="Détails de l’exécution"]')
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
     })
 
     expect(container!.textContent).not.toContain('Aucune orchestration dans cette conversation')
+    // Le graphe est bien rempli par la trace : c'est LA garde du défaut d'origine.
+    expect(container!.querySelector('[data-execution-node]')).not.toBeNull()
+    // Depuis le 2026-09-01, l'accueil de l'onglet Graph ne garde que les fils EN COURS : ce tour
+    // est TERMINÉ, donc son fil n'y est plus empilé — il s'ouvre en descendant sur son nœud.
+    expect(container!.querySelector('.live-run')).toBeNull()
+
+    const noeudAgent = container!.querySelector<HTMLButtonElement>(
+      '[data-execution-node][data-execution-kind]'
+    )!
+    await act(async () => noeudAgent.click())
     expect(container!.querySelector('.live-run')).not.toBeNull()
   })
 
@@ -1880,7 +1900,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     // Montage + sélection de conversation : rien n'est lu tant que le panneau reste fermé.
     expect(causalTrace).not.toHaveBeenCalled()
 
-    await click('button[title="Workflows (RUN.md)"]')
+    await click('button[title="Détails de l’exécution"]')
     // Le graphe n’est plus derrière un onglet : ouvrir le panneau SUFFIT à le monter, donc à lire
     // la trace. La paresse tient désormais à l’ouverture du panneau, seule garde encore réelle.
     await act(async () => {
@@ -1973,7 +1993,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await mount(mockApi)
     await click('.conv-pick')
 
-    expect(container!.querySelector('button[title="Workflows (RUN.md)"]')?.textContent).toContain(
+    expect(container!.querySelector('button[title="Détails de l’exécution"]')?.textContent).toContain(
       '1 green'
     )
   })

@@ -19,7 +19,7 @@ description: >-
   cited feasibility seed — it never declares "impossible" without a cited source. DO NOT use to: frame a need
   that's ALREADY chosen (→ `frame`); just LOCATE known code (→ `Explore` agent — scout RANKS
   opportunities, it does not locate); review an existing diff (→ code-review); judge the quality of a
-  finished deliverable (→ `judge`); audit a behavior / workflow / habit set (→ `judge` Mode B); nor to FIX/execute — scout PROPOSES, it touches nothing.
+  finished deliverable (→ `judge`); audit a behavior / workflow / habit set (→ `kaizen`); nor to FIX/execute — scout PROPOSES, it touches nothing.
 ---
 
 # scout — surface actionable improvement candidates (read-only: propose, never fix/frame/judge)
@@ -62,7 +62,7 @@ ONE table, ranked **highest-IMPACT first** (NOT "most-pickable" = smallest/safes
 ## Don't
 - **FIX / execute** — scout PROPOSES, touches nothing (read-only).
 - Merely **LOCATE** known code → that's the `Explore` agent (scout RANKS opportunities, it doesn't locate).
-- **Frame** an already-chosen need → `frame` · review a diff → code-review · judge a deliverable → `judge` · audit a behavior/workflow → `judge` Mode B.
+- **Frame** an already-chosen need → `frame` · review a diff → code-review · judge a deliverable → `judge` · audit a behavior/workflow → `kaizen`.
 - **Answer a pure ADVISORY question** ("which is best / what is X / why" — expects a direct answer, names no target to scan) → answer directly (CLAUDE.md ADVISORY hard-gate). (A "what to do / where to start on TARGET" question IS scout's job — derive it, don't bounce it back to the user.)
 - Emit a **/100**, per-lens scores, or internal jargon in the output table.
 

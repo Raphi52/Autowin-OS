@@ -71,17 +71,19 @@ describe('clic sur une action remember terminée', () => {
   it('le bloc est ACTIONNABLE (plus aria-disabled)', () => {
     render()
     expect(bloc().getAttribute('aria-disabled')).not.toBe('true')
-    expect(bloc().getAttribute('aria-expanded')).toBe('true')
+    expect(bloc().getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('le contenu retenu est PLIÉ au départ, l’étape visible', () => {
+  // Demande du 2026-09-01 : un groupe TERMINE arrive PLIE ; c'est l'utilisateur qui le deplie.
+  it('les étapes sont PLIÉES au départ sur un groupe terminé', () => {
     render()
-    expect(etapes()).not.toBeNull()
+    expect(etapes()).toBeNull()
     expect(detailEtape()).toBeNull()
   })
 
   it('le déplié se fait sur l’ÉTAGE, pas sur un second bloc', () => {
     render()
+    clicBloc()
     const toggle = container.querySelector<HTMLElement>('[data-testid="activity-step-toggle"]')
     expect(toggle).not.toBeNull()
     act(() => toggle!.click())
@@ -90,13 +92,13 @@ describe('clic sur une action remember terminée', () => {
     expect(container.textContent).toContain('deposé au Brain')
   })
 
-  it('le chevron d’en-tête CACHE les lignes d’étapes, et rien d’autre', () => {
+  it('le chevron d’en-tête MONTRE puis recache les lignes d’étapes, et rien d’autre', () => {
     render()
     clicBloc()
-    expect(etapes()).toBeNull()
-    expect(bloc().getAttribute('aria-expanded')).toBe('false')
+    expect(etapes()).not.toBeNull()
+    expect(bloc().getAttribute('aria-expanded')).toBe('true')
     expect(container.querySelector('[data-testid="activity-local-details"]')).toBeNull()
     clicBloc()
-    expect(etapes()).not.toBeNull()
+    expect(etapes()).toBeNull()
   })
 })

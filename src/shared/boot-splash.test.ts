@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { BOOT_JAUNE, BOOT_SPLASH_DOCUMENT, BOOT_SPLASH_MARKUP, BOOT_VIOLET } from './boot-splash'
+import { BOOT_SPLASH_DOCUMENT, BOOT_SPLASH_MARKUP } from './boot-splash'
 
 /**
  * L'écran d'attente doit tenir aux DEUX endroits, et rester identique entre les deux.
@@ -58,26 +58,47 @@ describe('écran d’attente — les deux copies', () => {
 })
 
 describe('écran d’attente — l’apparence demandée', () => {
-  it('fond noir, anneau jaune ET violet', () => {
+  // La feuille de style de l'application est la SOURCE de l'atome : le splash la recopie à la main,
+  // faute de pouvoir la charger si tôt. On confronte donc la copie à l'original plutôt qu'à des
+  // constantes propres au splash, qui laissaient les deux dériver sans que rien ne le dise.
+  const theme = readFileSync(join(__dirname, '../renderer/src/assets/theme.css'), 'utf8')
+  const sansEspaces = (t: string): string => t.replace(/\s+/g, '')
+
+  it('fond noir', () => {
     expect(BOOT_SPLASH_MARKUP).toContain('background:#000')
-    expect(BOOT_SPLASH_MARKUP).toContain(BOOT_JAUNE)
-    expect(BOOT_SPLASH_MARKUP).toContain(BOOT_VIOLET)
   })
 
-  it('un anneau SVG à extrémités arrondies, pas une bordure', () => {
-    // Une bordure colorée donne des angles nets et une rotation qui saute : ça se remarque comme
-    // bâclé, et c'était le premier reproche fait à cet écran.
-    expect(BOOT_SPLASH_MARKUP).toContain('<svg')
-    expect(BOOT_SPLASH_MARKUP).toContain('stroke-linecap:round')
-    expect(BOOT_SPLASH_MARKUP).toMatch(/stroke-dasharray/)
-    expect(BOOT_SPLASH_MARKUP).not.toMatch(/border-top-color/)
+  it('porte l’ATOME de l’application, pas un indicateur à lui', () => {
+    // Un deuxième « ça bosse » propre au démarrage est exactement ce qu'on ne veut plus : l'écran
+    // d'attente doit montrer le même objet que le reste de l'application.
+    for (const classe of [
+      'aw-atom__plane--3',
+      'aw-atom__rot--3',
+      'aw-atom__trail--3',
+      'aw-atom__head--3',
+      'aw-atom__star--hot'
+    ]) {
+      expect(BOOT_SPLASH_MARKUP).toContain(classe)
+    }
+    expect(BOOT_SPLASH_MARKUP).not.toContain('<svg')
+  })
+
+  it('reprend les couleurs et les tempos de `theme.css`', () => {
+    // Les trois têtes d'orbite et l'étoile : si le thème change de teinte, la copie doit suivre.
+    for (const couleur of ['#ff2d95', '#ff8a1f', '#ffd66b']) {
+      expect(theme).toContain(couleur)
+      expect(BOOT_SPLASH_MARKUP).toContain(couleur)
+    }
+    for (const tempo of ['2.7s', '3.3s', '3.9s', '1.6s']) {
+      expect(sansEspaces(BOOT_SPLASH_MARKUP)).toContain(tempo)
+    }
   })
 
   it('reste annoncé aux lecteurs d’écran et respecte la réduction d’animation', () => {
     expect(BOOT_SPLASH_MARKUP).toMatch(/role="status"/)
     expect(BOOT_SPLASH_MARKUP).toMatch(/aria-live="polite"/)
     expect(BOOT_SPLASH_MARKUP).toMatch(/prefers-reduced-motion/)
-    // L'anneau ralentit au lieu de s'arrêter : figé, il ne dirait plus que ça travaille.
+    // L'atome ralentit au lieu de s'arrêter : figé, il ne dirait plus que ça travaille.
     expect(BOOT_SPLASH_MARKUP).toMatch(/animation-duration:3s/)
   })
 })

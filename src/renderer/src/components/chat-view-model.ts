@@ -82,6 +82,11 @@ export interface HydratedAssistantMessage {
    * mêlé à la réponse. Sert à montrer l'activité durant les secondes précédant le premier mot.
    */
   reasoning?: string
+  /**
+   * Signe de vie TECHNIQUE du provider — REMPLACE le precedent, jamais accumule, jamais persiste,
+   * jamais melange au bloc « Reflexion ».
+   */
+  providerStatus?: string
 }
 
 export interface StoredAssistantMessage {
@@ -462,6 +467,9 @@ export function reduceAssistantPilotEvent(
   const turnId = message.turnId ?? event.turnId ?? 'pending'
   // Raisonnement live : accumulé HORS parts (transitoire, non persisté) et borné pour ne pas
   // gonfler indéfiniment sur un long raisonnement — on garde la fin, la plus informative.
+  if (event.kind === 'provider-status' && event.text) {
+    return { ...message, turnId, providerStatus: event.text }
+  }
   if (event.kind === 'reasoning' && event.text) {
     const merged = `${message.reasoning ?? ''}${event.text}`
     return { ...message, turnId, reasoning: merged.slice(-4_000) }

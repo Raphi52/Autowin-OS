@@ -30,6 +30,40 @@ describe('concise structured response policy', () => {
   })
 })
 
+/**
+ * PARLER SIMPLEMENT — demande explicite de l'utilisateur, mesuree le 2026-09-01.
+ *
+ * Ses mots : « les termes employes sont trop pousses », « faut simplifier un max, que l'humain
+ * comprenne vite ». Le cout n'est pas cosmetique : il decode du jargon a chaque reponse, sur chaque
+ * tache. Sans ces assertions, la clause se ferait effacer au premier remaniement du profil, et le
+ * defaut reviendrait sans que personne ne le voie.
+ */
+describe('profil de reponse — langage simple', () => {
+  const consigne = CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
+
+  it('exige de traduire le vocabulaire de mecanique interne', () => {
+    expect(consigne).toMatch(/jargon|terme de mécanique|mécanique interne/iu)
+    // Les mots les plus coûteux sont NOMMÉS : une consigne abstraite ne se déclenche sur rien.
+    for (const mot of ['gate', 'livrable', 'worktree', 'scope', 'verdict', 'token']) {
+      expect(consigne.toLowerCase()).toContain(mot)
+    }
+  })
+
+  it('demande de dire ce qui s’est passe, pas le nom des rouages', () => {
+    expect(consigne).toMatch(/rouages|ce que ça change|ce qui s'est passé/iu)
+  })
+
+  it('garde le droit de nommer une CIBLE technique — un chemin ne se paraphrase pas', () => {
+    expect(consigne).toMatch(/chemin de fichier|commande|identifiant/iu)
+  })
+
+  it('interdit d’acheter la simplicite avec de l’imprecision', () => {
+    // Le risque de cette regle, et la raison pour laquelle elle est testee : « simple » ne doit
+    // jamais devenir « vague ». Un echec adouci serait pire que le jargon qu'on retire.
+    expect(consigne).toMatch(/jamais sur la preuve|ne veut pas dire arrondir|exacte/iu)
+  })
+})
+
 describe('prompt suivant prérempli dans le composer', () => {
   it('demande la ligne technique, APRÈS les rubriques, et dit qu’elle est invisible', () => {
     const consigne = CONCISE_STRUCTURED_RESPONSE_INSTRUCTION

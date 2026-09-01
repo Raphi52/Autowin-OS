@@ -29,17 +29,19 @@ beforeEach(() => {
   spawnCapture.stdoutEvents = []
 })
 
-/** Draine le générateur et rend les fragments de raisonnement streamés. */
-async function drainReasoning(): Promise<{ reasoning: string[]; text: string }> {
+/** Draine le générateur et rend les fragments de RAISONNEMENT et de STATUT, séparément. */
+async function drainReasoning(): Promise<{ reasoning: string[]; statuts: string[]; text: string }> {
   const { ClaudeCliAdapter } = await import('./claude')
   const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
   const reasoning: string[] = []
+  const statuts: string[] = []
   let step = await gen.next()
   while (!step.done) {
     if (step.value.reasoning) reasoning.push(step.value.reasoning)
+    if (step.value.status) statuts.push(step.value.status)
     step = await gen.next()
   }
-  return { reasoning, text: step.value.text }
+  return { reasoning, statuts, text: step.value.text }
 }
 
 describe('ClaudeCliAdapter — surcharge API (529) rendue visible', () => {
@@ -74,12 +76,15 @@ describe('ClaudeCliAdapter — surcharge API (529) rendue visible', () => {
         usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0 }
       }
     ]
-    const { reasoning } = await drainReasoning()
+    // Le retry sort par le canal STATUT, jamais par le raisonnement : une surcharge reseau n'est
+    // pas une pensee du modele (canal separe depuis le 2026-09-01).
+    const { reasoning, statuts } = await drainReasoning()
 
-    expect(reasoning).toHaveLength(2)
-    expect(reasoning[0]).toContain('529')
-    expect(reasoning[0]).toContain('1/10')
-    expect(reasoning[1]).toContain('2/10')
+    expect(statuts).toHaveLength(2)
+    expect(statuts[0]).toContain('529')
+    expect(statuts[0]).toContain('1/10')
+    expect(statuts[1]).toContain('2/10')
+    expect(reasoning, 'le bloc Réflexion ne doit rien recevoir').toEqual([])
   })
 
   it("ne persiste PAS la surcharge API dans le champ raisonnement", async () => {
@@ -111,7 +116,7 @@ describe('ClaudeCliAdapter — surcharge API (529) rendue visible', () => {
     const streame: string[] = []
     let step = await gen.next()
     while (!step.done) {
-      if (step.value.reasoning) streame.push(step.value.reasoning)
+      if (step.value.status) streame.push(step.value.status)
       step = await gen.next()
     }
 
