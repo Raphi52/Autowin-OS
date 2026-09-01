@@ -28,6 +28,53 @@ describe('binaireDe — ce qui sera réellement lancé', () => {
   })
 })
 
+describe('les guillemets GROUPENT — un message en plusieurs mots arrive intact', () => {
+  /**
+   * DÉFAUT VÉCU (conv-46, 2026-09-01) : `git commit -m "trois mots"` repartait en autant
+   * d'arguments, guillemets compris, et git répondait « pathspec 'trois' did not match any
+   * file(s) ». Le lanceur coupait la ligne avec un simple `split(/\s+/)` : rien de guillemeté ne
+   * survivait. Ces cas sont TOUS rouges avec l'ancien découpage.
+   */
+  it('garde un message entre guillemets doubles en UN seul argument', () => {
+    expect(decouperArguments('git commit -m "message en plusieurs mots"')).toEqual([
+      'git',
+      'commit',
+      '-m',
+      'message en plusieurs mots'
+    ])
+  })
+
+  it('accepte aussi les apostrophes', () => {
+    expect(decouperArguments("git commit -m 'trois mots ici'")).toEqual([
+      'git',
+      'commit',
+      '-m',
+      'trois mots ici'
+    ])
+  })
+
+  it('transmet un script entier a bash -c sans le tronquer', () => {
+    expect(decouperArguments('bash -c "ALLOW_MAIN_PUSH=1 git push origin main"')).toEqual([
+      'bash',
+      '-c',
+      'ALLOW_MAIN_PUSH=1 git push origin main'
+    ])
+  })
+
+  it('ne change rien a une ligne sans guillemets', () => {
+    expect(decouperArguments('  git status --short  ')).toEqual(['git', 'status', '--short'])
+  })
+
+  it('ferme un guillemet reste ouvert au lieu de perdre la fin de la ligne', () => {
+    expect(decouperArguments('git commit -m "fin manquante')).toEqual([
+      'git',
+      'commit',
+      '-m',
+      'fin manquante'
+    ])
+  })
+})
+
 describe('decisionDeCommande — plus aucune autorisation a retaper', () => {
   const sansRien: string[] = []
   const autoriseGit = ['Autorise les commandes git : committe mon travail local']
