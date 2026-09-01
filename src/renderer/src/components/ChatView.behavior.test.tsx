@@ -847,6 +847,58 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
+  // Defaut vecu le 2026-09-01 : en basculant de conversation, le bouton « ↓ Dernier message »
+  // CLIGNOTAIT. L'etat « fil remonte » de la conversation QUITTEE restait pose pendant le rendu du
+  // nouveau fil, et seule la descente, une frame plus tard, le retirait. Les frames sont donc mises
+  // sous controle ici : c'est le seul moyen d'observer l'instant ou le clignotement se voit.
+  it('ne fait pas clignoter le saut vers le dernier message en basculant de conversation', async () => {
+    const frames: FrameRequestCallback[] = []
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      frames.push(cb)
+      return frames.length
+    })
+    try {
+      const mockApi = api({
+        conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')])
+      })
+      await mount(mockApi)
+      const picks = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')]
+      const convA = picks.find((b) => b.textContent?.includes('Conversation A'))!
+      const convB = picks.find((b) => b.textContent?.includes('Conversation B'))!
+      await act(async () => convA.click())
+      await type('un message')
+      await click('.composer-send')
+
+      const scroll = container!.querySelector('.chat-scroll') as HTMLDivElement
+      scroll.scrollTo = vi.fn()
+      Object.defineProperties(scroll, {
+        scrollHeight: { configurable: true, value: 1000 },
+        clientHeight: { configurable: true, value: 100 },
+        scrollTop: { configurable: true, writable: true, value: 0 }
+      })
+      await act(async () => {
+        scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+      })
+      expect(container!.querySelector('.chat-jump-latest')).not.toBeNull()
+
+      // Bascule vers une conversation JAMAIS lue : rien n'y est remonte, donc aucun bouton — pas
+      // meme le temps d'une frame.
+      frames.splice(0)
+      await act(async () => convB.click())
+      expect(
+        container!.querySelector('.chat-jump-latest'),
+        'le bouton du fil precedent survit a la bascule : il clignote'
+      ).toBeNull()
+
+      await act(async () => {
+        for (const frame of frames.splice(0)) frame(0)
+      })
+      expect(container!.querySelector('.chat-jump-latest')).toBeNull()
+    } finally {
+      raf.mockRestore()
+    }
+  })
+
   it('affiche le saut vers le dernier message dès que le fil est remonté, sans attendre une nouvelle activité', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)

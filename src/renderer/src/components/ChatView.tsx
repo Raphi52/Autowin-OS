@@ -1503,6 +1503,11 @@ export function ChatView({
     positionARestaurerRef.current = reprise ?? null
     followTailRef.current = !reprise
     setHasNewActivity(false)
+    // Le « fil remonte » appartient a LA conversation qu'on quitte. Sans cette remise a l'etat de la
+    // conversation OUVERTE, le bouton « ↓ Dernier message » restait peint pendant le rendu du
+    // nouveau fil et ne partait qu'a la frame de descente : un CLIGNOTEMENT a chaque bascule
+    // (rapporte le 2026-09-01). Une reprise, elle, s'ouvre bien remontee : le bouton y est du.
+    setScrolledAwayFromTail(!!reprise)
     activeRef.current = c.id
     setActiveId(c.id)
     const branchMessages = detailed.messages ?? []
