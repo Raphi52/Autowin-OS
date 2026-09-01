@@ -1774,18 +1774,6 @@ export class AgentPilot {
         }
         if (blocsIllisibles.length && commandeIllisibleRecoveryAvailable) {
           commandeIllisibleRecoveryAvailable = false
-          let illisibleIndex = 0
-          for (const bloc of blocsIllisibles) {
-            const actionId = `${i}:illisible:${illisibleIndex++}`
-            emit({ kind: 'command', actionId, name: 'commande illisible', args: {} })
-            emit({
-              kind: 'result',
-              actionId,
-              name: 'commande illisible',
-              ok: false,
-              data: `${bloc.reason} — aucune action n'a été exécutée`
-            })
-          }
           grantRecoveryIteration('commande-illisible')
           convo.push(`TOI: ${texteProvider}`)
           convo.push(
