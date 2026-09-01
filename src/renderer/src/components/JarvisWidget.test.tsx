@@ -116,11 +116,11 @@ const conversations = vi.fn(async () => [
   }
 ])
 
-function rendre(props: Record<string, unknown> = {}) {
+function rendre() {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
-  act(() => root.render(createElement(JarvisWidget, props as never)))
+  act(() => root.render(createElement(JarvisWidget)))
   monte.push({ root, container })
   return container
 }
@@ -156,6 +156,10 @@ afterEach(() => {
     container.remove()
   }
 })
+
+const moteur2Dire = async (m: FakeRecognition): Promise<void> => {
+  m.dire('Jarvis, lance une tache test', true)
+}
 
 describe('widget Jarvis', () => {
   it('n’écoute pas avant d’avoir été activé', () => {
@@ -230,6 +234,27 @@ describe('widget Jarvis', () => {
     expect(pilotChat).toHaveBeenCalledTimes(1)
   })
 
+  it('UN clic = UN SEUL micro ouvert, même sous StrictMode', async () => {
+    // LE DÉFAUT VÉCU (2026-09-01) : « jarvis a encore lancé 2x la conversation ». L'envoi de
+    // l'ordre avait déjà été sorti de l'updater, mais la CRÉATION DU MOTEUR y était restée :
+    // `setEcoute(precedent => { ... new Fabrique(); moteur.start() ... })`. React réexécute
+    // librement un updater (deux fois d'office sous StrictMode), donc UN clic ouvrait DEUX micros
+    // sur le vrai périphérique. Les deux entendaient la même phrase, et chacun envoyait son ordre.
+    // L'ENTRÉE QUI CASSERAIT UN FAUX FIX : faire parler TOUS les moteurs créés, pas seulement le
+    // dernier — c'est le premier, oublié dans `moteurRef`, qui doublait les tours.
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    act(() => root.render(createElement(StrictMode, null, createElement(JarvisWidget))))
+    monte.push({ root, container })
+    clic(container, 'jarvis-bascule')
+    expect(FakeRecognition.instances).toHaveLength(1)
+    for (const moteur of FakeRecognition.instances) {
+      await act(async () => moteur.dire('Jarvis, lance une tache test', true))
+    }
+    expect(pilotChat).toHaveBeenCalledTimes(1)
+  })
+
   it('fait un son dès qu’il entend son nom, avant même la fin de la phrase', async () => {
     // L'ENTRÉE QUI CASSERAIT UN FAUX FIX : dire('jarvis', false) — un partiel. Un bip branché
     // seulement sur les résultats FINAUX ne sonnerait pas ici, et l'utilisateur parlerait
@@ -271,13 +296,50 @@ describe('widget Jarvis', () => {
     expect(routeConversationMessage).not.toHaveBeenCalled()
   })
 
-  it('affiche les conversations en direct', async () => {
+  it('n’affiche PLUS la liste des conversations en direct', async () => {
+    // CHOIX DE L'UTILISATEUR (2026-09-01) : le widget sert a PARLER a Jarvis, pas a surveiller la
+    // liste des conversations — elle est deja dans la barre laterale. L'ENTREE QUI CASSERAIT UN
+    // FAUX FIX : le sondage rend bien une conversation « Run en cours » (voir `conversations`),
+    // donc un widget qui la garderait afficherait son titre ici.
     const c = rendre()
     await act(async () => {
       await Promise.resolve()
     })
-    expect(conversations).toHaveBeenCalled()
-    expect(c.textContent).toContain('Run en cours')
+    expect(c.querySelector('[data-testid="jarvis-direct"]')).toBeNull()
+    expect(c.textContent).not.toContain('Conversations en direct')
+    expect(c.textContent).not.toContain('Run en cours')
+  })
+
+  it('ENREGISTRE le transcript sans jamais declencher Jarvis', async () => {
+    // LE BESOIN : noter ce qui se dit (une reunion, une idee) sans qu'un « Jarvis » prononce au
+    // passage lance un tour. L'ENTREE QUI CASSERAIT UN FAUX FIX : une phrase qui contient le mot
+    // d'eveil ET un ordre — en mode enregistrement elle doit s'ecrire a l'ecran et RIEN d'autre.
+    const c = rendre()
+    clic(c, 'jarvis-enregistrer')
+    const moteur = FakeRecognition.instances.at(-1)!
+    expect(moteur.demarrages).toBe(1)
+    await act(async () => moteur.dire('Jarvis, ouvre le task manager', true))
+    expect(c.textContent).toContain('Jarvis, ouvre le task manager')
+    expect(routeConversationMessage).not.toHaveBeenCalled()
+    expect(pilotChat).not.toHaveBeenCalled()
+    expect(FakeAudio.demarrages).toBe(0)
+  })
+
+  it('bascule d’un mode a l’autre sans laisser le micro precedent ouvert', async () => {
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    const premier = FakeRecognition.instances.at(-1)!
+    clic(c, 'jarvis-enregistrer')
+    expect(premier.arrets).toBe(1)
+    expect(FakeRecognition.instances).toHaveLength(2)
+    // et l'ancien moteur, s'il rend un dernier segment, ne parle plus a Jarvis
+    await act(async () => moteur2Dire(FakeRecognition.instances.at(-1)!))
+    expect(pilotChat).not.toHaveBeenCalled()
+    // un second clic sur le MEME bouton coupe vraiment
+    clic(c, 'jarvis-enregistrer')
+    expect(
+      c.querySelector('[data-testid="jarvis-enregistrer"]')?.getAttribute('aria-pressed')
+    ).toBe('false')
   })
 
   describe('écoute LOCALE (whisper.cpp)', () => {
@@ -404,7 +466,7 @@ describe('widget Jarvis', () => {
       expect(c.querySelector('[data-testid="jarvis-jauge-barre"]')).not.toBeNull()
     })
 
-    it("affiche SOUS la jauge ce que le niveau veut dire, pas seulement sa hauteur", async () => {
+    it('affiche SOUS la jauge ce que le niveau veut dire, pas seulement sa hauteur', async () => {
       const c = rendre()
       await flush()
       clic(c, 'jarvis-bascule')

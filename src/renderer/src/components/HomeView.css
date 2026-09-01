@@ -922,7 +922,6 @@
 }
 
 .jarvis__paroles,
-.jarvis__direct,
 .jarvis__flux {
   list-style: none;
   margin: 0;
@@ -948,47 +947,6 @@
 .jarvis__paroles li[data-eveil='true'] {
   color: var(--cyan);
   text-shadow: 0 0 8px rgba(0, 214, 255, 0.45);
-}
-
-/* Un titre de section HUD : le libellé, puis un trait qui file jusqu'au bord. */
-.jarvis__titre {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 4px 0 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: rgba(0, 214, 255, 0.72);
-}
-
-.jarvis__titre::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(0, 214, 255, 0.45), transparent);
-}
-
-.jarvis__lien {
-  background: none;
-  border: 0;
-  padding: 0;
-  color: var(--text);
-  font-size: 11.5px;
-  text-align: left;
-  cursor: pointer;
-  transition: color 140ms ease;
-}
-
-.jarvis__lien:hover,
-.jarvis__lien:focus-visible {
-  color: var(--cyan);
-}
-
-.jarvis__direct span[data-encours='true'] {
-  color: var(--cyan);
-  text-shadow: 0 0 9px rgba(0, 214, 255, 0.5);
 }
 
 .jarvis__flux li {

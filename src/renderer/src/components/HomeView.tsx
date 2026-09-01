@@ -800,7 +800,7 @@ function WidgetBody({
 }): React.JSX.Element {
   if (id === 'jarvis') {
     // Le seul widget qui PARLE a l'app au lieu de la lire : micro continu et fil du direct.
-    return <JarvisWidget onNavigate={onNavigate} />
+    return <JarvisWidget />
   }
 
   if (id === 'conversations') {

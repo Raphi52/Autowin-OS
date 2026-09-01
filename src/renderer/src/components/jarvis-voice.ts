@@ -13,9 +13,19 @@ export interface JarvisCommande {
   le: number
 }
 
+/**
+ * DEUX FAÇONS D'ÉCOUTER, et une seule des deux parle à Jarvis.
+ *  - `jarvis` : le mot d'éveil arme un ordre, qui part vers un run.
+ *  - `enregistrement` : on garde le texte dicté, RIEN ne part. Le mot « Jarvis » prononcé pendant
+ *    une réunion ne doit alors ni biper ni lancer quoi que ce soit.
+ */
+export type ModeEcoute = 'jarvis' | 'enregistrement'
+
 export interface JarvisEcoute {
   /** L'interrupteur du widget. Aucune parole ne compte quand il est à false. */
   active: boolean
+  /** Ce que l'écoute en cours FAIT du texte entendu. */
+  mode: ModeEcoute
   /** Le segment en cours de dictée, non figé. Purement affiché. */
   partiel: string
   /** Les paroles figées, la plus récente en tête. */
@@ -31,6 +41,7 @@ const MAX_COMMANDES = 40
 
 export const ecouteInitiale: JarvisEcoute = {
   active: false,
+  mode: 'jarvis',
   partiel: '',
   commandes: [],
   eveille: false,
@@ -38,14 +49,23 @@ export const ecouteInitiale: JarvisEcoute = {
 }
 
 /**
- * Allume ou coupe l'écoute. Couper VIDE le partiel : une phrase inachevée affichée alors que le
- * micro est éteint ferait croire que Jarvis écoute encore. L'historique figé, lui, reste.
+ * Allume ou coupe l'écoute, dans le MODE demandé. Couper VIDE le partiel : une phrase inachevée
+ * affichée alors que le micro est éteint ferait croire que Jarvis écoute encore. L'historique figé,
+ * lui, reste.
+ *
+ * Un clic sur l'AUTRE mode pendant une écoute ne coupe pas : il BASCULE. Sinon il faudrait deux
+ * clics pour passer de l'ordre à l'enregistrement, et le premier laisserait un micro ouvert.
  */
-export function basculerEcoute(etat: JarvisEcoute, le: number): JarvisEcoute {
+export function basculerEcoute(
+  etat: JarvisEcoute,
+  le: number,
+  mode: ModeEcoute = 'jarvis'
+): JarvisEcoute {
   void le
-  return etat.active
-    ? { ...etat, active: false, partiel: '', eveille: false, eveilAnnonce: false }
-    : { ...etat, active: true, eveille: false, eveilAnnonce: false }
+  if (etat.active && etat.mode === mode) {
+    return { ...etat, active: false, partiel: '', eveille: false, eveilAnnonce: false }
+  }
+  return { ...etat, active: true, mode, partiel: '', eveille: false, eveilAnnonce: false }
 }
 
 export function appliquerParole(
@@ -207,6 +227,11 @@ export function reagirAParole(
   parole: { texte: string; final: boolean; le: number }
 ): ReactionParole {
   if (!etat.active) return { etat, bip: false, ordre: null }
+  // ENREGISTREMENT : on garde le texte, et c'est TOUT. Ni bip, ni ordre — même si le mot d'éveil
+  // est prononcé. C'est la seule chose qui distingue « je note ce qui se dit » de « j'obéis ».
+  if (etat.mode === 'enregistrement') {
+    return { etat: appliquerParole(etat, parole), bip: false, ordre: null }
+  }
   const eveilIci = contientEveil(parole.texte)
   const bip = eveilIci && !etat.eveilAnnonce
   let suivant = appliquerParole(etat, parole)

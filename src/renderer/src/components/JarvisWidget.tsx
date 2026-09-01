@@ -24,15 +24,14 @@ import {
 import type { EtatWhisper } from '../../../main/whisper-local'
 import {
   basculerEcoute,
-  conversationsEnDirect,
   ecouteInitiale,
   evenementsDirects,
   extraireCommandeEveil,
   messageErreurMoteur,
   reagirAParole,
-  type ConversationDirecte,
   type EvenementDirect,
   type JarvisEcoute,
+  type ModeEcoute,
   type SommaireDirect
 } from './jarvis-voice'
 
@@ -99,11 +98,7 @@ const apiJarvis = (): ApiJarvis | undefined => (window as unknown as { api?: Api
 const SONDAGE_MS = 4_000
 const MAX_EVENEMENTS = 12
 
-export function JarvisWidget({
-  onNavigate
-}: {
-  onNavigate?: (destination: string) => void
-}): React.JSX.Element {
+export function JarvisWidget(): React.JSX.Element {
   const [ecoute, setEcoute] = useState<JarvisEcoute>(ecouteInitiale)
   /**
    * L'ETAT D'ECOUTE LU HORS RENDU — parce qu'un envoi ne doit JAMAIS partir d'un updater.
@@ -116,7 +111,6 @@ export function JarvisWidget({
    * (bip, envoi) part une seule fois, hors du rendu.
    */
   const ecouteRef = useRef(ecoute)
-  const [direct, setDirect] = useState<ConversationDirecte[]>([])
   const [flux, setFlux] = useState<EvenementDirect[]>([])
   const [erreur, setErreur] = useState<string | null>(null)
   const [envoi, setEnvoi] = useState<string | null>(null)
@@ -153,6 +147,9 @@ export function JarvisWidget({
    */
   const verdictAffiche: VerdictMicro = ecoute.active ? verdict : 'coupe'
   const barreRef = useRef<HTMLDivElement | null>(null)
+  /** Vrai quand le micro tourne EN MODE ENREGISTREMENT : on note, Jarvis ne repond pas. */
+  const enregistre = ecoute.active && ecoute.mode === 'enregistrement'
+  const commande = ecoute.active && ecoute.mode === 'jarvis'
 
   /** Envoie un ordre a Jarvis, dans SA conversation — creee au premier ordre, pas au montage. */
   const envoyer = useCallback(async (texte: string) => {
@@ -220,15 +217,31 @@ export function JarvisWidget({
     [envoyer]
   )
 
-  const basculer = useCallback(() => {
-    setEcoute((precedent) => {
-      const suivant = basculerEcoute(precedent, Date.now())
-      ecouteRef.current = suivant
+  /**
+   * ALLUMER / COUPER LE MICRO — ENTIEREMENT HORS DU RENDU.
+   *
+   * DEFAUT VECU le 2026-09-01 : « jarvis a encore lance 2x la conversation ». L'envoi de l'ordre
+   * avait deja ete sorti de l'updater de `setEcoute`, mais la CREATION DU MOTEUR y etait restee.
+   * React reexecute librement un updater — deux fois d'office sous StrictMode — donc UN clic
+   * ouvrait DEUX micros, chacun entendait la phrase, et chacun envoyait son ordre. Ici tout est
+   * calcule sur `ecouteRef` et `setEcoute` ne recoit qu'une VALEUR : un clic = un moteur.
+   *
+   * LA MESURE : conv-45 et conv-46 ont ete creees a 2 ms d'ecart (11:46:06.602 et .604) avec le
+   * meme ordre dicte une seule fois. Meme motif pour conv-12/13 et conv-36/37.
+   */
+  const basculer = useCallback(
+    (mode: ModeEcoute) => {
+      const precedent = ecouteRef.current
+      const suivant = basculerEcoute(precedent, Date.now(), mode)
+      // Tout changement d'etat ferme le moteur courant : basculer de mode sans le fermer
+      // laisserait le micro precedent ouvert.
+      moteurRef.current?.stop()
+      moteurRef.current = null
       actifRef.current = suivant.active
       if (!suivant.active) {
-        moteurRef.current?.stop()
-        moteurRef.current = null
-        return suivant
+        ecouteRef.current = suivant
+        setEcoute(suivant)
+        return
       }
       const Fabrique = fabriqueMoteur(
         whisperRef.current?.installe === true,
@@ -239,8 +252,10 @@ export function JarvisWidget({
         setErreur(
           'Aucun moteur de reconnaissance disponible : installez la reconnaissance hors ligne ci-dessous.'
         )
-        return precedent
+        return
       }
+      ecouteRef.current = suivant
+      setEcoute(suivant)
       const moteur = new Fabrique()
       moteur.continuous = true
       moteur.interimResults = true
@@ -259,11 +274,9 @@ export function JarvisWidget({
         actifRef.current = false
         moteurRef.current = null
         setErreur(messageErreurMoteur(code))
-        setEcoute((precedent) => {
-          const suivant = { ...precedent, active: false, partiel: '' }
-          ecouteRef.current = suivant
-          return suivant
-        })
+        const arrete = { ...ecouteRef.current, active: false, partiel: '' }
+        ecouteRef.current = arrete
+        setEcoute(arrete)
       }
       moteur.onend = () => {
         if (actifRef.current && moteurRef.current === moteur) moteur.start()
@@ -271,9 +284,9 @@ export function JarvisWidget({
       moteurRef.current = moteur
       setErreur(null)
       moteur.start()
-      return suivant
-    })
-  }, [auResultat])
+    },
+    [auResultat]
+  )
 
   /** L'etat REEL de whisper, relu au montage : ni cache, ni supposition. */
   const relireWhisper = useCallback(async (): Promise<EtatWhisper | null> => {
@@ -424,15 +437,14 @@ export function JarvisWidget({
         const maintenant = Date.now()
         const evenements = evenementsDirects(precedentRef.current, sommaires, maintenant)
         precedentRef.current = sommaires
-        setDirect(conversationsEnDirect(sommaires, maintenant))
         if (evenements.length > 0) {
           setFlux((precedent) =>
             [...[...evenements].reverse(), ...precedent].slice(0, MAX_EVENEMENTS)
           )
         }
       } catch {
-        // Un sondage rate n'efface pas le direct precedent : mieux vaut une liste d'il y a 4 s
-        // qu'un vide qui se lirait « il ne se passe rien ».
+        // Un sondage rate n'efface pas le fil d'activite deja affiche : mieux vaut un releve
+        // d'il y a 4 s qu'un vide qui se lirait « il ne se passe rien ».
       }
     }
     void lire()
@@ -450,17 +462,32 @@ export function JarvisWidget({
           type="button"
           data-testid="jarvis-bascule"
           className="jarvis__bascule"
-          aria-pressed={ecoute.active}
-          onClick={basculer}
+          aria-pressed={commande}
+          onClick={() => basculer('jarvis')}
         >
-          {ecoute.active ? '● Écoute en cours — couper' : 'Activer l’écoute'}
+          {commande ? '● Écoute en cours — couper' : 'Activer l’écoute'}
+        </button>
+        {/*
+          ENREGISTRER ≠ ÉCOUTER. Le même micro, la même transcription, mais rien ne part : le mot
+          « Jarvis » prononcé pendant la prise de notes ne doit lancer AUCUN tour.
+        */}
+        <button
+          type="button"
+          data-testid="jarvis-enregistrer"
+          className="jarvis__bascule"
+          aria-pressed={enregistre}
+          onClick={() => basculer('enregistrement')}
+        >
+          {enregistre ? '⏺ Enregistrement — arrêter' : 'Enregistrer'}
         </button>
         <span className="jarvis__aide">
           {!ecoute.active
             ? 'Micro coupé'
-            : ecoute.eveille
-              ? '🔊 Je vous écoute — dites votre demande'
-              : 'Dites « Jarvis » : un bip vous répondra'}
+            : enregistre
+              ? '⏺ Enregistrement du transcript — Jarvis ne répond pas'
+              : ecoute.eveille
+                ? '🔊 Je vous écoute — dites votre demande'
+                : 'Dites « Jarvis » : un bip vous répondra'}
         </span>
       </div>
 
@@ -561,32 +588,13 @@ export function JarvisWidget({
       {envoi ? <p className="jarvis__envoi">Envoi à Jarvis : « {envoi} »</p> : null}
 
       <ul className="jarvis__paroles" data-testid="jarvis-paroles">
-        {ecoute.commandes.slice(0, 5).map((commande) => (
+        {/* En enregistrement, la liste EST le transcript : la tronquer a 5 lignes le perdrait. */}
+        {ecoute.commandes.slice(0, enregistre ? ecoute.commandes.length : 5).map((parole) => (
           <li
-            key={commande.id}
-            data-eveil={extraireCommandeEveil(commande.texte) ? 'true' : undefined}
+            key={parole.id}
+            data-eveil={!enregistre && extraireCommandeEveil(parole.texte) ? 'true' : undefined}
           >
-            {commande.texte}
-          </li>
-        ))}
-      </ul>
-
-      <h3 className="jarvis__titre">Conversations en direct</h3>
-      <ul className="jarvis__direct" data-testid="jarvis-direct">
-        {direct.length === 0 ? <li className="home-hint">Rien en cours</li> : null}
-        {direct.map((conversation) => (
-          <li key={conversation.id}>
-            <button
-              type="button"
-              className="jarvis__lien"
-              onClick={() => onNavigate?.('chat')}
-              title="Ouvrir le chat"
-            >
-              <span data-encours={conversation.enCours ? 'true' : undefined}>
-                {conversation.enCours ? '● ' : '○ '}
-                {conversation.titre}
-              </span>
-            </button>
+            {parole.texte}
           </li>
         ))}
       </ul>
