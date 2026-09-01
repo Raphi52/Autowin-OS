@@ -178,6 +178,20 @@ export function buildChatPilotagePrompt(
     `Après une commande tu reçois le résultat + le ` +
     `nouvel état et tu peux continuer. Quand tu as fini d'agir, termine par ta réponse en clair ` +
     `SANS commande.\n` +
+    // MESURE 2026-09-01 (conv-17, tour 0fb926e9, sequence 21 de la trace causale) : la reponse du
+    // pilote etait EXCLUSIVEMENT `<cmd>orchestrate</cmd>`, zero caractere hors commande. Pendant les
+    // dix minutes du run, le panneau Graphe se remplissait et le fil restait sur « Réflexion… ».
+    // L'interdit d'annoncer un SUCCES etait lu comme un interdit d'ECRIRE. On separe les deux : la
+    // commande garde sa place en tete, mais le silence complet devient une faute.
+    `JAMAIS DE FIL MUET — au moment où tu émets une commande LONGUE (orchestrate, verify, run, ` +
+    `graphify), tu écris dans le MÊME message, juste après elle, une à trois lignes qui disent ce ` +
+    `que tu lances, sur quoi, et ce que tu attends comme résultat. Un message qui ne contient ` +
+    `qu'un bloc <cmd> laisse l'utilisateur devant un fil muet pendant toute la durée du travail : ` +
+    `il voit la machine tourner ailleurs et rien dans la conversation. Écris ces lignes au présent ` +
+    `d'INTENTION — « je lance… », « j'ouvre… », « je tente… », « ce que j'attends : … » —, jamais ` +
+    `au passé ni à l'accompli. Cette ligne de contexte n'est PAS une annonce de succès : elle dit ` +
+    `ce qui part, pas ce qui est obtenu. Même exigence entre deux itérations d'un même tour : si ` +
+    `un run tourne encore, dis en une ligne où il en est plutôt que de rendre un message vide.\n` +
     `Pour une action, émets la commande AVANT tout texte visible. N'annonce jamais un lancement, ` +
     `un succès ou une clôture avant son résultat observable : reused:true signifie réutilisation, ` +
     `running signifie « en cours » avec runId, failed signifie échec. Ne dis « fait », ` +
