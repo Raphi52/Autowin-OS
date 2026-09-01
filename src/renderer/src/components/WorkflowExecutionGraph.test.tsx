@@ -540,4 +540,185 @@ describe('WorkflowExecutionGraph', () => {
     // La pastille doit porter le statut reconcilie, sinon elle reste verte comme un succes.
     expect(node?.className).toContain('is-interrupted')
   })
+  /**
+   * LA PENSÉE DU SOUS-AGENT EXISTE DANS LES DONNÉES DU GRAPHE ET N'ÉTAIT JAMAIS RENDUE.
+   *
+   * `stepPayloads` pousse une charge `reasoning` ; `buildHarnessTimelineFromTrace` la RECOPIE dans
+   * `event.payloads`. Mais aucun chemin de rendu ne la lisait : ni le titre, ni la meta, ni le
+   * détail — qui s'arrêtait à Acteur / Durée / Skill / Provider / Modèle / Observation. La descente
+   * « jusqu'à la pensée » butait donc sur son dernier échelon.
+   *
+   * Le pli reste FERMÉ : la délibération est longue, et le détail doit rester lisible.
+   */
+  it('descend jusqu’au raisonnement du sous-agent dans le détail d’un nœud', async () => {
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('agent', 1, {
+        turnId: 'turn-latest',
+        type: 'handoff',
+        provider: { id: 'codex', model: 'gpt-5.6-codex' },
+        execution: { phase: 'build', agentId: 'builder', taskId: 'task-build' }
+      }),
+      trace('reponse', 2, {
+        turnId: 'turn-latest',
+        parentId: 'agent',
+        type: 'model-response',
+        provider: { id: 'codex', model: 'gpt-5.6-codex' },
+        payloads: [
+          { kind: 'model-response', content: 'conclusion : je pars sur B' },
+          { kind: 'reasoning', content: 'A coûte moins cher mais casse le gate ; donc B' }
+        ]
+      })
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+    // Fermé tant qu'aucun nœud n'est sélectionné : la pensée ne fuit pas dans l'arbre.
+    expect(view.textContent).not.toContain('casse le gate')
+
+    await act(async () =>
+      view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
+    )
+    const detail = view.querySelector('.workflow-execution-detail')
+    const pli = detail?.querySelector<HTMLDetailsElement>('[data-execution-reasoning]')
+
+    expect(pli).not.toBeNull()
+    expect(pli?.open).toBe(false)
+    expect(pli?.querySelector('summary')?.textContent).toContain('Raisonnement')
+    expect(pli?.textContent).toContain('A coûte moins cher mais casse le gate ; donc B')
+  })
+
+  /** Sans charge `reasoning`, aucun pli vide ne s'invite dans le détail — discriminant. */
+  it('n’affiche aucun pli de raisonnement quand la trace n’en porte pas', async () => {
+    const causalTrace = vi
+      .fn()
+      .mockResolvedValue([trace('sans-pensee', 1, { turnId: 'turn-latest' })])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+    await act(async () =>
+      view.querySelector<HTMLButtonElement>('[data-execution-node="sans-pensee"]')?.click()
+    )
+
+    expect(view.querySelector('.workflow-execution-detail')).not.toBeNull()
+    expect(view.querySelector('[data-execution-reasoning]')).toBeNull()
+    // La fixture porte une charge d'OUTIL (« contenu sensible »). Le pli ne doit pas seulement être
+    // absent : le détail ouvert ne doit RIEN laisser fuiter de cette charge — c'est la raison d'être
+    // du filtre sur `reasoning` au rendu.
+    expect(view.querySelector('.workflow-execution-detail')?.textContent).not.toContain(
+      'contenu sensible'
+    )
+  })
+  /**
+   * REMONTER DANS LE TEMPS SANS CHANGER D'ONGLET.
+   *
+   * Le graphe ne projetait que `timeline.turns[0]` : l'historique de la conversation existait dans
+   * la trace et restait hors d'atteinte. Les onglets Sous-agents et Run, eux, listent TOUS les
+   * tours — le graphe ne pouvait pas les remplacer sans savoir revenir en arrière.
+   */
+  it('offre un sélecteur de tour et projette celui qu’on choisit', async () => {
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('m-vieux', 1, {
+        turnId: 'turn-vieux',
+        timestamp: '2026-07-30T11:00:00.000Z',
+        type: 'message',
+        payloads: [{ kind: 'text', content: 'UTILISATEUR: repare le gate' }]
+      }),
+      trace('a-vieux', 2, {
+        turnId: 'turn-vieux',
+        timestamp: '2026-07-30T11:00:01.000Z',
+        type: 'handoff',
+        execution: { phase: 'build', agentId: 'builder', taskId: 'task-vieux' }
+      }),
+      trace('m-recent', 3, {
+        turnId: 'turn-recent',
+        timestamp: '2026-07-30T12:00:00.000Z',
+        type: 'message',
+        payloads: [{ kind: 'text', content: 'UTILISATEUR: ajoute un module' }]
+      }),
+      trace('a-recent', 4, {
+        turnId: 'turn-recent',
+        timestamp: '2026-07-30T12:00:01.000Z',
+        type: 'handoff',
+        execution: { phase: 'judge', agentId: 'juge', taskId: 'task-recent' }
+      })
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+    const selecteur = view.querySelector<HTMLSelectElement>('[data-execution-turn-select]')
+
+    expect(selecteur).not.toBeNull()
+    expect([...(selecteur?.options ?? [])].map((option) => option.value)).toEqual([
+      'turn-recent',
+      'turn-vieux'
+    ])
+    expect(selecteur?.value).toBe('turn-recent')
+    expect(view.querySelector('[data-execution-node="a-recent"]')).not.toBeNull()
+    expect(view.querySelector('[data-execution-node="a-vieux"]')).toBeNull()
+
+    await act(async () => {
+      selecteur!.value = 'turn-vieux'
+      selecteur!.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(view.querySelector('[data-execution-node="a-vieux"]')).not.toBeNull()
+    expect(view.querySelector('[data-execution-node="a-recent"]')).toBeNull()
+  })
+
+  /** Un seul tour : pas de sélecteur, une commande inutile est du bruit. */
+  it('n’affiche pas de sélecteur quand la conversation n’a qu’un tour', async () => {
+    const causalTrace = vi
+      .fn()
+      .mockResolvedValue([trace('seul', 1, { turnId: 'turn-unique', type: 'handoff' })])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+
+    expect(view.querySelector('[data-execution-turn-select]')).toBeNull()
+  })
+  /**
+   * LE GRAPHE DOIT POUVOIR PILOTER LE PANNEAU.
+   *
+   * Tant que la sélection reste enfermée dans le composant, le graphe ne peut pas remplacer les
+   * onglets : rien en dehors de lui ne sait sur QUOI l'utilisateur est descendu. Il publie donc sa
+   * sélection — identité, nature du nœud, run et tour observés — sans rien décider de l'affichage.
+   */
+  it('publie la sélection d’un nœud, et sa désélection', async () => {
+    const onSelect = vi.fn()
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('agent', 1, {
+        turnId: 'turn-latest',
+        type: 'handoff',
+        execution: { phase: 'build', agentId: 'builder', taskId: 'task-build' }
+      })
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(
+        createElement(WorkflowExecutionGraph, {
+          conversationId: 'conv-a',
+          active: true,
+          onSelect
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const node = container.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')
+    await act(async () => node?.click())
+
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'agent', kind: 'agent', turnId: 'turn-latest' })
+    )
+
+    await act(async () => node?.click())
+    expect(onSelect).toHaveBeenLastCalledWith(null)
+  })
 })

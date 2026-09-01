@@ -43,20 +43,23 @@ describe('chat top bar surface', () => {
 })
 
 describe('workflow sidebar header', () => {
-  it('keeps four icon tabs on one line with one separator each and fixed actions', () => {
+  /**
+   * L'en-tête ne porte plus quatre onglets : le graphe est devenu la navigation du panneau. Il
+   * garde sa hauteur et ses actions fixes, et un titre qui tient sur une ligne. Les règles des
+   * onglets ont été RETIRÉES de la feuille — ce test l'exige, faute de quoi du CSS mort survivrait
+   * à la suppression du balisage.
+   */
+  it('keeps a fixed-height header with a one-line title and fixed actions, and no tab rules left', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
 
     expect(css).toMatch(
       /\.workflow-panel-head\s*{[^}]*display:\s*flex;[^}]*min-width:\s*0;[^}]*height:\s*46px/s
     )
     expect(css).toMatch(
-      /\.workflow-section-tabs\s*{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1\.15fr\)[^}]*minmax\(0,\s*1\.39fr\)/s
+      /\.workflow-panel-title\s*{[^}]*flex:\s*1;[^}]*white-space:\s*nowrap/s
     )
-    expect(css).toMatch(
-      /\.workflow-section-tab\s*{[^}]*display:\s*flex;[^}]*white-space:\s*nowrap/s
-    )
-    expect(css).toMatch(/\.workflow-section-separator\s*{[^}]*right:\s*0;[^}]*width:\s*1px/s)
     expect(css).toMatch(/\.workflow-panel-actions\s*{[^}]*width:\s*56px;[^}]*flex:\s*none/s)
+    expect(css).not.toMatch(/\.workflow-section-/)
   })
 })
 

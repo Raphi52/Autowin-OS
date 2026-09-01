@@ -1,25 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
-import {
-  settleStrandedExecutionStatus,
-  statusLabel
-} from './execution-interrupted-status'
+import { settleStrandedExecutionStatus, statusLabel } from './execution-interrupted-status'
 import {
   buildHarnessTimelineFromTrace,
   type HarnessTimelineEvent,
   type HarnessTraceEvent
 } from './harness-timeline-model'
 import { LatestRequestGate } from './observatory-reliability'
-import { projectLatestRequestExecution } from './request-execution-tree-model'
+import {
+  projectLatestRequestExecution,
+  type RequestTurnOption
+} from './request-execution-tree-model'
 import { workflowQuoteLabel } from './workflow-quote-label'
 import './WorkflowExecutionGraph.css'
 import { Spinner } from './Spinner'
+
+/**
+ * Ce que le graphe PUBLIE quand on descend sur un nœud. Il ne décide de rien : il dit sur quoi
+ * l'utilisateur est descendu, à charge du panneau d'en tirer la vue adaptée. Sans cela, la
+ * sélection reste enfermée dans le composant et le graphe ne peut pas remplacer les onglets.
+ */
+export interface ExecutionNodeSelection {
+  id: string
+  kind: string
+  runId?: string
+  skillName?: string
+  turnId?: string
+}
 
 interface WorkflowExecutionGraphProps {
   conversationId?: string
   active?: boolean
   live?: boolean
   requestLabel?: string
+  onSelect?: (selection: ExecutionNodeSelection | null) => void
 }
 
 const EVENT_LABEL: Record<HarnessTimelineEvent['kind'], string> = {
@@ -50,7 +64,6 @@ function costLabel(costUsd: number | undefined): string {
   if (costUsd == null) return 'coût inconnu'
   return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 }).format(costUsd)} $`
 }
-
 
 function skillLabel(event: HarnessTimelineEvent): string | undefined {
   if (event.display?.skillName) return `skill · ${event.display.skillName}`
@@ -169,6 +182,37 @@ function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JS
       <span aria-hidden="true">·</span>
       <span>{durationLabel(event.durationMs)}</span>
     </>
+  )
+}
+
+/**
+ * LA PENSÉE DU SOUS-AGENT — dernier échelon de la descente.
+ *
+ * `stepPayloads` écrit la délibération dans une charge `reasoning`, distincte de la conclusion.
+ * Elle arrivait jusqu'ici sans qu'aucun chemin de rendu ne la lise. Le pli reste FERMÉ : une
+ * délibération est longue, et le détail doit rester lisible d'un coup d'œil.
+ *
+ * Le filtre sur `reasoning` DOUBLE celui de la projection à dessein : c'est ici la garde qui
+ * empêche un contenu d'outil d'atterrir dans le détail. Un nœud non projeté garderait ses charges
+ * brutes, et le graphe s'interdit de les montrer (test discriminant : « contenu sensible »).
+ */
+function ExecutionNodeReasoning({
+  event
+}: {
+  event: HarnessTimelineEvent
+}): React.JSX.Element | null {
+  const reasoning = (event.payloads ?? [])
+    .filter((payload) => payload.kind === 'reasoning')
+    .map((payload) => payload.content)
+    .filter((content) => Boolean(content))
+  if (reasoning.length === 0) return null
+  return (
+    <details className="workflow-execution-reasoning" data-execution-reasoning>
+      <summary>Raisonnement du sous-agent</summary>
+      {reasoning.map((content, index) => (
+        <pre key={index}>{content}</pre>
+      ))}
+    </details>
   )
 }
 
@@ -318,10 +362,18 @@ export function WorkflowExecutionGraph({
   conversationId,
   active = true,
   live = false,
-  requestLabel
+  requestLabel,
+  onSelect
 }: WorkflowExecutionGraphProps): React.JSX.Element {
   const [events, setEvents] = useState<HarnessTimelineEvent[]>([])
   const [turnId, setTurnId] = useState<string | undefined>()
+  const [turns, setTurns] = useState<RequestTurnOption[]>([])
+  // Tour DEMANDÉ par l'utilisateur. Distinct de `turnId` (le tour effectivement projeté) : sans
+  // cette distinction, un rechargement en direct écraserait le choix à chaque seconde. Le choix est
+  // RATTACHÉ à sa conversation plutôt que remis à zéro par un effet : changer de conversation le
+  // périme alors de lui-même, sans rendu supplémentaire ni cascade.
+  const [picked, setPicked] = useState<{ convId?: string; turnId: string } | null>(null)
+  const pickedTurnId = picked && picked.convId === conversationId ? picked.turnId : undefined
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -343,10 +395,14 @@ export function WorkflowExecutionGraph({
         const trace = (await window.api.causalTrace(conversationId)) as HarnessTraceEvent[]
         if (!requestGate.current.isCurrent(requestId)) return
         const timeline = buildHarnessTimelineFromTrace(Array.isArray(trace) ? trace : [])
-        const projection = projectLatestRequestExecution(timeline, { requestLabel })
+        const projection = projectLatestRequestExecution(timeline, {
+          requestLabel,
+          ...(pickedTurnId ? { turnId: pickedTurnId } : {})
+        })
         const nextEvents = projection.events
         setEvents(nextEvents)
         setTurnId(projection.turnId)
+        setTurns(projection.turns ?? [])
         setSelectedId((current) =>
           current && nextEvents.some((event) => event.id === current) ? current : null
         )
@@ -361,7 +417,7 @@ export function WorkflowExecutionGraph({
         if (requestGate.current.isCurrent(requestId)) setLoading(false)
       }
     },
-    [active, conversationId, requestLabel]
+    [active, conversationId, requestLabel, pickedTurnId]
   )
 
   useEffect(() => {
@@ -416,6 +472,35 @@ export function WorkflowExecutionGraph({
   const graph = useMemo(() => buildCausalPath(settledEvents), [settledEvents])
   const nodes = useMemo(() => flattenCausalNodes(graph.roots), [graph.roots])
   const selected = selectedId ? graph.byId.get(selectedId) : undefined
+
+  // La publication passe par un effet plutôt que par le gestionnaire de clic : la sélection change
+  // aussi quand un rechargement fait disparaître le nœud choisi, et le panneau doit le savoir.
+  const selectionRef = useRef<string | null>(null)
+  const onSelectRef = useRef(onSelect)
+  // Assignation dans un effet, jamais pendant le rendu : écrire une ref au rendu casse la garantie
+  // de pureté de React (et le lint le refuse). Déclaré AVANT l’effet de publication pour que la
+  // fonction à jour soit déjà en place quand celui-ci s’exécute.
+  useEffect(() => {
+    onSelectRef.current = onSelect
+  })
+  useEffect(() => {
+    const event = selected?.event
+    const key = event ? event.id : null
+    if (selectionRef.current === key) return
+    selectionRef.current = key
+    onSelectRef.current?.(
+      event
+        ? {
+            id: event.id,
+            kind: event.display?.kind ?? 'event',
+            ...(event.display?.runId ? { runId: event.display.runId } : {}),
+            ...(event.display?.skillName ? { skillName: event.display.skillName } : {}),
+            ...(turnId ? { turnId } : {})
+          }
+        : null
+    )
+  }, [selected, turnId])
+
   const runCount = new Set(
     nodes
       .map((node) => node.event.display?.runId)
@@ -455,6 +540,31 @@ export function WorkflowExecutionGraph({
             {live ? ' · en direct' : ''}
           </span>
         </div>
+        {/*
+          SÉLECTEUR DE TOUR. Le graphe ne projetait que le dernier : tout l'historique de la
+          conversation existait dans la trace et restait inatteignable. Masqué sous deux tours —
+          une commande sans alternative est du bruit.
+        */}
+        {turns.length > 1 && (
+          <select
+            className="workflow-execution-turn-select"
+            data-execution-turn-select
+            aria-label="Demande affichée dans le graphe"
+            value={turnId ?? turns[0].id}
+            onChange={(changed) =>
+              setPicked({
+                ...(conversationId ? { convId: conversationId } : {}),
+                turnId: changed.target.value
+              })
+            }
+          >
+            {turns.map((turn) => (
+              <option key={turn.id} value={turn.id}>
+                {turn.label}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           className="btn btn-sm btn-ghost"
           type="button"
@@ -479,7 +589,10 @@ export function WorkflowExecutionGraph({
       )}
       {!loading && !error && nodes.length === 0 && (
         <div className="workflow-execution-empty">
-          Aucune trace d’exécution pour la dernière demande.
+          {/* « la dernière demande » mentait dès qu'un tour ANTÉRIEUR était sélectionné. */}
+          {pickedTurnId
+            ? 'Aucune trace d’exécution pour la demande sélectionnée.'
+            : 'Aucune trace d’exécution pour la dernière demande.'}
         </div>
       )}
 
@@ -539,6 +652,7 @@ export function WorkflowExecutionGraph({
             <span>{statusLabel(selected.event.status)}</span>
           </header>
           <ExecutionNodeDetail event={selected.event} />
+          <ExecutionNodeReasoning event={selected.event} />
           {selected.issues.length > 0 && (
             <p className="workflow-execution-warning">
               Trace partielle · {selected.issues.join(', ')}

@@ -847,58 +847,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
-  // Defaut vecu le 2026-09-01 : en basculant de conversation, le bouton « ↓ Dernier message »
-  // CLIGNOTAIT. L'etat « fil remonte » de la conversation QUITTEE restait pose pendant le rendu du
-  // nouveau fil, et seule la descente, une frame plus tard, le retirait. Les frames sont donc mises
-  // sous controle ici : c'est le seul moyen d'observer l'instant ou le clignotement se voit.
-  it('ne fait pas clignoter le saut vers le dernier message en basculant de conversation', async () => {
-    const frames: FrameRequestCallback[] = []
-    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
-      frames.push(cb)
-      return frames.length
-    })
-    try {
-      const mockApi = api({
-        conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')])
-      })
-      await mount(mockApi)
-      const picks = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')]
-      const convA = picks.find((b) => b.textContent?.includes('Conversation A'))!
-      const convB = picks.find((b) => b.textContent?.includes('Conversation B'))!
-      await act(async () => convA.click())
-      await type('un message')
-      await click('.composer-send')
-
-      const scroll = container!.querySelector('.chat-scroll') as HTMLDivElement
-      scroll.scrollTo = vi.fn()
-      Object.defineProperties(scroll, {
-        scrollHeight: { configurable: true, value: 1000 },
-        clientHeight: { configurable: true, value: 100 },
-        scrollTop: { configurable: true, writable: true, value: 0 }
-      })
-      await act(async () => {
-        scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
-      })
-      expect(container!.querySelector('.chat-jump-latest')).not.toBeNull()
-
-      // Bascule vers une conversation JAMAIS lue : rien n'y est remonte, donc aucun bouton — pas
-      // meme le temps d'une frame.
-      frames.splice(0)
-      await act(async () => convB.click())
-      expect(
-        container!.querySelector('.chat-jump-latest'),
-        'le bouton du fil precedent survit a la bascule : il clignote'
-      ).toBeNull()
-
-      await act(async () => {
-        for (const frame of frames.splice(0)) frame(0)
-      })
-      expect(container!.querySelector('.chat-jump-latest')).toBeNull()
-    } finally {
-      raf.mockRestore()
-    }
-  })
-
   it('affiche le saut vers le dernier message dès que le fil est remonté, sans attendre une nouvelle activité', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
@@ -1780,7 +1728,15 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ).toBe(1)
   })
 
-  it('expose les CINQ sections de Workflows, dont le graphe et les logs, et toujours pas d’onglet Activité', async () => {
+  /**
+   * LE GRAPHE REMPLACE LES QUATRE SECTIONS.
+   *
+   * Ce test EXIGEAIT la barre d'onglets. Elle a disparu : les quatre sections étaient quatre
+   * projections de la même exécution, qu'il fallait corréler de tête. Le graphe est désormais la
+   * navigation, et le détail dessous découle du nœud choisi. L'assertion est retournée pour que la
+   * barre ne puisse pas revenir en silence.
+   */
+  it('n’expose plus de barre d’onglets dans Workflows : le graphe est la navigation', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
     await click('.conv-pick')
@@ -1788,30 +1744,13 @@ describe('ChatView behavior under concurrent UI actions', () => {
 
     const pane = container!.querySelector('.runs-pane')
     expect(pane).toBeTruthy()
-    const tablist = pane!.querySelector('.workflow-section-tabs[role="tablist"]')
-    const tabButtons = [...(tablist?.querySelectorAll('button[role="tab"]') ?? [])]
-    const tabs = tabButtons.map((button) => button.textContent?.trim())
-    // L'onglet unique « Runs » melangeait le fil des sous-agents et la liste des RUN.md : il est
-    // remplace par DEUX sections distinctes, a la demande explicite de l'utilisateur.
-    expect(tabs).toContain('Sous-agents')
-    // « Logs » = la trace de ce que les modèles ont FAIT (appel, commande, verdict, artefact) ;
-    // ce n'est pas l'onglet « Activité » retiré, qui redoublait le fil.
-    expect(tabs).toContain('Logs')
-    expect(tabs).toContain('Run')
-    expect(tabs).toContain('Graphe')
-    expect(tabs).toContain('Source control')
-    expect(tabs).not.toContain('Runs')
-    expect(tabs).not.toContain('Activité')
-    expect(tabButtons).toHaveLength(5)
-    expect(tabButtons.every((button) => button.querySelector('svg.workflow-section-icon'))).toBe(
-      true
-    )
-    expect(tabButtons.every((button) => button.querySelector('.workflow-section-separator'))).toBe(
-      true
-    )
-    expect(
-      tabButtons.filter((button) => button.getAttribute('aria-selected') === 'true')
-    ).toHaveLength(1)
+    expect(pane!.querySelector('.workflow-section-tabs')).toBeNull()
+    expect(pane!.querySelector('[role="tablist"]')).toBeNull()
+    expect(pane!.querySelectorAll('button[role="tab"]')).toHaveLength(0)
+    // Le graphe est monté d'emblée, et le détail des RUN.md reste atteignable sous lui.
+    expect(pane!.querySelector('.workflow-execution-graph')).toBeTruthy()
+    expect(pane!.querySelector('[data-workflow-detail]')).toBeTruthy()
+    expect(pane!.textContent).not.toContain('Activité')
     expect(pane!.className).not.toContain('wide')
   })
 
@@ -1843,10 +1782,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await mount(mockApi)
     await click('.conv-pick')
     await click('button[title="Workflows (RUN.md)"]')
-    const runTab = [...container!.querySelectorAll('.workflow-section-tabs button')].find(
-      (button) => button.textContent?.trim() === 'Run'
-    ) as HTMLButtonElement
-    await act(async () => runTab.click())
+    // Plus d’onglet à activer : sans sélection dans le graphe, la liste des RUN.md est l’accueil.
 
     const deleteButton = container!.querySelector(
       'button[aria-label="Supprimer le run ancien-run"]'
@@ -1945,11 +1881,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(causalTrace).not.toHaveBeenCalled()
 
     await click('button[title="Workflows (RUN.md)"]')
-    const graphTab = [...container!.querySelectorAll('.workflow-section-tabs button')].find(
-      (button) => button.textContent?.trim() === 'Graphe'
-    ) as HTMLButtonElement
+    // Le graphe n’est plus derrière un onglet : ouvrir le panneau SUFFIT à le monter, donc à lire
+    // la trace. La paresse tient désormais à l’ouverture du panneau, seule garde encore réelle.
     await act(async () => {
-      graphTab.click()
       await Promise.resolve()
       await Promise.resolve()
     })

@@ -28,16 +28,33 @@
    chevaucher — extrait de message, compteurs et eyebrow du titre disparaissent, les paddings
    tombent, et le menu ⋮ passe en surimpression au lieu de voler de la largeur au titre. */
 @container convpane (max-width: 170px) {
-  .conv-head { padding: 0 0 var(--s1); }
+  .conv-head {
+    padding: 0 0 var(--s1);
+  }
   .conv-head > .module-header > span,
   .conv-snippet,
   .conv-count,
-  .conv-group-count { display: none; }
-  .conv-head > .module-header > h1 { font-size: 13px; }
-  .conv-pick { gap: var(--s1); padding: 5px 6px; font-size: 12px; }
-  .conv-group-head { gap: 4px; padding: 4px 6px; }
-  .conv-search { padding: 4px 6px; }
-  .conv-item { position: relative; }
+  .conv-group-count {
+    display: none;
+  }
+  .conv-head > .module-header > h1 {
+    font-size: 13px;
+  }
+  .conv-pick {
+    gap: var(--s1);
+    padding: 5px 6px;
+    font-size: 12px;
+  }
+  .conv-group-head {
+    gap: 4px;
+    padding: 4px 6px;
+  }
+  .conv-search {
+    padding: 4px 6px;
+  }
+  .conv-item {
+    position: relative;
+  }
   .conv-menu-trigger {
     position: absolute;
     right: 0;
@@ -406,14 +423,18 @@
   border: 1px solid var(--border, rgba(255, 255, 255, 0.18));
   border-radius: 999px;
   background: transparent;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 .conv-mosaic-toggle-knob {
   width: 9px;
   height: 9px;
   border-radius: 50%;
   background: var(--text-faint);
-  transition: transform 120ms ease, background 120ms ease;
+  transition:
+    transform 120ms ease,
+    background 120ms ease;
 }
 .conv-mosaic-toggle.is-open {
   background: color-mix(in srgb, var(--accent, #4c8dff) 35%, transparent);
@@ -535,85 +556,18 @@
   background: rgba(3, 7, 11, 0.96);
 }
 
-.workflow-section-tabs {
-  display: grid;
+/* Titre du panneau : il a pris la place de la barre des quatre onglets, retiree avec elles. */
+.workflow-panel-title {
   min-width: 0;
   flex: 1;
-  grid-template-columns:
-    minmax(0, 1.15fr) minmax(0, 0.68fr) minmax(0, 0.78fr)
-    minmax(0, 1.39fr);
-}
-
-.workflow-section-tab {
-  position: relative;
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 0 4px;
-  border: 0;
-  background: transparent;
-  color: #7c8997;
-  font: 650 9px/1 var(--font);
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    color var(--dur) var(--ease),
-    background var(--dur) var(--ease);
-}
-
-.workflow-section-tab:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #dce5ef;
-}
-
-.workflow-section-tab.active {
-  background: rgba(255, 60, 172, 0.055);
+  align-self: center;
+  overflow: hidden;
   color: var(--text);
-  box-shadow: inset 0 -2px var(--accent);
-}
-
-.workflow-section-tab:focus-visible {
-  z-index: 1;
-  outline: 0;
-  box-shadow:
-    inset 0 0 0 1px var(--gold),
-    inset 0 -2px var(--accent);
-}
-
-.workflow-section-icon {
-  width: 13px;
-  height: 13px;
-  flex: none;
-  color: #6f8495;
-}
-
-.workflow-section-tab:hover .workflow-section-icon {
-  color: var(--gold);
-}
-
-.workflow-section-tab.active .workflow-section-icon {
-  color: var(--accent);
-}
-
-.workflow-section-label {
-  min-width: 0;
-}
-
-.workflow-section-separator {
-  position: absolute;
-  top: 11px;
-  right: 0;
-  bottom: 11px;
-  width: 1px;
-  background: rgba(255, 255, 255, 0.14);
-  pointer-events: none;
-}
-
-.workflow-section-tab:last-child .workflow-section-separator {
-  background: rgba(255, 212, 90, 0.38);
+  font: 650 11px/1 var(--font);
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .workflow-panel-actions {
@@ -667,15 +621,8 @@
     padding-left: 4px;
   }
 
-  .workflow-section-tab {
-    gap: 2px;
-    padding-inline: 2px;
-    font-size: 7.5px;
-  }
-
-  .workflow-section-icon {
-    width: 11px;
-    height: 11px;
+  .workflow-panel-title {
+    font-size: 9.5px;
   }
 
   .workflow-panel-actions {
@@ -3407,7 +3354,6 @@ ol.md-list li {
   max-height: 180px;
   overflow-y: auto;
 }
-
 
 /* Reprise de lecture : le fil est masque le temps que la position soit tenue, pour supprimer le
    saut visible (clignotement) pendant les frames de re-application. */

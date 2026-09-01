@@ -1,17 +1,7 @@
+import { useState } from 'react'
 import type { RunEntry, CheckpointEntry } from './ChatView'
-import type { Msg } from './chat-view-types'
 import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat-view-model'
-import {
-  WORKFLOW_PANEL_SECTIONS,
-  sectionUsesScope,
-  type WorkflowPanelSection
-} from './workflows-panel-sections'
-import {
-  WorkflowSectionIcon,
-  WorkflowRefreshIcon,
-  WorkflowCloseIcon,
-  RunTrashIcon
-} from './chat-view-icons'
+import { WorkflowRefreshIcon, WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
 import { StepThread } from './ChatView.parts'
 import { RunProgress } from './RunProgress'
 import { RunInspector } from './RunInspector'
@@ -19,8 +9,9 @@ import { RunInspector } from './RunInspector'
 /** Onglets du détail d'un RUN. `progress` = suivi vivant (avancée), `runmd` = fichier produit. */
 export type RunDetailTab = 'progress' | 'trace' | 'runmd'
 import { SourceControlPane } from './SourceControlPane'
+import { WorkflowExecutionGraph, type ExecutionNodeSelection } from './WorkflowExecutionGraph'
 import { ModelActivityLogPane } from './ModelActivityLogPane'
-import { WorkflowExecutionGraph } from './WorkflowExecutionGraph'
+import type { Msg } from './chat-view-types'
 // `.lisere-dessus` vit dans cette feuille (voir ViewPage.css) : import explicite, pas d'heritage
 // implicite d'une autre vue.
 import './ViewPage.css'
@@ -42,11 +33,19 @@ const EFFORT_FR: Record<string, string> = {
   ultra: 'ultra'
 }
 
+/**
+ * Nœuds qui parlent du DÉPÔT plutôt que d'un sous-agent : y descendre ouvre Source control, qui
+ * était jusqu'ici un onglet à part qu'il fallait penser à aller chercher.
+ */
+function selectionParleDuDepot(selection: ExecutionNodeSelection | null): boolean {
+  return (
+    selection?.kind === 'git' || selection?.kind === 'closure' || selection?.kind === 'workspace'
+  )
+}
+
 export type WorkflowsPanelProps = {
   runsPaneWidth: number
   beginRunsResize: (event: React.PointerEvent<HTMLDivElement>) => void
-  paneTab: WorkflowPanelSection
-  setPaneTab: (section: WorkflowPanelSection) => void
   refreshRuns: () => void
   setShowRuns: (value: boolean) => void
   activeId: string | null
@@ -68,20 +67,23 @@ export type WorkflowsPanelProps = {
   runDetailTab: RunDetailTab
   setRunDetailTab: (tab: RunDetailTab) => void
   liveRunCardRef: React.RefObject<HTMLDivElement | null>
-  /** Fil de la conversation ouverte : source durable de la section « Logs ». */
+  /** Messages du fil : source des LOGS (trace de ce que les modèles ont fait). */
   messages: readonly Msg[]
 }
 
 /**
- * Panneau droit "Workflows" : sections (source-control, graph, sous-agents, run),
- * extrait strictement (déplacement de JSX) depuis ChatView. Aucune logique nouvelle.
+ * PANNEAU DROIT : UN SEUL OBJET, L'EXÉCUTION.
+ *
+ * Il portait quatre onglets — Sous-agents, Run, Graphe, Source control — c'est-à-dire quatre
+ * projections de la MÊME exécution qu'il fallait corréler de tête, en sachant d'avance où
+ * regarder. Le graphe les remplace : il EST la navigation, et ce qu'on ouvre dessous DÉCOULE du
+ * nœud sur lequel on descend. Aucune des quatre vues n'est perdue — elles cessent d'être des
+ * destinations pour devenir le détail d'une étape.
  */
 export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   const {
     runsPaneWidth,
     beginRunsResize,
-    paneTab,
-    setPaneTab,
     refreshRuns,
     setShowRuns,
     activeId,
@@ -106,6 +108,31 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     messages
   } = props
 
+  const [selection, setSelection] = useState<ExecutionNodeSelection | null>(null)
+
+  const depot = selectionParleDuDepot(selection)
+  // Appariement par TOUR : c'est le seul lien RÉEL entre le graphe et le fil relu
+  // (`scopedRunsFromTimeline` pose `runPath = turn.id`). On n'invente aucune correspondance par
+  // `runId` : le `run-<n>` du graphe est éphémère et ne désigne aucun RUN.md sur disque.
+  const filsDuTour =
+    selection && !depot && selection.turnId
+      ? visibleLiveRuns.filter(([, run]) => !run.runPath || run.runPath === selection.turnId)
+      : []
+  // SANS sélection, l'accueil montre TOUS les fils, puis les RUN.md : c'était la section par
+  // défaut du panneau, et une orchestration en cours doit rester visible dès l'ouverture — la
+  // cacher derrière un clic dans le graphe serait une perte, pas une simplification.
+  const fils = depot
+    ? []
+    : selection
+      ? filsDuTour.length > 0
+        ? filsDuTour
+        : visibleLiveRuns
+      : visibleLiveRuns
+  const filsHorsTour = Boolean(selection) && fils.length > 0 && filsDuTour.length === 0
+  // « accueil » et non « runs » : sans sélection, le panneau montre les fils vivants PUIS les
+  // RUN.md. Nommer cet état d'après sa seule seconde moitié le décrivait faux.
+  const detailAffiche = depot ? 'source-control' : selection ? 'subagents' : 'accueil'
+
   return (
     <>
       <div
@@ -117,30 +144,13 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
       />
       <aside className="lisere-dessus runs-pane fade-in" style={{ width: `${runsPaneWidth}px` }}>
         <div className="workflow-panel-head">
-          <div className="workflow-section-tabs" role="tablist" aria-label="Vues Workflows">
-            {WORKFLOW_PANEL_SECTIONS.map((section) => (
-              <button
-                key={section.id}
-                className={`workflow-section-tab${paneTab === section.id ? ' active' : ''}`}
-                role="tab"
-                aria-selected={paneTab === section.id}
-                onClick={() => setPaneTab(section.id)}
-              >
-                <WorkflowSectionIcon section={section.id} />
-                <span className="workflow-section-label">{section.label}</span>
-                <span className="workflow-section-separator" aria-hidden="true" />
-              </button>
-            ))}
-          </div>
+          <strong className="workflow-panel-title">Exécution</strong>
           <div className="workflow-panel-actions">
             <button
-              className={`workflow-panel-action workflow-panel-refresh${paneTab === 'run' ? '' : ' is-placeholder'}`}
+              className="workflow-panel-action workflow-panel-refresh"
               onClick={refreshRuns}
-              title={paneTab === 'run' ? 'Rafraîchir' : undefined}
+              title="Rafraîchir"
               aria-label="Rafraîchir les runs"
-              aria-hidden={paneTab !== 'run'}
-              tabIndex={paneTab === 'run' ? 0 : -1}
-              disabled={paneTab !== 'run'}
             >
               <WorkflowRefreshIcon />
             </button>
@@ -154,148 +164,149 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             </button>
           </div>
         </div>
-        {paneTab === 'source-control' && (
-          <SourceControlPane conversationId={activeId ?? undefined} onSendPrompt={send} />
-        )}
-        {/* SECTION LOGS : tout ce que les modèles ont fait dans cette conversation. */}
-        {paneTab === 'journal' && (
-          <ModelActivityLogPane
-            conversationId={activeId}
-            messages={messages}
-            live={liveGraphActive}
-          />
-        )}
-        {paneTab === 'graph' && (
-          <WorkflowExecutionGraph
-            conversationId={activeId ?? undefined}
-            active={isActive}
-            requestLabel={requestLabel}
-            live={liveGraphActive}
-          />
-        )}
+        {/* LA NAVIGATION. Plus un onglet parmi quatre : le point d'entrée unique du panneau. */}
+        <WorkflowExecutionGraph
+          conversationId={activeId ?? undefined}
+          active={isActive}
+          requestLabel={requestLabel}
+          live={liveGraphActive}
+          onSelect={setSelection}
+        />
+        {/* LOGS : la trace geste par geste de ce que les modèles ont fait. Section née APRÈS ce
+            panneau ; elle n'est PAS une projection de l'exécution orchestrée, donc aucun nœud du
+            graphe ne la porte. Elle reste donc atteignable ici, repliée par défaut. */}
+        <details className="workflow-logs-fold">
+          <summary>Logs</summary>
+          <ModelActivityLogPane conversationId={activeId} messages={messages} live={liveGraphActive} />
+        </details>
         {/* Pas de sélecteur de portée : ce panneau ne montre QUE la conversation courante.
             Le cadrage « tous » y affichait des compteurs globaux sous une conversation qui n'en
             porte que deux — on ne s'y retrouvait plus. Le global relève de l'Observatory. */}
         <div
-          className="scroll-y col grow"
-          style={{
-            gap: 'var(--s2)',
-            minHeight: 0,
-            display: sectionUsesScope(paneTab) ? undefined : 'none'
-          }}
+          className="scroll-y col grow workflow-panel-detail"
+          data-workflow-detail={detailAffiche}
+          style={{ gap: 'var(--s2)', minHeight: 0 }}
         >
+          {depot && (
+            <SourceControlPane conversationId={activeId ?? undefined} onSendPrompt={send} />
+          )}
+
           {/* SECTION SOUS-AGENTS : le fil d'une orchestration, en cours ou TERMINÉE. */}
-          {paneTab === 'subagents' && visibleLiveRuns.length === 0 && (
+          {selection && !depot && fils.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
               {activeId
-                ? 'Aucune orchestration dans cette conversation — le fil des sous-agents apparaît ici dès qu’une tâche est lancée, et il y RESTE une fois terminée.'
+                ? 'Aucun fil de sous-agents pour cette étape — son détail reste lisible dans le graphe ci-dessus.'
                 : 'Sélectionne une conversation pour voir le fil de ses sous-agents.'}
             </div>
           )}
-          {paneTab === 'subagents' &&
-            visibleLiveRuns.map(([runKey, liveRun]) => (
-              <div
-                key={runKey}
-                ref={liveRun.convId === activeId ? liveRunCardRef : undefined}
-                className={`card live-run stripe stripe-accent fade-in`}
-                data-live-run-conversation-id={liveRun.convId}
-              >
-                <details className="live-run-fold" open={liveRun.status === 'running'}>
-                  <summary
-                    className="row"
-                    style={{ justifyContent: 'space-between', cursor: 'pointer' }}
-                    title="Replier / déplier ce sous-agent"
-                  >
-                    <span className="row gap2" style={{ minWidth: 0 }}>
-                      {liveRun.status === 'running' ? (
-                        <Spinner />
-                      ) : (
-                        <span
-                          className={`status-dot ${liveRun.status === 'green' ? 'st-ok' : 'st-err'}`}
-                        />
-                      )}
-                      <span className="run-subject live-subject" title={liveRun.task}>
-                        {liveRun.task}
-                      </span>
+          {filsHorsTour && (
+            <div className="c-faint" style={{ fontSize: 11, padding: '0 var(--s2)' }}>
+              Aucun fil rattaché à ce tour précis — voici tous les fils de la conversation.
+            </div>
+          )}
+          {fils.map(([runKey, liveRun]) => (
+            <div
+              key={runKey}
+              ref={liveRun.convId === activeId ? liveRunCardRef : undefined}
+              className={`card live-run stripe stripe-accent fade-in`}
+              data-live-run-conversation-id={liveRun.convId}
+            >
+              <details className="live-run-fold" open={liveRun.status === 'running'}>
+                <summary
+                  className="row"
+                  style={{ justifyContent: 'space-between', cursor: 'pointer' }}
+                  title="Replier / déplier ce sous-agent"
+                >
+                  <span className="row gap2" style={{ minWidth: 0 }}>
+                    {liveRun.status === 'running' ? (
+                      <Spinner />
+                    ) : (
+                      <span
+                        className={`status-dot ${liveRun.status === 'green' ? 'st-ok' : 'st-err'}`}
+                      />
+                    )}
+                    <span className="run-subject live-subject" title={liveRun.task}>
+                      {liveRun.task}
                     </span>
-                  </summary>
-                  <div style={{ marginTop: 'var(--s2)' }}>
-                    <StepThread steps={liveRun.steps} />
-                    {liveRun.status === 'running' &&
-                      (() => {
-                        const phase = liveRun.phase
-                        const meta = phase ? STEP_META[phase.step] : undefined
-                        const label = phase ? phaseLabel(phase) : 'sous-agent'
-                        // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair.
-                        const shortModel = phase?.model?.split('/').pop()
-                        const eff =
-                          phase?.reasoningEffort &&
-                          phase.reasoningEffort !== 'none' &&
-                          phase.reasoningEffort !== 'auto'
-                            ? (EFFORT_FR[phase.reasoningEffort] ?? phase.reasoningEffort)
-                            : undefined
-                        const detail = shortModel
-                          ? `${shortModel}${eff ? ` · ${eff}` : ''}`
-                          : phase?.provider
-                        return (
-                          <div className="subagent-step live-subagent-step">
-                            <div
-                              className="row gap2"
-                              style={{ justifyContent: 'space-between', fontSize: 11 }}
-                            >
-                              <span className="c-faint">
-                                <Spinner /> {meta?.icon ?? ''} {label}
-                                {detail && <span className="mono c-accent"> {detail}</span>}
-                              </span>
-                              <span className="row gap2">
-                                <span className="badge">en cours</span>
-                                <button
-                                  className="btn btn-sm btn-danger"
-                                  title="Stopper le sous-agent en cours"
-                                  onClick={(event) => {
-                                    // Sans ce retour, un échec d'annulation laissait le run affiché
-                                    // « en cours » sans explication : l'utilisateur croit avoir stoppé
-                                    // le sous-agent alors qu'il tourne toujours. Le composant est
-                                    // sans état → on reporte l'échec sur le bouton lui-même (libellé
-                                    // + title), visible et sans introduire de store local.
-                                    const button = event.currentTarget
-                                    void window.api
-                                      .cancelOrchestration(liveRun.convId)
-                                      .catch((error: unknown) => {
-                                        button.textContent = '⚠ Stop échoué'
-                                        button.title = `Annulation impossible : ${error instanceof Error ? error.message : String(error)}`
-                                      })
-                                  }}
-                                >
-                                  ⏹ Stop
-                                </button>
-                              </span>
-                            </div>
-                            {/*
+                  </span>
+                </summary>
+                <div style={{ marginTop: 'var(--s2)' }}>
+                  <StepThread steps={liveRun.steps} />
+                  {liveRun.status === 'running' &&
+                    (() => {
+                      const phase = liveRun.phase
+                      const meta = phase ? STEP_META[phase.step] : undefined
+                      const label = phase ? phaseLabel(phase) : 'sous-agent'
+                      // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair.
+                      const shortModel = phase?.model?.split('/').pop()
+                      const eff =
+                        phase?.reasoningEffort &&
+                        phase.reasoningEffort !== 'none' &&
+                        phase.reasoningEffort !== 'auto'
+                          ? (EFFORT_FR[phase.reasoningEffort] ?? phase.reasoningEffort)
+                          : undefined
+                      const detail = shortModel
+                        ? `${shortModel}${eff ? ` · ${eff}` : ''}`
+                        : phase?.provider
+                      return (
+                        <div className="subagent-step live-subagent-step">
+                          <div
+                            className="row gap2"
+                            style={{ justifyContent: 'space-between', fontSize: 11 }}
+                          >
+                            <span className="c-faint">
+                              <Spinner /> {meta?.icon ?? ''} {label}
+                              {detail && <span className="mono c-accent"> {detail}</span>}
+                            </span>
+                            <span className="row gap2">
+                              <span className="badge">en cours</span>
+                              <button
+                                className="btn btn-sm btn-danger"
+                                title="Stopper le sous-agent en cours"
+                                onClick={(event) => {
+                                  // Sans ce retour, un échec d'annulation laissait le run affiché
+                                  // « en cours » sans explication : l'utilisateur croit avoir stoppé
+                                  // le sous-agent alors qu'il tourne toujours. Le composant est
+                                  // sans état → on reporte l'échec sur le bouton lui-même (libellé
+                                  // + title), visible et sans introduire de store local.
+                                  const button = event.currentTarget
+                                  void window.api
+                                    .cancelOrchestration(liveRun.convId)
+                                    .catch((error: unknown) => {
+                                      button.textContent = '⚠ Stop échoué'
+                                      button.title = `Annulation impossible : ${error instanceof Error ? error.message : String(error)}`
+                                    })
+                                }}
+                              >
+                                ⏹ Stop
+                              </button>
+                            </span>
+                          </div>
+                          {/*
                             Activité courante, AVANT le texte : quand un outil tourne quinze
                             minutes, c'est la seule chose qui distingue « travaille » de « mort ».
                             Le texte du livrable, lui, peut rester vide tout ce temps.
                           */}
-                            {liveRun.note && (
-                              <div
-                                className="subagent-live-note"
-                                title="Activité en cours du sous-agent"
-                              >
-                                {liveRun.note}
-                              </div>
-                            )}
-                            {liveRun.liveText && (
-                              <pre className="subagent-live-text">{liveRun.liveText}</pre>
-                            )}
-                          </div>
-                        )
-                      })()}
-                  </div>
-                </details>
-              </div>
-            ))}
+                          {liveRun.note && (
+                            <div
+                              className="subagent-live-note"
+                              title="Activité en cours du sous-agent"
+                            >
+                              {liveRun.note}
+                            </div>
+                          )}
+                          {liveRun.liveText && (
+                            <pre className="subagent-live-text">{liveRun.liveText}</pre>
+                          )}
+                        </div>
+                      )
+                    })()}
+                </div>
+              </details>
+            </div>
+          ))}
           {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
-          {paneTab === 'run' && checkpoints.length > 0 && (
+          {!selection && checkpoints.length > 0 && (
             <section className="card checkpoint-forks">
               <strong>Checkpoints persistants</strong>
               {checkpoints.map((checkpoint) => (
@@ -315,14 +326,14 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               {forkedCheckpoint && <small>Fork immuable préparé : {forkedCheckpoint}</small>}
             </section>
           )}
-          {paneTab === 'run' && runs.length === 0 && (
+          {!selection && runs.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
               {activeId
                 ? 'Aucun RUN.md pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
                 : 'Sélectionne ou démarre une conversation pour voir ses RUN.md.'}
             </div>
           )}
-          {paneTab === 'run' &&
+          {!selection &&
             runs.map((r) => {
               const pct =
                 r.summary.dodTotal > 0
