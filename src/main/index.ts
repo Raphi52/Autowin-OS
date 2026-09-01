@@ -48,7 +48,8 @@ import {
   configureClaudeAccountRotation,
   describeAccounts,
   parseIdentity,
-  type ClaudeIdentity
+  type ClaudeIdentity,
+  withClaudeAccountEnv
 } from './claude-accounts'
 import {
   app,
@@ -1942,7 +1943,9 @@ Le fil reprend ensuite normalement.`
         const child = spawn(resolveClaudeBin(), ['auth', 'status'], {
           windowsHide: true,
           shell: false,
-          env: { ...process.env, ...accountEnv(account) }
+          // EXPLICITE : pour le compte par defaut, accountEnv rend {} — sans retrait, la sonde
+          // heriterait le CLAUDE_CONFIG_DIR du processus et lirait l'identite d'un AUTRE compte.
+          env: withClaudeAccountEnv(process.env, accountEnv(account))
         })
         child.stdout?.on('data', (chunk: Buffer) => {
           out += chunk.toString('utf8')
@@ -3174,6 +3177,14 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:conversations', (event) => {
     assertTrustedRendererSender(event, 'Conversations')
     return os.conversations.listSummaries()
+  })
+  // Recherche par CONTENU pour la barre laterale : la liste envoyee au renderer n'a pas les
+  // messages, seul le processus principal peut dire quelles conversations portent le terme.
+  ipcMain.handle('os:conversations:searchContent', (event, rawTerme: unknown) => {
+    assertTrustedRendererSender(event, 'Conversations content search')
+    const terme = typeof rawTerme === 'string' ? rawTerme : ''
+    if (terme.trim().length === 0) return []
+    return os.conversations.rechercherParContenu(terme)
   })
   ipcMain.handle('os:conversation', (event, rawId: unknown) => {
     assertTrustedRendererSender(event, 'Conversation detail')
