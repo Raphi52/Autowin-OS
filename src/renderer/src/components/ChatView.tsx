@@ -876,6 +876,19 @@ export function ChatView({
       return { ...current, [conversationId]: next }
     })
   }
+  /**
+   * Le main a ecrit un VRAI message pour ce texte : le recu provisoire n'a plus lieu d'etre.
+   * Sans ce retrait, l'utilisateur verrait DEUX fois son texte (le recu + le message relu).
+   */
+  function retirerDirectiveReceipt(conversationId: string, entryId: number): void {
+    setDirectiveReceipts((current) => {
+      const receipts = current[conversationId]
+      if (!receipts?.length) return current
+      const next = receipts.filter((receipt) => receipt.id !== entryId)
+      if (next.length === receipts.length) return current
+      return { ...current, [conversationId]: next }
+    })
+  }
   function rebaseDirectiveReceiptsAfterStreamReset(conversationId: string, streamId: string): void {
     const liveMessages = liveMessagesRef.current.get(conversationId) ?? []
     setDirectiveReceipts((current) => {
@@ -2249,14 +2262,25 @@ export function ChatView({
     const entry: QueuedDirective = { id: nextQueueEntryIdRef.current++, text, mode: replimode }
     setDirectiveReceipt(id, entry, 'sending', reponse)
     let injected = false
+    // Le main ECRIT desormais un vrai message pour la directive acceptee et rend son identifiant.
+    // C'est ce qui manquait : le recu ne vivait qu'en memoire de l'ecran, un rechargement l'effacait
+    // et le texte disparaissait (conv-38, 2026-09-01).
+    let messageEcrit = false
     try {
-      injected = (await window.api.injectDirective(id, text))?.ok === true
+      const issue = await window.api.injectDirective(id, text)
+      injected = issue?.ok === true
+      messageEcrit = typeof issue?.messageId === 'string' && issue.messageId.length > 0
     } catch (error) {
       traceSilentFailure('inject-directive:btw', error)
       injected = false
     }
     // Repli explicite : l'injection a échoué → file d'attente (drainée en fin de tour), rien n'est perdu.
     if (!injected) enqueueMessage(id, text, replimode)
+    if (injected && messageEcrit) {
+      // Le fil porte le texte pour de bon : le recu provisoire ferait doublon.
+      retirerDirectiveReceipt(id, entry.id)
+      return
+    }
     setDirectiveReceipt(id, entry, injected ? issueDeLInjection(id) : 'failed', reponse)
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */

@@ -130,6 +130,7 @@ import {
   type RecoveredPilotProviderCall
 } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
+import { enregistrerDirectiveDansLeFil } from './directive-dans-le-fil'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import { boundedContinuationHistory, boundedTurnHistory } from './chat-turn-messages'
 import { buildContinuationProviderHistory } from './chat-continuation'
@@ -5562,6 +5563,18 @@ Le fil reprend ensuite normalement.`
       queued.push(directive)
       pendingDirectives.set(conversationId, queued)
       broadcast({ type: 'refresh', scope: 'directives' })
+      // La directive est acceptee -> elle devient un VRAI message du fil. Sans cette ecriture, le
+      // seul temoin etait un recu vivant dans la memoire de l'ecran : un rechargement l'effacait et
+      // l'utilisateur devait recliquer (conv-38, 2026-09-01). L'echec de l'ecriture ne remonte
+      // jamais : la directive est deja empilee, une trace manquee n'annule pas un envoi reussi.
+      const messageId = enregistrerDirectiveDansLeFil({
+        conversations: os.conversations,
+        conversationId,
+        texte: directive,
+        broadcast: (event) => broadcast(event),
+        onError: (error) => console.error('[inject] message non ecrit dans le fil', error)
+      })
+      if (messageId) return { ok: true, messageId }
       return { ok: true }
     }
   )
