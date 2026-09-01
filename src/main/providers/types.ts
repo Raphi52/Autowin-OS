@@ -74,6 +74,17 @@ export interface SendOptions {
   system?: string
   /** F6 — décomposition observable du `system` (passthrough, jamais transmis au provider). */
   systemBlocks?: SystemBlock[]
+  /**
+   * Décomposition observable du contexte poussé côté USER (mémoire de session, mémoire causale,
+   * empreinte du dépôt, savoir Brain, contexte collecté…). Même parti pris que `systemBlocks` :
+   * passthrough pur, jamais transmis au provider.
+   *
+   * Pourquoi séparément (2026-08-31) : ces blocs-là sont concaténés dans le MESSAGE utilisateur,
+   * pas dans le `system`. Ils étaient donc les seules injections d'Autowin sans aucun nom nulle
+   * part — l'Observatory les affichait fondus dans le message de l'utilisateur, impossibles à
+   * distinguer de ce que l'humain avait réellement écrit.
+   */
+  contextBlocks?: SystemBlock[]
   /** Reprise d'une session existante (cache-friendly) si l'adaptateur le gère. */
   resumeSessionId?: string
   /** Signal d'annulation coopératif. */
@@ -146,6 +157,8 @@ export interface PromptEnvelope {
   system?: string
   /** F6 — décomposition du `system` en blocs nommés, pour auditer ce qui a été injecté. */
   systemBlocks?: SystemBlock[]
+  /** Décomposition du contexte poussé côté user en blocs nommés (cf. `SendOptions.contextBlocks`). */
+  contextBlocks?: SystemBlock[]
   messages: Message[]
   options: Record<string, unknown>
   limitation: string
@@ -163,9 +176,14 @@ export interface StreamChunk {
    */
   reasoning?: string
   /**
-   * Signe de vie TECHNIQUE du provider — outil en cours, tâche de fond, retry API. Distinct de
-   * `reasoning` : ce n'est PAS du raisonnement, cela remplace le précédent au lieu de s'accumuler,
-   * et l'UI l'affiche hors du bloc « Réflexion ».
+   * Libellé d'ÉTAT transitoire du flux — surcharge API en cours de retente, battement d'un outil
+   * long, tâche de fond démarrée ou terminée. À relayer EN DIRECT et JAMAIS à persister : ce n'est
+   * ni de la réponse (`delta`) ni du raisonnement (`reasoning`), et l'écrire dans `thinking` faisait
+   * afficher « Raisonnement : API 529 overloaded » après coup (mesuré le 2026-08-21 : sur 155 étapes
+   * réelles, l'UNIQUE champ non vide ne portait que ce bruit).
+   *
+   * Le producteur existe depuis `claude.ts` (retentes, `tool_progress`, `task_started`) ; la
+   * déclaration manquait, ce qui rendait le typecheck rouge sur origin/main.
    */
   status?: string
   /** Artefacts structurés disponibles avant la fin du flux, si le supplier les émet ainsi. */

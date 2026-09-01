@@ -223,3 +223,69 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
     expect(statuts[0]).toMatch(/échec|echec|failed/i)
   })
 })
+
+/**
+ * UNE RAFALE DE LECTURES MUETTE PASSE POUR UNE APP MORTE.
+ *
+ * Mesure du 2026-08-31, run conv-9 (`scout-pour-trouver-les-causes-des-freeze-mth6zqy8-workspace`) :
+ * un sous-agent `scout` a enchaine 52 appels d'outils (26 Read, 23 Grep, 3 Glob), TOUS reussis,
+ * pendant 223 659 ms — et a produit ZERO texte. Le journal `causal-trace/conv-9.jsonl` montre un
+ * SEUL trou ininterrompu de 224 s sans aucun evenement live, puis les 52 enregistrements d'un coup
+ * en 12 ms a la toute fin. L'utilisateur a stoppe a 3 min 43 : son clic etait rationnel, rien ne
+ * distinguait « travaille » de « mort ». Le run est parti rouge avec un livrable vide.
+ *
+ * Le battement `tool_progress` ci-dessus ne couvre PAS ce cas : le CLI ne l'emet que pour un outil
+ * LONG (30 s de silence). Une rafale de lectures rapides n'en declenche aucun. L'app savait pourtant
+ * que le sous-agent etait vivant — `watchdog.beat()` est nourri a chaque ligne de stdout, y compris
+ * ces lignes-la (`claude.ts`, `consumeText`). Elle s'en servait pour le laisser tourner sans jamais
+ * le dire a l'utilisateur.
+ */
+describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie', () => {
+  const appelOutil = (
+    id: string,
+    name: string,
+    input: Record<string, unknown>
+  ): Record<string, unknown> => ({
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', id, name, input }] }
+  })
+
+  it('emet un signe de vie par appel d’outil, meme sans une ligne de texte', async () => {
+    spawnCapture.stdoutEvents = [
+      appelOutil('t1', 'Read', { file_path: 'src/main/index.ts' }),
+      appelOutil('t2', 'Grep', { pattern: 'gels.jsonl' }),
+      appelOutil('t3', 'Glob', { pattern: '**/*.ts' }),
+      succes
+    ]
+    const reasoning = await drainReasoning()
+
+    expect(reasoning).toHaveLength(3)
+    expect(reasoning[0]).toContain('Read')
+    expect(reasoning[1]).toContain('Grep')
+    expect(reasoning[2]).toContain('Glob')
+  })
+
+  it('nomme la CIBLE de l’outil, pas seulement l’outil — « Read » seul ne prouve pas l’avancement', async () => {
+    spawnCapture.stdoutEvents = [
+      appelOutil('t1', 'Read', { file_path: 'src/main/providers/claude.ts' }),
+      succes
+    ]
+    const reasoning = await drainReasoning()
+
+    expect(reasoning[0]).toContain('claude.ts')
+  })
+
+  /*
+   * CONTROLE DISCRIMINANT — l'entree qui DOIT laisser le test a zero. Sans lui, un relais qui
+   * pousse sur n'importe quel evenement passerait le test ci-dessus sans rien prouver.
+   */
+  it('ne relaie RIEN quand aucun outil n’est appele', async () => {
+    spawnCapture.stdoutEvents = [
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'Voici la reponse.' }] } },
+      succes
+    ]
+    const reasoning = await drainReasoning()
+
+    expect(reasoning).toHaveLength(0)
+  })
+})

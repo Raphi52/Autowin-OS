@@ -314,6 +314,21 @@ export function buildChatPilotagePrompt(
     `nécessaires : c'est infiniment moins cher qu'un ` +
     `pipeline. N'engage \`orchestrate\` que pour ÉCRIRE à plusieurs endroits ou mener un chantier ; ` +
     `pour une correction ponctuelle, utilise \`edit_file\` puis \`verify\`.\n` +
+    // LE VOCABULAIRE DE LA DEMANDE N'EST PAS UN ORDRE D'ORCHESTRER. La regle ci-dessus existait
+    // deja -- et n'a pas suffi une seconde fois. Mesure conv-9 (2026-08-31) : sur « scout pour trouver
+    // les causes des freezes (ne repond pas) pour les /heal », l'agent a lance `orchestrate`. Resultat
+    // reel : 223 659 ms de sous-agent, ZERO token de sortie, RUN.md `status: red`, aucun livrable,
+    // l'utilisateur coupe et reecrit « RECOMMENCE SANS cette erreur ». Le MEME scout, rendu en direct
+    // au tour suivant avec les outils de lecture, a produit huit causes classees avec fichier:ligne.
+    // Cause du rate : la regle parlait de « demande ouverte sur le code », jamais des MOTS de
+    // l'utilisateur, qui reprennent les noms de phases du pipeline -- « scout » se lisait comme
+    // `phase:'scout'`.
+    `Le VOCABULAIRE de la demande ne decide JAMAIS de l'orchestration. « scout », « audit », ` +
+    `« diagnostique », « trouve les causes », « /heal », « par ou commencer » nomment un LIVRABLE ` +
+    `D'ANALYSE que tu rends TOI-MEME dans le fil — pas la phase \`orchestrate(phase:'scout')\`, ` +
+    `meme quand l'utilisateur emploie exactement ce mot. Le seul critere reste : un fichier doit-il ` +
+    `changer ? Non -> tu lis et tu reponds. Un pipeline lance pour LIRE fait attendre des minutes et ` +
+    `peut ne rien rendre du tout.\n` +
     // QUAND tu orchestres, NOMME la phase. Ce bloc ne donne AUCUNE raison de plus d'orchestrer — la
     // decision reste la regle ci-dessus. Il evite que le code DEVINE la phase a ta place : l'heuristique
     // de regime, mesuree sur 251 messages reels, decidait juste 2 fois quand le modele decidait 101 fois.

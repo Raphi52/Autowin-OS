@@ -125,38 +125,63 @@ export function nommerPiecesJointes(
 ): string {
   if (!attachments?.length) return ''
   const noms = attachments.map((piece) => piece.name).filter((nom) => nom.trim().length > 0)
-  return noms.length ? `
-[pieces jointes de ce message: ${noms.join(', ')}]` : ''
+  return noms.length
+    ? `
+[pieces jointes de ce message: ${noms.join(', ')}]`
+    : ''
+}
+
+/** Un bloc NOMMÉ du message de tour : le texte envoyé, et ce qu'il est. */
+export interface TurnMessageBlock {
+  name: string
+  text: string
+}
+
+/**
+ * LES MÊMES ENTRÉES, NOMMÉES.
+ *
+ * Le chat pousse cinq blocs dans le message utilisateur — état de l'app, savoir Brain, écho de
+ * mémoire, rappel de conversations, corps de skill — puis l'historique. Aucun ne portait de nom :
+ * l'Observatory les affichait donc fondus dans « le message », indiscernables de ce que l'humain
+ * avait réellement tapé. C'est le pendant chat du même défaut corrigé côté orchestration le
+ * 2026-08-31.
+ *
+ * `buildTurnMessages` en DÉRIVE le texte : une seule composition, donc pas de seconde vérité qui
+ * dériverait de la première à la prochaine évolution du format.
+ */
+export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBlock[] {
+  const nonVu = parts.compteRenduNonVu?.trim()
+  const nommes: TurnMessageBlock[] = parts.resumeSessionId
+    ? [
+        { name: 'etatDeLApp', text: `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}` },
+        { name: 'brainContext', text: parts.brainContext },
+        { name: 'memoryEcho', text: parts.memoryEcho },
+        { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
+        { name: 'skillBody', text: parts.skillBody ?? '' },
+        {
+          name: nonVu ? 'repriseSessionAvecTourManquant' : 'repriseSession',
+          text: nonVu
+            ? `Suite de NOTRE conversation en cours. Ta session en contient l'historique, À UNE EXCEPTION : le tour ci-dessous a été exécuté par l'application SANS passer par toi, il est donc absent de ta session. Traite-le comme un fait établi de cette conversation.\n\nTOI (tour exécuté par l'app, hors de ta session):\n${nonVu}`
+            : `Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle conversation_search sur les mots de la demande, puis conversation_read sur l'identifiant rendu. L'identifiant de la conversation courante est activeConversationId, dans l'ETAT DE L'APP ci-dessus.`
+        },
+        { name: 'messageUtilisateur', text: `UTILISATEUR: ${parts.lastUserMessage ?? ''}` }
+      ]
+    : [
+        { name: 'etatDeLApp', text: `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}` },
+        { name: 'brainContext', text: parts.brainContext },
+        { name: 'memoryEcho', text: parts.memoryEcho },
+        { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
+        { name: 'skillBody', text: parts.skillBody ?? '' },
+        ...parts.history.map((m, rang) => ({
+          name: `historique:${m.role === 'user' ? 'utilisateur' : 'agent'}:${rang}`,
+          text: `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}${nommerPiecesJointes(m.attachments)}`
+        }))
+      ]
+  return nommes.filter((bloc) => bloc.text.trim().length > 0)
 }
 
 export function buildTurnMessages(parts: TurnMessageParts): string[] {
-  const nonVu = parts.compteRenduNonVu?.trim()
-  const entries = parts.resumeSessionId
-    ? [
-        `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`,
-        parts.brainContext,
-        parts.memoryEcho,
-        parts.rappelConversations ?? '',
-        parts.skillBody ?? '',
-        // La phrase CHANGE quand un tour manque : garder « tu connais déjà l'historique » au-dessus
-        // d'un tour jamais vu serait conserver le mensonge tout en ajoutant le remède.
-        nonVu
-          ? `Suite de NOTRE conversation en cours. Ta session en contient l'historique, À UNE EXCEPTION : le tour ci-dessous a été exécuté par l'application SANS passer par toi, il est donc absent de ta session. Traite-le comme un fait établi de cette conversation.\n\nTOI (tour exécuté par l'app, hors de ta session):\n${nonVu}`
-          : `Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle conversation_search sur les mots de la demande, puis conversation_read sur l'identifiant rendu. L'identifiant de la conversation courante est activeConversationId, dans l'ETAT DE L'APP ci-dessus.`,
-        `UTILISATEUR: ${parts.lastUserMessage ?? ''}`
-      ]
-    : [
-        `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`,
-        parts.brainContext,
-        parts.memoryEcho,
-        parts.rappelConversations ?? '',
-        parts.skillBody ?? '',
-        ...parts.history.map(
-          (m) =>
-            `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}${nommerPiecesJointes(m.attachments)}`
-        )
-      ]
-  return entries.filter((entry) => entry.trim().length > 0)
+  return buildTurnMessageBlocks(parts).map((bloc) => bloc.text)
 }
 
 /**
@@ -312,8 +337,7 @@ export function signatureDEchec(nom: string, erreur: string): string {
    * et une panne de destination devenaient LE MEME mur, donc « interdit de rejouer » sur un
    * diagnostic faux. Le suffixe est justement la ou vit le discriminant.
    */
-  const borne =
-    noyau.length <= 80 ? noyau : `${noyau.slice(0, 40)}…${noyau.slice(-40)}`
+  const borne = noyau.length <= 80 ? noyau : `${noyau.slice(0, 40)}…${noyau.slice(-40)}`
   return `${nom}::${borne}`
 }
 
@@ -361,10 +385,7 @@ export function consigneApresEchec(dejaRencontres: readonly string[], signature:
  * Elle se tait quand la reprise dépend RÉELLEMENT de l'humain (autorisation, droits, arbitrage) :
  * relancer un agent contre un mur externe brûle des itérations sans rien produire.
  */
-export function exigeCorrigerEtPoursuivre(
-  echecNonCorrige: boolean,
-  reponse: string
-): boolean {
+export function exigeCorrigerEtPoursuivre(echecNonCorrige: boolean, reponse: string): boolean {
   if (!echecNonCorrige) return false
   const texte = (reponse ?? '').trim()
   if (!texte) return false // le tour muet a sa propre garde
@@ -381,7 +402,8 @@ export function exigeCorrigerEtPoursuivre(
       texte
     )
   const questionSuspensive =
-    texte.includes('?') && /(dois-je|veux-tu|confirmes?-tu|souhaites?-tu|faut-il|puis-je)/i.test(texte)
+    texte.includes('?') &&
+    /(dois-je|veux-tu|confirmes?-tu|souhaites?-tu|faut-il|puis-je)/i.test(texte)
   /*
    * `impossible` ne desarme plus la reprise par sa seule PRESENCE. Defaut mesure le 2026-08-22 :
    * « le patch a echoue, la ligne visee est impossible a localiser » decrivait l'echec lui-meme, et
@@ -538,3 +560,111 @@ export const RELANCE_QUESTION_SANS_LECTURE =
   'lecture répond, avance sur une hypothèse énoncée (« je suppose X — corrige-moi ») au lieu de ' +
   'demander ; si un vrai choix subsiste (goût, arbitrage que seul l’utilisateur possède), repose ' +
   'la question en citant ce que tu as lu.'
+
+/**
+ * Le tour a AGI, mais sa clôture PROMET un compte-rendu qui n'arrivera jamais.
+ *
+ * LE DÉFAUT, mesuré le 2026-08-31 sur cette conversation. Le tour lance `orchestrate`, puis clôt
+ * sur « Run lancé. Je te rends le résultat vérifié — exit codes réels — dès qu'il rend la main. »
+ * Le tour se termine là : il n'y a AUCUN « dès qu'il rend la main ». Le run a fini
+ * `degraded-closed`, ses 20 fichiers sont restés dans un worktree isolé jamais fusionné, et
+ * l'utilisateur a dû refaire le travail dans une autre session (commit `4bbab009`). Le coût n'est
+ * pas la phrase : c'est le travail perdu derrière elle.
+ *
+ * Preuve que la consigne ne suffit pas : la constitution l'interdit déjà en toutes lettres
+ * (« rendre la main plus tôt — rapport d'étape — est un ÉCHEC ») et le prompt de pilotage aussi
+ * (« n'annonce jamais un lancement avant son résultat observable »). Les deux ont été enfreints
+ * dans le même message. C'est le motif connu du garde-fou PASSIF : une règle qu'aucun mécanisme ne
+ * vérifie finit par ne plus être suivie. On la rend donc MÉCANIQUE, comme ses sœurs au-dessus.
+ *
+ * DISTINCT de `exigeAgirPasAnnoncer`, qui ne mord QUE si aucune action n'a eu lieu. Ici l'action a
+ * bien eu lieu — c'est le RÉSULTAT qui est renvoyé à un futur inexistant, et c'est l'angle mort
+ * exact que sa jumelle laissait ouvert.
+ *
+ * Prudent par construction : deux familles étroites, et jamais un simple « dès que ». La famille B
+ * exige le verbe de restitution et le marqueur d'attente dans la MÊME phrase — « le cache est
+ * invalidé dès que le fichier change » ne promet rien et passe.
+ */
+export function exigePreuveAvantDePromettre(reponse: string, uneActionAEuLieu: boolean): boolean {
+  if (!uneActionAEuLieu) return false // sans action, c'est `exigeAgirPasAnnoncer` qui répond
+  const texte = (reponse ?? '').trim()
+  if (!texte) return false // le tour muet a sa propre garde
+  // Famille A — formules figées : promettre un message ultérieur, sans ambiguïté possible.
+  const promesseFigee =
+    /\bje (?:te |vous )?(?:reviens|reviendrai)\b[^.!?]{0,40}\b(?:avec|dès|des|quand|une fois)\b/i.test(
+      texte
+    ) ||
+    /\bje (?:te |vous )?tiens\b[^.!?]{0,30}\b(?:au courant|informé|informée|au jus)\b/i.test(
+      texte
+    ) ||
+    /\bje (?:te |vous )?(?:dirai|préviendrai|previendrai|informerai|recontacte|recontacterai)\b/i.test(
+      texte
+    )
+  if (promesseFigee) return true
+  // Famille B — verbe de RESTITUTION à la 1re personne ET marqueur d'ATTENTE, dans la même phrase.
+  const RESTITUTION =
+    /\bje (?:te |vous )?(?:rends|rendrai|redonne|redonnerai|donne|donnerai|livre|livrerai|rapporte|rapporterai|remets|remettrai|poste|posterai)\b/i
+  const ATTENTE =
+    /\b(?:dès qu|des qu|dès que|des que|quand (?:il|elle|ce|ça|ca)|une fois qu|à la fin|a la fin|au retour|ensuite)/i
+  return texte
+    .split(/(?<=[.!?])\s+|\n+/u)
+    .some((phrase) => RESTITUTION.test(phrase) && ATTENTE.test(phrase))
+}
+
+/** Ce qu'on renvoie à l'agent : la preuve MAINTENANT, ou l'aveu que le tour s'arrête. */
+export const RELANCE_PREUVE_AVANT_DE_PROMETTRE =
+  'SYSTÈME: ta clôture PROMET un compte-rendu ultérieur — « je te rends le résultat », « je ' +
+  'reviens avec », « je te tiens au courant ». Ce message est le DERNIER du tour : ce futur ' +
+  'n’existe pas, aucun second message ne partira, et l’utilisateur attendra pour rien. Mesuré le ' +
+  '31/08 : un run lancé puis promis a fini `degraded-closed`, son travail est resté dans un ' +
+  'worktree isolé jamais fusionné, et l’utilisateur a dû le refaire ailleurs. Donc MAINTENANT, au ' +
+  'choix : (1) va chercher le résultat dans CE tour — sonde l’état réel (`get_state`, ' +
+  '`retrospective`, `run`, `verify`, lecture de fichier) et rends compte de ce que tu OBSERVES ; ' +
+  'ou (2) si le résultat est réellement hors de ta portée, dis-le explicitement — ce qui est ' +
+  'lancé, où le retrouver, ce que l’utilisateur doit faire — sans promettre de revenir.'
+
+/**
+ * Une fence ```` ```html-render ```` a-t-elle été ouverte sans jamais être refermée ?
+ *
+ * LE DÉFAUT, mesuré le 2026-08-31 sur cette conversation : le bloc visuel a été fermé par une
+ * pseudo-balise `</html-render` au lieu du délimiteur ```` ``` ````. Le renderer dégrade alors
+ * proprement — `Markdown.tsx:hasClosingFence` exige un vrai délimiteur de fermeture — mais la
+ * conséquence est que l'utilisateur voit du HTML BRUT en bloc de code à la place de la page. Le
+ * travail de mise en forme est intégralement payé et intégralement perdu.
+ *
+ * Le prompt le dit déjà (« un bloc fermé ```html-render […] puis ferme-le par ``` ») et ne l'a pas
+ * empêché : même motif de garde-fou passif que ses sœurs, même remède mécanique.
+ *
+ * Ne mord QUE sur `html-render` : un bloc de code ordinaire laissé ouvert reste lisible, et
+ * relancer pour lui coûterait une itération sans rien sauver.
+ */
+export function blocVisuelNonFerme(reponse: string): boolean {
+  const lignes = (reponse ?? '').split(/\r?\n/u)
+  let ouvert: { marqueur: string; longueur: number; visuel: boolean } | undefined
+  for (const ligne of lignes) {
+    const fence = /^\s{0,3}(`{3,}|~{3,})([^\r\n]*)$/u.exec(ligne)
+    if (!fence) continue
+    const marqueur = fence[1][0]
+    const longueur = fence[1].length
+    if (!ouvert) {
+      ouvert = {
+        marqueur,
+        longueur,
+        visuel: fence[2].trim().toLowerCase() === 'html-render'
+      }
+      continue
+    }
+    // Une fermeture est un délimiteur SEUL, du même type et au moins aussi long que l'ouverture.
+    if (marqueur === ouvert.marqueur && longueur >= ouvert.longueur && fence[2].trim() === '')
+      ouvert = undefined
+  }
+  return Boolean(ouvert?.visuel)
+}
+
+/** Ce qu'on renvoie à l'agent : refermer la fence, sinon la page ne s'affiche pas. */
+export const RELANCE_BLOC_VISUEL_NON_FERME =
+  'SYSTÈME: tu as ouvert un bloc ```html-render sans jamais le REFERMER par une ligne ne ' +
+  'contenant que ```. Une pseudo-balise (`</html-render`) n’est pas un délimiteur : le fil rend ' +
+  'alors ton HTML en bloc de code BRUT, et toute ta mise en forme est perdue à l’écran. ' +
+  'Ré-émets MAINTENANT ta réponse complète, SANS aucune commande, avec la fence ouverte par ' +
+  '```html-render et fermée par ``` sur une ligne seule.'

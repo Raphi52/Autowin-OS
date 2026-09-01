@@ -732,6 +732,8 @@ export class CodexAdapter implements ProviderAdapter {
       model: model ?? opts.model ?? this.model,
       transport: 'Codex Responses API · instructions + input',
       system: opts.system,
+      systemBlocks: opts.systemBlocks,
+      contextBlocks: opts.contextBlocks,
       messages: messages.filter((message) => message.role !== 'system'),
       options: { store: false, stream: true, effort: opts.reasoningEffort },
       limitation:

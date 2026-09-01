@@ -162,6 +162,8 @@ export class KimiCliAdapter implements ProviderAdapter {
       model: model ?? opts.model,
       transport: 'Kimi Code CLI · --prompt + --output-format stream-json · OAuth compte local',
       system: opts.system,
+      systemBlocks: opts.systemBlocks,
+      contextBlocks: opts.contextBlocks,
       messages: messages.filter((message) => message.role !== 'system'),
       options: { resumed: false, effortIgnored: Boolean(opts.reasoningEffort) },
       limitation:

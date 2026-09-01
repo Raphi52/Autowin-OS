@@ -274,6 +274,20 @@ export function populateConvRunSections(
 }
 
 /** Applique au RUN le statut exact du lifecycle ; `open` n'est pas une clôture. */
+/**
+ * Met une erreur d'orchestration en UNE ligne de Journal.
+ *
+ * Deux contraintes qui se contredisent naivement : le Journal est un format une-entree-par-ligne
+ * (`closeConvRun` ecrit `[date] <ligne>`), et la RAISON de l'echec vit apres le premier retour a la
+ * ligne du message. Plafonner brutalement detruit la raison ; garder les retours a la ligne casse
+ * le format. On replie donc AVANT de plafonner.
+ */
+export function ligneJournalDErreur(e: unknown): string {
+  return String(e)
+    .replace(/\s*\n\s*/g, ' · ')
+    .slice(0, 600)
+}
+
 export function closeConvRun(path: string, status: RunClosureStatus, journalLine: string): void {
   if (status === 'open') return
   try {

@@ -47,6 +47,64 @@ const signedContextPayload = (context: string, token = 'jeton'): Record<string, 
   }
 }
 
+/**
+ * UNE ROUTE ABSENTE N'EST PAS UN REFUS.
+ *
+ * Mesure conv-9 (2026-08-31), lue dans la trace causale : `remember` a rendu
+ * `{ allowed: true, stored: false, detail: 'refusé par le Brain : not found' }`. Le mot « refusé »
+ * envoie chercher le defaut dans le FAIT (type ? source ? longueur ?), alors qu'un 404 dit que la
+ * route de depot n'existe pas sur ce serveur : rien n'a ete lu, rien n'a ete juge. Le meme tour
+ * portait par ailleurs un `status: 'unavailable'` cote lecture — meme serveur muet, deux messages
+ * qui ne se recoupaient pas.
+ */
+describe('remember — separer la panne de transport du refus de contenu', () => {
+  const faitPourCeTest = {
+    ...FAIT_VALIDE,
+    title: 'Route de depot absente — cas 404',
+    fact: 'Un 404 sur la route de depot ne dit rien du contenu du fait envoye.'
+  }
+
+  it('nomme la route de dépôt manquante au lieu d’accuser le fait', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-remember-404-'))
+    const fetchFn = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'not found' }), { status: 404 })
+    ) as unknown as typeof fetch
+    try {
+      configureRememberDepositStore(join(root, 'remember-deposits.json'))
+      const res = await rememberFact(faitPourCeTest, { token: 'jeton', fetchFn })
+      expect(res.stored).toBe(false)
+      expect(res.detail).toMatch(/route de dépôt/u)
+      expect(res.detail).toContain('404')
+      expect(res.detail).not.toMatch(/refusé par le Brain/u)
+    } finally {
+      forgetSessionDeposits()
+      configureRememberDepositStore()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('garde VERBATIM le motif d’un vrai refus du serveur', async () => {
+    // L'autre bord : separer ne doit pas avaler le motif que le serveur prend la peine de donner.
+    const root = mkdtempSync(join(tmpdir(), 'autowin-remember-422-'))
+    const fetchFn = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'type invalide' }), { status: 422 })
+    ) as unknown as typeof fetch
+    try {
+      configureRememberDepositStore(join(root, 'remember-deposits.json'))
+      const res = await rememberFact(
+        { ...faitPourCeTest, title: 'Vrai refus — cas 422' },
+        { token: 'jeton', fetchFn }
+      )
+      expect(res.stored).toBe(false)
+      expect(res.detail).toBe('refusé par le Brain : type invalide')
+    } finally {
+      forgetSessionDeposits()
+      configureRememberDepositStore()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('idempotence atomique de remember', () => {
   it('bloque un retry aveugle quand le premier depot a un etat inconnu', async () => {
     const deposited = new Map<string, string>()

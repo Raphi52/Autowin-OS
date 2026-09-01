@@ -149,6 +149,7 @@ export class FabricResourceAdapter implements ProviderAdapter {
       transport: 'Autowin Node v1 SSE — local-tools',
       system: opts.system,
       systemBlocks: opts.systemBlocks,
+      contextBlocks: opts.contextBlocks,
       messages,
       options: {
         mode: 'local-tools',

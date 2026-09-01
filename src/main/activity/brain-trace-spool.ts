@@ -110,8 +110,17 @@ export interface BrainTrace {
   conversationId: string
   /** Absent uniquement sur les traces historiques antérieures à la corrélation par tour. */
   turnId?: string
-  /** `automatic` = contexte préchargé par un run ; `query` = commande explicite du modèle. */
-  kind?: 'automatic' | 'query'
+  /**
+   * NATURE de l'aller-retour Brain. Les trois dernières valeurs sont arrivées le 2026-08-31 avec
+   * les appels qu'elles nomment : ils existaient déjà mais n'écrivaient AUCUNE trace, si bien que
+   * l'Observatory présentait une chronologie Brain incomplète en la donnant pour complète.
+   *  - `automatic`  : contexte préchargé au démarrage d'un run ;
+   *  - `query`      : commande `brain_query` explicite du modèle ;
+   *  - `empreinte`  : chargement de l'empreinte du dépôt (skill `think`), 1×/run ;
+   *  - `recherche`  : recherche lancée par l'HUMAIN depuis la vue Knowledge ;
+   *  - `depot`      : ÉCRITURE — dépôt d'un fait en `inbox/` par la commande `remember`.
+   */
+  kind?: 'automatic' | 'query' | 'empreinte' | 'recherche' | 'depot'
   query: string
   found?: boolean
   status?: 'found' | 'empty' | 'invalid' | 'unavailable'
