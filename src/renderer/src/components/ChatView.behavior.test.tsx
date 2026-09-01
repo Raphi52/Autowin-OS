@@ -883,6 +883,45 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.chat-jump-latest')).toBeNull()
   })
 
+  /**
+   * FIN DE TOUR. Quand le tour se termine, la hauteur du fil change (bandeau « en cours » retire,
+   * file d'attente videe, bloc de cloture peint) SANS que les messages changent : l'effet de
+   * descente, branche sur `messages`, ne se rejouait pas. Le fil restait arrete au milieu de la
+   * derniere reponse avec le bouton « ↓ Derniere reponse », alors que l'utilisateur n'avait rien
+   * remonte (rapporte le 2026-09-01, conv-44, capture a l'appui).
+   */
+  it('redescend tout en bas quand le tour se termine', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('une question')
+    await click('.composer-send')
+
+    const scroll = container!.querySelector('.chat-scroll') as HTMLDivElement
+    const scrollTo = vi.fn()
+    scroll.scrollTo = scrollTo
+    Object.defineProperties(scroll, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: { configurable: true, writable: true, value: 0 }
+    })
+    // On ne juge QUE la fin de tour : les descentes liees a l'envoi sont derriere nous.
+    await act(async () => flushAnimationFrames())
+    scrollTo.mockClear()
+
+    await act(async () => {
+      pilot.resolve({ ok: true })
+      await Promise.resolve()
+    })
+    await act(async () => flushAnimationFrames())
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'auto' })
+  })
+
   it('un message arrivé juste avant un scroll vers le haut ne ramène pas l’utilisateur en bas', async () => {
     // La frame est mise sous contrôle : c'est le seul moyen de placer le scroll utilisateur ENTRE la
     // décision de suivre le fil et son exécution. Sous charge, cet écart existe pour de vrai — c'est

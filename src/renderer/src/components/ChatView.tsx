@@ -1514,6 +1514,33 @@ export function ChatView({
     }
   }, [messages, activeDirectiveReceipts])
 
+  /**
+   * FIN DE TOUR — descente de RATTRAPAGE. L'effet ci-dessus ne se rejoue que sur `messages` : or la
+   * fin d'un tour change la HAUTEUR du fil sans toucher aux messages (le bandeau « en cours »
+   * disparait, la file d'attente se vide, le bloc de cloture finit de se peindre). Personne ne
+   * redescendait donc, et le fil restait arrete au milieu de la derniere reponse avec le bouton
+   * « ↓ Derniere reponse » alors que l'utilisateur n'avait rien remonte (rapporte le 2026-09-01,
+   * conv-44, capture a l'appui).
+   *
+   * Le plafond de frames est plus large qu'en streaming : le contenu tardif d'une fin de tour
+   * (markdown final, blocs `html-render`, images) se stabilise en plusieurs centaines de
+   * millisecondes, et une boucle de 40 frames atterrissait court. On poursuit le bas plus longtemps
+   * — et si malgre tout on n'atterrit pas, le bouton le DIT au lieu de mentir.
+   */
+  const busyPrecedentRef = useRef(busy)
+  useEffect(() => {
+    const finDeTour = busyPrecedentRef.current && !busy
+    busyPrecedentRef.current = busy
+    if (!finDeTour) return
+    const scroll = scrollRef.current
+    // On ne force RIEN si le lecteur a quitte le bas de lui-meme : sa position lui appartient.
+    if (!scroll || !followTailRef.current) return
+    const annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 120, (landed) => {
+      if (!landed) setHasNewActivity(true)
+    })
+    return () => annulerDescente()
+  }, [busy])
+
   /* --- conversations : sélection = fil rechargé depuis le store --- */
 
   /**
