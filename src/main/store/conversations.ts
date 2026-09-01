@@ -707,7 +707,18 @@ export class ConversationStore {
       throw new Error(`Conversation inconnue: ${id}`)
     }
     const ts = this.now()
-    const previous = conversation.messages.at(-1)
+    // LA RÉPONSE EN COURS N'EST PAS UN VOISIN COMME LES AUTRES : quand on demande l'insertion,
+    // le brouillon de réponse posé par `beginTurn` (dernier message, encore `streaming`) doit
+    // RESTER en dessous, sinon la consigne se lit après la réponse qui la traite (conv-46).
+    const dernier = conversation.messages.at(-1)
+    const rangReponseEnCours =
+      m.avantLaReponseEnCours === true &&
+      dernier?.role === 'assistant' &&
+      dernier.status === 'streaming'
+        ? conversation.messages.length - 1
+        : -1
+    const previous =
+      rangReponseEnCours >= 0 ? conversation.messages[rangReponseEnCours - 1] : dernier
     const message: Msg = {
       messageId: this.nextUniqueMessageId(conversation),
       ...(previous?.messageId ? { parentMessageId: previous.messageId } : {}),
@@ -717,14 +728,20 @@ export class ConversationStore {
       ...(m.attachments?.length ? { attachments: m.attachments } : {}),
       ...(m.orientation ? { orientation: true as const } : {})
     }
-    conversation.messages.push(message)
+    if (rangReponseEnCours >= 0) conversation.messages.splice(rangReponseEnCours, 0, message)
+    else conversation.messages.push(message)
     this.indexerMessage(conversation.id, message.content)
     conversation.updatedAt = ts
-    this.changed(id, 'immediate', {
-      op: 'append-messages',
-      messages: [structuredClone(message)],
-      updatedAt: ts
-    })
+    // Une INSERTION ne se diffuse pas comme un ajout : `append-messages` remettrait le message en
+    // fin de fil au rejeu du journal. On republie donc la conversation entière (cas rare : une
+    // consigne injectée), au lieu d'un delta qui mentirait sur l'ordre.
+    if (rangReponseEnCours >= 0) this.changed(id, 'immediate')
+    else
+      this.changed(id, 'immediate', {
+        op: 'append-messages',
+        messages: [structuredClone(message)],
+        updatedAt: ts
+      })
     return conversation
   }
 
