@@ -1,4 +1,8 @@
 import { applyEdit, decideEdit, decoderUtf8, editDiff, refusSiPasUtf8 } from './edit-file-command'
+import {
+  conversationRecenteEquivalente,
+  titreDeConversationDemandee
+} from './conversation-demandee'
 import { decisionDeSynchronisation } from './synchronisation-cible-bureau'
 import { pendantOperation } from './gel-main'
 import { rechargerEnv } from './env-reload'
@@ -564,8 +568,15 @@ const CATALOG: CommandSpec[] = [
   },
   {
     name: 'create_conversation',
-    description: 'Créer une conversation',
-    args: { title: 'titre', category: 'claude|codex' },
+    description:
+      'Créer une conversation. Le titre est celui que l’utilisateur a ÉCRIT — ne le reformule ' +
+      'pas ; si tu ne le fournis pas, ses mots sont repris automatiquement. Un second appel ' +
+      'identique dans les secondes qui suivent rend la conversation déjà créée (champ ' +
+      '`reprise`) au lieu d’en créer une deuxième.',
+    args: {
+      title: 'titre — facultatif, les mots de l’utilisateur si omis',
+      category: 'claude|codex'
+    },
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -2437,12 +2448,29 @@ export class AppCommandBus {
         }
       }
       case 'create_conversation': {
-        const c = this.os.conversations.create({
-          title: s('title'),
-          // L'argument s'appelle encore `category` (contrat d'agent, cf. catalogue) ; il ALIMENTE
-          // desormais le seul champ persiste, `provider`.
-          provider: s('category') || 'claude'
+        // L'argument s'appelle encore `category` (contrat d'agent, cf. catalogue) ; il ALIMENTE
+        // desormais le seul champ persiste, `provider`.
+        const provider = s('category') || 'claude'
+        // Le titre n'est plus INVENTE par le modele : a defaut d'un titre explicite, on reprend
+        // les mots que l'utilisateur vient d'ecrire (defaut conv-71 du 2026-09-01).
+        const dernierMessageUtilisateur = [
+          ...(this.os.conversations.get?.(conversationId ?? '')?.messages ?? [])
+        ]
+          .reverse()
+          .find((message) => message.role === 'user')?.content
+        const title = titreDeConversationDemandee(
+          a.title,
+          typeof dernierMessageUtilisateur === 'string' ? dernierMessageUtilisateur : ''
+        )
+        // Un second envoi identique a quelques secondes d'intervalle est le MEME geste : il rend
+        // la conversation deja creee au lieu d'en empiler une vide (conv-72 / conv-73).
+        const dejaCreee = conversationRecenteEquivalente(this.os.conversations.list?.() ?? [], {
+          title,
+          provider,
+          maintenant: Date.now()
         })
+        if (dejaCreee) return { ...dejaCreee, reprise: true }
+        const c = this.os.conversations.create({ title, provider })
         this.broadcast({ type: 'refresh', scope: 'conversations' })
         return c
       }
