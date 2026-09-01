@@ -235,6 +235,20 @@ describe('poser une tuile', () => {
     expect(boxOf(agenda)).toEqual(posee)
   })
 
+  it('ne REARRANGE pas toute la page quand on pose une tuile au bord droit', async () => {
+    // Defaut constate le 2026-09-01 : glisser un widget vers le bord droit faisait deborder sa boite,
+    // la reconciliation jugeait alors l agencement invalide et REMPLACAIT tout par la disposition
+    // d origine. Un geste de l utilisateur ne doit jamais rejouer la mise en place automatique.
+    const container = await mount()
+    const agenda = tile(container, 'agenda')
+    const mails = tile(container, 'mails')
+    await gesture(mails, [[520, 520]], [500, 500])
+    const avantMails = boxOf(mails)
+    await gesture(agenda, [[900, 300], [1600, 300], [2400, 300]], [400, 300])
+    expect(boxOf(mails)).toEqual(avantMails)
+    expect(boxOf(agenda).x).toBeGreaterThan(avantMails.x)
+  })
+
   it('applique la position SANS attendre une image d animation', async () => {
     // Défaut mesuré sur prototype : quand la transformée n'était écrite que par la boucle de rendu,
     // « réduire les animations » ou une fenêtre en arrière-plan rendait les tuiles immobiles.

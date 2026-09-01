@@ -3,6 +3,7 @@ import { observerLeMoteur } from './observer-les-sources'
 import { spawn } from 'node:child_process'
 import { readGitGraph } from './git-graph-main'
 import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
+import { ServiceTranscripts, dossierTranscripts } from './transcripts'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -564,6 +565,14 @@ instrumenterEntreesSortiesDuMain()
 let whisperMemo: ServiceWhisper | null = null
 const serviceWhisper = (): ServiceWhisper =>
   (whisperMemo ??= creerServiceWhisper({ racine: racineWhisper(app.getPath('userData')) }))
+
+/**
+ * Les enregistrements parlés, eux aussi construits PARESSEUSEMENT : tant que personne n'appuie sur
+ * « Enregistrer », aucun dossier n'est créé.
+ */
+let transcriptsMemo: ServiceTranscripts | null = null
+const serviceTranscripts = (): ServiceTranscripts =>
+  (transcriptsMemo ??= new ServiceTranscripts(dossierTranscripts(app.getPath('userData'))))
 
 configureSessionMemoryEcho(join(app.getPath('userData'), 'session-memory.json'))
 configureRememberDepositStore(join(app.getPath('userData'), 'remember-deposits.json'))
@@ -5863,6 +5872,43 @@ Le fil reprend ensuite normalement.`
     // Un WAV de 15 s à 16 kHz/16 bits pèse ~480 Ko : au-delà de 8 Mo, ce n'est plus un segment.
     if (octets.byteLength > 8_000_000) throw new Error('Segment audio trop volumineux')
     return serviceWhisper().transcrire(octets)
+  })
+
+  /**
+   * ENREGISTREMENTS PARLÉS. Le texte dicté n'allait NULLE PART : il vivait en mémoire de fenêtre,
+   * plafonné à 40 lignes, perdu au rechargement — une réunion de trois heures était donc perdue.
+   * Ces quatre canaux l'écrivent au fil de l'eau. Le chemin est décidé ici : la fenêtre ne
+   * manipule qu'un identifiant de session, jamais un chemin de fichier.
+   */
+  ipcMain.handle('os:transcript:demarrer', async (event) => {
+    assertTrustedRendererSender(event, 'Enregistrement démarrage')
+    return serviceTranscripts().demarrer()
+  })
+  ipcMain.handle('os:transcript:ajouter', async (event, id: unknown, texte: unknown) => {
+    assertTrustedRendererSender(event, 'Enregistrement écriture')
+    if (typeof id !== 'string' || typeof texte !== 'string') {
+      throw new Error('Ligne d’enregistrement invalide')
+    }
+    return serviceTranscripts().ajouter(id, texte)
+  })
+  ipcMain.handle('os:transcript:terminer', async (event, id: unknown) => {
+    assertTrustedRendererSender(event, 'Enregistrement fin')
+    if (typeof id !== 'string') throw new Error('Enregistrement invalide')
+    return serviceTranscripts().terminer(id)
+  })
+  ipcMain.handle('os:transcript:lister', async (event, max: unknown) => {
+    assertTrustedRendererSender(event, 'Enregistrements liste')
+    return serviceTranscripts().lister(typeof max === 'number' ? max : 10)
+  })
+  ipcMain.handle('os:transcript:revealer', async (event, chemin: unknown) => {
+    assertTrustedRendererSender(event, 'Enregistrement dans l’explorateur')
+    // Seul un fichier RÉELLEMENT listé s'ouvre : la fenêtre ne choisit pas ce que l'explorateur
+    // met en évidence.
+    const fichiers = await serviceTranscripts().lister(200)
+    const cible = fichiers.find((f) => f.chemin === chemin)
+    if (!cible) throw new Error('Enregistrement introuvable')
+    shell.showItemInFolder(cible.chemin)
+    return { ok: true as const }
   })
 
   ipcMain.handle('os:activity:sessions', (event) => {

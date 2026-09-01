@@ -1036,3 +1036,253 @@
   font-size: 11px;
   padding: 2px 4px;
 }
+
+/* ------------------------------------------------------------------------------------------------
+   ENREGISTREMENTS — le micro qui ECRIT, et la liste de ce qu'il a ecrit.
+   Direction visuelle demandee par l'utilisateur le 2026-09-01 : « from Iron Man » — l'affichage
+   tete haute du casque. Donc cyan repulseur sur or, angles coupes, balayage horizontal, tout en
+   capitales monospace. Le SEUL etat qui vire au rouge est l'enregistrement en cours : il doit se
+   voir de l'autre bout de la piece.
+   ------------------------------------------------------------------------------------------------ */
+.enregistrements {
+  --hud: 0, 214, 255;
+  --or: 212, 169, 79;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  height: 100%;
+  padding: 12px 14px;
+  overflow: hidden;
+  border: 1px solid rgba(var(--hud), 0.3);
+  border-radius: 4px;
+  font-size: 12px;
+  /* Angles coupes : la decoupe du viseur, pas une carte a coins ronds. */
+  clip-path: polygon(
+    14px 0,
+    100% 0,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    0 100%,
+    0 14px
+  );
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--hud), 0.07),
+      rgba(6, 14, 24, 0.34) 48%,
+      rgba(var(--or), 0.05)
+    ),
+    repeating-linear-gradient(0deg, rgba(var(--hud), 0.045) 0 1px, transparent 1px 4px);
+  box-shadow:
+    inset 0 0 26px rgba(var(--hud), 0.09),
+    inset 0 0 0 1px rgba(var(--or), 0.06);
+}
+
+/* Le reticule : deux equerres de visee dans les angles vifs. */
+.enregistrements::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 16px;
+  height: 16px;
+  border-top: 1px solid rgba(var(--hud), 0.55);
+  border-right: 1px solid rgba(var(--hud), 0.55);
+  pointer-events: none;
+}
+
+.enregistrements::after {
+  content: '';
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  width: 16px;
+  height: 16px;
+  border-bottom: 1px solid rgba(var(--hud), 0.55);
+  border-left: 1px solid rgba(var(--hud), 0.55);
+  pointer-events: none;
+}
+
+/* Un enregistrement EN COURS cerne la tuile : aucune confusion possible avec un micro coupe. */
+.enregistrements[data-enregistre='true'] {
+  --hud: 255, 92, 92;
+  border-color: rgba(255, 92, 92, 0.6);
+}
+
+.enregistrements__barre {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+/* Le bouton EST le reacteur : un noyau clair cercle d'un anneau qui se charge. */
+.enregistrements__bouton {
+  position: relative;
+  border-radius: 999px;
+  padding: 5px 15px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #dff6ff;
+  border: 1px solid rgba(var(--hud), 0.5);
+  background:
+    radial-gradient(circle at 14px 50%, rgba(var(--hud), 0.32), transparent 60%),
+    linear-gradient(135deg, rgba(var(--or), 0.14), rgba(6, 14, 24, 0.2) 60%, rgba(var(--hud), 0.12));
+  box-shadow:
+    0 0 10px rgba(var(--hud), 0.18),
+    inset 0 0 8px rgba(var(--hud), 0.14);
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.enregistrements__bouton:hover,
+.enregistrements__bouton:focus-visible {
+  color: #ffffff;
+  border-color: rgba(var(--hud), 0.9);
+  box-shadow:
+    0 0 16px rgba(var(--hud), 0.3),
+    inset 0 0 10px rgba(var(--hud), 0.2);
+}
+
+/* Le battement rouge : le seul etat ou l'application ecrit ce qui se dit dans la piece. */
+.enregistrements[data-enregistre='true'] .enregistrements__bouton {
+  color: #ffe4e4;
+  border-color: rgba(255, 92, 92, 0.9);
+  animation: enregistrement-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes enregistrement-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(255, 92, 92, 0.5),
+      inset 0 0 8px rgba(255, 92, 92, 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px rgba(255, 92, 92, 0),
+      inset 0 0 14px rgba(255, 92, 92, 0.4);
+  }
+}
+
+.enregistrements__etat,
+.enregistrements__cible,
+.enregistrements__partiel,
+.enregistrements__vide {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* Le compteur du HUD : chiffres monospace, jamais de police proportionnelle qui saute. */
+.enregistrements__etat {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--hud), 0.85);
+}
+
+.enregistrements__cible {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  color: rgba(var(--or), 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* La parole en cours de reconnaissance : la ligne vivante du viseur. */
+.enregistrements__partiel {
+  color: #dff2ff;
+  min-height: 14px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(var(--hud), 0.55);
+}
+
+.enregistrements__titre {
+  margin: 2px 0 0;
+  padding-bottom: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(0, 214, 255, 0.7);
+  border-bottom: 1px solid;
+  border-image: linear-gradient(90deg, rgba(0, 214, 255, 0.45), rgba(0, 214, 255, 0.02)) 1;
+}
+
+.enregistrements__lignes,
+.enregistrements__fichiers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.enregistrements__lignes li {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.enregistrements__lignes li::before {
+  content: '›';
+  margin-right: 6px;
+  color: rgba(var(--hud), 0.6);
+}
+
+/* Chaque fichier est un BOUTON : un clic le montre dans l'explorateur, la ou il est vraiment. */
+.enregistrements__fichier {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  border-left: 2px solid rgba(var(--or), 0.25);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.enregistrements__fichier:hover,
+.enregistrements__fichier:focus-visible {
+  border-color: rgba(0, 214, 255, 0.4);
+  border-left-color: rgba(0, 214, 255, 0.9);
+  background: linear-gradient(90deg, rgba(0, 214, 255, 0.12), transparent 70%);
+}
+
+.enregistrements__fichier-nom {
+  color: #e6f4fb;
+  font-size: 11px;
+}
+
+.enregistrements__fichier-meta {
+  color: var(--text-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Un ecran qui clignote gene : le battement s'efface si le systeme demande moins d'animation. */
+@media (prefers-reduced-motion: reduce) {
+  .enregistrements[data-enregistre='true'] .enregistrements__bouton {
+    animation: none;
+  }
+}

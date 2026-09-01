@@ -2,7 +2,7 @@
 import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { JarvisWidget } from './JarvisWidget'
+import { JarvisWidget, titreJarvis } from './JarvisWidget'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -157,10 +157,6 @@ afterEach(() => {
   }
 })
 
-const moteur2Dire = async (m: FakeRecognition): Promise<void> => {
-  m.dire('Jarvis, lance une tache test', true)
-}
-
 describe('widget Jarvis', () => {
   it('n’écoute pas avant d’avoir été activé', () => {
     rendre()
@@ -310,36 +306,23 @@ describe('widget Jarvis', () => {
     expect(c.textContent).not.toContain('Run en cours')
   })
 
-  it('ENREGISTRE le transcript sans jamais declencher Jarvis', async () => {
-    // LE BESOIN : noter ce qui se dit (une reunion, une idee) sans qu'un « Jarvis » prononce au
-    // passage lance un tour. L'ENTREE QUI CASSERAIT UN FAUX FIX : une phrase qui contient le mot
-    // d'eveil ET un ordre — en mode enregistrement elle doit s'ecrire a l'ecran et RIEN d'autre.
+  it('N A PLUS le bouton d enregistrement : il vit dans le widget « Enregistrements »', () => {
+    // CHOIX DE L'UTILISATEUR (2026-09-01) : « met ca dans un widget a part ». Le mode existe
+    // toujours dans `jarvis-voice`, mais Jarvis ne le declenche plus — le widget dedie, lui,
+    // ECRIT sur le disque, ce que ce bouton n a jamais fait.
     const c = rendre()
-    clic(c, 'jarvis-enregistrer')
-    const moteur = FakeRecognition.instances.at(-1)!
-    expect(moteur.demarrages).toBe(1)
-    await act(async () => moteur.dire('Jarvis, ouvre le task manager', true))
-    expect(c.textContent).toContain('Jarvis, ouvre le task manager')
-    expect(routeConversationMessage).not.toHaveBeenCalled()
-    expect(pilotChat).not.toHaveBeenCalled()
-    expect(FakeAudio.demarrages).toBe(0)
+    expect(c.querySelector('[data-testid="jarvis-enregistrer"]')).toBeNull()
   })
 
-  it('bascule d’un mode a l’autre sans laisser le micro precedent ouvert', async () => {
+  it('coupe vraiment le micro au second clic', () => {
     const c = rendre()
     clic(c, 'jarvis-bascule')
-    const premier = FakeRecognition.instances.at(-1)!
-    clic(c, 'jarvis-enregistrer')
-    expect(premier.arrets).toBe(1)
-    expect(FakeRecognition.instances).toHaveLength(2)
-    // et l'ancien moteur, s'il rend un dernier segment, ne parle plus a Jarvis
-    await act(async () => moteur2Dire(FakeRecognition.instances.at(-1)!))
-    expect(pilotChat).not.toHaveBeenCalled()
-    // un second clic sur le MEME bouton coupe vraiment
-    clic(c, 'jarvis-enregistrer')
-    expect(
-      c.querySelector('[data-testid="jarvis-enregistrer"]')?.getAttribute('aria-pressed')
-    ).toBe('false')
+    const moteur = FakeRecognition.instances.at(-1)!
+    clic(c, 'jarvis-bascule')
+    expect(moteur.arrets).toBe(1)
+    expect(c.querySelector('[data-testid="jarvis-bascule"]')?.getAttribute('aria-pressed')).toBe(
+      'false'
+    )
   })
 
   describe('écoute LOCALE (whisper.cpp)', () => {
@@ -498,5 +481,23 @@ describe('widget Jarvis', () => {
       await flush()
       expect(FakeRecognition.instances).toHaveLength(1)
     })
+  })
+})
+
+describe('titreJarvis', () => {
+  it('reprend le debut du message de l utilisateur', () => {
+    expect(titreJarvis('ouvre le rapport')).toBe('Jarvis - ouvre le rapport')
+  })
+
+  it('coupe une phrase longue sur un mot et marque la suite', () => {
+    const titre = titreJarvis(
+      'lance le scout du depot autowin et rends moi la liste des residus a nettoyer'
+    )
+    expect(titre.startsWith('Jarvis - lance le scout du depot autowin')).toBe(true)
+    expect(titre.endsWith(' ...')).toBe(true)
+  })
+
+  it('retombe sur Jarvis quand le message est vide', () => {
+    expect(titreJarvis('   ')).toBe('Jarvis')
   })
 })

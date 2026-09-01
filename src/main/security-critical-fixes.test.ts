@@ -286,7 +286,23 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     L ecriture est best-effort et ne leve jamais. Il porte
     //     `assertTrustedRendererSender(event, 'User input journal')` des sa PREMIERE ligne.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(156)
+    // MISE A JOUR 2026-09-01 (2) — 156 -> 161. CINQ canaux ajoutes, relus AVANT de toucher le
+    //   compte : les enregistrements parles (widget « Enregistrements »). Le texte dicte ne
+    //   s ecrivait NULLE PART — il vivait en memoire de fenetre, plafonne a 40 lignes, perdu au
+    //   rechargement. Le dossier cible est CONSTANT cote main
+    //   (`dossierTranscripts(app.getPath('userData'))`) et aucun canal n accepte de chemin :
+    //   os:transcript:demarrer — cree un fichier dont le NOM est calcule cote main a partir de
+    //     l horloge. Aucun argument ne vient du renderer.
+    //   os:transcript:ajouter — ajoute une ligne. Deux chaines : un identifiant de session opaque,
+    //     qui doit exister dans la table cote main (sinon l appel leve), et le texte dicte. Le
+    //     chemin ecrit vient de cette table, jamais du renderer.
+    //   os:transcript:terminer — retire la session de la table. Rien n est ecrit.
+    //   os:transcript:lister — LECTURE SEULE du dossier constant, filtree aux `.txt`.
+    //   os:transcript:revealer — met un fichier en evidence dans l explorateur, et UNIQUEMENT un
+    //     fichier deja rendu par `lister` : le chemin recu est compare a cette liste, jamais
+    //     utilise tel quel.
+    //   Les cinq portent `assertTrustedRendererSender` des leur PREMIERE ligne.
+    expect(handlers).toHaveLength(161)
     expect(unguarded).toEqual([])
   })
 

@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { jouerBipEveil } from './jarvis-bip'
+import { fabriqueMoteur } from './jarvis-moteur'
 
 /**
  * Décroissance de la crête par image d'affichage (~60/s) : ~1 s pour retomber d'une voix forte au
  * silence. Plus rapide, le verdict clignote entre les mots ; plus lent, il ment sur l'instant.
  */
 const DECROISSANCE_CRETE = 0.96
-import {
-  dependancesNavigateur,
-  fabriqueWhisper,
-  type FabriqueMoteur,
-  type MoteurVocal
-} from './jarvis-moteur-whisper'
+import { type MoteurVocal } from './jarvis-moteur-whisper'
 import {
   MESSAGE_VERDICT,
   SEUIL_MAX,
@@ -49,27 +45,6 @@ import {
  *  - rien ne part vers un run sans le mot d'eveil : un micro continu entend toute la piece.
  */
 
-/**
- * QUEL MOTEUR ECOUTE. MESURE sur cette application : `webkitSpeechRecognition` ouvre bien le micro
- * dans Electron, puis rend le code d erreur `network` — la branche `onerror` ci-dessous l affiche,
- * et une capture datee du 2026-08-31 le montre a l ecran (chemin cite dans l en-tete de
- * `src/main/whisper-local.ts`). La CAUSE de ce code n est PAS etablie dans ce depot : ne l ecris
- * pas comme un fait. Ce qui est etabli suffit — le moteur natif ne transcrit rien ici, et aucun
- * reglage du widget n y change quoi que ce soit. Whisper local, lui, tourne sur la machine et sans reseau ; il
- * passe donc D'ABORD des qu'il est installe, et Web Speech ne reste qu'un secours.
- */
-function fabriqueMoteur(whisperInstalle: boolean, peripherique?: string): FabriqueMoteur | null {
-  const api = apiJarvis()
-  if (whisperInstalle && api?.whisperTranscrire) {
-    const transcrire = api.whisperTranscrire.bind(api)
-    return fabriqueWhisper(dependancesNavigateur((wav) => transcrire(wav), peripherique))
-  }
-  const w = window as unknown as {
-    SpeechRecognition?: FabriqueMoteur
-    webkitSpeechRecognition?: FabriqueMoteur
-  }
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
-}
 
 interface ApiJarvis {
   conversations?: () => Promise<SommaireDirect[]>
@@ -97,6 +72,23 @@ const apiJarvis = (): ApiJarvis | undefined => (window as unknown as { api?: Api
 /** Le direct se relit souvent : c'est ce qui le rend « direct ». Assez lent pour rester gratuit. */
 const SONDAGE_MS = 4_000
 const MAX_EVENEMENTS = 12
+
+/** Longueur du debut de phrase repris dans le titre de la conversation Jarvis. */
+const TITRE_MAX = 40
+
+/**
+ * Titre de la conversation ouverte par Jarvis : « Jarvis - <debut de l'ordre> ... ».
+ * Le titre garde les MOTS de l'utilisateur, coupes sur un espace, jamais reformules.
+ */
+export function titreJarvis(texte: string): string {
+  const propre = texte.replace(/\s+/g, ' ').trim()
+  if (!propre) return 'Jarvis'
+  if (propre.length <= TITRE_MAX) return `Jarvis - ${propre}`
+  const coupe = propre.slice(0, TITRE_MAX)
+  const espace = coupe.lastIndexOf(' ')
+  const debut = espace > TITRE_MAX / 2 ? coupe.slice(0, espace) : coupe
+  return `Jarvis - ${debut.trimEnd()} ...`
+}
 
 export function JarvisWidget(): React.JSX.Element {
   const [ecoute, setEcoute] = useState<JarvisEcoute>(ecouteInitiale)
@@ -162,7 +154,7 @@ export function JarvisWidget(): React.JSX.Element {
     try {
       if (!conversationRef.current) {
         const creee = await api.conversationsCreate?.({
-          title: 'Jarvis',
+          title: titreJarvis(texte),
           category: 'chat',
           provider: 'claude'
         })
@@ -468,18 +460,10 @@ export function JarvisWidget(): React.JSX.Element {
           {commande ? '● Écoute en cours — couper' : 'Activer l’écoute'}
         </button>
         {/*
-          ENREGISTRER ≠ ÉCOUTER. Le même micro, la même transcription, mais rien ne part : le mot
-          « Jarvis » prononcé pendant la prise de notes ne doit lancer AUCUN tour.
+          L'ENREGISTREMENT A SON PROPRE WIDGET (« Enregistrements ») : il ECRIT sur le disque et
+          montre les fichiers déjà écrits. Le bouton n'est plus ici, mais le mode l'est encore :
+          basculer sur l'enregistrement ne doit toujours RIEN envoyer à Jarvis.
         */}
-        <button
-          type="button"
-          data-testid="jarvis-enregistrer"
-          className="jarvis__bascule"
-          aria-pressed={enregistre}
-          onClick={() => basculer('enregistrement')}
-        >
-          {enregistre ? '⏺ Enregistrement — arrêter' : 'Enregistrer'}
-        </button>
         <span className="jarvis__aide">
           {!ecoute.active
             ? 'Micro coupé'

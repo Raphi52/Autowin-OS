@@ -420,6 +420,19 @@ const api = {
   whisperInstaller: (): Promise<EtatWhisper> => ipcRenderer.invoke('os:whisper:installer'),
   whisperTranscrire: (wav: Uint8Array): Promise<string> =>
     ipcRenderer.invoke('os:whisper:transcrire', wav),
+  // Enregistrements parlés : la fenêtre ne connaît qu'un identifiant de session, jamais un chemin.
+  transcriptDemarrer: (): Promise<{ id: string; nom: string; chemin: string }> =>
+    ipcRenderer.invoke('os:transcript:demarrer'),
+  transcriptAjouter: (id: string, texte: string): Promise<{ octets: number }> =>
+    ipcRenderer.invoke('os:transcript:ajouter', id, texte),
+  transcriptTerminer: (id: string): Promise<{ chemin: string } | null> =>
+    ipcRenderer.invoke('os:transcript:terminer', id),
+  transcriptLister: (
+    max?: number
+  ): Promise<Array<{ nom: string; chemin: string; octets: number; le: number }>> =>
+    ipcRenderer.invoke('os:transcript:lister', max),
+  transcriptRevealer: (chemin: string): Promise<{ ok: true }> =>
+    ipcRenderer.invoke('os:transcript:revealer', chemin),
   // Conversations
   conversations: (): Promise<ConversationSummary[]> => ipcRenderer.invoke('os:conversations'),
   /** Ids des conversations dont le CONTENU porte le terme (+ extrait a montrer). */

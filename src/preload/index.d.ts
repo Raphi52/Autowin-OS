@@ -348,6 +348,13 @@ interface ChatApi {
   whisperEtat: () => Promise<EtatWhisper>
   whisperInstaller: () => Promise<EtatWhisper>
   whisperTranscrire: (wav: Uint8Array) => Promise<string>
+  transcriptDemarrer: () => Promise<{ id: string; nom: string; chemin: string }>
+  transcriptAjouter: (id: string, texte: string) => Promise<{ octets: number }>
+  transcriptTerminer: (id: string) => Promise<{ chemin: string } | null>
+  transcriptLister: (
+    max?: number
+  ) => Promise<Array<{ nom: string; chemin: string; octets: number; le: number }>>
+  transcriptRevealer: (chemin: string) => Promise<{ ok: true }>
   conversations: () => Promise<ConversationSummary[]>
   /** Ids des conversations dont le CONTENU porte le terme (+ extrait a montrer). */
   conversationsSearchContent: (

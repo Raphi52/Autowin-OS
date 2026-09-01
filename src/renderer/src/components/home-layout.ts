@@ -11,7 +11,13 @@
  */
 
 export type HomeWidgetId =
-  'mails' | 'agenda' | 'routines' | 'notifications' | 'conversations' | 'jarvis'
+  | 'mails'
+  | 'agenda'
+  | 'routines'
+  | 'notifications'
+  | 'conversations'
+  | 'jarvis'
+  | 'enregistrements'
 
 export interface HomeWidgetBox {
   id: HomeWidgetId
@@ -40,7 +46,8 @@ export const HOME_WIDGET_TITLES: Readonly<Record<HomeWidgetId, string>> = {
   routines: 'Départs des routines',
   notifications: 'Remontées des agents',
   conversations: 'Conversations',
-  jarvis: 'Jarvis'
+  jarvis: 'Jarvis',
+  enregistrements: 'Enregistrements'
 }
 
 /**
@@ -68,16 +75,23 @@ interface RelativeSpec {
  * d'une ligne de 0,5) recouvrait la tuile juste en dessous. Avec des lignes entieres, un
  * chevauchement devient impossible par construction — c'est de l'arithmetique, plus du reglage.
  */
-const ROWS = 5
+const ROWS = 6
+/**
+ * Deux colonnes demandent plus de rangees : sept tuiles a deux rangees minimum ne tiennent pas sur
+ * les six rangees de l'arrangement large.
+ */
+const MEDIUM_ROWS = 10
 
 const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
-  mails: { col: 0, colSpan: 1, row: 0, rowSpan: 5, z: 0 },
+  mails: { col: 0, colSpan: 1, row: 0, rowSpan: 4, z: 0 },
+  // Les enregistrements sont sous les mails : on les consulte apres coup, pas en parlant.
+  enregistrements: { col: 0, colSpan: 1, row: 4, rowSpan: 2, z: -50 },
   agenda: { col: 1, colSpan: 1, row: 0, rowSpan: 2, z: -30 },
-  routines: { col: 1, colSpan: 1, row: 2, rowSpan: 3, z: -60 },
+  routines: { col: 1, colSpan: 1, row: 2, rowSpan: 4, z: -60 },
   notifications: { col: 2, colSpan: 1, row: 0, rowSpan: 2, z: -20 },
   // Jarvis est en colonne de droite, a hauteur d'oeil : c'est l'endroit qu'on regarde en parlant.
   jarvis: { col: 2, colSpan: 1, row: 2, rowSpan: 2, z: -40 },
-  conversations: { col: 2, colSpan: 1, row: 4, rowSpan: 1, z: -120 }
+  conversations: { col: 2, colSpan: 1, row: 4, rowSpan: 2, z: -120 }
 }
 
 const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
@@ -89,12 +103,14 @@ const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   // fenetre est courte — c'est le defaut deja mesure le 2026-08-21 sur le hublot (historique).
   jarvis: { col: 1, colSpan: 1, row: 3, rowSpan: 3, z: -40 },
   routines: { col: 1, colSpan: 1, row: 6, rowSpan: 2, z: -60 },
-  conversations: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -120 }
+  conversations: { col: 0, colSpan: 1, row: 6, rowSpan: 2, z: -120 },
+  enregistrements: { col: 0, colSpan: 1, row: 8, rowSpan: 2, z: -50 }
 }
 
 /** L'ordre de lecture en colonne unique : ce qu'on regarde en premier, en haut. */
 const NARROW_ORDER: HomeWidgetId[] = [
   'jarvis',
+  'enregistrements',
   'notifications',
   'routines',
   'agenda',
@@ -116,6 +132,16 @@ const PAD_TOP = 142
 // decor 3D en entier, et l'effet qu'on venait de construire ne se voyait nulle part.
 const PAD_BOTTOM = 58
 const GAP = 20
+/**
+ * Ecart VERTICAL entre deux rangees.
+ *
+ * Il ne peut pas valoir `GAP` : l'etiquette de titre vit AU-DESSUS du panneau
+ * (`WIDGET_LABEL_HEIGHT`, 24 px) et se pose donc DANS cet ecart. A 20 px, le titre d'une tuile
+ * mordait le bas de la tuile du dessus — constate sur capture de l'app le 2026-09-01,
+ * « ENREGISTREMENTS » ecrit par-dessus la derniere ligne d'« Interlocuteurs ». L'ecart horizontal,
+ * lui, ne porte aucune etiquette et reste a `GAP`.
+ */
+const V_GAP = WIDGET_LABEL_HEIGHT + 8
 /**
  * Largeur maximale d'une colonne.
  *
@@ -194,22 +220,20 @@ export function defaultHomeLayout(
     )
   )
   const originX = PAD_X
-  // Deux colonnes demandent une ligne de plus, pour la bande des conversations en bas.
-  // Deux colonnes demandent trois rangees de plus : six tuiles a deux rangees minimum tiennent sur
-  // huit rangees, la ou cinq en occupaient six.
-  const gridRows = columns === 3 ? ROWS : ROWS + 3
-  const rowHeight = Math.max(24, Math.round((usableHeight - GAP * (gridRows - 1)) / gridRows))
+  // Deux colonnes n'ont pas la meme grille que trois : voir `MEDIUM_ROWS`.
+  const gridRows = columns === 3 ? ROWS : MEDIUM_ROWS
+  const rowHeight = Math.max(24, Math.round((usableHeight - V_GAP * (gridRows - 1)) / gridRows))
 
   return HOME_WIDGET_IDS.map((id) => {
     const entry = spec[id]
     return {
       id,
       x: originX + entry.col * (columnWidth + GAP),
-      y: top + entry.row * (rowHeight + GAP),
+      y: top + entry.row * (rowHeight + V_GAP),
       w: columnWidth * entry.colSpan + GAP * (entry.colSpan - 1),
       // La hauteur inclut les ecarts ENJAMBES : sans eux, une tuile sur trois lignes finit deux
       // ecarts trop courte et la colonne parait mal alignee.
-      h: Math.max(MIN_WIDGET_HEIGHT, rowHeight * entry.rowSpan + GAP * (entry.rowSpan - 1)),
+      h: Math.max(MIN_WIDGET_HEIGHT, rowHeight * entry.rowSpan + V_GAP * (entry.rowSpan - 1)),
       z: entry.z
     }
   })
@@ -217,6 +241,7 @@ export function defaultHomeLayout(
 
 export const HOME_WIDGET_IDS: HomeWidgetId[] = [
   'mails',
+  'enregistrements',
   'agenda',
   'routines',
   'notifications',

@@ -43,6 +43,7 @@ import {
 } from './conversations-attention'
 import { autowinStorageKey } from '../storage-keys'
 import { JarvisWidget } from './JarvisWidget'
+import { EnregistrementsWidget } from './EnregistrementsWidget'
 import './HomeView.css'
 import { Spinner } from './Spinner'
 
@@ -152,6 +153,16 @@ export function HomeView({
     height: window.innerHeight || 900,
     top: 142
   }))
+  /**
+   * L'agencement affiche a-t-il ete POSE A LA MAIN sur la surface courante ?
+   *
+   * Defaut constate le 2026-09-01 : glisser une tuile jusqu'au bord droit la faisait deborder (c'est
+   * permis, un tiers de tuile suffit a la reprendre), le controle de validite jugeait alors l'agencement
+   * invalide pour la surface et TOUTE la page repassait a la disposition d'origine. La reconciliation
+   * repond a un changement de SURFACE, jamais a un geste : tant que la surface n'a pas bouge depuis le
+   * dernier geste, ce que l'utilisateur a pose fait autorite et s'affiche tel quel.
+   */
+  const [poseALaMain, setPoseALaMain] = useState(false)
   const [snapshot, setSnapshot] = useState<TaskSnapshotLike | null>(null)
   const [snapshotError, setSnapshotError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -280,7 +291,15 @@ export function HomeView({
    * Recalculé, jamais enregistré. Réduire puis ré-agrandir la fenêtre repasse donc exactement par la
    * même dérivation et rend les positions d'origine au pixel.
    */
-  const layout = useMemo(() => reconcileLayout(arrangement, surface), [arrangement, surface])
+  const layout = useMemo(
+    () => (poseALaMain ? arrangement : reconcileLayout(arrangement, surface)),
+    [arrangement, surface, poseALaMain]
+  )
+
+  // Une nouvelle surface annule cette autorite : la disposition doit y etre re-jugee.
+  useEffect(() => {
+    setPoseALaMain(false)
+  }, [surface])
 
   /* ---------------------------------------------------------------- *
    * LE DECOR A DEMENAGE : il est desormais le fond de TOUTE l'application, monte a la racine de la
@@ -468,6 +487,7 @@ export function HomeView({
           : resizeWidgetBox(hold.from, hold.edge, dx, dy, viewport())
       // Un geste de l'utilisateur fait AUTORITE : il ecrit l'agencement. C'est la difference avec un
       // redimensionnement de fenetre, qui n'exprime aucune intention sur la disposition.
+      setPoseALaMain(true)
       setArrangement((current) => replaceWidget(current, box))
     }
     const onUp = (): void => {
@@ -498,6 +518,7 @@ export function HomeView({
   const scatter = useCallback(() => {
     setArrangement((courant) => {
       setHistoire((h) => remember(h, courant))
+      setPoseALaMain(true)
       return scatterHomeLayout(courant, viewport(), Math.random)
     })
   }, [viewport])
@@ -505,6 +526,7 @@ export function HomeView({
     setHistoire((h) => {
       const defait = undo(h)
       if (!defait) return h
+      setPoseALaMain(true)
       setArrangement(defait.arrangement)
       return defait.history
     })
@@ -798,6 +820,12 @@ function WidgetBody({
   onAcquitter: (alertId: string) => Promise<void>
   ouvertureEnCours: string | null
 }): React.JSX.Element {
+  if (id === 'enregistrements') {
+    // Le micro qui ECRIT sur le disque, et la liste de ce qu'il a ecrit. A part de Jarvis a
+    // dessein : ici le mot « Jarvis » prononce ne lance rien.
+    return <EnregistrementsWidget />
+  }
+
   if (id === 'jarvis') {
     // Le seul widget qui PARLE a l'app au lieu de la lire : micro continu et fil du direct.
     return <JarvisWidget />
