@@ -1234,7 +1234,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
              * servait pour le laisser tourner sans jamais le dire a l'utilisateur.
              */
             const cible = (filePath || command).slice(0, 120)
-            queue.push({ delta: '', reasoning: `
+            queue.push({ delta: '', status: `
 ${part.name}${cible ? `
 ${cible}` : ''}` })
           }

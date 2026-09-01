@@ -257,7 +257,7 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
       appelOutil('t3', 'Glob', { pattern: '**/*.ts' }),
       succes
     ]
-    const reasoning = await drainReasoning()
+    const reasoning = await drainStatus()
 
     expect(reasoning).toHaveLength(3)
     expect(reasoning[0]).toContain('Read')
@@ -270,7 +270,7 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
       appelOutil('t1', 'Read', { file_path: 'src/main/providers/claude.ts' }),
       succes
     ]
-    const reasoning = await drainReasoning()
+    const reasoning = await drainStatus()
 
     expect(reasoning[0]).toContain('claude.ts')
   })
@@ -284,7 +284,7 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
       { type: 'assistant', message: { content: [{ type: 'text', text: 'Voici la reponse.' }] } },
       succes
     ]
-    const reasoning = await drainReasoning()
+    const reasoning = await drainStatus()
 
     expect(reasoning).toHaveLength(0)
   })
