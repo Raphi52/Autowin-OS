@@ -273,7 +273,20 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     ecrit par le main dans un dossier temporaire qu il cree et supprime lui-meme, et la
     //     taille est plafonnee a 8 Mo. Aucune chaine du renderer n entre dans la ligne de commande.
     //   Les trois portent `assertTrustedRendererSender` des leur PREMIERE ligne.
-    expect(handlers).toHaveLength(154)
+    // MISE A JOUR 2026-09-01 — 154 -> 156. DEUX canaux ajoutes, relus AVANT de toucher le compte :
+    //   os:conversations:searchContent — LECTURE SEULE en memoire. Recherche litterale d un terme
+    //     dans les messages deja charges (`conversations.rechercherParContenu`) : aucun chemin,
+    //     aucune commande, aucune ecriture. Son unique argument est une chaine, ignoree si elle est
+    //     vide, et le nombre de resultats est plafonne cote store (max 5000). Il porte
+    //     `assertTrustedRendererSender(event, 'Conversations content search')` des sa PREMIERE ligne.
+    //   os:saisie:journaliser — AJOUT d une ligne au seul journal de saisies de l app
+    //     (`<appdata>/saisies-utilisateur.jsonl`, chemin CONSTANT calcule cote main). Le renderer ne
+    //     fournit ni chemin ni nom de fichier : trois chaines validees par `guardString`, et la voie
+    //     doit valoir exactement `message` ou `orientation`, sinon le canal rend `{ ok: false }`.
+    //     L ecriture est best-effort et ne leve jamais. Il porte
+    //     `assertTrustedRendererSender(event, 'User input journal')` des sa PREMIERE ligne.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(156)
     expect(unguarded).toEqual([])
   })
 

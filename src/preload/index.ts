@@ -547,7 +547,14 @@ const api = {
     ipcRenderer.invoke('os:pilotChat:active', conversationId),
   cancelOrchestration: (conversationId: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:orchestrate:cancel', conversationId),
-  injectDirective: (conversationId: string, directive: string): Promise<{ ok: boolean }> =>
+  /**
+   * Injecte un texte dans le tour en cours. `messageId` = identifiant du VRAI message ecrit
+   * dans le fil ; l'ecran s'en sert pour retirer son recu provisoire (sinon : doublon).
+   */
+  injectDirective: (
+    conversationId: string,
+    directive: string
+  ): Promise<{ ok: boolean; messageId?: string }> =>
     ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive),
   /**
    * Écrit le texte de l'utilisateur sur disque AVANT qu'il ne parte. Filet de dernier recours : un
