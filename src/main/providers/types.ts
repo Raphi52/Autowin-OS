@@ -175,6 +175,17 @@ export interface StreamChunk {
    * de réflexion avant le premier mot avec un gros modèle).
    */
   reasoning?: string
+  /**
+   * Libellé d'ÉTAT transitoire du flux — surcharge API en cours de retente, battement d'un outil
+   * long, tâche de fond démarrée ou terminée. À relayer EN DIRECT et JAMAIS à persister : ce n'est
+   * ni de la réponse (`delta`) ni du raisonnement (`reasoning`), et l'écrire dans `thinking` faisait
+   * afficher « Raisonnement : API 529 overloaded » après coup (mesuré le 2026-08-21 : sur 155 étapes
+   * réelles, l'UNIQUE champ non vide ne portait que ce bruit).
+   *
+   * Le producteur existe depuis `claude.ts` (retentes, `tool_progress`, `task_started`) ; la
+   * déclaration manquait, ce qui rendait le typecheck rouge sur origin/main.
+   */
+  status?: string
   /** Artefacts structurés disponibles avant la fin du flux, si le supplier les émet ainsi. */
   artifacts?: ChatArtifact[]
 }
