@@ -1241,6 +1241,11 @@ export class AgentPilot {
      * committee. L'utilisateur a attendu pour une reponse qui etait a portee de lecture.
      */
     let questionPoseeCeTour = false
+    /**
+     * La reponse que l'utilisateur a envoyee PENDANT que le tour posait sa question. Non vide = la
+     * question est deja repondue : on ne la repose pas et on ne clot pas le tour sur elle.
+     */
+    let reponseTardiveAUneQuestion: string | undefined
     let questionSansLectureRecoveryAvailable = true
     /** Dernier texte visible du tour, pour juger s'il avance un nombre non verifie. */
     let visibleTextThisTurn = ''
@@ -1627,17 +1632,36 @@ export class AgentPilot {
       // appel du MÊME tour. Entre ce drain vide et les branches synchrones ci-dessous, aucun IPC ne
       // peut s'intercaler : l'ACK immédiat reste donc sans fenêtre de perte en fin de tour.
       const lateDirectives = drainDirectives?.() ?? []
+      /**
+       * UNE DIRECTIVE TARDIVE INVALIDE DU TEXTE, JAMAIS DES ACTIONS.
+       *
+       * Mesure du 2026-09-01 (conv-65) : l'utilisateur repond pendant que le tour finit, et sa
+       * reponse jetait la reponse ENTIERE du modele — y compris les `<cmd>` qu'elle portait. Le tour
+       * contenait un `ask` : la question n'a donc JAMAIS ete posee, aucun bouton n'est apparu, et
+       * l'utilisateur a vecu « quand je reponds ca marche pas ». Un `remember` du meme souffle a
+       * disparu pareil. Trace : aucun `tool-call` pour ces deux commandes dans conv-65.jsonl.
+       *
+       * Regle : le TEXTE peut etre perime (il ne connait pas la directive), une ACTION deja decidee
+       * ne l'est pas. On execute donc l'iteration, la directive entrant au point d'iteration suivant.
+       *
+       * Et si l'iteration portait un `ask`, cette directive EST la reponse : on ne repose pas la
+       * question (elle attendrait un clic deja donne) et on ne clot pas le tour dessus.
+       */
+      const directivePorteLaReponse =
+        lateDirectives.length > 0 &&
+        parseOrderedPilotTokens(res.text ?? '').some((token) => token.kind === 'command')
       if (lateDirectives.length) {
         for (const directive of lateDirectives) {
           convo.push(
             `UTILISATEUR (DIRECTIVE INJECTÉE EN COURS DE TOUR — PRIORITAIRE): ${directive}`
           )
         }
-        if (successfulStreamedPrefix) {
+        if (successfulStreamedPrefix && !directivePorteLaReponse) {
           emit({ kind: 'stream-reset', streamId: `${i}:${successfulAttempt}`, iteration: i })
         }
         grantRecoveryIteration('late-directive')
-        continue
+        if (!directivePorteLaReponse) continue
+        reponseTardiveAUneQuestion = lateDirectives.join(' / ')
       }
       for (const artifact of res.artifacts ?? []) {
         emit({ kind: 'artifact', artifact, iteration: i })
@@ -2134,6 +2158,24 @@ export class AgentPilot {
           token.name === 'find_in_files'
         )
           anyReadExecuted = true
+        if (token.name === 'ask' && reponseTardiveAUneQuestion !== undefined) {
+          // L'utilisateur a REPONDU avant que la question ne parte : la reposer afficherait des
+          // boutons pour un choix deja fait.
+          emit({ kind: 'command', actionId, name: token.name, args: token.args })
+          emit({
+            kind: 'result',
+            actionId,
+            name: token.name,
+            ok: true,
+            data: `Question non reposée — l’utilisateur a déjà répondu : ${reponseTardiveAUneQuestion}`
+          })
+          results.push(
+            `ask → l’utilisateur a DÉJÀ répondu pendant ce tour : « ${reponseTardiveAUneQuestion} ». ` +
+              'Ne repose pas la question, traite cette réponse.'
+          )
+          tokenIndex += 1
+          continue
+        }
         if (token.name === 'ask') questionPoseeCeTour = true
         const settledAction = recoveredHere?.settledActions?.find(
           (action) => action.actionId === actionId && action.name === token.name
