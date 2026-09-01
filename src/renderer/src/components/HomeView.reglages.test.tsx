@@ -5,11 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HomeView } from './HomeView'
 import { CLE_VISIBILITE_WIDGETS } from './home-widgets-visibility'
 import { CLE_NOM_JARVIS } from './jarvis-nom'
+import { oublierOuvertureReglages } from './home-reglages-ouverture'
 
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
 beforeEach(() => {
   window.localStorage.clear()
+  // Equivalent d'un DEMARRAGE de l'application : la memoire d'ouverture du panneau vit dans le
+  // module, elle survivrait donc d'un test a l'autre.
+  oublierOuvertureReglages()
   ;(window as unknown as { api: Record<string, unknown> }).api = {
     taskManagerSnapshot: vi.fn(async () => ({ tasks: [], alerts: [] })),
     outlookSnapshot: vi.fn(async () => ({ ok: true, mails: [], events: [] })),
@@ -37,10 +41,7 @@ async function mount(): Promise<HTMLDivElement> {
 
 const q = <T extends Element>(c: ParentNode, sel: string): T | null => c.querySelector<T>(sel)
 
-/**
- * Le panneau est OUVERT au montage (choix du 2026-09-01) : le bouton ne fait donc que BASCULER.
- * Les tests qui veulent le panneau n'ont plus rien a cliquer -- ils le trouvent deja la.
- */
+/** Le bouton BASCULE le panneau : ouvert -> ferme, ferme -> ouvert. */
 async function basculerReglages(c: HTMLDivElement): Promise<void> {
   const bouton = q<HTMLButtonElement>(c, '[data-testid="home-settings"]')!
   await act(async () => bouton.click())
@@ -72,12 +73,31 @@ function saisir(champ: HTMLInputElement, valeur: string): void {
 }
 
 describe('le bouton Reglages de l accueil', () => {
-  it('est OUVERT au montage', async () => {
-    // CHOIX DU 2026-09-01, demande de l'utilisateur : les reglages de l'accueil (tuiles affichees,
-    // nom de l'assistant, disposition) sont ce qu'on vient regler en arrivant. Les cacher derriere
-    // un clic obligeait a le rouvrir a chaque ouverture de l'accueil.
+  it('est FERME au demarrage de l application', async () => {
+    // CHOIX DU 2026-09-01, demande de l'utilisateur : « laisse-le ferme au demarrage ». Un panneau
+    // ouvert d'office masque l'accueil de quelqu'un qui vient juste regarder ses tuiles.
     const container = await mount()
-    expect(q(container, '[data-testid="home-settings-panel"]')).not.toBeNull()
+    expect(q(container, '[data-testid="home-settings-panel"]')).toBeNull()
+  })
+
+  it('reste OUVERT quand on change de page et qu on revient', async () => {
+    // Deuxieme moitie de la meme demande : « laisse-le ouvert si l'utilisateur l'a ouvert et a change
+    // de page ». Changer d'onglet DEMONTE la vue ; l'ouverture ne doit pas mourir avec elle.
+    const premier = await mount()
+    await basculerReglages(premier)
+    expect(q(premier, '[data-testid="home-settings-panel"]')).not.toBeNull()
+
+    const retour = await mount()
+    expect(q(retour, '[data-testid="home-settings-panel"]')).not.toBeNull()
+  })
+
+  it('reste FERME au retour si on l avait referme', async () => {
+    const premier = await mount()
+    await basculerReglages(premier)
+    await basculerReglages(premier)
+
+    const retour = await mount()
+    expect(q(retour, '[data-testid="home-settings-panel"]')).toBeNull()
   })
 
   it('ouvre et referme le panneau au clic', async () => {

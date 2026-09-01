@@ -45,6 +45,10 @@ import {
 } from './home-widgets-visibility'
 import { ecrireNomJarvis, lireNomJarvis, NOM_JARVIS_LONGUEUR_MAX } from './jarvis-nom'
 import {
+  memoriserOuvertureReglages,
+  reglagesSontOuverts
+} from './home-reglages-ouverture'
+import {
   instantaneConversationsEnAttente,
   retirerConversationEnAttente,
   souscrireConversationsEnAttente,
@@ -208,7 +212,17 @@ export function HomeView({
   // OUVERT au montage : choix de l'utilisateur du 2026-09-01. Les reglages de l'accueil (visibilite
   // des tuiles, nom de l'assistant, disposition) sont ce qu'on vient regler en arrivant ; les
   // cacher derriere un clic obligeait a le faire a chaque ouverture.
-  const [reglagesOuverts, setReglagesOuverts] = useState(true)
+  // FERME au demarrage de l'application, mais RETROUVE OUVERT si on l'avait ouvert avant de changer
+  // de page : l'etat vit dans un module, donc il survit au demontage de la vue et meurt avec la
+  // fenetre. Demande de l'utilisateur du 2026-09-01.
+  const [reglagesOuverts, setReglagesOuverts] = useState(() => reglagesSontOuverts())
+
+  const basculerReglages = useCallback((): void => {
+    setReglagesOuverts((ouvert) => {
+      memoriserOuvertureReglages(!ouvert)
+      return !ouvert
+    })
+  }, [])
   const [visibilite, setVisibilite] = useState<HomeWidgetsVisibility>(() =>
     lireVisibilite(window.localStorage)
   )
@@ -715,7 +729,7 @@ export function HomeView({
               permanence pour un usage occasionnel ; elles sont maintenant DANS ce panneau. */}
           <button
             type="button"
-            onClick={() => setReglagesOuverts((ouvert) => !ouvert)}
+            onClick={basculerReglages}
             aria-expanded={reglagesOuverts}
             data-testid="home-settings"
             title="Réglages de l'accueil : widgets affichés, nom de l'assistant, disposition"
