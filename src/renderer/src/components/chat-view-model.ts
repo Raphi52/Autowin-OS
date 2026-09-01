@@ -1375,6 +1375,27 @@ export function isChatNearBottom(
   return metrics.scrollHeight - metrics.clientHeight - metrics.scrollTop <= threshold
 }
 
+/**
+ * L'evenement `scroll` ne dit PAS qui l'a provoque. Pendant qu'un tour streame, la descente
+ * automatique bouge `scrollTop` et le contenu grandit dans la meme frame : au moment ou le
+ * navigateur livre l'evenement, le bas a deja recule de plus que la tolerance, donc `nearBottom`
+ * repond `false`. Prendre cette mesure pour un geste de lecture COUPE le suivi definitivement — le
+ * fil s'arrete au milieu de la reponse et le bouton « ↓ Derniere reponse » s'allume alors que le
+ * lecteur n'a rien touche (rapporte le 2026-09-01, capture a l'appui).
+ *
+ * Le discriminant est le SIGNE du deplacement : on ne quitte pas le bas en DESCENDANT. Tant que
+ * `scrollTop` ne RECULE pas, un suivi deja actif se poursuit ; seul un recul rend la main au lecteur.
+ */
+export function doitSuivreLeBas(input: {
+  suivaitLeBas: boolean
+  precedentTop: number
+  top: number
+  nearBottom: boolean
+}): boolean {
+  if (input.nearBottom) return true
+  return input.suivaitLeBas && input.top >= input.precedentTop
+}
+
 type ScrollableChat = Pick<HTMLElement, 'scrollTop' | 'clientHeight' | 'scrollHeight'> & {
   scrollTo(options: ScrollToOptions): void
 }
