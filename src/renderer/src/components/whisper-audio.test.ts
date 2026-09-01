@@ -15,7 +15,10 @@ import {
   SEUIL_MAX,
   SEUIL_MIN,
   SEUIL_PAROLE,
-  seuilValide
+  seuilValide,
+  verdictMicro,
+  MESSAGE_VERDICT,
+  CRETE_SATURATION
 } from './whisper-audio'
 
 /** Un bloc de « parole » : du bruit franc. Un bloc de silence : des zéros. */
@@ -223,5 +226,40 @@ describe('niveau exporté', () => {
     const fort = new Float32Array(64).fill(0.5)
     expect(niveau(fort)).toBeCloseTo(0.5, 5)
     expect(niveau(new Float32Array(0))).toBe(0)
+  })
+})
+
+describe('verdictMicro', () => {
+  it("dit « coupé » avant toute autre chose : l'écoute inactive n'est pas un silence", () => {
+    expect(verdictMicro(false, 0.5, SEUIL_PAROLE)).toBe('coupe')
+  })
+
+  it('distingue « je parle dans le vide » de « micro cassé » — le cas qui a motivé la jauge', () => {
+    expect(verdictMicro(true, 0, SEUIL_PAROLE)).toBe('silence')
+    expect(verdictMicro(true, SEUIL_PAROLE / 2, SEUIL_PAROLE)).toBe('silence')
+  })
+
+  it('un signal juste au seuil est FAIBLE, pas bon : il déclenche, mais transcrit mal', () => {
+    expect(verdictMicro(true, SEUIL_PAROLE, SEUIL_PAROLE)).toBe('faible')
+  })
+
+  it('au double du seuil, le micro est bon', () => {
+    expect(verdictMicro(true, SEUIL_PAROLE * 2, SEUIL_PAROLE)).toBe('bon')
+  })
+
+  it("au-dessus de la crête de saturation, « bon » serait un mensonge : ça écrête", () => {
+    expect(verdictMicro(true, CRETE_SATURATION, SEUIL_PAROLE)).toBe('sature')
+    expect(verdictMicro(true, 1, SEUIL_PAROLE)).toBe('sature')
+  })
+
+  it("suit le seuil RÉGLÉ par l'utilisateur, pas une constante figée", () => {
+    expect(verdictMicro(true, 0.01, SEUIL_MAX)).toBe('silence')
+    expect(verdictMicro(true, 0.01, SEUIL_MIN)).toBe('bon')
+  })
+
+  it('chaque verdict porte un message lisible, sans trou', () => {
+    for (const v of ['coupe', 'silence', 'faible', 'bon', 'sature'] as const) {
+      expect(MESSAGE_VERDICT[v].length).toBeGreaterThan(0)
+    }
   })
 })

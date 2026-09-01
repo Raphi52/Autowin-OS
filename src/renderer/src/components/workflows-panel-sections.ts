@@ -3,9 +3,11 @@ import type { ScopedLiveRun } from './chat-view-model'
 /**
  * SÉLECTION DES FILS DE SOUS-AGENTS.
  *
- * Le nom du fichier parle encore de « sections » : elles n'existent plus. Le panneau n'a plus
- * d'onglets — le graphe d'exécution est sa navigation, et le détail affiché découle du nœud
- * sélectionné. Ne subsiste ici que la règle de portée des fils, qui, elle, sert toujours.
+ * Le nom du fichier parle encore des « sections » d'origine (Sous-agents / Run / Graphe / Source
+ * control) : celles-là n'existent plus. Le panneau porte depuis le 2026-09-01 trois onglets d'une
+ * autre nature — Graph, Runs, Logs — et, DANS l'onglet Graph, c'est toujours le graphe qui sert de
+ * navigation : le détail affiché découle du nœud sélectionné. Ne subsiste ici que la règle de
+ * portée des fils, qui, elle, sert toujours.
  */
 
 /**

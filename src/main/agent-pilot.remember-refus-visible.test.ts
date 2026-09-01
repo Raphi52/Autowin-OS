@@ -69,6 +69,25 @@ describe('remember auxiliaire — le refus reste visible', () => {
     expect(texte).toContain('source invalide')
   })
 
+  /*
+   * CAS DE conv-33 (2026-09-01) — le plus couteux, et celui qui passait.
+   *
+   * Le Brain repond 200-hors-succes : `{ok:true, data:{allowed:true, stored:false, detail:'refuse
+   * par le Brain : not found'}}`. Le transport a REUSSI, donc `commandResultSucceeded` disait vrai
+   * et la garde restait muette : le tour se cloturait sur « je depose la lecon » sans rien deposer.
+   * Le fait porteur est `stored`.
+   */
+  it('un depot rendu 200 avec stored:false est dit, avec le motif du serveur', async () => {
+    const texte = await jouer(
+      vi.fn().mockResolvedValue({
+        ok: true,
+        data: { allowed: true, stored: false, detail: 'refuse par le Brain : not found' }
+      })
+    )
+    expect(texte).toContain('NON déposée')
+    expect(texte).toContain('not found')
+  })
+
   it('un depot REUSSI ne pollue pas la reponse', async () => {
     const texte = await jouer(vi.fn().mockResolvedValue({ ok: true, data: { stored: true } }))
     expect(texte).toContain('Je retiens la leçon.')

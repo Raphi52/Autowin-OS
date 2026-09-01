@@ -21,6 +21,12 @@ export type PilotEventKind =
   | 'command'
   /** Signe de vie d'une action LONGUE encore en cours : ne resout rien. */
   | 'action-progress'
+  /**
+   * Signe de vie TECHNIQUE du provider (outil en cours, tache de fond, retry API). N'est PAS du
+   * raisonnement : il remplace le precedent au lieu de s'accumuler, et ne va jamais dans le bloc
+   * « Reflexion » — constat utilisateur du 2026-09-01 : « il m'ecrit encore des trucs useless ».
+   */
+  | 'provider-status'
   | 'result'
   | 'done'
   | 'error'

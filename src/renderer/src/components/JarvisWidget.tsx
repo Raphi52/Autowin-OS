@@ -1,12 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { jouerBipEveil } from './jarvis-bip'
+
+/**
+ * Décroissance de la crête par image d'affichage (~60/s) : ~1 s pour retomber d'une voix forte au
+ * silence. Plus rapide, le verdict clignote entre les mots ; plus lent, il ment sur l'instant.
+ */
+const DECROISSANCE_CRETE = 0.96
 import {
   dependancesNavigateur,
   fabriqueWhisper,
   type FabriqueMoteur,
   type MoteurVocal
 } from './jarvis-moteur-whisper'
-import { SEUIL_MAX, SEUIL_MIN, SEUIL_PAROLE, jaugeDepuisNiveau } from './whisper-audio'
+import {
+  MESSAGE_VERDICT,
+  SEUIL_MAX,
+  SEUIL_MIN,
+  SEUIL_PAROLE,
+  jaugeDepuisNiveau,
+  verdictMicro,
+  type VerdictMicro
+} from './whisper-audio'
 import type { EtatWhisper } from '../../../main/whisper-local'
 import {
   basculerEcoute,
@@ -112,6 +126,13 @@ export function JarvisWidget({
    * `ref`, et une boucle `requestAnimationFrame` écrit la largeur directement sur le noeud.
    */
   const niveauRef = useRef(0)
+  /**
+   * LA CRÊTE RÉCENTE, pas le niveau instantané : entre deux syllabes le RMS retombe à zéro, et un
+   * verdict rendu sur l'instantané afficherait « aucun son » en plein milieu d'une phrase. La crête
+   * décroît doucement (`DECROISSANCE_CRETE` par image) pour retomber en ~1 s après la parole.
+   */
+  const creteRef = useRef(0)
+  const [verdict, setVerdict] = useState<VerdictMicro>('coupe')
   const barreRef = useRef<HTMLDivElement | null>(null)
 
   /** Envoie un ordre a Jarvis, dans SA conversation — creee au premier ordre, pas au montage. */
@@ -330,6 +351,8 @@ export function JarvisWidget({
   useEffect(() => {
     if (!ecoute.active) {
       niveauRef.current = 0
+      creteRef.current = 0
+      setVerdict('coupe')
       if (barreRef.current) barreRef.current.style.width = '0%'
       return
     }
@@ -343,6 +366,10 @@ export function JarvisWidget({
         barre.style.width = `${Math.round(fraction * 100)}%`
         barre.dataset.parle = niveauRef.current >= seuilRef.current ? 'true' : 'false'
       }
+      creteRef.current = Math.max(niveauRef.current, creteRef.current * DECROISSANCE_CRETE)
+      // `setVerdict` ne re-rend QUE si le verdict change : React abandonne un état identique.
+      // C'est ce qui autorise cet appel dans une boucle à 60 images/s sans rallumer le rendu.
+      setVerdict(verdictMicro(true, creteRef.current, seuilRef.current))
       image = requestAnimationFrame(peindre)
     }
     image = requestAnimationFrame(peindre)
@@ -463,7 +490,9 @@ export function JarvisWidget({
               style={{ left: `${Math.round(jaugeDepuisNiveau(seuil) * 100)}%` }}
             />
           </div>
-          <span className="jarvis__aide">Niveau du micro — parlez pour le voir monter</span>
+          <span className="jarvis__aide" data-testid="jarvis-verdict" data-verdict={verdict}>
+            {MESSAGE_VERDICT[verdict]}
+          </span>
         </div>
       ) : null}
 

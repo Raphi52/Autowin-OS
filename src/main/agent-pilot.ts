@@ -109,6 +109,8 @@ export type PilotEventVariant =
   | { kind: 'command'; actionId: string; name: string; args: unknown }
   /** Signe de vie d'une action LONGUE encore en cours : ne resout rien, remplace le precedent. */
   | { kind: 'action-progress'; actionId: string; text: string }
+  /** Signe de vie TECHNIQUE du provider (outil, tache de fond, retry) — jamais du raisonnement. */
+  | { kind: 'provider-status'; text: string; iteration: number }
   | {
       kind: 'result'
       actionId: string
@@ -222,6 +224,26 @@ export function commandResultSucceeded(result: CommandResult): boolean {
   if (data.ok === false || data.valid === false || data.gateBlocked === true) return false
   if (data.status === 'failed' || data.status === 'red') return false
   return typeof data.exitCode !== 'number' || data.exitCode === 0
+}
+
+/**
+ * Motif d'un depot memoire QUI N'A RIEN ECRIT, ou `undefined` quand la memoire est bien deposee.
+ *
+ * Mesure conv-33 (2026-09-01) : le Brain a rendu `{ok:true, data:{allowed:true, stored:false,
+ * detail:"refuse par le Brain : not found"}}`. Ce resultat passe `commandResultSucceeded` — aucun
+ * `ok:false`, aucun statut rouge, aucun exitCode — donc la garde de visibilite ne s'armait pas : le
+ * tour s'est cloture sur « je depose la lecon » alors que RIEN n'etait ecrit, et l'utilisateur a lu
+ * un tour qui semblait bloque. Le fait porteur est `stored`, jamais la reussite du transport : c'est
+ * la meme lecture que `skill-node-mcp` fait deja cote MCP (« RIEN ECRIT »).
+ */
+export function motifDepotMemoireNonAbouti(result: CommandResult): string | undefined {
+  if (!result.ok) return String(result.error ?? 'refus')
+  const data = result.data as Record<string, unknown> | undefined
+  if (!data || typeof data !== 'object') return undefined
+  if (data.stored !== false) return undefined
+  return typeof data.detail === 'string' && data.detail.trim()
+    ? data.detail.trim()
+    : JSON.stringify(data)
 }
 
 function failedOrchestrationOutcome(error: unknown): Record<string, unknown> {
@@ -1394,6 +1416,11 @@ export class AgentPilot {
           let sawFirstChunk = false
           res = await this.registry.send(provider, messages, options, (chunk) => {
             // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
+            if (chunk.status) {
+              // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.
+              emit({ kind: 'provider-status', text: chunk.status, iteration: i })
+              return
+            }
             if (chunk.reasoning) {
               emit({ kind: 'reasoning', text: chunk.reasoning, iteration: i })
               return
@@ -2130,8 +2157,10 @@ export class AgentPilot {
           continue
         }
         const commandSucceeded = commandResultSucceeded(r)
-        if (token.name === 'remember' && !commandSucceeded) {
-          refusRememberAuxiliaire = r.ok ? JSON.stringify(r.data) : String(r.error ?? 'refus')
+        if (token.name === 'remember') {
+          // Sur `stored`, PAS sur la reussite du transport : voir motifDepotMemoireNonAbouti.
+          const motif = motifDepotMemoireNonAbouti(r)
+          if (motif) refusRememberAuxiliaire = motif
         }
         /*
          * La clef porte le nom ET LA CIBLE. Avec le nom seul, un `edit_file` reussi sur `b.ts`
@@ -2189,7 +2218,7 @@ export class AgentPilot {
           text: refusRememberAuxiliaire
             ? `${spoken}
 
-⚠️ Mémoire NON déposée — le Brain a refusé : ${refusRememberAuxiliaire}`
+⚠️ Mémoire NON déposée — ${refusRememberAuxiliaire}`
             : spoken,
           usage
         })

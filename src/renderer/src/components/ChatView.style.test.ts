@@ -44,22 +44,24 @@ describe('chat top bar surface', () => {
 
 describe('workflow sidebar header', () => {
   /**
-   * L'en-tête ne porte plus quatre onglets : le graphe est devenu la navigation du panneau. Il
-   * garde sa hauteur et ses actions fixes, et un titre qui tient sur une ligne. Les règles des
-   * onglets ont été RETIRÉES de la feuille — ce test l'exige, faute de quoi du CSS mort survivrait
-   * à la suppression du balisage.
+   * L'en-tete ne porte NI titre NI rangee de pilules : depuis le 2026-09-01 elle porte les trois
+   * onglets (Graph / Runs / Logs) a gauche et les actions a droite, sur UNE seule ligne. Ce test
+   * remplace celui qui figeait un titre et INTERDISAIT toute regle `.workflow-section-` : les deux
+   * exigences ont ete revoquees par l'utilisateur. Ce qu'il garde : la barre reste a hauteur fixe,
+   * les actions restent fixes, et le CSS du titre supprime ne survit pas au balisage retire.
    */
-  it('keeps a fixed-height header with a one-line title and fixed actions, and no tab rules left', () => {
+  it('keeps a fixed-height header with the three tabs, fixed actions, and no dead title rule', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
 
     expect(css).toMatch(
-      /\.workflow-panel-head\s*{[^}]*display:\s*flex;[^}]*min-width:\s*0;[^}]*height:\s*46px/s
+      /\.workflow-panel-head\s*{[^}]*display:\s*flex;[^}]*min-width:\s*0;[^}]*height:\s*34px/s
     )
-    expect(css).toMatch(
-      /\.workflow-panel-title\s*{[^}]*flex:\s*1;[^}]*white-space:\s*nowrap/s
-    )
+    // Le titre a ete retire du balisage : sa regle ne doit pas survivre en CSS mort.
+    expect(css).not.toMatch(/\.workflow-panel-title/)
     expect(css).toMatch(/\.workflow-panel-actions\s*{[^}]*width:\s*56px;[^}]*flex:\s*none/s)
-    expect(css).not.toMatch(/\.workflow-section-/)
+    // Les onglets, eux, ont bien leur traitement : souligne actif, aucun fond opaque.
+    expect(css).toMatch(/\.workflow-section-tab\.is-active\s*{[^}]*border-bottom-color:\s*#d4a94f/s)
+    expect(css).toMatch(/\.workflow-section-tabs\s*{[^}]*display:\s*flex/s)
   })
 })
 
@@ -69,7 +71,7 @@ describe('workflow header toggle', () => {
     const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
 
     expect(source).toMatch(/workflow-toggle\$\{showRuns \? ' is-active' : ''\}/)
-    expect(source).toContain('Workflows{openRunsCount > 0')
+    expect(source).toContain('Détails{openRunsCount > 0')
     expect(css).toMatch(
       /\.workflow-toggle\s*{[^}]*position:\s*relative;[^}]*border:\s*0;[^}]*background:\s*transparent/s
     )

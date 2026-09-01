@@ -162,6 +162,12 @@ export interface StreamChunk {
    * de réflexion avant le premier mot avec un gros modèle).
    */
   reasoning?: string
+  /**
+   * Signe de vie TECHNIQUE du provider — outil en cours, tâche de fond, retry API. Distinct de
+   * `reasoning` : ce n'est PAS du raisonnement, cela remplace le précédent au lieu de s'accumuler,
+   * et l'UI l'affiche hors du bloc « Réflexion ».
+   */
+  status?: string
   /** Artefacts structurés disponibles avant la fin du flux, si le supplier les émet ainsi. */
   artifacts?: ChatArtifact[]
 }

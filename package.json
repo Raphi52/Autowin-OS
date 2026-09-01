@@ -121,7 +121,8 @@
     "build:win": "npm run build:desktop && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
-    "scout:residus": "node scripts/scout-residus.mjs src"
+    "scout:residus": "node scripts/scout-residus.mjs src",
+    "scout:rendement": "node scripts/scout-rendement.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

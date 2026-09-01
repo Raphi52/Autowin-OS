@@ -432,6 +432,12 @@ interface ChatApi {
   pilotChatActive: (conversationId: string) => Promise<{ active: boolean }>
   cancelOrchestration: (conversationId: string) => Promise<{ ok: boolean }>
   injectDirective: (conversationId: string, directive: string) => Promise<{ ok: boolean }>
+  /** Écrit le texte de l'utilisateur sur disque AVANT son envoi — filet contre les textes sans tour. */
+  journaliserSaisie: (
+    conversationId: string,
+    texte: string,
+    voie: 'message' | 'orientation'
+  ) => Promise<{ ok: boolean }>
 
   markResponseDisplayed: (
     conversationId: string,

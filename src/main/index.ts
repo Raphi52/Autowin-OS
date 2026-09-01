@@ -382,6 +382,7 @@ import { graphDefects, worstCaseNodeExecutions, type WorkflowGraph } from './wor
 import { recapMessage, summarizeJournal } from './runs/journal-replay'
 import { tailJournalOnce } from './runs/stdout-journal'
 import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summary'
+import { journaliserSaisie } from './store/journal-saisie'
 import { defaultProcessIdentity } from './store/worktree-manager'
 import { scopeWorktreeActivity } from '../shared/worktree-activity-model'
 import {
@@ -5532,6 +5533,28 @@ Le fil reprend ensuite normalement.`
       pendingDirectives.set(conversationId, queued)
       broadcast({ type: 'refresh', scope: 'directives' })
       return { ok: true }
+    }
+  )
+
+  /**
+   * FILET DE SÉCURITÉ DU TEXTE UTILISATEUR — appelé AVANT tout envoi, quelle que soit la suite.
+   *
+   * Le renderer vide son composer dès qu'un texte part, et ce texte ne vit ensuite que dans des refs
+   * volatiles tant qu'aucun tour n'est créé (mesure du 2026-09-01, conv-30 : deux messages disparus
+   * sans trace). Cette écriture précède donc l'envoi, et son échec ne remonte jamais : elle rend
+   * `{ ok: false }` plutôt que de lever, pour ne pas transformer une trace manquée en envoi manqué.
+   */
+  ipcMain.handle(
+    'os:saisie:journaliser',
+    (event, rawConversationId: string, rawTexte: string, rawVoie: string) => {
+      assertTrustedRendererSender(event, 'User input journal')
+      const conversationId = guardString(rawConversationId, 'conversationId')
+      const texte = guardString(rawTexte, 'texte')
+      const voie = guardString(rawVoie, 'voie')
+      if (voie !== 'message' && voie !== 'orientation') {
+        return { ok: false }
+      }
+      return { ok: journaliserSaisie({ conversationId, texte, voie }) }
     }
   )
 

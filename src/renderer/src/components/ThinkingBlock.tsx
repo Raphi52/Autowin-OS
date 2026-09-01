@@ -5,8 +5,11 @@
  * NULLE PART depuis le retrait du panneau latéral : la pensée existait et restait invisible.
  * Il revient ici, dans la bulle, au-dessus de la réponse — comme chez Kimi.
  *
- * Ouverture : ouvert tant que le tour n'est pas terminé, replié ensuite ; un clic de
- * l'utilisateur reprend TOUJOURS la main (l'état manuel gagne sur l'automatique).
+ * Ouverture : PLIÉ par défaut, en cours comme terminé (demande du 2026-09-01, dans la foulée du
+ * pli des blocs d'actions : « pareil pour reflexion » — c'est l'utilisateur qui déplie s'il veut
+ * lire). L'en-tête continue de dire que ça pense (spinner + « Réflexion… »), donc rien n'est perdu :
+ * seul le PAVÉ de pensée cesse de pousser la réponse hors de l'écran. Un clic de l'utilisateur
+ * reprend TOUJOURS la main (l'état manuel gagne sur le défaut).
  */
 import React, { useEffect, useRef, useState } from 'react'
 import { Spinner } from './Spinner'
@@ -19,7 +22,7 @@ export function ThinkingBlock({
   done: boolean
 }): React.JSX.Element {
   const [manuel, setManuel] = useState<boolean | null>(null)
-  const ouvert = manuel ?? !done
+  const ouvert = manuel ?? false
   const corps = useRef<HTMLPreElement | null>(null)
   // Le flux s'écrit vers le BAS : sans cela, la pensée défile hors du cadre et on regarde le début.
   useEffect(() => {

@@ -6,6 +6,15 @@ import { StepThread } from './ChatView.parts'
 import { RunProgress } from './RunProgress'
 import { RunInspector } from './RunInspector'
 
+/** Les trois objets du panneau, chacun sur son onglet : le graphe, les RUN.md, la trace. */
+export type PanelTab = 'graph' | 'runs' | 'logs'
+
+const PANEL_TABS: ReadonlyArray<readonly [PanelTab, string]> = [
+  ['graph', 'Graph'],
+  ['runs', 'Runs'],
+  ['logs', 'Logs']
+]
+
 /** Onglets du détail d'un RUN. `progress` = suivi vivant (avancée), `runmd` = fichier produit. */
 export type RunDetailTab = 'progress' | 'trace' | 'runmd'
 import { SourceControlPane } from './SourceControlPane'
@@ -72,13 +81,17 @@ export type WorkflowsPanelProps = {
 }
 
 /**
- * PANNEAU DROIT : UN SEUL OBJET, L'EXÉCUTION.
+ * PANNEAU DROIT : TROIS OBJETS, UN PAR ONGLET — Graph, Runs, Logs.
  *
- * Il portait quatre onglets — Sous-agents, Run, Graphe, Source control — c'est-à-dire quatre
- * projections de la MÊME exécution qu'il fallait corréler de tête, en sachant d'avance où
- * regarder. Le graphe les remplace : il EST la navigation, et ce qu'on ouvre dessous DÉCOULE du
- * nœud sur lequel on descend. Aucune des quatre vues n'est perdue — elles cessent d'être des
- * destinations pour devenir le détail d'une étape.
+ * Histoire, parce qu'elle explique la forme actuelle. Le panneau a d'abord porte QUATRE onglets
+ * (Sous-agents, Run, Graphe, Source control) : quatre projections de la MÊME execution qu'il
+ * fallait corréler de tête. Le graphe les a remplacées — il EST la navigation du DÉTAIL, et ce
+ * qu'on ouvre dessous DÉCOULE du nœud sur lequel on descend. Cela reste vrai.
+ *
+ * Ce que le 2026-09-01 a rétabli est d'un autre ordre : les trois objets que le panneau empilait
+ * dans une seule colonne à faire défiler — le graphe, les RUN.md, la trace des modèles — ont
+ * retrouvé un onglet chacun. Ce ne sont PAS quatre projections d'une même exécution, mais trois
+ * choses distinctes ; les séparer ne rend donc rien à corréler de tête.
  */
 export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   const {
@@ -109,6 +122,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   } = props
 
   const [selection, setSelection] = useState<ExecutionNodeSelection | null>(null)
+  const [panelTab, setPanelTab] = useState<PanelTab>('graph')
 
   const depot = selectionParleDuDepot(selection)
   // Appariement par TOUR : c'est le seul lien RÉEL entre le graphe et le fil relu
@@ -118,16 +132,20 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     selection && !depot && selection.turnId
       ? visibleLiveRuns.filter(([, run]) => !run.runPath || run.runPath === selection.turnId)
       : []
-  // SANS sélection, l'accueil montre TOUS les fils, puis les RUN.md : c'était la section par
-  // défaut du panneau, et une orchestration en cours doit rester visible dès l'ouverture — la
-  // cacher derrière un clic dans le graphe serait une perte, pas une simplification.
+  // SANS selection, l'accueil de l'onglet Graph ne garde que les fils EN COURS.
+  //
+  // Il les empilait TOUS sous le graphe : on relisait la meme execution deux fois, une fois en
+  // graphe, une fois en liste. Les tours TERMINES s'ouvrent desormais en descendant sur leur noeud
+  // — c'est le role du graphe. Les fils VIVANTS restent, eux, a l'accueil : leur carte porte le
+  // bouton Stop de l'orchestration en cours, et l'enfouir derriere un clic serait une perte de
+  // fonction, pas une simplification.
   const fils = depot
     ? []
     : selection
       ? filsDuTour.length > 0
         ? filsDuTour
         : visibleLiveRuns
-      : visibleLiveRuns
+      : visibleLiveRuns.filter(([, run]) => run.status === 'running')
   const filsHorsTour = Boolean(selection) && fils.length > 0 && filsDuTour.length === 0
   // « accueil » et non « runs » : sans sélection, le panneau montre les fils vivants PUIS les
   // RUN.md. Nommer cet état d'après sa seule seconde moitié le décrivait faux.
@@ -138,13 +156,29 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
       <div
         className="runs-pane-resizer"
         role="separator"
-        aria-label="Redimensionner la colonne Workflows"
+        aria-label="Redimensionner la colonne Détails"
         aria-orientation="vertical"
         onPointerDown={beginRunsResize}
       />
       <aside className="lisere-dessus runs-pane fade-in" style={{ width: `${runsPaneWidth}px` }}>
+        {/* UNE SEULE BARRE. Le titre « Runs » doublonnait le bouton qui ouvre ce panneau et la
+            barre d'onglets juste dessous : trois rangees pour nommer la meme chose. Les onglets
+            SONT desormais le titre, les actions restent a droite. */}
         <div className="workflow-panel-head">
-          <strong className="workflow-panel-title">Exécution</strong>
+          <div className="workflow-section-tabs" role="tablist" aria-label="Sections du panneau">
+            {PANEL_TABS.map(([id, libelle]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={panelTab === id}
+                className={`workflow-section-tab${panelTab === id ? ' is-active' : ''}`}
+                onClick={() => setPanelTab(id)}
+              >
+                <span className="workflow-section-label">{libelle}</span>
+              </button>
+            ))}
+          </div>
           <div className="workflow-panel-actions">
             <button
               className="workflow-panel-action workflow-panel-refresh"
@@ -157,13 +191,15 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             <button
               className="workflow-panel-action workflow-panel-close"
               onClick={() => setShowRuns(false)}
-              title="Fermer Workflows"
-              aria-label="Fermer Workflows"
+              title="Fermer les détails"
+              aria-label="Fermer les détails"
             >
               <WorkflowCloseIcon />
             </button>
           </div>
         </div>
+        {panelTab === 'graph' && (
+          <>
         {/* LA NAVIGATION. Plus un onglet parmi quatre : le point d'entrée unique du panneau. */}
         <WorkflowExecutionGraph
           conversationId={activeId ?? undefined}
@@ -172,19 +208,16 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
           live={liveGraphActive}
           onSelect={setSelection}
         />
-        {/* LOGS : la trace geste par geste de ce que les modèles ont fait. Section née APRÈS ce
-            panneau ; elle n'est PAS une projection de l'exécution orchestrée, donc aucun nœud du
-            graphe ne la porte. Elle reste donc atteignable ici, repliée par défaut. */}
-        <details className="workflow-logs-fold">
-          <summary>Logs</summary>
-          <ModelActivityLogPane conversationId={activeId} messages={messages} live={liveGraphActive} />
-        </details>
         {/* Pas de sélecteur de portée : ce panneau ne montre QUE la conversation courante.
             Le cadrage « tous » y affichait des compteurs globaux sous une conversation qui n'en
             porte que deux — on ne s'y retrouvait plus. Le global relève de l'Observatory. */}
+        {/* Le detail garde `grow`, donc il prenait la moitie de la hauteur MEME vide — le graphe
+            s'en trouvait tasse sur le haut du panneau. `data-detail-vide` le fait retomber a sa
+            taille naturelle (zero) quand il n'a rien a montrer, et le graphe recupere tout. */}
         <div
           className="scroll-y col grow workflow-panel-detail"
           data-workflow-detail={detailAffiche}
+          data-detail-vide={!depot && !selection && fils.length === 0 ? 'true' : undefined}
           style={{ gap: 'var(--s2)', minHeight: 0 }}
         >
           {depot && (
@@ -305,8 +338,13 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               </details>
             </div>
           ))}
+          </div>
+          </>
+        )}
+        {panelTab === 'runs' && (
+          <div className="scroll-y col grow workflow-panel-detail" data-workflow-detail="runs" style={{ gap: 'var(--s2)', minHeight: 0 }}>
           {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
-          {!selection && checkpoints.length > 0 && (
+          {checkpoints.length > 0 && (
             <section className="card checkpoint-forks">
               <strong>Checkpoints persistants</strong>
               {checkpoints.map((checkpoint) => (
@@ -326,15 +364,14 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               {forkedCheckpoint && <small>Fork immuable préparé : {forkedCheckpoint}</small>}
             </section>
           )}
-          {!selection && runs.length === 0 && (
+          {runs.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
               {activeId
                 ? 'Aucun RUN.md pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
                 : 'Sélectionne ou démarre une conversation pour voir ses RUN.md.'}
             </div>
           )}
-          {!selection &&
-            runs.map((r) => {
+          {runs.map((r) => {
               const pct =
                 r.summary.dodTotal > 0
                   ? Math.round((r.summary.dodChecked / r.summary.dodTotal) * 100)
@@ -441,6 +478,12 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               )
             })}
         </div>
+        )}
+        {panelTab === 'logs' && (
+          <div className="col grow" style={{ minHeight: 0 }}>
+            <ModelActivityLogPane conversationId={activeId} messages={messages} live={liveGraphActive} />
+          </div>
+        )}
       </aside>
     </>
   )

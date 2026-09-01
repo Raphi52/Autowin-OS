@@ -810,6 +810,30 @@ export function ChatView({
     else steeringRef.current.delete(directiveId)
     setSteeringDirectives(new Set(steeringRef.current))
   }
+  /**
+   * FILET DE SÉCURITÉ : écrit le texte de l'utilisateur sur disque AVANT qu'il ne quitte le composer.
+   *
+   * Mesure du 2026-09-01 (conv-30) : deux messages tapés pendant un tour ont disparu sans trace.
+   * Le composer se vide dès l'envoi, et le texte ne vit ensuite que dans des refs volatiles
+   * (`composerDraftsRef`, `queueRef`, `directiveReceipts`) tant qu'aucun TOUR n'est créé — un
+   * rechargement, un changement de conversation ou une injection refusée l'effaçait définitivement.
+   *
+   * Volontairement « fire and forget » : un journal indisponible ne doit jamais retarder ni faire
+   * échouer un envoi. L'échec est tracé silencieusement, jamais remonté à l'utilisateur.
+   */
+  function journaliserSaisie(
+    conversationId: string,
+    texte: string,
+    voie: 'message' | 'orientation'
+  ): void {
+    try {
+      void window.api.journaliserSaisie?.(conversationId, texte, voie)?.catch((error: unknown) => {
+        traceSilentFailure('journal-saisie', error)
+      })
+    } catch (error) {
+      traceSilentFailure('journal-saisie', error)
+    }
+  }
   function setDirectiveReceipt(
     conversationId: string,
     entry: QueuedDirective,
@@ -2213,6 +2237,8 @@ export function ChatView({
       void send(text, cible ? { targetConversationId: cible } : undefined)
       return
     }
+    // AVANT le vidage du composer : passé cette ligne, ce texte n'existe plus nulle part ailleurs.
+    journaliserSaisie(id, text, 'orientation')
     setDraftInput(cleDraft, '')
     // REÇU, comme `steerWithoutInterrupt` : les deux chemins appellent la MÊME IPC `injectDirective`,
     // et seul l'autre en rendait compte. Sans ce reçu, le texte quittait le composer et RIEN
@@ -2406,6 +2432,9 @@ export function ChatView({
     )
       return
     sendLocksRef.current.add(sendLockKey)
+    // Même filet que l'orientation : le composer va être vidé, ce texte doit exister sur disque
+    // AVANT — y compris si la création de la conversation ou l'envoi échoue juste après.
+    if (value) journaliserSaisie(sourceConversationId ?? 'nouvelle-conversation', value, 'message')
 
     let convId = sourceConversationId
     let messageCommitted = false
@@ -3735,10 +3764,10 @@ export function ChatView({
                 type="button"
                 className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
                 onClick={() => setShowRuns((v) => !v)}
-                title="Workflows (RUN.md)"
+                title="Détails de l’exécution"
               >
                 <ForkIcon />
-                Workflows{openRunsCount > 0 ? ` · ${openRunsCount} open` : ''}
+                Détails{openRunsCount > 0 ? ` · ${openRunsCount} open` : ''}
                 {greenRunsCount > 0 ? ` · ${greenRunsCount} green` : ''}
               </button>
             </div>

@@ -259,3 +259,46 @@ export function seuilValide(valeur: number): number {
   if (!Number.isFinite(valeur)) return SEUIL_PAROLE
   return Math.max(SEUIL_MIN, Math.min(SEUIL_MAX, valeur))
 }
+
+/**
+ * CE QUE L'UTILISATEUR DOIT LIRE — la jauge montre un niveau, elle ne dit pas quoi en faire.
+ *
+ * Une barre à 8 % ne tranche pas entre « micro trop faible » et « je ne parle pas » ; une barre
+ * pleine ne distingue pas « bon signal » de « saturé, donc transcrit en charabia ». Le verdict
+ * nomme le cas, et c'est le nom qui indique le geste (se rapprocher, s'éloigner, vérifier le micro).
+ *
+ * Greffé depuis la branche de secours 78a3d379, seule pièce que la réimplémentation de `main`
+ * n'avait pas reprise.
+ */
+export type VerdictMicro = 'coupe' | 'silence' | 'faible' | 'bon' | 'sature'
+
+/**
+ * Au-dessus de ce niveau efficace, le signal écrête : Whisper y perd plus qu'il n'y gagne.
+ * Constante nommée plutôt qu'un 0.7 en dur, parce que c'est un réglage d'oreille, pas une loi.
+ */
+export const CRETE_SATURATION = 0.7
+
+/**
+ * `creteRecente` = le plus haut niveau vu dans la fenêtre récente, PAS le niveau instantané :
+ * juger sur l'instantané ferait clignoter « silence » entre deux syllabes.
+ */
+export function verdictMicro(
+  actif: boolean,
+  creteRecente: number,
+  seuil: number = SEUIL_PAROLE
+): VerdictMicro {
+  if (!actif) return 'coupe'
+  if (!(creteRecente > 0)) return 'silence'
+  if (creteRecente >= CRETE_SATURATION) return 'sature'
+  if (creteRecente >= seuil * 2) return 'bon'
+  if (creteRecente >= seuil) return 'faible'
+  return 'silence'
+}
+
+export const MESSAGE_VERDICT: Record<VerdictMicro, string> = {
+  coupe: 'Micro coupé',
+  silence: 'Aucun son détecté — vérifiez le micro ou la sensibilité',
+  faible: 'Son faible — parlez plus près du micro',
+  bon: 'Micro OK — je vous entends',
+  sature: 'Son saturé — éloignez-vous du micro'
+}

@@ -102,24 +102,60 @@ describe('WorkflowsPanel', () => {
   }
 
   /**
-   * LES QUATRE ONGLETS ONT DISPARU AU PROFIT DU GRAPHE.
-   *
-   * Ils exposaient quatre projections de la MÊME exécution qu'il fallait corréler de tête, en
-   * sachant d'avance où regarder. Ce test remplace celui qui FIGEAIT les quatre libellés : garder
-   * l'ancien aurait interdit la substitution demandée, et le supprimer sans contrepartie aurait
-   * laissé la barre d'onglets revenir sans qu'aucun test ne tombe.
+   * Les RUN.md ne sont plus l'accueil du panneau : depuis le retour des trois onglets
+   * (Graph / Runs / Logs), ils vivent sous « Runs ». Les tests qui les LISENT doivent donc y
+   * aller — c'est une etape de navigation ajoutee, aucune assertion n'est relachee.
    */
-  it('n’a plus de barre d’onglets : le graphe est la navigation', () => {
+  function ouvrirRuns(): void {
+    const onglet = Array.from(container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')).find(
+      (b) => b.textContent?.trim() === 'Runs'
+    )
+    if (!onglet) throw new Error('onglet Runs introuvable')
+    act(() => onglet.click())
+  }
+
+  /**
+   * TROIS ONGLETS, PAS QUATRE, ET LE GRAPHE RESTE LA NAVIGATION DU DETAIL.
+   *
+   * Ce test remplace celui qui INTERDISAIT toute barre d'onglets. L'interdiction datait de la
+   * substitution des quatre projections par le graphe ; l'utilisateur a redemande une separation
+   * le 2026-09-01, mais SEULEMENT entre les trois objets empiles (graphe, RUN.md, trace). Le
+   * drill-down du graphe n'est pas defait : il est verifie par les tests de selection plus bas.
+   */
+  it('expose exactement trois onglets — Graph, Runs, Logs — et monte le graphe par defaut', () => {
     render(baseProps())
-    expect(container.querySelector('.workflow-section-tabs')).toBeNull()
-    expect(container.querySelectorAll('.workflow-section-label')).toHaveLength(0)
-    expect(container.querySelector('[role="tablist"]')).toBeNull()
-    // Le graphe, lui, est monté d'emblée — il n'est plus un onglet parmi quatre.
+    const onglets = Array.from(container.querySelectorAll('button[role="tab"]')).map((b) =>
+      b.textContent?.trim()
+    )
+    expect(onglets).toEqual(['Graph', 'Runs', 'Logs'])
+    expect(container.querySelector('[role="tablist"]')).not.toBeNull()
+    // Le graphe est l'onglet d'accueil : le panneau s'ouvre sur l'execution, pas sur une liste.
     expect(container.querySelector('[data-testid="graph-stub"]')).not.toBeNull()
+    expect(
+      container.querySelector('button[role="tab"][aria-selected="true"]')?.textContent?.trim()
+    ).toBe('Graph')
+  })
+
+  /** Chaque onglet montre SON objet, et lui seul : c'est tout le point de la separation. */
+  it('bascule d’un objet à l’autre : le graphe cède la place aux RUN.md puis aux logs', () => {
+    render(baseProps({ runs: [run()] }))
+    expect(container.textContent).not.toContain('Audit du panneau')
+
+    ouvrirRuns()
+    expect(container.querySelector('[data-testid="graph-stub"]')).toBeNull()
+    expect(container.textContent).toContain('Audit du panneau')
+
+    const logs = Array.from(container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')).find(
+      (b) => b.textContent?.trim() === 'Logs'
+    )!
+    act(() => logs.click())
+    expect(container.textContent).not.toContain('Audit du panneau')
+    expect(container.querySelector('[data-testid="model-activity-log"]')).not.toBeNull()
   })
 
   it('rend un run avec sa progression DoD', () => {
     render(baseProps({ runs: [run()] }))
+    ouvrirRuns()
     expect(container.textContent).toContain('Audit du panneau')
     expect(container.textContent).toContain('4/4')
     expect(container.querySelector('.status-dot.st-ok')).not.toBeNull()
@@ -135,6 +171,7 @@ describe('WorkflowsPanel', () => {
    */
   it('affiche les compteurs Journal et Défauts de la carte, dans les deux cas', () => {
     render(baseProps({ runs: [run()] }))
+    ouvrirRuns()
     expect(container.textContent).toContain('J 2')
     expect(container.textContent).toContain('D 0')
 
@@ -148,12 +185,14 @@ describe('WorkflowsPanel', () => {
         ]
       })
     )
+    ouvrirRuns()
     expect(container.textContent).toContain('J 7')
     expect(container.textContent).toContain('D 3')
   })
 
   it('affiche le message vide quand aucune conversation active n’a de run', () => {
     render(baseProps({ runs: [], activeId: null }))
+    ouvrirRuns()
     expect(container.textContent).toContain(
       'Sélectionne ou démarre une conversation pour voir ses RUN.md.'
     )
@@ -174,10 +213,13 @@ describe('WorkflowsPanel', () => {
     expect(container.textContent).not.toContain('Audit du panneau')
   })
 
-  /** Descendre sur un agent ouvre le fil des sous-agents ; se désélectionner revient à l'accueil. */
-  it('ouvre le fil des sous-agents sur un nœud agent, et revient aux RUN.md en se désélectionnant', () => {
+  /**
+   * Descendre sur un agent ouvre le fil des sous-agents ; se deselectionner revient a l'accueil du
+   * GRAPHE. La cible du retour a change avec les trois onglets : l'accueil n'est plus la liste des
+   * RUN.md — elle a son propre onglet — mais le graphe reste, lui, la navigation du detail.
+   */
+  it('ouvre le fil des sous-agents sur un nœud agent, et revient à l’accueil du graphe en se désélectionnant', () => {
     render(baseProps({ runs: [run()] }))
-    expect(container.textContent).toContain('Audit du panneau')
 
     act(() => container.querySelector<HTMLButtonElement>('[data-testid="pick-agent"]')?.click())
     expect(
@@ -189,6 +231,9 @@ describe('WorkflowsPanel', () => {
     expect(
       container.querySelector('[data-workflow-detail]')?.getAttribute('data-workflow-detail')
     ).toBe('accueil')
+    // Le graphe reste monte, et les RUN.md restent joignables — sur leur onglet.
+    expect(container.querySelector('[data-testid="graph-stub"]')).not.toBeNull()
+    ouvrirRuns()
     expect(container.textContent).toContain('Audit du panneau')
   })
 

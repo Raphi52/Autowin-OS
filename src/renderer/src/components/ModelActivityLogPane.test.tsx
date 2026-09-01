@@ -67,8 +67,13 @@ describe('ModelActivityLogPane — la trace de ce que les modèles ont fait', ()
       row.textContent?.includes('Bash')
     )
     expect(ligne?.querySelector('.st-err')).toBeTruthy()
-    // le journal REMPLACE les parts du même tour : pas de doublon de l'action
-    expect(host.textContent).not.toContain('run_tests')
+    // UNION : le journal s'AJOUTE aux parts du meme tour, il ne les remplace plus — l'action
+    // persistee reste donc lisible, avec sa source.
+    expect(host.textContent).toContain('run_tests')
+    const persistee = [...host.querySelectorAll('.model-log-row')].find((row) =>
+      row.textContent?.includes('run_tests')
+    )
+    expect(persistee?.querySelector('.model-log-source')?.textContent).toBe('persisté')
   })
 
   it('horodate chaque geste dont le journal porte l’heure', async () => {
