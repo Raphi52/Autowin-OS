@@ -736,13 +736,92 @@
   color: var(--err);
 }
 
-/* Jarvis : le seul widget qui parle. L'état du micro doit se lire d'un coup d'œil, de loin. */
+/* ==================================================================================================
+   JARVIS — le seul widget qui PARLE. Il doit se lire d'un coup d'œil, de loin, ET se distinguer des
+   autres tuiles : c'est le poste de commande vocal, pas une liste de plus. D'où le traitement
+   « hologramme » — cadre en équerres, trame de balayage, typo machine — appliqué UNIQUEMENT ici.
+
+   RÈGLE DE VÉRITÉ : le décor bouge en permanence (ambiance), mais AUCUN élément d'état ne bouge à
+   tort. La pastille d'écoute ne pulse toujours QUE sous [data-ecoute='true'] : un micro coupé ne
+   doit jamais ressembler à un micro ouvert (verrouillé par jarvis-pulse.css.test.ts).
+   ================================================================================================ */
 .jarvis {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
   height: 100%;
+  padding: 11px 13px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 214, 255, 0.2);
+  border-radius: 10px;
   font-size: 12px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 214, 255, 0.075),
+      rgba(6, 12, 22, 0.32) 42%,
+      rgba(212, 169, 79, 0.05)
+    ),
+    repeating-linear-gradient(0deg, rgba(0, 214, 255, 0.045) 0 1px, transparent 1px 5px);
+  box-shadow:
+    inset 0 0 26px rgba(0, 214, 255, 0.09),
+    0 0 18px rgba(0, 214, 255, 0.05);
+}
+
+/* Les quatre équerres du cadre : un HUD, pas une boîte. Décoratif, donc inerte au pointeur. */
+.jarvis::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.6;
+  background:
+    linear-gradient(var(--cyan), var(--cyan)) 0 0 / 15px 1px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 0 0 / 1px 15px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 100% 0 / 15px 1px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 100% 0 / 1px 15px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 0 100% / 15px 1px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 0 100% / 1px 15px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 100% 100% / 15px 1px no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) 100% 100% / 1px 15px no-repeat;
+}
+
+/* Le balayage : la seule chose qui dit « ce poste est SOUS TENSION » même micro coupé. */
+.jarvis::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 38%;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(0, 214, 255, 0.09) 55%,
+    rgba(0, 214, 255, 0.3) 92%,
+    rgba(0, 214, 255, 0.5) 99%,
+    transparent
+  );
+  animation: jarvis-balayage 3.4s linear infinite;
+}
+
+@keyframes jarvis-balayage {
+  0% {
+    transform: translateY(-110%);
+  }
+  100% {
+    transform: translateY(300%);
+  }
+}
+
+/* Le contenu passe DEVANT le balayage : le texte reste net, seul le fond est traversé. */
+.jarvis > * {
+  position: relative;
+  z-index: 3;
 }
 
 .jarvis__barre {
@@ -754,9 +833,29 @@
 
 .jarvis__bascule {
   border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 11.5px;
+  padding: 5px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   white-space: nowrap;
+  color: #cfe6f2;
+  border: 1px solid rgba(0, 214, 255, 0.32);
+  background: linear-gradient(
+    135deg,
+    rgba(0, 214, 255, 0.14),
+    rgba(0, 214, 255, 0.02) 58%,
+    rgba(212, 169, 79, 0.1)
+  );
+  transition:
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.jarvis__bascule:hover,
+.jarvis__bascule:focus-visible {
+  color: #eaf7ff;
+  border-color: rgba(0, 214, 255, 0.65);
 }
 
 /* Un micro ouvert ne doit JAMAIS se confondre avec un micro coupé : la pastille pulse. */
@@ -788,10 +887,13 @@
 .jarvis__whisper-bouton {
   border-radius: 999px;
   padding: 5px 12px;
-  font-size: 11.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
   white-space: nowrap;
   border-color: var(--cyan);
   color: var(--cyan);
+  background: rgba(0, 214, 255, 0.08);
 }
 
 .jarvis__whisper-bouton:disabled {
@@ -809,8 +911,14 @@
 
 .jarvis__partiel {
   min-height: 15px;
-  color: var(--text);
-  font-style: italic;
+  padding-left: 9px;
+  border-left: 1px solid rgba(0, 214, 255, 0.35);
+  color: #e6f4fb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.jarvis__envoi {
+  color: #d4a94f;
 }
 
 .jarvis__paroles,
@@ -830,17 +938,36 @@
   font-size: 11px;
 }
 
+.jarvis__paroles li::before {
+  content: '›';
+  margin-right: 6px;
+  color: rgba(0, 214, 255, 0.5);
+}
+
 /* Ce qui a réveillé Jarvis se distingue du bruit de la pièce. */
 .jarvis__paroles li[data-eveil='true'] {
   color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0, 214, 255, 0.45);
 }
 
+/* Un titre de section HUD : le libellé, puis un trait qui file jusqu'au bord. */
 .jarvis__titre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 4px 0 0;
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: rgba(0, 214, 255, 0.72);
+}
+
+.jarvis__titre::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(0, 214, 255, 0.45), transparent);
 }
 
 .jarvis__lien {
@@ -851,43 +978,57 @@
   font-size: 11.5px;
   text-align: left;
   cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.jarvis__lien:hover,
+.jarvis__lien:focus-visible {
+  color: var(--cyan);
 }
 
 .jarvis__direct span[data-encours='true'] {
   color: var(--cyan);
+  text-shadow: 0 0 9px rgba(0, 214, 255, 0.5);
 }
 
 .jarvis__flux li {
   color: var(--text-dim);
-  font-size: 10.5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
 }
 
-/* LA JAUGE DE NIVEAU — une piste fine, aucun panneau, aucun halo : le fond de l'app reste visible. */
+/* LA JAUGE DE NIVEAU — une piste fine graduée : le niveau BRUT du micro, lisible sans panneau. */
 .jarvis__jauge {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .jarvis__jauge-piste {
   position: relative;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.07);
+  height: 7px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 214, 255, 0.18);
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 214, 255, 0.16) 0 1px, transparent 1px 9px),
+    rgba(4, 12, 22, 0.55);
   overflow: hidden;
 }
 
+/* NE PAS piloter `width` ici : le JS l'écrit directement sur le nœud (JarvisWidget.tsx, ~l.390). */
 .jarvis__jauge-barre {
   height: 100%;
   width: 0;
-  border-radius: 3px;
-  background: rgba(221, 227, 238, 0.45);
-  transition: background-color 120ms linear;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(0, 214, 255, 0.35), rgba(0, 214, 255, 0.85));
+  box-shadow: 0 0 10px rgba(0, 214, 255, 0.45);
+  transition: box-shadow 120ms linear;
 }
 
-/* Au-dessus du seuil, la barre passe en OR : c'est le moment exact où Jarvis considère qu'on parle. */
+/* Au-dessus du seuil, la barre passe en OR : le moment exact où Jarvis considère qu'on parle. */
 .jarvis__jauge-barre[data-parle='true'] {
-  background: linear-gradient(90deg, #d4a94f, #e3ba55);
+  background: linear-gradient(90deg, #d4a94f, #ffd98a);
+  box-shadow: 0 0 12px rgba(212, 169, 79, 0.65);
 }
 
 .jarvis__jauge-seuil {
@@ -895,7 +1036,8 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: rgba(212, 169, 79, 0.55);
+  background: rgba(255, 217, 138, 0.8);
+  box-shadow: 0 0 6px rgba(212, 169, 79, 0.7);
 }
 
 .jarvis__audio {
@@ -907,8 +1049,8 @@
   cursor: pointer;
   color: #d4a94f;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
@@ -928,10 +1070,10 @@
 .jarvis__audio-champ input[type='range'] {
   flex: 1;
   min-width: 0;
-  accent-color: #d4a94f;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 4px;
+  accent-color: var(--cyan);
+  background: rgba(0, 214, 255, 0.05);
+  border: 1px solid rgba(0, 214, 255, 0.22);
+  border-radius: 3px;
   color: #dde3ee;
   font-size: 11px;
   padding: 2px 4px;

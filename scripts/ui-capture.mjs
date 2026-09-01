@@ -20,6 +20,10 @@
  * capture d'écran noire ne peut pas se faire passer pour une preuve.
  *
  * Usage : node scripts/ui-capture.mjs --view worktree --out artifacts/preuve.png [--port 9231]
+ *         [--css <fichier.css>]      injecte une feuille de style d'une COPIE DE TRAVAIL par-dessus
+ *                                    celle du depot : sans elle, un agent en worktree ne peut rien
+ *                                    prouver visuellement (l'app sert le depot, pas sa copie). Le
+ *                                    JSON porte alors `cssInjecte` — la capture le DIT.
  *         [--click <selecteur CSS>]  ouvre ce que la vue seule ne montre pas (popover, menu,
  *                                    onglet) AVANT de capturer. Le clic doit avoir un EFFET :
  *                                    un declencheur absent ou inerte est un echec nomme, jamais
@@ -355,6 +359,52 @@ const main = async () => {
     })
   }
 
+  // --------------------------------------------------------------------
+  // --css : RENDRE LA FEUILLE DE STYLE D'UNE COPIE DE TRAVAIL.
+  //
+  // Pourquoi : l'application ouverte sert son rendu depuis le depot de l'utilisateur (vite sur
+  // localhost:5173). Un agent qui travaille dans une copie isolee ne peut donc RIEN prouver
+  // visuellement : sa feuille de style n'est jamais chargee par la page qu'il capture. Le harnais
+  // rendait alors une capture verte de l'ANCIEN rendu — un faux vert parfait.
+  // Ce que ca fait : injecte le fichier CSS demande en DERNIERE feuille du document, donc par-dessus
+  // celle du depot. Rien n'est ecrit sur disque, rien n'est modifie dans le depot de l'utilisateur ;
+  // l'injection meurt avec le rechargement de la page.
+  // Anti-faux-vert : fichier introuvable, vide, ou feuille dont le navigateur n'a retenu AUCUNE
+  // regle => echec nomme (code 8). Le JSON PORTE `cssInjecte` : une capture obtenue par injection
+  // ne peut pas se faire passer pour le rendu natif du depot.
+  const cheminCss = argument('--css')
+  let cssInjecte
+  if (cheminCss) {
+    const absolu = resolve(cheminCss)
+    if (!existsSync(absolu)) {
+      socket.close()
+      rendre({ ok: false, echecs: [`css-introuvable(${absolu})`], vue }, 8)
+    }
+    const source = readFileSync(absolu, 'utf8')
+    if (source.trim().length === 0) {
+      socket.close()
+      rendre({ ok: false, echecs: [`css-vide(${absolu})`], vue }, 8)
+    }
+    const regles = await evaluer(`(() => {
+      document.getElementById('aw-css-injecte')?.remove()
+      const noeud = document.createElement('style')
+      noeud.id = 'aw-css-injecte'
+      noeud.textContent = ${JSON.stringify(source)}
+      document.head.appendChild(noeud)
+      try {
+        return noeud.sheet ? noeud.sheet.cssRules.length : 0
+      } catch {
+        return 0
+      }
+    })()`)
+    if (!regles) {
+      socket.close()
+      rendre({ ok: false, echecs: [`css-sans-regle-retenue(${absolu})`], vue }, 8)
+    }
+    cssInjecte = { fichier: absolu, regles, octets: source.length }
+    await new Promise((r) => setTimeout(r, 300))
+  }
+
   // Navigation par le VRAI bouton de navigation, pas par un état interne : on prouve le chemin
   // qu'emprunte l'utilisateur, pas un raccourci que lui n'a pas.
   const navigue = await evaluer(`(() => {
@@ -569,6 +619,7 @@ const main = async () => {
         ...verdictM,
         vue,
         ...(verdictEtatForce ? { etatForce: verdictEtatForce } : {}),
+        ...(cssInjecte ? { cssInjecte } : {}),
         planche: boites.boites.length > 0 ? sortie : null,
         portUtilise,
         selecteur: selecteurMouvement,
@@ -610,6 +661,7 @@ const main = async () => {
       ...verdict,
       vue,
       ...(verdictEtatForce ? { etatForce: verdictEtatForce } : {}),
+      ...(cssInjecte ? { cssInjecte } : {}),
       fichier: sortie,
       portUtilise,
       ...mesures,
