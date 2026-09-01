@@ -157,7 +157,18 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
       msNonImputables += ms
       continue
     }
-    const operation = typeof gel.operation === 'string' && gel.operation ? gel.operation : 'inconnu'
+    const nomDeclare =
+      typeof gel.operation === 'string' && gel.operation ? gel.operation : 'inconnu'
+    /*
+     * La PISTE fait partie du nom du groupe, sinon elle n'arrive jamais sous les yeux : la vue
+     * agrege par operation, et les 35 gels anonymes du journal reel se fondraient en une seule
+     * ligne « inconnu » muette. Un gel anonyme SANS piste reste, lui, dans le groupe nu — on ne
+     * lui prete pas la piste du voisin.
+     */
+    const operation =
+      nomDeclare === 'inconnu' && typeof gel.indice === 'string' && gel.indice
+        ? `inconnu (piste: ${gel.indice})`
+        : nomDeclare
     gels += 1
     cumulMs += ms
     if (ms > pireMs) pireMs = ms
