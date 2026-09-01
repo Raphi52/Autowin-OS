@@ -650,6 +650,8 @@ export function ChatView({
   const runtimeRefreshGenerationRef = useRef(0)
   const runsRequestRef = useRef<RunRequestIdentity>({ id: 0, scope: 'conv', convId: null })
   const followTailRef = useRef(true)
+  /** Derniere position de defilement OBSERVEE : sert a lire le SENS du mouvement (cf. doitSuivreLeBas). */
+  const dernierScrollTopRef = useRef(0)
   /**
    * Position A RESTAURER a la prochaine peinture du fil : posee par `loadConv` quand la conversation
    * ouverte avait ete quittee EN COURS de lecture. Un ref et pas un state : l'effet de scroll doit la
