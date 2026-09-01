@@ -525,7 +525,8 @@ export function projectLatestRequestExecution(
   const phaseId = new Map(phaseEvents.map((event) => [event.execution?.phase ?? '', event.id]))
 
   const projectedAgents = agentSources.map<HarnessTimelineEvent>((event) => {
-    const grouped = structural.length > 0 ? technicalDescendants(event, childrenByParent) : []
+    const absorbed = technicalDescendants(event, childrenByParent)
+    const grouped = structural.length > 0 ? absorbed : []
     const terminal = [...grouped]
       .reverse()
       .find((candidate) => candidate.kind === 'model-response' || candidate.kind === 'error')
@@ -536,7 +537,16 @@ export function projectLatestRequestExecution(
       model: terminal?.model ?? event.model,
       status: terminal?.status ?? event.status,
       durationMs: terminal?.durationMs ?? event.durationMs,
-      payloads: [],
+      // LA DÉLIBÉRATION DU SOUS-AGENT SURVIT À L'ABSORPTION.
+      //
+      // Le nœud agent absorbe ses événements techniques (message, injection, model-response) ;
+      // `payloads: []` jetait TOUT leur contenu — dont la charge `reasoning` écrite par
+      // `stepPayloads`. La descente « jusqu'à la pensée » se coupait donc exactement ici, alors
+      // que la donnée était présente. Seul `reasoning` remonte : les contenus d'outils et les
+      // réponses brutes restent hors du graphe, comme avant.
+      payloads: [...(event.payloads ?? []), ...absorbed.flatMap((c) => c.payloads ?? [])].filter(
+        (payload) => payload.kind === 'reasoning'
+      ),
       display: {
         kind: event.kind === 'gate' || rawActorKind === 'system' ? 'event' : 'agent',
         title: agentTitle(event),

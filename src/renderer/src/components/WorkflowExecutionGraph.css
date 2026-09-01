@@ -343,3 +343,29 @@
   font-size: 10px;
   overflow-wrap: anywhere;
 }
+
+/* Pli de la délibération : replié par défaut, il ne doit jamais pousser le détail hors écran. */
+.workflow-execution-reasoning {
+  margin: var(--s2) 0 0;
+  border-top: 1px solid var(--line);
+  padding-top: var(--s2);
+}
+
+.workflow-execution-reasoning > summary {
+  cursor: pointer;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.workflow-execution-reasoning pre {
+  margin: 6px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-dim, var(--text-faint));
+}

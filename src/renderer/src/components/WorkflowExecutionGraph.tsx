@@ -172,6 +172,29 @@ function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JS
   )
 }
 
+/**
+ * LA PENSÉE DU SOUS-AGENT — dernier échelon de la descente.
+ *
+ * `stepPayloads` écrit la délibération dans une charge `reasoning`, distincte de la conclusion.
+ * Elle arrivait jusqu'ici sans qu'aucun chemin de rendu ne la lise. Le pli reste FERMÉ : une
+ * délibération est longue, et le détail doit rester lisible d'un coup d'œil.
+ */
+function ExecutionNodeReasoning({ event }: { event: HarnessTimelineEvent }): React.JSX.Element | null {
+  const reasoning = (event.payloads ?? [])
+    .filter((payload) => payload.kind === 'reasoning')
+    .map((payload) => payload.content)
+    .filter((content) => Boolean(content))
+  if (reasoning.length === 0) return null
+  return (
+    <details className="workflow-execution-reasoning" data-execution-reasoning>
+      <summary>Raisonnement du sous-agent</summary>
+      {reasoning.map((content, index) => (
+        <pre key={index}>{content}</pre>
+      ))}
+    </details>
+  )
+}
+
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }): React.JSX.Element {
   return (
     <div>
@@ -539,6 +562,7 @@ export function WorkflowExecutionGraph({
             <span>{statusLabel(selected.event.status)}</span>
           </header>
           <ExecutionNodeDetail event={selected.event} />
+          <ExecutionNodeReasoning event={selected.event} />
           {selected.issues.length > 0 && (
             <p className="workflow-execution-warning">
               Trace partielle · {selected.issues.join(', ')}

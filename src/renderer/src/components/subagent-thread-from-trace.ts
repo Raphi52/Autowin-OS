@@ -21,6 +21,8 @@ export interface ThreadStep {
   role?: string
   model?: string
   text?: string
+  /** Délibération du sous-agent, tenue SÉPARÉE de la conclusion (payload `reasoning`). */
+  thinking?: string
   detail?: string
   tokens?: number
   costUsd?: number
@@ -81,15 +83,42 @@ function reliableHistoricalModel(
   return undefined
 }
 
+/**
+ * Sépare délibération et conclusion.
+ *
+ * `stepPayloads` (main/activity/step-reasoning-payloads.ts) écrit DEUX charges distinctes ; c'est
+ * `buildHarnessTimelineFromTrace` qui les CONCATÈNE dans `content` pour un affichage brut. Lire
+ * `content` faisait donc passer un raisonnement exploratoire — hypothèses abandonnées comprises —
+ * pour la réponse remise. On relit les charges d'origine ; sans elles (traces anciennes), `content`
+ * reste la seule vérité disponible et n'est pas altéré.
+ */
+function splitDeliberation(event: HarnessTimelineEvent): { text?: string; thinking?: string } {
+  const payloads = event.payloads
+  if (!Array.isArray(payloads) || payloads.length === 0) return { text: event.content || undefined }
+  const join = (kept: typeof payloads): string | undefined =>
+    kept
+      .map((payload) => payload.content)
+      .filter((content) => Boolean(content))
+      .join('\n\n') || undefined
+  const thinking = join(payloads.filter((payload) => payload.kind === 'reasoning'))
+  const text = join(payloads.filter((payload) => payload.kind !== 'reasoning'))
+  return {
+    ...(text ? { text } : {}),
+    ...(thinking ? { thinking } : {})
+  }
+}
+
 function toStep(event: HarnessTimelineEvent, turnRuntime?: TurnRuntimeIdentity): ThreadStep {
   const kind = stepKindOf(event) ?? 'exec'
   const model = reliableHistoricalModel(event, turnRuntime)
+  const { text, thinking } = splitDeliberation(event)
   return {
     step: kind,
     ...(event.provider ? { provider: event.provider } : {}),
     ...(event.execution?.phase ? { role: event.execution.phase } : {}),
     ...(model ? { model } : {}),
-    ...(event.content ? { text: event.content } : {}),
+    ...(text ? { text } : {}),
+    ...(thinking ? { thinking } : {}),
     ...(event.detail ? { detail: event.detail } : {}),
     ...(typeof event.tokens === 'number' ? { tokens: event.tokens } : {}),
     ...(typeof event.costUsd === 'number' ? { costUsd: event.costUsd } : {}),

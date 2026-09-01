@@ -540,4 +540,66 @@ describe('WorkflowExecutionGraph', () => {
     // La pastille doit porter le statut reconcilie, sinon elle reste verte comme un succes.
     expect(node?.className).toContain('is-interrupted')
   })
+  /**
+   * LA PENSÉE DU SOUS-AGENT EXISTE DANS LES DONNÉES DU GRAPHE ET N'ÉTAIT JAMAIS RENDUE.
+   *
+   * `stepPayloads` pousse une charge `reasoning` ; `buildHarnessTimelineFromTrace` la RECOPIE dans
+   * `event.payloads`. Mais aucun chemin de rendu ne la lisait : ni le titre, ni la meta, ni le
+   * détail — qui s'arrêtait à Acteur / Durée / Skill / Provider / Modèle / Observation. La descente
+   * « jusqu'à la pensée » butait donc sur son dernier échelon.
+   *
+   * Le pli reste FERMÉ : la délibération est longue, et le détail doit rester lisible.
+   */
+  it('descend jusqu’au raisonnement du sous-agent dans le détail d’un nœud', async () => {
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('agent', 1, {
+        turnId: 'turn-latest',
+        type: 'handoff',
+        provider: { id: 'codex', model: 'gpt-5.6-codex' },
+        execution: { phase: 'build', agentId: 'builder', taskId: 'task-build' }
+      }),
+      trace('reponse', 2, {
+        turnId: 'turn-latest',
+        parentId: 'agent',
+        type: 'model-response',
+        provider: { id: 'codex', model: 'gpt-5.6-codex' },
+        payloads: [
+          { kind: 'model-response', content: 'conclusion : je pars sur B' },
+          { kind: 'reasoning', content: 'A coûte moins cher mais casse le gate ; donc B' }
+        ]
+      })
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+    // Fermé tant qu'aucun nœud n'est sélectionné : la pensée ne fuit pas dans l'arbre.
+    expect(view.textContent).not.toContain('casse le gate')
+
+    await act(async () =>
+      view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
+    )
+    const detail = view.querySelector('.workflow-execution-detail')
+    const pli = detail?.querySelector<HTMLDetailsElement>('[data-execution-reasoning]')
+
+    expect(pli).not.toBeNull()
+    expect(pli?.open).toBe(false)
+    expect(pli?.querySelector('summary')?.textContent).toContain('Raisonnement')
+    expect(pli?.textContent).toContain('A coûte moins cher mais casse le gate ; donc B')
+  })
+
+  /** Sans charge `reasoning`, aucun pli vide ne s'invite dans le détail — discriminant. */
+  it('n’affiche aucun pli de raisonnement quand la trace n’en porte pas', async () => {
+    const causalTrace = vi
+      .fn()
+      .mockResolvedValue([trace('sans-pensee', 1, { turnId: 'turn-latest' })])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+    await act(async () =>
+      view.querySelector<HTMLButtonElement>('[data-execution-node="sans-pensee"]')?.click()
+    )
+
+    expect(view.querySelector('.workflow-execution-detail')).not.toBeNull()
+    expect(view.querySelector('[data-execution-reasoning]')).toBeNull()
+  })
 })
