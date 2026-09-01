@@ -2,7 +2,11 @@ import { applyEdit, decideEdit, decoderUtf8, editDiff, refusSiPasUtf8 } from './
 import { decisionDeSynchronisation } from './synchronisation-cible-bureau'
 import { pendantOperation } from './gel-main'
 import { rechargerEnv } from './env-reload'
-import { autorisationsLuesDans, decisionDeCommande } from './autorisation-commande'
+import {
+  autorisationsLuesDans,
+  decisionDeCommande,
+  decouperArguments
+} from './autorisation-commande'
 import { memoriserAutorisations } from './store/autorisations-permanentes'
 import {
   decideRead,
