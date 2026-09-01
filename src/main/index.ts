@@ -441,7 +441,6 @@ import { persistTaskStore } from './task-manager/task-store-disk'
 import { TaskScheduler } from './task-manager/task-scheduler'
 import { WatchdogEngine } from './task-manager/watchdog-engine'
 import { seedWatchdogTasks } from './task-manager/watchdog-seeds'
-import { planQuotaResume } from './quota-resume'
 import type { TaskUsageSettlementSink, WatchdogAppEvent } from './task-manager/types'
 import {
   ScheduledChatDispatcher,
@@ -765,39 +764,6 @@ async function pickSavePath(
   }
   const result = await dialog.showSaveDialog(visible, { defaultPath })
   return result.canceled ? null : (result.filePath ?? null)
-}
-
-/**
- * Pose une reprise apres quota, si le refus annonce son heure. Best-effort et SILENCIEUX en cas
- * d'echec : un tour deja en erreur ne doit pas echouer deux fois pour une commodite.
- */
-function armQuotaResume(conversationId: string, error: unknown): void {
-  try {
-    const reason = error instanceof Error ? error.message : String(error ?? '')
-    const plan = planQuotaResume({
-      conversationId,
-      reason,
-      now: Date.now(),
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-    })
-    if (!plan) return
-    // Une seule reprise par conversation : deux murs successifs ne doivent pas empiler deux reveils.
-    const dejaArmee = scheduledTasks
-      .listTasks()
-      .some(
-        (task) =>
-          task.enabled &&
-          task.destination.kind === 'existing' &&
-          task.destination.conversationId === conversationId &&
-          task.title.startsWith('Reprise après quota')
-      )
-    if (dejaArmee) return
-    scheduledTasks.create(plan.task)
-    console.log(`[quota] reprise armée pour ${conversationId} (source: ${plan.source})`)
-    broadcast({ type: 'refresh', scope: 'task-manager' })
-  } catch (armError) {
-    console.warn('[quota] reprise non armée', armError)
-  }
 }
 
 function broadcast(e: AppEvent): void {
@@ -4980,11 +4946,6 @@ Le fil reprend ensuite normalement.`
       // Le `return` ci-dessus couvre l'abort du contrôleur du TOUR. Ce garde couvre le cas où l'arrêt de
       // l'ORCHESTRATION fait jeter le tour sans que son propre contrôleur ait été aborté : même geste
       // volontaire, même absence d'incident.
-      // MUR DE QUOTA : arme une reprise a l'heure ANNONCEE par le refus, sans jamais sonder.
-      // Le registre refuse de re-tester periodiquement (« ca couterait du quota ») et il a raison ;
-      // le prix etait paye par l'utilisateur, qui devait se souvenir de revenir. Le refus portant son
-      // heure de retour, il n'y a rien a sonder : on pose une tache planifiee a cette heure.
-      if (conversationId) armQuotaResume(conversationId, e)
       if (conversationId && !activeChatTurns.wasDeliberatelyStopped(conversationId)) {
         reportAutoKaizen({
           dedupeKey: `chat-turn:${conversationId}:${turnId}:failed`,
