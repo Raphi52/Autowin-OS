@@ -65,6 +65,19 @@ export function WorkflowSectionIcon({
     )
   }
 
+  if (section === 'journal') {
+    return (
+      <svg {...common}>
+        <path
+          d="M3.2 3.6h9.6M3.2 6.6h9.6M3.2 9.6h6.6M3.2 12.6h4.6"
+          stroke="currentColor"
+          strokeWidth="1.25"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+
   if (section === 'graph') {
     return (
       <svg {...common}>

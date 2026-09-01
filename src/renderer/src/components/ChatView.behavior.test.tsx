@@ -1728,7 +1728,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ).toBe(1)
   })
 
-  it('expose les QUATRE sections de Workflows, dont le graphe, et toujours pas d’onglet Activité', async () => {
+  it('expose les CINQ sections de Workflows, dont le graphe et les logs, et toujours pas d’onglet Activité', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
     await click('.conv-pick')
@@ -1742,12 +1742,15 @@ describe('ChatView behavior under concurrent UI actions', () => {
     // L'onglet unique « Runs » melangeait le fil des sous-agents et la liste des RUN.md : il est
     // remplace par DEUX sections distinctes, a la demande explicite de l'utilisateur.
     expect(tabs).toContain('Sous-agents')
+    // « Logs » = la trace de ce que les modèles ont FAIT (appel, commande, verdict, artefact) ;
+    // ce n'est pas l'onglet « Activité » retiré, qui redoublait le fil.
+    expect(tabs).toContain('Logs')
     expect(tabs).toContain('Run')
     expect(tabs).toContain('Graphe')
     expect(tabs).toContain('Source control')
     expect(tabs).not.toContain('Runs')
     expect(tabs).not.toContain('Activité')
-    expect(tabButtons).toHaveLength(4)
+    expect(tabButtons).toHaveLength(5)
     expect(tabButtons.every((button) => button.querySelector('svg.workflow-section-icon'))).toBe(
       true
     )

@@ -1,4 +1,5 @@
 import type { RunEntry, CheckpointEntry } from './ChatView'
+import type { Msg } from './chat-view-types'
 import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat-view-model'
 import {
   WORKFLOW_PANEL_SECTIONS,
@@ -18,6 +19,7 @@ import { RunInspector } from './RunInspector'
 /** Onglets du détail d'un RUN. `progress` = suivi vivant (avancée), `runmd` = fichier produit. */
 export type RunDetailTab = 'progress' | 'trace' | 'runmd'
 import { SourceControlPane } from './SourceControlPane'
+import { ModelActivityLogPane } from './ModelActivityLogPane'
 import { WorkflowExecutionGraph } from './WorkflowExecutionGraph'
 // `.lisere-dessus` vit dans cette feuille (voir ViewPage.css) : import explicite, pas d'heritage
 // implicite d'une autre vue.
@@ -66,6 +68,8 @@ export type WorkflowsPanelProps = {
   runDetailTab: RunDetailTab
   setRunDetailTab: (tab: RunDetailTab) => void
   liveRunCardRef: React.RefObject<HTMLDivElement | null>
+  /** Fil de la conversation ouverte : source durable de la section « Logs ». */
+  messages: readonly Msg[]
 }
 
 /**
@@ -98,7 +102,8 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     openTrace,
     runDetailTab,
     setRunDetailTab,
-    liveRunCardRef
+    liveRunCardRef,
+    messages
   } = props
 
   return (
@@ -151,6 +156,14 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
         </div>
         {paneTab === 'source-control' && (
           <SourceControlPane conversationId={activeId ?? undefined} onSendPrompt={send} />
+        )}
+        {/* SECTION LOGS : tout ce que les modèles ont fait dans cette conversation. */}
+        {paneTab === 'journal' && (
+          <ModelActivityLogPane
+            conversationId={activeId}
+            messages={messages}
+            live={liveGraphActive}
+          />
         )}
         {paneTab === 'graph' && (
           <WorkflowExecutionGraph

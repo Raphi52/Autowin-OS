@@ -13,6 +13,9 @@ import type { ScopedLiveRun } from './chat-view-model'
  */
 export const WORKFLOW_PANEL_SECTIONS = [
   { id: 'subagents', label: 'Sous-agents' },
+  // JOURNAL : ce que les MODÈLES ont fait, geste par geste (appel, raisonnement, commande, verdict,
+  // artefact, usage). Le fil montre la réponse ; cette section montre le travail.
+  { id: 'journal', label: 'Logs' },
   { id: 'run', label: 'Run' },
   { id: 'graph', label: 'Graphe' },
   { id: 'source-control', label: 'Source control' }

@@ -63,6 +63,7 @@ function props(over: Partial<WorkflowsPanelProps> = {}): WorkflowsPanelProps {
     runDetailTab: 'progress',
     setRunDetailTab: vi.fn(),
     liveRunCardRef: { current: null },
+    messages: [],
     ...over
   }
 }
