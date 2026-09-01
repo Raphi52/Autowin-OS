@@ -225,7 +225,7 @@ export function JarvisWidget({
       // OPTIONNELS : Web Speech ignore ces champs, la jauge reste alors à zéro sans rien casser.
       moteur.onniveau = auNiveau
       moteur.seuilParole = seuilRef.current
-      ;(moteur as { peripherique?: string }).peripherique = microRef.current || undefined
+      moteur.peripherique = microRef.current || undefined
       moteur.onerror = (evenement) => {
         const code = String((evenement as { error?: unknown } | null)?.error ?? 'inconnue')
         // `no-speech` / `aborted` = fonctionnement normal d'un micro qui attend : `onend` relance.
@@ -256,7 +256,7 @@ export function JarvisWidget({
   /** Changer de micro exige de rouvrir le flux : le périphérique est choisi à `getUserMedia`. */
   useEffect(() => {
     microRef.current = micro
-    const moteur = moteurRef.current as (MoteurVocal & { peripherique?: string }) | null
+    const moteur = moteurRef.current
     if (!moteur || !actifRef.current) return
     moteur.peripherique = micro || undefined
     moteur.stop()
@@ -360,6 +360,9 @@ export function JarvisWidget({
     }
   }, [])
 
+  const verdict = verdictMicro(ecoute.active, crete, seuil)
+  const pourcentJauge = Math.round(fractionJauge(niveauAudio) * 100)
+
   return (
     <div className="jarvis" data-ecoute={ecoute.active ? 'true' : undefined}>
       <div className="jarvis__barre">
@@ -385,17 +388,14 @@ export function JarvisWidget({
         <div
           className="jarvis__jauge"
           data-testid="jarvis-jauge"
-          data-verdict={verdictMicro(ecoute.active, crete, seuil)}
+          data-verdict={verdict}
           role="meter"
           aria-label="Niveau du micro"
-          aria-valuenow={Math.round(fractionJauge(niveauAudio) * 100)}
+          aria-valuenow={pourcentJauge}
           aria-valuemin={0}
           aria-valuemax={100}
         >
-          <span
-            className="jarvis__jauge-remplissage"
-            style={{ width: `${Math.round(fractionJauge(niveauAudio) * 100)}%` }}
-          />
+          <span className="jarvis__jauge-remplissage" style={{ width: `${pourcentJauge}%` }} />
           <span
             className="jarvis__jauge-seuil"
             style={{ left: `${Math.round(fractionJauge(seuil) * 100)}%` }}
@@ -415,7 +415,7 @@ export function JarvisWidget({
         </button>
       </div>
       <p className="jarvis__aide" data-testid="jarvis-verdict">
-        {MESSAGE_VERDICT[verdictMicro(ecoute.active, crete, seuil)]}
+        {MESSAGE_VERDICT[verdict]}
       </p>
 
       {reglages ? (

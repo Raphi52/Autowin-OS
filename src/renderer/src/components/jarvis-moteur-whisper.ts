@@ -44,6 +44,8 @@ export interface MoteurVocal {
   onniveau?: ((mesure: { niveau: number; parle: boolean }) => void) | null
   /** OPTIONNEL — seuil de parole réglable (sensibilité du micro). Défaut : `SEUIL_PAROLE`. */
   seuilParole?: number
+  /** OPTIONNEL — micro choisi ; vide/absent = périphérique système par défaut. */
+  peripherique?: string
   start(): void
   stop(): void
   abort?(): void
@@ -198,7 +200,8 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
       const taux = this.ctx.sampleRate || TAUX_WHISPER
       // La jauge part AVANT toute décision : c'est ce qui distingue « je ne t'entends pas » de
       // « je t'entends mais je ne comprends pas ».
-      this.onniveau?.({ niveau: niveau(bloc), parle: niveau(bloc) >= this.seuilParole })
+      const mesure = niveau(bloc)
+      this.onniveau?.({ niveau: mesure, parle: mesure >= this.seuilParole })
       const pas = avancerVad(this.vad, bloc, taux, this.seuilParole)
       const parlaitAvant = this.vad.parle
       this.vad = pas.etat
