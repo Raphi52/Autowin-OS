@@ -72,6 +72,14 @@ function saisir(champ: HTMLInputElement, valeur: string): void {
 }
 
 describe('le bouton Reglages de l accueil', () => {
+  it('est OUVERT au montage', async () => {
+    // CHOIX DU 2026-09-01, demande de l'utilisateur : les reglages de l'accueil (tuiles affichees,
+    // nom de l'assistant, disposition) sont ce qu'on vient regler en arrivant. Les cacher derriere
+    // un clic obligeait a le rouvrir a chaque ouverture de l'accueil.
+    const container = await mount()
+    expect(q(container, '[data-testid="home-settings-panel"]')).not.toBeNull()
+  })
+
   it('ouvre et referme le panneau au clic', async () => {
     const container = await mount()
     await ouvrirReglages(container)

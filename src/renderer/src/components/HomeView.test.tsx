@@ -314,8 +314,12 @@ describe('poser une tuile', () => {
   it('retablit la disposition par defaut sur demande', async () => {
     const container = await mount()
     await gesture(tile(container, 'agenda'), [[600, 500]], [400, 200])
-    const ouvrir = container.querySelector('[data-testid="home-settings"]') as HTMLButtonElement
-    await act(async () => ouvrir.click())
+    // Le panneau est ouvert d'office : on ne clique que s'il a ete referme, sinon ce clic le
+    // fermerait et la commande cherchee juste apres n'existerait plus.
+    if (container.querySelector('[data-testid="home-settings-panel"]') === null) {
+      const ouvrir = container.querySelector('[data-testid="home-settings"]') as HTMLButtonElement
+      await act(async () => ouvrir.click())
+    }
     const reset = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('tablir')
     )!

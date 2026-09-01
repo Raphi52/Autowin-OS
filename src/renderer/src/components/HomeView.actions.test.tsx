@@ -116,6 +116,14 @@ async function ouvrirReglages(c: HTMLDivElement): Promise<void> {
   }
 }
 
+/** L'inverse : le panneau etant OUVERT d'office, c'est le fermer qui demande un clic. */
+async function fermerReglages(c: HTMLDivElement): Promise<void> {
+  const bouton = c.querySelector('[data-testid="home-settings"]') as HTMLButtonElement
+  if (c.querySelector('[data-testid="home-settings-panel"]') !== null) {
+    await act(async () => bouton.click())
+  }
+}
+
 const tile = (c: HTMLDivElement, id: string): HTMLElement =>
   c.querySelector(`[data-testid="home-widget-${id}"]`) as HTMLElement
 
@@ -398,7 +406,12 @@ describe('la notice d usage s efface', () => {
   it('reste visible les premieres fois', async () => {
     const container = await mount()
     expect(container.querySelector('.home-view__masthead p')?.textContent).toContain('posez-la')
-    // L'aide n'encombre pas l'en-tete : son rappel est range dans les reglages, panneau ferme.
+    // L'aide n'encombre pas l'en-tete : son rappel est range DANS les reglages -- panneau ouvert
+    // d'office depuis le 2026-09-01, donc il est la, mais dans le panneau et nulle part ailleurs.
+    const panneau = container.querySelector('[data-testid="home-settings-panel"]') as HTMLElement
+    const rappel = container.querySelector('[data-testid="home-rappel-notice"]')
+    expect(panneau.contains(rappel)).toBe(true)
+    await fermerReglages(container)
     expect(container.querySelector('[data-testid="home-rappel-notice"]')).toBeNull()
   })
 })
