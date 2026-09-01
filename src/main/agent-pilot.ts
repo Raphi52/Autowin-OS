@@ -1732,6 +1732,46 @@ export class AgentPilot {
           (token): token is Extract<OrderedPilotToken, { kind: 'invalid' }> =>
             token.kind === 'invalid'
         )
+        if (blocsIllisibles.length) {
+          // Le bloc BRUT a deja ete diffuse en direct : sans token `command` survivant,
+          // `hasCommand` est faux et rien ne le retirait. Vecu le 2026-09-01 (conv-46) : du JSON
+          // entier affiche en plein fil. On efface le diffuse et on republie le SEUL texte parle.
+          if (successfulStreamedPrefix) {
+            emit({ kind: 'stream-reset', streamId: `${i}:${successfulAttempt}`, iteration: i })
+            successfulStreamedPrefix = ''
+            const texteParle = ordered
+              .filter(
+                (token): token is Extract<OrderedPilotToken, { kind: 'text' }> =>
+                  token.kind === 'text'
+              )
+              .map((token) => token.text)
+              .join('')
+              .trim()
+            if (texteParle) {
+              emit({
+                kind: 'delta',
+                streamId: `${i}:${successfulAttempt}:sans-bloc`,
+                text: texteParle,
+                iteration: i
+              })
+              successfulStreamedPrefix = texteParle
+            }
+          }
+          // CHAQUE bloc casse est signale, y compris le deuxieme du meme tour : le credit borne ne
+          // doit brider que la RELANCE, jamais l'avertissement. Sinon le second disparait sans un mot.
+          let indexSignale = 0
+          for (const bloc of blocsIllisibles) {
+            const actionId = `${i}:illisible-vu:${indexSignale++}`
+            emit({ kind: 'command', actionId, name: 'commande illisible', args: {} })
+            emit({
+              kind: 'result',
+              actionId,
+              name: 'commande illisible',
+              ok: false,
+              data: `${bloc.reason} — aucune action n'a été exécutée`
+            })
+          }
+        }
         if (blocsIllisibles.length && commandeIllisibleRecoveryAvailable) {
           commandeIllisibleRecoveryAvailable = false
           let illisibleIndex = 0
