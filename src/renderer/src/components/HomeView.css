@@ -1348,8 +1348,15 @@
 
 .home-settings__champ {
   flex-direction: column;
-  align-items: stretch;
+  /* `stretch` etirait le libelle sur toute la largeur et le faisait lire CENTRE au-dessus du champ
+     (constate sur capture de l'app le 2026-09-01) : il se cale a gauche, comme les autres. */
+  align-items: flex-start;
   gap: 6px;
+}
+
+.home-settings__champ input[type='text'] {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .home-settings__champ span {
@@ -1406,4 +1413,31 @@
    un bug d'affichage. */
 .home-view__header[data-reglages='true'] {
   z-index: 400;
+}
+
+/* Une commande POSEE SUR l'etiquette d'une tuile (relire Outlook depuis la tuile Outlook). Discrete
+   au repos : elle ne doit pas concurrencer le titre qu'elle accompagne. */
+.home-tile__action {
+  flex: none;
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.18));
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.home-tile__action:hover:not(:disabled),
+.home-tile__action:focus-visible {
+  color: var(--text);
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.home-tile__action:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

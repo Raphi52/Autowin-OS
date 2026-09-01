@@ -205,7 +205,10 @@ export function HomeView({
    * la place tout le temps. Elles sont donc RANGEES ici avec le reste des reglages -- demande
    * explicite de l'utilisateur le 2026-09-01.
    * ---------------------------------------------------------------- */
-  const [reglagesOuverts, setReglagesOuverts] = useState(false)
+  // OUVERT au montage : choix de l'utilisateur du 2026-09-01. Les reglages de l'accueil (visibilite
+  // des tuiles, nom de l'assistant, disposition) sont ce qu'on vient regler en arrivant ; les
+  // cacher derriere un clic obligeait a le faire a chaque ouverture.
+  const [reglagesOuverts, setReglagesOuverts] = useState(true)
   const [visibilite, setVisibilite] = useState<HomeWidgetsVisibility>(() =>
     lireVisibilite(window.localStorage)
   )
@@ -708,31 +711,6 @@ export function HomeView({
           ) : null}
         </div>
         <div className="home-view__tools">
-          {/* Outlook n'est relu que toutes les deux minutes : sans ce bouton, un mail qui vient
-              d'arriver reste invisible sans qu'on puisse rien y faire. Friction relevee par un scout
-              lance dans Autowin (score 86). L'horodatage rend l'effet du clic VISIBLE. */}
-          <button
-            type="button"
-            onClick={() => {
-              setOutlookEnCours(true)
-              void readOutlook(true)
-            }}
-            disabled={outlookEnCours}
-            data-testid="home-refresh-outlook"
-            title={
-              outlook.etat === 'ok'
-                ? `Outlook lu à ${new Date(outlook.luLe).toLocaleTimeString('fr-FR')}`
-                : 'Relire Outlook maintenant'
-            }
-          >
-            {outlookEnCours ? (
-              <>
-                <Spinner /> Lecture…
-              </>
-            ) : (
-              'Actualiser Outlook'
-            )}
-          </button>
           {/* UN seul bouton pour tous les reglages. Les commandes de disposition tenaient la barre en
               permanence pour un usage occasionnel ; elles sont maintenant DANS ce panneau. */}
           <button
@@ -857,6 +835,29 @@ export function HomeView({
               >
                 {enAttente.length}
               </span>
+            ) : null}
+            {/* Relire Outlook se commande DEPUIS la tuile Outlook : le bouton vivait dans la barre
+                du haut, loin de ce qu'il rafraichit. Demande de l'utilisateur du 2026-09-01. */}
+            {box.id === 'mails' ? (
+              <button
+                type="button"
+                className="home-tile__action"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setOutlookEnCours(true)
+                  void readOutlook(true)
+                }}
+                disabled={outlookEnCours}
+                data-testid="home-refresh-outlook"
+                title={
+                  outlook.etat === 'ok'
+                    ? `Outlook lu à ${new Date(outlook.luLe).toLocaleTimeString('fr-FR')}`
+                    : 'Relire Outlook maintenant'
+                }
+              >
+                {outlookEnCours ? <Spinner /> : 'Actualiser'}
+              </button>
             ) : null}
             {box.id === 'mails' && compteurs.personnes > 0 ? (
               <span

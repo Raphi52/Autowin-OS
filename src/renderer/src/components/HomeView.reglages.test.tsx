@@ -37,9 +37,23 @@ async function mount(): Promise<HTMLDivElement> {
 
 const q = <T extends Element>(c: ParentNode, sel: string): T | null => c.querySelector<T>(sel)
 
-async function ouvrir(c: HTMLDivElement): Promise<void> {
+/**
+ * Le panneau est OUVERT au montage (choix du 2026-09-01) : le bouton ne fait donc que BASCULER.
+ * Les tests qui veulent le panneau n'ont plus rien a cliquer -- ils le trouvent deja la.
+ */
+async function basculerReglages(c: HTMLDivElement): Promise<void> {
   const bouton = q<HTMLButtonElement>(c, '[data-testid="home-settings"]')!
   await act(async () => bouton.click())
+}
+
+/**
+ * Ouvre le panneau S'IL est ferme.
+ *
+ * Volontairement idempotent : l'etat initial du panneau est un choix d'affichage qui peut changer,
+ * et un test sur les interrupteurs n'a pas a en dependre.
+ */
+async function ouvrirReglages(c: HTMLDivElement): Promise<void> {
+  if (q(c, '[data-testid="home-settings-panel"]') === null) await basculerReglages(c)
 }
 
 /**
@@ -58,21 +72,30 @@ function saisir(champ: HTMLInputElement, valeur: string): void {
 }
 
 describe('le bouton Reglages de l accueil', () => {
-  it('ouvre un panneau, ferme par defaut', async () => {
+  it('ouvre et referme le panneau au clic', async () => {
     const container = await mount()
+    await ouvrirReglages(container)
+    expect(q(container, '[data-testid="home-settings-panel"]')).not.toBeNull()
+    await basculerReglages(container)
     expect(q(container, '[data-testid="home-settings-panel"]')).toBeNull()
-    await ouvrir(container)
+    await basculerReglages(container)
     expect(q(container, '[data-testid="home-settings-panel"]')).not.toBeNull()
   })
 
   it('range les commandes de disposition dedans, plus dans la barre', async () => {
     const container = await mount()
-    expect(q(container, '[data-testid="home-undo"]')).toBeNull()
-    await ouvrir(container)
+    await ouvrirReglages(container)
     const panneau = q<HTMLElement>(container, '[data-testid="home-settings-panel"]')!
-    expect(q(panneau, '[data-testid="home-undo"]')).not.toBeNull()
+    const undo = q<HTMLElement>(container, '[data-testid="home-undo"]')!
+    // La commande existe UNE seule fois, et elle est DANS le panneau : c'est ce qui prouve qu'elle
+    // n'est plus dans la barre.
+    expect(container.querySelectorAll('[data-testid="home-undo"]')).toHaveLength(1)
+    expect(panneau.contains(undo)).toBe(true)
     expect(panneau.textContent).toContain('Disperser')
     expect(panneau.textContent).toContain('Rétablir la disposition')
+    // Referme : la commande part avec le panneau, elle n'a pas de double dans la barre.
+    await basculerReglages(container)
+    expect(q(container, '[data-testid="home-undo"]')).toBeNull()
   })
 })
 
@@ -80,7 +103,7 @@ describe('un interrupteur par widget', () => {
   it('eteint une tuile et la rallume a la meme place', async () => {
     const container = await mount()
     const avant = q<HTMLElement>(container, '[data-testid="home-widget-agenda"]')!.style.transform
-    await ouvrir(container)
+    await ouvrirReglages(container)
     const interrupteur = q<HTMLInputElement>(
       container,
       '[data-testid="home-widget-switch-agenda"]'
@@ -98,7 +121,7 @@ describe('un interrupteur par widget', () => {
 
   it('retient le reglage d une ouverture a l autre', async () => {
     const premier = await mount()
-    await ouvrir(premier)
+    await ouvrirReglages(premier)
     await act(async () =>
       q<HTMLInputElement>(premier, '[data-testid="home-widget-switch-routines"]')!.click()
     )
@@ -116,7 +139,7 @@ describe('le nom de l assistant', () => {
     expect(
       q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent
     ).toBe('Jarvis')
-    await ouvrir(container)
+    await ouvrirReglages(container)
     const champ = q<HTMLInputElement>(container, '[data-testid="home-jarvis-nom"]')!
     await act(async () => saisir(champ, 'Alfred'))
     expect(
@@ -131,5 +154,25 @@ describe('le nom de l assistant', () => {
     expect(
       q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent
     ).toBe('Friday')
+  })
+})
+
+describe('relire Outlook se commande depuis la tuile Outlook', () => {
+  it('vit DANS l etiquette des interlocuteurs, plus dans la barre du haut', async () => {
+    const container = await mount()
+    const bouton = q<HTMLButtonElement>(container, '[data-testid="home-refresh-outlook"]')!
+    expect(bouton).not.toBeNull()
+    // La preuve qui compte : son ancetre est la tuile des mails, pas l'en-tete de la page.
+    expect(bouton.closest('[data-testid="home-widget-mails"]')).not.toBeNull()
+    expect(bouton.closest('.home-view__header')).toBeNull()
+  })
+
+  it('ne prend pas la tuile en main quand on le clique', async () => {
+    // La tuile se saisit N'IMPORTE OU : sans arret de la propagation, cliquer le bouton amorcerait
+    // un deplacement.
+    const container = await mount()
+    const bouton = q<HTMLButtonElement>(container, '[data-testid="home-refresh-outlook"]')!
+    await act(async () => bouton.click())
+    expect(q<HTMLElement>(container, '[data-testid="home-widget-mails"]')!.dataset.held).toBeUndefined()
   })
 })
