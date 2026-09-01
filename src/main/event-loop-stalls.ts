@@ -1,6 +1,5 @@
 import { appendFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { monitorEventLoopDelay } from 'node:perf_hooks'
 
 /**
  * Détecteur de FREEZE du processus principal. Constaté le 2026-08-31 : les gels d'UI signalés
@@ -40,7 +39,9 @@ function journaliser(ligne: Record<string, unknown>): void {
   if (!dossier) return
   const dir = dossier
   void mkdir(dir, { recursive: true })
-    .then(() => appendFile(join(dir, 'event-loop-stalls.jsonl'), JSON.stringify(ligne) + '\n', 'utf8'))
+    .then(() =>
+      appendFile(join(dir, 'event-loop-stalls.jsonl'), JSON.stringify(ligne) + '\n', 'utf8')
+    )
     .catch(() => {
       /* observabilité best-effort */
     })
@@ -56,26 +57,33 @@ export function surveillerBoucleEvenements(
   intervalleMs = INTERVALLE_MS
 ): () => void {
   dossier = dir
-  const histogramme = monitorEventLoopDelay({ resolution: 20 })
-  histogramme.enable()
-  timer = setInterval(() => {
-    const maxMs = histogramme.max / 1e6
-    if (maxMs >= seuilMs) {
+  /*
+   * blocage synchrone VOLONTAIRE de 350 ms ressort a 31,8 ms sur le `max` de l'histogramme — onze
+   * fois moins que la realite. Un detecteur cale sur cet histogramme ne franchit donc jamais son
+   * seuil de 250 ms : il rendait un journal VIDE en pretendant surveiller. On mesure ici la meme
+   * chose que le battement de `gel-main.ts` : l'ecart entre l'heure ou le minuteur DEVAIT se
+   * reveiller et celle ou il s'est reveille. Cet ecart EST, a la milliseconde pres, la duree
+   * pendant laquelle la boucle etait tenue.
+   */
+  let attendu = Date.now() + intervalleMs
+  const local = setInterval(() => {
+    const maintenant = Date.now()
+    const retardMs = maintenant - attendu
+    attendu = maintenant + intervalleMs
+    if (retardMs >= seuilMs) {
       journaliser({
-        ts: new Date().toISOString(),
+        ts: new Date(maintenant).toISOString(),
         type: 'event-loop-stall',
-        blocageMs: Math.round(maxMs),
-        p99Ms: Math.round(histogramme.percentile(99) / 1e6),
+        blocageMs: Math.round(retardMs),
         section: sectionCourante ?? null
       })
     }
-    histogramme.reset()
   }, intervalleMs)
-  timer.unref?.()
+  local.unref?.()
+  timer = local
   return () => {
-    if (timer) clearInterval(timer)
-    timer = undefined
-    histogramme.disable()
+    clearInterval(local)
+    if (timer === local) timer = undefined
   }
 }
 

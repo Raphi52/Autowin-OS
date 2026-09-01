@@ -80,8 +80,13 @@ describe('spawn CLI — regime de contexte', () => {
     expect(block).not.toContain('.claude')
   })
 
-  it('nettoie le dossier temporaire de reglages (pas de fuite disque)', () => {
-    expect(source).toMatch(/if \(settingsDir\) rmSync\(settingsDir/)
+  it('nettoie le dossier temporaire de reglages (pas de fuite disque), sans figer la boucle', () => {
+    // La propriete protegee reste la MEME — le dossier temporaire par appel est bien supprime.
+    // Ce qui a change est le GESTE : `rmSync` figeait la fin de chaque appel (mesure reelle du
+    // 2026-08-31 dans gels.jsonl : 1 625 ms). Le nettoyage passe maintenant par une fonction
+    // asynchrone dediee, dont l'effet est prouve par `claude.nettoyage-non-bloquant.test.ts`.
+    expect(source).toMatch(/await nettoyerTemporairesDeLAppel\(\{[\s\S]*?settingsDir/)
+    expect(source).not.toMatch(/if \(settingsDir\) rmSync\(settingsDir/)
   })
 
   it('donne le PLEIN OUTILLAGE au tour de chat (il n’est ni aveugle ni manchot)', () => {

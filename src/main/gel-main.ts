@@ -34,6 +34,14 @@ let minuteur: NodeJS.Timeout | undefined
  */
 const pile: string[] = []
 
+/*
+ * DERNIERE OPERATION REFERMEE. Mesure du 2026-09-01 sur le journal reel : 35 gels sur 54 sortent
+ * en `inconnu` (97,4 s de fenetre figee sur 124 s) et ne portent AUCUN autre champ — l'instrument
+ * prouve le gel et n'offre aucune piste. On retient donc le nom ET l'instant de la derniere
+ * operation refermee ; seule celle refermee PENDANT la fenetre figee sera reportee.
+ */
+let dernierFerme: { nom: string; a: number } | undefined
+
 /** Ce que le main declare faire ICI et MAINTENANT — joint au gel pour NOMMER le coupable. */
 export function marquerOperation(nom: string): void {
   pile.length = 0
@@ -49,6 +57,7 @@ export function ouvrirOperation(nom: string): () => void {
     ferme = true
     const i = pile.lastIndexOf(nom || 'inconnu')
     if (i >= 0) pile.splice(i, 1)
+    dernierFerme = { nom: nom || 'inconnu', a: Date.now() }
   }
 }
 
@@ -154,13 +163,24 @@ export function demarrerDetecteurDeGel(
       seuilMs,
       temoin?.retardMaxDepuisLaDerniereLecture()
     )
+    const debutFenetre = precedent
     precedent = maintenant
     if (blocageMs > 0) {
+      const operation = operationDeclaree()
+      /*
+       * L'indice n'est servi QUE faute de mieux, et QUE si l'operation s'est refermee dans la
+       * fenetre figee : hors de cette fenetre, c'est un alibi, pas un suspect.
+       */
+      const indice =
+        operation === 'inconnu' && dernierFerme && dernierFerme.a >= debutFenetre
+          ? dernierFerme.nom
+          : undefined
       ecrire({
         ts: new Date(maintenant).toISOString(),
         blocageMs,
-        operation: operationDeclaree(),
-        cause
+        operation,
+        cause,
+        ...(indice ? { indice } : {})
       })
     }
   }, periodeMs)

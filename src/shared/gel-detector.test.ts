@@ -119,20 +119,22 @@ describe('classerGel — distinguer la boucle TENUE du process PRIVE de CPU', ()
  */
 describe('classerGel — un TEMOIN a l’heure interdit d’excuser un gel en contention machine', () => {
   it('temoin a l’heure + aucun CPU : entree-sortie bloquante, pas contention machine', () => {
-    expect(classerGel(PERIODE_BATTEMENT_MS + 12_000, 40, PERIODE_BATTEMENT_MS, SEUIL_GEL_MS, 30).cause).toBe(
-      'entree-sortie-bloquante'
-    )
+    expect(
+      classerGel(PERIODE_BATTEMENT_MS + 12_000, 40, PERIODE_BATTEMENT_MS, SEUIL_GEL_MS, 30).cause
+    ).toBe('entree-sortie-bloquante')
   })
 
   it('temoin AUSSI en retard : la machine ne nous ordonnancait pas — process prive de CPU', () => {
     expect(
-      classerGel(PERIODE_BATTEMENT_MS + 12_000, 40, PERIODE_BATTEMENT_MS, SEUIL_GEL_MS, 11_500).cause
+      classerGel(PERIODE_BATTEMENT_MS + 12_000, 40, PERIODE_BATTEMENT_MS, SEUIL_GEL_MS, 11_500)
+        .cause
     ).toBe('process-prive-de-cpu')
   })
 
   it('CPU brule chez nous : le temoin ne change rien, la boucle etait TENUE par notre code', () => {
     expect(
-      classerGel(PERIODE_BATTEMENT_MS + 12_000, 11_000, PERIODE_BATTEMENT_MS, SEUIL_GEL_MS, 30).cause
+      classerGel(PERIODE_BATTEMENT_MS + 12_000, 11_000, PERIODE_BATTEMENT_MS, SEUIL_GEL_MS, 30)
+        .cause
     ).toBe('boucle-tenue')
   })
 
@@ -142,9 +144,39 @@ describe('classerGel — un TEMOIN a l’heure interdit d’excuser un gel en co
 
   it('un gel d’entree-sortie est IMPUTABLE : il compte dans l’attribution par operation', () => {
     const resume = resumerGels([
-      JSON.stringify({ ts: 'a', blocageMs: 12_000, operation: 'brain:lecture', cause: 'entree-sortie-bloquante' })
+      JSON.stringify({
+        ts: 'a',
+        blocageMs: 12_000,
+        operation: 'brain:lecture',
+        cause: 'entree-sortie-bloquante'
+      })
     ])
     expect(resume.gelsNonImputables).toBe(0)
     expect(resume.parOperation[0]).toMatchObject({ operation: 'brain:lecture', cumulMs: 12_000 })
+  })
+})
+
+describe('resumerGels — la piste d’un gel anonyme remonte jusqu’a la vue', () => {
+  /*
+   * ROUGE d'abord (2026-09-01). Sans ceci, les 35 gels `inconnu` du journal reel se fondent en UNE
+   * seule ligne « inconnu » dans l'Observatoire : la piste ecrite dans le journal ne serait jamais
+   * lue par personne.
+   *
+   * ENTREE QUI FAIT TOMBER CE TEST SI LA CORRECTION EST FAUSSE : la 3e ligne, un `inconnu` SANS
+   * piste. Un regroupement paresseux (« tout inconnu porte la derniere piste vue ») la rangerait
+   * avec les deux premieres et la ligne `inconnu` nue disparaitrait.
+   */
+  it('separe les gels anonymes selon leur piste, et garde les gels sans piste a part', () => {
+    const resume = resumerGels([
+      JSON.stringify({ ts: 'a', blocageMs: 100, operation: 'inconnu', indice: 'lecture:trace' }),
+      JSON.stringify({ ts: 'b', blocageMs: 40, operation: 'inconnu', indice: 'lecture:trace' }),
+      JSON.stringify({ ts: 'c', blocageMs: 70, operation: 'inconnu' })
+    ])
+    const noms = resume.parOperation.map((o) => o.operation)
+    expect(noms).toContain('inconnu (piste: lecture:trace)')
+    expect(noms).toContain('inconnu')
+    const piste = resume.parOperation.find((o) => o.operation === 'inconnu (piste: lecture:trace)')
+    expect(piste?.gels).toBe(2)
+    expect(piste?.cumulMs).toBe(140)
   })
 })

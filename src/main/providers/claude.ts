@@ -9,7 +9,8 @@ import {
 } from './watchdog'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { closeSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { rm as rmAsync, stat as statAsync } from 'node:fs/promises'
 import {
   openStdoutJournal,
   survivableExitCode,
@@ -46,6 +47,49 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
 import { abortFailure } from './abort-diagnostic'
+
+/**
+ * NETTOYAGE DE FIN D'APPEL — sans tenir la boucle principale.
+ *
+ * Mesure du journal reel `.autowin-data/autowin-os/gels.jsonl` (2026-08-31 18:45:36) : deux gels
+ * IMBRIQUES et mesures DIRECTEMENT sur l'appel lui-meme, `io:disque:rmSync
+ * C:/…/autowin-os-system-ajZp7B` a 1 625 ms et `io:disque:unlinkSync` a 1 624 ms, cause
+ * `entree-sortie-bloquante`. Supprimer le dossier temporaire du system-prompt a donc fige la
+ * fenetre 1,6 s a la fin de CHAQUE appel au CLI.
+ *
+ * Rien n'attend ce nettoyage : il ne doit pas etre synchrone. Les variantes asynchrones font le
+ * meme travail et rendent la main entre chaque acces disque.
+ *
+ * NON PROUVE ici : que ce seul chemin explique les gels `inconnu` de 4 s du meme journal — ceux-la
+ * n'ont pas encore de nom.
+ */
+export async function nettoyerTemporairesDeLAppel(cibles: {
+  systemPromptDir?: string
+  settingsDir?: string
+  inputPath?: string
+  journalPath?: string
+}): Promise<void> {
+  const jeter = async (chemin: string, recursif: boolean): Promise<void> => {
+    try {
+      await rmAsync(chemin, { force: true, ...(recursif ? { recursive: true } : {}) })
+    } catch {
+      /* hygiene best-effort : un temporaire deja parti ne doit jamais casser la fin d'appel */
+    }
+  }
+  if (cibles.systemPromptDir) await jeter(cibles.systemPromptDir, true)
+  if (cibles.settingsDir) await jeter(cibles.settingsDir, true)
+  if (cibles.inputPath) await jeter(cibles.inputPath, false)
+  if (cibles.journalPath) {
+    // Journal de sortie reste VIDE = le CLI n'a rien ecrit (echec de lancement, appel avorte). Il
+    // n'apporte rien a une reprise et fait croire a un run existant : mesure 3 journaux vides sur 7
+    // spawns lors d'un test reel, et 20 spawns en erreur sur 114 en usage reel. On le supprime.
+    try {
+      if ((await statAsync(cibles.journalPath)).size === 0) await jeter(cibles.journalPath, false)
+    } catch {
+      /* deja absent ou inaccessible : rien a nettoyer */
+    }
+  }
+}
 
 /**
  * Ramène l'usage Claude à l'invariant de `Usage` : `inputTokens` = input TOTAL, cache INCLUS.
@@ -363,7 +407,6 @@ export function nomDeFichierPourPieceJointe(nom: string, mimeType: string): stri
   const propre = base.replace(/[ .]+$/, '')
   return (propre || 'fichier') + ext
 }
-
 
 export function materializeClaudeAttachments(attachments: Attachment[]): MaterializedAttachments {
   const dir = mkdtempSync(join(tmpdir(), 'autowin-os-attachments-'))
@@ -1127,11 +1170,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // Relaye en DIRECT seulement, jamais persiste : un battement n'est pas du raisonnement.
         const elapsed = Number(o['elapsed_time_seconds'])
         if (!Number.isFinite(elapsed) || elapsed <= 0) return
-        const outil = typeof o['tool_name'] === 'string' && o['tool_name'] ? o['tool_name'] : 'outil'
+        const outil =
+          typeof o['tool_name'] === 'string' && o['tool_name'] ? o['tool_name'] : 'outil'
         queue.push({ delta: '', status: `${outil} en cours - ${dureeLisible(elapsed)}` })
         return
       }
-      if (t === 'system' && (o['subtype'] === 'task_started' || o['subtype'] === 'task_notification')) {
+      if (
+        t === 'system' &&
+        (o['subtype'] === 'task_started' || o['subtype'] === 'task_notification')
+      ) {
         /*
          * UNE TACHE DE FOND EST MUETTE — meme defaut que le battement d'outil juste au-dessus, un cran
          * plus loin. Quand le sous-agent lance sa commande EN ARRIERE-PLAN, le CLI n'emet AUCUN
@@ -1158,7 +1205,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const statut = String(o['status'] ?? '').toLowerCase()
         // On NOMME l'echec au lieu de rendre le meme libelle qu'une reussite : une tache de fond qui
         // rate en silence est exactement ce que ce relais existe pour supprimer.
-        const issue = statut === 'completed' ? 'terminee' : statut === 'failed' ? 'en echec' : statut || 'terminee'
+        const issue =
+          statut === 'completed'
+            ? 'terminee'
+            : statut === 'failed'
+              ? 'en echec'
+              : statut || 'terminee'
         queue.push({
           delta: '',
           status: commande ? `tache de fond ${issue} - ${commande}` : `tache de fond ${issue}`
@@ -1169,9 +1221,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // Raisonnement INCREMENTAL : la seule source temps reel. `text_delta` est volontairement
         // ignore ici — le texte de reponse reste pris sur l'evenement `assistant`, sans quoi il
         // serait compte deux fois.
-        const ev = o['event'] as { type?: string; delta?: { type?: string; thinking?: string } } | undefined
+        const ev = o['event'] as
+          { type?: string; delta?: { type?: string; thinking?: string } } | undefined
         const delta = ev?.delta
-        if (ev?.type === 'content_block_delta' && delta?.type === 'thinking_delta' && delta.thinking) {
+        if (
+          ev?.type === 'content_block_delta' &&
+          delta?.type === 'thinking_delta' &&
+          delta.thinking
+        ) {
           partialThinkingSeen = true
           reasoningFragments.push(delta.thinking)
           queue.push({ delta: '', reasoning: delta.thinking })
@@ -1367,23 +1424,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       const tailError = await tailSettled
       watchdog.dispose()
       if (childPid) execution?.onProcess?.(childPid, false)
-      if (systemPromptDir) rmSync(systemPromptDir, { recursive: true, force: true })
       // Meme hygiene que le system prompt : un dossier temporaire par appel ne doit pas s'accumuler
-      // (c'est exactement la fuite disque constatee ce jour sur run-stdout/).
-      if (settingsDir) rmSync(settingsDir, { recursive: true, force: true })
+      // (c'est exactement la fuite disque constatee ce jour sur run-stdout/). Tout passe par le
+      // nettoyage ASYNCHRONE : la version synchrone figeait la fenetre 1,6 s a chaque appel.
+      await nettoyerTemporairesDeLAppel({
+        systemPromptDir,
+        settingsDir,
+        inputPath: invocation.inputPath,
+        journalPath: journal?.path
+      })
       // Le fichier de config MCP porte le jeton : il ne survit pas a l'appel qui l'a justifie.
       mcpConfigDir?.nettoyer()
-      if (invocation.inputPath) rmSync(invocation.inputPath, { force: true })
-      // Journal de sortie resté VIDE = le CLI n'a rien écrit (échec de lancement, appel avorté). Il
-      // n'apporte rien à une reprise et fait croire à un run existant : mesuré 3 journaux vides sur 7
-      // spawns lors d'un test réel, et 20 spawns en erreur sur 114 en usage réel. On le supprime.
-      if (journal) {
-        try {
-          if (statSync(journal.path).size === 0) rmSync(journal.path, { force: true })
-        } catch {
-          /* déjà absent ou inaccessible : rien à nettoyer */
-        }
-      }
       materialized?.cleanup()
       // Flush du reliquat : un dernier event JSON sans '\n' terminal ne serait
       // jamais parsé (result/session_id perdus silencieusement) — on le traite ici.
