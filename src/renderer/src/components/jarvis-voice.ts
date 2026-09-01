@@ -145,9 +145,22 @@ export function evenementsDirects(
  * Rien ne part vers un run tant que « Jarvis » n'a pas été prononcé : c'est la seule garde entre une
  * pièce bruyante et une exécution réelle. Ce qui suit le mot est l'ordre ; l'éveil seul n'en est pas
  * un, sinon un « jarvis ? » enverrait une commande vide.
+ *
+ * LE NOM, TEL QU'IL REVIENT DES MOTEURS. Mesure réelle du 2026-08-31 : la CLI whisper.cpp
+ * (small-q5_1) a transcrit la phrase prononcée « Jarvis, ouvre le task manager » en
+ * « jarvie, ouvre le task manager. ». AUCUN moteur ne rend un nom propre au caractère près —
+ * exiger `jarvis` exactement laissait Jarvis MUET alors qu'il avait parfaitement entendu, ce qui se
+ * lit exactement comme le défaut signalé : « il n'entend pas quand je dis son nom ».
+ *
+ * La tolérance est BORNÉE, pas ouverte : le mot doit commencer par `jarv` et ne pas porter plus de
+ * trois lettres derrière. `jarvis`, `jarvie`, `jarvi`, `jarviss`, `jarvice`, `jarvys` réveillent ;
+ * `java`, `jardin`, `service`, `harvest`, `jars` ne réveillent RIEN. Le mot d'éveil reste la seule
+ * garde entre une pièce bruyante et une exécution réelle : l'élargir davantage la retirerait.
  */
+const EVEIL = /\bjarv[a-zà-öø-ÿ]{0,3}\b/iu
+
 export function extraireCommandeEveil(texte: string): string | null {
-  const correspondance = /\bjarvis\b/i.exec(texte)
+  const correspondance = EVEIL.exec(texte)
   if (!correspondance) return null
   const suite = texte
     .slice(correspondance.index + correspondance[0].length)
@@ -158,7 +171,7 @@ export function extraireCommandeEveil(texte: string): string | null {
 
 /** Le mot d'éveil est-il présent, même sans ordre derrière ? */
 export function contientEveil(texte: string): boolean {
-  return /\bjarvis\b/i.test(texte)
+  return EVEIL.test(texte)
 }
 
 export interface ReactionParole {
@@ -202,4 +215,22 @@ export function reagirAParole(
     bip,
     ordre
   }
+}
+
+/**
+ * CE QUE L'UTILISATEUR DOIT LIRE quand l'ecoute s'arrete. Un code brut (« network ») ne dit rien ;
+ * pire, `network` a longtemps ete rendu SILENCIEUX, si bien que le widget affichait « ecoute en
+ * cours » sur un moteur mort. Chaque code nomme donc sa cause ET la sortie.
+ */
+export function messageErreurMoteur(code: string): string {
+  if (code === 'network') {
+    return 'Le moteur de reconnaissance de Chromium est injoignable dans cette fenêtre (erreur « network ») : installez l’écoute hors ligne ci-dessous.'
+  }
+  if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'micro-indisponible') {
+    return 'Micro indisponible : autorisez le microphone pour Autowin OS, puis réactivez l’écoute.'
+  }
+  if (code === 'transcription-impossible') {
+    return 'La reconnaissance locale n’a pas pu transcrire : réinstallez l’écoute hors ligne.'
+  }
+  return `Reconnaissance vocale interrompue : ${code}`
 }

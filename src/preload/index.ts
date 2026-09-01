@@ -24,6 +24,7 @@ import type {
 } from '../shared/tickets'
 import type { TicketGetIpcRequest, TicketUpdateIpcRequest } from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
+import type { EtatWhisper } from '../main/whisper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
 import type { BrainGraphRef, BrainTheme } from '../main/viz/fs-brains'
@@ -414,6 +415,11 @@ const api = {
   toolUsage: (): Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   > => ipcRenderer.invoke('os:toolUsage'),
+  // Reconnaissance vocale LOCALE (whisper.cpp) : le moteur Chromium rend `network` dans Electron.
+  whisperEtat: (): Promise<EtatWhisper> => ipcRenderer.invoke('os:whisper:etat'),
+  whisperInstaller: (): Promise<EtatWhisper> => ipcRenderer.invoke('os:whisper:installer'),
+  whisperTranscrire: (wav: Uint8Array): Promise<string> =>
+    ipcRenderer.invoke('os:whisper:transcrire', wav),
   // Conversations
   conversations: (): Promise<ConversationSummary[]> => ipcRenderer.invoke('os:conversations'),
   conversation: (id: string): Promise<Conversation | null> =>

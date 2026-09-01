@@ -1,0 +1,176 @@
+import { describe, expect, it, vi } from 'vitest'
+import { fabriqueWhisper, type MoteurVocal } from './jarvis-moteur-whisper'
+import { TAUX_WHISPER } from './whisper-audio'
+
+const TAILLE_BLOC = 1_600 // 100 ms à 16 kHz
+
+function parole(): Float32Array {
+  const bloc = new Float32Array(TAILLE_BLOC)
+  for (let i = 0; i < TAILLE_BLOC; i += 1) bloc[i] = Math.sin(i / 3) * 0.3
+  return bloc
+}
+const silence = (): Float32Array => new Float32Array(TAILLE_BLOC)
+
+class FauxNoeud {
+  onaudioprocess:
+    ((e: { inputBuffer: { getChannelData(c: number): Float32Array } }) => void) | null = null
+  connecte = 0
+  deconnecte = 0
+  connect(): void {
+    this.connecte += 1
+  }
+  disconnect(): void {
+    this.deconnecte += 1
+  }
+}
+
+class FauxContexte {
+  static dernier: FauxContexte | null = null
+  sampleRate = TAUX_WHISPER
+  destination = {}
+  ferme = 0
+  noeud = new FauxNoeud()
+  source = { connect: () => {}, disconnect: () => {} }
+  constructor() {
+    FauxContexte.dernier = this
+  }
+  createMediaStreamSource(): { connect(): void; disconnect(): void } {
+    return this.source
+  }
+  createScriptProcessor(): FauxNoeud {
+    return this.noeud
+  }
+  close(): Promise<void> {
+    this.ferme += 1
+    return Promise.resolve()
+  }
+}
+
+function pistes(): { piste: { stop: () => void; arrets: number } } {
+  const piste = { arrets: 0, stop: (): void => void (piste.arrets += 1) }
+  return { piste }
+}
+
+function monter(transcrire: (wav: Uint8Array) => Promise<string>) {
+  const { piste } = pistes()
+  const flux = { getTracks: () => [piste] }
+  const Fabrique = fabriqueWhisper({
+    micro: async () => flux as never,
+    contexte: () => new FauxContexte() as never,
+    transcrire
+  })
+  const moteur: MoteurVocal = new Fabrique()
+  const resultats: string[] = []
+  const erreurs: string[] = []
+  let fins = 0
+  moteur.onresult = (e): void => {
+    const evenement = e as { results: ArrayLike<ArrayLike<{ transcript: string }>> }
+    resultats.push(evenement.results[0][0].transcript)
+  }
+  moteur.onerror = (e): void => void erreurs.push(String((e as { error?: unknown }).error))
+  moteur.onend = (): void => void (fins += 1)
+  return { moteur, resultats, erreurs, piste, fins: () => fins }
+}
+
+/** Rejoue une phrase : de la parole, puis le silence qui la termine. */
+async function dire(blocs: number, silences: number): Promise<void> {
+  const noeud = FauxContexte.dernier!.noeud
+  for (let i = 0; i < blocs; i += 1) {
+    noeud.onaudioprocess?.({ inputBuffer: { getChannelData: () => parole() } })
+  }
+  for (let i = 0; i < silences; i += 1) {
+    noeud.onaudioprocess?.({ inputBuffer: { getChannelData: () => silence() } })
+  }
+  await new Promise((r) => setTimeout(r, 0))
+  await new Promise((r) => setTimeout(r, 0))
+}
+
+describe('moteur Whisper local', () => {
+  it('transcrit une phrase et la rend comme un résultat FINAL', async () => {
+    const transcrire = vi.fn(async (_wav: Uint8Array) => 'Jarvis ouvre le task manager')
+    const h = monter(transcrire)
+    h.moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    await dire(8, 9)
+    expect(transcrire).toHaveBeenCalledTimes(1)
+    // ce qui part vers whisper est bien un WAV, pas des flottants bruts
+    const wav = transcrire.mock.calls[0][0]
+    expect(String.fromCharCode(...wav.slice(0, 4))).toBe('RIFF')
+    expect(h.resultats).toEqual(['Jarvis ouvre le task manager'])
+  })
+
+  it('ne remonte RIEN quand whisper ne rend que du silence', async () => {
+    // L'ENTRÉE QUI CASSE UN FAUX FIX : une transcription vide. La laisser passer enverrait une
+    // commande vide à Jarvis à chaque bruit de la pièce.
+    const h = monter(async () => '   ')
+    h.moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    await dire(8, 9)
+    expect(h.resultats).toEqual([])
+    expect(h.erreurs).toEqual([])
+  })
+
+  it('coupe le micro à l’arrêt : pistes stoppées, contexte fermé, `onend` émis', async () => {
+    const h = monter(async () => 'peu importe')
+    h.moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    h.moteur.stop()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(h.piste.arrets).toBe(1)
+    expect(FauxContexte.dernier!.ferme).toBe(1)
+    expect(FauxContexte.dernier!.noeud.deconnecte).toBeGreaterThan(0)
+    expect(h.fins()).toBe(1)
+  })
+
+  it('ne transcrit plus rien après l’arrêt, même si un segment était en vol', async () => {
+    // Le défaut connu des moteurs vocaux : un dernier segment arrive APRÈS l'ordre d'arrêt.
+    const h = monter(async () => 'ouvre le chat')
+    h.moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    const noeud = FauxContexte.dernier!.noeud
+    for (let i = 0; i < 8; i += 1) {
+      noeud.onaudioprocess?.({ inputBuffer: { getChannelData: () => parole() } })
+    }
+    h.moteur.stop()
+    for (let i = 0; i < 9; i += 1) {
+      noeud.onaudioprocess?.({ inputBuffer: { getChannelData: () => silence() } })
+    }
+    await new Promise((r) => setTimeout(r, 0))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(h.resultats).toEqual([])
+  })
+
+  it('signale un micro refusé au lieu de faire semblant d’écouter', async () => {
+    const Fabrique = fabriqueWhisper({
+      micro: async () => {
+        throw new Error('Permission denied')
+      },
+      contexte: () => new FauxContexte() as never,
+      transcrire: async () => ''
+    })
+    const moteur = new Fabrique()
+    const erreurs: string[] = []
+    moteur.onerror = (e): void => void erreurs.push(String((e as { error?: unknown }).error))
+    let fins = 0
+    moteur.onend = (): void => void (fins += 1)
+    moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(erreurs).toEqual(['micro-indisponible'])
+    expect(fins).toBe(1)
+  })
+
+  it('réessaie UNE fois une transcription qui échoue, puis signale l’échec', async () => {
+    let appels = 0
+    const h = monter(async () => {
+      appels += 1
+      throw new Error('CLI absente')
+    })
+    h.moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    await dire(8, 9)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(appels).toBe(2)
+    expect(h.erreurs).toEqual(['transcription-impossible'])
+  })
+})
