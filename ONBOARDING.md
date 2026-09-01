@@ -55,6 +55,25 @@ npm test               # vitest (suite complète)
 npm run lint
 ```
 
+> **Toujours passer par `npm run typecheck`, jamais par un `tsc -p tsconfig.node.json` à la main.**
+> Les deux projets sont `composite` : un `tsc -p` nu rend des `TS6307` (« File … is not listed
+> within the file list of project ») sur des fichiers de `src/shared/` parfaitement sains. Le script
+> passe `--composite false`, ce qui est exactement ce qui les fait disparaître. Mesuré le 2026-08-31 :
+> `tsc --noEmit -p tsconfig.node.json` rend **51** TS6307, le même avec `--composite false` en rend
+> **0**. Deux d'entre eux (`billing-model.ts`, `portee-de-phase.ts`) ont suffi à faire recommander une
+> correction d'`include` sur un `tsconfig.node.json` qui n'avait aucun défaut.
+
+## 5 bis. Où l'app écrit ses données (piège de chemin)
+
+Le `userData` d'Electron est **remplacé** par un stockage **portable** : tout l'état applicatif vit
+dans **`.autowin-data/`, à la racine du dépôt** — pas dans `%APPDATA%\Roaming`. La constante est
+`PORTABLE_APP_DATA_DIR` (`src/main/app-data.ts`), appliquée via `portableAppDataBase()` depuis
+`src/main/index.ts`. Motif : supprimer le dossier du projet laissait 1,8 Go derrière lui.
+
+Conséquence pratique : chercher un modèle, un cache ou un JSON de session sous `AppData/Roaming`
+donne un **faux négatif**. Mesuré le 2026-08-31 sur le moteur whisper — déclaré « pas installé »
+alors qu'il occupait déjà `.autowin-data/whisper`.
+
 ## 6. Config manuelle (secrets / login interactif — non automatisables)
 
 - **Token Brain** : définir la variable d'environnement `AMITEL_BRAIN_TOKEN` (active le RAG).

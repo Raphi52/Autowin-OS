@@ -70,6 +70,7 @@ import type { ChatArtifact } from '../shared/artifacts'
  */
 export const CAP_ITERATIONS_TOUR = 12
 import type { PilotEventKind } from '../shared/pilot-events'
+import { blocEtatSuivant, type EtatPrompt } from './etat-diff'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -952,6 +953,9 @@ export class AgentPilot {
      * ouverte — sinon la 2e itération repart à blanc (voir le bloc d'options plus bas).
      */
     let sessionEnCours = resumeSessionId
+    // Combien de segments de `convo` ont DÉJÀ été expédiés dans ce tour (voir la construction du
+    // message plus bas) : au-delà, la session reprise les porte déjà.
+    let segmentsDejaEnvoyes = 0
     // Un détour par un autre provider/modèle ajoute des échanges absents de l'ancienne session.
     // Elle devient donc définitivement périmée, même si l'utilisateur revient ensuite au binding initial.
     if (conversationId && known && known.key !== sessionKey) {
@@ -1275,6 +1279,9 @@ export class AgentPilot {
         ? 'J’ai agi mais je n’ai pas produit de conclusion en clair — vois les cartes ' +
           'd’action ci-dessus pour le detail (et leurs eventuels echecs).'
         : 'Aucune reponse produite pour ce tour.')
+    // L'etat ENTIER part deja dans le premier message du tour : les iterations suivantes n'en
+    // repoussent que le DELTA (voir `etat-diff.ts`).
+    let dernierEtatEnvoye: EtatPrompt = snapshot
     for (let i = recoveredProviderCall?.iteration ?? 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
       // point d'itération (priorité immédiate, sans attendre la fin du tour).
@@ -1304,10 +1311,27 @@ export class AgentPilot {
         ...commandAttachments
       ]
       commandAttachments = []
+      /**
+       * LE FIL N'EST PAS REPAYÉ À CHAQUE ITÉRATION.
+       *
+       * Mesuré le 2026-08-31 sur conv-1 : le livrable d'une phase `frame` (≈ 6 000 caractères)
+       * repartait VERBATIM à chaque itération suivante du même tour — cinq fois — alors que la
+       * session du provider portait DÉJÀ tous les segments précédents (`resumeSessionId` est armé
+       * à chaque itération depuis conv-1498). On n'expédie donc que les segments NOUVEAUX quand la
+       * reprise est réelle.
+       *
+       * Le repli est le comportement d'avant, et il est SÛR : sans session reprise (provider qui
+       * n'honore pas `--resume`, premier appel, session perdue en cours de tour), le fil entier
+       * repart. Amputer un prompt que le provider ne complète pas est exactement le défaut de
+       * conv-1498 — il reste fermé.
+       */
+      const reprisePorteLeFil = providerResumes && Boolean(sessionEnCours)
+      const segmentsAEnvoyer = reprisePorteLeFil ? convo.slice(segmentsDejaEnvoyes) : convo
+      segmentsDejaEnvoyes = convo.length
       const messages: Message[] = [
         {
           role: 'user',
-          content: `${convo.join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`,
+          content: `${segmentsAEnvoyer.join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`,
           ...(iterationAttachments.length ? { attachments: iterationAttachments } : {})
         }
       ]
@@ -2286,8 +2310,10 @@ export class AgentPilot {
       }
 
       const state = await this.bus.snapshotForPrompt()
+      const bloc = blocEtatSuivant(dernierEtatEnvoye, state)
+      dernierEtatEnvoye = state
       convo.push(`TU AS ÉMIS: ${text}`)
-      convo.push(`RÉSULTATS:\n${results.join('\n')}\n\nÉTAT MAINTENANT:\n${JSON.stringify(state)}`)
+      convo.push(`RÉSULTATS:\n${results.join('\n')}\n\n${bloc}`)
     }
     // Le cap EFFECTIF, pas le cap initial : `grantRecoveryIteration` en accorde jusqu'a huit de plus
     // (directive tardive, tour muet, chiffre non verifie, conclusion absente, echec taise...). Un tour

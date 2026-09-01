@@ -80,10 +80,21 @@ function excerpt(content: unknown, query: string, cap = 96): string {
  */
 export const PLAFOND_LISTE = 2_000
 
+/**
+ * Extraits par CONTENU, calcules par le processus principal.
+ *
+ * La liste laterale est une projection LEGERE : `messages` y est absent, donc une recherche purement
+ * locale ne voyait que le titre -- c'est-a-dire, en pratique, le debut du premier prompt. Cette
+ * carte (id -> extrait) apporte ce que le renderer ne peut pas savoir : quelles conversations
+ * CONTIENNENT le terme, meme dix messages plus loin.
+ */
+export type CorrespondancesContenu = ReadonlyMap<string, string>
+
 export function searchConversations<T extends ConversationSearchSource>(
   conversations: readonly T[],
   rawQuery: string,
-  limit = PLAFOND_LISTE
+  limit = PLAFOND_LISTE,
+  correspondancesContenu?: CorrespondancesContenu
 ): ConversationSearchHit<T>[] {
   const query = normalize(rawQuery.trim())
   if (!query) {
@@ -111,12 +122,16 @@ export function searchConversations<T extends ConversationSearchSource>(
       // et la conversation paraissait disparue alors qu'elle est bien en base.
       const idMatches = tokens.every((token) => norm.id.includes(token))
       const titleMatches = idMatches || tokens.every((token) => norm.title.includes(token))
-      if (!titleMatches && matchingIdx < 0) return []
+      // Le CONTENU vu par le processus principal : c'est lui qui rattrape les conversations dont le
+      // titre ignore le terme. Sans lui, la liste ne repondait qu'au debut du premier prompt.
+      const extraitDistant = correspondancesContenu?.get(conversation.id)
+      if (!titleMatches && matchingIdx < 0 && extraitDistant === undefined) return []
       return [
         {
           conversation,
           matchedIn: titleMatches ? ('title' as const) : ('message' as const),
-          snippet: matchingIdx >= 0 ? excerpt(messages[matchingIdx].content, query) : undefined
+          snippet:
+            matchingIdx >= 0 ? excerpt(messages[matchingIdx].content, query) : extraitDistant
         }
       ]
     })
@@ -215,4 +230,57 @@ export function doitAfficherRecentes(
   // demander l'ordre inverse, c'est précisément ne pas chercher sa dernière conversation.
   if (ordre === 'asc') return false
   return plusRecenteId !== premiereDeLaListeId
+}
+
+/**
+ * Decoupe un texte en segments alternant hors-terme / terme, pour SURLIGNER ce qui a ete cherche.
+ *
+ * Compare sur la forme repliee (minuscules, sans accents) mais rend les segments du texte
+ * D'ORIGINE : « À jour » se surligne quand on tape « a jour ». Les positions se correspondent parce
+ * que la normalisation NFD ne retire que des diacritiques combinants, jamais de lettre.
+ */
+export function segmentsSurlignes(
+  texte: string,
+  rawQuery: string
+): Array<{ texte: string; marque: boolean }> {
+  const source = String(texte ?? '')
+  const replie = normalize(source)
+  const phrase = normalize(rawQuery).trim()
+  /*
+   * La PHRASE ENTIERE d'abord, les mots seulement si elle n'apparait pas.
+   *
+   * Surligner mot a mot d'emblee fait marquer le « a » de « graphe » quand on cherche « a jour » :
+   * un mot de une ou deux lettres est present a peu pres partout, et le surlignage devient un bruit
+   * qui cache la vraie correspondance. Quand la suite exacte est la, c'est ELLE que l'utilisateur
+   * reconnait.
+   */
+  const tokens =
+    phrase.length > 0 && replie.includes(phrase)
+      ? [phrase]
+      : [...new Set(phrase.split(/\s+/).filter(Boolean))]
+  if (source.length === 0 || tokens.length === 0) return [{ texte: source, marque: false }]
+  // Un masque par caractere : deux termes qui se chevauchent ne produisent alors qu'UNE marque,
+  // au lieu de segments imbriques impossibles a rendre.
+  const marques = new Array<boolean>(source.length).fill(false)
+  let trouve = false
+  for (const token of tokens) {
+    let position = replie.indexOf(token)
+    while (position >= 0) {
+      trouve = true
+      for (let i = position; i < position + token.length && i < marques.length; i += 1) {
+        marques[i] = true
+      }
+      position = replie.indexOf(token, position + token.length)
+    }
+  }
+  if (!trouve) return [{ texte: source, marque: false }]
+  const segments: Array<{ texte: string; marque: boolean }> = []
+  let debut = 0
+  for (let i = 1; i <= source.length; i += 1) {
+    if (i === source.length || marques[i] !== marques[debut]) {
+      segments.push({ texte: source.slice(debut, i), marque: marques[debut] })
+      debut = i
+    }
+  }
+  return segments
 }

@@ -197,6 +197,25 @@ export type FinalizeResult =
       publishedSha?: string
     }
   | { outcome: 'nothing'; agentId: string }
+  /**
+   * PAS ENCORE — l'attente, distincte de l'absence d'issue.
+   *
+   * `undefined` disait DEUX choses incompatibles : « rien a faire » et « pas encore ». Mesure le
+   * 2026-08-31 (conv-1, run « reprend-pardon-mthg437j », 2,13 $) : la copie avait encore des
+   * processus vivants — typiquement les workers `vitest` que la verification vient elle-meme de
+   * lancer (deja documente conv-1404) —, la finalisation a ete DIFFEREE puis publiee par
+   * `retryRecovery`, mais l'orchestrateur avait deja rendu un rouge « integration locale non
+   * terminee » SANS cause. Face a un faux echec, l'agent RECOMMENCE.
+   *
+   * Ce n'est ni un echec ni une publication : c'est une attente, et elle porte sa cause.
+   */
+  | {
+      outcome: 'deferred'
+      agentId: string
+      files: string[]
+      reason: 'processes-still-running'
+      detail?: string
+    }
   | {
       outcome: 'conflict'
       agentId: string

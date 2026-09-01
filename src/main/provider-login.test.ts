@@ -2,8 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 
 describe('planProviderLogin', () => {
-  it('claude → terminal `claude auth login`', () => {
-    expect(planProviderLogin('claude')).toEqual({ kind: 'terminal', command: 'claude auth login' })
+  it('claude sans compte vise → login `claude auth login`, dossier herite PURGE', () => {
+    // La purge est le correctif du 2026-09-01 : un CLAUDE_CONFIG_DIR herite du shell parent
+    // faisait authentifier le dossier d'un AUTRE compte, ce qui « remplacait » le compte courant.
+    expect(planProviderLogin('claude')).toEqual({
+      kind: 'terminal',
+      command: 'Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue; claude auth login'
+    })
   })
   it('codex → terminal `npm run codex:login` (bon store, PAS `codex login`)', () => {
     const plan = planProviderLogin('codex')

@@ -224,7 +224,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 
-
 .home-tile__scroll {
   height: 100%;
   padding-right: 4px;
@@ -239,14 +238,62 @@
   position: absolute;
   z-index: 2;
 }
-.home-tile__grip[data-edge='n'] { top: -3px; left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
-.home-tile__grip[data-edge='s'] { bottom: -3px; left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
-.home-tile__grip[data-edge='w'] { left: -3px; top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
-.home-tile__grip[data-edge='e'] { right: -3px; top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
-.home-tile__grip[data-edge='nw'] { top: -3px; left: -3px; width: 17px; height: 17px; cursor: nwse-resize; }
-.home-tile__grip[data-edge='ne'] { top: -3px; right: -3px; width: 17px; height: 17px; cursor: nesw-resize; }
-.home-tile__grip[data-edge='sw'] { bottom: -3px; left: -3px; width: 17px; height: 17px; cursor: nesw-resize; }
-.home-tile__grip[data-edge='se'] { bottom: -3px; right: -3px; width: 17px; height: 17px; cursor: nwse-resize; }
+.home-tile__grip[data-edge='n'] {
+  top: -3px;
+  left: 14px;
+  right: 14px;
+  height: 8px;
+  cursor: ns-resize;
+}
+.home-tile__grip[data-edge='s'] {
+  bottom: -3px;
+  left: 14px;
+  right: 14px;
+  height: 8px;
+  cursor: ns-resize;
+}
+.home-tile__grip[data-edge='w'] {
+  left: -3px;
+  top: 14px;
+  bottom: 14px;
+  width: 8px;
+  cursor: ew-resize;
+}
+.home-tile__grip[data-edge='e'] {
+  right: -3px;
+  top: 14px;
+  bottom: 14px;
+  width: 8px;
+  cursor: ew-resize;
+}
+.home-tile__grip[data-edge='nw'] {
+  top: -3px;
+  left: -3px;
+  width: 17px;
+  height: 17px;
+  cursor: nwse-resize;
+}
+.home-tile__grip[data-edge='ne'] {
+  top: -3px;
+  right: -3px;
+  width: 17px;
+  height: 17px;
+  cursor: nesw-resize;
+}
+.home-tile__grip[data-edge='sw'] {
+  bottom: -3px;
+  left: -3px;
+  width: 17px;
+  height: 17px;
+  cursor: nesw-resize;
+}
+.home-tile__grip[data-edge='se'] {
+  bottom: -3px;
+  right: -3px;
+  width: 17px;
+  height: 17px;
+  cursor: nwse-resize;
+}
 
 .home-tile__grip[data-edge='se']::after {
   content: '';
@@ -729,6 +776,29 @@
   }
 }
 
+/* L'offre d'installation de l'écoute LOCALE : visible tant que le moteur hors ligne manque. */
+.jarvis__whisper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+}
+
+.jarvis__whisper-bouton {
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.jarvis__whisper-bouton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .jarvis__aide,
 .jarvis__partiel,
 .jarvis__envoi {
@@ -790,4 +860,79 @@
 .jarvis__flux li {
   color: var(--text-dim);
   font-size: 10.5px;
+}
+
+/* LA JAUGE DE NIVEAU — une piste fine, aucun panneau, aucun halo : le fond de l'app reste visible. */
+.jarvis__jauge {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.jarvis__jauge-piste {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.jarvis__jauge-barre {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: rgba(221, 227, 238, 0.45);
+  transition: background-color 120ms linear;
+}
+
+/* Au-dessus du seuil, la barre passe en OR : c'est le moment exact où Jarvis considère qu'on parle. */
+.jarvis__jauge-barre[data-parle='true'] {
+  background: linear-gradient(90deg, #d4a94f, #e3ba55);
+}
+
+.jarvis__jauge-seuil {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(212, 169, 79, 0.55);
+}
+
+.jarvis__audio {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.jarvis__audio > summary {
+  cursor: pointer;
+  color: #d4a94f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.jarvis__audio-champ {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.jarvis__audio-champ > span {
+  min-width: 130px;
+  color: #a9b2c4;
+}
+
+.jarvis__audio-champ select,
+.jarvis__audio-champ input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: #d4a94f;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 4px;
+  color: #dde3ee;
+  font-size: 11px;
+  padding: 2px 4px;
 }

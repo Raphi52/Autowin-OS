@@ -44,7 +44,7 @@ import {
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
-import { claudeAccountEnv } from '../claude-accounts'
+import { withClaudeAccountEnv } from '../claude-accounts'
 import { abortFailure } from './abort-diagnostic'
 
 /**
@@ -456,13 +456,19 @@ export interface ClaudeAdapterOptions {
   timeoutMs?: number
 }
 
+/** Les seules valeurs de `--effort` que le CLI Claude accepte (mesure du 2026-09-01 sur 2.1.251). */
+const EFFORTS_CLI_CLAUDE = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
+
 /** Ajoute au spawn les choix Agents réellement supportés par le CLI installé. */
 export function appendClaudeSelectionArgs(args: string[], opts: SendOptions): void {
   if (opts.model) args.push('--model', opts.model)
   if (Number.isFinite(opts.maxBudgetUsd) && (opts.maxBudgetUsd as number) > 0) {
     args.push('--max-budget-usd', String(opts.maxBudgetUsd))
   }
-  if (opts.reasoningEffort && opts.reasoningEffort !== 'none') {
+  // Le CLI n'accepte QUE ces cinq valeurs ; toute autre (`auto`, `none`) est rejetee avec un
+  // « Warning: Unknown --effort value » sur la sortie, puis silencieusement remplacee par le defaut.
+  // On ne l'envoie donc que si elle est reellement supportee — sinon on laisse le CLI decider.
+  if (opts.reasoningEffort && EFFORTS_CLI_CLAUDE.has(opts.reasoningEffort)) {
     args.push('--effort', opts.reasoningEffort)
   }
 }
@@ -679,6 +685,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       '--output-format',
       'stream-json',
       '--verbose',
+      // Sans ce drapeau, le CLI n'emet le raisonnement qu'en BLOCS COMPLETS, dans l'evenement
+      // `assistant` : le bloc « Reflexion » restait donc vide pendant toute la reflexion puis se
+      // remplissait d'un coup, apres coup. Avec `--include-partial-messages`, les `thinking_delta`
+      // arrivent au fil de l'eau et le bloc s'ecrit EN TEMPS REEL (comme kimi).
+      '--include-partial-messages',
       // Retiré UNIQUEMENT pour un nœud skill en héritage : voir `argumentsMcpNoeudSkill`.
       ...argsMcp.strict,
       '--setting-sources',
@@ -961,12 +972,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       cwd: execution?.cwd ?? readOnlyCwd,
       // Toujours un env EXPLICITE : sans lui le fils hérite du nôtre et peut ouvrir un pager, un
       // navigateur d'aide ou une invite d'identifiants. Voir NON_INTERACTIVE_ENV.
-      // `claudeAccountEnv()` porte le CLAUDE_CONFIG_DIR du compte actif — vide tant qu'un seul
-      // compte existe. Placé AVANT `invocation.env` : une invocation qui fixerait explicitement
-      // une variable garde le dernier mot.
+      // `withClaudeAccountEnv` POSE le CLAUDE_CONFIG_DIR du compte actif, ou le RETIRE pour le
+      // compte par defaut : sans ce retrait, un dir herite du processus ferait tourner le run
+      // sous une AUTRE identite. Place AVANT `invocation.env` : une invocation qui fixerait
+      // explicitement une variable garde le dernier mot.
       env: {
-        ...process.env,
-        ...claudeAccountEnv(),
+        ...withClaudeAccountEnv(process.env),
         ...(invocation.env ?? {}),
         ...NON_INTERACTIVE_ENV
       },
@@ -996,6 +1007,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     let lastRetry: { attempt: number; maxRetries: number; status: string } | null = null
     let resultSeen = false
     const reasoningFragments: string[] = []
+    // Vrai des qu'un `thinking_delta` partiel a ete recu : le bloc complet qui suit est alors un
+    // DOUBLON du flux deja affiche, et ne doit etre ni re-pousse ni re-persiste.
+    let partialThinkingSeen = false
     let resolvedModel: string | undefined
     let sessionId: string | undefined
     let usage: SendResult['usage']
@@ -1064,14 +1078,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     })
 
     /*
-     * Le resume d'une commande de fond. Toutes commencent par `cd "$(pwd)" && `, qui n'apprend rien et
-     * mange la place ; et une ligne de 400 caracteres dans une carte de fil est illisible. On garde le
-     * DEBUT de la commande reelle — c'est la qu'est le verbe (`vitest run`, `eslint`, `prettier`).
+     * Le resume d'une commande de fond. Toutes commencent par `cd "$(pwd)" && `, qui n'apprend rien
+     * et mange la place : ce prefixe-la saute. La commande, elle, est rendue ENTIERE — demande
+     * explicite de l'utilisateur du 2026-09-01 : « met pas de nb max de caracteres par ligne, jveux
+     * tout voir ». Une troncature cachait justement le verbe utile des commandes longues.
      */
     const resumerCommandeDeFond = (brut: string): string => {
       const sansCd = brut.replace(/^cd\s+"?\$\(pwd\)"?\s*&&\s*/i, '').trim()
-      const uneLigne = sansCd.split(/\r?\n/)[0]?.trim() ?? ''
-      return uneLigne.length > 70 ? uneLigne.slice(0, 70).trimEnd() + '…' : uneLigne
+      // Meme raison : une commande sur plusieurs lignes est rendue ENTIERE, pas reduite a sa
+      // premiere ligne. L'affichage la replie (`white-space: pre-wrap`), il ne la coupe pas.
+      return sansCd
     }
 
     const handleEvent = (o: Record<string, unknown>): void => {
@@ -1091,7 +1107,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // Relayee en DIRECT seulement : une surcharge API n'est pas du raisonnement, et la persister
         // dans `thinking` faisait afficher « Raisonnement : API 529 overloaded » apres coup (mesure le
         // 2026-08-21 : sur 155 etapes reelles, l'UNIQUE champ non vide ne contenait que ce bruit).
-        queue.push({ delta: '', reasoning: note })
+        queue.push({ delta: '', status: note })
         return
       }
       if (t === 'tool_progress') {
@@ -1103,7 +1119,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const elapsed = Number(o['elapsed_time_seconds'])
         if (!Number.isFinite(elapsed) || elapsed <= 0) return
         const outil = typeof o['tool_name'] === 'string' && o['tool_name'] ? o['tool_name'] : 'outil'
-        queue.push({ delta: '', reasoning: `\n${outil} en cours\n${dureeLisible(elapsed)}` })
+        queue.push({ delta: '', status: `${outil} en cours - ${dureeLisible(elapsed)}` })
         return
       }
       if (t === 'system' && (o['subtype'] === 'task_started' || o['subtype'] === 'task_notification')) {
@@ -1126,7 +1142,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (demarre) {
           queue.push({
             delta: '',
-            reasoning: commande ? `\ntache de fond en cours\n${commande}` : '\ntache de fond en cours'
+            status: commande ? `tache de fond en cours - ${commande}` : 'tache de fond en cours'
           })
           return
         }
@@ -1136,8 +1152,21 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const issue = statut === 'completed' ? 'terminee' : statut === 'failed' ? 'en echec' : statut || 'terminee'
         queue.push({
           delta: '',
-          reasoning: commande ? `\ntache de fond ${issue}\n${commande}` : `\ntache de fond ${issue}`
+          status: commande ? `tache de fond ${issue} - ${commande}` : `tache de fond ${issue}`
         })
+        return
+      }
+      if (t === 'stream_event') {
+        // Raisonnement INCREMENTAL : la seule source temps reel. `text_delta` est volontairement
+        // ignore ici — le texte de reponse reste pris sur l'evenement `assistant`, sans quoi il
+        // serait compte deux fois.
+        const ev = o['event'] as { type?: string; delta?: { type?: string; thinking?: string } } | undefined
+        const delta = ev?.delta
+        if (ev?.type === 'content_block_delta' && delta?.type === 'thinking_delta' && delta.thinking) {
+          partialThinkingSeen = true
+          reasoningFragments.push(delta.thinking)
+          queue.push({ delta: '', reasoning: delta.thinking })
+        }
         return
       }
       if (t === 'result') resultSeen = true
@@ -1164,6 +1193,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             text += part.text
             queue.push({ delta: part.text })
           } else if (part.type === 'thinking' && part.thinking) {
+            // Deja diffuse morceau par morceau via `stream_event` : le bloc complet est un doublon.
+            if (partialThinkingSeen) continue
             // Raisonnement CONSERVÉ pour l'observation post-mortem ET streamé en direct : c'est la
             // seule chose qui se passe pendant les secondes d'attente avant le premier mot.
             reasoningFragments.push(part.thinking)

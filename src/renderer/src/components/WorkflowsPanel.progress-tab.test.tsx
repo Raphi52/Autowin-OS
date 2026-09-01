@@ -40,8 +40,6 @@ function props(over: Partial<WorkflowsPanelProps> = {}): WorkflowsPanelProps {
   return {
     runsPaneWidth: 320,
     beginRunsResize: vi.fn(),
-    paneTab: 'run',
-    setPaneTab: vi.fn(),
     refreshRuns: vi.fn(),
     setShowRuns: vi.fn(),
     activeId: 'conv-1',
@@ -63,6 +61,7 @@ function props(over: Partial<WorkflowsPanelProps> = {}): WorkflowsPanelProps {
     runDetailTab: 'progress',
     setRunDetailTab: vi.fn(),
     liveRunCardRef: { current: null },
+    messages: [],
     ...over
   }
 }

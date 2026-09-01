@@ -16,6 +16,13 @@ import { PREFLIGHT_REPAIRS } from '../renderer/src/components/preflight-repair-a
  * rien de plus. L'utilisateur devait sortir de l'app pour agir, alors que l'app sait déjà lancer ce
  * login (bouton « Se reconnecter » de la page Routeur).
  */
+/**
+ * Aucun compte Claude dedie n'est actif dans ces tests : le plan de login RETIRE alors un
+ * CLAUDE_CONFIG_DIR herite du shell parent au lieu de le subir. Sans cette purge, la console de
+ * reparation authentifiait le dossier d'un AUTRE compte (incident 2026-09-01).
+ */
+const PURGE_HERITAGE = 'Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue; '
+
 describe('planPreflightRepair — on ne propose QUE ce qu’on sait réparer', () => {
   it('session Codex → login OAuth dans une console', () => {
     const plan = planPreflightRepair('codex-session')
@@ -75,7 +82,7 @@ describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', ()
         exists: () => true
       })
 
-      expect(openLoginTerminal).toHaveBeenCalledWith(`& "${bin}" auth login`, {})
+      expect(openLoginTerminal).toHaveBeenCalledWith(PURGE_HERITAGE + `& "${bin}" auth login`, {})
       expect(outcome.started).toBe(true)
       expect(outcome.detail).toContain('re-vérifie')
     })
@@ -89,7 +96,7 @@ describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', ()
       })
 
       expect(openLoginTerminal).toHaveBeenCalledWith(
-        '& "C:\\Program Files\\claude\\claude.exe" auth login',
+        PURGE_HERITAGE + '& "C:\\Program Files\\claude\\claude.exe" auth login',
         {}
       )
     })
@@ -134,7 +141,10 @@ describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', ()
         resolveOnPath: (which) => (which === 'claude-next' ? '/usr/bin/claude-next' : null)
       })
 
-      expect(openLoginTerminal).toHaveBeenCalledWith('& "claude-next" auth login', {})
+      expect(openLoginTerminal).toHaveBeenCalledWith(
+        PURGE_HERITAGE + '& "claude-next" auth login',
+        {}
+      )
       expect(outcome.started).toBe(true)
     })
 
@@ -161,7 +171,7 @@ describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', ()
         resolveOnPath: () => '/usr/local/bin/claude'
       })
 
-      expect(openLoginTerminal).toHaveBeenCalledWith('claude auth login', {})
+      expect(openLoginTerminal).toHaveBeenCalledWith(PURGE_HERITAGE + 'claude auth login', {})
       expect(outcome.started).toBe(true)
     })
   })

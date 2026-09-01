@@ -69,7 +69,7 @@ import type {
   UserMsg
 } from './chat-view-types'
 import { buildMentionSources, resolveMentionsForSend } from './chat-mentions'
-import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-sections'
+import { visibleScopedRuns } from './workflows-panel-sections'
 import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment, pieceJointePasseePourLeFil } from './chat-attachments'
 import { derniereConversationOuverte, memoriserDerniereConversation } from './derniere-conversation'
@@ -83,6 +83,7 @@ import {
   conversationsRecentes,
   recenceUtilisateur,
   searchConversations,
+  segmentsSurlignes,
   trierParRecenceUtilisateur
 } from './conversation-search'
 import {
@@ -136,6 +137,30 @@ type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
  * Ghost-text d'un FIL donne : prompt suivant ecrit par le modele, sinon rubrique Recommande.
  * Extrait du composant pour que la MOSAIQUE l'obtienne aussi, par conversation (2026-08-30).
  */
+/**
+ * SURLIGNE dans un libelle les portions qui correspondent au terme cherche.
+ *
+ * Une liste filtree qui ne montre pas POURQUOI chaque ligne est la oblige a ouvrir chaque
+ * conversation pour comprendre. `<mark>` porte aussi le sens semantiquement, pas seulement une
+ * couleur : un lecteur d'ecran l'annonce.
+ */
+function TexteSurligne({ texte, terme }: { texte: string; terme: string }): React.JSX.Element {
+  const segments = segmentsSurlignes(texte, terme)
+  return (
+    <>
+      {segments.map((segment, index) =>
+        segment.marque ? (
+          <mark key={index} className="conv-highlight">
+            {segment.texte}
+          </mark>
+        ) : (
+          <span key={index}>{segment.texte}</span>
+        )
+      )}
+    </>
+  )
+}
+
 function ghostDuFil(fil: Msg[]): string | null {
   const lastAssistant = [...fil].reverse().find((m) => m.role === 'assistant') as
     AsstMsg | undefined
@@ -502,7 +527,6 @@ export function ChatView({
   })
   // Quatre sections : Sous-agents · Run · Graphe · Source control. Défaut = Sous-agents, la section qu'on regarde
   // pendant une orchestration — garder « Run » par défaut aurait retiré les sous-agents de la vue.
-  const [paneTab, setPaneTab] = useState<WorkflowPanelSection>('subagents')
   const [runs, setRuns] = useState<RunEntry[]>([])
   const [checkpoints, setCheckpoints] = useState<CheckpointEntry[]>([])
   const [forkedCheckpoint, setForkedCheckpoint] = useState('')
@@ -560,7 +584,6 @@ export function ChatView({
   // veut la trace d'un run précis (elle survit au redémarrage, l'écho de session non).
   const revealLiveAction = useCallback((mode: 'live' | 'history' = 'live', runId?: string) => {
     setShowRuns(true)
-    setPaneTab('subagents')
     if (mode === 'history') {
       // Action déjà terminée/interrompue : sa carte live n'existe plus. On OUVRE LA TRACE du run
       // concerné — cadrer la seule liste laissait l'utilisateur chercher lequel regarder.
@@ -1144,9 +1167,8 @@ export function ChatView({
           })
         )
         if (e.convId === activeRef.current) {
+          // Le panneau n’a plus de section à cadrer : l’ouvrir suffit, le graphe montre le run.
           setShowRuns(true)
-          // Une orchestration démarre → on ouvre la section qui montre ses sous-agents.
-          setPaneTab('subagents')
         }
       } else if (e.type === 'orchestrate-phase' && e.phase && e.convId) {
         setLiveRuns((current) =>
@@ -1503,6 +1525,11 @@ export function ChatView({
     positionARestaurerRef.current = reprise ?? null
     followTailRef.current = !reprise
     setHasNewActivity(false)
+    // Le « fil remonte » appartient a LA conversation qu'on quitte. Sans cette remise a l'etat de la
+    // conversation OUVERTE, le bouton « ↓ Dernier message » restait peint pendant le rendu du
+    // nouveau fil et ne partait qu'a la frame de descente : un CLIGNOTEMENT a chaque bascule
+    // (rapporte le 2026-09-01). Une reprise, elle, s'ouvre bien remontee : le bouton y est du.
+    setScrolledAwayFromTail(!!reprise)
     activeRef.current = c.id
     setActiveId(c.id)
     const branchMessages = detailed.messages ?? []
@@ -2877,9 +2904,54 @@ export function ChatView({
   }
   const signatureComposerMosaique = `${draftsVersion}|${versionMentionsRef.current}|${skillCommands.length}`
 
+  /**
+   * Ce que le RENDERER ne peut pas savoir : quelles conversations CONTIENNENT le terme.
+   *
+   * La liste laterale est une projection sans `messages` (`ConversationSummary`) -- chercher
+   * localement ne voyait donc que le titre, c'est-a-dire le debut du premier prompt. Le processus
+   * principal, lui, a tout le corpus en memoire : on lui demande la carte id -> extrait.
+   */
+  const [correspondancesContenu, setCorrespondancesContenu] = useState<Map<string, string>>(
+    () => new Map()
+  )
+  useEffect(() => {
+    const terme = convQuery.trim()
+    if (!terme) {
+      setCorrespondancesContenu(new Map())
+      return
+    }
+    // Le pont peut ne pas exposer ce canal (preload ancien, harnais de test) : la liste doit alors
+    // rester utilisable en recherche locale, pas jeter une exception depuis un timer.
+    const chercherContenu = window.api?.conversationsSearchContent
+    if (typeof chercherContenu !== 'function') return
+    let annule = false
+    // Anti-rebond : une frappe ne doit pas declencher un parcours du corpus par caractere.
+    const minuterie = setTimeout(() => {
+      void Promise.resolve()
+        .then(() => chercherContenu(terme))
+        .then((resultats) => {
+          if (annule) return
+          setCorrespondancesContenu(new Map(resultats.map((r) => [r.id, r.extrait])))
+        })
+        .catch(() => {
+          // Une recherche de contenu indisponible ne doit pas casser la liste : on retombe sur la
+          // recherche locale (titre / id), qui reste juste, seulement moins large.
+          if (!annule) setCorrespondancesContenu(new Map())
+        })
+    }, 160)
+    return () => {
+      annule = true
+      clearTimeout(minuterie)
+    }
+  }, [convQuery])
+
   const conversationHits = useMemo(
-    () => trierParRecenceUtilisateur(searchConversations(convs, convQuery), conversationDateOrder),
-    [convs, convQuery, conversationDateOrder]
+    () =>
+      trierParRecenceUtilisateur(
+        searchConversations(convs, convQuery, undefined, correspondancesContenu),
+        conversationDateOrder
+      ),
+    [convs, convQuery, conversationDateOrder, correspondancesContenu]
   )
 
   /**
@@ -2972,7 +3044,10 @@ export function ChatView({
   const [persistedRuns, setPersistedRuns] = useState<ScopedLiveRun<OrchStep>[]>([])
   useEffect(() => {
     // Chargement PARESSEUX : la trace n'est lue qu'a l'ouverture de la section (garde testee).
-    if (!isActive || !activeId || !showRuns || paneTab !== 'subagents') return
+    // Le fil n’est plus derrière un onglet : il s’ouvre depuis n’importe quel nœud du graphe.
+    // La garde reste PARESSEUSE sur l’ouverture du panneau, elle ne peut plus l’être sur un onglet
+    // disparu — sinon le fil ne se chargerait jamais.
+    if (!isActive || !activeId || !showRuns) return
     let alive = true
     void (async () => {
       try {
@@ -2999,7 +3074,7 @@ export function ChatView({
     return () => {
       alive = false
     }
-  }, [isActive, activeId, showRuns, paneTab, liveRuns, active])
+  }, [isActive, activeId, showRuns, liveRuns, active])
 
   const visibleLiveRuns = mergeLiveAndPersisted<OrchStep>(
     visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, 'conv'),
@@ -3263,9 +3338,13 @@ export function ChatView({
                             />
                           )}
                           <span className="conv-copy">
-                            <span className="conv-label">{c.title}</span>
+                            <span className="conv-label">
+                              {convQuery ? <TexteSurligne texte={c.title} terme={convQuery} /> : c.title}
+                            </span>
                             {convQuery && snippet && (
-                              <span className="conv-snippet">{snippet}</span>
+                              <span className="conv-snippet">
+                                <TexteSurligne texte={snippet} terme={convQuery} />
+                              </span>
                             )}
                             {!convQuery && (
                               <span className="conv-meta">
@@ -4158,14 +4237,13 @@ export function ChatView({
         <WorkflowsPanel
           runsPaneWidth={runsPaneWidth}
           beginRunsResize={beginRunsResize}
-          paneTab={paneTab}
-          setPaneTab={setPaneTab}
           refreshRuns={refreshRuns}
           setShowRuns={setShowRuns}
           activeId={activeId}
           send={send}
           isActive={isActive}
           requestLabel={[...messages].reverse().find((message) => message.role === 'user')?.content}
+          messages={messages}
           liveGraphActive={
             Boolean(activeId && busyConversations.has(activeId)) ||
             liveRuns[activeId ?? '']?.status === 'running'

@@ -33,7 +33,7 @@
  */
 import { spawn } from 'node:child_process'
 import { resolveClaudeBin } from './providers/claude'
-import { claudeAccountEnv } from './claude-accounts'
+import { withClaudeAccountEnv } from './claude-accounts'
 
 export type ClaudeSessionState = 'authenticated' | 'absent' | 'unknown'
 
@@ -154,7 +154,8 @@ export async function probeClaudeSession(
         shell: false,
         // Sonder SANS l'env du compte actif interrogerait une AUTRE identite que celle que
         // le run utilisera : le badge d'auth mentirait des qu'un second compte existe.
-        env: { ...process.env, ...claudeAccountEnv() }
+        // EXPLICITE : un CLAUDE_CONFIG_DIR herite ferait sonder un AUTRE compte que l’actif.
+        env: withClaudeAccountEnv(process.env)
       })
     } catch {
       finish('unknown')

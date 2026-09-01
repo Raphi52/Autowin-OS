@@ -858,7 +858,25 @@ export class RunWorktreeCoordinator {
       this.waitingForProcess.add(runId)
       this.emit()
       this.scheduleRecoveryRetry()
-      return undefined
+      /*
+       * ON NOMME L'ATTENTE — voir `FinalizeResult.deferred`.
+       *
+       * Rendre `undefined` ici disait la meme chose que « rien a publier » : l'orchestrateur en
+       * tirait un rouge « integration locale non terminee » SANS cause, alors que la reprise
+       * (`scheduleRecoveryRetry`, arme juste au-dessus) publie ensuite normalement. Mesure
+       * conv-1 (2,13 $, 16 fichiers verts) et deja vecu conv-1404 sur `edit_file`.
+       *
+       * APPLIQUE AUX DEUX JUMEAUX (`end` et `endAsync`), comme le reste de ce fichier.
+       */
+      return {
+        outcome: 'deferred',
+        agentId: runId,
+        files: tracked.files.map((file) => file.path),
+        reason: 'processes-still-running',
+        detail:
+          'des processus tournent encore dans la copie isolée ; la publication est reprise ' +
+          'automatiquement dès leur fin'
+      }
     }
     tracked.endedAtMs = this.now()
     tracked.files = this.changedFiles(runId)
@@ -981,7 +999,25 @@ export class RunWorktreeCoordinator {
       this.waitingForProcess.add(runId)
       this.emit()
       this.scheduleRecoveryRetry()
-      return undefined
+      /*
+       * ON NOMME L'ATTENTE — voir `FinalizeResult.deferred`.
+       *
+       * Rendre `undefined` ici disait la meme chose que « rien a publier » : l'orchestrateur en
+       * tirait un rouge « integration locale non terminee » SANS cause, alors que la reprise
+       * (`scheduleRecoveryRetry`, arme juste au-dessus) publie ensuite normalement. Mesure
+       * conv-1 (2,13 $, 16 fichiers verts) et deja vecu conv-1404 sur `edit_file`.
+       *
+       * APPLIQUE AUX DEUX JUMEAUX (`end` et `endAsync`), comme le reste de ce fichier.
+       */
+      return {
+        outcome: 'deferred',
+        agentId: runId,
+        files: tracked.files.map((file) => file.path),
+        reason: 'processes-still-running',
+        detail:
+          'des processus tournent encore dans la copie isolée ; la publication est reprise ' +
+          'automatiquement dès leur fin'
+      }
     }
     tracked.endedAtMs = this.now()
     try {

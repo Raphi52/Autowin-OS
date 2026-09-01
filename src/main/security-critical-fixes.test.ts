@@ -259,7 +259,21 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     tronque par Math.floor ; aucun chemin, aucune chaine ne vient du renderer. Il porte
     //     assertTrustedRendererSender(event, 'PerfGelRenderer') des sa PREMIERE ligne.
     //     L ecriture va au seul puits d observabilite existant, best-effort, jamais bloquante.
-    expect(handlers).toHaveLength(151)
+    // MISE A JOUR 2026-08-31 (2) — 151 -> 154. TROIS canaux ajoutes, relus AVANT de toucher le
+    //   compte : la reconnaissance vocale LOCALE de Jarvis (whisper.cpp), rendue necessaire parce
+    //   que `webkitSpeechRecognition` rend le code d erreur `network` sur cette application —
+    //   MESURE, capture datee du 2026-08-31 citee dans l en-tete de `whisper-local.ts` ; le micro
+    //   s ouvrait et rien n etait jamais reconnu. La CAUSE de ce code n est pas etablie ici.
+    //   os:whisper:etat — LECTURE SEULE de deux chemins fixes sous `userData` (le modele et la
+    //     CLI). Aucun argument ne vient du renderer.
+    //   os:whisper:installer — telechargement EXPLICITE, declenche par un clic, vers deux URL
+    //     CONSTANTES du module (`MODELE_WHISPER.url`, `BINAIRE_WHISPER.url`) : le renderer ne
+    //     fournit ni URL, ni chemin, ni nom de fichier. L installation est serialisee cote main.
+    //   os:whisper:transcrire — recoit des OCTETS (un WAV), jamais un chemin : le fichier est
+    //     ecrit par le main dans un dossier temporaire qu il cree et supprime lui-meme, et la
+    //     taille est plafonnee a 8 Mo. Aucune chaine du renderer n entre dans la ligne de commande.
+    //   Les trois portent `assertTrustedRendererSender` des leur PREMIERE ligne.
+    expect(handlers).toHaveLength(154)
     expect(unguarded).toEqual([])
   })
 

@@ -3,15 +3,30 @@ import type {
   HarnessTimelineEvent,
   HarnessTimelineTurn
 } from './harness-timeline-model'
+import { extractHumanMessage } from './human-message'
+
+/** Un tour atteignable depuis le graphe : de quoi peupler un sélecteur sans relire la trace. */
+export interface RequestTurnOption {
+  id: string
+  ts: string
+  label: string
+}
 
 export interface RequestExecutionProjection {
   turnId?: string
   runIds?: string[]
   events: HarnessTimelineEvent[]
+  /**
+   * Tours sélectionnables, du plus récent au plus ancien. Absent quand la projection ne dépend pas
+   * d'un tour (faits de run : le graphe montre alors déjà TOUS les runs de la conversation).
+   */
+  turns?: RequestTurnOption[]
 }
 
 interface ProjectionOptions {
   requestLabel?: string
+  /** Tour à projeter. Inconnu ou absent → le plus récent, jamais du vide. */
+  turnId?: string
 }
 
 const TECHNICAL_PROVIDER_KINDS = new Set<HarnessTimelineEvent['kind']>([
@@ -472,14 +487,44 @@ function projectRunExecutions(timeline: HarnessTimeline): RequestExecutionProjec
   }
 }
 
+/**
+ * Libellé d'un tour pour le sélecteur : la DEMANDE humaine, pas le contexte injecté.
+ *
+ * Le contenu d'un tour est composé (`ÉTAT DE L'APP:\n{json}\n\nUTILISATEUR: …`) : lu brut, chaque
+ * option porterait le même JSON illisible. On réutilise l'extracteur déjà éprouvé ailleurs.
+ */
+function turnOption(turn: HarnessTimelineTurn): RequestTurnOption {
+  const request = turn.events.find((event) => event.kind === 'message')
+  const brut = request?.content ?? ''
+  // Le contenu d'un message de trace est la CONCATÉNATION de charges quelconques : l'afficher tel
+  // quel ferait fuiter dans le sélecteur des contenus que le graphe s'interdit de montrer. Seul un
+  // marqueur `UTILISATEUR:` identifie sans ambiguïté une demande humaine ; sinon on DATE le tour.
+  const humain = /(^|\n)\s*UTILISATEUR\s*:/.test(brut) ? extractHumanMessage(brut, 80) : ''
+  return { id: turn.id, ts: turn.ts, label: humain || turnDateLabel(turn.ts) }
+}
+
+/** Repli honnête quand la demande n'est pas identifiable : la date du tour, jamais son contenu. */
+function turnDateLabel(ts: string): string {
+  const date = new Date(ts)
+  if (Number.isNaN(date.getTime())) return 'demande sans libellé'
+  return `demande du ${new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(date)}`
+}
+
 export function projectLatestRequestExecution(
   timeline: HarnessTimeline,
   options: ProjectionOptions = {}
 ): RequestExecutionProjection {
   const runProjection = projectRunExecutions(timeline)
   if (runProjection) return runProjection
-  const turn = timeline.turns[0]
-  if (!turn) return { events: [] }
+  // `timeline.turns` est déjà trié du plus récent au plus ancien par `buildHarnessTimelineFromTrace`.
+  const turns = timeline.turns.map(turnOption)
+  const turn =
+    (options.turnId ? timeline.turns.find((item) => item.id === options.turnId) : undefined) ??
+    timeline.turns[0]
+  if (!turn) return { events: [], turns }
 
   const root = requestRoot(turn, options.requestLabel)
   const sourceById = new Map(turn.events.map((event) => [event.id, event]))
@@ -525,7 +570,8 @@ export function projectLatestRequestExecution(
   const phaseId = new Map(phaseEvents.map((event) => [event.execution?.phase ?? '', event.id]))
 
   const projectedAgents = agentSources.map<HarnessTimelineEvent>((event) => {
-    const grouped = structural.length > 0 ? technicalDescendants(event, childrenByParent) : []
+    const absorbed = technicalDescendants(event, childrenByParent)
+    const grouped = structural.length > 0 ? absorbed : []
     const terminal = [...grouped]
       .reverse()
       .find((candidate) => candidate.kind === 'model-response' || candidate.kind === 'error')
@@ -536,7 +582,16 @@ export function projectLatestRequestExecution(
       model: terminal?.model ?? event.model,
       status: terminal?.status ?? event.status,
       durationMs: terminal?.durationMs ?? event.durationMs,
-      payloads: [],
+      // LA DÉLIBÉRATION DU SOUS-AGENT SURVIT À L'ABSORPTION.
+      //
+      // Le nœud agent absorbe ses événements techniques (message, injection, model-response) ;
+      // `payloads: []` jetait TOUT leur contenu — dont la charge `reasoning` écrite par
+      // `stepPayloads`. La descente « jusqu'à la pensée » se coupait donc exactement ici, alors
+      // que la donnée était présente. Seul `reasoning` remonte : les contenus d'outils et les
+      // réponses brutes restent hors du graphe, comme avant.
+      payloads: [...(event.payloads ?? []), ...absorbed.flatMap((c) => c.payloads ?? [])].filter(
+        (payload) => payload.kind === 'reasoning'
+      ),
       display: {
         kind: event.kind === 'gate' || rawActorKind === 'system' ? 'event' : 'agent',
         title: agentTitle(event),
@@ -630,5 +685,5 @@ export function projectLatestRequestExecution(
     if (b.id === root.id) return 1
     return (a.timestamp ?? '').localeCompare(b.timestamp ?? '')
   })
-  return { turnId: turn.id, events }
+  return { turnId: turn.id, events, turns }
 }

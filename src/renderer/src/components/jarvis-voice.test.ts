@@ -5,6 +5,7 @@ import {
   conversationsEnDirect,
   ecouteInitiale,
   evenementsDirects,
+  contientEveil,
   extraireCommandeEveil,
   reagirAParole,
   type SommaireDirect
@@ -123,6 +124,36 @@ describe('mot d’éveil', () => {
     expect(extraireCommandeEveil('Jarvis, ouvre le task manager')).toBe('ouvre le task manager')
     expect(extraireCommandeEveil('jarvis ouvre le task manager')).toBe('ouvre le task manager')
     expect(extraireCommandeEveil('Dis Jarvis : lance la routine')).toBe('lance la routine')
+  })
+
+  it('reconnaît son nom TEL QUE LES MOTEURS LE TRANSCRIVENT, pas seulement bien orthographié', () => {
+    // MESURE RÉELLE (2026-08-31) : whisper.cpp small-q5_1, phrase prononcée « Jarvis, ouvre le task
+    // manager », transcription rendue « jarvie, ouvre le task manager. ». Un mot d'éveil exigé au
+    // caractère près laisse donc Jarvis MUET alors qu'il a parfaitement entendu — c'est le défaut
+    // signalé (« il n'entend pas quand je dis son nom »), une couche plus loin.
+    expect(extraireCommandeEveil('jarvie, ouvre le task manager.')).toBe('ouvre le task manager.')
+    expect(contientEveil('jarvie, ouvre le task manager.')).toBe(true)
+    for (const variante of ['jarvis', 'jarvie', 'jarvi', 'jarviss', 'jarvice', 'Jarvys']) {
+      expect(contientEveil(`${variante} ouvre le chat`)).toBe(true)
+    }
+  })
+
+  it('reconnaît son nom même quand whisper y colle une apostrophe', () => {
+    // MESURE 2026-08-31 : la même phrase, seul le niveau d'entrée change. À niveau normal la CLI
+    // rend « Jarvie, ouvre le gestionnaire de tâche. » ; à −18 dB elle rend « J'arvie, ouvre le
+    // jeu. ». `\bjarv` exigeait `jarv` d'un bloc : la frontière de mot tombant après l'apostrophe,
+    // le nom était ENTENDU et l'éveil ne partait pas.
+    expect(contientEveil("j'arvie, ouvre le jeu.")).toBe(true)
+    expect(contientEveil('j’arvis ouvre le chat')).toBe(true)
+    expect(extraireCommandeEveil("J'arvie, ouvre le chat")).toBe('ouvre le chat')
+  })
+
+  it('ne prend PAS n’importe quel mot pour son nom', () => {
+    // L'ENTRÉE QUI CASSE UN FAUX FIX : élargir le mot d'éveil jusqu'à l'absurde ferait partir un run
+    // sur une conversation ordinaire. Ces mots-là ne réveillent rien.
+    for (const mot of ['java', 'jardin', 'service', 'j’arrive', 'harvest', 'jars']) {
+      expect(contientEveil(`${mot} ouvre le chat`)).toBe(false)
+    }
   })
 
   it('ne retient pas un éveil sans ordre', () => {

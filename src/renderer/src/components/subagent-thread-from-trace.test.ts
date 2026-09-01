@@ -196,3 +196,56 @@ describe('fusion direct + persisté', () => {
     expect(merged).toHaveLength(2)
   })
 })
+
+/**
+ * LA PENSÉE DU SOUS-AGENT EST UNE CHARGE À PART, PAS UN PRÉAMBULE DE LA CONCLUSION.
+ *
+ * `stepPayloads` (main/activity) écrit DEUX charges distinctes : la conclusion (`model-response`)
+ * et la délibération (`reasoning`). Le fil relu, lui, lisait `event.content` — c'est-à-dire la
+ * CONCATÉNATION des deux (`harness-timeline-model.ts:194`). Résultat : un raisonnement exploratoire,
+ * avec ses hypothèses abandonnées, se lisait comme la réponse effectivement remise.
+ */
+describe('délibération et conclusion, séparées dans le fil relu', () => {
+  it('range le payload reasoning dans thinking et laisse text à la seule conclusion', () => {
+    const runs = scopedRunsFromTimeline(
+      timeline([
+        turn('turn-1', [
+          event({ id: 'm', kind: 'message', content: 'répare le gate' }),
+          event({
+            id: 'a',
+            kind: 'model-response',
+            provider: 'codex',
+            content: 'j’hésite entre A et B\n\nconclusion : B',
+            payloads: [
+              { kind: 'model-response', content: 'conclusion : B' },
+              { kind: 'reasoning', content: 'j’hésite entre A et B' }
+            ]
+          }),
+          event({ id: 'g', kind: 'gate' })
+        ])
+      ]),
+      'conv-1'
+    )
+
+    const step = runs[0].steps[0]
+    expect(step.thinking).toBe('j’hésite entre A et B')
+    expect(step.text).toBe('conclusion : B')
+    expect(step.text).not.toContain('j’hésite')
+  })
+
+  it('sans payload reasoning, le texte reste exactement le contenu de l’événement', () => {
+    const runs = scopedRunsFromTimeline(
+      timeline([
+        turn('turn-1', [
+          event({ id: 'm', kind: 'message', content: 'répare le gate' }),
+          event({ id: 'a', kind: 'model-response', content: 'réponse simple' }),
+          event({ id: 'g', kind: 'gate' })
+        ])
+      ]),
+      'conv-1'
+    )
+
+    expect(runs[0].steps[0].text).toBe('réponse simple')
+    expect(runs[0].steps[0].thinking).toBeUndefined()
+  })
+})

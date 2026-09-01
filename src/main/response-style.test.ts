@@ -100,3 +100,35 @@ describe('agir plutot que recommander — la cloture ne sert pas a rendre le tra
     expect(consigne).toMatch(/tu prendrais de toute fa/iu)
   })
 })
+
+/**
+ * RELANCE SANS CIBLE.
+ *
+ * Defaut mesure le 2026-08-31 (conv-5). Le tour precedent s'etait clos sur « 👉 Recommandé :
+ * corriger l'include de tsconfig.node.json ». L'utilisateur a repondu « go ». L'agent a lu ce
+ * « go » comme une demande VIDE — « go sans cible » — et a substitue sa propre idee du plus utile
+ * (lancer la suite de tests complete) au lieu d'executer la recommandation qu'il venait lui-meme
+ * d'ecrire. Le profil imposait la rubrique et son prompt prerempli, mais ne disait NULLE PART ce
+ * qu'un simple accord doit declencher : la boucle « je recommande / tu acceptes » n'etait pas
+ * fermee. Un accord est un ORDRE, et son objet est la derniere recommandation.
+ *
+ * Ces assertions portent sur le livrable lui-meme (le texte de consigne) : elles prouvent que la
+ * regle est ECRITE et injectee, jamais que le modele y obeit.
+ */
+describe('relance sans cible — un accord execute la derniere recommandation', () => {
+  const consigne = CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
+
+  it('nomme les formes courtes d accord qui declenchent la regle', () => {
+    expect(consigne).toMatch(/«\s*go\s*»/iu)
+    expect(consigne).toMatch(/vas-y|continue|ok/iu)
+  })
+
+  it('ordonne d executer la rubrique Recommandé plutot que d inventer une action', () => {
+    expect(consigne).toMatch(/RELANCE SANS CIBLE/u)
+    expect(consigne).toMatch(/n['’]invente|ne substitue|sans inventer/iu)
+  })
+
+  it('traite le cas ou la derniere recommandation est « rien » : demander une cible', () => {
+    expect(consigne).toMatch(/derni[èe]re recommandation est «\s*rien\s*»/iu)
+  })
+})
