@@ -173,6 +173,14 @@ export function buildChatPilotagePrompt(
     `est REFUSE et perdu. Dis l'echec et sa cause, fais toi-meme ce qui reste faisable avec ` +
     `\`edit_file\` et \`verify\`, et laisse la relance du run a l'utilisateur (mets-la en ` +
     `« Recommande »).\n` +
+    // PÉRIMÈTRE DE LECTURE (mesure 2026-08-10, conv-1). Le même réglage a produit deux comportements
+    // opposés : le 07/08, refus d'analyser un ticket au motif que « le dépôt RIG n'est pas accessible
+    // depuis cette session (workspace limité à E:\GIT\Autowin-OS) » ; le 10/08, lecture SANS difficulté
+    // de D:\GIT\RigApplication\greffe_map.txt (26 lignes + 1re ligne exacte). L'argv journalisé des deux
+    // tours est IDENTIQUE (`--add-dir E:\GIT\Autowin-OS`, aucun autre dossier) : il n'y avait donc aucun
+    // blocage, seulement une auto-limitation. Le réflexe 10 de la constitution (clôture NÉGATIVE) ne
+    // suffisait pas — il est générique ; cette ligne nomme le cas.
+    `PÉRIMÈTRE DE LECTURE — tu peux LIRE un chemin ABSOLU hors du workspace (Read/Grep/Glob), y compris sur un autre disque. Ne déclare JAMAIS un dépôt ou un fichier « non accessible depuis cette session » sans avoir TENTÉ la lecture. Si elle échoue réellement, cite l'erreur exacte au lieu de conclure à l'inaccessibilité — et n'annonce jamais « reste à confirmer sur le code » avant d'avoir essayé de lire ce code.\n` +
     `Commandes disponibles :\n` +
     catalog.map((c) => `- ${signatureDeCommande(c)} : ${c.description}`).join('\n') +
     // LIRE N'EST PAS AGIR — distinction ajoutée le 2026-08-15 sur mesure. La règle disait « n'utilise

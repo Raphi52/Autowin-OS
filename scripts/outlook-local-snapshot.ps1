@@ -35,7 +35,21 @@ function Write-Snapshot($objet) {
 }
 
 try {
-  $outlook = New-Object -ComObject Outlook.Application
+  # Liage TARDIF, et NON `New-Object -ComObject`. Mesure de ce poste le 2026-08-31 : l'assembly interop
+  # Office est installee mais l'INTERFACE `_Application` ({00063001-0000-0000-C000-000000000046}) n'est
+  # PAS enregistree. `New-Object -ComObject` reussit, puis le PREMIER acces membre echoue en
+  # "Interface non enregistree (HRESULT 0x80040155)" -- alors que COM et Outlook vont parfaitement bien
+  # (Outlook tournait, la classe est enregistree, le typelib 9.6 est present). L'erreur atteignait donc
+  # l'ecran d'accueil sous la forme d'un cast .NET, sur les DEUX tuiles.
+  #
+  # Contre-intuitif et verifie : `[Activator]::CreateInstance` rend le MEME type
+  # (`Microsoft.Office.Interop.Outlook.ApplicationClass`) -- ce n'est pas le type qui change, c'est la
+  # facon dont PowerShell lie l'appel, qui ne passe plus par le cast vers `_Application`. Tout l'aval de
+  # ce script reste donc inchange, en notation pointee : mesure sur ce poste, 21986 messages et 110
+  # rendez-vous lus. Ne pas "simplifier" ces trois lignes en `New-Object` : ce serait la panne de retour.
+  $typeOutlook = [Type]::GetTypeFromProgID('Outlook.Application')
+  if ($null -eq $typeOutlook) { throw "Outlook n'est pas installe sur ce poste." }
+  $outlook = [Activator]::CreateInstance($typeOutlook)
   $session = $outlook.GetNamespace('MAPI')
 
   # --- messages
