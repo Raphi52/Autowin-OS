@@ -1707,7 +1707,20 @@ export function ChatView({
     // pas une conversation vidée.
     const relu =
       duStore.length === 0 && filDeRepli && filDeRepli.length > 0 ? [...filDeRepli] : duStore
-    const stored = liveMessagesRef.current.get(c.id) ?? relu
+    /*
+     * UN CACHE VIDE EST UNE ABSENCE, PAS UN FIL.
+     *
+     * Vecu le 2026-09-01 (conv-82) : « les messages de conv-82 ont disparu » — la conversation
+     * existait, la barre laterale comptait ses 5 messages, le disque les rendait tous, l'ecran
+     * n'affichait RIEN. Une conversation ouverte alors qu'elle etait encore VIDE (elle vient d'etre
+     * creee) laisse un tableau vide dans le cache d'affichage ; l'agent la remplit ensuite cote
+     * processus principal, sans passer par ce cache. A la reouverture, `?? relu` ne se declenchait
+     * pas — un tableau vide n'est pas `undefined` — et ce vide gagnait sur un store PLEIN.
+     *
+     * Meme regle que juste au-dessus pour le store : le fil ne RETRECIT pas a zero.
+     */
+    const cacheAffiche = liveMessagesRef.current.get(c.id)
+    const stored = cacheAffiche && cacheAffiche.length > 0 ? cacheAffiche : relu
     liveMessagesRef.current.set(c.id, stored)
     setMessages(stored)
     switchComposerDraft(c.id)
