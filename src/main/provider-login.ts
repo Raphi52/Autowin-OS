@@ -39,7 +39,13 @@ export function planProviderLogin(provider: string, bin?: string, configDir?: st
       // stocker qu'une session par dossier de configuration.
       // Syntaxe PowerShell (le terminal est lance via `powershell -ExecutionPolicy Bypass`), et le
       // dossier est fixe AVANT l'appel pour que le CLI le voie des son demarrage.
-      const prefix = configDir ? `$env:CLAUDE_CONFIG_DIR = "${configDir}"; ` : ''
+      // Sans dossier vise (bouton « Se reconnecter » du compte par defaut), on RETIRE la
+      // variable au lieu de ne rien faire : si le terminal en herite une (app lancee depuis un
+      // shell ou elle traine), le login authentifierait le dossier d’un AUTRE compte — c’est
+      // exactement le « ca m’a remplace mon compte » du 2026-09-01.
+      const prefix = configDir
+        ? `$env:CLAUDE_CONFIG_DIR = "${configDir}"; `
+        : 'Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue; '
       return {
         kind: 'terminal',
         command: prefix + (bin ? `& "${bin}" auth login` : 'claude auth login')

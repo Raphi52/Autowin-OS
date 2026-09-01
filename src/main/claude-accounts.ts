@@ -126,13 +126,22 @@ export function describeAccounts(
     return counts
   }
   const byName = countBy((entry) => entry.name)
+  // L’organisation ne tranche que si elle DISTINGUE : deux comptes de meme email, meme
+  // niveau ET meme organisation (cas reel du 2026-09-01, deux fois
+  // « raphael.vilain@amitel.fr (Amitel) TEAM ») produisaient deux puces jumelles.
+  const byNameTierOrg = countBy(
+    (entry) => `${entry.name}\u0000${entry.tier}\u0000${entry.account.orgName?.trim() ?? ''}`
+  )
   const byNameTier = countBy((entry) => `${entry.name}\u0000${entry.tier}`)
 
   return named.map(({ account, name, tier }) => {
     let suffix = ''
     // Même nom ET même niveau : il faut aller plus loin, sinon les deux puces sont jumelles.
     if ((byNameTier.get(`${name}\u0000${tier}`) ?? 0) > 1) {
-      suffix = account.orgName?.trim() ? ` (${account.orgName.trim()})` : ` (${account.id})`
+      const org = account.orgName?.trim() ?? ''
+      const orgDistingue =
+        !!org && (byNameTierOrg.get(`${name}\u0000${tier}\u0000${org}`) ?? 0) === 1
+      suffix = orgDistingue ? ` (${org})` : ` (${account.id})`
     } else if ((byName.get(name) ?? 0) > 1 && !tier) {
       // Noms identiques et aucun niveau connu (compte pas encore sondé) : l'id tranche.
       suffix = ` (${account.id})`
@@ -244,6 +253,28 @@ export function claudeRotateAccount(walledAccountId: string): string | undefined
   } catch {
     return undefined // une rotation impossible doit laisser l'echec d'origine parler
   }
+}
+
+/**
+ * Env d'un processus fils Claude, EXPLICITE : `CLAUDE_CONFIG_DIR` y est POSE (compte dedie) ou
+ * RETIRE (compte par defaut), jamais laisse a ce que le processus parent trainait.
+ *
+ * Vecu le 2026-09-01 : l'app lancee depuis un terminal ou `CLAUDE_CONFIG_DIR` etait deja defini
+ * sondait le compte « par defaut » DANS le dossier d’un autre compte. Resultat lu a l’ecran :
+ * deux puces portant la meme identite, et l'impression que le compte d'origine avait ete
+ * « remplace ». `{ ...process.env, ...accountEnv(account) }` ne suffit donc pas : pour le compte
+ * par defaut `accountEnv` rend `{}`, c'est-a-dire « n'ecrase rien », donc « herite ».
+ */
+export function withClaudeAccountEnv(
+  base: Record<string, string | undefined>,
+  accountEnvironment: Record<string, string> = claudeAccountEnv()
+): Record<string, string | undefined> {
+  const env = { ...base }
+  delete env.CLAUDE_CONFIG_DIR
+  if (accountEnvironment.CLAUDE_CONFIG_DIR) {
+    env.CLAUDE_CONFIG_DIR = accountEnvironment.CLAUDE_CONFIG_DIR
+  }
+  return env
 }
 
 export function claudeAccountEnv(): Record<string, string> {

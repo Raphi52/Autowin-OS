@@ -23,6 +23,7 @@ import { dirname, isAbsolute, join, parse } from 'node:path'
 import { ensureBrainServerStarted } from './brain-server-launch'
 import { resolveBinOnPath } from './preflight-probes'
 import { resolveClaudeBin } from './providers/claude'
+import { claudeAccountEnv } from './claude-accounts'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 
 /** Nom du package du dépôt Autowin OS : l'IDENTITÉ exigée d'un candidat, pas juste un script. */
@@ -200,7 +201,14 @@ export async function repairPreflightCheck(
       }
       // Source unique de la commande de login (provider-login.ts) : pas de littéral dupliqué ici,
       // qui divergerait le jour où le CLI renomme sa sous-commande.
-      const loginPlan = planProviderLogin('claude', designated ? bin : undefined)
+      // Le dossier du compte ACTIF est passe explicitement : sans lui, reparer la session
+      // authentifiait toujours le dossier par defaut — et pouvait ecraser la session du compte
+      // que l'utilisateur venait d'ajouter (incident 2026-09-01).
+      const loginPlan = planProviderLogin(
+        'claude',
+        designated ? bin : undefined,
+        claudeAccountEnv().CLAUDE_CONFIG_DIR
+      )
       if (loginPlan.kind !== 'terminal') {
         return { started: false, detail: 'Le login claude ne passe pas par une console.' }
       }

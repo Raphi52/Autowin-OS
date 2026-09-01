@@ -236,7 +236,7 @@ describe('la commande est reconnue quelle que soit sa forme d’appel', () => {
     'sudo git stash push -u',
     'env FOO=1 git stash push -u',
     'pwsh -c "git stash push -u"',
-    'bash -c \'git stash push -u\'',
+    "bash -c 'git stash push -u'",
     'git -C "C:/Amitel/Autowin OS" stash push -u -m wip'
   ])('« %s » reste une mutation', (command) => {
     expect(claudeToolEvidenceKind('Bash', command)).toBe('mutation')
@@ -328,8 +328,13 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
     // commence par une parenthèse et échappe à toute regex d'identifiant — une version
     // intermédiaire de ce garde l'a appris en laissant passer, au vert, la régression même
     // qu'il existe pour attraper.
-    const firstSpread = /\.\.\.\s*\(?\s*([A-Za-z_$][\w$.]*)/.exec(envBlock)
-    expect(firstSpread?.[1]).toBe('process.env')
+    // La base reste `process.env` — eventuellement NORMALISEE par `withClaudeAccountEnv`, qui
+    // pose ou RETIRE le seul CLAUDE_CONFIG_DIR (multi-comptes) et ne touche a rien d'autre.
+    // Ce n'est pas un desserrage : tout autre point de depart que l'env herite reste refuse.
+    const base = /env: \{\s*\.\.\.\s*(process\.env|withClaudeAccountEnv\(process\.env\))/.exec(
+      envBlock
+    )
+    expect(base?.[1]).toBeDefined()
     expect(envBlock).toMatch(/\.\.\.\s*NON_INTERACTIVE_ENV\s*,?\s*\}$/)
   })
 })
