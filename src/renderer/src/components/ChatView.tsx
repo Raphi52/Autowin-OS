@@ -508,7 +508,15 @@ export function ChatView({
       ? 'mosaic'
       : 'list'
   )
+  /**
+   * Le mode d'affichage lu depuis un ECOUTEUR monte une seule fois (`prefill`, deps []) : sans cette
+   * ref, il verrait eternellement le mode du premier rendu et un message pre-ecrit atterrirait dans
+   * le chat unique... qui n'est pas affiche en mosaique (bug mesure le 01/09, conv-44 : « Faire
+   * reparer » semblait mort).
+   */
+  const convViewModeRef = useRef(convViewMode)
   useEffect(() => {
+    convViewModeRef.current = convViewMode
     window.localStorage.setItem('autowin.chat.conversationsViewMode', convViewMode)
   }, [convViewMode])
   const [conversationsPaneWidth, setConversationsPaneWidth] = useState(() => {
@@ -1747,6 +1755,41 @@ export function ChatView({
       // « En générer plus » atterrissait sur l'ancienne conversation).
       if (!detail?.prompt && !detail?.conversationId) return
       const id = detail.conversationId
+      /**
+       * MOSAIQUE. Le chat unique n'est pas rendu du tout dans ce mode : remplir son champ
+       * n'affichait RIEN, et « Faire reparer » (comme « Prompter dans Autowin » ou « Preparer le
+       * prompt » des tickets) paraissait mort alors que la conversation etait bien creee. On ouvre
+       * donc une fenetre DE PLUS — la mosaique reste en place —, on y depose le brouillon (deja
+       * indexe par conversation) et on impose la valeur au composer de cette fenetre des qu'il est
+       * monte. Choix utilisateur du 2026-09-01 (conv-44) contre la sortie de mosaique.
+       */
+      if (id && convViewModeRef.current === 'mosaic') {
+        const prompt = detail.prompt
+        void (async () => {
+          if (!convsRef.current.some((conversation) => conversation.id === id)) await refreshConvs()
+          await ouvrirDansMosaique(id)
+          if (!prompt) return
+          setDraftInput(id, prompt)
+          if (detail.send) {
+            void send(prompt, { targetConversationId: id })
+            return
+          }
+          // La fenetre vient d'etre ajoutee : son composer peut n'etre pas encore monte au premier
+          // repaint. On retente quelques images avant d'abandonner, plutot qu'un delai devine.
+          let restantes = 5
+          const poser = (): void => {
+            const composer = composersMosaiqueRef.current.get(id)
+            if (composer) {
+              composer.setInput(prompt)
+              composer.focus()
+              return
+            }
+            if (--restantes > 0) requestAnimationFrame(poser)
+          }
+          requestAnimationFrame(poser)
+        })()
+        return
+      }
       if (id) {
         const target = convsRef.current.find((conversation) => conversation.id === id)
         if (target) void loadConv(target)

@@ -2049,6 +2049,46 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(conversationsCreate).not.toHaveBeenCalled()
   })
 
+  /**
+   * MOSAIQUE + message pre-ecrit. « Faire reparer » (bandeau de mise a jour), « Prompter dans
+   * Autowin » (veille) et « Preparer le prompt » (tickets) passent TOUS par cet evenement. En
+   * mosaique, le chat unique n'est pas rendu : remplir son champ n'affichait rien du tout, et les
+   * boutons paraissaient morts (mesure le 2026-09-01, conv-44). La fenetre doit s'OUVRIR, avec le
+   * message dedans, sans faire sortir l'utilisateur de sa mosaique.
+   */
+  it('ouvre une fenetre de mosaique portant le message pre-ecrit, sans quitter la mosaique', async () => {
+    window.localStorage.setItem('autowin.chat.conversationsViewMode', 'mosaic')
+    window.localStorage.setItem('autowin.chat.mosaicOpenIds', JSON.stringify(['A']))
+    try {
+      const mockApi = api({
+        conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
+        conversation: vi.fn(async (id: string) => conversation(id))
+      })
+      await mount(mockApi)
+
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent('autowin:prefill-conversation', {
+            detail: { conversationId: 'B', prompt: 'Repare la mise a jour', send: false }
+          })
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await act(async () => flushAnimationFrames())
+
+      // On est TOUJOURS en mosaique, et elle porte maintenant les deux fenetres.
+      const fenetres = [...container!.querySelectorAll('.chat-mosaic-window')]
+      expect(fenetres).toHaveLength(2)
+      const champs = [...container!.querySelectorAll('.chat-mosaic-window textarea')].map(
+        (champ) => (champ as HTMLTextAreaElement).value
+      )
+      expect(champs).toContain('Repare la mise a jour')
+    } finally {
+      window.localStorage.clear()
+    }
+  })
+
   it('does not steal conversation B when routing from A resolves late', async () => {
     const routing = deferred<{
       sourceConversationId: string
