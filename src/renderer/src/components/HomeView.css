@@ -861,3 +861,70 @@
   color: var(--text-dim);
   font-size: 10.5px;
 }
+
+/* LA JAUGE D'ENTRÉE — voir qu'on ne parle pas dans le vide. La barre est haute et large exprès :
+   une jauge de 2 px ne répond pas à la question qu'elle prétend répondre. */
+.jarvis__jauge-ligne {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.jarvis__jauge {
+  position: relative;
+  flex: 1;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.jarvis__jauge-remplissage {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #2ecc71, #f1c40f);
+  transition: width 60ms linear;
+}
+.jarvis__jauge[data-verdict='silence'] .jarvis__jauge-remplissage {
+  background: #7f8c8d;
+}
+.jarvis__jauge[data-verdict='sature'] .jarvis__jauge-remplissage {
+  background: #e74c3c;
+}
+/* Le repère du seuil : sous lui, RIEN n'est transcrit — c'est l'information qui manquait. */
+.jarvis__jauge-seuil {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.7);
+}
+.jarvis__reglages-bouton {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+.jarvis__reglages {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+.jarvis__reglage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.jarvis__reglage select,
+.jarvis__reglage input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}

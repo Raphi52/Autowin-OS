@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { jouerBipEveil } from './jarvis-bip'
+import { MESSAGE_VERDICT, fractionJauge, verdictMicro } from './jarvis-audio'
+import { SEUIL_PAROLE } from './whisper-audio'
 import {
   dependancesNavigateur,
   fabriqueWhisper,
@@ -79,6 +81,8 @@ const apiJarvis = (): ApiJarvis | undefined => (window as unknown as { api?: Api
 /** Le direct se relit souvent : c'est ce qui le rend « direct ». Assez lent pour rester gratuit. */
 const SONDAGE_MS = 4_000
 const MAX_EVENEMENTS = 12
+/** Fenêtre de crête de la jauge : juger sur l'instant ferait clignoter « silence » entre deux syllabes. */
+const FENETRE_CRETE_MS = 1_500
 
 export function JarvisWidget({
   onNavigate
@@ -91,11 +95,53 @@ export function JarvisWidget({
   const [erreur, setErreur] = useState<string | null>(null)
   const [envoi, setEnvoi] = useState<string | null>(null)
   const [whisper, setWhisper] = useState<EtatWhisper | null>(null)
+  const [reglages, setReglages] = useState(false)
+  const [micros, setMicros] = useState<{ id: string; nom: string }[]>([])
+  const [micro, setMicro] = useState('')
+  const [seuil, setSeuil] = useState(SEUIL_PAROLE)
+  const [niveauAudio, setNiveauAudio] = useState(0)
+  const [crete, setCrete] = useState(0)
+  const creteRef = useRef<{ valeur: number; le: number }>({ valeur: 0, le: 0 })
+  const seuilRef = useRef(SEUIL_PAROLE)
+  const microRef = useRef('')
   const moteurRef = useRef<MoteurVocal | null>(null)
   const whisperRef = useRef<EtatWhisper | null>(null)
   const actifRef = useRef(false)
   const conversationRef = useRef<string | null>(null)
   const precedentRef = useRef<SommaireDirect[]>([])
+
+  /**
+   * LA JAUGE — ce qui répond à « est-ce que je parle dans le vide ? ». Le moteur remonte chaque bloc
+   * de micro ; on garde la CRÊTE récente, parce qu'une voix passe par zéro entre deux syllabes.
+   */
+  const auNiveau = useCallback((mesure: { niveau: number }) => {
+    const maintenant = Date.now()
+    setNiveauAudio(mesure.niveau)
+    const precedent = creteRef.current
+    const expiree = maintenant - precedent.le > FENETRE_CRETE_MS
+    const valeur = expiree || mesure.niveau >= precedent.valeur ? mesure.niveau : precedent.valeur
+    creteRef.current = {
+      valeur,
+      le: expiree || mesure.niveau >= precedent.valeur ? maintenant : precedent.le
+    }
+    setCrete(valeur)
+  }, [])
+
+  /** La liste des micros. Les libellés n'existent qu'après autorisation : d'où le repli « Micro n ». */
+  const listerMicros = useCallback(async () => {
+    const media = navigator.mediaDevices as MediaDevices | undefined
+    if (!media?.enumerateDevices) return
+    try {
+      const tous = await media.enumerateDevices()
+      setMicros(
+        tous
+          .filter((d) => d.kind === 'audioinput')
+          .map((d, i) => ({ id: d.deviceId, nom: d.label || `Micro ${i + 1}` }))
+      )
+    } catch {
+      // Une énumération refusée laisse simplement le micro système par défaut : ce n'est pas une panne.
+    }
+  }, [])
 
   /** Envoie un ordre a Jarvis, dans SA conversation — creee au premier ordre, pas au montage. */
   const envoyer = useCallback(async (texte: string) => {
@@ -157,8 +203,12 @@ export function JarvisWidget({
       if (!suivant.active) {
         moteurRef.current?.stop()
         moteurRef.current = null
+        setNiveauAudio(0)
+        setCrete(0)
+        creteRef.current = { valeur: 0, le: 0 }
         return suivant
       }
+      void listerMicros()
       const Fabrique = fabriqueMoteur(whisperRef.current?.installe === true)
       if (!Fabrique) {
         actifRef.current = false
@@ -172,6 +222,10 @@ export function JarvisWidget({
       moteur.interimResults = true
       moteur.lang = 'fr-FR'
       moteur.onresult = auResultat
+      // OPTIONNELS : Web Speech ignore ces champs, la jauge reste alors à zéro sans rien casser.
+      moteur.onniveau = auNiveau
+      moteur.seuilParole = seuilRef.current
+      ;(moteur as { peripherique?: string }).peripherique = microRef.current || undefined
       moteur.onerror = (evenement) => {
         const code = String((evenement as { error?: unknown } | null)?.error ?? 'inconnue')
         // `no-speech` / `aborted` = fonctionnement normal d'un micro qui attend : `onend` relance.
@@ -191,7 +245,23 @@ export function JarvisWidget({
       moteur.start()
       return suivant
     })
-  }, [auResultat])
+  }, [auResultat, auNiveau, listerMicros])
+
+  // Les réglages s'appliquent au moteur DÉJÀ en cours : sinon il faudrait couper puis relancer.
+  useEffect(() => {
+    seuilRef.current = seuil
+    if (moteurRef.current) moteurRef.current.seuilParole = seuil
+  }, [seuil])
+
+  /** Changer de micro exige de rouvrir le flux : le périphérique est choisi à `getUserMedia`. */
+  useEffect(() => {
+    microRef.current = micro
+    const moteur = moteurRef.current as (MoteurVocal & { peripherique?: string }) | null
+    if (!moteur || !actifRef.current) return
+    moteur.peripherique = micro || undefined
+    moteur.stop()
+    moteur.start()
+  }, [micro])
 
   /** L'etat REEL de whisper, relu au montage : ni cache, ni supposition. */
   const relireWhisper = useCallback(async (): Promise<EtatWhisper | null> => {
@@ -310,6 +380,79 @@ export function JarvisWidget({
               : 'Dites « Jarvis » : un bip vous répondra'}
         </span>
       </div>
+
+      <div className="jarvis__jauge-ligne">
+        <div
+          className="jarvis__jauge"
+          data-testid="jarvis-jauge"
+          data-verdict={verdictMicro(ecoute.active, crete, seuil)}
+          role="meter"
+          aria-label="Niveau du micro"
+          aria-valuenow={Math.round(fractionJauge(niveauAudio) * 100)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <span
+            className="jarvis__jauge-remplissage"
+            style={{ width: `${Math.round(fractionJauge(niveauAudio) * 100)}%` }}
+          />
+          <span
+            className="jarvis__jauge-seuil"
+            style={{ left: `${Math.round(fractionJauge(seuil) * 100)}%` }}
+          />
+        </div>
+        <button
+          type="button"
+          className="jarvis__reglages-bouton"
+          data-testid="jarvis-reglages-bascule"
+          aria-expanded={reglages}
+          onClick={() => {
+            setReglages((v) => !v)
+            void listerMicros()
+          }}
+        >
+          ⚙ Audio
+        </button>
+      </div>
+      <p className="jarvis__aide" data-testid="jarvis-verdict">
+        {MESSAGE_VERDICT[verdictMicro(ecoute.active, crete, seuil)]}
+      </p>
+
+      {reglages ? (
+        <div className="jarvis__reglages" data-testid="jarvis-reglages">
+          <label className="jarvis__reglage">
+            <span>Micro</span>
+            <select
+              data-testid="jarvis-micro"
+              value={micro}
+              onChange={(e) => setMicro(e.target.value)}
+            >
+              <option value="">Micro système par défaut</option>
+              {micros.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nom}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="jarvis__reglage">
+            <span>Sensibilité</span>
+            <input
+              type="range"
+              data-testid="jarvis-seuil"
+              min={0.002}
+              max={0.08}
+              step={0.002}
+              value={seuil}
+              onChange={(e) => setSeuil(Number(e.target.value))}
+            />
+            <span className="jarvis__aide">seuil {seuil.toFixed(3)}</span>
+          </label>
+          <span className="jarvis__aide">
+            Barre pleine = son reçu. Le repère marque le seuil : sous lui, rien n’est transcrit.
+          </span>
+        </div>
+      ) : null}
 
       {erreur ? <p className="home-error">{erreur}</p> : null}
 

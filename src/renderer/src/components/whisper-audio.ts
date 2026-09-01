@@ -144,7 +144,11 @@ export const etatVadInitial: EtatVad = {
   echantillonsSilence: 0
 }
 
-function niveau(bloc: Float32Array): number {
+/**
+ * Le NIVEAU efficace (RMS) d'un bloc. Exporté parce que la même mesure sert à deux choses : décider
+ * s'il y a parole (VAD), et MONTRER à l'utilisateur qu'il ne parle pas dans le vide.
+ */
+export function niveau(bloc: Float32Array): number {
   if (bloc.length === 0) return 0
   let somme = 0
   for (let i = 0; i < bloc.length; i += 1) somme += bloc[i] * bloc[i]

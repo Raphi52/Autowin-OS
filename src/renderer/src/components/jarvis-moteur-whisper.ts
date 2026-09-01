@@ -19,7 +19,9 @@
  *    résultat arrivé après l'arrêt ferait agir Jarvis micro éteint.
  */
 import {
+  SEUIL_PAROLE,
   TAUX_WHISPER,
+  niveau,
   avancerVad,
   coller,
   encoderWav16k,
@@ -35,6 +37,13 @@ export interface MoteurVocal {
   onresult: ((e: unknown) => void) | null
   onend: (() => void) | null
   onerror: ((e: unknown) => void) | null
+  /**
+   * OPTIONNEL — le niveau d'entrée en continu, pour la jauge du widget. Web Speech ne le fournit
+   * pas : le widget doit donc traiter son absence comme normale, jamais comme une panne.
+   */
+  onniveau?: ((mesure: { niveau: number; parle: boolean }) => void) | null
+  /** OPTIONNEL — seuil de parole réglable (sensibilité du micro). Défaut : `SEUIL_PAROLE`. */
+  seuilParole?: number
   start(): void
   stop(): void
   abort?(): void
@@ -65,7 +74,8 @@ interface ContexteAudio {
 }
 
 export interface DependancesWhisper {
-  micro: () => Promise<FluxAudio>
+  /** `peripherique` est OPTIONNEL : sans lui, le micro système par défaut est ouvert. */
+  micro: (peripherique?: string) => Promise<FluxAudio>
   contexte: () => ContexteAudio
   transcrire: (wav: Uint8Array) => Promise<string>
 }
@@ -111,6 +121,10 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
     onresult: ((e: unknown) => void) | null = null
     onend: (() => void) | null = null
     onerror: ((e: unknown) => void) | null = null
+    onniveau: ((mesure: { niveau: number; parle: boolean }) => void) | null = null
+    seuilParole: number = SEUIL_PAROLE
+    /** Le micro choisi dans les paramètres audio ; vide = périphérique système par défaut. */
+    peripherique: string | undefined = undefined
 
     private actif = false
     private flux: FluxAudio | null = null
@@ -153,7 +167,7 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
 
     private async ouvrir(): Promise<void> {
       try {
-        const flux = await deps.micro()
+        const flux = await deps.micro(this.peripherique)
         if (!this.actif) {
           // L'utilisateur a coupé pendant la demande d'autorisation : on ne laisse pas un micro ouvert.
           for (const piste of flux.getTracks()) piste.stop()
@@ -182,7 +196,10 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
       // ferait transcrire de l'audio écrasé.
       const bloc = new Float32Array(donnees)
       const taux = this.ctx.sampleRate || TAUX_WHISPER
-      const pas = avancerVad(this.vad, bloc, taux)
+      // La jauge part AVANT toute décision : c'est ce qui distingue « je ne t'entends pas » de
+      // « je t'entends mais je ne comprends pas ».
+      this.onniveau?.({ niveau: niveau(bloc), parle: niveau(bloc) >= this.seuilParole })
+      const pas = avancerVad(this.vad, bloc, taux, this.seuilParole)
       const parlaitAvant = this.vad.parle
       this.vad = pas.etat
       if (pas.segment) {
@@ -288,9 +305,14 @@ export function dependancesNavigateur(
   transcrire: (wav: Uint8Array) => Promise<string>
 ): DependancesWhisper {
   return {
-    micro: () =>
+    micro: (peripherique?: string) =>
       navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          channelCount: 1,
+          ...(peripherique ? { deviceId: { exact: peripherique } } : {})
+        }
       }) as unknown as Promise<FluxAudio>,
     contexte: () =>
       new (window as unknown as { AudioContext: new (o?: unknown) => ContexteAudio }).AudioContext({
