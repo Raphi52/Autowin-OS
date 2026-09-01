@@ -33,6 +33,48 @@ export function binaireDe(ligne: string): string | undefined {
   return base.replace(/\.(exe|cmd|bat|ps1)$/i, '').toLowerCase()
 }
 
+/**
+ * DÉCOUPE UNE LIGNE EN ARGUMENTS, EN RESPECTANT LES GUILLEMETS.
+ *
+ * Défaut vécu (conv-46, 2026-09-01) : la ligne était coupée par un simple `split(/\s+/)`, donc
+ * `git commit -m "message en plusieurs mots"` partait en huit arguments, guillemets compris. Git
+ * répondait « pathspec 'message' did not match any file(s) », et un `bash -c "…"` recevait un script
+ * tronqué. RIEN de guillemeté ne survivait — six appels perdus dans une seule session à chercher
+ * une cause ailleurs (fins de ligne, longueur du texte).
+ *
+ * Les guillemets sont des DÉLIMITEURS : ils groupent, puis disparaissent, comme dans un shell. Un
+ * guillemet resté ouvert ferme en fin de ligne : l'intention est claire, et refuser la ligne
+ * n'apprendrait rien de plus à l'appelant.
+ */
+export function decouperArguments(ligne: string): string[] {
+  const arguments_: string[] = []
+  let courant = ''
+  let ouvert: '"' | "'" | undefined
+  let commence = false
+  for (const caractere of ligne) {
+    if (ouvert) {
+      if (caractere === ouvert) ouvert = undefined
+      else courant += caractere
+      continue
+    }
+    if (caractere === '"' || caractere === "'") {
+      ouvert = caractere
+      commence = true
+      continue
+    }
+    if (/\s/.test(caractere)) {
+      if (commence) arguments_.push(courant)
+      courant = ''
+      commence = false
+      continue
+    }
+    courant += caractere
+    commence = true
+  }
+  if (commence) arguments_.push(courant)
+  return arguments_
+}
+
 /** Opérateurs qui donnent à une ligne un sens que `shell: false` n'exécutera pas. */
 const ENCHAINEMENTS = /[;|&`$><\n]|\$\(/
 
