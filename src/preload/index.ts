@@ -448,7 +448,10 @@ const api = {
     decision: { route: 'current' | 'new'; confidence: number; reason: string }
   }> =>
     ipcRenderer.invoke('os:conversations:routeMessage', conversationId, message, attachmentNames),
-  conversationsRename: (id: string, title: string): Promise<void> =>
+  conversationsRename: (
+    id: string,
+    title: string
+  ): Promise<{ id: string; title: string } | undefined> =>
     ipcRenderer.invoke('os:conversations:rename', id, title),
   /**
    * Range une conversation dans un dossier de travail — ce qui la groupe dans la liste.

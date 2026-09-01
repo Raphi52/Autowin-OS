@@ -1564,13 +1564,21 @@ export class ConversationStore {
     }))
   }
 
-  /** Renomme une conversation existante. Ne fait rien si l'id est inconnu. */
-  rename(id: string, title: string): void {
+  /**
+   * Renomme une conversation existante et REND le titre RELU apres coup.
+   *
+   * Rendre `void` etait le defaut vecu (conv-71) : l'appelant ne voyait rien revenir, en deduisait
+   * un echec, et rejouait l'appel. Un outil qui ne confirme rien pousse a reessayer. On relit donc
+   * l'objet stocke — pas l'argument recu — et on rend `undefined` pour un id inconnu, ce qui est un
+   * VRAI « non fait » distinguable d'un succes.
+   */
+  rename(id: string, title: string): { id: string; title: string } | undefined {
     const conversation = this.conversations.get(id)
-    if (conversation) {
-      conversation.title = title
-      this.changed(id)
-    }
+    if (!conversation) return undefined
+    conversation.title = title
+    this.changed(id)
+    const relue = this.conversations.get(id)
+    return relue ? { id, title: relue.title } : undefined
   }
 
   /**

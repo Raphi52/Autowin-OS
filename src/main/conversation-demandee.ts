@@ -18,8 +18,14 @@ export const TITRE_PAR_DEFAUT = 'Nouvelle conversation'
 /** Deux creations identiques a moins de ca d'intervalle sont le MEME geste, envoye deux fois. */
 export const FENETRE_DOUBLON_MS = 30_000
 
-/** Longueur max d'un titre repris du fil : au-dela on coupe, on ne colle pas un paragraphe. */
-const LONGUEUR_TITRE = 80
+/**
+ * Longueur max d'un titre repris du fil.
+ *
+ * MEME valeur et MEME coupe que la barre laterale (`ChatView.tsx:2711` et `:2743`) : deux regles
+ * de nommage differentes redonneraient exactement le defaut qu'on corrige — un titre qui n'est pas
+ * celui que l'utilisateur voit.
+ */
+export const LONGUEUR_TITRE = 42
 
 const compacter = (texte: string): string => texte.replace(/\s+/g, ' ').trim()
 
@@ -41,9 +47,7 @@ export function titreDeConversationDemandee(
       .replace(/<system-reminder>[\s\S]*$/i, '')
   )
   if (!repris) return TITRE_PAR_DEFAUT
-  return repris.length > LONGUEUR_TITRE
-    ? `${repris.slice(0, LONGUEUR_TITRE - 1).trimEnd()}…`
-    : repris
+  return repris.length > LONGUEUR_TITRE ? `${repris.slice(0, LONGUEUR_TITRE)}…` : repris
 }
 
 /** Comparaison de titres tolerante a la casse, aux accents et au point final. */

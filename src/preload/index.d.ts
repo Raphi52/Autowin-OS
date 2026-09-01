@@ -371,7 +371,11 @@ interface ChatApi {
     title?: string
     decision: { route: 'current' | 'new'; confidence: number; reason: string }
   }>
-  conversationsRename: (id: string, title: string) => Promise<void>
+  /** Renomme et rend le titre RELU (`undefined` = id inconnu, rien renomme). */
+  conversationsRename: (
+    id: string,
+    title: string
+  ) => Promise<{ id: string; title: string } | undefined>
   /** Range une conversation dans un dossier. Chemin omis → sélecteur natif ; `null` → « Divers ». */
   conversationsSetProject: (id: string, path?: string | null) => Promise<string | null>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>

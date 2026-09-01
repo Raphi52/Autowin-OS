@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   FENETRE_DOUBLON_MS,
+  LONGUEUR_TITRE,
   TITRE_PAR_DEFAUT,
   conversationRecenteEquivalente,
   titreDeConversationDemandee
@@ -25,8 +26,21 @@ describe('titre d une conversation demandee', () => {
 
   it('coupe un message long au lieu de coller un paragraphe', () => {
     const titre = titreDeConversationDemandee(undefined, 'a'.repeat(200))
-    expect(titre.length).toBeLessThanOrEqual(80)
+    expect(titre.length).toBeLessThanOrEqual(LONGUEUR_TITRE + 1)
     expect(titre.endsWith('…')).toBe(true)
+  })
+
+  it('coupe EXACTEMENT comme la barre laterale (ChatView.tsx:2711) : 42 puis …', () => {
+    const message = 'a'.repeat(200)
+    // La regle de l'interface, recopiee telle quelle : c'est elle qui fait foi a l'ecran.
+    const commeLInterface = message.length > 42 ? `${message.slice(0, 42)}…` : message
+    expect(titreDeConversationDemandee(undefined, message)).toBe(commeLInterface)
+    expect(LONGUEUR_TITRE).toBe(42)
+  })
+
+  it('ne coupe pas un message qui tient pile dans la largeur', () => {
+    const pile = 'b'.repeat(42)
+    expect(titreDeConversationDemandee(undefined, pile)).toBe(pile)
   })
 
   it('retombe sur un nom neutre quand il n y a aucun mot', () => {

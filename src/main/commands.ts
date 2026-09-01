@@ -721,7 +721,8 @@ const CATALOG: CommandSpec[] = [
   },
   {
     name: 'rename_conversation',
-    description: 'Renommer',
+    description:
+      'Renommer une conversation. Rend { id, title } RELU apres coup — ne rejoue pas l appel : un id inconnu leve une erreur explicite.',
     args: { id: 'id', title: 'nouveau titre' },
     annotations: {
       readOnlyHint: false,
@@ -2588,7 +2589,9 @@ export class AppCommandBus {
         }
       }
       case 'rename_conversation': {
+        // Rend le titre RELU, ou echoue franchement : un retour vide poussait a rejouer l'appel.
         const c = this.os.conversations.rename(s('id'), s('title'))
+        if (!c) throw new Error(`rename_conversation : ${s('id')} inconnue, rien n a ete renomme`)
         this.broadcast({ type: 'refresh', scope: 'conversations' })
         return c
       }

@@ -60,6 +60,22 @@ function pilote(reponses: string[], queue: string[]) {
   return { send, exec, lancer }
 }
 
+/** Noms des commandes reellement executees (le mock n'a pas de signature typee). */
+const nomsDesCommandes = (exec: { mock: { calls: unknown[] } }): string[] =>
+  (exec.mock.calls as Array<[string, ...unknown[]]>).map((appel) => appel[0])
+
+/**
+ * Contenu du message envoye au 2e appel provider.
+ *
+ * Le mock n'expose aucune signature d'arguments : `calls[1][1]` est vu comme un tuple VIDE par
+ * TypeScript, ce qui faisait sortir `npm run typecheck:node` en erreur. On decrit ici la forme
+ * reellement passee, une seule fois, au lieu de la deviner a chaque appel.
+ */
+const contenuDuSecondAppel = (send: { mock: { calls: unknown[] } }): string => {
+  const appels = send.mock.calls as Array<[unknown, Array<{ content: string }>]>
+  return appels[1][1][0].content
+}
+
 describe('directive utilisateur arrivée en fin de tour', () => {
   it('exécute quand même la commande que le modèle venait d’émettre', async () => {
     const queue: string[] = []
@@ -71,8 +87,8 @@ describe('directive utilisateur arrivée en fin de tour', () => {
       return { text: reponses.shift()!, provider: 'codex' }
     })
     await lancer()
-    expect(exec.mock.calls.map((appel) => appel[0])).toContain('get_state')
-    const second = (send.mock.calls[1][1] as Array<{ content: string }>)[0].content
+    expect(nomsDesCommandes(exec)).toContain('get_state')
+    const second = contenuDuSecondAppel(send)
     expect(second).toContain('DIRECTIVE INJECTÉE EN COURS DE TOUR')
     expect(second).toContain('Les deux')
   })
@@ -90,10 +106,10 @@ describe('directive utilisateur arrivée en fin de tour', () => {
     })
     await lancer()
     // La question n'est pas reposée…
-    expect(exec.mock.calls.map((appel) => appel[0])).not.toContain('ask')
+    expect(nomsDesCommandes(exec)).not.toContain('ask')
     // …et le tour CONTINUE avec la réponse au lieu de s'arrêter sur la question.
     expect(send).toHaveBeenCalledTimes(2)
-    const second = (send.mock.calls[1][1] as Array<{ content: string }>)[0].content
+    const second = contenuDuSecondAppel(send)
     expect(second).toContain('DÉJÀ répondu')
     expect(second).toContain('Les deux')
   })
