@@ -59,7 +59,7 @@ describe('ChatView — le reçu d’orientation dit la vérité', () => {
     await act(async () => {})
   }
 
-  it('un RUN en cours ⇒ « lira à la phase suivante », pas « Orienté »', async () => {
+  it('un RUN en cours ⇒ « lira à la phase suivante », pas « prochaine réponse »', async () => {
     const { pilote, app, injecte } = await monter()
     await act(async () =>
       app({ type: 'orchestrate-start', convId: 'A', task: '/frame les icônes' })
@@ -67,14 +67,17 @@ describe('ChatView — le reçu d’orientation dit la vérité', () => {
     await orienter(pilote)
     expect(injecte).toHaveBeenCalled()
     expect(recu()).toContain('à la phase suivante')
-    expect(recu()).not.toContain('Orienté')
+    expect(recu()).not.toContain('prochaine réponse')
   })
 
-  it('sans run, un tour de chat ordinaire annonce bien « Orienté »', async () => {
+  it('sans run, le reçu annonce QUAND la réponse viendra', async () => {
     const { pilote, injecte } = await monter()
     await orienter(pilote)
     expect(injecte).toHaveBeenCalled()
-    expect(recu()).toContain('Orienté')
+    // « Orienté » disait seulement « transmis » : l'utilisateur croyait que rien ne se passait
+    // pendant les minutes du tour (conv-61, 2026-09-01). Le reçu dit maintenant QUAND il aura
+    // sa réponse.
+    expect(recu()).toBe('✓ Reçue — l’agent répondra dans sa prochaine réponse')
   })
 
   it('un run TERMINÉ ne rend plus le reçu trompeur', async () => {
@@ -82,6 +85,6 @@ describe('ChatView — le reçu d’orientation dit la vérité', () => {
     await act(async () => app({ type: 'orchestrate-start', convId: 'A', task: '/frame' }))
     await act(async () => app({ type: 'orchestrate-end', convId: 'A', status: 'green' }))
     await orienter(pilote)
-    expect(recu()).toContain('Orienté')
+    expect(recu()).toContain('prochaine réponse')
   })
 })

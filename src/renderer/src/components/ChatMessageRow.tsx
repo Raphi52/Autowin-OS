@@ -40,7 +40,7 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
             receipt.reponse ? (
               '✓ Répondu'
             ) : (
-              '✓ Orienté'
+              "✓ Reçue — l’agent répondra dans sa prochaine réponse"
             )
           ) : receipt.status === 'differee' ? (
             '⏸ Reçue — l’agent la lira à la phase suivante du run'

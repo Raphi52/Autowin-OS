@@ -66,6 +66,6 @@ describe('ChatView — une réponse à une question n’est pas une orientation'
     expect(injecte).toHaveBeenCalledWith('A', 'Oui — 8e état needs-human')
     const recu = harness.container.querySelector('.directive-receipt-status')?.textContent ?? ''
     expect(recu).toContain('Répondu')
-    expect(recu).not.toContain('Orienté')
+    expect(recu).not.toContain('prochaine réponse')
   })
 })
