@@ -29,16 +29,22 @@ beforeEach(() => {
   spawnCapture.stdoutEvents = []
 })
 
-async function drainReasoning(): Promise<string[]> {
+/**
+ * Draine le canal STATUS — pas le raisonnement. Un battement d'outil ou de tache de fond n'est pas
+ * une pensee du modele : depuis le 2026-09-01 il voyage dans `chunk.status`, affiche dans la meta du
+ * tour, et le bloc « Reflexion » ne porte plus que du vrai `thinking` (constat utilisateur : ces
+ * lignes techniques y passaient pour du raisonnement et polluaient la lecture).
+ */
+async function drainStatus(): Promise<string[]> {
   const { ClaudeCliAdapter } = await import('./claude')
   const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
-  const reasoning: string[] = []
+  const statuts: string[] = []
   let step = await gen.next()
   while (!step.done) {
-    if (step.value.reasoning) reasoning.push(step.value.reasoning)
+    if (step.value.status) statuts.push(step.value.status)
     step = await gen.next()
   }
-  return reasoning
+  return statuts
 }
 
 const succes = {
@@ -72,11 +78,11 @@ describe('ClaudeCliAdapter — un outil long donne signe de vie', () => {
       },
       succes
     ]
-    const reasoning = await drainReasoning()
+    const statuts = await drainStatus()
 
-    expect(reasoning).toHaveLength(1)
-    expect(reasoning[0]).toContain('Bash')
-    expect(reasoning[0]).toContain('2 min 30 s')
+    expect(statuts).toHaveLength(1)
+    expect(statuts[0]).toContain('Bash')
+    expect(statuts[0]).toContain('2 min 30 s')
   })
 
   it('rend les secondes lisibles sous la minute', async () => {
@@ -84,10 +90,10 @@ describe('ClaudeCliAdapter — un outil long donne signe de vie', () => {
       { type: 'tool_progress', tool_name: 'Bash', elapsed_time_seconds: 30, heartbeat: true },
       succes
     ]
-    const reasoning = await drainReasoning()
+    const statuts = await drainStatus()
 
-    expect(reasoning[0]).toContain('30 s')
-    expect(reasoning[0]).not.toContain('min')
+    expect(statuts[0]).toContain('30 s')
+    expect(statuts[0]).not.toContain('min')
   })
 
   it('nomme l’outil « outil » quand le CLI ne le dit pas', async () => {
@@ -97,10 +103,10 @@ describe('ClaudeCliAdapter — un outil long donne signe de vie', () => {
       { type: 'tool_progress', elapsed_time_seconds: 60, heartbeat: true },
       succes
     ]
-    const reasoning = await drainReasoning()
+    const statuts = await drainStatus()
 
-    expect(reasoning[0]).toContain('outil')
-    expect(reasoning[0]).not.toContain('undefined')
+    expect(statuts[0]).toContain('outil')
+    expect(statuts[0]).not.toContain('undefined')
   })
 
   it('ignore un tool_progress SANS durée : il n’apprend rien', async () => {
@@ -109,7 +115,7 @@ describe('ClaudeCliAdapter — un outil long donne signe de vie', () => {
       succes
     ]
 
-    expect(await drainReasoning()).toHaveLength(0)
+    expect(await drainStatus()).toHaveLength(0)
   })
 })
 
@@ -141,15 +147,36 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
       },
       succes
     ]
-    const reasoning = await drainReasoning()
+    const statuts = await drainStatus()
 
-    expect(reasoning).toHaveLength(1)
-    expect(reasoning[0]).toContain('fond')
+    expect(statuts).toHaveLength(1)
+    expect(statuts[0]).toContain('fond')
     // La commande, pas un libelle generique : « une tache tourne » ne dit pas s'il faut attendre
     // 3 secondes ou 9 minutes.
-    expect(reasoning[0]).toContain('vitest')
+    expect(statuts[0]).toContain('vitest')
     // Le `cd "$(pwd)" &&` qui prefixe toutes les commandes n'apprend rien et mange la place.
-    expect(reasoning[0]).not.toContain('$(pwd)')
+    expect(statuts[0]).not.toContain('$(pwd)')
+  })
+
+  it('rend la commande ENTIERE, sans jamais la tronquer', async () => {
+    // Demande explicite du 2026-09-01 : « met pas de nb max de caracteres par ligne, jveux tout
+    // voir ». L'ancienne coupe a 70 caracteres remplacait la fin par « … », et c'est justement la
+    // fin qui dit ce que la commande cherche.
+    const commande = "ls /tmp/aos-pilot-sess-6irA6U/autowin-os | head -30; echo ---; find /tmp/aos-pilot-sess-6irA6U -name '*.ts' -newermt '-2 hours' | head -40"
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'system',
+        subtype: 'task_started',
+        task_id: 'longue',
+        task_type: 'local_bash',
+        description: `cd "$(pwd)" && ${commande}`
+      },
+      succes
+    ]
+    const statuts = await drainStatus()
+
+    expect(statuts[0]).toContain(commande)
+    expect(statuts[0]).not.toContain('…')
   })
 
   it('annonce la fin de la tache de fond', async () => {
@@ -163,10 +190,10 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
       },
       succes
     ]
-    const reasoning = await drainReasoning()
+    const statuts = await drainStatus()
 
-    expect(reasoning).toHaveLength(1)
-    expect(reasoning[0]).toContain('eslint')
+    expect(statuts).toHaveLength(1)
+    expect(statuts[0]).toContain('eslint')
   })
 
   it('sans description, dit quand meme qu une tache tourne — sans rien inventer', async () => {
@@ -174,10 +201,10 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
       { type: 'system', subtype: 'task_started', task_id: 'x1', task_type: 'local_bash' },
       succes
     ]
-    const reasoning = await drainReasoning()
+    const statuts = await drainStatus()
 
-    expect(reasoning).toHaveLength(1)
-    expect(reasoning[0]).toContain('fond')
+    expect(statuts).toHaveLength(1)
+    expect(statuts[0]).toContain('fond')
   })
 
   it('une tache de fond en ECHEC le dit, au lieu de se taire', async () => {
@@ -191,9 +218,9 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
       },
       succes
     ]
-    const reasoning = await drainReasoning()
+    const statuts = await drainStatus()
 
-    expect(reasoning[0]).toMatch(/échec|echec|failed/i)
+    expect(statuts[0]).toMatch(/échec|echec|failed/i)
   })
 })
 
@@ -230,7 +257,7 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
       appelOutil('t3', 'Glob', { pattern: '**/*.ts' }),
       succes
     ]
-    const reasoning = await drainReasoning()
+    const reasoning = await drainStatus()
 
     expect(reasoning).toHaveLength(3)
     expect(reasoning[0]).toContain('Read')
@@ -243,7 +270,7 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
       appelOutil('t1', 'Read', { file_path: 'src/main/providers/claude.ts' }),
       succes
     ]
-    const reasoning = await drainReasoning()
+    const reasoning = await drainStatus()
 
     expect(reasoning[0]).toContain('claude.ts')
   })
@@ -257,7 +284,7 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
       { type: 'assistant', message: { content: [{ type: 'text', text: 'Voici la reponse.' }] } },
       succes
     ]
-    const reasoning = await drainReasoning()
+    const reasoning = await drainStatus()
 
     expect(reasoning).toHaveLength(0)
   })

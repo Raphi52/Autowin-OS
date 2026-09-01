@@ -385,6 +385,21 @@ describe('widget Jarvis', () => {
       expect(c.querySelector('[data-testid="jarvis-jauge-barre"]')).not.toBeNull()
     })
 
+    it("affiche SOUS la jauge ce que le niveau veut dire, pas seulement sa hauteur", async () => {
+      const c = rendre()
+      await flush()
+      clic(c, 'jarvis-bascule')
+      await flush()
+      const verdict = c.querySelector('[data-testid="jarvis-verdict"]')
+      expect(verdict).not.toBeNull()
+      // Le verdict vit DANS la jauge : un message affiché ailleurs ne répondrait pas à
+      // « est-ce que ce niveau-là est bon ? ».
+      expect(c.querySelector('[data-testid="jarvis-jauge"]')?.contains(verdict!)).toBe(true)
+      // Micro ouvert mais rien dit encore : le cas exact qui ressemblait à une panne.
+      expect(verdict?.getAttribute('data-verdict')).toBe('silence')
+      expect(verdict?.textContent).toContain('Aucun son détecté')
+    })
+
     it('expose les paramètres audio : choix du micro et seuil', async () => {
       const c = rendre()
       await flush()

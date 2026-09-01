@@ -547,28 +547,19 @@
 .workflow-panel-head {
   display: flex;
   min-width: 0;
-  height: 46px;
+  /* 46px -> 34px : la barre portait un titre, elle ne porte plus que la navigation. */
+  height: 34px;
   flex: none;
   align-items: stretch;
+  justify-content: space-between;
   margin: calc(var(--runs-pane-pad-top) * -1) calc(var(--runs-pane-pad-x) * -1) 0;
   padding-left: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(3, 7, 11, 0.96);
+  /* Filet degrade or au lieu du liseré blanc + fond opaque : rien ne se pose sur le fond. */
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, rgba(212, 169, 79, 0.45), rgba(212, 169, 79, 0.04)) 1;
+  background: transparent;
 }
 
-/* Titre du panneau : il a pris la place de la barre des quatre onglets, retiree avec elles. */
-.workflow-panel-title {
-  min-width: 0;
-  flex: 1;
-  align-self: center;
-  overflow: hidden;
-  color: var(--text);
-  font: 650 11px/1 var(--font);
-  letter-spacing: 0.06em;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
 
 .workflow-panel-actions {
   display: grid;
@@ -621,8 +612,9 @@
     padding-left: 4px;
   }
 
-  .workflow-panel-title {
-    font-size: 9.5px;
+  .workflow-section-tab {
+    padding: 0 7px;
+    font-size: 9px;
   }
 
   .workflow-panel-actions {
@@ -801,6 +793,49 @@
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--text);
+}
+
+/*
+ * LES TROIS ONGLETS DU PANNEAU DROIT — Graph / Runs / Logs.
+ *
+ * Souligne actif plutot que pilule : la barre siege sous le titre du panneau, ou une rangee de
+ * pilules pesait plus que son contenu. Le filet degrade or sous la barre la rattache au panneau
+ * sans peindre de fond.
+ */
+.workflow-section-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+}
+.workflow-section-tab {
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-faint);
+  font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.workflow-section-tab:hover {
+  color: #c3cbda;
+}
+.workflow-section-tab.is-active {
+  color: #e3ba55;
+  border-bottom-color: #d4a94f;
+}
+
+/* Detail VIDE : il ne dispute plus la hauteur au graphe (voir WorkflowsPanel.tsx). */
+.workflow-panel-detail[data-detail-vide='true'] {
+  flex: none;
+  min-height: 0;
+  padding: 0;
 }
 
 .chat {

@@ -164,11 +164,20 @@ export const NON_INTERACTIVE_ENV: Record<string, string> = {
   GIT_TERMINAL_PROMPT: '0',
   GIT_ASKPASS: 'echo',
   SSH_ASKPASS: 'echo',
+  // MESURE 2026-09-01 (conv-35) : ces trois variables ne suffisent PAS sous Windows. L'helper
+  // `credential.helper=manager` (Git Credential Manager) est un PROCESSUS SEPARE qui ouvre sa
+  // propre fenetre GUI : il ignore GIT_TERMINAL_PROMPT et GIT_ASKPASS. Un `git push` d'un run a
+  // donc affiche TROIS fenetres de connexion GitHub et est reste bloque, invisible dans le fil.
+  // `GCM_INTERACTIVE=never` + `credential.interactive=false` forcent un ECHEC LISIBLE au lieu de
+  // l'attente muette.
+  GCM_INTERACTIVE: 'never',
   // `--help` retombe sur le format `man`, absent sous Windows : la commande échoue proprement
   // au lieu d'ouvrir un navigateur.
-  GIT_CONFIG_COUNT: '1',
+  GIT_CONFIG_COUNT: '2',
   GIT_CONFIG_KEY_0: 'help.format',
-  GIT_CONFIG_VALUE_0: 'man'
+  GIT_CONFIG_VALUE_0: 'man',
+  GIT_CONFIG_KEY_1: 'credential.interactive',
+  GIT_CONFIG_VALUE_1: 'false'
 }
 
 export function claudeToolEvidenceKind(name: string, command: string): ExecutionEvidence['kind'] {
@@ -1225,7 +1234,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
              * servait pour le laisser tourner sans jamais le dire a l'utilisateur.
              */
             const cible = (filePath || command).slice(0, 120)
-            queue.push({ delta: '', reasoning: `
+            queue.push({ delta: '', status: `
 ${part.name}${cible ? `
 ${cible}` : ''}` })
           }

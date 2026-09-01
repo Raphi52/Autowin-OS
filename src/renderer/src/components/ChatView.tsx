@@ -508,7 +508,15 @@ export function ChatView({
       ? 'mosaic'
       : 'list'
   )
+  /**
+   * Le mode d'affichage lu depuis un ECOUTEUR monte une seule fois (`prefill`, deps []) : sans cette
+   * ref, il verrait eternellement le mode du premier rendu et un message pre-ecrit atterrirait dans
+   * le chat unique... qui n'est pas affiche en mosaique (bug mesure le 01/09, conv-44 : « Faire
+   * reparer » semblait mort).
+   */
+  const convViewModeRef = useRef(convViewMode)
   useEffect(() => {
+    convViewModeRef.current = convViewMode
     window.localStorage.setItem('autowin.chat.conversationsViewMode', convViewMode)
   }, [convViewMode])
   const [conversationsPaneWidth, setConversationsPaneWidth] = useState(() => {
@@ -810,6 +818,30 @@ export function ChatView({
     else steeringRef.current.delete(directiveId)
     setSteeringDirectives(new Set(steeringRef.current))
   }
+  /**
+   * FILET DE SÉCURITÉ : écrit le texte de l'utilisateur sur disque AVANT qu'il ne quitte le composer.
+   *
+   * Mesure du 2026-09-01 (conv-30) : deux messages tapés pendant un tour ont disparu sans trace.
+   * Le composer se vide dès l'envoi, et le texte ne vit ensuite que dans des refs volatiles
+   * (`composerDraftsRef`, `queueRef`, `directiveReceipts`) tant qu'aucun TOUR n'est créé — un
+   * rechargement, un changement de conversation ou une injection refusée l'effaçait définitivement.
+   *
+   * Volontairement « fire and forget » : un journal indisponible ne doit jamais retarder ni faire
+   * échouer un envoi. L'échec est tracé silencieusement, jamais remonté à l'utilisateur.
+   */
+  function journaliserSaisie(
+    conversationId: string,
+    texte: string,
+    voie: 'message' | 'orientation'
+  ): void {
+    try {
+      void window.api.journaliserSaisie?.(conversationId, texte, voie)?.catch((error: unknown) => {
+        traceSilentFailure('journal-saisie', error)
+      })
+    } catch (error) {
+      traceSilentFailure('journal-saisie', error)
+    }
+  }
   function setDirectiveReceipt(
     conversationId: string,
     entry: QueuedDirective,
@@ -849,6 +881,19 @@ export function ChatView({
                 ...(anchorPart?.kind === 'text' ? { afterTextOffset: anchorPart.text.length } : {})
               }
             ]
+      return { ...current, [conversationId]: next }
+    })
+  }
+  /**
+   * Le main a ecrit un VRAI message pour ce texte : le recu provisoire n'a plus lieu d'etre.
+   * Sans ce retrait, l'utilisateur verrait DEUX fois son texte (le recu + le message relu).
+   */
+  function retirerDirectiveReceipt(conversationId: string, entryId: number): void {
+    setDirectiveReceipts((current) => {
+      const receipts = current[conversationId]
+      if (!receipts?.length) return current
+      const next = receipts.filter((receipt) => receipt.id !== entryId)
+      if (next.length === receipts.length) return current
       return { ...current, [conversationId]: next }
     })
   }
@@ -1469,6 +1514,33 @@ export function ChatView({
     }
   }, [messages, activeDirectiveReceipts])
 
+  /**
+   * FIN DE TOUR — descente de RATTRAPAGE. L'effet ci-dessus ne se rejoue que sur `messages` : or la
+   * fin d'un tour change la HAUTEUR du fil sans toucher aux messages (le bandeau « en cours »
+   * disparait, la file d'attente se vide, le bloc de cloture finit de se peindre). Personne ne
+   * redescendait donc, et le fil restait arrete au milieu de la derniere reponse avec le bouton
+   * « ↓ Derniere reponse » alors que l'utilisateur n'avait rien remonte (rapporte le 2026-09-01,
+   * conv-44, capture a l'appui).
+   *
+   * Le plafond de frames est plus large qu'en streaming : le contenu tardif d'une fin de tour
+   * (markdown final, blocs `html-render`, images) se stabilise en plusieurs centaines de
+   * millisecondes, et une boucle de 40 frames atterrissait court. On poursuit le bas plus longtemps
+   * — et si malgre tout on n'atterrit pas, le bouton le DIT au lieu de mentir.
+   */
+  const busyPrecedentRef = useRef(busy)
+  useEffect(() => {
+    const finDeTour = busyPrecedentRef.current && !busy
+    busyPrecedentRef.current = busy
+    if (!finDeTour) return
+    const scroll = scrollRef.current
+    // On ne force RIEN si le lecteur a quitte le bas de lui-meme : sa position lui appartient.
+    if (!scroll || !followTailRef.current) return
+    const annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 120, (landed) => {
+      if (!landed) setHasNewActivity(true)
+    })
+    return () => annulerDescente()
+  }, [busy])
+
   /* --- conversations : sélection = fil rechargé depuis le store --- */
 
   /**
@@ -1710,6 +1782,41 @@ export function ChatView({
       // « En générer plus » atterrissait sur l'ancienne conversation).
       if (!detail?.prompt && !detail?.conversationId) return
       const id = detail.conversationId
+      /**
+       * MOSAIQUE. Le chat unique n'est pas rendu du tout dans ce mode : remplir son champ
+       * n'affichait RIEN, et « Faire reparer » (comme « Prompter dans Autowin » ou « Preparer le
+       * prompt » des tickets) paraissait mort alors que la conversation etait bien creee. On ouvre
+       * donc une fenetre DE PLUS — la mosaique reste en place —, on y depose le brouillon (deja
+       * indexe par conversation) et on impose la valeur au composer de cette fenetre des qu'il est
+       * monte. Choix utilisateur du 2026-09-01 (conv-44) contre la sortie de mosaique.
+       */
+      if (id && convViewModeRef.current === 'mosaic') {
+        const prompt = detail.prompt
+        void (async () => {
+          if (!convsRef.current.some((conversation) => conversation.id === id)) await refreshConvs()
+          await ouvrirDansMosaique(id)
+          if (!prompt) return
+          setDraftInput(id, prompt)
+          if (detail.send) {
+            void send(prompt, { targetConversationId: id })
+            return
+          }
+          // La fenetre vient d'etre ajoutee : son composer peut n'etre pas encore monte au premier
+          // repaint. On retente quelques images avant d'abandonner, plutot qu'un delai devine.
+          let restantes = 5
+          const poser = (): void => {
+            const composer = composersMosaiqueRef.current.get(id)
+            if (composer) {
+              composer.setInput(prompt)
+              composer.focus()
+              return
+            }
+            if (--restantes > 0) requestAnimationFrame(poser)
+          }
+          requestAnimationFrame(poser)
+        })()
+        return
+      }
       if (id) {
         const target = convsRef.current.find((conversation) => conversation.id === id)
         if (target) void loadConv(target)
@@ -2213,6 +2320,8 @@ export function ChatView({
       void send(text, cible ? { targetConversationId: cible } : undefined)
       return
     }
+    // AVANT le vidage du composer : passé cette ligne, ce texte n'existe plus nulle part ailleurs.
+    journaliserSaisie(id, text, 'orientation')
     setDraftInput(cleDraft, '')
     // REÇU, comme `steerWithoutInterrupt` : les deux chemins appellent la MÊME IPC `injectDirective`,
     // et seul l'autre en rendait compte. Sans ce reçu, le texte quittait le composer et RIEN
@@ -2223,14 +2332,25 @@ export function ChatView({
     const entry: QueuedDirective = { id: nextQueueEntryIdRef.current++, text, mode: replimode }
     setDirectiveReceipt(id, entry, 'sending', reponse)
     let injected = false
+    // Le main ECRIT desormais un vrai message pour la directive acceptee et rend son identifiant.
+    // C'est ce qui manquait : le recu ne vivait qu'en memoire de l'ecran, un rechargement l'effacait
+    // et le texte disparaissait (conv-38, 2026-09-01).
+    let messageEcrit = false
     try {
-      injected = (await window.api.injectDirective(id, text))?.ok === true
+      const issue = await window.api.injectDirective(id, text)
+      injected = issue?.ok === true
+      messageEcrit = typeof issue?.messageId === 'string' && issue.messageId.length > 0
     } catch (error) {
       traceSilentFailure('inject-directive:btw', error)
       injected = false
     }
     // Repli explicite : l'injection a échoué → file d'attente (drainée en fin de tour), rien n'est perdu.
     if (!injected) enqueueMessage(id, text, replimode)
+    if (injected && messageEcrit) {
+      // Le fil porte le texte pour de bon : le recu provisoire ferait doublon.
+      retirerDirectiveReceipt(id, entry.id)
+      return
+    }
     setDirectiveReceipt(id, entry, injected ? issueDeLInjection(id) : 'failed', reponse)
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
@@ -2406,6 +2526,9 @@ export function ChatView({
     )
       return
     sendLocksRef.current.add(sendLockKey)
+    // Même filet que l'orientation : le composer va être vidé, ce texte doit exister sur disque
+    // AVANT — y compris si la création de la conversation ou l'envoi échoue juste après.
+    if (value) journaliserSaisie(sourceConversationId ?? 'nouvelle-conversation', value, 'message')
 
     let convId = sourceConversationId
     let messageCommitted = false
@@ -3735,10 +3858,10 @@ export function ChatView({
                 type="button"
                 className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
                 onClick={() => setShowRuns((v) => !v)}
-                title="Workflows (RUN.md)"
+                title="Détails de l’exécution"
               >
                 <ForkIcon />
-                Workflows{openRunsCount > 0 ? ` · ${openRunsCount} open` : ''}
+                Détails{openRunsCount > 0 ? ` · ${openRunsCount} open` : ''}
                 {greenRunsCount > 0 ? ` · ${greenRunsCount} green` : ''}
               </button>
             </div>

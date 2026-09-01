@@ -7,11 +7,13 @@
  * ne fait QUE : charger les journaux des tours affichés, et rendre le résultat du modèle pur.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import './ModelActivityLogPane.css'
 import type { Msg } from './chat-view-types'
 import {
   buildModelActivityLog,
   type ModelActivityEntry,
-  type ModelActivityKind
+  type ModelActivityKind,
+  type ModelActivitySource
 } from './model-activity-log'
 
 const KIND_LABEL: Record<ModelActivityKind, string> = {
@@ -22,7 +24,19 @@ const KIND_LABEL: Record<ModelActivityKind, string> = {
   action: 'Action',
   artifact: 'Artefact',
   error: 'Erreur',
-  done: 'Fin'
+  done: 'Fin',
+  injection: 'Injection',
+  boundary: 'Frontière',
+  usage: 'Coût',
+  event: 'Journal'
+}
+
+const SOURCE_LABEL: Record<ModelActivitySource, string> = {
+  thread: 'fil',
+  journal: 'journal',
+  parts: 'persisté',
+  causal: 'trace causale',
+  activity: 'activité'
 }
 
 /** Heure locale HH:MM:SS — le journal n'écrit qu'un epoch, et parfois rien du tout. */
@@ -47,6 +61,12 @@ export function ModelActivityLogPane({
     Record<string, ReadonlyArray<Record<string, unknown>>>
   >({})
   const [filtre, setFiltre] = useState('')
+  // Les DEUX sources que ce panneau ignorait : la trace causale (ce qu'analysait l'Observatory) et
+  // le journal d'activite facturee (provider, tokens, cout, duree).
+  const [causal, setCausal] = useState<ReadonlyArray<Record<string, unknown>>>([])
+  const [activity, setActivity] = useState<ReadonlyArray<Record<string, unknown>>>([])
+  const [kindMasque, setKindMasque] = useState<ModelActivityKind | ''>('')
+  const [sourceMasquee, setSourceMasquee] = useState<ModelActivitySource | ''>('')
   const listRef = useRef<HTMLDivElement | null>(null)
 
   // CLÉ des tours, et non le tableau `messages` : celui-ci change à CHAQUE fragment de stream, ce
@@ -67,7 +87,7 @@ export function ModelActivityLogPane({
       const lecture = await Promise.all(
         turnIds.map(async (turnId) => {
           try {
-            const events = (await window.api.turnJournal?.(conversationId, turnId)) ?? []
+            const events = (await window.api?.turnJournal?.(conversationId, turnId)) ?? []
             return [turnId, events] as const
           } catch {
             // Journal absent (nettoyé) : le tour reste tracé par ses parts durables.
@@ -90,18 +110,57 @@ export function ModelActivityLogPane({
     }
   }, [conversationId, turnKey, live])
 
+  // Trace causale et activite facturee sont scopees a la CONVERSATION (pas au tour) : une seule
+  // lecture, rejouee tant qu'un tour est vivant.
+  useEffect(() => {
+    // Pas de reinitialisation ICI : un `setState` synchrone dans un effet cascade les rendus. Sans
+    // conversation il n'y a rien a lire, et l'affichage derive de `conversationId` plus bas.
+    if (!conversationId) return
+    let annule = false
+    const charger = async (): Promise<void> => {
+      const [trace, activite] = await Promise.all([
+        window.api?.causalTrace?.(conversationId).catch(() => []) ?? [],
+        window.api?.conversationActivity?.(conversationId).catch(() => []) ?? []
+      ])
+      if (annule) return
+      setCausal((trace ?? []) as ReadonlyArray<Record<string, unknown>>)
+      setActivity((activite ?? []) as ReadonlyArray<Record<string, unknown>>)
+    }
+    void charger()
+    if (!live)
+      return () => {
+        annule = true
+      }
+    const timer = setInterval(() => void charger(), 4_000)
+    return () => {
+      annule = true
+      clearInterval(timer)
+    }
+  }, [conversationId, turnKey, live])
+
   const entries = useMemo(
-    () => buildModelActivityLog({ messages, journalByTurn }),
-    [messages, journalByTurn]
+    () =>
+      buildModelActivityLog({
+        messages,
+        journalByTurn,
+        // DERIVE, pas remis a zero par un effet : sans conversation, ces deux sources n'existent pas.
+        causal: conversationId ? causal : [],
+        activity: conversationId ? activity : []
+      }),
+    [messages, journalByTurn, causal, activity, conversationId]
   )
   const motif = filtre.trim().toLowerCase()
-  const visibles = motif
-    ? entries.filter((entry) =>
-        `${entry.label} ${entry.detail ?? ''} ${KIND_LABEL[entry.kind]}`
-          .toLowerCase()
-          .includes(motif)
-      )
-    : entries
+  const visibles = entries.filter((entry) => {
+    if (kindMasque && entry.kind !== kindMasque) return false
+    if (sourceMasquee && entry.source !== sourceMasquee) return false
+    if (!motif) return true
+    return `${entry.label} ${entry.detail ?? ''} ${KIND_LABEL[entry.kind]} ${SOURCE_LABEL[entry.source]}`
+      .toLowerCase()
+      .includes(motif)
+  })
+  // Les listes de filtres viennent des lignes REELLEMENT presentes : jamais une categorie vide.
+  const kindsPresents = [...new Set(entries.map((entry) => entry.kind))]
+  const sourcesPresentes = [...new Set(entries.map((entry) => entry.source))]
 
   // Le journal se lit par la FIN : l'activité récente est en bas, comme le fil.
   useEffect(() => {
@@ -110,24 +169,60 @@ export function ModelActivityLogPane({
   }, [visibles.length])
 
   return (
-    <div className="col grow" style={{ minHeight: 0, gap: 'var(--s2)' }}>
-      <input
-        className="input"
-        type="search"
-        value={filtre}
-        onChange={(event) => setFiltre(event.target.value)}
-        placeholder="Filtrer les logs…"
-        aria-label="Filtrer les logs"
-        style={{ fontSize: 12 }}
-      />
+    <div className="col grow model-log" style={{ minHeight: 0, gap: 'var(--s2)' }}>
+      <div className="model-log-filter">
+        <input
+          className="input"
+          type="search"
+          value={filtre}
+          onChange={(event) => setFiltre(event.target.value)}
+          placeholder="Filtrer les logs…"
+          aria-label="Filtrer les logs"
+        />
+        <select
+          className="input"
+          aria-label="Filtrer par nature"
+          value={kindMasque}
+          onChange={(event) => setKindMasque(event.target.value as ModelActivityKind | '')}
+        >
+          <option value="">Tout</option>
+          {kindsPresents.map((kind) => (
+            <option key={kind} value={kind}>
+              {KIND_LABEL[kind]}
+            </option>
+          ))}
+        </select>
+        <select
+          className="input"
+          aria-label="Filtrer par source"
+          value={sourceMasquee}
+          onChange={(event) => setSourceMasquee(event.target.value as ModelActivitySource | '')}
+        >
+          <option value="">Toutes sources</option>
+          {sourcesPresentes.map((source) => (
+            <option key={source} value={source}>
+              {SOURCE_LABEL[source]}
+            </option>
+          ))}
+        </select>
+        {/* Le compte dit ce que le filtre a retenu SUR le total : sans lui, un filtre trop etroit
+            ressemble a un journal vide. */}
+        {entries.length > 0 && (
+          <span className="model-log-count">
+            {visibles.length === entries.length
+              ? `${entries.length}`
+              : `${visibles.length}/${entries.length}`}
+          </span>
+        )}
+      </div>
       <div
         ref={listRef}
-        className="scroll-y col grow"
+        className="scroll-y col grow model-log-list"
         data-testid="model-activity-log"
-        style={{ minHeight: 0, gap: 4 }}
+        style={{ minHeight: 0 }}
       >
         {visibles.length === 0 && (
-          <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
+          <div className="model-log-empty">
             {conversationId
               ? 'Aucune activité modèle tracée pour l’instant — chaque appel, commande, verdict et artefact s’inscrira ici.'
               : 'Sélectionne une conversation pour lire ce que les modèles y ont fait.'}
@@ -154,33 +249,28 @@ function LogRow({ entry }: { entry: ModelActivityEntry }): React.JSX.Element {
     <div
       className="model-log-row"
       data-log-kind={entry.kind}
+      data-log-ok={entry.ok === undefined ? undefined : String(entry.ok)}
       title={entry.turnId ? `tour ${entry.turnId}` : undefined}
-      style={{ fontSize: 12, lineHeight: 1.35, padding: '3px 6px', borderRadius: 4 }}
     >
-      <div className="row gap2" style={{ alignItems: 'center', minWidth: 0 }}>
-        {dot ? <span className={`status-dot ${dot}`} /> : null}
-        {heure(entry.at) ? (
-          <time className="c-faint" style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums' }}>
-            {heure(entry.at)}
-          </time>
-        ) : null}
-        <span className="c-faint" style={{ fontSize: 10, textTransform: 'uppercase' }}>
-          {KIND_LABEL[entry.kind]}
-        </span>
-        <span
-          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}
-        >
-          {entry.label}
-        </span>
-      </div>
-      {entry.detail ? (
-        <div
-          className="c-faint"
-          style={{ fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-        >
-          {entry.detail}
+      <time className="model-log-time">{heure(entry.at) ?? '—'}</time>
+      <div className="model-log-body">
+        <div className="model-log-head">
+          {dot ? <span className={`status-dot ${dot}`} /> : null}
+          <span className="model-log-kind">{KIND_LABEL[entry.kind]}</span>
+          <span className="model-log-source" data-log-source={entry.source}>
+            {SOURCE_LABEL[entry.source]}
+          </span>
+          <span className="model-log-label">{entry.label}</span>
         </div>
-      ) : null}
+        {entry.detail ? (
+          <details className="model-log-detail">
+            {/* Le detail ENTIER vit dans le summary, clampe a deux lignes par le CSS et declampe
+                a l'ouverture : le texte n'est donc jamais duplique ni tronque pour de bon. */}
+            <summary>{entry.detail}</summary>
+            <span className="model-log-more" aria-hidden="true" />
+          </details>
+        ) : null}
+      </div>
     </div>
   )
 }

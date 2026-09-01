@@ -9,23 +9,23 @@ description: >-
   `SESSION_ID` injected each turn by the UserPromptSubmit hook); OR a named PAST session ("kaizen session X /
   the last one I tried to kaizen" → find by first-prompt / topic / a prior `kaizen`-fork); OR a named
   behavior; OR an AUTOWIN conversation (`conversation_read` / `conversation_search` / `retrospective`, never the
-  transcripts alone); OR an INJECTED instruction (the app system prompt, phase consignes, output-styles); OR a recurrent telemetry pattern surfaced by the `kaizen-nudge` Stop hook; (2) AUDIT behaviorally by REUSING
-  `judge` Mode B (parallel behavioral lenses — anchoring/honesty, communication, scope-drift, cross-session
-  state, model-shared blind spot… — each finding 1-2 blind spots with a FALSIFIABLE anchor quoted from the
-  transcript + a severity; loop with new lenses until 2 dry rounds); (3) DEFINE, for each blind spot, the TARGET BEHAVIOR — what should have happened for a good USER experience — and derive the rule from THAT, not from the symptom; (4) CONSOLIDATE to ONE root cause + a
+  transcripts alone); OR an INJECTED instruction (the app system prompt, phase consignes, output-styles); OR a recurrent telemetry pattern surfaced by the `kaizen-nudge` Stop hook; (2) AUDIT behaviorally with its OWN
+  parallel lenses — anchoring/honesty, communication, cost, cross-session state, scope, reversibility, silent
+  failure, safety, tool-use, premature stop, model-shared blind spot — each finding 1-2 blind spots with a
+  FALSIFIABLE anchor quoted from the transcript + a severity; loop with new lenses until 2 dry rounds; (3) DEFINE, for each blind spot, the TARGET BEHAVIOR — what should have happened for a good USER experience — and derive the rule from THAT, not from the symptom; (4) CONSOLIDATE to ONE root cause + a
   ranked table (blind spot · anchor · target behavior · proposed rule · integration point); (5) STATE the edits it is about to make, in plain words, so they are readable BEFORE and revertable after; then (6) INTEGRATE them itself — no approval wait — preferring
   a WIRED trigger (hook + CLAUDE.md hard rule) over a passive memory fiche (loading ≠ applying — a fiche alone
   was violated twice the same session), VERIFY each edited hook with an out-of-model signal (parse + behavior +
   negative control), then prove NON-RECURRENCE — replay the exact failing situation against the installed
   fix and show it now BLOCKED (« ça ne doit pas se reproduire » : an edit that cannot be shown to stop the
   ORIGINAL failure is not a fix), then run your local Autowin clone's `sync-kit.ps1` (live→package) and log the treated signature to
-  `kaizen-treated.jsonl`. Mechanics are CANONICAL in `_engine/ENGINE.md` + `judge` Mode B; kaizen carries only
-  the delta: target-location, the self-applied integrate step, sync-kit, and the one-commit-per-edit constraint.
+  `kaizen-treated.jsonl`. Scoring mechanics are CANONICAL in `_engine/ENGINE.md`; kaizen carries the behavioral audit itself plus
+  its delta: target-location, the self-applied integrate step, sync-kit, and the one-commit-per-edit constraint.
   Trigger on "kaizen this session", "improve the kit from my recurring failures", "audit
   my habits / workflow / blind spots", "what do I systematically miss", "analyse les defauts dans les
   workflows / les conversations / les comportements / les injections", "audite tout Autowin", OR right after the `kaizen-nudge` hook
-  surfaces a recurrent failure pattern. Do NOT use to: audit the QUALITY of a one-off deliverable → `judge`
-  (Mode A); fix a single code defect → `build`; frame a new need → `frame`. Kaizen targets the BEHAVIOR/kit,
+  surfaces a recurrent failure pattern. Do NOT use to: audit the QUALITY of a one-off deliverable → `judge`;
+  fix a single code defect → `build`; frame a new need → `frame`. Kaizen targets the BEHAVIOR/kit,
   not a specific artifact.
 ---
 
@@ -40,19 +40,56 @@ session's blind spots (defects Claude hit, corrections the user gave) into VERIF
 the kit (CLAUDE.md reflexes / hooks / skills / memory) that change FUTURE behavior. It APPLIES its own edits, each in a DEDICATED commit and each backed by an out-of-model verification — the garde-fou is revertability, not a wait.
 
 ## Procedure
-1. **LOCATE the target** (the step judge Mode B doesn't carry). **DEFAULT = the CURRENT session** — the conversation `/kaizen` is invoked in. Read its OWN transcript on disk: `~/.claude/projects/<project>/<SESSION_ID>.jsonl` (+ `subagents/`, `tool-results/`), where `<SESSION_ID>` is the id injected each turn by the UserPromptSubmit hook (also visible in any `SESSION_ID=…` system reminder). The transcript is written as the session runs, so it's available mid-session — point the audit lenses at THAT file. No need to ask which session; "kaizen" alone = kaizen THIS one. Other targets, only if the user names them (confirm, don't assume):
+1. **LOCATE the target.** **DEFAULT = the CURRENT session** — the conversation `/kaizen` is invoked in. Read its OWN transcript on disk: `~/.claude/projects/<project>/<SESSION_ID>.jsonl` (+ `subagents/`, `tool-results/`), where `<SESSION_ID>` is the id injected each turn by the UserPromptSubmit hook (also visible in any `SESSION_ID=…` system reminder). The transcript is written as the session runs, so it's available mid-session — point the audit lenses at THAT file. No need to ask which session; "kaizen" alone = kaizen THIS one. Other targets, only if the user names them (confirm, don't assume):
    - **a named PAST session** — "kaizen session X / the last one I tried to kaizen". Find it by first user prompt, dominant topic, or a prior `kaizen`/`kaizen-past-session` fork. **Cite the evidence** (first prompt + a topic line) and CONFIRM before auditing — a wrong target wastes the whole fan-out. Given a disambiguator (a remembered first prompt, a topic), grep all `projects/*/*.jsonl` for it.
-   - **a named behavior / habit / skill-set** — pass straight to Mode B's behavioral lenses.
+   - **a named behavior / habit / skill-set** — pass straight to the behavioral lenses of step 2.
    - **an AUTOWIN conversation, or the app's whole history** — the cockpit's conversations are NOT in `~/.claude/projects/*.jsonl`: a transcript holds one agent session, a conversation holds what the USER actually asked, corrected and refused. Read them with the app's own capabilities — `conversation_read` for a named id, `conversation_search` to find the fil from a phrase, `retrospective` for a turn's causal events (tools called, refusals, verdicts, cost) and its RUN.md. "Kaizen tout Autowin" = a NAMED or SEARCHED sample, never all of them implicitly (981 conversations = ruinous). A defect the user CORRECTED lives here and nowhere else.
    - **a recurrent telemetry pattern** — the `kaizen-nudge` Stop hook fired on `gate-counters.jsonl` (anti-flaky / fix-gate / revert recurring ≥ threshold). The pattern IS the target; audit whether it's a real habit or inflated noise (the detector itself can be the defect).
-2. **AUDIT — reuse `judge` Mode B (do NOT reimplement).** Run judge Mode B on the target: preload "already covered" (global `CLAUDE.md` + memory index + installed skills) so lenses don't re-flag the known; fan out 6-9 behavioral lenses IN PARALLEL (one message), model-diverse to decorrelate; each returns 1-2 NEW blind spots, each with a **falsifiable anchor** (exact quote + line) + severity + a proposed rule + an integration point. Loop with NEW lenses until 2 dry rounds (cap 3).
+2. **AUDIT — behavioral lenses, fanned out in parallel.** This machinery used to live in `judge`
+   as "Mode B" and was invoked from here. It was a DOUBLON: judge exists to grade a DELIVERABLE,
+   kaizen to improve a BEHAVIOR, and both carried the same lens list under OPPOSITE closing rules —
+   judge forbade writing anything, kaizen applies its edits. Removed from judge on 2026-09-01, its
+   substance moved HERE. Judge keeps quality audits; a behavioral target routes to kaizen.
 
-   **Two families of lenses, not one.** Mode B's default lenses are BEHAVIORAL (anchoring/honesty, communication, scope-drift…) and they read a transcript. A defect of the SYSTEM does not always show there, so fan out a second family when the target carries RUNs or conversations — **WORKFLOW/TOPOLOGY lenses**, which read `RUN.md` and the causal trace rather than prose:
+   **Parameterize the target first** — confirm which of: (i) Claude's behavior/workflow, (ii) a
+   codebase, (iii) a skill set. Do NOT assume "the repo": a wrong target wastes the whole fan-out.
+
+   **Preload "already covered"** (this replaces ledger round 1): the machine's global
+   `%USERPROFILE%\.claude\CLAUDE.md`, any project `CLAUDE.md`, the auto-memory index if present,
+   the installed skills. Inject that into EVERY lens so none re-flags the known.
+
+   **Fan out 6-9 lenses IN PARALLEL** (one message), model-diverse to decorrelate. Each returns 1-2
+   NEW blind spots — high-impact, each with a **falsifiable anchor** quoted from the transcript,
+   the repo or the scripts (never armchair reasoning), plus a severity, a proposed rule and an
+   integration point. The lens list:
+
+   - **Anchoring & honesty** — a claim made without the artifact that would settle it.
+   - **Communication & user attention** — what the user had to re-read, re-type or chase.
+   - **Cost & efficiency** — turns and tokens spent against what the livrable actually needed.
+   - **State / resume / capitalization** — what was re-derived because nothing carried it forward.
+   - **Scope & over-engineering** — work done that nobody asked for.
+   - **Reversibility & checkpoint** — a change that could not be undone in one command.
+   - **Error & silent failure** — a failure swallowed instead of surfaced.
+   - **Safety / secrets / PII** — anything sensitive that travelled where it should not.
+   - **Tool-use & idempotence** — a tool re-run blindly, or one whose replay is not safe.
+   - **Premature stop & iteration** — the hand given back before the verified result.
+   - **Model-shared blind spot** — assumptions the WHOLE panel takes for granted (same-model
+     ceiling). This lens is the one a single specialist cannot supply: keep it in every round.
+
+   **Convergence**: re-loop with NEW lenses until a round comes back dry; **2 dry rounds = stop,
+   cap 3 rounds**.
+
+   **Same-model honesty caveat (MANDATORY)**: this is a SELF-audit — producer = judge is not proof.
+   Mark the findings **non-conclusive** (« correlated same-model angle — blind spot not excluded »)
+   and surface that caveat in the report. It does not block the integrate step: the garde-fou there
+   is revertability (one commit per edit), not an illusion of independence.
+
+   **Two families of lenses, not one.** The lenses above are BEHAVIORAL and they read a transcript. A defect of the SYSTEM does not always show there, so fan out a second family when the target carries RUNs or conversations — **WORKFLOW/TOPOLOGY lenses**, which read `RUN.md` and the causal trace rather than prose:
    - **routing** — the phase actually played versus the one the demand called for (a `build` on an unframed need, a `judge` while work remained).
    - **fan-out sizing** — agents spent versus the regime bracket; a parallel round that returned nothing new.
    - **gate arming** — a RUN closed `green` with an unticked DoD, a `signal-cmd` never replayed, `gate: off` or `disposable` on work that needed a net.
    - **loop economics** — judge→build iterations, cost per turn, a re-run of something already tried (the retrospective shows it).
-   Each keeps Mode B's contract: a falsifiable anchor (the RUN path + the line), a severity, a proposed rule, an integration point.
+   Each keeps the same contract: a falsifiable anchor (the RUN path + the line), a severity, a proposed rule, an integration point.
 
 3. **DEFINE THE RIGHT BEHAVIOR (UX target) — before proposing any rule.** A defect names what happened; it does NOT say what SHOULD have happened. For each consolidated blind spot, write the **target behavior in one sentence, from the USER's experience**: at that exact moment, what would have been the good response/action for the person in front of the screen (what they get, when, in what form, what they are spared) — and what makes it good (less friction, no wasted turn, nothing to re-type, no false claim, the decision left where it belongs). Derive the rule FROM that target, never straight from the defect: a rule written against a symptom produces a prohibition (« ne fais plus X ») that leaves the agent with no behavior to run; a rule written from the target produces a REFLEX (« au moment où X → fais Y »). If two plausible target behaviors compete (answer directly vs. offer a choice, act vs. ask), name both, pick one with its reason, and record the discarded one — a rule installed on an unarbitrated target is a guess. When the target touches something the user alone can settle (a taste, a trade-off between speed and control), surface it as a question instead of freezing it into the kit. The non-recurrence replay (step 6) then tests the TARGET behavior, not merely the absence of the defect.
 
@@ -98,12 +135,39 @@ The deliverable is the STATE table (presented in PLAIN words) + the integrated e
 ## Don't
 - **Install a rule without having named the target behavior** — a prohibition derived from the symptom (« ne fais plus X ») leaves nothing to DO in its place, and gets violated the next session. Name the good user experience first, then write the reflex that produces it.
 - **The silent edit** — kaizen APPLIES, but never invisibly: an edit that does not appear in the STATE table, or that lands mixed into another commit, is a defect (the user must be able to see it and revert it alone).
-- **Reimplement the audit** — reuse `judge` Mode B; kaizen orchestrates, it doesn't re-derive the lens machinery.
+- **Improvise a parallel lens list per session** — the list in step 2 IS the machinery; extend it explicitly, and say so, rather than re-deriving one each time.
 - **Trust a lens's word** — adjudicate; reject a finding that re-flags a deliberate decision or overstates; edit on the REAL file, never a sub-agent's report.
 - **Prefer a passive fiche to a WIRED trigger** — loading ≠ applying; a hook + hard rule beats a memory fiche alone.
 - **Declare a finding treated without the non-recurrence replay** — « ça ne doit pas se reproduire » is the bar: an edit whose original failing scenario was never replayed against it is "installé, non prouvé", not treated. Restating a rule that already failed once is not an escalation.
 - **Report "integrated/done"** without the out-of-model verification (`test-hooks.ps1`) AND `sync-kit.ps1` propagation AND the `kaizen-treated.jsonl` line.
 
 ## Engine & reflexes
-- Mechanics are CANONICAL in `~/.claude/skills/_engine/ENGINE.md` and in `judge` **Mode B** (behavioral audit). Kaizen ORCHESTRATES them and carries only its delta: target-location, the self-applied integrate step, sync-kit, and the one-commit-per-edit constraint. **On divergence, the engine + judge Mode B win.**
+- Scoring and loop mechanics are CANONICAL in `~/.claude/skills/_engine/ENGINE.md`. Kaizen now carries the BEHAVIORAL audit itself (step 2 — absorbed from judge on 2026-09-01) plus its own delta: target-location, the self-applied integrate step, sync-kit, and the one-commit-per-edit constraint. **On divergence with the engine, the engine wins.**
 - Cardinal constraint (constitution §19): kaizen APPLIES its own edits — diagnostic → precise edits applied directly, each verified out-of-model and committed on its own. The garde-fou is REVERTABILITY, not an approval wait.
+
+## Les LOGS de conversation — la source de première main
+
+L'app écrit sous `.autowin-data/<profil>/` quatre journaux par conversation. **Les lire est la
+première main ; une sonde agrégée est la seconde.** Ils remplacent l'Observatory : ce que
+l'Observatory affichait, ces fichiers le PORTENT, et eux se lisent sans ouvrir une vue.
+
+| journal | un fichier par | ce qu'il porte |
+|---|---|---|
+| `activity/conv-N.jsonl` | conversation | `chat-usage` : `costUsd`, `durationMs`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `provider`, `model`, `reasoningEffort`, `label` (= le message utilisateur du tour) ; `conversation-route` : la phase choisie |
+| `causal-trace/conv-N.jsonl` | conversation | `message`, `model-response`, `decision`, `injection`, `boundary`, `error`, `response-displayed` — l'enchaînement causal réel |
+| `turn-journals/conv-N/` | tour | le journal fin du tour : appels, commandes, verdicts |
+| `prompt-observability/conv-N.jsonl` | conversation | ce qui est réellement parti au modèle |
+
+**Réflexe.** Au moment où la cible est une conversation NOMMÉE — et TOUJOURS avant d'écrire
+« non mesurable », « pas de données » ou « corpus vide » —, ouvrir son `activity/conv-N.jsonl` et
+son `causal-trace/conv-N.jsonl` avant de conclure. Une sonde agrégée a un corpus FIGÉ : les
+conversations récentes ou en cours n'y sont pas encore, alors que leur journal, lui, est déjà écrit.
+
+**Mesuré le 2026-09-01 (conv-27).** `scout:rendement` couvrait 25 conversations et ignorait
+conv-27, conv-26 et conv-28 — les trois plus récentes. La procédure telle qu'écrite menait à
+« hors corpus ». `activity/conv-27.jsonl` portait pourtant les 19 appels, $9,885 et 63,3 min qui
+ont permis toute l'analyse. Coût de l'omission : l'analyse entière, ou un chiffre inventé.
+
+**Garde-fous.** Lecture seule, jamais d'écriture sur ces journaux. Un tour à `costUsd = 0` est un
+tour NON INSTRUMENTÉ, pas un tour gratuit : l'exclure des moyennes. Et un journal DIT ce qui a été
+consommé, jamais si le livrable était bon — l'acceptation se lit dans le fil, pas dans le coût.

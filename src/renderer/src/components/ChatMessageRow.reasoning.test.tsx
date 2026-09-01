@@ -19,7 +19,7 @@ import { ChatMessageRow } from './ChatMessageRow'
 import type { Msg } from './chat-view-types'
 
 describe('ChatMessageRow', () => {
-  it('affiche le raisonnement dans un bloc Réflexion ouvert tant que le tour court', async () => {
+  it('affiche le raisonnement dans un bloc Réflexion, plié par défaut', async () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -35,8 +35,9 @@ describe('ChatMessageRow', () => {
     })
     const bloc = host.querySelector<HTMLDetailsElement>('[data-testid="thinking-block"]')
     expect(bloc, 'le raisonnement doit être rendu dans un bloc « Réflexion »').not.toBeNull()
-    // OUVERT tant que le tour court : replié, la pensée resterait invisible — le défaut d'origine.
-    expect(bloc!.open).toBe(true)
+    // PLIÉ par défaut depuis le 2026-09-01 (« pareil pour reflexion ») : ce que cet oracle protège,
+    // c'est que le bloc EXISTE et PORTE la pensée — le défaut d'origine était son absence totale.
+    expect(bloc!.open).toBe(false)
     expect(host.querySelector('[data-testid="thinking-body"]')?.textContent).toBe(
       'raisonnement en cours'
     )

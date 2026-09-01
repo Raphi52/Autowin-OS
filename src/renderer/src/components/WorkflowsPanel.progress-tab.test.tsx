@@ -79,8 +79,22 @@ describe('WorkflowsPanel — onglet Avancée', () => {
     container.remove()
   })
 
+  /**
+   * Le detail d'un RUN vit sous l'onglet « Runs » depuis le retour des trois onglets
+   * (Graph / Runs / Logs) : ces tests doivent y naviguer avant de lire. Aucune assertion relachee,
+   * une etape de navigation ajoutee.
+   */
+  function ouvrirRuns(): void {
+    const onglet = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
+    ).find((b) => b.textContent?.trim() === 'Runs')
+    if (!onglet) throw new Error('onglet Runs introuvable')
+    act(() => onglet.click())
+  }
+
   it('propose l’onglet Avancée et y rend le suivi du run', () => {
     act(() => root.render(<WorkflowsPanel {...props()} />))
+    ouvrirRuns()
     const tabs = Array.from(container.querySelectorAll('.run-detail-tab')).map((t) => t.textContent)
     expect(tabs).toContain('Avancée')
     expect(container.querySelectorAll('[data-testid="run-progress-step"]')).toHaveLength(1)
@@ -89,6 +103,7 @@ describe('WorkflowsPanel — onglet Avancée', () => {
 
   it('sur l’onglet RUN.md, le suivi cède la place au fichier rendu', () => {
     act(() => root.render(<WorkflowsPanel {...props({ runDetailTab: 'runmd' })} />))
+    ouvrirRuns()
     expect(container.querySelector('[data-testid="run-progress-step"]')).toBeNull()
     expect(container.querySelector('[data-testid="run-summary"]')).not.toBeNull()
   })

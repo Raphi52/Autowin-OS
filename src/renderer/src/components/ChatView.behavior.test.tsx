@@ -883,6 +883,45 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.chat-jump-latest')).toBeNull()
   })
 
+  /**
+   * FIN DE TOUR. Quand le tour se termine, la hauteur du fil change (bandeau « en cours » retire,
+   * file d'attente videe, bloc de cloture peint) SANS que les messages changent : l'effet de
+   * descente, branche sur `messages`, ne se rejouait pas. Le fil restait arrete au milieu de la
+   * derniere reponse avec le bouton « ↓ Derniere reponse », alors que l'utilisateur n'avait rien
+   * remonte (rapporte le 2026-09-01, conv-44, capture a l'appui).
+   */
+  it('redescend tout en bas quand le tour se termine', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('une question')
+    await click('.composer-send')
+
+    const scroll = container!.querySelector('.chat-scroll') as HTMLDivElement
+    const scrollTo = vi.fn()
+    scroll.scrollTo = scrollTo
+    Object.defineProperties(scroll, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: { configurable: true, writable: true, value: 0 }
+    })
+    // On ne juge QUE la fin de tour : les descentes liees a l'envoi sont derriere nous.
+    await act(async () => flushAnimationFrames())
+    scrollTo.mockClear()
+
+    await act(async () => {
+      pilot.resolve({ ok: true })
+      await Promise.resolve()
+    })
+    await act(async () => flushAnimationFrames())
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'auto' })
+  })
+
   it('un message arrivé juste avant un scroll vers le haut ne ramène pas l’utilisateur en bas', async () => {
     // La frame est mise sous contrôle : c'est le seul moyen de placer le scroll utilisateur ENTRE la
     // décision de suivre le fil et son exécution. Sous charge, cet écart existe pour de vrai — c'est
@@ -1703,7 +1742,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => {
       ;(container!.querySelectorAll('.conv-pick')[0] as HTMLElement).click()
     })
-    await click('button[title="Workflows (RUN.md)"]')
+    await click('button[title="Détails de l’exécution"]')
 
     const liveSubagentCard = container!.querySelector('.live-run .subagent-step')
     expect(liveSubagentCard?.textContent).toContain('en cours')
@@ -1736,21 +1775,30 @@ describe('ChatView behavior under concurrent UI actions', () => {
    * navigation, et le détail dessous découle du nœud choisi. L'assertion est retournée pour que la
    * barre ne puisse pas revenir en silence.
    */
-  it('n’expose plus de barre d’onglets dans Workflows : le graphe est la navigation', async () => {
+  /**
+   * TROIS ONGLETS — Graph / Runs / Logs — redemandes le 2026-09-01. Ce test remplace celui qui
+   * INTERDISAIT toute barre d'onglets : l'interdiction datait de la periode ou le graphe etait la
+   * seule navigation, et elle aurait bloque la separation demandee. Ce qui reste verifie : les
+   * QUATRE anciennes projections ne reviennent pas, et le graphe est toujours l'accueil.
+   */
+  it('expose trois onglets dans le panneau — Graph, Runs, Logs — et ouvre sur le graphe', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
     await click('.conv-pick')
-    await click('button[title="Workflows (RUN.md)"]')
+    await click('button[title="Détails de l’exécution"]')
 
     const pane = container!.querySelector('.runs-pane')
     expect(pane).toBeTruthy()
-    expect(pane!.querySelector('.workflow-section-tabs')).toBeNull()
-    expect(pane!.querySelector('[role="tablist"]')).toBeNull()
-    expect(pane!.querySelectorAll('button[role="tab"]')).toHaveLength(0)
-    // Le graphe est monté d'emblée, et le détail des RUN.md reste atteignable sous lui.
+    expect(pane!.querySelector('[role="tablist"]')).toBeTruthy()
+    expect(
+      Array.from(pane!.querySelectorAll('button[role="tab"]')).map((b) => b.textContent?.trim())
+    ).toEqual(['Graph', 'Runs', 'Logs'])
+    // Le graphe est monté d'emblée, et son détail de sélection reste sous lui.
     expect(pane!.querySelector('.workflow-execution-graph')).toBeTruthy()
     expect(pane!.querySelector('[data-workflow-detail]')).toBeTruthy()
+    // Les anciennes projections en onglets ne reviennent pas par la bande.
     expect(pane!.textContent).not.toContain('Activité')
+    expect(pane!.textContent).not.toContain('Source control')
     expect(pane!.className).not.toContain('wide')
   })
 
@@ -1781,8 +1829,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     await mount(mockApi)
     await click('.conv-pick')
-    await click('button[title="Workflows (RUN.md)"]')
-    // Plus d’onglet à activer : sans sélection dans le graphe, la liste des RUN.md est l’accueil.
+    await click('button[title="Détails de l’exécution"]')
+    // Les RUN.md ont leur propre onglet depuis le 2026-09-01 : il faut l'ouvrir pour les lire.
+    await click('button[role="tab"]:nth-of-type(2)')
 
     const deleteButton = container!.querySelector(
       'button[aria-label="Supprimer le run ancien-run"]'
@@ -1842,13 +1891,23 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ])
     await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]), causalTrace }))
     await click('.conv-pick')
-    await click('button[title="Workflows (RUN.md)"]')
+    await click('button[title="Détails de l’exécution"]')
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
     })
 
     expect(container!.textContent).not.toContain('Aucune orchestration dans cette conversation')
+    // Le graphe est bien rempli par la trace : c'est LA garde du défaut d'origine.
+    expect(container!.querySelector('[data-execution-node]')).not.toBeNull()
+    // Depuis le 2026-09-01, l'accueil de l'onglet Graph ne garde que les fils EN COURS : ce tour
+    // est TERMINÉ, donc son fil n'y est plus empilé — il s'ouvre en descendant sur son nœud.
+    expect(container!.querySelector('.live-run')).toBeNull()
+
+    const noeudAgent = container!.querySelector<HTMLButtonElement>(
+      '[data-execution-node][data-execution-kind]'
+    )!
+    await act(async () => noeudAgent.click())
     expect(container!.querySelector('.live-run')).not.toBeNull()
   })
 
@@ -1880,7 +1939,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     // Montage + sélection de conversation : rien n'est lu tant que le panneau reste fermé.
     expect(causalTrace).not.toHaveBeenCalled()
 
-    await click('button[title="Workflows (RUN.md)"]')
+    await click('button[title="Détails de l’exécution"]')
     // Le graphe n’est plus derrière un onglet : ouvrir le panneau SUFFIT à le monter, donc à lire
     // la trace. La paresse tient désormais à l’ouverture du panneau, seule garde encore réelle.
     await act(async () => {
@@ -1973,7 +2032,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await mount(mockApi)
     await click('.conv-pick')
 
-    expect(container!.querySelector('button[title="Workflows (RUN.md)"]')?.textContent).toContain(
+    expect(container!.querySelector('button[title="Détails de l’exécution"]')?.textContent).toContain(
       '1 green'
     )
   })
@@ -2027,6 +2086,46 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(routeConversationMessage).toHaveBeenCalledWith('B', 'Traite B', [])
     expect(pilotChat).toHaveBeenCalledWith(expect.any(Array), 'B')
     expect(conversationsCreate).not.toHaveBeenCalled()
+  })
+
+  /**
+   * MOSAIQUE + message pre-ecrit. « Faire reparer » (bandeau de mise a jour), « Prompter dans
+   * Autowin » (veille) et « Preparer le prompt » (tickets) passent TOUS par cet evenement. En
+   * mosaique, le chat unique n'est pas rendu : remplir son champ n'affichait rien du tout, et les
+   * boutons paraissaient morts (mesure le 2026-09-01, conv-44). La fenetre doit s'OUVRIR, avec le
+   * message dedans, sans faire sortir l'utilisateur de sa mosaique.
+   */
+  it('ouvre une fenetre de mosaique portant le message pre-ecrit, sans quitter la mosaique', async () => {
+    window.localStorage.setItem('autowin.chat.conversationsViewMode', 'mosaic')
+    window.localStorage.setItem('autowin.chat.mosaicOpenIds', JSON.stringify(['A']))
+    try {
+      const mockApi = api({
+        conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
+        conversation: vi.fn(async (id: string) => conversation(id))
+      })
+      await mount(mockApi)
+
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent('autowin:prefill-conversation', {
+            detail: { conversationId: 'B', prompt: 'Repare la mise a jour', send: false }
+          })
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      await act(async () => flushAnimationFrames())
+
+      // On est TOUJOURS en mosaique, et elle porte maintenant les deux fenetres.
+      const fenetres = [...container!.querySelectorAll('.chat-mosaic-window')]
+      expect(fenetres).toHaveLength(2)
+      const champs = [...container!.querySelectorAll('.chat-mosaic-window textarea')].map(
+        (champ) => (champ as HTMLTextAreaElement).value
+      )
+      expect(champs).toContain('Repare la mise a jour')
+    } finally {
+      window.localStorage.clear()
+    }
   })
 
   it('does not steal conversation B when routing from A resolves late', async () => {

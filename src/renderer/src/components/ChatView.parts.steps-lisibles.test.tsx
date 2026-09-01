@@ -36,6 +36,10 @@ type Action = Parameters<typeof AssistantActivityGroup>[0]['actions'][number]
 
 function render(actions: Action[]): void {
   act(() => root.render(createElement(AssistantActivityGroup, { actions })))
+  // Un groupe TERMINE arrive PLIE depuis le 2026-09-01 : ces oracles portent sur le CONTENU des
+  // etages, on les deplie donc comme le ferait l'utilisateur avant de les observer.
+  const entete = container.querySelector<HTMLButtonElement>('[data-testid="activity-group"]')
+  if (entete && entete.getAttribute('aria-expanded') === 'false') act(() => entete.click())
 }
 const etages = (): HTMLElement[] => [...container.querySelectorAll<HTMLElement>('.activity-step')]
 const action = (over: Partial<Action>): Action =>
