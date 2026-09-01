@@ -16,7 +16,6 @@
  * les doublons exacts sont écartés, et chaque ligne dit de quelle SOURCE elle vient. Une ligne par
  * geste, l'ensemble trié chronologiquement.
  */
-import { estimateCostUsd, formatUsd } from '../../../shared/cost-estimate'
 import type { Msg } from './chat-view-types'
 
 export type ModelActivityKind =
@@ -44,14 +43,7 @@ export type ModelActivityKind =
   | 'event'
 
 /** D'où vient la ligne. Affiché et filtrable : une preuve sans provenance n'en est pas une. */
-export type ModelActivitySource =
-  | 'thread'
-  | 'journal'
-  | 'parts'
-  | 'causal'
-  | 'activity'
-  /** Flux BRUT du fournisseur (`run-stdout/*.stdout.jsonl`) : ce que le CLI a réellement émis. */
-  | 'provider'
+export type ModelActivitySource = 'thread' | 'journal' | 'parts' | 'causal' | 'activity'
 
 export interface ModelActivityEntry {
   id: string
@@ -70,11 +62,6 @@ export interface ModelActivityInput {
   messages: readonly Msg[]
   /** Événements bruts du journal fichier, par `turnId`. Absent = tour hors rétention. */
   journalByTurn: Record<string, ReadonlyArray<Record<string, unknown>>>
-  /**
-   * Flux BRUT du fournisseur par `turnId` — la source, et non son résumé. Absent = pas de flux lu
-   * (aucun appel de CLI tracé, ou fichier purgé : `missing`).
-   */
-  providerByTurn?: Record<string, ProviderStreamPayload>
   /** Trace causale de la conversation (`autowin.trace/v1`), telle quelle. */
   causal?: ReadonlyArray<Record<string, unknown>>
   /** Journal d'activité facturée de la conversation (`activity/<conv>.jsonl`), tel quel. */
