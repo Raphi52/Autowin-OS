@@ -190,6 +190,11 @@ import {
   readTurnJournal
 } from './runs/turn-journal'
 import {
+  closingJournalEvents,
+  promptCallJournalEvents,
+  type PromptJournalMemory
+} from './runs/turn-journal-enrich'
+import {
   listRecoverableChatProviderCalls,
   recoverCompletedChatProviderCall,
   streamedPrefixForProviderCall,
@@ -3797,6 +3802,11 @@ Le fil reprend ensuite normalement.`
      * Meme patron que `streamedSpoken` — on accumule, on ecrit une fois.
      */
     let streamedReasoning = ''
+    /**
+     * Memoire du prompt SYSTEME deja journalise pour ce tour : il ne se reecrit que s'il CHANGE
+     * (cf. `turn-journal-enrich.ts`), sinon chaque iteration recopierait le meme socle.
+     */
+    const promptJournalMemory: PromptJournalMemory = {}
     let completedText = ''
     let verification: { complete: boolean; evidence: string } | undefined
     let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
@@ -4205,6 +4215,21 @@ Le fil reprend ensuite normalement.`
               /* trace best-effort : ne jamais casser un tour pour une ecriture d'observabilite */
             }
           }
+          /**
+           * ... et dans le JOURNAL de la conversation. Le raisonnement, le cout reel du tour et
+           * l'issue d'orchestration n'y figuraient PAS : ils partaient dans le tour et dans le
+           * trace-store (Observatory) seulement. Comme le journal est desormais ce qui est ANALYSE
+           * a la place de l'Observatory, l'information doit y etre ECRITE, pas seulement produite.
+           */
+          try {
+            for (const journalEvent of closingJournalEvents(
+              { reasoning: raisonnement, usage: turnUsage ? { ...turnUsage } : undefined, outcome: issue },
+              Date.now()
+            ))
+              appendTurnEvent(turnJournalRoot, conversationId, turnId, journalEvent)
+          } catch {
+            /* journal best-effort : ne jamais casser un tour pour une ecriture d'observabilite */
+          }
           durableEvent = { kind: 'done', sessionId: turnSessionId }
         } else if (pilotEvent.kind === 'cancellation') durableEvent = { kind: 'cancelled' }
         if (durableEvent) {
@@ -4397,6 +4422,19 @@ Le fil reprend ensuite normalement.`
         }
         applyDurableEvent(pilotEvent)
         if (conversationId && pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
+          // L'APPEL PROVIDER dans le journal : prompt systeme, options, usage/cout, modele resolu,
+          // duree, statut/erreur. Jusqu'ici seul le trace-store le savait — le journal ne portait
+          // que les deltas de reponse, d'ou un log juge « super pauvre ».
+          try {
+            for (const journalEvent of promptCallJournalEvents(
+              pilotEvent,
+              promptJournalMemory,
+              Date.now()
+            ))
+              appendTurnEvent(turnJournalRoot, conversationId, turnId, journalEvent)
+          } catch {
+            /* journal best-effort : ne jamais casser un tour pour une ecriture d'observabilite */
+          }
           traceSequence = rebaseTraceSequence(causalTrace, conversationId, traceSequence)
           const promptCall = appendPromptCall({
             conversationId,
