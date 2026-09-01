@@ -17,6 +17,40 @@ import { ConversationStore } from './store/conversations'
  * contient pas — exactement ce que l'utilisateur a vécu.
  */
 describe('une réponse injectée pendant un tour devient un VRAI message du fil', () => {
+  /**
+   * DÉFAUT VÉCU (conv-46, 2026-09-01) : « j'ai écrit un message et il se passe rien ».
+   *
+   * La consigne était reçue et traitée, mais elle s'écrivait EN FIN de fil — donc SOUS le brouillon
+   * de réponse posé par `beginTurn`. L'utilisateur voyait sa phrase en dernier, rien en dessous, et
+   * la réponse qui la traitait AU-DESSUS d'elle. Ce test fixe l'ordre de lecture.
+   */
+  it('se place AVANT la réponse du tour qui la consomme', () => {
+    let horloge = 1
+    const store = new ConversationStore(() => horloge++)
+    const conv = store.create({ title: 'A', provider: 'claude' })
+    store.beginTurn(conv.id, { content: 'commite le chantier' }, { turnId: 't1' })
+
+    const messageId = enregistrerDirectiveDansLeFil({
+      conversations: store,
+      conversationId: conv.id,
+      texte: 'ensuite push sur azure sur main',
+      broadcast: vi.fn()
+    })
+
+    const messages = store.get(conv.id)!.messages
+    expect(messages.map((message) => message.content)).toEqual([
+      'commite le chantier',
+      'ensuite push sur azure sur main',
+      ''
+    ])
+    const rangConsigne = messages.findIndex((message) => message.messageId === messageId)
+    const rangReponse = messages.findIndex(
+      (message) => message.role === 'assistant' && message.turnId === 't1'
+    )
+    expect(rangConsigne).toBeGreaterThanOrEqual(0)
+    expect(rangConsigne).toBeLessThan(rangReponse)
+  })
+
   it('écrit un message utilisateur PERSISTÉ et prévient l’écran', () => {
     let horloge = 1
     const store = new ConversationStore(() => horloge++)
