@@ -226,6 +226,18 @@ export function commandResultSucceeded(result: CommandResult): boolean {
   if (!result.data || typeof result.data !== 'object') return true
   const data = result.data as Record<string, unknown>
   if (data.ok === false || data.valid === false || data.gateBlocked === true) return false
+  /*
+   * UN REFUS TRANSPORTE DANS UN SUCCES EST UN ECHEC — decision utilisateur du 2026-09-01 (conv-52).
+   *
+   * Plusieurs commandes rendent `{ok:true}` en portant un REFUS dans leur charge : `remember`
+   * (`stored:false`, portee/type/source invalides, doublon), `verify` et `brain_query`
+   * (`allowed:false`, rien n'a tourne). Le test ne regardait que `ok`/`valid`/`status`/`exitCode` :
+   * ces resultats passaient pour des reussites, donc AUCUNE des gardes en aval ne s'armait — ni la
+   * pastille rouge de l'action, ni le mur enregistre, ni la relance « corrige, puis poursuis ». Le
+   * modele annoncait « je retiens ca » et rien n'etait ecrit. Le fait porteur est ce que la commande
+   * dit d'ELLE-MEME (`stored` / `allowed` / `refused`), jamais la reussite du transport.
+   */
+  if (data.stored === false || data.allowed === false || data.refused === true) return false
   if (data.status === 'failed' || data.status === 'red') return false
   return typeof data.exitCode !== 'number' || data.exitCode === 0
 }
@@ -761,6 +773,19 @@ export class AgentPilot {
     let refusRememberAuxiliaire: string | undefined
     /** Le raccourci `remember` a AVALE la garde de cloture : une relance est due (voir plus bas). */
     let consigneClotureApresRemember = false
+    /**
+     * UN DEPOT REFUSE SE CORRIGE, il ne se CONSTATE pas. Bornee a une reprise.
+     *
+     * Mesure conv-49 (2026-09-01, capture de l'utilisateur) : `remember` refuse pour « portee
+     * manquante », tour CLOS sur « ⚠️ Memoire NON deposee ». Le motif partait a l'utilisateur mais
+     * JAMAIS au modele, qui ne pouvait donc pas ajouter la portee manquante — un refus pourtant
+     * reparable en un seul argument. Verdict de l'utilisateur : « il doit se rendre compte quand ca
+     * foire et corriger avant de passer a la suite ». On rend la main aux commandes UNE fois ; si la
+     * reprise echoue a son tour, la cloture dit le refus comme avant.
+     */
+    let repriseRememberRefuseDisponible = true
+    /** La consigne de reprise du depot refuse, poussee au bout de l'iteration. */
+    let consigneRepriseRemember: string | undefined
     /**
      * Le compte-rendu AUTORITATIF de cette orchestration, garde comme REPLI.
      *
@@ -1306,12 +1331,28 @@ export class AgentPilot {
      * savoir ce qui ratait. Deux sites cloturent un tour ; ils partagent ce repli plutot que d'en
      * garder chacun une copie qui divergerait.
      */
-    const texteDeCloture = (spoken: string): string =>
-      spoken ||
-      (anyActionExecuted
-        ? 'J’ai agi mais je n’ai pas produit de conclusion en clair — vois les cartes ' +
-          'd’action ci-dessus pour le detail (et leurs eventuels echecs).'
-        : 'Aucune reponse produite pour ce tour.')
+    const texteDeCloture = (spoken: string): string => {
+      const texte =
+        spoken ||
+        (anyActionExecuted
+          ? 'J’ai agi mais je n’ai pas produit de conclusion en clair — vois les cartes ' +
+            'd’action ci-dessus pour le detail (et leurs eventuels echecs).'
+          : 'Aucune reponse produite pour ce tour.')
+      /*
+       * UN REFUS DE MEMOIRE ENCORE DEBOUT SUIT LE TOUR JUSQU'A SA CLOTURE, QUELLE QU'ELLE SOIT.
+       *
+       * La mention ne vivait que dans le raccourci `onlyAuxiliaryRemember`. Des que la reprise rend
+       * la main au modele (conv-52), le tour se clot ailleurs — branche sans commande, question,
+       * repli sur le cap — et le refus disparaissait alors COMPLETEMENT : ni le modele ni
+       * l'utilisateur n'apprenaient que rien n'avait ete ecrit. La mention est donc portee par le
+       * point de cloture COMMUN, et elle s'efface d'elle-meme quand un depot rejoue reussit.
+       */
+      return refusRememberAuxiliaire
+        ? `${texte}
+
+⚠️ Mémoire NON déposée — ${refusRememberAuxiliaire}`
+        : texte
+    }
     // L'etat ENTIER part deja dans le premier message du tour : les iterations suivantes n'en
     // repoussent que le DELTA (voir `etat-diff.ts`).
     let dernierEtatEnvoye: EtatPrompt = snapshot
@@ -2259,8 +2300,9 @@ export class AgentPilot {
         const commandSucceeded = commandResultSucceeded(r)
         if (token.name === 'remember') {
           // Sur `stored`, PAS sur la reussite du transport : voir motifDepotMemoireNonAbouti.
-          const motif = motifDepotMemoireNonAbouti(r)
-          if (motif) refusRememberAuxiliaire = motif
+          // Assignation INCONDITIONNELLE : un depot REJOUE avec succes doit EFFACER le refus
+          // precedent, sinon la cloture porterait un « NON deposee » dementi par la reprise.
+          refusRememberAuxiliaire = motifDepotMemoireNonAbouti(r)
         }
         /*
          * La clef porte le nom ET LA CIBLE. Avec le nom seul, un `edit_file` reussi sur `b.ts`
@@ -2332,6 +2374,25 @@ export class AgentPilot {
         conclusionFormatRecoveryAvailable = false
         grantRecoveryIteration('conclusion-absente')
         consigneClotureApresRemember = true
+      } else if (
+        onlyAuxiliaryRemember &&
+        refusRememberAuxiliaire &&
+        repriseRememberRefuseDisponible
+      ) {
+        // REFUS REPARABLE : on ne clot pas, on rend la main aux commandes (voir
+        // `repriseRememberRefuseDisponible`). La consigne part au bout de l'iteration, avec les
+        // RESULTATS reels — le modele lit donc le motif exact, pas un resume.
+        repriseRememberRefuseDisponible = false
+        grantRecoveryIteration('correction-apres-echec')
+        consigneRepriseRemember =
+          'SYSTÈME: ton dépôt de mémoire a été REFUSÉ (' +
+          refusRememberAuxiliaire +
+          ') — RIEN n’a été écrit, malgré ce que ton texte annonce. Corrige la CAUSE du refus dans ' +
+          'les arguments (portée du projet ou « global », type parmi lesson/decision/preference/' +
+          'domain, source tracée) et RÉ-ÉMETS `remember` MAINTENANT. Si le refus n’est pas ' +
+          'réparable, dis-le explicitement dans ta clôture au lieu de le taire. REPRENDS aussi ta ' +
+          'conclusion EN ENTIER dans ce nouveau message : lui seul sera affiché à l’utilisateur, le ' +
+          'texte précédent ne sera pas conservé.'
       } else if (onlyAuxiliaryRemember) {
         // Le modele a livre sa reponse ET sauve une memoire. On emettait VIDE — donc on JETAIT son
         // texte reel, laissant une bulle vide (conv-1141). `spoken` est garanti non vide ici.
@@ -2401,6 +2462,10 @@ export class AgentPilot {
       if (consigneClotureApresRemember) {
         consigneClotureApresRemember = false
         convo.push(RELANCE_CONCLUSION_ABSENTE)
+      }
+      if (consigneRepriseRemember) {
+        convo.push(consigneRepriseRemember)
+        consigneRepriseRemember = undefined
       }
     }
     // Le cap EFFECTIF, pas le cap initial : `grantRecoveryIteration` en accorde jusqu'a huit de plus

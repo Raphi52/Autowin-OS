@@ -18,8 +18,22 @@ const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
  * pilote et part en orchestration : ces tests ne testaient plus le streaming mais le routage. Le
  * comportement verifie ici — une commande atteint le bus, aucun faux blocage terminal — est inchange.
  */
+/** Le texte du dernier `done` — le seul que l'utilisateur lit. */
+function texteDuDone(events: PilotEvent[]): string {
+  const done = [...events].reverse().find((e) => e.kind === 'done') as
+    { kind: 'done'; text?: string } | undefined
+  return done?.text ?? ''
+}
+
 describe('AgentPilot chat streaming', () => {
-  it('ne repaie pas un appel pour reformuler un remember auxiliaire refusé après une réponse complète', async () => {
+  /*
+   * CE TEST A CHANGE D'INVARIANT le 2026-09-01, sur decision utilisateur (conv-52), et il faut le
+   * dire. Il verrouillait « ne repaie pas un appel pour un remember refuse » — l'economie. Constat
+   * de l'utilisateur sur sa capture (conv-49) : le refus s'affichait, le tour se fermait, et le
+   * modele n'apprenait JAMAIS le motif, donc ne pouvait pas ajouter l'argument manquant. Le nouvel
+   * invariant : UNE reprise est payee, jamais deux, et le refus qui survit est dit.
+   */
+  it('un remember auxiliaire refusé est REJOUÉ une fois, pas davantage', async () => {
     const responses = [
       'Scout livré.<cmd>{"name":"remember","args":{"type":"constraint"}}</cmd>',
       'Le dépôt mémoire a échoué.'
@@ -64,7 +78,8 @@ describe('AgentPilot chat streaming', () => {
       'conv-remember-cost'
     )
 
-    expect(send).toHaveBeenCalledTimes(1)
+    // UNE reprise, bornee : deux appels au modele, jamais trois.
+    expect(send).toHaveBeenCalledTimes(2)
     expect(bus.exec).toHaveBeenCalledTimes(1)
     expect(events).toContainEqual(
       expect.objectContaining({
@@ -74,7 +89,8 @@ describe('AgentPilot chat streaming', () => {
         data: 'type invalide'
       })
     )
-    expect(events.at(-1)).toMatchObject({ kind: 'done' })
+    // Le refus SURVIT jusqu'a la cloture : le modele n'a pas rejoue le depot.
+    expect(texteDuDone(events)).toContain('NON déposée')
   })
 
   it('OPEN BAR : une commande émise dans un tour « scout » ATTEINT le bus, et la réponse dite survit', async () => {
@@ -166,10 +182,11 @@ describe('AgentPilot chat streaming', () => {
         data: 'type invalide'
       })
     )
-    expect(events.at(-1)).toMatchObject({
-      kind: 'done',
-      text: 'Le dépôt mémoire a échoué, mais le travail demandé est terminé.'
-    })
+    expect(texteDuDone(events)).toContain(
+      'Le dépôt mémoire a échoué, mais le travail demandé est terminé.'
+    )
+    // Le depot n'a pas abouti : la cloture le porte, quel que soit le chemin de sortie.
+    expect(texteDuDone(events)).toContain('NON déposée')
   })
 
   /*
@@ -619,8 +636,7 @@ describe('AgentPilot chat streaming', () => {
     async ({ prefixeMarkdown, ponctuation }) => {
       const narration = 'Narration saine.'
       const prefixe = `${narration}\n\n${prefixeMarkdown}⛔️ Bloqué${ponctuation} aucun résultat.`
-      const commande =
-        '<cmd>{"name":"find_in_files","args":{"pattern":"status","dir":"src"}}</cmd>'
+      const commande = '<cmd>{"name":"find_in_files","args":{"pattern":"status","dir":"src"}}</cmd>'
       const responses = [
         { chunks: [prefixe, commande], text: `${prefixe}${commande}` },
         { chunks: [], text: 'Conclusion vérifiée.' }
@@ -666,9 +682,7 @@ describe('AgentPilot chat streaming', () => {
       expect(retraitIndex).toBeGreaterThan(-1)
       expect(apresRetrait.map((event) => event.text ?? '').join('')).not.toContain('⛔️ Bloqué')
       expect(
-        apresRetrait.filter(
-          (event) => event.kind === 'delta' && event.text?.includes(narration)
-        )
+        apresRetrait.filter((event) => event.kind === 'delta' && event.text?.includes(narration))
       ).toHaveLength(1)
     }
   )

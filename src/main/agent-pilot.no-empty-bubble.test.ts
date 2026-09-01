@@ -33,8 +33,7 @@ const describePrompt = () => ({
 /** Texte final du tour : le `done` porte la réponse persistée. */
 function texteFinal(events: PilotEvent[]): string | undefined {
   const done = [...events].reverse().find((e) => e.kind === 'done') as
-    | { kind: 'done'; text?: string }
-    | undefined
+    { kind: 'done'; text?: string } | undefined
   return done?.text
 }
 
@@ -50,7 +49,11 @@ describe('le chat ne rend jamais une bulle vide', () => {
       exec: vi.fn().mockResolvedValue({ ok: false, error: 'échec sonde' })
     }
     const events: PilotEvent[] = []
-    await new AgentPilot({ send, describePrompt } as never, rolesClaude as never, bus as never).chat(
+    await new AgentPilot(
+      { send, describePrompt } as never,
+      rolesClaude as never,
+      bus as never
+    ).chat(
       [{ role: 'user', content: 'lance la sonde et corrige' }],
       (e) => events.push(e),
       undefined,
@@ -66,6 +69,11 @@ describe('le chat ne rend jamais une bulle vide', () => {
 
   it('une réponse dite + un remember auxiliaire livre le TEXTE, pas du vide', async () => {
     // Le modèle répond ET sauve une mémoire : on jetait son texte et on émettait vide.
+    //
+    // LE DEPOT REUSSIT ICI, et c'est deliberé depuis le 2026-09-01 (conv-52) : un depot REFUSE rend
+    // desormais la main au modele pour qu'il corrige, donc le texte final est celui de la reprise.
+    // Ce test-ci porte sur la BULLE VIDE, pas sur le refus — le refus a son propre fichier
+    // (`agent-pilot.remember-refus-visible.test.ts`), qui verifie la reprise ET le motif affiche.
     const responses = [
       'Voici le diagnostic complet.<cmd>{"name":"remember","args":{"type":"constraint"}}</cmd>',
       'ok'
@@ -74,10 +82,14 @@ describe('le chat ne rend jamais une bulle vide', () => {
     const bus = {
       catalog: () => [{ name: 'remember', args: {}, description: 'mémoire' }],
       snapshotForPrompt,
-      exec: vi.fn().mockResolvedValue({ ok: false, error: 'type invalide' })
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { stored: true } })
     }
     const events: PilotEvent[] = []
-    await new AgentPilot({ send, describePrompt } as never, rolesClaude as never, bus as never).chat(
+    await new AgentPilot(
+      { send, describePrompt } as never,
+      rolesClaude as never,
+      bus as never
+    ).chat(
       [{ role: 'user', content: 'ajoute une contrainte en memoire' }],
       (e) => events.push(e),
       undefined,
