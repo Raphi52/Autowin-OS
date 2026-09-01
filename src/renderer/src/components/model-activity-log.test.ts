@@ -288,3 +288,75 @@ describe('rien ne se perd — le journal est lu à la place de l’Observatory',
     expect(entries[0].detail).toContain('je pense')
   })
 })
+
+/**
+ * CE QUE MONTRE LE BLOC « RÉFLEXION » DOIT SE RETROUVER DANS LES LOGS.
+ *
+ * Le bloc du fil (`ThinkingBlock`) affiche DEUX matières : la pensée du modèle et TOUTES les lignes
+ * de signe de vie du fournisseur (`providerStatusLog`). Le journal, lui, les recevait sans les
+ * reconnaître : `provider-status` et `reasoning-step` tombaient dans le fourre-tout « Journal », et
+ * la pensée conservée par le TOUR (seule survivante après le nettoyage du journal à 7 jours) n'était
+ * pas lue du tout. Trois trous entre ce qui s'affiche et ce qui se lit.
+ */
+describe('parité avec le bloc « Réflexion »', () => {
+  it('classe `provider-status` et `reasoning-step` du journal comme signe de vie et réflexion', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('turn-1', [])],
+      journalByTurn: {
+        'turn-1': [
+          { kind: 'provider-status', text: 'Bash(ls) en cours', iteration: 2, at: 10 },
+          { kind: 'reasoning-step', text: 'je pèse les options', iteration: 2, at: 11 }
+        ]
+      }
+    })
+    const statut = entries.find((entry) => entry.kind === 'status')
+    expect(statut).toMatchObject({ label: 'Bash(ls) en cours', source: 'journal', at: 10 })
+    const pensee = entries.find((entry) => entry.kind === 'reasoning')
+    expect(pensee).toMatchObject({ source: 'journal', at: 11 })
+    expect(pensee?.detail).toContain('je pèse les options')
+  })
+
+  it('lit la pensée et les signes de vie PORTÉS PAR LE MESSAGE, même sans journal', () => {
+    const message = {
+      role: 'assistant',
+      turnId: 'turn-1',
+      parts: [],
+      status: 'completed',
+      done: true,
+      reasoning: 'pensée conservée par le tour',
+      providerStatusLog: ['appel API', 'nouvelle tentative']
+    } as unknown as Msg
+    const entries = buildModelActivityLog({ messages: [message], journalByTurn: {} })
+    expect(entries.filter((entry) => entry.kind === 'reasoning')).toMatchObject([
+      { detail: 'pensée conservée par le tour', source: 'thread', turnId: 'turn-1' }
+    ])
+    expect(entries.filter((entry) => entry.kind === 'status').map((entry) => entry.label)).toEqual([
+      'appel API',
+      'nouvelle tentative'
+    ])
+  })
+
+  it('ne double pas une ligne déjà portée par le journal', () => {
+    const message = {
+      role: 'assistant',
+      turnId: 'turn-1',
+      parts: [],
+      status: 'completed',
+      done: true,
+      reasoning: 'même pensée',
+      providerStatusLog: ['Bash(ls) en cours']
+    } as unknown as Msg
+    const entries = buildModelActivityLog({
+      messages: [message],
+      journalByTurn: {
+        'turn-1': [
+          { kind: 'reasoning', text: 'même pensée', at: 5 },
+          { kind: 'provider-status', text: 'Bash(ls) en cours', iteration: 1, at: 6 }
+        ]
+      }
+    })
+    expect(entries.filter((entry) => entry.kind === 'reasoning')).toHaveLength(1)
+    expect(entries.filter((entry) => entry.kind === 'status')).toHaveLength(1)
+    expect(entries.filter((entry) => entry.kind === 'status')[0].source).toBe('journal')
+  })
+})

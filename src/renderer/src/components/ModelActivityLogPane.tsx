@@ -28,6 +28,7 @@ const KIND_LABEL: Record<ModelActivityKind, string> = {
   injection: 'Injection',
   boundary: 'Frontière',
   usage: 'Coût',
+  status: 'Signe de vie',
   event: 'Journal'
 }
 

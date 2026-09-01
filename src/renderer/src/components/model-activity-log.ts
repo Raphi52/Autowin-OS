@@ -33,6 +33,12 @@ export type ModelActivityKind =
   | 'boundary'
   /** Appel facturé : provider, modèle, tokens, coût, durée. */
   | 'usage'
+  /**
+   * SIGNE DE VIE du fournisseur (outil en cours, nouvelle tentative, tâche de fond) — la seconde
+   * matière du bloc « Réflexion » du fil, à côté de la pensée. Elle arrivait bien jusqu'au journal
+   * mais y était rangée en « Journal » fourre-tout : illisible et infiltrable.
+   */
+  | 'status'
   /** Tout geste journalisé qui n'entre dans AUCUNE des catégories ci-dessus. Rien ne se perd. */
   | 'event'
 
@@ -188,6 +194,25 @@ function fromParts(
   return out
 }
 
+/**
+ * Pensée et signes de vie PORTÉS PAR LE MESSAGE lui-même — la matière exacte du bloc « Réflexion »
+ * (`ThinkingBlock`) : `reasoning` (conservé par le tour, donc durable) et `providerStatusLog`
+ * (toutes les lignes de vie du tour, dans l'ordre). Sans heure : le message ne l'inscrit pas, et on
+ * n'en invente aucune — le tri chronologique les garde à leur place dans le fil.
+ */
+function fromMessageThinking(turnId: string, message: Msg): Brute[] {
+  const out: Brute[] = []
+  const pensee = short((message as { reasoning?: string }).reasoning)
+  if (pensee) out.push({ id: `${turnId}:thread:reasoning`, turnId, kind: 'reasoning', label: 'Raisonnement', detail: pensee })
+  const vies = ((message as { providerStatusLog?: string[] }).providerStatusLog ?? []).filter(
+    (ligne): ligne is string => typeof ligne === 'string' && ligne.trim() !== ''
+  )
+  vies.forEach((ligne, index) => {
+    out.push({ id: `${turnId}:thread:status:${index}`, turnId, kind: 'status', label: ligne })
+  })
+  return out
+}
+
 /** Gestes d'un tour reconstruits depuis son JOURNAL fichier (source la plus complète). */
 function fromJournal(
   turnId: string,
@@ -205,6 +230,34 @@ function fromJournal(
     if (kind === 'reasoning' || kind === 'think') {
       if (!reasoning) reasoningAt = stamp(event)
       reasoning += String(event.text ?? '')
+      return
+    }
+    if (kind === 'provider-status') {
+      // Exactement ce que le bloc « Réflexion » écrit ligne à ligne pendant l'attente.
+      const ligne = short(event.text)
+      const detail = rest(event, 'text')
+      out.push({
+        id,
+        turnId,
+        kind: 'status',
+        label: ligne ?? 'signe de vie',
+        ...stamp(event),
+        ...(detail ? { detail } : {})
+      })
+      return
+    }
+    if (kind === 'reasoning-step') {
+      // Pensée d'UNE itération (le journal écrit aussi un `reasoning` agrégé à la clôture) : elle
+      // se lit comme une réflexion, pas comme un geste anonyme.
+      const detail = joinDetail(short(event.text), rest(event, 'text', 'iteration'))
+      out.push({
+        id,
+        turnId,
+        kind: 'reasoning',
+        label: `Raisonnement (étape ${String(event.iteration ?? '?')})`,
+        ...stamp(event),
+        ...(detail ? { detail } : {})
+      })
       return
     }
     if (kind === 'delta') {
@@ -478,7 +531,12 @@ function fromActivity(entries: ReadonlyArray<Record<string, unknown>>): Brute[] 
 function dedupe(entries: ModelActivityEntry[]): ModelActivityEntry[] {
   const vues = new Set<string>()
   return entries.filter((entry) => {
-    const cle = `${entry.turnId}|${entry.kind}|${entry.label}|${entry.detail ?? ''}`
+    // Un signe de vie vu DEUX FOIS (porté par le message live ET par le journal) est la MÊME
+    // ligne : sa clé ignore les champs annexes (`iteration`), que seule la copie journal porte.
+    const cle =
+      entry.kind === 'status'
+        ? `${entry.turnId}|status|${entry.label}`
+        : `${entry.turnId}|${entry.kind}|${entry.label}|${entry.detail ?? ''}`
     if (vues.has(cle)) return false
     vues.add(cle)
     return true
@@ -530,6 +588,11 @@ export function buildModelActivityLog(input: ModelActivityInput): ModelActivityE
       ...tag('journal', journal && journal.length > 0 ? fromJournal(turnId, journal) : [])
     )
     entries.push(...tag('parts', fromParts(turnId, parts)))
+    // CE QUE MONTRE LE BLOC « RÉFLEXION », lu à sa source d'affichage. La pensée survit dans le
+    // TOUR (`message.reasoning`) quand le journal fichier a été nettoyé, et les signes de vie du
+    // fournisseur n'existent parfois que dans le message live : sans ces deux lignes, le journal
+    // montrait MOINS que la bulle du fil. Les copies déjà portées par le journal sont écartées.
+    entries.push(...tag('thread', fromMessageThinking(turnId, message)))
   })
   entries.push(...tag('causal', fromCausal(input.causal ?? [])))
   entries.push(...tag('activity', fromActivity(input.activity ?? [])))
