@@ -13,7 +13,12 @@
 export interface FilPourDirective {
   append(
     id: string,
-    message: { role: 'user' | 'assistant'; content: string; orientation?: boolean }
+    message: {
+      role: 'user' | 'assistant'
+      content: string
+      orientation?: boolean
+      avantLaReponseEnCours?: boolean
+    }
   ): { messages: ReadonlyArray<{ messageId?: string }> }
 }
 
