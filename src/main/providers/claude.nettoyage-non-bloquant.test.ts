@@ -14,10 +14,12 @@ import { nettoyerTemporairesDeLAppel } from './claude'
  * temporaire du system-prompt figeait donc la fenetre 1,6 s a la fin de l'appel au CLI.
  *
  * COMMENT ON LE PROUVE, et pourquoi PAS avec l'instrument du produit : `instrumenterEntreesSorties-
- * DuMain` remplace les fonctions sur l'OBJET de module `node:fs`. Un import nomme ESM
- * (`import { rmSync } from 'node:fs'`) est lie a la fonction ORIGINALE au chargement et echappe au
- * remplacement — verifie ici meme : un `rmSync` appele ainsi n'a produit AUCUN gel. Un test bati
- * dessus serait vert par aveuglement.
+ * DuMain` remplace les fonctions sur l'OBJET de module `node:fs`. Sous vitest, les sources restent
+ * en ESM : un import nomme (`import { rmSync } from 'node:fs'`) est lie a la fonction ORIGINALE au
+ * chargement et echappe au remplacement — mesure faite ici meme, un `rmSync` appele ainsi n'a
+ * produit AUCUN gel. Un test bati dessus serait donc vert par aveuglement. Dans l'application
+ * LIVREE le bundle est du CJS, l'appel repasse par l'objet de module et l'instrument voit bien
+ * l'acces : c'est ainsi que les 1 625 ms du journal ont ete captes.
  *
  * On prouve donc le contraire d'un blocage, directement : au retour de l'appel et AVANT de
  * l'attendre, le travail ne doit PAS deja etre fait. Une suppression synchrone aurait tout efface
