@@ -9,7 +9,9 @@ import {
   REGLAGE_VOIX_DEFAUT
 } from './jarvis-voix-reglage'
 
-function stockage(initial: Record<string, string> = {}): Storage & { data: Record<string, string> } {
+function stockage(
+  initial: Record<string, string> = {}
+): Storage & { data: Record<string, string> } {
   const data = { ...initial }
   return {
     data,
@@ -41,7 +43,11 @@ describe('le reglage de voix', () => {
     const s = stockage()
     ecrireReglageVoix(s, { voixURI: 'Microsoft Hortense' })
     const apres = ecrireReglageVoix(s, { debit: 1.5 })
-    expect(apres).toEqual({ voixURI: 'Microsoft Hortense', debit: 1.5, hauteur: REGLAGE_VOIX_DEFAUT.hauteur })
+    expect(apres).toEqual({
+      voixURI: 'Microsoft Hortense',
+      debit: 1.5,
+      hauteur: REGLAGE_VOIX_DEFAUT.hauteur
+    })
     expect(lireReglageVoix(s)).toEqual(apres)
   })
 })

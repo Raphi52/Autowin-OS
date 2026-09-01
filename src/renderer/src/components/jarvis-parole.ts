@@ -55,7 +55,7 @@ export function choisirVoix(
   return (
     (demandee === ''
       ? undefined
-      : voix.find((v) => v.voiceURI === demandee) ?? voix.find((v) => v.name === demandee)) ??
+      : (voix.find((v) => v.voiceURI === demandee) ?? voix.find((v) => v.name === demandee))) ??
     voix.find((v) => v.lang?.toLowerCase().startsWith('fr')) ??
     voix.find((v) => v.default) ??
     voix[0]
