@@ -10,7 +10,10 @@ import {
   type HarnessTraceEvent
 } from './harness-timeline-model'
 import { LatestRequestGate } from './observatory-reliability'
-import { projectLatestRequestExecution } from './request-execution-tree-model'
+import {
+  projectLatestRequestExecution,
+  type RequestTurnOption
+} from './request-execution-tree-model'
 import { workflowQuoteLabel } from './workflow-quote-label'
 import './WorkflowExecutionGraph.css'
 import { Spinner } from './Spinner'
@@ -345,6 +348,10 @@ export function WorkflowExecutionGraph({
 }: WorkflowExecutionGraphProps): React.JSX.Element {
   const [events, setEvents] = useState<HarnessTimelineEvent[]>([])
   const [turnId, setTurnId] = useState<string | undefined>()
+  const [turns, setTurns] = useState<RequestTurnOption[]>([])
+  // Tour DEMANDÉ par l'utilisateur. Distinct de `turnId` (le tour effectivement projeté) : sans
+  // cette distinction, un rechargement en direct écraserait le choix à chaque seconde.
+  const [pickedTurnId, setPickedTurnId] = useState<string | undefined>()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -366,10 +373,14 @@ export function WorkflowExecutionGraph({
         const trace = (await window.api.causalTrace(conversationId)) as HarnessTraceEvent[]
         if (!requestGate.current.isCurrent(requestId)) return
         const timeline = buildHarnessTimelineFromTrace(Array.isArray(trace) ? trace : [])
-        const projection = projectLatestRequestExecution(timeline, { requestLabel })
+        const projection = projectLatestRequestExecution(timeline, {
+          requestLabel,
+          ...(pickedTurnId ? { turnId: pickedTurnId } : {})
+        })
         const nextEvents = projection.events
         setEvents(nextEvents)
         setTurnId(projection.turnId)
+        setTurns(projection.turns ?? [])
         setSelectedId((current) =>
           current && nextEvents.some((event) => event.id === current) ? current : null
         )
@@ -384,8 +395,14 @@ export function WorkflowExecutionGraph({
         if (requestGate.current.isCurrent(requestId)) setLoading(false)
       }
     },
-    [active, conversationId, requestLabel]
+    [active, conversationId, requestLabel, pickedTurnId]
   )
+
+  // Changer de conversation remet le curseur sur la demande la plus récente : garder le tour choisi
+  // ailleurs afficherait un identifiant qui n'existe pas ici, donc un graphe vide sans raison.
+  useEffect(() => {
+    setPickedTurnId(undefined)
+  }, [conversationId])
 
   useEffect(() => {
     const gate = requestGate.current
@@ -478,6 +495,26 @@ export function WorkflowExecutionGraph({
             {live ? ' · en direct' : ''}
           </span>
         </div>
+        {/*
+          SÉLECTEUR DE TOUR. Le graphe ne projetait que le dernier : tout l'historique de la
+          conversation existait dans la trace et restait inatteignable. Masqué sous deux tours —
+          une commande sans alternative est du bruit.
+        */}
+        {turns.length > 1 && (
+          <select
+            className="workflow-execution-turn-select"
+            data-execution-turn-select
+            aria-label="Demande affichée dans le graphe"
+            value={turnId ?? turns[0].id}
+            onChange={(changed) => setPickedTurnId(changed.target.value)}
+          >
+            {turns.map((turn) => (
+              <option key={turn.id} value={turn.id}>
+                {turn.label}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           className="btn btn-sm btn-ghost"
           type="button"
@@ -502,7 +539,10 @@ export function WorkflowExecutionGraph({
       )}
       {!loading && !error && nodes.length === 0 && (
         <div className="workflow-execution-empty">
-          Aucune trace d’exécution pour la dernière demande.
+          {/* « la dernière demande » mentait dès qu'un tour ANTÉRIEUR était sélectionné. */}
+          {pickedTurnId
+            ? 'Aucune trace d’exécution pour la demande sélectionnée.'
+            : 'Aucune trace d’exécution pour la dernière demande.'}
         </div>
       )}
 

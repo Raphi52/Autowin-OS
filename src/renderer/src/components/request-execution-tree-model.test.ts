@@ -711,3 +711,43 @@ describe('nœud de clôture — un run non clos est EN ATTENTE, pas en cours', (
    * chemin corrigé ici ne la traverse jamais.
    */
 })
+
+/**
+ * LE GRAPHE NE MONTRAIT QUE LA DERNIÈRE DEMANDE.
+ *
+ * `timeline.turns[0]` était pris sans alternative : tout l'historique de la conversation existait
+ * dans la trace et restait inatteignable. Le panneau ne peut pas remplacer les onglets Sous-agents
+ * et Run — qui listent, eux, TOUS les tours — tant qu'il ne sait pas remonter dans le temps.
+ */
+describe('choix du tour projeté', () => {
+  const deuxTours = (): ReturnType<typeof buildHarnessTimelineFromTrace> =>
+    buildHarnessTimelineFromTrace([
+      trace('m-vieux', 'turn-vieux', 1, { type: 'message', payloads: [{ kind: 'text', content: 'UTILISATEUR: repare le gate' }] }),
+      trace('a-vieux', 'turn-vieux', 2, { execution: { phase: 'build' } }),
+      trace('m-recent', 'turn-recent', 3, { type: 'message', payloads: [{ kind: 'text', content: 'UTILISATEUR: ajoute un module' }] }),
+      trace('a-recent', 'turn-recent', 4, { execution: { phase: 'judge' } })
+    ])
+
+  it('expose les tours sélectionnables, du plus récent au plus ancien', () => {
+    const projection = projectLatestRequestExecution(deuxTours())
+
+    expect(projection.turnId).toBe('turn-recent')
+    expect(projection.turns?.map((turn) => turn.id)).toEqual(['turn-recent', 'turn-vieux'])
+    expect(projection.turns?.[1].label).toContain('repare le gate')
+  })
+
+  it('projette le tour DEMANDÉ, pas le dernier', () => {
+    const projection = projectLatestRequestExecution(deuxTours(), { turnId: 'turn-vieux' })
+
+    expect(projection.turnId).toBe('turn-vieux')
+    expect(projection.events.some((event) => event.id === 'a-vieux')).toBe(true)
+    expect(projection.events.some((event) => event.id === 'a-recent')).toBe(false)
+  })
+
+  it('un turnId inconnu retombe sur le dernier tour plutôt que sur du vide', () => {
+    const projection = projectLatestRequestExecution(deuxTours(), { turnId: 'turn-fantome' })
+
+    expect(projection.turnId).toBe('turn-recent')
+    expect(projection.events.length).toBeGreaterThan(0)
+  })
+})

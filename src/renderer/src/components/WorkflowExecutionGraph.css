@@ -369,3 +369,16 @@
   line-height: 1.5;
   color: var(--text-dim, var(--text-faint));
 }
+
+/* Sélecteur de tour : une commande discrète dans l'en-tête, jamais plus large que la colonne. */
+.workflow-execution-turn-select {
+  max-width: 180px;
+  min-width: 0;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  padding: 2px 4px;
+  color: var(--text-faint);
+  font-size: 10px;
+}

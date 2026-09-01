@@ -602,4 +602,74 @@ describe('WorkflowExecutionGraph', () => {
     expect(view.querySelector('.workflow-execution-detail')).not.toBeNull()
     expect(view.querySelector('[data-execution-reasoning]')).toBeNull()
   })
+  /**
+   * REMONTER DANS LE TEMPS SANS CHANGER D'ONGLET.
+   *
+   * Le graphe ne projetait que `timeline.turns[0]` : l'historique de la conversation existait dans
+   * la trace et restait hors d'atteinte. Les onglets Sous-agents et Run, eux, listent TOUS les
+   * tours — le graphe ne pouvait pas les remplacer sans savoir revenir en arrière.
+   */
+  it('offre un sélecteur de tour et projette celui qu’on choisit', async () => {
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('m-vieux', 1, {
+        turnId: 'turn-vieux',
+        timestamp: '2026-07-30T11:00:00.000Z',
+        type: 'message',
+        payloads: [{ kind: 'text', content: 'UTILISATEUR: repare le gate' }]
+      }),
+      trace('a-vieux', 2, {
+        turnId: 'turn-vieux',
+        timestamp: '2026-07-30T11:00:01.000Z',
+        type: 'handoff',
+        execution: { phase: 'build', agentId: 'builder', taskId: 'task-vieux' }
+      }),
+      trace('m-recent', 3, {
+        turnId: 'turn-recent',
+        timestamp: '2026-07-30T12:00:00.000Z',
+        type: 'message',
+        payloads: [{ kind: 'text', content: 'UTILISATEUR: ajoute un module' }]
+      }),
+      trace('a-recent', 4, {
+        turnId: 'turn-recent',
+        timestamp: '2026-07-30T12:00:01.000Z',
+        type: 'handoff',
+        execution: { phase: 'judge', agentId: 'juge', taskId: 'task-recent' }
+      })
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+    const selecteur = view.querySelector<HTMLSelectElement>('[data-execution-turn-select]')
+
+    expect(selecteur).not.toBeNull()
+    expect([...(selecteur?.options ?? [])].map((option) => option.value)).toEqual([
+      'turn-recent',
+      'turn-vieux'
+    ])
+    expect(selecteur?.value).toBe('turn-recent')
+    expect(view.querySelector('[data-execution-node="a-recent"]')).not.toBeNull()
+    expect(view.querySelector('[data-execution-node="a-vieux"]')).toBeNull()
+
+    await act(async () => {
+      selecteur!.value = 'turn-vieux'
+      selecteur!.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(view.querySelector('[data-execution-node="a-vieux"]')).not.toBeNull()
+    expect(view.querySelector('[data-execution-node="a-recent"]')).toBeNull()
+  })
+
+  /** Un seul tour : pas de sélecteur, une commande inutile est du bruit. */
+  it('n’affiche pas de sélecteur quand la conversation n’a qu’un tour', async () => {
+    const causalTrace = vi
+      .fn()
+      .mockResolvedValue([trace('seul', 1, { turnId: 'turn-unique', type: 'handoff' })])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+
+    expect(view.querySelector('[data-execution-turn-select]')).toBeNull()
+  })
 })
