@@ -688,6 +688,15 @@ export class ConversationStore {
       attachments?: AttachmentMeta[]
       /** Écrit pendant un tour : ce message oriente, il ne répond pas (cf. `Msg.orientation`). */
       orientation?: boolean
+      /**
+       * Insère le message JUSTE AVANT la réponse encore en cours, au lieu de l'ajouter en fin de fil.
+       *
+       * Défaut vécu (conv-46, 2026-09-01) : « j'ai écrit un message et il se passe rien ». La
+       * consigne injectée pendant un tour était reçue et traitée, mais elle s'écrivait APRÈS le
+       * brouillon de réponse posé par `beginTurn` — donc sous une réponse qui répondait déjà.
+       * L'utilisateur voyait sa phrase en dernier, avec rien en dessous.
+       */
+      avantLaReponseEnCours?: boolean
     }
   ): Conversation {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
