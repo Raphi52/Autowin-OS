@@ -3,6 +3,8 @@ import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { JarvisWidget, titreJarvis } from './JarvisWidget'
+import { ecrireNomJarvis } from './jarvis-nom'
+import { ecouteInitiale, phraseDeJarvis } from './jarvis-voice'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -103,6 +105,21 @@ class FakeAudio {
   }
 }
 
+/** La VOIX de Jarvis : elle ne s'entend pas en test, elle s'enregistre ici. */
+class FauxSynthese {
+  static dites: string[] = []
+  static annulations = 0
+  speak(u: { text: string }): void {
+    FauxSynthese.dites.push(u.text)
+  }
+  cancel(): void {
+    FauxSynthese.annulations += 1
+  }
+  getVoices(): SpeechSynthesisVoice[] {
+    return [{ lang: 'fr-FR', default: true, name: 'fr' } as SpeechSynthesisVoice]
+  }
+}
+
 const monte: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 const routeConversationMessage = vi.fn(async () => ({ conversationId: 'c-jarvis', routed: true }))
 const pilotChat = vi.fn(async () => ({ ok: true, cancelled: false }))
@@ -142,6 +159,16 @@ beforeEach(() => {
   pilotChat.mockClear()
   conversations.mockClear()
   ;(window as never as Record<string, unknown>).SpeechRecognition = FakeRecognition
+  FauxSynthese.dites = []
+  FauxSynthese.annulations = 0
+  ;(globalThis as never as Record<string, unknown>).speechSynthesis = new FauxSynthese()
+  ;(globalThis as never as Record<string, unknown>).SpeechSynthesisUtterance = class {
+    voice: unknown = null
+    lang = ''
+    rate = 1
+    pitch = 1
+    constructor(public text: string) {}
+  }
   ;(window as never as Record<string, unknown>).api = {
     conversations,
     conversationsCreate: vi.fn(async () => ({ id: 'c-jarvis' })),
@@ -158,6 +185,38 @@ afterEach(() => {
 })
 
 describe('widget Jarvis', () => {
+  it('REPOND A VOIX HAUTE quand un ordre part', async () => {
+    // Ce que ce test ferme : Jarvis entendait, bipait, executait — et ne disait jamais rien. Il
+    // fallait retourner lire l'ecran pour savoir qu'il avait compris.
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    const moteur = FakeRecognition.instances.at(-1)!
+    await act(async () => moteur.dire('Jarvis, ouvre le task manager', true))
+    expect(FauxSynthese.dites).toContain('Tout de suite.')
+  })
+
+  it('reste MUET en mode enregistrement, et se tait des que le micro est coupe', async () => {
+    // L'ENTREE QUI CASSE UN FAUX FIX : en reunion, le mot « Jarvis » est prononce sans lui parler.
+    // Une voix qui repond la est le pire defaut possible — meme garde que le bip.
+    //
+    // La garde est verifiee sur `phraseDeJarvis` et NON par un clic : le bouton
+    // `jarvis-enregistrer` de l'interface d'origine n'existe plus (le mode enregistrement a son
+    // propre widget). L'assertion n'est pas relachee — elle vise la fonction qui DECIDE du silence,
+    // c'est-a-dire l'endroit exact ou un faux fix passerait.
+    expect(
+      phraseDeJarvis(
+        { ...ecouteInitiale, active: true, mode: 'enregistrement' },
+        { genre: 'ordre' }
+      )
+    ).toBeNull()
+
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    const avant = FauxSynthese.annulations
+    clic(c, 'jarvis-bascule')
+    expect(FauxSynthese.annulations).toBeGreaterThan(avant)
+  })
+
   it('n’écoute pas avant d’avoir été activé', () => {
     rendre()
     expect(FakeRecognition.instances).toHaveLength(0)
@@ -499,5 +558,40 @@ describe('titreJarvis', () => {
 
   it('retombe sur Jarvis quand le message est vide', () => {
     expect(titreJarvis('   ')).toBe('Jarvis')
+  })
+})
+
+describe('le widget suit le NOM RÉGLÉ', () => {
+  it('obéit au nouveau nom et titre la conversation avec lui', async () => {
+    // LE DÉFAUT VÉCU : l'utilisateur renomme son assistant « Alfred », l'étiquette change, mais
+    // l'assistant reste sourd à « Alfred » et ouvre encore des conversations « Jarvis - ... ».
+    const creer = vi.fn(async () => ({ id: 'c-alfred' }))
+    ;(window as never as Record<string, unknown>).api = {
+      conversations,
+      conversationsCreate: creer,
+      routeConversationMessage,
+      pilotChat
+    }
+    const c = rendre()
+    act(() => {
+      ecrireNomJarvis(window.localStorage, 'Alfred')
+    })
+    clic(c, 'jarvis-bascule')
+    // L'invite parlée porte le nom réglé : c'est ce que l'utilisateur LIT avant de parler.
+    expect(c.textContent).toContain('Dites « Alfred »')
+    const moteur = FakeRecognition.instances.at(-1)!
+    await act(async () => moteur.dire('Alfred, ouvre le task manager', true))
+
+    expect(creer).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Alfred - ouvre le task manager' })
+    )
+    expect(routeConversationMessage).toHaveBeenCalledWith('c-alfred', 'ouvre le task manager', [])
+    // Le nom est un réglage PERSISTANT : on le rend au suivant tel qu'il l'a trouvé.
+    ecrireNomJarvis(window.localStorage, '')
+  })
+
+  it('le titre de conversation porte le nom réglé', () => {
+    expect(titreJarvis('ouvre le rapport', 'Friday')).toBe('Friday - ouvre le rapport')
+    expect(titreJarvis('   ', 'Friday')).toBe('Friday')
   })
 })

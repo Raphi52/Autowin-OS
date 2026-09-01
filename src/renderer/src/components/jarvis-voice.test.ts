@@ -221,3 +221,55 @@ describe('accusé sonore d’éveil', () => {
     expect(rallume.eveille).toBe(false)
   })
 })
+
+describe('le mot d’éveil suit le NOM RÉGLÉ, pas une constante', () => {
+  it('un assistant renommé répond à son nouveau nom', () => {
+    // LE DÉFAUT : renommer l'assistant changeait l'étiquette et rien d'autre — il restait sourd.
+    expect(extraireCommandeEveil('Alfred, ouvre le task manager', 'Alfred')).toBe(
+      'ouvre le task manager'
+    )
+    expect(contientEveil('alfred ?', 'Alfred')).toBe(true)
+  })
+
+  it('garde les tolérances de transcription mesurées, quel que soit le nom', () => {
+    expect(contientEveil('alfrede, ouvre', 'Alfred')).toBe(true)
+    expect(contientEveil("J'alfred, ouvre", 'Alfred')).toBe(true)
+    expect(contientEveil('Jarvis, ouvre', 'Alfred')).toBe(false)
+  })
+
+  it('reste borné : un mot voisin ne réveille pas', () => {
+    expect(contientEveil('le jardin est ouvert', 'Alfred')).toBe(false)
+    expect(contientEveil('alors on y va', 'Alfred')).toBe(false)
+  })
+
+  it('accepte un nom COMPOSÉ, écrit comme le moteur veut', () => {
+    // LE DÉFAUT : seul le PREMIER mot du nom servait d'éveil — « Jean-Pierre » ne répondait
+    // qu'à « Jean », et jamais à son nom entier écrit autrement par le moteur.
+    for (const dit of ['Jean-Pierre, ouvre le chat', 'jean pierre ouvre le chat', 'jeanpierre ouvre le chat']) {
+      expect(contientEveil(dit, 'Jean-Pierre')).toBe(true)
+    }
+    expect(extraireCommandeEveil('Jean-Pierre, ouvre le chat', 'Jean-Pierre')).toBe('ouvre le chat')
+    // Le raccourci naturel : on l'appelle par son premier mot.
+    expect(extraireCommandeEveil('Jean, ouvre le chat', 'Jean-Pierre')).toBe('ouvre le chat')
+    // Et par le second, qui est aussi son nom.
+    expect(contientEveil('Pierre ?', 'Jean-Pierre')).toBe(true)
+  })
+
+  it('un nom à plusieurs mots ne se réveille pas sur ses mots courts', () => {
+    // « Mon Ami » ne doit PAS partir sur « mon », prononcé dans une phrase sur deux.
+    expect(contientEveil('mon rendez-vous de demain', 'Mon Ami')).toBe(false)
+    expect(contientEveil('mon ami, ouvre le chat', 'Mon Ami')).toBe(true)
+  })
+
+  it('sans nom fourni, le comportement d’origine est inchangé', () => {
+    expect(extraireCommandeEveil('Jarvis, ouvre le task manager')).toBe('ouvre le task manager')
+    expect(contientEveil('le jardin')).toBe(false)
+  })
+
+  it('reagirAParole arme l’ordre sur le nom réglé', () => {
+    const depart = { ...ecouteInitiale, active: true }
+    const r = reagirAParole(depart, { texte: 'Friday ouvre le chat', final: true, le: 1 }, 'Friday')
+    expect(r.ordre).toBe('ouvre le chat')
+    expect(r.bip).toBe(true)
+  })
+})

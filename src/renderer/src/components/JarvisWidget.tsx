@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { jouerBipEveil } from './jarvis-bip'
 import { fabriqueMoteur } from './jarvis-moteur'
+import { parler, taireJarvis } from './jarvis-parole'
 
 /**
  * Décroissance de la crête par image d'affichage (~60/s) : ~1 s pour retomber d'une voix forte au
@@ -8,6 +9,7 @@ import { fabriqueMoteur } from './jarvis-moteur'
  */
 const DECROISSANCE_CRETE = 0.96
 import { type MoteurVocal } from './jarvis-moteur-whisper'
+import { EVENEMENT_NOM_JARVIS, lireNomJarvis, NOM_JARVIS_DEFAUT } from './jarvis-nom'
 import {
   MESSAGE_VERDICT,
   SEUIL_MAX,
@@ -24,6 +26,7 @@ import {
   evenementsDirects,
   extraireCommandeEveil,
   messageErreurMoteur,
+  phraseDeJarvis,
   reagirAParole,
   type EvenementDirect,
   type JarvisEcoute,
@@ -77,20 +80,56 @@ const MAX_EVENEMENTS = 12
 const TITRE_MAX = 40
 
 /**
- * Titre de la conversation ouverte par Jarvis : « Jarvis - <debut de l'ordre> ... ».
+ * Titre de la conversation ouverte par l'assistant : « <son nom> - <debut de l'ordre> ... ».
  * Le titre garde les MOTS de l'utilisateur, coupes sur un espace, jamais reformules.
+ *
+ * Le nom vient du REGLAGE, plus d'une constante : un utilisateur qui renomme son assistant
+ * « Alfred » voyait quand meme arriver des conversations intitulees « Jarvis - ... », donc deux noms
+ * pour un seul assistant.
  */
-export function titreJarvis(texte: string): string {
+export function titreJarvis(texte: string, nom: string = NOM_JARVIS_DEFAUT): string {
   const propre = texte.replace(/\s+/g, ' ').trim()
-  if (!propre) return 'Jarvis'
-  if (propre.length <= TITRE_MAX) return `Jarvis - ${propre}`
+  if (!propre) return nom
+  if (propre.length <= TITRE_MAX) return `${nom} - ${propre}`
   const coupe = propre.slice(0, TITRE_MAX)
   const espace = coupe.lastIndexOf(' ')
   const debut = espace > TITRE_MAX / 2 ? coupe.slice(0, espace) : coupe
-  return `Jarvis - ${debut.trimEnd()} ...`
+  return `${nom} - ${debut.trimEnd()} ...`
+}
+
+/**
+ * Le nom regle, RELU EN DIRECT.
+ *
+ * Le reglage vit dans la meme fenetre que le widget : le navigateur n'y emet pas `storage`, donc
+ * sans l'evenement de `jarvis-nom` le widget garderait l'ancien nom jusqu'au redemarrage — c'est
+ * exactement « il ne connait pas son nom quand je le change ». Un `ref` accompagne l'etat parce que
+ * la reconnaissance vocale lit le nom HORS rendu, dans ses rappels.
+ */
+function useNomJarvis(): { nom: string; nomRef: React.MutableRefObject<string> } {
+  const [nom, setNom] = useState<string>(() => lireNomJarvis(window.localStorage))
+  const nomRef = useRef(nom)
+  useEffect(() => {
+    // Le `ref` est ecrit ICI, jamais pendant le rendu : React interdit d'y toucher au rendu, et
+    // c'est ce chemin-la qui doit rester juste puisque le micro lit le nom hors rendu.
+    const relire = (): void => {
+      const courant = lireNomJarvis(window.localStorage)
+      nomRef.current = courant
+      setNom(courant)
+    }
+    window.addEventListener(EVENEMENT_NOM_JARVIS, relire)
+    // L'autre fenetre (ou un autre onglet) reste couverte par l'evenement standard.
+    window.addEventListener('storage', relire)
+    relire()
+    return () => {
+      window.removeEventListener(EVENEMENT_NOM_JARVIS, relire)
+      window.removeEventListener('storage', relire)
+    }
+  }, [])
+  return { nom, nomRef }
 }
 
 export function JarvisWidget(): React.JSX.Element {
+  const { nom: nomJarvis, nomRef } = useNomJarvis()
   const [ecoute, setEcoute] = useState<JarvisEcoute>(ecouteInitiale)
   /**
    * L'ETAT D'ECOUTE LU HORS RENDU — parce qu'un envoi ne doit JAMAIS partir d'un updater.
@@ -143,49 +182,70 @@ export function JarvisWidget(): React.JSX.Element {
   const enregistre = ecoute.active && ecoute.mode === 'enregistrement'
   const commande = ecoute.active && ecoute.mode === 'jarvis'
 
-  /** Envoie un ordre a Jarvis, dans SA conversation — creee au premier ordre, pas au montage. */
-  const envoyer = useCallback(async (texte: string) => {
-    const api = apiJarvis()
-    if (!api?.routeConversationMessage) {
-      setErreur('Passerelle des conversations indisponible')
-      return
-    }
-    setEnvoi(texte)
-    try {
-      if (!conversationRef.current) {
-        const creee = await api.conversationsCreate?.({
-          title: titreJarvis(texte),
-          category: 'chat',
-          provider: 'claude'
-        })
-        conversationRef.current = creee?.id ?? null
-      }
-      if (!conversationRef.current) {
-        setErreur('Aucune conversation Jarvis')
-        return
-      }
-      const route = await api.routeConversationMessage(conversationRef.current, texte, [])
-      // Le routage DESIGNE seulement la conversation cible : il n'ecrit rien et ne lance aucun tour.
-      // Sans ce `pilotChat`, l'ordre etait bien entendu et affiche, puis il ne se passait RIEN —
-      // exactement le defaut vecu (« il l'a bien note mais rien ne s'est passe »).
-      const cible = route?.conversationId ?? conversationRef.current
-      if (route?.routed && route.conversationId) conversationRef.current = route.conversationId
-      if (!api.pilotChat) {
-        setErreur('Passerelle du pilote indisponible : ordre non execute')
-        return
-      }
-      const resultat = await api.pilotChat([{ role: 'user', content: texte }], cible)
-      if (!resultat?.ok && !resultat?.cancelled) {
-        setErreur(resultat?.error ?? 'Ordre non execute')
-        return
-      }
-      setErreur(null)
-    } catch (cause) {
-      setErreur(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setEnvoi(null)
-    }
+  /**
+   * FAIT PARLER JARVIS, si tant est qu'il doive parler. L'etat lu est `ecouteRef` — jamais celui du
+   * rendu : la reponse part d'un effet de bord asynchrone (fin de tour, echec d'envoi), et l'etat
+   * capture par une cloture serait celui d'il y a plusieurs secondes. Micro coupe entre-temps =
+   * silence, ce qui est exactement la garde attendue.
+   */
+  const dire = useCallback((evenement: Parameters<typeof phraseDeJarvis>[1]) => {
+    const phrase = phraseDeJarvis(ecouteRef.current, evenement)
+    if (phrase) parler(phrase)
   }, [])
+
+  /** Envoie un ordre a Jarvis, dans SA conversation — creee au premier ordre, pas au montage. */
+  const envoyer = useCallback(
+    async (texte: string) => {
+      const api = apiJarvis()
+      if (!api?.routeConversationMessage) {
+        setErreur('Passerelle des conversations indisponible')
+        return
+      }
+      setEnvoi(texte)
+      // JARVIS REPOND. La phrase se decide dans `jarvis-voice.ts` (muet si micro coupe ou en mode
+      // enregistrement) ; ici on ne fait que la prononcer.
+      dire({ genre: 'ordre' })
+      try {
+        if (!conversationRef.current) {
+          const creee = await api.conversationsCreate?.({
+            title: titreJarvis(texte, nomRef.current),
+            category: 'chat',
+            provider: 'claude'
+          })
+          conversationRef.current = creee?.id ?? null
+        }
+        if (!conversationRef.current) {
+          setErreur(`Aucune conversation ${nomRef.current}`)
+          dire({ genre: 'erreur' })
+          return
+        }
+        const route = await api.routeConversationMessage(conversationRef.current, texte, [])
+        // Le routage DESIGNE seulement la conversation cible : il n'ecrit rien et ne lance aucun tour.
+        // Sans ce `pilotChat`, l'ordre etait bien entendu et affiche, puis il ne se passait RIEN —
+        // exactement le defaut vecu (« il l'a bien note mais rien ne s'est passe »).
+        const cible = route?.conversationId ?? conversationRef.current
+        if (route?.routed && route.conversationId) conversationRef.current = route.conversationId
+        if (!api.pilotChat) {
+          setErreur('Passerelle du pilote indisponible : ordre non execute')
+          dire({ genre: 'erreur' })
+          return
+        }
+        const resultat = await api.pilotChat([{ role: 'user', content: texte }], cible)
+        if (!resultat?.ok && !resultat?.cancelled) {
+          setErreur(resultat?.error ?? 'Ordre non execute')
+          dire({ genre: 'erreur' })
+          return
+        }
+        setErreur(null)
+      } catch (cause) {
+        setErreur(cause instanceof Error ? cause.message : String(cause))
+        dire({ genre: 'erreur' })
+      } finally {
+        setEnvoi(null)
+      }
+    },
+    [dire]
+  )
 
   const auResultat = useCallback(
     (event: unknown) => {
@@ -197,7 +257,11 @@ export function JarvisWidget(): React.JSX.Element {
         const resultat = e.results[i]
         const texte = resultat?.[0]?.transcript ?? ''
         const final = resultat?.isFinal === true
-        const reaction = reagirAParole(ecouteRef.current, { texte, final, le: Date.now() })
+        const reaction = reagirAParole(
+          ecouteRef.current,
+          { texte, final, le: Date.now() },
+          nomRef.current
+        )
         ecouteRef.current = reaction.etat
         setEcoute(reaction.etat)
         // Le bip part sur le PARTIEL : c'est ce qui dit « je t'ai entendu, parle maintenant ».
@@ -229,6 +293,9 @@ export function JarvisWidget(): React.JSX.Element {
       // laisserait le micro precedent ouvert.
       moteurRef.current?.stop()
       moteurRef.current = null
+      // On coupe la parole EN MEME TEMPS que le micro : une phrase encore en cours apres l'arret
+      // ferait parler Jarvis alors que l'utilisateur vient de l'eteindre.
+      taireJarvis()
       actifRef.current = suivant.active
       if (!suivant.active) {
         ecouteRef.current = suivant
@@ -433,6 +500,11 @@ export function JarvisWidget(): React.JSX.Element {
           setFlux((precedent) =>
             [...[...evenements].reverse(), ...precedent].slice(0, MAX_EVENEMENTS)
           )
+          // UNE seule annonce par releve, meme si deux tours finissent ensemble : deux phrases
+          // simultanees s'annulent l'une l'autre (`parler` coupe la precedente) et on n'entendrait
+          // que la derniere, tronquee.
+          const finie = evenements.find((e) => e.genre === 'fin')
+          if (finie) dire({ genre: 'fin', sujet: finie.titre })
         }
       } catch {
         // Un sondage rate n'efface pas le fil d'activite deja affiche : mieux vaut un releve
@@ -444,8 +516,9 @@ export function JarvisWidget(): React.JSX.Element {
     return () => {
       vivant = false
       clearInterval(timer)
+      taireJarvis()
     }
-  }, [])
+  }, [dire])
 
   return (
     <div className="jarvis" data-ecoute={ecoute.active ? 'true' : undefined}>
@@ -468,10 +541,10 @@ export function JarvisWidget(): React.JSX.Element {
           {!ecoute.active
             ? 'Micro coupé'
             : enregistre
-              ? '⏺ Enregistrement du transcript — Jarvis ne répond pas'
+              ? `⏺ Enregistrement du transcript — ${nomJarvis} ne répond pas`
               : ecoute.eveille
                 ? '🔊 Je vous écoute — dites votre demande'
-                : 'Dites « Jarvis » : un bip vous répondra'}
+                : `Dites « ${nomJarvis} » : un bip vous répondra`}
         </span>
       </div>
 
@@ -569,14 +642,16 @@ export function JarvisWidget(): React.JSX.Element {
         {ecoute.partiel || (ecoute.active ? '…' : '')}
       </p>
 
-      {envoi ? <p className="jarvis__envoi">Envoi à Jarvis : « {envoi} »</p> : null}
+      {envoi ? <p className="jarvis__envoi">Envoi à {nomJarvis} : « {envoi} »</p> : null}
 
       <ul className="jarvis__paroles" data-testid="jarvis-paroles">
         {/* En enregistrement, la liste EST le transcript : la tronquer a 5 lignes le perdrait. */}
         {ecoute.commandes.slice(0, enregistre ? ecoute.commandes.length : 5).map((parole) => (
           <li
             key={parole.id}
-            data-eveil={!enregistre && extraireCommandeEveil(parole.texte) ? 'true' : undefined}
+            data-eveil={
+              !enregistre && extraireCommandeEveil(parole.texte, nomJarvis) ? 'true' : undefined
+            }
           >
             {parole.texte}
           </li>

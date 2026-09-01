@@ -7,6 +7,8 @@
  * pas dépendre de l'état du micro — elle dépend de l'interrupteur du widget, et de lui seul.
  */
 
+import { NOM_JARVIS_DEFAUT } from './jarvis-nom'
+
 export interface JarvisCommande {
   id: string
   texte: string
@@ -189,10 +191,75 @@ export function evenementsDirects(
  * répare un segment trop faible pour être entendu ; c'est le niveau d'entrée qu'il faut corriger,
  * pas le motif.
  */
-const EVEIL = /\bj['’]?arv[a-zà-öø-ÿ]{0,3}\b/iu
+const TOLERANCE_FIN = '[a-zà-öø-ÿ]{0,3}'
 
-export function extraireCommandeEveil(texte: string): string | null {
-  const correspondance = EVEIL.exec(texte)
+/**
+ * Le nom, ramene a des MOTS de lettres simples : « Jarvis » et « jarvis » sont le meme mot d'eveil,
+ * et « Jean-Pierre » comme « Jean Pierre » donnent les deux memes mots.
+ *
+ * On garde TOUS les mots, plus seulement le premier : un nom compose dont on ne retenait que le
+ * debut rendait l'assistant sourd a la moitie de son propre nom.
+ */
+function motsNom(nom: string): string[] {
+  return (nom ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter((mot) => mot.length > 0)
+}
+
+/**
+ * Un mot du nom, ecrit en motif : apostrophe toleree apres la premiere lettre, et — pour le mot
+ * qui TERMINE l'appel — fin libre a trois lettres pres. Un mot de moins de 3 lettres ne tolere
+ * rien : « Al » elargi reveillerait l'assistant sur « allo », « alors », « aller ».
+ */
+function motifMot(mot: string, finLibre: boolean): string {
+  if (mot.length < 3) return mot
+  const prefixe = mot.slice(0, 4)
+  return `${prefixe[0]}['’]?${prefixe.slice(1)}${finLibre ? TOLERANCE_FIN : ''}`
+}
+
+const CACHE_EVEIL = new Map<string, RegExp>()
+
+/**
+ * Le motif d'eveil POUR LE NOM CHOISI.
+ *
+ * Le motif etait ecrit en dur sur « jarv » : renommer l'assistant changeait l'etiquette et RIEN
+ * d'autre — il continuait de n'obeir qu'a « Jarvis » et restait sourd a son nouveau nom. Le motif
+ * se construit donc a partir du nom regle, en gardant exactement les deux tolerances mesurees le
+ * 2026-08-31 sur whisper.cpp, qui ne dependent pas du nom :
+ *  - la FIN est libre a trois lettres pres (« jarvie », « jarviss ») : aucun moteur ne rend un nom
+ *    propre au caractere pres ;
+ *  - une APOSTROPHE peut s'inserer apres la premiere lettre (« J'arvie ») : artefact d'orthographe
+ *    francaise, pas un autre mot.
+ * La tolerance reste BORNEE : on exige les 4 premieres lettres du nom (ou le nom entier s'il est
+ * plus court). Un nom de moins de 3 lettres ne tolere plus rien du tout — « Al » elargi de trois
+ * lettres reveillerait l'assistant sur « allo », « alors », « aller ».
+ */
+export function motifEveil(nom: string = NOM_JARVIS_DEFAUT): RegExp {
+  const mots = motsNom(nom).length > 0 ? motsNom(nom) : motsNom(NOM_JARVIS_DEFAUT)
+  const cle = mots.join(' ')
+  const enCache = CACHE_EVEIL.get(cle)
+  if (enCache) return enCache
+  // Le nom ENTIER : les mots peuvent arriver colles, espaces, ou lies par un trait d'union ou une
+  // apostrophe, selon ce que le moteur decide d'ecrire. Seul le DERNIER mot a la fin libre.
+  const complet = mots
+    .map((mot, index) => motifMot(mot, index === mots.length - 1))
+    .join("[\\s'’-]*")
+  // Le RACCOURCI : on appelle « Jean-Pierre » en disant « Jean ». Reserve aux mots d'au moins
+  // quatre lettres — sur « Mon Ami », un eveil sur « mon » partirait a chaque phrase.
+  const raccourcis = mots.length > 1 ? mots.filter((mot) => mot.length >= 4) : []
+  const alternatives = [complet, ...raccourcis.map((mot) => motifMot(mot, true))]
+  const motif = new RegExp('\\b(?:' + alternatives.join('|') + ')\\b', 'iu')
+  CACHE_EVEIL.set(cle, motif)
+  return motif
+}
+
+export function extraireCommandeEveil(texte: string, nom?: string): string | null {
+  const correspondance = motifEveil(nom).exec(texte)
   if (!correspondance) return null
   const suite = texte
     .slice(correspondance.index + correspondance[0].length)
@@ -201,9 +268,9 @@ export function extraireCommandeEveil(texte: string): string | null {
   return suite === '' ? null : suite
 }
 
-/** Le mot d'éveil est-il présent, même sans ordre derrière ? */
-export function contientEveil(texte: string): boolean {
-  return EVEIL.test(texte)
+/** Le mot d'eveil est-il present, meme sans ordre derriere ? */
+export function contientEveil(texte: string, nom?: string): boolean {
+  return motifEveil(nom).test(texte)
 }
 
 export interface ReactionParole {
@@ -224,7 +291,8 @@ export interface ReactionParole {
  */
 export function reagirAParole(
   etat: JarvisEcoute,
-  parole: { texte: string; final: boolean; le: number }
+  parole: { texte: string; final: boolean; le: number },
+  nom?: string
 ): ReactionParole {
   if (!etat.active) return { etat, bip: false, ordre: null }
   // ENREGISTREMENT : on garde le texte, et c'est TOUT. Ni bip, ni ordre — même si le mot d'éveil
@@ -232,14 +300,14 @@ export function reagirAParole(
   if (etat.mode === 'enregistrement') {
     return { etat: appliquerParole(etat, parole), bip: false, ordre: null }
   }
-  const eveilIci = contientEveil(parole.texte)
+  const eveilIci = contientEveil(parole.texte, nom)
   const bip = eveilIci && !etat.eveilAnnonce
   let suivant = appliquerParole(etat, parole)
   if (bip) suivant = { ...suivant, eveille: true, eveilAnnonce: true }
   if (!parole.final) return { etat: suivant, bip, ordre: null }
 
   const ordre = eveilIci
-    ? extraireCommandeEveil(parole.texte)
+    ? extraireCommandeEveil(parole.texte, nom)
     : etat.eveille
       ? parole.texte.trim() || null
       : null
@@ -270,4 +338,48 @@ export function messageErreurMoteur(code: string): string {
     return 'La reconnaissance locale n’a pas pu transcrire : réinstallez l’écoute hors ligne.'
   }
   return `Reconnaissance vocale interrompue : ${code}`
+}
+
+/**
+ * CE QUE JARVIS DIT À VOIX HAUTE — et surtout QUAND IL SE TAIT.
+ *
+ * Jusqu'ici Jarvis entendait mais ne répondait jamais : l'utilisateur parlait, un bip confirmait,
+ * puis plus rien jusqu'à ce qu'il retourne lire l'écran. La réponse parlée est ce qui manque pour
+ * ne plus avoir à regarder.
+ *
+ * Deux gardes, et elles ne sont pas décoratives :
+ *  - micro coupé => MUET. Un moteur rend encore des résultats après l'ordre d'arrêt ; une phrase
+ *    parlée déclenchée par ce résidu ferait parler Jarvis tout seul, écoute éteinte.
+ *  - mode enregistrement => MUET. C'est la définition même du mode : on note ce qui se dit dans la
+ *    pièce, Jarvis n'y intervient pas. Une voix qui commente pendant une réunion est le pire défaut
+ *    possible ici — même garde que le bip, au même endroit.
+ */
+export type GenreParole = 'ordre' | 'fin' | 'erreur'
+
+export interface EvenementParle {
+  genre: GenreParole
+  /** Le titre de la conversation concernée, quand il y en a un. Jamais lu tel quel : voir plus bas. */
+  sujet?: string
+}
+
+/** Au-delà, un titre lu à voix haute devient une tirade : on le coupe. */
+const MAX_SUJET = 48
+
+function sujetLisible(sujet: string | undefined): string {
+  const propre = (sujet ?? '').replace(/\s+/gu, ' ').trim()
+  if (propre === '') return ''
+  return propre.length <= MAX_SUJET ? propre : `${propre.slice(0, MAX_SUJET).trimEnd()}…`
+}
+
+/**
+ * La phrase à prononcer, ou `null` s'il ne faut RIEN dire. Fonction pure : c'est ici que les gardes
+ * se prouvent sans micro ni haut-parleur.
+ */
+export function phraseDeJarvis(etat: JarvisEcoute, evenement: EvenementParle): string | null {
+  if (!etat.active) return null
+  if (etat.mode === 'enregistrement') return null
+  const sujet = sujetLisible(evenement.sujet)
+  if (evenement.genre === 'ordre') return 'Tout de suite.'
+  if (evenement.genre === 'fin') return sujet === '' ? 'C’est fait.' : `C’est fait : ${sujet}.`
+  return sujet === '' ? 'Je n’ai pas pu.' : `Je n’ai pas pu : ${sujet}.`
 }

@@ -6,6 +6,7 @@ import { HomeView } from './HomeView'
 import { CLE_VISIBILITE_WIDGETS } from './home-widgets-visibility'
 import { CLE_NOM_JARVIS } from './jarvis-nom'
 import { oublierOuvertureReglages } from './home-reglages-ouverture'
+import { CLE_VOIX_JARVIS, lireReglageVoix } from './jarvis-voix-reglage'
 
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
@@ -176,6 +177,34 @@ describe('le nom de l assistant', () => {
     expect(window.localStorage.getItem(CLE_NOM_JARVIS)).toBe('Alfred')
   })
 
+  it('laisse le champ VIDE le temps de retaper un autre nom', async () => {
+    // LE DEFAUT REPARE : le champ etait recale a chaque frappe sur le nom RETENU. Effacer rendait
+    // donc une saisie vide, aussitot remplacee par « Jarvis » -- impossible de vider pour retaper.
+    const container = await mount()
+    await ouvrirReglages(container)
+    const champ = q<HTMLInputElement>(container, '[data-testid="home-jarvis-nom"]')!
+    await act(async () => saisir(champ, ''))
+    expect(champ.value).toBe('')
+    // La tuile, elle, ne reste jamais sans titre.
+    expect(q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent).toBe(
+      'Jarvis'
+    )
+    await act(async () => saisir(champ, 'Alfred'))
+    expect(champ.value).toBe('Alfred')
+    expect(q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent).toBe(
+      'Alfred'
+    )
+  })
+
+  it('reaffiche le nom retenu quand on quitte le champ laisse vide', async () => {
+    const container = await mount()
+    await ouvrirReglages(container)
+    const champ = q<HTMLInputElement>(container, '[data-testid="home-jarvis-nom"]')!
+    await act(async () => saisir(champ, ''))
+    await act(async () => champ.dispatchEvent(new Event('focusout', { bubbles: true })))
+    expect(champ.value).toBe('Jarvis')
+  })
+
   it('reprend le nom enregistre a l ouverture suivante', async () => {
     window.localStorage.setItem(CLE_NOM_JARVIS, 'Friday')
     const container = await mount()
@@ -202,5 +231,85 @@ describe('relire Outlook se commande depuis la tuile Outlook', () => {
     const bouton = q<HTMLButtonElement>(container, '[data-testid="home-refresh-outlook"]')!
     await act(async () => bouton.click())
     expect(q<HTMLElement>(container, '[data-testid="home-widget-mails"]')!.dataset.held).toBeUndefined()
+  })
+})
+
+describe('plusieurs voix parametrables pour l assistant', () => {
+  const voix = (name: string, lang: string): SpeechSynthesisVoice =>
+    ({ name, lang, voiceURI: name, default: false }) as SpeechSynthesisVoice
+
+  beforeEach(() => {
+    ;(window as unknown as { speechSynthesis: unknown }).speechSynthesis = {
+      getVoices: () => [voix('Hortense', 'fr-FR'), voix('Zira', 'en-US')],
+      speak: vi.fn(),
+      cancel: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }
+    ;(window as unknown as { SpeechSynthesisUtterance: unknown }).SpeechSynthesisUtterance =
+      class {
+        voice: SpeechSynthesisVoice | null = null
+        lang = ''
+        rate = 1
+        pitch = 1
+        constructor(public text: string) {}
+      }
+  })
+
+  afterEach(() => {
+    delete (window as unknown as { speechSynthesis?: unknown }).speechSynthesis
+    delete (window as unknown as { SpeechSynthesisUtterance?: unknown }).SpeechSynthesisUtterance
+  })
+
+  it('propose les voix du poste, en plus du choix automatique', async () => {
+    const container = await mount()
+    await ouvrirReglages(container)
+    const liste = q<HTMLSelectElement>(container, '[data-testid="home-jarvis-voix"]')!
+    const libelles = [...liste.options].map((o) => o.textContent)
+    expect(libelles[0]).toContain('automatique')
+    expect(libelles).toContain('Hortense — fr-FR')
+    expect(libelles).toContain('Zira — en-US')
+  })
+
+  it('retient la voix choisie, son debit et sa hauteur', async () => {
+    const container = await mount()
+    await ouvrirReglages(container)
+    const liste = q<HTMLSelectElement>(container, '[data-testid="home-jarvis-voix"]')!
+    await act(async () => {
+      liste.value = 'Zira'
+      liste.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const debit = q<HTMLInputElement>(container, '[data-testid="home-jarvis-debit"]')!
+    await act(async () => saisir(debit, '1.5'))
+    expect(lireReglageVoix(window.localStorage)).toMatchObject({ voixURI: 'Zira', debit: 1.5 })
+  })
+
+  it('reprend le reglage enregistre a l ouverture suivante', async () => {
+    window.localStorage.setItem(
+      CLE_VOIX_JARVIS,
+      JSON.stringify({ voixURI: 'Zira', debit: 1.2, hauteur: 1.1 })
+    )
+    const container = await mount()
+    await ouvrirReglages(container)
+    expect(q<HTMLSelectElement>(container, '[data-testid="home-jarvis-voix"]')!.value).toBe('Zira')
+    expect(q<HTMLInputElement>(container, '[data-testid="home-jarvis-debit"]')!.value).toBe('1.2')
+  })
+
+  it('prononce un essai avec la voix choisie', async () => {
+    // Le seul endroit ou un reglage de voix se juge, c'est a l'oreille : l'essai doit partir.
+    const container = await mount()
+    await ouvrirReglages(container)
+    const liste = q<HTMLSelectElement>(container, '[data-testid="home-jarvis-voix"]')!
+    await act(async () => {
+      liste.value = 'Zira'
+      liste.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const essai = q<HTMLButtonElement>(container, '[data-testid="home-jarvis-voix-test"]')!
+    await act(async () => essai.click())
+    const synth = (window as unknown as { speechSynthesis: { speak: ReturnType<typeof vi.fn> } })
+      .speechSynthesis
+    expect(synth.speak).toHaveBeenCalledTimes(1)
+    const dit = synth.speak.mock.calls[0][0] as SpeechSynthesisUtterance
+    expect(dit.voice?.name).toBe('Zira')
   })
 })

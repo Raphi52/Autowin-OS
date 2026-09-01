@@ -45,6 +45,16 @@ import {
 } from './home-widgets-visibility'
 import { ecrireNomJarvis, lireNomJarvis, NOM_JARVIS_LONGUEUR_MAX } from './jarvis-nom'
 import {
+  DEBIT_MAX,
+  DEBIT_MIN,
+  ecrireReglageVoix,
+  HAUTEUR_MAX,
+  HAUTEUR_MIN,
+  lireReglageVoix,
+  type ReglageVoix
+} from './jarvis-voix-reglage'
+import { listerVoix, oublierVoixChoisie, parler } from './jarvis-parole'
+import {
   memoriserOuvertureReglages,
   reglagesSontOuverts
 } from './home-reglages-ouverture'
@@ -237,13 +247,64 @@ export function HomeView({
   }, [])
 
   /**
+   * Ce que l'utilisateur a TAPE, distinct du nom RETENU.
+   *
+   * Les deux ne peuvent pas etre la meme chose : le nom retenu ne peut jamais etre vide (la tuile
+   * doit garder un titre), alors que la saisie doit pouvoir l'etre le temps d'effacer pour retaper.
+   * Reafficher le nom retenu dans le champ a chaque frappe remettait « Jarvis » des qu'on effacait.
+   */
+  const [saisieNomJarvis, setSaisieNomJarvis] = useState<string>(nomJarvis)
+
+  /**
    * Le nom est enregistre a CHAQUE frappe, deja normalise.
    *
    * Enregistrer a la validation seulement obligerait a deviner quand la saisie est « finie » ; ici la
-   * valeur affichee et la valeur retenue ne peuvent pas diverger.
+   * valeur retenue suit la frappe, tandis que le champ garde exactement ce qui a ete tape.
    */
   const changerNomJarvis = useCallback((saisie: string): void => {
+    setSaisieNomJarvis(saisie)
     setNomJarvis(ecrireNomJarvis(window.localStorage, saisie))
+  }, [])
+
+  /** En quittant le champ, on remet sous les yeux le nom REELLEMENT retenu (vide -> nom d'origine). */
+  const finirSaisieNomJarvis = useCallback((): void => {
+    setSaisieNomJarvis(nomJarvis)
+  }, [nomJarvis])
+
+  /**
+   * LES VOIX DU POSTE, et celle qui est retenue.
+   *
+   * La liste n'est PAS disponible au premier rendu : les navigateurs la chargent en differe et
+   * previennent par `voiceschanged`. Sans cette souscription, le menu deroulant resterait vide sur
+   * un poste qui a pourtant des voix -- c'est le defaut classique de cette API.
+   */
+  const [voixDisponibles, setVoixDisponibles] = useState<SpeechSynthesisVoice[]>(() => listerVoix())
+  const [reglageVoix, setReglageVoix] = useState<ReglageVoix>(() =>
+    lireReglageVoix(window.localStorage)
+  )
+
+  useEffect(() => {
+    const relever = (): void => setVoixDisponibles(listerVoix())
+    relever()
+    const synthese = (window as unknown as { speechSynthesis?: EventTarget }).speechSynthesis
+    synthese?.addEventListener?.('voiceschanged', relever)
+    return () => synthese?.removeEventListener?.('voiceschanged', relever)
+  }, [])
+
+  /**
+   * Enregistre le changement ET oublie la voix deja chargee : sans cet oubli, l'assistant garderait
+   * jusqu'au redemarrage la voix prise a sa premiere phrase, et le nouveau choix serait inaudible.
+   * La phrase d'essai rend le reglage VERIFIABLE a l'oreille, seul endroit ou il se juge.
+   */
+  const changerReglageVoix = useCallback((modification: Partial<ReglageVoix>): void => {
+    const retenu = ecrireReglageVoix(window.localStorage, modification)
+    oublierVoixChoisie()
+    setReglageVoix(retenu)
+  }, [])
+
+  const essayerVoix = useCallback((): void => {
+    oublierVoixChoisie()
+    parler('Bonjour, je suis a votre ecoute.')
   }, [])
 
   /**
@@ -767,12 +828,70 @@ export function HomeView({
                 <span>Son nom</span>
                 <input
                   type="text"
-                  value={nomJarvis}
+                  value={saisieNomJarvis}
                   maxLength={NOM_JARVIS_LONGUEUR_MAX}
                   data-testid="home-jarvis-nom"
                   onChange={(event) => changerNomJarvis(event.target.value)}
+                  onBlur={finirSaisieNomJarvis}
                 />
               </label>
+              {/* La voix : celle du poste, choisie ici. Vide = l'application choisit (le francais
+                  d'abord), ce qui reste le comportement d'un poste ou personne n'a rien regle. */}
+              <label className="home-settings__champ">
+                <span>Sa voix</span>
+                <select
+                  value={reglageVoix.voixURI}
+                  data-testid="home-jarvis-voix"
+                  onChange={(event) => changerReglageVoix({ voixURI: event.target.value })}
+                >
+                  <option value="">Voix automatique (français si disponible)</option>
+                  {voixDisponibles.map((voix) => (
+                    <option key={voix.voiceURI || voix.name} value={voix.voiceURI || voix.name}>
+                      {voix.name} — {voix.lang}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {voixDisponibles.length === 0 ? (
+                <p className="home-settings__note" data-testid="home-jarvis-voix-vide">
+                  Aucune voix installée sur ce poste : l’assistant écoute mais ne répondra pas à voix
+                  haute.
+                </p>
+              ) : null}
+              <label className="home-settings__champ">
+                <span>Débit — {reglageVoix.debit.toFixed(2)}×</span>
+                <input
+                  type="range"
+                  min={DEBIT_MIN}
+                  max={DEBIT_MAX}
+                  step={0.05}
+                  value={reglageVoix.debit}
+                  data-testid="home-jarvis-debit"
+                  onChange={(event) => changerReglageVoix({ debit: Number(event.target.value) })}
+                />
+              </label>
+              <label className="home-settings__champ">
+                <span>Hauteur — {reglageVoix.hauteur.toFixed(2)}×</span>
+                <input
+                  type="range"
+                  min={HAUTEUR_MIN}
+                  max={HAUTEUR_MAX}
+                  step={0.05}
+                  value={reglageVoix.hauteur}
+                  data-testid="home-jarvis-hauteur"
+                  onChange={(event) => changerReglageVoix({ hauteur: Number(event.target.value) })}
+                />
+              </label>
+              <div className="home-settings__actions">
+                <button
+                  type="button"
+                  onClick={essayerVoix}
+                  data-testid="home-jarvis-voix-test"
+                  title="Prononcer une phrase avec la voix et les réglages choisis"
+                >
+                  Écouter un essai
+                </button>
+              </div>
             </section>
             <section className="home-settings__bloc">
               <h3>Disposition</h3>

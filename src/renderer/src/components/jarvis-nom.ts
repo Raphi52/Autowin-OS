@@ -16,12 +16,23 @@ export const NOM_JARVIS_DEFAUT = 'Jarvis'
  * Longueur maximale retenue.
  *
  * Le titre vit sur une etiquette d'une seule ligne au-dessus de la tuile : au-dela, il deborde sur la
- * tuile voisine. On COUPE plutot que de refuser -- refuser une frappe en cours d'ecriture est plus
+ * tuile voisine. On laisse la place d'un nom COMPOSE (« Jean-Pierre », « Mon Ami Alfred ») plutot
+ * qu'un seul mot court. On COUPE plutot que de refuser -- refuser une frappe en cours d'ecriture est plus
  * penible qu'un nom trop long qu'on raccourcit.
  */
-export const NOM_JARVIS_LONGUEUR_MAX = 24
+export const NOM_JARVIS_LONGUEUR_MAX = 32
 
 export const CLE_NOM_JARVIS = autowinStorageKey('home.jarvis-nom.v1')
+
+/**
+ * L'evenement emis quand le nom CHANGE, dans la meme fenetre.
+ *
+ * Le navigateur n'emet `storage` que pour les AUTRES onglets : le widget de l'assistant, monte dans
+ * la meme fenetre que le reglage, ne verrait donc jamais son nouveau nom. Sans cet evenement,
+ * l'utilisateur renomme l'assistant, l'etiquette change... et l'assistant continue de ne repondre
+ * qu'a son ancien nom, ce qui se lit exactement comme « il ne connait pas son nom ».
+ */
+export const EVENEMENT_NOM_JARVIS = 'autowin:jarvis-nom'
 
 interface StorageLike {
   getItem(key: string): string | null
@@ -65,6 +76,17 @@ export function ecrireNomJarvis(storage: StorageLike, brut: unknown): string {
     storage.setItem(CLE_NOM_JARVIS, nom)
   } catch {
     // Sans ecriture, le nom vaut pour la session : moins surprenant qu'un echec visible.
+  }
+  try {
+    const fenetre = globalThis as unknown as {
+      dispatchEvent?: (e: Event) => boolean
+      CustomEvent?: typeof CustomEvent
+    }
+    if (fenetre.dispatchEvent && fenetre.CustomEvent) {
+      fenetre.dispatchEvent(new fenetre.CustomEvent(EVENEMENT_NOM_JARVIS, { detail: nom }))
+    }
+  } catch {
+    // Pas de fenetre (test unitaire pur) : personne n'ecoute, il n'y a rien a prevenir.
   }
   return nom
 }
