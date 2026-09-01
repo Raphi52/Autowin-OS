@@ -42,7 +42,12 @@ export function enregistrerDirectiveDansLeFil(params: {
       // le clic de l'utilisateur ne part plus. Le verrou anti-double-envoi, lui, reste entier.
       orientation: true
     })
-    const messageId = conversation.messages.at(-1)?.messageId
+    // La consigne n'est PAS forcément le dernier message du fil : quand un tour est en cours, elle
+    // se pose AVANT le brouillon de réponse. On la retrouve donc par son contenu, en repartant de
+    // la fin — la plus récente est la nôtre.
+    const messageId = [...conversation.messages]
+      .reverse()
+      .find((message) => message.role === 'user' && message.content === texte)?.messageId
     // L'écran ne relit la conversation active que sur `scope: 'chat'` — sans ce signal, le message
     // n'apparaîtrait qu'au prochain rechargement complet.
     params.broadcast({ type: 'refresh', scope: 'chat', convId: params.conversationId })
