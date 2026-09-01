@@ -43,6 +43,26 @@ const STALE_SEQUENCE_LOCK_MS = 500
 const DESCRIPTEURS_MAX = 32
 
 /**
+ * Conversations gardees en cache de relecture, par mode de lecture — meme borne, meme raison que
+ * DESCRIPTEURS_MAX : le dossier d'activite de l'utilisateur compte 1 472 conversations, un cache
+ * non borne garderait TOUS leurs evenements parses en memoire pour la duree de la session.
+ */
+const CACHE_RELECTURE_MAX = 32
+
+/**
+ * Gele un evenement rendu par la relecture en cache.
+ *
+ * `[...events]` copie la LISTE, pas les evenements : sans ce gel, un appelant qui touche un champ
+ * pollue silencieusement toutes les lectures suivantes de tous les appelants. Le gel transforme ce
+ * faux vert en TypeError immediate, a l'endroit de la faute.
+ */
+function gelerProfond<T>(valeur: T): T {
+  if (valeur === null || typeof valeur !== 'object' || Object.isFrozen(valeur)) return valeur
+  for (const enfant of Object.values(valeur as Record<string, unknown>)) gelerProfond(enfant)
+  return Object.freeze(valeur)
+}
+
+/**
  * NOMME l'attente, pour que le detecteur de gel cesse de rendre 'inconnu'.
  *
  * instrumenterEntreesSortiesDuMain (src/main/gel-main.ts) ne patche que node:fs et
@@ -222,10 +242,15 @@ export class TraceStore {
   /*
    * RELECTURE INCREMENTALE — correction du gel « entree-sortie-bloquante » qui GRANDIT.
    *
-   * Chaque appel relisait et reparsait le fichier ENTIER, de facon synchrone, sur le thread qui
-   * tient la fenetre. Sur conv-54.jsonl (5,6 Mo) un appel coute ~128 ms a froid ; il y en a
-   * plusieurs par tour, d'ou une duree de gel proportionnelle a la taille du journal (1,4 s le
-   * matin, 4,4 s a 13h43 dans gels.jsonl). Une trace est un flux d'APPENDS : seuls les octets
+   * PROUVE : chaque appel relisait et reparsait le fichier ENTIER, de facon synchrone, sur le
+   * thread qui tient la fenetre — sur conv-54.jsonl (5,6 Mo) un appel coute 25 a 128 ms, et il
+   * existe 12 sites d'appel dans le main (orchestration-observability.ts x3, orchestration-
+   * outcome-trace.ts, tool-usage.ts, autowin-kaizen-context.ts, index.ts x6), tous par requete.
+   * NON PROUVE : que cette repetition explique A ELLE SEULE les gels de 1,4 s -> 4,4 s de
+   * gels.jsonl. La frequence d'appel reelle par tour n'a pas ete instrumentee, et une autre cause
+   * documentee dans ce fichier (verrou de sequence orphelin) couvre les pics de 25 a 44 s. Ce que
+   * la correction supprime avec certitude : un cout de relecture proportionnel a la taille du
+   * journal, mesure 25 ms -> <= 0,2 ms sur le vrai fichier. Une trace est un flux d'APPENDS : seuls les octets
    * ajoutes depuis la derniere lecture ont besoin d'etre parses. Le fichier reste l'autorite —
    * fichier disparu, raccourci ou reecrit a taille egale = relecture complete.
    */
@@ -246,6 +271,9 @@ export class TraceStore {
         : { offset: 0, mtimeMs: 0, ligne: 0, events: [] as TraceEventV1[] }
 
     if (precedent === reprise && stats.size === precedent.offset) {
+      // Re-insere pour marquer l'usage recent : Map preserve l'ordre d'insertion (eviction LRU).
+      cache.delete(conversationId)
+      cache.set(conversationId, precedent)
       return [...precedent.events].sort((a, b) => a.sequence - b.sequence)
     }
 
@@ -280,7 +308,10 @@ export class TraceStore {
       if (event && event !== 'tolere') events.push(event)
     }
 
+    cache.delete(conversationId)
     cache.set(conversationId, { offset, mtimeMs: stats.mtimeMs, ligne, events })
+    while (cache.size > CACHE_RELECTURE_MAX)
+      cache.delete(cache.keys().next().value as string)
     return [...events].sort((a, b) => a.sequence - b.sequence)
   }
 
@@ -294,7 +325,7 @@ export class TraceStore {
   ): TraceEventV1 | null | 'tolere' {
     try {
       const event = assertTraceEvent(JSON.parse(texte) as TraceEventV1)
-      return event.conversationId === conversationId ? event : null
+      return event.conversationId === conversationId ? gelerProfond(event) : null
     } catch (error) {
       if (!strict) return null
       if (derniereDuFichier && error instanceof SyntaxError) return 'tolere'

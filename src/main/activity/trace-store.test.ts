@@ -224,10 +224,10 @@ describe('TraceStore append-only', () => {
    * GARDE DE COUT DE RELECTURE (gels du 2026-09-01).
    *
    * `readConversation` relisait et reparsait le fichier ENTIER a chaque appel, sur le thread main.
-   * Sur `conv-54.jsonl` (5,6 Mo), un appel coute ~128 ms a froid : ce n'est pas l'appel unique qui
-   * gele la fenetre, c'est sa REPETITION (un appel par requete, plusieurs par tour). Le journal des
-   * gels montre la signature exacte : duree qui GRANDIT avec le fichier, 1,4 s le matin -> 4,4 s a
-   * 13h43, cause 'entree-sortie-bloquante', operation 'inconnu'.
+   * Sur `conv-54.jsonl` (5,6 Mo), un appel coute 25 a 128 ms (mesure). Ce test borne ce COUT ; il ne
+   * pretend pas que la repetition explique a elle seule les gels de 1,4 s -> 4,4 s de gels.jsonl —
+   * la frequence d'appel par tour n'est pas instrumentee, et les pics de 25 a 44 s ont une autre
+   * cause deja documentee ici (verrou de sequence orphelin, plus haut dans ce fichier).
    *
    * Entree qui ferait echouer ce test si la correction etait fausse : l'append EXTERNE de
    * `evt-200` ci-dessous. Un cache qui se contenterait de memoriser le premier resultat passerait
@@ -381,5 +381,63 @@ describe('descripteurs de trace bornes', () => {
     expect(
       (store as unknown as { descriptors: Map<string, number> }).descriptors.size
     ).toBeLessThanOrEqual(32)
+  })
+})
+
+/*
+ * BORNE DU CACHE DE RELECTURE + ISOLATION DES EVENEMENTS (suite des gels du 2026-09-01).
+ *
+ * La relecture incrementale garde les evenements deja parses par conversation. Deux defauts
+ * connus de ce genre de cache, tous deux deja payes dans ce fichier :
+ *  1) non borne -> il grandit avec le nombre de conversations (1 472 sur l'installation de
+ *     l'utilisateur, meme cause que l'EMFILE des descripteurs plus haut) ;
+ *  2) partage -> `[...events]` copie la LISTE, pas les evenements : un appelant qui touche un
+ *     evenement pollue toutes les lectures suivantes, y compris celles des autres appelants.
+ *
+ * Entrees qui feraient echouer ces tests si la correction etait fausse :
+ *  - borne : la 200e conversation lue (`conv-199`) apres 200 lectures distinctes — un cache sans
+ *    eviction garde 200 entrees et depasse la borne ; une eviction qui casserait la correction se
+ *    verrait sur la relecture de `conv-0`, qui doit rendre ses 2 evenements sans les perdre ;
+ *  - isolation : l'ecriture `events[0].payloads[0].content = 'pollue'` faite par l'appelant. Un
+ *    cache qui rend ses propres objets laisse cette valeur revenir a la lecture suivante.
+ */
+describe('cache de relecture borne et non partage', () => {
+  it('borne le cache de relecture a 32 conversations sans perdre la plus ancienne', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-read-borne-'))
+    const store = new TraceStore(root)
+    for (let i = 0; i < 200; i += 1)
+      store.append({ ...event(`evt-a-${i}`, 0), conversationId: `conv-${i}`, parentId: undefined })
+    store.append({ ...event('evt-b-0', 1), conversationId: 'conv-0', parentId: 'evt-a-0' })
+
+    for (let i = 0; i < 200; i += 1) store.readConversation(`conv-${i}`)
+    for (let i = 0; i < 200; i += 1) store.readConversationBestEffort(`conv-${i}`)
+
+    const interne = store as unknown as {
+      readCursorsStrict: Map<string, unknown>
+      readCursorsVue: Map<string, unknown>
+    }
+    expect(interne.readCursorsStrict.size).toBeLessThanOrEqual(32)
+    expect(interne.readCursorsVue.size).toBeLessThanOrEqual(32)
+    // La correction doit rester correcte apres eviction : conv-0 est sortie du cache.
+    expect(store.readConversation('conv-0').map((e) => e.id)).toEqual(['evt-a-0', 'evt-b-0'])
+    expect(store.readConversationBestEffort('conv-199').map((e) => e.id)).toEqual(['evt-a-199'])
+  })
+
+  it('ne laisse pas un appelant polluer les evenements gardes en cache', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-read-isolation-'))
+    const store = new TraceStore(root)
+    store.append(event('evt-0', 0)).append(event('evt-1', 1))
+    expect(store.readConversation('conv-1')).toHaveLength(2)
+
+    const premiers = store.readConversation('conv-1')
+    expect(() => {
+      premiers[0].payloads[0].content = 'pollue'
+      ;(premiers[0] as { type: string }).type = 'tool-call'
+    }).toThrow(TypeError)
+
+    const seconds = store.readConversation('conv-1')
+    expect(seconds[0].payloads[0].content).toBe('evt-0')
+    expect(seconds[0].type).toBe('message')
+    expect(store.readConversationBestEffort('conv-1')[0].payloads[0].content).toBe('evt-0')
   })
 })
