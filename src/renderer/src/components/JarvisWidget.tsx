@@ -68,10 +68,14 @@ interface ApiJarvis {
     id: string,
     message: string,
     attachments: string[]
-  ) => Promise<{ conversationId: string }>
+  ) => Promise<{ conversationId: string; routed?: boolean }>
   whisperEtat?: () => Promise<EtatWhisper>
   whisperInstaller?: () => Promise<EtatWhisper>
   whisperTranscrire?: (wav: Uint8Array) => Promise<string>
+  pilotChat?: (
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    conversationId?: string
+  ) => Promise<{ ok: boolean; cancelled: boolean; error?: string }>
 }
 
 const apiJarvis = (): ApiJarvis | undefined => (window as unknown as { api?: ApiJarvis }).api
@@ -118,7 +122,21 @@ export function JarvisWidget({
         setErreur('Aucune conversation Jarvis')
         return
       }
-      await api.routeConversationMessage(conversationRef.current, texte, [])
+      const route = await api.routeConversationMessage(conversationRef.current, texte, [])
+      // Le routage DESIGNE seulement la conversation cible : il n'ecrit rien et ne lance aucun tour.
+      // Sans ce `pilotChat`, l'ordre etait bien entendu et affiche, puis il ne se passait RIEN —
+      // exactement le defaut vecu (« il l'a bien note mais rien ne s'est passe »).
+      const cible = route?.conversationId ?? conversationRef.current
+      if (route?.routed && route.conversationId) conversationRef.current = route.conversationId
+      if (!api.pilotChat) {
+        setErreur('Passerelle du pilote indisponible : ordre non execute')
+        return
+      }
+      const resultat = await api.pilotChat([{ role: 'user', content: texte }], cible)
+      if (!resultat?.ok && !resultat?.cancelled) {
+        setErreur(resultat?.error ?? 'Ordre non execute')
+        return
+      }
       setErreur(null)
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : String(cause))

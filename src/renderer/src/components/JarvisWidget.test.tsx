@@ -105,6 +105,7 @@ class FakeAudio {
 
 const monte: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 const routeConversationMessage = vi.fn(async () => ({ conversationId: 'c-jarvis', routed: true }))
+const pilotChat = vi.fn(async () => ({ ok: true, cancelled: false }))
 const conversations = vi.fn(async () => [
   {
     id: 'c-1',
@@ -138,12 +139,14 @@ beforeEach(() => {
   FakeAudio.micro = null
   ;(window as never as Record<string, unknown>).AudioContext = FakeAudio
   routeConversationMessage.mockClear()
+  pilotChat.mockClear()
   conversations.mockClear()
   ;(window as never as Record<string, unknown>).SpeechRecognition = FakeRecognition
   ;(window as never as Record<string, unknown>).api = {
     conversations,
     conversationsCreate: vi.fn(async () => ({ id: 'c-jarvis' })),
-    routeConversationMessage
+    routeConversationMessage,
+    pilotChat
   }
 })
 
@@ -195,6 +198,17 @@ describe('widget Jarvis', () => {
 
     await act(async () => moteur.dire('Jarvis, ouvre le task manager', true))
     expect(routeConversationMessage).toHaveBeenCalledWith('c-jarvis', 'ouvre le task manager', [])
+  })
+
+  it('EXECUTE l’ordre entendu : le routage seul ne lance aucun tour', async () => {
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    const moteur = FakeRecognition.instances.at(-1)!
+    await act(async () => moteur.dire('Jarvis, lance une tache test', true))
+    expect(pilotChat).toHaveBeenCalledWith(
+      [{ role: 'user', content: 'lance une tache test' }],
+      'c-jarvis'
+    )
   })
 
   it('fait un son dès qu’il entend son nom, avant même la fin de la phrase', async () => {
