@@ -3446,7 +3446,14 @@ ol.md-list li {
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 10px;
   opacity: 0.7;
-  overflow-wrap: anywhere;
+  /* UNE SEULE LIGNE. En `overflow-wrap: anywhere` un long signe de vie s'etalait sur 2-3 lignes
+     DANS l'en-tete, bloc replie compris (« ya trop de choses », 2026-09-01). Tronque en « … » :
+     le texte entier reste au survol (title) et le corps deplie garde TOUTES les lignes. */
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .thinking-block .thinking-body {
   margin: 6px 0 0;
