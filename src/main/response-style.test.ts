@@ -132,3 +132,51 @@ describe('relance sans cible — un accord execute la derniere recommandation', 
     expect(consigne).toMatch(/derni[èe]re recommandation est «\s*rien\s*»/iu)
   })
 })
+
+/**
+ * LANGAGE SIMPLE.
+ *
+ * Demande de l'utilisateur du 2026-09-01 (conv-30) : « les termes employés sont trop poussés »,
+ * puis, apres levee d'ambiguite, « je parlais uniquement des réponses du model, faut simplifier un
+ * max, que l'humain comprenne vite ». Le profil imposait deja « phrases courtes » et « supprime le
+ * verbiage » — donc la LONGUEUR — mais rien sur le VOCABULAIRE. Un texte court en jargon reste
+ * illisible : « ⛔ Bloqué : gate refuse le livrable, verdict a-verifier » fait 8 mots et n'apprend
+ * rien a qui ne connait pas la mecanique.
+ *
+ * Le garde-fou qui compte est le DERNIER : simplifier ne doit jamais servir a effacer une reserve
+ * ou un echec. Sans lui, cette regle entre en collision frontale avec le reflexe 2 (aucun « fait »
+ * sans preuve) et fabrique des faux verts polis.
+ *
+ * Ces assertions portent sur le livrable lui-meme (ce texte de consigne) : elles prouvent que la
+ * regle est ECRITE et injectee, jamais que le modele y obeit.
+ */
+describe('langage simple — le vocabulaire, pas seulement la longueur', () => {
+  const consigne = CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
+
+  it('pose la regle et nomme les termes de mecanique a traduire', () => {
+    expect(consigne).toMatch(/LANGAGE SIMPLE/u)
+    for (const jargon of ['gate', 'worktree', 'livrable', 'verdict', 'provider']) {
+      expect(consigne).toContain(jargon)
+    }
+  })
+
+  it('donne des remplacements CONCRETS, pas seulement l ordre de simplifier', () => {
+    expect(consigne).toMatch(/contr[ôo]le final/iu)
+    expect(consigne).toMatch(/copie de travail/iu)
+    expect(consigne).toMatch(/mod[èe]le IA/iu)
+  })
+
+  it('exempte les noms de fichier, de commande et de branche — ce sont des adresses', () => {
+    expect(consigne).toMatch(/nom de fichier.*reste tel quel|adresse, pas du jargon/iu)
+  })
+
+  it('interdit de simplifier au prix de la verite : reserves et echecs restent dits', () => {
+    expect(consigne).toMatch(/DIRE VRAI PRIME SUR SIMPLIFIER/u)
+    expect(consigne).toMatch(/ne supprime jamais une r[ée]serve/iu)
+    expect(consigne).toMatch(/[ée]chec/iu)
+  })
+
+  it('place la regle AVANT le bloc de cloture, la ou le ton se decide', () => {
+    expect(consigne.indexOf('LANGAGE SIMPLE')).toBeLessThan(consigne.indexOf('✅ Fait'))
+  })
+})
