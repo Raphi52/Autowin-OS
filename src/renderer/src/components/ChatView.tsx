@@ -83,6 +83,7 @@ import {
   conversationsRecentes,
   recenceUtilisateur,
   searchConversations,
+  segmentsSurlignes,
   trierParRecenceUtilisateur
 } from './conversation-search'
 import {
@@ -136,6 +137,30 @@ type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
  * Ghost-text d'un FIL donne : prompt suivant ecrit par le modele, sinon rubrique Recommande.
  * Extrait du composant pour que la MOSAIQUE l'obtienne aussi, par conversation (2026-08-30).
  */
+/**
+ * SURLIGNE dans un libelle les portions qui correspondent au terme cherche.
+ *
+ * Une liste filtree qui ne montre pas POURQUOI chaque ligne est la oblige a ouvrir chaque
+ * conversation pour comprendre. `<mark>` porte aussi le sens semantiquement, pas seulement une
+ * couleur : un lecteur d'ecran l'annonce.
+ */
+function TexteSurligne({ texte, terme }: { texte: string; terme: string }): React.JSX.Element {
+  const segments = segmentsSurlignes(texte, terme)
+  return (
+    <>
+      {segments.map((segment, index) =>
+        segment.marque ? (
+          <mark key={index} className="conv-highlight">
+            {segment.texte}
+          </mark>
+        ) : (
+          <span key={index}>{segment.texte}</span>
+        )
+      )}
+    </>
+  )
+}
+
 function ghostDuFil(fil: Msg[]): string | null {
   const lastAssistant = [...fil].reverse().find((m) => m.role === 'assistant') as
     AsstMsg | undefined
@@ -2882,9 +2907,54 @@ export function ChatView({
   }
   const signatureComposerMosaique = `${draftsVersion}|${versionMentionsRef.current}|${skillCommands.length}`
 
+  /**
+   * Ce que le RENDERER ne peut pas savoir : quelles conversations CONTIENNENT le terme.
+   *
+   * La liste laterale est une projection sans `messages` (`ConversationSummary`) -- chercher
+   * localement ne voyait donc que le titre, c'est-a-dire le debut du premier prompt. Le processus
+   * principal, lui, a tout le corpus en memoire : on lui demande la carte id -> extrait.
+   */
+  const [correspondancesContenu, setCorrespondancesContenu] = useState<Map<string, string>>(
+    () => new Map()
+  )
+  useEffect(() => {
+    const terme = convQuery.trim()
+    if (!terme) {
+      setCorrespondancesContenu(new Map())
+      return
+    }
+    // Le pont peut ne pas exposer ce canal (preload ancien, harnais de test) : la liste doit alors
+    // rester utilisable en recherche locale, pas jeter une exception depuis un timer.
+    const chercherContenu = window.api?.conversationsSearchContent
+    if (typeof chercherContenu !== 'function') return
+    let annule = false
+    // Anti-rebond : une frappe ne doit pas declencher un parcours du corpus par caractere.
+    const minuterie = setTimeout(() => {
+      void Promise.resolve()
+        .then(() => chercherContenu(terme))
+        .then((resultats) => {
+          if (annule) return
+          setCorrespondancesContenu(new Map(resultats.map((r) => [r.id, r.extrait])))
+        })
+        .catch(() => {
+          // Une recherche de contenu indisponible ne doit pas casser la liste : on retombe sur la
+          // recherche locale (titre / id), qui reste juste, seulement moins large.
+          if (!annule) setCorrespondancesContenu(new Map())
+        })
+    }, 160)
+    return () => {
+      annule = true
+      clearTimeout(minuterie)
+    }
+  }, [convQuery])
+
   const conversationHits = useMemo(
-    () => trierParRecenceUtilisateur(searchConversations(convs, convQuery), conversationDateOrder),
-    [convs, convQuery, conversationDateOrder]
+    () =>
+      trierParRecenceUtilisateur(
+        searchConversations(convs, convQuery, undefined, correspondancesContenu),
+        conversationDateOrder
+      ),
+    [convs, convQuery, conversationDateOrder, correspondancesContenu]
   )
 
   /**
@@ -3268,9 +3338,13 @@ export function ChatView({
                             />
                           )}
                           <span className="conv-copy">
-                            <span className="conv-label">{c.title}</span>
+                            <span className="conv-label">
+                              {convQuery ? <TexteSurligne texte={c.title} terme={convQuery} /> : c.title}
+                            </span>
                             {convQuery && snippet && (
-                              <span className="conv-snippet">{snippet}</span>
+                              <span className="conv-snippet">
+                                <TexteSurligne texte={snippet} terme={convQuery} />
+                              </span>
                             )}
                             {!convQuery && (
                               <span className="conv-meta">

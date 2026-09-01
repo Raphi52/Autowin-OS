@@ -3,6 +3,7 @@ import {
   conversationsRecentes,
   doitAfficherRecentes,
   searchConversations,
+  segmentsSurlignes,
   trierParRecenceUtilisateur,
   type ConversationSearchSource
 } from './conversation-search'
@@ -323,6 +324,53 @@ describe('recherche par identifiant', () => {
     expect(searchConversations(convs, '1455').map((h) => h.conversation.id)).toEqual(['conv-1455'])
     expect(searchConversations(convs, 'conv-1455').map((h) => h.conversation.id)).toEqual([
       'conv-1455'
+    ])
+  })
+})
+
+describe('recherche par CONTENU (carte fournie par le processus principal)', () => {
+  const base = (id: string, title: string): ConversationSearchSource => ({
+    id,
+    title,
+    provider: 'claude',
+    updatedAt: 1
+  })
+
+  it('retient une conversation dont le TITRE ignore le terme, sur le seul contenu distant', () => {
+    const convs = [base('conv-1', 'Sans rapport'), base('conv-2', 'Autre chose')]
+    const hits = searchConversations(
+      convs,
+      'pastilles',
+      undefined,
+      new Map([['conv-2', 'les pastilles de couleur']])
+    )
+    expect(hits.map((h) => h.conversation.id)).toEqual(['conv-2'])
+    expect(hits[0].snippet).toBe('les pastilles de couleur')
+    expect(hits[0].matchedIn).toBe('message')
+  })
+
+  it('sans carte de contenu, la recherche ne voit que le titre (comportement dégradé assumé)', () => {
+    expect(searchConversations([base('conv-2', 'Autre chose')], 'pastilles')).toEqual([])
+  })
+})
+
+describe('segmentsSurlignes', () => {
+  it('marque le terme trouvé, en ignorant casse et accents', () => {
+    expect(segmentsSurlignes('Mise À Jour du graphe', 'a jour')).toEqual([
+      { texte: 'Mise ', marque: false },
+      { texte: 'À Jour', marque: true },
+      { texte: ' du graphe', marque: false }
+    ])
+  })
+
+  it('marque TOUTES les occurrences', () => {
+    const segments = segmentsSurlignes('badge et badge', 'badge')
+    expect(segments.filter((s) => s.marque).map((s) => s.texte)).toEqual(['badge', 'badge'])
+  })
+
+  it('rend le texte intact quand rien ne correspond', () => {
+    expect(segmentsSurlignes('rien ici', 'absent')).toEqual([
+      { texte: 'rien ici', marque: false }
     ])
   })
 })

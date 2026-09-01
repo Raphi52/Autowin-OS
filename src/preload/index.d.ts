@@ -349,6 +349,10 @@ interface ChatApi {
   whisperInstaller: () => Promise<EtatWhisper>
   whisperTranscrire: (wav: Uint8Array) => Promise<string>
   conversations: () => Promise<ConversationSummary[]>
+  /** Ids des conversations dont le CONTENU porte le terme (+ extrait a montrer). */
+  conversationsSearchContent: (
+    terme: string
+  ) => Promise<Array<{ id: string; extrait: string; occurrences: number }>>
   conversation: (id: string) => Promise<Conversation | null>
   conversationsCreate: (p: { title: string; category: string; provider: string }) => Promise<{
     id: string

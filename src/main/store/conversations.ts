@@ -964,6 +964,49 @@ export class ConversationStore {
     return trouvees
   }
 
+  /**
+   * TOUTES les conversations dont le CONTENU porte le terme, pour la barre laterale.
+   *
+   * La liste laterale est une projection LEGERE (`ConversationSummary`, sans `messages`) : la
+   * recherche du renderer ne pouvait donc porter que sur le titre -- c'est-a-dire, en pratique, sur
+   * le debut du premier prompt. Une conversation qui parle du terme dix messages plus loin restait
+   * invisible. Ce chemin rend l'appartenance (`id`) et de quoi la MONTRER (`extrait`).
+   *
+   * Litterale et non ponderee, a la difference de `search` : ici on ne classe pas, on FILTRE. Un
+   * elargissement au voisinage ferait surligner des conversations qui ne contiennent pas le mot
+   * tape, ce qui est exactement ce que l'utilisateur ne veut pas.
+   */
+  rechercherParContenu(
+    terme: string,
+    options?: { limite?: number }
+  ): Array<{ id: string; extrait: string; occurrences: number }> {
+    const aiguille = replier(terme).trim()
+    if (!aiguille) return []
+    // Plafond LARGE : ce resultat sert a surligner une liste, pas a rendre un top-N. Le borner a 50
+    // (comme `search`) ferait disparaitre des conversations qui contiennent pourtant le mot.
+    const limite = Math.max(1, Math.min(5_000, Math.floor(options?.limite ?? 2_000) || 2_000))
+    const trouvees: Array<{ id: string; extrait: string; occurrences: number }> = []
+    for (const conversation of this.list()) {
+      let extrait: string | undefined
+      let occurrences = 0
+      for (const message of conversation.messages) {
+        if (typeof message.content !== 'string') continue
+        const replie = replier(message.content)
+        let position = replie.indexOf(aiguille)
+        if (position < 0) continue
+        if (extrait === undefined) extrait = fenetre(message.content, position, aiguille.length)
+        while (position >= 0) {
+          occurrences += 1
+          position = replie.indexOf(aiguille, position + aiguille.length)
+        }
+      }
+      if (extrait === undefined) continue
+      trouvees.push({ id: conversation.id, extrait, occurrences })
+      if (trouvees.length >= limite) break
+    }
+    return trouvees
+  }
+
   /** Récupère une conversation par id, ou undefined si absente. */
   get(id: string): Conversation | undefined {
     return this.conversations.get(id)

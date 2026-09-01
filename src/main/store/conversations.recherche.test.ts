@@ -441,3 +441,34 @@ describe('forme exacte contre variante', () => {
     expect(titres[0]).toBe('Exact')
   })
 })
+
+/**
+ * SURLIGNAGE DE LA BARRE LATERALE. La liste envoyee au renderer est une projection sans `messages` :
+ * sans ce chemin, chercher dans la barre laterale ne repondait qu'au TITRE — c'est-a-dire, en
+ * pratique, au debut du premier prompt.
+ */
+describe('rechercherParContenu (appartenance, pour la barre laterale)', () => {
+  it('rend la conversation dont un message porte le terme, avec un extrait', () => {
+    const store = magasinPeuple()
+    const trouve = store.rechercherParContenu('ambre')
+    expect(trouve.map((t) => t.id).length).toBe(1)
+    expect(trouve[0].extrait.toLowerCase()).toContain('ambre')
+    expect(trouve[0].occurrences).toBe(1)
+  })
+
+  it('ignore la casse et les accents', () => {
+    const store = magasinPeuple()
+    expect(store.rechercherParContenu('À JOUR').length).toBe(1)
+  })
+
+  it('laisse dehors ce qui ne porte pas le terme, et rend [] sur un terme vide', () => {
+    const store = magasinPeuple()
+    expect(store.rechercherParContenu('inexistant')).toEqual([])
+    expect(store.rechercherParContenu('   ')).toEqual([])
+  })
+
+  it('trouve un terme court, la ou la recherche tokenisee ecarte les mots de moins de 3 lettres', () => {
+    const store = magasinPeuple()
+    expect(store.rechercherParContenu('RIG').map((t) => t.id).length).toBe(1)
+  })
+})

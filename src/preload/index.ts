@@ -422,6 +422,12 @@ const api = {
     ipcRenderer.invoke('os:whisper:transcrire', wav),
   // Conversations
   conversations: (): Promise<ConversationSummary[]> => ipcRenderer.invoke('os:conversations'),
+  /** Ids des conversations dont le CONTENU porte le terme (+ extrait a montrer). */
+  conversationsSearchContent: (
+    terme: string
+  ): Promise<Array<{ id: string; extrait: string; occurrences: number }>> =>
+    ipcRenderer.invoke('os:conversations:searchContent', terme),
+
   conversation: (id: string): Promise<Conversation | null> =>
     ipcRenderer.invoke('os:conversation', id),
   conversationsCreate: (p: {

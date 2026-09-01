@@ -376,6 +376,19 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+/* Le terme cherché, surligné là où il a été trouvé — dans le titre comme dans l'extrait.
+   Fond OR discret, texte inchangé : la ligne reste lisible, la correspondance saute aux yeux. */
+.conv-highlight {
+  background: rgba(212, 169, 79, 0.28);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 600;
+}
+.conv-snippet .conv-highlight {
+  color: var(--text);
+}
+
 .conv-count {
   font-size: 10px;
   color: var(--text-faint);
@@ -3422,14 +3435,23 @@ ol.md-list li {
 .thinking-block > summary::-webkit-details-marker {
   display: none;
 }
+/* CHEVRON DESSINE, pas un glyphe. Le caractere « ▾ » a 10px et 0.55 d'opacite etait illisible :
+   « on voit pas ou elle pointe » (2026-09-01). Deux bordures sur un carre donnent un chevron net,
+   epais et net a n'importe quelle taille. Ferme -> pointe a DROITE ; ouvert -> pointe en HAUT. */
 .thinking-block > summary::after {
-  content: '▾';
-  font-size: 10px;
-  opacity: 0.55;
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-left: 2px;
+  border-right: 1.5px solid #d4a94f;
+  border-bottom: 1.5px solid #d4a94f;
+  opacity: 0.9;
+  transform: rotate(-45deg);
+  transform-origin: center;
   transition: transform 0.15s ease;
 }
 .thinking-block[open] > summary::after {
-  transform: rotate(180deg);
+  transform: rotate(-135deg);
 }
 .thinking-block.is-live > summary .thinking-label {
   color: #d4a94f;
@@ -3488,4 +3510,16 @@ ol.md-list li {
   left: 18px;
   background: var(--gold-bright);
   opacity: 1;
+}
+
+/* Signe de vie technique du provider : discret, sur UNE ligne, tronque. Il ne doit jamais
+   concurrencer la reponse ni ressembler a du raisonnement. */
+.msg-provider-status {
+  color: var(--text-dim);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 10px;
+  opacity: 0.7;
+  /* AUCUNE troncature : la ligne se replie et se lit en entier (demande du 2026-09-01). */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
