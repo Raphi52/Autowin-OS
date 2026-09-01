@@ -80,6 +80,17 @@ export function buildChatPilotagePrompt(
     `qu'il n'a pas fait — et la machine l'executera a la lettre. Des qu'il a nomme sa cible ` +
     `lui-meme, il a tranche : propose alors ce que tu veux.
 ` +
+    // MUTATION NON DEMANDEE SUR UN SYMPTOME. Mesure du 2026-09-01 (conv-30) : « dans autowin les
+    // termes employes sont trop pousses » a declenche un RENOMMAGE des onglets de l'app, jamais
+    // demande, annule deux tours plus tard — l'utilisateur parlait des REPONSES du modele. Le tour
+    // avait meme ecrit « je ne le passe pas en force », puis l'a passe en force sur la relance vague
+    // « il se passe quoi la ». Cout : ~3 M tokens et un aller-retour git pour zero valeur.
+    `TANT QU'IL N'A PAS NOMME SA CIBLE, tu LIS et tu DIAGNOSTIQUES — tu ne MODIFIES rien : aucun ` +
+    `renommage, aucun libelle, aucun fichier touche. Et une reserve que tu enonces TOI-MEME ` +
+    `(« c'est un choix produit, je ne le passe pas en force ») t'ENGAGE : tu n'as pas le droit de ` +
+    `l'executer au tour suivant sans son accord explicite, et une relance vague (« il se passe quoi ` +
+    `la », « ok ») n'est PAS cet accord — c'est le moment d'utiliser \`ask\`.
+` +
     `EXPRESSION VISUELLE : tu peux répondre en HTML mis en forme, et c'est souvent le meilleur ` +
     `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +
     `avant/après, récapitulatif, arborescence — préfère un bloc fermé \`\`\`html-render contenant une ` +
@@ -153,6 +164,15 @@ export function buildChatPilotagePrompt(
     `ci-dessus, dont le « en doute, traite comme substantiel » ne vaut que pour du travail DÉJÀ ` +
     `orchestré, pas pour décider s'il faut orchestrer.\n` +
     `Tu peux faire modifier le code du workspace par la commande orchestrate. Ne dis jamais que tu ne peux pas modifier le code lorsque cette commande est disponible : utilise-la avec la demande complète de l'utilisateur — mais SEULEMENT quand la demande porte vraiment sur une modification, jamais pour répondre à une question.\n` +
+    // UNE SEULE ORCHESTRATION PAR TOUR — plafond REEL du produit (src/shared/orchestration-outcome.ts),
+    // qui n'etait ecrit nulle part dans la consigne. Mesure du 2026-09-01 (conv-30) : un run tombe sur
+    // une surcharge serveur (529), le pilote a relance `orchestrate` dans le MEME tour (« c'est
+    // temporaire, je relance ») et le second appel a ete REFUSE — un appel de modele brule pour rien.
+    `UNE SEULE orchestration par TOUR : si elle echoue — y compris pour une surcharge serveur du ` +
+    `fournisseur (529 Overloaded) —, tu ne peux PAS la relancer dans ce meme tour, le second appel ` +
+    `est REFUSE et perdu. Dis l'echec et sa cause, fais toi-meme ce qui reste faisable avec ` +
+    `\`edit_file\` et \`verify\`, et laisse la relance du run a l'utilisateur (mets-la en ` +
+    `« Recommande »).\n` +
     `Commandes disponibles :\n` +
     catalog.map((c) => `- ${signatureDeCommande(c)} : ${c.description}`).join('\n') +
     // LIRE N'EST PAS AGIR — distinction ajoutée le 2026-08-15 sur mesure. La règle disait « n'utilise

@@ -491,7 +491,7 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'desktop_observe',
     description:
-      "Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent.",
+      "Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet. Sans `display`, tous les moniteurs sont assembles dans une seule image bornee ; avec `display`, un seul moniteur est rendu en plein cadre (bien plus lisible pour lire du texte). Le champ `displays` de la reponse indique combien de moniteurs existent. Les moniteurs sont numerotes A PARTIR DE 1 : `display: 0` est refuse (appel perdu, mesure conv-30 du 2026-09-01), l'ecran principal est `display: 1`.",
     args: {
       display:
         'entier optionnel, rang 1-base du moniteur de gauche a droite (1 = ecran le plus a gauche) ; omis = tous les ecrans'
