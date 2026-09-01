@@ -187,7 +187,7 @@ describe('WorkflowsPanel', () => {
     act(() => container.querySelector<HTMLButtonElement>('[data-testid="pick-none"]')?.click())
     expect(
       container.querySelector('[data-workflow-detail]')?.getAttribute('data-workflow-detail')
-    ).toBe('runs')
+    ).toBe('accueil')
     expect(container.textContent).toContain('Audit du panneau')
   })
 

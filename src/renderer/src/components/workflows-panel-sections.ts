@@ -3,10 +3,9 @@ import type { ScopedLiveRun } from './chat-view-model'
 /**
  * SÉLECTION DES FILS DE SOUS-AGENTS.
  *
- * Ce module portait aussi le modèle des QUATRE sections du panneau (`WORKFLOW_PANEL_SECTIONS`,
- * `sectionUsesScope`). Ces sections ont disparu : le graphe d’exécution est devenu la navigation
- * du panneau, et le détail affiché découle du nœud sélectionné. Le modèle a donc été retiré plutôt
- * que laissé en place sans consommateur — un export mort finit toujours par être recâblé par erreur.
+ * Le nom du fichier parle encore de « sections » : elles n'existent plus. Le panneau n'a plus
+ * d'onglets — le graphe d'exécution est sa navigation, et le détail affiché découle du nœud
+ * sélectionné. Ne subsiste ici que la règle de portée des fils, qui, elle, sert toujours.
  */
 
 /**

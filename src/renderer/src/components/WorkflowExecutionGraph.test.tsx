@@ -601,6 +601,12 @@ describe('WorkflowExecutionGraph', () => {
 
     expect(view.querySelector('.workflow-execution-detail')).not.toBeNull()
     expect(view.querySelector('[data-execution-reasoning]')).toBeNull()
+    // La fixture porte une charge d'OUTIL (« contenu sensible »). Le pli ne doit pas seulement être
+    // absent : le détail ouvert ne doit RIEN laisser fuiter de cette charge — c'est la raison d'être
+    // du filtre sur `reasoning` au rendu.
+    expect(view.querySelector('.workflow-execution-detail')?.textContent).not.toContain(
+      'contenu sensible'
+    )
   })
   /**
    * REMONTER DANS LE TEMPS SANS CHANGER D'ONGLET.

@@ -124,6 +124,9 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
         : visibleLiveRuns
       : visibleLiveRuns
   const filsHorsTour = Boolean(selection) && fils.length > 0 && filsDuTour.length === 0
+  // « accueil » et non « runs » : sans sélection, le panneau montre les fils vivants PUIS les
+  // RUN.md. Nommer cet état d'après sa seule seconde moitié le décrivait faux.
+  const detailAffiche = depot ? 'source-control' : selection ? 'subagents' : 'accueil'
 
   return (
     <>
@@ -169,7 +172,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             porte que deux — on ne s'y retrouvait plus. Le global relève de l'Observatory. */}
         <div
           className="scroll-y col grow workflow-panel-detail"
-          data-workflow-detail={depot ? 'source-control' : selection ? 'subagents' : 'runs'}
+          data-workflow-detail={detailAffiche}
           style={{ gap: 'var(--s2)', minHeight: 0 }}
         >
           {depot && (

@@ -191,6 +191,10 @@ function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JS
  * `stepPayloads` écrit la délibération dans une charge `reasoning`, distincte de la conclusion.
  * Elle arrivait jusqu'ici sans qu'aucun chemin de rendu ne la lise. Le pli reste FERMÉ : une
  * délibération est longue, et le détail doit rester lisible d'un coup d'œil.
+ *
+ * Le filtre sur `reasoning` DOUBLE celui de la projection à dessein : c'est ici la garde qui
+ * empêche un contenu d'outil d'atterrir dans le détail. Un nœud non projeté garderait ses charges
+ * brutes, et le graphe s'interdit de les montrer (test discriminant : « contenu sensible »).
  */
 function ExecutionNodeReasoning({
   event
