@@ -310,8 +310,7 @@ export class TraceStore {
 
     cache.delete(conversationId)
     cache.set(conversationId, { offset, mtimeMs: stats.mtimeMs, ligne, events })
-    while (cache.size > CACHE_RELECTURE_MAX)
-      cache.delete(cache.keys().next().value as string)
+    while (cache.size > CACHE_RELECTURE_MAX) cache.delete(cache.keys().next().value as string)
     return [...events].sort((a, b) => a.sequence - b.sequence)
   }
 
