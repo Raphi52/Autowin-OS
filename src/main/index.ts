@@ -193,6 +193,7 @@ import {
 } from './runs/turn-journal'
 import {
   closingJournalEvents,
+  pilotJournalEvents,
   promptCallJournalEvents,
   type PromptJournalMemory
 } from './runs/turn-journal-enrich'
@@ -4462,6 +4463,21 @@ Le fil reprend ensuite normalement.`
           }
         }
         applyDurableEvent(pilotEvent)
+        /**
+         * TOUT LE RESTE DU PILOTE DANS LE JOURNAL. `applyDurableEvent` ne retient que 8 `kind` sur
+         * les 14 emis ; `error`, `retry`, `provider-status`, `action-progress` et le `reasoning`
+         * par iteration n'atteignaient donc AUCUN fichier — produits, puis jetes a la frontiere
+         * d'ecriture. Aucun affichage ne peut montrer ce qui n'est pas ecrit : c'est ici la cause
+         * du journal ou « on ne voit rien ». Un `kind` inconnu est ecrit tel quel, jamais perdu.
+         */
+        if (conversationId) {
+          try {
+            for (const journalEvent of pilotJournalEvents(pilotEvent, Date.now()))
+              appendTurnEvent(turnJournalRoot, conversationId, turnId, journalEvent)
+          } catch {
+            /* journal best-effort : ne jamais casser un tour pour une ecriture d'observabilite */
+          }
+        }
         if (conversationId && pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
           // L'APPEL PROVIDER dans le journal : prompt systeme, options, usage/cout, modele resolu,
           // duree, statut/erreur. Jusqu'ici seul le trace-store le savait — le journal ne portait

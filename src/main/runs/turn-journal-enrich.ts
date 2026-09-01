@@ -133,3 +133,65 @@ export function closingJournalEvents(
     out.push({ kind: 'outcome', ...(sanitizePersistedValue(input.outcome) as object), at })
   return out
 }
+
+/**
+ * `kind` du pilote déjà écrits AILLEURS : les huit que `applyDurableEvent` transforme en événement
+ * durable (donc journalisé avec le tour) et `prompt-call`, journalisé par
+ * `promptCallJournalEvents`. Les réécrire ici doublerait le journal.
+ */
+const DEJA_JOURNALISES = new Set([
+  'delta',
+  'stream-reset',
+  'think',
+  'command',
+  'result',
+  'artifact',
+  'done',
+  'cancellation',
+  'prompt-call'
+])
+
+/**
+ * Forme MINIMALE attendue d'un événement de pilote : tous les champs sont optionnels, car ce point
+ * d'écriture accepte volontairement n'importe quel `kind` — y compris un futur.
+ */
+export interface PilotJournalEventLike {
+  kind?: string
+  iteration?: number
+  actionId?: string
+  streamId?: string
+  name?: string
+  ok?: boolean
+  text?: string
+  data?: unknown
+}
+
+/** Champs d'un événement de pilote qui ont un sens dans le journal, dans un ordre stable. */
+const CHAMPS_PILOTE = ['iteration', 'actionId', 'streamId', 'name', 'ok', 'text', 'data'] as const
+
+/**
+ * TOUT le reste du pilote dans le journal — `error`, `retry`, `provider-status`,
+ * `action-progress`, le `reasoning` par itération, et tout `kind` FUTUR.
+ *
+ * Mesuré sur `applyDurableEvent` (`src/main/index.ts`) : un `kind` qui ne produit pas d'événement
+ * durable n'atteint AUCUN fichier. Une erreur provider, une nouvelle tentative ou l'avancement
+ * d'une commande longue étaient donc produits puis jetés à la frontière d'écriture — d'où un
+ * journal où « on ne voit rien ». Le défaut par défaut est ici INVERSÉ : un `kind` inconnu est
+ * écrit tel quel plutôt que perdu en silence.
+ *
+ * `reasoning` devient `reasoning-step` : la clôture écrit déjà un `reasoning` AGRÉGÉ, et deux sens
+ * différents sous un même nom rendraient le journal inexploitable.
+ */
+export function pilotJournalEvents(event: PilotJournalEventLike, at: number): TurnJournalEvent[] {
+  const kind = typeof event.kind === 'string' ? event.kind : ''
+  if (!kind || DEJA_JOURNALISES.has(kind)) return []
+  const source = event as Record<string, unknown>
+  const out: TurnJournalEvent = { kind: kind === 'reasoning' ? 'reasoning-step' : kind }
+  for (const champ of CHAMPS_PILOTE) {
+    const value = source[champ]
+    if (value === undefined) continue
+    out[champ] = sanitizePersistedValue(value)
+  }
+  out.at = at
+  return [out]
+}

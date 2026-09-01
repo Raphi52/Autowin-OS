@@ -1,5 +1,13 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { closingJournalEvents, promptCallJournalEvents } from './turn-journal-enrich'
+import { appendTurnEvent, readTurnJournal } from './turn-journal'
+import {
+  closingJournalEvents,
+  pilotJournalEvents,
+  promptCallJournalEvents
+} from './turn-journal-enrich'
 import type { PromptCallLike } from './turn-journal-enrich'
 
 const basePrompt = {
@@ -89,5 +97,106 @@ describe('journal de tour — ce que l Observatory savait et que le log ignorait
   it('n ecrit rien quand il n y a rien a dire', () => {
     expect(closingJournalEvents({ reasoning: '   ', usage: {}, outcome: {} }, 1)).toEqual([])
     expect(promptCallJournalEvents({}, {}, 1)).toEqual([])
+  })
+})
+
+/**
+ * LE TROU RESTANT — mesuré sur `applyDurableEvent` (`src/main/index.ts`) : le pilote émet 14 `kind`,
+ * mais seuls 8 deviennent un événement durable (delta, stream-reset, think, command, result,
+ * artifact, done, cancellation) et 1 est journalisé à part (prompt-call). `error`, `retry`,
+ * `provider-status`, `action-progress` et le `reasoning` PAR ITÉRATION n'atteignaient donc AUCUN
+ * fichier : une erreur provider, une nouvelle tentative ou l'avancement d'une commande longue
+ * étaient produits puis jetés à la frontière d'écriture. C'est exactement « on ne voit rien ».
+ */
+describe('journal de tour — les evenements du pilote jetes a l ecriture', () => {
+  it('journalise erreur, nouvelle tentative, statut provider, avancement et raisonnement', () => {
+    expect(pilotJournalEvents({ kind: 'error', text: 'plafond atteint' }, 7)).toEqual([
+      { kind: 'error', text: 'plafond atteint', at: 7 }
+    ])
+    expect(
+      pilotJournalEvents(
+        { kind: 'retry', iteration: 2, name: 'anthropic', text: 'surcharge', data: { attempt: 1 } },
+        8
+      )
+    ).toEqual([
+      {
+        kind: 'retry',
+        iteration: 2,
+        name: 'anthropic',
+        text: 'surcharge',
+        data: { attempt: 1 },
+        at: 8
+      }
+    ])
+    expect(
+      pilotJournalEvents({ kind: 'provider-status', text: 'file d attente', iteration: 1 }, 9)
+    ).toEqual([{ kind: 'provider-status', iteration: 1, text: 'file d attente', at: 9 }])
+    expect(
+      pilotJournalEvents({ kind: 'action-progress', actionId: 'a1', text: '12 fichiers lus' }, 10)
+    ).toEqual([{ kind: 'action-progress', actionId: 'a1', text: '12 fichiers lus', at: 10 }])
+    expect(pilotJournalEvents({ kind: 'reasoning', text: 'je cherche', iteration: 3 }, 11)).toEqual(
+      [{ kind: 'reasoning-step', iteration: 3, text: 'je cherche', at: 11 }]
+    )
+  })
+
+  it('ne double JAMAIS ce qui est deja ecrit ailleurs', () => {
+    for (const kind of [
+      'delta',
+      'stream-reset',
+      'think',
+      'command',
+      'result',
+      'artifact',
+      'done',
+      'cancellation',
+      'prompt-call'
+    ])
+      expect(pilotJournalEvents({ kind, text: 'x' }, 1)).toEqual([])
+  })
+
+  it('un kind INCONNU est ecrit quand meme, jamais jete en silence', () => {
+    expect(pilotJournalEvents({ kind: 'quota-reset', text: 'demain 9h' }, 12)).toEqual([
+      { kind: 'quota-reset', text: 'demain 9h', at: 12 }
+    ])
+  })
+
+  it('masque les secrets et ne casse pas sur un evenement vide', () => {
+    const [event] = pilotJournalEvents(
+      { kind: 'retry', text: 'echec', data: { apiKey: 'sk-secret' } },
+      1
+    )
+    expect(JSON.stringify(event)).not.toContain('sk-secret')
+    expect(pilotJournalEvents({}, 1)).toEqual([])
+  })
+})
+
+/**
+ * PREUVE SUR FICHIER — un mapping vert ne prouve rien si l'événement n'atteint pas le disque. On
+ * écrit ici les événements du pilote par le VRAI écrivain, puis on relit le `.jsonl`.
+ */
+describe('journal de tour — l evenement du pilote atteint bien le fichier', () => {
+  it('relit erreur, tentative et avancement dans le .jsonl', () => {
+    const root = mkdtempSync(join(tmpdir(), 'journal-pilote-'))
+    try {
+      for (const pilotEvent of [
+        { kind: 'provider-status', text: 'file d attente', iteration: 0 },
+        { kind: 'retry', iteration: 0, name: 'anthropic', text: 'surcharge' },
+        { kind: 'action-progress', actionId: 'a1', text: '12 fichiers lus' },
+        { kind: 'error', text: 'plafond atteint' }
+      ])
+        for (const journalEvent of pilotJournalEvents(pilotEvent, 42))
+          appendTurnEvent(root, 'conv-70', 'tour-1', journalEvent)
+      const relu = readTurnJournal(root, 'conv-70', 'tour-1')
+      expect(relu.map((e) => e.kind)).toEqual([
+        'provider-status',
+        'retry',
+        'action-progress',
+        'error'
+      ])
+      expect(relu[1]).toMatchObject({ name: 'anthropic', text: 'surcharge' })
+      expect(relu[3]).toMatchObject({ text: 'plafond atteint', at: 42 })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
