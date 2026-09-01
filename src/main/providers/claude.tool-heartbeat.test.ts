@@ -276,6 +276,22 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
   })
 
   /*
+   * UNE LIGNE, PAS TROIS. Le libelle partait avec de VRAIS retours a la ligne (`\n` + nom + `\n` +
+   * cible) : dans le bloc « Reflexion » deplie, chaque appel d'outil ajoutait donc deux lignes vides,
+   * et l'en-tete repliee recevait un texte multiligne. Constat du 2026-09-01.
+   */
+  it('tient sur UNE ligne — outil · cible, sans retour a la ligne', async () => {
+    spawnCapture.stdoutEvents = [
+      appelOutil('t1', 'Read', { file_path: 'src/main/index.ts' }),
+      succes
+    ]
+    const reasoning = await drainStatus()
+
+    expect(reasoning[0]).toBe('Read · src/main/index.ts')
+    expect(reasoning[0]).not.toContain('\n')
+  })
+
+  /*
    * CONTROLE DISCRIMINANT — l'entree qui DOIT laisser le test a zero. Sans lui, un relais qui
    * pousse sur n'importe quel evenement passerait le test ci-dessus sans rien prouver.
    */

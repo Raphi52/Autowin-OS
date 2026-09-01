@@ -1234,9 +1234,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
              * servait pour le laisser tourner sans jamais le dire a l'utilisateur.
              */
             const cible = (filePath || command).slice(0, 120)
-            queue.push({ delta: '', status: `
-${part.name}${cible ? `
-${cible}` : ''}` })
+            // UNE SEULE LIGNE : ce libelle s'affiche dans l'en-tete du bloc « Reflexion » et dans son
+            // corps deplie, ou chaque signe de vie occupe UNE ligne. Des retours a la ligne dans le
+            // texte y inseraient des lignes vides et casseraient l'en-tete (constat du 2026-09-01).
+            queue.push({ delta: '', status: `${part.name}${cible ? ` · ${cible}` : ''}` })
           }
         }
       } else if (t === 'user') {
