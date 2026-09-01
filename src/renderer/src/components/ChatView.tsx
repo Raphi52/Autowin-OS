@@ -653,6 +653,15 @@ export function ChatView({
   /** Derniere position de defilement OBSERVEE : sert a lire le SENS du mouvement (cf. doitSuivreLeBas). */
   const dernierScrollTopRef = useRef(0)
   /**
+   * UNE DESCENTE AUTOMATIQUE EST EN VOL. L'evenement `scroll` ne dit pas qui l'a provoque : pendant
+   * une descente, c'est NOUS qui bougeons `scrollTop` alors que le contenu grandit encore, donc la
+   * mesure « pres du bas » repond `false` et le suivi etait COUPE des la premiere frame — le fil
+   * s'arretait juste apres l'envoi et le bouton « ↓ Derniere reponse » s'allumait sans geste du
+   * lecteur. Tant qu'une descente est en vol, seul un RECUL de `scrollTop` rend la main au lecteur
+   * (cf. `doitSuivreLeBas`).
+   */
+  const descenteEnVolRef = useRef(false)
+  /**
    * Position A RESTAURER a la prochaine peinture du fil : posee par `loadConv` quand la conversation
    * ouverte avait ete quittee EN COURS de lecture. Un ref et pas un state : l'effet de scroll doit la
    * consommer sur la meme frame que les messages, sans re-rendu intermediaire.
@@ -1510,7 +1519,10 @@ export function ChatView({
       // le filet. Si la descente n'atterrit PAS (re-rendu qui repose le fil en haut, contenu qui grandit
       // plus vite qu'on ne descend), le texte tardif — typiquement le bloc de clôture — reste hors
       // champ : le bouton « ↓ Dernière réponse » doit alors le dire, au lieu d'un silence.
+      descenteEnVolRef.current = true
+      dernierScrollTopRef.current = scroll.scrollTop
       annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 40, (landed) => {
+        descenteEnVolRef.current = false
         if (!landed) setHasNewActivity(true)
       })
       setHasNewActivity(false)
@@ -1546,10 +1558,16 @@ export function ChatView({
     const scroll = scrollRef.current
     // On ne force RIEN si le lecteur a quitte le bas de lui-meme : sa position lui appartient.
     if (!scroll || !followTailRef.current) return
+    descenteEnVolRef.current = true
+    dernierScrollTopRef.current = scroll.scrollTop
     const annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 120, (landed) => {
+      descenteEnVolRef.current = false
       if (!landed) setHasNewActivity(true)
     })
-    return () => annulerDescente()
+    return () => {
+      descenteEnVolRef.current = false
+      annulerDescente()
+    }
   }, [busy])
 
   /* --- conversations : sélection = fil rechargé depuis le store --- */
@@ -4095,18 +4113,31 @@ export function ChatView({
             aria-live="polite"
             aria-relevant="additions text"
             onScroll={(event) => {
-              const nearBottom = isChatNearBottom(event.currentTarget)
+              const conteneur = event.currentTarget
+              const nearBottom = isChatNearBottom(conteneur)
               // La position de lecture se retient A CHAQUE mouvement : quitter une conversation ne
               // passe pas toujours par un evenement de fermeture (switch, fermeture brutale de l'app).
               if (activeRef.current)
                 memoriserPositionLecture(
                   activeRef.current,
-                  event.currentTarget,
-                  mesurerMessagesRendus(event.currentTarget)
+                  conteneur,
+                  mesurerMessagesRendus(conteneur)
                 )
-              followTailRef.current = nearBottom
-              setScrolledAwayFromTail(!nearBottom)
-              if (nearBottom) setHasNewActivity(false)
+              // Pendant une descente automatique (envoi d'un message, streaming, fin de tour), les
+              // evenements `scroll` viennent de NOUS : les prendre pour un geste de lecture coupait le
+              // suivi et laissait le fil arrete au milieu du tour. Seul un recul rend la main.
+              const suit = descenteEnVolRef.current
+                ? doitSuivreLeBas({
+                    suivaitLeBas: followTailRef.current,
+                    precedentTop: dernierScrollTopRef.current,
+                    top: conteneur.scrollTop,
+                    nearBottom
+                  })
+                : nearBottom
+              dernierScrollTopRef.current = conteneur.scrollTop
+              followTailRef.current = suit
+              setScrolledAwayFromTail(!suit)
+              if (suit) setHasNewActivity(false)
             }}
           >
             {/* Chargement du fil : squelette pendant l'attente, bandeau ACTIONNABLE en cas d'échec.

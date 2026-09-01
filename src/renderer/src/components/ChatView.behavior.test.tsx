@@ -964,6 +964,55 @@ describe('ChatView behavior under concurrent UI actions', () => {
     }
   })
 
+  /**
+   * ENVOI = ON RESTE COLLE AU BAS. La descente automatique bouge `scrollTop` pendant que le fil
+   * grandit : le navigateur livre alors des evenements `scroll` LOIN du bas, provoques par NOUS.
+   * Les prendre pour un geste de lecture coupait le suivi des la premiere frame — le fil s'arretait
+   * juste apres l'envoi et le bouton « ↓ Derniere reponse » s'allumait sans que le lecteur ait
+   * touche a rien (rapporte le 2026-09-01). Le garde `doitSuivreLeBas` existait mais n'etait pas
+   * branche sur le conteneur.
+   */
+  it('reste colle au bas apres un envoi malgre les evenements de sa propre descente', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+
+    const scroll = container!.querySelector('.chat-scroll') as HTMLDivElement
+    const scrollTo = vi.fn()
+    scroll.scrollTo = scrollTo
+    Object.defineProperties(scroll, {
+      scrollHeight: { configurable: true, value: 4000 },
+      clientHeight: { configurable: true, value: 400 },
+      scrollTop: { configurable: true, writable: true, value: 0 }
+    })
+
+    await type('une question')
+    await click('.composer-send')
+    await act(async () => flushAnimationFrames())
+
+    // La descente est en vol : elle avance vers le bas sans l'avoir atteint. C'est ELLE qui emet
+    // l'evenement, pas le lecteur.
+    await act(async () => {
+      ;(scroll as unknown as { scrollTop: number }).scrollTop = 1200
+      scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+    })
+
+    expect(container!.querySelector('.chat-jump-latest')).toBeNull()
+
+    // Le tour se termine : le suivi doit toujours etre actif, donc on redescend tout en bas.
+    scrollTo.mockClear()
+    await act(async () => {
+      pilot.resolve({ ok: true })
+      await Promise.resolve()
+    })
+    await act(async () => flushAnimationFrames())
+    expect(scrollTo).toHaveBeenCalledWith({ top: 4000, behavior: 'auto' })
+  })
+
   it('conserve tous les reçus orientés de la session sans évincer les plus anciens', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({
@@ -1908,6 +1957,12 @@ describe('ChatView behavior under concurrent UI actions', () => {
       '[data-execution-node][data-execution-kind]'
     )!
     await act(async () => noeudAgent.click())
+    // Depuis le 2026-09-01 le fil des sous-agents vit dans l'onglet RUNS : le graphe choisit le
+    // tour, le fil se lit sur l'onglet Runs.
+    const ongletRuns = [
+      ...container!.querySelectorAll<HTMLButtonElement>('.workflow-section-tab')
+    ].find((b) => b.textContent?.trim() === 'Runs')!
+    await act(async () => ongletRuns.click())
     expect(container!.querySelector('.live-run')).not.toBeNull()
   })
 
