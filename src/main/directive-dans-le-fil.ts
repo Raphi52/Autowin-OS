@@ -19,7 +19,9 @@ export interface FilPourDirective {
       orientation?: boolean
       avantLaReponseEnCours?: boolean
     }
-  ): { messages: ReadonlyArray<{ messageId?: string }> }
+  ): {
+    messages: ReadonlyArray<{ messageId?: string; role: 'user' | 'assistant'; content: string }>
+  }
 }
 
 export function enregistrerDirectiveDansLeFil(params: {
