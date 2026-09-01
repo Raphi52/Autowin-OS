@@ -9,6 +9,7 @@ import {
   deriveConversationState,
   groupAssistantActivity,
   isRunRequestCurrent,
+  doitSuivreLeBas,
   isChatNearBottom,
   scrollChatToBottom,
   hydrateStoredAssistant,
