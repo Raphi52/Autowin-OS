@@ -105,6 +105,17 @@ async function mount(): Promise<HTMLDivElement> {
   return container
 }
 
+/**
+ * Les commandes de disposition vivent desormais DANS le panneau de reglages : un test qui les cherche
+ * doit d'abord l'ouvrir, comme un utilisateur.
+ */
+async function ouvrirReglages(c: HTMLDivElement): Promise<void> {
+  const bouton = c.querySelector('[data-testid="home-settings"]') as HTMLButtonElement
+  if (c.querySelector('[data-testid="home-settings-panel"]') === null) {
+    await act(async () => bouton.click())
+  }
+}
+
 const tile = (c: HTMLDivElement, id: string): HTMLElement =>
   c.querySelector(`[data-testid="home-widget-${id}"]`) as HTMLElement
 
@@ -214,6 +225,7 @@ describe('la vue agit : solder une alerte', () => {
 describe('annuler un geste', () => {
   it('est desactive tant qu il n y a rien a defaire', async () => {
     const container = await mount()
+    await ouvrirReglages(container)
     expect((container.querySelector('[data-testid="home-undo"]') as HTMLButtonElement).disabled).toBe(
       true
     )
@@ -225,6 +237,7 @@ describe('annuler un geste', () => {
     const avant = boxOf(agenda)
     await geste(agenda, [500, 300], [537, 341])
     expect(boxOf(agenda)).not.toEqual(avant)
+    await ouvrirReglages(container)
     const undo = container.querySelector('[data-testid="home-undo"]') as HTMLButtonElement
     expect(undo.disabled).toBe(false)
     await act(async () => undo.click())
@@ -237,6 +250,7 @@ describe('annuler un geste', () => {
     const agenda = tile(container, 'agenda')
     await geste(agenda, [500, 300], [560, 380])
     const poseeALaMain = boxOf(agenda)
+    await ouvrirReglages(container)
     const disperser = Array.from(container.querySelectorAll('button')).find(
       (b) => b.textContent === 'Disperser'
     )!
@@ -253,6 +267,7 @@ describe('annuler un geste', () => {
     const agenda = tile(container, 'agenda')
     await geste(agenda, [500, 300], [560, 380])
     const posee = boxOf(agenda)
+    await ouvrirReglages(container)
     await act(async () =>
       (
         Array.from(container.querySelectorAll('button')).find((b) =>
@@ -312,6 +327,7 @@ describe('piloter une tuile au clavier', () => {
     const agenda = tile(container, 'agenda')
     const avant = boxOf(agenda)
     await touche(agenda, 'ArrowRight')
+    await ouvrirReglages(container)
     await act(async () =>
       (container.querySelector('[data-testid="home-undo"]') as HTMLButtonElement).click()
     )
@@ -371,6 +387,7 @@ describe('la notice d usage s efface', () => {
     window.localStorage.setItem(autowinStorageKey('home.notice-vue.v1'), '12')
     const container = await mount()
     expect(container.querySelector('.home-view__masthead p')).toBeNull()
+    await ouvrirReglages(container)
     const rappel = container.querySelector('[data-testid="home-rappel-notice"]') as HTMLButtonElement
     expect(rappel).not.toBeNull()
     // Effacer une aide SANS moyen de la revoir echangerait une friction contre une autre.
@@ -381,6 +398,7 @@ describe('la notice d usage s efface', () => {
   it('reste visible les premieres fois', async () => {
     const container = await mount()
     expect(container.querySelector('.home-view__masthead p')?.textContent).toContain('posez-la')
+    // L'aide n'encombre pas l'en-tete : son rappel est range dans les reglages, panneau ferme.
     expect(container.querySelector('[data-testid="home-rappel-notice"]')).toBeNull()
   })
 })

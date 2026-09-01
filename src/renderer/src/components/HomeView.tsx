@@ -21,6 +21,7 @@ import {
 } from './home-widgets-model'
 import {
   defaultHomeLayout,
+  HOME_WIDGET_IDS,
   HOME_WIDGET_TITLES,
   reconcileLayout,
   moveWidgetBox,
@@ -35,6 +36,14 @@ import {
   type ResizeEdge
 } from './home-layout'
 import { canUndo, emptyHistory, remember, undo, type ArrangementHistory } from './home-history'
+import {
+  basculerWidget,
+  ecrireVisibilite,
+  estVisible,
+  lireVisibilite,
+  type HomeWidgetsVisibility
+} from './home-widgets-visibility'
+import { ecrireNomJarvis, lireNomJarvis, NOM_JARVIS_LONGUEUR_MAX } from './jarvis-nom'
 import {
   instantaneConversationsEnAttente,
   retirerConversationEnAttente,
@@ -187,6 +196,49 @@ export function HomeView({
   /** Celle-ci comprise : c'est ce nombre que l'affichage compare, comme avant ce correctif. */
   const noticeVue = ouverturesDejaComptees + 1
   const [noticeForcee, setNoticeForcee] = useState(false)
+
+  /* ---------------------------------------------------------------- *
+   * LES REGLAGES : ce que l'accueil affiche, et comment on l'appelle.
+   *
+   * Un seul endroit, ouvert par un seul bouton. Les commandes de disposition (annuler, disperser,
+   * retablir) vivaient en barre permanente : elles servent une fois de temps en temps et occupaient
+   * la place tout le temps. Elles sont donc RANGEES ici avec le reste des reglages -- demande
+   * explicite de l'utilisateur le 2026-09-01.
+   * ---------------------------------------------------------------- */
+  const [reglagesOuverts, setReglagesOuverts] = useState(false)
+  const [visibilite, setVisibilite] = useState<HomeWidgetsVisibility>(() =>
+    lireVisibilite(window.localStorage)
+  )
+  const [nomJarvis, setNomJarvis] = useState<string>(() => lireNomJarvis(window.localStorage))
+
+  const basculerVisibilite = useCallback((id: HomeWidgetId): void => {
+    setVisibilite((courante) => {
+      const suivante = basculerWidget(courante, id)
+      ecrireVisibilite(window.localStorage, suivante)
+      return suivante
+    })
+  }, [])
+
+  /**
+   * Le nom est enregistre a CHAQUE frappe, deja normalise.
+   *
+   * Enregistrer a la validation seulement obligerait a deviner quand la saisie est « finie » ; ici la
+   * valeur affichee et la valeur retenue ne peuvent pas diverger.
+   */
+  const changerNomJarvis = useCallback((saisie: string): void => {
+    setNomJarvis(ecrireNomJarvis(window.localStorage, saisie))
+  }, [])
+
+  /**
+   * Le titre affiche d'une tuile.
+   *
+   * Tous les titres sont fixes SAUF celui de l'assistant, qui suit le nom choisi : le nom regle et le
+   * titre affiche doivent etre la meme chose, sinon on aurait deux verites pour un seul objet.
+   */
+  const titreWidget = useCallback(
+    (id: HomeWidgetId): string => (id === 'jarvis' ? nomJarvis : HOME_WIDGET_TITLES[id]),
+    [nomJarvis]
+  )
 
   const surfaceRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
@@ -634,7 +686,11 @@ export function HomeView({
       {/* UNE seule rangée, qui se replie. Deux blocs positionnés en absolu se recouvraient dès que la
           fenêtre devenait étroite : le titre passait sous les boutons. Une rangée qui se replie rend
           ce chevauchement impossible, quelle que soit la largeur. */}
-      <div className="home-view__header" ref={headerRef}>
+      <div
+        className="home-view__header"
+        ref={headerRef}
+        data-reglages={reglagesOuverts ? 'true' : undefined}
+      >
         <div className="home-view__masthead">
           <h1>
             Autowin <b>Accueil</b>
@@ -677,35 +733,93 @@ export function HomeView({
               'Actualiser Outlook'
             )}
           </button>
+          {/* UN seul bouton pour tous les reglages. Les commandes de disposition tenaient la barre en
+              permanence pour un usage occasionnel ; elles sont maintenant DANS ce panneau. */}
           <button
             type="button"
-            onClick={annuler}
-            disabled={!canUndo(histoire)}
-            data-testid="home-undo"
-            title="Défaire le dernier déplacement ou redimensionnement"
+            onClick={() => setReglagesOuverts((ouvert) => !ouvert)}
+            aria-expanded={reglagesOuverts}
+            data-testid="home-settings"
+            title="Réglages de l'accueil : widgets affichés, nom de l'assistant, disposition"
           >
-            Annuler
+            Réglages
           </button>
-          <button type="button" onClick={scatter}>
-            Disperser
-          </button>
-          <button type="button" onClick={resetLayout}>
-            Rétablir la disposition
-          </button>
-          {!noticeVisible ? (
-            <button
-              type="button"
-              onClick={() => setNoticeForcee(true)}
-              title="Rappeler comment manipuler les tuiles"
-              data-testid="home-rappel-notice"
-            >
-              ?
-            </button>
-          ) : null}
         </div>
+        {reglagesOuverts ? (
+          <div className="home-view__settings" role="dialog" aria-label="Réglages de l'accueil" data-testid="home-settings-panel">
+            <section className="home-settings__bloc">
+              <h3>Widgets affichés</h3>
+              <ul>
+                {HOME_WIDGET_IDS.map((id) => (
+                  <li key={id}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        checked={estVisible(visibilite, id)}
+                        aria-checked={estVisible(visibilite, id)}
+                        aria-label={titreWidget(id)}
+                        data-testid={`home-widget-switch-${id}`}
+                        onChange={() => basculerVisibilite(id)}
+                      />
+                      <span>{titreWidget(id)}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <section className="home-settings__bloc">
+              <h3>Assistant vocal</h3>
+              {/* Le nom saisi ici EST le titre de la tuile : une seule source, jamais deux. */}
+              <label className="home-settings__champ">
+                <span>Son nom</span>
+                <input
+                  type="text"
+                  value={nomJarvis}
+                  maxLength={NOM_JARVIS_LONGUEUR_MAX}
+                  data-testid="home-jarvis-nom"
+                  onChange={(event) => changerNomJarvis(event.target.value)}
+                />
+              </label>
+            </section>
+            <section className="home-settings__bloc">
+              <h3>Disposition</h3>
+              <div className="home-settings__actions">
+                <button
+                  type="button"
+                  onClick={annuler}
+                  disabled={!canUndo(histoire)}
+                  data-testid="home-undo"
+                  title="Défaire le dernier déplacement ou redimensionnement"
+                >
+                  Annuler
+                </button>
+                <button type="button" onClick={scatter}>
+                  Disperser
+                </button>
+                <button type="button" onClick={resetLayout}>
+                  Rétablir la disposition
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNoticeForcee(true)}
+                  title="Rappeler comment manipuler les tuiles"
+                  data-testid="home-rappel-notice"
+                >
+                  Rappeler l'aide
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
       </div>
 
-      {layout.map((box) => (
+      {/* Seules les tuiles ALLUMEES sont rendues : une tuile eteinte ne doit ni s'afficher, ni faire
+          tourner son contenu (l'assistant tient un micro). L'agencement, lui, n'est PAS touche —
+          rallumer une tuile la rend exactement ou elle etait. */}
+      {layout
+        .filter((box) => estVisible(visibilite, box.id))
+        .map((box) => (
         <section
           key={box.id}
           className="home-tile"
@@ -714,7 +828,7 @@ export function HomeView({
           data-testid={`home-widget-${box.id}`}
           tabIndex={0}
           role="group"
-          aria-label={`${HOME_WIDGET_TITLES[box.id]} — flèches pour déplacer, Maj+flèches pour redimensionner`}
+          aria-label={`${titreWidget(box.id)} — flèches pour déplacer, Maj+flèches pour redimensionner`}
           onKeyDown={(event) => auClavier(event, box.id)}
           style={{
             width: `${box.w}px`,
@@ -729,7 +843,7 @@ export function HomeView({
           onPointerDown={(event) => grab(event, box.id, 'move')}
         >
           <div className="home-tile__label">
-            <h2>{HOME_WIDGET_TITLES[box.id]}</h2>
+            <h2>{titreWidget(box.id)}</h2>
             <i className="home-tile__rule" />
             {box.id === 'notifications' && pending > 0 ? (
               <span className="home-tile__count" title={`${pending} remontée(s) à lire`}>
@@ -786,7 +900,7 @@ export function HomeView({
             ))}
           </div>
         </section>
-      ))}
+        ))}
     </div>
   )
 }

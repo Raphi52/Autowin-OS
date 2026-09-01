@@ -1286,3 +1286,124 @@
     animation: none;
   }
 }
+
+/* LE PANNEAU DE REGLAGES.
+   Il se pose SOUS le bouton, au-dessus du decor, et ne pousse rien : l'accueil garde exactement la
+   meme disposition qu'il soit ouvert ou ferme — un panneau qui deplace les tuiles ferait croire a un
+   rearrangement. */
+.home-view__settings {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 400;
+  width: min(340px, calc(100vw - 56px));
+  max-height: min(70vh, 620px);
+  overflow-y: auto;
+  margin-top: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--bg-1, rgba(0, 0, 0, 0.72));
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.18));
+  border-radius: 12px;
+  backdrop-filter: blur(16px);
+  pointer-events: auto;
+}
+
+.home-settings__bloc h3 {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.home-settings__bloc ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-settings__bloc label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 2px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.home-settings__bloc input[type='checkbox'] {
+  accent-color: var(--accent, #d4a94f);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.home-settings__champ {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.home-settings__champ span {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.home-settings__champ input[type='text'] {
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.18));
+  border-radius: 8px;
+}
+
+.home-settings__champ input[type='text']:focus-visible {
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.home-settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.home-settings__actions button {
+  padding: 6px 12px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.18));
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.home-settings__actions button:hover:not(:disabled),
+.home-settings__actions button:focus-visible {
+  color: var(--text);
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.home-settings__actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* L'en-tete passe DEVANT les tuiles tant que les reglages sont ouverts. Sans cela le panneau, enferme
+   dans le plan de l'en-tete (z-index 3), passait sous les tuiles (plan 10 et plus) et se lisait comme
+   un bug d'affichage. */
+.home-view__header[data-reglages='true'] {
+  z-index: 400;
+}

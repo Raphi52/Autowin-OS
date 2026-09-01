@@ -147,11 +147,16 @@ function splitAssistantTimeline(
   receipts: DirectiveReceipt[]
 ): AssistantTimelineItem[] {
   if (receipts.length === 0) return [{ kind: 'parts', parts }]
+  // Un recu SANS point d accroche (la reponse n affichait encore rien) passe EN DERNIER : sinon
+  // le message tape pendant un travail s affichait AU-DESSUS du bloc en cours (2026-09-01).
+  const rang = function (receipt: DirectiveReceipt): number {
+    return receipt.afterPartIndex < 0 ? Number.MAX_SAFE_INTEGER : receipt.afterPartIndex
+  }
   const ordered = receipts
     .slice()
     .sort(
       (left, right) =>
-        left.afterPartIndex - right.afterPartIndex ||
+        rang(left) - rang(right) ||
         (left.afterTextOffset ?? Number.MAX_SAFE_INTEGER) -
           (right.afterTextOffset ?? Number.MAX_SAFE_INTEGER) ||
         left.id - right.id
@@ -169,10 +174,6 @@ function splitAssistantTimeline(
     timeline.push({ kind: 'receipt', receipt })
   }
 
-  while (ordered[receiptIndex]?.afterPartIndex < 0) {
-    appendReceipt(ordered[receiptIndex])
-    receiptIndex += 1
-  }
   parts.forEach((part, partIndex) => {
     if (part.kind === 'text') {
       let textOffset = 0

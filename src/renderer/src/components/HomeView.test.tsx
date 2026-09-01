@@ -314,8 +314,10 @@ describe('poser une tuile', () => {
   it('retablit la disposition par defaut sur demande', async () => {
     const container = await mount()
     await gesture(tile(container, 'agenda'), [[600, 500]], [400, 200])
+    const ouvrir = container.querySelector('[data-testid="home-settings"]') as HTMLButtonElement
+    await act(async () => ouvrir.click())
     const reset = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Rétablir')
+      button.textContent?.includes('tablir')
     )!
     await act(async () => reset.click())
     // La disposition d'origine depend de la SURFACE : on la compare a celle de la meme fenetre, pas
