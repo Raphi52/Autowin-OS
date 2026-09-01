@@ -22,6 +22,7 @@ import {
   deriveConversationState,
   hydrateStoredAssistant,
   isRunRequestCurrent,
+  doitSuivreLeBas,
   isChatNearBottom,
   scrollChatToBottom,
   reduceScopedLiveRuns,
