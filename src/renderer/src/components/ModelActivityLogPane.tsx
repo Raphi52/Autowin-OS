@@ -87,7 +87,7 @@ export function ModelActivityLogPane({
       const lecture = await Promise.all(
         turnIds.map(async (turnId) => {
           try {
-            const events = (await window.api.turnJournal?.(conversationId, turnId)) ?? []
+            const events = (await window.api?.turnJournal?.(conversationId, turnId)) ?? []
             return [turnId, events] as const
           } catch {
             // Journal absent (nettoyé) : le tour reste tracé par ses parts durables.
@@ -113,16 +113,14 @@ export function ModelActivityLogPane({
   // Trace causale et activite facturee sont scopees a la CONVERSATION (pas au tour) : une seule
   // lecture, rejouee tant qu'un tour est vivant.
   useEffect(() => {
-    if (!conversationId) {
-      setCausal([])
-      setActivity([])
-      return
-    }
+    // Pas de reinitialisation ICI : un `setState` synchrone dans un effet cascade les rendus. Sans
+    // conversation il n'y a rien a lire, et l'affichage derive de `conversationId` plus bas.
+    if (!conversationId) return
     let annule = false
     const charger = async (): Promise<void> => {
       const [trace, activite] = await Promise.all([
-        window.api.causalTrace?.(conversationId).catch(() => []) ?? [],
-        window.api.conversationActivity?.(conversationId).catch(() => []) ?? []
+        window.api?.causalTrace?.(conversationId).catch(() => []) ?? [],
+        window.api?.conversationActivity?.(conversationId).catch(() => []) ?? []
       ])
       if (annule) return
       setCausal((trace ?? []) as ReadonlyArray<Record<string, unknown>>)
@@ -141,8 +139,15 @@ export function ModelActivityLogPane({
   }, [conversationId, turnKey, live])
 
   const entries = useMemo(
-    () => buildModelActivityLog({ messages, journalByTurn, causal, activity }),
-    [messages, journalByTurn, causal, activity]
+    () =>
+      buildModelActivityLog({
+        messages,
+        journalByTurn,
+        // DERIVE, pas remis a zero par un effet : sans conversation, ces deux sources n'existent pas.
+        causal: conversationId ? causal : [],
+        activity: conversationId ? activity : []
+      }),
+    [messages, journalByTurn, causal, activity, conversationId]
   )
   const motif = filtre.trim().toLowerCase()
   const visibles = entries.filter((entry) => {

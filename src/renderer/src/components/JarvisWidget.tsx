@@ -133,6 +133,14 @@ export function JarvisWidget({
    */
   const creteRef = useRef(0)
   const [verdict, setVerdict] = useState<VerdictMicro>('coupe')
+  /**
+   * LE VERDICT AFFICHE, derive de l'etat d'ecoute.
+   *
+   * Micro coupe => 'coupe', sans qu'aucun effet n'ecrive d'etat : un `setState` synchrone dans un
+   * effet cascade les rendus (regle react-hooks refusee a la verification). Quand l'ecoute
+   * reprend, la boucle d'affichage reecrit `verdict` des la premiere image.
+   */
+  const verdictAffiche: VerdictMicro = ecoute.active ? verdict : 'coupe'
   const barreRef = useRef<HTMLDivElement | null>(null)
 
   /** Envoie un ordre a Jarvis, dans SA conversation — creee au premier ordre, pas au montage. */
@@ -352,7 +360,8 @@ export function JarvisWidget({
     if (!ecoute.active) {
       niveauRef.current = 0
       creteRef.current = 0
-      setVerdict('coupe')
+      // Pas de `setVerdict` ICI : un `setState` synchrone dans un effet cascade les rendus. Micro
+      // coupe => le verdict affiche est DERIVE de `ecoute.active` (voir `verdictAffiche`).
       if (barreRef.current) barreRef.current.style.width = '0%'
       return
     }
@@ -490,8 +499,8 @@ export function JarvisWidget({
               style={{ left: `${Math.round(jaugeDepuisNiveau(seuil) * 100)}%` }}
             />
           </div>
-          <span className="jarvis__aide" data-testid="jarvis-verdict" data-verdict={verdict}>
-            {MESSAGE_VERDICT[verdict]}
+          <span className="jarvis__aide" data-testid="jarvis-verdict" data-verdict={verdictAffiche}>
+            {MESSAGE_VERDICT[verdictAffiche]}
           </span>
         </div>
       ) : null}
