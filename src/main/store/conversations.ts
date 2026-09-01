@@ -53,6 +53,15 @@ export interface Msg {
   error?: string
   /** Raisonnement conservé du tour — alimente le bloc « Réflexion » après un rechargement. */
   reasoning?: string
+  /**
+   * Message utilisateur ÉCRIT PENDANT un tour (orientation injectée) : il précise, il ne REPOND pas.
+   *
+   * Depuis conv-38 (2026-09-01) ces orientations sont de vrais messages du fil. Le verrou du bloc
+   * `ask` — « un message utilisateur postérieur EST la réponse » — les prenait donc pour des
+   * réponses : la question se fermait sur « Répondu » et le clic devenait inerte (conv-50, même
+   * jour). Ce drapeau est la seule chose qui distingue les deux.
+   */
+  orientation?: boolean
 }
 
 /** D'où vient une conversation créée par un fork — trace d'origine, sans lien vivant. */
@@ -673,7 +682,13 @@ export class ConversationStore {
   /** Ajoute un message à une conversation existante et met à jour updatedAt. Jette si l'id est inconnu. */
   append(
     id: string,
-    m: { role: 'user' | 'assistant'; content: string; attachments?: AttachmentMeta[] }
+    m: {
+      role: 'user' | 'assistant'
+      content: string
+      attachments?: AttachmentMeta[]
+      /** Écrit pendant un tour : ce message oriente, il ne répond pas (cf. `Msg.orientation`). */
+      orientation?: boolean
+    }
   ): Conversation {
     // Le voisinage n'est plus JETE ici : `indexerMessage` l'ALIMENTE message par message.
     // Le jeter coutait ~90 ms de reconstruction par tour, synchrones dans le processus
@@ -690,7 +705,8 @@ export class ConversationStore {
       role: m.role,
       content: m.content,
       ts,
-      ...(m.attachments?.length ? { attachments: m.attachments } : {})
+      ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+      ...(m.orientation ? { orientation: true as const } : {})
     }
     conversation.messages.push(message)
     this.indexerMessage(conversation.id, message.content)

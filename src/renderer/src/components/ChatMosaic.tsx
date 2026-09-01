@@ -14,6 +14,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 import { ChatMessageRow } from './ChatMessageRow'
 import type { Msg } from './chat-view-types'
 import { colonnesPour } from './chat-mosaic-grille'
+import { aUneReponseApres } from './chat-message-keys'
 import './ChatMosaic.css'
 import {
   marquerConversationEnAttente,
@@ -41,6 +42,13 @@ export type ChatMosaicProps = {
   /** Ouvre une conversation NEUVE dans une case de plus. */
   onNouvelleConversation: () => void
   /**
+   * REPONSE A UNE QUESTION `ask` posee DANS une fenetre (conv-50, 2026-09-01).
+   *
+   * Sans ce destinataire, la ligne de message etait rendue sans chemin d'envoi : le clic ne
+   * pouvait RIEN faire partir. La cible est la conversation de la FENETRE, jamais l'active.
+   */
+  onAnswerAsk?: (prompt: string, cible: string) => void
+  /**
    * SIGNATURE des entrees du composer qui ne transitent PAS par `fenetre` (brouillons, pieces
    * jointes, palettes). Elle change quand un composer doit se redessiner, et SEULEMENT alors :
    * c'est ce qui autorise une fenetre inchangee a ne pas se re-rendre pendant qu'une autre streame.
@@ -52,12 +60,14 @@ function FenetreChatBrut({
   fenetre,
   onClose,
   onOuvrirSeule,
-  rendreComposer
+  rendreComposer,
+  onAnswerAsk
 }: {
   fenetre: ChatMosaicWindow
   onClose: (id: string) => void
   onOuvrirSeule: (id: string) => void
   rendreComposer: (id: string) => React.ReactNode
+  onAnswerAsk?: (prompt: string, cible: string) => void
   /** Jamais lue ici : elle n'existe que pour le comparateur du memo ci-dessous. */
   signatureComposer?: string
 }): React.JSX.Element {
@@ -144,6 +154,14 @@ function FenetreChatBrut({
               key={`${fenetre.id}-${index}`}
               message={message}
               conversationId={fenetre.id}
+              askRepondu={
+                message.role === 'assistant'
+                  ? aUneReponseApres([...fenetre.messages], index)
+                  : undefined
+              }
+              onAnswerAsk={
+                onAnswerAsk ? (prompt) => onAnswerAsk(prompt, fenetre.id) : undefined
+              }
             />
           ))
         )}
@@ -184,6 +202,7 @@ const FenetreChat = memo(FenetreChatBrut, (avant, apres) => {
     avant.onClose === apres.onClose &&
     avant.onOuvrirSeule === apres.onOuvrirSeule &&
     avant.rendreComposer === apres.rendreComposer &&
+    avant.onAnswerAsk === apres.onAnswerAsk &&
     avant.signatureComposer === apres.signatureComposer
   )
 })
@@ -194,6 +213,7 @@ export function ChatMosaic({
   onOuvrirSeule,
   rendreComposer,
   onNouvelleConversation,
+  onAnswerAsk,
   signatureComposer
 }: ChatMosaicProps): React.JSX.Element {
   if (fenetres.length === 0) {
@@ -226,6 +246,7 @@ export function ChatMosaic({
           onClose={onClose}
           onOuvrirSeule={onOuvrirSeule}
           rendreComposer={rendreComposer}
+          onAnswerAsk={onAnswerAsk}
           signatureComposer={signatureComposer}
         />
       ))}

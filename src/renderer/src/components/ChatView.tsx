@@ -2454,6 +2454,11 @@ export function ChatView({
     else void sendRef.current(prompt)
   }
   const answerAsk = useCallback((prompt: string) => answerAskRef.current(prompt), [])
+  /** Meme envoi, vise une conversation NOMMEE : la mosaique repond depuis sa propre fenetre. */
+  const submitBtwRef = useRef<(prompt: string, cible: string) => void>(() => {})
+  submitBtwRef.current = (prompt: string, cible: string) => {
+    void submitBtw(prompt, 'normal', true, cible)
+  }
   /**
    * « Reprendre en précisant… » : REMPLIT le composer (prompt d'origine + motif), et s'arrête là.
    * Aucun envoi, aucune orchestration — le geste appartient à l'utilisateur.
@@ -3022,6 +3027,16 @@ export function ChatView({
     (id: string) => rappelsMosaiqueRef.current.composer(id),
     []
   )
+  /**
+   * REPONDRE A UNE QUESTION DEPUIS UNE FENETRE DE MOSAIQUE (conv-50, 2026-09-01).
+   *
+   * Meme chemin que la vue plein ecran (`answerAsk`), mais CIBLE sur la conversation de la fenetre :
+   * sans ce rappel, la ligne de message etait rendue sans destinataire et le clic ne partait pas.
+   */
+  const repondreAskMosaiqueStable = useCallback((prompt: string, cible: string) => {
+    if (busyConversationsRef.current.has(cible)) void submitBtwRef.current(prompt, cible)
+    else void sendRef.current(prompt, { targetConversationId: cible })
+  }, [])
   /**
    * Ce qui oblige un composer a se redessiner SANS passer par `fenetre` : brouillons et pieces
    * jointes (`draftsVersion`), palettes `@` et `/`. Le fil et l'etat occupe, eux, sont deja dans
@@ -3725,6 +3740,7 @@ export function ChatView({
           onOuvrirSeule={ouvrirSeuleStable}
           rendreComposer={rendreComposerStable}
           onNouvelleConversation={nouvelleFenetreStable}
+          onAnswerAsk={repondreAskMosaiqueStable}
           signatureComposer={signatureComposerMosaique}
         />
       ) : (

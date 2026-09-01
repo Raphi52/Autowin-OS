@@ -24,9 +24,18 @@ export function lastUserPromptBefore(messages: Msg[], index: number): string | u
  * repond plus. Derive, donc rien a persister — et vrai apres un remontage du bloc comme apres un
  * redemarrage, la ou l'etat local repartait a zero et laissait le spam-clic renvoyer N reponses.
  */
+/**
+ * Ce message utilisateur REPOND-il ? Une orientation écrite pendant le tour, non : elle précise,
+ * elle ne choisit pas. Depuis conv-38 (2026-09-01) ces orientations sont de vrais messages du fil,
+ * et les compter comme des réponses fermait les questions encore ouvertes (conv-50).
+ */
+function estUneReponse(message: Msg): boolean {
+  return message.role === 'user' && (message as { orientation?: boolean }).orientation !== true
+}
+
 export function aUneReponseApres(messages: Msg[], index: number): boolean {
   for (let i = index + 1; i < messages.length; i += 1) {
-    if (messages[i].role === 'user') return true
+    if (estUneReponse(messages[i])) return true
   }
   return false
 }
@@ -46,7 +55,8 @@ export function aUneReponseApres(messages: Msg[], index: number): boolean {
 export function askEnAttente(messages: Msg[]): boolean {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i]
-    if (message.role === 'user') return false
+    if (estUneReponse(message)) return false
+    if (message.role === 'user') continue
     const blocs = groupAssistantActivity((message as { parts?: ChatPart[] }).parts ?? [])
     if (blocs.some((bloc) => bloc.kind === 'ask-decision')) return true
   }

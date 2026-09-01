@@ -13,7 +13,7 @@
 export interface FilPourDirective {
   append(
     id: string,
-    message: { role: 'user' | 'assistant'; content: string }
+    message: { role: 'user' | 'assistant'; content: string; orientation?: boolean }
   ): { messages: ReadonlyArray<{ messageId?: string }> }
 }
 
@@ -29,7 +29,11 @@ export function enregistrerDirectiveDansLeFil(params: {
   try {
     const conversation = params.conversations.append(params.conversationId, {
       role: 'user',
-      content: texte
+      content: texte,
+      // CE MESSAGE ORIENTE, IL NE REPOND PAS (conv-50, 2026-09-01). Sans ce drapeau, le verrou du
+      // bloc `ask` le prend pour la reponse a la question du tour : le bloc affiche « Répondu » et
+      // le clic de l'utilisateur ne part plus. Le verrou anti-double-envoi, lui, reste entier.
+      orientation: true
     })
     const messageId = conversation.messages.at(-1)?.messageId
     // L'écran ne relit la conversation active que sur `scope: 'chat'` — sans ce signal, le message

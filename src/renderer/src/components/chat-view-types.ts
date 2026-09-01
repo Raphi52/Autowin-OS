@@ -38,6 +38,14 @@ export interface UserMsg {
   role: 'user'
   content: string
   attachments?: AttachmentMeta[]
+  /**
+   * Ce message a été ÉCRIT PENDANT un tour (orientation injectée), il ne REPOND à rien.
+   *
+   * Sans cette distinction, le verrou du bloc `ask` — « un message utilisateur postérieur EST la
+   * réponse » — prenait toute orientation pour une réponse et fermait la question en affichant
+   * « Répondu » (conv-50, 2026-09-01). Posé côté main par `enregistrerDirectiveDansLeFil`.
+   */
+  orientation?: boolean
 }
 export type AsstMsg = HydratedAssistantMessage
 export type Msg = (UserMsg | AsstMsg) & { messageId?: string }

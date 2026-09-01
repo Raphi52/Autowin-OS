@@ -97,6 +97,15 @@ export function AskDecisionBlock({
   // le lire ici serait une lecture de ref pendant le rendu, que React interdit.
   const verrouille = repondu !== undefined || dejaRepondu === true
   const repondre = (prompt: string): void => {
+    /*
+     * AUCUN DESTINATAIRE = AUCUNE REPONSE (conv-50, 2026-09-01).
+     *
+     * `ChatMosaic` rendait la ligne de message sans `onAnswerAsk` : le bloc recevait `onPick`
+     * indefini, armait quand meme son verrou, et le pied passait a « Répondu » alors qu'aucun
+     * message ne pouvait partir. Le verrou empeche un SECOND envoi ; il ne doit jamais fermer un
+     * bloc dont le PREMIER envoi n'a pas eu lieu.
+     */
+    if (!onPick) return
     if (verrou.current || repondu !== undefined || dejaRepondu === true) return
     verrou.current = true
     setRepondu(prompt)

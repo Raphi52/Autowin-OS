@@ -39,6 +39,32 @@ describe('une réponse injectée pendant un tour devient un VRAI message du fil'
     expect(broadcast).toHaveBeenCalledWith({ type: 'refresh', scope: 'chat', convId: conv.id })
   })
 
+
+  /**
+   * SUITE DIRECTE DU MEME MECANISME (conv-50, 2026-09-01). Ecrire l'orientation dans le fil a
+   * casse le verrou du bloc `ask` : ce verrou lit « un message utilisateur existe-t-il apres ce
+   * tour ? », et toute orientation le rendait vrai. L'utilisateur cliquait une reponse, le bloc
+   * affichait « Répondu », et RIEN ne partait. Le message ecrit doit donc se DECLARER orientation.
+   */
+  it('marque le message comme ORIENTATION — il ne repond a aucune question', () => {
+    let horloge = 1
+    const store = new ConversationStore(() => horloge++)
+    const conv = store.create({ title: 'A', provider: 'claude' })
+    store.beginTurn(conv.id, { content: 'corrige le gabarit' }, { turnId: 't1' })
+
+    enregistrerDirectiveDansLeFil({
+      conversations: store,
+      conversationId: conv.id,
+      texte: 'ca la met juste dans la barre',
+      broadcast: vi.fn()
+    })
+
+    const ecrit = store
+      .get(conv.id)!
+      .messages.find((m) => m.content === 'ca la met juste dans la barre')!
+    expect(ecrit.orientation).toBe(true)
+  })
+
   it('une conversation inconnue ne fait PAS échouer l’injection (la trace ne casse pas l’envoi)', () => {
     const store = new ConversationStore(() => 1)
     const broadcast = vi.fn()
