@@ -4171,6 +4171,7 @@ export function ChatView({
           send={send}
           isActive={isActive}
           requestLabel={[...messages].reverse().find((message) => message.role === 'user')?.content}
+          messages={messages}
           liveGraphActive={
             Boolean(activeId && busyConversations.has(activeId)) ||
             liveRuns[activeId ?? '']?.status === 'running'

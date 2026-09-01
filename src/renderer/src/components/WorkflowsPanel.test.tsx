@@ -43,6 +43,7 @@ function baseProps(overrides: Partial<WorkflowsPanelProps> = {}): WorkflowsPanel
     runDetailTab: 'trace',
     setRunDetailTab: vi.fn(),
     liveRunCardRef: { current: null },
+    messages: [],
     ...overrides
   }
 }
@@ -85,12 +86,40 @@ describe('WorkflowsPanel', () => {
     })
   }
 
-  it('affiche les quatre onglets de section', () => {
+  it('affiche les onglets de section', () => {
     render(baseProps())
     const labels = Array.from(container.querySelectorAll('.workflow-section-label')).map(
       (el) => el.textContent
     )
-    expect(labels).toEqual(['Sous-agents', 'Run', 'Graphe', 'Source control'])
+    expect(labels).toEqual(['Sous-agents', 'Logs', 'Run', 'Graphe', 'Source control'])
+  })
+
+  it('la section Logs rend le journal d’activité des modèles de la conversation', async () => {
+    ;(window as unknown as { api: Record<string, unknown> }).api = {
+      turnJournal: vi.fn().mockResolvedValue([])
+    }
+    render(
+      baseProps({
+        paneTab: 'journal',
+        messages: [
+          {
+            role: 'assistant',
+            turnId: 'turn-1',
+            status: 'completed',
+            done: true,
+            parts: [{ kind: 'action', name: 'run_tests', ok: true }]
+          }
+        ] as unknown as WorkflowsPanelProps['messages']
+      })
+    )
+    // La lecture des journaux est asynchrone : on la laisse se résoudre DANS act, sinon la mise
+    // à jour d'état retombe hors act et pollue la suite d'un avertissement React.
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="model-activity-log"]')).toBeTruthy()
+    expect(container.textContent).toContain('run_tests')
+    delete (window as unknown as { api?: unknown }).api
   })
 
   it('rend un run avec sa progression DoD', () => {

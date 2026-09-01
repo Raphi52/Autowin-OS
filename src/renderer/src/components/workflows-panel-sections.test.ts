@@ -12,16 +12,18 @@ import type { ScopedLiveRun } from './chat-view-model'
 /**
  * Le panneau sépare les fils, les RUN.md, le graphe d'exécution de la conversation et le dépôt.
  */
-describe('les quatre sections du panneau Workflows', () => {
-  it('expose les quatre sections dans un ordre orienté exécution', () => {
+describe('les sections du panneau Workflows', () => {
+  it('expose les sections dans un ordre orienté exécution', () => {
     expect(WORKFLOW_PANEL_SECTIONS.map((s) => s.id)).toEqual([
       'subagents',
+      'journal',
       'run',
       'graph',
       'source-control'
     ])
     expect(WORKFLOW_PANEL_SECTIONS.map((s) => s.label)).toEqual([
       'Sous-agents',
+      'Logs',
       'Run',
       'Graphe',
       'Source control'
@@ -32,6 +34,8 @@ describe('les quatre sections du panneau Workflows', () => {
     expect(sectionUsesScope('subagents')).toBe(true)
     expect(sectionUsesScope('run')).toBe(true)
     expect(sectionUsesScope('graph')).toBe(false)
+    // Le journal d'activité des modèles suit la conversation ouverte, pas un sélecteur de portée.
+    expect(sectionUsesScope('journal')).toBe(false)
     expect(sectionUsesScope('source-control')).toBe(false)
   })
 })
