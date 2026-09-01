@@ -344,6 +344,7 @@ import { registerTicketsIpc } from './tickets-ipc'
 import { abortUpdateConflict, checkForUpdate, applyUpdate } from './git-update'
 import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
+import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './journal-arrets'
 import { consommerReprise } from './redemarrage-reprise'
 import {
   ChatArtifactPreviewBudget,
@@ -1064,6 +1065,7 @@ function setupTray(): void {
         label: 'Quitter Autowin',
         click: () => {
           isQuitting = true
+          annoncerFermeture('menu du tray — « Quitter Autowin »')
           app.quit()
         }
       }
@@ -1669,6 +1671,7 @@ function registerChatIpc(): void {
         window.webContents.reloadIgnoringCache()
       }
     } else if (result.ok && result.relaunch) {
+      annoncerFermeture('mise a jour appliquee — relance demandee')
       restartApplication(app)
     }
     return result
@@ -6616,6 +6619,9 @@ app.on('before-quit', (event) => {
     })
   } else {
     otelGenAiExporter.close()
+    // DERNIER moment ou la fermeture est certaine : la branche du dessus a pu l'annuler pour vider
+    // sa file, et elle repassera ici. Une ligne par fermeture reellement consommee, pas une de plus.
+    journaliserCauseFermeture(cheminJournalArrets(appDataRoot))
   }
 })
 

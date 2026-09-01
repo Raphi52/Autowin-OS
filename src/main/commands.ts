@@ -191,6 +191,7 @@ import {
 } from './graphify-command'
 import { ensureAutowinAppData } from './app-data'
 import { poserReprise } from './redemarrage-reprise'
+import { annoncerFermeture } from './journal-arrets'
 import type { TraceStore } from './activity/trace-store'
 import { redactTrace } from './activity/trace-redact'
 import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
@@ -516,7 +517,7 @@ const CATALOG: CommandSpec[] = [
       actions:
         "tableau JSON (max 20) de {type:'move',x,y}, {type:'click',x,y,button?,clicks?}, {type:'scroll',delta,x?,y?}, {type:'type',text}, {type:'key',keys:['CTRL','A']}, {type:'open',target,args?}, {type:'wait',ms}. " +
         "`keys` est un TABLEAU de touches, jamais une chaine : ['CTRL','A'] et non 'CTRL+A'. `ms` est borne a 5000 (au-dela = refus, enchainer deux waits). " +
-        "Exemple complet : [{\"type\":\"click\",\"x\":500,\"y\":320},{\"type\":\"wait\",\"ms\":800},{\"type\":\"key\",\"keys\":[\"CTRL\",\"A\"]},{\"type\":\"type\",\"text\":\"bonjour\"}]"
+        'Exemple complet : [{"type":"click","x":500,"y":320},{"type":"wait","ms":800},{"type":"key","keys":["CTRL","A"]},{"type":"type","text":"bonjour"}]'
     },
     annotations: {
       readOnlyHint: false,
@@ -2698,6 +2699,11 @@ export class AppCommandBus {
         // Le quit part APRES la reponse : sans ce delai, le tour se termine dans un process deja
         // mort et l'utilisateur ne voit jamais l'accuse de redemarrage.
         const relancer = this.redemarrerApp
+        // La cause de l'arret, ecrite dans le journal des arrets : sans elle, ce redemarrage
+        // ressemble a n'importe quelle autre fermeture propre.
+        annoncerFermeture(
+          `restart_app (${cible})${a.raison ? ` — ${String(a.raison).trim()}` : ''}`
+        )
         setTimeout(() => relancer(), 1200)
         return {
           redemarre: true,

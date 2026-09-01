@@ -5,6 +5,11 @@ import { join } from 'node:path'
 import { AppCommandBus } from './commands'
 import { consommerReprise } from './redemarrage-reprise'
 import { ensureAutowinAppData } from './app-data'
+import {
+  cheminJournalArrets,
+  journaliserCauseFermeture,
+  oublierOrigineFermeture
+} from './journal-arrets'
 
 /*
  * `restart_app` doit tenir DEUX promesses indissociables : redemarrer, et ne pas perdre la tache.
@@ -30,6 +35,25 @@ afterEach(() => {
 })
 
 describe('restart_app', () => {
+  it('nomme la cause dans le journal des arrets — sinon la fermeture est indistinguable', async () => {
+    oublierOrigineFermeture()
+    vi.useFakeTimers()
+    const bus = new AppCommandBus(os, () => undefined)
+    bus.redemarrerApp = vi.fn()
+
+    await bus.exec(
+      'restart_app',
+      { consigne: 'reprends le travail', raison: 'src/main modifié' },
+      'conv-66'
+    )
+    // Ce que le veilleur ecrira ensuite dira « code=0 arret propre » ; CETTE ligne dit qui l'a voulu.
+    const ligne = journaliserCauseFermeture(cheminJournalArrets(appdata))
+
+    expect(ligne).toContain('fermeture demandee-par=restart_app (conv-66) — src/main modifié')
+    vi.useRealTimers()
+    oublierOrigineFermeture()
+  })
+
   it('pose la consigne AVANT de relancer, dans la conversation courante', async () => {
     vi.useFakeTimers()
     const bus = new AppCommandBus(os, () => undefined)
