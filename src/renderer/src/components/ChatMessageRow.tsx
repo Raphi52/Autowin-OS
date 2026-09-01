@@ -351,22 +351,21 @@ export const ChatMessageRow = memo(
         <div className="msg-meta">
           <span className="msg-role">Agent</span>
           {!message.done && <Spinner />}
-          {/* Signe de vie TECHNIQUE du provider (outil en cours, tache de fond, retry API) : il se
-              lit ICI, dans la meta du tour, et REMPLACE le precedent. Il n'entre plus dans le bloc
-              « Reflexion », ou il passait pour de la pensee du modele alors qu'il n'en est pas
-              (constat utilisateur du 2026-09-01 : « il m'ecrit encore des trucs useless »). */}
-          {!message.done && message.providerStatus && (
-            <span className="msg-provider-status" title={message.providerStatus}>
-              {message.providerStatus}
-            </span>
-          )}
         </div>
         {/* Le raisonnement se lit ICI, repliable, écrit en direct pendant que le modèle pense.
             L'attente AVANT le premier fragment de pensée passe par le MÊME bloc (corps vide) :
             l'ancien placeholder texte « réflexion… » etait un vestige qui court-circuitait le
             bloc depliable et donnait l'impression d'une retrogradation. */}
-        {(message.reasoning || (!message.done && message.parts.length === 0)) && (
-          <ThinkingBlock text={message.reasoning ?? ''} done={message.done} />
+        {(message.reasoning ||
+          (!message.done && (message.parts.length === 0 || message.providerStatus))) && (
+          <ThinkingBlock
+            text={message.reasoning ?? ''}
+            done={message.done}
+            {...(message.providerStatus ? { status: message.providerStatus } : {})}
+            {...(message.providerStatusLog?.length
+              ? { statusLog: message.providerStatusLog }
+              : {})}
+          />
         )}
         <div className="msg-turn">
           {splitAssistantTimeline(message.parts, directiveReceipts ?? []).map(

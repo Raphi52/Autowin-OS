@@ -87,6 +87,15 @@ export interface HydratedAssistantMessage {
    * jamais melange au bloc « Reflexion ».
    */
   providerStatus?: string
+  /**
+   * HISTORIQUE des signes de vie du tour — toutes les lignes, dans l'ordre d'arrivee.
+   *
+   * `providerStatus` ne garde que la DERNIERE : c'est ce qu'il faut sur une ligne d'en-tete, mais
+   * pas quand on DEPLIE le bloc « Reflexion » (« ca doit m'ecrire toutes les lignes de reflexion
+   * pas seulement la derniere », 2026-09-01). Deplier doit montrer ce que le tour a traverse.
+   * Transitoire comme `providerStatus` : jamais persiste.
+   */
+  providerStatusLog?: string[]
 }
 
 export interface StoredAssistantMessage {
@@ -458,6 +467,9 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
   }
 }
 
+/** Borne de l'historique des signes de vie : de quoi relire un tour long sans gonfler la vue. */
+const STATUTS_MAX = 500
+
 export function reduceAssistantPilotEvent(
   message: HydratedAssistantMessage,
   event: AssistantPilotEvent
@@ -468,7 +480,16 @@ export function reduceAssistantPilotEvent(
   // Raisonnement live : accumulé HORS parts (transitoire, non persisté) et borné pour ne pas
   // gonfler indéfiniment sur un long raisonnement — on garde la fin, la plus informative.
   if (event.kind === 'provider-status' && event.text) {
-    return { ...message, turnId, providerStatus: event.text }
+    // Une meme ligne re-emise (un battement qui se repete a l'identique) n'ajoute rien : on ne
+    // duplique que ce qui CHANGE, et on borne l'historique pour un tour tres long.
+    const journal = message.providerStatusLog ?? []
+    const suite = journal.at(-1) === event.text ? journal : [...journal, event.text]
+    return {
+      ...message,
+      turnId,
+      providerStatus: event.text,
+      providerStatusLog: suite.slice(-STATUTS_MAX)
+    }
   }
   if (event.kind === 'reasoning' && event.text) {
     const merged = `${message.reasoning ?? ''}${event.text}`
