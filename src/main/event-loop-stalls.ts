@@ -39,7 +39,9 @@ function journaliser(ligne: Record<string, unknown>): void {
   if (!dossier) return
   const dir = dossier
   void mkdir(dir, { recursive: true })
-    .then(() => appendFile(join(dir, 'event-loop-stalls.jsonl'), JSON.stringify(ligne) + '\n', 'utf8'))
+    .then(() =>
+      appendFile(join(dir, 'event-loop-stalls.jsonl'), JSON.stringify(ligne) + '\n', 'utf8')
+    )
     .catch(() => {
       /* observabilité best-effort */
     })

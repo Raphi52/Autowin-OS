@@ -53,6 +53,13 @@ export interface Gel {
   operation: string
   /** Absent sur les gels journalises avant l'introduction de la preuve par le CPU. */
   cause?: CauseGel
+  /**
+   * PISTE, pas verdict — renseigne uniquement quand `operation` vaut `inconnu`. C'est la derniere
+   * operation qui s'est REFERMEE pendant la fenetre figee : elle a donc reellement tourne pendant
+   * le gel. Une operation refermee AVANT la fenetre n'est jamais reportee ici (l'erreur d'alibi
+   * deja payee sur `timer:balayage:copiesAbandonnees`).
+   */
+  indice?: string
 }
 
 export interface ResumeGels {

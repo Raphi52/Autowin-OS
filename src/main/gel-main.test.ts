@@ -50,6 +50,66 @@ describe('detecteur de gel — un blocage REEL du main est capte et nomme', () =
   })
 })
 
+describe('gel anonyme — un INDICE plutot que rien', () => {
+  /*
+   * ROUGE d'abord (2026-09-01). Mesure sur le journal reel de l'utilisateur
+   * (`.autowin-data/autowin-os/gels.jsonl`, 54 lignes) : 35 gels sur 54 sortent en
+   * `operation:'inconnu'`, soit 97,4 s de fenetre figee sur 124 s au total — 78 %. Et la ligne ne
+   * porte AUCUN autre champ : impossible de savoir par ou chercher. Un instrument qui prouve le
+   * gel sans jamais donner de piste laisse le defaut vivant.
+   *
+   * On attache donc un INDICE — jamais une attribution : la derniere operation qui s'est REFERMEE
+   * PENDANT la fenetre figee.
+   *
+   * ENTREE QUI FAIT TOMBER CE TEST SI LA CORRECTION EST FAUSSE : `alibi:ferme-avant`, une
+   * operation refermee AVANT le debut de la fenetre. Une correction paresseuse (« garder le
+   * dernier nom vu, point ») la designerait comme indice — c'est exactement l'erreur d'alibi deja
+   * payee sur `timer:balayage:copiesAbandonnees`. Le second cas l'exige donc ABSENT.
+   */
+  it('nomme la derniere operation refermee PENDANT la fenetre figee', async () => {
+    const captures: Gel[] = []
+    const arreter = demarrerDetecteurDeGel(
+      mkdtempSync(join(tmpdir(), 'gel-')),
+      20,
+      (g) => captures.push(g),
+      30
+    )
+    await new Promise((r) => setTimeout(r, 40))
+    pendantOperation('suspect:lecture-journal', () => {
+      const fin = Date.now() + 60
+      while (Date.now() < fin) {
+        /* le suspect tient la boucle, puis se referme */
+      }
+    })
+    await new Promise((r) => setTimeout(r, 80))
+    arreter()
+    const gel = captures.find((g) => g.operation === 'inconnu')
+    expect(gel).toBeDefined()
+    expect(gel?.indice).toBe('suspect:lecture-journal')
+  })
+
+  it('n’accuse PAS une operation refermee avant la fenetre figee', async () => {
+    const captures: Gel[] = []
+    const arreter = demarrerDetecteurDeGel(
+      mkdtempSync(join(tmpdir(), 'gel-')),
+      20,
+      (g) => captures.push(g),
+      30
+    )
+    pendantOperation('alibi:ferme-avant', () => undefined)
+    await new Promise((r) => setTimeout(r, 60))
+    const fin = Date.now() + 60
+    while (Date.now() < fin) {
+      /* blocage SANS aucune operation ouverte ni refermee ici */
+    }
+    await new Promise((r) => setTimeout(r, 80))
+    arreter()
+    const gel = captures.find((g) => g.operation === 'inconnu' && g.blocageMs > 30)
+    expect(gel).toBeDefined()
+    expect(gel?.indice).toBeUndefined()
+  })
+})
+
 describe('lireGels — dire « pas de journal » plutot qu’un zero rassurant', () => {
   it('rend disponible=false quand aucun journal n’existe', () => {
     const dir = mkdtempSync(join(tmpdir(), 'gel-'))
@@ -221,7 +281,7 @@ describe('mesure DIRECTE du segment synchrone d’un canal IPC', () => {
     arreter()
     expect(captures).toEqual([])
   })
-/*
+  /*
    * REGRESSION du 2026-08-30 : le jalon de demarrage restait en pile pour toujours, si bien qu'un
    * gel survenu des heures plus tard etait etiquete 'demarrage:interface chargee'. La phase de
    * demarrage doit se CLORE.

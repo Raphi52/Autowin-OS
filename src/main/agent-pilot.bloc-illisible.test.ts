@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AgentPilot, type PilotEvent } from './agent-pilot'
+import { AgentPilot, type PilotEvent, type PilotEventVariant } from './agent-pilot'
 import type { PromptSnapshot } from './commands'
 
 const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
@@ -9,9 +9,9 @@ const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   conversationsCount: 0
 })
 
-type Delta = Extract<PilotEvent, { kind: 'delta' }>
-type Reset = Extract<PilotEvent, { kind: 'stream-reset' }>
-type Resultat = Extract<PilotEvent, { kind: 'result' }>
+type Delta = Extract<PilotEventVariant, { kind: 'delta' }>
+type Reset = Extract<PilotEventVariant, { kind: 'stream-reset' }>
+type Resultat = Extract<PilotEventVariant, { kind: 'result' }>
 
 /**
  * CE QUE L'UTILISATEUR VOIT QUAND UNE COMMANDE EST REFUSEE.
