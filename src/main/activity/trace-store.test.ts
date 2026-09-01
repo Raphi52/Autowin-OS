@@ -220,6 +220,102 @@ describe('TraceStore append-only', () => {
     expect((await Promise.all([first, second])).sort((a, b) => a - b)).toEqual([1, 2])
   })
 
+  /*
+   * GARDE DE COUT DE RELECTURE (gels du 2026-09-01).
+   *
+   * `readConversation` relisait et reparsait le fichier ENTIER a chaque appel, sur le thread main.
+   * Sur `conv-54.jsonl` (5,6 Mo), un appel coute ~128 ms a froid : ce n'est pas l'appel unique qui
+   * gele la fenetre, c'est sa REPETITION (un appel par requete, plusieurs par tour). Le journal des
+   * gels montre la signature exacte : duree qui GRANDIT avec le fichier, 1,4 s le matin -> 4,4 s a
+   * 13h43, cause 'entree-sortie-bloquante', operation 'inconnu'.
+   *
+   * Entree qui ferait echouer ce test si la correction etait fausse : l'append EXTERNE de
+   * `evt-200` ci-dessous. Un cache qui se contenterait de memoriser le premier resultat passerait
+   * la borne d'octets mais RATERAIT cet evenement — l'assertion sur les identifiants apres append
+   * externe est la sonde de ce faux vert.
+   */
+  it('ne reparse pas tout le journal a chaque relecture et voit quand meme un append externe', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-read-cache-'))
+    const writer = new TraceStore(root)
+    for (let index = 0; index < 200; index += 1) writer.append(event(`evt-${index}`, index))
+
+    const reader = new TraceStore(root)
+    expect(reader.readConversation('conv-1')).toHaveLength(200)
+    const warmupBytes = reader.readScanBytes
+    expect(warmupBytes).toBeGreaterThan(10_000)
+
+    for (let tour = 0; tour < 10; tour += 1)
+      expect(reader.readConversation('conv-1')).toHaveLength(200)
+    expect(reader.readScanBytes).toBe(warmupBytes)
+
+    appendFileSync(
+      join(root, 'conv-1.jsonl'),
+      `${JSON.stringify(event('evt-200', 200))}
+`
+    )
+    const apres = reader.readConversation('conv-1')
+    expect(apres.at(-1)?.id).toBe('evt-200')
+    expect(apres).toHaveLength(201)
+    expect(reader.readScanBytes - warmupBytes).toBeLessThan(2_000)
+  })
+
+  it('garde la lecture des vues derivees incrementale sans avaler un append externe', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-read-cache-vue-'))
+    const writer = new TraceStore(root)
+    for (let index = 0; index < 200; index += 1) writer.append(event(`evt-${index}`, index))
+
+    const reader = new TraceStore(root)
+    expect(reader.readConversationBestEffort('conv-1')).toHaveLength(200)
+    const warmupBytes = reader.readScanBytes
+    expect(reader.readConversationBestEffort('conv-1')).toHaveLength(200)
+    expect(reader.readScanBytes).toBe(warmupBytes)
+
+    appendFileSync(
+      join(root, 'conv-1.jsonl'),
+      `${JSON.stringify(event('evt-200', 200))}
+`
+    )
+    expect(reader.readConversationBestEffort('conv-1').at(-1)?.id).toBe('evt-200')
+    expect(reader.readScanBytes - warmupBytes).toBeLessThan(2_000)
+  })
+
+  it('signale encore la corruption a sa ligne absolue apres une relecture en cache', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-read-cache-corrupt-'))
+    const path = join(root, 'conv-1.jsonl')
+    const store = new TraceStore(root)
+    store.append(event('evt-0', 0))
+    expect(store.readConversation('conv-1')).toHaveLength(1)
+
+    appendFileSync(
+      path,
+      `{invalide}
+${JSON.stringify(event('evt-1', 1))}
+`,
+      'utf8'
+    )
+    expect(() => store.readConversation('conv-1')).toThrow(/trace corrompue ligne 2/)
+    expect(store.readConversationBestEffort('conv-1').map((item) => item.id)).toEqual([
+      'evt-0',
+      'evt-1'
+    ])
+  })
+
+  it('ne sert pas un cache perime quand le journal est reecrit plus court', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-read-cache-tronque-'))
+    const path = join(root, 'conv-1.jsonl')
+    const store = new TraceStore(root)
+    store.append(event('evt-0', 0)).append(event('evt-1', 1))
+    expect(store.readConversation('conv-1')).toHaveLength(2)
+
+    writeFileSync(
+      path,
+      `${JSON.stringify(event('evt-9', 9))}
+`,
+      'utf8'
+    )
+    expect(store.readConversation('conv-1').map((item) => item.id)).toEqual(['evt-9'])
+  })
+
   it('ne relit pas tout le journal apres warmup et ne scanne que l append externe', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-trace-sequence-cache-'))
     const writer = new TraceStore(root)
