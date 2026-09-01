@@ -100,3 +100,86 @@ describe('horodatage', () => {
     expect(entries.find((entry) => entry.kind === 'done')?.at).toBeUndefined()
   })
 })
+
+describe('rien ne se perd — le journal est lu à la place de l’Observatory', () => {
+  it('trace les gestes hors liste blanche (provider-journal, stream-reset, resumed) avec leurs champs', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('t', [])],
+      journalByTurn: {
+        t: [
+          { kind: 'resumed' },
+          {
+            kind: 'provider-journal',
+            at: 1_700_000_000_000,
+            provider: 'codex',
+            attempt: 2,
+            requestId: 'req-9',
+            token: 'jeton',
+            journalPath: 'C:/j.log'
+          },
+          { kind: 'stream-reset', at: 1_700_000_000_001, streamId: 's1' }
+        ]
+      }
+    })
+    expect(entries.map((entry) => entry.label)).toEqual([
+      'resumed',
+      'provider-journal',
+      'stream-reset'
+    ])
+    expect(entries.every((entry) => entry.kind === 'event')).toBe(true)
+    expect(entries[1].detail).toContain('codex')
+    expect(entries[1].detail).toContain('req-9')
+    expect(entries[1].at).toBe(1_700_000_000_000)
+    expect(entries[2].detail).toContain('s1')
+  })
+
+  it('ne tronque plus le détail : raisonnement et réponse arrivent entiers', () => {
+    const long = 'x'.repeat(3_000)
+    const entries = buildModelActivityLog({
+      messages: [assistant('t', [])],
+      journalByTurn: {
+        t: [
+          { kind: 'reasoning', text: long },
+          { kind: 'delta', text: `ligne 1\nligne 2 ${long}` }
+        ]
+      }
+    })
+    expect(entries[0].detail).toHaveLength(3_000)
+    expect(entries[1].detail).toContain('\n')
+    expect(entries[1].detail?.length).toBeGreaterThan(3_000)
+    expect(entries.some((entry) => entry.detail?.endsWith('…'))).toBe(false)
+  })
+
+  it('garde les champs déjà lus mais jetés (sessionId d’un `done`, erreur d’un `failed`)', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('t', [])],
+      journalByTurn: {
+        t: [
+          { kind: 'failed', at: 1, error: 'stream 500' },
+          { kind: 'done', at: 2, sessionId: 'sess-42' }
+        ]
+      }
+    })
+    expect(entries[0]).toMatchObject({ kind: 'error', ok: false })
+    expect(entries[0].detail).toContain('stream 500')
+    expect(entries[1]).toMatchObject({ kind: 'done', label: 'Tour terminé' })
+    expect(entries[1].detail).toContain('sess-42')
+  })
+
+  it('un `cancelled` clôt le tour au lieu de disparaître', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('t', [])],
+      journalByTurn: { t: [{ kind: 'cancelled', at: 3 }] }
+    })
+    expect(entries[0]).toMatchObject({ kind: 'done', label: 'Tour annulé', at: 3 })
+  })
+
+  it('une part persistée de type inattendu reste visible', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('t', [{ kind: 'reasoning', text: 'je pense' }])],
+      journalByTurn: {}
+    })
+    expect(entries[0]).toMatchObject({ kind: 'event', label: 'reasoning' })
+    expect(entries[0].detail).toContain('je pense')
+  })
+})

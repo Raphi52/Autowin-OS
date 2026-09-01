@@ -22,7 +22,8 @@ const KIND_LABEL: Record<ModelActivityKind, string> = {
   action: 'Action',
   artifact: 'Artefact',
   error: 'Erreur',
-  done: 'Fin'
+  done: 'Fin',
+  event: 'Journal'
 }
 
 /** Heure locale HH:MM:SS — le journal n'écrit qu'un epoch, et parfois rien du tout. */
@@ -175,8 +176,16 @@ function LogRow({ entry }: { entry: ModelActivityEntry }): React.JSX.Element {
       </div>
       {entry.detail ? (
         <div
-          className="c-faint"
-          style={{ fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+          className="c-faint scroll-y"
+          style={{
+            fontSize: 11,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            // Le détail n'est plus tronqué (le journal doit contenir TOUT) : c'est la HAUTEUR
+            // affichée qui est bornée, et la ligne défile pour livrer le reste.
+            maxHeight: 220,
+            overflowY: 'auto'
+          }}
         >
           {entry.detail}
         </div>

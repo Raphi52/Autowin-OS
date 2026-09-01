@@ -13,7 +13,16 @@
 import type { Msg } from './chat-view-types'
 
 export type ModelActivityKind =
-  'prompt' | 'model-call' | 'reasoning' | 'text' | 'action' | 'artifact' | 'error' | 'done'
+  | 'prompt'
+  | 'model-call'
+  | 'reasoning'
+  | 'text'
+  | 'action'
+  | 'artifact'
+  | 'error'
+  | 'done'
+  /** Tout geste journalisé qui n'entre dans AUCUNE des catégories ci-dessus. Rien ne se perd. */
+  | 'event'
 
 export interface ModelActivityEntry {
   id: string
@@ -32,8 +41,6 @@ export interface ModelActivityInput {
   journalByTurn: Record<string, ReadonlyArray<Record<string, unknown>>>
 }
 
-const DETAIL_MAX = 400
-
 /** L'heure vient du JOURNAL (`at: Date.now()` côté main) ; on ne l'INVENTE jamais quand elle manque. */
 function stamp(source: Record<string, unknown>): { at?: number } {
   return typeof source.at === 'number' ? { at: source.at } : {}
@@ -47,13 +54,43 @@ function safeJson(value: unknown): string {
   }
 }
 
+/**
+ * Détail d'une valeur — INTÉGRAL. Ce journal est lu À LA PLACE de l'Observatory : une troncature
+ * (elle était à 400 caractères) coupait raisonnement, réponse et sortie de commande en plein milieu,
+ * exactement l'information qu'on vient y chercher. On ne normalise donc que les espaces horizontaux
+ * et on GARDE les sauts de ligne (le rendu est en `pre-wrap` et borne la HAUTEUR affichée : c'est une
+ * limite d'affichage, jamais une perte).
+ */
 function short(value: unknown): string | undefined {
   if (value === undefined || value === null || value === '') return undefined
   const text = typeof value === 'string' ? value : safeJson(value)
   if (!text) return undefined
-  const flat = text.replace(/\s+/g, ' ').trim()
-  if (!flat) return undefined
-  return flat.length > DETAIL_MAX ? `${flat.slice(0, DETAIL_MAX)}…` : flat
+  const flat = text
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return flat || undefined
+}
+
+/**
+ * Champs RESTANTS d'un événement, une fois retirés ceux déjà rendus par la ligne. C'est ce qui
+ * faisait la pauvreté du journal : `sessionId`, `provider`, `attempt`, `requestId`, `streamId`,
+ * `journalPath`, `error`… étaient lus depuis le fichier puis jetés à l'affichage.
+ */
+function rest(source: Record<string, unknown>, ...omit: string[]): string | undefined {
+  const ignored = new Set(['kind', 'at', ...omit])
+  const keep: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(source)) {
+    if (ignored.has(key) || value === undefined || value === null || value === '') continue
+    keep[key] = value
+  }
+  return Object.keys(keep).length === 0 ? undefined : short(keep)
+}
+
+/** Concatène deux fragments de détail sans en perdre un seul. */
+function joinDetail(...parts: Array<string | undefined>): string | undefined {
+  const kept = parts.filter((part): part is string => Boolean(part))
+  return kept.length === 0 ? undefined : kept.join(' · ')
 }
 
 /** Gestes d'un tour reconstruits depuis ses PARTS persistées (source durable). */
@@ -70,7 +107,7 @@ function fromParts(
       return
     }
     if (part.kind === 'action') {
-      const detail = short(part.args)
+      const detail = joinDetail(short(part.args), rest(part, 'kind', 'args', 'name', 'ok'))
       out.push({
         id,
         turnId,
@@ -84,7 +121,7 @@ function fromParts(
     }
     if (part.kind === 'artifact') {
       const artifact = (part.artifact ?? {}) as Record<string, unknown>
-      const detail = short(artifact.kind)
+      const detail = joinDetail(short(artifact), rest(part, 'kind', 'artifact'))
       out.push({
         id,
         turnId,
@@ -96,7 +133,7 @@ function fromParts(
       return
     }
     if (part.kind === 'error') {
-      const detail = short(part.message)
+      const detail = joinDetail(short(part.message), rest(part, 'kind', 'message', 'cause'))
       out.push({
         id,
         turnId,
@@ -106,7 +143,18 @@ function fromParts(
         ...(detail ? { detail } : {}),
         ok: false
       })
+      return
     }
+    // Même règle que pour le journal : une part d'un type non prévu ici reste VISIBLE.
+    const detail = rest(part, 'kind')
+    out.push({
+      id,
+      turnId,
+      kind: 'event',
+      label: String(part.kind ?? 'part'),
+      ...stamp(part),
+      ...(detail ? { detail } : {})
+    })
   })
   return out
 }
@@ -136,7 +184,7 @@ function fromJournal(
       return
     }
     if (kind === 'prompt-call') {
-      const detail = short(event.args)
+      const detail = joinDetail(short(event.args), rest(event, 'args', 'name'))
       out.push({
         id,
         turnId,
@@ -150,7 +198,7 @@ function fromJournal(
     if (kind === 'command') {
       const key = String(event.actionId ?? `${String(event.name ?? '')}:${index}`)
       actionIndex.set(key, out.length)
-      const detail = short(event.args)
+      const detail = joinDetail(short(event.args), rest(event, 'args', 'name', 'actionId'))
       out.push({
         id,
         turnId,
@@ -165,7 +213,7 @@ function fromJournal(
       const key = String(event.actionId ?? '')
       const position = actionIndex.get(key)
       const ok = typeof event.ok === 'boolean' ? event.ok : undefined
-      const detail = short(event.data)
+      const detail = joinDetail(short(event.data), rest(event, 'data', 'name', 'actionId', 'ok'))
       if (position !== undefined) {
         const target = out[position]
         out[position] = {
@@ -186,8 +234,11 @@ function fromJournal(
       })
       return
     }
-    if (kind === 'error') {
-      const detail = short(event.text)
+    if (kind === 'error' || kind === 'failed') {
+      const detail = joinDetail(
+        short(event.text ?? event.error ?? event.message),
+        rest(event, 'text', 'error', 'message')
+      )
       out.push({
         id,
         turnId,
@@ -201,28 +252,44 @@ function fromJournal(
     }
     if (kind === 'artifact') {
       const artifact = (event.artifact ?? {}) as Record<string, unknown>
+      const detail = joinDetail(short(artifact), rest(event, 'artifact'))
       out.push({
         id,
         turnId,
         kind: 'artifact',
         label: String(artifact.name ?? artifact.id ?? 'artefact'),
-        ...stamp(event)
+        ...stamp(event),
+        ...(detail ? { detail } : {})
       })
       return
     }
-    if (kind === 'done') {
+    if (kind === 'done' || kind === 'cancelled') {
       const usage = event.usage as Record<string, unknown> | undefined
-      const detail = [
+      const detail = joinDetail(
         event.outcome ? `issue ${String(event.outcome)}` : undefined,
-        usage ? short(usage) : undefined
-      ]
-        .filter(Boolean)
-        .join(' · ')
+        usage ? short(usage) : undefined,
+        rest(event, 'usage', 'outcome')
+      )
       out.push({
         id,
         turnId,
         kind: 'done',
-        label: 'Tour terminé',
+        label: kind === 'cancelled' ? 'Tour annulé' : 'Tour terminé',
+        ...stamp(event),
+        ...(detail ? { detail } : {})
+      })
+      return
+    }
+    // RIEN NE SE PERD — tout autre geste journalisé (`provider-journal`, `stream-reset`, `resumed`,
+    // `interrupted`, un `kind` ajouté demain côté main) devenait un TROU dans le journal : la liste
+    // blanche ci-dessus le jetait en silence. Il s'affiche désormais tel quel, champs compris.
+    if (kind) {
+      const detail = rest(event)
+      out.push({
+        id,
+        turnId,
+        kind: 'event',
+        label: kind,
         ...stamp(event),
         ...(detail ? { detail } : {})
       })
