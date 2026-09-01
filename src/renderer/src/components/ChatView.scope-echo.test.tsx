@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { createElement } from 'react'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 vi.mock('./Markdown', () => ({
@@ -19,7 +19,12 @@ const RUN = {
 describe('ChatView — écho de périmètre avant l’envoi', () => {
   beforeAll(installRafShim)
   let h: ChatHarness | null = null
+  // Les brouillons SURVIVENT au rechargement de la fenêtre (localStorage, conv-65) : sans ce
+  // nettoyage, le texte du premier cas reviendrait tout seul dans le composer du second, qui
+  // vérifie justement qu'un composer VIDE n'affiche aucun écho.
+  beforeEach(() => window.localStorage.clear())
   afterEach(async () => {
+    window.localStorage.clear()
     await h?.unmount()
     h = null
     vi.restoreAllMocks()

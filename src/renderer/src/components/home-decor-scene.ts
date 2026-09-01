@@ -1313,13 +1313,18 @@ export const NAPPE_FRAGMENT_SHADER = [
   'uniform vec3 uAnthracite;',
   'uniform float uGrain;',
   // Valeur-bruit interpolée en douceur : la base organique.
+  // Hash sans transcendante (Hoskins) : `fract(sin(dot(...)))` sature et aligne ses cellules sur la
+  // grille, ce qui fabriquait des faisceaux de droites en travers de l'écran (conv-1582).
   'float hash(vec2 p) {',
-  '  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);',
+  '  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));',
+  '  q += dot(q, q.yzx + 33.33);',
+  '  return fract((q.x + q.y) * q.z);',
   '}',
   'float bruit(vec2 p) {',
   '  vec2 i = floor(p);',
   '  vec2 f = fract(p);',
-  '  vec2 u = f * f * (3.0 - 2.0 * f);',
+  // Fondu quintique : dérivée nulle aux bords de cellule, donc plus d'arête au raccord.
+  '  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);',
   '  float a = hash(i);',
   '  float b = hash(i + vec2(1.0, 0.0));',
   '  float c = hash(i + vec2(0.0, 1.0));',
@@ -1329,11 +1334,16 @@ export const NAPPE_FRAGMENT_SHADER = [
   // Cinq octaves : en dessous de quatre, la nappe se lit comme des taches ; au-dessus de six, le
   // gain visuel disparaît et le coût par pixel reste, or cette vue tourne toute la journée.
   'float fbm(vec2 p) {',
+  // Chaque octave tourne d'un angle qui AVANCE : sans rotation, les cinq grilles se superposent
+  // dans les mêmes directions et leurs raccords s'additionnent en droites visibles.
+  '  mat2 pas = mat2(0.4472136, 0.89442719, -0.89442719, 0.4472136);',
+  '  mat2 rot = pas;',
   '  float somme = 0.0;',
   '  float amplitude = 0.5;',
   '  for (int octave = 0; octave < 5; octave++) {',
   '    somme += amplitude * bruit(p);',
-  '    p = p * 2.03 + vec2(17.3, 9.1);',
+  '    p = rot * p * 2.03 + vec2(17.3, 9.1);',
+  '    rot = pas * rot;',
   '    amplitude *= 0.5;',
   '  }',
   '  return somme;',
@@ -1346,7 +1356,9 @@ export const NAPPE_FRAGMENT_SHADER = [
   '  float w1 = fbm(p + derive);',
   '  float w2 = fbm(p + vec2(5.2, 1.3) + derive * 1.7);',
   '  float champ = fbm(p + vec2(w1, w2) * 1.6 + derive * 0.5);',
-  '  float crete = pow(clamp(champ * 1.25, 0.0, 1.0), 3.2);',
+  // Fondu doux plutôt qu'un aplat saturé : le `clamp` écrasait tout un plateau à 1.0 et son bord
+  // devenait un iso-contour anguleux.
+  '  float crete = pow(smoothstep(0.02, 0.86, champ), 3.2);',
   // Vignette douce : le centre reste sombre, les widgets restent lisibles au milieu.
   '  vec2 c = vUv - 0.5;',
   '  float vignette = smoothstep(0.12, 0.72, length(c));',

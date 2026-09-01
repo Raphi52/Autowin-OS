@@ -1957,12 +1957,12 @@ describe('ChatView behavior under concurrent UI actions', () => {
       '[data-execution-node][data-execution-kind]'
     )!
     await act(async () => noeudAgent.click())
-    // Depuis le 2026-09-01 le fil des sous-agents vit dans l'onglet RUNS : le graphe choisit le
-    // tour, le fil se lit sur l'onglet Runs.
-    const ongletRuns = [
-      ...container!.querySelectorAll<HTMLButtonElement>('.workflow-section-tab')
-    ].find((b) => b.textContent?.trim() === 'Runs')!
-    await act(async () => ongletRuns.click())
+    // Le fil se lit SOUS LE GRAPHE, dans la zone de détail de l'onglet Graph : c'est là que
+    // `WorkflowsPanel` rend les fils du tour sélectionné, et c'est ce que vérifient aussi les
+    // tests « Stop du sous-agent » et « ouvrir le run depuis l'indicateur ». L'onglet Runs, lui,
+    // liste les RUN.md. Un détour par cet onglet vidait donc l'écran de tout fil.
+    const ongletActif = container!.querySelector('.workflow-section-tab.is-active')
+    expect(ongletActif?.textContent?.trim()).toBe('Graph')
     expect(container!.querySelector('.live-run')).not.toBeNull()
   })
 

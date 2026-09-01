@@ -964,9 +964,15 @@ export function ChatView({
         const anchorRemoved = anchorPart?.kind === 'text' && anchorPart.streamId === streamId
         if (removedBefore === 0 && !anchorRemoved) return receipt
         changed = true
+        const nouvelIndex = receipt.afterPartIndex - removedBefore - (anchorRemoved ? 1 : 0)
+        // Tout ce qui precedait ce recu vient d'etre efface : il se pose AVANT ce qui reste.
+        // On ne redescend PAS a un index negatif — au rendu, `afterPartIndex < 0` veut dire
+        // « aucun point d'accroche, ce recu passe en dernier », ce qui l'aurait renvoye APRES le
+        // flux de remplacement alors qu'il l'a precede.
+        if (nouvelIndex < 0) return { ...receipt, afterPartIndex: 0, afterTextOffset: 0 }
         return {
           ...receipt,
-          afterPartIndex: receipt.afterPartIndex - removedBefore - (anchorRemoved ? 1 : 0),
+          afterPartIndex: nouvelIndex,
           ...(anchorRemoved ? { afterTextOffset: undefined } : {})
         }
       })
