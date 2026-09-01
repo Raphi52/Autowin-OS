@@ -75,6 +75,12 @@ import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment, pieceJointePasseePourLeFil } from './chat-attachments'
 import { derniereConversationOuverte, memoriserDerniereConversation } from './derniere-conversation'
 import {
+  brouillonEnAttente,
+  lireBrouillons,
+  memoriserBrouillon,
+  oublierBrouillons
+} from './brouillons-persistes'
+import {
   memoriserPositionLecture,
   positionLectureMemorisee,
   restaurerPositionLecture,
@@ -640,8 +646,22 @@ export function ChatView({
   const composerDraftKeyRef = useRef(NEW_DRAFT_KEY)
   const [draftsVersion, setDraftsVersion] = useState(0)
   const composerSelectionGenerationRef = useRef(0)
+  /**
+   * Les brouillons du composer, indexes par conversation. HYDRATES depuis le stockage local au
+   * montage : un rechargement de fenetre (mise a jour appliquee, rechargement a chaud, plantage du
+   * renderer) effacait sinon TOUT le texte en cours de frappe — perte signalee le 2026-09-01
+   * (« ca m'enleve de la conversation ou j'ecris et ca m'efface le message »). Les pieces jointes ne
+   * se rechargent pas : leur contenu n'est pas persiste.
+   */
   const composerDraftsRef = useRef(
-    new Map<string, ComposerDraft>([[NEW_DRAFT_KEY, { input: '', attachments: [], error: null }]])
+    (() => {
+      const carte = new Map<string, ComposerDraft>([
+        [NEW_DRAFT_KEY, { input: '', attachments: [], error: null }]
+      ])
+      for (const [cle, input] of Object.entries(lireBrouillons()))
+        carte.set(cle, { input, attachments: [], error: null })
+      return carte
+    })()
   )
   const activeRef = useRef<string | null>(null)
   const loadConversationRequestRef = useRef(0)
@@ -685,6 +705,9 @@ export function ChatView({
 
   function setDraftInput(key: string, value: string): void {
     composerDraftsRef.current.set(key, { ...getComposerDraft(key), input: value })
+    // Le texte part AUSSI sur le stockage local, a chaque frappe : c'est le seul endroit ou il
+    // survit a un rechargement de la fenetre. Un vide efface l'entree (envoi, nettoyage).
+    memoriserBrouillon(key, value)
     if (composerDraftKeyRef.current === key) composerRef.current?.setInput(value)
   }
 
@@ -1013,9 +1036,27 @@ export function ChatView({
     // L'horloge ECARTE les vestiges : un tour interrompu la veille ne doit plus voler le demarrage
     // a la conversation ou l'utilisateur travaille (mesure conv-1267, 2026-08-18).
     const target = pickTurnToResume(turns, Date.now())
+    /**
+     * UN MESSAGE A MOITIE ECRIT GAGNE SUR LA REPRISE. Symptome du 2026-09-01 : « de temps en temps
+     * ca m'enleve de la conversation dans laquelle je suis en train d'ecrire ». Un rechargement de
+     * fenetre relance cette reprise, qui ouvrait la conversation d'un tour interrompu AILLEURS et
+     * plantait l'utilisateur devant un fil qui n'etait pas le sien.
+     *
+     * Rien n'est perdu de l'autre cote : le journal du tour interrompu est rejoue quand meme, son
+     * fil est donc a jour des qu'on l'ouvre — seule la SELECTION reste a l'utilisateur.
+     */
+    const ouJEcrivais = derniereConversationOuverte(loaded)
     if (target) {
       const conversation = loaded.find((candidate) => candidate.id === target.conversationId)
       if (conversation) {
+        if (brouillonEnAttente(ouJEcrivais) && ouJEcrivais !== target.conversationId) {
+          await replayTurnJournal(target.conversationId, target.turnId)
+          const restons = loaded.find((candidate) => candidate.id === ouJEcrivais)
+          if (restons) {
+            await loadConv(restons)
+            return
+          }
+        }
         await loadConv(conversation)
         await replayTurnJournal(target.conversationId, target.turnId)
         return
@@ -1024,7 +1065,7 @@ export function ChatView({
     // Pas de tour a reprendre : on rouvre la ou l'utilisateur etait (demande du 2026-08-18). La
     // reprise d'un tour inacheve reste PRIORITAIRE — elle repare quelque chose, celle-ci ne fait
     // que replacer le curseur. Aucune selection inventee si la memoire est vide ou perimee.
-    const derniere = derniereConversationOuverte(loaded)
+    const derniere = ouJEcrivais
     if (derniere) {
       const conversation = loaded.find((candidate) => candidate.id === derniere)
       if (conversation) await loadConv(conversation)
@@ -1134,6 +1175,15 @@ export function ChatView({
   useEffect(() => {
     window.api.setActiveConversation(activeId)
   }, [activeId])
+  /**
+   * REPOSE le brouillon restaure dans le composer, une fois au montage. La carte est hydratee depuis
+   * le stockage local, mais le composer garde son texte chez lui (handle imperatif) : sans cette
+   * remise, le texte retrouve restait invisible tant qu'aucune conversation n'etait rouverte.
+   */
+  useEffect(() => {
+    const restaure = getComposerDraft(composerDraftKeyRef.current).input
+    if (restaure) composerRef.current?.setInput(restaure)
+  }, [])
   useEffect(() => {
     let disposed = false
     void Promise.resolve().then(async () => {
@@ -1956,6 +2006,7 @@ export function ChatView({
     setDeleteCandidate(null)
     await window.api.conversationsRemove(c.id)
     composerDraftsRef.current.delete(c.id)
+    oublierBrouillons([c.id])
     if (activeId === c.id) newConv()
     await refreshConvs()
   }
@@ -1983,6 +2034,7 @@ export function ChatView({
     try {
       const removed = await window.api.conversationsRemoveMany(ids)
       for (const id of removed) composerDraftsRef.current.delete(id)
+      oublierBrouillons(removed)
       if (activeId && removed.includes(activeId)) newConv()
       setBulkDeleteAsking(false)
       quitterModeSelection()
