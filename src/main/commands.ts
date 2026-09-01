@@ -2659,7 +2659,9 @@ export class AppCommandBus {
         }
         const cwd = this.os.executionWorkspace
         if (!cwd) return { lance: false, detail: 'Commande refusée : aucun workspace résolu' }
-        const issue = await this.spawnVerify(ligne.split(/\s+/), cwd, ligne, onProgress)
+        // Les guillemets GROUPENT : `decouperArguments` respecte `-m "trois mots"` là où un
+        // `split(/\s+/)` en faisait trois arguments et laissait les guillemets dans le texte.
+        const issue = await this.spawnVerify(decouperArguments(ligne), cwd, ligne, onProgress)
         return {
           lance: true,
           commande: ligne,
