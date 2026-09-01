@@ -111,3 +111,53 @@ describe('ChatView — prévisu cliquable dans la prompt box', () => {
     expect(h.container.querySelector('.attachment-thumb-button')).toBeNull()
   })
 })
+
+/**
+ * COLLER PENDANT UN TOUR (conv-44, 2026-09-01). `addFiles` commençait par `if (!cible && busy)
+ * return` : un collage pendant qu'un tour tournait était ignoré EN SILENCE — rien d'attaché, aucun
+ * message. Demande de l'utilisateur : la pièce jointe s'attache dans la barre comme hors tour ; elle
+ * n'est pas envoyée à l'agent en cours, elle attend le prochain message.
+ */
+describe('ChatView — coller pendant un tour en cours', () => {
+  beforeAll(installRafShim)
+  let h: ChatHarness | null = null
+  afterEach(async () => {
+    await h?.unmount()
+    h = null
+    vi.restoreAllMocks()
+  })
+
+  it('attache et affiche l’image collée alors qu’un tour tourne', async () => {
+    let libere: ((value: { ok: boolean }) => void) | null = null
+    h = await mountChat(
+      chatApi({
+        pilotChat: vi.fn(
+          () =>
+            new Promise<{ ok: boolean }>((resolve) => {
+              libere = resolve
+            })
+        )
+      })
+    )
+    await h.click('.conv-pick')
+    await h.type('un tour qui dure')
+    await h.click('.composer-send')
+
+    const file = new File(['abc'], 'pendant-le-tour.png', { type: 'image/png' })
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(paste, 'clipboardData', { configurable: true, value: { files: [file] } })
+    await act(async () => {
+      h!.textarea().dispatchEvent(paste)
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(h.container.querySelector('.attachment-list.pending')).toBeTruthy()
+    expect(h.container.textContent).toContain('pendant-le-tour.png')
+
+    await act(async () => {
+      libere?.({ ok: true })
+    })
+  })
+})

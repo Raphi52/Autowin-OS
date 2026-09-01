@@ -926,8 +926,16 @@ export function ChatView({
   }
 
   async function addFiles(files: FileList | File[], cible?: string): Promise<void> {
-    if (!cible && busy) return
-    if (cible && busyConversationsRef.current.has(cible)) return
+    /*
+     * PLUS DE REFUS SILENCIEUX PENDANT UN TOUR (conv-44, 2026-09-01).
+     *
+     * Ces deux lignes rendaient tout ajout de fichier inopérant tant qu'un tour tournait —
+     * collage, dépôt, bouton fichier — sans un mot à l'écran : « ça la met juste dans la barre
+     * comme si je la collais pas pendant un tour ». La pièce jointe s'attache donc maintenant
+     * comme hors tour ; elle n'est PAS envoyée à l'agent en vol (le canal d'orientation ne porte
+     * que du texte, `injectDirective`), elle attend le prochain message. Les plafonds ci-dessous
+     * (nombre, 10 Mo par fichier, 20 Mo au total) restent les seuls refus, et ils PARLENT.
+     */
     const originDraftKey = cible ?? composerDraftKeyRef.current
     const originDraft = getComposerDraft(originDraftKey)
     setDraftError(originDraftKey, null)
