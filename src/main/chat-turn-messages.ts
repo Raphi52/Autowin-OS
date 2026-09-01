@@ -248,8 +248,26 @@ export function exigeUneConclusion(aAgi: boolean, reponse: string): boolean {
   if (!aAgi) return false
   const texte = (reponse ?? '').trim()
   if (!texte) return false // le tour muet a sa propre garde, plus ancienne
-  const annonceCeQuiEstFait = /✅|\bfait\b/i.test(texte)
-  const annonceLaSuite = /(reste à faire|à faire|recommand|prochaine étape)/i.test(texte)
+  /*
+   * UNE RUBRIQUE SE RECONNAIT A SA POSITION, PAS A SES LETTRES.
+   *
+   * Mesure conv-44 (2026-09-01) : « t'as termine sans me donner le bloc de cloture ». La version
+   * precedente cherchait `\bfait\b` et `recommand` N'IMPORTE OU dans le texte. Or
+   * « fait » et « recommandation » sont deux mots courants du francais : la prose
+   * « Ma RECOMMANDation du tour precedent etait a cote. Je depose le FAIT. » armait les DEUX
+   * drapeaux, la garde rendait `false`, et un tour qui avait AGI se cloturait nu. Le faux negatif
+   * etait garanti par le vocabulaire courant, pas par le hasard.
+   *
+   * On exige donc un MARQUEUR de rubrique : l'emoji dedie, ou le libelle en TETE DE LIGNE (puces,
+   * titres et numerotation retires d'abord). Une phrase qui cite ces mots en son milieu ne clot
+   * plus rien.
+   */
+  const enTeteDeLigne = (motif: RegExp): boolean =>
+    texte.split('\n').some((ligne) => motif.test(ligne.replace(/^[\s>#*_`\-\d.)]+/, '')))
+  const annonceCeQuiEstFait = /✅/.test(texte) || enTeteDeLigne(/^fait\b/i)
+  const annonceLaSuite =
+    /⏳|👉/.test(texte) ||
+    enTeteDeLigne(/^(reste à faire|à faire|recommandé|recommandation|prochaine étape)\b/i)
   return !(annonceCeQuiEstFait && annonceLaSuite)
 }
 
