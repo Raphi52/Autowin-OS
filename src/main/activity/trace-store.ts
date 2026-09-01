@@ -116,6 +116,15 @@ export class TraceStore {
     { offset: number; mtimeMs: number; lastSequence: number }
   >()
   private scannedSequenceBytes = 0
+  private readonly readCursorsStrict = new Map<
+    string,
+    { offset: number; mtimeMs: number; ligne: number; events: TraceEventV1[] }
+  >()
+  private readonly readCursorsVue = new Map<
+    string,
+    { offset: number; mtimeMs: number; ligne: number; events: TraceEventV1[] }
+  >()
+  private scannedReadBytes = 0
 
   constructor(private readonly root: string) {}
 
@@ -210,40 +219,115 @@ export class TraceStore {
     return this
   }
 
-  readConversation(conversationId: string): TraceEventV1[] {
+  /*
+   * RELECTURE INCREMENTALE — correction du gel « entree-sortie-bloquante » qui GRANDIT.
+   *
+   * Chaque appel relisait et reparsait le fichier ENTIER, de facon synchrone, sur le thread qui
+   * tient la fenetre. Sur conv-54.jsonl (5,6 Mo) un appel coute ~128 ms a froid ; il y en a
+   * plusieurs par tour, d'ou une duree de gel proportionnelle a la taille du journal (1,4 s le
+   * matin, 4,4 s a 13h43 dans gels.jsonl). Une trace est un flux d'APPENDS : seuls les octets
+   * ajoutes depuis la derniere lecture ont besoin d'etre parses. Le fichier reste l'autorite —
+   * fichier disparu, raccourci ou reecrit a taille egale = relecture complete.
+   */
+  private lireIncremental(conversationId: string, strict: boolean): TraceEventV1[] {
+    const cache = strict ? this.readCursorsStrict : this.readCursorsVue
     const path = this.path(conversationId)
-    if (!existsSync(path)) return []
-    const out: TraceEventV1[] = []
-    const lines = readFileSync(path, 'utf8').split(/\r?\n/)
-    const lastContentIndex = lines.reduce((last, line, index) => (line ? index : last), -1)
-    for (const [index, line] of lines.entries()) {
-      if (!line) continue
-      try {
-        const event = assertTraceEvent(JSON.parse(line) as TraceEventV1)
-        if (event.conversationId === conversationId) out.push(event)
-      } catch (error) {
-        if (index === lastContentIndex && error instanceof SyntaxError) continue
-        throw new Error(`trace corrompue ligne ${index + 1}`, { cause: error })
-      }
+    if (!existsSync(path)) {
+      cache.delete(conversationId)
+      return []
     }
-    return out.sort((a, b) => a.sequence - b.sequence)
+    const stats = statSync(path)
+    const precedent = cache.get(conversationId)
+    const reprise =
+      precedent &&
+      stats.size >= precedent.offset &&
+      (stats.size > precedent.offset || stats.mtimeMs === precedent.mtimeMs)
+        ? precedent
+        : { offset: 0, mtimeMs: 0, ligne: 0, events: [] as TraceEventV1[] }
+
+    if (precedent === reprise && stats.size === precedent.offset) {
+      return [...precedent.events].sort((a, b) => a.sequence - b.sequence)
+    }
+
+    const suffixe = this.lireSuffixe(path, reprise.offset, stats.size)
+    const completeBytes = suffixe.lastIndexOf(0x0a) + 1
+    const lignesCompletes = suffixe.subarray(0, completeBytes).toString('utf8').split('\n')
+    const reste = suffixe.subarray(completeBytes).toString('utf8')
+    if (lignesCompletes.length && lignesCompletes[lignesCompletes.length - 1] === '')
+      lignesCompletes.pop()
+
+    const events = [...reprise.events]
+    let offset = reprise.offset
+    let ligne = reprise.ligne
+    for (const [rang, brute] of lignesCompletes.entries()) {
+      const derniereDuFichier = !reste && rang === lignesCompletes.length - 1
+      const consommes = Buffer.byteLength(brute, 'utf8') + 1
+      const texte = brute.endsWith('\r') ? brute.slice(0, -1) : brute
+      if (!texte) {
+        offset += consommes
+        ligne += 1
+        continue
+      }
+      const event = this.parseLigne(texte, conversationId, ligne + 1, strict, derniereDuFichier)
+      if (event === 'tolere') break
+      if (event) events.push(event)
+      offset += consommes
+      ligne += 1
+    }
+    if (reste) {
+      const texte = reste.endsWith('\r') ? reste.slice(0, -1) : reste
+      const event = texte ? this.parseLigne(texte, conversationId, ligne + 1, strict, true) : null
+      if (event && event !== 'tolere') events.push(event)
+    }
+
+    cache.set(conversationId, { offset, mtimeMs: stats.mtimeMs, ligne, events })
+    return [...events].sort((a, b) => a.sequence - b.sequence)
+  }
+
+  /** Parse une ligne ; rend `'tolere'` pour une derniere ligne tronquee, `null` pour une entree ignoree. */
+  private parseLigne(
+    texte: string,
+    conversationId: string,
+    numeroLigne: number,
+    strict: boolean,
+    derniereDuFichier: boolean
+  ): TraceEventV1 | null | 'tolere' {
+    try {
+      const event = assertTraceEvent(JSON.parse(texte) as TraceEventV1)
+      return event.conversationId === conversationId ? event : null
+    } catch (error) {
+      if (!strict) return null
+      if (derniereDuFichier && error instanceof SyntaxError) return 'tolere'
+      throw new Error(`trace corrompue ligne ${numeroLigne}`, { cause: error })
+    }
+  }
+
+  private lireSuffixe(path: string, offset: number, size: number): Buffer {
+    const longueur = Math.max(0, size - offset)
+    const tampon = Buffer.allocUnsafe(longueur)
+    if (longueur === 0) return tampon
+    const descriptor = openSync(path, 'r')
+    let lus = 0
+    try {
+      while (lus < longueur) {
+        const read = readSync(descriptor, tampon, lus, longueur - lus, offset + lus)
+        if (read === 0) break
+        lus += read
+      }
+    } finally {
+      closeSync(descriptor)
+    }
+    this.scannedReadBytes += lus
+    return tampon.subarray(0, lus)
+  }
+
+  readConversation(conversationId: string): TraceEventV1[] {
+    return this.lireIncremental(conversationId, true)
   }
 
   /** Lecture reservee aux vues derivees : ignore chaque entree invalide sans masquer la corruption canonique. */
   readConversationBestEffort(conversationId: string): TraceEventV1[] {
-    const path = this.path(conversationId)
-    if (!existsSync(path)) return []
-    const out: TraceEventV1[] = []
-    for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
-      if (!line) continue
-      try {
-        const event = assertTraceEvent(JSON.parse(line) as TraceEventV1)
-        if (event.conversationId === conversationId) out.push(event)
-      } catch {
-        // Une vue reconstruisible peut rester partielle ; la lecture canonique demeure fail-closed.
-      }
-    }
-    return out.sort((a, b) => a.sequence - b.sequence)
+    return this.lireIncremental(conversationId, false)
   }
 
   nextSequence(conversationId: string): number {
@@ -311,6 +395,11 @@ export class TraceStore {
     return this.reserveSequence(conversationId, lastSequence + 1)
   }
 
+  /** Octets réellement inspectés par les relectures de conversation, exposés pour la garde de complexité. */
+  get readScanBytes(): number {
+    return this.scannedReadBytes
+  }
+
   /** Octets réellement inspectés par `nextSequence`, exposés pour la garde de complexité. */
   get sequenceScanBytes(): number {
     return this.scannedSequenceBytes
@@ -373,6 +462,8 @@ export class TraceStore {
     this.ids.delete(conversationId)
     this.lastSequences.delete(conversationId)
     this.sequenceCursors.delete(conversationId)
+    this.readCursorsStrict.delete(conversationId)
+    this.readCursorsVue.delete(conversationId)
     allocatedSequences.delete(this.sequenceKey(conversationId))
     rmSync(join(this.root, `.${conversationId}.sequence`), { force: true })
     return true
