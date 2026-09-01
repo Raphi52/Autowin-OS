@@ -289,6 +289,13 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
     expect(NON_INTERACTIVE_ENV.PAGER).toBe('cat')
     expect(NON_INTERACTIVE_ENV.GIT_TERMINAL_PROMPT).toBe('0')
     expect(NON_INTERACTIVE_ENV.GIT_ASKPASS).toBeTruthy()
+    // Git Credential Manager est un processus SEPARE a fenetre GUI : il ignore les deux variables
+    // ci-dessus. Sans ces deux reglages, un `git push` d'un run attend une fenetre que personne ne
+    // relie au fil (mesure conv-35, 2026-09-01 : trois invites, run bloque, zero log).
+    expect(NON_INTERACTIVE_ENV.GCM_INTERACTIVE).toBe('never')
+    expect(NON_INTERACTIVE_ENV.GIT_CONFIG_COUNT).toBe('2')
+    expect(NON_INTERACTIVE_ENV.GIT_CONFIG_KEY_1).toBe('credential.interactive')
+    expect(NON_INTERACTIVE_ENV.GIT_CONFIG_VALUE_1).toBe('false')
     // `--help` retombe sur `man`, absent sous Windows : échec propre au lieu d'un navigateur.
     expect(NON_INTERACTIVE_ENV.GIT_CONFIG_VALUE_0).toBe('man')
   })
