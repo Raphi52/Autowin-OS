@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react'
+import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { JarvisWidget } from './JarvisWidget'
@@ -209,6 +209,25 @@ describe('widget Jarvis', () => {
       [{ role: 'user', content: 'lance une tache test' }],
       'c-jarvis'
     )
+  })
+
+  it('UNE parole = UN SEUL tour, même sous StrictMode', async () => {
+    // LE DÉFAUT VÉCU (conv-46, 2026-09-01) : une phrase dictée UNE fois lançait 6 tours en 1,5 s —
+    // 6 bulles identiques dans le chat, 6 appels au modèle facturés. Cause : l'envoi de l'ordre
+    // était déclenché DEPUIS l'updater de `setEcoute`. React réexécute librement un updater (deux
+    // fois d'office sous StrictMode, davantage lors d'un rejeu de file), donc l'effet de bord
+    // partait autant de fois qu'il était rejoué. L'ENTRÉE QUI CASSERAIT UN FAUX FIX est ici
+    // StrictMode : sans lui, le double appel reste invisible en test.
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    act(() => root.render(createElement(StrictMode, null, createElement(JarvisWidget))))
+    monte.push({ root, container })
+    clic(container, 'jarvis-bascule')
+    const moteur = FakeRecognition.instances.at(-1)!
+    await act(async () => moteur.dire('Jarvis, lance une tache test', true))
+    expect(routeConversationMessage).toHaveBeenCalledTimes(1)
+    expect(pilotChat).toHaveBeenCalledTimes(1)
   })
 
   it('fait un son dès qu’il entend son nom, avant même la fin de la phrase', async () => {

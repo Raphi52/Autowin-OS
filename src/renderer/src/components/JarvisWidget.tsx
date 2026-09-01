@@ -105,6 +105,17 @@ export function JarvisWidget({
   onNavigate?: (destination: string) => void
 }): React.JSX.Element {
   const [ecoute, setEcoute] = useState<JarvisEcoute>(ecouteInitiale)
+  /**
+   * L'ETAT D'ECOUTE LU HORS RENDU — parce qu'un envoi ne doit JAMAIS partir d'un updater.
+   *
+   * DEFAUT VECU le 2026-09-01 (conv-46) : une phrase dictee UNE fois lancait jusqu'a 6 tours en
+   * 1,5 s. `reagirAParole` etait appelee DANS l'updater de `setEcoute`, et l'ordre partait de la.
+   * Or React reexecute un updater a sa guise — deux fois d'office sous StrictMode, davantage
+   * quand la file d'updates est rejouee — et chaque rejeu renvoyait la meme phrase au pilote.
+   * L'updater redevient PUR : la reaction se calcule ici, sur cette reference, et l'effet de bord
+   * (bip, envoi) part une seule fois, hors du rendu.
+   */
+  const ecouteRef = useRef(ecoute)
   const [direct, setDirect] = useState<ConversationDirecte[]>([])
   const [flux, setFlux] = useState<EvenementDirect[]>([])
   const [erreur, setErreur] = useState<string | null>(null)
@@ -197,14 +208,13 @@ export function JarvisWidget({
         const resultat = e.results[i]
         const texte = resultat?.[0]?.transcript ?? ''
         const final = resultat?.isFinal === true
-        setEcoute((precedent) => {
-          const reaction = reagirAParole(precedent, { texte, final, le: Date.now() })
-          // Le bip part sur le PARTIEL : c'est ce qui dit « je t'ai entendu, parle maintenant ».
-          // Attendre la phrase figée le ferait arriver apres que l'utilisateur a deja parle.
-          if (reaction.bip) jouerBipEveil()
-          if (reaction.ordre && actifRef.current) void envoyer(reaction.ordre)
-          return reaction.etat
-        })
+        const reaction = reagirAParole(ecouteRef.current, { texte, final, le: Date.now() })
+        ecouteRef.current = reaction.etat
+        setEcoute(reaction.etat)
+        // Le bip part sur le PARTIEL : c'est ce qui dit « je t'ai entendu, parle maintenant ».
+        // Attendre la phrase figée le ferait arriver apres que l'utilisateur a deja parle.
+        if (reaction.bip) jouerBipEveil()
+        if (reaction.ordre && actifRef.current) void envoyer(reaction.ordre)
       }
     },
     [envoyer]
@@ -213,6 +223,7 @@ export function JarvisWidget({
   const basculer = useCallback(() => {
     setEcoute((precedent) => {
       const suivant = basculerEcoute(precedent, Date.now())
+      ecouteRef.current = suivant
       actifRef.current = suivant.active
       if (!suivant.active) {
         moteurRef.current?.stop()
@@ -248,7 +259,11 @@ export function JarvisWidget({
         actifRef.current = false
         moteurRef.current = null
         setErreur(messageErreurMoteur(code))
-        setEcoute((precedent) => ({ ...precedent, active: false, partiel: '' }))
+        setEcoute((precedent) => {
+          const suivant = { ...precedent, active: false, partiel: '' }
+          ecouteRef.current = suivant
+          return suivant
+        })
       }
       moteur.onend = () => {
         if (actifRef.current && moteurRef.current === moteur) moteur.start()
