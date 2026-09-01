@@ -69,7 +69,7 @@ import type {
   UserMsg
 } from './chat-view-types'
 import { buildMentionSources, resolveMentionsForSend } from './chat-mentions'
-import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-sections'
+import { visibleScopedRuns } from './workflows-panel-sections'
 import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment, pieceJointePasseePourLeFil } from './chat-attachments'
 import { derniereConversationOuverte, memoriserDerniereConversation } from './derniere-conversation'
@@ -502,7 +502,6 @@ export function ChatView({
   })
   // Quatre sections : Sous-agents · Run · Graphe · Source control. Défaut = Sous-agents, la section qu'on regarde
   // pendant une orchestration — garder « Run » par défaut aurait retiré les sous-agents de la vue.
-  const [paneTab, setPaneTab] = useState<WorkflowPanelSection>('subagents')
   const [runs, setRuns] = useState<RunEntry[]>([])
   const [checkpoints, setCheckpoints] = useState<CheckpointEntry[]>([])
   const [forkedCheckpoint, setForkedCheckpoint] = useState('')
@@ -560,7 +559,6 @@ export function ChatView({
   // veut la trace d'un run précis (elle survit au redémarrage, l'écho de session non).
   const revealLiveAction = useCallback((mode: 'live' | 'history' = 'live', runId?: string) => {
     setShowRuns(true)
-    setPaneTab('subagents')
     if (mode === 'history') {
       // Action déjà terminée/interrompue : sa carte live n'existe plus. On OUVRE LA TRACE du run
       // concerné — cadrer la seule liste laissait l'utilisateur chercher lequel regarder.
@@ -1144,9 +1142,8 @@ export function ChatView({
           })
         )
         if (e.convId === activeRef.current) {
+          // Le panneau n’a plus de section à cadrer : l’ouvrir suffit, le graphe montre le run.
           setShowRuns(true)
-          // Une orchestration démarre → on ouvre la section qui montre ses sous-agents.
-          setPaneTab('subagents')
         }
       } else if (e.type === 'orchestrate-phase' && e.phase && e.convId) {
         setLiveRuns((current) =>
@@ -2972,7 +2969,10 @@ export function ChatView({
   const [persistedRuns, setPersistedRuns] = useState<ScopedLiveRun<OrchStep>[]>([])
   useEffect(() => {
     // Chargement PARESSEUX : la trace n'est lue qu'a l'ouverture de la section (garde testee).
-    if (!isActive || !activeId || !showRuns || paneTab !== 'subagents') return
+    // Le fil n’est plus derrière un onglet : il s’ouvre depuis n’importe quel nœud du graphe.
+    // La garde reste PARESSEUSE sur l’ouverture du panneau, elle ne peut plus l’être sur un onglet
+    // disparu — sinon le fil ne se chargerait jamais.
+    if (!isActive || !activeId || !showRuns) return
     let alive = true
     void (async () => {
       try {
@@ -2999,7 +2999,7 @@ export function ChatView({
     return () => {
       alive = false
     }
-  }, [isActive, activeId, showRuns, paneTab, liveRuns, active])
+  }, [isActive, activeId, showRuns, liveRuns, active])
 
   const visibleLiveRuns = mergeLiveAndPersisted<OrchStep>(
     visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, 'conv'),
@@ -4158,8 +4158,6 @@ export function ChatView({
         <WorkflowsPanel
           runsPaneWidth={runsPaneWidth}
           beginRunsResize={beginRunsResize}
-          paneTab={paneTab}
-          setPaneTab={setPaneTab}
           refreshRuns={refreshRuns}
           setShowRuns={setShowRuns}
           activeId={activeId}

@@ -672,4 +672,47 @@ describe('WorkflowExecutionGraph', () => {
 
     expect(view.querySelector('[data-execution-turn-select]')).toBeNull()
   })
+  /**
+   * LE GRAPHE DOIT POUVOIR PILOTER LE PANNEAU.
+   *
+   * Tant que la sélection reste enfermée dans le composant, le graphe ne peut pas remplacer les
+   * onglets : rien en dehors de lui ne sait sur QUOI l'utilisateur est descendu. Il publie donc sa
+   * sélection — identité, nature du nœud, run et tour observés — sans rien décider de l'affichage.
+   */
+  it('publie la sélection d’un nœud, et sa désélection', async () => {
+    const onSelect = vi.fn()
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('agent', 1, {
+        turnId: 'turn-latest',
+        type: 'handoff',
+        execution: { phase: 'build', agentId: 'builder', taskId: 'task-build' }
+      })
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(
+        createElement(WorkflowExecutionGraph, {
+          conversationId: 'conv-a',
+          active: true,
+          onSelect
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const node = container.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')
+    await act(async () => node?.click())
+
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'agent', kind: 'agent', turnId: 'turn-latest' })
+    )
+
+    await act(async () => node?.click())
+    expect(onSelect).toHaveBeenLastCalledWith(null)
+  })
 })

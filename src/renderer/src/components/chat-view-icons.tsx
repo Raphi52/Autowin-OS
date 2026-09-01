@@ -1,5 +1,3 @@
-import type { WorkflowPanelSection } from './workflows-panel-sections'
-
 /** Icône « brancher » (fork) — deux nœuds reliés, monochrome via currentColor. */
 export function ForkIcon(): React.JSX.Element {
   return (
@@ -23,74 +21,6 @@ export function InspectIcon(): React.JSX.Element {
     <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
       <circle cx="7" cy="7" r="4.2" stroke="currentColor" strokeWidth="1.3" />
       <path d="M10.2 10.2 14 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-export function WorkflowSectionIcon({
-  section
-}: {
-  section: WorkflowPanelSection
-}): React.JSX.Element {
-  const common = {
-    className: 'workflow-section-icon',
-    viewBox: '0 0 16 16',
-    fill: 'none',
-    'aria-hidden': true,
-    focusable: false
-  } as const
-
-  if (section === 'subagents') {
-    return (
-      <svg {...common}>
-        <circle cx="8" cy="3" r="1.75" stroke="currentColor" strokeWidth="1.25" />
-        <circle cx="3.5" cy="12.5" r="1.75" stroke="currentColor" strokeWidth="1.25" />
-        <circle cx="12.5" cy="12.5" r="1.75" stroke="currentColor" strokeWidth="1.25" />
-        <path
-          d="M8 4.8v2.1M3.5 10.7V9.5A2.5 2.5 0 0 1 6 7h4a2.5 2.5 0 0 1 2.5 2.5v1.2"
-          stroke="currentColor"
-          strokeWidth="1.25"
-          strokeLinecap="round"
-        />
-      </svg>
-    )
-  }
-
-  if (section === 'run') {
-    return (
-      <svg {...common}>
-        <circle cx="8" cy="8" r="5.6" stroke="currentColor" strokeWidth="1.2" />
-        <path d="m6.7 5.5 4 2.5-4 2.5z" fill="currentColor" />
-      </svg>
-    )
-  }
-
-  if (section === 'graph') {
-    return (
-      <svg {...common}>
-        <path
-          d="m5 5 5.7 1.3M5.2 6.1l2 5M10.5 7.5 8.7 11"
-          stroke="currentColor"
-          strokeWidth="1.2"
-        />
-        <circle cx="3.7" cy="4.7" r="1.8" stroke="currentColor" strokeWidth="1.2" />
-        <circle cx="12.2" cy="6.6" r="1.8" stroke="currentColor" strokeWidth="1.2" />
-        <circle cx="8" cy="12.2" r="1.8" stroke="currentColor" strokeWidth="1.2" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg {...common}>
-      <circle cx="4" cy="3" r="1.7" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="4" cy="13" r="1.7" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="12" cy="6" r="1.7" stroke="currentColor" strokeWidth="1.2" />
-      <path
-        d="M4 4.7v6.6M4 8h4.3A2.2 2.2 0 0 0 10.5 5.8"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
     </svg>
   )
 }

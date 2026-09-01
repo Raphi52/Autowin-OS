@@ -1,29 +1,13 @@
 import type { ScopedLiveRun } from './chat-view-model'
 
 /**
- * LES TROIS SECTIONS DU PANNEAU WORKFLOWS.
+ * SÉLECTION DES FILS DE SOUS-AGENTS.
  *
- * Le panneau n'en avait que deux — « Runs » et « Source control » — et la première MÉLANGEAIT deux choses
- * de natures différentes : le fil des sous-agents d'une orchestration, et la liste des RUN.md. Le fil se
- * retrouvait en encart au-dessus d'une liste, donc jamais consultable pour lui-même, alors qu'il est la
- * preuve de ce qui a été fait.
- *
- * Le modèle vit ici, hors du composant, pour que les libellés et la sélection soient VÉRIFIABLES sur leur
- * sortie plutôt que grepés dans du JSX.
+ * Ce module portait aussi le modèle des QUATRE sections du panneau (`WORKFLOW_PANEL_SECTIONS`,
+ * `sectionUsesScope`). Ces sections ont disparu : le graphe d’exécution est devenu la navigation
+ * du panneau, et le détail affiché découle du nœud sélectionné. Le modèle a donc été retiré plutôt
+ * que laissé en place sans consommateur — un export mort finit toujours par être recâblé par erreur.
  */
-export const WORKFLOW_PANEL_SECTIONS = [
-  { id: 'subagents', label: 'Sous-agents' },
-  { id: 'run', label: 'Run' },
-  { id: 'graph', label: 'Graphe' },
-  { id: 'source-control', label: 'Source control' }
-] as const
-
-export type WorkflowPanelSection = (typeof WORKFLOW_PANEL_SECTIONS)[number]['id']
-
-/** Sections gouvernées par la portée (« cette conversation » / « tous »). Pas Source control. */
-export function sectionUsesScope(section: WorkflowPanelSection): boolean {
-  return section === 'subagents' || section === 'run'
-}
 
 /**
  * Les fils de sous-agents à afficher : ceux de la conversation active, ou tous sur demande.

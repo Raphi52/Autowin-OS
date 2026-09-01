@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
-import {
-  settleStrandedExecutionStatus,
-  statusLabel
-} from './execution-interrupted-status'
+import { settleStrandedExecutionStatus, statusLabel } from './execution-interrupted-status'
 import {
   buildHarnessTimelineFromTrace,
   type HarnessTimelineEvent,
@@ -18,11 +15,25 @@ import { workflowQuoteLabel } from './workflow-quote-label'
 import './WorkflowExecutionGraph.css'
 import { Spinner } from './Spinner'
 
+/**
+ * Ce que le graphe PUBLIE quand on descend sur un nœud. Il ne décide de rien : il dit sur quoi
+ * l'utilisateur est descendu, à charge du panneau d'en tirer la vue adaptée. Sans cela, la
+ * sélection reste enfermée dans le composant et le graphe ne peut pas remplacer les onglets.
+ */
+export interface ExecutionNodeSelection {
+  id: string
+  kind: string
+  runId?: string
+  skillName?: string
+  turnId?: string
+}
+
 interface WorkflowExecutionGraphProps {
   conversationId?: string
   active?: boolean
   live?: boolean
   requestLabel?: string
+  onSelect?: (selection: ExecutionNodeSelection | null) => void
 }
 
 const EVENT_LABEL: Record<HarnessTimelineEvent['kind'], string> = {
@@ -53,7 +64,6 @@ function costLabel(costUsd: number | undefined): string {
   if (costUsd == null) return 'coût inconnu'
   return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 }).format(costUsd)} $`
 }
-
 
 function skillLabel(event: HarnessTimelineEvent): string | undefined {
   if (event.display?.skillName) return `skill · ${event.display.skillName}`
@@ -182,7 +192,11 @@ function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JS
  * Elle arrivait jusqu'ici sans qu'aucun chemin de rendu ne la lise. Le pli reste FERMÉ : une
  * délibération est longue, et le détail doit rester lisible d'un coup d'œil.
  */
-function ExecutionNodeReasoning({ event }: { event: HarnessTimelineEvent }): React.JSX.Element | null {
+function ExecutionNodeReasoning({
+  event
+}: {
+  event: HarnessTimelineEvent
+}): React.JSX.Element | null {
   const reasoning = (event.payloads ?? [])
     .filter((payload) => payload.kind === 'reasoning')
     .map((payload) => payload.content)
@@ -344,14 +358,18 @@ export function WorkflowExecutionGraph({
   conversationId,
   active = true,
   live = false,
-  requestLabel
+  requestLabel,
+  onSelect
 }: WorkflowExecutionGraphProps): React.JSX.Element {
   const [events, setEvents] = useState<HarnessTimelineEvent[]>([])
   const [turnId, setTurnId] = useState<string | undefined>()
   const [turns, setTurns] = useState<RequestTurnOption[]>([])
   // Tour DEMANDÉ par l'utilisateur. Distinct de `turnId` (le tour effectivement projeté) : sans
-  // cette distinction, un rechargement en direct écraserait le choix à chaque seconde.
-  const [pickedTurnId, setPickedTurnId] = useState<string | undefined>()
+  // cette distinction, un rechargement en direct écraserait le choix à chaque seconde. Le choix est
+  // RATTACHÉ à sa conversation plutôt que remis à zéro par un effet : changer de conversation le
+  // périme alors de lui-même, sans rendu supplémentaire ni cascade.
+  const [picked, setPicked] = useState<{ convId?: string; turnId: string } | null>(null)
+  const pickedTurnId = picked && picked.convId === conversationId ? picked.turnId : undefined
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -397,12 +415,6 @@ export function WorkflowExecutionGraph({
     },
     [active, conversationId, requestLabel, pickedTurnId]
   )
-
-  // Changer de conversation remet le curseur sur la demande la plus récente : garder le tour choisi
-  // ailleurs afficherait un identifiant qui n'existe pas ici, donc un graphe vide sans raison.
-  useEffect(() => {
-    setPickedTurnId(undefined)
-  }, [conversationId])
 
   useEffect(() => {
     const gate = requestGate.current
@@ -456,6 +468,35 @@ export function WorkflowExecutionGraph({
   const graph = useMemo(() => buildCausalPath(settledEvents), [settledEvents])
   const nodes = useMemo(() => flattenCausalNodes(graph.roots), [graph.roots])
   const selected = selectedId ? graph.byId.get(selectedId) : undefined
+
+  // La publication passe par un effet plutôt que par le gestionnaire de clic : la sélection change
+  // aussi quand un rechargement fait disparaître le nœud choisi, et le panneau doit le savoir.
+  const selectionRef = useRef<string | null>(null)
+  const onSelectRef = useRef(onSelect)
+  // Assignation dans un effet, jamais pendant le rendu : écrire une ref au rendu casse la garantie
+  // de pureté de React (et le lint le refuse). Déclaré AVANT l’effet de publication pour que la
+  // fonction à jour soit déjà en place quand celui-ci s’exécute.
+  useEffect(() => {
+    onSelectRef.current = onSelect
+  })
+  useEffect(() => {
+    const event = selected?.event
+    const key = event ? event.id : null
+    if (selectionRef.current === key) return
+    selectionRef.current = key
+    onSelectRef.current?.(
+      event
+        ? {
+            id: event.id,
+            kind: event.display?.kind ?? 'event',
+            ...(event.display?.runId ? { runId: event.display.runId } : {}),
+            ...(event.display?.skillName ? { skillName: event.display.skillName } : {}),
+            ...(turnId ? { turnId } : {})
+          }
+        : null
+    )
+  }, [selected, turnId])
+
   const runCount = new Set(
     nodes
       .map((node) => node.event.display?.runId)
@@ -506,7 +547,12 @@ export function WorkflowExecutionGraph({
             data-execution-turn-select
             aria-label="Demande affichée dans le graphe"
             value={turnId ?? turns[0].id}
-            onChange={(changed) => setPickedTurnId(changed.target.value)}
+            onChange={(changed) =>
+              setPicked({
+                ...(conversationId ? { convId: conversationId } : {}),
+                turnId: changed.target.value
+              })
+            }
           >
             {turns.map((turn) => (
               <option key={turn.id} value={turn.id}>

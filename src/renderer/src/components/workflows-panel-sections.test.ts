@@ -1,38 +1,22 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  WORKFLOW_PANEL_SECTIONS,
-  sectionUsesScope,
-  visibleScopedRuns,
-  type WorkflowPanelSection
-} from './workflows-panel-sections'
+import { visibleScopedRuns } from './workflows-panel-sections'
 import type { ScopedLiveRun } from './chat-view-model'
 
 /**
- * Le panneau sépare les fils, les RUN.md, le graphe d'exécution de la conversation et le dépôt.
+ * LES QUATRE SECTIONS N’EXISTENT PLUS.
+ *
+ * Elles exposaient quatre projections de la MÊME exécution. Le graphe est devenu la navigation du
+ * panneau ; le modèle de sections a été retiré avec elles. Ce test garde la suppression : un
+ * `WORKFLOW_PANEL_SECTIONS` qui reviendrait ramènerait la barre d’onglets avec lui.
  */
-describe('les quatre sections du panneau Workflows', () => {
-  it('expose les quatre sections dans un ordre orienté exécution', () => {
-    expect(WORKFLOW_PANEL_SECTIONS.map((s) => s.id)).toEqual([
-      'subagents',
-      'run',
-      'graph',
-      'source-control'
-    ])
-    expect(WORKFLOW_PANEL_SECTIONS.map((s) => s.label)).toEqual([
-      'Sous-agents',
-      'Run',
-      'Graphe',
-      'Source control'
-    ])
-  })
-
-  it('la portée gouverne les sous-agents et les runs, jamais le graphe conversationnel ni Source control', () => {
-    expect(sectionUsesScope('subagents')).toBe(true)
-    expect(sectionUsesScope('run')).toBe(true)
-    expect(sectionUsesScope('graph')).toBe(false)
-    expect(sectionUsesScope('source-control')).toBe(false)
+describe('le modèle des quatre sections a bien disparu', () => {
+  it('n’exporte plus ni la liste des sections ni la règle de portée', async () => {
+    const module = (await import('./workflows-panel-sections')) as Record<string, unknown>
+    expect(module.WORKFLOW_PANEL_SECTIONS).toBeUndefined()
+    expect(module.sectionUsesScope).toBeUndefined()
+    expect(typeof module.visibleScopedRuns).toBe('function')
   })
 })
 
@@ -83,9 +67,11 @@ describe('câblage du panneau', () => {
   const chatView = (): string => readFileSync(join(__dirname, 'ChatView.tsx'), 'utf8')
   const workflowsPanel = (): string => readFileSync(join(__dirname, 'WorkflowsPanel.tsx'), 'utf8')
 
-  it('le panneau consomme le modèle de sections et la sélection extraite', () => {
+  it('le panneau est piloté par le graphe, et ChatView garde la sélection des fils', () => {
     expect(chatView()).toContain('visibleScopedRuns')
-    expect(workflowsPanel()).toContain('WORKFLOW_PANEL_SECTIONS')
+    // Le panneau ne choisit plus une section : il REÇOIT la sélection du graphe.
+    expect(workflowsPanel()).not.toContain('WORKFLOW_PANEL_SECTIONS')
+    expect(workflowsPanel()).toContain('onSelect={setSelection}')
   })
 
   it('plus aucun code ne détruit un run terminé après un délai', () => {
@@ -97,13 +83,5 @@ describe('câblage du panneau', () => {
 
   it('Source control réutilise le composant existant au lieu d’être réécrit', () => {
     expect(workflowsPanel()).toContain('<SourceControlPane')
-  })
-})
-
-// Garde de typage : la section par défaut doit rester une section RÉELLE.
-const defaultSection: WorkflowPanelSection = 'subagents'
-describe('section par défaut', () => {
-  it('est Sous-agents — c’est ce qu’on regarde pendant une orchestration', () => {
-    expect(WORKFLOW_PANEL_SECTIONS[0]?.id).toBe(defaultSection)
   })
 })
