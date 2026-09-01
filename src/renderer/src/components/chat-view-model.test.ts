@@ -1488,6 +1488,34 @@ describe('chat scrolling and layout rules', () => {
     expect(isChatNearBottom({ scrollTop: 300, clientHeight: 300, scrollHeight: 1040 })).toBe(false)
   })
 
+  describe('doitSuivreLeBas', () => {
+    it('NE COUPE PAS le suivi quand le contenu grandit sous un lecteur colle en bas', () => {
+      // Streaming : la descente automatique avance (700 -> 900) mais le fil a grandi davantage,
+      // donc la mesure « proche du bas » repond false. Ce n'est PAS un geste de lecture.
+      expect(
+        doitSuivreLeBas({ suivaitLeBas: true, precedentTop: 700, top: 900, nearBottom: false })
+      ).toBe(true)
+    })
+
+    it('rend la main des que le lecteur RECULE', () => {
+      expect(
+        doitSuivreLeBas({ suivaitLeBas: true, precedentTop: 900, top: 400, nearBottom: false })
+      ).toBe(false)
+    })
+
+    it('ne rearme pas le suivi tant que le lecteur remonte reste loin du bas', () => {
+      expect(
+        doitSuivreLeBas({ suivaitLeBas: false, precedentTop: 400, top: 500, nearBottom: false })
+      ).toBe(false)
+    })
+
+    it('rearme le suivi des que le lecteur revient au bas', () => {
+      expect(
+        doitSuivreLeBas({ suivaitLeBas: false, precedentTop: 400, top: 980, nearBottom: true })
+      ).toBe(true)
+    })
+  })
+
   it('atteint le VRAI bas même quand le contenu grandit pendant la descente', () => {
     const queue: Array<() => void> = []
     const targets: Array<{ top: number; behavior?: string }> = []
