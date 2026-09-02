@@ -32,6 +32,7 @@ const KIND_LABEL: Record<ModelActivityKind, string> = {
   usage: 'Coût',
   status: 'Signe de vie',
   brain: 'Brain',
+  agent: 'Sous-agent',
   event: 'Journal'
 }
 
@@ -51,7 +52,8 @@ const SOURCE_LABEL: Record<ModelActivitySource, string> = {
   causal: 'trace causale',
   activity: 'activité',
   brain: 'brain',
-  prompts: 'prompt envoyé'
+  prompts: 'prompt envoyé',
+  bureaux: 'copie de travail'
 }
 
 /** Heure locale HH:MM:SS — le journal n'écrit qu'un epoch, et parfois rien du tout. */
@@ -95,6 +97,8 @@ export function ModelActivityLogPane({
   const [brain, setBrain] = useState<ReadonlyArray<Record<string, unknown>>>([])
   // SEPTIEME source : le prompt REELLEMENT parti au modele, appel par appel.
   const [promptCalls, setPromptCalls] = useState<ReadonlyArray<Record<string, unknown>>>([])
+  // HUITIEME source : ce que les sous-agents ont fait dans leur copie de travail isolee.
+  const [bureaux, setBureaux] = useState<ReadonlyArray<Record<string, unknown>>>([])
   // Fenêtre d'affichage PAR sélection (conversation + filtres) : changer de filtre repart donc de
   // la taille par défaut sans le moindre effet, et revenir à une sélection retrouve sa fenêtre.
   const [fenetres, setFenetres] = useState<Record<string, number>>({})
@@ -149,17 +153,19 @@ export function ModelActivityLogPane({
     if (!conversationId) return
     let annule = false
     const charger = async (): Promise<void> => {
-      const [trace, activite, savoir, appels] = await Promise.all([
+      const [trace, activite, savoir, appels, copies] = await Promise.all([
         window.api?.causalTrace?.(conversationId).catch(() => []) ?? [],
         window.api?.conversationActivity?.(conversationId).catch(() => []) ?? [],
         // Le spool Brain porte TOUTES les conversations : on ne garde que la nôtre.
         window.api?.brainTraces?.(conversationId).catch(() => []) ?? [],
-        window.api?.promptCalls?.(conversationId).catch(() => []) ?? []
+        window.api?.promptCalls?.(conversationId).catch(() => []) ?? [],
+        window.api?.getWorktreeActivity?.(conversationId).catch(() => []) ?? []
       ])
       if (annule) return
       setCausal((trace ?? []) as ReadonlyArray<Record<string, unknown>>)
       setActivity((activite ?? []) as ReadonlyArray<Record<string, unknown>>)
       setPromptCalls((appels ?? []) as ReadonlyArray<Record<string, unknown>>)
+      setBureaux((copies ?? []) as ReadonlyArray<Record<string, unknown>>)
       setBrain(
         ((savoir ?? []) as ReadonlyArray<Record<string, unknown>>).filter(
           (item) => !item.conversationId || item.conversationId === conversationId
@@ -187,9 +193,10 @@ export function ModelActivityLogPane({
         causal: conversationId ? causal : [],
         activity: conversationId ? activity : [],
         brain: conversationId ? brain : [],
-        promptCalls: conversationId ? promptCalls : []
+        promptCalls: conversationId ? promptCalls : [],
+        bureaux: conversationId ? bureaux : []
       }),
-    [messages, journalByTurn, causal, activity, brain, promptCalls, conversationId]
+    [messages, journalByTurn, causal, activity, brain, promptCalls, bureaux, conversationId]
   )
   const motif = filtre.trim().toLowerCase()
   const visibles = entries.filter((entry) => {

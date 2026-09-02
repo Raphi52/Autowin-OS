@@ -45,6 +45,11 @@ export type ModelActivityKind =
    * montrer ce qu'il avait lu.
    */
   | 'brain'
+  /**
+   * Travail d'un SOUS-AGENT dans sa copie de travail isolee : etat, fichiers touches, blocage.
+   * Invisible depuis le fil, alors que c'est la que le travail se fait reellement.
+   */
+  | 'agent'
   /** Tout geste journalisé qui n'entre dans AUCUNE des catégories ci-dessus. Rien ne se perd. */
   | 'event'
 
@@ -57,6 +62,8 @@ export type ModelActivitySource =
   | 'activity'
   | 'brain'
   | 'prompts'
+  /** Copies de travail isolees des sous-agents (`getWorktreeActivity`). */
+  | 'bureaux'
 
 export interface ModelActivityEntry {
   id: string
@@ -97,6 +104,8 @@ export interface ModelActivityInput {
    * n'atteignait que l'Observatory.
    */
   promptCalls?: ReadonlyArray<Record<string, unknown>>
+  /** Activite des copies de travail des sous-agents (`getWorktreeActivity`), telle quelle. */
+  bureaux?: ReadonlyArray<Record<string, unknown>>
 }
 
 /** L'heure vient du JOURNAL (`at: Date.now()` côté main) ; on ne l'INVENTE jamais quand elle manque. */
@@ -707,6 +716,60 @@ function trierChronologiquement(entries: ModelActivityEntry[]): ModelActivityEnt
  * autre), les doublons exacts écartés, et l'ensemble trié chronologiquement. Un tour dont le journal
  * fichier a été nettoyé reste présent via ses parts durables.
  */
+/** État d'une copie de travail, dit en clair. */
+const ETAT_BUREAU: Record<string, string> = {
+  isolated: 'isolée',
+  working: 'au travail',
+  ready: 'prête',
+  merged: 'publiée',
+  conflict: 'en conflit',
+  blocked: 'bloquée',
+  interrupted: 'interrompue'
+}
+
+/**
+ * TRAVAIL DES SOUS-AGENTS, dans leur copie isolée. C'est là que les fichiers changent réellement,
+ * et le fil n'en montrait rien : ni les fichiers touchés, ni l'état de la copie, ni la raison pour
+ * laquelle elle attend. Un travail « terminé » mais jamais publié devient visible ICI, à sa date.
+ */
+function fromBureaux(bureaux: ReadonlyArray<Record<string, unknown>>): Brute[] {
+  return bureaux.map((bureau, index) => {
+    const etatBrut = typeof bureau.state === 'string' ? bureau.state : ''
+    const etat = ETAT_BUREAU[etatBrut] ?? etatBrut
+    const fichiers = Array.isArray(bureau.files) ? bureau.files : []
+    const chemins = fichiers
+      .map((fichier) => {
+        const item = fichier as { path?: unknown; kind?: unknown }
+        return typeof item?.path === 'string'
+          ? `${typeof item.kind === 'string' ? `${item.kind} ` : ''}${item.path}`
+          : ''
+      })
+      .filter((chemin) => chemin !== '')
+    const detail = joinDetail(
+      short(bureau.task),
+      chemins.length > 0 ? `${chemins.length} fichier(s) : ${chemins.join(', ')}` : undefined,
+      typeof bureau.attentionReason === 'string' ? `attente : ${bureau.attentionReason}` : undefined,
+      typeof bureau.conflictFile === 'string' ? `conflit sur ${bureau.conflictFile}` : undefined,
+      rest(bureau, 'task', 'files', 'attentionReason', 'conflictFile', 'state', 'startedAtMs')
+    )
+    return {
+      id: `bureau:${String(bureau.agentId ?? index)}`,
+      // Un bureau appartient a une CONVERSATION, pas a un tour : il traverse plusieurs tours.
+      turnId: typeof bureau.turnId === 'string' ? bureau.turnId : '',
+      kind: 'agent' as ModelActivityKind,
+      label: joinDetail(short(bureau.agentName) ?? 'sous-agent', etat || undefined) ?? 'sous-agent',
+      ...(typeof bureau.startedAtMs === 'number' ? { at: bureau.startedAtMs } : {}),
+      ...allFields(bureau),
+      ...(detail ? { detail } : {}),
+      ...(etatBrut === 'merged'
+        ? { ok: true }
+        : etatBrut === 'conflict' || etatBrut === 'blocked' || etatBrut === 'interrupted'
+          ? { ok: false }
+          : {})
+    }
+  })
+}
+
 /** Blocs nommés d'un prompt (système ou contexte), rendus « nom (n car.) » sans rien inventer. */
 function blocs(valeur: unknown): string | undefined {
   if (!Array.isArray(valeur) || valeur.length === 0) return undefined
@@ -864,5 +927,6 @@ export function buildModelActivityLog(input: ModelActivityInput): ModelActivityE
   entries.push(...tag('activity', fromActivity(input.activity ?? [])))
   entries.push(...tag('brain', fromBrain(input.brain ?? [])))
   entries.push(...tag('prompts', fromPromptCalls(input.promptCalls ?? [])))
+  entries.push(...tag('bureaux', fromBureaux(input.bureaux ?? [])))
   return trierChronologiquement(ecarterPenseeTronquee(dedupe(entries)))
 }

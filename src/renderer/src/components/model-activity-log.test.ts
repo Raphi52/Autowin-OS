@@ -592,3 +592,52 @@ describe('buildModelActivityLog — les APPELS PROMPT', () => {
     expect(ligne.detail).toContain('529 Overloaded')
   })
 })
+
+describe('buildModelActivityLog — le travail des SOUS-AGENTS', () => {
+  const bureau = (part: Record<string, unknown>): Record<string, unknown> => ({
+    agentId: 'run-1',
+    agentName: 'producteur',
+    state: 'working',
+    files: [{ path: 'src/a.ts', kind: 'mod' }],
+    startedAtMs: 1_700_000_000_000,
+    ...part
+  })
+
+  it('montre l’état de la copie, les fichiers touchés et l’heure de départ', () => {
+    const [ligne] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      bureaux: [bureau({ task: 'brancher le Brain' })]
+    })
+    expect(ligne.source).toBe('bureaux')
+    expect(ligne.kind).toBe('agent')
+    expect(ligne.label).toContain('au travail')
+    expect(ligne.detail).toContain('brancher le Brain')
+    expect(ligne.detail).toContain('mod src/a.ts')
+    expect(ligne.at).toBe(1_700_000_000_000)
+  })
+
+  it('marque en échec une copie en conflit, bloquée ou interrompue', () => {
+    const etats = ['conflict', 'blocked', 'interrupted'].map(
+      (state) =>
+        buildModelActivityLog({ messages: [], journalByTurn: {}, bureaux: [bureau({ state })] })[0]
+          .ok
+    )
+    expect(etats).toEqual([false, false, false])
+  })
+
+  it('marque en succès une copie publiée et rend visible la raison d’une attente', () => {
+    const [publiee] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      bureaux: [bureau({ state: 'merged' })]
+    })
+    expect(publiee.ok).toBe(true)
+    const [attente] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      bureaux: [bureau({ state: 'ready', attentionReason: 'base-dirty' })]
+    })
+    expect(attente.detail).toContain('attente : base-dirty')
+  })
+})
