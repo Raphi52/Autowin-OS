@@ -71,6 +71,15 @@ export interface Gel {
    * l'air, la meme faute d'alibi que sur `indice`.
    */
   accumulation?: AccesCumule[]
+  /**
+   * TOUR de chat en cours au moment du gel — absent hors tour et sur toutes les lignes deja ecrites.
+   *
+   * Mesure du 2026-09-02 : aucune ligne de `gels.jsonl` ne portait d'identite. On lisait « la fenetre
+   * a ete figee 33 s » sans pouvoir dire pendant QUOI, alors que l'app savait quel tour tournait.
+   * Rapprocher a l'horodatage devient faux des que deux conversations travaillent en meme temps.
+   */
+  conversationId?: string
+  turnId?: string
 }
 
 /** Temps synchrone total passe dans UN appel, sur la fenetre d'un battement. */

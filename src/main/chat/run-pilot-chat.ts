@@ -39,6 +39,7 @@ import {
 import type { AttachmentMeta } from '../store/conversations'
 import { closingTurnDelivery } from '../runs/turn-closing'
 import { appendTurnEvent } from '../runs/turn-journal'
+import { ouvrirTourDeChat } from '../gel-main'
 import {
   closingJournalEvents,
   pilotJournalEvents,
@@ -295,6 +296,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     // visible dans ActiveChatTurns, retenir l'utilisateur pendant tout l'appel provider serait a son
     // tour invasif ; il peut reprendre son travail sans que le Watchdog n'interrompe quoi que ce soit.
     if (policy?.background) activeChatTurns.releaseIdleLease()
+    // A QUI IMPUTER UN GEL. Le detecteur prouve la fenetre figee sans savoir ce qui tournait : le
+    // seul endroit qui le sait est ICI. Referme dans le `finally` — jamais imputer a un tour clos.
+    const fermerTourPourGels = ouvrirTourDeChat({ conversationId, turnId })
     try {
       const rawMessages = Array.isArray(messages) ? messages : []
       const continuationWindow = continuation
@@ -1397,6 +1401,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     } finally {
       // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant.
       if (veilleur) clearInterval(veilleur)
+      fermerTourPourGels()
       usagePersistenceReady = true
       if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
       if (conversationId) {

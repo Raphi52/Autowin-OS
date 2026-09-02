@@ -148,9 +148,48 @@ export function operationDeclaree(): string {
  */
 let puits: (gel: Gel) => void = journaliser
 
+/*
+ * TOURS DE CHAT EN COURS — la seule identite que le detecteur ne peut pas deviner.
+ *
+ * Le journal des gels prouvait le blocage sans jamais dire PENDANT QUOI : aucune ligne reelle ne
+ * portait de conversation ni de tour. Le controleur de chat, lui, le sait ; il ouvre son tour au
+ * debut et le referme dans son `finally`.
+ *
+ * REGISTRE, et non scalaire — meme lecon que la pile d'operations ci-dessus : plusieurs tours
+ * peuvent tourner en parallele (tour de fond, seconde conversation). Un scalaire aurait fait porter
+ * le gel par le DERNIER arrive, et son `finally` aurait efface l'identite d'un tour encore vivant.
+ * On n'impute donc que lorsqu'UN SEUL tour tourne ; a deux, l'attribution serait une accusation en
+ * l'air (meme regle d'alibi que pour `indice`) et la ligne reste muette.
+ */
+const toursDeChat = new Map<string, { conversationId?: string; turnId?: string }>()
+
+/** Declare un tour de chat et rend la fonction qui le referme — sur d'usage en `finally`. */
+export function ouvrirTourDeChat(tour: { conversationId?: string; turnId?: string }): () => void {
+  const cle = `${tour.conversationId ?? ''}#${tour.turnId ?? ''}`
+  toursDeChat.set(cle, tour)
+  let ferme = false
+  return () => {
+    if (ferme) return
+    ferme = true
+    toursDeChat.delete(cle)
+  }
+}
+
+/** Le tour a qui imputer un gel : AUCUN des deux quand deux tours tournent en meme temps. */
+function tourImputable(): { conversationId?: string; turnId?: string } | undefined {
+  if (toursDeChat.size !== 1) return undefined
+  return [...toursDeChat.values()][0]
+}
+
 /** Depose un gel dans le journal — expose pour les mesures DIRECTES (segments synchrones). */
 export function journaliserGel(gel: Gel): void {
-  puits(gel)
+  // UN SEUL point d'enrichissement, celui par lequel passent battement et mesures directes.
+  const tour = tourImputable()
+  puits({
+    ...gel,
+    ...(tour?.conversationId ? { conversationId: tour.conversationId } : {}),
+    ...(tour?.turnId ? { turnId: tour.turnId } : {})
+  })
 }
 
 function journaliser(gel: Gel): void {
