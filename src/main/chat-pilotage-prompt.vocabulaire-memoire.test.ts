@@ -44,3 +44,20 @@ describe('la prose du bloc MÉMOIRE parle le vocabulaire de `remember`', () => {
     expect(prompt).toContain('`domain` — un fait du système')
   })
 })
+
+/**
+ * LA PORTÉE ÉTAIT LE SEUL CHAMP OBLIGATOIRE QUE LA PROSE NE NOMMAIT PAS.
+ *
+ * Mesuré le 2026-09-02 (conv-142) : `remember` refusé « portée manquante », rien d'écrit, et le
+ * modèle avait déjà annoncé le dépôt. `signatureDeCommande` n'expose que les ÉNUMÉRATIONS ; `scope`
+ * n'a pas de liste fermée, donc il n'apparaissait que comme nom nu, sans dire ce qu'on en attend.
+ */
+describe('la prose du bloc MÉMOIRE nomme la portée', () => {
+  it('dit que la portée est remplie par défaut, et à quoi sert `global`', () => {
+    const prompt = proseSeule()
+
+    expect(prompt).toContain('`scope`')
+    expect(prompt).toContain('le projet courant')
+    expect(prompt).toContain('`global`')
+  })
+})

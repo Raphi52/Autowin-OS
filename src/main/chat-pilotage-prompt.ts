@@ -373,6 +373,14 @@ export function buildChatPilotagePrompt(
     `y compris une cause racine vérifiée · \`decision\` — un choix technique tranché et son motif · ` +
     `\`preference\` — un goût ou une règle de l'utilisateur · \`domain\` — un fait du système : une ` +
     `contrainte, un invariant, un chiffre mesuré. ` +
+    // PORTEE (conv-142, 2026-09-02) : ce bloc detaillait les quatre `type` et les sept formes de
+    // `source`, et ne disait RIEN de `scope` — pourtant OBLIGATOIRE. Le depot a ete refuse « portee
+    // manquante », rien n'a ete ecrit, et le modele l'avait deja annonce a l'utilisateur. Le champ
+    // n'apparaissait que comme NOM NU dans la signature du catalogue (aucune enumeration a exposer),
+    // donc invisible comme exigence. Autowin remplit desormais la portee avec le projet courant
+    // (`projectScopeFromWorkspace`) : la prose dit ce defaut, pour que `global` reste un choix.
+    `\`scope\` — la portée : omets-la et Autowin la remplit avec le projet courant ; écris ` +
+    `\`global\` seulement quand le fait vaut au-delà de ce projet. ` +
     `Ne retiens PAS une règle de comportement te concernant, ni ce qui ne vaut que ce tour-ci, ni une ` +
     `hypothèse non vérifiée. Le fait doit être AUTOPORTÉ (relisible dans 3 mois sans cette ` +
     `conversation) et porter une source traçable. Les formes acceptées, en ENTIER : ` +
