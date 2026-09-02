@@ -55,7 +55,7 @@ import {
   messageKey
 } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
-import { deciderRelanceAuto } from './chat-auto-mode'
+import { deciderRelanceAuto, signatureTour } from './chat-auto-mode'
 import { reprendreApresRedemarrage } from './chat-reprise'
 import type {
   AsstMsg,
@@ -294,8 +294,10 @@ export function ChatView({
   const [autoNotice, setAutoNotice] = useState<string | null>(null)
   /** Dernier tour DÉJÀ traité par la boucle : un re-rendu du même tour ne renvoie rien. */
   const autoDernierTourRef = useRef<string | null>(null)
-  /** Dernier texte envoyé automatiquement : la même suite deux fois = boucle, on coupe. */
+  /** Dernier texte envoyé automatiquement : la même suite deux fois = boucle, on ne renvoie pas. */
   const autoDernierPromptRef = useRef<string | null>(null)
+  /** Fil où la boucle a déjà pris son point de départ (anti-relance d'une vieille réponse). */
+  const autoFilAmorceRef = useRef<string | null>(null)
   /*
    * Les suppositions du cadrage en cours, par conversation. Vivantes seulement : elles viennent d'un
    * evenement de run, disparaissent quand l'utilisateur les masque ou quand un nouveau cadrage
@@ -2529,6 +2531,13 @@ export function ChatView({
   }, [busy, activeId])
 
   /**
+   * CHANGEMENT DE FIL : le mode auto reste ALLUMÉ, mais il ne relance pas ce qu'il trouve.
+   *
+   * Le tour déjà présent à l'arrivée est marqué comme traité : il a pu être écrit il y a des
+   * heures, et le relancer dépenserait un tour que personne n'a demandé. La boucle repart sur le
+   * PROCHAIN tour terminé dans ce fil.
+   */
+  /**
    * LA BOUCLE DU MODE AUTO. Fin de tour ⇒ on relit la clôture de l'agent et on renvoie la suite
    * qu'il propose, jusqu'à ce que sa rubrique « 👉 Recommandé » dise « rien ».
    *
@@ -2537,6 +2546,22 @@ export function ChatView({
    */
   useEffect(() => {
     if (!autoActif || !activeId) return
+    /*
+     * PREMIER PASSAGE DANS CE FIL : on prend le tour déjà là comme point de départ, sans l'envoyer.
+     *
+     * Défaut vécu le 2026-09-02 (« quand je change de conversation ça enlève le mode auto ») : la
+     * dernière réponse d'un fil qu'on rouvre peut dater de la veille. La relancer dépenserait un
+     * tour que personne n'a demandé. Tant qu'aucune réponse n'est chargée (signature nulle), on ne
+     * fige rien — sinon le fil encore en cours de chargement passerait pour un fil déjà traité.
+     */
+    if (autoFilAmorceRef.current !== activeId) {
+      const signatureArrivee = signatureTour(messages)
+      if (signatureArrivee === null) return
+      autoFilAmorceRef.current = activeId
+      autoDernierTourRef.current = signatureArrivee
+      autoDernierPromptRef.current = null
+      return
+    }
     const decision = deciderRelanceAuto({
       actif: true,
       occupe: busy,
@@ -2567,6 +2592,8 @@ export function ChatView({
     }
     autoDernierTourRef.current = null
     autoDernierPromptRef.current = null
+    // À l'allumage, le fil courant est amorcé par la boucle elle-même (pas de relance du passé).
+    autoFilAmorceRef.current = null
     setAutoNotice(null)
     setAutoActif(true)
   }

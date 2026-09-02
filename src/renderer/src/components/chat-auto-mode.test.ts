@@ -66,22 +66,30 @@ describe('deciderRelanceAuto — arrêts', () => {
       raison: 'recommandation-rien'
     })
   })
-  it('arrête si la même suite revient (boucle)', () => {
-    const fil = [agent(REPONSE_AVEC_SUITE)]
-    expect(
-      deciderRelanceAuto({ ...base, fil, dernierPromptEnvoye: 'lance le terrain sur X' })
-    ).toMatchObject({ action: 'arreter', raison: 'prompt-identique' })
-  })
-  it('arrête si aucune suite n’est proposée', () => {
-    expect(deciderRelanceAuto({ ...base, fil: [agent('rapport sans clôture')] })).toMatchObject({
-      action: 'arreter',
-      raison: 'aucun-prompt'
-    })
+  it('« rien » est le SEUL motif qui éteint le mode', () => {
+    const arrets = [
+      // même suite deux fois : on ne renvoie pas, mais l'interrupteur reste allumé
+      deciderRelanceAuto({
+        ...base,
+        fil: [agent(REPONSE_AVEC_SUITE)],
+        dernierPromptEnvoye: 'lance le terrain sur X'
+      }),
+      // aucune suite proposée : idem
+      deciderRelanceAuto({ ...base, fil: [agent('rapport sans clôture')] })
+    ]
+    for (const d of arrets) expect(d.action).toBe('attendre')
   })
 })
 
 describe('deciderRelanceAuto — attentes (aucun envoi, le mode reste armé)', () => {
   const fil = [agent(REPONSE_AVEC_SUITE)]
+  it('rouvrir un vieux fil sans suite proposée n’éteint pas le mode', () => {
+    // Le cas signalé le 2026-09-02 : on change de conversation, elle finit sur une vieille réponse.
+    expect(deciderRelanceAuto({ ...base, fil: [agent('réponse d’hier, sans clôture')] })).toEqual({
+      action: 'attendre',
+      raison: 'aucun-prompt'
+    })
+  })
   it('mode éteint', () => {
     expect(deciderRelanceAuto({ ...base, fil, actif: false })).toEqual({
       action: 'attendre',

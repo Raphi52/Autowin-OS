@@ -82,10 +82,16 @@ export type DecisionAuto =
   | { action: 'attendre'; raison: RaisonArret }
   | { action: 'arreter'; raison: RaisonArret; message: string }
 
+/**
+ * SEUL « rien » ÉTEINT le mode. C'est la condition demandée, et la seule.
+ *
+ * DÉFAUT VÉCU le 2026-09-02 : « quand je change de conversation ça enlève le mode auto ». En
+ * arrivant dans un autre fil, la boucle lisait sa DERNIÈRE réponse — souvent ancienne et sans
+ * suite proposée — et s'éteignait comme si le travail était fini. Une absence de suite n'est pas
+ * une fin : c'est juste « rien à envoyer sur CE tour ». On patiente, l'interrupteur reste allumé.
+ */
 const MESSAGES_ARRET: Record<string, string> = {
-  'recommandation-rien': 'Mode auto terminé : plus rien de recommandé.',
-  'aucun-prompt': 'Mode auto arrêté : le dernier tour ne propose aucune suite.',
-  'prompt-identique': 'Mode auto arrêté : la même suite était proposée deux fois (boucle).'
+  'recommandation-rien': 'Mode auto terminé : plus rien de recommandé.'
 }
 
 /** La SEULE porte qui autorise un envoi automatique. Tout le reste de la vue s'y plie. */
@@ -106,13 +112,10 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
       message: MESSAGES_ARRET['recommandation-rien']
     }
   const texte = extrairePromptSuivant(texteReponse) ?? extractRecommendation(texteReponse)
-  if (!texte)
-    return { action: 'arreter', raison: 'aucun-prompt', message: MESSAGES_ARRET['aucun-prompt'] }
+  // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.
+  if (!texte) return { action: 'attendre', raison: 'aucun-prompt' }
+  // La même suite deux fois d'affilée = boucle : on ne la renvoie pas, sans couper l'interrupteur.
   if (entree.dernierPromptEnvoye && texte.trim() === entree.dernierPromptEnvoye.trim())
-    return {
-      action: 'arreter',
-      raison: 'prompt-identique',
-      message: MESSAGES_ARRET['prompt-identique']
-    }
+    return { action: 'attendre', raison: 'prompt-identique' }
   return { action: 'envoyer', texte, signature }
 }
