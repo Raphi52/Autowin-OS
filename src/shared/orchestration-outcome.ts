@@ -1076,16 +1076,35 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome): string[] {
       "👉 Recommandé : faire exécuter le travail si le besoin n'est pas encore réalisé."
     ]
   }
-  if (runDAnalyseSeule(phases)) {
-    const restantes = phasesRestantes(phases)
-    const suite = restantes.length ? restantes.join(' → ') : 'la suite du pipeline'
+  /*
+   * CE QUI RESTE SE CALCULE POUR TOUTE PORTEE CONNUE, plus seulement apres une analyse.
+   *
+   * MESURE DU 2026-09-02 (journaux de la journee) : les tours de rattrapage « kaizen … » ont coute
+   * 19,38 $ sur 156,51 $, dont deux fois la meme phrase — « j'etais en mode auto et t'as pas
+   * enchaine le workflow » (conv-131, 6,66 $ pour 0,11 $ de travail utile). Le mode auto renvoie la
+   * ligne « 👉 Recommande » de ce bloc : en rejouant scout → frame → terrain → build → clean →
+   * judge, la chaine QUITTAIT le pipeline apres `build` (« Reste a faire : rien », « passer a la
+   * prochaine demande ») et, apres `judge`, tournait sur « lancer la phase suivante » — un ordre
+   * sans phase. Les deux textes venaient d'ICI, pas du modele.
+   *
+   * Une phase de mutation produit un resultat REEL (on ne le degrade pas en « livrable de phase »),
+   * mais elle ne dispense ni du nettoyage ni de l'audit : la premiere ligne distingue donc les deux
+   * portees, la suite de la chaine se dit dans les deux cas.
+   */
+  const restantes = phasesRestantes(phases)
+  if (restantes.length) {
+    const analyse = runDAnalyseSeule(phases)
     return [
       '---',
       '✅ Fait',
-      `1. Le livrable de la phase ${phases.join(', ')} a été produit et validé${surSujet}.`,
-      "📍 Maintenant : cette phase est rendue — le besoin lui-même n'est PAS réalisé, rien n'a été muté.",
-      `⏳ Reste à faire : ${suite}.`,
-      `👉 Recommandé : lancer ${restantes[0] ?? 'la phase suivante'}.`
+      analyse
+        ? `1. Le livrable de la phase ${phases.join(', ')} a été produit et validé${surSujet}.`
+        : `1. Le résultat demandé a été produit et validé${surSujet}.`,
+      analyse
+        ? "📍 Maintenant : cette phase est rendue — le besoin lui-même n'est PAS réalisé, rien n'a été muté."
+        : `📍 Maintenant : la phase ${phases.join(', ')} est rendue — la suite de la chaîne n'est pas encore jouée.`,
+      `⏳ Reste à faire : ${restantes.join(' → ')}.`,
+      `👉 Recommandé : lancer ${restantes[0]}.`
     ]
   }
   return [

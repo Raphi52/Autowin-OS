@@ -63,13 +63,21 @@ const EN_TETES_CLOTURE =
  * jamais le mot rien, mais il l'écrit souvent dans le bloc Fait ».
  */
 export function lignesDuBlocFait(texte: string): string[] {
+  return lignesDeRubrique(texte, 'Fait')
+}
+
+/**
+ * Les lignes d'UNE rubrique de clôture. Deux rubriques portent le mot « rien » — « ✅ Fait » et
+ * « ⏳ Reste à faire » —, et la seconde est celle qu'Autowin écrit lui-même en fin de chaîne.
+ */
+function lignesDeRubrique(texte: string, rubrique: 'Fait' | 'Reste à faire'): string[] {
   const lignes = texte.split('\n')
   const sortie: string[] = []
   let dedans = false
   for (const brute of lignes) {
     const entete = brute.match(EN_TETES_CLOTURE)
     if (entete) {
-      dedans = entete[1] === 'Fait'
+      dedans = entete[1] === rubrique
       if (dedans) {
         const reste = brute.replace(EN_TETES_CLOTURE, '').replace(/^\s*\**\s*[:：—–-]?\s*/u, '')
         if (reste.trim()) sortie.push(reste)
@@ -89,7 +97,28 @@ export function lignesDuBlocFait(texte: string): string[] {
  * alors qu'il reste tout à faire.
  */
 export function blocFaitDitRien(texte: string): boolean {
-  return lignesDuBlocFait(texte).some((ligne) => {
+  return ligneNueDitRien(lignesDuBlocFait(texte))
+}
+
+/**
+ * FIN DE CHAÎNE D'AUTOWIN — « ⏳ Reste à faire : rien. »
+ *
+ * MESURE DU 2026-09-02 (journaux de la journée) : en rejouant la chaîne complète
+ * scout → frame → terrain → build → clean → judge sur le texte que l'app produit VRAIMENT, le
+ * dernier maillon rend « ⏳ Reste à faire : rien. » puis « 👉 Recommandé : passer à la prochaine
+ * demande. ». Des quatre rubriques, c'était la SEULE que cette porte ne lisait pas : la boucle
+ * envoyait donc « passer à la prochaine demande. » comme ordre — un tour PAYANT qui ne produit
+ * rien, dans les 19,38 $/jour de rattrapage mesurés. Une chaîne finie éteint la boucle.
+ *
+ * Même exigence de précision que pour le bloc « Fait » : le mot doit être SEUL sur sa ligne.
+ * « rien ne bloque le lancement de clean » raconte une suite POSSIBLE, pas une fin.
+ */
+export function resteAFaireDitRien(texte: string): boolean {
+  return ligneNueDitRien(lignesDeRubrique(texte, 'Reste à faire'))
+}
+
+function ligneNueDitRien(lignes: readonly string[]): boolean {
+  return lignes.some((ligne) => {
     const nu = ligne
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '')
@@ -109,6 +138,7 @@ export type RaisonArret =
   | 'brouillon'
   | 'recommandation-rien'
   | 'fait-rien'
+  | 'reste-rien'
   | 'aucun-prompt'
   | 'prompt-identique'
 
@@ -141,7 +171,8 @@ export type DecisionAuto =
  */
 const MESSAGES_ARRET: Record<string, string> = {
   'recommandation-rien': 'Mode auto terminé : plus rien de recommandé.',
-  'fait-rien': 'Mode auto terminé : le bloc « Fait » ne rapporte plus rien.'
+  'fait-rien': 'Mode auto terminé : le bloc « Fait » ne rapporte plus rien.',
+  'reste-rien': 'Mode auto terminé : il ne reste plus rien à faire.'
 }
 
 /** La SEULE porte qui autorise un envoi automatique. Tout le reste de la vue s'y plie. */
@@ -165,6 +196,10 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   // souvent (précision utilisateur du 2026-09-02).
   if (blocFaitDitRien(texteReponse))
     return { action: 'arreter', raison: 'fait-rien', message: MESSAGES_ARRET['fait-rien'] }
+  // Garde-fou 1 ter : la chaîne est FINIE — « ⏳ Reste à faire : rien ». C'est le texte d'Autowin
+  // lui-même après le dernier maillon ; sans cette lecture la boucle repartait pour un tour payant.
+  if (resteAFaireDitRien(texteReponse))
+    return { action: 'arreter', raison: 'reste-rien', message: MESSAGES_ARRET['reste-rien'] }
   const texte = extrairePromptSuivant(texteReponse) ?? extractRecommendation(texteReponse)
   // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.
   if (!texte) return { action: 'attendre', raison: 'aucun-prompt' }

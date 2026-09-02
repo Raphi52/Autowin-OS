@@ -158,3 +158,54 @@ describe('texteDernierAssistant', () => {
     expect(texteDernierAssistant([humain('b')])).toBeNull()
   })
 })
+
+/**
+ * LA FIN DE CHAINE D'AUTOWIN — le mot « rien » tombe sur la ligne « ⏳ Reste à faire », et c'est
+ * la SEULE des quatre rubriques que la porte de décision ne lisait pas.
+ *
+ * MESURE DU 2026-09-02 (journaux de la journée) : les tours de rattrapage « kaizen … » ont coûté
+ * 19,38 $ sur 156,51 $. En rejouant la chaîne complète scout → frame → terrain → build → clean →
+ * judge sur le texte que produit VRAIMENT l'app, le dernier tour rendait
+ * « ⏳ Reste à faire : rien. / 👉 Recommandé : passer à la prochaine demande. » — donc le mode auto
+ * envoyait « passer à la prochaine demande. » comme ordre : un tour PAYANT pour ne rien produire,
+ * exactement le gaspillage mesuré. La chaîne finie doit ÉTEINDRE la boucle, pas la relancer.
+ */
+const FIN_DE_CHAINE_AUTOWIN = [
+  '✅ Fait',
+  '1. Le résultat demandé a été produit et validé — sujet : « mon-sujet ».',
+  '📍 Maintenant : la tâche demandée est terminée et son résultat est disponible.',
+  '⏳ Reste à faire : rien.',
+  '👉 Recommandé : passer à la prochaine demande.'
+].join('\n')
+
+describe('fin de chaîne — « Reste à faire : rien » éteint la boucle', () => {
+  it('ARRÊTE au lieu d’envoyer « passer à la prochaine demande »', () => {
+    const decision = deciderRelanceAuto({
+      ...base,
+      fil: [humain('lancer judge.'), agent(FIN_DE_CHAINE_AUTOWIN)]
+    })
+    expect(decision.action).toBe('arreter')
+  })
+
+  it('n’arrête pas quand la chaîne continue', () => {
+    const suite = FIN_DE_CHAINE_AUTOWIN.replace(
+      '⏳ Reste à faire : rien.',
+      '⏳ Reste à faire : clean → judge.'
+    ).replace('👉 Recommandé : passer à la prochaine demande.', '👉 Recommandé : lancer clean.')
+    const decision = deciderRelanceAuto({ ...base, fil: [humain('go'), agent(suite)] })
+    expect(decision).toEqual({
+      action: 'envoyer',
+      texte: 'lancer clean.',
+      signature: expect.any(String)
+    })
+  })
+
+  it('« rien ne bloque » dans cette rubrique ne coupe PAS la boucle', () => {
+    const suite = FIN_DE_CHAINE_AUTOWIN.replace(
+      '⏳ Reste à faire : rien.',
+      '⏳ Reste à faire : rien ne bloque le lancement de clean.'
+    ).replace('👉 Recommandé : passer à la prochaine demande.', '👉 Recommandé : lancer clean.')
+    const decision = deciderRelanceAuto({ ...base, fil: [humain('go'), agent(suite)] })
+    expect(decision.action).toBe('envoyer')
+  })
+})
