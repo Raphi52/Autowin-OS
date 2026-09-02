@@ -13,6 +13,7 @@ import { registerGitIpc } from './ipc/git'
 import { registerTestsViewIpc } from './ipc/tests-view'
 import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
+import { registerClaudeAccountsIpc } from './ipc/claude-accounts'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -46,18 +47,12 @@ function jalonDemarrage(etape: string): void {
   marquerOperationDemarrage(`demarrage:${etape}`)
 }
 jalonDemarrage('module principal évalué')
-import { resolveClaudeBin } from './providers/claude'
 import { emitToLiveWindows } from './renderer-emit'
 import {
   ClaudeAccountsStore,
-  accountEnv,
   configureClaudeAccountEnv,
   configureClaudeActiveAccountId,
-  configureClaudeAccountRotation,
-  describeAccounts,
-  parseIdentity,
-  type ClaudeIdentity,
-  withClaudeAccountEnv
+  configureClaudeAccountRotation
 } from './claude-accounts'
 import { app, shell, BrowserWindow, dialog, ipcMain } from 'electron'
 import { dirname, join } from 'path'
@@ -218,11 +213,7 @@ import {
 import { rebuildSemanticTemporalProjection } from './knowledge/semantic-temporal-store'
 import { causalLearningContext } from './knowledge/semantic-temporal-projection'
 import { ModelCatalogRefresher } from './model-refresh'
-import {
-  buildModelQuotaSnapshot,
-  getModelQuotaSnapshot,
-  invalidateModelQuotaCache
-} from './model-quotas'
+import { buildModelQuotaSnapshot, getModelQuotaSnapshot } from './model-quotas'
 import { loadAgentTopology, saveAgentTopology, type IncidentTopologie } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
@@ -1701,106 +1692,8 @@ Le fil reprend ensuite normalement.`
     os.startProviderLogin(guardString(provider, 'provider'))
     return { ok: true }
   })
-  // --- Comptes Claude multiples : lister / basculer / ajouter / retirer ---
-  // Un compte = un CLAUDE_CONFIG_DIR (mecanisme verifie sur le CLI reel). Basculer ne relance
-  // aucun login : les sessions restent stockees cote a cote, comme dans claude.exe.
-  const claudeAccountsPayload = (): {
-    activeId: string
-    accounts: Array<{
-      id: string
-      displayName: string
-      tier: string
-      email?: string
-      active: boolean
-    }>
-  } => {
-    const state = claudeAccounts.current()
-    return {
-      activeId: state.activeId,
-      accounts: describeAccounts(state.accounts, state.activeId).map((account) => ({
-        id: account.id,
-        displayName: account.displayName,
-        tier: account.tier,
-        email: account.email,
-        active: account.active
-      }))
-    }
-  }
-
-  /**
-   * Sonde l'identite REELLE d'un compte : `claude auth status` dans SON dossier de configuration.
-   * C'est le seul moyen de distinguer deux comptes qui partagent la meme adresse mail et ne
-   * different que par le niveau d'abonnement (`subscriptionType`) — le cas d'usage demande.
-   * Borne dans le temps et fail-open : une sonde muette laisse le compte tel quel, elle ne doit
-   * jamais bloquer l'affichage de la liste.
-   */
-  const probeAccountIdentity = async (accountId: string): Promise<void> => {
-    const account = claudeAccounts.find(accountId)
-    if (!account) return
-    const identity = await new Promise<ClaudeIdentity | undefined>((resolve) => {
-      let out = ''
-      let settled = false
-      const done = (value: ClaudeIdentity | undefined): void => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        resolve(value)
-      }
-      const timer = setTimeout(() => done(undefined), 8000)
-      try {
-        const child = spawn(resolveClaudeBin(), ['auth', 'status'], {
-          windowsHide: true,
-          shell: false,
-          // EXPLICITE : pour le compte par defaut, accountEnv rend {} — sans retrait, la sonde
-          // heriterait le CLAUDE_CONFIG_DIR du processus et lirait l'identite d'un AUTRE compte.
-          env: withClaudeAccountEnv(process.env, accountEnv(account))
-        })
-        child.stdout?.on('data', (chunk: Buffer) => {
-          out += chunk.toString('utf8')
-        })
-        child.on('error', () => done(undefined))
-        child.on('close', () => done(parseIdentity(out)))
-      } catch {
-        done(undefined)
-      }
-    })
-    claudeAccounts.setIdentity(accountId, identity)
-  }
-
-  /** Sonde TOUS les comptes en parallele — la liste ne vaut que si chaque puce dit vrai. */
-  const refreshAllAccountIdentities = async (): Promise<void> => {
-    await Promise.all(
-      claudeAccounts.current().accounts.map((account) => probeAccountIdentity(account.id))
-    )
-  }
-
-  ipcMain.handle('os:claudeAccounts:list', async (event) => {
-    assertTrustedRendererSender(event, 'Claude accounts list')
-    await refreshAllAccountIdentities()
-    return claudeAccountsPayload()
-  })
-  ipcMain.handle('os:claudeAccounts:add', (event, label: unknown) => {
-    assertTrustedRendererSender(event, 'Claude accounts add')
-    const account = claudeAccounts.add(typeof label === 'string' ? label : undefined)
-    // On enchaine directement sur le login DANS LE DOSSIER DU NOUVEAU COMPTE : un compte ajoute
-    // mais jamais authentifie ne servirait a rien, et l'utilisateur n'a aucun moyen de le faire
-    // lui-meme depuis l'app.
-    os.startProviderLogin('claude', account.dir)
-    return claudeAccountsPayload()
-  })
-  ipcMain.handle('os:claudeAccounts:switch', (event, id: unknown) => {
-    assertTrustedRendererSender(event, 'Claude accounts switch')
-    claudeAccounts.switchTo(guardString(id, 'id'))
-    // Le quota appartient a l'ABONNEMENT : changer de compte rend le snapshot memorise caduc,
-    // sinon l'indicateur affiche encore celui du compte quitte pendant une minute.
-    invalidateModelQuotaCache()
-    return claudeAccountsPayload()
-  })
-  ipcMain.handle('os:claudeAccounts:remove', (event, id: unknown) => {
-    assertTrustedRendererSender(event, 'Claude accounts remove')
-    claudeAccounts.remove(guardString(id, 'id'))
-    return claudeAccountsPayload()
-  })
+  // Les canaux des comptes Claude multiples vivent dans src/main/ipc/claude-accounts.ts.
+  registerClaudeAccountsIpc({ os, claudeAccounts })
   // --- Orchestration disciplinée (le cœur) : streame chaque étape ---
   ipcMain.handle('os:orchestrate', async (event, task: string, targetConversationId?: string) => {
     assertTrustedRendererSender(event, 'Orchestrate')
