@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Msg } from './chat-view-types'
 import {
+  blocFaitDitRien,
   deciderRelanceAuto,
   recommandationDitRien,
   signatureTour,
@@ -41,6 +42,24 @@ describe('recommandationDitRien — la condition d’arrêt demandée', () => {
   })
 })
 
+describe('blocFaitDitRien — le bloc « Fait » vide (précision utilisateur du 2026-09-02)', () => {
+  it('voit « rien » posé seul, sur la ligne d’en-tête comme en puce', () => {
+    expect(blocFaitDitRien('✅ Fait — rien')).toBe(true)
+    expect(blocFaitDitRien('✅ **Fait**\n- rien\n\n📍 Maintenant\n- ça tourne')).toBe(true)
+    expect(blocFaitDitRien('✅ Fait\nrien à signaler.')).toBe(true)
+  })
+  it('ne confond PAS avec un travail réussi qui emploie le mot', () => {
+    expect(blocFaitDitRien('✅ Fait\n- corrigé le bug, rien de cassé ailleurs')).toBe(false)
+    expect(blocFaitDitRien('✅ Fait\n- livré')).toBe(false)
+  })
+  it('ne lit QUE le bloc Fait : un « rien » d’une autre rubrique ne compte pas', () => {
+    expect(blocFaitDitRien('✅ Fait\n- livré\n\n⏳ Reste à faire\n- rien')).toBe(false)
+  })
+  it('sans bloc de clôture, il n’y a rien à lire', () => {
+    expect(blocFaitDitRien('une réponse en prose, rien de plus')).toBe(false)
+  })
+})
+
 describe('deciderRelanceAuto — envoi', () => {
   it('envoie le PROMPT du modèle, pas la rubrique', () => {
     const d = deciderRelanceAuto({ ...base, fil: [humain('go'), agent(REPONSE_AVEC_SUITE)] })
@@ -64,6 +83,15 @@ describe('deciderRelanceAuto — arrêts', () => {
     expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({
       action: 'arreter',
       raison: 'recommandation-rien'
+    })
+  })
+  it('ARRÊTE quand le bloc « Fait » ne rapporte rien, même si une suite est proposée', () => {
+    const fil = [
+      agent('✅ Fait\n- rien\n\n👉 Recommandé — relancer\nAUTOWIN_PROMPT_V1: relance encore')
+    ]
+    expect(deciderRelanceAuto({ ...base, fil })).toMatchObject({
+      action: 'arreter',
+      raison: 'fait-rien'
     })
   })
   it('« rien » est le SEUL motif qui éteint le mode', () => {

@@ -53,6 +53,54 @@ export function recommandationDitRien(recommandation: string | null): boolean {
   return /(^|[^\p{L}\p{N}])rien([^\p{L}\p{N}]|$)/u.test(nu)
 }
 
+/** Les quatre en-têtes du bloc de clôture : ils bornent la rubrique qu'on veut lire. */
+const EN_TETES_CLOTURE =
+  /^\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)\b/u
+
+/**
+ * Contenu de la rubrique « ✅ Fait » : le reste de sa ligne d'en-tête ET les lignes qui la suivent,
+ * jusqu'à la rubrique d'après. Précision utilisateur du 2026-09-02 : « dans le prompt il n'écrit
+ * jamais le mot rien, mais il l'écrit souvent dans le bloc Fait ».
+ */
+export function lignesDuBlocFait(texte: string): string[] {
+  const lignes = texte.split('\n')
+  const sortie: string[] = []
+  let dedans = false
+  for (const brute of lignes) {
+    const entete = brute.match(EN_TETES_CLOTURE)
+    if (entete) {
+      dedans = entete[1] === 'Fait'
+      if (dedans) {
+        const reste = brute.replace(EN_TETES_CLOTURE, '').replace(/^\s*\**\s*[:：—–-]?\s*/u, '')
+        if (reste.trim()) sortie.push(reste)
+      }
+      continue
+    }
+    if (dedans) sortie.push(brute)
+  }
+  return sortie
+}
+
+/**
+ * « rien » posé SEUL sur une ligne (puce comprise) = la rubrique est vide. C'est le signal d'arrêt.
+ *
+ * On exige la ligne entière, pas le mot n'importe où : dans le bloc Fait, « rien de cassé » ou
+ * « rien ne bloque » racontent un travail RÉUSSI — les prendre pour une fin couperait la boucle
+ * alors qu'il reste tout à faire.
+ */
+export function blocFaitDitRien(texte: string): boolean {
+  return lignesDuBlocFait(texte).some((ligne) => {
+    const nu = ligne
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/^[\s>*•\-–—]+/u, '')
+      .replace(/[\s.;:!*`]+$/u, '')
+      .trim()
+    return nu === 'rien' || nu === 'rien a signaler' || nu === 'rien a faire'
+  })
+}
+
 export type RaisonArret =
   | 'inactif'
   | 'tour-en-cours'
@@ -60,6 +108,7 @@ export type RaisonArret =
   | 'aucune-reponse'
   | 'brouillon'
   | 'recommandation-rien'
+  | 'fait-rien'
   | 'aucun-prompt'
   | 'prompt-identique'
 
@@ -91,7 +140,8 @@ export type DecisionAuto =
  * une fin : c'est juste « rien à envoyer sur CE tour ». On patiente, l'interrupteur reste allumé.
  */
 const MESSAGES_ARRET: Record<string, string> = {
-  'recommandation-rien': 'Mode auto terminé : plus rien de recommandé.'
+  'recommandation-rien': 'Mode auto terminé : plus rien de recommandé.',
+  'fait-rien': 'Mode auto terminé : le bloc « Fait » ne rapporte plus rien.'
 }
 
 /** La SEULE porte qui autorise un envoi automatique. Tout le reste de la vue s'y plie. */
@@ -111,6 +161,10 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
       raison: 'recommandation-rien',
       message: MESSAGES_ARRET['recommandation-rien']
     }
+  // Garde-fou 1 bis : le bloc « Fait » vide dit la même chose — c'est là que le mot tombe le plus
+  // souvent (précision utilisateur du 2026-09-02).
+  if (blocFaitDitRien(texteReponse))
+    return { action: 'arreter', raison: 'fait-rien', message: MESSAGES_ARRET['fait-rien'] }
   const texte = extrairePromptSuivant(texteReponse) ?? extractRecommendation(texteReponse)
   // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.
   if (!texte) return { action: 'attendre', raison: 'aucun-prompt' }
