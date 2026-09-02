@@ -16,6 +16,14 @@ const ACTIVITY_LIMIT = 50
 const TRACE_LIMIT = 80
 const RUN_LIMIT = 4
 const RUN_CAP = 4_000
+/*
+  Plancher de RÉSUMÉ d'un RUN. Mesuré sur le dossier réel de conv-105 : `runs: 0` et
+  `troncature.runs = 4` — les QUATRE RUN.md partaient en entier, kaizen n'en voyait AUCUN. Cause :
+  l'ajustement au budget ne savait que SUPPRIMER un élément, jamais le RACCOURCIR, et un RUN de
+  4 000 signes est le plus lourd du dossier, donc le premier sacrifié. On le résume jusqu'à ce
+  plancher avant d'envisager de le retirer.
+*/
+const RUN_MIN = 1_200
 const TOTAL_CAP = 28_000
 const REQUEST_CAP = 2_000
 const PROMPT_CALL_LIMIT = 12
@@ -112,6 +120,8 @@ export interface AutowinKaizenEvidence {
   /** Texte tapé par l'utilisateur, y compris les orientations qui ne créent aucun tour. */
   saisies?: KaizenSaisie[]
 }
+
+const SUFFIXE_TRONQUE = '…[tronqué]'.length
 
 function clipped(value: string, cap: number): string {
   return value.length <= cap ? value : `${value.slice(0, cap)}…[tronqué]`
@@ -211,7 +221,11 @@ function readTurnEvents(conversationId: string, appData: string): KaizenTurnEven
       .flatMap(({ turnId, events }) =>
         events.slice(-TURN_EVENT_LIMIT).map((event) => {
           const { kind, ...reste } = event
-          return { turnId, kind: String(kind), payload: clipped(JSON.stringify(reste), TURN_EVENT_CAP) }
+          return {
+            turnId,
+            kind: String(kind),
+            payload: clipped(JSON.stringify(reste), TURN_EVENT_CAP)
+          }
         })
       )
       .slice(-TURN_EVENT_LIMIT)
@@ -233,9 +247,9 @@ export function collectAutowinKaizenEvidence(
       causale, sans le dire. Kaizen est une vue dérivée : `readConversationBestEffort` ignore la
       seule ligne fautive et garde les autres.
     */
-    causalEvents = new TraceStore(
-      join(appData, 'causal-trace')
-    ).readConversationBestEffort(conversation.id)
+    causalEvents = new TraceStore(join(appData, 'causal-trace')).readConversationBestEffort(
+      conversation.id
+    )
   } catch {
     causalEvents = []
   }
@@ -295,14 +309,66 @@ function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<strin
     { nom: 'brainTraces', liste: snapshot.brainTraces, retirerEnTete: false }
   ]
   const retires: Record<string, number> = {}
-  while (JSON.stringify(snapshot).length > budget) {
-    const candidates = sections.filter((section) => section.liste.length > 0)
-    if (candidates.length === 0) break
-    const cible = candidates.reduce((plusLourde, section) =>
-      JSON.stringify(section.liste).length > JSON.stringify(plusLourde.liste).length
-        ? section
-        : plusLourde
-    )
+  const prochainElement = (section: (typeof sections)[number]): unknown =>
+    section.retirerEnTete ? section.liste[0] : section.liste[section.liste.length - 1]
+  const poidsElement = (section: (typeof sections)[number]): number =>
+    JSON.stringify(prochainElement(section) ?? null).length + 1
+  /*
+    Un RUN se RÉSUME avant de se perdre : on raccourcit le plus long jusqu'au plancher `RUN_MIN`
+    tant que ça suffit à rentrer dans le budget. Sans cette passe, les 4 RUN de conv-105 étaient
+    tous supprimés.
+  */
+  for (;;) {
+    const depassement = JSON.stringify(snapshot).length - budget
+    if (depassement <= 0) break
+    const plusLong = snapshot.runs
+      .filter((run) => run.content.length > RUN_MIN)
+      .reduce<KaizenRun | undefined>(
+        (max, run) => (!max || run.content.length > max.content.length ? run : max),
+        undefined
+      )
+    if (!plusLong) break
+    /*
+      `clipped` AJOUTE un suffixe « …[tronqué] ». Couper à `longueur - dépassement` avec un
+      dépassement plus petit que ce suffixe RALLONGEAIT le RUN : la boucle ne terminait jamais
+      (vitest bloqué à 120 s, mesuré). On retranche donc le suffixe, et on ne coupe que si la
+      coupe raccourcit vraiment.
+    */
+    const cible = Math.max(RUN_MIN, plusLong.content.length - depassement - SUFFIXE_TRONQUE)
+    if (cible + SUFFIXE_TRONQUE >= plusLong.content.length) break
+    plusLong.content = clipped(plusLong.content, cible)
+  }
+
+  for (;;) {
+    const depassement = JSON.stringify(snapshot).length - budget
+    if (depassement <= 0) break
+    const nonVides = sections.filter((section) => section.liste.length > 0)
+    if (nonVides.length === 0) break
+    /*
+      Un RUN déjà résumé au plancher se retire en DERNIER : c'est la trace la plus dense d'un run
+      précédent, et un élément RUN (1 210 signes) devenait « le plus léger qui suffit » dès que le
+      dépassement dépassait le poids d'une ligne d'activité — on perdait un RUN pour 300 signes.
+      Les autres sections sont bien plus redondantes entre elles.
+    */
+    const sansRuns = nonVides.filter((section) => section.nom !== 'runs')
+    const candidates = sansRuns.length > 0 ? sansRuns : nonVides
+    /*
+      Mesure sur conv-105 : 23 870 signes retenus sur 28 000, un RUN entier jeté pour un
+      dépassement de quelques signes — un RUN pèse jusqu'à 4 000 signes, donc viser la section la
+      plus LOURDE emportait 4 000 signes de budget avec lui. Dès qu'un SEUL retrait suffit à
+      rentrer dans le budget, on prend le MOINS lourd de ceux-là ; sinon on continue d'alléger la
+      section la plus lourde, qui est le seul moyen de progresser vite.
+    */
+    const suffisants = candidates.filter((section) => poidsElement(section) >= depassement)
+    const cible = suffisants.length
+      ? suffisants.reduce((plusLeger, section) =>
+          poidsElement(section) < poidsElement(plusLeger) ? section : plusLeger
+        )
+      : candidates.reduce((plusLourde, section) =>
+          JSON.stringify(section.liste).length > JSON.stringify(plusLourde.liste).length
+            ? section
+            : plusLourde
+        )
     if (cible.retirerEnTete) cible.liste.shift()
     else cible.liste.pop()
     retires[cible.nom] = (retires[cible.nom] ?? 0) + 1

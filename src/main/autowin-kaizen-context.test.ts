@@ -479,3 +479,82 @@ describe('dossier de preuve /kaizen — appels modele et deroule des tours', () 
     }
   })
 })
+
+describe('dossier de preuve /kaizen — budget reellement utilise', () => {
+  /*
+    Mesure sur le dossier REEL de conv-105 : 23 870 signes utilises sur 28 000 alors que 167
+    elements avaient ete jetes. Cause : le retrait vise la section la plus LOURDE, or un RUN pese
+    jusqu'a 4 000 signes ; pour resorber un depassement de quelques signes, un RUN entier partait
+    et 4 000 signes de budget avec lui. Reproduction hermetique ci-dessous : 4 RUN + 30 lignes
+    d'activite -> un RUN jete, 4 144 signes perdus.
+  */
+  it("ne sacrifie pas un RUN entier pour resorber un petit depassement", () => {
+    const task = buildAutowinKaizenTask('/kaizen', {
+      conversation: { id: 'conv-budget', title: 'Budget', messages: [{ role: 'user', content: 'x', ts: 1 }] },
+      activity: Array.from({ length: 30 }, (_, index) => ({
+        ts: new Date(index).toISOString(),
+        kind: 'exec',
+        label: 'phase-' + index,
+        text: 't'.repeat(300)
+      })),
+      brainTraces: [],
+      causalEvents: [],
+      runs: Array.from({ length: 4 }, (_, index) => ({
+        path: 'C:/R' + index + '/RUN.md',
+        content: String.fromCharCode(97 + index).repeat(4_000)
+      }))
+    })
+    const snapshot = JSON.parse(task.slice(task.indexOf('{'), task.lastIndexOf('}') + 1))
+
+    expect(task.length).toBeLessThanOrEqual(28_000)
+    // En dessous de 27 000, du budget a ete jete pour rien.
+    expect(task.length).toBeGreaterThan(27_000)
+    // Le depassement se resorbe sur des elements LEGERS : les 4 RUN survivent.
+    expect(snapshot.runs).toHaveLength(4)
+  })
+})
+
+describe('dossier de preuve /kaizen — les RUN survivent au resserrage', () => {
+  /*
+    Mesure sur le dossier REEL de conv-105 (tsx sur le code du depot) : `runs: 0`, et
+    `troncature.runs = 4`. Les QUATRE RUN.md etaient jetes en entier, donc kaizen n'avait
+    AUCUN RUN sous les yeux. Cause : l'ajustement au budget ne sait que SUPPRIMER un element,
+    jamais le RESUMER ; un RUN pesant jusqu'a 4 000 signes est le plus lourd, donc le premier
+    sacrifie des que le depassement est gros.
+  */
+  it('resume les RUN au lieu de les jeter quand le depassement est gros', () => {
+    const task = buildAutowinKaizenTask('/kaizen', {
+      conversation: {
+        id: 'conv-runs',
+        title: 'RUN',
+        messages: Array.from({ length: 24 }, (_, index) => ({
+          role: 'user' as const,
+          content: 'm'.repeat(700),
+          ts: index
+        }))
+      },
+      activity: Array.from({ length: 50 }, (_, index) => ({
+        ts: new Date(index).toISOString(),
+        kind: 'exec',
+        label: 'phase-' + index,
+        text: 't'.repeat(600)
+      })),
+      brainTraces: [],
+      causalEvents: [],
+      runs: Array.from({ length: 4 }, (_, index) => ({
+        path: 'C:/R' + index + '/RUN.md',
+        content: String.fromCharCode(97 + index).repeat(4_000)
+      }))
+    })
+    const snapshot = JSON.parse(task.slice(task.indexOf('{'), task.lastIndexOf('}') + 1))
+
+    expect(task.length).toBeLessThanOrEqual(28_000)
+    // Les 4 RUN sont TOUS presents, resumes et non supprimes.
+    expect(snapshot.runs).toHaveLength(4)
+    for (const run of snapshot.runs as Array<{ path: string; content: string }>) {
+      expect(run.content.length).toBeGreaterThanOrEqual(1_200)
+    }
+    // Aucun RUN compte comme ecarte.
+    expect(snapshot.troncature?.runs ?? 0).toBe(0)
+  })
+})
