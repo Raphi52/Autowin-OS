@@ -50,7 +50,7 @@ export function extractScreenshotEvidence(text?: string): string[] {
   return [...new Set((text.match(SCREENSHOT_RE) ?? []).map((path) => path.trim()))]
 }
 
-export function convActivityRoot(): string {
+function convActivityRoot(): string {
   return join(ensureAutowinAppData(), 'activity')
 }
 

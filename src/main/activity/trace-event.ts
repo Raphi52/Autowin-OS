@@ -10,7 +10,7 @@ function legacyAuthorityDecision(input: {
   return 'allow'
 }
 
-export type TraceEventType =
+type TraceEventType =
   | 'message'
   | 'injection'
   | 'decision'
@@ -34,10 +34,10 @@ export type TraceEventType =
   | 'error'
   | 'boundary'
 
-export type TraceEventStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-export type TraceActorKind = 'human' | 'system' | 'agent' | 'judge' | 'tool' | 'provider'
-export type TraceParticipantKind = TraceActorKind | 'skill' | 'hook' | 'resource'
-export type TraceChannel = 'user' | 'system' | 'assistant' | 'tool' | 'internal'
+type TraceEventStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+type TraceActorKind = 'human' | 'system' | 'agent' | 'judge' | 'tool' | 'provider'
+type TraceParticipantKind = TraceActorKind | 'skill' | 'hook' | 'resource'
+type TraceChannel = 'user' | 'system' | 'assistant' | 'tool' | 'internal'
 export type TracePayloadKind =
   | 'user-message'
   | 'system-instruction'
@@ -57,7 +57,7 @@ export type TracePayloadKind =
   | 'reasoning'
   | 'error'
 
-export interface TraceParticipant {
+interface TraceParticipant {
   id: string
   kind: TraceParticipantKind
   label: string
@@ -76,7 +76,7 @@ export interface TraceObservation {
   limitation?: string
 }
 
-export interface TraceExecutionContext {
+interface TraceExecutionContext {
   phase?: string
   agentId?: string
   taskId?: string

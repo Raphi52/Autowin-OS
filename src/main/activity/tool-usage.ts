@@ -10,7 +10,7 @@ import { TraceStore } from './trace-store'
  * modèles Autowin), ceci reflète ce que Codex/Claude ont réellement exécuté sur la machine.
  * Forme compatible avec l'item de la vue Capacités (id/label/description/enabled/mutable).
  */
-export interface ToolUsageItem {
+interface ToolUsageItem {
   id: string
   label: string
   description: string

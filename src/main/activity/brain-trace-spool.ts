@@ -26,7 +26,7 @@ const MAX_ENTRY_BYTES = 512 * 1024
 const latestTraceIds = new Map<string, string>()
 
 /** Sante du spool Brain, lisible sans jamais jeter. `enBonneSante` est faux des la premiere perte. */
-export interface SanteSpoolBrain {
+interface SanteSpoolBrain {
   tracesPerdues: number
   derniereErreur?: string
   enBonneSante: boolean

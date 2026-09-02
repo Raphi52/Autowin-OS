@@ -1,6 +1,6 @@
 import type { CapabilityItem, CapabilityKind } from '../capability-controls'
 
-export interface PromptConfigChange {
+interface PromptConfigChange {
   kind: CapabilityKind
   actor: 'human-ui'
   before: string[]

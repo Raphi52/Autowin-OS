@@ -18,7 +18,7 @@ export interface SessionMeta {
   mtime: number
 }
 
-export interface SessionRef {
+interface SessionRef {
   id: string
   project: string
 }
@@ -31,7 +31,7 @@ export interface ToolCall {
   sidechain?: boolean
 }
 
-export interface TurnEntry {
+interface TurnEntry {
   kind: 'user' | 'assistant'
   ts?: string
   text: string
@@ -39,7 +39,7 @@ export interface TurnEntry {
   sidechain?: boolean
 }
 
-export interface ImageRef {
+interface ImageRef {
   path: string
   ts?: string
   exists: boolean
@@ -60,7 +60,7 @@ const SESSION_CACHE_TTL_MS = 15_000
 const SESSION_SCAN_CONCURRENCY = 8
 const sessionListCache = new Map<string, { expiresAt: number; sessions: SessionMeta[] }>()
 
-export function projectsRoot(): string {
+function projectsRoot(): string {
   return join(homedir(), '.claude', 'projects')
 }
 

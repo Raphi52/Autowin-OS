@@ -5,7 +5,7 @@ import type { TracePayload } from './trace-event'
  * d'`ExecutionEvidence` (`providers/types.ts`), pour que l'ajout d'un champ la-bas ne puisse jamais
  * faire echouer une ecriture de trace ici.
  */
-export interface EvidenceLike {
+interface EvidenceLike {
   type: string
   summary?: string
   command?: string
@@ -37,7 +37,7 @@ function borner(valeur: string): Borne {
   }
 }
 
-export interface EvidencePayloadResult {
+interface EvidencePayloadResult {
   payloads: TracePayload[]
   /**
    * `exact` UNIQUEMENT si le contenu integral est transporte.

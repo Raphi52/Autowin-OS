@@ -94,7 +94,7 @@ const OCTETS_MIN = 8_192
 const OCTETS_MAX = 4_000_000
 
 /** Etat de sante du tracage — un ledger muet se lit comme un ledger vide, donc comme « rien ». */
-export interface SanteLedger {
+interface SanteLedger {
   ecrituresEchouees: number
   lecturesEchouees: number
   lignesCorrompues: number

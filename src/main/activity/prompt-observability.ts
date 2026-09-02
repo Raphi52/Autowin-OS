@@ -247,7 +247,7 @@ function sampleFromCall(call: PromptCallRecord): CostSample {
 }
 
 /** Entree d'activite minimale exploitable pour le cout (sous-ensemble de ConvActivityEntry). */
-export interface ActivityCostEntry {
+interface ActivityCostEntry {
   kind?: string
   label?: string
   provider?: string

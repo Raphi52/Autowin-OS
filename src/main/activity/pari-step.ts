@@ -25,7 +25,7 @@ export interface StepObserve {
   execution?: { phase?: string }
 }
 
-export interface MesureAffichable extends MesureCalibration {
+interface MesureAffichable extends MesureCalibration {
   /**
    * Nombre de VERDICTS distincts derrière ces paris. Toutes les phases d'un run partagent l'issue de
    * ce run : 40 paris peuvent ne valoir que 10 tirages indépendants. Sans ce compte, un `n` flatteur

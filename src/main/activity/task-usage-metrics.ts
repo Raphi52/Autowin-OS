@@ -1,6 +1,6 @@
 import type { ExecutionUsageSnapshot } from '../execution-supervisor'
 
-export interface TaskUsageMetrics {
+interface TaskUsageMetrics {
   knownCostUsd?: number
   totalTokens?: number
   unpricedCalls?: number

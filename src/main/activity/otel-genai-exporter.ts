@@ -10,7 +10,7 @@ interface OtlpAttribute {
   value: OtlpAnyValue
 }
 
-export interface OtlpSpan {
+interface OtlpSpan {
   traceId: string
   spanId: string
   parentSpanId?: string
@@ -164,7 +164,7 @@ async function fetchTransport(
   }
 }
 
-export type OtlpEnqueueResult = 'disabled' | 'queued' | 'dropped'
+type OtlpEnqueueResult = 'disabled' | 'queued' | 'dropped'
 
 /** Bounded, asynchronous and best-effort: telemetry can never become a run dependency. */
 export class MetadataOnlyOtlpExporter {

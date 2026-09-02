@@ -26,7 +26,7 @@ export function nativeSpoolRoot(base = ensureAutowinAppData()): string {
   return root
 }
 
-export interface NativeTraceInput {
+interface NativeTraceInput {
   provider: string
   model?: string
   conversationId?: string

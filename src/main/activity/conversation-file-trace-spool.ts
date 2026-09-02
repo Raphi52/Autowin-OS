@@ -31,7 +31,7 @@ export interface ConversationFileTrace {
   pathLineFingerprints?: Record<string, string[]>
 }
 
-export type ConversationFileTraceAppendResult = 'appended' | 'duplicate' | 'ignored' | 'failed'
+type ConversationFileTraceAppendResult = 'appended' | 'duplicate' | 'ignored' | 'failed'
 
 function spoolRoot(base = ensureAutowinAppData()): string {
   const root = join(base, 'conversation-file-trace-spool')
@@ -305,7 +305,7 @@ export function readConversationTurnFilePaths(
   return readConversationTurnFileMutations(conversationId, turnId, base).paths
 }
 
-export interface ConversationTurnFileMutations {
+interface ConversationTurnFileMutations {
   paths: string[]
   lineFingerprintsByPath: Record<string, string[]>
   generationMarkersByPath: Record<string, string>
@@ -349,7 +349,7 @@ export function readConversationTurnFileMutations(
   return { paths: [...new Set(paths)], lineFingerprintsByPath, generationMarkersByPath }
 }
 
-export interface ConversationPathOwnership {
+interface ConversationPathOwnership {
   conversationId: string
   workspaceRoot: string
   path: string

@@ -5,7 +5,7 @@ import type { TracePayload } from './trace-event'
  * import d'`OrchestrationStep`, pour qu'un champ ajoute la-bas ne puisse jamais casser une ecriture
  * de trace ici.
  */
-export interface StepLike {
+interface StepLike {
   step: string
   text?: string
   detail?: string

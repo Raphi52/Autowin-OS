@@ -14,7 +14,7 @@ import {
 import { join, resolve } from 'node:path'
 import { assertTraceEvent, type TraceEventV1 } from './trace-event'
 
-export type TraceEventSink = (event: TraceEventV1) => void
+type TraceEventSink = (event: TraceEventV1) => void
 
 let installedTraceEventSink: TraceEventSink | undefined
 // Tous les producteurs de trace d'Autowin vivent dans le meme main Electron. Ce registre partage
