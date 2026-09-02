@@ -1,0 +1,110 @@
+import { describe, expect, it, vi } from 'vitest'
+import { Dictee, insererDictee, type DependancesDictee } from './composer-dictee'
+
+describe('insererDictee', () => {
+  it('insère au point d’insertion avec les espaces qu’il faut', () => {
+    expect(insererDictee('bonjour le monde', 'cher', 8)).toEqual({
+      texte: 'bonjour cher le monde',
+      caret: 12
+    })
+  })
+
+  it('n’ajoute pas d’espace en tête d’un champ vide', () => {
+    expect(insererDictee('', ' salut  ', 0)).toEqual({ texte: 'salut', caret: 5 })
+  })
+
+  it('ne touche à rien quand whisper rend du vide', () => {
+    expect(insererDictee('déjà tapé', '   ', 4)).toEqual({ texte: 'déjà tapé', caret: 4 })
+  })
+})
+
+function fauxDeps(transcrire = vi.fn(async (_wav: Uint8Array) => 'texte dicté')): {
+  deps: DependancesDictee
+  pousser: (bloc: Float32Array) => void
+  pistesArretees: () => number
+  transcrire: typeof transcrire
+} {
+  let onaudio: ((e: { inputBuffer: { getChannelData(c: number): Float32Array } }) => void) | null =
+    null
+  let arrets = 0
+  const deps: DependancesDictee = {
+    micro: async () => ({ getTracks: () => [{ stop: () => (arrets += 1) }] }),
+    contexte: () =>
+      ({
+        sampleRate: 16_000,
+        destination: {},
+        createMediaStreamSource: () => ({ connect: () => {}, disconnect: () => {} }),
+        createScriptProcessor: () => ({
+          connect: () => {},
+          disconnect: () => {},
+          set onaudioprocess(v: never) {
+            onaudio = v
+          },
+          get onaudioprocess() {
+            return onaudio as never
+          }
+        }),
+        close: async () => {}
+      }) as never,
+    transcrire
+  }
+  return {
+    deps,
+    pousser: (bloc) => onaudio?.({ inputBuffer: { getChannelData: () => bloc } }),
+    pistesArretees: () => arrets,
+    transcrire
+  }
+}
+
+const parole = (n: number): Float32Array =>
+  Float32Array.from({ length: n }, (_, i) => Math.sin(i / 3) * 0.3)
+
+describe('Dictee', () => {
+  it('enregistre puis rend le texte transcrit, micro refermé', async () => {
+    const { deps, pousser, pistesArretees, transcrire } = fauxDeps()
+    const dictee = new Dictee(deps)
+    expect(await dictee.demarrer()).toBe(true)
+    pousser(parole(1600))
+    pousser(parole(1600))
+    const texte = await dictee.arreter()
+    expect(texte).toBe('texte dicté')
+    expect(pistesArretees()).toBe(1)
+    expect(dictee.enCours).toBe(false)
+    const wav = transcrire.mock.calls[0]![0]
+    expect(String.fromCharCode(...wav.slice(0, 4))).toBe('RIFF')
+  })
+
+  it('annuler ne transcrit rien', async () => {
+    const { deps, pousser, transcrire } = fauxDeps()
+    const dictee = new Dictee(deps)
+    await dictee.demarrer()
+    pousser(parole(1600))
+    dictee.annuler()
+    expect(transcrire).not.toHaveBeenCalled()
+    expect(await dictee.arreter()).toBe('')
+  })
+
+  it('une transcription qui échoue ne casse rien', async () => {
+    const { deps, pousser } = fauxDeps(
+      vi.fn(async (_wav: Uint8Array): Promise<string> => {
+        throw new Error('cli absente')
+      })
+    )
+    const dictee = new Dictee(deps)
+    await dictee.demarrer()
+    pousser(parole(1600))
+    expect(await dictee.arreter()).toBe('')
+  })
+
+  it('un micro refusé rend false', async () => {
+    const { deps } = fauxDeps()
+    const dictee = new Dictee({
+      ...deps,
+      micro: async () => {
+        throw new Error('refusé')
+      }
+    })
+    expect(await dictee.demarrer()).toBe(false)
+    expect(dictee.enCours).toBe(false)
+  })
+})

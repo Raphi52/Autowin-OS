@@ -192,3 +192,15 @@
   font: inherit;
   font-size: 13px;
 }
+
+/* En mosaïque la rangée est étroite : le micro reste une icône, un peu plus petite qu'en plein
+   écran, et ne prend jamais la place du texte. */
+.chat-mosaic-window-composer .composer-dictee {
+  width: 28px;
+  min-width: 28px;
+  font-size: 13px;
+}
+.chat-mosaic-window-composer .composer-dictee-message {
+  font-size: 10px;
+  margin-top: 3px;
+}
