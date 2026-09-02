@@ -6,7 +6,8 @@ import {
   type PersistedChatArtifactPart,
   type PersistedChatErrorPart,
   type PersistedChatPart,
-  type PersistedChatTextPart
+  type PersistedChatTextPart,
+  type PipelineChoice
 } from '../../../shared/chat-turn'
 import { parseAskDecision, type AskDecision } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
@@ -35,6 +36,7 @@ import {
 } from '../../../shared/orchestration-outcome'
 
 export type ChatActionPart = PersistedChatActionPart
+export type { PipelineChoice }
 export type ChatArtifactPart = PersistedChatArtifactPart
 export type ChatErrorPart = PersistedChatErrorPart
 export type ChatTextPart = PersistedChatTextPart & {
@@ -275,6 +277,38 @@ export function settleOrchestrationOnRunEnd(
     const settled = parts.slice()
     settled[i] = { ...part, ok: statut === 'green' }
     return settled
+  }
+  return parts
+}
+
+/**
+ * NOTE le skill/agent que le run vient d'engager, sur l'orchestration ENCORE EN COURS du tour.
+ *
+ * Meme forme que `settleOrchestrationOnRunEnd` juste au-dessus : la derniere action `orchestrate`
+ * sans issue est la seule concernee, et le tableau est rendu TEL QUEL quand rien ne change (une
+ * nouvelle reference a chaque battement de phase re-rendrait le fil pour rien).
+ *
+ * Ce qu'elle ne fait PAS : inventer. Un choix sans phase ni agent n'ajoute aucune ligne, et un
+ * choix deja recu (les phases sont re-annoncees a chaque membre d'un fan-out) n'est pas duplique.
+ */
+export function noterChoixDePipeline(parts: ChatPart[], choix: PipelineChoice): ChatPart[] {
+  const propre: PipelineChoice = {
+    ...(choix.phase ? { phase: choix.phase } : {}),
+    ...(choix.role ? { role: choix.role } : {}),
+    ...(choix.provider ? { provider: choix.provider } : {}),
+    ...(choix.model ? { model: choix.model } : {})
+  }
+  if (Object.keys(propre).length === 0) return parts
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]
+    if (part.kind !== 'action' || part.name !== 'orchestrate') continue
+    if (part.ok !== undefined || part.interrupted) return parts
+    const deja = part.pipeline ?? []
+    const cle = JSON.stringify(propre)
+    if (deja.some((ligne) => JSON.stringify(ligne) === cle)) return parts
+    const suite = parts.slice()
+    suite[i] = { ...part, pipeline: [...deja, propre] }
+    return suite
   }
   return parts
 }

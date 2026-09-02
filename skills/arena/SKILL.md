@@ -70,6 +70,16 @@ reprises) · `coût prévu` · `risque`. Classer par (gain attendu ÷ risque). *
 et **1 casse-prémisse** pour X — X n'est jamais le 3e meilleur du classement, c'est le plus
 DIFFÉRENT, sinon les quatre bras testent la même idée.
 
+**TRACE ÉCRITE OBLIGATOIRE — avant de choisir B, C et X.** Le classement des 6 à 10 candidats
+s'ÉCRIT SUR DISQUE dans le RUN.md du banc, section `## Candidats scoutés`, sous forme de tableau :
+`candidat | famille | hypothèse mesurable | coût prévu | risque | score (gain ÷ risque) | retenu ?`.
+Les lignes retenues portent explicitement `B`, `C` ou `X`. Ce fichier est écrit AVANT le message qui
+lance les bras — pas reconstitué après coup, pas résumé dans la réponse au lieu du fichier.
+Pas de section `## Candidats scoutés` sur disque → le lancement des bras est REFUSÉ : sans elle, B et
+C ne sont pas des candidats triés mais deux idées improvisées, et l'expérience ne mesure plus rien.
+Écrire les quatre workflows d'un seul jet sans passer par ce tableau est le défaut CONSTATÉ au run du
+2026-09-02 (relevé par le juge) : c'est l'étape de tri qui disparaît, pas une formalité de rédaction.
+
 ### 3. EXPÉRIENCE A/B/C/X — les quatre bras dans UN SEUL message
 Lancer les quatre en même temps (un sous-agent par bras). Chaque bras reçoit, mot pour mot :
 - l'énoncé de la tâche (identique), le critère de succès, sa copie de travail,
@@ -126,3 +136,5 @@ non prouvé (une seule tâche testée = un seul point de mesure).
 - **Chiffres estimés** présentés comme mesurés → faux vert.
 - **Le producteur se juge** → le classement se fait par `judge` externe, jamais par toi.
 - **Gagnant généralisé sur une seule tâche** → l'annoncer comme une piste mesurée, pas comme une loi.
+- **B et C improvisés** (aucune section `## Candidats scoutés` écrite avant le lancement) → il n'y a
+  pas eu de tri, donc rien ne dit que les bras testés valaient la peine d'être testés.

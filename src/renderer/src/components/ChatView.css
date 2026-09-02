@@ -3348,6 +3348,37 @@ ol.md-list li {
   white-space: pre-wrap;
   font-size: 10.5px;
 }
+/* SKILLS ET AGENTS CHOISIS pour la tache : une ligne par phase engagee, meme gouttiere que le
+   detail (22px) pour rester alignee sous le nom de l'action. */
+.activity-step-pipeline {
+  margin: 0 0 4px 22px;
+  padding: 4px 8px;
+  list-style: none;
+  border-left: 2px solid var(--line2, #31373f);
+  border-radius: 0 5px 5px 0;
+  background: rgb(0 0 0 / 22%);
+  font-size: 10.5px;
+}
+.activity-step-pipeline li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+}
+.activity-step-phase {
+  color: var(--accent, #5b8cff);
+  font-weight: 600;
+}
+.activity-step-role {
+  color: var(--muted, #9aa4b2);
+}
+.activity-step-agent {
+  overflow: hidden;
+  color: var(--muted, #9aa4b2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
 .activity-step-detail.failed {
   border-left-color: var(--err, #ef6b6b);
 }

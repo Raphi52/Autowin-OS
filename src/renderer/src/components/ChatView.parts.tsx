@@ -136,6 +136,14 @@ function EtageActivite({
   lien?: string
 }): React.JSX.Element {
   const detail = localActionDetail(etape)
+  /**
+   * SKILLS ET AGENTS CHOISIS pour la tache (demande du 2026-09-02, capture jointe). Une
+   * orchestration EN COURS n'a aucun `data` : `detail` est vide, donc l'etape n'offrait AUCUN
+   * chevron et le fil ne nommait ni la phase jouee ni le modele qui la joue — alors que le run
+   * l'annonce a chaque phase. Rien de devine : sans choix recu, rien ne s'affiche.
+   */
+  const pipeline = etape.pipeline ?? []
+  const depliable = Boolean(detail) || pipeline.length > 0
   // Un ECHEC s'ouvre d'office : sa cause est la seule information qui compte quand ca casse.
   // Un succes attend le clic. (Comportement herite du bloc de details supprime le 2026-08-31.)
   const [ouvert, setOuvert] = useState(detail ? !detail.ok : false)
@@ -171,7 +179,7 @@ function EtageActivite({
           </span>
         )}
         {etape.ok === undefined && !etape.interrupted && <Spinner />}
-        {detail && (
+        {depliable && (
           <button
             type="button"
             className="activity-step-toggle"
@@ -189,7 +197,7 @@ function EtageActivite({
           la friction rapportee. Sans detail a montrer, la cible reste un simple texte : un bouton
           qui ne deplie rien se lit comme casse. */}
       {cible &&
-        (detail ? (
+        (depliable ? (
           <button
             type="button"
             className="activity-step-target is-clickable"
@@ -205,6 +213,23 @@ function EtageActivite({
             {cible}
           </span>
         ))}
+      {/* LES AGENTS CHOISIS, dans l'ordre ou le pipeline les engage : phase (ou skill) puis le
+          modele qui la joue. Un champ absent n'est pas comble — on affiche ce que le run a dit. */}
+      {ouvert && pipeline.length > 0 && (
+        <ul className="activity-step-pipeline" data-testid="activity-step-pipeline">
+          {pipeline.map((choix, index) => (
+            <li key={`${choix.phase ?? ''}-${choix.model ?? ''}-${index}`}>
+              {choix.phase && <span className="activity-step-phase">{choix.phase}</span>}
+              {choix.role && <span className="activity-step-role">{choix.role}</span>}
+              {(choix.provider || choix.model) && (
+                <span className="activity-step-agent">
+                  {[choix.provider, choix.model].filter(Boolean).join(' · ')}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
       {ouvert && detail && (
         <pre
           className={`activity-step-detail${detail.ok ? '' : ' failed'}`}

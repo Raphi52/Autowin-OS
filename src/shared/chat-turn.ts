@@ -34,6 +34,25 @@ export interface PersistedChatActionPart {
    * mort sous un verdict deja rendu.
    */
   progress?: string
+  /**
+   * SKILLS ET AGENTS CHOISIS pour cette tache, dans l'ordre ou le pipeline les engage — la phase
+   * (ou skill) jouee et le modele qui la joue. TRANSITOIRE comme `progress` : rempli par la vue a
+   * partir des evenements `orchestrate-phase` du run, jamais ecrit par le journal du tour.
+   *
+   * DEMANDE du 2026-09-02 : « le bloc orchestration doit pouvoir etre deplie et afficher les
+   * skill/agents choisis pour la task ». Tant que le run tourne, l'action n'a aucun `data` : le fil
+   * ne pouvait donc RIEN deplier et ne nommait ni la phase en cours ni l'agent qui la joue.
+   */
+  pipeline?: PipelineChoice[]
+}
+
+/** Un maillon du pipeline reellement engage : la phase/skill jouee et l'agent qui la joue. */
+export interface PipelineChoice {
+  /** Phase du pipeline (scout/frame/build/...) ou identifiant de skill, tel que le run l'annonce. */
+  phase?: string
+  role?: string
+  provider?: string
+  model?: string
 }
 
 export interface PersistedChatArtifactPart {
