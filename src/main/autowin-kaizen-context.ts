@@ -30,6 +30,13 @@ const PROMPT_CALL_LIMIT = 12
 const PROMPT_CALL_CAP = 600
 const TURN_JOURNAL_LIMIT = 3
 const TURN_EVENT_LIMIT = 40
+/**
+ * Plafond GLOBAL du deroule des tours reunis. Il DOIT valoir le plafond par tour multiplie par le
+ * nombre de tours joints : le meme chiffre applique deux fois (une fois par tour, puis une fois sur
+ * l'ensemble) rabotait les tours les plus anciens, si bien qu'un dossier annoncant 3 tours n'en
+ * montrait qu'un (mesure du 2026-09-02, conv-131).
+ */
+const TURN_EVENT_TOTAL_LIMIT = TURN_JOURNAL_LIMIT * TURN_EVENT_LIMIT
 const TURN_EVENT_CAP = 400
 const SAISIE_LIMIT = 30
 const SAISIE_CAP = 700
@@ -228,7 +235,7 @@ function readTurnEvents(conversationId: string, appData: string): KaizenTurnEven
           }
         })
       )
-      .slice(-TURN_EVENT_LIMIT)
+      .slice(-TURN_EVENT_TOTAL_LIMIT)
   } catch {
     return []
   }
@@ -419,7 +426,7 @@ export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenE
     causalEvents: evidence.causalEvents.slice(-TRACE_LIMIT),
     runs: evidence.runs.slice(-RUN_LIMIT),
     promptCalls: (evidence.promptCalls ?? []).slice(-PROMPT_CALL_LIMIT),
-    turnEvents: (evidence.turnEvents ?? []).slice(-TURN_EVENT_LIMIT),
+    turnEvents: (evidence.turnEvents ?? []).slice(-TURN_EVENT_TOTAL_LIMIT),
     saisies: (evidence.saisies ?? []).slice(-SAISIE_LIMIT)
   }
 

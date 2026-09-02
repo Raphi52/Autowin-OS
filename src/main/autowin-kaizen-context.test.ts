@@ -558,3 +558,49 @@ describe('dossier de preuve /kaizen — les RUN survivent au resserrage', () => 
     expect(snapshot.troncature?.runs ?? 0).toBe(0)
   })
 })
+
+describe('dossier de preuve /kaizen — le deroule des 3 tours arrive en entier', () => {
+  /*
+    Mesure du 2026-09-02 (conv-131) : le dossier annonce 3 tours mais n'en montre qu'un.
+    Cause : la coupure par tour existe deja (`events.slice(-TURN_EVENT_LIMIT)` par journal), puis
+    une SECONDE coupure globale du meme plafond rabote l'ensemble des tours reunis — elle ne garde
+    donc que la fin d'un seul journal. Il y a une coupure EN TROP, pas un plafond a ecrire.
+  */
+  it('garde les 3 tours distincts quand chacun porte 20 evenements', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-3tours-'))
+    mkdirSync(join(appData, 'turn-journals', 'conv-3t'), { recursive: true })
+    for (const tour of ['turn-1', 'turn-2', 'turn-3']) {
+      writeFileSync(
+        join(appData, 'turn-journals', 'conv-3t', `${tour}.jsonl`),
+        Array.from({ length: 20 }, (_, index) =>
+          JSON.stringify({ kind: 'command', name: 'verify', detail: `${tour}-evt-${index}` })
+        ).join('\n') + '\n'
+      )
+    }
+    try {
+      const evidence = collectAutowinKaizenEvidence(
+        {
+          id: 'conv-3t',
+          title: 'Trois tours',
+          provider: 'claude',
+          messages: [],
+          createdAt: 1,
+          updatedAt: 1
+        },
+        appData
+      )
+      const tours = new Set((evidence.turnEvents ?? []).map((event) => event.turnId))
+      expect([...tours].sort()).toEqual(['turn-1', 'turn-2', 'turn-3'])
+
+      // Et le dossier REELLEMENT envoye au modele porte lui aussi les 3 tours.
+      const task = buildAutowinKaizenTask('/kaizen', evidence)
+      const snapshot = JSON.parse(task.slice(task.indexOf('{'), task.lastIndexOf('}') + 1))
+      const toursEnvoyes = new Set(
+        (snapshot.turnEvents as Array<{ turnId: string }>).map((event) => event.turnId)
+      )
+      expect([...toursEnvoyes].sort()).toEqual(['turn-1', 'turn-2', 'turn-3'])
+    } finally {
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+})
