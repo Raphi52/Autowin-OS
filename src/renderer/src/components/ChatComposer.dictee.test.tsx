@@ -94,6 +94,9 @@ describe('ChatComposer — dictée', () => {
 
     const micro = hote.querySelector<HTMLButtonElement>('[data-testid="composer-dictee"]')
     expect(micro).not.toBeNull()
+    // L'icone est DESSINEE (demande du 2026-09-02 : l'emoji etait moche et dependait de la police).
+    expect(micro!.querySelector('svg')).not.toBeNull()
+    expect(micro!.textContent ?? '').not.toContain('\u{1F3A4}')
 
     await act(async () => {
       micro!.click()

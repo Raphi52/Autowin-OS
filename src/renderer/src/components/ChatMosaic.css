@@ -200,6 +200,11 @@
   min-width: 28px;
   font-size: 13px;
 }
+/* En mosaïque le tracé rétrécit avec le bouton, sans changer d'épaisseur. */
+.chat-mosaic-window-composer .composer-dictee svg {
+  width: 13px;
+  height: 13px;
+}
 .chat-mosaic-window-composer .composer-dictee-message {
   font-size: 10px;
   margin-top: 3px;

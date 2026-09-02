@@ -3555,6 +3555,13 @@ ol.md-list li {
   padding: 0;
   font-size: 15px;
   line-height: 1;
+  /* L'icône est un tracé SVG : elle se centre, elle ne se cale plus sur la ligne de texte. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.composer-dictee svg {
+  display: block;
 }
 .composer-dictee.is-recording {
   border-color: rgba(239, 69, 88, 0.7);

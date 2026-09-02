@@ -70,6 +70,54 @@ async function whisperInstalle(): Promise<boolean | null> {
 const DICTEE_NON_INSTALLEE =
   'Reconnaissance vocale non installée — installez-la depuis les enregistrements parlés.'
 
+/**
+ * ICÔNES DU MICRO — dessinées, pas des emojis.
+ *
+ * DEMANDE DE L'UTILISATEUR (2026-09-02) : « l'icone est pourri, mets en un autre ». Un emoji 🎤 est
+ * rendu par la police du système : couleur imposée, trait épais, taille imprévisible. Ces tracés
+ * suivent `currentColor` (donc la couleur du bouton : neutre au repos, rouge en écoute) et restent
+ * nets à 15 px comme à 13 px en mosaïque.
+ */
+function IconeMicroTrait(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="9" y="2" width="6" height="11" rx="3" />
+        <path d="M5 11a7 7 0 0 0 14 0" />
+        <path d="M12 18v3" />
+      </g>
+    </svg>
+  )
+}
+
+/** Le carré d'arrêt : même trait, même graisse que le micro. */
+function IconeArret(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+      <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
+    </svg>
+  )
+}
+
+/** Les trois points de la transcription en cours. */
+function IconeTranscription(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+      <g fill="currentColor">
+        <circle cx="6" cy="12" r="1.8" />
+        <circle cx="12" cy="12" r="1.8" />
+        <circle cx="18" cy="12" r="1.8" />
+      </g>
+    </svg>
+  )
+}
+
 export interface ChatComposerHandle {
   /** Impose une valeur (brouillon rechargé, préremplissage) sans passer par un rendu du parent. */
   setInput: (value: string) => void
@@ -438,7 +486,13 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                       : 'Dicter au micro (Whisper local)'))
               }
             >
-              {dicteeEtat === 'transcription' ? '…' : dicteeEtat === 'ecoute' ? '⏹' : '🎤'}
+              {dicteeEtat === 'transcription' ? (
+                <IconeTranscription />
+              ) : dicteeEtat === 'ecoute' ? (
+                <IconeArret />
+              ) : (
+                <IconeMicroTrait />
+              )}
             </button>
             {props.stopNode}
             <button
