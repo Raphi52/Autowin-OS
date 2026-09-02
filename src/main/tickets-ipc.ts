@@ -1,4 +1,5 @@
 import {
+  parseTicketSourceProfile,
   type TicketItem,
   type TicketListRequest,
   type TicketPage,
@@ -41,9 +42,24 @@ interface TicketsServicePort {
   update(value: TicketUpdateIpcRequest, signal?: AbortSignal): Promise<TicketItem>
 }
 
+/**
+ * L'ANNUAIRE des collaborateurs, isole derriere un port.
+ *
+ * Il n'appelle pas le meme service que les autres canaux : il interroge Azure DevOps directement,
+ * avec les MEMES identifiants que `tickets:list`. Le detail de cette authentification reste dans
+ * `index.ts`, qui la partage avec le reste du demarrage ; ce module ne recoit qu'une fonction.
+ */
+interface TicketsPeoplePort {
+  /** Rend les collaborateurs, ou [] si la source n'est pas Azure / l'appel echoue. */
+  list(source: TicketSourceProfile): Promise<unknown[]>
+  /** Vrai si ce profil fait partie des sources enregistrees : un profil invente est refuse. */
+  estAutorisee(source: TicketSourceProfile): boolean
+}
+
 interface RegisterTicketsIpcOptions {
   ipc: TicketsIpcRegistrar
   service: TicketsServicePort
+  people: TicketsPeoplePort
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assertTrusted: (event: any, scope: string) => void
 }
@@ -51,6 +67,7 @@ interface RegisterTicketsIpcOptions {
 export function registerTicketsIpc({
   ipc,
   service,
+  people,
   assertTrusted
 }: RegisterTicketsIpcOptions): void {
   const active = new Map<unknown, Map<string, AbortController>>()
@@ -126,6 +143,17 @@ export function registerTicketsIpc({
       if (senderRequests.get(id) === controller) senderRequests.delete(id)
       if (senderRequests.size === 0) active.delete(event.sender)
     }
+  })
+  // Annuaire des collaborateurs (autocomplete assigne) : equipes du projet -> membres, memes
+  // credentials que tickets:list. BEST-EFFORT : toute defaillance => [] (l'autocomplete degrade
+  // sur les assignes deja charges, jamais d'erreur bloquante pour la vue).
+  ipc.handle('tickets:people', async (event, value: unknown) => {
+    assertTrusted(event, 'Tickets')
+    const source = parseTicketSourceProfile(value)
+    if (!source || !people.estAutorisee(source)) {
+      throw new Error('Profil Tickets non autorisé')
+    }
+    return people.list(source)
   })
   ipc.handle('tickets:cancel', (event, value: unknown) => {
     assertTrusted(event, 'Tickets')

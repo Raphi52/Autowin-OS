@@ -252,7 +252,6 @@ import {
   type MigratedRendererStorage
 } from './renderer-storage-migration'
 import { guardBoolean, guardProfile, guardString, guardStringOrNull } from './ipc-guards'
-import { parseTicketSourceProfile } from '../shared/tickets'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { TicketSourceStore } from './ticket-source-store'
@@ -1410,26 +1409,6 @@ function registerStorageMigrationIpc(lecture: Promise<LectureHistorique>): void 
 
 /** IPC : chat, orchestration, dashboards et graphe. */
 function registerChatIpc(): void {
-  // Annuaire des collaborateurs (autocomplete assigné) : équipes du projet → membres, mêmes
-  // credentials que tickets:list. BEST-EFFORT : toute défaillance ⇒ [] (l'autocomplete dégrade
-  // sur les assignés déjà chargés, jamais d'erreur bloquante pour la vue).
-  ipcMain.handle('tickets:people', async (event, value: unknown) => {
-    assertTrustedRendererSender(event, 'Tickets')
-    const source = parseTicketSourceProfile(value)
-    if (!source || !ticketSources.list().some((candidate) => candidate.id === source.id)) {
-      throw new Error('Profil Tickets non autorisé')
-    }
-    if (source.provider !== 'azure') return []
-    try {
-      const pat = process.env.AUTOWIN_AZDO_PAT ?? ''
-      const token = pat || (await getAzureDevOpsAadToken()) || ''
-      if (!token) return []
-      const authScheme: 'bearer' | 'pat' = pat ? 'pat' : 'bearer'
-      return await listAzurePeople(source, { token, authScheme, fetchFn: fetch })
-    } catch {
-      return []
-    }
-  })
   // Survie niveau 2 : au démarrage, le renderer demande les tours restés INACHEVÉS (app fermée en
   // pleine exécution) pour les rejouer/afficher. GC des journaux terminés au passage.
   ipcMain.handle('runs:unfinishedTurns', (event) => {
@@ -4040,6 +4019,24 @@ app.whenReady().then(async () => {
   registerTicketsIpc({
     ipc: ipcMain,
     service: tickets,
+    // L'annuaire n'appelle pas le service Tickets : il interroge Azure DevOps avec les MEMES
+    // identifiants que `tickets:list`. Cette authentification reste ici, partagee avec le
+    // demarrage ; le module ne recoit que le geste.
+    people: {
+      estAutorisee: (source) => ticketSources.list().some((candidat) => candidat.id === source.id),
+      list: async (source) => {
+        if (source.provider !== 'azure') return []
+        try {
+          const pat = process.env.AUTOWIN_AZDO_PAT ?? ''
+          const token = pat || (await getAzureDevOpsAadToken()) || ''
+          if (!token) return []
+          const authScheme: 'bearer' | 'pat' = pat ? 'pat' : 'bearer'
+          return await listAzurePeople(source, { token, authScheme, fetchFn: fetch })
+        } catch {
+          return []
+        }
+      }
+    },
     assertTrusted: assertTrustedRendererSender
   })
   jalonDemarrage('avant createWindow')

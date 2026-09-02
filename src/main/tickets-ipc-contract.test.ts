@@ -13,14 +13,13 @@ const TICKET_CHANNELS = [
 
 describe('Tickets IPC main contract', () => {
   it('enregistre les handlers consommés par le preload', () => {
-    const mainSource = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+    // LES SEPT AU MEME ENDROIT. `tickets:people` vivait a part dans `index.ts` et ce contrat
+    // portait l'exception ; il a rejoint ses freres le 2026-09-02, l'exception disparait.
     const ticketSource = readFileSync(new URL('./tickets-ipc.ts', import.meta.url), 'utf8')
 
     for (const channel of TICKET_CHANNELS) {
-      const source = channel === 'tickets:people' ? mainSource : ticketSource
-      const registrar = channel === 'tickets:people' ? 'ipcMain' : 'ipc'
-      expect(source, `handler main manquant: ${channel}`).toMatch(
-        new RegExp(`${registrar}\\.handle\\(\\s*['"]${channel}['"]`)
+      expect(ticketSource, `handler main manquant: ${channel}`).toMatch(
+        new RegExp(`ipc\\.handle\\(\\s*['"]${channel}['"]`)
       )
     }
   })

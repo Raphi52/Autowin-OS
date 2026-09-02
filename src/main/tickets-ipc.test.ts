@@ -38,8 +38,13 @@ function setup() {
     }))
   }
   const assertTrusted = vi.fn()
-  registerTicketsIpc({ ipc, service, assertTrusted })
-  return { handlers, service, assertTrusted }
+  // L'annuaire est un PORT distinct du service : il interroge Azure directement dans la production.
+  const people = {
+    estAutorisee: vi.fn((source: { id: string }) => source.id === DEFAULT_TICKET_SOURCE.id),
+    list: vi.fn(async () => [{ displayName: 'Raphael VILAIN' }])
+  }
+  registerTicketsIpc({ ipc, service, people, assertTrusted })
+  return { handlers, service, people, assertTrusted }
 }
 
 describe('IPC Tickets', () => {
@@ -179,4 +184,32 @@ describe('IPC Tickets', () => {
     expect(signals.every(({ aborted }) => aborted)).toBe(true)
   })
 
+  /**
+   * L'ANNUAIRE — trois garanties, aucune n'etait testable tant que ce canal vivait dans `index.ts`.
+   *
+   * Il alimente l'autocomplete de l'assigne. Un profil que le renderer INVENTE ne doit pas servir
+   * de porte vers un autre organisation Azure : d'ou le refus explicite avant tout appel reseau.
+   */
+  it("l'annuaire refuse un profil qui n'est pas enregistre, avant tout appel", async () => {
+    const { handlers, people, assertTrusted } = setup()
+    const event = { senderFrame: { url: 'app://trusted' } }
+
+    await expect(
+      handlers.get('tickets:people')!(event, { ...DEFAULT_TICKET_SOURCE, id: 'invente' })
+    ).rejects.toThrow('Profil Tickets non autorisé')
+    expect(people.list).not.toHaveBeenCalled()
+    expect(assertTrusted).toHaveBeenCalledTimes(1)
+  })
+
+  it("l'annuaire delegue au port quand le profil est enregistre", async () => {
+    const { handlers, people } = setup()
+    const event = { senderFrame: { url: 'app://trusted' } }
+
+    const membres = await handlers.get('tickets:people')!(event, DEFAULT_TICKET_SOURCE)
+
+    expect(membres).toEqual([{ displayName: 'Raphael VILAIN' }])
+    expect(people.list).toHaveBeenCalledWith(
+      expect.objectContaining({ id: DEFAULT_TICKET_SOURCE.id })
+    )
+  })
 })

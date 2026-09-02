@@ -325,7 +325,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   os:piper:parler — une chaine validee par `guardString`, plafonnee a 1 000 caracteres, puis
     //     prononcee en local. Aucune ecriture, aucun chemin, aucun reseau a l'usage.
     //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
-    expect(handlers).toHaveLength(165)
+    // MISE A JOUR 2026-09-02 — 165 -> 164. AUCUN canal supprime : `tickets:people` a REJOINT ses
+    //   six freres dans `tickets-ipc.ts`, ou il s'enregistre par l'`ipc` INJECTE. Ce fil-piege
+    //   compte les `ipcMain.handle` de la zone du process principal, il ne le voit donc plus. Il
+    //   n'echappe pas au controle pour autant : le scan ci-dessous, elargi dans le meme
+    //   changement, couvre desormais AUSSI les enregistrements par `ipc` injecte — ce qui ferme
+    //   au passage un angle mort ANTERIEUR de 16 canaux (tickets, task-manager, veille).
+    expect(handlers).toHaveLength(164)
     expect(unguarded).toEqual([])
   })
 
@@ -354,7 +360,10 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
           entree.name !== 'index.ts'
         ) {
           const contenu = readFileSync(chemin, 'utf8')
-          if (/ipcMain\.handle\(\s*['"]/.test(contenu)) fichiers.push(chemin)
+          // `ipcMain.handle` OU `ipc.handle` : trois modules (tickets, task-manager, veille)
+          // recoivent l'`ipc` en parametre. Ils etaient invisibles a ce scan — 16 canaux reels,
+          // tous gardes, mais rien ne l'imposait. Mesure du 2026-09-02.
+          if (/(?:ipcMain|ipc)\.handle\(\s*['"]/.test(contenu)) fichiers.push(chemin)
         }
       }
     }
@@ -362,7 +371,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
 
     const nonGardes = fichiers.flatMap((chemin) => {
       const contenu = readFileSync(chemin, 'utf8')
-      const trouves = [...contenu.matchAll(/ipcMain\.handle\(\s*['"]([^'"]+)['"]/g)]
+      const trouves = [...contenu.matchAll(/(?:ipcMain|ipc)\.handle\(\s*['"]([^'"]+)['"]/g)]
       return trouves.flatMap((match, index) => {
         const bloc = contenu.slice(match.index, trouves[index + 1]?.index ?? contenu.length)
         // Garde direct OU garde INJECTÉ (`deps.assertTrusted(event, …)`).
