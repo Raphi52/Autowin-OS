@@ -77,6 +77,12 @@ function noeudsVisibles(): string[] {
   )
 }
 
+/** Le compteur que la vue publie elle-même dans le DOM : nombre de nœuds visibles en arbre. */
+function compteurArbre(): number {
+  const canvas = container.querySelector<HTMLElement>('.graph-canvas')
+  return Number(canvas?.dataset.treeVisibleNodes ?? '-1')
+}
+
 async function cliquer(nodeId: string): Promise<void> {
   const bouton = container.querySelector<HTMLButtonElement>(`[data-node-id="${nodeId}"]`)
   if (!bouton) throw new Error(`nœud absent du graphe : ${nodeId}`)
@@ -136,26 +142,95 @@ describe('graphe en arbre — un clic déplie un cran, de la branche jusqu’à 
 
     // Cran 0 : seule la branche de premier niveau est là — aucune fiche, aucun sous-dossier.
     expect(noeudsVisibles()).toEqual(['__tree__:Transverse'])
+    const mesures = [compteurArbre()]
+    expect(mesures[0]).toBeGreaterThan(0)
 
     // Chaque clic dévoile EXACTEMENT le cran suivant, jamais plus.
     await cliquer('__tree__:Transverse')
     expect(noeudsVisibles()).toEqual(['__tree__:Transverse', '__tree__:Transverse/knowledge'])
+    mesures.push(compteurArbre())
 
     await cliquer('__tree__:Transverse/knowledge')
+    mesures.push(compteurArbre())
     expect(noeudsVisibles()).toContain('__tree__:Transverse/knowledge/decisions')
     expect(noeudsVisibles()).not.toContain('__tree__:Transverse/knowledge/decisions/2026')
 
     await cliquer('__tree__:Transverse/knowledge/decisions')
+    mesures.push(compteurArbre())
     expect(noeudsVisibles()).toContain('__tree__:Transverse/knowledge/decisions/2026')
     expect(noeudsVisibles()).not.toContain('knowledge/decisions/2026/curation.md')
 
     // Dernier cran : les fiches elles-mêmes apparaissent.
     await cliquer('__tree__:Transverse/knowledge/decisions/2026')
+    mesures.push(compteurArbre())
+    // Le compteur publié par la vue AUGMENTE strictement à chaque clic : la mesure ne dépend pas
+    // du faux graphe 3D, elle vient de l'attribut que la vue écrit elle-même.
+    for (let cran = 1; cran < mesures.length; cran += 1)
+      expect(mesures[cran]).toBeGreaterThan(mesures[cran - 1])
     expect(noeudsVisibles()).toContain('knowledge/decisions/2026/curation.md')
     expect(noeudsVisibles()).toContain('knowledge/decisions/2026/tri.md')
 
     // …et la fiche au bout de la chaîne est CONSULTABLE : un clic ouvre son contenu.
     await cliquer('knowledge/decisions/2026/curation.md')
+    expect(readNodeFile).toHaveBeenCalledWith(
+      'C:/brain/knowledge/decisions/2026/curation.md',
+      undefined
+    )
+    expect(container.textContent).toContain('Détail du nœud')
+    expect(container.textContent).toContain('C:/brain/knowledge/decisions/2026/curation.md')
+  })
+})
+
+describe('graphe en mode nuage (le mode d’ouverture par défaut) — un clic ouvre la fiche', () => {
+  it('ajoute les voisins au nuage et affiche le contenu de la fiche cliquée', async () => {
+    const readNodeFile = vi.fn().mockResolvedValue('# Curation contenu de la fiche')
+    const VOISINS = [
+      ...FICHES,
+      {
+        id: 'knowledge/decisions/2026/voisine.md',
+        label: 'voisine',
+        group: 1,
+        file: 'C:/brain/knowledge/decisions/2026/voisine.md'
+      }
+    ]
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'brain', label: 'Brain', path: 'C:/brain', sizeMb: 1, kind: 'file' }
+        ]),
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({ nodes: FICHES, links: [] }),
+      loadBrainGraph: vi.fn().mockResolvedValue({ nodes: FICHES, links: [] }),
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([]),
+      loadBrainNeighborhood: vi.fn().mockResolvedValue({ nodes: VOISINS, links: [] }),
+      readNodeFile,
+      searchBrain: vi.fn().mockResolvedValue({ status: 'found', note: '', results: [] })
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+
+    // Aucun clic sur la bascule : on reste dans le mode d'ouverture par défaut (le nuage).
+    const canvas = container.querySelector<HTMLElement>('.graph-canvas')
+    expect(canvas?.dataset.treeVisibleNodes).toBeUndefined()
+
+    const avant = noeudsVisibles()
+    expect(avant).toEqual([
+      'knowledge/decisions/2026/curation.md',
+      'knowledge/decisions/2026/tri.md'
+    ])
+
+    await cliquer('knowledge/decisions/2026/curation.md')
+
+    // Points APRÈS > points AVANT : le clic a bien ramené le voisinage dans le nuage.
+    const apres = noeudsVisibles()
+    expect(apres.length).toBeGreaterThan(avant.length)
+    expect(apres).toContain('knowledge/decisions/2026/voisine.md')
+
+    // …et la fiche cliquée est ouverte.
     expect(readNodeFile).toHaveBeenCalledWith(
       'C:/brain/knowledge/decisions/2026/curation.md',
       undefined
