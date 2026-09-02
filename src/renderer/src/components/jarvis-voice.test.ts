@@ -255,6 +255,21 @@ describe('le mot d’éveil suit le NOM RÉGLÉ, pas une constante', () => {
     expect(contientEveil('Pierre ?', 'Jean-Pierre')).toBe(true)
   })
 
+  it('dire son nom ENTIER ne lance AUCUNE tâche', () => {
+    // LE DÉFAUT vécu le 2026-09-02 (conv-108/109) : assistant nommé « Machin bidule ». Le motif du
+    // nom complet exigeait les 4 premières lettres de CHAQUE mot non final SANS tolérance de fin :
+    // « mach » devait être suivi d'un séparateur, donc « machin bidule » ne correspondait jamais en
+    // entier. Seul le raccourci « machin » réveillait, et le reste du NOM — « bidule » — partait
+    // comme ordre : dire son nom lançait une tâche appelée « bidule ».
+    expect(contientEveil('machin bidule', 'Machin bidule')).toBe(true)
+    expect(extraireCommandeEveil('machin bidule', 'Machin bidule')).toBeNull()
+    expect(extraireCommandeEveil('Machin bidule.', 'Machin bidule')).toBeNull()
+    // Un vrai ordre derrière le nom reste un ordre.
+    expect(extraireCommandeEveil('Machin bidule, ouvre le chat', 'Machin bidule')).toBe(
+      'ouvre le chat'
+    )
+  })
+
   it('un nom à plusieurs mots ne se réveille pas sur ses mots courts', () => {
     // « Mon Ami » ne doit PAS partir sur « mon », prononcé dans une phrase sur deux.
     expect(contientEveil('mon rendez-vous de demain', 'Mon Ami')).toBe(false)

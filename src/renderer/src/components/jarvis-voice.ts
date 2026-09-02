@@ -212,14 +212,23 @@ function motsNom(nom: string): string[] {
 }
 
 /**
- * Un mot du nom, ecrit en motif : apostrophe toleree apres la premiere lettre, et — pour le mot
- * qui TERMINE l'appel — fin libre a trois lettres pres. Un mot de moins de 3 lettres ne tolere
- * rien : « Al » elargi reveillerait l'assistant sur « allo », « alors », « aller ».
+ * Un mot du nom, ecrit en motif : apostrophe toleree apres la premiere lettre, et fin libre a trois
+ * lettres pres. Un mot de moins de 3 lettres ne tolere rien : « Al » elargi reveillerait
+ * l'assistant sur « allo », « alors », « aller ».
+ *
+ * LA FIN LIBRE VAUT POUR CHAQUE MOT, pas seulement le dernier. Defaut vecu le 2026-09-02
+ * (conv-108/109), assistant nomme « Machin bidule » : un mot NON final n'etait garde que sur ses
+ * 4 premieres lettres SANS tolerance, donc `mach` devait etre suivi d'un separateur et
+ * « machin bidule » ne correspondait JAMAIS au nom entier. Seul le raccourci « machin »
+ * reveillait, et le reste du NOM — « bidule » — repartait comme ORDRE : dire son nom lancait une
+ * tache appelee « bidule ». Le nom entier est essaye AVANT les raccourcis, donc il gagne.
+ * La tolerance reste BORNEE (4 lettres exigees, 3 libres au plus) : la garde contre une piece
+ * bruyante ne bouge pas.
  */
-function motifMot(mot: string, finLibre: boolean): string {
+function motifMot(mot: string): string {
   if (mot.length < 3) return mot
   const prefixe = mot.slice(0, 4)
-  return `${prefixe[0]}['’]?${prefixe.slice(1)}${finLibre ? TOLERANCE_FIN : ''}`
+  return `${prefixe[0]}['’]?${prefixe.slice(1)}${TOLERANCE_FIN}`
 }
 
 const CACHE_EVEIL = new Map<string, RegExp>()
@@ -244,15 +253,15 @@ export function motifEveil(nom: string = NOM_JARVIS_DEFAUT): RegExp {
   const cle = mots.join(' ')
   const enCache = CACHE_EVEIL.get(cle)
   if (enCache) return enCache
-  // Le nom ENTIER : les mots peuvent arriver colles, espaces, ou lies par un trait d'union ou une
-  // apostrophe, selon ce que le moteur decide d'ecrire. Seul le DERNIER mot a la fin libre.
-  const complet = mots
-    .map((mot, index) => motifMot(mot, index === mots.length - 1))
-    .join("[\\s'’-]*")
+  // Le nom ENTIER, essaye EN PREMIER : l'alternance retient la premiere branche qui reussit, donc
+  // le nom complet l'emporte sur le raccourci et ne laisse aucun reste a prendre pour un ordre.
+  // Les mots peuvent arriver colles, espaces, ou lies par un trait d'union ou une apostrophe,
+  // selon ce que le moteur decide d'ecrire ; CHACUN garde sa fin libre a trois lettres pres.
+  const complet = mots.map((mot) => motifMot(mot)).join("[\\s'’-]*")
   // Le RACCOURCI : on appelle « Jean-Pierre » en disant « Jean ». Reserve aux mots d'au moins
   // quatre lettres — sur « Mon Ami », un eveil sur « mon » partirait a chaque phrase.
   const raccourcis = mots.length > 1 ? mots.filter((mot) => mot.length >= 4) : []
-  const alternatives = [complet, ...raccourcis.map((mot) => motifMot(mot, true))]
+  const alternatives = [complet, ...raccourcis.map((mot) => motifMot(mot))]
   const motif = new RegExp('\\b(?:' + alternatives.join('|') + ')\\b', 'iu')
   CACHE_EVEIL.set(cle, motif)
   return motif
