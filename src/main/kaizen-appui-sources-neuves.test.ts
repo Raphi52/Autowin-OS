@@ -68,7 +68,9 @@ describe('une correction de kaizen doit s appuyer sur une source neuve', () => {
     const verdict = exigenceAppuiSourcesNeuves(tache, sortie)
     expect(verdict.cites).toContain('turn-8f21')
     expect(verdict.manque).toBe(false)
-    expect(appuiSourcesNeuvesHandler({ event: 'pre-green', task: tache, output: sortie }).block).toBeFalsy()
+    expect(
+      appuiSourcesNeuvesHandler({ event: 'pre-green', task: tache, output: sortie }).block
+    ).toBeFalsy()
   })
 
   it('accepte l horodatage d une saisie (les saisies n ont pas d identifiant)', () => {
@@ -89,7 +91,9 @@ describe('une correction de kaizen doit s appuyer sur une source neuve', () => {
       saisies: []
     })
     expect(exigenceAppuiSourcesNeuves(vide, 'aucune citation').applicable).toBe(false)
-    expect(appuiSourcesNeuvesHandler({ event: 'pre-green', task: vide, output: 'rien' }).block).toBeFalsy()
+    expect(
+      appuiSourcesNeuvesHandler({ event: 'pre-green', task: vide, output: 'rien' }).block
+    ).toBeFalsy()
   })
   /*
     Deux defauts releves par le controle final sur CE controle, sur les donnees reelles de conv-105 :

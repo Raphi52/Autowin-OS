@@ -442,7 +442,6 @@ function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<strin
   return retires
 }
 
-/** Transforme /kaizen en dossier de preuve borné, sans source ni instruction Claude. */
 const MARQUEUR_DEBUT = '=== DOSSIER DE PREUVE AUTOWIN OS ==='
 const MARQUEUR_FIN = '=== FIN DU DOSSIER ==='
 
@@ -523,6 +522,7 @@ export function exigenceAppuiSourcesNeuves(task: string, sortie: string): AppuiS
   }
 }
 
+/** Transforme /kaizen en dossier de preuve borné, sans source ni instruction Claude. */
 export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenEvidence): string {
   const messages = evidence.conversation.messages.slice(-MESSAGE_LIMIT).map((message) => ({
     ts: new Date(message.ts).toISOString(),
