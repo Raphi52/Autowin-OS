@@ -37,6 +37,26 @@ function measures(input: Record<string, unknown>): Record<string, unknown> {
   return out
 }
 
+/**
+ * TEXTE DE LA DEMANDE — le journal ne portait que `messages: 3`, c'est-a-dire le NOMBRE de
+ * messages envoyes. Relire un tour sans savoir ce qui a ete demande rend le journal illisible en
+ * retrospective (mesure conv-131). On ecrit donc le dernier message UTILISATEUR, borne a 2000
+ * signes : assez pour reconnaitre la demande, jamais une recopie du prompt complet.
+ */
+const DEMANDE_MAX = 2000
+
+function derniereDemande(messages: unknown[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i] as { role?: unknown; content?: unknown } | null
+    if (!message || message.role !== 'user') continue
+    if (typeof message.content !== 'string') continue
+    const texte = message.content.trim()
+    if (!texte) continue
+    return texte.slice(0, DEMANDE_MAX)
+  }
+  return undefined
+}
+
 /** Ce qu'un tour doit retenir entre deux appels pour ne pas ré-écrire le même prompt système. */
 export interface PromptJournalMemory {
   system?: string
@@ -125,6 +145,7 @@ export function promptCallJournalEvents(
       at
     })
   }
+  const demande = derniereDemande(prompt.messages)
   out.push({
     kind: 'prompt-call',
     iteration: event.iteration ?? 0,
@@ -137,6 +158,7 @@ export function promptCallJournalEvents(
     ...(event.error ? { error: event.error } : {}),
     options: sanitizePersistedValue(prompt.options),
     messages: prompt.messages.length,
+    ...(demande ? { demande } : {}),
     systemChars: system.length,
     responseChars: (event.response ?? '').length,
     ...(event.callUsage ? { usage: measures({ ...event.callUsage }) } : {}),
