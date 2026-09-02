@@ -30,6 +30,45 @@ import {
   type MentionSources
 } from './chat-mentions'
 import { buildScopeEcho, formatScopeEcho } from './chat-scope-echo'
+import {
+  Dictee,
+  dependancesDicteeNavigateur,
+  insererDictee,
+  type EtatDictee
+} from './composer-dictee'
+
+/** Le pont vers la transcription LOCALE (whisper.cpp), exposé par le préchargement. */
+interface ApiWhisper {
+  whisperTranscrire?: (w: Uint8Array) => Promise<string>
+  whisperEtat?: () => Promise<{ installe: boolean }>
+}
+const apiWhisper = (): ApiWhisper | undefined => (window as unknown as { api?: ApiWhisper }).api
+
+const pontWhisper = (): ((wav: Uint8Array) => Promise<string>) | undefined => {
+  const api = apiWhisper()
+  return api?.whisperTranscrire ? api.whisperTranscrire.bind(api) : undefined
+}
+
+/**
+ * WHISPER EST-IL INSTALLÉ ? La seule présence de la fonction du pont ne le dit PAS : le processus
+ * principal refuse de transcrire tant que le binaire et le modèle ne sont pas là
+ * (`whisper-local.ts`, `transcrire`). Sans cette lecture, le micro s'ouvrait pour rien et l'échec
+ * ressortait en « Rien n'a été reconnu » — un message faux.
+ * Rend `null` quand l'état est illisible (pont absent) : on ne bloque pas sur une inconnue.
+ */
+async function whisperInstalle(): Promise<boolean | null> {
+  const api = apiWhisper()
+  if (!api?.whisperEtat) return null
+  try {
+    return (await api.whisperEtat()).installe === true
+  } catch {
+    return null
+  }
+}
+
+/** Le texte affiché quand la reconnaissance vocale n'est pas installée sur le poste. */
+const DICTEE_NON_INSTALLEE =
+  'Reconnaissance vocale non installée — installez-la depuis les enregistrements parlés.'
 
 export interface ChatComposerHandle {
   /** Impose une valeur (brouillon rechargé, préremplissage) sans passer par un rendu du parent. */
@@ -135,6 +174,79 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         el.focus()
         el.setSelectionRange(nextCaret, nextCaret)
       })
+    }
+
+    /**
+     * DICTÉE (micro) — même bouton pour le chat plein et la mosaïque : elles partagent CE composer.
+     * Le texte reconnu repasse par `pousserTexte`, sinon le brouillon tenu par le parent serait
+     * perdu au changement de conversation.
+     */
+    const [dicteeEtat, setDicteeEtat] = useState<EtatDictee>('inactif')
+    const [dicteeErreur, setDicteeErreur] = useState<string | null>(null)
+    const dicteeRef = useRef<Dictee | null>(null)
+    // `null` = pas encore su. Le bouton n'est barré que sur un « non » LU, jamais sur une inconnue.
+    const [dicteeInstallee, setDicteeInstallee] = useState<boolean | null>(null)
+    // Démonter la vue ne doit pas laisser un micro ouvert.
+    useEffect(() => () => dicteeRef.current?.annuler(), [])
+    useEffect(() => {
+      let vivant = true
+      void whisperInstalle().then((etat) => {
+        if (!vivant) return
+        setDicteeInstallee(etat)
+        if (etat === false) setDicteeErreur(DICTEE_NON_INSTALLEE)
+      })
+      return () => {
+        vivant = false
+      }
+    }, [])
+
+    async function basculerDictee(): Promise<void> {
+      if (dicteeEtat === 'transcription') return
+      if (dicteeEtat === 'ecoute') {
+        setDicteeEtat('transcription')
+        const texte = (await dicteeRef.current?.arreter()) ?? ''
+        dicteeRef.current = null
+        setDicteeEtat('inactif')
+        if (texte === '') {
+          setDicteeErreur('Rien n’a été reconnu.')
+          return
+        }
+        const el = inputRef.current
+        // La valeur LUE dans le champ, pas celle capturée au clic : l'utilisateur a pu taper
+        // pendant que le micro tournait.
+        const courant = el?.value ?? input
+        const caret = el?.selectionStart ?? courant.length
+        const suivant = insererDictee(courant, texte, caret)
+        pousserTexte(suivant.texte)
+        requestAnimationFrame(() => {
+          const champ = inputRef.current
+          if (!champ) return
+          champ.focus()
+          champ.setSelectionRange(suivant.caret, suivant.caret)
+        })
+        return
+      }
+      const transcrire = pontWhisper()
+      if (!transcrire) {
+        setDicteeErreur('Reconnaissance vocale indisponible.')
+        return
+      }
+      // Re-lecture au clic : l'installation a pu se faire depuis l'ouverture de la vue.
+      const installee = await whisperInstalle()
+      setDicteeInstallee(installee)
+      if (installee === false) {
+        setDicteeErreur(DICTEE_NON_INSTALLEE)
+        return
+      }
+      const dictee = new Dictee(dependancesDicteeNavigateur(transcrire))
+      dicteeRef.current = dictee
+      setDicteeErreur(null)
+      setDicteeEtat('ecoute')
+      if (!(await dictee.demarrer())) {
+        dicteeRef.current = null
+        setDicteeEtat('inactif')
+        setDicteeErreur('Micro indisponible.')
+      }
     }
 
     const canResume = props.resumeAvailable && !input.trim() && props.attachmentCount === 0
@@ -301,6 +413,33 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                     : 'Écrire à l’agent ou déposer des fichiers…'
               }
             />
+            <button
+              type="button"
+              className={`btn composer-dictee${dicteeEtat === 'ecoute' ? ' is-recording' : ''}${
+                dicteeEtat === 'transcription' ? ' is-transcribing' : ''
+              }`}
+              data-testid="composer-dictee"
+              onClick={() => void basculerDictee()}
+              disabled={dicteeEtat === 'transcription' || dicteeInstallee === false}
+              aria-pressed={dicteeEtat === 'ecoute'}
+              aria-label={
+                dicteeEtat === 'ecoute'
+                  ? 'Arrêter la dictée et transcrire'
+                  : dicteeEtat === 'transcription'
+                    ? 'Transcription en cours'
+                    : 'Dicter au micro'
+              }
+              title={
+                dicteeInstallee === false
+                  ? DICTEE_NON_INSTALLEE
+                  : (dicteeErreur ??
+                    (dicteeEtat === 'ecoute'
+                      ? 'Arrêter la dictée'
+                      : 'Dicter au micro (Whisper local)'))
+              }
+            >
+              {dicteeEtat === 'transcription' ? '…' : dicteeEtat === 'ecoute' ? '⏹' : '🎤'}
+            </button>
             {props.stopNode}
             <button
               className={`btn-accent btn composer-send${canResume ? ' is-resume' : ''}`}
@@ -334,6 +473,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               {canResume ? '↻ Reprendre' : props.busy ? '🧭 Orienter' : 'Envoyer'}
             </button>
           </div>
+          {dicteeErreur ? (
+            <div
+              className="composer-dictee-message"
+              data-testid="composer-dictee-message"
+              role="status"
+            >
+              {dicteeErreur}
+            </div>
+          ) : null}
           {props.metaNode}
         </div>
       </div>
