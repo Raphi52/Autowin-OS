@@ -257,6 +257,22 @@ export function populateConvRunSections(
       const placeholder = new RegExp(`(##\\s+${section}\\n)<!--[\\s\\S]*?-->`, 'i')
       if (placeholder.test(md)) md = md.replace(placeholder, `$1${best}`)
     }
+    /*
+     * `## Défauts` ne peut PAS rejoindre la boucle ci-dessus : les autres sections se remplissent en
+     * remplaçant leur commentaire gabarit `<!-- … -->`, or celle-ci naît sans commentaire. On écrit
+     * donc SOUS le titre, en REMPLAÇANT son contenu — le peuplement est rejoué à chaque phase, il
+     * doit rester idempotent (sinon le compteur enflerait à chaque passage).
+     * Sans cela `dashboards/runs.ts` comptait une section que personne n'écrivait : « Défauts 0 »
+     * sur tous les runs, y compris rouges.
+     */
+    const defauts = phaseOutputs
+      .map((p) => extractSection(p.text, 'Défauts'))
+      .filter((c) => c && !c.startsWith('<!--'))
+      .sort((a, b) => b.length - a.length)[0]
+    if (defauts) {
+      md = md.replace(/(\n##\s+Défauts\s*\n)[\s\S]*?(?=\n##\s)/, `$1${defauts}\n`)
+    }
+
     const annexe = phaseOutputs
       .map((p) => `### phase ${p.phase}\n${p.text.slice(0, 2000)}`)
       .join('\n\n')
