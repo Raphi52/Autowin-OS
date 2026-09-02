@@ -4384,6 +4384,57 @@ export function ChatView({
             </div>
           )}
 
+          {renameCandidate && (
+            <div
+              className="delete-confirm-layer"
+              role="presentation"
+              onClick={() => setRenameCandidate(null)}
+            >
+              <form
+                className="delete-confirm-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="rename-conv-title"
+                data-testid="rename-conv-dialog"
+                onClick={(event) => event.stopPropagation()}
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void confirmRenameConv()
+                }}
+              >
+                <span className="delete-confirm-kicker">RENOMMER</span>
+                <h2 id="rename-conv-title">Nouveau titre</h2>
+                <input
+                  className="rename-conv-input"
+                  data-testid="rename-conv-input"
+                  aria-label="Nouveau titre de la conversation"
+                  value={renameCandidate.value}
+                  autoFocus
+                  onChange={(event) =>
+                    setRenameCandidate((current) =>
+                      current ? { ...current, value: event.target.value } : current
+                    )
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') setRenameCandidate(null)
+                  }}
+                />
+                <div className="delete-confirm-actions">
+                  <button
+                    type="button"
+                    className="btn delete-confirm-cancel"
+                    onClick={() => setRenameCandidate(null)}
+                  >
+                    Annuler
+                  </button>
+                  <button type="submit" className="btn" data-testid="rename-conv-confirm">
+                    Renommer
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
           {deleteCandidate && (
             <div
               className="delete-confirm-layer"
