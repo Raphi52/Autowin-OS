@@ -121,8 +121,7 @@ export function decideEdit(
   if (externe) {
     // Le chemin RESOLU et le chemin DEMANDE sont juges tous les deux : sous Windows, `resolve('/etc/x')`
     // rend `E:\etc\x` (ancre sur le disque courant), donc la racine POSIX ne survit qu'au brut.
-    const refusSysteme =
-      refusRacineSysteme(absolutePath) ?? refusRacineSysteme(input.path)
+    const refusSysteme = refusRacineSysteme(absolutePath) ?? refusRacineSysteme(input.path)
     if (refusSysteme) return { allowed: false, reason: refusSysteme }
   }
 
@@ -199,10 +198,14 @@ export function refusRacineSysteme(absolutePath: string): string | undefined {
   return undefined
 }
 
-
 /** Premiere ligne non vide d'un extrait — la plus discriminante pour retrouver la zone visee. */
 function anchorLine(text: string): string {
-  return text.split(/\r?\n/).find((line) => line.trim().length > 0)?.trim() ?? ''
+  return (
+    text
+      .split(/\r?\n/)
+      .find((line) => line.trim().length > 0)
+      ?.trim() ?? ''
+  )
 }
 
 /** Longueur du plus long prefixe commun : mesure de proximite suffisante, sans dependance. */
@@ -227,7 +230,10 @@ export function nearestLines(content: string, wanted: string, limit = 3): string
     const score = normalized.includes(needle) ? 10_000 : commonPrefix(normalized, needle)
     return { line, index, score }
   })
-  const best = scored.filter((entry) => entry.score >= 8).sort((a, b) => b.score - a.score).slice(0, limit)
+  const best = scored
+    .filter((entry) => entry.score >= 8)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
   if (best.length === 0) return ''
   return best
     .sort((a, b) => a.index - b.index)
@@ -241,7 +247,8 @@ export function occurrenceLines(content: string, wanted: string, limit = 5): str
   const lines = content.split(/\r?\n/)
   const found: string[] = []
   for (let i = 0; i < lines.length && found.length < limit; i += 1) {
-    if (anchor && lines[i].includes(anchor)) found.push(`  ${i + 1}: ${lines[i].trim().slice(0, 160)}`)
+    if (anchor && lines[i].includes(anchor))
+      found.push(`  ${i + 1}: ${lines[i].trim().slice(0, 160)}`)
   }
   return found.join('\n')
 }

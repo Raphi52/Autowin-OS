@@ -21,7 +21,11 @@ describe('decideEdit — CONFINEMENT au workspace', () => {
       'src/../../dehors.ts',
       'a/b/../../../evade.ts'
     ]) {
-      const decision = decideEdit({ path: escape, oldText: 'a', newText: 'b' }, WORKSPACE, file('a'))
+      const decision = decideEdit(
+        { path: escape, oldText: 'a', newText: 'b' },
+        WORKSPACE,
+        file('a')
+      )
       expect(decision.allowed).toBe(false)
       if (!decision.allowed) expect(decision.reason).toContain('hors du workspace')
     }
@@ -81,9 +85,9 @@ describe('decideEdit — CONFINEMENT au workspace', () => {
   })
 
   it('refuse sans workspace resolu', () => {
-    expect(decideEdit({ path: 'a.ts', oldText: 'a', newText: 'b' }, undefined, file('a')).allowed).toBe(
-      false
-    )
+    expect(
+      decideEdit({ path: 'a.ts', oldText: 'a', newText: 'b' }, undefined, file('a')).allowed
+    ).toBe(false)
   })
 })
 
@@ -100,7 +104,9 @@ describe('decideEdit — ZONES INTERDITES', () => {
 
   it('refuse node_modules, dist et out', () => {
     for (const path of ['node_modules/pkg/index.js', 'dist/bundle.js', 'out/main/index.js']) {
-      expect(decideEdit({ path, oldText: 'a', newText: 'b' }, WORKSPACE, file('a')).allowed).toBe(false)
+      expect(decideEdit({ path, oldText: 'a', newText: 'b' }, WORKSPACE, file('a')).allowed).toBe(
+        false
+      )
     }
   })
 
@@ -115,9 +121,9 @@ describe('decideEdit — ZONES INTERDITES', () => {
 
 describe('decideEdit — REMPLACEMENT non ambigu', () => {
   it('refuse une chaine vide (elle correspondrait partout)', () => {
-    expect(decideEdit({ path: 'a.ts', oldText: '', newText: 'x' }, WORKSPACE, file('abc')).allowed).toBe(
-      false
-    )
+    expect(
+      decideEdit({ path: 'a.ts', oldText: '', newText: 'x' }, WORKSPACE, file('abc')).allowed
+    ).toBe(false)
   })
 
   it('refuse un texte INTROUVABLE', () => {
@@ -141,16 +147,22 @@ describe('decideEdit — REMPLACEMENT non ambigu', () => {
   })
 
   it('refuse de CREER un fichier', () => {
-    const decision = decideEdit({ path: 'nouveau.ts', oldText: 'a', newText: 'b' }, WORKSPACE, absent)
+    const decision = decideEdit(
+      { path: 'nouveau.ts', oldText: 'a', newText: 'b' },
+      WORKSPACE,
+      absent
+    )
     expect(decision.allowed).toBe(false)
     if (!decision.allowed) expect(decision.reason).toContain('inexistant')
   })
 
   it('refuse un non-changement et des arguments invalides', () => {
-    expect(decideEdit({ path: 'a.ts', oldText: 'a', newText: 'a' }, WORKSPACE, file('a')).allowed).toBe(
+    expect(
+      decideEdit({ path: 'a.ts', oldText: 'a', newText: 'a' }, WORKSPACE, file('a')).allowed
+    ).toBe(false)
+    expect(decideEdit({ path: 42, oldText: 'a', newText: 'b' }, WORKSPACE, file('a')).allowed).toBe(
       false
     )
-    expect(decideEdit({ path: 42, oldText: 'a', newText: 'b' }, WORKSPACE, file('a')).allowed).toBe(false)
     expect(decideEdit({ path: 'a.ts', oldText: 'a' }, WORKSPACE, file('a')).allowed).toBe(false)
   })
 
@@ -196,7 +208,10 @@ describe('cablage de edit_file', () => {
 
   it('est declaree DESTRUCTIVE (l’UI et l’agent doivent le savoir)', () => {
     const source = commands()
-    const spec = source.slice(source.indexOf("name: 'edit_file'"), source.indexOf("name: 'edit_file'") + 800)
+    const spec = source.slice(
+      source.indexOf("name: 'edit_file'"),
+      source.indexOf("name: 'edit_file'") + 800
+    )
     expect(spec).toContain('destructiveHint: true')
     expect(spec).toContain('oldText')
   })
@@ -229,12 +244,9 @@ describe('cablage de edit_file', () => {
  * de son echec. Ici, l'echec doit rendre les lignes REELLES pour qu'il corrige au coup suivant.
  */
 describe('refus INSTRUCTIF (ce qui evite les 4 tentatives a l’aveugle)', () => {
-  const CONTENT = [
-    'export interface ScoutRow {',
-    "  impact: string",
-    "  effort: string",
-    '}'
-  ].join('\n')
+  const CONTENT = ['export interface ScoutRow {', '  impact: string', '  effort: string', '}'].join(
+    '\n'
+  )
 
   it('un extrait presque juste rend la LIGNE REELLE avec son numero', () => {
     // L'agent croit se souvenir de « impact: number » alors que le fichier dit « string ».
@@ -263,7 +275,11 @@ describe('refus INSTRUCTIF (ce qui evite les 4 tentatives a l’aveugle)', () =>
 
   it('un extrait AMBIGU liste les occurrences avec leurs numeros', () => {
     const twice = 'let x = 1\nautre\nlet x = 1\n'
-    const decision = decideEdit({ path: 'a.ts', oldText: 'let x = 1', newText: 'let y = 1' }, WORKSPACE, () => twice)
+    const decision = decideEdit(
+      { path: 'a.ts', oldText: 'let x = 1', newText: 'let y = 1' },
+      WORKSPACE,
+      () => twice
+    )
     expect(decision.allowed).toBe(false)
     if (!decision.allowed) {
       expect(decision.reason).toContain('2 fois')

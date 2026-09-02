@@ -17,6 +17,7 @@ import { AppCommandBus } from './commands'
  *   2. aucun bureau isole n'est ouvert (`worktrees.begin` jamais appele) — la machinerie de
  *      verification vitest d'Autowin ne s'applique pas a un depot .NET etranger.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- double minimal d'AutowinOS, comme dans commands.test.ts
 function osMinimal(executionWorkspace: string): any {
   return {
     executionWorkspace,

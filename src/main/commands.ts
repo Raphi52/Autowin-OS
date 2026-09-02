@@ -1,4 +1,11 @@
-import { applyEdit, decideEdit, decoderUtf8, editDiff, refusRacineSysteme, refusSiPasUtf8 } from './edit-file-command'
+import {
+  applyEdit,
+  decideEdit,
+  decoderUtf8,
+  editDiff,
+  refusRacineSysteme,
+  refusSiPasUtf8
+} from './edit-file-command'
 import {
   conversationRecenteEquivalente,
   titreDeConversationDemandee
@@ -2173,9 +2180,7 @@ export class AppCommandBus {
                   turnId: orchestrationTurnId,
                   phase:
                     (step.execution?.phase ??
-                      (step.detail ?? '')
-                        .replace(/^phase /, '')
-                        .replace(/ \(réparation\)$/, '')) ||
+                      (step.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '')) ||
                     undefined,
                   // La duree etait DEJA mesuree par l'orchestrateur et jetee ici : sans elle, on ne
                   // pouvait repondre qu'a « quelle phase coute », pas a « quelle phase est LENTE ».
