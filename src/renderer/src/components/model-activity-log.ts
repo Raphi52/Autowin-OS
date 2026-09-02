@@ -72,6 +72,12 @@ export interface ModelActivityInput {
   causal?: ReadonlyArray<Record<string, unknown>>
   /** Journal d'activité facturée de la conversation (`activity/<conv>.jsonl`), tel quel. */
   activity?: ReadonlyArray<Record<string, unknown>>
+  /**
+   * Traces BRAIN de la conversation (`brain-trace-spool`), telles quelles. C'était le trou : le
+   * savoir récupéré, la requête qui l'a déclenché, ce qui a été trouvé ou non, et les faits DÉPOSÉS
+   * par `remember` avaient leur propre journal, lu par l'Observatory — jamais par celui-ci.
+   */
+  brain?: ReadonlyArray<Record<string, unknown>>
 }
 
 /** L'heure vient du JOURNAL (`at: Date.now()` côté main) ; on ne l'INVENTE jamais quand elle manque. */
