@@ -688,6 +688,54 @@ function trierChronologiquement(entries: ModelActivityEntry[]): ModelActivityEnt
  * autre), les doublons exacts écartés, et l'ensemble trié chronologiquement. Un tour dont le journal
  * fichier a été nettoyé reste présent via ses parts durables.
  */
+/** Nature de l'aller-retour Brain, dite en clair plutôt qu'en code interne. */
+const BRAIN_NATURE: Record<string, string> = {
+  automatic: 'contexte préchargé',
+  query: 'brain_query',
+  empreinte: 'empreinte du dépôt',
+  recherche: 'recherche humaine',
+  depot: 'dépôt d’un fait'
+}
+
+/**
+ * Gestes du BRAIN — le savoir récupéré ou déposé pendant la conversation. Cette matière avait son
+ * propre journal (`brain-trace-spool`) mais n'atteignait que l'Observatory : dans le journal du
+ * chat, on voyait le modèle répondre sans jamais voir CE QU'IL AVAIT LU. On rend ici la requête, la
+ * nature de l'appel, l'issue (trouvé / vide / indisponible) et le volume réellement injecté.
+ */
+function fromBrain(traces: ReadonlyArray<Record<string, unknown>>): Brute[] {
+  return traces.map((trace, index) => {
+    const kind = typeof trace.kind === 'string' ? trace.kind : ''
+    const nature = BRAIN_NATURE[kind] ?? kind ?? ''
+    const statut = typeof trace.status === 'string' ? trace.status : undefined
+    const injecte = typeof trace.injectedChars === 'number' ? trace.injectedChars : undefined
+    const detail = joinDetail(
+      short(trace.query),
+      statut ? `issue : ${statut}` : undefined,
+      injecte !== undefined ? `${injecte} caractères injectés` : undefined,
+      rest(trace, 'query', 'status', 'injectedChars', 'timestamp', 'kind')
+    )
+    // L'ÉCHEC d'une récupération est un fait : un savoir vide ou indisponible explique une réponse
+    // pauvre. On ne le peint en rouge que lorsque la trace le dit elle-même.
+    const ok =
+      statut === 'found' || trace.found === true
+        ? true
+        : statut === 'empty' || statut === 'invalid' || statut === 'unavailable' || trace.found === false
+          ? false
+          : undefined
+    return {
+      id: `brain:${String(trace.id ?? index)}`,
+      turnId: typeof trace.turnId === 'string' ? trace.turnId : '',
+      kind: 'brain' as ModelActivityKind,
+      label: joinDetail('Brain', nature || undefined) ?? 'Brain',
+      ...isoStamp(trace.timestamp),
+      ...allFields(trace),
+      ...(detail ? { detail } : {}),
+      ...(ok === undefined ? {} : { ok })
+    }
+  })
+}
+
 /**
  * Tour qu'OUVRE une demande utilisateur : le premier message d'assistant qui la suit. Sans lui, la
  * demande flotte hors de tout tour et le regroupement par tour perd son point de départ. Une
