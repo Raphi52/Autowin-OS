@@ -344,11 +344,6 @@ import { unePasseALaFois } from './veille/une-passe-a-la-fois'
 import { lancerScoutVeille } from './veille/scout-claude'
 import { candidatsInternesDuDepot } from './veille/audit-depot'
 import { dispatcherAvecVeille } from './veille/dispatch-veille'
-import {
-  AutoKaizenSupervisor,
-  legacyAutoKaizenSupervisorEnabled,
-  type AutoKaizenIncidentInput
-} from './auto-kaizen-supervisor'
 import { OUTILS_NOEUD_SKILL } from './skill-node-tools'
 
 /**
@@ -576,22 +571,6 @@ jalonDemarrage('stores conversations et taches charges')
 for (const alert of scheduledTasks.listAlerts(true)) notifiedTaskAlerts.add(alert.id)
 let scheduledTaskScheduler: TaskScheduler | undefined
 let watchdogEngine: WatchdogEngine | undefined
-let autoKaizenSupervisor: AutoKaizenSupervisor | undefined
-/**
- * L'ancien superviseur auto-kaizen, DÉSARMÉ.
- *
- * Son rôle est repris par la règle Watchdog « Auto-kaizen » (`watchdog-seeds.ts`), qui écoute les
- * mêmes incidents mais est VISIBLE et réglable dans le Task Manager. Ses trois filtres mesurés
- * (abandon volontaire, quota épuisé, panne amont) ont été déplacés dans `watchdog-suppression.ts`
- * avec leurs mesures ; sa borne de largeur de cascade est devenue `maxPerRoot`.
- *
- * Désarmé plutôt que SUPPRIMÉ, délibérément : le retirer demande 23 points de chirurgie dans ce
- * fichier et touche `conversations.ts`, qui persiste un `autoKaizenConversationLink`. Le faire tant
- * que la suite complète n'est pas rejouable serait un changement non prouvable. Passer ce drapeau à
- * `true` restaure l'ancien comportement à l'identique — ce qui rend la bascule vérifiable dans les
- * deux sens avant que le code ne parte.
- */
-const AUTO_KAIZEN_SUPERVISOR_ENABLED = legacyAutoKaizenSupervisorEnabled(process.env)
 const pendingScheduledOccurrences = new Set<string>()
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
@@ -705,38 +684,8 @@ function broadcast(e: AppEvent): void {
       e.convId
     )
   }
-  if (!autoKaizenSupervisor) return
-  if (e.type === 'orchestrate-step' && e.convId && e.step.status === 'failed') {
-    const attempt = e.step.execution?.attemptId ?? `${e.step.step}:${e.step.provider ?? 'unknown'}`
-    autoKaizenSupervisor.report({
-      dedupeKey: `orchestration-step:${e.runPath ?? e.convId}:${attempt}`,
-      sourceConversationId: e.convId,
-      kind: e.step.step === 'gate' ? 'gate-failed' : 'orchestration-step-failed',
-      summary: `${e.step.step} a échoué`,
-      detail: e.step.error ?? e.step.detail ?? e.step.text ?? 'Étape en échec sans détail',
-      lineage: autoKaizenSupervisor.lineageForConversation(e.convId)
-    })
-  } else if (e.type === 'orchestrate-end' && e.convId && e.status === 'red') {
-    autoKaizenSupervisor.report({
-      dedupeKey: `orchestration-end:${e.runPath ?? e.convId}:red`,
-      sourceConversationId: e.convId,
-      kind: 'orchestration-red',
-      summary: 'Une orchestration s’est terminée en rouge',
-      detail: e.runPath ? `RUN en échec : ${e.runPath}` : 'Orchestration rouge sans RUN associé',
-      lineage: autoKaizenSupervisor.lineageForConversation(e.convId)
-    })
-  }
 }
 /** Bus de commandes (plan de contrôle) + pilote agent (tool-loop). */
-function reportAutoKaizen(input: AutoKaizenIncidentInput): void {
-  const supervisor = autoKaizenSupervisor
-  if (!supervisor || !os.conversations.get(input.sourceConversationId)) return
-  supervisor.report({
-    ...input,
-    lineage: input.lineage ?? supervisor.lineageForConversation(input.sourceConversationId)
-  })
-}
-
 const desktopController = new WindowsDesktopController({ capture: captureElectronDesktop })
 const outcomeLearningDirectory = join(app.getPath('userData'), 'outcome-learning')
 const outcomeLearningModePath = join(outcomeLearningDirectory, 'mode.txt')
@@ -2542,7 +2491,6 @@ Le fil reprend ensuite normalement.`
     drainPendingDirectives,
     askModelQuestion,
     notifyWatchdogWorkflowIncident,
-    reportAutoKaizen,
     watchdogEngine: () => watchdogEngine
   })
   /**
@@ -2659,108 +2607,6 @@ Le fil reprend ensuite normalement.`
       })()
     })
   }
-  // Désarmé : la règle Watchdog « Auto-kaizen » a repris son rôle (voir
-  // AUTO_KAIZEN_SUPERVISOR_ENABLED). Laisser les deux actifs déclencherait DEUX agents par incident.
-  if (AUTO_KAIZEN_SUPERVISOR_ENABLED)
-    autoKaizenSupervisor = new AutoKaizenSupervisor({
-      path: join(app.getPath('userData'), 'auto-kaizen-incidents.json'),
-      runtime: {
-        createConversation: ({ title, link }) => {
-          const source = os.conversations.get(link.sourceConversationId)
-          return os.conversations.create({
-            title: title.slice(0, 140),
-            provider: source?.provider ?? os.roles.getBinding('orchestrator').provider,
-            autoKaizen: link
-          })
-        },
-        appendSourceUpdate: (conversationId, text) => {
-          if (!os.conversations.get(conversationId)) return
-          os.conversations.append(conversationId, { role: 'assistant', content: text })
-          broadcast({ type: 'refresh', scope: 'conversations' })
-        },
-        runAnalysis: async (conversationId, prompt) => {
-          if (isolatedTestInstance) {
-            const turnId = `${conversationId}:isolated-auto-kaizen-analysis`
-            os.conversations.append(conversationId, { role: 'user', content: prompt })
-            const text = 'Diagnostic Auto-Kaizen isolé : erreur structurée reproduite et bornée.'
-            os.conversations.append(conversationId, { role: 'assistant', content: text })
-            return { ok: true, turnId, text }
-          }
-          const result = await runPilotChat(
-            undefined,
-            [{ role: 'user', content: prompt }],
-            conversationId
-          )
-          return {
-            ok: result.ok && !result.cancelled,
-            turnId: result.turnId,
-            text: result.text,
-            error: result.cancelled ? 'Analyse Auto-Kaizen interrompue' : result.error
-          }
-        },
-        runFix: async (conversationId, prompt) => {
-          if (isolatedTestInstance) {
-            const turnId = `${conversationId}:isolated-auto-kaizen-fix`
-            os.conversations.append(conversationId, { role: 'user', content: prompt })
-            const text = 'Correctif Auto-Kaizen isolé vérifié rouge→vert.'
-            os.conversations.append(conversationId, { role: 'assistant', content: text })
-            return {
-              ok: true,
-              turnId,
-              text,
-              verification: { complete: true, evidence: 'fixture rouge→vert, gate isolée validée' }
-            }
-          }
-          const result = await runPilotChat(
-            undefined,
-            [{ role: 'user', content: prompt }],
-            conversationId
-          )
-          return {
-            ok: result.ok && !result.cancelled,
-            turnId: result.turnId,
-            text: result.text,
-            verification: result.verification,
-            error: result.cancelled ? 'Correction Auto-Kaizen interrompue' : result.error
-          }
-        },
-        isConversationRunning: (conversationId) =>
-          Boolean(activeChatTurns.get(conversationId)) ||
-          os
-            .resumableOrchestrations()
-            .some((candidate) => candidate.conversationId === conversationId),
-        readConversationResult: (conversationId) => {
-          const message = os.conversations
-            .get(conversationId)
-            ?.messages.slice()
-            .reverse()
-            .find(
-              (candidate) =>
-                candidate.role === 'assistant' &&
-                candidate.status !== 'failed' &&
-                candidate.status !== 'cancelled' &&
-                candidate.status !== 'interrupted' &&
-                candidate.content.trim()
-            )
-          return message ? { turnId: message.turnId, text: message.content } : undefined
-        }
-      }
-    })
-  autoKaizenSupervisor?.resumePending()
-  /*
-   * DECLARE au detecteur de gel. Mesure du 2026-08-30 : les gels de 6 a 10 s reviennent en RAFALES
-   * espacees d'une dizaine de secondes — la cadence de CE minuteur. `resumePending` traverse
-   * `persist()`, donc `archiveIncidents` + `saveSnapshot`, deux ecritures SYNCHRONES. Suspect, pas
-   * coupable : on le NOMME d'abord, on corrigera ce que le journal designe.
-   */
-  const autoKaizenResumeTimer = setInterval(
-    () =>
-      pendantOperation('timer:autoKaizen:resumePending', () =>
-        autoKaizenSupervisor?.resumePending()
-      ),
-    15_000
-  )
-  autoKaizenResumeTimer.unref()
 
   /**
    * Le balayage des copies d'agent abandonnées, RÉPÉTÉ pendant la session et non plus au seul démarrage.
@@ -2903,45 +2749,44 @@ Le fil reprend ensuite normalement.`
   })
   scheduledTaskScheduler = new TaskScheduler(scheduledTasks, dispatcherVeille, relay)
   // Le moteur de réveil OBSERVE et délègue à ce même scheduler : il n'y a qu'un chemin d'exécution.
-  if (!AUTO_KAIZEN_SUPERVISOR_ENABLED) {
-    watchdogEngine = new WatchdogEngine(
-      () => scheduledTasks.listTasks(),
-      {
-        runWatchdog: async (taskId, signal, onLateMutationClaims, onLateUsageSettlement) => {
-          const result = await os.executionSupervisor.runOutsideCurrent(
-            async () =>
-              (await scheduledTaskScheduler?.runWatchdog(
-                taskId,
-                signal,
-                onLateMutationClaims,
-                onLateUsageSettlement
-              )) ?? {
-                fired: false
-              }
-          )
-          if (result.fired) broadcast({ type: 'refresh', scope: 'task-manager' })
-          return result
-        }
-      },
-      undefined,
-      undefined,
-      () => broadcast({ type: 'refresh', scope: 'task-manager' }),
-      (taskId) =>
-        scheduledTasks
-          .listOccurrences(taskId)
-          .filter(
-            (occurrence) => occurrence.trigger === 'watchdog' && occurrence.watchdog !== undefined
-          )
-          .map((occurrence) => ({
-            eventId: occurrence.id,
-            signature: occurrence.watchdog!.signature,
-            rootSignature: occurrence.watchdog!.rootSignature,
-            admittedAt: occurrence.claimedAt,
-            knownCostUsd: occurrence.knownCostUsd,
-            unpricedCalls: occurrence.unpricedCalls
-          }))
-    )
-  }
+  watchdogEngine = new WatchdogEngine(
+    () => scheduledTasks.listTasks(),
+    {
+      runWatchdog: async (taskId, signal, onLateMutationClaims, onLateUsageSettlement) => {
+        const result = await os.executionSupervisor.runOutsideCurrent(
+          async () =>
+            (await scheduledTaskScheduler?.runWatchdog(
+              taskId,
+              signal,
+              onLateMutationClaims,
+              onLateUsageSettlement
+            )) ?? {
+              fired: false
+            }
+        )
+        if (result.fired) broadcast({ type: 'refresh', scope: 'task-manager' })
+        return result
+      }
+    },
+    undefined,
+    undefined,
+    () => broadcast({ type: 'refresh', scope: 'task-manager' }),
+    (taskId) =>
+      scheduledTasks
+        .listOccurrences(taskId)
+        .filter(
+          (occurrence) => occurrence.trigger === 'watchdog' && occurrence.watchdog !== undefined
+        )
+        .map((occurrence) => ({
+          eventId: occurrence.id,
+          signature: occurrence.watchdog!.signature,
+          rootSignature: occurrence.watchdog!.rootSignature,
+          admittedAt: occurrence.claimedAt,
+          knownCostUsd: occurrence.knownCostUsd,
+          unpricedCalls: occurrence.unpricedCalls
+        }))
+  )
+
   os.onRecoveredCausalMutationClaims((claims) => {
     watchdogEngine?.rememberRecoveredMutationClaims(claims)
   })
@@ -3064,16 +2909,13 @@ Le fil reprend ensuite normalement.`
         await scheduledTaskScheduler?.runOccurrence(occurrenceId)
       }
       pendingScheduledOccurrences.clear()
-      // Règles livrées d'origine (l'auto-kaizen). Posées AVANT le démarrage du moteur pour qu'il les
-      // voie dès son premier passage, et UNE SEULE FOIS : supprimée par l'utilisateur, une règle
-      // semée ne revient pas.
-      if (!AUTO_KAIZEN_SUPERVISOR_ENABLED) {
-        const seeded = seedWatchdogTasks(scheduledTasks)
-        if (seeded.length) console.log(`[watchdog] règles livrées posées : ${seeded.length}`)
-        // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc
-        // l'historique déjà écrit ne réveille personne au démarrage.
-        await watchdogEngine?.start()
-      }
+      // Plus aucune règle n'est livrée d'origine : l'auto-kaizen a été retiré. Cet appel EFFACE la
+      // règle auto-kaizen encore posée quand elle est restée intacte, avant que le moteur ne la voie.
+      const seeded = seedWatchdogTasks(scheduledTasks)
+      if (seeded.length) console.log(`[watchdog] règles livrées posées : ${seeded.length}`)
+      // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc
+      // l'historique déjà écrit ne réveille personne au démarrage.
+      await watchdogEngine?.start()
       broadcast({ type: 'refresh', scope: 'task-manager' })
     })
     .catch((error) => {
@@ -3749,37 +3591,11 @@ app.whenReady().then(async () => {
           os.conversations.append(conversationId, { role: 'assistant', content: message })
           broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
         }
-        if (conversationId && (recap.coverage.lostProof > 0 || recap.diagnostics.length > 0)) {
-          const replayWindow = (resumableRun.agents ?? [])
-            .map((agent) => `${agent.token}:${agent.offset ?? 0}`)
-            .join('|')
-          if (recap.coverage.lostProof > 0) {
-            void wakeWatchdog(
-              'workflow-proof-lost',
-              `${recap.coverage.lostProof} perte(s) de preuve dans le journal du run ${resumableRun.runId}.`
-            )
-            reportAutoKaizen({
-              dedupeKey: `journal-replay-loss:${resumableRun.runId}:${replayWindow}:${lignes.length}`,
-              sourceConversationId: conversationId,
-              sourceTurnId: resumeTurnId,
-              kind: 'journal-replay-loss',
-              summary: `${recap.coverage.lostProof} perte(s) de preuve dans le journal`,
-              detail:
-                `Couverture structurée ${recap.coverage.structuredPercent} % ; ` +
-                `${recap.coverage.noise} bruit(s), ${recap.coverage.diagnostics} diagnostic(s), ` +
-                `${recap.coverage.blockages} blocage(s), ${recap.coverage.lostProof} perte(s) de preuve.`
-            })
-          }
-          for (const diagnostic of recap.diagnostics) {
-            reportAutoKaizen({
-              dedupeKey: `journal-diagnostic:${resumableRun.runId}:${replayWindow}:${diagnostic.line}:${diagnostic.summary}`,
-              sourceConversationId: conversationId,
-              sourceTurnId: resumeTurnId,
-              kind: diagnostic.kind,
-              summary: diagnostic.summary,
-              detail: diagnostic.detail
-            })
-          }
+        if (conversationId && recap.coverage.lostProof > 0) {
+          void wakeWatchdog(
+            'workflow-proof-lost',
+            `${recap.coverage.lostProof} perte(s) de preuve dans le journal du run ${resumableRun.runId}.`
+          )
         }
         // L'offset atteint est repersisté : ce qui vient d'être montré ne sera pas remontré.
         os.rememberAgentOffsets(resumableRun.runId, agentsApres)

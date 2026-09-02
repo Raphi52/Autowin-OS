@@ -330,7 +330,8 @@ function isUntouchedPriorReadOnlyAutoKaizen(task: ScheduledTask): boolean {
 /** Migre uniquement le semis historique INTACT ; une regle editee par l'utilisateur reste sienne. */
 function isUntouchedClaudeReadOnlyAutoKaizen(task: ScheduledTask): boolean {
   const current = autoKaizenSeed()
-  if (current.destination.kind !== 'new' || current.watchdog?.source.kind !== 'app-event') return false
+  if (current.destination.kind !== 'new' || current.watchdog?.source.kind !== 'app-event')
+    return false
   const source = task.watchdog?.source
   return (
     task.title === current.title &&
