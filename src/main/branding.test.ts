@@ -167,19 +167,22 @@ describe('identite Autowin OS', () => {
       'icon: build/icon.ico'
     )
     /*
-     * LE FOND N'EST PLUS UNE IMAGE. Ce test exigeait ici que `theme.css` peigne
-     * `autowin-galaxy-bg-hq.png` sur le `body`. Cette image PLATE a ete retiree : le fond de
-     * l'application est desormais la scene three.js `DecorDeFond`, montee a la racine de la coque et
-     * visible sur TOUTES les vues -- demande formulee deux fois par l'utilisateur (« enlever le fond
-     * d'ecran 2d et tout remplacer par du 3d »).
+     * LE FOND 2D EST LE FOND PAR DEFAUT, et ce test a deja porte l'exigence INVERSE.
+     * Historique reel, en trois temps : (1) l'image `autowin-galaxy-bg-hq.png` peignait le `body`
+     * sur toutes les vues ; (2) l'utilisateur l'a fait retirer au profit de la scene three.js
+     * `DecorDeFond` (« enlever le fond d'ecran 2d et tout remplacer par du 3d ») -- ce test exigeait
+     * alors son ABSENCE ; (3) le decor 3D a ete restreint a l'Accueil, sur demande egalement
+     * (« laisse le que sur accueil comme avant »), ce qui laissait un aplat noir partout ailleurs.
+     * L'image est donc revenue comme fond par defaut (commit 6570eede), et ce test est reste sur
+     * l'exigence du temps 2 : ROUGE alors que le code respectait le dernier choix de l'utilisateur.
      *
-     * Ce qui reste verifie, et qui compte autant : le `body` garde une base sombre EXPLICITE. Elle
-     * est ce qu'on voit avant la premiere image WebGL, et sur une machine sans WebGL ou le decor ne
-     * monte pas du tout -- sans elle, le fond serait blanc.
+     * Ce qui est verifie maintenant, c'est le choix COURANT : l'image peint le `body`, l'aplat
+     * sombre reste dessous en repli tant qu'elle n'est pas chargee, et le decor 3D n'est monte que
+     * sur l'Accueil (ou il recouvre l'image).
      */
-    expect(theme).not.toContain("url('./autowin-galaxy-bg-hq.png')")
-    expect(theme).toMatch(/body \{[^}]*background:\s*#[0-9a-f]{6}\s*;/i)
-    expect(appShell).toContain('<DecorDeFond />')
+    expect(theme).toContain("url('./autowin-galaxy-bg-hq.png')")
+    expect(theme).toMatch(/body \{[\s\S]*?background:[^;]*#[0-9a-f]{6}\s*;/i)
+    expect(appShell).toContain("{tab === 'accueil' && <DecorDeFond />}")
     expect(main).not.toContain("process.platform === 'linux' ? { icon } : {}")
     expect(main).toContain("icon: process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon")
     expect(main).toMatch(/titleBarOverlay:\s*\{[\s\S]*?color:\s*'#00000000'/)
