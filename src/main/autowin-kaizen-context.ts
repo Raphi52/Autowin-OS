@@ -221,7 +221,11 @@ function readTurnEvents(conversationId: string, appData: string): KaizenTurnEven
       .flatMap(({ turnId, events }) =>
         events.slice(-TURN_EVENT_LIMIT).map((event) => {
           const { kind, ...reste } = event
-          return { turnId, kind: String(kind), payload: clipped(JSON.stringify(reste), TURN_EVENT_CAP) }
+          return {
+            turnId,
+            kind: String(kind),
+            payload: clipped(JSON.stringify(reste), TURN_EVENT_CAP)
+          }
         })
       )
       .slice(-TURN_EVENT_LIMIT)
@@ -243,9 +247,9 @@ export function collectAutowinKaizenEvidence(
       causale, sans le dire. Kaizen est une vue dérivée : `readConversationBestEffort` ignore la
       seule ligne fautive et garde les autres.
     */
-    causalEvents = new TraceStore(
-      join(appData, 'causal-trace')
-    ).readConversationBestEffort(conversation.id)
+    causalEvents = new TraceStore(join(appData, 'causal-trace')).readConversationBestEffort(
+      conversation.id
+    )
   } catch {
     causalEvents = []
   }
