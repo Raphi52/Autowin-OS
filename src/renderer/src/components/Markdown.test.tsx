@@ -3,7 +3,8 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { groupAssistantActivity, hydrateStoredAssistant } from './chat-view-model'
-import { Markdown, extractRecommendation } from './Markdown'
+import { Markdown } from './Markdown'
+import { extractRecommendation } from './markdown-recommandation'
 
 let container: HTMLDivElement
 let root: Root

@@ -1,7 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBrancheCourante } from './branche-courante'
 import { createPortal } from 'react-dom'
-import { extractRecommendation } from './Markdown'
+import { extractRecommendation } from './markdown-recommandation'
+import { mesurerMessagesRendus } from './chat-mesure-messages'
 import { extrairePromptSuivant } from '../../../shared/prompt-suivant'
 import { SuggestionGrid } from './SuggestionGrid'
 import { ModuleHeader } from './ModuleHeader'
@@ -242,18 +243,6 @@ function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
         }
       : { ...hydrateStoredAssistant(m as StoredAssistantMessage), messageId: m.messageId }
   )
-}
-
-/**
- * Haut de CHAQUE message rendu, relatif au conteneur de défilement — l'ancre structurelle de la
- * reprise de lecture. `offsetTop` est relatif au parent positionné : on le ramène au conteneur en
- * retranchant le sien, ce qui reste juste même si un ancêtre intermédiaire est positionné.
- */
-export function mesurerMessagesRendus(conteneur: HTMLElement): { offsetTop: number }[] {
-  const hautConteneur = conteneur.getBoundingClientRect().top + conteneur.scrollTop
-  return Array.from(conteneur.querySelectorAll<HTMLElement>('.msg')).map((element) => ({
-    offsetTop: Math.round(element.getBoundingClientRect().top + conteneur.scrollTop - hautConteneur)
-  }))
 }
 
 export function ChatView({

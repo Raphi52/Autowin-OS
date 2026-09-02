@@ -2,7 +2,8 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AssistantActivityGroup, interruptedTask } from './ChatView.parts'
+import { AssistantActivityGroup } from './ChatView.parts'
+import { interruptedTask } from './chat-parts-helpers'
 import type { ChatActionPart } from './chat-view-model'
 
 let container: HTMLDivElement

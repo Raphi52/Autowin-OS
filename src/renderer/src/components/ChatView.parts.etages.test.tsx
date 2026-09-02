@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AssistantActivityGroup, iconeFamille, raisonDuLien } from './ChatView.parts'
+import { AssistantActivityGroup } from './ChatView.parts'
+import { iconeFamille, raisonDuLien } from './chat-parts-helpers'
 
 /**
  * Les 4 points du design convergé (B3-γ + L4) encore absents du FIL D'ACTIVITÉ du chat :

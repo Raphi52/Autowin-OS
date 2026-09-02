@@ -20,7 +20,7 @@
 import type { Msg, AsstMsg } from './chat-view-types'
 import type { ChatPart } from './chat-view-model'
 import { extrairePromptSuivant } from '../../../shared/prompt-suivant'
-import { extractRecommendation } from './Markdown'
+import { extractRecommendation } from './markdown-recommandation'
 
 /** Texte brut (avec la ligne technique du prompt) du DERNIER message de l'agent. */
 export function texteDernierAssistant(fil: readonly Msg[]): string | null {

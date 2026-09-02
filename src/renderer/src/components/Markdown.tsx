@@ -61,26 +61,6 @@ const FINAL_SUMMARY_LABELS = [
 ]
 
 /**
- * Extrait la RECOMMANDATION (ligne « 👉 Recommandé : … » du bloc de clôture) d'une réponse.
- * Rend le texte de l'étape recommandée (sans le libellé, sans le gras markdown), ou null.
- * Sert de ghost-text pré-rempli dans le composer du chat (accepté par Tab).
- */
-// eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec ce renderer
-export function extractRecommendation(text: string): string | null {
-  for (const raw of text.split('\n')) {
-    const line = raw.trim()
-    if (!line.startsWith('👉') || !/Recommand[ée]/u.test(line)) continue
-    const m = line.match(/Recommand[ée]\**\s*(?:[:：]|[—–-])\s*(.+)$/u)
-    const rec = (m ? m[1] : line.replace(/^👉\s*/u, ''))
-      .replace(/\*\*/g, '')
-      .replace(/`/g, '')
-      .trim()
-    return rec || null
-  }
-  return null
-}
-
-/**
  * MÉMOÏSATION DU RENDU — le fil se re-rend à chaque lot de deltas ; sans `memo`, les bulles déjà
  * figées repayaient un parse CommonMark complet à chaque frame alors que leur texte n'a pas bougé.
  * Les props sont des primitives : la comparaison superficielle de `memo` est ici exacte.
