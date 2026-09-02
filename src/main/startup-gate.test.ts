@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { interfaceVisible, signalerInterfaceVisible } from './startup-gate'
@@ -40,7 +41,9 @@ describe('garde de démarrage', () => {
 describe('le report de la réconciliation attend un ÉVÉNEMENT, jamais un délai', () => {
   const coordinateur = readFileSync(join(__dirname, 'store/run-worktree-coordinator.ts'), 'utf8')
   const os = readFileSync(join(__dirname, 'os.ts'), 'utf8')
-  const index = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+  // La ZONE du process principal, pas un chemin : le fenetrage a quitte `index.ts` pour
+  // `window.ts` le 2026-09-02 — un demenagement de code n'est pas une regression.
+  const index = sourceProcessPrincipal()
 
   it('le coordinateur n’expose aucun report exprimé en millisecondes', () => {
     expect(coordinateur).toContain('deferRecoveryUntil?: Promise<unknown>')
@@ -76,9 +79,18 @@ describe('le report de la réconciliation attend un ÉVÉNEMENT, jamais un déla
     // MESURÉ : signalé à `ready-to-show`, le travail synchrone occupait le fil principal avant même
     // que `loadURL` soit demandé — écran d'attente à 6,5 s, interface réelle à 32,8 s. Reculer ce
     // signal d'un cran annulerait tout le gain.
-    expect(index).toMatch(
-      /webContents\.once\('did-finish-load', \(\) => \{\s*jalonDemarrage\('interface chargée'\)\s*signalerInterfaceVisible\(\)/
+    // Le corps de l'ECOUTE, pas une suite de lignes collees : `cloreDemarrage()` s'y est
+    // intercale depuis, et exiger l'adjacence rendait ce contrat rouge sans qu'aucun cablage
+    // n'ait change (2026-09-02).
+    const ecouteChargement = index.slice(
+      index.indexOf(
+        "webContents.once('did-finish-load', () => {",
+        index.indexOf('const chargerInterface = ()')
+      )
     )
+    const corps = ecouteChargement.slice(0, ecouteChargement.indexOf('})'))
+    expect(corps).toContain("jalonDemarrage('interface chargée')")
+    expect(corps).toContain('signalerInterfaceVisible()')
     // ET l'écoute doit être posée DANS `chargerInterface`. Posée à la création de la fenêtre, elle
     // captait le `did-finish-load` de l'écran d'attente — MESURÉ, elle partait à 7 149 ms et le gain
     // était nul. C'est l'erreur exacte qui a été commise ici.

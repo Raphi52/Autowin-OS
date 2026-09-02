@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 import { closingTurnDelivery, closingStreamId } from './turn-closing'
 
 /**
@@ -17,7 +16,12 @@ import { closingTurnDelivery, closingStreamId } from './turn-closing'
  */
 describe('livraison du texte de clôture', () => {
   it('rend un événement durable ET un événement live, même flux et même texte', () => {
-    const livraison = closingTurnDelivery('turn-9', '  ⛔ Workflow BLOQUÉ par le gate  ', false, undefined)
+    const livraison = closingTurnDelivery(
+      'turn-9',
+      '  ⛔ Workflow BLOQUÉ par le gate  ',
+      false,
+      undefined
+    )
 
     expect(livraison?.durable).toEqual({
       kind: 'delta',
@@ -47,8 +51,10 @@ describe('livraison du texte de clôture', () => {
    * Le câblage, pas la logique : « calculé puis jeté à la frontière » est exactement le défaut vécu,
    * et aucun test de comportement sur cette fonction ne peut l'attraper.
    */
-  it('index.ts livre l’événement live, il ne persiste pas seulement le durable', () => {
-    const main = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  it('le process principal livre l’événement live, il ne persiste pas seulement le durable', () => {
+    // La ZONE du process principal, pas un chemin : ce cablage a quitte `index.ts` pour
+    // `src/main/chat/` (mesure du 2026-09-02).
+    const main = sourceProcessPrincipal()
     const usage = main.slice(main.indexOf('closingTurnDelivery('))
     expect(usage.length).toBeGreaterThan(0)
     const bloc = usage.slice(0, 1200)

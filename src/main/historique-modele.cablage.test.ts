@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 import { flattenChatParts, flattenChatPartsForModel } from '../shared/chat-turn'
 
 /**
@@ -15,7 +14,9 @@ import { flattenChatParts, flattenChatPartsForModel } from '../shared/chat-turn'
  * appel ne detecte pas qu'on a debranche sa CONSOMMATION. Sabotage joue sur un autre garde ce
  * jour-la : retirer l'usage du resultat le laissait VERT. On exige donc les deux.
  */
-const INDEX = readFileSync(join(__dirname, 'index.ts'), 'utf8').replace(/\s+/g, ' ')
+// La ZONE du process principal, pas un chemin : ce cablage a quitte `index.ts` pour
+// `src/main/chat/` (mesure du 2026-09-02) — un demenagement n'est pas une regression.
+const INDEX = sourceProcessPrincipal().replace(/\s+/g, ' ')
 
 describe('câblage — l’entrée du modèle est reconstruite depuis les parts', () => {
   it('runPilotChat consulte les parts stockées de la conversation', () => {
@@ -25,10 +26,9 @@ describe('câblage — l’entrée du modèle est reconstruite depuis les parts'
   it('le résultat ALIMENTE le contenu envoyé, il ne reste pas inutilisé', () => {
     // L'entrée qui doit faire échouer un débranchement : sans cette ligne, la map serait remplie
     // puis ignorée, et le modèle continuerait de recevoir l'étiquette nue.
-    expect(
-      INDEX,
-      'le contenu envoyé au modèle doit venir de flattenChatPartsForModel'
-    ).toContain('const pourLeModele = parts ? flattenChatPartsForModel(parts) || m.content : m.content')
+    expect(INDEX, 'le contenu envoyé au modèle doit venir de flattenChatPartsForModel').toContain(
+      'const pourLeModele = parts ? flattenChatPartsForModel(parts) || m.content : m.content'
+    )
     expect(INDEX).toContain("content: guardString(pourLeModele, 'content')")
   })
 

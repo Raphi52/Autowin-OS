@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * LE DRAPEAU D'EXPÉRIENCE DOIT ÊTRE RÉELLEMENT PASSÉ — sinon les gardes sont inertes.
@@ -17,7 +18,9 @@ import { join } from 'node:path'
  * D'où ce test : il vérifie le CÂBLAGE, pas la logique. C'est le seul défaut de la famille
  * « exposé mais jamais appelé » qu'aucun test de comportement ne peut attraper.
  */
-const main = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+// La ZONE du process principal, pas un chemin : ce cablage a quitte `index.ts` pour
+// `src/main/chat/`. Un demenagement de code n'est pas une regression (mesure du 2026-09-02).
+const main = sourceProcessPrincipal()
 const pilot = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
 
 describe('câblage de l’expérience soignée', () => {
