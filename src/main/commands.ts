@@ -65,6 +65,12 @@ import { bornerLigneDeVie } from './verify-battement'
 import { refusAvecIssue, refusPourOutcome, type OutcomeDePublication } from './issue-de-refus'
 import { rappelDesEchangesPasses } from './rappel-conversations'
 import { cleDeBureau, decisionDeReutilisation } from './bureau-reutilisable'
+import {
+  bureauUtilisable,
+  cleDuBureauDeVerification,
+  synchroniserBureauDeVerification,
+  VERIFY_SANS_ISOLATION
+} from './verification-isolee'
 import { readLastCommitFiles } from './git-read-main'
 import { nativeSkills } from './native-registry'
 
@@ -2787,7 +2793,11 @@ export class AppCommandBus {
         // reglage prend effet au prochain appel qui le lit, sans redemarrage.
         return rechargerEnv(a.nom)
       case 'verify':
-        return await this.runVerify(onProgress, typeof a.cible === 'string' ? a.cible : undefined)
+        return await this.runVerify(
+          onProgress,
+          typeof a.cible === 'string' ? a.cible : undefined,
+          conversationId
+        )
       case 'brain_query':
         return await this.runBrainQuery(a.question, conversationId, turnId)
       case 'ticket_create':
@@ -3947,11 +3957,71 @@ export class AppCommandBus {
     return { allowed: true, ...outcome }
   }
 
+  /**
+   * `verify` SE JOUE DANS UNE COPIE ISOLEE, PAS DANS LE DOSSIER PARTAGE.
+   *
+   * DEFAUT MESURE le 2026-09-02 (conv-133) : la suite tournait dans l'espace de travail partage.
+   * Un autre agent y a reecrit `src/main/runs/conv-runs.ts` PENDANT le lot, et la suite a echoue au
+   * chargement sur un fichier sain — un faux rouge, donc un verdict sans valeur. La meme fenetre
+   * rend un faux VERT possible : un fichier remis a l'identique apres coup efface la trace.
+   *
+   * Meme geste que `edit_file` (`withIsolatedMutation`), aux deux differences pres qui comptent :
+   * la copie n'est jamais publiee (on ne fait que LIRE un verdict), et l'etat COURANT y est reporte
+   * avant de lancer — sinon on verifierait le dernier commit, ce que personne ne demande.
+   *
+   * Copie indisponible = comportement d'AVANT, mais DIT : le verdict part avec
+   * `VERIFY_SANS_ISOLATION`. Se rabattre en silence sur le dossier partage rendrait de nouveau des
+   * verdicts que rien ne distingue d'un vrai.
+   */
   private async runVerify(
     onProgress?: (text: string) => void,
-    cible?: string
+    cible?: string,
+    conversationId?: string
   ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
-    return this.runVerifyAt(this.os.executionWorkspace, onProgress, cible)
+    const bureau = await this.bureauDeVerification(conversationId, onProgress)
+    if (bureau) return this.runVerifyAt(bureau, onProgress, cible)
+    const resultat = await this.runVerifyAt(this.os.executionWorkspace, onProgress, cible)
+    return { ...resultat, output: `${VERIFY_SANS_ISOLATION}${SAUT_PORTEE}${resultat.output}` }
+  }
+
+  /**
+   * Obtient (ou reprend) la copie de verification de cette conversation et y reporte l'etat
+   * courant. Rend `undefined` — jamais une exception — quand l'isolation n'est pas disponible :
+   * une verification impossible a isoler doit encore pouvoir conclure, en le disant.
+   */
+  private async bureauDeVerification(
+    conversationId?: string,
+    onProgress?: (text: string) => void
+  ): Promise<string | undefined> {
+    const workspace = this.os.executionWorkspace
+    const worktrees = this.os.worktrees
+    if (!workspace || !worktrees) return undefined
+    const runId = cleDuBureauDeVerification(conversationId)
+    const beginOptions = {
+      task: 'verify',
+      role: 'command',
+      ...(conversationId ? { conversationId } : {})
+    }
+    try {
+      const bureau = worktrees.beginAsync
+        ? await worktrees.beginAsync(runId, 'Commande verify', true, beginOptions)
+        : worktrees.begin(runId, 'Commande verify', true, beginOptions)
+      if (!bureauUtilisable(bureau)) return undefined
+      const rapport = synchroniserBureauDeVerification(
+        workspace,
+        bureau,
+        await this.fichiersNonCommites(workspace)
+      )
+      // Le premier `verify` d'une conversation paie la creation de la copie : le dire evite de
+      // lire cette attente comme un blocage.
+      onProgress?.(
+        `copie isolée prête — ${rapport.copies.length} fichier(s) à jour reporté(s)` +
+          (rapport.supprimes.length ? `, ${rapport.supprimes.length} retiré(s)` : '')
+      )
+      return bureau
+    } catch {
+      return undefined
+    }
   }
 
   private async runVerifyAt(
