@@ -71,6 +71,7 @@ import type { ChatArtifact } from '../shared/artifacts'
 export const CAP_ITERATIONS_TOUR = 12
 import type { PilotEventKind } from '../shared/pilot-events'
 import { blocEtatSuivant, type EtatPrompt } from './etat-diff'
+import { protegerRappel } from './observabilite-non-bloquante'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -672,15 +673,33 @@ export class AgentPilot {
     // Anti-collage : un delta qui ouvre une fence, ou qui reprend un flux interrompu, doit tomber
     // sur une ligne NEUVE — sinon la fence ```html-render finit en milieu de ligne (HTML brut à l'écran).
     const collage = new DeltaCollageTracker()
+    /*
+     * UN GEL DE L'INTERFACE NE FAIT PLUS REPAYER LE TOUR.
+     *
+     * MESURE DU 2026-09-02 (journaux de la journee) : 14 appels « reprise du tour interrompu » pour
+     * 13,62 $, dont 3,44 $ sur un seul (conv-96, 04:19) — un tour deja paye, relance du debut.
+     *
+     * Le consommateur de ces evenements ECRIT : trace causale, journal du tour, activite. Pendant un
+     * gel, l'ecriture de la trace attend un verrou de sequence (`withSequenceLock`,
+     * activity/trace-store.ts) qui JETTE passe son budget. Or `onEvent` etait appele A NU : ce jet
+     * remontait ici et tuait un tour par ailleurs sain. `run-pilot-chat.ts` protege pourtant ses
+     * ecritures une par une (« best-effort : ne jamais casser un tour ») — mais pas celles de
+     * l'appel provider ni des actions, et un oubli ligne par ligne se reproduira.
+     *
+     * On applique donc a la SOURCE le contrat deja retenu pour le pipeline le meme jour (commit
+     * d2f1f97d, `protegerRappel`) : l'observabilite d'un tour de chat n'est plus fatale. Ce n'est pas
+     * un catch avale — l'echec est signale — il cesse seulement d'emporter le tour.
+     */
+    const publier = protegerRappel<[PilotEvent]>('chat:onEvent', onEvent) ?? onEvent
     const emit = (e: PilotEventVariant): void => {
       if (e.kind === 'delta' && e.streamId && e.text) {
         const separation = collage.separation(e.streamId, e.text)
         if (separation) {
-          onEvent({ ...e, text: separation + e.text })
+          publier({ ...e, text: separation + e.text })
           return
         }
       }
-      onEvent(e)
+      publier(e)
     }
     let timingWritten = false
     const binding = runtimeBinding ?? bindingOverride ?? this.roles.getBinding('orchestrator')
