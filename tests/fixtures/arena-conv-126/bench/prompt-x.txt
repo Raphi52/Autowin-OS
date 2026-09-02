@@ -1,0 +1,25 @@
+TACHE (identique pour tous) :
+Dans le fichier scripts/scout-rendement.mjs DE CE DOSSIER, ajoute une option en ligne de commande
+`--depuis <YYYY-MM-DD>` qui ne garde que les conversations creees a cette date ou apres.
+La date de creation d'une conversation est le champ `createdAt` (epoch ms) dans
+.autowin-data/autowin-os/conversations.json. Sans l'option, le comportement actuel ne change pas.
+Le rapport Markdown (sortie sans --json) doit faire apparaitre la date de filtre. Mets l'option a jour
+dans la ligne "Usage :" de l'entete du fichier.
+
+CRITERE DE SUCCES — le seul qui compte, il est deterministe :
+  node D:/AutoWinOS/.autowin-data/autowin-os/arena-bench/check.mjs scripts/scout-rendement.mjs
+doit sortir "CRITERE ATTEINT" avec le code de sortie 0.
+
+REGLES DURES :
+- Tu ne modifies AUCUN autre fichier que scripts/scout-rendement.mjs.
+- Tu ne modifies PAS check.mjs (il sera re-verifie depuis une copie neuve : le tricher se voit).
+- Tu ne fais aucun commit, aucun push, aucun git.
+- Tu ne relances pas l'application.
+
+RENDS A LA FIN, en clair : (1) la liste ordonnee de ce que tu as fait, (2) la sortie exacte du
+critere de succes, (3) ce qui a echoue en route.
+WORKFLOW IMPOSE (X) — casse-premisse : tu n'as PAS le droit d'ouvrir le fichier en lecture complete,
+ni d'utiliser un outil de lecture de fichier (pas de Read). Tu n'as le droit qu'a des commandes shell :
+grep pour localiser les ancres, sed -n pour ne voir que quelques lignes autour, et tu appliques ta
+modification par une commande (sed / patch / heredoc en python ou node). Aucune phase, aucun plan,
+aucune relecture globale : tu localises, tu patches, tu lances le critere de succes.
