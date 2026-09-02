@@ -179,6 +179,11 @@ async function piperDisponible(): Promise<boolean> {
  * retombe alors sur la voix du système plutôt que de laisser Jarvis muet.
  */
 async function parlerPiper(texte: string, mien: number): Promise<boolean> {
+  // LE CHOIX DE L'UTILISATEUR DÉCIDE. Sans ce test, la voix neuronale passait devant TOUTES les
+  // autres dès qu'elle était installée : choisir une voix de Windows dans la liste ne changeait
+  // plus rien, et le réglage mentait. Liste vide (« automatique ») = elle reste préférée.
+  const choix = reglageCourant().voixURI.trim()
+  if (choix !== '' && choix !== VOIX_PIPER_URI) return false
   if (!(await piperDisponible())) return false
   const api = apiVoix()
   const g = globalThis as unknown as {
