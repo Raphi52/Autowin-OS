@@ -49,7 +49,8 @@ const SOURCE_LABEL: Record<ModelActivitySource, string> = {
   journal: 'journal',
   parts: 'persisté',
   causal: 'trace causale',
-  activity: 'activité'
+  activity: 'activité',
+  brain: 'brain'
 }
 
 /** Heure locale HH:MM:SS — le journal n'écrit qu'un epoch, et parfois rien du tout. */
