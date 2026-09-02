@@ -947,6 +947,13 @@ export function JarvisWidget(): React.JSX.Element {
             onChange={(event) => changerReglageVoix({ voixURI: event.target.value })}
           >
             <option value="">Voix automatique (français si disponible)</option>
+            {/*
+              LA VOIX NEURONALE, nommée dans la liste. Elle ne vient pas de `speechSynthesis` :
+              sans cette entrée, l'utilisateur l'installait puis ne la trouvait NULLE PART.
+            */}
+            {piper?.installe ? (
+              <option value={VOIX_PIPER_URI}>Voix française neuronale (Piper) — hors ligne</option>
+            ) : null}
             {voixDisponibles.map((voix) => (
               <option key={voix.voiceURI || voix.name} value={voix.voiceURI || voix.name}>
                 {voix.name} — {voix.lang}
