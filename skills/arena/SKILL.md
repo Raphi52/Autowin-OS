@@ -131,6 +131,21 @@ pas déclaré meilleur parce qu'il est moins cher : moins cher ET au moins aussi
   `session:<id>` ou `git:<chemin>@<sha>`.
 - Une règle installée sans avoir rejoué la situation d'origine est **non vérifiée** : le dire.
 
+### 6. Contrôle du protocole — du CODE, pas ta relecture
+Avant de rendre la sortie ci-dessous :
+
+```
+npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc>
+```
+
+Il lit les fichiers du banc et rend 13 points OK/RATE (candidats écrits, rouge collé, cas limites du
+critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
+`total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,
+copies perdantes retirées). Code de sortie 0 = protocole tenu. Un RATE se corrige, ou s'écrit dans la
+sortie tel quel — il ne se tait pas : au banc du 2026-09-02, quatre de ces points étaient RATE sans
+que rien ne le dise. Les 4 points de **jugement** que le script liste en fin de sortie ne sont pas
+mécanisables ; ils restent au juge.
+
 ## Sortie (format imposé)
 
 **Banc** : tâche · critère de succès · baseline (ou « aucune, A la fabrique »).
