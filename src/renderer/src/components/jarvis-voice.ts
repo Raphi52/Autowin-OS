@@ -194,6 +194,19 @@ export function evenementsDirects(
 const TOLERANCE_FIN = '[a-zà-öø-ÿ]{0,3}'
 
 /**
+ * Ce qui peut SEPARER deux mots d'un nom compose, tel que le moteur l'ecrit.
+ *
+ * DEFAUT VECU le 2026-09-02 (conv-113), assistant nomme « Machin Bidule » : whisper ponctue tout
+ * seul (« Machin, bidule », « Machin. Bidule »). Le separateur n'admettait que l'espace, le trait
+ * d'union et l'apostrophe, donc le nom ENTIER ne correspondait plus ; seul le raccourci « machin »
+ * reveillait, et le reste du NOM — « bidule » — repartait comme ORDRE : dire son nom ouvrait une
+ * conversation et payait un appel modele pour rien. La ponctuation courante est donc admise ENTRE
+ * les mots du nom, et elle reste BORNEE a de la ponctuation : aucune lettre ne passe, donc un vrai
+ * mot glisse entre les deux morceaux ne peut pas etre avale.
+ */
+const SEPARATEUR_NOM = "[\\s'’,.;:!?-]*"
+
+/**
  * Le nom, ramene a des MOTS de lettres simples : « Jarvis » et « jarvis » sont le meme mot d'eveil,
  * et « Jean-Pierre » comme « Jean Pierre » donnent les deux memes mots.
  *
@@ -257,7 +270,7 @@ export function motifEveil(nom: string = NOM_JARVIS_DEFAUT): RegExp {
   // le nom complet l'emporte sur le raccourci et ne laisse aucun reste a prendre pour un ordre.
   // Les mots peuvent arriver colles, espaces, ou lies par un trait d'union ou une apostrophe,
   // selon ce que le moteur decide d'ecrire ; CHACUN garde sa fin libre a trois lettres pres.
-  const complet = mots.map((mot) => motifMot(mot)).join("[\\s'’-]*")
+  const complet = mots.map((mot) => motifMot(mot)).join(SEPARATEUR_NOM)
   // Le RACCOURCI : on appelle « Jean-Pierre » en disant « Jean ». Reserve aux mots d'au moins
   // quatre lettres — sur « Mon Ami », un eveil sur « mon » partirait a chaque phrase.
   const raccourcis = mots.length > 1 ? mots.filter((mot) => mot.length >= 4) : []

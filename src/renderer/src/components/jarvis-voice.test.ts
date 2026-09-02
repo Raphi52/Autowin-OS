@@ -270,6 +270,39 @@ describe('le mot d’éveil suit le NOM RÉGLÉ, pas une constante', () => {
     )
   })
 
+  it('le nom entier reste le nom même quand le moteur le PONCTUE', () => {
+    // LE DÉFAUT vécu le 2026-09-02 (conv-113), assistant nommé « Machin Bidule » : whisper coupe et
+    // ponctue tout seul (« Machin, bidule », « Machin. Bidule »). Le séparateur n'admettait que
+    // l'espace, le trait d'union et l'apostrophe : le nom ENTIER ne correspondait plus, seul le
+    // raccourci « machin » réveillait, et « bidule » repartait comme ORDRE — une conversation
+    // ouverte et un appel modèle payé pour quelqu'un qui a seulement dit le nom.
+    for (const dit of ['Machin, bidule', 'Machin. Bidule', 'Machin ! Bidule', 'Machin : bidule']) {
+      expect(contientEveil(dit, 'Machin Bidule')).toBe(true)
+      expect(extraireCommandeEveil(dit, 'Machin Bidule')).toBeNull()
+    }
+    // Un ordre derrière le nom ponctué reste un ordre.
+    expect(extraireCommandeEveil('Machin. Bidule, ouvre le chat', 'Machin Bidule')).toBe(
+      'ouvre le chat'
+    )
+  })
+
+  it('le nom dit en DEUX segments ne lance aucune tâche', () => {
+    // Le moteur fige souvent « Machin » et « Bidule » en deux phrases séparées. Le premier morceau
+    // arme l'éveil ; le second ne doit PAS être pris pour l'ordre de la phrase précédente.
+    const depart = { ...ecouteInitiale, active: true }
+    const un = reagirAParole(depart, { texte: 'Machin.', final: true, le: 1 }, 'Machin Bidule')
+    expect(un.ordre).toBeNull()
+    const deux = reagirAParole(un.etat, { texte: 'Bidule.', final: true, le: 2 }, 'Machin Bidule')
+    expect(deux.ordre).toBeNull()
+    // Et l'ordre qui suit vraiment part bien.
+    const trois = reagirAParole(
+      deux.etat,
+      { texte: 'ouvre le chat', final: true, le: 3 },
+      'Machin Bidule'
+    )
+    expect(trois.ordre).toBe('ouvre le chat')
+  })
+
   it('un nom à plusieurs mots ne se réveille pas sur ses mots courts', () => {
     // « Mon Ami » ne doit PAS partir sur « mon », prononcé dans une phrase sur deux.
     expect(contientEveil('mon rendez-vous de demain', 'Mon Ami')).toBe(false)
