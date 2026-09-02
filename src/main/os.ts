@@ -1221,7 +1221,12 @@ export class AutowinOS {
 
   // --- Graphe 3D / brain (données réelles disque) ---
   listBrains(): BrainGraphRef[] {
-    return scanBrainGraphs()
+    // PAS de catalogue de themes ici. Le construire ouvre et lit les ~845 fiches du vault sur le
+    // partage reseau \ged2 : 6,5 s MESUREES, en lecture bloquante dans le processus principal,
+    // donc toute l'application gele pendant ce temps. Le seul appelant (`commands.ts`, commande
+    // `load_graph`) ne cherche qu'un brain par son id et n'utilise jamais `themes`.
+    // La vue Memory, elle, passe deja par le worker et demande ses themes a part.
+    return scanBrainGraphs(undefined, undefined, false)
   }
   loadBrainGraph(
     path: string,

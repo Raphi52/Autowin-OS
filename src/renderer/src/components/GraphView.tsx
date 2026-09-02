@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import type { BrainGraphRef } from '../../../main/viz/fs-brains'
 import { brainSubjectOf } from './graph-brain-categories'
+import { mesurerBlocGraphe } from './graph-perf'
 import { degre as degreDuNoeud, deuxiemeSaut } from './graph-neighborhood'
 import {
   layoutTree,
@@ -572,7 +573,7 @@ export function GraphView({
   )
   const visibleSearchNodes = selectedBrain?.kind === 'vault' ? vaultSearch : catalogSearch.nodes
   const displayGraph = useMemo(
-    () => filterGraphVisibility(graph, settings.orphans),
+    () => mesurerBlocGraphe('graph:visibilite', () => filterGraphVisibility(graph, settings.orphans)),
     [graph, settings.orphans]
   )
   const healthIssues = useMemo(() => knowledgeHealthIssues(graph), [graph])
@@ -594,16 +595,25 @@ export function GraphView({
           // FAIBLE (72-83 %), là où l'axe par nature cognitive oscillait de 44 % à 83 % selon le
           // tirage. Une lecture dont le résultat dépend du tirage ne peut pas servir de socle.
           // Toujours une couche de lecture dérivée : aucun fichier n'est déplacé dans le Brain.
-          layoutTree(displayGraph.nodes, { groupOf: brainSubjectOf })
+          mesurerBlocGraphe('graph:layoutTree', () =>
+            layoutTree(displayGraph.nodes, { groupOf: brainSubjectOf })
+          )
         : null,
     [layoutMode, displayGraph.nodes]
   )
   const visibleTree = useMemo(
-    () => (tree ? projectTreeVisibility(tree, collapsedTreeNodeIds) : null),
+    () =>
+      tree
+        ? mesurerBlocGraphe('graph:projection', () =>
+            projectTreeVisibility(tree, collapsedTreeNodeIds)
+          )
+        : null,
     [collapsedTreeNodeIds, tree]
   )
 
-  const renderedGraph = useMemo(() => {
+  const renderedGraph = useMemo(
+    () =>
+      mesurerBlocGraphe('graph:objets3d', () => {
     if (layoutMode !== 'tree' || !visibleTree) {
       return {
         nodes: displayGraph.nodes.map((graphNode) => ({ ...graphNode })),
@@ -657,7 +667,9 @@ export function GraphView({
         links: []
       }
     }
-  }, [collapsedTreeNodeIds, displayGraph, layoutMode, visibleTree])
+      }),
+    [collapsedTreeNodeIds, displayGraph, layoutMode, visibleTree]
+  )
 
   /**
    * DESSIN de l'arborescence : les anneaux de niveau, les branches de filiation, les nœuds internes.

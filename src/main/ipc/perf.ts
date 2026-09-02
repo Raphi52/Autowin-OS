@@ -48,14 +48,21 @@ export function registerPerfIpc({ appDataRoot }: PerfIpcDeps): void {
    * chemin d'ecriture. Le prefixe 'renderer:' est ce qui permet enfin de trancher main vs
    * interface en relisant gels.jsonl.
    */
-  ipcMain.handle('perf:gelRenderer', (event, dureeMs: unknown) => {
+  ipcMain.handle('perf:gelRenderer', (event, dureeMs: unknown, etiquette?: unknown) => {
     assertTrustedRendererSender(event, 'PerfGelRenderer')
     const ms = typeof dureeMs === 'number' && Number.isFinite(dureeMs) ? Math.floor(dureeMs) : 0
     if (ms <= 0) return false
+    // `longtask` disait COMBIEN, jamais QUOI : 31,8 s cumulees a l'ouverture de Memory etaient
+    // imputees au thread d'interface en bloc, sans nommer le calcul fautif. Une etiquette
+    // facultative — bornee et assainie — permet d'attribuer la tache longue a son bloc de code.
+    const nom =
+      typeof etiquette === 'string' && /^[a-z0-9:-]{1,48}$/i.test(etiquette)
+        ? `renderer:${etiquette}`
+        : 'renderer:longtask'
     journaliserGel({
       ts: new Date().toISOString(),
       blocageMs: ms,
-      operation: 'renderer:longtask',
+      operation: nom,
       // Mesure DIRECTE d'une tache longue du thread d'interface : imputable par construction.
       cause: 'boucle-tenue'
     })

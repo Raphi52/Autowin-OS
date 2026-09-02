@@ -134,7 +134,8 @@ const api = {
   perfTurnLatency: (derniers?: number) => ipcRenderer.invoke('perf:turnLatency', derniers),
   perfGels: (derniers?: number) => ipcRenderer.invoke('perf:gels', derniers),
   // Depose une tache longue du thread d'interface dans le journal de gels commun.
-  signalerGelRenderer: (dureeMs: number) => ipcRenderer.invoke('perf:gelRenderer', dureeMs),
+  signalerGelRenderer: (dureeMs: number, etiquette?: string) =>
+    ipcRenderer.invoke('perf:gelRenderer', dureeMs, etiquette),
   getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:get'),
   setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
