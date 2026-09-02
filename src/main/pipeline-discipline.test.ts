@@ -63,6 +63,17 @@ describe('discipline de pipeline canonique', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/tu NOMMES l'obstacle/)
   })
 
+  /**
+   * La consigne annoncait « Tu n'as PAS d'acces web » alors que `claude.ts` charge WebFetch et
+   * WebSearch sur TOUTES les branches de spawn (`const OUTILS_WEB`, verrouille par
+   * `providers/claude.web.test.ts`). Un agent qui croit ne pas avoir le web devine au lieu d'aller
+   * lire : exactement le defaut que l'ouverture du web visait a supprimer.
+   */
+  it('ne nie pas une capacite reellement servie : le web', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/n'as PAS d'accès web/i)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/WebFetch et WebSearch/)
+  })
+
   it('ne transforme pas le contrat read-only de scout frame terrain en faux blocage', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
       /absence de Write\/Edit n'est ni un obstacle ni un droit manquant/i
