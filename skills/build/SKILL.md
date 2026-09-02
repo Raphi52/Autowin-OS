@@ -34,6 +34,8 @@ quality verdict (that's `judge`) — so a defect is "done" only when an external
 - An ordinary missing input is **assumed** as a stated default (one line, "assuming X — correct me") and the work continues. Only a secret, an access you do not hold, or a genuinely destructive/out-of-scope call justifies stopping (see `Don't` → STOP-and-ask).
 - Several defects handed back by `judge` → **all** of them are taken in the pass, one at a time, not the first one plus a summary.
 
+**Anti-« reprend » — mesuré le 2026-09-02 (journée entière, 40 conversations, `.autowin-data/<profil>/activity/conv-*.jsonl`).** Les tours dont le message utilisateur est un simple « reprend » ont coûté **23,54 $ sur 156,51 $ dépensés (62 appels)** — de l'argent dépensé uniquement pour redemander ce qui était déjà engagé. Contrôle négatif du même jour : conv-130, 17 appels et zéro reprise pour 4,97 $, contre conv-96, 29 appels et 16,22 $ dont 4,88 $ seulement de travail utile — le surcoût vient des reprises, pas de la difficulté. AU MOMENT où tu es tenté d'écrire un point d'étape, une question de continuation ou un plan sans exécution : ce message coûtera un tour complet à l'utilisateur pour ne rien produire — continue jusqu'au vert vérifié ou nomme le blocage précis, jamais entre les deux.
+
 This relaxes NO proof. "To green" means to the out-of-model ARTIFACT (step 4), never to a declaration of success. A green obtained by loosening an assertion, swallowing an error, widening a timeout or guarding around the defect is a FALSE green — therefore a failure to surface, labelled, with the real cause dispatched.
 
 ## Procedure  (per defect — one at a time)
