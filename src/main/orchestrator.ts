@@ -53,7 +53,7 @@ import type { Role, RoleBinding, RoleModelConfig, ReasoningEffort } from './role
 import { resolvePhaseBinding } from './roles'
 import { raisonDeBlocageIntegration } from '../shared/raison-de-blocage'
 import { defaultQuorumThreshold } from './quorum'
-import type { CostAggregator } from './dashboards/cost'
+import { withCostContext, type CostAggregator, type CostSink } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
 import {
   arretDeLaReparation,
@@ -1175,6 +1175,15 @@ function hasVerifiedExternalGitMutation(
 
 export class Orchestrator {
   private readonly causalWatchPathsByRun = new Map<string, readonly string[]>()
+  /**
+   * Conversation et tour d'origine du run EN COURS, par `runId`. Sert a estampiller chaque ligne
+   * de cout : sans ce rattachement, `cost.jsonl` ne pouvait pas dire QUEL echange a coute combien.
+   * Rempli seulement quand l'appelant fournit reellement l'information — jamais devine.
+   */
+  private readonly costContextByRun = new Map<
+    string,
+    { conversationId?: string; turnId?: string }
+  >()
   private readonly learningOraclesByRun = new Map<string, readonly TrustedLearningOracle[]>()
 
   constructor(private readonly deps: OrchestratorDeps) {}
@@ -1496,6 +1505,12 @@ export class Orchestrator {
         ? (reservationId) => observers.reservationSettled(reservationId)
         : undefined
     }
+  }
+
+  /** Collecteur de cout du run : les tours ecrits portent la conversation quand elle est connue. */
+  private costFor(runId: string): CostSink {
+    const context = this.costContextByRun.get(runId)
+    return context ? withCostContext(this.deps.cost, context) : this.deps.cost
   }
 
   private causalWatchPathsFor(cwd: string, runId: string): string[] {
@@ -1982,6 +1997,7 @@ export class Orchestrator {
     } finally {
       this.processObservers.delete(runId)
       this.causalWatchPathsByRun.delete(runId)
+      this.costContextByRun.delete(runId)
       this.learningOraclesByRun.delete(runId)
       // Le travail n'est fusionné dans la base QUE si le run est vert. Un run rouge, annulé ou planté
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
@@ -2351,7 +2367,8 @@ export class Orchestrator {
     gate: ReturnType<typeof evaluateClosure>
     learningAttestations: IndependentLearningAttestation[]
   }> {
-    const { registry, roles, cost, trust } = this.deps
+    const { registry, roles, trust } = this.deps
+    const cost = this.costFor(runId)
     // Le chemin greedy doit respecter le même ordre économique que le séquentiel : les oracles
     // locaux falsifiables passent AVANT le juge payant. S'ils réfutent le livrable, aucun appel
     // modèle ne peut rendre cette tentative verte.
@@ -2570,7 +2587,8 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     failed: string[]
     skipped: string[]
   }> {
-    const { registry, roles, cost } = this.deps
+    const { registry, roles } = this.deps
+    const cost = this.costFor(runId)
     type ProviderAdmission = {
       state: 'probing' | 'ready' | 'blocked'
       settled: Promise<void>
@@ -3093,7 +3111,9 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
     if (!runtimeSnapshot) {
       throw new Error("Snapshot runtime manquant dans le coeur d'orchestration")
     }
-    const { registry, roles, cost, trust } = this.deps
+    if (conversationId || turnId) this.costContextByRun.set(runId, { conversationId, turnId })
+    const { registry, roles, trust } = this.deps
+    const cost = this.costFor(runId)
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
     // chaîne de précédence et le plie dans chaque system → source unique, quel que soit le modèle.
     const projectContext = projectContextBlock(this.deps.executionWorkspace)

@@ -22,6 +22,40 @@ export interface TurnCost extends TokenUsage {
   inputTokens: number
   outputTokens: number
   costUsd?: number
+  /**
+   * QUAND ce tour a ete paye (ISO 8601). Pose a l'ecriture quand l'appelant ne la fournit pas :
+   * sans elle, `cost.jsonl` etait une pile de montants hors du temps, impossible a rattacher a un
+   * tour de conversation. Optionnel dans le type : les lignes ecrites avant n'en portent pas.
+   */
+  ts?: string
+  /** Conversation d'origine, quand elle est REELLEMENT connue — jamais devinee. */
+  conversationId?: string
+  /** Tour de chat d'origine, quand il est REELLEMENT connu — jamais devine. */
+  turnId?: string
+}
+
+/** Ce dont un appelant de cout a besoin : enregistrer un tour. */
+export interface CostSink {
+  add(t: TurnCost): void
+}
+
+/**
+ * Meme collecteur de cout, mais chaque tour ecrit porte la conversation et le tour d'origine.
+ * Un champ deja renseigne par l'appelant gagne : ce contexte complete, il n'ecrase pas.
+ */
+export function withCostContext(
+  sink: CostSink,
+  context: { conversationId?: string; turnId?: string }
+): CostSink {
+  return {
+    add(t: TurnCost): void {
+      sink.add({
+        ...t,
+        conversationId: t.conversationId ?? context.conversationId,
+        turnId: t.turnId ?? context.turnId
+      })
+    }
+  }
 }
 
 /** Agregat cout/tours pour une cle (provider ou role). */
@@ -94,7 +128,8 @@ export class CostAggregator {
   }
 
   /** Enregistre un nouveau tour (et l'historise sur disque si `persistPath`). */
-  add(t: TurnCost): void {
+  add(turn: TurnCost): void {
+    const t: TurnCost = { ...turn, ts: turn.ts ?? new Date().toISOString() }
     this.turns.push(t)
     if (this.persistPath) {
       try {

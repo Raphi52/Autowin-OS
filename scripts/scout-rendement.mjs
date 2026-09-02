@@ -42,6 +42,9 @@ const REWORK = [
 // Marqueurs de CADRAGE MANQUANT : la demande initiale est une solution ou un flou.
 const VAGUE = [/\bun truc\b/i, /\bameliore\b/i, /\boptimise\b/i, /\bfais mieux\b/i, /\bcomme on avait dit\b/i, /^\s*(go|ok|vas-?y|continue|oui)\s*$/i]
 
+/** Etiquettes ecrites par l'orchestrateur dans le journal d'activite. */
+const ORCH_KINDS = new Set(['exec', 'judge', 'gate'])
+
 const rows = []
 for (const c of convs) {
   const id = c.id
@@ -50,7 +53,10 @@ for (const c of convs) {
   const acts = readJsonl(path.join(DATA, 'activity', `${id}.jsonl`))
   const costUsd = acts.reduce((s, a) => s + (Number(a.costUsd) || 0), 0)
   const durationMs = acts.reduce((s, a) => s + (Number(a.durationMs) || 0), 0)
-  const orchestrations = acts.filter((a) => String(a.kind || '').includes('run') || String(a.kind || '').includes('agent')).length
+  // ETAPES D'ORCHESTRATION : les etiquettes REELLEMENT ecrites par l'app (commands.ts, type
+  // OrchestrationStep). L'ancien filtre cherchait `run`/`agent`, deux mots qu'aucune ligne ne
+  // porte : la colonne affichait donc 0 partout, y compris sur des conversations de 30 etapes.
+  const orchestrations = acts.filter((a) => ORCH_KINDS.has(String(a.kind || ''))).length
   // --- TOURS : chaque evenement d'activite est rattache au DERNIER message utilisateur qui le precede.
   const turns = users.map((m, i) => ({
     index: i + 1,
@@ -60,12 +66,25 @@ for (const c of convs) {
     coutUsd: 0,
     minutes: 0
   }))
+  // Rattachement EXACT quand le journal porte le tour (`turnId`) : un evenement peut arriver
+  // APRES la demande suivante (sous-agent lent), et l'heure seule le mettrait sur le mauvais tour.
+  // Sinon seulement, repli sur « dernier message utilisateur avant cet evenement ».
+  const tourParId = new Map()
+  {
+    let dernierUser = -1
+    for (const m of msgs) {
+      if (m.role === 'user') dernierUser += 1
+      if (m.turnId && dernierUser >= 0 && !tourParId.has(m.turnId)) tourParId.set(m.turnId, dernierUser)
+    }
+  }
   for (const a of acts) {
-    const t = Date.parse(a.ts)
-    if (!Number.isFinite(t)) continue
-    let k = -1
-    for (let i = 0; i < turns.length; i++) if (turns[i].ts <= t) k = i
-    if (k < 0) continue
+    let k = a.turnId !== undefined && tourParId.has(a.turnId) ? tourParId.get(a.turnId) : -1
+    if (k < 0) {
+      const t = Date.parse(a.ts)
+      if (!Number.isFinite(t)) continue
+      for (let i = 0; i < turns.length; i++) if (turns[i].ts <= t) k = i
+    }
+    if (k < 0 || k >= turns.length) continue
     turns[k].coutUsd += Number(a.costUsd) || 0
     turns[k].minutes += (Number(a.durationMs) || 0) / 60000
   }

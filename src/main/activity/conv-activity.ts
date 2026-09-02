@@ -22,6 +22,14 @@ export interface ConvActivityEntry {
   /** Stable id of the provider call, when this entry mirrors prompt observability. */
   usageCallId?: string
   /**
+   * Tour de chat d'origine. ABSENT jusqu'au 2026-09-02 : le rapport /rendement devait deviner le
+   * tour par l'HORODATAGE (« la derniere demande utilisateur avant cet evenement »), ce qui casse
+   * des que deux tours se chevauchent. Renseigne seulement quand l'appelant le connait.
+   */
+  turnId?: string
+  /** Phase du pipeline (frame, build, judge...) quand elle est connue — jamais devinee. */
+  phase?: string
+  /**
    * Duree de l'operation. ABSENTE jusqu'au 2026-07-29 : ce journal porte les sous-agents les plus
    * couteux (mesure conv-75 : 2,83 $ vus cote appels contre ~20,70 $ reels), donc on ne pouvait pas
    * repondre a « quelle phase prend le TEMPS », seulement a « laquelle prend l'argent » — les deux ne
@@ -71,6 +79,8 @@ export function appendConvActivity(
       cacheReadTokens: entry.cacheReadTokens,
       costUsd: entry.costUsd,
       usageCallId: entry.usageCallId,
+      turnId: entry.turnId,
+      phase: entry.phase,
       durationMs: entry.durationMs,
       // Configuration diffs are audit evidence: truncating them would make the
       // Workflows view unable to explain the exact effective prompt change.
