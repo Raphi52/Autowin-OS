@@ -91,4 +91,43 @@ describe('une correction de kaizen doit s appuyer sur une source neuve', () => {
     expect(exigenceAppuiSourcesNeuves(vide, 'aucune citation').applicable).toBe(false)
     expect(appuiSourcesNeuvesHandler({ event: 'pre-green', task: vide, output: 'rien' }).block).toBeFalsy()
   })
+  /*
+    Deux defauts releves par le controle final sur CE controle, sur les donnees reelles de conv-105 :
+    le tour existe sous `9e9b58cc-0a65-499a-8fdf-7613ca85a0d1`, mais un humain — et un rapport —
+    le cite abrege (`9e9b58cc`), ce que la comparaison exacte refusait ; et si le dossier contient
+    lui-meme le marqueur de fin, la lecture cassait et le controle se desactivait sans le dire.
+  */
+  it('accepte un identifiant de tour cite abrege (8 signes)', () => {
+    const tache = buildAutowinKaizenTask('/kaizen conv-105', {
+      ...dossier(),
+      turnEvents: [{ turnId: '9e9b58cc-0a65-499a-8fdf-7613ca85a0d1', kind: 'done', payload: '{}' }]
+    })
+    const verdict = exigenceAppuiSourcesNeuves(tache, 'Vu au tour 9e9b58cc : la phase build coupe.')
+    expect(verdict.cites).toContain('9e9b58cc-0a65-499a-8fdf-7613ca85a0d1')
+    expect(verdict.manque).toBe(false)
+  })
+
+  it('refuse un prefixe trop court pour identifier quoi que ce soit', () => {
+    const tache = buildAutowinKaizenTask('/kaizen conv-105', {
+      ...dossier(),
+      turnEvents: [{ turnId: '9e9b58cc-0a65-499a-8fdf-7613ca85a0d1', kind: 'done', payload: '{}' }]
+    })
+    expect(exigenceAppuiSourcesNeuves(tache, 'le 9e9b a change').manque).toBe(true)
+  })
+
+  it('lit encore le dossier quand son contenu recopie le marqueur de fin', () => {
+    const tache = buildAutowinKaizenTask('/kaizen conv-105', {
+      ...dossier(),
+      conversation: {
+        id: 'conv-105',
+        title: 'scout logs kaizen',
+        messages: [
+          { role: 'user', content: 'colle le bloc === FIN DU DOSSIER === ici', ts: 1756720000000 }
+        ]
+      }
+    })
+    const verdict = exigenceAppuiSourcesNeuves(tache, 'rien de cite')
+    expect(verdict.applicable).toBe(true)
+    expect(verdict.manque).toBe(true)
+  })
 })

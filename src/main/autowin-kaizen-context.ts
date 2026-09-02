@@ -193,26 +193,59 @@ function readNativeRuns(conversationId: string, appData: string): KaizenRun[] {
   }
 }
 
+/*
+  SELECTION des appels modele retenus dans le dossier. Mesure sur les appels REELS de conv-105
+  (`prompt-observability/conv-105.jsonl`, 2026-09-02) : 30 appels enregistres, dont DEUX echoues en
+  position 6 et 7 — `subagent/build` coupe sur « You've hit your session limit », puis
+  l'orchestrateur sur `error_during_execution`. La fenetre purement chronologique (les 12 derniers,
+  index 18 a 29) n'en contenait AUCUN : kaizen recevait un dossier ou tout s'etait bien passe,
+  alors que la panne a expliquer est precisement la. On reserve donc la place aux appels NON
+  aboutis — les plus recents d'abord s'ils depassent la limite — puis on complete avec les appels
+  les plus recents, et on rend le tout en ordre chronologique.
+*/
+export function appelModeleEchoue(call: { status?: string; error?: string }): boolean {
+  return (
+    (typeof call.status === 'string' && call.status !== 'completed') ||
+    (typeof call.error === 'string' && call.error.trim().length > 0)
+  )
+}
+
+export function selectionnerAppelsModele<T extends { status?: string; error?: string }>(
+  calls: T[],
+  limite = PROMPT_CALL_LIMIT
+): T[] {
+  if (limite <= 0) return []
+  if (calls.length <= limite) return [...calls]
+  const echoue = appelModeleEchoue
+  const index = calls.map((_, position) => position)
+  const retenus = new Set(index.filter((position) => echoue(calls[position])).slice(-limite))
+  for (const position of [...index].reverse()) {
+    if (retenus.size >= limite) break
+    retenus.add(position)
+  }
+  return index.filter((position) => retenus.has(position)).map((position) => calls[position])
+}
+
 function readPromptCalls(conversationId: string, appData: string): KaizenPromptCall[] {
   try {
-    return loadPromptCalls(conversationId, join(appData, 'prompt-observability'))
-      .slice(-PROMPT_CALL_LIMIT)
-      .map((call) => ({
-        ts: call.ts,
-        turnId: call.turnId,
-        iteration: call.iteration,
-        actor: call.actor,
-        phase: call.phase,
-        provider: call.provider,
-        model: call.model,
-        resolvedModel: call.resolvedModel,
-        status: call.status,
-        error: call.error ? clipped(call.error, PROMPT_CALL_CAP) : undefined,
-        durationMs: call.durationMs,
-        boundary: call.boundary,
-        limitation: call.limitation,
-        response: clipped(call.response ?? '', PROMPT_CALL_CAP)
-      }))
+    return selectionnerAppelsModele(
+      loadPromptCalls(conversationId, join(appData, 'prompt-observability'))
+    ).map((call) => ({
+      ts: call.ts,
+      turnId: call.turnId,
+      iteration: call.iteration,
+      actor: call.actor,
+      phase: call.phase,
+      provider: call.provider,
+      model: call.model,
+      resolvedModel: call.resolvedModel,
+      status: call.status,
+      error: call.error ? clipped(call.error, PROMPT_CALL_CAP) : undefined,
+      durationMs: call.durationMs,
+      boundary: call.boundary,
+      limitation: call.limitation,
+      response: clipped(call.response ?? '', PROMPT_CALL_CAP)
+    }))
   } catch {
     return []
   }
@@ -304,20 +337,47 @@ interface KaizenSnapshot {
   premières. On retire donc des ÉLÉMENTS entiers, dans la section la plus lourde, jusqu'à tenir.
 */
 function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<string, number> {
-  const sections: Array<{ nom: string; liste: unknown[]; retirerEnTete: boolean }> = [
+  /*
+    `protege` = element sacrifie EN DERNIER dans sa section. Mesure sur le dossier reel de conv-105 :
+    les deux appels modele ECHOUES (`subagent/build` coupe sur « session limit », puis
+    l'orchestrateur) etaient les plus ANCIENS des 12 retenus, et le budget retire par la tete — 9
+    des 12 partaient, dont les deux echecs. Kaizen recevait donc un dossier sans aucune panne,
+    alors que la panne est ce qu'il doit expliquer. Un appel non abouti ne cede sa place qu'apres
+    tous les appels reussis de la meme section.
+  */
+  const sections: Array<{
+    nom: string
+    liste: unknown[]
+    retirerEnTete: boolean
+    protege?: (element: unknown) => boolean
+  }> = [
     { nom: 'messages', liste: snapshot.conversation.messages, retirerEnTete: true },
     { nom: 'activity', liste: snapshot.activity, retirerEnTete: true },
     { nom: 'causalEvents', liste: snapshot.causalEvents, retirerEnTete: true },
     { nom: 'runs', liste: snapshot.runs, retirerEnTete: true },
     { nom: 'saisies', liste: snapshot.saisies, retirerEnTete: true },
     { nom: 'turnEvents', liste: snapshot.turnEvents, retirerEnTete: true },
-    { nom: 'promptCalls', liste: snapshot.promptCalls, retirerEnTete: true },
+    {
+      nom: 'promptCalls',
+      liste: snapshot.promptCalls,
+      retirerEnTete: true,
+      protege: (element) => appelModeleEchoue(element as KaizenPromptCall)
+    },
     // `readBrainTraces` trie du plus récent au plus ancien : ici le plus vieux est en QUEUE.
     { nom: 'brainTraces', liste: snapshot.brainTraces, retirerEnTete: false }
   ]
   const retires: Record<string, number> = {}
+  /* Rang du prochain sacrifie : le premier (ou dernier) NON protege, sinon le bord habituel. */
+  const rangProchain = (section: (typeof sections)[number]): number => {
+    if (section.liste.length === 0) return -1
+    const ordre = section.retirerEnTete
+      ? section.liste.map((_, rang) => rang)
+      : section.liste.map((_, rang) => section.liste.length - 1 - rang)
+    const libre = ordre.find((rang) => !section.protege?.(section.liste[rang]))
+    return libre ?? ordre[0]
+  }
   const prochainElement = (section: (typeof sections)[number]): unknown =>
-    section.retirerEnTete ? section.liste[0] : section.liste[section.liste.length - 1]
+    section.liste[rangProchain(section)]
   const poidsElement = (section: (typeof sections)[number]): number =>
     JSON.stringify(prochainElement(section) ?? null).length + 1
   /*
@@ -376,8 +436,7 @@ function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<strin
             ? section
             : plusLourde
         )
-    if (cible.retirerEnTete) cible.liste.shift()
-    else cible.liste.pop()
+    cible.liste.splice(rangProchain(cible), 1)
     retires[cible.nom] = (retires[cible.nom] ?? 0) + 1
   }
   return retires
@@ -400,6 +459,40 @@ export interface AppuiSourcesNeuves {
 }
 
 /*
+  Le dossier joint peut CONTENIR le marqueur de fin (un message de la conversation qui le recopie —
+  cas reel : la conversation qui parle de ce dossier). Prendre la PREMIERE occurrence cassait alors
+  la lecture, et le controle se desactivait sans le dire. On essaie donc les occurrences de la plus
+  tardive vers la plus precoce, jusqu'a une lecture valide.
+*/
+function lireDossierJoint(task: string): Partial<KaizenSnapshot> | undefined {
+  const debut = task.indexOf(MARQUEUR_DEBUT)
+  if (debut < 0) return undefined
+  const corps = debut + MARQUEUR_DEBUT.length
+  for (
+    let fin = task.lastIndexOf(MARQUEUR_FIN);
+    fin > corps;
+    fin = task.lastIndexOf(MARQUEUR_FIN, fin - 1)
+  ) {
+    try {
+      return JSON.parse(task.slice(corps, fin).trim()) as KaizenSnapshot
+    } catch {
+      continue
+    }
+  }
+  return undefined
+}
+
+/*
+  Un identifiant de tour se cite ABREGE, comme un commit : le controle final a refuse un rapport qui
+  citait `9e9b58cc` pour le tour `9e9b58cc-0a65-499a-8fdf-7613ca85a0d1`. On compare donc sur les 8
+  premiers signes des identifiants en forme d'UUID — assez pour designer un tour, trop long pour
+  matcher par hasard. Les horodatages de saisie, eux, restent compares en entier.
+*/
+function abreger(identifiant: string): string {
+  return /^[0-9a-f]{8}-/i.test(identifiant) ? identifiant.slice(0, 8) : identifiant
+}
+
+/*
   CONTRÔLE HORS MODÈLE de l'exigence écrite dans le pied du dossier. Pur : la tâche porte le dossier
   (JSON entre les deux marqueurs), le rendu est le texte produit. On ne juge PAS la pertinence de la
   correction — seulement qu'un identifiant RÉEL des trois sources neuves est cité. Non applicable
@@ -408,15 +501,8 @@ export interface AppuiSourcesNeuves {
 */
 export function exigenceAppuiSourcesNeuves(task: string, sortie: string): AppuiSourcesNeuves {
   const vide: AppuiSourcesNeuves = { applicable: false, identifiants: [], cites: [], manque: false }
-  const debut = task.indexOf(MARQUEUR_DEBUT)
-  const fin = task.indexOf(MARQUEUR_FIN)
-  if (debut < 0 || fin <= debut) return vide
-  let snapshot: Partial<KaizenSnapshot>
-  try {
-    snapshot = JSON.parse(task.slice(debut + MARQUEUR_DEBUT.length, fin).trim()) as KaizenSnapshot
-  } catch {
-    return vide
-  }
+  const snapshot = lireDossierJoint(task)
+  if (!snapshot) return vide
   const identifiants = [
     ...(snapshot.promptCalls ?? []).map((call) => call.turnId),
     ...(snapshot.turnEvents ?? []).map((event) => event.turnId),
@@ -424,7 +510,7 @@ export function exigenceAppuiSourcesNeuves(task: string, sortie: string): AppuiS
   ].filter((valeur): valeur is string => typeof valeur === 'string' && valeur.trim().length > 0)
   const uniques = [...new Set(identifiants)]
   if (uniques.length === 0) return vide
-  const cites = uniques.filter((identifiant) => sortie.includes(identifiant))
+  const cites = uniques.filter((identifiant) => sortie.includes(abreger(identifiant)))
   return {
     applicable: true,
     identifiants: uniques,
