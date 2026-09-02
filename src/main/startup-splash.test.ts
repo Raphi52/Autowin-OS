@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * L'écran d'attente du démarrage et le découplage qui le rend utile.
@@ -19,7 +18,7 @@ import { describe, expect, it } from 'vitest'
  * trou noir de 44 secondes reviendrait sans bruit.
  */
 
-const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+const source = sourceProcessPrincipal()
 
 describe('démarrage — la fenêtre n’attend plus la migration', () => {
   it('la lecture historique n’est PAS attendue avant la création de la fenêtre', () => {

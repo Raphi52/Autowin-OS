@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { buildKimiPrompt, KimiCliAdapter, kimiTextFromEvent, resolveKimiCommand } from './kimi'
+import {
+  buildKimiPrompt,
+  KIMI_PACKAGE_ENTRY,
+  KimiCliAdapter,
+  kimiTextFromEvent,
+  resolveKimiCommand
+} from './kimi'
+import { findNpmGlobalFile } from './npm-global-resolve'
+
+/**
+ * CE CONTRAT LANCE LE VRAI CLI — il n'a de sens que sur une machine qui l'a installe.
+ *
+ * `resolveKimiCommand` retombe sur le repli `'kimi'`, MORT sous Windows (npm -g n'y pose qu'un shim
+ * `kimi.cmd`, que `spawn(shell:false)` ne peut pas executer). Sur une machine sans
+ * `@moonshot-ai/kimi-code`, l'assertion tombait donc en rouge sans qu'aucun code n'ait change —
+ * mesure du 2026-09-02 sur le poste de dev.
+ *
+ * `skipIf` et NON un `return` silencieux : vitest AFFICHE le test saute, donc l'absence de preuve
+ * reste visible au lieu de se deguiser en vert. Quand le CLI est present, l'assertion est
+ * exactement la meme qu'avant.
+ */
+const CLI_KIMI_PRESENT = Boolean(process.env.KIMI_BIN ?? findNpmGlobalFile(KIMI_PACKAGE_ENTRY))
 
 describe('KimiCliAdapter — contrat compte CLI', () => {
   it('injecte explicitement le système et conserve le fil, sans message system dupliqué', () => {
@@ -37,7 +58,11 @@ describe('KimiCliAdapter — contrat compte CLI', () => {
     expect(() => resolveKimiCommand('C:\\outils\\kimi.cmd')).toThrow('shim kimi.cmd')
   })
 
-  it('lance le CLI Kimi installe via son entrypoint Node, sans shell', async () => {
-    await expect(new KimiCliAdapter().auth()).resolves.toBe(true)
-  }, 15_000)
+  it.skipIf(!CLI_KIMI_PRESENT)(
+    'lance le CLI Kimi installe via son entrypoint Node, sans shell',
+    async () => {
+      await expect(new KimiCliAdapter().auth()).resolves.toBe(true)
+    },
+    15_000
+  )
 })
