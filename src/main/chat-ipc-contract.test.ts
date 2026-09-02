@@ -131,16 +131,23 @@ describe('renderer chat IPC contract', () => {
 
   it('serves the cached model catalog immediately, then notifies the renderer after boot refresh', () => {
     const sources = readChatContractSources()
+    // Le canal a quitte `index.ts` pour `ipc/models.ts` le 2026-09-02 : on borne la tranche par le
+    // canal SUIVANT quel qu'il soit, plutot que par un commentaire voisin qui demenage aussi.
+    const debutModele = sources.main.indexOf("ipcMain.handle('os:models:list'")
+    const suivantModele = sources.main.indexOf('ipcMain.handle(', debutModele + 1)
     const modelHandler = sources.main.slice(
-      sources.main.indexOf("ipcMain.handle('os:models:list'"),
-      sources.main.indexOf('// Page Routeur')
+      debutModele,
+      suivantModele < 0 ? sources.main.length : suivantModele
     )
     const catalogSetup = sources.main.slice(
       sources.main.indexOf('const modelCatalog ='),
       sources.main.indexOf('const agentModelsReady =')
     )
 
-    expect(modelHandler).toContain('if (!force) return agentModels')
+    expect(debutModele).toBeGreaterThanOrEqual(0)
+    // Le catalogue en cache est servi TOUT DE SUITE quand rien n'est force : la lecture est un
+    // lecteur depuis l'extraction (`lireModeles()`), l'invariant est l'absence d'attente.
+    expect(modelHandler).toMatch(/if \(!force\) return (agentModels|lireModeles\(\))/)
     expect(catalogSetup).toContain('applyFabricSummaries(')
     expect(modelHandler).toContain('const refresh = modelCatalog.refresh(true)')
     expect(modelHandler).toContain('os.setTaskReadiness(')

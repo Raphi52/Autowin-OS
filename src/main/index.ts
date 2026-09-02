@@ -18,6 +18,8 @@ import { registerProfilesIpc } from './ipc/profiles'
 import { registerTopologyIpc } from './ipc/topology'
 import { registerProvidersIpc } from './ipc/providers'
 import { registerRolesIpc } from './ipc/roles'
+import { registerModelsIpc } from './ipc/models'
+import { registerFabricIpc } from './ipc/fabric'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -217,7 +219,6 @@ import {
 import { rebuildSemanticTemporalProjection } from './knowledge/semantic-temporal-store'
 import { causalLearningContext } from './knowledge/semantic-temporal-projection'
 import { ModelCatalogRefresher } from './model-refresh'
-import { buildModelQuotaSnapshot, getModelQuotaSnapshot } from './model-quotas'
 import { loadAgentTopology, saveAgentTopology, type IncidentTopologie } from './topology-disk'
 import type { AgentTopology, SlotBinding } from './topology'
 import {
@@ -2235,29 +2236,22 @@ Le fil reprend ensuite normalement.`
     )
     return shadowRoutingPilotState(saved)
   })
-  ipcMain.handle('os:models:list', async (event, force = false) => {
-    assertTrustedRendererSender(event, 'Model catalog')
-    if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
-    if (!force) return agentModels
-    const refresh = modelCatalog.refresh(true)
-    // Armer la barriere avant le premier await : aucun tour ne part sur l'ancien catalogue
-    // pendant qu'un rafraichissement force est en vol.
-    os.setTaskReadiness(
-      refresh.then(() => assertRuntimeTopologyAvailable(agentTopology, agentModels))
-    )
-    await refresh
-    applyFabricSummaries(fabricControlPlane.list())
-    return agentModels
+  // Reprojeter les modeles de Compute Fabric : `applyFabricSummaries` a d'autres appelants au
+  // demarrage, elle reste donc dans `index.ts` et les modules la recoivent.
+  const synchroniserFabric = (): void => applyFabricSummaries(fabricControlPlane.list())
+  registerModelsIpc({
+    os,
+    modelCatalog,
+    lireModeles: () => agentModels,
+    lireTopologie,
+    synchroniserFabric,
+    isolatedTestInstance
   })
-  ipcMain.handle('os:fabric:list', (event) => {
-    assertTrustedRendererSender(event, 'Compute Fabric')
-    const live = fabricControlPlane.list()
-    return isolatedFabricFixtureSummary
-      ? [
-          ...live.filter((node) => node.nodeId !== isolatedFabricFixtureSummary?.nodeId),
-          isolatedFabricFixtureSummary
-        ]
-      : live
+  registerFabricIpc({
+    fabricControlPlane,
+    lireFixtureIsolee: () => isolatedFabricFixtureSummary,
+    synchroniserFabric,
+    broadcastRolesRefresh
   })
   ipcMain.handle('app:test:fabric-fixture:install', (event) => {
     assertTrustedRendererSender(event, 'Fixture Compute Fabric')
@@ -2321,13 +2315,6 @@ Le fil reprend ensuite normalement.`
       [{ role: 'user', content: 'preuve Compute Fabric packagée' }],
       execution ? { execution: { cwd: os.executionWorkspace, sandbox: 'read-only' } } : {}
     )
-  })
-  ipcMain.handle('os:fabric:refresh', async (event, nodeId?: unknown) => {
-    assertTrustedRendererSender(event, 'Compute Fabric')
-    const summary = await fabricControlPlane.refresh(guardString(nodeId, 'nodeId'))
-    applyFabricSummaries(fabricControlPlane.list())
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return summary
   })
   ipcMain.handle('os:checkpointForks:list', (event) => {
     assertTrustedRendererSender(event, 'Checkpoint forks')
@@ -2400,61 +2387,6 @@ Le fil reprend ensuite normalement.`
         model: guardString(route.model, 'champion.model')
       }
     })
-  })
-  ipcMain.handle('os:models:quotas', async (event, force = false) => {
-    assertTrustedRendererSender(event, 'Model quotas')
-    if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
-    const models = modelCatalog.current()
-    if (isolatedTestInstance) {
-      const observedAt = new Date().toISOString()
-      const fiveHourResetsAt = new Date(Date.now() + 5 * 60 * 60_000).toISOString()
-      const sevenDayResetsAt = new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString()
-      return buildModelQuotaSnapshot(models, {
-        claude: {
-          status: 'available',
-          source: 'Fixture isolée Claude',
-          observedAt,
-          windows: [
-            {
-              id: 'five-hour',
-              label: '5 h',
-              usedPercent: 63,
-              remainingPercent: 37,
-              resetsAt: fiveHourResetsAt
-            },
-            {
-              id: 'seven-day',
-              label: '7 j',
-              usedPercent: 18,
-              remainingPercent: 82,
-              resetsAt: sevenDayResetsAt
-            }
-          ]
-        },
-        codex: {
-          status: 'available',
-          source: 'Fixture isolée Codex',
-          observedAt,
-          windows: [
-            {
-              id: 'five-hour',
-              label: '5 h',
-              usedPercent: 42,
-              remainingPercent: 58,
-              resetsAt: fiveHourResetsAt
-            },
-            {
-              id: 'seven-day',
-              label: '7 j',
-              usedPercent: 29,
-              remainingPercent: 71,
-              resetsAt: sevenDayResetsAt
-            }
-          ]
-        }
-      })
-    }
-    return getModelQuotaSnapshot(models, { force })
   })
   registerProfilesIpc({
     os,
