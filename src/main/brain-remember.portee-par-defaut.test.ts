@@ -68,3 +68,19 @@ describe('une portée absente est remplie depuis le projet', () => {
     expect(outcome.reason).toContain('portée manquante')
   })
 })
+
+/**
+ * UN REFUS DOIT DIRE QU'IL N'A RIEN ÉCRIT.
+ *
+ * conv-142 : le compte-rendu ne portait que le motif de forme, et l'agent avait déjà annoncé
+ * « je dépose la leçon ». Lire un motif ne lui disait pas que l'effet annoncé n'avait pas eu lieu.
+ */
+describe('un refus de validation dit qu’il n’a rien écrit', () => {
+  it('le compte-rendu lu par l’agent porte l’absence d’effet, pas seulement le motif', async () => {
+    const outcome = await rememberFact({ ...FAIT, type: 'cause-racine' }, { token: '' })
+
+    expect(outcome.stored).toBe(false)
+    expect(outcome.detail).toMatch(/rien n[’']a été retenu/u)
+    expect(outcome.detail).toContain('type invalide')
+  })
+})

@@ -575,7 +575,15 @@ export async function rememberFact(
     scopeGiven ? args : { ...args, scope: projectScopeFromWorkspace(deps.workspace) }
   )
   if (!decision.allowed) {
-    return { allowed: false, reason: decision.reason, stored: false, detail: decision.reason }
+    /*
+     * UN REFUS DOIT DIRE QU'IL N'A RIEN ECRIT — conv-142, 2026-09-02. Le compte-rendu ne portait que
+     * le motif (« portee manquante — … »). Or l'agent avait deja ecrit « je depose la lecon » : lire
+     * un motif de forme ne lui a pas dit que l'effet annonce n'avait PAS eu lieu, et l'utilisateur a
+     * du le constater lui-meme. Les refus du transport le disaient deja (« jeton du Brain absent —
+     * rien n'a ete ecrit ») ; les refus de VALIDATION, non.
+     */
+    const detail = `rien n’a été retenu — ${decision.reason}`
+    return { allowed: false, reason: decision.reason, stored: false, detail }
   }
   // fix-ok: refactorisation assumée, pas un correctif aveugle — cause MESURÉE et citée dans le RUN de la
   // session (CausalHypothesis, cycle 4). L'appelant alimentait l'écho avec `a.fact ?? a.body`, les
