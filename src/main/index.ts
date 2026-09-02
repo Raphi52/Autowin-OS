@@ -20,6 +20,7 @@ import { registerProvidersIpc } from './ipc/providers'
 import { registerRolesIpc } from './ipc/roles'
 import { registerModelsIpc } from './ipc/models'
 import { registerFabricIpc } from './ipc/fabric'
+import { registerCapabilitiesIpc } from './ipc/capabilities'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -162,8 +163,6 @@ import {
   costSamplesFrom,
   summarizeCostSamples
 } from './activity/prompt-observability'
-import { promptConfigChange } from './activity/prompt-config-change'
-import { appendPromptConfigActivity } from './activity/prompt-config-store'
 import { promptCallToTraceEvents } from './activity/prompt-call-trace'
 import { appendObservedOrchestrationOutcome } from './activity/orchestration-outcome-trace'
 import { executionCostCoverageFields } from '../shared/orchestration-outcome'
@@ -180,7 +179,7 @@ import {
 import { aggregateToolUsage } from './activity/tool-usage'
 
 import { ProfileStore } from './profile-store'
-import { capabilityEnabled, listCapabilities, setCapabilityEnabled } from './capability-controls'
+import { capabilityEnabled } from './capability-controls'
 import { seedRegistrySnapshot } from './native-registry'
 import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 import {
@@ -196,7 +195,6 @@ import {
 } from './ipc-senders'
 import { createWindowing } from './window'
 import { discoverConfiguredSkillRegistry } from './skill-registry'
-import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion } from './model-questions'
 import {
   discoverImportedModels,
@@ -246,7 +244,7 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { guardBoolean, guardString, guardStringOrNull } from './ipc-guards'
+import { guardString, guardStringOrNull } from './ipc-guards'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { TicketSourceStore } from './ticket-source-store'
@@ -2402,44 +2400,10 @@ Le fil reprend ensuite normalement.`
     appliquerTopologie,
     broadcastRolesRefresh
   })
-  // --- Contrôles de capacités : inventaire + mutations bornées ---
-  ipcMain.handle(
-    'os:capabilities:list',
-    (event, kind: 'skills' | 'hooks' | 'tools' | 'plugins') => {
-      assertTrustedRendererSender(event, 'Capabilities')
-      if (!['skills', 'hooks', 'tools', 'plugins'].includes(kind))
-        throw new Error('Vue de capacités inconnue')
-      return listCapabilities(kind)
-    }
-  )
-
-  ipcMain.handle('claude:hooks:list', (event) => {
-    assertTrustedRendererSender(event, 'Claude hooks')
-    return listClaudeHooks()
-  })
-  ipcMain.handle('codex:hooks:list', (event) => {
-    assertTrustedRendererSender(event, 'Codex hooks')
-    return listCodexHooks()
-  })
-  ipcMain.handle('os:capabilities:tools:set', async (event, name: string, enabled: unknown) => {
-    assertTrustedRendererSender(event, 'Capabilities')
-    const before = await listCapabilities('tools')
-    const result = await setCapabilityEnabled(
-      'tools',
-      guardString(name, 'toolset'),
-      guardBoolean(enabled, 'toolset.enabled')
-    )
-    const change = promptConfigChange('tools', before, result.items)
-    appendPromptConfigActivity(`Prompt Load · toolset ${name}`, change)
-    if (bus.activeConversationId) {
-      appendConvActivity(bus.activeConversationId, {
-        kind: 'configuration-change',
-        label: `Prompt Load · toolset ${name}`,
-        text: JSON.stringify(change)
-      })
-    }
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return result
+  // Les canaux de l'inventaire des capacités vivent dans src/main/ipc/capabilities.ts.
+  registerCapabilitiesIpc({
+    lireConversationActive: () => bus.activeConversationId,
+    broadcast
   })
 
   ipcMain.handle('os:behaviour:choose-workspace', async (event) => {
