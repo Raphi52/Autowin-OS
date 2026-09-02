@@ -5,6 +5,7 @@ import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisp
 import { creerServicePiper, racinePiper, type ServicePiper } from './piper-local'
 import { ServiceTranscripts, dossierTranscripts } from './transcripts'
 import { registerPiperIpc } from './ipc/piper'
+import { registerActivityIpc } from './ipc/activity'
 import { registerTranscriptsIpc } from './ipc/transcripts'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
@@ -114,12 +115,6 @@ import { commandeEditeur, ligneDemandee, racinesRevelation } from './reveal-file
 import { type ChatTurnEvent } from '../shared/chat-turn'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger, evenementRefusIntegration } from './activity/ledger'
-import {
-  listSessionsAsync,
-  parseSession,
-  resolveListedSessionAsync,
-  resolveListedSessionImage
-} from './activity/transcripts'
 import { LOT_SUPPRESSION_MAX } from './store/conversations'
 import { persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
@@ -4497,48 +4492,9 @@ Le fil reprend ensuite normalement.`
   registerPiperIpc({ servicePiper })
   registerTranscriptsIpc({ serviceTranscripts })
 
-  ipcMain.handle('os:activity:sessions', (event) => {
-    assertTrustedRendererSender(event, 'Activity sessions')
-    return listSessionsAsync(60)
-  })
-  ipcMain.handle('os:activity:session', async (event, ref: unknown) => {
-    assertTrustedRendererSender(event, 'Activity session')
-    if (!ref || typeof ref !== 'object') throw new Error('Référence de session invalide')
-    const raw = ref as Record<string, unknown>
-    const session = await resolveListedSessionAsync({
-      id: guardString(raw.id, 'session.id'),
-      project: guardString(raw.project, 'session.project')
-    })
-    if (!session) throw new Error('Session non autorisée ou hors inventaire')
-    return parseSession(session)
-  })
-
-  // Affichage des screenshots consultés : whitelist extensions + cap taille, lecture seule.
-  ipcMain.handle('os:activity:image', async (event, ref: unknown, path: string) => {
-    assertTrustedRendererSender(event, 'ActivityImage')
-    if (!ref || typeof ref !== 'object') throw new Error('Référence de session invalide')
-    const raw = ref as Record<string, unknown>
-    const p = guardString(path, 'path')
-    if (!/\.(png|jpe?g|webp|gif|bmp)$/i.test(p)) throw new Error('extension non autorisée')
-    const authorizedPath = await resolveListedSessionImage(
-      {
-        id: guardString(raw.id, 'session.id'),
-        project: guardString(raw.project, 'session.project')
-      },
-      p
-    )
-    if (!authorizedPath) throw new Error('Image absente des transcripts autorisés')
-    const { statSync, readFileSync } = await import('node:fs')
-    if (statSync(authorizedPath).size > 8_000_000) throw new Error('image trop volumineuse')
-    const ext = p.split('.').pop()!.toLowerCase()
-    const mime =
-      ext === 'png'
-        ? 'image/png'
-        : ext === 'webp'
-          ? 'image/webp'
-          : `image/${ext === 'jpg' ? 'jpeg' : ext}`
-    return { dataUrl: `data:${mime};base64,${readFileSync(authorizedPath).toString('base64')}` }
-  })
+  // Les canaux de l'activite (sessions consultees et leurs captures) vivent dans
+  // src/main/ipc/activity.ts : ils ne prenaient rien ici.
+  registerActivityIpc()
 }
 
 // This method will be called when Electron has finished
