@@ -39,6 +39,12 @@ export type ModelActivityKind =
    * mais y était rangée en « Journal » fourre-tout : illisible et infiltrable.
    */
   | 'status'
+  /**
+   * Aller-retour avec le BRAIN : savoir récupéré (préchargé, `brain_query`, empreinte, recherche)
+   * ou fait DÉPOSÉ par `remember`. Sans lui, le journal montrait le modèle répondre sans jamais
+   * montrer ce qu'il avait lu.
+   */
+  | 'brain'
   /** Tout geste journalisé qui n'entre dans AUCUNE des catégories ci-dessus. Rien ne se perd. */
   | 'event'
 
