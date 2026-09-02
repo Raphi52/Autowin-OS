@@ -19,7 +19,9 @@ async function lireLigne(): Promise<Record<string, unknown>> {
   // Ecriture best-effort NON attendue (jamais bloquante pour un tour) : on attend son arrivee.
   for (let essai = 0; essai < 200; essai += 1) {
     if (existsSync(source)) {
-      const lignes = readFileSync(source, 'utf8').split('\n').filter((l) => l.trim())
+      const lignes = readFileSync(source, 'utf8')
+        .split('\n')
+        .filter((l) => l.trim())
       if (lignes.length) return JSON.parse(lignes[lignes.length - 1] as string)
     }
     await new Promise((resolve) => setTimeout(resolve, 10))

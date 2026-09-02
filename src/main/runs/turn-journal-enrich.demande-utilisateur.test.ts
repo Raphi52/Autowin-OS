@@ -56,7 +56,9 @@ describe('journal de tour — la demande de l utilisateur y est ecrite', () => {
   it('ne repete pas la meme demande a chaque iteration du tour', () => {
     const memory = {}
     const messages = [{ role: 'user', content: 'une seule demande' }]
-    expect(promptCallJournalEvents(prompt(messages), memory, 1).map((e) => e.kind)).toContain('user')
+    expect(promptCallJournalEvents(prompt(messages), memory, 1).map((e) => e.kind)).toContain(
+      'user'
+    )
     expect(promptCallJournalEvents(prompt(messages), memory, 2).map((e) => e.kind)).toEqual([
       'prompt-call'
     ])
@@ -64,7 +66,10 @@ describe('journal de tour — la demande de l utilisateur y est ecrite', () => {
 
   it('n ecrit RIEN quand aucun message utilisateur ne porte de texte', () => {
     const events = promptCallJournalEvents(
-      prompt([{ role: 'assistant', content: 'je continue' }, { role: 'user', content: '   ' }]),
+      prompt([
+        { role: 'assistant', content: 'je continue' },
+        { role: 'user', content: '   ' }
+      ]),
       {},
       1
     )
