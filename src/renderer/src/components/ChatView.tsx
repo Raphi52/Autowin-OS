@@ -40,7 +40,8 @@ import {
   type RunRequestIdentity,
   type ScopedLiveRun,
   type StoredAssistantMessage,
-  settleOrchestrationOnRunEnd
+  settleOrchestrationOnRunEnd,
+  noterChoixDePipeline
 } from './chat-view-model'
 import { shortModelLabel } from './model-display-label'
 import { buildHomeSuggestions } from './chat-home-suggestions'
@@ -49,12 +50,7 @@ import { moveQueueEntry } from './chat-queue-order'
 import { ChatQueuePanel } from './ChatQueuePanel'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
-import {
-  askDejaRepondu,
-  askEnAttente,
-  lastUserPromptBefore,
-  messageKey
-} from './chat-message-keys'
+import { askDejaRepondu, askEnAttente, lastUserPromptBefore, messageKey } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
 import { deciderRelanceAuto, signatureTour } from './chat-auto-mode'
 import { reprendreApresRedemarrage } from './chat-reprise'
@@ -293,10 +289,27 @@ export function ChatView({
    */
   const [autoActif, setAutoActif] = useState(false)
   const [autoNotice, setAutoNotice] = useState<string | null>(null)
-  /** Dernier tour DÉJÀ traité par la boucle : un re-rendu du même tour ne renvoie rien. */
-  const autoDernierTourRef = useRef<string | null>(null)
-  /** Dernier texte envoyé automatiquement : la même suite deux fois = boucle, on ne renvoie pas. */
-  const autoDernierPromptRef = useRef<string | null>(null)
+  /**
+   * L'avancement de la boucle, PAR CONVERSATION — `tour` = dernier tour déjà traité (un re-rendu du
+   * même tour ne renvoie rien), `prompt` = dernier texte envoyé (la même suite deux fois = boucle).
+   *
+   * DÉFAUT VÉCU le 2026-09-02 : « j'étais en mode auto et t'as pas enchaîné le workflow ». Les
+   * horaires des journaux de tours le montrent — trois conversations tournaient en parallèle
+   * (conv-131, conv-133, conv-134) et la boucle, tenue par des compteurs UNIQUES, ne pouvait suivre
+   * que le fil affiché. Un état par conversation est la condition pour enchaîner les autres.
+   */
+  const autoEtatsRef = useRef(new Map<string, { tour: string | null; prompt: string | null }>())
+  /**
+   * Fils dont un tour a été VU tourner pendant que l'interrupteur est armé. C'est ce qui distingue
+   * « un tour vient de finir sous mon autorité » (à enchaîner, même si l'écran est ailleurs) d'une
+   * « vieille réponse d'un fil qu'on rouvre » (à ne JAMAIS relancer — le tour serait payé sans que
+   * personne l'ait demandé, règle déjà figée par `ChatView.mode-auto-allumage.test.tsx`).
+   */
+  const autoSuiviesRef = useRef(new Set<string>())
+  /** Nombre de repassages déjà faits sur un fil dont le texte n'était pas encore complet. */
+  const autoEssaisRef = useRef(new Map<string, number>())
+  /** Simple réveil de la boucle d'arrière-plan : rien d'autre ne change quand un fil est en retard. */
+  const [autoTic, setAutoTic] = useState(0)
   /**
    * L'interrupteur vient d'être allumé À LA MAIN : ce clic PORTE sur la réponse affichée, donc la
    * suite proposée part tout de suite. Défaut vécu le 2026-09-02 (« j'ai mis le mode auto et je
@@ -1357,6 +1370,29 @@ export function ChatView({
             }
           })
         )
+        /*
+         * LE MEME SIGNAL PART DANS LE FIL — correctif du 2026-09-02.
+         *
+         * Ce qui precede n'alimentait que la carte du panneau Workflows : dans le chat,
+         * « 1 action en cours · Orchestration » ne disait NI quelle phase tourne, NI quel modele
+         * la joue, et l'etape n'offrait aucun chevron faute de resultat. On reutilise l'evenement
+         * existant — en fabriquer un second ferait diverger deux verites sur le meme fait.
+         */
+        const choix = e.phase as {
+          provider?: string
+          role?: string
+          model?: string
+          phase?: string
+          step?: string
+        }
+        patchLast(e.convId, (m) => {
+          m.parts = noterChoixDePipeline(m.parts, {
+            phase: choix.phase ?? choix.step,
+            role: choix.role,
+            provider: choix.provider,
+            model: choix.model
+          }) as typeof m.parts
+        })
       } else if (
         e.type === 'orchestrate-delta' &&
         typeof e.note === 'string' &&
@@ -2567,6 +2603,14 @@ export function ChatView({
    * Rien n'est décidé ici : `deciderRelanceAuto` tranche, cet effet exécute. Un envoi automatique
    * coûte un tour payant : sa condition ne doit pas être éparpillée dans la vue.
    */
+  /** L'avancement de la boucle pour CE fil — créé à la demande, jamais partagé entre fils. */
+  function autoEtat(conversationId: string): { tour: string | null; prompt: string | null } {
+    const connu = autoEtatsRef.current.get(conversationId)
+    if (connu) return connu
+    const neuf = { tour: null, prompt: null }
+    autoEtatsRef.current.set(conversationId, neuf)
+    return neuf
+  }
   useEffect(() => {
     if (!autoActif || !activeId) return
     /*
@@ -2577,49 +2621,125 @@ export function ChatView({
      * tour que personne n'a demandé. Tant qu'aucune réponse n'est chargée (signature nulle), on ne
      * fige rien — sinon le fil encore en cours de chargement passerait pour un fil déjà traité.
      */
+    const etat = autoEtat(activeId)
     if (autoFilAmorceRef.current !== activeId) {
       const signatureArrivee = signatureTour(messages)
       if (signatureArrivee === null) return
       autoFilAmorceRef.current = activeId
-      autoDernierPromptRef.current = null
+      etat.prompt = null
       // ALLUMAGE MANUEL : l'utilisateur clique EN VOYANT la suite proposée — c'est sa demande de
       // l'envoyer. On ne fige donc pas ce tour, on le laisse passer la porte de décision.
       const allumageManuel = autoAllumageManuelRef.current
       autoAllumageManuelRef.current = false
-      autoDernierTourRef.current = allumageManuel ? null : signatureArrivee
+      etat.tour = allumageManuel ? null : signatureArrivee
       if (!allumageManuel) return
     }
     const decision = deciderRelanceAuto({
       actif: true,
       occupe: busy,
       fil: messages,
-      dernierTourTraite: autoDernierTourRef.current,
-      dernierPromptEnvoye: autoDernierPromptRef.current,
+      dernierTourTraite: etat.tour,
+      dernierPromptEnvoye: etat.prompt,
       brouillonPresent
     })
-    if (decision.action === 'attendre') return
+    if (decision.action === 'attendre') {
+      // VISIBILITÉ : deux attentes sont des impasses réelles — plus aucune suite écrite, ou la même
+      // suite renvoyée en boucle. Le badge disait « actif » pendant que la boucle était morte ;
+      // désormais il dit pourquoi. Les autres attentes sont normales et restent muettes.
+      if (decision.raison === 'aucun-prompt')
+        setAutoNotice('Mode auto en attente : la dernière réponse ne propose aucune suite.')
+      else if (decision.raison === 'prompt-identique')
+        setAutoNotice('Mode auto en attente : la même suite revenait deux fois — non renvoyée.')
+      return
+    }
     if (decision.action === 'arreter') {
       setAutoActif(false)
       setAutoNotice(decision.message)
       return
     }
-    autoDernierTourRef.current = decision.signature
-    autoDernierPromptRef.current = decision.texte
+    etat.tour = decision.signature
+    etat.prompt = decision.texte
+    setAutoNotice(null)
     // Comme le vidage de file : ce n'est pas un geste de l'utilisateur, le composer n'est pas touché.
     void send(decision.texte, { keepComposerDraft: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoActif, activeId, busy, messages, brouillonPresent])
 
+  /**
+   * LES AUTRES FILS — la boucle ne doit pas s'arrêter parce qu'on regarde ailleurs.
+   *
+   * Mesure du 2026-09-02 (journaux de tours) : conv-131 a fini son tour à 11:53:59 pendant que
+   * conv-133 était à l'écran depuis 11:53:17. La suite proposée n'est jamais partie, et au retour
+   * dans le fil la règle du premier passage marquait ce tour comme « déjà traité » — donc il ne
+   * pouvait PLUS jamais repartir. La chaîne mourait en silence.
+   *
+   * La borne qui protège l'argent reste entière : on n'enchaîne QUE les fils dont on a vu le tour
+   * tourner pendant que l'interrupteur était armé. Une vieille réponse d'un fil qu'on rouvre n'est
+   * jamais relancée — c'est un tour que personne n'a demandé.
+   */
+  useEffect(() => {
+    if (!autoActif) return
+    for (const id of busyConversations) autoSuiviesRef.current.add(id)
+    for (const id of [...autoSuiviesRef.current]) {
+      if (busyConversations.has(id)) continue
+      autoSuiviesRef.current.delete(id)
+      // Le fil affiché a son propre effet, qui sait en plus respecter un brouillon en cours.
+      if (id === activeId) continue
+      const etat = autoEtat(id)
+      const decision = deciderRelanceAuto({
+        actif: true,
+        occupe: false,
+        fil: liveMessagesRef.current.get(id) ?? [],
+        dernierTourTraite: etat.tour,
+        dernierPromptEnvoye: etat.prompt,
+        brouillonPresent: false
+      })
+      if (decision.action === 'arreter') {
+        setAutoActif(false)
+        setAutoNotice(decision.message)
+        return
+      }
+      if (decision.action !== 'envoyer') {
+        /*
+         * LE TEXTE PEUT ÊTRE EN RETARD SUR LA FIN DU TOUR : les morceaux de réponse sont posés par
+         * lots (`ChatView.pilot-delta-batch.test.tsx`), donc « terminé » peut arriver avant la
+         * dernière ligne — celle qui porte justement la suite. On garde le fil en attente et on
+         * repasse un instant plus tard, au lieu de le jeter définitivement.
+         */
+        if (decision.raison === 'aucun-prompt' || decision.raison === 'aucune-reponse') {
+          const essais = (autoEssaisRef.current.get(id) ?? 0) + 1
+          if (essais <= 5) {
+            autoEssaisRef.current.set(id, essais)
+            autoSuiviesRef.current.add(id)
+            window.setTimeout(() => setAutoTic((t) => t + 1), 400)
+          }
+        }
+        continue
+      }
+      autoEssaisRef.current.delete(id)
+      etat.tour = decision.signature
+      etat.prompt = decision.texte
+      const titre = convsRef.current.find((c) => c.id === id)?.title ?? id
+      setAutoNotice(`Mode auto : suite envoyée dans « ${titre} ».`)
+      void send(decision.texte, { keepComposerDraft: true, targetConversationId: id })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoActif, activeId, busyConversations, autoTic])
+
   /** Bascule du mode auto : à l'allumage, l'anti-doublon et l'anti-boucle repartent de zéro. */
   function basculerModeAuto(): void {
     if (autoActif) {
       autoAllumageManuelRef.current = false
+      // Éteindre coupe TOUT : les fils suivis en arrière-plan ne doivent pas repartir plus tard.
+      autoSuiviesRef.current.clear()
+      autoEssaisRef.current.clear()
       setAutoActif(false)
       setAutoNotice('Mode auto arrêté.')
       return
     }
-    autoDernierTourRef.current = null
-    autoDernierPromptRef.current = null
+    autoEtatsRef.current.clear()
+    autoSuiviesRef.current.clear()
+    autoEssaisRef.current.clear()
     // À l'allumage, le fil courant est amorcé par la boucle elle-même — mais le tour SOUS LES YEUX
     // est justement celui que ce clic demande d'enchaîner, pas un vieux tour rouvert.
     autoFilAmorceRef.current = null
@@ -3251,10 +3371,7 @@ export function ChatView({
     nouvelle: nouvelleFenetreMosaique,
     composer: rendreComposerMosaique
   }
-  const fermerFenetreStable = useCallback(
-    (id: string) => rappelsMosaiqueRef.current.fermer(id),
-    []
-  )
+  const fermerFenetreStable = useCallback((id: string) => rappelsMosaiqueRef.current.fermer(id), [])
   const ouvrirSeuleStable = useCallback(
     (id: string) => void rappelsMosaiqueRef.current.ouvrirSeule(id),
     []
@@ -3481,9 +3598,7 @@ export function ChatView({
             /* VERROU DURABLE : seule une VRAIE reponse (le texte que le bloc envoie) ferme la
              question. Derive du fil, donc vrai apres un remontage comme apres un redemarrage.
              Se fermer sur n'importe quel message posterieur avalait le clic (conv-50). */
-            askRepondu={
-              message.role === 'assistant' ? askDejaRepondu(messages, index) : undefined
-            }
+            askRepondu={message.role === 'assistant' ? askDejaRepondu(messages, index) : undefined}
             message={message}
             conversationId={activeId}
             onInspectTurn={onInspectTurn}
@@ -3760,7 +3875,11 @@ export function ChatView({
                           )}
                           <span className="conv-copy">
                             <span className="conv-label">
-                              {convQuery ? <TexteSurligne texte={c.title} terme={convQuery} /> : c.title}
+                              {convQuery ? (
+                                <TexteSurligne texte={c.title} terme={convQuery} />
+                              ) : (
+                                c.title
+                              )}
                             </span>
                             {convQuery && snippet && (
                               <span className="conv-snippet">
