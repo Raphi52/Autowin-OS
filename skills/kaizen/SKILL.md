@@ -2,8 +2,12 @@
 name: kaizen
 description: >-
   Continuous-improvement loop on Claude's OWN behavior: turn a session (BY DEFAULT the CURRENT one it is
-  invoked in) into VERIFIED, SELF-APPLIED EDITS to the kit files — `skills/` · `hooks/*.ps1` ·
-  `settings.json` · `CLAUDE.md` (+ `CONSTITUTION.md` mirror) · memory — that improve Claude's FUTURE behavior.
+  invoked in) into VERIFIED, SELF-APPLIED EDITS to ANY of its levers — the kit (`skills/**/SKILL.md` ·
+  `skills/_engine/ENGINE.md` · `hooks/*.ps1` · `settings.json` · `CLAUDE.md` + `CONSTITUTION.md` mirror · memory)
+  AND the Autowin code that injects behavior at runtime (`src/main/chat-pilotage-prompt.ts`,
+  `src/main/phase-briefs.ts`, `src/main/constitution.ts`, `src/main/intent-phase-routing.ts`), the TOOLS the agent
+  is given and their descriptions (`src/main/commands.ts`), the deterministic guardrails in code
+  (`src/main/gates/*.ts`, `src/main/hooks/*.ts`), the repo `.md` docs, and the Brain — full list in § « Tes leviers ».
   ORCHESTRATES, never re-implements the audit: (0) FINISH THE TASK FIRST — when kaizen is invoked while a
   user task is still in flight (« kaizen, et au fait ça marche toujours pas »), the TASK is delivered and
   verified BEFORE the behavioral improvement, then the improvement is done in the SAME pass; kaizen never
@@ -42,6 +46,27 @@ naming the defect, understanding it, or writing a rule about it changes nothing 
 session's blind spots (defects Claude hit, corrections the user gave) into VERIFIED, SELF-APPLIED edits to
 the kit (CLAUDE.md reflexes / hooks / skills / memory) that change FUTURE behavior. It APPLIES its own edits, each in a DEDICATED commit and each backed by an out-of-model verification — the garde-fou is revertability, not a wait.
 **L'audit ne remplace jamais le travail** : si une tâche utilisateur est encore en cours au moment de l'invocation, elle est TERMINÉE d'abord (livrée + vérifiée), l'amélioration comportementale vient ENSUITE, dans la même passe.
+
+## Tes leviers — ce que kaizen a le DROIT d'éditer
+Un défaut de comportement n'a pas toujours sa cause dans `skills/`. Avant de choisir un fichier, balaye
+cette liste : la cause vit dans UN de ces sept leviers, et éditer le mauvais levier ne corrige rien.
+Chemins relatifs au dépôt Autowin (vérifiés le 2026-09-02).
+
+| # | levier | où | quand c'est LUI |
+|---|---|---|---|
+| 1 | **Skills** | `skills/<nom>/SKILL.md` (18 skills au 2026-09-02, compte relu : `find skills -name SKILL.md`), mécanique canonique dans `skills/_engine/ENGINE.md`, gabarit `skills/_engine/RUN-template.md` | la procédure elle-même est fausse/incomplète. Nouvelle skill → `graft` |
+| 2 | **Prompts injectés au runtime (code Autowin)** | `src/main/chat-pilotage-prompt.ts` (prompt du cockpit), `src/main/phase-briefs.ts` (consignes de phase), `src/main/constitution.ts`, `src/main/intent-phase-routing.ts` (routage), `src/main/autowin-kaizen-context.ts` (ce que kaizen reçoit lui-même) | le comportement est FAUX parce que l'injection le demande. L'injection est lue en DERNIER et gagne : aucune édition de `CLAUDE.md` ne la corrigera |
+| 3 | **Outils de l'agent** | `src/main/commands.ts` (déclaration ET texte de description de chaque outil) + les modules dédiés (`edit-file-command.ts`, `brain-query-command.ts`, …) | l'agent n'a pas le levier, ou la description de l'outil l'induit en erreur — un texte d'outil EST une injection de comportement |
+| 4 | **Garde-fous déterministes** | `src/main/gates/*.ts` (`stopgate.ts`, `hooks.ts`), `src/main/hooks/*.ts` (`cablage-garde.ts`, `verify-replay-hook.ts`) + les hooks PowerShell du kit et leur câblage `settings.json` | il faut du CODE qui refuse tout seul — l'enforcement le plus fort, à préférer à une règle en prose |
+| 5 | **Fichiers de comportement hors dépôt** | `%USERPROFILE%\.claude\settings.json`, `CLAUDE.md` global / projet, `CONSTITUTION.md`, fiches `memory/` | réflexe global ou local-machine. Inventorie-les avec le scanner de comportements (`src/main/behaviour-files.ts` / vue Comportements) au lieu de deviner un chemin |
+| 6 | **Documentation `.md` du dépôt** | `README.md`, `ONBOARDING.md`, `RUN.md`, `docs/*.md` | le savoir humain est faux/périmé, ou une install/étape manquante a causé le défaut. N'installe JAMAIS un réflexe ici : un `.md` de doc n'est pas chargé par l'agent |
+| 7 | **Brain (savoir partagé)** | dépôt d'un candidat via `remember`, relecture via `brain_query`, côté code `src/main/brain-*.ts` (`brain-remember.ts`, `brain-retrieval.ts`, `brain-inbox.ts`, `brain-corpus-scope.ts`) | c'est un FAIT durable qui manquait, pas un comportement. Un fait au Brain part en candidat et n'agit pas tout seul : il ne remplace pas une règle câblée |
+
+**Règles de levier.**
+- **Levier ≠ liste de courses** : un défaut = le levier de sa CAUSE, pas les sept. Un correctif posé dans une skill alors que l'injection le contredit est un pansement.
+- **Édition de CODE (leviers 2, 3, 4, 7-code)** : c'est un changement de projet, pas une édition de kit → `edit_file` sur le fichier réel, puis `verify` sur le test colocalisé (`src/main/<module>.test.ts`), et un commit dédié. Pas de propagation `sync-kit.ps1` (elle ne concerne que le kit vivant, leviers 1 et 5).
+- **Édition de KIT (leviers 1, 5)** : `sync-kit.ps1` (live→package) après coup, `test-hooks.ps1` pour tout hook touché, et un nouveau fichier doit être AJOUTÉ au manifeste sync-kit.
+- **Ordre d'enforcement, du plus faible au plus fort** : doc `.md` < fait Brain < fiche mémoire < règle dure (`CLAUDE.md`/skill) < prompt injecté (code) < garde-fou déterministe (hook/gate). Si un rejeu montre que le défaut persiste, MONTE d'un niveau — ne réécris pas la même règle plus fort.
 
 ## Procedure
 0. **FINISH THE TASK FIRST (CARDINAL — ordre non négociable).** Kaizen arrive presque toujours PENDANT un travail : l'utilisateur signale un défaut de comportement sur la tâche qu'il est en train de faire faire. Cette tâche reste due. **Ordre imposé : (a) terminer la tâche demandée jusqu'à son résultat vérifié hors-modèle, (b) PUIS mener l'audit comportemental et installer les éditions, dans la MÊME passe.** Partir directement à l'audit — et rendre la main avec un kit amélioré mais la demande initiale non livrée — est un ÉCHEC, pas une priorisation : l'utilisateur perd son livrable ET doit redemander.
@@ -110,12 +135,15 @@ the kit (CLAUDE.md reflexes / hooks / skills / memory) that change FUTURE behavi
      - **local** (THIS machine only — RIG hooks, paths, project gates) → the **« Local »** section of `~/.claude/CLAUDE.md`, **NOT mirrored** (a machine-specific fact in the shared `CONSTITUTION.md` pollutes the company kit).
      - **project** (one RIG sub-project) → that project's `CLAUDE.md` (e.g. `<project-root>\CLAUDE.md`), never the global constitution.
 
-   Then map the kind of fix to the file (the **target-map**), at the scope decided above:
+   Then map the kind of fix to the file (the **target-map**), at the scope decided above — la liste COMPLÈTE des cibles possibles est le tableau § « Tes leviers » ; balaye-le avant de te rabattre sur `skills/` ou `CLAUDE.md` :
    - **a triggered reflex / hard rule** → `CLAUDE.md` (+ `CONSTITUTION.md` **only if global**) — the reflexes loaded every session.
    - **an automatic, deterministic guardrail** → a **hook** (`hooks/*.ps1`) + its **wiring in `settings.json`** (and the package `hooks/settings-snippet.json`). This is the STRONGEST fix — code that fires on its own.
    - **a workflow/skill behavior** → the relevant `skills/<x>/SKILL.md` (or a new skill).
    - **an INJECTED instruction — the app's own prompting, not the kit's** → the text Autowin injects at runtime: the cockpit's system prompt, the per-phase consignes, `output-styles/*.md`, the replayed reminders and retrieved-knowledge blocks. This is a REAL and frequently-missed target: a behavior can be wrong because the injection says so, and no amount of editing `CLAUDE.md` will fix it — the injection is read LAST and wins. Anchor the finding on the injected TEXT quoted verbatim, locate its emitter in the app source (`find_in_files` on the quoted phrase), and treat a fix there as a code change, subject to the project's own signal — not a kit edit.
    - **a recall-only nuance** → a `memory/` fiche + the `MEMORY.md` index.
+   - **a missing or misleading TOOL** → `src/main/commands.ts` (levier 3) : la déclaration de l'outil ou son TEXTE de description. Un outil que l'agent croit absent, ou décrit de travers, produit un défaut que nulle règle ne rattrape.
+   - **a durable FACT that was missing** → le Brain via `remember` (levier 7), jamais un réflexe : un fait n'agit pas tout seul, il part en candidat.
+   - **a wrong or stale HUMAN doc** → `README.md` / `ONBOARDING.md` / `docs/*.md` (levier 6) — documentation seulement : n'y installe aucun réflexe, l'agent ne les charge pas.
 
    Then:
    - **Prefer a WIRED trigger** (a hook + a CLAUDE.md/CONSTITUTION hard rule) over a passive memory fiche — loading ≠ applying (a fresh fiche was violated twice the same session). Memory fiche = reinforcement, not the primary enforcement.

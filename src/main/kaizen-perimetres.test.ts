@@ -21,7 +21,22 @@ const AXES: Array<[string, RegExp]> = [
   ['axe 4 — lentilles workflow', /WORKFLOW\/TOPOLOGY lenses/],
   // Demande utilisateur du 2026-09-02 : kaizen invoqué PENDANT un travail doit d'abord FINIR
   // la tâche, puis faire l'amélioration comportementale — l'audit ne remplace pas le livrable.
-  ['axe 5 — finir la tâche avant l’audit', /FINISH THE TASK FIRST/]
+  ['axe 5 — finir la tâche avant l’audit', /FINISH THE TASK FIRST/],
+  // Demande utilisateur du 2026-09-02 : kaizen doit connaître SES LEVIERS — skills, outils, code
+  // Autowin, .md, Brain — sinon il corrige toujours dans `skills/` faute de savoir où d'autre agir.
+  ['axe 6 — la liste des leviers éditables', /## Tes leviers/]
+]
+
+/* Les sept leviers, chacun ancré sur une cible RÉELLE du dépôt (pas une catégorie en prose). */
+const LEVIERS: Array<[string, RegExp]> = [
+  ['skills', /skills\/_engine\/ENGINE\.md/],
+  ['prompts injectés (code)', /src\/main\/chat-pilotage-prompt\.ts/],
+  ['consignes de phase', /src\/main\/phase-briefs\.ts/],
+  ['outils de l’agent', /src\/main\/commands\.ts/],
+  ['garde-fous déterministes', /src\/main\/gates\/\*\.ts/],
+  ['fichiers de comportement hors dépôt', /behaviour-files\.ts/],
+  ['docs .md du dépôt', /ONBOARDING\.md/],
+  ['Brain', /brain-remember\.ts/]
 ]
 
 const SHA_AVANT = '74501455'
@@ -68,6 +83,23 @@ describe('kaizen — périmètres d’audit et propagation package→live', () =
     expect(texte.indexOf('FINISH THE TASK FIRST')).toBeLessThan(
       texte.indexOf('1. **LOCATE the target.**')
     )
+  })
+
+  for (const [nom, motif] of LEVIERS) {
+    it(`le levier « ${nom} » est NOMMÉ avec sa cible réelle`, () => {
+      expect(motif.test(texte)).toBe(true)
+    })
+  }
+
+  it('les leviers sont balayés AVANT le choix du fichier (renvoi depuis l’étape INTEGRATE)', () => {
+    expect(texte).toMatch(/§ « Tes leviers »/)
+    // La section vient AVANT la procédure : elle se lit avant de choisir une cible.
+    expect(texte.indexOf('## Tes leviers')).toBeLessThan(texte.indexOf('## Procedure'))
+  })
+
+  it('l’ordre d’enforcement est écrit (une règle qui échoue MONTE d’un niveau)', () => {
+    expect(texte).toMatch(/Ordre d'enforcement/)
+    expect(texte).toMatch(/garde-fou déterministe/)
   })
 
   it('contrôle négatif : la version d’avant les éditions ÉCHOUE ces axes', () => {
