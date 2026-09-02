@@ -152,10 +152,17 @@ export function candidatsDepuisScoutTable(
 }
 
 /**
- * Le prompt « parfait » pour enchaîner : /frame sur LA SÉLECTION, avec les ancrages et preuves,
- * et la consigne d'aller jusqu'au commit publié — le même contrat que les campagnes.
+ * Le prompt « parfait » pour enchaîner : le WORKFLOW COMPLET sur LA SÉLECTION, avec les ancrages et
+ * preuves, et la consigne d'aller jusqu'au commit publié — le même contrat que les campagnes.
+ *
+ * Demande utilisateur du 2026-09-02 : le bouton de la shortlist scout doit lancer TOUT le workflow,
+ * pas seulement le cadrage. Le préfixe `/frame` réduisait le run à la seule phase frame
+ * (`skill-routing.ts` → `explicitPhase`), donc l'ancienne version ne pouvait rien livrer. Ici :
+ * AUCUN préfixe de phase, et le mot « pipeline » dans la consigne classe la tâche en régime
+ * `critical` (`task-regime.ts` : CRITICAL_SIGNALS), qui joue scout → frame → terrain → build → clean
+ * puis le juge, sans qu'une intention en langage naturel puisse l'amputer.
  */
-export function redigerPromptFrameSelection(selection: readonly CandidatAffiche[]): string {
+export function redigerPromptWorkflowSelection(selection: readonly CandidatAffiche[]): string {
   const lignes = selection.map((candidat, index) => {
     const morceaux = [
       candidat.url
@@ -176,23 +183,14 @@ export function redigerPromptFrameSelection(selection: readonly CandidatAffiche[
   })
   return [
     selection.length > 1
-      ? `/frame Traite ENSEMBLE ces ${selection.length} candidats issus du scout interne d'Autowin :`
-      : `/frame Traite ce candidat issu du scout interne d'Autowin :`,
+      ? `Traite ENSEMBLE ces ${selection.length} candidats issus du scout interne d'Autowin :`
+      : `Traite ce candidat issu du scout interne d'Autowin :`,
     '',
     ...lignes,
     '',
-    // NE PROMETS PAS CE QUE CE RUN NE PEUT PAS TENIR. Le prefixe `/frame` REDUIT le run a la seule
-    // phase frame (`task-regime.ts` : une phase nommee explicitement rend `[phase]`). L'ancien texte
-    // exigeait pourtant « le workflow complet jusqu'au COMMIT PUBLIÉ » : le run etait donc
-    // structurellement incapable de satisfaire sa propre consigne, et le juge le sanctionnait pour
-    // ca. Mesure du 2026-08-19, en pilotant l'app : score 20/100, « le livrable s'arrete
-    // volontairement a FRAME sans declarer cet echec ». C'est aussi l'ORIGINE de conv-1302, ou ce
-    // meme prompt a ouvert douze tours de reparation : premier juge, score 25, « execution limitee a
-    // FRAME, contrairement au workflow complet demande ».
-    'Commence par relire chaque ancrage et vérifier que le besoin tient toujours, puis rends le',
-    'CADRAGE de ce besoin — périmètre, DoD falsifiable, risques. Ce tour ne joue que la phase frame :',
-    'la suite (terrain → build → clean → judge) s’enchaîne au tour suivant. Si un ancrage ne tient',
-    'plus, dis-le franchement plutôt que de cadrer un besoin mort.'
+    'Commence par relire chaque ancrage et vérifier que le besoin tient toujours, puis joue le',
+    'PIPELINE complet — cadrage, terrain, build, nettoyage, jugement — jusqu’au COMMIT PUBLIÉ et',
+    'vérifié. Si un ancrage ne tient plus, dis-le franchement plutôt que de traiter un besoin mort.'
   ].join('\n')
 }
 
