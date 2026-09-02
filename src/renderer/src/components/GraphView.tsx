@@ -4,7 +4,6 @@ import type { BrainGraphRef } from '../../../main/viz/fs-brains'
 import { brainSubjectOf } from './graph-brain-categories'
 import { degre as degreDuNoeud, deuxiemeSaut } from './graph-neighborhood'
 import {
-  initialCollapsedTreeNodeIds,
   layoutTree,
   pickVisibleLabels,
   projectTreeVisibility,
@@ -170,8 +169,6 @@ export function GraphView({
   const viewBeforeFocusRef = useRef<CameraView | undefined>(undefined)
   const [graph, setGraph] = useState<GraphData>({ nodes: [], links: [] })
   const [collapsedTreeNodeIds, setCollapsedTreeNodeIds] = useState<Set<string>>(() => new Set())
-  /** Dossiers déjà proposés à l'utilisateur : un dossier connu ne se referme jamais tout seul. */
-  const seededTreeFoldersRef = useRef<Set<string>>(new Set())
   const [treeZoomTier, setTreeZoomTier] = useState<SemanticZoomTier>('overview')
   const [graphReload, setGraphReload] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -605,25 +602,6 @@ export function GraphView({
     () => (tree ? projectTreeVisibility(tree, collapsedTreeNodeIds) : null),
     [collapsedTreeNodeIds, tree]
   )
-
-  // L'arbre s'ouvre sur ses catégories de premier niveau et RIEN d'autre : chaque clic dévoile un
-  // cran, jusqu'aux fiches. Sans ce point de départ, tout était déjà déplié et le premier clic
-  // repliait — exactement l'inverse du geste attendu.
-  // Un dossier déjà vu garde l'état choisi par l'utilisateur ; seuls les dossiers NOUVEAUX (arbre
-  // rechargé, fiche ajoutée) arrivent fermés.
-  useEffect(() => {
-    if (layoutMode !== 'tree' || !tree) return
-    const nouveaux = initialCollapsedTreeNodeIds(tree).filter(
-      (id) => !seededTreeFoldersRef.current.has(id)
-    )
-    if (nouveaux.length === 0) return
-    for (const id of nouveaux) seededTreeFoldersRef.current.add(id)
-    setCollapsedTreeNodeIds((current) => {
-      const next = new Set(current)
-      for (const id of nouveaux) next.add(id)
-      return next
-    })
-  }, [layoutMode, tree])
 
   const renderedGraph = useMemo(() => {
     if (layoutMode !== 'tree' || !visibleTree) {
@@ -1654,7 +1632,6 @@ export function GraphView({
             clearNodeSelection()
             setSelected(event.target.value)
             setActiveThemes(new Set())
-            seededTreeFoldersRef.current = new Set()
             setCollapsedTreeNodeIds(new Set())
           }}
         >
