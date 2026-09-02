@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   journaliserSaisie,
   journalSaisiePath,
+  lireSaisies,
+  rattacherSaisieAuTour,
+  saisieDuTour,
   type SaisieJournalisee
 } from './journal-saisie'
 
@@ -62,5 +65,64 @@ describe('journal des saisies utilisateur', () => {
       journaliserSaisie({ conversationId: 'c', texte: 'texte', voie: 'message' }, introuvable)
     ).not.toThrow()
     expect(journaliserSaisie({ conversationId: 'c', texte: 'texte', voie: 'message' }, introuvable)).toBe(false)
+  })
+})
+
+/**
+ * RATTACHEMENT AU TOUR — mesure conv-131 : la saisie porte la conversation mais AUCUN numero de
+ * tour, parce qu'elle est ecrite AVANT que le tour existe. Relire « quel texte a produit ce tour »
+ * se faisait donc au rapprochement d'horodatages, approximatif par construction.
+ */
+describe('journal des saisies — rattachement au tour', () => {
+  it('ecrit une ligne portant turnId et la relie a la saisie exacte', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'saisie-tour-'))
+    try {
+      journaliserSaisie(
+        { conversationId: 'c1', texte: 'repare les journaux', voie: 'message' },
+        racine
+      )
+      expect(rattacherSaisieAuTour('c1', 'tour-1', 'repare les journaux', racine)).toBe(true)
+
+      const lignes = readFileSync(join(racine, 'saisies-utilisateur.jsonl'), 'utf8')
+        .trim()
+        .split(/\r?\n/)
+        .map((l) => JSON.parse(l))
+      expect(lignes).toHaveLength(2)
+      expect(lignes[1].turnId).toBe('tour-1')
+      expect(lignes[1].saisieTs).toBe(lignes[0].ts)
+
+      expect(saisieDuTour('c1', 'tour-1', racine)?.texte).toBe('repare les journaux')
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
+  })
+
+  it('ne rattache RIEN quand aucune saisie ne correspond (pas d alibi)', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'saisie-tour-'))
+    try {
+      journaliserSaisie({ conversationId: 'c1', texte: 'autre chose', voie: 'message' }, racine)
+      expect(rattacherSaisieAuTour('c1', 'tour-1', 'repare les journaux', racine)).toBe(false)
+      expect(saisieDuTour('c1', 'tour-1', racine)).toBeUndefined()
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
+  })
+
+  it('la ligne de rattachement ne pollue PAS la relecture des saisies', () => {
+    const racine = mkdtempSync(join(tmpdir(), 'saisie-tour-'))
+    try {
+      journaliserSaisie({ conversationId: 'c1', texte: 'bonjour', voie: 'message' }, racine)
+      rattacherSaisieAuTour('c1', 'tour-1', 'bonjour', racine)
+      const saisies = lireSaisies('c1', racine)
+      expect(saisies).toHaveLength(1)
+      expect(saisies[0]?.texte).toBe('bonjour')
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
+  })
+
+  it('le tour de chat rattache reellement sa saisie', () => {
+    const source = readFileSync(join(__dirname, '..', 'chat', 'run-pilot-chat.ts'), 'utf8')
+    expect(source).toContain('rattacherSaisieAuTour(')
   })
 })

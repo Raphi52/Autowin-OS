@@ -47,6 +47,7 @@ import {
   type PromptJournalMemory
 } from '../runs/turn-journal-enrich'
 import { appendConvActivity } from '../activity/conv-activity'
+import { rattacherSaisieAuTour } from '../store/journal-saisie'
 import {
   persistChatUsageSettlement,
   persistRecoveredChatProviderUsage
@@ -196,6 +197,15 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       resolveCompletion = resolve
     })
     const turnId = recovery?.turnId ?? randomUUID()
+    /*
+     * LIEN SAISIE → TOUR. Le texte est journalise par le renderer AVANT l'envoi, donc avant que ce
+     * tour existe : il ne pouvait porter aucun `turnId`. On pose le lien ICI, ou les deux sont
+     * connus. Best-effort strict : un lien manquant ne change rien au tour.
+     */
+    if (conversationId && !recovery) {
+      const derniere = [...messages].reverse().find((m) => m.role === 'user')
+      if (derniere?.content) rattacherSaisieAuTour(conversationId, turnId, derniere.content)
+    }
     // Correlation durable AVANT le spawn : apres un crash, le reglement peut retrouver l'occurrence.
     onLateTaskUsageSettlement?.({ conversationId, turnId })
     /**

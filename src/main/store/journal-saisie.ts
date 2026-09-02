@@ -47,6 +47,24 @@ export interface SaisieJournalisee extends SaisieUtilisateur {
   ts: number
 }
 
+/**
+ * RATTACHEMENT D'UNE SAISIE A SON TOUR.
+ *
+ * La saisie est ecrite AVANT que le tour existe — c'est tout l'interet du filet (un texte qui ne
+ * produit jamais de tour reste retrouvable). Elle ne peut donc PAS porter `turnId` a l'ecriture.
+ * Le lien est pose APRES, quand le controleur de chat cree le tour, par une ligne SUPPLEMENTAIRE :
+ * le journal reste strictement en ajout (aucune reecriture, aucun risque de perdre une ligne sur
+ * une ecriture concurrente) et la forme des lignes deja ecrites ne bouge pas.
+ */
+export interface RattachementDeSaisie {
+  schema: 'autowin.saisie-tour/v1'
+  ts: number
+  conversationId: string
+  turnId: string
+  /** Horodatage de la saisie rattachee — la cle de jointure, exacte et non approximative. */
+  saisieTs: number
+}
+
 export function journalSaisiePath(racine?: string): string {
   return join(racine ?? ensureAutowinAppData(), 'saisies-utilisateur.jsonl')
 }
@@ -102,6 +120,9 @@ export function lireSaisies(
           const entree = JSON.parse(ligne) as SaisieJournalisee
           // Filtre STRICT sur la conversation ciblée : un dossier de preuve ne doit jamais
           // emporter le texte tapé dans une autre conversation.
+          // Filtre STRICT sur le schéma : les lignes de RATTACHEMENT partagent le fichier et la
+          // conversation, mais ne portent aucun texte — les rendre ici polluerait tout lecteur.
+          if (entree?.schema !== 'autowin.saisie/v1') return []
           return entree?.conversationId === conversationId ? [entree] : []
         } catch {
           return []
@@ -110,5 +131,80 @@ export function lireSaisies(
     return saisies.slice(-limite)
   } catch {
     return []
+  }
+}
+
+/**
+ * Pose le lien saisie → tour. Rend `false` si aucune saisie de cette conversation ne porte
+ * EXACTEMENT ce texte : sans correspondance, un lien serait un alibi, pas une preuve.
+ *
+ * Best-effort comme le reste du journal : jamais d'exception vers le chemin d'un tour.
+ */
+export function rattacherSaisieAuTour(
+  conversationId: string,
+  turnId: string,
+  texte: string,
+  racine?: string
+): boolean {
+  try {
+    const attendu = texte.trim()
+    if (!attendu) return false
+    const candidates = lireSaisies(conversationId, racine, 200)
+    let cible: SaisieJournalisee | undefined
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      if (candidates[i]?.texte.trim() === attendu) {
+        cible = candidates[i]
+        break
+      }
+    }
+    if (!cible) return false
+    const lien: RattachementDeSaisie = {
+      schema: 'autowin.saisie-tour/v1',
+      ts: Date.now(),
+      conversationId,
+      turnId,
+      saisieTs: cible.ts
+    }
+    appendFileSync(
+      journalSaisiePath(racine),
+      `${JSON.stringify(lien)}
+`,
+      'utf8'
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Rend le texte qui a produit CE tour, ou `undefined` si aucun lien n'a ete pose. */
+export function saisieDuTour(
+  conversationId: string,
+  turnId: string,
+  racine?: string
+): SaisieJournalisee | undefined {
+  try {
+    const chemin = journalSaisiePath(racine)
+    if (!existsSync(chemin)) return undefined
+    const lignes = readFileSync(chemin, 'utf8')
+      .split(SEPARATEUR_LIGNE)
+      .filter((ligne) => ligne.trim())
+    let saisieTs: number | undefined
+    const saisies: SaisieJournalisee[] = []
+    for (const ligne of lignes) {
+      try {
+        const entree = JSON.parse(ligne) as SaisieJournalisee | RattachementDeSaisie
+        if (entree?.conversationId !== conversationId) continue
+        if (entree.schema === 'autowin.saisie-tour/v1' && entree.turnId === turnId)
+          saisieTs = entree.saisieTs
+        else if (entree.schema === 'autowin.saisie/v1') saisies.push(entree)
+      } catch {
+        /* ligne illisible : ignoree, comme partout dans ce journal */
+      }
+    }
+    if (saisieTs === undefined) return undefined
+    return saisies.find((saisie) => saisie.ts === saisieTs)
+  } catch {
+    return undefined
   }
 }
