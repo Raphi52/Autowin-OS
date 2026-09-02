@@ -1,12 +1,17 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import {
-  delierLesDependances,
-  lierLesDependances,
-  messageLiaison
-} from './dependances-copie-agent'
+import { afterEach, describe, expect, it } from 'vitest'
+import { delierLesDependances, lierLesDependances, messageLiaison } from './dependances-copie-agent'
 
 /**
  * LE DÉFAUT, mesuré le 2026-08-25 sur le run `je-vois-toujours-le-fond-d-ecran-…` (conv-1397).
@@ -22,14 +27,34 @@ import {
  * de portée d'un rejeu). Un travail réellement fait et prouvé était rendu comme un échec.
  */
 
+// Chaque bac est un dossier jetable dans TEMP. Mesure du 2026-09-02 : 546 dossiers
+// `copie-agent-*` s'etaient accumules la (~340 Mo) parce que rien ne les retirait. On les retire
+// donc apres chaque test. Un effacement recursif ne traverse PAS la jonction (fait verrouille plus
+// bas) : les faux modules du bac partent, rien d'autre. Un echec de retrait n'est jamais fatal --
+// le nettoyage ne doit pas pouvoir faire rougir un test.
+const bacsAJeter: string[] = []
+
 const bac = (): { base: string; copie: string } => {
   const racine = mkdtempSync(join(tmpdir(), 'copie-agent-'))
   const base = join(racine, 'depot')
   const copie = join(racine, 'copie')
   mkdirSync(base, { recursive: true })
   mkdirSync(copie, { recursive: true })
+  bacsAJeter.push(racine)
   return { base, copie }
 }
+
+afterEach(() => {
+  while (bacsAJeter.length > 0) {
+    const racine = bacsAJeter.pop()
+    if (racine === undefined) continue
+    try {
+      rmSync(racine, { recursive: true, force: true })
+    } catch {
+      // residu laisse : sans effet sur le resultat du test
+    }
+  }
+})
 
 describe('les dépendances suivent la copie agent', () => {
   it('relie node_modules quand le dépôt en a et la copie non', () => {
@@ -123,5 +148,56 @@ describe('le lien est retiré avant qu’une copie ne soit supprimée', () => {
       }
     })
     expect(resultat).toEqual({ fait: 'echec', raison: 'EBUSY: resource busy' })
+  })
+})
+
+/**
+ * CE QUE CE TEST TRANCHE, et pourquoi il existe.
+ *
+ * Un cadrage du 2026-09-02 (conv-133) affirmait comme PROUVÉ qu'un effacement récursif d'une copie
+ * agent « détruirait les 836 Mo de modules du dépôt réel » à travers la jonction. Personne ne
+ * l'avait mesuré. Mesure faite : c'est FAUX. Une jonction NTFS n'est pas suivie par un effacement
+ * récursif — ni `fs.rmSync({recursive})`, ni `rm -rf`, ni `rmdir /s` : la jonction part, sa cible
+ * reste. Le vrai motif du retrait du lien avant nettoyage est ailleurs, et il est écrit dans
+ * `dependances-copie-agent.ts` : `git worktree remove --force` rend 0 mais laisse un dossier
+ * fantôme contenant encore la jonction.
+ *
+ * Ce test verrouille le fait mesuré, pour qu'aucun futur cadrage ne réinvente le danger.
+ */
+describe('effacer une copie ne traverse pas la jonction', () => {
+  it('laisse INTACTS les modules du dépôt après un effacement récursif de la copie', () => {
+    const { base, copie } = bac()
+    mkdirSync(join(base, 'node_modules', 'un-paquet'), { recursive: true })
+    writeFileSync(join(base, 'node_modules', 'un-paquet', 'index.js'), 'module.exports=1', 'utf8')
+
+    expect(lierLesDependances(base, copie)).toEqual({ fait: 'liees' })
+    // Le lien est réellement traversable : sans ça, la mesure ne prouverait rien.
+    expect(existsSync(join(copie, 'node_modules', 'un-paquet', 'index.js'))).toBe(true)
+
+    rmSync(copie, { recursive: true, force: true })
+
+    expect(existsSync(copie)).toBe(false)
+    expect(existsSync(join(base, 'node_modules', 'un-paquet', 'index.js'))).toBe(true)
+    expect(readdirSync(join(base, 'node_modules'))).toEqual(['un-paquet'])
+  })
+
+  it('avec `stat` au lieu de `lstat`, la jonction RESTE — la coquille orpheline, pas la destruction', () => {
+    // Ce que coûte VRAIMENT la mauvaise sonde, mesuré : `stat` suit la jonction et répond
+    // « dossier », donc la garde croit voir de VRAIS modules et refuse d'y toucher. Le lien
+    // survit, le dossier de la copie survit avec lui — exactement la coquille orpheline que
+    // `git worktree remove --force` laisse déjà. Rien n'est détruit du côté du dépôt.
+    const { base, copie } = bac()
+    mkdirSync(join(base, 'node_modules', 'un-paquet'), { recursive: true })
+    writeFileSync(join(base, 'node_modules', 'un-paquet', 'index.js'), 'module.exports=1', 'utf8')
+    expect(lierLesDependances(base, copie)).toEqual({ fait: 'liees' })
+
+    const avecStat = delierLesDependances(copie, {
+      estUnLien: (chemin) => statSync(chemin).isSymbolicLink(),
+      retirer: (chemin) => unlinkSync(chemin)
+    })
+
+    expect(avecStat).toEqual({ fait: 'refuse-vrai-dossier' })
+    expect(existsSync(join(copie, 'node_modules'))).toBe(true)
+    expect(existsSync(join(base, 'node_modules', 'un-paquet', 'index.js'))).toBe(true)
   })
 })
