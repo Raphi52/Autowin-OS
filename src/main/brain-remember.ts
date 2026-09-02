@@ -22,7 +22,7 @@
 
 import { SECRET_SHAPES_SOURCE } from './activity/trace-redact'
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
 import { memoryWorkspaceIdentity } from './session-memory-echo'
@@ -525,6 +525,43 @@ export interface RememberDeps {
 }
 
 /**
+ * LA PORTÉE NE SE DEVINE PAS : LE PROJET LA CONNAÎT.
+ *
+ * Mesuré le 2026-09-02 (conv-142) : un `remember` légitime a été REFUSÉ « portée manquante », rien
+ * n'a été écrit, et le modèle avait déjà annoncé le dépôt. La valeur qui a fait passer le second
+ * essai — `autowin-os` — est exactement le `name` du `package.json` du dépôt : l'app la tenait de
+ * source sûre pendant qu'on demandait au modèle de la deviner. La prose du prompt détaillait les
+ * quatre `type` et les sept formes de `source`, et ne disait RIEN de `scope` (voir
+ * `chat-pilotage-prompt.vocabulaire-memoire.test.ts`).
+ *
+ * On COPIE donc la portée d'une source tracée au lieu de l'inventer : `package.json` du workspace,
+ * sinon le nom du dossier. `global` reste un choix DÉLIBÉRÉ du modèle — jamais un défaut, car
+ * élargir la portée d'un fait à toute la boîte ne se fait pas par omission.
+ * Si aucun workspace n'est connu, on garde le refus : mieux vaut refuser que ranger un fait sous une
+ * portée inventée.
+ */
+export function projectScopeFromWorkspace(workspace?: string): string {
+  const root = workspace?.trim()
+  if (!root) return ''
+  const slug = (value: string): string =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, REMEMBER_SCOPE_MAX)
+  try {
+    const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      name?: unknown
+    }
+    const named = typeof manifest.name === 'string' ? slug(manifest.name) : ''
+    if (named) return named
+  } catch {
+    // Pas de manifeste lisible (dossier hors Node, JSON cassé) : le nom du dossier reste tracable.
+  }
+  return slug(basename(resolve(root)))
+}
+
+/**
  * Dépose le candidat sur `POST /ingest`. Ne throw JAMAIS : un échec d'écriture est un résultat à
  * afficher, pas une exception qui casse le tour.
  */
@@ -532,7 +569,11 @@ export async function rememberFact(
   args: Record<string, unknown>,
   deps: RememberDeps = {}
 ): Promise<RememberOutcome & { allowed: boolean; reason?: string }> {
-  const decision = decideRemember(args)
+  // La portée absente est REMPLIE depuis le projet, pas refusée : voir `projectScopeFromWorkspace`.
+  const scopeGiven = typeof args.scope === 'string' && args.scope.trim().length > 0
+  const decision = decideRemember(
+    scopeGiven ? args : { ...args, scope: projectScopeFromWorkspace(deps.workspace) }
+  )
   if (!decision.allowed) {
     return { allowed: false, reason: decision.reason, stored: false, detail: decision.reason }
   }
