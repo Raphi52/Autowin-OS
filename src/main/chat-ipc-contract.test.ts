@@ -184,10 +184,14 @@ describe('renderer chat IPC contract', () => {
 
   it('does not let a live directive outlive the chat turn that accepted it', () => {
     const { main } = readChatContractSources()
-    const drain = main.slice(
-      main.indexOf('function drainPendingDirectives'),
-      main.indexOf('const questionWindows')
-    )
+    /*
+     * La zone est bornee par la FIN de la fonction, plus par la declaration voisine.
+     * Mesure du 2026-09-02 : la borne etait `const questionWindows`, qui a demenage dans
+     * `src/main/window.ts` avec le fenetrage. `indexOf` rendait -1, la tranche avalait tout le
+     * fichier, et le controle rougissait alors que `drainPendingDirectives` n'avait pas bouge.
+     */
+    const debutDrain = main.indexOf('function drainPendingDirectives')
+    const drain = main.slice(debutDrain, main.indexOf('\n}', debutDrain) + 2)
     const handler = extractIpcHandler(main, 'os:pilotChat:inject')
     const activeTurnGuard = handler.indexOf(
       'if (!(await activeChatTurns.waitForActive(conversationId, 500)))'
@@ -208,10 +212,11 @@ describe('renderer chat IPC contract', () => {
 
   it('acknowledges a live directive immediately after the bounded active-turn guard', () => {
     const { main } = readChatContractSources()
-    const drain = main.slice(
-      main.indexOf('function drainPendingDirectives'),
-      main.indexOf('const questionWindows')
-    )
+    // Borne = la FIN de la fonction, plus la declaration voisine : `const questionWindows` a
+    // demenage dans `src/main/window.ts` le 2026-09-02, `indexOf` rendait -1 et la tranche avalait
+    // tout le fichier — rouge alors que `drainPendingDirectives` n'avait pas bouge.
+    const debutDrain = main.indexOf('function drainPendingDirectives')
+    const drain = main.slice(debutDrain, main.indexOf('\n}', debutDrain) + 2)
     const turnCleanup = main.slice(
       main.indexOf('activeChatTurns.delete(conversationId, controller)'),
       main.indexOf('resolveCompletion()')

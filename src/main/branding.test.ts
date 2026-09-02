@@ -1,4 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
+// `main` = LE PROCESS PRINCIPAL, pas `index.ts` seul : le fenetrage et les gardes IPC en ont ete
+// extraits le 2026-09-02, et un deplacement de code n'est pas une regression de marque.
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -91,7 +94,7 @@ describe('identite Autowin OS', () => {
     }
     const builder = readFileSync(join(ROOT, 'electron-builder.yml'), 'utf8')
     const prettierIgnore = readFileSync(join(ROOT, '.prettierignore'), 'utf8')
-    const main = readFileSync(join(ROOT, 'src/main/index.ts'), 'utf8')
+    const main = sourceProcessPrincipal()
     const appShell = readFileSync(join(ROOT, 'src/renderer/src/App.tsx'), 'utf8')
     expect(builder).toContain('appId: com.amitel.autowin-os')
     expect(builder).toContain('productName: Autowin OS')
@@ -155,7 +158,7 @@ describe('identite Autowin OS', () => {
   it('uses the transparent Autowin logo in the app shell while preserving packaging identity', () => {
     const appShell = readFileSync(join(ROOT, 'src/renderer/src/App.tsx'), 'utf8')
     const theme = readFileSync(join(ROOT, 'src/renderer/src/assets/theme.css'), 'utf8')
-    const main = readFileSync(join(ROOT, 'src/main/index.ts'), 'utf8')
+    const main = sourceProcessPrincipal()
     const runtimeIcon = readFileSync(join(ROOT, 'resources/icon.png'))
     const packagingIcon = readFileSync(join(ROOT, 'build/icon.png'))
 

@@ -32,9 +32,22 @@ export function fichiersDuTourDeChat(): string[] {
     .map((nom) => join(dossier, nom))
 }
 
-/** `index.ts` ET les modules du tour de chat, bout à bout, fins de ligne normalisées. */
+/**
+ * Les modules SORTIS d'`index.ts` qui restent du câblage de démarrage — vides s'ils n'existent pas.
+ *
+ * Le fenêtrage (`window.ts`) et les gardes d'expéditeur IPC (`ipc-senders.ts`) ont quitté
+ * `index.ts` le 2026-09-02. Même leçon que pour le tour de chat : un contrat qui lit « le process
+ * principal » doit suivre le déménagement, sinon il rougit sans qu'aucun câblage n'ait changé.
+ */
+export function modulesExtraitsDuDemarrage(): string[] {
+  return ['window.ts', 'ipc-senders.ts']
+    .map((nom) => join(RACINE_MAIN, nom))
+    .filter((chemin) => existsSync(chemin))
+}
+
+/** `index.ts` ET les modules qui en ont été extraits, bout à bout, fins de ligne normalisées. */
 export function sourceProcessPrincipal(): string {
-  return [join(RACINE_MAIN, 'index.ts'), ...fichiersDuTourDeChat()]
+  return [join(RACINE_MAIN, 'index.ts'), ...modulesExtraitsDuDemarrage(), ...fichiersDuTourDeChat()]
     .map((fichier) => readFileSync(fichier, 'utf8'))
     .join('\n')
     .replace(/\r\n/g, '\n')
