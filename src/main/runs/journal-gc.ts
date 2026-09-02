@@ -146,7 +146,9 @@ export function collectStdoutJournals(
 
   const entries: JournalEntry[] = []
   for (const name of names) {
-    if (!name.endsWith('.stdout.jsonl')) continue
+    // Les DEUX sorties d'un run detache. Mesure conv-131 : seul `.stdout.jsonl` entrait dans le
+    // nettoyage, si bien que les `.stderr.log` s'accumulaient sans limite d'age ni de nombre.
+    if (!name.endsWith('.stdout.jsonl') && !name.endsWith('.stderr.log')) continue
     const path = join(root, name)
     try {
       const stat = statSync(path)
