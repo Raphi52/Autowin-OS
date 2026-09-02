@@ -287,7 +287,21 @@ export function ChatView({
    * fil. Il s'applique donc à la conversation qu'on a sous les yeux, quelle qu'elle soit.
    * Toute la décision d'envoyer vit dans `chat-auto-mode.ts` (fonction pure testée).
    */
-  const [autoActif, setAutoActif] = useState(false)
+  /**
+   * L'INTERRUPTEUR SURVIT AU REDÉMARRAGE (demande utilisateur du 2026-09-02 : « fais que le mode
+   * auto survive à un redémarrage de l'app »). Il vivait en mémoire seule, donc un rafraîchissement
+   * de l'interface l'éteignait EN SILENCE — indistinguable d'un arrêt légitime sur « rien ».
+   *
+   * Aucun tour payant n'est déclenché par cette reprise : au premier passage dans un fil, la boucle
+   * marque le tour déjà présent comme traité (`autoAllumageManuelRef` reste faux au démarrage), donc
+   * elle repart sur le PROCHAIN tour terminé, jamais sur une réponse d'avant la fermeture.
+   */
+  const [autoActif, setAutoActif] = useState(
+    () => window.localStorage.getItem('autowin.chat.modeAuto') === '1'
+  )
+  useEffect(() => {
+    window.localStorage.setItem('autowin.chat.modeAuto', autoActif ? '1' : '0')
+  }, [autoActif])
   const [autoNotice, setAutoNotice] = useState<string | null>(null)
   /**
    * L'avancement de la boucle, PAR CONVERSATION — `tour` = dernier tour déjà traité (un re-rendu du
@@ -2694,10 +2708,18 @@ export function ChatView({
         dernierPromptEnvoye: etat.prompt,
         brouillonPresent: false
       })
+      /*
+       * UN FIL D'ARRIÈRE-PLAN NE COUPE PLUS L'INTERRUPTEUR GLOBAL (demande du 2026-09-02).
+       *
+       * Son « rien » ne parle que de LUI : il ne dit rien du fil qu'on a sous les yeux ni des autres
+       * fils suivis. On arrête donc de le suivre — il est déjà retiré de `autoSuiviesRef` juste
+       * au-dessus — et le mode reste armé. Seul le fil AFFICHÉ peut éteindre le mode.
+       */
       if (decision.action === 'arreter') {
-        setAutoActif(false)
-        setAutoNotice(decision.message)
-        return
+        autoEssaisRef.current.delete(id)
+        const fini = convsRef.current.find((c) => c.id === id)?.title ?? id
+        setAutoNotice(`Mode auto : « ${fini} » n'a plus rien à enchaîner — le mode reste actif.`)
+        continue
       }
       if (decision.action !== 'envoyer') {
         /*
