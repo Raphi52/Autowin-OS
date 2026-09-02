@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs'
+import { basename } from 'node:path'
+import { fichiersDuTourDeChat } from '../source-process-principal.test-helpers'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -103,10 +105,28 @@ describe("exhaustivité de l'inventaire des injections", () => {
      * l'Observatory sans une seule injection nommée. Un site de persistance qui laisse tomber un
      * champ ne casse rien et ne se voit nulle part : d'où ce test.
      */
-    for (const fichier of ['index.ts', 'activity/orchestration-observability.ts']) {
+    /*
+     * ON CHERCHE LES SITES, PAS UN FICHIER. Le tour pilote a quitte `index.ts` pour
+     * `src/main/chat/` le 2026-09-02 : la liste codee en dur rendait ce controle rouge alors que le
+     * transport etait INTACT. Un site qui n'appelle pas `appendPromptCall` n'a rien a transporter ;
+     * ce qui compte est qu'AUCUN de ceux qui l'appellent ne laisse tomber la decomposition. Le
+     * plancher a 2 interdit le faux vert d'une liste devenue vide.
+     */
+    const candidats = [
+      'index.ts',
+      'activity/orchestration-observability.ts',
+      ...fichiersDuTourDeChat().map((chemin) => `chat/${basename(chemin)}`)
+    ]
+    const sites = candidats.filter((fichier) =>
+      codeSeulement(fichier).includes('appendPromptCall(')
+    )
+    expect(
+      sites.length,
+      `sites de persistance introuvables parmi ${candidats.join(', ')}`
+    ).toBeGreaterThanOrEqual(2)
+    for (const fichier of sites) {
       const source = codeSeulement(fichier)
       const debut = source.indexOf('appendPromptCall(')
-      expect(debut, `${fichier} : appendPromptCall introuvable`).toBeGreaterThanOrEqual(0)
       const bloc = source.slice(debut, debut + 1_800)
       expect(bloc, `${fichier} : systemBlocks non transporté`).toMatch(/systemBlocks[:,]/)
       expect(bloc, `${fichier} : contextBlocks non transporté`).toMatch(/contextBlocks[:,]/)

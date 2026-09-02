@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CAP_ITERATIONS_TOUR } from './agent-pilot'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * LE CAP D'ITÉRATIONS RELEVÉ N'ATTEIGNAIT JAMAIS L'APPLICATION.
@@ -24,12 +25,16 @@ describe('cap d’itérations — une seule valeur par défaut, celle qui est do
     expect(CAP_ITERATIONS_TOUR).toBe(12)
   })
 
+  /*
+   * ZONE, PAS FICHIER : le tour pilote a quitte `index.ts` pour `src/main/chat/` le 2026-09-02, et
+   * ce controle rougissait alors que le repli etait INTACT. Le cap appartient au process principal.
+   */
   it('le chat interactif n’a plus de repli codé en dur', () => {
-    expect(source('index.ts')).not.toContain('policy?.maxIterations ?? 6')
+    expect(sourceProcessPrincipal()).not.toContain('policy?.maxIterations ?? 6')
   })
 
   it('il se replie sur la constante partagée', () => {
-    expect(source('index.ts')).toContain('policy?.maxIterations ?? CAP_ITERATIONS_TOUR')
+    expect(sourceProcessPrincipal()).toContain('policy?.maxIterations ?? CAP_ITERATIONS_TOUR')
   })
 
   it('la signature de `chat` utilise la même constante, pas un littéral concurrent', () => {

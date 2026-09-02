@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { sourceProcessPrincipal, zoneDuTourDeChat } from './source-process-principal.test-helpers'
 import { describe, expect, it } from 'vitest'
 
 const LEGACY_CHAT_MARKERS = [
@@ -19,7 +20,13 @@ function findLegacyChatMarkers(sources: Record<string, string>): string[] {
 
 function readChatContractSources(): Record<string, string> {
   return {
-    main: readFileSync(new URL('./index.ts', import.meta.url), 'utf8'),
+    /*
+     * « main » = LE PROCESS PRINCIPAL, pas `index.ts` seul. Le tour pilote a ete extrait vers
+     * `src/main/chat/` le 2026-09-02 : 5 controles de ce fichier sont devenus rouges alors que le
+     * cablage IPC etait INTACT. Les canaux restent dans `index.ts`, lu en premier, donc les
+     * tranches bornees par deux `ipcMain.handle` ci-dessous ne changent pas de sens.
+     */
+    main: sourceProcessPrincipal(),
     preload: readFileSync(new URL('../preload/index.ts', import.meta.url), 'utf8'),
     preloadTypes: readFileSync(new URL('../preload/index.d.ts', import.meta.url), 'utf8')
   }
@@ -59,12 +66,11 @@ describe('renderer chat IPC contract', () => {
 
   it('persiste les reglements tardifs du superviseur sur le chemin de chat renderer', () => {
     const { main } = readChatContractSources()
-    const pilotChat = main.slice(
-      main.indexOf('const runPilotChat = async'),
-      main.indexOf("ipcMain.handle('os:pilotChat'")
-    )
+    const pilotChat = zoneDuTourDeChat()
 
-    expect(main).toContain("from './activity/chat-usage-settlement'")
+    // Le MODULE importe, pas son chemin relatif : depuis `src/main/chat/` le meme import s'ecrit
+    // `../activity/...`. Un prefixe fige ne dit rien du cablage, il dit d'ou on regarde.
+    expect(main).toMatch(/from '[./]*activity\/chat-usage-settlement'/)
     expect(pilotChat).toContain('persistChatUsageSettlement({')
     expect(pilotChat).toMatch(/os\.runChatTurn\([\s\S]*?onSupervisedUsageSettlement/)
     expect(pilotChat).toMatch(
@@ -79,11 +85,7 @@ describe('renderer chat IPC contract', () => {
   })
 
   it('journalise les pieces jointes de commande sans les exposer au renderer', () => {
-    const { main } = readChatContractSources()
-    const pilotChat = main.slice(
-      main.indexOf('const runPilotChat = async'),
-      main.indexOf("ipcMain.handle('os:pilotChat'")
-    )
+    const pilotChat = zoneDuTourDeChat()
 
     expect(pilotChat).toContain('guardAttachments(pilotEvent.attachments)')
     expect(pilotChat.match(/delete\s+\w+\.attachments/g)).toHaveLength(2)

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { zoneDuTourDeChat } from './source-process-principal.test-helpers'
 import { chatTurnBudget } from './chat-turn-budget'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
 import type { OrchestrationStep } from './orchestrator'
@@ -12,11 +11,12 @@ import type { OrchestrationStep } from './orchestrator'
  * tour a coute 2,109 $ (40 iterations d'outils) sans qu'aucune borne n'existe cote chat, dans une
  * session facturee 26,65 $/h. Ces assertions garantissent que le tour de chat est borne ET coupe.
  */
-const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
-const chatRunner = source.slice(
-  source.indexOf('const runPilotChat'),
-  source.indexOf("ipcMain.handle('os:pilotChat'")
-)
+/*
+ * La ZONE du tour de chat, lue la ou elle vit : le tour pilote a ete extrait d'`index.ts` vers
+ * `src/main/chat/run-pilot-chat.ts` le 2026-09-02, et cette tranche codee en dur ne bornait plus
+ * rien — 4 controles rouges alors que le budget etait INTACT.
+ */
+const chatRunner = zoneDuTourDeChat()
 
 describe('tour de chat — budget applique', () => {
   it('instancie un breaker dans le runner partagé du tour de chat', () => {
