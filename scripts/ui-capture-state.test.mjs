@@ -49,3 +49,24 @@ describe('emulation prefers-reduced-motion', () => {
     expect(mediaMouvementEmulee(['--full-motion', '--reduced-motion'])).toBe('reduce')
   })
 })
+
+import { vueARestaurer } from './ui-capture.mjs'
+
+/**
+ * Pourquoi ce test existe : mesure du 2026-09-02 (conv-115). Le harnais clique le VRAI bouton de
+ * navigation de la fenetre OUVERTE. Une phase terrain a donc envoye l'utilisateur deux fois sur
+ * `knowledge` pendant qu'il travaillait, et l'y a laisse. L'entree falsifiante est celle-ci :
+ * l'utilisateur etait sur `chat`, la capture demande `knowledge` -> il faut le ramener sur `chat`.
+ */
+describe('ui-capture — restitution de la vue de l utilisateur', () => {
+  it('ramene l utilisateur la ou il etait (entree falsifiante : chat -> knowledge)', () => {
+    expect(vueARestaurer({ vueAvant: 'chat', vueDemandee: 'knowledge' })).toBe('chat')
+  })
+
+  it('ne clique rien quand il n y a rien a defaire', () => {
+    expect(vueARestaurer({ vueAvant: 'knowledge', vueDemandee: 'knowledge' })).toBeUndefined()
+    expect(vueARestaurer({ vueAvant: null, vueDemandee: 'knowledge' })).toBeUndefined()
+    expect(vueARestaurer({ vueAvant: 'nulle-part', vueDemandee: 'knowledge' })).toBeUndefined()
+    expect(vueARestaurer()).toBeUndefined()
+  })
+})

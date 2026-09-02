@@ -73,6 +73,20 @@ export const resoudreVue = (valeur) => {
 }
 
 /** Seuils au-dessus desquels une vue est considérée comme ayant réellement rendu. */
+/**
+ * VUE A RESTAURER — le harnais pilote la fenetre REELLE de l'utilisateur (il clique son propre
+ * bouton de navigation, ligne ~411). Mesure du 2026-09-02 : une phase terrain a ainsi deplace
+ * l'utilisateur DEUX FOIS sur Knowledge pendant qu'il travaillait, sans jamais le ramener. Une
+ * preuve visuelle ne doit pas laisser l'app ailleurs qu'ou elle etait.
+ * Rend la destination a re-cliquer, ou `undefined` quand il n'y a rien a defaire (deja sur la vue
+ * demandee, destination inconnue, ou mesure absente : on ne clique jamais au hasard).
+ */
+export const vueARestaurer = ({ vueAvant, vueDemandee } = {}) => {
+  const avant = String(vueAvant ?? '').trim()
+  if (!avant || !VUES_CONNUES.includes(avant)) return undefined
+  return avant === vueDemandee ? undefined : avant
+}
+
 export const SEUILS = {
   texte: 40,
   elements: 12,
@@ -405,6 +419,27 @@ const main = async () => {
     await new Promise((r) => setTimeout(r, 300))
   }
 
+  // Ou etait l'utilisateur AVANT qu'on lui prenne la main : mesure avant tout clic, sinon il n'y a
+  // plus rien a restaurer.
+  const vueAvant = await evaluer(`(() => {
+    const actif = [...document.querySelectorAll('[data-testid^="nav-"]')]
+      .find((b) => b.className.includes('active') || b.getAttribute('aria-current'))
+    return actif?.getAttribute('data-testid')?.replace(/^nav-/, '') ?? null
+  })()`)
+  const aRestaurer = vueARestaurer({ vueAvant, vueDemandee: vue })
+  // Appelee sur CHAQUE sortie posterieure a la navigation, y compris les echecs : une capture qui
+  // echoue n'a pas moins deplace l'utilisateur qu'une capture qui reussit.
+  const restaurerVue = async () => {
+    if (!aRestaurer) return
+    try {
+      await evaluer(
+        `(() => { document.querySelector('[data-testid="nav-${aRestaurer}"]')?.click(); return true })()`
+      )
+    } catch {
+      // Une restauration impossible ne doit pas effacer le verdict de la capture elle-meme.
+    }
+  }
+
   // Navigation par le VRAI bouton de navigation, pas par un état interne : on prouve le chemin
   // qu'emprunte l'utilisateur, pas un raccourci que lui n'a pas.
   const navigue = await evaluer(`(() => {
@@ -456,6 +491,7 @@ const main = async () => {
       appliques
     }
     if (!verdictEtatForce.ok) {
+      await restaurerVue()
       socket.close()
       rendre({ ok: false, echecs: verdictEtatForce.echecs, vue, etatForce: verdictEtatForce }, 7)
     }
@@ -613,6 +649,7 @@ const main = async () => {
     }
 
     const verdictM = verdictMouvement({ selecteur: selecteurMouvement, occurrences })
+    await restaurerVue()
     socket.close()
     rendre(
       {
@@ -647,6 +684,7 @@ const main = async () => {
   mkdirSync(dirname(sortie), { recursive: true })
   writeFileSync(sortie, Buffer.from(capture.data, 'base64'))
   const octetsPng = statSync(sortie).size
+  await restaurerVue()
   socket.close()
 
   const mesures = {
@@ -664,6 +702,8 @@ const main = async () => {
       ...(cssInjecte ? { cssInjecte } : {}),
       fichier: sortie,
       portUtilise,
+      vueAvant,
+      vueRestauree: aRestaurer ?? null,
       ...mesures,
       erreursConsole: erreursConsole.slice(0, 5),
       // Ce que le producteur peut CITER au juge comme preuve hors-modèle.
