@@ -1718,7 +1718,15 @@ export class AppCommandBus {
                 'Invoque le skill `salvage` pour les trier un par un (fusionner / jeter / laisser) : ' +
                 'il juge sur le CONTENU, car le plus souvent le travail est déjà présent sous une ' +
                 'autre implémentation. Ne conclus JAMAIS « rien à fusionner » sans l’avoir fait — un ' +
-                '`git status` dans l’arbre principal ne voit pas ces copies isolées.',
+                '`git status` dans l’arbre principal ne voit pas ces copies isolées. ' +
+                // Cette liste a déjà été prise pour le périmètre entier : quatre `/salvage` de suite
+                // le 2026-09-02, parce que deux remises de côté vieilles d'un jour — dont une portant
+                // un vrai bug — n'étaient citées nulle part ici. Un compte de N cadre le balayage à N
+                // si on ne dit pas le contraire.
+                'Cette liste est un POINT DE DÉPART, pas le périmètre : le skill balaye AUSSI les ' +
+                'remises de côté (`git stash`), les copies orphelines et les branches jamais ' +
+                'fusionnées. Termine le balayage entier dans la MÊME passe — ne rends pas la main ' +
+                'sur une cachette repérée mais non triée.',
               apercu: full.travauxNonPublies
             }
           }

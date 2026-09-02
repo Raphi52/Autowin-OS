@@ -78,4 +78,31 @@ describe('du travail non fusionné déclenche `salvage`', () => {
 
     expect(consigne).toMatch(/rien à fusionner/iu)
   })
+
+  /**
+   * LA LISTE EST UN POINT DE DEPART, PAS LE PERIMETRE.
+   *
+   * DEFAUT VECU le 2026-09-02 (conv-121) : l'utilisateur a du lancer `/salvage` QUATRE fois. Au
+   * premier passage l'agent n'a trie que les N copies isolees citees ici, alors que deux remises de
+   * cote (`git stash`) attendaient depuis la veille — dont une portant un vrai bug (un ordre dicte
+   * partait DEUX fois, donc deux tours payants). Il les avait meme listees, puis ecartees d'un
+   * « pre-existantes, non touchees ».
+   *
+   * La cause est dans cette consigne : en ne nommant QUE les copies isolees, et en opposant l'arbre
+   * principal (« un `git status` ne les voit pas »), elle se lisait comme la DEFINITION du travail a
+   * faire. La consigne doit donc nommer les autres cachettes, sinon un compte de N cadre le balayage
+   * a N et le reste attend une relance de l'utilisateur.
+   */
+  it('dit que la liste est un POINT DE DEPART, et nomme les autres cachettes', async () => {
+    const bus = new AppCommandBus(osAvec([UN_TRAVAIL]), () => undefined)
+
+    const consigne = (await bus.snapshotForPrompt()).travauxNonFusionnes?.consigne ?? ''
+
+    expect(consigne, 'la liste ne doit pas se lire comme le perimetre entier').toMatch(
+      /point de d[eé]part/iu
+    )
+    expect(consigne, 'les remises de cote sont la cachette oubliee au premier passage').toMatch(
+      /remise|stash/iu
+    )
+  })
 })
