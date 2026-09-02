@@ -40,9 +40,20 @@ export function fichiersDuTourDeChat(): string[] {
  * principal » doit suivre le déménagement, sinon il rougit sans qu'aucun câblage n'ait changé.
  */
 export function modulesExtraitsDuDemarrage(): string[] {
-  return ['window.ts', 'ipc-senders.ts']
+  const nommes = ['window.ts', 'ipc-senders.ts']
     .map((nom) => join(RACINE_MAIN, nom))
     .filter((chemin) => existsSync(chemin))
+  return [...nommes, ...fichiersDuDossier('ipc')]
+}
+
+/** Les modules d'un sous-dossier de `src/main` — vide si le dossier n'existe pas. */
+function fichiersDuDossier(nom: string): string[] {
+  const dossier = join(RACINE_MAIN, nom)
+  if (!existsSync(dossier)) return []
+  return readdirSync(dossier)
+    .filter((fichier) => fichier.endsWith('.ts') && !/\.test[.-]/.test(fichier))
+    .sort()
+    .map((fichier) => join(dossier, fichier))
 }
 
 /** `index.ts` ET les modules qui en ont été extraits, bout à bout, fins de ligne normalisées. */

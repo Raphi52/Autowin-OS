@@ -2,6 +2,7 @@ import { describe, expect, it, afterEach } from 'vitest'
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /** Chemin lisible dans un message d'échec : `src/main/...` plutôt qu'un absolu illisible. */
 const entreeCourte = (chemin: string): string => relative(__dirname, chemin).replace(/\\/gu, '/')
@@ -48,7 +49,15 @@ describe('critique #1 — persistance auth.json durcie', () => {
 })
 
 describe('critique #2 — handlers IPC agentiques gardés', () => {
-  const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+  /*
+   * « source » = LE PROCESS PRINCIPAL, pas `index.ts` seul.
+   *
+   * Les canaux sortent progressivement d'`index.ts` vers `src/main/ipc/` (voix neuronale et
+   * enregistrements parles le 2026-09-02). Compter dans `index.ts` seul ferait BAISSER la surface
+   * mesuree a chaque demenagement, et un canal deplace echapperait au fil-piege sans que personne
+   * ne le voie : exactement l'angle mort que ce controle existe pour fermer.
+   */
+  const source = sourceProcessPrincipal()
   const guarded = (channel: string): boolean => {
     const marker = `'${channel}'`
     const start = source.indexOf(marker)

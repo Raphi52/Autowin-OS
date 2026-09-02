@@ -4,6 +4,8 @@ import { readGitGraph } from './git-graph-main'
 import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
 import { creerServicePiper, racinePiper, type ServicePiper } from './piper-local'
 import { ServiceTranscripts, dossierTranscripts } from './transcripts'
+import { registerPiperIpc } from './ipc/piper'
+import { registerTranscriptsIpc } from './ipc/transcripts'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -4490,66 +4492,10 @@ Le fil reprend ensuite normalement.`
     return serviceWhisper().transcrire(octets)
   })
 
-  /**
-   * LA VOIX DE JARVIS EN QUALITÉ NEURONALE (Piper). Les voix de `speechSynthesis` sont celles
-   * DÉJÀ installées sur le poste : leur qualité est un plafond que ni le débit ni la hauteur ne
-   * dépassent. Ces trois canaux exposent une voix française téléchargée UNE fois sur un clic, puis
-   * prononcée en local — plus aucun réseau à l'usage. Rien n'est un préalable : sans installation,
-   * `etat().installe` est faux et la fenêtre reparle avec la voix du système.
-   */
-  ipcMain.handle('os:piper:etat', (event) => {
-    assertTrustedRendererSender(event, 'Piper état')
-    return servicePiper().etat()
-  })
-  ipcMain.handle('os:piper:installer', async (event) => {
-    assertTrustedRendererSender(event, 'Piper installation')
-    return servicePiper().installer()
-  })
-  ipcMain.handle('os:piper:parler', async (event, texte: unknown) => {
-    assertTrustedRendererSender(event, 'Piper synthèse')
-    const phrase = guardString(texte, 'texte')
-    // Une phrase d'assistant fait quelques dizaines de mots : au-delà, ce n'est plus une réponse
-    // parlée, c'est une lecture de document qui occuperait le processeur pour rien.
-    if (phrase.length > 1_000) throw new Error('Phrase trop longue pour être prononcée')
-    return servicePiper().synthetiser(phrase)
-  })
-
-  /**
-   * ENREGISTREMENTS PARLÉS. Le texte dicté n'allait NULLE PART : il vivait en mémoire de fenêtre,
-   * plafonné à 40 lignes, perdu au rechargement — une réunion de trois heures était donc perdue.
-   * Ces quatre canaux l'écrivent au fil de l'eau. Le chemin est décidé ici : la fenêtre ne
-   * manipule qu'un identifiant de session, jamais un chemin de fichier.
-   */
-  ipcMain.handle('os:transcript:demarrer', async (event) => {
-    assertTrustedRendererSender(event, 'Enregistrement démarrage')
-    return serviceTranscripts().demarrer()
-  })
-  ipcMain.handle('os:transcript:ajouter', async (event, id: unknown, texte: unknown) => {
-    assertTrustedRendererSender(event, 'Enregistrement écriture')
-    if (typeof id !== 'string' || typeof texte !== 'string') {
-      throw new Error('Ligne d’enregistrement invalide')
-    }
-    return serviceTranscripts().ajouter(id, texte)
-  })
-  ipcMain.handle('os:transcript:terminer', async (event, id: unknown) => {
-    assertTrustedRendererSender(event, 'Enregistrement fin')
-    if (typeof id !== 'string') throw new Error('Enregistrement invalide')
-    return serviceTranscripts().terminer(id)
-  })
-  ipcMain.handle('os:transcript:lister', async (event, max: unknown) => {
-    assertTrustedRendererSender(event, 'Enregistrements liste')
-    return serviceTranscripts().lister(typeof max === 'number' ? max : 10)
-  })
-  ipcMain.handle('os:transcript:revealer', async (event, chemin: unknown) => {
-    assertTrustedRendererSender(event, 'Enregistrement dans l’explorateur')
-    // Seul un fichier RÉELLEMENT listé s'ouvre : la fenêtre ne choisit pas ce que l'explorateur
-    // met en évidence.
-    const fichiers = await serviceTranscripts().lister(200)
-    const cible = fichiers.find((f) => f.chemin === chemin)
-    if (!cible) throw new Error('Enregistrement introuvable')
-    shell.showItemInFolder(cible.chemin)
-    return { ok: true as const }
-  })
+  // Les canaux de la voix neuronale et des enregistrements parles vivent dans src/main/ipc/ :
+  // ils ne prenaient ici que leur service, construit paresseusement.
+  registerPiperIpc({ servicePiper })
+  registerTranscriptsIpc({ serviceTranscripts })
 
   ipcMain.handle('os:activity:sessions', (event) => {
     assertTrustedRendererSender(event, 'Activity sessions')
