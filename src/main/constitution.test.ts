@@ -31,6 +31,21 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).toContain('FAUX vert')
   })
 
+  it("interdit de REMPLACER en silence la tâche énoncée", () => {
+    expect(CONSTITUTION).toContain('la tâche ÉNONCÉE ne se REMPLACE pas en cours de route')
+    expect(CONSTITUTION).toContain("l'énoncé reçu reste la cible jusqu'au bout")
+    expect(CONSTITUTION).toContain('STOP et le DIRE')
+    expect(CONSTITUTION).toContain('rend TOUT le résultat hors-sujet')
+  })
+
+  it("étend l'anti-pansement aux correctifs de COMPORTEMENT, cause localisée exigée", () => {
+    expect(CONSTITUTION).toContain('forme comportementale de la rustine')
+    expect(CONSTITUTION).toContain("tant que la cause n'est pas LOCALISÉE")
+    expect(CONSTITUTION).toContain("« L'agent n'a pas pensé à X » n'est pas une cause")
+    expect(CONSTITUTION).toContain('se choisit sur la CAUSE dès la PREMIÈRE fois')
+    expect(CONSTITUTION).toContain('attendre une récidive')
+  })
+
   it('porte les 13 réflexes et la limite honnête', () => {
     expect(CONSTITUTION).toContain('Les 13 réflexes')
     expect(CONSTITUTION).toContain('La limite honnête')
