@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { JarvisAnneau } from './JarvisAnneau'
 import { jouerBipEveil } from './jarvis-bip'
 import { fabriqueMoteur } from './jarvis-moteur'
-import { listerVoix, oublierVoixChoisie, parler, taireJarvis } from './jarvis-parole'
+import { listerVoix, oublierEtatPiper, oublierVoixChoisie, parler, taireJarvis } from './jarvis-parole'
 
 /**
  * Décroissance de la crête par image d'affichage (~60/s) : ~1 s pour retomber d'une voix forte au
@@ -36,6 +36,7 @@ import {
   type VerdictMicro
 } from './whisper-audio'
 import type { EtatWhisper } from '../../../main/whisper-local'
+import type { EtatPiper } from '../../../main/piper-local'
 import {
   basculerEcoute,
   ecouteInitiale,
@@ -74,6 +75,8 @@ interface ApiJarvis {
   whisperEtat?: () => Promise<EtatWhisper>
   whisperInstaller?: () => Promise<EtatWhisper>
   whisperTranscrire?: (wav: Uint8Array) => Promise<string>
+  piperEtat?: () => Promise<EtatPiper>
+  piperInstaller?: () => Promise<EtatPiper>
   pilotChat?: (
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
     conversationId?: string
@@ -185,7 +188,7 @@ export function JarvisWidget(): React.JSX.Element {
   }, [])
   const essayerVoix = useCallback((): void => {
     oublierVoixChoisie()
-    parler('Bonjour, je suis a votre ecoute.')
+    void parler('Bonjour, je suis a votre ecoute.')
   }, [])
   const [ecoute, setEcoute] = useState<JarvisEcoute>(ecouteInitiale)
   /**
@@ -203,6 +206,8 @@ export function JarvisWidget(): React.JSX.Element {
   const [erreur, setErreur] = useState<string | null>(null)
   const [envoi, setEnvoi] = useState<string | null>(null)
   const [whisper, setWhisper] = useState<EtatWhisper | null>(null)
+  /** L'état de la voix neuronale. `null` tant qu'il n'a pas été lu : on n'affiche rien à l'aveugle. */
+  const [piper, setPiper] = useState<EtatPiper | null>(null)
   const moteurRef = useRef<MoteurVocal | null>(null)
   const whisperRef = useRef<EtatWhisper | null>(null)
   const actifRef = useRef(false)
@@ -251,7 +256,7 @@ export function JarvisWidget(): React.JSX.Element {
    */
   const dire = useCallback((evenement: Parameters<typeof phraseDeJarvis>[1]) => {
     const phrase = phraseDeJarvis(ecouteRef.current, evenement)
-    if (phrase) parler(phrase)
+    if (phrase) void parler(phrase)
   }, [])
 
   /**
@@ -458,6 +463,54 @@ export function JarvisWidget(): React.JSX.Element {
       vivant = false
     }
   }, [relireWhisper])
+
+  /** L'etat REEL de la voix neuronale, relu sur le disque : ni cache, ni supposition. */
+  const relirePiper = useCallback(async (): Promise<EtatPiper | null> => {
+    const api = apiJarvis()
+    if (!api?.piperEtat) return null
+    try {
+      const etat = await api.piperEtat()
+      setPiper(etat)
+      return etat
+    } catch {
+      return null
+    }
+  }, [])
+
+  useEffect(() => {
+    void relirePiper()
+  }, [relirePiper])
+
+  /**
+   * L'installation de la VOIX, UNE fois. Rien ne descend dans le dos de l'utilisateur : le poids
+   * est ecrit sur le bouton, et c'est son clic qui declenche le seul acces reseau de ce chemin.
+   */
+  const installerPiper = useCallback(async () => {
+    const api = apiJarvis()
+    if (!api?.piperInstaller) return
+    setErreur(null)
+    setPiper((precedent) =>
+      precedent
+        ? {
+            ...precedent,
+            installation: { enCours: true, etape: 'demarrage', fraction: 0, erreur: null }
+          }
+        : precedent
+    )
+    const suivi = setInterval(() => void relirePiper(), 1_000)
+    try {
+      const etat = await api.piperInstaller()
+      setPiper(etat)
+      // Sans cet oubli, la parole garderait « Piper absent » jusqu'au redemarrage : la voix
+      // fraichement installee ne s'entendrait jamais.
+      oublierEtatPiper()
+    } catch (cause) {
+      setErreur(cause instanceof Error ? cause.message : String(cause))
+      await relirePiper()
+    } finally {
+      clearInterval(suivi)
+    }
+  }, [relirePiper])
 
   /**
    * L'installation, UNE fois. ~215 Mo descendus explicitement par l'utilisateur : rien ne se
@@ -683,6 +736,40 @@ export function JarvisWidget(): React.JSX.Element {
       {whisper?.installe ? (
         <p className="jarvis__aide" data-testid="jarvis-moteur">
           Écoute locale prête — hors ligne
+        </p>
+      ) : null}
+
+      {/*
+        LA VOIX, en qualité neuronale. Les voix de Windows sont le plafond du poste : ni le débit
+        ni la hauteur ne les rendent plus agréables. Celle-ci se télécharge UNE fois, sur ce clic,
+        puis parle hors ligne. Tant qu'elle n'est pas là, Jarvis parle exactement comme avant.
+      */}
+      {piper && !piper.installe && apiJarvis()?.piperInstaller ? (
+        <div className="jarvis__whisper">
+          <button
+            type="button"
+            data-testid="jarvis-installer-piper"
+            className="jarvis__whisper-bouton"
+            disabled={piper.installation?.enCours === true}
+            onClick={() => void installerPiper()}
+          >
+            {piper.installation?.enCours
+              ? `Installation de la voix ${piper.installation.etape}${
+                  piper.installation.fraction !== null
+                    ? ` — ${Math.round(piper.installation.fraction * 100)} %`
+                    : '…'
+                }`
+              : `Installer une vraie voix française (≈ ${piper.megaoctets} Mo, une seule fois)`}
+          </button>
+          <span className="jarvis__aide">
+            Voix neuronale (Piper) : téléchargée une fois, puis plus aucun réseau. Sans elle, Jarvis
+            garde la voix de Windows.
+          </span>
+        </div>
+      ) : null}
+      {piper?.installe ? (
+        <p className="jarvis__aide" data-testid="jarvis-voix-piper">
+          Voix française installée — hors ligne
         </p>
       ) : null}
 

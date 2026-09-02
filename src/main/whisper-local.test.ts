@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  truncateSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -26,6 +33,18 @@ function installationFactice(racine: string): void {
   writeFileSync(join(racine, 'bin', 'Release', 'whisper-cli.exe'), 'x')
   writeFileSync(join(racine, MODELE_WHISPER.nom), 'y')
 }
+
+/**
+ * Un faux téléchargement de la BONNE TAILLE. Écrire 7 octets ferait échouer le contrôle de taille
+ * — à raison : depuis qu'il existe, un fichier trop court n'est plus une installation. Le fichier
+ * est creux (`truncate`), donc instantané et sans occupation disque réelle.
+ */
+function ecrireFichierPlausible(destination: string): void {
+  mkdirSync(dirname(destination), { recursive: true })
+  writeFileSync(destination, '')
+  truncateSync(destination, 25_000_000)
+}
+
 afterEach(() => {
   for (const r of racines.splice(0)) rmSync(r, { recursive: true, force: true })
 })
@@ -237,8 +256,7 @@ describe('service whisper', () => {
       executer: async () => ({ stdout: '', stderr: '' }),
       telecharger: async (url, destination) => {
         telecharge.push(url)
-        mkdirSync(dirname(destination), { recursive: true })
-        writeFileSync(destination, 'contenu')
+        ecrireFichierPlausible(destination)
       },
       decompresser: async (_archive, destination) => {
         mkdirSync(join(destination, 'Release'), { recursive: true })
@@ -260,8 +278,7 @@ describe('service whisper', () => {
       racine,
       executer: async () => ({ stdout: '', stderr: '' }),
       telecharger: async (_url, destination) => {
-        mkdirSync(dirname(destination), { recursive: true })
-        writeFileSync(destination, 'c')
+        ecrireFichierPlausible(destination)
       },
       decompresser: async () => {
         /* archive vide : rien n'est extrait */
@@ -277,9 +294,8 @@ describe('service whisper', () => {
       racine,
       executer: async () => ({ stdout: '', stderr: '' }),
       telecharger: async (_url, destination, progres) => {
-        mkdirSync(dirname(destination), { recursive: true })
         progres?.(50, 100)
-        writeFileSync(destination, 'c')
+        ecrireFichierPlausible(destination)
       },
       decompresser: async (_a, destination) => {
         mkdirSync(join(destination, 'Release'), { recursive: true })
@@ -291,5 +307,29 @@ describe('service whisper', () => {
     await attente
     expect(service.etat().installation?.enCours).toBe(false)
     expect(service.etat().installe).toBe(true)
+  })
+})
+
+describe('un fichier reçu trop court n’est PAS une installation', () => {
+  it('refuse une page d’erreur de 3 Ko enregistrée sous le nom du modèle', async () => {
+    // Le défaut que ce test ferme : `octetsMinimum` était déclaré et lu par personne. Une
+    // redirection perdue rendait 3 Ko de HTML, écrits sous `ggml-small-q5_1.bin` ; `existsSync`
+    // disait « installé » et la panne ne se voyait qu'à la première parole.
+    const racine = racineTemp()
+    const service = creerServiceWhisper({
+      racine,
+      telecharger: async (_url, destination) => {
+        mkdirSync(dirname(destination), { recursive: true })
+        writeFileSync(destination, '<html>404</html>'.repeat(180)) // ~3 Ko
+      },
+      decompresser: async (_archive, destination) => {
+        mkdirSync(join(destination, 'Release'), { recursive: true })
+        writeFileSync(join(destination, 'Release', 'whisper-cli.exe'), 'x')
+      }
+    })
+    await expect(service.installer()).rejects.toThrow(/incomplet/i)
+    // ET le fichier douteux n'a pas survécu : sinon le clic suivant le prendrait pour un modèle.
+    expect(existsSync(join(racine, MODELE_WHISPER.nom))).toBe(false)
+    expect(service.etat().installe).toBe(false)
   })
 })

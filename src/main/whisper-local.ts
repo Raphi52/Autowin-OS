@@ -32,19 +32,17 @@
  *    laisse alors un fichier de travail, jamais un modèle tronqué qui passerait pour installé.
  */
 import { execFile } from 'node:child_process'
-import {
-  createWriteStream,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  type Dirent
-} from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, type Dirent } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { get as httpsGet } from 'node:https'
 import { cpus, tmpdir } from 'node:os'
-import { join, posix, sep } from 'node:path'
+import { join, posix } from 'node:path'
+import {
+  decompresserReel,
+  telechargerReel,
+  verifierTaille,
+  type Decompresseur,
+  type Telechargeur
+} from './telechargement'
 
 /**
  * Le modèle. `small` quantifié en q5_1 : ~190 Mo au lieu de 466 Mo pour le `small` complet, pour une
@@ -269,13 +267,7 @@ export type Executeur = (
   args: readonly string[]
 ) => Promise<{ stdout: string; stderr: string }>
 
-export type Telechargeur = (
-  url: string,
-  destination: string,
-  progres?: (recus: number, total: number) => void
-) => Promise<void>
-
-export type Decompresseur = (archive: string, destination: string) => Promise<void>
+export type { Decompresseur, Telechargeur } from './telechargement'
 
 export interface ServiceWhisper {
   etat(): EtatWhisper
@@ -294,65 +286,6 @@ const executerReel: Executeur = (binaire, args) =>
         if (erreur) rejeter(new Error(`whisper: ${erreur.message}${stderr ? ` — ${stderr}` : ''}`))
         else resoudre({ stdout, stderr })
       }
-    )
-  })
-
-/** Téléchargement réel : suit les redirections (HuggingFace et GitHub en posent toujours). */
-const telechargerReel: Telechargeur = (url, destination, progres) =>
-  new Promise((resoudre, rejeter) => {
-    const partiel = `${destination}.part`
-    mkdirSync(destination.slice(0, destination.lastIndexOf(sep)) || '.', { recursive: true })
-    const aller = (cible: string, sautsRestants: number): void => {
-      httpsGet(cible, { headers: { 'user-agent': 'autowin-os', accept: '*/*' } }, (reponse) => {
-        const code = reponse.statusCode ?? 0
-        if (code >= 300 && code < 400 && reponse.headers.location) {
-          reponse.resume()
-          if (sautsRestants === 0) return rejeter(new Error('trop de redirections'))
-          return aller(new URL(reponse.headers.location, cible).toString(), sautsRestants - 1)
-        }
-        if (code !== 200) {
-          reponse.resume()
-          return rejeter(new Error(`téléchargement refusé (HTTP ${code}) : ${cible}`))
-        }
-        const total = Number(reponse.headers['content-length'] ?? 0)
-        let recus = 0
-        const flux = createWriteStream(partiel)
-        reponse.on('data', (bloc: Buffer) => {
-          recus += bloc.length
-          progres?.(recus, total)
-        })
-        reponse.pipe(flux)
-        flux.on('error', rejeter)
-        flux.on('finish', () => {
-          flux.close(() => {
-            // Renommage FINAL : tant qu'il n'a pas eu lieu, rien ne peut passer pour installé.
-            renameSync(partiel, destination)
-            resoudre()
-          })
-        })
-      }).on('error', rejeter)
-    }
-    aller(url, 5)
-  })
-
-/**
- * Décompression réelle. `Expand-Archive` de PowerShell est présent sur tout Windows supporté : pas
- * de dépendance npm supplémentaire, donc pas de binaire natif à reconstruire à chaque Electron.
- */
-const decompresserReel: Decompresseur = (archive, destination) =>
-  new Promise((resoudre, rejeter) => {
-    mkdirSync(destination, { recursive: true })
-    execFile(
-      'powershell',
-      [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        `Expand-Archive -LiteralPath '${archive}' -DestinationPath '${destination}' -Force`
-      ],
-      { timeout: 180_000, windowsHide: true },
-      (erreur) => (erreur ? rejeter(erreur) : resoudre())
     )
   })
 
@@ -390,6 +323,8 @@ export function creerServiceWhisper(options: {
         await telecharger(MODELE_WHISPER.url, modele, (recus, total) =>
           poser('modèle', total > 0 ? recus / total : null)
         )
+        // Le fichier est PESÉ avant d'être cru : 3 Ko de HTML portent aussi bien ce nom.
+        verifierTaille(modele, MODELE_WHISPER.octetsMinimum, 'Modèle whisper')
       }
       if (!etatWhisper(racine).binaire) {
         const archive = join(racine, BINAIRE_WHISPER.archive)
@@ -397,6 +332,7 @@ export function creerServiceWhisper(options: {
         await telecharger(BINAIRE_WHISPER.url, archive, (recus, total) =>
           poser('moteur', total > 0 ? recus / total : null)
         )
+        verifierTaille(archive, BINAIRE_WHISPER.octetsMinimum, 'Moteur whisper')
         poser('décompression', null)
         await decompresser(archive, join(racine, 'bin'))
         rmSync(archive, { force: true })
