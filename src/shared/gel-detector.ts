@@ -60,6 +60,24 @@ export interface Gel {
    * deja payee sur `timer:balayage:copiesAbandonnees`).
    */
   indice?: string
+  /**
+   * MORT PAR MILLE COUPURES — les contributeurs CUMULES pendant la fenetre figee.
+   *
+   * Mesure du 2026-09-02 : sept gels de 9,1 a 12,6 s, tous `operation:'inconnu'` avec la cause
+   * `entree-sortie-bloquante`, alors que node:fs et node:child_process sont instrumentes. Raison :
+   * l'instrumentation ne journalise qu'un appel dont la duree SEULE depasse le seuil. Cent lectures
+   * de 100 ms tiennent la boucle 10 s sans qu'aucune ne soit nommee. On cumule donc par appel, et
+   * on ne NOMME que si le cumul explique une part reelle du gel — sinon c'est une accusation en
+   * l'air, la meme faute d'alibi que sur `indice`.
+   */
+  accumulation?: AccesCumule[]
+}
+
+/** Temps synchrone total passe dans UN appel, sur la fenetre d'un battement. */
+export interface AccesCumule {
+  operation: string
+  cumulMs: number
+  appels: number
 }
 
 export interface ResumeGels {
@@ -86,6 +104,34 @@ export interface ResumeGels {
  * boucle tenue par notre propre code ne change pas de coupable a chaque minute. Le CPU consomme
  * pendant le retard tranche : brule chez nous => c'est nous ; pas brule => c'est la machine.
  */
+/** Part du gel qu'un cumul doit expliquer pour etre NOMME comme contributeur. */
+export const PART_CUMUL_IMPUTABLE = 0.25
+
+/** Nombre de contributeurs reportes : au-dela, ce n'est plus une piste mais un listing. */
+export const CONTRIBUTEURS_REPORTES = 3
+
+/**
+ * Classe les appels bloquants d'une fenetre figee et rend ceux qui l'EXPLIQUENT.
+ *
+ * Rend `undefined` — jamais une liste vide, jamais une liste faible — quand le cumul n'atteint pas
+ * `PART_CUMUL_IMPUTABLE` du blocage : un gel de 12 s que 200 ms d'entrees-sorties n'expliquent pas
+ * doit rester ANONYME plutot que de designer un innocent.
+ */
+export function nommerAccumulation(
+  entrees: readonly AccesCumule[],
+  blocageMs: number,
+  partMinimale = PART_CUMUL_IMPUTABLE
+): AccesCumule[] | undefined {
+  if (blocageMs <= 0) return undefined
+  const retenues = entrees.filter((e) => e.cumulMs > 0 && e.appels > 0)
+  if (retenues.length === 0) return undefined
+  const cumulTotal = retenues.reduce((somme, e) => somme + e.cumulMs, 0)
+  if (cumulTotal < blocageMs * partMinimale) return undefined
+  return [...retenues]
+    .sort((a, b) => b.cumulMs - a.cumulMs || a.operation.localeCompare(b.operation))
+    .slice(0, CONTRIBUTEURS_REPORTES)
+}
+
 export function classerGel(
   ecouleMs: number,
   cpuMsConsomme: number,

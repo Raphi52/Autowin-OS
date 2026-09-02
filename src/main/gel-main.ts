@@ -5,10 +5,12 @@ import { createRequire } from 'node:module'
 import { Worker } from 'node:worker_threads'
 import {
   classerGel,
+  nommerAccumulation,
   resumerGels,
   nommerAccesBloquant,
   PERIODE_BATTEMENT_MS,
   SEUIL_GEL_MS,
+  type AccesCumule,
   type Gel,
   type ResumeGels
 } from '../shared/gel-detector'
@@ -41,6 +43,38 @@ const pile: string[] = []
  * operation refermee ; seule celle refermee PENDANT la fenetre figee sera reportee.
  */
 let dernierFerme: { nom: string; a: number } | undefined
+
+/*
+ * CUMUL DES APPELS BLOQUANTS DE LA FENETRE COURANTE — le seul moyen de nommer une mort par mille
+ * coupures. `instrumenterAccesBloquants` ne journalisait qu'un appel dont la duree SEULE depasse le
+ * seuil ; cent lectures de 100 ms tiennent la boucle 10 s en restant invisibles. La cle est le nom
+ * de l'API SEUL (pas le chemin) : la cardinalite reste bornee quoi que fasse l'application.
+ */
+const cumulFenetre = new Map<string, { cumulMs: number; appels: number }>()
+
+/** Ajoute le temps synchrone d'un appel a la fenetre courante. */
+export function cumulerAccesBloquant(api: string, dureeMs: number): void {
+  if (dureeMs <= 0) return
+  const cle = api || 'inconnu'
+  const courant = cumulFenetre.get(cle)
+  if (courant) {
+    courant.cumulMs += dureeMs
+    courant.appels += 1
+    return
+  }
+  cumulFenetre.set(cle, { cumulMs: dureeMs, appels: 1 })
+}
+
+/** Rend le cumul de la fenetre et la REMET A ZERO — un cumul lu deux fois accuserait deux fois. */
+export function preleverAccesCumules(): AccesCumule[] {
+  const entrees: AccesCumule[] = [...cumulFenetre].map(([operation, { cumulMs, appels }]) => ({
+    operation,
+    cumulMs: Math.round(cumulMs),
+    appels
+  }))
+  cumulFenetre.clear()
+  return entrees
+}
 
 /**
  * VRAI une fois la phase de demarrage close — un jalon de demarrage n'a alors plus rien a etiqueter.
@@ -176,6 +210,9 @@ export function demarrerDetecteurDeGel(
     )
     const debutFenetre = precedent
     precedent = maintenant
+    // PRELEVE A CHAQUE REVEIL, gel ou pas : un cumul qui traine d'une fenetre a l'autre attribuerait
+    // a un gel des appels qui l'ont precede — l'erreur d'alibi, deja payee sur `indice`.
+    const cumules = preleverAccesCumules()
     if (blocageMs > 0) {
       const operation = operationDeclaree()
       /*
@@ -186,12 +223,14 @@ export function demarrerDetecteurDeGel(
         operation === 'inconnu' && dernierFerme && dernierFerme.a >= debutFenetre
           ? dernierFerme.nom
           : undefined
+      const accumulation = nommerAccumulation(cumules, blocageMs)
       ecrire({
         ts: new Date(maintenant).toISOString(),
         blocageMs,
         operation,
         cause,
-        ...(indice ? { indice } : {})
+        ...(indice ? { indice } : {}),
+        ...(accumulation ? { accumulation } : {})
       })
     }
   }, periodeMs)
@@ -351,6 +390,7 @@ export function instrumenterAccesBloquants<H extends Record<string, unknown>>(
         return fn.apply(this, args)
       } finally {
         const dureeMs = Date.now() - depart
+        cumulerAccesBloquant(nom, dureeMs)
         if (dureeMs >= seuilMs) {
           ecrire({
             ts: new Date().toISOString(),

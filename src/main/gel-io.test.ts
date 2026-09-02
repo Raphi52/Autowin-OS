@@ -123,3 +123,64 @@ describe('instrumenterEntreesSortiesDuMain — cablage sur les vrais modules', (
     expect(fs.realpathSync).toBe(avant)
   })
 })
+
+import { cumulerAccesBloquant, preleverAccesCumules } from './gel-main'
+import { nommerAccumulation } from '../shared/gel-detector'
+
+/**
+ * MORT PAR MILLE COUPURES — mesure du 2026-09-02 sur le journal reel de l'utilisateur : sept gels
+ * de 9,1 a 12,6 s, tous `operation:'inconnu'`, cause `entree-sortie-bloquante`, alors que
+ * node:fs ET node:child_process sont instrumentes depuis le 2026-08-31. Explication trouvee dans
+ * l'instrument lui-meme : il ne journalise qu'un appel dont la duree SEULE depasse le seuil. Cent
+ * lectures de 100 ms tiennent la boucle dix secondes et ne laissent AUCUNE trace.
+ *
+ * L'entree falsifiante est donc celle-ci : 100 appels de 100 ms, chacun tres en dessous du seuil,
+ * pendant un gel de 12 s. L'ancien instrument n'ecrivait rien ; le cumul doit les nommer.
+ */
+describe('accumulation d appels courts — nommer ce qu aucun appel isole ne trahit', () => {
+  it('nomme readFileSync quand 100 appels de 100 ms expliquent un gel de 12 s', () => {
+    preleverAccesCumules()
+    for (let i = 0; i < 100; i++) cumulerAccesBloquant('readFileSync', 100)
+    for (let i = 0; i < 5; i++) cumulerAccesBloquant('statSync', 4)
+    const cumules = preleverAccesCumules()
+    const nommes = nommerAccumulation(cumules, 12_000)
+    expect(nommes?.[0]).toEqual({ operation: 'readFileSync', cumulMs: 10_000, appels: 100 })
+    expect(nommes?.[1]).toEqual({ operation: 'statSync', cumulMs: 20, appels: 5 })
+  })
+
+  it('n accuse PERSONNE quand le cumul n explique pas le gel (200 ms sur 12 s)', () => {
+    preleverAccesCumules()
+    cumulerAccesBloquant('readFileSync', 200)
+    expect(nommerAccumulation(preleverAccesCumules(), 12_000)).toBeUndefined()
+  })
+
+  it('remet le cumul a zero une fois preleve — un gel n herite pas de la fenetre precedente', () => {
+    preleverAccesCumules()
+    cumulerAccesBloquant('readFileSync', 5_000)
+    expect(preleverAccesCumules()).toHaveLength(1)
+    expect(preleverAccesCumules()).toEqual([])
+    expect(nommerAccumulation([], 12_000)).toBeUndefined()
+  })
+
+  it('cumule aussi les appels SOUS le seuil, que l ancien instrument jetait', () => {
+    const hote = {
+      lire(): string {
+        const fin = Date.now() + 30
+        while (Date.now() < fin) {
+          /* segment synchrone court : sous le seuil, donc jamais journalise */
+        }
+        return 'ok'
+      }
+    }
+    const gels: Gel[] = []
+    const defaire = instrumenterAccesBloquants(hote, ['lire'], 1_000, (gel) => gels.push(gel))
+    preleverAccesCumules()
+    hote.lire()
+    hote.lire()
+    defaire()
+    const cumules = preleverAccesCumules()
+    expect(gels).toEqual([])
+    expect(cumules.find((c) => c.operation === 'lire')?.appels).toBe(2)
+    expect(cumules.find((c) => c.operation === 'lire')?.cumulMs ?? 0).toBeGreaterThanOrEqual(50)
+  })
+})
