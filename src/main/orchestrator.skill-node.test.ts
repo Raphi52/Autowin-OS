@@ -15,7 +15,7 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
 import { sandboxForPhase } from './orchestrator'
 import { nativeSkills } from './native-registry'
 import { isPipelinePhase } from './skill-pipeline'
-import { phaseBrief } from './phase-briefs'
+import { GARDE_TACHE, phaseBrief } from './phase-briefs'
 import { TOURS_OUTILS_MAX } from './skill-node-tools'
 
 /**
@@ -81,6 +81,21 @@ describe('nœud portant une skill du disque', () => {
     // Discriminant : le corps, pas seulement l'en-tête. Un chargement vide passerait le test ci-dessus.
     expect(systeme.length).toBeGreaterThan(500)
     expect(provider.calls[0].systemBlocks?.some((b) => b.name === 'skill:think')).toBe(true)
+  })
+
+  /**
+   * Defaut vecu le 2026-09-02 (conv-126) : c'est un noeud SKILL (`arena`) qui a substitue sa tache
+   * en cours de route. Son corps vient du kit, donc il ne passe PAS par `phaseBrief` — la garde
+   * commune doit etre posee sur CE second chemin d'assemblage, sinon elle ne couvre que la moitie
+   * des noeuds.
+   */
+  it('recoit lui aussi la garde « la tache donnee ne se remplace pas »', async () => {
+    const provider = new ProviderCapturant()
+    await orchestrateur(provider, ['think']).run('remets-toi dans ce depot')
+    const systeme = provider.calls[0]?.system ?? ''
+    expect(systeme).toContain(GARDE_TACHE)
+    // La garde precede le corps du kit : elle n'est pas noyee en fin de prompt.
+    expect(systeme.indexOf(GARDE_TACHE)).toBeLessThan(systeme.indexOf('SKILL THINK'))
   })
 
   it('reste en LECTURE SEULE : seules build et clean écrivent', () => {

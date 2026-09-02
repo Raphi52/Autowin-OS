@@ -78,9 +78,24 @@ Livrable :
 3. Ce que tu NE refais pas, et pourquoi — un remake qui touche à tout n'est pas un remake, c'est une réécriture.`
 }
 
+/**
+ * GARDE COMMUNE À TOUTES LES PHASES — la tâche donnée ne se remplace pas.
+ *
+ * Mesure du 2026-09-02 (conv-126) : un run lancé sur « distinguer les messages humains des
+ * messages injectés par l'app » a livré, impeccablement, une option `--depuis <date>` — une
+ * AUTRE tâche, substituée en cours de route et jamais signalée comme telle. Aucune consigne de
+ * phase, ni `_engine/ENGINE.md`, ne portait alors d'obligation de garder l'énoncé reçu : les
+ * phases savaient reformuler (`frame` remonte de la solution au problème) mais rien ne disait
+ * que la reformulation devait rester la MÊME tâche.
+ *
+ * Le texte distingue explicitement PRÉCISER (autorisé, c'est le travail de `frame`) de
+ * SUBSTITUER (interdit) : une garde trop serrée empêcherait de remonter au besoin réel.
+ */
+export const GARDE_TACHE = `TÂCHE DONNÉE = TÂCHE TRAITÉE. L'énoncé qui t'est confié ne se remplace pas en cours de route. Tu peux le PRÉCISER — remonter à son problème réel, borner son périmètre, nommer ses critères — jamais lui en SUBSTITUER un autre, même voisin, plus facile ou plus intéressant. Au moment où tu constates que la tâche est DÉJÀ FAITE, INFAISABLE en l'état, ou repose sur une prémisse fausse : tu t'ARRÊTES et tu le DIS, avec la preuve du constat (le fichier lu et sa ligne, la commande et son code de sortie) — tu ne traites pas autre chose à la place, et tu ne le laisses pas deviner. Un livrable parfait qui répond à une question que personne n'a posée est un échec.`
+
 /** Consigne d'une phase (vide si inconnue — l'appelant retombe alors sur la discipline générique). */
 export function phaseBrief(phase: NodePhase): string {
   // Un noeud SKILL n'a pas de consigne native : son corps vient du kit, pas d'ici.
   const brief = PHASE_BRIEFS[phase as PipelinePhase]
-  return brief ? `\n=== CONSIGNE ${phase.toUpperCase()} ===\n${brief}\n` : ''
+  return brief ? `\n=== CONSIGNE ${phase.toUpperCase()} ===\n${GARDE_TACHE}\n\n${brief}\n` : ''
 }

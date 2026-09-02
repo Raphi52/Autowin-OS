@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { PHASE_BRIEFS, phaseBrief } from './phase-briefs'
+import { GARDE_TACHE, PHASE_BRIEFS, phaseBrief } from './phase-briefs'
 import { PIPELINE_PHASES } from './skill-pipeline'
 
 describe('phase-briefs (consignes courtes in-app)', () => {
@@ -107,6 +107,25 @@ describe('phase-briefs (consignes courtes in-app)', () => {
   it('phaseBrief enveloppe la consigne avec un en-tête de phase', () => {
     expect(phaseBrief('scout')).toContain('=== CONSIGNE SCOUT ===')
     expect(phaseBrief('scout')).toContain('SCOUT')
+  })
+
+  /**
+   * Defaut vecu le 2026-09-02 (conv-126) : un run lance sur « distinguer les messages humains des
+   * messages injectes par l'app » a livre une option `--depuis <date>` — une AUTRE tache, substituee
+   * en route, jamais signalee. Aucune consigne ne portait cette obligation : la garde est commune,
+   * donc elle se verifie sur TOUTES les phases, pas sur une.
+   */
+  it('toute phase recoit la garde « la tache donnee ne se remplace pas »', () => {
+    for (const phase of PIPELINE_PHASES) {
+      const rendu = phaseBrief(phase)
+      expect(rendu, phase).toContain(GARDE_TACHE)
+      // PRECISER reste autorise (c'est le travail de frame) ; SUBSTITUER ne l'est pas.
+      expect(rendu, phase).toMatch(/PRÉCISER/)
+      expect(rendu, phase).toMatch(/SUBSTITUER/)
+      // Deja faite / infaisable -> on s'arrete en le disant, avec la preuve.
+      expect(rendu, phase).toMatch(/DÉJÀ FAITE/)
+      expect(rendu, phase).toMatch(/preuve/i)
+    }
   })
 
   it('les phases d analyse savent que la lecture seule est leur contrat normal', () => {

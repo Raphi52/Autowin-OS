@@ -354,7 +354,7 @@ function appelsRequisParWorkflow(
   }
   return total
 }
-import { phaseBrief } from './phase-briefs'
+import { GARDE_TACHE, phaseBrief } from './phase-briefs'
 import { contratDeLaConversation, noteContratPourJuge } from './conversation-task-contract'
 import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-confiance'
 import { convRunsRoot } from './runs/conv-runs'
@@ -1339,7 +1339,10 @@ export class Orchestrator {
       !isPipelinePhase(phase) && this.deps.skillCommands?.()
         ? promptOutilsNoeudSkill(this.deps.skillCommands()?.catalogue?.() ?? [])
         : ''
-    const installed = corpsSkill ? `${corpsSkill}${outils}` : ''
+    // La garde « tâche donnée = tâche traitée » vaut AUSSI pour un noeud skill : c'est justement
+    // un noeud skill (`arena`) qui a substitué sa tâche le 2026-09-02. Le corps vient du kit, donc
+    // `phaseBrief` ne passe pas par ici — la garde se pose sur ce second chemin d'assemblage.
+    const installed = corpsSkill ? `${GARDE_TACHE}\n\n${corpsSkill}${outils}` : ''
     const base = installed || phaseBrief(phase)
     // Point de passage UNIQUE des consignes de phase : y brancher le workflow suffit à couvrir
     // exec, judge et greedy sans les threader un par un.
