@@ -7,7 +7,20 @@ import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 
 export default defineConfig(
   {
-    ignores: ['**/node_modules', '**/dist', '**/out', 'Audit/**', '.autowin-data/**']
+    /*
+     * `tests/fixtures/arena-conv-126` est une COPIE FIGEE d'un run reel : sa valeur de preuve
+     * tient a sa fidelite octet pour octet a l'original (voir le README du dossier). La reformater
+     * -- meme un simple retour a la ligne de prettier -- casserait cette fidelite. On l'exclut donc
+     * du lint plutot que de la corriger.
+     */
+    ignores: [
+      '**/node_modules',
+      '**/dist',
+      '**/out',
+      'Audit/**',
+      '.autowin-data/**',
+      'tests/fixtures/arena-conv-126/**'
+    ]
   },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
