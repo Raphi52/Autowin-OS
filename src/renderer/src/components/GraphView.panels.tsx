@@ -2,6 +2,7 @@ import { BrainMarkdown } from './BrainMarkdown'
 import { HumanJson } from './HumanJson'
 import { brainScoreChannelLabel, nodeThemeIds, type GraphNode } from './graph-view-model'
 import { Spinner } from './Spinner'
+import { useState } from 'react'
 
 /**
  * Sous-composants de présentation de l'observatoire 3D (GraphView) : sections de
@@ -107,6 +108,8 @@ export function NodePanel({
   fileErr,
   linkedNodes,
   onNavigate,
+  degre,
+  deuxiemeSaut,
   onRetry,
   onRetract,
   onSupersede
@@ -116,19 +119,58 @@ export function NodePanel({
   fileErr: string
   linkedNodes: Array<{ node: GraphNode; direction: 'incoming' | 'outgoing'; relation?: string }>
   onNavigate: (node: GraphNode) => void
+  /** Combien de liens entrent et sortent — le poids reel du noeud dans le graphe. */
+  degre?: { entrants: number; sortants: number }
+  /** Noeuds atteints en DEUX liens, avec le relais par lequel on y arrive. */
+  deuxiemeSaut?: Array<{ node: GraphNode; via: GraphNode }>
   onRetry?: () => void
   onRetract?: () => void
   onSupersede?: () => void
 }): React.JSX.Element {
+  // Les liens d'une fiche fournie se comptent par dizaines et melangent toutes les relations :
+  // sans ce filtre, retrouver « qui me cite » revenait a lire la liste entiere a l'oeil.
+  const [relation, setRelation] = useState('')
+  const relationsPresentes = [
+    ...new Set(linkedNodes.map((lien) => lien.relation).filter((nom): nom is string => Boolean(nom)))
+  ]
+  const liensVisibles = relation
+    ? linkedNodes.filter((lien) => lien.relation === relation)
+    : linkedNodes
   return (
     <div className="node-panel">
+
       <nav className="node-links" aria-label="Nœuds reliés">
         <div className="node-links__heading">
           <strong>Liens</strong>
-          <span>{linkedNodes.length}</span>
+          <span>
+            {liensVisibles.length === linkedNodes.length
+              ? linkedNodes.length
+              : `${liensVisibles.length}/${linkedNodes.length}`}
+          </span>
+          {degre && (
+            <small className="node-links__degre">
+              ↓{degre.entrants} ↑{degre.sortants}
+            </small>
+          )}
         </div>
-        {linkedNodes.length === 0 && <p>Aucun nœud relié dans cette vue.</p>}
-        {linkedNodes.map((linked) => (
+        {relationsPresentes.length > 1 && (
+          <select
+            className="node-links__relation"
+            aria-label="Filtrer les liens par relation"
+            value={relation}
+            onChange={(event) => setRelation(event.target.value)}
+          >
+            <option value="">Toutes relations</option>
+            {relationsPresentes.map((nom) => (
+              <option key={nom} value={nom}>
+                {nom}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {liensVisibles.length === 0 && <p>Aucun nœud relié dans cette vue.</p>}
+        {liensVisibles.map((linked) => (
           <button
             key={`${linked.direction}:${linked.node.id}`}
             type="button"
@@ -139,11 +181,36 @@ export function NodePanel({
             {linked.relation && <small>{linked.relation}</small>}
           </button>
         ))}
+        {deuxiemeSaut && deuxiemeSaut.length > 0 && (
+          <details className="node-links__saut" data-testid="node-second-hop">
+            <summary>Voisinage à 2 sauts ({deuxiemeSaut.length})</summary>
+            {deuxiemeSaut.map((saut) => (
+              <button key={saut.node.id} type="button" onClick={() => onNavigate(saut.node)}>
+                <span aria-hidden="true">⇢</span>
+                <strong>{saut.node.label}</strong>
+                <small>via {saut.via.label}</small>
+              </button>
+            ))}
+          </details>
+        )}
       </nav>
       <article className="node-content">
+
         <span className="node-panel__theme">{nodeThemeIds(node).join(' · ')}</span>
         <h2>{node.label}</h2>
-        <div className="node-panel__path">{node.file ?? 'Aucun fichier associé'}</div>
+        <div className="node-panel__path">
+          <span>{node.file ?? 'Aucun fichier associé'}</span>
+          {node.file && (
+            <button
+              type="button"
+              className="node-panel__copier"
+              onClick={() => void navigator.clipboard?.writeText(String(node.file))}
+            >
+              Copier le chemin
+            </button>
+          )}
+        </div>
+
         {onRetract && (
           <div>
             <button type="button" className="node-panel__retry" onClick={onRetract}>

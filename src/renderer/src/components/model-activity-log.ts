@@ -56,6 +56,12 @@ export interface ModelActivityEntry {
   at?: number
   /** Source d'où le geste est lu. Jamais devinée. */
   source: ModelActivitySource
+  /**
+   * Champs BRUTS du geste, tels que la source les a écrits — clé par clé, sans aplatissement.
+   * `detail` reste la version texte (elle porte le filtre et la ligne repliée) ; `fields` porte la
+   * MÊME matière en structure, pour que l'affichage puisse la déplier au lieu de la lire à plat.
+   */
+  fields?: Record<string, unknown>
 }
 
 export interface ModelActivityInput {
@@ -114,6 +120,22 @@ function rest(source: Record<string, unknown>, ...omit: string[]): string | unde
   return Object.keys(keep).length === 0 ? undefined : short(keep)
 }
 
+/**
+ * Champs bruts d'un événement — TOUT ce que la source a écrit, sauf ce que la ligne rend déjà
+ * elle-même (`kind`, `at`). Contrairement à `rest()`, rien n'est sérialisé : l'affichage reçoit
+ * l'objet et peut le déplier clé par clé. C'est ce qui manquait : l'information ARRIVAIT jusqu'ici
+ * puis était collée en une seule chaîne avant d'atteindre l'écran.
+ */
+function allFields(source: Record<string, unknown>): { fields?: Record<string, unknown> } {
+  const keep: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'kind' || key === 'at' || value === undefined || value === null || value === '')
+      continue
+    keep[key] = value
+  }
+  return Object.keys(keep).length === 0 ? {} : { fields: keep }
+}
+
 /** Concatène deux fragments de détail sans en perdre un seul. */
 function joinDetail(...parts: Array<string | undefined>): string | undefined {
   const kept = parts.filter((part): part is string => Boolean(part))
@@ -129,16 +151,22 @@ function tag(source: ModelActivitySource, entries: Brute[]): ModelActivityEntry[
 }
 
 /** Gestes d'un tour reconstruits depuis ses PARTS persistées (source durable). */
-function fromParts(
-  turnId: string,
-  parts: ReadonlyArray<Record<string, unknown>>
-): Brute[] {
+function fromParts(turnId: string, parts: ReadonlyArray<Record<string, unknown>>): Brute[] {
   const out: Brute[] = []
   parts.forEach((part, index) => {
     const id = `${turnId}:part:${index}`
     if (part.kind === 'text') {
       const detail = short(part.text)
-      if (detail) out.push({ id, turnId, kind: 'text', label: 'Réponse', detail, ...stamp(part) })
+      if (detail)
+        out.push({
+          id,
+          turnId,
+          kind: 'text',
+          label: 'Réponse',
+          detail,
+          ...stamp(part),
+          ...allFields(part)
+        })
       return
     }
     if (part.kind === 'action') {
@@ -149,6 +177,7 @@ function fromParts(
         kind: 'action',
         label: String(part.name ?? 'action'),
         ...stamp(part),
+        ...allFields(part),
         ...(detail ? { detail } : {}),
         ...(typeof part.ok === 'boolean' ? { ok: part.ok } : {})
       })
@@ -163,6 +192,7 @@ function fromParts(
         kind: 'artifact',
         label: String(artifact.name ?? artifact.id ?? 'artefact'),
         ...stamp(part),
+        ...allFields(part),
         ...(detail ? { detail } : {})
       })
       return
@@ -175,6 +205,7 @@ function fromParts(
         kind: 'error',
         label: `Erreur (${String(part.cause ?? 'turn')})`,
         ...stamp(part),
+        ...allFields(part),
         ...(detail ? { detail } : {}),
         ok: false
       })
@@ -188,6 +219,7 @@ function fromParts(
       kind: 'event',
       label: String(part.kind ?? 'part'),
       ...stamp(part),
+      ...allFields(part),
       ...(detail ? { detail } : {})
     })
   })
@@ -203,7 +235,14 @@ function fromParts(
 function fromMessageThinking(turnId: string, message: Msg): Brute[] {
   const out: Brute[] = []
   const pensee = short((message as { reasoning?: string }).reasoning)
-  if (pensee) out.push({ id: `${turnId}:thread:reasoning`, turnId, kind: 'reasoning', label: 'Raisonnement', detail: pensee })
+  if (pensee)
+    out.push({
+      id: `${turnId}:thread:reasoning`,
+      turnId,
+      kind: 'reasoning',
+      label: 'Raisonnement',
+      detail: pensee
+    })
   const vies = ((message as { providerStatusLog?: string[] }).providerStatusLog ?? []).filter(
     (ligne): ligne is string => typeof ligne === 'string' && ligne.trim() !== ''
   )
@@ -214,10 +253,7 @@ function fromMessageThinking(turnId: string, message: Msg): Brute[] {
 }
 
 /** Gestes d'un tour reconstruits depuis son JOURNAL fichier (source la plus complète). */
-function fromJournal(
-  turnId: string,
-  events: ReadonlyArray<Record<string, unknown>>
-): Brute[] {
+function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknown>>): Brute[] {
   const out: Brute[] = []
   const actionIndex = new Map<string, number>()
   let reasoning = ''
@@ -242,6 +278,7 @@ function fromJournal(
         kind: 'status',
         label: ligne ?? 'signe de vie',
         ...stamp(event),
+        ...allFields(event),
         ...(detail ? { detail } : {})
       })
       return
@@ -256,6 +293,7 @@ function fromJournal(
         kind: 'reasoning',
         label: `Raisonnement (étape ${String(event.iteration ?? '?')})`,
         ...stamp(event),
+        ...allFields(event),
         ...(detail ? { detail } : {})
       })
       return
@@ -273,6 +311,7 @@ function fromJournal(
         kind: 'model-call',
         label: `Appel modèle${event.name ? ` — ${String(event.name)}` : ''}`,
         ...stamp(event),
+        ...allFields(event),
         ...(detail ? { detail } : {})
       })
       return
@@ -287,6 +326,7 @@ function fromJournal(
         kind: 'action',
         label: String(event.name ?? 'action'),
         ...stamp(event),
+        ...allFields(event),
         ...(detail ? { detail } : {})
       })
       return
@@ -298,10 +338,15 @@ function fromJournal(
       const detail = joinDetail(short(event.data), rest(event, 'data', 'name', 'actionId', 'ok'))
       if (position !== undefined) {
         const target = out[position]
+        const champsResultat = allFields(event).fields
         out[position] = {
           ...target,
           ...(ok === undefined ? {} : { ok }),
-          ...(detail ? { detail } : {})
+          ...(detail ? { detail } : {}),
+          // La commande porte ses `args`, le résultat ses `data` : la ligne fusionnée garde les deux.
+          ...(target.fields || champsResultat
+            ? { fields: { ...(target.fields ?? {}), ...(champsResultat ?? {}) } }
+            : {})
         }
         return
       }
@@ -311,6 +356,7 @@ function fromJournal(
         kind: 'action',
         label: String(event.name ?? 'résultat'),
         ...stamp(event),
+        ...allFields(event),
         ...(detail ? { detail } : {}),
         ...(ok === undefined ? {} : { ok })
       })
@@ -327,6 +373,7 @@ function fromJournal(
         kind: 'error',
         label: 'Erreur',
         ...stamp(event),
+        ...allFields(event),
         ...(detail ? { detail } : {}),
         ok: false
       })
@@ -340,6 +387,48 @@ function fromJournal(
         turnId,
         kind: 'artifact',
         label: String(artifact.name ?? artifact.id ?? 'artefact'),
+        ...stamp(event),
+        ...allFields(event),
+        ...(detail ? { detail } : {})
+      })
+      return
+    }
+    if (kind === 'prompt-system') {
+      // Le prompt SYSTÈME entier, tel qu'il est parti au modèle : la première chose qu'on venait
+      // chercher dans l'Observatory. Il était rangé en « Journal » fourre-tout, donc infiltrable.
+      const detail = joinDetail(short(event.text), rest(event, 'text'))
+      out.push({
+        id,
+        turnId,
+        kind: 'prompt',
+        label: 'Prompt système',
+        ...stamp(event),
+        ...(detail ? { detail } : {})
+      })
+      return
+    }
+    if (kind === 'usage') {
+      // Appel FACTURÉ écrit par le journal du tour (tokens, coût, durée) — même nature que les
+      // lignes du journal d'activité, donc même catégorie « Coût ».
+      const detail = rest(event)
+      out.push({
+        id,
+        turnId,
+        kind: 'usage',
+        label: 'Appel facturé',
+        ...stamp(event),
+        ...(detail ? { detail } : {})
+      })
+      return
+    }
+    if (kind === 'outcome') {
+      // Issue du tour telle que le main l'a inscrite (statut, raison, verdict) : c'est une FIN.
+      const detail = rest(event)
+      out.push({
+        id,
+        turnId,
+        kind: 'done',
+        label: 'Issue du tour',
         ...stamp(event),
         ...(detail ? { detail } : {})
       })
@@ -358,6 +447,7 @@ function fromJournal(
         kind: 'done',
         label: kind === 'cancelled' ? 'Tour annulé' : 'Tour terminé',
         ...stamp(event),
+        ...allFields(event),
         ...(detail ? { detail } : {})
       })
       return
@@ -373,6 +463,7 @@ function fromJournal(
         kind: 'event',
         label: kind,
         ...stamp(event),
+        ...allFields(event),
         ...(detail ? { detail } : {})
       })
     }
@@ -470,6 +561,7 @@ function fromCausal(events: ReadonlyArray<Record<string, unknown>>): Brute[] {
       kind: CAUSAL_KIND[type] ?? 'event',
       label: joinDetail(type, short(actor.label)) ?? type,
       ...isoStamp(event.timestamp),
+      ...allFields(event),
       ...(statut === 'failed' || statut === 'cancelled' ? { ok: false } : {}),
       ...(statut === 'completed' ? { ok: true } : {}),
       ...(detail ? { detail } : {})
@@ -519,6 +611,7 @@ function fromActivity(entries: ReadonlyArray<Record<string, unknown>>): Brute[] 
       kind: 'usage' as ModelActivityKind,
       label: joinDetail(String(entry.kind ?? 'appel'), short(entry.label)) ?? 'appel',
       ...isoStamp(entry.ts),
+      ...allFields(entry),
       ...(detail ? { detail } : {})
     }
   })
@@ -544,6 +637,31 @@ function dedupe(entries: ModelActivityEntry[]): ModelActivityEntry[] {
 }
 
 /**
+ * Écarte la copie TRONQUÉE de la pensée. Le tour ne conserve que les 4 000 derniers caractères du
+ * raisonnement (`REASONING_MAX`, `src/shared/chat-turn.ts`) alors que le journal fichier en porte la
+ * TOTALITÉ : les deux lignes n'étant pas identiques, le dédoublonnage exact les laissait toutes les
+ * deux, et la plus courte n'apportait rien. On garde donc l'entière, et la copie du fil ne survit
+ * que lorsque le journal a été nettoyé (au-delà de 7 jours) — c'est elle qui rend la Réflexion
+ * DURABLE.
+ */
+function ecarterPenseeTronquee(entries: ModelActivityEntry[]): ModelActivityEntry[] {
+  const entieres = new Map<string, string>()
+  for (const entry of entries) {
+    if (entry.kind !== 'reasoning' || entry.source !== 'journal' || !entry.detail) continue
+    const deja = entieres.get(entry.turnId) ?? ''
+    if (entry.detail.length > deja.length) entieres.set(entry.turnId, entry.detail)
+  }
+  return entries.filter((entry) => {
+    if (entry.kind !== 'reasoning' || entry.source !== 'journal') {
+      if (entry.kind !== 'reasoning' || !entry.detail) return true
+      const entiere = entieres.get(entry.turnId)
+      return !(entiere && entiere.includes(entry.detail))
+    }
+    return true
+  })
+}
+
+/**
  * Tri chronologique STABLE. Une ligne sans heure (parts persistées, message du fil) n'est pas
  * envoyée en tête : elle hérite de la dernière heure connue AVANT elle, donc garde sa place dans le
  * fil au lieu de flotter.
@@ -564,6 +682,21 @@ function trierChronologiquement(entries: ModelActivityEntry[]): ModelActivityEnt
  * autre), les doublons exacts écartés, et l'ensemble trié chronologiquement. Un tour dont le journal
  * fichier a été nettoyé reste présent via ses parts durables.
  */
+/**
+ * Tour qu'OUVRE une demande utilisateur : le premier message d'assistant qui la suit. Sans lui, la
+ * demande flotte hors de tout tour et le regroupement par tour perd son point de départ. Une
+ * demande sans réponse (tour en cours, tour perdu) garde un identifiant qui lui est propre.
+ */
+function turnIdDuTourSuivant(messages: readonly Msg[], depuis: number): string {
+  for (let index = depuis + 1; index < messages.length; index += 1) {
+    const message = messages[index]
+    if (message.role === 'user') break
+    const turnId = (message as { turnId?: string }).turnId
+    if (turnId) return turnId
+  }
+  return `message-${depuis}`
+}
+
 export function buildModelActivityLog(input: ModelActivityInput): ModelActivityEntry[] {
   const entries: ModelActivityEntry[] = []
   input.messages.forEach((message, messageIndex) => {
@@ -571,7 +704,10 @@ export function buildModelActivityLog(input: ModelActivityInput): ModelActivityE
       const detail = short((message as { content?: string }).content)
       entries.push({
         id: `user:${messageIndex}`,
-        turnId: '',
+        // La demande APPARTIENT au tour qu'elle ouvre. Avec un `turnId` vide, toutes les demandes
+        // de la conversation se retrouvaient rassemblees dans un meme pseudo-tour, detachees de
+        // ce qu'elles avaient declenche.
+        turnId: turnIdDuTourSuivant(input.messages, messageIndex),
         kind: 'prompt',
         label: 'Demande',
         source: 'thread',
@@ -596,5 +732,5 @@ export function buildModelActivityLog(input: ModelActivityInput): ModelActivityE
   })
   entries.push(...tag('causal', fromCausal(input.causal ?? [])))
   entries.push(...tag('activity', fromActivity(input.activity ?? [])))
-  return trierChronologiquement(dedupe(entries))
+  return trierChronologiquement(ecarterPenseeTronquee(dedupe(entries)))
 }

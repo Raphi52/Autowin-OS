@@ -95,4 +95,184 @@ describe('ModelActivityLogPane — la trace de ce que les modèles ont fait', ()
     await monter()
     expect(host.textContent).toContain('run_tests')
   })
+  it('déplie les champs du geste clé par clé, et non en une seule chaîne', async () => {
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([
+        {
+          kind: 'command',
+          name: 'Bash',
+          actionId: 'c1',
+          args: { command: 'ls', cwd: '/tmp' },
+          sessionId: 'sess-7'
+        }
+      ])
+    await monter()
+    const ligne = [...host.querySelectorAll('.model-log-row')].find((row) =>
+      row.textContent?.includes('Bash')
+    ) as HTMLElement
+    const detail = ligne.querySelector('details') as HTMLDetailsElement
+    expect(detail).toBeTruthy()
+    await act(async () => {
+      detail.open = true
+    })
+    // Chaque champ est une LIGNE clé → valeur de l'arbre, pas un fragment de JSON collé.
+    const cles = [...detail.querySelectorAll('.human-json__key')].map((noeud) => noeud.textContent)
+    expect(cles).toContain('sessionId')
+    expect(cles).toContain('command')
+    expect(cles).toContain('cwd')
+    // La provenance exacte de la ligne reste lisible une fois dépliée.
+    expect(detail.querySelector('.model-log-meta')?.textContent).toContain('tour turn-1')
+    expect(detail.querySelector('.model-log-copy')).toBeTruthy()
+  })
+})
+
+describe('ModelActivityLogPane — tenue du volume', () => {
+  it('borne le nombre de lignes RENDUES et laisse remonter plus ancien', async () => {
+    const parts = Array.from({ length: 20_000 }, (_, index) => ({
+      kind: 'text',
+      text: `ligne ${index}`
+    }))
+    const gros = [
+      {
+        role: 'assistant',
+        turnId: 'turn-1',
+        status: 'completed',
+        done: true,
+        parts
+      }
+    ] as unknown as Msg[]
+    ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([])
+    await act(async () => {
+      root.render(<ModelActivityLogPane conversationId="conv-1" messages={gros} />)
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const rendues = host.querySelectorAll('.model-log-row').length
+    expect(rendues).toBeLessThanOrEqual(300)
+    // ce qui est rendu, c'est la FIN du journal (l'activité récente)
+    expect(host.textContent).toContain('ligne 19999')
+    expect(host.textContent).not.toContain('ligne 0 ')
+    const bouton = host.querySelector('[data-testid="model-log-plus"]') as HTMLButtonElement | null
+    expect(bouton).not.toBeNull()
+    expect(bouton?.textContent ?? '').toContain('ancien')
+    await act(async () => {
+      bouton?.click()
+    })
+    expect(host.querySelectorAll('.model-log-row').length).toBeGreaterThan(rendues)
+  })
+})
+
+describe('ModelActivityLogPane — les quatre sources jusqu’à l’écran', () => {
+  const brancher = (causalKo = false): void => {
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.turnJournal = vi
+      .fn()
+      .mockResolvedValue([{ kind: 'reasoning', text: 'je réfléchis', at: 1 }])
+    api.causalTrace = causalKo
+      ? vi.fn().mockRejectedValue(new Error('trace illisible'))
+      : vi.fn().mockResolvedValue([
+          {
+            id: 'e1',
+            type: 'injection',
+            timestamp: '2026-09-01T10:00:00.000Z',
+            payloads: [{ kind: 'contexte', name: 'état app', content: 'onglet chat' }]
+          }
+        ])
+    api.conversationActivity = vi
+      .fn()
+      .mockResolvedValue([
+        { ts: '2026-09-01T10:00:05.000Z', kind: 'appel', provider: 'claude', costUsd: 0.02 }
+      ])
+  }
+
+  it('affiche une ligne par source, chacune marquée de son origine', async () => {
+    brancher()
+    await monter()
+    const sources = [...host.querySelectorAll('[data-log-source]')].map((n) =>
+      n.getAttribute('data-log-source')
+    )
+    expect(new Set(sources)).toEqual(new Set(['thread', 'journal', 'parts', 'causal', 'activity']))
+    const menu = host.querySelector('[aria-label="Filtrer par source"]') as HTMLSelectElement
+    const options = [...menu.options].map((option) => option.value)
+    for (const source of ['journal', 'parts', 'causal', 'activity'])
+      expect(options).toContain(source)
+  })
+
+  it('une source illisible n’efface pas les autres', async () => {
+    brancher(true)
+    await monter()
+    const sources = [...host.querySelectorAll('[data-log-source]')].map((n) =>
+      n.getAttribute('data-log-source')
+    )
+    expect(sources).not.toContain('causal')
+    expect(new Set(sources)).toEqual(new Set(['thread', 'journal', 'parts', 'activity']))
+    expect(host.textContent).toContain('je réfléchis')
+  })
+})
+
+describe('ModelActivityLogPane — lecture en profondeur', () => {
+  const deuxTours = [
+    { role: 'user', content: 'un' },
+    {
+      role: 'assistant',
+      turnId: 'turn-1',
+      status: 'completed',
+      done: true,
+      parts: [{ kind: 'action', name: 'run_tests', ok: true }]
+    },
+    { role: 'user', content: 'deux' },
+    {
+      role: 'assistant',
+      turnId: 'turn-2',
+      status: 'completed',
+      done: true,
+      parts: [{ kind: 'error', cause: 'turn', text: 'ça a cassé' }]
+    }
+  ] as unknown as Msg[]
+
+  async function monterAvec(msgs: Msg[]): Promise<void> {
+    await act(async () => {
+      root.render(<ModelActivityLogPane conversationId="conv-1" messages={msgs} />)
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+  }
+
+  it('range les gestes par TOUR, avec un en-tête par tour', async () => {
+    await monterAvec(deuxTours)
+    const entetes = [...host.querySelectorAll('[data-testid="model-log-tour"]')]
+    expect(entetes).toHaveLength(2)
+    expect(entetes[0].textContent).toContain('Tour 1')
+    expect(entetes[1].textContent).toContain('Tour 2')
+    // Le tour qui a echoue le DIT dans son en-tete, sans qu'on ait a le deplier.
+    expect(entetes[1].textContent).toContain('échec')
+    expect(entetes[0].textContent).not.toContain('échec')
+  })
+
+  it('ne garde que les gestes en échec quand on demande les erreurs', async () => {
+    await monterAvec(deuxTours)
+    const bouton = host.querySelector('[data-testid="model-log-erreurs"]') as HTMLButtonElement
+    await act(async () => bouton.click())
+    const liste = host.querySelector('[data-testid="model-activity-log"]') as HTMLElement
+    expect(liste.textContent).toContain('ça a cassé')
+    expect(liste.textContent).not.toContain('run_tests')
+    expect(bouton.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('exporte les lignes affichées au format JSON', async () => {
+    const writeText = vi.fn()
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    await monterAvec(deuxTours)
+    const bouton = host.querySelector('[data-testid="model-log-export"]') as HTMLButtonElement
+    await act(async () => bouton.click())
+    expect(writeText).toHaveBeenCalledTimes(1)
+    const copie = JSON.parse(writeText.mock.calls[0][0] as string) as Array<{ turnId: string }>
+    expect(copie.length).toBeGreaterThan(0)
+    expect(copie.some((ligne) => ligne.turnId === 'turn-2')).toBe(true)
+  })
 })

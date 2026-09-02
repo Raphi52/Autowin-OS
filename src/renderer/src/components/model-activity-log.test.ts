@@ -359,4 +359,115 @@ describe('parité avec le bloc « Réflexion »', () => {
     expect(entries.filter((entry) => entry.kind === 'status')).toHaveLength(1)
     expect(entries.filter((entry) => entry.kind === 'status')[0].source).toBe('journal')
   })
+  it('garde les champs du geste EN STRUCTURE, en plus du détail à plat', () => {
+    const entries = buildModelActivityLog({
+      messages: [
+        {
+          role: 'assistant',
+          turnId: 'turn-1',
+          parts: [],
+          status: 'completed',
+          done: true
+        } as unknown as Msg
+      ],
+      journalByTurn: {
+        'turn-1': [
+          {
+            kind: 'command',
+            name: 'Bash',
+            actionId: 'a1',
+            args: { cmd: 'ls', cwd: '/tmp' },
+            sessionId: 'sess-9',
+            at: 1
+          },
+          { kind: 'result', actionId: 'a1', ok: true, data: { exit: 0 }, at: 2 }
+        ]
+      },
+      activity: [
+        { ts: '2026-09-01T10:00:00.000Z', kind: 'call', provider: 'x', model: 'm', costUsd: 0.5 }
+      ]
+    })
+    const action = entries.find((entry) => entry.kind === 'action')
+    expect(action?.fields).toMatchObject({
+      name: 'Bash',
+      actionId: 'a1',
+      sessionId: 'sess-9',
+      args: { cmd: 'ls', cwd: '/tmp' },
+      // La commande ET son résultat : la fusion ne perd ni les arguments ni les données.
+      data: { exit: 0 },
+      ok: true
+    })
+    expect(typeof action?.detail).toBe('string')
+    const usage = entries.find((entry) => entry.kind === 'usage')
+    expect(usage?.fields).toMatchObject({ provider: 'x', model: 'm', costUsd: 0.5 })
+  })
+})
+
+describe('les gestes DÉJÀ écrits par le journal ont leur propre catégorie', () => {
+  it('range prompt-system, usage et outcome hors du fourre-tout « Journal »', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('turn-1', [])],
+      journalByTurn: {
+        'turn-1': [
+          { kind: 'prompt-system', text: 'tu es un agent', at: 1 },
+          { kind: 'usage', inputTokens: 12, outputTokens: 3, costUsd: 0.04, at: 2 },
+          { kind: 'outcome', status: 'succeeded', at: 3 }
+        ]
+      }
+    })
+    const parKind = Object.fromEntries(entries.map((entry) => [entry.kind, entry]))
+    expect(entries.some((entry) => entry.kind === 'event')).toBe(false)
+    expect(parKind.prompt).toMatchObject({ label: 'Prompt système', source: 'journal' })
+    expect(parKind.prompt.detail).toContain('tu es un agent')
+    expect(parKind.usage).toMatchObject({ source: 'journal' })
+    expect(parKind.usage.detail).toContain('12')
+    expect(parKind.done).toMatchObject({ source: 'journal' })
+    expect(parKind.done.detail).toContain('succeeded')
+  })
+
+  it('garde le fourre-tout « Journal » pour un type FUTUR inconnu', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('turn-1', [])],
+      journalByTurn: { 'turn-1': [{ kind: 'quelque-chose-de-neuf', valeur: 42, at: 1 }] }
+    })
+    expect(entries[0]).toMatchObject({ kind: 'event', label: 'quelque-chose-de-neuf' })
+  })
+})
+
+describe('le raisonnement DURABLE ne doit ni disparaître ni faire doublon', () => {
+  const long = 'pensée '.repeat(2_000).trim()
+
+  it('garde la version ENTIÈRE du journal, pas la copie tronquée du tour', () => {
+    const message = {
+      role: 'assistant',
+      turnId: 'turn-1',
+      parts: [],
+      status: 'completed',
+      done: true,
+      reasoning: long.slice(-4_000)
+    } as unknown as Msg
+    const entries = buildModelActivityLog({
+      messages: [message],
+      journalByTurn: { 'turn-1': [{ kind: 'reasoning', text: long, at: 5 }] }
+    })
+    const pensees = entries.filter((entry) => entry.kind === 'reasoning')
+    expect(pensees).toHaveLength(1)
+    expect(pensees[0].source).toBe('journal')
+    expect(pensees[0].detail?.length).toBe(long.length)
+  })
+
+  it('garde la pensée du tour quand le journal a été nettoyé (au-delà de 7 jours)', () => {
+    const message = {
+      role: 'assistant',
+      turnId: 'turn-1',
+      parts: [{ kind: 'text', text: 'réponse' }],
+      status: 'completed',
+      done: true,
+      reasoning: 'pensée survivante'
+    } as unknown as Msg
+    const entries = buildModelActivityLog({ messages: [message], journalByTurn: {} })
+    const pensees = entries.filter((entry) => entry.kind === 'reasoning')
+    expect(pensees).toHaveLength(1)
+    expect(pensees[0]).toMatchObject({ source: 'thread', detail: 'pensée survivante' })
+  })
 })

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import type { BrainGraphRef } from '../../../main/viz/fs-brains'
 import { brainSubjectOf } from './graph-brain-categories'
+import { degre as degreDuNoeud, deuxiemeSaut } from './graph-neighborhood'
 import {
   layoutTree,
   pickVisibleLabels,
@@ -924,6 +925,17 @@ export function GraphView({
   const visualProfile = getGraphVisualProfile(visualMode)
   const motionProfile = graphMotionProfile()
   const linkedNodes = useMemo(() => (node ? linkedNodesFor(node.id, graph) : []), [graph, node])
+  // Le POIDS du noeud et son second cercle : deux chiffres deja portes par les liens charges,
+  // qui n'atteignaient jamais l'ecran.
+  const degreNoeud = useMemo(
+    () => (node ? degreDuNoeud(node.id, graph.links) : undefined),
+    [graph.links, node]
+  )
+  const sautsDeux = useMemo(() => {
+    if (!node) return []
+    const parId = new Map(graph.nodes.map((candidat) => [candidat.id, candidat]))
+    return deuxiemeSaut(node.id, graph.links, parId)
+  }, [graph.links, graph.nodes, node])
   const visualActiveThemes = node ? EMPTY_THEME_SELECTION : activeThemes
   const hoveredNodeIds = useMemo(() => new Set(hoveredNode ? [hoveredNode.id] : []), [hoveredNode])
   const selectedNodeIds = useMemo(
@@ -2265,6 +2277,8 @@ export function GraphView({
                 file={file}
                 fileErr={fileErr}
                 linkedNodes={linkedNodes}
+                degre={degreNoeud}
+                deuxiemeSaut={sautsDeux}
                 onRetry={() => void openNode(node)}
                 onNavigate={(nextNode) => openNode(nextNode)}
                 onRetract={
