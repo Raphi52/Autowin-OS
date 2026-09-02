@@ -1290,11 +1290,18 @@ export class ClaudeCliAdapter implements ProviderAdapter {
              * nourrit `watchdog.beat()` a chaque ligne de stdout, celles-ci comprises — et s'en
              * servait pour le laisser tourner sans jamais le dire a l'utilisateur.
              */
-            const cible = (filePath || command).slice(0, 120)
+            const cibleEntiere = filePath || command
+            const cible = cibleEntiere.slice(0, 120)
             // UNE SEULE LIGNE : ce libelle s'affiche dans l'en-tete du bloc « Reflexion » et dans son
             // corps deplie, ou chaque signe de vie occupe UNE ligne. Des retours a la ligne dans le
             // texte y inseraient des lignes vides et casseraient l'en-tete (constat du 2026-09-01).
-            queue.push({ delta: '', status: `${part.name}${cible ? ` · ${cible}` : ''}` })
+            // La coupure reste donc, mais elle ne decide plus de ce que la TRACE garde : `statusTarget`
+            // emporte la cible entiere quand le libelle l'a rognee (moignons mesures sur conv-130).
+            queue.push({
+              delta: '',
+              status: `${part.name}${cible ? ` · ${cible}` : ''}`,
+              ...(cible.length < cibleEntiere.length ? { statusTarget: cibleEntiere } : {})
+            })
           }
         }
       } else if (t === 'user') {

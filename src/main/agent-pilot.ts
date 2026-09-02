@@ -115,7 +115,13 @@ export type PilotEventVariant =
   /** Signe de vie d'une action LONGUE encore en cours : ne resout rien, remplace le precedent. */
   | { kind: 'action-progress'; actionId: string; text: string }
   /** Signe de vie TECHNIQUE du provider (outil, tache de fond, retry) — jamais du raisonnement. */
-  | { kind: 'provider-status'; text: string; iteration: number }
+  | {
+      kind: 'provider-status'
+      text: string
+      iteration: number
+      /** Cible ENTIERE quand `text` l'a coupee pour tenir sur une ligne (cf. `StreamChunk.statusTarget`). */
+      data?: { target: string }
+    }
   | {
       kind: 'result'
       actionId: string
@@ -1533,7 +1539,13 @@ export class AgentPilot {
             // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
             if (chunk.status) {
               // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.
-              emit({ kind: 'provider-status', text: chunk.status, iteration: i })
+              emit({
+                kind: 'provider-status',
+                text: chunk.status,
+                iteration: i,
+                // Le journal recopie `text` : sans cette cible entiere, il n'y garde qu'un moignon.
+                ...(chunk.statusTarget ? { data: { target: chunk.statusTarget } } : {})
+              })
               return
             }
             if (chunk.reasoning) {

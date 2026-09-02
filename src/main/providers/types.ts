@@ -186,6 +186,16 @@ export interface StreamChunk {
    * déclaration manquait, ce qui rendait le typecheck rouge sur origin/main.
    */
   status?: string
+  /**
+   * CIBLE ENTIÈRE de l'appel outil quand `status` a dû la couper pour tenir sur UNE ligne.
+   *
+   * `status` est un libellé d'ÉCRAN : l'en-tête « Réflexion » n'accepte qu'une ligne, d'où la coupure
+   * à 120 signes dans `claude.ts`. Ce même libellé finissait recopié dans le journal de tour (via
+   * `provider-status`), qui n'y trouvait donc plus qu'un moignon — mesuré sur conv-130, chemin coupé
+   * en plein milieu. Ce champ porte la trace COMPLÈTE à côté du libellé, sans rallonger l'affichage.
+   * Absent quand la cible tient déjà en entier dans `status`.
+   */
+  statusTarget?: string
   /** Artefacts structurés disponibles avant la fin du flux, si le supplier les émet ainsi. */
   artifacts?: ChatArtifact[]
 }
