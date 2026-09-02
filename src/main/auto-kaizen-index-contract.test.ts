@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -7,10 +7,21 @@ describe('branchement runtime Auto-Kaizen', () => {
   // Les assertions multi-lignes ci-dessous s'ecrivent avec `\n` et ne pouvaient donc JAMAIS
   // correspondre — le contrat d'exclusivite Watchdog etait rouge des sa naissance, sans rien
   // prouver. Normaliser ici garde les litteraux lisibles et rend le test independant du checkout.
-  const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8').replace(
-    /\r\n/g,
-    '\n'
-  )
+  //
+  // Le cablage NE VIT PLUS uniquement dans `index.ts` : le tour pilote a ete extrait dans
+  // `src/main/chat/`. Le contrat porte sur le PROCESS PRINCIPAL, pas sur un fichier precis --
+  // on lit donc index.ts ET les modules de `src/main/chat/`, sinon un simple deplacement de code
+  // fait rougir un contrat que le code respecte toujours (mesure du 2026-09-02).
+  const chatDir = join(process.cwd(), 'src/main/chat')
+  const chatFiles = existsSync(chatDir)
+    ? readdirSync(chatDir)
+        .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+        .map((f) => join(chatDir, f))
+    : []
+  const source = [join(process.cwd(), 'src/main/index.ts'), ...chatFiles]
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n')
+    .replace(/\r\n/g, '\n')
 
   it('observe les erreurs structurées du chat et de l’orchestration', () => {
     expect(source).toContain('incidentFromPilotEvent({')
