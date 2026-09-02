@@ -550,6 +550,28 @@ describe('widget Jarvis', () => {
       expect(c.textContent).toContain('Voix française installée')
     })
 
+    it('NOMME la voix neuronale dans la liste des voix une fois installée', async () => {
+      // Constat utilisateur du 2026-09-02 : « ya pas les nouvelles voix ». La voix installée ne
+      // figurait dans AUCUNE liste — elle passait devant les autres sans jamais s'afficher, donc
+      // rien ne prouvait à l'utilisateur qu'elle existait, et le réglage semblait sans effet.
+      brancherWhisper(true, {
+        piperEtat: vi.fn(async () => ({
+          installe: true,
+          binaire: 'C:/p/piper.exe',
+          voix: 'C:/p/fr.onnx',
+          racine: 'C:/p',
+          voixNom: 'fr_FR-siwis-medium.onnx',
+          megaoctets: 85
+        }))
+      })
+      const c = rendre()
+      await flush()
+      const liste = c.querySelector('[data-testid="jarvis-voix"]')
+      expect(liste, 'la liste des voix doit exister').not.toBeNull()
+      const entrees = [...(liste?.querySelectorAll('option') ?? [])].map((o) => o.textContent)
+      expect(entrees.join(' | ')).toContain('Piper')
+    })
+
     it('n’offre RIEN sur la voix tant que l’application ne sait pas répondre', async () => {
       // Sans cette garde, un poste où le canal n'existe pas afficherait un bouton mort.
       brancherWhisper(true)

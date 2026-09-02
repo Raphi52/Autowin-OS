@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { choisirVoix, oublierEtatPiper, parler, taireJarvis } from './jarvis-parole'
+import {
+  choisirVoix,
+  oublierEtatPiper,
+  parler,
+  taireJarvis,
+  VOIX_PIPER_URI
+} from './jarvis-parole'
 import { ecrireReglageVoix } from './jarvis-voix-reglage'
 import { basculerEcoute, ecouteInitiale, phraseDeJarvis } from './jarvis-voice'
 
@@ -188,6 +194,45 @@ describe('la voix NEURONALE (Piper) quand elle est installée', () => {
     })
     expect(await parler('Tout de suite.')).toBe(true)
     expect(moteur.speak).toHaveBeenCalledTimes(1)
+  })
+
+  it('respecte le CHOIX de l’utilisateur : une voix de Windows choisie n’est pas doublée par Piper', async () => {
+    // Le defaut ferme ici (constat utilisateur du 2026-09-02) : la voix neuronale passait devant
+    // TOUTES les autres des qu'elle etait installee. Le reglage affichait un choix qui ne changeait
+    // rien — un menu qui ment. Desormais Piper ne parle que s'il est CHOISI, ou en mode automatique.
+    const g = globalThis as unknown as { localStorage?: Storage }
+    const data: Record<string, string> = {}
+    g.localStorage = {
+      getItem: (k: string) => (k in data ? data[k] : null),
+      setItem: (k: string, v: string) => {
+        data[k] = v
+      }
+    } as unknown as Storage
+    ecrireReglageVoix(g.localStorage, { voixURI: 'fr-FR' })
+    const moteur = poserMoteur([voix('fr-FR')])
+    poserPiper(true)
+    expect(await parler('Tout de suite.')).toBe(true)
+    expect(sons, 'Piper ne doit PAS parler quand une autre voix est choisie').toHaveLength(0)
+    expect(moteur.speak).toHaveBeenCalledTimes(1)
+    delete g.localStorage
+  })
+
+  it('utilise Piper quand il est EXPLICITEMENT choisi dans la liste', async () => {
+    const g = globalThis as unknown as { localStorage?: Storage }
+    const data: Record<string, string> = {}
+    g.localStorage = {
+      getItem: (k: string) => (k in data ? data[k] : null),
+      setItem: (k: string, v: string) => {
+        data[k] = v
+      }
+    } as unknown as Storage
+    ecrireReglageVoix(g.localStorage, { voixURI: VOIX_PIPER_URI })
+    const moteur = poserMoteur([voix('fr-FR')])
+    poserPiper(true)
+    expect(await parler('Tout de suite.')).toBe(true)
+    expect(sons).toHaveLength(1)
+    expect(moteur.speak).not.toHaveBeenCalled()
+    delete g.localStorage
   })
 
   it('SE TAIT vraiment : la voix Piper en cours est coupée, pas seulement celle du système', async () => {

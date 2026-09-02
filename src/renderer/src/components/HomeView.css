@@ -771,7 +771,12 @@
   gap: 8px;
   height: 100%;
   padding: 11px 13px;
-  overflow: hidden;
+  /* LE WIDGET DEFILE. Reglages deplies, la liste des voix et les curseurs depassent la hauteur
+     de la tuile : en `overflow: hidden` ils etaient simplement COUPES, donc inatteignables. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(212, 169, 79, 0.45) transparent;
   border: 1px solid rgba(212, 169, 79, 0.2);
   border-radius: 10px;
   font-size: 12px;

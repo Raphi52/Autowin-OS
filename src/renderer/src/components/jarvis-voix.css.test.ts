@@ -40,3 +40,31 @@ describe('HomeView.css — la liste des voix de Jarvis est lisible', () => {
     }
   })
 })
+
+/**
+ * LE WIDGET DOIT DEFILER (constat utilisateur du 2026-09-02 : « ce widget doit etre scrollable »).
+ *
+ * Cause reelle : `.jarvis` etait en `overflow: hidden` avec une hauteur imposee. Reglages deplies,
+ * la liste des voix, les curseurs et le bouton d'essai passaient sous le bord et devenaient
+ * INATTEIGNABLES — rien ne permettait d'y descendre.
+ *
+ * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : remettre `overflow: hidden` sur `.jarvis`.
+ */
+describe('HomeView.css — le widget Jarvis defile', () => {
+  const css = readFileSync(new URL('./HomeView.css', import.meta.url), 'utf8').replace(
+    /\/\*[\s\S]*?\*\//g,
+    ''
+  )
+  const corps = ((): string => {
+    const debut = css.indexOf('.jarvis {')
+    expect(debut, 'la règle .jarvis doit exister').toBeGreaterThan(-1)
+    return css.slice(debut, css.indexOf('}', debut))
+  })()
+
+  it('laisse le contenu vertical defiler au lieu de le couper', () => {
+    expect(corps).toMatch(/overflow-y:\s*auto\s*;/)
+    expect(corps, 'un overflow global caché reprendrait le découpage').not.toMatch(
+      /overflow:\s*hidden\s*;/
+    )
+  })
+})
