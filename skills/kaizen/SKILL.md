@@ -169,6 +169,8 @@ The deliverable is the STATE table (presented in PLAIN words) + the integrated e
 
 **Done** — recap in plain words: **d'abord le résultat de la TÂCHE terminée (étape 0) avec sa preuve**, puis root cause, what was integrated + where, what was VERIFIED (the out-of-model signal), **the non-recurrence replay per edit** (situation rejouée → résultat: bloqué / corrigé / non rejoué), caveats. **Never report "integrated/done"** without the verification artifact. The net is the commit log: each edit revertable alone.
 
+**Closing condition — EXERCISE THE CHANGED PATH IN AUTOWIN OS ITSELF.** A kaizen is not done when the files are edited: it is done when the modified behavior has been RUN in the app (invoke the touched skill/command in a real conversation, or trigger the modified injection/hook through the app), and the observed result is reported here in one line (`exercised: <what was run in the app> → <what was observed>`). If it truly cannot be exercised — the app cannot be driven from this run, the path needs a human action you don't have — NAME the impediment and mark the result `non exercé`, never `done`. Motive, measured on conv-105: the task's own edits were committed and the closing control still refused the run — « aucun /kaizen réel n'a été lancé » — because nothing had been tried inside Autowin OS.
+
 ## Don't
 - **Abandonner la tâche pour faire l'audit** — kaizen invoqué au milieu d'un travail ne remplace pas ce travail : la tâche est finie et vérifiée d'abord, l'amélioration comportementale ensuite, dans la même passe. Rendre un kit amélioré et un livrable manquant est un échec.
 - **Install a rule without having named the target behavior** — a prohibition derived from the symptom (« ne fais plus X ») leaves nothing to DO in its place, and gets violated the next session. Name the good user experience first, then write the reflex that produces it.
@@ -177,7 +179,7 @@ The deliverable is the STATE table (presented in PLAIN words) + the integrated e
 - **Trust a lens's word** — adjudicate; reject a finding that re-flags a deliberate decision or overstates; edit on the REAL file, never a sub-agent's report.
 - **Prefer a passive fiche to a WIRED trigger** — loading ≠ applying; a hook + hard rule beats a memory fiche alone.
 - **Declare a finding treated without the non-recurrence replay** — « ça ne doit pas se reproduire » is the bar: an edit whose original failing scenario was never replayed against it is "installé, non prouvé", not treated. Restating a rule that already failed once is not an escalation.
-- **Report "integrated/done"** without the out-of-model verification (`test-hooks.ps1`) AND `sync-kit.ps1` propagation AND the `kaizen-treated.jsonl` line.
+- **Report "integrated/done"** without the out-of-model verification (`test-hooks.ps1`) AND `sync-kit.ps1` propagation AND the `kaizen-treated.jsonl` line AND the real exercise of the changed path INSIDE Autowin OS (conv-105: edits committed, closing control refused — « aucun /kaizen réel n'a été lancé »). Files edited ≠ behavior exercised.
 
 ## Engine & reflexes
 - Scoring and loop mechanics are CANONICAL in `~/.claude/skills/_engine/ENGINE.md`. Kaizen now carries the BEHAVIORAL audit itself (step 2 — absorbed from judge on 2026-09-01) plus its own delta: target-location, the self-applied integrate step, sync-kit, and the one-commit-per-edit constraint. **On divergence with the engine, the engine wins.**
