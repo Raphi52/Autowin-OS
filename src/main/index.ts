@@ -21,6 +21,7 @@ import { registerRolesIpc } from './ipc/roles'
 import { registerModelsIpc } from './ipc/models'
 import { registerFabricIpc } from './ipc/fabric'
 import { registerCapabilitiesIpc } from './ipc/capabilities'
+import { registerWorkflowProfilesIpc } from './ipc/workflow-profiles'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -64,7 +65,6 @@ import {
 import { app, shell, BrowserWindow, dialog, ipcMain } from 'electron'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { buildExport, readImport, suggestedFileName } from './workflow-transfer'
 import { createHash, randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import type { ExecutionEvidence, ProviderAdapter } from './providers/types'
@@ -278,14 +278,8 @@ import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
 import { resumeActionFor, runIsProducing, waitUntilRunCanResume } from './runs/run-reattach'
 import {
   activeWorkflowProfile,
-  loadWorkflowProfiles,
-  removeWorkflowProfile,
-  saveWorkflowProfiles,
   seedDefaultWorkflows,
-  selectWorkflowProfile,
-  upsertWorkflowProfile,
   WorkflowRefusalMailbox,
-  type WorkflowProfile,
   type WorkflowProfilesFile
 } from './workflow-profiles'
 import { overrideFor, registerWorkflowBenchIpc } from './workflow-bench-ipc'
@@ -2036,92 +2030,13 @@ Le fil reprend ensuite normalement.`
   // vide, et le moteur n'aurait rien à porter.
   appliquerWorkflowActif(seedDefaultWorkflows())
 
-  ipcMain.handle('os:workflowProfiles:get', (event) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    return loadWorkflowProfiles()
-  })
-  ipcMain.handle('os:workflowProfiles:notice', (event) => {
-    assertTrustedRendererSender(event, 'Workflow profile notice')
-    return workflowRefusalMailbox.peek()
-  })
-  ipcMain.handle('os:workflowProfiles:acknowledgeNotice', (event, rawId: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow profile notice acknowledgement')
-    if (typeof rawId !== 'number' || !Number.isSafeInteger(rawId)) {
-      throw new Error('Identifiant de notice invalide')
-    }
-    return workflowRefusalMailbox.acknowledge(rawId)
-  })
-  ipcMain.handle('os:workflowProfiles:upsert', (event, raw: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    const next = upsertWorkflowProfile(loadWorkflowProfiles(), raw as WorkflowProfile)
-    saveWorkflowProfiles(next)
-    // Éditer le graphe du workflow ACTIF doit prendre effet tout de suite : sinon le moteur
-    // continuerait de jouer la version d'avant, sans que rien ne le signale.
-    appliquerWorkflowActif(next)
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return next
-  })
-  ipcMain.handle('os:workflowProfiles:remove', (event, rawId: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    const next = removeWorkflowProfile(loadWorkflowProfiles(), guardString(rawId, 'id'))
-    saveWorkflowProfiles(next)
-    // Supprimer le workflow actif doit le retirer du moteur, pas le laisser piloter un profil mort.
-    appliquerWorkflowActif(next)
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return next
-  })
-  ipcMain.handle('os:workflowProfiles:select', (event, rawId: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    const id = rawId === null ? null : guardString(rawId, 'id')
-    const next = selectWorkflowProfile(loadWorkflowProfiles(), id)
-    saveWorkflowProfiles(next)
-    appliquerWorkflowActif(next)
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return next
-  })
-  /**
-   * Sortir un ou tous les workflows vers un fichier. Un workflow est une façon de travailler : elle
-   * se partage et se versionne, elle ne doit pas rester prisonnière d'un %APPDATA%.
-   */
-  ipcMain.handle('os:workflowProfiles:export', async (event, rawId: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    const fichier = loadWorkflowProfiles()
-    const id = rawId === null || rawId === undefined ? null : guardString(rawId, 'id')
-    const choisis = id ? fichier.profiles.filter((p) => p.id === id) : fichier.profiles
-    if (!choisis.length) return { ok: false as const, reason: 'aucun workflow à exporter' }
-    const cible = await pickSavePath(event.sender, suggestedFileName(id ? choisis[0] : undefined))
-    if (!cible) return { ok: false as const, reason: 'annulé' }
-    const paquet = buildExport(choisis, new Date().toISOString())
-    writeFileSync(cible, JSON.stringify(paquet, null, 2), 'utf8')
-    return { ok: true as const, path: cible, count: choisis.length }
-  })
-  /**
-   * Faire entrer des workflows depuis un fichier. Le contenu n'est JAMAIS cru : il passe par le même
-   * assainisseur que la relecture locale, et un identifiant en collision est ré-attribué plutôt que
-   * d'écraser en silence le workflow d'à côté.
-   */
-  ipcMain.handle('os:workflowProfiles:import', async (event) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    const choisi = await pickPath(event.sender, 'openFile')
-    if (!choisi) {
-      return { ok: false as const, reason: 'annulé', file: loadWorkflowProfiles() }
-    }
-    let brut: unknown
-    try {
-      // Le BOM est retiré : sous Windows, presque tout ce qui écrit un JSON à la main en pose un.
-      brut = JSON.parse(readFileSync(choisi, 'utf8').replace(/^\uFEFF/, ''))
-    } catch {
-      return { ok: false as const, reason: 'fichier illisible', file: loadWorkflowProfiles() }
-    }
-    let fichier = loadWorkflowProfiles()
-    const { profiles, rejected } = readImport(brut, fichier.profiles)
-    for (const profil of profiles) fichier = upsertWorkflowProfile(fichier, profil)
-    if (profiles.length) {
-      saveWorkflowProfiles(fichier)
-      appliquerWorkflowActif(fichier)
-      broadcast({ type: 'refresh', scope: 'workflows' })
-    }
-    return { ok: true as const, imported: profiles.length, rejected, file: fichier }
+  // Les canaux des workflows nommés vivent dans src/main/ipc/workflow-profiles.ts.
+  registerWorkflowProfilesIpc({
+    workflowRefusalMailbox,
+    appliquerWorkflowActif,
+    pickPath,
+    pickSavePath,
+    broadcast
   })
   // La validité d'un graphe composé. Calculée côté main pour que le canevas et l'exécution partagent
   // exactement la même règle — deux vérités divergeraient tôt ou tard.

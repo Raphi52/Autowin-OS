@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 import { describe, expect, it, vi } from 'vitest'
 import { overrideFor, registerWorkflowBenchIpc } from './workflow-bench-ipc'
 import type { OrchestrationResult } from './orchestrator'
@@ -95,7 +96,9 @@ describe('canal de confrontation', () => {
     )
     await vi.waitFor(() => expect(runOrchestration).toHaveBeenCalledTimes(1))
 
-    await expect(handlers.get('os:workflowBench:cancel')!({ sender }, undefined)).resolves.toBe(true)
+    await expect(handlers.get('os:workflowBench:cancel')!({ sender }, undefined)).resolves.toBe(
+      true
+    )
     await running
     expect(observedSignal?.aborted).toBe(true)
   })
@@ -310,7 +313,12 @@ describe('canal de confrontation', () => {
 describe('le canal est réellement branché à l’application', () => {
   // Un module parfait que personne n'enregistre n'existe pas pour l'utilisateur : ce test lit la
   // source du point d'entrée, seul endroit où le branchement peut être constaté sans lancer Electron.
-  const entree = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+  //
+  // « point d'entrée » = LA ZONE du process principal, pas `index.ts` seul : les canaux des
+  // workflows nommés en ont été extraits vers `src/main/ipc/workflow-profiles.ts` le 2026-09-02, et
+  // un contrat qui lit le point d'entrée doit suivre le déménagement — sinon il rougit alors que le
+  // branchement est INTACT.
+  const entree = sourceProcessPrincipal()
 
   it('index.ts importe et appelle registerWorkflowBenchIpc', () => {
     // L'import est groupé depuis que `overrideFor` sert AUSSI à poser le workflow actif du chat :
@@ -335,9 +343,23 @@ describe('le canal est réellement branché à l’application', () => {
     // Le choix venu de la vue est marqué EXPLICITE : sans ce drapeau, l'heuristique de
     // proportionnalité le désactivait en silence sur une demande jugée légère.
     expect(entree).toMatch(/explicit: true/)
-    // Les trois chemins qui changent l'actif doivent le republier, sinon l'un d'eux ment.
-    const applications = entree.match(/appliquerWorkflowActif\(/g) ?? []
-    expect(applications.length).toBeGreaterThanOrEqual(4) // définition + ouverture + select + upsert + remove
+    // Les chemins qui changent l'actif doivent le republier, sinon l'un d'eux ment. Un COMPTE
+    // global ne le prouvait pas : en retirer un laissait le total au-dessus du seuil. On vérifie
+    // donc CHAQUE canal d'écriture dans sa propre tranche.
+    for (const canal of [
+      'os:workflowProfiles:upsert',
+      'os:workflowProfiles:remove',
+      'os:workflowProfiles:select',
+      'os:workflowProfiles:import'
+    ]) {
+      const debut = entree.indexOf(`ipcMain.handle('${canal}'`)
+      expect(debut, canal).toBeGreaterThanOrEqual(0)
+      const suivant = entree.indexOf('ipcMain.handle(', debut + 1)
+      const tranche = entree.slice(debut, suivant < 0 ? entree.length : suivant)
+      expect(tranche, canal).toContain('appliquerWorkflowActif(')
+    }
+    // Et l'ouverture le pose AUSSI, avant tout changement : sinon la première session ne porte rien.
+    expect(entree).toContain('appliquerWorkflowActif(seedDefaultWorkflows())')
   })
 
   it('index.ts relie un override run-scoped à l’OS — sans ça, phases et consignes n’arrivent nulle part', () => {
