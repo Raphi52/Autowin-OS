@@ -1017,6 +1017,12 @@ export function sandboxForPhase(
   // `salvage` trie le travail (fusionner / jeter / laisser) : en lecture seule il REDIGERAIT ce
   // qu il ferait, exactement le theatre que ce depot proscrit. Il ecrit donc, aux memes conditions
   // que build/clean — une tache de MUTATION, et rien d autre.
+  // `kaizen` APPLIQUE ses propres editions : sa consigne de phase le lui ordonne (`phase-briefs.ts`
+  // : « les editions elles-memes, APPLIQUEES... kaizen n'attend aucun accord humain ») et le contrat
+  // racine le classe deja comme phase qui ecrit (`root-execution-contract.ts`). En lecture seule il
+  // ne pouvait que REDIGER ce qu'il ferait. Ses droits ne dependent pas du verbe de la demande : une
+  // retrospective est TOUJOURS formulee comme une lecture, alors que son livrable est une correction.
+  if (phase === 'kaizen') return 'danger-full-access'
   return isMutationTask(task) && (phase === 'build' || phase === 'clean' || phase === 'salvage')
     ? 'danger-full-access'
     : 'read-only'

@@ -104,6 +104,16 @@ describe('`salvage` peut REELLEMENT trier', () => {
     expect(sandboxForPhase('corrige le bug de rendu', 'scout')).toBe('read-only')
   })
 
+  it('`kaizen` ecrit, meme si sa demande est formulee comme une lecture', () => {
+    // Sa consigne de phase lui ORDONNE d'appliquer ses editions ; en lecture seule cet ordre serait
+    // une promesse que la machine refuse. Une retrospective se formule toujours comme une lecture.
+    expect(sandboxForPhase('/kaizen audite cette conversation', 'kaizen')).toBe(
+      'danger-full-access'
+    )
+    // Falsifieur : le droit vient de la PHASE, il ne fuit pas vers les autres.
+    expect(sandboxForPhase('/kaizen audite cette conversation', 'judge')).toBe('read-only')
+  })
+
   it('la skill `salvage` charge de vraies instructions', () => {
     expect(skillInstruction('salvage').length).toBeGreaterThan(500)
   })
