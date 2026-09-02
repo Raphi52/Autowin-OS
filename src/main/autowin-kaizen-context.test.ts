@@ -513,3 +513,48 @@ describe('dossier de preuve /kaizen — budget reellement utilise', () => {
     expect(snapshot.runs).toHaveLength(4)
   })
 })
+
+describe('dossier de preuve /kaizen — les RUN survivent au resserrage', () => {
+  /*
+    Mesure sur le dossier REEL de conv-105 (tsx sur le code du depot) : `runs: 0`, et
+    `troncature.runs = 4`. Les QUATRE RUN.md etaient jetes en entier, donc kaizen n'avait
+    AUCUN RUN sous les yeux. Cause : l'ajustement au budget ne sait que SUPPRIMER un element,
+    jamais le RESUMER ; un RUN pesant jusqu'a 4 000 signes est le plus lourd, donc le premier
+    sacrifie des que le depassement est gros.
+  */
+  it('resume les RUN au lieu de les jeter quand le depassement est gros', () => {
+    const task = buildAutowinKaizenTask('/kaizen', {
+      conversation: {
+        id: 'conv-runs',
+        title: 'RUN',
+        messages: Array.from({ length: 24 }, (_, index) => ({
+          role: 'user' as const,
+          content: 'm'.repeat(700),
+          ts: index
+        }))
+      },
+      activity: Array.from({ length: 50 }, (_, index) => ({
+        ts: new Date(index).toISOString(),
+        kind: 'exec',
+        label: 'phase-' + index,
+        text: 't'.repeat(600)
+      })),
+      brainTraces: [],
+      causalEvents: [],
+      runs: Array.from({ length: 4 }, (_, index) => ({
+        path: 'C:/R' + index + '/RUN.md',
+        content: String.fromCharCode(97 + index).repeat(4_000)
+      }))
+    })
+    const snapshot = JSON.parse(task.slice(task.indexOf('{'), task.lastIndexOf('}') + 1))
+
+    expect(task.length).toBeLessThanOrEqual(28_000)
+    // Les 4 RUN sont TOUS presents, resumes et non supprimes.
+    expect(snapshot.runs).toHaveLength(4)
+    for (const run of snapshot.runs as Array<{ path: string; content: string }>) {
+      expect(run.content.length).toBeGreaterThanOrEqual(1_200)
+    }
+    // Aucun RUN compte comme ecarte.
+    expect(snapshot.troncature?.runs ?? 0).toBe(0)
+  })
+})
