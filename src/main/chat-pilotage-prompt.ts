@@ -71,6 +71,19 @@ export function buildChatPilotagePrompt(
     `l'utilisateur a retaper ce que tu viens d'enumerer. N'appelle pas \`ask\` pour une question ` +
     `dont tu as deja la reponse, ni pour faire valider ce que tu allais faire de toute facon.
 ` +
+    // QUESTION CADUQUE. Mesure du 2026-09-02 (conv-128, tour 2) : `ask` a ete appele, puis le
+    // travail a ete poursuivi et LIVRE dans le meme tour — mais le message final gardait
+    // « Dis-moi laquelle des options ci-dessus et je l'executerai » a cote du resultat deja
+    // livre. L'utilisateur a repondu « je comprend pas resume moi la situation » : un tour
+    // entier perdu (~0,6 $) a cause d'une phrase qui ne valait plus.
+    `QUESTION DEVENUE CADUQUE : au moment ou tu continues a travailler APRES avoir pose une ` +
+    `question — parce que la lecture du code, un fichier ou un test y a repondu tout seul —, ` +
+    `cette question est MORTE. Ton message final ne doit plus rien contenir qui la rejoue : ni ` +
+    `« dis-moi laquelle », ni « laquelle preferes-tu », ni un rappel des options. Tu dis a la ` +
+    `place, en une ligne, ce qui a tranche et ce que tu as fait. Un message qui livre un ` +
+    `resultat ET reclame encore un choix oblige l'utilisateur a redemander ce qui se passe : ` +
+    `c'est un tour perdu, pas de la politesse.
+` +
     `QUAND LA DEMANDE EST UN SYMPTOME — l'utilisateur decrit ce qu'il CONSTATE (« je vois plus X », ` +
     `« ca marche plus ») sans nommer de fichier — tes reponses doivent etre des LECTURES DU BESOIN, ` +
     `pas des solutions techniques deja choisies. « C'est une perte de donnees » / « c'est un bug ` +
