@@ -2148,12 +2148,20 @@ export function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function renameConv(c: Conv): Promise<void> {
-    const t = prompt('Nouveau titre', c.title)
-    if (t && t.trim()) {
-      await window.api.conversationsRename(c.id, t.trim())
-      await refreshConvs()
+  function renameConv(c: Conv): void {
+    setRenameCandidate({ conv: c, value: c.title })
+  }
+  async function confirmRenameConv(): Promise<void> {
+    const candidate = renameCandidate
+    if (!candidate) return
+    const titre = candidate.value.trim()
+    if (!titre || titre === candidate.conv.title) {
+      setRenameCandidate(null)
+      return
     }
+    setRenameCandidate(null)
+    await window.api.conversationsRename(candidate.conv.id, titre)
+    await refreshConvs()
   }
   async function removeConv(c: Conv): Promise<void> {
     setDeleteCandidate(c)
