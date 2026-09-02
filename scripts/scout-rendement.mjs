@@ -7,7 +7,7 @@
  * REPRISES (l'utilisateur redemande la meme chose). Rend un rapport Markdown.
  *
  * Aucune ecriture : le script n'ouvre que .autowin-data/<app>/ en lecture.
- * Usage : node scripts/scout-rendement.mjs [--data <dir>] [--top N] [--json]
+ * Usage : node scripts/scout-rendement.mjs [--data <dir>] [--top N] [--json] [--depuis <YYYY-MM-DD>]
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -17,6 +17,15 @@ const argOf = (n, d) => { const i = args.indexOf(n); return i >= 0 && args[i + 1
 const DATA = path.resolve(argOf('--data', path.join('.autowin-data', 'autowin-os')))
 const TOP = Number(argOf('--top', '15'))
 const AS_JSON = args.includes('--json')
+// FENETRE D'OBSERVATION : `--depuis 2026-09-02` ne garde que les conversations creees ce jour-la
+// ou apres. Le seuil est MINUIT LOCAL (pas de suffixe `Z`) : une date tapee par un humain designe
+// son jour a lui, pas un jour UTC decale de son fuseau.
+const DEPUIS = argOf('--depuis', '')
+const DEPUIS_MS = DEPUIS ? Date.parse(`${DEPUIS}T00:00:00`) : null
+if (DEPUIS && !Number.isFinite(DEPUIS_MS)) {
+  console.error(`--depuis attend une date YYYY-MM-DD, recu : ${DEPUIS}`)
+  process.exit(2)
+}
 
 const readJson = (p, d) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return d } }
 const readJsonl = (p) => {
@@ -26,9 +35,18 @@ const readJsonl = (p) => {
   } catch { return [] }
 }
 
-const convs = readJson(path.join(DATA, 'conversations.json'), [])
-if (!Array.isArray(convs) || convs.length === 0) {
+const corpus = readJson(path.join(DATA, 'conversations.json'), [])
+if (!Array.isArray(corpus) || corpus.length === 0) {
   console.error(`Aucune conversation lisible sous ${DATA}`)
+  process.exit(2)
+}
+// Une conversation SANS `createdAt` lisible ne peut pas etre prouvee dans la fenetre : elle sort.
+// On ne devine pas une date de creation a partir du premier message.
+const convs = DEPUIS_MS === null
+  ? corpus
+  : corpus.filter((c) => Number.isFinite(Number(c.createdAt)) && Number(c.createdAt) >= DEPUIS_MS)
+if (convs.length === 0) {
+  console.error(`Aucune conversation creee le ${DEPUIS} ou apres sous ${DATA}`)
   process.exit(2)
 }
 
@@ -154,6 +172,7 @@ rows.sort((a, b) => b.gaspillage - a.gaspillage)
 
 const tot = (k) => rows.reduce((s, r) => s + r[k], 0)
 const summary = {
+  depuis: DEPUIS || null,
   conversations: rows.length,
   toursUtilisateur: tot('tours'),
   reprises: tot('reprises'),
@@ -171,6 +190,9 @@ if (AS_JSON) { console.log(JSON.stringify({ summary, rows }, null, 2)); process.
 
 const fmt = (n) => String(n)
 console.log(`# Rendement du corpus — ${DATA}\n`)
+// La fenetre doit se lire SUR le rapport : un tableau filtre qui ne dit pas qu'il l'est se fait
+// comparer a un tableau complet, et l'ecart passe pour un resultat.
+if (DEPUIS) console.log(`Filtre: conversations créées **depuis le ${DEPUIS}** (${summary.conversations} sur ${corpus.length} du corpus)\n`)
 console.log(`Conversations: **${summary.conversations}** · tours utilisateur: **${summary.toursUtilisateur}** · reprises: **${summary.reprises}** (taux ${(summary.tauxRepriseGlobal * 100).toFixed(1)} %)`)
 console.log(`Coût total mesuré: **$${summary.coutTotalUsd}** · médiane/conversation: $${summary.coutMedianParConversation} · temps modèle: ${summary.minutesModele} min · demandes initiales floues: ${summary.demandesFloues}\n`)
 console.log(`## Top ${Math.min(TOP, rows.length)} par gaspillage (coût pondéré par le taux de reprise)\n`)
