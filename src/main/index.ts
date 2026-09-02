@@ -4884,6 +4884,7 @@ Le fil reprend ensuite normalement.`
             inputTokens: turnUsage?.inputTokens,
             outputTokens: turnUsage?.outputTokens,
             costUsd: turnUsage?.costUsd,
+            turnId,
             durationMs: turnDurationMs,
             text: (streamedSpoken || spoken.join('\n') || etiquettesAction.join('\n')).slice(0, 600)
           })

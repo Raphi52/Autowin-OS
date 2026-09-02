@@ -123,6 +123,9 @@ export function persistChatUsageSettlement(
       outputTokens,
       cacheReadTokens,
       costUsd,
+      // Rattachement EXACT du cout de chat a son tour : la valeur est COPIEE de `input.turnId`,
+      // deja utilisee pour la trace juste en dessous. Sans elle, /rendement devinait par l'heure.
+      turnId: input.turnId,
       durationMs: input.durationMs,
       text: settlementText
     },
