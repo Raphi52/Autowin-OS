@@ -55,6 +55,7 @@ import {
   messageKey
 } from './chat-message-keys'
 import { promptDeRelanceGratuite } from './auto-relance'
+import { deciderRelanceAuto } from './chat-auto-mode'
 import { reprendreApresRedemarrage } from './chat-reprise'
 import type {
   AsstMsg,
@@ -281,6 +282,20 @@ export function ChatView({
   const composerRef = useRef<ChatComposerHandle | null>(null)
   /** Seule retombée d'une frappe sur la vue : vide ↔ non-vide (la home s'y accroche). */
   const [brouillonPresent, setBrouillonPresent] = useState(false)
+  /*
+   * MODE AUTO — « renvoie tout seul la suite proposée jusqu'à ce qu'il ne reste rien ».
+   *
+   * Cadrage utilisateur (2026-09-02) : l'interrupteur est dans la barre de gauche et le mode reste
+   * ACTIF jusqu'à ce qu'on le coupe — pas de plafond de tours, pas d'extinction au changement de
+   * fil. Il s'applique donc à la conversation qu'on a sous les yeux, quelle qu'elle soit.
+   * Toute la décision d'envoyer vit dans `chat-auto-mode.ts` (fonction pure testée).
+   */
+  const [autoActif, setAutoActif] = useState(false)
+  const [autoNotice, setAutoNotice] = useState<string | null>(null)
+  /** Dernier tour DÉJÀ traité par la boucle : un re-rendu du même tour ne renvoie rien. */
+  const autoDernierTourRef = useRef<string | null>(null)
+  /** Dernier texte envoyé automatiquement : la même suite deux fois = boucle, on coupe. */
+  const autoDernierPromptRef = useRef<string | null>(null)
   /*
    * Les suppositions du cadrage en cours, par conversation. Vivantes seulement : elles viennent d'un
    * evenement de run, disparaissent quand l'utilisateur les masque ou quand un nouveau cadrage
@@ -2513,6 +2528,49 @@ export function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy, activeId])
 
+  /**
+   * LA BOUCLE DU MODE AUTO. Fin de tour ⇒ on relit la clôture de l'agent et on renvoie la suite
+   * qu'il propose, jusqu'à ce que sa rubrique « 👉 Recommandé » dise « rien ».
+   *
+   * Rien n'est décidé ici : `deciderRelanceAuto` tranche, cet effet exécute. Un envoi automatique
+   * coûte un tour payant : sa condition ne doit pas être éparpillée dans la vue.
+   */
+  useEffect(() => {
+    if (!autoActif || !activeId) return
+    const decision = deciderRelanceAuto({
+      actif: true,
+      occupe: busy,
+      fil: messages,
+      dernierTourTraite: autoDernierTourRef.current,
+      dernierPromptEnvoye: autoDernierPromptRef.current,
+      brouillonPresent
+    })
+    if (decision.action === 'attendre') return
+    if (decision.action === 'arreter') {
+      setAutoActif(false)
+      setAutoNotice(decision.message)
+      return
+    }
+    autoDernierTourRef.current = decision.signature
+    autoDernierPromptRef.current = decision.texte
+    // Comme le vidage de file : ce n'est pas un geste de l'utilisateur, le composer n'est pas touché.
+    void send(decision.texte, { keepComposerDraft: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoActif, activeId, busy, messages, brouillonPresent])
+
+  /** Bascule du mode auto : à l'allumage, l'anti-doublon et l'anti-boucle repartent de zéro. */
+  function basculerModeAuto(): void {
+    if (autoActif) {
+      setAutoActif(false)
+      setAutoNotice('Mode auto arrêté.')
+      return
+    }
+    autoDernierTourRef.current = null
+    autoDernierPromptRef.current = null
+    setAutoNotice(null)
+    setAutoActif(true)
+  }
+
   // Callback STABLE (le row est memo'd — une ref inline casserait la mémoïsation).
   const forkRef = useRef(forkFromMessage)
   forkRef.current = forkFromMessage
@@ -3464,6 +3522,30 @@ export function ChatView({
               ×
             </button>
           )}
+        </div>
+        {/* MODE AUTO : la boucle est payante, son état reste LISIBLE ici, et l'arrêt est à un clic
+            du même bouton. Une fois allumé, il tient jusqu'à ce qu'on le coupe. */}
+        <div className="conv-auto" data-testid="conv-auto">
+          <button
+            type="button"
+            className={`conv-auto-toggle${autoActif ? ' actif' : ''}`}
+            data-testid="conv-auto-toggle"
+            aria-pressed={autoActif}
+            onClick={() => basculerModeAuto()}
+            title={
+              autoActif
+                ? 'Arrêter le mode auto'
+                : "Mode auto : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »"
+            }
+          >
+            <span className="conv-auto-dot" aria-hidden="true" />
+            {autoActif ? 'Mode auto : actif' : 'Mode auto'}
+          </button>
+          {autoNotice ? (
+            <span className="conv-auto-notice" data-testid="conv-auto-notice">
+              {autoNotice}
+            </span>
+          ) : null}
         </div>
         {/*
           La barre n'existe QUE pendant une sélection en cours : hors de ce moment elle n'offrait

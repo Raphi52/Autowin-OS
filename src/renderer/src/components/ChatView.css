@@ -3586,3 +3586,45 @@ ol.md-list li {
     box-shadow: 0 0 0 5px rgba(239, 69, 88, 0);
   }
 }
+
+/* MODE AUTO (barre de gauche) : allumé, il renvoie tout seul la suite proposée jusqu'à « rien ».
+   Actif jusqu'à désactivation — son état doit donc rester visible en permanence. */
+.conv-auto {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 var(--s2) var(--s2);
+}
+.conv-auto-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.conv-auto-toggle:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.conv-auto-toggle .conv-auto-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+}
+.conv-auto-toggle.actif {
+  border-color: #d4a94f;
+  color: #e3ba55;
+}
+.conv-auto-toggle.actif .conv-auto-dot {
+  background: #d4a94f;
+}
+.conv-auto-notice {
+  font-size: 11px;
+  opacity: 0.75;
+}
