@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 
@@ -116,5 +116,21 @@ export function loadConvActivity(convId: string, root = convActivityRoot()): Con
       .filter((e): e is ConvActivityEntry => e !== null)
   } catch {
     return []
+  }
+}
+
+/**
+ * Supprime le journal d'activité d'une conversation. Appelé par la suppression (unitaire ou en
+ * lot) : sans cela, `activity/conv-N.jsonl` survivait à la conversation et son contenu remontait
+ * dans une future conversation réutilisant l'identifiant.
+ */
+export function removeConvActivity(convId: string, root = convActivityRoot()): boolean {
+  try {
+    const p = fileFor(convId, root)
+    if (!existsSync(p)) return false
+    unlinkSync(p)
+    return true
+  } catch {
+    return false
   }
 }

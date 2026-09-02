@@ -23,6 +23,7 @@
 import { ipcMain } from 'electron'
 import { LOT_SUPPRESSION_MAX } from '../store/conversations'
 import { removeConversationTurnJournals } from '../runs/turn-journal'
+import { removeConvActivity } from '../activity/conv-activity'
 import { appendConvActivity } from '../activity/conv-activity'
 import { deletePromptCalls } from '../activity/prompt-observability'
 import { assertTrustedRendererSender } from '../ipc-senders'
@@ -199,6 +200,7 @@ export function registerConversationsIpc({
       causalTrace.deleteConversation(id)
       deletePromptCalls(id)
       removeConversationTurnJournals(turnJournalRoot, id)
+      removeConvActivity(id)
       broadcast({ type: 'refresh', scope: 'conversations' })
     }
     return removed
@@ -222,6 +224,7 @@ export function registerConversationsIpc({
       causalTrace.deleteConversation(id)
       deletePromptCalls(id)
       removeConversationTurnJournals(turnJournalRoot, id)
+      removeConvActivity(id)
     }
     if (removed.length > 0) broadcast({ type: 'refresh', scope: 'conversations' })
     return removed
