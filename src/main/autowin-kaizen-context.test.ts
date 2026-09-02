@@ -54,7 +54,11 @@ describe('buildAutowinKaizenTask', () => {
     expect(task).toContain('"injectedChars":450')
     expect(task).toContain('preuve manquante')
     expect(task).toContain('Status: RED')
-    expect(task).toContain('lecture seule')
+    // La consigne doit dire d'APPLIQUER (SKILL.md:40/97/146), pas de proposer et attendre.
+    expect(task).toContain('Applique')
+    expect(task).toContain('un commit par édition')
+    expect(task).not.toContain('lecture seule')
+    expect(task).not.toContain('faire approuver')
     expect(isMutationTask(task)).toBe(false)
   })
 
@@ -170,7 +174,7 @@ describe('dossier de preuve /kaizen — intégrité', () => {
     const dossier = JSON.parse(json) as { source: string; conversation: { id: string } }
     expect(dossier.source).toBe('autowin-os')
     expect(dossier.conversation.id).toBe('conv-8')
-    expect(task.trimEnd().endsWith('approuver.')).toBe(true)
+    expect(task.trimEnd().endsWith('revert.')).toBe(true)
     expect(isMutationTask(task)).toBe(false)
   })
 
@@ -239,6 +243,140 @@ describe('dossier de preuve /kaizen — intégrité', () => {
         'RUN b-plus',
         'RUN a-recent'
       ])
+    } finally {
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+})
+
+/*
+  TERRAIN — harnais des 4 défauts du dossier de preuve /kaizen qui tiennent encore.
+  (Le 5e, la coupe au milieu du JSON, est déjà traité par `ajusterAuBudget`.)
+  Chaque test affirme le comportement CIBLE : il doit être ROUGE avant la correction.
+*/
+describe('dossier de preuve /kaizen — ce que les journaux portent déjà', () => {
+  function evenementComplet(): unknown {
+    return {
+      schema: 'autowin.trace/v1',
+      id: 'evt-a',
+      conversationId: 'conv-11',
+      turnId: 'turn-42',
+      parentId: 'evt-parent',
+      timestamp: new Date(2_000).toISOString(),
+      sequence: 7,
+      type: 'tool-call',
+      status: 'completed',
+      actor: { id: 'claude', kind: 'agent', label: 'Claude' },
+      channel: 'tool',
+      payloads: [{ kind: 'tool-call', content: 'verify' }],
+      observation: { boundary: 'main', fidelity: 'derived', limitation: 'coût estimé' },
+      execution: { phase: 'build', agentId: 'agent-1', taskId: 'task-1', runId: 'run-9' },
+      metrics: { durationMs: 22_000, inputTokens: 10, outputTokens: 3, cacheReadTokens: 5 }
+    }
+  }
+
+  it("recopie les 4 champs d'activité écrits puis jetés", () => {
+    const task = buildAutowinKaizenTask('/kaizen', {
+      conversation: { id: 'conv-10', title: 'Activité', messages: [] },
+      activity: [
+        {
+          ts: '2026-09-02T10:00:00.000Z',
+          kind: 'exec',
+          label: 'build',
+          durationMs: 132_000,
+          cacheReadTokens: 4_096,
+          usageCallId: 'call-abc',
+          screenshots: ['D:/preuves/apres.png']
+        }
+      ],
+      brainTraces: [],
+      causalEvents: [],
+      runs: []
+    })
+
+    expect(task).toContain('"durationMs":132000')
+    expect(task).toContain('"cacheReadTokens":4096')
+    expect(task).toContain('call-abc')
+    expect(task).toContain('D:/preuves/apres.png')
+  })
+
+  it('garde le lien causal des événements : tour, rang, parent, phase, mesures, fidélité', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-causal-'))
+    mkdirSync(join(appData, 'causal-trace'), { recursive: true })
+    writeFileSync(
+      join(appData, 'causal-trace', 'conv-11.jsonl'),
+      JSON.stringify(evenementComplet()) + '\n'
+    )
+    try {
+      const evidence = collectAutowinKaizenEvidence(
+        {
+          id: 'conv-11',
+          title: 'Causal',
+          provider: 'codex',
+          messages: [],
+          createdAt: 1,
+          updatedAt: 1
+        },
+        appData
+      )
+      const event = evidence.causalEvents[0] as unknown as Record<string, unknown>
+      expect(event.turnId).toBe('turn-42')
+      expect(event.sequence).toBe(7)
+      expect(event.parentId).toBe('evt-parent')
+      expect(event.execution).toMatchObject({ phase: 'build', runId: 'run-9' })
+      expect(event.metrics).toMatchObject({ durationMs: 22_000, cacheReadTokens: 5 })
+      expect(event.observation).toMatchObject({
+        fidelity: 'derived',
+        limitation: 'coût estimé'
+      })
+    } finally {
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+
+  it("joint les saisies de la conversation ciblée, et seulement les siennes", () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-saisies-'))
+    writeFileSync(
+      join(appData, 'saisies-utilisateur.jsonl'),
+      [
+        JSON.stringify({
+          schema: 'autowin.saisie/v1',
+          ts: 1,
+          conversationId: 'conv-12',
+          texte: 'ORIENTATION DONNEE EN COURS DE ROUTE',
+          voie: 'orientation'
+        }),
+        JSON.stringify({
+          schema: 'autowin.saisie/v1',
+          ts: 2,
+          conversationId: 'conv-autre',
+          texte: 'SAISIE D UNE AUTRE CONVERSATION',
+          voie: 'orientation'
+        })
+      ].join('\n') + '\n'
+    )
+    try {
+      const evidence = collectAutowinKaizenEvidence(
+        {
+          id: 'conv-12',
+          title: 'Saisies',
+          provider: 'codex',
+          messages: [],
+          createdAt: 1,
+          updatedAt: 1
+        },
+        appData
+      )
+      const saisies = (evidence as unknown as Record<string, unknown>).saisies as
+        | Array<Record<string, unknown>>
+        | undefined
+      expect(saisies?.map((saisie) => saisie.texte)).toEqual([
+        'ORIENTATION DONNEE EN COURS DE ROUTE'
+      ])
+
+      const task = buildAutowinKaizenTask('/kaizen', evidence)
+      expect(task).toContain('ORIENTATION DONNEE EN COURS DE ROUTE')
+      expect(task).not.toContain('SAISIE D UNE AUTRE CONVERSATION')
     } finally {
       rmSync(appData, { recursive: true, force: true })
     }

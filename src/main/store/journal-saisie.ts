@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 
@@ -73,5 +73,42 @@ export function journaliserSaisie(saisie: SaisieUtilisateur, racine?: string): b
     return true
   } catch {
     return false
+  }
+}
+
+/**
+ * Relit les saisies d'UNE conversation. Aucun lecteur n'existait : le texte tapé pendant un tour
+ * (voie `orientation`) était écrit puis jamais consulté, alors que c'est là que vit la correction
+ * donnée en cours de route — la matière même d'une rétrospective.
+ *
+ * Rend une liste vide sur toute défaillance : ce journal est une trace de dernier recours, le lire
+ * ne doit jamais faire échouer l'appelant.
+ */
+const SEPARATEUR_LIGNE = new RegExp('\r?\n')
+
+export function lireSaisies(
+  conversationId: string,
+  racine?: string,
+  limite = 30
+): SaisieJournalisee[] {
+  try {
+    const chemin = journalSaisiePath(racine)
+    if (!existsSync(chemin)) return []
+    const saisies = readFileSync(chemin, 'utf8')
+      .split(SEPARATEUR_LIGNE)
+      .filter((ligne) => ligne.trim())
+      .flatMap((ligne) => {
+        try {
+          const entree = JSON.parse(ligne) as SaisieJournalisee
+          // Filtre STRICT sur la conversation ciblée : un dossier de preuve ne doit jamais
+          // emporter le texte tapé dans une autre conversation.
+          return entree?.conversationId === conversationId ? [entree] : []
+        } catch {
+          return []
+        }
+      })
+    return saisies.slice(-limite)
+  } catch {
+    return []
   }
 }

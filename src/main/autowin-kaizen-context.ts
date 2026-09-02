@@ -6,6 +6,7 @@ import { readBrainTraces, type BrainTrace } from './activity/brain-trace-spool'
 import { TraceStore } from './activity/trace-store'
 import type { TraceEventV1 } from './activity/trace-event'
 import type { Conversation } from './store/conversations'
+import { lireSaisies, type SaisieJournalisee } from './store/journal-saisie'
 
 const MESSAGE_LIMIT = 24
 const MESSAGE_CAP = 700
@@ -15,6 +16,8 @@ const RUN_LIMIT = 4
 const RUN_CAP = 4_000
 const TOTAL_CAP = 28_000
 const REQUEST_CAP = 2_000
+const SAISIE_LIMIT = 30
+const SAISIE_CAP = 700
 /* Marge réservée au champ `troncature`, ajouté APRÈS l'ajustement au budget. */
 const TRONCATURE_MARGE = 160
 
@@ -25,12 +28,36 @@ interface KaizenConversation {
   runPaths?: string[]
 }
 
+/*
+  Le lien CAUSAL était perdu : on ne gardait que timestamp/type/status/actor/payload, alors que
+  `trace-event.ts` porte le tour, le rang, le parent, la phase d'exécution, les mesures et la
+  fidélité de l'observation. Sans eux, impossible de reconstruire l'arbre d'un tour, de dire quelle
+  PHASE a fait quoi (les lentilles « routage » et « armement du contrôle » de la skill le réclament),
+  ni de savoir qu'une mesure est approchée.
+*/
 interface KaizenCausalEvent {
   timestamp: string
   type: string
   status: string
   actor: string
   payload: string
+  turnId?: string
+  sequence?: number
+  parentId?: string
+  execution?: {
+    phase?: string
+    agentId?: string
+    taskId?: string
+    runId?: string
+  }
+  metrics?: TraceEventV1['metrics']
+  observation?: { fidelity?: string; limitation?: string }
+}
+
+interface KaizenSaisie {
+  ts: number
+  voie: string
+  texte: string
 }
 
 interface KaizenRun {
@@ -44,6 +71,8 @@ export interface AutowinKaizenEvidence {
   brainTraces: BrainTrace[]
   causalEvents: KaizenCausalEvent[]
   runs: KaizenRun[]
+  /** Texte tapé par l'utilisateur, y compris les orientations qui ne créent aucun tour. */
+  saisies?: KaizenSaisie[]
 }
 
 function clipped(value: string, cap: number): string {
@@ -59,8 +88,28 @@ function compactCausalEvent(event: TraceEventV1): KaizenCausalEvent {
     payload: clipped(
       event.payloads.map((payload) => `${payload.kind}: ${payload.content}`).join(' | '),
       900
-    )
+    ),
+    turnId: event.turnId,
+    sequence: event.sequence,
+    parentId: event.parentId,
+    execution: event.execution
+      ? {
+          phase: event.execution.phase,
+          agentId: event.execution.agentId,
+          taskId: event.execution.taskId,
+          runId: event.execution.runId
+        }
+      : undefined,
+    metrics: event.metrics,
+    observation: {
+      fidelity: event.observation?.fidelity,
+      limitation: event.observation?.limitation
+    }
   }
+}
+
+function compactSaisie(saisie: SaisieJournalisee): KaizenSaisie {
+  return { ts: saisie.ts, voie: saisie.voie, texte: clipped(saisie.texte, SAISIE_CAP) }
 }
 
 function readNativeRuns(conversationId: string, appData: string): KaizenRun[] {
@@ -121,7 +170,8 @@ export function collectAutowinKaizenEvidence(
     causalEvents: causalEvents.slice(-TRACE_LIMIT).map(compactCausalEvent),
     // `conversation.runPaths` contient des pièces externes attachées manuellement (historiquement
     // des RUN Claude). Kaizen les ignore intégralement et ne lit que les RUN natifs d'Autowin.
-    runs: readNativeRuns(conversation.id, appData)
+    runs: readNativeRuns(conversation.id, appData),
+    saisies: lireSaisies(conversation.id, appData, SAISIE_LIMIT).map(compactSaisie)
   }
 }
 
@@ -136,6 +186,7 @@ interface KaizenSnapshot {
   brainTraces: BrainTrace[]
   causalEvents: KaizenCausalEvent[]
   runs: KaizenRun[]
+  saisies: KaizenSaisie[]
   troncature?: Record<string, number>
 }
 
@@ -151,6 +202,7 @@ function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<strin
     { nom: 'activity', liste: snapshot.activity, retirerEnTete: true },
     { nom: 'causalEvents', liste: snapshot.causalEvents, retirerEnTete: true },
     { nom: 'runs', liste: snapshot.runs, retirerEnTete: true },
+    { nom: 'saisies', liste: snapshot.saisies, retirerEnTete: true },
     // `readBrainTraces` trie du plus récent au plus ancien : ici le plus vieux est en QUEUE.
     { nom: 'brainTraces', liste: snapshot.brainTraces, retirerEnTete: false }
   ]
@@ -187,7 +239,19 @@ export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenE
     inputTokens: entry.inputTokens,
     outputTokens: entry.outputTokens,
     costUsd: entry.costUsd,
-    text: entry.text
+    text: entry.text,
+    /*
+      Ces quatre champs étaient ÉCRITS par `conv-activity.ts` puis jetés ici : kaizen ne pouvait
+      juger ni le TEMPS d'une phase (`durationMs`, ajouté le 2026-07-29 pour cette question), ni
+      l'efficacité du cache, ni recouper un appel compté deux fois (`usageCallId`), ni retrouver la
+      preuve visuelle citée (`screenshots`).
+    */
+    durationMs: entry.durationMs,
+    cacheReadTokens: entry.cacheReadTokens,
+    usageCallId: entry.usageCallId,
+    screenshots: entry.screenshots,
+    turnId: entry.turnId,
+    phase: entry.phase
   }))
   const snapshot: KaizenSnapshot = {
     source: 'autowin-os',
@@ -199,7 +263,8 @@ export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenE
     activity,
     brainTraces: evidence.brainTraces.slice(0, 30),
     causalEvents: evidence.causalEvents.slice(-TRACE_LIMIT),
-    runs: evidence.runs.slice(-RUN_LIMIT)
+    runs: evidence.runs.slice(-RUN_LIMIT),
+    saisies: (evidence.saisies ?? []).slice(-SAISIE_LIMIT)
   }
 
   const entete = `${clipped(request.trim(), REQUEST_CAP) || '/kaizen'}
@@ -211,7 +276,13 @@ export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenE
 === FIN DU DOSSIER ===
 ` +
     `Audite cette conversation et les mécanismes Autowin qui l'ont produite. ` +
-    `Reste strictement en lecture seule et rends uniquement des propositions vérifiables à faire approuver.`
+    /*
+      Cette phrase ordonnait l'inverse de la phase kaizen elle-même (`phase-briefs.ts` : « les
+      éditions elles-mêmes, APPLIQUÉES… kaizen n'attend aucun accord humain »). Lue en DERNIER, elle
+      gagnait : l'utilisateur recevait une liste de propositions au lieu de corrections.
+    */
+    `Applique ensuite toi-même les corrections que les preuves justifient : un commit par édition, ` +
+    `annoncé et vérifié par un signal hors-modèle, pour que chacune reste annulable d'un seul revert.`
   const budget = TOTAL_CAP - entete.length - pied.length - TRONCATURE_MARGE
   const retires = ajusterAuBudget(snapshot, budget)
   // Ce qui a été retiré est DIT : un dossier amputé en silence se lit comme un dossier complet.
