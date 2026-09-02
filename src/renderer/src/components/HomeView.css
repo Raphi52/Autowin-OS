@@ -834,6 +834,49 @@
     border-color 140ms ease;
 }
 
+/* Les deux sourdines : petites pastilles carrées, à côté de l'interrupteur. En sourdine, elles
+   passent au rouge — un micro coupé doit se voir de loin, pas se lire. */
+.jarvis__mute {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1;
+  border-radius: 7px;
+  color: #cfd4de;
+  border: 1px solid rgba(212, 169, 79, 0.3);
+  background: rgba(212, 169, 79, 0.07);
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease;
+}
+
+/* Micro verrouillé : la jauge RESTE, mais elle est visiblement tenue — atténuée et barrée d'un
+   liseré rouge. La faire disparaître effacerait la preuve que le micro existe encore. */
+.jarvis__jauge[data-verrouille='true'] {
+  opacity: 0.55;
+}
+
+.jarvis__jauge[data-verrouille='true'] .jarvis__jauge-piste {
+  border-color: rgba(224, 96, 96, 0.55);
+}
+
+.jarvis__mute:hover,
+.jarvis__mute:focus-visible {
+  border-color: rgba(212, 169, 79, 0.65);
+  color: #f0e6d2;
+}
+
+.jarvis__mute[aria-pressed='true'] {
+  color: #ffb4b4;
+  border-color: rgba(224, 96, 96, 0.7);
+  background: rgba(224, 96, 96, 0.14);
+}
+
 .jarvis__bascule:hover,
 .jarvis__bascule:focus-visible {
   color: #f0e6d2;

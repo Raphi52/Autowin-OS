@@ -200,6 +200,46 @@ afterEach(() => {
 })
 
 describe('widget Jarvis', () => {
+  it('VERROUILLE le micro sans toucher a l’ecoute, et ne relance rien au deverrouillage', () => {
+    // DEMANDE DE L'UTILISATEUR (2026-09-02) : « je veux pas qu'il lance l'ecoute quand je le
+    // reactive, et je veux pas qu'il enleve la barre de capture, juste qu'il la verrouille ».
+    // L'ENTREE QUI CASSE UN FAUX FIX : un verrou qui arreterait/relancerait le moteur creerait un
+    // 2e moteur au deverrouillage — exactement ce qui est refuse ici.
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    const moteur = FakeRecognition.instances.at(-1)!
+    clic(c, 'jarvis-mute-micro')
+    expect(moteur.arrets).toBe(0)
+    // La barre de capture RESTE affichee, marquee verrouillee.
+    const jauge = c.querySelector('[data-testid="jarvis-jauge"]')
+    expect(jauge).not.toBeNull()
+    expect(jauge!.getAttribute('data-verrouille')).toBe('true')
+    // Verrouille = plus rien n'entre : aucune ligne inscrite.
+    act(() => moteur.dire('Jarvis, ouvre le task manager', true))
+    expect(c.querySelectorAll('[data-testid="jarvis-paroles"] li')).toHaveLength(0)
+    // Deverrouiller ne cree AUCUN nouveau moteur : l'ecoute n'a jamais ete relancee.
+    clic(c, 'jarvis-mute-micro')
+    expect(FakeRecognition.instances).toHaveLength(1)
+    expect(moteur.demarrages).toBe(1)
+    act(() => moteur.dire('Robert', true))
+    expect(c.querySelectorAll('[data-testid="jarvis-paroles"] li')).toHaveLength(1)
+  })
+
+  it('COUPE LA VOIX : plus une seule phrase prononcee tant que la sourdine tient', async () => {
+    // L'ENTREE QUI CASSE UN FAUX FIX : l'ordre PART quand meme (le micro n'est pas coupe), seule
+    // la reponse parlee doit disparaitre — puis revenir quand on retablit le son.
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    clic(c, 'jarvis-mute-son')
+    const moteur = FakeRecognition.instances.at(-1)!
+    FauxSynthese.dites = []
+    await act(async () => moteur.dire('Jarvis, ouvre le task manager', true))
+    expect(FauxSynthese.dites).toHaveLength(0)
+    clic(c, 'jarvis-mute-son')
+    await act(async () => moteur.dire('Jarvis, ferme la fenetre', true))
+    expect(FauxSynthese.dites).toContain('Tout de suite.')
+  })
+
   it('REPOND A VOIX HAUTE quand un ordre part', async () => {
     // Ce que ce test ferme : Jarvis entendait, bipait, executait — et ne disait jamais rien. Il
     // fallait retourner lire l'ecran pour savoir qu'il avait compris.

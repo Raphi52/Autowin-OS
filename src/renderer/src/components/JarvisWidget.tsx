@@ -80,6 +80,57 @@ interface ApiJarvis {
   ) => Promise<{ ok: boolean; cancelled: boolean; error?: string }>
 }
 
+/**
+ * LES ICONES DES DEUX SOURDINES, dessinees en SVG plutot qu'en emoji.
+ *
+ * DEMANDE DE L'UTILISATEUR (2026-09-02) : « l'icone micro est pourri ». Un emoji est rendu par la
+ * police du systeme : couleur imposee, trait epais, taille imprevisible — il jurait avec le HUD
+ * or et fin du widget. Ces traces suivent `currentColor`, donc la couleur du bouton (or au repos,
+ * rouge en sourdine), et restent nets a 12 px.
+ */
+function IconeMicro({ coupe }: { coupe: boolean }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false">
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="9" y="2" width="6" height="11" rx="3" />
+        <path d="M5 11a7 7 0 0 0 14 0" />
+        <path d="M12 18v3" />
+        {coupe ? <path d="M4 3l16 18" /> : null}
+      </g>
+    </svg>
+  )
+}
+
+function IconeSon({ coupe }: { coupe: boolean }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false">
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M4 9v6h4l5 4V5L8 9H4z" />
+        {coupe ? (
+          <path d="M17 9l5 6M22 9l-5 6" />
+        ) : (
+          <>
+            <path d="M17 9a4 4 0 0 1 0 6" />
+            <path d="M19.5 6.5a8 8 0 0 1 0 11" />
+          </>
+        )}
+      </g>
+    </svg>
+  )
+}
+
 const apiJarvis = (): ApiJarvis | undefined => (window as unknown as { api?: ApiJarvis }).api
 
 /** Le direct se relit souvent : c'est ce qui le rend « direct ». Assez lent pour rester gratuit. */
@@ -199,6 +250,16 @@ export function JarvisWidget(): React.JSX.Element {
    * (bip, envoi) part une seule fois, hors du rendu.
    */
   const ecouteRef = useRef(ecoute)
+  /**
+   * LES DEUX SOURDINES DU WIDGET — micro coupé, voix coupée. Deux choses distinctes : on peut
+   * vouloir dicter sans que l'assistant réponde à voix haute (bureau partagé), ou le laisser
+   * parler tout en fermant le micro. Elles sont donc SÉPARÉES, et lues hors rendu par des `ref`
+   * puisque le micro et la parole travaillent en dehors du rendu React.
+   */
+  const [microCoupe, setMicroCoupe] = useState(false)
+  const microCoupeRef = useRef(false)
+  const [sonCoupe, setSonCoupe] = useState(false)
+  const sonCoupeRef = useRef(false)
   const [flux, setFlux] = useState<EvenementDirect[]>([])
   const [erreur, setErreur] = useState<string | null>(null)
   const [envoi, setEnvoi] = useState<string | null>(null)
@@ -250,6 +311,9 @@ export function JarvisWidget(): React.JSX.Element {
    * silence, ce qui est exactement la garde attendue.
    */
   const dire = useCallback((evenement: Parameters<typeof phraseDeJarvis>[1]) => {
+    // Voix coupée = silence TOTAL, y compris sur une erreur : la sourdine n'a de valeur que si
+    // elle tient pour toutes les phrases, sinon l'assistant parle quand même au pire moment.
+    if (sonCoupeRef.current) return
     const phrase = phraseDeJarvis(ecouteRef.current, evenement)
     if (phrase) parler(phrase)
   }, [])
@@ -322,6 +386,9 @@ export function JarvisWidget(): React.JSX.Element {
         resultIndex?: number
         results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }>
       }
+      // MICRO VERROUILLE : rien n'entre. Pas de ligne inscrite, pas de bip, pas d'ordre envoye —
+      // le moteur, lui, n'est pas touche, donc lever le verrou ne relance aucune ecoute.
+      if (microCoupeRef.current) return
       for (let i = e.resultIndex ?? 0; i < e.results.length; i += 1) {
         const resultat = e.results[i]
         // UNE PHRASE FIGEE NE S'INSCRIT QU'UNE FOIS. Chez Chromium, `results` est CUMULATIF sur
@@ -430,6 +497,29 @@ export function JarvisWidget(): React.JSX.Element {
     },
     [auResultat]
   )
+
+  /**
+   * SOURDINE DU MICRO = UN VERROU, PAS UN INTERRUPTEUR.
+   *
+   * DEMANDE DE L'UTILISATEUR (2026-09-02) : « je veux pas qu'il lance l'ecoute quand je le
+   * reactive, et je veux pas qu'il enleve la barre de capture, juste qu'il la verrouille ».
+   * Ce bouton ne DEMARRE et n'ARRETE donc JAMAIS l'ecoute : allumer et eteindre reste le seul
+   * travail de l'interrupteur a cote. Il ne fait que fermer l'entree — plus rien n'est retenu,
+   * aucun bip, aucun ordre — et la jauge reste a l'ecran, figee, pour montrer qu'elle est tenue.
+   */
+  const basculerMicro = useCallback((): void => {
+    const suivant = !microCoupeRef.current
+    microCoupeRef.current = suivant
+    setMicroCoupe(suivant)
+  }, [])
+
+  /** SOURDINE DE LA VOIX : coupe la phrase EN COURS, puis toutes les suivantes (voir `dire`). */
+  const basculerSon = useCallback((): void => {
+    const suivant = !sonCoupeRef.current
+    sonCoupeRef.current = suivant
+    setSonCoupe(suivant)
+    if (suivant) taireJarvis()
+  }, [])
 
   /** L'etat REEL de whisper, relu au montage : ni cache, ni supposition. */
   const relireWhisper = useCallback(async (): Promise<EtatWhisper | null> => {
@@ -541,15 +631,18 @@ export function JarvisWidget(): React.JSX.Element {
     const peindre = (): void => {
       if (!vivant) return
       const barre = barreRef.current
+      // Micro verrouille : la barre RESTE a l'ecran mais ne bouge plus — c'est ce qui donne a voir
+      // le verrou, la faire disparaitre reviendrait a effacer la preuve que le micro existe.
+      const verrouille = microCoupeRef.current
       if (barre) {
-        const fraction = jaugeDepuisNiveau(niveauRef.current)
+        const fraction = verrouille ? 0 : jaugeDepuisNiveau(niveauRef.current)
         barre.style.width = `${Math.round(fraction * 100)}%`
-        barre.dataset.parle = niveauRef.current >= seuilRef.current ? 'true' : 'false'
+        barre.dataset.parle = !verrouille && niveauRef.current >= seuilRef.current ? 'true' : 'false'
       }
       creteRef.current = Math.max(niveauRef.current, creteRef.current * DECROISSANCE_CRETE)
       // `setVerdict` ne re-rend QUE si le verdict change : React abandonne un état identique.
       // C'est ce qui autorise cet appel dans une boucle à 60 images/s sans rallumer le rendu.
-      setVerdict(verdictMicro(true, creteRef.current, seuilRef.current))
+      setVerdict(verrouille ? 'coupe' : verdictMicro(true, creteRef.current, seuilRef.current))
       image = requestAnimationFrame(peindre)
     }
     image = requestAnimationFrame(peindre)
@@ -635,6 +728,32 @@ export function JarvisWidget(): React.JSX.Element {
             {commande ? '● Écoute en cours — couper' : 'Activer l’écoute'}
           </button>
           {/*
+            LES DEUX SOURDINES, en petit, a cote de l'interrupteur : couper le micro (on n'est plus
+            entendu) et couper la voix (il n'est plus entendu). Deux gestes distincts, deux boutons.
+          */}
+          <button
+            type="button"
+            data-testid="jarvis-mute-micro"
+            className="jarvis__mute"
+            aria-pressed={microCoupe}
+            title={microCoupe ? 'Micro verrouillé — déverrouiller' : 'Verrouiller le micro'}
+            aria-label={microCoupe ? 'Micro verrouillé — déverrouiller' : 'Verrouiller le micro'}
+            onClick={basculerMicro}
+          >
+            <IconeMicro coupe={microCoupe} />
+          </button>
+          <button
+            type="button"
+            data-testid="jarvis-mute-son"
+            className="jarvis__mute"
+            aria-pressed={sonCoupe}
+            title={sonCoupe ? 'Voix coupée — la rétablir' : 'Couper la voix'}
+            aria-label={sonCoupe ? 'Voix coupée — la rétablir' : 'Couper la voix'}
+            onClick={basculerSon}
+          >
+            <IconeSon coupe={sonCoupe} />
+          </button>
+          {/*
           L'ENREGISTREMENT A SON PROPRE WIDGET (« Enregistrements ») : il ECRIT sur le disque et
           montre les fichiers déjà écrits. Le bouton n'est plus ici, mais le mode l'est encore :
           basculer sur l'enregistrement ne doit toujours RIEN envoyer à Jarvis.
@@ -693,7 +812,11 @@ export function JarvisWidget(): React.JSX.Element {
         dépasse le seuil de parole retenu.
       */}
       {ecoute.active ? (
-        <div className="jarvis__jauge" data-testid="jarvis-jauge">
+        <div
+          className="jarvis__jauge"
+          data-testid="jarvis-jauge"
+          data-verrouille={microCoupe ? 'true' : undefined}
+        >
           <div className="jarvis__jauge-piste">
             <div className="jarvis__jauge-barre" ref={barreRef} data-testid="jarvis-jauge-barre" />
             <span
@@ -702,7 +825,7 @@ export function JarvisWidget(): React.JSX.Element {
             />
           </div>
           <span className="jarvis__aide" data-testid="jarvis-verdict" data-verdict={verdictAffiche}>
-            {MESSAGE_VERDICT[verdictAffiche]}
+            {microCoupe ? 'Micro verrouillé — rien n’est écouté' : MESSAGE_VERDICT[verdictAffiche]}
           </span>
         </div>
       ) : null}
