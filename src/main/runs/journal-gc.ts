@@ -66,7 +66,6 @@ export interface JournalGcPolicy {
  * 3 jours laissait, du 4e au 7e jour, une trace qui renvoie vers un fichier supprime. La duree n'est
  * donc plus decidee ici, elle est IMPORTEE de la source unique.
  */
-export { JOURNAL_RETENTION_MS } from './turn-journal'
 export const DEFAULT_MAX_AGE_MS = JOURNAL_RETENTION_MS
 /** 200 journaux ≈ quelques Mo : la fenetre reste consultable a la main. */
 export const DEFAULT_MAX_FILES = 200
