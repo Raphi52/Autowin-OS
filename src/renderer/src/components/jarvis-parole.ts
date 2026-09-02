@@ -33,6 +33,13 @@ function fenetre(): FenetreParole {
   return globalThis as unknown as FenetreParole
 }
 
+/**
+ * L'IDENTIFIANT DE LA VOIX NEURONALE dans le réglage. Elle n'existe pas dans `speechSynthesis` :
+ * sans cette entrée à elle, la liste des voix ne pourrait pas la nommer, et l'utilisateur ne
+ * verrait nulle part la voix qu'il vient d'installer.
+ */
+export const VOIX_PIPER_URI = 'piper:fr_FR-siwis-medium'
+
 /** La voix retenue : la recalculer a chaque phrase couterait un parcours de liste. */
 let voixChoisie: SpeechSynthesisVoice | null = null
 
