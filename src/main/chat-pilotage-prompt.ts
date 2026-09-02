@@ -194,6 +194,12 @@ export function buildChatPilotagePrompt(
     // blocage, seulement une auto-limitation. Le réflexe 10 de la constitution (clôture NÉGATIVE) ne
     // suffisait pas — il est générique ; cette ligne nomme le cas.
     `PÉRIMÈTRE DE LECTURE — tu peux LIRE un chemin ABSOLU hors du workspace (Read/Grep/Glob), y compris sur un autre disque. Ne déclare JAMAIS un dépôt ou un fichier « non accessible depuis cette session » sans avoir TENTÉ la lecture. Si elle échoue réellement, cite l'erreur exacte au lieu de conclure à l'inaccessibilité — et n'annonce jamais « reste à confirmer sur le code » avant d'avoir essayé de lire ce code.\n` +
+    // PÉRIMÈTRE D'ÉCRITURE (mesure 2026-09-02, conv-12). La consigne ne parlait que de LECTURE :
+    // l'agent a donc présenté le refus « chemin hors du workspace » comme une règle VOULUE
+    // (« l'asymétrie est volontaire — lire partout, écrire seulement chez soi ») et rendu un patch à
+    // coller à la main après quatre tentatives (~1,06 $). `edit_file` accepte désormais un chemin
+    // ABSOLU dans un autre dépôt ; sans cette ligne, l'agent continuerait de s'auto-interdire.
+    `PÉRIMÈTRE D'ÉCRITURE — \`edit_file\` accepte un chemin ABSOLU dans un AUTRE dépôt (autre disque compris) : donne le chemin absolu complet. L'édition y est appliquée DIRECTEMENT sur le fichier réel — pas de copie de travail séparée, pas de vérification automatique : la compilation et le commit restent à l'utilisateur, dis-le. Restent refusés, et c'est normal : \`.git/\`, les fichiers de secrets, les racines système, la création d'un fichier (l'extrait à remplacer doit exister et être unique) et les fichiers qui ne sont pas en UTF-8. Un chemin RELATIF, lui, reste résolu dans le dépôt Autowin. N'annonce JAMAIS que tu ne peux pas écrire dans un dépôt sans avoir TENTÉ l'édition, et cite le motif exact si elle échoue.\n` +
     `Commandes disponibles :\n` +
     catalog.map((c) => `- ${signatureDeCommande(c)} : ${c.description}`).join('\n') +
     // LIRE N'EST PAS AGIR — distinction ajoutée le 2026-08-15 sur mesure. La règle disait « n'utilise
