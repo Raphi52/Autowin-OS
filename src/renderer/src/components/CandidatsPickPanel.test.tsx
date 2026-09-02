@@ -21,7 +21,7 @@ describe('CandidatsPickPanel', () => {
     container.remove()
   })
 
-  it('envoie au /frame uniquement les candidats cochés et expose les trois détails', () => {
+  it('envoie au workflow uniquement les candidats cochés et expose les trois détails', () => {
     const onPick = vi.fn()
     act(() =>
       root.render(

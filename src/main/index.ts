@@ -17,6 +17,10 @@ import { registerClaudeAccountsIpc } from './ipc/claude-accounts'
 import { registerProfilesIpc } from './ipc/profiles'
 import { registerTopologyIpc } from './ipc/topology'
 import { registerProvidersIpc } from './ipc/providers'
+import { registerRolesIpc } from './ipc/roles'
+import { registerModelsIpc } from './ipc/models'
+import { registerFabricIpc } from './ipc/fabric'
+import { registerCapabilitiesIpc } from './ipc/capabilities'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -159,8 +163,6 @@ import {
   costSamplesFrom,
   summarizeCostSamples
 } from './activity/prompt-observability'
-import { promptConfigChange } from './activity/prompt-config-change'
-import { appendPromptConfigActivity } from './activity/prompt-config-store'
 import { promptCallToTraceEvents } from './activity/prompt-call-trace'
 import { appendObservedOrchestrationOutcome } from './activity/orchestration-outcome-trace'
 import { executionCostCoverageFields } from '../shared/orchestration-outcome'
@@ -177,7 +179,7 @@ import {
 import { aggregateToolUsage } from './activity/tool-usage'
 
 import { ProfileStore } from './profile-store'
-import { capabilityEnabled, listCapabilities, setCapabilityEnabled } from './capability-controls'
+import { capabilityEnabled } from './capability-controls'
 import { seedRegistrySnapshot } from './native-registry'
 import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 import {
@@ -193,7 +195,6 @@ import {
 } from './ipc-senders'
 import { createWindowing } from './window'
 import { discoverConfiguredSkillRegistry } from './skill-registry'
-import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion } from './model-questions'
 import {
   discoverImportedModels,
@@ -216,7 +217,6 @@ import {
 import { rebuildSemanticTemporalProjection } from './knowledge/semantic-temporal-store'
 import { causalLearningContext } from './knowledge/semantic-temporal-projection'
 import { ModelCatalogRefresher } from './model-refresh'
-import { buildModelQuotaSnapshot, getModelQuotaSnapshot } from './model-quotas'
 import { loadAgentTopology, saveAgentTopology, type IncidentTopologie } from './topology-disk'
 import type { AgentTopology, SlotBinding } from './topology'
 import {
@@ -224,7 +224,6 @@ import {
   assertRuntimeTopologyAvailable,
   runtimeRoleBinding,
   runtimeRoleSlots,
-  topologyWithRuntimeRole,
   UnresolvedRuntimeModelError
 } from './runtime-topology'
 import {
@@ -245,7 +244,7 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { guardBoolean, guardString, guardStringOrNull } from './ipc-guards'
+import { guardString, guardStringOrNull } from './ipc-guards'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { TicketSourceStore } from './ticket-source-store'
@@ -1986,10 +1985,22 @@ Le fil reprend ensuite normalement.`
   // sur un décompte tiré de cet artefact. Ici l'événement est ÉMIS, jamais lu d'un fichier : il ne
   // peut pas se polluer de la même façon.
   os.onRefusIntegration((refus) => ledger.append(evenementRefusIntegration(refus)))
-  ipcMain.handle('os:roles', async (event) => {
-    assertTrustedRendererSender(event, 'Roles')
-    await agentModelsReady
-    return os.roles.all()
+  // `index.ts` garde la SEULE autorité sur `agentTopology` (variable réassignée) : les modules la
+  // reçoivent en lecture/écriture, jamais en valeur.
+  const lireTopologie = (): AgentTopology => agentTopology
+  const appliquerTopologie = (topology: AgentTopology): AgentTopology => {
+    agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
+    syncRuntimeTopology(agentTopology)
+    return agentTopology
+  }
+  const broadcastRolesRefresh = (): void => broadcast({ type: 'refresh', scope: 'roles' })
+  registerRolesIpc({
+    os,
+    agentModelsReady,
+    lireModeles: () => agentModels,
+    lireTopologie,
+    appliquerTopologie,
+    broadcastRolesRefresh
   })
   // WORKFLOWS NOMMÉS : lire, écrire, sélectionner. La sélection ne PILOTE encore rien — c'est la
   // pièce qui rend un workflow nommable et choisissable, préalable à la comparaison de plusieurs
@@ -2223,50 +2234,22 @@ Le fil reprend ensuite normalement.`
     )
     return shadowRoutingPilotState(saved)
   })
-  ipcMain.handle(
-    'os:setRole',
-    async (event, role: Role, provider: string, model?: string, reasoningEffort?: string) => {
-      assertTrustedRendererSender(event, 'SetRole')
-      await agentModelsReady
-      const next = topologyWithRuntimeRole(
-        agentTopology,
-        role,
-        {
-          provider,
-          model,
-          reasoningEffort: reasoningEffort as ReasoningEffort | undefined
-        },
-        agentModels
-      )
-      agentTopology = saveAgentTopology(agentTopologyPath, next, agentModels)
-      syncRuntimeTopology(agentTopology)
-      broadcast({ type: 'refresh', scope: 'roles' })
-      return os.roles.all()
-    }
-  )
-  ipcMain.handle('os:models:list', async (event, force = false) => {
-    assertTrustedRendererSender(event, 'Model catalog')
-    if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
-    if (!force) return agentModels
-    const refresh = modelCatalog.refresh(true)
-    // Armer la barriere avant le premier await : aucun tour ne part sur l'ancien catalogue
-    // pendant qu'un rafraichissement force est en vol.
-    os.setTaskReadiness(
-      refresh.then(() => assertRuntimeTopologyAvailable(agentTopology, agentModels))
-    )
-    await refresh
-    applyFabricSummaries(fabricControlPlane.list())
-    return agentModels
+  // Reprojeter les modeles de Compute Fabric : `applyFabricSummaries` a d'autres appelants au
+  // demarrage, elle reste donc dans `index.ts` et les modules la recoivent.
+  const synchroniserFabric = (): void => applyFabricSummaries(fabricControlPlane.list())
+  registerModelsIpc({
+    os,
+    modelCatalog,
+    lireModeles: () => agentModels,
+    lireTopologie,
+    synchroniserFabric,
+    isolatedTestInstance
   })
-  ipcMain.handle('os:fabric:list', (event) => {
-    assertTrustedRendererSender(event, 'Compute Fabric')
-    const live = fabricControlPlane.list()
-    return isolatedFabricFixtureSummary
-      ? [
-          ...live.filter((node) => node.nodeId !== isolatedFabricFixtureSummary?.nodeId),
-          isolatedFabricFixtureSummary
-        ]
-      : live
+  registerFabricIpc({
+    fabricControlPlane,
+    lireFixtureIsolee: () => isolatedFabricFixtureSummary,
+    synchroniserFabric,
+    broadcastRolesRefresh
   })
   ipcMain.handle('app:test:fabric-fixture:install', (event) => {
     assertTrustedRendererSender(event, 'Fixture Compute Fabric')
@@ -2330,13 +2313,6 @@ Le fil reprend ensuite normalement.`
       [{ role: 'user', content: 'preuve Compute Fabric packagée' }],
       execution ? { execution: { cwd: os.executionWorkspace, sandbox: 'read-only' } } : {}
     )
-  })
-  ipcMain.handle('os:fabric:refresh', async (event, nodeId?: unknown) => {
-    assertTrustedRendererSender(event, 'Compute Fabric')
-    const summary = await fabricControlPlane.refresh(guardString(nodeId, 'nodeId'))
-    applyFabricSummaries(fabricControlPlane.list())
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return summary
   })
   ipcMain.handle('os:checkpointForks:list', (event) => {
     assertTrustedRendererSender(event, 'Checkpoint forks')
@@ -2410,70 +2386,6 @@ Le fil reprend ensuite normalement.`
       }
     })
   })
-  ipcMain.handle('os:models:quotas', async (event, force = false) => {
-    assertTrustedRendererSender(event, 'Model quotas')
-    if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
-    const models = modelCatalog.current()
-    if (isolatedTestInstance) {
-      const observedAt = new Date().toISOString()
-      const fiveHourResetsAt = new Date(Date.now() + 5 * 60 * 60_000).toISOString()
-      const sevenDayResetsAt = new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString()
-      return buildModelQuotaSnapshot(models, {
-        claude: {
-          status: 'available',
-          source: 'Fixture isolée Claude',
-          observedAt,
-          windows: [
-            {
-              id: 'five-hour',
-              label: '5 h',
-              usedPercent: 63,
-              remainingPercent: 37,
-              resetsAt: fiveHourResetsAt
-            },
-            {
-              id: 'seven-day',
-              label: '7 j',
-              usedPercent: 18,
-              remainingPercent: 82,
-              resetsAt: sevenDayResetsAt
-            }
-          ]
-        },
-        codex: {
-          status: 'available',
-          source: 'Fixture isolée Codex',
-          observedAt,
-          windows: [
-            {
-              id: 'five-hour',
-              label: '5 h',
-              usedPercent: 42,
-              remainingPercent: 58,
-              resetsAt: fiveHourResetsAt
-            },
-            {
-              id: 'seven-day',
-              label: '7 j',
-              usedPercent: 29,
-              remainingPercent: 71,
-              resetsAt: sevenDayResetsAt
-            }
-          ]
-        }
-      })
-    }
-    return getModelQuotaSnapshot(models, { force })
-  })
-  // `index.ts` garde la SEULE autorité sur `agentTopology` (variable réassignée) : les modules la
-  // reçoivent en lecture/écriture, jamais en valeur.
-  const lireTopologie = (): AgentTopology => agentTopology
-  const appliquerTopologie = (topology: AgentTopology): AgentTopology => {
-    agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
-    syncRuntimeTopology(agentTopology)
-    return agentTopology
-  }
-  const broadcastRolesRefresh = (): void => broadcast({ type: 'refresh', scope: 'roles' })
   registerProfilesIpc({
     os,
     profiles,
@@ -2488,44 +2400,10 @@ Le fil reprend ensuite normalement.`
     appliquerTopologie,
     broadcastRolesRefresh
   })
-  // --- Contrôles de capacités : inventaire + mutations bornées ---
-  ipcMain.handle(
-    'os:capabilities:list',
-    (event, kind: 'skills' | 'hooks' | 'tools' | 'plugins') => {
-      assertTrustedRendererSender(event, 'Capabilities')
-      if (!['skills', 'hooks', 'tools', 'plugins'].includes(kind))
-        throw new Error('Vue de capacités inconnue')
-      return listCapabilities(kind)
-    }
-  )
-
-  ipcMain.handle('claude:hooks:list', (event) => {
-    assertTrustedRendererSender(event, 'Claude hooks')
-    return listClaudeHooks()
-  })
-  ipcMain.handle('codex:hooks:list', (event) => {
-    assertTrustedRendererSender(event, 'Codex hooks')
-    return listCodexHooks()
-  })
-  ipcMain.handle('os:capabilities:tools:set', async (event, name: string, enabled: unknown) => {
-    assertTrustedRendererSender(event, 'Capabilities')
-    const before = await listCapabilities('tools')
-    const result = await setCapabilityEnabled(
-      'tools',
-      guardString(name, 'toolset'),
-      guardBoolean(enabled, 'toolset.enabled')
-    )
-    const change = promptConfigChange('tools', before, result.items)
-    appendPromptConfigActivity(`Prompt Load · toolset ${name}`, change)
-    if (bus.activeConversationId) {
-      appendConvActivity(bus.activeConversationId, {
-        kind: 'configuration-change',
-        label: `Prompt Load · toolset ${name}`,
-        text: JSON.stringify(change)
-      })
-    }
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return result
+  // Les canaux de l'inventaire des capacités vivent dans src/main/ipc/capabilities.ts.
+  registerCapabilitiesIpc({
+    lireConversationActive: () => bus.activeConversationId,
+    broadcast
   })
 
   ipcMain.handle('os:behaviour:choose-workspace', async (event) => {

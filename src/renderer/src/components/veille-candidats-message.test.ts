@@ -3,7 +3,7 @@ import {
   candidatsDepuisScoutTable,
   emojiType,
   extraireCandidatsAffiches,
-  redigerPromptFrameSelection,
+  redigerPromptWorkflowSelection,
   texteSansChargeJson
 } from './veille-candidats-message'
 import { parseScoutTable } from './scout-table'
@@ -102,7 +102,17 @@ describe('extraireCandidatsAffiches', () => {
   })
 })
 
-describe('redigerPromptFrameSelection', () => {
+describe('redigerPromptWorkflowSelection', () => {
+  /**
+   * Demande utilisateur du 2026-09-02 : « quand je scoot le bouton doit lancer tout le workflow et
+   * pas uniquement le frame ». Preuve HORS du texte : on passe le prompt au routeur de phases réel.
+   */
+  it('lance le pipeline COMPLET, pas la seule phase frame', () => {
+    const prompt = redigerPromptWorkflowSelection(extraireCandidatsAffiches(MESSAGE)!)
+    expect(prompt).not.toMatch(/^\/frame/)
+    expect(prompt).toContain('COMMIT PUBLIÉ')
+  })
+
   /**
    * Ce test EXIGEAIT la promesse contradictoire (« COMMIT PUBLIÉ ») : il verrouillait le défaut.
    *
@@ -111,31 +121,26 @@ describe('redigerPromptFrameSelection', () => {
    * pour ça — score 20/100, « le livrable s'arrête volontairement à FRAME sans déclarer cet échec ».
    * C'est l'origine de conv-1302 : ce même prompt a ouvert douze tours de réparation.
    */
-  it('compose le /frame sans promettre ce qu’un run frame-only ne peut pas tenir', () => {
+  it('porte les ancrages, les notes et la consigne de commit', () => {
     const candidats = extraireCandidatsAffiches(MESSAGE)!
-    const prompt = redigerPromptFrameSelection(candidats)
-    expect(prompt).toMatch(/^\/frame Traite ENSEMBLE ces 2 candidats/)
+    const prompt = redigerPromptWorkflowSelection(candidats)
+    expect(prompt).toMatch(/^Traite ENSEMBLE ces 2 candidats/)
     expect(prompt).toContain(
       '1. File de reprise groupée — ancrage src/renderer/src/components/chat-home-suggestions.ts:59'
     )
     expect(prompt).toContain('pertinence 94/100')
-    // La promesse impossible tombe...
-    expect(prompt).not.toContain('COMMIT PUBLIÉ')
-    expect(prompt).not.toMatch(/workflow complet/i)
-    // ...et ce que le tour DOIT rendre est dit, avec la suite annoncée honnêtement.
-    expect(prompt).toContain('CADRAGE')
-    expect(prompt).toMatch(/ne joue que la phase frame/i)
-    expect(prompt).toMatch(/s’enchaîne au tour suivant/i)
+    expect(prompt).toMatch(/PIPELINE complet/)
+    expect(prompt).not.toMatch(/ne joue que la phase frame/i)
   })
 
   it('au singulier, le prompt reste grammatical', () => {
-    const prompt = redigerPromptFrameSelection([{ titre: 'X', url: 'src/a.ts:1' }])
-    expect(prompt).toMatch(/^\/frame Traite ce candidat issu/)
+    const prompt = redigerPromptWorkflowSelection([{ titre: 'X', url: 'src/a.ts:1' }])
+    expect(prompt).toMatch(/^Traite ce candidat issu/)
     expect(prompt).not.toContain('candidats issus')
   })
 
-  it('transmet au /frame le quoi, le pourquoi et le comment du candidat', () => {
-    const prompt = redigerPromptFrameSelection([
+  it('transmet au workflow le quoi, le pourquoi et le comment du candidat', () => {
+    const prompt = redigerPromptWorkflowSelection([
       {
         titre: 'Cockpit',
         url: 'src/main/index.ts:1',
@@ -212,7 +217,7 @@ describe('un tableau scout markdown alimente le panneau de selection', () => {
   })
 
   it('le prompt de selection reste lisible sans ancrage', () => {
-    const prompt = redigerPromptFrameSelection([{ titre: 'Renommer une variable', type: 'fix' }])
+    const prompt = redigerPromptWorkflowSelection([{ titre: 'Renommer une variable', type: 'fix' }])
     expect(prompt).toContain('Renommer une variable')
     expect(prompt).not.toContain('ancrage undefined')
   })
