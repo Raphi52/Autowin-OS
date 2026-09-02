@@ -36,6 +36,36 @@ export interface JarvisEcoute {
   eveille: boolean
   /** Verrou par phrase : le moteur republie le partiel à chaque mot, on ne bipe qu'une fois. */
   eveilAnnonce: boolean
+  /**
+   * LE DERNIER ORDRE RÉELLEMENT PARTI, et quand. C'est le verrou contre le DOUBLE ENVOI.
+   *
+   * DÉFAUT VÉCU le 2026-09-01 (conv-71) : la phrase « rend la widget de Jarvis futuriste et ultra
+   * stylé. » dite UNE fois a produit DEUX messages à 0,8 s d'écart, donc deux tours de modèle
+   * PAYANTS. Les moteurs de reconnaissance republient un segment déjà figé (whisper.cpp quand le
+   * silence est recoupé, `webkitSpeechRecognition` quand `resultIndex` rejoue la liste) : l'éveil
+   * et l'extraction sont alors parfaitement corrects DEUX fois de suite. La garde ne peut donc pas
+   * vivre dans le widget, elle vit ICI, dans l'état de la session vocale.
+   */
+  dernierOrdre: string | null
+  /** Horodatage du dernier ordre parti (voir `dernierOrdre`). */
+  dernierOrdreLe: number
+}
+
+/**
+ * Fenêtre pendant laquelle un ordre IDENTIQUE est tenu pour le MÊME, donc ignoré. Calibrée sur le
+ * défaut mesuré (0,8 s entre les deux copies) avec une marge large ; au-delà, répéter volontairement
+ * un ordre (« relance ») reste possible.
+ */
+export const FENETRE_ORDRE_REPETE_MS = 5_000
+
+/** Deux transcriptions de la MÊME phrase ne diffèrent qu'à la ponctuation et la casse près. */
+function memeOrdre(a: string, b: string): boolean {
+  const nettoyer = (t: string): string =>
+    t
+      .toLowerCase()
+      .replace(/[\s.,;:!?—-]+/gu, ' ')
+      .trim()
+  return nettoyer(a) === nettoyer(b)
 }
 
 /** Au-delà, l'historique parlé n'est plus lu — il ne sert qu'à vérifier ce que Jarvis a entendu. */
@@ -47,7 +77,9 @@ export const ecouteInitiale: JarvisEcoute = {
   partiel: '',
   commandes: [],
   eveille: false,
-  eveilAnnonce: false
+  eveilAnnonce: false,
+  dernierOrdre: null,
+  dernierOrdreLe: 0
 }
 
 /**
@@ -328,16 +360,26 @@ export function reagirAParole(
   if (bip) suivant = { ...suivant, eveille: true, eveilAnnonce: true }
   if (!parole.final) return { etat: suivant, bip, ordre: null }
 
-  const ordre = eveilIci
+  const entendu = eveilIci
     ? extraireCommandeEveil(parole.texte, nom)
     : etat.eveille
       ? parole.texte.trim() || null
       : null
+  // REPUBLICATION : le même ordre redit dans la fenêtre est le MÊME ordre, pas un second. On le
+  // laisse tomber SANS toucher au verrou : sinon deux copies suivies d'une troisième rouvriraient
+  // la porte, et l'utilisateur paierait le tour qu'il n'a jamais demandé.
+  const repete =
+    entendu !== null &&
+    etat.dernierOrdre !== null &&
+    parole.le - etat.dernierOrdreLe < FENETRE_ORDRE_REPETE_MS &&
+    memeOrdre(entendu, etat.dernierOrdre)
+  const ordre = repete ? null : entendu
   return {
     etat: {
       ...suivant,
       eveilAnnonce: false,
-      eveille: ordre === null && (eveilIci || etat.eveille)
+      eveille: ordre === null && !repete && (eveilIci || etat.eveille),
+      ...(ordre !== null ? { dernierOrdre: ordre, dernierOrdreLe: parole.le } : {})
     },
     bip,
     ordre

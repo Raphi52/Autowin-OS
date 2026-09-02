@@ -8,6 +8,8 @@ import {
   contientEveil,
   extraireCommandeEveil,
   reagirAParole,
+  FENETRE_ORDRE_REPETE_MS,
+  type JarvisEcoute,
   type SommaireDirect
 } from './jarvis-voice'
 
@@ -319,5 +321,38 @@ describe('le mot d’éveil suit le NOM RÉGLÉ, pas une constante', () => {
     const r = reagirAParole(depart, { texte: 'Friday ouvre le chat', final: true, le: 1 }, 'Friday')
     expect(r.ordre).toBe('ouvre le chat')
     expect(r.bip).toBe(true)
+  })
+})
+
+/**
+ * DOUBLE ENVOI D'UN ORDRE DICTE — repeche de la remise de cote 646a83eb (2026-09-01, conv-71).
+ *
+ * La phrase « rend la widget de Jarvis futuriste et ultra style. » dite UNE fois a produit DEUX
+ * messages a 0,8 s d'ecart, donc deux tours de modele PAYANTS. Les moteurs republient un segment
+ * deja fige : whisper.cpp quand le silence est recoupe, `webkitSpeechRecognition` quand
+ * `resultIndex` rejoue la liste. L'eveil et l'extraction sont alors corrects DEUX fois de suite —
+ * la garde ne peut donc pas vivre dans le widget, elle vit dans l'etat de la session vocale.
+ */
+describe('reagirAParole — un ordre dit une fois ne part qu une fois', () => {
+  const dire = (etat: JarvisEcoute, texte: string, le: number) =>
+    reagirAParole(etat, { texte, final: true, le }, 'Jarvis')
+
+  it('ignore la REPUBLICATION du meme ordre (entree falsifiante : 0,8 s d ecart)', () => {
+    const premier = dire({ ...ecouteInitiale, active: true }, 'Jarvis, ouvre le chat', 1_000)
+    expect(premier.ordre).toBe('ouvre le chat')
+    const second = dire(premier.etat, 'Jarvis, ouvre le chat.', 1_800)
+    expect(second.ordre).toBeNull()
+  })
+
+  it('ne confond pas deux ordres DIFFERENTS dits coup sur coup', () => {
+    const premier = dire({ ...ecouteInitiale, active: true }, 'Jarvis, ouvre le chat', 1_000)
+    const second = dire(premier.etat, 'Jarvis, ferme le chat', 1_800)
+    expect(second.ordre).toBe('ferme le chat')
+  })
+
+  it('laisse REPETER le meme ordre une fois la fenetre passee', () => {
+    const premier = dire({ ...ecouteInitiale, active: true }, 'Jarvis, ouvre le chat', 1_000)
+    const tard = dire(premier.etat, 'Jarvis, ouvre le chat', 1_000 + FENETRE_ORDRE_REPETE_MS + 1)
+    expect(tard.ordre).toBe('ouvre le chat')
   })
 })

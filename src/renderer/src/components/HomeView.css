@@ -895,6 +895,20 @@
   animation: jarvis-pulse 1.6s ease-in-out infinite;
 }
 
+/*
+ * MOUVEMENT REDUIT : le pouls s'immobilise, l'ETAT reste lisible.
+ *
+ * Le battement est de l'ambiance ; quand le systeme demande moins d'animation, il s'arrete. La
+ * distinction micro ouvert / micro coupe ne repose alors plus sur le mouvement mais sur la COULEUR
+ * (`border-color` et `color` en or), posee par la regle d'etat juste au-dessus — sans elle, couper
+ * l'animation rendrait un micro ouvert indiscernable d'un micro eteint.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .jarvis[data-ecoute='true'] .jarvis__bascule {
+    animation: none;
+  }
+}
+
 @keyframes jarvis-pulse {
   0%,
   100% {

@@ -32,4 +32,28 @@ describe('HomeView.css — la pastille d’écoute de Jarvis pulse, et seulement
     const regleNeutre = css.match(/(?<!\])\s\.jarvis__bascule\s*\{([^}]*)\}/)
     expect(regleNeutre?.[1] ?? '').not.toMatch(/animation/)
   })
+
+  /**
+   * MOUVEMENT REDUIT — repeche de la remise de cote 646a83eb. Le pouls est de l'ambiance : quand le
+   * systeme demande moins d'animation, il s'arrete. La distinction micro ouvert / micro coupe ne
+   * repose alors plus sur le mouvement mais sur la COULEUR, que la meme regle pose deja
+   * (`border-color` et `color` en or) — sans elle, immobiliser le pouls rendrait l'etat illisible.
+   */
+  const FIN_DE_BLOC = String.fromCharCode(10) + '}'
+
+  it('immobilise le pouls quand le systeme demande moins d animation', () => {
+    const blocs = css
+      .split('@media (prefers-reduced-motion: reduce)')
+      .slice(1)
+      .map((morceau) => morceau.slice(0, morceau.indexOf(FIN_DE_BLOC)))
+    const couvre = blocs.some(
+      (bloc) =>
+        bloc.includes(".jarvis[data-ecoute='true'] .jarvis__bascule") &&
+        /animation\s*:\s*none/.test(bloc)
+    )
+    expect(couvre, 'le pouls du micro doit etre coupe sous prefers-reduced-motion').toBe(true)
+
+    const regleActive = css.match(/\.jarvis\[data-ecoute='true'\]\s+\.jarvis__bascule\s*\{([^}]*)\}/)
+    expect(regleActive?.[1], 'la couleur doit rester le signal de secours').toMatch(/color\s*:/)
+  })
 })
