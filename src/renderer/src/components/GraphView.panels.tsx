@@ -1,6 +1,6 @@
 import { BrainMarkdown } from './BrainMarkdown'
 import { HumanJson } from './HumanJson'
-import { nodeThemeIds, type GraphNode } from './graph-view-model'
+import { brainScoreChannelLabel, nodeThemeIds, type GraphNode } from './graph-view-model'
 import { Spinner } from './Spinner'
 
 /**
@@ -84,6 +84,23 @@ export function RangeRow({
   )
 }
 
+/**
+ * Champs du NŒUD lui-même, tels que le graphe les porte. Le panneau ne montrait que le libellé, le
+ * chemin et le contenu du fichier : tout le reste (identifiant, thèmes, scores de recherche,
+ * relations déclarées, position dans l'arbre) était chargé puis jeté avant l'affichage. Les
+ * coordonnées de rendu (`x`, `fx`…) sont écartées : elles ne disent rien de la connaissance.
+ */
+const NODE_RENDER_ONLY = new Set(['x', 'y', 'z', 'fx', 'fy', 'fz', 'label'])
+
+function nodeDetailFields(node: GraphNode): Record<string, unknown> {
+  const keep: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(node)) {
+    if (NODE_RENDER_ONLY.has(key) || value === undefined || value === null || value === '') continue
+    keep[key] = value
+  }
+  return keep
+}
+
 export function NodePanel({
   node,
   file,
@@ -155,6 +172,32 @@ export function NodePanel({
             <Spinner /> Chargement du contenu…
           </div>
         )}
+        {/* DÉTAIL DU NŒUD — l'information existait déjà dans le nœud, elle n'était simplement
+            jamais rendue. Repliée par défaut : le contenu de la fiche reste la lecture première. */}
+        <details className="node-panel__details" data-testid="node-panel-details">
+          <summary>Détail du nœud</summary>
+          <dl className="node-panel__meta">
+            <dt>Identifiant</dt>
+            <dd>{node.id}</dd>
+            <dt>Thèmes</dt>
+            <dd>{nodeThemeIds(node).join(' · ') || '—'}</dd>
+            <dt>Scores de recherche</dt>
+            <dd>{brainScoreChannelLabel(node)}</dd>
+            <dt>Relations déclarées</dt>
+            <dd>{node.relations?.length ?? 0}</dd>
+          </dl>
+          {node.relations && node.relations.length > 0 && (
+            <ul className="node-panel__relations">
+              {node.relations.map((relation, index) => (
+                <li key={`${relation.type}:${relation.target}:${index}`}>
+                  <em>{relation.type}</em>
+                  <span>{relation.target}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <HumanJson className="node-panel__json" value={nodeDetailFields(node)} />
+        </details>
         {file &&
           (/\.md$/i.test(file.path) ? (
             <BrainMarkdown source={file.content} />

@@ -1,0 +1,110 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>front-converge — vocabulaire de design partagé</title>
+<style>
+  :root{
+    --bg:#0d1016; --surf:#141922; --line:#232a36;
+    --txt:#dde3ee; --txt2:#98a2b6;
+    --or:#d4a94f; --or2:#e3ba55; --cy:#7fe3ff; --rouge:#ff5d6c; --vert:#5fd39a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;padding:32px;max-width:1080px}
+  h1{font:600 22px/1.3 inherit;margin:0 0 4px}
+  h2{font:600 15px/1.3 inherit;margin:36px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .kick{font:600 10px/1 ui-monospace,Consolas,monospace;letter-spacing:.16em;
+        text-transform:uppercase;color:var(--or)}
+  p{color:var(--txt2);margin:6px 0}
+  table{border-collapse:collapse;width:100%;margin-top:8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:600 11px/1 ui-monospace,Consolas,monospace;letter-spacing:.1em;
+     text-transform:uppercase;color:var(--txt2)}
+  code{font:12px/1 ui-monospace,Consolas,monospace;color:var(--cy)}
+  .term{color:var(--or2);font-weight:600}
+  .ban{color:var(--rouge);font-weight:600}
+  .ok{color:var(--vert);font-weight:600}
+  .demo{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px}
+  .card{background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:14px;width:300px}
+  .card .cap{font:600 10px/1 ui-monospace,Consolas,monospace;letter-spacing:.14em;
+             text-transform:uppercase;color:var(--txt2);margin-bottom:10px}
+  .hair{height:1px;background:var(--line);margin:10px 0}
+  .stripe{border-left:2px solid var(--or);padding-left:10px}
+  .rail{display:flex;gap:10px}
+  .rail .col{flex:0 0 44px;border-right:1px solid var(--line);color:var(--txt2);
+             font:11px/1.4 ui-monospace,Consolas,monospace}
+  .dense{font:11px/1.35 ui-monospace,Consolas,monospace;color:var(--txt2)}
+  .edito{font:600 19px/1.25 Georgia,serif;color:var(--txt)}
+  .note{background:var(--surf);border:1px solid var(--line);border-left:2px solid var(--or);
+        border-radius:0 8px 8px 0;padding:12px 14px;margin-top:10px}
+</style>
+
+<div class="kick">front-converge</div>
+<h1>Vocabulaire de design partagé</h1>
+<p>Sert à NOMMER une direction au lieu de la décrire à chaque tour. Trois sections&nbsp;:
+les termes de structure, la direction par défaut de l'utilisateur, et ce qu'il refuse.
+Mis à jour quand un tour de design tranche quelque chose.</p>
+
+<h2>1. Termes de structure</h2>
+<p>Ces mots sont ceux que la boucle emploie pour dire en quoi deux directions diffèrent.</p>
+<table>
+  <tr><th>Terme</th><th>Ce que ça veut dire</th></tr>
+  <tr><td class="term">Linéaire</td><td>Tout coule dans une seule colonne, séparé par des filets. Pas de cartes, pas de grille.</td></tr>
+  <tr><td class="term">Editorial</td><td>Hiérarchie de magazine : un gros titre, beaucoup d'air, peu d'éléments.</td></tr>
+  <tr><td class="term">Dense</td><td>Beaucoup d'information au cm², typo petite, souvent monospace. Registre « instrument ».</td></tr>
+  <tr><td class="term">Rail</td><td>Colonne étroite à gauche (heure, état, index) qui cadence les lignes à droite.</td></tr>
+  <tr><td class="term">Hairline</td><td>Filet de 1px comme seul séparateur. Remplace les bordures de cartes.</td></tr>
+  <tr><td class="term">Status-stripe</td><td>Barre verticale de 2px à gauche d'un bloc, colorée selon l'état.</td></tr>
+  <tr><td class="term">Instrument</td><td>Le visuel affiche une MESURE (seuil, échelle, graduation), pas une décoration.</td></tr>
+</table>
+
+<div class="demo">
+  <div class="card"><div class="cap">Hairline + linéaire</div>
+    <div>Écoute active</div><div class="hair"></div>
+    <div>Seuil micro</div><div class="hair"></div>
+    <div>Transcript partiel</div>
+  </div>
+  <div class="card"><div class="cap">Status-stripe</div>
+    <div class="stripe">Micro ouvert<br><span class="dense">seuil -42 dB</span></div>
+  </div>
+  <div class="card"><div class="cap">Rail + dense</div>
+    <div class="rail"><div class="col">14:22<br>14:21</div>
+      <div class="dense">WAKE&nbsp;WORD&nbsp;OK<br>GAIN&nbsp;+3.2&nbsp;dB</div></div>
+  </div>
+  <div class="card"><div class="cap">Editorial</div>
+    <div class="edito">J'écoute.</div>
+    <p style="margin:4px 0 0">un seul point d'accroche, beaucoup d'air</p>
+  </div>
+</div>
+
+<h2>2. Direction par défaut</h2>
+<div class="note">
+  <span class="ok">HUD sci-fi de précision</span> — validé le 2026-09-01 sur le widget Jarvis
+  (« j'aime la direction que ça prend »). Registre futuriste assumé, mais tenu par la
+  <span class="term">précision d'instrument</span> : graduations, seuils chiffrés, typo monospace fine,
+  cyan froid + or comme accent unique. Le futurisme vient de la DENSITÉ d'information mesurée,
+  pas de la quantité de lueur.
+</div>
+<p>Hors de ce contexte, la fiche de goût en mémoire
+<code>[[feedback_portail_design_lineaire]]</code> reste la source de vérité et prime sur cette page.
+Si la mémoire ne répond pas, cette page sert de repli — et il faut le DIRE à l'utilisateur.</p>
+
+<h2>3. Ce qui est refusé (anti-patterns)</h2>
+<table>
+  <tr><th>Refusé</th><th>Preuve</th><th>À faire à la place</th></tr>
+  <tr><td class="ban">Trop sage</td>
+      <td>« c'est pas assez futuriste » — variantes typographiques silencieuses, presque immobiles</td>
+      <td>Garder la finesse, mais assumer un registre technique visible</td></tr>
+  <tr><td class="ban">Néon générique</td>
+      <td>« j'aime pas ce premier jet » sur le HUD lueur/glow — le bon registre, mal exécuté</td>
+      <td>Remplacer la lueur par de la graduation : échelles, repères, chiffres</td></tr>
+  <tr><td class="ban">Décor sans mesure</td>
+      <td>Un anneau qui tourne sans rien indiquer</td>
+      <td>Tout élément animé affiche une VALEUR réelle (niveau micro, seuil, état)</td></tr>
+  <tr><td class="ban">Recycler un set refusé</td>
+      <td>Règle de la boucle : après un rejet, aucune direction ne se réutilise</td>
+      <td>Re-diverger sur d'autres axes</td></tr>
+</table>
+
+<h2>4. Comment s'en servir dans la boucle</h2>
+<p>Au moment de proposer 3 directions : chacune est nommée avec les termes de la section 1,
+diffère des autres sur au moins 2 axes, et ne retombe sur aucune ligne de la section 3.</p>

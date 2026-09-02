@@ -1982,3 +1982,72 @@
   border-color: #293543;
   color: #9fb0c4;
 }
+
+/* DETAIL DU NŒUD — l'identite, les scores et les relations declarees, sous la fiche. Replie par
+   defaut : c'est une preuve consultable, pas une distraction permanente. */
+.node-panel__details {
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(212, 169, 79, 0.22);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12px;
+}
+
+.node-panel__details > summary {
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d4a94f;
+}
+
+.node-panel__meta {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: 2px 10px;
+  margin: 8px 0 0;
+}
+
+.node-panel__meta dt {
+  color: rgba(169, 178, 196, 0.75);
+  font-size: 11px;
+}
+
+.node-panel__meta dd {
+  margin: 0;
+  min-width: 0;
+  word-break: break-word;
+  color: #dde3ee;
+}
+
+.node-panel__relations {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.node-panel__relations li {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.node-panel__relations em {
+  flex: none;
+  font-style: normal;
+  color: #d4a94f;
+}
+
+.node-panel__relations span {
+  min-width: 0;
+  word-break: break-word;
+  color: rgba(221, 227, 238, 0.85);
+}
+
+.node-panel__json {
+  margin-top: 8px;
+}
