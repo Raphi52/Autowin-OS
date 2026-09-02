@@ -49,6 +49,24 @@ Deux artefacts, jamais un seul :
 ### 1. Cadrer le banc (1 message, pas de sous-agent)
 - Reformuler la tâche en **critère de succès vérifiable** (le test, la commande, la capture qui dira
   « livré »). Sans lui, il n'y a pas de gagnant possible → le fabriquer, ne pas le demander.
+- **CRITÈRE CONSTATÉ ROUGE AVANT LE LANCEMENT — sinon le banc est REFUSÉ.** Le critère s'EXÉCUTE sur
+  le dépôt intact et sa sortie ROUGE est collée dans le RUN.md (commande + code de sortie ≠ 0 +
+  assertions en échec). Un critère qui passe déjà au vert ne mesure rien : les quatre bras
+  « réussissent » sans avoir rien fait. Si le rouge ne s'obtient pas → **ARRÊT**, on le dit, on ne
+  lance aucun bras. Cas particuliers : critère déjà vert = la tâche est faite → arrêt et signalement
+  (pas de banc) ; critère qu'on ne peut pas exécuter avant (capture d'écran, jugement à l'œil) = pas
+  un critère → en fabriquer un exécutable, ou déclarer le banc impossible.
+- **LE CRITÈRE DOIT COUVRIR LES CAS LIMITES — sinon le banc est REFUSÉ.** Au moins **3 assertions**,
+  dont au moins **1 cas nominal** et au moins **2 cas limites** pris hors du chemin heureux : entrée
+  invalide ou absurde · limite vide / zéro résultat · borne (premier, dernier, égalité) · erreur
+  attendue qui DOIT être refusée. Chaque assertion s'écrit dans le RUN.md avec ce qu'elle interdit.
+  Un critère qui ne teste que le chemin heureux ne départage personne : au banc du 2026-09-02, les
+  **4 bras sur 4** l'ont passé et ont tous raté les MÊMES cas limites (dates absurdes acceptées,
+  fenêtre vide) — c'est le critère qui a échoué, pas les bras, et le classement s'est joué sur une
+  impression de qualité au lieu d'une mesure.
+- **Contrôle de discrimination, après coup** : si les 4 bras passent le critère, le banc est déclaré
+  **NON DISCRIMINANT** dans la sortie. Le gagnant devient une piste, jamais une mesure, et le vrai
+  correctif est de durcir le critère puis de rejouer — pas de trancher à l'œil.
 - Fixer le **régime** : jetable ≤2 bras · standard = 4 bras (A/B/C/X) · critique = 4 bras + 2 tours
   de juge. Par défaut : standard.
 - **Baseline** : coût et durée observés des tâches comparables (sonde rendement + journaux). Si rien
@@ -126,7 +144,8 @@ pas déclaré meilleur parce qu'il est moins cher : moins cher ET au moins aussi
 
 **Gagnant** : bras + workflow en une phrase · **Δ contre A** : $ et minutes · **Preuve** : l'artefact
 et le journal cités · **Installé où** : le fichier/point de déclenchement · **Limite** : ce qui reste
-non prouvé (une seule tâche testée = un seul point de mesure).
+non prouvé (une seule tâche testée = un seul point de mesure) · **Discrimination** : combien de bras
+ont passé le critère — `4/4` ⇒ banc NON DISCRIMINANT, le gagnant n'est qu'une piste.
 
 ## Pièges qui tuent l'expérience
 - **Pas de témoin** → aucun écart interprétable.
@@ -138,3 +157,7 @@ non prouvé (une seule tâche testée = un seul point de mesure).
 - **Gagnant généralisé sur une seule tâche** → l'annoncer comme une piste mesurée, pas comme une loi.
 - **B et C improvisés** (aucune section `## Candidats scoutés` écrite avant le lancement) → il n'y a
   pas eu de tri, donc rien ne dit que les bras testés valaient la peine d'être testés.
+- **Critère jamais vu rouge** → on ne sait pas s'il testait quoi que ce soit ; un bras peut « réussir »
+  sans avoir touché au défaut.
+- **Critère chemin-heureux seul** → les 4 bras passent, le banc ne départage plus rien et le
+  classement retombe sur le goût du juge.
