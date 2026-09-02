@@ -17,8 +17,6 @@ import { AGENT_STUDIO_DEFAULT_PROVIDER } from '../../shared/task-provider'
  * RECONNAITRE pour la retirer.
  */
 
-export const AUTO_KAIZEN_SEED_ID = 'auto-kaizen-v1'
-
 /**
  * L'auto-kaizen en tant que Watchdog Agent.
  *
@@ -32,7 +30,7 @@ export const AUTO_KAIZEN_SEED_ID = 'auto-kaizen-v1'
  * avec le modele orchestrateur courant d'Agent Studio. Une correction devient une recommandation
  * explicite ; elle ne part jamais en chantier autonome sur la seule foi d'un evenement terminal.
  */
-export function previousOrchestrationAutoKaizenSeed(): ScheduledTaskInput {
+function previousOrchestrationAutoKaizenSeed(): ScheduledTaskInput {
   return {
     title: 'Auto-kaizen — orchestration rouge ou workflow douteux',
     prompt: [
