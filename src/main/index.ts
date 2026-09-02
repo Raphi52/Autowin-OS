@@ -1,6 +1,5 @@
 import { observerLeMoteur } from './observer-les-sources'
 import { spawn } from 'node:child_process'
-import { readGitGraph } from './git-graph-main'
 import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
 import { creerServicePiper, racinePiper, type ServicePiper } from './piper-local'
 import { ServiceTranscripts, dossierTranscripts } from './transcripts'
@@ -10,6 +9,7 @@ import { registerWorktreeIpc, type WorktreeFixtureDeTest } from './ipc/worktree'
 import { registerConversationsIpc } from './ipc/conversations'
 import { registerTranscriptsIpc } from './ipc/transcripts'
 import { registerPreflightIpc } from './ipc/preflight'
+import { registerGitIpc } from './ipc/git'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -331,10 +331,6 @@ import {
   readConversationTurnFilePaths,
   workspaceTracePathKey
 } from './activity/conversation-file-trace-spool'
-import {
-  readConversationGitDiff,
-  readConversationGitState
-} from './activity/conversation-git-state'
 import { buildBehaviourComposition } from './behaviour-composition'
 import {
   buildProviderStatuses,
@@ -347,7 +343,6 @@ import { loadTokens } from './providers/codex-auth'
 import { artifactsFromExecutionEvidence } from './providers/artifacts'
 
 import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
-import { readGitState, readGitDiff } from './git-read-main'
 import {
   ensureTestProjects,
   inspectProject,
@@ -2163,23 +2158,8 @@ Le fil reprend ensuite normalement.`
   })
   // Les canaux du diagnostic de prérequis vivent dans src/main/ipc/preflight.ts.
   registerPreflightIpc({ preflightProviderOptions })
-  // Source control : lecture git READ-ONLY (statut/branche/changements/historique). Aucune action git ici.
-  // Le dépôt lu est configurable (multi-repo) : le renderer fournit un cwd (défaut = cwd de l'app).
-  ipcMain.handle('git:read', (event, cwd?: string) => {
-    assertTrustedRendererSender(event, 'GitRead')
-    return readGitState(cwd && typeof cwd === 'string' ? cwd : process.cwd())
-  })
-  // Historique git : la frise de commits de la vue Worktrees. Lecture seule, bornée côté main.
-  ipcMain.handle('git:graph', (event, cwd?: string) => {
-    assertTrustedRendererSender(event, 'GitGraph')
-    return readGitGraph(
-      cwd && typeof cwd === 'string' ? cwd : (process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd())
-    )
-  })
-  ipcMain.handle('git:diff', (event, path: string, cwd?: string) => {
-    assertTrustedRendererSender(event, 'GitDiff')
-    return readGitDiff(cwd && typeof cwd === 'string' ? cwd : process.cwd(), String(path ?? ''))
-  })
+  // Les canaux git (lecture seule) vivent dans src/main/ipc/git.ts.
+  registerGitIpc({ os, pickDirectory })
   // Vue Tests — MULTI-PROJETS. Le registre porte des racines quelconques : la vue ne connait pas
   // « le » depot de l'app, elle connait une liste. Le workspace courant y est seme au premier appel
   // pour que l'ecran ne soit pas vide, mais il n'y a aucun privilege attache a cette entree.
@@ -2238,11 +2218,6 @@ Le fil reprend ensuite normalement.`
     return runProjectTests(projet, {
       ...(typeof filter === 'string' && filter.trim() ? { filter: filter.trim() } : {})
     })
-  })
-  // Selecteur de depot (dialogue dossier, read-only) → renvoie le chemin choisi ou null si annulé.
-  ipcMain.handle('git:pickRepo', async (event) => {
-    assertTrustedRendererSender(event, 'GitPickRepo')
-    return pickDirectory(event.sender)
   })
   // Racine du Brain partagé : permet à Source control de basculer sur SON dépôt git en un clic
   // (les notes du Brain sont versionnées comme le code). Lecture seule, aucun secret exposé.
@@ -3659,23 +3634,6 @@ Le fil reprend ensuite normalement.`
       true
     )
   })
-  ipcMain.handle('git:conversationRead', async (event, conversationId: unknown) => {
-    assertTrustedRendererSender(event, 'ConversationGitRead')
-    const safeConversationId = guardString(conversationId, 'conversationId')
-    return readConversationGitState(safeConversationId, os.executionWorkspace)
-  })
-  ipcMain.handle(
-    'git:conversationDiff',
-    async (event, conversationId: unknown, rawPath: unknown, rawWorkspaceRoot: unknown) => {
-      assertTrustedRendererSender(event, 'ConversationGitDiff')
-      const safeConversationId = guardString(conversationId, 'conversationId')
-      const path = guardString(rawPath, 'path')
-        .replaceAll('\\', '/')
-        .replace(/^\.\/+/, '')
-      const requestedRoot = guardString(rawWorkspaceRoot, 'workspaceRoot')
-      return readConversationGitDiff(safeConversationId, path, requestedRoot)
-    }
-  )
 
   const relayScriptPath = app.isPackaged
     ? join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'autowin-task-relay.ps1')
