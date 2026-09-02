@@ -672,7 +672,10 @@ export class AgentPilot {
     exigerExperienceSoignee = false
   ): Promise<void> {
     // Chronométrage des jalons jusqu'au PREMIER token : c'est la latence réellement perçue au clic.
-    const timer = startTurnTimer('chat')
+    const timer = startTurnTimer('chat', {
+      ...(turnId ? { turnId } : {}),
+      ...(conversationId ? { conversationId } : {})
+    })
     // Frontière de typage T2 : chaque évènement construit ici doit correspondre EXACTEMENT à une
     // variante de `PilotEventVariant` (excess-property-check compris) avant d'atteindre le
     // consommateur externe `onEvent: (e: PilotEvent) => void`.

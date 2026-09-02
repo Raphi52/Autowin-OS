@@ -24,7 +24,18 @@ export interface TurnTimer {
   end: (extra?: Record<string, unknown>) => void
 }
 
-export function startTurnTimer(label: string): TurnTimer {
+/**
+ * QUI est chronométré. Mesure du 2026-09-02 : les 398 lignes réelles de `turn-timing.jsonl` ne
+ * portent que `label: 'chat'` — on sait qu'un tour a duré 42 s sans pouvoir dire LEQUEL, donc sans
+ * pouvoir joindre la mesure au journal du tour, à la conversation, ni au gel du même instant.
+ * L'identité est demandée au DÉMARRAGE, seul endroit où elle est de toute façon connue.
+ */
+export interface TurnIdentity {
+  turnId?: string
+  conversationId?: string
+}
+
+export function startTurnTimer(label: string, identity: TurnIdentity = {}): TurnTimer {
   const startedAt = performance.now()
   const marks: Record<string, number> = {}
   return {
@@ -37,6 +48,9 @@ export function startTurnTimer(label: string): TurnTimer {
         JSON.stringify({
           ts: new Date().toISOString(),
           label,
+          // Champs OPTIONNELS : le journal est en ajout-seul, les lignes deja ecrites restent lisibles.
+          ...(identity.turnId ? { turnId: identity.turnId } : {}),
+          ...(identity.conversationId ? { conversationId: identity.conversationId } : {}),
           totalMs: Math.round(performance.now() - startedAt),
           marks,
           ...extra
