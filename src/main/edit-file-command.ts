@@ -22,7 +22,19 @@ import { isAbsolute, relative, resolve } from 'node:path'
  */
 
 export type EditDecision =
-  | { allowed: true; absolutePath: string; relativePath: string; oldText: string; newText: string }
+  | {
+      allowed: true
+      absolutePath: string
+      relativePath: string
+      oldText: string
+      newText: string
+      /**
+       * VRAI quand la cible est HORS du dossier Autowin (autre dépôt, autre disque). L'appelant doit
+       * alors écrire DIRECTEMENT sur le fichier réel : la machinerie de bureau isolé + vérification
+       * vitest ne vaut que pour ce dépôt-ci. Voir `commands.ts` (runTracedEditFile).
+       */
+      externe: boolean
+    }
   | { allowed: false; reason: string }
 
 /** Chemins qu'un agent ne doit jamais reecrire, meme dans le workspace. */
@@ -78,17 +90,45 @@ export function decideEdit(
     return { allowed: false, reason: 'aucun changement demandé' }
   }
 
-  // 1. Confinement au workspace. `resolve` neutralise les `..` ; `relative` prouve l'appartenance.
-  const absolutePath = isAbsolute(input.path)
-    ? resolve(input.path)
-    : resolve(workspace, input.path)
+  /*
+   * 1. LOCALISATION DE LA CIBLE — et non plus confinement au seul dossier Autowin.
+   *
+   * MESURE le 2026-09-02 (conv-12) : l'utilisateur travaillait sur `D:\GIT\RigApplication`, sur SA
+   * branche, et a demande la modification de `ULT_TT_INPI.cs` en disant qu'il compilerait et
+   * committerait lui-meme. Les QUATRE voies d'ecriture ont ete refusees, dont celle-ci avec
+   * « chemin hors du workspace » : quatre appels de modele (~1,06 $) pour finir sur un patch a
+   * coller a la main. L'agent LISAIT ce depot sans probleme depuis 20 tours — l'asymetrie
+   * lire-partout / ecrire-ici n'etait pas une regle de securite, c'etait le confinement d'origine
+   * jamais reconsidere.
+   *
+   * Un chemin ABSOLU hors du dossier Autowin est donc accepte, et marque `externe`. Ce qui protege
+   * reellement reste EN PLACE et vaut pour lui aussi : pas de `.git/`, pas de fichier de secrets,
+   * remplacement d'une chaine EXACTE et UNIQUE (donc jamais d'ecrasement ni de creation), refus des
+   * fichiers non-UTF-8. Seules les racines SYSTEME restent fermees : elles ne sont le travail de
+   * personne et une erreur y casse le poste.
+   *
+   * Un chemin RELATIF, lui, reste resolu DANS le dossier Autowin et sa traversee `..` reste refusee :
+   * un `../x` est une ambiguite (relatif a quoi ?), pas une intention. Pour viser un autre depot, on
+   * donne son chemin absolu.
+   */
+  const relatifDemande = !isAbsolute(input.path)
+  const absolutePath = relatifDemande ? resolve(workspace, input.path) : resolve(input.path)
   const relativePath = relative(resolve(workspace), absolutePath)
-  if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+  const externe = !relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)
+  if (externe && relatifDemande) {
     return { allowed: false, reason: 'chemin hors du workspace' }
   }
+  if (externe) {
+    // Le chemin RESOLU et le chemin DEMANDE sont juges tous les deux : sous Windows, `resolve('/etc/x')`
+    // rend `E:\etc\x` (ancre sur le disque courant), donc la racine POSIX ne survit qu'au brut.
+    const refusSysteme =
+      refusRacineSysteme(absolutePath) ?? refusRacineSysteme(input.path)
+    if (refusSysteme) return { allowed: false, reason: refusSysteme }
+  }
 
-  // 2. Zones interdites.
-  const forbidden = isForbidden(relativePath)
+  // 2. Zones interdites (les MEMES dedans et dehors).
+  const cheminAJuger = externe ? absolutePath : relativePath
+  const forbidden = isForbidden(cheminAJuger)
   if (forbidden) return { allowed: false, reason: forbidden }
 
   // 3-4. Le fichier doit exister, et la correspondance doit etre unique.
@@ -122,10 +162,41 @@ export function decideEdit(
   return {
     allowed: true,
     absolutePath,
-    relativePath: relativePath.replace(/\\/g, '/'),
+    // Hors du dossier Autowin, le chemin RELATIF ne veut rien dire : on rend l'absolu, seul citable.
+    relativePath: (externe ? absolutePath : relativePath).replace(/\\/g, '/'),
     oldText: input.oldText,
-    newText: input.newText
+    newText: input.newText,
+    externe
   }
+}
+
+/**
+ * RACINES SYSTEME — les seules fermees a l'ecriture hors du dossier Autowin.
+ *
+ * Elles ne sont le travail de personne (aucun depot, aucune fiche) et une edition ratee y casse le
+ * poste ou l'installation d'un logiciel. Le refus est explicite : il ENSEIGNE, comme les autres.
+ */
+const RACINES_SYSTEME = [
+  'c:/windows',
+  'c:/program files',
+  'c:/program files (x86)',
+  'c:/programdata',
+  '/etc',
+  '/bin',
+  '/sbin',
+  '/usr/bin',
+  '/system',
+  '/library'
+]
+
+export function refusRacineSysteme(absolutePath: string): string | undefined {
+  const normalise = absolutePath.replace(/\\/g, '/').toLowerCase()
+  for (const racine of RACINES_SYSTEME) {
+    if (normalise === racine || normalise.startsWith(`${racine}/`)) {
+      return `racine système protégée : ${racine} — édition refusée (aucun dépôt de travail n'y vit)`
+    }
+  }
+  return undefined
 }
 
 

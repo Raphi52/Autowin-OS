@@ -27,13 +27,48 @@ describe('decideEdit — CONFINEMENT au workspace', () => {
     }
   })
 
-  it('refuse un chemin absolu EXTERIEUR au workspace', () => {
+  /*
+   * MESURE conv-12 (2026-09-02) : l'edition d'un fichier d'un AUTRE depot (D:\GIT\RigApplication) a
+   * ete refusee « chemin hors du workspace », alors que l'agent lisait ce depot depuis 20 tours.
+   * Un chemin ABSOLU externe est donc recevable, et marque `externe`.
+   */
+  it('ACCEPTE un chemin absolu vers un autre depot, marque externe', () => {
     const decision = decideEdit(
-      { path: 'C:/Windows/system.ini', oldText: 'a', newText: 'b' },
+      { path: 'D:/GIT/RigApplication/Source/ULT_TT_INPI.cs', oldText: 'a', newText: 'b' },
       WORKSPACE,
       file('a')
     )
-    expect(decision.allowed).toBe(false)
+    expect(decision.allowed).toBe(true)
+    if (decision.allowed) {
+      expect(decision.externe).toBe(true)
+      expect(decision.relativePath).toBe('D:/GIT/RigApplication/Source/ULT_TT_INPI.cs')
+    }
+  })
+
+  it('un chemin INTERIEUR n’est pas marque externe', () => {
+    const decision = decideEdit(
+      { path: 'C:/projet/src/app.ts', oldText: 'a', newText: 'b' },
+      WORKSPACE,
+      file('a')
+    )
+    expect(decision.allowed).toBe(true)
+    if (decision.allowed) expect(decision.externe).toBe(false)
+  })
+
+  it('refuse encore les RACINES SYSTEME (elles ne sont le travail de personne)', () => {
+    for (const path of ['C:/Windows/system.ini', 'C:/Program Files/app/config.txt', '/etc/hosts']) {
+      const decision = decideEdit({ path, oldText: 'a', newText: 'b' }, WORKSPACE, file('a'))
+      expect(decision.allowed).toBe(false)
+      if (!decision.allowed) expect(decision.reason).toContain('racine système')
+    }
+  })
+
+  it('refuse .git et les secrets AUSSI hors du workspace', () => {
+    for (const path of ['D:/GIT/RigApplication/.git/config', 'D:/GIT/RigApplication/.env']) {
+      const decision = decideEdit({ path, oldText: 'a', newText: 'b' }, WORKSPACE, file('a'))
+      expect(decision.allowed).toBe(false)
+      if (!decision.allowed) expect(decision.reason).toMatch(/protégé|sensible/)
+    }
   })
 
   it('accepte un chemin absolu INTERIEUR au workspace', () => {
