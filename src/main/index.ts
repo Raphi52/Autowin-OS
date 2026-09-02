@@ -15,6 +15,7 @@ import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
 import { registerClaudeAccountsIpc } from './ipc/claude-accounts'
 import { registerProfilesIpc } from './ipc/profiles'
+import { registerTopologyIpc } from './ipc/topology'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -216,7 +217,6 @@ import { causalLearningContext } from './knowledge/semantic-temporal-projection'
 import { ModelCatalogRefresher } from './model-refresh'
 import { buildModelQuotaSnapshot, getModelQuotaSnapshot } from './model-quotas'
 import { loadAgentTopology, saveAgentTopology, type IncidentTopologie } from './topology-disk'
-import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
 import {
   assertRuntimeBindingAvailable,
@@ -2596,37 +2596,29 @@ Le fil reprend ensuite normalement.`
     }
     return probeProviderConnection(id as RoutedProvider)
   })
+  // `index.ts` garde la SEULE autorité sur `agentTopology` (variable réassignée) : les modules la
+  // reçoivent en lecture/écriture, jamais en valeur.
+  const lireTopologie = (): AgentTopology => agentTopology
+  const appliquerTopologie = (topology: AgentTopology): AgentTopology => {
+    agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
+    syncRuntimeTopology(agentTopology)
+    return agentTopology
+  }
+  const broadcastRolesRefresh = (): void => broadcast({ type: 'refresh', scope: 'roles' })
   registerProfilesIpc({
     os,
     profiles,
     agentModelsReady,
-    lireTopologie: () => agentTopology,
-    appliquerTopologie: (topology) => {
-      agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
-      syncRuntimeTopology(agentTopology)
-      return agentTopology
-    },
-    broadcastRolesRefresh: () => broadcast({ type: 'refresh', scope: 'roles' })
+    lireTopologie,
+    appliquerTopologie,
+    broadcastRolesRefresh
   })
-  ipcMain.handle('os:topology:get', async (event) => {
-    assertTrustedRendererSender(event, 'Topology')
-    await agentModelsReady
-    return agentTopology
+  registerTopologyIpc({
+    agentModelsReady,
+    lireTopologie,
+    appliquerTopologie,
+    broadcastRolesRefresh
   })
-  ipcMain.handle('os:topology:set', async (event, topology: AgentTopology) => {
-    assertTrustedRendererSender(event, 'Topology')
-    await agentModelsReady
-    guardString(JSON.stringify(topology), 'topology')
-    agentTopology = saveAgentTopology(
-      agentTopologyPath,
-      migrateTopologyShape(topology) as AgentTopology,
-      agentModels
-    )
-    syncRuntimeTopology(agentTopology)
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return agentTopology
-  })
-
   // --- Contrôles de capacités : inventaire + mutations bornées ---
   ipcMain.handle(
     'os:capabilities:list',
