@@ -1343,6 +1343,22 @@
   justify-content: flex-end;
   gap: 10px;
 }
+.rename-conv-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 14px 0 22px;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #f2f5fb;
+  font: inherit;
+}
+.rename-conv-input:focus {
+  outline: none;
+  border-color: rgba(212, 169, 79, 0.72);
+}
 .delete-confirm-cancel {
   background: rgba(255, 255, 255, 0.06);
 }
