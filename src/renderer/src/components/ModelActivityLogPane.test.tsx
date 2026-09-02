@@ -276,3 +276,53 @@ describe('ModelActivityLogPane — lecture en profondeur', () => {
     expect(copie.some((ligne) => ligne.turnId === 'turn-2')).toBe(true)
   })
 })
+
+describe('ModelActivityLogPane — la source Brain', () => {
+  it('lit les traces Brain de la conversation et les affiche comme gestes', async () => {
+    const brainTraces = vi.fn(async () => [
+      {
+        id: 'b1',
+        timestamp: '2026-09-02T10:00:00.000Z',
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        kind: 'query',
+        query: 'contrainte du graphe',
+        status: 'found',
+        found: true,
+        injectedChars: 1_200
+      },
+      // Une trace d'UNE AUTRE conversation ne doit jamais s'inviter dans ce fil.
+      {
+        id: 'b2',
+        timestamp: '2026-09-02T10:01:00.000Z',
+        conversationId: 'conv-9',
+        kind: 'query',
+        query: 'sujet etranger',
+        injectedChars: 5
+      }
+    ])
+    ;(window as unknown as { api: Record<string, unknown> }).api = { brainTraces }
+    await monter()
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(brainTraces).toHaveBeenCalledWith('conv-1')
+    const liste = host.querySelector('[data-testid="model-activity-log"]') as HTMLElement
+    expect(liste.textContent).toContain('contrainte du graphe')
+    expect(liste.textContent).toContain('brain_query')
+    expect(liste.textContent).not.toContain('sujet etranger')
+  })
+
+  it('ne casse pas le journal quand le Brain est hors ligne', async () => {
+    ;(window as unknown as { api: Record<string, unknown> }).api = {
+      brainTraces: vi.fn(async () => {
+        throw new Error('brain hors ligne')
+      })
+    }
+    await monter()
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(host.querySelector('[data-testid="model-activity-log"]')).not.toBeNull()
+  })
+})

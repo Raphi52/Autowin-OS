@@ -471,3 +471,55 @@ describe('le raisonnement DURABLE ne doit ni disparaître ni faire doublon', () 
     expect(pensees[0]).toMatchObject({ source: 'thread', detail: 'pensée survivante' })
   })
 })
+
+describe('buildModelActivityLog — la source BRAIN', () => {
+  const trace = (part: Record<string, unknown>): Record<string, unknown> => ({
+    id: 'b1',
+    timestamp: '2026-09-02T10:00:00.000Z',
+    conversationId: 'conv-1',
+    turnId: 'turn-1',
+    query: 'contrainte du graphe',
+    injectedChars: 1_200,
+    ...part
+  })
+
+  it('rend la récupération Brain avec sa nature, sa requête et le volume injecté', () => {
+    const [ligne] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      brain: [trace({ kind: 'query', status: 'found', found: true })]
+    })
+    expect(ligne.source).toBe('brain')
+    expect(ligne.kind).toBe('brain')
+    expect(ligne.label).toContain('brain_query')
+    expect(ligne.detail).toContain('contrainte du graphe')
+    expect(ligne.detail).toContain('1200 caractères injectés')
+    expect(ligne.ok).toBe(true)
+    // La ligne rejoint le TOUR qui l'a déclenchée, pas un journal à part.
+    expect(ligne.turnId).toBe('turn-1')
+  })
+
+  it('marque en échec une récupération vide ou indisponible — elle explique une réponse pauvre', () => {
+    const [vide] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      brain: [trace({ kind: 'automatic', status: 'unavailable', found: false })]
+    })
+    expect(vide.ok).toBe(false)
+    expect(vide.label).toContain('contexte préchargé')
+  })
+
+  it('nomme le DÉPÔT d’un fait, pas seulement les lectures', () => {
+    const [depot] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      brain: [trace({ kind: 'depot', query: 'leçon sur les logs' })]
+    })
+    expect(depot.label).toContain('dépôt')
+    expect(depot.fields).toMatchObject({ conversationId: 'conv-1' })
+  })
+
+  it('n’invente aucune ligne quand la source Brain est absente', () => {
+    expect(buildModelActivityLog({ messages: [], journalByTurn: {} })).toEqual([])
+  })
+})

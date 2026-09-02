@@ -89,6 +89,9 @@ export function ModelActivityLogPane({
   const [kindMasque, setKindMasque] = useState<ModelActivityKind | ''>('')
   const [sourceMasquee, setSourceMasquee] = useState<ModelActivitySource | ''>('')
   const [erreursSeules, setErreursSeules] = useState(false)
+  // La SIXIEME source, et la seule qui disait ce que le modele avait LU avant de repondre : les
+  // recuperations Brain et les faits deposes. Elle n'atteignait que l'Observatory.
+  const [brain, setBrain] = useState<ReadonlyArray<Record<string, unknown>>>([])
   // Fenêtre d'affichage PAR sélection (conversation + filtres) : changer de filtre repart donc de
   // la taille par défaut sans le moindre effet, et revenir à une sélection retrouve sa fenêtre.
   const [fenetres, setFenetres] = useState<Record<string, number>>({})
@@ -143,13 +146,20 @@ export function ModelActivityLogPane({
     if (!conversationId) return
     let annule = false
     const charger = async (): Promise<void> => {
-      const [trace, activite] = await Promise.all([
+      const [trace, activite, savoir] = await Promise.all([
         window.api?.causalTrace?.(conversationId).catch(() => []) ?? [],
-        window.api?.conversationActivity?.(conversationId).catch(() => []) ?? []
+        window.api?.conversationActivity?.(conversationId).catch(() => []) ?? [],
+        // Le spool Brain porte TOUTES les conversations : on ne garde que la nôtre.
+        window.api?.brainTraces?.(conversationId).catch(() => []) ?? []
       ])
       if (annule) return
       setCausal((trace ?? []) as ReadonlyArray<Record<string, unknown>>)
       setActivity((activite ?? []) as ReadonlyArray<Record<string, unknown>>)
+      setBrain(
+        ((savoir ?? []) as ReadonlyArray<Record<string, unknown>>).filter(
+          (item) => !item.conversationId || item.conversationId === conversationId
+        )
+      )
     }
     void charger()
     if (!live)
@@ -170,9 +180,10 @@ export function ModelActivityLogPane({
         journalByTurn,
         // DERIVE, pas remis a zero par un effet : sans conversation, ces deux sources n'existent pas.
         causal: conversationId ? causal : [],
-        activity: conversationId ? activity : []
+        activity: conversationId ? activity : [],
+        brain: conversationId ? brain : []
       }),
-    [messages, journalByTurn, causal, activity, conversationId]
+    [messages, journalByTurn, causal, activity, brain, conversationId]
   )
   const motif = filtre.trim().toLowerCase()
   const visibles = entries.filter((entry) => {
