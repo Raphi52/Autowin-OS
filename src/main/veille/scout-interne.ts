@@ -71,7 +71,7 @@ export function construirePromptScoutInterne(params: ParametresScoutInterne): st
     '  observé. En cas de doute, sous-note.',
     '- `what` : ce que la capacité FAIT, en 1-2 phrases concrètes (pas le titre répété).',
     '- `why` : pourquoi l’usage observé la réclame — cite le constat qui la justifie.',
-    '- `how` : le PREMIER PAS concret d’implémentation (fichier à toucher, geste à faire).',
+    '- `how` : COMMENT on le fait, concrètement (fichier à toucher, geste à faire).',
     '- 3 à 8 candidats maximum : garde les plus forts, pas un inventaire.',
     ...(params.dejaConnus?.length
       ? [

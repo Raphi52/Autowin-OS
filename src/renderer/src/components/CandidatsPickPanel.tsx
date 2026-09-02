@@ -132,7 +132,7 @@ export function CandidatsPickPanel({
                   {candidat.how ??
                     (candidat.url
                       ? `Partir de l'ancrage ${candidat.url}.`
-                      : 'Premier pas non précisé.')}
+                      : 'Non précisé.')}
                 </p>
               </div>
             </div>
