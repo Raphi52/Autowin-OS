@@ -1,5 +1,5 @@
 ---
-name: skill
+name: arena
 description: >-
   Prend UNE tâche et cherche le MEILLEUR WORKFLOW pour la faire — en le mesurant, pas en l'estimant.
   Trois temps : (1) SCOUT lecture seule de candidats de workflow qui amélioreraient le RENDEMENT de
@@ -11,7 +11,7 @@ description: >-
   X = variante qui CASSE une prémisse (chemin court, phase sautée, outil différent) ; (3) JUGE externe
   et adversarial qui compare les quatre livrables sur la MÊME grille (qualité d'abord, puis $ et
   minutes lus dans les journaux, jamais estimés) et rend UN workflow gagnant avec sa preuve, puis
-  l'installe au point qui le déclenche. Déclencher sur `/skill <tâche>`, « quel est le meilleur
+  l'installe au point qui le déclenche. Déclencher sur `/arena <tâche>`, « quel est le meilleur
   workflow pour X », « teste plusieurs façons de faire X », « A/B teste cette tâche »,
   « optimise la manière dont on fait X ». N'UTILISE PAS pour : exécuter simplement la tâche (→ `build`),
   analyser le corpus passé sans rien exécuter (→ `rendement`), auditer un livrable unique (→ `judge`),
@@ -19,7 +19,7 @@ description: >-
   et la tâche n'est que le banc d'essai — mais son meilleur résultat est livré pour de vrai.
 ---
 
-# skill — trouver le meilleur workflow d'une tâche par expérience A/B/C/X
+# arena — trouver le meilleur workflow d'une tâche par expérience A/B/C/X
 
 Tu es l'**ORCHESTRATEUR**. Tu ne juges pas toi-même et tu n'exécutes pas les bras à la main : tu
 prépares le banc, tu lances les quatre bras EN PARALLÈLE, tu fais juger de l'extérieur, tu installes
