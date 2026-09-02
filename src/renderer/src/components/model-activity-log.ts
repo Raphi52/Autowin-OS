@@ -43,7 +43,7 @@ export type ModelActivityKind =
   | 'event'
 
 /** D'où vient la ligne. Affiché et filtrable : une preuve sans provenance n'en est pas une. */
-export type ModelActivitySource = 'thread' | 'journal' | 'parts' | 'causal' | 'activity'
+export type ModelActivitySource = 'thread' | 'journal' | 'parts' | 'causal' | 'activity' | 'brain'
 
 export interface ModelActivityEntry {
   id: string
