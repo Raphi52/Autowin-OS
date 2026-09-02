@@ -811,8 +811,30 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // B — mode exécuteur : outils activés + permission autonome, dans le cwd borné. A (générique) :
       // read-only ⇒ pas d'écriture/Bash-mutation ; workspace-write/danger ⇒ édition + Bash.
       const write = execution.sandbox !== 'read-only'
+      /**
+       * LE SHELL EST UNE CAPACITE DE BASE DE TOUTE EXECUTION, l'ECRITURE non.
+       *
+       * Avant : `read-only` retirait Bash EN MEME TEMPS que Write/Edit. Les deux choses n'ont rien a
+       * voir. « read-only » veut dire « ne modifie pas le depot » ; `npm test`, `git status`, `node
+       * script.mjs` ne le modifient pas — ce sont des LECTURES qui rendent un code de sortie, c'est
+       * a dire la seule preuve hors-modele que ce depot accepte.
+       *
+       * Mesure conv-155, tour `20f856a2-8dd5-4e78-b98b-f7c7319afd12` : la phase `judge` a rendu
+       * « Bash is disabled for this session, in subagents as well as here », a ferme ses objections
+       * « par lecture », et a ecrit dans le meme souffle « aucun test n'a ete lance ». Un juge sans
+       * shell ne peut structurellement pas faire son metier : il note du texte.
+       *
+       * Demande utilisateur (saisie du 2026-09-02, ts 1788376585435) : « tu dois pouvoir faire ca
+       * partout pour tout en toute circonstances ».
+       *
+       * Ce que cela n'ouvre PAS : Write, Edit, MultiEdit restent reserves aux phases qui produisent
+       * le livrable (build/clean/salvage/kaizen, via `sandboxForPhase`). Le fond autonome
+       * (`watchdog-read-only`) garde sa frontiere fermee : son contexte d'evenement n'est pas fiable.
+       */
       const tools =
-        (write ? 'Read,Grep,Glob,Bash,Edit,Write,MultiEdit' : 'Read,Grep,Glob') + ',' + OUTILS_WEB
+        (write ? 'Read,Grep,Glob,Bash,Edit,Write,MultiEdit' : 'Read,Grep,Glob,Bash') +
+        ',' +
+        OUTILS_WEB
       // `--tools` EN PLUS de `--allowedTools` : mesure du 2026-07-28 sur les journaux reels — 34
       // outils etaient DECLARES alors que 3 seulement etaient autorises en read-only. La doc du CLI
       // les distingue : `--tools` = « the list of available tools from the built-in set » (restreint
