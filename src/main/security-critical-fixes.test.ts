@@ -302,7 +302,21 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     fichier deja rendu par `lister` : le chemin recu est compare a cette liste, jamais
     //     utilise tel quel.
     //   Les cinq portent `assertTrustedRendererSender` des leur PREMIERE ligne.
-    expect(handlers).toHaveLength(161)
+    // MISE A JOUR 2026-09-02 — 161 -> 165. QUATRE canaux ajoutes, relus AVANT de toucher le
+    //   compte, et TOUS portent `assertTrustedRendererSender` des leur PREMIERE ligne :
+    //   os:conversationFileTraces — LECTURE SEULE des traces de fichiers d'une conversation. Le
+    //     seul argument est un identifiant valide par `guardString`, et il ne touche AUCUN chemin :
+    //     `readConversationFileTraces` lit TROIS fichiers constants du spool
+    //     (`events.jsonl`, `events.previous.jsonl`, `events.archive.jsonl`) puis filtre EN MEMOIRE
+    //     sur `trace.conversationId`. Aucune traversee possible.
+    //   os:piper:etat — sans argument. Rend l'etat d'installation de la voix neuronale locale.
+    //   os:piper:installer — sans argument. Telecharge la voix et le binaire depuis des URL
+    //     CONSTANTES cote main (`VOIX_PIPER.url`, `BINAIRE_PIPER.url` dans `piper-local.ts`) vers
+    //     un dossier calcule cote main : la fenetre ne fournit ni adresse ni destination.
+    //   os:piper:parler — une chaine validee par `guardString`, plafonnee a 1 000 caracteres, puis
+    //     prononcee en local. Aucune ecriture, aucun chemin, aucun reseau a l'usage.
+    //   `unguarded` reste VIDE : la surface grandit, aucune garantie ne faiblit.
+    expect(handlers).toHaveLength(165)
     expect(unguarded).toEqual([])
   })
 
@@ -321,7 +335,13 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
         else if (
           entree.isFile() &&
           entree.name.endsWith('.ts') &&
-          !entree.name.includes('.test.') &&
+          // Les fichiers de TEST et leurs AIDES ne sont pas embarqués dans l'application : ils
+          // n'enregistrent aucun canal. Mesure du 2026-09-02 :
+          // `source-process-principal.test-helpers.ts` CITE la chaîne `ipcMain.handle('os:pilotChat'`
+          // pour découper du texte source, et le scan la prenait pour un vrai canal non gardé —
+          // un faux rouge, sur un fichier qui n'existe pas à l'exécution. Le motif couvre
+          // `.test.ts` ET `.test-helpers.ts` : aucun fichier de production n'y répond.
+          !/\.test[.-]/.test(entree.name) &&
           entree.name !== 'index.ts'
         ) {
           const contenu = readFileSync(chemin, 'utf8')
