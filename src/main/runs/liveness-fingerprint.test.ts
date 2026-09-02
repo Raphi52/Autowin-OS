@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { agentVerdict, resumeActionFor } from './run-reattach'
-import { defaultProcessIdentity } from '../store/worktree-manager'
+import { defaultProcessIdentity, oublierEmpreintesProcessus } from '../store/worktree-manager'
 
 /**
  * Ce que ces tests protègent : qu'un run interrompu puisse être RELANCÉ.
@@ -64,6 +64,10 @@ describe('la garde de vivacité a besoin de l’empreinte pour garder quoi que c
       expect(identity).toEqual(expect.any(String))
       const previousPath = process.env.PATH
       process.env.PATH = ''
+      // L'empreinte d'un PID vivant est gardee quelques secondes (elle coutait 87,5 s de fenetre
+      // figee en rafale, cf. process-identity-cache.test.ts). Cette memoire repondrait ici a la
+      // place de la sonde et masquerait la panne que ce test observe : on l'oublie d'abord.
+      oublierEmpreintesProcessus()
       try {
         expect(
           agentVerdict(

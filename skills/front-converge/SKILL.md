@@ -19,7 +19,7 @@ Use only while visual intent is OPEN and worth diverging on.
 2. **Read the user's taste FIRST from memory** (`[[feedback_portail_design_lineaire]]`), don't hardcode it — so divergence stays within the taste + its anti-patterns, and current if taste evolves.
 3. **Diverge K=3 DISTINCT directions** (not cosmetic variants). Within taste guardrails, each MUST differ on **≥2 axes**: information density · typographic hierarchy · accent-color usage · spatial structure (grid/columns/cards) · motion/restraint. Invoke `frontend-design` for each direction's execution quality. Round 1 = broad divergence (layout + tone). **Shared vocabulary**: named directions/structures/details (Linéaire, editorial, dense, rail, hairline, status-stripe…) with rendered examples live in `design-glossary.html` (bundled) — use its terms; it marks the user's default direction + banned anti-patterns.
 4. **Render + CAPTURE + READ** each direction (backend per tech, below). **Self-check BEFORE showing**: not broken (non-empty render, glyphs OK, no dead binding/layout) + taste guardrails respected. A capture not READ has no value.
-5. **Present for CHOICE** — one side-by-side gallery artifact + ask **keep/kill/mix** (+ free comment). Prefer `AskUserQuestion` if available, else ask plainly. If user rejects all 3 → re-diverge differently, never re-offer the same set.
+5. **Present for CHOICE** (and ALWAYS with a fresh batch of 3 — see "Never stop proposing") — one side-by-side gallery artifact + ask **keep/kill/mix** (+ free comment). Prefer `AskUserQuestion` if available, else ask plainly. If user rejects all 3 → re-diverge differently, never re-offer the same set.
 6. **Narrow** — refine the kept direction + GRAFT liked parts of others. Later rounds = narrowing (style/density/detail), not broad divergence.
 7. **Converge → STOP at EXPLICIT user approval** (never auto-stop: aesthetics not auto-provable). Cap ~4-5 rounds; if no convergence → "lock the layout, iterate only style" or raise back to user.
 8. **Freeze + PORT** — produce a design spec (below), hand to `frontend-design`/`build` for implementation. This skill doesn't rewrite the implementation engine; it delivers the settled design and ports it.
@@ -52,8 +52,14 @@ Note: `visualize.show_widget` renders INLINE in chat (presenting to user) — no
 ## Taste guardrails
 Read from memory at runtime (`[[feedback_portail_design_lineaire]]`), don't bake values here (would go stale). The fiche is the single source of truth. Guardrails BOUND the divergence, don't cancel it (3 directions stay distinct on ≥2 axes). Always validate against the read capture.
 
+## Never stop proposing (conversation-wide invariant)
+The loop does NOT end when a round is presented. As long as the user has NOT explicitly ordered the IMPLEMENTATION of one solution ("implémente celle-là", "go sur la 2", "code-la", explicit approval to build), EVERY reply in the conversation ends with a NEW batch of **3** proposals. This holds for the WHOLE conversation, across rounds, including after feedback, mixes, rejections, off-topic detours or a partial "j'aime bien la 2" — a preference is NOT an implementation order; keep proposing 3 refinements of it.
+- Never reply with only comments, questions or an analysis: comment/ask AND propose 3.
+- Never re-offer an identical batch: each new batch of 3 must differ (round 1 = broad divergence, later rounds = narrowing on the kept direction).
+- The ONLY exit is the user's explicit go to implement (or an explicit "stop"). At that moment, freeze the spec and port (step 8).
+
 ## Caps
-- K = **3** directions/round · cap ~**4-5 rounds** · variants generated in parallel.
+- K = **3** directions/round, **every round, until the user orders implementation** · target ~**4-5 rounds** (soft: keep proposing if the user keeps iterating) · variants generated in parallel.
 - Closure = **explicit user approval** (attestable, not replayable — assumed honestly).
 
 ## Don't
@@ -61,6 +67,7 @@ Read from memory at runtime (`[[feedback_portail_design_lineaire]]`), don't bake
 - Do NOT converge at random: respect the taste guardrails from memory.
 - Do NOT show a mockup not CAPTURED+READ (dead binding/layout is invisible otherwise).
 - Do NOT declare "done" without explicit user approval.
+- Do NOT stop proposing batches of 3 while no implementation order has been given — a reply without 3 new proposals is a failure of this skill.
 - Do NOT assume the tech (web vs WinForms vs WPF) — ask.
 - Implementing an ALREADY-settled design → `frontend-design` directly (not this loop).
 

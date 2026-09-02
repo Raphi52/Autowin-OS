@@ -214,27 +214,35 @@ describe('WorkflowsPanel', () => {
   })
 
   /**
-   * Descendre sur un agent ouvre le fil des sous-agents ; se deselectionner revient a l'accueil du
-   * GRAPHE. La cible du retour a change avec les trois onglets : l'accueil n'est plus la liste des
-   * RUN.md — elle a son propre onglet — mais le graphe reste, lui, la navigation du detail.
+   * LE FIL DES SOUS-AGENTS EST DANS L'ONGLET RUNS — demande utilisateur repetee (2026-09-01).
+   *
+   * Il s'ouvrait SOUS le graphe, dans l'onglet Graph. Descendre sur un noeud d'agent bascule
+   * desormais sur Runs et y montre le fil du tour choisi ; le graphe redevient une navigation
+   * pure. Le retour au graphe se fait par son onglet.
    */
-  it('ouvre le fil des sous-agents sur un nœud agent, et revient à l’accueil du graphe en se désélectionnant', () => {
+  it('descendre sur un nœud agent bascule sur Runs et y ouvre le fil des sous-agents', () => {
     render(baseProps({ runs: [run()] }))
 
     act(() => container.querySelector<HTMLButtonElement>('[data-testid="pick-agent"]')?.click())
     expect(
+      container.querySelector('button[role="tab"][aria-selected="true"]')?.textContent?.trim()
+    ).toBe('Runs')
+    expect(
       container.querySelector('[data-workflow-detail]')?.getAttribute('data-workflow-detail')
     ).toBe('subagents')
     expect(container.textContent).toContain('Aucun fil de sous-agents pour cette étape')
-
-    act(() => container.querySelector<HTMLButtonElement>('[data-testid="pick-none"]')?.click())
-    expect(
-      container.querySelector('[data-workflow-detail]')?.getAttribute('data-workflow-detail')
-    ).toBe('accueil')
-    // Le graphe reste monte, et les RUN.md restent joignables — sur leur onglet.
-    expect(container.querySelector('[data-testid="graph-stub"]')).not.toBeNull()
-    ouvrirRuns()
+    // Le graphe n'est plus a l'ecran : un objet par onglet, c'est tout le point de la separation.
+    expect(container.querySelector('[data-testid="graph-stub"]')).toBeNull()
+    // Les RUN.md restent sur le meme onglet, sous le fil.
     expect(container.textContent).toContain('Audit du panneau')
+
+    const graphe = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
+    ).find((b) => b.textContent?.trim() === 'Graph')!
+    act(() => graphe.click())
+    expect(container.querySelector('[data-testid="graph-stub"]')).not.toBeNull()
+    // L'onglet Graph ne rend plus AUCUN fil : c'etait le doublon a supprimer.
+    expect(container.textContent).not.toContain('Aucun fil de sous-agents pour cette étape')
   })
 
   /** Le fil affiché est celui du TOUR sélectionné — le seul appariement réellement disponible. */

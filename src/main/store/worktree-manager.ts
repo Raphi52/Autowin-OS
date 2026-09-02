@@ -419,17 +419,20 @@ const LIGNES = /\r?\n/
  * à quelques minutes d'écart (recyclage) ; cette empreinte distingue « toujours le nôtre » de
  * « quelqu'un d'autre a hérité du numéro ». Exportée : le rattachement d'un run en a besoin aussi.
  */
-export function defaultProcessIdentity(pid: number): string | null | undefined {
-  // La disparition du PID et l'échec de la sonde sont deux faits différents. `undefined` est
-  // réservé à ESRCH (absence prouvée) ; `null` signifie que le PID existe peut-être encore mais
-  // que son empreinte n'a pas pu être lue. Le rattachement traite alors l'agent comme inconnu.
-  try {
-    process.kill(pid, 0)
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code === 'ESRCH') return undefined
-    return null
-  }
+const IDENTITE_MEMOIRE_MS = 5_000
+const identitesMemoisees = new Map<number, { identite: string; a: number }>()
+
+/** Vide la memoire courte des empreintes — pour les tests qui sondent la PANNE de la sonde. */
+export function oublierEmpreintesProcessus(): void {
+  identitesMemoisees.clear()
+}
+
+/**
+ * Le sondage SYSTEME de l'empreinte — un processus externe, synchrone, par appel.
+ *
+ * Sur Windows il lance `powershell.exe` : 1 a 3 secondes de fil principal tenu a chaque fois.
+ */
+function sondeIdentiteSysteme(pid: number): string | null {
   try {
     if (platform() === 'win32') {
       const command =
@@ -467,6 +470,40 @@ export function defaultProcessIdentity(pid: number): string | null | undefined {
   } catch {
     return null
   }
+}
+
+export function defaultProcessIdentity(
+  pid: number,
+  sonde: (pid: number) => string | null = sondeIdentiteSysteme,
+  maintenant: () => number = Date.now
+): string | null | undefined {
+  // La disparition du PID et l'échec de la sonde sont deux faits différents. `undefined` est
+  // réservé à ESRCH (absence prouvée) ; `null` signifie que le PID existe peut-être encore mais
+  // que son empreinte n'a pas pu être lue. Le rattachement traite alors l'agent comme inconnu.
+  try {
+    process.kill(pid, 0)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    identitesMemoisees.delete(pid)
+    if (code === 'ESRCH') return undefined
+    return null
+  }
+  /*
+   * MEMOIRE COURTE, ET SEULEMENT SUR UN PID VIVANT.
+   *
+   * Mesure du 2026-09-02 (gels.jsonl) : 48 gels, 87,5 s de fenetre morte, tous sur le PowerShell
+   * synchrone de la sonde, rappelee en rafale sur les MEMES PID par le recensement. L'empreinte
+   * d'un processus vivant est immuable : dans une fenetre de quelques secondes, la resonder ne peut
+   * rien apprendre. La fenetre reste COURTE et la memoire est purgee des que le PID disparait, pour
+   * que la detection d'un numero recycle — la raison d'etre de cette empreinte — garde sa valeur.
+   */
+  const memo = identitesMemoisees.get(pid)
+  const t = maintenant()
+  if (memo && t - memo.a < IDENTITE_MEMOIRE_MS) return memo.identite
+  const identity = sonde(pid)
+  if (identity) identitesMemoisees.set(pid, { identite: identity, a: t })
+  else identitesMemoisees.delete(pid)
+  return identity
 }
 
 /**

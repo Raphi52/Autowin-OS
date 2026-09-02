@@ -163,13 +163,13 @@ describe('un interrupteur par widget', () => {
 })
 
 describe('le nom de l assistant', () => {
-  it('se choisit dans les reglages et devient le titre de la tuile', async () => {
+  it('se choisit DANS SON WIDGET et devient le titre de la tuile', async () => {
     const container = await mount()
     expect(
       q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent
     ).toBe('Jarvis')
     await ouvrirReglages(container)
-    const champ = q<HTMLInputElement>(container, '[data-testid="home-jarvis-nom"]')!
+    const champ = q<HTMLInputElement>(container, '[data-testid="jarvis-nom"]')!
     await act(async () => saisir(champ, 'Alfred'))
     expect(
       q<HTMLElement>(container, '[data-testid="home-widget-jarvis"] h2')!.textContent
@@ -182,7 +182,7 @@ describe('le nom de l assistant', () => {
     // donc une saisie vide, aussitot remplacee par « Jarvis » -- impossible de vider pour retaper.
     const container = await mount()
     await ouvrirReglages(container)
-    const champ = q<HTMLInputElement>(container, '[data-testid="home-jarvis-nom"]')!
+    const champ = q<HTMLInputElement>(container, '[data-testid="jarvis-nom"]')!
     await act(async () => saisir(champ, ''))
     expect(champ.value).toBe('')
     // La tuile, elle, ne reste jamais sans titre.
@@ -199,7 +199,7 @@ describe('le nom de l assistant', () => {
   it('reaffiche le nom retenu quand on quitte le champ laisse vide', async () => {
     const container = await mount()
     await ouvrirReglages(container)
-    const champ = q<HTMLInputElement>(container, '[data-testid="home-jarvis-nom"]')!
+    const champ = q<HTMLInputElement>(container, '[data-testid="jarvis-nom"]')!
     await act(async () => saisir(champ, ''))
     await act(async () => champ.dispatchEvent(new Event('focusout', { bubbles: true })))
     expect(champ.value).toBe('Jarvis')
@@ -264,7 +264,7 @@ describe('plusieurs voix parametrables pour l assistant', () => {
   it('propose les voix du poste, en plus du choix automatique', async () => {
     const container = await mount()
     await ouvrirReglages(container)
-    const liste = q<HTMLSelectElement>(container, '[data-testid="home-jarvis-voix"]')!
+    const liste = q<HTMLSelectElement>(container, '[data-testid="jarvis-voix"]')!
     const libelles = [...liste.options].map((o) => o.textContent)
     expect(libelles[0]).toContain('automatique')
     expect(libelles).toContain('Hortense — fr-FR')
@@ -274,12 +274,12 @@ describe('plusieurs voix parametrables pour l assistant', () => {
   it('retient la voix choisie, son debit et sa hauteur', async () => {
     const container = await mount()
     await ouvrirReglages(container)
-    const liste = q<HTMLSelectElement>(container, '[data-testid="home-jarvis-voix"]')!
+    const liste = q<HTMLSelectElement>(container, '[data-testid="jarvis-voix"]')!
     await act(async () => {
       liste.value = 'Zira'
       liste.dispatchEvent(new Event('change', { bubbles: true }))
     })
-    const debit = q<HTMLInputElement>(container, '[data-testid="home-jarvis-debit"]')!
+    const debit = q<HTMLInputElement>(container, '[data-testid="jarvis-debit"]')!
     await act(async () => saisir(debit, '1.5'))
     expect(lireReglageVoix(window.localStorage)).toMatchObject({ voixURI: 'Zira', debit: 1.5 })
   })
@@ -291,25 +291,49 @@ describe('plusieurs voix parametrables pour l assistant', () => {
     )
     const container = await mount()
     await ouvrirReglages(container)
-    expect(q<HTMLSelectElement>(container, '[data-testid="home-jarvis-voix"]')!.value).toBe('Zira')
-    expect(q<HTMLInputElement>(container, '[data-testid="home-jarvis-debit"]')!.value).toBe('1.2')
+    expect(q<HTMLSelectElement>(container, '[data-testid="jarvis-voix"]')!.value).toBe('Zira')
+    expect(q<HTMLInputElement>(container, '[data-testid="jarvis-debit"]')!.value).toBe('1.2')
   })
 
   it('prononce un essai avec la voix choisie', async () => {
     // Le seul endroit ou un reglage de voix se juge, c'est a l'oreille : l'essai doit partir.
     const container = await mount()
     await ouvrirReglages(container)
-    const liste = q<HTMLSelectElement>(container, '[data-testid="home-jarvis-voix"]')!
+    const liste = q<HTMLSelectElement>(container, '[data-testid="jarvis-voix"]')!
     await act(async () => {
       liste.value = 'Zira'
       liste.dispatchEvent(new Event('change', { bubbles: true }))
     })
-    const essai = q<HTMLButtonElement>(container, '[data-testid="home-jarvis-voix-test"]')!
+    const essai = q<HTMLButtonElement>(container, '[data-testid="jarvis-voix-test"]')!
     await act(async () => essai.click())
     const synth = (window as unknown as { speechSynthesis: { speak: ReturnType<typeof vi.fn> } })
       .speechSynthesis
     expect(synth.speak).toHaveBeenCalledTimes(1)
     const dit = synth.speak.mock.calls[0][0] as SpeechSynthesisUtterance
     expect(dit.voice?.name).toBe('Zira')
+  })
+})
+
+describe('les reglages de l assistant vivent DANS son widget', () => {
+  /**
+   * DEMANDE DE L'UTILISATEUR (2026-09-01) : « les settings liees a Bernard doivent etre dans le
+   * widget ». Le nom et la voix etaient dans le panneau « Reglages » de l'accueil, c'est-a-dire a
+   * l'autre bout de l'ecran de la tuile qu'ils reglent.
+   */
+  it('le nom et la voix sont dans la tuile, plus dans le panneau de l accueil', async () => {
+    const container = await mount()
+    await ouvrirReglages(container)
+    const panneau = q<HTMLElement>(container, '[data-testid="home-settings-panel"]')!
+    const tuile = q<HTMLElement>(container, '[data-testid="home-widget-jarvis"]')!
+
+    // L'ENTREE QUI CASSERAIT UN FAUX FIX : le panneau de l'accueil est OUVERT ici. Un simple
+    // ajout dans le widget, sans retrait, laisserait deux endroits pour un meme reglage.
+    expect(q(panneau, '[data-testid="jarvis-nom"]')).toBeNull()
+    expect(q(panneau, '[data-testid="jarvis-voix"]')).toBeNull()
+    expect(panneau.textContent).not.toContain('Assistant vocal')
+
+    for (const id of ['jarvis-nom', 'jarvis-voix', 'jarvis-debit', 'jarvis-hauteur', 'jarvis-voix-test']) {
+      expect(q(tuile, `[data-testid="${id}"]`)).not.toBeNull()
+    }
   })
 })

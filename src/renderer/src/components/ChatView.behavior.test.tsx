@@ -143,6 +143,15 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => element.click())
   }
 
+  /** Le fil des sous-agents et les RUN.md sont dans l'onglet Runs ; le panneau ouvre sur Graph. */
+  async function ouvrirOngletRuns(): Promise<void> {
+    const onglet = Array.from(
+      container!.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
+    ).find((b) => b.textContent?.trim() === 'Runs')
+    if (!onglet) throw new Error('onglet Runs introuvable')
+    await act(async () => onglet.click())
+  }
+
   async function flushAnimationFrames(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
@@ -1792,6 +1801,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
       ;(container!.querySelectorAll('.conv-pick')[0] as HTMLElement).click()
     })
     await click('button[title="Détails de l’exécution"]')
+    // Le fil des sous-agents vit dans l'onglet Runs depuis le 2026-09-01 (demande utilisateur) :
+    // le panneau s'ouvre sur le graphe, il faut donc y aller.
+    await ouvrirOngletRuns()
 
     const liveSubagentCard = container!.querySelector('.live-run .subagent-step')
     expect(liveSubagentCard?.textContent).toContain('en cours')
@@ -1957,12 +1969,11 @@ describe('ChatView behavior under concurrent UI actions', () => {
       '[data-execution-node][data-execution-kind]'
     )!
     await act(async () => noeudAgent.click())
-    // Le fil se lit SOUS LE GRAPHE, dans la zone de détail de l'onglet Graph : c'est là que
-    // `WorkflowsPanel` rend les fils du tour sélectionné, et c'est ce que vérifient aussi les
-    // tests « Stop du sous-agent » et « ouvrir le run depuis l'indicateur ». L'onglet Runs, lui,
-    // liste les RUN.md. Un détour par cet onglet vidait donc l'écran de tout fil.
+    // Le fil se lit dans l'onglet RUNS, à côté des RUN.md — demandé trois fois par l'utilisateur,
+    // acté le 2026-09-01. Descendre sur un nœud du graphe y bascule tout seul : sans cela, le fil
+    // s'empilait sous le graphe et on relisait la même exécution deux fois.
     const ongletActif = container!.querySelector('.workflow-section-tab.is-active')
-    expect(ongletActif?.textContent?.trim()).toBe('Graph')
+    expect(ongletActif?.textContent?.trim()).toBe('Runs')
     expect(container!.querySelector('.live-run')).not.toBeNull()
   })
 

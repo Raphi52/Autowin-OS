@@ -120,12 +120,22 @@ function tile(container: HTMLDivElement, id: string): HTMLElement {
   return container.querySelector(`[data-testid="home-widget-${id}"]`) as HTMLElement
 }
 
+/**
+ * La PRISE d'une tuile est sa barre de titre, et elle seule (demande utilisateur du 2026-09-02).
+ * Saisir la tuile revient donc a saisir son etiquette : ce helper fait la traduction pour tous les
+ * gestes de deplacement. Les poignees de redimensionnement, elles, restent visees directement.
+ */
+function prise(el: Element): Element {
+  return el.classList.contains('home-tile') ? (el.querySelector('.home-tile__label') as Element) : el
+}
+
 /** Un geste complet : prise, déplacements, lâcher. `on` est l'élément qu'on saisit. */
 async function gesture(
-  on: Element,
+  cible: Element,
   steps: Array<[number, number]>,
   start: [number, number]
 ): Promise<void> {
+  const on = prise(cible)
   const fire = (type: string, x: number, y: number, target: EventTarget): void => {
     const event = new Event(type, { bubbles: true, cancelable: true }) as Event & {
       clientX: number
@@ -220,6 +230,23 @@ describe('page d accueil', () => {
 })
 
 describe('poser une tuile', () => {
+  /**
+   * LA PRISE EST LA BARRE DU HAUT, ET ELLE SEULE (demande utilisateur du 2026-09-02).
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : remettre `onPointerDown={grab(..., 'move')}` sur la
+   * <section> de la tuile — un appui dans le CORPS (selection de texte, curseur de reglage, lien)
+   * redeplacerait alors la tuile.
+   */
+  it('ne se deplace PAS quand on appuie dans le corps du widget', async () => {
+    const container = await mount()
+    const agenda = tile(container, 'agenda')
+    const before = boxOf(agenda)
+    const corps = agenda.querySelector('.home-tile__scroll') as HTMLElement
+    await gesture(corps, [[560, 280], [583, 297]], [500, 250])
+    expect(boxOf(agenda)).toEqual(before)
+    expect(agenda.dataset.held).toBeUndefined()
+  })
+
   it('deplace exactement du geste, et la tuile ne derive pas apres le lacher', async () => {
     const container = await mount()
     const agenda = tile(container, 'agenda')
@@ -266,7 +293,7 @@ describe('poser une tuile', () => {
       event.pointerId = 1
       target.dispatchEvent(event)
     }
-    await act(async () => fire('pointerdown', 500, 250, agenda))
+    await act(async () => fire('pointerdown', 500, 250, prise(agenda)))
     await act(async () => fire('pointermove', 530, 250, window))
     // Aucun `requestAnimationFrame` n'a été laissé tourner entre les deux : la position est déjà là.
     expect(boxOf(agenda).x - before.x).toBe(30)

@@ -1,0 +1,56 @@
+import { describe, expect, it } from 'vitest'
+import { defaultProcessIdentity } from './worktree-manager'
+
+/*
+ * MESURE DU 2026-09-02 (.autowin-data/autowin-os/gels.jsonl) : `execFileSync powershell.exe` porte
+ * 48 gels du journal, 87,5 s de fenetre morte cumulee, jusqu'a 3 s d'un coup — deuxieme poste apres
+ * les gels non nommes. Le sondage d'empreinte d'un PID lance un PowerShell SYNCHRONE sur le thread
+ * qui pompe les messages de la fenetre, et le recensement rappelle les MEMES PID en rafale (trois
+ * appels entre 19:54:17 et 19:54:22 le 2026-09-01). L'empreinte d'un PID vivant ne change pas :
+ * la resonder dans la seconde ne rapporte rien et coute une fenetre figee.
+ */
+describe('empreinte de processus — le sondage systeme est memoise', () => {
+  it('ne relance pas le sondage pour le meme PID dans la fenetre courte', () => {
+    let appels = 0
+    const sonde = (): string => {
+      appels += 1
+      return 'empreinte-1'
+    }
+    let horloge = 1_000
+    const maintenant = (): number => horloge
+
+    expect(defaultProcessIdentity(process.pid, sonde, maintenant)).toBe('empreinte-1')
+    horloge += 900
+    expect(defaultProcessIdentity(process.pid, sonde, maintenant)).toBe('empreinte-1')
+    horloge += 900
+    expect(defaultProcessIdentity(process.pid, sonde, maintenant)).toBe('empreinte-1')
+
+    expect(appels).toBe(1)
+  })
+
+  it('resonde le systeme une fois la memoire expiree', () => {
+    let appels = 0
+    const sonde = (): string => {
+      appels += 1
+      return `empreinte-${appels}`
+    }
+    let horloge = 500_000
+    const maintenant = (): number => horloge
+
+    expect(defaultProcessIdentity(process.pid, sonde, maintenant)).toBe('empreinte-1')
+    horloge += 60_000
+    expect(defaultProcessIdentity(process.pid, sonde, maintenant)).toBe('empreinte-2')
+    expect(appels).toBe(2)
+  })
+
+  it('un PID absent rend undefined sans sonder le systeme', () => {
+    let appels = 0
+    const sonde = (): string => {
+      appels += 1
+      return 'jamais'
+    }
+    // PID hors de portee : `process.kill(pid, 0)` leve ESRCH, l'absence est PROUVEE.
+    expect(defaultProcessIdentity(2_147_483_646, sonde, () => 1_000)).toBeUndefined()
+    expect(appels).toBe(0)
+  })
+})

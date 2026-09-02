@@ -71,7 +71,10 @@ describe('câblage du panneau', () => {
     expect(chatView()).toContain('visibleScopedRuns')
     // Le panneau ne choisit plus une section : il REÇOIT la sélection du graphe.
     expect(workflowsPanel()).not.toContain('WORKFLOW_PANEL_SECTIONS')
-    expect(workflowsPanel()).toContain('onSelect={setSelection}')
+    // Le graphe reste la source de la selection ; depuis le 2026-09-01 elle passe par
+    // `choisirNoeud`, qui bascule EN PLUS sur l'onglet Runs — c'est la que vit le fil.
+    expect(workflowsPanel()).toContain('onSelect={choisirNoeud}')
+    expect(workflowsPanel()).toMatch(/setSelection\(suivant\)/)
   })
 
   it('plus aucun code ne détruit un run terminé après un délai', () => {

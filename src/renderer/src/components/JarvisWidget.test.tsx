@@ -39,6 +39,21 @@ class FakeRecognition {
       results: [Object.assign([{ transcript: texte }], { isFinal: final })]
     })
   }
+
+  /**
+   * LE VRAI CHROMIUM, lui, est CUMULATIF : `results` garde toutes les phrases de la session,
+   * REUTILISE l'objet de chacune, et `resultIndex` peut REPOINTER sur une phrase deja figee. Le
+   * faux moteur ci-dessus n'envoyait jamais qu'un seul resultat neuf a l'index 0, donc il ne
+   * pouvait pas montrer ce defaut. Ici les objets sont CONSERVES entre deux evenements, comme dans
+   * le navigateur : c'est cette identite qui distingue une phrase republiee d'une phrase nouvelle.
+   */
+  cumul: (ArrayLike<{ transcript: string }> & { isFinal?: boolean })[] = []
+  direCumule(phrases: readonly string[], resultIndex = 0): void {
+    phrases.forEach((t, i) => {
+      if (!this.cumul[i]) this.cumul[i] = Object.assign([{ transcript: t }], { isFinal: true })
+    })
+    this.onresult?.({ resultIndex, results: this.cumul.slice(0, phrases.length) })
+  }
 }
 
 /** Un AudioContext factice : le bip ne se voit pas, il s'ENREGISTRE ici. */
@@ -217,6 +232,19 @@ describe('widget Jarvis', () => {
     expect(FauxSynthese.annulations).toBeGreaterThan(avant)
   })
 
+  it('n’écrit PAS deux fois une phrase que le moteur republie', () => {
+    // DEFAUT VECU le 2026-09-01 : « j'ai dit Robert, puis j'ai redit Robert et ca a ecrit 2 lignes
+    // d'un coup », reproductible a l'infini. Chromium republie une phrase DEJA figee dans un
+    // evenement suivant ; sans memoire de ce qui a ete consomme, elle est reinscrite a chaque fois.
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    const moteur = FakeRecognition.instances.at(-1)!
+    act(() => moteur.direCumule(['Robert']))
+    act(() => moteur.direCumule(['Robert', 'Robert']))
+    const lignes = c.querySelectorAll('[data-testid="jarvis-paroles"] li')
+    expect(lignes).toHaveLength(2)
+  })
+
   it('n’écoute pas avant d’avoir été activé', () => {
     rendre()
     expect(FakeRecognition.instances).toHaveLength(0)
@@ -252,11 +280,14 @@ describe('widget Jarvis', () => {
     clic(c, 'jarvis-bascule')
     const moteur = FakeRecognition.instances.at(-1)!
     await act(async () => moteur.dire('on ira manger à midi', true))
-    expect(routeConversationMessage).not.toHaveBeenCalled()
+    expect(pilotChat).not.toHaveBeenCalled()
     expect(c.textContent).toContain('on ira manger à midi')
 
     await act(async () => moteur.dire('Jarvis, ouvre le task manager', true))
-    expect(routeConversationMessage).toHaveBeenCalledWith('c-jarvis', 'ouvre le task manager', [])
+    expect(pilotChat).toHaveBeenCalledWith(
+      [{ role: 'user', content: 'ouvre le task manager' }],
+      'c-jarvis'
+    )
   })
 
   it('EXECUTE l’ordre entendu : le routage seul ne lance aucun tour', async () => {
@@ -285,7 +316,6 @@ describe('widget Jarvis', () => {
     clic(container, 'jarvis-bascule')
     const moteur = FakeRecognition.instances.at(-1)!
     await act(async () => moteur.dire('Jarvis, lance une tache test', true))
-    expect(routeConversationMessage).toHaveBeenCalledTimes(1)
     expect(pilotChat).toHaveBeenCalledTimes(1)
   })
 
@@ -341,14 +371,17 @@ describe('widget Jarvis', () => {
     clic(c, 'jarvis-bascule')
     const moteur = FakeRecognition.instances.at(-1)!
     await act(async () => moteur.dire('Jarvis', true))
-    expect(routeConversationMessage).not.toHaveBeenCalled()
+    expect(pilotChat).not.toHaveBeenCalled()
     await act(async () => moteur.dire('ouvre le task manager', true))
-    expect(routeConversationMessage).toHaveBeenCalledWith('c-jarvis', 'ouvre le task manager', [])
+    expect(pilotChat).toHaveBeenCalledWith(
+      [{ role: 'user', content: 'ouvre le task manager' }],
+      'c-jarvis'
+    )
 
     // et il se rendort : la phrase d'après ne part pas
-    routeConversationMessage.mockClear()
+    pilotChat.mockClear()
     await act(async () => moteur.dire('passe moi le sel', true))
-    expect(routeConversationMessage).not.toHaveBeenCalled()
+    expect(pilotChat).not.toHaveBeenCalled()
   })
 
   it('n’affiche PLUS la liste des conversations en direct', async () => {
@@ -471,7 +504,10 @@ describe('widget Jarvis', () => {
       expect(String.fromCharCode(...wav.slice(0, 4))).toBe('RIFF')
       // ... et la chaîne complète tient : parole → transcription → bip → ordre envoyé à Jarvis
       expect(FakeAudio.frequences).toEqual([880, 1320])
-      expect(routeConversationMessage).toHaveBeenCalledWith('c-jarvis', 'ouvre le task manager', [])
+      expect(pilotChat).toHaveBeenCalledWith(
+        [{ role: 'user', content: 'ouvre le task manager' }],
+        'c-jarvis'
+      )
       expect(c.textContent).toContain('Jarvis, ouvre le task manager')
     })
 
@@ -585,7 +621,10 @@ describe('le widget suit le NOM RÉGLÉ', () => {
     expect(creer).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Alfred - ouvre le task manager' })
     )
-    expect(routeConversationMessage).toHaveBeenCalledWith('c-alfred', 'ouvre le task manager', [])
+    expect(pilotChat).toHaveBeenCalledWith(
+      [{ role: 'user', content: 'ouvre le task manager' }],
+      'c-alfred'
+    )
     // Le nom est un réglage PERSISTANT : on le rend au suivant tel qu'il l'a trouvé.
     ecrireNomJarvis(window.localStorage, '')
   })
@@ -593,5 +632,59 @@ describe('le widget suit le NOM RÉGLÉ', () => {
   it('le titre de conversation porte le nom réglé', () => {
     expect(titreJarvis('ouvre le rapport', 'Friday')).toBe('Friday - ouvre le rapport')
     expect(titreJarvis('   ', 'Friday')).toBe('Friday')
+  })
+})
+
+describe('UNE demande dictée = UNE conversation, et UN seul message', () => {
+  /**
+   * LE DÉFAUT VÉCU (2026-09-01) : « ça a envoyé 2 messages et ça a dupliqué la transcript, et
+   * quand j'ai enchaîné 2 demandes la 2ᵉ a pas créé de conversation ».
+   *
+   * Cause : le widget créait une conversation, PUIS demandait au routeur
+   * (`routeConversationMessage`) où mettre le message. Sur une conversation vide, le routeur
+   * répond « nouveau contexte » et CRÉE une seconde conversation (`conversation-router.ts:263`) :
+   * une coquille vide + une conversation réelle pour un seul ordre dicté. Puis il gardait cette
+   * conversation dans un `ref` : la 2ᵉ demande, cette fois routée sur « contexte courant »,
+   * atterrissait dans la MÊME conversation — « la 2ᵉ n'a pas créé de conversation ».
+   */
+  it('ouvre une conversation NEUVE à chaque ordre, sans passer par le routeur', async () => {
+    const creees: string[] = []
+    const creer = vi.fn(async (_p: { title: string }) => {
+      const id = `c-${creees.length + 1}`
+      creees.push(id)
+      return { id }
+    })
+    ;(window as never as Record<string, unknown>).api = {
+      conversations,
+      conversationsCreate: creer,
+      routeConversationMessage,
+      pilotChat
+    }
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    const moteur = FakeRecognition.instances.at(-1)!
+
+    await act(async () => moteur.dire('Jarvis, ouvre le task manager', true))
+    await act(async () => moteur.dire('Jarvis, lance le scout', true))
+
+    // L'ENTRÉE QUI CASSERAIT UN FAUX FIX : le SECOND ordre. Avec l'ancien code, il ne créait rien
+    // (`conversationRef` déjà rempli) et `conversationsCreate` restait à 1 appel.
+    expect(creer).toHaveBeenCalledTimes(2)
+    expect(creer.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ title: 'Jarvis - lance le scout' })
+    )
+
+    // Le routeur est ce qui fabriquait la conversation en trop : il ne doit plus être appelé.
+    // Son bouchon rend `routed: true, conversationId: 'c-jarvis'` — un fix qui le garderait
+    // enverrait les DEUX ordres dans 'c-jarvis', donc une seule conversation pour deux demandes.
+    expect(routeConversationMessage).not.toHaveBeenCalled()
+
+    // UN message par ordre, chacun dans SA conversation.
+    expect(pilotChat).toHaveBeenCalledTimes(2)
+    expect(pilotChat.mock.calls[0]).toEqual([
+      [{ role: 'user', content: 'ouvre le task manager' }],
+      'c-1'
+    ])
+    expect(pilotChat.mock.calls[1]).toEqual([[{ role: 'user', content: 'lance le scout' }], 'c-2'])
   })
 })

@@ -153,7 +153,11 @@ function pointer(type: string, x: number, y: number, target: EventTarget): void 
 }
 
 async function geste(el: Element, de: [number, number], vers: [number, number]): Promise<void> {
-  await act(async () => pointer('pointerdown', de[0], de[1], el))
+  // La tuile se saisit par sa barre de titre uniquement (demande utilisateur du 2026-09-02).
+  const on = el.classList.contains('home-tile')
+    ? (el.querySelector('.home-tile__label') as Element)
+    : el
+  await act(async () => pointer('pointerdown', de[0], de[1], on))
   await act(async () => pointer('pointermove', vers[0], vers[1], window))
   await act(async () => pointer('pointerup', vers[0], vers[1], window))
 }

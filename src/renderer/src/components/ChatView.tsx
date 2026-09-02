@@ -594,11 +594,16 @@ export function ChatView({
   // Carte de l'orchestration EN COURS dans le panneau Workflows : cible du clic sur
   // l'indicateur « action en cours » d'un message (ouvre le panneau + cadre le run/step actif).
   const liveRunCardRef = useRef<HTMLDivElement>(null)
+  /** Onglet a imposer au panneau droit (voir `revealLiveAction`). */
+  const [ongletPanneau, setOngletPanneau] = useState<{ tab: 'runs'; jeton: number } | null>(null)
   // Clic sur le bloc d'activité d'un message → Workflows, à l'endroit qui montre RÉELLEMENT ce qui
   // s'est passé : la section Sous-agents pour le fil du run, l'onglet Activité (historique) quand on
   // veut la trace d'un run précis (elle survit au redémarrage, l'écho de session non).
   const revealLiveAction = useCallback((mode: 'live' | 'history' = 'live', runId?: string) => {
     setShowRuns(true)
+    // Le fil des sous-agents et les RUN.md vivent tous deux dans l'onglet Runs : ouvrir le panneau
+    // sur le graphe laisserait l'utilisateur a un clic de ce qu'il vient justement de demander.
+    setOngletPanneau((precedent) => ({ tab: 'runs', jeton: (precedent?.jeton ?? 0) + 1 }))
     if (mode === 'history') {
       // Action déjà terminée/interrompue : sa carte live n'existe plus. On OUVRE LA TRACE du run
       // concerné — cadrer la seule liste laissait l'utilisateur chercher lequel regarder.
@@ -1856,6 +1861,13 @@ export function ChatView({
       delete suite[id]
       return suite
     })
+  }
+
+  /** Referme TOUTES les fenetres d'un coup : la mosaique reste, elle redevient vide. */
+  function fermerToutesFenetresMosaique(): void {
+    mosaicIdsRef.current = []
+    setMosaicIds([])
+    setMosaicFils({})
   }
 
   function newConv(): void {
@@ -3410,18 +3422,32 @@ export function ChatView({
             eyebrow="Espace de travail"
             title="Conversations"
             actions={
-              <button
-                type="button"
-                className="conv-view-toggle"
-                data-testid="conv-view-toggle"
-                role="switch"
-                aria-checked={convViewMode === 'mosaic'}
-                aria-label="Vue mosaïque"
-                title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
-                onClick={() => setConvViewMode(convViewMode === 'mosaic' ? 'list' : 'mosaic')}
-              >
-                <span className="conv-view-toggle-knob" aria-hidden="true" />
-              </button>
+              <>
+                {convViewMode === 'mosaic' && mosaicIds.length > 0 && (
+                  <button
+                    type="button"
+                    className="conv-mosaic-close-all"
+                    data-testid="conv-mosaic-close-all"
+                    title="Fermer toutes les fenêtres ouvertes"
+                    aria-label="Fermer toutes les fenêtres ouvertes"
+                    onClick={fermerToutesFenetresMosaique}
+                  >
+                    Tout fermer
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="conv-view-toggle"
+                  data-testid="conv-view-toggle"
+                  role="switch"
+                  aria-checked={convViewMode === 'mosaic'}
+                  aria-label="Vue mosaïque"
+                  title={convViewMode === 'mosaic' ? 'Revenir à la liste' : 'Passer en mosaïque'}
+                  onClick={() => setConvViewMode(convViewMode === 'mosaic' ? 'list' : 'mosaic')}
+                >
+                  <span className="conv-view-toggle-knob" aria-hidden="true" />
+                </button>
+              </>
             }
           />
         </div>
@@ -4547,6 +4573,7 @@ export function ChatView({
           runDetailTab={runDetailTab}
           setRunDetailTab={setRunDetailTab}
           liveRunCardRef={liveRunCardRef}
+          {...(ongletPanneau ? { ongletDemande: ongletPanneau } : {})}
         />
       )}
       {openImage &&

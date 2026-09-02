@@ -2,6 +2,16 @@
    Noir dominant · outlines blancs · cyan data · rose activité · or autorité. */
 
 :root {
+  /*
+    LES CONTROLES NATIFS SUIVENT LE THEME SOMBRE — declare UNE fois, ici.
+
+    Sans cela, Chromium peint listes deroulantes, champs de saisie, barres de defilement et
+    selecteurs de fichier en theme CLAIR : un fond blanc apparaissait sous les fonds semi-opaques de
+    l'application, et le texte clair devenait illisible (constat utilisateur du 2026-09-02 sur la
+    liste des voix de l'assistant). Le defaut etait latent partout, pas seulement la.
+  */
+  color-scheme: dark;
+
   --bg-0: #000000;
   --bg-1: rgba(0, 0, 0, 0.56);
   --bg-2: rgba(0, 0, 0, 0.42);

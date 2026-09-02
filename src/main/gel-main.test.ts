@@ -292,6 +292,24 @@ describe('mesure DIRECTE du segment synchrone d’un canal IPC', () => {
     cloreDemarrage()
     expect(operationDeclaree()).toBe('inconnu')
   })
+  /*
+   * MEME DEFAUT, DEUXIEME FORME — mesure du 2026-09-02 (gels.jsonl) : 56 gels etiquetes
+   * 'demarrage:ready-to-show', du 2026-09-01 05:23 au 2026-09-02 04:48, soit PRES DE VINGT-QUATRE
+   * HEURES apres le demarrage concerne. `ready-to-show` est emis APRES `did-finish-load`, donc apres
+   * la cloture : le jalon repose une etiquette de demarrage que plus rien ne depile, et 188 s de
+   * fenetre morte repartent sous un nom faux. Une phase CLOSE ne se rouvre pas.
+   */
+  it('ignore un jalon de demarrage pose APRES la cloture', () => {
+    marquerOperation('demarrage:interface chargée')
+    cloreDemarrage()
+    marquerOperation('demarrage:ready-to-show : la fenêtre devient visible')
+    expect(operationDeclaree()).toBe('inconnu')
+  })
+  it('laisse une operation ORDINAIRE nommer les gels apres la cloture', () => {
+    cloreDemarrage()
+    marquerOperation('ipc:worktree:activity')
+    expect(operationDeclaree()).toBe('ipc:worktree:activity')
+  })
 })
 
 describe('temoin ordonnance — un blocage SANS CPU n’est plus excuse en contention machine', () => {

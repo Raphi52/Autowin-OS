@@ -6021,8 +6021,18 @@ function createWindow(): void {
   relayoutMainWindow = forceRelayout
 
   mainWindow.on('ready-to-show', () => {
-    jalonDemarrage('ready-to-show : la fenêtre devient visible')
-    presentAutomationWindow(mainWindow, automationInstanceMode.headless, { maximize: true })
+    /*
+     * L'etiquette est BORNEE au segment synchrone de ce gestionnaire.
+     *
+     * `ready-to-show` est emis APRES `did-finish-load`, donc apres la cloture du demarrage : un
+     * simple jalon reposait une etiquette que plus rien ne depilait. Mesure du 2026-09-02 : 56 gels
+     * etales sur pres de 24 h ressortaient sous 'demarrage:ready-to-show'. `pendantOperation` la
+     * retire des que l'affichage est fait.
+     */
+    console.log(`[demarrage] ${String(Date.now() - T0_DEMARRAGE).padStart(6)} ms  ready-to-show`)
+    pendantOperation('fenetre:affichage-initial', () => {
+      presentAutomationWindow(mainWindow, automationInstanceMode.headless, { maximize: true })
+    })
     setTimeout(() => void warmCapabilities(), 250)
   })
 

@@ -42,8 +42,18 @@ const pile: string[] = []
  */
 let dernierFerme: { nom: string; a: number } | undefined
 
+/**
+ * VRAI une fois la phase de demarrage close — un jalon de demarrage n'a alors plus rien a etiqueter.
+ *
+ * Mesure du 2026-09-02 : `ready-to-show` est emis APRES `did-finish-load`, donc APRES
+ * `cloreDemarrage()`. Son jalon reposait une etiquette que plus rien ne depilait, et 56 gels
+ * s'etalant sur pres de 24 h sont ressortis sous 'demarrage:ready-to-show'.
+ */
+let demarrageClos = false
+
 /** Ce que le main declare faire ICI et MAINTENANT — joint au gel pour NOMMER le coupable. */
 export function marquerOperation(nom: string): void {
+  if (demarrageClos && nom.startsWith('demarrage:')) return
   pile.length = 0
   if (nom) pile.push(nom)
 }
@@ -90,6 +100,7 @@ export function pendantOperation<T>(nom: string, action: () => T): T {
  */
 export function cloreDemarrage(): void {
   pile.length = 0
+  demarrageClos = true
 }
 
 /** Rend l'operation la plus INTERNE encore ouverte (utile aux tests et au diagnostic). */

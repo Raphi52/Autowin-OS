@@ -3472,6 +3472,25 @@ ol.md-list li {
    des primitives reutilisables (contrat ui-system.test.ts). Consomme par ChatView.tsx. */
 /* Squelette du switch et de la mosaique : habillage fin a faire en design. */
 /* UN SEUL interrupteur (demande du 2026-08-30) : liste <-> mosaique, pas deux boutons segmentes. */
+/* « Tout fermer » : n'apparait qu'en mosaique ET s'il reste des fenetres ouvertes. */
+.conv-mosaic-close-all {
+  padding: 2px 8px;
+  border: 1px solid rgba(212, 169, 79, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gold-doux);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.conv-mosaic-close-all:hover {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+}
+
 .conv-view-toggle {
   position: relative;
   width: 34px;

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { RunEntry, CheckpointEntry } from './ChatView'
 import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat-view-model'
 import { WorkflowRefreshIcon, WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
@@ -78,6 +78,13 @@ export type WorkflowsPanelProps = {
   liveRunCardRef: React.RefObject<HTMLDivElement | null>
   /** Messages du fil : source des LOGS (trace de ce que les modèles ont fait). */
   messages: readonly Msg[]
+  /**
+   * Onglet IMPOSE de l'exterieur — clic sur l'indicateur « action en cours » d'un message. Le fil
+   * des sous-agents vit dans Runs : ouvrir le panneau sur Graph obligerait a un clic de plus pour
+   * atteindre exactement ce que l'utilisateur vient de demander. Le `jeton` change a chaque
+   * demande, pour que deux demandes identiques d'affilee rouvrent bien l'onglet.
+   */
+  ongletDemande?: { tab: PanelTab; jeton: number }
 }
 
 /**
@@ -118,11 +125,18 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     runDetailTab,
     setRunDetailTab,
     liveRunCardRef,
-    messages
+    messages,
+    ongletDemande
   } = props
 
   const [selection, setSelection] = useState<ExecutionNodeSelection | null>(null)
   const [panelTab, setPanelTab] = useState<PanelTab>('graph')
+  const jeton = ongletDemande?.jeton
+  const tabDemande = ongletDemande?.tab
+  useEffect(() => {
+    if (jeton === undefined || !tabDemande) return
+    setPanelTab(tabDemande)
+  }, [jeton, tabDemande])
 
   const depot = selectionParleDuDepot(selection)
   // Appariement par TOUR : c'est le seul lien RÉEL entre le graphe et le fil relu
@@ -147,9 +161,20 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
         : visibleLiveRuns
       : visibleLiveRuns.filter(([, run]) => run.status === 'running')
   const filsHorsTour = Boolean(selection) && fils.length > 0 && filsDuTour.length === 0
-  // « accueil » et non « runs » : sans sélection, le panneau montre les fils vivants PUIS les
-  // RUN.md. Nommer cet état d'après sa seule seconde moitié le décrivait faux.
-  const detailAffiche = depot ? 'source-control' : selection ? 'subagents' : 'accueil'
+  /**
+   * LE FIL DES SOUS-AGENTS VIT DANS L'ONGLET RUNS — demande utilisateur repetee (2026-09-01).
+   *
+   * Il etait rendu SOUS le graphe, dans l'onglet Graph : on lisait la meme execution deux fois,
+   * une fois en graphe, une fois en fil, et l'onglet Runs ne portait que les RUN.md. Le fil est
+   * desormais dans Runs, a cote des RUN.md auxquels il appartient ; le graphe redevient une pure
+   * navigation. Descendre sur un noeud d'agent BASCULE donc sur Runs, se deselectionner revient
+   * au graphe. Un noeud de DEPOT reste, lui, sur le graphe : Source control s'ouvre dessous.
+   */
+  const choisirNoeud = (suivant: ExecutionNodeSelection | null): void => {
+    setSelection(suivant)
+    if (suivant && !selectionParleDuDepot(suivant)) setPanelTab('runs')
+    else if (!suivant) setPanelTab('graph')
+  }
 
   return (
     <>
@@ -206,7 +231,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
           active={isActive}
           requestLabel={requestLabel}
           live={liveGraphActive}
-          onSelect={setSelection}
+          onSelect={choisirNoeud}
         />
         {/* Pas de sélecteur de portée : ce panneau ne montre QUE la conversation courante.
             Le cadrage « tous » y affichait des compteurs globaux sous une conversation qui n'en
@@ -216,19 +241,28 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             taille naturelle (zero) quand il n'a rien a montrer, et le graphe recupere tout. */}
         <div
           className="scroll-y col grow workflow-panel-detail"
-          data-workflow-detail={detailAffiche}
-          data-detail-vide={!depot && !selection && fils.length === 0 ? 'true' : undefined}
+          data-workflow-detail={depot ? 'source-control' : 'accueil'}
+          data-detail-vide={depot ? undefined : 'true'}
           style={{ gap: 'var(--s2)', minHeight: 0 }}
         >
           {depot && (
             <SourceControlPane conversationId={activeId ?? undefined} onSendPrompt={send} />
           )}
 
+          </div>
+          </>
+        )}
+        {panelTab === 'runs' && (
+          <div
+            className="scroll-y col grow workflow-panel-detail"
+            data-workflow-detail={selection && !depot ? 'subagents' : 'runs'}
+            style={{ gap: 'var(--s2)', minHeight: 0 }}
+          >
           {/* SECTION SOUS-AGENTS : le fil d'une orchestration, en cours ou TERMINÉE. */}
           {selection && !depot && fils.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
               {activeId
-                ? 'Aucun fil de sous-agents pour cette étape — son détail reste lisible dans le graphe ci-dessus.'
+                ? 'Aucun fil de sous-agents pour cette étape — son détail reste lisible dans l’onglet Graph.'
                 : 'Sélectionne une conversation pour voir le fil de ses sous-agents.'}
             </div>
           )}
@@ -338,11 +372,6 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               </details>
             </div>
           ))}
-          </div>
-          </>
-        )}
-        {panelTab === 'runs' && (
-          <div className="scroll-y col grow workflow-panel-detail" data-workflow-detail="runs" style={{ gap: 'var(--s2)', minHeight: 0 }}>
           {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
           {checkpoints.length > 0 && (
             <section className="card checkpoint-forks">

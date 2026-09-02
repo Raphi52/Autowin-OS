@@ -43,17 +43,7 @@ import {
   lireVisibilite,
   type HomeWidgetsVisibility
 } from './home-widgets-visibility'
-import { ecrireNomJarvis, lireNomJarvis, NOM_JARVIS_LONGUEUR_MAX } from './jarvis-nom'
-import {
-  DEBIT_MAX,
-  DEBIT_MIN,
-  ecrireReglageVoix,
-  HAUTEUR_MAX,
-  HAUTEUR_MIN,
-  lireReglageVoix,
-  type ReglageVoix
-} from './jarvis-voix-reglage'
-import { listerVoix, oublierVoixChoisie, parler } from './jarvis-parole'
+import { EVENEMENT_NOM_JARVIS, lireNomJarvis } from './jarvis-nom'
 import {
   memoriserOuvertureReglages,
   reglagesSontOuverts
@@ -236,7 +226,24 @@ export function HomeView({
   const [visibilite, setVisibilite] = useState<HomeWidgetsVisibility>(() =>
     lireVisibilite(window.localStorage)
   )
+  /**
+   * LE NOM DE L'ASSISTANT, RELU EN DIRECT.
+   *
+   * Il ne se SAISIT plus ici : son champ vit dans le widget de l'assistant (demande du 2026-09-01).
+   * L'accueil n'en garde que la LECTURE, pour titrer la tuile. Le navigateur n'emet pas `storage`
+   * dans la fenetre qui ecrit, d'ou l'evenement dedie de `jarvis-nom` — sans lui, le titre de la
+   * tuile garderait l'ancien nom jusqu'au redemarrage.
+   */
   const [nomJarvis, setNomJarvis] = useState<string>(() => lireNomJarvis(window.localStorage))
+  useEffect(() => {
+    const relire = (): void => setNomJarvis(lireNomJarvis(window.localStorage))
+    window.addEventListener(EVENEMENT_NOM_JARVIS, relire)
+    window.addEventListener('storage', relire)
+    return () => {
+      window.removeEventListener(EVENEMENT_NOM_JARVIS, relire)
+      window.removeEventListener('storage', relire)
+    }
+  }, [])
 
   const basculerVisibilite = useCallback((id: HomeWidgetId): void => {
     setVisibilite((courante) => {
@@ -244,67 +251,6 @@ export function HomeView({
       ecrireVisibilite(window.localStorage, suivante)
       return suivante
     })
-  }, [])
-
-  /**
-   * Ce que l'utilisateur a TAPE, distinct du nom RETENU.
-   *
-   * Les deux ne peuvent pas etre la meme chose : le nom retenu ne peut jamais etre vide (la tuile
-   * doit garder un titre), alors que la saisie doit pouvoir l'etre le temps d'effacer pour retaper.
-   * Reafficher le nom retenu dans le champ a chaque frappe remettait « Jarvis » des qu'on effacait.
-   */
-  const [saisieNomJarvis, setSaisieNomJarvis] = useState<string>(nomJarvis)
-
-  /**
-   * Le nom est enregistre a CHAQUE frappe, deja normalise.
-   *
-   * Enregistrer a la validation seulement obligerait a deviner quand la saisie est « finie » ; ici la
-   * valeur retenue suit la frappe, tandis que le champ garde exactement ce qui a ete tape.
-   */
-  const changerNomJarvis = useCallback((saisie: string): void => {
-    setSaisieNomJarvis(saisie)
-    setNomJarvis(ecrireNomJarvis(window.localStorage, saisie))
-  }, [])
-
-  /** En quittant le champ, on remet sous les yeux le nom REELLEMENT retenu (vide -> nom d'origine). */
-  const finirSaisieNomJarvis = useCallback((): void => {
-    setSaisieNomJarvis(nomJarvis)
-  }, [nomJarvis])
-
-  /**
-   * LES VOIX DU POSTE, et celle qui est retenue.
-   *
-   * La liste n'est PAS disponible au premier rendu : les navigateurs la chargent en differe et
-   * previennent par `voiceschanged`. Sans cette souscription, le menu deroulant resterait vide sur
-   * un poste qui a pourtant des voix -- c'est le defaut classique de cette API.
-   */
-  const [voixDisponibles, setVoixDisponibles] = useState<SpeechSynthesisVoice[]>(() => listerVoix())
-  const [reglageVoix, setReglageVoix] = useState<ReglageVoix>(() =>
-    lireReglageVoix(window.localStorage)
-  )
-
-  useEffect(() => {
-    const relever = (): void => setVoixDisponibles(listerVoix())
-    relever()
-    const synthese = (window as unknown as { speechSynthesis?: EventTarget }).speechSynthesis
-    synthese?.addEventListener?.('voiceschanged', relever)
-    return () => synthese?.removeEventListener?.('voiceschanged', relever)
-  }, [])
-
-  /**
-   * Enregistre le changement ET oublie la voix deja chargee : sans cet oubli, l'assistant garderait
-   * jusqu'au redemarrage la voix prise a sa premiere phrase, et le nouveau choix serait inaudible.
-   * La phrase d'essai rend le reglage VERIFIABLE a l'oreille, seul endroit ou il se juge.
-   */
-  const changerReglageVoix = useCallback((modification: Partial<ReglageVoix>): void => {
-    const retenu = ecrireReglageVoix(window.localStorage, modification)
-    oublierVoixChoisie()
-    setReglageVoix(retenu)
-  }, [])
-
-  const essayerVoix = useCallback((): void => {
-    oublierVoixChoisie()
-    parler('Bonjour, je suis a votre ecoute.')
   }, [])
 
   /**
@@ -770,9 +716,27 @@ export function HomeView({
         data-reglages={reglagesOuverts ? 'true' : undefined}
       >
         <div className="home-view__masthead">
-          <h1>
-            Autowin <b>Accueil</b>
-          </h1>
+          {/* Le rouage vit DANS la plaque du titre, a sa droite (demande utilisateur du 2026-09-02) :
+              un bouton isole a l'autre bout de l'ecran obligeait a traverser la page pour un reglage. */}
+          <div className="home-view__masthead-ligne">
+            <h1>
+              Autowin <b>Accueil</b>
+            </h1>
+            <button
+              type="button"
+              className="home-view__rouage"
+              onClick={basculerReglages}
+              aria-expanded={reglagesOuverts}
+              aria-label="Réglages de l’accueil"
+              data-testid="home-settings"
+              title="Réglages de l'accueil : widgets affichés, nom de l'assistant, disposition"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="3.2" />
+                <path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" />
+              </svg>
+            </button>
+          </div>
           {noticeVisible ? (
             <p>
               Prenez une tuile n’importe où et posez-la : elle reste exactement là où vous la
@@ -784,19 +748,6 @@ export function HomeView({
               {erreurOuverture}
             </p>
           ) : null}
-        </div>
-        <div className="home-view__tools">
-          {/* UN seul bouton pour tous les reglages. Les commandes de disposition tenaient la barre en
-              permanence pour un usage occasionnel ; elles sont maintenant DANS ce panneau. */}
-          <button
-            type="button"
-            onClick={basculerReglages}
-            aria-expanded={reglagesOuverts}
-            data-testid="home-settings"
-            title="Réglages de l'accueil : widgets affichés, nom de l'assistant, disposition"
-          >
-            Réglages
-          </button>
         </div>
         {reglagesOuverts ? (
           <div className="home-view__settings" role="dialog" aria-label="Réglages de l'accueil" data-testid="home-settings-panel">
@@ -821,78 +772,9 @@ export function HomeView({
                 ))}
               </ul>
             </section>
-            <section className="home-settings__bloc">
-              <h3>Assistant vocal</h3>
-              {/* Le nom saisi ici EST le titre de la tuile : une seule source, jamais deux. */}
-              <label className="home-settings__champ">
-                <span>Son nom</span>
-                <input
-                  type="text"
-                  value={saisieNomJarvis}
-                  maxLength={NOM_JARVIS_LONGUEUR_MAX}
-                  data-testid="home-jarvis-nom"
-                  onChange={(event) => changerNomJarvis(event.target.value)}
-                  onBlur={finirSaisieNomJarvis}
-                />
-              </label>
-              {/* La voix : celle du poste, choisie ici. Vide = l'application choisit (le francais
-                  d'abord), ce qui reste le comportement d'un poste ou personne n'a rien regle. */}
-              <label className="home-settings__champ">
-                <span>Sa voix</span>
-                <select
-                  value={reglageVoix.voixURI}
-                  data-testid="home-jarvis-voix"
-                  onChange={(event) => changerReglageVoix({ voixURI: event.target.value })}
-                >
-                  <option value="">Voix automatique (français si disponible)</option>
-                  {voixDisponibles.map((voix) => (
-                    <option key={voix.voiceURI || voix.name} value={voix.voiceURI || voix.name}>
-                      {voix.name} — {voix.lang}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {voixDisponibles.length === 0 ? (
-                <p className="home-settings__note" data-testid="home-jarvis-voix-vide">
-                  Aucune voix installée sur ce poste : l’assistant écoute mais ne répondra pas à voix
-                  haute.
-                </p>
-              ) : null}
-              <label className="home-settings__champ">
-                <span>Débit — {reglageVoix.debit.toFixed(2)}×</span>
-                <input
-                  type="range"
-                  min={DEBIT_MIN}
-                  max={DEBIT_MAX}
-                  step={0.05}
-                  value={reglageVoix.debit}
-                  data-testid="home-jarvis-debit"
-                  onChange={(event) => changerReglageVoix({ debit: Number(event.target.value) })}
-                />
-              </label>
-              <label className="home-settings__champ">
-                <span>Hauteur — {reglageVoix.hauteur.toFixed(2)}×</span>
-                <input
-                  type="range"
-                  min={HAUTEUR_MIN}
-                  max={HAUTEUR_MAX}
-                  step={0.05}
-                  value={reglageVoix.hauteur}
-                  data-testid="home-jarvis-hauteur"
-                  onChange={(event) => changerReglageVoix({ hauteur: Number(event.target.value) })}
-                />
-              </label>
-              <div className="home-settings__actions">
-                <button
-                  type="button"
-                  onClick={essayerVoix}
-                  data-testid="home-jarvis-voix-test"
-                  title="Prononcer une phrase avec la voix et les réglages choisis"
-                >
-                  Écouter un essai
-                </button>
-              </div>
-            </section>
+            {/* Les reglages de l'assistant (nom, voix, debit, hauteur) ne sont PLUS ici : ils
+                vivent dans SON widget — demande de l'utilisateur du 2026-09-01. Ce panneau ne garde
+                que ce qui concerne la PAGE : les tuiles affichees et leur disposition. */}
             <section className="home-settings__bloc">
               <h3>Disposition</h3>
               <div className="home-settings__actions">
@@ -951,9 +833,16 @@ export function HomeView({
             // `zIndex` (plans) et les ombres, sans mise a l'echelle fractionnaire.
             transform: `translate3d(${box.x}px, ${box.y}px, 0)`
           }}
-          onPointerDown={(event) => grab(event, box.id, 'move')}
         >
-          <div className="home-tile__label">
+          {/*
+            LA PRISE EST LA BARRE DU HAUT, ET ELLE SEULE (demande utilisateur du 2026-09-02).
+            Saisir n'importe ou dans le corps rendait le contenu inutilisable : selectionner un
+            texte, tirer un curseur de reglage ou cliquer un lien amorçait un deplacement de tuile.
+          */}
+          <div
+            className="home-tile__label"
+            onPointerDown={(event) => grab(event, box.id, 'move')}
+          >
             <h2>{titreWidget(box.id)}</h2>
             <i className="home-tile__rule" />
             {box.id === 'notifications' && pending > 0 ? (
