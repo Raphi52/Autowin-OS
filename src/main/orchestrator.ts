@@ -409,6 +409,7 @@ import {
   porteLesOutilsNatifs,
   type ServeurOutilsNoeudSkill
 } from './skill-node-mcp'
+import { protegerRappel } from './observabilite-non-bloquante'
 
 function canonicalCausalPath(root: string, path: string): string {
   const normalized = resolve(root, path).replaceAll('\\', '/')
@@ -1571,6 +1572,16 @@ export class Orchestrator {
     onLateCausalMutationClaims?: WatchdogMutationClaimsSink,
     runOptions: OrchestrationRunOptions = {}
   ): Promise<OrchestrationResult> {
+    /*
+     * UN GEL NE CASSE PAS LE TOUR. Ces trois rappels ecrivent la trace causale, qui passe par un
+     * verrou de sequence JETANT au dela de son budget d'acquisition — exactement ce qui arrive
+     * quand la boucle d'evenements est tenue. Invoques a nu en aval (`onStep?.(s)`, `onPhase?.(p)`),
+     * ils faisaient remonter ce jet jusqu'ici et tuaient un run par ailleurs sain. On les protege
+     * UNE fois, a leur entree dans le pipeline : meme contrat que `emitLifecycle` juste dessous.
+     */
+    onStep = protegerRappel('onStep', onStep)
+    onPhase = protegerRappel('onPhase', onPhase)
+    onDelta = protegerRappel('onDelta', onDelta)
     const runId = runOptions.resumeRunId ?? `run-${this.runNamespace}-${++this.runSeq}`
     this.causalWatchPathsByRun.set(runId, [...causalWatchPaths])
     const runStartedAtMs = Date.now()
