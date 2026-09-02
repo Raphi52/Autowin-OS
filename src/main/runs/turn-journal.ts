@@ -34,6 +34,17 @@ export interface UnfinishedTurn {
  */
 const TERMINAL_KINDS = new Set(['done', 'cancelled', 'error', 'failed'])
 
+/**
+ * FENÊTRE DE CONSERVATION UNIQUE des journaux — 7 jours.
+ *
+ * Elle vit ICI parce que c'est le journal de tour qui CITE les autres fichiers (il porte le lien vers
+ * la sortie brute du CLI). Les sorties brutes partaient à 3 jours (`journal-gc.ts`) : du 4e au 7e jour,
+ * un tour restait lisible en renvoyant vers un fichier déjà supprimé — une trace qui promet une preuve
+ * disparue. Une seule durée décide donc des deux purges, et c'est la PLUS LONGUE qui gagne : la
+ * supprimer plus tôt ne libérerait que quelques Mo au prix du diagnostic de la semaine écoulée.
+ */
+export const JOURNAL_RETENTION_MS = 7 * 24 * 3_600_000
+
 /** Nom de fichier sûr (un id de conversation/tour ne doit jamais s'échapper du dossier). */
 function safeSegment(value: string): string {
   const cleaned = value.replace(/[^A-Za-z0-9._-]/g, '_')
@@ -186,7 +197,7 @@ export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
  * GC : supprime les journaux TERMINÉS plus vieux que `maxAgeMs` (défaut 7 j). Ne touche jamais un
  * tour inachevé (c'est précisément ce qu'on veut pouvoir reprendre). Renvoie le nombre supprimé.
  */
-export function pruneFinishedTurnJournals(root: string, maxAgeMs = 7 * 24 * 3_600_000, now = Date.now()): number {
+export function pruneFinishedTurnJournals(root: string, maxAgeMs = JOURNAL_RETENTION_MS, now = Date.now()): number {
   // Un SCAN de l'arborescence décide de ce qui est inachevé ou obsolète : les tampons encore en
   // mémoire doivent être sur disque AVANT, sinon un tour en vol serait invisible (donc jamais repris).
   flushAllTurnJournals()

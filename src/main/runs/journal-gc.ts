@@ -1,5 +1,6 @@
 import { readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { JOURNAL_RETENTION_MS } from './turn-journal'
 
 /**
  * Ramasse-miettes des journaux de sortie brute (`run-stdout/`).
@@ -58,8 +59,15 @@ export interface JournalGcPolicy {
   assumeDeadMs?: number
 }
 
-/** 3 jours : large de quoi diagnostiquer la veille et l'avant-veille, sans accumuler. */
-export const DEFAULT_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000
+/**
+ * Meme fenetre que le journal de tour (7 jours) — et non 3, comme jusqu'au 2026-09-02.
+ *
+ * Le journal de tour porte le LIEN vers ces sorties brutes et se garde 7 jours : couper les brutes a
+ * 3 jours laissait, du 4e au 7e jour, une trace qui renvoie vers un fichier supprime. La duree n'est
+ * donc plus decidee ici, elle est IMPORTEE de la source unique.
+ */
+export { JOURNAL_RETENTION_MS } from './turn-journal'
+export const DEFAULT_MAX_AGE_MS = JOURNAL_RETENTION_MS
 /** 200 journaux ≈ quelques Mo : la fenetre reste consultable a la main. */
 export const DEFAULT_MAX_FILES = 200
 /**
