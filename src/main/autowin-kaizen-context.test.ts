@@ -479,3 +479,37 @@ describe('dossier de preuve /kaizen — appels modele et deroule des tours', () 
     }
   })
 })
+
+describe('dossier de preuve /kaizen — budget reellement utilise', () => {
+  /*
+    Mesure sur le dossier REEL de conv-105 : 23 870 signes utilises sur 28 000 alors que 167
+    elements avaient ete jetes. Cause : le retrait vise la section la plus LOURDE, or un RUN pese
+    jusqu'a 4 000 signes ; pour resorber un depassement de quelques signes, un RUN entier partait
+    et 4 000 signes de budget avec lui. Reproduction hermetique ci-dessous : 4 RUN + 30 lignes
+    d'activite -> un RUN jete, 4 144 signes perdus.
+  */
+  it("ne sacrifie pas un RUN entier pour resorber un petit depassement", () => {
+    const task = buildAutowinKaizenTask('/kaizen', {
+      conversation: { id: 'conv-budget', title: 'Budget', messages: [{ role: 'user', content: 'x', ts: 1 }] },
+      activity: Array.from({ length: 30 }, (_, index) => ({
+        ts: new Date(index).toISOString(),
+        kind: 'exec',
+        label: 'phase-' + index,
+        text: 't'.repeat(300)
+      })),
+      brainTraces: [],
+      causalEvents: [],
+      runs: Array.from({ length: 4 }, (_, index) => ({
+        path: 'C:/R' + index + '/RUN.md',
+        content: String.fromCharCode(97 + index).repeat(4_000)
+      }))
+    })
+    const snapshot = JSON.parse(task.slice(task.indexOf('{'), task.lastIndexOf('}') + 1))
+
+    expect(task.length).toBeLessThanOrEqual(28_000)
+    // En dessous de 27 000, du budget a ete jete pour rien.
+    expect(task.length).toBeGreaterThan(27_000)
+    // Le depassement se resorbe sur des elements LEGERS : les 4 RUN survivent.
+    expect(snapshot.runs).toHaveLength(4)
+  })
+})

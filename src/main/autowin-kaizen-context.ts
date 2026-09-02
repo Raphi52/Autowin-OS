@@ -295,14 +295,32 @@ function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<strin
     { nom: 'brainTraces', liste: snapshot.brainTraces, retirerEnTete: false }
   ]
   const retires: Record<string, number> = {}
-  while (JSON.stringify(snapshot).length > budget) {
+  const prochainElement = (section: (typeof sections)[number]): unknown =>
+    section.retirerEnTete ? section.liste[0] : section.liste[section.liste.length - 1]
+  const poidsElement = (section: (typeof sections)[number]): number =>
+    JSON.stringify(prochainElement(section) ?? null).length + 1
+  for (;;) {
+    const depassement = JSON.stringify(snapshot).length - budget
+    if (depassement <= 0) break
     const candidates = sections.filter((section) => section.liste.length > 0)
     if (candidates.length === 0) break
-    const cible = candidates.reduce((plusLourde, section) =>
-      JSON.stringify(section.liste).length > JSON.stringify(plusLourde.liste).length
-        ? section
-        : plusLourde
-    )
+    /*
+      Mesure sur conv-105 : 23 870 signes retenus sur 28 000, un RUN entier jeté pour un
+      dépassement de quelques signes — un RUN pèse jusqu'à 4 000 signes, donc viser la section la
+      plus LOURDE emportait 4 000 signes de budget avec lui. Dès qu'un SEUL retrait suffit à
+      rentrer dans le budget, on prend le MOINS lourd de ceux-là ; sinon on continue d'alléger la
+      section la plus lourde, qui est le seul moyen de progresser vite.
+    */
+    const suffisants = candidates.filter((section) => poidsElement(section) >= depassement)
+    const cible = suffisants.length
+      ? suffisants.reduce((plusLeger, section) =>
+          poidsElement(section) < poidsElement(plusLeger) ? section : plusLeger
+        )
+      : candidates.reduce((plusLourde, section) =>
+          JSON.stringify(section.liste).length > JSON.stringify(plusLourde.liste).length
+            ? section
+            : plusLourde
+        )
     if (cible.retirerEnTete) cible.liste.shift()
     else cible.liste.pop()
     retires[cible.nom] = (retires[cible.nom] ?? 0) + 1
