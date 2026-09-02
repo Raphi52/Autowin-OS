@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { zoneDuTourDeChat } from '../../../main/source-process-principal.test-helpers'
 import {
   callsLabel,
   formatDuration,
@@ -296,9 +297,12 @@ describe('câblage — la durée est écrite ET affichée', () => {
   })
 
   it('le tour de chat est mesuré de bout en bout', () => {
-    const main = read2('../../../main/index.ts')
-    expect(main).toContain('const turnStartedAtMs = performance.now()')
-    expect(main).toContain('durationMs: turnDurationMs')
+    // La ZONE du tour, pas un chemin de fichier : ce cablage a demenage d'`index.ts` vers
+    // `src/main/chat/run-pilot-chat.ts` le 2026-09-02 et ce controle rougissait sans qu'aucune
+    // mesure n'ait change (meme lecon que les 4 contrats de `src/main`).
+    const tour = zoneDuTourDeChat()
+    expect(tour).toContain('const turnStartedAtMs = performance.now()')
+    expect(tour).toContain('durationMs: turnDurationMs')
   })
 
   it('l’agrégation additionne la durée des deux journaux', () => {
