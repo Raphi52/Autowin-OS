@@ -123,7 +123,8 @@
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
     "scout:residus": "node scripts/scout-residus.mjs src",
-    "scout:rendement": "node scripts/scout-rendement.mjs"
+    "scout:rendement": "node scripts/scout-rendement.mjs",
+    "arena:protocole": "node scripts/arena-protocole-check.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
