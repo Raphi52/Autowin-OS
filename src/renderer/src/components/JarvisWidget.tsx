@@ -2,7 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { JarvisAnneau } from './JarvisAnneau'
 import { jouerBipEveil } from './jarvis-bip'
 import { fabriqueMoteur } from './jarvis-moteur'
-import { listerVoix, oublierEtatPiper, oublierVoixChoisie, parler, taireJarvis } from './jarvis-parole'
+import {
+  listerVoix,
+  oublierEtatPiper,
+  oublierVoixChoisie,
+  parler,
+  taireJarvis,
+  VOIX_PIPER_URI
+} from './jarvis-parole'
 
 /**
  * Décroissance de la crête par image d'affichage (~60/s) : ~1 s pour retomber d'une voix forte au
