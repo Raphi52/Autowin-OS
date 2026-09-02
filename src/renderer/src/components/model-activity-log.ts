@@ -792,5 +792,6 @@ export function buildModelActivityLog(input: ModelActivityInput): ModelActivityE
   })
   entries.push(...tag('causal', fromCausal(input.causal ?? [])))
   entries.push(...tag('activity', fromActivity(input.activity ?? [])))
+  entries.push(...tag('brain', fromBrain(input.brain ?? [])))
   return trierChronologiquement(ecarterPenseeTronquee(dedupe(entries)))
 }
