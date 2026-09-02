@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 import { promoteInboxCandidate, promoteOutcomeLearningCandidate } from './brain-inbox'
 import { brainCorpusForWorkspace } from './brain-corpus-scope'
 import { invalidateVaultBrainNotesCache, searchVaultBrainNotesAsync } from './viz/fs-brains'
@@ -68,7 +69,9 @@ const causalEvidence = [
 
 describe('outcome learning — contrat visible par les modèles', () => {
   it('branche le ledger durable, le kill switch et le promoteur réel au démarrage', () => {
-    const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+    // La ZONE du process principal, pas un chemin : les canaux du Brain ont quitte `index.ts`
+    // pour `src/main/ipc/brain.ts` le 2026-09-02 sans qu'aucun cablage ne change.
+    const source = sourceProcessPrincipal()
     expect(source).toContain("join(outcomeLearningDirectory, 'events-v1.jsonl')")
     expect(source).toContain("join(outcomeLearningDirectory, 'mode.txt')")
     expect(source).toContain('process.env.AUTOWIN_OUTCOME_LEARNING_MODE')

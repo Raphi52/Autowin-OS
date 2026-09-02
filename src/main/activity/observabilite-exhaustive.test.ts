@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
-import { fichiersDuTourDeChat } from '../source-process-principal.test-helpers'
+import {
+  fichiersDuTourDeChat,
+  sourceProcessPrincipal
+} from '../source-process-principal.test-helpers'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -38,6 +41,19 @@ function lire(chemin: string): string[] {
 function codeSeulement(chemin: string): string {
   return lire(chemin)
     .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+}
+
+/**
+ * MEME FILTRE, sur la ZONE du process principal et non sur un chemin.
+ *
+ * Les canaux du Brain ont quitte `index.ts` pour `src/main/ipc/brain.ts` le 2026-09-02 : la garde
+ * cherchait la trace de recherche a une adresse qu'elle avait quittee. Un demenagement de code
+ * n'est pas une trace absente.
+ */
+function codeSeulementDuProcessPrincipal(): string {
+  return sourceProcessPrincipal()
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '')
 }
@@ -164,7 +180,7 @@ describe('exhaustivité des appels au Brain', () => {
   })
 
   it('la recherche lancée depuis la vue Knowledge laisse une trace', () => {
-    expect(codeSeulement('index.ts')).toMatch(/kind: 'recherche'/)
+    expect(codeSeulementDuProcessPrincipal()).toMatch(/kind: 'recherche'/)
   })
 
   it("l'empreinte du dépôt chargée à chaque run laisse une trace", () => {
