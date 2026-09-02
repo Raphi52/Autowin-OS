@@ -770,6 +770,16 @@ export function ChatView({
    * On masque le fil le temps de la reprise, et on le revele une fois la position tenue.
    */
   const [repriseEnCours, setRepriseEnCours] = useState(false)
+  /**
+   * DEMANDE D'ATTERRISSAGE DU FIL, quand rien d'autre ne le declenche.
+   *
+   * Defaut vecu le 2026-09-02 : « quand je clique depuis la mosaique sur aller vers la conversation
+   * en grand, ca me met pas scrolle jusqu'au dernier message ». Le fil plein ecran n'existe PAS en
+   * mosaique : il est MONTE au clic, donc il nait en haut. Et si la conversation ouverte etait deja
+   * l'active, `loadConv` repose le MEME tableau de messages — React ne re-rend pas, l'effet de
+   * descente (dependant de `messages`) ne se rejoue jamais, et personne ne descend.
+   */
+  const [atterrissageDemande, setAtterrissageDemande] = useState(0)
 
   /** Le texte en cours de frappe, lu dans la carte des brouillons (le composer y écrit à chaque touche). */
   function texteDuComposer(): string {
@@ -1501,7 +1511,12 @@ export function ChatView({
   }
 
   function patchLast(conversationId: string, fn: (m: AsstMsg) => void): void {
-    const next = (liveMessagesRef.current.get(conversationId) ?? []).slice()
+    // RIEN A PATCHER N'EST PAS « FIL VIDE ». Le cache peut avoir ete retire le temps d'une relecture
+    // (handler `refresh`) : publier le tableau vide qui en resulte EFFACAIT la fenetre de mosaique
+    // a l'ecran, avant qu'elle ne se repeigne — le clignotement signale par l'utilisateur.
+    const courant = liveMessagesRef.current.get(conversationId)
+    if (!courant || courant.length === 0) return
+    const next = courant.slice()
     for (let i = next.length - 1; i >= 0; i--) {
       if (next[i].role !== 'assistant') continue
       const copy: AsstMsg = { ...(next[i] as AsstMsg), parts: (next[i] as AsstMsg).parts.slice() }
@@ -1700,7 +1715,7 @@ export function ChatView({
       cancelAnimationFrame(frame)
       annulerDescente?.()
     }
-  }, [messages, activeDirectiveReceipts])
+  }, [messages, activeDirectiveReceipts, atterrissageDemande])
 
   /**
    * FIN DE TOUR — descente de RATTRAPAGE. L'effet ci-dessus ne se rejoue que sur `messages` : or la
@@ -1891,8 +1906,12 @@ export function ChatView({
   async function ouvrirDansMosaique(id: string): Promise<void> {
     if (!mosaicIdsRef.current.includes(id)) mosaicIdsRef.current = [...mosaicIdsRef.current, id]
     setMosaicIds((courant) => (courant.includes(id) ? courant : [...courant, id]))
+    // UN CACHE VIDE EST UNE ABSENCE, PAS UN FIL — meme regle qu'au chat plein (conv-82). Une
+    // conversation ouverte alors qu'elle etait encore vide laisse un tableau vide ici ; l'agent la
+    // remplit ensuite cote main, sans passer par ce cache. Un `if (cache)` laissait donc ce vide
+    // gagner sur un store PLEIN et la fenetre revenait « creuse » (« Aucun message. »).
     const cache = liveMessagesRef.current.get(id)
-    if (cache) {
+    if (cache && cache.length > 0) {
       setMosaicFils((courant) => ({ ...courant, [id]: cache }))
       return
     }
@@ -1941,6 +1960,10 @@ export function ChatView({
     setConvViewMode('list')
     const cible = convsRef.current.find((c) => c.id === id)
     if (cible) await loadConv(cible)
+    // Le fil plein ecran vient d'etre monte : il nait en haut. On demande explicitement son
+    // atterrissage (bas du fil, ou reprise de lecture memorisee), car `loadConv` peut n'avoir
+    // re-rendu AUCUN message quand la conversation ouverte etait deja l'active.
+    setAtterrissageDemande((tour) => tour + 1)
   }
 
   function fermerFenetreMosaique(id: string): void {
