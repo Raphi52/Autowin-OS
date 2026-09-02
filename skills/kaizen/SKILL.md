@@ -4,7 +4,10 @@ description: >-
   Continuous-improvement loop on Claude's OWN behavior: turn a session (BY DEFAULT the CURRENT one it is
   invoked in) into VERIFIED, SELF-APPLIED EDITS to the kit files — `skills/` · `hooks/*.ps1` ·
   `settings.json` · `CLAUDE.md` (+ `CONSTITUTION.md` mirror) · memory — that improve Claude's FUTURE behavior.
-  ORCHESTRATES, never re-implements the audit: (1) LOCATE the target — BY DEFAULT the CURRENT session it is
+  ORCHESTRATES, never re-implements the audit: (0) FINISH THE TASK FIRST — when kaizen is invoked while a
+  user task is still in flight (« kaizen, et au fait ça marche toujours pas »), the TASK is delivered and
+  verified BEFORE the behavioral improvement, then the improvement is done in the SAME pass; kaizen never
+  replaces the work it was asked about; (1) LOCATE the target — BY DEFAULT the CURRENT session it is
   invoked in (reconstruct it from its OWN transcript `~/.claude/projects/<project>/<SESSION_ID>.jsonl`, the
   `SESSION_ID` injected each turn by the UserPromptSubmit hook); OR a named PAST session ("kaizen session X /
   the last one I tried to kaizen" → find by first-prompt / topic / a prior `kaizen`-fork); OR a named
@@ -38,8 +41,14 @@ treated when the ORIGINAL failing situation, replayed against the installed fix,
 naming the defect, understanding it, or writing a rule about it changes nothing until that replay is shown. Turn a
 session's blind spots (defects Claude hit, corrections the user gave) into VERIFIED, SELF-APPLIED edits to
 the kit (CLAUDE.md reflexes / hooks / skills / memory) that change FUTURE behavior. It APPLIES its own edits, each in a DEDICATED commit and each backed by an out-of-model verification — the garde-fou is revertability, not a wait.
+**L'audit ne remplace jamais le travail** : si une tâche utilisateur est encore en cours au moment de l'invocation, elle est TERMINÉE d'abord (livrée + vérifiée), l'amélioration comportementale vient ENSUITE, dans la même passe.
 
 ## Procedure
+0. **FINISH THE TASK FIRST (CARDINAL — ordre non négociable).** Kaizen arrive presque toujours PENDANT un travail : l'utilisateur signale un défaut de comportement sur la tâche qu'il est en train de faire faire. Cette tâche reste due. **Ordre imposé : (a) terminer la tâche demandée jusqu'à son résultat vérifié hors-modèle, (b) PUIS mener l'audit comportemental et installer les éditions, dans la MÊME passe.** Partir directement à l'audit — et rendre la main avec un kit amélioré mais la demande initiale non livrée — est un ÉCHEC, pas une priorisation : l'utilisateur perd son livrable ET doit redemander.
+   - **Cas où il n'y a rien à finir** : l'invocation porte sur une session PASSÉE déjà close, ou sur un comportement/telemetry sans tâche en cours → passer directement à l'étape 1, en le disant en une ligne (« aucune tâche en cours — audit direct »).
+   - **Si la tâche en cours est elle-même bloquée** : nommer le blocage, puis auditer — un blocage ne se contourne pas en changeant de sujet pour l'audit.
+   - **Ne pas fusionner les deux** : la correction de la tâche et l'édition du kit sont des commits SÉPARÉS (l'un corrige un artefact, l'autre change un comportement futur ; les mélanger rend le revert impossible).
+   - **Clôture** : le compte-rendu porte les DEUX résultats — ce qui a été livré pour la tâche, puis ce qui a été installé pour le comportement. Un seul des deux = travail incomplet.
 1. **LOCATE the target.** **DEFAULT = the CURRENT session** — the conversation `/kaizen` is invoked in. Read its OWN transcript on disk: `~/.claude/projects/<project>/<SESSION_ID>.jsonl` (+ `subagents/`, `tool-results/`), where `<SESSION_ID>` is the id injected each turn by the UserPromptSubmit hook (also visible in any `SESSION_ID=…` system reminder). The transcript is written as the session runs, so it's available mid-session — point the audit lenses at THAT file. No need to ask which session; "kaizen" alone = kaizen THIS one. Other targets, only if the user names them (confirm, don't assume):
    - **a named PAST session** — "kaizen session X / the last one I tried to kaizen". Find it by first user prompt, dominant topic, or a prior `kaizen`/`kaizen-past-session` fork. **Cite the evidence** (first prompt + a topic line) and CONFIRM before auditing — a wrong target wastes the whole fan-out. Given a disambiguator (a remembered first prompt, a topic), grep all `projects/*/*.jsonl` for it.
    - **a named behavior / habit / skill-set** — pass straight to the behavioral lenses of step 2.
@@ -130,9 +139,10 @@ The deliverable is the STATE table (presented in PLAIN words) + the integrated e
 `{"gate":"<fix-gate|anti-flaky|stop>","treatedCount":<count at treatment>,"ts":"<iso>","note":"<what changed>"}`
 `gate` + `treatedCount` are REQUIRED: `kaizen-nudge.ps1` filters by `gate` and reads `treatedCount` to gate the re-nudge (≥ +5) — a line missing either silently breaks the anti-spam. The nudge then goes silent on the resolved (re-nudge only if the count climbs ≥ +5 again).
 
-**Done** — recap in plain words: root cause, what was integrated + where, what was VERIFIED (the out-of-model signal), **the non-recurrence replay per edit** (situation rejouée → résultat: bloqué / corrigé / non rejoué), caveats. **Never report "integrated/done"** without the verification artifact. The net is the commit log: each edit revertable alone.
+**Done** — recap in plain words: **d'abord le résultat de la TÂCHE terminée (étape 0) avec sa preuve**, puis root cause, what was integrated + where, what was VERIFIED (the out-of-model signal), **the non-recurrence replay per edit** (situation rejouée → résultat: bloqué / corrigé / non rejoué), caveats. **Never report "integrated/done"** without the verification artifact. The net is the commit log: each edit revertable alone.
 
 ## Don't
+- **Abandonner la tâche pour faire l'audit** — kaizen invoqué au milieu d'un travail ne remplace pas ce travail : la tâche est finie et vérifiée d'abord, l'amélioration comportementale ensuite, dans la même passe. Rendre un kit amélioré et un livrable manquant est un échec.
 - **Install a rule without having named the target behavior** — a prohibition derived from the symptom (« ne fais plus X ») leaves nothing to DO in its place, and gets violated the next session. Name the good user experience first, then write the reflex that produces it.
 - **The silent edit** — kaizen APPLIES, but never invisibly: an edit that does not appear in the STATE table, or that lands mixed into another commit, is a defect (the user must be able to see it and revert it alone).
 - **Improvise a parallel lens list per session** — the list in step 2 IS the machinery; extend it explicitly, and say so, rather than re-deriving one each time.

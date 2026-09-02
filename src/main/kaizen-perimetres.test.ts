@@ -18,7 +18,10 @@ import { bundledSkillsRoot } from './native-registry'
 const AXES: Array<[string, RegExp]> = [
   ['axe 2 — conversations Autowin', /conversation_read|conversation_search/],
   ['axe 3 — injections runtime', /INJECTED instruction/],
-  ['axe 4 — lentilles workflow', /WORKFLOW\/TOPOLOGY lenses/]
+  ['axe 4 — lentilles workflow', /WORKFLOW\/TOPOLOGY lenses/],
+  // Demande utilisateur du 2026-09-02 : kaizen invoqué PENDANT un travail doit d'abord FINIR
+  // la tâche, puis faire l'amélioration comportementale — l'audit ne remplace pas le livrable.
+  ['axe 5 — finir la tâche avant l’audit', /FINISH THE TASK FIRST/]
 ]
 
 const SHA_AVANT = '74501455'
@@ -54,6 +57,17 @@ describe('kaizen — périmètres d’audit et propagation package→live', () =
     const front = texte.split('---')[1] ?? ''
     expect(front).toMatch(/AUTOWIN conversation/)
     expect(front).toMatch(/INJECTED instruction/)
+    expect(front).toMatch(/FINISH THE TASK FIRST/)
+  })
+
+  it('l’ordre est IMPOSÉ : la tâche est finie AVANT l’audit, dans la même passe', () => {
+    // La règle doit être une étape de la procédure (donc jouée), pas une phrase d'intention.
+    expect(texte).toMatch(/0\. \*\*FINISH THE TASK FIRST/)
+    expect(texte).toMatch(/Abandonner la tâche pour faire l'audit/)
+    // Et l'étape 0 vient AVANT l'étape 1 « LOCATE the target ».
+    expect(texte.indexOf('FINISH THE TASK FIRST')).toBeLessThan(
+      texte.indexOf('1. **LOCATE the target.**')
+    )
   })
 
   it('contrôle négatif : la version d’avant les éditions ÉCHOUE ces axes', () => {
