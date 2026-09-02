@@ -297,6 +297,13 @@ export function ChatView({
   const autoDernierTourRef = useRef<string | null>(null)
   /** Dernier texte envoyé automatiquement : la même suite deux fois = boucle, on ne renvoie pas. */
   const autoDernierPromptRef = useRef<string | null>(null)
+  /**
+   * L'interrupteur vient d'être allumé À LA MAIN : ce clic PORTE sur la réponse affichée, donc la
+   * suite proposée part tout de suite. Défaut vécu le 2026-09-02 (« j'ai mis le mode auto et je
+   * dois encore faire tab+entrée ») : l'amorce anti-vieille-réponse, faite pour le CHANGEMENT de
+   * fil, marquait aussi ce tour-là comme déjà traité, et il ne partait rien.
+   */
+  const autoAllumageManuelRef = useRef(false)
   /** Fil où la boucle a déjà pris son point de départ (anti-relance d'une vieille réponse). */
   const autoFilAmorceRef = useRef<string | null>(null)
   /*
@@ -2574,9 +2581,13 @@ export function ChatView({
       const signatureArrivee = signatureTour(messages)
       if (signatureArrivee === null) return
       autoFilAmorceRef.current = activeId
-      autoDernierTourRef.current = signatureArrivee
       autoDernierPromptRef.current = null
-      return
+      // ALLUMAGE MANUEL : l'utilisateur clique EN VOYANT la suite proposée — c'est sa demande de
+      // l'envoyer. On ne fige donc pas ce tour, on le laisse passer la porte de décision.
+      const allumageManuel = autoAllumageManuelRef.current
+      autoAllumageManuelRef.current = false
+      autoDernierTourRef.current = allumageManuel ? null : signatureArrivee
+      if (!allumageManuel) return
     }
     const decision = deciderRelanceAuto({
       actif: true,
@@ -2602,14 +2613,17 @@ export function ChatView({
   /** Bascule du mode auto : à l'allumage, l'anti-doublon et l'anti-boucle repartent de zéro. */
   function basculerModeAuto(): void {
     if (autoActif) {
+      autoAllumageManuelRef.current = false
       setAutoActif(false)
       setAutoNotice('Mode auto arrêté.')
       return
     }
     autoDernierTourRef.current = null
     autoDernierPromptRef.current = null
-    // À l'allumage, le fil courant est amorcé par la boucle elle-même (pas de relance du passé).
+    // À l'allumage, le fil courant est amorcé par la boucle elle-même — mais le tour SOUS LES YEUX
+    // est justement celui que ce clic demande d'enchaîner, pas un vieux tour rouvert.
     autoFilAmorceRef.current = null
+    autoAllumageManuelRef.current = true
     setAutoNotice(null)
     setAutoActif(true)
   }
