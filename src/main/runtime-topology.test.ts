@@ -132,16 +132,24 @@ describe('bindings runtime issus d’Agent Studio', () => {
   })
 
   it('fait passer l’API setRole par agent-topology.json au lieu de roles.json seul', () => {
-    const source = indexSource()
+    // Le canal a quitté `index.ts` pour `ipc/roles.ts` le 2026-09-02 : on lit la ZONE du process
+    // principal, et on borne par le canal SUIVANT quel qu'il soit — un voisin nommé déménage.
+    const source = sourceProcessPrincipal()
     const start = source.indexOf("ipcMain.handle(\n    'os:setRole'")
-    const end = source.indexOf("ipcMain.handle('os:models:list'", start)
+    const suivant = source.indexOf('ipcMain.handle(', start + 1)
+    const end = suivant < 0 ? source.length : suivant
     const handler = source.slice(start, end)
 
     expect(start).toBeGreaterThan(0)
     expect(end).toBeGreaterThan(start)
+    // Le rôle est calculé DANS la topologie ...
     expect(handler).toContain('topologyWithRuntimeRole')
-    expect(handler).toContain('saveAgentTopology')
-    expect(handler).toContain('syncRuntimeTopology(agentTopology)')
+    // ... puis APPLIQUÉ par le seul chemin d'écriture ...
+    expect(handler).toContain('appliquerTopologie(next)')
+    // ... et ce chemin persiste bien agent-topology.json avant de resynchroniser les rôles.
+    expect(source).toContain('agentTopology = saveAgentTopology(agentTopologyPath, topology')
+    expect(source).toContain('syncRuntimeTopology(agentTopology)')
+    // Jamais d'écriture directe du rôle : `roles.json` seul n'est pas une autorité.
     expect(handler).not.toContain('os.setRole(role')
   })
 
@@ -154,10 +162,13 @@ describe('bindings runtime issus d’Agent Studio', () => {
   })
 
   it('ne sert pas les rôles avant la fin de la readiness modèles', () => {
-    const source = indexSource()
+    const source = sourceProcessPrincipal()
     const start = source.indexOf("ipcMain.handle('os:roles'")
-    const end = source.indexOf("ipcMain.handle('os:orchestrationBudget:get'", start)
+    const suivant = source.indexOf('ipcMain.handle(', start + 1)
+    const end = suivant < 0 ? source.length : suivant
     const handler = source.slice(start, end)
+
+    expect(start).toBeGreaterThan(0)
 
     expect(handler).toContain('await agentModelsReady')
     expect(handler).toContain('return os.roles.all()')

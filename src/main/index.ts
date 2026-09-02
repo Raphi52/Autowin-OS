@@ -17,6 +17,7 @@ import { registerClaudeAccountsIpc } from './ipc/claude-accounts'
 import { registerProfilesIpc } from './ipc/profiles'
 import { registerTopologyIpc } from './ipc/topology'
 import { registerProvidersIpc } from './ipc/providers'
+import { registerRolesIpc } from './ipc/roles'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -224,7 +225,6 @@ import {
   assertRuntimeTopologyAvailable,
   runtimeRoleBinding,
   runtimeRoleSlots,
-  topologyWithRuntimeRole,
   UnresolvedRuntimeModelError
 } from './runtime-topology'
 import {
@@ -1986,10 +1986,22 @@ Le fil reprend ensuite normalement.`
   // sur un décompte tiré de cet artefact. Ici l'événement est ÉMIS, jamais lu d'un fichier : il ne
   // peut pas se polluer de la même façon.
   os.onRefusIntegration((refus) => ledger.append(evenementRefusIntegration(refus)))
-  ipcMain.handle('os:roles', async (event) => {
-    assertTrustedRendererSender(event, 'Roles')
-    await agentModelsReady
-    return os.roles.all()
+  // `index.ts` garde la SEULE autorité sur `agentTopology` (variable réassignée) : les modules la
+  // reçoivent en lecture/écriture, jamais en valeur.
+  const lireTopologie = (): AgentTopology => agentTopology
+  const appliquerTopologie = (topology: AgentTopology): AgentTopology => {
+    agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
+    syncRuntimeTopology(agentTopology)
+    return agentTopology
+  }
+  const broadcastRolesRefresh = (): void => broadcast({ type: 'refresh', scope: 'roles' })
+  registerRolesIpc({
+    os,
+    agentModelsReady,
+    lireModeles: () => agentModels,
+    lireTopologie,
+    appliquerTopologie,
+    broadcastRolesRefresh
   })
   // WORKFLOWS NOMMÉS : lire, écrire, sélectionner. La sélection ne PILOTE encore rien — c'est la
   // pièce qui rend un workflow nommable et choisissable, préalable à la comparaison de plusieurs
@@ -2223,27 +2235,6 @@ Le fil reprend ensuite normalement.`
     )
     return shadowRoutingPilotState(saved)
   })
-  ipcMain.handle(
-    'os:setRole',
-    async (event, role: Role, provider: string, model?: string, reasoningEffort?: string) => {
-      assertTrustedRendererSender(event, 'SetRole')
-      await agentModelsReady
-      const next = topologyWithRuntimeRole(
-        agentTopology,
-        role,
-        {
-          provider,
-          model,
-          reasoningEffort: reasoningEffort as ReasoningEffort | undefined
-        },
-        agentModels
-      )
-      agentTopology = saveAgentTopology(agentTopologyPath, next, agentModels)
-      syncRuntimeTopology(agentTopology)
-      broadcast({ type: 'refresh', scope: 'roles' })
-      return os.roles.all()
-    }
-  )
   ipcMain.handle('os:models:list', async (event, force = false) => {
     assertTrustedRendererSender(event, 'Model catalog')
     if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
@@ -2465,15 +2456,6 @@ Le fil reprend ensuite normalement.`
     }
     return getModelQuotaSnapshot(models, { force })
   })
-  // `index.ts` garde la SEULE autorité sur `agentTopology` (variable réassignée) : les modules la
-  // reçoivent en lecture/écriture, jamais en valeur.
-  const lireTopologie = (): AgentTopology => agentTopology
-  const appliquerTopologie = (topology: AgentTopology): AgentTopology => {
-    agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
-    syncRuntimeTopology(agentTopology)
-    return agentTopology
-  }
-  const broadcastRolesRefresh = (): void => broadcast({ type: 'refresh', scope: 'roles' })
   registerProfilesIpc({
     os,
     profiles,
