@@ -50,6 +50,12 @@ export type ModelActivityKind =
    * Invisible depuis le fil, alors que c'est la que le travail se fait reellement.
    */
   | 'agent'
+  /**
+   * FICHIERS reellement touches pendant le tour, et par QUI : l'outil d'edition direct ou un
+   * sous-agent. Le journal disait qu'une commande avait tourne ; il ne disait pas ce qu'elle avait
+   * change sur le disque.
+   */
+  | 'fichiers'
   /** Tout geste journalisé qui n'entre dans AUCUNE des catégories ci-dessus. Rien ne se perd. */
   | 'event'
 
@@ -64,6 +70,8 @@ export type ModelActivitySource =
   | 'prompts'
   /** Copies de travail isolees des sous-agents (`getWorktreeActivity`). */
   | 'bureaux'
+  /** Trace des fichiers lus et ecrits (`conversation-file-trace-spool`). */
+  | 'fichiers'
 
 export interface ModelActivityEntry {
   id: string
@@ -106,6 +114,8 @@ export interface ModelActivityInput {
   promptCalls?: ReadonlyArray<Record<string, unknown>>
   /** Activite des copies de travail des sous-agents (`getWorktreeActivity`), telle quelle. */
   bureaux?: ReadonlyArray<Record<string, unknown>>
+  /** Traces de fichiers de la conversation (`conversation-file-trace-spool`), telles quelles. */
+  fichiers?: ReadonlyArray<Record<string, unknown>>
 }
 
 /** L'heure vient du JOURNAL (`at: Date.now()` côté main) ; on ne l'INVENTE jamais quand elle manque. */
@@ -716,6 +726,44 @@ function trierChronologiquement(entries: ModelActivityEntry[]): ModelActivityEnt
  * autre), les doublons exacts écartés, et l'ensemble trié chronologiquement. Un tour dont le journal
  * fichier a été nettoyé reste présent via ses parts durables.
  */
+/** Qui a touché le fichier, dit en clair plutôt qu'en nom de canal. */
+const AUTEUR_FICHIER: Record<string, string> = {
+  edit_file: 'édition directe',
+  subagent: 'sous-agent'
+}
+
+/**
+ * FICHIERS LUS ET ÉCRITS pendant le tour. Le journal montrait les commandes ; il ne montrait pas
+ * leur EFFET sur le disque. Chaque trace nomme le tour, l'auteur du geste et les chemins touchés —
+ * l'attribution vient du spool, elle n'est jamais devinée en rapprochant des horaires.
+ */
+function fromFichiers(traces: ReadonlyArray<Record<string, unknown>>): Brute[] {
+  return traces.map((trace, index) => {
+    const chemins = Array.isArray(trace.paths)
+      ? trace.paths.filter((chemin): chemin is string => typeof chemin === 'string')
+      : []
+    const auteurBrut = typeof trace.source === 'string' ? trace.source : ''
+    const auteur = AUTEUR_FICHIER[auteurBrut] ?? auteurBrut
+    const detail = joinDetail(
+      chemins.length > 0 ? chemins.join(', ') : undefined,
+      rest(trace, 'paths', 'source', 'timestamp', 'conversationId', 'turnId')
+    )
+    return {
+      id: `fichiers:${String(trace.eventId ?? index)}`,
+      turnId: typeof trace.turnId === 'string' ? trace.turnId : '',
+      kind: 'fichiers' as ModelActivityKind,
+      label:
+        joinDetail(
+          `${chemins.length} fichier${chemins.length > 1 ? 's' : ''} touché${chemins.length > 1 ? 's' : ''}`,
+          auteur || undefined
+        ) ?? 'fichiers touchés',
+      ...isoStamp(trace.timestamp),
+      ...allFields(trace),
+      ...(detail ? { detail } : {})
+    }
+  })
+}
+
 /** État d'une copie de travail, dit en clair. */
 const ETAT_BUREAU: Record<string, string> = {
   isolated: 'isolée',
@@ -928,5 +976,6 @@ export function buildModelActivityLog(input: ModelActivityInput): ModelActivityE
   entries.push(...tag('brain', fromBrain(input.brain ?? [])))
   entries.push(...tag('prompts', fromPromptCalls(input.promptCalls ?? [])))
   entries.push(...tag('bureaux', fromBureaux(input.bureaux ?? [])))
+  entries.push(...tag('fichiers', fromFichiers(input.fichiers ?? [])))
   return trierChronologiquement(ecarterPenseeTronquee(dedupe(entries)))
 }

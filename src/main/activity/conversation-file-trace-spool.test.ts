@@ -7,7 +7,8 @@ import {
   appendExecutionEvidenceFileTrace,
   readCurrentConversationPathOwnership,
   readConversationTurnFileMutations,
-  readConversationTurnFilePaths
+  readConversationTurnFilePaths,
+  readConversationFileTraces
 } from './conversation-file-trace-spool'
 import { lineFingerprint } from '../task-manager/watchdog-line'
 
@@ -242,5 +243,41 @@ describe('conversation file trace spool', () => {
     expect(
       readCurrentConversationPathOwnership('conv-durable', root).map((item) => item.path)
     ).toEqual(['src/durable.ts'])
+  })
+})
+
+describe('readConversationFileTraces', () => {
+  it('rend les traces de LA conversation demandée, sans celles des autres', () => {
+    const base = mkdtempSync(join(tmpdir(), 'file-trace-lecture-'))
+    appendConversationFileTrace(
+      {
+        timestamp: '2026-09-02T10:00:00.000Z',
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        workspaceRoot: resolve('d:/ws'),
+        source: 'edit_file',
+        paths: [resolve('d:/ws/src/a.ts')]
+      },
+      base
+    )
+    appendConversationFileTrace(
+      {
+        timestamp: '2026-09-02T10:01:00.000Z',
+        conversationId: 'conv-2',
+        workspaceRoot: resolve('d:/ws'),
+        source: 'subagent',
+        paths: [resolve('d:/ws/src/b.ts')]
+      },
+      base
+    )
+    const traces = readConversationFileTraces('conv-1', base)
+    expect(traces).toHaveLength(1)
+    expect(traces[0].turnId).toBe('turn-1')
+    expect(traces[0].source).toBe('edit_file')
+  })
+
+  it('rend une liste vide quand la conversation n’a rien touché', () => {
+    const base = mkdtempSync(join(tmpdir(), 'file-trace-vide-'))
+    expect(readConversationFileTraces('conv-inconnue', base)).toEqual([])
   })
 })

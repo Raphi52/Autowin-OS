@@ -277,6 +277,25 @@ function readFileTraces(path: string): ConversationFileTrace[] {
   return traces
 }
 
+/**
+ * TOUTES les traces de fichiers d'une conversation, archives comprises, dans l'ordre d'écriture.
+ *
+ * Le spool savait déjà répondre « quels fichiers pour CE tour » (`readConversationTurnFilePaths`),
+ * mais rien ne rendait la conversation ENTIÈRE : le journal du chat ne pouvait donc pas montrer ce
+ * que le travail avait réellement touché, alors que la matière était écrite depuis le début.
+ */
+export function readConversationFileTraces(
+  conversationId: string,
+  base = ensureAutowinAppData()
+): ConversationFileTrace[] {
+  const root = spoolRoot(base)
+  return [
+    ...readFileTraces(join(root, 'events.archive.jsonl')),
+    ...readFileTraces(join(root, 'events.previous.jsonl')),
+    ...readFileTraces(join(root, 'events.jsonl'))
+  ].filter((trace) => trace.conversationId === conversationId)
+}
+
 /** Chemins absolus attribués à UN tour, pour relier une mutation à sa cause sans deviner au temps. */
 export function readConversationTurnFilePaths(
   conversationId: string,

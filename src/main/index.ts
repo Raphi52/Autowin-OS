@@ -397,6 +397,7 @@ import { scopeWorktreeActivity } from '../shared/worktree-activity-model'
 import {
   appendConversationFileTrace,
   appendExecutionEvidenceFileTrace,
+  readConversationFileTraces,
   readConversationTurnFileMutations,
   readConversationTurnFilePaths,
   workspaceTracePathKey
@@ -2271,6 +2272,13 @@ Le fil reprend ensuite normalement.`
       'utf8'
     )
     return behaviourAccess.approve(workspace)
+  })
+  // CE QUE LE TRAVAIL A TOUCHE : chemins lus et ecrits, tour par tour, avec l'auteur du geste.
+  // La matiere existait depuis le debut cote main ; aucun canal ne la rendait au journal du chat.
+  ipcMain.handle('os:conversationFileTraces', (event, rawConversationId: unknown) => {
+    assertTrustedRendererSender(event, 'Conversation file traces')
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    return readConversationFileTraces(conversationId)
   })
   ipcMain.handle('os:brainTraces', (event, rawConversationId: unknown) => {
     assertTrustedRendererSender(event, 'Brain traces')

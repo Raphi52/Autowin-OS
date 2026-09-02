@@ -32,6 +32,7 @@ import type { ProviderDisplayStatus, ProviderStatus } from '../main/provider-sta
 import type { SemanticTemporalProjectionV1 } from '../main/knowledge/semantic-temporal-projection'
 import type { BehaviourComposition } from '../main/behaviour-composition'
 import type { BrainTrace } from '../main/activity/brain-trace-spool'
+import type { ConversationFileTrace } from '../main/activity/conversation-file-trace-spool'
 import type { PreflightResult } from '../main/preflight'
 import type { PreflightRepairOutcome } from '../main/preflight-repair'
 import type { TaskManagerSnapshot, ScheduledTask } from '../main/task-manager/types'
@@ -311,6 +312,8 @@ interface ChatApi {
     conversationId?: string
   ) => Promise<CostBreakdownRow[]>
   brainTraces: (conversationId: string) => Promise<BrainTrace[]>
+  /** Chemins lus et ecrits pendant la conversation, avec le tour et l'auteur du geste. */
+  conversationFileTraces: (conversationId: string) => Promise<ConversationFileTrace[]>
   behaviourComposition: (workspace?: string) => Promise<
     BehaviourComposition & {
       inspection: { workspace: string; files: Array<BehaviourFile & { excerpt?: string }> }

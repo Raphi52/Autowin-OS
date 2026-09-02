@@ -641,3 +641,41 @@ describe('buildModelActivityLog — le travail des SOUS-AGENTS', () => {
     expect(attente.detail).toContain('attente : base-dirty')
   })
 })
+
+describe('buildModelActivityLog — les FICHIERS touchés', () => {
+  const trace = (part: Record<string, unknown>): Record<string, unknown> => ({
+    eventId: 'e1',
+    timestamp: '2026-09-02T10:00:00.000Z',
+    conversationId: 'conv-1',
+    turnId: 'turn-1',
+    workspaceRoot: 'd:/autowinos',
+    source: 'subagent',
+    paths: ['src/a.ts', 'src/b.ts'],
+    ...part
+  })
+
+  it('dit combien de fichiers, lesquels, et QUI les a touchés', () => {
+    const [ligne] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      fichiers: [trace({})]
+    })
+    expect(ligne.source).toBe('fichiers')
+    expect(ligne.kind).toBe('fichiers')
+    expect(ligne.label).toContain('2 fichiers touchés')
+    expect(ligne.label).toContain('sous-agent')
+    expect(ligne.detail).toContain('src/a.ts')
+    expect(ligne.detail).toContain('src/b.ts')
+  })
+
+  it('nomme l’édition directe en clair et rattache la ligne à son tour', () => {
+    const [ligne] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      fichiers: [trace({ source: 'edit_file', paths: ['src/seul.ts'], turnId: 'turn-9' })]
+    })
+    expect(ligne.label).toContain('1 fichier touché')
+    expect(ligne.label).toContain('édition directe')
+    expect(ligne.turnId).toBe('turn-9')
+  })
+})

@@ -54,6 +54,7 @@ export interface ClaudeAccountsPayload {
 }
 import type { BehaviourComposition } from '../main/behaviour-composition'
 import type { BrainTrace } from '../main/activity/brain-trace-spool'
+import type { ConversationFileTrace } from '../main/activity/conversation-file-trace-spool'
 import type { PreflightResult } from '../main/preflight'
 import type { PreflightRepairOutcome } from '../main/preflight-repair'
 import type { TaskManagerSnapshot, ScheduledTask } from '../main/task-manager/types'
@@ -364,6 +365,8 @@ const api = {
     ipcRenderer.invoke('os:costBreakdown', dimension, conversationId),
   brainTraces: (conversationId: string): Promise<BrainTrace[]> =>
     ipcRenderer.invoke('os:brainTraces', conversationId),
+  conversationFileTraces: (conversationId: string): Promise<ConversationFileTrace[]> =>
+    ipcRenderer.invoke('os:conversationFileTraces', conversationId),
   behaviourComposition: (
     workspace?: string
   ): Promise<
