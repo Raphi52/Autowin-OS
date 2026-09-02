@@ -31,6 +31,7 @@ const KIND_LABEL: Record<ModelActivityKind, string> = {
   boundary: 'Frontière',
   usage: 'Coût',
   status: 'Signe de vie',
+  brain: 'Brain',
   event: 'Journal'
 }
 
