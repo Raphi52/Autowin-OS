@@ -428,6 +428,26 @@ export interface RememberOutcome {
 const depositedThisSession = new Map<string, string>()
 const SESSION_MEMO_MAX = 200
 const UNKNOWN_DEPOSIT = '[etat-inconnu]'
+
+/**
+ * PLAFOND D'ATTENTE DU DEPOT — genereux ET reglable, jamais fige.
+ *
+ * DEFAUT VECU le 2026-09-02 (conv-143) : le plafond etait de 2 s en dur. Or le depot ecrit sur un
+ * partage RESEAU (`\ged2\...\inbox`) apres un calcul d'embedding : deux secondes ne suffisent pas
+ * toujours. Un depot legitime est donc ressorti « delai depasse », et comme cet etat est INCONNU
+ * (le serveur a peut-etre ecrit), il marque durablement le fait dans le journal local et BLOQUE
+ * tout nouvel essai jusqu'au redemarrage de l'app. Trop court ici ne coute pas une attente : il
+ * coute la lecon, deux fois.
+ *
+ * `AUTOWIN_BRAIN_TIMEOUT_MS` permet de le regler sans toucher au code (et il est rechargeable a
+ * chaud, voir `VARIABLES_RECHARGEABLES`).
+ */
+export const BRAIN_DEPOSIT_TIMEOUT_MS = 15_000
+
+export function brainDepositTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const brut = Number(env.AUTOWIN_BRAIN_TIMEOUT_MS)
+  return Number.isFinite(brut) && brut > 0 ? brut : BRAIN_DEPOSIT_TIMEOUT_MS
+}
 let depositStorePath: string | undefined
 type DepositOutcome = RememberOutcome & { allowed: boolean }
 const pendingByLedger = new WeakMap<Map<string, string>, Map<string, Promise<DepositOutcome>>>()
@@ -671,7 +691,8 @@ async function performDepositCandidate(
   const origin = deps.origin ?? 'http://127.0.0.1:8765'
   const doFetch = deps.fetchFn ?? fetch
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), deps.timeoutMs ?? 2_000) // sleep-ok: borne d'abort d'un fetch, pas un sleep de polling
+  const timeoutMs = deps.timeoutMs ?? brainDepositTimeoutMs()
+  const timer = setTimeout(() => controller.abort(), timeoutMs) // sleep-ok: borne d'abort d'un fetch, pas un sleep de polling
   try {
     const response = await doFetch(`${origin}/ingest`, {
       method: 'POST',
@@ -790,7 +811,7 @@ async function performDepositCandidate(
         allowed: true,
         stored: false,
         unknown: true,
-        detail: `délai dépassé (${deps.timeoutMs ?? 2_000} ms) — état du dépôt INCONNU, le Brain a peut-être écrit. Ne retente pas à l’aveugle`
+        detail: `délai dépassé (${timeoutMs} ms) — état du dépôt INCONNU, le Brain a peut-être écrit. Ne retente pas à l’aveugle`
       }
     }
     return {

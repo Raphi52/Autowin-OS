@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process'
  * liste blanche — un `PATH` ou un `NODE_OPTIONS` recharge a chaud changerait le comportement
  * d'execution du processus, ce n'est pas un reglage produit.
  */
-export const VARIABLES_RECHARGEABLES = ['AUTOWIN_VERIFY_TIMEOUT_MS'] as const
+export const VARIABLES_RECHARGEABLES = ['AUTOWIN_VERIFY_TIMEOUT_MS', 'AUTOWIN_BRAIN_TIMEOUT_MS'] as const
 
 export type NomRechargeable = (typeof VARIABLES_RECHARGEABLES)[number]
 
