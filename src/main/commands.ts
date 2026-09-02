@@ -1,4 +1,4 @@
-import { applyEdit, decideEdit, decoderUtf8, editDiff, refusSiPasUtf8 } from './edit-file-command'
+import { applyEdit, decideEdit, decoderUtf8, editDiff, refusRacineSysteme, refusSiPasUtf8 } from './edit-file-command'
 import {
   conversationRecenteEquivalente,
   titreDeConversationDemandee
@@ -3807,6 +3807,31 @@ export class AppCommandBus {
       const baseDecision = decideEdit(input, this.os.executionWorkspace, (absolutePath) =>
         existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
       )
+      /*
+       * CIBLE DANS UN AUTRE DEPOT — ecriture DIRECTE, sans bureau isole ni verification vitest.
+       *
+       * Toute la machinerie qui suit (bureau isole, `vitest related`, publication) est faite POUR CE
+       * DEPOT : elle cree un bureau depuis le git d'Autowin, resynchronise un chemin RELATIF a lui, et
+       * juge l'edition avec la suite de tests d'Autowin. Sur `D:\GIT\RigApplication` (mesure conv-12),
+       * rien de tout cela n'a de sens : ce depot a son propre git, sa branche, sa compilation .NET.
+       * L'appliquer la-bas ne protegerait rien — il refuserait tout, ou publierait ailleurs.
+       * L'utilisateur garde la main sur la verification chez lui : c'est exactement ce qu'il a annonce
+       * (« je m'occupe de compiler, du commit et des PR »). Les gardes qui comptent restent celles de
+       * `decideEdit`, deja evaluees ci-dessus.
+       */
+      if (baseDecision.allowed && baseDecision.externe) {
+        return this.runEditFile(input, this.os.executionWorkspace)
+      }
+      /*
+       * UN REFUS DE RACINE SYSTEME SE REND TEL QUEL — il ne depend ni du contenu du fichier ni d'un
+       * bureau. Sans ce point de sortie, il tombait dans l'isolation : sans bureau disponible, la
+       * reponse devenait « isolation-indisponible » et la VRAIE raison (« racine système protégée »)
+       * etait perdue. Un refus qui n'enseigne plus renvoie l'agent a la devinette.
+       */
+      if (typeof input.path === 'string') {
+        const refusSysteme = refusRacineSysteme(input.path)
+        if (refusSysteme) return { allowed: false, reason: refusSysteme }
+      }
       const baseContentBefore = baseDecision.allowed
         ? readFileSync(baseDecision.absolutePath, 'utf8')
         : undefined
