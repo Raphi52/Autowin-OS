@@ -4,8 +4,14 @@
  * donc tue sa propre session au milieu de son tour. Cote utilisateur : « kaizen t'as plante » — la
  * reponse n'est jamais arrivee, et l'arret large emportait des fenetres etrangeres au travail.
  *
- * Le prompt de pilotage doit porter l'interdit ET l'issue de remplacement (rendre le redemarrage a
- * l'utilisateur), sans quoi rien n'empeche le geste de se rejouer.
+ * Le prompt de pilotage doit porter l'interdit ET l'issue de remplacement, sans quoi rien n'empeche
+ * le geste de se rejouer.
+ *
+ * CORRECTION (02/09, conv-103) : l'issue de remplacement etait « le redemarrage revient a
+ * l'utilisateur ». Depuis l'arrivee de `restart_app` (redemarrage par le lanceur officiel + consigne
+ * de reprise rejouee dans la conversation), cette issue est FAUSSE : l'utilisateur a mesure la gene
+ * (« ca doit jamais me dire de redemarer l'app, ca doit le faire »). L'agent redemarre donc lui-meme,
+ * et ne rend la main que si `restart_app` se declare indisponible.
  */
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
@@ -22,8 +28,18 @@ describe('prompt de pilotage — processus hote', () => {
     expect(prompt).toMatch(/differer ne rend pas le geste sur/)
   })
 
-  it('nomme l issue de remplacement : le redemarrage revient a l utilisateur', () => {
-    expect(prompt).toMatch(/redemarrage revient a l'utilisateur/)
+  it('nomme l issue de remplacement : redemarrer SOI-MEME avec restart_app', () => {
+    expect(prompt).toMatch(/tu le FAIS toi-meme avec `restart_app`/)
+    expect(prompt).toMatch(/consigne de reprise/)
+  })
+
+  it('interdit de renvoyer le redemarrage a l utilisateur en cloture', () => {
+    expect(prompt).toMatch(/NE DEMANDE JAMAIS a l'utilisateur de relancer l'app/)
+    expect(prompt).toMatch(/Ctrl\+R[\s\S]{0,80}est un ECHEC/)
+  })
+
+  it('ne garde la main a l utilisateur que si restart_app se declare indisponible', () => {
+    expect(prompt).toMatch(/si `restart_app` te repond lui-meme qu'il est indisponible/)
   })
 
   it('interdit l arret large d un nom de processus entier', () => {
