@@ -260,6 +260,16 @@ export function projectTreeVisibility(
   }
 }
 
+/**
+ * Dossiers fermés AU DÉPART : l'arbre s'ouvre sur ses seules catégories de premier niveau, et
+ * chaque clic ne dévoile qu'un cran de plus. Tout ouvrir d'emblée donnait l'effet inverse de celui
+ * attendu — le premier clic REPLIAIT au lieu de déplier.
+ * Les feuilles (fiches) ne sont pas des dossiers : elles n'entrent jamais dans cette liste.
+ */
+export function initialCollapsedTreeNodeIds(layout: TreeLayout): string[] {
+  return layout.nodes.filter((node) => !node.isLeaf && node.depth >= 1).map((node) => node.id)
+}
+
 /** Trois niveaux lisibles, exprimés relativement au rayon réel du Brain. */
 export function semanticZoomTier(cameraDistance: number, graphRadius: number): SemanticZoomTier {
   const radius = Math.max(1, graphRadius)
