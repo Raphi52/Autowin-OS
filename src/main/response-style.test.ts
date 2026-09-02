@@ -165,6 +165,21 @@ describe('relance sans cible — un accord execute la derniere recommandation', 
   it('traite le cas ou la derniere recommandation est « rien » : demander une cible', () => {
     expect(consigne).toMatch(/derni[èe]re recommandation est «\s*rien\s*»/iu)
   })
+
+  /**
+   * Defaut mesure le 2026-09-02 (conv-122). Tour 2 : « et kaizen doit pouvoir editer les skills
+   * les tools le code autowin les fichiers.md le brain bref faut lui lister ses leviers » ->
+   * annulation par l'utilisateur apres 93 s, 0 token, message affiche « Tour annule avant toute
+   * reponse — rien n'a ete execute » (causal-trace/conv-122.jsonl, sequence 8-9). Tour 3 : « go ».
+   * L'agent a applique la regle a la LETTRE — la derniere rubrique « Recommandé » ecrite datait du
+   * tour 1 — et est parti sur le tri de conv-124, laissant la demande annulee sans reponse. Cout
+   * pour l'utilisateur : il a re-tape sa phrase MOT POUR MOT dans une nouvelle conversation
+   * (conv-123, 09:03:38Z) pour l'obtenir. Le paragraphe ne prevoyait pas le tour interrompu.
+   */
+  it('traite le tour INTERROMPU : la relance reprend la demande abandonnee', () => {
+    expect(consigne).toMatch(/interrompu|annul[ée]/iu)
+    expect(consigne).toMatch(/reprend/iu)
+  })
 })
 
 /**
