@@ -1,6 +1,6 @@
 ---
 name: salvage
-description: Find and recover work stranded anywhere in a git repository — uncommitted changes, stashes, detached worktrees, orphan commits, unmerged and recovery branches, dangling objects in the reflog — then decide per item whether to merge it, drop it, or leave it, and carry that decision out without losing anything. Judges every candidate by CONTENT, never by its message, because the most common finding is work already integrated under a different implementation. Use when a repo has accumulated side-work across sessions, agents or worktrees; when a tool reports "unpublished work"; before a big merge, migration, branch cleanup or machine handover; after an interrupted rebase, a crashed agent run, or a stash you no longer trust; or on "did I lose work?", "what is still not merged?", "clean up my stashes/branches/worktrees". Do NOT use to review code quality, to resolve a merge conflict you are already inside, or to restore a file from a single known commit.
+description: Find and recover work stranded anywhere in a git repository — uncommitted changes, stashes, detached worktrees, orphan commits, unmerged and recovery branches, dangling objects in the reflog — then decide per item whether to merge it, drop it, or leave it, carry that decision out without losing anything, and finish on a CLEAN working tree so the next pull, branch switch or update is not refused. Judges every candidate by CONTENT, never by its message, because the most common finding is work already integrated under a different implementation. Use when a repo has accumulated side-work across sessions, agents or worktrees; when a tool reports "unpublished work"; before a big merge, migration, branch cleanup or machine handover; after an interrupted rebase, a crashed agent run, or a stash you no longer trust; or on "did I lose work?", "what is still not merged?", "clean up my stashes/branches/worktrees". Do NOT use to review code quality, to resolve a merge conflict you are already inside, or to restore a file from a single known commit.
 ---
 
 # salvage — find stranded work, then merge it or drop it, without losing anything
@@ -137,10 +137,42 @@ irreversible act into a reversible one and costs one line.
 they are precisely what makes these objects unrecoverable. Get an explicit yes before deleting
 anything you did not create.
 
-### 6. REPORT
+### 6. LEAVE THE TREE CLEAN — a salvage that ends dirty blocks the next action
+
+**A salvage is not finished when the verdicts are written; it is finished when `git status
+--porcelain` is empty.** Every downstream operation refuses a dirty tree: pulling, rebasing,
+switching branch, and the app's own **« Mettre à jour »** button, which declines rather than merge
+over uncommitted work. Leaving probe files, half-applied patches, a `.rej`, a temporary worktree or
+an un-popped index behind turns a successful rescue into a stuck repository — the user pressed
+salvage, then could not press update.
+
+Close the loop, in this order:
+
+```bash
+git status --porcelain             # MUST be empty at the end — staged included
+git status --porcelain --ignored   # your own scratch files count as residue too
+git stash list                     # every stash you created is popped or explicitly kept + noted
+git worktree list --porcelain      # every temporary worktree you added is removed
+git diff --name-only --diff-filter=U ; grep -rn '^<<<<<<< ' -- .   # zero conflict markers
+```
+
+Rules for closing:
+- **What you recovered gets committed.** An applied patch left uncommitted is not salvaged, it is a
+  new stranded item — the exact state this skill exists to remove.
+- **What you created for the investigation gets removed**: temp patches (`/tmp/p.patch`), probe
+  files, isolated worktrees (`git worktree remove <tmp>` — never `git worktree prune`).
+- **What was dirty BEFORE you started stays exactly as it was.** Note it in the report as
+  pre-existing and untouched; do not commit or discard someone else's work in progress to reach a
+  clean status.
+- **If the tree cannot be made clean** (unresolved item, conflict the human must settle), say so
+  explicitly, name what remains and why, and warn that update/pull will refuse until it is settled.
+
+### 7. REPORT
 
 One row per item: what it is · where it lived · verdict **with its evidence** (which file matched,
 which identifier was found) · action taken · recovery SHA. State plainly what you could not classify.
+End the report with the **final `git status --porcelain`** (empty, or the exact lines that remain and
+why) — that line is the proof the repository is usable again.
 
 ## Don't
 
@@ -159,6 +191,9 @@ which identifier was found) · action taken · recovery SHA. State plainly what 
 - **Don't restore a file wholesale** when its base has diverged. Patch it.
 - **Don't delete without a recorded SHA**, and never another author's work without a clear yes.
 - **Don't declare the sweep complete** while an item is UNKNOWN. Report it unresolved.
+- **Don't stop at the verdicts and walk away.** A rescue that leaves the tree dirty just moved the
+  problem: the next pull, branch switch or « Mettre à jour » is refused. Finish on an empty
+  `git status`.
 - **Don't read a silent reporting tool as "nothing stranded".** A reporter blind to detached
   worktrees reports zero forever. Verify it covers the categories in step 1.
 
@@ -169,5 +204,7 @@ which identifier was found) · action taken · recovery SHA. State plainly what 
 - **Recoverability before judgement.** Make everything reversible first, decide second. A wrong call
   you can undo is an inconvenience; a wrong call you cannot is a loss.
 - **A clean apply is not a correct merge.** Text merging and meaning are unrelated.
+- **Done means clean, not decided.** The last command of a salvage is `git status --porcelain`, and
+  it is empty — or every remaining line is named and justified.
 - **Taste belongs to the human.** Structure, tests and naming you can judge. Colours, thresholds and
   timings you cannot — surface them with the numbers side by side.
