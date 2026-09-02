@@ -1167,11 +1167,17 @@ function allowedReadRoots(): string[] {
   // de bricolage : c'est une liste blanche ANTI-TRAVERSAL, donc un nom de dossier generique y offrait
   // un droit de LECTURE sur tout ce que quiconque y deposerait. Les racines d'entreprise viennent
   // maintenant de la source unique `amitel-paths.ts`, surchargeable par environnement.
+  // La racine de donnees EFFECTIVE peut etre deplacee hors de %APPDATA% (mode portable :
+  // `<workspace>/.autowin-data/autowin-os`). Le main process la publie dans
+  // `AUTOWIN_APP_DATA_ROOT`, heritee par le worker Brain. Sans elle, les RUN.md reellement ecrits
+  // etaient refuses par cette liste blanche, qui ne connaissait que l'emplacement %APPDATA%.
+  const effectiveAppDataRoot = process.env.AUTOWIN_APP_DATA_ROOT?.trim()
   return [
     amitelBrainRoot(),
     join(home, '.graphify'),
     join(home, '.claude', 'runs'), // RUN.md du pipeline (vue Workflow)
     join(appData, 'autowin-os', 'runs'), // RUN.md créés par les conversations Autowin
+    ...(effectiveAppDataRoot ? [join(effectiveAppDataRoot, 'runs')] : []),
     ...amitelWorkspaces()
   ]
 }

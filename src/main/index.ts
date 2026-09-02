@@ -535,6 +535,10 @@ if (is.dev) {
 const canonicalAppDataRoot = createAutowinAppDataRoot(appDataRoot)
 jalonDemarrage('racine de donnees preparee')
 app.setPath('userData', canonicalAppDataRoot)
+// Publie la racine de donnees EFFECTIVE pour les processus enfants et les workers (Brain) : eux ne
+// voient pas `app.getPath('userData')`. Sans elle, la lecture d'un RUN.md ecrit sous une racine
+// portable etait refusee ("fichier hors perimetre autorise").
+process.env.AUTOWIN_APP_DATA_ROOT = canonicalAppDataRoot
 // Le verrou Electron est rattaché au `userData` : deux instances de test isolées avec deux racines
 // restent indépendantes, tandis que DEUX processus sur la même racine ne peuvent jamais parcourir
 // ensemble les checkpoints de reprise. Cette exclusion vaut aussi en dev : sans elle, deux boots

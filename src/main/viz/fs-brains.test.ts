@@ -2121,4 +2121,24 @@ tags: [${theme}]
       process.env.APPDATA = previousAppData
     }
   })
+
+  it('reads a RUN.md under the EFFECTIVE app data root published by the main process', () => {
+    const portable = mkdtempSync(join(tmpdir(), 'autowin-os-portable-'))
+    const dataRoot = join(portable, '.autowin-data', 'autowin-os')
+    const runFile = join(dataRoot, 'runs', 'conv-1', 'subject-workspace', 'RUN.md')
+    const sibling = join(dataRoot, 'conversations.json')
+    mkdirSync(dirname(runFile), { recursive: true })
+    writeFileSync(runFile, '# Portable workflow\n', 'utf8')
+    writeFileSync(sibling, '{}', 'utf8')
+    const previousRoot = process.env.AUTOWIN_APP_DATA_ROOT
+    process.env.AUTOWIN_APP_DATA_ROOT = dataRoot
+    try {
+      expect(readNodeFile(runFile).content).toBe('# Portable workflow\n')
+      expect(() => readNodeFile(sibling)).toThrow('fichier hors périmètre autorisé')
+    } finally {
+      if (previousRoot === undefined) delete process.env.AUTOWIN_APP_DATA_ROOT
+      else process.env.AUTOWIN_APP_DATA_ROOT = previousRoot
+      rmSync(portable, { recursive: true, force: true })
+    }
+  })
 })
