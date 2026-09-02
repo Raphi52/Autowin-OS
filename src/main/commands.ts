@@ -2076,6 +2076,23 @@ export class AppCommandBus {
             task,
             (step) => {
               steps.push(step)
+              /*
+               * SIGNE DE VIE vers le tour de chat qui attend cette commande.
+               *
+               * `onProgress` n'etait branche que sur `run` et `verify` : une orchestration
+               * n'emettait RIEN pendant tout son travail. Le veilleur d'inactivite du tour
+               * (`run-pilot-chat.ts`, plafond 20 min) la prenait donc pour morte et coupait le tour
+               * pendant qu'elle tournait encore. Mesure conv-136 (2026-09-02) : run de 25 min, tour
+               * coupe a 20, compte-rendu perdu alors que le run a fini VERT. Chaque phase battue ici
+               * remet le veilleur a zero — il distingue enfin « long » de « mort ».
+               */
+              onProgress?.(
+                bornerLigneDeVie(
+                  `phase ${step.step}${step.status ? ` · ${step.status}` : ''}${
+                    step.detail ? ` · ${step.detail}` : ''
+                  }`
+                )
+              )
               persistOrchestrationStep(
                 step,
                 {

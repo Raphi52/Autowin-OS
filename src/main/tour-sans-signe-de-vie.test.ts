@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { zoneDuTourDeChat } from './source-process-principal.test-helpers'
+import { estCoupureVeilleur, motifInactivite } from './chat-turn-arret'
 
 /**
  * UN TOUR QUI NE FINIT JAMAIS NE DOIT PAS RESTER SILENCIEUX.
@@ -17,7 +17,10 @@ import { join } from 'node:path'
  * l'invoquer demanderait de booter Electron. Il vérifie le câblage — armement, remise à zéro,
  * extinction — pas l'effet. La mesure sur l'app reste l'autorité.
  */
-const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+// La ZONE du tour de chat, pas un chemin : le veilleur a quitte `index.ts` pour
+// `chat/run-pilot-chat.ts`, et ces trois controles rougissaient sans qu'aucun cablage n'ait change
+// -- c'est ce faux vert qui a laisse passer la coupure muette de conv-136 (2026-09-02).
+const source = zoneDuTourDeChat()
 
 describe('veilleur d’inactivité du tour de chat', () => {
   it('tout évènement du pilote compte comme un SIGNE DE VIE', () => {
@@ -28,9 +31,13 @@ describe('veilleur d’inactivité du tour de chat', () => {
 
   it('coupe avec un motif NOMMÉ, jamais un arrêt muet', () => {
     // Un tour qui s'arrête sans dire pourquoi reproduit le défaut qu'on corrige.
+    // Le motif vit desormais dans `chat-turn-arret.ts`, PREFIXE : c'est ce prefixe qui le
+    // requalifie en echec au lieu de le laisser passer pour une annulation volontaire. Une chaine
+    // ecrite a la main ici ne serait plus reconnue, et le motif repartirait a la poubelle.
     const compact = source.replace(/\s+/g, ' ')
-    expect(compact).toContain('aucun signe de vie depuis')
-    expect(compact).toMatch(/controller\.abort\(\s*`Tour interrompu/)
+    expect(compact).toContain('controller.abort(motifInactivite(PLAFOND_INACTIVITE_MS))')
+    expect(motifInactivite(20 * 60 * 1000)).toContain('aucun signe de vie depuis 20 minutes')
+    expect(estCoupureVeilleur(motifInactivite(20 * 60 * 1000))).toBe(true)
   })
 
   it('laisse une marge LARGE : on distingue « long » de « mort »', () => {

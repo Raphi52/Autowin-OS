@@ -20,6 +20,7 @@ import type { Message, ProviderAdapter, SendResult, StreamChunk } from '../provi
 import { ProviderRegistry } from '../providers/registry'
 import { CostCircuitBreaker } from '../cost-circuit-breaker'
 import { chatTurnBudget, estCoupureBudget, CHAT_BUDGET_ABORT_PREFIX } from '../chat-turn-budget'
+import { motifInactivite, terminalDuTour } from '../chat-turn-arret'
 import { RoleModelConfig, type RoleBinding } from '../roles'
 import { AppCommandBus } from '../commands'
 import {
@@ -710,10 +711,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         if (Date.now() - dernierSigneDeVie < PLAFOND_INACTIVITE_MS) return
         if (veilleur) clearInterval(veilleur)
         // Un motif NOMME, jamais un arret muet : l'utilisateur doit lire pourquoi son tour s'arrete.
-        controller.abort(
-          `Tour interrompu : aucun signe de vie depuis ${Math.round(PLAFOND_INACTIVITE_MS / 60000)} minutes. ` +
-            'Le travail lance a pu se terminer sans rendre son resultat — relance ta demande.'
-        )
+        // Le motif porte le PREFIXE qui le requalifie en ECHEC plus bas — sans lui, cet arret
+        // repassait pour une annulation volontaire et le motif etait jete (conv-136, 2026-09-02).
+        controller.abort(motifInactivite(PLAFOND_INACTIVITE_MS))
       }, 60_000)
       veilleur.unref()
 
@@ -1318,11 +1318,21 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       // Un abort BUDGET n'est pas un stop volontaire : le classer `cancelled` l'excluait de la
       // relance automatique et faisait porter le renoncement à l'utilisateur (conv-1149, 13/08).
       const coupureBudget = controller.signal.aborted && estCoupureBudget(controller.signal.reason)
-      const terminal = coupureBudget
-        ? ({ kind: 'failed', error: String(controller.signal.reason) } as const)
-        : controller.signal.aborted
-          ? ({ kind: 'cancelled' } as const)
-          : ({ kind: 'failed', error: e instanceof Error ? e.message : String(e) } as const)
+      /*
+       * TOUT ARRET QUI PORTE UNE CAUSE MACHINE EST UN ECHEC, pas une annulation.
+       *
+       * Seul le budget etait requalifie ; la coupure du VEILLEUR d'inactivite tombait donc dans
+       * `cancelled`, et son motif — pourtant redige — etait jete. Mesure conv-136 (2026-09-02) : un
+       * run de 25 min, tour coupe a 20, fil reduit a « [a execute orchestrate] », ni reponse ni
+       * erreur. La decision vit maintenant dans `terminalDuTour`, pure et testee.
+       */
+      const terminal = terminalDuTour({
+        aborted: controller.signal.aborted,
+        reason: controller.signal.reason,
+        erreur: e,
+        motivee: coupureBudget
+      })
+      const coupureMotivee = terminal.kind === 'failed' && controller.signal.aborted
       if (conversationId && os.conversations.get(conversationId)) {
         os.conversations.applyTurnEvent(conversationId, turnId, terminal)
       }
@@ -1339,7 +1349,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
       usagePersistenceReady = true
       broadcast({ type: 'refresh', scope: 'workflows' })
-      if (coupureBudget)
+      // `coupureMotivee` couvre le budget ET le veilleur : le motif remonte a l'appelant, qui
+      // l'affiche, au lieu de repartir en « annule » avec pour seul texte les etiquettes d'action.
+      if (coupureMotivee)
         return {
           ok: false,
           cancelled: false,
