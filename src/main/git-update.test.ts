@@ -94,8 +94,7 @@ describe('abortUpdateConflict', () => {
     const run: GitRunner = async (args) => {
       calls.push(args)
       const key = args.join(' ')
-      if (key === 'diff --name-only --diff-filter=U')
-        return { stdout: aborted ? '' : 'src/x.ts' }
+      if (key === 'diff --name-only --diff-filter=U') return { stdout: aborted ? '' : 'src/x.ts' }
       if (key === 'rev-parse --verify --quiet MERGE_HEAD') return { stdout: 'abc123' }
       if (key === 'merge --abort') aborted = true
       return { stdout: '' }
@@ -135,7 +134,7 @@ describe('applyUpdate', () => {
     expect(r.ok).toBe(true)
     // Plus JAMAIS de stash : la mécanique push/pop a déjà effacé du travail non committé.
     expect(calls.some((args) => args[0] === 'stash')).toBe(false)
-    expect(calls).toContainEqual(['pull', '--ff-only'])
+    expect(calls).toContainEqual(['merge', '--ff-only', 'origin/main'])
   })
 
   it('dépôt déjà en conflit → refuse avant stash ou mise à jour', async () => {
@@ -180,7 +179,8 @@ describe('applyUpdate', () => {
       const key = args.join(' ')
       if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
       if (key === 'status --porcelain') return { stdout: ' M src/x.ts' }
-      if (key === 'pull --ff-only') throw new Error('local changes would be overwritten')
+      if (key === 'merge --ff-only origin/main')
+        throw new Error('local changes would be overwritten')
       return { stdout: '' }
     }
 
@@ -202,10 +202,14 @@ describe('applyUpdate', () => {
 })
 
 describe('applyUpdate — souplesse HORS de main, sans mutation non demandee', () => {
-  const onBranch = (calls: string[][]): GitRunner => async (args) => {
-    calls.push(args)
-    return args.join(' ') === 'rev-parse --abbrev-ref HEAD' ? { stdout: 'feat/x' } : { stdout: '' }
-  }
+  const onBranch =
+    (calls: string[][]): GitRunner =>
+    async (args) => {
+      calls.push(args)
+      return args.join(' ') === 'rev-parse --abbrev-ref HEAD'
+        ? { stdout: 'feat/x' }
+        : { stdout: '' }
+    }
 
   it('sans strategie explicite : ne touche a RIEN et POSE la question', async () => {
     const calls: string[][] = []
@@ -235,7 +239,7 @@ describe('applyUpdate — souplesse HORS de main, sans mutation non demandee', (
     const r = await applyUpdate('/r', { strategy: 'switch-main' }, onBranch(calls), async () => {})
     expect(r).toMatchObject({ ok: true, strategy: 'switch-main' })
     expect(calls).toContainEqual(['switch', 'main'])
-    expect(calls).toContainEqual(['pull', '--ff-only'])
+    expect(calls).toContainEqual(['merge', '--ff-only', 'origin/main'])
     expect(calls).toContainEqual(['switch', 'feat/x'])
   })
 
@@ -249,13 +253,15 @@ describe('applyUpdate — souplesse HORS de main, sans mutation non demandee', (
       return { stdout: '' }
     }
 
-    expect(await applyUpdate('/r', { strategy: 'switch-main' }, run, async () => {})).toMatchObject({
-      ok: true,
-      strategy: 'switch-main'
-    })
+    expect(await applyUpdate('/r', { strategy: 'switch-main' }, run, async () => {})).toMatchObject(
+      {
+        ok: true,
+        strategy: 'switch-main'
+      }
+    )
     expect(calls.some((args) => args[0] === 'stash')).toBe(false)
     const main = calls.findIndex((args) => args.join(' ') === 'switch main')
-    const pull = calls.findIndex((args) => args.join(' ') === 'pull --ff-only')
+    const pull = calls.findIndex((args) => args.join(' ') === 'merge --ff-only origin/main')
     const origin = calls.findIndex((args) => args.join(' ') === 'switch feat/x')
     expect(main).toBeGreaterThan(-1)
     expect(pull).toBeGreaterThan(main)
@@ -269,15 +275,17 @@ describe('applyUpdate — souplesse HORS de main, sans mutation non demandee', (
       const key = args.join(' ')
       if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'feat/x' }
       if (key === 'status --porcelain') return { stdout: ' M src/x.ts' }
-      if (key === 'pull --ff-only') throw new Error('remote indisponible')
+      if (key === 'merge --ff-only origin/main') throw new Error('remote indisponible')
       return { stdout: '' }
     }
 
-    expect(await applyUpdate('/r', { strategy: 'switch-main' }, run, async () => {})).toMatchObject({
-      ok: false,
-      strategy: 'switch-main'
-    })
-    const pull = calls.findIndex((args) => args.join(' ') === 'pull --ff-only')
+    expect(await applyUpdate('/r', { strategy: 'switch-main' }, run, async () => {})).toMatchObject(
+      {
+        ok: false,
+        strategy: 'switch-main'
+      }
+    )
+    const pull = calls.findIndex((args) => args.join(' ') === 'merge --ff-only origin/main')
     const origin = calls.findIndex((args) => args.join(' ') === 'switch feat/x')
     expect(origin).toBeGreaterThan(pull)
     expect(calls.some((args) => args[0] === 'stash')).toBe(false)
@@ -330,11 +338,11 @@ describe('checkForUpdate — reference equipe (trous constates)', () => {
 })
 
 describe('applyUpdate — jamais de mutation silencieuse dune branche', () => {
-  it('sur une branche de feature → REFUSE de pull, explique quoi faire', async () => {
+  it('sur une branche de feature → REFUSE d avancer, explique quoi faire', async () => {
     const pulled = vi.fn()
     const run: GitRunner = async (args) => {
       const key = args.join(' ')
-      if (args[0] === 'pull') pulled()
+      if (args[0] === 'pull' || args.includes('--ff-only')) pulled()
       if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'feat/quotas' }
       return { stdout: '' } // status vide = propre
     }
@@ -344,17 +352,22 @@ describe('applyUpdate — jamais de mutation silencieuse dune branche', () => {
     expect(pulled).not.toHaveBeenCalled()
   })
 
-  it('sur main → pull ff-only normal', async () => {
-    const pulled = vi.fn()
+  // `git pull` relit FETCH_HEAD, un fichier PARTAGE : un fetch concurrent (agents, copies de travail)
+  // y ecrit plusieurs branches « a fusionner » et git refuse alors avec « Cannot fast-forward to
+  // multiple branches », alors qu'AUCUN conflit reel n'existe. On avance donc sur une reference
+  // NOMMEE. Mesure du 2026-09-02 : mise a jour bloquee sur un arbre propre en retard pur.
+  it('sur main → avance sur origin/main NOMMEE, sans jamais appeler pull', async () => {
+    const calls: string[][] = []
     const run: GitRunner = async (args) => {
+      calls.push(args)
       const key = args.join(' ')
-      if (args[0] === 'pull') pulled()
       if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
       return { stdout: '' }
     }
     const r = await applyUpdate('/r', {}, run, async () => {})
     expect(r).toMatchObject({ ok: true, relaunch: true })
-    expect(pulled).toHaveBeenCalledOnce()
+    expect(calls).toContainEqual(['merge', '--ff-only', 'origin/main'])
+    expect(calls.some((args) => args[0] === 'pull')).toBe(false)
   })
 })
 

@@ -277,13 +277,19 @@ export async function applyUpdate(
 
     let switchedToMain = false
     try {
-      if (strategy === 'fast-forward') await run(['pull', '--ff-only'], cwd)
+      // On AVANCE sur une référence NOMMÉE (`origin/main`), jamais via `pull --ff-only`. `pull` relit
+      // `FETCH_HEAD` : un `git fetch` lancé en parallèle (agents, copies de travail) y écrit plusieurs
+      // branches « à fusionner » et git refuse alors avec « Cannot fast-forward to multiple branches »
+      // — une mise à jour bloquée sans qu'aucun conflit réel n'existe. `merge --ff-only <ref>` ne
+      // dépend d'aucun état partagé. On rafraîchit d'abord la référence, ce que `pull` faisait seul.
+      await run(['fetch', '--quiet'], cwd)
+      if (strategy === 'fast-forward') await run(['merge', '--ff-only', TEAM_REFERENCE], cwd)
       else if (strategy === 'merge') await run(['merge', TEAM_REFERENCE], cwd)
       else if (strategy === 'rebase') await run(['rebase', TEAM_REFERENCE], cwd)
       else {
         await run(['switch', 'main'], cwd)
         switchedToMain = true
-        await run(['pull', '--ff-only'], cwd)
+        await run(['merge', '--ff-only', TEAM_REFERENCE], cwd)
         await run(['switch', currentBranch], cwd)
         switchedToMain = false
       }
