@@ -14,6 +14,7 @@ import type { ChatTurnEvent } from '../../shared/chat-turn'
 import { applyTurnEventToMessages, deterministicMessageId } from './conversations'
 import type { Conversation, ConversationChange, ConversationStore, Msg } from './conversations'
 import { ensureAutowinAppData } from '../app-data'
+import type { FinishedRunOutcome } from '../runs/run-interruption'
 
 /**
  * Persistance disque des conversations (sinon TOUT disparaît au restart).
@@ -579,7 +580,11 @@ export function persistConversations(
    * Tours dont le run VA reprendre au démarrage (checkpoint encore sur disque). Eux seuls échappent
    * à l'avis d'interruption : les annoncer interrompus alors qu'ils redémarrent serait faux.
    */
-  options?: { resumableTurnIds?: ReadonlySet<string> }
+  options?: {
+    resumableTurnIds?: ReadonlySet<string>
+    /** Issue d'un run déjà terminé — voir `ConversationStore.hydrate`. */
+    finishedRunOutcome?: (turnId: string) => FinishedRunOutcome | undefined
+  }
 ): () => void {
   const journalPresentAtStartup = existsSync(conversationJournalPath(path))
   const migrated = store.hydrate(loadConversations(path), options)

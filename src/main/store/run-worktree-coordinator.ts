@@ -1528,6 +1528,16 @@ export class RunWorktreeCoordinator {
   }
 
   /**
+   * Issues des runs TERMINÉS, lues sur disque et non dans la mémoire du coordinateur.
+   *
+   * `this.runs` n'est peuplé qu'après la réconciliation, elle-même reportée jusqu'à l'affichage en
+   * production. Au chargement des conversations — bien avant — seul l'état persisté répond.
+   */
+  runRecords(): WorktreeRunRecord[] {
+    return this.stateStore?.list() ?? []
+  }
+
+  /**
    * Copies isolées laissées par un run INTERROMPU (l'app est morte pendant son travail).
    *
    * Le redémarrage marque déjà ces runs `interrupted`, mais rien ne permettait de les RETROUVER :

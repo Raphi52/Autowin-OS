@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ConversationStore } from './conversations'
+import type { FinishedRunOutcome } from '../runs/run-interruption'
 import { grouperConversations } from '../../renderer/src/components/conversation-groups'
 
 /** Horloge de test : incrémente à chaque appel pour garantir des ts strictement croissants. */
@@ -373,6 +374,57 @@ describe('réconciliation au chargement des tours interrompus', () => {
       )
     }))
     store.hydrate(reouvert)
+
+    expect(store.get('conv-1056')!.messages.at(-1)!.content).toBe(once)
+  })
+
+  /**
+   * RUN TERMINÉ APRÈS LA COUPURE — le fil restait MUET sur un travail pourtant fini.
+   *
+   * Le run n'est plus dans la liste des reprises pour deux raisons opposées : il est mort avec l'app,
+   * OU il s'est terminé normalement. Le second cas recevait le même avis « interrompu » et rien
+   * d'autre : le résultat (vert, publié, ses commits) n'atteignait jamais l'utilisateur, qui ne
+   * pouvait le lire nulle part dans sa conversation.
+   */
+  const issueVerte = (): FinishedRunOutcome => ({
+    runId: 'run-42',
+    verdict: 'green',
+    publication: 'published',
+    publishedSha: 'abc1234def5678',
+    task: 'restituer le fil',
+    fileCount: 3
+  })
+
+  it('un tour clos alors que son run est TERMINÉ restitue le résultat dans le fil', () => {
+    const store = new ConversationStore(makeClock())
+    store.hydrate(zombie(), {
+      finishedRunOutcome: (turnId) => (turnId === 'turn-zombie' ? issueVerte() : undefined)
+    })
+
+    const message = store.get('conv-1056')!.messages.at(-1)!
+    expect(message.status).toBe('interrupted')
+    expect(message.content).toContain('run `run-42`')
+    expect(message.content).toContain('vert')
+    expect(message.content).toContain('abc1234')
+    expect(message.content).toContain('restituer le fil')
+    // L'avis « l'app a été fermée » serait FAUX ici : le run, lui, est allé au bout.
+    expect(message.content).not.toContain("l'application a été fermée")
+  })
+
+  it('un second chargement ne réempile pas la restitution du run terminé', () => {
+    const store = new ConversationStore(makeClock())
+    const options = {
+      finishedRunOutcome: (turnId: string) => (turnId === 'turn-zombie' ? issueVerte() : undefined)
+    }
+    store.hydrate(zombie(), options)
+    const once = store.get('conv-1056')!.messages.at(-1)!.content
+    const reouvert = store.list().map((conversation) => ({
+      ...conversation,
+      messages: conversation.messages.map((message) =>
+        message.turnId === 'turn-zombie' ? { ...message, status: 'streaming' as const } : message
+      )
+    }))
+    store.hydrate(reouvert, options)
 
     expect(store.get('conv-1056')!.messages.at(-1)!.content).toBe(once)
   })

@@ -390,6 +390,7 @@ import {
 } from './preflight-announce'
 import { graphDefects, worstCaseNodeExecutions, type WorkflowGraph } from './workflow-graph'
 import { recapMessage, summarizeJournal } from './runs/journal-replay'
+import type { FinishedRunOutcome } from './runs/run-interruption'
 import { tailJournalOnce } from './runs/stdout-journal'
 import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summary'
 import { journaliserSaisie } from './store/journal-saisie'
@@ -651,7 +652,45 @@ const resumableTurnIds = new Set([
     .filter((turnId): turnId is string => Boolean(turnId)),
   ...startupRecoverableChatCalls.map((call) => call.turnId)
 ])
-const flushConversations = persistConversations(os.conversations, undefined, { resumableTurnIds })
+/**
+ * RESTITUER un run TERMINÉ après une coupure.
+ *
+ * Un tour absent de `resumableTurnIds` peut l'être pour la raison INVERSE de l'interruption : son
+ * run est allé au bout pendant que l'app était fermée. Le fil l'annonçait alors « interrompu » sans
+ * un mot sur le résultat — vert, publié, ses commits — que l'utilisateur ne pouvait lire nulle part.
+ * L'index est construit à la PREMIÈRE demande seulement : sans tour à clore, il n'est jamais lu.
+ */
+const finishedRunOutcomeByTurnId = ((): ((turnId: string) => FinishedRunOutcome | undefined) => {
+  let index: Map<string, FinishedRunOutcome> | undefined
+  return (turnId: string) => {
+    if (!index) {
+      index = new Map()
+      try {
+        for (const record of os.worktrees?.runRecords() ?? []) {
+          // `running`/`unknown` ne sont pas des fins : sur eux, l'avis d'interruption reste le vrai.
+          if (!record.turnId || !['green', 'red', 'cancelled'].includes(record.verdict)) continue
+          index.set(record.turnId, {
+            runId: record.runId,
+            verdict: record.verdict,
+            ...(record.publication ? { publication: record.publication } : {}),
+            ...(record.publishedSha ? { publishedSha: record.publishedSha } : {}),
+            ...(record.task ? { task: record.task } : {}),
+            ...(record.files?.length ? { fileCount: record.files.length } : {})
+          })
+        }
+      } catch (error) {
+        // Une lecture d'état illisible ne doit pas empêcher le chargement des conversations :
+        // sans issue connue, on retombe exactement sur l'avis d'interruption d'avant.
+        console.warn('[startup] issues des runs terminés illisibles', error)
+      }
+    }
+    return index.get(turnId)
+  }
+})()
+const flushConversations = persistConversations(os.conversations, undefined, {
+  resumableTurnIds,
+  finishedRunOutcome: finishedRunOutcomeByTurnId
+})
 const scheduledTasks = new TaskStore()
 /** Alertes déjà transmises au moteur de réveil : le store rediffuse tout son instantané à chaque
  *  changement, donc sans cette mémoire la même alerte réveillerait un agent en boucle. */

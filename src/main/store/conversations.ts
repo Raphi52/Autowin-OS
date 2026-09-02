@@ -8,7 +8,13 @@ import {
   type ChatTurnStatus,
   type PersistedChatPart
 } from '../../shared/chat-turn'
-import { hasInterruptionNotice, interruptionNotice } from '../runs/run-interruption'
+import {
+  finishedRunNotice,
+  hasFinishedRunNotice,
+  hasInterruptionNotice,
+  interruptionNotice,
+  type FinishedRunOutcome
+} from '../runs/run-interruption'
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../../shared/auto-kaizen-link'
 import { canonicalProjectPath } from '../../shared/project-path'
@@ -443,7 +449,19 @@ export class ConversationStore {
    * `resumableTurnIds` est le discriminant : un tour dont le checkpoint de run survit va réellement
    * reprendre au démarrage — l'annoncer interrompu serait faux. Absent = plus rien ne reprend.
    */
-  hydrate(saved: Conversation[], options?: { resumableTurnIds?: ReadonlySet<string> }): boolean {
+  hydrate(
+    saved: Conversation[],
+    options?: {
+      resumableTurnIds?: ReadonlySet<string>
+      /**
+       * Issue d'un run DÉJÀ TERMINÉ, lue dans son état persisté. Absente de `resumableTurnIds` pour
+       * la raison inverse de l'interruption : plus rien ne reprend parce que tout est fini. Sans
+       * elle, le fil annonçait « interrompu » sur un travail vert et publié, et n'en disait rien
+       * d'autre — l'utilisateur ne voyait jamais le résultat.
+       */
+      finishedRunOutcome?: (turnId: string) => FinishedRunOutcome | undefined
+    }
+  ): boolean {
     this.voisinageCache = undefined
     // Le corpus entier change de forme : la pre-selection ne peut pas etre rattrapee
     // par une mise a jour, elle est jetee.
@@ -519,8 +537,12 @@ export class ConversationStore {
           }
           const runId = message.turnId
           if (!runId) return interrupted
-          if (hasInterruptionNotice(interrupted.content, runId)) return interrupted
-          const notice = interruptionNotice(runId)
+          // Le run est-il MORT avec l'app, ou est-il allé au bout pendant son absence ? Les deux
+          // sortent de `resumableTurnIds` ; seul l'état persisté du run les distingue.
+          const outcome = options?.finishedRunOutcome?.(runId)
+          if (outcome && hasFinishedRunNotice(interrupted.content, outcome)) return interrupted
+          if (!outcome && hasInterruptionNotice(interrupted.content, runId)) return interrupted
+          const notice = outcome ? finishedRunNotice(outcome) : interruptionNotice(runId)
           const parts: PersistedChatPart[] = [
             ...(interrupted.parts ?? []),
             { kind: 'text', text: notice }
