@@ -856,6 +856,38 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
+  /**
+   * CLIGNOTEMENT A LA BASCULE (rapporte le 2026-09-02, « parfois »). Ouvrir une autre conversation
+   * remplace tout le contenu du fil : le navigateur emet un `scroll` mesure sur l'ANCIENNE position,
+   * avant toute descente. Ce defilement fantome etait lu comme un recul du lecteur et allumait
+   * « ↓ Dernier message » le temps d'une frame. Le lecteur n'a rien touche : rien ne doit s'allumer.
+   */
+  it('n allume pas le saut vers le bas sur le defilement fantome d une bascule de conversation', async () => {
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')])
+    })
+    await mount(mockApi)
+    const picks = [...container!.querySelectorAll<HTMLButtonElement>('.conv-pick')]
+    await act(async () => picks[0].click())
+
+    const scroll = container!.querySelector('.chat-scroll') as HTMLDivElement
+    scroll.scrollTo = vi.fn()
+    Object.defineProperties(scroll, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: { configurable: true, writable: true, value: 900 }
+    })
+
+    // Bascule vers l'autre conversation : le fil est remplace, le navigateur emet un `scroll`
+    // AUCUN geste de lecture ne l'accompagne.
+    await act(async () => picks[1].click())
+    await act(async () => {
+      ;(scroll as unknown as { scrollTop: number }).scrollTop = 0
+      scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+    })
+    expect(container!.querySelector('.chat-jump-latest')).toBeNull()
+  })
+
   it('affiche le saut vers le dernier message dès que le fil est remonté, sans attendre une nouvelle activité', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
@@ -878,7 +910,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.chat-jump-latest')).toBeNull()
 
     // L'utilisateur remonte — aucune nouvelle activité n'arrive, le bouton doit apparaître quand même.
+    // La molette fait partie du geste : c'est elle qui distingue une lecture d'un defilement emis par
+    // l'app (remplacement du fil a la bascule de conversation).
     await act(async () => {
+      scroll.dispatchEvent(new Event('wheel', { bubbles: true }))
       ;(scroll as unknown as { scrollTop: number }).scrollTop = 0
       scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
     })
@@ -955,8 +990,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
         scrollTop: { configurable: true, writable: true, value: 900 }
       })
 
-      // L'utilisateur remonte pendant que la frame du message est encore en attente.
+      // L'utilisateur remonte pendant que la frame du message est encore en attente : geste de
+      // molette compris, sans quoi ce defilement serait indiscernable de celui emis par l'app.
       await act(async () => {
+        scroll.dispatchEvent(new Event('wheel', { bubbles: true }))
         ;(scroll as unknown as { scrollTop: number }).scrollTop = 0
         scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
       })

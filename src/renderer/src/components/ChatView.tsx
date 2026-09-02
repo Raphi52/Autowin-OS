@@ -23,6 +23,7 @@ import {
   hydrateStoredAssistant,
   isRunRequestCurrent,
   doitSuivreLeBas,
+  doitIgnorerDefilementDeBascule,
   isChatNearBottom,
   scrollChatToBottom,
   reduceScopedLiveRuns,
@@ -723,6 +724,12 @@ export function ChatView({
    * consommer sur la meme frame que les messages, sans re-rendu intermediaire.
    */
   const positionARestaurerRef = useRef<PositionLecture | null>(null)
+  /**
+   * BASCULE EN COURS : vrai depuis l'ouverture d'une autre conversation jusqu'a l'atterrissage
+   * (descente vers le bas ou reprise de lecture). Pendant ce temps, les evenements `scroll` viennent
+   * du remplacement du contenu, pas du lecteur (cf. `doitIgnorerDefilementDeBascule`).
+   */
+  const basculeConvRef = useRef(false)
   /**
    * MASQUE PENDANT LA REPRISE. La restauration re-applique la cible sur ~20 frames pendant que le
    * markdown se rend : l'utilisateur voyait le fil sauter (clignotement signale le 2026-08-30).
@@ -1583,7 +1590,10 @@ export function ChatView({
       setRepriseEnCours(true)
       // Filet : si la boucle ne rend jamais la main (fil demonte en pleine reprise), le fil ne doit
       // PAS rester invisible. Le masque tombe de toute facon.
-      const filet = window.setTimeout(() => setRepriseEnCours(false), 800)
+      const filet = window.setTimeout(() => {
+        basculeConvRef.current = false
+        setRepriseEnCours(false)
+      }, 800)
       requestAnimationFrame(() =>
         restaurerPositionLecture(
           scroll,
@@ -1592,6 +1602,7 @@ export function ChatView({
           20,
           () => {
             window.clearTimeout(filet)
+            basculeConvRef.current = false
             setRepriseEnCours(false)
           },
           () => mesurerMessagesRendus(scroll)
@@ -1600,6 +1611,7 @@ export function ChatView({
       return
     }
     if (!followTailRef.current) {
+      basculeConvRef.current = false
       setHasNewActivity(true)
       return
     }
@@ -1618,6 +1630,7 @@ export function ChatView({
       dernierScrollTopRef.current = scroll.scrollTop
       annulerDescente = scrollChatToBottom(scroll, requestAnimationFrame, 40, (landed) => {
         descenteEnVolRef.current = false
+        basculeConvRef.current = false
         if (!landed) setHasNewActivity(true)
       })
       setHasNewActivity(false)
@@ -1727,6 +1740,9 @@ export function ChatView({
     // nouveau fil et ne partait qu'a la frame de descente : un CLIGNOTEMENT a chaque bascule
     // (rapporte le 2026-09-01). Une reprise, elle, s'ouvre bien remontee : le bouton y est du.
     setScrolledAwayFromTail(!!reprise)
+    // Le fil va etre REMPLACE : les `scroll` qui suivent viennent du navigateur, pas du lecteur.
+    basculeConvRef.current = true
+    gesteLecteurRef.current = false
     activeRef.current = c.id
     setActiveId(c.id)
     const branchMessages = detailed.messages ?? []
@@ -4351,6 +4367,17 @@ export function ChatView({
             }}
             onScroll={(event) => {
               const conteneur = event.currentTarget
+              // Defilement FANTOME de la bascule : mesure sur l'ancienne position, aucune intention
+              // de lecture. Le lire allumait « ↓ Dernier message » une frame — le clignotement.
+              if (
+                doitIgnorerDefilementDeBascule({
+                  basculeEnCours: basculeConvRef.current,
+                  gesteLecteur: gesteLecteurRef.current
+                })
+              ) {
+                dernierScrollTopRef.current = conteneur.scrollTop
+                return
+              }
               const nearBottom = isChatNearBottom(conteneur)
               // La position de lecture se retient a chaque mouvement DU LECTEUR : quitter une
               // conversation ne passe pas toujours par un evenement de fermeture (changement de

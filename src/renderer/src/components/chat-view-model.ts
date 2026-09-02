@@ -1638,3 +1638,23 @@ export function isRunRequestCurrent(
     requested.convId === current.convId
   )
 }
+
+/**
+ * BASCULE DE CONVERSATION — le premier `scroll` n'est pas un geste de lecture.
+ *
+ * Ouvrir une autre conversation remplace tout le contenu du fil : le navigateur emet alors un
+ * evenement `scroll` (position ecretee, hauteur qui change) AVANT que la descente vers le bas ne
+ * demarre. Mesure au `scrollTop` de l'ancien fil, `nearBottom` repond `false` : le bouton
+ * « ↓ Dernier message » s'allumait le temps d'une frame puis disparaissait — le CLIGNOTEMENT
+ * rapporte le 2026-09-02 (« parfois »), residuel apres le correctif de conv-21 qui ne traitait que
+ * l'etat herite, pas cet evenement fantome.
+ *
+ * Tant que la bascule n'a pas atterri, un defilement que le LECTEUR n'a pas provoque n'a donc
+ * aucune valeur d'intention. Le moindre geste (molette, doigt, clavier) rend la main immediatement.
+ */
+export function doitIgnorerDefilementDeBascule(input: {
+  basculeEnCours: boolean
+  gesteLecteur: boolean
+}): boolean {
+  return input.basculeEnCours && !input.gesteLecteur
+}

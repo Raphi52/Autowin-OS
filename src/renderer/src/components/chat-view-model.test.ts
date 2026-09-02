@@ -10,6 +10,7 @@ import {
   groupAssistantActivity,
   isRunRequestCurrent,
   doitSuivreLeBas,
+  doitIgnorerDefilementDeBascule,
   isChatNearBottom,
   scrollChatToBottom,
   hydrateStoredAssistant,
@@ -1486,6 +1487,29 @@ describe('chat scrolling and layout rules', () => {
   it('follows the tail only when the reader is close to the bottom', () => {
     expect(isChatNearBottom({ scrollTop: 700, clientHeight: 300, scrollHeight: 1040 })).toBe(true)
     expect(isChatNearBottom({ scrollTop: 300, clientHeight: 300, scrollHeight: 1040 })).toBe(false)
+  })
+
+  describe('doitIgnorerDefilementDeBascule', () => {
+    it('IGNORE le defilement fantome emis par le remplacement du fil a la bascule', () => {
+      // Ouverture d'une autre conversation : le navigateur emet un `scroll` avant la descente,
+      // mesure sur l'ancienne position. Le prendre pour une lecture allumait « ↓ Dernier message »
+      // le temps d'une frame — le clignotement rapporte le 2026-09-02.
+      expect(doitIgnorerDefilementDeBascule({ basculeEnCours: true, gesteLecteur: false })).toBe(
+        true
+      )
+    })
+
+    it('rend la main AU PREMIER geste du lecteur, meme pendant la bascule', () => {
+      expect(doitIgnorerDefilementDeBascule({ basculeEnCours: true, gesteLecteur: true })).toBe(
+        false
+      )
+    })
+
+    it('ne bloque rien une fois la bascule atterrie', () => {
+      expect(doitIgnorerDefilementDeBascule({ basculeEnCours: false, gesteLecteur: false })).toBe(
+        false
+      )
+    })
   })
 
   describe('doitSuivreLeBas', () => {
