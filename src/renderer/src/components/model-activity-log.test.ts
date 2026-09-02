@@ -523,3 +523,72 @@ describe('buildModelActivityLog — la source BRAIN', () => {
     expect(buildModelActivityLog({ messages: [], journalByTurn: {} })).toEqual([])
   })
 })
+
+describe('buildModelActivityLog — les APPELS PROMPT', () => {
+  const appel = (part: Record<string, unknown>): Record<string, unknown> => ({
+    id: 'p1',
+    ts: '2026-09-02T10:00:00.000Z',
+    conversationId: 'conv-1',
+    turnId: 'turn-1',
+    iteration: 2,
+    actor: 'producteur',
+    provider: 'claude',
+    model: 'opus-5',
+    messages: [{ role: 'user', content: 'fais X' }],
+    options: {},
+    response: 'voici X',
+    ...part
+  })
+
+  it('nomme l’acteur, la phase et l’étape, et garde tout l’appel en champs bruts', () => {
+    const [ligne] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      promptCalls: [appel({ phase: 'build', status: 'completed', durationMs: 4_200 })]
+    })
+    expect(ligne.source).toBe('prompts')
+    expect(ligne.kind).toBe('prompt')
+    expect(ligne.label).toContain('producteur')
+    expect(ligne.label).toContain('build')
+    expect(ligne.label).toContain('étape 2')
+    expect(ligne.detail).toContain('4200 ms')
+    expect(ligne.ok).toBe(true)
+    expect(ligne.turnId).toBe('turn-1')
+    // Le contenu ENTIER reste disponible, jamais aplati.
+    expect(ligne.fields).toMatchObject({ response: 'voici X' })
+  })
+
+  it('dit quel modèle a RÉELLEMENT servi quand il diffère du modèle demandé', () => {
+    const [ligne] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      promptCalls: [appel({ resolvedModel: 'opus-5-20260901' })]
+    })
+    expect(ligne.detail).toContain('opus-5 → opus-5-20260901')
+  })
+
+  it('nomme les blocs du prompt système et du contexte injecté, avec leur taille', () => {
+    const [ligne] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      promptCalls: [
+        appel({
+          systemBlocks: [{ name: 'discipline', chars: 1_800 }],
+          contextBlocks: [{ name: 'savoir Brain', chars: 640 }]
+        })
+      ]
+    })
+    expect(ligne.detail).toContain('discipline (1800)')
+    expect(ligne.detail).toContain('savoir Brain (640)')
+  })
+
+  it('marque l’appel en échec et remonte son erreur', () => {
+    const [ligne] = buildModelActivityLog({
+      messages: [],
+      journalByTurn: {},
+      promptCalls: [appel({ status: 'failed', error: '529 Overloaded' })]
+    })
+    expect(ligne.ok).toBe(false)
+    expect(ligne.detail).toContain('529 Overloaded')
+  })
+})

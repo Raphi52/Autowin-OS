@@ -49,7 +49,14 @@ export type ModelActivityKind =
   | 'event'
 
 /** D'où vient la ligne. Affiché et filtrable : une preuve sans provenance n'en est pas une. */
-export type ModelActivitySource = 'thread' | 'journal' | 'parts' | 'causal' | 'activity' | 'brain'
+export type ModelActivitySource =
+  | 'thread'
+  | 'journal'
+  | 'parts'
+  | 'causal'
+  | 'activity'
+  | 'brain'
+  | 'prompts'
 
 export interface ModelActivityEntry {
   id: string
@@ -84,6 +91,12 @@ export interface ModelActivityInput {
    * par `remember` avaient leur propre journal, lu par l'Observatory — jamais par celui-ci.
    */
   brain?: ReadonlyArray<Record<string, unknown>>
+  /**
+   * Appels PROMPT observés (`prompt-observability`), tels quels. C'est le prompt REELLEMENT parti au
+   * modèle — son système décomposé en blocs nommés, le contexte injecté, la réponse, l'usage. Il
+   * n'atteignait que l'Observatory.
+   */
+  promptCalls?: ReadonlyArray<Record<string, unknown>>
 }
 
 /** L'heure vient du JOURNAL (`at: Date.now()` côté main) ; on ne l'INVENTE jamais quand elle manque. */
@@ -694,6 +707,63 @@ function trierChronologiquement(entries: ModelActivityEntry[]): ModelActivityEnt
  * autre), les doublons exacts écartés, et l'ensemble trié chronologiquement. Un tour dont le journal
  * fichier a été nettoyé reste présent via ses parts durables.
  */
+/** Blocs nommés d'un prompt (système ou contexte), rendus « nom (n car.) » sans rien inventer. */
+function blocs(valeur: unknown): string | undefined {
+  if (!Array.isArray(valeur) || valeur.length === 0) return undefined
+  const noms = valeur
+    .map((bloc) => {
+      const item = bloc as { name?: unknown; chars?: unknown }
+      if (typeof item?.name !== 'string') return ''
+      return typeof item.chars === 'number' ? `${item.name} (${item.chars})` : item.name
+    })
+    .filter((nom) => nom !== '')
+  return noms.length === 0 ? undefined : noms.join(', ')
+}
+
+/**
+ * APPELS PROMPT — ce qui est REELLEMENT parti au modèle. Le journal savait dire qu'un appel avait
+ * eu lieu ; il ne disait pas ce qu'il CONTENAIT. Chaque appel porte ici son acteur, sa phase, son
+ * fournisseur, le modèle demandé ET celui réellement servi, la décomposition du prompt système et
+ * du contexte injecté en blocs nommés, la durée, l'usage, et l'erreur s'il a échoué. Le contenu
+ * intégral (messages, options, réponse) reste dans les champs bruts, dépliables.
+ */
+function fromPromptCalls(calls: ReadonlyArray<Record<string, unknown>>): Brute[] {
+  return calls.map((call, index) => {
+    const statut = typeof call.status === 'string' ? call.status : undefined
+    const modele =
+      call.resolvedModel && call.resolvedModel !== call.model
+        ? `${String(call.model ?? '?')} → ${String(call.resolvedModel)}`
+        : short(call.resolvedModel ?? call.model)
+    const systeme = blocs(call.systemBlocks)
+    const contexte = blocs(call.contextBlocks)
+    const detail = joinDetail(
+      modele ? `modèle : ${modele}` : undefined,
+      systeme ? `système : ${systeme}` : undefined,
+      contexte ? `contexte injecté : ${contexte}` : undefined,
+      typeof call.durationMs === 'number' ? `${call.durationMs} ms` : undefined,
+      short(call.error),
+      short(call.response)
+    )
+    return {
+      id: `prompt:${String(call.id ?? index)}`,
+      turnId: typeof call.turnId === 'string' ? call.turnId : '',
+      kind: 'prompt' as ModelActivityKind,
+      label:
+        joinDetail(
+          'Prompt envoyé',
+          short(call.actor),
+          short(call.phase),
+          short(call.provider),
+          typeof call.iteration === 'number' ? `étape ${call.iteration}` : undefined
+        ) ?? 'Prompt envoyé',
+      ...isoStamp(call.ts),
+      ...allFields(call),
+      ...(detail ? { detail } : {}),
+      ...(statut === 'completed' ? { ok: true } : statut === 'failed' ? { ok: false } : {})
+    }
+  })
+}
+
 /** Nature de l'aller-retour Brain, dite en clair plutôt qu'en code interne. */
 const BRAIN_NATURE: Record<string, string> = {
   automatic: 'contexte préchargé',
@@ -793,5 +863,6 @@ export function buildModelActivityLog(input: ModelActivityInput): ModelActivityE
   entries.push(...tag('causal', fromCausal(input.causal ?? [])))
   entries.push(...tag('activity', fromActivity(input.activity ?? [])))
   entries.push(...tag('brain', fromBrain(input.brain ?? [])))
+  entries.push(...tag('prompts', fromPromptCalls(input.promptCalls ?? [])))
   return trierChronologiquement(ecarterPenseeTronquee(dedupe(entries)))
 }

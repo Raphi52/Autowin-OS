@@ -326,3 +326,47 @@ describe('ModelActivityLogPane — la source Brain', () => {
     expect(host.querySelector('[data-testid="model-activity-log"]')).not.toBeNull()
   })
 })
+
+describe('ModelActivityLogPane — les appels prompt', () => {
+  it('lit les appels prompt de la conversation et montre ce qui est parti au modèle', async () => {
+    const promptCalls = vi.fn(async () => [
+      {
+        id: 'p1',
+        ts: '2026-09-02T10:00:00.000Z',
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        iteration: 1,
+        actor: 'producteur',
+        provider: 'claude',
+        model: 'opus-5',
+        systemBlocks: [{ name: 'discipline', chars: 1_800 }],
+        messages: [],
+        options: {},
+        response: 'ok',
+        status: 'completed'
+      }
+    ])
+    ;(window as unknown as { api: Record<string, unknown> }).api = { promptCalls }
+    await monter()
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(promptCalls).toHaveBeenCalledWith('conv-1')
+    const liste = host.querySelector('[data-testid="model-activity-log"]') as HTMLElement
+    expect(liste.textContent).toContain('producteur')
+    expect(liste.textContent).toContain('discipline (1800)')
+  })
+
+  it('ne casse pas le journal quand les appels prompt sont illisibles', async () => {
+    ;(window as unknown as { api: Record<string, unknown> }).api = {
+      promptCalls: vi.fn(async () => {
+        throw new Error('spool illisible')
+      })
+    }
+    await monter()
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(host.querySelector('[data-testid="model-activity-log"]')).not.toBeNull()
+  })
+})
