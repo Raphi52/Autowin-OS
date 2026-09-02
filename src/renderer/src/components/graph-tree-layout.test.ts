@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  initialCollapsedTreeNodeIds,
   layoutTree,
   pickVisibleLabels,
   projectTreeVisibility,
@@ -264,5 +265,32 @@ describe('exploration progressive de l’arbre', () => {
     expect(shouldLabelTreeNode(dossier, 'branches')).toBe(true)
     expect(shouldLabelTreeNode(note, 'branches')).toBe(false)
     expect(shouldLabelTreeNode(note, 'notes')).toBe(true)
+  })
+})
+
+describe('point de départ de l’exploration', () => {
+  it('n’ouvre que le premier niveau, puis un clic dévoile le cran suivant', () => {
+    const complet = layoutTree(VAULT)
+    const fermes = new Set(initialCollapsedTreeNodeIds(complet))
+    const depart = projectTreeVisibility(complet, fermes)
+    // Le premier niveau reste visible : sinon la barre de branches serait vide, sans point d’entrée.
+    const niveau1 = complet.nodes.filter((node) => node.depth === 1)
+    expect(niveau1.length).toBeGreaterThan(0)
+    for (const node of niveau1) expect(depart.nodes.some((v) => v.id === node.id)).toBe(true)
+    expect(depart.nodes.some((node) => node.depth >= 2)).toBe(false)
+    // Aucune fiche n’est fermée : une feuille s’ouvre, elle ne se déplie pas.
+    expect(complet.nodes.filter((node) => fermes.has(node.id)).every((n) => !n.isLeaf)).toBe(true)
+
+    const branche = niveau1.find((node) => !node.isLeaf)!
+    const apresUnClic = new Set(fermes)
+    apresUnClic.delete(branche.id)
+    const cran2 = projectTreeVisibility(complet, apresUnClic)
+    const enfants = complet.nodes.filter((node) => node.parentId === branche.id)
+    for (const enfant of enfants) expect(cran2.nodes.some((v) => v.id === enfant.id)).toBe(true)
+    // …et pas plus loin : les petits-enfants attendent le clic suivant.
+    const petitsEnfants = complet.nodes.filter((node) =>
+      enfants.some((enfant) => enfant.id === node.parentId)
+    )
+    for (const pe of petitsEnfants) expect(cran2.nodes.some((v) => v.id === pe.id)).toBe(false)
   })
 })

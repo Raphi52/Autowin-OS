@@ -804,7 +804,7 @@ describe('GraphView refresh', () => {
     expect(container.querySelector('.graph-hint')?.textContent).not.toContain('pivoter')
   })
 
-  it('replie puis déplie une branche circulaire depuis son nœud interne', async () => {
+  it('déplie puis replie une branche circulaire depuis son nœud interne', async () => {
     const nodes = [
       { id: 'a', label: 'A', group: 0, file: 'C:/brain/projects/alpha/a.md' },
       { id: 'b', label: 'B', group: 0, file: 'C:/brain/projects/alpha/b.md' },
@@ -829,17 +829,18 @@ describe('GraphView refresh', () => {
     expect(
       container.querySelector('[role="toolbar"][aria-label="Branches du Brain"] button')
     ).toBeTruthy()
-    const before = container.querySelectorAll('[data-node-id]').length
+    // Au départ l'arbre est FERMÉ sous le premier niveau : le premier clic doit DÉPLIER.
+    const ferme = container.querySelectorAll('[data-node-id]').length
     const branch = container.querySelector<HTMLButtonElement>('[data-node-id^="__tree__:"]')
     expect(branch).toBeTruthy()
     await act(async () => branch?.click())
-    const collapsed = container.querySelectorAll('[data-node-id]').length
-    expect(collapsed).toBeLessThan(before)
+    const deplie = container.querySelectorAll('[data-node-id]').length
+    expect(deplie).toBeGreaterThan(ferme)
     const sameBranch = container.querySelector<HTMLButtonElement>(
       `[data-node-id="${branch?.dataset.nodeId}"]`
     )
     await act(async () => sameBranch?.click())
-    expect(container.querySelectorAll('[data-node-id]')).toHaveLength(before)
+    expect(container.querySelectorAll('[data-node-id]')).toHaveLength(ferme)
   })
 
   it('remplace la stack IPC par un message métier quand loadBrainGraph échoue', async () => {
