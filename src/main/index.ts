@@ -6,6 +6,7 @@ import { creerServicePiper, racinePiper, type ServicePiper } from './piper-local
 import { ServiceTranscripts, dossierTranscripts } from './transcripts'
 import { registerPiperIpc } from './ipc/piper'
 import { registerActivityIpc } from './ipc/activity'
+import { registerWorktreeIpc, type WorktreeFixtureDeTest } from './ipc/worktree'
 import { registerTranscriptsIpc } from './ipc/transcripts'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
@@ -328,7 +329,6 @@ import { tailJournalOnce } from './runs/stdout-journal'
 import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summary'
 import { journaliserSaisie } from './store/journal-saisie'
 import { defaultProcessIdentity } from './store/worktree-manager'
-import { scopeWorktreeActivity } from '../shared/worktree-activity-model'
 import {
   appendConversationFileTrace,
   appendExecutionEvidenceFileTrace,
@@ -2277,74 +2277,9 @@ Le fil reprend ensuite normalement.`
     os.setAutoClose(enabled === true)
     return os.getAutoClose()
   })
-  // Cockpit worktree (volet A) : snapshot à la demande + push live des changements d'activité.
-  let worktreeFixture:
-    | {
-        activity: ReturnType<typeof os.getWorktreeActivity>
-        status: ReturnType<typeof os.getWorktreeRuntimeStatus>
-      }
-    | undefined
-  ipcMain.handle('worktree:activity', (event, conversationId?: unknown) => {
-    assertTrustedRendererSender(event, 'WorktreeActivity')
-    const activity = worktreeFixture?.activity ?? os.getWorktreeActivity()
-    return scopeWorktreeActivity(
-      activity,
-      typeof conversationId === 'string' && conversationId.trim() ? conversationId : undefined
-    )
-  })
-  ipcMain.handle('worktree:travaux-non-publies', (event) => {
-    assertTrustedRendererSender(event, 'TravauxNonPublies')
-    return os.travauxNonPublies()
-  })
-  ipcMain.handle('worktree:patch-non-publie', (event, agentId?: unknown) => {
-    assertTrustedRendererSender(event, 'PatchTravailNonPublie')
-    return typeof agentId === 'string'
-      ? os.patchTravailNonPublie(agentId)
-      : { patch: '', tronque: false }
-  })
-  ipcMain.handle('worktree:status', (event) => {
-    assertTrustedRendererSender(event, 'WorktreeStatus')
-    return worktreeFixture?.status ?? os.getWorktreeRuntimeStatus()
-  })
-  ipcMain.handle('worktree:conflict-diff', (event, agentId: unknown) => {
-    assertTrustedRendererSender(event, 'WorktreeConflictDiff')
-    return os.getWorktreeConflictDiff(typeof agentId === 'string' ? agentId : '')
-  })
-  ipcMain.handle('worktree:resolve-conflict', (event, agentId: unknown, choice: unknown) => {
-    assertTrustedRendererSender(event, 'WorktreeResolveConflict')
-    if (typeof agentId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(agentId)) {
-      throw new Error('Identifiant de bureau invalide')
-    }
-    if (choice !== 'agent' && choice !== 'mine') {
-      throw new Error('Choix de résolution invalide')
-    }
-    return os.resolveWorktreeConflict(agentId, choice)
-  })
-  ipcMain.handle('worktree:retry-recovery', (event, agentId: unknown) => {
-    assertTrustedRendererSender(event, 'WorktreeRetryRecovery')
-    if (typeof agentId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(agentId)) {
-      throw new Error('Identifiant de bureau invalide')
-    }
-    return os.retryWorktreeRecovery(agentId)
-  })
-  /**
-   * Liberation SURE d'une copie : le travail est preserve dans `autowin/recovery/<id>` AVANT
-   * suppression. Distinct de `worktree:discard-held`, qui supprime sans preserver.
-   */
-  ipcMain.handle('worktree:preserve-release', (event, agentId: unknown) => {
-    assertTrustedRendererSender(event, 'WorktreePreserveRelease')
-    if (typeof agentId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(agentId)) {
-      throw new Error('Identifiant de bureau invalide')
-    }
-    return os.preserverEtLibererWorktree(agentId)
-  })
-  ipcMain.handle('worktree:discard-held', (event, agentId: unknown) => {
-    assertTrustedRendererSender(event, 'WorktreeDiscardHeld')
-    if (typeof agentId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(agentId)) {
-      throw new Error('Identifiant de bureau invalide')
-    }
-    return os.discardHeldWorktree(agentId)
-  })
+  // Les canaux des copies de travail vivent dans src/main/ipc/worktree.ts. La fixture de test
+  // reste posee d'ici (canal `app:test:worktree-fixture`), mais l'etat vit la-bas.
+  const worktreeIpc = registerWorktreeIpc({ os })
   ipcMain.handle('app:test:worktree-fixture', (event, value: unknown) => {
     assertTrustedRendererSender(event, 'Fixture worktree')
     if (!isolatedTestInstance) throw new Error('Fixture worktree indisponible hors instance isolée')
@@ -2353,8 +2288,8 @@ Le fil reprend ensuite normalement.`
     if (!Array.isArray(fixture.activity) || !fixture.status || typeof fixture.status !== 'object') {
       throw new Error('Fixture worktree incomplète')
     }
-    const nextFixture = fixture as NonNullable<typeof worktreeFixture>
-    worktreeFixture = nextFixture
+    const nextFixture = fixture as WorktreeFixtureDeTest
+    worktreeIpc.poserFixtureDeTest(nextFixture)
     for (const window of BrowserWindow.getAllWindows()) {
       window.webContents.send('worktree:activity-changed', nextFixture.activity)
     }
