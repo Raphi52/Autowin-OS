@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
- * Contrat de SOURCE sur la borne du probe provider (`src/main/index.ts`).
+ * Contrat de SOURCE sur la borne du probe provider (zone du process principal).
  *
  * Pourquoi un test sur le texte source plutot que sur le comportement : ce message n'est emis
  * qu'apres 20 s d'attente reelle d'un appel provider. Le simuler demanderait d'injecter l'horloge et
@@ -15,7 +15,13 @@ import { readFileSync } from 'node:fs'
  * REPOND PAS serait silencieusement classe « session expiree » — donc l'UI proposerait de se
  * reconnecter alors que le service est juste muet. Ce test ferme cette porte.
  */
-const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+/*
+ * La sonde a quitte `index.ts` pour `src/main/ipc/providers.ts` le 2026-09-02, avec les canaux
+ * dont elle etait le seul appelant. On lit donc la ZONE du process principal : un contrat qui lit
+ * « le process principal » doit suivre le demenagement, sinon il rougit sans qu'aucun invariant
+ * n'ait bouge.
+ */
+const source = sourceProcessPrincipal()
 
 /** Les mots sur lesquels le `catch` de `probeProviderConnection` bascule vers « expire ». */
 const MOTS_QUI_RECLASSENT = ['authenticate', 'oauth', 'expired', 'not logged', 'login']
