@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { JarvisAnneau } from './JarvisAnneau'
 import { jouerBipEveil } from './jarvis-bip'
 import { fabriqueMoteur } from './jarvis-moteur'
-import { parler, taireJarvis } from './jarvis-parole'
+import { listerVoix, oublierVoixChoisie, parler, taireJarvis } from './jarvis-parole'
 
 /**
  * Décroissance de la crête par image d'affichage (~60/s) : ~1 s pour retomber d'une voix forte au
@@ -9,7 +10,22 @@ import { parler, taireJarvis } from './jarvis-parole'
  */
 const DECROISSANCE_CRETE = 0.96
 import { type MoteurVocal } from './jarvis-moteur-whisper'
-import { EVENEMENT_NOM_JARVIS, lireNomJarvis, NOM_JARVIS_DEFAUT } from './jarvis-nom'
+import {
+  EVENEMENT_NOM_JARVIS,
+  ecrireNomJarvis,
+  lireNomJarvis,
+  NOM_JARVIS_DEFAUT,
+  NOM_JARVIS_LONGUEUR_MAX
+} from './jarvis-nom'
+import {
+  DEBIT_MAX,
+  DEBIT_MIN,
+  HAUTEUR_MAX,
+  HAUTEUR_MIN,
+  ecrireReglageVoix,
+  lireReglageVoix,
+  type ReglageVoix
+} from './jarvis-voix-reglage'
 import {
   MESSAGE_VERDICT,
   SEUIL_MAX,
@@ -48,7 +64,6 @@ import {
  *  - rien ne part vers un run sans le mot d'eveil : un micro continu entend toute la piece.
  */
 
-
 interface ApiJarvis {
   conversations?: () => Promise<SommaireDirect[]>
   conversationsCreate?: (p: {
@@ -56,11 +71,6 @@ interface ApiJarvis {
     category: string
     provider: string
   }) => Promise<{ id: string }>
-  routeConversationMessage?: (
-    id: string,
-    message: string,
-    attachments: string[]
-  ) => Promise<{ conversationId: string; routed?: boolean }>
   whisperEtat?: () => Promise<EtatWhisper>
   whisperInstaller?: () => Promise<EtatWhisper>
   whisperTranscrire?: (wav: Uint8Array) => Promise<string>
@@ -130,6 +140,53 @@ function useNomJarvis(): { nom: string; nomRef: React.MutableRefObject<string> }
 
 export function JarvisWidget(): React.JSX.Element {
   const { nom: nomJarvis, nomRef } = useNomJarvis()
+  /**
+   * LES REGLAGES DE L'ASSISTANT, DANS SON PROPRE WIDGET.
+   *
+   * DEMANDE DE L'UTILISATEUR (2026-09-01) : « les settings liees a Bernard doivent etre dans le
+   * widget ». Ils vivaient dans le panneau « Reglages » de l'accueil, a l'autre bout de l'ecran de
+   * la tuile qu'ils reglent — et melanges aux reglages de la PAGE (widgets affiches, disposition),
+   * qui n'ont rien a voir avec l'assistant.
+   */
+  /**
+   * Ce qui est TAPE, distinct du nom RETENU : le nom retenu ne peut jamais etre vide (la tuile doit
+   * garder un titre), alors que la saisie doit pouvoir l'etre le temps d'effacer pour retaper.
+   */
+  const [saisieNom, setSaisieNom] = useState(nomJarvis)
+  const changerNom = useCallback((saisie: string): void => {
+    setSaisieNom(saisie)
+    // `ecrireNomJarvis` emet l'evenement que `useNomJarvis` ecoute : le titre de la tuile suit.
+    ecrireNomJarvis(window.localStorage, saisie)
+  }, [])
+  /**
+   * LES VOIX DU POSTE. La liste n'est PAS prete au premier rendu : les navigateurs la chargent en
+   * differe et previennent par `voiceschanged`. Sans cette souscription, le menu resterait vide sur
+   * un poste qui a pourtant des voix.
+   */
+  const [voixDisponibles, setVoixDisponibles] = useState<SpeechSynthesisVoice[]>(() => listerVoix())
+  const [reglageVoix, setReglageVoix] = useState<ReglageVoix>(() =>
+    lireReglageVoix(window.localStorage)
+  )
+  useEffect(() => {
+    const relever = (): void => setVoixDisponibles(listerVoix())
+    relever()
+    const synthese = (window as unknown as { speechSynthesis?: EventTarget }).speechSynthesis
+    synthese?.addEventListener?.('voiceschanged', relever)
+    return () => synthese?.removeEventListener?.('voiceschanged', relever)
+  }, [])
+  /**
+   * Enregistre le changement ET oublie la voix deja chargee : sans cet oubli, l'assistant garderait
+   * jusqu'au redemarrage la voix prise a sa premiere phrase, et le nouveau choix serait inaudible.
+   */
+  const changerReglageVoix = useCallback((modification: Partial<ReglageVoix>): void => {
+    const retenu = ecrireReglageVoix(window.localStorage, modification)
+    oublierVoixChoisie()
+    setReglageVoix(retenu)
+  }, [])
+  const essayerVoix = useCallback((): void => {
+    oublierVoixChoisie()
+    parler('Bonjour, je suis a votre ecoute.')
+  }, [])
   const [ecoute, setEcoute] = useState<JarvisEcoute>(ecouteInitiale)
   /**
    * L'ETAT D'ECOUTE LU HORS RENDU — parce qu'un envoi ne doit JAMAIS partir d'un updater.
@@ -149,7 +206,11 @@ export function JarvisWidget(): React.JSX.Element {
   const moteurRef = useRef<MoteurVocal | null>(null)
   const whisperRef = useRef<EtatWhisper | null>(null)
   const actifRef = useRef(false)
-  const conversationRef = useRef<string | null>(null)
+  /**
+   * Les phrases FIGEES deja inscrites, retenues par identite d'objet. Un `WeakSet` parce que ces
+   * objets appartiennent au moteur : quand il les oublie, la memoire se libere avec eux.
+   */
+  const finauxVusRef = useRef<WeakSet<object>>(new WeakSet())
   const precedentRef = useRef<SommaireDirect[]>([])
   const [peripheriques, setPeripheriques] = useState<Array<{ id: string; nom: string }>>([])
   const [peripherique, setPeripherique] = useState('')
@@ -193,11 +254,25 @@ export function JarvisWidget(): React.JSX.Element {
     if (phrase) parler(phrase)
   }, [])
 
-  /** Envoie un ordre a Jarvis, dans SA conversation — creee au premier ordre, pas au montage. */
+  /**
+   * Envoie un ordre a Jarvis, dans UNE CONVERSATION NEUVE — une par ordre dicte.
+   *
+   * DEFAUT VECU le 2026-09-01 : « ca a envoye 2 messages et ca a duplique la transcript, et quand
+   * j'ai enchaine 2 demandes la 2e a pas cree de conversation ». Le widget creait une conversation
+   * PUIS demandait au routeur (`os:conversations:routeMessage`) ou poser le message. Sur une
+   * conversation vide le routeur repond « nouveau contexte » et CREE lui-meme une seconde
+   * conversation (`conversation-router.ts`) : deux fils pour un seul ordre, dont une coquille vide.
+   * La cible retenue etait ensuite gardee dans un `ref`, donc le 2e ordre — cette fois route sur
+   * « contexte courant » — retombait dans le MEME fil : « la 2e n'a pas cree de conversation ».
+   *
+   * Le routeur n'a rien a arbitrer ici : une demande dictee au micro N'A PAS de contexte courant,
+   * elle EST son propre debut. On le retire donc du chemin, et chaque ordre ouvre son fil. C'est
+   * aussi un appel modele de moins par ordre.
+   */
   const envoyer = useCallback(
     async (texte: string) => {
       const api = apiJarvis()
-      if (!api?.routeConversationMessage) {
+      if (!api?.conversationsCreate) {
         setErreur('Passerelle des conversations indisponible')
         return
       }
@@ -206,25 +281,19 @@ export function JarvisWidget(): React.JSX.Element {
       // enregistrement) ; ici on ne fait que la prononcer.
       dire({ genre: 'ordre' })
       try {
-        if (!conversationRef.current) {
-          const creee = await api.conversationsCreate?.({
-            title: titreJarvis(texte, nomRef.current),
-            category: 'chat',
-            provider: 'claude'
-          })
-          conversationRef.current = creee?.id ?? null
-        }
-        if (!conversationRef.current) {
+        const creee = await api.conversationsCreate({
+          title: titreJarvis(texte, nomRef.current),
+          category: 'chat',
+          provider: 'claude'
+        })
+        const cible = creee?.id
+        if (!cible) {
           setErreur(`Aucune conversation ${nomRef.current}`)
           dire({ genre: 'erreur' })
           return
         }
-        const route = await api.routeConversationMessage(conversationRef.current, texte, [])
-        // Le routage DESIGNE seulement la conversation cible : il n'ecrit rien et ne lance aucun tour.
-        // Sans ce `pilotChat`, l'ordre etait bien entendu et affiche, puis il ne se passait RIEN —
-        // exactement le defaut vecu (« il l'a bien note mais rien ne s'est passe »).
-        const cible = route?.conversationId ?? conversationRef.current
-        if (route?.routed && route.conversationId) conversationRef.current = route.conversationId
+        // `pilotChat` ECRIT le message de l'utilisateur (`beginTurn`) et lance le tour : c'est le
+        // seul canal d'ecriture. Un second canal en amont, c'etait le message en double.
         if (!api.pilotChat) {
           setErreur('Passerelle du pilote indisponible : ordre non execute')
           dire({ genre: 'erreur' })
@@ -255,6 +324,19 @@ export function JarvisWidget(): React.JSX.Element {
       }
       for (let i = e.resultIndex ?? 0; i < e.results.length; i += 1) {
         const resultat = e.results[i]
+        // UNE PHRASE FIGEE NE S'INSCRIT QU'UNE FOIS. Chez Chromium, `results` est CUMULATIF sur
+        // toute la session et un evenement suivant peut REPOINTER sur une phrase deja figee : elle
+        // etait alors reinscrite. « J'ai dit Robert, puis j'ai redit Robert et ca a ecrit 2 lignes
+        // d'un coup », reproductible a l'infini (vecu le 2026-09-01).
+        //
+        // On reconnait le deja-vu a l'OBJET, pas a son index : les index ne veulent pas dire la
+        // meme chose selon le moteur (l'ecoute hors ligne renvoie toujours l'index 0 avec une
+        // liste d'UN element, non cumulative — s'en servir la rendrait sourde des la 2e phrase).
+        // Chromium, lui, REUTILISE l'objet d'une phrase deja figee : c'est ce qui le trahit.
+        if (resultat?.isFinal === true) {
+          if (finauxVusRef.current.has(resultat)) continue
+          finauxVusRef.current.add(resultat)
+        }
         const texte = resultat?.[0]?.transcript ?? ''
         const final = resultat?.isFinal === true
         const reaction = reagirAParole(
@@ -316,6 +398,8 @@ export function JarvisWidget(): React.JSX.Element {
       ecouteRef.current = suivant
       setEcoute(suivant)
       const moteur = new Fabrique()
+      // Nouvelle session d'ecoute = nouveaux objets resultats : on repart d'une memoire vierge.
+      finauxVusRef.current = new WeakSet()
       moteur.continuous = true
       moteur.interimResults = true
       moteur.lang = 'fr-FR'
@@ -522,30 +606,49 @@ export function JarvisWidget(): React.JSX.Element {
 
   return (
     <div className="jarvis" data-ecoute={ecoute.active ? 'true' : undefined}>
-      <div className="jarvis__barre">
-        <button
-          type="button"
-          data-testid="jarvis-bascule"
-          className="jarvis__bascule"
-          aria-pressed={commande}
-          onClick={() => basculer('jarvis')}
-        >
-          {commande ? '● Écoute en cours — couper' : 'Activer l’écoute'}
-        </button>
-        {/*
+      {/*
+        LA TETE DU WIDGET : l'anneau a gauche, la commande a droite. L'anneau dit l'ETAT de loin
+        (ce que le libelle du bouton ne fait qu'a la lecture) ; le bouton reste le seul point
+        cliquable — l'anneau est purement visuel (aria-hidden).
+      */}
+      <div className="jarvis__tete">
+        <JarvisAnneau
+          nom={nomJarvis}
+          etat={
+            !ecoute.active
+              ? 'hors ligne'
+              : enregistre
+                ? 'enregistre'
+                : ecoute.eveille
+                  ? 'a l’ecoute'
+                  : 'en veille'
+          }
+        />
+        <div className="jarvis__barre">
+          <button
+            type="button"
+            data-testid="jarvis-bascule"
+            className="jarvis__bascule"
+            aria-pressed={commande}
+            onClick={() => basculer('jarvis')}
+          >
+            {commande ? '● Écoute en cours — couper' : 'Activer l’écoute'}
+          </button>
+          {/*
           L'ENREGISTREMENT A SON PROPRE WIDGET (« Enregistrements ») : il ECRIT sur le disque et
           montre les fichiers déjà écrits. Le bouton n'est plus ici, mais le mode l'est encore :
           basculer sur l'enregistrement ne doit toujours RIEN envoyer à Jarvis.
         */}
-        <span className="jarvis__aide">
-          {!ecoute.active
-            ? 'Micro coupé'
-            : enregistre
-              ? `⏺ Enregistrement du transcript — ${nomJarvis} ne répond pas`
-              : ecoute.eveille
-                ? '🔊 Je vous écoute — dites votre demande'
-                : `Dites « ${nomJarvis} » : un bip vous répondra`}
-        </span>
+          <span className="jarvis__aide">
+            {!ecoute.active
+              ? 'Micro coupé'
+              : enregistre
+                ? `⏺ Enregistrement du transcript — ${nomJarvis} ne répond pas`
+                : ecoute.eveille
+                  ? '🔊 Je vous écoute — dites votre demande'
+                  : `Dites « ${nomJarvis} » : un bip vous répondra`}
+          </span>
+        </div>
       </div>
 
       {erreur ? <p className="home-error">{erreur}</p> : null}
@@ -604,6 +707,77 @@ export function JarvisWidget(): React.JSX.Element {
         </div>
       ) : null}
 
+      <details className="jarvis__audio" data-testid="jarvis-reglages">
+        <summary>Réglages de l’assistant</summary>
+        {/* Le nom saisi ici EST le titre de la tuile : une seule source, jamais deux. */}
+        <label className="jarvis__audio-champ">
+          <span>Son nom</span>
+          <input
+            type="text"
+            value={saisieNom}
+            maxLength={NOM_JARVIS_LONGUEUR_MAX}
+            data-testid="jarvis-nom"
+            onChange={(event) => changerNom(event.target.value)}
+            onBlur={() => setSaisieNom(nomJarvis)}
+          />
+        </label>
+        {/* La voix : celle du poste. Vide = l'application choisit (le francais d'abord). */}
+        <label className="jarvis__audio-champ">
+          <span>Sa voix</span>
+          <select
+            value={reglageVoix.voixURI}
+            data-testid="jarvis-voix"
+            onChange={(event) => changerReglageVoix({ voixURI: event.target.value })}
+          >
+            <option value="">Voix automatique (français si disponible)</option>
+            {voixDisponibles.map((voix) => (
+              <option key={voix.voiceURI || voix.name} value={voix.voiceURI || voix.name}>
+                {voix.name} — {voix.lang}
+              </option>
+            ))}
+          </select>
+        </label>
+        {voixDisponibles.length === 0 ? (
+          <span className="jarvis__aide" data-testid="jarvis-voix-vide">
+            Aucune voix installée sur ce poste : l’assistant écoute mais ne répondra pas à voix
+            haute.
+          </span>
+        ) : null}
+        <label className="jarvis__audio-champ">
+          <span>Débit — {reglageVoix.debit.toFixed(2)}×</span>
+          <input
+            type="range"
+            min={DEBIT_MIN}
+            max={DEBIT_MAX}
+            step={0.05}
+            value={reglageVoix.debit}
+            data-testid="jarvis-debit"
+            onChange={(event) => changerReglageVoix({ debit: Number(event.target.value) })}
+          />
+        </label>
+        <label className="jarvis__audio-champ">
+          <span>Hauteur — {reglageVoix.hauteur.toFixed(2)}×</span>
+          <input
+            type="range"
+            min={HAUTEUR_MIN}
+            max={HAUTEUR_MAX}
+            step={0.05}
+            value={reglageVoix.hauteur}
+            data-testid="jarvis-hauteur"
+            onChange={(event) => changerReglageVoix({ hauteur: Number(event.target.value) })}
+          />
+        </label>
+        <button
+          type="button"
+          className="jarvis__bascule"
+          onClick={essayerVoix}
+          data-testid="jarvis-voix-test"
+          title="Prononcer une phrase avec la voix et les réglages choisis"
+        >
+          Écouter un essai
+        </button>
+      </details>
+
       <details className="jarvis__audio" data-testid="jarvis-audio">
         <summary>Paramètres audio</summary>
         <label className="jarvis__audio-champ">
@@ -642,7 +816,11 @@ export function JarvisWidget(): React.JSX.Element {
         {ecoute.partiel || (ecoute.active ? '…' : '')}
       </p>
 
-      {envoi ? <p className="jarvis__envoi">Envoi à {nomJarvis} : « {envoi} »</p> : null}
+      {envoi ? (
+        <p className="jarvis__envoi">
+          Envoi à {nomJarvis} : « {envoi} »
+        </p>
+      ) : null}
 
       <ul className="jarvis__paroles" data-testid="jarvis-paroles">
         {/* En enregistrement, la liste EST le transcript : la tronquer a 5 lignes le perdrait. */}
