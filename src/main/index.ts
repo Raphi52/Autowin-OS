@@ -72,6 +72,7 @@ import { projectContextBlock } from './context-files'
 import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort } from './cdp-port'
 import { execFileSync } from 'node:child_process'
 import { ensureBrainServerStarted } from './brain-server-launch'
+import { startBrainCuration } from './brain-curation-run'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
 import {
@@ -4446,6 +4447,11 @@ app.whenReady().then(async () => {
   const preflightStartedAt = Date.now()
   let brainLaunch: BrainLaunchOutcome | undefined
   preflightWatchHandle = watchAppPreflight((raw) => {
+    // #1 bis - la file de candidats Brain se VIDE toute seule au demarrage. Sans ce declencheur,
+    // rien dans l'app n'executait l'etape 3 du protocole (inbox/README.md) : 109 candidats
+    // dormants mesures le 2026-09-02, dont 67 deposes le jour meme. Ne promeut que le mecanique.
+    const curation = startBrainCuration()
+    if (curation.status === 'launched') console.log('[brain-curation]', curation.detail)
     // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
     // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera
     // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
