@@ -235,3 +235,35 @@ export function removeConversationTurnJournals(root: string, conversationId: str
   rmSync(dir, { recursive: true, force: true })
   return true
 }
+
+/**
+ * Tous les tours JOURNALISÉS d'une conversation, du plus ancien au plus récent.
+ *
+ * Ajouté pour le dossier de preuve `/kaizen` : `readTurnJournal` exige un identifiant de tour, donc
+ * aucune vue dérivée ne pouvait dire « montre-moi les derniers tours de cette conversation ».
+ * Lecture seule stricte : aucun fichier créé, un dossier absent rend une liste vide.
+ */
+export function listConversationTurnIds(root: string, conversationId: string): string[] {
+  try {
+    const dir = join(root, safeSegment(conversationId))
+    if (!existsSync(dir)) return []
+    return readdirSync(dir)
+      .filter((name) => name.endsWith('.jsonl'))
+      .map((name) => ({ id: name.slice(0, -'.jsonl'.length), at: statSync(join(dir, name)).mtimeMs }))
+      .sort((a, b) => a.at - b.at)
+      .map(({ id }) => id)
+  } catch {
+    return []
+  }
+}
+
+/** Les `maxTurns` DERNIERS tours d'une conversation, avec leurs événements. */
+export function readConversationTurnJournals(
+  root: string,
+  conversationId: string,
+  maxTurns = 3
+): Array<{ turnId: string; events: TurnJournalEvent[] }> {
+  return listConversationTurnIds(root, conversationId)
+    .slice(-Math.max(0, maxTurns))
+    .map((turnId) => ({ turnId, events: readTurnJournal(root, conversationId, turnId) }))
+}

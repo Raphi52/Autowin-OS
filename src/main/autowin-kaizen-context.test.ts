@@ -382,3 +382,100 @@ describe('dossier de preuve /kaizen — ce que les journaux portent déjà', () 
     }
   })
 })
+
+/*
+  Repris de la branche de secours `run-657abec585f1-1` : les deux SEULES sources qu'elle apportait
+  en plus (son mecanisme de budget, lui, doublait celui deja en place).
+*/
+describe('dossier de preuve /kaizen — appels modele et deroule des tours', () => {
+  it("joint ce qui est REELLEMENT parti au modele, et seulement pour la conversation ciblee", () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-prompts-'))
+    mkdirSync(join(appData, 'prompt-observability'), { recursive: true })
+    const appel = (conversationId: string, response: string): string =>
+      JSON.stringify({
+        id: `call-${conversationId}`,
+        ts: '2026-09-02T10:00:00.000Z',
+        conversationId,
+        turnId: 'turn-77',
+        iteration: 2,
+        actor: 'orchestrator',
+        phase: 'build',
+        provider: 'claude',
+        model: 'opus',
+        resolvedModel: 'claude-opus-5',
+        transport: 'cli',
+        boundary: 'main',
+        limitation: 'aucune',
+        response,
+        status: 'failed',
+        error: 'error_during_execution',
+        durationMs: 4_200
+      })
+    writeFileSync(
+      join(appData, 'prompt-observability', 'conv-13.jsonl'),
+      appel('conv-13', 'REPONSE DU MODELE CIBLE') + '\n'
+    )
+    writeFileSync(
+      join(appData, 'prompt-observability', 'conv-autre.jsonl'),
+      appel('conv-autre', 'REPONSE D UNE AUTRE CONVERSATION') + '\n'
+    )
+    try {
+      const evidence = collectAutowinKaizenEvidence(
+        {
+          id: 'conv-13',
+          title: 'Appels',
+          provider: 'claude',
+          messages: [],
+          createdAt: 1,
+          updatedAt: 1
+        },
+        appData
+      )
+      expect(evidence.promptCalls?.map((call) => call.response)).toEqual([
+        'REPONSE DU MODELE CIBLE'
+      ])
+      expect(evidence.promptCalls?.[0]).toMatchObject({
+        phase: 'build',
+        resolvedModel: 'claude-opus-5',
+        status: 'failed',
+        error: 'error_during_execution',
+        durationMs: 4_200
+      })
+      const task = buildAutowinKaizenTask('/kaizen', evidence)
+      expect(task).toContain('REPONSE DU MODELE CIBLE')
+      expect(task).not.toContain('REPONSE D UNE AUTRE CONVERSATION')
+    } finally {
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+
+  it('joint le deroule des derniers tours journalises', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-tours-'))
+    mkdirSync(join(appData, 'turn-journals', 'conv-14'), { recursive: true })
+    writeFileSync(
+      join(appData, 'turn-journals', 'conv-14', 'turn-1.jsonl'),
+      [
+        JSON.stringify({ kind: 'command', name: 'verify', detail: 'CE QUE LE TOUR A FAIT' }),
+        JSON.stringify({ kind: 'done', exitCode: 0 })
+      ].join('\n') + '\n'
+    )
+    try {
+      const evidence = collectAutowinKaizenEvidence(
+        {
+          id: 'conv-14',
+          title: 'Tours',
+          provider: 'claude',
+          messages: [],
+          createdAt: 1,
+          updatedAt: 1
+        },
+        appData
+      )
+      expect(evidence.turnEvents?.map((event) => event.kind)).toEqual(['command', 'done'])
+      expect(evidence.turnEvents?.[0].turnId).toBe('turn-1')
+      expect(buildAutowinKaizenTask('/kaizen', evidence)).toContain('CE QUE LE TOUR A FAIT')
+    } finally {
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+})

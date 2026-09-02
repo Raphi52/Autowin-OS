@@ -4,6 +4,8 @@ import { ensureAutowinAppData } from './app-data'
 import { loadConvActivity, type ConvActivityEntry } from './activity/conv-activity'
 import { readBrainTraces, type BrainTrace } from './activity/brain-trace-spool'
 import { TraceStore } from './activity/trace-store'
+import { loadPromptCalls } from './activity/prompt-observability'
+import { readConversationTurnJournals } from './runs/turn-journal'
 import type { TraceEventV1 } from './activity/trace-event'
 import type { Conversation } from './store/conversations'
 import { lireSaisies, type SaisieJournalisee } from './store/journal-saisie'
@@ -16,6 +18,11 @@ const RUN_LIMIT = 4
 const RUN_CAP = 4_000
 const TOTAL_CAP = 28_000
 const REQUEST_CAP = 2_000
+const PROMPT_CALL_LIMIT = 12
+const PROMPT_CALL_CAP = 600
+const TURN_JOURNAL_LIMIT = 3
+const TURN_EVENT_LIMIT = 40
+const TURN_EVENT_CAP = 400
 const SAISIE_LIMIT = 30
 const SAISIE_CAP = 700
 /* Marge réservée au champ `troncature`, ajouté APRÈS l'ajustement au budget. */
@@ -54,6 +61,35 @@ interface KaizenCausalEvent {
   observation?: { fidelity?: string; limitation?: string }
 }
 
+/*
+  Ce qui est REELLEMENT parti au modele. La skill le declare source de premiere main, mais il
+  n'etait jamais joint : c'est le seul journal qui porte la phase reelle, le modele resolu, l'etat
+  d'echec et le message d'erreur d'un appel.
+*/
+interface KaizenPromptCall {
+  ts: string
+  turnId: string
+  iteration: number
+  actor: string
+  phase?: string
+  provider: string
+  model?: string
+  resolvedModel?: string
+  status?: string
+  error?: string
+  durationMs?: number
+  boundary: string
+  limitation: string
+  response: string
+}
+
+/** Le deroule brut d'un tour (deltas, commandes, resultats) — la survie niveau 2 du chat. */
+interface KaizenTurnEvent {
+  turnId: string
+  kind: string
+  payload: string
+}
+
 interface KaizenSaisie {
   ts: number
   voie: string
@@ -71,6 +107,8 @@ export interface AutowinKaizenEvidence {
   brainTraces: BrainTrace[]
   causalEvents: KaizenCausalEvent[]
   runs: KaizenRun[]
+  promptCalls?: KaizenPromptCall[]
+  turnEvents?: KaizenTurnEvent[]
   /** Texte tapé par l'utilisateur, y compris les orientations qui ne créent aucun tour. */
   saisies?: KaizenSaisie[]
 }
@@ -138,6 +176,50 @@ function readNativeRuns(conversationId: string, appData: string): KaizenRun[] {
   }
 }
 
+function readPromptCalls(conversationId: string, appData: string): KaizenPromptCall[] {
+  try {
+    return loadPromptCalls(conversationId, join(appData, 'prompt-observability'))
+      .slice(-PROMPT_CALL_LIMIT)
+      .map((call) => ({
+        ts: call.ts,
+        turnId: call.turnId,
+        iteration: call.iteration,
+        actor: call.actor,
+        phase: call.phase,
+        provider: call.provider,
+        model: call.model,
+        resolvedModel: call.resolvedModel,
+        status: call.status,
+        error: call.error ? clipped(call.error, PROMPT_CALL_CAP) : undefined,
+        durationMs: call.durationMs,
+        boundary: call.boundary,
+        limitation: call.limitation,
+        response: clipped(call.response ?? '', PROMPT_CALL_CAP)
+      }))
+  } catch {
+    return []
+  }
+}
+
+function readTurnEvents(conversationId: string, appData: string): KaizenTurnEvent[] {
+  try {
+    return readConversationTurnJournals(
+      join(appData, 'turn-journals'),
+      conversationId,
+      TURN_JOURNAL_LIMIT
+    )
+      .flatMap(({ turnId, events }) =>
+        events.slice(-TURN_EVENT_LIMIT).map((event) => {
+          const { kind, ...reste } = event
+          return { turnId, kind: String(kind), payload: clipped(JSON.stringify(reste), TURN_EVENT_CAP) }
+        })
+      )
+      .slice(-TURN_EVENT_LIMIT)
+  } catch {
+    return []
+  }
+}
+
 /** Collecte uniquement les preuves persistées par Autowin OS pour la conversation ciblée. */
 export function collectAutowinKaizenEvidence(
   conversation: Conversation,
@@ -171,6 +253,8 @@ export function collectAutowinKaizenEvidence(
     // `conversation.runPaths` contient des pièces externes attachées manuellement (historiquement
     // des RUN Claude). Kaizen les ignore intégralement et ne lit que les RUN natifs d'Autowin.
     runs: readNativeRuns(conversation.id, appData),
+    promptCalls: readPromptCalls(conversation.id, appData),
+    turnEvents: readTurnEvents(conversation.id, appData),
     saisies: lireSaisies(conversation.id, appData, SAISIE_LIMIT).map(compactSaisie)
   }
 }
@@ -186,6 +270,8 @@ interface KaizenSnapshot {
   brainTraces: BrainTrace[]
   causalEvents: KaizenCausalEvent[]
   runs: KaizenRun[]
+  promptCalls: KaizenPromptCall[]
+  turnEvents: KaizenTurnEvent[]
   saisies: KaizenSaisie[]
   troncature?: Record<string, number>
 }
@@ -203,6 +289,8 @@ function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<strin
     { nom: 'causalEvents', liste: snapshot.causalEvents, retirerEnTete: true },
     { nom: 'runs', liste: snapshot.runs, retirerEnTete: true },
     { nom: 'saisies', liste: snapshot.saisies, retirerEnTete: true },
+    { nom: 'turnEvents', liste: snapshot.turnEvents, retirerEnTete: true },
+    { nom: 'promptCalls', liste: snapshot.promptCalls, retirerEnTete: true },
     // `readBrainTraces` trie du plus récent au plus ancien : ici le plus vieux est en QUEUE.
     { nom: 'brainTraces', liste: snapshot.brainTraces, retirerEnTete: false }
   ]
@@ -264,6 +352,8 @@ export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenE
     brainTraces: evidence.brainTraces.slice(0, 30),
     causalEvents: evidence.causalEvents.slice(-TRACE_LIMIT),
     runs: evidence.runs.slice(-RUN_LIMIT),
+    promptCalls: (evidence.promptCalls ?? []).slice(-PROMPT_CALL_LIMIT),
+    turnEvents: (evidence.turnEvents ?? []).slice(-TURN_EVENT_LIMIT),
     saisies: (evidence.saisies ?? []).slice(-SAISIE_LIMIT)
   }
 
