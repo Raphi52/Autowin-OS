@@ -18,6 +18,8 @@ import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
  * trou noir de 44 secondes reviendrait sans bruit.
  */
 
+// La ZONE du process principal, pas un chemin : le fenetrage a quitte `index.ts` pour
+// `window.ts` le 2026-09-02 et ces controles rougissaient sans qu'aucun cablage n'ait change.
 const source = sourceProcessPrincipal()
 
 describe('démarrage — la fenêtre n’attend plus la migration', () => {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { zoneDuTourDeChat } from './source-process-principal.test-helpers'
 
 /**
  * LES ÉTIQUETTES D'ACTION SONT UN DERNIER RECOURS — deux garanties qui ne valent qu'ENSEMBLE.
@@ -18,7 +17,9 @@ import { join } from 'node:path'
  * chargement). C'est un pis-aller assumé : il vérifie l'ORDRE des replis, pas leur effet. La mesure
  * sur l'app reste l'autorité.
  */
-const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+// La ZONE du tour de chat, pas un chemin : ce code a quitte `index.ts` pour
+// `chat/run-pilot-chat.ts` le 2026-09-02.
+const source = zoneDuTourDeChat()
 
 describe('étiquettes d’action : dernier recours, jamais devant une vraie réponse', () => {
   it('les étiquettes ne sont PAS poussées dans le tampon du texte parlé', () => {

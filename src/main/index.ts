@@ -22,6 +22,7 @@ import { registerModelsIpc } from './ipc/models'
 import { registerFabricIpc } from './ipc/fabric'
 import { registerCapabilitiesIpc } from './ipc/capabilities'
 import { registerWorkflowProfilesIpc } from './ipc/workflow-profiles'
+import { registerChatArtifactsIpc } from './ipc/chat-artifacts'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -261,14 +262,7 @@ import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './journal-arrets'
 import { consommerReprise } from './redemarrage-reprise'
-import {
-  ChatArtifactPreviewBudget,
-  MAX_ARTIFACT_PREVIEW_BYTES,
-  materializeChatArtifact,
-  readConversationArtifact,
-  removeConversationArtifacts,
-  revealableConversationArtifactPath
-} from './store/chat-artifact-store'
+import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import { BrainSearchCoordinator } from './viz/brain-search-coordinator'
@@ -599,8 +593,6 @@ let autoKaizenSupervisor: AutoKaizenSupervisor | undefined
  */
 const AUTO_KAIZEN_SUPERVISOR_ENABLED = legacyAutoKaizenSupervisorEnabled(process.env)
 const pendingScheduledOccurrences = new Set<string>()
-const chatArtifactPreviewBudget = new ChatArtifactPreviewBudget()
-const budgetedArtifactRenderers = new Set<number>()
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
 /** Réveille les règles Watchdog sur un incident interne. Volontairement best-effort. */
@@ -2361,59 +2353,8 @@ Le fil reprend ensuite normalement.`
       isolatedConversationReadCount += 1
     }
   })
-  ipcMain.handle(
-    'os:chatArtifact:read',
-    (event, rawConversationId: unknown, rawTurnId: unknown, rawArtifactId: unknown) => {
-      assertTrustedRendererSender(event, 'Chat artifact')
-      const conversationId = guardString(rawConversationId, 'conversationId')
-      const turnId = guardString(rawTurnId, 'turnId')
-      const artifactId = guardString(rawArtifactId, 'artifactId')
-      if (!budgetedArtifactRenderers.has(event.sender.id)) {
-        budgetedArtifactRenderers.add(event.sender.id)
-        event.sender.once('destroyed', () => {
-          chatArtifactPreviewBudget.clearRenderer(event.sender.id)
-          budgetedArtifactRenderers.delete(event.sender.id)
-        })
-      }
-      const scope = `${event.sender.id}:${conversationId}`
-      const artifactBudgetId = `${turnId}\u0000${artifactId}`
-      const remaining = Math.min(
-        MAX_ARTIFACT_PREVIEW_BYTES,
-        chatArtifactPreviewBudget.remaining(scope, artifactBudgetId)
-      )
-      const result = readConversationArtifact(
-        os.conversations.get(conversationId),
-        turnId,
-        artifactId,
-        undefined,
-        remaining
-      )
-      if (
-        result.ok &&
-        !chatArtifactPreviewBudget.reserve(scope, artifactBudgetId, result.artifact?.size ?? 0)
-      ) {
-        return { ok: false, artifact: result.artifact, error: 'Budget cumulé des aperçus atteint' }
-      }
-      return result
-    }
-  )
-  ipcMain.handle(
-    'os:chatArtifact:reveal',
-    (event, rawConversationId: unknown, rawTurnId: unknown, rawArtifactId: unknown) => {
-      assertTrustedRendererSender(event, 'Chat artifact')
-      const conversationId = guardString(rawConversationId, 'conversationId')
-      const turnId = guardString(rawTurnId, 'turnId')
-      const artifactId = guardString(rawArtifactId, 'artifactId')
-      const path = revealableConversationArtifactPath(
-        os.conversations.get(conversationId),
-        turnId,
-        artifactId
-      )
-      if (!path) return { ok: false, error: 'Artefact introuvable' }
-      shell.showItemInFolder(path)
-      return { ok: true }
-    }
-  )
+  // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
+  registerChatArtifactsIpc({ os })
 
   // Les canaux du Brain (graphe 3D, recherche, boite de reception) vivent dans
   // src/main/ipc/brain.ts.
