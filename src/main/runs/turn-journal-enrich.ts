@@ -40,6 +40,26 @@ function measures(input: Record<string, unknown>): Record<string, unknown> {
 /** Ce qu'un tour doit retenir entre deux appels pour ne pas ré-écrire le même prompt système. */
 export interface PromptJournalMemory {
   system?: string
+  /** Dernière demande utilisateur DÉJÀ écrite dans ce tour — une itération ne la répète pas. */
+  userText?: string
+}
+
+/**
+ * DERNIER message utilisateur porteur de texte, ou chaîne vide.
+ *
+ * `messages` est volontairement typé `unknown[]` dans `PromptCallLike` (ce point d'écriture accepte
+ * n'importe quel adaptateur) : on ne suppose donc rien de la forme et on ne retient qu'un
+ * `{ role: 'user', content: string }`. Un contenu déjà structuré (blocs, images) n'est pas la
+ * demande TAPÉE et n'a rien à faire ici.
+ */
+function derniereDemandeUtilisateur(messages: unknown[]): string {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i] as { role?: unknown; content?: unknown } | undefined
+    if (message?.role !== 'user') continue
+    const content = message.content
+    if (typeof content === 'string' && content.trim()) return content
+  }
+  return ''
 }
 
 export interface PromptCallLike {
@@ -75,6 +95,24 @@ export function promptCallJournalEvents(
   const prompt = event.prompt
   if (!prompt) return []
   const out: TurnJournalEvent[] = []
+  /*
+   * LA DEMANDE, PAS SON COMPTE. `prompt-call` n'écrivait que `messages: <nombre>` : sur les 394
+   * journaux de tour réels, ZÉRO ligne `"kind":"user"` — le texte tapé ne vivait que dans
+   * `saisies-utilisateur.jsonl`, sans identifiant de tour. Le journal ne pouvait donc pas dire ce
+   * qui avait été demandé au tour X. Écrit UNE fois par tour (mémoire ci-dessus), en TÊTE de
+   * l'appel pour respecter la chronologie, et passé au même filtre de secrets que le reste.
+   */
+  const demande = derniereDemandeUtilisateur(prompt.messages)
+  if (demande && demande !== memory.userText) {
+    memory.userText = demande
+    out.push({
+      kind: 'user',
+      iteration: event.iteration ?? 0,
+      chars: demande.length,
+      text: sanitizePersistedValue(demande),
+      at
+    })
+  }
   const system = prompt.system ?? ''
   if (system && system !== memory.system) {
     memory.system = system

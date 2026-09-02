@@ -36,10 +36,11 @@ const promptCall = (over: Partial<PromptCallLike> = {}): PromptCallLike => ({
 describe('journal de tour — ce que l Observatory savait et que le log ignorait', () => {
   it('ecrit le prompt systeme, les options, l usage et le modele resolu', () => {
     const events = promptCallJournalEvents(promptCall(), {}, 111)
-    expect(events.map((e) => e.kind)).toEqual(['prompt-system', 'prompt-call'])
-    expect(events[0].text).toBe('TU ES AUTOWIN')
-    expect(events[0].blocks).toEqual([{ name: 'discipline', chars: 12 }])
-    const call = events[1] as Record<string, unknown>
+    // `user` en tete depuis le 2026-09-02 : la demande TAPEE est ecrite avant l'appel qu'elle declenche.
+    expect(events.map((e) => e.kind)).toEqual(['user', 'prompt-system', 'prompt-call'])
+    expect(events[1].text).toBe('TU ES AUTOWIN')
+    expect(events[1].blocks).toEqual([{ name: 'discipline', chars: 12 }])
+    const call = events[2] as Record<string, unknown>
     expect(call.provider).toBe('anthropic')
     expect(call.resolvedModel).toBe('claude-opus-5')
     expect(call.usage).toMatchObject({ costUsd: 0.02, inputTokens: 10 })
@@ -49,7 +50,7 @@ describe('journal de tour — ce que l Observatory savait et que le log ignorait
   })
 
   it('masque les secrets des options provider', () => {
-    const [, call] = promptCallJournalEvents(promptCall(), {}, 1)
+    const [, , call] = promptCallJournalEvents(promptCall(), {}, 1)
     expect((call.options as Record<string, unknown>).apiKey).toBe('[masqué]')
     expect((call.options as Record<string, unknown>).reasoningEffort).toBe('high')
   })
@@ -70,7 +71,7 @@ describe('journal de tour — ce que l Observatory savait et que le log ignorait
   })
 
   it('journalise un appel echoue avec son erreur', () => {
-    const [, call] = promptCallJournalEvents(
+    const [, , call] = promptCallJournalEvents(
       promptCall({ status: 'failed', error: '429 overloaded', response: '' }),
       {},
       1
