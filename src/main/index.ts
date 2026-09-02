@@ -23,6 +23,7 @@ import { registerFabricIpc } from './ipc/fabric'
 import { registerCapabilitiesIpc } from './ipc/capabilities'
 import { registerWorkflowProfilesIpc } from './ipc/workflow-profiles'
 import { registerChatArtifactsIpc } from './ipc/chat-artifacts'
+import { registerSkillsIpc } from './ipc/skills'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -195,7 +196,6 @@ import {
   behaviourRendererOptions
 } from './ipc-senders'
 import { createWindowing } from './window'
-import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { ModelQuestionHub, type ModelQuestion } from './model-questions'
 import {
   discoverImportedModels,
@@ -1600,10 +1600,8 @@ Le fil reprend ensuite normalement.`
     if (reset === true) isolatedConversationReadCount = 0
     return count
   })
-  ipcMain.handle('skills:registry:list', (event) => {
-    assertTrustedRendererSender(event, 'Skills')
-    return discoverConfiguredSkillRegistry(join(app.getPath('userData'), 'skill-sources.json'))
-  })
+  // Le canal de l'inventaire des skills vit dans src/main/ipc/skills.ts.
+  registerSkillsIpc({ skillSourcesPath: join(app.getPath('userData'), 'skill-sources.json') })
   registerProvidersIpc({ os, providerStateStore })
   // Les canaux des comptes Claude multiples vivent dans src/main/ipc/claude-accounts.ts.
   registerClaudeAccountsIpc({ os, claudeAccounts })
