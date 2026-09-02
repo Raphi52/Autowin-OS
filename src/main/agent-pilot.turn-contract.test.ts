@@ -42,6 +42,17 @@ const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   conversationsCount: 0
 })
 
+/**
+ * Le corps du tour de chat a ete SORTI de `src/main/index.ts` vers `src/main/chat/run-pilot-chat.ts`
+ * (deplacement mecanique, comportement inchange). Ces contrats lisent donc les DEUX fichiers : le
+ * cablage reste dans `index.ts`, la logique du tour vit dans le module extrait.
+ */
+const sourceDuTourDeChat = (): string =>
+  [
+    readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8'),
+    readFileSync(join(process.cwd(), 'src/main/chat/run-pilot-chat.ts'), 'utf8')
+  ].join('\n')
+
 describe('AgentPilot turn contract', () => {
   it('reinjecte une capture de commande comme image ephemere a iteration suivante', async () => {
     const calls: Array<Array<{ role: string; content: string; attachments?: unknown[] }>> = []
@@ -370,7 +381,7 @@ describe('AgentPilot turn contract', () => {
   })
 
   it('does not pass an authority mode from the real pilotChat IPC path', () => {
-    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const source = sourceDuTourDeChat()
     expect(source).toContain(
       'const supervisedSignal = os.executionSupervisor.currentSignal() ?? controller.signal'
     )
@@ -378,7 +389,7 @@ describe('AgentPilot turn contract', () => {
   })
 
   it('journals the routed model and reasoning effort used by pilotChat', () => {
-    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const source = sourceDuTourDeChat()
     expect(source).toContain('turnPromptIdentity ??= {')
     const activityBlock = source.match(
       /appendConvActivity\(conversationId, \{[\s\S]*?kind: 'chat',[\s\S]*?\}\)/
@@ -394,7 +405,7 @@ describe('AgentPilot turn contract', () => {
   })
 
   it('journalise aussi le modele concret rapporte par le provider', () => {
-    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const source = sourceDuTourDeChat()
     const promptCallBlock = source.match(
       /const promptCall = appendPromptCall\(\{[\s\S]*?\n\s*\}\)/
     )?.[0]
