@@ -1470,3 +1470,138 @@
   line-height: 1.45;
   color: var(--text-dim);
 }
+
+/* ================================================================================================
+   L'ANNEAU — la signature du poste. Couronnes concentriques SVG (arcs mesures en degres via
+   pathLength=360), graduations, un arc ambre isole, le nom au centre.
+
+   REGLE DE VERITE : les couronnes de DECOR tournent toujours (le poste est sous tension) ;
+   l'arc d'ETAT reste eteint et immobile tant que le micro est coupe. Verrouille par
+   jarvis-anneau.css.test.ts.
+   ================================================================================================ */
+.jarvis__tete {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.jarvis__anneau {
+  position: relative;
+  flex: 0 0 auto;
+  width: 112px;
+  height: 112px;
+}
+
+.jarvis__anneau-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: none;
+  stroke-linecap: butt;
+}
+
+.jarvis__anneau-graduations {
+  stroke: rgba(0, 214, 255, 0.5);
+  stroke-width: 4;
+  transform-origin: 50% 50%;
+  animation: jarvis-anneau-horaire 44s linear infinite;
+}
+
+.jarvis__anneau-arcs {
+  stroke: rgba(0, 214, 255, 0.75);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 3px rgba(0, 214, 255, 0.55));
+  transform-origin: 50% 50%;
+  animation: jarvis-anneau-horaire 18s linear infinite;
+}
+
+.jarvis__anneau-ambre {
+  stroke: #d4a94f;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 4px rgba(212, 169, 79, 0.6));
+  transform-origin: 50% 50%;
+  animation: jarvis-anneau-antihoraire 11s linear infinite;
+}
+
+/* Micro COUPE : l'arc d'etat est un trait mort, sans halo et sans rotation. */
+.jarvis__anneau-etat {
+  stroke: rgba(0, 214, 255, 0.16);
+  stroke-width: 1.5;
+  transform-origin: 50% 50%;
+}
+
+.jarvis__anneau-coeur {
+  fill: rgba(3, 9, 17, 0.72);
+  stroke: rgba(0, 214, 255, 0.28);
+  stroke-width: 1;
+}
+
+/* Micro OUVERT, et seulement la : l'arc d'etat s'allume, tourne et respire. */
+.jarvis[data-ecoute='true'] .jarvis__anneau-etat {
+  stroke: var(--cyan);
+  stroke-width: 2.5;
+  animation:
+    jarvis-anneau-horaire 3.6s linear infinite,
+    jarvis-anneau-souffle 1.6s ease-in-out infinite;
+}
+
+@keyframes jarvis-anneau-horaire {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes jarvis-anneau-antihoraire {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes jarvis-anneau-souffle {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.jarvis__anneau-texte {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+}
+
+.jarvis__anneau-texte > strong {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  color: #eaf7ff;
+  text-shadow: 0 0 9px rgba(0, 214, 255, 0.55);
+}
+
+.jarvis__anneau-texte > span {
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.jarvis[data-ecoute='true'] .jarvis__anneau-texte > span {
+  color: var(--cyan);
+}
+
+/* La commande occupe la place restante a droite de l'anneau. */
+.jarvis__tete > .jarvis__barre {
+  flex: 1 1 auto;
+  min-width: 0;
+}
