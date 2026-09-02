@@ -25,6 +25,7 @@ import type {
 import type { TicketGetIpcRequest, TicketUpdateIpcRequest } from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { EtatWhisper } from '../main/whisper-local'
+import type { EtatPiper } from '../main/piper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
 import type { BrainGraphRef, BrainTheme } from '../main/viz/fs-brains'
@@ -423,6 +424,11 @@ const api = {
   whisperInstaller: (): Promise<EtatWhisper> => ipcRenderer.invoke('os:whisper:installer'),
   whisperTranscrire: (wav: Uint8Array): Promise<string> =>
     ipcRenderer.invoke('os:whisper:transcrire', wav),
+  // Voix NEURONALE locale (Piper) : téléchargée sur clic, prononcée hors ligne ensuite.
+  piperEtat: (): Promise<EtatPiper> => ipcRenderer.invoke('os:piper:etat'),
+  piperInstaller: (): Promise<EtatPiper> => ipcRenderer.invoke('os:piper:installer'),
+  piperParler: (texte: string): Promise<Uint8Array> =>
+    ipcRenderer.invoke('os:piper:parler', texte),
   // Enregistrements parlés : la fenêtre ne connaît qu'un identifiant de session, jamais un chemin.
   transcriptDemarrer: (): Promise<{ id: string; nom: string; chemin: string }> =>
     ipcRenderer.invoke('os:transcript:demarrer'),

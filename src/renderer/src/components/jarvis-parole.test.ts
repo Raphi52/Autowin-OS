@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { choisirVoix, parler, taireJarvis } from './jarvis-parole'
+import { choisirVoix, oublierEtatPiper, parler, taireJarvis } from './jarvis-parole'
 import { ecrireReglageVoix } from './jarvis-voix-reglage'
 import { basculerEcoute, ecouteInitiale, phraseDeJarvis } from './jarvis-voice'
 
@@ -71,22 +71,22 @@ describe('la voix locale', () => {
     expect(choisirVoix([])).toBeNull()
   })
 
-  it('prononce avec la voix française et annule la phrase précédente', () => {
+  it('prononce avec la voix française et annule la phrase précédente', async () => {
     const moteur = poserMoteur([voix('en-US', true), voix('fr-FR')])
-    expect(parler('Tout de suite.')).toBe(true)
+    expect(await parler('Tout de suite.')).toBe(true)
     expect(moteur.cancel).toHaveBeenCalledTimes(1)
     const dit = moteur.speak.mock.calls[0][0] as SpeechSynthesisUtterance
     expect(dit.text).toBe('Tout de suite.')
     expect(dit.lang).toBe('fr-FR')
   })
 
-  it('ne casse rien quand le poste n’a aucune synthèse vocale', () => {
-    expect(parler('Tout de suite.')).toBe(false)
+  it('ne casse rien quand le poste n’a aucune synthèse vocale', async () => {
+    expect(await parler('Tout de suite.')).toBe(false)
   })
 
-  it('ne prononce pas une phrase vide', () => {
+  it('ne prononce pas une phrase vide', async () => {
     const moteur = poserMoteur([voix('fr-FR')])
-    expect(parler('   ')).toBe(false)
+    expect(await parler('   ')).toBe(false)
     expect(moteur.speak).not.toHaveBeenCalled()
   })
 })
@@ -106,7 +106,7 @@ describe('la voix CHOISIE dans les reglages', () => {
     expect(choisirVoix([nommee('Hortense', 'fr-FR')], 'Disparue')?.name).toBe('Hortense')
   })
 
-  it('prononce avec le debit et la hauteur enregistres', () => {
+  it('prononce avec le debit et la hauteur enregistres', async () => {
     const g = globalThis as unknown as { localStorage?: Storage }
     const data: Record<string, string> = {}
     g.localStorage = {
@@ -117,11 +117,102 @@ describe('la voix CHOISIE dans les reglages', () => {
     } as unknown as Storage
     ecrireReglageVoix(g.localStorage, { voixURI: 'Zira', debit: 1.4, hauteur: 1.2 })
     const moteur = poserMoteur([nommee('Hortense', 'fr-FR'), nommee('Zira', 'en-US')])
-    expect(parler('Essai.')).toBe(true)
+    expect(await parler('Essai.')).toBe(true)
     const dit = moteur.speak.mock.calls[0][0] as SpeechSynthesisUtterance
     expect(dit.voice?.name).toBe('Zira')
     expect(dit.rate).toBe(1.4)
     expect(dit.pitch).toBe(1.2)
     delete g.localStorage
+  })
+})
+
+describe('la voix NEURONALE (Piper) quand elle est installée', () => {
+  interface FauxSon {
+    pause: ReturnType<typeof vi.fn>
+    play: ReturnType<typeof vi.fn>
+    src: string
+  }
+  const sons: FauxSon[] = []
+
+  function poserPiper(installe: boolean, parle?: () => Promise<Uint8Array>): void {
+    const g = globalThis as unknown as Record<string, unknown>
+    g.api = {
+      piperEtat: async () => ({ installe }),
+      piperParler: parle ?? (async () => new Uint8Array([82, 73, 70, 70]))
+    }
+    g.Blob = class {
+      constructor(public parts: unknown[]) {}
+    }
+    g.URL = { createObjectURL: () => 'blob:voix', revokeObjectURL: vi.fn() }
+    g.Audio = class {
+      pause = vi.fn()
+      play = vi.fn(() => Promise.resolve())
+      constructor(public src: string) {
+        sons.push(this as unknown as FauxSon)
+      }
+    }
+  }
+
+  afterEach(() => {
+    sons.length = 0
+    const g = globalThis as unknown as Record<string, unknown>
+    delete g.api
+    delete g.Blob
+    delete g.URL
+    delete g.Audio
+    oublierEtatPiper()
+  })
+
+  it('parle avec Piper, et NE double PAS avec la voix du système', async () => {
+    const moteur = poserMoteur([voix('fr-FR')])
+    poserPiper(true)
+    expect(await parler('Tout de suite.')).toBe(true)
+    expect(sons).toHaveLength(1)
+    expect(sons[0].play).toHaveBeenCalled()
+    // Le défaut évité : deux voix qui parlent en même temps.
+    expect(moteur.speak).not.toHaveBeenCalled()
+  })
+
+  it('retombe sur la voix du système quand Piper n’est PAS installé', async () => {
+    const moteur = poserMoteur([voix('fr-FR')])
+    poserPiper(false)
+    expect(await parler('Tout de suite.')).toBe(true)
+    expect(sons).toHaveLength(0)
+    expect(moteur.speak).toHaveBeenCalledTimes(1)
+  })
+
+  it('retombe sur la voix du système quand la synthèse ÉCHOUE : Jarvis ne se tait pas', async () => {
+    const moteur = poserMoteur([voix('fr-FR')])
+    poserPiper(true, async () => {
+      throw new Error('piper a échoué (code 1)')
+    })
+    expect(await parler('Tout de suite.')).toBe(true)
+    expect(moteur.speak).toHaveBeenCalledTimes(1)
+  })
+
+  it('SE TAIT vraiment : la voix Piper en cours est coupée, pas seulement celle du système', async () => {
+    // Le défaut fermé ici : `taireJarvis` n'annulait que `speechSynthesis`. Micro déjà éteint,
+    // Jarvis finissait quand même sa phrase neuronale.
+    const moteur = poserMoteur([voix('fr-FR')])
+    poserPiper(true)
+    await parler('Tout de suite.')
+    taireJarvis()
+    expect(sons[0].pause).toHaveBeenCalledTimes(1)
+    expect(moteur.cancel).toHaveBeenCalled()
+  })
+
+  it('ne joue PAS une phrase annulée pendant sa synthèse', async () => {
+    // La synthèse neuronale prend un instant. Sans numéro de phrase, une réplique demandée puis
+    // annulée revenait de l'application et se jouait APRÈS le silence.
+    poserMoteur([voix('fr-FR')])
+    let libere: ((son: Uint8Array) => void) | null = null
+    poserPiper(true, () => new Promise<Uint8Array>((r) => (libere = r)))
+    const enCours = parler('Tout de suite.')
+    // On attend que la synthèse soit RÉELLEMENT partie : couper avant elle ne prouverait rien.
+    while (libere === null) await new Promise((r) => setTimeout(r, 0))
+    taireJarvis()
+    ;(libere as (son: Uint8Array) => void)(new Uint8Array([82, 73, 70, 70]))
+    await enCours
+    expect(sons).toHaveLength(0)
   })
 })

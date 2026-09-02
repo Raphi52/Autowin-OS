@@ -3,6 +3,7 @@ import { observerLeMoteur } from './observer-les-sources'
 import { spawn } from 'node:child_process'
 import { readGitGraph } from './git-graph-main'
 import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
+import { creerServicePiper, racinePiper, type ServicePiper } from './piper-local'
 import { ServiceTranscripts, dossierTranscripts } from './transcripts'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
@@ -565,6 +566,14 @@ instrumenterEntreesSortiesDuMain()
 let whisperMemo: ServiceWhisper | null = null
 const serviceWhisper = (): ServiceWhisper =>
   (whisperMemo ??= creerServiceWhisper({ racine: racineWhisper(app.getPath('userData')) }))
+
+/**
+ * La voix neuronale hors ligne (Piper), construite PARESSEUSEMENT elle aussi : tant que
+ * l'utilisateur ne l'a pas installée, elle ne fait que lire un dossier et ne coûte rien.
+ */
+let piperMemo: ServicePiper | null = null
+const servicePiper = (): ServicePiper =>
+  (piperMemo ??= creerServicePiper({ racine: racinePiper(app.getPath('userData')) }))
 
 /**
  * Les enregistrements parlés, eux aussi construits PARESSEUSEMENT : tant que personne n'appuie sur
@@ -5841,6 +5850,30 @@ Le fil reprend ensuite normalement.`
     // Un WAV de 15 s à 16 kHz/16 bits pèse ~480 Ko : au-delà de 8 Mo, ce n'est plus un segment.
     if (octets.byteLength > 8_000_000) throw new Error('Segment audio trop volumineux')
     return serviceWhisper().transcrire(octets)
+  })
+
+  /**
+   * LA VOIX DE JARVIS EN QUALITÉ NEURONALE (Piper). Les voix de `speechSynthesis` sont celles
+   * DÉJÀ installées sur le poste : leur qualité est un plafond que ni le débit ni la hauteur ne
+   * dépassent. Ces trois canaux exposent une voix française téléchargée UNE fois sur un clic, puis
+   * prononcée en local — plus aucun réseau à l'usage. Rien n'est un préalable : sans installation,
+   * `etat().installe` est faux et la fenêtre reparle avec la voix du système.
+   */
+  ipcMain.handle('os:piper:etat', (event) => {
+    assertTrustedRendererSender(event, 'Piper état')
+    return servicePiper().etat()
+  })
+  ipcMain.handle('os:piper:installer', async (event) => {
+    assertTrustedRendererSender(event, 'Piper installation')
+    return servicePiper().installer()
+  })
+  ipcMain.handle('os:piper:parler', async (event, texte: unknown) => {
+    assertTrustedRendererSender(event, 'Piper synthèse')
+    const phrase = guardString(texte, 'texte')
+    // Une phrase d'assistant fait quelques dizaines de mots : au-delà, ce n'est plus une réponse
+    // parlée, c'est une lecture de document qui occuperait le processeur pour rien.
+    if (phrase.length > 1_000) throw new Error('Phrase trop longue pour être prononcée')
+    return servicePiper().synthetiser(phrase)
   })
 
   /**

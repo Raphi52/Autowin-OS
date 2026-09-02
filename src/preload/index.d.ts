@@ -16,6 +16,7 @@ import type {
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { EtatWhisper } from '../main/whisper-local'
+import type { EtatPiper } from '../main/piper-local'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
 import type { BrainGraphRef, BrainTheme } from '../main/viz/fs-brains'
@@ -351,6 +352,9 @@ interface ChatApi {
   whisperEtat: () => Promise<EtatWhisper>
   whisperInstaller: () => Promise<EtatWhisper>
   whisperTranscrire: (wav: Uint8Array) => Promise<string>
+  piperEtat: () => Promise<EtatPiper>
+  piperInstaller: () => Promise<EtatPiper>
+  piperParler: (texte: string) => Promise<Uint8Array>
   transcriptDemarrer: () => Promise<{ id: string; nom: string; chemin: string }>
   transcriptAjouter: (id: string, texte: string) => Promise<{ octets: number }>
   transcriptTerminer: (id: string) => Promise<{ chemin: string } | null>

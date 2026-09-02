@@ -523,6 +523,41 @@ describe('widget Jarvis', () => {
       expect(c.textContent).toContain('Écoute locale prête')
     })
 
+    it('propose la VOIX neuronale tant qu’elle est absente, et l’annonce une fois installée', async () => {
+      // Ce que ce test ferme : la demande d'origine (« des voix plus sympa ») ne se règle pas au
+      // débit ni à la hauteur — les voix de Windows sont le plafond du poste. Le bouton doit
+      // exister, dire son poids AVANT le clic, et disparaître une fois la voix installée.
+      const etatVoix = (installe: boolean) => ({
+        installe,
+        binaire: installe ? 'C:/p/piper.exe' : null,
+        voix: installe ? 'C:/p/fr.onnx' : null,
+        racine: 'C:/p',
+        voixNom: 'fr_FR-siwis-medium.onnx',
+        megaoctets: 85
+      })
+      const piperInstaller = vi.fn(async () => etatVoix(true))
+      brancherWhisper(true, { piperEtat: vi.fn(async () => etatVoix(false)), piperInstaller })
+      const c = rendre()
+      await flush()
+      const bouton = c.querySelector('[data-testid="jarvis-installer-piper"]')
+      expect(bouton).not.toBeNull()
+      // Le poids est écrit AVANT le clic : rien ne descend sans que l'utilisateur sache combien.
+      expect(bouton?.textContent).toContain('85 Mo')
+      clic(c, 'jarvis-installer-piper')
+      await flush()
+      expect(piperInstaller).toHaveBeenCalledTimes(1)
+      expect(c.querySelector('[data-testid="jarvis-installer-piper"]')).toBeNull()
+      expect(c.textContent).toContain('Voix française installée')
+    })
+
+    it('n’offre RIEN sur la voix tant que l’application ne sait pas répondre', async () => {
+      // Sans cette garde, un poste où le canal n'existe pas afficherait un bouton mort.
+      brancherWhisper(true)
+      const c = rendre()
+      await flush()
+      expect(c.querySelector('[data-testid="jarvis-installer-piper"]')).toBeNull()
+    })
+
     it('ÉCOUTE par whisper local — pas par le moteur Chromium — dès qu’il est installé', async () => {
       // LE DÉFAUT D'ORIGINE : `webkitSpeechRecognition` rend `error: network` dans Electron, donc
       // le micro s'ouvrait et rien n'était jamais reconnu. L'entrée qui casserait un faux fix :
