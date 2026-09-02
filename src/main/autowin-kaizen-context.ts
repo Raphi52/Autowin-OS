@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 import { loadConvActivity, type ConvActivityEntry } from './activity/conv-activity'
@@ -14,6 +14,9 @@ const TRACE_LIMIT = 80
 const RUN_LIMIT = 4
 const RUN_CAP = 4_000
 const TOTAL_CAP = 28_000
+const REQUEST_CAP = 2_000
+/* Marge réservée au champ `troncature`, ajouté APRÈS l'ajustement au budget. */
+const TRONCATURE_MARGE = 160
 
 interface KaizenConversation {
   id: string
@@ -65,13 +68,22 @@ function readNativeRuns(conversationId: string, appData: string): KaizenRun[] {
   const root = join(appData, 'runs', conversationId)
   try {
     if (!existsSync(root)) return []
+    /*
+      Le tri était ALPHABÉTIQUE (`.sort()`) alors que `slice(-RUN_LIMIT)` prétend garder les
+      derniers : les dossiers de run sont nommés d'après le prompt (`frame-…`, `scout-…`), donc
+      leur ordre alphabétique n'a aucun rapport avec leur ordre chronologique. Sur conv-105, le
+      run le plus ancien (`scout-…`) sortait DERNIER et le plus récent pouvait être jeté, en
+      silence. On trie donc sur la date de dernière écriture du RUN.md, puis on rend du plus
+      ancien au plus récent pour garder l'ordre de lecture.
+    */
     return readdirSync(root, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => join(root, entry.name, 'RUN.md'))
       .filter(existsSync)
-      .sort()
+      .map((path) => ({ path, mtimeMs: statSync(path).mtimeMs }))
+      .sort((a, b) => a.mtimeMs - b.mtimeMs || a.path.localeCompare(b.path))
       .slice(-RUN_LIMIT)
-      .map((path) => ({ path, content: clipped(readFileSync(path, 'utf8'), RUN_CAP) }))
+      .map(({ path }) => ({ path, content: clipped(readFileSync(path, 'utf8'), RUN_CAP) }))
   } catch {
     return []
   }
@@ -84,7 +96,15 @@ export function collectAutowinKaizenEvidence(
 ): AutowinKaizenEvidence {
   let causalEvents: TraceEventV1[] = []
   try {
-    causalEvents = new TraceStore(join(appData, 'causal-trace')).readConversation(conversation.id)
+    /*
+      Lecture BEST-EFFORT : `readConversation` est la lecture stricte, elle jette sur la première
+      ligne abîmée (`trace-store.ts:331`) et le `catch` ci-dessous vidait alors TOUTE la trace
+      causale, sans le dire. Kaizen est une vue dérivée : `readConversationBestEffort` ignore la
+      seule ligne fautive et garde les autres.
+    */
+    causalEvents = new TraceStore(
+      join(appData, 'causal-trace')
+    ).readConversationBestEffort(conversation.id)
   } catch {
     causalEvents = []
   }
@@ -103,6 +123,51 @@ export function collectAutowinKaizenEvidence(
     // des RUN Claude). Kaizen les ignore intégralement et ne lit que les RUN natifs d'Autowin.
     runs: readNativeRuns(conversation.id, appData)
   }
+}
+
+interface KaizenSnapshot {
+  source: string
+  conversation: {
+    id: string
+    title: string
+    messages: Array<{ ts: string; role: string; content: string }>
+  }
+  activity: Array<Record<string, unknown>>
+  brainTraces: BrainTrace[]
+  causalEvents: KaizenCausalEvent[]
+  runs: KaizenRun[]
+  troncature?: Record<string, number>
+}
+
+/*
+  Ajuste le dossier AVANT sa mise en JSON. La version précédente coupait le texte final
+  (`clipped(body, TOTAL_CAP)`) : la coupe tombait au milieu du JSON, le dossier devenait
+  impossible à relire et les deux phrases de consigne, placées en dernier, disparaissaient les
+  premières. On retire donc des ÉLÉMENTS entiers, dans la section la plus lourde, jusqu'à tenir.
+*/
+function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<string, number> {
+  const sections: Array<{ nom: string; liste: unknown[]; retirerEnTete: boolean }> = [
+    { nom: 'messages', liste: snapshot.conversation.messages, retirerEnTete: true },
+    { nom: 'activity', liste: snapshot.activity, retirerEnTete: true },
+    { nom: 'causalEvents', liste: snapshot.causalEvents, retirerEnTete: true },
+    { nom: 'runs', liste: snapshot.runs, retirerEnTete: true },
+    // `readBrainTraces` trie du plus récent au plus ancien : ici le plus vieux est en QUEUE.
+    { nom: 'brainTraces', liste: snapshot.brainTraces, retirerEnTete: false }
+  ]
+  const retires: Record<string, number> = {}
+  while (JSON.stringify(snapshot).length > budget) {
+    const candidates = sections.filter((section) => section.liste.length > 0)
+    if (candidates.length === 0) break
+    const cible = candidates.reduce((plusLourde, section) =>
+      JSON.stringify(section.liste).length > JSON.stringify(plusLourde.liste).length
+        ? section
+        : plusLourde
+    )
+    if (cible.retirerEnTete) cible.liste.shift()
+    else cible.liste.pop()
+    retires[cible.nom] = (retires[cible.nom] ?? 0) + 1
+  }
+  return retires
 }
 
 /** Transforme /kaizen en dossier de preuve borné, sans source ni instruction Claude. */
@@ -124,11 +189,11 @@ export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenE
     costUsd: entry.costUsd,
     text: entry.text
   }))
-  const snapshot = {
+  const snapshot: KaizenSnapshot = {
     source: 'autowin-os',
     conversation: {
       id: evidence.conversation.id,
-      title: evidence.conversation.title,
+      title: clipped(evidence.conversation.title, 200),
       messages
     },
     activity,
@@ -136,11 +201,21 @@ export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenE
     causalEvents: evidence.causalEvents.slice(-TRACE_LIMIT),
     runs: evidence.runs.slice(-RUN_LIMIT)
   }
-  const body =
-    `${request.trim() || '/kaizen'}\n\n` +
-    `=== DOSSIER DE PREUVE AUTOWIN OS ===\n${JSON.stringify(snapshot)}\n` +
-    `=== FIN DU DOSSIER ===\n` +
+
+  const entete = `${clipped(request.trim(), REQUEST_CAP) || '/kaizen'}
+
+=== DOSSIER DE PREUVE AUTOWIN OS ===
+`
+  const pied =
+    `
+=== FIN DU DOSSIER ===
+` +
     `Audite cette conversation et les mécanismes Autowin qui l'ont produite. ` +
     `Reste strictement en lecture seule et rends uniquement des propositions vérifiables à faire approuver.`
-  return clipped(body, TOTAL_CAP)
+  const budget = TOTAL_CAP - entete.length - pied.length - TRONCATURE_MARGE
+  const retires = ajusterAuBudget(snapshot, budget)
+  // Ce qui a été retiré est DIT : un dossier amputé en silence se lit comme un dossier complet.
+  if (Object.keys(retires).length > 0) snapshot.troncature = retires
+
+  return `${entete}${JSON.stringify(snapshot)}${pied}`
 }
