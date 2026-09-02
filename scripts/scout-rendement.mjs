@@ -35,7 +35,12 @@ if (!Array.isArray(convs) || convs.length === 0) {
 // Marqueurs de REPRISE : l'utilisateur signale que le tour precedent n'a pas livre.
 const REWORK = [
   /\btoujours pas\b/i, /\bca marche (pas|toujours pas)\b/i, /\bc'?est pas (ca|bon)\b/i,
-  /\bnon,? /i, /\brefais\b/i, /\bencore\b.*\bpareil\b/i, /\bmarche pas\b/i,
+  // `non` ne compte QU'EN TETE de message (« non, … », « non ça marche pas »). L'ancien motif
+  // `\bnon,? ` matchait le « non » ADJECTIF au milieu d'une phrase — « travaux non publiés »,
+  // « fichier non suivi », « reste non commité » —, et le prompt automatique de /salvage porte
+  // justement cette formule : 20 des 27 « reprises » du corpus etaient des faux positifs, qui
+  // gonflaient aussi le score de gaspillage (pondere par le taux de reprise).
+  /^\s*non\b[\s,.!:]/i, /\brefais\b/i, /\bencore\b.*\bpareil\b/i, /\bmarche pas\b/i,
   /\btu n'?as pas\b/i, /\bje t'?ai dit\b/i, /\bpourquoi tu\b/i, /\brien n'?a chang/i,
   /\bregarde mieux\b/i, /\bfaux\b/i
 ]
@@ -58,14 +63,23 @@ for (const c of convs) {
   // porte : la colonne affichait donc 0 partout, y compris sur des conversations de 30 etapes.
   const orchestrations = acts.filter((a) => ORCH_KINDS.has(String(a.kind || ''))).length
   // --- TOURS : chaque evenement d'activite est rattache au DERNIER message utilisateur qui le precede.
-  const turns = users.map((m, i) => ({
-    index: i + 1,
-    ts: Number(m.ts) || 0,
-    demande: String(m.content || '').replace(/\s+/g, ' ').slice(0, 90),
-    reprise: REWORK.some((r) => r.test(String(m.content || ''))),
-    coutUsd: 0,
-    minutes: 0
-  }))
+  const turns = users.map((m, i) => {
+    // Le MARQUEUR qui a fait compter ce tour comme reprise est conserve : un compteur dont on ne
+    // peut pas verifier ce qu'il compte n'est pas auditable (13 formules FR en dur, faux positifs
+    // possibles). On garde donc l'expression declenchante ET l'extrait qu'elle a touche.
+    const texte = String(m.content || '')
+    const declencheur = REWORK.find((r) => r.test(texte))
+    return {
+      index: i + 1,
+      ts: Number(m.ts) || 0,
+      demande: texte.replace(/\s+/g, ' ').slice(0, 90),
+      reprise: Boolean(declencheur),
+      marqueurReprise: declencheur ? String(declencheur) : '',
+      extraitReprise: declencheur ? String(texte.match(declencheur)?.[0] || '').trim() : '',
+      coutUsd: 0,
+      minutes: 0
+    }
+  })
   // Rattachement EXACT quand le journal porte le tour (`turnId`) : un evenement peut arriver
   // APRES la demande suivante (sous-agent lent), et l'heure seule le mettrait sur le mauvais tour.
   // Sinon seulement, repli sur « dernier message utilisateur avant cet evenement ».
@@ -109,7 +123,9 @@ for (const c of convs) {
       restant -= t.coutUsd
     }
   }
-  const rework = users.filter((m) => REWORK.some((r) => r.test(String(m.content || '')))).length
+  // Une SEULE source pour le compteur : les tours deja marques ci-dessus. Deux detections
+  // paralleles finissent par diverger, et le total ne correspondrait plus a la liste affichee.
+  const rework = turns.filter((t) => t.reprise).length
   const first = users[0]
   const vagueStart = first ? VAGUE.some((r) => r.test(String(first.content || ''))) : false
   const wallMs = msgs.length ? (msgs[msgs.length - 1].ts - msgs[0].ts) : 0
@@ -176,6 +192,33 @@ if (bifs.length === 0) {
     console.log(`| ${r.id} | #${b.index} | ${b.coutUsd} | ${b.coutApresUsd} | ${(b.partApres * 100).toFixed(0)} % | ${b.reprise ? 'oui' : ''} | ${b.demande} |`)
   }
   console.log('\n_Candidat, pas verdict : lire ce tour (conversation_read / retrospective) pour nommer la cause — cadrage · routage · preuve · redite · surdimensionnement · boucle._')
+}
+
+// LISTE des tours comptes comme reprise. Le total seul n'est pas auditable : sans le tour et
+// l'expression qui l'a declenche, impossible de dire si 27 reprises sont 27 vraies reprises.
+const REPRISES_AFFICHEES = 25
+const reprises = rows
+  .flatMap((r) => r.tours_detail.filter((t) => t.reprise).map((t) => ({ conv: r.id, ...t })))
+  .sort((a, b) => b.coutUsd - a.coutUsd)
+console.log(
+  `\n## Tours comptes comme REPRISE — ${reprises.length} tour(s), $${reprises
+    .reduce((s, t) => s + t.coutUsd, 0)
+    .toFixed(2)} depenses dessus\n`
+)
+if (reprises.length === 0) {
+  console.log('_Aucun tour de reprise detecte sur ce corpus._')
+} else {
+  console.log('| conv | tour | $ du tour | expression detectee | demande |')
+  console.log('|---|---|---|---|---|')
+  for (const t of reprises.slice(0, REPRISES_AFFICHEES)) {
+    console.log(`| ${t.conv} | #${t.index} | ${fmt(t.coutUsd)} | \`${t.extraitReprise}\` | ${t.demande} |`)
+  }
+  if (reprises.length > REPRISES_AFFICHEES) {
+    console.log(`\n_${reprises.length - REPRISES_AFFICHEES} autre(s) non affiche(s) — \`--json\` les porte toutes._`)
+  }
+  console.log(
+    "\n_Detection par 13 expressions francaises en dur : verifier chaque ligne avant d'en tirer un taux. Une ligne fausse ici gonfle le score de gaspillage de sa conversation._"
+  )
 }
 
 console.log(`\n## Premières demandes des conversations les plus coûteuses\n`)

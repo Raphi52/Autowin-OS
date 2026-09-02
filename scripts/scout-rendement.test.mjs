@@ -63,3 +63,54 @@ describe('scout-rendement — colonne orchestrations et rattachement des tours',
     expect(tours[1].coutUsd).toBe(7)
   })
 })
+
+/** Corpus dedie aux REPRISES : un vrai retour negatif, et un « non » ADJECTIF a ne pas compter. */
+function corpusReprises() {
+  const data = mkdtempSync(join(tmpdir(), 'rendement-rep-'))
+  mkdirSync(join(data, 'activity'), { recursive: true })
+  writeFileSync(
+    join(data, 'conversations.json'),
+    JSON.stringify([
+      {
+        id: 'conv-1',
+        title: 'test',
+        messages: [
+          { role: 'user', content: '/salvage 5 travaux non publies vivent sur une branche', ts: 1000 },
+          { role: 'user', content: 'Regarde le fichier non suivi X et dis-moi ce qu il teste', ts: 2000 },
+          { role: 'user', content: 'non, refais : ca marche pas', ts: 3000 }
+        ]
+      }
+    ])
+  )
+  writeFileSync(join(data, 'activity', 'conv-1.jsonl'), '')
+  return data
+}
+
+function rapportTexte(data) {
+  return execFileSync(process.execPath, ['scripts/scout-rendement.mjs', '--data', data], {
+    encoding: 'utf8'
+  })
+}
+
+describe('scout-rendement — compteur de reprises auditable', () => {
+  it('ne compte pas le « non » ADJECTIF au milieu d une phrase (faux positif mesure : 20 sur 27)', () => {
+    const r = rapport(corpusReprises())
+    expect(r.summary.reprises).toBe(1)
+    expect(r.rows[0].tours_detail.filter((t) => t.reprise).map((t) => t.index)).toEqual([3])
+  })
+
+  it('expose l expression qui a declenche le comptage, pour que le chiffre soit verifiable', () => {
+    const r = rapport(corpusReprises())
+    const tour = r.rows[0].tours_detail[2]
+    // Le premier marqueur du tableau qui matche gagne : ici « ca marche pas », pas le « non ».
+    expect(tour.extraitReprise.length).toBeGreaterThan(0)
+    expect(tour.demande.toLowerCase()).toContain(tour.extraitReprise.toLowerCase())
+    expect(tour.marqueurReprise).not.toBe('')
+  })
+
+  it('liste les tours comptes dans le rapport, et le total de la section egale le compteur', () => {
+    const texte = rapportTexte(corpusReprises())
+    expect(texte).toContain('## Tours comptes comme REPRISE — 1 tour(s)')
+    expect(texte).toContain('| conv-1 | #3 |')
+  })
+})
