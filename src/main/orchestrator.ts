@@ -2399,7 +2399,8 @@ export class Orchestrator {
       verifyCmd: this.resolveVerifyCmd(workCwd),
       requireProof: isMutationTask(task),
       evidenceOkCount: evidence.filter((item) => item.ok).length,
-      evidence
+      evidence,
+      output: aggregate
     })
     const preGate = evaluateClosure({
       status: evidenceOk && !hookOutcome.blocked ? 'green' : 'red',
@@ -4645,7 +4646,8 @@ ${empreinteDepot}`
         verifyCmd: this.resolveVerifyCmd(workCwd),
         requireProof: isMutationTask(task),
         evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
-        evidence: exec.executionEvidence
+        evidence: exec.executionEvidence,
+        output: exec.text
       })
       // UN SEUL endroit calcule l'etat de cloture (`root-execution-contract.ts`) : cette decision
       // vivait ici en ligne, donc hors de portee des tests — une mutation de sa garde ne faisait

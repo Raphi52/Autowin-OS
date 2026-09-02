@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { HookBus, type HookContext, type HookResult } from './hook-bus'
 import { createVerifyReplayHook, type VerifyRunner } from './verify-replay-hook'
 import { runHooks } from '../gates/hooks'
+import { exigenceAppuiSourcesNeuves } from '../autowin-kaizen-context'
 
 /**
  * Un handler pre-green qui RÉUTILISE les hooks synchrones existants (gates/hooks.ts :
@@ -18,6 +19,24 @@ export function syncGateHooksHandler(ctx: HookContext): HookResult {
   })
   return violations.length
     ? { block: true, reason: violations.map((h) => `hook ${h.hook}: ${h.detail}`).join('; ') }
+    : { block: false }
+}
+
+/**
+ * APPUI SUR LES SOURCES NEUVES — contrôle hors modèle d'un rendu de /kaizen.
+ *
+ * Mesuré sur conv-105 : le dossier de preuve joignait les appels modèle, le journal des tours et
+ * les saisies, l'exigence de s'en servir était écrite dans la consigne, et le rendu n'en citait
+ * aucun — les corrections portaient sur le mécanisme qui fabrique le dossier. Une exigence
+ * seulement écrite ne tient pas : elle est donc VÉRIFIÉE ici, sur le texte produit. Le contrôle ne
+ * juge pas la pertinence de la correction, seulement qu'un identifiant réel est cité ; il ne
+ * s'applique ni hors kaizen, ni quand le dossier ne porte aucune de ces trois sources.
+ */
+export function appuiSourcesNeuvesHandler(ctx: HookContext): HookResult {
+  if (!ctx.output) return { block: false }
+  const verdict = exigenceAppuiSourcesNeuves(ctx.task, ctx.output)
+  return verdict.manque
+    ? { block: true, reason: `hook kaizen-appui-sources-neuves: ${verdict.motif}` }
     : { block: false }
 }
 
@@ -52,5 +71,6 @@ const defaultVerifyRunner: VerifyRunner = (cmd, cwd) =>
 export function createDefaultHookBus(verifyRunner: VerifyRunner = defaultVerifyRunner): HookBus {
   return new HookBus()
     .register('pre-green', syncGateHooksHandler)
+    .register('pre-green', appuiSourcesNeuvesHandler)
     .register('pre-green', createVerifyReplayHook(verifyRunner))
 }

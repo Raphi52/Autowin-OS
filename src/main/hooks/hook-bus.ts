@@ -13,6 +13,11 @@ export interface HookContext {
   phase?: string
   cwd?: string
   evidence?: ExecutionEvidence[]
+  /**
+   * Le TEXTE produit par le run (agrégat des phases). Un contrôle de CONTENU — « cette correction
+   * s'appuie-t-elle sur une source neuve ? » — ne peut rien vérifier sans lui.
+   */
+  output?: string
   /** Commande de vérification à REJOUER (verify-replay) — absente = pas de replay possible. */
   verifyCmd?: string
   // Entrées des hooks synchrones existants (gates/hooks.ts), réutilisés comme handlers pre-green.

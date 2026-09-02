@@ -174,7 +174,11 @@ describe('dossier de preuve /kaizen — intégrité', () => {
     const dossier = JSON.parse(json) as { source: string; conversation: { id: string } }
     expect(dossier.source).toBe('autowin-os')
     expect(dossier.conversation.id).toBe('conv-8')
-    expect(task.trimEnd().endsWith('revert.')).toBe(true)
+    // Le pied se termine désormais par l'exigence d'appui sur une source neuve (appels modèle /
+    // tours / saisies), ajoutée APRÈS la consigne d'application. Les deux doivent survivre à la
+    // saturation : elles sont déduites du budget avant l'ajustement.
+    expect(task).toContain('un commit par édition')
+    expect(task.trimEnd().endsWith('refuse le rendu.')).toBe(true)
     expect(isMutationTask(task)).toBe(false)
   })
 

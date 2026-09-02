@@ -384,6 +384,59 @@ function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<strin
 }
 
 /** Transforme /kaizen en dossier de preuve borné, sans source ni instruction Claude. */
+const MARQUEUR_DEBUT = '=== DOSSIER DE PREUVE AUTOWIN OS ==='
+const MARQUEUR_FIN = '=== FIN DU DOSSIER ==='
+
+export interface AppuiSourcesNeuves {
+  /** Le contrôle a-t-il un sens ici : tâche kaizen AVEC un dossier qui porte au moins une des 3 sources. */
+  applicable: boolean
+  /** Les identifiants réellement présents dans le dossier, donc citables. */
+  identifiants: string[]
+  /** Ceux que le rendu cite. */
+  cites: string[]
+  /** Applicable et aucune citation → le rendu ne s'appuie sur aucune source neuve. */
+  manque: boolean
+  motif?: string
+}
+
+/*
+  CONTRÔLE HORS MODÈLE de l'exigence écrite dans le pied du dossier. Pur : la tâche porte le dossier
+  (JSON entre les deux marqueurs), le rendu est le texte produit. On ne juge PAS la pertinence de la
+  correction — seulement qu'un identifiant RÉEL des trois sources neuves est cité. Non applicable
+  hors kaizen, et non applicable si le dossier ne contient aucune de ces trois sources (rien à
+  citer : bloquer serait un faux refus).
+*/
+export function exigenceAppuiSourcesNeuves(task: string, sortie: string): AppuiSourcesNeuves {
+  const vide: AppuiSourcesNeuves = { applicable: false, identifiants: [], cites: [], manque: false }
+  const debut = task.indexOf(MARQUEUR_DEBUT)
+  const fin = task.indexOf(MARQUEUR_FIN)
+  if (debut < 0 || fin <= debut) return vide
+  let snapshot: Partial<KaizenSnapshot>
+  try {
+    snapshot = JSON.parse(task.slice(debut + MARQUEUR_DEBUT.length, fin).trim()) as KaizenSnapshot
+  } catch {
+    return vide
+  }
+  const identifiants = [
+    ...(snapshot.promptCalls ?? []).map((call) => call.turnId),
+    ...(snapshot.turnEvents ?? []).map((event) => event.turnId),
+    ...(snapshot.saisies ?? []).map((saisie) => String(saisie.ts))
+  ].filter((valeur): valeur is string => typeof valeur === 'string' && valeur.trim().length > 0)
+  const uniques = [...new Set(identifiants)]
+  if (uniques.length === 0) return vide
+  const cites = uniques.filter((identifiant) => sortie.includes(identifiant))
+  return {
+    applicable: true,
+    identifiants: uniques,
+    cites,
+    manque: cites.length === 0,
+    motif:
+      cites.length === 0
+        ? `aucune correction ne cite un appel modèle, un tour ou une saisie du dossier (${uniques.length} identifiant(s) citable(s), ex. ${uniques[0]})`
+        : undefined
+  }
+}
+
 export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenEvidence): string {
   const messages = evidence.conversation.messages.slice(-MESSAGE_LIMIT).map((message) => ({
     ts: new Date(message.ts).toISOString(),
@@ -432,11 +485,11 @@ export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenE
 
   const entete = `${clipped(request.trim(), REQUEST_CAP) || '/kaizen'}
 
-=== DOSSIER DE PREUVE AUTOWIN OS ===
+${MARQUEUR_DEBUT}
 `
   const pied =
     `
-=== FIN DU DOSSIER ===
+${MARQUEUR_FIN}
 ` +
     `Audite cette conversation et les mécanismes Autowin qui l'ont produite. ` +
     /*
@@ -445,7 +498,19 @@ export function buildAutowinKaizenTask(request: string, evidence: AutowinKaizenE
       gagnait : l'utilisateur recevait une liste de propositions au lieu de corrections.
     */
     `Applique ensuite toi-même les corrections que les preuves justifient : un commit par édition, ` +
-    `annoncé et vérifié par un signal hors-modèle, pour que chacune reste annulable d'un seul revert.`
+    `annoncé et vérifié par un signal hors-modèle, pour que chacune reste annulable d'un seul revert.` +
+    /*
+      Cette phrase était ABSENTE, et le défaut a été mesuré sur conv-105 : le dossier joignait bien
+      les appels modèle, le journal des tours et les saisies, mais les corrections rendues portaient
+      toutes sur le mécanisme qui FABRIQUE le dossier — aucune sur un fait lu dedans. L'exigence est
+      posée ici (l'en-tête et le pied sont déduits du budget AVANT l'ajustement : ils ne sont jamais
+      rognés) et elle est CONTRÔLÉE hors modèle par `exigenceAppuiSourcesNeuves`, parce qu'une
+      exigence seulement écrite avait déjà été écrite, puis non tenue.
+    */
+    ` AU MOINS UNE de ces corrections doit s'appuyer sur les appels modèle (promptCalls), le ` +
+    `journal des tours (turnEvents) ou les saisies (saisies) de ce dossier, et CITER l'identifiant ` +
+    `exact qui l'établit : le \`turnId\` de l'appel ou du tour, ou l'horodatage \`ts\` de la saisie. ` +
+    `Sans cette citation, un contrôle hors modèle refuse le rendu.`
   const budget = TOTAL_CAP - entete.length - pied.length - TRONCATURE_MARGE
   const retires = ajusterAuBudget(snapshot, budget)
   // Ce qui a été retiré est DIT : un dossier amputé en silence se lit comme un dossier complet.
