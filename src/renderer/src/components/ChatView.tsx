@@ -660,6 +660,13 @@ export function ChatView({
   }, [])
   const [deleteCandidate, setDeleteCandidate] = useState<Conv | null>(null)
   /**
+   * Renommage d'une conversation. Le DÉFAUT corrigé : le menu appelait `window.prompt`, qu'Electron
+   * ne sait PAS afficher — la fonction rendait `null` sans rien montrer, donc le renommage depuis la
+   * barre latérale était structurellement inatteignable. On reprend la fenêtre React déjà utilisée
+   * par la confirmation de suppression, à un champ de saisie près.
+   */
+  const [renameCandidate, setRenameCandidate] = useState<{ conv: Conv; value: string } | null>(null)
+  /**
    * Purge en LOT. `selectedConvIds` n'existe QUE en mode sélection : hors mode, aucune case n'est
    * rendue et la liste retrouve son comportement de clic unique. Sortir du mode vide la sélection —
    * une sélection invisible qui survit est un piège à suppression accidentelle.
