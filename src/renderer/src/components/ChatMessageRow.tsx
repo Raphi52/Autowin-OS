@@ -33,14 +33,13 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
         <span className="directive-receipt-status" role="status">
           {receipt.status === 'sending' ? (
             <>
-              <Spinner />{' '}
-              {receipt.reponse ? 'Réponse…' : 'Orientation…'}
+              <Spinner /> {receipt.reponse ? 'Réponse…' : 'Orientation…'}
             </>
           ) : receipt.status === 'sent' ? (
             receipt.reponse ? (
               '✓ Répondu'
             ) : (
-              "✓ Reçue — l’agent répondra dans sa prochaine réponse"
+              '✓ Reçue — l’agent répondra dans sa prochaine réponse'
             )
           ) : receipt.status === 'differee' ? (
             '⏸ Reçue — l’agent la lira à la phase suivante du run'
@@ -363,9 +362,7 @@ export const ChatMessageRow = memo(
             text={message.reasoning ?? ''}
             done={message.done}
             {...(message.providerStatus ? { status: message.providerStatus } : {})}
-            {...(message.providerStatusLog?.length
-              ? { statusLog: message.providerStatusLog }
-              : {})}
+            {...(message.providerStatusLog?.length ? { statusLog: message.providerStatusLog } : {})}
           />
         )}
         <div className="msg-turn">
@@ -396,13 +393,23 @@ export const ChatMessageRow = memo(
                     ) : part.kind === 'ask-decision' ? (
                       /* Cle STABLE = l'identite de l'action `ask`. Avec `key={index}` le bloc etait
                          remonte des que le flux se regroupait, et son verrou « deja repondu »
-                         repartait a zero : c'est ce qui rendait le spam-clic possible. */
-                      <AskDecisionBlock
-                        key={`ask-${part.askId}`}
-                        decision={part.decision}
-                        dejaRepondu={askRepondu}
-                        onPick={(prompt) => onAnswerAsk?.(prompt)}
-                      />
+                         repartait a zero : c'est ce qui rendait le spam-clic possible.
+
+                         LE BLOC N'EXISTE QU'UNE FOIS LE TOUR TERMINE (2026-09-02, defaut vecu :
+                         « le bloc ask apparait avant que le tour finisse et quand je click trop tot
+                         ca marche pas »). Pendant le tour, un clic passe par l'injection dans le
+                         tour en cours ; celle-ci n'est plus relue apres l'execution des commandes,
+                         et ce qui n'a pas ete lu est efface a la fermeture du tour — la reponse
+                         disparaissait pendant que le bloc se verrouillait sur « Repondu ». Rien a
+                         cliquer avant la fin = aucune reponse perdue. */
+                      !message.done ? null : (
+                        <AskDecisionBlock
+                          key={`ask-${part.askId}`}
+                          decision={part.decision}
+                          dejaRepondu={askRepondu}
+                          onPick={(prompt) => onAnswerAsk?.(prompt)}
+                        />
+                      )
                     ) : part.kind === 'candidats-pick' ? (
                       <CandidatsPickPanel
                         key={index}
