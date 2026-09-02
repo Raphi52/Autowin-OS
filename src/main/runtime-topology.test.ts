@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { TEST_MODEL_CATALOG } from './models.fixture'
 import { DEFAULT_IMPORTED_MODELS } from './models'
 import { bindingForModel, createDefaultTopology } from './topology'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 import {
   assertRuntimeBindingAvailable,
   assertRuntimeTopologyAvailable,
@@ -90,14 +91,22 @@ describe('bindings runtime issus d’Agent Studio', () => {
   })
 
   it('ne laisse pas un profil réappliquer son ancien snapshot de rôles après la topologie', () => {
-    const source = indexSource()
+    // Le canal a quitté `index.ts` pour `ipc/profiles.ts` le 2026-09-02 : on lit la ZONE du
+    // process principal, et on borne par le canal SUIVANT quel qu'il soit — un voisin nommé
+    // déménage, la garde ne doit pas dépendre de lui.
+    const source = sourceProcessPrincipal()
     const start = source.indexOf("ipcMain.handle('os:profiles:apply'")
-    const end = source.indexOf("ipcMain.handle('os:topology:get'", start)
+    const suivant = source.indexOf('ipcMain.handle(', start + 1)
+    const end = suivant < 0 ? source.length : suivant
     const handler = source.slice(start, end)
 
     expect(start).toBeGreaterThan(0)
     expect(end).toBeGreaterThan(start)
-    expect(handler).toContain('syncRuntimeTopology(agentTopology)')
+    // La topologie du profil est APPLIQUÉE (persistée + rôles resynchronisés) ...
+    expect(handler).toMatch(/appliquerTopologie\(migrateTopologyShape\(profile\.topology\)/)
+    // ... et l'application resynchronise bien les rôles runtime, là où elle est câblée.
+    expect(source).toContain('syncRuntimeTopology(agentTopology)')
+    // ... mais l'ancien instantané de rôles du profil, lui, n'est JAMAIS réappliqué.
     expect(handler).not.toContain('profile.roles')
   })
 

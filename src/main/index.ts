@@ -14,6 +14,7 @@ import { registerTestsViewIpc } from './ipc/tests-view'
 import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
 import { registerClaudeAccountsIpc } from './ipc/claude-accounts'
+import { registerProfilesIpc } from './ipc/profiles'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -173,7 +174,7 @@ import {
 } from './activity/orchestration-observability'
 import { aggregateToolUsage } from './activity/tool-usage'
 
-import { ProfileStore, type AutowinProfile } from './profile-store'
+import { ProfileStore } from './profile-store'
 import { capabilityEnabled, listCapabilities, setCapabilityEnabled } from './capability-controls'
 import { seedRegistrySnapshot } from './native-registry'
 import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
@@ -243,7 +244,7 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { guardBoolean, guardProfile, guardString, guardStringOrNull } from './ipc-guards'
+import { guardBoolean, guardString, guardStringOrNull } from './ipc-guards'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { TicketSourceStore } from './ticket-source-store'
@@ -2595,52 +2596,17 @@ Le fil reprend ensuite normalement.`
     }
     return probeProviderConnection(id as RoutedProvider)
   })
-  ipcMain.handle('os:profiles:list', (event) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    return profiles.list().map((profile) => ({
-      ...profile,
-      topology: migrateTopologyShape(profile.topology) as AgentTopology
-    }))
-  })
-  ipcMain.handle('os:profiles:save', async (event, profile: AutowinProfile) => {
-    assertTrustedRendererSender(event, 'Profiles')
-    await agentModelsReady
-    /*
-     * VALIDER A LA FRONTIERE avant de persister. `ProfileStore.save` ne verifie RIEN et ecrit la
-     * charge utile telle quelle -- et il compose `[profile, ...list().filter(...)]`, donc un `id`
-     * absent fait atterrir l'objet douteux EN TETE de liste. Le lecteur etant tolerant, le degat est
-     * silencieux : pas un plantage, de la donnee pourrie.
-     *
-     * Meme classe que l'incident du meme jour sur les conversations, ou le lecteur etait STRICT et
-     * l'app en est devenue inbootable. Le cout differe, la cause est identique : un ecrivain qui
-     * accepte une forme que rien ne verifie.
-     */
-    const verifie = guardProfile(profile)
-    const safe = {
-      ...verifie,
-      topology: agentTopology,
-      roles: os.roles.all(),
-      updatedAt: new Date().toISOString()
-    }
-    return profiles.save(safe)
-  })
-  ipcMain.handle('os:profiles:apply', async (event, id: string) => {
-    assertTrustedRendererSender(event, 'Profiles')
-    await agentModelsReady
-    const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
-    if (!profile) throw new Error('Profil introuvable')
-    // Rétrocompat : un profil sauvegardé avant un panel récent peut ne pas l'avoir → on migre
-    // la forme avant validation (sinon assertTopology jetterait « Profil introuvable/incohérent »).
-    agentTopology = saveAgentTopology(
-      agentTopologyPath,
-      migrateTopologyShape(profile.topology) as AgentTopology,
-      agentModels
-    )
-    syncRuntimeTopology(agentTopology)
-    // `roles` reste dans le schéma des anciens profils pour la lecture rétrocompatible, mais Agent
-    // Studio n'édite que `topology`. Le réappliquer ici recréerait une seconde autorité invisible.
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return { ...profile, topology: agentTopology }
+  registerProfilesIpc({
+    os,
+    profiles,
+    agentModelsReady,
+    lireTopologie: () => agentTopology,
+    appliquerTopologie: (topology) => {
+      agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
+      syncRuntimeTopology(agentTopology)
+      return agentTopology
+    },
+    broadcastRolesRefresh: () => broadcast({ type: 'refresh', scope: 'roles' })
   })
   ipcMain.handle('os:topology:get', async (event) => {
     assertTrustedRendererSender(event, 'Topology')
