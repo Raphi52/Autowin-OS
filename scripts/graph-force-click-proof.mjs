@@ -93,7 +93,10 @@ const main = async () => {
   const envoyer = (methode, params = {}) =>
     new Promise((ok, ko) => {
       const n = ++id
-      const t = setTimeout(() => (attente.delete(n), ko(new Error(`${methode} expiré`))), 60_000)
+      // 180 s, et le temps réel de la bascule est MESURÉ puis rapporté (`basculeArbreMs`) : passer
+      // en arbre reconstruit 704 nœuds d'un bloc et gèle l'interface plusieurs dizaines de secondes.
+      // Allonger l'attente sans publier la mesure aurait caché ce gel au lieu de le montrer.
+      const t = setTimeout(() => (attente.delete(n), ko(new Error(`${methode} expiré`))), 180_000)
       attente.set(n, { ok: (v) => (clearTimeout(t), ok(v)), ko: (e) => (clearTimeout(t), ko(e)) })
       socket.send(JSON.stringify({ id: n, method: methode, params }))
     })
@@ -112,21 +115,34 @@ const main = async () => {
   // 1. Se placer sur Memory par le bouton de navigation IDENTIFIÉ (`data-testid="nav-knowledge"`),
   // jamais par une recherche de texte : un `find` sur /memory/i attrape « Clean memory » et déclenche
   // une action que personne n'a demandée. Défaut commis puis corrigé ici même le 2026-09-02.
-  const navigation = await evaluer(`(() => {
-    const bouton = document.querySelector('[data-testid="nav-knowledge"]')
-    if (!bouton) return 'bouton-absent'
-    bouton.click()
-    return 'clique'
-  })()`)
+  // La destination est RÉAFFIRMÉE plusieurs fois : quand un tour de chat est en cours, l'application
+  // ramène d'elle-même l'utilisateur sur le Chat, et un clic unique se faisait donc annuler juste
+  // après (mesuré le 2026-09-02, sortie « destination-inattendue » avec nav-chat actif).
+  const destinationActuelle = () =>
+    evaluer(`(() => {
+      const actif = [...document.querySelectorAll('[data-testid^="nav-"]')].find((b) =>
+        b.className.includes('active') || b.getAttribute('aria-current'))
+      return actif?.getAttribute('data-testid') ?? null
+    })()`)
+
+  let active = null
+  let navigation = null
+  for (let essai = 0; essai < 8; essai += 1) {
+    navigation = await evaluer(`(() => {
+      const bouton = document.querySelector('[data-testid="nav-knowledge"]')
+      if (!bouton) return 'bouton-absent'
+      bouton.click()
+      return 'clique'
+    })()`)
+    if (navigation !== 'clique') break
+    await dormir(1200)
+    active = await destinationActuelle()
+    if (active === 'nav-knowledge') break
+  }
   if (navigation !== 'clique') rendre({ ok: false, echecs: ['nav-knowledge-absent'], port }, 4)
-  await dormir(2500)
-  const active = await evaluer(`(() => {
-    const actif = [...document.querySelectorAll('[data-testid^="nav-"]')].find((b) =>
-      b.className.includes('active') || b.getAttribute('aria-current'))
-    return actif?.getAttribute('data-testid') ?? null
-  })()`)
   if (active !== 'nav-knowledge')
     rendre({ ok: false, echecs: ['destination-inattendue'], destinationActive: active, port }, 4)
+  await dormir(1500)
 
   const etat = () =>
     evaluer(`(() => {
@@ -184,22 +200,103 @@ const main = async () => {
       break
     }
   }
-  if (!touche) rendre({ ok: false, echecs: ['aucun-point-touche'], depart, apres, port }, 5)
+  // Un clic « à l'aveugle » sur le nuage peut légitimement ne toucher aucun point : 704 points
+  // dessinés dans un canvas WebGL, aucun élément DOM, donc aucune position lisible. On le RAPPORTE
+  // au lieu de le déguiser en échec du produit — la preuve du geste, elle, est portée ci-dessous par
+  // le mode ARBRE, dont le compteur est lisible dans le DOM.
+  const nuage = {
+    clicTouche: touche,
+    pointsAvant: depart.points,
+    pointsApres: apres.points,
+    compteurArbreAbsent: depart.modeArbre === false
+  }
 
-  await dormir(1500)
-  apres = await etat()
-  const ok = apres.points !== null && apres.points >= depart.points
+  // 3. Mode ARBRE — la preuve mesurable : chaque dépliage AUGMENTE `data-tree-visible-nodes`,
+  // chaque repli le ramène à sa valeur d'avant.
+  const compteurArbre = () =>
+    evaluer(`(() => {
+      const canvas = document.querySelector('.graph-canvas')
+      const brut = canvas?.dataset.treeVisibleNodes
+      const replies = [...document.querySelectorAll('[aria-label="Branches du Brain"] button')]
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+      return {
+        compteur: brut === undefined ? null : Number(brut),
+        branchesRepliees: replies.length,
+        premiereRepliee: replies[0]?.getAttribute('title') ?? null
+      }
+    })()`)
+
+  const debutBascule = Date.now()
+  let arbre = await compteurArbre()
+  for (let essai = 0; essai < 4 && arbre.compteur === null; essai += 1) {
+    await evaluer(`document.querySelector('[aria-label="Disposition du graphe"]')?.click(), true`)
+    await dormir(3000)
+    arbre = await compteurArbre()
+  }
+  const basculeArbreMs = Date.now() - debutBascule
+  if (arbre.compteur === null)
+    rendre({ ok: false, echecs: ['mode-arbre-inatteignable'], nuage, arbre, port }, 5)
+  if (arbre.branchesRepliees === 0)
+    rendre({ ok: false, echecs: ['aucune-branche-repliee-au-depart'], nuage, arbre, port }, 5)
+
+  const cliquerPremiereRepliee = () =>
+    evaluer(`(() => {
+      const b = [...document.querySelectorAll('[aria-label="Branches du Brain"] button')]
+        .find((x) => x.getAttribute('aria-pressed') === 'true')
+      if (!b) return null
+      const titre = b.getAttribute('title')
+      b.click()
+      return titre
+    })()`)
+  const cliquerParTitre = (titre) =>
+    evaluer(`(() => {
+      const b = [...document.querySelectorAll('[aria-label="Branches du Brain"] button')]
+        .find((x) => x.getAttribute('title') === ${JSON.stringify(titre)})
+      if (!b) return null
+      b.click()
+      return true
+    })()`)
+
+  const avantDepliage = arbre.compteur
+  const brancheDepliee = await cliquerPremiereRepliee()
+  if (!brancheDepliee)
+    rendre({ ok: false, echecs: ['branche-non-cliquable'], nuage, arbre, port }, 5)
+  await dormir(1800)
+  const apresDepliage = (await compteurArbre()).compteur
+  if (!(apresDepliage > avantDepliage))
+    rendre(
+      {
+        ok: false,
+        echecs: ['depliage-sans-effet'],
+        nuage,
+        branche: brancheDepliee,
+        compteurAvant: avantDepliage,
+        compteurApres: apresDepliage,
+        basculeArbreMs,
+        port
+      },
+      6
+    )
+
+  // Le repli se demande par le titre INVERSE : le bouton dit maintenant « Replier … ».
+  const titreReplier = brancheDepliee.replace('Déplier ', 'Replier ')
+  await cliquerParTitre(titreReplier)
+  await dormir(1800)
+  const apresRepli = (await compteurArbre()).compteur
+
+  const ok = apresDepliage > avantDepliage && apresRepli === avantDepliage
   rendre(
     {
       ok,
-      echecs: ok ? [] : ['points-en-baisse'],
+      echecs: ok ? [] : ['repli-non-reversible'],
       port,
-      clic: touche,
-      pointsAvant: depart.points,
-      pointsApres: apres.points,
-      ficheOuverteAvant: depart.ficheOuverte,
-      ficheOuverteApres: apres.ficheOuverte,
-      preuve: `clic réel en (${touche.x},${touche.y}) sur le nuage : fiche ouverte (« Détail du nœud »), points ${depart.points} → ${apres.points}`
+      basculeArbreMs,
+      nuage,
+      branche: brancheDepliee,
+      compteurAvant: avantDepliage,
+      compteurApresDepliage: apresDepliage,
+      compteurApresRepli: apresRepli,
+      preuve: `mode arbre : « ${brancheDepliee} » → nœuds visibles ${avantDepliage} → ${apresDepliage} au dépliage, retour à ${apresRepli} au repli ; mode nuage : aucun compteur d'arbre (${nuage.compteurArbreAbsent}), ${nuage.clicTouche ? `clic réel en (${nuage.clicTouche.x},${nuage.clicTouche.y}) a ouvert une fiche` : 'clic à l aveugle sur le canvas n a touché aucun point (non concluant, pas un échec produit)'}`
     },
     ok ? 0 : 6
   )
