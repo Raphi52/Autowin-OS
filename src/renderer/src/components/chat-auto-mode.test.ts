@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Msg } from './chat-view-types'
 import {
+  ancrerSurLaTacheInitiale,
   blocFaitDitRien,
   deciderRelanceAuto,
+  tacheInitiale,
   recommandationDitRien,
   signatureTour,
   texteDernierAssistant
@@ -63,7 +65,11 @@ describe('blocFaitDitRien — le bloc « Fait » vide (précision utilisateur du
 describe('deciderRelanceAuto — envoi', () => {
   it('envoie le PROMPT du modèle, pas la rubrique', () => {
     const d = deciderRelanceAuto({ ...base, fil: [humain('go'), agent(REPONSE_AVEC_SUITE)] })
-    expect(d).toMatchObject({ action: 'envoyer', texte: 'lance le terrain sur X' })
+    // Le prompt du modele, ANCRE sur la tache initiale du fil — le texte reellement envoye.
+    expect(d).toMatchObject({
+      action: 'envoyer',
+      texte: ancrerSurLaTacheInitiale('lance le terrain sur X', 'go')
+    })
   })
   it('retombe sur la rubrique quand aucun prompt n’est écrit', () => {
     const d = deciderRelanceAuto({ ...base, fil: [agent('👉 Recommandé — passer en terrain')] })
@@ -195,7 +201,8 @@ describe('fin de chaîne — « Reste à faire : rien » éteint la boucle', () 
     const decision = deciderRelanceAuto({ ...base, fil: [humain('go'), agent(suite)] })
     expect(decision).toEqual({
       action: 'envoyer',
-      texte: 'lancer clean.',
+      // La suite part ANCREE sur la tache initiale du fil (« go ») : c'est le texte reellement envoye.
+      texte: ancrerSurLaTacheInitiale('lancer clean.', 'go'),
       signature: expect.any(String)
     })
   })
@@ -207,5 +214,79 @@ describe('fin de chaîne — « Reste à faire : rien » éteint la boucle', () 
     ).replace('👉 Recommandé : passer à la prochaine demande.', '👉 Recommandé : lancer clean.')
     const decision = deciderRelanceAuto({ ...base, fil: [humain('go'), agent(suite)] })
     expect(decision.action).toBe('envoyer')
+  })
+})
+
+/**
+ * ANCRAGE ANTI-DÉRIVE — demande du 2026-09-02 : « le mode auto doit pas trop trop partir en
+ * couille par rapport a la tache initiale non plus ». Mesuré sur conv-138 : la chaîne est partie
+ * de « juge la qualité de mon prompting » et est arrivée au shader du nuage d'accueil.
+ */
+describe('le mode auto reste accroché à la tâche initiale', () => {
+  const reponse = (texte: string): Msg =>
+    ({ role: 'assistant', parts: [{ kind: 'text', text: texte }] }) as unknown as Msg
+  const demande = (texte: string, orientation?: boolean): Msg =>
+    ({ role: 'user', content: texte, ...(orientation ? { orientation: true } : {}) }) as unknown as Msg
+
+  it('prend le PREMIER message de l’utilisateur, pas le dernier', () => {
+    expect(
+      tacheInitiale([demande('juge la qualité de mon prompting'), reponse('x'), demande('et le nuage ?')])
+    ).toBe('juge la qualité de mon prompting')
+  })
+
+  it('ignore une orientation tapée PENDANT un tour', () => {
+    expect(tacheInitiale([demande('arrête-toi', true), demande('la vraie demande')])).toBe(
+      'la vraie demande'
+    )
+  })
+
+  it('le texte ENVOYÉ porte la tâche initiale et l’ordre de s’arrêter en cas de dérive', () => {
+    const decision = deciderRelanceAuto({
+      actif: true,
+      occupe: false,
+      fil: [
+        demande('juge la qualité de mon prompting'),
+        reponse('⏳ Reste à faire : trier\n👉 Recommandé — regarder le nuage\nAUTOWIN_PROMPT_V1: Montre-moi le nuage')
+      ],
+      dernierTourTraite: null,
+      dernierPromptEnvoye: null,
+      brouillonPresent: false
+    })
+    expect(decision.action).toBe('envoyer')
+    if (decision.action !== 'envoyer') return
+    expect(decision.texte).toContain('Montre-moi le nuage')
+    expect(decision.texte).toContain('juge la qualité de mon prompting')
+    expect(decision.texte).toContain('arrête la chaîne')
+  })
+
+  it('l’anti-boucle survit à l’ancrage : la même suite deux fois n’est pas renvoyée', () => {
+    const fil = [
+      demande('ma demande de départ'),
+      reponse('👉 Recommandé — suite\nAUTOWIN_PROMPT_V1: Refais la même chose')
+    ]
+    const premier = deciderRelanceAuto({
+      actif: true,
+      occupe: false,
+      fil,
+      dernierTourTraite: null,
+      dernierPromptEnvoye: null,
+      brouillonPresent: false
+    })
+    expect(premier.action).toBe('envoyer')
+    if (premier.action !== 'envoyer') return
+    const second = deciderRelanceAuto({
+      actif: true,
+      occupe: false,
+      fil,
+      dernierTourTraite: null,
+      // Ce qui a RÉELLEMENT été envoyé, ancrage compris.
+      dernierPromptEnvoye: premier.texte,
+      brouillonPresent: false
+    })
+    expect(second).toEqual({ action: 'attendre', raison: 'prompt-identique' })
+  })
+
+  it('le premier maillon n’est pas ancré sur lui-même', () => {
+    expect(ancrerSurLaTacheInitiale('fais X', 'fais X')).toBe('fais X')
   })
 })
