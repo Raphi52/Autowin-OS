@@ -10,6 +10,8 @@ import { registerConversationsIpc } from './ipc/conversations'
 import { registerTranscriptsIpc } from './ipc/transcripts'
 import { registerPreflightIpc } from './ipc/preflight'
 import { registerGitIpc } from './ipc/git'
+import { registerTestsViewIpc } from './ipc/tests-view'
+import { registerPerfIpc } from './ipc/perf'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -246,13 +248,7 @@ import {
   resolveAutowinAppDataBase
 } from './app-data'
 import { configureTurnTiming } from './turn-timing'
-import { lireLatenceTours } from './perf-lag-main'
-import {
-  demarrerDetecteurDeGel,
-  instrumenterEntreesSortiesDuMain,
-  journaliserGel,
-  lireGels
-} from './gel-main'
+import { demarrerDetecteurDeGel, instrumenterEntreesSortiesDuMain } from './gel-main'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
 import {
   createStorageMigrationReadHandler,
@@ -343,13 +339,6 @@ import { loadTokens } from './providers/codex-auth'
 import { artifactsFromExecutionEvidence } from './providers/artifacts'
 
 import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
-import {
-  ensureTestProjects,
-  inspectProject,
-  loadTestProjects,
-  runProjectTests,
-  saveTestProjects
-} from './tests-view-main'
 import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker
@@ -2160,65 +2149,10 @@ Le fil reprend ensuite normalement.`
   registerPreflightIpc({ preflightProviderOptions })
   // Les canaux git (lecture seule) vivent dans src/main/ipc/git.ts.
   registerGitIpc({ os, pickDirectory })
-  // Vue Tests — MULTI-PROJETS. Le registre porte des racines quelconques : la vue ne connait pas
-  // « le » depot de l'app, elle connait une liste. Le workspace courant y est seme au premier appel
-  // pour que l'ecran ne soit pas vide, mais il n'y a aucun privilege attache a cette entree.
-  ipcMain.handle('tests:projects', (event) => {
-    assertTrustedRendererSender(event, 'TestsProjects')
-    return ensureTestProjects(os.executionWorkspace).map((projet) => inspectProject(projet))
-  })
-  ipcMain.handle('tests:saveProjects', (event, projects: unknown) => {
-    assertTrustedRendererSender(event, 'TestsSaveProjects')
-    return saveTestProjects(projects).map((projet) => inspectProject(projet))
-  })
-  ipcMain.handle('tests:pickProject', async (event) => {
-    assertTrustedRendererSender(event, 'TestsPickProject')
-    return pickDirectory(event.sender)
-  })
-  // Onglet Latence de la vue Tests : rapport LU du journal de jalons ecrit par `turn-timing.ts`.
-  // Lecture seule, bornee aux derniers tours.
-  ipcMain.handle('perf:turnLatency', (event, derniers?: unknown) => {
-    assertTrustedRendererSender(event, 'PerfTurnLatency')
-    const n = typeof derniers === 'number' && derniers > 0 ? Math.floor(derniers) : 200
-    return lireLatenceTours(ensureAutowinAppData(appDataRoot), n)
-  })
-  // Onglet Latence : gels REELS du process main, dates et attribues a une operation.
-  ipcMain.handle('perf:gels', (event, derniers?: unknown) => {
-    assertTrustedRendererSender(event, 'PerfGels')
-    const n = typeof derniers === 'number' && derniers > 0 ? Math.floor(derniers) : 200
-    return lireGels(ensureAutowinAppData(appDataRoot), n)
-  })
-  /*
-   * Gels du RENDERER, deposes dans le MEME journal que ceux du main.
-   *
-   * Le detecteur de gel ne surveille que le process principal : un freeze de la fenetre cause par
-   * le thread d'interface n'etait attribuable NULLE PART apres coup. Le renderer signale donc ses
-   * taches longues ici, et elles passent par l'unique puits d'ecriture existant — pas de second
-   * chemin d'ecriture. Le prefixe 'renderer:' est ce qui permet enfin de trancher main vs
-   * interface en relisant gels.jsonl.
-   */
-  ipcMain.handle('perf:gelRenderer', (event, dureeMs: unknown) => {
-    assertTrustedRendererSender(event, 'PerfGelRenderer')
-    const ms = typeof dureeMs === 'number' && Number.isFinite(dureeMs) ? Math.floor(dureeMs) : 0
-    if (ms <= 0) return false
-    journaliserGel({
-      ts: new Date().toISOString(),
-      blocageMs: ms,
-      operation: 'renderer:longtask',
-      // Mesure DIRECTE d'une tache longue du thread d'interface : imputable par construction.
-      cause: 'boucle-tenue'
-    })
-    return true
-  })
-  ipcMain.handle('tests:run', (event, root: unknown, filter?: unknown) => {
-    assertTrustedRendererSender(event, 'TestsRun')
-    const racine = String(root ?? '')
-    const projet = loadTestProjects().find((p) => p.root === racine)
-    if (!projet) throw new Error('projet inconnu du registre des tests')
-    return runProjectTests(projet, {
-      ...(typeof filter === 'string' && filter.trim() ? { filter: filter.trim() } : {})
-    })
-  })
+  // Les canaux de la vue Tests vivent dans src/main/ipc/tests-view.ts.
+  registerTestsViewIpc({ os, pickDirectory })
+  // Les canaux de l'onglet Latence vivent dans src/main/ipc/perf.ts.
+  registerPerfIpc({ appDataRoot })
   // Racine du Brain partagé : permet à Source control de basculer sur SON dépôt git en un clic
   // (les notes du Brain sont versionnées comme le code). Lecture seule, aucun secret exposé.
   // Clôture automatique d'un run vert (commit + push sur branche dédiée). OFF par défaut.
