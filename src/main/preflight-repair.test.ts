@@ -8,6 +8,7 @@ import {
   resolveCodexLoginCwd
 } from './preflight-repair'
 import { PREFLIGHT_REPAIRS } from '../renderer/src/components/preflight-repair-affordance'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * RÉPARER depuis la popup de diagnostic.
@@ -364,10 +365,13 @@ describe('câblage IPC — la réparation est atteignable et gardée', () => {
   const source = (rel: string): string => readFileSync(join(__dirname, rel), 'utf8')
 
   it('le main garde le canal AVANT d’exécuter quoi que ce soit', () => {
-    const main = source('index.ts')
+    // La ZONE du process principal, pas un chemin : les canaux de prerequis ont quitte `index.ts`
+    // pour `src/main/ipc/preflight.ts` le 2026-09-02 sans qu'aucun cablage ne change.
+    const main = sourceProcessPrincipal()
     const start = main.indexOf("ipcMain.handle('preflight:repair'")
     expect(start).toBeGreaterThan(0)
-    const body = main.slice(start, main.indexOf("ipcMain.handle('preflight:recheck'", start))
+    const suivant = main.indexOf('ipcMain.handle(', start + 1)
+    const body = main.slice(start, suivant < 0 ? undefined : suivant)
     expect(body).toContain("assertTrustedRendererSender(event, 'Preflight')")
     expect(body.indexOf('assertTrustedRendererSender')).toBeLessThan(
       body.indexOf('repairPreflightCheck')

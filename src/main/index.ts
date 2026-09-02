@@ -9,6 +9,7 @@ import { registerActivityIpc } from './ipc/activity'
 import { registerWorktreeIpc, type WorktreeFixtureDeTest } from './ipc/worktree'
 import { registerConversationsIpc } from './ipc/conversations'
 import { registerTranscriptsIpc } from './ipc/transcripts'
+import { registerPreflightIpc } from './ipc/preflight'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -85,14 +86,7 @@ import {
 import { amitelWorkspaces } from './amitel-paths'
 import { installCrashHandlers } from './crash-handlers'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
-import {
-  appPreflightProbes,
-  getLastAppPreflightResult,
-  resolveBinOnPath,
-  runAppPreflight,
-  watchAppPreflight
-} from './preflight-probes'
-import { repairPreflightCheck } from './preflight-repair'
+import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
 import { type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { compensateOutcomeCuration } from './outcome-learning-curation'
@@ -2167,23 +2161,8 @@ Le fil reprend ensuite normalement.`
       { base: app.getPath('userData'), brainRoot: amitelBrainRoot() }
     )
   })
-  // RÉPARER un prérequis rouge d'un clic (login OAuth, démarrage brain_server) au lieu de faire
-  // recopier une commande. Renvoie ce qui a été LANCÉ — le verdict reste au re-diagnostic.
-  ipcMain.handle('preflight:repair', (event, checkId?: unknown) => {
-    assertTrustedRendererSender(event, 'Preflight')
-    if (typeof checkId !== 'string') {
-      return { started: false, detail: 'Prérequis inconnu.' }
-    }
-    return repairPreflightCheck(checkId, { pingBrain: () => appPreflightProbes().pingBrain() })
-  })
-  ipcMain.handle('preflight:recheck', (event, force?: boolean) => {
-    assertTrustedRendererSender(event, 'Preflight')
-    return runAppPreflight(force === true, preflightProviderOptions())
-  })
-  ipcMain.handle('preflight:current', (event) => {
-    assertTrustedRendererSender(event, 'Preflight')
-    return getLastAppPreflightResult()
-  })
+  // Les canaux du diagnostic de prérequis vivent dans src/main/ipc/preflight.ts.
+  registerPreflightIpc({ preflightProviderOptions })
   // Source control : lecture git READ-ONLY (statut/branche/changements/historique). Aucune action git ici.
   // Le dépôt lu est configurable (multi-repo) : le renderer fournit un cwd (défaut = cwd de l'app).
   ipcMain.handle('git:read', (event, cwd?: string) => {
