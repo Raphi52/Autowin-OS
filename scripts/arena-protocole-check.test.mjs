@@ -1,14 +1,21 @@
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { verifierProtocole } from './arena-protocole-check.mjs'
 
 const ARMS = ['a', 'b', 'c', 'x']
 
+/** Dossiers temporaires a retirer, meme si un test echoue en cours de route. */
+const aNettoyer = []
+afterEach(() => {
+  while (aNettoyer.length) rmSync(aNettoyer.pop(), { recursive: true, force: true })
+})
+
 /** Banc de reference CONFORME au protocole de skills/arena/SKILL.md. */
 function bancConforme() {
   const racine = mkdtempSync(join(tmpdir(), 'arena-proto-'))
+  aNettoyer.push(racine)
   const bench = join(racine, 'arena-bench')
   const copies = join(racine, 'worktrees-arena')
   mkdirSync(bench, { recursive: true })
@@ -101,7 +108,6 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     expect(rates.map((p) => `${p.id} ${p.detail}`)).toEqual([])
     expect(res.ok).toBe(true)
     expect(res.jugements.length).toBeGreaterThanOrEqual(4)
-    rmSync(f.racine, { recursive: true, force: true })
   })
 
   it('P1 RATE quand la section Candidats scoutés manque', () => {
@@ -110,7 +116,6 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     const res = verifierProtocole({ run: f.run, bench: f.bench })
     expect(point(res, 'P1').ok).toBe(false)
     expect(res.ok).toBe(false)
-    rmSync(f.racine, { recursive: true, force: true })
   })
 
   it('P2 RATE quand le rouge est affirmé en prose, sans sortie collée', () => {
@@ -123,7 +128,6 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     const res = verifierProtocole({ run: f.run, bench: f.bench })
     expect(point(res, 'P2').ok).toBe(false)
     expect(point(res, 'P2').detail).toMatch(/sortie collee/)
-    rmSync(f.racine, { recursive: true, force: true })
   })
 
   it('P3 RATE quand le critère n_a qu_un seul cas limite', () => {
@@ -134,7 +138,6 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     )
     const res = verifierProtocole({ run: f.run, bench: f.bench })
     expect(point(res, 'P3').ok).toBe(false)
-    rmSync(f.racine, { recursive: true, force: true })
   })
 
   it('P8 RATE quand un chiffre du tableau ne colle pas au journal du bras', () => {
@@ -144,7 +147,6 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     const res = verifierProtocole({ run: f.run, bench: f.bench })
     expect(point(res, 'P8').ok).toBe(false)
     expect(point(res, 'P8').detail).toMatch(/0,120|0\.12/)
-    rmSync(f.racine, { recursive: true, force: true })
   })
 
   it('P11 RATE quand 4/4 bras passent sans mention NON DISCRIMINANT', () => {
@@ -152,7 +154,6 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     writeFileSync(f.run, readFileSync(f.run, 'utf8').replace('3/4 bras', '4/4 bras'))
     const res = verifierProtocole({ run: f.run, bench: f.bench })
     expect(point(res, 'P11').ok).toBe(false)
-    rmSync(f.racine, { recursive: true, force: true })
   })
 
   it('P13 RATE quand les copies de travail des bras sont encore sur disque', () => {
@@ -160,6 +161,5 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     mkdirSync(join(f.copies, 'a'), { recursive: true })
     const res = verifierProtocole({ run: f.run, bench: f.bench })
     expect(point(res, 'P13').ok).toBe(false)
-    rmSync(f.racine, { recursive: true, force: true })
   })
 })
