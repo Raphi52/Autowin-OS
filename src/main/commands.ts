@@ -2143,6 +2143,15 @@ export class AppCommandBus {
                   cacheReadTokens: step.usage?.cacheReadTokens,
                   costUsd: step.usage?.costUsd ?? step.costUsd,
                   usageCallId: step.usageCallId,
+                  // Rattachement EXACT au tour et a la phase : sans eux, le rapport de rendement
+                  // ne pouvait relier une depense a une demande que par l'heure, donc a peu pres.
+                  turnId: orchestrationTurnId,
+                  phase:
+                    (step.execution?.phase ??
+                      (step.detail ?? '')
+                        .replace(/^phase /, '')
+                        .replace(/ \(réparation\)$/, '')) ||
+                    undefined,
                   // La duree etait DEJA mesuree par l'orchestrateur et jetee ici : sans elle, on ne
                   // pouvait repondre qu'a « quelle phase coute », pas a « quelle phase est LENTE ».
                   durationMs: step.durationMs,
