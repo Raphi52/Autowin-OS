@@ -241,6 +241,20 @@
   border-top-color: var(--line);
 }
 
+/* MINI-PAGES du modèle (`.md-html`) — elles sont ÉCRITES avec des couleurs de
+   nuit : texte clair, accents or. C'est la consigne de style du modèle, elle
+   suppose un fond sombre. Le conteneur n'en pose aucun (choix assumé de
+   `ChatView.css` l.1684), donc en mode clair leur texte se perd sur le blanc.
+   Signalé le 2026-09-03 : « dans certaines réponses le texte est trop clair ».
+   On rend au bloc le fond qu'il suppose : il devient un encart sombre assumé.
+   Écrit ICI et non dans ChatView.css, verrouillé par un test rouge préexistant. */
+:root[data-theme='clair'] .md-html {
+  padding: 12px 14px;
+  border: 1px solid rgba(18, 24, 40, 0.14);
+  border-radius: 10px;
+  background: #12161f;
+}
+
 /* Le bloc de clôture (Fait / Maintenant / Reste à faire / Recommandé) en thème
    clair est traité dans `ChatView.css`, juste après la règle sombre d'origine —
    c'est là que doit vivre sa version claire, pour que l'ordre des règles reste
