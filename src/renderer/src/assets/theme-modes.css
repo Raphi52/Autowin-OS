@@ -213,3 +213,25 @@
   color: var(--text);
   border-color: rgba(154, 111, 16, 0.45);
 }
+
+/* ----------------------------------------------------------------------------
+   MENU DU CLIC DROIT sur une conversation (Renommer / Ranger / Supprimer).
+   `ChatView.css` l.490 le peint en `background: #000` EN DUR, et ses entrées sont
+   en `--text-dim` : sur fond clair, un rectangle noir avec du gris pâle dedans.
+   Signalé par l'utilisateur le 2026-09-03, capture à l'appui.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .conv-menu-pop {
+  background: #ffffff;
+  border-color: var(--line);
+  box-shadow: 0 10px 28px rgba(18, 24, 40, 0.18);
+}
+:root[data-theme='clair'] .conv-menu-input {
+  background: #ffffff;
+  color: var(--text);
+}
+:root[data-theme='clair'] .conv-menu-pop button {
+  color: var(--text);
+}
+:root[data-theme='clair'] .conv-menu-pop button:hover {
+  background: rgba(15, 20, 35, 0.06);
+}
