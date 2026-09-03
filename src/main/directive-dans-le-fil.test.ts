@@ -18,13 +18,11 @@ import { ConversationStore } from './store/conversations'
  */
 describe('une réponse injectée pendant un tour devient un VRAI message du fil', () => {
   /**
-   * DÉFAUT VÉCU (conv-46, 2026-09-01) : « j'ai écrit un message et il se passe rien ».
-   *
-   * La consigne était reçue et traitée, mais elle s'écrivait EN FIN de fil — donc SOUS le brouillon
-   * de réponse posé par `beginTurn`. L'utilisateur voyait sa phrase en dernier, rien en dessous, et
-   * la réponse qui la traitait AU-DESSUS d'elle. Ce test fixe l'ordre de lecture.
+   * CHOIX UTILISATEUR DU 2026-09-03 : « quand j'écris pendant que tu bosses, ça l'écrit au-dessus
+   * au lieu d'en dessous ». Le message tapé pendant un tour doit rester le DERNIER du fil, à sa
+   * place chronologique. Ce test remplace l'ordre inverse posé en conv-46.
    */
-  it('se place AVANT la réponse du tour qui la consomme', () => {
+  it('se place APRÈS la réponse en cours — en bas du fil', () => {
     let horloge = 1
     const store = new ConversationStore(() => horloge++)
     const conv = store.create({ title: 'A', provider: 'claude' })
@@ -40,15 +38,15 @@ describe('une réponse injectée pendant un tour devient un VRAI message du fil'
     const messages = store.get(conv.id)!.messages
     expect(messages.map((message) => message.content)).toEqual([
       'commite le chantier',
-      'ensuite push sur azure sur main',
-      ''
+      '',
+      'ensuite push sur azure sur main'
     ])
     const rangConsigne = messages.findIndex((message) => message.messageId === messageId)
     const rangReponse = messages.findIndex(
       (message) => message.role === 'assistant' && message.turnId === 't1'
     )
     expect(rangConsigne).toBeGreaterThanOrEqual(0)
-    expect(rangConsigne).toBeLessThan(rangReponse)
+    expect(rangConsigne).toBeGreaterThan(rangReponse)
   })
 
   it('écrit un message utilisateur PERSISTÉ et prévient l’écran', () => {

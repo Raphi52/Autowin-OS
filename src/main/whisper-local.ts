@@ -244,8 +244,32 @@ export function filsParDefaut(coeurs: number = cpus().length): number {
 const LIGNE_JOURNAL =
   /^(whisper_|ggml_|main:|system_info:|operator\(\)|load_|init:|gpu_|error:|warning:|\s*$)/i
 const HORODATAGE = /^\s*\[\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}\]\s*/
-/** Les annotations de bruit : whisper les rend quand il n'y a PAS de parole. */
-const BRUIT = /^[[(](blank_audio|silence|music|musique|sons?|applaudissements|rires|bruit)[\])]$/i
+/**
+ * Les annotations de NON-PAROLE. Whisper les rend entre crochets ou parentheses des qu'il entend
+ * autre chose que des mots : (rires), [BLANK_AUDIO], (soupir), [bruit de bouche]... La liste est
+ * OUVERTE, et le modele en invente : la filtrer par mots-cles laissait passer tout le reste. Une
+ * annotation peut aussi se glisser AU MILIEU d'une phrase dictee (« bonjour (rires) ca va »), donc
+ * on la retire partout, pas seulement quand elle occupe la ligne entiere.
+ */
+const ANNOTATION = /[[(][^\])]{0,60}[\])]|\*[^*]{0,60}\*/g
+
+/**
+ * Une note ne s'efface pas comme un caractere parasite : elle QUALIFIE toute la ligne. « ♪ Musique
+ * ♪ » ou « ♪ on ira tous au paradis ♪ » est du chant ou un fond sonore, pas une dictee — retirer
+ * seulement les notes laisserait le mot « Musique » partir en commande.
+ */
+const LIGNE_MUSICALE = /[♪♫♬♩♭♮♯]/
+
+/**
+ * Les PHRASES DE GENERIQUE. whisper.cpp a ete entraine sur des sous-titres YouTube : sur du silence
+ * ou du souffle, il comble avec une phrase de fin de video (« Merci d'avoir regarde cette video »,
+ * « Sous-titrage ST'501 »). Ce n'est PAS une annotation : c'est du texte de parole ordinaire, donc
+ * aucune regle de forme ne peut l'attraper — seule une liste fermee le peut, et elle restera
+ * incomplete. Elle ne s'applique qu'a une ligne ENTIEREMENT composee de cette phrase, pour ne
+ * jamais amputer une vraie dictee. Source : dataset sachaarbonel/whisper-hallucinations.
+ */
+const GENERIQUE =
+  /^(merci d[e'’] ?avoir regarde[e]?( cette video)?|merci( beaucoup)? d[e'’] ?avoir ecoute|j[e'’] ?espere que (cette video vous a plu|vous avez apprecie la video)|sous-?titr(age|es)([ ,].*)?|abonnez-vous( a la chaine)?|a bientot pour une nouvelle video|thanks? for watching|subtitles by.*|amara\.org.*)$/i
 
 /**
  * De la sortie brute de la CLI à la PAROLE. Sans ce filtre, le journal du moteur (« loading
@@ -256,8 +280,15 @@ export function analyserTranscription(sortie: string): string {
   for (const brute of sortie.split(/\r?\n/)) {
     const ligne = brute.replace(HORODATAGE, '').trim()
     if (ligne === '' || LIGNE_JOURNAL.test(ligne)) continue
-    if (BRUIT.test(ligne)) continue
-    morceaux.push(ligne)
+    const parole = ligne
+      .replace(ANNOTATION, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (LIGNE_MUSICALE.test(parole)) continue
+    // Une ligne qui ne portait QUE des annotations ne laisse rien : ce n'etait pas de la parole.
+    if (parole === '' || /^[\s.,;:!?-]+$/.test(parole)) continue
+    if (GENERIQUE.test(parole.replace(/[.!…]+$/, '').trim())) continue
+    morceaux.push(parole)
   }
   return morceaux.join(' ').replace(/\s+/g, ' ').trim()
 }
