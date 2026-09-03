@@ -252,6 +252,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
      */
     const [dicteeEtat, setDicteeEtat] = useState<EtatDictee>('inactif')
     const [dicteeErreur, setDicteeErreur] = useState<string | null>(null)
+    /**
+     * APERÇU EN COURS DE PHRASE — texte PROVISOIRE, jamais inséré dans le champ : il est remplacé au
+     * rafraîchissement suivant, puis effacé quand la phrase finie est écrite pour de bon. Sans lui,
+     * quelqu'un qui parle sans pause voit un champ vide et croit que le micro est mort.
+     */
+    const [dicteeApercu, setDicteeApercu] = useState('')
     const dicteeRef = useRef<Dictee | null>(null)
     // `null` = pas encore su. Le bouton n'est barré que sur un « non » LU, jamais sur une inconnue.
     const [dicteeInstallee, setDicteeInstallee] = useState<boolean | null>(null)
@@ -296,6 +302,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         // La FIN de phrase restée dans le tampon ; les phrases précédentes sont déjà écrites.
         const texte = (await dictee?.arreter()) ?? ''
         dicteeRef.current = null
+        setDicteeApercu('')
         setDicteeEtat('inactif')
         if (texte === '') {
           if (dictee?.aDejaEcrit !== true) setDicteeErreur('Rien n’a été reconnu.')
@@ -317,13 +324,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         return
       }
       const dictee = new Dictee(
-        dependancesDicteeNavigateur(transcrire, (texte) => {
-          // Micro encore ouvert : le texte apparaît dans la barre de prompt pendant qu'on parle.
-          if (dicteeRef.current === dictee) ecrireDictee(texte)
-        })
+        dependancesDicteeNavigateur(
+          transcrire,
+          (texte) => {
+            // Micro encore ouvert : le texte apparaît dans la barre de prompt pendant qu'on parle.
+            if (dicteeRef.current === dictee) ecrireDictee(texte)
+          },
+          (apercu) => {
+            if (dicteeRef.current === dictee) setDicteeApercu(apercu)
+          }
+        )
       )
       dicteeRef.current = dictee
       setDicteeErreur(null)
+      setDicteeApercu('')
       setDicteeEtat('ecoute')
       if (!(await dictee.demarrer())) {
         dicteeRef.current = null
@@ -568,6 +582,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               </span>
             </button>
           </div>
+          {dicteeApercu !== '' && dicteeEtat === 'ecoute' ? (
+            <div
+              className="composer-dictee-apercu"
+              data-testid="composer-dictee-apercu"
+              role="status"
+            >
+              {dicteeApercu}
+            </div>
+          ) : null}
           {dicteeErreur ? (
             <div
               className="composer-dictee-message"

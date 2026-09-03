@@ -3717,6 +3717,15 @@ ol.md-list li {
   line-height: 1.35;
   color: #ff8a96;
 }
+/* L'APERÇU EST PROVISOIRE : atténué et en italique, pour qu'on ne le confonde pas avec le texte
+   déjà écrit dans le champ — celui-là seul sera envoyé. */
+.composer-dictee-apercu {
+  margin: 4px 2px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  font-style: italic;
+  color: rgba(221, 227, 238, 0.55);
+}
 @keyframes composer-dictee-pulse {
   0%,
   100% {

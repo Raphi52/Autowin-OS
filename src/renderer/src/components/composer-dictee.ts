@@ -56,7 +56,21 @@ export interface DependancesDictee {
    * d'arrêt. Absent = ancien comportement (tout à la fin).
    */
   onTexte?: (texte: string) => void
+  /**
+   * APERÇU PROVISOIRE — appelé pendant qu'une phrase est ENCORE en cours, avec la transcription du
+   * tampon partiel. Ce texte n'est PAS définitif : il est remplacé par le suivant, puis effacé
+   * (chaîne vide) quand la phrase finie part par `onTexte`. Il ne doit jamais être inséré dans le
+   * champ, sinon le même mot y serait écrit deux fois.
+   */
+  onApercu?: (texte: string) => void
 }
+
+/**
+ * PÉRIODE DE L'APERÇU. La reconnaissance coûte ~2 s par appel sur la machine de référence
+ * (mesuré le 2026-09-03 : 1 s d'audio, modèle small-q5_1, `-ac 512` → 1994 ms). Rafraîchir plus
+ * vite ne ferait qu'empiler des appels qui arrivent après la phrase suivante.
+ */
+const MS_APERCU = 1_500
 
 /** Même taille de tampon que le moteur Jarvis : ~93 ms à 44,1 kHz. */
 const TAILLE_TAMPON = 4096
@@ -102,6 +116,12 @@ export class Dictee {
   private file: Promise<void> = Promise.resolve()
   /** Au moins une phrase a-t-elle été écrite dans le champ ? Sert au message « rien reconnu ». */
   private aEcrit = false
+  /** Une transcription d'aperçu est-elle en vol ? Deux en parallèle se disputent le processeur. */
+  private apercuEnVol = false
+  /** Phrases définitives en attente de transcription : l'aperçu leur cède la place, elles priment. */
+  private phrasesEnVol = 0
+  /** Échantillons déjà couverts par le dernier aperçu lancé : sert à espacer les rafraîchissements. */
+  private apercuDepuis = 0
 
   constructor(private readonly deps: DependancesDictee) {}
 
@@ -153,11 +173,48 @@ export class Dictee {
     // texte dans le champ. Le plafond long de Jarvis laisserait l'écran vide 15 s.
     const pas = avancerVad(this.vad, bloc, this.taux, SEUIL_PAROLE, DUREE_MAX_DICTEE_MS)
     this.vad = pas.etat
-    if (pas.segment) this.enfiler(pas.segment, this.taux)
+    if (pas.segment) {
+      this.apercuDepuis = 0
+      this.enfiler(pas.segment, this.taux)
+      return
+    }
+    this.peutEtreApercu()
+  }
+
+  /**
+   * APERÇU DU TAMPON EN COURS. Rien ne sort de la découpe tant que la phrase n'est pas finie : sans
+   * ceci, l'utilisateur qui parle voit un champ vide et en conclut que le micro ne marche pas.
+   * Un seul aperçu à la fois, et pas plus d'un par MS_APERCU d'audio nouveau.
+   */
+  private peutEtreApercu(): void {
+    // Une phrase définitive en cours de transcription PRIME : elle ira dans le champ, pas l'aperçu.
+    // Les faire tourner ensemble mettrait deux moteurs whisper sur le même processeur.
+    if (!this.deps.onApercu || this.apercuEnVol || this.phrasesEnVol > 0 || !this.vad.parle) return
+    let total = 0
+    for (const b of this.vad.tampon) total += b.length
+    if (total - this.apercuDepuis < (MS_APERCU / 1000) * this.taux) return
+    this.apercuDepuis = total
+    const partiel = coller(this.vad.tampon)
+    const taux = this.taux
+    this.apercuEnVol = true
+    // MÊME FILE que les phrases définitives : un seul moteur whisper tourne à la fois, sinon les
+    // deux se disputent le processeur et l'aperçu retarde le texte qui compte vraiment.
+    this.file = this.file.then(async () => {
+      try {
+        const texte = (await this.deps.transcrire(encoderWav16k(partiel, taux))).trim()
+        // Une phrase finie entre-temps a déjà écrit le vrai texte : l'aperçu serait un doublon.
+        if (this.actif && this.vad.parle && texte !== '') this.deps.onApercu?.(texte)
+      } catch {
+        // Un aperçu raté n'est pas une panne : la phrase finie reste transcrite normalement.
+      } finally {
+        this.apercuEnVol = false
+      }
+    })
   }
 
   /** Une phrase finie part en transcription, et son texte est écrit AUSSITÔT dans le champ. */
   private enfiler(segment: Float32Array, taux: number): void {
+    this.phrasesEnVol += 1
     this.file = this.file.then(async () => {
       let texte = ''
       try {
@@ -165,9 +222,12 @@ export class Dictee {
       } catch {
         // Une phrase ratée ne coupe pas l'écoute : on continue de dicter.
         return
+      } finally {
+        this.phrasesEnVol -= 1
       }
       if (texte === '') return
       this.aEcrit = true
+      this.deps.onApercu?.('')
       this.deps.onTexte?.(texte)
     })
   }
@@ -179,6 +239,7 @@ export class Dictee {
   async arreter(): Promise<string> {
     if (!this.actif) return ''
     this.actif = false
+    this.deps.onApercu?.('')
     const reste = this.vad.tampon.length > 0 ? coller(this.vad.tampon) : null
     const taux = this.taux
     this.vad = etatVadInitial
@@ -196,6 +257,7 @@ export class Dictee {
   /** Coupe sans rien transcrire : l'utilisateur a annulé. */
   annuler(): void {
     this.actif = false
+    this.deps.onApercu?.('')
     this.vad = etatVadInitial
     this.fermer()
   }
@@ -218,7 +280,8 @@ export class Dictee {
 /** Le câblage RÉEL du navigateur : non testable hors fenêtre, il reste nu. */
 export function dependancesDicteeNavigateur(
   transcrire: (wav: Uint8Array) => Promise<string>,
-  onTexte?: (texte: string) => void
+  onTexte?: (texte: string) => void,
+  onApercu?: (texte: string) => void
 ): DependancesDictee {
   return {
     micro: () =>
@@ -230,6 +293,7 @@ export function dependancesDicteeNavigateur(
         sampleRate: TAUX_WHISPER
       }),
     transcrire,
-    onTexte
+    onTexte,
+    onApercu
   }
 }

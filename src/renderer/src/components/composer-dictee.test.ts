@@ -117,6 +117,74 @@ describe('Dictee', () => {
     expect(await dictee.arreter()).toBe('')
   })
 
+  /**
+   * L'APERÇU est la réponse au défaut mesuré « le texte ne s'affiche pas en temps réel » : sans lui,
+   * rien ne sort tant que la phrase n'est pas finie, et le champ reste vide pendant qu'on parle.
+   */
+  it('rend un aperçu PENDANT la phrase, sans jamais l’écrire dans le champ', async () => {
+    const { deps, pousser } = fauxDeps()
+    const apercus: string[] = []
+    const ecrits: string[] = []
+    const dictee = new Dictee({
+      ...deps,
+      onTexte: (t) => ecrits.push(t),
+      onApercu: (t) => apercus.push(t)
+    })
+    await dictee.demarrer()
+    // 2 s de parole continue, sans silence : aucune phrase n'est finie, donc rien dans le champ.
+    pousser(parole(16_000))
+    pousser(parole(16_000))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(apercus).toContain('texte dicté')
+    expect(ecrits).toEqual([])
+    await dictee.arreter()
+  })
+
+  it('efface l’aperçu quand la phrase définitive est écrite', async () => {
+    const { deps, pousser } = fauxDeps()
+    const apercus: string[] = []
+    const dictee = new Dictee({ ...deps, onTexte: () => {}, onApercu: (t) => apercus.push(t) })
+    await dictee.demarrer()
+    pousser(parole(16_000))
+    pousser(parole(16_000))
+    await new Promise((r) => setTimeout(r, 0))
+    pousser(new Float32Array(32_000))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(apercus.at(-1)).toBe('')
+    await dictee.arreter()
+  })
+
+  it('n’empile pas deux aperçus en parallèle', async () => {
+    let enVol = 0
+    let max = 0
+    const transcrire = vi.fn(async (_wav: Uint8Array) => {
+      enVol += 1
+      max = Math.max(max, enVol)
+      await new Promise((r) => setTimeout(r, 5))
+      enVol -= 1
+      return 'texte dicté'
+    })
+    const { deps, pousser } = fauxDeps(transcrire)
+    const dictee = new Dictee({ ...deps, onApercu: () => {} })
+    await dictee.demarrer()
+    for (let i = 0; i < 6; i += 1) pousser(parole(16_000))
+    await new Promise((r) => setTimeout(r, 30))
+    expect(max).toBe(1)
+    await dictee.arreter()
+  })
+
+  it('annuler efface l’aperçu affiché', async () => {
+    const { deps, pousser } = fauxDeps()
+    const apercus: string[] = []
+    const dictee = new Dictee({ ...deps, onApercu: (t) => apercus.push(t) })
+    await dictee.demarrer()
+    pousser(parole(16_000))
+    pousser(parole(16_000))
+    await new Promise((r) => setTimeout(r, 0))
+    dictee.annuler()
+    expect(apercus.at(-1)).toBe('')
+  })
+
   it('un micro refusé rend false', async () => {
     const { deps } = fauxDeps()
     const dictee = new Dictee({
