@@ -241,17 +241,10 @@
   border-top-color: var(--line);
 }
 
-/* BLOC DE CLÔTURE `.md-final-summary` (Fait / Maintenant / Reste à faire /
-   Recommandé) : son fond est un dégradé écrit en dur qui finit sur un brun-noir
-   à 76 % (ChatView.css l.967), plus un halo doré pensé pour du noir. Signalé le
-   2026-09-03 : « le TLDR a un fond en dégradé sombre ». On garde la teinte dorée
-   du départ, on remplace la queue noire par de l'ivoire et on éteint le halo. */
-:root[data-theme='clair'] .md-final-summary {
-  background: linear-gradient(145deg, rgba(154, 111, 16, 0.1), rgba(255, 253, 247, 0.96));
-  border-color: rgba(154, 111, 16, 0.42);
-  color: var(--text);
-  box-shadow: none;
-}
+/* Le bloc de clôture (Fait / Maintenant / Reste à faire / Recommandé) en thème
+   clair est traité dans `ChatView.css`, juste après la règle sombre d'origine —
+   c'est là que doit vivre sa version claire, pour que l'ordre des règles reste
+   lisible. Ne pas la redupliquer ici (doublon retiré le 2026-09-03). */
 
 /* ----------------------------------------------------------------------------
    TEXTE DES MESSAGES — écrit en clair EN DUR dans `cosmic-outline.css` :
