@@ -675,6 +675,32 @@
   color: #8b8f96;
 }
 
+/* MODE CLAIR — le bloc `.theme-serious` juste au-dessus impose `#8b8f96` à toute
+   une famille de libellés (eyebrow, nom du modèle assigné, étiquettes de slot,
+   liens d'action). Sa spécificité à deux niveaux bat une règle simple : il faut
+   donc la même forme ici. S'y ajoutent le titre de section, qui n'a aucune
+   couleur propre et héritait du sombre, et le compteur en petit. Signalé le
+   2026-09-03 : « Exploration et vérification parallèles », « Opus 5 · CLI » et
+   les liens « Glissez un modèle ici » restaient trop clairs. */
+:root[data-theme='clair'] .theme-serious .topology-eyebrow,
+:root[data-theme='clair'] .theme-serious .topology-panel > header span,
+:root[data-theme='clair'] .theme-serious .topology-parallel-heading span,
+:root[data-theme='clair'] .theme-serious .topology-model small,
+:root[data-theme='clair'] .theme-serious .topology-slot-copy span,
+:root[data-theme='clair'] .theme-serious .topology-slot-copy small,
+:root[data-theme='clair'] .theme-serious .topology-slot label,
+:root[data-theme='clair'] .theme-serious .topology-toolbar p,
+:root[data-theme='clair'] .theme-serious .topology-panel > header p {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .topology-parallel-heading h3,
+:root[data-theme='clair'] .topology-slot-copy strong {
+  color: var(--text);
+}
+:root[data-theme='clair'] .topology-parallel-heading small {
+  color: var(--text-dim);
+}
+
 @media (max-width: 1100px) {
   .agents-topology {
     grid-template-columns: 230px minmax(0, 1fr);
