@@ -29,6 +29,7 @@ import {
   hydrateStoredAssistant,
   isRunRequestCurrent,
   doitSuivreLeBas,
+  doitSuivreLeRoutage,
   compenserRetrecissementDuFil,
   doitIgnorerDefilementDeBascule,
   isChatNearBottom,
@@ -3645,7 +3646,8 @@ export function ChatView({
               hit
             }))
           ),
-          groupesReplies
+          // Pendant une recherche, aucun repli ne masque un resultat : chercher, c'est vouloir voir.
+          convQuery.trim() ? {} : groupesReplies
         ),
         // La date n'arbitre qu'entre FRERES : un `.sort()` a plat ecrasait le rang par nature
         // (« Auto-kaizen » remontait en tete) et l'ordre parent-avant-enfant (un sous-dossier
@@ -3657,7 +3659,7 @@ export function ChatView({
         (groupe) => recenceUtilisateur(groupe.items[0].hit.conversation),
         conversationDateOrder
       ),
-    [conversationHits, groupesReplies, conversationDateOrder]
+    [conversationHits, groupesReplies, conversationDateOrder, convQuery]
   )
 
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
@@ -3893,7 +3895,9 @@ export function ChatView({
             <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
           )}
           {groupes.map((groupe) => {
-            const replie = estReplie(groupe.key, groupesReplies)
+            // Une RECHERCHE en cours deplie tout : un resultat cache dans un dossier replie
+            // faisait croire que la conversation n'existait plus (« je tape 170, ca me montre rien »).
+            const replie = !convQuery.trim() && estReplie(groupe.key, groupesReplies)
             return (
               <Fragment key={groupe.key}>
                 {/*
