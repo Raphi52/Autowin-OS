@@ -166,8 +166,10 @@
   flex-wrap: wrap;
   gap: 10px;
   padding: 8px 10px;
-  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
-  border: 0;
+  /* Cadre REMIS a la demande de l'utilisateur du 03/09 (« remet comme avant ») : sans lui, les
+     cases « Traiter reellement » et « Mode auto » flottaient nues sur le fond. Exception assumee
+     au retrait general des bords, limitee a CETTE barre. */
+  border: 1px solid var(--container-border);
   border-radius: var(--container-radius-card);
   background: color-mix(in srgb, var(--surface-card) 88%, transparent);
   font-size: 11px;

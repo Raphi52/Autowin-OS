@@ -1431,9 +1431,10 @@
 .delete-confirm-danger:hover {
   background: #d14a71;
 }
+/* D2c-3 : le rappel des raccourcis etait en 8 px — illisible, donc inutile. Il n'occupe
+   plus d'etage : il vit en info-bulle sur le bouton d'envoi. */
 .composer-hint {
-  color: var(--text-faint);
-  font-size: 8px;
+  display: none;
 }
 .file-drop-overlay {
   position: absolute;
