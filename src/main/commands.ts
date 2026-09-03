@@ -2184,6 +2184,8 @@ export class AppCommandBus {
                   // Rattachement EXACT au tour et a la phase : sans eux, le rapport de rendement
                   // ne pouvait relier une depense a une demande que par l'heure, donc a peu pres.
                   turnId: orchestrationTurnId,
+                  // Sans le run, une depense de sous-agent n'est rattachable a aucun bras de banc.
+                  runId: currentRunId ?? step.execution?.runId,
                   phase:
                     (step.execution?.phase ??
                       (step.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '')) ||
