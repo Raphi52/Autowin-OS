@@ -1,0 +1,152 @@
+{
+  "schema": "amitel-rag-eval/v1",
+  "description": "Questions paraphrasées couvrant gouvernance, Autowin OS et domaines RIG. Les cibles sont des sources locales vérifiées présentes dans le vault.",
+  "cases": [
+    {
+      "id": "brain-architecture",
+      "query": "Pourquoi le deuxième cerveau partagé Amitel combine-t-il des notes Obsidian et des graphes de code régénérables ?",
+      "expected_paths": ["knowledge/decisions/amitel-brain-architecture.md"]
+    },
+    {
+      "id": "smb-python-path",
+      "query": "Sous Windows, quelle écriture de chemin réseau Python évite que le parcours du partage GED2 ne retourne aucun fichier ?",
+      "expected_paths": ["knowledge/lessons/smb-ged2-forward-slash-python.md"]
+    },
+    {
+      "id": "rig-host-plugins",
+      "query": "Comment le moteur RIG charge-t-il ses plugins et quel rôle joue le host applicatif ?",
+      "expected_paths": ["knowledge/domain/rig-host-plugins-moteur.md"]
+    },
+    {
+      "id": "rig-drift-sql",
+      "query": "Quelles différences existent entre le modèle SQL RIG documenté, les classes métier et le DDL réellement observé ?",
+      "expected_paths": ["knowledge/domain/rig-acces-donnees-drift-sql.md"]
+    },
+    {
+      "id": "rig-process-duplicate-risks",
+      "query": "Pourquoi les contrôles de PROC_DEPPCM et le backfill de PROC_RELCLI ne garantissent-ils pas l'absence de doublons en concurrence ?",
+      "expected_paths": ["knowledge/domain/rig-risques-doublons-concurrence-processus.md"]
+    },
+    {
+      "id": "rig-ult-composition-volumes",
+      "query": "Quelle différence entre MODELE_ULT et ADAPTATEUR_ULT, et quels types E1 A1 T4 sont les plus réutilisés dans les opérations RIG ?",
+      "expected_paths": ["knowledge/domain/rig-configuration-ult-volumes-et-composition.md"]
+    },
+    {
+      "id": "rig-edi-vs-amimessage",
+      "query": "Quelle différence entre le pipeline EDI planifié par Windows et le bus SQL AMIMESSAGE consommé par les services RIG ?",
+      "expected_paths": ["knowledge/domain/rig-edi-et-traitements-asynchrones.md"]
+    },
+    {
+      "id": "rig-judiciaire-rcs-boundary",
+      "query": "Comment les workflows judiciaires et RCS partagent-ils FormAutomate tout en gardant des objets métier distincts ?",
+      "expected_paths": ["knowledge/domain/rig-workflows-judiciaires-et-rcs.md"]
+    },
+    {
+      "id": "rig-production-transverse",
+      "query": "Comment relier éditions Lot 1 Lot 2, Crystal Reports, facturation, habilitations et logs dans RIG ?",
+      "expected_paths": ["knowledge/domain/rig-production-transverse-editions-securite.md"]
+    },
+    {
+      "id": "rig-build-reconstruction",
+      "query": "Quel ordre sûr suivre pour builder, gérer le GAC, déployer puis reconstruire un plugin RIG ?",
+      "expected_paths": ["knowledge/domain/rig-build-deploiement-et-reconstruction.md"]
+    },
+    {
+      "id": "rig-legacy-config-engine",
+      "query": "Comment le moteur FormAutomate combine-t-il Processus Etape Operation ULT, configuration data-driven et composants VB6 COM ?",
+      "expected_paths": ["knowledge/domain/rig-moteur-graphique-legacy-et-configuration.md"]
+    },
+    {
+      "id": "rig-secondary-sql-objects",
+      "query": "Où sont synthétisés les vues, fonctions, procédures stockées, RIG_PARAMETRE et DDL des bases secondaires ?",
+      "expected_paths": ["knowledge/domain/rig-objets-sql-secondaires-catalogue.md"]
+    },
+    {
+      "id": "rig-overview",
+      "query": "Donne une vue d'ensemble de RigApplication, de ses couches et des grands flux métier.",
+      "expected_paths": ["knowledge/domain/rig-application-vue-ensemble.md"]
+    },
+    {
+      "id": "rig-graph-reconstruction",
+      "query": "Comment passer des graphes AST des dépôts RIG aux phases d'une reconstruction fidèle ?",
+      "expected_paths": ["knowledge/domain/rig-ast-graphes-vers-phases-reconstruction.md"]
+    },
+    {
+      "id": "rig-navigation",
+      "query": "Par où commencer pour naviguer dans toutes les cartes de connaissance RIG sans charger le corpus entier ?",
+      "expected_paths": ["knowledge/domain/rig-brain-carte-navigation.md", "knowledge/_maps/rig.md"]
+    },
+    {
+      "id": "autowin-model-accounts",
+      "query": "Comment Autowin OS choisit-il les modèles Claude ou Codex et comment les comptes sont-ils utilisés ?",
+      "expected_paths": [
+        "knowledge/domain/autowin-os-interaction-des-modeles-et-des-comptes-v2.md",
+        "knowledge/domain/autowin-os-realite-produit-v3.md"
+      ]
+    },
+    {
+      "id": "autowin-headless",
+      "query": "Comment lancer une instance Autowin isolée sans polluer les conversations réelles pour faire une autovérification ?",
+      "expected_paths": ["knowledge/domain/autowin-os-instances-headless-isolees-pour-autoverification-v2.md"]
+    },
+    {
+      "id": "autowin-packaging",
+      "query": "Quelle commande reconstruit le package desktop canonique Autowin et remet le raccourci Windows à jour ?",
+      "expected_paths": ["knowledge/runbooks/autowin-os-build-clean-packaging-et-raccourcis.md"]
+    },
+    {
+      "id": "autowin-memory",
+      "query": "Comment la vue Memory d'Autowin relie-t-elle le Brain partagé et les graphes des dépôts ?",
+      "expected_paths": ["knowledge/domain/autowin-os-memory-brain-et-graphes-v2.md"]
+    },
+    {
+      "id": "rig-integrations-map",
+      "query": "Où trouver la carte des services, batchs et intégrations externes de RIG ?",
+      "expected_paths": ["knowledge/_maps/rig-services-integrations.md"]
+    },
+    {
+      "id": "rig-data-map",
+      "query": "Quelle carte synthétise les données, tables et paramètres métier RIG ?",
+      "expected_paths": ["knowledge/_maps/rig-modele-donnees.md"]
+    },
+    {
+      "id": "rig-ult-adapter",
+      "query": "Dans l'adaptateur ULT, quels types portent le plus de lignes et combien d'éléments E1 sont recensés ?",
+      "expected_paths": ["knowledge/domain/rigapplication-documentation/artifacts/data-config/adaptateur-ult.md"]
+    },
+    {
+      "id": "brain-contribution",
+      "query": "Quel workflow suivre pour proposer puis promouvoir une connaissance durable dans Amitel Brain ?",
+      "expected_paths": [
+        "knowledge/_maps/contribution.md",
+        "knowledge/decisions/curation-full-ai.md"
+      ]
+    },
+    {
+      "id": "rig-source-mirror",
+      "query": "Comment savoir quels documents du snapshot RigApplication ont été importés verbatim et où les parcourir ?",
+      "expected_paths": [
+        "knowledge/_maps/rig-source-mirror.md",
+        "knowledge/_maps/rig-couverture.md",
+        "knowledge/domain/rigapplication-documentation/INDEX.md",
+        "knowledge/domain/rigapplication-documentation/_IMPORT.md"
+      ]
+    },
+    {
+      "id": "negative-cooking",
+      "query": "Quelle quantité de farine faut-il pour préparer des crêpes bretonnes ?",
+      "max_dense": 0.35
+    },
+    {
+      "id": "negative-weather",
+      "query": "Quel temps fera-t-il demain matin à Tokyo ?",
+      "max_dense": 0.35
+    },
+    {
+      "id": "negative-football",
+      "query": "Quel club gagnera la prochaine finale de football européen ?",
+      "max_dense": 0.35
+    }
+  ]
+}
