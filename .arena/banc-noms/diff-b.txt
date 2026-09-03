@@ -1,0 +1,25 @@
+diff --git a/skills/arena/SKILL.md b/skills/arena/SKILL.md
+index df1e7dae..9d36c709 100644
+--- a/skills/arena/SKILL.md
++++ b/skills/arena/SKILL.md
+@@ -138,6 +138,20 @@ Avant de rendre la sortie ci-dessous :
+ npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc>
+ ```
+ 
++**Le dossier du banc doit porter ces fichiers, à ces noms exacts** — le contrôle les cherche sur
++disque et un nom différent est lu comme un fichier absent, donc comme un protocole NON TENU :
++- `tache.txt` — l'énoncé de la tâche, mot pour mot, celui reçu par les quatre bras ;
++- `check.mjs` — le critère de succès exécutable (celui constaté ROUGE à l'étape 1) ;
++- `prompt-<bras>.txt` — un par bras (`prompt-a.txt`, `prompt-b.txt`, `prompt-c.txt`,
++  `prompt-x.txt`) : l'énoncé identique + le workflow imposé de ce bras ;
++- `out-<bras>.json` — un par bras (`out-a.json`, `out-b.json`, `out-c.json`, `out-x.json`) : le
++  retour brut du sous-agent, d'où se lisent `total_cost_usd`, la durée et les tours ;
++- `out-judge.json` — le retour brut du juge externe.
++
++Ces fichiers s'écrivent au fil de la procédure (`tache.txt`, `check.mjs` et les `prompt-<bras>.txt`
++AVANT le message qui lance les bras ; les `out-<bras>.json` à leur retour ; `out-judge.json` à
++l'étape 4), jamais reconstitués après coup pour faire passer le contrôle.
++
+ Il lit les fichiers du banc et rend 13 points OK/RATE (candidats écrits, rouge collé, cas limites du
+ critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
+ `total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,

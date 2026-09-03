@@ -256,6 +256,32 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
  * le meme appel sur `C:` coute des millisecondes. Le chemin est CONDENSE (racine + fichier) :
  * l'agregation par operation doit regrouper les acces d'un meme partage, pas les eparpiller.
  */
+/**
+ * LA CLE DE CUMUL D'UN APPEL — assez fine pour nommer un coupable, assez grosse pour agreger.
+ *
+ * Mesure du 2026-09-03 (`gels.jsonl`, 536 gels) : `execFileSync` porte a lui seul 348 s de fenetre
+ * morte sur 2 409 appels, dans TOUS les gisements — mais sous ce nom unique, rien ne dit QUELLE
+ * commande. L'`indice` (l'IPC ouvert au moment du gel) ne le dit pas non plus : c'est un contexte,
+ * pas un appelant, et 405 gels n'en ont aucun. On garde donc le programme et sa SOUS-COMMANDE
+ * (`git diff`, `git cherry`, `git for-each-ref`) — jamais les arguments suivants, qui portent des
+ * chemins et des SHA et feraient exploser le nombre de cles pour aucune information de plus.
+ */
+export function cleDeCumul(api: string, args: readonly unknown[]): string {
+  if (!/^(execFile|spawn|exec)Sync$/.test(api)) return api
+  const programme = args[0]
+  if (typeof programme !== 'string' || !programme) return api
+  const nom = programme.split(/[\\/]/).pop() || programme
+  const suite = args[1]
+  /*
+   * La sous-commande est un MOT (`diff`, `cherry`, `for-each-ref`) : ni une option, ni sa valeur
+   * (`-C /repo`), ni un chemin, ni un SHA. Le filtre garde donc les seuls jetons alphabetiques.
+   */
+  const sousCommande = Array.isArray(suite)
+    ? suite.find((a) => typeof a === 'string' && /^[a-z][a-z0-9-]*$/.test(a))
+    : undefined
+  return typeof sousCommande === 'string' ? `${api} ${nom} ${sousCommande}` : `${api} ${nom}`
+}
+
 export function nommerAccesBloquant(api: string, cible?: unknown): string {
   if (typeof cible !== 'string' || !cible) return `io:disque:${api}`
   const normalise = cible.split(String.fromCharCode(92)).join('/')

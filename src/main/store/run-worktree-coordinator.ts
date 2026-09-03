@@ -1471,6 +1471,24 @@ export class RunWorktreeCoordinator {
     return this.manager.apercuTravauxNonPublies?.('HEAD', 100) ?? []
   }
 
+  /**
+   * LA MEME LISTE, mais HORS du thread qui dessine la fenetre.
+   *
+   * Mesure du 2026-09-03 (`gels.jsonl`, 536 entrees) : `ipc:worktree:travaux-non-publies (sync)` a
+   * bloque la boucle main 16 099 ms puis 9 793 ms. La cause n'est pas le volume : c'est que ce
+   * geste explicite payait le recensement git (une commande par branche, 145 ms par appel) sur le
+   * thread principal, alors que la voie hors-thread existe deja et sert le bandeau
+   * (`recensementNonPubliesAsync`). Sans worker, on retombe sur la voie synchrone : meme reponse.
+   */
+  async travauxNonPubliesAsync(): Promise<
+    Array<{ agentId: string; date: string; fichiers: string[] }>
+  > {
+    const releve = await this.manager.recensementNonPubliesAsync?.('HEAD', 100)
+    if (!releve) return this.travauxNonPublies()
+    const ids = new Set(releve.ids)
+    return releve.apercu.filter((entree) => ids.has(entree.agentId))
+  }
+
   /** Le patch d'un travail non publie, pour le lire avant d'en decider. */
   patchTravailNonPublie(agentId: string): { patch: string; tronque: boolean } {
     return this.manager.patchTravailNonPublie?.(agentId) ?? { patch: '', tronque: false }

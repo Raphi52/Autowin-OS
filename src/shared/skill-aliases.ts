@@ -9,8 +9,8 @@
  * dossier, donc la garde anti-traversée de `skillInstruction` s'applique inchangée APRÈS résolution.
  */
 export const SKILL_ALIASES: Readonly<Record<string, string>> = {
-  // `front-converge` est long à taper et l'utilisateur l'appelle « design ».
-  design: 'front-converge'
+  // Aucun alias actif. `/design` a été retiré sur demande de l'utilisateur (03/09/2026) :
+  // `draft` s'invoque par son seul nom de dossier.
 }
 
 /** Résout un alias vers l'id réel ; rend l'entrée telle quelle si ce n'en est pas un. */

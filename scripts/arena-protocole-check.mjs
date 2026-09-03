@@ -248,6 +248,46 @@ export function verifierProtocole({ run, bench }) {
     return restantes.length ? `encore sur disque : ${restantes.join(', ')}` : true
   })
 
+  /*
+   * P14 — banc de FORMULATION (skills/arena/SKILL.md, etape « 2 bis »). Ne s'applique QUE si le
+   * banc declare tester des variations de TEXTE : sinon il est « sans objet » et reste OK, pour ne
+   * pas transformer un banc de workflow en RATE. Quand il s'applique, ce qui se lit se verifie :
+   * la section `## Variantes de texte`, son levier par bras, et le diff REELLEMENT sur disque.
+   * Sans diff, on ne sait pas ce que le bras a lu — donc rien n'est attribuable au texte.
+   */
+  ajoute('P14', 'Banc de formulation : section Variantes de texte + un diff par bras', () => {
+    const bloc = section(md, '## Candidats scoutés') ?? section(md, '## Candidats scoutes')
+    const brasFormulation = new Set()
+    if (bloc !== null) {
+      for (const l of lignesTableau(bloc)) {
+        if (/^candidat$/i.test(l[0])) continue
+        const retenu = l[l.length - 1].toUpperCase()
+        if (['B', 'C', 'X'].includes(retenu) && /formulation|texte|wording/i.test(l.join(' ')))
+          brasFormulation.add(retenu.toLowerCase())
+      }
+    }
+    const declare = brasFormulation.size > 0 || /banc de formulation|variantes de texte/i.test(md)
+    if (!declare) return true // banc de workflow : point sans objet
+    const variantes = section(md, '## Variantes de texte')
+    if (variantes === null)
+      return 'banc de formulation declare sans section `## Variantes de texte` : le texte teste n_est pas ecrit'
+    const LEVIERS = /ordre|tête|tete|réflexe|reflexe|longueur|court|négatif|negatif|exemple/i
+    if (!LEVIERS.test(variantes))
+      return 'section `## Variantes de texte` sans levier nomme (ordre / mise en tete / reflexe / longueur / negatif->positif / exemple)'
+    const cibles = brasFormulation.size
+      ? [...brasFormulation]
+      : ['b', 'c', 'x'].filter((b) => new RegExp(`\\b${b}\\b`, 'i').test(variantes))
+    if (!cibles.length) return 'aucun bras nomme dans `## Variantes de texte`'
+    const manquants = cibles.filter((b) => {
+      const f = path.join(bench, 'variantes', `${b}.diff`)
+      const t = lire(f)
+      return t === null || t.trim() === ''
+    })
+    return manquants.length
+      ? `variantes/${manquants.join('.diff, variantes/')}.diff absent ou vide : la variante de texte n_est pas sur disque`
+      : true
+  })
+
   const jugements = [
     'X est-il VRAIMENT une premisse cassee, ou une variante de B ? (lecture humaine des workflows)',
     'Un bras a-t-il reformule la tache malgre un enonce identique ? (lecture des livrables)',

@@ -76,7 +76,7 @@ import { AutowinOS } from './os'
 import { projectContextBlock } from './context-files'
 import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort } from './cdp-port'
 import { execFileSync } from 'node:child_process'
-import { ensureBrainServerStarted } from './brain-server-launch'
+import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { startBrainCuration } from './brain-curation-run'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
@@ -2393,9 +2393,15 @@ Le fil reprend ensuite normalement.`
   })
 
   // Ouvre le dossier contenant un fichier dans l'explorateur (vue Workflow).
+  // Un chemin mort (run supprime, disque demonte, lecteur reseau absent) passe tel quel a
+  // l'explorateur produit une boite Windows opaque (« Le lecteur specifie est introuvable »).
+  // On verifie donc l'existence AVANT d'appeler le shell, et on rend un refus nomme.
   ipcMain.handle('os:openFolder', (event, path: string) => {
     assertTrustedRendererSender(event, 'Open folder')
-    shell.showItemInFolder(guardString(path, 'path'))
+    const cible = guardString(path, 'path')
+    if (!existsSync(cible)) return { ok: false, reason: 'introuvable', path: cible }
+    shell.showItemInFolder(cible)
+    return { ok: true }
   })
 
   // Liens de fichiers du markdown : le renderer envoie la cible BRUTE citee par l'agent, le main
@@ -3701,7 +3707,17 @@ app.whenReady().then(async () => {
     // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
     // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera
     // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
-    if (raw.checks.some((c) => c.id === 'brain' && !c.ok)) {
+    const brainCheck = raw.checks.find((c) => c.id === 'brain')
+    /*
+     * REARMEMENT — mesure conv-152, 2026-09-02. `ensureBrainServerStarted` ne se rearme QUE
+     * lorsqu'elle est appelee et trouve le service vivant ; or on ne l'appelait que sur un check
+     * ROUGE. Donc apres UNE tentative infructueuse, `attempted` restait vrai pour toute la session
+     * et l'app ne relancait plus JAMAIS le brain_server : elle repondait « injoignable » alors que
+     * le service etait simplement a relancer (verifie : 100 s de service mort, aucun nouveau spawn).
+     * On rearme donc des que le check est VERT : la prochaine chute redonne droit a une tentative.
+     */
+    if (brainCheck?.ok) resetBrainLaunchAttempt()
+    if (brainCheck && !brainCheck.ok) {
       void ensureBrainServerStarted(() => appPreflightProbes().pingBrain()).then((r) => {
         // Retenu pour DIRE POURQUOI si le délai de grâce expire : la première sonde ne pouvait pas
         // le savoir, cette tentative l'a appris.

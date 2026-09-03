@@ -706,6 +706,13 @@ export class AutowinOS {
     return this.worktrees?.travauxNonPublies() ?? []
   }
 
+  /** La meme liste, calculee HORS du thread qui dessine la fenetre. Lecture seule. */
+  async travauxNonPubliesAsync(): Promise<
+    Array<{ agentId: string; date: string; fichiers: string[] }>
+  > {
+    return (await this.worktrees?.travauxNonPubliesAsync?.()) ?? this.travauxNonPublies()
+  }
+
   /** La version BORNEE et CACHEE, pour les chemins chauds (`get_state`). Lecture seule. */
   travauxNonPubliesBornes(): Array<{ agentId: string; date: string; fichiers: string[] }> {
     return this.worktrees?.travauxNonPubliesBornes?.() ?? []

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Rig.Pilote.MotsDirecteurs</RootNamespace>
+    <AssemblyName>rig-mdjud-pilote</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- confrontation/ est un projet SEPARE (il a son propre point d'entree) : sans cette
+         exclusion, le projet parent ramasse son Program.cs et la compilation echoue. -->
+    <Compile Remove="confrontation/**" />
+  </ItemGroup>
+</Project>

@@ -79,6 +79,7 @@ import type { TraceStore } from '../activity/trace-store'
 import type { TraceLedger } from '../activity/ledger'
 import type { AppEvent } from '../commands'
 import type { ModelQuestion } from '../model-questions'
+import { collerTexteParle } from './coller-texte-parle'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
 export type RunPilotChatDeps = {
@@ -233,6 +234,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     const etiquettesAction: string[] = []
     let streamedSpoken = recovery?.providerCall.streamedPrefix ?? ''
     let durableResponseTextSeen = Boolean(streamedSpoken.trim())
+    // Frontiere d'iteration : sert a savoir si le delta poursuit le MEME message ou en ouvre un
+    // nouveau (cf. coller-texte-parle.ts). -1 = aucun delta recu encore.
+    let iterationDuDernierDelta: number | undefined = -1
     /**
      * Raisonnement du modele ACCUMULE sur le tour.
      *
@@ -784,7 +788,15 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           }
         }
         if (pilotEvent.kind === 'delta' && pilotEvent.text) {
-          streamedSpoken += pilotEvent.text
+          // Deux itérations d'un même tour sont deux MESSAGES : les coller bout à bout soudait la
+          // fin de l'un au début de l'autre (« …du balayage.```html-render »), ce qui sortait le
+          // bloc mis en forme en texte brut. Cf. coller-texte-parle.ts pour le défaut mesuré.
+          streamedSpoken = collerTexteParle(
+            streamedSpoken,
+            pilotEvent.text,
+            iterationDuDernierDelta === pilotEvent.iteration
+          )
+          iterationDuDernierDelta = pilotEvent.iteration
           durableResponseTextSeen = true
         }
         if (pilotEvent.kind === 'reasoning' && pilotEvent.text) streamedReasoning += pilotEvent.text

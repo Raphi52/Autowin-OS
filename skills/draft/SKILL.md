@@ -1,9 +1,9 @@
 ---
-name: front-converge
+name: draft
 description: Use when the user wants to DESIGN or iterate a UI/layout and the visual intent is NOT yet settled — "fais-moi une interface / un écran / une page", "propose des layouts", "je sais pas quel design", "itère sur le design", "trouve le bon agencement", "refais le look de X". Drives a VISUAL ELICITATION LOOP: diverge ~3 distinct directions as rendered mockups → user keeps/kills/mixes → refine → converge to explicit approval → port to target tech. TECH-NEUTRAL (web / WinForms / WPF). Do NOT use when the user already DESCRIBES the layout structure or hands a finished spec — that is an implementation order, go to `frontend-design` directly; nor for back-end/logic work.
 ---
 
-# front-converge — visual elicitation through iterative mockups
+# draft — visual elicitation through iterative mockups
 
 ## Purpose
 Surface the user's REAL visual intent by SHOWING it, not guessing it (words are lossy; the user recognizes what they want when they SEE it). DIVERGE into distinct directions → render as comparable mockups → capture the choice → NARROW → converge to explicit approval → materialize the winner in target tech. NOT "produce one good UI" (that is `frontend-design`, INVOKED per variant). The new thing is the **convergence loop** (invariant); the render+capture backend is PLUGGABLE.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extrairePromptSuivant, retirerLignePromptSuivant } from './prompt-suivant'
+import { extrairePromptSuivant, retirerLignePromptSuivant, PROMPT_SALVAGE } from './prompt-suivant'
 
 const LIGNE = 'AUTOWIN_PROMPT_V1: Lance le terrain sur le build du pari.'
 
@@ -73,5 +73,43 @@ describe('retrait de la ligne technique de l’affichage', () => {
 
   it('ne laisse pas une ligne vide en fin de texte à la place de la ligne retirée', () => {
     expect(retirerLignePromptSuivant(`fin du travail\n${LIGNE}`)).toBe('fin du travail')
+  })
+})
+
+describe('publication → /salvage', () => {
+  it('réécrit un prompt de publication en /salvage', () => {
+    expect(extrairePromptSuivant('AUTOWIN_PROMPT_V1: Commit et push les deux corrections sur main.')).toBe(
+      PROMPT_SALVAGE
+    )
+    expect(extrairePromptSuivant('AUTOWIN_PROMPT_V1: Ouvre une pull request pour ce lot.')).toBe(
+      PROMPT_SALVAGE
+    )
+  })
+  it('laisse intact un prompt qui ne publie rien', () => {
+    expect(extrairePromptSuivant('AUTOWIN_PROMPT_V1: Lance le terrain sur X.')).toBe(
+      'Lance le terrain sur X.'
+    )
+  })
+})
+
+describe('toutes les formes de « publier »', () => {
+  const formes = [
+    'Publie ce lot sur main.',
+    'Publication des deux commits.',
+    'Ce travail est publié, enchaîne dessus.',
+    'Déploie la version.',
+    'Fais la mise en ligne.',
+    'Prépare la release.',
+    'Fusionne la branche dans main.'
+  ]
+  for (const forme of formes) {
+    it(`réécrit « ${forme} » en /salvage`, () => {
+      expect(extrairePromptSuivant(`AUTOWIN_PROMPT_V1: ${forme}`)).toBe(PROMPT_SALVAGE)
+    })
+  }
+  it("ne se déclenche pas sur un prompt sans acte de publication", () => {
+    expect(extrairePromptSuivant('AUTOWIN_PROMPT_V1: Relis le journal des gels et résume-le.')).toBe(
+      'Relis le journal des gels et résume-le.'
+    )
   })
 })

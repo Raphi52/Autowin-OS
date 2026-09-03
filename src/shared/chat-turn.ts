@@ -53,6 +53,18 @@ export interface PipelineChoice {
   role?: string
   provider?: string
   model?: string
+  /**
+   * Le prompt REELLEMENT envoye a ce sous-agent, tel que l'enveloppe d'appel le porte. Jamais
+   * reconstitue : absent quand l'etape n'a pas (encore) rendu son appel.
+   */
+  prompt?: string
+  /**
+   * Ce que l'etape a RENDU : la conclusion du sous-agent, ou — pour le controle final (`gate`) —
+   * la decision et son motif, tels que l'orchestrateur les a ecrits.
+   */
+  outcome?: string
+  /** Faux quand l'etape a echoue (ou que le controle final a refuse) : l'affichage doit le montrer. */
+  ok?: boolean
 }
 
 export interface PersistedChatArtifactPart {

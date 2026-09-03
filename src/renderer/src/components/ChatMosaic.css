@@ -181,6 +181,10 @@
   border-top: 1px solid var(--container-border);
   padding: 6px;
 }
+/* Deux étages (direction C) : en tuile le champ reste bas mais pleine largeur. */
+.chat-mosaic-window-composer .composer textarea {
+  min-height: 30px;
+}
 .chat-mosaic-window-composer textarea {
   width: 100%;
   resize: none;

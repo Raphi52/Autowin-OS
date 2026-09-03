@@ -162,6 +162,85 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     const res = verifierProtocole({ run: f.run, bench: f.bench })
     expect(point(res, 'P13').ok).toBe(false)
   })
+
+  it('P14 est sans objet (OK) sur un banc de workflow qui ne teste aucun texte', () => {
+    const f = bancConforme()
+    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    expect(point(res, 'P14').ok).toBe(true)
+  })
+})
+
+/**
+ * Banc de FORMULATION (skills/arena/SKILL.md, etape « 2 bis ») : quand un bras retenu ne differe
+ * QUE par le TEXTE d'une skill, la variante doit etre ECRITE sur disque. Sans elle, on ne sait pas
+ * ce que le bras a lu, et le resultat n'est attribuable a aucun changement de formulation.
+ */
+describe('arena-protocole-check — P14 banc de formulation', () => {
+  /** Le banc conforme, converti en banc de texte : B devient un candidat de formulation. */
+  function bancFormulation({ section = true, diffs = ['b'] } = {}) {
+    const f = bancConforme()
+    let md = readFileSync(f.run, 'utf8').replace(
+      '| grep + édition directe | profondeur | −40 % de $ | 0,3 $ | moyen | 3,0 | B |',
+      '| skill réécrite en réflexes | formulation | −2 tours | 0,3 $ | moyen | 3,0 | B |'
+    )
+    if (section) {
+      md += [
+        '',
+        '## Variantes de texte',
+        '',
+        '| bras | fichier | levier | hypothèse de comportement |',
+        '|---|---|---|---|',
+        '| B | skills/build/SKILL.md | règle remontée en tête | vérifie avant de conclure |',
+        ''
+      ].join('\n')
+    }
+    writeFileSync(f.run, md)
+    mkdirSync(join(f.bench, 'variantes'), { recursive: true })
+    for (const bras of diffs)
+      writeFileSync(join(f.bench, 'variantes', `${bras}.diff`), '-ancien texte\n+nouveau texte\n')
+    return f
+  }
+
+  it('passe quand la section et le diff du bras de formulation existent', () => {
+    const f = bancFormulation()
+    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    expect(point(res, 'P14').detail).toBe('ok')
+    expect(point(res, 'P14').ok).toBe(true)
+  })
+
+  it('RATE quand la section `## Variantes de texte` manque', () => {
+    const f = bancFormulation({ section: false })
+    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    expect(point(res, 'P14').ok).toBe(false)
+    expect(point(res, 'P14').detail).toMatch(/Variantes de texte/)
+    expect(res.ok).toBe(false)
+  })
+
+  it('RATE quand le diff du bras est absent du disque', () => {
+    const f = bancFormulation({ diffs: [] })
+    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    expect(point(res, 'P14').ok).toBe(false)
+    expect(point(res, 'P14').detail).toMatch(/variantes\/b\.diff/)
+  })
+
+  it('RATE quand le diff existe mais est vide', () => {
+    const f = bancFormulation({ diffs: [] })
+    mkdirSync(join(f.bench, 'variantes'), { recursive: true })
+    writeFileSync(join(f.bench, 'variantes', 'b.diff'), '   \n')
+    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    expect(point(res, 'P14').ok).toBe(false)
+  })
+
+  it('RATE quand aucun levier n_est nommé dans la section', () => {
+    const f = bancFormulation()
+    writeFileSync(
+      f.run,
+      readFileSync(f.run, 'utf8').replace('règle remontée en tête', 'texte différent')
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    expect(point(res, 'P14').ok).toBe(false)
+    expect(point(res, 'P14').detail).toMatch(/levier/)
+  })
 })
 
 /**

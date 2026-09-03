@@ -1,0 +1,7 @@
+RATE nominal : SKILL.md nomme les 5 fichiers du banc attendus par le contrôle — absents de SKILL.md : tache.txt, check.mjs, prompt-<bras>.txt, out-<bras>.json, out-judge.json
+OK   cas limite — SKILL.md vide ou introuvable : le critère doit refuser, pas passer
+OK   cas limite — nom voisin invalide interdit (tache.md, check.js, out-judge.txt, prompt-a.md)
+RATE cas limite — zéro nom dans la section du contrôle de protocole : liste hors sujet refusée — 0 nom(s) sur 5 dans la section du contrôle, 4 minimum
+
+CRITÈRE NON ATTEINT (2 RATE)
+exit=1

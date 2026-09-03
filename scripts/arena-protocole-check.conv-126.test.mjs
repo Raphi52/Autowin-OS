@@ -60,11 +60,11 @@ describe('arena-protocole-check face au banc réel de conv-126', () => {
     expect(res.ok).toBe(false)
   })
 
-  it('les neuf autres points restent tenus : le refus est ciblé, pas un rejet en bloc', () => {
+  it('les dix autres points restent tenus : le refus est ciblé, pas un rejet en bloc', () => {
     const res = verifierProtocole({ run: RUN, bench: BENCH })
     const tenus = res.points.filter((p) => p.ok).map((p) => p.id)
-    expect(tenus).toEqual(['P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P12', 'P13'])
-    expect(res.points).toHaveLength(13)
+    expect(tenus).toEqual(['P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P12', 'P13', 'P14'])
+    expect(res.points).toHaveLength(14)
   })
 
   it('en ligne de commande, le contrôle sort en code 1 et dit PROTOCOLE NON TENU', () => {
