@@ -8,7 +8,8 @@
   padding-top: 9px;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-page);
   background: var(--surface-page);
   box-shadow: var(--container-shadow);
@@ -62,7 +63,8 @@
   align-items: center;
   gap: 7px;
   padding: 5px 7px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-card);
   background: var(--surface-card);
   white-space: nowrap;
@@ -153,7 +155,8 @@
   padding: 10px;
   overflow: hidden;
   box-sizing: border-box;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-card);
   background: var(--surface-card);
   color: #dfeaf5;
@@ -252,7 +255,8 @@
 .topology-panel {
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-panel);
   background: var(--surface-panel);
   transition:

@@ -72,7 +72,7 @@ export function buildReadOnlyBatch(query: string, maxRows: number): string {
  * L'erreur de SQL Server est exacte mais opaque : on y ajoute la marche à suivre, pour que l'agent se
  * corrige du premier coup au lieu de brûler un aller-retour.
  */
-export function explainSqlError(detail: string): string {
+function explainSqlError(detail: string): string {
   if (/\bMsg (?:13605|13600)\b/.test(detail)) {
     return `${detail} — la lecture est enveloppée dans FOR JSON : donne un alias à chaque colonne calculée, par exemple SELECT COUNT(*) AS n.`
   }

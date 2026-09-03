@@ -21,8 +21,8 @@ export type ShaBatchExec = (
   timeoutMs: number
 ) => ReadonlyMap<string, string>
 
-export const MAX_SHA_PATHS_PER_BATCH = 50
-export const SHA_RESOLUTION_BUDGET_MS = 2_500
+const MAX_SHA_PATHS_PER_BATCH = 50
+const SHA_RESOLUTION_BUDGET_MS = 2_500
 const MAX_SHA_BATCH_TIMEOUT_MS = 3_000
 
 function cleanLocatorPath(path: string): string | undefined {

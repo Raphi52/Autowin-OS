@@ -187,7 +187,7 @@ export function formatUsd(amount: number): string {
 }
 
 /** Volume lisible : la seule information vraie qui reste quand le tarif du modèle est inconnu. */
-export function formatTokenVolume(tokens: number): string {
+function formatTokenVolume(tokens: number): string {
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M tokens`
   if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k tokens`
   return `${Math.round(tokens)} tokens`

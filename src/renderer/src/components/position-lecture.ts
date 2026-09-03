@@ -87,7 +87,7 @@ export function memoriserPositionLecture(
  * a en haut d'écran. On garde son rang plus le décalage, pour reposer l'œil au même endroit même
  * si les hauteurs du fil ont bougé entre-temps.
  */
-export function ancrerSurMessage(
+function ancrerSurMessage(
   scrollTop: number,
   messages?: readonly AncrageMessage[]
 ): { index: number; decalage: number } | undefined {

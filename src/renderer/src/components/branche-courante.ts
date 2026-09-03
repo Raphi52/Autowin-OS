@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react'
  * pour le cas ou la branche change pendant qu'on regarde l'ecran (un run Autowin le fait). La
  * lecture reste READ-ONLY et silencieuse en echec : mieux vaut rien qu'un nom invente.
  */
-export const PERIODE_RELECTURE_BRANCHE_MS = 5000
+const PERIODE_RELECTURE_BRANCHE_MS = 5000
 
 export function useBrancheCourante(
   lire: () => Promise<{ available?: boolean; state?: { branch?: string | null } } | undefined>,

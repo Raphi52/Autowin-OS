@@ -128,7 +128,7 @@ function octetsOuRien(chemin: string): Uint8Array | undefined {
  * Bornee : au-dela de `plafond` fichiers on s'arrete, un dossier non suivi enorme (build, cache)
  * ne doit pas transformer une verification en copie de disque.
  */
-export function fichiersDeLEtatCourant(
+function fichiersDeLEtatCourant(
   workspace: string,
   changements: readonly string[],
   plafond = 2000

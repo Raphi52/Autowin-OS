@@ -119,7 +119,7 @@ export function saveMemoryDetailWidths(storage: StorageLike, widths: MemoryDetai
 }
 
 /** Mode visuel du graphe Memory (sombre vs galaxy), persisté entre lancements. */
-export const GRAPH_VISUAL_MODE_SUFFIX = 'memory.visual-mode.v1'
+const GRAPH_VISUAL_MODE_SUFFIX = 'memory.visual-mode.v1'
 
 export function loadGraphVisualMode(storage: StorageLike): GraphVisualMode {
   return readMigratedStorageValue(storage, GRAPH_VISUAL_MODE_SUFFIX) === 'galaxy'
@@ -146,7 +146,7 @@ export function saveGraphVisualMode(storage: StorageLike, mode: GraphVisualMode)
  */
 export type GraphLayoutMode = 'force' | 'tree'
 
-export const GRAPH_LAYOUT_MODE_SUFFIX = 'memory.layout-mode.v1'
+const GRAPH_LAYOUT_MODE_SUFFIX = 'memory.layout-mode.v1'
 
 const MODES_CONNUS: readonly GraphLayoutMode[] = ['force', 'tree']
 

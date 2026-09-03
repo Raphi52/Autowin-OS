@@ -139,7 +139,7 @@ function parseNode(value: unknown): FabricNodeRecord {
   }
 }
 
-export function parseFabricState(value: unknown): FabricState {
+function parseFabricState(value: unknown): FabricState {
   const raw = record(value, 'état Compute Fabric')
   exactKeys(raw, ['schema', 'nodes'], "l'état Compute Fabric")
   if (raw.schema !== FABRIC_STATE_SCHEMA || !Array.isArray(raw.nodes) || raw.nodes.length > 64) {

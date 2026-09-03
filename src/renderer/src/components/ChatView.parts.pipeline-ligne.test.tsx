@@ -4,7 +4,18 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AssistantActivityGroup } from './ChatView.parts'
 import { completerChoixDePipeline, noterChoixDePipeline } from './chat-view-model'
-import type { ChatPart, OrchStep } from './chat-view-model'
+import type { ChatPart, OrchStep, PipelineChoice } from './chat-view-model'
+
+/**
+ * Les lignes de pipeline vivent sur la part d'ACTION. On AFFINE le type au lieu de forcer un
+ * cast : depuis que `ChatPart` inclut la part d'erreur, `parts[0] as { pipeline: ... }` ne
+ * compile plus (TS2352, deux formes qui ne se recouvrent pas). Une part d'un autre genre ici
+ * serait un vrai defaut du reducteur, donc on la fait echouer bruyamment.
+ */
+const lignesDePipeline = (part: ChatPart): PipelineChoice[] => {
+  if (part.kind !== 'action') throw new Error(`part « ${part.kind} » : aucune ligne de pipeline`)
+  return part.pipeline ?? []
+}
 
 /**
  * DEMANDE UTILISATEUR (2026-09-03, capture jointe) : « chacune des lignes dans orchestration
@@ -43,16 +54,18 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
       ]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    act(() => container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click())
+    act(() =>
+      container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
+    )
     const chevrons = container.querySelectorAll<HTMLButtonElement>(
       '[data-testid="activity-pipeline-toggle"]'
     )
     expect(chevrons).toHaveLength(1)
     expect(container.querySelector('[data-testid="activity-pipeline-prompt"]')).toBeNull()
     act(() => chevrons[0].click())
-    expect(container.querySelector('[data-testid="activity-pipeline-prompt"]')!.textContent).toContain(
-      'fais X'
-    )
+    expect(
+      container.querySelector('[data-testid="activity-pipeline-prompt"]')!.textContent
+    ).toContain('fais X')
   })
 
   it('la ligne du controle final rend sa DECISION et son motif', () => {
@@ -60,9 +73,13 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
       pipeline: [{ phase: 'gate', role: 'gate', outcome: 'BLOQUE: tests rouges', ok: false }]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    act(() => container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click())
     act(() =>
-      container.querySelector<HTMLButtonElement>('[data-testid="activity-pipeline-toggle"]')!.click()
+      container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
+    )
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="activity-pipeline-toggle"]')!
+        .click()
     )
     const rendu = container.querySelector('[data-testid="activity-pipeline-outcome"]')!
     expect(rendu.textContent).toContain('BLOQUE: tests rouges')
@@ -73,7 +90,9 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
   it('aucun chevron de ligne quand la ligne ne porte ni prompt ni resultat', () => {
     const action = orchestration({ pipeline: [{ phase: 'scout', role: 'subagent' }] })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    act(() => container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click())
+    act(() =>
+      container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
+    )
     expect(container.querySelector('[data-testid="activity-pipeline-toggle"]')).toBeNull()
   })
 })
@@ -103,7 +122,7 @@ describe('completerChoixDePipeline — l etape terminee complete SA ligne', () =
       }
     }
     const parts = completerChoixDePipeline(ligneEnCours(), step)
-    const lignes = (parts[0] as unknown as { pipeline: Array<Record<string, unknown>> }).pipeline
+    const lignes = lignesDePipeline(parts[0])
     expect(lignes).toHaveLength(1)
     expect(lignes[0].prompt).toBe('[system]\nconsigne\n\n[user]\nfais X')
     expect(lignes[0].outcome).toBe('livrable')
@@ -118,7 +137,7 @@ describe('completerChoixDePipeline — l etape terminee complete SA ligne', () =
       status: 'failed',
       detail: 'BLOQUÉ: preuve manquante — verdict du juge: pas de test'
     })
-    const lignes = (parts[0] as unknown as { pipeline: Array<Record<string, unknown>> }).pipeline
+    const lignes = lignesDePipeline(parts[0])
     expect(lignes).toHaveLength(2)
     expect(lignes[1].outcome).toContain('verdict du juge')
     expect(lignes[1].ok).toBe(false)

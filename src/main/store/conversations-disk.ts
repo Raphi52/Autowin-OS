@@ -310,7 +310,7 @@ function loadConversationSnapshot(path: string): Conversation[] {
  * Il ne descend JAMAIS. Un identifiant supprime ne doit pas etre reattribue, parce que des runs
  * continuent de le referencer longtemps apres la mort de leur conversation.
  */
-export function conversationIdFloorPath(path = conversationsPath()): string {
+function conversationIdFloorPath(path = conversationsPath()): string {
   return `${path}.next-id`
 }
 

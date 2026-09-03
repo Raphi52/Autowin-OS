@@ -47,6 +47,8 @@ import type { EtatPiper } from '../../../main/piper-local'
 import {
   basculerEcoute,
   ecouteInitiale,
+  erreurDAutorisationMicro,
+  erreurRattrapableParMicro,
   evenementsDirects,
   extraireCommandeEveil,
   messageErreurMoteur,
@@ -85,6 +87,7 @@ interface ApiJarvis {
   whisperEtat?: () => Promise<EtatWhisper>
   whisperInstaller?: () => Promise<EtatWhisper>
   whisperTranscrire?: (wav: Uint8Array) => Promise<string>
+  ouvrirReglagesMicro?: () => Promise<{ ouvert: boolean; raison?: string }>
   piperEtat?: () => Promise<EtatPiper>
   piperInstaller?: () => Promise<EtatPiper>
   pilotChat?: (
@@ -275,12 +278,28 @@ export function JarvisWidget(): React.JSX.Element {
    * enchaîner un second ordre pendant « Tout de suite. » est légitime et doit passer.
    */
   const ditRef = useRef<PhraseDite[]>([])
+  /** La vue est-elle encore montée ? Une énumération de micros qui revient après la fermeture
+   * n'a personne à informer. */
+  const monteRef = useRef(true)
+  useEffect(
+    () => () => {
+      monteRef.current = false
+    },
+    []
+  )
   const [microCoupe, setMicroCoupe] = useState(false)
   const microCoupeRef = useRef(false)
   const [sonCoupe, setSonCoupe] = useState(false)
   const sonCoupeRef = useRef(false)
   const [flux, setFlux] = useState<EvenementDirect[]>([])
   const [erreur, setErreur] = useState<string | null>(null)
+  /**
+   * LE CODE de la derniere panne du moteur, garde tel quel a cote du message. DEFAUT VECU
+   * (2026-09-03) : « aucun bouton pour le faire » — le message disait quoi faire, l'ecran n'offrait
+   * aucun geste. Le code decide QUELS boutons apparaissent : relancer le micro, ouvrir la page
+   * « Microphone » de Windows, ou aucun des deux.
+   */
+  const [codeErreur, setCodeErreur] = useState<string | null>(null)
   const [envoi, setEnvoi] = useState<string | null>(null)
   const [whisper, setWhisper] = useState<EtatWhisper | null>(null)
   /** L'état de la voix neuronale. `null` tant qu'il n'a pas été lu : on n'affiche rien à l'aveugle. */
@@ -488,6 +507,7 @@ export function JarvisWidget(): React.JSX.Element {
         setErreur(
           'Aucun moteur de reconnaissance disponible : installez la reconnaissance hors ligne ci-dessous.'
         )
+        setCodeErreur(null)
         return
       }
       ecouteRef.current = suivant
@@ -512,6 +532,7 @@ export function JarvisWidget(): React.JSX.Element {
         actifRef.current = false
         moteurRef.current = null
         setErreur(messageErreurMoteur(code))
+        setCodeErreur(code)
         const arrete = { ...ecouteRef.current, active: false, partiel: '' }
         ecouteRef.current = arrete
         setEcoute(arrete)
@@ -521,6 +542,7 @@ export function JarvisWidget(): React.JSX.Element {
       }
       moteurRef.current = moteur
       setErreur(null)
+      setCodeErreur(null)
       moteur.start()
     },
     [auResultat]
@@ -664,32 +686,61 @@ export function JarvisWidget(): React.JSX.Element {
   }, [peripherique])
 
   /** La liste des micros REELS de la machine. Les libellés n'existent qu'une fois l'autorisation
-   * accordée : avant, le navigateur rend des entrées anonymes — on les nomme alors par rang. */
+   * accordée : avant, le navigateur rend des entrées anonymes — on les nomme alors par rang.
+   * Relue AUSSI par « Réessayer le micro » : un casque branché après l'erreur doit apparaître dans
+   * le choix AVANT la relance, sinon le bouton rejouerait l'échec sur la même liste périmée. */
+  const relirePeripheriques = useCallback(async (): Promise<void> => {
+    if (!navigator.mediaDevices?.enumerateDevices) return
+    try {
+      const tous = await navigator.mediaDevices.enumerateDevices()
+      if (!monteRef.current) return
+      setPeripheriques(
+        tous
+          .filter((d) => d.kind === 'audioinput')
+          .map((d, index) => ({ id: d.deviceId, nom: d.label || `Micro ${index + 1}` }))
+      )
+    } catch {
+      // Pas d'énumération possible (permission refusée, environnement sans micro) : le micro par
+      // défaut reste utilisable, on n'affiche simplement aucun choix.
+    }
+  }, [])
+
   useEffect(() => {
     if (!navigator.mediaDevices?.enumerateDevices) return
-    let vivant = true
-    const lire = async (): Promise<void> => {
-      try {
-        const tous = await navigator.mediaDevices.enumerateDevices()
-        if (!vivant) return
-        setPeripheriques(
-          tous
-            .filter((d) => d.kind === 'audioinput')
-            .map((d, index) => ({ id: d.deviceId, nom: d.label || `Micro ${index + 1}` }))
-        )
-      } catch {
-        // Pas d'énumération possible (permission refusée, environnement sans micro) : le micro par
-        // défaut reste utilisable, on n'affiche simplement aucun choix.
-      }
-    }
-    void lire()
+    const lire = (): void => void relirePeripheriques()
+    lire()
     // Un micro branché ou débranché pendant la session doit apparaître sans recharger la vue.
     navigator.mediaDevices.addEventListener?.('devicechange', lire)
     return () => {
-      vivant = false
       navigator.mediaDevices.removeEventListener?.('devicechange', lire)
     }
+  }, [relirePeripheriques])
+
+  /**
+   * LE GESTE QUI MANQUAIT. Le message d'erreur disait « puis réessayez » sans qu'aucun bouton
+   * n'existe : il fallait couper puis rallumer l'écoute à la main, en devinant. Ce bouton relit la
+   * liste des micros, efface l'erreur, puis rallume l'écoute — un seul clic, le même chemin que
+   * l'interrupteur.
+   */
+  /**
+   * LA PAGE « MICROPHONE » DE WINDOWS, ouverte depuis l'app. Le filtre qui n'autorise que
+   * http/https vers l'exterieur reste en place : il protege les liens venus d'un TEXTE de modele.
+   * Ici l'adresse est une constante du processus principal, le rendu ne fait que la declencher.
+   */
+  const ouvrirReglagesMicro = useCallback((): void => {
+    const api = apiJarvis()
+    if (!api?.ouvrirReglagesMicro) return
+    void api.ouvrirReglagesMicro().then((r) => {
+      if (!r?.ouvert) setErreur('Les réglages Windows ne s’ouvrent que sous Windows.')
+    })
   }, [])
+
+  const reessayerMicro = useCallback((): void => {
+    setErreur(null)
+    setCodeErreur(null)
+    void relirePeripheriques()
+    if (!ecouteRef.current.active) basculer('jarvis')
+  }, [basculer, relirePeripheriques])
 
   // La boucle d'affichage de la jauge : elle ne tourne QUE pendant l'écoute, sinon elle brûlerait
   // une frame par seconde d'affichage pour peindre une barre vide.
@@ -846,7 +897,31 @@ export function JarvisWidget(): React.JSX.Element {
         </div>
       </div>
 
-      {erreur ? <p className="home-error">{erreur}</p> : null}
+      {erreur ? (
+        <div className="jarvis__whisper" data-testid="jarvis-erreur">
+          <p className="home-error">{erreur}</p>
+          {codeErreur !== null && erreurDAutorisationMicro(codeErreur) ? (
+            <button
+              type="button"
+              data-testid="jarvis-reglages-micro"
+              className="jarvis__whisper-bouton"
+              onClick={ouvrirReglagesMicro}
+            >
+              Autoriser le micro dans Windows
+            </button>
+          ) : null}
+          {codeErreur !== null && erreurRattrapableParMicro(codeErreur) ? (
+            <button
+              type="button"
+              data-testid="jarvis-reessayer-micro"
+              className="jarvis__whisper-bouton"
+              onClick={reessayerMicro}
+            >
+              Réessayer le micro
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/*
         L'INSTALLATION, visible tant que l'ecoute locale n'existe pas sur cette machine. Sans elle,

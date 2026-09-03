@@ -1,4 +1,5 @@
 /* Theme modes select mood only. Component geometry lives in ui-system.css. */
+/* Deux modes vivent ici : `.theme-serious` (nuit, par défaut) et `:root[data-theme="clair"]`. */
 /* Backdrop de page transparent : les bords / espaces hors containers laissent voir le fond cosmique. */
 .theme-serious .main {
   background: transparent;
@@ -212,4 +213,78 @@
 :root[data-theme='clair'] .chat-travail-non-publie button {
   color: var(--text);
   border-color: rgba(154, 111, 16, 0.45);
+}
+
+/* ----------------------------------------------------------------------------
+   MENU DU CLIC DROIT sur une conversation (Renommer / Ranger / Supprimer).
+   `ChatView.css` l.490 le peint en `background: #000` EN DUR, et ses entrées sont
+   en `--text-dim` : sur fond clair, un rectangle noir avec du gris pâle dedans.
+   Signalé par l'utilisateur le 2026-09-03, capture à l'appui.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .conv-menu-pop {
+  background: #ffffff;
+  border-color: var(--line);
+  box-shadow: 0 10px 28px rgba(18, 24, 40, 0.18);
+}
+:root[data-theme='clair'] .conv-menu-input {
+  background: #ffffff;
+  color: var(--text);
+}
+:root[data-theme='clair'] .conv-menu-pop button {
+  color: var(--text);
+}
+:root[data-theme='clair'] .conv-menu-pop button:hover {
+  background: rgba(15, 20, 35, 0.06);
+}
+
+/* ----------------------------------------------------------------------------
+   EN-TÊTE DU FIL — signalé par l'utilisateur le 2026-09-03 (« zone encore trop
+   claire », deux flèches : le titre et « Détails »).
+   Couleurs en dur dans `ChatView.css` : titre `#f3f6f8` (l.1858), bouton Détails
+   `#a8b1ba` (l.1889), fond des boutons d'en-tête `#070d13` (l.1866). Presque
+   blanches, donc invisibles sur un en-tête devenu blanc.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .cosmic-outline .chat-conv-title {
+  color: var(--text);
+}
+:root[data-theme='clair'] .workflow-toggle {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .cosmic-outline .chat-head .btn {
+  background: #ffffff;
+  border-color: var(--line);
+  color: var(--text);
+}
+
+/* ----------------------------------------------------------------------------
+   BARRES D'ACTIVITÉ (« 1 action terminée · run ») — signalées illisibles par
+   l'utilisateur le 2026-09-03.
+   Deux causes cumulées dans `cosmic-outline.css` : le titre est en `#dbe4ea`
+   (l.692) et le nom de l'outil en `#657481` (l.701) ; et le fond de chaque état
+   est un dégradé qui FINIT en `rgba(0, 0, 0, 0.3)` (l.575, 584, 593, 602), ce qui
+   pose un voile gris sale sur une page blanche. On garde la teinte de statut à
+   gauche — c'est elle qui informe — et on éteint la queue noire.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .cosmic-outline .activity-group-title {
+  color: var(--text);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group-tools {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='done'] {
+  background: linear-gradient(100deg, rgba(78, 201, 165, 0.22) 0%, rgba(78, 201, 165, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='running'] {
+  background: linear-gradient(100deg, rgba(35, 150, 195, 0.22) 0%, rgba(35, 150, 195, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='interrupted'] {
+  background: linear-gradient(100deg, rgba(196, 132, 30, 0.22) 0%, rgba(196, 132, 30, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group.failed,
+:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='failed'] {
+  background: linear-gradient(100deg, rgba(210, 60, 100, 0.2) 0%, rgba(210, 60, 100, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group:hover {
+  background: rgba(15, 20, 35, 0.05);
+  border-color: var(--line-strong);
 }

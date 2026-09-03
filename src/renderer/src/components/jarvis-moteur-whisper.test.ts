@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fabriqueWhisper, type MoteurVocal } from './jarvis-moteur-whisper'
+import { codeErreurMicro, fabriqueWhisper, type MoteurVocal } from './jarvis-moteur-whisper'
 import { TAUX_WHISPER } from './whisper-audio'
 
 const TAILLE_BLOC = 1_600 // 100 ms à 16 kHz
@@ -218,6 +218,37 @@ describe('moteur Whisper local', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(erreurs).toEqual(['micro-indisponible'])
     expect(fins).toBe(1)
+  })
+
+  it('distingue les CINQ pannes de micro au lieu d’en faire une seule', () => {
+    // DEFAUT VECU (2026-09-03) : le `catch` jetait la vraie erreur, donc « aucun micro branche »
+    // s'affichait « autorisez le microphone » — un reglage deja bon, cherche pour rien.
+    const nomme = (name: string): string => codeErreurMicro(Object.assign(new Error('x'), { name }))
+    expect(nomme('NotAllowedError')).toBe('micro-refuse')
+    expect(nomme('SecurityError')).toBe('micro-refuse')
+    expect(nomme('NotFoundError')).toBe('micro-absent')
+    expect(nomme('NotReadableError')).toBe('micro-occupe')
+    expect(nomme('OverconstrainedError')).toBe('micro-introuvable')
+    // Inconnu = on n'INVENTE pas de cause : le code generique reste.
+    expect(nomme('Error')).toBe('micro-indisponible')
+    expect(codeErreurMicro(null)).toBe('micro-indisponible')
+  })
+
+  it('remonte la panne REELLE du micro jusqu’au moteur', async () => {
+    const Fabrique = fabriqueWhisper({
+      micro: async () => {
+        throw Object.assign(new Error('no device'), { name: 'NotFoundError' })
+      },
+      contexte: () => new FauxContexte() as never,
+      transcrire: async () => ''
+    })
+    const moteur = new Fabrique()
+    const erreurs: string[] = []
+    moteur.onerror = (e): void => void erreurs.push(String((e as { error?: unknown }).error))
+    moteur.start()
+    await new Promise((r) => setTimeout(r, 0))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(erreurs).toEqual(['micro-absent'])
   })
 
   it('réessaie UNE fois une transcription qui échoue, puis signale l’échec', async () => {

@@ -104,7 +104,7 @@ interface ProviderReservation {
   abort: (reason: string) => void
 }
 
-export class ExecutionBudgetExceededError extends Error {
+class ExecutionBudgetExceededError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'ExecutionBudgetExceededError'
@@ -246,7 +246,22 @@ export class ExecutionSupervisor {
       return terminal
     }
     if (prior && prior.activeCalls > 0) {
-      runtime.stoppedReason = `Reprise refusee : ${prior.activeCalls} appel(s) provider encore actif(s).`
+      /*
+       * UN REFUS QUI NE DIT PAS SA SUITE EST LU COMME UNE IMPOSSIBILITE.
+       *
+       * Mesure conv-18, tour 6c581550-6be5-47cf-8c11-41901d4d885a (journal du tour, delta a
+       * 1788425682673) : l'agent lit « Reprise refusee : 1 appel(s) provider encore actif(s). »,
+       * en conclut « je ne peux pas relancer un run dans ce tour », et ecrit la fonctionnalite A
+       * LA MAIN dans le depot reel (`cat > src/shared/reprise-surcharge.ts`, fichier resté non
+       * suivi). Le refus etait pourtant temporaire : la MEME demande a demarre 2 minutes plus tard
+       * (run-70137bee6f8d-1). Le refus reste inchange — il protege le budget ; c'est son TEXTE qui
+       * doit dire ce qu'il est et ce qui repare, pour l'agent comme pour l'utilisateur.
+       */
+      runtime.stoppedReason =
+        `Reprise refusee : ${prior.activeCalls} appel(s) provider encore actif(s). ` +
+        `Refus transitoire, aucun fichier touche : l'appel en cours se regle seul. ` +
+        `La suite correcte est de relancer la MEME demande d'orchestration ; ` +
+        `ecrire la mutation a la main hors du pipeline n'en est pas une.`
       controller.abort(runtime.stoppedReason)
       publishTerminalSnapshot()
       throw new ExecutionBudgetExceededError(runtime.stoppedReason)

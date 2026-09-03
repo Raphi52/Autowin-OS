@@ -16,7 +16,7 @@ import { ensureAutowinAppData } from '../app-data'
 
 const MAX_PERSISTED_ARTIFACT_BYTES = 256 * 1024 * 1024
 export const MAX_ARTIFACT_PREVIEW_BYTES = 16 * 1024 * 1024
-export const MAX_CHAT_PREVIEW_BYTES = 64 * 1024 * 1024
+const MAX_CHAT_PREVIEW_BYTES = 64 * 1024 * 1024
 
 function safeSegment(value: string, fallback: string): string {
   const safe = value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^[.-]+|[.-]+$/g, '')
@@ -169,7 +169,7 @@ export class ChatArtifactPreviewBudget {
   }
 }
 
-export function findConversationArtifact(
+function findConversationArtifact(
   conversation: Conversation | undefined,
   turnId: string,
   artifactId: string
@@ -291,7 +291,7 @@ export function removeConversationArtifacts(conversationId: string, base?: strin
 }
 
 /** Plafond du binaire rechargé pour le modèle : au-delà, la miniature reste le bon compromis. */
-export const MAX_PIECE_JOINTE_RECHARGEE_BYTES = 12 * 1024 * 1024
+const MAX_PIECE_JOINTE_RECHARGEE_BYTES = 12 * 1024 * 1024
 
 /**
  * Recharge le binaire ORIGINAL d'une pièce jointe image depuis le store d'artefacts.

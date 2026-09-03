@@ -148,7 +148,7 @@ interface TicketReportDeps {
  * Compte-rendu COPIÉ, jamais rédigé : chaque valeur vient d'une source tracée (id du ticket, id de
  * la conversation, statut réel du run). Aucune appréciation, aucun résumé du travail de l'agent.
  */
-export function formatTicketTreatmentComment(
+function formatTicketTreatmentComment(
   item: Pick<TicketItem, 'sourceId' | 'id'>,
   conversationId: string,
   succeeded: boolean

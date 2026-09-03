@@ -60,9 +60,8 @@ describe('suppression — un token d’auth expiré est un MUR, pas un défaut �
  * nouveau marqueur ; les deux gardes de suppression sont restés sur l'ANCIEN vocabulaire. Le
  * changement d'émetteur n'a pas été propagé à ses lecteurs.
  *
- * Le jumeau `auto-kaizen-supervisor` a été SUPPRIMÉ du code (commit 1af16504, « supprimer l'ancien
- * superviseur auto-kaizen et son cablage ») : ses assertions ont donc été retirées ici, elles
- * importaient un module inexistant et rendaient le typecheck rouge. Il ne reste qu'un garde.
+ * Le jumeau `auto-kaizen-supervisor` a depuis été supprimé (l'ancien superviseur auto-kaizen et son
+ * câblage sont partis) : il ne reste qu'un garde à vérifier, celui de ce module.
  */
 describe('suppression — le marqueur [abort] est un abandon voulu', () => {
   // La chaîne EXACTE du Journal de conv-14 (2026-09-02), telle qu'elle remonte au garde.

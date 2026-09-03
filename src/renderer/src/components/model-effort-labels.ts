@@ -16,7 +16,7 @@ export const EFFORT_LABELS: Record<string, string> = {
 }
 
 /** Ordre canonique croissant. Un effort inconnu du catalogue reste affiché, à la fin. */
-export const EFFORT_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+const EFFORT_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
 
 export function sortEfforts(efforts: string[]): string[] {
   return [...efforts].sort((a, b) => {

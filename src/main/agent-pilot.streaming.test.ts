@@ -743,8 +743,11 @@ describe('AgentPilot chat streaming', () => {
 
     const deltas = events.filter((event) => event.kind === 'delta')
     expect(deltas.length).toBeGreaterThanOrEqual(4)
+    // Le texte de l'iteration suivante n'est plus SOUDE au point final de la precedente
+    // (« action.Tout est bon. » : mesure du 2026-09-03) — il tombe sur un paragraphe neuf. Le
+    // texte deja separe par une espace, lui, reste intact : on ne coupe que la soudure.
     expect(deltas.map((event) => event.text).join('')).toBe(
-      'Je réponds.  Après action.Tout est bon.'
+      'Je réponds.  Après action.\n\nTout est bon.'
     )
     expect(JSON.stringify(deltas)).not.toContain('<cmd>')
     expect(JSON.stringify(deltas)).not.toContain('get_state')

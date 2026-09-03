@@ -142,7 +142,7 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
  * rendu du bloc de décision (deux options minimum), pour qu'aucune pastille n'apparaisse sur
  * une question que la vue n'affiche pas comme telle.
  */
-export function attendUneDecision(messages: readonly Msg[]): boolean {
+function attendUneDecision(messages: readonly Msg[]): boolean {
   const dernier = messages.at(-1)
   if (!dernier || dernier.role !== 'assistant') return false
   const parts = (dernier as { parts?: PersistedChatPart[] }).parts

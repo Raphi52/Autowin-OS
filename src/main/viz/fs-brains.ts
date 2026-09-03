@@ -234,7 +234,7 @@ function retrievalRootsMatch(navigationRoot: string, expectedRoot: string): bool
 }
 
 /** Frontière synchrone commune à toutes les lectures renderer d'un vault. */
-export function assertAuthorizedBrainVaultSync(
+function assertAuthorizedBrainVaultSync(
   requestedRoot: string,
   allowedRoot = AMITEL_BRAIN_ROOT
 ): string {
@@ -452,7 +452,7 @@ export const AMITEL_BRAIN_THEMES: BrainTheme[] = [
 ]
 
 /** Racines par défaut où chercher des graphes graphify. */
-export function defaultBrainRoots(): string[] {
+function defaultBrainRoots(): string[] {
   return [join(AMITEL_BRAIN_ROOT, 'projects'), join(process.env.USERPROFILE ?? '.', '.graphify')]
 }
 

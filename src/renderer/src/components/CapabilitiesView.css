@@ -4,7 +4,8 @@
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   padding: 18px 20px 20px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-page);
   background: var(--surface-panel);
   box-shadow: var(--container-shadow);
@@ -53,7 +54,8 @@
   min-height: 0;
   display: grid;
   grid-template-columns: 210px minmax(390px, 1fr) 330px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-panel);
   overflow: hidden;
   background: var(--surface-panel);

@@ -69,7 +69,7 @@ export interface CandidatVeille {
 export type TypeEntree = 'ajout' | 'correction' | 'autre'
 
 /** Ramène ce qu'un scout a écrit à l'une des trois natures. Inconnu → `autre`, jamais deviné. */
-export function natureDe(brut: string | undefined): TypeEntree {
+function natureDe(brut: string | undefined): TypeEntree {
   const valeur = brut?.trim().toLowerCase()
   return valeur === 'ajout' || valeur === 'correction' ? valeur : 'autre'
 }
@@ -139,7 +139,7 @@ export const CITATION_MINIMUM = 40
  * Dix caracteres suffisent a exclure un fragment inutilisable (`}`, `return`) sans refuser une ligne
  * courte et parfaitement probante.
  */
-export const CITATION_MINIMUM_INTERNE = 10
+const CITATION_MINIMUM_INTERNE = 10
 
 /**
  * Titre réduit à sa forme comparable, pour reconnaître la même entrée d'une passe à l'autre.

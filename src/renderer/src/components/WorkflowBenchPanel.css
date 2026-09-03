@@ -10,7 +10,8 @@
   gap: 10px;
   flex: none;
   padding: var(--s3, 12px);
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-panel);
   background: var(--surface-panel);
 }
@@ -69,7 +70,8 @@
   align-items: flex-start;
   gap: 8px;
   padding: 8px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: 6px;
   background: var(--surface-inset);
   cursor: pointer;
@@ -120,7 +122,8 @@
   display: grid;
   gap: 5px;
   padding: 9px 10px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: 6px;
   background: var(--surface-inset);
   font-size: 11px;

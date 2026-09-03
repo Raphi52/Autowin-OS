@@ -8,11 +8,11 @@ export function taskStorePath(): string {
   return join(ensureAutowinAppData(), 'scheduled-tasks.json')
 }
 
-export function emptyTaskStoreSnapshot(): TaskStoreSnapshot {
+function emptyTaskStoreSnapshot(): TaskStoreSnapshot {
   return { schemaVersion: 1, tasks: [], occurrences: [], alerts: [] }
 }
 
-export function loadTaskStore(path = taskStorePath()): TaskStoreSnapshot {
+function loadTaskStore(path = taskStorePath()): TaskStoreSnapshot {
   if (!existsSync(path)) return emptyTaskStoreSnapshot()
   const value: unknown = JSON.parse(readFileSync(path, 'utf8'))
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -30,7 +30,7 @@ export function loadTaskStore(path = taskStorePath()): TaskStoreSnapshot {
   return snapshot as TaskStoreSnapshot
 }
 
-export function saveTaskStore(snapshot: TaskStoreSnapshot, path = taskStorePath()): void {
+function saveTaskStore(snapshot: TaskStoreSnapshot, path = taskStorePath()): void {
   mkdirSync(dirname(path), { recursive: true })
   const temporary = `${path}.tmp`
   writeFileSync(temporary, JSON.stringify(snapshot, null, 2), 'utf8')

@@ -16,7 +16,7 @@ import { defaultModelForProvider, findModel, type ImportedModel } from './models
 import { parseComputeBinding, type ComputeBinding } from '../shared/compute-fabric'
 
 /** Version du schéma de topologie persistée (migration sûre à l'ouverture). */
-export const TOPOLOGY_VERSION = 1
+const TOPOLOGY_VERSION = 1
 
 /** Un binding atomique : un slot lié à un modèle importé + un effort. */
 export interface SlotBinding {
@@ -52,7 +52,7 @@ export interface AgentTopology {
 }
 
 /** Valide un binding contre le catalogue de modèles importés. Jette si incohérent. */
-export function assertBinding(binding: SlotBinding, models: ImportedModel[]): SlotBinding {
+function assertBinding(binding: SlotBinding, models: ImportedModel[]): SlotBinding {
   assertBindingShape(binding)
   const model = findModel(models, binding.modelId)
   if (!model) throw new Error(`Modèle inconnu : ${binding.modelId}`)
@@ -110,7 +110,7 @@ function assertBindingShape(value: unknown): asserts value is SlotBinding {
  * Un démarrage hors ligne ne doit jamais transformer une sélection utilisateur valide en
  * topologie par défaut Kimi/Gemini simplement parce que Codex/Claude n'a pas encore répondu.
  */
-export function assertTopologyShape(value: unknown): AgentTopology {
+function assertTopologyShape(value: unknown): AgentTopology {
   if (!value || typeof value !== 'object') throw new Error('Topologie invalide')
   const topology = value as Partial<AgentTopology>
   if (!Number.isInteger(topology.version) || topology.version! < 1) {

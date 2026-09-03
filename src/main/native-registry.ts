@@ -132,7 +132,7 @@ function registryDir(base = ensureAutowinAppData()): string {
 export function enablementPath(base = ensureAutowinAppData()): string {
   return join(registryDir(base), 'enablement.v1.json')
 }
-export function catalogPath(base = ensureAutowinAppData()): string {
+function catalogPath(base = ensureAutowinAppData()): string {
   return join(registryDir(base), 'catalog.v1.json')
 }
 
@@ -156,7 +156,7 @@ function readJson<T>(path: string, fallback: T): T {
  * et on garde le premier qui porte réellement des skills — vérifier plutôt que supposer un layout.
  * `__dirname` est absent quand ce module tourne en ESM (vitest) : on le sonde au lieu de le supposer.
  */
-export function bundledSkillsCandidates(): string[] {
+function bundledSkillsCandidates(): string[] {
   const candidates: string[] = []
   if (process.env.AUTOWIN_SKILLS_ROOT) candidates.push(process.env.AUTOWIN_SKILLS_ROOT)
   candidates.push(join(process.cwd(), 'skills'))

@@ -114,6 +114,37 @@ const TAILLE_TAMPON = 4096
 const MS_PARTIEL_MINIMUM = 1200
 const MS_PARTIEL_INTERVALLE = 1500
 
+/**
+ * LA VRAIE CAUSE D'UN MICRO QUI NE S'OUVRE PAS.
+ *
+ * DEFAUT VECU (2026-09-03) : cinq pannes distinctes rendaient le MEME code, donc le meme message
+ * « autorisez le microphone ». Mesure faite sur la machine de l'utilisateur : autorisation micro
+ * Windows a « Allow » aux trois niveaux, session bureau a distance, et TOUTES les entrees de
+ * capture a l'etat 8 (debranchee) — il n'y avait donc RIEN a autoriser, et le message envoyait
+ * chercher un reglage deja bon. `getUserMedia` rejette avec un `DOMException` dont le NOM dit la
+ * panne : on le garde au lieu de le jeter.
+ */
+export function codeErreurMicro(cause: unknown): string {
+  const nom = (cause as { name?: unknown } | null)?.name
+  switch (typeof nom === 'string' ? nom : '') {
+    case 'NotAllowedError':
+    case 'PermissionDeniedError':
+    case 'SecurityError':
+      return 'micro-refuse'
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+      return 'micro-absent'
+    case 'NotReadableError':
+    case 'TrackStartError':
+      return 'micro-occupe'
+    case 'OverconstrainedError':
+    case 'ConstraintNotSatisfiedError':
+      return 'micro-introuvable'
+    default:
+      return 'micro-indisponible'
+  }
+}
+
 export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
   return class MoteurWhisper implements MoteurVocal {
     continuous = true
@@ -181,10 +212,10 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
         noeud.onaudioprocess = (e): void => this.auBloc(e.inputBuffer.getChannelData(0))
         this.source.connect(noeud)
         noeud.connect(ctx.destination)
-      } catch {
+      } catch (cause) {
         this.actif = false
         this.fermer()
-        this.onerror?.({ error: 'micro-indisponible' })
+        this.onerror?.({ error: codeErreurMicro(cause) })
         this.onend?.()
       }
     }

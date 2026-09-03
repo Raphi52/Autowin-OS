@@ -71,7 +71,7 @@ export function splitByTrigger<T extends WatchdogTaskLike>(
   }
 }
 
-export const APP_EVENT_LABEL: Record<WatchdogAppEvent, string> = {
+const APP_EVENT_LABEL: Record<WatchdogAppEvent, string> = {
   'orchestration-red': 'une orchestration se termine en rouge',
   'workflow-gate-failed': 'le gate refuse la preuve d’un workflow',
   'workflow-unverified': 'un workflow se dit réussi SANS preuve de validation',

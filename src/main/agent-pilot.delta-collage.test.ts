@@ -58,6 +58,53 @@ describe('DeltaCollageTracker', () => {
     expect(tracker.separation('1:0', '```html-render\n<div>x</div>\n```')).toBe('\n\n')
   })
 
+  /**
+   * MESURE conv-1/conv-2 (2026-09-03, signalement utilisateur) : six messages persistes portent
+   * une phrase TERMINEE collee au premier mot de l'iteration suivante — « je lance la verification
+   * ciblee.Maintenant le cote ecriture ». Le texte de l'iteration N et celui de l'iteration N+1
+   * tombent dans la MEME part ; au premier delta du flux NEUF, `dejaEmis` est vide, donc l'ancienne
+   * garde ne separait QUE les ouvertures de fence et laissait la prose se souder.
+   */
+  it('separe une phrase TERMINEE du premier delta d’un nouveau flux', () => {
+    const tracker = new DeltaCollageTracker()
+    expect(tracker.separation('0:0', 'Je le fais.')).toBe('')
+    expect(tracker.separation('1:0', 'Le correctif est en place.')).toBe('\n\n')
+  })
+
+  it('separe aussi apres un point d’exclamation, d’interrogation ou un guillemet fermant', () => {
+    const t1 = new DeltaCollageTracker()
+    expect(t1.separation('0:0', 'Voila pourquoi ?')).toBe('')
+    expect(t1.separation('1:0', 'Parce que le flux change.')).toBe('\n\n')
+    const t2 = new DeltaCollageTracker()
+    expect(t2.separation('0:0', 'Il a dit « oui ».')).toBe('')
+    expect(t2.separation('1:0', 'Je continue.')).toBe('\n\n')
+  })
+
+  // ENTREES QUI DOIVENT FAIRE ECHOUER UN FIX POSE TROP LARGEMENT :
+  it('ne separe pas quand le nouveau flux commence DEJA par une espace', () => {
+    const tracker = new DeltaCollageTracker()
+    expect(tracker.separation('0:0', 'Premiere phrase.')).toBe('')
+    expect(tracker.separation('1:0', ' Deuxieme phrase.')).toBe('')
+  })
+
+  it('ne separe pas un nombre decimal coupe entre deux flux', () => {
+    const tracker = new DeltaCollageTracker()
+    expect(tracker.separation('0:0', 'version 1.')).toBe('')
+    expect(tracker.separation('1:0', '2.3 publiee')).toBe('')
+  })
+
+  it('ne separe pas quand la phrase precedente n’est pas terminee', () => {
+    const tracker = new DeltaCollageTracker()
+    expect(tracker.separation('0:0', 'Je lance la suite')).toBe('')
+    expect(tracker.separation('1:0', 'complete maintenant')).toBe('')
+  })
+
+  it('ne separe pas une phrase terminee qui finit DEJA par un saut de ligne', () => {
+    const tracker = new DeltaCollageTracker()
+    expect(tracker.separation('0:0', 'Premiere phrase.\n')).toBe('')
+    expect(tracker.separation('1:0', 'Deuxieme phrase.')).toBe('')
+  })
+
   it('ne separe pas un nouveau flux qui poursuit de la PROSE', () => {
     // L'entree qui ferait echouer une separation posee trop largement : sans fence, rien a couper.
     const tracker = new DeltaCollageTracker()

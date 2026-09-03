@@ -33,7 +33,17 @@ export interface ComposerDraft {
   attachments: ChatAttachment[]
   error: string | null
 }
-export type SendOptions = { keepComposerDraft?: boolean; targetConversationId?: string }
+export type SendOptions = {
+  keepComposerDraft?: boolean
+  targetConversationId?: string
+  /**
+   * Reprises DÉJÀ faites après une surcharge du modèle (529) — voir shared/reprise-surcharge.ts.
+   * Portée par l'option parce qu'elle doit survivre au fork : la conversation change, pas le compte.
+   */
+  repriseSurcharge?: number
+  /** Pièces jointes IMPOSÉES (rejeu automatique) : le brouillon du composer n'est pas lu. */
+  piecesJointesImposees?: ChatAttachment[]
+}
 export interface UserMsg {
   role: 'user'
   content: string

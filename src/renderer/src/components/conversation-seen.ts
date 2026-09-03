@@ -7,7 +7,7 @@
  */
 export type ConversationsVues = Record<string, number>
 
-export const CLE_CONVERSATIONS_VUES = 'autowin.conversations.vues'
+const CLE_CONVERSATIONS_VUES = 'autowin.conversations.vues'
 
 export function estNonVue(
   conversation: { id: string; updatedAt?: number },

@@ -6,7 +6,7 @@ import { survivableExitCode } from './stdout-journal'
 import { listUnfinishedTurns, readTurnJournal, type TurnJournalEvent } from './turn-journal'
 
 /** Apres le plafond reel des appels directs (40 min), un journal muet sans recu est orphelin. */
-export const MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS = 2 * 60 * 60_000
+const MAX_UNCERTIFIED_CHAT_RECOVERY_AGE_MS = 2 * 60 * 60_000
 
 function providerJournalActivityAt(path: string, fallback: number): number {
   try {

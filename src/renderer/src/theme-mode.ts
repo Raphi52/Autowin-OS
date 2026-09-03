@@ -10,9 +10,9 @@
 export type ThemeMode = 'sombre' | 'clair'
 
 export const THEME_MODE_STORAGE_KEY = 'autowin-theme-mode.v1'
-export const THEME_MODE_PAR_DEFAUT: ThemeMode = 'sombre'
+const THEME_MODE_PAR_DEFAUT: ThemeMode = 'sombre'
 
-export function estThemeMode(valeur: unknown): valeur is ThemeMode {
+function estThemeMode(valeur: unknown): valeur is ThemeMode {
   return valeur === 'sombre' || valeur === 'clair'
 }
 

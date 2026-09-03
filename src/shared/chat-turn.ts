@@ -46,6 +46,27 @@ export interface PersistedChatActionPart {
   pipeline?: PipelineChoice[]
 }
 
+/**
+ * PROMPT REELLEMENT ENVOYE a une phase du pipeline — meme enveloppe que celle deja affichee dans le
+ * fil des sous-agents (`OrchStep.prompt`), remontee jusqu'a la ligne de phase du bloc orchestration.
+ *
+ * DEMANDE (2026-09-03) : « voir les prompts envoyes a chaque skill ». Le deplie nommait la phase et
+ * le modele, mais rien ne disait ce qui leur avait ete transmis — l'information existait pourtant
+ * deja, un cran plus loin, dans le panneau des sous-agents.
+ *
+ * Un SEUL type pour les deux endroits, volontairement : deux declarations du meme prompt finiraient
+ * par divenger, et le fil afficherait alors une verite de plus que celle envoyee.
+ */
+export interface PipelinePrompt {
+  provider: string
+  model?: string
+  transport: string
+  system?: string
+  messages: Array<{ role: string; content: string }>
+  options: Record<string, unknown>
+  limitation: string
+}
+
 /** Un maillon du pipeline reellement engage : la phase/skill jouee et l'agent qui la joue. */
 export interface PipelineChoice {
   /** Phase du pipeline (scout/frame/build/...) ou identifiant de skill, tel que le run l'annonce. */
@@ -342,7 +363,7 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
  */
 const ANNONCE_EN_TETE = /^\s*je (?:dois|vais|commence par|cible|proc\u00e8de)\b[^\n]*\n/i
 
-export function retirerAnnonceEnTete(texte: string): string {
+function retirerAnnonceEnTete(texte: string): string {
   if (!ANNONCE_EN_TETE.test(texte)) return texte
   const reste = texte.replace(ANNONCE_EN_TETE, '').trim()
   // Si l'annonce etait TOUT le message, on la garde : mieux vaut une intention qu'une bulle vide.

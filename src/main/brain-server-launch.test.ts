@@ -3,6 +3,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
+  BRAIN_LAUNCH_COOLDOWN_MS,
+  MAX_BRAIN_LAUNCH_ATTEMPTS,
   buildBrainLaunchCommand,
   ensureBrainServerStarted,
   resetBrainLaunchAttempt,
@@ -126,6 +128,80 @@ describe('ensureBrainServerStarted', () => {
     expect(unc?.cwd).toBeUndefined()
     expect(unc?.args.at(-1)).toBe('\\\\ged2\\rig\\tooling\\brain_server.py')
     expect(unc?.args).toContain('/d')
+  })
+
+  // Defaut mesure le 2026-09-03 (dev-app-stdout.log) : l'app tente UNE fois a 08:43, le service meurt
+  // pendant son warm-up, et les 7 re-sondes suivantes rendent « demarrage deja tente cette session ».
+  // Le Brain est reste injoignable toute la session, reparable seulement a la main. Ces trois tests
+  // figent la garde CORRIGEE : un delai entre essais, un plafond d'essais, mais jamais un essai unique.
+  it('un service mort apres le premier essai est RE-DEMARRE quand le delai est passe', async () => {
+    makeValidTooling()
+    const spawnFn = vi.fn().mockReturnValue({ unref: vi.fn() })
+    const env = { AUTOWIN_BRAIN_TOOLING: tooling }
+    let horloge = 1_000_000
+
+    const premier = await ensureBrainServerStarted(async () => false, env, spawnFn as never, () => horloge)
+    expect(premier.status).toBe('starting')
+
+    horloge += BRAIN_LAUNCH_COOLDOWN_MS + 1
+    const second = await ensureBrainServerStarted(async () => false, env, spawnFn as never, () => horloge)
+    expect(second.status).toBe('starting')
+    expect(spawnFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('pendant le warm-up, aucun second spawn (anti-doublon par DELAI, pas par verrou)', async () => {
+    makeValidTooling()
+    const spawnFn = vi.fn().mockReturnValue({ unref: vi.fn() })
+    const env = { AUTOWIN_BRAIN_TOOLING: tooling }
+    let horloge = 1_000_000
+
+    await ensureBrainServerStarted(async () => false, env, spawnFn as never, () => horloge)
+    horloge += 5_000
+    const pendant = await ensureBrainServerStarted(async () => false, env, spawnFn as never, () => horloge)
+
+    expect(pendant.status).toBe('unavailable')
+    expect(pendant.detail).toContain('warm-up')
+    expect(spawnFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('au-dela du plafond, on arrete et on NOMME ou lire la cause', async () => {
+    makeValidTooling()
+    const spawnFn = vi.fn().mockReturnValue({ unref: vi.fn() })
+    const env = { AUTOWIN_BRAIN_TOOLING: tooling }
+    let horloge = 1_000_000
+
+    for (let essai = 0; essai < MAX_BRAIN_LAUNCH_ATTEMPTS; essai += 1) {
+      const r = await ensureBrainServerStarted(async () => false, env, spawnFn as never, () => horloge)
+      expect(r.status).toBe('starting')
+      horloge += BRAIN_LAUNCH_COOLDOWN_MS + 1
+    }
+    const apres = await ensureBrainServerStarted(async () => false, env, spawnFn as never, () => horloge)
+
+    expect(apres.status).toBe('unavailable')
+    expect(apres.detail).toContain('server-err.log')
+    expect(spawnFn).toHaveBeenCalledTimes(MAX_BRAIN_LAUNCH_ATTEMPTS)
+  })
+
+  it('un service redevenu joignable REARME le compteur d essais', async () => {
+    makeValidTooling()
+    const spawnFn = vi.fn().mockReturnValue({ unref: vi.fn() })
+    const env = { AUTOWIN_BRAIN_TOOLING: tooling }
+    let horloge = 1_000_000
+
+    for (let essai = 0; essai < MAX_BRAIN_LAUNCH_ATTEMPTS; essai += 1) {
+      await ensureBrainServerStarted(async () => false, env, spawnFn as never, () => horloge)
+      horloge += BRAIN_LAUNCH_COOLDOWN_MS + 1
+    }
+    expect(
+      (await ensureBrainServerStarted(async () => false, env, spawnFn as never, () => horloge)).status
+    ).toBe('unavailable')
+
+    expect(
+      (await ensureBrainServerStarted(async () => true, env, spawnFn as never, () => horloge)).status
+    ).toBe('already-up')
+
+    const apresChute = await ensureBrainServerStarted(async () => false, env, spawnFn as never, () => horloge)
+    expect(apresChute.status).toBe('starting')
   })
 
   it('resolveBrainRuntime : env tooling prioritaire sinon vide', () => {

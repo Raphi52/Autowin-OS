@@ -78,7 +78,7 @@ function excerpt(content: unknown, query: string, cap = 96): string {
  * valeur qui COUVRE l'usage réel observé, de sorte que le compteur redevienne un compte. Au-delà, la
  * recherche prend le relais : elle parcourt tout, elle, sans passer par cette fenêtre.
  */
-export const PLAFOND_LISTE = 2_000
+const PLAFOND_LISTE = 2_000
 
 /**
  * Extraits par CONTENU, calcules par le processus principal.
@@ -181,11 +181,8 @@ export function trierParRecenceUtilisateur<T extends ConversationSearchSource>(
   })
 }
 
-/** Clé stable de la catégorie « Récentes » — sert d'identité à son repli persisté. */
-export const GROUPE_RECENTES = 'recentes'
-
 /** Combien de conversations la catégorie « Récentes » affiche au plus. */
-export const RECENTES_AFFICHEES = 20
+const RECENTES_AFFICHEES = 20
 
 /**
  * Les N conversations où l'utilisateur a parlé le plus récemment, TOUTES PROVENANCES CONFONDUES.

@@ -140,7 +140,7 @@ export type SqlcmdOutcome =
  *
  * Le texte du message est sur la ligne SUIVANTE de l'en-tête `Msg …`, d'où la reprise par paires.
  */
-export function extractSqlMessages(brut: string): string | undefined {
+function extractSqlMessages(brut: string): string | undefined {
   const lignes = brut.split('\n')
   const retenues: string[] = []
   for (let i = 0; i < lignes.length; i += 1) {

@@ -157,7 +157,7 @@ export interface ConversationDirecte {
 }
 
 /** Fenêtre de fraîcheur d'une conversation TERMINÉE : au-delà, ce n'est plus « en direct ». */
-export const FENETRE_DIRECT_MS = 10 * 60_000
+const FENETRE_DIRECT_MS = 10 * 60_000
 const MAX_DIRECT = 6
 
 export function conversationsEnDirect(
@@ -311,7 +311,7 @@ const CACHE_EVEIL = new Map<string, RegExp>()
  * plus court). Un nom de moins de 3 lettres ne tolere plus rien du tout — « Al » elargi de trois
  * lettres reveillerait l'assistant sur « allo », « alors », « aller ».
  */
-export function motifEveil(nom: string = NOM_JARVIS_DEFAUT): RegExp {
+function motifEveil(nom: string = NOM_JARVIS_DEFAUT): RegExp {
   const mots = motsNom(nom).length > 0 ? motsNom(nom) : motsNom(NOM_JARVIS_DEFAUT)
   const cle = mots.join(' ')
   const enCache = CACHE_EVEIL.get(cle)
@@ -413,12 +413,59 @@ export function reagirAParole(
  * pire, `network` a longtemps ete rendu SILENCIEUX, si bien que le widget affichait « ecoute en
  * cours » sur un moteur mort. Chaque code nomme donc sa cause ET la sortie.
  */
+/**
+ * CETTE ERREUR SE RATTRAPE-T-ELLE EN RELANCANT LE MICRO ? C'est ce qui decide de l'affichage du
+ * bouton « Réessayer le micro » : le proposer sur `network` (moteur Chromium injoignable) ou sur
+ * un echec d'envoi ferait cliquer dans le vide.
+ */
+export function erreurRattrapableParMicro(code: string): boolean {
+  return (
+    code === 'not-allowed' ||
+    code === 'service-not-allowed' ||
+    code === 'micro-refuse' ||
+    code === 'micro-absent' ||
+    code === 'micro-occupe' ||
+    code === 'micro-introuvable' ||
+    code === 'micro-indisponible'
+  )
+}
+
+/**
+ * L'AUTORISATION WINDOWS PEUT-ELLE ETRE EN CAUSE ? Seul ce cas justifie d'ouvrir la page
+ * « Microphone » des reglages : sur « aucun micro branche », y envoyer l'utilisateur lui ferait
+ * regler un parametre deja bon — exactement le defaut du 2026-09-03. Le code generique y reste
+ * parce que la cause n'y est PAS etablie.
+ */
+export function erreurDAutorisationMicro(code: string): boolean {
+  return (
+    code === 'not-allowed' ||
+    code === 'service-not-allowed' ||
+    code === 'micro-refuse' ||
+    code === 'micro-indisponible'
+  )
+}
+
 export function messageErreurMoteur(code: string): string {
   if (code === 'network') {
     return 'Le moteur de reconnaissance de Chromium est injoignable dans cette fenêtre (erreur « network ») : installez l’écoute hors ligne ci-dessous.'
   }
-  if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'micro-indisponible') {
-    return 'Micro indisponible : autorisez le microphone pour Autowin OS, puis réactivez l’écoute.'
+  // CINQ CAUSES, CINQ SORTIES. Une seule phrase pour toutes envoyait l'utilisateur chercher une
+  // autorisation Windows deja accordee (mesure du 2026-09-03) : ici chaque cause nomme LE geste
+  // qui la leve, et le bouton « Réessayer le micro » du widget est a cote de la phrase.
+  if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'micro-refuse') {
+    return 'Micro refusé pour Autowin OS : autorisez le microphone dans Windows (Confidentialité → Microphone), puis réessayez.'
+  }
+  if (code === 'micro-absent') {
+    return 'Aucun micro disponible sur cette machine : branchez un micro ou un casque, puis réessayez. En session à distance, le micro n’arrive que si la redirection audio est activée côté client.'
+  }
+  if (code === 'micro-occupe') {
+    return 'Le micro est déjà pris par une autre application (visio, enregistreur) : libérez-le, puis réessayez.'
+  }
+  if (code === 'micro-introuvable') {
+    return 'Le micro choisi dans « Paramètres audio » n’existe plus : choisissez-en un autre, puis réessayez.'
+  }
+  if (code === 'micro-indisponible') {
+    return 'Micro indisponible : l’entrée audio n’a pas pu s’ouvrir. Vérifiez le micro choisi dans « Paramètres audio », puis réessayez.'
   }
   if (code === 'transcription-impossible') {
     return 'La reconnaissance locale n’a pas pu transcrire : réinstallez l’écoute hors ligne.'

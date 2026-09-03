@@ -29,13 +29,13 @@ const MAX_DEPTH = 6
 const MAX_FILES_PER_SOURCE = 500
 const METADATA_BYTES = 16_384
 
-export function defaultSkillRegistryRoots(): SkillRegistryRoots {
+function defaultSkillRegistryRoots(): SkillRegistryRoots {
   // Racines dérivées de la SOURCE UNIQUE (provider-capabilities) — plus de hardcoding dupliqué.
   const byId = Object.fromEntries(providerCapabilities().map((p) => [p.id, p.skillsRoot]))
   return { codex: byId.codex, claude: byId.claude, autowin: byId.autowin }
 }
 
-export function providersFromRoots(roots: SkillRegistryRoots): SkillDiscoveryProvider[] {
+function providersFromRoots(roots: SkillRegistryRoots): SkillDiscoveryProvider[] {
   const labelById = new Map(providerCapabilities().map((p) => [p.id, p.label]))
   return [
     { id: 'codex', label: labelById.get('codex') ?? 'Codex', root: roots.codex },
@@ -44,7 +44,7 @@ export function providersFromRoots(roots: SkillRegistryRoots): SkillDiscoveryPro
   ]
 }
 
-export function loadConfiguredProviders(
+function loadConfiguredProviders(
   configPath: string,
   roots: SkillRegistryRoots = defaultSkillRegistryRoots()
 ): SkillDiscoveryProvider[] {

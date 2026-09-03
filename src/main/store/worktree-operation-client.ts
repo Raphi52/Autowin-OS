@@ -11,7 +11,7 @@ export interface WorktreeOperationWorkerLike {
   postMessage(message: WorktreeOperationRequest): void
   terminate(): Promise<number>
 }
-export class WorktreeOperationTimeoutError extends Error {
+class WorktreeOperationTimeoutError extends Error {
   constructor(readonly timeoutMs: number) {
     super(`Opération worktree interrompue après ${timeoutMs} ms`)
     this.name = 'WorktreeOperationTimeoutError'

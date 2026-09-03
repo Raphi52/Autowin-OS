@@ -52,8 +52,12 @@ export function InterfaceView(): React.JSX.Element {
         </label>
       </div>
       <p className="interface-reserve">
-        Les écrans qui peignent leurs couleurs en dur — le graphe Memory, la topologie des agents,
-        les aperçus HTML générés — restent sombres : ils ne lisent pas les couleurs du thème.
+        <strong>Ce qui reste sombre.</strong> Le mode clair change le cadre de l’application : le
+        menu, les panneaux, les textes et les champs. Les écrans qui peignent leurs couleurs en dur
+        ne le suivent pas encore et resteront sombres, y compris la page <strong>Chat</strong>, l’
+        <strong>Accueil</strong>, l’<strong>Observatory</strong>, le graphe <strong>Memory</strong>,
+        la <strong>topologie</strong> des agents et les aperçus HTML générés. L’affichage sera donc
+        mixte : clair autour, sombre à l’intérieur de ces écrans.
       </p>
     </section>
   )

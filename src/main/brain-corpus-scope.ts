@@ -179,7 +179,7 @@ export function brainSourcePathAllowed(
 }
 
 /** Une attestation HMAC doit reprendre exactement la portée demandée, ordre compris. */
-export function brainCorpusAttestationMatches(
+function brainCorpusAttestationMatches(
   attested: readonly string[] | undefined,
   requested: readonly string[] | undefined
 ): boolean {

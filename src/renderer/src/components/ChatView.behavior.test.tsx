@@ -4,6 +4,13 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ChatView } from './ChatView'
 
+// L'attente entre deux reprises après surcharge (30 s en vrai) est neutralisée : ces tests
+// vérifient la DÉCISION et le GESTE, pas la patience.
+vi.mock('../../../shared/reprise-surcharge', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  attendreAvantReprise: () => Promise.resolve()
+}))
+
 const markdownRenderCount = vi.hoisted(() => ({ value: 0 }))
 vi.mock('./Markdown', () => ({
   Markdown: ({ text }: { text: string }) => {
@@ -2688,6 +2695,124 @@ describe('ChatView behavior under concurrent UI actions', () => {
       },
       { role: 'user', content: 'u2', ts: 2, messageId: 'm3', parentMessageId: 'm2' }
     ]
+  })
+
+  /**
+   * SURCHARGE DU MODÈLE (529) — demande utilisateur du 2026-09-03 : « quand le modèle renvoie une
+   * erreur 529, forke la conversation et reprends (max 3 tentatives) ». Le fournisseur a refusé,
+   * la demande est intacte : Autowin la rejoue dans une copie, au plus trois fois, et le dit.
+   */
+  const ERREUR_529 = 'API Claude surchargée (529) — abandon après 10/10 tentatives'
+  const conversationAvecHistorique = (): Record<string, unknown> => ({
+    ...conversation('A'),
+    messages: [
+      { role: 'user', content: 'u1', ts: 1, messageId: 'm1' },
+      {
+        role: 'assistant',
+        content: 'a1',
+        ts: 1,
+        messageId: 'm2',
+        turnId: 't1',
+        status: 'completed',
+        parts: [{ kind: 'text', text: 'a1' }]
+      }
+    ]
+  })
+  const copieDeA = (id = 'A-fork'): Record<string, unknown> => ({
+    id,
+    title: 'A (fork)',
+    category: 'codex',
+    provider: 'codex',
+    updatedAt: 2,
+    messages: [{ role: 'user', content: 'u1', ts: 1, messageId: 'f1' }]
+  })
+
+  async function laisserLaRepriseSeFaire(tours = 6): Promise<void> {
+    for (let i = 0; i < tours; i += 1) await act(async () => flushAnimationFrames())
+  }
+
+  it('529 : forke la conversation et rejoue la demande dans la copie', async () => {
+    const pilotChat = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, cancelled: false, error: ERREUR_529 })
+      .mockResolvedValue({ ok: true })
+    const conversationsFork = vi.fn().mockResolvedValue(copieDeA())
+    const conversations = vi
+      .fn()
+      .mockResolvedValueOnce([conversationAvecHistorique()])
+      .mockResolvedValue([conversationAvecHistorique(), copieDeA()])
+    await mount(api({ conversations, conversationsFork, pilotChat }))
+    await click('.conv-pick')
+    await type('ma demande')
+    await click('.composer-send')
+    await laisserLaRepriseSeFaire()
+
+    // La copie part du dernier message DÉJÀ enregistré, donc avant la demande qui a échoué.
+    expect(conversationsFork).toHaveBeenCalledWith('A', 'm2')
+    expect(pilotChat).toHaveBeenCalledTimes(2)
+    expect(pilotChat.mock.calls[1]?.[1]).toBe('A-fork')
+    expect(pilotChat.mock.calls[1]?.[0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'ma demande' })])
+    )
+  })
+
+  it('529 en boucle : 3 reprises au maximum, puis le renoncement est dit', async () => {
+    const pilotChat = vi.fn().mockResolvedValue({ ok: false, cancelled: false, error: ERREUR_529 })
+    const conversationsFork = vi.fn().mockResolvedValue(copieDeA())
+    const conversations = vi
+      .fn()
+      .mockResolvedValueOnce([conversationAvecHistorique()])
+      .mockResolvedValue([conversationAvecHistorique(), copieDeA()])
+    await mount(api({ conversations, conversationsFork, pilotChat }))
+    await click('.conv-pick')
+    await type('ma demande')
+    await click('.composer-send')
+    await laisserLaRepriseSeFaire(12)
+
+    // 1 envoi + 3 reprises, jamais une quatrième.
+    expect(pilotChat).toHaveBeenCalledTimes(4)
+    expect(conversationsFork).toHaveBeenCalledTimes(3)
+    expect(container!.textContent ?? '').toContain('3 reprises automatiques ont échoué')
+  })
+
+  it('un échec ordinaire ne forke rien', async () => {
+    const pilotChat = vi
+      .fn()
+      .mockResolvedValue({ ok: false, cancelled: false, error: 'Exit code: 1' })
+    const conversationsFork = vi.fn().mockResolvedValue(copieDeA())
+    await mount(
+      api({
+        conversations: vi.fn().mockResolvedValue([conversationAvecHistorique()]),
+        conversationsFork,
+        pilotChat
+      })
+    )
+    await click('.conv-pick')
+    await type('ma demande')
+    await click('.composer-send')
+    await laisserLaRepriseSeFaire()
+
+    expect(conversationsFork).not.toHaveBeenCalled()
+    expect(pilotChat).toHaveBeenCalledTimes(1)
+  })
+
+  it('un arrêt voulu par l’utilisateur ne forke rien, même libellé 529', async () => {
+    const pilotChat = vi.fn().mockResolvedValue({ ok: true, cancelled: true, error: ERREUR_529 })
+    const conversationsFork = vi.fn().mockResolvedValue(copieDeA())
+    await mount(
+      api({
+        conversations: vi.fn().mockResolvedValue([conversationAvecHistorique()]),
+        conversationsFork,
+        pilotChat
+      })
+    )
+    await click('.conv-pick')
+    await type('ma demande')
+    await click('.composer-send')
+    await laisserLaRepriseSeFaire()
+
+    expect(conversationsFork).not.toHaveBeenCalled()
+    expect(pilotChat).toHaveBeenCalledTimes(1)
   })
 
   it('forke depuis un tour assistant persistant en appelant conversationsFork', async () => {

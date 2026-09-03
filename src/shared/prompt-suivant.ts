@@ -15,7 +15,7 @@
  * caractères — on retombe sur l'ancien comportement au lieu de casser le composer.
  */
 
-export const MARQUEUR_PROMPT_SUIVANT = 'AUTOWIN_PROMPT_V1:'
+const MARQUEUR_PROMPT_SUIVANT = 'AUTOWIN_PROMPT_V1:'
 
 /** Au-delà, ce n'est plus un prompt mais un paragraphe : on le borne au lieu de noyer le champ. */
 const LONGUEUR_MAX = 600

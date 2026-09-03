@@ -89,7 +89,7 @@ export interface ScheduledChatRuntime {
   }>
 }
 
-export const WATCHDOG_INTERACTIVE_IDLE_TIMEOUT_MS = 30_000
+const WATCHDOG_INTERACTIVE_IDLE_TIMEOUT_MS = 30_000
 
 export function scheduledTaskBinding(
   task: ScheduledTask,

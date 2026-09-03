@@ -278,7 +278,7 @@ function valeurLisible(valeur: unknown): string | undefined {
 }
 
 /** Rend lisible le RESULTAT d'une commande dont aucun champ n'est connu du lecteur. */
-export function resumeGenerique(data: Record<string, unknown>): string | undefined {
+function resumeGenerique(data: Record<string, unknown>): string | undefined {
   const lignes: string[] = []
   for (const [cle, valeur] of Object.entries(data)) {
     if (CLES_DE_CONTROLE.has(cle)) continue
@@ -295,7 +295,7 @@ export function resumeGenerique(data: Record<string, unknown>): string | undefin
 const MAX_ARG_CHARS = 200
 
 /** Ce qui a ete DEMANDE — chemin lu, motif cherche, cible — en une ligne d'entete du deplie. */
-export function resumeArguments(args: unknown): string | undefined {
+function resumeArguments(args: unknown): string | undefined {
   const record = asRecord(args)
   if (!record) return undefined
   const morceaux: string[] = []

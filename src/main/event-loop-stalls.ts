@@ -86,16 +86,3 @@ export function surveillerBoucleEvenements(
     if (timer === local) timer = undefined
   }
 }
-
-/** Journalise une opération synchrone lourde (taille + durée) quand elle dépasse le seuil. */
-export function mesurerOperationSynchrone<T>(nom: string, octets: number, travail: () => T): T {
-  const debut = performance.now()
-  try {
-    return withSection(nom, travail)
-  } finally {
-    const dureeMs = Math.round(performance.now() - debut)
-    if (dureeMs >= 100) {
-      journaliser({ ts: new Date().toISOString(), type: 'sync-io', nom, octets, dureeMs })
-    }
-  }
-}

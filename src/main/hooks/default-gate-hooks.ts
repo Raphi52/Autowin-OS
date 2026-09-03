@@ -9,7 +9,7 @@ import { exigenceAppuiSourcesNeuves } from '../autowin-kaizen-context'
  * anti-flaky / fix-gate / done-without-proof). On ne réécrit PAS leur logique — on la branche
  * comme handler du bus (unification demandée, zéro duplication).
  */
-export function syncGateHooksHandler(ctx: HookContext): HookResult {
+function syncGateHooksHandler(ctx: HookContext): HookResult {
   const violations = runHooks({
     requireProof: ctx.requireProof,
     evidenceOkCount: ctx.evidenceOkCount,

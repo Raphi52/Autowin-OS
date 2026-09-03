@@ -154,7 +154,7 @@ export class RoleModelConfig {
  * réellement (cf. ImportedModel.reasoningEfforts) et chaque adaptateur rejette
  * explicitement une valeur qu'il ne sait pas transmettre (cf. providers/*).
  */
-export const REASONING_EFFORTS = [
+const REASONING_EFFORTS = [
   'none',
   'minimal',
   'low',

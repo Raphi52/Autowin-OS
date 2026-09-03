@@ -66,7 +66,7 @@ const EN_TETES_CLOTURE =
  * jusqu'à la rubrique d'après. Précision utilisateur du 2026-09-02 : « dans le prompt il n'écrit
  * jamais le mot rien, mais il l'écrit souvent dans le bloc Fait ».
  */
-export function lignesDuBlocFait(texte: string): string[] {
+function lignesDuBlocFait(texte: string): string[] {
   return lignesDeRubrique(texte, 'Fait')
 }
 
@@ -117,7 +117,7 @@ export function blocFaitDitRien(texte: string): boolean {
  * Même exigence de précision que pour le bloc « Fait » : le mot doit être SEUL sur sa ligne.
  * « rien ne bloque le lancement de clean » raconte une suite POSSIBLE, pas une fin.
  */
-export function resteAFaireDitRien(texte: string): boolean {
+function resteAFaireDitRien(texte: string): boolean {
   return ligneNueDitRien(lignesDeRubrique(texte, 'Reste à faire'))
 }
 

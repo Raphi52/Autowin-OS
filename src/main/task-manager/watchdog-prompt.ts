@@ -10,7 +10,7 @@ import type { WatchdogOutcome, WatchdogSignal } from './types'
  *    plus : quelqu'un doit quand meme aller lire pour savoir si c'etait grave.
  */
 
-export const WATCHDOG_OUTCOMES: readonly WatchdogOutcome[] = [
+const WATCHDOG_OUTCOMES: readonly WatchdogOutcome[] = [
   'benign',
   'report',
   'investigate',

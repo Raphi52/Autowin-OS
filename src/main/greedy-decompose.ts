@@ -9,7 +9,7 @@ import type { GreedyTaskNode } from './orchestrator'
  */
 
 /** Consigne remise au modèle orchestrateur pour produire le plan. Format STRICT attendu = tableau JSON. */
-export function decompositionPrompt(task: string): string {
+function decompositionPrompt(task: string): string {
   return (
     `Tu es l'ORCHESTRATEUR. Découpe la TÂCHE en sous-tâches indépendantes ou enchaînables, pour un ` +
     `dispatch PARALLÈLE greedy. Renvoie UNIQUEMENT un tableau JSON, sans prose autour :\n` +

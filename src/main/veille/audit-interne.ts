@@ -371,7 +371,7 @@ export function detecterImpuretesAuRendu(fichiers: FichierAudite[]): ConstatInte
 }
 
 /** Tous les détecteurs, dans l'ordre où ils sont utiles à lire. */
-export const DETECTEURS = [
+const DETECTEURS = [
   detecterGardesSurFichierAbsent,
   detecterAssertionsNeutralisees,
   detecterComposantsJamaisMontes,

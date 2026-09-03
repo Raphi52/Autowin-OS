@@ -41,7 +41,7 @@ export interface RememberedFact {
 }
 
 /** Titre abrégé dans l'écho : un titre non borné pouvait à lui seul épuiser tout le budget du bloc. */
-export const ECHO_MAX_TITLE_CHARS = 120
+const ECHO_MAX_TITLE_CHARS = 120
 
 /** Assez pour être utile sur un fil de travail, trop peu pour peser. */
 export const ECHO_MAX_FACTS = 12

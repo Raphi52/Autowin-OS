@@ -76,7 +76,7 @@ function summarizeProjectContext(request: object): RagTraceSummary | null {
   }
 }
 
-export function canonicalRagSourcePath(path: string): string {
+function canonicalRagSourcePath(path: string): string {
   return path
     .trim()
     .replace(FILE_PREFIX, '')

@@ -220,7 +220,7 @@ function commonPrefix(a: string, b: string): number {
  * transforme un refus en information exploitable : l'agent voit l'ecart exact (un espace, une
  * apostrophe, un renommage) au lieu de re-deviner.
  */
-export function nearestLines(content: string, wanted: string, limit = 3): string {
+function nearestLines(content: string, wanted: string, limit = 3): string {
   const anchor = anchorLine(wanted)
   if (!anchor) return ''
   const needle = anchor.replace(/\s+/g, ' ').toLowerCase()
@@ -242,7 +242,7 @@ export function nearestLines(content: string, wanted: string, limit = 3): string
 }
 
 /** Numeros de ligne des occurrences d'un extrait ambigu — pour choisir laquelle viser. */
-export function occurrenceLines(content: string, wanted: string, limit = 5): string {
+function occurrenceLines(content: string, wanted: string, limit = 5): string {
   const anchor = anchorLine(wanted)
   const lines = content.split(/\r?\n/)
   const found: string[] = []

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
@@ -24,7 +25,7 @@ import { join } from 'node:path'
 export const DEFAULT_BRAIN_ROOT = '\\\\ged2\\rig\\Projets IA\\Amitel Brain'
 
 /** Origine du service RAG local. Surcharge : `AMITEL_BRAIN_ORIGIN` (nom historique, preserve). */
-export const DEFAULT_BRAIN_ORIGIN = 'http://127.0.0.1:8765'
+const DEFAULT_BRAIN_ORIGIN = 'http://127.0.0.1:8765'
 
 /**
  * Workspaces d'entreprise consultes en LECTURE quand ils existent. `C:\Nouveau dossier` a ete RETIRE :
@@ -60,9 +61,59 @@ export function requireLoopbackBrainOrigin(value: string): string {
   return parsed.origin
 }
 
+/**
+ * Origine lue dans la CONFIGURATION POSEE PAR L'INSTALLATION, quand l'environnement est muet.
+ *
+ * DEFAUT VECU (conv-8, 2026-09-03) : le serveur a jour ecoutait 8766 (c'est lui qui porte l'echange
+ * de defi du protocole 2 ; un binaire plus ancien squattait 8765). Cote client, l'origine ne vivait
+ * QUE dans la variable `AMITEL_BRAIN_ORIGIN` du shell ou elle avait ete tapee : le processus
+ * principal, lance sans elle, retombait sur le defaut 8765 et chaque lecture du savoir rendait
+ * « indisponible » en 15 ms (connexion refusee). Persister la variable ne suffit pas — un
+ * redemarrage qui herite de l'ancien environnement la perd a nouveau, ce qui a ete MESURE : l'app
+ * relancee a demarre un second serveur sur 8765.
+ *
+ * `config.json` est deja la source de verite des chemins de l'installation (`brain_root`,
+ * `code_root`, `python`, lus par `brain-server-launch`). Le PORT y appartient au meme titre : un
+ * seul fichier decide, client et serveur le lisent, et plus rien ne depend de ce qu'un shell a
+ * exporte. `origin` est prioritaire ; `port` est accepte comme raccourci.
+ */
+function origineDepuisInstallation(env: NodeJS.ProcessEnv): string | undefined {
+  const stateRoot = amitelBrainStateRoot(env)
+  if (!stateRoot) return undefined
+  let config: { origin?: unknown; port?: unknown }
+  try {
+    config = JSON.parse(readFileSync(join(stateRoot, 'config.json'), 'utf8')) as typeof config
+  } catch {
+    // Installation absente ou inachevee : le defaut reste valide, on ne fait pas echouer la lecture.
+    return undefined
+  }
+  const origin = typeof config.origin === 'string' ? config.origin.trim() : ''
+  if (origin) return origin
+  const brut =
+    typeof config.port === 'number'
+      ? String(config.port)
+      : typeof config.port === 'string'
+        ? config.port.trim()
+        : ''
+  if (!/^\d{1,5}$/.test(brut)) return undefined
+  const port = Number(brut)
+  return port > 0 && port < 65536 ? `http://127.0.0.1:${port}` : undefined
+}
+
 export function amitelBrainOrigin(env: NodeJS.ProcessEnv = process.env): string {
-  const configured = env.AMITEL_BRAIN_ORIGIN?.trim()
-  return requireLoopbackBrainOrigin(configured || DEFAULT_BRAIN_ORIGIN)
+  const parEnv = env.AMITEL_BRAIN_ORIGIN?.trim()
+  const parPort = env.AMITEL_BRAIN_PORT?.trim()
+  const configured =
+    parEnv || (/^\d{1,5}$/.test(parPort ?? '') ? `http://127.0.0.1:${parPort}` : '')
+  return requireLoopbackBrainOrigin(
+    configured || origineDepuisInstallation(env) || DEFAULT_BRAIN_ORIGIN
+  )
+}
+
+/** Port du service, derive de la MEME origine : le serveur lance ne peut plus viser un autre port. */
+export function amitelBrainPort(env: NodeJS.ProcessEnv = process.env): string {
+  const { port } = new URL(amitelBrainOrigin(env))
+  return port || '80'
 }
 
 /** Etat et runtime installes localement par Hermes-Brain. Le partage ne contient que les donnees. */

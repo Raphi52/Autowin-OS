@@ -194,7 +194,7 @@ export function activeAccountOf(state: ClaudeAccountsState): ClaudeAccount {
 }
 
 /** Id stable, lisible dans un chemin de dossier, et jamais en collision avec un existant. */
-export function nextAccountId(state: ClaudeAccountsState): string {
+function nextAccountId(state: ClaudeAccountsState): string {
   for (let index = 2; ; index += 1) {
     const candidate = `compte-${index}`
     if (!state.accounts.some((account) => account.id === candidate)) return candidate

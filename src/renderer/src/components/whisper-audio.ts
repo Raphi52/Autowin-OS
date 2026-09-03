@@ -19,9 +19,9 @@ export const SEUIL_PAROLE = 0.012
 /** Silence à partir duquel la phrase est réputée finie. Assez long pour tolérer une respiration. */
 export const MS_SILENCE_FIN = 700
 /** En deçà, ce n'était pas une phrase : bruit, souffle, claquement. */
-export const MS_PAROLE_MINIMUM = 350
+const MS_PAROLE_MINIMUM = 350
 /** Audio conservé AVANT le déclenchement : c'est lui qui sauve la première syllabe. */
-export const MS_PRE_ROLL = 400
+const MS_PRE_ROLL = 400
 /** Une parole qui ne s'arrête jamais est coupée ici, plutôt que de gonfler la mémoire sans fin. */
 export const DUREE_MAX_MS = 15_000
 
@@ -70,13 +70,13 @@ export function reechantillonner(
  */
 export const CRETE_CIBLE = 0.9
 export const GAIN_MAX = 12
-export const RMS_PLANCHER = 0.004
+const RMS_PLANCHER = 0.004
 /**
  * ZONE MORTE. Une crête à 0,8999 donnerait un gain de 1,0000010 : re-multiplier 240 000
  * échantillons pour un millionième de dB est du travail pur, et brouille la garantie « un segment
  * correct n'est pas touché ». En dessous de ce seuil, on ne touche à rien.
  */
-export const GAIN_MINIMUM = 1.05
+const GAIN_MINIMUM = 1.05
 
 export function gainNormalisation(echantillons: Float32Array): number {
   if (echantillons.length === 0) return 1
@@ -240,8 +240,8 @@ export function avancerVad(
  * normalisation afficherait « plein » sur un micro trop faible, et cacherait la cause n°1 mesurée
  * du charabia.
  */
-export const PLANCHER_DB = -60
-export const CRETE_DB = -12
+const PLANCHER_DB = -60
+const CRETE_DB = -12
 
 export function jaugeDepuisNiveau(rms: number): number {
   if (!(rms > 0)) return 0

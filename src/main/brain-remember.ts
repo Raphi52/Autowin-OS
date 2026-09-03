@@ -25,6 +25,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { basename, dirname, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
+import { amitelBrainOrigin } from './amitel-paths'
 import { memoryWorkspaceIdentity } from './session-memory-echo'
 
 /** Types acceptés par le garde du Brain (`brain_propose.ALLOWED_TYPES`). Liste FERMÉE. */
@@ -45,7 +46,7 @@ export const REMEMBER_SOURCE_SCHEMES = [
   'meeting'
 ] as const
 
-export const REMEMBER_TITLE_MAX = 200
+const REMEMBER_TITLE_MAX = 200
 export const REMEMBER_BODY_MAX = 4_000
 export const REMEMBER_SCOPE_MAX = 120
 export const REMEMBER_TAG_MAX = 40
@@ -97,7 +98,7 @@ const KEYED_CANDIDATE =
  * Chaque exclusion vient d'un faux refus RÉEL relevé par l'audit du 2026-07-30 — et un faux refus est le
  * sens coûteux ici : il bloque une mémoire valide alors qu'un second garde tourne derrière.
  */
-export function valueLooksLikeSecret(value: string): boolean {
+function valueLooksLikeSecret(value: string): boolean {
   // Trop court pour être un secret utile : « X-CSRF-Token », « 3600000000 ».
   if (value.length < 16) return false
   // Un CHEMIN ou une URL n'est pas un secret : « /api/v2/oauth/token/refresh »,
@@ -442,7 +443,7 @@ const UNKNOWN_DEPOSIT = '[etat-inconnu]'
  * `AUTOWIN_BRAIN_TIMEOUT_MS` permet de le regler sans toucher au code (et il est rechargeable a
  * chaud, voir `VARIABLES_RECHARGEABLES`).
  */
-export const BRAIN_DEPOSIT_TIMEOUT_MS = 15_000
+const BRAIN_DEPOSIT_TIMEOUT_MS = 15_000
 
 export function brainDepositTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const brut = Number(env.AUTOWIN_BRAIN_TIMEOUT_MS)
@@ -688,7 +689,28 @@ async function performDepositCandidate(
   deposited: Map<string, string>
 ): Promise<DepositOutcome> {
   const token = deps.token ?? ''
-  const origin = deps.origin ?? 'http://127.0.0.1:8765'
+  /*
+   * Origine CONFIGUREE (`AMITEL_BRAIN_ORIGIN`) : une adresse ecrite en dur envoyait le candidat sur
+   * un service qui n'est pas celui que l'app interroge en lecture. `amitelBrainOrigin` REFUSE une
+   * origine non loopback ; ce refus ne doit pas remonter en exception, car `rememberFact` promet de
+   * ne jamais throw — il devient donc un depot impossible, dit explicitement.
+   */
+  let origin: string
+  if (deps.origin) {
+    origin = deps.origin
+  } else {
+    try {
+      origin = amitelBrainOrigin()
+    } catch {
+      return {
+        allowed: true,
+        stored: false,
+        detail:
+          "depot IMPOSSIBLE : l'origine du Brain configuree (AMITEL_BRAIN_ORIGIN) n'est pas une " +
+          'adresse loopback HTTP valide - rien n a ete envoye, c est la configuration qu il faut corriger'
+      }
+    }
+  }
   const doFetch = deps.fetchFn ?? fetch
   const controller = new AbortController()
   const timeoutMs = deps.timeoutMs ?? brainDepositTimeoutMs()

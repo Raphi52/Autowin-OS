@@ -12,7 +12,12 @@
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { amitelBrainRoot, amitelBrainStateRoot, amitelBrainTooling } from './amitel-paths'
+import {
+  amitelBrainPort,
+  amitelBrainRoot,
+  amitelBrainStateRoot,
+  amitelBrainTooling
+} from './amitel-paths'
 
 // Le chemin du tooling vient de la SOURCE UNIQUE `amitel-paths.ts` et reste distinct du corpus partagé.
 
@@ -66,8 +71,27 @@ export function buildBrainLaunchCommand(
   return { bin: 'cmd.exe', args: ['/d', '/c', 'start', '', '/b', python, script], cwd }
 }
 
-/** Tentative unique par session : évite de spammer des spawns pendant le backoff de re-probe. */
-let attempted = false
+/**
+ * Tentatives BORNÉES par session, pas une seule.
+ *
+ * Défaut mesuré le 2026-09-03 : une tentative unique avait été posée pour ne pas spammer de spawns
+ * pendant le backoff de re-probe. Conséquence observée dans `dev-app-stdout.log` — l'app tente à
+ * 08:43 (« starting »), le service meurt pendant son warm-up, et les 7 re-sondes suivantes rendent
+ * « démarrage déjà tenté cette session » : le Brain est resté INJOIGNABLE pendant toute la session,
+ * sans autre issue qu'un démarrage à la main. Un seul essai n'est pas une garde anti-spam, c'est un
+ * verrou d'échec définitif.
+ *
+ * Le vrai anti-spam est un DÉLAI entre deux essais (le warm-up fastembed dure ~30-40 s : re-spawner
+ * avant lui créerait un doublon inutile) plus un PLAFOND d'essais (si trois spawns meurent, le
+ * problème n'est pas le timing et re-spawner en boucle ne le résoudra pas).
+ */
+let attempts = 0
+let lastAttemptAt = 0
+
+/** Plafond d'essais par session : au-delà, le défaut n'est pas un problème de timing. */
+export const MAX_BRAIN_LAUNCH_ATTEMPTS = 3
+/** Délai minimal entre deux essais : couvre le warm-up fastembed (~30-40 s) avec une marge. */
+export const BRAIN_LAUNCH_COOLDOWN_MS = 90_000
 
 export interface BrainRuntimePaths {
   tooling: string
@@ -119,9 +143,10 @@ export function resolveBrainRuntime(env: NodeJS.ProcessEnv = process.env): Brain
   return { tooling, python, brainRoot }
 }
 
-/** Réarme la tentative (ex. brain repassé up puis re-tombé, ou déclenchement manuel explicite). */
+/** Réarme les tentatives (ex. brain repassé up puis re-tombé, ou déclenchement manuel explicite). */
 export function resetBrainLaunchAttempt(): void {
-  attempted = false
+  attempts = 0
+  lastAttemptAt = 0
 }
 
 /**
@@ -131,18 +156,30 @@ export function resetBrainLaunchAttempt(): void {
 export async function ensureBrainServerStarted(
   isUp: () => Promise<boolean>,
   env: NodeJS.ProcessEnv = process.env,
-  spawnFn: typeof spawn = spawn
+  spawnFn: typeof spawn = spawn,
+  now: () => number = Date.now
 ): Promise<BrainLaunchResult> {
   try {
     if (await isUp()) {
-      attempted = false // il tourne → réarme pour une éventuelle chute future
+      resetBrainLaunchAttempt() // il tourne → réarme pour une éventuelle chute future
       return { status: 'already-up', detail: 'brain_server déjà joignable' }
     }
   } catch {
     /* ping en erreur = traité comme down */
   }
-  if (attempted) {
-    return { status: 'unavailable', detail: 'démarrage déjà tenté cette session — pas de nouveau spawn' }
+  if (attempts >= MAX_BRAIN_LAUNCH_ATTEMPTS) {
+    return {
+      status: 'unavailable',
+      detail: `${attempts} démarrages tentés sans succès cette session — le service ne tient pas, voir %LOCALAPPDATA%\\AmitelBrain\\server-err.log`
+    }
+  }
+  const sinceLast = now() - lastAttemptAt
+  if (attempts > 0 && sinceLast < BRAIN_LAUNCH_COOLDOWN_MS) {
+    const reste = Math.ceil((BRAIN_LAUNCH_COOLDOWN_MS - sinceLast) / 1000)
+    return {
+      status: 'unavailable',
+      detail: `démarrage n°${attempts} en cours de warm-up — nouvel essai dans ${reste} s`
+    }
   }
   const runtime = resolveBrainRuntime(env)
   const { tooling, python } = runtime
@@ -165,6 +202,16 @@ export async function ensureBrainServerStarted(
   childEnv.AMITEL_BRAIN_ROOT = runtime.brainRoot
   childEnv.AMITEL_BRAIN_CODE_ROOT = runtime.tooling
   childEnv.AMITEL_BRAIN_PYTHON = runtime.python
+  /*
+   * LE PORT DU SERVEUR VIENT DE LA MEME SOURCE QUE CELUI DU CLIENT.
+   *
+   * MESURE DU 2026-09-03 (conv-8) : `brain_server.py` prend son port dans `AMITEL_BRAIN_PORT`, avec
+   * 8765 par defaut. L'environnement herite ne la portait pas, donc l'app a demarre un serveur sur
+   * 8765 pendant que le service a jour ecoutait 8766 — deux serveurs, et le client qui interrogeait
+   * celui que personne n'avait mis a jour. Deriver le port de `amitelBrainOrigin()` rend cette
+   * divergence STRUCTURELLEMENT impossible : une seule valeur decide des deux cotes.
+   */
+  childEnv.AMITEL_BRAIN_PORT = amitelBrainPort(env)
   // Détaché + unref : survit à l'app, stdio ignoré (pas de pipe qui bloque). windowsHide : pas de
   // console qui pop.
   // Sous Windows, `detached` + `stdio:'ignore'` + `unref()` ne suffisent PAS : libuv appelle
@@ -185,7 +232,8 @@ export async function ensureBrainServerStarted(
       detail: `chemin du tooling refusé (caractère interprété par cmd.exe dans « ${tooling} ») — renommer le dossier ou pointer AUTOWIN_BRAIN_TOOLING ailleurs`
     }
   }
-  attempted = true
+  attempts += 1
+  lastAttemptAt = now()
   const child = spawnFn(command.bin, command.args, {
     cwd: command.cwd,
     env: childEnv,
@@ -196,6 +244,6 @@ export async function ensureBrainServerStarted(
   child.unref?.()
   return {
     status: 'starting',
-    detail: 'brain_server lancé — warm-up fastembed ~30-40 s (le preflight re-sonde avec backoff)'
+    detail: `brain_server lancé (essai ${attempts}/${MAX_BRAIN_LAUNCH_ATTEMPTS}) — warm-up fastembed ~30-40 s (le preflight re-sonde avec backoff)`
   }
 }

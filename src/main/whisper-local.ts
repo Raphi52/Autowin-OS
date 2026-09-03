@@ -170,8 +170,8 @@ export function etatWhisper(racine: string): EtatWhisper {
  * formule théorique (1500 unités pour 30 s, soit 50/s) donnerait 210 pour 4,2 s — et 256 explose
  * déjà. On garde donc le DOUBLE de marge, plancher inclus.
  */
-export const CONTEXTE_PLEIN = 1500
-export const CONTEXTE_MINIMUM = 512
+const CONTEXTE_PLEIN = 1500
+const CONTEXTE_MINIMUM = 512
 
 export function contexteAudio(secondes: number): number | null {
   if (!Number.isFinite(secondes) || secondes <= 0) return null

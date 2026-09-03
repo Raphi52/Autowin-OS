@@ -15,7 +15,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--s2);
-  border: 1px solid var(--container-border);
+  /* Sans bord gris : les trois cartes de Chat se posent sur le fond, seul leur fond les delimite
+     (choix utilisateur du 03/09). Le rayon reste, il decoupe le fond de la carte. */
+  border: 0;
   border-radius: var(--container-radius-panel);
   padding: var(--s2);
   min-height: 0;
@@ -77,7 +79,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--s2);
-  border: 1px solid var(--container-border);
+  border: 0;
   border-radius: var(--container-radius-panel);
   padding: var(--runs-pane-pad-top) var(--runs-pane-pad-x);
   min-height: 0;
@@ -3434,15 +3436,26 @@ ol.md-list li {
   background: rgb(0 0 0 / 22%);
   font-size: 10.5px;
 }
+/* Une phase = son en-tete (phase/role/agent) PUIS, en dessous, le prompt qui lui a ete envoye.
+   L'empilement etait horizontal : le niveau de prompt s'y serait ecrase a cote de l'agent. */
 .activity-step-pipeline li {
   min-width: 0;
 }
 .activity-pipeline-head {
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.activity-step-pipeline-head {
+  display: flex;
   gap: 6px;
   align-items: baseline;
   min-width: 0;
 }
+/* Le prompt d'une phase reste un niveau SECONDAIRE : legerement en retrait, replie par defaut. */
+.activity-step-pipeline .prompt-envelope {
+  margin: 2px 0 4px 10px;
 .activity-step-pipeline li.is-depliable .activity-pipeline-head {
   cursor: default;
 }

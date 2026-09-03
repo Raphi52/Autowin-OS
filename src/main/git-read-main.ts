@@ -72,6 +72,60 @@ export async function readLastCommitFiles(cwd: string): Promise<string[]> {
 }
 
 /**
+ * LES FICHIERS DE TEST QUI *NOMMENT* QUELQUE CHOSE — lecture seule, `git grep` et rien d'autre.
+ *
+ * POURQUOI CETTE LECTURE EXISTE (mesure du 2026-09-03, dans ce dépôt) :
+ *   npx vitest related src/renderer/src/components/ChatView.css --run  ->  89 fichiers, 401 tests
+ *   et parmi les ABSENTS : ChatView.style.test.ts, ui-system.test.ts, spinner-partout.test.ts…
+ * Autrement dit, les tests qui jugent RÉELLEMENT une feuille de style ne l'importent pas, ils la
+ * LISENT (`readFileSync`) — donc le graphe d'imports ne les voit pas. Une portée qui s'arrêterait à
+ * `vitest related` rendrait un vert n'ayant jamais regardé ce que l'édition a changé.
+ *
+ * TROIS RÉPONSES DISTINCTES, et la distinction est le point :
+ *   - une liste  -> ces tests-là citent le motif ;
+ *   - `[]`       -> personne ne le cite (fait établi, pas un échec) ;
+ *   - `undefined`-> on ne SAIT pas (pas de dépôt, pas de git). L'appelant doit alors élargir, jamais
+ *     conclure : « rien trouvé » et « je n'ai pas pu chercher » ne se confondent pas.
+ *
+ * `-F` : le motif est un TEXTE, jamais une expression régulière. `-I` écarte le binaire. Le motif est
+ * passé en argv derrière `-e`, les chemins derrière `--` : aucune interpolation, aucun shell.
+ */
+export async function readTestsCitant(cwd: string, motif: string): Promise<string[] | undefined> {
+  if (!motif.trim()) return []
+  try {
+    const run = promisify(execFile)
+    const r = await run(
+      'git',
+      [
+        'grep',
+        '-l',
+        '-I',
+        '-F',
+        '-e',
+        motif,
+        '--',
+        '*.test.ts',
+        '*.test.tsx',
+        '*.test.js',
+        '*.test.jsx',
+        '*.spec.ts',
+        '*.spec.tsx'
+      ],
+      { cwd, windowsHide: true }
+    )
+    return r.stdout
+      .split(String.fromCharCode(10))
+      .map((chemin) => chemin.trim())
+      .filter((chemin) => chemin.length > 0)
+  } catch (error) {
+    // `git grep` sort en 1 quand il ne trouve RIEN. C'est un résultat, pas une panne ; tout autre
+    // code (128 hors dépôt, ENOENT sans git) laisse la question ouverte.
+    const code = (error as { code?: unknown } | null)?.code
+    return code === 1 && !stdoutOf(error).trim() ? [] : undefined
+  }
+}
+
+/**
  * Lecture git READ-ONLY pour la surface "Source control". N'exécute QUE status/log (aucune mutation).
  * Les actions git (commit/push/branche) ne passent JAMAIS par ici : elles composent un prompt agent.
  * Dégrade proprement (repo absent / git indispo) → { available:false } sans jamais throw vers l'IPC.

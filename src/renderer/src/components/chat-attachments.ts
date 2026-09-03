@@ -67,7 +67,7 @@ export function bytesToBase64(bytes: Uint8Array): string {
 }
 
 /** Miniature downscalée (max 96px, JPEG léger) pour une image — reconnaissable + persistable. */
-export async function makeThumbnail(dataUrl: string, max = 96): Promise<string | undefined> {
+async function makeThumbnail(dataUrl: string, max = 96): Promise<string | undefined> {
   return new Promise((resolve) => {
     const img = new Image()
     img.onload = () => {

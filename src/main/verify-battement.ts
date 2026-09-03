@@ -18,7 +18,7 @@ import { sansSequencesAnsi } from '../shared/ansi'
 const LARGEUR_MAX = 140
 
 /** Temps ecoulé en francais court : « 45 s », « 1 min », « 3 min 20 s ». */
-export function dureeCourte(ms: number): string {
+function dureeCourte(ms: number): string {
   const secondes = Math.max(0, Math.round(ms / 1000))
   if (secondes < 60) return `${secondes} s`
   const minutes = Math.floor(secondes / 60)

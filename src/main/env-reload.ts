@@ -14,6 +14,15 @@ import { execFileSync } from 'node:child_process'
  * liste blanche — un `PATH` ou un `NODE_OPTIONS` recharge a chaud changerait le comportement
  * d'execution du processus, ce n'est pas un reglage produit.
  */
+/**
+ * `AMITEL_BRAIN_ORIGIN` ajoutee le 2026-09-03 apres le meme defaut, vecu sur le canal Brain.
+ * L'installation persiste le jeton et les chemins du Brain, mais PAS le port : l'origine ne vivait
+ * que dans le shell ou elle avait ete tapee. Le service ecoutait 8766, le processus principal
+ * retombait sur le defaut 8765, et chaque `brain_query` rendait « indisponible » en 15 ms
+ * (connexion refusee) — cerveau muet, sans autre issue qu'un redemarrage de l'app.
+ * `amitelBrainOrigin()` relit `process.env` a CHAQUE appel : recharger la variable suffit donc a
+ * rebrancher le canal a chaud. La valeur reste validee loopback par `requireLoopbackBrainOrigin`.
+ */
 /*
  * `AUTOWIN_SQLCMD_BIN` — DEFAUT VECU (conv-152, 2026-09-02) : `sqlcmd` etait absent du poste.
  * Installe en version portable puis ajoute au PATH utilisateur, il restait INVISIBLE pour l'app :
@@ -26,6 +35,7 @@ import { execFileSync } from 'node:child_process'
 export const VARIABLES_RECHARGEABLES = [
   'AUTOWIN_VERIFY_TIMEOUT_MS',
   'AUTOWIN_BRAIN_TIMEOUT_MS',
+  'AMITEL_BRAIN_ORIGIN',
   'AUTOWIN_SQLCMD_BIN'
 ] as const
 

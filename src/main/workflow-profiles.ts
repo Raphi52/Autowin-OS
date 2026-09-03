@@ -160,7 +160,7 @@ export interface WorkflowProfilesFile {
 
 const EMPTY: WorkflowProfilesFile = { profiles: [], activeId: null }
 
-export function workflowProfilesPath(base = ensureAutowinAppData()): string {
+function workflowProfilesPath(base = ensureAutowinAppData()): string {
   return join(base, 'workflow-profiles.json')
 }
 

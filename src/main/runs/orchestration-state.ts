@@ -482,7 +482,7 @@ function isTerminalDisposition(
  * Le predicat ci-dessous est conserve tel quel : c'est lui qui decide. Cette fonction n'ajoute que
  * la capacite de le DIRE.
  */
-export function raisonsCheckpointInvalide(value: unknown): string[] {
+function raisonsCheckpointInvalide(value: unknown): string[] {
   if (!isRecord(value)) return ['ce n est pas un objet']
   const r: string[] = []
   if (!isRunId(value.runId)) r.push(`runId invalide (${JSON.stringify(value.runId)})`)
@@ -742,7 +742,7 @@ export function normalizeTaskKey(task: string): string {
 }
 
 /** Portee d'une reprise : une conversation et une demande canonique forment un seul workflow. */
-export function orchestrationResumeScopeKey(state: OrchestrationRunState): string {
+function orchestrationResumeScopeKey(state: OrchestrationRunState): string {
   return `${state.conversationId ?? '__autonomous__'}\u0000${normalizeTaskKey(state.task)}`
 }
 

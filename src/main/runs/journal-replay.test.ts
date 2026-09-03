@@ -49,6 +49,19 @@ describe('récapitulatif d’un journal', () => {
     expect(recapMessage(recap, false)).toContain('a produit')
   })
 
+  /*
+   * Mesure du 2026-09-03 (conv-18). L'utilisateur relit sa conversation et y trouve un message
+   * « Reprise du fil … » suivi de « Couverture structurée : 100 % (222/222) · 0 diagnostic(s) ·
+   * 0 blocage(s) · 0 bruit(s) · 0 perte(s) de preuve. » — quatre compteurs internes tous à zéro,
+   * dans SON fil, au milieu du travail. Un journal intégralement relu n'a RIEN à signaler : la
+   * réserve reste due quand une ligne est perdue, jamais quand tout a été lu.
+   */
+  it('ne colle aucun compteur interne quand tout le journal a été relu', () => {
+    const message = recapMessage(summarizeJournal([claude('module écrit')]), true)
+    expect(message).toContain('module écrit')
+    expect(message).not.toContain('Couverture structurée')
+  })
+
   it('annonce la preuve non structurée plutôt que de la qualifier à tort', () => {
     const message = recapMessage(summarizeJournal([claude('ok'), 'bruit']), false)
     expect(message).toContain('non structurée(s)')

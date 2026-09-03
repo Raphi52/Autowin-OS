@@ -1,4 +1,5 @@
 import { joinThinking } from './thinking'
+import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 import {
   assertArgvWithinLimit,
   createStreamWatchdog,
@@ -47,6 +48,7 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
 import { abortFailure } from './abort-diagnostic'
+import { describeExitCode } from '../provider-failure-diagnosis'
 
 /**
  * NETTOYAGE DE FIN D'APPEL — sans tenir la boucle principale.
@@ -314,7 +316,7 @@ export function claudeWrittenLineFingerprints(
  * « généré » est un mensonge d'affichage. On dérive donc le libellé de l'outil réel,
  * et « généré » ne reste que pour une sortie directe du modèle (aucun outil).
  */
-export function untitledArtifactName(blockType?: string, tool?: string): string {
+function untitledArtifactName(blockType?: string, tool?: string): string {
   const isImage = blockType === 'image'
   const base = isImage ? 'image' : 'document'
   if (!tool) return isImage ? 'image-générée' : 'document-généré'
@@ -594,7 +596,7 @@ export function argumentsMcpNoeudSkill(opts: SendOptions): {
  * Rend `undefined` si l'ecriture echoue : l'appelant retombe alors sur la chaine inline (capacite
  * preservee, fuite signalee) plutot que de perdre l'outillage du noeud.
  */
-export function ecrireConfigMcp(
+function ecrireConfigMcp(
   config: string
 ): { chemin: string; nettoyer: () => void } | undefined {
   try {
@@ -1278,8 +1280,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         collectArtifacts(msg?.content)
         for (const part of msg?.content ?? []) {
           if (part.type === 'text' && part.text) {
-            text += part.text
-            queue.push({ delta: part.text })
+            /*
+             * SÉPARATION DES BLOCS RECOLLÉS — voir `shared/collage-blocs-texte.ts` pour la mesure.
+             * Sans elle, un bloc qui finit par une phrase et un bloc suivant qui OUVRE une fence
+             * donnaient « …branchée.```html-render » : plus une ouverture de bloc pour CommonMark,
+             * donc du HTML brut dans le fil (signalé par l'utilisateur sur conv-8, 2026-09-03).
+             * Le MÊME séparateur part dans `text` (le brut relu en aval) et dans le delta diffusé :
+             * une divergence entre les deux rejouerait le collage sur l'un des deux chemins.
+             */
+            const separation = separationEntreBlocsTexte(text, part.text)
+            text += separation + part.text
+            queue.push({ delta: separation + part.text })
           } else if (part.type === 'thinking' && part.thinking) {
             // Deja diffuse morceau par morceau via `stream_event` : le bloc complet est un doublon.
             if (partialThinkingSeen) continue
@@ -1479,7 +1490,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (tailError && !errored) {
         errored = tailError instanceof Error ? tailError : new Error(String(tailError))
       }
-      if (code !== 0 && !errored) errored = new Error(`claude CLI exit ${code}`)
+      if (code !== 0 && !errored) {
+        // Un NTSTATUS decimal brut (« exit 1073807364 ») ne dit rien : on nomme le statut systeme
+        // quand il est connu, pour que le diagnostic de role puisse conseiller un relancement.
+        const abnormal = describeExitCode(code)
+        errored = new Error(`claude CLI exit ${code}${abnormal ? ` (${abnormal})` : ''}`)
+      }
       // Retries epuises sans reponse : le CLI sort en 0 sans event `result`, donc le tour passait
       // pour un succes VIDE et l'UI ne quittait jamais l'etat « reflexion ». C'est un ECHEC, nomme.
       if (!errored && !resultSeen && !text && lastRetry) {

@@ -82,7 +82,7 @@ function iconeEtape(label: string): string {
 }
 
 /** L4 : (verdict précédent → phase suivante) → raison. Aucune règle ⇒ aucune étiquette. */
-export function raisonDeLien(
+function raisonDeLien(
   prev: { state: RunProgressEntry['state']; phase: string } | undefined,
   phase: string
 ): string | undefined {

@@ -49,7 +49,7 @@ export interface CircuitBreakerLimits {
  * près — un run légitime tué par un garde-fou trop serré, la pire façon de « protéger ». 250M laisse
  * 2,6× de marge au run le plus lourd observé tout en arrêtant une dérive d'un ordre de grandeur.
  */
-export const DEFAULT_MAX_UNPRICED_TOKENS = 250_000_000
+const DEFAULT_MAX_UNPRICED_TOKENS = 250_000_000
 
 export interface CircuitBreakerTrip {
   trip: true

@@ -87,7 +87,7 @@ const CHEMIN_HORS_DEPOT =
 
 const MARQUEUR_ABANDON = /abandonn[eé]\s*:\s*l.app s.est arr[eê]t[eé]e/iu
 
-export function runAbandonne(content: string): boolean {
+function runAbandonne(content: string): boolean {
   return MARQUEUR_ABANDON.test(content.normalize('NFC'))
 }
 

@@ -39,7 +39,7 @@ const COORDINATION_DRAIN_GRACE_MS = ((): number => {
  * Deux sources acceptées : la signature structurée que pose l'adaptateur codex, et le texte brut — pour
  * qu'un provider qui n'a pas (encore) de signature soit couvert quand même.
  */
-export function quotaWallReason(error: unknown): string | undefined {
+function quotaWallReason(error: unknown): string | undefined {
   const signature = (error as { signature?: unknown } | null)?.signature
   const texte = error instanceof Error ? error.message : String(error ?? '')
   if (/retry after|try again in|rate limit exceeded/i.test(texte)) return undefined

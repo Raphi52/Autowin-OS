@@ -3,7 +3,6 @@ import type { RunEntry, CheckpointEntry } from './ChatView'
 import { STEP_META, phaseLabel, type OrchStep, type ScopedLiveRun } from './chat-view-model'
 import { WorkflowRefreshIcon, WorkflowCloseIcon, RunTrashIcon } from './chat-view-icons'
 import { StepThread } from './ChatView.parts'
-import { RunProgress } from './RunProgress'
 import { RunInspector } from './RunInspector'
 
 /** Les trois objets du panneau, chacun sur son onglet : le graphe, les RUN.md, la trace. */
@@ -15,8 +14,8 @@ const PANEL_TABS: ReadonlyArray<readonly [PanelTab, string]> = [
   ['logs', 'Logs']
 ]
 
-/** Onglets du détail d'un RUN. `progress` = suivi vivant (avancée), `runmd` = fichier produit. */
-export type RunDetailTab = 'progress' | 'trace' | 'runmd'
+/** Onglets du détail d'un RUN. `trace` = fil des sous-agents, `runmd` = fichier produit. */
+export type RunDetailTab = 'trace' | 'runmd'
 import { SourceControlPane } from './SourceControlPane'
 import { WorkflowExecutionGraph, type ExecutionNodeSelection } from './WorkflowExecutionGraph'
 import { ModelActivityLogPane } from './ModelActivityLogPane'
@@ -463,13 +462,6 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                         <div className="run-detail-tabs">
                           <button
                             type="button"
-                            className={`run-detail-tab${runDetailTab === 'progress' ? ' is-active' : ''}`}
-                            onClick={() => setRunDetailTab('progress')}
-                          >
-                            Avancée
-                          </button>
-                          <button
-                            type="button"
                             className={`run-detail-tab${runDetailTab === 'trace' ? ' is-active' : ''}`}
                             onClick={() => setRunDetailTab('trace')}
                           >
@@ -486,17 +478,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                           )}
                         </div>
                       )}
-                      {openTrace &&
-                      (runDetailTab === 'progress' || (!openRun && runDetailTab === 'runmd')) ? (
-                        <RunProgress
-                          steps={openTrace}
-                          activePhase={
-                            visibleLiveRuns.find(
-                              ([, lr]) => lr.status === 'running' && lr.runPath === openRun?.path
-                            )?.[1].phase
-                          }
-                        />
-                      ) : openTrace && runDetailTab === 'trace' ? (
+                      {openTrace && (runDetailTab === 'trace' || !openRun) ? (
                         <StepThread steps={openTrace} />
                       ) : (
                         openRun && <RunInspector content={openRun.content} summary={r.summary} />

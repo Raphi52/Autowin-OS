@@ -7,7 +7,8 @@ import {
   type PersistedChatErrorPart,
   type PersistedChatPart,
   type PersistedChatTextPart,
-  type PipelineChoice
+  type PipelineChoice,
+  type PipelinePrompt
 } from '../../../shared/chat-turn'
 import { parseAskDecision, type AskDecision } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
@@ -36,7 +37,7 @@ import {
 } from '../../../shared/orchestration-outcome'
 
 export type ChatActionPart = PersistedChatActionPart
-export type { PipelineChoice }
+export type { PipelineChoice, PipelinePrompt }
 export type ChatArtifactPart = PersistedChatArtifactPart
 export type ChatErrorPart = PersistedChatErrorPart
 export type ChatTextPart = PersistedChatTextPart & {
@@ -338,11 +339,6 @@ ${message.content}`
   return blocs.join('\n\n').trim() || undefined
 }
 
-/** Phase du step, lue comme le reste du code la lit : `detail` = « phase build ». */
-function phaseDuStep(step: OrchStep): string | undefined {
-  return step.detail?.match(/phase (\w+)/)?.[1] || undefined
-}
-
 /**
  * COMPLETE la ligne de pipeline avec ce que l'etape terminee a produit : le prompt envoye et,
  * pour le controle final, la decision motivee.
@@ -365,30 +361,107 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
   for (let i = parts.length - 1; i >= 0; i--) {
     const part = parts[i]
     if (part.kind !== 'action' || part.name !== 'orchestrate') continue
+    // Une orchestration DEJA close (issue rendue ou interrompue) ne se reecrit plus : un step en
+    // retard ne doit pas rouvrir un tour termine.
+    if (part.ok !== undefined || part.interrupted) return parts
     const deja = part.pipeline ?? []
     if (deja.length === 0) return parts
-    const phase = phaseDuStep(step) ?? step.step
-    const candidat = (ligne: PipelineChoice): boolean =>
-      (ligne.phase === phase || ligne.phase === step.step) &&
-      (!step.model || !ligne.model || ligne.model === step.model) &&
-      ligne.prompt === undefined &&
-      ligne.outcome === undefined
-    let index = -1
-    for (let j = deja.length - 1; j >= 0; j--) if (candidat(deja[j])) index = j
-    if (index === -1) return parts
-    const suite = parts.slice()
-    const lignes = deja.slice()
-    lignes[index] = {
-      ...lignes[index],
+    // Appariement FIN : phase causale + modele, avec refus explicite quand un fan-out rend deux
+    // lignes indiscernables — coller le prompt d'un membre sous un autre est pire que rien.
+    const index = indexDeLaLignePipeline(deja, phaseDuLigne(step), step.model)
+    if (index < 0) return parts
+    const avant = deja[index]
+    const apres: PipelineChoice = {
+      ...avant,
       ...(prompt ? { prompt } : {}),
       ...(rendu ? { outcome: rendu } : {}),
       ok
     }
+    // RIEN de nouveau a dire => meme reference, pour ne pas re-rendre le fil a chaque battement.
+    if (apres.prompt === avant.prompt && apres.outcome === avant.outcome && apres.ok === avant.ok) {
+      return parts
+    }
+    const suite = parts.slice()
+    const lignes = deja.slice()
+    lignes[index] = apres
     suite[i] = { ...part, pipeline: lignes }
     return suite
   }
   return parts
 }
+
+/**
+ * PHASE d'un step, telle qu'elle a ete annoncee au fil.
+ *
+ * Deux sources, dans cet ordre : la provenance causale (`execution.phase`, la seule fiable), puis le
+ * libelle `detail` (« phase build », « phase build (reparation) »). Meme derivation que la frontiere
+ * de persistance dans `commands.ts` — s'en ecarter ici ferait afficher le prompt sous une autre
+ * phase que celle qui le facture.
+ */
+function phaseDuStep(step: Pick<OrchStep, 'detail' | 'execution'>): string | undefined {
+  const brut =
+    step.execution?.phase ??
+    (step.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '')
+  return brut || undefined
+}
+
+/**
+ * PHASE sous laquelle CHERCHER la ligne d'un step.
+ *
+ * Le controle final est un cas a part : son `detail` ne porte PAS un libelle de phase (« phase
+ * build ») mais sa DECISION MOTIVEE (« BLOQUE: preuve manquante — verdict du juge: ... »). Le
+ * deriver comme les autres steps cherchait donc une phase nommee d'apres la decision, qui ne
+ * designe aucune ligne : le motif du controle final n'atteignait jamais sa ligne.
+ */
+function phaseDuLigne(step: OrchStep): string | undefined {
+  if (step.step === 'gate') return step.execution?.phase ?? 'gate'
+  return phaseDuStep(step) ?? step.step
+}
+
+/**
+ * LA ligne de pipeline a laquelle un step appartient — ou -1 quand on ne peut pas le dire.
+ *
+ * Regle : on ne RAPPROCHE que ce qui est identifiable. Phase + modele est la cle exacte (elle
+ * distingue les N membres d'un fan-out) ; a defaut, la phase seule ne vaut que si elle ne designe
+ * qu'UNE ligne. Deux lignes de meme phase indiscernables par le modele => aucun rapprochement :
+ * mettre le prompt d'un membre sous un autre est pire que de ne rien montrer.
+ */
+function indexDeLaLignePipeline(
+  lignes: readonly PipelineChoice[],
+  phase: string | undefined,
+  model: string | undefined
+): number {
+  if (phase && model) {
+    const exact = lignes.findIndex((ligne) => ligne.phase === phase && ligne.model === model)
+    if (exact >= 0) return exact
+  }
+  if (phase) {
+    const memePhase = lignes.reduce<number[]>(
+      (acc, ligne, index) => (ligne.phase === phase ? [...acc, index] : acc),
+      []
+    )
+    if (memePhase.length === 1) return memePhase[0]
+    // Une seule ligne de cette phase n'annonce PAS de modele : c'est celle qui attend son prompt.
+    const sansModele = memePhase.filter((index) => !lignes[index].model)
+    if (sansModele.length === 1) return sansModele[0]
+    // Le refus reste ENTIER des que des lignes portent cette phase mais sont indiscernables :
+    // coller le prompt d'un membre de fan-out sous un autre est pire que de ne rien montrer.
+    // On ne laisse passer que le cas ou la phase ne designe AUCUNE ligne — un run de skill
+    // annonce sa ligne sous le nom du SKILL (kaizen) alors que le step rend la phase du
+    // PIPELINE (build) : sans cela, la regle du modele juste en dessous n'est jamais atteinte,
+    // et la ligne ne peut structurellement jamais devenir depliable.
+    if (memePhase.length > 0) return -1
+  }
+  if (model) {
+    const memeModele = lignes.reduce<number[]>(
+      (acc, ligne, index) => (ligne.model === model ? [...acc, index] : acc),
+      []
+    )
+    if (memeModele.length === 1) return memeModele[0]
+  }
+  return -1
+}
+
 
 /**
  * Impose l'invariant « un tour `done` n'a plus rien en cours » sur un message VIVANT.
@@ -718,15 +791,14 @@ export type OrchStep = {
   error?: string
   /** Raisonnement/thinking du sous-agent, conservé pour post-mortem (rendu repliable). */
   thinking?: string
-  prompt?: {
-    provider: string
-    model?: string
-    transport: string
-    system?: string
-    messages: Array<{ role: string; content: string }>
-    options: Record<string, unknown>
-    limitation: string
-  }
+  /**
+   * Enveloppe envoyée au sous-agent. Type PARTAGÉ avec `PipelineChoice.prompt` : le bloc
+   * orchestration affiche le MÊME prompt sous sa ligne de phase, et deux déclarations jumelles
+   * finiraient par divorcer.
+   */
+  prompt?: PipelinePrompt
+  /** Provenance causale du step — sert à rattacher son prompt à la bonne ligne de pipeline. */
+  execution?: { phase?: string }
   /** Preuves d'exécution du tour (diff fichiers, stdout/exit commandes) — rendues inline. */
   evidence?: EvidencePart[]
 }
@@ -988,7 +1060,7 @@ export interface OrchestratorModelGroup {
  * Catégorie ÉDITEUR déduite de l'id du modèle. Ordre voulu :
  * Anthropic, puis ChatGPT, puis les autres éditeurs (alpha), puis routes auto, puis divers.
  */
-export function modelVendor(model: string): { key: string; label: string; rank: number } {
+function modelVendor(model: string): { key: string; label: string; rank: number } {
   const id = model.toLowerCase()
   // Les routes auto/* forment LEUR PROPRE catégorie (jamais mélangées à un éditeur),
   // testées AVANT la marque pour que `auto/claude-opus` n'atterrisse pas dans Anthropic.
@@ -1015,7 +1087,7 @@ export function modelVendor(model: string): { key: string; label: string; rank: 
  * Clé de tri d'un modèle CONCRET dans sa catégorie éditeur : famille puis version,
  * du plus capable/récent au plus ancien. Ex. Opus 4.8 avant Opus 4.5 avant Sonnet.
  */
-export function modelRecencyKey(model: string): [number, number] {
+function modelRecencyKey(model: string): [number, number] {
   const id = model.toLowerCase()
   const family = id.includes('fable')
     ? 5
@@ -1040,7 +1112,7 @@ export function modelRecencyKey(model: string): [number, number] {
  * (numéros, dates, `latest`, `preview`). `claude-opus-4-8` et `claude-opus-4-1` partagent
  * la même clé ; `claude-sonnet-4-5` et `gpt-5-mini` gardent la leur.
  */
-export function modelFamilyKey(model: string): string {
+function modelFamilyKey(model: string): string {
   return model
     .toLowerCase()
     .replace(/\d+([._-]\d+)*/g, '-')
@@ -1053,7 +1125,7 @@ export function modelFamilyKey(model: string): string {
  * Ne conserve que la version la PLUS RÉCENTE de chaque famille, par fournisseur.
  * Le modèle actuellement lié est toujours gardé — sinon le menu perdrait sa propre sélection.
  */
-export function keepLatestVersionPerFamily(
+function keepLatestVersionPerFamily(
   options: OrchestratorModelOption[],
   current?: { provider: string; model?: string }
 ): OrchestratorModelOption[] {
@@ -1081,8 +1153,8 @@ export function keepLatestVersionPerFamily(
 }
 
 /** Seuils de coût-équivalent par tour (dérivés de 78k tours réels : p33/p66). */
-export const COST_EQ_LOW = 18_000
-export const COST_EQ_HIGH = 47_000
+const COST_EQ_LOW = 18_000
+const COST_EQ_HIGH = 47_000
 
 /** Coût-équivalent tokens d'un tour (output ×5, input ×1). */
 export function turnCostEq(usage: { inputTokens?: number; outputTokens?: number } | null): number {
@@ -1126,7 +1198,7 @@ export function modelCostTier(model: string): {
  * éditeur est fait en amont par modelVendor). Ordre : Chat → Raisonnement → Code → reste,
  * tier « best » avant « pro ». Retourne [sous-rang, 0] ; libellé puis index tranchent les égalités.
  */
-export function orchestratorOptionRank(model: string): [number, number] {
+function orchestratorOptionRank(model: string): [number, number] {
   const id = model.toLowerCase()
   const dimension = id.includes('chat') ? 0 : id.includes('reason') ? 1 : id.includes('cod') ? 2 : 3
   const tier = id.includes('best') ? 0 : id.includes('pro') ? 1 : 2

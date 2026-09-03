@@ -67,7 +67,7 @@ const systemClock: SchedulerClock = {
   clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
 }
 
-export const WINDOWS_RELAY_GRACE_MS = 5 * 60_000
+const WINDOWS_RELAY_GRACE_MS = 5 * 60_000
 
 export class TaskScheduler {
   private timer: unknown

@@ -53,7 +53,7 @@ export function nomFichierTranscript(le: number): string {
   )
 }
 
-export function enteteTranscript(le: number): string {
+function enteteTranscript(le: number): string {
   const d = new Date(le)
   const jour = `${deuxChiffres(d.getDate())}/${deuxChiffres(d.getMonth() + 1)}/${d.getFullYear()}`
   return `# Enregistrement du ${jour} a ${deuxChiffres(d.getHours())}:${deuxChiffres(d.getMinutes())}\n\n`

@@ -11,7 +11,8 @@
 .wf-editor {
   display: grid;
   grid-template-columns: 148px minmax(0, 1fr) 270px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-panel);
   background: var(--surface-panel);
   overflow: hidden;

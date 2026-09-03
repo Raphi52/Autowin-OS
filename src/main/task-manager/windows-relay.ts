@@ -12,7 +12,7 @@ type ProcessRunner = (
 ) => Promise<ProcessResult>
 
 const runProcess = promisify(execFile) as unknown as ProcessRunner
-export const LEGACY_WINDOWS_RELAY_TASK_NAME = 'Autowin OS - Prompt Relay'
+const LEGACY_WINDOWS_RELAY_TASK_NAME = 'Autowin OS - Prompt Relay'
 
 export function windowsRelayTaskName(userDataPath: string): string {
   const identity = normalize(userDataPath).replaceAll('\\', '/').toLowerCase()

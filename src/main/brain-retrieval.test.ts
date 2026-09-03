@@ -29,16 +29,20 @@ const textResponse = (body: unknown, ok = true): { ok: boolean; text: () => Prom
   text: async () => JSON.stringify(body)
 })
 
+/**
+ * Serveur factice FIDELE au service vivant (mesure du 2026-09-02) : c'est LUI qui emet le nonce, et
+ * il REFUSE toute chaine de requete sur `/challenge`. Un client qui imposerait son propre nonce via
+ * `?nonce=…` ne recevrait donc jamais de challenge — exactement la panne qu'on a corrigee.
+ */
+const SERVER_NONCE = 'ab12cd34ef56ab12cd34ef56'
+
 const challengeResponse = (
   url: unknown
 ): { ok: boolean; text: () => Promise<string> } | undefined => {
   const parsed = new URL(String(url))
   if (parsed.pathname !== '/challenge') return undefined
-  const nonce = parsed.searchParams.get('nonce') ?? ''
-  if (!/^[0-9a-f]{24}$/.test(nonce)) {
-    return textResponse({ error: 'invalid challenge' }, false)
-  }
-  return textResponse(signedPayload({ context: `challenge:${nonce}` }))
+  if (parsed.search) return textResponse({ error: 'invalid challenge' }, false)
+  return textResponse(signedPayload({ context: `challenge:${SERVER_NONCE}` }))
 }
 
 const withChallenge = (
@@ -72,6 +76,62 @@ const boundSignedPayload = (
 
 const okFetch = (body: Record<string, unknown>): typeof fetch =>
   withChallenge(async (_url, init) => textResponse(boundSignedPayload(body, init?.body)))
+
+describe('origine du service — configuree, jamais ecrite en dur', () => {
+  /*
+   * DEFAUT MESURE le 2026-09-02 : l'origine etait la constante `http://127.0.0.1:8765`, alors que la
+   * machine exposait le service sur 8766 (`AMITEL_BRAIN_ORIGIN`). Les requetes partaient donc sur un
+   * AUTRE serveur, signant avec un AUTRE jeton : chaque `brain_query` revenait `invalid` et tout le
+   * savoir rendu etait jete. Le port ne doit plus etre devine ici.
+   */
+  it('appelle l origine declaree par AMITEL_BRAIN_ORIGIN', async () => {
+    const urls: string[] = []
+    const res = await retrieveBrainContext('q', {
+      env: {
+        AMITEL_BRAIN_TOKEN: TEST_TOKEN,
+        AMITEL_BRAIN_ORIGIN: 'http://127.0.0.1:8766'
+      } as NodeJS.ProcessEnv,
+      fetchFn: (async (url: unknown, init?: RequestInit) => {
+        urls.push(String(url))
+        return (
+          challengeResponse(url) ??
+          textResponse(boundSignedPayload({ context: '[BRAIN] ok' }, init?.body))
+        )
+      }) as unknown as typeof fetch
+    })
+    expect(res.status).toBe('found')
+    expect(urls).toHaveLength(2)
+    expect(urls[0]).toBe('http://127.0.0.1:8766/challenge')
+    expect(urls[1]).toBe('http://127.0.0.1:8766/query-secure')
+  })
+
+  it('retombe sur le port par defaut quand rien n est configure', async () => {
+    const urls: string[] = []
+    await retrieveBrainContext('q', {
+      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      fetchFn: (async (url: unknown, init?: RequestInit) => {
+        urls.push(String(url))
+        return (
+          challengeResponse(url) ??
+          textResponse(boundSignedPayload({ context: '[BRAIN] ok' }, init?.body))
+        )
+      }) as unknown as typeof fetch
+    })
+    expect(urls[1]).toBe('http://127.0.0.1:8765/query-secure')
+  })
+
+  it('rend unavailable — sans throw — si l origine configuree n est pas loopback', async () => {
+    const res = await retrieveBrainContext('q', {
+      env: {
+        AMITEL_BRAIN_TOKEN: TEST_TOKEN,
+        AMITEL_BRAIN_ORIGIN: 'https://brain.example.invalid'
+      } as NodeJS.ProcessEnv,
+      fetchFn: okFetch({ context: '[BRAIN] ok' })
+    })
+    expect(res.status).toBe('unavailable')
+    expect(res.context).toBe('')
+  })
+})
 
 describe('parseNavigation — offsets de chunk + root', () => {
   it('borne le nombre de candidats signés avant exposition à l’UI', async () => {
