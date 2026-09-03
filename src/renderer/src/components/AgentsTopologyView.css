@@ -168,6 +168,36 @@
     background 120ms ease;
 }
 
+/* ----------------------------------------------------------------------------
+   MODE CLAIR — Agent Studio peint TOUT en couleurs de nuit écrites en dur :
+   `#e7edf5` pour le corps (l.17), `#dfeaf5` pour les modèles (l.162), `#c9d9e8`
+   pour les champs (l.83), `#6f8499` / `#74879a` / `#66798c` pour les libellés
+   secondaires (l.34, 50, 138), `#fff` pour le titre de la bibliothèque (l.125).
+   Aucune variable de thème : le mode clair ne les atteignait pas, d'où les titres
+   de rôle et les noms de modèles quasi invisibles signalés le 2026-09-03.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .topology-panel,
+:root[data-theme='clair'] .topology-model,
+:root[data-theme='clair'] .topology-library > h3 {
+  color: var(--text);
+}
+:root[data-theme='clair'] .topology-panel > header span,
+:root[data-theme='clair'] .topology-parallel-heading span,
+:root[data-theme='clair'] .topology-library > p {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .topology-panel > header p {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .topology-slot select,
+:root[data-theme='clair'] .topology-slot input,
+:root[data-theme='clair'] .topology-panel select,
+:root[data-theme='clair'] .topology-panel input {
+  color: var(--text);
+  background: #ffffff;
+  border-color: var(--line);
+}
+
 .topology-model:hover,
 .topology-model.is-selected {
   border-color: #4da6d2;
