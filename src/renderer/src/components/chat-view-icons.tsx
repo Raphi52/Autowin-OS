@@ -15,6 +15,31 @@ export function ForkIcon(): React.JSX.Element {
   )
 }
 
+/*
+ * Icone « volet de details » — un cadre dont la colonne DROITE est detachee, exactement ce que le
+ * bouton fait : ouvrir le panneau de droite (runs, etapes, RUN.md).
+ *
+ * Pourquoi elle existe : ce bouton portait `ForkIcon`, la MEME icone que le nom de branche affiche
+ * deux centimetres a sa gauche dans la meme barre. Deux actions sans rapport partageaient donc le
+ * meme symbole, et aucune des deux ne se lisait.
+ */
+export function PanelIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <rect
+        x="1.7"
+        y="2.7"
+        width="12.6"
+        height="10.6"
+        rx="1.8"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path d="M10 2.7v10.6" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  )
+}
+
 /** Icône « inspecter » (loupe), monochrome via currentColor. */
 export function InspectIcon(): React.JSX.Element {
   return (
