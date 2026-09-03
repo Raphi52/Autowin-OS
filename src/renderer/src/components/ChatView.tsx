@@ -127,6 +127,8 @@ import './ChatView.css'
 import './SlashPalette.css'
 import './ChatComposerExtras.css'
 import { frictionEchecsRepetes } from '../../../shared/friction-echecs-repetes'
+import { isUpstreamOutage } from '../../../shared/panne-amont'
+import { reprendreApresPanneAmont } from '../../../shared/reprise-panne-amont'
 import type { HypotheseDeCadrage } from '../../../shared/cadrage-confiance'
 import { CadrageHypotheses } from './CadrageHypotheses'
 import { orchestrationOutcomesFromMessages } from './action-outcome-summary'
@@ -3198,8 +3200,9 @@ export function ChatView({
         mentionSourcesRef.current
       )
       const res = await window.api.pilotChat(payload, convId)
-      if (!res.ok || res.cancelled)
-        patchLast(convId, (m) => {
+      if (!res.ok || res.cancelled) {
+        const filEnEchec = convId
+        patchLast(filEnEchec, (m) => {
           m.status = res.cancelled ? 'cancelled' : 'failed'
           m.done = true
           // Part d'ERREUR structurée (et non plus un `⚠️ …` texte, que rien ne distinguait d'une
@@ -3207,6 +3210,50 @@ export function ChatView({
           if (!res.cancelled)
             m.parts.push({ kind: 'error', cause: 'turn', message: res.error ?? 'erreur' })
         })
+        /*
+         * PANNE DU FOURNISSEUR (529 « surchargé » et voisins) : la demande n'a produit AUCUNE
+         * réponse, et rien dans le message de l'utilisateur n'y est pour quelque chose. On la
+         * rejoue donc pour lui, au plus 3 fois, dans une COPIE de la conversation prise juste
+         * AVANT la demande ratée — rejouer sur place empilerait la même demande deux fois dans
+         * l'historique envoyé au modèle. L'échec ci-dessus reste affiché dans le fil d'origine :
+         * la reprise ne l'efface pas, elle ouvre une autre branche à côté.
+         */
+        const ancre = [...previousMessagesForTarget].reverse().find((m) => m.messageId)?.messageId
+        if (!res.cancelled && ancre && isUpstreamOutage(res.error ?? '', '')) {
+          const reprise = await reprendreApresPanneAmont<typeof res>({
+            copier: async () => {
+              const copie = (await window.api.conversationsFork(filEnEchec, ancre)) as
+                Conv | undefined
+              return copie?.id
+            },
+            renvoyer: (cible) => window.api.pilotChat(payload, cible),
+            estPanneAmont: (r) => !r.ok && !r.cancelled && isUpstreamOutage(r.error ?? '', ''),
+            attendre: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+            // Conversation supprimée entre-temps : plus personne n'attend cette réponse.
+            abandonne: () => !convsRef.current.some((c) => c.id === filEnEchec),
+            surTentative: (numero, total) =>
+              setAppNotice((current) =>
+                newestNotice(current, {
+                  text: `Fournisseur surchargé — je réessaie (${numero}/${total}) dans une copie de la conversation.`
+                })
+              )
+          })
+          if (reprise.issue === 'reprise') {
+            const fresh = (await window.api.conversations()) as Conv[]
+            setConvs(fresh)
+            const copie = fresh.find((c) => c.id === reprise.conversationId)
+            // On n'emmène l'utilisateur dans la copie que s'il est RESTÉ sur le fil qui a échoué :
+            // le déplacer alors qu'il lit ailleurs lui arracherait son écran (vécu le 2026-09-03).
+            if (copie && activeRef.current === filEnEchec) void loadConv(copie)
+            else if (copie)
+              setAppNotice((current) =>
+                newestNotice(current, {
+                  text: `Réponse obtenue après reprise, dans « ${copie.title} ».`
+                })
+              )
+          }
+        }
+      }
     } catch (error) {
       if (!messageCommitted) {
         if (sourceConversationId) {

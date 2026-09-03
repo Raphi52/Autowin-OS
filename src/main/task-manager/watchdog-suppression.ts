@@ -1,7 +1,7 @@
 /**
  * Ce qu'un chien de garde NE DOIT PAS reveiller.
  *
- * Ces trois predicats viennent de `auto-kaizen-supervisor.ts`, DEPLACES ici mot pour mot avec leurs
+ * Ces predicats viennent de `auto-kaizen-supervisor.ts`, DEPLACES ici mot pour mot avec leurs
  * commentaires : chacun encode un incident REELLEMENT mesure sur ce poste, pas une precaution
  * theorique. Les reecrire aurait perdu ce qui leur donne leur valeur — la date, le compte, la boucle
  * exacte qu'ils ont coupee.
@@ -12,6 +12,7 @@
  */
 
 import { classifyProviderFailure } from '../provider-failure-diagnosis'
+import { isUpstreamOutage } from '../../shared/panne-amont'
 
 /**
  * Un mur EXTERNE n'est pas un défaut réparable : aucune modification de code ne rétablit un quota
@@ -105,28 +106,11 @@ export function isDeliberateAbort(summary: string, detail: string): boolean {
   )
 }
 
-export function isUpstreamOutage(summary: string, detail: string): boolean {
-  const text = `${summary} ${detail}`.toLowerCase()
-  return (
-    // Vocabulaire explicite des fournisseurs (Anthropic, OpenAI) : aucune ambiguïté possible.
-    /\boverloaded(?:_error)?\b/.test(text) ||
-    /\bapi_error\b/.test(text) ||
-    /\binternal server error\b/.test(text) ||
-    /\bservice[ _]unavailable\b/.test(text) ||
-    /\bbad gateway\b/.test(text) ||
-    /\bgateway time-?out\b/.test(text) ||
-    /\bupstream connect error\b/.test(text) ||
-    // Codes 5xx, uniquement quand le contexte dit qu'il s'agit d'un statut.
-    /\bhttp\s?5\d{2}\b/.test(text) ||
-    /\bstatus(?:\s?code)?\s?5\d{2}\b/.test(text) ||
-    /\bapi error\b[^\n]{0,40}\b5\d{2}\b/.test(text) ||
-    /\b5\d{2}\b[^\n]{0,40}\bapi error\b/.test(text) ||
-    // Couche réseau : la requête n'a même pas abouti, il n'y a rien à analyser.
-    /\b(?:econnreset|etimedout|enotfound|eai_again|econnrefused)\b/.test(text) ||
-    /\bsocket hang up\b/.test(text) ||
-    /\bfetch failed\b/.test(text)
-  )
-}
+/**
+ * Panne du fournisseur : definition UNIQUE, partagee avec l'interface (reprise automatique apres
+ * un 529). Re-exportee ici pour que les appelants historiques de ce fichier ne bougent pas.
+ */
+export { isUpstreamOutage }
 
 export type WatchdogSuppression = 'aborted' | 'non-actionable' | 'upstream-outage'
 
