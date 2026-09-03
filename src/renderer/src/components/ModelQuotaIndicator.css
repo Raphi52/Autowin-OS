@@ -59,15 +59,24 @@
 .model-quota-bar-value {
   position: absolute;
   top: 50%;
-  left: min(var(--quota-fill, 0%), calc(100% - 26px));
+  left: min(var(--quota-fill, 0%), calc(100% - 22px));
   /* Aucun ecart : la pastille TOUCHE le bout de la portion coloree (demande utilisateur). */
   margin-left: -1px;
-  padding: 1px 6px;
-  border: 1px solid color-mix(in srgb, var(--quota-color, #35d07f) 45%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--quota-color, #35d07f) 16%, #060b10);
-  color: var(--quota-color, #35d07f);
-  line-height: 1.4;
+  /* VRAI ROND : cercle a diametre fixe, chiffre centre — pas une pilule etiree par le padding. */
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  /* La teinte vient du POINT du degrade ou la pastille se pose (`quotaGradientColor`), avec repli
+     sur la couleur de palier quand le restant est inconnu. */
+  border: 1px solid color-mix(in srgb, var(--quota-teinte, var(--quota-color, #35d07f)) 45%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--quota-teinte, var(--quota-color, #35d07f)) 16%, #060b10);
+  color: var(--quota-teinte, var(--quota-color, #35d07f));
+  font-size: 10px;
+  line-height: 1;
   pointer-events: none;
   transform: translateY(-50%);
   transition:

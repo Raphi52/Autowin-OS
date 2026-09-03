@@ -256,6 +256,34 @@ function ContextGaugeRow({
   )
 }
 
+/**
+ * COULEUR EXACTE DU POINT DE LA BARRE ou se pose la pastille.
+ *
+ * La pastille prenait la couleur du PALIER (vert/orange/rouge). A 74 % le degrade de la barre est
+ * encore JAUNE-OR a cet endroit : la pastille verte ne correspondait pas a ce qu'on voit juste a
+ * cote. On interpole ici les MEMES arrets que `.model-quota-bar-fill`.
+ */
+const QUOTA_STOPS: readonly (readonly [number, readonly [number, number, number]])[] = [
+  [0, [239, 68, 68]],
+  [35, [245, 158, 11]],
+  [65, [250, 204, 21]],
+  [100, [53, 208, 127]]
+]
+
+export function quotaGradientColor(percent: number): string {
+  const p = Math.min(100, Math.max(0, percent))
+  for (let i = 1; i < QUOTA_STOPS.length; i += 1) {
+    const [x0, c0] = QUOTA_STOPS[i - 1]
+    const [x1, c1] = QUOTA_STOPS[i]
+    if (p <= x1) {
+      const t = x1 === x0 ? 0 : (p - x0) / (x1 - x0)
+      const mix = c0.map((v, k) => Math.round(v + (c1[k] - v) * t))
+      return `rgb(${mix[0]}, ${mix[1]}, ${mix[2]})`
+    }
+  }
+  return 'rgb(53, 208, 127)'
+}
+
 export function ModelQuotaIndicator({
   provider,
   contextGauge,
@@ -368,7 +396,14 @@ export function ModelQuotaIndicator({
         <span className="model-quota-bar" aria-hidden="true">
           <i className="model-quota-bar-fill" />
         </span>
-        <span className="model-quota-bar-value">
+        <span
+          className="model-quota-bar-value"
+          style={
+            remaining === undefined
+              ? undefined
+              : ({ '--quota-teinte': quotaGradientColor(remaining) } as CSSProperties)
+          }
+        >
           {remaining === undefined ? '···' : Math.round(remaining)}
         </span>
       </button>
