@@ -389,6 +389,13 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
  * de persistance dans `commands.ts` — s'en ecarter ici ferait afficher le prompt sous une autre
  * phase que celle qui le facture.
  */
+function phaseDuStep(step: Pick<OrchStep, 'detail' | 'execution'>): string | undefined {
+  const brut =
+    step.execution?.phase ??
+    (step.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '')
+  return brut || undefined
+}
+
 /**
  * PHASE sous laquelle CHERCHER la ligne d'un step.
  *
@@ -400,13 +407,6 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
 function phaseDuLigne(step: OrchStep): string | undefined {
   if (step.step === 'gate') return step.execution?.phase ?? 'gate'
   return phaseDuStep(step) ?? step.step
-}
-
-function phaseDuStep(step: Pick<OrchStep, 'detail' | 'execution'>): string | undefined {
-  const brut =
-    step.execution?.phase ??
-    (step.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '')
-  return brut || undefined
 }
 
 /**
