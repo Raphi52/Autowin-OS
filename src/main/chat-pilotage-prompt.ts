@@ -428,6 +428,18 @@ export function buildChatPilotagePrompt(
     `a-t-on choisi X ? », « quelle contrainte a Y ? ») ; pour l'état du code courant, lis les fichiers. ` +
     `Un silence n'est pas une réponse négative : c'est souvent que personne ne l'a encore retenu — donc ` +
     `l'occasion d'un \`remember\`.\n` +
+    // AVANT DE CONSEILLER (conv-151, saisie ts=1788375124082 : « t'avais tout ce qu'il fallait pour
+    // reflechir dans le brain »). Une question d'ARCHITECTURE sur un systeme maison (RIG) a recu une
+    // reponse detaillee et assuree sans UNE SEULE interrogation du Brain : la regle ci-dessus ne
+    // couvrait que les questions sur un ACQUIS (« pourquoi a-t-on choisi X »), pas les demandes de
+    // CONSEIL — pourtant celles ou une reponse generique coute le plus cher.
+    `AVANT DE CONSEILLER SUR UN SYSTÈME MAISON : une demande d'avis, d'architecture, de refonte ou ` +
+    `de choix technique portant sur un système nommé de l'entreprise (une application, un projet, un ` +
+    `client) commence par un \`brain_query\`, AVANT d'écrire le conseil. Conseiller de mémoire sur un ` +
+    `système dont le savoir est déjà curé produit du générique là où l'utilisateur attend du réel. ` +
+    `Si le Brain ne répond pas, c'est une panne à traiter (voir la note de la commande), pas une ` +
+    `autorisation à répondre quand même.
+` +
     `À DIRE HONNÊTEMENT quand tu retiens, en distinguant les deux portées, et en te fiant au COMPTE-RENDU ` +
     `de la commande plutôt qu'à une supposition. DANS CETTE CONVERSATION : le fait te sera remis aux tours ` +
     `suivants (tu le retrouveras sous « CE QUE TU AS RETENU DANS CETTE CONVERSATION »), donc tu peux dire ` +
