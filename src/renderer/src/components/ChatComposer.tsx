@@ -258,6 +258,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
      * quelqu'un qui parle sans pause voit un champ vide et croit que le micro est mort.
      */
     const [dicteeApercu, setDicteeApercu] = useState('')
+    /** Niveau du micro (0..1) : c'est le SEUL signe visible que la voix entre pendant qu'on parle. */
+    const [dicteeNiveau, setDicteeNiveau] = useState(0)
     const dicteeRef = useRef<Dictee | null>(null)
     // `null` = pas encore su. Le bouton n'est barré que sur un « non » LU, jamais sur une inconnue.
     const [dicteeInstallee, setDicteeInstallee] = useState<boolean | null>(null)
@@ -304,6 +306,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         dicteeRef.current = null
         setDicteeApercu('')
         setDicteeEtat('inactif')
+        setDicteeNiveau(0)
         if (texte === '') {
           if (dictee?.aDejaEcrit !== true) setDicteeErreur('Rien n’a été reconnu.')
           return
@@ -332,16 +335,21 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
           },
           (apercu) => {
             if (dicteeRef.current === dictee) setDicteeApercu(apercu)
+          },
+          (niveau) => {
+            if (dicteeRef.current === dictee) setDicteeNiveau(niveau)
           }
         )
       )
       dicteeRef.current = dictee
       setDicteeErreur(null)
       setDicteeApercu('')
+      setDicteeNiveau(0)
       setDicteeEtat('ecoute')
       if (!(await dictee.demarrer())) {
         dicteeRef.current = null
         setDicteeEtat('inactif')
+        setDicteeNiveau(0)
         setDicteeErreur('Micro indisponible.')
       }
     }
@@ -543,6 +551,19 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 <IconeMicroTrait />
               )}
             </button>
+            {dicteeEtat === 'ecoute' ? (
+              <span
+                className="composer-dictee-niveau"
+                data-testid="composer-dictee-niveau"
+                // Niveau brut ×4 : la parole normale vit vers 0,05-0,25 en valeur efficace, une
+                // barre à l'échelle 1 resterait plate et ne prouverait rien à l'oeil.
+                style={{ '--niveau': String(Math.min(1, dicteeNiveau * 4)) } as React.CSSProperties}
+                aria-hidden="true"
+                title="Niveau du micro"
+              >
+                <i />
+              </span>
+            ) : null}
             {props.metaNode}
             {props.stopNode}
             <button

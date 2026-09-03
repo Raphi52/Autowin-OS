@@ -241,7 +241,6 @@ export function avancerVad(
   }
 }
 
-
 /**
  * DU RMS À LA JAUGE — pourquoi une échelle logarithmique et pas la valeur brute.
  *

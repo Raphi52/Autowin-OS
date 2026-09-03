@@ -3710,6 +3710,27 @@ ol.md-list li {
   opacity: 0.45;
   cursor: not-allowed;
 }
+/* JAUGE DE NIVEAU : pendant l'écoute, elle bouge au son. Sans elle, rien à l'écran ne dit que la
+   voix entre tant qu'une phrase n'est pas finie — l'utilisateur croit alors que ça ne marche pas. */
+.composer-dictee-niveau {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 6px;
+  height: 22px;
+  border-radius: 3px;
+  background: rgba(239, 69, 88, 0.18);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.composer-dictee-niveau > i {
+  display: block;
+  width: 100%;
+  height: calc(var(--niveau, 0) * 100%);
+  background: #ff8a96;
+  transition: height 90ms linear;
+}
+
 /* La raison d'un micro barré doit se LIRE sans survoler le bouton. */
 .composer-dictee-message {
   margin: 4px 2px 0;

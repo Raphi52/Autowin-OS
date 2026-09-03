@@ -21,6 +21,7 @@ import {
   coller,
   encoderWav16k,
   etatVadInitial,
+  niveau,
   type EtatVad
 } from './whisper-audio'
 
@@ -63,6 +64,12 @@ export interface DependancesDictee {
    * champ, sinon le même mot y serait écrit deux fois.
    */
   onApercu?: (texte: string) => void
+  /**
+   * NIVEAU DU MICRO à chaque bloc (~93 ms), entre 0 et 1. Sert la jauge affichée dans la barre de
+   * saisie : sans elle, l'écran reste muet tant qu'aucune phrase n'est finie, et l'utilisateur
+   * croit que le micro ne prend rien. Absent = aucune jauge, comportement inchangé.
+   */
+  onNiveau?: (niveau: number) => void
 }
 
 /**
@@ -169,6 +176,8 @@ export class Dictee {
   }
 
   private auBloc(bloc: Float32Array): void {
+    // AVANT la découpe : la jauge doit bouger à chaque bloc, pas seulement en fin de phrase.
+    this.deps.onNiveau?.(niveau(bloc))
     // Plafond COURT ici : en parole continue, c'est lui qui déclenche la première apparition de
     // texte dans le champ. Le plafond long de Jarvis laisserait l'écran vide 15 s.
     const pas = avancerVad(this.vad, bloc, this.taux, SEUIL_PAROLE, DUREE_MAX_DICTEE_MS)
@@ -281,7 +290,8 @@ export class Dictee {
 export function dependancesDicteeNavigateur(
   transcrire: (wav: Uint8Array) => Promise<string>,
   onTexte?: (texte: string) => void,
-  onApercu?: (texte: string) => void
+  onApercu?: (texte: string) => void,
+  onNiveau?: (niveau: number) => void
 ): DependancesDictee {
   return {
     micro: () =>
@@ -294,6 +304,7 @@ export function dependancesDicteeNavigateur(
       }),
     transcrire,
     onTexte,
-    onApercu
+    onApercu,
+    onNiveau
   }
 }
