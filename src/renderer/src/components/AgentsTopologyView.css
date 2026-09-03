@@ -572,6 +572,20 @@
   text-transform: uppercase;
 }
 
+/* MODE CLAIR — choix de l'utilisateur du 2026-09-03 : « conserve un fond foncé,
+   juste changer la police, bleue me semble bien ». Le bandeau reste donc un encart
+   sombre assumé au bas d'une page claire, accordé aux vignettes de modèles ; seule
+   sa gamme passe du doré au bleu. Fond légèrement bleuté pour que le cadre suive,
+   texte et titres en bleu clair — le contraste sur fond sombre est préservé. */
+:root[data-theme='clair'] .topology-runtime-limit {
+  border-color: #2f4a63;
+  background: rgba(10, 20, 30, 0.82);
+  color: #8fb8d6;
+}
+:root[data-theme='clair'] .topology-runtime-limit b {
+  color: #6fc9f5;
+}
+
 .agents-topology-loading {
   display: grid;
   width: 100%;

@@ -4527,7 +4527,7 @@ export function ChatView({
                         : 'Aucune conversation ouverte'
                     }
                   >
-                    <span className="status-dot" />
+                    {/* Pas de pastille ici : l'etat occupe se lit sur « en cours » et la classe is-busy. */}
                     {activeId ?? 'aucune conversation'}
                     {busy && ' · en cours'}
                   </span>
