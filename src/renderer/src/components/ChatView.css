@@ -853,6 +853,85 @@
   height: 100%;
   gap: var(--s3);
 }
+/* ---- Ctrl+F dans la conversation (conv-21) ----
+   Posee EN SURCOUCHE en haut a droite du fil : elle ne pousse rien, donc l'ouvrir ne deplace
+   pas le texte qu'on est en train de lire. `.chat` est deja `position: relative`. */
+.chat-find {
+  position: absolute;
+  /* SOUS l'en-tete, pas dessus : mesure sur l'app reelle (2026-09-03), le fil commence 82 px
+     sous le haut de `.chat`. A 8 px, la barre masquait le titre de la conversation et ses
+     badges. Elle flotte donc au-dessus du HAUT DU FIL, qu'un defilement fait de toute facon
+     glisser dessous. */
+  top: 90px;
+  right: 20px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  /* Meme fond que les surcouches du fil (cf. `.chat-jump-latest`) : noir dense sur le decor
+     cosmique, pas un gris opaque qui trancherait avec le theme. */
+  background: rgba(2, 3, 7, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.chat-find-icone {
+  color: var(--text-faint);
+  font-size: 13px;
+}
+.chat-find-input {
+  width: 220px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+.chat-find-input:focus {
+  border-color: var(--line);
+}
+.chat-find-count {
+  min-width: 72px;
+  text-align: right;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.chat-find-nav,
+.chat-find-close {
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 6px;
+}
+.chat-find-nav:hover:not(:disabled),
+.chat-find-close:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+.chat-find-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* LE SURLIGNAGE, peint par l'API de surlignage CSS : aucune balise n'est ajoutee au fil, donc
+   chercher ne re-rend AUCUN message. Meme or que la recherche de la liste (`.conv-highlight`),
+   l'occurrence courante etant la seule pleine. */
+::highlight(chat-find) {
+  background-color: rgba(212, 169, 79, 0.28);
+}
+::highlight(chat-find-actif) {
+  background-color: rgba(212, 169, 79, 0.75);
+  color: #10121a;
+}
+
 .chat-head {
   justify-content: space-between;
   padding-bottom: var(--s3);

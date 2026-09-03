@@ -148,6 +148,7 @@ import type { CheckpointEntry } from './chat-view-types'
 import { useSkillsCatalog } from './useSkillsInventory'
 import { messageTravailNonPublie, promptTravauxNonPublies } from './travail-non-publie'
 import { TravauxNonPublies } from './TravauxNonPublies'
+import { ChatFindBar } from './ChatFindBar'
 import { Spinner } from './Spinner'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
@@ -417,6 +418,29 @@ export function ChatView({
   }, [isActive])
   const [openImage, setOpenImage] = useState<{ src: string; name: string } | null>(null)
   const [dragActive, setDragActive] = useState(false)
+
+  /**
+   * CTRL+F DANS LA CONVERSATION (conv-21).
+   *
+   * On intercepte le raccourci du navigateur : sa recherche native n'existe pas dans une fenêtre
+   * Electron sans chrome, et l'utilisateur n'avait donc AUCUN moyen de retrouver un mot dans un
+   * fil long. Seul l'état ouvert/fermé vit ici — le terme cherché reste dans `ChatFindBar`, pour
+   * que la frappe ne re-rende pas le fil.
+   */
+  const [rechercheFilOuverte, setRechercheFilOuverte] = useState(false)
+  useEffect(() => {
+    const surTouche = (event: KeyboardEvent): void => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+      if (event.key !== 'f' && event.key !== 'F') return
+      event.preventDefault()
+      setRechercheFilOuverte(true)
+      // Barre deja ouverte : le raccourci REPREND la main dessus (et selectionne le terme, pour
+      // le remplacer d'une frappe) au lieu de ne rien faire.
+      document.querySelector<HTMLInputElement>('.chat-find-input')?.select()
+    }
+    document.addEventListener('keydown', surTouche)
+    return () => document.removeEventListener('keydown', surTouche)
+  }, [])
 
   useEffect(() => {
     if (!openImage) return
@@ -4427,6 +4451,12 @@ export function ChatView({
               <strong>Dépose tes fichiers ici</strong>
               <span>Ils seront joints au prochain message</span>
             </div>
+          )}
+          {rechercheFilOuverte && (
+            <ChatFindBar
+              racine={() => scrollRef.current}
+              onFermer={() => setRechercheFilOuverte(false)}
+            />
           )}
           <header className="chat-head row">
             <div className="row gap2" style={{ alignItems: 'center', minWidth: 0 }}>
