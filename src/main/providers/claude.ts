@@ -1,4 +1,5 @@
 import { joinThinking } from './thinking'
+import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 import {
   assertArgvWithinLimit,
   createStreamWatchdog,
@@ -1256,8 +1257,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         collectArtifacts(msg?.content)
         for (const part of msg?.content ?? []) {
           if (part.type === 'text' && part.text) {
-            text += part.text
-            queue.push({ delta: part.text })
+            /*
+             * SÉPARATION DES BLOCS RECOLLÉS — voir `shared/collage-blocs-texte.ts` pour la mesure.
+             * Sans elle, un bloc qui finit par une phrase et un bloc suivant qui OUVRE une fence
+             * donnaient « …branchée.```html-render » : plus une ouverture de bloc pour CommonMark,
+             * donc du HTML brut dans le fil (signalé par l'utilisateur sur conv-8, 2026-09-03).
+             * Le MÊME séparateur part dans `text` (le brut relu en aval) et dans le delta diffusé :
+             * une divergence entre les deux rejouerait le collage sur l'un des deux chemins.
+             */
+            const separation = separationEntreBlocsTexte(text, part.text)
+            text += separation + part.text
+            queue.push({ delta: separation + part.text })
           } else if (part.type === 'thinking' && part.thinking) {
             // Deja diffuse morceau par morceau via `stream_event` : le bloc complet est un doublon.
             if (partialThinkingSeen) continue

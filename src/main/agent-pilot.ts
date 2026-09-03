@@ -359,6 +359,65 @@ export function separationDeltaCollee(dejaEmis: string, suivant: string): string
 }
 
 /**
+ * FENCE SOUDEE EN MILIEU DE LIGNE — la moitie que `separationDeltaCollee` ne peut PAS voir.
+ *
+ * MESURE DU 2026-09-03 (conv-8, signalement utilisateur « le html ne s'est pas render ») : le
+ * journal du tour porte un SEUL delta (`0:0:ordered:4`, 4 925 car.) dont le texte est
+ * « …est bien branchee.```html-render
+<!doctype html> ». Le collage n'est donc pas a la JOINTURE
+ * de deux deltas — il est DEJA dans le texte d'un delta unique, assemble en amont de l'emission.
+ * `DeltaCollageTracker` n'inspecte que la frontiere entre deux deltas : il ne pouvait rien y faire,
+ * et CommonMark, qui exige une fence en debut de ligne, a rendu 4 900 caracteres de HTML en prose.
+ *
+ * La regle est volontairement ETROITE, parce que le prompt de chat parle lui-meme de
+ * « ```html-render » au milieu de ses phrases : transformer ces mentions en vraies fences serait une
+ * regression pire que le defaut. On ne coupe donc que si les QUATRE conditions d'une vraie
+ * OUVERTURE sont reunies :
+ *   (1) le marqueur est precede, sur la meme ligne, par autre chose que de l'espace ;
+ *   (2) il est suivi d'une etiquette de langage d'un seul mot (`html-render`, `ts`, `json`) ;
+ *   (3) cette etiquette TERMINE la ligne — une mention en prose se poursuit par des mots ;
+ *   (4) on n'est pas DEJA dans une fence ouverte, ou ``` est du contenu.
+ */
+export function detacherFenceCollee(texte: string): string {
+  if (!texte.includes('```') && !texte.includes('~~~')) return texte
+  const lignes = texte.split(/(\r?\n)/u)
+  let dansUneFence = false
+  for (let index = 0; index < lignes.length; index += 2) {
+    const ligne = lignes[index]
+    if (/^[ \t]*(?:`{3,}|~{3,})/u.test(ligne)) {
+      dansUneFence = !dansUneFence
+      continue
+    }
+    if (dansUneFence) continue
+    const soudure = /^(.*[^\s`~])(`{3,}|~{3,})([A-Za-z][\w-]*)[ \t]*$/u.exec(ligne)
+    if (!soudure) continue
+    lignes[index] = `${soudure[1]}\n\n${soudure[2]}${soudure[3]}`
+    dansUneFence = true
+  }
+  return lignes.join('')
+}
+
+/**
+ * SOUDURE DE DEUX PHRASES — mesure du 2026-09-03 (signalement utilisateur, 6 occurrences dans
+ * `conversations.json` : « je lance la vérification ciblée.Maintenant le côté écriture »). Le texte
+ * d'une itération et celui de la suivante tombent dans la MÊME part ; quand le premier finit sur un
+ * point et que le second commence par une lettre, la phrase suivante se colle au point et l'espace
+ * manque à l'écran. Ce n'est PAS un défaut de rédaction du modèle : c'est le recollage des flux.
+ *
+ * La règle reste étroite pour ne pas couper ce qui se poursuit vraiment : rien si l'un des deux
+ * côtés porte déjà une espace, rien si la phrase n'est pas terminée, rien devant un CHIFFRE (un
+ * « version 1. » + « 2.3 » n'est pas une nouvelle phrase).
+ */
+const FIN_DE_PHRASE = /[.!?…][»”"')\]]*$/u
+const DEBUT_DE_PHRASE = /^[\p{L}«“"'(#*\->`]/u
+
+export function soudureDePhrases(precedent: string, suivant: string): boolean {
+  if (!precedent || !suivant) return false
+  if (/\s$/u.test(precedent) || /^\s/u.test(suivant)) return false
+  return FIN_DE_PHRASE.test(precedent) && DEBUT_DE_PHRASE.test(suivant)
+}
+
+/**
  * Mémoire du texte déjà émis par `streamId`, pour deux cas de collage :
  * (1) un delta qui ouvre une fence juste après un préambule sans saut de ligne ;
  * (2) un delta qui REPREND un streamId après qu'un autre flux ait parlé — la reprise est recollée
@@ -388,9 +447,11 @@ export class DeltaCollageTracker {
             /\n[ \t]*$/.test(dejaEmis)
             ? ''
             : '\n\n'
-          : // Flux NEUF : ne couper que si le delta OUVRE une fence — sinon on couperait une
-            // phrase que le modele poursuit simplement a l’iteration suivante.
-            separationDeltaCollee(precedent, texte)
+          : // Flux NEUF : couper si le delta OUVRE une fence, ou si la phrase precedente est
+            // TERMINEE et que le nouveau texte viendrait se souder a son point final. Hors de ces
+            // deux cas on ne coupe rien — le modele peut simplement poursuivre sa phrase.
+            separationDeltaCollee(precedent, texte) ||
+            (soudureDePhrases(precedent, texte) ? '\n\n' : '')
         : separationDeltaCollee(dejaEmis, texte)
     }
     this.emis.set(streamId, dejaEmis + separation + texte)
@@ -704,9 +765,14 @@ export class AgentPilot {
     const publier = protegerRappel<[PilotEvent]>('chat:onEvent', onEvent) ?? onEvent
     const emit = (e: PilotEventVariant): void => {
       if (e.kind === 'delta' && e.streamId && e.text) {
-        const separation = collage.separation(e.streamId, e.text)
-        if (separation) {
-          publier({ ...e, text: separation + e.text })
+        // Deux collages DISTINCTS, dans cet ordre. D'abord celui qui vit DANS le texte du delta
+        // (fence soudee a la phrase precedente, cf. detacherFenceCollee), sinon la separation
+        // calculee juste apres porterait sur un texte deja fautif. Ensuite celui de la JOINTURE
+        // avec le delta precedent, que seul le tracker connait.
+        const texte = detacherFenceCollee(e.text)
+        const separation = collage.separation(e.streamId, texte)
+        if (separation || texte !== e.text) {
+          publier({ ...e, text: separation + texte })
           return
         }
       }
