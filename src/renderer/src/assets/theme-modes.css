@@ -235,3 +235,22 @@
 :root[data-theme='clair'] .conv-menu-pop button:hover {
   background: rgba(15, 20, 35, 0.06);
 }
+
+/* ----------------------------------------------------------------------------
+   EN-TÊTE DU FIL — signalé par l'utilisateur le 2026-09-03 (« zone encore trop
+   claire », deux flèches : le titre et « Détails »).
+   Couleurs en dur dans `ChatView.css` : titre `#f3f6f8` (l.1858), bouton Détails
+   `#a8b1ba` (l.1889), fond des boutons d'en-tête `#070d13` (l.1866). Presque
+   blanches, donc invisibles sur un en-tête devenu blanc.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .cosmic-outline .chat-conv-title {
+  color: var(--text);
+}
+:root[data-theme='clair'] .workflow-toggle {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .cosmic-outline .chat-head .btn {
+  background: #ffffff;
+  border-color: var(--line);
+  color: var(--text);
+}
