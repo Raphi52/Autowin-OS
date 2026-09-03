@@ -137,6 +137,41 @@ describe('applyUpdate', () => {
     expect(calls).toContainEqual(['merge', '--ff-only', 'origin/main'])
   })
 
+  it('main DIVERGÉE → pose le choix rebaser/fusionner au lieu de tenter une avance impossible', async () => {
+    const calls: string[][] = []
+    const run: GitRunner = async (args) => {
+      calls.push(args)
+      const key = args.join(' ')
+      if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
+      if (key === 'rev-list --count origin/main..HEAD') return { stdout: '2' }
+      if (key === 'diff --name-only --diff-filter=U') return { stdout: '' }
+      if (key === 'status --porcelain') return { stdout: '' }
+      return { stdout: '' }
+    }
+    const r = await applyUpdate('/r', {}, run, async () => {})
+    expect(r.ok).toBe(false)
+    expect(r.needsChoice).toBe(true)
+    expect(r.strategies).toEqual(['rebase', 'merge'])
+    // Le geste qui ne pouvait QUE échouer n'est même plus tenté.
+    expect(calls).not.toContainEqual(['merge', '--ff-only', 'origin/main'])
+  })
+
+  it('main divergée + stratégie NOMMÉE → rebase accepté depuis main', async () => {
+    const calls: string[][] = []
+    const run: GitRunner = async (args) => {
+      calls.push(args)
+      const key = args.join(' ')
+      if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
+      if (key === 'rev-list --count origin/main..HEAD') return { stdout: '2' }
+      if (key === 'diff --name-only --diff-filter=U') return { stdout: '' }
+      if (key === 'status --porcelain') return { stdout: '' }
+      return { stdout: '' }
+    }
+    const r = await applyUpdate('/r', { strategy: 'rebase' }, run, async () => {})
+    expect(r.ok).toBe(true)
+    expect(calls).toContainEqual(['rebase', 'origin/main'])
+  })
+
   it('dépôt déjà en conflit → refuse avant stash ou mise à jour', async () => {
     const calls: string[][] = []
     const run: GitRunner = async (args) => {

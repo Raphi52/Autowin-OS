@@ -100,6 +100,18 @@ export async function checkForUpdate(
     } catch {
       /* état inconnu : on n'en fait pas un blocage */
     }
+    // L'AVANCE locale décide si « avancer » est encore possible. Sans elle, `main` porteuse de commits
+    // non poussés ne recevait que `fast-forward` — donc un bouton qui ne pouvait QUE échouer.
+    let ahead = 0
+    try {
+      const rawAhead = (
+        await run(['rev-list', '--count', `${reference}..HEAD`], cwd)
+      ).stdout.trim()
+      const parsed = Number.parseInt(rawAhead, 10)
+      if (Number.isFinite(parsed)) ahead = parsed
+    } catch {
+      /* avance illisible : on reste sur le comportement d'avant (avancer) */
+    }
     return {
       available: behind > 0,
       behind,
@@ -107,7 +119,7 @@ export async function checkForUpdate(
       reference,
       dirty,
       conflicted: false,
-      strategies: strategiesFor(branch)
+      strategies: strategiesFor(branch, ahead > 0)
     }
   } catch (error) {
     return {
@@ -238,17 +250,34 @@ export async function applyUpdate(
     // une fusion ou un rebase peut ajouter plusieurs entrées au reflog.
     const headBefore = (await run(['rev-parse', 'HEAD'], cwd)).stdout.trim()
     const currentBranch = (await run(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)).stdout.trim()
-    const available = strategiesFor(currentBranch)
+    // Divergence de `main` : des commits locaux que `origin/main` n'a pas. `--ff-only` est alors
+    // structurellement impossible — le choix (rebaser / fusionner) doit être POSÉ, pas subi sous
+    // forme d'échec répété.
+    let diverged = false
+    if (currentBranch === 'main') {
+      try {
+        const rawAhead = (
+          await run(['rev-list', '--count', `${TEAM_REFERENCE}..HEAD`], cwd)
+        ).stdout.trim()
+        diverged = Number.parseInt(rawAhead, 10) > 0
+      } catch {
+        /* avance illisible : on tente l'avance simple, git refusera proprement */
+      }
+    }
+    const available = strategiesFor(currentBranch, diverged)
     // Sur main, avancer est sans ambiguïté → défaut. Ailleurs, l'appelant DOIT nommer sa stratégie :
     // c'est la seule garde conservée, et elle empêche exactement une chose — fabriquer un merge que
     // personne n'a demandé sur la branche de quelqu'un.
-    const strategy = options.strategy ?? (currentBranch === 'main' ? 'fast-forward' : undefined)
+    const strategy =
+      options.strategy ?? (currentBranch === 'main' && !diverged ? 'fast-forward' : undefined)
     if (!strategy) {
       return {
         ok: false,
         needsChoice: true,
         strategies: available,
-        error: `Tu es sur « ${currentBranch} » : choisis comment intégrer origin/main (fusionner, rebaser, ou basculer sur main).`
+        error: diverged
+          ? `Ta branche « main » porte des commits que origin/main n'a pas : avancer simplement est impossible. Ton travail est INTACT. Choisis comment intégrer origin/main (rebaser tes commits par-dessus, ou fusionner).`
+          : `Tu es sur « ${currentBranch} » : choisis comment intégrer origin/main (fusionner, rebaser, ou basculer sur main).`
       }
     }
     if (!available.includes(strategy)) {
