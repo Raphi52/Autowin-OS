@@ -53,7 +53,10 @@ const CMD_LABEL: Record<string, string> = {
  * le prompt envoye et le motif du controle final existaient deja dans l'etape, sans etre montres.
  *
  * Le chevron n'apparait QUE si la ligne porte vraiment quelque chose : promettre un depliage vide
- * se lit comme casse.
+ * se lit comme casse. Arbitrage utilisateur du 2026-09-03 (« une fleche seulement quand il y a
+ * quelque chose a voir ») : on a d'abord essaye l'autre reponse — garder la fleche partout et
+ * afficher « aucun detail recu » a l'ouverture. Elle est ECARTEE : pas de fleche, donc pas de
+ * message de vide non plus. Une etape sans prompt ni resultat rend juste son identite.
  */
 function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element {
   const [ouvert, setOuvert] = useState(false)
@@ -61,18 +64,20 @@ function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element 
   const nom = [choix.phase, choix.role].filter(Boolean).join(' ') || 'etape'
   const estControle = choix.phase === 'gate' || choix.role === 'gate'
   return (
-    <li className="is-depliable" data-testid="activity-pipeline-line">
+    <li className={detaille ? 'is-depliable' : undefined} data-testid="activity-pipeline-line">
       <div className="activity-pipeline-head">
-        <button
-          type="button"
-          className="activity-step-toggle activity-pipeline-chevron"
-          data-testid="activity-pipeline-toggle"
-          aria-expanded={ouvert}
-          aria-label={ouvert ? `Replier ${nom}` : `Deplier le detail de ${nom}`}
-          onClick={() => setOuvert((etat) => !etat)}
-        >
-          {ouvert ? '▼' : '▶'}
-        </button>
+        {detaille && (
+          <button
+            type="button"
+            className="activity-step-toggle activity-pipeline-chevron"
+            data-testid="activity-pipeline-toggle"
+            aria-expanded={ouvert}
+            aria-label={ouvert ? `Replier ${nom}` : `Deplier le detail de ${nom}`}
+            onClick={() => setOuvert((etat) => !etat)}
+          >
+            {ouvert ? '▼' : '▶'}
+          </button>
+        )}
         <span className="activity-pipeline-identite">
           {choix.phase && <span className="activity-step-phase">{choix.phase}</span>}
           {choix.role && <span className="activity-step-role">{choix.role}</span>}
@@ -83,14 +88,6 @@ function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element 
           )}
         </span>
       </div>
-      {/* Une etape SANS prompt ni resultat garde sa fleche (demande du 2026-09-03 : « une fleche
-          pour deplier chaque etape ») ; le pli dit alors franchement qu'il n'y a rien encore,
-          plutot que de s'ouvrir sur du vide. */}
-      {ouvert && !detaille && (
-        <div className="activity-pipeline-vide" data-testid="activity-pipeline-vide">
-          aucun détail reçu pour cette étape (elle est en cours ou n’a rien rendu)
-        </div>
-      )}
       {ouvert && choix.prompt && (
         <>
           <div className="activity-pipeline-titre">prompt envoyé</div>

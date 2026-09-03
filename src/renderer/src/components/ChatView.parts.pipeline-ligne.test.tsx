@@ -87,24 +87,41 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
     expect(container.textContent).toContain('décision et motif')
   })
 
-  it('CHAQUE etape garde sa fleche, meme sans prompt ni resultat, et le dit', () => {
+  /**
+   * ARBITRAGE UTILISATEUR (2026-09-03) : « une fleche seulement quand il y a quelque chose a voir —
+   * un depliage vide se lit comme casse ». Ce test verifiait AVANT la reponse inverse (fleche
+   * partout + message « aucun detail recu » a l'ouverture). Il n'est pas affaibli, il est RETOURNE :
+   * l'etape sans prompt ni resultat ne promet plus rien, donc elle n'a plus de fleche — et le
+   * message de vide n'a plus lieu d'exister, meme apres clic, puisqu'il n'y a plus rien a cliquer.
+   */
+  it('une etape sans prompt ni resultat ne montre AUCUNE fleche, ni message de vide', () => {
     const action = orchestration({
       pipeline: [
         { phase: 'frame', role: 'subagent' },
-        { phase: 'build', role: 'subagent' }
+        { phase: 'build', role: 'subagent', prompt: 'fais X' }
       ]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
     act(() =>
       container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
     )
+    // Les DEUX lignes sont rendues : seule la fleche disparait, pas l'etape elle-meme.
+    const lignes = container.querySelectorAll('[data-testid="activity-pipeline-line"]')
+    expect(lignes).toHaveLength(2)
+    expect(lignes[0].textContent).toContain('frame')
+    // Une seule fleche, et elle est sur la ligne qui porte le prompt.
     const chevrons = container.querySelectorAll<HTMLButtonElement>(
       '[data-testid="activity-pipeline-toggle"]'
     )
-    expect(chevrons).toHaveLength(2)
+    expect(chevrons).toHaveLength(1)
+    expect(lignes[1].contains(chevrons[0])).toBe(true)
+    // Plus aucun panneau de vide, ni avant ni apres ouverture de la seule fleche restante.
     expect(container.querySelector('[data-testid="activity-pipeline-vide"]')).toBeNull()
-    act(() => chevrons[1].click())
-    expect(container.querySelectorAll('[data-testid="activity-pipeline-vide"]')).toHaveLength(1)
+    act(() => chevrons[0].click())
+    expect(container.querySelector('[data-testid="activity-pipeline-vide"]')).toBeNull()
+    expect(container.querySelector('[data-testid="activity-pipeline-prompt"]')!.textContent).toContain(
+      'fais X'
+    )
   })
 })
 
