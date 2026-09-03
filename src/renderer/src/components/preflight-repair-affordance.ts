@@ -19,7 +19,7 @@ export const PREFLIGHT_REPAIRS: Record<string, RepairAffordance> = {
   },
   'claude-session': {
     label: 'Se connecter',
-    note: 'Une console s’ouvre : le login Anthropic s’y fait. Rien n’est saisi dans Autowin.'
+    note: 'Une console s’ouvre : le CLI est installé s’il manque, puis le login Anthropic s’y fait. Rien n’est saisi dans Autowin.'
   },
   'brain-venv': {
     label: 'Installer',

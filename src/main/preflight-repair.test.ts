@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   AUTOWIN_PACKAGE_NAME,
+  CLAUDE_CLI_INSTALL_COMMAND,
   planPreflightRepair,
   repairPreflightCheck,
   resolveCodexLoginCwd
@@ -115,7 +116,12 @@ describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', ()
       expect(outcome.detail).toMatch(/CLAUDE_BIN|introuvable/i)
     })
 
-    it('CLI absent du PATH → le geste proposé est l’INSTALLATION, pas un login impossible', async () => {
+    /**
+     * 2026-09-02 : le bouton rendait une commande À RECOPIER (« installe-le, puis re-vérifie ») —
+     * vu de l'utilisateur, un clic sans effet. « + Ajouter un compte » du Routeur, lui, EXÉCUTE.
+     * La console doit donc poser le CLI PUIS enchaîner le login, dans le même terminal.
+     */
+    it('CLI absent du PATH → la console INSTALLE puis enchaîne le login (pas une commande à recopier)', async () => {
       const openLoginTerminal = vi.fn()
       const outcome = await repairPreflightCheck('claude-session', {
         openLoginTerminal,
@@ -123,10 +129,15 @@ describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', ()
         resolveOnPath: () => null
       })
 
-      expect(openLoginTerminal).not.toHaveBeenCalled()
-      expect(outcome.started).toBe(false)
-      expect(outcome.detail).toMatch(/installe/i)
-      expect(outcome.detail).not.toMatch(/auth login/i)
+      expect(openLoginTerminal).toHaveBeenCalledTimes(1)
+      const [command] = openLoginTerminal.mock.calls[0] as [string]
+      expect(command).toContain(CLAUDE_CLI_INSTALL_COMMAND)
+      expect(command).toContain('claude auth login')
+      // L'installation passe AVANT le login : l'inverse chercherait un binaire pas encore posé.
+      expect(command.indexOf(CLAUDE_CLI_INSTALL_COMMAND)).toBeLessThan(
+        command.indexOf('claude auth login')
+      )
+      expect(outcome.started).toBe(true)
     })
 
     /**

@@ -10,7 +10,9 @@
  *  - `codex-session` → ouvre le login OAuth (le CLI gère la saisie ; l'app ne voit aucun credential).
  *  - `brain`         → tente de démarrer le brain_server local.
  *  - `brain-token`   → AUCUN plan : un secret ne s'invente pas.
- *  - CLI absent      → AUCUN plan : installer un binaire n'est pas une réparation d'un clic.
+ *  - `claude-session` → ouvre le login Anthropic ; CLI absent → la console l'INSTALLE puis enchaîne
+ *    le login (2026-09-02 : afficher « installe-le, puis re-vérifie » était un cul-de-sac — le
+ *    bouton semblait sans effet. « + Ajouter un compte » du Routeur, lui, exécute).
  * Un check sans plan n'affiche PAS de bouton, plutôt qu'un bouton qui ne peut pas tenir sa promesse.
  *
  * Et une réparation LANCÉE n'est pas une réparation FAITE : le login est interactif, le serveur met
@@ -25,6 +27,13 @@ import { resolveBinOnPath } from './preflight-probes'
 import { resolveClaudeBin } from './providers/claude'
 import { claudeAccountEnv } from './claude-accounts'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
+
+/**
+ * Installation du CLI claude, EXÉCUTÉE dans la console de login quand le binaire manque.
+ * `-g` pose les shims dans le préfixe npm — déjà sur le PATH de la console — donc le `auth login`
+ * enchaîné juste après le trouve sans rouvrir de terminal.
+ */
+export const CLAUDE_CLI_INSTALL_COMMAND = 'npm i -g @anthropic-ai/claude-code'
 
 /** Nom du package du dépôt Autowin OS : l'IDENTITÉ exigée d'un candidat, pas juste un script. */
 export const AUTOWIN_PACKAGE_NAME = 'autowin-os'
@@ -110,7 +119,7 @@ export function planPreflightRepair(checkId: string): PreflightRepairPlan | unde
         kind: 'login',
         provider: 'claude',
         label: 'Se connecter',
-        note: 'Une console s’ouvre : le login Anthropic s’y fait. Rien n’est saisi dans Autowin.'
+        note: 'Une console s’ouvre : le CLI est installé s’il manque, puis le login Anthropic s’y fait. Rien n’est saisi dans Autowin.'
       }
     case 'brain':
       return {
@@ -124,7 +133,7 @@ export function planPreflightRepair(checkId: string): PreflightRepairPlan | unde
         label: 'Installer',
         note: 'Ouvre une console sur scripts/bootstrap-deps.ps1 : il pose le venv et le tooling du Brain (plusieurs minutes).'
       }
-    // brain-token : un secret ne s'invente pas. CLI absent : une installation n'est pas un clic.
+    // brain-token : un secret ne s'invente pas.
     default:
       return undefined
   }
@@ -191,14 +200,12 @@ export async function repairPreflightCheck(
             detail: `Binaire claude introuvable (${bin}) : corrige CLAUDE_BIN ou réinstalle le CLI.`
           }
         }
-      } else if (onPath('claude') === null) {
-        // Aucun binaire désigné ET rien dans le PATH : le CLI n'est pas installé. Le geste utile est
-        // une INSTALLATION, pas un login.
-        return {
-          started: false,
-          detail: 'CLI claude absent : installe-le (npm i -g @anthropic-ai/claude-code), puis re-vérifie.'
-        }
       }
+      // Aucun binaire désigné ET rien dans le PATH : le CLI n'est pas installé. On n'AFFICHE PLUS la
+      // commande à recopier — c'était un cul-de-sac (« le bouton ne fait rien », 2026-09-02). Comme
+      // « + Ajouter un compte » du Routeur, le bouton OUVRE la console et EXÉCUTE : l'installation
+      // d'abord, le login enchaîné dans la MÊME console (le shim npm est alors sur son PATH).
+      const missing = !designated && onPath('claude') === null
       // Source unique de la commande de login (provider-login.ts) : pas de littéral dupliqué ici,
       // qui divergerait le jour où le CLI renomme sa sous-commande.
       // Le dossier du compte ACTIF est passe explicitement : sans lui, reparer la session
@@ -212,10 +219,12 @@ export async function repairPreflightCheck(
       if (loginPlan.kind !== 'terminal') {
         return { started: false, detail: 'Le login claude ne passe pas par une console.' }
       }
-      open(loginPlan.command, {})
+      open(missing ? `${CLAUDE_CLI_INSTALL_COMMAND}; ${loginPlan.command}` : loginPlan.command, {})
       return {
         started: true,
-        detail: 'Console de connexion ouverte. Termine le login, puis re-vérifie.'
+        detail: missing
+          ? 'Console ouverte : installation du CLI claude, puis login enchaîné. Termine, puis re-vérifie.'
+          : 'Console de connexion ouverte. Termine le login, puis re-vérifie.'
       }
     }
     if (plan.kind === 'login') {
