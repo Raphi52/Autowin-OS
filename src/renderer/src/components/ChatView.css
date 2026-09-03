@@ -1821,6 +1821,10 @@ ol.md-list li {
   padding: 10px 9px 10px 12px;
 }
 
+/* TÉMOIN DE DICHOTOMIE 2 — 2026-09-03, À RETIRER. */
+.cosmic-outline .conv-label {
+  outline: 2px solid #00ff00;
+}
 .cosmic-outline .conv-label {
   color: #dce6ee;
   font-size: 12px;
