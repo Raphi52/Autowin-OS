@@ -146,6 +146,21 @@
    en #070d13 EN DUR (ChatView.css l.2277) — quatre rectangles noirs au milieu
    d'une page blanche, texte invisible. Signalé le 2026-09-03. La barre de saisie
    du bas a le même défaut (dégradé vers #030609, l.2285). */
+/* Les suggestions ne sont PAS des `.btn` mais des `.sg-chip` (SuggestionGrid.css),
+   et leur fond appelle `var(--surface2, #191d23)` — une variable qui n'existe dans
+   AUCUN thème. C'est donc la valeur de secours, un gris très sombre, qui s'applique
+   toujours : quatre pavés noirs sur page blanche. Même piège pour `--muted`. */
+:root[data-theme='clair'] .sg-chip {
+  background: #ffffff;
+  border-color: var(--line);
+  color: var(--text);
+}
+:root[data-theme='clair'] .sg-chip:hover {
+  background: rgba(15, 20, 35, 0.05);
+}
+:root[data-theme='clair'] .sg-subtitle {
+  color: var(--text-dim);
+}
 :root[data-theme='clair'] .cosmic-outline .chat-suggest .btn {
   background: #ffffff;
   border-color: var(--line);
