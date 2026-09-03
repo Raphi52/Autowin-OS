@@ -90,6 +90,28 @@ describe('publication → /salvage', () => {
       'Lance le terrain sur X.'
     )
   })
+
+  /*
+   * Vecu le 2026-09-03 (conv-210) : le tri venait d'etre TERMINE dans le tour, et la suite utile
+   * etait de restaurer un fichier precis. Le garde-fou a quand meme tout remplace par `/salvage`,
+   * effacant la seule cible que le tour avait identifiee.
+   */
+  it("ne reecrit pas quand publier n'est que la SUITE d'un autre acte", () => {
+    const prompt =
+      'Restaure skills/arena/SKILL.md pour recuperer la journalisation des 4 bras, puis publie le curseur de volume.'
+    expect(extrairePromptSuivant(`AUTOWIN_PROMPT_V1: ${prompt}`)).toBe(prompt)
+  })
+
+  it('ne reecrit pas un prompt qui EST deja un ordre de tri', () => {
+    const prompt = 'Lance /salvage sur les 2 travaux ChatComposer.tsx avant de publier.'
+    expect(extrairePromptSuivant(`AUTOWIN_PROMPT_V1: ${prompt}`)).toBe(prompt)
+  })
+
+  it("reecrit toujours quand publier EST l'acte principal, meme suivi d'une suite", () => {
+    expect(
+      extrairePromptSuivant('AUTOWIN_PROMPT_V1: Publie le lot sur main, puis relance les tests.')
+    ).toBe(PROMPT_SALVAGE)
+  })
 })
 
 describe('toutes les formes de « publier »', () => {

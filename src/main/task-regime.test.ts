@@ -151,3 +151,24 @@ describe('phasesForRegime', () => {
     expect(phasesForRegime('critical')).toEqual(['scout', 'frame', 'terrain', 'build', 'clean'])
   })
 })
+
+describe('classifyRegime — retouches d\'apparence (conv-210)', () => {
+  it('classe une micro-retouche visuelle courte en trivial', () => {
+    expect(classifyRegime('enleve la pastille verte')).toBe('trivial')
+    expect(classifyRegime('met le nom de la conv en gris')).toBe('trivial')
+    expect(classifyRegime('enleve la boite autour du cout')).toBe('trivial')
+    expect(classifyRegime('met le titre plus gros et en blanc')).toBe('trivial')
+    expect(classifyRegime('aligne le texte MAIN avec l\'icone de branche')).toBe('trivial')
+  })
+
+  it('ne rétrograde pas une tâche à risque contenant un mot d\'apparence', () => {
+    expect(classifyRegime('enleve la couleur puis refactor le pipeline')).toBe('critical')
+    expect(classifyRegime('masque le badge auth en production')).toBe('critical')
+  })
+
+  it('ne rétrograde pas une retouche visuelle longue ou multi-clauses', () => {
+    expect(
+      classifyRegime('enleve la pastille verte ; ensuite met le nom de la conv en gris')
+    ).toBe('standard')
+  })
+})

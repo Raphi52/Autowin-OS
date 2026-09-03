@@ -84,7 +84,7 @@ import type {
 } from './chat-view-types'
 import { buildMentionSources, resolveMentionsForSend } from './chat-mentions'
 import { visibleScopedRuns } from './workflows-panel-sections'
-import { ForkIcon } from './chat-view-icons'
+import { ForkIcon, PanelIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment, pieceJointePasseePourLeFil } from './chat-attachments'
 import { derniereConversationOuverte, memoriserDerniereConversation } from './derniere-conversation'
 import {
@@ -4612,7 +4612,7 @@ export function ChatView({
                 onClick={() => setShowRuns((v) => !v)}
                 title="Détails de l’exécution"
               >
-                <ForkIcon />
+                <PanelIcon />
                 Détails{openRunsCount > 0 ? ` · ${openRunsCount} open` : ''}
                 {greenRunsCount > 0 ? ` · ${greenRunsCount} green` : ''}
               </button>

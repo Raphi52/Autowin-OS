@@ -105,6 +105,28 @@ const ACTES_DE_PUBLICATION =
 export const PROMPT_SALVAGE =
   "Lance /salvage : trie par leur contenu tous les travaux non publiés (copies de travail isolées, remises de côté, branches jamais fusionnées) avant qu'on publie quoi que ce soit."
 
+/*
+ * DEUX EXCEPTIONS, mesurees le 2026-09-03 (conv-210).
+ *
+ * Le garde-fou ci-dessus est volontairement aveugle : il ne lit pas ce que le tour a fait. Deux cas
+ * ou cette cecite retourne l'outil contre son but :
+ *
+ * 1. Le prompt EST deja l'ordre de tri (`/salvage`). Le reecrire en `/salvage` n'ajoute rien mais
+ *    ecrase la cible precise que le tour venait de nommer.
+ * 2. La publication n'est que la SUITE d'un autre acte (« restaure X, PUIS publie »). L'acte
+ *    principal est le premier ; le remplacer par un tri fait perdre la seule chose que le tour
+ *    avait identifiee. Vecu : « Restaure skills/arena/SKILL.md, puis publie » est devenu un
+ *    `/salvage` alors que le tri venait d'etre termine dans ce meme tour.
+ *
+ * Le garde-fou garde tout son mordant sur le cas qu'il vise : un prompt dont l'acte PRINCIPAL est
+ * de publier.
+ */
+const ORDRE_DE_TRI = /\/salvage\b/i
+const CHARNIERE_DE_SUITE = /\b(puis|ensuite|apr[eè]s (?:quoi|avoir)|et enfin)\b/i
+
 export function estPromptDePublication(prompt: string): boolean {
+  if (ORDRE_DE_TRI.test(prompt)) return false
+  const charniere = prompt.search(CHARNIERE_DE_SUITE)
+  if (charniere > 0 && !ACTES_DE_PUBLICATION.test(prompt.slice(0, charniere))) return false
   return ACTES_DE_PUBLICATION.test(prompt)
 }

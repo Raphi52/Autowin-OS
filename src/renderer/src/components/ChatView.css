@@ -1852,10 +1852,12 @@ ol.md-list li {
 
 .cosmic-outline .chat-head-kicker {
   color: #ffffff;
+  /* Meme police que le titre « Conversations » du panneau lateral (.module-header > h1). */
+  font-family: var(--module-title-font);
   font-size: 16px;
   font-weight: 700;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
 }
 
 .cosmic-outline .conv-head > .btn {
@@ -4051,3 +4053,11 @@ ol.md-list li {
   display: inline-flex;
   align-items: center;
 }
+
+/* BARRE UNIQUE DE DICTEE (2026-09-03) : une seule barre HORIZONTALE qui porte les deux infos --
+   le remplissage rose montre le volume de la voix, le rond blanc pose dessus regle la capture. */
+.composer-dictee-niveau {position:relative;width:72px;height:6px;margin:0 4px;border-radius:3px;align-items:stretch;overflow:visible}
+.composer-dictee-niveau i {width:calc(var(--niveau,0) * 100%);height:100%;border-radius:3px;transition:width 90ms linear}
+.composer-dictee-gain {position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;cursor:ew-resize}
+.composer-dictee-gain::-webkit-slider-runnable-track {height:6px;background:transparent}
+.composer-dictee-gain::-webkit-slider-thumb {margin-top:-3px;width:12px;height:12px;border-radius:50%;background:#ffffff;box-shadow:0 0 0 1px rgba(0,0,0,.45)}
