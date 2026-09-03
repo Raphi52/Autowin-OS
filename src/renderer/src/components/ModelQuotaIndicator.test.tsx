@@ -71,7 +71,14 @@ describe('indicateur de quotas modèles', () => {
       '[data-testid="model-quota-trigger"]'
     ) as HTMLButtonElement
     expect(trigger.textContent).toContain('28')
-    await act(async () => trigger.click())
+    // Piste B : le declencheur est la BARRE (plus aucune roue SVG), et le remplissage suit le restant.
+    expect(trigger.querySelector('svg')).toBeNull()
+    const barre = trigger.querySelector('.model-quota-bar-fill') as HTMLElement
+    expect(barre).not.toBeNull()
+    expect(trigger.style.getPropertyValue('--quota-fill')).toBe('28%')
+    // Et c'est bien un clic sur cette barre qui ouvre la popup.
+    expect(container.querySelector('[data-testid="model-quota-popover"]')).toBeNull()
+    await act(async () => barre.click())
 
     const popover = container.querySelector('[data-testid="model-quota-popover"]')
     expect(popover?.textContent).toContain('Claude')
@@ -336,7 +343,7 @@ describe('indicateur de quotas modèles', () => {
     await act(async () => root.unmount())
   })
 
-  it('met à jour la wheel lorsque le fournisseur du modèle sélectionné change', async () => {
+  it('met à jour la barre lorsque le fournisseur du modèle sélectionné change', async () => {
     const modelQuotas = vi.fn(async () => ({
       observedAt: '2026-07-29T08:00:00.000Z',
       summary: { remainingPercent: 25, status: 'warning' as const },

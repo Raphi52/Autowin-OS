@@ -45,7 +45,7 @@ function quotasByProvider(models: readonly ModelQuota[]): ModelQuota[] {
 }
 
 /**
- * Fenêtre que la wheel doit RÉSUMER pour un provider donné.
+ * Fenêtre que la barre doit RÉSUMER pour un provider donné.
  *
  * Par défaut la fenêtre courte (5 h) : c'est elle qui bloque l'utilisateur MAINTENANT, et un weekly
  * plus bas ne doit pas alarmer sur une capacité immédiate disponible.
@@ -90,7 +90,7 @@ function levelOf(remainingPercent: number): ModelQuotaLevel {
 }
 
 /**
- * Résumé destiné à la wheel : la VALEUR (fenêtre voulue) est dissociée du STATUT d'alerte.
+ * Résumé destiné à la barre : la VALEUR (fenêtre voulue) est dissociée du STATUT d'alerte.
  * `windowLabel` décrit ce qui est réellement mesuré ; `statusWindowLabel` nomme la fenêtre qui dicte
  * la couleur quand ce n'est pas celle affichée.
  */
@@ -121,7 +121,7 @@ export function summaryForProvider(
     .filter((model) => model.provider === provider && model.status !== 'unavailable')
     .flatMap((model) => model.windows.filter((window) => window.limitKnown !== false))
   // Repli assume : la fenetre voulue absente (provider qui ne l'expose pas encore) -> minimum de ce
-  // qui est connu, comportement historique prudent plutot qu'une wheel vide.
+  // qui est connu, comportement historique prudent plutot qu'une barre vide.
   const preferred = summarizable.filter((window) => window.id === wantedId)
   const fellBack = preferred.length === 0
   const pool = fellBack ? summarizable : preferred
@@ -132,7 +132,7 @@ export function summaryForProvider(
     window.remainingPercent < low.remainingPercent ? window : low
   )
   const minimum = retained.remainingPercent
-  // Statut DISSOCIÉ de la valeur : sur le chemin nominal codex la wheel affiche le 7 j (voulu), mais
+  // Statut DISSOCIÉ de la valeur : sur le chemin nominal codex la barre affiche le 7 j (voulu), mais
   // une 5 h à 2 % bloque l'utilisateur MAINTENANT — la couleur ne doit pas rassurer pendant ce temps.
   //
   // MAIS on n'agrège PAS toutes les fenêtres : un weekly bas ne bloque rien dans l'immédiat, et faire
@@ -351,25 +351,26 @@ export function ModelQuotaIndicator({
         type="button"
         className={`model-quota-trigger is-${level}`}
         data-testid="model-quota-trigger"
-        style={{ '--quota-angle': `${remaining ?? 0}` } as CSSProperties}
+        style={{ '--quota-fill': `${remaining ?? 0}%` } as CSSProperties}
         aria-label={
           remaining === undefined
             ? 'Afficher les quotas fournisseurs'
             : `Afficher les quotas fournisseurs, ${Math.round(remaining)} % restant sur ${windowLabel}${alert}`
         }
         aria-expanded={open}
-        title={`Quotas par fournisseur — wheel sur ${windowLabel}${alert}`}
+        title={`Quotas par fournisseur — barre sur ${windowLabel}${alert}`}
         onClick={() => {
           const next = !open
           setOpen(next)
           if (next) void refresh()
         }}
       >
-        <svg className="model-quota-wheel" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-          <circle className="model-quota-wheel-track" cx="16" cy="16" r="12.5" pathLength="100" />
-          <circle className="model-quota-wheel-value" cx="16" cy="16" r="12.5" pathLength="100" />
-        </svg>
-        <span>{remaining === undefined ? '···' : Math.round(remaining)}</span>
+        <span className="model-quota-bar" aria-hidden="true">
+          <i className="model-quota-bar-fill" />
+        </span>
+        <span className="model-quota-bar-value">
+          {remaining === undefined ? '···' : Math.round(remaining)}
+        </span>
       </button>
       {open && (
         <section
