@@ -5029,7 +5029,7 @@ export function ChatView({
             }
             leadingNode={
               <>
-                {/* Le rond des quotas ouvre la rangee d'outils, tout a gauche (choix utilisateur). */}
+                {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
                 <ModelQuotaIndicator
                   provider={runtimeIdentity?.provider}
                   contextGauge={activeId != null ? contextGauges[activeId] : undefined}

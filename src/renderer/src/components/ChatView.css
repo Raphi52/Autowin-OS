@@ -1023,18 +1023,15 @@
   flex: 1 0 100%;
   min-width: 0;
 }
-/* La 2e rangée : un filet fin la détache du champ, sur toute la largeur. */
-.composer-input-row::before {
+/* La 2e rangée est détachée du champ par la BARRE DE QUOTAS : elle remplace l'ancien filet et
+   porte aussi le signal de focus (C1 : le champ n'a plus de cadre). */
+.composer-input-row > .model-quota {
   order: 0;
   flex: 1 0 100%;
-  height: 0;
   margin-top: 1px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  content: '';
 }
-/* C1 : le champ n'a plus de cadre — c'est ce filet qui signale le focus. */
-.composer-field:focus-within .composer-input-row::before {
-  border-top-color: rgba(239, 69, 168, 0.45);
+.composer-field:focus-within .composer-input-row .model-quota-bar {
+  background: rgba(255, 255, 255, 0.18);
 }
 /* Envoyer reste ancré à droite, quoi qu'il y ait avant lui. */
 .composer-input-row > .composer-send {
@@ -2291,7 +2288,7 @@ ol.md-list li {
 /* DIRECTION C1 « NU » (choix utilisateur, conv-167) : la barre de prompting n'est plus une boite.
    Le cadre et le fond opaque venaient de la rangee unique, ou il fallait dessiner la zone de saisie ;
    en deux etages le filet entre les etages suffit a la delimiter. Le focus se signale sur ce filet
-   (voir `.composer-field:focus-within .composer-input-row::before`), plus par un halo. */
+   (voir `.composer-field:focus-within .composer-input-row .model-quota-bar`), plus par un halo. */
 .cosmic-outline .composer-field {
   display: grid;
   flex: 1;
@@ -3838,13 +3835,6 @@ ol.md-list li {
   display: none;
 }
 
-/* Le rond des quotas est un bouton de la rangee comme les autres : meme diametre. */
-.composer-input-row .model-quota-trigger {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  flex: none;
-}
 /* La depense du fil, remontee dans la barre du haut : elle s'aligne sur la ligne technique. */
 .chat-runtime .conv-cost {
   display: inline-flex;
