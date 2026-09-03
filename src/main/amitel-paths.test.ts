@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   amitelBrainOrigin,
+  amitelBrainPort,
   amitelBrainRoot,
   amitelBrainStateRoot,
   amitelBrainTooling,
@@ -68,5 +72,61 @@ describe('amitel-paths — source unique et surchargeable', () => {
     expect(amitelWorkspaces({ AUTOWIN_AMITEL_WORKSPACES: '  ;  ;' })).toEqual([
       ...DEFAULT_AMITEL_WORKSPACES
     ])
+  })
+})
+
+/**
+ * DEFAUT VECU (conv-8, 2026-09-03) : le service a jour ecoutait 8766 et le processus principal
+ * interrogeait 8765 — son defaut — parce que l'origine ne vivait que dans la variable d'un shell.
+ * Chaque lecture du savoir rendait « indisponible » en 15 ms. Persister la variable N'A PAS suffi :
+ * l'app relancee a herite de l'ancien environnement et a demarre un SECOND serveur sur 8765.
+ *
+ * ENTREE QUI FAIT ECHOUER CES TESTS SI LA CORRECTION EST FAUSSE : une installation dont le
+ * `config.json` porte 8766 et un environnement TOTALEMENT muet. Une resolution qui ne lit que
+ * l'environnement retombe sur 8765 et les deux premiers tests tombent rouges.
+ */
+describe('origine du Brain — le port vient de l installation, pas d un shell', () => {
+  const avecInstallation = (config: Record<string, unknown>): NodeJS.ProcessEnv => {
+    const localAppData = mkdtempSync(join(tmpdir(), 'brain-origine-'))
+    mkdirSync(join(localAppData, 'AmitelBrain'), { recursive: true })
+    writeFileSync(join(localAppData, 'AmitelBrain', 'config.json'), JSON.stringify(config))
+    installations.push(localAppData)
+    return { LOCALAPPDATA: localAppData }
+  }
+  const installations: string[] = []
+  afterAll(() => {
+    for (const dir of installations) rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('lit `origin` du config.json quand l environnement est muet', () => {
+    const env = avecInstallation({ origin: 'http://127.0.0.1:8766' })
+    expect(amitelBrainOrigin(env)).toBe('http://127.0.0.1:8766')
+    expect(amitelBrainPort(env)).toBe('8766')
+  })
+
+  it('accepte `port` comme raccourci', () => {
+    expect(amitelBrainOrigin(avecInstallation({ port: 8790 }))).toBe('http://127.0.0.1:8790')
+    expect(amitelBrainOrigin(avecInstallation({ port: '8791' }))).toBe('http://127.0.0.1:8791')
+  })
+
+  it('l environnement reste PRIORITAIRE sur l installation', () => {
+    const env = avecInstallation({ origin: 'http://127.0.0.1:8766' })
+    expect(amitelBrainOrigin({ ...env, AMITEL_BRAIN_ORIGIN: 'http://127.0.0.1:8700' })).toBe(
+      'http://127.0.0.1:8700'
+    )
+    expect(amitelBrainOrigin({ ...env, AMITEL_BRAIN_PORT: '8701' })).toBe('http://127.0.0.1:8701')
+  })
+
+  it('une valeur ILLISIBLE retombe sur le defaut plutot que de faire echouer la lecture', () => {
+    expect(amitelBrainOrigin(avecInstallation({ port: 'huit-mille' }))).toBe(
+      'http://127.0.0.1:8765'
+    )
+    expect(amitelBrainOrigin(avecInstallation({ port: 99999 }))).toBe('http://127.0.0.1:8765')
+  })
+
+  it('une origine NON loopback est refusee — jamais une adresse distante en silence', () => {
+    expect(() => amitelBrainOrigin(avecInstallation({ origin: 'http://10.0.0.9:8766' }))).toThrow(
+      /loopback/i
+    )
   })
 })

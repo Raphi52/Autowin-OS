@@ -105,6 +105,57 @@ describe('remember — separer la panne de transport du refus de contenu', () =>
   })
 })
 
+describe('depot — l origine est CONFIGUREE, jamais ecrite en dur', () => {
+  /*
+   * Meme defaut que la lecture, mesure le 2026-09-02 : le depot visait `127.0.0.1:8765` en dur alors
+   * que le service tournait sur l origine declaree par `AMITEL_BRAIN_ORIGIN`. Ecrire ailleurs que la
+   * ou l on lit est pire qu une panne : le candidat part sur un service que personne ne consulte.
+   */
+  it('envoie le candidat sur l origine declaree par AMITEL_BRAIN_ORIGIN', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-remember-origine-'))
+    vi.stubEnv('AMITEL_BRAIN_ORIGIN', 'http://127.0.0.1:8766')
+    const fetchFn = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'not found' }), { status: 404 })
+    ) as unknown as typeof fetch
+    try {
+      configureRememberDepositStore(join(root, 'remember-deposits.json'))
+      await rememberFact(
+        { ...FAIT_VALIDE, title: 'Origine configuree — depot' },
+        { token: 'jeton', fetchFn }
+      )
+      expect(String(vi.mocked(fetchFn).mock.calls[0][0])).toBe('http://127.0.0.1:8766/ingest')
+    } finally {
+      vi.unstubAllEnvs()
+      forgetSessionDeposits()
+      configureRememberDepositStore()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('ne throw pas quand l origine configuree n est pas loopback : depot IMPOSSIBLE', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-remember-origine-ko-'))
+    vi.stubEnv('AMITEL_BRAIN_ORIGIN', 'https://brain.example.invalid')
+    const fetchFn = vi.fn(
+      async () => new Response('{}', { status: 200 })
+    ) as unknown as typeof fetch
+    try {
+      configureRememberDepositStore(join(root, 'remember-deposits.json'))
+      const res = await rememberFact(
+        { ...FAIT_VALIDE, title: 'Origine invalide — depot' },
+        { token: 'jeton', fetchFn }
+      )
+      expect(res.stored).toBe(false)
+      expect(res.detail).toMatch(/AMITEL_BRAIN_ORIGIN/u)
+      expect(vi.mocked(fetchFn)).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+      forgetSessionDeposits()
+      configureRememberDepositStore()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('idempotence atomique de remember', () => {
   it('bloque un retry aveugle quand le premier depot a un etat inconnu', async () => {
     const deposited = new Map<string, string>()

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { lecteurWindows, rechargerEnv, VARIABLES_RECHARGEABLES } from './env-reload'
 import { verifyTimeoutMs, VERIFY_TIMEOUT_MS } from './verify-command'
+import { amitelBrainOrigin } from './amitel-paths'
 
 /**
  * CE QUE CE TEST PROUVE : le plafond de `verify` change SANS redemarrage.
@@ -58,6 +59,30 @@ describe('reload_env — recharger une variable a chaud', () => {
     expect(() => rechargerEnv('', { env, lecteur: () => 'x' })).toThrow(/non rechargeable/i)
     expect(env.PATH).toBe('inchangé')
     expect(VARIABLES_RECHARGEABLES).toContain('AUTOWIN_VERIFY_TIMEOUT_MS')
+  })
+
+  /**
+   * DEFAUT VECU (conv-8, 2026-09-03) : le service Brain ecoutait 8766, le processus principal
+   * retombait sur le defaut 8765 parce que `AMITEL_BRAIN_ORIGIN` n'etait persistee NULLE PART —
+   * elle ne vivait que dans le shell ou elle avait ete tapee. Chaque `brain_query` rendait
+   * « indisponible » en 15 ms (connexion refusee), et l'origine n'etait pas rechargeable : la
+   * seule issue etait un redemarrage complet de l'app.
+   *
+   * ENTREE QUI FAIT ECHOUER CE TEST SI LA CORRECTION EST FAUSSE : une origine persistee (8766)
+   * differente de celle du processus (8765). Sans l'ajout a la liste blanche, `rechargerEnv` leve
+   * « Variable non rechargeable » et `amitelBrainOrigin` reste sur 8765.
+   */
+  it('rebranche le canal Brain a chaud quand le port persiste diverge du processus', () => {
+    const env = { AMITEL_BRAIN_ORIGIN: 'http://127.0.0.1:8765' } as NodeJS.ProcessEnv
+    expect(amitelBrainOrigin(env)).toBe('http://127.0.0.1:8765')
+
+    const issue = rechargerEnv('AMITEL_BRAIN_ORIGIN', {
+      env,
+      lecteur: (nom) => (nom === 'AMITEL_BRAIN_ORIGIN' ? 'http://127.0.0.1:8766' : undefined)
+    })
+
+    expect(issue.change).toBe(true)
+    expect(amitelBrainOrigin(env)).toBe('http://127.0.0.1:8766')
   })
 
 

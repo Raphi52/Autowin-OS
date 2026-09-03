@@ -112,6 +112,7 @@
     "bootstrap:deps": "powershell -ExecutionPolicy Bypass -File scripts/bootstrap-deps.ps1",
     "clean:generated": "powershell -ExecutionPolicy Bypass -File scripts/clean-generated-artifacts.ps1",
     "context:compute-fabric": "node scripts/export-compute-fabric-context.mjs",
+    "brain:doctor": "node scripts/brain-doctor.mjs",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",

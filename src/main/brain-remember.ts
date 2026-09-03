@@ -25,6 +25,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { basename, dirname, join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
+import { amitelBrainOrigin } from './amitel-paths'
 import { memoryWorkspaceIdentity } from './session-memory-echo'
 
 /** Types acceptés par le garde du Brain (`brain_propose.ALLOWED_TYPES`). Liste FERMÉE. */
@@ -688,7 +689,28 @@ async function performDepositCandidate(
   deposited: Map<string, string>
 ): Promise<DepositOutcome> {
   const token = deps.token ?? ''
-  const origin = deps.origin ?? 'http://127.0.0.1:8765'
+  /*
+   * Origine CONFIGUREE (`AMITEL_BRAIN_ORIGIN`) : une adresse ecrite en dur envoyait le candidat sur
+   * un service qui n'est pas celui que l'app interroge en lecture. `amitelBrainOrigin` REFUSE une
+   * origine non loopback ; ce refus ne doit pas remonter en exception, car `rememberFact` promet de
+   * ne jamais throw — il devient donc un depot impossible, dit explicitement.
+   */
+  let origin: string
+  if (deps.origin) {
+    origin = deps.origin
+  } else {
+    try {
+      origin = amitelBrainOrigin()
+    } catch {
+      return {
+        allowed: true,
+        stored: false,
+        detail:
+          "depot IMPOSSIBLE : l'origine du Brain configuree (AMITEL_BRAIN_ORIGIN) n'est pas une " +
+          'adresse loopback HTTP valide - rien n a ete envoye, c est la configuration qu il faut corriger'
+      }
+    }
+  }
   const doFetch = deps.fetchFn ?? fetch
   const controller = new AbortController()
   const timeoutMs = deps.timeoutMs ?? brainDepositTimeoutMs()

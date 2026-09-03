@@ -1,5 +1,9 @@
 /**
- * Client du service de retrieval Amitel Brain (brain_server.py, loopback :8765).
+ * Client du service de retrieval Amitel Brain (brain_server.py, loopback).
+ *
+ * L'origine vient de `amitelBrainOrigin()` (env `AMITEL_BRAIN_ORIGIN`, defaut 127.0.0.1:8765), jamais
+ * d'une constante locale : une adresse ecrite en dur ici envoyait les requetes sur un autre port que
+ * celui reellement configure, donc sur un autre service — jeton different, reponse rejetee `invalid`.
  *
  * Le Brain expose un retriever CHAUD dense + lexical + graphe, fusionné par RRF. Autowin le réutilise
  * via POST /query avec bearer token, corpus de workspace et réponse HMAC signée.
@@ -7,13 +11,14 @@
  * Toute dégradation reste non bloquante et typée : empty, invalid ou unavailable.
  */
 import { existsSync, readFileSync } from 'node:fs'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import {
   readSignedBrainPayload,
   sealBrainRequest,
   verifySignedBrainPayload
 } from './brain-protocol'
+import { amitelBrainOrigin } from './amitel-paths'
 
 type FetchLike = typeof fetch
 
@@ -32,6 +37,7 @@ export function brainServiceToken(env: NodeJS.ProcessEnv = process.env): string 
 
 export interface BrainRetrievalOptions {
   timeoutMs?: number
+  /** Surcharge de test/diagnostic. Absent = origine CONFIGUREE (`AMITEL_BRAIN_ORIGIN`). */
   port?: number
   fetchFn?: FetchLike
   env?: NodeJS.ProcessEnv
@@ -191,22 +197,31 @@ export async function retrieveBrainContext(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000)
   try {
-    const origin = `http://127.0.0.1:${opts.port ?? 8765}`
-    const nonce = randomBytes(12).toString('hex')
-    const challengeResponse = await doFetch(`${origin}/challenge?nonce=${nonce}`, {
+    const origin = opts.port
+      ? `http://127.0.0.1:${opts.port}`
+      : amitelBrainOrigin(opts.env ?? process.env)
+    /*
+     * LE NONCE EST EMIS PAR LE SERVEUR, pas par nous. Mesure du 2026-09-02 sur le service vivant :
+     * `GET /challenge` REFUSE toute chaine de requete (`if parsed.query: 400`) et rend son propre
+     * nonce a usage unique, seul accepte ensuite par `/query-secure` (`challenges.consume`). Le
+     * client imposait le sien via `?nonce=…` : chaque lecture repartait donc sur un 400, et le
+     * savoir n'arrivait jamais. Ce sens-la est aussi le plus sur : c'est l'emetteur du nonce qui
+     * garantit son unicite, et sa signature HMAC prouve qui l'a emis.
+     */
+    const challengeResponse = await doFetch(`${origin}/challenge`, {
       method: 'GET',
       signal: controller.signal
     })
     if (!challengeResponse.ok) return { context: '', status: 'unavailable' }
+    let nonce: string
     try {
       const challenge = verifySignedBrainPayload(
         await readSignedBrainPayload(challengeResponse),
         token
       )
       const challengeNonce = /^challenge:([0-9a-f]{24})$/.exec(challenge.context)?.[1]
-      if (challengeNonce !== nonce) {
-        return { context: '', status: 'invalid' }
-      }
+      if (!challengeNonce) return { context: '', status: 'invalid' }
+      nonce = challengeNonce
     } catch {
       return { context: '', status: 'invalid' }
     }

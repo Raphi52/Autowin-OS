@@ -254,4 +254,28 @@ describe('runAppPreflight', () => {
     expect(await runAppPreflight(false)).toBe(forcedResult)
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  /**
+   * DEFAUT VECU (conv-8, 2026-09-03) : ce ping visait `127.0.0.1:8765` ECRIT EN DUR alors que le
+   * service a jour ecoutait 8766. La sonde declarait donc le cerveau eteint en permanence, et l'app
+   * relancait des serveurs qui n'y servaient personne — pendant que la lecture du savoir, elle,
+   * fonctionnait par l'origine CONFIGUREE. Meme defaut que celui corrige la veille dans
+   * `brain-retrieval` : deux chemins vers le meme service, un seul qui lisait la configuration.
+   *
+   * ENTREE QUI FAIT ECHOUER CE TEST SI LA CORRECTION EST FAUSSE : une origine configuree sur un
+   * AUTRE port que 8765. Une adresse en dur appelle 8765 et l'assertion tombe.
+   */
+  it('sonde l’origine CONFIGUREE, jamais une adresse ecrite en dur', async () => {
+    process.env.AMITEL_BRAIN_ORIGIN = 'http://127.0.0.1:8790'
+    const fetchMock = vi.fn(async () => new Response('ok'))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+    try {
+      const { appPreflightProbes } = await import('./preflight-probes')
+      expect(await appPreflightProbes().pingBrain()).toBe(true)
+      expect(String(fetchMock.mock.calls[0]?.[0])).toBe('http://127.0.0.1:8790/')
+    } finally {
+      globalThis.fetch = originalFetch
+      delete process.env.AMITEL_BRAIN_ORIGIN
+    }
+  })
 })
