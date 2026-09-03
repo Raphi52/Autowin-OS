@@ -202,6 +202,14 @@ export interface CostBreakdownRow extends TokenUsage {
   durationMs: number
   /** Appels executes dont le fournisseur n'expose pas de prix fiable. */
   unpricedCalls: number
+  /**
+   * Sous-ensemble de `unpricedCalls` dont les tokens ont ete RECUPERES aupres du CLI et tarifes au
+   * tarif public (`activity/cli-usage-recovery.ts`). `unpricedCalls - estimatedCalls` = ce qui reste
+   * vraiment sans aucun chiffre.
+   */
+  estimatedCalls: number
+  /** Montant ESTIME de ces appels. Absent = rien n'a pu etre recupere ni tarife. */
+  estimatedUsd?: number
 }
 
 /**
@@ -228,6 +236,12 @@ export interface CostSample extends TokenUsage {
   /** Duree de l'appel ; 0 quand la source ne la connait pas. */
   durationMs: number
   callId?: string
+  /**
+   * Montant reconstitue au tarif public a partir des tokens RELUS aupres du CLI, pour un appel dont
+   * le provider n'a jamais rendu de prix (`activity/cli-usage-recovery.ts`). Reste distinct de
+   * `costUsd` : une estimation ne se melange pas a une depense rapportee.
+   */
+  estimatedUsd?: number
 }
 
 function sampleFromCall(call: PromptCallRecord): CostSample {
@@ -391,6 +405,53 @@ export function costSamplesFrom(
   return samples
 }
 
+/** Ce qu'un appel non tarife a laisse dans le transcript du CLI (`cli-usage-recovery.ts`). */
+interface RecoveredUsageLike {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
+  estimatedUsd?: number
+}
+
+/**
+ * Verse dans les echantillons les valeurs RECUPEREES aupres du CLI pour les appels qu'il n'a pas
+ * tarifes (tues par le watchdog avant leur event `result`). C'est ce qui remplace « + non expose »
+ * par un montant a l'ecran.
+ *
+ * DEUX gardes, parce qu'une mesure de cout fausse est pire qu'une mesure absente :
+ * - un echantillon DEJA tarife par le provider n'est jamais touche (`costKnown`) ;
+ * - un echantillon qui porte deja des tokens (reglement tardif du journal d'activite) garde les
+ *   siens : les additionner compterait le meme tour deux fois.
+ */
+export function applyRecoveredUsage(
+  samples: readonly CostSample[],
+  recovered: ReadonlyMap<string, RecoveredUsageLike>
+): CostSample[] {
+  if (recovered.size === 0) return [...samples]
+  return samples.map((sample) => {
+    if (sample.costKnown || !sample.callId) return sample
+    const usage = recovered.get(sample.callId)
+    if (!usage) return sample
+    const dejaMesure =
+      sample.inputTokens !== 0 || sample.outputTokens !== 0 || sample.cacheReadTokens !== 0
+    return {
+      ...sample,
+      ...(dejaMesure
+        ? {}
+        : {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cacheReadTokens: usage.cacheReadTokens,
+            cacheCreationTokens: usage.cacheCreationTokens
+          }),
+      ...(usage.estimatedUsd !== undefined && !dejaMesure
+        ? { estimatedUsd: usage.estimatedUsd }
+        : {})
+    }
+  })
+}
+
 /** Repartition du cout a partir d'echantillons NORMALISES (les deux journaux reunis). */
 export function summarizeCostSamples(
   samples: readonly CostSample[],
@@ -409,7 +470,8 @@ export function summarizeCostSamples(
       cacheCreationTokens: 0,
       cacheHitRatio: 0,
       durationMs: 0,
-      unpricedCalls: 0
+      unpricedCalls: 0,
+      estimatedCalls: 0
     }
     row.calls += 1
     // Modele et provider ne sont portes par la ligne que s'ils sont UNANIMES parmi ses appels :
@@ -428,6 +490,10 @@ export function summarizeCostSamples(
     row.cacheCreationTokens += sample.cacheCreationTokens
     row.durationMs += sample.durationMs
     if (!sample.costKnown) row.unpricedCalls += 1
+    if (!sample.costKnown && sample.estimatedUsd !== undefined) {
+      row.estimatedCalls += 1
+      row.estimatedUsd = (row.estimatedUsd ?? 0) + sample.estimatedUsd
+    }
     rows.set(key, row)
   }
   for (const row of rows.values()) {
