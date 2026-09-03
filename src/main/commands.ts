@@ -1607,6 +1607,26 @@ export class AppCommandBus {
   ) {}
 
   /**
+   * Chemin de `sqlcmd`, choisi AU MOMENT DE L'APPEL et non au demarrage.
+   *
+   * DEFAUT VECU (conv-152, 2026-09-02) : `sqlcmd` etait absent du poste, donc `sql_query` repondait
+   * « non localise sur ce poste ». Installe puis ajoute au PATH utilisateur, il restait INVISIBLE :
+   * une modification du PATH ne se propage jamais aux processus deja lances, et le redemarrage passe
+   * par le lanceur, qui herite de l'ancien environnement. Le chemin resolu une seule fois au
+   * demarrage etait donc DEFINITIVEMENT vide pour toute la vie du process.
+   *
+   * `AUTOWIN_SQLCMD_BIN` (rechargeable a chaud, cf. `env-reload.ts`) permet de DESIGNER le binaire
+   * sans redemarrer — meme motif que `AUTOWIN_GRAPHIFY_BIN` et `CODEX_BIN`. L'existence du fichier
+   * est verifiee : un reglage qui pointe a cote doit laisser la main a la resolution par le PATH,
+   * jamais faire echouer l'appel sur un binaire fantome.
+   */
+  private cheminSqlcmd(): string | undefined {
+    const designe = process.env.AUTOWIN_SQLCMD_BIN?.trim()
+    if (designe && existsSync(designe)) return designe
+    return this.sqlcmdPath
+  }
+
+  /**
    * Les echanges passes que la demande suppose connus, prets a etre injectes dans le tour.
    *
    * Passe par le bus plutot que d'exposer le store : l'appelant (`agent-pilot`) n'a pas a connaitre
