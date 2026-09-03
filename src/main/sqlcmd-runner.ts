@@ -113,6 +113,12 @@ const REAL_OUTPUT_FILE: OutputFileAccess = {
 
 export interface SqlcmdDeps {
   spawnFn?: typeof spawn
+  /**
+   * Sonde de la VARIANTE de sqlcmd (historique ODBC, ou go-sqlcmd). Injectable pour la même raison
+   * que `spawnFn` : sans elle, un test qui vérifie les drapeaux dépendrait du binaire réellement
+   * installé sur la machine de test — donc du poste, pas du code.
+   */
+  spawnSyncFn?: typeof spawnSync
   /** Chemin de sqlcmd. Absent = capacité non câblée. */
   sqlcmdPath?: string
   outputFile?: OutputFileAccess
