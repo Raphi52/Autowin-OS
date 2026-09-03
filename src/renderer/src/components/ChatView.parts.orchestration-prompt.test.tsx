@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AssistantActivityGroup } from './ChatView.parts'
-import { noterPromptDePipeline } from './chat-view-model'
+import { completerChoixDePipeline, texteDuPrompt } from './chat-view-model'
 import type { ChatPart, OrchStep } from './chat-view-model'
 
 /**
@@ -86,7 +86,7 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
           role: 'subagent',
           provider: 'claude',
           model: 'opus-4',
-          prompt: enveloppe('BUILD')
+          prompt: texteDuPrompt(enveloppe('BUILD'))
         }
       ]
     })
@@ -94,19 +94,20 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
     act(() =>
       container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
     )
-    const prompts = container.querySelectorAll('[data-testid="activity-step-prompt"]')
+    // Repere ACTUEL de l'interface : un chevron par ligne depliable, et le prompt en <pre>.
+    const chevrons = container.querySelectorAll<HTMLButtonElement>(
+      '[data-testid="activity-pipeline-toggle"]'
+    )
     // UNE seule ligne porte un prompt : la phase `scout` n'en a pas recu, elle ne promet donc rien.
-    expect(prompts).toHaveLength(1)
-    const lignes = container.querySelectorAll('[data-testid="activity-step-pipeline"] > li')
-    expect(lignes[1].contains(prompts[0])).toBe(true)
-    expect(prompts[0].textContent).toContain('Voir le prompt envoyé')
+    expect(chevrons).toHaveLength(1)
     // Replie par defaut : le prompt ne doit pas noyer le fil tant qu'on ne l'ouvre pas.
-    expect((prompts[0] as HTMLDetailsElement).open).toBe(false)
-    act(() => {
-      ;(prompts[0] as HTMLDetailsElement).open = true
-    })
-    expect(prompts[0].textContent).toContain('SYSTEME BUILD')
-    expect(prompts[0].textContent).toContain('MESSAGE BUILD')
+    expect(container.querySelector('[data-testid="activity-pipeline-prompt"]')).toBeNull()
+    const lignes = container.querySelectorAll('[data-testid="activity-pipeline-line"]')
+    expect(lignes[1].contains(chevrons[0])).toBe(true)
+    act(() => chevrons[0].click())
+    const prompt = lignes[1].querySelector('[data-testid="activity-pipeline-prompt"]')!
+    expect(prompt.textContent).toContain('SYSTEME BUILD')
+    expect(prompt.textContent).toContain('MESSAGE BUILD')
   })
 
   it('range le prompt d un step sur LA ligne de sa phase ET de son modele', () => {
@@ -123,7 +124,7 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
         ]
       } as ChatPart
     ]
-    const suite = noterPromptDePipeline(parts, {
+    const suite = completerChoixDePipeline(parts, {
       step: 'exec',
       detail: 'phase build',
       model: 'sonnet-4',
@@ -132,7 +133,7 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
     const action = suite[0] as Extract<ChatPart, { kind: 'action' }>
     expect(action.pipeline).toHaveLength(2)
     expect(action.pipeline![0].prompt).toBeUndefined()
-    expect(action.pipeline![1].prompt?.system).toBe('SYSTEME SONNET')
+    expect(action.pipeline![1].prompt).toContain('SYSTEME SONNET')
   })
 
   it('n invente aucune ligne pour un step dont la phase n a pas ete annoncee', () => {
@@ -145,7 +146,7 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
       } as ChatPart
     ]
     // Entree qui doit casser un rapprochement trop permissif : `judge` n'a jamais ete annonce.
-    const suite = noterPromptDePipeline(parts, {
+    const suite = completerChoixDePipeline(parts, {
       step: 'judge',
       detail: 'phase judge',
       model: 'gpt-5',
@@ -153,7 +154,7 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
     })
     expect(suite).toBe(parts)
     // Un step SANS prompt ne touche a rien non plus.
-    expect(noterPromptDePipeline(parts, { step: 'exec', detail: 'phase build' })).toBe(parts)
+    expect(completerChoixDePipeline(parts, { step: 'exec', detail: 'phase build' })).toBe(parts)
     // Une orchestration DEJA close ne bouge plus.
     const close: ChatPart[] = [
       {
@@ -165,7 +166,7 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
       } as ChatPart
     ]
     expect(
-      noterPromptDePipeline(close, { step: 'exec', detail: 'phase build', prompt: enveloppe('X') })
+      completerChoixDePipeline(close, { step: 'exec', detail: 'phase build', prompt: enveloppe('X') })
     ).toBe(close)
   })
 
@@ -178,13 +179,13 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
         pipeline: [{ phase: 'build', model: 'opus-4' }]
       } as ChatPart
     ]
-    const premier = noterPromptDePipeline(parts, {
+    const premier = completerChoixDePipeline(parts, {
       step: 'exec',
       execution: { phase: 'build' },
       model: 'opus-4',
       prompt: enveloppe('UN')
     })
-    const second = noterPromptDePipeline(premier, {
+    const second = completerChoixDePipeline(premier, {
       step: 'exec',
       execution: { phase: 'build' },
       model: 'opus-4',
@@ -192,10 +193,10 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
     })
     const action = second[0] as Extract<ChatPart, { kind: 'action' }>
     expect(action.pipeline).toHaveLength(1)
-    expect(action.pipeline![0].prompt?.system).toBe('SYSTEME DEUX')
+    expect(action.pipeline![0].prompt).toContain('SYSTEME DEUX')
     // Rien de nouveau a dire => meme reference, pas de re-rendu du fil.
     expect(
-      noterPromptDePipeline(second, {
+      completerChoixDePipeline(second, {
         step: 'exec',
         execution: { phase: 'build' },
         model: 'opus-4',
@@ -216,14 +217,14 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
         pipeline: [{ phase: 'kaizen', role: 'subagent', provider: 'claude', model: 'opus' }]
       } as ChatPart
     ]
-    const suite = noterPromptDePipeline(parts, {
+    const suite = completerChoixDePipeline(parts, {
       step: 'exec',
       detail: 'phase build',
       model: 'opus',
       prompt: enveloppe('KAIZEN')
     })
     const action = suite[0] as Extract<ChatPart, { kind: 'action' }>
-    expect(action.pipeline![0].prompt?.system).toBe('SYSTEME KAIZEN')
+    expect(action.pipeline![0].prompt).toContain('SYSTEME KAIZEN')
   })
 
   it('refuse encore quand des lignes portent la phase mais sont indiscernables', () => {
@@ -236,7 +237,7 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
       } as ChatPart
     ]
     expect(
-      noterPromptDePipeline(parts, {
+      completerChoixDePipeline(parts, {
         step: 'exec',
         detail: 'phase build',
         model: 'opus',

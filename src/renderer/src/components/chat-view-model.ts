@@ -361,20 +361,29 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
   for (let i = parts.length - 1; i >= 0; i--) {
     const part = parts[i]
     if (part.kind !== 'action' || part.name !== 'orchestrate') continue
+    // Une orchestration DEJA close (issue rendue ou interrompue) ne se reecrit plus : un step en
+    // retard ne doit pas rouvrir un tour termine.
+    if (part.ok !== undefined || part.interrupted) return parts
     const deja = part.pipeline ?? []
     if (deja.length === 0) return parts
     // Appariement FIN : phase causale + modele, avec refus explicite quand un fan-out rend deux
     // lignes indiscernables — coller le prompt d'un membre sous un autre est pire que rien.
     const index = indexDeLaLignePipeline(deja, phaseDuLigne(step), step.model)
     if (index < 0) return parts
-    const suite = parts.slice()
-    const lignes = deja.slice()
-    lignes[index] = {
-      ...lignes[index],
+    const avant = deja[index]
+    const apres: PipelineChoice = {
+      ...avant,
       ...(prompt ? { prompt } : {}),
       ...(rendu ? { outcome: rendu } : {}),
       ok
     }
+    // RIEN de nouveau a dire => meme reference, pour ne pas re-rendre le fil a chaque battement.
+    if (apres.prompt === avant.prompt && apres.outcome === avant.outcome && apres.ok === avant.ok) {
+      return parts
+    }
+    const suite = parts.slice()
+    const lignes = deja.slice()
+    lignes[index] = apres
     suite[i] = { ...part, pipeline: lignes }
     return suite
   }
