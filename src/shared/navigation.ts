@@ -13,7 +13,15 @@ export const APP_DESTINATIONS = [
 
 export type AppDestination = (typeof APP_DESTINATIONS)[number]['id']
 export type AgentStudioSection = 'topology' | 'routing' | 'workflows'
-export type SettingsSection = 'capabilities' | 'budget' | 'behaviour' | 'providers' | 'preflight'
+export type SettingsSection =
+  | 'capabilities'
+  | 'budget'
+  | 'behaviour'
+  | 'providers'
+  | 'preflight'
+  // Apparence de l'application (mode sombre / clair). Séparée de « behaviour » : régler ce qu'on
+  // VOIT n'est pas régler ce que les agents FONT.
+  | 'interface'
 /**
  * Deux MÉTIERS distincts dans Task Manager, donc deux sections : surveiller des agents (alertes,
  * occurrences ratées) n'est pas éditer des tâches planifiées. Elles s'empilaient sur un seul écran.
@@ -102,6 +110,10 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   hooks: { destination: 'settings', section: 'capabilities' },
   tools: { destination: 'settings', section: 'capabilities' },
   budget: { destination: 'settings', section: 'budget' },
+  interface: { destination: 'settings', section: 'interface' },
+  apparence: { destination: 'settings', section: 'interface' },
+  theme: { destination: 'settings', section: 'interface' },
+  'theme-clair': { destination: 'settings', section: 'interface' },
   behaviour: { destination: 'settings', section: 'behaviour' },
   behavior: { destination: 'settings', section: 'behaviour' },
   // Un agent pilote l'app par des NOMS : sans ces entrées, la séparation Watchdog/Planification ne

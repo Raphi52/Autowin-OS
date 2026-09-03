@@ -129,6 +129,89 @@ describe('WatchdogEngine — observer, filtrer, deleguer', () => {
     expect(engine.lastSuppression(task.id)).toBe('self-conversation')
   })
 
+  /**
+   * BOUT EN BOUT du défaut mesuré le 2026-09-02 : l'utilisateur clique Stop sur une orchestration,
+   * elle finit `red` en le disant honnêtement, et la règle « Auto-kaizen — orchestration rouge »
+   * (la SEULE règle active du poste, `scheduled-tasks.json`) lance un run PAYANT sur cet arrêt voulu.
+   *
+   * Le texte ci-dessous n'est pas inventé : il est composé exactement comme `index.ts:758-766`
+   * compose le contexte d'un `orchestration-red`, et sa « Cause terminale » est le `e.message`
+   * recopié du Journal de
+   * `runs/conv-14/kaizen-conv-13-est-bloquee-mtk5a9fg-workspace/RUN.md`.
+   *
+   * C'est ce niveau-là qui compte : un test sur le seul prédicat ne dirait pas si le texte réel
+   * arrive bien jusqu'à lui.
+   */
+  it('un Stop utilisateur remonté en orchestration rouge ne réveille AUCUN agent', async () => {
+    const dispatch = spy()
+    const task = watchdogTask(logPath, {
+      destination: {
+        kind: 'new',
+        title: 'Auto-kaizen',
+        category: 'Qualite',
+        provider: 'claude',
+        conversationId: 'conv-15'
+      },
+      watchdog: {
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        action: 'orchestration',
+        guards: { dedupWindowMs: 0, maxTriggersPerHour: 100, maxChainDepth: 0, maxPerRoot: 20 }
+      }
+    })
+    const engine = new WatchdogEngine(() => [task], dispatch, clock)
+
+    const causeTerminale =
+      'Phase kaizen — appel du rôle subagent INTERROMPU avant sa fin : [abort] claude CLI ' +
+      "interrompu : arret demande par l'utilisateur (Stop du chat)\nlast-event=none\nstderr=none. " +
+      "Ce n'est pas une panne : ni claude ni le binding du rôle ne sont en cause."
+    await engine.notifyAppEvent(
+      'orchestration-red',
+      "Une orchestration s'est terminée en ROUGE. RUN : .autowin-data/autowin-os/runs/conv-14/" +
+        'kaizen-conv-13-est-bloquee-mtk5a9fg-workspace Conversation : conv-14\n' +
+        `Cause terminale : ${causeTerminale}`,
+      'conv-14'
+    )
+
+    expect(dispatch.calls).toHaveLength(0)
+    expect(engine.lastSuppression(task.id)).toBe('aborted')
+  })
+
+  /**
+   * CONTRÔLE NÉGATIF du test ci-dessus, et c'est lui qui rend la garde acceptable : le même
+   * événement, la même règle, mais une orchestration rouge pour un VRAI défaut doit continuer de
+   * réveiller un agent. Sans cette assertion, élargir la suppression rendrait les vrais échecs
+   * invisibles — le défaut symétrique, et le plus coûteux.
+   */
+  it('CONTRÔLE NÉGATIF : une orchestration rouge sur un vrai défaut réveille toujours un agent', async () => {
+    const dispatch = spy()
+    const task = watchdogTask(logPath, {
+      destination: {
+        kind: 'new',
+        title: 'Auto-kaizen',
+        category: 'Qualite',
+        provider: 'claude',
+        conversationId: 'conv-15'
+      },
+      watchdog: {
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        action: 'orchestration',
+        guards: { dedupWindowMs: 0, maxTriggersPerHour: 100, maxChainDepth: 0, maxPerRoot: 20 }
+      }
+    })
+    const engine = new WatchdogEngine(() => [task], dispatch, clock)
+
+    await engine.notifyAppEvent(
+      'orchestration-red',
+      "Une orchestration s'est terminée en ROUGE. RUN : runs/conv-14/x Conversation : conv-14\n" +
+        'Cause terminale : Le contrôle final a refusé le livrable : 3 tests rouges dans ' +
+        'src/main/models.test.ts — expected 3 to be 4.',
+      'conv-14'
+    )
+
+    expect(dispatch.calls).toHaveLength(1)
+    expect(engine.lastSuppression(task.id)).toBeUndefined()
+  })
+
   it('ne lance jamais deux occurrences de la meme regle en parallele', async () => {
     let release!: () => void
     const calls: WatchdogSignal[] = []

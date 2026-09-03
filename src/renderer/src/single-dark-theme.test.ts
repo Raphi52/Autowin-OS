@@ -12,7 +12,10 @@ describe('single Dark theme contract', () => {
   const topologyCss = read('./components/AgentsTopologyView.css')
 
   it('renders one fixed serious shell without a global Glass control', () => {
-    // Le THÈME GLOBAL reste unique (dark) : aucun sélecteur de thème au niveau App.
+    // Le choix sombre / clair existe désormais (Settings · Interface), mais il ne passe PAS par
+    // App : il pose `data-theme` sur la racine du document depuis `theme-mode.ts`, et les couleurs
+    // claires sont des surcharges de variables dans `theme-modes.css`. La coque garde donc une
+    // classe FIXE, et aucun sélecteur de thème ne remonte au niveau App.
     // Le mode visuel du GRAPHE Memory (sombre/galaxy) est un réglage LOCAL à GraphView,
     // persisté par graph-settings — il ne remonte pas dans App.
     expect(app).toContain('className="shell cosmic-outline theme-serious"')

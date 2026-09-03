@@ -12,3 +12,204 @@
 .theme-serious .brand {
   background: rgba(7, 7, 8, 0.95);
 }
+
+/* ============================================================================
+   MODE CLAIR — activé par l'interrupteur de Settings · Interface, qui pose
+   `data-theme="clair"` sur la racine du document (voir src/renderer/src/theme-mode.ts).
+
+   Rien n'est dupliqué : on REPREND les mêmes variables que `theme.css` avec des valeurs
+   claires. Les surfaces sombres y étaient des noirs semi-transparents ; elles deviennent
+   des blancs semi-transparents, et les filets blancs deviennent noirs — sinon un filet
+   blanc sur fond blanc disparaît.
+
+   `color-scheme: light` est INDISPENSABLE : sans lui, Chromium continue de peindre listes
+   déroulantes, champs et ascenseurs en sombre au milieu d'une page claire — le défaut
+   symétrique de celui corrigé le 2026-09-02 dans theme.css.
+   ============================================================================ */
+:root[data-theme='clair'] {
+  color-scheme: light;
+
+  --bg-0: #f4f5f8;
+  --bg-1: rgba(255, 255, 255, 0.82);
+  --bg-2: rgba(255, 255, 255, 0.7);
+  --bg-3: rgba(15, 20, 35, 0.06);
+  --bg-inset: rgba(255, 255, 255, 0.92);
+
+  --line: rgba(18, 24, 40, 0.16);
+  --line-strong: rgba(18, 24, 40, 0.34);
+
+  --text: #14192a;
+  --text-dim: #4d5567;
+  --text-faint: #767f92;
+
+  /* Or et rose ASSOMBRIS : les teintes de nuit passaient sous le seuil de lisibilité
+     sur fond clair (jaune pâle sur blanc). Même rôle, même famille, plus de contraste. */
+  --gold: #9a6f10;
+  --gold-bright: #b4841c;
+  --gold-doux: #8c6412;
+  --gold-clair: #a3760f;
+  --rose: #c81a6c;
+  --rose-bright: #a81259;
+  --cyan: #0f6f9c;
+  --accent: var(--rose);
+  --accent-dim: #f3c9dd;
+  --accent-soft: rgba(200, 26, 108, 0.1);
+
+  --ok: #3f7a2e;
+  --warn: #9a6f10;
+  --err: #b23a34;
+  --info: #0f6f9c;
+  --violet: #5a48c8;
+}
+
+/* Le fond de page : plus d'image cosmique ni de voile noir en mode clair. */
+:root[data-theme='clair'] body {
+  background: var(--bg-0);
+  color: var(--text);
+}
+/* Grain + nappe et voile de vignettage : pensés pour du noir, ils salissent un fond clair. */
+:root[data-theme='clair'] body::before,
+:root[data-theme='clair'] body::after {
+  display: none;
+}
+
+/* Le menu de gauche était noir EN DUR (voir plus haut) : il faut le reprendre ici,
+   sinon un rail noir reste collé à une application claire. */
+:root[data-theme='clair'] .theme-serious .rail {
+  background: #ffffff;
+  border-right-color: var(--line);
+}
+:root[data-theme='clair'] .theme-serious .brand {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* Bouton d'accent : texte blanc sur rose foncé, contraste conservé. */
+:root[data-theme='clair'] .btn-accent {
+  color: #ffffff;
+}
+
+/* ----------------------------------------------------------------------------
+   SURFACES — la SECONDE famille de variables, celle qui peint réellement les
+   panneaux (`ui-system.css` l.3-33). Elle est posée sur `.shell` / `.shell.theme-serious`,
+   donc les valeurs claires de `:root[data-theme='clair']` ne l'atteignaient PAS :
+   le panneau central restait noir pendant que le texte passait en sombre — illisible.
+   Constat écran du 2026-09-03. On reprend donc les mêmes sélecteurs, préfixés par la
+   racine claire pour rester plus spécifiques.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .shell,
+:root[data-theme='clair'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(255, 255, 255, 0.96);
+  --surface-card: rgba(255, 255, 255, 0.9);
+  --surface-inset: rgba(15, 20, 35, 0.05);
+  --surface-hover: rgba(15, 20, 35, 0.05);
+  --surface-selected: rgba(200, 26, 108, 0.09);
+  --container-border: rgba(18, 24, 40, 0.16);
+  --container-border-strong: rgba(18, 24, 40, 0.32);
+  --container-shadow: none;
+}
+
+/* Le titre de l'application était `#fff` EN DUR (app-shell.css) : blanc sur blanc. */
+:root[data-theme='clair'] .brand-name {
+  color: #10131c;
+  text-shadow: none;
+}
+
+/* ----------------------------------------------------------------------------
+   CHAT — la liste des conversations est peinte en NOIR EN DUR
+   (`cosmic-outline.css` l.250 : `background: var(--lisere-haut), #000`), avec un
+   commentaire qui prévient que toute autre règle serait du code mort. C'est donc
+   ICI qu'il faut la reprendre, sinon un panneau noir reste collé au chat clair.
+   Les filets blancs des panneaux de chat deviennent sombres pour la même raison :
+   un filet blanc sur fond blanc n'existe pas.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .cosmic-outline .conv-pane {
+  background: #ffffff;
+  border-color: var(--line);
+  border-right-color: var(--line);
+}
+:root[data-theme='clair'] .cosmic-outline .chat,
+:root[data-theme='clair'] .cosmic-outline .chat-head,
+:root[data-theme='clair'] .cosmic-outline .chat-layout,
+:root[data-theme='clair'] .cosmic-outline .runs-pane {
+  border-color: var(--line);
+}
+:root[data-theme='clair'] .cosmic-outline .conv-search,
+:root[data-theme='clair'] .cosmic-outline .chat-head .btn,
+:root[data-theme='clair'] .cosmic-outline .chat-suggest .btn,
+:root[data-theme='clair'] .cosmic-outline .composer-field {
+  border-color: var(--line);
+}
+
+/* ----------------------------------------------------------------------------
+   TEXTE DES MESSAGES — écrit en clair EN DUR dans `cosmic-outline.css` :
+   `#e1e7ec` pour l'agent (l.509), `#fff4fa` pour l'utilisateur (l.519), `#73808c`
+   pour la ligne de rôle (l.496). Sur fond blanc ces valeurs devenaient presque
+   invisibles : c'est le vrai défaut de lisibilité du chat clair, pas les cartes
+   sombres (elles gardent leur texte clair et restent lisibles).
+   La bulle de l'utilisateur avait un fond violet foncé : elle passe en rose pâle
+   avec un texte sombre, sinon son texte assombri disparaîtrait dedans.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .cosmic-outline .msg.assistant .msg-body {
+  color: var(--text);
+  border-left-color: var(--gold);
+}
+:root[data-theme='clair'] .cosmic-outline .msg.user .msg-body {
+  background: rgba(200, 26, 108, 0.08);
+  border-color: rgba(200, 26, 108, 0.35);
+  color: #3d0a24;
+}
+:root[data-theme='clair'] .cosmic-outline .msg-meta {
+  color: var(--text-dim);
+}
+
+/* Zone de saisie du bas : elle héritait d'un gris de nuit. */
+:root[data-theme='clair'] .cosmic-outline .composer {
+  background: var(--bg-0);
+}
+:root[data-theme='clair'] .cosmic-outline .composer-field {
+  background: #ffffff;
+}
+:root[data-theme='clair'] .cosmic-outline .composer-field textarea {
+  color: var(--text);
+}
+
+/* Liste de conversations : titres `#dce6ee` et métadonnées `#65778a` en dur
+   (`ChatView.css` l.1775 et l.1784) — presque blancs sur le panneau devenu blanc. */
+:root[data-theme='clair'] .cosmic-outline .conv-label {
+  color: var(--text);
+}
+:root[data-theme='clair'] .cosmic-outline .conv-meta,
+:root[data-theme='clair'] .cosmic-outline .conv-snippet {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .cosmic-outline .conv-group-label {
+  color: var(--text-dim);
+}
+
+/* Bandeau d'alerte en haut du fil (travaux non publiés) : fond noir plein. */
+:root[data-theme='clair'] .chat-workflow-notice,
+:root[data-theme='clair'] .chat-travail-non-publie {
+  background: rgba(154, 111, 16, 0.08);
+  border-color: rgba(154, 111, 16, 0.35);
+  color: var(--text);
+}
+
+/* Cartes de pièces jointes : elles restaient des blocs noirs posés sur la page claire. */
+:root[data-theme='clair'] .artifact-preview {
+  background: #ffffff;
+  border-color: var(--line);
+}
+/* Les textes internes de la carte sont écrits en clair EN DUR dans ArtifactPreview.css
+   (#eef0f5, #d7dae2, #8d94a2…) : éclaircir le fond sans les reprendre rend la carte
+   blanche sur blanc — constaté à l'écran le 2026-09-03. */
+:root[data-theme='clair'] .artifact-preview,
+:root[data-theme='clair'] .artifact-preview * {
+  color: var(--text);
+}
+/* Même piège pour les boutons du bandeau (« Traiter », « Voir la liste »). */
+:root[data-theme='clair'] .chat-workflow-notice button,
+:root[data-theme='clair'] .chat-travail-non-publie button {
+  color: var(--text);
+  border-color: rgba(154, 111, 16, 0.45);
+}
