@@ -60,7 +60,8 @@
   position: absolute;
   top: 50%;
   left: min(var(--quota-fill, 0%), calc(100% - 26px));
-  margin-left: 5px;
+  /* Aucun ecart : la pastille TOUCHE le bout de la portion coloree (demande utilisateur). */
+  margin-left: -1px;
   padding: 1px 6px;
   border: 1px solid color-mix(in srgb, var(--quota-color, #35d07f) 45%, transparent);
   border-radius: 999px;
