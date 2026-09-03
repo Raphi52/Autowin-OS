@@ -22,9 +22,7 @@ async function monter(section: 'interface' | 'behaviour' = 'interface') {
   const root = createRoot(container)
   mounted.push({ root, container })
   await act(async () => {
-    root.render(
-      createElement(SettingsView, { active: true, section, onSectionChange: vi.fn() })
-    )
+    root.render(createElement(SettingsView, { active: true, section, onSectionChange: vi.fn() }))
   })
   return container
 }
