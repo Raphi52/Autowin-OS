@@ -1233,6 +1233,12 @@ export function ChatView({
    * Un nouvel envoi BTW, lui, se range derriere les BTW deja presents (ordre d'arrivee conserve).
    */
   function enqueueMessage(id: string, text: string, mode?: QueuedDirective['mode']): void {
+    // Un texte qui arrive en file APRES un Stop est un geste explicite de l'utilisateur : il LEVE le
+    // gel one-shot pose par Stop. Sans cette ligne, « stop puis j'ecris dans la foulee » perdait le
+    // message — le tour n'etait pas encore retombe, l'injection echouait, la file recevait le texte
+    // et la transition busy→false l'avalait au titre du gel (constate le 03/09). Le gel ne doit
+    // arreter QUE la relance automatique de ce qui restait en file, jamais une nouvelle demande.
+    stoppedQueueDrainRef.current.delete(id)
     const current = queueRef.current.get(id) ?? []
     const entry = { id: nextQueueEntryIdRef.current++, text, mode }
     if (mode === 'btw') {

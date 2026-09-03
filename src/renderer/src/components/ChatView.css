@@ -3468,6 +3468,7 @@ ol.md-list li {
 /* Le prompt d'une phase reste un niveau SECONDAIRE : legerement en retrait, replie par defaut. */
 .activity-step-pipeline .prompt-envelope {
   margin: 2px 0 4px 10px;
+}
 .activity-step-pipeline li.is-depliable .activity-pipeline-head {
   cursor: default;
 }
