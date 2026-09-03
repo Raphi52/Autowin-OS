@@ -101,9 +101,13 @@ describe('ConversationCostIndicator — la dépense est à l’écran', () => {
       ]
     })
     await render({ conversationId: 'conv-unpriced' })
-    expect(
-      container.querySelector('[data-testid="conversation-cost-total"]')?.textContent
-    ).toContain('non expos')
+    const totalNonChiffre = container.querySelector(
+      '[data-testid="conversation-cost-total"]'
+    )?.textContent
+    // Demande utilisateur du 2026-09-03 : plus jamais « non exposé ». Rien n'étant récupérable ici
+    // (aucun modèle, aucune session), l'indicateur COMPTE ce qui manque au lieu de l'avouer.
+    expect(totalNonChiffre).toContain('1 appel non chiffré')
+    expect(totalNonChiffre).not.toContain('non exposé')
   })
 
   it('rien dépensé → l’indicateur ne s’affiche PAS (aucun faux « 0 $ »)', async () => {
@@ -204,18 +208,17 @@ describe('ConversationCostIndicator — la dépense est à l’écran', () => {
     })
     await render({ conversationId: 'conv-76' })
     await act(async () =>
-      container
-        .querySelector<HTMLButtonElement>('[data-testid="conversation-cost-total"]')
-        ?.click()
+      container.querySelector<HTMLButtonElement>('[data-testid="conversation-cost-total"]')?.click()
     )
     await flush()
     const total = container.querySelector('[data-testid="conversation-cost-total"]')?.textContent
     const ligne = container.querySelector(
       '[data-testid="conversation-cost-row-codex"] .conv-cost-amount'
     )?.textContent
-    expect(total).toContain('non exposé')
-    expect(ligne).toContain('non exposé')
+    expect(total).toContain('2 appels non chiffrés')
+    expect(ligne).toContain('2 appels non chiffrés')
+    expect(total).not.toContain('non exposé')
+    expect(ligne).not.toContain('non exposé')
     expect(ligne).not.toContain('inconnu')
   })
-
 })

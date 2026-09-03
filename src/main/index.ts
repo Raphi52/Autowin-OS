@@ -163,9 +163,11 @@ import {
   deletePromptCalls,
   loadAllPromptCalls,
   loadPromptCalls,
+  applyRecoveredUsage,
   costSamplesFrom,
   summarizeCostSamples
 } from './activity/prompt-observability'
+import { recoverUnpricedCallsUsage } from './activity/cli-usage-recovery'
 import { promptCallToTraceEvents } from './activity/prompt-call-trace'
 import { appendObservedOrchestrationOutcome } from './activity/orchestration-outcome-trace'
 import { executionCostCoverageFields } from '../shared/orchestration-outcome'
@@ -3105,7 +3107,14 @@ Le fil reprend ensuite normalement.`
       // LES DEUX journaux : les sous-agents les plus couteux n'existent que dans l'activite
       // (mesure conv-75 : 2,83 $ vus contre ~20,70 $ reels). costSamplesFrom deduplique.
       const activity = id ? loadConvActivity(id) : []
-      return summarizeCostSamples(costSamplesFrom(calls, activity), dim as (typeof allowed)[number])
+      // Un appel tue par le watchdog meurt avant l'event `result` : le journal n'a ni tokens ni
+      // prix, et l'indicateur affichait « 4,20 $ + non expose ». Ces chiffres existent dans le
+      // transcript du CLI — on va les y relire avant de resumer, plutot que d'avouer une absence.
+      const recovered = recoverUnpricedCallsUsage(calls)
+      return summarizeCostSamples(
+        applyRecoveredUsage(costSamplesFrom(calls, activity), recovered),
+        dim as (typeof allowed)[number]
+      )
     }
   )
   const loadNativeTraces = (): ReturnType<typeof readNativePreflight> => {

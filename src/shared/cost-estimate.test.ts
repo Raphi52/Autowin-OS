@@ -297,7 +297,9 @@ describe('resolveCostCoverage — une seule réponse à « combien a coûté cec
 
     // Le trio délibéré est préservé mot pour mot.
     expect(outcome).toBe('110k tokens · tarif non exposé · 2 appels non chiffrés')
-    expect(conversation.label).toBe('coût non exposé')
+    // L'indicateur de conversation ne dit plus « non exposé » (demande utilisateur du
+    // 2026-09-03) : il COMPTE ce qui manque. Les autres surfaces gardent le trio mot pour mot.
+    expect(conversation.label).toBe('2 appels non chiffrés')
     expect(conversation.label).not.toMatch(/0,00 \$|0\.00 \$/)
     expect(outcome).not.toMatch(/0,00 \$|0\.00 \$/)
     expect(aggregator.budgetStatus().coverage.estimatedUsd).toBeUndefined()
