@@ -268,7 +268,27 @@
   padding: 12px 14px;
   border: 1px solid rgba(18, 24, 40, 0.14);
   border-radius: 10px;
-  background: #12161f;
+  background: transparent;
+}
+/* REVIREMENT du 2026-09-03 : le fond sombre `#12161f` pose plus tot dans la
+   journee a ete REFUSE par l'utilisateur — « une reponse bien trop sombre ».
+   La mini-page devient donc CLAIRE, et on ecrase les couleurs de nuit que le
+   modele ecrit EN LIGNE dans son HTML : un style en ligne ne bat pas `!important`,
+   c'est le seul levier depuis une feuille de style.
+   COUT ASSUME : les accents dores passent en sombre ici — l'or pale sur blanc ne
+   se lit pas. La lisibilite prime sur la couleur d'accent. */
+:root[data-theme='clair'] .md-html,
+:root[data-theme='clair'] .md-html * {
+  color: #1b2130 !important;
+  background-color: transparent !important;
+  border-color: rgba(18, 24, 40, 0.16) !important;
+}
+/* Les puces monospace (chemins, valeurs) garderaient sinon un fond invisible et
+   se confondraient avec le texte courant : gris tres leger pour les detacher. */
+:root[data-theme='clair'] .md-html code,
+:root[data-theme='clair'] .md-html kbd,
+:root[data-theme='clair'] .md-html pre {
+  background-color: rgba(18, 24, 40, 0.05) !important;
 }
 
 /* Le bloc de clôture (Fait / Maintenant / Reste à faire / Recommandé) en thème
