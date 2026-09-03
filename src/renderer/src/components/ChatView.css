@@ -970,6 +970,17 @@
     inset 0 0 0 1px rgba(255, 226, 163, 0.06),
     0 0 18px rgba(203, 145, 43, 0.08);
 }
+/* MODE CLAIR — le fond ci-dessus est un dégradé EN DUR qui finit sur un brun-noir
+   à 76 %, et son halo doré est pensé pour du noir : aucune variable de thème, donc
+   le bloc restait sombre au milieu d'une page claire (signalé le 2026-09-03).
+   Cette règle vient APRÈS la règle d'origine, jamais avant : `ChatView.style.test.ts`
+   lit la PREMIÈRE `.md-final-summary` du fichier pour vérifier son cadre doré. */
+:root[data-theme='clair'] .md-final-summary {
+  background: linear-gradient(145deg, rgba(154, 111, 16, 0.1), rgba(255, 253, 247, 0.96));
+  border-color: rgba(154, 111, 16, 0.42);
+  color: var(--text);
+  box-shadow: none;
+}
 .md-final-summary:first-child {
   margin-top: 0;
 }
