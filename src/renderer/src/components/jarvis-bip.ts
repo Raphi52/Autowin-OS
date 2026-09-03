@@ -57,9 +57,3 @@ export function jouerBipEveil(): boolean {
     return false
   }
 }
-
-/** Pour les tests et le démontage : repart d'un contexte neuf. */
-export function reinitialiserBip(): void {
-  void contexte?.close?.()
-  contexte = null
-}

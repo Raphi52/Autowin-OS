@@ -181,9 +181,6 @@ export function trierParRecenceUtilisateur<T extends ConversationSearchSource>(
   })
 }
 
-/** Clé stable de la catégorie « Récentes » — sert d'identité à son repli persisté. */
-export const GROUPE_RECENTES = 'recentes'
-
 /** Combien de conversations la catégorie « Récentes » affiche au plus. */
 export const RECENTES_AFFICHEES = 20
 
