@@ -456,6 +456,25 @@ describe('ExecutionSupervisor', () => {
       )
     ).rejects.toThrow(/appel.*actif|reprise.*active/i)
 
+    /*
+     * LE REFUS DOIT NOMMER SA SUITE.
+     *
+     * conv-18, tour 6c581550-6be5-47cf-8c11-41901d4d885a (journal du tour, delta a 1788425682673) :
+     * l'agent recoit « Reprise refusee : 1 appel(s) provider encore actif(s). », en conclut « je ne
+     * peux pas relancer un run dans ce tour », et ecrit la fonctionnalite A LA MAIN dans le depot
+     * reel (`cat > src/shared/reprise-surcharge.ts`). Le refus etait pourtant transitoire : la meme
+     * demande a demarre 2 minutes plus tard (run-70137bee6f8d-1). Un refus qui ne dit pas qu'il est
+     * temporaire se lit comme une impossibilite, et fait contourner le pipeline.
+     */
+    await expect(
+      supervisor.run(
+        quote,
+        undefined,
+        () => registry.send('counted', [{ role: 'user', content: 'reprise concurrente' }]),
+        prior
+      )
+    ).rejects.toThrow(/transitoire[\s\S]*relanc/i)
+
     expect(provider.calls).toBe(0)
     expect(supervisor.lastSnapshot()).toMatchObject({ activeCalls: 1, startedCalls: 1 })
   })
