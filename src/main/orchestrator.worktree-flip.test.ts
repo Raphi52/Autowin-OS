@@ -1011,9 +1011,19 @@ describe('Orchestrator — flip live worktree', () => {
       expect(result.gateReasons).toContain('intégration locale non terminée')
       // Sans la CAUSE, un run rouge est indiagnosticable : constate le 2026-08-10 sur conv-1080,
       // deux runs verts consécutifs bloqués par une base sale sans que le RUN.md ne le dise.
-      expect(result.gateReasons).toContain(
-        'blocage d’intégration: base-dirty — fichiers en cause: src/a.ts'
+      // On exige les TROIS informations, pas une phrase au mot près : la catégorie, les fichiers,
+      // et le sens en clair du code. Le 2026-09-03, `raison-de-blocage.ts` a ajouté la traduction
+      // (« des fichiers non committés de la base bloquent la publication ») parce que `base-dirty`
+      // seul avait fait inventer une cause fausse à un lecteur. Ce test, resté sur l'ancienne
+      // formulation exacte, tombait alors que le produit s'était AMÉLIORÉ — une assertion trop
+      // serrée transforme un progrès en régression apparente.
+      const blocage = result.gateReasons.find((raison) =>
+        raison.startsWith('blocage d’intégration:')
       )
+      expect(blocage).toBeDefined()
+      expect(blocage).toContain('base-dirty')
+      expect(blocage).toContain('fichiers en cause: src/a.ts')
+      expect(blocage).toContain('non committés de la base')
       expect(onRunSettled).not.toHaveBeenCalled()
       expect(close).not.toHaveBeenCalled()
     })
