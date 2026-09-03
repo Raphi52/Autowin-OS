@@ -1,4 +1,5 @@
 /* Theme modes select mood only. Component geometry lives in ui-system.css. */
+/* Deux modes vivent ici : `.theme-serious` (nuit, par défaut) et `:root[data-theme="clair"]`. */
 /* Backdrop de page transparent : les bords / espaces hors containers laissent voir le fond cosmique. */
 .theme-serious .main {
   background: transparent;
