@@ -87,3 +87,56 @@
 :root[data-theme='clair'] .btn-accent {
   color: #ffffff;
 }
+
+/* ----------------------------------------------------------------------------
+   SURFACES — la SECONDE famille de variables, celle qui peint réellement les
+   panneaux (`ui-system.css` l.3-33). Elle est posée sur `.shell` / `.shell.theme-serious`,
+   donc les valeurs claires de `:root[data-theme='clair']` ne l'atteignaient PAS :
+   le panneau central restait noir pendant que le texte passait en sombre — illisible.
+   Constat écran du 2026-09-03. On reprend donc les mêmes sélecteurs, préfixés par la
+   racine claire pour rester plus spécifiques.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .shell,
+:root[data-theme='clair'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(255, 255, 255, 0.96);
+  --surface-card: rgba(255, 255, 255, 0.9);
+  --surface-inset: rgba(15, 20, 35, 0.05);
+  --surface-hover: rgba(15, 20, 35, 0.05);
+  --surface-selected: rgba(200, 26, 108, 0.09);
+  --container-border: rgba(18, 24, 40, 0.16);
+  --container-border-strong: rgba(18, 24, 40, 0.32);
+  --container-shadow: none;
+}
+
+/* Le titre de l'application était `#fff` EN DUR (app-shell.css) : blanc sur blanc. */
+:root[data-theme='clair'] .brand-name {
+  color: #10131c;
+  text-shadow: none;
+}
+
+/* ----------------------------------------------------------------------------
+   CHAT — la liste des conversations est peinte en NOIR EN DUR
+   (`cosmic-outline.css` l.250 : `background: var(--lisere-haut), #000`), avec un
+   commentaire qui prévient que toute autre règle serait du code mort. C'est donc
+   ICI qu'il faut la reprendre, sinon un panneau noir reste collé au chat clair.
+   Les filets blancs des panneaux de chat deviennent sombres pour la même raison :
+   un filet blanc sur fond blanc n'existe pas.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .cosmic-outline .conv-pane {
+  background: #ffffff;
+  border-color: var(--line);
+  border-right-color: var(--line);
+}
+:root[data-theme='clair'] .cosmic-outline .chat,
+:root[data-theme='clair'] .cosmic-outline .chat-head,
+:root[data-theme='clair'] .cosmic-outline .chat-layout,
+:root[data-theme='clair'] .cosmic-outline .runs-pane {
+  border-color: var(--line);
+}
+:root[data-theme='clair'] .cosmic-outline .conv-search,
+:root[data-theme='clair'] .cosmic-outline .chat-head .btn,
+:root[data-theme='clair'] .cosmic-outline .chat-suggest .btn,
+:root[data-theme='clair'] .cosmic-outline .composer-field {
+  border-color: var(--line);
+}
