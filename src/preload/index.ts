@@ -527,6 +527,12 @@ const api = {
   /** Ouvre un element (message ou rendez-vous) dans Outlook, par son identifiant. */
   outlookOuvrir: (id: string): Promise<{ ok: boolean; erreur?: string }> =>
     ipcRenderer.invoke('outlook:ouvrir', id),
+  /**
+   * REPOND a un message et ENVOIE la reponse. Irreversible : l'appelant doit avoir fait confirmer.
+   * Canal distinct de la lecture et de l'ouverture, parce que c'est le seul qui ecrit.
+   */
+  outlookRepondre: (id: string, corps: string): Promise<{ ok: boolean; erreur?: string }> =>
+    ipcRenderer.invoke('outlook:repondre', id, corps),
   taskManagerCreate: (task: unknown): Promise<ScheduledTask> =>
     ipcRenderer.invoke('task-manager:create', task),
   taskManagerUpdate: (id: string, task: unknown): Promise<ScheduledTask> =>

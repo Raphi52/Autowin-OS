@@ -408,4 +408,54 @@ describe('indicateur de quotas modèles', () => {
     expect(modelQuotas).toHaveBeenCalledTimes(1)
     await act(async () => root.unmount())
   })
+  it('recharge le quota quand le compte actif change (signal autowin:quotas-stale)', async () => {
+    const snapshot = (remaining: number): unknown => ({
+      observedAt: '2026-07-24T01:00:00.000Z',
+      summary: { remainingPercent: remaining, status: 'healthy' },
+      models: [
+        {
+          modelId: 'claude/opus',
+          model: 'opus',
+          label: 'Claude Opus',
+          provider: 'claude',
+          shared: true,
+          status: 'fresh',
+          source: 'Claude /usage',
+          observedAt: '2026-07-24T01:00:00.000Z',
+          windows: [
+            {
+              id: 'five-hour',
+              label: '5 h',
+              usedPercent: 100 - remaining,
+              remainingPercent: remaining,
+              resetsAt: '2026-07-24T05:00:00.000Z'
+            }
+          ]
+        }
+      ]
+    })
+    const modelQuotas = vi
+      .fn()
+      .mockResolvedValueOnce(snapshot(12))
+      .mockResolvedValue(snapshot(88))
+    Object.defineProperty(window, 'api', { configurable: true, value: { modelQuotas } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ModelQuotaIndicator, { provider: 'claude' }))
+      await Promise.resolve()
+    })
+    const trigger = container.querySelector(
+      '[data-testid="model-quota-trigger"]'
+    ) as HTMLButtonElement
+    expect(trigger.textContent).toContain('12')
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('autowin:quotas-stale'))
+      await Promise.resolve()
+    })
+    expect(trigger.textContent).toContain('88')
+    await act(async () => root.unmount())
+  })
 })

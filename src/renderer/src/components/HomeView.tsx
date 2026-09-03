@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import {
   formatEventDay,
   formatEventTime,
-  formatExchangeDate,
   groupByInterlocutor,
   parseOutlookResult,
   splitByExchange,
@@ -57,6 +56,7 @@ import {
 import { autowinStorageKey } from '../storage-keys'
 import { JarvisWidget } from './JarvisWidget'
 import { EnregistrementsWidget } from './EnregistrementsWidget'
+import { InterlocuteursWidget } from './InterlocuteursWidget'
 import './HomeView.css'
 import { Spinner } from './Spinner'
 
@@ -632,6 +632,35 @@ export function HomeView({
     }
   }, [])
 
+  /**
+   * ENVOIE une réponse à un message Outlook.
+   *
+   * Le seul chemin de cette page qui écrit quelque part. La confirmation est demandée par la tuile,
+   * juste au-dessus du bouton : c'est là que l'utilisateur regarde. Le résultat est RENDU à
+   * l'appelant plutôt qu'affiché ici — la tuile doit pouvoir dire « envoyé » à l'endroit exact où
+   * l'utilisateur vient de cliquer.
+   */
+  const repondreDansOutlook = useCallback(
+    async (id: string, corps: string): Promise<{ ok: boolean; erreur?: string }> => {
+      const api = (
+        window as unknown as {
+          api?: {
+            outlookRepondre?: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+          }
+        }
+      ).api
+      if (!api?.outlookRepondre) {
+        return { ok: false, erreur: 'Cette version ne sait pas encore répondre depuis Outlook.' }
+      }
+      try {
+        return await api.outlookRepondre(id, corps)
+      } catch (error) {
+        return { ok: false, erreur: error instanceof Error ? error.message : String(error) }
+      }
+    },
+    []
+  )
+
   /** Acquitte une alerte d'agent depuis l'accueil, sans aller la chercher ailleurs. */
   const acquitter = useCallback(async (alertId: string): Promise<void> => {
     const api = (
@@ -907,6 +936,7 @@ export function HomeView({
                 enAttente={enAttente}
                 onOuvrirConversation={ouvrirConversation}
                 onOuvrir={ouvrirDansOutlook}
+                onRepondre={repondreDansOutlook}
                 onAcquitter={acquitter}
                 ouvertureEnCours={ouvertureEnCours}
               />
@@ -939,6 +969,7 @@ function WidgetBody({
   enAttente,
   onOuvrirConversation,
   onOuvrir,
+  onRepondre,
   onAcquitter,
   ouvertureEnCours
 }: {
@@ -953,6 +984,7 @@ function WidgetBody({
   enAttente: readonly ConversationEnAttente[]
   onOuvrirConversation: (id: string) => void
   onOuvrir: (id: string) => Promise<void>
+  onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
   onAcquitter: (alertId: string) => Promise<void>
   ouvertureEnCours: string | null
 }): React.JSX.Element {
@@ -986,11 +1018,12 @@ function WidgetBody({
       return <p className="home-error">Outlook injoignable : {outlook.cause}</p>
     }
     return id === 'mails' ? (
-      <InterlocuteursList
+      <InterlocuteursWidget
         fils={outlook.fils}
         now={now}
         onOuvrir={onOuvrir}
         ouvertureEnCours={ouvertureEnCours}
+        onRepondre={onRepondre}
       />
     ) : (
       <AgendaList agenda={outlook.agenda} onOuvrir={onOuvrir} ouvertureEnCours={ouvertureEnCours} />
@@ -1086,113 +1119,6 @@ function WidgetBody({
   )
 }
 
-/**
- * Les interlocuteurs : un fil par contact, non lus en tête, comme une messagerie.
- *
- * Les PERSONNES d'abord, les automates ensuite et annoncés comme tels. Mesure du 2026-08-21 en
- * pilotant l'app sur une vraie boîte : sur 23 émetteurs, 3 étaient des personnes — le reste était
- * des codes à usage unique, des ajouts à des groupes et des robots de suivi. Un widget qui promet
- * « mes échanges par interlocuteur » et livre cela rate sa promesse.
- */
-function InterlocuteursList({
-  fils,
-  now,
-  onOuvrir,
-  ouvertureEnCours
-}: {
-  fils: Interlocuteur[]
-  now: number
-  onOuvrir: (id: string) => Promise<void>
-  ouvertureEnCours: string | null
-}): React.JSX.Element {
-  if (fils.length === 0) {
-    return <p className="home-hint">Aucun message dans votre boîte de réception.</p>
-  }
-  const { personnes, automates, indistinct } = splitByExchange(fils)
-  return (
-    <>
-      {personnes.length > 0 ? (
-        <FilsList
-          fils={personnes}
-          now={now}
-          onOuvrir={onOuvrir}
-          ouvertureEnCours={ouvertureEnCours}
-        />
-      ) : null}
-      {personnes.length === 0 && !indistinct ? (
-        <p className="home-hint">
-          Aucun message d’une personne à qui vous avez déjà écrit. Ci-dessous, les envois
-          automatiques.
-        </p>
-      ) : null}
-      {automates.length > 0 ? (
-        <>
-          {/* Nommé, pas masqué : ces messages existent, ils ne sont simplement pas des échanges. */}
-          <p className="home-subhead">Envois automatiques</p>
-          <FilsList
-            fils={automates}
-            now={now}
-            onOuvrir={onOuvrir}
-            ouvertureEnCours={ouvertureEnCours}
-          />
-        </>
-      ) : null}
-    </>
-  )
-}
-
-function FilsList({
-  fils,
-  now,
-  onOuvrir,
-  ouvertureEnCours
-}: {
-  fils: Interlocuteur[]
-  now: number
-  onOuvrir: (id: string) => Promise<void>
-  ouvertureEnCours: string | null
-}): React.JSX.Element {
-  return (
-    <ul className="home-threads">
-      {fils.map((fil) => {
-        const dernier = fil.messages[0]
-        return (
-          <li
-            key={fil.cle}
-            data-unread={fil.nonLus > 0 ? 'true' : undefined}
-            data-echange={fil.echange === true ? 'true' : undefined}
-          >
-            {/* Un VRAI bouton, pas un `<li>` décoré : l'accueil informait puis renvoyait chercher
-                l'élément à la main dans Outlook. Relevé en pilotant l'app ET par le scout (score 82). */}
-            <button
-              type="button"
-              className="home-threads__ouvrir"
-              onClick={() => void onOuvrir(dernier?.id ?? '')}
-              disabled={!dernier || ouvertureEnCours === dernier.id}
-              title={`Ouvrir dans Outlook — ${fil.adresse || fil.nom}`}
-              data-testid={`home-ouvrir-mail-${fil.cle}`}
-            >
-              <span className="home-threads__who" aria-hidden="true">
-                {initiales(fil.nom)}
-              </span>
-              <span className="home-threads__lines">
-                <span className="home-threads__name">
-                  <b>{fil.nom}</b>
-                  <em>{formatExchangeDate(fil.dernierEchange, now)}</em>
-                </span>
-                <span className="home-threads__last">
-                  {ouvertureEnCours === dernier?.id ? 'Ouverture…' : dernier?.sujet}
-                </span>
-              </span>
-              {/* Le compte du fil, pas celui de la boîte : c'est ce qui reste à lire CHEZ ce contact. */}
-              {fil.nonLus > 0 ? <span className="home-threads__tally">{fil.nonLus}</span> : null}
-            </button>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
 
 /**
  * Les conversations qui ATTENDENT une reprise, une ligne cliquable chacune.
@@ -1232,17 +1158,6 @@ function ConversationsEnAttenteList({
       ))}
     </ul>
   )
-}
-
-/** Deux ou trois initiales tirées du nom affiché, pour tenir dans une pastille. */
-function initiales(nom: string): string {
-  const mots = nom
-    .replace(/[<>()"]/g, ' ')
-    .split(/[\s.,;]+/)
-    .filter((mot) => mot.length > 0)
-  if (mots.length === 0) return '?'
-  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase()
-  return (mots[0][0] + mots[mots.length - 1][0]).toUpperCase()
 }
 
 /** L'agenda : le PROCHAIN rendez-vous en tête, puis le reste d'aujourd'hui et de la semaine. */

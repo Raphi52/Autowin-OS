@@ -130,8 +130,7 @@ export function searchConversations<T extends ConversationSearchSource>(
         {
           conversation,
           matchedIn: titleMatches ? ('title' as const) : ('message' as const),
-          snippet:
-            matchingIdx >= 0 ? excerpt(messages[matchingIdx].content, query) : extraitDistant
+          snippet: matchingIdx >= 0 ? excerpt(messages[matchingIdx].content, query) : extraitDistant
         }
       ]
     })
@@ -280,4 +279,13 @@ export function segmentsSurlignes(
     }
   }
   return segments
+}
+
+/**
+ * La MEME repliure de texte que la recherche de la liste (minuscules, accents retires), exposee
+ * pour la recherche DANS un fil (`chat-find.ts`). Reexportee plutot que recopiee : deux replis
+ * differents feraient trouver « À jour » ici et pas la.
+ */
+export function replierPourRecherche(value: unknown): string {
+  return normalize(value)
 }

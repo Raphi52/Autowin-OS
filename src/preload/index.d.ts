@@ -421,6 +421,8 @@ interface ChatApi {
   taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
   outlookSnapshot: (force?: boolean) => Promise<unknown>
   outlookOuvrir: (id: string) => Promise<{ ok: boolean; erreur?: string }>
+  /** Envoie une réponse à un message Outlook. Irréversible : à confirmer avant l'appel. */
+  outlookRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
   taskManagerCreate: (task: unknown) => Promise<ScheduledTask>
   taskManagerUpdate: (id: string, task: unknown) => Promise<ScheduledTask>
   taskManagerRemove: (id: string) => Promise<boolean>

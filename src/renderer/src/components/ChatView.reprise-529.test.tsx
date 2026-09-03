@@ -147,3 +147,91 @@ describe('reprise automatique après un 529', () => {
     expect(pilotChat).toHaveBeenCalledTimes(1)
   })
 })
+
+/**
+ * SURCHARGE LIVRÉE COMME RÉPONSE (mesuré le 2026-09-03, conv-28). Le tour ne signale AUCUNE erreur :
+ * le fournisseur a « répondu » le texte de l'incident (« API Error: 529 Overloaded… »). Le tour
+ * comptait donc pour un succès, aucune reprise ne partait, et l'utilisateur devait retaper sa
+ * demande à la main — c'est exactement ce qui s'est produit. La reprise doit partir quand même.
+ */
+describe('surcharge rendue comme réponse, sans erreur de tour', () => {
+  let h: ChatHarness | null = null
+  const source = (): Record<string, unknown> => ({
+    id: 'A',
+    title: 'A',
+    provider: 'codex',
+    updatedAt: 1,
+    messages: [{ role: 'user', content: 'u1', ts: 1, messageId: 'm1' }]
+  })
+  const copie = {
+    id: 'A-fork',
+    title: 'A (fork)',
+    provider: 'codex',
+    updatedAt: 2,
+    messages: [{ role: 'user', content: 'u1', ts: 1, messageId: 'f1' }]
+  }
+
+  beforeEach(() => installRafShim())
+  afterEach(async () => {
+    vi.useRealTimers()
+    await h?.unmount()
+    h = null
+  })
+
+  async function envoyerAvecReponse(texte: string, fork: ReturnType<typeof vi.fn>) {
+    let pilote!: (event: Record<string, unknown>) => void
+    const pilotChat = vi.fn(async (_payload: unknown, id: string) => {
+      pilote({ conversationId: id, kind: 'delta', text: texte, streamId: `s-${id}` })
+      return { ok: true }
+    })
+    h = await mountChat(
+      chatApi({
+        conversations: vi.fn(async () => [source(), copie]),
+        conversation: vi.fn().mockResolvedValue(source()),
+        conversationsFork: fork,
+        onPilotEvent: vi.fn((listener) => {
+          pilote = listener as (event: Record<string, unknown>) => void
+          return vi.fn()
+        }),
+        pilotChat
+      })
+    )
+    await h.click('.conv-pick')
+    await h.type('ma demande')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    await act(async () => {
+      h!.textarea().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    for (let tour = 0; tour < 5; tour++)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+    return pilotChat
+  }
+
+  it('rejoue la demande quand toute la réponse est l’incident du fournisseur', async () => {
+    const fork = vi.fn().mockResolvedValue(copie)
+    const pilotChat = await envoyerAvecReponse(
+      'API Error: 529 Overloaded. This is a server-side issue, usually temporary.',
+      fork
+    )
+    expect(fork).toHaveBeenCalled()
+    expect(pilotChat.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('ne rejoue PAS une vraie réponse, même si elle parle d’une surcharge 529', async () => {
+    const fork = vi.fn().mockResolvedValue(copie)
+    const pilotChat = await envoyerAvecReponse(
+      'La reprise ne regardait que le champ error du tour, donc une erreur 529 arrivée dans le ' +
+        'texte passait pour un succès. Je corrige la porte de décision pour qu’elle voie aussi le ' +
+        'texte rendu, et je garde un garde-fou sur le début du message.',
+      fork
+    )
+    expect(fork).not.toHaveBeenCalled()
+    expect(pilotChat).toHaveBeenCalledTimes(1)
+  })
+})

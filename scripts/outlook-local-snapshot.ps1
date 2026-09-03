@@ -23,10 +23,53 @@ param(
   # Decalage ARRIERE de la fenetre, en jours. Vaut 0 en usage normal : l'accueil regarde devant.
   # Existe pour le DIAGNOSTIC -- sans lui, un calendrier dont tous les rendez-vous sont passes ne
   # permet aucune preuve positive du depliage, et un chemin jamais exerce n'est pas un chemin verifie.
-  [ValidateRange(0, 3650)][int]$DepuisJours = 0
+  [ValidateRange(0, 3650)][int]$DepuisJours = 0,
+  # Plafond de messages ENVOYES rapportes. Ils servent a montrer les DEUX cotes d'un fil : sans eux
+  # une conversation n'a qu'une moitie, et elle se lit comme un monologue du correspondant.
+  [ValidateRange(0, 1000)][int]$MaxEnvoyes = 150,
+  # Longueur retenue du corps d'un message. Tronque ICI et pas cote application : le cout est dans le
+  # transport, et un fil de discussion se lit sur les premiers milliers de caracteres.
+  [ValidateRange(0, 20000)][int]$MaxCorps = 2000
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Le corps d'un message, tronque et sans les blancs de mise en page.
+#
+# Outlook rend le corps HTML converti en texte quand on lit `.Body` ; les tableaux de signature y
+# laissent des rafales de lignes vides qui, dans un widget, poussent le texte utile hors de l'ecran.
+function Get-Corps($item, [int]$max) {
+  if ($max -le 0) { return '' }
+  $texte = ''
+  try { $texte = [string]$item.Body } catch { return '' }
+  if ([string]::IsNullOrEmpty($texte)) { return '' }
+  $texte = $texte -replace "`r`n", "`n"
+  $texte = [regex]::Replace($texte, "`n{3,}", "`n`n")
+  $texte = $texte.Trim()
+  if ($texte.Length -gt $max) { return $texte.Substring(0, $max) }
+  return $texte
+}
+
+# L'adresse SMTP d'un destinataire, et non son chemin interne Exchange.
+#
+# `Recipients.Address` rend souvent un DN X500 (`/o=ExchangeLabs/ou=.../cn=...`) pour un collegue.
+# Cote reception, le meme contact arrive avec son adresse SMTP : sans cette resolution, le message
+# envoye et le message recu se rangeraient sous DEUX interlocuteurs differents, et le fil serait
+# coupe en deux. Verifie par lecture de la forme rendue -- la resolution echoue silencieusement pour
+# un contact externe, ou `.Address` est deja l'adresse SMTP.
+function Get-AdresseSmtp($destinataire) {
+  try {
+    $entree = $destinataire.AddressEntry
+    if ($null -ne $entree) {
+      $utilisateur = $entree.GetExchangeUser()
+      if ($null -ne $utilisateur) {
+        $smtp = [string]$utilisateur.PrimarySmtpAddress
+        if ($smtp) { return $smtp }
+      }
+    }
+  } catch { }
+  try { return [string]$destinataire.Address } catch { return '' }
+}
 
 function Write-Snapshot($objet) {
   $json = $objet | ConvertTo-Json -Depth 6 -Compress
@@ -81,6 +124,14 @@ try {
       recuLe = $recuIso
       nonLu = [bool]$item.UnRead
       conversation = [string]$item.ConversationID
+      # Mesure de ce poste le 2026-09-03 : sur 40 messages lus, `ConversationID` est VIDE pour les 40,
+      # alors que `ConversationTopic` est renseigne et vaut l'objet debarrasse de ses "RE:" / "TR:".
+      # Les deux sont donc rapportes tels quels ; c'est le modele, cote application, qui choisit la
+      # cle -- l'identifiant s'il existe, le sujet de conversation sinon. Ne pas retirer ce champ :
+      # sans lui, aucun fil ne se regroupe sur ce profil.
+      sujetConversation = [string]$item.ConversationTopic
+      corps = (Get-Corps $item $MaxCorps)
+      deMoi = $false
     })
   }
 
@@ -99,15 +150,45 @@ try {
     $envoyes = $session.GetDefaultFolder(5).Items
     $envoyes.Sort('[SentOn]', $true)
     $vus = 0
+    $mailsEnvoyes = 0
     foreach ($envoye in $envoyes) {
       if ($vus -ge 400) { break }
       $vus++
+      $premiereAdresse = ''
+      $premierNom = ''
       try {
         foreach ($destinataire in $envoye.Recipients) {
-          $adresseDest = [string]$destinataire.Address
-          if ($adresseDest) { [void]$connus.Add($adresseDest.ToLowerInvariant()) }
+          $adresseDest = Get-AdresseSmtp $destinataire
+          if ($adresseDest) {
+            [void]$connus.Add($adresseDest.ToLowerInvariant())
+            if (-not $premiereAdresse) {
+              $premiereAdresse = $adresseDest
+              try { $premierNom = [string]$destinataire.Name } catch { $premierNom = '' }
+            }
+          }
         }
       } catch { }
+
+      # Le message ENVOYE rejoint la liste, range sous son DESTINATAIRE et non sous son expediteur :
+      # c'est ainsi qu'il retombe dans le fil du bon interlocuteur cote application. Un envoi n'est
+      # jamais "non lu" -- il vient de nous.
+      if ($mailsEnvoyes -lt $MaxEnvoyes -and $premiereAdresse -and $envoye.MessageClass -like 'IPM.Note*') {
+        $envoiIso = $null
+        try { $envoiIso = $envoye.SentOn.ToString('o') } catch { $envoiIso = $null }
+        [void]$mails.Add([pscustomobject]@{
+          id = [string]$envoye.EntryID
+          adresse = $premiereAdresse
+          nom = $premierNom
+          sujet = [string]$envoye.Subject
+          recuLe = $envoiIso
+          nonLu = $false
+          conversation = [string]$envoye.ConversationID
+          sujetConversation = [string]$envoye.ConversationTopic
+          corps = (Get-Corps $envoye $MaxCorps)
+          deMoi = $true
+        })
+        $mailsEnvoyes++
+      }
     }
   } catch {
     # Pas de dossier Elements envoyes accessible : on ne sait pas qui est une personne, et on le DIT

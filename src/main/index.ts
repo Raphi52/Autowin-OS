@@ -2895,6 +2895,13 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Outlook')
     return outlookGateway.openItem(id)
   })
+  // Le seul canal Outlook qui ECRIT : il envoie une reponse, donc un acte irreversible. La
+  // confirmation appartient a l'interface, qui est le seul endroit ou l'utilisateur est present ; ici
+  // on garde la validation du contenu, parce qu'une frontiere de confiance ne se garde pas d'un cote.
+  ipcMain.handle('outlook:repondre', async (event, id: unknown, corps: unknown) => {
+    assertTrustedRendererSender(event, 'Outlook')
+    return outlookGateway.replyToItem(id, corps)
+  })
 
   registerTaskManagerIpc({
     ipc: ipcMain,

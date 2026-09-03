@@ -162,8 +162,10 @@ describe('identite Autowin OS', () => {
     const runtimeIcon = readFileSync(join(ROOT, 'resources/icon.png'))
     const packagingIcon = readFileSync(join(ROOT, 'build/icon.png'))
 
-    expect(appShell).toContain("import autowinLogo from './assets/autowin-logo-transparent.png'")
-    expect(appShell).toContain('className="brand-logo"')
+    // Choix utilisateur du 2026-09-03 : la marque du rail porte le spinner « atome », plus l'image.
+    expect(appShell).toContain("import { Spinner } from './components/Spinner'")
+    expect(appShell).toContain('<Spinner className="brand-logo"')
+    expect(appShell).not.toContain('autowin-logo-transparent.png')
     expect(appShell).not.toContain('className="brand-dot"')
     expect(packagingIcon).toEqual(runtimeIcon)
     expect(readFileSync(join(ROOT, 'electron-builder.yml'), 'utf8')).toContain(

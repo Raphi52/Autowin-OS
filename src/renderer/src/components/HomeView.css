@@ -1826,3 +1826,232 @@
   flex: 1 1 auto;
   min-width: 0;
 }
+
+/* ═══ La tuile Interlocuteurs, en trois écrans ════════════════════════════════════════════════
+   Le widget n'est plus une liste plate : contacts → fils → conversation. Chaque écran occupe TOUTE
+   la tuile, avec sa barre de retour en haut. La barre est COLLANTE : dans une conversation longue,
+   un « Précédent » parti hors de l'écran par le défilement se cherche à la souris. */
+.home-inter {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  gap: 6px;
+}
+
+.home-inter__bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 5px;
+  /* Opaque, sinon le contenu qui défile passe LISIBLEMENT derrière le titre. */
+  background: var(--bg-1, #0c0d12);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Le retour est un bouton discret mais VISIBLE : c'est le seul chemin vers l'écran précédent. */
+.home-inter__back {
+  flex: none;
+  padding: 2px 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--cyan);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.home-inter__back:hover,
+.home-inter__back:focus-visible {
+  color: var(--text);
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.home-inter__titre {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-inter__titre b {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-inter__titre em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Le chevron dit qu'une ligne MÈNE quelque part. Sans lui, rien ne distingue une liste qu'on lit
+   d'une liste dans laquelle on entre. */
+.home-threads__chevron {
+  flex: none;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+/* ─── La conversation déroulée, façon messagerie instantanée ─────────────────────────────────
+   Les miens à droite, les siens à gauche. L'ordre est chronologique de haut en bas : on lit une
+   discussion comme elle s'est tenue. */
+.home-chat {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.home-chat__ligne {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  /* Une bulle ne prend jamais toute la largeur : le bord libre est ce qui dit de quel côté on est. */
+  max-width: 86%;
+  margin-right: auto;
+}
+
+.home-chat__ligne[data-moi='true'] {
+  align-items: flex-end;
+  margin-right: 0;
+  margin-left: auto;
+}
+
+.home-chat__meta {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 0 2px 2px;
+}
+
+.home-chat__meta b {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.home-chat__meta em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
+.home-chat__bulle {
+  padding: 6px 9px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 10px 2px;
+  /* Le corps arrive avec ses retours à la ligne : les écraser collerait les paragraphes. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.home-chat__ligne[data-moi='true'] .home-chat__bulle {
+  color: var(--text);
+  background: rgba(103, 232, 249, 0.07);
+  border-color: color-mix(in srgb, var(--cyan) 28%, transparent);
+  border-radius: 10px 10px 2px 10px;
+}
+
+/* Un message JAMAIS LU se voit à son liseré, pas seulement à un compteur resté sur l'écran d'avant. */
+.home-chat__bulle[data-unread='true'] {
+  color: var(--text);
+  border-left: 2px solid var(--rose);
+}
+
+.home-chat__sans-corps {
+  color: var(--text-faint);
+}
+
+/* ─── La réponse : collée en bas, toujours atteignable ───────────────────────────────────────── */
+.home-chat__repondre {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 6px;
+  background: var(--bg-1, #0c0d12);
+  border-top: 1px solid var(--line);
+}
+
+.home-chat__saisie {
+  width: 100%;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: var(--r1, 8px);
+  resize: vertical;
+}
+
+.home-chat__saisie:focus-visible {
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.home-chat__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* L'envoi est l'action PRINCIPALE et la seule qui part chez quelqu'un : il porte la couleur, les
+   autres restent en retrait. */
+.home-chat__envoyer,
+.home-chat__annuler,
+.home-chat__ouvrir {
+  padding: 3px 9px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.home-chat__envoyer {
+  color: #06181c;
+  background: var(--cyan);
+  border: 1px solid var(--cyan);
+}
+
+.home-chat__annuler,
+.home-chat__ouvrir {
+  color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+}
+
+.home-chat__annuler:hover,
+.home-chat__ouvrir:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.home-chat__envoyer:disabled,
+.home-chat__annuler:disabled,
+.home-chat__ouvrir:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
