@@ -64,10 +64,16 @@ describe('reprise automatique après un 529', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    // 5 s + 15 s + 30 s d'attentes, plus la marge des rAF : tout se joue en temps simulé.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000)
-    })
+    /*
+     * 5 s + 15 s + 30 s d'attentes, plus la marge des rAF : tout se joue en temps simulé. Chaque
+     * reprise n'arme SON attente qu'apres la cloture du tour precedent — donc apres le drain en
+     * cours. On rejoue le drain autant de fois qu'il y a de reprises possibles, sinon seule la
+     * premiere partirait.
+     */
+    for (let tour = 0; tour < 5; tour++)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
   }
 
   it('forke au dernier message AVANT la demande et la rejoue dans la copie', async () => {
@@ -92,20 +98,30 @@ describe('reprise automatique après un 529', () => {
     // La MÊME demande est rejouée, dans la copie.
     expect(pilotChat).toHaveBeenCalledTimes(2)
     expect(pilotChat.mock.calls[1][1]).toBe('A-fork')
-    expect(JSON.stringify(pilotChat.mock.calls[1][0])).toBe(
-      JSON.stringify(pilotChat.mock.calls[0][0])
-    )
+    /*
+     * Le texte rejoué est bien celui de la demande ratée. L'HISTORIQUE, lui, est celui de la COPIE
+     * et non celui du fil d'origine : la reprise passe par l'envoi normal dans la conversation
+     * copiée, qui s'arrête juste avant la demande. Exiger deux enveloppes identiques au caractère
+     * reviendrait à exiger que la copie porte la demande ratée en double.
+     */
+    const dernier = (appel: unknown): string | undefined =>
+      (appel as Array<{ content?: string }>).at(-1)?.content
+    expect(dernier(pilotChat.mock.calls[1][0])).toBe(dernier(pilotChat.mock.calls[0][0]))
   })
 
   it('s arrête à 3 reprises et laisse la panne visible', async () => {
-    const fork = vi.fn(async () => ({ ...copie, id: `A-fork-${fork.mock.calls.length}` }))
+    // Chaque reprise crée SA copie, et la liste des conversations doit la contenir : la reprise
+    // rouvre la copie par son id avant de rejouer dedans.
+    const copies: Array<Record<string, unknown>> = []
+    const fork = vi.fn(async () => {
+      const nouvelle = { ...copie, id: `A-fork-${fork.mock.calls.length}` }
+      copies.push(nouvelle)
+      return nouvelle
+    })
     const pilotChat = vi.fn().mockResolvedValue({ ok: false, error: err529 })
     await envoyer(
       chatApi({
-        conversations: vi
-          .fn()
-          .mockResolvedValueOnce([source()])
-          .mockResolvedValue([source(), copie]),
+        conversations: vi.fn(async () => [source(), ...copies]),
         conversation: vi.fn().mockResolvedValue(source()),
         conversationsFork: fork,
         pilotChat
