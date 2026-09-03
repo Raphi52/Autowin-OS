@@ -3288,6 +3288,10 @@ ol.md-list li {
   ne juge pas. Or a l'aise, or vif quand ca se tend, rouge quand la place manque -- l'echelle de
   l'avertissement du theme, pas une couleur inventee pour l'occasion.
 */
+/* TÉMOIN DE MESURE — 2026-09-03, retiré juste après. */
+.cosmic-outline .conv-label {
+  outline: 2px solid #00ff00;
+}
 .chat-context-gauge {
   display: inline-flex;
   align-items: center;
