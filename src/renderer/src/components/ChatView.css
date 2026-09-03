@@ -500,7 +500,7 @@
   border: 1px solid var(--line);
   border-radius: var(--r1);
   background: #000;
-  color: var(--fg);
+  color: var(--text);
   font: inherit;
 }
 .conv-menu-input:focus-visible {
@@ -1048,6 +1048,17 @@
   box-shadow:
     inset 0 0 0 1px rgba(255, 226, 163, 0.06),
     0 0 18px rgba(203, 145, 43, 0.08);
+}
+/* MODE CLAIR — le fond ci-dessus est un dégradé EN DUR qui finit sur un brun-noir
+   à 76 %, et son halo doré est pensé pour du noir : aucune variable de thème, donc
+   le bloc restait sombre au milieu d'une page claire (signalé le 2026-09-03).
+   Cette règle vient APRÈS la règle d'origine, jamais avant : `ChatView.style.test.ts`
+   lit la PREMIÈRE `.md-final-summary` du fichier pour vérifier son cadre doré. */
+:root[data-theme='clair'] .md-final-summary {
+  background: linear-gradient(145deg, rgba(154, 111, 16, 0.1), rgba(255, 253, 247, 0.96));
+  border-color: rgba(154, 111, 16, 0.42);
+  color: var(--text);
+  box-shadow: none;
 }
 .md-final-summary:first-child {
   margin-top: 0;
@@ -1840,11 +1851,11 @@ ol.md-list li {
 }
 
 .cosmic-outline .chat-head-kicker {
-  color: #6c8095;
-  font-size: 8px;
+  color: #ffffff;
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .cosmic-outline .conv-head > .btn {
@@ -3835,6 +3846,36 @@ ol.md-list li {
   height: calc(var(--niveau, 0) * 100%);
   background: #ff8a96;
   transition: height 90ms linear;
+}
+
+/* VOLUME DE CAPTURE : un curseur fin, juste à droite de la jauge, visible seulement pendant la
+   dictée — il doit se régler en parlant, sans quitter la barre de saisie. */
+.composer-dictee-gain {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 62px;
+  height: 14px;
+  margin: 0 2px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.composer-dictee-gain::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.composer-dictee-gain::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: -4px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ff8a96;
+}
+.composer-dictee-gain:focus-visible {
+  outline: 1px solid rgba(255, 138, 150, 0.6);
+  outline-offset: 2px;
 }
 
 /* La raison d'un micro barré doit se LIRE sans survoler le bouton. */

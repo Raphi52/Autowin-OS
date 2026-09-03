@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Dictee, insererDictee, type DependancesDictee } from './composer-dictee'
+import {
+  appliquerGain,
+  Dictee,
+  GAIN_MAX,
+  insererDictee,
+  type DependancesDictee
+} from './composer-dictee'
 
 describe('insererDictee', () => {
   it('insère au point d’insertion avec les espaces qu’il faut', () => {
@@ -195,5 +201,27 @@ describe('Dictee', () => {
     })
     expect(await dictee.demarrer()).toBe(false)
     expect(dictee.enCours).toBe(false)
+  })
+})
+
+/**
+ * LE VOLUME DE CAPTURE — un micro trop faible ne franchit jamais le seuil de parole : whisper ne
+ * reçoit rien et l'utilisateur croit la dictée cassée. Le réglage doit donc agir sur le son LUI-MÊME.
+ */
+describe('appliquerGain', () => {
+  it('amplifie le son sans jamais déborder de ±1', () => {
+    const sortie = appliquerGain(Float32Array.from([0.1, -0.1, 0.9, -0.9]), 2)
+    expect(sortie[0]).toBeCloseTo(0.2, 5)
+    expect(sortie[1]).toBeCloseTo(-0.2, 5)
+    expect(sortie[2]).toBe(1)
+    expect(sortie[3]).toBe(-1)
+  })
+
+  it('rend le bloc tel quel à ×1, et borne les valeurs aberrantes', () => {
+    const bloc = Float32Array.from([0.3])
+    expect(appliquerGain(bloc, 1)).toBe(bloc)
+    expect(appliquerGain(bloc, Number.NaN)).toBe(bloc)
+    // Au-delà du maximum autorisé, on plafonne au lieu d'amplifier du souffle sans limite.
+    expect(appliquerGain(Float32Array.from([0.1]), 99)[0]).toBeCloseTo(0.1 * GAIN_MAX, 5)
   })
 })

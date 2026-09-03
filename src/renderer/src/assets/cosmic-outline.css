@@ -430,7 +430,7 @@
   align-items: center;
   gap: 6px;
   margin-top: 5px;
-  color: #778696;
+  color: #ffffff;
   font-size: 8px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -444,14 +444,14 @@
 
 .cosmic-outline .chat-runtime > span + span::before {
   margin-right: 6px;
-  color: rgba(255, 212, 90, 0.62);
+  color: #ffffff;
   content: '·';
 }
 
 .cosmic-outline .chat-runtime-provider {
   flex: none;
   overflow: visible;
-  color: #f1c966;
+  color: #ffffff;
   font-weight: 800;
 }
 
@@ -460,20 +460,12 @@
   flex: none;
   align-items: center;
   gap: 5px;
-  color: #79d9b7;
-}
-
-.cosmic-outline .chat-runtime-state .status-dot {
-  background: #63d4ac;
+  /* Le nom de la conversation est une information de reperage, pas une alerte : gris, jamais vert. */
+  color: #97a3b1;
 }
 
 .cosmic-outline .chat-runtime-state.is-busy {
-  color: #79cef0;
-}
-
-.cosmic-outline .chat-runtime-state.is-busy .status-dot {
-  background: #62cdf5;
-  animation: pulse 1.2s ease-in-out infinite;
+  color: #97a3b1;
 }
 
 .cosmic-outline .chat-scroll {

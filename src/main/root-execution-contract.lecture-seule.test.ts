@@ -130,13 +130,26 @@ describe('la case ANALYSE doit etre tenable par toute phase de LECTURE', () => {
       ROOT_DOD.tests,
       ROOT_DOD.commit
     ])
-    // Aucune phase de LECTURE porteuse de texte -> l analyse reste DUE, pas offerte.
+    // CHANGEMENT DE COMPORTEMENT ASSUME le 2026-09-03, et sa raison est une MESURE, pas un avis.
+    //
+    // Cette assertion exigeait ici `false` : « aucune phase de LECTURE porteuse de texte ->
+    // l analyse reste DUE, pas offerte ». Consequence reelle sur run-90383ebef541-1 (conv-21) : un
+    // run qui n a joue QUE `build` — six fois, 4 607 a 9 803 caracteres de livrable chacune, lu dans
+    // `.autowin-data/autowin-os/run-state/run-90383ebef541-1.json` — a ete bloque SIX fois par
+    // « Promis mais pas fait : "Analyse demandee presente dans le livrable" », verdict de juge vide.
+    // La case n etait cochable a AUCUN prix : meme pathologie que celle documentee dans
+    // `root-execution-contract.ts` pour la MUTATION le 2026-08-18, en miroir.
+    //
+    // Ce qui est protege reste protege : une phase d analyse JOUEE mais MUETTE n est toujours pas
+    // blanchie (test suivant, et `conv-runs.dod-honnete.test.ts:122`). Seul change le cas ou le run
+    // n a joue AUCUNE phase d analyse : son livrable textuel la porte alors.
     const sansLecture = rootRequirementChecks(tache, {
       phases: [{ phase: 'build', text: 'code ecrit' }]
     })
-    expect(sansLecture.find((c) => c.label === ROOT_DOD.analysis)?.checked).toBe(false)
-    // Et les autres cases restent exigeantes : aucune preuve -> aucune coche.
-    expect(sansLecture.filter((c) => c.checked)).toEqual([])
+    expect(sansLecture.find((c) => c.label === ROOT_DOD.analysis)?.checked).toBe(true)
+    // Et les autres cases restent AUSSI exigeantes qu avant : sans preuve d execution, aucune coche.
+    // C est la moitie de ce test qui n a pas bouge — la relacher serait le vrai defaut.
+    expect(sansLecture.filter((c) => c.checked).map((c) => c.label)).toEqual([ROOT_DOD.analysis])
   })
 
   it('une phase de lecture MUETTE ne coche rien (pas de blanchiment par la forme)', () => {

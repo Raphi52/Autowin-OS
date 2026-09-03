@@ -70,6 +70,25 @@ export interface DependancesDictee {
    * croit que le micro ne prend rien. Absent = aucune jauge, comportement inchangé.
    */
   onNiveau?: (niveau: number) => void
+  /**
+   * VOLUME DE CAPTURE réglé par l'utilisateur, relu à CHAQUE bloc (donc un réglage bougé pendant
+   * qu'on parle s'applique tout de suite). 1 = son du micro tel quel. Chaque échantillon est
+   * multiplié puis borné à [-1, 1] : au-delà, le son sature au lieu de repartir de l'autre côté.
+   */
+  gain?: () => number
+}
+
+/** Bornes du volume de capture : en dessous on n'entend plus rien, au-dessus ce n'est que du bruit. */
+export const GAIN_MIN = 0.5
+export const GAIN_MAX = 4
+
+/** Applique le volume de capture, en saturant proprement plutôt qu'en laissant déborder. */
+export function appliquerGain(bloc: Float32Array, gain: number): Float32Array {
+  if (!Number.isFinite(gain) || gain === 1) return bloc
+  const g = Math.min(GAIN_MAX, Math.max(GAIN_MIN, gain))
+  const sortie = new Float32Array(bloc.length)
+  for (let i = 0; i < bloc.length; i++) sortie[i] = Math.max(-1, Math.min(1, bloc[i] * g))
+  return sortie
 }
 
 /**
@@ -175,7 +194,10 @@ export class Dictee {
     }
   }
 
-  private auBloc(bloc: Float32Array): void {
+  private auBloc(brut: Float32Array): void {
+    // Le volume de capture s'applique AVANT tout le reste : la jauge, la découpe des phrases et
+    // l'audio envoyé à la transcription doivent voir le MÊME son que celui que l'utilisateur règle.
+    const bloc = appliquerGain(brut, this.deps.gain?.() ?? 1)
     // AVANT la découpe : la jauge doit bouger à chaque bloc, pas seulement en fin de phrase.
     this.deps.onNiveau?.(niveau(bloc))
     // Plafond COURT ici : en parole continue, c'est lui qui déclenche la première apparition de
@@ -291,7 +313,8 @@ export function dependancesDicteeNavigateur(
   transcrire: (wav: Uint8Array) => Promise<string>,
   onTexte?: (texte: string) => void,
   onApercu?: (texte: string) => void,
-  onNiveau?: (niveau: number) => void
+  onNiveau?: (niveau: number) => void,
+  gain?: () => number
 ): DependancesDictee {
   return {
     micro: () =>
@@ -305,6 +328,7 @@ export function dependancesDicteeNavigateur(
     transcrire,
     onTexte,
     onApercu,
-    onNiveau
+    onNiveau,
+    gain
   }
 }

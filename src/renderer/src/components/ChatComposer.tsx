@@ -32,10 +32,25 @@ import {
 import { buildScopeEcho, formatScopeEcho } from './chat-scope-echo'
 import {
   Dictee,
+  GAIN_MAX,
+  GAIN_MIN,
   dependancesDicteeNavigateur,
   insererDictee,
   type EtatDictee
 } from './composer-dictee'
+
+/** Où le volume de capture est mémorisé : un micro trop faible doit se régler UNE fois, pas à chaque dictée. */
+const CLE_GAIN_DICTEE = 'autowin.dictee.gain'
+
+function gainMemorise(): number {
+  try {
+    const brut = Number(window.localStorage?.getItem(CLE_GAIN_DICTEE))
+    if (Number.isFinite(brut) && brut >= GAIN_MIN && brut <= GAIN_MAX) return brut
+  } catch {
+    // Stockage indisponible (fenêtre restreinte) : on retombe sur le son du micro tel quel.
+  }
+  return 1
+}
 
 /** Le pont vers la transcription LOCALE (whisper.cpp), exposé par le préchargement. */
 interface ApiWhisper {
@@ -260,6 +275,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const [dicteeApercu, setDicteeApercu] = useState('')
     /** Niveau du micro (0..1) : c'est le SEUL signe visible que la voix entre pendant qu'on parle. */
     const [dicteeNiveau, setDicteeNiveau] = useState(0)
+    /** Volume de capture, réglable pendant qu'on parle : lu à chaque bloc audio via `dicteeGainRef`. */
+    const [dicteeGain, setDicteeGain] = useState(gainMemorise)
+    const dicteeGainRef = useRef(dicteeGain)
+    dicteeGainRef.current = dicteeGain
     const dicteeRef = useRef<Dictee | null>(null)
     // `null` = pas encore su. Le bouton n'est barré que sur un « non » LU, jamais sur une inconnue.
     const [dicteeInstallee, setDicteeInstallee] = useState<boolean | null>(null)
@@ -338,7 +357,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
           },
           (niveau) => {
             if (dicteeRef.current === dictee) setDicteeNiveau(niveau)
-          }
+          },
+          () => dicteeGainRef.current
         )
       )
       dicteeRef.current = dictee
@@ -563,6 +583,28 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               >
                 <i />
               </span>
+            ) : null}
+            {dicteeEtat === 'ecoute' ? (
+              <input
+                type="range"
+                className="composer-dictee-gain"
+                data-testid="composer-dictee-gain"
+                min={GAIN_MIN}
+                max={GAIN_MAX}
+                step={0.1}
+                value={dicteeGain}
+                onChange={(e) => {
+                  const valeur = Number(e.target.value)
+                  setDicteeGain(valeur)
+                  try {
+                    window.localStorage?.setItem(CLE_GAIN_DICTEE, String(valeur))
+                  } catch {
+                    // Réglage non mémorisé : il vaut quand même pour la dictée en cours.
+                  }
+                }}
+                aria-label="Volume de capture du micro"
+                title={`Volume de capture : ×${dicteeGain.toFixed(1)}`}
+              />
             ) : null}
             {props.metaNode}
             {props.stopNode}

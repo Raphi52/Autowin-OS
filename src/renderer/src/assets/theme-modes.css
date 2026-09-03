@@ -142,6 +142,110 @@
   border-color: var(--line);
 }
 
+/* Écran d'un NOUVEAU FIL : les quatre suggestions « Pour démarrer » sont peintes
+   en #070d13 EN DUR (ChatView.css l.2277) — quatre rectangles noirs au milieu
+   d'une page blanche, texte invisible. Signalé le 2026-09-03. La barre de saisie
+   du bas a le même défaut (dégradé vers #030609, l.2285). */
+/* Les suggestions ne sont PAS des `.btn` mais des `.sg-chip` (SuggestionGrid.css),
+   et leur fond appelle `var(--surface2, #191d23)` — une variable qui n'existe dans
+   AUCUN thème. C'est donc la valeur de secours, un gris très sombre, qui s'applique
+   toujours : quatre pavés noirs sur page blanche. Même piège pour `--muted`. */
+:root[data-theme='clair'] .sg-chip {
+  background: #ffffff;
+  border-color: var(--line);
+  color: var(--text);
+}
+:root[data-theme='clair'] .sg-chip:hover {
+  background: rgba(15, 20, 35, 0.05);
+}
+:root[data-theme='clair'] .sg-subtitle {
+  color: var(--text-dim);
+}
+
+/* ----------------------------------------------------------------------------
+   OBSERVATOIRE — signalé « zones trop claires » le 2026-09-03 : les chiffres des
+   indicateurs, la rangée de filtres et le kicker de section se lisaient à peine.
+   Le kicker est en `#59dcff` EN DUR (ObservatoryView.css l.29), un cyan pensé
+   pour du noir. Les chiffres et les boutons de filtre n'ont aucune couleur
+   propre : ils héritent, et l'héritage venait du thème sombre.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .observatory-panel-title {
+  color: #0f6f9c;
+}
+:root[data-theme='clair'] .observatory-metrics > strong {
+  color: var(--text);
+  background: #ffffff;
+  border-color: var(--line);
+}
+:root[data-theme='clair'] .observatory-metrics small {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .observatory-quick-filters button,
+:root[data-theme='clair'] .observatory-causal-controls button,
+:root[data-theme='clair'] .observatory-toolbar__actions button,
+:root[data-theme='clair'] .observatory-toolbar__actions summary {
+  color: var(--text);
+}
+:root[data-theme='clair'] .observatory-toolbar__scope small {
+  color: var(--text-dim);
+}
+
+/* SÉLECTION de l'Observatoire : `ObservatoryView.css` l.1229 redéfinit
+   `--surface-selected` en `rgba(225, 193, 103, 0.1)` — un or à 10 %. Sur fond
+   blanc c'est le jaune pâle signalé, et le libellé sélectionné passe en or clair
+   par-dessus : illisible. On densifie le fond et on force un texte sombre. */
+:root[data-theme='clair'] .observatory-view {
+  --surface-selected: rgba(154, 111, 16, 0.14);
+  /* `--text-muted` n'est définie NULLE PART et n'a aucune valeur de secours
+     (ObservatoryView.css l.715) : le texte des bandeaux SORTANT / RÉPONSE n'avait
+     donc aucune couleur propre. Même famille de défaut que `--surface2` dans
+     SuggestionGrid.css. On la définit ici pour le mode clair. */
+  --text-muted: #4d5567;
+}
+/* Le titre du bandeau est mélangé à du BLANC (l.712) : pensé pour du noir, il
+   disparaît sur fond clair. On le mélange à du sombre à la place. */
+/* « Mémoire temporelle reconstruite » (ObservatoryView.tsx l.1024) : ce bandeau
+   garde ses couleurs de nuit, titre et compteur également pâles. */
+:root[data-theme='clair'] .observatory-semantic-timeline {
+  color: var(--text);
+}
+:root[data-theme='clair'] .observatory-semantic-timeline strong {
+  color: var(--text);
+}
+:root[data-theme='clair'] .observatory-semantic-timeline small {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .observatory-group-head b {
+  color: color-mix(in srgb, var(--zone-accent) 55%, #101625);
+}
+:root[data-theme='clair'] .observatory-group {
+  border-color: color-mix(in srgb, var(--zone-accent) 45%, #ffffff);
+  background: color-mix(in srgb, #ffffff 92%, var(--zone-accent) 8%);
+}
+:root[data-theme='clair'] .observatory-conversations > button.is-active,
+:root[data-theme='clair'] .observatory-calls button.is-active,
+:root[data-theme='clair'] .observatory-event.is-selected,
+:root[data-theme='clair'] .observatory-view-switch button.is-active,
+:root[data-theme='clair'] .observatory-quick-filters button.is-active,
+:root[data-theme='clair'] .observatory-causal-controls button.is-active {
+  color: var(--text);
+  border-color: rgba(154, 111, 16, 0.5);
+}
+:root[data-theme='clair'] .cosmic-outline .chat-suggest .btn {
+  background: #ffffff;
+  border-color: var(--line);
+  color: var(--text);
+}
+:root[data-theme='clair'] .cosmic-outline .composer {
+  background: var(--bg-0);
+  border-top-color: var(--line);
+}
+
+/* Le bloc de clôture (Fait / Maintenant / Reste à faire / Recommandé) en thème
+   clair est traité dans `ChatView.css`, juste après la règle sombre d'origine —
+   c'est là que doit vivre sa version claire, pour que l'ordre des règles reste
+   lisible. Ne pas la redupliquer ici (doublon retiré le 2026-09-03). */
+
 /* ----------------------------------------------------------------------------
    TEXTE DES MESSAGES — écrit en clair EN DUR dans `cosmic-outline.css` :
    `#e1e7ec` pour l'agent (l.509), `#fff4fa` pour l'utilisateur (l.519), `#73808c`

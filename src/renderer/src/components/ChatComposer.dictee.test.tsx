@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { ChatComposer, type ChatComposerProps } from './ChatComposer'
+import { GAIN_MAX, appliquerGain } from './composer-dictee'
 
 /**
  * LE MICRO DU CHAMP DE SAISIE — un seul composer sert le chat plein ET la mosaïque, donc ce test
@@ -213,6 +214,65 @@ describe('ChatComposer — jauge de niveau du micro', () => {
       await Promise.resolve()
     })
     expect(jauge()).toBeNull()
+
+    await act(async () => {
+      root.unmount()
+    })
+    hote.remove()
+  })
+
+  it('le volume de capture amplifie le son et la jauge le montre', () => {
+    const bloc = new Float32Array([0.1, -0.1, 0.9])
+    const fort = appliquerGain(bloc, 3)
+    expect(fort[0]).toBeCloseTo(0.3, 5)
+    expect(fort[1]).toBeCloseTo(-0.3, 5)
+    // Saturation propre : jamais au-delà de 1, sinon le son repartirait de l'autre côté.
+    expect(fort[2]).toBe(1)
+    // Hors bornes = borné, pas de gain absurde.
+    expect(appliquerGain(bloc, 99)[0]).toBeCloseTo(0.1 * GAIN_MAX, 5)
+    expect(appliquerGain(bloc, 1)).toBe(bloc)
+  })
+})
+
+/**
+ * LE RÉGLAGE DU VOLUME DE CAPTURE — il vit à côté de la jauge, sinon on voit que le micro prend
+ * mal sans pouvoir y faire quoi que ce soit. Et il se retient : un micro faible se règle une fois.
+ */
+describe('ChatComposer — volume de capture du micro', () => {
+  it('affiche le curseur pendant l’écoute et mémorise la valeur choisie', async () => {
+    window.localStorage.removeItem('autowin.dictee.gain')
+    const transcrire = vi.fn(async (_wav: Uint8Array) => '')
+    brancherAudio(transcrire)
+    const hote = document.createElement('div')
+    document.body.appendChild(hote)
+    const root = createRoot(hote)
+    await act(async () => {
+      root.render(<ChatComposer {...proprietes()} />)
+    })
+    const curseur = (): HTMLInputElement | null =>
+      hote.querySelector<HTMLInputElement>('[data-testid="composer-dictee-gain"]')
+    expect(curseur()).toBeNull()
+
+    const micro = hote.querySelector<HTMLButtonElement>('[data-testid="composer-dictee"]')
+    await act(async () => {
+      micro!.click()
+    })
+    expect(curseur()).not.toBeNull()
+    expect(curseur()!.value).toBe('1')
+
+    await act(async () => {
+      const champ = curseur()!
+      // React lit la valeur via le descripteur natif : l'écrire directement ne déclencherait pas
+      // son onChange, et le test passerait sur un affichage qui n'a rien changé au réglage réel.
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )?.set
+      setter?.call(champ, '2.5')
+      champ.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(curseur()!.value).toBe('2.5')
+    expect(window.localStorage.getItem('autowin.dictee.gain')).toBe('2.5')
 
     await act(async () => {
       root.unmount()
