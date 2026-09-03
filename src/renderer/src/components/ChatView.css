@@ -1776,7 +1776,7 @@ ol.md-list li {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  text-transform: none;
+  text-transform: uppercase;
 }
 
 .cosmic-outline .conv-head > .btn {
