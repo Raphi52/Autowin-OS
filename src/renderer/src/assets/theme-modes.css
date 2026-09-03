@@ -12,3 +12,78 @@
 .theme-serious .brand {
   background: rgba(7, 7, 8, 0.95);
 }
+
+/* ============================================================================
+   MODE CLAIR — activé par l'interrupteur de Settings · Interface, qui pose
+   `data-theme="clair"` sur la racine du document (voir src/renderer/src/theme-mode.ts).
+
+   Rien n'est dupliqué : on REPREND les mêmes variables que `theme.css` avec des valeurs
+   claires. Les surfaces sombres y étaient des noirs semi-transparents ; elles deviennent
+   des blancs semi-transparents, et les filets blancs deviennent noirs — sinon un filet
+   blanc sur fond blanc disparaît.
+
+   `color-scheme: light` est INDISPENSABLE : sans lui, Chromium continue de peindre listes
+   déroulantes, champs et ascenseurs en sombre au milieu d'une page claire — le défaut
+   symétrique de celui corrigé le 2026-09-02 dans theme.css.
+   ============================================================================ */
+:root[data-theme='clair'] {
+  color-scheme: light;
+
+  --bg-0: #f4f5f8;
+  --bg-1: rgba(255, 255, 255, 0.82);
+  --bg-2: rgba(255, 255, 255, 0.7);
+  --bg-3: rgba(15, 20, 35, 0.06);
+  --bg-inset: rgba(255, 255, 255, 0.92);
+
+  --line: rgba(18, 24, 40, 0.16);
+  --line-strong: rgba(18, 24, 40, 0.34);
+
+  --text: #14192a;
+  --text-dim: #4d5567;
+  --text-faint: #767f92;
+
+  /* Or et rose ASSOMBRIS : les teintes de nuit passaient sous le seuil de lisibilité
+     sur fond clair (jaune pâle sur blanc). Même rôle, même famille, plus de contraste. */
+  --gold: #9a6f10;
+  --gold-bright: #b4841c;
+  --gold-doux: #8c6412;
+  --gold-clair: #a3760f;
+  --rose: #c81a6c;
+  --rose-bright: #a81259;
+  --cyan: #0f6f9c;
+  --accent: var(--rose);
+  --accent-dim: #f3c9dd;
+  --accent-soft: rgba(200, 26, 108, 0.1);
+
+  --ok: #3f7a2e;
+  --warn: #9a6f10;
+  --err: #b23a34;
+  --info: #0f6f9c;
+  --violet: #5a48c8;
+}
+
+/* Le fond de page : plus d'image cosmique ni de voile noir en mode clair. */
+:root[data-theme='clair'] body {
+  background: var(--bg-0);
+  color: var(--text);
+}
+/* Grain + nappe et voile de vignettage : pensés pour du noir, ils salissent un fond clair. */
+:root[data-theme='clair'] body::before,
+:root[data-theme='clair'] body::after {
+  display: none;
+}
+
+/* Le menu de gauche était noir EN DUR (voir plus haut) : il faut le reprendre ici,
+   sinon un rail noir reste collé à une application claire. */
+:root[data-theme='clair'] .theme-serious .rail {
+  background: #ffffff;
+  border-right-color: var(--line);
+}
+:root[data-theme='clair'] .theme-serious .brand {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* Bouton d'accent : texte blanc sur rose foncé, contraste conservé. */
+:root[data-theme='clair'] .btn-accent {
+  color: #ffffff;
+}

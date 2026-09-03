@@ -1,0 +1,91 @@
+.interface-view {
+  padding: 14px 18px 18px;
+  color: var(--text);
+}
+.interface-view > header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.interface-view h2 {
+  margin: 2px 0 0;
+  font-size: 15px;
+}
+
+.interface-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s5);
+  padding: 16px 4px 12px;
+}
+.interface-row-text p {
+  margin: 4px 0 0;
+  max-width: 62ch;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.interface-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  cursor: pointer;
+  flex: none;
+}
+/* La case native reste PRÉSENTE (clavier, lecteurs d'écran) mais invisible :
+   `display: none` la retirerait de la navigation au clavier. */
+.interface-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.interface-switch-track {
+  position: relative;
+  width: 38px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-3);
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.interface-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition:
+    transform var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.interface-switch input:checked + .interface-switch-track {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.interface-switch input:checked + .interface-switch-track .interface-switch-knob {
+  transform: translateX(18px);
+  background: var(--accent);
+}
+.interface-switch input:focus-visible + .interface-switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.interface-switch-etat {
+  min-width: 46px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.interface-reserve {
+  margin: 0 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--text-faint);
+  font-size: 11px;
+  max-width: 78ch;
+}
