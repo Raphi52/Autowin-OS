@@ -3,6 +3,7 @@ import { useBrancheCourante } from './branche-courante'
 import { createPortal } from 'react-dom'
 import { extractRecommendation } from './markdown-recommandation'
 import { mesurerMessagesRendus } from './chat-mesure-messages'
+import { filAffichable } from './fil-affichable'
 import { extrairePromptSuivant } from '../../../shared/prompt-suivant'
 import { SuggestionGrid } from './SuggestionGrid'
 import { ModuleHeader } from './ModuleHeader'
@@ -1831,8 +1832,17 @@ export function ChatView({
      *
      * Meme regle que juste au-dessus pour le store : le fil ne RETRECIT pas a zero.
      */
+    /*
+     * ... ET UN CACHE PLUS COURT QUE LE STORE N'EST PAS LE FIL.
+     *
+     * Vecu conv-152 (saisie ts=1788413114634 : « la moitié de cette convers s'est effacé j'arrive
+     * pas a remonter le fil », tour 57656364-053f-40e6-bc8e-91efd5b74e39). Le disque portait les 41
+     * messages, l'ecran la seule fin. Un tour lance cote main amorce ce cache avec le SEUL message
+     * en cours ; `cache.length > 0` le faisait alors gagner sur un store PLEIN. `filAffichable`
+     * repose la tete du store et garde la queue vivante : le fil ne RETRECIT plus.
+     */
     const cacheAffiche = liveMessagesRef.current.get(c.id)
-    const stored = cacheAffiche && cacheAffiche.length > 0 ? cacheAffiche : relu
+    const stored = filAffichable(cacheAffiche, relu)
     liveMessagesRef.current.set(c.id, stored)
     setMessages(stored)
     switchComposerDraft(c.id)
