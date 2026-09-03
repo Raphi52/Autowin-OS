@@ -3,7 +3,7 @@ import { useBrancheCourante } from './branche-courante'
 import { createPortal } from 'react-dom'
 import { extractRecommendation } from './markdown-recommandation'
 import { mesurerMessagesRendus } from './chat-mesure-messages'
-import { filAffichable } from './fil-affichable'
+import { completerAvecHistorique, filAffichable } from './fil-affichable'
 import { extrairePromptSuivant } from '../../../shared/prompt-suivant'
 import { SuggestionGrid } from './SuggestionGrid'
 import { ModuleHeader } from './ModuleHeader'
@@ -1610,8 +1610,11 @@ export function ChatView({
               )
               if (historique.length === 0) return
               const courant = liveMessagesRef.current.get(conversationId) ?? []
-              if (courant.some((message) => message.role === 'user')) return
-              const complet = [...historique, ...courant]
+              // Decide sur l'IDENTITE, pas sur « il y a un message utilisateur » : cette heuristique
+              // abandonnait l'historique des qu'un message etait tape pendant la lecture du store, et
+              // le fil restait tronque a son dernier tour (conv-152, saisie ts=1788413114634).
+              const complet = completerAvecHistorique(historique, courant)
+              if (complet === courant) return
               liveMessagesRef.current.set(conversationId, complet)
               publierFil(conversationId, complet)
             })
