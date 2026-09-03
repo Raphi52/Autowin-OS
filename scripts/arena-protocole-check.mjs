@@ -17,6 +17,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
+import { lireDuels, cheminJournal } from './arena-duel.mjs'
 
 const BRAS = ['a', 'b', 'c', 'x']
 /** Mots qui marquent un cas HORS chemin heureux dans le libelle d'une assertion. */
@@ -66,7 +67,7 @@ function scriptLancement(bench) {
     : null
 }
 
-export function verifierProtocole({ run, bench }) {
+export function verifierProtocole({ run, bench, racineDuels = process.cwd() }) {
   const md = lire(run)
   if (md === null) return { erreur: `RUN.md introuvable : ${run}` }
   const points = []
@@ -92,7 +93,23 @@ export function verifierProtocole({ run, bench }) {
       candidats.map((l) => l[l.length - 1].toUpperCase()).filter((v) => ['B', 'C', 'X'].includes(v))
     )
     const manque = ['B', 'C', 'X'].filter((v) => !retenus.has(v))
-    return manque.length ? `aucune ligne marquee ${manque.join(', ')}` : true
+    if (manque.length) return `aucune ligne marquee ${manque.join(', ')}`
+    /*
+     * L'ORDRE FAIT PARTIE DE LA REGLE — objection du juge, conv-158 (2026-09-03, turnId
+     * e0697674-fb4a-4f79-a6a0-565be7e07998) : le tableau des candidats avait ete ecrit APRES la
+     * commande de lancement, et P1 passait quand meme parce qu'il ne testait que la presence. Un
+     * scoutage redige apres coup ne choisit plus rien : il justifie. Le test est lisible sans
+     * jugement — position du titre de section contre premiere mention du lancement dans le RUN.md.
+     */
+    const titre = ['## Candidats scoutés', '## Candidats scoutes']
+      .map((t) => md.indexOf(t))
+      .find((i) => i >= 0)
+    const ancres = [lancement ? path.basename(lancement.chemin) : null, 'claude -p'].filter(Boolean)
+    const lancementPos = ancres.map((a) => md.indexOf(a)).filter((i) => i >= 0)
+    if (lancementPos.length && Math.min(...lancementPos) < titre) {
+      return 'candidats ecrits APRES le lancement : le scoutage ne choisit plus, il justifie'
+    }
+    return true
   })
 
   ajoute('P2', 'Rouge du critere CONSTATE avant lancement, sortie COLLEE dans le RUN.md', () => {
@@ -232,6 +249,75 @@ export function verifierProtocole({ run, bench }) {
     return restantes.length ? `encore sur disque : ${restantes.join(', ')}` : true
   })
 
+  /*
+   * P14 — banc de FORMULATION (skills/arena/SKILL.md, etape « 2 bis »). Ne s'applique QUE si le
+   * banc declare tester des variations de TEXTE : sinon il est « sans objet » et reste OK, pour ne
+   * pas transformer un banc de workflow en RATE. Quand il s'applique, ce qui se lit se verifie :
+   * la section `## Variantes de texte`, son levier par bras, et le diff REELLEMENT sur disque.
+   * Sans diff, on ne sait pas ce que le bras a lu — donc rien n'est attribuable au texte.
+   */
+  ajoute('P14', 'Banc de formulation : section Variantes de texte + un diff par bras', () => {
+    const bloc = section(md, '## Candidats scoutés') ?? section(md, '## Candidats scoutes')
+    const brasFormulation = new Set()
+    if (bloc !== null) {
+      for (const l of lignesTableau(bloc)) {
+        if (/^candidat$/i.test(l[0])) continue
+        const retenu = l[l.length - 1].toUpperCase()
+        if (['B', 'C', 'X'].includes(retenu) && /formulation|texte|wording/i.test(l.join(' ')))
+          brasFormulation.add(retenu.toLowerCase())
+      }
+    }
+    const declare = brasFormulation.size > 0 || /banc de formulation|variantes de texte/i.test(md)
+    if (!declare) return true // banc de workflow : point sans objet
+    const variantes = section(md, '## Variantes de texte')
+    if (variantes === null)
+      return 'banc de formulation declare sans section `## Variantes de texte` : le texte teste n_est pas ecrit'
+    const LEVIERS = /ordre|tête|tete|réflexe|reflexe|longueur|court|négatif|negatif|exemple/i
+    if (!LEVIERS.test(variantes))
+      return 'section `## Variantes de texte` sans levier nomme (ordre / mise en tete / reflexe / longueur / negatif->positif / exemple)'
+    const cibles = brasFormulation.size
+      ? [...brasFormulation]
+      : ['b', 'c', 'x'].filter((b) => new RegExp(`\\b${b}\\b`, 'i').test(variantes))
+    if (!cibles.length) return 'aucun bras nomme dans `## Variantes de texte`'
+    const manquants = cibles.filter((b) => {
+      const f = path.join(bench, 'variantes', `${b}.diff`)
+      const t = lire(f)
+      return t === null || t.trim() === ''
+    })
+    return manquants.length
+      ? `variantes/${manquants.join('.diff, variantes/')}.diff absent ou vide : la variante de texte n_est pas sur disque`
+      : true
+  })
+
+  /*
+   * P15 — le banc est-il JOURNALISE ? Un tournoi qui ne laisse pas ses quatre lignes dans
+   * `arena-duels.jsonl` fait repayer le meme duel au banc suivant : les perdants y sont
+   * re-testes comme s'ils etaient neufs (demande du 2026-09-03, conv-175). On exige les QUATRE
+   * bras, pas seulement le gagnant — c'est le perdant qui evite le prochain essai inutile.
+   * Rattachement au banc : d'abord le champ `banc` de la ligne (compare en chemin resolu), sinon
+   * l'enonce de `tache.txt`. Un verdict `casse` compte comme journalise : le bras a bien ete tranche.
+   */
+  ajoute('P15', 'Les 4 bras ont leur ligne dans arena-duels.jsonl', () => {
+    const journal = cheminJournal(racineDuels)
+    const { duels } = lireDuels({}, racineDuels)
+    if (!duels.length) return `journal vide ou absent (${journal}) : aucun bras journalise`
+    const memeBanc = (d) => {
+      if (typeof d.banc === 'string' && d.banc.trim())
+        return path.resolve(d.banc) === path.resolve(bench)
+      return false
+    }
+    const enonce = (lire(path.join(bench, 'tache.txt')) ?? '').trim()
+    const parEnonce = (d) => enonce !== '' && String(d.tache ?? '').trim() === enonce
+    const lignes = duels.filter((d) => memeBanc(d) || parEnonce(d))
+    if (!lignes.length)
+      return `aucune ligne rattachee a ce banc dans ${journal} (ni champ \`banc\`, ni enonce de tache.txt)`
+    const vus = new Set(lignes.map((d) => String(d.bras ?? '').toLowerCase()).filter(Boolean))
+    const manque = BRAS.filter((b) => !vus.has(b))
+    return manque.length
+      ? `bras non journalise(s) : ${manque.join(', ')} — le banc suivant les re-testera`
+      : true
+  })
+
   const jugements = [
     'X est-il VRAIMENT une premisse cassee, ou une variante de B ? (lecture humaine des workflows)',
     'Un bras a-t-il reformule la tache malgre un enonce identique ? (lecture des livrables)',
@@ -251,11 +337,11 @@ if (estCLI) {
   const bench = arg('--bench')
   if (!run || !bench) {
     console.error(
-      'Usage : node scripts/arena-protocole-check.mjs --run <RUN.md> --bench <dossier> [--json]'
+      'Usage : node scripts/arena-protocole-check.mjs --run <RUN.md> --bench <dossier> [--duels <racine du depot>] [--json]'
     )
     process.exit(2)
   }
-  const res = verifierProtocole({ run, bench })
+  const res = verifierProtocole({ run, bench, racineDuels: arg('--duels') ?? process.cwd() })
   if (res.erreur) {
     console.error(res.erreur)
     process.exit(2)

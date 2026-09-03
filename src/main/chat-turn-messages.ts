@@ -569,6 +569,35 @@ export function questionPoseeSansAvoirLu(
   return questionPosee && !lectureEffectuee
 }
 
+/**
+ * UNE LECTURE NATIVE compte comme une lecture.
+ *
+ * LE DEFAUT, mesure le 2026-09-03 (conv-167). Le garde ci-dessus ne comptait que trois commandes
+ * Autowin (`list_files`, `read_file`, `find_in_files`). Depuis que le tour de chat tourne en
+ * `bypassPermissions` (providers/claude.ts), la consigne demande au contraire de LIRE avec les
+ * outils natifs -- `Read`, `Grep`, `Glob`, ou un `Bash` de type `cat`/`sed -n`/`grep`. Ces appels
+ * n'arrivent PAS par les jetons `<cmd>` : ils passent par `chunk.status`. `anyReadExecuted` restait
+ * donc faux apres DOUZE fichiers lus, et le garde mordait a chaque question.
+ *
+ * Consequence vecue, pire que le faux positif lui-meme : sa relance ordonne « avance sur une
+ * hypothese au lieu de demander », ce qui CONTREDIT la skill `draft` (proposer trois directions et
+ * faire choisir l'humain). Un garde-fou fonde sur un compteur incomplet ne fait pas que rater sa
+ * cible, il pousse activement contre une procedure legitime.
+ *
+ * On ne reconnait que des lecteurs SURS. Un `Bash` quelconque (npm, git commit, rm) n'est pas une
+ * lecture : la liste est fermee, pas heuristique.
+ */
+const LECTEURS_NATIFS = /^(Read|Grep|Glob)\b/
+const BASH_LECTEUR = /^\s*(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type|git\s+(log|show|diff|status))\b/
+
+export function statusEstUneLecture(status: string | undefined): boolean {
+  const texte = (status ?? '').trim()
+  if (!texte) return false
+  if (LECTEURS_NATIFS.test(texte)) return true
+  const bash = /^Bash\b\s*(?:·\s*)?(.*)$/s.exec(texte)
+  return bash ? BASH_LECTEUR.test(bash[1] ?? '') : false
+}
+
 /** Ce qu'on renvoie a l'agent : l'ordre de REGARDER, puis de decider lui-meme si possible. */
 export const RELANCE_QUESTION_SANS_LECTURE =
   'SYSTÈME: tu viens de poser une question à l’utilisateur SANS avoir lu un seul fichier. ' +

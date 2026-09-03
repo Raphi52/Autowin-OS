@@ -304,10 +304,87 @@ export function noterChoixDePipeline(parts: ChatPart[], choix: PipelineChoice): 
     if (part.kind !== 'action' || part.name !== 'orchestrate') continue
     if (part.ok !== undefined || part.interrupted) return parts
     const deja = part.pipeline ?? []
-    const cle = JSON.stringify(propre)
-    if (deja.some((ligne) => JSON.stringify(ligne) === cle)) return parts
+    // La comparaison porte sur l'IDENTITE de la ligne (phase/role/agent), jamais sur son contenu
+    // rendu : une ligne deja completee par son prompt ne doit pas se dupliquer au battement suivant.
+    if (deja.some((ligne) => identiteDeLigne(ligne) === identiteDeLigne(propre))) return parts
     const suite = parts.slice()
     suite[i] = { ...part, pipeline: [...deja, propre] }
+    return suite
+  }
+  return parts
+}
+
+function identiteDeLigne(ligne: PipelineChoice): string {
+  return [ligne.phase ?? '', ligne.role ?? '', ligne.provider ?? '', ligne.model ?? ''].join('|')
+}
+
+/**
+ * Le PROMPT reellement envoye, tel que l'enveloppe d'appel le porte.
+ *
+ * Rien n'est reconstitue ni resume : on concatene les blocs dans l'ordre ou le provider les a recus,
+ * en nommant chaque role. Sans enveloppe (provider qui ne la remonte pas), on ne rend rien plutot
+ * qu'un texte plausible.
+ */
+export function texteDuPrompt(prompt: OrchStep['prompt']): string | undefined {
+  if (!prompt) return undefined
+  const blocs = [
+    ...(prompt.system ? [`[system]
+${prompt.system}`] : []),
+    ...(Array.isArray(prompt.messages) ? prompt.messages : []).map(
+      (message) => `[${message.role}]
+${message.content}`
+    )
+  ]
+  return blocs.join('\n\n').trim() || undefined
+}
+
+/** Phase du step, lue comme le reste du code la lit : `detail` = « phase build ». */
+function phaseDuStep(step: OrchStep): string | undefined {
+  return step.detail?.match(/phase (\w+)/)?.[1] || undefined
+}
+
+/**
+ * COMPLETE la ligne de pipeline avec ce que l'etape terminee a produit : le prompt envoye et,
+ * pour le controle final, la decision motivee.
+ *
+ * Demande utilisateur (2026-09-03) : « chacune des lignes meriterait d'etre depliable et montrer le
+ * prompt envoye, et pour la gate la decision rendue et pourquoi ». Le battement de phase annonce
+ * QUI joue, mais seul le step termine porte le prompt (`prompt`) et le motif (`detail`). On rattache
+ * donc le step a SA ligne — meme phase/role/modele — au lieu d'ouvrir un second affichage.
+ *
+ * Rien d'invente : sans prompt ni texte rendu, le tableau est renvoye tel quel.
+ */
+export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): ChatPart[] {
+  const prompt = texteDuPrompt(step.prompt)
+  const rendu =
+    step.step === 'gate'
+      ? step.detail || step.text
+      : step.text || step.error || (step.step === 'exec' ? undefined : step.detail)
+  if (!prompt && !rendu) return parts
+  const ok = step.status !== 'failed'
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]
+    if (part.kind !== 'action' || part.name !== 'orchestrate') continue
+    const deja = part.pipeline ?? []
+    if (deja.length === 0) return parts
+    const phase = phaseDuStep(step) ?? step.step
+    const candidat = (ligne: PipelineChoice): boolean =>
+      (ligne.phase === phase || ligne.phase === step.step) &&
+      (!step.model || !ligne.model || ligne.model === step.model) &&
+      ligne.prompt === undefined &&
+      ligne.outcome === undefined
+    let index = -1
+    for (let j = deja.length - 1; j >= 0; j--) if (candidat(deja[j])) index = j
+    if (index === -1) return parts
+    const suite = parts.slice()
+    const lignes = deja.slice()
+    lignes[index] = {
+      ...lignes[index],
+      ...(prompt ? { prompt } : {}),
+      ...(rendu ? { outcome: rendu } : {}),
+      ok
+    }
+    suite[i] = { ...part, pipeline: lignes }
     return suite
   }
   return parts
@@ -1691,4 +1768,30 @@ export function doitIgnorerDefilementDeBascule(input: {
   gesteLecteur: boolean
 }): boolean {
   return input.basculeEnCours && !input.gesteLecteur
+}
+
+/**
+ * LE FIL QUI REMONTE PENDANT LA FRAPPE (rapporte le 2026-09-03).
+ *
+ * La barre de saisie grandit a chaque ligne tapee (auto-hauteur jusqu'a 180 px), et la palette
+ * `/`, l'echo de portee ou un message de dictee peuvent apparaitre. Comme le fil (`.chat-scroll`,
+ * `flex: 1`) partage la colonne avec cette barre, chaque grossissement RETRECIT la fenetre de
+ * lecture. Le navigateur, lui, conserve `scrollTop` : le haut du contenu ne bouge pas, donc c'est
+ * le BAS qui sort du champ — vu de l'utilisateur, la conversation « remonte » toute seule alors
+ * qu'il n'a fait que taper.
+ *
+ * La compensation est arithmetique : le fil doit reculer de EXACTEMENT ce que la fenetre a perdu,
+ * pour que la ligne du bas reste la meme. On ne compense QUE quand le lecteur suivait le bas —
+ * s'il lisait plus haut, sa position lui appartient — et jamais au-dela du bas reel.
+ */
+export function compenserRetrecissementDuFil(input: {
+  suivaitLeBas: boolean
+  hauteurPrecedente: number
+  metrics: Pick<HTMLElement, 'scrollTop' | 'clientHeight' | 'scrollHeight'>
+}): number | null {
+  const { clientHeight, scrollHeight, scrollTop } = input.metrics
+  const perdu = input.hauteurPrecedente - clientHeight
+  if (!input.suivaitLeBas || perdu <= 0) return null
+  const cible = Math.min(scrollTop + perdu, Math.max(scrollHeight - clientHeight, 0))
+  return cible > scrollTop ? cible : null
 }

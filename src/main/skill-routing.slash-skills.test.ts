@@ -5,7 +5,7 @@ vi.mock('./native-registry', () => ({
     { id: 'look' },
     { id: 'think' },
     { id: 'salvage' },
-    { id: 'front-converge' }
+    { id: 'draft' }
   ]
 }))
 
@@ -24,7 +24,7 @@ describe('slash des skills hors pipeline', () => {
       skill: 'look',
       reason: 'explicit-skill'
     })
-    expect(routeSkillRequest('/front-converge le header')?.skill).toBe('front-converge')
+    expect(routeSkillRequest('/draft le header')?.skill).toBe('draft')
     expect(routeSkillRequest('/look')?.explicitPhase).toBeUndefined()
   })
 

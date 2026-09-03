@@ -101,6 +101,10 @@ function lancer(
   const fichier = fakeFile(contenuFichier)
   const resultat = runSqlRead(cible, {
     spawnFn: spawnFn as never,
+    // Variante de sqlcmd INJECTÉE : sans cela, les drapeaux dépendraient du binaire réellement
+    // installé sur la machine de test. Par défaut on simule le sqlcmd HISTORIQUE (celui dont
+    // l'aide annonce `-f <codepage>`), qui est le contrat historique de ces tests.
+    spawnSyncFn: (() => ({ stdout: '  -f <codepage>\n  -o <fichier>\n', stderr: '' })) as never,
     sqlcmdPath: 'sqlcmd.exe',
     catalog: CATALOGUE,
     outputFile: fichier,
@@ -159,6 +163,30 @@ describe('runSqlRead — invocation de sqlcmd', () => {
     expect(args).toContain('-x') // désactive la substitution $(…) (2ᵉ audit)
     expect(args).toContain('-b') // code de sortie ≠ 0 sur erreur SQL (3ᵉ audit)
     expect(args[args.indexOf('-f') + 1]).toBe('65001') // UTF-8 dans le fichier (4ᵉ audit)
+    expect(args[args.indexOf('-o') + 1]).toBe('T:\\sortie.json')
+  })
+
+  /**
+   * DEUX BINAIRES PORTENT LE NOM `sqlcmd` — conv-152, 2026-09-02. Sur un poste équipé du portage
+   * moderne (`go-sqlcmd`), CHAQUE lecture échouait sur « Sqlcmd: 'f': Unknown Option » : `-f` n'a
+   * jamais existé dans cette variante, qui écrit déjà de l'UTF-8. L'option doit donc SAUTER là, et
+   * rester présente sur le sqlcmd historique (test précédent) — sans quoi les accents y reviennent
+   * en CP1252.
+   */
+  it('n’envoie PAS -f au portage moderne, qui ne connaît pas cette option', async () => {
+    const { resultat, args } = lancer('[{"x":1}]', 0, {
+      // L'aide de go-sqlcmd ne mentionne jamais `-f`.
+      spawnSyncFn: (() =>
+        ({ stdout: 'sqlcmd: Install/Create/Query SQL Server\n  -o string\n', stderr: '' })) as never,
+      sqlcmdPath: 'go-sqlcmd.exe'
+    })
+    await resultat
+    expect(args).not.toContain('-f')
+    expect(args).not.toContain('65001')
+    // Les drapeaux de sécurité, eux, ne bougent pas : go-sqlcmd les accepte tous.
+    expect(args).toContain('-X')
+    expect(args).toContain('-x')
+    expect(args).toContain('-b')
     expect(args[args.indexOf('-o') + 1]).toBe('T:\\sortie.json')
   })
 

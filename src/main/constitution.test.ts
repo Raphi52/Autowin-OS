@@ -60,4 +60,19 @@ describe('CONSTITUTION (source unique du soul)', () => {
   it('se termine par un saut de ligne pour une concaténation sûre dans les prompts système', () => {
     expect(CONSTITUTION.endsWith('\n')).toBe(true)
   })
+
+  /**
+   * SYMPTOME NU — demande utilisateur du 2026-09-02, saisie ts=1788375433820 :
+   * « je vais toujours faire que de lister des symptomes […] c'est a toi de t'adapter pour pas
+   * perdre trop de temps et de token pour faire symptome -> fix ». Elle annule la preference
+   * inverse posee a ts=1788351936324 (reclamer « je fais X, je vois Y, j'attendais Z »).
+   */
+  it('traite un symptome NU comme un rapport de bug complet, sans formulaire a remplir', () => {
+    expect(CONSTITUTION).toContain('SYMPTÔME-HARD-GATE')
+    expect(CONSTITUTION).toContain('est un rapport de bug COMPLET, pas un formulaire à faire remplir')
+    expect(CONSTITUTION).toContain('la localisation est TON travail')
+    expect(CONSTITUTION).toContain("Ne renvoie JAMAIS l'utilisateur décrire")
+    expect(CONSTITUTION).toContain('APRÈS deux tentatives de localisation distinctes')
+    expect(CONSTITUTION).toContain('ts=1788375433820')
+  })
 })

@@ -1,0 +1,25 @@
+diff --git a/skills/arena/SKILL.md b/skills/arena/SKILL.md
+index df1e7dae..f063f9af 100644
+--- a/skills/arena/SKILL.md
++++ b/skills/arena/SKILL.md
+@@ -138,6 +138,20 @@ Avant de rendre la sortie ci-dessous :
+ npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc>
+ ```
+ 
++**Le dossier du banc doit porter EXACTEMENT ces noms de fichiers — le contrôle les cherche sur disque
++et tout nom voisin (autre extension, autre racine) compte comme absent :**
++
++| fichier | contenu | écrit par |
++|---|---|---|
++| `tache.txt` | l'énoncé de la tâche, mot pour mot, identique pour les quatre bras | toi, à l'étape 1 |
++| `check.mjs` | le critère de succès exécutable (`node <banc>/check.mjs <racine>`, exit 0 = atteint) | toi, à l'étape 1 |
++| `prompt-<bras>.txt` | le prompt envoyé au bras — un par bras : `prompt-a.txt`, `prompt-b.txt`, `prompt-c.txt`, `prompt-x.txt` | toi, à l'étape 3 |
++| `out-<bras>.json` | le retour brut du bras, dont `total_cost_usd` — un par bras : `out-a.json`, `out-b.json`, `out-c.json`, `out-x.json` | l'exécution des bras, étape 3 |
++| `out-judge.json` | le retour brut du juge externe | l'exécution du juge, étape 4 |
++
++Le RUN.md du banc vit dans ce même dossier. Un banc dont les fichiers sont nommés autrement est
++déclaré non tenu par le contrôle, même si le travail a été fait.
++
+ Il lit les fichiers du banc et rend 13 points OK/RATE (candidats écrits, rouge collé, cas limites du
+ critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
+ `total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,

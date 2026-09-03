@@ -1,214 +1,91 @@
 import { describe, expect, it } from 'vitest'
 import { TaskStore } from './task-store'
-import { WatchdogEngine } from './watchdog-engine'
-import { AUTO_KAIZEN_SEED_ID, autoKaizenSeed, seedWatchdogTasks } from './watchdog-seeds'
+import { autoKaizenSeed, seedWatchdogTasks } from './watchdog-seeds'
 
 function store(): TaskStore {
   let counter = 0
   return new TaskStore({ now: () => 1000, id: () => `task-${++counter}` })
 }
 
-describe('seedWatchdogTasks — l’auto-kaizen comme VRAIE tâche', () => {
-  it('crée une tâche visible dans le Task Manager, pas un module invisible', () => {
+describe('seedWatchdogTasks — l’auto-kaizen a été retiré du produit', () => {
+  it('ne pose plus AUCUNE règle au premier démarrage', () => {
     const tasks = store()
+
+    expect(seedWatchdogTasks(tasks)).toEqual([])
+    expect(tasks.listTasks()).toEqual([])
+  })
+
+  it('efface la règle Auto-kaizen déjà posée et restée intacte', () => {
+    const tasks = store()
+    const posee = tasks.create(autoKaizenSeed())
 
     seedWatchdogTasks(tasks)
 
-    const seeded = tasks.listTasks()
-    expect(seeded).toHaveLength(1)
-    expect(seeded[0].title).toContain('Auto-kaizen')
-    expect(seeded[0].watchdog?.source).toMatchObject({ kind: 'app-event' })
+    expect(tasks.getTask(posee.id)).toBeUndefined()
+    expect(tasks.listTasks()).toEqual([])
   })
 
-  it('elle fait un triage leger avec le modele Agent Studio dynamique', () => {
+  it('efface aussi une variante historique intacte', () => {
     const tasks = store()
-    seedWatchdogTasks(tasks)
-
-    const task = tasks.listTasks()[0]
-    expect(task.watchdog?.action).toBe('chat')
-    expect(task.destination).toMatchObject({ provider: 'agent-studio-default' })
-    expect(task.destination).not.toHaveProperty('model')
-    expect(task.destination).not.toHaveProperty('reasoningEffort')
-  })
-
-  it('encode explicitement l option Agents Studio model (default), pas un snapshot du demarrage', () => {
-    expect(autoKaizenSeed().destination).toMatchObject({ provider: 'agent-studio-default' })
-  })
-
-  it('migre aussi le semis Claude deja persiste vers le binding Agent Studio dynamique', () => {
-    const first = store()
-    const legacy = autoKaizenSeed()
-    if (legacy.destination.kind !== 'new') throw new Error('Le semis doit creer une conversation')
-    const { id } = first.create({
-      ...legacy,
-      destination: {
-        ...legacy.destination,
-        provider: 'claude',
-        model: 'haiku',
-        reasoningEffort: 'low'
-      }
-    })
-    first.markSeeded(AUTO_KAIZEN_SEED_ID)
-    first.bindConversation(id, 'conv-auto-kaizen')
-    const restarted = store()
-    restarted.hydrate(first.snapshot())
-
-    seedWatchdogTasks(restarted)
-
-    expect(restarted.getTask(id)?.destination).toMatchObject({
-      provider: 'agent-studio-default',
-      conversationId: 'conv-auto-kaizen'
-    })
-    expect(restarted.getTask(id)?.destination).not.toHaveProperty('model')
-  })
-
-  it('ne migre pas un Auto-kaizen dont le modele Claude a ete choisi par l utilisateur', () => {
-    const tasks = store()
-    const seed = autoKaizenSeed()
-    if (seed.destination.kind !== 'new') throw new Error('Le semis doit creer une conversation')
-    const customized = tasks.create({
-      ...seed,
-      prompt: `${seed.prompt}\nConsigne personnelle.`,
-      destination: {
-        ...seed.destination,
-        provider: 'claude',
-        model: 'claude-opus-5',
-        reasoningEffort: 'high'
-      }
-    })
-    tasks.markSeeded(AUTO_KAIZEN_SEED_ID)
-
-    seedWatchdogTasks(tasks)
-
-    expect(tasks.getTask(customized.id)?.destination).toMatchObject({
-      provider: 'claude',
-      model: 'claude-opus-5',
-      reasoningEffort: 'high'
-    })
-  })
-
-  it('elle est ÉDITABLE comme n’importe quelle tâche', () => {
-    const tasks = store()
-    const [id] = seedWatchdogTasks(tasks)
-
-    const edited = tasks.update(id, {
-      title: 'Mon auto-kaizen à moi',
+    const historique = tasks.create({
+      ...autoKaizenSeed(),
+      prompt: [
+        "Une orchestration vient d'echouer. Etablis ce qui s'est reellement passe avant de conclure.",
+        '',
+        '1. Lis le RUN.md cite dans le contexte : son besoin, ses decisions, son journal.',
+        '2. Cherche la cause RACINE, pas le symptome le plus visible. Un echec en fin de chaine vient',
+        "   souvent d'une decision prise bien plus tot.",
+        '3. Si la cause est claire ET la correction bornee, corrige-la et prouve-le par un signal',
+        '   hors-modele (test rouge->vert, code de sortie, requete). Sans preuve, ne dis pas que',
+        "   c'est repare.",
+        "4. Si la cause n'est pas etablie, ne repare rien : rapporte ce que tu as ecarte et ce qui",
+        '   reste a verifier. Une reparation sur une cause supposee cree le defaut suivant.'
+      ].join('\n'),
+      title: 'Auto-kaizen — une orchestration rouge',
+      destination: { kind: 'new', title: 'Auto-kaizen', category: 'Qualite', provider: 'claude' },
       watchdog: {
-        source: { kind: 'app-event', events: ['task-failed'] },
-        action: 'chat',
-        guards: { dedupWindowMs: 0, maxTriggersPerHour: 9, maxChainDepth: 1, maxPerRoot: 7 }
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        action: 'orchestration',
+        guards: {
+          dedupWindowMs: 300_000,
+          maxTriggersPerHour: 4,
+          maxChainDepth: 0,
+          maxPerRoot: 3
+        }
       }
     })
 
-    expect(edited.title).toBe('Mon auto-kaizen à moi')
-    expect(edited.watchdog?.guards.maxTriggersPerHour).toBe(9)
-    expect(edited.watchdog?.action).toBe('chat')
-  })
-
-  it('SUPPRIMÉE, elle ne renaît PAS au redémarrage', () => {
-    // Sinon ce ne serait plus la tâche de l'utilisateur mais une tâche imposée.
-    const first = store()
-    const [id] = seedWatchdogTasks(first)
-    first.remove(id)
-    const persisted = first.snapshot()
-
-    const afterRestart = store()
-    afterRestart.hydrate(persisted)
-    const createdAgain = seedWatchdogTasks(afterRestart)
-
-    expect(createdAgain).toEqual([])
-    expect(afterRestart.listTasks()).toEqual([])
-  })
-
-  it('ne se dédouble pas au redémarrage quand elle est toujours là', () => {
-    const first = store()
-    seedWatchdogTasks(first)
-    const persisted = first.snapshot()
-
-    const afterRestart = store()
-    afterRestart.hydrate(persisted)
-    seedWatchdogTasks(afterRestart)
-
-    expect(afterRestart.listTasks()).toHaveLength(1)
-  })
-
-  it('réveille Auto-kaizen après chargement du vieux champ app-event.event', async () => {
-    const first = store()
-    seedWatchdogTasks(first)
-    const persisted = first.snapshot()
-    const source = persisted.tasks[0].watchdog?.source as unknown as Record<string, unknown>
-    source.event = 'orchestration-red'
-    delete source.events
-    const restarted = store()
-    restarted.hydrate(persisted)
-    const calls: string[] = []
-    const engine = new WatchdogEngine(() => restarted.listTasks(), {
-      async runWatchdog(taskId) {
-        calls.push(taskId)
-        return true
-      }
-    })
-
-    expect(seedWatchdogTasks(restarted)).toEqual([])
-    await engine.notifyAppEvent('orchestration-red', 'Huit chantiers dogfood rouges')
-
-    expect(calls).toEqual([persisted.tasks[0].id])
-  })
-
-  it('le semis est mémorisé dans l’instantané persisté', () => {
-    const tasks = store()
     seedWatchdogTasks(tasks)
 
-    expect(tasks.snapshot().seeds).toContain(AUTO_KAIZEN_SEED_ID)
+    expect(tasks.getTask(historique.id)).toBeUndefined()
   })
 
-  it('crée la règle sans mode d’autorité', () => {
-    const seed = autoKaizenSeed()
+  it('NE supprime PAS une règle que l’utilisateur a éditée', () => {
+    const tasks = store()
+    const mienne = tasks.create({ ...autoKaizenSeed(), title: 'Mon auto-kaizen à moi' })
 
-    expect(seed.destination).not.toHaveProperty('authorityMode')
+    seedWatchdogTasks(tasks)
+
+    expect(tasks.getTask(mienne.id)?.title).toBe('Mon auto-kaizen à moi')
   })
 
-  it('surveille les problèmes de WORKFLOW, pas seulement les orchestrations rouges', () => {
-    // « un workflow qui se dit réussi sans preuve » ne casse rien et ne lève aucune alerte : sans
-    // cette règle, personne ne le relit jamais. Un rouge se voit, un faux vert non.
-    const source = autoKaizenSeed().watchdog!.source
-
-    expect(source.kind).toBe('app-event')
-    expect(source.kind === 'app-event' && source.events).toEqual([
-      'orchestration-red',
-      'workflow-gate-failed',
-      'workflow-unverified',
-      'workflow-proof-lost'
-    ])
-  })
-
-  it('son prompt distingue « qu’est-ce qui a cassé » de « est-ce réellement fait »', () => {
-    expect(autoKaizenSeed().prompt).toContain('est-ce reellement fait')
-    expect(autoKaizenSeed().prompt).toContain('faux vert')
-  })
-
-  it('un kaizen ne peut pas en déclencher un autre', () => {
-    expect(autoKaizenSeed().watchdog?.guards.maxChainDepth).toBe(0)
-  })
-
-  it('coupe la consommation quotidienne, y compris quand le tarif manque', () => {
-    expect(autoKaizenSeed().watchdog?.guards).toMatchObject({
-      maxTriggersPerDay: 4,
-      maxKnownCostUsdPerDay: 0.25,
-      maxUnpricedCallsPerDay: 1
+  it('ne touche pas une règle sans rapport', () => {
+    const tasks = store()
+    const autre = tasks.create({
+      title: 'Ma veille',
+      prompt: 'Regarde les tickets',
+      enabled: true,
+      mode: 'active-only',
+      destination: { kind: 'new', title: 'Veille', category: 'Qualite', provider: 'claude' },
+      watchdog: {
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        action: 'chat',
+        guards: { dedupWindowMs: 1000, maxTriggersPerHour: 1, maxChainDepth: 0, maxPerRoot: 1 }
+      }
     })
-  })
 
-  it('borne la largeur : une panne unique ne lance pas un agent par orchestration cassée', () => {
-    expect(autoKaizenSeed().watchdog?.guards.maxPerRoot).toBe(1)
-  })
+    seedWatchdogTasks(tasks)
 
-  it('son prompt REFUSE de réparer sur une cause supposée', () => {
-    // Le défaut que l'auto-kaizen historique pouvait produire : réparer un symptôme sans preuve.
-    const prompt = autoKaizenSeed().prompt
-
-    expect(prompt).toContain('cause RACINE')
-    expect(prompt).toContain('hors-modele')
-    expect(prompt).toContain('ne repare rien')
+    expect(tasks.getTask(autre.id)?.title).toBe('Ma veille')
   })
 })

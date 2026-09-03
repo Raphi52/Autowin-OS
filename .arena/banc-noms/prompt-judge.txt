@@ -1,0 +1,119 @@
+Tu es JUGE externe et adversarial. Quatre bras anonymes (1,2,3,4) ont reçu le MÊME énoncé et le même critère exécutable. Le critère est ATTEINT (exit 0) pour les quatre — c'est vérifié, ne le rejuge pas. Classe-les sur la grille, dans cet ordre : (1) critère atteint avec preuve [égalité ici] (2) QUALITÉ du livrable : défauts, rustines, dette, justesse de l'emplacement dans le fichier, risque de fausse info (3) coût $ mesuré (4) durée/tours mesurés (5) reproductibilité hors de cette tâche.
+
+ÉNONCÉ DONNÉ AUX BRAS :
+Dans skills/arena/SKILL.md, la procédure du banc /arena ne nomme AUCUN des fichiers que le contrôle
+scripts/arena-protocole-check.mjs va chercher sur disque. Un agent qui suit la skill à la lettre écrit
+donc un banc que le contrôle déclare non tenu, sans faute de sa part.
+Corrige skills/arena/SKILL.md pour que la procédure nomme explicitement les fichiers attendus du dossier
+du banc : tache.txt, check.mjs, prompt-<bras>.txt, out-<bras>.json, out-judge.json — au bon endroit de la
+procédure (la section du contrôle de protocole), sans renommer ni supprimer quoi que ce soit d'autre.
+Critère de succès : node <BENCH>/check.mjs <racine-du-depot> sort en code 0.
+
+===== BRAS 1 — coût $0.383131 · durée 70s · tours 7
+diff --git a/skills/arena/SKILL.md b/skills/arena/SKILL.md
+index df1e7dae..271167ff 100644
+--- a/skills/arena/SKILL.md
++++ b/skills/arena/SKILL.md
+@@ -138,6 +138,21 @@ Avant de rendre la sortie ci-dessous :
+ npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc>
+ ```
+ 
++**Le contrôle ne devine pas les noms : il ouvre ces fichiers EXACTS dans le dossier du banc.** Un banc
++qui les nomme autrement est déclaré non tenu même si le travail est bon — donc les écrire sous ces
++noms-là, dès la préparation du banc (étape 1) et au retour de chaque bras (étape 3) :
++
++| fichier (dans le dossier du banc) | écrit quand | ce que le contrôle en fait |
++|---|---|---|
++| `tache.txt` | étape 1, avant le lancement | l'énoncé de référence ; son texte doit se retrouver dans chaque `prompt-<bras>.txt` |
++| `check.mjs` | étape 1, avant le lancement | le critère de succès exécutable (`node check.mjs <racine>`), constaté rouge |
++| `prompt-<bras>.txt` | étape 3, à l'envoi | un par bras (`a`, `b`, `c`, `x`) : le prompt envoyé mot pour mot, preuve de l'énoncé identique |
++| `out-<bras>.json` | étape 3, au retour | un par bras : la sortie JSON brute du sous-agent, d'où sont lus `total_cost_usd` et `session_id` |
++| `out-judge.json` | étape 4, au retour du juge | la sortie brute de `judge`, avec son `session_id` — c'est elle qui prouve que le producteur ne s'est pas jugé |
++
++Le `RUN.md` passé en `--run` reste à part : c'est le compte rendu (candidats scoutés, rouge collé,
++tableau, Discrimination), pas un des artefacts ci-dessus.
++
+ Il lit les fichiers du banc et rend 13 points OK/RATE (candidats écrits, rouge collé, cas limites du
+ critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
+ `total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,
+
+===== BRAS 2 — coût $0.2960075 · durée 54s · tours 5
+diff --git a/skills/arena/SKILL.md b/skills/arena/SKILL.md
+index df1e7dae..9d36c709 100644
+--- a/skills/arena/SKILL.md
++++ b/skills/arena/SKILL.md
+@@ -138,6 +138,20 @@ Avant de rendre la sortie ci-dessous :
+ npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc>
+ ```
+ 
++**Le dossier du banc doit porter ces fichiers, à ces noms exacts** — le contrôle les cherche sur
++disque et un nom différent est lu comme un fichier absent, donc comme un protocole NON TENU :
++- `tache.txt` — l'énoncé de la tâche, mot pour mot, celui reçu par les quatre bras ;
++- `check.mjs` — le critère de succès exécutable (celui constaté ROUGE à l'étape 1) ;
++- `prompt-<bras>.txt` — un par bras (`prompt-a.txt`, `prompt-b.txt`, `prompt-c.txt`,
++  `prompt-x.txt`) : l'énoncé identique + le workflow imposé de ce bras ;
++- `out-<bras>.json` — un par bras (`out-a.json`, `out-b.json`, `out-c.json`, `out-x.json`) : le
++  retour brut du sous-agent, d'où se lisent `total_cost_usd`, la durée et les tours ;
++- `out-judge.json` — le retour brut du juge externe.
++
++Ces fichiers s'écrivent au fil de la procédure (`tache.txt`, `check.mjs` et les `prompt-<bras>.txt`
++AVANT le message qui lance les bras ; les `out-<bras>.json` à leur retour ; `out-judge.json` à
++l'étape 4), jamais reconstitués après coup pour faire passer le contrôle.
++
+ Il lit les fichiers du banc et rend 13 points OK/RATE (candidats écrits, rouge collé, cas limites du
+ critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
+ `total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,
+
+===== BRAS 3 — coût $0.38793200000000005 · durée 66s · tours 8
+diff --git a/skills/arena/SKILL.md b/skills/arena/SKILL.md
+index df1e7dae..f063f9af 100644
+--- a/skills/arena/SKILL.md
++++ b/skills/arena/SKILL.md
+@@ -138,6 +138,20 @@ Avant de rendre la sortie ci-dessous :
+ npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc>
+ ```
+ 
++**Le dossier du banc doit porter EXACTEMENT ces noms de fichiers — le contrôle les cherche sur disque
++et tout nom voisin (autre extension, autre racine) compte comme absent :**
++
++| fichier | contenu | écrit par |
++|---|---|---|
++| `tache.txt` | l'énoncé de la tâche, mot pour mot, identique pour les quatre bras | toi, à l'étape 1 |
++| `check.mjs` | le critère de succès exécutable (`node <banc>/check.mjs <racine>`, exit 0 = atteint) | toi, à l'étape 1 |
++| `prompt-<bras>.txt` | le prompt envoyé au bras — un par bras : `prompt-a.txt`, `prompt-b.txt`, `prompt-c.txt`, `prompt-x.txt` | toi, à l'étape 3 |
++| `out-<bras>.json` | le retour brut du bras, dont `total_cost_usd` — un par bras : `out-a.json`, `out-b.json`, `out-c.json`, `out-x.json` | l'exécution des bras, étape 3 |
++| `out-judge.json` | le retour brut du juge externe | l'exécution du juge, étape 4 |
++
++Le RUN.md du banc vit dans ce même dossier. Un banc dont les fichiers sont nommés autrement est
++déclaré non tenu par le contrôle, même si le travail a été fait.
++
+ Il lit les fichiers du banc et rend 13 points OK/RATE (candidats écrits, rouge collé, cas limites du
+ critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
+ `total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,
+
+===== BRAS 4 — coût $0.4011455 · durée 98s · tours 9
+diff --git a/skills/arena/SKILL.md b/skills/arena/SKILL.md
+index df1e7dae..0585fe35 100644
+--- a/skills/arena/SKILL.md
++++ b/skills/arena/SKILL.md
+@@ -132,6 +132,18 @@ pas déclaré meilleur parce qu'il est moins cher : moins cher ET au moins aussi
+ - Une règle installée sans avoir rejoué la situation d'origine est **non vérifiée** : le dire.
+ 
+ ### 6. Contrôle du protocole — du CODE, pas ta relecture
++
++**Fichiers attendus dans le dossier du banc** — le contrôle les cherche sur disque sous exactement ces noms :
++
++- `tache.txt` — l’énoncé de la tâche, identique pour tous les bras ;
++- `check.mjs` — le critère exécutable, lancé par `node <BANC>/check.mjs <racine-du-depot>` ;
++- `prompt-<bras>.txt` — le prompt effectivement envoyé au bras `<bras>` (un par bras) ;
++- `out-<bras>.json` — la sortie brute du bras `<bras>` (un par bras) ;
++- `out-judge.json` — le verdict du juge.
++
++Tout autre nom (variante d’extension ou de casse) fait échouer le contrôle de protocole :
++le banc est alors déclaré non tenu même si le travail a été fait.
++
+ Avant de rendre la sortie ci-dessous :
+ 
+ ```
+
+RENDS : un classement 1er..4e avec la raison en une phrase chacun, les défauts prouvés de chaque bras, un GAGNANT nommé, et dis si l'écart entre eux est dans le bruit. Sois dur : cite des lignes.

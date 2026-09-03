@@ -44,7 +44,8 @@ export function registerWorktreeIpc({ os }: WorktreeIpcDeps): WorktreeIpc {
   })
   ipcMain.handle('worktree:travaux-non-publies', (event) => {
     assertTrustedRendererSender(event, 'TravauxNonPublies')
-    return os.travauxNonPublies()
+    // HORS thread main : le recensement git synchrone figeait la fenetre 16 s (gels.jsonl, 03/09).
+    return os.travauxNonPubliesAsync()
   })
   ipcMain.handle('worktree:patch-non-publie', (event, agentId?: unknown) => {
     assertTrustedRendererSender(event, 'PatchTravailNonPublie')

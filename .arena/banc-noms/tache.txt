@@ -1,0 +1,7 @@
+Dans skills/arena/SKILL.md, la procédure du banc /arena ne nomme AUCUN des fichiers que le contrôle
+scripts/arena-protocole-check.mjs va chercher sur disque. Un agent qui suit la skill à la lettre écrit
+donc un banc que le contrôle déclare non tenu, sans faute de sa part.
+Corrige skills/arena/SKILL.md pour que la procédure nomme explicitement les fichiers attendus du dossier
+du banc : tache.txt, check.mjs, prompt-<bras>.txt, out-<bras>.json, out-judge.json — au bon endroit de la
+procédure (la section du contrôle de protocole), sans renommer ni supprimer quoi que ce soit d'autre.
+Critère de succès : node <BENCH>/check.mjs <racine-du-depot> sort en code 0.

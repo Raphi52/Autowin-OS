@@ -8,12 +8,14 @@ description: >-
   `.autowin-data/<profil>/activity/conv-N.jsonl` ; (2) EXPÉRIENCE A/B/C/X — la MÊME tâche exécutée par
   QUATRE bras LANCÉS EN PARALLÈLE dans un SEUL message, chacun dans sa copie de travail isolée :
   A = workflow actuel (témoin, obligatoire), B et C = les deux meilleurs candidats scoutés,
-  X = variante qui CASSE une prémisse (chemin court, phase sautée, outil différent) ; (3) JUGE externe
+  X = variante qui CASSE une prémisse (chemin court, phase sautée, outil différent) ; un bras peut
+  aussi ne différer QUE par le TEXTE d'une skill ou d'une consigne (même tâche, même modèle,
+  formulation réécrite) ; (3) JUGE externe
   et adversarial qui compare les quatre livrables sur la MÊME grille (qualité d'abord, puis $ et
   minutes lus dans les journaux, jamais estimés) et rend UN workflow gagnant avec sa preuve, puis
   l'installe au point qui le déclenche. Déclencher sur `/arena <tâche>`, « quel est le meilleur
   workflow pour X », « teste plusieurs façons de faire X », « A/B teste cette tâche »,
-  « optimise la manière dont on fait X ». N'UTILISE PAS pour : exécuter simplement la tâche (→ `build`),
+  « optimise la manière dont on fait X », « teste des formulations de cette skill ». N'UTILISE PAS pour : exécuter simplement la tâche (→ `build`),
   analyser le corpus passé sans rien exécuter (→ `rendement`), auditer un livrable unique (→ `judge`),
   chercher quoi faire sur une codebase (→ `scout`). Ici le livrable est un WORKFLOW GAGNANT PROUVÉ,
   et la tâche n'est que le banc d'essai — mais son meilleur résultat est livré pour de vrai.
@@ -73,6 +75,18 @@ Deux artefacts, jamais un seul :
   de comparable n'existe, le dire : le bras A FERA la baseline.
 
 ### 2. SCOUT des candidats de workflow (lecture seule, en parallèle)
+**D'ABORD : lire les duels DÉJÀ mesurés — un banc ne repart pas de zéro.**
+
+```
+npm run arena:duel -- lire --limite 30
+```
+
+Le journal `.autowin-data/<profil>/arena-duels.jsonl` porte une ligne par bras des bancs passés
+(tâche, workflow, durée, coût, verdict). Un workflow qui y est déjà `perdant` sur une tâche voisine
+ne se re-teste pas comme s'il était neuf : soit on l'écarte en citant sa ligne, soit on dit
+explicitement ce qui change cette fois. Un workflow déjà `gagnant` devient un candidat B/C fort. Si
+le journal est vide, le dire — c'est un premier banc, pas une absence de mesure.
+
 Chercher **6 à 10 candidats**, chacun étant une manière DIFFÉRENTE de mener la tâche, pas une idée
 d'amélioration du code. Familles à balayer (au moins 4) :
 - **routage** — quelle phase joue, dans quel ordre ; phases sautées ou fusionnées ;
@@ -82,6 +96,11 @@ d'amélioration du code. Familles à balayer (au moins 4) :
   pas refaire du déjà-fait ;
 - **preuve** — quelle vérification, à quel moment (cible vs suite entière) ;
 - **prémisse cassée** — et si on ne faisait PAS l'étape que tout le monde fait ?
+- **formulation** — le MÊME workflow, mais le TEXTE de la skill / de la consigne réécrit : ordre des
+  étapes, règle remontée en tête, réflexe « au moment où X → fais Y » contre prose explicative,
+  version courte contre version longue, interdiction en négatif contre critère en positif, exemple
+  concret ajouté ou retiré. Famille la moins chère à tester et la plus souvent oubliée : le texte est
+  ce qui DÉCLENCHE le comportement, donc c'est un facteur mesurable comme un autre.
 
 Chaque candidat porte : `hypothèse mesurable` (ce qui devrait baisser : tours / $ / minutes /
 reprises) · `coût prévu` · `risque`. Classer par (gain attendu ÷ risque). **Garder 2** pour B et C,
@@ -97,6 +116,25 @@ Pas de section `## Candidats scoutés` sur disque → le lancement des bras est 
 C ne sont pas des candidats triés mais deux idées improvisées, et l'expérience ne mesure plus rien.
 Écrire les quatre workflows d'un seul jet sans passer par ce tableau est le défaut CONSTATÉ au run du
 2026-09-02 (relevé par le juge) : c'est l'étape de tri qui disparaît, pas une formalité de rédaction.
+
+### 2 bis. Banc de FORMULATION — quand les bras diffèrent par le TEXTE
+Dès qu'un candidat retenu (B, C ou X) est une variation de formulation, le banc devient un banc de
+texte, et ces règles s'ajoutent :
+- **UN SEUL facteur bouge** : le texte. Même tâche, même critère, même modèle, même régime, même
+  découpage. Un bras qui change le texte ET le routage ne dit plus lequel des deux a agi → INVALIDE.
+- **A garde le texte ACTUEL, intact.** Chaque autre bras reçoit sa copie du fichier de skill réécrite
+  DANS SA propre copie de travail — jamais d'édition du fichier partagé pendant le banc.
+- **La variante s'écrit sur disque** : `variantes/<bras>.diff` (ou le fichier réécrit en entier) dans
+  le dossier du banc. Le RUN.md porte une section `## Variantes de texte` avec, par bras : le fichier
+  visé, le levier changé (ordre · mise en tête · réflexe · longueur · négatif→positif · exemple) et
+  l'hypothèse de COMPORTEMENT attendue.
+- **Ce qui est mesuré est le COMPORTEMENT, pas le style** : le bras a-t-il fait le geste que la
+  formulation visait (vérifier avant de conclure, refuser la rustine, poser la question) ? Le juge le
+  lit dans les traces du bras. « Ce texte est mieux écrit » n'est pas un résultat.
+- **Variantes trop proches = pas de banc** : si deux formulations disent la même chose autrement, on
+  ne mesure que du bruit → refaire des variantes franchement contrastées.
+- **Le gagnant s'installe en écrivant SON texte** dans le fichier réel, et la leçon retenue cite le
+  LEVIER qui a marché, pas seulement le nom du bras.
 
 ### 3. EXPÉRIENCE A/B/C/X — les quatre bras dans UN SEUL message
 Lancer les quatre en même temps (un sous-agent par bras). Chaque bras reçoit, mot pour mot :
@@ -127,6 +165,22 @@ pas déclaré meilleur parce qu'il est moins cher : moins cher ET au moins aussi
 ### 5. Installer et retenir
 - Livrer le meilleur livrable pour de vrai ; jeter les copies de travail perdantes.
 - Écrire le workflow gagnant à son point de déclenchement, en une règle-réflexe.
+- **Journaliser les QUATRE bras — une ligne chacun, gagnant ET perdants.** Sans ça le banc suivant
+  refait ce tournoi :
+
+  ```
+  npm run arena:duel -- noter --tache "<énoncé du banc>" --workflow "<workflow du bras>"
+    --bras a --duree-ms <mesuré> --cout-usd <mesuré>
+    --verdict gagnant|perdant|nul|abandonne|casse
+    --banc <dossier du banc> [--note "<ce qui a discriminé>"]
+  (tout sur UNE seule ligne à l'exécution)
+  ```
+
+  Les chiffres sont ceux du tableau ci-dessous, donc LUS (`out-<bras>.json` : `total_cost_usd` ;
+  `activity/conv-N.jsonl` : `durationMs`) — jamais estimés. Un bras invalidé (énoncé reformulé,
+  copie partagée) se note `casse`, pas `perdant` : il n'a pas concouru. Le script refuse une ligne
+  sans tâche, sans workflow, ou avec un verdict inventé — c'est voulu : une ligne incomparable pollue
+  tous les bancs suivants.
 - `remember` (`type: lesson`) : la tâche, le gagnant, Δ$ et Δminutes contre A, la source
   `session:<id>` ou `git:<chemin>@<sha>`.
 - Une règle installée sans avoir rejoué la situation d'origine est **non vérifiée** : le dire.
@@ -138,10 +192,14 @@ Avant de rendre la sortie ci-dessous :
 npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc>
 ```
 
-Il lit les fichiers du banc et rend 13 points OK/RATE (candidats écrits, rouge collé, cas limites du
+Il lit les fichiers du banc et rend 15 points OK/RATE (candidats écrits, rouge collé, cas limites du
 critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
 `total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,
-copies perdantes retirées). Code de sortie 0 = protocole tenu. Un RATE se corrige, ou s'écrit dans la
+copies perdantes retirées, et — si le banc teste des variations de TEXTE — section `## Variantes de
+texte` avec son levier plus un `variantes/<bras>.diff` non vide par bras, et enfin les QUATRE lignes
+du banc dans `arena-duels.jsonl` — un tournoi non journalisé est RATE, gagnant seul journalisé
+compris). Code de sortie 0 =
+protocole tenu. Un RATE se corrige, ou s'écrit dans la
 sortie tel quel — il ne se tait pas : au banc du 2026-09-02, quatre de ces points étaient RATE sans
 que rien ne le dise. Les 4 points de **jugement** que le script liste en fin de sortie ne sont pas
 mécanisables ; ils restent au juge.
@@ -170,9 +228,14 @@ ont passé le critère — `4/4` ⇒ banc NON DISCRIMINANT, le gagnant n'est qu'
 - **Chiffres estimés** présentés comme mesurés → faux vert.
 - **Le producteur se juge** → le classement se fait par `judge` externe, jamais par toi.
 - **Gagnant généralisé sur une seule tâche** → l'annoncer comme une piste mesurée, pas comme une loi.
+- **Banc non journalisé** → le tournoi suivant re-teste les mêmes perdants et repaie le même coût :
+  `npm run arena:duel -- noter` sur les quatre bras fait partie de l'étape 5, pas d'un extra.
 - **B et C improvisés** (aucune section `## Candidats scoutés` écrite avant le lancement) → il n'y a
   pas eu de tri, donc rien ne dit que les bras testés valaient la peine d'être testés.
 - **Critère jamais vu rouge** → on ne sait pas s'il testait quoi que ce soit ; un bras peut « réussir »
   sans avoir touché au défaut.
+- **Variantes de texte quasi identiques** (reformulation cosmétique) → on mesure du bruit et on
+  conclut sur un goût de rédaction.
+- **Texte ET workflow changés dans le même bras** → l'effet n'est plus attribuable.
 - **Critère chemin-heureux seul** → les 4 bras passent, le banc ne départage plus rien et le
   classement retombe sur le goût du juge.

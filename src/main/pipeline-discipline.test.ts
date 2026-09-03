@@ -53,12 +53,30 @@ describe('discipline de pipeline canonique', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/SI TA PHASE DISPOSE DES OUTILS DE MUTATION/)
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/SI TA PHASE EST EN LECTURE SEULE/)
     // L'issue de la lecture seule : nommer l'obstacle dans le livrable, ni réparer ni taire.
+    // Mais Bash lui reste ouvert (conv-155, tour 20f856a2-8dd5-4e78-b98b-f7c7319afd12 : un juge
+    // sans shell a note du texte au lieu de lancer les tests) : la consigne doit dire que toute
+    // phase peut EXECUTER, et que seule l'ECRITURE de fichiers distingue build/clean.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
+      /TOUTES les phases disposent de Read, Grep, Glob ET Bash/
+    )
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/Read\/Grep\/Glob uniquement/)
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/tu NOMMES l'obstacle/)
+  })
+
+  /**
+   * La consigne annoncait « Tu n'as PAS d'acces web » alors que `claude.ts` charge WebFetch et
+   * WebSearch sur TOUTES les branches de spawn (`const OUTILS_WEB`, verrouille par
+   * `providers/claude.web.test.ts`). Un agent qui croit ne pas avoir le web devine au lieu d'aller
+   * lire : exactement le defaut que l'ouverture du web visait a supprimer.
+   */
+  it('ne nie pas une capacite reellement servie : le web', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/n'as PAS d'accès web/i)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/WebFetch et WebSearch/)
   })
 
   it('ne transforme pas le contrat read-only de scout frame terrain en faux blocage', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
-      /absence de Write\/Edit\/Bash n'est ni un obstacle ni un droit manquant/i
+      /absence de Write\/Edit n'est ni un obstacle ni un droit manquant/i
     )
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/ne la mentionne pas comme un blocage/i)
   })

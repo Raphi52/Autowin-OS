@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { verifierProtocole } from './arena-protocole-check.mjs'
+import { cheminJournal, noterDuel } from './arena-duel.mjs'
 
 const ARMS = ['a', 'b', 'c', 'x']
 
@@ -95,6 +96,22 @@ CRITERE NON ATTEINT (code de sortie 1)
 AUTOWIN_LESSON_V1: {"outcome":"success","title":"A gagne","body":"Δ = 0,29 $ contre A"}
 `
   )
+  // Un banc CONFORME est aussi JOURNALISE : ses 4 bras sont dans arena-duels.jsonl (P15).
+  const verdicts = { a: 'gagnant', b: 'perdant', c: 'perdant', x: 'perdant' }
+  for (const bras of ARMS)
+    noterDuel(
+      {
+        tache: tache.trim(),
+        workflow: `workflow ${bras}`,
+        bras,
+        dureeMs: 114000,
+        coutUsd: couts[bras],
+        verdict: verdicts[bras],
+        banc: bench
+      },
+      racine
+    )
+
   return { racine, bench, run, copies }
 }
 
@@ -103,7 +120,7 @@ const point = (res, id) => res.points.find((p) => p.id === id)
 describe('arena-protocole-check — contrôle déterministe du banc /arena', () => {
   it('un banc conforme passe tous les points lisibles', () => {
     const f = bancConforme()
-    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     const rates = res.points.filter((p) => !p.ok)
     expect(rates.map((p) => `${p.id} ${p.detail}`)).toEqual([])
     expect(res.ok).toBe(true)
@@ -113,7 +130,7 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
   it('P1 RATE quand la section Candidats scoutés manque', () => {
     const f = bancConforme()
     writeFileSync(f.run, '## Banc\nrien\n')
-    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P1').ok).toBe(false)
     expect(res.ok).toBe(false)
   })
@@ -125,7 +142,7 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
       'le critère était rouge, promis (2 sur 5 en échec).'
     )
     writeFileSync(f.run, sansBloc)
-    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P2').ok).toBe(false)
     expect(point(res, 'P2').detail).toMatch(/sortie collee/)
   })
@@ -136,7 +153,7 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
       join(f.bench, 'check.mjs'),
       "check('C1 nominal', () => true)\ncheck('C2 nominal bis', () => true)\ncheck('C3 cas limite — fenetre vide', () => true)\n"
     )
-    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P3').ok).toBe(false)
   })
 
@@ -144,7 +161,7 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     const f = bancConforme()
     const run = readFileSync(f.run, 'utf8').replace('**0,349**', '**0,120**')
     writeFileSync(f.run, run)
-    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P8').ok).toBe(false)
     expect(point(res, 'P8').detail).toMatch(/0,120|0\.12/)
   })
@@ -152,14 +169,187 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
   it('P11 RATE quand 4/4 bras passent sans mention NON DISCRIMINANT', () => {
     const f = bancConforme()
     writeFileSync(f.run, readFileSync(f.run, 'utf8').replace('3/4 bras', '4/4 bras'))
-    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P11').ok).toBe(false)
   })
 
   it('P13 RATE quand les copies de travail des bras sont encore sur disque', () => {
     const f = bancConforme()
     mkdirSync(join(f.copies, 'a'), { recursive: true })
-    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
     expect(point(res, 'P13').ok).toBe(false)
+  })
+
+  it('P14 est sans objet (OK) sur un banc de workflow qui ne teste aucun texte', () => {
+    const f = bancConforme()
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P14').ok).toBe(true)
+  })
+})
+
+/**
+ * Banc de FORMULATION (skills/arena/SKILL.md, etape « 2 bis ») : quand un bras retenu ne differe
+ * QUE par le TEXTE d'une skill, la variante doit etre ECRITE sur disque. Sans elle, on ne sait pas
+ * ce que le bras a lu, et le resultat n'est attribuable a aucun changement de formulation.
+ */
+describe('arena-protocole-check — P14 banc de formulation', () => {
+  /** Le banc conforme, converti en banc de texte : B devient un candidat de formulation. */
+  function bancFormulation({ section = true, diffs = ['b'] } = {}) {
+    const f = bancConforme()
+    let md = readFileSync(f.run, 'utf8').replace(
+      '| grep + édition directe | profondeur | −40 % de $ | 0,3 $ | moyen | 3,0 | B |',
+      '| skill réécrite en réflexes | formulation | −2 tours | 0,3 $ | moyen | 3,0 | B |'
+    )
+    if (section) {
+      md += [
+        '',
+        '## Variantes de texte',
+        '',
+        '| bras | fichier | levier | hypothèse de comportement |',
+        '|---|---|---|---|',
+        '| B | skills/build/SKILL.md | règle remontée en tête | vérifie avant de conclure |',
+        ''
+      ].join('\n')
+    }
+    writeFileSync(f.run, md)
+    mkdirSync(join(f.bench, 'variantes'), { recursive: true })
+    for (const bras of diffs)
+      writeFileSync(join(f.bench, 'variantes', `${bras}.diff`), '-ancien texte\n+nouveau texte\n')
+    return f
+  }
+
+  it('passe quand la section et le diff du bras de formulation existent', () => {
+    const f = bancFormulation()
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P14').detail).toBe('ok')
+    expect(point(res, 'P14').ok).toBe(true)
+  })
+
+  it('RATE quand la section `## Variantes de texte` manque', () => {
+    const f = bancFormulation({ section: false })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P14').ok).toBe(false)
+    expect(point(res, 'P14').detail).toMatch(/Variantes de texte/)
+    expect(res.ok).toBe(false)
+  })
+
+  it('RATE quand le diff du bras est absent du disque', () => {
+    const f = bancFormulation({ diffs: [] })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P14').ok).toBe(false)
+    expect(point(res, 'P14').detail).toMatch(/variantes\/b\.diff/)
+  })
+
+  it('RATE quand le diff existe mais est vide', () => {
+    const f = bancFormulation({ diffs: [] })
+    mkdirSync(join(f.bench, 'variantes'), { recursive: true })
+    writeFileSync(join(f.bench, 'variantes', 'b.diff'), '   \n')
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P14').ok).toBe(false)
+  })
+
+  it('RATE quand aucun levier n_est nommé dans la section', () => {
+    const f = bancFormulation()
+    writeFileSync(
+      f.run,
+      readFileSync(f.run, 'utf8').replace('règle remontée en tête', 'texte différent')
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P14').ok).toBe(false)
+    expect(point(res, 'P14').detail).toMatch(/levier/)
+  })
+})
+
+/**
+ * OBJECTION DU JUGE, conv-158 (2026-09-03, turnId e0697674-fb4a-4f79-a6a0-565be7e07998) :
+ * « Le tableau `## Candidats scoutés` a été écrit APRÈS la commande de lancement, alors que la
+ * procédure exige l'inverse. Le contrôle ne sait pas voir l'ordre (P1 ne teste que la présence) :
+ * le point P1 est donc OK sans que la règle soit vraiment tenue. »
+ *
+ * Un point vert sur une règle non tenue est un faux vert : P1 lit desormais aussi l'ORDRE.
+ */
+describe('arena-protocole-check — P1 lit aussi l_ORDRE (conv-158)', () => {
+  it('P1 RATE quand les candidats sont ecrits APRES le lancement', () => {
+    const f = bancConforme()
+    const md = readFileSync(f.run, 'utf8')
+    const i = md.indexOf('## Banc')
+    writeFileSync(
+      f.run,
+      `## Lancement\nsh lance.sh\n\n${md.slice(i)}\n\n${md.slice(0, i)}`
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P1').ok).toBe(false)
+    expect(point(res, 'P1').detail).toMatch(/apr[eè]s le lancement/i)
+  })
+
+  it('un banc conforme reste vert : les candidats sont bien avant', () => {
+    const f = bancConforme()
+    const md = readFileSync(f.run, 'utf8')
+    writeFileSync(f.run, `${md}\n## Lancement\nsh lance.sh\n`)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P1').ok).toBe(true)
+  })
+})
+
+describe('P15 — le banc doit etre journalise dans arena-duels.jsonl', () => {
+  it('RATE quand aucun bras n_est journalise (journal absent)', () => {
+    const f = bancConforme()
+    rmSync(cheminJournal(f.racine), { force: true })
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P15').ok).toBe(false)
+    expect(point(res, 'P15').detail).toMatch(/aucun bras journalise/)
+    expect(res.ok).toBe(false)
+  })
+
+  it('RATE quand seul le gagnant est journalise, en NOMMANT les bras manquants', () => {
+    const f = bancConforme()
+    const lignes = readFileSync(cheminJournal(f.racine), 'utf8').trim().split('\n')
+    writeFileSync(cheminJournal(f.racine), `${lignes[0]}\n`)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P15').ok).toBe(false)
+    expect(point(res, 'P15').detail).toMatch(/b, c, x/)
+  })
+
+  it('RATE quand les lignes existent mais pour un AUTRE banc', () => {
+    const f = bancConforme()
+    const autres = readFileSync(cheminJournal(f.racine), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => {
+        const d = JSON.parse(l)
+        return JSON.stringify({ ...d, banc: join(f.racine, 'autre-banc'), tache: 'une autre tache' })
+      })
+    writeFileSync(cheminJournal(f.racine), `${autres.join('\n')}\n`)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P15').ok).toBe(false)
+    expect(point(res, 'P15').detail).toMatch(/aucune ligne rattachee a ce banc/)
+  })
+
+  it('PASSE quand les 4 bras sont rattaches par l_enonce seul, sans champ banc', () => {
+    const f = bancConforme()
+    const sansBanc = readFileSync(cheminJournal(f.racine), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => {
+        const { banc, ...reste } = JSON.parse(l)
+        return JSON.stringify(reste)
+      })
+    writeFileSync(cheminJournal(f.racine), `${sansBanc.join('\n')}\n`)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P15').ok).toBe(true)
+  })
+
+  it('un bras `casse` compte comme journalise : il a bien ete tranche', () => {
+    const f = bancConforme()
+    const lignes = readFileSync(cheminJournal(f.racine), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => {
+        const d = JSON.parse(l)
+        return JSON.stringify(d.bras === 'x' ? { ...d, verdict: 'casse' } : d)
+      })
+    writeFileSync(cheminJournal(f.racine), `${lignes.join('\n')}\n`)
+    const res = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(res, 'P15').ok).toBe(true)
   })
 })

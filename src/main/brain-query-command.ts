@@ -104,7 +104,17 @@ export function buildBrainOutcome(
         ? "reponse Brain rejetee : identite ou integrite invalide - aucune connaissance n'a ete utilisee"
         : effectiveStatus === 'empty'
           ? 'aucun savoir cure sur cette question - ne pas conclure que la reponse est negative'
-          : 'service Brain indisponible - ne pas conclure que la reponse est negative'
+          : // PANNE = TACHE, PAS FIN DE ROUTE (kaizen conv-151, saisie ts=1788375174361 :
+            // « t'aurais du reparer le brain »). La note disait seulement « ne conclus pas au
+            // negatif » : le modele a relance SIX fois la meme question entre 18:57:46 et 19:04:52
+            // (traces status=unavailable), puis s'est rabattu sur d'autres sources et a rendu la
+            // main. Il a fallu que l'utilisateur ordonne la reparation. La note porte desormais le
+            // geste attendu.
+            'service Brain indisponible - ne pas conclure que la reponse est negative. ' +
+            "C'est une PANNE a reparer, pas une reponse : relancer la MEME question a l'identique " +
+            'ne servira a rien. Diagnostique le serveur Brain (process, port, protocole, journal), ' +
+            'repare-le, puis rejoue la question - et ne rends la main sur une autre source ' +
+            "qu'apres avoir dit ce que tu as essaye."
     return {
       found: false,
       query,

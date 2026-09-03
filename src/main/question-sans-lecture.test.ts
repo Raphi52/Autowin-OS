@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { questionPoseeSansAvoirLu, RELANCE_QUESTION_SANS_LECTURE } from './chat-turn-messages'
+import {
+  questionPoseeSansAvoirLu,
+  statusEstUneLecture,
+  RELANCE_QUESTION_SANS_LECTURE
+} from './chat-turn-messages'
 
 /**
  * LE DÉFAUT, mesuré le 2026-08-25 sur conv-1399.
@@ -67,7 +71,40 @@ describe('le garde est réellement branché dans la boucle de tour', () => {
     expect(source).toContain('convo.push(RELANCE_QUESTION_SANS_LECTURE)')
   })
 
+  /*
+   * Les outils NATIFS de lecture n'emettent aucun jeton `<cmd>` : ils passent par le battement
+   * d'outil (`chunk.status`). Sans ce branchement, `anyReadExecuted` restait faux apres une douzaine
+   * de fichiers lus, et le garde mordait a chaque question — en ordonnant d'avancer sans demander,
+   * donc en ecrasant la skill `draft` qui exige de faire choisir l'humain (conv-167, 2026-09-03).
+   */
+  it('compte AUSSI les lectures natives, qui arrivent par le battement d’outil', () => {
+    expect(source).toMatch(/statusEstUneLecture\(chunk\.status\)\)\s*anyReadExecuted = true/)
+  })
+
   it('ne relance QU’UNE FOIS — sinon un tour peut boucler en payant à chaque passage', () => {
     expect(source).toContain('questionSansLectureRecoveryAvailable = false')
+  })
+})
+
+describe('une lecture NATIVE compte comme une lecture', () => {
+  it('reconnaît les outils de lecture du modèle', () => {
+    expect(statusEstUneLecture('Read · src/main/agent-pilot.ts')).toBe(true)
+    expect(statusEstUneLecture('Grep · questionPoseeSansAvoirLu')).toBe(true)
+    expect(statusEstUneLecture('Glob · **/*.tsx')).toBe(true)
+  })
+
+  it('reconnaît un `Bash` de lecture', () => {
+    expect(statusEstUneLecture('Bash · cat src/main/skill-pipeline.ts')).toBe(true)
+    expect(statusEstUneLecture('Bash · sed -n 1,60p fichier.ts')).toBe(true)
+    expect(statusEstUneLecture('Bash · grep -n motif src')).toBe(true)
+  })
+
+  /* La liste est FERMÉE : un `Bash` quelconque n'est pas une lecture, sinon le garde ne mord plus. */
+  it('refuse un `Bash` qui ne lit rien', () => {
+    expect(statusEstUneLecture('Bash · npm run build')).toBe(false)
+    expect(statusEstUneLecture('Bash · git commit -m "x"')).toBe(false)
+    expect(statusEstUneLecture('Write · fichier.ts')).toBe(false)
+    expect(statusEstUneLecture('')).toBe(false)
+    expect(statusEstUneLecture(undefined)).toBe(false)
   })
 })

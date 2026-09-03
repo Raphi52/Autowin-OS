@@ -3,7 +3,12 @@ import { useBrancheCourante } from './branche-courante'
 import { createPortal } from 'react-dom'
 import { extractRecommendation } from './markdown-recommandation'
 import { mesurerMessagesRendus } from './chat-mesure-messages'
-import { extrairePromptSuivant } from '../../../shared/prompt-suivant'
+import { completerAvecHistorique, filAffichable } from './fil-affichable'
+import {
+  extrairePromptSuivant,
+  estPromptDePublication,
+  PROMPT_SALVAGE
+} from '../../../shared/prompt-suivant'
 import { SuggestionGrid } from './SuggestionGrid'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
@@ -24,6 +29,7 @@ import {
   hydrateStoredAssistant,
   isRunRequestCurrent,
   doitSuivreLeBas,
+  compenserRetrecissementDuFil,
   doitIgnorerDefilementDeBascule,
   isChatNearBottom,
   scrollChatToBottom,
@@ -42,7 +48,8 @@ import {
   type ScopedLiveRun,
   type StoredAssistantMessage,
   settleOrchestrationOnRunEnd,
-  noterChoixDePipeline
+  noterChoixDePipeline,
+  completerChoixDePipeline
 } from './chat-view-model'
 import { shortModelLabel } from './model-display-label'
 import { buildHomeSuggestions } from './chat-home-suggestions'
@@ -175,7 +182,9 @@ function ghostDuFil(fil: Msg[]): string | null {
     .filter((p): p is Extract<ChatPart, { kind: 'text' }> => p.kind === 'text')
     .map((p) => p.text)
     .join('\n')
-  return extrairePromptSuivant(text) ?? extractRecommendation(text)
+  const suite = extrairePromptSuivant(text) ?? extractRecommendation(text)
+  // Le repli sur la rubrique « Recommandé » doit obéir à la même règle : publier passe par /salvage.
+  return suite && estPromptDePublication(suite) ? PROMPT_SALVAGE : suite
 }
 
 // Les suggestions d'accueil ne sont plus figées : elles se DÉRIVENT de l'état réel
@@ -1439,6 +1448,16 @@ export function ChatView({
             step
           })
         )
+        /*
+         * LA MEME ETAPE COMPLETE SA LIGNE DANS LE FIL (demande du 2026-09-03).
+         *
+         * Le battement de phase avait deja pose la ligne (« qui joue ») ; seul le step termine porte
+         * le prompt envoye et, pour le controle final, la decision et son motif. On les rattache a
+         * cette ligne au lieu d'ouvrir un second affichage : une seule verite, deux niveaux de zoom.
+         */
+        patchLast(e.convId, (m) => {
+          m.parts = completerChoixDePipeline(m.parts, step) as typeof m.parts
+        })
       } else if (
         e.type === 'orchestrate-hypotheses' &&
         e.convId &&
@@ -1609,8 +1628,11 @@ export function ChatView({
               )
               if (historique.length === 0) return
               const courant = liveMessagesRef.current.get(conversationId) ?? []
-              if (courant.some((message) => message.role === 'user')) return
-              const complet = [...historique, ...courant]
+              // Decide sur l'IDENTITE, pas sur « il y a un message utilisateur » : cette heuristique
+              // abandonnait l'historique des qu'un message etait tape pendant la lecture du store, et
+              // le fil restait tronque a son dernier tour (conv-152, saisie ts=1788413114634).
+              const complet = completerAvecHistorique(historique, courant)
+              if (complet === courant) return
               liveMessagesRef.current.set(conversationId, complet)
               publierFil(conversationId, complet)
             })
@@ -1747,6 +1769,32 @@ export function ChatView({
     }
   }, [busy])
 
+  /**
+   * FIL QUI REMONTE PENDANT LA FRAPPE. La barre de saisie grandit ligne par ligne et vole de la
+   * hauteur au fil ; le navigateur garde `scrollTop`, donc le bas sort du champ tout seul. On
+   * rend au fil ce que la fenetre lui a pris, uniquement quand le lecteur suivait le bas.
+   */
+  useEffect(() => {
+    const scroll = scrollRef.current
+    if (!scroll || typeof ResizeObserver === 'undefined') return
+    let hauteurPrecedente = scroll.clientHeight
+    const observer = new ResizeObserver(() => {
+      const cible = compenserRetrecissementDuFil({
+        suivaitLeBas: followTailRef.current,
+        hauteurPrecedente,
+        metrics: scroll
+      })
+      hauteurPrecedente = scroll.clientHeight
+      if (cible === null) return
+      // Repositionnement MECANIQUE, pas un geste de lecture : le suivi du bas doit survivre.
+      gesteLecteurRef.current = false
+      dernierScrollTopRef.current = cible
+      scroll.scrollTop = cible
+    })
+    observer.observe(scroll)
+    return () => observer.disconnect()
+  }, [])
+
   /* --- conversations : sélection = fil rechargé depuis le store --- */
 
   /**
@@ -1831,8 +1879,17 @@ export function ChatView({
      *
      * Meme regle que juste au-dessus pour le store : le fil ne RETRECIT pas a zero.
      */
+    /*
+     * ... ET UN CACHE PLUS COURT QUE LE STORE N'EST PAS LE FIL.
+     *
+     * Vecu conv-152 (saisie ts=1788413114634 : « la moitié de cette convers s'est effacé j'arrive
+     * pas a remonter le fil », tour 57656364-053f-40e6-bc8e-91efd5b74e39). Le disque portait les 41
+     * messages, l'ecran la seule fin. Un tour lance cote main amorce ce cache avec le SEUL message
+     * en cours ; `cache.length > 0` le faisait alors gagner sur un store PLEIN. `filAffichable`
+     * repose la tete du store et garde la queue vivante : le fil ne RETRECIT plus.
+     */
     const cacheAffiche = liveMessagesRef.current.get(c.id)
-    const stored = cacheAffiche && cacheAffiche.length > 0 ? cacheAffiche : relu
+    const stored = filAffichable(cacheAffiche, relu)
     liveMessagesRef.current.set(c.id, stored)
     setMessages(stored)
     switchComposerDraft(c.id)
@@ -2258,12 +2315,32 @@ export function ChatView({
    */
   async function forkFromMessage(messageId: string): Promise<void> {
     if (!activeId) return
+    /*
+     * TOUR EN COURS : la branche se cree, mais on NE BOUGE PAS. Vecu le 2026-09-03 (« quand tu as
+     * commence a travailler ca m'a switch de conversation des fois ») : l'icone de branche fait
+     * 26 px, elle est collee sous chaque message a 6 px de la loupe, et le fil glissait alors sous
+     * le curseur pendant la frappe -- un clic involontaire arrachait donc l'utilisateur au fil qui
+     * TRAVAILLE, run compris. Le geste VOLONTAIRE garde son comportement d'origine (ouvrir la
+     * copie) : seul le cas ou un tour tourne est retenu sur place, avec un avis qui dit ou aller.
+     */
+    const tourEnCours = busyConversationsRef.current.has(activeId)
     const forked = (await window.api.conversationsFork(activeId, messageId)) as Conv | undefined
     const fresh = (await window.api.conversations()) as Conv[]
     setConvs(fresh)
     const target = (forked?.id && fresh.find((c) => c.id === forked.id)) || undefined
-    if (target) void loadConv(target)
-    else await reloadActiveFromStore(activeId) // fork refusé : on reste où on est
+    if (!target) {
+      await reloadActiveFromStore(activeId) // fork refusé : on reste où on est
+      return
+    }
+    if (tourEnCours) {
+      setAppNotice((current) =>
+        newestNotice(current, {
+          text: `Branche « ${target.title} » créée. Le tour en cours continue ici — la branche t'attend dans la liste.`
+        })
+      )
+      return
+    }
+    void loadConv(target)
   }
   /**
    * PARITÉ claude.exe (demande du 2026-08-21) : le message tapé pendant un tour ORIENTE le tour en

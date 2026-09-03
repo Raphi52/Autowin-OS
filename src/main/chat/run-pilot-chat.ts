@@ -69,7 +69,7 @@ import {
 } from '../store/chat-artifact-store'
 import { latestBrainTraceId } from '../activity/brain-trace-spool'
 import type { TaskUsageSettlementSink } from '../task-manager/types'
-import { incidentFromPilotEvent } from '../auto-kaizen-supervisor'
+import { incidentFromPilotEvent } from '../pilot-incident'
 
 import type { AutowinOS } from '../os'
 import type { ActiveChatTurns } from '../active-chat-turns'
@@ -79,7 +79,7 @@ import type { TraceStore } from '../activity/trace-store'
 import type { TraceLedger } from '../activity/ledger'
 import type { AppEvent } from '../commands'
 import type { ModelQuestion } from '../model-questions'
-import type { AutoKaizenIncidentInput } from '../auto-kaizen-supervisor'
+import { collerTexteParle } from './coller-texte-parle'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
 export type RunPilotChatDeps = {
@@ -106,7 +106,6 @@ export type RunPilotChatDeps = {
     incident: { kind: string; summary: string; detail: string },
     sourceConversationId?: string
   ) => void
-  reportAutoKaizen: (input: AutoKaizenIncidentInput) => void
   /** Lecteur, pas valeur : `watchdogEngine` est assigné après le démarrage. */
   watchdogEngine: () => WatchdogEngine | undefined
 }
@@ -170,8 +169,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     broadcast,
     drainPendingDirectives,
     askModelQuestion,
-    notifyWatchdogWorkflowIncident,
-    reportAutoKaizen
+    notifyWatchdogWorkflowIncident
   } = deps
 
   const runPilotChat: RunPilotChat = async (
@@ -236,6 +234,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     const etiquettesAction: string[] = []
     let streamedSpoken = recovery?.providerCall.streamedPrefix ?? ''
     let durableResponseTextSeen = Boolean(streamedSpoken.trim())
+    // Frontiere d'iteration : sert a savoir si le delta poursuit le MEME message ou en ouvre un
+    // nouveau (cf. coller-texte-parle.ts). -1 = aucun delta recu encore.
+    let iterationDuDernierDelta: number | undefined = -1
     /**
      * Raisonnement du modele ACCUMULE sur le tour.
      *
@@ -762,32 +763,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           // mais pas celui de l'ORCHESTRATION : un run coupé finit rouge, et rouge valait incident. D'où
           // la boucle rapportée — couper un run kaizen en engendrait un autre.
           if (structuredIncident && !activeChatTurns.wasDeliberatelyStopped(conversationId)) {
-            const resultData =
-              pilotEvent.data && typeof pilotEvent.data === 'object'
-                ? (pilotEvent.data as Record<string, unknown>)
-                : undefined
-            const runPath =
-              typeof resultData?.runPath === 'string'
-                ? resultData.runPath
-                : typeof resultData?.runId === 'string'
-                  ? resultData.runId
-                  : undefined
-            const terminalRunError =
-              pilotEvent.name === 'orchestrate' && runPath
-                ? `orchestration-end:${runPath}:red`
-                : undefined
             // Les mêmes incidents structurés alimentent les règles Watchdog. La détection existait
             // déjà (`incidentFromPilotEvent`) mais n'était exposée nulle part : elle mourait dans un
             // module invisible. On ne la réécrit pas, on la BRANCHE.
             void notifyWatchdogWorkflowIncident(structuredIncident, conversationId)
-            reportAutoKaizen({
-              dedupeKey:
-                terminalRunError ??
-                `pilot:${conversationId}:${turnId}:${pilotEvent.actionId ?? pilotEvent.iteration ?? 0}:${pilotEvent.kind}:${pilotEvent.name ?? 'provider'}`,
-              sourceConversationId: conversationId,
-              sourceTurnId: turnId,
-              ...structuredIncident
-            })
           }
         }
         if (
@@ -809,7 +788,15 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           }
         }
         if (pilotEvent.kind === 'delta' && pilotEvent.text) {
-          streamedSpoken += pilotEvent.text
+          // Deux itérations d'un même tour sont deux MESSAGES : les coller bout à bout soudait la
+          // fin de l'un au début de l'autre (« …du balayage.```html-render »), ce qui sortait le
+          // bloc mis en forme en texte brut. Cf. coller-texte-parle.ts pour le défaut mesuré.
+          streamedSpoken = collerTexteParle(
+            streamedSpoken,
+            pilotEvent.text,
+            iterationDuDernierDelta === pilotEvent.iteration
+          )
+          iterationDuDernierDelta = pilotEvent.iteration
           durableResponseTextSeen = true
         }
         if (pilotEvent.kind === 'reasoning' && pilotEvent.text) streamedReasoning += pilotEvent.text
@@ -1387,19 +1374,6 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
           ...taskUsageMetricsFromExecution(supervisedUsage)
         }
-      // Le `return` ci-dessus couvre l'abort du contrôleur du TOUR. Ce garde couvre le cas où l'arrêt de
-      // l'ORCHESTRATION fait jeter le tour sans que son propre contrôleur ait été aborté : même geste
-      // volontaire, même absence d'incident.
-      if (conversationId && !activeChatTurns.wasDeliberatelyStopped(conversationId)) {
-        reportAutoKaizen({
-          dedupeKey: `chat-turn:${conversationId}:${turnId}:failed`,
-          sourceConversationId: conversationId,
-          sourceTurnId: turnId,
-          kind: 'chat-turn-failed',
-          summary: 'Le tour de conversation a échoué',
-          detail: e instanceof Error ? e.message : String(e)
-        })
-      }
       return {
         ok: false,
         cancelled: false,

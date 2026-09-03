@@ -1261,7 +1261,13 @@ function lireLeBlocage(
   if (!diagnostic) return { fichiers: [] }
   const apres = diagnostic.split('blocage d’intégration:')[1] ?? ''
   const [causePart, fichiersPart] = apres.split('— fichiers en cause:')
-  const brut = causePart.trim()
+  /*
+   * Le code interne arrive maintenant AVEC son sens en clair (« base-dirty — cause: des fichiers
+   * non committés … », cf. `raison-de-blocage.ts`, ajouté après conv-158). La table `BLOCAGES` est
+   * indexée par le CODE seul : on lit donc le code jusqu'au premier tiret cadratin, sinon la
+   * lecture retombe en « cause inconnue » et l'utilisateur reperd l'action et la reprise.
+   */
+  const brut = (causePart.split('—')[0] ?? causePart).trim()
   const fichiers = (fichiersPart ?? '')
     .split(',')
     .map((fichier) => fichier.trim())
