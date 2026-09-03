@@ -444,7 +444,7 @@
 
 .cosmic-outline .chat-runtime > span + span::before {
   margin-right: 6px;
-  color: rgba(255, 212, 90, 0.62);
+  color: #ffffff;
   content: '·';
 }
 
