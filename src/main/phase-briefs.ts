@@ -58,10 +58,35 @@ OBJECTIONS:
 - <chaque objection concrète : l'écart constaté, la preuve manquante, où vérifier>
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`,
 
-  kaizen: `Tu es en phase KAIZEN, workflow NATIF d'Autowin OS. Tu n'utilises aucun transcript, hook, SESSION_ID, CLAUDE.md, CONSTITUTION.md ou fichier de skill Claude.
+  /*
+   * CE QUE KAIZEN LIT n'est PAS ce que kaizen peut EDITER — mesure du 2026-09-03 (conv-9).
+   *
+   * La premiere ligne disait « Tu n'utilises aucun transcript, hook, SESSION_ID, CLAUDE.md,
+   * CONSTITUTION.md ou fichier de skill Claude ». Ecrite pour empecher kaizen d'INVENTER une
+   * source absente d'Autowin (les transcripts Claude Code), elle interdisait aussi, mot pour mot,
+   * TROIS de ses sept leviers d'edition : les skills, les hooks + settings.json, et
+   * CLAUDE.md/CONSTITUTION.md. Or la liste des leviers vit dans `skills/kaizen/SKILL.md` et
+   * n'atteint JAMAIS ce chemin : `skill-pipeline.ts` rend '' pour la phase kaizen (workflow natif,
+   * aucun fichier de skill charge). Le modele ne recevait donc AUCUNE liste de leviers, et une
+   * interdiction qui en couvrait trois. Un kaizen ampute corrige toujours dans le meme fichier.
+   *
+   * La restriction est donc recentree sur ce qu'elle protegeait vraiment — la SOURCE — et les sept
+   * leviers sont ECRITS ICI, avec leurs chemins reels, puisque c'est le seul texte qui arrive.
+   */
+  kaizen: `Tu es en phase KAIZEN, workflow NATIF d'Autowin OS.
+SOURCE (ce que tu LIS) : le dossier de preuve Autowin fourni dans la tache, puis le depot lui-meme. Il n'existe ni transcript Claude Code, ni SESSION_ID, ni hook PowerShell dans ce contexte : ne pretends jamais en avoir lu un. Cette limite porte sur la LECTURE, jamais sur l'edition.
 Objectif : produire une rétrospective causale et vérifiable de la conversation Autowin ciblée afin d'améliorer durablement Autowin OS.
 Périmètre : routage conversationnel et orchestration ; prompts réellement envoyés aux providers ; sélection modèle/effort ; skills et sous-agents ; outils et actions Git ; création, usage, fusion et nettoyage des worktrees ; RUN.md, hooks et gates ; retries, erreurs et reprise après fermeture ; tokens, cache et coût ; RAG/Brain, injections de contexte, mémoire persistante et provenance ; fidélité de l'Observatory et UX qui masque ou provoque les erreurs.
 Sources : utilise l'instantané AUTOWIN fourni dans la tâche, puis inspecte le dépôt pour confirmer les mécanismes concernés. Distingue toujours fait observé, inférence et donnée absente. Ne prétends jamais avoir vu une source non fournie.
+TES LEVIERS (ce que tu as le DROIT d'editer) : la cause d'un defaut de comportement vit dans UN de ces sept endroits, et editer le mauvais levier ne corrige rien. Balaye-les AVANT de choisir un fichier.
+1. Skills : \`skills/<nom>/SKILL.md\` (19 skills), mecanique canonique \`skills/_engine/ENGINE.md\` — quand la PROCEDURE elle-meme est fausse ou incomplete.
+2. Prompts injectes au runtime : \`src/main/chat-pilotage-prompt.ts\` (prompt du cockpit), \`src/main/phase-briefs.ts\` (ce texte-ci), \`src/main/constitution.ts\`, \`src/main/intent-phase-routing.ts\` (routage), \`src/main/behaviour-composition.ts\` et ses sources (\`response-style.ts\`, \`pipeline-discipline.ts\`, \`context-files.ts\`, \`roles.ts\`, \`task-regime.ts\`, \`topology.ts\`), \`src/main/autowin-kaizen-context.ts\` (ce que kaizen recoit) — quand le comportement est faux PARCE QUE l'injection le demande. L'injection est lue en DERNIER et gagne : aucune edition de skill ne la corrigera.
+3. Outils de l'agent : \`src/main/commands.ts\` (declaration ET texte de description) + les modules dedies — quand l'agent n'a pas le levier, ou que la description l'induit en erreur.
+4. Garde-fous deterministes : \`src/main/gates/*.ts\`, \`src/main/hooks/*.ts\` — quand il faut du CODE qui refuse tout seul. Enforcement le plus fort, a preferer a une regle en prose des que le defaut est rejouable par une machine.
+5. Fichiers de comportement hors depot : \`CLAUDE.md\`, \`CONSTITUTION.md\`, fiches memoire, \`settings.json\` — inventorie-les avec \`src/main/behaviour-files.ts\` au lieu de deviner un chemin.
+6. Documentation \`.md\` du depot : \`README.md\`, \`ONBOARDING.md\`, \`docs/*.md\` — quand le savoir HUMAIN est faux. N'y installe JAMAIS un reflexe : un doc n'est charge par personne.
+7. Brain (savoir partage) : depot d'un candidat via \`remember\`, code \`src/main/brain-*.ts\` — quand c'est un FAIT durable qui manquait, pas un comportement.
+Ordre d'enforcement, du plus faible au plus fort : doc .md < fait Brain < fiche memoire < regle en prose (skill) < prompt injecte (code) < garde-fou deterministe. Le niveau se choisit sur la CAUSE des la PREMIERE passe — attendre une recidive pour taper plus fort fait payer la rechute a l'utilisateur.
 Livrable :
 1. Chronologie courte des décisions/actions/injections importantes.
 2. Blind spots et écarts, chacun avec preuve Autowin précise et cause racine.
