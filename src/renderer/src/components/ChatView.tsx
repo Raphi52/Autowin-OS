@@ -4461,7 +4461,6 @@ export function ChatView({
                         aria-label={titreDossier}
                         data-testid="chat-project-dot"
                       >
-                        <span className={`status-dot ${dossierProjet ? 'st-ok' : 'st-ok'}`} />
                         📁 {labelDossier}
                       </span>
                     )
