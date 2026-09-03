@@ -339,11 +339,6 @@ ${message.content}`
   return blocs.join('\n\n').trim() || undefined
 }
 
-/** Phase du step, lue comme le reste du code la lit : `detail` = « phase build ». */
-function phaseDuStep(step: OrchStep): string | undefined {
-  return step.detail?.match(/phase (\w+)/)?.[1] || undefined
-}
-
 /**
  * COMPLETE la ligne de pipeline avec ce que l'etape terminee a produit : le prompt envoye et,
  * pour le controle final, la decision motivee.
@@ -368,15 +363,10 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
     if (part.kind !== 'action' || part.name !== 'orchestrate') continue
     const deja = part.pipeline ?? []
     if (deja.length === 0) return parts
-    const phase = phaseDuStep(step) ?? step.step
-    const candidat = (ligne: PipelineChoice): boolean =>
-      (ligne.phase === phase || ligne.phase === step.step) &&
-      (!step.model || !ligne.model || ligne.model === step.model) &&
-      ligne.prompt === undefined &&
-      ligne.outcome === undefined
-    let index = -1
-    for (let j = deja.length - 1; j >= 0; j--) if (candidat(deja[j])) index = j
-    if (index === -1) return parts
+    // Appariement FIN : phase causale + modele, avec refus explicite quand un fan-out rend deux
+    // lignes indiscernables — coller le prompt d'un membre sous un autre est pire que rien.
+    const index = indexDeLaLignePipeline(deja, phaseDuLigne(step), step.model)
+    if (index < 0) return parts
     const suite = parts.slice()
     const lignes = deja.slice()
     lignes[index] = {
@@ -399,6 +389,19 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
  * de persistance dans `commands.ts` — s'en ecarter ici ferait afficher le prompt sous une autre
  * phase que celle qui le facture.
  */
+/**
+ * PHASE sous laquelle CHERCHER la ligne d'un step.
+ *
+ * Le controle final est un cas a part : son `detail` ne porte PAS un libelle de phase (« phase
+ * build ») mais sa DECISION MOTIVEE (« BLOQUE: preuve manquante — verdict du juge: ... »). Le
+ * deriver comme les autres steps cherchait donc une phase nommee d'apres la decision, qui ne
+ * designe aucune ligne : le motif du controle final n'atteignait jamais sa ligne.
+ */
+function phaseDuLigne(step: OrchStep): string | undefined {
+  if (step.step === 'gate') return step.execution?.phase ?? 'gate'
+  return phaseDuStep(step) ?? step.step
+}
+
 function phaseDuStep(step: Pick<OrchStep, 'detail' | 'execution'>): string | undefined {
   const brut =
     step.execution?.phase ??
@@ -450,43 +453,6 @@ function indexDeLaLignePipeline(
   return -1
 }
 
-/**
- * RANGE le prompt reellement envoye sous la ligne de phase qui l'a recu.
- *
- * DEMANDE (2026-09-03) : « il manque les niveaux inferieurs pour consulter les prompts envoyes a
- * chaque skill ». Le prompt n'a jamais voyage sur l'evenement `orchestrate-phase` — et il ne peut
- * pas : la phase est annoncee AVANT que son enveloppe soit compilee. Il arrive un cran plus tard,
- * sur `orchestrate-step`, ou il alimentait deja le panneau des sous-agents. C'est donc la vue qui
- * apparie les deux, sur la phase et le modele.
- *
- * Ce qu'elle ne fait PAS : inventer une ligne (un step sans phase annoncee est ignore), toucher une
- * orchestration deja close, ou rendre une nouvelle reference quand rien ne change. Un second prompt
- * pour la meme ligne (reparation, retente) REMPLACE le premier : la ligne montre ce qui a ete
- * envoye en DERNIER a cette phase.
- */
-export function noterPromptDePipeline(
-  parts: ChatPart[],
-  step: Pick<OrchStep, 'step' | 'model' | 'detail' | 'execution' | 'prompt'>
-): ChatPart[] {
-  const prompt = step.prompt
-  if (!prompt) return parts
-  const phase = phaseDuStep(step)
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const part = parts[i]
-    if (part.kind !== 'action' || part.name !== 'orchestrate') continue
-    if (part.ok !== undefined || part.interrupted) return parts
-    const lignes = part.pipeline ?? []
-    const index = indexDeLaLignePipeline(lignes, phase, step.model)
-    if (index < 0) return parts
-    if (JSON.stringify(lignes[index].prompt) === JSON.stringify(prompt)) return parts
-    const pipeline = lignes.slice()
-    pipeline[index] = { ...lignes[index], prompt }
-    const suite = parts.slice()
-    suite[i] = { ...part, pipeline }
-    return suite
-  }
-  return parts
-}
 
 /**
  * Impose l'invariant « un tour `done` n'a plus rien en cours » sur un message VIVANT.
