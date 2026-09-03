@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filAffichable, type MessageAffichable } from './fil-affichable'
+import { completerAvecHistorique, filAffichable, type MessageAffichable } from './fil-affichable'
 
 const u = (content: string): MessageAffichable & { content: string } => ({
   role: 'user',
@@ -47,5 +47,33 @@ describe('filAffichable', () => {
   it('un cache plus court SANS tour en vol laisse le store faire foi', () => {
     const store = [u('q1'), a('r1'), u('q2'), a('r2')]
     expect(filAffichable([u('q1'), a('r1')], store)).toEqual(store)
+  })
+})
+
+type Ligne = { role: string; content: string; done?: boolean; messageId?: string }
+
+describe('completerAvecHistorique', () => {
+  const h: Ligne[] = [
+    { role: 'user', content: 'vieux', messageId: 'b1' },
+    { role: 'assistant', content: 'vieille reponse', messageId: 'b2', done: true }
+  ]
+
+  it("recolle l'historique meme si le fil live porte deja un message utilisateur (conv-152)", () => {
+    const live: Ligne[] = [
+      { role: 'assistant', content: 'en vol', done: false },
+      { role: 'user', content: 'tape pendant la lecture du store' },
+      { role: 'assistant', content: '', done: false }
+    ]
+    expect(completerAvecHistorique(h, live)).toEqual([...h, ...live])
+  })
+
+  it('ne recolle pas DEUX fois : un identifiant persiste deja present suffit', () => {
+    const live: Ligne[] = [...h, { role: 'assistant', content: 'en vol', done: false }]
+    expect(completerAvecHistorique(h, live)).toBe(live)
+  })
+
+  it('un historique vide laisse le fil live intact', () => {
+    const live: Ligne[] = [{ role: 'assistant', content: 'en vol', done: false }]
+    expect(completerAvecHistorique([], live)).toBe(live)
   })
 })

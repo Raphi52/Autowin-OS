@@ -42,3 +42,30 @@ export function filAffichable<M extends MessageAffichable>(
   }
   return [...tete, ...cache.slice(debutVivant)]
 }
+
+/**
+ * RECOLLE l'historique persiste DEVANT un fil live, sans le coller DEUX FOIS.
+ *
+ * Meme defaut, autre bout de la chaine (conv-152, saisie ts=1788413114634) : le rattrapage de
+ * l'historique, apres un tour lance cote main, se refusait des que le fil live portait UN message
+ * utilisateur (`courant.some((m) => m.role === 'user')`). C'est une heuristique, pas une identite :
+ * un message utilisateur tape pendant que la lecture du store est en vol suffisait a ABANDONNER
+ * l'historique — le fil restait tronque a son dernier tour, sans moyen de remonter.
+ *
+ * On decide donc sur l'IDENTITE : si le fil live porte deja un des messages persistes, il a deja ete
+ * recolle ; sinon on repose l'historique devant lui.
+ */
+export function completerAvecHistorique<M extends { messageId?: string }>(
+  historique: M[],
+  courant: M[]
+): M[] {
+  if (historique.length === 0) return courant
+  const identifiants = new Set(
+    courant.map((message) => message.messageId).filter((id): id is string => !!id)
+  )
+  const dejaRecolle = historique.some(
+    (message) => !!message.messageId && identifiants.has(message.messageId)
+  )
+  if (dejaRecolle) return courant
+  return [...historique, ...courant]
+}
