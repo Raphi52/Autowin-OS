@@ -189,6 +189,23 @@
 :root[data-theme='clair'] .observatory-toolbar__scope small {
   color: var(--text-dim);
 }
+
+/* SÉLECTION de l'Observatoire : `ObservatoryView.css` l.1229 redéfinit
+   `--surface-selected` en `rgba(225, 193, 103, 0.1)` — un or à 10 %. Sur fond
+   blanc c'est le jaune pâle signalé, et le libellé sélectionné passe en or clair
+   par-dessus : illisible. On densifie le fond et on force un texte sombre. */
+:root[data-theme='clair'] .observatory-view {
+  --surface-selected: rgba(154, 111, 16, 0.14);
+}
+:root[data-theme='clair'] .observatory-conversations > button.is-active,
+:root[data-theme='clair'] .observatory-calls button.is-active,
+:root[data-theme='clair'] .observatory-event.is-selected,
+:root[data-theme='clair'] .observatory-view-switch button.is-active,
+:root[data-theme='clair'] .observatory-quick-filters button.is-active,
+:root[data-theme='clair'] .observatory-causal-controls button.is-active {
+  color: var(--text);
+  border-color: rgba(154, 111, 16, 0.5);
+}
 :root[data-theme='clair'] .cosmic-outline .chat-suggest .btn {
   background: #ffffff;
   border-color: var(--line);
