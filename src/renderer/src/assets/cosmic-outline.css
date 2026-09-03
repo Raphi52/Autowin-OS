@@ -460,11 +460,11 @@
   flex: none;
   align-items: center;
   gap: 5px;
-  color: #79d9b7;
+  color: #97a3b1;
 }
 
 .cosmic-outline .chat-runtime-state .status-dot {
-  background: #63d4ac;
+  background: #97a3b1;
 }
 
 .cosmic-outline .chat-runtime-state.is-busy {
