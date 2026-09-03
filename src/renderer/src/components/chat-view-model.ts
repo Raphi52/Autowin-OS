@@ -7,7 +7,8 @@ import {
   type PersistedChatErrorPart,
   type PersistedChatPart,
   type PersistedChatTextPart,
-  type PipelineChoice
+  type PipelineChoice,
+  type PipelinePrompt
 } from '../../../shared/chat-turn'
 import { parseAskDecision, type AskDecision } from './ask-choices'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
@@ -36,7 +37,7 @@ import {
 } from '../../../shared/orchestration-outcome'
 
 export type ChatActionPart = PersistedChatActionPart
-export type { PipelineChoice }
+export type { PipelineChoice, PipelinePrompt }
 export type ChatArtifactPart = PersistedChatArtifactPart
 export type ChatErrorPart = PersistedChatErrorPart
 export type ChatTextPart = PersistedChatTextPart & {
@@ -308,6 +309,97 @@ export function noterChoixDePipeline(parts: ChatPart[], choix: PipelineChoice): 
     if (deja.some((ligne) => JSON.stringify(ligne) === cle)) return parts
     const suite = parts.slice()
     suite[i] = { ...part, pipeline: [...deja, propre] }
+    return suite
+  }
+  return parts
+}
+
+/**
+ * PHASE d'un step, telle qu'elle a ete annoncee au fil.
+ *
+ * Deux sources, dans cet ordre : la provenance causale (`execution.phase`, la seule fiable), puis le
+ * libelle `detail` (« phase build », « phase build (reparation) »). Meme derivation que la frontiere
+ * de persistance dans `commands.ts` — s'en ecarter ici ferait afficher le prompt sous une autre
+ * phase que celle qui le facture.
+ */
+function phaseDuStep(step: Pick<OrchStep, 'detail' | 'execution'>): string | undefined {
+  const brut =
+    step.execution?.phase ??
+    (step.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '')
+  return brut || undefined
+}
+
+/**
+ * LA ligne de pipeline a laquelle un step appartient — ou -1 quand on ne peut pas le dire.
+ *
+ * Regle : on ne RAPPROCHE que ce qui est identifiable. Phase + modele est la cle exacte (elle
+ * distingue les N membres d'un fan-out) ; a defaut, la phase seule ne vaut que si elle ne designe
+ * qu'UNE ligne. Deux lignes de meme phase indiscernables par le modele => aucun rapprochement :
+ * mettre le prompt d'un membre sous un autre est pire que de ne rien montrer.
+ */
+function indexDeLaLignePipeline(
+  lignes: readonly PipelineChoice[],
+  phase: string | undefined,
+  model: string | undefined
+): number {
+  if (phase && model) {
+    const exact = lignes.findIndex((ligne) => ligne.phase === phase && ligne.model === model)
+    if (exact >= 0) return exact
+  }
+  if (phase) {
+    const memePhase = lignes.reduce<number[]>(
+      (acc, ligne, index) => (ligne.phase === phase ? [...acc, index] : acc),
+      []
+    )
+    if (memePhase.length === 1) return memePhase[0]
+    // Une seule ligne de cette phase n'annonce PAS de modele : c'est celle qui attend son prompt.
+    const sansModele = memePhase.filter((index) => !lignes[index].model)
+    if (sansModele.length === 1) return sansModele[0]
+    return -1
+  }
+  if (model) {
+    const memeModele = lignes.reduce<number[]>(
+      (acc, ligne, index) => (ligne.model === model ? [...acc, index] : acc),
+      []
+    )
+    if (memeModele.length === 1) return memeModele[0]
+  }
+  return -1
+}
+
+/**
+ * RANGE le prompt reellement envoye sous la ligne de phase qui l'a recu.
+ *
+ * DEMANDE (2026-09-03) : « il manque les niveaux inferieurs pour consulter les prompts envoyes a
+ * chaque skill ». Le prompt n'a jamais voyage sur l'evenement `orchestrate-phase` — et il ne peut
+ * pas : la phase est annoncee AVANT que son enveloppe soit compilee. Il arrive un cran plus tard,
+ * sur `orchestrate-step`, ou il alimentait deja le panneau des sous-agents. C'est donc la vue qui
+ * apparie les deux, sur la phase et le modele.
+ *
+ * Ce qu'elle ne fait PAS : inventer une ligne (un step sans phase annoncee est ignore), toucher une
+ * orchestration deja close, ou rendre une nouvelle reference quand rien ne change. Un second prompt
+ * pour la meme ligne (reparation, retente) REMPLACE le premier : la ligne montre ce qui a ete
+ * envoye en DERNIER a cette phase.
+ */
+export function noterPromptDePipeline(
+  parts: ChatPart[],
+  step: Pick<OrchStep, 'step' | 'model' | 'detail' | 'execution' | 'prompt'>
+): ChatPart[] {
+  const prompt = step.prompt
+  if (!prompt) return parts
+  const phase = phaseDuStep(step)
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]
+    if (part.kind !== 'action' || part.name !== 'orchestrate') continue
+    if (part.ok !== undefined || part.interrupted) return parts
+    const lignes = part.pipeline ?? []
+    const index = indexDeLaLignePipeline(lignes, phase, step.model)
+    if (index < 0) return parts
+    if (JSON.stringify(lignes[index].prompt) === JSON.stringify(prompt)) return parts
+    const pipeline = lignes.slice()
+    pipeline[index] = { ...lignes[index], prompt }
+    const suite = parts.slice()
+    suite[i] = { ...part, pipeline }
     return suite
   }
   return parts
@@ -641,15 +733,14 @@ export type OrchStep = {
   error?: string
   /** Raisonnement/thinking du sous-agent, conservé pour post-mortem (rendu repliable). */
   thinking?: string
-  prompt?: {
-    provider: string
-    model?: string
-    transport: string
-    system?: string
-    messages: Array<{ role: string; content: string }>
-    options: Record<string, unknown>
-    limitation: string
-  }
+  /**
+   * Enveloppe envoyée au sous-agent. Type PARTAGÉ avec `PipelineChoice.prompt` : le bloc
+   * orchestration affiche le MÊME prompt sous sa ligne de phase, et deux déclarations jumelles
+   * finiraient par divorcer.
+   */
+  prompt?: PipelinePrompt
+  /** Provenance causale du step — sert à rattacher son prompt à la bonne ligne de pipeline. */
+  execution?: { phase?: string }
   /** Preuves d'exécution du tour (diff fichiers, stdout/exit commandes) — rendues inline. */
   evidence?: EvidencePart[]
 }

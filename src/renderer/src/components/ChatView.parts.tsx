@@ -97,11 +97,9 @@ function EtageActivite({
           {iconeFamille(etape.name)}
         </span>
         <span className="activity-step-label">{libelle}</span>
-        {cible && (
-          <span className="activity-step-target" data-testid="activity-step-target" title={cible}>
-            {cible}
-          </span>
-        )}
+        {/* PAS DE CIBLE ICI (2026-09-03) : elle etait ecrite une seconde fois plus bas, sous le meme
+            `data-testid`, et l'ecran affichait donc la meme tache deux lignes de suite. Celle du bas
+            est la seule qui porte le clic de depliage — c'est cette copie muette qui part. */}
         {etape.ok === undefined && !etape.interrupted && <Spinner />}
         {depliable && (
           <button
@@ -143,12 +141,20 @@ function EtageActivite({
         <ul className="activity-step-pipeline" data-testid="activity-step-pipeline">
           {pipeline.map((choix, index) => (
             <li key={`${choix.phase ?? ''}-${choix.model ?? ''}-${index}`}>
-              {choix.phase && <span className="activity-step-phase">{choix.phase}</span>}
-              {choix.role && <span className="activity-step-role">{choix.role}</span>}
-              {(choix.provider || choix.model) && (
-                <span className="activity-step-agent">
-                  {[choix.provider, choix.model].filter(Boolean).join(' · ')}
-                </span>
+              <div className="activity-step-pipeline-head">
+                {choix.phase && <span className="activity-step-phase">{choix.phase}</span>}
+                {choix.role && <span className="activity-step-role">{choix.role}</span>}
+                {(choix.provider || choix.model) && (
+                  <span className="activity-step-agent">
+                    {[choix.provider, choix.model].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+              </div>
+              {/* UN CRAN DE PLUS : ce qui a ete ENVOYE a cette phase. Absent tant que l'appel n'est
+                  pas parti — la phase est annoncee avant que son prompt existe, et promettre un
+                  depliage vide se lit comme casse. */}
+              {choix.prompt && (
+                <EnveloppeDePrompt prompt={choix.prompt} testid="activity-step-prompt" />
               )}
             </li>
           ))}
@@ -210,6 +216,46 @@ export function SubAgentText({ text }: { text: string }): React.JSX.Element {
   )
 }
 
+/**
+ * CE QUI A ETE ENVOYE au modele, replie par defaut.
+ *
+ * UN SEUL balisage pour DEUX endroits : le fil des sous-agents (ci-dessous) et la ligne de phase du
+ * bloc orchestration, qui montre desormais le meme prompt (demande du 2026-09-03). Le dupliquer
+ * ferait deriver les deux affichages du meme fait.
+ */
+function EnveloppeDePrompt({
+  prompt,
+  testid
+}: {
+  prompt: NonNullable<OrchStep['prompt']>
+  testid?: string
+}): React.JSX.Element {
+  return (
+    <details className="prompt-envelope" data-testid={testid}>
+      <summary>Voir le prompt envoyé</summary>
+      <div className="prompt-envelope-meta">
+        <span>{prompt.provider}</span>
+        {prompt.model && <span>{prompt.model}</span>}
+        <span>{prompt.transport}</span>
+      </div>
+      <p className="prompt-envelope-limit">{prompt.limitation}</p>
+      <strong>Système · instructions + skills/contexte injectés</strong>
+      <div className="prompt-envelope-system" data-testid="prompt-system-md">
+        <BrainMarkdown source={prompt.system || 'Aucun bloc système.'} />
+      </div>
+      <strong>Messages transmis</strong>
+      {prompt.messages.map((message, messageIndex) => (
+        <section key={`${message.role}-${messageIndex}`}>
+          <small>{message.role}</small>
+          <pre>{message.content}</pre>
+        </section>
+      ))}
+      <strong>Options de transport</strong>
+      <HumanJson value={prompt.options} />
+    </details>
+  )
+}
+
 /** Rendu d'UN step de sous-agent (prompt, raisonnement, echec, texte, preuves). */
 export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element {
   const meta = STEP_META[s.step] ?? { icon: '•', label: s.step }
@@ -254,30 +300,7 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
         </details>
       )}
       {s.text && <SubAgentText text={s.text} />}
-      {s.prompt && (
-        <details className="prompt-envelope">
-          <summary>Voir le prompt envoyé</summary>
-          <div className="prompt-envelope-meta">
-            <span>{s.prompt.provider}</span>
-            {s.prompt.model && <span>{s.prompt.model}</span>}
-            <span>{s.prompt.transport}</span>
-          </div>
-          <p className="prompt-envelope-limit">{s.prompt.limitation}</p>
-          <strong>Système · instructions + skills/contexte injectés</strong>
-          <div className="prompt-envelope-system" data-testid="prompt-system-md">
-            <BrainMarkdown source={s.prompt.system || 'Aucun bloc système.'} />
-          </div>
-          <strong>Messages transmis</strong>
-          {s.prompt.messages.map((message, messageIndex) => (
-            <section key={`${message.role}-${messageIndex}`}>
-              <small>{message.role}</small>
-              <pre>{message.content}</pre>
-            </section>
-          ))}
-          <strong>Options de transport</strong>
-          <HumanJson value={s.prompt.options} />
-        </details>
-      )}
+      {s.prompt && <EnveloppeDePrompt prompt={s.prompt} />}
       {s.evidence && s.evidence.length > 0 && <EvidenceList items={s.evidence} />}
     </div>
   )

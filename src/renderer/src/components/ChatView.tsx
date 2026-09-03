@@ -42,7 +42,8 @@ import {
   type ScopedLiveRun,
   type StoredAssistantMessage,
   settleOrchestrationOnRunEnd,
-  noterChoixDePipeline
+  noterChoixDePipeline,
+  noterPromptDePipeline
 } from './chat-view-model'
 import { shortModelLabel } from './model-display-label'
 import { buildHomeSuggestions } from './chat-home-suggestions'
@@ -1439,6 +1440,20 @@ export function ChatView({
             step
           })
         )
+        /*
+         * LE PROMPT ENVOYE REJOINT SA PHASE DANS LE FIL — correctif du 2026-09-03.
+         *
+         * Le deplie du bloc orchestration nommait la phase et le modele, mais pas ce qui leur avait
+         * ete transmis, alors que c'etait la demande. Le prompt ne peut PAS voyager sur
+         * `orchestrate-phase` : la phase est annoncee AVANT que son enveloppe soit compilee. Il
+         * arrive ici, sur le step, ou il alimentait deja le panneau des sous-agents — on le range
+         * sous la ligne de sa phase au lieu d'en fabriquer une seconde source.
+         */
+        if (step.prompt) {
+          patchLast(e.convId, (m) => {
+            m.parts = noterPromptDePipeline(m.parts, step) as typeof m.parts
+          })
+        }
       } else if (
         e.type === 'orchestrate-hypotheses' &&
         e.convId &&

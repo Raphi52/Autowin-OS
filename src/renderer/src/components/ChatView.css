@@ -3377,11 +3377,23 @@ ol.md-list li {
   background: rgb(0 0 0 / 22%);
   font-size: 10.5px;
 }
+/* Une phase = son en-tete (phase/role/agent) PUIS, en dessous, le prompt qui lui a ete envoye.
+   L'empilement etait horizontal : le niveau de prompt s'y serait ecrase a cote de l'agent. */
 .activity-step-pipeline li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.activity-step-pipeline-head {
   display: flex;
   gap: 6px;
   align-items: baseline;
   min-width: 0;
+}
+/* Le prompt d'une phase reste un niveau SECONDAIRE : legerement en retrait, replie par defaut. */
+.activity-step-pipeline .prompt-envelope {
+  margin: 2px 0 4px 10px;
 }
 .activity-step-phase {
   color: var(--accent, #5b8cff);
