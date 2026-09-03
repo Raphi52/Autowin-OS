@@ -1481,7 +1481,13 @@ export class RunWorktreeCoordinator {
    * (`recensementNonPubliesAsync`). Sans worker, on retombe sur la voie synchrone : meme reponse.
    */
   async travauxNonPubliesAsync(): Promise<
-    Array<{ agentId: string; date: string; fichiers: string[] }>
+    Array<{
+      agentId: string
+      date: string
+      fichiers: string[]
+      verdict?: VerdictBureau
+      lectureEchouee?: boolean
+    }>
   > {
     const releve = await this.manager.recensementNonPubliesAsync?.('HEAD', 100)
     if (!releve) return this.travauxNonPublies()

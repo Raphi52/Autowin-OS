@@ -3197,7 +3197,19 @@ export class AppCommandBus {
     const aleatoire = `command-${famille}-${randomUUID()}`
     const cle = cleDeBureau(famille, conversationId, cible)
     if (!cle) return aleatoire
-    const retenus = this.os.worktrees?.travauxNonPublies?.() ?? []
+    /*
+     * HORS DU THREAD QUI DESSINE LA FENETRE.
+     *
+     * Mesure du 2026-09-03 (`gels.jsonl`, 08:30:01) : 7 244 ms de fenetre morte, accumulation
+     * `execFileSync git rev-parse` x48, `git status` x34, `git cherry` x11. C'etait ce recensement,
+     * paye ICI sur le thread main au debut de chaque commande. La voie hors-thread existe deja
+     * (`travauxNonPubliesAsync`, worker) ; sans worker elle retombe d'elle-meme sur la voie
+     * synchrone, meme reponse.
+     */
+    const retenus =
+      (await this.os.worktrees?.travauxNonPubliesAsync?.()) ??
+      this.os.worktrees?.travauxNonPublies?.() ??
+      []
     const existant = retenus.find((travail) => travail.agentId === cle)
     if (!existant) return cle
     // On transmet l'INDETERMINATION : sans elle, une lecture git ratee se lisait « bureau vide »
