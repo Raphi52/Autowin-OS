@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { SettingsSection } from '../tabs'
 import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView } from './CapabilitiesView'
+import { InterfaceView } from './InterfaceView'
 import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
 import { ShadowRoutingPilotSettings } from './ShadowRoutingPilotSettings'
 import { ViewTopBar } from './ViewTopBar'
@@ -153,7 +154,7 @@ export function SettingsView({
       <ViewTopBar
         eyebrow="CONFIGURATION"
         title="Settings"
-        description="Budget, capacités accordées aux agents, comportement, providers et prérequis machine."
+        description="Budget, capacités accordées aux agents, comportement, apparence, providers et prérequis machine."
         ariaLabel="Sections Settings"
         active={section}
         onSelect={onSectionChange}
@@ -161,6 +162,7 @@ export function SettingsView({
           { id: 'budget', label: 'Budget' },
           { id: 'capabilities', label: 'Skills · Hooks · Tools' },
           { id: 'behaviour', label: 'Behaviour' },
+          { id: 'interface', label: 'Interface' },
           { id: 'providers', label: 'Providers' },
           {
             id: 'preflight',
@@ -183,6 +185,7 @@ export function SettingsView({
           </>
         )}
         {section === 'behaviour' && <BehaviourView />}
+        {section === 'interface' && <InterfaceView />}
         {section === 'providers' && (
           <section className="settings-providers surface-panel" aria-label="Providers">
             <header>
