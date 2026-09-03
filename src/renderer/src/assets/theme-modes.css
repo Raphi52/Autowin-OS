@@ -161,6 +161,34 @@
 :root[data-theme='clair'] .sg-subtitle {
   color: var(--text-dim);
 }
+
+/* ----------------------------------------------------------------------------
+   OBSERVATOIRE — signalé « zones trop claires » le 2026-09-03 : les chiffres des
+   indicateurs, la rangée de filtres et le kicker de section se lisaient à peine.
+   Le kicker est en `#59dcff` EN DUR (ObservatoryView.css l.29), un cyan pensé
+   pour du noir. Les chiffres et les boutons de filtre n'ont aucune couleur
+   propre : ils héritent, et l'héritage venait du thème sombre.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .observatory-panel-title {
+  color: #0f6f9c;
+}
+:root[data-theme='clair'] .observatory-metrics > strong {
+  color: var(--text);
+  background: #ffffff;
+  border-color: var(--line);
+}
+:root[data-theme='clair'] .observatory-metrics small {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .observatory-quick-filters button,
+:root[data-theme='clair'] .observatory-causal-controls button,
+:root[data-theme='clair'] .observatory-toolbar__actions button,
+:root[data-theme='clair'] .observatory-toolbar__actions summary {
+  color: var(--text);
+}
+:root[data-theme='clair'] .observatory-toolbar__scope small {
+  color: var(--text-dim);
+}
 :root[data-theme='clair'] .cosmic-outline .chat-suggest .btn {
   background: #ffffff;
   border-color: var(--line);
