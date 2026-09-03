@@ -33,6 +33,48 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const OUTPUT_CODEPAGE = '65001'
+
+/**
+ * DEUX BINAIRES PORTENT LE NOM `sqlcmd`, et un seul connaît `-f`.
+ *
+ * DEFAUT VECU (conv-152, 2026-09-02) : le poste n'avait aucun sqlcmd. Une fois `go-sqlcmd`
+ * installe (le portage moderne, distribue par Microsoft sous le nom `Microsoft.Sqlcmd`), CHAQUE
+ * lecture echouait sur « Sqlcmd: 'f': Unknown Option » — l'option `-f 65001` n'existe QUE dans le
+ * sqlcmd historique livre avec les outils ODBC. Le module etait ecrit pour cette seule variante.
+ *
+ * Retirer `-f` sans distinguer serait une regression : sur le sqlcmd HISTORIQUE, c'est le seul
+ * chemin qui produise de l'Unicode explicite (cf. le tableau en tete de module), et sans lui les
+ * accents reviennent en CP1252. On SONDE donc le binaire, une fois par chemin.
+ *
+ * Mesure du 2026-09-02 sur go-sqlcmd 1.10 : sans `-f`, `-o fichier` rend de l'UTF-8 SANS BOM, avec
+ * les accents intacts (« Adjonction d'activité » relu exactement). L'option est donc inutile pour
+ * cette variante, pas seulement tolerable.
+ */
+const supportF = new Map<string, boolean>()
+
+export function sqlcmdSupporteOptionF(
+  binaire: string,
+  lanceur: typeof spawnSync = spawnSync
+): boolean {
+  const connu = supportF.get(binaire)
+  if (connu !== undefined) return connu
+  let supporte = true // en cas de doute on garde le comportement historique, jamais l'inverse
+  try {
+    const aide = lanceur(binaire, ['-?'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      shell: false,
+      timeout: 5_000
+    })
+    const texte = `${aide.stdout ?? ''}${aide.stderr ?? ''}`
+    // L'aide du sqlcmd historique liste « -f <codepage> ». go-sqlcmd ne mentionne jamais `-f`.
+    if (texte.trim()) supporte = /(^|\s)-f\b/.test(texte)
+  } catch {
+    /* sonde impossible : on reste sur le comportement historique */
+  }
+  supportF.set(binaire, supporte)
+  return supporte
+}
 /** Une lecture de paramétrage répond en moins d'une seconde ; au-delà, quelque chose déraille. */
 const QUERY_TIMEOUT_SEC = 20
 const PROCESS_TIMEOUT_MS = 30_000
