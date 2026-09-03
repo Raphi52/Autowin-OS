@@ -414,7 +414,7 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
     ).toContain('reste en place')
   })
 
-  it('bloqué → « Faire réparer » ouvre une conversation et PRÉ-REMPLIT le prompt de fix', async () => {
+  it('bloqué → « Faire réparer » ouvre une conversation et ENVOIE le prompt de fix', async () => {
     const conversationsCreate = vi.fn().mockResolvedValue({ id: 'conv-fix' })
     const events: CustomEvent[] = []
     const listener = (e: Event): void => void events.push(e as CustomEvent)
@@ -443,9 +443,9 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
       expect(conversationsCreate).toHaveBeenCalledWith(
         expect.objectContaining({ provider: 'claude', title: 'Réparer la mise à jour' })
       )
-      // Prompt PRÉ-REMPLI (send:false) portant la raison du blocage.
+      // Prompt ENVOYÉ directement (send:true) : le clic vaut validation, pas de 2e Entrée.
       expect(events).toHaveLength(1)
-      expect(events[0].detail).toMatchObject({ conversationId: 'conv-fix', send: false })
+      expect(events[0].detail).toMatchObject({ conversationId: 'conv-fix', send: true })
       const prompt = (events[0].detail as { prompt: string }).prompt
       expect(prompt).toContain('bloquée')
       expect(prompt).toContain('ton travail non committé bloque')

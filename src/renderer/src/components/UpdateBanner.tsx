@@ -49,8 +49,10 @@ function errorMessage(reason: unknown, fallback: string): string {
 /**
  * « Faire réparer » : le fix que l'utilisateur relance À LA MAIN à chaque update bloqué (committer /
  * mettre de côté son travail, ou résoudre le conflit). On le pré-remplit dans une conversation dédiée
- * — même chemin que « Prompter dans Autowin » du veille (`autowin:prefill-conversation`, send:false) —
- * il n'a plus qu'à valider d'un Entrée. Provider résolu depuis les RÔLES, jamais un défaut inventé ;
+ * — même chemin que « Prompter dans Autowin » du veille (`autowin:prefill-conversation`) —
+ * et on l'ENVOIE tout de suite (`send: true`) : le clic EST la validation. Redemander une seconde
+ * validation par Entrée faisait refaire à l'utilisateur le geste qu'il venait de faire
+ * (demande du 2026-09-03). Provider résolu depuis les RÔLES, jamais un défaut inventé ;
  * sans provider on n'ouvre RIEN (mieux que créer une conversation inutilisable).
  */
 async function reparerBlocageUpdate(raison: string): Promise<void> {
@@ -77,7 +79,7 @@ async function reparerBlocageUpdate(raison: string): Promise<void> {
     `mise à jour.`
   window.dispatchEvent(
     new CustomEvent('autowin:prefill-conversation', {
-      detail: { conversationId: conversation.id, prompt, send: false }
+      detail: { conversationId: conversation.id, prompt, send: true }
     })
   )
 }
