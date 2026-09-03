@@ -20,7 +20,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, parse } from 'node:path'
-import { ensureBrainServerStarted } from './brain-server-launch'
+import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { resolveBinOnPath } from './preflight-probes'
 import { resolveClaudeBin } from './providers/claude'
 import { claudeAccountEnv } from './claude-accounts'
@@ -277,8 +277,16 @@ export async function repairPreflightCheck(
     }
     const start =
       deps.startBrain ??
-      ((): Promise<{ status: string; detail: string }> =>
-        ensureBrainServerStarted(deps.pingBrain ?? (async () => false)))
+      ((): Promise<{ status: string; detail: string }> => {
+        // Un clic sur « Démarrer » est une intention MANUELLE et explicite. La garde « une tentative
+        // par session » de `ensureBrainServerStarted` existe pour empêcher le backoff AUTOMATIQUE de
+        // spammer des spawns — pas pour désarmer l'utilisateur. Sans ce réarmement, dès que le
+        // démarrage auto du lancement avait échoué, le bouton restait inopérant pour toute la session
+        // et répondait « démarrage déjà tenté cette session — pas de nouveau spawn » sans rien tenter.
+        // (Constaté 2026-09-01 : brain_server mort, bouton cliqué en vain.)
+        resetBrainLaunchAttempt()
+        return ensureBrainServerStarted(deps.pingBrain ?? (async () => false))
+      })
     const result = await start()
     // `already-up` n'est PAS un démarrage : le dire, au lieu de laisser croire qu'on a agi.
     return { started: result.status === 'starting', detail: result.detail }
