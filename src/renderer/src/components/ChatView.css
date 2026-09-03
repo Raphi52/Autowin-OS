@@ -2854,6 +2854,10 @@ ol.md-list li {
   inset: 0;
 }
 
+/* TÉMOIN DE DICHOTOMIE 3 — 2026-09-03, À RETIRER. */
+.cosmic-outline .conv-label {
+  outline: 2px solid #ff00ff;
+}
 .effort-matrix {
   width: min(620px, 100%);
   padding: 14px 16px 10px;
