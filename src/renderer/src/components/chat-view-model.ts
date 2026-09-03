@@ -1633,8 +1633,6 @@ export function scrollChatToBottom(
    * de lecture ; une molette recule progressivement. On tolère donc UN seul retour-à-zéro.
    */
   let retourEnHautTolere = true
-  /** Une animation `smooth` a été émise et peut être encore en vol. */
-  let smoothEmis = false
   const step = (): void => {
     // Une descente plus récente a pris la main : celle-ci se tait au lieu de lutter contre elle.
     if (annule) return
@@ -1652,17 +1650,13 @@ export function scrollChatToBottom(
       element.scrollTo({ top: height, behavior: 'auto' })
     }
     const isLastFrame = frames >= maxFrames - 1
-    const remaining = height - element.clientHeight - element.scrollTop
     if (heightMoved || (isLastFrame && !isChatNearBottom(element))) {
-      const sec = isLastFrame || remaining >= element.clientHeight
-      // Un `smooth` RELANCÉ à chaque frame repart d'une vitesse nulle : au lieu d'avancer, il fait
-      // trembler le fil. On ne le ré-émet donc que si l'animation en vol n'avance PAS (scrollTop
-      // immobile depuis la frame précédente) ; sinon on la laisse finir sa course.
-      const smoothEnVol = !sec && smoothEmis && element.scrollTop !== lastTop
-      if (!smoothEnVol) {
-        element.scrollTo({ top: height, behavior: sec ? 'auto' : 'smooth' })
-        smoothEmis = !sec
-      }
+      // TOUJOURS SEC. Une animation `smooth` sur un fil qui grandit encore (envoi d'un message
+      // depuis une position remontee, puis streaming) se fait re-cibler a chaque frame : chaque
+      // re-ciblage repart d'une vitesse nulle et l'oeil voit une suite de petits sauts — le
+      // « clignotement jusqu'en bas » rapporte le 2026-09-03. Un saut instantane n'a pas d'etape
+      // intermediaire, donc rien a faire clignoter.
+      element.scrollTo({ top: height, behavior: 'auto' })
     }
     lastHeight = height
     lastTop = element.scrollTop

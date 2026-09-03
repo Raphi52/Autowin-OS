@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { instrumenterAccesBloquants, marquerOperation } from './gel-main'
+import {
+  cumulerAccesBloquant,
+  instrumenterAccesBloquants,
+  marquerOperation,
+  preleverAccesCumules
+} from './gel-main'
 import { nommerAccesBloquant } from '../shared/gel-detector'
 import type { Gel } from '../shared/gel-detector'
 
@@ -124,7 +129,6 @@ describe('instrumenterEntreesSortiesDuMain — cablage sur les vrais modules', (
   })
 })
 
-import { cumulerAccesBloquant, preleverAccesCumules } from './gel-main'
 import { nommerAccumulation } from '../shared/gel-detector'
 
 /**
@@ -182,5 +186,31 @@ describe('accumulation d appels courts — nommer ce qu aucun appel isole ne tra
     expect(gels).toEqual([])
     expect(cumules.find((c) => c.operation === 'lire')?.appels).toBe(2)
     expect(cumules.find((c) => c.operation === 'lire')?.cumulMs ?? 0).toBeGreaterThanOrEqual(50)
+  })
+})
+
+/**
+ * MORT PAR MILLE COUPURES : le cumul doit dire QUI, pas seulement QUOI.
+ *
+ * Mesure du 2026-09-03 : un gel de demarrage porte `execFileSync git for-each-ref` x27 (2 252 ms)
+ * sans aucun appelant — le champ pose sur l'appel UNIQUE hors seuil ne couvre pas les cumuls, qui
+ * sont pourtant la forme habituelle des gels.
+ */
+describe('appelant dominant d’un cumul', () => {
+  it('garde l’appelant qui porte le plus de temps, pas le plus frequent', () => {
+    preleverAccesCumules()
+    cumulerAccesBloquant('execFileSync git status', 50, 'store/worktree-manager.ts:1209:7')
+    cumulerAccesBloquant('execFileSync git status', 50, 'store/worktree-manager.ts:1209:7')
+    cumulerAccesBloquant('execFileSync git status', 400, 'main/commands.ts:1710:9')
+    const [entree] = preleverAccesCumules()
+    expect(entree.operation).toBe('execFileSync git status')
+    expect(entree.cumulMs).toBe(500)
+    expect(entree.appels).toBe(3)
+    expect(entree.appelant).toBe('main/commands.ts:1710:9')
+  })
+  it('n’invente aucun appelant quand aucun n’a ete capture', () => {
+    preleverAccesCumules()
+    cumulerAccesBloquant('readFileSync', 12)
+    expect(preleverAccesCumules()[0].appelant).toBeUndefined()
   })
 })

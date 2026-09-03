@@ -80,6 +80,15 @@ export interface Gel {
    */
   conversationId?: string
   turnId?: string
+  /**
+   * QUI a lance l'appel bloquant — les premieres frames applicatives de la pile, hors node interne.
+   *
+   * Mesure du 2026-09-03 (`gels.jsonl`) : les gels les plus longs disent `execFileSync git rev-parse
+   * x60` sans dire d'ou ils partent, et l'`indice` ne nomme qu'un IPC ouvert, pas l'appelant. Sans
+   * cette ligne, chaque diagnostic recommence par une fouille du depot. Elle n'est capturee que
+   * quand un appel depasse deja le seuil : cout nul sur le chemin normal.
+   */
+  appelant?: string
 }
 
 /** Temps synchrone total passe dans UN appel, sur la fenetre d'un battement. */
@@ -87,6 +96,15 @@ export interface AccesCumule {
   operation: string
   cumulMs: number
   appels: number
+  /**
+   * QUI a lance ces appels — l'appelant qui pese le PLUS dans ce cumul.
+   *
+   * Mesure du 2026-09-03 : les gels reels ne sont presque jamais UN appel long, mais un cumul
+   * (`execFileSync git for-each-ref` x27 = 2 252 ms). Le champ `appelant` du gel, pose seulement sur
+   * l'appel unique hors seuil, ne les couvrait donc pas : ils restaient anonymes, et le diagnostic
+   * repartait en fouille du depot. Un seul appelant est garde par operation — le plus couteux.
+   */
+  appelant?: string
 }
 
 export interface ResumeGels {
@@ -280,6 +298,30 @@ export function cleDeCumul(api: string, args: readonly unknown[]): string {
     ? suite.find((a) => typeof a === 'string' && /^[a-z][a-z0-9-]*$/.test(a))
     : undefined
   return typeof sousCommande === 'string' ? `${api} ${nom} ${sousCommande}` : `${api} ${nom}`
+}
+
+/**
+ * LES FRAMES APPLICATIVES d'une pile, condensees en une ligne — jamais le bruit de node.
+ *
+ * On garde `fichier:ligne` des trois premieres frames hors `node:` et hors le detecteur lui-meme :
+ * c'est ce qui nomme un appelant sans faire exploser la taille d'une ligne de journal.
+ */
+export function appelantApplicatif(pile: string | undefined, maxFrames = 3): string | undefined {
+  if (!pile) return undefined
+  const frames = pile
+    .split(/\r?\n/)
+    .slice(1)
+    .map((ligne) => ligne.trim())
+    .filter((ligne) => ligne.startsWith('at '))
+    .filter((ligne) => !/\(node:|node:internal/.test(ligne))
+    .filter((ligne) => !/gel-main|gel-detector/.test(ligne))
+    .map((ligne) => {
+      const emplacement = /\(?([^()\s]+:\d+:\d+)\)?$/.exec(ligne)?.[1]
+      if (!emplacement) return undefined
+      return emplacement.split(/[\\/]/).slice(-2).join('/')
+    })
+    .filter((frame): frame is string => frame !== undefined)
+  return frames.length ? frames.slice(0, maxFrames).join(' < ') : undefined
 }
 
 export function nommerAccesBloquant(api: string, cible?: unknown): string {

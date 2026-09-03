@@ -62,6 +62,7 @@ export interface RunWorktreeCoordinatorDeps {
       Pick<
         WorktreeManager,
         | 'commitDejaReference'
+        | 'commitsDejaReferences'
         | 'travauxNonPublies'
         | 'marquerTravailTrie'
         | 'oublierTravailTrie'
@@ -2288,6 +2289,18 @@ export class RunWorktreeCoordinator {
     managerIds: readonly string[]
   ): void {
     if (!this.stateStore) return
+    /*
+     * UNE SEULE INTERROGATION GIT POUR TOUS LES MANIFESTES.
+     *
+     * Mesure du 2026-09-03 (gel de demarrage, `gels.jsonl`) : `for-each-ref --contains` etait pose
+     * ici UNE FOIS PAR MANIFESTE — 27 appels, 2 252 ms de fenetre morte, sur le thread qui dessine.
+     * La question ne change pas ; seule sa forme change : `commitsDejaReferences` y repond pour
+     * tout le lot d'un coup. Sans manager capable du lot, la voie unitaire reste inchangee.
+     */
+    const commitsAVerifier = [...records.values()]
+      .map((record) => record.sourceSha ?? record.publishedSha)
+      .filter((commit): commit is string => Boolean(commit))
+    const referencesDuLot = this.manager.commitsDejaReferences?.(commitsAVerifier)
     for (const [runId, record] of [...records]) {
       /*
        * DEUX signaux independants, jamais un seul. Un `existsSync` transitoirement faux — disque
@@ -2311,7 +2324,10 @@ export class RunWorktreeCoordinator {
       if (ETATS_ENCORE_RECUPERABLES.has(record.publication)) continue
       const commit = record.sourceSha ?? record.publishedSha
       if (commit) {
-        if (this.manager.commitDejaReference?.(commit) !== true) continue
+        const deja = referencesDuLot
+          ? referencesDuLot.get(commit)
+          : this.manager.commitDejaReference?.(commit)
+        if (deja !== true) continue
       }
       this.stateStore.remove(runId)
       records.delete(runId)

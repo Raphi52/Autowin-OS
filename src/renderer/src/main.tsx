@@ -4,6 +4,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { surveillerGelsRenderer } from './gel-renderer'
+import { vueDominanteRecente } from './components/rendu-long'
 import { appliquerThemeMode, lireThemeMode } from './theme-mode'
 
 /*
@@ -18,8 +19,17 @@ appliquerThemeMode(lireThemeMode())
  * de la fenetre.
  */
 surveillerGelsRenderer((dureeMs) => {
-  const api = (window as unknown as { api?: { signalerGelRenderer?: (ms: number) => unknown } }).api
-  api?.signalerGelRenderer?.(dureeMs)
+  const api = (
+    window as unknown as {
+      api?: { signalerGelRenderer?: (ms: number, etiquette?: string) => unknown }
+    }
+  ).api
+  /*
+   * On joint la vue qui a le plus rendu juste avant : sans elle, la tache longue repart sous
+   * `renderer:longtask`, le nom qui portait 272 s de fenetre morte sans accuser personne.
+   * Aucune vue mesuree = aucune etiquette, jamais un nom invente.
+   */
+  api?.signalerGelRenderer?.(dureeMs, vueDominanteRecente())
 })
 
 createRoot(document.getElementById('root')!).render(

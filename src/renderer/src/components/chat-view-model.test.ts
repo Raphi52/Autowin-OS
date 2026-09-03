@@ -1755,7 +1755,7 @@ describe('chat scrolling and layout rules', () => {
     expect(element.scrollTop).toBe(2300)
   })
 
-  it("ne relance pas un smooth qui avance déjà (relance par frame = tremblement)", () => {
+  it('descend TOUJOURS d’un saut sec, meme sur le dernier centimetre (pas de clignotement)', () => {
     const queue: Array<() => void> = []
     const scrolls: ScrollToOptions[] = []
     const element = {
@@ -1767,15 +1767,14 @@ describe('chat scrolling and layout rules', () => {
       }
     }
     scrollChatToBottom(element, (callback) => queue.push(callback))
-    expect(scrolls[0]?.behavior).toBe('smooth')
-    // L'animation avance d'elle-même pendant que le fil grandit un peu.
     for (let i = 1; i <= 3; i += 1) {
       element.scrollTop += 10
       element.scrollHeight += 5
       queue.shift()?.()
     }
-    // Aucun smooth ré-émis tant qu'il progresse.
-    expect(scrolls.filter((o) => o.behavior === 'smooth')).toHaveLength(1)
+    // Aucune animation : une descente animee re-ciblee frame par frame est ce qui faisait trembler
+    // le fil apres un envoi depuis une position remontee (2026-09-03).
+    expect(scrolls.every((o) => o.behavior === 'auto')).toBe(true)
   })
 
   it('câble le filet de secours dans ChatView (exposé sans appelant = théâtre)', () => {

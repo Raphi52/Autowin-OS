@@ -35,6 +35,7 @@ import {
   hydrateStoredAssistant,
   isRunRequestCurrent,
   doitSuivreLeBas,
+  doitSuivreLeRoutage,
   compenserRetrecissementDuFil,
   doitIgnorerDefilementDeBascule,
   isChatNearBottom,
@@ -3140,7 +3141,37 @@ export function ChatView({
           value,
           outgoingAttachments.map((attachment) => attachment.name)
         )
-        if (route.routed && route.conversationId !== sourceId) {
+        /*
+         * ON NE SUIT LE ROUTAGE QUE SI ON PEUT Y EMMENER L'UTILISATEUR.
+         *
+         * Defaut vecu le 2026-09-03 (conv-171) : « je crois que la conv s'est pas cree et que ca a
+         * laisse le message ici ». La bascule d'ecran etait CONDITIONNELLE, mais l'envoi vers le fil
+         * neuf ne l'etait pas : des que le brouillon ou la selection avaient bouge pendant l'appel au
+         * routeur, le message partait dans un fil que l'utilisateur ne voyait jamais. Constat mesure :
+         * conv-170 a recu un numero (compteur passe a 179), aucun message, et n'existait plus ensuite.
+         *
+         * La decision est donc prise AVANT tout deplacement. Si on ne peut pas basculer, on ne suit
+         * pas : le message reste dans le fil ou il a ete ecrit, et le fil neuf cree pour rien est
+         * retire — sinon il tapisserait la liste de fils vides.
+         */
+        const suivreLeRoutage = doitSuivreLeRoutage({
+          routed: route.routed,
+          cibleId: route.conversationId,
+          sourceId,
+          filAffiche: activeRef.current,
+          cleBrouillonEnvoi: sendDraftKey,
+          cleBrouillonActuelle: composerDraftKeyRef.current,
+          generationSelectionEnvoi: sendSelectionGeneration,
+          generationSelectionActuelle: composerSelectionGenerationRef.current
+        })
+        if (route.routed && route.conversationId !== sourceId && !suivreLeRoutage) {
+          // Optionnel a l'appel : le retrait du fil inutile ne doit JAMAIS empecher le message de
+          // partir. Une API amputee ferait perdre le nettoyage, pas le texte de l'utilisateur.
+          void window.api
+            .conversationsRemove?.(route.conversationId)
+            ?.catch((error: unknown) => traceSilentFailure('routage-fil-abandonne', error))
+        }
+        if (suivreLeRoutage) {
           convId = route.conversationId
           sendLocksRef.current.add(convId)
           liveMessagesRef.current.set(sourceId, sourcePreviousMessages)
@@ -3157,15 +3188,9 @@ export function ChatView({
            */
           sendLocksRef.current.delete(sendLockKey)
           previousMessagesForTarget = liveMessagesRef.current.get(convId) ?? []
-          const shouldAdoptRoutedConversation =
-            activeRef.current === sourceId &&
-            composerDraftKeyRef.current === sendDraftKey &&
-            composerSelectionGenerationRef.current === sendSelectionGeneration
-          if (shouldAdoptRoutedConversation) {
-            activeRef.current = convId
-            setActiveId(convId)
-            switchComposerDraft(convId)
-          }
+          activeRef.current = convId
+          setActiveId(convId)
+          switchComposerDraft(convId)
         }
       }
 
@@ -3731,7 +3756,8 @@ export function ChatView({
               hit
             }))
           ),
-          groupesReplies
+          // Pendant une recherche, aucun repli ne masque un resultat : chercher, c'est vouloir voir.
+          convQuery.trim() ? {} : groupesReplies
         ),
         // La date n'arbitre qu'entre FRERES : un `.sort()` a plat ecrasait le rang par nature
         // (« Auto-kaizen » remontait en tete) et l'ordre parent-avant-enfant (un sous-dossier
@@ -3743,7 +3769,7 @@ export function ChatView({
         (groupe) => recenceUtilisateur(groupe.items[0].hit.conversation),
         conversationDateOrder
       ),
-    [conversationHits, groupesReplies, conversationDateOrder]
+    [conversationHits, groupesReplies, conversationDateOrder, convQuery]
   )
 
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
@@ -3979,7 +4005,9 @@ export function ChatView({
             <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
           )}
           {groupes.map((groupe) => {
-            const replie = estReplie(groupe.key, groupesReplies)
+            // Une RECHERCHE en cours deplie tout : un resultat cache dans un dossier replie
+            // faisait croire que la conversation n'existait plus (« je tape 170, ca me montre rien »).
+            const replie = !convQuery.trim() && estReplie(groupe.key, groupesReplies)
             return (
               <Fragment key={groupe.key}>
                 {/*
@@ -4098,12 +4126,21 @@ export function ChatView({
                                 <TexteSurligne texte={snippet} terme={convQuery} />
                               </span>
                             )}
-                            {!convQuery && (
-                              <span className="conv-meta">
-                                <span>{c.id}</span>
-                                <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
+                            {/* Le NUMERO reste visible pendant une recherche, et surligne quand il
+                                correspond : taper « 171 » masquait la seule information qui prouve
+                                qu'on a trouve la bonne conversation (2026-09-03). */}
+                            <span className="conv-meta">
+                              <span>
+                                {convQuery ? (
+                                  <TexteSurligne texte={c.id} terme={convQuery} />
+                                ) : (
+                                  c.id
+                                )}
                               </span>
-                            )}
+                              {!convQuery && (
+                                <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
+                              )}
+                            </span>
                           </span>
                           {convQuery && (
                             <span className="conv-count tnum">

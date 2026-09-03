@@ -450,3 +450,64 @@ describe('D — un etat dont la COPIE a disparu ne survit plus tout seul', () =>
     }
   })
 })
+
+/**
+ * LE COUT DE LA FERMETURE — mesure du 2026-09-03 (`gels.jsonl`, gel de demarrage).
+ *
+ * `for-each-ref --contains` reparcourt toutes les references du depot A CHAQUE APPEL, et il etait
+ * pose une fois par manifeste : 27 appels, 2 252 ms de fenetre morte pendant la construction de la
+ * fenetre. Le test verrouille la FORME de l'interrogation, pas une duree : une seule pour tout le lot.
+ */
+describe('fermeture des manifestes orphelins — une seule interrogation git', () => {
+  it('interroge git UNE fois pour N manifestes, et respecte sa reponse par commit', () => {
+    const root = mkdtempSync(join(tmpdir(), 'fermeture-lot-'))
+    try {
+      const store = new WorktreeRunStateStore(root, 'repo-a')
+      const dansHistorique = 'a'.repeat(40)
+      const orphelin = 'b'.repeat(40)
+      for (const [runId, sha] of [
+        ['run-publie-1', dansHistorique],
+        ['run-publie-2', dansHistorique],
+        ['run-orphelin', orphelin]
+      ] as const) {
+        store.save({
+          version: 1,
+          repoId: 'repo-a',
+          runId,
+          agentName: 'Builder',
+          baseBranch: 'main',
+          baseSha: SHA,
+          verdict: 'green',
+          publication: 'blocked',
+          worktreePath: join(root, 'agent__' + runId),
+          files: [],
+          createdAtMs: 10,
+          updatedAtMs: 20,
+          sourceSha: sha
+        })
+      }
+      const lots: string[][] = []
+      // eslint-disable-next-line no-new
+      new RunWorktreeCoordinator({
+        manager: manager(root, {
+          listAgentIds: () => [],
+          commitDejaReference: () => {
+            throw new Error('la voie unitaire ne doit plus etre empruntee pour le lot')
+          },
+          commitsDejaReferences: (shas: readonly string[]) => {
+            lots.push([...shas])
+            return new Map(shas.map((sha) => [sha, sha === dansHistorique]))
+          }
+        }),
+        stateStore: store,
+        nowFn: () => 30
+      })
+      expect(lots).toHaveLength(1)
+      expect(store.get('run-publie-1')).toBeUndefined()
+      expect(store.get('run-publie-2')).toBeUndefined()
+      expect(store.get('run-orphelin')).toBeTruthy()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})

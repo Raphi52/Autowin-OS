@@ -9,6 +9,7 @@ import {
   resumerGels,
   cleDeCumul,
   nommerAccesBloquant,
+  appelantApplicatif,
   PERIODE_BATTEMENT_MS,
   SEUIL_GEL_MS,
   type AccesCumule,
@@ -51,28 +52,60 @@ let dernierFerme: { nom: string; a: number } | undefined
  * seuil ; cent lectures de 100 ms tiennent la boucle 10 s en restant invisibles. La cle est le nom
  * de l'API SEUL (pas le chemin) : la cardinalite reste bornee quoi que fasse l'application.
  */
-const cumulFenetre = new Map<string, { cumulMs: number; appels: number }>()
+/**
+ * A PARTIR DE QUAND on paie une pile d'appel pour nommer l'appelant.
+ *
+ * 40 ms : au-dessus, l'appel a deja coute mille fois le prix de la capture ; en dessous, il ne
+ * pourrait composer un gel de plusieurs secondes qu'a des centaines d'appels, cas que le cumul
+ * par API nomme deja.
+ */
+const SEUIL_APPELANT_MS = 40
 
-/** Ajoute le temps synchrone d'un appel a la fenetre courante. */
-export function cumulerAccesBloquant(api: string, dureeMs: number): void {
+const cumulFenetre = new Map<
+  string,
+  { cumulMs: number; appels: number; parAppelant?: Map<string, number> }
+>()
+
+/**
+ * Ajoute le temps synchrone d'un appel a la fenetre courante, avec l'APPELANT quand on le connait.
+ *
+ * L'appelant n'est pas une cle de cumul : il est compte a part et seul le plus couteux ressort.
+ * Garder toutes les piles ferait exploser la ligne de journal pour une information deja portee par
+ * la premiere.
+ */
+export function cumulerAccesBloquant(api: string, dureeMs: number, appelant?: string): void {
   if (dureeMs <= 0) return
   const cle = api || 'inconnu'
-  const courant = cumulFenetre.get(cle)
-  if (courant) {
-    courant.cumulMs += dureeMs
-    courant.appels += 1
-    return
+  const courant = cumulFenetre.get(cle) ?? { cumulMs: 0, appels: 0 }
+  courant.cumulMs += dureeMs
+  courant.appels += 1
+  if (appelant) {
+    const parAppelant = courant.parAppelant ?? new Map<string, number>()
+    parAppelant.set(appelant, (parAppelant.get(appelant) ?? 0) + dureeMs)
+    courant.parAppelant = parAppelant
   }
-  cumulFenetre.set(cle, { cumulMs: dureeMs, appels: 1 })
+  cumulFenetre.set(cle, courant)
+}
+
+/** L'appelant qui porte le plus de temps dans un cumul — `undefined` si aucun n'a ete capture. */
+function appelantDominant(parAppelant?: Map<string, number>): string | undefined {
+  if (!parAppelant || parAppelant.size === 0) return undefined
+  return [...parAppelant].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]
 }
 
 /** Rend le cumul de la fenetre et la REMET A ZERO — un cumul lu deux fois accuserait deux fois. */
 export function preleverAccesCumules(): AccesCumule[] {
-  const entrees: AccesCumule[] = [...cumulFenetre].map(([operation, { cumulMs, appels }]) => ({
-    operation,
-    cumulMs: Math.round(cumulMs),
-    appels
-  }))
+  const entrees: AccesCumule[] = [...cumulFenetre].map(
+    ([operation, { cumulMs, appels, parAppelant }]) => {
+      const appelant = appelantDominant(parAppelant)
+      return {
+        operation,
+        cumulMs: Math.round(cumulMs),
+        appels,
+        ...(appelant ? { appelant } : {})
+      }
+    }
+  )
   cumulFenetre.clear()
   return entrees
 }
@@ -430,13 +463,30 @@ export function instrumenterAccesBloquants<H extends Record<string, unknown>>(
         return fn.apply(this, args)
       } finally {
         const dureeMs = Date.now() - depart
-        cumulerAccesBloquant(cleDeCumul(nom, args), dureeMs)
+        /*
+         * LA PILE NE SE PAIE QUE SUR UN APPEL DEJA LENT.
+         *
+         * `new Error().stack` coute quelques dizaines de microsecondes : impensable sur les
+         * centaines de milliers d'acces d'une session, negligeable sur un appel qui vient de tenir
+         * la boucle plus de `SEUIL_APPELANT_MS`. C'est exactement la population qui compose les
+         * gels par mille coupures — la seule qui restait anonyme.
+         */
+        const appelantDeCetAppel =
+          dureeMs >= SEUIL_APPELANT_MS ? appelantApplicatif(new Error('acces').stack) : undefined
+        cumulerAccesBloquant(cleDeCumul(nom, args), dureeMs, appelantDeCetAppel)
         if (dureeMs >= seuilMs) {
+          /*
+           * QUI a lance cet appel — capture SEULEMENT ici, jamais sur le chemin normal.
+           * Sans elle, un gel dit `execFileSync git rev-parse` x60 sans dire d'ou il part, et
+           * chaque diagnostic recommence par une fouille du depot (mesure du 2026-09-03).
+           */
+          const appelant = appelantDeCetAppel ?? appelantApplicatif(new Error('gel').stack)
           ecrire({
             ts: new Date().toISOString(),
             blocageMs: dureeMs,
             operation: nommerAccesBloquant(nom, args[0]),
-            cause: 'entree-sortie-bloquante'
+            cause: 'entree-sortie-bloquante',
+            ...(appelant ? { appelant } : {})
           })
         }
       }

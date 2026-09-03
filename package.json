@@ -124,6 +124,7 @@
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
     "scout:residus": "node scripts/scout-residus.mjs src",
+    "scout:pilote": "node scripts/pilote-prompts.cli.mjs",
     "scout:rendement": "node scripts/scout-rendement.mjs",
     "arena:protocole": "node scripts/arena-protocole-check.mjs",
     "arena:duel": "node scripts/arena-duel.mjs"

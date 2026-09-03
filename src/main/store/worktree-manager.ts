@@ -1994,6 +1994,50 @@ export class WorktreeManager {
    * Rend `undefined` quand git ne repond pas — l'ignorance n'est pas une reponse negative, et
    * l'appelant doit s'abstenir plutot que de supposer.
    */
+  /**
+   * LA MEME QUESTION, POSEE UNE SEULE FOIS POUR TOUT UN LOT.
+   *
+   * `for-each-ref --contains <sha>` reparcourt TOUTES les references du depot a chaque appel :
+   * mesure du 2026-09-03 (`gels.jsonl`, gel de demarrage) 27 appels = 2 252 ms de fenetre morte,
+   * soit 83 ms piece, payes sur le thread qui dessine la fenetre. Or `rev-list --no-walk` repond
+   * pour N commits d'un coup : il rend ceux qui ne sont atteignables depuis AUCUNE reference. Un
+   * commit absent de sa sortie est donc deja retenu par l'historique — meme definition, une commande.
+   *
+   * `--glob=refs/*` et `--single-worktree`, jamais `--all` : `--all` compte AUSSI le HEAD du depot et
+   * les HEAD detaches des copies, que `for-each-ref` ignore. Avec lui, un travail retenu par la SEULE
+   * copie de l'agent passait pour deja publie — et son manifeste, seule adresse de ce travail, etait
+   * supprime. Verifie par test sur depot reel : la reponse doit etre identique a la voie unitaire.
+   *
+   * Rend une entree `undefined` par sha quand git ne repond pas : l'ignorance n'est pas une reponse
+   * negative, et l'appelant doit s'abstenir de supprimer.
+   */
+  commitsDejaReferences(shas: readonly string[]): Map<string, boolean | undefined> {
+    const reponse = new Map<string, boolean | undefined>()
+    const valides = [...new Set(shas.filter((sha) => /^[0-9a-f]{40,64}$/i.test(sha)))]
+    for (const sha of shas) if (!valides.includes(sha)) reponse.set(sha, undefined)
+    if (valides.length === 0) return reponse
+    const sortie = this.tryGitFn(this.baseRepo, [
+      'rev-list',
+      '--single-worktree',
+      '--no-walk',
+      ...valides,
+      '--not',
+      '--glob=refs/*'
+    ])
+    if (sortie.code !== 0) {
+      for (const sha of valides) reponse.set(sha, undefined)
+      return reponse
+    }
+    const orphelins = new Set(
+      sortie.stdout
+        .split(/\r?\n/)
+        .map((ligne) => ligne.trim().toLowerCase())
+        .filter(Boolean)
+    )
+    for (const sha of valides) reponse.set(sha, !orphelins.has(sha.toLowerCase()))
+    return reponse
+  }
+
   commitDejaReference(sha: string): boolean | undefined {
     if (!/^[0-9a-f]{40,64}$/i.test(sha)) return undefined
     const containing = this.tryGitFn(this.baseRepo, [

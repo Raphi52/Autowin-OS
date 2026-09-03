@@ -2238,7 +2238,19 @@ describe('ChatView behavior under concurrent UI actions', () => {
     }
   })
 
-  it('does not steal conversation B when routing from A resolves late', async () => {
+  /**
+   * REGLE POSEE LE 2026-09-03 (conv-171), sur demande explicite de l'utilisateur : « un message
+   * reste toujours dans le fil ou je l'ecris quand la bascule d'ecran ne peut pas s'appliquer ».
+   *
+   * Ce test exigeait AUPARAVANT l'inverse : le message partait dans le fil neuf `C` pendant que
+   * l'utilisateur regardait `B`. C'est le defaut vecu — « je crois que la conv s'est pas cree et
+   * que ca a laisse le message ici ». Le fil `C` ne recevait parfois jamais son contenu et
+   * disparaissait, le texte ne survivant que dans le journal de secours des saisies.
+   *
+   * L'exigence est donc INVERSEE, pas desserree : le message doit partir dans `A`, le fil neuf
+   * cree pour rien doit etre retire, et l'ecran ne doit pas bouger de `B`.
+   */
+  it('garde le message dans A quand le routage arrive trop tard pour basculer', async () => {
     const routing = deferred<{
       sourceConversationId: string
       conversationId: string
@@ -2252,6 +2264,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
         .mockResolvedValueOnce([conversation('A'), conversation('B')])
         .mockResolvedValue([conversation('A'), conversation('B'), conversation('C')]),
       routeConversationMessage: vi.fn(() => routing.promise),
+      conversationsRemove: vi.fn().mockResolvedValue(true),
       pilotChat
     })
     await mount(mockApi)
@@ -2274,7 +2287,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(pilotChat.mock.calls[0][0]).toEqual([
       expect.objectContaining({ role: 'user', content: 'nouveau sujet depuis A' })
     ])
-    expect(pilotChat.mock.calls[0][1]).toBe('C')
+    // Le message reste dans le fil OU IL A ETE ECRIT, pas dans le fil neuf que personne ne regarde.
+    expect(pilotChat.mock.calls[0][1]).toBe('A')
+    // Et le fil neuf cree pour rien est retire, sinon la liste se tapisse de fils vides.
+    expect(mockApi.conversationsRemove).toHaveBeenCalledWith('C')
     expect(
       container!.querySelector('.chat-layout')?.getAttribute('data-active-conversation-id')
     ).toBe('B')
