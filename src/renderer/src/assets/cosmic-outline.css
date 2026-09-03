@@ -460,20 +460,12 @@
   flex: none;
   align-items: center;
   gap: 5px;
-  color: #ffffff;
-}
-
-.cosmic-outline .chat-runtime-state .status-dot {
-  background: #ffffff;
+  /* Le nom de la conversation est une information de reperage, pas une alerte : gris, jamais vert. */
+  color: #97a3b1;
 }
 
 .cosmic-outline .chat-runtime-state.is-busy {
-  color: #ffffff;
-}
-
-.cosmic-outline .chat-runtime-state.is-busy .status-dot {
-  background: #ffffff;
-  animation: pulse 1.2s ease-in-out infinite;
+  color: #97a3b1;
 }
 
 .cosmic-outline .chat-scroll {
