@@ -1942,9 +1942,9 @@ export function ChatView({
    * « Traiter » DELEGUE, au lieu d'ouvrir une liste.
    *
    * L'utilisateur a clique, lu les quatorze lignes, et demande « et apres je fais quoi avec ca ? ».
-   * La liste informait sans permettre d'agir : elle deplacait le probleme sur lui. Le bouton depose
-   * desormais un prompt dans une conversation NEUVE, sans l'envoyer -- meme regle que la vue Tickets,
-   * pour la meme raison : preparer un prompt qu'il ne voit pas serait inutile.
+   * La liste informait sans permettre d'agir : elle deplacait le probleme sur lui. Le bouton ecrit
+   * desormais le prompt dans une conversation NEUVE et l'ENVOIE : l'utilisateur a deja decide en
+   * cliquant, et le tri des travaux non publies est une lecture qui ne supprime rien.
    *
    * La liste reste accessible par « Voir la liste » : elle sert a LIRE un diff, et supprimer cet
    * acces aurait ete une perte silencieuse.
@@ -1961,7 +1961,15 @@ export function ChatView({
     if (!prompt) return
     newConv()
     setDraftInput(NEW_DRAFT_KEY, prompt)
-    requestAnimationFrame(() => composerRef.current?.focus())
+    /*
+     * ENVOYE, pas depose. Le geste s'arretait au brouillon « l'utilisateur lit et decide » : il
+     * n'avait plus rien a decider — il a clique « Traiter », le prompt est un `/salvage` que lui
+     * seul pouvait envoyer, et il l'a envoye a la main a chaque fois. Demande du 2026-09-03 : « je
+     * passe mon temps a envoyer des salvages alors que ca pourrait etre fait tout seul ». Le tri est
+     * une LECTURE qui juge par contenu et ne supprime rien sans SHA consigne : sur, borne, reversible.
+     * Le prompt reste ECRIT dans le fil, donc visible et relisible.
+     */
+    requestAnimationFrame(() => void send(prompt))
   }
 
   /**
