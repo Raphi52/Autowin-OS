@@ -1004,43 +1004,54 @@
   flex-direction: column;
   gap: 6px;
 }
-/* BARRE DE PROMPTING « DEUX ÉTAGES » (choix utilisateur, conv-167 direction C).
-   Le TEXTE occupe toute la largeur (order:-1 + flex-basis 100% force le retour), les outils
-   passent sur une seconde rangée séparée d'un filet. Motif : en mosaïque la rangée unique
-   écrasait le champ — le bouton « Envoyer » et le micro lui mangeaient la place. Aucun JSX
-   touché : le passage à deux étages est purement une affaire de mise en page. */
+/* BARRE DE PROMPTING « CAPSULE » (choix utilisateur, conv-174 direction D2c-3).
+   UN seul étage : capsule centrée à 72 %, la couleur du CONTOUR dit l'état — or au repos,
+   rose pendant qu'un run tourne (présence du bouton d'arrêt). Remplace les deux étages de
+   conv-167 : trois rangées empilées faisaient ~150 px de haut pour un champ d'une ligne.
+   Aucun JSX touché : la refonte est purement une affaire de mise en page. */
 .composer-input-row {
   display: flex;
-  flex-wrap: wrap;
+  width: 72%;
+  min-width: min(420px, 100%);
+  max-width: 900px;
+  box-sizing: border-box;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
-  min-width: 0;
+  padding: 9px 9px 9px 20px;
+  border: 1px solid rgba(212, 169, 79, 0.4);
+  border-radius: 999px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.04);
+  gap: 12px;
   container-type: inline-size;
+  transition: border-color 0.18s ease;
 }
 .composer-input-row > textarea {
-  order: -1;
-  flex: 1 0 100%;
   min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  min-height: 24px;
+  max-height: 120px;
 }
-/* La 2e rangée : un filet fin la détache du champ, sur toute la largeur. */
+/* Le filet séparateur des deux étages n'a plus lieu d'être. */
 .composer-input-row::before {
-  order: 0;
-  flex: 1 0 100%;
-  height: 0;
-  margin-top: 1px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  content: '';
+  display: none;
 }
-/* C1 : le champ n'a plus de cadre — c'est ce filet qui signale le focus. */
-.composer-field:focus-within .composer-input-row::before {
-  border-top-color: rgba(239, 69, 168, 0.45);
+/* Le CONTOUR signale l'état : or vif au focus, rose tant que l'agent travaille. */
+.composer-field:focus-within .composer-input-row {
+  border-color: rgba(212, 169, 79, 0.75);
+}
+.composer-input-row:has([data-testid='composer-stop']) {
+  border-color: rgba(239, 69, 168, 0.5);
 }
 /* Envoyer reste ancré à droite, quoi qu'il y ait avant lui. */
 .composer-input-row > .composer-send {
   margin-left: auto;
 }
 
-/* TUILE ÉTROITE (mosaïque) : la rangée d'outils se resserre, le champ ne bouge pas. */
+/* TUILE ÉTROITE (mosaïque) : la capsule prend toute la largeur, les outils se resserrent. */
 @container (max-width: 320px) {
   .composer-input-row {
     gap: 4px;
