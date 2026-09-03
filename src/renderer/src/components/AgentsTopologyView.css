@@ -657,6 +657,21 @@
   color: #ead18b;
 }
 
+/* MODE CLAIR — les liens d'action (« Glissez un modèle ici », « Remplacer avec le
+   modèle sélectionné », « + Ajouter le modèle sélectionné ») sont peints en
+   `#95999f` avec une bordure BLANCHE translucide par la règle `.theme-serious`
+   ci-dessus (l.649-653). Deux niveaux de spécificité : une règle simple ne les
+   atteint pas. Le survol doré reste doré, mais assombri pour rester lisible. */
+:root[data-theme='clair'] .theme-serious .topology-empty,
+:root[data-theme='clair'] .theme-serious .topology-assign-button {
+  border-color: var(--line);
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
+  border-color: rgba(154, 111, 16, 0.6);
+  color: #7a5a10;
+}
+
 .theme-serious .topology-panel.is-drop-target {
   border-color: rgba(225, 193, 103, 0.82);
   background: rgba(18, 16, 10, 0.86);
