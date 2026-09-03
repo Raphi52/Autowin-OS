@@ -265,6 +265,16 @@
    pose un voile gris sale sur une page blanche. On garde la teinte de statut à
    gauche — c'est elle qui informe — et on éteint la queue noire.
    ---------------------------------------------------------------------------- */
+/* LA RÈGLE DE BASE, oubliée par la première correction : `.cosmic-outline
+   .activity-group` (cosmic-outline.css l.539-540) pose un VOILE NOIR
+   `rgba(0, 0, 0, 0.3)` et un texte `#9caab5`. Les quatre états colorés le
+   recouvrent, mais une barre SANS état garde ce voile — c'est la moitié grise
+   que l'utilisateur a signalée trois fois le 2026-09-03. */
+:root[data-theme='clair'] .cosmic-outline .activity-group {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--line);
+  color: var(--text-dim);
+}
 :root[data-theme='clair'] .cosmic-outline .activity-group-title {
   color: var(--text);
 }
