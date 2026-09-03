@@ -297,7 +297,7 @@
   gap: var(--s2);
   flex: 1;
   min-width: 0;
-  padding: 7px var(--s2);
+  padding: 10px var(--s2);
   border: none;
   background: transparent;
   color: var(--text-dim);
@@ -377,6 +377,7 @@
 .conv-label {
   display: block;
   min-width: 0;
+  line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1004,47 +1005,36 @@
   flex-direction: column;
   gap: 6px;
 }
-/* BARRE DE PROMPTING « CAPSULE » (choix utilisateur, conv-174 direction D2c-3).
-   UN seul étage : capsule centrée à 72 %, la couleur du CONTOUR dit l'état — or au repos,
-   rose pendant qu'un run tourne (présence du bouton d'arrêt). Remplace les deux étages de
-   conv-167 : trois rangées empilées faisaient ~150 px de haut pour un champ d'une ligne.
-   Aucun JSX touché : la refonte est purement une affaire de mise en page. */
+/* BARRE DE PROMPTING « DEUX ÉTAGES » (choix utilisateur, conv-167 direction C).
+   Le TEXTE occupe toute la largeur (order:-1 + flex-basis 100% force le retour), les outils
+   passent sur une seconde rangée séparée d'un filet. Motif : en mosaïque la rangée unique
+   écrasait le champ — le bouton « Envoyer » et le micro lui mangeaient la place. Aucun JSX
+   touché : le passage à deux étages est purement une affaire de mise en page. */
 .composer-input-row {
   display: flex;
-  width: 72%;
-  min-width: min(420px, 100%);
-  max-width: 900px;
-  box-sizing: border-box;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 9px 9px 9px 20px;
-  border: 1px solid rgba(212, 169, 79, 0.4);
-  border-radius: 999px;
-  margin: 0 auto;
-  background: rgba(255, 255, 255, 0.04);
-  gap: 12px;
+  gap: 6px;
+  min-width: 0;
   container-type: inline-size;
-  transition: border-color 0.18s ease;
 }
 .composer-input-row > textarea {
+  order: -1;
+  flex: 1 0 100%;
   min-width: 0;
-  flex: 1 1 auto;
-  padding: 0;
-  border: none;
-  background: transparent;
-  min-height: 24px;
-  max-height: 120px;
 }
-/* Le filet séparateur des deux étages n'a plus lieu d'être. */
+/* La 2e rangée : un filet fin la détache du champ, sur toute la largeur. */
 .composer-input-row::before {
-  display: none;
+  order: 0;
+  flex: 1 0 100%;
+  height: 0;
+  margin-top: 1px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  content: '';
 }
-/* Le CONTOUR signale l'état : or vif au focus, rose tant que l'agent travaille. */
-.composer-field:focus-within .composer-input-row {
-  border-color: rgba(212, 169, 79, 0.75);
-}
-.composer-input-row:has([data-testid='composer-stop']) {
-  border-color: rgba(239, 69, 168, 0.5);
+/* C1 : le champ n'a plus de cadre — c'est ce filet qui signale le focus. */
+.composer-field:focus-within .composer-input-row::before {
+  border-top-color: rgba(239, 69, 168, 0.45);
 }
 /* Envoyer reste ancré à droite, quoi qu'il y ait avant lui. */
 .composer-input-row > .composer-send {
@@ -1833,10 +1823,6 @@ ol.md-list li {
   padding: 10px 9px 10px 12px;
 }
 
-/* TÉMOIN DE DICHOTOMIE 2 — 2026-09-03, À RETIRER. */
-.cosmic-outline .conv-label {
-  outline: 2px solid #00ff00;
-}
 .cosmic-outline .conv-label {
   color: #dce6ee;
   font-size: 12px;
@@ -1848,7 +1834,8 @@ ol.md-list li {
   gap: 7px;
   margin-top: 6px;
   color: #65778a;
-  font-size: 8px;
+  font-size: 9px;
+  line-height: 1.7;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -2866,10 +2853,6 @@ ol.md-list li {
   inset: 0;
 }
 
-/* TÉMOIN DE DICHOTOMIE 3 — 2026-09-03, À RETIRER. */
-.cosmic-outline .conv-label {
-  outline: 2px solid #ff00ff;
-}
 .effort-matrix {
   width: min(620px, 100%);
   padding: 14px 16px 10px;
