@@ -103,7 +103,7 @@ describe('completerChoixDePipeline — l etape terminee complete SA ligne', () =
       }
     }
     const parts = completerChoixDePipeline(ligneEnCours(), step)
-    const lignes = (parts[0] as { pipeline: Array<Record<string, unknown>> }).pipeline
+    const lignes = (parts[0] as unknown as { pipeline: Array<Record<string, unknown>> }).pipeline
     expect(lignes).toHaveLength(1)
     expect(lignes[0].prompt).toBe('[system]\nconsigne\n\n[user]\nfais X')
     expect(lignes[0].outcome).toBe('livrable')
@@ -118,7 +118,7 @@ describe('completerChoixDePipeline — l etape terminee complete SA ligne', () =
       status: 'failed',
       detail: 'BLOQUÉ: preuve manquante — verdict du juge: pas de test'
     })
-    const lignes = (parts[0] as { pipeline: Array<Record<string, unknown>> }).pipeline
+    const lignes = (parts[0] as unknown as { pipeline: Array<Record<string, unknown>> }).pipeline
     expect(lignes).toHaveLength(2)
     expect(lignes[1].outcome).toContain('verdict du juge')
     expect(lignes[1].ok).toBe(false)
