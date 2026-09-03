@@ -107,3 +107,52 @@ describe('libellés', () => {
     expect(libelleRenoncement()).toContain('3 reprises automatiques ont échoué')
   })
 })
+
+/**
+ * SURCHARGE LIVRÉE COMME RÉPONSE (mesuré le 2026-09-03, conv-28) : le CLI n'a pas échoué, il a
+ * « répondu » le texte de l'incident (« API Error: 529 Overloaded. This is a server-side issue… »).
+ * Le tour comptait donc pour un SUCCÈS, aucune reprise ne partait, et l'utilisateur devait retaper
+ * sa demande à la main. La décision doit voir le TEXTE RENDU, pas seulement le champ d'erreur.
+ */
+describe('surcharge rendue dans le texte de la réponse', () => {
+  const texte529 =
+    'API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment.'
+
+  it('un tour « réussi » dont toute la réponse est la surcharge se reprend', () => {
+    expect(
+      deciderRepriseSurcharge({
+        ok: true,
+        cancelled: false,
+        texteRendu: texte529,
+        tentativesDejaFaites: 0
+      })
+    ).toMatchObject({ action: 'forker-et-reprendre', tentative: 1 })
+  })
+
+  it('une vraie réponse qui PARLE de 529 ne se reprend pas', () => {
+    const analyse =
+      'La reprise auto ne regarde que le champ error du tour. ' +
+      'Ici la surcharge (erreur 529) est arrivée dans le texte de la réponse, donc la porte a ' +
+      "répondu « succès ». Je corrige la source pour que la décision voie aussi le texte rendu, " +
+      'sans quoi tu dois retaper ta demande à la main à chaque incident du fournisseur.'
+    expect(
+      deciderRepriseSurcharge({
+        ok: true,
+        cancelled: false,
+        texteRendu: analyse,
+        tentativesDejaFaites: 0
+      })
+    ).toEqual({ action: 'renoncer', raison: 'succes' })
+  })
+
+  it('un arrêt voulu par l’utilisateur ne se reprend pas, même texte de surcharge', () => {
+    expect(
+      deciderRepriseSurcharge({
+        ok: true,
+        cancelled: true,
+        texteRendu: texte529,
+        tentativesDejaFaites: 0
+      })
+    ).toEqual({ action: 'renoncer', raison: 'annule' })
+  })
+})

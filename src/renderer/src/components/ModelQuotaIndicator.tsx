@@ -322,6 +322,16 @@ export function ModelQuotaIndicator({
     }
   }, [])
 
+  // Un changement de compte (Agents > Routage) rend le quota affiche faux immediatement : on
+  // recharge sur signal, sans attendre le clic de l'utilisateur ni le rafraichissement periodique.
+  useEffect(() => {
+    const onStale = (): void => {
+      void refresh()
+    }
+    window.addEventListener('autowin:quotas-stale', onStale)
+    return () => window.removeEventListener('autowin:quotas-stale', onStale)
+  }, [refresh])
+
   useEffect(() => {
     if (!open) return
     const close = (event: PointerEvent): void => {

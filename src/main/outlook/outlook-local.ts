@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 
@@ -30,6 +30,14 @@ export interface OutlookOpenResult {
   erreur?: string
 }
 
+export interface OutlookReplyResult {
+  ok: boolean
+  erreur?: string
+}
+
+/** Plafond du corps d'une reponse. Assez pour un message, assez peu pour rester un widget. */
+const MAX_CORPS = 20_000
+
 export interface OutlookGatewayOptions {
   /** Racine du dépôt / de l'application, d'où le script est résolu. */
   appRoot: string
@@ -39,6 +47,8 @@ export interface OutlookGatewayOptions {
   runner?: (scriptPath: string, outPath: string) => Promise<void>
   /** Idem pour l'ouverture d'un élément. Rend le code de sortie du script. */
   opener?: (scriptPath: string, id: string) => Promise<number>
+  /** Idem pour la RÉPONSE. Le corps est passé par un fichier, pas en argument. */
+  replier?: (scriptPath: string, id: string, corpsPath: string) => Promise<number>
   now?: () => number
 }
 
@@ -85,6 +95,44 @@ const OPEN_FAILURES: Readonly<Record<number, string>> = {
   3: 'Cet élément n’existe plus dans Outlook — il a peut-être été supprimé ou déplacé.'
 }
 
+/**
+ * Codes de sortie du script de réponse, traduits en phrases.
+ *
+ * Un envoi est IRRÉVERSIBLE : la différence entre « le message a été envoyé » et « Outlook l'a
+ * refusé » ne doit jamais se perdre en route, sinon l'utilisateur renvoie deux fois — ou croit avoir
+ * répondu alors que rien n'est parti.
+ */
+const REPLY_FAILURES: Readonly<Record<number, string>> = {
+  1: "Outlook n'a pas pu envoyer cette réponse.",
+  2: "Cet identifiant n'a pas la forme d'un élément Outlook.",
+  3: 'Ce message n’existe plus dans Outlook — il a peut-être été supprimé ou déplacé.',
+  4: 'La réponse est vide : rien n’a été envoyé.'
+}
+
+function defaultReplier(scriptPath: string, id: string, corpsPath: string): Promise<number> {
+  return new Promise((resolve) => {
+    execFile(
+      'powershell',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+        '-Id',
+        id,
+        '-CorpsFichier',
+        corpsPath
+      ],
+      { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 256 * 1024 },
+      (error) => {
+        const code = (error as { code?: number } | null)?.code
+        resolve(typeof code === 'number' ? code : error ? 1 : 0)
+      }
+    )
+  })
+}
+
 function defaultOpener(scriptPath: string, id: string): Promise<number> {
   return new Promise((resolve) => {
     execFile(
@@ -105,6 +153,7 @@ export class OutlookLocalGateway {
   private readonly ttlMs: number
   private readonly runner: (scriptPath: string, outPath: string) => Promise<void>
   private readonly opener: (scriptPath: string, id: string) => Promise<number>
+  private readonly replier: (scriptPath: string, id: string, corpsPath: string) => Promise<number>
   private readonly now: () => number
   private cache: { at: number; result: OutlookGatewayResult } | null = null
   /** Lecture en cours : deux widgets qui interrogent en même temps ne doivent lancer QU'UN script. */
@@ -115,6 +164,7 @@ export class OutlookLocalGateway {
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS
     this.runner = options.runner ?? defaultRunner
     this.opener = options.opener ?? defaultOpener
+    this.replier = options.replier ?? defaultReplier
     this.now = options.now ?? (() => Date.now())
   }
 
@@ -173,16 +223,55 @@ export class OutlookLocalGateway {
       return { ok: false, erreur: OPEN_FAILURES[2] }
     }
     try {
-      const script = resolveOutlookScriptPath(this.appRoot).replace(
-        'outlook-local-snapshot.ps1',
-        'outlook-local-open.ps1'
-      )
-      const code = await this.opener(script, id)
+      const code = await this.opener(this.scriptVoisin('outlook-local-open.ps1'), id)
       if (code === 0) return { ok: true }
       return { ok: false, erreur: OPEN_FAILURES[code] ?? OPEN_FAILURES[1] }
     } catch (error) {
       return { ok: false, erreur: describeFailure(error) }
     }
+  }
+
+  /**
+   * RÉPOND à un message, et l'envoie.
+   *
+   * Le seul chemin de ce fichier qui ÉCRIT quelque part. Il vit dans un script à part
+   * (`outlook-local-reply.ps1`) pour la même raison que l'ouverture : la garantie « lecture seule »
+   * du script d'instantané doit rester vérifiable en le lisant, sans avoir à suivre une branche.
+   *
+   * Le corps passe par un FICHIER en UTF-8 et non par la ligne de commande. Deux raisons mesurées sur
+   * ce poste : l'encodage de la console est cp1252, donc un accent en argument arrive abîmé ; et un
+   * texte libre concaténé dans une ligne de commande est une porte ouverte, alors qu'un fichier n'est
+   * jamais interprété.
+   */
+  async replyToItem(id: unknown, corps: unknown): Promise<OutlookReplyResult> {
+    if (typeof id !== 'string' || !/^[0-9A-Fa-f]{16,512}$/.test(id)) {
+      return { ok: false, erreur: REPLY_FAILURES[2] }
+    }
+    // Un envoi ne se DEVINE pas : un corps vide ne devient pas un message vide, il devient un refus.
+    const texte = typeof corps === 'string' ? corps.trim() : ''
+    if (texte === '') return { ok: false, erreur: REPLY_FAILURES[4] }
+    if (texte.length > MAX_CORPS) {
+      return { ok: false, erreur: `La réponse dépasse ${MAX_CORPS} caractères.` }
+    }
+    let dossier: string | null = null
+    try {
+      dossier = await mkdtemp(join(tmpdir(), 'autowin-outlook-reply-'))
+      const corpsPath = join(dossier, 'corps.txt')
+      await writeFile(corpsPath, texte, 'utf8')
+      const code = await this.replier(this.scriptVoisin('outlook-local-reply.ps1'), id, corpsPath)
+      if (code === 0) return { ok: true }
+      return { ok: false, erreur: REPLY_FAILURES[code] ?? REPLY_FAILURES[1] }
+    } catch (error) {
+      return { ok: false, erreur: describeFailure(error) }
+    } finally {
+      // Le texte d'un message ne traîne pas dans le dossier temporaire une fois parti.
+      if (dossier) await rm(dossier, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
+  /** Un script livré À CÔTÉ de celui de lecture, résolu de la même façon (packagé compris). */
+  private scriptVoisin(nom: string): string {
+    return resolveOutlookScriptPath(this.appRoot).replace('outlook-local-snapshot.ps1', nom)
   }
 
   /** Vide le cache. Sert au rafraîchissement demandé explicitement par l'utilisateur. */

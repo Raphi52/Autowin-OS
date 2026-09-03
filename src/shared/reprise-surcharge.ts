@@ -63,6 +63,12 @@ export interface EntreeRepriseSurcharge {
   cancelled: boolean
   /** Message d'erreur du tour, tel que rendu par le processus principal. */
   erreur?: string
+  /**
+   * Texte RENDU par le tour. Mesuré le 2026-09-03 (conv-28) : un fournisseur surchargé ne fait pas
+   * toujours ECHOUER le tour — il « répond » le texte de l'incident (« API Error: 529 Overloaded…
+   * try again in a moment »). Le tour comptait alors pour un succès et aucune reprise ne partait.
+   */
+  texteRendu?: string
   /** Reprises DÉJÀ faites pour cette même demande (0 au premier échec). */
   tentativesDejaFaites: number
   /** Plafond, pour les tests et un réglage éventuel. */
@@ -76,12 +82,39 @@ export type DecisionRepriseSurcharge =
       raison: 'succes' | 'annule' | 'pas-une-surcharge' | 'plafond-atteint'
     }
 
+/**
+ * Le texte s'ouvre-t-il sur une ÉTIQUETTE d'erreur brute, comme un outil qui recrache un incident
+ * (« API Error: … », « Error: … », un corps JSON d'erreur) ? Une réponse rédigée commence par une
+ * phrase, jamais par ça : c'est ce qui sépare l'incident du DISCOURS sur l'incident.
+ */
+const ETIQUETTE_ERREUR_BRUTE =
+  /^(?:\{|\[|api[ _-]?error\b|error\b|erreur\b|api\s+claude\s+surcharg|request\s+failed\b|http\b|status\b|overloaded\b|\d{3}\b)/i
+
+/**
+ * La réponse rendue EST-ELLE l'incident du fournisseur, plutôt qu'une réponse ?
+ */
+export function estReponseDeSurcharge(texte: string | undefined | null): boolean {
+  const t = (texte ?? '').trim()
+  // TROIS conditions, car rejouer à tort DÉTRUIRAIT une réponse produite. Une réponse rédigée peut
+  // très bien PARLER d'une surcharge (un diagnostic, ce commentaire même) ; deux critères plus
+  // faibles ont été essayés et pris en défaut : le seuil de longueur seul laissait passer un
+  // diagnostic de 330 caractères, et « les 80 premiers caractères » laissait passer une phrase
+  // d'analyse qui s'ouvrait sur « … une erreur 529 arrivée dans le texte ». Le marqueur fiable est
+  // STRUCTUREL : un tour perdu ne contient QUE l'incident, donc il est court ET il s'ouvre sur une
+  // ÉTIQUETTE d'erreur brute — ce qu'une phrase rédigée ne fait jamais.
+  if (!t || t.length > 400) return false
+  if (!ETIQUETTE_ERREUR_BRUTE.test(t)) return false
+  return estSurchargeFournisseur(t)
+}
+
 /** La SEULE porte qui autorise une reprise automatique après surcharge. */
 export function deciderRepriseSurcharge(entree: EntreeRepriseSurcharge): DecisionRepriseSurcharge {
-  if (entree.ok && !entree.cancelled) return { action: 'renoncer', raison: 'succes' }
+  const surchargeRendue = !entree.cancelled && estReponseDeSurcharge(entree.texteRendu)
+  if (entree.ok && !entree.cancelled && !surchargeRendue)
+    return { action: 'renoncer', raison: 'succes' }
   // L'arrêt volontaire passe AVANT la lecture du message : couper soi-même n'est pas une panne.
   if (entree.cancelled) return { action: 'renoncer', raison: 'annule' }
-  if (!estSurchargeFournisseur(entree.erreur))
+  if (!surchargeRendue && !estSurchargeFournisseur(entree.erreur))
     return { action: 'renoncer', raison: 'pas-une-surcharge' }
   const max = entree.max ?? MAX_REPRISES_SURCHARGE
   const faites = Math.max(0, Math.trunc(entree.tentativesDejaFaites))

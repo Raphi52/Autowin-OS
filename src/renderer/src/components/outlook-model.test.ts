@@ -4,6 +4,9 @@ import {
   splitByExchange,
   formatExchangeDate,
   groupByInterlocutor,
+  groupThreads,
+  normaliserSujet,
+  sortByName,
   parseOutlookResult,
   splitAgenda,
   totalUnread,
@@ -287,5 +290,107 @@ describe('une personne n est pas un automate', () => {
       ok: true, luLe: '', boite: '', mailsNonLus: 0, mails: [], evenements: []
     })
     expect(sans.ok && sans.adressesEchangees).toBeNull()
+  })
+})
+
+describe('fils de conversation d un interlocuteur', () => {
+  it('regroupe par identifiant de conversation, du plus ancien au plus recent DANS le fil', () => {
+    const [fil] = groupByInterlocutor([
+      mail({ id: 'a', conversation: 'c1', sujet: 'Devis', recuLe: new Date(NOW - 3600_000).toISOString() }),
+      mail({ id: 'b', conversation: 'c1', sujet: 'RE: Devis', recuLe: new Date(NOW).toISOString() }),
+      mail({ id: 'c', conversation: 'c2', sujet: 'Facture', recuLe: new Date(NOW - JOUR).toISOString() })
+    ])
+    const fils = groupThreads(fil)
+    expect(fils.map((f) => f.cle)).toEqual(['c1', 'c2'])
+    // Le fil le plus recent en tete, mais A L INTERIEUR on lit de haut en bas comme une discussion.
+    expect(fils[0].messages.map((m) => m.id)).toEqual(['a', 'b'])
+    expect(fils[0].sujet).toBe('Devis')
+  })
+
+  it('retombe sur l objet normalise quand Outlook ne donne pas de conversation', () => {
+    const [fil] = groupByInterlocutor([
+      mail({ id: 'a', conversation: '', sujet: 'Devis' }),
+      mail({ id: 'b', conversation: '', sujet: 'RE: Devis' }),
+      mail({ id: 'c', conversation: '', sujet: 'TR: Devis' })
+    ])
+    expect(groupThreads(fil)).toHaveLength(1)
+  })
+
+  it('porte le corps, l auteur et le sens du message', () => {
+    const [fil] = groupByInterlocutor([
+      mail({ id: 'a', corps: 'Bonjour, ci-joint le devis.' }),
+      mail({ id: 'b', corps: 'Merci !', deMoi: true, nom: 'Jean Dupont' })
+    ])
+    const messages = groupThreads(fil)[0].messages
+    expect(messages.map((m) => m.corps)).toEqual(['Bonjour, ci-joint le devis.', 'Merci !'])
+    expect(messages.map((m) => m.deMoi)).toEqual([false, true])
+    expect(messages[1].auteur).toBe('moi')
+  })
+
+  it('compte les non lus du fil, pas ceux de la boite', () => {
+    const [fil] = groupByInterlocutor([
+      mail({ id: 'a', conversation: 'c1', nonLu: true }),
+      mail({ id: 'b', conversation: 'c2', nonLu: false })
+    ])
+    const fils = groupThreads(fil)
+    expect(fils.find((f) => f.cle === 'c1')?.nonLus).toBe(1)
+    expect(fils.find((f) => f.cle === 'c2')?.nonLus).toBe(0)
+  })
+
+  it('normalise les prefixes de reponse et de transfert', () => {
+    expect(normaliserSujet('RE: RE: Devis')).toBe('devis')
+    expect(normaliserSujet('TR: Devis')).toBe('devis')
+    expect(normaliserSujet('Fwd: Devis')).toBe('devis')
+    expect(normaliserSujet('  Devis  ')).toBe('devis')
+  })
+
+  it('range les interlocuteurs par NOM quand on le demande', () => {
+    // La demande de l utilisateur est une liste « par nom » : l ordre par activite est un autre tri.
+    const fils = groupByInterlocutor([
+      mail({ id: 'a', adresse: 'zoe@amitel.fr', nom: 'Zoe Martin' }),
+      mail({ id: 'b', adresse: 'anne@amitel.fr', nom: 'anne bernard' })
+    ])
+    expect(sortByName(fils).map((f) => f.nom)).toEqual(['anne bernard', 'Zoe Martin'])
+  })
+})
+
+describe('cle de fil et nom du contact, tels que la vraie boite les rend', () => {
+  it('regroupe sur le sujet de conversation quand l identifiant est vide', () => {
+    // Mesure du 2026-09-03 sur la boite reelle : `ConversationID` est vide pour les 40 messages lus,
+    // et `ConversationTopic` est renseigne pour les 40. C'est donc lui qui porte le fil ici.
+    const [fil] = groupByInterlocutor([
+      mail({ id: 'a', conversation: '', sujetConversation: 'test widget', sujet: 'test widget' }),
+      mail({ id: 'b', conversation: '', sujetConversation: 'test widget', sujet: 'RE: test widget' })
+    ])
+    expect(groupThreads(fil)).toHaveLength(1)
+  })
+
+  it('garde le nom RECU du contact, pas celui qu Outlook met sur un envoi', () => {
+    // Mesure du 2026-09-03 : cote Elements envoyes, le nom du destinataire arrive comme
+    // "'raphael.vilain@amitel.fr'" -- entre apostrophes. Le laisser gagner parce qu'il est le plus
+    // recent remplacerait "Raphael VILAIN" par cette chaine dans la liste des interlocuteurs.
+    const [fil] = groupByInterlocutor([
+      mail({
+        id: 'recu',
+        adresse: 'raphael.vilain@amitel.fr',
+        nom: 'Raphael VILAIN',
+        recuLe: new Date(NOW - 3600_000).toISOString()
+      }),
+      mail({
+        id: 'envoye',
+        adresse: 'raphael.vilain@amitel.fr',
+        nom: "'raphael.vilain@amitel.fr'",
+        deMoi: true,
+        recuLe: new Date(NOW).toISOString()
+      })
+    ])
+    expect(fil.nom).toBe('Raphael VILAIN')
+  })
+
+  it('retire les apostrophes d un nom quand c est tout ce qu on a', () => {
+    const [fil] = groupByInterlocutor([
+      mail({ id: 'a', adresse: 'zoe@amitel.fr', nom: "'zoe@amitel.fr'", deMoi: true })
+    ])
+    expect(fil.nom).toBe('zoe@amitel.fr')
   })
 })
