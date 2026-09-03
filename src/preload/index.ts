@@ -420,6 +420,10 @@ const api = {
   toolUsage: (): Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   > => ipcRenderer.invoke('os:toolUsage'),
+  // La page « Microphone » des reglages Windows. AUCUNE url ne traverse ce canal : le main tient
+  // l'adresse en constante, le rendu ne peut que demander son ouverture.
+  ouvrirReglagesMicro: (): Promise<{ ouvert: boolean; raison?: string }> =>
+    ipcRenderer.invoke('os:micro:reglages'),
   // Reconnaissance vocale LOCALE (whisper.cpp) : le moteur Chromium rend `network` dans Electron.
   whisperEtat: (): Promise<EtatWhisper> => ipcRenderer.invoke('os:whisper:etat'),
   whisperInstaller: (): Promise<EtatWhisper> => ipcRenderer.invoke('os:whisper:installer'),

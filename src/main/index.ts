@@ -3383,6 +3383,22 @@ Le fil reprend ensuite normalement.`
     return serviceWhisper().transcrire(octets)
   })
 
+  /**
+   * OUVRIR LA PAGE MICRO DE WINDOWS. DEMANDE DE L'UTILISATEUR (2026-09-03) : le message « autorisez
+   * le microphone » n'offrait aucun geste — « fais sauter le garde fou ».
+   *
+   * LE GARDE-FOU QUI SAUTE, ET CELUI QUI RESTE. Le filtre de `setWindowOpenHandler` (window.ts)
+   * n'ouvre a l'exterieur que http/https, parce qu'un lien vient la d'un TEXTE de modele et
+   * pourrait etre `file://un.exe`. Ce canal-ci ne prend AUCUNE url : l'adresse est une constante
+   * ecrite ici, le rendu ne peut que la declencher. Le filtre general n'est donc pas touche.
+   */
+  ipcMain.handle('os:micro:reglages', async (event) => {
+    assertTrustedRendererSender(event, 'Réglages micro')
+    if (process.platform !== 'win32') return { ouvert: false, raison: 'hors-windows' }
+    await shell.openExternal('ms-settings:privacy-microphone')
+    return { ouvert: true }
+  })
+
   // Les canaux de la voix neuronale et des enregistrements parles vivent dans src/main/ipc/ :
   // ils ne prenaient ici que leur service, construit paresseusement.
   registerPiperIpc({ servicePiper })

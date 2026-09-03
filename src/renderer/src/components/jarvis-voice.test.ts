@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   appliquerParole,
+  erreurDAutorisationMicro,
+  erreurRattrapableParMicro,
+  messageErreurMoteur,
   basculerEcoute,
   conversationsEnDirect,
   ecouteInitiale,
@@ -403,5 +406,53 @@ describe('il ne s’écoute pas lui-même', () => {
     expect(estEcho('Jarvis, lance le scout', dites, 1_200)).toBe(false)
     // Un mot trop court n'est jamais un écho : sinon un « oui » serait avalé.
     expect(estEcho('oui', dites, 1_200)).toBe(false)
+  })
+})
+
+describe('le message d’un micro qui ne s’ouvre pas', () => {
+  // MESURE DU 2026-09-03 sur la machine de l'utilisateur : autorisation micro Windows a « Allow »
+  // aux trois niveaux (machine, utilisateur, applis hors Store), session bureau a distance, et
+  // toutes les entrees de capture a l'etat 8 (debranchee). La phrase unique « autorisez le
+  // microphone » envoyait donc regler un parametre DEJA bon.
+  it('ne parle d’autorisation QUE pour un refus', () => {
+    expect(messageErreurMoteur('micro-refuse')).toContain('autorisez le microphone')
+    expect(messageErreurMoteur('not-allowed')).toContain('autorisez le microphone')
+    for (const code of ['micro-absent', 'micro-occupe', 'micro-introuvable', 'micro-indisponible'])
+      expect(messageErreurMoteur(code)).not.toContain('autorisez le microphone')
+  })
+
+  it('nomme chaque cause et le geste qui la lève', () => {
+    expect(messageErreurMoteur('micro-absent')).toContain('branchez un micro')
+    expect(messageErreurMoteur('micro-absent')).toContain('session à distance')
+    expect(messageErreurMoteur('micro-occupe')).toContain('autre application')
+    expect(messageErreurMoteur('micro-introuvable')).toContain('n’existe plus')
+    expect(messageErreurMoteur('micro-indisponible')).toContain('Paramètres audio')
+  })
+
+  it('n’envoie dans les réglages Windows que si l’autorisation peut être en cause', () => {
+    expect(erreurDAutorisationMicro('micro-refuse')).toBe(true)
+    expect(erreurDAutorisationMicro('not-allowed')).toBe(true)
+    // Cause inconnue : on laisse la porte, sans l'affirmer.
+    expect(erreurDAutorisationMicro('micro-indisponible')).toBe(true)
+    // Causes ETABLIES et sans rapport avec l'autorisation : la page ne sert a rien.
+    expect(erreurDAutorisationMicro('micro-absent')).toBe(false)
+    expect(erreurDAutorisationMicro('micro-occupe')).toBe(false)
+    expect(erreurDAutorisationMicro('micro-introuvable')).toBe(false)
+    expect(erreurDAutorisationMicro('network')).toBe(false)
+  })
+
+  it('ne propose la relance du micro QUE là où elle peut marcher', () => {
+    for (const code of [
+      'micro-refuse',
+      'micro-absent',
+      'micro-occupe',
+      'micro-introuvable',
+      'micro-indisponible',
+      'not-allowed'
+    ])
+      expect(erreurRattrapableParMicro(code)).toBe(true)
+    // `network` = moteur de reconnaissance Chromium injoignable : relancer le micro n'y change rien.
+    expect(erreurRattrapableParMicro('network')).toBe(false)
+    expect(erreurRattrapableParMicro('transcription-impossible')).toBe(false)
   })
 })

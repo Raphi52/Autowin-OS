@@ -4,6 +4,12 @@ import { createPortal } from 'react-dom'
 import { extractRecommendation } from './markdown-recommandation'
 import { mesurerMessagesRendus } from './chat-mesure-messages'
 import { extrairePromptSuivant } from '../../../shared/prompt-suivant'
+import {
+  attendreAvantReprise,
+  deciderRepriseSurcharge,
+  libelleRenoncement,
+  libelleReprise
+} from '../../../shared/reprise-surcharge'
 import { SuggestionGrid } from './SuggestionGrid'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
@@ -2281,6 +2287,49 @@ export function ChatView({
     else await reloadActiveFromStore(activeId) // fork refusé : on reste où on est
   }
   /**
+   * REPRISE APRÈS SURCHARGE DU MODÈLE (529) — demande utilisateur du 2026-09-03 : « quand le modèle
+   * renvoie une erreur 529, forke la conversation et reprends (max 3 tentatives) ».
+   *
+   * Le fournisseur a refusé de répondre : la demande, elle, est intacte. On la rejoue dans une COPIE
+   * de la conversation — l'original garde la trace de l'échec, la copie repart propre juste avant la
+   * demande. Cousin de `promptDeRelanceGratuite`, qui couvre l'autre trou : le tour tué sans rien
+   * produire. La décision (est-ce une surcharge ? reste-t-il des reprises ?) vit dans
+   * `shared/reprise-surcharge.ts`, pure et testée ; ici on ne fait que l'appliquer.
+   */
+  async function relancerApresSurcharge(
+    conversationId: string,
+    texte: string,
+    pieces: ChatAttachment[],
+    reprise: { tentative: number; attenteMs: number; ancre?: string }
+  ): Promise<void> {
+    // Le CLI a déjà retenté ~10 fois pendant 2-3 min : repartir dans la seconde retomberait sur la
+    // même surcharge. L'attente croît d'une reprise à l'autre.
+    await attendreAvantReprise(reprise.attenteMs)
+    let cible = conversationId
+    if (reprise.ancre) {
+      try {
+        const copie = (await window.api.conversationsFork(conversationId, reprise.ancre)) as
+          Conv | undefined
+        const fraiches = (await window.api.conversations()) as Conv[]
+        setConvs(fraiches)
+        const ouverte = copie?.id ? fraiches.find((c) => c.id === copie.id) : undefined
+        if (ouverte) {
+          await loadConv(ouverte)
+          cible = ouverte.id
+        }
+      } catch {
+        // Copie impossible : on rejoue dans la conversation d'origine plutôt que d'abandonner.
+      }
+    }
+    await send(texte, {
+      targetConversationId: cible,
+      keepComposerDraft: true,
+      piecesJointesImposees: pieces,
+      repriseSurcharge: reprise.tentative
+    })
+  }
+
+  /**
    * PARITÉ claude.exe (demande du 2026-08-21) : le message tapé pendant un tour ORIENTE le tour en
    * cours, il n'est PLUS mis en file. C'est exactement le chemin `/btw` — même IPC `injectDirective`,
    * même reçu — donc plus deux comportements pour un seul geste. La file survit uniquement comme
@@ -2950,7 +2999,10 @@ export function ChatView({
     const sendDraftKey = options?.targetConversationId ?? composerDraftKeyRef.current
     const keepComposerDraft = options?.keepComposerDraft === true
     const outgoingDraft = getComposerDraft(sendDraftKey)
-    const outgoingAttachments = keepComposerDraft ? [] : outgoingDraft.attachments
+    // Un rejeu automatique (reprise après surcharge) impose SES pièces jointes — celles de la
+    // demande d'origine. Sans cela, la reprise repartirait sans l'image que l'utilisateur avait mise.
+    const outgoingAttachments =
+      options?.piecesJointesImposees ?? (keepComposerDraft ? [] : outgoingDraft.attachments)
     const sendSelectionGeneration = composerSelectionGenerationRef.current
     const sendLockKey = sourceConversationId ?? NEW_DRAFT_KEY
     if (
@@ -2966,6 +3018,9 @@ export function ChatView({
 
     let convId = sourceConversationId
     let messageCommitted = false
+    /** Décidé à l'échec du tour, exécuté APRÈS sa clôture (voir le `finally`). */
+    let repriseApresSurcharge: { tentative: number; attenteMs: number; ancre?: string } | null =
+      null
     const sourcePreviousMessages = sourceConversationId
       ? (liveMessagesRef.current.get(sourceConversationId) ?? [])
       : messages
@@ -3136,15 +3191,42 @@ export function ChatView({
         mentionSourcesRef.current
       )
       const res = await window.api.pilotChat(payload, convId)
-      if (!res.ok || res.cancelled)
+      if (!res.ok || res.cancelled) {
+        // Surcharge du modèle : on décide ICI, on exécute après la clôture du tour.
+        const decision = deciderRepriseSurcharge({
+          ok: res.ok,
+          cancelled: res.cancelled === true,
+          erreur: res.error,
+          tentativesDejaFaites: options?.repriseSurcharge ?? 0
+        })
+        if (decision.action === 'forker-et-reprendre')
+          repriseApresSurcharge = {
+            tentative: decision.tentative,
+            attenteMs: decision.attenteMs,
+            // Point de copie : le dernier message DÉJÀ ENREGISTRÉ avant la demande qui a échoué. La
+            // copie s'arrête donc juste avant elle, et la reprise la rejoue proprement.
+            ancre: [...previousMessagesForTarget].reverse().find((m) => m.messageId)?.messageId
+          }
+        const plafondAtteint =
+          decision.action === 'renoncer' && decision.raison === 'plafond-atteint'
         patchLast(convId, (m) => {
           m.status = res.cancelled ? 'cancelled' : 'failed'
           m.done = true
           // Part d'ERREUR structurée (et non plus un `⚠️ …` texte, que rien ne distinguait d'une
           // réponse du modèle) : cause + message, rendus par un bloc `role="alert"` dédié.
           if (!res.cancelled)
-            m.parts.push({ kind: 'error', cause: 'turn', message: res.error ?? 'erreur' })
+            m.parts.push({
+              kind: 'error',
+              cause: 'turn',
+              // La reprise ne se fait JAMAIS en silence : le fil dit qu'elle part, ou qu'on renonce.
+              message: repriseApresSurcharge
+                ? `${res.error ?? 'erreur'} — ${libelleReprise(repriseApresSurcharge.tentative)}`
+                : plafondAtteint
+                  ? `${res.error ?? 'erreur'} — ${libelleRenoncement()}`
+                  : (res.error ?? 'erreur')
+            })
         })
+      }
     } catch (error) {
       if (!messageCommitted) {
         if (sourceConversationId) {
@@ -3205,6 +3287,10 @@ export function ChatView({
             .join('\n') ?? ''
         if (renderedText.trim()) await window.api.markResponseDisplayed(convId, renderedText)
       }
+      // APRÈS la clôture du tour, jamais avant : le rejeu se heurterait sinon à la garde « un tour
+      // est déjà en cours » et serait avalé sans bruit.
+      if (repriseApresSurcharge && convId)
+        void relancerApresSurcharge(convId, value, outgoingAttachments, repriseApresSurcharge)
     }
   }
 

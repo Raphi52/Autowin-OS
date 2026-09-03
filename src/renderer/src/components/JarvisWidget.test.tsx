@@ -785,3 +785,67 @@ describe('UNE demande dictée = UNE conversation, et UN seul message', () => {
     expect(pilotChat.mock.calls[1]).toEqual([[{ role: 'user', content: 'lance le scout' }], 'c-2'])
   })
 })
+
+describe('un micro qui ne s’ouvre pas : la vraie cause ET le geste pour la lever', () => {
+  // DEFAUT VECU (2026-09-03) : « Micro indisponible : autorisez le microphone pour Autowin OS,
+  // puis réactivez l’écoute. mais aucun bouton pour le faire ». Deux manques dans la meme phrase :
+  // la cause etait fausse (autorisation Windows deja accordee, mais AUCUN micro branche dans une
+  // session distante) et l'ecran n'offrait aucun geste.
+  it('nomme l’absence de micro — sans parler d’autorisation — et offre le bouton de relance', () => {
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    const moteur = FakeRecognition.instances.at(-1)!
+    act(() => moteur.onerror?.({ error: 'micro-absent' }))
+    const texte = c.querySelector('[data-testid="jarvis-erreur"]')!.textContent ?? ''
+    expect(texte).toContain('Aucun micro disponible')
+    expect(texte).not.toContain('autorisez le microphone')
+    // LE GESTE, la ou le message le reclame.
+    expect(c.querySelector('[data-testid="jarvis-reessayer-micro"]')).not.toBeNull()
+  })
+
+  it('le bouton RELANCE vraiment l’ecoute et efface l’erreur', () => {
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    act(() => FakeRecognition.instances.at(-1)!.onerror?.({ error: 'micro-refuse' }))
+    expect(FakeRecognition.instances).toHaveLength(1)
+    clic(c, 'jarvis-reessayer-micro')
+    // L'ENTREE QUI CASSE UN FAUX FIX : un bouton qui n'effacerait que le texte laisserait le micro
+    // eteint. Un SECOND moteur doit exister, demarre.
+    expect(FakeRecognition.instances).toHaveLength(2)
+    expect(FakeRecognition.instances.at(-1)!.demarrages).toBe(1)
+    expect(c.querySelector('[data-testid="jarvis-erreur"]')).toBeNull()
+  })
+
+  it('OUVRE la page micro de Windows sur un refus — et ne la propose pas quand le micro est absent', () => {
+    // DEMANDE DE L'UTILISATEUR (2026-09-03) : « fais sauter le garde fou ». Le bouton part vers un
+    // canal SANS url (l'adresse est une constante du processus principal) : le filtre http/https
+    // des liens venus d'un texte de modele n'est pas touche.
+    const ouvrirReglagesMicro = vi.fn(async () => ({ ouvert: true }))
+    ;(window as never as Record<string, unknown>).api = {
+      conversations,
+      conversationsCreate: vi.fn(async () => ({ id: 'c-jarvis' })),
+      routeConversationMessage,
+      pilotChat,
+      ouvrirReglagesMicro
+    }
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    act(() => FakeRecognition.instances.at(-1)!.onerror?.({ error: 'micro-refuse' }))
+    clic(c, 'jarvis-reglages-micro')
+    expect(ouvrirReglagesMicro).toHaveBeenCalledTimes(1)
+    // L'ENTREE QUI CASSE UN FAUX FIX : sans micro branche, la page d'autorisation ne sert a RIEN —
+    // y envoyer l'utilisateur est le defaut qu'on repare, pas le remede.
+    clic(c, 'jarvis-reessayer-micro')
+    act(() => FakeRecognition.instances.at(-1)!.onerror?.({ error: 'micro-absent' }))
+    expect(c.querySelector('[data-testid="jarvis-reglages-micro"]')).toBeNull()
+    expect(c.querySelector('[data-testid="jarvis-reessayer-micro"]')).not.toBeNull()
+  })
+
+  it('n’offre PAS de relance micro quand le micro n’est pas en cause', () => {
+    const c = rendre()
+    clic(c, 'jarvis-bascule')
+    act(() => FakeRecognition.instances.at(-1)!.onerror?.({ error: 'network' }))
+    expect(c.querySelector('[data-testid="jarvis-erreur"]')).not.toBeNull()
+    expect(c.querySelector('[data-testid="jarvis-reessayer-micro"]')).toBeNull()
+  })
+})

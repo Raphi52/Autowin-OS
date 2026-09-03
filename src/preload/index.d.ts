@@ -349,6 +349,7 @@ interface ChatApi {
   toolUsage: () => Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   >
+  ouvrirReglagesMicro: () => Promise<{ ouvert: boolean; raison?: string }>
   whisperEtat: () => Promise<EtatWhisper>
   whisperInstaller: () => Promise<EtatWhisper>
   whisperTranscrire: (wav: Uint8Array) => Promise<string>

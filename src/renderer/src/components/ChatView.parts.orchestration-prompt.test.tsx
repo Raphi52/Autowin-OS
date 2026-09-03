@@ -203,4 +203,45 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
       })
     ).toBe(second)
   })
+
+  it('rapproche par le MODELE quand la phase du step ne designe aucune ligne (run de skill)', () => {
+    // Constate a l'ecran (2026-09-03) : la ligne est annoncee sous le nom du SKILL (`kaizen`)
+    // alors que le step rend la phase du PIPELINE (`build`). Les deux noms ne se rencontrent
+    // jamais ; seule la regle du modele peut trancher, et elle exige deja l unicite.
+    const parts: ChatPart[] = [
+      {
+        kind: 'action',
+        name: 'orchestrate',
+        args: { task: 't' },
+        pipeline: [{ phase: 'kaizen', role: 'subagent', provider: 'claude', model: 'opus' }]
+      } as ChatPart
+    ]
+    const suite = noterPromptDePipeline(parts, {
+      step: 'exec',
+      detail: 'phase build',
+      model: 'opus',
+      prompt: enveloppe('KAIZEN')
+    })
+    const action = suite[0] as Extract<ChatPart, { kind: 'action' }>
+    expect(action.pipeline![0].prompt?.system).toBe('SYSTEME KAIZEN')
+  })
+
+  it('refuse encore quand des lignes portent la phase mais sont indiscernables', () => {
+    const parts: ChatPart[] = [
+      {
+        kind: 'action',
+        name: 'orchestrate',
+        args: { task: 't' },
+        pipeline: [{ phase: 'build' }, { phase: 'build' }]
+      } as ChatPart
+    ]
+    expect(
+      noterPromptDePipeline(parts, {
+        step: 'exec',
+        detail: 'phase build',
+        model: 'opus',
+        prompt: enveloppe('AMBIGU')
+      })
+    ).toBe(parts)
+  })
 })

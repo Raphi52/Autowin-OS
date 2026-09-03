@@ -355,7 +355,13 @@ function indexDeLaLignePipeline(
     // Une seule ligne de cette phase n'annonce PAS de modele : c'est celle qui attend son prompt.
     const sansModele = memePhase.filter((index) => !lignes[index].model)
     if (sansModele.length === 1) return sansModele[0]
-    return -1
+    // Le refus reste ENTIER des que des lignes portent cette phase mais sont indiscernables :
+    // coller le prompt d'un membre de fan-out sous un autre est pire que de ne rien montrer.
+    // On ne laisse passer que le cas ou la phase ne designe AUCUNE ligne — un run de skill
+    // annonce sa ligne sous le nom du SKILL (kaizen) alors que le step rend la phase du
+    // PIPELINE (build) : sans cela, la regle du modele juste en dessous n'est jamais atteinte,
+    // et la ligne ne peut structurellement jamais devenir depliable.
+    if (memePhase.length > 0) return -1
   }
   if (model) {
     const memeModele = lignes.reduce<number[]>(
