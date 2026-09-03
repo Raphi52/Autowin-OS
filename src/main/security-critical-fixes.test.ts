@@ -331,7 +331,12 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   n'echappe pas au controle pour autant : le scan ci-dessous, elargi dans le meme
     //   changement, couvre desormais AUSSI les enregistrements par `ipc` injecte — ce qui ferme
     //   au passage un angle mort ANTERIEUR de 16 canaux (tickets, task-manager, veille).
-    expect(handlers).toHaveLength(164)
+    // MISE A JOUR 2026-09-03 — 164 -> 165. UN canal ajoute, garde des sa PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Reglages micro')` :
+    //   `os:micro:reglages` — ouvre la page micro de Windows. Il ne prend AUCUNE url : l'adresse
+    //     est une constante ecrite cote main, la fenetre ne peut que la declencher.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(165)
     expect(unguarded).toEqual([])
   })
 
