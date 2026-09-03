@@ -60,10 +60,20 @@ describe('suppression — un token d’auth expiré est un MUR, pas un défaut �
  * nouveau marqueur ; les deux gardes de suppression sont restés sur l'ANCIEN vocabulaire. Le
  * changement d'émetteur n'a pas été propagé à ses lecteurs.
  *
+<<<<<<< HEAD
  * Le jumeau `auto-kaizen-supervisor` a depuis été supprimé (l'ancien superviseur auto-kaizen et son
  * câblage sont partis) : il ne reste qu'un garde à vérifier, celui de ce module.
  */
 describe('suppression — le marqueur [abort] est un abandon voulu', () => {
+=======
+ * Ce fichier vérifiait aussi le JUMEAU de `auto-kaizen-supervisor.ts` — corriger un seul garde
+ * garantissait la rechute par l'autre chemin. Ce jumeau a été supprimé avec l'ancien superviseur
+ * (`feat(main): supprimer l'ancien superviseur auto-kaizen et son cablage`), et son import restait
+ * ici : le fichier de test ne se chargeait plus du tout. Les assertions du jumeau sont retirées, pas
+ * affaiblies — il n'y a plus qu'UN garde, et c'est celui de ce fichier.
+ */
+describe('suppression — le marqueur [abort] est un abandon voulu, dans le garde de suppression', () => {
+>>>>>>> c4f137d0
   // La chaîne EXACTE du Journal de conv-14 (2026-09-02), telle qu'elle remonte au garde.
   const conv14 =
     'Phase kaizen — appel du rôle subagent INTERROMPU avant sa fin : [abort] claude CLI interrompu : ' +
