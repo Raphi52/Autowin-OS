@@ -646,6 +646,19 @@
   color: #e7e8eb;
 }
 
+/* MODE CLAIR — le COMPTEUR de slots (la pastille « 0 » / « 1 » dans l'en-tête de
+   chaque panneau) est peint en `#e7e8eb`, un blanc cassé, sur un fond devenu très
+   clair : blanc sur blanc. Sa bordure blanche translucide disparaît aussi. Même
+   règle à deux niveaux que les liens d'action — il faut la même forme ici.
+   Signalé le 2026-09-03 : « il reste le numéro ». */
+:root[data-theme='clair'] .theme-serious .topology-panel > header b,
+:root[data-theme='clair'] .theme-serious .topology-profiles,
+:root[data-theme='clair'] .theme-serious .topology-slot select {
+  border-color: var(--line);
+  background: #ffffff;
+  color: var(--text);
+}
+
 .theme-serious .topology-empty,
 .theme-serious .topology-assign-button {
   border-color: rgba(255, 255, 255, 0.24);
