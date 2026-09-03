@@ -58,3 +58,28 @@ describe('message de cap — il rapporte le cap EFFECTIF', () => {
     expect(source).not.toContain("Cap d'itérations (${maxIter})")
   })
 })
+
+/**
+ * LE BUDGET DU TOUR N'ÉTAIT ANNONCÉ QU'AU DERNIER APPEL — trop tard pour changer de méthode.
+ *
+ * Mesuré le 2026-09-03 (conv-10) : douze itérations dépensées une par une en lecture, la seule
+ * écriture tentée au douzième appel, et refusée. Le modèle n'a appris l'existence de son cap qu'en
+ * 12/12, quand il ne pouvait plus que constater ce qu'il n'avait pas fait. Le manque n'est pas un
+ * oubli du modèle : le moteur CONNAISSAIT le compte et ne le disait pas. L'annonce de mi-parcours
+ * donne le reste ET le levier qui change quelque chose.
+ */
+describe('budget du tour — annoncé à mi-parcours, pas seulement au dernier appel', () => {
+  const pilote = (): string => readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
+
+  it('une annonce de budget existe, distincte de la consigne de clôture', () => {
+    expect(pilote()).toContain('SYSTÈME — BUDGET DU TOUR')
+  })
+
+  it('elle tombe à mi-parcours et jamais sur la dernière itération', () => {
+    expect(pilote()).toContain('i < iterationLimit - 1 && i === Math.floor(iterationLimit / 2)')
+  })
+
+  it('elle nomme le levier concret plutôt que de réclamer de la prudence', () => {
+    expect(pilote()).toContain('UN SEUL message')
+  })
+})
