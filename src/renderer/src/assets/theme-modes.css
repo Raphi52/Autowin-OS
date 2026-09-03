@@ -142,6 +142,20 @@
   border-color: var(--line);
 }
 
+/* Écran d'un NOUVEAU FIL : les quatre suggestions « Pour démarrer » sont peintes
+   en #070d13 EN DUR (ChatView.css l.2277) — quatre rectangles noirs au milieu
+   d'une page blanche, texte invisible. Signalé le 2026-09-03. La barre de saisie
+   du bas a le même défaut (dégradé vers #030609, l.2285). */
+:root[data-theme='clair'] .cosmic-outline .chat-suggest .btn {
+  background: #ffffff;
+  border-color: var(--line);
+  color: var(--text);
+}
+:root[data-theme='clair'] .cosmic-outline .composer {
+  background: var(--bg-0);
+  border-top-color: var(--line);
+}
+
 /* ----------------------------------------------------------------------------
    TEXTE DES MESSAGES — écrit en clair EN DUR dans `cosmic-outline.css` :
    `#e1e7ec` pour l'agent (l.509), `#fff4fa` pour l'utilisateur (l.519), `#73808c`
