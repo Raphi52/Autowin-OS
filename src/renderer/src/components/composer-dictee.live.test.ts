@@ -69,8 +69,11 @@ describe.skipIf(!ARME)('dictée du composer — chaîne réelle', () => {
     bande.set(b, a.length + pause.length)
 
     const ecrits: string[] = []
-    let onaudio: ((e: { inputBuffer: { getChannelData(c: number): Float32Array } }) => void) | null =
-      null
+    type PoussoirAudio = (e: { inputBuffer: { getChannelData(c: number): Float32Array } }) => void
+    // Rempli par le setter ci-dessous, donc APRES cette ligne : sans ce porteur explicite,
+    // TypeScript fige la variable a `null` et l'appel plus bas devient injoignable
+    // (« never has no call signatures »).
+    const branche: { pousser: PoussoirAudio | null } = { pousser: null }
     const deps: DependancesDictee = {
       micro: async () => ({ getTracks: () => [{ stop: () => {} }] }),
       contexte: () =>
@@ -81,11 +84,11 @@ describe.skipIf(!ARME)('dictée du composer — chaîne réelle', () => {
           createScriptProcessor: () => ({
             connect: () => {},
             disconnect: () => {},
-            set onaudioprocess(v: never) {
-              onaudio = v
+            set onaudioprocess(v: unknown) {
+              branche.pousser = v as PoussoirAudio
             },
             get onaudioprocess() {
-              return onaudio as never
+              return branche.pousser as unknown
             }
           }),
           close: async () => {}
@@ -97,7 +100,7 @@ describe.skipIf(!ARME)('dictée du composer — chaîne réelle', () => {
     const dictee = new Dictee(deps)
     expect(await dictee.demarrer()).toBe(true)
     for (let i = 0; i < bande.length; i += 4096) {
-      onaudio?.({ inputBuffer: { getChannelData: () => bande.slice(i, i + 4096) } })
+      branche.pousser?.({ inputBuffer: { getChannelData: () => bande.slice(i, i + 4096) } })
       // Laisse la file de transcription avancer, comme le ferait le temps réel.
       await new Promise((r) => setTimeout(r, 0))
     }
