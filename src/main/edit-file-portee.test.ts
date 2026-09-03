@@ -751,7 +751,20 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
     expect(git('status', '--porcelain')).toBe('')
   }, 300_000)
 
-  it('refuse une édition sur un fichier non UTF-8, sans toucher un seul octet', async () => {
+  /*
+   * RETOURNÉ le 2026-09-03, en récupérant `work/edit-file-encoding`.
+   *
+   * Ce test gardait l'ANCIEN comportement : un fichier hérité (cp1252) était REFUSÉ, motif « non
+   * UTF-8 ». C'était une protection par renoncement — l'octet était sauf parce qu'on n'écrivait
+   * rien. Le travail récupéré fait mieux : le fichier est relu et réécrit dans SON encodage
+   * (`readFileText` / `encodeFile`). L'édition passe donc, et la propriété qui compte reste la
+   * même — aucun octet hors de la zone éditée ne bouge.
+   *
+   * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION EST FAUSSE : réécrire le fichier en
+   * UTF-8 « puisque c'est le standard ». L'octet 0xE9 devient alors 0xEF 0xBF 0xBD et l'assertion
+   * d'octets tombe.
+   */
+  it('édite un fichier hérité non UTF-8 sans abîmer un seul de ses octets', async () => {
     const { repo, git } = depotDejaRouge()
     // `é` = 0xE9 en cp1252 : un octet qu'aucune lecture utf8 ne sait rendre.
     const octetsLegacy = Buffer.concat([
@@ -775,16 +788,20 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
       conversationUnique()
     )
 
-    /*
-     * Un refus de `decideEdit` remonte dans l'ENVELOPPE (`ok: true`, `data.allowed: false`) : c'est
-     * une reponse rendue au modele, pas une panne de la commande. Seule la verification jette.
-     */
-    const refus = (result.data ?? {}) as { allowed?: boolean; reason?: string }
-    expect(refus.allowed).toBe(false)
-    // Le refus NOMME sa raison — il enseigne, comme les autres refus de cette commande.
-    expect(refus.reason ?? '').toContain('non UTF-8')
-    // Identite d'OCTETS : c'est la propriete detruite par le defaut, pas « le fichier existe ».
-    expect(readFileSync(join(repo, 'legacy.ts')).equals(octetsLegacy)).toBe(true)
-    expect(git('status', '--porcelain')).toBe('')
+    // L'edition est ACCEPTEE : l'encodage du fichier n'est plus un motif de refus.
+    const issue = (result.data ?? {}) as { allowed?: boolean; reason?: string }
+    expect(issue.allowed).toBe(true)
+    expect(issue.reason ?? '').not.toContain('non UTF-8')
+
+    const apres = readFileSync(join(repo, 'legacy.ts'))
+    // La zone visee a bien change — sinon « aucun octet abime » serait vrai sans rien faire.
+    expect(apres.toString('latin1')).toContain('export const legacy = (): number => 42')
+    // L'OCTET HERITE SURVIT : 0xE9 (le `é` cp1252), et non 0xEF 0xBF 0xBD d'une reecriture en utf8.
+    expect(apres.includes(0xe9)).toBe(true)
+    expect(apres.includes(Buffer.from([0xef, 0xbf, 0xbd]))).toBe(false)
+    // Tout ce qui entoure la zone editee est identique OCTET POUR OCTET.
+    const zone = (octets: Buffer): string =>
+      octets.toString('latin1').replace(/=> (?:1|42)/u, '=> N')
+    expect(zone(apres)).toBe(zone(octetsLegacy))
   }, 180_000)
 })

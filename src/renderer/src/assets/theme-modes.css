@@ -310,6 +310,78 @@
 }
 /* Le voile sombre posé DERRIÈRE les tuiles pour les détacher du décor : sur des
    plaques blanches il produit un halo noir (l.45). */
+/* JARVIS et ENREGISTREMENTS — « version claire de l'or », choix de l'utilisateur
+   du 2026-09-03 : fond très pâle, accents or FONCÉ, cadre à équerres conservé.
+   Ces deux widgets sont volontairement « or sur noir » (HomeView.css l.762 et
+   l.1268, direction « Iron Man » du 2026-09-01) : on ne défait ni le HUD ni ses
+   équerres, on retourne le fond et on assombrit l'or. #d4a94f sur ivoire serait
+   illisible, il devient #8c6412. Ces widgets pilotant presque tout par leurs
+   variables locales, les redéfinir suffit : le contenu suit. */
+:root[data-theme='clair'] .jarvis {
+  --jv-or: #8c6412;
+  border-color: rgba(140, 100, 18, 0.35);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 247, 0.95), rgba(252, 250, 244, 0.97)),
+    repeating-linear-gradient(0deg, rgba(140, 100, 18, 0.05) 0 1px, transparent 1px 5px);
+  box-shadow: inset 0 0 26px rgba(140, 100, 18, 0.07);
+  color: var(--text);
+}
+:root[data-theme='clair'] .enregistrements {
+  --hud: 140, 100, 18;
+  --or: 140, 100, 18;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--hud), 0.06),
+      rgba(255, 253, 247, 0.95) 48%,
+      rgba(var(--or), 0.05)
+    ),
+    repeating-linear-gradient(0deg, rgba(var(--hud), 0.05) 0 1px, transparent 1px 4px);
+  box-shadow:
+    inset 0 0 26px rgba(var(--hud), 0.08),
+    inset 0 0 0 1px rgba(var(--or), 0.08);
+  color: var(--text);
+}
+/* Les TROIS libellés qui échappent aux variables locales, et restaient donc
+   pâles sur l'ivoire — repérés à l'écran le 2026-09-03 :
+   la bascule « ACTIVER L'ÉCOUTE » (#cfd4de, l.827), le nom dans l'anneau
+   (#f0e6d2 + halo, l.1809), le titre « DERNIERS ENREGISTREMENTS » (or à 70 %,
+   l.1438). Le halo doré autour du texte n'a plus de sens sur fond clair. */
+:root[data-theme='clair'] .jarvis__bascule {
+  color: #5a4a2a;
+}
+:root[data-theme='clair'] .jarvis__bascule:hover,
+:root[data-theme='clair'] .jarvis__bascule:focus-visible {
+  color: #3d3018;
+}
+:root[data-theme='clair'] .jarvis__anneau-texte > strong {
+  color: #3d3018;
+  text-shadow: none;
+}
+/* Le DISQUE derrière ce nom est un noir à 72 % peint en SVG (HomeView.css
+   l.1755) : assombrir le texte SANS lui donnait du foncé sur du foncé — vu à
+   l'écran le 2026-09-03, la correction du texte seule ne suffisait pas. */
+:root[data-theme='clair'] .jarvis__anneau-coeur {
+  fill: rgba(255, 253, 247, 0.92);
+  stroke: rgba(140, 100, 18, 0.35);
+}
+:root[data-theme='clair'] .jarvis__anneau-etat {
+  stroke: rgba(18, 24, 40, 0.14);
+}
+:root[data-theme='clair'] .enregistrements__titre {
+  color: rgba(120, 86, 16, 0.95);
+}
+
+/* Les champs de Jarvis avaient un fond opaque #14120d et un texte clair
+   (HomeView.css l.1116-1134) : noirs au milieu d'un widget devenu pâle. */
+:root[data-theme='clair'] .jarvis__audio-champ select,
+:root[data-theme='clair'] .jarvis__audio-champ input[type='text'],
+:root[data-theme='clair'] .jarvis__audio-champ select option {
+  background: #ffffff;
+  color: var(--text);
+  border-color: rgba(140, 100, 18, 0.3);
+}
+
 :root[data-theme='clair'] .home-view::after {
   background: radial-gradient(58% 48% at 50% 46%, rgba(255, 255, 255, 0.5), transparent 78%);
 }
