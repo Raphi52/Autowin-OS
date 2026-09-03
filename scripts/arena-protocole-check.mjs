@@ -92,7 +92,23 @@ export function verifierProtocole({ run, bench }) {
       candidats.map((l) => l[l.length - 1].toUpperCase()).filter((v) => ['B', 'C', 'X'].includes(v))
     )
     const manque = ['B', 'C', 'X'].filter((v) => !retenus.has(v))
-    return manque.length ? `aucune ligne marquee ${manque.join(', ')}` : true
+    if (manque.length) return `aucune ligne marquee ${manque.join(', ')}`
+    /*
+     * L'ORDRE FAIT PARTIE DE LA REGLE — objection du juge, conv-158 (2026-09-03, turnId
+     * e0697674-fb4a-4f79-a6a0-565be7e07998) : le tableau des candidats avait ete ecrit APRES la
+     * commande de lancement, et P1 passait quand meme parce qu'il ne testait que la presence. Un
+     * scoutage redige apres coup ne choisit plus rien : il justifie. Le test est lisible sans
+     * jugement — position du titre de section contre premiere mention du lancement dans le RUN.md.
+     */
+    const titre = ['## Candidats scoutés', '## Candidats scoutes']
+      .map((t) => md.indexOf(t))
+      .find((i) => i >= 0)
+    const ancres = [lancement ? path.basename(lancement.chemin) : null, 'claude -p'].filter(Boolean)
+    const lancementPos = ancres.map((a) => md.indexOf(a)).filter((i) => i >= 0)
+    if (lancementPos.length && Math.min(...lancementPos) < titre) {
+      return 'candidats ecrits APRES le lancement : le scoutage ne choisit plus, il justifie'
+    }
+    return true
   })
 
   ajoute('P2', 'Rouge du critere CONSTATE avant lancement, sortie COLLEE dans le RUN.md', () => {

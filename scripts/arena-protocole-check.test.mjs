@@ -163,3 +163,34 @@ describe('arena-protocole-check — contrôle déterministe du banc /arena', () 
     expect(point(res, 'P13').ok).toBe(false)
   })
 })
+
+/**
+ * OBJECTION DU JUGE, conv-158 (2026-09-03, turnId e0697674-fb4a-4f79-a6a0-565be7e07998) :
+ * « Le tableau `## Candidats scoutés` a été écrit APRÈS la commande de lancement, alors que la
+ * procédure exige l'inverse. Le contrôle ne sait pas voir l'ordre (P1 ne teste que la présence) :
+ * le point P1 est donc OK sans que la règle soit vraiment tenue. »
+ *
+ * Un point vert sur une règle non tenue est un faux vert : P1 lit desormais aussi l'ORDRE.
+ */
+describe('arena-protocole-check — P1 lit aussi l_ORDRE (conv-158)', () => {
+  it('P1 RATE quand les candidats sont ecrits APRES le lancement', () => {
+    const f = bancConforme()
+    const md = readFileSync(f.run, 'utf8')
+    const i = md.indexOf('## Banc')
+    writeFileSync(
+      f.run,
+      `## Lancement\nsh lance.sh\n\n${md.slice(i)}\n\n${md.slice(0, i)}`
+    )
+    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    expect(point(res, 'P1').ok).toBe(false)
+    expect(point(res, 'P1').detail).toMatch(/apr[eè]s le lancement/i)
+  })
+
+  it('un banc conforme reste vert : les candidats sont bien avant', () => {
+    const f = bancConforme()
+    const md = readFileSync(f.run, 'utf8')
+    writeFileSync(f.run, `${md}\n## Lancement\nsh lance.sh\n`)
+    const res = verifierProtocole({ run: f.run, bench: f.bench })
+    expect(point(res, 'P1').ok).toBe(true)
+  })
+})
