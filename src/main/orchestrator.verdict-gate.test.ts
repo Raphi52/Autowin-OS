@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { evaluateClosure } from './gates/stopgate'
 import { lireVerdictJuge } from './orchestrator'
 
@@ -115,5 +117,53 @@ describe('gate de clôture — une raison par fait, et aucune cause inventée', 
         signalExitCode: 1
       }).blocked
     ).toBe(false)
+  })
+})
+
+/**
+ * LE FAUX VERT MESURE LE 2026-09-03 (conv-9) — un juge qui se CORRIGE.
+ *
+ * Texte reellement rendu par le juge (`causal-trace/conv-9.jsonl`, sequence 11) :
+ *
+ *   VALIDE
+ *   Non — je corrige : la premiere ligne doit etre le verdict machine.
+ *
+ *   DEFAUT: la liste des leviers ... SCORE: 40
+ *
+ * Le run a ferme VERT (`sequence 16` : `valid : true`, `gateBlocked : false`) et l'utilisateur a lu
+ * « Le resultat demande a ete produit et valide » sur un livrable que le juge notait 40/100.
+ *
+ * Cause : TROIS sites du pipeline principal (`orchestrator.ts` 4684, 4905, 5021) lisaient encore le
+ * verdict avec `/^\s*valide/i` — les premiers mots seulement — alors que le lecteur durci
+ * `lireVerdictJuge` existait et etait deja branche sur le chemin greedy. Le doublon de lecteurs,
+ * annonce comme resorbe, ne l'etait que sur UNE lignee.
+ */
+describe('faux vert du juge qui se corrige — un seul lecteur, sur TOUS les chemins', () => {
+  const VERDICT_REEL = [
+    'VALIDE',
+    'Non — je corrige : la première ligne doit être le verdict machine.',
+    '',
+    "DEFAUT: la liste des leviers vit dans skills/kaizen/SKILL.md mais n'arrive JAMAIS au kaizen d'Autowin.",
+    '',
+    'SCORE: 40'
+  ].join('\n')
+
+  it('le verdict REEL de conv-9 est un REFUS, malgre son premier mot', () => {
+    expect(lireVerdictJuge(VERDICT_REEL)).toBe(false)
+  })
+
+  it("le lecteur faible n'existe plus dans l'orchestrateur : un seul lecteur pour tous les chemins", () => {
+    const source = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+    // Le TEXTE exact du lecteur faible, tel qu'il etait ecrit aux trois sites fautifs.
+    // On vise l'USAGE, pas la mention : un commentaire qui cite le motif fautif reste utile.
+    const LECTEUR_FAIBLE = String.raw`/^\s*valide/i.test(`
+    // CONTROLE NEGATIF : la sonde reconnait bien la ligne d'AVANT le correctif. Sans lui, une sonde
+    // mal echappee ne matcherait jamais rien et ce test passerait au vert en ne gardant RIEN.
+    expect(String.raw`const ok = evidenceOk && /^\s*valide/i.test(verdict.text)`).toContain(
+      LECTEUR_FAIBLE
+    )
+    expect(source).not.toContain(LECTEUR_FAIBLE)
+    // Et les sites de decision passent bien par le lecteur canonique.
+    expect((source.match(/lireVerdictJuge\(/g) ?? []).length).toBeGreaterThanOrEqual(4)
   })
 })

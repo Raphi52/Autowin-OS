@@ -4683,7 +4683,7 @@ ${empreinteDepot}`
       // Consommer ici l'occurrence restante évite de payer/rejouer exactement le même verdict.
       const resumedJudgeText = takePaidPhase('judge')
       if (resumedJudgeText !== undefined) {
-        const ok = evidenceOk && /^\s*valide/i.test(resumedJudgeText)
+        const ok = evidenceOk && lireVerdictJuge(resumedJudgeText)
         lastJudgeText = resumedJudgeText.trim()
         trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
         push({
@@ -4904,7 +4904,7 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
                   costUsd: r.usage.costUsd
                 })
               }
-              const votesValide = /^\s*valide/i.test(r.text)
+              const votesValide = lireVerdictJuge(r.text)
               push({
                 step: 'judge',
                 provider: r.provider ?? member.provider,
@@ -5006,7 +5006,21 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
           })
         }
       }
-      const ok = evidenceOk && /^\s*valide/i.test(verdict.text)
+      /*
+       * UN SEUL LECTEUR DE VERDICT — mesure du 2026-09-03 (conv-9).
+       *
+       * Ce site testait encore `/^\s*valide/i`, c'est-a-dire les premiers mots SEULEMENT. Un juge
+       * qui a ecrit « VALIDE » puis s'est corrige a la ligne suivante par « DEFAUT: ... / SCORE: 40 »
+       * a donc ferme le run en VERT : trace `causal-trace/conv-9.jsonl` sequence 11 (le texte du
+       * verdict porte les deux) et sequence 16 (`valid : true`, `gateBlocked : false`). L'utilisateur
+       * a lu « Le resultat demande a ete produit et valide » sur un livrable note 40/100.
+       *
+       * `lireVerdictJuge` est le lecteur durci et deja canonique (cf. son commentaire) : un
+       * `DEFAUT:` n'importe ou dans le texte prime sur toute mention d'approbation. Le chemin greedy
+       * (ligne 2522) l'utilisait deja ; les trois chemins du pipeline principal, non — le doublon
+       * annonce comme resorbe ne l'etait que sur une lignee.
+       */
+      const ok = evidenceOk && lireVerdictJuge(verdict.text)
       lastJudgeText = verdict.text.trim()
       trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
       push({
