@@ -33,6 +33,14 @@ export interface CostRow extends TokenUsage {
   durationMs?: number
   /** Appels executes dont le fournisseur n'expose pas de prix fiable. */
   unpricedCalls: number
+  /**
+   * Sous-ensemble de `unpricedCalls` dont les tokens ont été RELUS auprès du CLI puis tarifés au
+   * tarif public par le main (`main/activity/cli-usage-recovery.ts`). Absent sur les anciens
+   * journaux : ce module ne recalcule rien, il affiche ce que le main a mesuré.
+   */
+  estimatedCalls?: number
+  /** Montant estimé de ces appels-là. */
+  estimatedUsd?: number
 }
 
 export interface CostSummary extends Readonly<{
@@ -52,6 +60,11 @@ export interface CostSummary extends Readonly<{
   /** Temps cumulé de la conversation. 0 = aucune source ne l'a mesuré. */
   durationMs: number
   unpricedCalls: number
+  /**
+   * Montant des appels que le provider n'a pas tarifés mais dont les tokens ont été RÉCUPÉRÉS
+   * auprès du CLI. 0 = rien n'a pu être reconstitué.
+   */
+  estimatedUsd: number
   /**
    * Ce que l'app SAIT dire du coût — la MÊME réponse que l'issue d'orchestration et le dashboard,
    * au lieu d'une troisième version locale. Porte l'estimation au tarif public quand le provider
@@ -94,6 +107,8 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
   let input = 0
   let durationMs = 0
   let unpricedCalls = 0
+  let estimatedUsd = 0
+  let estimatedCalls = 0
   let topKey: string | undefined
   let topCost = 0
   let output = 0
@@ -129,6 +144,12 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
     input += typeof row?.inputTokens === 'number' ? Math.max(0, row.inputTokens) : 0
     unpricedCalls +=
       typeof row?.unpricedCalls === 'number' && row.unpricedCalls > 0 ? row.unpricedCalls : 0
+    // Montant RÉCUPÉRÉ auprès du CLI par le main. Additionné à part du coût rapporté : une
+    // estimation et une dépense tarifée ne se confondent pas dans le même chiffre.
+    estimatedUsd +=
+      typeof row?.estimatedUsd === 'number' && row.estimatedUsd > 0 ? row.estimatedUsd : 0
+    estimatedCalls +=
+      typeof row?.estimatedCalls === 'number' && row.estimatedCalls > 0 ? row.estimatedCalls : 0
     if (cost > topCost) {
       topCost = cost
       topKey = row.key
@@ -159,17 +180,18 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
     totalUsd,
     calls,
     coverage,
-    label:
-      unpricedCalls > 0
-        ? totalUsd > 0
-          ? `${formatUsd(totalUsd)} + non expos\u00e9`
-          : // Le tarif public est reconstituable : afficher le montant estimé vaut mieux que
-            // « coût non exposé », qui jetait une information qu'on possède. Sans modèle connu, le
-            // libellé délibéré est préservé mot pour mot.
-            coverage.estimatedUsd !== undefined
-            ? `\u2248 ${formatUsd(coverage.estimatedUsd)} estim\u00e9s`
-            : 'co\u00fbt non expos\u00e9'
-        : formatUsd(totalUsd),
+    label: spendLabel({
+      knownUsd: totalUsd,
+      // Estimation par LIGNE (tokens relus auprès du CLI) d'abord ; à défaut, celle de la
+      // couverture, qui porte sur le volume ENTIER et couvre donc déjà tous les appels.
+      estimatedUsd: estimatedUsd > 0 ? estimatedUsd : (coverage.estimatedUsd ?? 0),
+      unpricedCalls,
+      // Sans estimation par ligne, seule une couverture estimée couvre les appels ; sinon rien
+      // ne les couvre et ils doivent rester COMPTÉS à l'écran.
+      estimatedCalls:
+        estimatedUsd > 0 ? estimatedCalls : coverage.estimatedUsd !== undefined ? unpricedCalls : 0
+    }),
+    estimatedUsd,
     durationMs,
     unpricedCalls,
     ...(topKey !== undefined ? { topKey } : {}),
@@ -181,18 +203,61 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
 }
 
 /**
- * Le montant d'UNE ligne, dit avec le vocabulaire de couverture du TOTAL. La ligne rendait
- * « + inconnu » la ou le total dit « + non expose » : un 4e mot pour la meme incertitude, que
- * personne ne pouvait greper avec les trois autres.
+ * LE LIBELLÉ D'UNE DÉPENSE, total ou ligne — un seul endroit, donc un seul vocabulaire.
  *
- * N'ESTIME RIEN : `CostRow` ne porte ni modele ni provider, donc un montant estime par ligne
- * serait un montant invente. L'estimation reste au TOTAL, ou la couverture connait le modele.
+ * Demande de l'utilisateur du 2026-09-03, sur « 7,00 $ + non exposé » : il ne veut plus lire ces
+ * deux mots, il veut la VALEUR. Elle existe : quand le CLI meurt avant son event `result`, ses
+ * tokens restent écrits dans son transcript, et le main les relit puis les tarife au tarif public
+ * (`main/activity/cli-usage-recovery.ts`). Le libellé porte donc :
+ *   « 7,00 $ »                                     tout est tarifé par le provider ;
+ *   « 7,00 $ + ≈ 8,43 $ estimés »                  le reste a été récupéré auprès du CLI ;
+ *   « 7,00 $ + ≈ 8,43 $ estimés · 1 appel non chiffré »  un appel dont RIEN n'est récupérable ;
+ *   « 1 appel non chiffré »                        aucune valeur, nulle part.
+ *
+ * Le « ≈ » n'est pas décoratif : ce montant est reconstitué au tarif public, pas facturé par le
+ * provider. Simplifier les mots ne doit pas effacer cette différence.
  */
-export function costRowLabel(row: Pick<CostRow, 'costUsd' | 'unpricedCalls'>): string {
-  if (row.unpricedCalls > 0) {
-    return row.costUsd > 0 ? `${formatUsd(row.costUsd)} + non exposé` : 'coût non exposé'
-  }
-  return formatUsd(row.costUsd)
+interface SpendLabelInput {
+  knownUsd: number
+  /** Montant reconstitué au tarif public (0 = rien de récupéré). */
+  estimatedUsd: number
+  unpricedCalls: number
+  /** Part de `unpricedCalls` déjà couverte par l'estimation. */
+  estimatedCalls: number
+}
+
+function spendLabel(input: SpendLabelInput): string {
+  const parts: string[] = []
+  if (input.knownUsd > 0) parts.push(formatUsd(input.knownUsd))
+  // « estimés » est le mot des AUTRES surfaces pour la même chose (`formatCostCoverage`) :
+  // le garder ici, c'est un seul vocabulaire de coût dans toute l'app.
+  if (input.estimatedUsd > 0) parts.push(`≈ ${formatUsd(input.estimatedUsd)} estimés`)
+  const montant = parts.join(' + ')
+  const reste = Math.max(0, input.unpricedCalls - input.estimatedCalls)
+  // Ce qui reste sans aucun chiffre se COMPTE : « 1 appel non chiffré » dit ce qui manque et
+  // combien, là où « non exposé » n'était qu'un aveu sans quantité.
+  const manquant =
+    reste > 0 ? `${reste} appel${reste > 1 ? 's' : ''} non chiffré${reste > 1 ? 's' : ''}` : ''
+  if (montant && manquant) return `${montant} · ${manquant}`
+  return montant || manquant || formatUsd(input.knownUsd)
+}
+
+/**
+ * Le montant d'UNE ligne, avec le MÊME vocabulaire que le total. La ligne rendait « + inconnu » là
+ * où le total disait autre chose : un mot de plus pour la même incertitude.
+ *
+ * N'ESTIME RIEN ICI : `CostRow` ne porte ni modèle ni provider. Le montant estimé lui est REMIS par
+ * le main, qui seul connaît le modèle servi — un calcul local serait une deuxième vérité.
+ */
+export function costRowLabel(
+  row: Pick<CostRow, 'costUsd' | 'unpricedCalls' | 'estimatedCalls' | 'estimatedUsd'>
+): string {
+  return spendLabel({
+    knownUsd: row.costUsd,
+    estimatedUsd: row.estimatedUsd ?? 0,
+    unpricedCalls: row.unpricedCalls,
+    estimatedCalls: row.estimatedCalls ?? 0
+  })
 }
 
 /** Lignes triées par coût décroissant, sans les lignes à 0 $ (elles n'expliquent aucune dépense). */

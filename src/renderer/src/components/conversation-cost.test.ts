@@ -9,6 +9,7 @@ import {
   sharePercent,
   spendingRows,
   summarizeConversationCost,
+  costRowLabel,
   timeSharePercent,
   type CostRow
 } from './conversation-cost'
@@ -318,6 +319,12 @@ describe('câblage — la durée est écrite ET affichée', () => {
   })
 })
 
+/**
+ * « 7,00 $ + non exposé » — demande explicite de l'utilisateur du 2026-09-03 : ces deux mots ne
+ * doivent plus apparaître, et la valeur qui manquait est récupérée auprès du CLI
+ * (`main/activity/cli-usage-recovery.ts`) puis tarifée au tarif public. L'indicateur affiche donc un
+ * MONTANT là où il affichait un aveu, et le nombre d'appels quand il ne reste vraiment aucun chiffre.
+ */
 describe('unknown pricing', () => {
   it('keeps an unpriced provider call visible and explicit', () => {
     const summary = summarizeConversationCost([
@@ -325,6 +332,63 @@ describe('unknown pricing', () => {
     ])
     expect(summary.calls).toBe(1)
     expect(summary.unpricedCalls).toBe(1)
-    expect(summary.label).toMatch(/non expos/i)
+    // Rien de récupérable : on dit ce qui manque, sans les mots bannis.
+    expect(summary.label).toBe('1 appel non chiffré')
+    expect(summary.label).not.toMatch(/non expos/i)
+  })
+
+  it('affiche le montant RÉCUPÉRÉ au lieu de « + non exposé »', () => {
+    const summary = summarizeConversationCost([
+      row({
+        key: 'orchestrator',
+        calls: 3,
+        costUsd: 7,
+        unpricedCalls: 1,
+        estimatedCalls: 1,
+        estimatedUsd: 8.43,
+        inputTokens: 12_000,
+        outputTokens: 400
+      })
+    ])
+    expect(summary.label).toBe('7,00 $ + ≈ 8,43 $ estimés')
+    expect(summary.label).not.toMatch(/non expos/i)
+    expect(summary.estimatedUsd).toBeCloseTo(8.43, 6)
+  })
+
+  it("nomme ce qui reste non chiffré à côté du montant, sans jamais l'appeler « non exposé »", () => {
+    // Cas RÉEL de conv-1 : deux appels tués, un seul récupérable (le transcript du second est vide).
+    const summary = summarizeConversationCost([
+      row({
+        key: 'orchestrator',
+        calls: 11,
+        costUsd: 4.2,
+        unpricedCalls: 2,
+        estimatedCalls: 1,
+        estimatedUsd: 8.43
+      })
+    ])
+    expect(summary.label).toBe('4,20 $ + ≈ 8,43 $ estimés · 1 appel non chiffré')
+    expect(summary.label).not.toMatch(/non expos/i)
+  })
+
+  it('la ligne de détail dit le même montant récupéré que le total', () => {
+    expect(
+      costRowLabel({ costUsd: 4.2, unpricedCalls: 2, estimatedCalls: 1, estimatedUsd: 8.43 })
+    ).toBe('4,20 $ + ≈ 8,43 $ estimés · 1 appel non chiffré')
+    expect(costRowLabel({ costUsd: 4.2, unpricedCalls: 1 })).toBe('4,20 $ · 1 appel non chiffré')
+    expect(costRowLabel({ costUsd: 0, unpricedCalls: 2 })).toBe('2 appels non chiffrés')
+    expect(costRowLabel({ costUsd: 1.5, unpricedCalls: 0 })).toBe('1,50 $')
+  })
+
+  it("aucune surface de l'indicateur n'écrit plus « non exposé »", () => {
+    const source = readFileSync(join(__dirname, 'conversation-cost.ts'), 'utf8')
+    // Le mot est aussi banni sous sa forme échappée (`non exposé`), qui échappait au grep.
+    const rendu = source.replace(/\\u00e9/g, 'é')
+    const lignes = rendu
+      .split('\n')
+      .filter((l) => /non expos/i.test(l))
+      // Les commentaires RACONTENT le défaut corrigé ; seul le texte RENDU est banni.
+      .filter((l) => !/^(\*|\/\/|\/\*)/.test(l.trimStart()))
+    expect(lignes).toEqual([])
   })
 })
