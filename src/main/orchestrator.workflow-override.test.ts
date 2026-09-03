@@ -779,3 +779,39 @@ describe('mode bloquant : aucune reprise automatique sans nouveau tour humain', 
     expect(provider.phases).toEqual(['build', 'judge'])
   })
 })
+
+describe('allocation imposée par le workflow (conv-188)', () => {
+  const override = () => ({
+    explicit: true as const,
+    allocation: { maxGreedyNodes: 3 },
+    graph: {
+      entry: 'build',
+      nodes: [
+        { id: 'build', phase: 'build' as const },
+        { id: 'judge', phase: 'judge' as const }
+      ],
+      edges: [{ from: 'build', to: 'judge', when: 'always' as const }]
+    }
+  })
+
+  it('en mesure seule, une allocation plus large que le devis élargit le run au lieu de le tuer', async () => {
+    const quote = compileExecutionQuote('stabilise le devis du workflow')
+    const run = override()
+    await expect(
+      makeOrchestrator(new Recorder(), run, quote).run('stabilise le devis du workflow')
+    ).resolves.toBeDefined()
+    expect(quote.allocation?.maxGreedyNodes).toBe(3)
+  })
+
+  it('en mode bloquant, la même allocation est toujours refusée avant le premier appel', async () => {
+    const provider = new Recorder()
+    const quote = compileExecutionQuote('stabilise le devis du workflow', {
+      spendEnforcement: 'blocking'
+    })
+    const run = override()
+    await expect(
+      makeOrchestrator(provider, run, quote).run('stabilise le devis du workflow')
+    ).rejects.toThrow('Devis impossible')
+    expect(provider.prompts).toHaveLength(0)
+  })
+})

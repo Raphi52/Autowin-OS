@@ -1747,9 +1747,30 @@ export class Orchestrator {
           impose.maxGreedyNodes !== undefined &&
           executionQuote.allocation.maxGreedyNodes < impose.maxGreedyNodes
         if (refusesJudge || refusePhase || refuseGreedy) {
-          throw new Error(
-            `Devis impossible avant exécution : l'allocation du workflow dépasse les plafonds du run.`
-          )
+          // MESURE SEULE = ON COMPTE, ON NE REFUSE PAS (conv-188). Les deux refus voisins
+          // (`maxProviderCalls` ci-dessus, agents obligatoires dans `execution-quote.ts`) ont été
+          // assouplis le 12/08 ; celui-ci avait été oublié et tuait encore le run AVANT le premier
+          // appel. En mesure seule (défaut), l'allocation s'ALIGNE sur ce que le workflow impose ;
+          // le refus ne subsiste qu'en `spendEnforcement: 'blocking'`, choisi explicitement.
+          if (executionQuote.limits.spendEnforcement === 'blocking') {
+            throw new Error(
+              `Devis impossible avant exécution : l'allocation du workflow dépasse les plafonds du run.`
+            )
+          }
+          if (impose.judgeMembers !== undefined) {
+            executionQuote.allocation.judgeMembers = impose.judgeMembers
+          }
+          for (const [phase, count] of Object.entries(impose.phaseMembers ?? {})) {
+            if (count !== undefined) {
+              executionQuote.allocation.phaseMembers[phase as PipelinePhase] = count
+            }
+          }
+          if (impose.maxGreedyNodes !== undefined) {
+            executionQuote.allocation.maxGreedyNodes = Math.max(
+              executionQuote.allocation.maxGreedyNodes,
+              impose.maxGreedyNodes
+            )
+          }
         }
       }
       executionQuote.decomposition =
