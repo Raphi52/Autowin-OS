@@ -133,16 +133,36 @@ export function rootRequirementChecks(
   if (required.analysis) {
     checks.push({
       label: ROOT_DOD.analysis,
-      // Toute phase de LECTURE porte l'analyse, pas seulement `scout` : un run programme
-      // `['frame']` ou `['terrain']` ne joue JAMAIS `scout`, donc n'aurait pu cocher cette case a
-      // aucun prix — la seule case que `rootDodLabels` lui seme etait structurellement incochable
-      // (« DoD 0/1 » sur un livrable complet). On reutilise `noeudSansEcriture`, le predicat deja
-      // defini plus bas : deux listes du meme concept, c'est le defaut que ce run corrige. Un noeud
-      // SKILL y entre aussi — sinon un workflow fait de skills n'aurait, lui non plus, aucun moyen
-      // de cocher cette case.
-      checked: proofs.phases.some(
-        (phase) => noeudSansEcriture(phase.phase) && Boolean(phase.text?.trim())
-      )
+      // TOUTE phase porteuse d'un livrable TEXTUEL coche l'analyse — y compris `build` et `clean`.
+      //
+      // Ce predicat filtrait sur `noeudSansEcriture` (scout/frame/terrain + noeuds skill). Defaut
+      // MESURE le 2026-09-03 (run-90383ebef541-1, conv-21) : un run qui n'a joue que `build` — six
+      // fois, 4 607 a 9 803 caracteres de livrable chacune, lu dans
+      // `.autowin-data/autowin-os/run-state/run-90383ebef541-1.json` — a ete bloque SIX fois de
+      // suite par « Promis mais pas fait : "Analyse demandee presente dans le livrable" », avec un
+      // verdict de juge vide. `build` ecrit, donc la case n'etait cochable a AUCUN prix : meme
+      // pathologie que celle deja documentee ici pour la MUTATION le 2026-08-18, en miroir. Et
+      // `rootExecutionRequirements` l'annonce pourtant : « L'ANALYSE, elle, reste due : il peut la
+      // tenir » — elle ne pouvait pas la tenir.
+      //
+      // REGLE, en deux temps, et le second temps n'est PAS un assouplissement du premier :
+      //   1. Le run a JOUE au moins une phase d'analyse (scout/frame/terrain ou noeud skill) ->
+      //      c'est ELLE qui doit rendre l'analyse. Une phase d'analyse MUETTE n'est pas blanchie par
+      //      le texte du build : intention deja testee (`conv-runs.dod-honnete.test.ts:122` « ne
+      //      confond ni une phase scout vide ni un lint avec les livrables demandes », et
+      //      `root-execution-contract.lecture-seule.test.ts:142` « pas de blanchiment par la forme »).
+      //   2. Le run n'a joue AUCUNE phase d'analyse -> le livrable textuel d'une phase ecrivante la
+      //      porte. Sans ce second temps l'exigence est insatisfaisable, et c'est le defaut mesure.
+      //
+      // Le texte reste OBLIGATOIRE dans les deux cas : un livrable vide, ou aucune phase jouee, ne
+      // coche pas. Ce gate ne juge jamais le CONTENU de l'analyse (c'est le travail du juge), il
+      // constate qu'un livrable textuel existe la ou il pouvait exister. Les trois falsificateurs de
+      // `root-execution-contract.analyse-phase-ecrivante.test.ts` tiennent ces trois bords.
+      checked: (() => {
+        const phasesDAnalyse = proofs.phases.filter((phase) => noeudSansEcriture(phase.phase))
+        const porteuses = phasesDAnalyse.length > 0 ? phasesDAnalyse : proofs.phases
+        return porteuses.some((phase) => Boolean(phase.text?.trim()))
+      })()
     })
   }
   if (required.mutation) {
