@@ -2041,6 +2041,18 @@ ol.md-list li {
   white-space: nowrap;
 }
 
+/* MODE CLAIR — le nom du modèle actif hérite de `.model-select { color: #eaf6ff }`
+   (l.2014), un blanc bleuté : invisible sur fond clair. Le niveau d'effort à côté
+   est en `#88949d`, trop pâle lui aussi. Aucune variable de thème dans les deux
+   cas. Signalé le 2026-09-03 : « le modèle actif est trop clair ». */
+:root[data-theme='clair'] .model-select,
+:root[data-theme='clair'] .model-select summary > strong {
+  color: var(--text);
+}
+:root[data-theme='clair'] .model-select summary > em {
+  color: var(--text-dim);
+}
+
 .model-select summary > em {
   color: #88949d;
   font: 500 9px/1.2 var(--font);
