@@ -3747,6 +3747,10 @@ ol.md-list li {
   cursor: pointer;
   text-align: left;
 }
+/* TÉMOIN DE DICHOTOMIE — 2026-09-03, À RETIRER. */
+.conv-auto-toggle {
+  outline: 2px solid #00ff00;
+}
 .conv-auto-toggle:hover {
   border-color: rgba(255, 255, 255, 0.28);
 }
