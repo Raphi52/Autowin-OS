@@ -63,7 +63,8 @@
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-panel) var(--container-radius-panel) 0 0;
   background: transparent;
 }
@@ -434,7 +435,8 @@
   flex: 1;
   display: grid;
   grid-template-columns: minmax(210px, 255px) minmax(0, 1fr);
-  border: 1px solid var(--line);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-top: 0;
   border-radius: 0 0 10px 10px;
   background: var(--surface-panel);

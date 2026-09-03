@@ -47,7 +47,8 @@
 .project-strip {
   display: grid;
   grid-template-columns: repeat(5, minmax(110px, 1fr));
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-left: 3px solid var(--cyan);
   border-radius: var(--container-radius-panel);
   background: var(--surface-card);
@@ -96,7 +97,8 @@
 .cockpit-section {
   margin-top: 16px;
   padding: 16px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-panel);
   background: var(--surface-card);
 }

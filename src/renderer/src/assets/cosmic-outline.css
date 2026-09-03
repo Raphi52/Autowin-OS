@@ -233,7 +233,9 @@
 
 .cosmic-outline .conv-pane,
 .cosmic-outline .runs-pane {
-  border-color: rgba(255, 255, 255, 0.14);
+  /* Aucun bord : les cartes de Chat se lisent par leur fond seul (choix utilisateur du 03/09,
+     « enleve les bordures grises des cadres conversation »). */
+  border: 0;
   /* Meme lisere que les cadres de page : les trois panneaux de Chat etaient les seuls sans ce
      repere. Couche AJOUTEE au fond propre du panneau, pas un remplacement. */
   background: var(--lisere-haut), var(--surface-panel);
@@ -257,7 +259,7 @@
 /* Fenetre "conversation active" : carte autonome (fond 95% propre, plus dependante de
    chat-layout) bordee arrondie comme les autres panneaux. */
 .cosmic-outline .chat {
-  border: 1px solid var(--container-border);
+  border: 0;
   border-radius: var(--container-radius-panel);
   overflow: hidden;
   background: var(--lisere-haut), var(--surface-panel);
@@ -371,7 +373,6 @@
 .cosmic-outline .conv-pane {
   gap: 16px;
   padding: 22px 17px 18px;
-  border-right-color: rgba(255, 255, 255, 0.12);
 }
 
 .cosmic-outline .conv-pane-resizer,

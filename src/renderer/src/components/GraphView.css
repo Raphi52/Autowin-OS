@@ -17,7 +17,10 @@
      bouge — et personne ne repasse verifier. */
   color: #e8edf4;
   background: var(--surface-panel);
-  border: 1px solid var(--container-border);
+  /* Pas de cadre blanc ici : le cadre de page (`.view-page`, lisere rose) entoure deja Memory.
+     Les deux bords empiles faisaient un double liseré blanc + rose (choix utilisateur du 03/09 :
+     garder le colore, retirer le blanc). */
+  border: 0;
   border-radius: var(--container-radius-page);
   box-shadow: var(--container-shadow);
 }

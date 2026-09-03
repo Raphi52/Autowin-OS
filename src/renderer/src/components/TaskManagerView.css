@@ -40,7 +40,8 @@
 
 .task-manager-health {
   padding: 5px 9px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: 999px;
   color: var(--text-dim);
   background: color-mix(in srgb, var(--surface-card) 88%, transparent);
@@ -112,7 +113,8 @@
 .task-manager-stats {
   gap: 16px;
   padding: 9px 12px;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-card);
   background: color-mix(in srgb, var(--surface-card) 88%, transparent);
   color: var(--text-dim);
@@ -167,7 +169,8 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  border: 1px solid var(--container-border);
+  /* Sans cadre : choix utilisateur du 03/09, « enleve les bords dans toutes les vues » — seul le cadre de page (.view-page) delimite la vue. */
+  border: 0;
   border-radius: var(--container-radius-card);
   background: color-mix(in srgb, var(--surface-card) 92%, transparent);
 }
