@@ -140,3 +140,76 @@
 :root[data-theme='clair'] .cosmic-outline .composer-field {
   border-color: var(--line);
 }
+
+/* ----------------------------------------------------------------------------
+   TEXTE DES MESSAGES — écrit en clair EN DUR dans `cosmic-outline.css` :
+   `#e1e7ec` pour l'agent (l.509), `#fff4fa` pour l'utilisateur (l.519), `#73808c`
+   pour la ligne de rôle (l.496). Sur fond blanc ces valeurs devenaient presque
+   invisibles : c'est le vrai défaut de lisibilité du chat clair, pas les cartes
+   sombres (elles gardent leur texte clair et restent lisibles).
+   La bulle de l'utilisateur avait un fond violet foncé : elle passe en rose pâle
+   avec un texte sombre, sinon son texte assombri disparaîtrait dedans.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .cosmic-outline .msg.assistant .msg-body {
+  color: var(--text);
+  border-left-color: var(--gold);
+}
+:root[data-theme='clair'] .cosmic-outline .msg.user .msg-body {
+  background: rgba(200, 26, 108, 0.08);
+  border-color: rgba(200, 26, 108, 0.35);
+  color: #3d0a24;
+}
+:root[data-theme='clair'] .cosmic-outline .msg-meta {
+  color: var(--text-dim);
+}
+
+/* Zone de saisie du bas : elle héritait d'un gris de nuit. */
+:root[data-theme='clair'] .cosmic-outline .composer {
+  background: var(--bg-0);
+}
+:root[data-theme='clair'] .cosmic-outline .composer-field {
+  background: #ffffff;
+}
+:root[data-theme='clair'] .cosmic-outline .composer-field textarea {
+  color: var(--text);
+}
+
+/* Liste de conversations : titres `#dce6ee` et métadonnées `#65778a` en dur
+   (`ChatView.css` l.1775 et l.1784) — presque blancs sur le panneau devenu blanc. */
+:root[data-theme='clair'] .cosmic-outline .conv-label {
+  color: var(--text);
+}
+:root[data-theme='clair'] .cosmic-outline .conv-meta,
+:root[data-theme='clair'] .cosmic-outline .conv-snippet {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .cosmic-outline .conv-group-label {
+  color: var(--text-dim);
+}
+
+/* Bandeau d'alerte en haut du fil (travaux non publiés) : fond noir plein. */
+:root[data-theme='clair'] .chat-workflow-notice,
+:root[data-theme='clair'] .chat-travail-non-publie {
+  background: rgba(154, 111, 16, 0.08);
+  border-color: rgba(154, 111, 16, 0.35);
+  color: var(--text);
+}
+
+/* Cartes de pièces jointes : elles restaient des blocs noirs posés sur la page claire. */
+:root[data-theme='clair'] .artifact-preview {
+  background: #ffffff;
+  border-color: var(--line);
+}
+/* Les textes internes de la carte sont écrits en clair EN DUR dans ArtifactPreview.css
+   (#eef0f5, #d7dae2, #8d94a2…) : éclaircir le fond sans les reprendre rend la carte
+   blanche sur blanc — constaté à l'écran le 2026-09-03. */
+:root[data-theme='clair'] .artifact-preview,
+:root[data-theme='clair'] .artifact-preview * {
+  color: var(--text);
+}
+/* Même piège pour les boutons du bandeau (« Traiter », « Voir la liste »). */
+:root[data-theme='clair'] .chat-workflow-notice button,
+:root[data-theme='clair'] .chat-travail-non-publie button {
+  color: var(--text);
+  border-color: rgba(154, 111, 16, 0.45);
+}
