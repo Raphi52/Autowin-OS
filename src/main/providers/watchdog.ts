@@ -28,7 +28,7 @@ const envMs = (name: string, fallback: number): number => {
 export const SUBAGENT_INACTIVITY_MS = envMs('AUTOWIN_SUBAGENT_INACTIVITY_MS', 5 * 60_000)
 export const SUBAGENT_TOTAL_MS = envMs('AUTOWIN_SUBAGENT_TOTAL_MS', 40 * 60_000)
 /** Délai de grâce entre SIGTERM et SIGKILL lors de l'escalade de kill d'un process figé. */
-export const KILL_GRACE_MS = envMs('AUTOWIN_SUBAGENT_KILL_GRACE_MS', 3_000)
+const KILL_GRACE_MS = envMs('AUTOWIN_SUBAGENT_KILL_GRACE_MS', 3_000)
 
 /**
  * Le devis du run prime sur le plafond local du transport. Hors orchestration (chat direct, sonde),

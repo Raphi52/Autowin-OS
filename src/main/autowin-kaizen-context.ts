@@ -203,7 +203,7 @@ function readNativeRuns(conversationId: string, appData: string): KaizenRun[] {
   aboutis — les plus recents d'abord s'ils depassent la limite — puis on complete avec les appels
   les plus recents, et on rend le tout en ordre chronologique.
 */
-export function appelModeleEchoue(call: { status?: string; error?: string }): boolean {
+function appelModeleEchoue(call: { status?: string; error?: string }): boolean {
   return (
     (typeof call.status === 'string' && call.status !== 'completed') ||
     (typeof call.error === 'string' && call.error.trim().length > 0)

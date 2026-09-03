@@ -312,7 +312,7 @@ export function cibleNommeeTouchee(
     : 'manquee'
 }
 
-export function libelleCibleNommee(cibles: readonly string[]): string {
+function libelleCibleNommee(cibles: readonly string[]): string {
   return `Cible nommee dans la demande reellement modifiee : ${cibles.join(', ')}`
 }
 

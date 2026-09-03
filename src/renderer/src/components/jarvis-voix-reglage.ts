@@ -40,7 +40,7 @@ export const CLE_VOIX_JARVIS = autowinStorageKey('home.jarvis-voix.v1')
  * Le navigateur n'emet `storage` que pour les autres onglets : sans cet evenement, la synthese
  * garderait la voix chargee au premier mot et le nouveau choix ne s'entendrait qu'au redemarrage.
  */
-export const EVENEMENT_VOIX_JARVIS = 'autowin:jarvis-voix'
+const EVENEMENT_VOIX_JARVIS = 'autowin:jarvis-voix'
 
 interface StorageLike {
   getItem(key: string): string | null

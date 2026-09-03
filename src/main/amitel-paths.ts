@@ -25,7 +25,7 @@ import { join } from 'node:path'
 export const DEFAULT_BRAIN_ROOT = '\\\\ged2\\rig\\Projets IA\\Amitel Brain'
 
 /** Origine du service RAG local. Surcharge : `AMITEL_BRAIN_ORIGIN` (nom historique, preserve). */
-export const DEFAULT_BRAIN_ORIGIN = 'http://127.0.0.1:8765'
+const DEFAULT_BRAIN_ORIGIN = 'http://127.0.0.1:8765'
 
 /**
  * Workspaces d'entreprise consultes en LECTURE quand ils existent. `C:\Nouveau dossier` a ete RETIRE :

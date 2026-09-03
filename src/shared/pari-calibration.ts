@@ -82,7 +82,7 @@ export interface MesureCalibration {
 export const SEUIL_ECHANTILLON = 20
 
 /** Sous ce nombre de cas dans la classe minoritaire, l'ordre n'est pas mesurable (voir plus bas). */
-export const MINIMUM_PAR_CLASSE = 5
+const MINIMUM_PAR_CLASSE = 5
 
 const cle = (runId: string, phase: string): string => `${runId}/${phase}`
 

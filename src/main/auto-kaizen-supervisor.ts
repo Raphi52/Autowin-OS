@@ -22,7 +22,7 @@ import type {
 } from '../shared/auto-kaizen-link'
 import { classifyProviderFailure } from './provider-failure-diagnosis'
 
-export const LEGACY_AUTO_KAIZEN_ENABLED_ENV = 'AUTOWIN_LEGACY_AUTO_KAIZEN_ENABLED'
+const LEGACY_AUTO_KAIZEN_ENABLED_ENV = 'AUTOWIN_LEGACY_AUTO_KAIZEN_ENABLED'
 
 export function legacyAutoKaizenSupervisorEnabled(
   env: Readonly<Record<string, string | undefined>> = process.env

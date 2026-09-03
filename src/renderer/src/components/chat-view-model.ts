@@ -1002,7 +1002,7 @@ export interface OrchestratorModelGroup {
  * Catégorie ÉDITEUR déduite de l'id du modèle. Ordre voulu :
  * Anthropic, puis ChatGPT, puis les autres éditeurs (alpha), puis routes auto, puis divers.
  */
-export function modelVendor(model: string): { key: string; label: string; rank: number } {
+function modelVendor(model: string): { key: string; label: string; rank: number } {
   const id = model.toLowerCase()
   // Les routes auto/* forment LEUR PROPRE catégorie (jamais mélangées à un éditeur),
   // testées AVANT la marque pour que `auto/claude-opus` n'atterrisse pas dans Anthropic.
@@ -1029,7 +1029,7 @@ export function modelVendor(model: string): { key: string; label: string; rank: 
  * Clé de tri d'un modèle CONCRET dans sa catégorie éditeur : famille puis version,
  * du plus capable/récent au plus ancien. Ex. Opus 4.8 avant Opus 4.5 avant Sonnet.
  */
-export function modelRecencyKey(model: string): [number, number] {
+function modelRecencyKey(model: string): [number, number] {
   const id = model.toLowerCase()
   const family = id.includes('fable')
     ? 5
@@ -1054,7 +1054,7 @@ export function modelRecencyKey(model: string): [number, number] {
  * (numéros, dates, `latest`, `preview`). `claude-opus-4-8` et `claude-opus-4-1` partagent
  * la même clé ; `claude-sonnet-4-5` et `gpt-5-mini` gardent la leur.
  */
-export function modelFamilyKey(model: string): string {
+function modelFamilyKey(model: string): string {
   return model
     .toLowerCase()
     .replace(/\d+([._-]\d+)*/g, '-')
@@ -1067,7 +1067,7 @@ export function modelFamilyKey(model: string): string {
  * Ne conserve que la version la PLUS RÉCENTE de chaque famille, par fournisseur.
  * Le modèle actuellement lié est toujours gardé — sinon le menu perdrait sa propre sélection.
  */
-export function keepLatestVersionPerFamily(
+function keepLatestVersionPerFamily(
   options: OrchestratorModelOption[],
   current?: { provider: string; model?: string }
 ): OrchestratorModelOption[] {
@@ -1095,8 +1095,8 @@ export function keepLatestVersionPerFamily(
 }
 
 /** Seuils de coût-équivalent par tour (dérivés de 78k tours réels : p33/p66). */
-export const COST_EQ_LOW = 18_000
-export const COST_EQ_HIGH = 47_000
+const COST_EQ_LOW = 18_000
+const COST_EQ_HIGH = 47_000
 
 /** Coût-équivalent tokens d'un tour (output ×5, input ×1). */
 export function turnCostEq(usage: { inputTokens?: number; outputTokens?: number } | null): number {
@@ -1140,7 +1140,7 @@ export function modelCostTier(model: string): {
  * éditeur est fait en amont par modelVendor). Ordre : Chat → Raisonnement → Code → reste,
  * tier « best » avant « pro ». Retourne [sous-rang, 0] ; libellé puis index tranchent les égalités.
  */
-export function orchestratorOptionRank(model: string): [number, number] {
+function orchestratorOptionRank(model: string): [number, number] {
   const id = model.toLowerCase()
   const dimension = id.includes('chat') ? 0 : id.includes('reason') ? 1 : id.includes('cod') ? 2 : 3
   const tier = id.includes('best') ? 0 : id.includes('pro') ? 1 : 2

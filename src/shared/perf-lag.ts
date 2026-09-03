@@ -13,7 +13,7 @@
 export const SEUIL_SEGMENT_LENT_MS = 500
 
 /** Au-dela de ce retard sur un tick, le renderer etait REELLEMENT bloque (pas juste charge). */
-export const SEUIL_GEL_RENDERER_MS = 250
+const SEUIL_GEL_RENDERER_MS = 250
 
 export interface SegmentLatence {
   nom: string

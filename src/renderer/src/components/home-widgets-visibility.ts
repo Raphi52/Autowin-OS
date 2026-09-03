@@ -55,7 +55,7 @@ export function parseVisibilite(raw: unknown): HomeWidgetsVisibility {
   return resultat as HomeWidgetsVisibility
 }
 
-export function serializeVisibilite(courante: HomeWidgetsVisibility): string {
+function serializeVisibilite(courante: HomeWidgetsVisibility): string {
   return JSON.stringify(courante)
 }
 

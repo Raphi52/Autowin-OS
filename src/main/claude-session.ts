@@ -42,7 +42,7 @@ export type ClaudeSessionState = 'authenticated' | 'absent' | 'unknown'
  * 8 s : au démarrage (Electron + Vite + antivirus, plusieurs spawns en parallèle) un CLI répond
  * tardivement. Au-delà : `unknown`, jamais un vert ni une absence par défaut.
  */
-export const CLAUDE_AUTH_PROBE_TIMEOUT_MS = 8000
+const CLAUDE_AUTH_PROBE_TIMEOUT_MS = 8000
 
 /**
  * Extrait les objets JSON équilibrés du texte, en respectant les chaînes et les échappements.

@@ -66,7 +66,7 @@ function parseFile(
  * Hooks d'un provider — GÉNÉRIQUE : lit les fichiers déclarés pour ce provider dans la source unique
  * `provider-capabilities`. Un futur provider = 1 entrée là-bas, zéro code ici.
  */
-export function listProviderHooks(providerId: string, projectRoot = process.cwd()): ClaudeHookItem[] {
+function listProviderHooks(providerId: string, projectRoot = process.cwd()): ClaudeHookItem[] {
   const provider = findProviderCapabilities(providerId, { projectRoot })
   if (!provider) return []
   return provider.hookFiles.flatMap((file) => parseFile(file.path, file.scope, providerId))

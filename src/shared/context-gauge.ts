@@ -69,7 +69,7 @@ const SEUIL_TENDU = 0.6
 /** Au-dela, CRITIQUE : la prochaine reponse longue peut ne plus tenir. */
 const SEUIL_CRITIQUE = 0.85
 
-export function contextWindowFor(
+function contextWindowFor(
   model: string | undefined,
   provider?: string
 ): ContextWindow | undefined {

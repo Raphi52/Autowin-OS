@@ -29,7 +29,7 @@ export function lastUserPromptBefore(messages: Msg[], index: number): string | u
  * celle du drapeau seul : un message ORDINAIRE mais hors sujet ne doit pas fermer la question non
  * plus, et aucun drapeau ne peut le savoir.
  */
-export function estUneReponseAuBloc(texte: string, decision: AskDecision): boolean {
+function estUneReponseAuBloc(texte: string, decision: AskDecision): boolean {
   const propre = texte.trim()
   if (!propre) return false
   const attendus = decision.options.map((option) => promptDeLOption(option).trim())

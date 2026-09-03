@@ -91,7 +91,7 @@ const systemClock: WatchdogEngineClock = {
   clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
 }
 
-export const DEFAULT_WATCHDOG_POLL_MS = 3_000
+const DEFAULT_WATCHDOG_POLL_MS = 3_000
 
 /** Lignes de voisinage remises a l'agent autour de celle qui a matche. */
 const NEIGHBOURHOOD = 4

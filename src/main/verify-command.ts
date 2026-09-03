@@ -207,7 +207,7 @@ export function scriptVitestUnique(
 }
 
 /** Conserve pour la voie de PORTEE, qui n'ajoute aucun drapeau : seul « vitest existe-t-il ? » compte. */
-export function declareVitest(
+function declareVitest(
   cwd: string,
   lireScripts: (dir: string) => Record<string, string> | null = scriptsDeclares
 ): boolean {

@@ -653,7 +653,7 @@ export function codexApiEffort(effort: string | undefined): string | undefined {
   return CODEX_VALID_EFFORTS.has(effort) ? effort : 'high'
 }
 
-export function codexContent(message: Message): Array<Record<string, string>> {
+function codexContent(message: Message): Array<Record<string, string>> {
   const content: Array<Record<string, string>> = [{ type: 'input_text', text: message.content }]
   for (const attachment of message.attachments ?? []) {
     if (attachment.kind === 'text') {
@@ -678,7 +678,7 @@ export function codexContent(message: Message): Array<Record<string, string>> {
 }
 
 /** Extrait `chatgpt_account_id` du claim JWT de l'access_token (header exigé par le backend). */
-export function accountIdFromJwt(token: string): string | undefined {
+function accountIdFromJwt(token: string): string | undefined {
   try {
     const parts = token.split('.')
     if (parts.length < 2) return undefined

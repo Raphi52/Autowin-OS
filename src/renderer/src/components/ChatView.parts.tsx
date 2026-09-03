@@ -350,7 +350,7 @@ export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element 
 
 /** Preuves d'exécution rendues LISIBLEMENT inline : diff pour un file_change, stdout+exit pour une
  *  commande. Remplace le dump JSON générique — c'est ce qui rend le travail « visible » dans le Chat. */
-export function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.Element {
+function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.Element {
   return (
     <div className="evidence-list">
       {items.map((e, i) => (

@@ -124,7 +124,7 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   scheduler: { destination: 'task-manager', section: 'planification' }
 }
 
-export function isAppDestination(value: string): value is AppDestination {
+function isAppDestination(value: string): value is AppDestination {
   return DESTINATION_IDS.has(value)
 }
 

@@ -46,7 +46,7 @@ export const REMEMBER_SOURCE_SCHEMES = [
   'meeting'
 ] as const
 
-export const REMEMBER_TITLE_MAX = 200
+const REMEMBER_TITLE_MAX = 200
 export const REMEMBER_BODY_MAX = 4_000
 export const REMEMBER_SCOPE_MAX = 120
 export const REMEMBER_TAG_MAX = 40
@@ -98,7 +98,7 @@ const KEYED_CANDIDATE =
  * Chaque exclusion vient d'un faux refus RÉEL relevé par l'audit du 2026-07-30 — et un faux refus est le
  * sens coûteux ici : il bloque une mémoire valide alors qu'un second garde tourne derrière.
  */
-export function valueLooksLikeSecret(value: string): boolean {
+function valueLooksLikeSecret(value: string): boolean {
   // Trop court pour être un secret utile : « X-CSRF-Token », « 3600000000 ».
   if (value.length < 16) return false
   // Un CHEMIN ou une URL n'est pas un secret : « /api/v2/oauth/token/refresh »,
@@ -443,7 +443,7 @@ const UNKNOWN_DEPOSIT = '[etat-inconnu]'
  * `AUTOWIN_BRAIN_TIMEOUT_MS` permet de le regler sans toucher au code (et il est rechargeable a
  * chaud, voir `VARIABLES_RECHARGEABLES`).
  */
-export const BRAIN_DEPOSIT_TIMEOUT_MS = 15_000
+const BRAIN_DEPOSIT_TIMEOUT_MS = 15_000
 
 export function brainDepositTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const brut = Number(env.AUTOWIN_BRAIN_TIMEOUT_MS)

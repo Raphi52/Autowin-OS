@@ -184,7 +184,7 @@ export interface GitPublicationRange {
   publishedSha: string
 }
 
-export async function publishRunCommits(input: {
+async function publishRunCommits(input: {
   repo: string
   /** Plage exacte attestée par la finalisation du worktree. */
   publication: Readonly<GitPublicationRange>
@@ -294,7 +294,7 @@ export function autoCloseBranch(runId: string): string {
  * clôture emporte tout ce qui traînait dans l'arbre (mesuré : 44 `.md` préexistants côté Brain, du
  * travail concurrent côté projet) — soit exactement le « changements entremêlés » qu'on veut éviter.
  */
-export async function snapshotChangedPaths(repo: string, runGit: GitRunner): Promise<string[]> {
+async function snapshotChangedPaths(repo: string, runGit: GitRunner): Promise<string[]> {
   try {
     return parsePorcelainPaths(await runGit(['status', '--porcelain=v1', '-z', '-uall'], repo))
   } catch {
@@ -303,7 +303,7 @@ export async function snapshotChangedPaths(repo: string, runGit: GitRunner): Pro
 }
 
 /** Chemins réellement imputables au run = modifiés maintenant, mais pas déjà modifiés avant. */
-export function pathsFromRun(before: readonly string[], after: readonly string[]): string[] {
+function pathsFromRun(before: readonly string[], after: readonly string[]): string[] {
   const preexisting = new Set(before)
   return after.filter((path) => !preexisting.has(path))
 }
@@ -370,7 +370,7 @@ export function projectPublicationNeedsRetry(report: AutoCloseReport): boolean {
 }
 
 /** Message de commit : la tâche du run, bornée, préfixée pour être reconnaissable dans l'historique. */
-export function autoCloseMessage(task: string, runId: string): string {
+function autoCloseMessage(task: string, runId: string): string {
   const head = task.replace(/\s+/g, ' ').trim().slice(0, 100) || 'travail agent'
   return `auto(${runId}): ${head}`
 }

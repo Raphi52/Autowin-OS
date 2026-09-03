@@ -32,7 +32,7 @@ export interface MentionQuery {
   query: string
 }
 
-export const MENTION_LIMIT = 8
+const MENTION_LIMIT = 8
 
 /** Un `@` ne déclenche une mention que s'il commence un mot (début de texte ou blanc devant). */
 export function activeMentionQuery(
@@ -84,7 +84,7 @@ export function matchMentions(
 }
 
 /** Référence textuelle insérée dans le prompt (et re-résolue à l'envoi). */
-export function mentionRef(candidate: MentionCandidate): string {
+function mentionRef(candidate: MentionCandidate): string {
   return `@${candidate.kind === 'run' ? 'run' : 'fichier'}:${candidate.id}`
 }
 

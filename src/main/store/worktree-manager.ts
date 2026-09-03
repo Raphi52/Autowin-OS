@@ -159,7 +159,7 @@ function tryGit(repo: string, args: string[]): { code: number; stdout: string; s
  * le premier cadre de pile, qui suffit a situer le point de rupture. Borne a 600 caracteres : ce
  * `detail` traverse le ledger et l'UI, une pile entiere y serait illisible.
  */
-export function detailFinalisationJetee(erreur: unknown): string {
+function detailFinalisationJetee(erreur: unknown): string {
   const prefixe = 'La finalisation Git a échoué de façon inattendue'
   const message =
     erreur instanceof Error

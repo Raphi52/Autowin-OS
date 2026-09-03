@@ -36,7 +36,7 @@ function finiteNonNegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
-export function isRoutingObservation(value: unknown): value is RoutingObservation {
+function isRoutingObservation(value: unknown): value is RoutingObservation {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const candidate = value as Partial<RoutingObservation>
   return (
@@ -327,7 +327,7 @@ export class ShadowRoutingTraceObserver {
   }
 }
 
-export const SHADOW_ROUTING_ENABLED_ENV = 'AUTOWIN_MODEL_ROUTING_SHADOW_ENABLED'
+const SHADOW_ROUTING_ENABLED_ENV = 'AUTOWIN_MODEL_ROUTING_SHADOW_ENABLED'
 
 export type ShadowRoutingRuntime =
   | { enabled: false }

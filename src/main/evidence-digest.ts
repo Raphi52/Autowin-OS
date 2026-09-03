@@ -28,17 +28,17 @@ import type { ExecutionEvidence } from './providers/types'
  * fait) et ses preuves en queue (tests, exit codes, verdicts). Amputer un bord rendrait le juge
  * incapable de juger ; amputer le ventre lui coûte des redites.
  */
-export const AGGREGATE_HEAD = 40_000
-export const AGGREGATE_TAIL = 20_000
+const AGGREGATE_HEAD = 40_000
+const AGGREGATE_TAIL = 20_000
 
 /** Borne le livrable agrégé soumis au juge sans lui retirer ses deux bords porteurs. */
 export const clampAggregateForJudge = (text: string | undefined): string =>
   text ? clampMiddle(text, AGGREGATE_HEAD, AGGREGATE_TAIL) : ''
 
 /** Bornes : têtes/queues de `stdout`, longueur de commande, nombre de preuves. */
-export const EVIDENCE_STDOUT_HEAD = 400
-export const EVIDENCE_STDOUT_TAIL = 800
-export const EVIDENCE_COMMAND_MAX = 300
+const EVIDENCE_STDOUT_HEAD = 400
+const EVIDENCE_STDOUT_TAIL = 800
+const EVIDENCE_COMMAND_MAX = 300
 export const EVIDENCE_MAX_ITEMS = 60
 
 export interface JudgeEvidence {

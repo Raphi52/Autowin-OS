@@ -882,7 +882,7 @@ function costOfTrace(trace: OrchestrationStep[]): number {
   )
 }
 
-export function limitGreedyPlan(plan: GreedyTaskNode[], maxNodes: number): GreedyTaskNode[] {
+function limitGreedyPlan(plan: GreedyTaskNode[], maxNodes: number): GreedyTaskNode[] {
   const kept = plan.slice(0, Math.max(0, maxNodes))
   const ids = new Set(kept.map((node) => node.id))
   return kept.filter((node) => node.deps.every((dependency) => ids.has(dependency)))
@@ -1037,7 +1037,7 @@ export function sandboxForPhase(
  * propre mission et tentent d'écrire malgré leur contrat read-only. Le routage a déjà été calculé
  * avant la construction du contexte ; on peut donc retirer uniquement une phase native reconnue.
  */
-export function taskForPipelineContext(task: string): string {
+function taskForPipelineContext(task: string): string {
   const match = /^\s*\/([a-z][a-z0-9-]*)\b\s*/i.exec(task)
   if (!match) return task
   const phase = match[1].toLowerCase() as PipelinePhase

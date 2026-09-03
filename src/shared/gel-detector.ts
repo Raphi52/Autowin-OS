@@ -22,7 +22,7 @@ export const PERIODE_BATTEMENT_MS = 500
  * Part du retard qui doit avoir ete brulee par NOTRE process pour que le gel lui soit imputable.
  * En dessous, le temps a passe ailleurs : la boucle n'etait pas tenue, elle n'etait pas ordonnancee.
  */
-export const PART_CPU_IMPUTABLE = 0.5
+const PART_CPU_IMPUTABLE = 0.5
 
 /**
  * Origine d'un gel.
@@ -42,7 +42,7 @@ export type CauseGel = 'boucle-tenue' | 'process-prive-de-cpu' | 'entree-sortie-
  * En dessous, le temoin s'est reveille A L'HEURE : la machine nous ordonnancait bien, donc le thread
  * principal etait coince dans un appel bloquant — c'est NOTRE code, pas la machine.
  */
-export const PART_TEMOIN_EN_RETARD = 0.5
+const PART_TEMOIN_EN_RETARD = 0.5
 
 export interface Gel {
   /** Horodatage ISO du reveil tardif. */
@@ -114,10 +114,10 @@ export interface ResumeGels {
  * pendant le retard tranche : brule chez nous => c'est nous ; pas brule => c'est la machine.
  */
 /** Part du gel qu'un cumul doit expliquer pour etre NOMME comme contributeur. */
-export const PART_CUMUL_IMPUTABLE = 0.25
+const PART_CUMUL_IMPUTABLE = 0.25
 
 /** Nombre de contributeurs reportes : au-dela, ce n'est plus une piste mais un listing. */
-export const CONTRIBUTEURS_REPORTES = 3
+const CONTRIBUTEURS_REPORTES = 3
 
 /**
  * Classe les appels bloquants d'une fenetre figee et rend ceux qui l'EXPLIQUENT.

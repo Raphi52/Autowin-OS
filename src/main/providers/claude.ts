@@ -315,7 +315,7 @@ export function claudeWrittenLineFingerprints(
  * « généré » est un mensonge d'affichage. On dérive donc le libellé de l'outil réel,
  * et « généré » ne reste que pour une sortie directe du modèle (aucun outil).
  */
-export function untitledArtifactName(blockType?: string, tool?: string): string {
+function untitledArtifactName(blockType?: string, tool?: string): string {
   const isImage = blockType === 'image'
   const base = isImage ? 'image' : 'document'
   if (!tool) return isImage ? 'image-générée' : 'document-généré'
@@ -595,7 +595,7 @@ export function argumentsMcpNoeudSkill(opts: SendOptions): {
  * Rend `undefined` si l'ecriture echoue : l'appelant retombe alors sur la chaine inline (capacite
  * preservee, fuite signalee) plutot que de perdre l'outillage du noeud.
  */
-export function ecrireConfigMcp(
+function ecrireConfigMcp(
   config: string
 ): { chemin: string; nettoyer: () => void } | undefined {
   try {

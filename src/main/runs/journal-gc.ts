@@ -68,7 +68,7 @@ export interface JournalGcPolicy {
  */
 export const DEFAULT_MAX_AGE_MS = JOURNAL_RETENTION_MS
 /** 200 journaux ≈ quelques Mo : la fenetre reste consultable a la main. */
-export const DEFAULT_MAX_FILES = 200
+const DEFAULT_MAX_FILES = 200
 /**
  * 6 h sans une seule ecriture : seuil au-dela duquel on accepte de presumer le run mort.
  *

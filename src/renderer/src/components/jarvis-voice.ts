@@ -157,7 +157,7 @@ export interface ConversationDirecte {
 }
 
 /** Fenêtre de fraîcheur d'une conversation TERMINÉE : au-delà, ce n'est plus « en direct ». */
-export const FENETRE_DIRECT_MS = 10 * 60_000
+const FENETRE_DIRECT_MS = 10 * 60_000
 const MAX_DIRECT = 6
 
 export function conversationsEnDirect(
@@ -311,7 +311,7 @@ const CACHE_EVEIL = new Map<string, RegExp>()
  * plus court). Un nom de moins de 3 lettres ne tolere plus rien du tout — « Al » elargi de trois
  * lettres reveillerait l'assistant sur « allo », « alors », « aller ».
  */
-export function motifEveil(nom: string = NOM_JARVIS_DEFAUT): RegExp {
+function motifEveil(nom: string = NOM_JARVIS_DEFAUT): RegExp {
   const mots = motsNom(nom).length > 0 ? motsNom(nom) : motsNom(NOM_JARVIS_DEFAUT)
   const cle = mots.join(' ')
   const enCache = CACHE_EVEIL.get(cle)

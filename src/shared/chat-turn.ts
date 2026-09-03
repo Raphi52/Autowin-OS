@@ -357,7 +357,7 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
  */
 const ANNONCE_EN_TETE = /^\s*je (?:dois|vais|commence par|cible|proc\u00e8de)\b[^\n]*\n/i
 
-export function retirerAnnonceEnTete(texte: string): string {
+function retirerAnnonceEnTete(texte: string): string {
   if (!ANNONCE_EN_TETE.test(texte)) return texte
   const reste = texte.replace(ANNONCE_EN_TETE, '').trim()
   // Si l'annonce etait TOUT le message, on la garde : mieux vaut une intention qu'une bulle vide.

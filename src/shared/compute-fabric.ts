@@ -1,4 +1,4 @@
-export const NODE_MANIFEST_SCHEMA = 'autowin.node-manifest/v1' as const
+const NODE_MANIFEST_SCHEMA = 'autowin.node-manifest/v1' as const
 
 export type ComputeExecutionMode = 'local-tools' | 'remote-agent'
 export type ComputeResourceKind = 'model' | 'agent'

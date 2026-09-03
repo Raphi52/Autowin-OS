@@ -347,7 +347,7 @@ function matches(table: Record<string, Rule>, tokens: string[]): boolean {
  * mutation d'ÉTAT, l'agent doit produire son oracle dans un appel SÉPARÉ — ce que le gate exige
  * déjà par ailleurs, l'oracle devant être une preuve distincte de la mutation.
  */
-export function classifyShellCommand(command: string | undefined): ShellCommandKind {
+function classifyShellCommand(command: string | undefined): ShellCommandKind {
   if (!command) return 'inspection'
   const segments = segmentsOf(command).map(tokensOf)
   if (segments.some((tokens) => matches(VERIFYING, tokens))) return 'verification'

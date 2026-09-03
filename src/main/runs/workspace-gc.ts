@@ -35,7 +35,7 @@ import { join } from 'node:path'
  */
 
 /** Statuts qui CONCLUENT un run. Tout le reste est « non clos » et donc protégé. */
-export const STATUTS_CLOS = new Set(['green', 'degraded-closed', 'succeeded'])
+const STATUTS_CLOS = new Set(['green', 'degraded-closed', 'succeeded'])
 
 export interface WorkspaceEntry {
   /** Dossier du workspace (c'est LUI qui sera supprimé, sidecars compris). */
@@ -68,7 +68,7 @@ export const DEFAULT_MAX_PER_CONVERSATION = 50
 /** 6 h sans écriture — même seuil et même justification que `journal-gc.DEFAULT_ASSUME_DEAD_MS`. */
 export const DEFAULT_ASSUME_DEAD_MS = 6 * 60 * 60 * 1000
 /** Borne le coût d'une passe de démarrage. */
-export const DEFAULT_MAX_DELETIONS = 500
+const DEFAULT_MAX_DELETIONS = 500
 
 export interface WorkspaceGcPlan {
   doomed: string[]
@@ -157,7 +157,7 @@ function lireStatut(runPath: string): string {
 }
 
 /** Inventorie les workspaces sous la racine des runs de conversation. */
-export function inventoryRunWorkspaces(root: string): WorkspaceEntry[] {
+function inventoryRunWorkspaces(root: string): WorkspaceEntry[] {
   const entries: WorkspaceEntry[] = []
   let convs: string[]
   try {

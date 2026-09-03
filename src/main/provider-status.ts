@@ -76,7 +76,7 @@ export function probeResultStatus(result: {
 }
 
 /** Un statut « authenticated » ou « expired » est définitif ; les autres méritent un bouton « Tester ». */
-export function isTestable(status: AuthStatus): boolean {
+function isTestable(status: AuthStatus): boolean {
   return status === 'installed-untested' || status === 'unknown'
 }
 

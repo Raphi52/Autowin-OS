@@ -21,7 +21,7 @@ import { isForbidden } from './edit-file-command'
 export const RANGE_MAX = 400
 export const CORRESPONDANCES_MAX = 80
 /** Un fichier plus lourd n'est jamais lu d'un bloc : traces jsonl de plusieurs Mo. */
-export const OCTETS_MAX_FICHIER = 4_000_000
+const OCTETS_MAX_FICHIER = 4_000_000
 
 export type ReadDecision =
   | { allowed: true; absolutePath: string; relativePath: string; from: number; count: number }

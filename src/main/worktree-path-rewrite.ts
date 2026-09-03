@@ -114,7 +114,7 @@ export function adresseDeSecours(rescueRef?: string): string {
  * posé sur un état encore en mouvement, et la reprise la démentait sans que rien ne la réécrive.
  * Celle-ci ne promet pas la publication et ne la nie pas : elle dit ce qui est vrai à cet instant.
  */
-export function pendingIntegrationNotice(worktreeCwd: string, rescueRef?: string): string {
+function pendingIntegrationNotice(worktreeCwd: string, rescueRef?: string): string {
   return (
     `⏳ Intégration DIFFÉRÉE, pas échouée : la base portait une opération git en cours, une reprise ` +
     `automatique est programmée. En attendant, le travail est dans la copie isolée ${worktreeCwd} ` +

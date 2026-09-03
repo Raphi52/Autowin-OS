@@ -31,13 +31,13 @@ const FIN_DE_PHRASE = /[.!?…][»”"')\]]*$/u
 const DEBUT_DE_PHRASE = /^[\p{L}«“"'(#*\->`]/u
 
 /** Une fence est-elle ENCORE ouverte à la fin du texte accumulé ? (nombre impair de délimiteurs) */
-export function fenceEncoreOuverte(texte: string): boolean {
+function fenceEncoreOuverte(texte: string): boolean {
   const delimiteurs = texte.match(/^[ \t]*(?:```|~~~)/gm)
   return delimiteurs !== null && delimiteurs.length % 2 === 1
 }
 
 /** Deux phrases soudées sans espace : « …ciblée. » + « Maintenant… ». */
-export function phrasesSoudees(precedent: string, suivant: string): boolean {
+function phrasesSoudees(precedent: string, suivant: string): boolean {
   if (!precedent || !suivant) return false
   if (/\s$/u.test(precedent) || /^\s/u.test(suivant)) return false
   return FIN_DE_PHRASE.test(precedent) && DEBUT_DE_PHRASE.test(suivant)

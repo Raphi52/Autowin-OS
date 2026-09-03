@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 
-export const SURVIVABLE_EXIT_EVENT_TYPE = 'autowin.survivable-exit'
+const SURVIVABLE_EXIT_EVENT_TYPE = 'autowin.survivable-exit'
 
 /**
  * Preuve de fermeture écrite par le relais, hors de stdout/stderr contrôlés par le provider.
@@ -43,7 +43,7 @@ export function writeSurvivableExit(journalPath: string, exitCode: number): void
 }
 
 /** Marqueur écrit par le relais APRÈS la fermeture réelle du CLI. */
-export function survivableExitCodeFromLine(line: string): number | undefined {
+function survivableExitCodeFromLine(line: string): number | undefined {
   try {
     const value: unknown = JSON.parse(line)
     if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
@@ -82,7 +82,7 @@ export function stdoutJournalPath(root: string, runId: string): string {
 }
 
 /** Stderr reste observable, mais ne doit jamais être confondu avec la réponse du provider. */
-export function stderrJournalPath(root: string, runId: string): string {
+function stderrJournalPath(root: string, runId: string): string {
   const safe = runId.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 120)
   if (!safe || safe === '.' || safe === '..') throw new Error('identifiant de run invalide')
   return join(root, `${safe}.stderr.log`)

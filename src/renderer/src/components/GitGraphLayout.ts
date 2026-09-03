@@ -41,7 +41,7 @@ export interface GitGraphReachability {
   openBranchHashes?: readonly string[]
 }
 
-export function commitsReachableFromRefs(
+function commitsReachableFromRefs(
   commits: GitGraphCommit[],
   refs: GitGraphRef[]
 ): GitGraphCommit[] {

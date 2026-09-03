@@ -83,7 +83,7 @@ export interface GardeAttendu {
  * Elle est EXPLICITE et non deduite : `stop-gate.ps1` ecrit ses evenements sous le nom `stop`, et
  * `kaizen-revert-log.ps1` sous `revert`. Deviner par similarite de chaine aurait rate les deux.
  */
-export const SCRIPT_PAR_GATE: Readonly<Record<string, string>> = {
+const SCRIPT_PAR_GATE: Readonly<Record<string, string>> = {
   stop: 'stop-gate.ps1',
   'anti-flaky': 'anti-flaky.ps1',
   'fix-gate': 'fix-gate.ps1',

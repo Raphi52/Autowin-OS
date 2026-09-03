@@ -261,7 +261,7 @@ export function commandResultSucceeded(result: CommandResult): boolean {
  */
 /** Consigne unique de relance quand un tour qui a AGI ne conclut pas. Partagee par les DEUX
  *  chemins de cloture : la branche sans commande ET le raccourci `remember` auxiliaire. */
-export const RELANCE_CONCLUSION_ABSENTE =
+const RELANCE_CONCLUSION_ABSENTE =
   'SYSTÈME: ta réponse ne CONCLUT pas. Reformule-la MAINTENANT, SANS aucune commande, en ' +
   'terminant par ce bloc, court et concret : « ✅ Fait » (ce que tu as établi, avec le ' +
   'résultat), puis l’état en trois lignes — 📍 Maintenant / ⏳ Reste à faire / 👉 ' +
@@ -270,7 +270,7 @@ export const RELANCE_CONCLUSION_ABSENTE =
   'N’écris PAS le mot « rien » seul dans une rubrique pour la remplir : ce mot éteint le mode ' +
   'auto du chat. Réserve-le au travail réellement terminé ; sinon dis le fait en clair.'
 
-export function motifDepotMemoireNonAbouti(result: CommandResult): string | undefined {
+function motifDepotMemoireNonAbouti(result: CommandResult): string | undefined {
   if (!result.ok) return String(result.error ?? 'refus')
   const data = result.data as Record<string, unknown> | undefined
   if (!data || typeof data !== 'object') return undefined
@@ -559,7 +559,7 @@ function waitForAnswer(answer: Promise<string>, signal?: AbortSignal): Promise<s
 type PieceJointeDuFil = NonNullable<Message['attachments']>[number] & { thumbnail?: string }
 
 /** Le binaire est-il REELLEMENT la ? Un `content` vide produirait un fichier vide chez le provider. */
-export function aPieceJointeLisible(piece: PieceJointeDuFil | undefined): boolean {
+function aPieceJointeLisible(piece: PieceJointeDuFil | undefined): boolean {
   return typeof piece?.content === 'string' && piece.content.length > 0
 }
 
@@ -570,7 +570,7 @@ export function aPieceJointeLisible(piece: PieceJointeDuFil | undefined): boolea
  * perd donc le binaire d'origine. La miniature, elle, est une vraie image (data URL) : degradee mais
  * LISIBLE. Le nom porte la mention pour que le modele ne prenne jamais la reduction pour la source.
  */
-export function replierSurLaMiniature(
+function replierSurLaMiniature(
   piece: PieceJointeDuFil | undefined
 ): PieceJointeDuFil | undefined {
   const thumbnail = piece?.thumbnail

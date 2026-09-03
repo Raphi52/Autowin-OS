@@ -157,7 +157,7 @@ function hasUnprovenEndedActiveAgent(
  * Le journal est le seul témoin de production qu'on ait sur disque. `undefined` = on ne sait pas
  * (pas de journal, ou sonde en échec) — et on n'invente pas un verdict à partir d'une ignorance.
  */
-export function agentSilenceMs(
+function agentSilenceMs(
   agent: { journalPath?: string },
   nowMs: number,
   lastWriteMs: (path: string) => number | undefined
@@ -182,7 +182,7 @@ export function agentSilenceMs(
  */
 export const SILENCE_TOLERE_MS = 10 * 60_000
 /** Même horizon pour une reprise dont aucune preuve de processus ou de sortie n'arrive. */
-export const MAX_REATTACH_PROBES = Math.ceil(SILENCE_TOLERE_MS / 1_000)
+const MAX_REATTACH_PROBES = Math.ceil(SILENCE_TOLERE_MS / 1_000)
 
 /**
  * Cet agent produit-il encore, pour de bon ?
@@ -376,11 +376,11 @@ export function preparePersistedRunForRelaunch(
   return reconciled
 }
 
-export const INTERRUPTED_WITHOUT_EXIT_REASON =
+const INTERRUPTED_WITHOUT_EXIT_REASON =
   'PID provider disparu sans preuve de sortie — relance automatique interdite'
-export const INTERRUPTED_STALE_HEARTBEAT_REASON =
+const INTERRUPTED_STALE_HEARTBEAT_REASON =
   'PID provider vivant mais journal expire — processus arrete et relance automatique interdite'
-export const INTERRUPTED_ORPHANED_RESERVATION_REASON =
+const INTERRUPTED_ORPHANED_RESERVATION_REASON =
   'Reservation provider active sans agent identifiable — soldee sans relance automatique'
 
 export interface InterruptedTerminalizationProbes {

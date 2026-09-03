@@ -68,9 +68,9 @@ export function assertBrainVaultRoot(requested: string, allowed: string): string
   return allowedRoot.canonical
 }
 
-export const INBOX_DIR = 'inbox'
-export const KNOWLEDGE_DIR = 'knowledge'
-export const TRASH_DIR = '.trash'
+const INBOX_DIR = 'inbox'
+const KNOWLEDGE_DIR = 'knowledge'
+const TRASH_DIR = '.trash'
 
 /**
  * Seuil d'alerte du quasi-jumeau. Aligné sur le `NEAR_DUP_DENSE = 0.82` du serveur cité par
@@ -134,7 +134,7 @@ export interface ListInboxOptions {
 const MAX_INBOX_CANDIDATES = 300
 export const MAX_INBOX_FILE_BYTES = 256 * 1024
 const MOVED_MARKER = '<!-- autowin-inbox-moved:'
-export const MAX_INBOX_BODY_PREVIEW_CHARS = 400
+const MAX_INBOX_BODY_PREVIEW_CHARS = 400
 export const MAX_NEAR_DUPLICATES_PER_CANDIDATE = 10
 const FRONTMATTER_RE = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/
 
@@ -176,8 +176,8 @@ interface LexicalBag {
   norm: number
 }
 
-export const LEXICAL_VECTOR_DIMENSIONS = 128
-export const MAX_LEXICAL_TOKENS = 4_096
+const LEXICAL_VECTOR_DIMENSIONS = 128
+const MAX_LEXICAL_TOKENS = 4_096
 
 function lexicalHash(token: string): number {
   let hash = 0x811c9dc5

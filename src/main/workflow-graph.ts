@@ -218,7 +218,7 @@ export function worstCaseVisits(graph: WorkflowGraph): Map<string, number> {
 }
 
 /** Clé d'identité d'un retour : deux arêtes qui la partagent sont LA MÊME arête, composée deux fois. */
-export function returnEdgeKey(edge: Pick<WorkflowEdge, 'from' | 'to' | 'when'>): string {
+function returnEdgeKey(edge: Pick<WorkflowEdge, 'from' | 'to' | 'when'>): string {
   return `${edge.from}>${edge.to}:${edge.when}`
 }
 

@@ -102,7 +102,7 @@ export interface AutorisationsLues {
  * seul est grave : la liste reste nominale (propriete 2), les enchainements restent refuses
  * (propriete 3), et tout autre binaire garde le refus par defaut (propriete 1).
  */
-export const AUTORISATIONS_PAR_DEFAUT: readonly string[] = ['git']
+const AUTORISATIONS_PAR_DEFAUT: readonly string[] = ['git']
 
 /**
  * AUTORISATION GENERALE PAR DEFAUT — decision utilisateur du 2026-08-28 : « je ne veux plus

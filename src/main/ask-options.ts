@@ -26,7 +26,7 @@ export interface ReponseAsk {
 
 const PLAFOND_LIBELLE = 200
 const PLAFOND_LIGNE = 400
-export const PLAFOND_REPONSES = 4
+const PLAFOND_REPONSES = 4
 
 function borne(valeur: unknown, plafond: number): string | undefined {
   if (typeof valeur !== 'string') return undefined

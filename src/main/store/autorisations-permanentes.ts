@@ -17,7 +17,7 @@ export interface RegistreAutorisations {
   binaires: readonly string[]
 }
 
-export const REGISTRE_VIDE: RegistreAutorisations = { general: false, binaires: [] }
+const REGISTRE_VIDE: RegistreAutorisations = { general: false, binaires: [] }
 
 export function cheminRegistreAutorisations(racine: string): string {
   return join(racine, 'autorisations-commandes.json')

@@ -41,7 +41,7 @@ export interface StockVeille {
 
 const STOCK_VIDE: StockVeille = { candidats: [], echecs: [] }
 
-export function cheminStockVeille(): string {
+function cheminStockVeille(): string {
   return join(ensureAutowinAppData(), 'veille-candidats.json')
 }
 

@@ -18,7 +18,7 @@ export interface WorkflowSelections {
   byConversation: Record<string, string>
 }
 
-export function workflowSelectionPath(base = ensureAutowinAppData()): string {
+function workflowSelectionPath(base = ensureAutowinAppData()): string {
   return join(base, 'workflow-selection.json')
 }
 
@@ -48,7 +48,7 @@ export function loadWorkflowSelections(path = workflowSelectionPath()): Workflow
  * réimposait alors un workflow que l'utilisateur venait tout juste de retirer. Un refus doit se
  * persister comme une décision, pas s'évaporer.
  */
-export const AUCUN_WORKFLOW = '__aucun__'
+const AUCUN_WORKFLOW = '__aucun__'
 
 /** L'id choisi, `AUCUN_WORKFLOW` si l'utilisateur a refusé, `undefined` s'il ne s'est pas prononcé. */
 export function workflowForConversation(
