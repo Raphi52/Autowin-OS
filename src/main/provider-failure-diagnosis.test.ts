@@ -5,6 +5,7 @@ import {
   classifyProviderFailure,
   describeFanoutFailure,
   diagnoseProviderFailure,
+  describeExitCode,
   explainRoleFailure,
   repairHint
 } from './provider-failure-diagnosis'
@@ -414,5 +415,30 @@ describe('une panne TERMINALE ne doit pas être requalifiée en annulation', () 
     expect(
       classifyProviderFailure('[abort] codex exec interrompu : Budget USD depasse (12.00)')
     ).toBe('budget')
+  })
+})
+
+/**
+ * Incident Auto-Kaizen ak-820d7029b0c5e76d : « Phase build — le rôle subagent est bindé sur claude
+ * (opus) : claude CLI exit 1073807364 ». Un code NTSTATUS Windows brut ne dit rien : ni que le
+ * process a été TUÉ (0x40010004 = DBG_TERMINATE_PROCESS), ni qu'un relancement est le geste utile.
+ * La cause était dans le code de sortie ; elle n'arrivait pas à l'utilisateur.
+ */
+describe('sortie anormale d’un CLI (codes NTSTATUS Windows)', () => {
+  it('nomme un process terminé et un crash', () => {
+    expect(describeExitCode(1073807364)).toBe('0x40010004 arrêt du process demandé par l’hôte')
+    expect(describeExitCode(3221226091)).toBe('0xc000026b échec d’initialisation d’une DLL (arrêt de session Windows)')
+    expect(describeExitCode(3221225477)).toBe('0xc0000005 violation d’accès (crash du CLI)')
+    expect(describeExitCode(1)).toBeUndefined()
+  })
+
+  it('classe la sortie anormale en « crashed » avec un geste concret', () => {
+    expect(classifyProviderFailure('claude CLI exit 1073807364 (0x40010004 arrêt du process demandé par l’hôte)')).toBe('crashed')
+    expect(classifyProviderFailure('claude CLI exit 3221226091 (0xc000026b échec d’initialisation d’une DLL (arrêt de session Windows))')).toBe('crashed')
+    expect(diagnoseProviderFailure({ provider: 'claude', model: 'opus', message: 'claude CLI exit 3221225477 (0xc0000005 violation d’accès (crash du CLI))' }).hint).toMatch(/relanc/i)
+  })
+
+  it('ne confond pas un exit 1 ordinaire avec un crash', () => {
+    expect(classifyProviderFailure('claude CLI exit 1')).toBe('other')
   })
 })

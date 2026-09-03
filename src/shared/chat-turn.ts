@@ -75,11 +75,17 @@ export interface PipelineChoice {
   provider?: string
   model?: string
   /**
-   * Ce qui a ete ENVOYE a ce maillon. Absent tant que l'appel n'est pas parti : la phase est
-   * annoncee AVANT que son prompt soit compile, donc une ligne sans prompt est un etat normal, pas
-   * un trou a combler.
+   * Le prompt REELLEMENT envoye a ce sous-agent, tel que l'enveloppe d'appel le porte. Jamais
+   * reconstitue : absent quand l'etape n'a pas (encore) rendu son appel.
    */
-  prompt?: PipelinePrompt
+  prompt?: string
+  /**
+   * Ce que l'etape a RENDU : la conclusion du sous-agent, ou — pour le controle final (`gate`) —
+   * la decision et son motif, tels que l'orchestrateur les a ecrits.
+   */
+  outcome?: string
+  /** Faux quand l'etape a echoue (ou que le controle final a refuse) : l'affichage doit le montrer. */
+  ok?: boolean
 }
 
 export interface PersistedChatArtifactPart {

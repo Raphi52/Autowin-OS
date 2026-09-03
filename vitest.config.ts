@@ -119,6 +119,16 @@ export default defineConfig({
       // Voir `RACINE_DONNEES_TESTS` : aucun test n'écrit plus dans le %APPDATA% réel.
       APPDATA: RACINE_DONNEES_TESTS
     },
+    /**
+     * RANGEMENT DES DOSSIERS TEMPORAIRES, en fin de suite.
+     *
+     * Même classe de pollution que `RACINE_DONNEES_TESTS` ci-dessus, par un autre chemin : mesuré le
+     * 2026-09-02, le dossier temporaire de Windows portait 4 240 dossiers `autowin*` pour 1 274 Mo,
+     * accumulés parce que ~240 fichiers de test appellent `mkdtempSync` et aucun `rmSync`. Un
+     * teardown global le ferme pour TOUS les fichiers d'un coup, y compris ceux écrits demain.
+     * Gardes et cas limites : `tests/temp-cleanup.test.ts`.
+     */
+    globalSetup: ['./tests/global-nettoyage-temp.ts'],
     pool: 'threads',
     maxWorkers: 4,
     testTimeout: 20_000,

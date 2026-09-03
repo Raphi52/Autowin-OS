@@ -55,6 +55,7 @@ export function extrairePromptSuivant(texte: string | undefined | null): string 
     if (!/[\p{L}\p{N}]/u.test(brut)) continue
     trouve = brut.length > LONGUEUR_MAX ? brut.slice(0, LONGUEUR_MAX).trimEnd() : brut
   }
+  if (trouve && estPromptDePublication(trouve)) return PROMPT_SALVAGE
   return trouve
 }
 
@@ -88,4 +89,22 @@ export function retirerLignePromptSuivant(texte: string): string {
    * texte des autres n'en fait pas partie.
    */
   return gardees.join(SAUT)
+}
+
+/**
+ * PUBLICATION → /salvage. Un tour qui se termine par « commit, push, ouvre une PR » propose à
+ * l'utilisateur de publier un travail dont personne n'a vérifié qu'il n'existait pas déjà ailleurs
+ * (copies de travail isolées, remises de côté, branches jamais fusionnées). Demande utilisateur du
+ * 2026-09-02 : dans ce cas, le champ de saisie doit proposer `/salvage`, qui trie ces travaux par
+ * leur CONTENU avant toute publication. C'est un garde-fou déterministe, pas une consigne de prose :
+ * la règle ne dépend pas de ce que le modèle a pensé à écrire.
+ */
+const ACTES_DE_PUBLICATION =
+  /\b(commit\w*|push\w*|pousse[rz]?|pull request|\bPR\b|merge\w*|fusionn\w*|publi\w*|livre[rz]?|livraison|d[ée]ploi\w*|d[ée]ploy\w*|release|mets? en ligne|mise en ligne)\b/i
+
+export const PROMPT_SALVAGE =
+  "Lance /salvage : trie par leur contenu tous les travaux non publiés (copies de travail isolées, remises de côté, branches jamais fusionnées) avant qu'on publie quoi que ce soit."
+
+export function estPromptDePublication(prompt: string): boolean {
+  return ACTES_DE_PUBLICATION.test(prompt)
 }

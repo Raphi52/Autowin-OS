@@ -183,6 +183,15 @@ describe('kimi — même correction, même repli mort évité', () => {
 describe('sur CETTE machine, les CLI se résolvent en chemins réels', () => {
   it('codex : le binaire natif existe et évite le wrapper console', () => {
     if (process.platform !== 'win32' || process.env.CODEX_BIN) return
+    // Codex peut legitimement ne PAS etre installe (choix assume de l'utilisateur, 2026-09-03) : ce
+    // test garde la RESOLUTION, pas la presence. Absent, on exige l'erreur EXPLICITE qui nomme ou
+    // l'on a cherche et l'echappatoire CODEX_BIN, jamais un nom nu qui finirait en ENOENT au spawn.
+    if (!findNpmGlobalFile(CODEX_PACKAGE_ENTRY)) {
+      expect(() => codexExecSpec('C:\\repo', 'gpt-5.6-terra', 'read-only')).toThrow(
+        /Codex CLI introuvable/
+      )
+      return
+    }
     const resolved = codexExecSpec('C:\\repo', 'gpt-5.6-terra', 'read-only')
     expect(resolved.executable.toLowerCase().endsWith('codex.exe')).toBe(true)
     expect(resolved.args[0]).toBe('exec')

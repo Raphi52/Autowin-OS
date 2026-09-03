@@ -301,6 +301,67 @@ export function porteeDerivableDesChangements(
   return normalises
 }
 
+/**
+ * LES FEUILLES DE STYLE — dans le graphe d'imports, mais pas la ou on les juge.
+ *
+ * Un `.css` A une place dans le graphe : le composant fait `import './X.css'`. Mesure hors modele du
+ * 2026-09-03, dans ce depot : `vitest related src/renderer/src/components/ChatView.css --run` rend
+ * 89 fichiers / 401 tests en 38 s, la ou la suite entiere depasse le plafond de 600 s. Le cibler
+ * MARCHE donc, et c'est ce qui manquait : l'edition d'une couleur rejouait tout, atteignait le
+ * plafond, et se faisait refuser sans qu'aucun verdict n'existe (conv-21).
+ */
+const EXTENSIONS_DE_STYLE = /[.](?:css|scss|sass|less)$/
+
+export function estUneFeuilleDeStyle(chemin: string): boolean {
+  return EXTENSIONS_DE_STYLE.test((chemin ?? '').split(ANTISLASH).join('/'))
+}
+
+/**
+ * L'ANGLE MORT PROPRE AUX STYLES, et il n'est pas celui du code.
+ *
+ * La meme mesure a montre le piege : les tests qui jugent REELLEMENT le CSS ne l'IMPORTENT pas, ils
+ * le LISENT. Absents de `vitest related ChatView.css` : `ChatView.style.test.ts`,
+ * `ChatView.pastilles.test.ts`, `ui-system.test.ts`, `spinner-legibility.test.ts`,
+ * `spinner-partout.test.ts`. Se contenter d'ajouter `.css` aux extensions de code aurait donc
+ * fabrique un vert qui n'a jamais regarde ce que l'edition a change — pire que la suite lente.
+ */
+export const VERIFY_STYLE_ANGLE_MORT =
+  'portée = les tests qui importent la feuille éditée, PLUS ceux qui nomment ce type de fichier (ils la lisent sans l’importer) ; un test qui ne l’atteint qu’en assemblant un chemin à l’exécution, sans jamais écrire l’extension, n’est pas rejoué'
+
+/**
+ * LA PORTEE D'UNE EDITION — ce que CE fichier-la oblige a rejouer.
+ *
+ * Deux regimes, parce que les deux familles ne se testent pas de la meme facon :
+ *   - du CODE  -> le graphe d'imports suffit, regle inchangee (`porteeDerivableDesChangements`) ;
+ *   - un STYLE -> le graphe d'imports PLUS les fichiers de test qui NOMMENT cette extension.
+ *
+ * La recherche porte sur l'EXTENSION, pas sur le nom du fichier : `spinner-partout.test.ts` balaie
+ * tout `src/renderer` sans jamais citer une feuille precise, et il juge pourtant ce qu'on edite.
+ * Chercher `ChatView.css` l'aurait manque ; chercher `.css` le trouve. Le surcout est quelques
+ * fichiers de test en trop — jamais un vert qui n'a rien mesure.
+ *
+ * `undefined` veut dire « pas de portee derivable », donc suite complete chez l'appelant. C'est aussi
+ * la reponse quand la recherche elle-meme ne peut pas conclure : « je n'ai pas pu chercher » ne se
+ * lit JAMAIS comme « personne ne le juge ».
+ */
+export async function porteeDUneEdition(
+  chemin: string,
+  testsQuiCitent: (motif: string) => Promise<readonly string[] | undefined>
+): Promise<readonly string[] | undefined> {
+  const normalise = (chemin ?? '').split(ANTISLASH).join('/')
+  if (!normalise.trim()) return undefined
+  const style = EXTENSIONS_DE_STYLE.exec(normalise)
+  if (!style) return porteeDerivableDesChangements([normalise])
+  const cites = await testsQuiCitent(style[0])
+  if (!cites) return undefined
+  const portee: string[] = [normalise]
+  for (const brut of cites) {
+    const test = brut.split(ANTISLASH).join('/')
+    if (test.trim() && !portee.includes(test)) portee.push(test)
+  }
+  return portee
+}
+
 /** Sortie d'une verification, telle qu'elle est rendue a l'agent. */
 export interface VerifyOutcome {
   ok: boolean

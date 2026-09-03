@@ -1004,11 +1004,59 @@
   flex-direction: column;
   gap: 6px;
 }
+/* BARRE DE PROMPTING « DEUX ÉTAGES » (choix utilisateur, conv-167 direction C).
+   Le TEXTE occupe toute la largeur (order:-1 + flex-basis 100% force le retour), les outils
+   passent sur une seconde rangée séparée d'un filet. Motif : en mosaïque la rangée unique
+   écrasait le champ — le bouton « Envoyer » et le micro lui mangeaient la place. Aucun JSX
+   touché : le passage à deux étages est purement une affaire de mise en page. */
 .composer-input-row {
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
+  container-type: inline-size;
+}
+.composer-input-row > textarea {
+  order: -1;
+  flex: 1 0 100%;
+  min-width: 0;
+}
+/* La 2e rangée : un filet fin la détache du champ, sur toute la largeur. */
+.composer-input-row::before {
+  order: 0;
+  flex: 1 0 100%;
+  height: 0;
+  margin-top: 1px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  content: '';
+}
+/* C1 : le champ n'a plus de cadre — c'est ce filet qui signale le focus. */
+.composer-field:focus-within .composer-input-row::before {
+  border-top-color: rgba(239, 69, 168, 0.45);
+}
+/* Envoyer reste ancré à droite, quoi qu'il y ait avant lui. */
+.composer-input-row > .composer-send {
+  margin-left: auto;
+}
+
+/* TUILE ÉTROITE (mosaïque) : la rangée d'outils se resserre, le champ ne bouge pas. */
+@container (max-width: 320px) {
+  .composer-input-row {
+    gap: 4px;
+  }
+  .composer-input-row > .composer-send {
+    height: 24px;
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: 11px;
+    line-height: 24px;
+  }
+  .composer-input-row > .composer-dictee {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+  }
 }
 .composer-meta-actions {
   display: flex;
@@ -2237,19 +2285,17 @@ ol.md-list li {
   background: linear-gradient(180deg, rgba(2, 4, 6, 0.74), #030609 30%);
 }
 
+/* DIRECTION C1 « NU » (choix utilisateur, conv-167) : la barre de prompting n'est plus une boite.
+   Le cadre et le fond opaque venaient de la rangee unique, ou il fallait dessiner la zone de saisie ;
+   en deux etages le filet entre les etages suffit a la delimiter. Le focus se signale sur ce filet
+   (voir `.composer-field:focus-within .composer-input-row::before`), plus par un halo. */
 .cosmic-outline .composer-field {
   display: grid;
   flex: 1;
   gap: 5px;
-  padding: 10px 13px 8px;
-  border: 1px solid rgba(116, 178, 211, 0.34);
-  border-radius: 9px;
-  background: #050a0f;
-}
-
-.cosmic-outline .composer-field:focus-within {
-  border-color: rgba(104, 207, 250, 0.74);
-  box-shadow: 0 0 0 2px rgba(64, 176, 225, 0.08);
+  padding: 4px 2px 2px;
+  border: 0;
+  background: transparent;
 }
 
 /**
@@ -2375,14 +2421,27 @@ ol.md-list li {
   font-size: 8px;
 }
 
+/* C1 : bouton en CONTOUR, pas en bloc plein. `align-self: stretch` datait de la rangee unique ou il
+   devait faire la hauteur du champ ; sur sa propre rangee il n'a plus rien a etirer, et laisse tel
+   quel il rendait un gros pave rose (constate a l'ecran). Hauteur fixe, fond quasi nul, accent ROSE
+   du theme (pas d'or : ce n'est pas la couleur d'accent de cosmic-outline). */
 .cosmic-outline .composer-send {
-  min-width: 92px;
-  align-self: stretch;
-  border: 1px solid rgba(239, 69, 168, 0.58);
-  border-radius: 9px;
-  background: linear-gradient(145deg, #ad286f, #72174b);
-  color: white;
-  font-weight: 700;
+  min-width: 82px;
+  height: 28px;
+  align-self: center;
+  padding: 0 12px;
+  border: 1px solid rgba(239, 69, 168, 0.55);
+  border-radius: 7px;
+  background: rgba(157, 34, 105, 0.14);
+  color: #ff9bcb;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cosmic-outline .composer-send:hover:not(:disabled) {
+  border-color: #ff9bcb;
+  background: rgba(157, 34, 105, 0.3);
+  color: #fff;
 }
 
 .cosmic-outline .runs-pane {
@@ -3380,6 +3439,9 @@ ol.md-list li {
 /* Une phase = son en-tete (phase/role/agent) PUIS, en dessous, le prompt qui lui a ete envoye.
    L'empilement etait horizontal : le niveau de prompt s'y serait ecrase a cote de l'agent. */
 .activity-step-pipeline li {
+  min-width: 0;
+}
+.activity-pipeline-head {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -3394,6 +3456,15 @@ ol.md-list li {
 /* Le prompt d'une phase reste un niveau SECONDAIRE : legerement en retrait, replie par defaut. */
 .activity-step-pipeline .prompt-envelope {
   margin: 2px 0 4px 10px;
+.activity-step-pipeline li.is-depliable .activity-pipeline-head {
+  cursor: default;
+}
+.activity-pipeline-titre {
+  margin: 3px 0 1px;
+  color: var(--muted, #9aa4b2);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .activity-step-phase {
   color: var(--accent, #5b8cff);

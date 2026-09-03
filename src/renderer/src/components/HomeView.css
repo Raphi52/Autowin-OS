@@ -105,10 +105,8 @@
 .home-view__rouage svg {
   width: 15px;
   height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
+  fill: currentColor;
+  stroke: none;
 }
 
 .home-view__rouage:hover,

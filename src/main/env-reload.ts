@@ -23,10 +23,20 @@ import { execFileSync } from 'node:child_process'
  * `amitelBrainOrigin()` relit `process.env` a CHAQUE appel : recharger la variable suffit donc a
  * rebrancher le canal a chaud. La valeur reste validee loopback par `requireLoopbackBrainOrigin`.
  */
+/*
+ * `AUTOWIN_SQLCMD_BIN` — DEFAUT VECU (conv-152, 2026-09-02) : `sqlcmd` etait absent du poste.
+ * Installe en version portable puis ajoute au PATH utilisateur, il restait INVISIBLE pour l'app :
+ * une modification du PATH ne se propage jamais aux processus deja lances, et le redemarrage passe
+ * par le lanceur, qui herite de l'ancien environnement. Un `setx` du PATH suivi d'un redemarrage
+ * ne suffit donc PAS. Le PATH reste volontairement HORS de cette liste (cf. en-tete), mais
+ * DESIGNER le binaire est un reglage produit, comme `AUTOWIN_GRAPHIFY_BIN` ou `CODEX_BIN` : la
+ * valeur vient de l'OS, le modele ne choisit que le nom.
+ */
 export const VARIABLES_RECHARGEABLES = [
   'AUTOWIN_VERIFY_TIMEOUT_MS',
   'AUTOWIN_BRAIN_TIMEOUT_MS',
-  'AMITEL_BRAIN_ORIGIN'
+  'AMITEL_BRAIN_ORIGIN',
+  'AUTOWIN_SQLCMD_BIN'
 ] as const
 
 export type NomRechargeable = (typeof VARIABLES_RECHARGEABLES)[number]

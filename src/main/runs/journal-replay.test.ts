@@ -153,3 +153,37 @@ describe('diagnostics Auto-Kaizen du journal mixte', () => {
     expect(message).not.toContain('conservées comme diagnostics')
   })
 })
+
+describe('actions relues (reprise conv-152)', () => {
+  // DEFAUT VECU : tour 57656364-053f-40e6-bc8e-91efd5b74e39, journal
+  // c63dd8c1-ee90-480f-a852-beba47d2ae8f.stdout.jsonl — 308 lignes relues, 21 messages assistant,
+  // ZERO texte : que des tool_use. Le recap disait « aucun message final » et rien d'autre.
+  const journal = [
+    JSON.stringify({
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'thinking', thinking: 'je reflechis' },
+          { type: 'tool_use', name: 'Bash', input: { command: 'npx vitest run\n  src/x.test.ts' } }
+        ]
+      }
+    }),
+    JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', name: 'Edit', input: { file_path: 'src/main/a.ts' } }] }
+    })
+  ]
+
+  it('extrait les actions quand aucun texte final n\'existe', () => {
+    const recap = summarizeJournal(journal)
+    expect(recap.text).toBe('')
+    expect(recap.actions).toEqual(['Bash · npx vitest run src/x.test.ts', 'Edit · src/main/a.ts'])
+  })
+
+  it('les montre dans le message de reprise au lieu du seul compte d\'etapes', () => {
+    const message = recapMessage(summarizeJournal(journal), true) ?? ''
+    expect(message).toContain('Ce qu\'il a fait (2 action(s) relues)')
+    expect(message).toContain('- Edit · src/main/a.ts')
+    expect(message).not.toContain('aucun message final à cet instant.\n')
+  })
+})

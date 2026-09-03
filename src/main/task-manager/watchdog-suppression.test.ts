@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { isDeliberateAbort, isNonActionableWall, suppressionFor } from './watchdog-suppression'
-import { isDeliberateAbort as isDeliberateAbortSuperviseur } from '../auto-kaizen-supervisor'
 
 /**
  * La suppression protège Auto-Kaizen d'incidents qu'il ne peut PAS corriger : abandon volontaire,
@@ -61,9 +60,10 @@ describe('suppression — un token d’auth expiré est un MUR, pas un défaut �
  * nouveau marqueur ; les deux gardes de suppression sont restés sur l'ANCIEN vocabulaire. Le
  * changement d'émetteur n'a pas été propagé à ses lecteurs.
  *
- * Les deux jumeaux sont vérifiés ICI : corriger un seul garantissait la rechute par l'autre chemin.
+ * Le jumeau `auto-kaizen-supervisor` a depuis été supprimé (l'ancien superviseur auto-kaizen et son
+ * câblage sont partis) : il ne reste qu'un garde à vérifier, celui de ce module.
  */
-describe('suppression — le marqueur [abort] est un abandon voulu, dans les DEUX gardes', () => {
+describe('suppression — le marqueur [abort] est un abandon voulu', () => {
   // La chaîne EXACTE du Journal de conv-14 (2026-09-02), telle qu'elle remonte au garde.
   const conv14 =
     'Phase kaizen — appel du rôle subagent INTERROMPU avant sa fin : [abort] claude CLI interrompu : ' +
@@ -75,10 +75,6 @@ describe('suppression — le marqueur [abort] est un abandon voulu, dans les DEU
     expect(suppressionFor('Orchestration en échec', conv14)).toBe('aborted')
   })
 
-  it('le jumeau du superviseur la reconnaît aussi', () => {
-    expect(isDeliberateAbortSuperviseur('Orchestration en échec', conv14)).toBe(true)
-  })
-
   it('couvre les quatre providers, quelle que soit la raison rapportée', () => {
     for (const detail of [
       "[abort] codex exec interrompu : raison non rapportee par l'appelant",
@@ -87,7 +83,6 @@ describe('suppression — le marqueur [abort] est un abandon voulu, dans les DEU
       '[abort] Envoi Gemini interrompu : arret demande'
     ]) {
       expect(isDeliberateAbort('un outil a echoue', detail), detail).toBe(true)
-      expect(isDeliberateAbortSuperviseur('un outil a echoue', detail), detail).toBe(true)
     }
   })
 
@@ -97,7 +92,6 @@ describe('suppression — le marqueur [abort] est un abandon voulu, dans les DEU
     // coûté ». Même règle que `provider-failure-diagnosis.ts` : budget testé AVANT l'annulation.
     const budget = '[abort] codex exec interrompu : Budget USD depasse (12.00)'
     expect(isDeliberateAbort('Orchestration en échec', budget)).toBe(false)
-    expect(isDeliberateAbortSuperviseur('Orchestration en échec', budget)).toBe(false)
     expect(suppressionFor('Orchestration en échec', budget)).toBe('non-actionable')
   })
 
@@ -112,7 +106,6 @@ describe('suppression — le marqueur [abort] est un abandon voulu, dans les DEU
       'expected 3 to be 4'
     ]) {
       expect(isDeliberateAbort('un outil a echoue', detail), detail).toBe(false)
-      expect(isDeliberateAbortSuperviseur('un outil a echoue', detail), detail).toBe(false)
     }
     expect(
       suppressionFor('un outil a echoue', "Claude a interrompu l'appel : max_tokens")

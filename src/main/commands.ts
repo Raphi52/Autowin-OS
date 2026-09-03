@@ -50,6 +50,9 @@ import {
   decideVerifyCommand,
   porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
+  VERIFY_STYLE_ANGLE_MORT,
+  estUneFeuilleDeStyle,
+  porteeDUneEdition,
   porteeDerivableDesChangements,
   scriptVitestUnique,
   echecsDuRapport,
@@ -71,7 +74,7 @@ import {
   synchroniserBureauDeVerification,
   VERIFY_SANS_ISOLATION
 } from './verification-isolee'
-import { readLastCommitFiles } from './git-read-main'
+import { readLastCommitFiles, readTestsCitant } from './git-read-main'
 import { nativeSkills } from './native-registry'
 
 /**
@@ -1607,6 +1610,26 @@ export class AppCommandBus {
   ) {}
 
   /**
+   * Chemin de `sqlcmd`, choisi AU MOMENT DE L'APPEL et non au demarrage.
+   *
+   * DEFAUT VECU (conv-152, 2026-09-02) : `sqlcmd` etait absent du poste, donc `sql_query` repondait
+   * « non localise sur ce poste ». Installe puis ajoute au PATH utilisateur, il restait INVISIBLE :
+   * une modification du PATH ne se propage jamais aux processus deja lances, et le redemarrage passe
+   * par le lanceur, qui herite de l'ancien environnement. Le chemin resolu une seule fois au
+   * demarrage etait donc DEFINITIVEMENT vide pour toute la vie du process.
+   *
+   * `AUTOWIN_SQLCMD_BIN` (rechargeable a chaud, cf. `env-reload.ts`) permet de DESIGNER le binaire
+   * sans redemarrer — meme motif que `AUTOWIN_GRAPHIFY_BIN` et `CODEX_BIN`. L'existence du fichier
+   * est verifiee : un reglage qui pointe a cote doit laisser la main a la resolution par le PATH,
+   * jamais faire echouer l'appel sur un binaire fantome.
+   */
+  private cheminSqlcmd(): string | undefined {
+    const designe = process.env.AUTOWIN_SQLCMD_BIN?.trim()
+    if (designe && existsSync(designe)) return designe
+    return this.sqlcmdPath
+  }
+
+  /**
    * Les echanges passes que la demande suppose connus, prets a etre injectes dans le tour.
    *
    * Passe par le bus plutot que d'exposer le store : l'appelant (`agent-pilot`) n'a pas a connaitre
@@ -2184,6 +2207,8 @@ export class AppCommandBus {
                   // Rattachement EXACT au tour et a la phase : sans eux, le rapport de rendement
                   // ne pouvait relier une depense a une demande que par l'heure, donc a peu pres.
                   turnId: orchestrationTurnId,
+                  // Sans le run, une depense de sous-agent n'est rattachable a aucun bras de banc.
+                  runId: currentRunId ?? step.execution?.runId,
                   phase:
                     (step.execution?.phase ??
                       (step.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '')) ||
@@ -2816,7 +2841,7 @@ export class AppCommandBus {
             database: a.database,
             query: a.query
           },
-          { ...(this.sqlcmdPath ? { sqlcmdPath: this.sqlcmdPath } : {}) }
+          { ...(this.cheminSqlcmd() ? { sqlcmdPath: this.cheminSqlcmd() } : {}) }
         )
       case 'ticket_get':
         return await getTicketFromCommand(a as TicketGetArgs, {
@@ -3282,9 +3307,30 @@ export class AppCommandBus {
          * le prix de ne pas fabriquer de faux vert, et c'est le probleme que la baseline
          * differentielle (option A du cadrage) doit lever ensuite.
          */
+        /*
+         * UNE FEUILLE DE STYLE A UNE PORTEE, ELLE AUSSI — corrige le 2026-09-03 (conv-21).
+         *
+         * DEFAUT VECU : corriger une couleur dans `ChatView.css` rejouait la SUITE ENTIERE. Elle
+         * depasse le plafond de temps, donc l'edition etait refusee sans qu'aucun verdict n'existe —
+         * et le contournement pris sur le moment a ete de RELEVER le plafond, c'est-a-dire de payer
+         * l'attente au lieu de la supprimer. La cause etait ici : `porteeDerivableDesChangements`
+         * n'accepte que du code, donc « rien a cibler », donc repli global.
+         *
+         * MESURE HORS MODELE du meme jour : `vitest related <la feuille> --run` rend 89 fichiers /
+         * 401 tests en 38 s. Cibler marche. Mais la MEME mesure a montre pourquoi la voie rapide
+         * seule aurait ete un faux vert : les tests qui jugent le CSS le LISENT au lieu de
+         * l'importer, donc le graphe d'imports ne les voit pas. `porteeDUneEdition` recolle les deux
+         * moities ; le detail vit dans `verify-command.ts`, sous `VERIFY_STYLE_ANGLE_MORT`.
+         */
         const octetsAvantEdition = lireOctetsAvant?.()
         const edite = (result as { path?: unknown } | undefined)?.path
-        const cible = porteeDerivableDesChangements(typeof edite === 'string' ? [edite] : []) ?? []
+        const cible =
+          (typeof edite === 'string'
+            ? await porteeDUneEdition(
+                edite,
+                async (motif) => await readTestsCitant(workspaceRoot, motif)
+              )
+            : undefined) ?? []
         /*
          * LA BASELINE EMPRUNTE LA MEME VOIE QUE LA MESURE — par CONSTRUCTION, pas par verification.
          *
@@ -3494,7 +3540,13 @@ export class AppCommandBus {
           result = {
             ...result,
             verifie: verification.command,
-            portee: parPortee ? VERIFY_RELATED_ANGLE_MORT : 'suite complète',
+            // L'angle mort d'un style n'est pas celui du code : il faut NOMMER le bon, sinon le
+            // verdict promet une couverture qu'il n'a pas.
+            portee: !parPortee
+              ? 'suite complète'
+              : typeof edite === 'string' && estUneFeuilleDeStyle(edite)
+                ? VERIFY_STYLE_ANGLE_MORT
+                : VERIFY_RELATED_ANGLE_MORT,
             ...(testsJoues === undefined ? {} : { testsJoues }),
             ...(noteDifferentielle ? { differentiel: noteDifferentielle } : {})
           } as Awaited<T>

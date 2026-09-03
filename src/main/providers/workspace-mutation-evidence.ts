@@ -262,6 +262,24 @@ export async function appendWorkspaceMutationEvidence(
 }
 
 /**
+ * Decoupe un diff unifie MULTI-FICHIERS en portions, indexees par le chemin d'apres (`+++ b/...`).
+ *
+ * Le chemin d'APRES est le bon : c'est celui que l'appelant a demande, et il survit a un renommage.
+ * Un fichier supprime (`+++ /dev/null`) n'apporte aucune ligne ajoutee — il est simplement absent.
+ */
+export function decouperDiffParFichier(diff: string): Map<string, string> {
+  const portions = new Map<string, string>()
+  if (!diff) return portions
+  for (const bloc of diff.split(/^diff --git /m).slice(1)) {
+    const entete = /^\+\+\+ b\/(.+)$/m.exec(bloc)
+    const chemin = entete?.[1]?.trim()
+    if (!chemin || chemin === '/dev/null') continue
+    portions.set(chemin, `diff --git ${bloc}`)
+  }
+  return portions
+}
+
+/**
  * Preuve causale issue du commit IMMUTABLE préparé par WorktreeManager. Contrairement au snapshot
  * du répertoire vivant, cette plage ne peut pas rater une écriture arrivée juste avant `git add`, ni
  * attribuer une écriture arrivée après le commit (elle n'est alors pas publiée dans cette SHA).
@@ -282,23 +300,40 @@ export function preparedCommitMutationEvidence(
     )
   ]
   if (paths.length === 0) return []
+  /*
+   * UN SEUL `git diff` POUR TOUS LES FICHIERS, pas un par fichier.
+   *
+   * Mesure du 2026-09-03 (`gels.jsonl`, 536 gels) : `execFileSync` coute 145 ms par appel EN
+   * MOYENNE sur ce depot, et il est lance ici sur le thread qui dessine la fenetre, une fois par
+   * fichier touche — un run qui touche dix fichiers figeait donc la fenetre pres d'une seconde et
+   * demie, a chaque preuve de mutation. `git diff` accepte tous les chemins d'un coup ; il ne reste
+   * qu'a decouper sa sortie par fichier, ce que ses entetes `diff --git` permettent exactement.
+   */
+  const diffParFichier = new Map<string, string>()
+  try {
+    const stdout = execFileSync(
+      'git',
+      [
+        'diff',
+        '--no-color',
+        '--no-ext-diff',
+        '--text',
+        '--unified=0',
+        `${baseSha}...${agentSha}`,
+        '--',
+        ...paths
+      ],
+      { cwd, windowsHide: true, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' }
+    )
+    for (const [path, portion] of decouperDiffParFichier(stdout)) diffParFichier.set(path, portion)
+  } catch {
+    // Une preuve best-effort ne doit jamais transformer un tour reussi en echec.
+  }
   const entries = paths.map((path) => {
     try {
-      const stdout = execFileSync(
-        'git',
-        [
-          'diff',
-          '--no-color',
-          '--no-ext-diff',
-          '--text',
-          '--unified=0',
-          `${baseSha}...${agentSha}`,
-          '--',
-          path
-        ],
-        { cwd, windowsHide: true, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' }
-      )
-      const fingerprints = addedLineFingerprintsFromUnifiedDiff(stdout)
+      const portion = diffParFichier.get(path)
+      if (portion === undefined) return undefined
+      const fingerprints = addedLineFingerprintsFromUnifiedDiff(portion)
       if (!fingerprints.length) return undefined
       const generationMarker = captureFileGenerationMarkerSync(resolve(cwd, path))
       if (!generationMarker) return undefined

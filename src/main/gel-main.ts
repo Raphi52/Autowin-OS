@@ -7,6 +7,7 @@ import {
   classerGel,
   nommerAccumulation,
   resumerGels,
+  cleDeCumul,
   nommerAccesBloquant,
   PERIODE_BATTEMENT_MS,
   SEUIL_GEL_MS,
@@ -429,7 +430,7 @@ export function instrumenterAccesBloquants<H extends Record<string, unknown>>(
         return fn.apply(this, args)
       } finally {
         const dureeMs = Date.now() - depart
-        cumulerAccesBloquant(nom, dureeMs)
+        cumulerAccesBloquant(cleDeCumul(nom, args), dureeMs)
         if (dureeMs >= seuilMs) {
           ecrire({
             ts: new Date().toISOString(),

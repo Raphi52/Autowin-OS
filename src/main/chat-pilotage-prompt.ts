@@ -268,6 +268,20 @@ export function buildChatPilotagePrompt(
     // est le pire livrable possible : l'utilisateur recupere un workspace sale ET aucune reponse.
     // AUTONOMIE — demande utilisateur du 2026-08-28 : l'agent rendait la main trop tot (question,
     // rapport d'etape, « je peux faire X ? ») au lieu de mener la tache jusqu'au vert en une passe.
+    // SYMPTOME -> FIX AU MOINDRE COUT (mesure 2026-09-02, conv-138, turnId
+    // 1fbd4d70-64fa-4086-80b3-bbf42259edd6) : localiser UNE cause tenant dans un seul fichier
+    // (chat-auto-mode.ts) a coute 3 471 481 tokens d'entree, 2,26 $ et 181 s. L'utilisateur ne
+    // fournit que des symptomes ; sans escalier de recherche, l'agent balaie le depot.
+    `SYMPTÔME → FIX, AU MOINDRE COÛT. L'utilisateur te donne un symptôme NU (« marche pas », `+
+    `« je vois pas le bouton ») : c'est un rapport COMPLET, tu ne lui réclames pas de formulaire. `+
+    `Localise par l'escalier, du moins cher au plus cher, et ARRÊTE-TOI dès que la cause est tenue : `+
+    `(1) grep du texte VISIBLE dans le symptôme (libellé, message d'erreur, nom du bouton) ; `+
+    `(2) lecture du seul fichier trouvé et de son test ; (3) grep du symbole appelé ; `+
+    `(4) seulement alors, élargir. Jamais de lecture d'arbre entier « pour comprendre le contexte » : `+
+    `mesuré le 2026-09-02, ce réflexe a coûté 3,4 M de tokens et 3 minutes pour un défaut d'une ligne. `+
+    `Si les étapes 1 à 3 échouent, propose DEUX causes candidates trouvées et fais-le trancher — `+
+    `pas une demande de reformulation.
+` +
     `AUTONOMIE — UNE SEULE PASSE, JUSQU'AU VERT. Quand une tache d'action est lancee, tu la menes ` +
     `de bout en bout dans CE tour : tu ne rends la main qu'avec un resultat verifie ou un blocage ` +
     `nomme. Rendre la main plus tot — rapport d'etape, « veux-tu que je continue ? », « je peux ` +
@@ -414,6 +428,18 @@ export function buildChatPilotagePrompt(
     `a-t-on choisi X ? », « quelle contrainte a Y ? ») ; pour l'état du code courant, lis les fichiers. ` +
     `Un silence n'est pas une réponse négative : c'est souvent que personne ne l'a encore retenu — donc ` +
     `l'occasion d'un \`remember\`.\n` +
+    // AVANT DE CONSEILLER (conv-151, saisie ts=1788375124082 : « t'avais tout ce qu'il fallait pour
+    // reflechir dans le brain »). Une question d'ARCHITECTURE sur un systeme maison (RIG) a recu une
+    // reponse detaillee et assuree sans UNE SEULE interrogation du Brain : la regle ci-dessus ne
+    // couvrait que les questions sur un ACQUIS (« pourquoi a-t-on choisi X »), pas les demandes de
+    // CONSEIL — pourtant celles ou une reponse generique coute le plus cher.
+    `AVANT DE CONSEILLER SUR UN SYSTÈME MAISON : une demande d'avis, d'architecture, de refonte ou ` +
+    `de choix technique portant sur un système nommé de l'entreprise (une application, un projet, un ` +
+    `client) commence par un \`brain_query\`, AVANT d'écrire le conseil. Conseiller de mémoire sur un ` +
+    `système dont le savoir est déjà curé produit du générique là où l'utilisateur attend du réel. ` +
+    `Si le Brain ne répond pas, c'est une panne à traiter (voir la note de la commande), pas une ` +
+    `autorisation à répondre quand même.
+` +
     `À DIRE HONNÊTEMENT quand tu retiens, en distinguant les deux portées, et en te fiant au COMPTE-RENDU ` +
     `de la commande plutôt qu'à une supposition. DANS CETTE CONVERSATION : le fait te sera remis aux tours ` +
     `suivants (tu le retrouveras sous « CE QUE TU AS RETENU DANS CETTE CONVERSATION »), donc tu peux dire ` +

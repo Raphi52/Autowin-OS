@@ -46,7 +46,7 @@ describe('identifiant de skill et traversée de chemin', () => {
   })
 
   it('accepte les identifiants réels du kit', () => {
-    for (const bon of ['think', 'learn', 'front-converge', 'graphify']) {
+    for (const bon of ['think', 'learn', 'draft', 'graphify']) {
       expect(/^[a-z0-9][a-z0-9_-]{0,63}$/i.test(bon), bon).toBe(true)
     }
   })

@@ -24,6 +24,7 @@ import { registerCapabilitiesIpc } from './ipc/capabilities'
 import { registerWorkflowProfilesIpc } from './ipc/workflow-profiles'
 import { registerChatArtifactsIpc } from './ipc/chat-artifacts'
 import { registerSkillsIpc } from './ipc/skills'
+import { registerWhisperIpc } from './ipc/whisper'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -75,7 +76,7 @@ import { AutowinOS } from './os'
 import { projectContextBlock } from './context-files'
 import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort } from './cdp-port'
 import { execFileSync } from 'node:child_process'
-import { ensureBrainServerStarted } from './brain-server-launch'
+import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { startBrainCuration } from './brain-curation-run'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
@@ -344,11 +345,6 @@ import { unePasseALaFois } from './veille/une-passe-a-la-fois'
 import { lancerScoutVeille } from './veille/scout-claude'
 import { candidatsInternesDuDepot } from './veille/audit-depot'
 import { dispatcherAvecVeille } from './veille/dispatch-veille'
-import {
-  AutoKaizenSupervisor,
-  legacyAutoKaizenSupervisorEnabled,
-  type AutoKaizenIncidentInput
-} from './auto-kaizen-supervisor'
 import { OUTILS_NOEUD_SKILL } from './skill-node-tools'
 
 /**
@@ -576,22 +572,6 @@ jalonDemarrage('stores conversations et taches charges')
 for (const alert of scheduledTasks.listAlerts(true)) notifiedTaskAlerts.add(alert.id)
 let scheduledTaskScheduler: TaskScheduler | undefined
 let watchdogEngine: WatchdogEngine | undefined
-let autoKaizenSupervisor: AutoKaizenSupervisor | undefined
-/**
- * L'ancien superviseur auto-kaizen, DÉSARMÉ.
- *
- * Son rôle est repris par la règle Watchdog « Auto-kaizen » (`watchdog-seeds.ts`), qui écoute les
- * mêmes incidents mais est VISIBLE et réglable dans le Task Manager. Ses trois filtres mesurés
- * (abandon volontaire, quota épuisé, panne amont) ont été déplacés dans `watchdog-suppression.ts`
- * avec leurs mesures ; sa borne de largeur de cascade est devenue `maxPerRoot`.
- *
- * Désarmé plutôt que SUPPRIMÉ, délibérément : le retirer demande 23 points de chirurgie dans ce
- * fichier et touche `conversations.ts`, qui persiste un `autoKaizenConversationLink`. Le faire tant
- * que la suite complète n'est pas rejouable serait un changement non prouvable. Passer ce drapeau à
- * `true` restaure l'ancien comportement à l'identique — ce qui rend la bascule vérifiable dans les
- * deux sens avant que le code ne parte.
- */
-const AUTO_KAIZEN_SUPERVISOR_ENABLED = legacyAutoKaizenSupervisorEnabled(process.env)
 const pendingScheduledOccurrences = new Set<string>()
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
@@ -705,38 +685,8 @@ function broadcast(e: AppEvent): void {
       e.convId
     )
   }
-  if (!autoKaizenSupervisor) return
-  if (e.type === 'orchestrate-step' && e.convId && e.step.status === 'failed') {
-    const attempt = e.step.execution?.attemptId ?? `${e.step.step}:${e.step.provider ?? 'unknown'}`
-    autoKaizenSupervisor.report({
-      dedupeKey: `orchestration-step:${e.runPath ?? e.convId}:${attempt}`,
-      sourceConversationId: e.convId,
-      kind: e.step.step === 'gate' ? 'gate-failed' : 'orchestration-step-failed',
-      summary: `${e.step.step} a échoué`,
-      detail: e.step.error ?? e.step.detail ?? e.step.text ?? 'Étape en échec sans détail',
-      lineage: autoKaizenSupervisor.lineageForConversation(e.convId)
-    })
-  } else if (e.type === 'orchestrate-end' && e.convId && e.status === 'red') {
-    autoKaizenSupervisor.report({
-      dedupeKey: `orchestration-end:${e.runPath ?? e.convId}:red`,
-      sourceConversationId: e.convId,
-      kind: 'orchestration-red',
-      summary: 'Une orchestration s’est terminée en rouge',
-      detail: e.runPath ? `RUN en échec : ${e.runPath}` : 'Orchestration rouge sans RUN associé',
-      lineage: autoKaizenSupervisor.lineageForConversation(e.convId)
-    })
-  }
 }
 /** Bus de commandes (plan de contrôle) + pilote agent (tool-loop). */
-function reportAutoKaizen(input: AutoKaizenIncidentInput): void {
-  const supervisor = autoKaizenSupervisor
-  if (!supervisor || !os.conversations.get(input.sourceConversationId)) return
-  supervisor.report({
-    ...input,
-    lineage: input.lineage ?? supervisor.lineageForConversation(input.sourceConversationId)
-  })
-}
-
 const desktopController = new WindowsDesktopController({ capture: captureElectronDesktop })
 const outcomeLearningDirectory = join(app.getPath('userData'), 'outcome-learning')
 const outcomeLearningModePath = join(outcomeLearningDirectory, 'mode.txt')
@@ -2443,9 +2393,15 @@ Le fil reprend ensuite normalement.`
   })
 
   // Ouvre le dossier contenant un fichier dans l'explorateur (vue Workflow).
+  // Un chemin mort (run supprime, disque demonte, lecteur reseau absent) passe tel quel a
+  // l'explorateur produit une boite Windows opaque (« Le lecteur specifie est introuvable »).
+  // On verifie donc l'existence AVANT d'appeler le shell, et on rend un refus nomme.
   ipcMain.handle('os:openFolder', (event, path: string) => {
     assertTrustedRendererSender(event, 'Open folder')
-    shell.showItemInFolder(guardString(path, 'path'))
+    const cible = guardString(path, 'path')
+    if (!existsSync(cible)) return { ok: false, reason: 'introuvable', path: cible }
+    shell.showItemInFolder(cible)
+    return { ok: true }
   })
 
   // Liens de fichiers du markdown : le renderer envoie la cible BRUTE citee par l'agent, le main
@@ -2542,7 +2498,6 @@ Le fil reprend ensuite normalement.`
     drainPendingDirectives,
     askModelQuestion,
     notifyWatchdogWorkflowIncident,
-    reportAutoKaizen,
     watchdogEngine: () => watchdogEngine
   })
   /**
@@ -2659,108 +2614,6 @@ Le fil reprend ensuite normalement.`
       })()
     })
   }
-  // Désarmé : la règle Watchdog « Auto-kaizen » a repris son rôle (voir
-  // AUTO_KAIZEN_SUPERVISOR_ENABLED). Laisser les deux actifs déclencherait DEUX agents par incident.
-  if (AUTO_KAIZEN_SUPERVISOR_ENABLED)
-    autoKaizenSupervisor = new AutoKaizenSupervisor({
-      path: join(app.getPath('userData'), 'auto-kaizen-incidents.json'),
-      runtime: {
-        createConversation: ({ title, link }) => {
-          const source = os.conversations.get(link.sourceConversationId)
-          return os.conversations.create({
-            title: title.slice(0, 140),
-            provider: source?.provider ?? os.roles.getBinding('orchestrator').provider,
-            autoKaizen: link
-          })
-        },
-        appendSourceUpdate: (conversationId, text) => {
-          if (!os.conversations.get(conversationId)) return
-          os.conversations.append(conversationId, { role: 'assistant', content: text })
-          broadcast({ type: 'refresh', scope: 'conversations' })
-        },
-        runAnalysis: async (conversationId, prompt) => {
-          if (isolatedTestInstance) {
-            const turnId = `${conversationId}:isolated-auto-kaizen-analysis`
-            os.conversations.append(conversationId, { role: 'user', content: prompt })
-            const text = 'Diagnostic Auto-Kaizen isolé : erreur structurée reproduite et bornée.'
-            os.conversations.append(conversationId, { role: 'assistant', content: text })
-            return { ok: true, turnId, text }
-          }
-          const result = await runPilotChat(
-            undefined,
-            [{ role: 'user', content: prompt }],
-            conversationId
-          )
-          return {
-            ok: result.ok && !result.cancelled,
-            turnId: result.turnId,
-            text: result.text,
-            error: result.cancelled ? 'Analyse Auto-Kaizen interrompue' : result.error
-          }
-        },
-        runFix: async (conversationId, prompt) => {
-          if (isolatedTestInstance) {
-            const turnId = `${conversationId}:isolated-auto-kaizen-fix`
-            os.conversations.append(conversationId, { role: 'user', content: prompt })
-            const text = 'Correctif Auto-Kaizen isolé vérifié rouge→vert.'
-            os.conversations.append(conversationId, { role: 'assistant', content: text })
-            return {
-              ok: true,
-              turnId,
-              text,
-              verification: { complete: true, evidence: 'fixture rouge→vert, gate isolée validée' }
-            }
-          }
-          const result = await runPilotChat(
-            undefined,
-            [{ role: 'user', content: prompt }],
-            conversationId
-          )
-          return {
-            ok: result.ok && !result.cancelled,
-            turnId: result.turnId,
-            text: result.text,
-            verification: result.verification,
-            error: result.cancelled ? 'Correction Auto-Kaizen interrompue' : result.error
-          }
-        },
-        isConversationRunning: (conversationId) =>
-          Boolean(activeChatTurns.get(conversationId)) ||
-          os
-            .resumableOrchestrations()
-            .some((candidate) => candidate.conversationId === conversationId),
-        readConversationResult: (conversationId) => {
-          const message = os.conversations
-            .get(conversationId)
-            ?.messages.slice()
-            .reverse()
-            .find(
-              (candidate) =>
-                candidate.role === 'assistant' &&
-                candidate.status !== 'failed' &&
-                candidate.status !== 'cancelled' &&
-                candidate.status !== 'interrupted' &&
-                candidate.content.trim()
-            )
-          return message ? { turnId: message.turnId, text: message.content } : undefined
-        }
-      }
-    })
-  autoKaizenSupervisor?.resumePending()
-  /*
-   * DECLARE au detecteur de gel. Mesure du 2026-08-30 : les gels de 6 a 10 s reviennent en RAFALES
-   * espacees d'une dizaine de secondes — la cadence de CE minuteur. `resumePending` traverse
-   * `persist()`, donc `archiveIncidents` + `saveSnapshot`, deux ecritures SYNCHRONES. Suspect, pas
-   * coupable : on le NOMME d'abord, on corrigera ce que le journal designe.
-   */
-  const autoKaizenResumeTimer = setInterval(
-    () =>
-      pendantOperation('timer:autoKaizen:resumePending', () =>
-        autoKaizenSupervisor?.resumePending()
-      ),
-    15_000
-  )
-  autoKaizenResumeTimer.unref()
 
   /**
    * Le balayage des copies d'agent abandonnées, RÉPÉTÉ pendant la session et non plus au seul démarrage.
@@ -2903,45 +2756,44 @@ Le fil reprend ensuite normalement.`
   })
   scheduledTaskScheduler = new TaskScheduler(scheduledTasks, dispatcherVeille, relay)
   // Le moteur de réveil OBSERVE et délègue à ce même scheduler : il n'y a qu'un chemin d'exécution.
-  if (!AUTO_KAIZEN_SUPERVISOR_ENABLED) {
-    watchdogEngine = new WatchdogEngine(
-      () => scheduledTasks.listTasks(),
-      {
-        runWatchdog: async (taskId, signal, onLateMutationClaims, onLateUsageSettlement) => {
-          const result = await os.executionSupervisor.runOutsideCurrent(
-            async () =>
-              (await scheduledTaskScheduler?.runWatchdog(
-                taskId,
-                signal,
-                onLateMutationClaims,
-                onLateUsageSettlement
-              )) ?? {
-                fired: false
-              }
-          )
-          if (result.fired) broadcast({ type: 'refresh', scope: 'task-manager' })
-          return result
-        }
-      },
-      undefined,
-      undefined,
-      () => broadcast({ type: 'refresh', scope: 'task-manager' }),
-      (taskId) =>
-        scheduledTasks
-          .listOccurrences(taskId)
-          .filter(
-            (occurrence) => occurrence.trigger === 'watchdog' && occurrence.watchdog !== undefined
-          )
-          .map((occurrence) => ({
-            eventId: occurrence.id,
-            signature: occurrence.watchdog!.signature,
-            rootSignature: occurrence.watchdog!.rootSignature,
-            admittedAt: occurrence.claimedAt,
-            knownCostUsd: occurrence.knownCostUsd,
-            unpricedCalls: occurrence.unpricedCalls
-          }))
-    )
-  }
+  watchdogEngine = new WatchdogEngine(
+    () => scheduledTasks.listTasks(),
+    {
+      runWatchdog: async (taskId, signal, onLateMutationClaims, onLateUsageSettlement) => {
+        const result = await os.executionSupervisor.runOutsideCurrent(
+          async () =>
+            (await scheduledTaskScheduler?.runWatchdog(
+              taskId,
+              signal,
+              onLateMutationClaims,
+              onLateUsageSettlement
+            )) ?? {
+              fired: false
+            }
+        )
+        if (result.fired) broadcast({ type: 'refresh', scope: 'task-manager' })
+        return result
+      }
+    },
+    undefined,
+    undefined,
+    () => broadcast({ type: 'refresh', scope: 'task-manager' }),
+    (taskId) =>
+      scheduledTasks
+        .listOccurrences(taskId)
+        .filter(
+          (occurrence) => occurrence.trigger === 'watchdog' && occurrence.watchdog !== undefined
+        )
+        .map((occurrence) => ({
+          eventId: occurrence.id,
+          signature: occurrence.watchdog!.signature,
+          rootSignature: occurrence.watchdog!.rootSignature,
+          admittedAt: occurrence.claimedAt,
+          knownCostUsd: occurrence.knownCostUsd,
+          unpricedCalls: occurrence.unpricedCalls
+        }))
+  )
+
   os.onRecoveredCausalMutationClaims((claims) => {
     watchdogEngine?.rememberRecoveredMutationClaims(claims)
   })
@@ -3064,16 +2916,13 @@ Le fil reprend ensuite normalement.`
         await scheduledTaskScheduler?.runOccurrence(occurrenceId)
       }
       pendingScheduledOccurrences.clear()
-      // Règles livrées d'origine (l'auto-kaizen). Posées AVANT le démarrage du moteur pour qu'il les
-      // voie dès son premier passage, et UNE SEULE FOIS : supprimée par l'utilisateur, une règle
-      // semée ne revient pas.
-      if (!AUTO_KAIZEN_SUPERVISOR_ENABLED) {
-        const seeded = seedWatchdogTasks(scheduledTasks)
-        if (seeded.length) console.log(`[watchdog] règles livrées posées : ${seeded.length}`)
-        // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc
-        // l'historique déjà écrit ne réveille personne au démarrage.
-        await watchdogEngine?.start()
-      }
+      // Plus aucune règle n'est livrée d'origine : l'auto-kaizen a été retiré. Cet appel EFFACE la
+      // règle auto-kaizen encore posée quand elle est restée intacte, avant que le moteur ne la voie.
+      const seeded = seedWatchdogTasks(scheduledTasks)
+      if (seeded.length) console.log(`[watchdog] règles livrées posées : ${seeded.length}`)
+      // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc
+      // l'historique déjà écrit ne réveille personne au démarrage.
+      await watchdogEngine?.start()
       broadcast({ type: 'refresh', scope: 'task-manager' })
     })
     .catch((error) => {
@@ -3356,32 +3205,9 @@ Le fil reprend ensuite normalement.`
   })
 
   // --- Observatoire d'activité : transcripts Claude Code (lecture seule) + ledger in-app ---
-  /**
-   * RECONNAISSANCE VOCALE LOCALE. MESURÉ sur cette application : le moteur
-   * `webkitSpeechRecognition` rend le code d'erreur `network`, affiché à l'écran et conservé en
-   * capture datée (voir l'en-tête de `whisper-local.ts` pour le chemin de l'artefact) — Jarvis
-   * ouvrait le micro et n'entendait jamais rien. La CAUSE de ce code n'est pas établie ici et
-   * n'est pas nécessaire : ces trois canaux exposent whisper.cpp installé en local — téléchargé
-   * UNE fois, puis plus aucun réseau.
-   */
-  ipcMain.handle('os:whisper:etat', (event) => {
-    assertTrustedRendererSender(event, 'Whisper état')
-    return serviceWhisper().etat()
-  })
-  ipcMain.handle('os:whisper:installer', async (event) => {
-    assertTrustedRendererSender(event, 'Whisper installation')
-    return serviceWhisper().installer()
-  })
-  ipcMain.handle('os:whisper:transcrire', async (event, wav: unknown) => {
-    assertTrustedRendererSender(event, 'Whisper transcription')
-    if (!(wav instanceof Uint8Array) && !Buffer.isBuffer(wav)) {
-      throw new Error('Segment audio invalide')
-    }
-    const octets = wav as Uint8Array
-    // Un WAV de 15 s à 16 kHz/16 bits pèse ~480 Ko : au-delà de 8 Mo, ce n'est plus un segment.
-    if (octets.byteLength > 8_000_000) throw new Error('Segment audio trop volumineux')
-    return serviceWhisper().transcrire(octets)
-  })
+  // Les canaux de la reconnaissance vocale locale vivent dans src/main/ipc/whisper.ts : ils ne
+  // prenaient ici que leur service, construit paresseusement.
+  registerWhisperIpc({ serviceWhisper })
 
   /**
    * OUVRIR LA PAGE MICRO DE WINDOWS. DEMANDE DE L'UTILISATEUR (2026-09-03) : le message « autorisez
@@ -3765,37 +3591,11 @@ app.whenReady().then(async () => {
           os.conversations.append(conversationId, { role: 'assistant', content: message })
           broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
         }
-        if (conversationId && (recap.coverage.lostProof > 0 || recap.diagnostics.length > 0)) {
-          const replayWindow = (resumableRun.agents ?? [])
-            .map((agent) => `${agent.token}:${agent.offset ?? 0}`)
-            .join('|')
-          if (recap.coverage.lostProof > 0) {
-            void wakeWatchdog(
-              'workflow-proof-lost',
-              `${recap.coverage.lostProof} perte(s) de preuve dans le journal du run ${resumableRun.runId}.`
-            )
-            reportAutoKaizen({
-              dedupeKey: `journal-replay-loss:${resumableRun.runId}:${replayWindow}:${lignes.length}`,
-              sourceConversationId: conversationId,
-              sourceTurnId: resumeTurnId,
-              kind: 'journal-replay-loss',
-              summary: `${recap.coverage.lostProof} perte(s) de preuve dans le journal`,
-              detail:
-                `Couverture structurée ${recap.coverage.structuredPercent} % ; ` +
-                `${recap.coverage.noise} bruit(s), ${recap.coverage.diagnostics} diagnostic(s), ` +
-                `${recap.coverage.blockages} blocage(s), ${recap.coverage.lostProof} perte(s) de preuve.`
-            })
-          }
-          for (const diagnostic of recap.diagnostics) {
-            reportAutoKaizen({
-              dedupeKey: `journal-diagnostic:${resumableRun.runId}:${replayWindow}:${diagnostic.line}:${diagnostic.summary}`,
-              sourceConversationId: conversationId,
-              sourceTurnId: resumeTurnId,
-              kind: diagnostic.kind,
-              summary: diagnostic.summary,
-              detail: diagnostic.detail
-            })
-          }
+        if (conversationId && recap.coverage.lostProof > 0) {
+          void wakeWatchdog(
+            'workflow-proof-lost',
+            `${recap.coverage.lostProof} perte(s) de preuve dans le journal du run ${resumableRun.runId}.`
+          )
         }
         // L'offset atteint est repersisté : ce qui vient d'être montré ne sera pas remontré.
         os.rememberAgentOffsets(resumableRun.runId, agentsApres)
@@ -3923,7 +3723,17 @@ app.whenReady().then(async () => {
     // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
     // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera
     // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
-    if (raw.checks.some((c) => c.id === 'brain' && !c.ok)) {
+    const brainCheck = raw.checks.find((c) => c.id === 'brain')
+    /*
+     * REARMEMENT — mesure conv-152, 2026-09-02. `ensureBrainServerStarted` ne se rearme QUE
+     * lorsqu'elle est appelee et trouve le service vivant ; or on ne l'appelait que sur un check
+     * ROUGE. Donc apres UNE tentative infructueuse, `attempted` restait vrai pour toute la session
+     * et l'app ne relancait plus JAMAIS le brain_server : elle repondait « injoignable » alors que
+     * le service etait simplement a relancer (verifie : 100 s de service mort, aucun nouveau spawn).
+     * On rearme donc des que le check est VERT : la prochaine chute redonne droit a une tentative.
+     */
+    if (brainCheck?.ok) resetBrainLaunchAttempt()
+    if (brainCheck && !brainCheck.ok) {
       void ensureBrainServerStarted(() => appPreflightProbes().pingBrain()).then((r) => {
         // Retenu pour DIRE POURQUOI si le délai de grâce expire : la première sonde ne pouvait pas
         // le savoir, cette tentative l'a appris.

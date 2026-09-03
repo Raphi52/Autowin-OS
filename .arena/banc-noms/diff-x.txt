@@ -1,0 +1,23 @@
+diff --git a/skills/arena/SKILL.md b/skills/arena/SKILL.md
+index df1e7dae..0585fe35 100644
+--- a/skills/arena/SKILL.md
++++ b/skills/arena/SKILL.md
+@@ -132,6 +132,18 @@ pas déclaré meilleur parce qu'il est moins cher : moins cher ET au moins aussi
+ - Une règle installée sans avoir rejoué la situation d'origine est **non vérifiée** : le dire.
+ 
+ ### 6. Contrôle du protocole — du CODE, pas ta relecture
++
++**Fichiers attendus dans le dossier du banc** — le contrôle les cherche sur disque sous exactement ces noms :
++
++- `tache.txt` — l’énoncé de la tâche, identique pour tous les bras ;
++- `check.mjs` — le critère exécutable, lancé par `node <BANC>/check.mjs <racine-du-depot>` ;
++- `prompt-<bras>.txt` — le prompt effectivement envoyé au bras `<bras>` (un par bras) ;
++- `out-<bras>.json` — la sortie brute du bras `<bras>` (un par bras) ;
++- `out-judge.json` — le verdict du juge.
++
++Tout autre nom (variante d’extension ou de casse) fait échouer le contrôle de protocole :
++le banc est alors déclaré non tenu même si le travail a été fait.
++
+ Avant de rendre la sortie ci-dessous :
+ 
+ ```

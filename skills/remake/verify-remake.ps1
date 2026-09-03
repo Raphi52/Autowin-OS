@@ -31,14 +31,14 @@ if ($echecs.Count -gt 0) { $echecs | ForEach-Object { Write-Output "ECHEC: $_" }
 
 # -Encoding UTF8 EXPLICITE : sans BOM, PowerShell 5.1 lit un fichier en ANSI, et tout caractere
 # non-ASCII (les fleches des renvois, les guillemets francais) cesse de correspondre au motif cherche.
-# Constate ici meme : l'assertion sur front-converge echouait alors que la regle etait bien presente.
+# Constate ici meme : l'assertion sur draft echouait alors que la regle etait bien presente.
 $txt = Get-Content -LiteralPath $skill -Raw -Encoding UTF8
 $engineTxt = Get-Content -LiteralPath $engine -Raw -Encoding UTF8
 $gateTxt = Get-Content -LiteralPath $gate -Raw -Encoding UTF8
 $frameTxt = Get-Content -LiteralPath $frame -Raw -Encoding UTF8
 
 # CORPS de la skill = frontmatter exclu. Une regle citee seulement dans la description ne compte pas :
-# c'est ce qui rendait l'assertion sur front-converge inoperante.
+# c'est ce qui rendait l'assertion sur draft inoperante.
 $corps = $txt
 $fin = $txt.IndexOf("`n---", 4)
 if ($fin -gt 0) { $corps = $txt.Substring($fin) } else { Fail 'frontmatter introuvable : le decoupage corps/description est casse' }
@@ -134,7 +134,7 @@ $exigences = @{
     'timeout distingue d''une regression'    = 'Is it even a red?'
     'bisection par partition'                = 'Bisect by PARTITION'
     'dispatch : perimetre gradue'            = 'It is GRADUATED'
-    'exclusion front-converge'               = 'LOOK like (→ `front-converge`)'
+    'exclusion draft'               = 'LOOK like (→ `draft`)'
     'flaky hors signal-cmd'                  = 'Flaky signal'
     'variante attestable a la cloture'       = 'FRESH attestation'
     'cap : releve = perimetre gele'          = 'NOT an autonomous option'

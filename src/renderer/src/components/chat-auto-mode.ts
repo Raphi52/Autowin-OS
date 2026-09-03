@@ -19,7 +19,11 @@
  */
 import type { Msg, AsstMsg } from './chat-view-types'
 import type { ChatPart } from './chat-view-model'
-import { extrairePromptSuivant } from '../../../shared/prompt-suivant'
+import {
+  extrairePromptSuivant,
+  estPromptDePublication,
+  PROMPT_SALVAGE
+} from '../../../shared/prompt-suivant'
 import { extractRecommendation } from './markdown-recommandation'
 
 /** Texte brut (avec la ligne technique du prompt) du DERNIER message de l'agent. */
@@ -248,7 +252,8 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   // lui-même après le dernier maillon ; sans cette lecture la boucle repartait pour un tour payant.
   if (resteAFaireDitRien(texteReponse))
     return { action: 'arreter', raison: 'reste-rien', message: MESSAGES_ARRET['reste-rien'] }
-  const suite = extrairePromptSuivant(texteReponse) ?? extractRecommendation(texteReponse)
+  const brut = extrairePromptSuivant(texteReponse) ?? extractRecommendation(texteReponse)
+  const suite = brut && estPromptDePublication(brut) ? PROMPT_SALVAGE : brut
   // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.
   if (!suite) return { action: 'attendre', raison: 'aucun-prompt' }
   /*

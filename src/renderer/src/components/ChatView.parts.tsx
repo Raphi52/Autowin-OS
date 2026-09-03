@@ -12,7 +12,8 @@ import {
   formatTokens,
   type ChatActionPart,
   type EvidencePart,
-  type OrchStep
+  type OrchStep,
+  type PipelineChoice
 } from './chat-view-model'
 import './ChatView.css'
 import './Evidence.css'
@@ -43,6 +44,69 @@ const CMD_LABEL: Record<string, string> = {
 
 
 
+
+/**
+ * UNE LIGNE de pipeline, depliable pour elle-meme.
+ *
+ * Demande utilisateur (2026-09-03) : « chacune des lignes meriterait d'etre depliable et montrer le
+ * prompt envoye, et pour la gate la decision rendue et pourquoi ». La ligne ne disait que QUI joue ;
+ * le prompt envoye et le motif du controle final existaient deja dans l'etape, sans etre montres.
+ *
+ * Le chevron n'apparait QUE si la ligne porte vraiment quelque chose : promettre un depliage vide
+ * se lit comme casse.
+ */
+function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element {
+  const [ouvert, setOuvert] = useState(false)
+  const depliable = Boolean(choix.prompt || choix.outcome)
+  const nom = [choix.phase, choix.role].filter(Boolean).join(' ') || 'etape'
+  const estControle = choix.phase === 'gate' || choix.role === 'gate'
+  return (
+    <li className={depliable ? 'is-depliable' : undefined} data-testid="activity-pipeline-line">
+      <div className="activity-pipeline-head">
+        {choix.phase && <span className="activity-step-phase">{choix.phase}</span>}
+        {choix.role && <span className="activity-step-role">{choix.role}</span>}
+        {(choix.provider || choix.model) && (
+          <span className="activity-step-agent">
+            {[choix.provider, choix.model].filter(Boolean).join(' · ')}
+          </span>
+        )}
+        {depliable && (
+          <button
+            type="button"
+            className="activity-step-toggle"
+            data-testid="activity-pipeline-toggle"
+            aria-expanded={ouvert}
+            aria-label={ouvert ? `Replier ${nom}` : `Deplier le detail de ${nom}`}
+            onClick={() => setOuvert((etat) => !etat)}
+          >
+            {ouvert ? '▾' : '▸'}
+          </button>
+        )}
+      </div>
+      {ouvert && choix.prompt && (
+        <>
+          <div className="activity-pipeline-titre">prompt envoyé</div>
+          <pre className="activity-step-detail" data-testid="activity-pipeline-prompt">
+            {choix.prompt}
+          </pre>
+        </>
+      )}
+      {ouvert && choix.outcome && (
+        <>
+          <div className="activity-pipeline-titre">
+            {estControle ? 'décision et motif' : 'ce que l’étape a rendu'}
+          </div>
+          <pre
+            className={`activity-step-detail${choix.ok === false ? ' failed' : ''}`}
+            data-testid="activity-pipeline-outcome"
+          >
+            {choix.outcome}
+          </pre>
+        </>
+      )}
+    </li>
+  )
+}
 
 /**
  * UN ETAGE = une action, avec sa pastille de famille, sa cible, et son PROPRE bouton d'extension.
@@ -140,23 +204,7 @@ function EtageActivite({
       {ouvert && pipeline.length > 0 && (
         <ul className="activity-step-pipeline" data-testid="activity-step-pipeline">
           {pipeline.map((choix, index) => (
-            <li key={`${choix.phase ?? ''}-${choix.model ?? ''}-${index}`}>
-              <div className="activity-step-pipeline-head">
-                {choix.phase && <span className="activity-step-phase">{choix.phase}</span>}
-                {choix.role && <span className="activity-step-role">{choix.role}</span>}
-                {(choix.provider || choix.model) && (
-                  <span className="activity-step-agent">
-                    {[choix.provider, choix.model].filter(Boolean).join(' · ')}
-                  </span>
-                )}
-              </div>
-              {/* UN CRAN DE PLUS : ce qui a ete ENVOYE a cette phase. Absent tant que l'appel n'est
-                  pas parti — la phase est annoncee avant que son prompt existe, et promettre un
-                  depliage vide se lit comme casse. */}
-              {choix.prompt && (
-                <EnveloppeDePrompt prompt={choix.prompt} testid="activity-step-prompt" />
-              )}
-            </li>
+            <LignePipeline key={`${choix.phase ?? ''}-${choix.model ?? ''}-${index}`} choix={choix} />
           ))}
         </ul>
       )}

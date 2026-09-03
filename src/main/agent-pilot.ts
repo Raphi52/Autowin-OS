@@ -27,6 +27,7 @@ import {
   blocVisuelNonFerme,
   RELANCE_BLOC_VISUEL_NON_FERME,
   questionPoseeSansAvoirLu,
+  statusEstUneLecture,
   RELANCE_QUESTION_SANS_LECTURE,
   exigeUneConclusion
 } from './chat-turn-messages'
@@ -1633,6 +1634,15 @@ export class AgentPilot {
           res = await this.registry.send(provider, messages, options, (chunk) => {
             // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
             if (chunk.status) {
+              /*
+               * UNE LECTURE NATIVE COMPTE. Les outils natifs du modele (`Read`, `Grep`, `Glob`, un
+               * `Bash` de type `cat`/`sed -n`/`grep`) n'emettent aucun jeton `<cmd>` : ils passent
+               * ICI, en battement d'outil. Sans cette ligne, `anyReadExecuted` restait faux apres
+               * une douzaine de fichiers lus et le garde « question sans lecture » mordait a chaque
+               * question -- en ordonnant d'avancer sans demander, donc en ecrasant la skill `draft`
+               * qui exige justement de faire choisir l'humain (mesure conv-167, 2026-09-03).
+               */
+              if (statusEstUneLecture(chunk.status)) anyReadExecuted = true
               // Canal SEPARE du raisonnement : un battement d'outil n'est pas une pensee.
               emit({
                 kind: 'provider-status',

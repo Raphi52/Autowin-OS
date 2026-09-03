@@ -6,16 +6,16 @@ import { AGENT_STUDIO_DEFAULT_PROVIDER } from '../../shared/task-provider'
  * Les regles livrees d'origine.
  *
  * Un semis est une VRAIE tache : elle apparait dans le Task Manager, s'edite, se desactive et se
- * supprime comme n'importe quelle autre. C'est la difference entre « le systeme sait faire ca » et
- * « je vois ce que fait mon systeme et je peux le changer ». Un comportement autonome invisible dans
- * l'interface est un comportement que personne ne peut ni regler ni arreter.
+ * supprime comme n'importe quelle autre.
  *
- * Chaque semis est pose UNE FOIS et sa pose est memorisee (`TaskStore.hasSeed`). Supprimer la tache
- * la supprime pour de bon : sans cette memoire, elle renaitrait au demarrage suivant et ne serait
- * plus la tache de l'utilisateur mais une tache imposee.
+ * Il n'y a PLUS AUCUN semis. L'auto-kaizen a ete retire du produit sur demande de l'utilisateur :
+ * plus rien ne se seme au demarrage, et la regle deja posee est EFFACEE au prochain lancement si
+ * elle est restee intacte (`removeSeededAutoKaizen`). Une regle que l'utilisateur a editee reste
+ * la sienne : elle n'est jamais supprimee dans son dos.
+ *
+ * Les empreintes ci-dessous ne servent donc plus a poser ni a migrer la regle, seulement a la
+ * RECONNAITRE pour la retirer.
  */
-
-export const AUTO_KAIZEN_SEED_ID = 'auto-kaizen-v1'
 
 /**
  * L'auto-kaizen en tant que Watchdog Agent.
@@ -30,7 +30,7 @@ export const AUTO_KAIZEN_SEED_ID = 'auto-kaizen-v1'
  * avec le modele orchestrateur courant d'Agent Studio. Une correction devient une recommandation
  * explicite ; elle ne part jamais en chantier autonome sur la seule foi d'un evenement terminal.
  */
-export function previousOrchestrationAutoKaizenSeed(): ScheduledTaskInput {
+function previousOrchestrationAutoKaizenSeed(): ScheduledTaskInput {
   return {
     title: 'Auto-kaizen — orchestration rouge ou workflow douteux',
     prompt: [
@@ -328,7 +328,8 @@ function isUntouchedPriorReadOnlyAutoKaizen(task: ScheduledTask): boolean {
 /** Migre uniquement le semis historique INTACT ; une regle editee par l'utilisateur reste sienne. */
 function isUntouchedClaudeReadOnlyAutoKaizen(task: ScheduledTask): boolean {
   const current = autoKaizenSeed()
-  if (current.destination.kind !== 'new' || current.watchdog?.source.kind !== 'app-event') return false
+  if (current.destination.kind !== 'new' || current.watchdog?.source.kind !== 'app-event')
+    return false
   const source = task.watchdog?.source
   return (
     task.title === current.title &&
@@ -348,7 +349,29 @@ function isUntouchedClaudeReadOnlyAutoKaizen(task: ScheduledTask): boolean {
   )
 }
 
-function upgradeLegacyAutoKaizen(store: TaskStore): void {
+/** Empreinte exacte de la DERNIERE version livree, celle encore posee chez l'utilisateur. */
+function isUntouchedCurrentAutoKaizen(task: ScheduledTask): boolean {
+  const current = autoKaizenSeed()
+  if (current.destination.kind !== 'new' || current.watchdog?.source.kind !== 'app-event')
+    return false
+  const source = task.watchdog?.source
+  return (
+    task.title === current.title &&
+    task.prompt === current.prompt &&
+    hasExactSeedDestination(task, current.destination) &&
+    task.watchdog?.action === current.watchdog.action &&
+    source?.kind === 'app-event' &&
+    JSON.stringify(source.events) === JSON.stringify(current.watchdog.source.events) &&
+    JSON.stringify(task.watchdog?.guards) === JSON.stringify(current.watchdog.guards)
+  )
+}
+
+/**
+ * Efface la regle auto-kaizen posee par les versions precedentes, si elle est restee INTACTE.
+ * Sans ce retrait, « supprimer l'auto-kaizen » ne vaudrait que pour une installation neuve : la
+ * regle deja semee continuerait a se reveiller chez ceux qui l'ont deja.
+ */
+function removeSeededAutoKaizen(store: TaskStore): void {
   for (const task of store.listTasks()) {
     if (
       (!isUntouchedLegacyAutoKaizen(task) &&
@@ -356,35 +379,29 @@ function upgradeLegacyAutoKaizen(store: TaskStore): void {
         !isUntouchedPriorBoundedAutoKaizen(task) &&
         !isUntouchedOrchestrationAutoKaizen(task) &&
         !isUntouchedPriorReadOnlyAutoKaizen(task) &&
-        !isUntouchedClaudeReadOnlyAutoKaizen(task)) ||
+        !isUntouchedClaudeReadOnlyAutoKaizen(task) &&
+        !isUntouchedCurrentAutoKaizen(task)) ||
       task.destination.kind !== 'new'
     )
       continue
-    const next = autoKaizenSeed()
-    if (next.destination.kind !== 'new') continue
-    const conversationId = task.destination.conversationId
-    store.update(task.id, {
-      ...next,
-      enabled: task.enabled,
-      mode: task.mode,
-      destination: {
-        ...next.destination,
-        ...(conversationId === undefined ? {} : { conversationId })
-      }
-    })
+    try {
+      store.remove(task.id)
+    } catch {
+      // `remove` refuse une tache en cours d'execution. On la laisse finir : le retrait sera
+      // rejoue au demarrage suivant plutot que de faire echouer la pose des regles.
+    }
   }
 }
 
-const SEEDS: { id: string; build: () => ScheduledTaskInput }[] = [
-  { id: AUTO_KAIZEN_SEED_ID, build: autoKaizenSeed }
-]
+/** Plus aucune regle n'est livree d'origine : l'auto-kaizen etait la seule. */
+const SEEDS: { id: string; build: () => ScheduledTaskInput }[] = []
 
 /**
  * Pose les regles d'origine absentes. Rend les identifiants des taches creees — vide au deuxieme
  * demarrage, et vide aussi apres une suppression par l'utilisateur.
  */
 export function seedWatchdogTasks(store: TaskStore): string[] {
-  upgradeLegacyAutoKaizen(store)
+  removeSeededAutoKaizen(store)
   const created: string[] = []
   for (const seed of SEEDS) {
     if (store.hasSeed(seed.id)) continue
