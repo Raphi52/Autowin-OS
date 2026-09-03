@@ -166,6 +166,30 @@ describe('runSqlRead — invocation de sqlcmd', () => {
     expect(args[args.indexOf('-o') + 1]).toBe('T:\\sortie.json')
   })
 
+  /**
+   * DEUX BINAIRES PORTENT LE NOM `sqlcmd` — conv-152, 2026-09-02. Sur un poste équipé du portage
+   * moderne (`go-sqlcmd`), CHAQUE lecture échouait sur « Sqlcmd: 'f': Unknown Option » : `-f` n'a
+   * jamais existé dans cette variante, qui écrit déjà de l'UTF-8. L'option doit donc SAUTER là, et
+   * rester présente sur le sqlcmd historique (test précédent) — sans quoi les accents y reviennent
+   * en CP1252.
+   */
+  it('n’envoie PAS -f au portage moderne, qui ne connaît pas cette option', async () => {
+    const { resultat, args } = lancer('[{"x":1}]', 0, {
+      // L'aide de go-sqlcmd ne mentionne jamais `-f`.
+      spawnSyncFn: (() =>
+        ({ stdout: 'sqlcmd: Install/Create/Query SQL Server\n  -o string\n', stderr: '' })) as never,
+      sqlcmdPath: 'go-sqlcmd.exe'
+    })
+    await resultat
+    expect(args).not.toContain('-f')
+    expect(args).not.toContain('65001')
+    // Les drapeaux de sécurité, eux, ne bougent pas : go-sqlcmd les accepte tous.
+    expect(args).toContain('-X')
+    expect(args).toContain('-x')
+    expect(args).toContain('-b')
+    expect(args[args.indexOf('-o') + 1]).toBe('T:\\sortie.json')
+  })
+
   it('demande une ligne de plus que le plafond au serveur', async () => {
     const { resultat, args } = lancer('', 0, { maxRows: 200 })
     await resultat
