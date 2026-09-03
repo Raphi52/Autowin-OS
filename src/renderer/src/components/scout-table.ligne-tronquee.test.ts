@@ -7,7 +7,7 @@ import { parseScoutTable } from './scout-table'
  * Mesuré le 2026-08-27 (conv-1475) : le prompt émis par le bouton du panneau de sélection portait un
  * 7e candidat dont le « Pourquoi » s'arrêtait en plein mot — « chaque onglet visité reste MONTÉ dan ».
  * La consigne finale du prompt, elle, était bien présente : la coupure n'était donc pas dans
- * `redigerPromptFrameSelection` (aucun `slice` sur le contenu) mais dans la DONNÉE.
+ * `redigerPromptWorkflowSelection` (aucun `slice` sur le contenu) mais dans la DONNÉE.
  *
  * Cause : `isTableRow` acceptait une ligne sur son SEUL `|` d'ouverture, et le repli `at(idx, '')`
  * remplissait de vides les colonnes absentes. La dernière ligne d'un tableau coupé par un stream

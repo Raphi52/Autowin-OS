@@ -2,9 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import type { BrainGraphRef } from '../../../main/viz/fs-brains'
 import { brainSubjectOf } from './graph-brain-categories'
+import { mesurerBlocGraphe } from './graph-perf'
 import { degre as degreDuNoeud, deuxiemeSaut } from './graph-neighborhood'
 import {
-  initialCollapsedTreeNodeIds,
   layoutTree,
   pickVisibleLabels,
   projectTreeVisibility,
@@ -170,8 +170,6 @@ export function GraphView({
   const viewBeforeFocusRef = useRef<CameraView | undefined>(undefined)
   const [graph, setGraph] = useState<GraphData>({ nodes: [], links: [] })
   const [collapsedTreeNodeIds, setCollapsedTreeNodeIds] = useState<Set<string>>(() => new Set())
-  /** Dossiers déjà proposés à l'utilisateur : un dossier connu ne se referme jamais tout seul. */
-  const seededTreeFoldersRef = useRef<Set<string>>(new Set())
   const [treeZoomTier, setTreeZoomTier] = useState<SemanticZoomTier>('overview')
   const [graphReload, setGraphReload] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -575,7 +573,7 @@ export function GraphView({
   )
   const visibleSearchNodes = selectedBrain?.kind === 'vault' ? vaultSearch : catalogSearch.nodes
   const displayGraph = useMemo(
-    () => filterGraphVisibility(graph, settings.orphans),
+    () => mesurerBlocGraphe('graph:visibilite', () => filterGraphVisibility(graph, settings.orphans)),
     [graph, settings.orphans]
   )
   const healthIssues = useMemo(() => knowledgeHealthIssues(graph), [graph])
@@ -597,35 +595,25 @@ export function GraphView({
           // FAIBLE (72-83 %), là où l'axe par nature cognitive oscillait de 44 % à 83 % selon le
           // tirage. Une lecture dont le résultat dépend du tirage ne peut pas servir de socle.
           // Toujours une couche de lecture dérivée : aucun fichier n'est déplacé dans le Brain.
-          layoutTree(displayGraph.nodes, { groupOf: brainSubjectOf })
+          mesurerBlocGraphe('graph:layoutTree', () =>
+            layoutTree(displayGraph.nodes, { groupOf: brainSubjectOf })
+          )
         : null,
     [layoutMode, displayGraph.nodes]
   )
   const visibleTree = useMemo(
-    () => (tree ? projectTreeVisibility(tree, collapsedTreeNodeIds) : null),
+    () =>
+      tree
+        ? mesurerBlocGraphe('graph:projection', () =>
+            projectTreeVisibility(tree, collapsedTreeNodeIds)
+          )
+        : null,
     [collapsedTreeNodeIds, tree]
   )
 
-  // L'arbre s'ouvre sur ses catégories de premier niveau et RIEN d'autre : chaque clic dévoile un
-  // cran, jusqu'aux fiches. Sans ce point de départ, tout était déjà déplié et le premier clic
-  // repliait — exactement l'inverse du geste attendu.
-  // Un dossier déjà vu garde l'état choisi par l'utilisateur ; seuls les dossiers NOUVEAUX (arbre
-  // rechargé, fiche ajoutée) arrivent fermés.
-  useEffect(() => {
-    if (layoutMode !== 'tree' || !tree) return
-    const nouveaux = initialCollapsedTreeNodeIds(tree).filter(
-      (id) => !seededTreeFoldersRef.current.has(id)
-    )
-    if (nouveaux.length === 0) return
-    for (const id of nouveaux) seededTreeFoldersRef.current.add(id)
-    setCollapsedTreeNodeIds((current) => {
-      const next = new Set(current)
-      for (const id of nouveaux) next.add(id)
-      return next
-    })
-  }, [layoutMode, tree])
-
-  const renderedGraph = useMemo(() => {
+  const renderedGraph = useMemo(
+    () =>
+      mesurerBlocGraphe('graph:objets3d', () => {
     if (layoutMode !== 'tree' || !visibleTree) {
       return {
         nodes: displayGraph.nodes.map((graphNode) => ({ ...graphNode })),
@@ -679,7 +667,9 @@ export function GraphView({
         links: []
       }
     }
-  }, [collapsedTreeNodeIds, displayGraph, layoutMode, visibleTree])
+      }),
+    [collapsedTreeNodeIds, displayGraph, layoutMode, visibleTree]
+  )
 
   /**
    * DESSIN de l'arborescence : les anneaux de niveau, les branches de filiation, les nœuds internes.
@@ -1654,7 +1644,6 @@ export function GraphView({
             clearNodeSelection()
             setSelected(event.target.value)
             setActiveThemes(new Set())
-            seededTreeFoldersRef.current = new Set()
             setCollapsedTreeNodeIds(new Set())
           }}
         >

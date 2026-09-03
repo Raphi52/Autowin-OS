@@ -51,10 +51,13 @@ import {
   extraireCommandeEveil,
   messageErreurMoteur,
   phraseDeJarvis,
+  estEcho,
   reagirAParole,
+  retenirPhraseDite,
   type EvenementDirect,
   type JarvisEcoute,
   type ModeEcoute,
+  type PhraseDite,
   type SommaireDirect
 } from './jarvis-voice'
 
@@ -266,6 +269,12 @@ export function JarvisWidget(): React.JSX.Element {
    * parler tout en fermant le micro. Elles sont donc SÉPARÉES, et lues hors rendu par des `ref`
    * puisque le micro et la parole travaillent en dehors du rendu React.
    */
+  /**
+   * CE QUE L'ASSISTANT VIENT DE DIRE À VOIX HAUTE, avec l'heure. Sert à reconnaître SA PROPRE voix
+   * quand le micro la reprend (voir `estEcho`). On ne ferme PAS le micro pendant qu'il parle :
+   * enchaîner un second ordre pendant « Tout de suite. » est légitime et doit passer.
+   */
+  const ditRef = useRef<PhraseDite[]>([])
   const [microCoupe, setMicroCoupe] = useState(false)
   const microCoupeRef = useRef(false)
   const [sonCoupe, setSonCoupe] = useState(false)
@@ -327,7 +336,12 @@ export function JarvisWidget(): React.JSX.Element {
     // elle tient pour toutes les phrases, sinon l'assistant parle quand même au pire moment.
     if (sonCoupeRef.current) return
     const phrase = phraseDeJarvis(ecouteRef.current, evenement)
-    if (phrase) void parler(phrase)
+    if (!phrase) return
+    // IL NE S'ÉCOUTE PAS LUI-MÊME. Le micro reste OUVERT pendant qu'il parle (enchaîner un ordre
+    // doit rester possible) : on retient donc la phrase dite, et la reconnaissance qui la rend
+    // telle quelle est écartée comme écho — voir `estEcho`.
+    ditRef.current = retenirPhraseDite(ditRef.current, phrase, Date.now())
+    void parler(phrase)
   }, [])
 
   /**
@@ -418,6 +432,8 @@ export function JarvisWidget(): React.JSX.Element {
         }
         const texte = resultat?.[0]?.transcript ?? ''
         const final = resultat?.isFinal === true
+        // SA PROPRE VOIX, reprise par le micro : ni inscrite, ni bipée, ni envoyée.
+        if (estEcho(texte, ditRef.current, Date.now())) continue
         const reaction = reagirAParole(
           ecouteRef.current,
           { texte, final, le: Date.now() },

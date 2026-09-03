@@ -266,7 +266,9 @@ export const RELANCE_CONCLUSION_ABSENTE =
   'terminant par ce bloc, court et concret : « ✅ Fait » (ce que tu as établi, avec le ' +
   'résultat), puis l’état en trois lignes — 📍 Maintenant / ⏳ Reste à faire / 👉 ' +
   'Recommandé. N’écris aucune étiquette technique du type « [a exécuté … ] » et ' +
-  'n’annonce pas ce que tu vas faire : le travail est déjà fait, dis ce qu’il a donné.'
+  'n’annonce pas ce que tu vas faire : le travail est déjà fait, dis ce qu’il a donné. ' +
+  'N’écris PAS le mot « rien » seul dans une rubrique pour la remplir : ce mot éteint le mode ' +
+  'auto du chat. Réserve-le au travail réellement terminé ; sinon dis le fait en clair.'
 
 export function motifDepotMemoireNonAbouti(result: CommandResult): string | undefined {
   if (!result.ok) return String(result.error ?? 'refus')

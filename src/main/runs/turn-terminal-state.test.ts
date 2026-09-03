@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { zoneDuTourDeChat } from '../source-process-principal.test-helpers'
+import { terminalDuTour } from '../chat-turn-arret'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { shouldPersistClosingText } from './turn-closing'
@@ -66,7 +68,9 @@ describe('un tour ÉCHOUÉ n’est plus zombie', () => {
  * fichier, la détection ci-dessus ne verrait jamais l'état terminal.
  */
 describe('câblage — le catch de pilotChat écrit l’état terminal au journal', () => {
-  const main = (): string => readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  // La ZONE du tour de chat, pas un chemin : ce cablage a quitte `index.ts` pour
+  // `chat/run-pilot-chat.ts` le 2026-09-02, sans qu'aucune ecriture n'ait change.
+  const main = (): string => zoneDuTourDeChat()
 
   it('écrit dans le store ET dans le journal fichier', () => {
     const source = main()
@@ -82,15 +86,31 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
     const catchBlock = source.slice(source.indexOf('const coupureBudget = controller.signal.aborted'))
     const journalWrite = catchBlock.slice(catchBlock.indexOf('appendTurnEvent'))
     expect(journalWrite).toContain('catch')
-    // L'erreur d'origine doit toujours etre remontee a l'appelant.
-    expect(catchBlock).toContain('return { ok: false')
+    // L'erreur d'origine doit toujours etre remontee a l'appelant. Les espaces sont NORMALISES :
+    // prettier eclate ce `return` sur plusieurs lignes, et un test qui tombe sur une mise en forme
+    // est un faux rouge, aussi trompeur qu'un faux vert.
+    expect(catchBlock.replace(/\s+/gu, ' ')).toContain('return { ok: false')
   })
 
   it('distingue une ANNULATION d’un ÉCHEC', () => {
-    const source = main()
-    const catchBlock = source.slice(source.indexOf('const coupureBudget = controller.signal.aborted'))
-    expect(catchBlock).toContain("kind: 'cancelled'")
-    expect(catchBlock).toContain("kind: 'failed'")
+    // La decision a quitte le `catch` pour `terminalDuTour` (module pur) le 2026-09-02. On la juge
+    // donc SUR SON COMPORTEMENT, ce qui vaut mieux qu'une lecture de texte, et on verifie que le
+    // catch appelle bien ce juge au lieu de refaire la distinction dans son coin.
+    const catchBlock = main().slice(
+      main().indexOf('const coupureBudget = controller.signal.aborted')
+    )
+    expect(catchBlock).toContain('terminalDuTour(')
+    // Un stop VOULU par l'utilisateur reste une annulation.
+    expect(terminalDuTour({ aborted: true, reason: 'user' })).toEqual({ kind: 'cancelled' })
+    // Une coupure qui porte une cause machine est un ECHEC, et voyage AVEC son motif.
+    expect(terminalDuTour({ aborted: true, reason: 'budget', motivee: true })).toEqual({
+      kind: 'failed',
+      error: 'budget'
+    })
+    // Une erreur ordinaire (pas d'abort) est un echec qui porte son message.
+    expect(terminalDuTour({ aborted: false, reason: undefined, erreur: new Error('boum') })).toEqual(
+      { kind: 'failed', error: 'boum' }
+    )
   })
 })
 
@@ -103,7 +123,9 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
  * patron que le cout jete : l'information existe, elle n'arrive jamais a l'utilisateur.
  */
 describe('cablage — le texte du `done` atterrit dans le message', () => {
-  const main = (): string => readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  // La ZONE du tour de chat, pas un chemin : ce cablage a quitte `index.ts` pour
+  // `chat/run-pilot-chat.ts` le 2026-09-02, sans qu'aucune ecriture n'ait change.
+  const main = (): string => zoneDuTourDeChat()
 
   it('persiste le texte de cloture quand rien n’a ete streame', () => {
     const source = main()

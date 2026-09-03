@@ -37,6 +37,16 @@ export interface JarvisEcoute {
   /** Verrou par phrase : le moteur republie le partiel à chaque mot, on ne bipe qu'une fois. */
   eveilAnnonce: boolean
   /**
+   * QUAND l'éveil a été entendu. C'est la date de PÉREMPTION de `eveille`.
+   *
+   * DÉFAUT VÉCU le 2026-09-02 : l'éveil n'expirait JAMAIS. Dire le nom sans ordre derrière armait
+   * l'assistant pour toujours ; la phrase figée SUIVANTE — n'importe laquelle, même dix minutes
+   * plus tard, même un bout du nom mal transcrit ou la voix de l'assistant reprise par le micro —
+   * partait comme ORDRE et ouvrait une conversation payante que personne n'avait demandée.
+   * L'éveil est donc une FENÊTRE, pas un état permanent.
+   */
+  eveilleLe: number
+  /**
    * LE DERNIER ORDRE RÉELLEMENT PARTI, et quand. C'est le verrou contre le DOUBLE ENVOI.
    *
    * DÉFAUT VÉCU le 2026-09-01 (conv-71) : la phrase « rend la widget de Jarvis futuriste et ultra
@@ -58,6 +68,13 @@ export interface JarvisEcoute {
  */
 export const FENETRE_ORDRE_REPETE_MS = 5_000
 
+/**
+ * Combien de temps l'éveil reste armé sans ordre derrière. Assez long pour dire le nom, attendre le
+ * bip et formuler (« Jarvis… » … « ouvre le task manager »), trop court pour qu'une phrase de
+ * bureau prononcée plus tard passe pour un ordre.
+ */
+export const FENETRE_EVEIL_MS = 15_000
+
 /** Deux transcriptions de la MÊME phrase ne diffèrent qu'à la ponctuation et la casse près. */
 function memeOrdre(a: string, b: string): boolean {
   const nettoyer = (t: string): string =>
@@ -78,6 +95,7 @@ export const ecouteInitiale: JarvisEcoute = {
   commandes: [],
   eveille: false,
   eveilAnnonce: false,
+  eveilleLe: 0,
   dernierOrdre: null,
   dernierOrdreLe: 0
 }
@@ -357,12 +375,15 @@ export function reagirAParole(
   const eveilIci = contientEveil(parole.texte, nom)
   const bip = eveilIci && !etat.eveilAnnonce
   let suivant = appliquerParole(etat, parole)
-  if (bip) suivant = { ...suivant, eveille: true, eveilAnnonce: true }
+  if (bip) suivant = { ...suivant, eveille: true, eveilAnnonce: true, eveilleLe: parole.le }
+  // L'ÉVEIL PÉRIME. Passé la fenêtre, l'assistant est rendormi : la phrase en cours n'est plus un
+  // ordre, elle n'est qu'une phrase.
+  const eveilValide = etat.eveille && parole.le - etat.eveilleLe < FENETRE_EVEIL_MS
   if (!parole.final) return { etat: suivant, bip, ordre: null }
 
   const entendu = eveilIci
     ? extraireCommandeEveil(parole.texte, nom)
-    : etat.eveille
+    : eveilValide
       ? parole.texte.trim() || null
       : null
   // REPUBLICATION : le même ordre redit dans la fenêtre est le MÊME ordre, pas un second. On le
@@ -378,7 +399,8 @@ export function reagirAParole(
     etat: {
       ...suivant,
       eveilAnnonce: false,
-      eveille: ordre === null && !repete && (eveilIci || etat.eveille),
+      eveille: ordre === null && !repete && (eveilIci || eveilValide),
+      eveilleLe: eveilIci ? parole.le : etat.eveilleLe,
       ...(ordre !== null ? { dernierOrdre: ordre, dernierOrdreLe: parole.le } : {})
     },
     bip,
@@ -446,4 +468,61 @@ export function phraseDeJarvis(etat: JarvisEcoute, evenement: EvenementParle): s
   if (evenement.genre === 'ordre') return 'Tout de suite.'
   if (evenement.genre === 'fin') return sujet === '' ? 'C’est fait.' : `C’est fait : ${sujet}.`
   return sujet === '' ? 'Je n’ai pas pu.' : `Je n’ai pas pu : ${sujet}.`
+}
+
+/**
+ * UNE PHRASE QUE L'ASSISTANT A DITE À VOIX HAUTE, et quand.
+ *
+ * DÉFAUT VÉCU le 2026-09-02 : le micro reste ouvert pendant que l'assistant parle. « Tout de
+ * suite. » et « C'est fait : <titre>. » repartent donc dans la reconnaissance, s'inscrivent comme
+ * une parole de l'utilisateur — et, si l'éveil était armé, s'ENVOIENT comme ordre. Fermer le micro
+ * pendant qu'il parle n'est PAS la solution : enchaîner un second ordre pendant « Tout de suite. »
+ * est légitime et doit passer. On reconnaît donc SA propre phrase, elle seule.
+ */
+export interface PhraseDite {
+  texte: string
+  le: number
+}
+
+/** Au-delà, une phrase dite ne peut plus revenir par le micro : ce serait une vraie parole. */
+export const FENETRE_ECHO_MS = 6_000
+
+/** Les dernières phrases dites suffisent : deux peuvent se chevaucher (fin de tour + erreur). */
+const MAX_DITES = 4
+
+function nettoyerParle(t: string): string {
+  return t
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, ' ')
+    .trim()
+}
+
+export function retenirPhraseDite(
+  dites: readonly PhraseDite[],
+  phrase: string,
+  le: number
+): PhraseDite[] {
+  const propre = nettoyerParle(phrase)
+  if (propre === '') return [...dites]
+  return [{ texte: propre, le }, ...dites].slice(0, MAX_DITES)
+}
+
+/**
+ * Ce texte entendu est-il l'assistant qui s'entend lui-même ?
+ *
+ * La comparaison est par INCLUSION dans les deux sens, sur du texte réduit aux lettres : la
+ * reconnaissance rend rarement la phrase entière (« c'est fait », « tout de suite ouvre le »), et
+ * elle peut aussi ajouter du bruit autour. Bornée à la fenêtre d'écho et à un texte assez long
+ * pour être significatif — un « oui » ne doit pas être avalé sous prétexte que l'assistant l'a dit.
+ */
+export function estEcho(texte: string, dites: readonly PhraseDite[], now: number): boolean {
+  const propre = nettoyerParle(texte)
+  if (propre.length < 6) return false
+  return dites.some(
+    (d) =>
+      now - d.le < FENETRE_ECHO_MS &&
+      (d.texte.includes(propre) || propre.includes(d.texte))
+  )
 }

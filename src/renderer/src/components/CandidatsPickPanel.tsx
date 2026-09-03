@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import type { CandidatAffiche } from './veille-candidats-message'
-import { emojiType, redigerPromptFrameSelection } from './veille-candidats-message'
+import { emojiType, redigerPromptWorkflowSelection } from './veille-candidats-message'
 import './CandidatsPickPanel.css'
 
 /** Une pastille muette ne dit rien : chaque couleur porte son libelle en infobulle et en aria. */
@@ -144,10 +144,10 @@ export function CandidatsPickPanel({
         className="btn-accent btn cpick-lancer"
         data-testid="cpick-lancer"
         disabled={selection.length === 0}
-        onClick={() => onPick?.(redigerPromptFrameSelection(selection))}
-        title="Envoie le prompt /frame sur les candidats cochés et enchaîne le workflow jusqu'au commit publié"
+        onClick={() => onPick?.(redigerPromptWorkflowSelection(selection))}
+        title="Envoie les candidats cochés dans le workflow COMPLET (cadrage → terrain → build → nettoyage → jugement) jusqu'au commit publié"
       >
-        Enchaîner (frame) sur la sélection
+        Lancer le workflow complet sur la sélection
       </button>
     </div>
   )

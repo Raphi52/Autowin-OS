@@ -110,8 +110,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('graphe en arbre — un clic déplie un cran, de la branche jusqu’à la fiche', () => {
-  it('déroule toute la chaîne et rend la fiche consultable au bout', async () => {
+describe('graphe en arbre — tout est visible d’emblée, le pliage reste possible', () => {
+  it('montre branches ET fiches sans clic, et rend la fiche consultable', async () => {
     const readNodeFile = vi.fn().mockResolvedValue('# Curation\ncontenu de la fiche')
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
       listBrains: vi
@@ -140,36 +140,21 @@ describe('graphe en arbre — un clic déplie un cran, de la branche jusqu’à 
     await act(async () => bascule.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     await flush()
 
-    // Cran 0 : seule la branche de premier niveau est là — aucune fiche, aucun sous-dossier.
-    expect(noeudsVisibles()).toEqual(['__tree__:Transverse'])
-    const mesures = [compteurArbre()]
-    expect(mesures[0]).toBeGreaterThan(0)
+    // À L'OUVERTURE, TOUT EST VISIBLE : l'arbre montre ses branches ET ses fiches sans
+    // qu'un seul clic soit nécessaire. Choix produit du 2026-09-02 : le dépliage cran par cran
+    // obligeait à cliquer pour voir des nœuds qui étaient visibles d'emblée auparavant.
+    const auDepart = noeudsVisibles()
+    expect(auDepart).toContain('__tree__:Transverse')
+    expect(auDepart).toContain('__tree__:Transverse/knowledge/decisions/2026')
+    expect(auDepart).toContain('knowledge/decisions/2026/curation.md')
+    expect(auDepart).toContain('knowledge/decisions/2026/tri.md')
+    expect(compteurArbre()).toBeGreaterThan(0)
 
-    // Chaque clic dévoile EXACTEMENT le cran suivant, jamais plus.
-    await cliquer('__tree__:Transverse')
-    expect(noeudsVisibles()).toEqual(['__tree__:Transverse', '__tree__:Transverse/knowledge'])
-    mesures.push(compteurArbre())
-
-    await cliquer('__tree__:Transverse/knowledge')
-    mesures.push(compteurArbre())
-    expect(noeudsVisibles()).toContain('__tree__:Transverse/knowledge/decisions')
-    expect(noeudsVisibles()).not.toContain('__tree__:Transverse/knowledge/decisions/2026')
-
-    await cliquer('__tree__:Transverse/knowledge/decisions')
-    mesures.push(compteurArbre())
-    expect(noeudsVisibles()).toContain('__tree__:Transverse/knowledge/decisions/2026')
-    expect(noeudsVisibles()).not.toContain('knowledge/decisions/2026/curation.md')
-
-    // Dernier cran : les fiches elles-mêmes apparaissent.
+    // Le pliage reste DISPONIBLE : un clic sur un dossier ouvert le referme.
     await cliquer('__tree__:Transverse/knowledge/decisions/2026')
-    mesures.push(compteurArbre())
-    // Le compteur publié par la vue AUGMENTE strictement à chaque clic : la mesure ne dépend pas
-    // du faux graphe 3D, elle vient de l'attribut que la vue écrit elle-même.
-    for (let cran = 1; cran < mesures.length; cran += 1)
-      expect(mesures[cran]).toBeGreaterThan(mesures[cran - 1])
+    expect(noeudsVisibles()).not.toContain('knowledge/decisions/2026/curation.md')
+    await cliquer('__tree__:Transverse/knowledge/decisions/2026')
     expect(noeudsVisibles()).toContain('knowledge/decisions/2026/curation.md')
-    expect(noeudsVisibles()).toContain('knowledge/decisions/2026/tri.md')
-
     // …et la fiche au bout de la chaîne est CONSULTABLE : un clic ouvre son contenu.
     await cliquer('knowledge/decisions/2026/curation.md')
     expect(readNodeFile).toHaveBeenCalledWith(

@@ -13,6 +13,17 @@ import { registerGitIpc } from './ipc/git'
 import { registerTestsViewIpc } from './ipc/tests-view'
 import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
+import { registerClaudeAccountsIpc } from './ipc/claude-accounts'
+import { registerProfilesIpc } from './ipc/profiles'
+import { registerTopologyIpc } from './ipc/topology'
+import { registerProvidersIpc } from './ipc/providers'
+import { registerRolesIpc } from './ipc/roles'
+import { registerModelsIpc } from './ipc/models'
+import { registerFabricIpc } from './ipc/fabric'
+import { registerCapabilitiesIpc } from './ipc/capabilities'
+import { registerWorkflowProfilesIpc } from './ipc/workflow-profiles'
+import { registerChatArtifactsIpc } from './ipc/chat-artifacts'
+import { registerSkillsIpc } from './ipc/skills'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -46,23 +57,16 @@ function jalonDemarrage(etape: string): void {
   marquerOperationDemarrage(`demarrage:${etape}`)
 }
 jalonDemarrage('module principal évalué')
-import { resolveClaudeBin } from './providers/claude'
 import { emitToLiveWindows } from './renderer-emit'
 import {
   ClaudeAccountsStore,
-  accountEnv,
   configureClaudeAccountEnv,
   configureClaudeActiveAccountId,
-  configureClaudeAccountRotation,
-  describeAccounts,
-  parseIdentity,
-  type ClaudeIdentity,
-  withClaudeAccountEnv
+  configureClaudeAccountRotation
 } from './claude-accounts'
 import { app, shell, BrowserWindow, dialog, ipcMain } from 'electron'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { buildExport, readImport, suggestedFileName } from './workflow-transfer'
 import { createHash, randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import type { ExecutionEvidence, ProviderAdapter } from './providers/types'
@@ -161,8 +165,6 @@ import {
   costSamplesFrom,
   summarizeCostSamples
 } from './activity/prompt-observability'
-import { promptConfigChange } from './activity/prompt-config-change'
-import { appendPromptConfigActivity } from './activity/prompt-config-store'
 import { promptCallToTraceEvents } from './activity/prompt-call-trace'
 import { appendObservedOrchestrationOutcome } from './activity/orchestration-outcome-trace'
 import { executionCostCoverageFields } from '../shared/orchestration-outcome'
@@ -178,8 +180,8 @@ import {
 } from './activity/orchestration-observability'
 import { aggregateToolUsage } from './activity/tool-usage'
 
-import { ProfileStore, type AutowinProfile } from './profile-store'
-import { capabilityEnabled, listCapabilities, setCapabilityEnabled } from './capability-controls'
+import { ProfileStore } from './profile-store'
+import { capabilityEnabled } from './capability-controls'
 import { seedRegistrySnapshot } from './native-registry'
 import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 import {
@@ -194,8 +196,6 @@ import {
   behaviourRendererOptions
 } from './ipc-senders'
 import { createWindowing } from './window'
-import { discoverConfiguredSkillRegistry } from './skill-registry'
-import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion } from './model-questions'
 import {
   discoverImportedModels,
@@ -218,20 +218,13 @@ import {
 import { rebuildSemanticTemporalProjection } from './knowledge/semantic-temporal-store'
 import { causalLearningContext } from './knowledge/semantic-temporal-projection'
 import { ModelCatalogRefresher } from './model-refresh'
-import {
-  buildModelQuotaSnapshot,
-  getModelQuotaSnapshot,
-  invalidateModelQuotaCache
-} from './model-quotas'
 import { loadAgentTopology, saveAgentTopology, type IncidentTopologie } from './topology-disk'
-import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
 import {
   assertRuntimeBindingAvailable,
   assertRuntimeTopologyAvailable,
   runtimeRoleBinding,
   runtimeRoleSlots,
-  topologyWithRuntimeRole,
   UnresolvedRuntimeModelError
 } from './runtime-topology'
 import {
@@ -252,7 +245,7 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { guardBoolean, guardProfile, guardString, guardStringOrNull } from './ipc-guards'
+import { guardString, guardStringOrNull } from './ipc-guards'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { TicketSourceStore } from './ticket-source-store'
@@ -269,14 +262,7 @@ import type { UpdateAction } from '../shared/update-contract'
 import { restartApplication } from './app-restart'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './journal-arrets'
 import { consommerReprise } from './redemarrage-reprise'
-import {
-  ChatArtifactPreviewBudget,
-  MAX_ARTIFACT_PREVIEW_BYTES,
-  materializeChatArtifact,
-  readConversationArtifact,
-  removeConversationArtifacts,
-  revealableConversationArtifactPath
-} from './store/chat-artifact-store'
+import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import { BrainSearchCoordinator } from './viz/brain-search-coordinator'
@@ -286,14 +272,8 @@ import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
 import { resumeActionFor, runIsProducing, waitUntilRunCanResume } from './runs/run-reattach'
 import {
   activeWorkflowProfile,
-  loadWorkflowProfiles,
-  removeWorkflowProfile,
-  saveWorkflowProfiles,
   seedDefaultWorkflows,
-  selectWorkflowProfile,
-  upsertWorkflowProfile,
   WorkflowRefusalMailbox,
-  type WorkflowProfile,
   type WorkflowProfilesFile
 } from './workflow-profiles'
 import { overrideFor, registerWorkflowBenchIpc } from './workflow-bench-ipc'
@@ -322,14 +302,7 @@ import {
   workspaceTracePathKey
 } from './activity/conversation-file-trace-spool'
 import { buildBehaviourComposition } from './behaviour-composition'
-import {
-  buildProviderStatuses,
-  probePresenceUnlessStandby,
-  probeResultStatus
-} from './provider-status'
-import { ProviderStateStore, type ProviderMode } from './provider-state-store'
-import { compileExecutionQuote } from './execution-quote'
-import { loadTokens } from './providers/codex-auth'
+import { ProviderStateStore } from './provider-state-store'
 import { artifactsFromExecutionEvidence } from './providers/artifacts'
 
 import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
@@ -620,8 +593,6 @@ let autoKaizenSupervisor: AutoKaizenSupervisor | undefined
  */
 const AUTO_KAIZEN_SUPERVISOR_ENABLED = legacyAutoKaizenSupervisorEnabled(process.env)
 const pendingScheduledOccurrences = new Set<string>()
-const chatArtifactPreviewBudget = new ChatArtifactPreviewBudget()
-const budgetedArtifactRenderers = new Set<number>()
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
 /** Réveille les règles Watchdog sur un incident interne. Volontairement best-effort. */
@@ -968,69 +939,6 @@ let preflightWatchHandle: { stop: () => void } | null = null
 const providerStateStore = new ProviderStateStore(
   join(app.getPath('userData'), 'provider-state.json')
 )
-
-/**
- * Borne du probe de connexion d'un provider. 20 s : c'est un VRAI appel (spawn de CLI + aller-retour
- * réseau), donc largement au-dessus d'une latence normale — la valeur n'est pas là pour accélérer un
- * échec mais pour empêcher un hang de bloquer le préflight indéfiniment.
- */
-const PROVIDER_PROBE_TIMEOUT_MS = 20_000
-
-async function probeProviderConnection(
-  id: RoutedProvider
-): Promise<{ provider: RoutedProvider; status: ReturnType<typeof probeResultStatus> | 'standby' }> {
-  if (providerStateStore.get(id).mode === 'standby') {
-    return { provider: id, status: 'standby' }
-  }
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
-  try {
-    const quote = compileExecutionQuote(`provider-probe:${id}`, {
-      maxProviderCalls: 1,
-      maxTotalTokens: 100_000,
-      maxUsd: 0.05
-    })
-    quote.phases = []
-    quote.decomposition = { mode: 'disabled', maxNodes: 1 }
-    quote.limits.maxAgents = 0
-    quote.limits.maxConcurrency = 1
-    quote.limits.maxDurationMs = PROVIDER_PROBE_TIMEOUT_MS
-    quote.limits.maxRecoveries = 0
-    quote.limits.maxFreshTokens = Math.min(quote.limits.maxFreshTokens, 25_000)
-    const timeoutController = new AbortController()
-    const timeout = new Promise<never>((_resolve, reject) => {
-      timeoutHandle = setTimeout(() => {
-        const message = `pas de reponse de ${id} apres ${PROVIDER_PROBE_TIMEOUT_MS} ms`
-        timeoutController.abort(message)
-        reject(new Error(`pas de reponse de ${id} apres ${PROVIDER_PROBE_TIMEOUT_MS} ms`))
-      }, PROVIDER_PROBE_TIMEOUT_MS) // sleep-ok: garde-timeout bornant un vrai appel provider (réseau/CLI)
-    })
-    const result = (await os.executionSupervisor.run(quote, timeoutController.signal, () =>
-      Promise.race([
-        // Probe minimal : aucun kit système injecté, pour éviter de facturer le contexte applicatif.
-        os.registry.send(id, [{ role: 'user', content: 'ping' }], {
-          system: '',
-          signal: timeoutController.signal
-        }),
-        timeout
-      ])
-    )) as { text?: string }
-    const text = (result?.text ?? '').toLowerCase()
-    const status = /authenticate|oauth|expired|not logged|login/.test(text)
-      ? probeResultStatus({ expired: true })
-      : probeResultStatus({ ok: true })
-    providerStateStore.recordProbe(id, status)
-    return { provider: id, status }
-  } catch (error) {
-    const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
-    const status = /authenticate|oauth|expired|not logged|login/.test(message)
-      ? probeResultStatus({ expired: true })
-      : probeResultStatus({ errored: true })
-    providerStateStore.recordProbe(id, status)
-    return { provider: id, status }
-  } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle)
-  }
-}
 
 function preflightProviderOptions(): { standbyProviders: RoutedProvider[] } {
   return {
@@ -1692,115 +1600,11 @@ Le fil reprend ensuite normalement.`
     if (reset === true) isolatedConversationReadCount = 0
     return count
   })
-  ipcMain.handle('skills:registry:list', (event) => {
-    assertTrustedRendererSender(event, 'Skills')
-    return discoverConfiguredSkillRegistry(join(app.getPath('userData'), 'skill-sources.json'))
-  })
-  ipcMain.handle('os:providerLogin', (event, provider: unknown) => {
-    assertTrustedRendererSender(event, 'Provider login')
-    os.startProviderLogin(guardString(provider, 'provider'))
-    return { ok: true }
-  })
-  // --- Comptes Claude multiples : lister / basculer / ajouter / retirer ---
-  // Un compte = un CLAUDE_CONFIG_DIR (mecanisme verifie sur le CLI reel). Basculer ne relance
-  // aucun login : les sessions restent stockees cote a cote, comme dans claude.exe.
-  const claudeAccountsPayload = (): {
-    activeId: string
-    accounts: Array<{
-      id: string
-      displayName: string
-      tier: string
-      email?: string
-      active: boolean
-    }>
-  } => {
-    const state = claudeAccounts.current()
-    return {
-      activeId: state.activeId,
-      accounts: describeAccounts(state.accounts, state.activeId).map((account) => ({
-        id: account.id,
-        displayName: account.displayName,
-        tier: account.tier,
-        email: account.email,
-        active: account.active
-      }))
-    }
-  }
-
-  /**
-   * Sonde l'identite REELLE d'un compte : `claude auth status` dans SON dossier de configuration.
-   * C'est le seul moyen de distinguer deux comptes qui partagent la meme adresse mail et ne
-   * different que par le niveau d'abonnement (`subscriptionType`) — le cas d'usage demande.
-   * Borne dans le temps et fail-open : une sonde muette laisse le compte tel quel, elle ne doit
-   * jamais bloquer l'affichage de la liste.
-   */
-  const probeAccountIdentity = async (accountId: string): Promise<void> => {
-    const account = claudeAccounts.find(accountId)
-    if (!account) return
-    const identity = await new Promise<ClaudeIdentity | undefined>((resolve) => {
-      let out = ''
-      let settled = false
-      const done = (value: ClaudeIdentity | undefined): void => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        resolve(value)
-      }
-      const timer = setTimeout(() => done(undefined), 8000)
-      try {
-        const child = spawn(resolveClaudeBin(), ['auth', 'status'], {
-          windowsHide: true,
-          shell: false,
-          // EXPLICITE : pour le compte par defaut, accountEnv rend {} — sans retrait, la sonde
-          // heriterait le CLAUDE_CONFIG_DIR du processus et lirait l'identite d'un AUTRE compte.
-          env: withClaudeAccountEnv(process.env, accountEnv(account))
-        })
-        child.stdout?.on('data', (chunk: Buffer) => {
-          out += chunk.toString('utf8')
-        })
-        child.on('error', () => done(undefined))
-        child.on('close', () => done(parseIdentity(out)))
-      } catch {
-        done(undefined)
-      }
-    })
-    claudeAccounts.setIdentity(accountId, identity)
-  }
-
-  /** Sonde TOUS les comptes en parallele — la liste ne vaut que si chaque puce dit vrai. */
-  const refreshAllAccountIdentities = async (): Promise<void> => {
-    await Promise.all(
-      claudeAccounts.current().accounts.map((account) => probeAccountIdentity(account.id))
-    )
-  }
-
-  ipcMain.handle('os:claudeAccounts:list', async (event) => {
-    assertTrustedRendererSender(event, 'Claude accounts list')
-    await refreshAllAccountIdentities()
-    return claudeAccountsPayload()
-  })
-  ipcMain.handle('os:claudeAccounts:add', (event, label: unknown) => {
-    assertTrustedRendererSender(event, 'Claude accounts add')
-    const account = claudeAccounts.add(typeof label === 'string' ? label : undefined)
-    // On enchaine directement sur le login DANS LE DOSSIER DU NOUVEAU COMPTE : un compte ajoute
-    // mais jamais authentifie ne servirait a rien, et l'utilisateur n'a aucun moyen de le faire
-    // lui-meme depuis l'app.
-    os.startProviderLogin('claude', account.dir)
-    return claudeAccountsPayload()
-  })
-  ipcMain.handle('os:claudeAccounts:switch', (event, id: unknown) => {
-    assertTrustedRendererSender(event, 'Claude accounts switch')
-    claudeAccounts.switchTo(guardString(id, 'id'))
-    // Le quota appartient a l'ABONNEMENT : changer de compte rend le snapshot memorise caduc,
-    // sinon l'indicateur affiche encore celui du compte quitte pendant une minute.
-    invalidateModelQuotaCache()
-    return claudeAccountsPayload()
-  })
-  ipcMain.handle('os:claudeAccounts:remove', (event, id: unknown) => {
-    assertTrustedRendererSender(event, 'Claude accounts remove')
-    claudeAccounts.remove(guardString(id, 'id'))
-    return claudeAccountsPayload()
-  })
+  // Le canal de l'inventaire des skills vit dans src/main/ipc/skills.ts.
+  registerSkillsIpc({ skillSourcesPath: join(app.getPath('userData'), 'skill-sources.json') })
+  registerProvidersIpc({ os, providerStateStore })
+  // Les canaux des comptes Claude multiples vivent dans src/main/ipc/claude-accounts.ts.
+  registerClaudeAccountsIpc({ os, claudeAccounts })
   // --- Orchestration disciplinée (le cœur) : streame chaque étape ---
   ipcMain.handle('os:orchestrate', async (event, task: string, targetConversationId?: string) => {
     assertTrustedRendererSender(event, 'Orchestrate')
@@ -2165,10 +1969,22 @@ Le fil reprend ensuite normalement.`
   // sur un décompte tiré de cet artefact. Ici l'événement est ÉMIS, jamais lu d'un fichier : il ne
   // peut pas se polluer de la même façon.
   os.onRefusIntegration((refus) => ledger.append(evenementRefusIntegration(refus)))
-  ipcMain.handle('os:roles', async (event) => {
-    assertTrustedRendererSender(event, 'Roles')
-    await agentModelsReady
-    return os.roles.all()
+  // `index.ts` garde la SEULE autorité sur `agentTopology` (variable réassignée) : les modules la
+  // reçoivent en lecture/écriture, jamais en valeur.
+  const lireTopologie = (): AgentTopology => agentTopology
+  const appliquerTopologie = (topology: AgentTopology): AgentTopology => {
+    agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
+    syncRuntimeTopology(agentTopology)
+    return agentTopology
+  }
+  const broadcastRolesRefresh = (): void => broadcast({ type: 'refresh', scope: 'roles' })
+  registerRolesIpc({
+    os,
+    agentModelsReady,
+    lireModeles: () => agentModels,
+    lireTopologie,
+    appliquerTopologie,
+    broadcastRolesRefresh
   })
   // WORKFLOWS NOMMÉS : lire, écrire, sélectionner. La sélection ne PILOTE encore rien — c'est la
   // pièce qui rend un workflow nommable et choisissable, préalable à la comparaison de plusieurs
@@ -2204,92 +2020,13 @@ Le fil reprend ensuite normalement.`
   // vide, et le moteur n'aurait rien à porter.
   appliquerWorkflowActif(seedDefaultWorkflows())
 
-  ipcMain.handle('os:workflowProfiles:get', (event) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    return loadWorkflowProfiles()
-  })
-  ipcMain.handle('os:workflowProfiles:notice', (event) => {
-    assertTrustedRendererSender(event, 'Workflow profile notice')
-    return workflowRefusalMailbox.peek()
-  })
-  ipcMain.handle('os:workflowProfiles:acknowledgeNotice', (event, rawId: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow profile notice acknowledgement')
-    if (typeof rawId !== 'number' || !Number.isSafeInteger(rawId)) {
-      throw new Error('Identifiant de notice invalide')
-    }
-    return workflowRefusalMailbox.acknowledge(rawId)
-  })
-  ipcMain.handle('os:workflowProfiles:upsert', (event, raw: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    const next = upsertWorkflowProfile(loadWorkflowProfiles(), raw as WorkflowProfile)
-    saveWorkflowProfiles(next)
-    // Éditer le graphe du workflow ACTIF doit prendre effet tout de suite : sinon le moteur
-    // continuerait de jouer la version d'avant, sans que rien ne le signale.
-    appliquerWorkflowActif(next)
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return next
-  })
-  ipcMain.handle('os:workflowProfiles:remove', (event, rawId: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    const next = removeWorkflowProfile(loadWorkflowProfiles(), guardString(rawId, 'id'))
-    saveWorkflowProfiles(next)
-    // Supprimer le workflow actif doit le retirer du moteur, pas le laisser piloter un profil mort.
-    appliquerWorkflowActif(next)
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return next
-  })
-  ipcMain.handle('os:workflowProfiles:select', (event, rawId: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    const id = rawId === null ? null : guardString(rawId, 'id')
-    const next = selectWorkflowProfile(loadWorkflowProfiles(), id)
-    saveWorkflowProfiles(next)
-    appliquerWorkflowActif(next)
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return next
-  })
-  /**
-   * Sortir un ou tous les workflows vers un fichier. Un workflow est une façon de travailler : elle
-   * se partage et se versionne, elle ne doit pas rester prisonnière d'un %APPDATA%.
-   */
-  ipcMain.handle('os:workflowProfiles:export', async (event, rawId: unknown) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    const fichier = loadWorkflowProfiles()
-    const id = rawId === null || rawId === undefined ? null : guardString(rawId, 'id')
-    const choisis = id ? fichier.profiles.filter((p) => p.id === id) : fichier.profiles
-    if (!choisis.length) return { ok: false as const, reason: 'aucun workflow à exporter' }
-    const cible = await pickSavePath(event.sender, suggestedFileName(id ? choisis[0] : undefined))
-    if (!cible) return { ok: false as const, reason: 'annulé' }
-    const paquet = buildExport(choisis, new Date().toISOString())
-    writeFileSync(cible, JSON.stringify(paquet, null, 2), 'utf8')
-    return { ok: true as const, path: cible, count: choisis.length }
-  })
-  /**
-   * Faire entrer des workflows depuis un fichier. Le contenu n'est JAMAIS cru : il passe par le même
-   * assainisseur que la relecture locale, et un identifiant en collision est ré-attribué plutôt que
-   * d'écraser en silence le workflow d'à côté.
-   */
-  ipcMain.handle('os:workflowProfiles:import', async (event) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    const choisi = await pickPath(event.sender, 'openFile')
-    if (!choisi) {
-      return { ok: false as const, reason: 'annulé', file: loadWorkflowProfiles() }
-    }
-    let brut: unknown
-    try {
-      // Le BOM est retiré : sous Windows, presque tout ce qui écrit un JSON à la main en pose un.
-      brut = JSON.parse(readFileSync(choisi, 'utf8').replace(/^\uFEFF/, ''))
-    } catch {
-      return { ok: false as const, reason: 'fichier illisible', file: loadWorkflowProfiles() }
-    }
-    let fichier = loadWorkflowProfiles()
-    const { profiles, rejected } = readImport(brut, fichier.profiles)
-    for (const profil of profiles) fichier = upsertWorkflowProfile(fichier, profil)
-    if (profiles.length) {
-      saveWorkflowProfiles(fichier)
-      appliquerWorkflowActif(fichier)
-      broadcast({ type: 'refresh', scope: 'workflows' })
-    }
-    return { ok: true as const, imported: profiles.length, rejected, file: fichier }
+  // Les canaux des workflows nommés vivent dans src/main/ipc/workflow-profiles.ts.
+  registerWorkflowProfilesIpc({
+    workflowRefusalMailbox,
+    appliquerWorkflowActif,
+    pickPath,
+    pickSavePath,
+    broadcast
   })
   // La validité d'un graphe composé. Calculée côté main pour que le canevas et l'exécution partagent
   // exactement la même règle — deux vérités divergeraient tôt ou tard.
@@ -2402,50 +2139,22 @@ Le fil reprend ensuite normalement.`
     )
     return shadowRoutingPilotState(saved)
   })
-  ipcMain.handle(
-    'os:setRole',
-    async (event, role: Role, provider: string, model?: string, reasoningEffort?: string) => {
-      assertTrustedRendererSender(event, 'SetRole')
-      await agentModelsReady
-      const next = topologyWithRuntimeRole(
-        agentTopology,
-        role,
-        {
-          provider,
-          model,
-          reasoningEffort: reasoningEffort as ReasoningEffort | undefined
-        },
-        agentModels
-      )
-      agentTopology = saveAgentTopology(agentTopologyPath, next, agentModels)
-      syncRuntimeTopology(agentTopology)
-      broadcast({ type: 'refresh', scope: 'roles' })
-      return os.roles.all()
-    }
-  )
-  ipcMain.handle('os:models:list', async (event, force = false) => {
-    assertTrustedRendererSender(event, 'Model catalog')
-    if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
-    if (!force) return agentModels
-    const refresh = modelCatalog.refresh(true)
-    // Armer la barriere avant le premier await : aucun tour ne part sur l'ancien catalogue
-    // pendant qu'un rafraichissement force est en vol.
-    os.setTaskReadiness(
-      refresh.then(() => assertRuntimeTopologyAvailable(agentTopology, agentModels))
-    )
-    await refresh
-    applyFabricSummaries(fabricControlPlane.list())
-    return agentModels
+  // Reprojeter les modeles de Compute Fabric : `applyFabricSummaries` a d'autres appelants au
+  // demarrage, elle reste donc dans `index.ts` et les modules la recoivent.
+  const synchroniserFabric = (): void => applyFabricSummaries(fabricControlPlane.list())
+  registerModelsIpc({
+    os,
+    modelCatalog,
+    lireModeles: () => agentModels,
+    lireTopologie,
+    synchroniserFabric,
+    isolatedTestInstance
   })
-  ipcMain.handle('os:fabric:list', (event) => {
-    assertTrustedRendererSender(event, 'Compute Fabric')
-    const live = fabricControlPlane.list()
-    return isolatedFabricFixtureSummary
-      ? [
-          ...live.filter((node) => node.nodeId !== isolatedFabricFixtureSummary?.nodeId),
-          isolatedFabricFixtureSummary
-        ]
-      : live
+  registerFabricIpc({
+    fabricControlPlane,
+    lireFixtureIsolee: () => isolatedFabricFixtureSummary,
+    synchroniserFabric,
+    broadcastRolesRefresh
   })
   ipcMain.handle('app:test:fabric-fixture:install', (event) => {
     assertTrustedRendererSender(event, 'Fixture Compute Fabric')
@@ -2509,13 +2218,6 @@ Le fil reprend ensuite normalement.`
       [{ role: 'user', content: 'preuve Compute Fabric packagée' }],
       execution ? { execution: { cwd: os.executionWorkspace, sandbox: 'read-only' } } : {}
     )
-  })
-  ipcMain.handle('os:fabric:refresh', async (event, nodeId?: unknown) => {
-    assertTrustedRendererSender(event, 'Compute Fabric')
-    const summary = await fabricControlPlane.refresh(guardString(nodeId, 'nodeId'))
-    applyFabricSummaries(fabricControlPlane.list())
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return summary
   })
   ipcMain.handle('os:checkpointForks:list', (event) => {
     assertTrustedRendererSender(event, 'Checkpoint forks')
@@ -2589,223 +2291,24 @@ Le fil reprend ensuite normalement.`
       }
     })
   })
-  ipcMain.handle('os:models:quotas', async (event, force = false) => {
-    assertTrustedRendererSender(event, 'Model quotas')
-    if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
-    const models = modelCatalog.current()
-    if (isolatedTestInstance) {
-      const observedAt = new Date().toISOString()
-      const fiveHourResetsAt = new Date(Date.now() + 5 * 60 * 60_000).toISOString()
-      const sevenDayResetsAt = new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString()
-      return buildModelQuotaSnapshot(models, {
-        claude: {
-          status: 'available',
-          source: 'Fixture isolée Claude',
-          observedAt,
-          windows: [
-            {
-              id: 'five-hour',
-              label: '5 h',
-              usedPercent: 63,
-              remainingPercent: 37,
-              resetsAt: fiveHourResetsAt
-            },
-            {
-              id: 'seven-day',
-              label: '7 j',
-              usedPercent: 18,
-              remainingPercent: 82,
-              resetsAt: sevenDayResetsAt
-            }
-          ]
-        },
-        codex: {
-          status: 'available',
-          source: 'Fixture isolée Codex',
-          observedAt,
-          windows: [
-            {
-              id: 'five-hour',
-              label: '5 h',
-              usedPercent: 42,
-              remainingPercent: 58,
-              resetsAt: fiveHourResetsAt
-            },
-            {
-              id: 'seven-day',
-              label: '7 j',
-              usedPercent: 29,
-              remainingPercent: 71,
-              resetsAt: sevenDayResetsAt
-            }
-          ]
-        }
-      })
-    }
-    return getModelQuotaSnapshot(models, { force })
+  registerProfilesIpc({
+    os,
+    profiles,
+    agentModelsReady,
+    lireTopologie,
+    appliquerTopologie,
+    broadcastRolesRefresh
   })
-  // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : codex exact (expiry token),
-  // claude/kimi = présence CLI seulement (JAMAIS « authenticated » sans probe réel). Borné.
-  ipcMain.handle('os:providerStatus', async (event) => {
-    assertTrustedRendererSender(event, 'Provider status')
-    const bounded = (p: Promise<boolean>): Promise<boolean> =>
-      Promise.race([
-        p.catch(() => false),
-        new Promise<boolean>((r) => setTimeout(() => r(false), 4000)) // sleep-ok: garde-timeout bornant auth() (spawn CLI), pas un délai flaky
-      ])
-    const responds = async (id: string): Promise<boolean> => {
-      const state = providerStateStore.get(id)
-      return probePresenceUnlessStandby(state, async () => {
-        try {
-          const adapter = os.registry.get(id) as { auth?: () => Promise<boolean> }
-          return adapter.auth ? await bounded(adapter.auth()) : false
-        } catch {
-          return false
-        }
-      })
-    }
-    const [claudeResponds, kimiResponds, geminiResponds] = await Promise.all([
-      responds('claude'),
-      responds('kimi'),
-      responds('gemini')
-    ])
-    return buildProviderStatuses({
-      codexTokens: loadTokens(),
-      claudeResponds,
-      kimiResponds,
-      geminiResponds,
-      now: Date.now(),
-      states: {
-        codex: providerStateStore.get('codex'),
-        claude: providerStateStore.get('claude'),
-        kimi: providerStateStore.get('kimi'),
-        gemini: providerStateStore.get('gemini')
-      }
-    })
+  registerTopologyIpc({
+    agentModelsReady,
+    lireTopologie,
+    appliquerTopologie,
+    broadcastRolesRefresh
   })
-  ipcMain.handle('os:providerMode:set', (event, provider: unknown, mode: unknown) => {
-    assertTrustedRendererSender(event, 'Provider mode')
-    const id = guardString(provider, 'provider')
-    if (!ROUTED_PROVIDERS.includes(id as RoutedProvider)) {
-      throw new Error('Provider non supporté.')
-    }
-    if (mode !== 'active' && mode !== 'standby') throw new Error('Mode provider invalide.')
-    return providerStateStore.setMode(id, mode as ProviderMode)
-  })
-  // Bouton « Tester » — probe RÉEL borné à la demande (claude/kimi) : un vrai mini-tour dont
-  // l'erreur d'auth révèle l'expiration. Timeout/exception → unknown (jamais authenticated).
-  ipcMain.handle('os:providerTest', async (event, provider: unknown) => {
-    assertTrustedRendererSender(event, 'Provider test')
-    const id = guardString(provider, 'provider')
-    if (!ROUTED_PROVIDERS.includes(id as RoutedProvider)) {
-      throw new Error('Provider non supporté.')
-    }
-    return probeProviderConnection(id as RoutedProvider)
-  })
-  ipcMain.handle('os:profiles:list', (event) => {
-    assertTrustedRendererSender(event, 'Workflow profiles')
-    return profiles.list().map((profile) => ({
-      ...profile,
-      topology: migrateTopologyShape(profile.topology) as AgentTopology
-    }))
-  })
-  ipcMain.handle('os:profiles:save', async (event, profile: AutowinProfile) => {
-    assertTrustedRendererSender(event, 'Profiles')
-    await agentModelsReady
-    /*
-     * VALIDER A LA FRONTIERE avant de persister. `ProfileStore.save` ne verifie RIEN et ecrit la
-     * charge utile telle quelle -- et il compose `[profile, ...list().filter(...)]`, donc un `id`
-     * absent fait atterrir l'objet douteux EN TETE de liste. Le lecteur etant tolerant, le degat est
-     * silencieux : pas un plantage, de la donnee pourrie.
-     *
-     * Meme classe que l'incident du meme jour sur les conversations, ou le lecteur etait STRICT et
-     * l'app en est devenue inbootable. Le cout differe, la cause est identique : un ecrivain qui
-     * accepte une forme que rien ne verifie.
-     */
-    const verifie = guardProfile(profile)
-    const safe = {
-      ...verifie,
-      topology: agentTopology,
-      roles: os.roles.all(),
-      updatedAt: new Date().toISOString()
-    }
-    return profiles.save(safe)
-  })
-  ipcMain.handle('os:profiles:apply', async (event, id: string) => {
-    assertTrustedRendererSender(event, 'Profiles')
-    await agentModelsReady
-    const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
-    if (!profile) throw new Error('Profil introuvable')
-    // Rétrocompat : un profil sauvegardé avant un panel récent peut ne pas l'avoir → on migre
-    // la forme avant validation (sinon assertTopology jetterait « Profil introuvable/incohérent »).
-    agentTopology = saveAgentTopology(
-      agentTopologyPath,
-      migrateTopologyShape(profile.topology) as AgentTopology,
-      agentModels
-    )
-    syncRuntimeTopology(agentTopology)
-    // `roles` reste dans le schéma des anciens profils pour la lecture rétrocompatible, mais Agent
-    // Studio n'édite que `topology`. Le réappliquer ici recréerait une seconde autorité invisible.
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return { ...profile, topology: agentTopology }
-  })
-  ipcMain.handle('os:topology:get', async (event) => {
-    assertTrustedRendererSender(event, 'Topology')
-    await agentModelsReady
-    return agentTopology
-  })
-  ipcMain.handle('os:topology:set', async (event, topology: AgentTopology) => {
-    assertTrustedRendererSender(event, 'Topology')
-    await agentModelsReady
-    guardString(JSON.stringify(topology), 'topology')
-    agentTopology = saveAgentTopology(
-      agentTopologyPath,
-      migrateTopologyShape(topology) as AgentTopology,
-      agentModels
-    )
-    syncRuntimeTopology(agentTopology)
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return agentTopology
-  })
-
-  // --- Contrôles de capacités : inventaire + mutations bornées ---
-  ipcMain.handle(
-    'os:capabilities:list',
-    (event, kind: 'skills' | 'hooks' | 'tools' | 'plugins') => {
-      assertTrustedRendererSender(event, 'Capabilities')
-      if (!['skills', 'hooks', 'tools', 'plugins'].includes(kind))
-        throw new Error('Vue de capacités inconnue')
-      return listCapabilities(kind)
-    }
-  )
-
-  ipcMain.handle('claude:hooks:list', (event) => {
-    assertTrustedRendererSender(event, 'Claude hooks')
-    return listClaudeHooks()
-  })
-  ipcMain.handle('codex:hooks:list', (event) => {
-    assertTrustedRendererSender(event, 'Codex hooks')
-    return listCodexHooks()
-  })
-  ipcMain.handle('os:capabilities:tools:set', async (event, name: string, enabled: unknown) => {
-    assertTrustedRendererSender(event, 'Capabilities')
-    const before = await listCapabilities('tools')
-    const result = await setCapabilityEnabled(
-      'tools',
-      guardString(name, 'toolset'),
-      guardBoolean(enabled, 'toolset.enabled')
-    )
-    const change = promptConfigChange('tools', before, result.items)
-    appendPromptConfigActivity(`Prompt Load · toolset ${name}`, change)
-    if (bus.activeConversationId) {
-      appendConvActivity(bus.activeConversationId, {
-        kind: 'configuration-change',
-        label: `Prompt Load · toolset ${name}`,
-        text: JSON.stringify(change)
-      })
-    }
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return result
+  // Les canaux de l'inventaire des capacités vivent dans src/main/ipc/capabilities.ts.
+  registerCapabilitiesIpc({
+    lireConversationActive: () => bus.activeConversationId,
+    broadcast
   })
 
   ipcMain.handle('os:behaviour:choose-workspace', async (event) => {
@@ -2848,59 +2351,8 @@ Le fil reprend ensuite normalement.`
       isolatedConversationReadCount += 1
     }
   })
-  ipcMain.handle(
-    'os:chatArtifact:read',
-    (event, rawConversationId: unknown, rawTurnId: unknown, rawArtifactId: unknown) => {
-      assertTrustedRendererSender(event, 'Chat artifact')
-      const conversationId = guardString(rawConversationId, 'conversationId')
-      const turnId = guardString(rawTurnId, 'turnId')
-      const artifactId = guardString(rawArtifactId, 'artifactId')
-      if (!budgetedArtifactRenderers.has(event.sender.id)) {
-        budgetedArtifactRenderers.add(event.sender.id)
-        event.sender.once('destroyed', () => {
-          chatArtifactPreviewBudget.clearRenderer(event.sender.id)
-          budgetedArtifactRenderers.delete(event.sender.id)
-        })
-      }
-      const scope = `${event.sender.id}:${conversationId}`
-      const artifactBudgetId = `${turnId}\u0000${artifactId}`
-      const remaining = Math.min(
-        MAX_ARTIFACT_PREVIEW_BYTES,
-        chatArtifactPreviewBudget.remaining(scope, artifactBudgetId)
-      )
-      const result = readConversationArtifact(
-        os.conversations.get(conversationId),
-        turnId,
-        artifactId,
-        undefined,
-        remaining
-      )
-      if (
-        result.ok &&
-        !chatArtifactPreviewBudget.reserve(scope, artifactBudgetId, result.artifact?.size ?? 0)
-      ) {
-        return { ok: false, artifact: result.artifact, error: 'Budget cumulé des aperçus atteint' }
-      }
-      return result
-    }
-  )
-  ipcMain.handle(
-    'os:chatArtifact:reveal',
-    (event, rawConversationId: unknown, rawTurnId: unknown, rawArtifactId: unknown) => {
-      assertTrustedRendererSender(event, 'Chat artifact')
-      const conversationId = guardString(rawConversationId, 'conversationId')
-      const turnId = guardString(rawTurnId, 'turnId')
-      const artifactId = guardString(rawArtifactId, 'artifactId')
-      const path = revealableConversationArtifactPath(
-        os.conversations.get(conversationId),
-        turnId,
-        artifactId
-      )
-      if (!path) return { ok: false, error: 'Artefact introuvable' }
-      shell.showItemInFolder(path)
-      return { ok: true }
-    }
-  )
+  // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
+  registerChatArtifactsIpc({ os })
 
   // Les canaux du Brain (graphe 3D, recherche, boite de reception) vivent dans
   // src/main/ipc/brain.ts.

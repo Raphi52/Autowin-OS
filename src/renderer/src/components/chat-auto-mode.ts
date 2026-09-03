@@ -130,6 +130,54 @@ function ligneNueDitRien(lignes: readonly string[]): boolean {
   })
 }
 
+/** Meme parade que prompt-suivant.ts : un saut de ligne ECRIT casse la compilation. */
+const SAUT_ANCRAGE = String.fromCharCode(10)
+
+/** Au-dela, l'ancrage noie le prompt qu'il accompagne : on le borne. */
+const TACHE_ANCRAGE_MAX = 240
+
+/**
+ * LA TACHE INITIALE DU FIL — le PREMIER message que l'utilisateur a ecrit.
+ *
+ * Un message d'ORIENTATION est ecarte : il est tape PENDANT un tour et ne fonde pas la demande.
+ */
+export function tacheInitiale(fil: readonly Msg[]): string | null {
+  for (const m of fil) {
+    if (m.role !== 'user') continue
+    const user = m as Extract<Msg, { role: 'user' }>
+    if (user.orientation) continue
+    const nu = (user.content ?? '').trim()
+    if (!nu) continue
+    return nu.length > TACHE_ANCRAGE_MAX ? `${nu.slice(0, TACHE_ANCRAGE_MAX).trimEnd()}…` : nu
+  }
+  return null
+}
+
+/**
+ * ANCRAGE ANTI-DERIVE — demande utilisateur du 2026-09-02 : « le mode auto doit pas trop trop
+ * partir en couille par rapport a la tache initiale non plus ».
+ *
+ * La boucle renvoyait le prompt du DERNIER tour, et RIEN d'autre : chaque maillon etait redige a
+ * partir du precedent, sans aucune trace de la demande de depart. Le seul garde-fou etait
+ * `prompt-identique`, qui n'attrape qu'une repetition mot pour mot — une derive LENTE passait
+ * librement (mesure sur conv-138 : partie de « juge la qualite de mon prompting », la chaine est
+ * arrivee au shader du nuage d'accueil, six tours plus loin).
+ *
+ * Chaque envoi automatique porte donc la tache initiale AVEC lui, et l'ordre de s'arreter plutot
+ * que de s'en eloigner. L'ancrage est ajoute au texte ENVOYE, jamais a la condition d'arret.
+ */
+export function ancrerSurLaTacheInitiale(texte: string, tache: string | null): string {
+  if (!tache) return texte
+  // La suite EST la tache initiale (premier maillon) : l'ancrage ferait un doublon inutile.
+  if (texte.trim() === tache.trim()) return texte
+  return [
+    texte,
+    '',
+    `(Mode auto — tâche initiale de ce fil : « ${tache} ». Si cette suite s'en éloigne, dis-le et`,
+    'arrête la chaîne au lieu de dériver.)'
+  ].join(SAUT_ANCRAGE)
+}
+
 export type RaisonArret =
   | 'inactif'
   | 'tour-en-cours'
@@ -200,9 +248,15 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   // lui-même après le dernier maillon ; sans cette lecture la boucle repartait pour un tour payant.
   if (resteAFaireDitRien(texteReponse))
     return { action: 'arreter', raison: 'reste-rien', message: MESSAGES_ARRET['reste-rien'] }
-  const texte = extrairePromptSuivant(texteReponse) ?? extractRecommendation(texteReponse)
+  const suite = extrairePromptSuivant(texteReponse) ?? extractRecommendation(texteReponse)
   // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.
-  if (!texte) return { action: 'attendre', raison: 'aucun-prompt' }
+  if (!suite) return { action: 'attendre', raison: 'aucun-prompt' }
+  /*
+   * L'ANCRAGE EST POSÉ AVANT la comparaison anti-boucle, et c'est délibéré : c'est le texte
+   * RÉELLEMENT envoyé qui est mémorisé dans `dernierPromptEnvoye`. Comparer la suite NUE à un
+   * précédent ancré ne serait jamais égal, et le garde-fou « deux fois la même suite » mourrait.
+   */
+  const texte = ancrerSurLaTacheInitiale(suite, tacheInitiale(entree.fil))
   // La même suite deux fois d'affilée = boucle : on ne la renvoie pas, sans couper l'interrupteur.
   if (entree.dernierPromptEnvoye && texte.trim() === entree.dernierPromptEnvoye.trim())
     return { action: 'attendre', raison: 'prompt-identique' }

@@ -113,8 +113,13 @@ export type RetraitDependances =
  *
  * LA GARDE QUI COMPTE : on ne retire QUE si c'est un lien. Un VRAI dossier de modules n'est jamais
  * supprime -- une copie a pu installer les siens, et les effacer serait une destruction. La
- * distinction se lit avec `lstat`, qui NE SUIT PAS le lien ; `stat` dirait « dossier » dans les deux
- * cas et effacerait les modules du depot a travers la jonction.
+ * distinction se lit avec `lstat`, qui NE SUIT PAS le lien.
+ *
+ * CE QUE COUTE `stat` A LA PLACE, mesure le 2026-09-02 (test « avec `stat` au lieu de `lstat` ») :
+ * `stat` suit la jonction et repond « dossier », donc la garde croit voir de VRAIS modules et REFUSE
+ * d'y toucher -- le lien survit, et avec lui la coquille orpheline. Ce n'est PAS une destruction :
+ * mesure le meme jour, un effacement recursif (`fs.rmSync({recursive})`, `rm -rf`, `rmdir /s`) NE
+ * TRAVERSE PAS une jonction NTFS ; la jonction part, sa cible reste intacte.
  */
 export function delierLesDependances(
   worktreePath: string,

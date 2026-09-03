@@ -219,38 +219,71 @@ function compteurDeBaselines(bus: AppCommandBus): () => number {
 }
 
 describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du dépôt', () => {
+  /*
+   * CE TEST NE CONCLUT QUE SUR LA VOIE QU'IL VISE : la portee CIBLEE.
+   *
+   * DEFAUT MESURE le 2026-09-02 (conv-131), 1 echec sur 1104 fichiers en suite complete, 5 verts
+   * hors charge : `expect(baselines()).toBe(0)` a recu 1. Ce n'etait NI un bug du produit NI une
+   * assertion trop stricte. Sous charge, `vitest related` collecte 0 test par intermittence ; le
+   * produit BASCULE alors sur la suite complete (comportement voulu, teste plus bas), celle-ci est
+   * rouge a cause du test etranger du fixture, et une baseline devient LEGITIME. Sur cette voie,
+   * l'invariant « un vert ne mesure aucune baseline » ne s'applique plus, et le sabotage vise
+   * (baseline systematique) ne serait meme plus discriminant : le test ne mesure plus rien.
+   *
+   * On ne desserre donc RIEN — l'assertion reste `toBe(0)`. On refait la mesure tant que le hasard
+   * de collecte nous met sur l'autre voie, et une bascule SYSTEMATIQUE fait echouer : elle ne serait
+   * plus une intermittence, mais un vrai defaut de derivation de portee.
+   */
   it('publie une édition saine alors qu’un test SANS RAPPORT est déjà rouge', async () => {
-    const { repo, git } = depotDejaRouge()
+    const TENTATIVES = 3
+    let bascules = 0
 
-    const bus = busSur(repo)
-    const baselines = compteurDeBaselines(bus)
+    for (let essai = 1; essai <= TENTATIVES; essai += 1) {
+      const { repo, git } = depotDejaRouge()
 
-    const result = await bus.exec(
-      'edit_file',
-      {
-        path: 'sujet.ts',
-        oldText: 'export const valeur = (): number => 1',
-        newText: 'export const valeur = (): number => 1 // commentaire sans effet'
-      },
-      conversationUnique()
+      const bus = busSur(repo)
+      const baselines = compteurDeBaselines(bus)
+
+      const result = await bus.exec(
+        'edit_file',
+        {
+          path: 'sujet.ts',
+          oldText: 'export const valeur = (): number => 1',
+          newText: 'export const valeur = (): number => 1 // commentaire sans effet'
+        },
+        conversationUnique()
+      )
+
+      // L'edition est publiee sur les DEUX voies : c'est le coeur du correctif, il se verifie ici.
+      expect(result).toMatchObject({ ok: true })
+      expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).toContain('commentaire sans effet')
+      // Le rouge préexistant n’a pas été « réparé » au passage : il est resté INTACT.
+      expect(readFileSync(join(repo, 'etranger.test.ts'), 'utf8')).toContain('toBe(2)')
+      expect(git('status', '--porcelain')).toBe('')
+
+      const data = result.data as { verifie?: string; portee?: string }
+      if (!data.verifie?.includes('vitest related')) {
+        // Collecte vide -> le produit a remesure plus large. Cette voie ne prouve pas l'invariant.
+        bascules += 1
+        continue
+      }
+
+      /*
+       * LE CHEMIN VERT NE MESURE AUCUNE BASELINE — prouve par le COMPTEUR, pas par l'absence d'un
+       * texte. Sabotage qui doit rougir : sortir l'appel de baseline du `if (!verification.ok)` dans
+       * `withIsolatedMutation` (l'option « baseline systematique », ecartee pour son cout).
+       */
+      expect(baselines()).toBe(0)
+      // Le verdict NOMME sa portée : un vert dont on ignore l’étendue se lit plus large qu’il n’est.
+      expect(data.portee).toContain('importent')
+      return
+    }
+
+    throw new Error(
+      `la portee ciblee a bascule sur la suite complete ${bascules} fois sur ${TENTATIVES} : ` +
+        "ce n'est plus une intermittence de collecte, la derivation de portee est en cause"
     )
-
-    expect(result).toMatchObject({ ok: true })
-    expect(readFileSync(join(repo, 'sujet.ts'), 'utf8')).toContain('commentaire sans effet')
-    /*
-     * LE CHEMIN VERT NE MESURE AUCUNE BASELINE — prouve par le COMPTEUR, pas par l'absence d'un
-     * texte. Sabotage qui doit rougir : sortir l'appel de baseline du `if (!verification.ok)` dans
-     * `withIsolatedMutation` (l'option « baseline systematique », ecartee pour son cout).
-     */
-    expect(baselines()).toBe(0)
-    // Le verdict NOMME sa portée : un vert dont on ignore l’étendue se lit plus large qu’il n’est.
-    const data = result.data as { verifie?: string; portee?: string }
-    expect(data.verifie).toContain('vitest related')
-    expect(data.portee).toContain('importent')
-    // Le rouge préexistant n’a pas été « réparé » au passage : il est resté INTACT.
-    expect(readFileSync(join(repo, 'etranger.test.ts'), 'utf8')).toContain('toBe(2)')
-    expect(git('status', '--porcelain')).toBe('')
-  }, 180_000)
+  }, 300_000)
 
   it('nomme le MOTIF quand la publication du bureau échoue', async () => {
     const { repo } = depotDejaRouge()

@@ -9,6 +9,10 @@ import {
   extraireCommandeEveil,
   reagirAParole,
   FENETRE_ORDRE_REPETE_MS,
+  FENETRE_EVEIL_MS,
+  FENETRE_ECHO_MS,
+  estEcho,
+  retenirPhraseDite,
   type JarvisEcoute,
   type SommaireDirect
 } from './jarvis-voice'
@@ -214,6 +218,31 @@ describe('accusé sonore d’éveil', () => {
     expect(deux.ordre).toBeNull()
   })
 
+  it('rendort Jarvis quand l’éveil a expiré, au lieu de prendre la phrase suivante pour un ordre', () => {
+    // LE DÉFAUT VÉCU le 2026-09-02 : « quand il fait une tâche, parfois ça écrit le bidule ».
+    // L'éveil n'expirait jamais : le nom dit sans ordre armait l'assistant pour toujours, et la
+    // phrase figée suivante — bout de nom mal transcrit, phrase de bureau, sa propre voix reprise
+    // par le micro — partait comme ordre et ouvrait une conversation payante.
+    const on = basculerEcoute(ecouteInitiale, 1)
+    const eveil = reagirAParole(on, { texte: 'Jarvis', final: true, le: 1_000 })
+    expect(eveil.etat.eveille).toBe(true)
+    // Juste DANS la fenêtre : c'est bien un ordre, la pause pour formuler reste permise.
+    const dedans = reagirAParole(eveil.etat, {
+      texte: 'ouvre le chat',
+      final: true,
+      le: 1_000 + FENETRE_EVEIL_MS - 1
+    })
+    expect(dedans.ordre).toBe('ouvre le chat')
+    // HORS fenêtre : rien ne part, et l'état est rendormi.
+    const dehors = reagirAParole(eveil.etat, {
+      texte: 'bidule',
+      final: true,
+      le: 1_000 + FENETRE_EVEIL_MS + 1
+    })
+    expect(dehors.ordre).toBeNull()
+    expect(dehors.etat.eveille).toBe(false)
+  })
+
   it('couper l’écoute rendort Jarvis', () => {
     const on = basculerEcoute(ecouteInitiale, 1)
     const eveil = reagirAParole(on, { texte: 'jarvis', final: true, le: 2 })
@@ -354,5 +383,25 @@ describe('reagirAParole — un ordre dit une fois ne part qu une fois', () => {
     const premier = dire({ ...ecouteInitiale, active: true }, 'Jarvis, ouvre le chat', 1_000)
     const tard = dire(premier.etat, 'Jarvis, ouvre le chat', 1_000 + FENETRE_ORDRE_REPETE_MS + 1)
     expect(tard.ordre).toBe('ouvre le chat')
+  })
+})
+
+describe('il ne s’écoute pas lui-même', () => {
+  it('écarte SA propre phrase reprise par le micro, même partielle ou ponctuée autrement', () => {
+    // LE DÉFAUT VÉCU le 2026-09-02 : le micro reste ouvert pendant qu'il parle. « C'est fait : … »
+    // revenait dans la reconnaissance, s'inscrivait, et pouvait partir comme ordre.
+    const dites = retenirPhraseDite([], 'C’est fait : lance le scout.', 1_000)
+    expect(estEcho('c est fait, lance le scout', dites, 1_500)).toBe(true)
+    expect(estEcho('C’est fait', dites, 1_500)).toBe(true)
+    // Passé la fenêtre, la même phrase est une VRAIE parole : on ne la mange pas.
+    expect(estEcho('c est fait lance le scout', dites, 1_000 + FENETRE_ECHO_MS + 1)).toBe(false)
+  })
+
+  it('laisse passer un ordre enchaîné pendant qu’il parle', () => {
+    // L'ENTRÉE QUI CASSERAIT UN FAUX FIX : fermer le micro pendant la parole bloquerait ceci.
+    const dites = retenirPhraseDite([], 'Tout de suite.', 1_000)
+    expect(estEcho('Jarvis, lance le scout', dites, 1_200)).toBe(false)
+    // Un mot trop court n'est jamais un écho : sinon un « oui » serait avalé.
+    expect(estEcho('oui', dites, 1_200)).toBe(false)
   })
 })

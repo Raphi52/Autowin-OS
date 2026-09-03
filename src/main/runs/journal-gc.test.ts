@@ -176,3 +176,35 @@ describe('collectStdoutJournals — application au disque', () => {
     expect(outcome).toEqual({ removed: 0, freedBytes: 0 })
   })
 })
+
+describe('collectStdoutJournals — les sorties d erreur aussi', () => {
+  it('nettoie un .stderr.log ancien au meme titre qu un .stdout.jsonl', () => {
+    const root = mkdtempSync(join(tmpdir(), 'journal-gc-'))
+    try {
+      const erreurs = join(root, 'run-42.stderr.log')
+      writeFileSync(erreurs, 'z'.repeat(80))
+      const vieuxDate = new Date(Date.now() - DEFAULT_MAX_AGE_MS - 60_000)
+      utimesSync(erreurs, vieuxDate, vieuxDate)
+
+      const outcome = collectStdoutJournals(root)
+
+      expect(outcome.removed).toBe(1)
+      expect(outcome.freedBytes).toBe(80)
+      expect(existsSync(erreurs)).toBe(false)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('protege un .stderr.log encore ecrit (meme garde que la sortie standard)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'journal-gc-'))
+    try {
+      const vivant = join(root, 'run-vivant.stderr.log')
+      writeFileSync(vivant, '')
+      expect(collectStdoutJournals(root).removed).toBe(0)
+      expect(existsSync(vivant)).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
