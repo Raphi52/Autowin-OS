@@ -74,6 +74,27 @@ describe('Dictee', () => {
     expect(String.fromCharCode(...wav.slice(0, 4))).toBe('RIFF')
   })
 
+  it('écrit chaque phrase DANS LE CHAMP pendant que le micro tourne', async () => {
+    const { deps, pousser } = fauxDeps()
+    const ecrits: string[] = []
+    const dictee = new Dictee({ ...deps, onTexte: (t) => ecrits.push(t) })
+    await dictee.demarrer()
+    // Une phrase, puis 700 ms de silence : la phrase est finie, elle doit partir tout de suite.
+    pousser(parole(8000))
+    pousser(new Float32Array(16_000))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(ecrits).toEqual(['texte dicté'])
+    expect(dictee.aDejaEcrit).toBe(true)
+    // Micro TOUJOURS ouvert : la dictée continue après l'écriture.
+    expect(dictee.enCours).toBe(true)
+    // La deuxième phrase s'écrit aussi, sans clic d'arrêt.
+    pousser(parole(8000))
+    pousser(new Float32Array(16_000))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(ecrits).toEqual(['texte dicté', 'texte dicté'])
+    await dictee.arreter()
+  })
+
   it('annuler ne transcrit rien', async () => {
     const { deps, pousser, transcrire } = fauxDeps()
     const dictee = new Dictee(deps)

@@ -248,30 +248,39 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       }
     }, [])
 
+    /**
+     * ÉCRIRE DANS LE CHAMP au fil de la parole. La valeur est LUE dans le champ à cet instant, pas
+     * capturée au clic : l'utilisateur peut taper pendant que le micro tourne.
+     */
+    function ecrireDictee(texte: string): void {
+      if (texte === '') return
+      const el = inputRef.current
+      const courant = el?.value ?? input
+      const caret = el?.selectionStart ?? courant.length
+      const suivant = insererDictee(courant, texte, caret)
+      pousserTexte(suivant.texte)
+      requestAnimationFrame(() => {
+        const champ = inputRef.current
+        if (!champ) return
+        champ.focus()
+        champ.setSelectionRange(suivant.caret, suivant.caret)
+      })
+    }
+
     async function basculerDictee(): Promise<void> {
       if (dicteeEtat === 'transcription') return
       if (dicteeEtat === 'ecoute') {
         setDicteeEtat('transcription')
-        const texte = (await dicteeRef.current?.arreter()) ?? ''
+        const dictee = dicteeRef.current
+        // La FIN de phrase restée dans le tampon ; les phrases précédentes sont déjà écrites.
+        const texte = (await dictee?.arreter()) ?? ''
         dicteeRef.current = null
         setDicteeEtat('inactif')
         if (texte === '') {
-          setDicteeErreur('Rien n’a été reconnu.')
+          if (dictee?.aDejaEcrit !== true) setDicteeErreur('Rien n’a été reconnu.')
           return
         }
-        const el = inputRef.current
-        // La valeur LUE dans le champ, pas celle capturée au clic : l'utilisateur a pu taper
-        // pendant que le micro tournait.
-        const courant = el?.value ?? input
-        const caret = el?.selectionStart ?? courant.length
-        const suivant = insererDictee(courant, texte, caret)
-        pousserTexte(suivant.texte)
-        requestAnimationFrame(() => {
-          const champ = inputRef.current
-          if (!champ) return
-          champ.focus()
-          champ.setSelectionRange(suivant.caret, suivant.caret)
-        })
+        ecrireDictee(texte)
         return
       }
       const transcrire = pontWhisper()
@@ -286,7 +295,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         setDicteeErreur(DICTEE_NON_INSTALLEE)
         return
       }
-      const dictee = new Dictee(dependancesDicteeNavigateur(transcrire))
+      const dictee = new Dictee(
+        dependancesDicteeNavigateur(transcrire, (texte) => {
+          // Micro encore ouvert : le texte apparaît dans la barre de prompt pendant qu'on parle.
+          if (dicteeRef.current === dictee) ecrireDictee(texte)
+        })
+      )
       dicteeRef.current = dictee
       setDicteeErreur(null)
       setDicteeEtat('ecoute')

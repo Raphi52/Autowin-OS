@@ -13,7 +13,15 @@
  *  - après `arreter()`, le micro est fermé AVANT la transcription : laisser une piste ouverte
  *    pendant l'attente reviendrait à écouter la pièce sans le dire.
  */
-import { TAUX_WHISPER, coller, encoderWav16k } from './whisper-audio'
+import {
+  SEUIL_PAROLE,
+  TAUX_WHISPER,
+  avancerVad,
+  coller,
+  encoderWav16k,
+  etatVadInitial,
+  type EtatVad
+} from './whisper-audio'
 
 /** Ce que l'utilisateur voit : rien, le micro tourne, ou la transcription est en cours. */
 export type EtatDictee = 'inactif' | 'ecoute' | 'transcription'
@@ -41,6 +49,12 @@ export interface DependancesDictee {
   micro: () => Promise<FluxAudio>
   contexte: () => ContexteAudio
   transcrire: (wav: Uint8Array) => Promise<string>
+  /**
+   * ÉCRITURE EN DIRECT — appelé à CHAQUE phrase reconnue, micro encore ouvert. C'est ce qui fait
+   * apparaître le texte dans la barre de prompt pendant qu'on parle, au lieu d'attendre le clic
+   * d'arrêt. Absent = ancien comportement (tout à la fin).
+   */
+  onTexte?: (texte: string) => void
 }
 
 /** Même taille de tampon que le moteur Jarvis : ~93 ms à 44,1 kHz. */
@@ -79,9 +93,14 @@ export class Dictee {
   private ctx: ContexteAudio | null = null
   private source: { connect(n: unknown): void; disconnect(): void } | null = null
   private noeud: NoeudAudio | null = null
-  private blocs: Float32Array[] = []
   private taux = TAUX_WHISPER
   private actif = false
+  /** Découpage sur le silence : c'est lui qui décide quand une phrase est finie. */
+  private vad: EtatVad = etatVadInitial
+  /** Les transcriptions sont sérialisées : deux CLI whisper en parallèle se disputent le CPU. */
+  private file: Promise<void> = Promise.resolve()
+  /** Au moins une phrase a-t-elle été écrite dans le champ ? Sert au message « rien reconnu ». */
+  private aEcrit = false
 
   constructor(private readonly deps: DependancesDictee) {}
 
@@ -89,11 +108,17 @@ export class Dictee {
     return this.actif
   }
 
+  /** Une phrase a-t-elle déjà été écrite en direct pendant cette dictée ? */
+  get aDejaEcrit(): boolean {
+    return this.aEcrit
+  }
+
   /** Ouvre le micro. Rend `false` si l'autorisation est refusée ou le micro indisponible. */
   async demarrer(): Promise<boolean> {
     if (this.actif) return true
     this.actif = true
-    this.blocs = []
+    this.vad = etatVadInitial
+    this.aEcrit = false
     try {
       const flux = await this.deps.micro()
       if (!this.actif) {
@@ -110,7 +135,7 @@ export class Dictee {
       noeud.onaudioprocess = (e): void => {
         if (!this.actif) return
         // COPIE obligatoire : le tampon du noeud est réutilisé au bloc suivant.
-        this.blocs.push(new Float32Array(e.inputBuffer.getChannelData(0)))
+        this.auBloc(new Float32Array(e.inputBuffer.getChannelData(0)))
       }
       this.source.connect(noeud)
       noeud.connect(ctx.destination)
@@ -122,17 +147,44 @@ export class Dictee {
     }
   }
 
-  /** Ferme le micro et rend le texte reconnu (`''` si rien d'exploitable). */
+  private auBloc(bloc: Float32Array): void {
+    const pas = avancerVad(this.vad, bloc, this.taux, SEUIL_PAROLE)
+    this.vad = pas.etat
+    if (pas.segment) this.enfiler(pas.segment, this.taux)
+  }
+
+  /** Une phrase finie part en transcription, et son texte est écrit AUSSITÔT dans le champ. */
+  private enfiler(segment: Float32Array, taux: number): void {
+    this.file = this.file.then(async () => {
+      let texte = ''
+      try {
+        texte = (await this.deps.transcrire(encoderWav16k(segment, taux))).trim()
+      } catch {
+        // Une phrase ratée ne coupe pas l'écoute : on continue de dicter.
+        return
+      }
+      if (texte === '') return
+      this.aEcrit = true
+      this.deps.onTexte?.(texte)
+    })
+  }
+
+  /**
+   * Ferme le micro, transcrit la FIN de phrase restée dans le tampon et la rend. Les phrases déjà
+   * écrites en direct ne sont PAS rendues une seconde fois — elles sont déjà dans le champ.
+   */
   async arreter(): Promise<string> {
     if (!this.actif) return ''
     this.actif = false
-    const blocs = this.blocs
+    const reste = this.vad.tampon.length > 0 ? coller(this.vad.tampon) : null
     const taux = this.taux
-    this.blocs = []
+    this.vad = etatVadInitial
     this.fermer()
-    if (blocs.length === 0) return ''
+    // On attend les phrases déjà en vol, pour que l'ordre du texte reste celui de la parole.
+    await this.file
+    if (!reste || reste.length === 0) return ''
     try {
-      return (await this.deps.transcrire(encoderWav16k(coller(blocs), taux))).trim()
+      return (await this.deps.transcrire(encoderWav16k(reste, taux))).trim()
     } catch {
       return ''
     }
@@ -141,7 +193,7 @@ export class Dictee {
   /** Coupe sans rien transcrire : l'utilisateur a annulé. */
   annuler(): void {
     this.actif = false
-    this.blocs = []
+    this.vad = etatVadInitial
     this.fermer()
   }
 
@@ -162,7 +214,8 @@ export class Dictee {
 
 /** Le câblage RÉEL du navigateur : non testable hors fenêtre, il reste nu. */
 export function dependancesDicteeNavigateur(
-  transcrire: (wav: Uint8Array) => Promise<string>
+  transcrire: (wav: Uint8Array) => Promise<string>,
+  onTexte?: (texte: string) => void
 ): DependancesDictee {
   return {
     micro: () =>
@@ -173,6 +226,7 @@ export function dependancesDicteeNavigateur(
       new (window as unknown as { AudioContext: new (o?: unknown) => ContexteAudio }).AudioContext({
         sampleRate: TAUX_WHISPER
       }),
-    transcrire
+    transcrire,
+    onTexte
   }
 }
