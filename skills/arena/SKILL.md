@@ -192,11 +192,13 @@ Avant de rendre la sortie ci-dessous :
 npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc>
 ```
 
-Il lit les fichiers du banc et rend 14 points OK/RATE (candidats écrits, rouge collé, cas limites du
+Il lit les fichiers du banc et rend 15 points OK/RATE (candidats écrits, rouge collé, cas limites du
 critère, 4 bras, énoncé identique, copies distinctes, départ simultané, chaque `$` du tableau égal au
 `total_cost_usd` du bras, juge distinct, format du tableau, ligne Discrimination, leçon chiffrée,
 copies perdantes retirées, et — si le banc teste des variations de TEXTE — section `## Variantes de
-texte` avec son levier plus un `variantes/<bras>.diff` non vide par bras). Code de sortie 0 =
+texte` avec son levier plus un `variantes/<bras>.diff` non vide par bras, et enfin les QUATRE lignes
+du banc dans `arena-duels.jsonl` — un tournoi non journalisé est RATE, gagnant seul journalisé
+compris). Code de sortie 0 =
 protocole tenu. Un RATE se corrige, ou s'écrit dans la
 sortie tel quel — il ne se tait pas : au banc du 2026-09-02, quatre de ces points étaient RATE sans
 que rien ne le dise. Les 4 points de **jugement** que le script liste en fin de sortie ne sont pas
