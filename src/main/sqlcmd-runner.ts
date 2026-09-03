@@ -248,8 +248,11 @@ export async function runSqlcmdJson(
           '-b',
           // Voir le commentaire en tête de module : `-o` + `-f 65001` est le SEUL chemin qui produise
           // de l'UTF-8. Sur le pipe, sqlcmd écrit la codepage OEM et les accents sont corrompus.
-          '-f',
-          OUTPUT_CODEPAGE,
+          // MAIS uniquement sur le sqlcmd HISTORIQUE : go-sqlcmd refuse `-f` (« 'f': Unknown
+          // Option ») et n'en a nul besoin, il écrit déjà de l'UTF-8. Cf. sqlcmdSupporteOptionF.
+          ...(sqlcmdSupporteOptionF(deps.sqlcmdPath as string, deps.spawnSyncFn)
+            ? ['-f', OUTPUT_CODEPAGE]
+            : []),
           '-o',
           fichier,
           '-t',
