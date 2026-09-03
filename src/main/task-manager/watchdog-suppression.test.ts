@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isNonActionableWall, suppressionFor } from './watchdog-suppression'
+import { isDeliberateAbort, isNonActionableWall, suppressionFor } from './watchdog-suppression'
+import { isDeliberateAbort as isDeliberateAbortSuperviseur } from '../auto-kaizen-supervisor'
 
 /**
  * La suppression protège Auto-Kaizen d'incidents qu'il ne peut PAS corriger : abandon volontaire,
@@ -39,6 +40,82 @@ describe('suppression — un token d’auth expiré est un MUR, pas un défaut �
     // à analyser — sinon on masquerait de vrais bugs.
     expect(isNonActionableWall('', 'assertion failed at foo.test.ts:401')).toBe(false)
     expect(isNonActionableWall('', 'expected 401 items but got 400')).toBe(false)
-    expect(suppressionFor('Phase build échec', 'TypeError: cannot read x at line 401')).toBeUndefined()
+    expect(
+      suppressionFor('Phase build échec', 'TypeError: cannot read x at line 401')
+    ).toBeUndefined()
+  })
+})
+
+/**
+ * ABANDON VOULU — la suppression doit reconnaître le marqueur `[abort]`, pas seulement le mot
+ * « annulé ».
+ *
+ * Défaut mesuré le 2026-09-02, run
+ * `.autowin-data/autowin-os/runs/conv-14/kaizen-conv-13-est-bloquee-mtk5a9fg-workspace/RUN.md` :
+ * l'utilisateur clique Stop, le run finit `red` en le DISANT honnêtement
+ * (« [abort] claude CLI interrompu : arret demande par l'utilisateur (Stop du chat) »), et cet échec
+ * traverse la suppression — donc réveille un agent et relance un chantier payant sur un arrêt voulu.
+ *
+ * La cause est en amont, le 2026-08-18 : `abortFailure` a cessé d'écrire « claude CLI annulé » pour
+ * écrire « [abort] claude CLI interrompu : <raison> ». `provider-failure-diagnosis.ts` a suivi le
+ * nouveau marqueur ; les deux gardes de suppression sont restés sur l'ANCIEN vocabulaire. Le
+ * changement d'émetteur n'a pas été propagé à ses lecteurs.
+ *
+ * Les deux jumeaux sont vérifiés ICI : corriger un seul garantissait la rechute par l'autre chemin.
+ */
+describe('suppression — le marqueur [abort] est un abandon voulu, dans les DEUX gardes', () => {
+  // La chaîne EXACTE du Journal de conv-14 (2026-09-02), telle qu'elle remonte au garde.
+  const conv14 =
+    'Phase kaizen — appel du rôle subagent INTERROMPU avant sa fin : [abort] claude CLI interrompu : ' +
+    "arret demande par l'utilisateur (Stop du chat) · last-event=none · stderr=none. Ce n'est pas " +
+    'une panne : ni claude ni le binding du rôle ne sont en cause.'
+
+  it('la chaîne réelle de conv-14 est reconnue comme abandon et supprimée', () => {
+    expect(isDeliberateAbort('Orchestration en échec', conv14)).toBe(true)
+    expect(suppressionFor('Orchestration en échec', conv14)).toBe('aborted')
+  })
+
+  it('le jumeau du superviseur la reconnaît aussi', () => {
+    expect(isDeliberateAbortSuperviseur('Orchestration en échec', conv14)).toBe(true)
+  })
+
+  it('couvre les quatre providers, quelle que soit la raison rapportée', () => {
+    for (const detail of [
+      "[abort] codex exec interrompu : raison non rapportee par l'appelant",
+      '[abort] claude CLI interrompu : conversation-deleted',
+      '[abort] Kimi Code interrompu : run remplace',
+      '[abort] Envoi Gemini interrompu : arret demande'
+    ]) {
+      expect(isDeliberateAbort('un outil a echoue', detail), detail).toBe(true)
+      expect(isDeliberateAbortSuperviseur('un outil a echoue', detail), detail).toBe(true)
+    }
+  })
+
+  it('CONTRÔLE NÉGATIF : un arrêt imposé par le BUDGET reste un mur, pas un abandon', () => {
+    // L'ordre compte. Le devis coupe l'appel par le même mécanisme, donc le même marqueur — mais la
+    // cause est le plafond. L'étiqueter « aborted » ferait perdre « combien de runs le budget a
+    // coûté ». Même règle que `provider-failure-diagnosis.ts` : budget testé AVANT l'annulation.
+    const budget = '[abort] codex exec interrompu : Budget USD depasse (12.00)'
+    expect(isDeliberateAbort('Orchestration en échec', budget)).toBe(false)
+    expect(isDeliberateAbortSuperviseur('Orchestration en échec', budget)).toBe(false)
+    expect(suppressionFor('Orchestration en échec', budget)).toBe('non-actionable')
+  })
+
+  it('CONTRÔLE NÉGATIF : un vrai échec terminal qui dit « interrompu » n’est PAS avalé', () => {
+    // Le défaut symétrique, et celui qui coûte le plus cher : `providers/claude.ts` lève
+    // « Claude a interrompu l'appel : … » sur un event `result` avec `is_error: true` — une panne
+    // TERMINALE. Elle ne porte pas `[abort]` et doit continuer de mériter un agent.
+    for (const detail of [
+      "Claude a interrompu l'appel : max_tokens",
+      'la transaction a ete aborted par la base de donnees',
+      "le processus a ete interrompu par une erreur d'assertion",
+      'expected 3 to be 4'
+    ]) {
+      expect(isDeliberateAbort('un outil a echoue', detail), detail).toBe(false)
+      expect(isDeliberateAbortSuperviseur('un outil a echoue', detail), detail).toBe(false)
+    }
+    expect(
+      suppressionFor('un outil a echoue', "Claude a interrompu l'appel : max_tokens")
+    ).toBeUndefined()
   })
 })

@@ -20,6 +20,7 @@ import type {
   AutoKaizenConversationLink,
   AutoKaizenConversationRole
 } from '../shared/auto-kaizen-link'
+import { classifyProviderFailure } from './provider-failure-diagnosis'
 
 export const LEGACY_AUTO_KAIZEN_ENABLED_ENV = 'AUTOWIN_LEGACY_AUTO_KAIZEN_ENABLED'
 
@@ -499,6 +500,14 @@ export function isRemediationRed(kind: string, depth: number): boolean {
 export function isDeliberateAbort(summary: string, detail: string): boolean {
   const text = `${summary} ${detail}`.toLowerCase().trim()
   return (
+    // MARQUEUR `[abort]` — même correctif que le jumeau `task-manager/watchdog-suppression.ts`, et
+    // appliqué en même temps À DESSEIN : n'en corriger qu'un laissait l'autre chemin rechuter sur le
+    // même arrêt utilisateur. La reconnaissance est DÉLÉGUÉE à `classifyProviderFailure`, seul
+    // lecteur du marqueur, ce qui préserve l'ordre budget-avant-annulation qu'il tient déjà.
+    // Défaut mesuré le 2026-09-02 : un Stop du chat produisait « [abort] claude CLI interrompu :
+    // arret demande par l'utilisateur (Stop du chat) », que l'ANCIEN vocabulaire (« … annulé »)
+    // ne reconnaissait plus depuis le changement d'émetteur du 2026-08-18.
+    classifyProviderFailure(text) === 'cancelled' ||
     // Message exact d'un `AbortController` Node/undici.
     /\bthis operation was aborted\b/.test(text) ||
     /\bthe operation was aborted\b/.test(text) ||

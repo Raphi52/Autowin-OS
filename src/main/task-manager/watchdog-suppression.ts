@@ -11,6 +11,8 @@
  * que l'agent va justement rappeler pour echouer pareil.
  */
 
+import { classifyProviderFailure } from '../provider-failure-diagnosis'
+
 /**
  * Un mur EXTERNE n'est pas un défaut réparable : aucune modification de code ne rétablit un quota
  * acheté. Le 2026-08-04, le quota codex épuisé jusqu'au 8 août a produit 2924 incidents en 3 h 09 —
@@ -72,6 +74,18 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
 export function isDeliberateAbort(summary: string, detail: string): boolean {
   const text = `${summary} ${detail}`.toLowerCase().trim()
   return (
+    // MARQUEUR `[abort]` — la signature de l'émetteur, posée par `providers/abort-diagnostic.ts` et
+    // par lui seul. Sans elle, ce garde ne connaissait que l'ANCIEN libellé « … annulé », abandonné
+    // le 2026-08-18 au profit de « [abort] <action> interrompu : <raison> ». Le nouveau vocabulaire
+    // avait été propagé à `provider-failure-diagnosis.ts`, pas ici : un Stop du chat traversait donc
+    // la suppression et relançait un chantier payant sur un arrêt VOULU (mesuré le 2026-09-02,
+    // `runs/conv-14/kaizen-conv-13-est-bloquee-mtk5a9fg-workspace/RUN.md`).
+    //
+    // On DÉLÈGUE à `classifyProviderFailure` au lieu de recopier une expression, pour deux raisons :
+    // le marqueur reste défini à un seul endroit, et l'ORDRE y est déjà juste — un arrêt imposé par
+    // le devis porte lui aussi `[abort] … interrompu` mais se classe `budget`, donc n'est PAS un
+    // abandon ici et retombe sur le mur non actionnable, qui dit la vraie cause.
+    classifyProviderFailure(text) === 'cancelled' ||
     // Message exact d'un `AbortController` Node/undici.
     /\bthis operation was aborted\b/.test(text) ||
     /\bthe operation was aborted\b/.test(text) ||
