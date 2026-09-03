@@ -47,6 +47,7 @@ import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-finge
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { withClaudeAccountEnv } from '../claude-accounts'
 import { abortFailure } from './abort-diagnostic'
+import { describeExitCode } from '../provider-failure-diagnosis'
 
 /**
  * NETTOYAGE DE FIN D'APPEL — sans tenir la boucle principale.
@@ -1479,7 +1480,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (tailError && !errored) {
         errored = tailError instanceof Error ? tailError : new Error(String(tailError))
       }
-      if (code !== 0 && !errored) errored = new Error(`claude CLI exit ${code}`)
+      if (code !== 0 && !errored) {
+        // Un NTSTATUS decimal brut (« exit 1073807364 ») ne dit rien : on nomme le statut systeme
+        // quand il est connu, pour que le diagnostic de role puisse conseiller un relancement.
+        const abnormal = describeExitCode(code)
+        errored = new Error(`claude CLI exit ${code}${abnormal ? ` (${abnormal})` : ''}`)
+      }
       // Retries epuises sans reponse : le CLI sort en 0 sans event `result`, donc le tour passait
       // pour un succes VIDE et l'UI ne quittait jamais l'etat « reflexion ». C'est un ECHEC, nomme.
       if (!errored && !resultSeen && !text && lastRetry) {
