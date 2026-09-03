@@ -204,6 +204,17 @@
 }
 /* Le titre du bandeau est mélangé à du BLANC (l.712) : pensé pour du noir, il
    disparaît sur fond clair. On le mélange à du sombre à la place. */
+/* « Mémoire temporelle reconstruite » (ObservatoryView.tsx l.1024) : ce bandeau
+   garde ses couleurs de nuit, titre et compteur également pâles. */
+:root[data-theme='clair'] .observatory-semantic-timeline {
+  color: var(--text);
+}
+:root[data-theme='clair'] .observatory-semantic-timeline strong {
+  color: var(--text);
+}
+:root[data-theme='clair'] .observatory-semantic-timeline small {
+  color: var(--text-dim);
+}
 :root[data-theme='clair'] .observatory-group-head b {
   color: color-mix(in srgb, var(--zone-accent) 55%, #101625);
 }
