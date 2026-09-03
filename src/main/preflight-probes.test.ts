@@ -267,7 +267,9 @@ describe('runAppPreflight', () => {
    */
   it('sonde l’origine CONFIGUREE, jamais une adresse ecrite en dur', async () => {
     process.env.AMITEL_BRAIN_ORIGIN = 'http://127.0.0.1:8790'
-    const fetchMock = vi.fn(async () => new Response('ok'))
+    // Le mock DECLARE son argument : sans lui, `mock.calls` est un tuple vide et l'URL sondee
+    // — la seule chose que ce test verifie — serait inaccessible au controle de types.
+    const fetchMock = vi.fn(async (_entree: unknown) => new Response('ok'))
     globalThis.fetch = fetchMock as unknown as typeof fetch
     try {
       const { appPreflightProbes } = await import('./preflight-probes')
