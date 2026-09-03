@@ -196,6 +196,20 @@
    par-dessus : illisible. On densifie le fond et on force un texte sombre. */
 :root[data-theme='clair'] .observatory-view {
   --surface-selected: rgba(154, 111, 16, 0.14);
+  /* `--text-muted` n'est définie NULLE PART et n'a aucune valeur de secours
+     (ObservatoryView.css l.715) : le texte des bandeaux SORTANT / RÉPONSE n'avait
+     donc aucune couleur propre. Même famille de défaut que `--surface2` dans
+     SuggestionGrid.css. On la définit ici pour le mode clair. */
+  --text-muted: #4d5567;
+}
+/* Le titre du bandeau est mélangé à du BLANC (l.712) : pensé pour du noir, il
+   disparaît sur fond clair. On le mélange à du sombre à la place. */
+:root[data-theme='clair'] .observatory-group-head b {
+  color: color-mix(in srgb, var(--zone-accent) 55%, #101625);
+}
+:root[data-theme='clair'] .observatory-group {
+  border-color: color-mix(in srgb, var(--zone-accent) 45%, #ffffff);
+  background: color-mix(in srgb, #ffffff 92%, var(--zone-accent) 8%);
 }
 :root[data-theme='clair'] .observatory-conversations > button.is-active,
 :root[data-theme='clair'] .observatory-calls button.is-active,
