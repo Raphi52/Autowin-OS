@@ -254,3 +254,36 @@
   border-color: var(--line);
   color: var(--text);
 }
+
+/* ----------------------------------------------------------------------------
+   BARRES D'ACTIVITÉ (« 1 action terminée · run ») — signalées illisibles par
+   l'utilisateur le 2026-09-03.
+   Deux causes cumulées dans `cosmic-outline.css` : le titre est en `#dbe4ea`
+   (l.692) et le nom de l'outil en `#657481` (l.701) ; et le fond de chaque état
+   est un dégradé qui FINIT en `rgba(0, 0, 0, 0.3)` (l.575, 584, 593, 602), ce qui
+   pose un voile gris sale sur une page blanche. On garde la teinte de statut à
+   gauche — c'est elle qui informe — et on éteint la queue noire.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .cosmic-outline .activity-group-title {
+  color: var(--text);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group-tools {
+  color: var(--text-dim);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='done'] {
+  background: linear-gradient(100deg, rgba(78, 201, 165, 0.22) 0%, rgba(78, 201, 165, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='running'] {
+  background: linear-gradient(100deg, rgba(35, 150, 195, 0.22) 0%, rgba(35, 150, 195, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='interrupted'] {
+  background: linear-gradient(100deg, rgba(196, 132, 30, 0.22) 0%, rgba(196, 132, 30, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group.failed,
+:root[data-theme='clair'] .cosmic-outline .activity-group[data-state='failed'] {
+  background: linear-gradient(100deg, rgba(210, 60, 100, 0.2) 0%, rgba(210, 60, 100, 0.06) 45%, rgba(255, 255, 255, 0.9) 85%);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-group:hover {
+  background: rgba(15, 20, 35, 0.05);
+  border-color: var(--line-strong);
+}

@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
@@ -48,7 +49,20 @@ const CRLF = String.fromCharCode(13, 10)
  * Elle etait sous `process.cwd()`, donc les depots jetables et leurs bureaux isoles se creaient DANS
  * le depot que la suite mesure — collecte, watchers et menage s'y melangeaient.
  */
-const RACINE = mkdtempSync(join(tmpdir(), 'autowin-portee-'))
+/*
+ * LE CHEMIN EST RESOLU EN FORME LONGUE — sinon `vitest related` ne trouve JAMAIS rien ici.
+ *
+ * MESURE du 2026-09-03, dans ce depot : `os.tmpdir()` rend `C:\Users\EMMANU~1.HEU\...` (forme 8.3
+ * heritee de MS-DOS). Le bureau isole herite de ce chemin court, vitest resout la cible dessus,
+ * mais son graphe de modules est indexe sur le chemin REEL (`C:\Users\Emmanuel.heurtier\...`) : les
+ * deux ne se ressemblent pas, donc `vitest related <fichier> --run` rend « No test files found,
+ * exiting with code 0 ». Le produit bascule alors sur la suite complete — comportement voulu, mais
+ * qui rend AVEUGLE tout test cense prouver le ciblage : il passe quoi qu'on sabote.
+ *
+ * C'est probablement aussi ce que les commentaires de ce fichier appellent depuis le 2026-08-27
+ * une « intermittence de collecte » : elle depend de la machine, pas du hasard.
+ */
+const RACINE = realpathSync.native(mkdtempSync(join(tmpdir(), 'autowin-portee-')))
 
 /*
  * CHAQUE TEST A SA PROPRE CONVERSATION — cause NOMMEE de la non-determinance mesuree.
@@ -152,6 +166,56 @@ function depotDejaRouge(): { repo: string; git: (...a: string[]) => string } {
   git('config', 'commit.gpgsign', 'false')
   git('add', '-A')
   git('commit', '-q', '-m', 'base deja rouge')
+  return { repo, git }
+}
+
+/**
+ * LE MEME DEPOT, PLUS UNE FEUILLE DE STYLE ET SES DEUX FACONS D'ETRE TESTEE.
+ *
+ * C'est la mise en scene exacte mesuree dans ce depot le 2026-09-03 :
+ *   - `composant.test.ts` IMPORTE le style (par `composant.ts`) -> `vitest related style.css` le voit ;
+ *   - `style-lisible.test.ts` LIT le style avec `readFileSync` -> il est INVISIBLE pour le graphe
+ *     d'imports, et c'est pourtant lui qui juge la couleur.
+ * Les deux ensemble sont le point : une portee qui ne retient que le premier rend un vert qui n'a
+ * jamais regarde ce que l'edition a change.
+ */
+function depotAvecStyle(): { repo: string; git: (...a: string[]) => string } {
+  const { repo, git } = depotDejaRouge()
+  writeFileSync(
+    join(repo, 'style.css'),
+    ':root {' + SAUT + '  --fond: #000000;' + SAUT + '}' + SAUT,
+    'utf8'
+  )
+  writeFileSync(
+    join(repo, 'composant.ts'),
+    ["import './style.css'", 'export const composant = (): string => "fond"', ''].join(SAUT),
+    'utf8'
+  )
+  writeFileSync(
+    join(repo, 'composant.test.ts'),
+    [
+      "import { expect, it } from 'vitest'",
+      "import { composant } from './composant'",
+      "it('rend le nom du fond', () => expect(composant()).toBe('fond'))",
+      ''
+    ].join(SAUT),
+    'utf8'
+  )
+  writeFileSync(
+    join(repo, 'style-lisible.test.ts'),
+    [
+      "import { readFileSync } from 'node:fs'",
+      "import { expect, it } from 'vitest'",
+      "it('garde un fond sombre', () => {",
+      "  const css = readFileSync(new URL('./style.css', import.meta.url), 'utf8')",
+      "  expect(css).toContain('#000000')",
+      '})',
+      ''
+    ].join(SAUT),
+    'utf8'
+  )
+  git('add', '-A')
+  git('commit', '-q', '-m', 'feuille de style, testee par import ET par lecture')
   return { repo, git }
 }
 
@@ -619,6 +683,74 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
    * ENTREE QUI FAIT ECHOUER CE TEST SI LA GARDE EST FAUSSE : ce meme fichier cp1252, dont la zone
    * editee est pourtant PUREMENT ASCII — l'edition « reussissait » et detruisait le reste.
    */
+  /*
+   * DEFAUT VECU le 2026-09-03 (conv-21) : une correction de couleur dans `ChatView.css` faisait
+   * rejouer la SUITE ENTIERE — donc plafond de temps, donc edition refusee sans aucun verdict. La
+   * derivation de portee existait, mais `EXTENSIONS_DE_CODE` excluait les feuilles de style : plus
+   * rien a cibler, repli global, chronometre. Mesure hors modele du meme jour, dans ce depot :
+   *   npx vitest related src/renderer/src/components/ChatView.css --run -> 89 fichiers, 401 tests, 38 s.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST SI LA CORRECTION EST FAUSSE : laisser la feuille de style
+   * hors des extensions derivables. `verifie` redevient alors `npm run test:unit`, c'est-a-dire la
+   * suite entiere — exactement ce que l'utilisateur a paye en attente.
+   */
+  it('CIBLE une édition de feuille de style au lieu de rejouer toute la suite', async () => {
+    const { repo } = depotAvecStyle()
+
+    const result = await busSur(repo).exec(
+      'edit_file',
+      {
+        path: 'style.css',
+        oldText: ':root {',
+        newText: '/* commentaire sans effet */' + SAUT + ':root {'
+      },
+      conversationUnique()
+    )
+
+    expect((result as { error?: string }).error ?? 'pas d’erreur').toBe('pas d’erreur')
+    expect(result).toMatchObject({ ok: true })
+    const data = (result.data ?? {}) as { verifie?: string; portee?: string; testsJoues?: number }
+    // La preuve vient d'une portee CIBLEE, jamais de la suite complete.
+    expect(data.verifie ?? '').toContain('vitest related')
+    expect(data.verifie ?? '').not.toContain('npm run test:unit')
+    /*
+     * ET LA PORTEE COUVRE CE QUI JUGE VRAIMENT LE STYLE. Mesure du 2026-09-03 : les tests qui jugent
+     * le CSS ne l'IMPORTENT pas, ils le LISENT — `ChatView.style.test.ts`, `ui-system.test.ts`,
+     * `spinner-partout.test.ts` etaient tous ABSENTS de `vitest related ChatView.css`. Sans cette
+     * assertion, la version « on ajoute .css aux extensions de code » passerait, et publierait vert.
+     */
+    expect(data.verifie ?? '').toContain('style-lisible.test.ts')
+    expect(data.portee ?? '').toContain('nomment')
+    expect(data.testsJoues ?? 0).toBeGreaterThan(0)
+    // Le rouge preexistant HORS portee n'a pas ete rejoue, et il est reste intact.
+    expect(readFileSync(join(repo, 'etranger.test.ts'), 'utf8')).toContain('toBe(2)')
+  }, 300_000)
+
+  /*
+   * LE FAUX VERT QUE LA VOIE RAPIDE FABRIQUERAIT. Ici l'edition de style casse un test qui LIT la
+   * feuille sans l'importer : il est hors du graphe d'imports, donc invisible pour `vitest related`
+   * seul. Le fixture contient AUSSI un test qui, lui, importe le style : la portee n'est donc pas
+   * vide, le repli « 0 test joue -> suite complete » ne se declenche pas, et rien ne rattrape la
+   * regression a part une portee correctement elargie.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST SI LA CORRECTION EST FAUSSE : ajouter `.css` aux
+   * extensions de code sans chercher les tests qui NOMMENT la feuille. `#ffffff` est alors publie.
+   */
+  it('REFUSE une édition de style qui casse un test lisant la feuille sans l’importer', async () => {
+    const { repo, git } = depotAvecStyle()
+
+    const result = await busSur(repo).exec(
+      'edit_file',
+      { path: 'style.css', oldText: '#000000', newText: '#ffffff' },
+      conversationUnique()
+    )
+
+    expect(result).toMatchObject({ ok: false })
+    // La base reste INTACTE : la regression de couleur n'a pas ete publiee.
+    expect(readFileSync(join(repo, 'style.css'), 'utf8')).toContain('#000000')
+    expect(git('status', '--porcelain')).toBe('')
+  }, 300_000)
+
   it('refuse une édition sur un fichier non UTF-8, sans toucher un seul octet', async () => {
     const { repo, git } = depotDejaRouge()
     // `é` = 0xE9 en cp1252 : un octet qu'aucune lecture utf8 ne sait rendre.
