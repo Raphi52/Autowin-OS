@@ -176,8 +176,29 @@
     0 2px 5px rgba(18, 24, 40, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
+/* Les icônes sont les emojis 🌑 (disque noir) et 🌌 (rectangle sombre) : rendus
+   à égalité, ils forment un « carré » parasite à côté du pouce rond — constat
+   utilisateur du 2026-09-03. En clair, l'INACTIVE s'efface presque entièrement,
+   l'ACTIVE reste nette : l'œil ne voit qu'un seul symbole, celui du mode courant. */
 :root[data-theme='clair'] .graph-mode-switch__icon {
-  filter: grayscale(0.35) brightness(0.9);
+  filter: grayscale(1) brightness(1.35);
+  opacity: 0.28;
+}
+:root[data-theme='clair'] .graph-mode-switch.is-galaxy .graph-mode-switch__icon:last-of-type,
+:root[data-theme='clair'] .graph-mode-switch:not(.is-galaxy) .graph-mode-switch__icon:first-of-type {
+  filter: none;
+  opacity: 1;
+}
+/* Le pouce manquait de contraste : blanc sur gris très clair. Il devient un
+   disque BLANC cerclé de sombre, franchement détaché de sa piste. */
+:root[data-theme='clair'] .graph-mode-switch__track {
+  background: linear-gradient(180deg, #dfe4ec, #ccd4df);
+  border-color: rgba(18, 24, 40, 0.34);
+}
+:root[data-theme='clair'] .graph-mode-switch__thumb {
+  background: #ffffff;
+  border: 1px solid rgba(18, 24, 40, 0.45);
+  box-shadow: 0 1px 3px rgba(18, 24, 40, 0.35);
 }
 
 .graph-mode-switch.is-galaxy .graph-mode-switch__track {
