@@ -96,6 +96,27 @@ function IconeMicroTrait(): React.JSX.Element {
   )
 }
 
+/** ENVOYER : une flèche dessinée d'un trait, même graisse que le micro et l'arrêt. */
+function IconeEnvoyer(): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 19V6" />
+      <path d="m6 11.5 6-6 6 6" />
+    </svg>
+  )
+}
+
 /** Le carré d'arrêt : même trait, même graisse que le micro. */
 function IconeArret(): React.JSX.Element {
   return (
@@ -508,6 +529,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 <IconeMicroTrait />
               )}
             </button>
+            {props.metaNode}
             {props.stopNode}
             <button
               className={`btn-accent btn composer-send${canResume ? ' is-resume' : ''}`}
@@ -538,7 +560,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                     : 'Envoyer le message'
               }
             >
-              {canResume ? '↻ Reprendre' : props.busy ? '🧭 Orienter' : 'Envoyer'}
+              <span className="composer-btn-glyph" aria-hidden="true">
+                {canResume ? '↻' : <IconeEnvoyer />}
+              </span>
+              <span className="composer-btn-label">
+                {canResume ? 'Reprendre' : props.busy ? 'Orienter' : 'Envoyer'}
+              </span>
             </button>
           </div>
           {dicteeErreur ? (
@@ -550,7 +577,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               {dicteeErreur}
             </div>
           ) : null}
-          {props.metaNode}
         </div>
       </div>
     )

@@ -3771,3 +3771,82 @@ ol.md-list li {
   font-size: 11px;
   opacity: 0.75;
 }
+
+/* BARRE D'OUTILS RONDE ET MINIMALISTE (demande utilisateur conv-199) — la 2e rangée porte,
+   dans l'ordre : trombone, micro, puis la ligne modèle/effort/prix/quota (remontée depuis
+   sa propre ligne), et Envoyer/Orienter/Stop ancrés à droite. Tous les boutons sont des
+   pastilles rondes de 32px, icône seule ; le libellé reste dans le DOM (accessibilité + tests)
+   mais n'est plus peint. */
+.composer-btn-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.composer-btn-glyph {
+  display: block;
+  font-size: 14px;
+  line-height: 1;
+}
+.composer-input-row > .attachment-button,
+.composer-input-row > .composer-dictee,
+.composer-input-row > .composer-stop,
+.composer-input-row > .composer-send,
+.cosmic-outline .composer-input-row > .attachment-button,
+.cosmic-outline .composer-input-row > .composer-dictee,
+.cosmic-outline .composer-input-row > .composer-stop,
+.cosmic-outline .composer-input-row > .composer-send {
+  display: inline-flex;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  padding: 0;
+  border-radius: 999px;
+  box-shadow: none;
+  font-size: 14px;
+}
+.composer-input-row > .attachment-button .attachment-icon,
+.cosmic-outline .composer-input-row > .attachment-button .attachment-icon {
+  width: 16px;
+  height: 16px;
+}
+.composer-input-row > .composer-dictee svg {
+  width: 16px;
+  height: 16px;
+}
+/* La ligne modèle/prix/quota vient se poser sur la rangée des boutons. */
+.composer-input-row > .composer-meta,
+.cosmic-outline .composer-input-row > .composer-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 0 4px;
+}
+.composer-input-row > .composer-meta .composer-hint {
+  display: none;
+}
+
+/* Le rond des quotas est un bouton de la rangee comme les autres : meme diametre. */
+.composer-input-row .model-quota-trigger {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  flex: none;
+}
+/* La depense du fil, remontee dans la barre du haut : elle s'aligne sur la ligne technique. */
+.chat-runtime .conv-cost {
+  display: inline-flex;
+  align-items: center;
+}

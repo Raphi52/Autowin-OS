@@ -4523,6 +4523,8 @@ export function ChatView({
                     {activeId ?? 'aucune conversation'}
                     {busy && ' · en cours'}
                   </span>
+                  {/* La depense du fil vit dans la barre du haut, plus dans la zone de saisie. */}
+                  <ConversationCostIndicator conversationId={activeId ?? undefined} busy={busy} />
                 </div>
               </div>
             </div>
@@ -5027,6 +5029,13 @@ export function ChatView({
             }
             leadingNode={
               <>
+                {/* Le rond des quotas ouvre la rangee d'outils, tout a gauche (choix utilisateur). */}
+                <ModelQuotaIndicator
+                  provider={runtimeIdentity?.provider}
+                  contextGauge={activeId != null ? contextGauges[activeId] : undefined}
+                  busy={busy}
+                  onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
+                />
                 <button
                   type="button"
                   className="attachment-button"
@@ -5085,7 +5094,12 @@ export function ChatView({
                   aria-label="Arrêter la réponse"
                   title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
                 >
-                  {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : '■ Stop'}
+                  <span className="composer-btn-glyph" aria-hidden="true">
+                    ■
+                  </span>
+                  <span className="composer-btn-label">
+                    {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : 'Stop'}
+                  </span>
                 </button>
               ) : null
             }
@@ -5103,13 +5117,6 @@ export function ChatView({
                     pending={modelChangePending}
                     error={modelChangeError}
                     onSelect={(option) => void changeOrchestratorModel(option)}
-                  />
-                  <ConversationCostIndicator conversationId={activeId ?? undefined} busy={busy} />
-                  <ModelQuotaIndicator
-                    provider={runtimeIdentity?.provider}
-                    contextGauge={activeId != null ? contextGauges[activeId] : undefined}
-                    busy={busy}
-                    onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
                   />
                 </div>
               </div>
