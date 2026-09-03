@@ -17,6 +17,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
+import { lireDuels, cheminJournal } from './arena-duel.mjs'
 
 const BRAS = ['a', 'b', 'c', 'x']
 /** Mots qui marquent un cas HORS chemin heureux dans le libelle d'une assertion. */
@@ -66,7 +67,7 @@ function scriptLancement(bench) {
     : null
 }
 
-export function verifierProtocole({ run, bench }) {
+export function verifierProtocole({ run, bench, racineDuels = process.cwd() }) {
   const md = lire(run)
   if (md === null) return { erreur: `RUN.md introuvable : ${run}` }
   const points = []
@@ -288,6 +289,35 @@ export function verifierProtocole({ run, bench }) {
       : true
   })
 
+  /*
+   * P15 — le banc est-il JOURNALISE ? Un tournoi qui ne laisse pas ses quatre lignes dans
+   * `arena-duels.jsonl` fait repayer le meme duel au banc suivant : les perdants y sont
+   * re-testes comme s'ils etaient neufs (demande du 2026-09-03, conv-175). On exige les QUATRE
+   * bras, pas seulement le gagnant — c'est le perdant qui evite le prochain essai inutile.
+   * Rattachement au banc : d'abord le champ `banc` de la ligne (compare en chemin resolu), sinon
+   * l'enonce de `tache.txt`. Un verdict `casse` compte comme journalise : le bras a bien ete tranche.
+   */
+  ajoute('P15', 'Les 4 bras ont leur ligne dans arena-duels.jsonl', () => {
+    const journal = cheminJournal(racineDuels)
+    const { duels } = lireDuels({}, racineDuels)
+    if (!duels.length) return `journal vide ou absent (${journal}) : aucun bras journalise`
+    const memeBanc = (d) => {
+      if (typeof d.banc === 'string' && d.banc.trim())
+        return path.resolve(d.banc) === path.resolve(bench)
+      return false
+    }
+    const enonce = (lire(path.join(bench, 'tache.txt')) ?? '').trim()
+    const parEnonce = (d) => enonce !== '' && String(d.tache ?? '').trim() === enonce
+    const lignes = duels.filter((d) => memeBanc(d) || parEnonce(d))
+    if (!lignes.length)
+      return `aucune ligne rattachee a ce banc dans ${journal} (ni champ \`banc\`, ni enonce de tache.txt)`
+    const vus = new Set(lignes.map((d) => String(d.bras ?? '').toLowerCase()).filter(Boolean))
+    const manque = BRAS.filter((b) => !vus.has(b))
+    return manque.length
+      ? `bras non journalise(s) : ${manque.join(', ')} — le banc suivant les re-testera`
+      : true
+  })
+
   const jugements = [
     'X est-il VRAIMENT une premisse cassee, ou une variante de B ? (lecture humaine des workflows)',
     'Un bras a-t-il reformule la tache malgre un enonce identique ? (lecture des livrables)',
@@ -307,11 +337,11 @@ if (estCLI) {
   const bench = arg('--bench')
   if (!run || !bench) {
     console.error(
-      'Usage : node scripts/arena-protocole-check.mjs --run <RUN.md> --bench <dossier> [--json]'
+      'Usage : node scripts/arena-protocole-check.mjs --run <RUN.md> --bench <dossier> [--duels <racine du depot>] [--json]'
     )
     process.exit(2)
   }
-  const res = verifierProtocole({ run, bench })
+  const res = verifierProtocole({ run, bench, racineDuels: arg('--duels') ?? process.cwd() })
   if (res.erreur) {
     console.error(res.erreur)
     process.exit(2)
