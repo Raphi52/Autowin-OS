@@ -1472,6 +1472,30 @@ export class AgentPilot {
        * Injectée une seule fois par index : `grantRecoveryIteration` peut relever le cap APRÈS,
        * auquel cas la nouvelle dernière itération reçoit sa propre consigne.
        */
+      /**
+       * BUDGET DU TOUR ANNONCE A MI-PARCOURS, PAS SEULEMENT AU DERNIER APPEL.
+       *
+       * Le modele n'apprenait son cap qu'a `iterationLimit - 1` : a cet instant il ne peut plus
+       * changer de methode, seulement CONSTATER. Mesure le 2026-09-03 (conv-10) : douze iterations
+       * depensees une par une en lecture (un `read_file` par appel), la seule ecriture tentee au
+       * douzieme — et refusee. L'utilisateur a recu un diagnostic la ou il demandait un correctif,
+       * alors que le levier existait des le premier appel : plusieurs commandes tiennent dans UN
+       * SEUL message et ne coutent qu'un appel.
+       *
+       * On annonce donc le RESTE a mi-parcours, en NOMMANT ce levier. Jamais sur la derniere
+       * iteration, qui porte deja sa propre consigne de cloture. Si `grantRecoveryIteration` releve
+       * le cap ensuite, la nouvelle moitie recoit sa propre annonce : le budget a change, le modele
+       * doit le savoir.
+       */
+      if (i > 0 && i < iterationLimit - 1 && i === Math.floor(iterationLimit / 2)) {
+        convo.push(
+          `SYSTÈME — BUDGET DU TOUR : appel ${i + 1} sur ${iterationLimit}, il en reste ` +
+            `${iterationLimit - i - 1}. Si la tâche demandée n'est pas encore ENGAGÉE, change de ` +
+            'méthode maintenant : plusieurs commandes tiennent dans UN SEUL message et ne coûtent ' +
+            "qu'un appel — groupe tes lectures, ou délègue-les. Au dernier appel il ne restera plus " +
+            'qu’à constater ce qui n’a pas été fait.'
+        )
+      }
       if (i === iterationLimit - 1 && consigneClotureInjectee !== i) {
         consigneClotureInjectee = i
         convo.push(
