@@ -58,7 +58,7 @@ function props(over: Partial<WorkflowsPanelProps> = {}): WorkflowsPanelProps {
     setOpenTrace: vi.fn(),
     requestDeleteRun: vi.fn(),
     openTrace: steps,
-    runDetailTab: 'progress',
+    runDetailTab: 'trace',
     setRunDetailTab: vi.fn(),
     liveRunCardRef: { current: null },
     messages: [],
@@ -66,7 +66,12 @@ function props(over: Partial<WorkflowsPanelProps> = {}): WorkflowsPanelProps {
   }
 }
 
-describe('WorkflowsPanel — onglet Avancée', () => {
+/**
+ * Choix utilisateur du 03/09 : l'onglet « Avancée » est RETIRÉ du détail d'un RUN. Ce test garde
+ * la suppression — il échoue si l'onglet revient — et vérifie que les deux onglets restants
+ * fonctionnent toujours.
+ */
+describe('WorkflowsPanel — onglets du détail d’un RUN', () => {
   let container: HTMLDivElement
   let root: Root
   beforeEach(() => {
@@ -79,11 +84,6 @@ describe('WorkflowsPanel — onglet Avancée', () => {
     container.remove()
   })
 
-  /**
-   * Le detail d'un RUN vit sous l'onglet « Runs » depuis le retour des trois onglets
-   * (Graph / Runs / Logs) : ces tests doivent y naviguer avant de lire. Aucune assertion relachee,
-   * une etape de navigation ajoutee.
-   */
   function ouvrirRuns(): void {
     const onglet = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')
@@ -92,19 +92,27 @@ describe('WorkflowsPanel — onglet Avancée', () => {
     act(() => onglet.click())
   }
 
-  it('propose l’onglet Avancée et y rend le suivi du run', () => {
+  function onglets(): (string | null)[] {
+    return Array.from(container.querySelectorAll('.run-detail-tab')).map((t) => t.textContent)
+  }
+
+  it('n’offre plus « Avancée » : seuls le fil des sous-agents et RUN.md restent', () => {
     act(() => root.render(<WorkflowsPanel {...props()} />))
     ouvrirRuns()
-    const tabs = Array.from(container.querySelectorAll('.run-detail-tab')).map((t) => t.textContent)
-    expect(tabs).toContain('Avancée')
-    expect(container.querySelectorAll('[data-testid="run-progress-step"]')).toHaveLength(1)
+    expect(onglets()).toEqual(['Fil des sous-agents', 'RUN.md'])
+    expect(onglets()).not.toContain('Avancée')
+    expect(container.querySelector('[data-testid="run-progress-step"]')).toBeNull()
+  })
+
+  it('rend le fil des sous-agents sur l’onglet par défaut', () => {
+    act(() => root.render(<WorkflowsPanel {...props()} />))
+    ouvrirRuns()
     expect(container.textContent).toContain('⛔ Bloqué : dépendance absente')
   })
 
-  it('sur l’onglet RUN.md, le suivi cède la place au fichier rendu', () => {
+  it('rend le fichier produit sur l’onglet RUN.md', () => {
     act(() => root.render(<WorkflowsPanel {...props({ runDetailTab: 'runmd' })} />))
     ouvrirRuns()
-    expect(container.querySelector('[data-testid="run-progress-step"]')).toBeNull()
     expect(container.querySelector('[data-testid="run-summary"]')).not.toBeNull()
   })
 })

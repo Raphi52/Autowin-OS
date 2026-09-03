@@ -630,7 +630,7 @@ export function ChatView({
   const [openRun, setOpenRun] = useState<{ path: string; content: string } | null>(null)
   const [openTrace, setOpenTrace] = useState<OrchStep[] | null>(null)
   // Détail d'un run : bascule entre le fil des sous-agents (trace) et le RUN.md brut.
-  const [runDetailTab, setRunDetailTab] = useState<RunDetailTab>('progress')
+  const [runDetailTab, setRunDetailTab] = useState<RunDetailTab>('trace')
   const [liveRuns, setLiveRuns] = useState<Record<string, ScopedLiveRun<OrchStep>>>({})
   // Carte de l'orchestration EN COURS dans le panneau Workflows : cible du clic sur
   // l'indicateur « action en cours » d'un message (ouvre le panneau + cadre le run/step actif).
