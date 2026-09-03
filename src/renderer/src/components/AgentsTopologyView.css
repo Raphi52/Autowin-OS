@@ -667,6 +667,16 @@
   border-color: var(--line);
   color: var(--text-dim);
 }
+
+/* Le COMPTEUR de slots est un `<b>` NU dans l'en-tête du panneau
+   (AgentsTopologyView.tsx l.367) : aucune classe, donc aucune couleur propre —
+   il héritait du sombre et disparaissait sur fond clair. Signalé le 2026-09-03
+   (« il reste le numéro »). On le cible par sa position dans l'en-tête. */
+:root[data-theme='clair'] .topology-panel > header > b {
+  color: var(--text);
+  background: rgba(15, 20, 35, 0.05);
+  border-color: var(--line);
+}
 :root[data-theme='clair'] .theme-serious .topology-assign-button:hover:not(:disabled) {
   border-color: rgba(154, 111, 16, 0.6);
   color: #7a5a10;
