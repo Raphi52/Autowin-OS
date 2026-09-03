@@ -26,21 +26,21 @@
   border: 1px solid transparent;
   border-radius: 999px;
   padding: 7px 12px;
-  color: var(--text-secondary);
+  color: var(--text-dim);
   background: transparent;
   cursor: pointer;
 }
 
 .domain-tabs button:hover,
 .domain-tabs button.is-active {
-  color: var(--text-primary);
+  color: var(--text);
   border-color: var(--accent-soft);
   background: var(--surface-card);
 }
 
 .domain-tabs button.is-active {
   /* Sélection VISIBLE, calquée sur le menu de gauche (.nav-item.active) : fond rose + bord doré. */
-  color: var(--text-primary);
+  color: var(--text);
   background: rgba(239, 63, 145, 0.09);
   border-color: var(--gold);
   box-shadow: none;
@@ -73,18 +73,18 @@
 }
 
 .domain-eyebrow {
-  color: var(--text-secondary);
+  color: var(--text-dim);
   font-size: 0.72rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .domain-ok {
-  color: var(--success);
+  color: var(--ok);
 }
 
 .domain-warning {
-  color: var(--warning);
+  color: var(--warn);
 }
 
 .domain-badge-alert {
@@ -92,10 +92,10 @@
   place-items: center;
   width: 17px;
   height: 17px;
-  border: 1px solid color-mix(in srgb, var(--danger) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--err) 70%, transparent);
   border-radius: 50%;
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 14%, transparent);
   font-size: 0.68rem;
   font-weight: 800;
   line-height: 1;
@@ -135,14 +135,14 @@
   gap: 8px 12px;
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface-card);
 }
 
 .settings-providers-list strong {
   overflow: hidden;
-  color: var(--text-primary);
+  color: var(--text);
   font-size: 0.9rem;
   text-overflow: ellipsis;
   text-transform: capitalize;
@@ -152,9 +152,9 @@
 .settings-providers-list li > span:first-of-type {
   justify-self: end;
   padding: 4px 8px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line);
   border-radius: 999px;
-  color: var(--text-secondary);
+  color: var(--text-dim);
   background: var(--surface-panel);
   font-size: 0.72rem;
   white-space: nowrap;
@@ -162,7 +162,7 @@
 
 .settings-providers-list li > span:nth-of-type(2) {
   grid-column: 1 / -1;
-  color: var(--text-secondary);
+  color: var(--text-dim);
   font-size: 0.76rem;
   line-height: 1.45;
 }
@@ -184,16 +184,16 @@
   gap: 10px;
   justify-content: space-between;
   padding: 10px 12px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--line);
   border-radius: 10px;
 }
 
 .settings-preflight-list li.is-ok strong {
-  color: var(--success);
+  color: var(--ok);
 }
 
 .settings-preflight-list li.is-ko strong {
-  color: var(--danger);
+  color: var(--err);
 }
 
 /* Une anomalie de la section, visible depuis l'onglet VOISIN : sans elle, un provider expiré ou un

@@ -499,7 +499,7 @@
   border: 1px solid var(--line);
   border-radius: var(--r1);
   background: #000;
-  color: var(--fg);
+  color: var(--text);
   font: inherit;
 }
 .conv-menu-input:focus-visible {
