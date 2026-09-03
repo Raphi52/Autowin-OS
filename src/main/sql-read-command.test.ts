@@ -101,6 +101,10 @@ function lancer(
   const fichier = fakeFile(contenuFichier)
   const resultat = runSqlRead(cible, {
     spawnFn: spawnFn as never,
+    // Variante de sqlcmd INJECTÉE : sans cela, les drapeaux dépendraient du binaire réellement
+    // installé sur la machine de test. Par défaut on simule le sqlcmd HISTORIQUE (celui dont
+    // l'aide annonce `-f <codepage>`), qui est le contrat historique de ces tests.
+    spawnSyncFn: (() => ({ stdout: '  -f <codepage>\n  -o <fichier>\n', stderr: '' })) as never,
     sqlcmdPath: 'sqlcmd.exe',
     catalog: CATALOGUE,
     outputFile: fichier,
