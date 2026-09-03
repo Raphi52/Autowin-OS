@@ -3742,6 +3742,36 @@ ol.md-list li {
   transition: height 90ms linear;
 }
 
+/* VOLUME DE CAPTURE : un curseur fin, juste à droite de la jauge, visible seulement pendant la
+   dictée — il doit se régler en parlant, sans quitter la barre de saisie. */
+.composer-dictee-gain {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 62px;
+  height: 14px;
+  margin: 0 2px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.composer-dictee-gain::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.composer-dictee-gain::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: -4px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ff8a96;
+}
+.composer-dictee-gain:focus-visible {
+  outline: 1px solid rgba(255, 138, 150, 0.6);
+  outline-offset: 2px;
+}
+
 /* La raison d'un micro barré doit se LIRE sans survoler le bouton. */
 .composer-dictee-message {
   margin: 4px 2px 0;
