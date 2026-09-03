@@ -91,7 +91,9 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
       ]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    act(() => container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click())
+    act(() =>
+      container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
+    )
     const prompts = container.querySelectorAll('[data-testid="activity-step-prompt"]')
     // UNE seule ligne porte un prompt : la phase `scout` n'en a pas recu, elle ne promet donc rien.
     expect(prompts).toHaveLength(1)
@@ -154,7 +156,13 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
     expect(noterPromptDePipeline(parts, { step: 'exec', detail: 'phase build' })).toBe(parts)
     // Une orchestration DEJA close ne bouge plus.
     const close: ChatPart[] = [
-      { kind: 'action', name: 'orchestrate', ok: true, args: { task: 't' }, pipeline: [{ phase: 'build' }] } as ChatPart
+      {
+        kind: 'action',
+        name: 'orchestrate',
+        ok: true,
+        args: { task: 't' },
+        pipeline: [{ phase: 'build' }]
+      } as ChatPart
     ]
     expect(
       noterPromptDePipeline(close, { step: 'exec', detail: 'phase build', prompt: enveloppe('X') })
@@ -186,11 +194,13 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
     expect(action.pipeline).toHaveLength(1)
     expect(action.pipeline![0].prompt?.system).toBe('SYSTEME DEUX')
     // Rien de nouveau a dire => meme reference, pas de re-rendu du fil.
-    expect(noterPromptDePipeline(second, {
-      step: 'exec',
-      execution: { phase: 'build' },
-      model: 'opus-4',
-      prompt: enveloppe('DEUX')
-    })).toBe(second)
+    expect(
+      noterPromptDePipeline(second, {
+        step: 'exec',
+        execution: { phase: 'build' },
+        model: 'opus-4',
+        prompt: enveloppe('DEUX')
+      })
+    ).toBe(second)
   })
 })
