@@ -49,9 +49,9 @@ KEPT/KILLED : elements grafted in, elements rejected
 
 ### Inline mockup recipes (host chat, no Preview) — MANDATORY
 The inline renderer has NO emoji font and NO icon font. Every mockup icon/button MUST be built from these recipes, never from a pasted glyph:
-- **Icons**: NEVER `📎 🎤 ↑ ◍ ◼ ⏎` as drawn objects. Use a lowercase monospace WORD (`fichier`, `micro`, `envoyer`) or an inline `<svg>` with `stroke="currentColor"`. Keyboard keys stay as text only inside a caption line, never as a button face.
-- **Round/pill button**: centring by `inline-grid`+`place-items` is unreliable inside a flex row. Use exactly `display:flex;align-items:center;justify-content:center;flex:0 0 auto;width:32px;height:32px;line-height:1;border-radius:50%` and put an `<svg>` (not a character) inside.
-- **Self-check before showing**: re-read your own HTML and confirm zero emoji codepoints and zero character used as a button face. A mockup whose button renders wrong invalidates the whole round — the user judges the drawing, not the intent.
+- **Icons**: NEVER emoji (paperclip, mic) nor `↑ ◍ ◼ ⏎ ›` as a drawn OBJECT. Use a lowercase monospace WORD (`fichier`, `micro`, `envoyer`) or an inline `<svg>` with `stroke="currentColor"`. Keyboard keys stay text inside a caption line, never a button face.
+- **Round/pill button**: centring via `inline-grid`+`place-items` is unreliable inside a flex row (the glyph drifts to a corner). Use exactly `display:flex;align-items:center;justify-content:center;flex:0 0 auto;width:32px;height:32px;line-height:1;border-radius:50%` with an `<svg>` inside.
+- **Self-check before showing**: re-read your own HTML — zero emoji codepoint, zero character used as a button face. A mockup whose button renders wrong invalidates the WHOLE round: the user judges the drawing, not the intent.
 
 Note: `visualize.show_widget` renders INLINE in chat (presenting to user) — no PNG on disk, NOT a substitute for the READ self-check; use Claude Preview for that.
 
@@ -74,6 +74,7 @@ The loop does NOT end when a round is presented. As long as the user has NOT exp
 - Do NOT reimplement `frontend-design` (per-variant quality) nor the `Artifact` tool — ORCHESTRATE them.
 - Do NOT converge at random: respect the taste guardrails from memory.
 - Do NOT show a mockup not CAPTURED+READ (dead binding/layout is invisible otherwise).
+- Do NOT paste emoji or symbol characters as icons/buttons in an inline mockup — the host has no emoji font, they render as unreadable monochrome shapes or drift out of their circle (see Inline mockup recipes).
 - Do NOT sketch a live app's surface from imagination or at reduced scale: READ its real style file (colors, sizes, spacing) and `desktop_observe` it FIRST — mockups drawn blind are the #1 source of "propositions douteuses".
 - Do NOT declare "done" without explicit user approval.
 - Do NOT stop proposing batches of 3 while no implementation order has been given — a reply without 3 new proposals is a failure of this skill.
