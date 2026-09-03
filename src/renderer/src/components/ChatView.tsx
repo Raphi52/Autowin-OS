@@ -4432,8 +4432,9 @@ export function ChatView({
             <div className="row gap2" style={{ alignItems: 'center', minWidth: 0 }}>
               <span className="chat-head-signal" aria-hidden="true" />
               <div className="col" style={{ gap: 1, minWidth: 0 }}>
-                <span className="chat-head-kicker">Conversation active</span>
-                <b className="chat-conv-title">{active ? active.title : 'Nouvelle conversation'}</b>
+                <span className="chat-head-kicker">
+                  {active ? active.title : 'Nouvelle conversation'}
+                </span>
                 <div className="chat-runtime" data-testid="chat-runtime-identity">
                   <span
                     className={`chat-runtime-provider is-${runtimeIdentity?.provider ?? 'loading'}`}
