@@ -57,6 +57,9 @@
   gap: 20px;
   /* Etait `0 18px` : le titre montait de 9 px par rapport aux autres vues. */
   padding: var(--view-head-pad, 18px 20px 0);
+  /* Le retrait partage finit a 0 en bas : la derniere ligne du titre collait alors la barre de
+     separation. Ici l'en-tete porte une description, il lui faut ce souffle. */
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--container-border);
   background: transparent;
 }
