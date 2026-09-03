@@ -26,7 +26,9 @@
   min-height: 0;
   overflow: hidden;
   padding: 16px 18px;
-  border: 1px solid color-mix(in srgb, var(--rose) 34%, var(--container-border));
+  /* Aucune bordure autour du cadre de page (choix utilisateur) : comme la vue Chat, seule la
+     ligne du haut (`--lisere-haut`, en couche de fond) marque le conteneur. */
+  border: 0;
   border-radius: var(--container-radius-page);
   /* Le lisere lui-meme est un TOKEN (`--lisere-haut`, plus bas) : la vue Chat en a besoin sur ses
      trois panneaux, dont deux ont leur propre fond. Une couche de fond se compose ; une regle

@@ -35,6 +35,7 @@ import {
   hydrateStoredAssistant,
   isRunRequestCurrent,
   doitSuivreLeBas,
+  doitSuivreLeRoutage,
   compenserRetrecissementDuFil,
   doitIgnorerDefilementDeBascule,
   isChatNearBottom,
@@ -1232,6 +1233,12 @@ export function ChatView({
    * Un nouvel envoi BTW, lui, se range derriere les BTW deja presents (ordre d'arrivee conserve).
    */
   function enqueueMessage(id: string, text: string, mode?: QueuedDirective['mode']): void {
+    // Un texte qui arrive en file APRES un Stop est un geste explicite de l'utilisateur : il LEVE le
+    // gel one-shot pose par Stop. Sans cette ligne, « stop puis j'ecris dans la foulee » perdait le
+    // message — le tour n'etait pas encore retombe, l'injection echouait, la file recevait le texte
+    // et la transition busy→false l'avalait au titre du gel (constate le 03/09). Le gel ne doit
+    // arreter QUE la relance automatique de ce qui restait en file, jamais une nouvelle demande.
+    stoppedQueueDrainRef.current.delete(id)
     const current = queueRef.current.get(id) ?? []
     const entry = { id: nextQueueEntryIdRef.current++, text, mode }
     if (mode === 'btw') {
@@ -1935,9 +1942,9 @@ export function ChatView({
    * « Traiter » DELEGUE, au lieu d'ouvrir une liste.
    *
    * L'utilisateur a clique, lu les quatorze lignes, et demande « et apres je fais quoi avec ca ? ».
-   * La liste informait sans permettre d'agir : elle deplacait le probleme sur lui. Le bouton depose
-   * desormais un prompt dans une conversation NEUVE, sans l'envoyer -- meme regle que la vue Tickets,
-   * pour la meme raison : preparer un prompt qu'il ne voit pas serait inutile.
+   * La liste informait sans permettre d'agir : elle deplacait le probleme sur lui. Le bouton ecrit
+   * desormais le prompt dans une conversation NEUVE et l'ENVOIE : l'utilisateur a deja decide en
+   * cliquant, et le tri des travaux non publies est une lecture qui ne supprime rien.
    *
    * La liste reste accessible par « Voir la liste » : elle sert a LIRE un diff, et supprimer cet
    * acces aurait ete une perte silencieuse.
@@ -1954,7 +1961,15 @@ export function ChatView({
     if (!prompt) return
     newConv()
     setDraftInput(NEW_DRAFT_KEY, prompt)
-    requestAnimationFrame(() => composerRef.current?.focus())
+    /*
+     * ENVOYE, pas depose. Le geste s'arretait au brouillon « l'utilisateur lit et decide » : il
+     * n'avait plus rien a decider — il a clique « Traiter », le prompt est un `/salvage` que lui
+     * seul pouvait envoyer, et il l'a envoye a la main a chaque fois. Demande du 2026-09-03 : « je
+     * passe mon temps a envoyer des salvages alors que ca pourrait etre fait tout seul ». Le tri est
+     * une LECTURE qui juge par contenu et ne supprime rien sans SHA consigne : sur, borne, reversible.
+     * Le prompt reste ECRIT dans le fil, donc visible et relisible.
+     */
+    requestAnimationFrame(() => void send(prompt))
   }
 
   /**
@@ -3140,7 +3155,37 @@ export function ChatView({
           value,
           outgoingAttachments.map((attachment) => attachment.name)
         )
-        if (route.routed && route.conversationId !== sourceId) {
+        /*
+         * ON NE SUIT LE ROUTAGE QUE SI ON PEUT Y EMMENER L'UTILISATEUR.
+         *
+         * Defaut vecu le 2026-09-03 (conv-171) : « je crois que la conv s'est pas cree et que ca a
+         * laisse le message ici ». La bascule d'ecran etait CONDITIONNELLE, mais l'envoi vers le fil
+         * neuf ne l'etait pas : des que le brouillon ou la selection avaient bouge pendant l'appel au
+         * routeur, le message partait dans un fil que l'utilisateur ne voyait jamais. Constat mesure :
+         * conv-170 a recu un numero (compteur passe a 179), aucun message, et n'existait plus ensuite.
+         *
+         * La decision est donc prise AVANT tout deplacement. Si on ne peut pas basculer, on ne suit
+         * pas : le message reste dans le fil ou il a ete ecrit, et le fil neuf cree pour rien est
+         * retire — sinon il tapisserait la liste de fils vides.
+         */
+        const suivreLeRoutage = doitSuivreLeRoutage({
+          routed: route.routed,
+          cibleId: route.conversationId,
+          sourceId,
+          filAffiche: activeRef.current,
+          cleBrouillonEnvoi: sendDraftKey,
+          cleBrouillonActuelle: composerDraftKeyRef.current,
+          generationSelectionEnvoi: sendSelectionGeneration,
+          generationSelectionActuelle: composerSelectionGenerationRef.current
+        })
+        if (route.routed && route.conversationId !== sourceId && !suivreLeRoutage) {
+          // Optionnel a l'appel : le retrait du fil inutile ne doit JAMAIS empecher le message de
+          // partir. Une API amputee ferait perdre le nettoyage, pas le texte de l'utilisateur.
+          void window.api
+            .conversationsRemove?.(route.conversationId)
+            ?.catch((error: unknown) => traceSilentFailure('routage-fil-abandonne', error))
+        }
+        if (suivreLeRoutage) {
           convId = route.conversationId
           sendLocksRef.current.add(convId)
           liveMessagesRef.current.set(sourceId, sourcePreviousMessages)
@@ -3157,15 +3202,9 @@ export function ChatView({
            */
           sendLocksRef.current.delete(sendLockKey)
           previousMessagesForTarget = liveMessagesRef.current.get(convId) ?? []
-          const shouldAdoptRoutedConversation =
-            activeRef.current === sourceId &&
-            composerDraftKeyRef.current === sendDraftKey &&
-            composerSelectionGenerationRef.current === sendSelectionGeneration
-          if (shouldAdoptRoutedConversation) {
-            activeRef.current = convId
-            setActiveId(convId)
-            switchComposerDraft(convId)
-          }
+          activeRef.current = convId
+          setActiveId(convId)
+          switchComposerDraft(convId)
         }
       }
 
@@ -3731,7 +3770,8 @@ export function ChatView({
               hit
             }))
           ),
-          groupesReplies
+          // Pendant une recherche, aucun repli ne masque un resultat : chercher, c'est vouloir voir.
+          convQuery.trim() ? {} : groupesReplies
         ),
         // La date n'arbitre qu'entre FRERES : un `.sort()` a plat ecrasait le rang par nature
         // (« Auto-kaizen » remontait en tete) et l'ordre parent-avant-enfant (un sous-dossier
@@ -3743,7 +3783,7 @@ export function ChatView({
         (groupe) => recenceUtilisateur(groupe.items[0].hit.conversation),
         conversationDateOrder
       ),
-    [conversationHits, groupesReplies, conversationDateOrder]
+    [conversationHits, groupesReplies, conversationDateOrder, convQuery]
   )
 
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
@@ -3979,7 +4019,9 @@ export function ChatView({
             <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
           )}
           {groupes.map((groupe) => {
-            const replie = estReplie(groupe.key, groupesReplies)
+            // Une RECHERCHE en cours deplie tout : un resultat cache dans un dossier replie
+            // faisait croire que la conversation n'existait plus (« je tape 170, ca me montre rien »).
+            const replie = !convQuery.trim() && estReplie(groupe.key, groupesReplies)
             return (
               <Fragment key={groupe.key}>
                 {/*
@@ -4098,12 +4140,21 @@ export function ChatView({
                                 <TexteSurligne texte={snippet} terme={convQuery} />
                               </span>
                             )}
-                            {!convQuery && (
-                              <span className="conv-meta">
-                                <span>{c.id}</span>
-                                <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
+                            {/* Le NUMERO reste visible pendant une recherche, et surligne quand il
+                                correspond : taper « 171 » masquait la seule information qui prouve
+                                qu'on a trouve la bonne conversation (2026-09-03). */}
+                            <span className="conv-meta">
+                              <span>
+                                {convQuery ? (
+                                  <TexteSurligne texte={c.id} terme={convQuery} />
+                                ) : (
+                                  c.id
+                                )}
                               </span>
-                            )}
+                              {!convQuery && (
+                                <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
+                              )}
+                            </span>
                           </span>
                           {convQuery && (
                             <span className="conv-count tnum">
@@ -4381,8 +4432,9 @@ export function ChatView({
             <div className="row gap2" style={{ alignItems: 'center', minWidth: 0 }}>
               <span className="chat-head-signal" aria-hidden="true" />
               <div className="col" style={{ gap: 1, minWidth: 0 }}>
-                <span className="chat-head-kicker">Conversation active</span>
-                <b className="chat-conv-title">{active ? active.title : 'Nouvelle conversation'}</b>
+                <span className="chat-head-kicker">
+                  {active ? active.title : 'Nouvelle conversation'}
+                </span>
                 <div className="chat-runtime" data-testid="chat-runtime-identity">
                   <span
                     className={`chat-runtime-provider is-${runtimeIdentity?.provider ?? 'loading'}`}
@@ -4410,7 +4462,6 @@ export function ChatView({
                         aria-label={titreDossier}
                         data-testid="chat-project-dot"
                       >
-                        <span className={`status-dot ${dossierProjet ? 'st-ok' : 'st-ok'}`} />
                         📁 {labelDossier}
                       </span>
                     )
@@ -4452,7 +4503,7 @@ export function ChatView({
                       data-testid="chat-git-branch"
                       title={`Branche git courante du depot : ${gitBranch}`}
                     >
-                      ⑂ {gitBranch}
+                      <ForkIcon /> {gitBranch}
                     </span>
                   )}
                   {/*
@@ -4480,6 +4531,8 @@ export function ChatView({
                     {activeId ?? 'aucune conversation'}
                     {busy && ' · en cours'}
                   </span>
+                  {/* La depense du fil vit dans la barre du haut, plus dans la zone de saisie. */}
+                  <ConversationCostIndicator conversationId={activeId ?? undefined} busy={busy} />
                 </div>
               </div>
             </div>
@@ -4984,6 +5037,13 @@ export function ChatView({
             }
             leadingNode={
               <>
+                {/* La barre des quotas ouvre la popup et detache la rangee d'outils du champ. */}
+                <ModelQuotaIndicator
+                  provider={runtimeIdentity?.provider}
+                  contextGauge={activeId != null ? contextGauges[activeId] : undefined}
+                  busy={busy}
+                  onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
+                />
                 <button
                   type="button"
                   className="attachment-button"
@@ -5042,7 +5102,12 @@ export function ChatView({
                   aria-label="Arrêter la réponse"
                   title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
                 >
-                  {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : '■ Stop'}
+                  <span className="composer-btn-glyph" aria-hidden="true">
+                    ■
+                  </span>
+                  <span className="composer-btn-label">
+                    {interruptingConversations.has(activeId ?? '') ? 'Arrêt…' : 'Stop'}
+                  </span>
                 </button>
               ) : null
             }
@@ -5060,13 +5125,6 @@ export function ChatView({
                     pending={modelChangePending}
                     error={modelChangeError}
                     onSelect={(option) => void changeOrchestratorModel(option)}
-                  />
-                  <ConversationCostIndicator conversationId={activeId ?? undefined} busy={busy} />
-                  <ModelQuotaIndicator
-                    provider={runtimeIdentity?.provider}
-                    contextGauge={activeId != null ? contextGauges[activeId] : undefined}
-                    busy={busy}
-                    onCompact={activeId != null ? () => void send(COMPACT_REQUEST) : undefined}
                   />
                 </div>
               </div>

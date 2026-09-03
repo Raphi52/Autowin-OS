@@ -44,6 +44,15 @@ describe('bouton « Démarrer » — un clic manuel n’est pas désarmé par la
     //    chemin réel s'arrête alors sur un diagnostic de fichiers, sans jamais spawner un process —
     //    le test reste donc hermétique (aucun brain_server réel lancé par la suite de tests).
     vi.stubEnv('AUTOWIN_BRAIN_TOOLING', join(tmpdir(), 'brain-tooling-absent-pour-ce-test'))
+    // ISOLER L'ENVIRONNEMENT DU POSTE — sinon ce test ne prouve rien de portable. `resolveBrainRuntime`
+    // lit `AMITEL_BRAIN_PYTHON` AVANT de déduire le python du dossier de tooling : sur toute machine
+    // où le Brain est installé (donc celles de l'équipe), cette variable existe et pointe un python
+    // RÉEL. Le diagnostic s'arrêtait alors sur « brain_server.py introuvable » au lieu du « venv
+    // Python introuvable » attendu, et l'échec ne disait rien du comportement testé. Mesuré le
+    // 2026-09-03 : rouge sur un poste équipé, vert sur un poste nu — un test qui dépend du poste.
+    vi.stubEnv('AMITEL_BRAIN_PYTHON', '')
+    vi.stubEnv('AMITEL_BRAIN_CODE_ROOT', '')
+    vi.stubEnv('AUTOWIN_BRAIN_STATE_ROOT', join(tmpdir(), 'brain-state-absent-pour-ce-test'))
     const clic = await repairPreflightCheck('brain')
 
     // Sans le réarmement, le détail serait « démarrage déjà tenté cette session — pas de nouveau

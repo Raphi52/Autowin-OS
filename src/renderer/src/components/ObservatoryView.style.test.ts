@@ -38,7 +38,9 @@ describe('Observatory visual contracts', () => {
     const regleCadre = cadre.match(/\.view-page\s*{[^}]*}/s)?.[0]
     expect(cadre.match(/\.shell\s*{[^}]*}/s)?.[0]).toMatch(liseré)
     expect(regleCadre).toMatch(/background:\s*var\(--lisere-haut\),/)
-    expect(regleCadre).toMatch(/border: 1px solid color-mix\(in srgb, var\(--rose\) 34%/)
+    // Le cadre de page n'a PLUS de bordure (choix utilisateur, comme la vue Chat) : seule la ligne
+    // du haut marque le conteneur. Le test suit ce choix au lieu d'exiger un bord supprime.
+    expect(regleCadre).toMatch(/border:\s*0/)
     // Et Observatory ne repart pas en solo : aucun cadre redécrit dans sa propre règle.
     const regleObservatory = observatory.match(/\.observatory-view\s*{[^}]*}/s)?.[0]
     expect(regleObservatory).not.toMatch(liseré)

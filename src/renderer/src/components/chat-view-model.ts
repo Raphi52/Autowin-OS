@@ -1633,8 +1633,6 @@ export function scrollChatToBottom(
    * de lecture ; une molette recule progressivement. On tolère donc UN seul retour-à-zéro.
    */
   let retourEnHautTolere = true
-  /** Une animation `smooth` a été émise et peut être encore en vol. */
-  let smoothEmis = false
   const step = (): void => {
     // Une descente plus récente a pris la main : celle-ci se tait au lieu de lutter contre elle.
     if (annule) return
@@ -1652,17 +1650,13 @@ export function scrollChatToBottom(
       element.scrollTo({ top: height, behavior: 'auto' })
     }
     const isLastFrame = frames >= maxFrames - 1
-    const remaining = height - element.clientHeight - element.scrollTop
     if (heightMoved || (isLastFrame && !isChatNearBottom(element))) {
-      const sec = isLastFrame || remaining >= element.clientHeight
-      // Un `smooth` RELANCÉ à chaque frame repart d'une vitesse nulle : au lieu d'avancer, il fait
-      // trembler le fil. On ne le ré-émet donc que si l'animation en vol n'avance PAS (scrollTop
-      // immobile depuis la frame précédente) ; sinon on la laisse finir sa course.
-      const smoothEnVol = !sec && smoothEmis && element.scrollTop !== lastTop
-      if (!smoothEnVol) {
-        element.scrollTo({ top: height, behavior: sec ? 'auto' : 'smooth' })
-        smoothEmis = !sec
-      }
+      // TOUJOURS SEC. Une animation `smooth` sur un fil qui grandit encore (envoi d'un message
+      // depuis une position remontee, puis streaming) se fait re-cibler a chaque frame : chaque
+      // re-ciblage repart d'une vitesse nulle et l'oeil voit une suite de petits sauts — le
+      // « clignotement jusqu'en bas » rapporte le 2026-09-03. Un saut instantane n'a pas d'etape
+      // intermediaire, donc rien a faire clignoter.
+      element.scrollTo({ top: height, behavior: 'auto' })
     }
     lastHeight = height
     lastTop = element.scrollTop
@@ -1866,4 +1860,39 @@ export function compenserRetrecissementDuFil(input: {
   if (!input.suivaitLeBas || perdu <= 0) return null
   const cible = Math.min(scrollTop + perdu, Math.max(scrollHeight - clientHeight, 0))
   return cible > scrollTop ? cible : null
+}
+
+/**
+ * LE MESSAGE PARTI DANS UN FIL QUE PERSONNE NE REGARDE (mesure du 2026-09-03, conv-171).
+ *
+ * Le routeur peut decider qu'un message ouvre un autre sujet : le main cree alors un fil neuf et
+ * rend son identifiant. Le renderer n'y BASCULE toutefois que si l'utilisateur est encore sur le
+ * fil source ET que son brouillon et sa selection n'ont pas bouge pendant l'appel au modele.
+ *
+ * LE DEFAUT : quand cette garde tombait, le message partait quand meme dans le fil neuf SANS y
+ * emmener l'utilisateur. Vu de l'ecran, le texte semblait rester en place alors qu'il etait parti
+ * dans un fil vide, jamais affiche. Constat mesure : conv-170 a recu un numero (compteur passe a
+ * 179), aucun message, et n'existait plus ensuite ; le texte ne survivait que dans le journal de
+ * secours des saisies.
+ *
+ * LA REGLE : on ne suit le routage QUE si on peut y emmener l'utilisateur. Sinon le message reste
+ * dans le fil ou il a ete ecrit, visible la ou son auteur le cherche.
+ */
+export function doitSuivreLeRoutage(input: {
+  routed: boolean
+  cibleId: string
+  sourceId: string
+  filAffiche: string | null
+  cleBrouillonEnvoi: string
+  cleBrouillonActuelle: string
+  generationSelectionEnvoi: number
+  generationSelectionActuelle: number
+}): boolean {
+  if (!input.routed) return false
+  if (input.cibleId === input.sourceId) return false
+  // Les trois conditions de la BASCULE D'ECRAN. Si l'une manque, suivre le routage rendrait le
+  // message invisible : on ne le suit donc pas du tout.
+  if (input.filAffiche !== input.sourceId) return false
+  if (input.cleBrouillonActuelle !== input.cleBrouillonEnvoi) return false
+  return input.generationSelectionActuelle === input.generationSelectionEnvoi
 }

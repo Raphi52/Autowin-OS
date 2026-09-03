@@ -57,7 +57,15 @@ port.on('message', (request: WorktreeOperationRequest) => {
           ids: manager.travauxNonPublies(baseRef),
           apercu: manager
             .apercuTravauxNonPublies(baseRef, request.limite ?? 6)
-            .map((e) => ({ agentId: e.agentId, date: e.date, fichiers: e.fichiers }))
+            // `lectureEchouee` TRAVERSE le worker : sans lui, une lecture git ratee se relit
+            // « bureau vide » de l'autre cote et fait JETER du travail (cycle 2, audit 2026-08-26).
+            .map((e) => ({
+              agentId: e.agentId,
+              date: e.date,
+              fichiers: e.fichiers,
+              verdict: e.verdict,
+              lectureEchouee: e.lectureEchouee
+            }))
         }
         break
       }

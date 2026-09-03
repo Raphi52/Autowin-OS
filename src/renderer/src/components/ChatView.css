@@ -297,7 +297,7 @@
   gap: var(--s2);
   flex: 1;
   min-width: 0;
-  padding: 7px var(--s2);
+  padding: 10px var(--s2);
   border: none;
   background: transparent;
   color: var(--text-dim);
@@ -377,6 +377,7 @@
 .conv-label {
   display: block;
   min-width: 0;
+  line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1022,25 +1023,22 @@
   flex: 1 0 100%;
   min-width: 0;
 }
-/* La 2e rangée : un filet fin la détache du champ, sur toute la largeur. */
-.composer-input-row::before {
+/* La 2e rangée est détachée du champ par la BARRE DE QUOTAS : elle remplace l'ancien filet et
+   porte aussi le signal de focus (C1 : le champ n'a plus de cadre). */
+.composer-input-row > .model-quota {
   order: 0;
   flex: 1 0 100%;
-  height: 0;
   margin-top: 1px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  content: '';
 }
-/* C1 : le champ n'a plus de cadre — c'est ce filet qui signale le focus. */
-.composer-field:focus-within .composer-input-row::before {
-  border-top-color: rgba(239, 69, 168, 0.45);
+.composer-field:focus-within .composer-input-row .model-quota-bar {
+  background: rgba(255, 255, 255, 0.18);
 }
 /* Envoyer reste ancré à droite, quoi qu'il y ait avant lui. */
 .composer-input-row > .composer-send {
   margin-left: auto;
 }
 
-/* TUILE ÉTROITE (mosaïque) : la rangée d'outils se resserre, le champ ne bouge pas. */
+/* TUILE ÉTROITE (mosaïque) : la capsule prend toute la largeur, les outils se resserrent. */
 @container (max-width: 320px) {
   .composer-input-row {
     gap: 4px;
@@ -1420,9 +1418,10 @@
 .delete-confirm-danger:hover {
   background: #d14a71;
 }
+/* D2c-3 : le rappel des raccourcis etait en 8 px — illisible, donc inutile. Il n'occupe
+   plus d'etage : il vit en info-bulle sur le bouton d'envoi. */
 .composer-hint {
-  color: var(--text-faint);
-  font-size: 8px;
+  display: none;
 }
 .file-drop-overlay {
   position: absolute;
@@ -1832,7 +1831,8 @@ ol.md-list li {
   gap: 7px;
   margin-top: 6px;
   color: #65778a;
-  font-size: 8px;
+  font-size: 9px;
+  line-height: 1.7;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -2288,7 +2288,7 @@ ol.md-list li {
 /* DIRECTION C1 « NU » (choix utilisateur, conv-167) : la barre de prompting n'est plus une boite.
    Le cadre et le fond opaque venaient de la rangee unique, ou il fallait dessiner la zone de saisie ;
    en deux etages le filet entre les etages suffit a la delimiter. Le focus se signale sur ce filet
-   (voir `.composer-field:focus-within .composer-input-row::before`), plus par un halo. */
+   (voir `.composer-field:focus-within .composer-input-row .model-quota-bar`), plus par un halo. */
 .cosmic-outline .composer-field {
   display: grid;
   flex: 1;
@@ -3456,6 +3456,7 @@ ol.md-list li {
 /* Le prompt d'une phase reste un niveau SECONDAIRE : legerement en retrait, replie par defaut. */
 .activity-step-pipeline .prompt-envelope {
   margin: 2px 0 4px 10px;
+}
 .activity-step-pipeline li.is-depliable .activity-pipeline-head {
   cursor: default;
 }
@@ -3709,12 +3710,42 @@ ol.md-list li {
   opacity: 0.45;
   cursor: not-allowed;
 }
+/* JAUGE DE NIVEAU : pendant l'écoute, elle bouge au son. Sans elle, rien à l'écran ne dit que la
+   voix entre tant qu'une phrase n'est pas finie — l'utilisateur croit alors que ça ne marche pas. */
+.composer-dictee-niveau {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 6px;
+  height: 22px;
+  border-radius: 3px;
+  background: rgba(239, 69, 88, 0.18);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.composer-dictee-niveau > i {
+  display: block;
+  width: 100%;
+  height: calc(var(--niveau, 0) * 100%);
+  background: #ff8a96;
+  transition: height 90ms linear;
+}
+
 /* La raison d'un micro barré doit se LIRE sans survoler le bouton. */
 .composer-dictee-message {
   margin: 4px 2px 0;
   font-size: 11px;
   line-height: 1.35;
   color: #ff8a96;
+}
+/* L'APERÇU EST PROVISOIRE : atténué et en italique, pour qu'on ne le confonde pas avec le texte
+   déjà écrit dans le champ — celui-là seul sera envoyé. */
+.composer-dictee-apercu {
+  margin: 4px 2px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  font-style: italic;
+  color: rgba(221, 227, 238, 0.55);
 }
 @keyframes composer-dictee-pulse {
   0%,
@@ -3766,4 +3797,76 @@ ol.md-list li {
 .conv-auto-notice {
   font-size: 11px;
   opacity: 0.75;
+}
+
+/* BARRE D'OUTILS RONDE ET MINIMALISTE (demande utilisateur conv-199) — la 2e rangée porte,
+   dans l'ordre : trombone, micro, puis la ligne modèle/effort/prix/quota (remontée depuis
+   sa propre ligne), et Envoyer/Orienter/Stop ancrés à droite. Tous les boutons sont des
+   pastilles rondes de 32px, icône seule ; le libellé reste dans le DOM (accessibilité + tests)
+   mais n'est plus peint. */
+.composer-btn-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.composer-btn-glyph {
+  display: block;
+  font-size: 14px;
+  line-height: 1;
+}
+.composer-input-row > .attachment-button,
+.composer-input-row > .composer-dictee,
+.composer-input-row > .composer-stop,
+.composer-input-row > .composer-send,
+.cosmic-outline .composer-input-row > .attachment-button,
+.cosmic-outline .composer-input-row > .composer-dictee,
+.cosmic-outline .composer-input-row > .composer-stop,
+.cosmic-outline .composer-input-row > .composer-send {
+  display: inline-flex;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  padding: 0;
+  border-radius: 999px;
+  box-shadow: none;
+  font-size: 14px;
+}
+.composer-input-row > .attachment-button .attachment-icon,
+.cosmic-outline .composer-input-row > .attachment-button .attachment-icon {
+  width: 16px;
+  height: 16px;
+}
+.composer-input-row > .composer-dictee svg {
+  width: 16px;
+  height: 16px;
+}
+/* La ligne modèle/prix/quota vient se poser sur la rangée des boutons. */
+.composer-input-row > .composer-meta,
+.cosmic-outline .composer-input-row > .composer-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 0 4px;
+}
+.composer-input-row > .composer-meta .composer-hint {
+  display: none;
+}
+
+/* La depense du fil, remontee dans la barre du haut : elle s'aligne sur la ligne technique. */
+.chat-runtime .conv-cost {
+  display: inline-flex;
+  align-items: center;
 }

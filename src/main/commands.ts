@@ -2622,9 +2622,22 @@ export class AppCommandBus {
            * meme geste, la meme fonction, que pour le tour courant et l'orchestration.
            */
           const jointes = referencesDesPiecesJointes(message)
+          /*
+           * L'ECHEC D'UN TOUR TRAVERSE LA LECTURE — il ne la traversait pas.
+           *
+           * Mesure le 2026-09-03 (conv-181) : trois tours coupes sur `error_during_execution`. Le
+           * store portait bien `status: 'failed'` et `error` (ecrits par `terminalDuTour`), mais
+           * cette projection ne rendait que `role`/`ts`/`text` : un tour EN ECHEC se relisait comme
+           * une reponse VIDE, indiscernable d'un silence du modele. Toute retrospective partait
+           * donc chercher la cause ailleurs. Ce que l'app SAIT de l'echec doit etre DIT.
+           */
+          const statut = (message as { status?: string }).status
+          const erreur = (message as { error?: string }).error
           return {
             role: message.role,
             ts: message.ts,
+            ...(statut && statut !== 'done' ? { statut } : {}),
+            ...(erreur ? { erreur } : {}),
             text: coupe ? texte.slice(0, CAP_PAR_MESSAGE) : texte,
             ...(coupe ? { tronque: true, longueurReelle: texte.length } : {}),
             ...(jointes.length ? { piecesJointes: jointes } : {})
@@ -3200,7 +3213,19 @@ export class AppCommandBus {
     const aleatoire = `command-${famille}-${randomUUID()}`
     const cle = cleDeBureau(famille, conversationId, cible)
     if (!cle) return aleatoire
-    const retenus = this.os.worktrees?.travauxNonPublies?.() ?? []
+    /*
+     * HORS DU THREAD QUI DESSINE LA FENETRE.
+     *
+     * Mesure du 2026-09-03 (`gels.jsonl`, 08:30:01) : 7 244 ms de fenetre morte, accumulation
+     * `execFileSync git rev-parse` x48, `git status` x34, `git cherry` x11. C'etait ce recensement,
+     * paye ICI sur le thread main au debut de chaque commande. La voie hors-thread existe deja
+     * (`travauxNonPubliesAsync`, worker) ; sans worker elle retombe d'elle-meme sur la voie
+     * synchrone, meme reponse.
+     */
+    const retenus =
+      (await this.os.worktrees?.travauxNonPubliesAsync?.()) ??
+      this.os.worktrees?.travauxNonPublies?.() ??
+      []
     const existant = retenus.find((travail) => travail.agentId === cle)
     if (!existant) return cle
     // On transmet l'INDETERMINATION : sans elle, une lecture git ratee se lisait « bureau vide »

@@ -25,6 +25,19 @@ const MS_PRE_ROLL = 400
 /** Une parole qui ne s'arrête jamais est coupée ici, plutôt que de gonfler la mémoire sans fin. */
 export const DUREE_MAX_MS = 15_000
 
+/**
+ * PLAFOND DE PHRASE POUR LA DICTÉE — la cause mesurée du « le texte ne s'affiche pas en temps réel ».
+ *
+ * Rien ne sort de la découpe tant que la phrase n'est pas finie : soit 700 ms de silence, soit le
+ * plafond de durée. Avec le plafond de Jarvis (15 s), quelqu'un qui parle SANS pause ne voit donc
+ * rien apparaître pendant 15 s, plus 1 à 3 s de transcription — un champ vide qui se lit comme une
+ * panne. Pour la dictée du champ de saisie, on coupe donc bien plus tôt.
+ *
+ * Ce plafond ne remplace PAS DUREE_MAX_MS : le moteur d'éveil de Jarvis doit garder des segments
+ * longs (le mot d'éveil et l'ordre peuvent être séparés). Deux usages, deux plafonds.
+ */
+export const DUREE_MAX_DICTEE_MS = 2_500
+
 /** Interpolation linéaire : suffisante pour de la voix, et sans dépendance. */
 export function reechantillonner(
   entree: Float32Array,
@@ -176,11 +189,12 @@ export function avancerVad(
   etat: EtatVad,
   bloc: Float32Array,
   tauxHz: number,
-  seuil: number = SEUIL_PAROLE
+  seuil: number = SEUIL_PAROLE,
+  dureeMaxMs: number = DUREE_MAX_MS
 ): { etat: EtatVad; segment: Float32Array | null } {
   const parleIci = niveau(bloc) >= seuil
   const maxPreRoll = Math.round((MS_PRE_ROLL / 1000) * tauxHz)
-  const maxSegment = Math.round((DUREE_MAX_MS / 1000) * tauxHz)
+  const maxSegment = Math.round((dureeMaxMs / 1000) * tauxHz)
 
   if (!etat.parle) {
     if (!parleIci) {
@@ -226,7 +240,6 @@ export function avancerVad(
     segment: assezDeParole ? coller(tampon) : null
   }
 }
-
 
 /**
  * DU RMS À LA JAUGE — pourquoi une échelle logarithmique et pas la valeur brute.

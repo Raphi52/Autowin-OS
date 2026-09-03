@@ -21,8 +21,11 @@ describe('single Dark theme contract', () => {
     expect(app).toContain('className="shell cosmic-outline theme-serious"')
     expect(app).not.toMatch(/Mode glass|setVisualMode|visual-mode\.v1|ThemeIcon|GraphVisualMode/)
     expect(app).not.toMatch(/visualMode/)
-    expect(app).toContain(
-      "<KnowledgeView active={tab === 'knowledge'} onCleanMemory={openBrainwashConversation} />"
+    // Ce qu'on garantit est le CÂBLAGE de Knowledge (onglet actif + nettoyage mémoire), pas sa mise
+    // en forme : le littéral sur une seule ligne cassait au premier reformatage de Prettier, alors
+    // que le montage était intact. On épingle donc les props, pas les retours à la ligne.
+    expect(app).toMatch(
+      /<KnowledgeView\s+active=\{tab === 'knowledge'\}\s+onCleanMemory=\{openBrainwashConversation\}\s*\/>/
     )
   })
 

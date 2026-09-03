@@ -1,6 +1,6 @@
 ---
 name: salvage
-description: Find and recover work stranded anywhere in a git repository — uncommitted changes, stashes, detached worktrees, orphan commits, unmerged and recovery branches, dangling objects in the reflog — then decide per item whether to merge it, drop it, or leave it, carry that decision out without losing anything, and finish on a CLEAN working tree so the next pull, branch switch or update is not refused. Judges every candidate by CONTENT, never by its message, because the most common finding is work already integrated under a different implementation. Use when a repo has accumulated side-work across sessions, agents or worktrees; when a tool reports "unpublished work"; before a big merge, migration, branch cleanup or machine handover; after an interrupted rebase, a crashed agent run, or a stash you no longer trust; or on "did I lose work?", "what is still not merged?", "clean up my stashes/branches/worktrees". Do NOT use to review code quality, to resolve a merge conflict you are already inside, or to restore a file from a single known commit.
+description: Find and recover work stranded anywhere in a git repository — uncommitted changes, stashes, detached worktrees, orphan commits, unmerged and recovery branches, dangling objects in the reflog — then decide per item whether to merge it, drop it, or leave it, carry that decision out without losing anything, then finish by PUSHING what was recovered and leaving a CLEAN working tree, so the work is no longer only on this machine and the next pull, branch switch or update is not refused. Judges every candidate by CONTENT, never by its message, because the most common finding is work already integrated under a different implementation. Use when a repo has accumulated side-work across sessions, agents or worktrees; when a tool reports "unpublished work"; before a big merge, migration, branch cleanup or machine handover; after an interrupted rebase, a crashed agent run, or a stash you no longer trust; or on "did I lose work?", "what is still not merged?", "clean up my stashes/branches/worktrees". Do NOT use to review code quality, to resolve a merge conflict you are already inside, or to restore a file from a single known commit.
 ---
 
 # salvage — find stranded work, then merge it or drop it, without losing anything
@@ -167,7 +167,25 @@ Rules for closing:
 - **If the tree cannot be made clean** (unresolved item, conflict the human must settle), say so
   explicitly, name what remains and why, and warn that update/pull will refuse until it is settled.
 
-### 7. REPORT
+### 7. PUBLISH — the sort is what makes publishing safe
+
+**A salvage that ends local has not finished.** Sorting exists so that publishing can happen without
+burying work that already lived elsewhere; once every candidate carries a verdict backed by content,
+that condition is met and the push is part of THIS pass — not a follow-up prompt for the human.
+
+```bash
+git log --oneline @{u}..HEAD        # what this machine still holds alone
+git push                            # or: git push -u origin HEAD for a fresh branch
+git rev-parse HEAD origin/<branch>  # both SHAs equal = published, proven, not assumed
+```
+
+Push only what the sort covered, and only after the targeted checks are green. If a guard refuses
+(protected branch, pre-push hook) apply the exception it names and say so; if publishing is genuinely
+not yours to make — someone else's branch, a remote you do not own — say that instead of silently
+leaving the work local. Never end a salvage by asking the human to push: that request is precisely
+the loop this step removes (user report, 2026-09-03: "salvage doit push").
+
+### 8. REPORT
 
 One row per item: what it is · where it lived · verdict **with its evidence** (which file matched,
 which identifier was found) · action taken · recovery SHA. State plainly what you could not classify.
@@ -204,7 +222,8 @@ why) — that line is the proof the repository is usable again.
 - **Recoverability before judgement.** Make everything reversible first, decide second. A wrong call
   you can undo is an inconvenience; a wrong call you cannot is a loss.
 - **A clean apply is not a correct merge.** Text merging and meaning are unrelated.
-- **Done means clean, not decided.** The last command of a salvage is `git status --porcelain`, and
-  it is empty — or every remaining line is named and justified.
+- **Done means clean AND published, not decided.** A salvage ends on two proofs: an empty
+  `git status --porcelain`, and `HEAD` equal to its upstream — or every remaining line, and every
+  unpushed commit, named and justified.
 - **Taste belongs to the human.** Structure, tests and naming you can judge. Colours, thresholds and
   timings you cannot — surface them with the numbers side by side.

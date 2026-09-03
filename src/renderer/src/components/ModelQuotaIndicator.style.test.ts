@@ -4,38 +4,48 @@ import { describe, expect, it } from 'vitest'
 const component = readFileSync(new URL('./ModelQuotaIndicator.tsx', import.meta.url), 'utf8')
 const styles = readFileSync(new URL('./ModelQuotaIndicator.css', import.meta.url), 'utf8')
 
-describe('wheel de quota G', () => {
-  it('utilise un rail SVG et un arc arrondi piloté par le pourcentage restant', () => {
-    expect(component).toContain('model-quota-wheel')
-    expect(component).toContain('model-quota-wheel-track')
-    expect(component).toContain('model-quota-wheel-value')
-    expect(component).toContain("'--quota-angle': `${remaining ?? 0}`")
-    expect(component.match(/pathLength="100"/g)).toHaveLength(2)
+describe('barre de quota cliquable', () => {
+  it('rend une barre pilotée par le pourcentage restant, et plus aucune roue', () => {
+    expect(component).toContain('model-quota-bar')
+    expect(component).toContain('model-quota-bar-fill')
+    expect(component).toContain("'--quota-fill': `${remaining ?? 0}%`")
+    // La roue est SUPPRIMÉE : plus de SVG ni d'arc, ni dans le composant ni dans les styles.
+    expect(component).not.toContain('model-quota-wheel')
+    expect(component).not.toContain('pathLength')
+    expect(component).not.toContain('--quota-angle')
+    expect(styles).not.toContain('model-quota-wheel')
+  })
+
+  it('garde le dégradé rouge → orange → jaune → vert dans ce sens, calé sur la barre entière', () => {
     expect(styles).toMatch(
-      /\.model-quota-wheel-value\s*{[^}]*stroke-linecap:\s*round;[^}]*stroke-dasharray:\s*var\(--quota-angle\)\s+100;/s
+      /\.model-quota-bar-fill\s*{[^}]*linear-gradient\(\s*90deg,\s*#ef4444 0%,\s*#f59e0b 35%,\s*#facc15 65%,\s*#35d07f 100%\s*\);/s
+    )
+    // Le restant DÉCOUPE le dégradé au lieu de le compresser : à 10 % restant il ne reste que du
+    // rouge, alors qu'une largeur portée par l'élément laisserait du vert au bord droit.
+    expect(styles).toMatch(
+      /\.model-quota-bar-fill\s*{[^}]*clip-path:\s*inset\(0 calc\(100% - var\(--quota-fill, 0%\)\) 0 0\);/s
     )
   })
 
-  it('verrouille le diam?tre compact et les quatre ?tats de couleur', () => {
-    expect(styles).toMatch(/\.model-quota-trigger\s*{[^}]*width:\s*29px;[^}]*height:\s*29px;/s)
+  it('conserve les quatre états de couleur du nombre', () => {
     const stateColors = {
       healthy: '#35d07f',
       warning: '#f59e0b',
-      critical: '#ef4444'
+      critical: '#ef4444',
+      unknown: '#687782'
     }
     for (const [level, color] of Object.entries(stateColors)) {
       expect(styles).toMatch(
         new RegExp(`\\.model-quota-trigger\\.is-${level}\\s*{[^}]*--quota-color:\\s*${color};`, 's')
       )
     }
-    expect(styles).toMatch(/\.model-quota-trigger\.is-unknown\s*{[^}]*--quota-color:\s*#687782;/s)
     expect(styles).toContain('--quota-color, #35d07f')
     expect(styles).toMatch(
       /\.model-quota-meter i\s*{[^}]*linear-gradient\(90deg,\s*#ef4444 0%,\s*#f59e0b 45%,\s*#35d07f 100%\);/s
     )
   })
 
-  it('conserve le popover existant hors de la wheel', () => {
+  it('conserve le popover existant, désormais ouvert par la barre', () => {
     expect(component).toContain('model-quota-popover')
     expect(component).toContain('Quotas fournisseurs')
   })

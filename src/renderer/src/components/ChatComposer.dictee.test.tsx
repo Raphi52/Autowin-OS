@@ -173,3 +173,50 @@ describe('ChatComposer — dictée sans Whisper installé', () => {
     hote.remove()
   })
 })
+
+/**
+ * LE RETOUR VISUEL PENDANT QU'ON PARLE — sans lui, l'écran reste muet jusqu'à la première phrase
+ * reconnue et l'utilisateur en déduit « ça ne marche pas ». La barre montre le niveau du micro.
+ */
+describe('ChatComposer — jauge de niveau du micro', () => {
+  it('affiche la jauge pendant l’écoute et la fait bouger avec le son', async () => {
+    const transcrire = vi.fn(async (_wav: Uint8Array) => '')
+    const { pousserSon } = brancherAudio(transcrire)
+    const hote = document.createElement('div')
+    document.body.appendChild(hote)
+    const root = createRoot(hote)
+    await act(async () => {
+      root.render(<ChatComposer {...proprietes()} />)
+    })
+    const jauge = (): HTMLElement | null =>
+      hote.querySelector<HTMLElement>('[data-testid="composer-dictee-niveau"]')
+    expect(jauge()).toBeNull()
+
+    const micro = hote.querySelector<HTMLButtonElement>('[data-testid="composer-dictee"]')
+    await act(async () => {
+      micro!.click()
+    })
+    expect(jauge()).not.toBeNull()
+    expect(jauge()!.style.getPropertyValue('--niveau')).toBe('0')
+
+    await act(async () => {
+      pousserSon()
+    })
+    const remplissage = Number(jauge()!.style.getPropertyValue('--niveau'))
+    expect(remplissage).toBeGreaterThan(0)
+
+    await act(async () => {
+      micro!.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(jauge()).toBeNull()
+
+    await act(async () => {
+      root.unmount()
+    })
+    hote.remove()
+  })
+})

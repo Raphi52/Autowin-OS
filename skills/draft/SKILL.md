@@ -16,7 +16,7 @@ Use only while visual intent is OPEN and worth diverging on.
 
 ## The loop (procedure)
 1. **Frame the minimum** — which screen/surface, the REAL content, the TARGET TECH (web/WinForms/WPF — ASK if not obvious, never assume web), hard constraints (design system? responsive?). Do NOT over-frame the style — the loop discovers it.
-2. **Read the user's taste FIRST from memory** (`[[feedback_portail_design_lineaire]]`), don't hardcode it — so divergence stays within the taste + its anti-patterns, and current if taste evolves.
+2. **Read the user's taste FIRST from memory — BLOCKING, before drawing anything** (`brain_query` on the user's visual preferences; if the host has no memory tool, say so; fiche `[[feedback_portail_design_lineaire]]`), don't hardcode it — so divergence stays within the taste + its anti-patterns, and current if taste evolves.
 3. **Diverge K=3 DISTINCT directions** (not cosmetic variants). Within taste guardrails, each MUST differ on **≥2 axes**: information density · typographic hierarchy · accent-color usage · spatial structure (grid/columns/cards) · motion/restraint. Invoke `frontend-design` for each direction's execution quality. Round 1 = broad divergence (layout + tone). **Shared vocabulary**: named directions/structures/details (Linéaire, editorial, dense, rail, hairline, status-stripe…) with rendered examples live in `design-glossary.html` (bundled) — use its terms; it marks the user's default direction + banned anti-patterns.
 4. **Render + CAPTURE + READ** each direction (backend per tech, below). **Self-check BEFORE showing**: not broken (non-empty render, glyphs OK, no dead binding/layout) + taste guardrails respected. A capture not READ has no value.
 5. **Present for CHOICE** (and ALWAYS with a fresh batch of 3 — see "Never stop proposing") — one side-by-side gallery artifact + ask **keep/kill/mix** (+ free comment). Prefer `AskUserQuestion` if available, else ask plainly. If user rejects all 3 → re-diverge differently, never re-offer the same set.
@@ -44,6 +44,14 @@ KEPT/KILLED : elements grafted in, elements rejected
 | **web / HTML** | `Artifact` tool (self-contained page) | render locally with **Claude Preview** and screenshot. Deferred tools — load first: `ToolSearch "select:mcp__Claude_Preview__preview_start,mcp__Claude_Preview__preview_screenshot,mcp__Claude_Preview__preview_stop"`. Per-round cycle: `preview_start` → `preview_screenshot` → **Read** PNG → **`preview_stop`** (always stop before next round, else a stale preview blocks the next `preview_start`) |
 | **WPF / WinForms** | build + launch the project | `capture-window.ps1` (bundled): `-Exe <path>` / `-WindowTitle <substring>` / `-ProcId <pid>` → PrintWindow → PNG → **Read** |
 | any target | per-variant quality | invoke `frontend-design` (do NOT reimplement) |
+| **surface of a RUNNING app** (redesigning a part of a live app — chat bar, panel, toolbar) | inline render in the host chat | the live app IS the render target: **`desktop_observe`** the real screen, then draw at the REAL SCALE of that component (same width, same font sizes, same live colors read from its CSS/XAML). A thumbnail sketch 3x smaller than the real widget is NOT a mockup and misleads the user. |
+| **host WITHOUT `Artifact`/Claude Preview** (e.g. an embedded agent chat) | inline HTML block supported by the host | those deferred MCP tools do NOT exist here — do not pretend to capture. Substitute: `desktop_observe` on the real surface, else state plainly "not observed". |
+
+### Inline mockup recipes (host chat, no Preview) — MANDATORY
+The inline renderer has NO emoji font and NO icon font. Every mockup icon/button MUST be built from these recipes, never from a pasted glyph:
+- **Icons**: NEVER emoji (paperclip, mic) nor `↑ ◍ ◼ ⏎ ›` as a drawn OBJECT. Use a lowercase monospace WORD (`fichier`, `micro`, `envoyer`) or an inline `<svg>` with `stroke="currentColor"`. Keyboard keys stay text inside a caption line, never a button face.
+- **Round/pill button**: centring via `inline-grid`+`place-items` is unreliable inside a flex row (the glyph drifts to a corner). Use exactly `display:flex;align-items:center;justify-content:center;flex:0 0 auto;width:32px;height:32px;line-height:1;border-radius:50%` with an `<svg>` inside.
+- **Self-check before showing**: re-read your own HTML — zero emoji codepoint, zero character used as a button face. A mockup whose button renders wrong invalidates the WHOLE round: the user judges the drawing, not the intent.
 
 Note: `visualize.show_widget` renders INLINE in chat (presenting to user) — no PNG on disk, NOT a substitute for the READ self-check; use Claude Preview for that.
 
@@ -66,6 +74,8 @@ The loop does NOT end when a round is presented. As long as the user has NOT exp
 - Do NOT reimplement `frontend-design` (per-variant quality) nor the `Artifact` tool — ORCHESTRATE them.
 - Do NOT converge at random: respect the taste guardrails from memory.
 - Do NOT show a mockup not CAPTURED+READ (dead binding/layout is invisible otherwise).
+- Do NOT paste emoji or symbol characters as icons/buttons in an inline mockup — the host has no emoji font, they render as unreadable monochrome shapes or drift out of their circle (see Inline mockup recipes).
+- Do NOT sketch a live app's surface from imagination or at reduced scale: READ its real style file (colors, sizes, spacing) and `desktop_observe` it FIRST — mockups drawn blind are the #1 source of "propositions douteuses".
 - Do NOT declare "done" without explicit user approval.
 - Do NOT stop proposing batches of 3 while no implementation order has been given — a reply without 3 new proposals is a failure of this skill.
 - Do NOT assume the tech (web vs WinForms vs WPF) — ask.

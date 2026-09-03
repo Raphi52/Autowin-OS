@@ -529,8 +529,10 @@
 .tree-branch-controls {
   position: absolute;
   z-index: 7;
-  top: 54px;
-  left: 16px;
+  /* Sous le titre de la scene (top 17px + ~55px de haut) : a 54px les pastilles
+     de branches chevauchaient "Vue d ensemble". */
+  top: 82px;
+  left: 20px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -545,7 +547,9 @@
   padding: 5px 8px;
   border: 1px solid rgba(117, 215, 255, 0.28);
   border-radius: 999px;
-  background: rgba(6, 10, 18, 0.9);
+  /* Fond OPAQUE : a 0.9 les etiquettes de themes du canvas transparaissaient sous
+     les pastilles ("RIG 458" superpose a "RIG · 458"). */
+  background: #060a12;
   color: #b9c9db;
   font-size: 10px;
   cursor: pointer;

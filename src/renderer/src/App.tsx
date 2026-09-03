@@ -9,6 +9,7 @@ declare const __BUILD_SHA__: string
 const buildNumber = typeof __BUILD_NUMBER__ === 'string' ? __BUILD_NUMBER__ : 'dev'
 const buildSha = typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'local'
 import { ChatView } from './components/ChatView'
+import { VueMesuree } from './components/VueMesuree'
 import { HomeView } from './components/HomeView'
 import { DecorDeFond } from './components/DecorDeFond'
 import { FirstRunWizard } from './components/FirstRunWizard'
@@ -533,80 +534,103 @@ export function MainApp(): React.JSX.Element {
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
         {visitedTabs.has('accueil') && (
           <div className={`view-slot${tab === 'accueil' ? ' is-active' : ''}`}>
-            <HomeView active={tab === 'accueil'} onNavigate={applyLocation} />
+            <VueMesuree id="accueil">
+              <HomeView active={tab === 'accueil'} onNavigate={applyLocation} />
+            </VueMesuree>
           </div>
         )}
         {visitedTabs.has('chat') && (
           <div className={`view-slot${tab === 'chat' ? ' is-active' : ''}`}>
-            <ChatView isActive={tab === 'chat'} onInspectTurn={inspectTurn} />
+            <VueMesuree id="chat">
+              <ChatView isActive={tab === 'chat'} onInspectTurn={inspectTurn} />
+            </VueMesuree>
           </div>
         )}
         {visitedTabs.has('agent-studio') && (
           <div className={`view-slot${tab === 'agent-studio' ? ' is-active' : ''}`}>
-            <AgentStudioView
-              active={tab === 'agent-studio'}
-              section={agentStudioSection}
-              onSectionChange={setAgentStudioSection}
-            />
+            <VueMesuree id="agent-studio">
+              <AgentStudioView
+                active={tab === 'agent-studio'}
+                section={agentStudioSection}
+                onSectionChange={setAgentStudioSection}
+              />
+            </VueMesuree>
           </div>
         )}
         {visitedTabs.has('knowledge') && (
           <div className={`view-slot${tab === 'knowledge' ? ' is-active' : ''}`}>
-            <KnowledgeView active={tab === 'knowledge'} onCleanMemory={openBrainwashConversation} />
+            <VueMesuree id="knowledge">
+              <KnowledgeView
+                active={tab === 'knowledge'}
+                onCleanMemory={openBrainwashConversation}
+              />
+            </VueMesuree>
           </div>
         )}
         {visitedTabs.has('observatory') && (
           <div className={`view-slot${tab === 'observatory' ? ' is-active' : ''}`}>
-            <ObservatoryView
-              active={tab === 'observatory'}
-              focus={observatoryFocus}
-              onDismissFocus={() => setObservatoryFocus(null)}
-              onOpenCapabilities={() => {
-                setSettingsSection('capabilities')
-                navigate('settings')
-              }}
-            />
+            <VueMesuree id="observatory">
+              <ObservatoryView
+                active={tab === 'observatory'}
+                focus={observatoryFocus}
+                onDismissFocus={() => setObservatoryFocus(null)}
+                onOpenCapabilities={() => {
+                  setSettingsSection('capabilities')
+                  navigate('settings')
+                }}
+              />
+            </VueMesuree>
           </div>
         )}
         {visitedTabs.has('worktree') && (
           <div className={`view-slot${tab === 'worktree' ? ' is-active' : ''}`}>
-            <WorktreeView active={tab === 'worktree'} />
+            <VueMesuree id="worktree">
+              <WorktreeView active={tab === 'worktree'} />
+            </VueMesuree>
           </div>
         )}
         {visitedTabs.has('task-manager') && (
           <div className={`view-slot${tab === 'task-manager' ? ' is-active' : ''}`}>
-            <TaskManagerView
-              active={tab === 'task-manager'}
-              onOpenConversation={openTaskConversation}
-              section={taskManagerSection}
-              onSectionChange={setTaskManagerSection}
-            />
+            <VueMesuree id="task-manager">
+              <TaskManagerView
+                active={tab === 'task-manager'}
+                onOpenConversation={openTaskConversation}
+                section={taskManagerSection}
+                onSectionChange={setTaskManagerSection}
+              />
+            </VueMesuree>
           </div>
         )}
         {visitedTabs.has('tickets') && (
           <div className={`view-slot${tab === 'tickets' ? ' is-active' : ''}`}>
-            <TicketsView active={tab === 'tickets'} />
+            <VueMesuree id="tickets">
+              <TicketsView active={tab === 'tickets'} />
+            </VueMesuree>
           </div>
         )}
         {visitedTabs.has('tests') && (
           <div className={`view-slot${tab === 'tests' ? ' is-active' : ''}`}>
-            <TestsView active={tab === 'tests'} />
+            <VueMesuree id="tests">
+              <TestsView active={tab === 'tests'} />
+            </VueMesuree>
           </div>
         )}
         {visitedTabs.has('settings') && (
           <div className={`view-slot${tab === 'settings' ? ' is-active' : ''}`}>
-            <SettingsView
-              active={tab === 'settings'}
-              section={settingsSection}
-              onSectionChange={(next) => {
-                settingsSectionPinned.current = true
-                setSettingsSection(next)
-              }}
-              onOpenRouter={() => {
-                setAgentStudioSection('routing')
-                navigate('agent-studio')
-              }}
-            />
+            <VueMesuree id="settings">
+              <SettingsView
+                active={tab === 'settings'}
+                section={settingsSection}
+                onSectionChange={(next) => {
+                  settingsSectionPinned.current = true
+                  setSettingsSection(next)
+                }}
+                onOpenRouter={() => {
+                  setAgentStudioSection('routing')
+                  navigate('agent-studio')
+                }}
+              />
+            </VueMesuree>
           </div>
         )}
       </main>

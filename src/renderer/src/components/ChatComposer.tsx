@@ -96,6 +96,27 @@ function IconeMicroTrait(): React.JSX.Element {
   )
 }
 
+/** ENVOYER : une flèche dessinée d'un trait, même graisse que le micro et l'arrêt. */
+function IconeEnvoyer(): React.JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 19V6" />
+      <path d="m6 11.5 6-6 6 6" />
+    </svg>
+  )
+}
+
 /** Le carré d'arrêt : même trait, même graisse que le micro. */
 function IconeArret(): React.JSX.Element {
   return (
@@ -231,6 +252,14 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
      */
     const [dicteeEtat, setDicteeEtat] = useState<EtatDictee>('inactif')
     const [dicteeErreur, setDicteeErreur] = useState<string | null>(null)
+    /**
+     * APERÇU EN COURS DE PHRASE — texte PROVISOIRE, jamais inséré dans le champ : il est remplacé au
+     * rafraîchissement suivant, puis effacé quand la phrase finie est écrite pour de bon. Sans lui,
+     * quelqu'un qui parle sans pause voit un champ vide et croit que le micro est mort.
+     */
+    const [dicteeApercu, setDicteeApercu] = useState('')
+    /** Niveau du micro (0..1) : c'est le SEUL signe visible que la voix entre pendant qu'on parle. */
+    const [dicteeNiveau, setDicteeNiveau] = useState(0)
     const dicteeRef = useRef<Dictee | null>(null)
     // `null` = pas encore su. Le bouton n'est barré que sur un « non » LU, jamais sur une inconnue.
     const [dicteeInstallee, setDicteeInstallee] = useState<boolean | null>(null)
@@ -275,7 +304,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         // La FIN de phrase restée dans le tampon ; les phrases précédentes sont déjà écrites.
         const texte = (await dictee?.arreter()) ?? ''
         dicteeRef.current = null
+        setDicteeApercu('')
         setDicteeEtat('inactif')
+        setDicteeNiveau(0)
         if (texte === '') {
           if (dictee?.aDejaEcrit !== true) setDicteeErreur('Rien n’a été reconnu.')
           return
@@ -296,17 +327,29 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         return
       }
       const dictee = new Dictee(
-        dependancesDicteeNavigateur(transcrire, (texte) => {
-          // Micro encore ouvert : le texte apparaît dans la barre de prompt pendant qu'on parle.
-          if (dicteeRef.current === dictee) ecrireDictee(texte)
-        })
+        dependancesDicteeNavigateur(
+          transcrire,
+          (texte) => {
+            // Micro encore ouvert : le texte apparaît dans la barre de prompt pendant qu'on parle.
+            if (dicteeRef.current === dictee) ecrireDictee(texte)
+          },
+          (apercu) => {
+            if (dicteeRef.current === dictee) setDicteeApercu(apercu)
+          },
+          (niveau) => {
+            if (dicteeRef.current === dictee) setDicteeNiveau(niveau)
+          }
+        )
       )
       dicteeRef.current = dictee
       setDicteeErreur(null)
+      setDicteeApercu('')
+      setDicteeNiveau(0)
       setDicteeEtat('ecoute')
       if (!(await dictee.demarrer())) {
         dicteeRef.current = null
         setDicteeEtat('inactif')
+        setDicteeNiveau(0)
         setDicteeErreur('Micro indisponible.')
       }
     }
@@ -508,6 +551,20 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 <IconeMicroTrait />
               )}
             </button>
+            {dicteeEtat === 'ecoute' ? (
+              <span
+                className="composer-dictee-niveau"
+                data-testid="composer-dictee-niveau"
+                // Niveau brut ×4 : la parole normale vit vers 0,05-0,25 en valeur efficace, une
+                // barre à l'échelle 1 resterait plate et ne prouverait rien à l'oeil.
+                style={{ '--niveau': String(Math.min(1, dicteeNiveau * 4)) } as React.CSSProperties}
+                aria-hidden="true"
+                title="Niveau du micro"
+              >
+                <i />
+              </span>
+            ) : null}
+            {props.metaNode}
             {props.stopNode}
             <button
               className={`btn-accent btn composer-send${canResume ? ' is-resume' : ''}`}
@@ -538,9 +595,23 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                     : 'Envoyer le message'
               }
             >
-              {canResume ? '↻ Reprendre' : props.busy ? '🧭 Orienter' : 'Envoyer'}
+              <span className="composer-btn-glyph" aria-hidden="true">
+                {canResume ? '↻' : <IconeEnvoyer />}
+              </span>
+              <span className="composer-btn-label">
+                {canResume ? 'Reprendre' : props.busy ? 'Orienter' : 'Envoyer'}
+              </span>
             </button>
           </div>
+          {dicteeApercu !== '' && dicteeEtat === 'ecoute' ? (
+            <div
+              className="composer-dictee-apercu"
+              data-testid="composer-dictee-apercu"
+              role="status"
+            >
+              {dicteeApercu}
+            </div>
+          ) : null}
           {dicteeErreur ? (
             <div
               className="composer-dictee-message"
@@ -550,7 +621,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               {dicteeErreur}
             </div>
           ) : null}
-          {props.metaNode}
         </div>
       </div>
     )

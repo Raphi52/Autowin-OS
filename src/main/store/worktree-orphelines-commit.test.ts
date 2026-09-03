@@ -98,3 +98,31 @@ describe('copie dont le commit n’est retenu par aucune référence', () => {
     expect(existsSync(copie)).toBe(true)
   })
 })
+
+/**
+ * LA MEME QUESTION POUR TOUT UN LOT — et elle doit rendre EXACTEMENT la meme reponse.
+ *
+ * `commitsDejaReferences` remplace N `for-each-ref --contains` (83 ms piece, mesure du 2026-09-03)
+ * par un seul `rev-list --no-walk`. Le test le confronte a un vrai depot : un commit retenu par une
+ * branche, un commit orphelin, et une entree illisible.
+ */
+describe('commitsDejaReferences — une commande, la meme verite', () => {
+  it('distingue le commit retenu par une reference du commit orphelin', () => {
+    const { base, worktreeRoot, copie } = copieOrpheline()
+    const orphelin = git(copie, 'rev-parse', 'HEAD')
+    const retenu = git(base, 'rev-parse', 'HEAD')
+    const reponse = manager(base, worktreeRoot).commitsDejaReferences([retenu, orphelin, 'pas-un-sha'])
+    expect(reponse.get(retenu)).toBe(true)
+    expect(reponse.get(orphelin)).toBe(false)
+    expect(reponse.get('pas-un-sha')).toBeUndefined()
+  })
+  it('rend la MEME reponse que la voie unitaire qu’elle remplace', () => {
+    const { base, worktreeRoot, copie } = copieOrpheline()
+    const orphelin = git(copie, 'rev-parse', 'HEAD')
+    const retenu = git(base, 'rev-parse', 'HEAD')
+    const gestionnaire = manager(base, worktreeRoot)
+    const lot = gestionnaire.commitsDejaReferences([retenu, orphelin])
+    expect(lot.get(retenu)).toBe(gestionnaire.commitDejaReference(retenu))
+    expect(lot.get(orphelin)).toBe(gestionnaire.commitDejaReference(orphelin))
+  })
+})

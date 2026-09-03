@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DUREE_MAX_MS,
+  DUREE_MAX_DICTEE_MS,
   MS_SILENCE_FIN,
   TAUX_WHISPER,
   avancerVad,
@@ -261,5 +262,27 @@ describe('verdictMicro', () => {
     for (const v of ['coupe', 'silence', 'faible', 'bon', 'sature'] as const) {
       expect(MESSAGE_VERDICT[v].length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('dictée : première apparition de texte en parole continue', () => {
+  const taille = 1_600 // 100 ms à 16 kHz
+
+  it('coupe la parole continue à DUREE_MAX_DICTEE_MS, sans toucher au plafond de Jarvis', () => {
+    // LE DÉFAUT MESURÉ : en parlant sans pause, rien ne sort avant DUREE_MAX_MS (15 s) + le temps
+    // de transcription. L'utilisateur voit un champ vide et conclut « ça ne marche pas ».
+    expect(DUREE_MAX_DICTEE_MS).toBeLessThanOrEqual(3_000)
+    expect(DUREE_MAX_MS).toBe(15_000)
+
+    let etat = etatVadInitial
+    const segments: Float32Array[] = []
+    const nbBlocs = Math.ceil(DUREE_MAX_DICTEE_MS / 100) + 2
+    for (let i = 0; i < nbBlocs; i += 1) {
+      const pas = avancerVad(etat, parole(taille), TAUX_WHISPER, SEUIL_PAROLE, DUREE_MAX_DICTEE_MS)
+      etat = pas.etat
+      if (pas.segment) segments.push(pas.segment)
+    }
+    expect(segments).toHaveLength(1)
+    expect(segments[0].length / TAUX_WHISPER).toBeLessThanOrEqual(DUREE_MAX_DICTEE_MS / 1000 + 0.2)
   })
 })
