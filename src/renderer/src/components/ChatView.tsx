@@ -4502,7 +4502,7 @@ export function ChatView({
                       data-testid="chat-git-branch"
                       title={`Branche git courante du depot : ${gitBranch}`}
                     >
-                      ⑂ {gitBranch}
+                      <ForkIcon /> {gitBranch}
                     </span>
                   )}
                   {/*
