@@ -181,6 +181,21 @@ export function recapMessage(recap: JournalRecap, stillWorking: boolean): string
   const corps = recap.text
     ? recap.text
     : `${recap.events} étape(s) enregistrée(s), aucun message final à cet instant.`
+  /*
+   * LES COMPTEURS INTERNES NE SORTENT QUE S'ILS DISENT QUELQUE CHOSE.
+   *
+   * Mesure du 2026-09-03 (conv-18) : l'utilisateur relit son fil et y trouve « Couverture
+   * structuree : 100 % (222/222) · 0 diagnostic(s) · 0 blocage(s) · 0 bruit(s) · 0 perte(s) de
+   * preuve. » — cinq chiffres de mecanique interne, tous neutres, reposes a CHAQUE retour de
+   * l'app. Un journal relu en entier n'a aucune reserve a formuler : la taire ne retire aucune
+   * information a l'utilisateur, et lui rend un fil lisible.
+   *
+   * Des qu'une ligne n'a pas ete comprise, ou qu'une erreur exploitable a ete vue, la reserve
+   * redevient due et les compteurs repartent avec elle : c'est la qu'ils informent vraiment.
+   */
+  if (recap.unreadable === 0 && recap.diagnostics.length === 0) {
+    return `${entete}\n\n${corps}`
+  }
   const coverage =
     `\n\nCouverture structurée : ${recap.coverage.structuredPercent} % ` +
     `(${recap.coverage.structured}/${recap.coverage.total}) · ` +
