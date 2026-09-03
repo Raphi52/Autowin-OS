@@ -32,8 +32,8 @@ export function InterfaceView(): React.JSX.Element {
         <div className="interface-row-text">
           <strong>Mode clair</strong>
           <p>
-            Fonds clairs et texte sombre. Désactivé, l’application garde son mode nuit, qui reste
-            le réglage par défaut. Le choix est mémorisé sur ce poste.
+            Fonds clairs et texte sombre. Désactivé, l’application garde son mode nuit, qui reste le
+            réglage par défaut. Le choix est mémorisé sur ce poste.
           </p>
         </div>
         <label className="interface-switch">
