@@ -142,6 +142,22 @@
   border-color: var(--line);
 }
 
+/* Bouton MODE AUTO (haut de la liste des conversations) : son contour est
+   `rgba(255,255,255,0.13)` EN DUR (ChatView.css l.3956) — un blanc a 13 %, donc
+   INVISIBLE sur fond clair. Le bouton se lit alors comme un simple texte et on ne
+   devine pas qu'il se clique. Constate a l'ecran le 2026-09-03.
+   Sa pastille d'etat a le meme defaut (l.3971) : blanc translucide sur blanc.
+   L'etat ACTIF n'est pas repris ici : il est deja dore (#d4a94f), lisible partout. */
+:root[data-theme='clair'] .conv-auto-toggle {
+  border-color: var(--line);
+}
+:root[data-theme='clair'] .conv-auto-toggle:hover {
+  border-color: rgba(15, 20, 35, 0.32);
+}
+:root[data-theme='clair'] .conv-auto-toggle .conv-auto-dot {
+  background: rgba(15, 20, 35, 0.28);
+}
+
 /* Écran d'un NOUVEAU FIL : les quatre suggestions « Pour démarrer » sont peintes
    en #070d13 EN DUR (ChatView.css l.2277) — quatre rectangles noirs au milieu
    d'une page blanche, texte invisible. Signalé le 2026-09-03. La barre de saisie
