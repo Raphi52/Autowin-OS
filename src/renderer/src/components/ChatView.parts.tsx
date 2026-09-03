@@ -57,32 +57,40 @@ const CMD_LABEL: Record<string, string> = {
  */
 function LignePipeline({ choix }: { choix: PipelineChoice }): React.JSX.Element {
   const [ouvert, setOuvert] = useState(false)
-  const depliable = Boolean(choix.prompt || choix.outcome)
+  const detaille = Boolean(choix.prompt || choix.outcome)
   const nom = [choix.phase, choix.role].filter(Boolean).join(' ') || 'etape'
   const estControle = choix.phase === 'gate' || choix.role === 'gate'
   return (
-    <li className={depliable ? 'is-depliable' : undefined} data-testid="activity-pipeline-line">
+    <li className="is-depliable" data-testid="activity-pipeline-line">
       <div className="activity-pipeline-head">
-        {choix.phase && <span className="activity-step-phase">{choix.phase}</span>}
-        {choix.role && <span className="activity-step-role">{choix.role}</span>}
-        {(choix.provider || choix.model) && (
-          <span className="activity-step-agent">
-            {[choix.provider, choix.model].filter(Boolean).join(' · ')}
-          </span>
-        )}
-        {depliable && (
-          <button
-            type="button"
-            className="activity-step-toggle"
-            data-testid="activity-pipeline-toggle"
-            aria-expanded={ouvert}
-            aria-label={ouvert ? `Replier ${nom}` : `Deplier le detail de ${nom}`}
-            onClick={() => setOuvert((etat) => !etat)}
-          >
-            {ouvert ? '▾' : '▸'}
-          </button>
-        )}
+        <button
+          type="button"
+          className="activity-step-toggle activity-pipeline-chevron"
+          data-testid="activity-pipeline-toggle"
+          aria-expanded={ouvert}
+          aria-label={ouvert ? `Replier ${nom}` : `Deplier le detail de ${nom}`}
+          onClick={() => setOuvert((etat) => !etat)}
+        >
+          {ouvert ? '▼' : '▶'}
+        </button>
+        <span className="activity-pipeline-identite">
+          {choix.phase && <span className="activity-step-phase">{choix.phase}</span>}
+          {choix.role && <span className="activity-step-role">{choix.role}</span>}
+          {(choix.provider || choix.model) && (
+            <span className="activity-step-agent">
+              {[choix.provider, choix.model].filter(Boolean).join(' · ')}
+            </span>
+          )}
+        </span>
       </div>
+      {/* Une etape SANS prompt ni resultat garde sa fleche (demande du 2026-09-03 : « une fleche
+          pour deplier chaque etape ») ; le pli dit alors franchement qu'il n'y a rien encore,
+          plutot que de s'ouvrir sur du vide. */}
+      {ouvert && !detaille && (
+        <div className="activity-pipeline-vide" data-testid="activity-pipeline-vide">
+          aucun détail reçu pour cette étape (elle est en cours ou n’a rien rendu)
+        </div>
+      )}
       {ouvert && choix.prompt && (
         <>
           <div className="activity-pipeline-titre">prompt envoyé</div>

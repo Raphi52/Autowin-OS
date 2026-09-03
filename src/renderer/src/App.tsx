@@ -8,6 +8,7 @@ declare const __BUILD_NUMBER__: string
 declare const __BUILD_SHA__: string
 const buildNumber = typeof __BUILD_NUMBER__ === 'string' ? __BUILD_NUMBER__ : 'dev'
 const buildSha = typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'local'
+import { Spinner } from './components/Spinner'
 import { ChatView } from './components/ChatView'
 import { VueMesuree } from './components/VueMesuree'
 import { HomeView } from './components/HomeView'
@@ -43,7 +44,6 @@ import {
   type Tab,
   type TaskManagerSection
 } from './tabs'
-import autowinLogo from './assets/autowin-logo-transparent.png'
 import './assets/app-shell.css'
 import './assets/cosmic-outline.css'
 import './assets/theme-modes.css'
@@ -455,7 +455,7 @@ export function MainApp(): React.JSX.Element {
       <FirstRunWizard />
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
-          <img className="brand-logo" src={autowinLogo} alt="" aria-hidden="true" />
+          <Spinner className="brand-logo" size={34} />
           <span className="brand-name">Autowin OS</span>
           <button
             type="button"

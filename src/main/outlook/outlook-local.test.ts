@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -167,5 +167,62 @@ describe('ou trouver le script de lecture', () => {
 
   it('ne touche pas un dossier qui CONTIENT le mot asar sans en etre une', () => {
     expect(resolveOutlookScriptPath('/home/dev/mon-app.asarnaut')).not.toContain('unpacked')
+  })
+})
+
+describe('reponse envoyee depuis l accueil', () => {
+  it('passe le corps par un FICHIER en UTF-8, jamais par la ligne de commande', async () => {
+    // La sortie et l'entree de PowerShell sont en cp1252 sur ce poste : un accent passe en argument
+    // arrive abime. Le corps voyage donc par un fichier, comme l'instantane.
+    let luDansLeFichier = ''
+    const replier = vi.fn(async (_script: string, _id: string, corpsPath: string) => {
+      luDansLeFichier = await readFile(corpsPath, 'utf8')
+      return 0
+    })
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), replier })
+    const resultat = await passerelle.replyToItem('A'.repeat(32), 'Réponse à préparer — ça va ?')
+    expect(resultat.ok).toBe(true)
+    expect(luDansLeFichier).toBe('Réponse à préparer — ça va ?')
+  })
+
+  it('refuse un identifiant qui n a pas la forme d un element Outlook', async () => {
+    const replier = vi.fn(async () => 0)
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), replier })
+    const resultat = await passerelle.replyToItem('../../evil', 'Bonjour')
+    expect(resultat.ok).toBe(false)
+    expect(replier).not.toHaveBeenCalled()
+  })
+
+  it('refuse un corps vide : un envoi est irreversible, on ne devine pas', async () => {
+    const replier = vi.fn(async () => 0)
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), replier })
+    expect((await passerelle.replyToItem('A'.repeat(32), '   ')).ok).toBe(false)
+    expect(replier).not.toHaveBeenCalled()
+  })
+
+  it('nomme la cause quand le script echoue', async () => {
+    const replier = vi.fn(async () => 3)
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), replier })
+    const resultat = await passerelle.replyToItem('A'.repeat(32), 'Bonjour')
+    expect(resultat.ok).toBe(false)
+    expect(resultat.erreur).toMatch(/n.existe plus/i)
+  })
+
+  it('vise le script de reponse, pas celui de lecture', async () => {
+    const replier = vi.fn(async (_script: string, _id: string, _corps: string) => 0)
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), replier })
+    await passerelle.replyToItem('A'.repeat(32), 'Bonjour')
+    expect(replier.mock.calls[0][0]).toMatch(/outlook-local-reply\.ps1$/)
+  })
+
+  it('efface le fichier de corps apres l envoi', async () => {
+    let chemin = ''
+    const replier = vi.fn(async (_s: string, _i: string, corpsPath: string) => {
+      chemin = corpsPath
+      return 0
+    })
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), replier })
+    await passerelle.replyToItem('A'.repeat(32), 'Bonjour')
+    await expect(readFile(chemin, 'utf8')).rejects.toThrow()
   })
 })

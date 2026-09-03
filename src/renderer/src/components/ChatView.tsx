@@ -148,6 +148,7 @@ import type { CheckpointEntry } from './chat-view-types'
 import { useSkillsCatalog } from './useSkillsInventory'
 import { messageTravailNonPublie, promptTravauxNonPublies } from './travail-non-publie'
 import { TravauxNonPublies } from './TravauxNonPublies'
+import { ChatFindBar } from './ChatFindBar'
 import { Spinner } from './Spinner'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
@@ -417,6 +418,29 @@ export function ChatView({
   }, [isActive])
   const [openImage, setOpenImage] = useState<{ src: string; name: string } | null>(null)
   const [dragActive, setDragActive] = useState(false)
+
+  /**
+   * CTRL+F DANS LA CONVERSATION (conv-21).
+   *
+   * On intercepte le raccourci du navigateur : sa recherche native n'existe pas dans une fenêtre
+   * Electron sans chrome, et l'utilisateur n'avait donc AUCUN moyen de retrouver un mot dans un
+   * fil long. Seul l'état ouvert/fermé vit ici — le terme cherché reste dans `ChatFindBar`, pour
+   * que la frappe ne re-rende pas le fil.
+   */
+  const [rechercheFilOuverte, setRechercheFilOuverte] = useState(false)
+  useEffect(() => {
+    const surTouche = (event: KeyboardEvent): void => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+      if (event.key !== 'f' && event.key !== 'F') return
+      event.preventDefault()
+      setRechercheFilOuverte(true)
+      // Barre deja ouverte : le raccourci REPREND la main dessus (et selectionne le terme, pour
+      // le remplacer d'une frappe) au lieu de ne rien faire.
+      document.querySelector<HTMLInputElement>('.chat-find-input')?.select()
+    }
+    document.addEventListener('keydown', surTouche)
+    return () => document.removeEventListener('keydown', surTouche)
+  }, [])
 
   useEffect(() => {
     if (!openImage) return
@@ -3098,6 +3122,14 @@ export function ChatView({
     /** Décidé à l'échec du tour, exécuté APRÈS sa clôture (voir le `finally`). */
     let repriseApresSurcharge: { tentative: number; attenteMs: number; ancre?: string } | null =
       null
+    /**
+     * Le tour a-t-il « réussi » en ne rendant QUE l'incident du fournisseur ? Mesuré le 2026-09-03
+     * (conv-28) : la surcharge est arrivée dans le TEXTE de la réponse, pas dans `error`. Le tour
+     * comptait pour un succès, la porte de reprise répondait « succès », et l'utilisateur devait
+     * retaper sa demande. Le texte rendu n'est connu qu'après la clôture : on garde donc de quoi
+     * rejuger là-bas.
+     */
+    let ancreCopieSurcharge: string | undefined
     const sourcePreviousMessages = sourceConversationId
       ? (liveMessagesRef.current.get(sourceConversationId) ?? [])
       : messages
@@ -3291,6 +3323,11 @@ export function ChatView({
         payload[payload.length - 1].content,
         mentionSourcesRef.current
       )
+      // Point de copie : le dernier message DÉJÀ ENREGISTRÉ avant la demande. La copie s'arrête donc
+      // juste avant elle, et la reprise la rejoue proprement.
+      ancreCopieSurcharge = [...previousMessagesForTarget]
+        .reverse()
+        .find((m) => m.messageId)?.messageId
       const res = await window.api.pilotChat(payload, convId)
       if (!res.ok || res.cancelled) {
         // Surcharge du modèle : on décide ICI, on exécute après la clôture du tour.
@@ -3306,7 +3343,7 @@ export function ChatView({
             attenteMs: decision.attenteMs,
             // Point de copie : le dernier message DÉJÀ ENREGISTRÉ avant la demande qui a échoué. La
             // copie s'arrête donc juste avant elle, et la reprise la rejoue proprement.
-            ancre: [...previousMessagesForTarget].reverse().find((m) => m.messageId)?.messageId
+            ancre: ancreCopieSurcharge
           }
         const plafondAtteint =
           decision.action === 'renoncer' && decision.raison === 'plafond-atteint'
@@ -3387,6 +3424,32 @@ export function ChatView({
             .map((part) => part.text)
             .join('\n') ?? ''
         if (renderedText.trim()) await window.api.markResponseDisplayed(convId, renderedText)
+        // Le tour s'est CLOS sans erreur, mais tout ce qu'il a rendu est l'incident du fournisseur :
+        // c'est la même perte qu'un échec, elle passait juste par un autre chemin. On la fait juger
+        // par la MÊME porte, avec le texte rendu — jamais par une règle parallèle.
+        if (!repriseApresSurcharge) {
+          const surTexte = deciderRepriseSurcharge({
+            ok: true,
+            cancelled: false,
+            texteRendu: renderedText,
+            tentativesDejaFaites: options?.repriseSurcharge ?? 0
+          })
+          if (surTexte.action === 'forker-et-reprendre') {
+            repriseApresSurcharge = {
+              tentative: surTexte.tentative,
+              attenteMs: surTexte.attenteMs,
+              ancre: ancreCopieSurcharge
+            }
+            patchLast(convId, (m) => {
+              m.status = 'failed'
+              m.parts.push({
+                kind: 'error',
+                cause: 'turn',
+                message: `${renderedText.trim()} — ${libelleReprise(surTexte.tentative)}`
+              })
+            })
+          }
+        }
       }
       // APRÈS la clôture du tour, jamais avant : le rejeu se heurterait sinon à la garde « un tour
       // est déjà en cours » et serait avalé sans bruit.
@@ -4427,6 +4490,12 @@ export function ChatView({
               <strong>Dépose tes fichiers ici</strong>
               <span>Ils seront joints au prochain message</span>
             </div>
+          )}
+          {rechercheFilOuverte && (
+            <ChatFindBar
+              racine={() => scrollRef.current}
+              onFermer={() => setRechercheFilOuverte(false)}
+            />
           )}
           <header className="chat-head row">
             <div className="row gap2" style={{ alignItems: 'center', minWidth: 0 }}>

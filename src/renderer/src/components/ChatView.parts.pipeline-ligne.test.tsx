@@ -87,13 +87,24 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
     expect(container.textContent).toContain('décision et motif')
   })
 
-  it('aucun chevron de ligne quand la ligne ne porte ni prompt ni resultat', () => {
-    const action = orchestration({ pipeline: [{ phase: 'scout', role: 'subagent' }] })
+  it('CHAQUE etape garde sa fleche, meme sans prompt ni resultat, et le dit', () => {
+    const action = orchestration({
+      pipeline: [
+        { phase: 'frame', role: 'subagent' },
+        { phase: 'build', role: 'subagent' }
+      ]
+    })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
     act(() =>
       container.querySelector<HTMLButtonElement>('[data-testid="activity-step-toggle"]')!.click()
     )
-    expect(container.querySelector('[data-testid="activity-pipeline-toggle"]')).toBeNull()
+    const chevrons = container.querySelectorAll<HTMLButtonElement>(
+      '[data-testid="activity-pipeline-toggle"]'
+    )
+    expect(chevrons).toHaveLength(2)
+    expect(container.querySelector('[data-testid="activity-pipeline-vide"]')).toBeNull()
+    act(() => chevrons[1].click())
+    expect(container.querySelectorAll('[data-testid="activity-pipeline-vide"]')).toHaveLength(1)
   })
 })
 
