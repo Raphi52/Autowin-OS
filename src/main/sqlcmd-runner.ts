@@ -26,7 +26,7 @@
  *
  * `shell: false` et arguments en TABLEAU : rien ne traverse un interpréteur de commandes.
  */
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
