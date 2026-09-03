@@ -4476,6 +4476,31 @@ export function ChatView({
                       ? shortModelLabel(runtimeIdentity.modelLabel, runtimeIdentity.provider)
                       : 'modèle en cours de résolution'}
                   </span>
+                  {/*
+                  L'IDENTIFIANT de la conversation, a la place de « interface prete ».
+
+                  Ce libelle ne disait rien : une interface affichee est prete, sinon on ne la
+                  lirait pas. Pendant ce temps l'agent cite des conversations par leur id
+                  (« conv-12 ») sans que rien a l'ecran ne permette de savoir laquelle on regarde.
+                  La place etait donc occupee par du bruit alors qu'il manquait la seule
+                  information qui relie ce que l'agent dit a ce que l'utilisateur voit.
+
+                  L'etat occupe n'est PAS perdu : il reste porte par la classe `is-busy`, par la
+                  pastille, et par la mention ajoutee a la suite de l'id.
+                */}
+                  <span
+                    className={`chat-runtime-state${busy ? ' is-busy' : ''}`}
+                    data-testid="chat-runtime-conv"
+                    title={
+                      activeId
+                        ? `Identifiant de cette conversation : ${activeId}. C'est ce nom que l'agent emploie quand il parle d'une conversation.`
+                        : 'Aucune conversation ouverte'
+                    }
+                  >
+                    {/* Pas de pastille ici : l'etat occupe se lit sur « en cours » et la classe is-busy. */}
+                    {activeId ?? 'aucune conversation'}
+                    {busy && ' · en cours'}
+                  </span>
                   {(() => {
                     const dossierProjet = active?.projectPath?.trim()
                     const cheminEffectif = dossierProjet || defaultWorkspace
@@ -4536,31 +4561,6 @@ export function ChatView({
                       <ForkIcon /> {gitBranch}
                     </span>
                   )}
-                  {/*
-                  L'IDENTIFIANT de la conversation, a la place de « interface prete ».
-
-                  Ce libelle ne disait rien : une interface affichee est prete, sinon on ne la
-                  lirait pas. Pendant ce temps l'agent cite des conversations par leur id
-                  (« conv-12 ») sans que rien a l'ecran ne permette de savoir laquelle on regarde.
-                  La place etait donc occupee par du bruit alors qu'il manquait la seule
-                  information qui relie ce que l'agent dit a ce que l'utilisateur voit.
-
-                  L'etat occupe n'est PAS perdu : il reste porte par la classe `is-busy`, par la
-                  pastille, et par la mention ajoutee a la suite de l'id.
-                */}
-                  <span
-                    className={`chat-runtime-state${busy ? ' is-busy' : ''}`}
-                    data-testid="chat-runtime-conv"
-                    title={
-                      activeId
-                        ? `Identifiant de cette conversation : ${activeId}. C'est ce nom que l'agent emploie quand il parle d'une conversation.`
-                        : 'Aucune conversation ouverte'
-                    }
-                  >
-                    {/* Pas de pastille ici : l'etat occupe se lit sur « en cours » et la classe is-busy. */}
-                    {activeId ?? 'aucune conversation'}
-                    {busy && ' · en cours'}
-                  </span>
                   {/* La depense du fil vit dans la barre du haut, plus dans la zone de saisie. */}
                   <ConversationCostIndicator conversationId={activeId ?? undefined} busy={busy} />
                 </div>

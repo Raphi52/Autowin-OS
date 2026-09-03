@@ -460,12 +460,24 @@
   flex: none;
   align-items: center;
   gap: 5px;
-  /* Le nom de la conversation est une information de reperage, pas une alerte : gris, jamais vert. */
-  color: #97a3b1;
+  /* Le nom de la conversation est un reperage, pas une alerte : blanc, quel que soit l'etat. */
+  color: #ffffff;
 }
 
 .cosmic-outline .chat-runtime-state.is-busy {
-  color: #97a3b1;
+  color: #ffffff;
+}
+
+/*
+  L'ICONE DE BRANCHE ET SON NOM SUR LA MEME LIGNE.
+
+  Le svg est un element inline : pose sur la ligne de base, il faisait descendre le texte
+  « main » sous le reste de la barre. En inline-flex centre, les deux se calent au milieu.
+*/
+.cosmic-outline .chat-runtime [data-testid='chat-git-branch'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .cosmic-outline .chat-scroll {
