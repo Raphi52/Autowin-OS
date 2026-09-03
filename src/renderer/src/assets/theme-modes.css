@@ -382,8 +382,22 @@
   border-color: rgba(140, 100, 18, 0.3);
 }
 
+/* VOILE DE BRUME — direction choisie par l'utilisateur le 2026-09-03, parmi
+   trois propositions. Le décor n'est pas une image mais une scène 3D montée à la
+   racine (`home-decor-scene.ts`) : on ne la retouche donc PAS, on pose un voile
+   ivoire par-dessus. Le cosmos reste là, lavé comme un ciel de jour, et le fond
+   se cale juste sous le blanc des fenêtres pour qu'elles se détachent encore.
+   Réversible d'une ligne : c'est l'argument qui a fait préférer cette voie au
+   chantier de shaders. */
 :root[data-theme='clair'] .home-view::after {
-  background: radial-gradient(58% 48% at 50% 46%, rgba(255, 255, 255, 0.5), transparent 78%);
+  background:
+    linear-gradient(
+      170deg,
+      rgba(250, 248, 243, 0.9) 0%,
+      rgba(246, 244, 239, 0.86) 45%,
+      rgba(243, 240, 234, 0.9) 100%
+    ),
+    radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%);
 }
 :root[data-theme='clair'] .cosmic-outline .activity-group-tools {
   color: var(--text-dim);
