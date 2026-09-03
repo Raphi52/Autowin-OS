@@ -2549,6 +2549,23 @@ export function ChatView({
     )
       return
     stoppedQueueDrainRef.current.add(id)
+    /*
+     * STOP = « J'ARRÊTE TOUT » (choix de l'utilisateur, 2026-09-03).
+     *
+     * Le garde ci-dessus ne protégeait QUE le vidage de la file de messages. La boucle du mode auto,
+     * elle, se déclenche sur la transition « plus occupé » — exactement ce que produit ce Stop : le
+     * tour mourait et la suite repartait dans la seconde. Mesuré sur les journaux de tours de
+     * conv-24 : trois tours successifs sans aucun évènement de fin, et « le bouton stop n'arrête pas
+     * la réflexion ». On désarme donc la boucle ICI, avant l'annulation, pour qu'aucune relance ne
+     * puisse se glisser dans la course entre le clic et la fin réelle du tour.
+     */
+    autoAllumageManuelRef.current = false
+    autoSuiviesRef.current.clear()
+    autoEssaisRef.current.clear()
+    if (autoActif) {
+      setAutoActif(false)
+      setAutoNotice('Mode auto arrêté par le Stop.')
+    }
     setConversationInterrupting(id, true)
     // Même si l'IPC perd la course avec la fin réelle du tour, le geste Stop garde la file.
     // En revanche, libère le feedback « Arrêt… » si aucune annulation n'a été prise en charge.

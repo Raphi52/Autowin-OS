@@ -278,6 +278,19 @@
 :root[data-theme='clair'] .cosmic-outline .activity-group-title {
   color: var(--text);
 }
+
+/* La zone DÉPLIÉE d'une action (le contenu lu, la sortie d'un outil) :
+   `cosmic-outline.css` l.616-617 lui donne un fond noir `rgba(0, 0, 0, 0.35)` et
+   un texte `#9caab5`. Signalé par l'utilisateur le 2026-09-03 : « quand on déplie
+   une action en cours, la zone est sombre ». */
+:root[data-theme='clair'] .cosmic-outline .activity-step-detail {
+  background: rgba(15, 20, 35, 0.04);
+  border-left-color: var(--line);
+  color: var(--text);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-step-target {
+  color: var(--text-dim);
+}
 :root[data-theme='clair'] .cosmic-outline .activity-group-tools {
   color: var(--text-dim);
 }
