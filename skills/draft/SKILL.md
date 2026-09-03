@@ -47,6 +47,12 @@ KEPT/KILLED : elements grafted in, elements rejected
 | **surface of a RUNNING app** (redesigning a part of a live app — chat bar, panel, toolbar) | inline render in the host chat | the live app IS the render target: **`desktop_observe`** the real screen, then draw at the REAL SCALE of that component (same width, same font sizes, same live colors read from its CSS/XAML). A thumbnail sketch 3x smaller than the real widget is NOT a mockup and misleads the user. |
 | **host WITHOUT `Artifact`/Claude Preview** (e.g. an embedded agent chat) | inline HTML block supported by the host | those deferred MCP tools do NOT exist here — do not pretend to capture. Substitute: `desktop_observe` on the real surface, else state plainly "not observed". |
 
+### Inline mockup recipes (host chat, no Preview) — MANDATORY
+The inline renderer has NO emoji font and NO icon font. Every mockup icon/button MUST be built from these recipes, never from a pasted glyph:
+- **Icons**: NEVER `📎 🎤 ↑ ◍ ◼ ⏎` as drawn objects. Use a lowercase monospace WORD (`fichier`, `micro`, `envoyer`) or an inline `<svg>` with `stroke="currentColor"`. Keyboard keys stay as text only inside a caption line, never as a button face.
+- **Round/pill button**: centring by `inline-grid`+`place-items` is unreliable inside a flex row. Use exactly `display:flex;align-items:center;justify-content:center;flex:0 0 auto;width:32px;height:32px;line-height:1;border-radius:50%` and put an `<svg>` (not a character) inside.
+- **Self-check before showing**: re-read your own HTML and confirm zero emoji codepoints and zero character used as a button face. A mockup whose button renders wrong invalidates the whole round — the user judges the drawing, not the intent.
+
 Note: `visualize.show_widget` renders INLINE in chat (presenting to user) — no PNG on disk, NOT a substitute for the READ self-check; use Claude Preview for that.
 
 `capture-window.ps1` (bundled): generic (title/PID/exe), detects "exited early" crash + near-black renders. Ex: `powershell -NoProfile -File capture-window.ps1 -Exe "C:\proj\bin\Debug\App.exe" -KillFirst`.
