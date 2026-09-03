@@ -14,6 +14,7 @@
  *    pendant l'attente reviendrait à écouter la pièce sans le dire.
  */
 import {
+  DUREE_MAX_DICTEE_MS,
   SEUIL_PAROLE,
   TAUX_WHISPER,
   avancerVad,
@@ -148,7 +149,9 @@ export class Dictee {
   }
 
   private auBloc(bloc: Float32Array): void {
-    const pas = avancerVad(this.vad, bloc, this.taux, SEUIL_PAROLE)
+    // Plafond COURT ici : en parole continue, c'est lui qui déclenche la première apparition de
+    // texte dans le champ. Le plafond long de Jarvis laisserait l'écran vide 15 s.
+    const pas = avancerVad(this.vad, bloc, this.taux, SEUIL_PAROLE, DUREE_MAX_DICTEE_MS)
     this.vad = pas.etat
     if (pas.segment) this.enfiler(pas.segment, this.taux)
   }
