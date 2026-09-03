@@ -449,6 +449,26 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               )
             })()}
           <div className="composer-input-row">
+            {/*
+              APERCU DE DICTEE, EN GRIS, DANS LE CHAMP LUI-MEME.
+              Un textarea natif ne sait pas afficher deux couleurs : le texte provisoire est donc
+              peint par un calque pose EXACTEMENT sur le champ (memes police, taille et marges),
+              ou le texte deja saisi est rendu invisible pour reserver sa place, et seul l'apercu
+              se voit. Le calque ne recoit aucun clic : le curseur reste dans le vrai champ.
+            */}
+            {dicteeApercu !== '' && dicteeEtat === 'ecoute' ? (
+              <div
+                className="composer-dictee-apercu"
+                data-testid="composer-dictee-apercu"
+                aria-hidden="true"
+              >
+                <span className="composer-dictee-apercu-place">{input}</span>
+                <span className="composer-dictee-apercu-texte">
+                  {input !== '' && !input.endsWith(' ') ? ' ' : ''}
+                  {dicteeApercu}
+                </span>
+              </div>
+            ) : null}
             {props.leadingNode}
             <textarea
               ref={inputRef}
@@ -578,33 +598,32 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 // Niveau brut ×4 : la parole normale vit vers 0,05-0,25 en valeur efficace, une
                 // barre à l'échelle 1 resterait plate et ne prouverait rien à l'oeil.
                 style={{ '--niveau': String(Math.min(1, dicteeNiveau * 4)) } as React.CSSProperties}
-                aria-hidden="true"
-                title="Niveau du micro"
+                title={`Niveau du micro · volume ×${dicteeGain.toFixed(1)}`}
               >
-                <i />
+                <i aria-hidden="true" />
+                {/* Le réglage VIT SUR la barre verticale : curseur vertical transparent posé
+                    dessus, pas une seconde barre horizontale à côté (demande du 2026-09-03). */}
+                <input
+                  type="range"
+                  className="composer-dictee-gain"
+                  data-testid="composer-dictee-gain"
+                  min={GAIN_MIN}
+                  max={GAIN_MAX}
+                  step={0.1}
+                  value={dicteeGain}
+                  onChange={(e) => {
+                    const valeur = Number(e.target.value)
+                    setDicteeGain(valeur)
+                    try {
+                      window.localStorage?.setItem(CLE_GAIN_DICTEE, String(valeur))
+                    } catch {
+                      // Réglage non mémorisé : il vaut quand même pour la dictée en cours.
+                    }
+                  }}
+                  aria-label="Volume de capture du micro"
+                  title={`Volume de capture : ×${dicteeGain.toFixed(1)}`}
+                />
               </span>
-            ) : null}
-            {dicteeEtat === 'ecoute' ? (
-              <input
-                type="range"
-                className="composer-dictee-gain"
-                data-testid="composer-dictee-gain"
-                min={GAIN_MIN}
-                max={GAIN_MAX}
-                step={0.1}
-                value={dicteeGain}
-                onChange={(e) => {
-                  const valeur = Number(e.target.value)
-                  setDicteeGain(valeur)
-                  try {
-                    window.localStorage?.setItem(CLE_GAIN_DICTEE, String(valeur))
-                  } catch {
-                    // Réglage non mémorisé : il vaut quand même pour la dictée en cours.
-                  }
-                }}
-                aria-label="Volume de capture du micro"
-                title={`Volume de capture : ×${dicteeGain.toFixed(1)}`}
-              />
             ) : null}
             {props.metaNode}
             {props.stopNode}
@@ -645,15 +664,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               </span>
             </button>
           </div>
-          {dicteeApercu !== '' && dicteeEtat === 'ecoute' ? (
-            <div
-              className="composer-dictee-apercu"
-              data-testid="composer-dictee-apercu"
-              role="status"
-            >
-              {dicteeApercu}
-            </div>
-          ) : null}
           {dicteeErreur ? (
             <div
               className="composer-dictee-message"

@@ -41,9 +41,15 @@ const CRITICAL_SIGNALS =
 const NEGATED_CRITICAL_SIGNALS =
   /\b(?:ne\s+pas|n['’]\s*|pas\s+de|aucun(?:e)?|sans|ni|do\s+not|don't|without)\s+(?:[^\s.;,:!?]+\s+){0,5}(?:architect\w*|refactor\w*|migrat\w*|s[eé]curit\w*|security|auth\w*|pipeline|orchestrat\w*|transvers\w*|breaking|irr[eé]versibl\w*|production|prod\b|deploy\w*|d[eé]ploie\w*|sch[eé]ma|schema|multi-\w+|tout le|l'ensemble|whole|entire)/gi
 
-/** Signaux de TRIVIALITÉ (→ trivial) : micro-édition ciblée, déjà précise. */
+/**
+ * Signaux de TRIVIALITÉ (→ trivial) : micro-édition ciblée, déjà précise.
+ * Inclut les RETOUCHES D'APPARENCE (couleur, pastille, icône, taille, alignement, espacement) :
+ * mesuré sur conv-210, chacune de ces demandes d'une ligne partait en pipeline complet alors qu'un
+ * seul pas de build suffit. La rétrogradation reste bornée : `critical` est testé AVANT, et la tâche
+ * doit rester courte et mono-clause.
+ */
 const TRIVIAL_SIGNALS =
-  /\b(typo|renomm\w*|rename|corrige la faute|coquille|commentaire|comment|reformul\w*|un mot|one word|bump\w*|version|lint|format\w*)\b/i
+  /\b(typo|renomm\w*|rename|corrige la faute|coquille|commentaire|comment|reformul\w*|un mot|one word|bump\w*|version|lint|format\w*|pastille|badge|ic[oôö]ne|icon|couleur|color|gris|grey|gray|blanc|white|noir|black|police|font|padding|marge|margin|align\w*|gras|bold|italique|majuscule|uppercase|css|arrondi|bordure|border|bo[iî]te|encadr\w*|contour|fond|background|ombre|shadow|espacement|taille)\b/i
 
 /**
  * Classe une tâche. Ordre : critical d'abord (prudence), puis trivial (signal FORT + tâche courte),

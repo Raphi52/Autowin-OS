@@ -280,3 +280,48 @@ describe('ChatComposer — volume de capture du micro', () => {
     hote.remove()
   })
 })
+
+/**
+ * DEFAUT MESURE (2026-09-03) : « le texte gris devrait apparaitre dans la barre de prompting ».
+ * L'apercu provisoire s'affichait dans un bandeau SOUS le champ : le morceau reconnu semblait
+ * apparaitre ailleurs puis disparaitre au moment ou la phrase definitive entrait dans le champ.
+ * Il doit desormais etre peint DANS la barre de saisie, a la suite du texte deja ecrit.
+ */
+describe('ChatComposer — aperçu de dictée dans la barre', () => {
+  it('peint l’aperçu gris dans le champ, après le texte déjà saisi', async () => {
+    // La transcription ne rend jamais la main : la phrase reste au stade « aperçu ».
+    const transcrire = vi.fn(async (_wav: Uint8Array) => 'bonjour tout le monde')
+    const { pousserSon } = brancherAudio(transcrire)
+    const hote = document.createElement('div')
+    document.body.appendChild(hote)
+    const root = createRoot(hote)
+    await act(async () => {
+      root.render(<ChatComposer {...proprietes()} />)
+    })
+    const micro = hote.querySelector<HTMLButtonElement>('[data-testid="composer-dictee"]')
+    await act(async () => {
+      micro!.click()
+    })
+    // 2 s de parole continue, sans silence : un aperçu part, aucune phrase n'est encore finie
+    // (la coupe de phrase n'arrive qu'à 2,5 s).
+    for (let n = 0; n < 22; n += 1) {
+      act(() => {
+        pousserSon()
+      })
+    }
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5))
+    })
+
+    const apercu = hote.querySelector('[data-testid="composer-dictee-apercu"]')
+    expect(apercu).not.toBeNull()
+    expect(apercu!.textContent ?? '').toContain('bonjour tout le monde')
+    // Il vit DANS la barre de saisie, pas dans un bandeau en dessous.
+    expect(apercu!.closest('.composer-input-row')).not.toBeNull()
+
+    await act(async () => {
+      root.unmount()
+    })
+    hote.remove()
+  })
+})
