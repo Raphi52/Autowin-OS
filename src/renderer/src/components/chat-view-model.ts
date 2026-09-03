@@ -1795,3 +1795,38 @@ export function compenserRetrecissementDuFil(input: {
   const cible = Math.min(scrollTop + perdu, Math.max(scrollHeight - clientHeight, 0))
   return cible > scrollTop ? cible : null
 }
+
+/**
+ * LE MESSAGE PARTI DANS UN FIL QUE PERSONNE NE REGARDE (mesure du 2026-09-03, conv-171).
+ *
+ * Le routeur peut decider qu'un message ouvre un autre sujet : le main cree alors un fil neuf et
+ * rend son identifiant. Le renderer n'y BASCULE toutefois que si l'utilisateur est encore sur le
+ * fil source ET que son brouillon et sa selection n'ont pas bouge pendant l'appel au modele.
+ *
+ * LE DEFAUT : quand cette garde tombait, le message partait quand meme dans le fil neuf SANS y
+ * emmener l'utilisateur. Vu de l'ecran, le texte semblait rester en place alors qu'il etait parti
+ * dans un fil vide, jamais affiche. Constat mesure : conv-170 a recu un numero (compteur passe a
+ * 179), aucun message, et n'existait plus ensuite ; le texte ne survivait que dans le journal de
+ * secours des saisies.
+ *
+ * LA REGLE : on ne suit le routage QUE si on peut y emmener l'utilisateur. Sinon le message reste
+ * dans le fil ou il a ete ecrit, visible la ou son auteur le cherche.
+ */
+export function doitSuivreLeRoutage(input: {
+  routed: boolean
+  cibleId: string
+  sourceId: string
+  filAffiche: string | null
+  cleBrouillonEnvoi: string
+  cleBrouillonActuelle: string
+  generationSelectionEnvoi: number
+  generationSelectionActuelle: number
+}): boolean {
+  if (!input.routed) return false
+  if (input.cibleId === input.sourceId) return false
+  // Les trois conditions de la BASCULE D'ECRAN. Si l'une manque, suivre le routage rendrait le
+  // message invisible : on ne le suit donc pas du tout.
+  if (input.filAffiche !== input.sourceId) return false
+  if (input.cleBrouillonActuelle !== input.cleBrouillonEnvoi) return false
+  return input.generationSelectionActuelle === input.generationSelectionEnvoi
+}
