@@ -751,7 +751,17 @@ export class WorktreeManager {
   async recensementNonPubliesAsync(
     baseRef = 'HEAD',
     limite = 6
-  ): Promise<{ ids: string[]; apercu: Array<{ agentId: string; date: string; fichiers: string[] }> }> {
+  ): Promise<{
+    ids: string[]
+    apercu: Array<{
+      agentId: string
+      date: string
+      fichiers: string[]
+      verdict?: VerdictBureau
+      /** VRAI quand `fichiers` est l'echo d'une lecture ratee, pas une constatation de vide. */
+      lectureEchouee?: boolean
+    }>
+  }> {
     if (this.operationClient) {
       return this.operationClient.run({ operation: 'recensementNonPublies', baseRef, limite })
     }
@@ -760,7 +770,9 @@ export class WorktreeManager {
       apercu: this.apercuTravauxNonPublies(baseRef, limite).map((e) => ({
         agentId: e.agentId,
         date: e.date,
-        fichiers: e.fichiers
+        fichiers: e.fichiers,
+        verdict: e.verdict,
+        lectureEchouee: e.lectureEchouee
       }))
     }
   }
