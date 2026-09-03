@@ -216,13 +216,42 @@ describe('cablage de edit_file', () => {
     expect(spec).toContain('oldText')
   })
 
+  /**
+   * Ce garde-fou s'ancrait sur `const content =`, une ligne du corps qui a DISPARU quand la lecture est
+   * passée par `readFileText` (préservation de l'encodage, 2026-08-07). `indexOf` rendait alors -1 et
+   * le découpage devenait faux : le test échouait sans que la PROPRIÉTÉ soit en cause.
+   *
+   * Il est donc réécrit SANS ANCRE, et plus strict qu'avant : on ne vérifie plus « pas d'écriture avant
+   * telle ligne », mais que TOUS les refus précèdent l'écriture. Un refus ne peut donc pas toucher le
+   * disque, quelle que soit la façon dont le corps évoluera.
+   */
   it('AUCUNE ecriture avant la decision (un refus ne touche pas le disque)', () => {
     const source = commands()
     const impl = source.slice(source.indexOf('private runEditFile'))
     const body = impl.slice(0, impl.indexOf('return {\n      allowed: true'))
-    const refusal = body.slice(0, body.indexOf('const content ='))
-    expect(refusal).toContain('if (!decision.allowed) return')
-    expect(refusal).not.toContain('writeFileSync(')
+    const write = body.indexOf('writeFileSync(')
+    expect(write, 'runEditFile doit bien écrire quelque part').toBeGreaterThan(-1)
+    expect(body.slice(0, write)).toContain('if (!decision.allowed) return')
+    // Aucun refus APRÈS l'écriture : sinon le disque serait déjà modifié au moment du refus.
+    expect(body.slice(write)).not.toContain('allowed: false')
+  })
+
+  /**
+   * RÉGRESSION (2026-08-07). `runEditFile` lisait ET écrivait en `'utf8'` codé en dur. Sur un dépôt
+   * VB6 (sources en mono-octet), la lecture rendait « l'<?>quipe » au lieu de « l'équipe » — donc
+   * `oldText` ne correspondait JAMAIS — et la réécriture aurait remplacé chaque accent du fichier
+   * ENTIER par `EF BF BD`. Ce test empêche le retour d'un encodage figé.
+   */
+  it('ne fige AUCUN encodage : il préserve celui du fichier', () => {
+    const impl = commands().slice(commands().indexOf('private runEditFile'))
+    const body = impl.slice(0, impl.indexOf('return {\n      allowed: true'))
+    expect(body).toContain('readFileText(')
+    expect(body).toContain('encodeFile(')
+    expect(body).toContain('unrepresentableCharacters(')
+    // La propriété porte sur le CODE. Les commentaires sont retirés : celui qui documente ce défaut
+    // cite forcément l'encodage figé, et le faisait échouer à tort.
+    const code = body.replace(/\/\/.*$/gm, '')
+    expect(code, 'un encodage figé est précisément le défaut corrigé').not.toContain("'utf8'")
   })
 
   it('passe par la decision pure et le remplacement unique', () => {

@@ -1,3 +1,5 @@
+/* Écran Settings · Interface (interrupteur sombre/clair). Les couleurs viennent
+   des variables du thème : cet écran doit rester lisible dans LES DEUX modes. */
 .interface-view {
   padding: 14px 18px 18px;
   color: var(--text);

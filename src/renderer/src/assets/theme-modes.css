@@ -265,8 +265,139 @@
    pose un voile gris sale sur une page blanche. On garde la teinte de statut à
    gauche — c'est elle qui informe — et on éteint la queue noire.
    ---------------------------------------------------------------------------- */
+/* LA RÈGLE DE BASE, oubliée par la première correction : `.cosmic-outline
+   .activity-group` (cosmic-outline.css l.539-540) pose un VOILE NOIR
+   `rgba(0, 0, 0, 0.3)` et un texte `#9caab5`. Les quatre états colorés le
+   recouvrent, mais une barre SANS état garde ce voile — c'est la moitié grise
+   que l'utilisateur a signalée trois fois le 2026-09-03. */
+:root[data-theme='clair'] .cosmic-outline .activity-group {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--line);
+  color: var(--text-dim);
+}
 :root[data-theme='clair'] .cosmic-outline .activity-group-title {
   color: var(--text);
+}
+
+/* La zone DÉPLIÉE d'une action (le contenu lu, la sortie d'un outil) :
+   `cosmic-outline.css` l.616-617 lui donne un fond noir `rgba(0, 0, 0, 0.35)` et
+   un texte `#9caab5`. Signalé par l'utilisateur le 2026-09-03 : « quand on déplie
+   une action en cours, la zone est sombre ». */
+:root[data-theme='clair'] .cosmic-outline .activity-step-detail {
+  background: rgba(15, 20, 35, 0.04);
+  border-left-color: var(--line);
+  color: var(--text);
+}
+:root[data-theme='clair'] .cosmic-outline .activity-step-target {
+  color: var(--text-dim);
+}
+
+/* ----------------------------------------------------------------------------
+   ACCUEIL — les FENÊTRES d'abord (demande de l'utilisateur du 2026-09-03 :
+   « on va commencer par les fenêtres, et on regardera ensuite pour l'arrière
+   plan »). Le décor cosmique reste donc INTACT à ce stade.
+   `HomeView.css` l.215-221 peint chaque tuile en `rgba(0, 0, 0, 0.72)` avec un
+   contour blanc et une ombre noire profonde : une plaque noire posée sur la
+   page. On la retourne en plaque blanche translucide, contour et ombre adoucis,
+   pour qu'elle garde sa lisibilité PAR-DESSUS le décor.
+   ---------------------------------------------------------------------------- */
+:root[data-theme='clair'] .home-tile__panel {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(18, 24, 40, 0.22);
+  box-shadow:
+    0 20px 46px rgba(18, 24, 40, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+/* Le voile sombre posé DERRIÈRE les tuiles pour les détacher du décor : sur des
+   plaques blanches il produit un halo noir (l.45). */
+/* JARVIS et ENREGISTREMENTS — « version claire de l'or », choix de l'utilisateur
+   du 2026-09-03 : fond très pâle, accents or FONCÉ, cadre à équerres conservé.
+   Ces deux widgets sont volontairement « or sur noir » (HomeView.css l.762 et
+   l.1268, direction « Iron Man » du 2026-09-01) : on ne défait ni le HUD ni ses
+   équerres, on retourne le fond et on assombrit l'or. #d4a94f sur ivoire serait
+   illisible, il devient #8c6412. Ces widgets pilotant presque tout par leurs
+   variables locales, les redéfinir suffit : le contenu suit. */
+:root[data-theme='clair'] .jarvis {
+  --jv-or: #8c6412;
+  border-color: rgba(140, 100, 18, 0.35);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 247, 0.95), rgba(252, 250, 244, 0.97)),
+    repeating-linear-gradient(0deg, rgba(140, 100, 18, 0.05) 0 1px, transparent 1px 5px);
+  box-shadow: inset 0 0 26px rgba(140, 100, 18, 0.07);
+  color: var(--text);
+}
+:root[data-theme='clair'] .enregistrements {
+  --hud: 140, 100, 18;
+  --or: 140, 100, 18;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--hud), 0.06),
+      rgba(255, 253, 247, 0.95) 48%,
+      rgba(var(--or), 0.05)
+    ),
+    repeating-linear-gradient(0deg, rgba(var(--hud), 0.05) 0 1px, transparent 1px 4px);
+  box-shadow:
+    inset 0 0 26px rgba(var(--hud), 0.08),
+    inset 0 0 0 1px rgba(var(--or), 0.08);
+  color: var(--text);
+}
+/* Les TROIS libellés qui échappent aux variables locales, et restaient donc
+   pâles sur l'ivoire — repérés à l'écran le 2026-09-03 :
+   la bascule « ACTIVER L'ÉCOUTE » (#cfd4de, l.827), le nom dans l'anneau
+   (#f0e6d2 + halo, l.1809), le titre « DERNIERS ENREGISTREMENTS » (or à 70 %,
+   l.1438). Le halo doré autour du texte n'a plus de sens sur fond clair. */
+:root[data-theme='clair'] .jarvis__bascule {
+  color: #5a4a2a;
+}
+:root[data-theme='clair'] .jarvis__bascule:hover,
+:root[data-theme='clair'] .jarvis__bascule:focus-visible {
+  color: #3d3018;
+}
+:root[data-theme='clair'] .jarvis__anneau-texte > strong {
+  color: #3d3018;
+  text-shadow: none;
+}
+/* Le DISQUE derrière ce nom est un noir à 72 % peint en SVG (HomeView.css
+   l.1755) : assombrir le texte SANS lui donnait du foncé sur du foncé — vu à
+   l'écran le 2026-09-03, la correction du texte seule ne suffisait pas. */
+:root[data-theme='clair'] .jarvis__anneau-coeur {
+  fill: rgba(255, 253, 247, 0.92);
+  stroke: rgba(140, 100, 18, 0.35);
+}
+:root[data-theme='clair'] .jarvis__anneau-etat {
+  stroke: rgba(18, 24, 40, 0.14);
+}
+:root[data-theme='clair'] .enregistrements__titre {
+  color: rgba(120, 86, 16, 0.95);
+}
+
+/* Les champs de Jarvis avaient un fond opaque #14120d et un texte clair
+   (HomeView.css l.1116-1134) : noirs au milieu d'un widget devenu pâle. */
+:root[data-theme='clair'] .jarvis__audio-champ select,
+:root[data-theme='clair'] .jarvis__audio-champ input[type='text'],
+:root[data-theme='clair'] .jarvis__audio-champ select option {
+  background: #ffffff;
+  color: var(--text);
+  border-color: rgba(140, 100, 18, 0.3);
+}
+
+/* VOILE DE BRUME — direction choisie par l'utilisateur le 2026-09-03, parmi
+   trois propositions. Le décor n'est pas une image mais une scène 3D montée à la
+   racine (`home-decor-scene.ts`) : on ne la retouche donc PAS, on pose un voile
+   ivoire par-dessus. Le cosmos reste là, lavé comme un ciel de jour, et le fond
+   se cale juste sous le blanc des fenêtres pour qu'elles se détachent encore.
+   Réversible d'une ligne : c'est l'argument qui a fait préférer cette voie au
+   chantier de shaders. */
+:root[data-theme='clair'] .home-view::after {
+  background:
+    linear-gradient(
+      170deg,
+      rgba(250, 248, 243, 0.9) 0%,
+      rgba(246, 244, 239, 0.86) 45%,
+      rgba(243, 240, 234, 0.9) 100%
+    ),
+    radial-gradient(62% 52% at 50% 44%, rgba(255, 255, 255, 0.55), transparent 80%);
 }
 :root[data-theme='clair'] .cosmic-outline .activity-group-tools {
   color: var(--text-dim);
