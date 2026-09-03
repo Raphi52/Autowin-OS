@@ -2818,7 +2818,7 @@ export class AppCommandBus {
             database: a.database,
             query: a.query
           },
-          { ...(this.sqlcmdPath ? { sqlcmdPath: this.sqlcmdPath } : {}) }
+          { ...(this.cheminSqlcmd() ? { sqlcmdPath: this.cheminSqlcmd() } : {}) }
         )
       case 'ticket_get':
         return await getTicketFromCommand(a as TicketGetArgs, {
