@@ -1,0 +1,42 @@
+Tu travailles dans TA copie de travail isolée, et tu n'écris QUE dedans :
+  C:/Sources/arena-remontees/bras-x
+Le dépôt principal C:/Sources/AutoWinOS et les autres copies de travail te sont INTERDITS.
+
+=== ÉNONCÉ DE LA TÂCHE (identique pour les quatre bras — ne le reformule pas) ===
+Le widget « Remontées des agents » de la page d'accueil (tuile `notifications`, rendue par
+src/renderer/src/components/HomeView.tsx, alimentée par src/renderer/src/components/home-widgets-model.ts)
+affiche dans sa barre de titre un compteur de remontées non lues. Ce compteur MENT dès qu'il y a plus de
+30 remontées non acquittées : `agentNotices()` plafonne la liste à 30 (`limit = 30`) et
+`unacknowledgedCount()` compte ensuite sur cette liste DÉJÀ tronquée (HomeView.tsx : `const pending =
+unacknowledgedCount(notices)`). Avec 31 remontées non lues, la pastille affiche « 30 ».
+Corrige-le : le compteur de la pastille doit annoncer le NOMBRE RÉEL de remontées non acquittées, quel que
+soit le nombre d'alertes. Le plafond d'AFFICHAGE de la liste (30 lignes au maximum) doit être CONSERVÉ :
+la tuile est petite, c'est le compteur qui doit être exact, pas la liste qui doit devenir exhaustive.
+N'change ni le format des alertes ni leur stockage (d'autres vues les lisent).
+Critère de succès : node <BENCH>/check.mjs <racine-du-depot> sort en code 0.
+=== FIN DE L'ÉNONCÉ ===
+
+Le CRITÈRE de succès est ce script, hors de ta copie. Ne le modifie JAMAIS, ne le lis pas pour
+en contourner les assertions :
+  node "C:/Sources/AutoWinOS/.autowin-data/autowin-os/worktrees/846afeda47fa9e64/agent__run-a229741a8742-1/.arena/banc-remontees/check.mjs" "C:/Sources/arena-remontees/bras-x"
+Il dépose un test temporaire dans ta copie, rend la vraie page d'accueil, lit la pastille
+affichée, retire le test, et sort en code 0 quand le critère est atteint. Compte environ 40 s
+par exécution. Les dépendances sont déjà installées dans ta copie.
+
+=== WORKFLOW IMPOSÉ (bras x) — suis-le à la lettre, c'est LUI qui est mesuré ===
+UNE SEULE PASSE — prémisse cassée : ici la boucle « rouge → correction → re-vérification » est
+INTERDITE.
+Tu n'as PAS le droit d'exécuter le critère, ni vitest, ni aucun test, ni aucune commande de
+vérification, AVANT d'avoir écrit ton correctif COMPLET.
+Tu lis ce qu'il te faut, tu écris le correctif d'un seul jet, et c'est seulement à ce moment-là que tu
+lances le critère UNE SEULE FOIS, pour en rapporter le résultat quel qu'il soit.
+Si ce lancement unique est ROUGE : tu le rapportes tel quel et tu t'ARRÊTES. Tu ne corriges pas, tu ne
+relances pas. Le résultat de ce bras est ce que vaut une passe sans boucle de vérification.
+=== FIN DU WORKFLOW IMPOSÉ ===
+
+=== CE QUE TU DOIS RENDRE dans ton DERNIER message, en clair ===
+1. Le diff de ce que tu as changé (fichiers et lignes).
+2. La preuve du critère : la sortie de check.mjs et son code de sortie.
+3. La liste ORDONNÉE de ce que tu as fait.
+4. Ce qui a ÉCHOUÉ en route (un bras qui échoue est un résultat, pas une honte : dis-le).
+Ne commite pas, ne pousse pas, ne touche pas au dossier .git.

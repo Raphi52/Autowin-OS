@@ -14,7 +14,7 @@ import {
 import {
   agentNotices,
   nextDepartures,
-  unacknowledgedCount,
+  unacknowledgedAlertCount,
   type AgentNotice,
   type RoutineDeparture
 } from './home-widgets-model'
@@ -486,7 +486,12 @@ export function HomeView({
     () => (snapshot ? agentNotices(snapshot.alerts, snapshot.tasks) : []),
     [snapshot]
   )
-  const pending = unacknowledgedCount(notices)
+  /**
+   * La pastille compte sur les alertes BRUTES, jamais sur `notices` : cette liste est plafonnee a
+   * 30 lignes pour tenir dans la tuile, et compter dessus faisait annoncer « 30 » a la 31e remontee
+   * non lue.
+   */
+  const pending = snapshot ? unacknowledgedAlertCount(snapshot.alerts) : 0
   /**
    * Les conversations dont la fenetre de mosaique est en etat « cadre dore / pastille jaune » :
    * tour termine, l'utilisateur n'y est pas revenu. L'accueil ne les DEDUIT pas — la mosaique les

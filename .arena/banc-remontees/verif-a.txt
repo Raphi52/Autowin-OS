@@ -1,0 +1,8 @@
+OK   nominal : 3 remontées dont 2 non lues, la pastille affiche 2
+OK   cas limite — 31 non lues pour 30 lignes affichables : la pastille doit dire 31, jamais 30
+OK   cas limite — aucune remontée : liste vide, aucune pastille, aucun plantage
+OK   cas limite — zéro non lue parmi 40 déjà acquittées : aucune pastille
+OK   cas limite — 100 non lues : pastille exacte ET liste toujours bornée à 30 lignes
+
+CRITÈRE ATTEINT
+exit=0

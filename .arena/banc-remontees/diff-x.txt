@@ -1,0 +1,48 @@
+diff --git a/src/renderer/src/components/HomeView.tsx b/src/renderer/src/components/HomeView.tsx
+index b05ff7c0..8930cc0b 100644
+--- a/src/renderer/src/components/HomeView.tsx
++++ b/src/renderer/src/components/HomeView.tsx
+@@ -14,7 +14,7 @@ import {
+ import {
+   agentNotices,
+   nextDepartures,
+-  unacknowledgedCount,
++  unacknowledgedAlertCount,
+   type AgentNotice,
+   type RoutineDeparture
+ } from './home-widgets-model'
+@@ -486,7 +486,12 @@ export function HomeView({
+     () => (snapshot ? agentNotices(snapshot.alerts, snapshot.tasks) : []),
+     [snapshot]
+   )
+-  const pending = unacknowledgedCount(notices)
++  /**
++   * Le compteur de la pastille se lit sur les alertes BRUTES, pas sur `notices` : cette derniere est
++   * plafonnee a 30 lignes pour tenir dans la tuile, et compter dessus plafonnerait aussi le compteur
++   * (31 remontees non lues affichaient « 30 »). La liste reste tronquee, le compteur devient exact.
++   */
++  const pending = snapshot ? unacknowledgedAlertCount(snapshot.alerts) : 0
+   /**
+    * Les conversations dont la fenetre de mosaique est en etat « cadre dore / pastille jaune » :
+    * tour termine, l'utilisateur n'y est pas revenu. L'accueil ne les DEDUIT pas — la mosaique les
+diff --git a/src/renderer/src/components/home-widgets-model.ts b/src/renderer/src/components/home-widgets-model.ts
+index 0646c407..4143781c 100644
+--- a/src/renderer/src/components/home-widgets-model.ts
++++ b/src/renderer/src/components/home-widgets-model.ts
+@@ -116,3 +116,16 @@ export function agentNotices(
+ export function unacknowledgedCount(notices: readonly AgentNotice[]): number {
+   return notices.filter((notice) => !notice.acknowledged).length
+ }
++
++/**
++ * Le nombre REEL de remontees non acquittees, compte sur les alertes BRUTES.
++ *
++ * A ne pas confondre avec `unacknowledgedCount`, qui compte sur une liste `AgentNotice` deja passee
++ * par `agentNotices` — donc deja PLAFONNEE a `limit` lignes. Compter la pastille sur cette liste
++ * tronquee la fait mentir des la 31e alerte non lue : elle annoncerait « 30 » pour 31 remontees.
++ * La pastille doit donc lire la source, pas l'extrait affiche : le plafond reste un plafond
++ * d'AFFICHAGE, il ne doit jamais devenir un plafond de COMPTAGE.
++ */
++export function unacknowledgedAlertCount(alerts: readonly AlertLike[]): number {
++  return alerts.filter((alert) => typeof alert.acknowledgedAt !== 'number').length
++}

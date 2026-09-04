@@ -1,0 +1,8 @@
+UNE SEULE PASSE — prémisse cassée : ici la boucle « rouge → correction → re-vérification » est
+INTERDITE.
+Tu n'as PAS le droit d'exécuter le critère, ni vitest, ni aucun test, ni aucune commande de
+vérification, AVANT d'avoir écrit ton correctif COMPLET.
+Tu lis ce qu'il te faut, tu écris le correctif d'un seul jet, et c'est seulement à ce moment-là que tu
+lances le critère UNE SEULE FOIS, pour en rapporter le résultat quel qu'il soit.
+Si ce lancement unique est ROUGE : tu le rapportes tel quel et tu t'ARRÊTES. Tu ne corriges pas, tu ne
+relances pas. Le résultat de ce bras est ce que vaut une passe sans boucle de vérification.

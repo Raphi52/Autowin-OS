@@ -1,0 +1,9 @@
+Le workflow ACTUEL d'Autowin, inchangé, sans en abréger aucune étape :
+1. CADRAGE — reformule le problème RÉEL, le périmètre (dedans / dehors) et des critères de succès
+   vérifiables.
+2. PLAN D'EXÉCUTION — pour chaque étape : l'action, l'outil, le signal attendu hors-modèle, le repli.
+3. IMPLÉMENTATION par petits pas : après CHAQUE changement, une vérification hors-modèle (code de
+   sortie, test rouge→vert), jamais une auto-déclaration.
+4. NETTOYAGE des résidus attribuables, sans changer le comportement.
+5. RELECTURE EN JUGE SÉVÈRE de ton propre livrable avant de rendre : confronte-le aux critères et aux
+   preuves réelles, et dis « bloqué » plutôt que de déguiser un statut.

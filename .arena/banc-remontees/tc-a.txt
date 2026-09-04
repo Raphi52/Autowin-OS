@@ -1,0 +1,1055 @@
+src/main/activity/brain-trace-spool.ts(12,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/app-data.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/brain-trace-spool.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/veille/candidats-store.ts'
+    Imported via './app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/native-registry.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex-auth.ts'
+    Imported via './app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/autowin-kaizen-context.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/conv-activity.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/prompt-observability.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/journal-saisie.ts'
+    Imported via './app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-proposal.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/conv-runs.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/conversation-file-trace-spool.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/chat-session-store.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/json-index-store.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/murs-store.ts'
+    Imported via './app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profiles.ts'
+    Imported via './app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/role-store.ts'
+    Imported via './app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/autoclose-store.ts'
+    Imported via './app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-selection.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/native-trace-spool.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/orchestration-observability.ts'
+    Imported via './app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../app-data' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/chat-artifact-store.ts'
+src/main/activity/brain-trace-spool.ts(13,29): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/trace-redact.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './trace-redact' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/brain-trace-spool.ts'
+    Imported via './trace-redact' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/native-preflight.ts'
+    Imported via './trace-redact' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/native-trace-spool.ts'
+    Imported via './activity/trace-redact' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-remember.ts'
+    Imported via './activity/trace-redact' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/activity/brain-trace-spool.ts(14,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/brain-retrieval.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/brain-trace-spool.ts'
+    Imported via '../../../main/brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/BrainNavigationCard.tsx'
+    Imported via './brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-corpus-scope.ts'
+    Imported via '../brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/viz/fs-brains.ts'
+    Imported via './brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-empreinte-message.ts'
+    Imported via './brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-query-command.ts'
+    Imported via './brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/amitel-context.ts'
+    Imported via './brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-search-envelope.ts'
+    Imported via './brain-retrieval' from file 'C:/Sources/arena-remontees/bras-a/src/main/preflight-probes.ts'
+src/main/activity/native-preflight.ts(10,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/native-trace-contract.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../shared/native-trace-contract' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/native-preflight.ts'
+    Imported via '../../shared/native-trace-contract' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/native-trace-spool.ts'
+src/main/activity/native-trace-spool.ts(4,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/native-preflight.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/activity/orchestration-observability.ts(5,41): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/prompt-call-trace.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/activity/orchestration-observability.ts(9,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/evidence-payloads.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/activity/orchestration-observability.ts(10,30): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/step-reasoning-payloads.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/agent-pilot.ts(1,70): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/chat-session-store.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/agent-pilot.ts(2,45): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/murs-store.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/agent-pilot.ts(5,51): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './commands' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via '../main/commands' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/agent-pilot.ts(14,56): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/model-questions.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './model-questions' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via './model-questions' from file 'C:/Sources/arena-remontees/bras-a/src/main/chat-pilotage-prompt.ts'
+    Imported via '../main/model-questions' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/agent-pilot.ts(33,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/chat-turn-messages.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/agent-pilot.ts(35,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/stream-markup-filter.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/agent-pilot.ts(40,41): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/chat-pilotage-prompt.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './chat-pilotage-prompt' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via '../../../main/chat-pilotage-prompt' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/html-render-e2e.live.test.tsx'
+src/main/agent-pilot.ts(46,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/outil-pretendu-absent.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/agent-pilot.ts(47,32): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/turn-timing.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/agent-pilot.ts(74,50): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/etat-diff.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/agent-pilot.ts(75,32): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/observabilite-non-bloquante.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './observabilite-non-bloquante' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via './observabilite-non-bloquante' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+src/main/app-data.ts(13,60): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/app-identity.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../shared/app-identity' from file 'C:/Sources/arena-remontees/bras-a/src/main/app-data.ts'
+    Imported via '../../shared/app-identity' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/storage-keys.ts'
+    Imported via '../../shared/app-identity' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via '../shared/app-identity' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-files.ts'
+    Imported via '../shared/app-identity' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../../shared/app-identity' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/storage-keys.test.ts'
+    Imported via '../../../shared/app-identity' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/graph-settings.test.ts'
+src/main/autowin-kaizen-context.ts(4,58): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/conv-activity.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './activity/conv-activity' from file 'C:/Sources/arena-remontees/bras-a/src/main/autowin-kaizen-context.ts'
+    Imported via './activity/conv-activity' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../main/activity/conv-activity' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/autowin-kaizen-context.ts(6,28): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/trace-store.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './activity/trace-store' from file 'C:/Sources/arena-remontees/bras-a/src/main/autowin-kaizen-context.ts'
+    Imported via './trace-store' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/orchestration-observability.ts'
+    Imported via './activity/trace-store' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/autowin-kaizen-context.ts(7,33): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/prompt-observability.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './activity/prompt-observability' from file 'C:/Sources/arena-remontees/bras-a/src/main/autowin-kaizen-context.ts'
+    Imported via './prompt-observability' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/orchestration-observability.ts'
+    Imported via './prompt-observability' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/prompt-call-trace.ts'
+    Imported via '../main/activity/prompt-observability' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/autowin-kaizen-context.ts(8,46): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/turn-journal.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/autowin-kaizen-context.ts(11,53): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/journal-saisie.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/behaviour-composition.ts(34,36): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/topology.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './topology' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-composition.ts'
+    Imported via './topology' from file 'C:/Sources/arena-remontees/bras-a/src/main/profile-store.ts'
+src/main/behaviour-files.ts(4,43): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/bounded-file-read.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/brain-corpus-scope.ts(42,44): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/viz/fs-brains.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './viz/fs-brains' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-corpus-scope.ts'
+    Imported via './viz/fs-brains' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../main/viz/fs-brains' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../../../main/viz/fs-brains' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/GraphView.tsx'
+src/main/brain-retrieval.ts(20,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/brain-protocol.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './brain-protocol' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-retrieval.ts'
+    Imported via './brain-protocol' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-corpus-scope.ts'
+    Imported via './brain-protocol' from file 'C:/Sources/arena-remontees/bras-a/src/main/amitel-context.ts'
+    Imported via './brain-protocol' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-remember.ts'
+src/main/brain-retrieval.ts(21,35): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/amitel-paths.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './amitel-paths' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-retrieval.ts'
+    Imported via '../amitel-paths' from file 'C:/Sources/arena-remontees/bras-a/src/main/viz/fs-brains.ts'
+    Imported via './amitel-paths' from file 'C:/Sources/arena-remontees/bras-a/src/main/amitel-context.ts'
+    Imported via './amitel-paths' from file 'C:/Sources/arena-remontees/bras-a/src/main/amitel-context.ts'
+    Imported via './amitel-paths' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-files.ts'
+    Imported via './amitel-paths' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-remember.ts'
+    Imported via './amitel-paths' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-server-launch.ts'
+    Imported via './amitel-paths' from file 'C:/Sources/arena-remontees/bras-a/src/main/preflight-probes.ts'
+src/main/commands.ts(7,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/edit-file-command.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './edit-file-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './edit-file-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/synchronisation-cible-bureau.ts'
+    Imported via './edit-file-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/read-file-command.ts'
+    Imported via './edit-file-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/verification-isolee.ts'
+src/main/commands.ts(8,69): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/file-encoding.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(12,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/conversation-demandee.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(13,43): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/synchronisation-cible-bureau.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(14,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/gel-main.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './gel-main' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../gel-main' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/run-worktree-coordinator.ts'
+src/main/commands.ts(15,30): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/env-reload.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(20,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/autorisation-commande.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(21,40): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/autorisations-permanentes.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(27,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/read-file-command.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(28,49): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/startup-resume-publication.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(41,77): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/brain-query-command.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './brain-query-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './brain-query-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-search-envelope.ts'
+src/main/commands.ts(45,40): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/verify-extinction.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(64,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/verify-command.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './verify-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './verify-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/verify-echec-nature.ts'
+src/main/commands.ts(65,62): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/verify-battement.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './verify-battement' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './verify-battement' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/commands.ts(66,32): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/verify-echec-nature.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(69,41): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/rappel-conversations.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(70,54): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/bureau-reutilisable.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(76,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/verification-isolee.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(121,32): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/os.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(147,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/pieces-jointes-orchestration.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(158,35): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/native-trace-spool.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(171,64): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/ticket-create-command.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './ticket-create-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './ticket-create-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-search-command.ts'
+    Imported via './ticket-create-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-get-command.ts'
+    Imported via './ticket-create-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-update-command.ts'
+src/main/commands.ts(172,65): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/ticket-search-command.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(173,58): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/ticket-get-command.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './ticket-get-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './ticket-get-command' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-update-command.ts'
+src/main/commands.ts(174,64): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/ticket-update-command.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(175,28): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/sql-read-command.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(188,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/orchestration-observability.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(196,45): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/orchestration-context.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(197,74): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/orchestration-memoire.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(200,30): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/brain-remember.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './brain-remember' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './brain-remember' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-inbox.ts'
+src/main/commands.ts(203,61): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/ask-options.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(211,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/graphify-command.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(213,30): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/redemarrage-reprise.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(214,35): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/journal-arrets.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(217,43): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/late-run-usage-settlement.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(220,40): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/desktop-control.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/commands.ts(224,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-supervisor.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/compute-fabric/control-plane.ts(7,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/fabric-store.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/compute-fabric/control-plane.ts(8,36): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/manifest.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/compute-fabric/control-plane.ts(13,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/node-transport-store.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './node-transport-store' from file 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/control-plane.ts'
+    Imported via './node-transport-store' from file 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/fabric-http-client.ts'
+    Imported via './node-transport-store' from file 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/resource-adapter.ts'
+src/main/compute-fabric/control-plane.ts(14,39): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/resource-adapter.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/compute-fabric/resource-adapter.ts(11,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/fabric-http-client.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/execution-quote.ts(2,63): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/task-regime.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './task-regime' from file 'C:/Sources/arena-remontees/bras-a/src/main/execution-quote.ts'
+    Imported via './task-regime' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './task-regime' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './task-regime' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-composition.ts'
+src/main/execution-supervisor.ts(4,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/execution-quote.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './execution-quote' from file 'C:/Sources/arena-remontees/bras-a/src/main/execution-supervisor.ts'
+    Imported via './execution-quote' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via '../execution-quote' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/orchestration-state.ts'
+    Imported via './execution-quote' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+src/main/execution-supervisor.ts(6,32): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/issue-de-refus.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './issue-de-refus' from file 'C:/Sources/arena-remontees/bras-a/src/main/execution-supervisor.ts'
+    Imported via './issue-de-refus' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/hooks/default-gate-hooks.ts(3,59): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/hooks/verify-replay-hook.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/hooks/default-gate-hooks.ts(4,26): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/gates/hooks.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/hooks/default-gate-hooks.ts(5,44): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/autowin-kaizen-context.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../autowin-kaizen-context' from file 'C:/Sources/arena-remontees/bras-a/src/main/hooks/default-gate-hooks.ts'
+    Imported via './autowin-kaizen-context' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/knowledge/semantic-temporal-projection.ts(4,53): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/trace-event.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../activity/trace-event' from file 'C:/Sources/arena-remontees/bras-a/src/main/knowledge/semantic-temporal-projection.ts'
+    Imported via './trace-event' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/trace-store.ts'
+    Imported via './activity/trace-event' from file 'C:/Sources/arena-remontees/bras-a/src/main/autowin-kaizen-context.ts'
+    Imported via './trace-event' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/prompt-call-trace.ts'
+    Imported via './trace-event' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/orchestration-observability.ts'
+    Imported via './trace-event' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/evidence-payloads.ts'
+    Imported via './trace-event' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/step-reasoning-payloads.ts'
+    Imported via '../main/activity/trace-event' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/models.ts(20,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/compute-fabric.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../shared/compute-fabric' from file 'C:/Sources/arena-remontees/bras-a/src/main/models.ts'
+    Imported via '../shared/compute-fabric' from file 'C:/Sources/arena-remontees/bras-a/src/main/topology.ts'
+    Imported via '../../shared/compute-fabric' from file 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/control-plane.ts'
+    Imported via '../../shared/compute-fabric' from file 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/manifest.ts'
+src/main/models.ts(21,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './providers/codex' from file 'C:/Sources/arena-remontees/bras-a/src/main/models.ts'
+    Imported via './providers/codex' from file 'C:/Sources/arena-remontees/bras-a/src/main/codex-model-source.ts'
+    Imported via './providers/codex' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../providers/codex' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/run-reattach.ts'
+    Imported via '../../../main/providers/codex' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ArtifactPipeline.integration.test.tsx'
+src/main/models.ts(27,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/model-aliases.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './model-aliases' from file 'C:/Sources/arena-remontees/bras-a/src/main/models.ts'
+    Imported via './model-aliases' from file 'C:/Sources/arena-remontees/bras-a/src/main/claude-cli-catalog.ts'
+    Imported via './model-aliases' from file 'C:/Sources/arena-remontees/bras-a/src/main/roles.ts'
+src/main/models.ts(28,68): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/codex-model-source.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/models.ts(29,35): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/claude-cli-catalog.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/models.ts(30,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './providers/claude' from file 'C:/Sources/arena-remontees/bras-a/src/main/models.ts'
+    Imported via './providers/claude' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../providers/claude' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/run-reattach.ts'
+    Imported via '../providers/claude' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/run-reattach.ts'
+    Imported via './providers/claude' from file 'C:/Sources/arena-remontees/bras-a/src/main/claude-session.ts'
+    Imported via './providers/claude' from file 'C:/Sources/arena-remontees/bras-a/src/main/preflight-repair.ts'
+    Imported via '../../../main/providers/claude' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/html-render-e2e.live.test.tsx'
+src/main/native-registry.ts(5,51): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/durable-json.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './durable-json' from file 'C:/Sources/arena-remontees/bras-a/src/main/native-registry.ts'
+    Imported via './durable-json' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profiles.ts'
+    Imported via './durable-json' from file 'C:/Sources/arena-remontees/bras-a/src/main/role-store.ts'
+    Imported via './durable-json' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestration-budget.ts'
+    Imported via './durable-json' from file 'C:/Sources/arena-remontees/bras-a/src/main/model-routing-shadow-setting.ts'
+src/main/orchestration-context.ts(1,68): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/conversation-window.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './conversation-window' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestration-context.ts'
+    Imported via './conversation-window' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestration-memoire.ts'
+    Imported via './conversation-window' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/orchestrator.ts(4,39): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/registry.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './providers/registry' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './providers/registry' from file 'C:/Sources/arena-remontees/bras-a/src/main/greedy-decompose.ts'
+    Imported via './providers/registry' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via './providers/registry' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+src/main/orchestrator.ts(5,67): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/evidence-digest.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './evidence-digest' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './evidence-digest' from file 'C:/Sources/arena-remontees/bras-a/src/main/phase-carry.ts'
+src/main/orchestrator.ts(52,74): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/roles.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/models.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-graph.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/greedy-decompose.ts'
+    Imported via '../roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/task-manager/types.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profiles.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/role-store.ts'
+    Imported via '../roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/orchestration-state.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profile-apply.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-composition.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/topology.ts'
+    Imported via '../main/roles' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via './roles' from file 'C:/Sources/arena-remontees/bras-a/src/main/profile-store.ts'
+src/main/orchestrator.ts(54,44): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/raison-de-blocage.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(55,40): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/quorum.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(56,69): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/dashboards/cost.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './dashboards/cost' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './dashboards/cost' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+src/main/orchestrator.ts(57,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/trust/ledger.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './trust/ledger' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './trust/ledger' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+src/main/orchestrator.ts(63,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/gates/stopgate.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(64,25): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/hooks/hook-bus.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './hooks/hook-bus' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './hook-bus' from file 'C:/Sources/arena-remontees/bras-a/src/main/hooks/default-gate-hooks.ts'
+    Imported via './hook-bus' from file 'C:/Sources/arena-remontees/bras-a/src/main/hooks/verify-replay-hook.ts'
+src/main/orchestrator.ts(65,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/hooks/default-gate-hooks.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(66,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/hooks/resolve-verify-cmd.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './hooks/resolve-verify-cmd' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './hooks/resolve-verify-cmd' from file 'C:/Sources/arena-remontees/bras-a/src/main/verify-command.ts'
+src/main/orchestrator.ts(67,44): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/learning-oracle-manifest.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(68,31): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/brain-corpus-scope.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './brain-corpus-scope' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via '../brain-corpus-scope' from file 'C:/Sources/arena-remontees/bras-a/src/main/viz/fs-brains.ts'
+    Imported via './brain-corpus-scope' from file 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-proposal.ts'
+    Imported via './brain-corpus-scope' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './brain-corpus-scope' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './brain-corpus-scope' from file 'C:/Sources/arena-remontees/bras-a/src/main/amitel-context.ts'
+src/main/orchestrator.ts(75,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-proposal.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './outcome-learning-proposal' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './outcome-learning-proposal' from file 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-policy.ts'
+    Imported via './outcome-learning-proposal' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/orchestrator.ts(87,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/root-execution-contract.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './root-execution-contract' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './root-execution-contract' from file 'C:/Sources/arena-remontees/bras-a/src/main/conversation-task-contract.ts'
+    Imported via '../root-execution-contract' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/conv-runs.ts'
+src/main/orchestrator.ts(95,72): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-instruction.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(107,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-graph.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './workflow-graph' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './workflow-graph' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-walk.ts'
+    Imported via './workflow-graph' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-dynamic.ts'
+    Imported via './workflow-graph' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profiles.ts'
+src/main/orchestrator.ts(108,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/phase-carry.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(114,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/route-drift.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(125,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-walk.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(357,41): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/phase-briefs.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './phase-briefs' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './phase-briefs' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-composition.ts'
+src/main/orchestrator.ts(358,62): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/conversation-task-contract.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(360,30): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/conv-runs.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './runs/conv-runs' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './runs/conv-runs' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/orchestrator.ts(362,43): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/greedy-decompose.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './greedy-decompose' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './greedy-decompose' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+src/main/orchestrator.ts(364,39): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/brain-empreinte-message.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(374,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/session-memory-echo.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './session-memory-echo' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './session-memory-echo' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-remember.ts'
+    Imported via './session-memory-echo' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './session-memory-echo' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+src/main/orchestrator.ts(375,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/context-files.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './context-files' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './context-files' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-composition.ts'
+src/main/orchestrator.ts(384,50): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/conversation-file-trace-spool.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './activity/conversation-file-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './activity/conversation-file-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './activity/conversation-file-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../main/activity/conversation-file-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/orchestrator.ts(385,73): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/task-manager/types.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './task-manager/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './task-manager/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './task-manager/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './task-manager/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../main/task-manager/types' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/orchestrator.ts(387,57): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/response-style.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './response-style' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './response-style' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via './response-style' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-composition.ts'
+src/main/orchestrator.ts(388,30): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/constitution.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './constitution' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './constitution' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './constitution' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via './constitution' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-composition.ts'
+src/main/orchestrator.ts(389,49): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/pipeline-discipline.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './pipeline-discipline' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './pipeline-discipline' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-composition.ts'
+src/main/orchestrator.ts(392,59): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/worktree-path-rewrite.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(393,44): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/greedy-scheduler.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/orchestrator.ts(406,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/skill-node-tools.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './skill-node-tools' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './skill-node-tools' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './skill-node-tools' from file 'C:/Sources/arena-remontees/bras-a/src/main/skill-node-mcp.ts'
+src/main/orchestrator.ts(411,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/skill-node-mcp.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(8,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/startup-gate.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(13,32): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/kimi.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(14,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/gemini.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(17,55): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/provider-login.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './provider-login' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './provider-login' from file 'C:/Sources/arena-remontees/bras-a/src/main/preflight-repair.ts'
+src/main/os.ts(24,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-dynamic.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(25,52): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/role-store.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './role-store' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../role-store' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/orchestration-state.ts'
+src/main/os.ts(29,47): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/dashboards/kaizen.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(45,43): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/hooks/verify-replay-config.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(53,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/run-autoclose.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './run-autoclose' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../run-autoclose' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-manager.ts'
+    Imported via '../main/run-autoclose' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/os.ts(54,33): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/amitel-context.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(68,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/orchestration-state.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './runs/orchestration-state' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './orchestration-state' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/run-reattach.ts'
+    Imported via '../main/runs/orchestration-state' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/os.ts(69,43): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-files.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './behaviour-files' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../main/behaviour-files' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/os.ts(70,57): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-manager.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './store/worktree-manager' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './worktree-manager' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-operation-protocol.ts'
+    Imported via './worktree-manager' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/run-worktree-coordinator.ts'
+src/main/os.ts(71,40): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/run-worktree-coordinator.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(78,44): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-repository.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(89,46): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/autoclose-store.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(93,41): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/orchestration-budget.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(94,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profile-apply.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(100,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-selection.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/os.ts(107,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/run-reattach.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/outcome-learning-projector.ts(10,39): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-policy.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/outcome-learning-proposal.ts(2,49): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/run-learning.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../shared/run-learning' from file 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-proposal.ts'
+    Imported via '../shared/run-learning' from file 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-supervisor.ts'
+    Imported via '../../shared/run-learning' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/outcome-learning-ledger.ts'
+    Imported via '../../shared/run-learning' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/outcome-learning-ledger.ts'
+    Imported via '../shared/run-learning' from file 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-projector.ts'
+    Imported via '../shared/run-learning' from file 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-policy.ts'
+src/main/outcome-learning-supervisor.ts(12,39): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/outcome-learning-ledger.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/outcome-learning-supervisor.ts(13,40): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-projector.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/preflight-repair.ts(25,67): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/brain-server-launch.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './brain-server-launch' from file 'C:/Sources/arena-remontees/bras-a/src/main/preflight-repair.ts'
+    Imported via './brain-server-launch' from file 'C:/Sources/arena-remontees/bras-a/src/main/preflight-probes.ts'
+src/main/preflight-repair.ts(26,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/preflight-probes.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/preflight.ts(9,41): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/claude-session.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './claude-session' from file 'C:/Sources/arena-remontees/bras-a/src/main/preflight.ts'
+    Imported via './claude-session' from file 'C:/Sources/arena-remontees/bras-a/src/main/preflight-probes.ts'
+src/main/preflight.ts(10,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/routed-providers.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/providers/claude.ts(2,43): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/collage-blocs-texte.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/providers/claude.ts(27,42): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/evidence-portee-par-erreur.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './evidence-portee-par-erreur' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './providers/evidence-portee-par-erreur' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+src/main/providers/claude.ts(49,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/claude-accounts.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../claude-accounts' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './claude-accounts' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './claude-accounts' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via './claude-accounts' from file 'C:/Sources/arena-remontees/bras-a/src/main/claude-session.ts'
+    Imported via './claude-accounts' from file 'C:/Sources/arena-remontees/bras-a/src/main/preflight-repair.ts'
+src/main/providers/claude.ts(51,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/provider-failure-diagnosis.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../provider-failure-diagnosis' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './provider-failure-diagnosis' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+src/main/providers/codex.ts(1,30): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/abort-diagnostic.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './abort-diagnostic' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './abort-diagnostic' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './abort-diagnostic' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/kimi.ts'
+    Imported via './abort-diagnostic' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/gemini.ts'
+src/main/providers/codex.ts(11,39): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/execution-evidence-path.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './execution-evidence-path' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './execution-evidence-path' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+src/main/providers/codex.ts(12,56): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/evidence-vocabulary.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './evidence-vocabulary' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './evidence-vocabulary' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/causal-verification-evidence.ts'
+    Imported via './evidence-vocabulary' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './providers/evidence-vocabulary' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+src/main/providers/codex.ts(16,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/workspace-mutation-evidence.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './workspace-mutation-evidence' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './workspace-mutation-evidence' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './providers/workspace-mutation-evidence' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './providers/workspace-mutation-evidence' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './providers/workspace-mutation-evidence' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/providers/codex.ts(17,84): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex-auth.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './codex-auth' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './providers/codex-auth' from file 'C:/Sources/arena-remontees/bras-a/src/main/preflight-probes.ts'
+src/main/providers/codex.ts(18,30): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/thinking.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './thinking' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './thinking' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+src/main/providers/codex.ts(27,33): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/survivable-spawn.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../runs/survivable-spawn' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via '../runs/survivable-spawn' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via '../runs/survivable-spawn' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/kimi.ts'
+    Imported via '../runs/survivable-spawn' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/gemini.ts'
+src/main/providers/codex.ts(28,35): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/npm-global-resolve.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './npm-global-resolve' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './npm-global-resolve' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './npm-global-resolve' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/kimi.ts'
+src/main/providers/codex.ts(33,76): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/artifacts.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+src/main/providers/codex.ts(35,52): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/causal-verification-evidence.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './causal-verification-evidence' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './causal-verification-evidence' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './providers/causal-verification-evidence' from file 'C:/Sources/arena-remontees/bras-a/src/main/root-execution-contract.ts'
+src/main/providers/registry.ts(9,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/types.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './types' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/registry.ts'
+    Imported via './providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/execution-supervisor.ts'
+    Imported via './providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/evidence-digest.ts'
+    Imported via './types' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './types' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/workspace-mutation-evidence.ts'
+    Imported via './types' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/artifacts.ts'
+    Imported via './types' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/causal-verification-evidence.ts'
+    Imported via './types' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/evidence-portee-par-erreur.ts'
+    Imported via './types' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via '../providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/hooks/hook-bus.ts'
+    Imported via '../providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/prompt-observability.ts'
+    Imported via './types' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/learning-oracle-manifest.ts'
+    Imported via './providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/root-execution-contract.ts'
+    Imported via '../providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/conv-runs.ts'
+    Imported via './providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via '../providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/conversation-file-trace-spool.ts'
+    Imported via './types' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/kimi.ts'
+    Imported via './types' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/gemini.ts'
+    Imported via './providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/orchestration-state.ts'
+    Imported via '../providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/run-reattach.ts'
+    Imported via './providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/outcome-learning-supervisor.ts'
+    Imported via './providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via '../providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/main/compute-fabric/resource-adapter.ts'
+    Imported via '../../../main/providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ArtifactPipeline.integration.test.tsx'
+    Imported via '../../../main/providers/types' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/html-render-e2e.live.test.tsx'
+src/main/providers/registry.ts(10,60): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/providers/watchdog.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './watchdog' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/registry.ts'
+    Imported via './watchdog' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via './providers/watchdog' from file 'C:/Sources/arena-remontees/bras-a/src/main/codex-model-source.ts'
+    Imported via './watchdog' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './watchdog' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/kimi.ts'
+    Imported via './watchdog' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/gemini.ts'
+    Imported via './providers/watchdog' from file 'C:/Sources/arena-remontees/bras-a/src/main/graphify-command.ts'
+src/main/providers/registry.ts(11,42): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/execution-supervisor.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../execution-supervisor' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/registry.ts'
+    Imported via './execution-supervisor' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via '../execution-supervisor' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/orchestration-state.ts'
+    Imported via './execution-supervisor' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../execution-supervisor' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/late-run-usage-settlement.ts'
+src/main/providers/workspace-mutation-evidence.ts(5,43): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/git-read-main.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../git-read-main' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/workspace-mutation-evidence.ts'
+    Imported via './git-read-main' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './git-read-main' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/providers/workspace-mutation-evidence.ts(10,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/exact-line-fingerprint.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../exact-line-fingerprint' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/workspace-mutation-evidence.ts'
+    Imported via '../exact-line-fingerprint' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via '../exact-line-fingerprint' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './exact-line-fingerprint' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/providers/workspace-mutation-evidence.ts(17,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/task-manager/watchdog-file-source.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/roles.ts(7,36): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/models.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './models' from file 'C:/Sources/arena-remontees/bras-a/src/main/roles.ts'
+    Imported via './models' from file 'C:/Sources/arena-remontees/bras-a/src/main/model-aliases.ts'
+    Imported via '../main/models' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via './models' from file 'C:/Sources/arena-remontees/bras-a/src/main/topology.ts'
+src/main/root-execution-contract.ts(3,44): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/task-mutation-classifier.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './task-mutation-classifier' from file 'C:/Sources/arena-remontees/bras-a/src/main/root-execution-contract.ts'
+    Imported via './task-mutation-classifier' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './task-mutation-classifier' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+src/main/runs/chat-session-store.ts(2,33): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/json-index-store.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './json-index-store' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/chat-session-store.ts'
+    Imported via './json-index-store' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/murs-store.ts'
+src/main/runs/conv-runs.ts(14,26): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/dashboards/runs.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../dashboards/runs' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/conv-runs.ts'
+    Imported via './runs' from file 'C:/Sources/arena-remontees/bras-a/src/main/dashboards/runs-scan.ts'
+    Imported via './dashboards/runs' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+src/main/runs/conv-runs.ts(15,48): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/dashboards/runs-scan.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../dashboards/runs-scan' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/conv-runs.ts'
+    Imported via './dashboards/runs-scan' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../main/dashboards/runs-scan' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/runs/survivable-spawn.ts(13,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/stdout-journal.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './stdout-journal' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/survivable-spawn.ts'
+    Imported via '../runs/stdout-journal' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via './stdout-journal' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/run-reattach.ts'
+src/main/skill-node-tools.ts(1,41): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './agent-pilot' from file 'C:/Sources/arena-remontees/bras-a/src/main/skill-node-tools.ts'
+    Imported via '../../../main/agent-pilot' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ArtifactPipeline.integration.test.tsx'
+src/main/skill-pipeline.ts(4,48): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/native-registry.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './native-registry' from file 'C:/Sources/arena-remontees/bras-a/src/main/skill-pipeline.ts'
+    Imported via './native-registry' from file 'C:/Sources/arena-remontees/bras-a/src/main/skill-routing.ts'
+    Imported via './native-registry' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './native-registry' from file 'C:/Sources/arena-remontees/bras-a/src/main/capability-controls.ts'
+    Imported via '../../../main/native-registry' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/slash-commands.test.ts'
+src/main/skill-registry.ts(4,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/provider-capabilities.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './provider-capabilities' from file 'C:/Sources/arena-remontees/bras-a/src/main/skill-registry.ts'
+    Imported via './provider-capabilities' from file 'C:/Sources/arena-remontees/bras-a/src/main/claude-hooks.ts'
+src/main/sql-read-catalog.ts(23,48): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/sqlcmd-runner.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './sqlcmd-runner' from file 'C:/Sources/arena-remontees/bras-a/src/main/sql-read-catalog.ts'
+    Imported via './sqlcmd-runner' from file 'C:/Sources/arena-remontees/bras-a/src/main/sql-read-command.ts'
+src/main/sql-read-command.ts(19,49): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/sql-read-guard.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/sql-read-guard.ts(27,39): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/sql-read-catalog.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './sql-read-catalog' from file 'C:/Sources/arena-remontees/bras-a/src/main/sql-read-guard.ts'
+    Imported via './sql-read-catalog' from file 'C:/Sources/arena-remontees/bras-a/src/main/sql-read-command.ts'
+src/main/store/conversations.ts(17,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/runs/run-interruption.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/conversations.ts(19,49): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/auto-kaizen-link.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/conversations.ts(21,33): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/mots.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../shared/mots' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/conversations.ts'
+    Imported via '../shared/mots' from file 'C:/Sources/arena-remontees/bras-a/src/main/amitel-context.ts'
+src/main/store/conversations.ts(23,29): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/synonymes.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/conversations.ts(24,58): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/voisinage.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/conversations.ts(25,54): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/index-inverse.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/run-worktree-coordinator.ts(6,44): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/delai-de-reprise.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/run-worktree-coordinator.ts(7,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/repechage-automatique.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './repechage-automatique' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/run-worktree-coordinator.ts'
+    Imported via './repechage-automatique' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/run-worktree-coordinator.ts'
+src/main/store/run-worktree-coordinator.ts(9,48): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/avertissement-collision-probable.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/run-worktree-coordinator.ts(14,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/run-sans-signe-de-vie.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/run-worktree-coordinator.ts(28,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-run-state.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './worktree-run-state' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/run-worktree-coordinator.ts'
+    Imported via './store/worktree-run-state' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+src/main/store/worktree-manager.ts(1,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/cause-git.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/worktree-manager.ts(4,56): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/coquilles-vides.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/worktree-manager.ts(5,53): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/verdict-bureau.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './verdict-bureau' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-manager.ts'
+    Imported via './verdict-bureau' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/run-worktree-coordinator.ts'
+src/main/store/worktree-manager.ts(30,39): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/process-identity.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../process-identity' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-manager.ts'
+    Imported via '../process-identity' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/run-reattach.ts'
+src/main/store/worktree-manager.ts(32,41): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-operation-client.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/worktree-manager.ts(39,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/dependances-copie-agent.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/store/worktree-operation-client.ts(5,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-operation-protocol.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './worktree-operation-protocol' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-operation-client.ts'
+    Imported via './worktree-operation-protocol' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-manager.ts'
+    Imported via './worktree-operation-protocol' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/run-worktree-coordinator.ts'
+src/main/task-manager/types.ts(1,41): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/task-manager/schedule.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/task-regime.ts(14,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/intent-phase-routing.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/task-regime.ts(15,35): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/skill-routing.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './skill-routing' from file 'C:/Sources/arena-remontees/bras-a/src/main/task-regime.ts'
+    Imported via './skill-routing' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './skill-routing' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+src/main/ticket-create-command.ts(20,42): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/ticket-providers/provider-contract.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './ticket-providers/provider-contract' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-create-command.ts'
+    Imported via './ticket-providers/provider-contract' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-get-command.ts'
+    Imported via './ticket-providers/provider-contract' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-update-command.ts'
+    Imported via './ticket-providers/provider-contract' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/viz/fs-brains.ts(15,75): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/viz/brain-file-reader.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/viz/fs-brains.ts(23,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/viz/graph.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './graph' from file 'C:/Sources/arena-remontees/bras-a/src/main/viz/fs-brains.ts'
+    Imported via '../main/viz/graph' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/viz/fs-brains.ts(24,40): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/viz/windows-ordinal-case.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './windows-ordinal-case' from file 'C:/Sources/arena-remontees/bras-a/src/main/viz/fs-brains.ts'
+    Imported via './viz/windows-ordinal-case' from file 'C:/Sources/arena-remontees/bras-a/src/main/brain-inbox.ts'
+src/main/whisper-local.ts(45,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/telechargement.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './telechargement' from file 'C:/Sources/arena-remontees/bras-a/src/main/whisper-local.ts'
+    Imported via './telechargement' from file 'C:/Sources/arena-remontees/bras-a/src/main/whisper-local.ts'
+    Imported via './telechargement' from file 'C:/Sources/arena-remontees/bras-a/src/main/piper-local.ts'
+src/main/workflow-bench.ts(5,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-comparison.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './workflow-comparison' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-bench.ts'
+    Imported via './workflow-comparison' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-counterfactual.ts'
+src/main/workflow-bench.ts(12,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-counterfactual.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/workflow-bench.ts(20,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-bench-quality.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/main/workflow-counterfactual.ts(8,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/wire-checkpoint-fork.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './wire-checkpoint-fork' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-counterfactual.ts'
+    Imported via './wire-checkpoint-fork' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-bench.ts'
+    Imported via '../main/wire-checkpoint-fork' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/main/workflow-dynamic.ts(2,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/option-lecture-ou-solution.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './option-lecture-ou-solution' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-dynamic.ts'
+    Imported via './option-lecture-ou-solution' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+src/main/workflow-dynamic.ts(3,75): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profiles.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './workflow-profiles' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-dynamic.ts'
+    Imported via './workflow-profiles' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-defaults.ts'
+    Imported via './workflow-profiles' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profile-apply.ts'
+    Imported via './workflow-profiles' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../main/workflow-profiles' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via './workflow-profiles' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-bench.ts'
+src/main/workflow-profiles.ts(7,35): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/workflow-defaults.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/renderer/src/App.tsx(3,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/moteur-perime.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/renderer/src/components/action-detail-target.ts(15,35): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/ansi.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/ansi' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/action-detail-target.ts'
+    Imported via '../shared/ansi' from file 'C:/Sources/arena-remontees/bras-a/src/main/verify-command.ts'
+    Imported via '../shared/ansi' from file 'C:/Sources/arena-remontees/bras-a/src/main/verify-battement.ts'
+src/renderer/src/components/ArtifactPipeline.integration.test.tsx(14,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/chat-artifact-store.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/renderer/src/components/chat-view-model.ts(12,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/chat-turn.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/chat-turn' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/chat-view-model.ts'
+    Imported via '../../../shared/chat-turn' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ticket-treatment.ts'
+    Imported via '../../shared/chat-turn' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/conversations.ts'
+    Imported via '../../../shared/chat-turn' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ChatView.action-event.test.ts'
+src/renderer/src/components/chat-view-model.ts(22,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/pilot-events.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/pilot-events' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/chat-view-model.ts'
+    Imported via '../../../shared/pilot-events' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/chat-view-types.ts'
+    Imported via '../shared/pilot-events' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+src/renderer/src/components/chat-view-model.ts(23,31): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/skill-aliases.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/skill-aliases' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/chat-view-model.ts'
+    Imported via '../shared/skill-aliases' from file 'C:/Sources/arena-remontees/bras-a/src/main/skill-pipeline.ts'
+src/renderer/src/components/chat-view-model.ts(37,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/orchestration-outcome.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/orchestration-outcome' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/chat-view-model.ts'
+    Imported via '../../../shared/orchestration-outcome' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/Markdown.tsx'
+    Imported via '../../../shared/orchestration-outcome' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/action-outcome-summary.ts'
+    Imported via './orchestration-outcome' from file 'C:/Sources/arena-remontees/bras-a/src/shared/friction-echecs-repetes.ts'
+    Imported via '../shared/orchestration-outcome' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../shared/orchestration-outcome' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via '../../../shared/orchestration-outcome' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/chat-view-model.test.ts'
+src/renderer/src/components/ChatView.tsx(11,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/prompt-suivant.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/prompt-suivant' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ChatView.tsx'
+    Imported via '../../../shared/prompt-suivant' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/Markdown.tsx'
+    Imported via '../../../shared/prompt-suivant' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/chat-auto-mode.ts'
+src/renderer/src/components/ChatView.tsx(17,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/reprise-surcharge.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/renderer/src/components/ChatView.tsx(136,39): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/friction-echecs-repetes.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/renderer/src/components/ChatView.tsx(137,41): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/cadrage-confiance.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/cadrage-confiance' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ChatView.tsx'
+    Imported via '../../../shared/cadrage-confiance' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/CadrageHypotheses.tsx'
+    Imported via '../shared/cadrage-confiance' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via '../shared/cadrage-confiance' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../../../shared/cadrage-confiance' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/CadrageHypotheses.test.tsx'
+src/renderer/src/components/conversation-cost.test.ts(4,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/source-process-principal.test-helpers.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/renderer/src/components/conversation-groups.ts(15,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/project-path.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/project-path' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/conversation-groups.ts'
+    Imported via '../../shared/project-path' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/conversations.ts'
+    Imported via '../../shared/project-path' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/conversations.ts'
+    Imported via '../shared/project-path' from file 'C:/Sources/arena-remontees/bras-a/src/main/rappel-conversations.ts'
+src/renderer/src/components/DiffView.tsx(1,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/git-read.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/git-read' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/DiffView.tsx'
+    Imported via '../../../shared/git-read' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/SourceControlPane.tsx'
+    Imported via '../shared/git-read' from file 'C:/Sources/arena-remontees/bras-a/src/main/git-read-main.ts'
+    Imported via '../shared/git-read' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../shared/git-read' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../shared/git-read' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../shared/git-read' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../../../shared/git-read' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/SourceControlPane.test.tsx'
+src/renderer/src/components/harness-timeline-model.ts(7,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/run-execution.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/run-execution' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/harness-timeline-model.ts'
+    Imported via '../../../shared/run-execution' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/workflow-quote-label.ts'
+    Imported via '../../shared/run-execution' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/trace-event.ts'
+    Imported via '../../shared/run-execution' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/conv-runs.ts'
+    Imported via '../shared/run-execution' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via '../shared/run-execution' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../../shared/run-execution' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/orchestration-observability.ts'
+    Imported via '../shared/run-execution' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../../shared/run-execution' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/late-run-usage-settlement.ts'
+src/renderer/src/components/JarvisWidget.tsx(45,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/whisper-local.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../main/whisper-local' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/JarvisWidget.tsx'
+    Imported via '../../../main/whisper-local' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/EnregistrementsWidget.tsx'
+    Imported via '../main/whisper-local' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../../../main/whisper-local' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/composer-dictee.live.test.ts'
+src/renderer/src/components/JarvisWidget.tsx(46,32): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/piper-local.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../main/piper-local' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/JarvisWidget.tsx'
+    Imported via '../main/piper-local' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/renderer/src/components/Markdown.tsx(17,30): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/file-ref.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/renderer/src/components/ModelQuotaIndicator.tsx(7,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/model-quotas.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/model-quotas' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ModelQuotaIndicator.tsx'
+    Imported via '../shared/model-quotas' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../../../shared/model-quotas' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/quota-summary-window.test.ts'
+src/renderer/src/components/ModelQuotaIndicator.tsx(8,35): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/context-gauge.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/context-gauge' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ModelQuotaIndicator.tsx'
+    Imported via '../../../shared/context-gauge' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ChatView.tsx'
+    Imported via '../../../shared/context-gauge' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ChatView.tsx'
+    Imported via '../../../shared/context-gauge' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ModelQuotaIndicator.compact.test.tsx'
+    Imported via '../../../shared/context-gauge' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ModelQuotaIndicator.compact.test.tsx'
+    Imported via '../../../shared/context-gauge' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ModelQuotaIndicator.context.test.tsx'
+src/renderer/src/components/ObservatoryCallDetail.tsx(7,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/shadow-router.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../main/shadow-router' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ObservatoryCallDetail.tsx'
+    Imported via '../main/shadow-router' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/renderer/src/components/PerfLagPanel.tsx(7,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/perf-lag.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/perf-lag' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/PerfLagPanel.tsx'
+    Imported via '../shared/perf-lag' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/renderer/src/components/rendu-long.ts(1,30): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/gel-detector.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/gel-detector' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/rendu-long.ts'
+    Imported via '../../../shared/gel-detector' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/PerfLagPanel.tsx'
+    Imported via '../shared/gel-detector' from file 'C:/Sources/arena-remontees/bras-a/src/main/gel-main.ts'
+    Imported via '../shared/gel-detector' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../../../shared/gel-detector' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/graph-perf.ts'
+    Imported via '../../shared/gel-detector' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/gel-renderer.ts'
+src/renderer/src/components/resume-unfinished.ts(6,31): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/resume-staleness.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/resume-staleness' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/resume-unfinished.ts'
+    Imported via '../../shared/resume-staleness' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/orchestration-state.ts'
+    Imported via '../../../shared/resume-staleness' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ChatView.boot-selection.test.tsx'
+src/renderer/src/components/SourceControlPane.tsx(13,33): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/activity/brain-trace-spool.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../main/activity/brain-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/SourceControlPane.tsx'
+    Imported via '../activity/brain-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/main/knowledge/semantic-temporal-projection.ts'
+    Imported via '../../../main/activity/brain-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/BrainNavigationCard.tsx'
+    Imported via './activity/brain-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/main/autowin-kaizen-context.ts'
+    Imported via './activity/brain-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './activity/brain-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './brain-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/orchestration-observability.ts'
+    Imported via '../main/activity/brain-trace-spool' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/renderer/src/components/TaskManagerView.tsx(3,70): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/store/conversations.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../main/store/conversations' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/TaskManagerView.tsx'
+    Imported via '../main/store/conversations' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via './store/conversations' from file 'C:/Sources/arena-remontees/bras-a/src/main/autowin-kaizen-context.ts'
+    Imported via './store/conversations' from file 'C:/Sources/arena-remontees/bras-a/src/main/rappel-conversations.ts'
+    Imported via './store/conversations' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via './store/conversations' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via './conversations' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/pieces-jointes-orchestration.ts'
+    Imported via './conversations' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/chat-artifact-store.ts'
+    Imported via '../../../main/store/conversations' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ArtifactPipeline.integration.test.tsx'
+src/renderer/src/components/TaskManagerView.tsx(25,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/task-provider.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/renderer/src/components/TicketsView.tsx(8,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/tickets.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/TicketsView.tsx'
+    Imported via '../../../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ticket-treatment.ts'
+    Imported via '../../../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ticket-auto-mode.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-create-command.ts'
+    Imported via '../../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-providers/provider-contract.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-search-command.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-get-command.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/main/ticket-update-command.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/main/tickets-ipc.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../../../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/TicketsView.test.tsx'
+    Imported via '../../../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ticket-auto-mode.test.ts'
+    Imported via '../../../shared/tickets' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ticket-treatment.test.ts'
+src/renderer/src/components/TicketsView.tsx(9,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/navigation.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/navigation' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/TicketsView.tsx'
+    Imported via '../../shared/navigation' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/tabs.ts'
+    Imported via '../shared/navigation' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../../../shared/navigation' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/TaskManagerView.sections.test.tsx'
+src/renderer/src/components/UpdateBanner.tsx(6,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/update-contract.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/update-contract' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/UpdateBanner.tsx'
+    Imported via '../shared/update-contract' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/renderer/src/components/useObservatorySources.ts(2,51): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/knowledge/semantic-temporal-projection.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../main/knowledge/semantic-temporal-projection' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/useObservatorySources.ts'
+    Imported via '../main/knowledge/semantic-temporal-projection' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/renderer/src/components/VeilleCandidatsSection.tsx(2,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/veille/candidats.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../main/veille/candidats' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/VeilleCandidatsSection.tsx'
+    Imported via './candidats' from file 'C:/Sources/arena-remontees/bras-a/src/main/veille/candidats-store.ts'
+    Imported via '../../../main/veille/candidats' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/veille-tri.ts'
+    Imported via '../../../main/veille/candidats' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/VeilleCandidatsSection.test.tsx'
+src/renderer/src/components/VeilleCandidatsSection.tsx(3,34): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/veille/candidats-store.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../main/veille/candidats-store' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/VeilleCandidatsSection.tsx'
+    Imported via '../main/veille/candidats-store' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../../../main/veille/candidats-store' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/VeilleCandidatsSection.test.tsx'
+src/renderer/src/components/watchdog-section-model.ts(1,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/watchdog-regex.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/watchdog-regex' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/watchdog-section-model.ts'
+    Imported via '../../shared/watchdog-regex' from file 'C:/Sources/arena-remontees/bras-a/src/main/task-manager/watchdog-file-source.ts'
+src/renderer/src/components/WorkflowCanvas.tsx(2,29): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/persona.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/persona' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/WorkflowCanvas.tsx'
+    Imported via '../shared/persona' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+src/renderer/src/components/WorktreeActivityView.tsx(9,8): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/worktree-activity-model.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/WorktreeActivityView.tsx'
+    Imported via '../../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/SourceControlPane.tsx'
+    Imported via '../../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/WorktreeView.tsx'
+    Imported via '../../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/worktree-chef-de-projet.ts'
+    Imported via '../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via '../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/startup-resume-publication.ts'
+    Imported via '../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-manager.ts'
+    Imported via '../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/run-worktree-coordinator.ts'
+    Imported via '../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/run-worktree-coordinator.ts'
+    Imported via '../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/worktree-run-state.ts'
+    Imported via '../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/WorktreeActivityView.test.tsx'
+    Imported via '../../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/WorktreeView.test.tsx'
+    Imported via '../../../shared/worktree-activity-model' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/worktree-chef-de-projet.test.ts'
+src/renderer/src/components/WorktreeView.tsx(2,39): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/git-graph.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../../../shared/git-graph' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/WorktreeView.tsx'
+    Imported via '../../../shared/git-graph' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/GitGraphLayout.ts'
+    Imported via '../shared/git-graph' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../../../shared/git-graph' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/GitGraphLayout.elisions.test.ts'
+    Imported via '../../../shared/git-graph' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/GitGraphLayout.test.ts'
+src/shared/chat-turn.ts(1,35): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/artifacts.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/shared/chat-turn.ts'
+    Imported via '../../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/chat-view-types.ts'
+    Imported via '../../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ArtifactPreview.tsx'
+    Imported via '../../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ArtifactArchivePreview.tsx'
+    Imported via '../../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ArtifactFontPreview.tsx'
+    Imported via '../../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ArtifactModel3dPreview.tsx'
+    Imported via '../../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ChatMessageRow.tsx'
+    Imported via '../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/conversations.ts'
+    Imported via '../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+    Imported via '../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/types.ts'
+    Imported via '../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/codex.ts'
+    Imported via '../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/artifacts.ts'
+    Imported via '../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/main/providers/claude.ts'
+    Imported via '../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via '../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via '../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/main/store/chat-artifact-store.ts'
+    Imported via '../../../shared/artifacts' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/ArtifactPreview.test.tsx'
+src/shared/chat-turn.ts(2,37): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/preload-contracts.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './preload-contracts' from file 'C:/Sources/arena-remontees/bras-a/src/shared/chat-turn.ts'
+    Imported via '../shared/preload-contracts' from file 'C:/Sources/arena-remontees/bras-a/src/preload/index.d.ts'
+src/shared/cost-estimate.ts(16,33): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/token-usage.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './token-usage' from file 'C:/Sources/arena-remontees/bras-a/src/shared/cost-estimate.ts'
+    Imported via './token-usage' from file 'C:/Sources/arena-remontees/bras-a/src/shared/orchestration-outcome.ts'
+    Imported via '../../../shared/token-usage' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/conversation-cost.ts'
+    Imported via './token-usage' from file 'C:/Sources/arena-remontees/bras-a/src/shared/context-gauge.ts'
+    Imported via '../../shared/token-usage' from file 'C:/Sources/arena-remontees/bras-a/src/main/dashboards/cost.ts'
+    Imported via '../../shared/token-usage' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/prompt-observability.ts'
+src/shared/cost-estimate.ts(17,38): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/billing-model.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/shared/orchestration-outcome.ts(2,68): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/cost-estimate.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './cost-estimate' from file 'C:/Sources/arena-remontees/bras-a/src/shared/orchestration-outcome.ts'
+    Imported via '../../../shared/cost-estimate' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/conversation-cost.ts'
+    Imported via '../../../shared/cost-estimate' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/conversation-cost.ts'
+    Imported via './cost-estimate' from file 'C:/Sources/arena-remontees/bras-a/src/shared/context-gauge.ts'
+    Imported via './cost-estimate' from file 'C:/Sources/arena-remontees/bras-a/src/shared/friction-echecs-repetes.ts'
+    Imported via '../shared/cost-estimate' from file 'C:/Sources/arena-remontees/bras-a/src/main/execution-supervisor.ts'
+    Imported via '../../shared/cost-estimate' from file 'C:/Sources/arena-remontees/bras-a/src/main/dashboards/cost.ts'
+src/shared/orchestration-outcome.ts(4,51): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/portee-de-phase.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+src/shared/persona.ts(3,36): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/main/skill-pipeline.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via '../main/skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/shared/persona.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/task-regime.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/intent-phase-routing.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/skill-routing.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/execution-quote.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/roles.ts'
+    Imported via '../skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/prompt-observability.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/orchestrator.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-graph.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/phase-briefs.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profiles.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/role-store.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/os.ts'
+    Imported via '../skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/orchestration-state.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profile-apply.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-profile-apply.ts'
+    Imported via '../skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/activity/orchestration-observability.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/agent-pilot.ts'
+    Imported via './skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/main/behaviour-composition.ts'
+    Imported via '../../../main/skill-pipeline' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/slash-commands.test.ts'
+src/shared/portee-de-phase.ts(1,33): error TS6307: File 'C:/Sources/arena-remontees/bras-a/src/shared/pipeline-phases.ts' is not listed within the file list of project 'C:/Sources/arena-remontees/bras-a/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './pipeline-phases' from file 'C:/Sources/arena-remontees/bras-a/src/shared/portee-de-phase.ts'
+    Imported via '../../../shared/pipeline-phases' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/workflow-executability.ts'
+    Imported via '../shared/pipeline-phases' from file 'C:/Sources/arena-remontees/bras-a/src/main/skill-pipeline.ts'
+    Imported via '../shared/pipeline-phases' from file 'C:/Sources/arena-remontees/bras-a/src/main/skill-pipeline.ts'
+    Imported via './pipeline-phases' from file 'C:/Sources/arena-remontees/bras-a/src/shared/persona.ts'
+    Imported via '../../../shared/pipeline-phases' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/WorkflowCanvas.tsx'
+    Imported via '../shared/pipeline-phases' from file 'C:/Sources/arena-remontees/bras-a/src/main/workflow-graph.ts'
+    Imported via '../../shared/pipeline-phases' from file 'C:/Sources/arena-remontees/bras-a/src/main/runs/orchestration-state.ts'
+    Imported via '../shared/pipeline-phases' from file 'C:/Sources/arena-remontees/bras-a/src/main/commands.ts'
+    Imported via '../../../shared/pipeline-phases' from file 'C:/Sources/arena-remontees/bras-a/src/renderer/src/components/WorkflowCanvas.skill-brick.test.tsx'
+typecheck-web exit=2
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Sources/arena-remontees/bras-a[39m
+
+ [32m✓[39m [30m[45m unite [49m[39m src/renderer/src/components/home-widgets-model.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m [30m[45m unite [49m[39m src/renderer/src/components/HomeView.test.tsx [2m([22m[2m26 tests[22m[2m)[22m[33m 564[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m44 passed[39m[22m[90m (44)[39m
+[2m   Start at [22m 17:16:46
+[2m   Duration [22m 1.15s[2m (transform 146ms, setup 0ms, collect 178ms, tests 567ms, environment 202ms, prepare 90ms)[22m
+
+tests exit=0

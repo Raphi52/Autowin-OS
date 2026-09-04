@@ -58,13 +58,28 @@ function section(md, titre) {
   return fin < 0 ? reste : reste.slice(0, fin)
 }
 
-/** Le script de lancement du banc, quel que soit son nom. */
+/**
+ * Le script qui lance LES QUATRE BRAS, quel que soit son nom.
+ *
+ * Un banc peut porter PLUSIEURS `lance*.sh` : celui des bras, et celui du juge. Prendre le premier
+ * par ordre alphabetique faisait noter P6 et P7 sur le mauvais fichier — mesure du 2026-09-03 (banc
+ * « remontees des agents ») : `lance-juge.sh` passait avant `lance.sh`, et le banc ressortait
+ * « lancement sequentiel, 2 dossiers pour 4 bras » alors que les quatre bras etaient bien partis
+ * ensemble. Un faux RATE coute autant qu'un faux OK : il fait corriger ce qui marchait deja. On
+ * retient donc, parmi les candidats, celui qui parle REELLEMENT des quatre bras.
+ */
 function scriptLancement(bench) {
   if (!existsSync(bench)) return null
-  const f = readdirSync(bench).find((n) => /^lance.*\.(sh|ps1|bat|mjs|js)$/i.test(n))
-  return f
-    ? { chemin: path.join(bench, f), texte: readFileSync(path.join(bench, f), 'utf8') }
-    : null
+  const candidats = readdirSync(bench)
+    .filter((n) => /^lance.*\.(sh|ps1|bat|mjs|js)$/i.test(n))
+    .map((n) => ({ chemin: path.join(bench, n), texte: readFileSync(path.join(bench, n), 'utf8') }))
+  if (!candidats.length) return null
+  const parleDesQuatre = (texte) => {
+    const t = texte.toLowerCase()
+    if (t.includes('a b c x')) return true
+    return BRAS.every((b) => ['prompt-', 'bras-', 'out-'].some((prefixe) => t.includes(prefixe + b)))
+  }
+  return candidats.find((c) => parleDesQuatre(c.texte)) ?? candidats[0]
 }
 
 export function verifierProtocole({ run, bench, racineDuels = process.cwd() }) {
