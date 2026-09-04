@@ -163,7 +163,7 @@ describe('ClaudeCliAdapter — pièces jointes', () => {
     ])
   })
 
-  it('matérialise uniquement les fichiers déposés puis les nettoie', () => {
+  it('matérialise uniquement les fichiers déposés puis les nettoie', async () => {
     const materialized = materializeClaudeAttachments([
       {
         name: '../capture.png',
@@ -178,7 +178,9 @@ describe('ClaudeCliAdapter — pièces jointes', () => {
     expect(materialized.paths[0]).not.toContain('..')
     expect(readFileSync(materialized.paths[0]).toString('utf8')).toBe('abc')
     expect(materialized.promptSuffix).toContain(materialized.paths[0])
-    materialized.cleanup()
+    // `cleanup` est ASYNCHRONE depuis le 2026-09-04 : la suppression synchrone tenait le fil
+    // principal 1,6 s en fin de chaque appel (gels.jsonl). Il faut donc l'attendre ici.
+    await materialized.cleanup()
     expect(existsSync(materialized.dir)).toBe(false)
   })
   it('retire tous les caractères de contrôle Windows des noms matérialisés', () => {

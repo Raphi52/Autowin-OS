@@ -375,7 +375,14 @@ export interface MaterializedAttachments {
   dir: string
   paths: string[]
   promptSuffix: string
-  cleanup: () => void
+  /**
+   * ASYNCHRONE, et c'est le point. Mesure du journal `gels.jsonl` (2026-08-31 18:45:36) :
+   * `io:disque:rmSync` a tenu la fenetre 1 625 ms, cause `entree-sortie-bloquante`. Ce nettoyage
+   * s'execute a la fin de CHAQUE appel au CLI, et un dossier d'images pese bien plus qu'un fichier
+   * de prompt. Rien ne l'attend : il ne doit pas figer l'interface.
+   * Garde : `claude.nettoyage-non-bloquant.test.ts`.
+   */
+  cleanup: () => Promise<void>
 }
 
 /**
@@ -439,7 +446,10 @@ export function materializeClaudeAttachments(attachments: Attachment[]): Materia
       '\n\nPIÈCES JOINTES FOURNIES PAR L’UTILISATEUR (celles marquées « message precedent » viennent d’un tour ANTÉRIEUR de cette conversation, pas du message ci-dessus) :\n' +
       paths.map((path, index) => `- ${path} — ${attachments[index]?.name ?? ''}`).join('\n') +
       '\nUtilise Read uniquement pour consulter ces fichiers si nécessaire.',
-    cleanup: () => rmSync(dir, { recursive: true, force: true })
+    cleanup: () =>
+      rmAsync(dir, { recursive: true, force: true }).catch(() => {
+        /* hygiene best-effort : un temporaire deja parti ne doit pas casser la fin d'appel */
+      })
   }
 }
 
@@ -632,12 +642,19 @@ export function argumentsMcpNoeudSkill(opts: SendOptions): {
  */
 function ecrireConfigMcp(
   config: string
-): { chemin: string; nettoyer: () => void } | undefined {
+): { chemin: string; nettoyer: () => Promise<void> } | undefined {
   try {
     const dossier = mkdtempSync(join(tmpdir(), 'autowin-os-mcp-'))
     const chemin = join(dossier, 'mcp.json')
     writeFileSync(chemin, config, 'utf8')
-    return { chemin, nettoyer: () => rmSync(dossier, { recursive: true, force: true }) }
+    return {
+      chemin,
+      nettoyer: () =>
+        // Meme raison que pour les pieces jointes : jamais de suppression synchrone en fin d'appel.
+        rmAsync(dossier, { recursive: true, force: true }).catch(() => {
+          /* hygiene best-effort */
+        })
+    }
   } catch {
     return undefined
   }
@@ -746,7 +763,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // Une annulation peut arriver pendant la capture asynchrone du workspace, avant que le
       // process CLI (et donc son handler `close`) n'existe. Nettoyer ici les pièces jointes déjà
       // matérialisées évite de laisser un dossier temporaire à chaque tentative interrompue.
-      materialized?.cleanup()
+      await materialized?.cleanup()
       throw error
     }
     // Autowin = SOURCE UNIQUE : on lance le CLI « nu ». `--setting-sources ""` → aucun CLAUDE.md
@@ -788,7 +805,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // pas. Elles etaient donc payees a chaque appel sans jamais etre utilisees.
       '--disable-slash-commands'
     ]
-    let mcpConfigDir: { chemin: string; nettoyer: () => void } | undefined
+    let mcpConfigDir: { chemin: string; nettoyer: () => Promise<void> } | undefined
     if (argsMcp.mcp.length > 0) {
       /**
        * `--mcp-config` déclare le serveur, `--allowedTools` autorise l'USAGE : les deux, sinon
@@ -1516,8 +1533,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         journalPath: journal?.path
       })
       // Le fichier de config MCP porte le jeton : il ne survit pas a l'appel qui l'a justifie.
-      mcpConfigDir?.nettoyer()
-      materialized?.cleanup()
+      await mcpConfigDir?.nettoyer()
+      await materialized?.cleanup()
       // Flush du reliquat : un dernier event JSON sans '\n' terminal ne serait
       // jamais parsé (result/session_id perdus silencieusement) — on le traite ici.
       const rest = buffer.trim()
