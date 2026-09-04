@@ -35,11 +35,21 @@ export interface BrainIndexRefresh {
   detail: string
 }
 
+/**
+ * Le processus est détaché et ses sorties ignorées, mais on écoute quand même sa FIN : sans cela,
+ * une réindexation qui échoue passe pour réussie et le Brain reste muet jusqu'au prochain démarrage.
+ * `once` est optionnel pour que les doublures de test restent simples.
+ */
+export interface LancedChild {
+  unref?: () => void
+  once?: (evenement: 'exit' | 'error', rappel: (...args: unknown[]) => void) => unknown
+}
+
 type SpawnLike = (
   bin: string,
   args: readonly string[],
   options: Record<string, unknown>
-) => Pick<ChildProcess, 'unref'>
+) => LancedChild
 
 /** Lit `/health` (bearer obligatoire : 403 sinon). Rend `null` si le service ne répond pas. */
 export async function readBrainHealth(
