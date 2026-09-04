@@ -472,6 +472,82 @@ function sondeIdentiteSysteme(pid: number): string | null {
   }
 }
 
+/**
+ * Le sondage GROUPE : l'empreinte de N PID en UN SEUL processus externe.
+ *
+ * Mesure du 2026-09-04 (.autowin-data/autowin-os/gels.jsonl) : 68 gels, 240 s de fil principal tenu,
+ * mediane 2,1 s, pointe 17,4 s. La memoire courte par PID ne supprime que les REPETITIONS ; le
+ * recensement des baux, lui, balaie N PID DIFFERENTS a la suite et payait donc N lancements de
+ * PowerShell d'affilee. `Get-Process` accepte une LISTE d'identifiants : un seul lancement suffit.
+ */
+function sondeIdentitesSystemeGroupee(pids: number[]): Map<number, string | null> {
+  const resultat = new Map<number, string | null>(pids.map((pid) => [pid, null]))
+  if (pids.length === 0) return resultat
+  if (platform() !== 'win32') {
+    for (const pid of pids) resultat.set(pid, sondeIdentiteSysteme(pid))
+    return resultat
+  }
+  try {
+    const command =
+      `Get-Process -Id ${pids.join(',')} -ErrorAction SilentlyContinue | ForEach-Object { ` +
+      `$path = ''; try { $path = $_.Path } catch {}; ` +
+      `Write-Output ($_.Id.ToString() + '|' + $_.StartTime.ToUniversalTime().Ticks.ToString() + '|' + $path) }`
+    const sortie = execFileSync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', command],
+      { encoding: 'utf8', timeout: 5_000, windowsHide: true }
+    )
+    for (const ligne of sortie.split(LIGNES)) {
+      const brut = ligne.trim()
+      if (!brut) continue
+      const separateur = brut.indexOf('|')
+      if (separateur <= 0) continue
+      const pid = Number(brut.slice(0, separateur))
+      if (!Number.isSafeInteger(pid) || !resultat.has(pid)) continue
+      const empreinte = brut.slice(separateur + 1)
+      resultat.set(pid, empreinte || null)
+    }
+  } catch {
+    // Un echec du sondage groupe reste un echec de LECTURE : `null` partout, memoise comme tel.
+  }
+  return resultat
+}
+
+/**
+ * Precharge la memoire courte pour TOUS les PID d'un recensement, en un seul processus externe.
+ *
+ * Les PID morts sont ecartes AVANT le lancement (`process.kill(pid, 0)` : l'absence est prouvee
+ * localement, gratuitement) et ceux deja memoises ne sont pas resondes. Si rien ne reste a lire,
+ * AUCUN processus externe n'est lance.
+ */
+export function prechargerEmpreintesProcessus(
+  pids: readonly number[],
+  sonde: (pids: number[]) => Map<number, string | null> = sondeIdentitesSystemeGroupee,
+  maintenant: () => number = Date.now
+): void {
+  const t = maintenant()
+  const aLire: number[] = []
+  for (const pid of new Set(pids)) {
+    if (!Number.isSafeInteger(pid) || pid <= 0) continue
+    try {
+      process.kill(pid, 0)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+        identitesMemoisees.delete(pid)
+        continue
+      }
+    }
+    const memo = identitesMemoisees.get(pid)
+    if (memo && t - memo.a < IDENTITE_MEMOIRE_MS) continue
+    aLire.push(pid)
+  }
+  if (aLire.length === 0) return
+  const empreintes = sonde(aLire)
+  for (const pid of aLire) {
+    identitesMemoisees.set(pid, { identite: empreintes.get(pid) ?? null, a: t })
+  }
+}
+
 export function defaultProcessIdentity(
   pid: number,
   sonde: (pid: number) => string | null = sondeIdentiteSysteme,
@@ -598,6 +674,21 @@ export class WorktreeManager {
   private readonly removeIndexLockFn: (path: string) => void
   private readonly configuredBaseBranch?: string
   private readonly requireCanonicalRemote: boolean
+
+  /**
+   * UN seul processus externe pour TOUS les PID d'un recensement, avant de les lire un par un.
+   *
+   * Mesure du 2026-09-04 (gels.jsonl) : 240 s de fil principal tenu, 68 gels, pointe 17,4 s — le
+   * recensement des baux lancait un PowerShell PAR PID. Le prechargement ne change aucun verdict :
+   * il remplit d'avance la memoire courte que `defaultProcessIdentity` consulte deja. Il ne
+   * s'applique QUE quand la sonde reelle est en place — une sonde injectee par un test compte ses
+   * propres appels et ne doit pas etre court-circuitee.
+   */
+  private prechargerEmpreintes(pids: readonly number[]): void {
+    if (this.processIdentity !== defaultProcessIdentity) return
+    prechargerEmpreintesProcessus(pids.filter((pid) => Number.isSafeInteger(pid) && pid > 0))
+  }
+
   private readonly processIdentity: (pid: number) => string | null | undefined
   private readonly now: () => number
   private readonly operationClient?: WorktreeOperationClient
@@ -2166,7 +2257,9 @@ export class WorktreeManager {
     const leaseDir = join(this.worktreeRoot, '.leases', agentId)
     if (!existsSync(leaseDir)) return false
     let active = false
-    for (const entry of readdirSync(leaseDir, { withFileTypes: true })) {
+    const entrees = readdirSync(leaseDir, { withFileTypes: true })
+    this.prechargerEmpreintes(entrees.map((entree) => Number(entree.name)))
+    for (const entry of entrees) {
       if (entry.isFile() && entry.name.startsWith('spawn-pending-')) {
         const intentPath = join(leaseDir, entry.name)
         const recordedAt = Number(readFileSync(intentPath, 'utf8'))
@@ -2932,7 +3025,13 @@ exit 0
       if (activeOwner) activeToken = activeOwner.owner.token
       else ownershipKnown = false
     }
-    for (const entry of readdirSync(ownerRoot, { withFileTypes: true })) {
+    const entreesProprietaires = readdirSync(ownerRoot, { withFileTypes: true })
+    this.prechargerEmpreintes(
+      entreesProprietaires.map((entree) =>
+        Number(/^index-(\d+)-[A-Za-z0-9_-]+\.owner$/.exec(entree.name)?.[1])
+      )
+    )
+    for (const entry of entreesProprietaires) {
       const match = entry.isFile()
         ? /^index-(\d+)-([A-Za-z0-9_-]+)\.owner$/.exec(entry.name)
         : undefined
