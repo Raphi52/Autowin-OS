@@ -3,7 +3,7 @@ import {
   agentNotices,
   nextDepartures,
   relativeDelay,
-  unacknowledgedCount
+  unacknowledgedAlertCount
 } from './home-widgets-model'
 
 const NOW = Date.parse('2026-08-21T09:00:00.000Z')
@@ -95,8 +95,32 @@ describe('remontees des agents', () => {
     expect(notices.find((notice) => notice.id === 'a-inconnue')!.origin).toBe('disparue')
   })
 
-  it('compte ce qui reste a lire', () => {
-    expect(unacknowledgedCount(agentNotices(alerts, tasks))).toBe(2)
-    expect(unacknowledgedCount([])).toBe(0)
+  /**
+   * LE COMPTEUR NE DOIT PAS SE FAIRE TRONQUER PAR LE PLAFOND D'AFFICHAGE.
+   *
+   * Defaut constate : `agentNotices` plafonne a 30 lignes, et compter sur cette liste deja coupee
+   * annoncait « 30 » alors qu'il y avait 31 remontees non lues. Le plafond concerne la LISTE (la
+   * tuile est petite), jamais la pastille.
+   *
+   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : borner le comptage au plafond d'affichage, par exemple
+   * `alerts.slice(0, 30).filter(...)` dans `unacknowledgedAlertCount`.
+   */
+  it('compte les non acquittees REELLES, au-dela du plafond d affichage de la liste', () => {
+    const nombreuses = Array.from({ length: 31 }, (_, index) => ({
+      id: `a-${index}`,
+      taskId: 't1',
+      kind: 'failed' as const,
+      message: `run rouge ${index}`,
+      createdAt: NOW - index * 60_000
+    }))
+    // Le plafond d'AFFICHAGE est conserve...
+    expect(agentNotices(nombreuses, tasks)).toHaveLength(30)
+    // ...mais le compteur dit la verite.
+    expect(unacknowledgedAlertCount(nombreuses)).toBe(31)
+  })
+
+  it('ne compte pas les alertes deja acquittees', () => {
+    expect(unacknowledgedAlertCount(alerts)).toBe(2)
+    expect(unacknowledgedAlertCount([])).toBe(0)
   })
 })

@@ -113,6 +113,14 @@ export function agentNotices(
     .slice(0, limit)
 }
 
-export function unacknowledgedCount(notices: readonly AgentNotice[]): number {
-  return notices.filter((notice) => !notice.acknowledged).length
+/**
+ * Le nombre REEL de remontees non acquittees, compte sur les alertes BRUTES.
+ *
+ * Il a remplace un `unacknowledgedCount(notices)` qui comptait sur la liste rendue par
+ * `agentNotices` — donc DEJA plafonnee a `limit` lignes. La pastille annoncait alors « 30 » des la
+ * 31e remontee non lue : elle mentait exactement quand elle devenait utile. Le plafond appartient a
+ * l'AFFICHAGE (la tuile est petite), jamais au comptage.
+ */
+export function unacknowledgedAlertCount(alerts: readonly AlertLike[]): number {
+  return alerts.filter((alert) => typeof alert.acknowledgedAt !== 'number').length
 }
