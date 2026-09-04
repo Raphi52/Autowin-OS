@@ -16,8 +16,6 @@ import {
 import { brainServiceToken } from './brain-retrieval'
 import { resolveBrainRuntime } from './brain-server-launch'
 import { probeClaudeSession } from './claude-session'
-import { loadTokens } from './providers/codex-auth'
-import { codexTokenStatus } from './provider-status'
 
 /**
  * Resout un executable sur le PATH, SANS l'executer — comme `where`, en pur Node.
@@ -82,7 +80,7 @@ export function appPreflightProbes(): PreflightProbes {
     hasBin: async (which) => {
       // Whitelist runtime (défense en profondeur, pas seulement le typage TS) : ne jamais exécuter
       // un binaire arbitraire même si un futur appelant relayait une valeur non contrôlée. (Guardian.)
-      if (which !== 'codex' && which !== 'claude' && which !== 'kimi') return false
+      if (which !== 'claude') return false
       const envBin = process.env[`${which.toUpperCase()}_BIN`]
       if (envBin) return existsSync(envBin)
       // shell:true sur Windows : codex/claude sont installés en shims `.cmd` par npm -g → un spawn
@@ -119,7 +117,6 @@ export function appPreflightProbes(): PreflightProbes {
         })
       })
     },
-    hasCodexSession: () => codexTokenStatus(loadTokens(), Date.now()) === 'authenticated',
     // `claude auth status` est l'autorité : le store de credentials du CLI n'est pas contractuel.
     claudeSession: () => probeClaudeSession(),
     hasBrainToken: () => brainServiceToken().length > 0,

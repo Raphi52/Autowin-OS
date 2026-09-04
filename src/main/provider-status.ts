@@ -124,9 +124,11 @@ export function buildProviderStatuses(inputs: {
     }
     return { provider, status: fallback, testable: isTestable(fallback) }
   }
-  const statuses = [display('codex', codex), display('claude', claude), display('kimi', kimi)]
-  if (inputs.geminiResponds !== undefined || inputs.states?.gemini) {
-    statuses.push(display('gemini', gemini))
-  }
-  return statuses
+  // Codex, Kimi et Gemini sont des projets abandonnés : plus aucun statut publié, donc plus aucune
+  // connexion proposée ni sondée. Les entrées correspondantes restent ACCEPTÉES en signature pour
+  // que la relecture de l'historique et les appelants existants continuent de compiler.
+  void codex
+  void kimi
+  void gemini
+  return [display('claude', claude)]
 }

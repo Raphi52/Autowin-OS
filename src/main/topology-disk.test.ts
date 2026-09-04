@@ -42,8 +42,12 @@ describe('agent topology disk persistence', () => {
   it('round-trips the validated topology atomically', () => {
     const path = temporaryFile()
     const base = createDefaultTopology(TEST_MODEL_CATALOG)
-    const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
-    const changed = setSlot(base, 'judge', bindingForModel('judge-2', codex), TEST_MODEL_CATALOG)
+    // Un SECOND modèle distinct de celui de la topologie par défaut, sur un moteur toujours routé
+    // (Codex a été retiré : un slot Codex serait désormais rebranché au chargement).
+    const autre = TEST_MODEL_CATALOG.find(
+      (model) => model.provider === 'claude' && model.id !== base.orchestrator.modelId
+    )!
+    const changed = setSlot(base, 'judge', bindingForModel('judge-2', autre), TEST_MODEL_CATALOG)
 
     saveAgentTopology(path, changed, TEST_MODEL_CATALOG)
 
@@ -106,8 +110,8 @@ describe('agent topology disk persistence', () => {
     const topology = createDefaultTopology(TEST_MODEL_CATALOG)
     topology.orchestrator = {
       slotId: 'orchestrator',
-      provider: 'codex',
-      modelId: 'codex/flagship',
+      provider: 'claude',
+      modelId: 'claude/opus-latest',
       reasoningEffort: 'medium'
     }
     saveAgentTopology(path, topology, TEST_MODEL_CATALOG)
@@ -116,7 +120,7 @@ describe('agent topology disk persistence', () => {
 
     expect(loaded).toEqual(topology)
     expect(() => runtimeRoleBinding(loaded.orchestrator, DEFAULT_IMPORTED_MODELS)).toThrow(
-      'Modèle indisponible hors catalogue : codex/flagship'
+      'Modèle indisponible hors catalogue : claude/opus-latest'
     )
   })
 

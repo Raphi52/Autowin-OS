@@ -79,15 +79,15 @@ describe('bindings runtime issus d’Agent Studio', () => {
   it('refuse un alias dynamique non résolu plutôt que de l’inventer comme transport', () => {
     const slot = {
       slotId: 'orchestrator',
-      provider: 'codex',
-      modelId: 'codex/flagship',
+      provider: 'claude',
+      modelId: 'claude/opus-latest',
       reasoningEffort: 'medium' as const
     }
 
     expect(() => runtimeRoleBinding(slot, DEFAULT_IMPORTED_MODELS)).toThrow(
-      'Modèle indisponible hors catalogue : codex/flagship'
+      'Modèle indisponible hors catalogue : claude/opus-latest'
     )
-    expect(runtimeRoleBinding(slot, TEST_MODEL_CATALOG).model).toBe('gpt-5.6-terra')
+    expect(runtimeRoleBinding(slot, TEST_MODEL_CATALOG).model).toBe('claude-opus-4-6')
   })
 
   it('ne laisse pas un profil réappliquer son ancien snapshot de rôles après la topologie', () => {

@@ -19,27 +19,25 @@ const fetchKo = (async () => {
   throw new Error('pas de service local')
 }) as unknown as typeof fetch
 
-describe('catalogue codex — GPT-5.6 Sol', () => {
-  it('expose gpt-5.6-sol meme quand le listing live ne le rend pas', async () => {
+/**
+ * CONTRAT INVERSÉ depuis le retrait de Codex (2026-09-04). Ce banc garantissait que `gpt-5.6-sol`
+ * apparaisse toujours au catalogue — c'était une exception assumée, demandée par l'utilisateur.
+ * Codex étant retiré du produit, la garantie devient son contraire : Sol ne doit PLUS ressortir,
+ * y compris quand le listing de l'App Server l'expose lui-même.
+ */
+describe('catalogue codex — GPT-5.6 Sol retiré', () => {
+  it('n’expose plus gpt-5.6-sol, même via le supplément nommé', async () => {
     const models = await discoverImportedModels(
       fetchKo,
       undefined,
       listingLive as never,
       sansCli as never
     )
-    const sol = models.find((m) => m.model === 'gpt-5.6-sol')
-    expect(sol).toBeDefined()
-    expect(sol?.provider).toBe('codex')
-    expect(sol?.id).toBe('codex/gpt-5.6-sol')
-    // Le cran porteur de la pastille doit exister, sinon la matrice ne l'affichera pas.
-    expect(sol?.reasoningEfforts).toContain('xhigh')
-    // Entree qui ferait echouer une fausse correction : un listing qui expose DEJA sol ne doit
-    // pas produire un doublon.
-    const doubles = models.filter((m) => m.model === 'gpt-5.6-sol')
-    expect(doubles).toHaveLength(1)
+    expect(models.filter((m) => m.model === 'gpt-5.6-sol')).toHaveLength(0)
+    expect(models.filter((m) => m.provider === 'codex')).toHaveLength(0)
   })
 
-  it('ne duplique pas sol quand le listing live l’expose', async () => {
+  it('n’expose pas sol non plus quand le listing live l’expose', async () => {
     const avecSol = async (): Promise<unknown[]> => [
       ...(await listingLive()),
       {
@@ -56,6 +54,6 @@ describe('catalogue codex — GPT-5.6 Sol', () => {
       avecSol as never,
       sansCli as never
     )
-    expect(models.filter((m) => m.model === 'gpt-5.6-sol')).toHaveLength(1)
+    expect(models.filter((m) => m.model === 'gpt-5.6-sol')).toHaveLength(0)
   })
 })

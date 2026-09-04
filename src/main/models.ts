@@ -27,6 +27,7 @@ import {
 } from './model-aliases'
 import { listCodexAppServerModels, type CodexAppServerModel } from './codex-model-source'
 import { claudeCliModelIds } from './claude-cli-catalog'
+import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 import { resolveClaudeBin } from './providers/claude'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
@@ -56,69 +57,19 @@ export interface ImportedModel {
 /**
  * Déclarations de capacité des adaptateurs SANS source dynamique. Ce n'est PAS un repli.
  *
- * `kimi` et `gemini` n'ont aucun listing distant : ces entrées décrivent ce que
- * `providers/kimi.ts` et `providers/gemini.ts` savent réellement piloter. Il n'existe donc aucun
- * catalogue dont elles pourraient dériver, rien qui puisse mentir.
+ * VIDE depuis le retrait des moteurs abandonnés (2026-09-04). Cette liste ne portait que `kimi` et
+ * `gemini`, les deux seules voies sans listing distant. Elles sont retirées du produit : plus
+ * proposées au premier lancement, plus sondées, plus listées au catalogue.
  *
- * `claude` et `codex` n'ont PLUS d'entrée ici, volontairement. Ils ont, eux, une source vivante
- * (service de modèles local pour Claude, App Server pour codex) — et une copie figée dans le code
- * devient fausse dès qu'un modèle est publié, en l'affirmant sans le moindre signal. Constaté le
- * 2026-07-30 : sur un poste sans le service, Agent Studio annonçait `opus-4-6` comme meilleur opus
- * alors que le service en exposait onze, dont `claude-opus-5`.
+ * `claude` n'a jamais eu d'entrée ici, volontairement : il a une source vivante (service de modèles
+ * local) — et une copie figée dans le code devient fausse dès qu'un modèle est publié, en
+ * l'affirmant sans le moindre signal. Constaté le 2026-07-30 : sur un poste sans le service, Agent
+ * Studio annonçait `opus-4-6` comme meilleur opus alors que le service en exposait onze.
+ *
+ * La constante SURVIT (plutôt que d'être supprimée) parce qu'elle est le point d'extension d'un
+ * futur adaptateur sans listing, et qu'elle est déjà câblée chez ses appelants.
  */
-export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = [
-  {
-    // Alias officiel Kimi Code pour les comptes OAuth (pas une clé API).
-    // Le CLI sélectionne ensuite le modèle effectivement autorisé par le compte.
-    id: 'kimi/kimi-code/kimi-for-coding',
-    provider: 'kimi',
-    model: 'kimi-code/kimi-for-coding',
-    label: 'Kimi Code · compte OAuth',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  },
-  {
-    // Modèles réellement exposés par Antigravity 1.1.4 au compte Google local.
-    id: 'gemini/Gemini 3.5 Flash (Low)',
-    provider: 'gemini',
-    model: 'Gemini 3.5 Flash (Low)',
-    label: 'Gemini 3.5 Flash · Low',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  },
-  {
-    id: 'gemini/Gemini 3.5 Flash (Medium)',
-    provider: 'gemini',
-    model: 'Gemini 3.5 Flash (Medium)',
-    label: 'Gemini 3.5 Flash · Medium',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  },
-  {
-    id: 'gemini/Gemini 3.5 Flash (High)',
-    provider: 'gemini',
-    model: 'Gemini 3.5 Flash (High)',
-    label: 'Gemini 3.5 Flash · High',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  },
-  {
-    id: 'gemini/Gemini 3.1 Pro (Low)',
-    provider: 'gemini',
-    model: 'Gemini 3.1 Pro (Low)',
-    label: 'Gemini 3.1 Pro · Low',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  },
-  {
-    id: 'gemini/Gemini 3.1 Pro (High)',
-    provider: 'gemini',
-    model: 'Gemini 3.1 Pro (High)',
-    label: 'Gemini 3.1 Pro · High',
-    reasoningEfforts: ['none'],
-    defaultReasoningEffort: 'none'
-  }
-]
+export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = []
 
 const CLAUDE_EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 /** Résultat par voie : `live` distingue un listing réussi d'un repli (cache/seed). */
@@ -440,21 +391,20 @@ function writeCatalogCache(
  * devient faux dès qu'un modèle est publié, et il l'affirme sans le moindre signal (constaté le
  * 2026-07-30 : `opus-4-6` presenté comme le meilleur opus alors que le service en expose `opus-5`).
  *
- * `kimi` et `gemini` restent, et ce n'est PAS la même chose : aucune source dynamique n'existe pour
- * eux, leurs entrées sont la DÉCLARATION DE CAPACITÉ de leur adaptateur (`providers/kimi.ts`,
- * `providers/gemini.ts`) — il n'y a pas de catalogue distant dont elles pourraient dériver, donc rien
- * qui puisse mentir. Les retirer supprimerait deux providers fonctionnels.
+ * `kimi` et `gemini` ont été RETIRÉS (adaptateurs supprimés le 2026-09-04) : plus aucune entrée
+ * déclarée en dur ne subsiste pour eux, et le filtre de sortie ci-dessous écarte ce qu'un cache
+ * antérieur au retrait contiendrait encore.
  */
 export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
   const codex = readCatalogCache(cachePath, 'codex') ?? []
   const claude = readCatalogCache(cachePath, 'claude') ?? []
-  return [
-    ...codex,
-    ...claude,
-    ...DEFAULT_IMPORTED_MODELS.filter(
-      (model) => model.provider === 'kimi' || model.provider === 'gemini'
-    )
-  ]
+  // MÊME FILTRE DE SORTIE QUE `discoverImportedModels`, et pour la même raison : ce cache a été
+  // écrit AVANT le retrait des moteurs et en contient encore. Sans lui, le catalogue du DÉMARRAGE
+  // (avant toute découverte) reproposait Codex dans Agent Studio et un rôle pouvait y être routé.
+  // Le fichier de cache n'est PAS réécrit : les données anciennes restent lisibles pour l'historique.
+  return [...codex, ...claude, ...DEFAULT_IMPORTED_MODELS].filter((model) =>
+    ROUTED_PROVIDERS.includes(model.provider as RoutedProvider)
+  )
 }
 
 /**
@@ -494,13 +444,16 @@ export async function discoverImportedModels(
       ? claude.models
       : [...claude.models, ...(readCatalogCache(cachePath, 'claude') ?? [])]
   const resolvedClaudeModels = resolveClaudeAliasLabels(uniqueModels(discoveredClaudeModels))
+  // FILTRE DE SORTIE — le catalogue ne propose que des moteurs RÉELLEMENT routés. Il est appliqué
+  // ici, en dernier, plutôt qu'à chaque source : le cache disque a été écrit AVANT le retrait de
+  // Codex/Kimi/Gemini et en contient encore ; sans ce filtre, ces moteurs morts réapparaîtraient
+  // dans Agent Studio au prochain démarrage et un rôle pourrait de nouveau y être routé.
+  // Le cache n'est PAS réécrit : les données anciennes restent lisibles pour l'historique.
   return [
     ...withCodexNamedSupplements(codexModels),
     ...resolvedClaudeModels,
-    ...DEFAULT_IMPORTED_MODELS.filter(
-      (model) => model.provider === 'kimi' || model.provider === 'gemini'
-    )
-  ]
+    ...DEFAULT_IMPORTED_MODELS
+  ].filter((model) => ROUTED_PROVIDERS.includes(model.provider as RoutedProvider))
 }
 
 /**

@@ -16,24 +16,9 @@ const cliIds = (): string[] => ['claude-opus-5', 'claude-sonnet-4-6']
 const noCliIds = (): string[] => []
 
 describe('catalogue Agents dynamique', () => {
-  it('expose Gemini via le compte Google du CLI officiel, sans clé API', () => {
-    expect(DEFAULT_IMPORTED_MODELS).toContainEqual(
-      expect.objectContaining({
-        id: 'gemini/Gemini 3.5 Flash (Low)',
-        provider: 'gemini',
-        model: 'Gemini 3.5 Flash (Low)'
-      })
-    )
-  })
-
-  it('expose Kimi Code compte comme modèle sélectionnable, sans API key', () => {
-    expect(DEFAULT_IMPORTED_MODELS).toContainEqual(
-      expect.objectContaining({
-        id: 'kimi/kimi-code/kimi-for-coding',
-        provider: 'kimi',
-        model: 'kimi-code/kimi-for-coding'
-      })
-    )
+  it('n’expose plus aucun moteur retiré : Kimi et Gemini ont quitté le catalogue statique', () => {
+    // Ces deux voies étaient les SEULES entrées de cette liste. Elles sont retirées du produit.
+    expect(DEFAULT_IMPORTED_MODELS).toEqual([])
   })
 
   it('importe Fable et tous les modèles Claude réellement exposés', async () => {
@@ -56,9 +41,9 @@ describe('catalogue Agents dynamique', () => {
     )
     expect(models.find((model) => model.model === 'fable')?.label).toBe('Claude Fable 5 · CLI')
 
-    // Ordre du catalogue : codex (aucun ici, `noCodexModels`), puis les ALIAS du CLI — le socle
-    // portable, present sur toute machine qui a le CLI —, puis les versions EXACTES qu'un service
-    // local expose (pour epingler), puis kimi/gemini qui n'ont pas de source dynamique.
+    // Ordre du catalogue : les ALIAS du CLI — le socle portable, present sur toute machine qui a le
+    // CLI —, puis les versions EXACTES qu'un service local expose (pour epingler). Plus aucune
+    // entree kimi/gemini : ces moteurs sont retires du produit.
     expect(models.map((model) => model.model)).toEqual([
       'opus',
       'sonnet',
@@ -69,13 +54,7 @@ describe('catalogue Agents dynamique', () => {
       'claude-opus-5',
       'claude-sonnet-4-6',
       'claude-fable-5',
-      'claude-opus-4-8',
-      'kimi-code/kimi-for-coding',
-      'Gemini 3.5 Flash (Low)',
-      'Gemini 3.5 Flash (Medium)',
-      'Gemini 3.5 Flash (High)',
-      'Gemini 3.1 Pro (Low)',
-      'Gemini 3.1 Pro (High)'
+      'claude-opus-4-8'
     ])
     expect(models.find((model) => model.model === 'claude-fable-5')?.reasoningEfforts).toEqual([
       'low',
@@ -114,15 +93,13 @@ describe('catalogue Agents dynamique', () => {
     // LE point : Opus 5 est la, NOMME, sans aucun service tiers — lu dans le binaire du CLI.
     expect(claude).toContain('claude-opus-5')
     expect(claude).toEqual(['opus', 'sonnet', 'haiku', 'fable', 'claude-opus-5', 'claude-sonnet-4-6'])
-    // Codex n'a pas d'alias equivalent : sans listing, aucun modele codex.
+    // CONTRÔLE NÉGATIF : aucun moteur retiré ne reparaît, quelle que soit la panne de source.
     expect(models.some((model) => model.provider === 'codex')).toBe(false)
-    // Les providers SANS source dynamique restent : leurs entrées sont la capacité de l'adaptateur,
-    // pas une copie d'un catalogue distant qui pourrait avoir bougé.
-    expect(models.some((model) => model.provider === 'kimi')).toBe(true)
-    expect(models.some((model) => model.provider === 'gemini')).toBe(true)
+    expect(models.some((model) => model.provider === 'kimi')).toBe(false)
+    expect(models.some((model) => model.provider === 'gemini')).toBe(false)
   })
 
-  it('importe tous les modèles réellement exposés par le compte ChatGPT', async () => {
+  it('n’importe AUCUN modèle du compte ChatGPT : Codex est retiré du produit', async () => {
     const fetchFn = vi.fn(async () => Response.json({ data: [{ id: 'claude-fable-5' }] }))
     const listCodexModels = vi.fn(async () => [
       {
@@ -161,9 +138,9 @@ describe('catalogue Agents dynamique', () => {
       cliIds
     )
 
+    // Le compte ChatGPT expose toujours ces modèles (le stub ci-dessus le prouve), mais Codex est
+    // RETIRÉ du produit : le catalogue ne doit plus en proposer un seul. Il ne reste que Claude.
     expect(models.map((model) => model.model)).toEqual([
-      'gpt-5.6-sol',
-      'gpt-5.4-mini',
       // Les alias du CLI Claude sont le socle portable : presents quoi que rende le service local.
       'opus',
       'sonnet',
@@ -171,23 +148,10 @@ describe('catalogue Agents dynamique', () => {
       'fable',
       'claude-opus-5',
       'claude-sonnet-4-6',
-      'claude-fable-5',
-      'kimi-code/kimi-for-coding',
-      'Gemini 3.5 Flash (Low)',
-      'Gemini 3.5 Flash (Medium)',
-      'Gemini 3.5 Flash (High)',
-      'Gemini 3.1 Pro (Low)',
-      'Gemini 3.1 Pro (High)'
+      'claude-fable-5'
     ])
-    // 'ultra' est filtré (400 sur /responses) → seul 'low' reste. Non-régression du fix HTTP 400.
-    expect(models[0]).toMatchObject({
-      id: 'codex/gpt-5.6-sol',
-      label: 'GPT-5.6-Sol · ChatGPT',
-      reasoningEfforts: ['low'],
-      defaultReasoningEffort: 'low'
-    })
-    // priority/visibility (contrat flagship) sont portés quand le listing les expose.
-    expect(models[1]).toMatchObject({ visibility: 'hide' })
+    expect(models.some((model) => model.provider === 'codex')).toBe(false)
+    expect(listCodexModels).toHaveBeenCalled()
   })
 })
 
@@ -281,7 +245,8 @@ describe('cache disque du dernier catalogue vu', () => {
     expect(offline.find((model) => model.model === 'opus')?.label).toBe('Claude Opus · CLI')
     // Codex n'a pas d'alias equivalent cote CLI : sans listing ni cache, aucun modele codex.
     expect(offline.filter((m) => m.provider === 'codex')).toEqual([])
-    expect(offline.some((m) => m.provider === 'gemini')).toBe(true)
+    expect(offline.some((m) => m.provider === 'gemini')).toBe(false)
+    expect(offline.some((m) => m.provider === 'kimi')).toBe(false)
   })
 })
 
@@ -319,7 +284,9 @@ describe('résolution des alias par famille via findModel', () => {
     // que le seed statique produisait (il figeait `opus-latest` sur opus-4-6).
     expect(findModel(catalog, 'claude/opus-latest')?.model).toBe('claude-opus-5')
     expect(findModel(catalog, 'claude/fable-latest')?.model).toBe('claude-fable-5')
-    expect(findModel(catalog, 'codex/flagship')?.model).toBe('gpt-5.6-terra')
+    // Moteur retiré : plus d'alias, donc plus de résolution — même si le catalogue de test en
+    // garde une entrée (cas d'un cache antérieur au retrait).
+    expect(findModel(catalog, 'codex/flagship')).toBeUndefined()
     expect(findModel(catalog, 'claude/sonnet-latest')).toBeUndefined()
     expect(findModel(catalog, 'claude/inexistant')).toBeUndefined()
   })

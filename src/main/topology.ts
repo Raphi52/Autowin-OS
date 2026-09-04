@@ -14,6 +14,7 @@
 import { isReasoningEffort, type ReasoningEffort } from './roles'
 import { defaultModelForProvider, findModel, type ImportedModel } from './models'
 import { parseComputeBinding, type ComputeBinding } from '../shared/compute-fabric'
+import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 
 /** Version du schéma de topologie persistée (migration sûre à l'ouverture). */
 const TOPOLOGY_VERSION = 1
@@ -234,7 +235,7 @@ export function setSlot(
  */
 export function migrateTopologyShape(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return raw
-  const t = raw as { panels?: Record<string, unknown> }
+  const t = raw as { panels?: Record<string, unknown>; subagents?: unknown; orchestrator?: unknown }
   if (!t.panels || typeof t.panels !== 'object') return raw
   // Clone superficiel + panels cloné : aucune mutation de l'objet reçu (une référence externe
   // à `raw`/`raw.panels` conservée par l'appelant reste intacte).
@@ -242,22 +243,49 @@ export function migrateTopologyShape(raw: unknown): unknown {
   for (const target of ['scout', 'frame', 'terrain', 'judge'] as const) {
     if (!Array.isArray(panels[target])) panels[target] = []
   }
-  return { ...t, panels }
+  for (const target of ['scout', 'frame', 'terrain', 'judge'] as const) {
+    panels[target] = (panels[target] as unknown[]).map((slot) =>
+      rebindSlotIfRetired(slot, t.orchestrator)
+    )
+  }
+  const subagents = Array.isArray(t.subagents)
+    ? t.subagents.map((slot) => rebindSlotIfRetired(slot, t.orchestrator))
+    : t.subagents
+  return { ...t, subagents, panels }
 }
 
 /**
- * Topologie par défaut RAISONNABLE, bornée au catalogue fourni : orchestrateur
- * Claude, un sous-agent Claude, un scout Codex, un judge Claude — chacun sur le
- * premier modèle importé de son provider (jamais inventé). Si un provider n'a
- * aucun modèle importé, sa cible reste vide (sauf l'orchestrateur, obligatoire).
+ * Rebranche un slot resté sur un moteur RETIRÉ (Codex, Kimi, Gemini) vers le moteur de
+ * l'orchestrateur, qui lui est vivant. On garde le `slotId` — donc le rôle configuré par
+ * l'utilisateur survit ; seul le moteur mort est remplacé.
+ *
+ * Sans ça, `assertTopologyAgainstAvailableModels` rejette la topologie enregistrée et TOUTE la
+ * configuration de l'utilisateur repart de zéro. Si l'orchestrateur lui-même est sur un moteur
+ * retiré, on ne peut rien déduire ici : le slot est laissé tel quel et la validation tranchera.
+ */
+function rebindSlotIfRetired(slot: unknown, orchestrator: unknown): unknown {
+  if (!slot || typeof slot !== 'object') return slot
+  const provider = (slot as { provider?: unknown }).provider
+  if (typeof provider !== 'string') return slot
+  if (ROUTED_PROVIDERS.includes(provider as RoutedProvider)) return slot
+  const cible = orchestrator as { provider?: unknown; modelId?: unknown } | undefined
+  if (!cible || typeof cible.provider !== 'string' || typeof cible.modelId !== 'string') return slot
+  if (!ROUTED_PROVIDERS.includes(cible.provider as RoutedProvider)) return slot
+  return { ...(slot as object), provider: cible.provider, modelId: cible.modelId }
+}
+
+/**
+ * Topologie par défaut RAISONNABLE, bornée au catalogue fourni : tous les rôles
+ * sur Claude, chacun sur le premier modèle importé de son provider (jamais
+ * inventé). Le scout était sur Codex jusqu'au retrait des moteurs abandonnés
+ * (Codex/Kimi/Gemini) : il bascule sur Claude comme les autres rôles.
  */
 export function createDefaultTopology(models: ImportedModel[]): AgentTopology {
   if (models.length === 0) throw new Error('Impossible de créer une topologie sans modèle importé')
   const claude = defaultModelForProvider(models, 'claude')
-  const codex = defaultModelForProvider(models, 'codex')
   const orchestratorModel = claude ?? models[0]
   const subagentModel = claude ?? models[0]
-  const scoutModel = codex ?? claude ?? models[0]
+  const scoutModel = claude ?? models[0]
   const judgeModel = claude ?? models[0]
   const frameModel = claude ?? models[0]
   const terrainModel = claude ?? models[0]

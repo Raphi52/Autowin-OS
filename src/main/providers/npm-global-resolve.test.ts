@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import { findNpmGlobalFile, npmPrefixCandidates } from './npm-global-resolve'
 import { CODEX_PACKAGE_ENTRY, codexExecSpec } from './codex'
-import { KIMI_PACKAGE_ENTRY, resolveKimiCommand } from './kimi'
 
 /**
  * RÉSOLUTION PARTAGÉE des CLI installés par `npm -g`.
@@ -153,29 +152,6 @@ describe('codex — le fan-out scout ne doit plus échouer sur un préfixe npm d
   })
 })
 
-describe('kimi — même correction, même repli mort évité', () => {
-  it('le sous-chemin du paquet est celui du CLI officiel', () => {
-    expect(KIMI_PACKAGE_ENTRY).toBe(
-      join('node_modules', '@moonshot-ai', 'kimi-code', 'dist', 'main.mjs')
-    )
-  })
-
-  it('KIMI_BIN explicite gagne, et un shim .cmd est REFUSÉ', () => {
-    expect(resolveKimiCommand('C:\\perso\\kimi.exe', {})).toEqual({
-      executable: 'C:\\perso\\kimi.exe',
-      prefix: []
-    })
-    expect(() => resolveKimiCommand('C:\\npm\\kimi.cmd', {})).toThrow(/shim/)
-  })
-
-  it('sans rien de trouvé, le repli reste `kimi` — et il est SANS préfixe', () => {
-    expect(resolveKimiCommand(undefined, { PATH: 'Z:\\rien', APPDATA: 'Z:\\rien' })).toEqual({
-      executable: 'kimi',
-      prefix: []
-    })
-  })
-})
-
 /**
  * GARDES RÉELLES sur cette machine : si une de ces résolutions rend le nom nu, le spawn `shell: false`
  * échouera en ENOENT — c'est le défaut d'origine, pas une hypothèse.
@@ -197,12 +173,4 @@ describe('sur CETTE machine, les CLI se résolvent en chemins réels', () => {
     expect(resolved.args[0]).toBe('exec')
   })
 
-  it('kimi : soit l’entrypoint .mjs via node, soit le repli ASSUMÉ', () => {
-    if (process.platform !== 'win32' || process.env.KIMI_BIN) return
-    const command = resolveKimiCommand()
-    // Kimi peut legitimement ne PAS etre installe : on exige alors le repli explicite. Ce qui est
-    // interdit, c'est un prefixe non vide pointant nulle part.
-    if (command.executable === 'kimi') expect(command.prefix).toEqual([])
-    else expect(command.prefix[0].toLowerCase().endsWith('main.mjs')).toBe(true)
-  })
 })

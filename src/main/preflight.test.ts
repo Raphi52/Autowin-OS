@@ -6,21 +6,20 @@ describe('runPreflight', () => {
     const r = await runPreflight({
       pingBrain: async () => true,
       hasBin: async () => true,
-      hasCodexSession: () => true,
       claudeSession: () => 'authenticated',
       hasBrainToken: () => true,
       hasBrainRuntime: () => true
     })
     expect(r.ok).toBe(true)
-    expect(r.checks).toHaveLength(8)
+    // Codex et Kimi retirés : il ne reste que Brain (x3) + CLI claude + session claude.
+    expect(r.checks).toHaveLength(5)
     expect(r.summary).toContain('OK')
   })
 
-  it('brain down + codex absent → ok:false, détaille les manquants', async () => {
+  it('brain down + claude absent → ok:false, détaille les manquants', async () => {
     const r = await runPreflight({
       pingBrain: async () => false,
-      hasBin: async (w) => w === 'claude',
-      hasCodexSession: () => true,
+      hasBin: async () => false,
       claudeSession: () => 'authenticated',
       hasBrainToken: () => true,
       hasBrainRuntime: () => true
@@ -28,30 +27,22 @@ describe('runPreflight', () => {
     expect(r.ok).toBe(false)
     const failed = r.checks.filter((c) => !c.ok).map((c) => c.id)
     expect(failed).toContain('brain')
-    expect(failed).toContain('codex')
-    expect(failed).not.toContain('claude')
+    expect(failed).toContain('claude')
     expect(r.summary).toMatch(/incomplète/i)
   })
 
-  it('CLI codex présent sans session → état non opérationnel explicite', async () => {
+  it('CONTRÔLE NÉGATIF : plus aucun contrôle Codex ni Kimi au démarrage', async () => {
     const r = await runPreflight({
       pingBrain: async () => true,
       hasBin: async () => true,
       hasBrainToken: () => true,
       hasBrainRuntime: () => true,
-      hasCodexSession: () => false,
       claudeSession: () => 'authenticated'
     })
 
-    expect(r.ok).toBe(false)
-    expect(r.checks).toContainEqual(
-      expect.objectContaining({
-        id: 'codex-session',
-        ok: false,
-        detail: expect.stringMatching(/session|oauth|authent/i)
-      })
-    )
-    expect(r.checks).toContainEqual(expect.objectContaining({ id: 'codex', ok: true }))
+    expect(r.checks.map((c) => c.id)).not.toContain('codex')
+    expect(r.checks.map((c) => c.id)).not.toContain('codex-session')
+    expect(r.checks.map((c) => c.id)).not.toContain('kimi')
   })
 
   it('un probe qui throw = ko, jamais un crash', async () => {
@@ -61,9 +52,6 @@ describe('runPreflight', () => {
       },
       hasBin: async () => {
         throw new Error('spawn fail')
-      },
-      hasCodexSession: () => {
-        throw new Error('auth store fail')
       },
       claudeSession: () => {
         throw new Error('claude auth status fail')
@@ -85,17 +73,16 @@ describe('runPreflight', () => {
       {
         pingBrain: async () => true,
         hasBin,
-        hasCodexSession: () => true,
         claudeSession: () => 'authenticated',
         hasBrainToken: () => true,
         hasBrainRuntime: () => true
       },
-      { standbyProviders: ['kimi'] }
+      { standbyProviders: ['claude'] }
     )
 
-    expect(hasBin).not.toHaveBeenCalledWith('kimi')
+    expect(hasBin).not.toHaveBeenCalledWith('claude')
     expect(r.checks).toContainEqual(
-      expect.objectContaining({ id: 'kimi', ok: true, standby: true })
+      expect.objectContaining({ id: 'claude', ok: true, standby: true })
     )
     expect(r.ok).toBe(true)
   })
@@ -112,7 +99,6 @@ describe('runPreflight — la session claude n’est plus déduite de la présen
   const base = {
     pingBrain: async () => true,
     hasBin: async () => true,
-    hasCodexSession: () => true,
     hasBrainToken: () => true,
     hasBrainRuntime: () => true
   }
@@ -183,7 +169,6 @@ describe('runPreflight — runtime Brain', () => {
   const sain = {
     pingBrain: async () => true,
     hasBin: async () => true,
-    hasCodexSession: () => true,
     claudeSession: () => 'authenticated' as const,
     hasBrainToken: () => true,
     hasBrainRuntime: () => true

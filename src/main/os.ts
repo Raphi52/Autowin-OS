@@ -9,9 +9,6 @@ import { interfaceVisible } from './startup-gate'
 import { ProviderRegistry } from './providers/registry'
 import { claudeActiveAccountId, claudeRotateAccount, claudeAccountEnv } from './claude-accounts'
 import { ClaudeCliAdapter } from './providers/claude'
-import { CodexAdapter } from './providers/codex'
-import { KimiCliAdapter } from './providers/kimi'
-import { GeminiCliAdapter } from './providers/gemini'
 import type { Message } from './providers/types'
 import { CONSTITUTION } from './constitution'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
@@ -347,10 +344,10 @@ export class AutowinOS {
       // gardent donc exactement le comportement d'avant (l'echec de quota remonte tel quel).
       (providerId, walled) => (providerId === 'claude' ? claudeRotateAccount(walled) : undefined)
     )
+      // Claude est le SEUL moteur enregistré. Codex, Kimi et Gemini sont des projets abandonnés :
+      // leurs adaptateurs restent dans l'arbre (relecture de l'historique, types) mais ne sont plus
+      // branchés — donc jamais lancés, jamais sondés, jamais routés. Voir `routed-providers.ts`.
       .register(new ClaudeCliAdapter())
-      .register(new CodexAdapter())
-      .register(new KimiCliAdapter())
-      .register(new GeminiCliAdapter())
     const executionWorkspace = resolveExecutionWorkspace()
     this.executionWorkspace = executionWorkspace
     // Le workspace resolu est republie dans l'environnement pour que le TRANSPORT y ait acces sans

@@ -31,12 +31,14 @@ describe('RoleModelConfig', () => {
     }
   })
 
-  it('utilise les defauts raisonnables attendus (claude partout sauf scout->codex)', () => {
+  it('utilise les defauts attendus — Claude sur les QUATRE rôles, aucun moteur retiré', () => {
+    // Scout était le dernier rôle câblé par défaut sur un moteur retiré : une installation neuve
+    // routait donc encore vers du mort.
     const cfg = new RoleModelConfig()
     expect(cfg.getBinding('orchestrator').provider).toBe('claude')
     expect(cfg.getBinding('subagent').provider).toBe('claude')
     expect(cfg.getBinding('judge').provider).toBe('claude')
-    expect(cfg.getBinding('scout').provider).toBe('codex')
+    expect(cfg.getBinding('scout').provider).toBe('claude')
   })
 
   it('permet un override via le constructeur', () => {
@@ -56,11 +58,8 @@ describe('RoleModelConfig', () => {
       .setBinding('judge', { provider: 'codex', model: 'gpt-5' })
       .setBinding('scout', { provider: 'claude' })
     expect(result).toBe(cfg) // chainable : retourne this
-    expect(cfg.getBinding('judge')).toEqual({
-      provider: 'codex',
-      model: 'gpt-5',
-      reasoningEffort: 'medium'
-    })
+    // Moteur retiré : le binding n'est plus complété (aucun effort par défaut inventé pour lui).
+    expect(cfg.getBinding('judge')).toEqual({ provider: 'codex', model: 'gpt-5' })
     expect(cfg.getBinding('scout')).toEqual({
       provider: 'claude',
       model: 'claude-fable-5',
@@ -94,12 +93,17 @@ describe('RoleModelConfig', () => {
   })
 
   it('normalise un role provider-only vers la selection canonique de son adaptateur', () => {
-    const cfg = new RoleModelConfig({ orchestrator: { provider: 'codex' } })
+    const cfg = new RoleModelConfig({ orchestrator: { provider: 'claude' } })
     expect(cfg.getBinding('orchestrator')).toEqual({
-      provider: 'codex',
-      model: 'gpt-5.6-terra',
-      reasoningEffort: 'medium'
+      provider: 'claude',
+      model: 'claude-fable-5',
+      reasoningEffort: 'high'
     })
+  })
+
+  it('un provider retiré n’est PAS normalisé vers un modèle mort', () => {
+    const cfg = new RoleModelConfig({ orchestrator: { provider: 'codex' } })
+    expect(cfg.getBinding('orchestrator')).toEqual({ provider: 'codex' })
   })
 
   it('controle negatif : getBinding leve sur un role invalide (garde runtime)', () => {
@@ -134,10 +138,12 @@ describe('défauts de rôle par alias de famille (catalogue découvert)', () => 
     expect(cfg.getBinding('orchestrator').model).toBe('claude-fable-6')
   })
 
-  it('codex provider-only résout le flagship (priority min) du catalogue', () => {
+  it('un provider RETIRÉ n’a plus de défaut : son binding ressort inchangé, jamais complété', () => {
+    // Garde du retrait : compléter ce binding le ferait pointer vers un modèle mort et donnerait
+    // l'illusion d'un moteur encore utilisable.
     const catalog = [codex('gpt-5.6-terra', 2), codex('gpt-5.7-sol', 1)]
     const cfg = new RoleModelConfig({ scout: { provider: 'codex' } }, catalog)
-    expect(cfg.getBinding('scout').model).toBe('gpt-5.7-sol')
+    expect(cfg.getBinding('scout').model).toBeUndefined()
   })
 
   it('sans catalogue → fallback figé historique (0 régression)', () => {

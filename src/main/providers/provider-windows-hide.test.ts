@@ -48,7 +48,6 @@ vi.mock('node:child_process', async (importOriginal) => ({
 }))
 
 import { ClaudeCliAdapter } from './claude'
-import { KimiCliAdapter } from './kimi'
 
 async function drain(stream: AsyncGenerator<unknown, unknown, void>): Promise<void> {
   let step = await stream.next()
@@ -70,16 +69,6 @@ describe('providers CLI — consoles Windows non interactives', () => {
     expect(spawnCapture.calls.every((call) => call.options.windowsHide === true)).toBe(true)
   })
 
-  it('masque les contrôles et exécutions Kimi', async () => {
-    const adapter = new KimiCliAdapter({ bin: 'kimi-test' })
-
-    await adapter.auth()
-    await drain(adapter.send([{ role: 'user', content: 'test' }]))
-
-    expect(spawnCapture.calls).toHaveLength(2)
-    expect(spawnCapture.calls.every((call) => call.options.windowsHide === true)).toBe(true)
-  })
-
   it('persiste le journal Claude avant de lancer le provider', () => {
     const source = readFileSync('src/main/providers/claude.ts', 'utf8')
     const journal = source.indexOf('onJournal(spawnToken, journal.path)')
@@ -88,7 +77,7 @@ describe('providers CLI — consoles Windows non interactives', () => {
     expect(spawn).toBeGreaterThan(journal)
   })
 
-  it.each(['codex', 'gemini', 'kimi'])(
+  it.each(['codex'])(
     'confie la persistance pré-spawn du journal commun à %s',
     (provider) => {
       const source = readFileSync(`src/main/providers/${provider}.ts`, 'utf8')

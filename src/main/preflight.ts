@@ -13,11 +13,8 @@ export interface PreflightCheck {
   id:
     | 'brain'
     | 'brain-venv'
-    | 'codex'
-    | 'codex-session'
     | 'claude'
     | 'claude-session'
-    | 'kimi'
     | 'brain-token'
   label: string
   ok: boolean
@@ -36,9 +33,7 @@ export interface PreflightProbes {
   /** brain_server joignable (POST/GET /health ou /query). */
   pingBrain: () => Promise<boolean>
   /** Un exécutable CLI est résolvable dans le PATH / la config. */
-  hasBin: (which: 'codex' | 'claude' | 'kimi') => Promise<boolean>
-  /** Une session OAuth Codex est enregistrée dans le store utilisé par le runtime. */
-  hasCodexSession: () => boolean
+  hasBin: (which: RoutedProvider) => Promise<boolean>
   /**
    * État de la session du CLI claude. Tri-état volontaire : `unknown` (sonde ratée) ne doit ni
    * passer pour un vert, ni pour une session prouvée absente.
@@ -90,31 +85,16 @@ export async function runPreflight(
     }
   }
   const standby = new Set(options.standbyProviders ?? [])
-  const providerProbe = (provider: 'codex' | 'claude' | 'kimi'): Promise<boolean> =>
+  const providerProbe = (provider: RoutedProvider): Promise<boolean> =>
     standby.has(provider) ? Promise.resolve(true) : safe(() => probes.hasBin(provider))
-  const [brain, codex, claude, kimi] = await Promise.all([
-    safe(probes.pingBrain),
-    providerProbe('codex'),
-    providerProbe('claude'),
-    providerProbe('kimi')
-  ])
+  const [brain, claude] = await Promise.all([safe(probes.pingBrain), providerProbe('claude')])
   let token = false
-  let codexSession = false
   try {
     token = probes.hasBrainToken()
   } catch {
     token = false
   }
-  if (standby.has('codex')) {
-    codexSession = true
-  } else {
-    try {
-      codexSession = probes.hasCodexSession()
-    } catch {
-      codexSession = false
-    }
-  }
-  // Symétrique de codexSession : un provider en standby n'est pas diagnostiqué. Une sonde qui jette
+  // Un provider en standby n'est pas diagnostiqué. Une sonde qui jette
   // vaut `unknown`, jamais `authenticated` — on ne ment pas sur une session qu'on n'a pas pu lire.
   let claudeSession: ClaudeSessionState = 'unknown'
   if (standby.has('claude')) {
@@ -130,7 +110,7 @@ export async function runPreflight(
     }
   }
   const cliCheck = (
-    id: 'codex' | 'claude' | 'kimi',
+    id: RoutedProvider,
     label: string,
     ok: boolean,
     missing: string
@@ -170,23 +150,6 @@ export async function runPreflight(
       ok: token,
       detail: token ? undefined : 'absent — définir AMITEL_BRAIN_TOKEN'
     },
-    cliCheck('codex', 'CLI codex', codex, 'introuvable — installer Codex CLI'),
-    standby.has('codex')
-      ? {
-          id: 'codex-session',
-          label: 'Session OAuth Codex',
-          ok: true,
-          standby: true,
-          detail: 'standby — diagnostic ignoré'
-        }
-      : {
-          id: 'codex-session',
-          label: 'Session OAuth Codex',
-          ok: codexSession,
-          detail: codexSession
-            ? undefined
-            : 'session OAuth absente ou expirée — npm run codex:login'
-        },
     cliCheck('claude', 'CLI claude', claude, 'introuvable — installer claude'),
     standby.has('claude')
       ? {
@@ -201,8 +164,7 @@ export async function runPreflight(
           label: 'Session claude',
           ok: claudeSession === 'authenticated',
           detail: claudeSessionDetail(claudeSession, claude)
-        },
-    cliCheck('kimi', 'CLI kimi', kimi, 'introuvable — installer/authentifier kimi')
+        }
   ]
   const failed = checks.filter((c) => !c.ok)
   return {

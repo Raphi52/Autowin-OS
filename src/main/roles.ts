@@ -52,17 +52,16 @@ export function resolvePhaseBinding(
  * Sélections par défaut par provider. `alias` = alias de FAMILLE (model-aliases.ts)
  * résolu au runtime contre le catalogue découvert → le défaut suit le modèle le plus
  * frais de la famille. `model` = fallback figé (comportement historique), utilisé
- * quand aucun catalogue n'est fourni ou que l'alias est insoluble. Kimi n'a pas de
- * listing → pas d'alias, fallback direct.
+ * quand aucun catalogue n'est fourni ou que l'alias est insoluble. Les moteurs retirés n'ont plus
+ * d'entrée du tout.
  */
 const PROVIDER_DEFAULT_SELECTIONS: Record<
   string,
   { alias?: string; model: string; reasoningEffort: ReasoningEffort }
 > = {
-  claude: { alias: 'claude/fable-latest', model: 'claude-fable-5', reasoningEffort: 'high' },
-  codex: { alias: 'codex/flagship', model: 'gpt-5.6-terra', reasoningEffort: 'medium' },
-  kimi: { model: 'kimi-code/kimi-for-coding', reasoningEffort: 'none' },
-  gemini: { model: 'Gemini 3.5 Flash (Low)', reasoningEffort: 'none' }
+  claude: { alias: 'claude/fable-latest', model: 'claude-fable-5', reasoningEffort: 'high' }
+  // Moteurs retirés (codex, kimi, gemini) : plus de défaut publié. Un binding qui les nomme encore
+  // ressort INCHANGÉ — il n'est pas complété en silence vers un modèle mort.
 }
 
 /**
@@ -83,12 +82,12 @@ export function normalizeRoleBinding(binding: RoleBinding, catalog?: ImportedMod
   }
 }
 
-/** Config par defaut raisonnable : claude pour l'essentiel, codex pour le scout. */
+/** Config par defaut : Claude sur les quatre rôles — c'est le seul moteur routé. */
 const DEFAULT_BINDINGS: Record<Role, RoleBinding> = {
   orchestrator: normalizeRoleBinding({ provider: 'claude' }),
   subagent: normalizeRoleBinding({ provider: 'claude' }),
   judge: normalizeRoleBinding({ provider: 'claude' }),
-  scout: normalizeRoleBinding({ provider: 'codex' })
+  scout: normalizeRoleBinding({ provider: 'claude' })
 }
 
 export class RoleModelConfig {
