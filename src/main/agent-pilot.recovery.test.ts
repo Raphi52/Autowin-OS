@@ -21,13 +21,9 @@ import { RoleModelConfig } from './roles'
  * On compare donc le DEBUT de chaque appel. Aucune assertion n'est desserree : les valeurs verifiees
  * sont exactement les memes, seule la queue non specifiee cesse de compter.
  */
-const appeleAvec = (
-  spy: { mock: { calls: unknown[][] } },
-  ...attendus: unknown[]
-): void => {
+const appeleAvec = (spy: { mock: { calls: unknown[][] } }, ...attendus: unknown[]): void => {
   expect(spy.mock.calls.map((appel) => appel.slice(0, attendus.length))).toContainEqual(attendus)
 }
-
 
 describe('AgentPilot — resultat provider recupere apres redemarrage', () => {
   it('publie le lien du journal direct avant de consommer la réponse', async () => {
@@ -139,18 +135,17 @@ describe('AgentPilot — resultat provider recupere apres redemarrage', () => {
     )
 
     expect(exec).toHaveBeenCalledTimes(1)
-    appeleAvec(exec, 
-      'edit_file',
-      { path: 'src/x.ts' },
-      'conv-recovery',
-      undefined,
-      'turn-recovery'
-    )
+    appeleAvec(exec, 'edit_file', { path: 'src/x.ts' }, 'conv-recovery', undefined, 'turn-recovery')
     expect(providerCalls).toBe(1)
     expect(events.find((event) => event.kind === 'done')?.usage).toEqual({
       inputTokens: 103,
       outputTokens: 24,
-      costUsd: 0.44999999999999996
+      costUsd: 0.44999999999999996,
+      // Le resultat durable recopie DESORMAIS l'empreinte complete de l'appel (provider +
+      // derniere entree), pas seulement les trois compteurs : on l'assert en ENTIER.
+      provider: 'fixture',
+      derniereEntree: 3,
+      derniereEntreeCache: 0
     })
   })
 

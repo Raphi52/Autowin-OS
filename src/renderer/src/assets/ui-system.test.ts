@@ -23,7 +23,23 @@ describe('Autowin UI contract', () => {
     }
     expect(css).not.toMatch(/\.(graph|observatory|topology|cockpit|behaviour|chat|conv|runs)-/)
     expect(css).not.toMatch(/\b!important\b/)
-    expect(css).not.toMatch(/^\s*(grid-template|width|height|overflow|position)\s*:/m)
+    /**
+     * AUCUNE MISE EN PAGE ICI — sauf UNE exception nommee, celle du titre partage.
+     *
+     * `.module-header-line > h1` tronque son texte en « … » quand la place manque (mosaique) : la
+     * troncature EXIGE `overflow: hidden` a cote de `text-overflow: ellipsis`, et le titre partage
+     * n'a pas d'autre feuille proprietaire — une autre garde de ce meme fichier interdit aux vues
+     * de redefinir la typographie du titre. On retire donc CE bloc avant de verifier le contrat,
+     * plutot que de retirer `overflow` de la liste : toute autre mise en page reste bannie.
+     */
+    const SANS_TRONCATURE_DU_TITRE = css.replace(
+      /\.module-header-line > h1 \{\s*min-width: 0;[^}]*\}/,
+      '.module-header-line > h1 { }'
+    )
+    expect(SANS_TRONCATURE_DU_TITRE).not.toBe(css)
+    expect(SANS_TRONCATURE_DU_TITRE).not.toMatch(
+      /^\s*(grid-template|width|height|overflow|position)\s*:/m
+    )
   })
 
   const VUES = [
@@ -95,9 +111,10 @@ describe('Autowin UI contract', () => {
       }
     }
 
-    expect(fonds.length, 'aucune règle de fond trouvée : le sélecteur a été renommé').toBeGreaterThan(
-      0
-    )
+    expect(
+      fonds.length,
+      'aucune règle de fond trouvée : le sélecteur a été renommé'
+    ).toBeGreaterThan(0)
     for (const [nom, fond] of fonds) {
       expect(fond, nom).not.toMatch(/rgba\(/)
       expect(fond, nom).toMatch(/#000(?![0-9a-fA-F])/)

@@ -64,7 +64,8 @@ export function InterlocuteursWidget({
   // l'état. Outlook se relit toutes les deux minutes : une copie figée afficherait la conversation
   // d'il y a deux minutes, sans le nouveau message, et le rafraîchissement paraîtrait cassé.
   const contact = useMemo(
-    () => (etape.ecran === 'contacts' ? null : (fils.find((fil) => fil.cle === etape.contact) ?? null)),
+    () =>
+      etape.ecran === 'contacts' ? null : (fils.find((fil) => fil.cle === etape.contact) ?? null),
     [etape, fils]
   )
   const conversations = useMemo(() => (contact ? groupThreads(contact) : []), [contact])

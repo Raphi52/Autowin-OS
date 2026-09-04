@@ -2012,20 +2012,19 @@ describe('ChatView behavior under concurrent UI actions', () => {
     // est TERMINÉ, donc son fil n'y est plus empilé — il s'ouvre en descendant sur son nœud.
     expect(container!.querySelector('.live-run')).toBeNull()
 
-    const noeudAgent = container!.querySelector<HTMLButtonElement>(
-      '[data-execution-node][data-execution-kind="agent"]'
+    // DESCENDRE SUR UN BLOC NON-AGENT RESTE SUR LE GRAPHE (conv-259, 2026-09-04) : son panneau de
+    // détail s'ouvre sous l'arbre, seule vue qui détaille injection, appel d'outil ou clôture.
+    // L'auto-bascule vers Runs ne vaut plus QUE pour un bloc d'agent — ce cas-là est prouvé par
+    // `WorkflowsPanel.test.tsx` (« descendre sur un nœud agent bascule sur Runs »), avec un vrai
+    // nœud d'agent ; la trace minimale utilisée ici n'en produit pas.
+    const noeud = container!.querySelector<HTMLButtonElement>(
+      '[data-execution-node][data-execution-kind]'
     )!
-    expect(noeudAgent).not.toBeNull()
-    await act(async () => noeudAgent.click())
-    // Le fil se lit dans l'onglet RUNS, à côté des RUN.md — demandé trois fois par l'utilisateur,
-    // acté le 2026-09-01. Descendre sur un nœud d'AGENT y bascule tout seul : sans cela, le fil
-    // s'empilait sous le graphe et on relisait la même exécution deux fois. Restriction du
-    // 2026-09-04 (conv-259) : SEUL un nœud d'agent bascule — les autres blocs (injection, outil,
-    // clôture) ouvrent leur détail SUR le graphe, seule vue qui les détaille. D'où le sélecteur
-    // explicite sur `agent` : viser « n'importe quel nœud typé » testait l'ancienne règle.
+    expect(noeud).not.toBeNull()
+    await act(async () => noeud.click())
     const ongletActif = container!.querySelector('.workflow-section-tab.is-active')
-    expect(ongletActif?.textContent?.trim()).toBe('Runs')
-    expect(container!.querySelector('.live-run')).not.toBeNull()
+    expect(ongletActif?.textContent?.trim()).toBe('Graph')
+    expect(container!.querySelector('[data-execution-node]')).not.toBeNull()
   })
 
   // CONTRAT ÉLARGI (2026-07-31) : la trace causale alimente désormais DEUX sections — le graphe et le
@@ -2149,9 +2148,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await mount(mockApi)
     await click('.conv-pick')
 
-    expect(container!.querySelector('button[title="Détails de l’exécution"]')?.textContent).toContain(
-      '1 green'
-    )
+    expect(
+      container!.querySelector('button[title="Détails de l’exécution"]')?.textContent
+    ).toContain('1 green')
   })
 
   it('does not steal conversation B when creation from New resolves late', async () => {

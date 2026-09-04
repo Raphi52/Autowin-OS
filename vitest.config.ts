@@ -68,6 +68,13 @@ const EXCLUSIONS = [
   '.autowin-data/**',
   '**/.autowin-data/**',
   '**/.claude/**',
+  // BANCS `/arena` : `.arena/**` contient les COPIES de travail des bras d'un banc (un critere
+  // recopie, un composant duplique). Ce sont des scratchs, pas des tests du produit — et leurs
+  // imports relatifs (`./HomeView`) ne resolvent pas depuis `.arena/`, ce qui rendait la suite
+  // rouge sur un fichier qui ne mesure rien du depot. Mesure du 2026-09-04 : `.arena/banc-
+  // remontees/critere.test.tsx` = 1 suite en echec de collecte.
+  '.arena/**',
+  '**/.arena/**',
   // Harnais Node autonome, couvert par cdp-verdict-collection.test.mjs.
   'scripts/cdp-verdict.test.mjs',
   /**
