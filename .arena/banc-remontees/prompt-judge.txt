@@ -1,0 +1,373 @@
+Tu es JUGE EXTERNE et ADVERSARIAL. Tu n'as PAS produit ces livrables et tu ne dois flatter personne.
+
+=== LA TÂCHE, identique pour les quatre bras ===
+Le widget « Remontées des agents » de la page d'accueil (tuile `notifications`, rendue par
+src/renderer/src/components/HomeView.tsx, alimentée par src/renderer/src/components/home-widgets-model.ts)
+affiche dans sa barre de titre un compteur de remontées non lues. Ce compteur MENT dès qu'il y a plus de
+30 remontées non acquittées : `agentNotices()` plafonne la liste à 30 (`limit = 30`) et
+`unacknowledgedCount()` compte ensuite sur cette liste DÉJÀ tronquée (HomeView.tsx : `const pending =
+unacknowledgedCount(notices)`). Avec 31 remontées non lues, la pastille affiche « 30 ».
+Corrige-le : le compteur de la pastille doit annoncer le NOMBRE RÉEL de remontées non acquittées, quel que
+soit le nombre d'alertes. Le plafond d'AFFICHAGE de la liste (30 lignes au maximum) doit être CONSERVÉ :
+la tuile est petite, c'est le compteur qui doit être exact, pas la liste qui doit devenir exhaustive.
+N'change ni le format des alertes ni leur stockage (d'autres vues les lisent).
+Critère de succès : node <BENCH>/check.mjs <racine-du-depot> sort en code 0.
+
+=== LE CRITÈRE DE SUCCÈS ===
+Un script exécutable rend la vraie page d'accueil (happy-dom) et lit la pastille affichée. 5 assertions :
+1. nominal : 3 remontées dont 2 non lues -> pastille "2"
+2. cas limite : 31 non lues, 30 lignes affichables -> pastille "31", jamais "30"
+3. cas limite : aucune remontée -> aucune pastille, aucun plantage
+4. cas limite : 40 remontées TOUTES acquittées -> aucune pastille
+5. cas limite : 100 non lues -> pastille "100" ET liste toujours bornée à 30 lignes
+Avant le banc, sur le dépôt intact : assertions 2 et 5 ROUGES (la pastille disait "30"). Exit=1.
+
+=== LES QUATRE LIVRABLES (anonymisés — tu ne sais pas lequel est le témoin) ===
+
+############ BRAS 1 ############
+Critère RE-JOUÉ par l'orchestrateur dans la copie de ce bras : 5/5 OK, exit=0.
+typecheck web du dépôt (tsc --noEmit -p tsconfig.web.json) : exit=0, 0 erreur.
+vitest sur home-widgets-model.test.ts + HomeView.test.tsx : 2 fichiers passés, exit=0.
+Coût MESURÉ (total_cost_usd du journal) : 1.0198 $ · durée MESURÉE : 2.9 min · tours MESURÉS : 16
+--- DIFF COMPLET ---
+diff --git a/src/renderer/src/components/HomeView.test.tsx b/src/renderer/src/components/HomeView.test.tsx
+index f426ee8a..2f507342 100644
+--- a/src/renderer/src/components/HomeView.test.tsx
++++ b/src/renderer/src/components/HomeView.test.tsx
+@@ -200,6 +200,32 @@ describe('page d accueil', () => {
+     expect(notifications.querySelector('.home-tile__count')?.textContent).toBe('1')
+   })
+ 
++  /**
++   * LA PASTILLE ANNONCE LE NOMBRE REEL, PAS LE PLAFOND DE LA LISTE.
++   *
++   * Defaut constate : la liste des remontees est plafonnee a 30 lignes et le compteur etait calcule
++   * SUR cette liste tronquee — avec 31 remontees non lues, la pastille affichait « 30 ». Le plafond
++   * d'affichage reste (la tuile est petite) ; c'est le compteur qui doit etre exact.
++   */
++  it('affiche le NOMBRE REEL de remontees non lues, meme au-dela des 30 lignes affichees', async () => {
++    const alerts = Array.from({ length: 31 }, (_, index) => ({
++      id: `al-${index}`,
++      taskId: 't-matin',
++      kind: 'failed' as const,
++      message: `run rouge ${index}`,
++      createdAt: NOW - index * 60_000
++    }))
++    ;(window as unknown as { api: unknown }).api = {
++      taskManagerSnapshot: vi.fn(async () => ({ ...snapshot(), alerts })),
++      outlookSnapshot: vi.fn(async () => outlookSnapshot())
++    }
++    const container = await mount()
++    const notifications = tile(container, 'notifications')
++    expect(notifications.querySelector('.home-tile__count')?.textContent).toBe('31')
++    // Le plafond d'AFFICHAGE de la liste est CONSERVE.
++    expect(notifications.querySelectorAll('.home-notices li').length).toBe(30)
++  })
++
+   it('annonce l absence de passerelle au lieu d une liste vide', async () => {
+     // Sans `api.outlookSnapshot`, les deux widgets doivent DIRE qu ils ne peuvent pas lire. Une liste
+     // vide se lirait « vous n avez pas de mail », ce qui est faux.
+diff --git a/src/renderer/src/components/HomeView.tsx b/src/renderer/src/components/HomeView.tsx
+index b05ff7c0..063bd436 100644
+--- a/src/renderer/src/components/HomeView.tsx
++++ b/src/renderer/src/components/HomeView.tsx
+@@ -14,7 +14,7 @@ import {
+ import {
+   agentNotices,
+   nextDepartures,
+-  unacknowledgedCount,
++  unacknowledgedAlertCount,
+   type AgentNotice,
+   type RoutineDeparture
+ } from './home-widgets-model'
+@@ -486,7 +486,12 @@ export function HomeView({
+     () => (snapshot ? agentNotices(snapshot.alerts, snapshot.tasks) : []),
+     [snapshot]
+   )
+-  const pending = unacknowledgedCount(notices)
++  /**
++   * La pastille compte sur les alertes BRUTES, jamais sur `notices` : cette liste est plafonnee a
++   * 30 lignes pour tenir dans la tuile, et compter dessus faisait annoncer « 30 » a la 31e remontee
++   * non lue.
++   */
++  const pending = snapshot ? unacknowledgedAlertCount(snapshot.alerts) : 0
+   /**
+    * Les conversations dont la fenetre de mosaique est en etat « cadre dore / pastille jaune » :
+    * tour termine, l'utilisateur n'y est pas revenu. L'accueil ne les DEDUIT pas — la mosaique les
+diff --git a/src/renderer/src/components/home-widgets-model.test.ts b/src/renderer/src/components/home-widgets-model.test.ts
+index 6b9bf0bd..bf796f7b 100644
+--- a/src/renderer/src/components/home-widgets-model.test.ts
++++ b/src/renderer/src/components/home-widgets-model.test.ts
+@@ -3,6 +3,7 @@ import {
+   agentNotices,
+   nextDepartures,
+   relativeDelay,
++  unacknowledgedAlertCount,
+   unacknowledgedCount
+ } from './home-widgets-model'
+ 
+@@ -99,4 +100,33 @@ describe('remontees des agents', () => {
+     expect(unacknowledgedCount(agentNotices(alerts, tasks))).toBe(2)
+     expect(unacknowledgedCount([])).toBe(0)
+   })
++
++  /**
++   * LE COMPTEUR NE DOIT PAS SE FAIRE TRONQUER PAR LE PLAFOND D'AFFICHAGE.
++   *
++   * Defaut constate : `agentNotices` plafonne a 30 lignes, et compter sur cette liste deja coupee
++   * annoncait « 30 » alors qu'il y avait 31 remontees non lues. Le plafond concerne la LISTE (la
++   * tuile est petite), jamais la pastille.
++   *
++   * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : recompter a partir de `agentNotices(...)` au lieu des
++   * alertes brutes.
++   */
++  it('compte les non acquittees REELLES, au-dela du plafond d affichage de la liste', () => {
++    const nombreuses = Array.from({ length: 31 }, (_, index) => ({
++      id: `a-${index}`,
++      taskId: 't1',
++      kind: 'failed' as const,
++      message: `run rouge ${index}`,
++      createdAt: NOW - index * 60_000
++    }))
++    // Le plafond d'AFFICHAGE est conserve...
++    expect(agentNotices(nombreuses, tasks)).toHaveLength(30)
++    // ...mais le compteur dit la verite.
++    expect(unacknowledgedAlertCount(nombreuses)).toBe(31)
++  })
++
++  it('ne compte pas les alertes deja acquittees', () => {
++    expect(unacknowledgedAlertCount(alerts)).toBe(2)
++    expect(unacknowledgedAlertCount([])).toBe(0)
++  })
+ })
+diff --git a/src/renderer/src/components/home-widgets-model.ts b/src/renderer/src/components/home-widgets-model.ts
+index 0646c407..8e012f05 100644
+--- a/src/renderer/src/components/home-widgets-model.ts
++++ b/src/renderer/src/components/home-widgets-model.ts
+@@ -116,3 +116,15 @@ export function agentNotices(
+ export function unacknowledgedCount(notices: readonly AgentNotice[]): number {
+   return notices.filter((notice) => !notice.acknowledged).length
+ }
++
++/**
++ * Le nombre REEL de remontees non acquittees, compte sur les alertes BRUTES.
++ *
++ * A ne pas confondre avec `unacknowledgedCount`, qui compte sur une liste DEJA passee par
++ * `agentNotices` — donc deja plafonnee a `limit`. Compter la pastille sur cette liste tronquee
++ * annoncait « 30 » des la 31e remontee non lue : le compteur mentait exactement quand il devenait
++ * utile. Le plafond appartient a l'AFFICHAGE (la tuile est petite), pas au comptage.
++ */
++export function unacknowledgedAlertCount(alerts: readonly AlertLike[]): number {
++  return alerts.filter((alert) => typeof alert.acknowledgedAt !== 'number').length
++}
+
+
+############ BRAS 2 ############
+Critère RE-JOUÉ par l'orchestrateur dans la copie de ce bras : 5/5 OK, exit=0.
+typecheck web du dépôt (tsc --noEmit -p tsconfig.web.json) : exit=0, 0 erreur.
+vitest sur home-widgets-model.test.ts + HomeView.test.tsx : 2 fichiers passés, exit=0.
+Coût MESURÉ (total_cost_usd du journal) : 2.7207 $ · durée MESURÉE : 13.9 min · tours MESURÉS : 51
+--- DIFF COMPLET ---
+diff --git a/src/renderer/src/components/HomeView.tsx b/src/renderer/src/components/HomeView.tsx
+index b05ff7c0..b5a65a00 100644
+--- a/src/renderer/src/components/HomeView.tsx
++++ b/src/renderer/src/components/HomeView.tsx
+@@ -14,7 +14,7 @@ import {
+ import {
+   agentNotices,
+   nextDepartures,
+-  unacknowledgedCount,
++  unacknowledgedAlertCount,
+   type AgentNotice,
+   type RoutineDeparture
+ } from './home-widgets-model'
+@@ -486,7 +486,9 @@ export function HomeView({
+     () => (snapshot ? agentNotices(snapshot.alerts, snapshot.tasks) : []),
+     [snapshot]
+   )
+-  const pending = unacknowledgedCount(notices)
++  // Le compte se fait sur les alertes BRUTES, pas sur `notices` : cette liste est deja tronquee a
++  // 30 lignes pour tenir dans la tuile, et compter dessus faisait mentir la pastille au-dela.
++  const pending = snapshot ? unacknowledgedAlertCount(snapshot.alerts) : 0
+   /**
+    * Les conversations dont la fenetre de mosaique est en etat « cadre dore / pastille jaune » :
+    * tour termine, l'utilisateur n'y est pas revenu. L'accueil ne les DEDUIT pas — la mosaique les
+diff --git a/src/renderer/src/components/home-widgets-model.test.ts b/src/renderer/src/components/home-widgets-model.test.ts
+index 6b9bf0bd..2f7a31ec 100644
+--- a/src/renderer/src/components/home-widgets-model.test.ts
++++ b/src/renderer/src/components/home-widgets-model.test.ts
+@@ -3,6 +3,7 @@ import {
+   agentNotices,
+   nextDepartures,
+   relativeDelay,
++  unacknowledgedAlertCount,
+   unacknowledgedCount
+ } from './home-widgets-model'
+ 
+@@ -99,4 +100,21 @@ describe('remontees des agents', () => {
+     expect(unacknowledgedCount(agentNotices(alerts, tasks))).toBe(2)
+     expect(unacknowledgedCount([])).toBe(0)
+   })
++
++  it('compte les non acquittees au-dela du plafond d affichage, sans lever ce plafond', () => {
++    const nombreuses = Array.from({ length: 31 }, (_, index) => ({
++      id: `a-${index}`,
++      taskId: 't1',
++      kind: 'failed' as const,
++      message: 'run rouge',
++      createdAt: NOW - index * 1000
++    }))
++    expect(unacknowledgedAlertCount(nombreuses)).toBe(31)
++    expect(agentNotices(nombreuses, tasks)).toHaveLength(30)
++  })
++
++  it('ignore les alertes deja acquittees dans le compte reel', () => {
++    expect(unacknowledgedAlertCount(alerts)).toBe(2)
++    expect(unacknowledgedAlertCount([])).toBe(0)
++  })
+ })
+diff --git a/src/renderer/src/components/home-widgets-model.ts b/src/renderer/src/components/home-widgets-model.ts
+index 0646c407..a5fa4479 100644
+--- a/src/renderer/src/components/home-widgets-model.ts
++++ b/src/renderer/src/components/home-widgets-model.ts
+@@ -116,3 +116,15 @@ export function agentNotices(
+ export function unacknowledgedCount(notices: readonly AgentNotice[]): number {
+   return notices.filter((notice) => !notice.acknowledged).length
+ }
++
++/**
++ * Le nombre REEL de remontees non acquittees, compte sur les alertes BRUTES.
++ *
++ * `agentNotices` plafonne la liste a 30 lignes parce que la tuile est petite ; compter sur son
++ * resultat plafonnait donc aussi le compteur, et la pastille annoncait « 30 » avec 31 alertes non
++ * lues. Le plafond d'AFFICHAGE reste dans `agentNotices` : c'est le comptage qui remonte en amont
++ * de la troncature, pas la liste qui devient exhaustive.
++ */
++export function unacknowledgedAlertCount(alerts: readonly AlertLike[]): number {
++  return alerts.filter((alert) => typeof alert.acknowledgedAt !== 'number').length
++}
+
+
+############ BRAS 3 ############
+Critère RE-JOUÉ par l'orchestrateur dans la copie de ce bras : 5/5 OK, exit=0.
+typecheck web du dépôt (tsc --noEmit -p tsconfig.web.json) : exit=0, 0 erreur.
+vitest sur home-widgets-model.test.ts + HomeView.test.tsx : 2 fichiers passés, exit=0.
+Coût MESURÉ (total_cost_usd du journal) : 0.5074 $ · durée MESURÉE : 1.3 min · tours MESURÉS : 7
+--- DIFF COMPLET ---
+diff --git a/src/renderer/src/components/HomeView.tsx b/src/renderer/src/components/HomeView.tsx
+index b05ff7c0..8930cc0b 100644
+--- a/src/renderer/src/components/HomeView.tsx
++++ b/src/renderer/src/components/HomeView.tsx
+@@ -14,7 +14,7 @@ import {
+ import {
+   agentNotices,
+   nextDepartures,
+-  unacknowledgedCount,
++  unacknowledgedAlertCount,
+   type AgentNotice,
+   type RoutineDeparture
+ } from './home-widgets-model'
+@@ -486,7 +486,12 @@ export function HomeView({
+     () => (snapshot ? agentNotices(snapshot.alerts, snapshot.tasks) : []),
+     [snapshot]
+   )
+-  const pending = unacknowledgedCount(notices)
++  /**
++   * Le compteur de la pastille se lit sur les alertes BRUTES, pas sur `notices` : cette derniere est
++   * plafonnee a 30 lignes pour tenir dans la tuile, et compter dessus plafonnerait aussi le compteur
++   * (31 remontees non lues affichaient « 30 »). La liste reste tronquee, le compteur devient exact.
++   */
++  const pending = snapshot ? unacknowledgedAlertCount(snapshot.alerts) : 0
+   /**
+    * Les conversations dont la fenetre de mosaique est en etat « cadre dore / pastille jaune » :
+    * tour termine, l'utilisateur n'y est pas revenu. L'accueil ne les DEDUIT pas — la mosaique les
+diff --git a/src/renderer/src/components/home-widgets-model.ts b/src/renderer/src/components/home-widgets-model.ts
+index 0646c407..4143781c 100644
+--- a/src/renderer/src/components/home-widgets-model.ts
++++ b/src/renderer/src/components/home-widgets-model.ts
+@@ -116,3 +116,16 @@ export function agentNotices(
+ export function unacknowledgedCount(notices: readonly AgentNotice[]): number {
+   return notices.filter((notice) => !notice.acknowledged).length
+ }
++
++/**
++ * Le nombre REEL de remontees non acquittees, compte sur les alertes BRUTES.
++ *
++ * A ne pas confondre avec `unacknowledgedCount`, qui compte sur une liste `AgentNotice` deja passee
++ * par `agentNotices` — donc deja PLAFONNEE a `limit` lignes. Compter la pastille sur cette liste
++ * tronquee la fait mentir des la 31e alerte non lue : elle annoncerait « 30 » pour 31 remontees.
++ * La pastille doit donc lire la source, pas l'extrait affiche : le plafond reste un plafond
++ * d'AFFICHAGE, il ne doit jamais devenir un plafond de COMPTAGE.
++ */
++export function unacknowledgedAlertCount(alerts: readonly AlertLike[]): number {
++  return alerts.filter((alert) => typeof alert.acknowledgedAt !== 'number').length
++}
+
+
+############ BRAS 4 ############
+Critère RE-JOUÉ par l'orchestrateur dans la copie de ce bras : 5/5 OK, exit=0.
+typecheck web du dépôt (tsc --noEmit -p tsconfig.web.json) : exit=0, 0 erreur.
+vitest sur home-widgets-model.test.ts + HomeView.test.tsx : 2 fichiers passés, exit=0.
+Coût MESURÉ (total_cost_usd du journal) : 0.4463 $ · durée MESURÉE : 1.1 min · tours MESURÉS : 8
+--- DIFF COMPLET ---
+diff --git a/src/renderer/src/components/HomeView.tsx b/src/renderer/src/components/HomeView.tsx
+index b05ff7c0..5b61ec67 100644
+--- a/src/renderer/src/components/HomeView.tsx
++++ b/src/renderer/src/components/HomeView.tsx
+@@ -14,7 +14,7 @@ import {
+ import {
+   agentNotices,
+   nextDepartures,
+-  unacknowledgedCount,
++  unacknowledgedAlertCount,
+   type AgentNotice,
+   type RoutineDeparture
+ } from './home-widgets-model'
+@@ -486,7 +486,7 @@ export function HomeView({
+     () => (snapshot ? agentNotices(snapshot.alerts, snapshot.tasks) : []),
+     [snapshot]
+   )
+-  const pending = unacknowledgedCount(notices)
++  const pending = snapshot ? unacknowledgedAlertCount(snapshot.alerts) : 0
+   /**
+    * Les conversations dont la fenetre de mosaique est en etat « cadre dore / pastille jaune » :
+    * tour termine, l'utilisateur n'y est pas revenu. L'accueil ne les DEDUIT pas — la mosaique les
+diff --git a/src/renderer/src/components/home-widgets-model.ts b/src/renderer/src/components/home-widgets-model.ts
+index 0646c407..27763f84 100644
+--- a/src/renderer/src/components/home-widgets-model.ts
++++ b/src/renderer/src/components/home-widgets-model.ts
+@@ -116,3 +116,13 @@ export function agentNotices(
+ export function unacknowledgedCount(notices: readonly AgentNotice[]): number {
+   return notices.filter((notice) => !notice.acknowledged).length
+ }
++
++/**
++ * Le compteur de la pastille : compte sur les alertes BRUTES, jamais sur la liste rendue.
++ *
++ * `agentNotices` plafonne l'AFFICHAGE à 30 lignes (la tuile est petite). Compter sur ce résultat
++ * tronqué faisait mentir la pastille dès la 31e remontée non lue — elle affichait « 30 ».
++ */
++export function unacknowledgedAlertCount(alerts: readonly AlertLike[]): number {
++  return alerts.filter((alert) => typeof alert.acknowledgedAt !== 'number').length
++}
+
+
+=== TA GRILLE, dans CET ORDRE (un bras qui rate la dimension 1 ne peut PAS gagner sur les suivantes) ===
+1. Le critère est-il atteint, avec preuve ? (oui/non, jamais « presque »)
+2. Qualité du livrable : défauts AVEC PREUVE (cite la ligne du diff), rustines, dette laissée, affirmations fausses dans les commentaires ajoutés.
+3. Coût $ mesuré.
+4. Durée / tours mesurés.
+5. Reproductibilité : ce résultat tient-il hors de cette tâche, ou a-t-il gagné par chance ?
+
+CONSIGNES DURES :
+- Les quatre bras passent le critère : le classement NE PEUT PAS se jouer sur la dimension 1. Dis-le.
+- Un bras n'est pas déclaré meilleur PARCE QU'il est moins cher : il doit être moins cher ET au moins aussi bon.
+- Si l'écart est dans le bruit, dis « pas de gagnant ».
+- Cherche activement à RÉFUTER chaque livrable : une affirmation fausse dans un commentaire, un test qui ne tomberait pas si on cassait le code, une dette (du code devenu mort), un effet de bord non couvert.
+- N'invente aucun chiffre : ceux ci-dessus sont les seuls mesurés.
+
+=== CE QUE TU RENDS ===
+- UN gagnant nommé (bras 1/2/3/4) et le classement complet des quatre.
+- Pour chaque bras : ses défauts avec la preuve (numéro de ligne ou extrait du diff).
+- L'écart chiffré entre le gagnant et chacun des autres.
+- Une phrase : ce qui a RÉELLEMENT discriminé, sachant que les 4 passent le critère.

@@ -1,0 +1,78 @@
+diff --git a/src/renderer/src/components/HomeView.tsx b/src/renderer/src/components/HomeView.tsx
+index b05ff7c0..b5a65a00 100644
+--- a/src/renderer/src/components/HomeView.tsx
++++ b/src/renderer/src/components/HomeView.tsx
+@@ -14,7 +14,7 @@ import {
+ import {
+   agentNotices,
+   nextDepartures,
+-  unacknowledgedCount,
++  unacknowledgedAlertCount,
+   type AgentNotice,
+   type RoutineDeparture
+ } from './home-widgets-model'
+@@ -486,7 +486,9 @@ export function HomeView({
+     () => (snapshot ? agentNotices(snapshot.alerts, snapshot.tasks) : []),
+     [snapshot]
+   )
+-  const pending = unacknowledgedCount(notices)
++  // Le compte se fait sur les alertes BRUTES, pas sur `notices` : cette liste est deja tronquee a
++  // 30 lignes pour tenir dans la tuile, et compter dessus faisait mentir la pastille au-dela.
++  const pending = snapshot ? unacknowledgedAlertCount(snapshot.alerts) : 0
+   /**
+    * Les conversations dont la fenetre de mosaique est en etat « cadre dore / pastille jaune » :
+    * tour termine, l'utilisateur n'y est pas revenu. L'accueil ne les DEDUIT pas — la mosaique les
+diff --git a/src/renderer/src/components/home-widgets-model.test.ts b/src/renderer/src/components/home-widgets-model.test.ts
+index 6b9bf0bd..2f7a31ec 100644
+--- a/src/renderer/src/components/home-widgets-model.test.ts
++++ b/src/renderer/src/components/home-widgets-model.test.ts
+@@ -3,6 +3,7 @@ import {
+   agentNotices,
+   nextDepartures,
+   relativeDelay,
++  unacknowledgedAlertCount,
+   unacknowledgedCount
+ } from './home-widgets-model'
+ 
+@@ -99,4 +100,21 @@ describe('remontees des agents', () => {
+     expect(unacknowledgedCount(agentNotices(alerts, tasks))).toBe(2)
+     expect(unacknowledgedCount([])).toBe(0)
+   })
++
++  it('compte les non acquittees au-dela du plafond d affichage, sans lever ce plafond', () => {
++    const nombreuses = Array.from({ length: 31 }, (_, index) => ({
++      id: `a-${index}`,
++      taskId: 't1',
++      kind: 'failed' as const,
++      message: 'run rouge',
++      createdAt: NOW - index * 1000
++    }))
++    expect(unacknowledgedAlertCount(nombreuses)).toBe(31)
++    expect(agentNotices(nombreuses, tasks)).toHaveLength(30)
++  })
++
++  it('ignore les alertes deja acquittees dans le compte reel', () => {
++    expect(unacknowledgedAlertCount(alerts)).toBe(2)
++    expect(unacknowledgedAlertCount([])).toBe(0)
++  })
+ })
+diff --git a/src/renderer/src/components/home-widgets-model.ts b/src/renderer/src/components/home-widgets-model.ts
+index 0646c407..a5fa4479 100644
+--- a/src/renderer/src/components/home-widgets-model.ts
++++ b/src/renderer/src/components/home-widgets-model.ts
+@@ -116,3 +116,15 @@ export function agentNotices(
+ export function unacknowledgedCount(notices: readonly AgentNotice[]): number {
+   return notices.filter((notice) => !notice.acknowledged).length
+ }
++
++/**
++ * Le nombre REEL de remontees non acquittees, compte sur les alertes BRUTES.
++ *
++ * `agentNotices` plafonne la liste a 30 lignes parce que la tuile est petite ; compter sur son
++ * resultat plafonnait donc aussi le compteur, et la pastille annoncait « 30 » avec 31 alertes non
++ * lues. Le plafond d'AFFICHAGE reste dans `agentNotices` : c'est le comptage qui remonte en amont
++ * de la troncature, pas la liste qui devient exhaustive.
++ */
++export function unacknowledgedAlertCount(alerts: readonly AlertLike[]): number {
++  return alerts.filter((alert) => typeof alert.acknowledgedAt !== 'number').length
++}

@@ -200,6 +200,32 @@ describe('page d accueil', () => {
     expect(notifications.querySelector('.home-tile__count')?.textContent).toBe('1')
   })
 
+  /**
+   * LA PASTILLE ANNONCE LE NOMBRE REEL, PAS LE PLAFOND DE LA LISTE.
+   *
+   * Defaut constate : la liste des remontees est plafonnee a 30 lignes et le compteur etait calcule
+   * SUR cette liste tronquee — avec 31 remontees non lues, la pastille affichait « 30 ». Le plafond
+   * d'affichage reste (la tuile est petite) ; c'est le compteur qui doit etre exact.
+   */
+  it('affiche le NOMBRE REEL de remontees non lues, meme au-dela des 30 lignes affichees', async () => {
+    const alerts = Array.from({ length: 31 }, (_, index) => ({
+      id: `al-${index}`,
+      taskId: 't-matin',
+      kind: 'failed' as const,
+      message: `run rouge ${index}`,
+      createdAt: NOW - index * 60_000
+    }))
+    ;(window as unknown as { api: unknown }).api = {
+      taskManagerSnapshot: vi.fn(async () => ({ ...snapshot(), alerts })),
+      outlookSnapshot: vi.fn(async () => outlookSnapshot())
+    }
+    const container = await mount()
+    const notifications = tile(container, 'notifications')
+    expect(notifications.querySelector('.home-tile__count')?.textContent).toBe('31')
+    // Le plafond d'AFFICHAGE de la liste est CONSERVE.
+    expect(notifications.querySelectorAll('.home-notices li').length).toBe(30)
+  })
+
   it('annonce l absence de passerelle au lieu d une liste vide', async () => {
     // Sans `api.outlookSnapshot`, les deux widgets doivent DIRE qu ils ne peuvent pas lire. Une liste
     // vide se lirait « vous n avez pas de mail », ce qui est faux.

@@ -1,0 +1,5 @@
+ÉDITION DIRECTE CIBLÉE — la cause est déjà localisée dans l'énoncé, ne la re-cherche pas.
+INTERDIT : écrire un cadrage, écrire un plan, explorer le dépôt au-delà des deux fichiers nommés dans
+l'énoncé et de leurs tests directs, lancer la suite de tests complète.
+AUTORISÉ et ATTENDU : lire ces deux fichiers, faire l'édition MINIMALE qui corrige la cause, lancer le
+critère. S'il est rouge, corriger et relancer. Rien d'autre. Vise le moins de tours possible.

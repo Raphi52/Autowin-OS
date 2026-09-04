@@ -1,0 +1,7 @@
+OK   nominal : deux obstacles DISTINCTS conservés, dans l ordre de première apparition
+RATE cas limite : ligne identique dans texte ET raisonnement comptée UNE fois — obstacles=["⛔ Bloqué : le worktree refuse la publication","⛔ Bloqué : le worktree refuse la publication"] count=2
+RATE cas limite : erreur de l étape identique à une ligne du texte comptée UNE fois, et non dupliquée dans les sous-étapes — obstacles=["⛔ Bloqué : le worktree refuse la publication","⛔ Bloqué : le worktree refuse la publication"] count=2 substeps=["⛔ Bloqué : le worktree refuse la publication","⛔ Bloqué : le worktree refuse la publication"]
+RATE cas limite : même ligne répétée 3 fois dans un seul texte (+ ligne vide) comptée UNE fois — obstacles=["⛔ Bloqué : le worktree refuse la publication","⛔ Bloqué : le worktree refuse la publication","⛔ Bloqué : le worktree refuse la publication"] count=3
+
+CRITÈRE NON ATTEINT (3 RATE)
+exit=1

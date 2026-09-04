@@ -274,10 +274,13 @@ function retirerAnnotations(ligne: string): string {
   return ligne.replace(ANNOTATION, (entier, a, b, c) => {
     const dedans = (a ?? b ?? c ?? '').trim()
     if (dedans === '') return ' '
+    // CROCHETS et ETOILES : whisper ne s'en sert QUE pour annoter du non-dit, et la liste de ce
+    // qu'il invente est ouverte (« [bruit de prout] ») — on retire sans chercher a reconnaitre.
+    if (!entier.startsWith('(')) return ' '
+    // PARENTHESES : elles peuvent porter de la vraie dictee (« le dossier (celui de mardi) »).
+    // Seul un contenu reconnu comme bruit est retire.
     const noyau = noyauAnnotation(dedans)
-    if (BRUIT.test(noyau) || ONOMATOPEE.test(noyau) || CREDIT.test(dedans)) return ' '
-    // Une annotation entre étoiles est TOUJOURS une didascalie : whisper ne l'écrit pas pour de la parole.
-    return entier.startsWith('*') ? ' ' : entier
+    return BRUIT.test(noyau) || ONOMATOPEE.test(noyau) || CREDIT.test(dedans) ? ' ' : entier
   })
 }
 
@@ -300,6 +303,25 @@ function replierBoucles(texte: string): string {
 /** Ce qui reste après nettoyage mais ne porte aucune parole : ponctuation seule, syllabe unique. */
 const SANS_PAROLE = /^[\s.,;:!?…«»"'’\-–—()[\]]*$/
 
+
+/**
+ * Une note ne s'efface pas comme un caractere parasite : elle QUALIFIE toute la ligne. « ♪ Musique
+ * ♪ » ou « ♪ on ira tous au paradis ♪ » est du chant ou un fond sonore, pas une dictee — retirer
+ * seulement les notes laisserait le mot « Musique » partir en commande.
+ */
+const LIGNE_MUSICALE = /[♪♫♬♩♭♮♯]/
+
+/**
+ * Les PHRASES DE GENERIQUE. whisper.cpp a ete entraine sur des sous-titres YouTube : sur du silence
+ * ou du souffle, il comble avec une phrase de fin de video (« Merci d'avoir regarde cette video »,
+ * « Sous-titrage ST'501 »). Ce n'est PAS une annotation : c'est du texte de parole ordinaire, donc
+ * aucune regle de forme ne peut l'attraper — seule une liste fermee le peut, et elle restera
+ * incomplete. Elle ne s'applique qu'a une ligne ENTIEREMENT composee de cette phrase, pour ne
+ * jamais amputer une vraie dictee. Source : dataset sachaarbonel/whisper-hallucinations.
+ */
+const GENERIQUE =
+  /^(merci d[e'’] ?avoir regarde[e]?( cette video)?|merci( beaucoup)? d[e'’] ?avoir ecoute|j[e'’] ?espere que (cette video vous a plu|vous avez apprecie la video)|sous-?titr(age|es)([ ,].*)?|abonnez-vous( a la chaine)?|a bientot pour une nouvelle video|thanks? for watching|subtitles by.*|amara\.org.*)$/i
+
 /**
  * De la sortie brute de la CLI à la PAROLE. Sans ce filtre, le journal du moteur (« loading
  * model… ») et les hallucinations de whisper (didascalies, crédits de sous-titres, boucles)
@@ -310,10 +332,18 @@ export function analyserTranscription(sortie: string): string {
   for (const brute of sortie.split(/\r?\n/)) {
     const ligne = brute.replace(HORODATAGE, '').trim()
     if (ligne === '' || LIGNE_JOURNAL.test(ligne)) continue
-    if (CREDIT.test(ligne)) continue
+    if (LIGNE_MUSICALE.test(ligne)) continue
     const propre = retirerAnnotations(ligne).replace(/\s+/g, ' ').trim()
     if (propre === '' || SANS_PAROLE.test(propre)) continue
     if (BRUIT.test(propre)) continue
+    // Les accents ne changent pas la phrase de generique : on compare sans eux, sinon
+    // « Merci d’avoir regardé cette vidéo ! » passait a travers la liste (ecrite sans accents).
+    const sansAccent = propre
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[.!…]+$/, '')
+      .trim()
+    if (GENERIQUE.test(sansAccent)) continue
     morceaux.push(propre)
   }
   const texte = replierBoucles(morceaux.join(' ').replace(/\s+/g, ' ').trim())

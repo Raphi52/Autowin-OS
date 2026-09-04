@@ -1,0 +1,24 @@
+OK   P1 Candidats scoutes ecrits sur disque : >=6 lignes, B/C/X marques — ok
+OK   P2 Rouge du critere CONSTATE avant lancement, sortie COLLEE dans le RUN.md — ok
+OK   P3 Critere : >=3 assertions dont >=2 cas limites — ok
+OK   P4 Quatre bras A/B/C/X reellement lances (prompt + sortie) — ok
+OK   P5 Enonce IDENTIQUE mot pour mot dans les quatre prompts — ok
+OK   P6 Une copie de travail DISTINCTE par bras — ok
+OK   P7 Les quatre bras partent EN MEME TEMPS (arriere-plan + attente) — ok
+OK   P8 Chaque $ du tableau == total_cost_usd du bras (aucun chiffre estime) — ok
+OK   P9 Le juge est un appel DISTINCT des quatre bras — ok
+OK   P10 Tableau de sortie au format impose (8 colonnes) — ok
+OK   P11 Ligne Discrimination presente, et 4/4 declare NON DISCRIMINANT — ok
+OK   P12 Lecon retenue avec ses chiffres mesures — ok
+OK   P13 Copies de travail perdantes retirees du disque — ok
+OK   P14 Banc de formulation : section Variantes de texte + un diff par bras — ok
+OK   P15 Les 4 bras ont leur ligne dans arena-duels.jsonl — ok
+
+NON MECANISABLE (jugement humain, aucun script ne tranche) :
+  - X est-il VRAIMENT une premisse cassee, ou une variante de B ? (lecture humaine des workflows)
+  - Un bras a-t-il reformule la tache malgre un enonce identique ? (lecture des livrables)
+  - Qualite reelle des livrables et dette laissee — dimension 2 de la grille du juge.
+  - Reproductibilite hors de cette tache : un seul banc = un seul point de mesure.
+
+PROTOCOLE TENU
+exit=0

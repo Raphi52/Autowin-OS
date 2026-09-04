@@ -1,0 +1,9 @@
+PREUVE D'ABORD — le test avant le code.
+1. AVANT de toucher au code de production, ÉTENDS les tests DÉJÀ présents dans le dépôt
+   (src/renderer/src/components/home-widgets-model.test.ts et/ou
+   src/renderer/src/components/HomeView.test.tsx) avec au moins un test qui échoue AUJOURD'HUI à cause
+   du défaut décrit dans l'énoncé.
+2. Constate-le ROUGE et colle la sortie (commande + code de sortie).
+3. SEULEMENT ENSUITE, corrige le code jusqu'au vert.
+4. Rejoue ces fichiers de test, puis le critère.
+Le ou les tests que tu ajoutes RESTENT dans le dépôt : c'est la non-régression qui survit au banc.

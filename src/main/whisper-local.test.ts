@@ -111,6 +111,38 @@ describe('analyserTranscription', () => {
     expect(analyserTranscription('  [BLANK_AUDIO]\n')).toBe('')
     expect(analyserTranscription('')).toBe('')
   })
+
+  it('jette TOUTE annotation de non-parole, meme inconnue, meme au milieu d une phrase', () => {
+    // La liste fermée de mots-clés laissait passer tout ce que le modèle invente.
+    expect(analyserTranscription('(rires)')).toBe('')
+    expect(analyserTranscription('[bruit de prout]')).toBe('')
+    expect(analyserTranscription('(soupir)')).toBe('')
+    expect(analyserTranscription('[00:00:00.000 --> 00:00:02.000]   [ronflement]')).toBe('')
+    expect(analyserTranscription('bonjour (rires) ca va')).toBe('bonjour ca va')
+    expect(analyserTranscription('ouvre le task manager [bruit de clavier]')).toBe(
+      'ouvre le task manager'
+    )
+    // La parole seule reste intacte.
+    expect(analyserTranscription('Jarvis, ouvre le depot')).toBe('Jarvis, ouvre le depot')
+  })
+
+  it('jette les notes de musique et les asterisques, que ANNOTATION ne voyait pas', () => {
+    expect(analyserTranscription('♪ Musique ♪')).toBe('')
+    expect(analyserTranscription('♫♫♫')).toBe('')
+    expect(analyserTranscription('*rires*')).toBe('')
+    expect(analyserTranscription('ouvre le depot *toux*')).toBe('ouvre le depot')
+  })
+
+  it('jette les PHRASES DE GENERIQUE hallucinees sur du silence', () => {
+    expect(analyserTranscription('Merci d’avoir regarde cette video !')).toBe('')
+    expect(analyserTranscription('Sous-titrage ST’ 501')).toBe('')
+    expect(analyserTranscription('Abonnez-vous')).toBe('')
+    expect(analyserTranscription('Thanks for watching!')).toBe('')
+    // Mais elle n'ampute JAMAIS une vraie dictee qui contient ces mots.
+    expect(analyserTranscription('merci d’avoir regarde, maintenant ouvre le depot')).toBe(
+      'merci d’avoir regarde, maintenant ouvre le depot'
+    )
+  })
 })
 
 describe('argumentsWhisper', () => {

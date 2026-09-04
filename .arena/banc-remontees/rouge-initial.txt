@@ -1,0 +1,8 @@
+OK   nominal : 3 remontées dont 2 non lues, la pastille affiche 2
+RATE cas limite — 31 non lues pour 30 lignes affichables : la pastille doit dire 31, jamais 30 — AssertionError: expected '30' to be '31' // Object.is equality
+OK   cas limite — aucune remontée : liste vide, aucune pastille, aucun plantage
+OK   cas limite — zéro non lue parmi 40 déjà acquittées : aucune pastille
+RATE cas limite — 100 non lues : pastille exacte ET liste toujours bornée à 30 lignes — AssertionError: expected '30' to be '100' // Object.is equality
+
+CRITÈRE NON ATTEINT (2 RATE)
+exit=1

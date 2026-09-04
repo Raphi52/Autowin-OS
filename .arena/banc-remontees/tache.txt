@@ -1,0 +1,11 @@
+Le widget « Remontées des agents » de la page d'accueil (tuile `notifications`, rendue par
+src/renderer/src/components/HomeView.tsx, alimentée par src/renderer/src/components/home-widgets-model.ts)
+affiche dans sa barre de titre un compteur de remontées non lues. Ce compteur MENT dès qu'il y a plus de
+30 remontées non acquittées : `agentNotices()` plafonne la liste à 30 (`limit = 30`) et
+`unacknowledgedCount()` compte ensuite sur cette liste DÉJÀ tronquée (HomeView.tsx : `const pending =
+unacknowledgedCount(notices)`). Avec 31 remontées non lues, la pastille affiche « 30 ».
+Corrige-le : le compteur de la pastille doit annoncer le NOMBRE RÉEL de remontées non acquittées, quel que
+soit le nombre d'alertes. Le plafond d'AFFICHAGE de la liste (30 lignes au maximum) doit être CONSERVÉ :
+la tuile est petite, c'est le compteur qui doit être exact, pas la liste qui doit devenir exhaustive.
+N'change ni le format des alertes ni leur stockage (d'autres vues les lisent).
+Critère de succès : node <BENCH>/check.mjs <racine-du-depot> sort en code 0.

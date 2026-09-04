@@ -1,0 +1,1 @@
+typecheck:web exit=0
