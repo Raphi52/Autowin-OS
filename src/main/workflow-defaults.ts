@@ -54,19 +54,21 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
     id: 'correctif',
     name: 'Correctif',
     description:
-      'Un défaut à corriger : on charge le contexte, on reproduit, on répare, on fait juger, on capitalise. Le juge rouge renvoie au build, au plus deux fois.',
+      'Un défaut à corriger : on charge le contexte, on reproduit, on répare, on nettoie, on fait juger, on capitalise. Le juge rouge renvoie au build, au plus deux fois.',
     graph: {
       entry: 'think-1',
       nodes: [
         { id: 'think-1', phase: 'think' },
         { id: 'build-1', phase: 'build', agents: [agentStudio('preuve')] },
+        { id: 'clean-1', phase: 'clean' },
         { id: 'judge-1', phase: 'judge', agents: [agentStudio('correcteur')] },
         { id: 'learn-1', phase: 'learn' },
         { id: 'salvage-1', phase: 'salvage' }
       ],
       edges: [
         { from: 'think-1', to: 'build-1', when: 'always' },
-        { from: 'build-1', to: 'judge-1', when: 'always' },
+        { from: 'build-1', to: 'clean-1', when: 'always' },
+        { from: 'clean-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
         { from: 'learn-1', to: 'salvage-1', when: 'always' }
@@ -197,13 +199,14 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
     id: 'remake',
     name: 'Remake',
     description:
-      'Le livrable est fini et marche : on paie les compromis accumulés. Le bar est le regret, pas le défaut.',
+      'Le livrable est fini et marche : on paie les compromis accumulés. Le bar est le regret, pas le défaut. On nettoie avant de faire juger.',
     graph: {
       entry: 'think-1',
       nodes: [
         { id: 'think-1', phase: 'think' },
         { id: 'remake-1', phase: 'remake' },
         { id: 'build-1', phase: 'build', agents: [agentStudio('minimal')] },
+        { id: 'clean-1', phase: 'clean' },
         { id: 'judge-1', phase: 'judge', agents: [agentStudio('lean')] },
         { id: 'learn-1', phase: 'learn' },
         { id: 'salvage-1', phase: 'salvage' }
@@ -211,7 +214,8 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
       edges: [
         { from: 'think-1', to: 'remake-1', when: 'always' },
         { from: 'remake-1', to: 'build-1', when: 'always' },
-        { from: 'build-1', to: 'judge-1', when: 'always' },
+        { from: 'build-1', to: 'clean-1', when: 'always' },
+        { from: 'clean-1', to: 'judge-1', when: 'always' },
         { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 },
         { from: 'judge-1', to: 'learn-1', when: 'green' },
         { from: 'learn-1', to: 'salvage-1', when: 'always' }

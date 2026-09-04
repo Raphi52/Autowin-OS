@@ -81,7 +81,32 @@ import { protegerRappel } from './observabilite-non-bloquante'
  * en direct), puis on lui renvoie le résultat + le nouvel état, et il reboucle
  * jusqu'à écrire DONE (ou cap d'itérations). C'est « l'agent voit ce qu'il update ».
  */
-type TurnUsage = { inputTokens: number; outputTokens: number; costUsd?: number }
+type TurnUsage = {
+  inputTokens: number
+  outputTokens: number
+  costUsd?: number
+  /**
+   * ENTREE DU DERNIER APPEL, distincte du cumul ci-dessus.
+   *
+   * `inputTokens` SOMME toutes les iterations du tour : c'est ce qu'il faut pour la depense, et
+   * c'est faux pour l'OCCUPATION de la fenetre — le prefixe est renvoye a chaque appel, donc la
+   * somme le compte autant de fois qu'il y a eu d'iterations. Un tour de neuf appels rendait
+   * 578 207 tokens pour une fenetre de 200 000, et la jauge de contexte restait collee a 100 %
+   * (mesure du 2026-09-04 sur conv-240, journal d'activite). L'occupation reelle, c'est ce que le
+   * DERNIER appel a recu.
+   */
+  derniereEntree?: number
+  /** Part du DERNIER appel relue depuis le cache — sous-ensemble de `derniereEntree`. */
+  derniereEntreeCache?: number
+  /**
+   * MODELE ET PROVIDER SERVIS. Sans eux, `contextGauge()` ne trouve aucune fenetre et rend
+   * `undefined` : la jauge de contexte ne s'affichait donc JAMAIS, ni sur le filet du champ ni
+   * dans l'en-tete, alors que le journal d'activite portait bien `claude-opus-5`. Le modele est
+   * celui que le provider a REELLEMENT servi (`res.model`), pas celui demande.
+   */
+  model?: string
+  provider?: string
+}
 
 export function resolveLatestUserMessage(
   history: Array<Pick<Message, 'role' | 'content'>>,
@@ -246,6 +271,13 @@ export function commandResultSucceeded(result: CommandResult): boolean {
    * dit d'ELLE-MEME (`stored` / `allowed` / `refused`), jamais la reussite du transport.
    */
   if (data.stored === false || data.allowed === false || data.refused === true) return false
+  /*
+   * MEME FAMILLE, deux champs qui manquaient — mesure conv-244 (2026-09-04) sur les traces reelles :
+   * `run` refuse rend `{ok:true, data:{lance:false, detail:"Commande refusee : ..."}}` et
+   * `restart_app` indisponible rend `{redemarre:false}`. Rien n'a tourne, pourtant la trace causale
+   * enregistrait ces resultats en `status:"completed"` — donc aucune garde d'echec ne s'armait.
+   */
+  if (data.lance === false || data.redemarre === false) return false
   if (data.status === 'failed' || data.status === 'red') return false
   return typeof data.exitCode !== 'number' || data.exitCode === 0
 }
@@ -1265,8 +1297,9 @@ export class AgentPilot {
       return retenues
     })()
 
-    // Coût cumulé du tour (toutes les itérations LLM du même message utilisateur).
-    const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0 }
+    // Coût cumulé du tour (toutes les itérations LLM du même message utilisateur). `derniereEntree`
+    // n'est PAS cumulée : voir `TurnUsage`.
+    const usage: TurnUsage & { costUsd: number } = { inputTokens: 0, outputTokens: 0, costUsd: 0 }
 
     let iterationLimit = maxIter
     /**
@@ -1762,6 +1795,12 @@ export class AgentPilot {
         usage.inputTokens += res.usage.inputTokens
         usage.outputTokens += res.usage.outputTokens
         usage.costUsd += res.usage.costUsd ?? 0
+        // ECRASE, ne cumule pas : la jauge de contexte veut la DERNIERE entree, pas leur somme.
+        usage.derniereEntree = res.usage.inputTokens
+        usage.derniereEntreeCache = res.usage.cacheReadTokens
+        // Le modele SERVI, sinon aucune fenetre de contexte n'est trouvable en aval.
+        if (res.model) usage.model = res.model
+        usage.provider = provider
       }
       // Dernière barrière avant d'interpréter/clore la réponse : une directive arrivée pendant
       // l'appel provider invalide cette réponse devenue obsolète. On la réinjecte dans un nouvel

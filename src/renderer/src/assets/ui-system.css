@@ -74,6 +74,15 @@
   display: flex;
   margin-left: auto;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
+  /* Les commandes gardent leur taille : c'est le titre qui cede (min-width sur le h1).
+     Sans cela, en mosaique, « Tout fermer » passe sur deux lignes et le switch s'ecrase. */
+  flex: 0 0 auto;
+}
+.module-header-line > h1 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 

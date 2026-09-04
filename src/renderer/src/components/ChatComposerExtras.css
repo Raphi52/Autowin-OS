@@ -1,15 +1,6 @@
 /* Styles des ajouts « une tâche en un seul prompt » : écho de périmètre, palette de mentions,
    réordonnancement de la file. Fichier séparé pour ne pas toucher ChatView.css. */
 
-.composer-scope-echo {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px 4px;
-  font-size: 11px;
-  line-height: 1.4;
-  opacity: 0.66;
-}
 
 /* Friction sur echecs repetes : une serie de runs sans livraison doit se VOIR avant la relance
    suivante (mesure conv-1302 : neuf relances a l'aveugle). Reprend la geometrie de l'echo de

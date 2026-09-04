@@ -148,6 +148,8 @@ export class Dictee {
   private phrasesEnVol = 0
   /** Échantillons déjà couverts par le dernier aperçu lancé : sert à espacer les rafraîchissements. */
   private apercuDepuis = 0
+  /** Dernier aperçu affiché : sert à ne jamais faire RECULER le texte provisoire. */
+  private apercuTexte = ''
 
   constructor(private readonly deps: DependancesDictee) {}
 
@@ -206,6 +208,7 @@ export class Dictee {
     this.vad = pas.etat
     if (pas.segment) {
       this.apercuDepuis = 0
+      this.apercuTexte = ''
       this.enfiler(pas.segment, this.taux)
       return
     }
@@ -234,7 +237,13 @@ export class Dictee {
       try {
         const texte = (await this.deps.transcrire(encoderWav16k(partiel, taux))).trim()
         // Une phrase finie entre-temps a déjà écrit le vrai texte : l'aperçu serait un doublon.
-        if (this.actif && this.vad.parle && texte !== '') this.deps.onApercu?.(texte)
+        if (!this.actif || !this.vad.parle || texte === '') return
+        // ANTI-CLIGNOTEMENT. Chaque aperçu re-transcrit un audio qui s'ALLONGE : un résultat plus
+        // court que le précédent est une hésitation du moteur, pas une correction. L'afficher
+        // ferait reculer le texte sous les yeux — des bouts de phrase qui s'effacent.
+        if (texte.length < this.apercuTexte.length) return
+        this.apercuTexte = texte
+        this.deps.onApercu?.(texte)
       } catch {
         // Un aperçu raté n'est pas une panne : la phrase finie reste transcrite normalement.
       } finally {
@@ -258,6 +267,7 @@ export class Dictee {
       }
       if (texte === '') return
       this.aEcrit = true
+      this.apercuTexte = ''
       this.deps.onApercu?.('')
       this.deps.onTexte?.(texte)
     })
@@ -270,6 +280,7 @@ export class Dictee {
   async arreter(): Promise<string> {
     if (!this.actif) return ''
     this.actif = false
+    this.apercuTexte = ''
     this.deps.onApercu?.('')
     const reste = this.vad.tampon.length > 0 ? coller(this.vad.tampon) : null
     const taux = this.taux
@@ -288,6 +299,7 @@ export class Dictee {
   /** Coupe sans rien transcrire : l'utilisateur a annulé. */
   annuler(): void {
     this.actif = false
+    this.apercuTexte = ''
     this.deps.onApercu?.('')
     this.vad = etatVadInitial
     this.fermer()

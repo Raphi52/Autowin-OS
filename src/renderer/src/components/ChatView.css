@@ -279,8 +279,12 @@
   color: var(--text-faint);
 }
 
+/* `flex: none` OBLIGATOIRE : `.conv-list` est une colonne flex, donc sans lui les cartes se font
+   ECRASER (flex-shrink par defaut) des que leur contenu grandit — en recherche, l'extrait ajoute
+   deux lignes et le texte se retrouvait coupe par `overflow: hidden` (2026-09-04). */
 .conv-item {
   display: flex;
+  flex: none;
   align-items: center;
   border-radius: var(--r1);
 }
@@ -2377,6 +2381,47 @@ ol.md-list li {
   background: linear-gradient(180deg, rgba(2, 4, 6, 0.74), #030609 30%);
 }
 
+/* LE FILET EST LA JAUGE DE CONTEXTE (demande utilisateur conv-240, reference claude.exe).
+   Le trait gris qui separe le fil de la zone de saisie porte desormais la part occupee de la
+   fenetre du modele : rien n'est ajoute a l'ecran, la place prise reste la meme. Peint en
+   `::before` d'un pixel pose SUR le filet -- pas en `border-image`, qui aurait empeche le repli
+   gris quand l'occupation est inconnue.
+   Sans `[data-context-level]` (occupation inconnue), aucune regle ne s'applique : filet gris. */
+/* PAS de prefixe de theme : le filet existe dans TOUS les themes, la jauge doit donc s'y peindre
+   partout. Rattachee a `.cosmic-outline` seul, elle disparaissait des que le theme changeait. */
+.composer[data-context-level] {
+  position: relative;
+  border-top-color: rgba(212, 225, 239, 0.1);
+  --context-teinte: #35d07f;
+}
+.composer[data-context-level='tendu'] {
+  --context-teinte: #efc023;
+}
+.composer[data-context-level='critique'] {
+  --context-teinte: #e0362f;
+}
+.composer[data-context-level]::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 0;
+  /* 2 px PLEINS, pas 1 px a demi-opacite : mesure utilisateur du 2026-09-04 — un filet d'un pixel
+     translucide ne se voit tout simplement pas a l'ecran. Discret veut dire fin et sobre, pas
+     invisible. Le palier critique gagne un pixel de plus. */
+  height: 2px;
+  width: var(--context-fill, 0%);
+  background: var(--context-teinte);
+  opacity: 0.92;
+  pointer-events: none;
+  transition:
+    width 220ms ease,
+    opacity 220ms ease;
+}
+.composer[data-context-level='critique']::before {
+  height: 3px;
+  opacity: 1;
+}
+
 /* DIRECTION C1 « NU » (choix utilisateur, conv-167) : la barre de prompting n'est plus une boite.
    Le cadre et le fond opaque venaient de la rangee unique, ou il fallait dessiner la zone de saisie ;
    en deux etages le filet entre les etages suffit a la delimiter. Le focus se signale sur ce filet
@@ -3729,6 +3774,8 @@ ol.md-list li {
 /* UN SEUL interrupteur (demande du 2026-08-30) : liste <-> mosaique, pas deux boutons segmentes. */
 /* « Tout fermer » : n'apparait qu'en mosaique ET s'il reste des fenetres ouvertes. */
 .conv-mosaic-close-all {
+  flex: 0 0 auto;
+  white-space: nowrap;
   padding: 2px 8px;
   border: 1px solid rgba(212, 169, 79, 0.35);
   border-radius: 999px;
@@ -3748,6 +3795,7 @@ ol.md-list li {
 
 .conv-view-toggle {
   position: relative;
+  flex: 0 0 34px;
   width: 34px;
   height: 18px;
   padding: 0;
@@ -4027,3 +4075,17 @@ ol.md-list li {
 .composer-dictee-gain {position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;cursor:ew-resize}
 .composer-dictee-gain::-webkit-slider-runnable-track {height:6px;background:transparent}
 .composer-dictee-gain::-webkit-slider-thumb {margin-top:-3px;width:12px;height:12px;border-radius:50%;background:#ffffff;box-shadow:0 0 0 1px rgba(0,0,0,.45)}
+
+/* APERCU DE DICTEE DANS LE CHAMP (2026-09-03) : le texte provisoire est peint par un calque pose
+   sur le champ, memes police et marges. Le texte deja saisi y est invisible et ne sert qu a pousser
+   l apercu au curseur. Quand la phrase est reconnue, elle entre en blanc au MEME endroit : aucun
+   saut de ligne, aucun texte en dessous. */
+.composer-input-row {position:relative}
+.composer-dictee-apercu {position:absolute;top:0;left:0;right:0;z-index:1;margin:0;padding:9px 11px;font-size:13px;line-height:inherit;font-style:normal;white-space:pre-wrap;overflow-wrap:anywhere;pointer-events:none}
+.composer-dictee-apercu-place {color:transparent}
+.composer-dictee-apercu-texte {color:rgba(221,227,238,.5);transition:opacity 140ms ease}
+
+/* CALAGE VERTICAL DU CALQUE (2026-09-04) : le champ et le calque doivent partager EXACTEMENT la
+   meme hauteur de ligne, sinon la premiere ligne du gris tombe plus bas que le texte blanc. */
+.composer-input-row textarea.input {line-height:1.45}
+.composer-dictee-apercu {line-height:1.45}

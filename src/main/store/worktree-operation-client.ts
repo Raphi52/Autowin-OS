@@ -30,7 +30,7 @@ export class WorktreeOperationClient {
       workerFactory?: () => WorktreeOperationWorkerLike
     } = {}
   ) {
-    this.timeoutMs = options.timeoutMs ?? 30_000
+    this.timeoutMs = options.timeoutMs ?? Number(process.env.AUTOWIN_WORKTREE_TIMEOUT_MS ?? 180_000)
     this.workerFactory = options.workerFactory ?? (() => new Worker(workerPath))
   }
 

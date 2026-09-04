@@ -333,3 +333,39 @@ describe('un fichier reçu trop court n’est PAS une installation', () => {
     expect(service.etat().installe).toBe(false)
   })
 })
+
+describe('analyserTranscription — hallucinations de whisper', () => {
+  it('retire les didascalies entre étoiles et garde la parole', () => {
+    expect(analyserTranscription('*soupir* *soupir* C’est parti *Bip* *Bip*')).toBe('C’est parti')
+  })
+
+  it('retire les crédits de sous-titres inventés', () => {
+    expect(analyserTranscription('*Sous-titres par la communauté d’Amara.org*')).toBe('')
+    expect(analyserTranscription('Merci d’avoir regardé cette vidéo !')).toBe('')
+    expect(analyserTranscription('Générique de fin')).toBe('')
+  })
+
+  it('replie les boucles de mots', () => {
+    expect(analyserTranscription('la la la la la la')).toBe('la la')
+    expect(analyserTranscription('très très bien')).toBe('très très bien')
+  })
+
+  it('rend vide quand il ne reste que de la ponctuation', () => {
+    expect(analyserTranscription('[00:00:00.000 --> 00:00:04.000]   ... !')).toBe('')
+    expect(analyserTranscription('(Rire)')).toBe('')
+  })
+})
+
+describe('analyserTranscription — onomatopées répétées', () => {
+  it('retire les bruits répétés entre parenthèses et garde la phrase', () => {
+    expect(
+      analyserTranscription('*Brrr* [Bip] [Bip] *Rire* Je vais voir. (bip-bip-bip-bip) *Rires*')
+    ).toBe('Je vais voir.')
+  })
+
+  it('garde une parenthèse qui porte de la parole', () => {
+    expect(analyserTranscription('Prends le dossier (celui de mardi) et vérifie.')).toBe(
+      'Prends le dossier (celui de mardi) et vérifie.'
+    )
+  })
+})

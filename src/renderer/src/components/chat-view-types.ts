@@ -136,7 +136,18 @@ export type RunEntry = {
 }
 export type CheckpointEntry = { id: string; runId: string; createdAt: string }
 
-export type QueuedDirective = { id: number; text: string; mode?: 'btw' }
+/**
+ * `attachments` : une IMAGE tapee pendant un tour ne peut pas etre injectee (l'injection ne
+ * transporte qu'un texte). Le message part donc en FILE avec ses pieces jointes, et le drain de
+ * fin de tour les renvoie telles quelles — sans cela l'image restait dans le composer et n'etait
+ * JAMAIS envoyee (constate le 2026-09-04).
+ */
+export type QueuedDirective = {
+  id: number
+  text: string
+  mode?: 'btw'
+  attachments?: ChatAttachment[]
+}
 export type DirectiveReceipt = {
   id: number
   text: string

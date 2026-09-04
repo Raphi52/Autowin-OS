@@ -160,6 +160,27 @@ describe('Dictee', () => {
     await dictee.arreter()
   })
 
+  /**
+   * DEFAUT MESURE (2026-09-03) : « des morceaux de ma phrase apparaissent et disparaissent ».
+   * Chaque apercu re-transcrit un audio qui s'allonge ; un resultat PLUS COURT est une hesitation
+   * du moteur, pas une correction. L'afficher ferait reculer le texte sous les yeux.
+   */
+  it('ne fait jamais RECULER l’aperçu vers un texte plus court', async () => {
+    const sorties = ['bonjour tout le monde', 'bonjour', 'bonjour tout le monde ici']
+    let i = 0
+    const { deps, pousser } = fauxDeps(vi.fn(async (_wav: Uint8Array) => sorties[i++] ?? 'fin'))
+    const apercus: string[] = []
+    const dictee = new Dictee({ ...deps, onTexte: () => {}, onApercu: (t) => apercus.push(t) })
+    await dictee.demarrer()
+    for (let n = 0; n < 6; n += 1) {
+      pousser(parole(16_000))
+      await new Promise((r) => setTimeout(r, 0))
+    }
+    expect(apercus).not.toContain('bonjour')
+    expect(apercus[0]).toBe('bonjour tout le monde')
+    await dictee.arreter()
+  })
+
   it('n’empile pas deux aperçus en parallèle', async () => {
     let enVol = 0
     let max = 0

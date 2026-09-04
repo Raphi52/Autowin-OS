@@ -264,9 +264,13 @@ function ContextGaugeRow({
  * cote. On interpole ici les MEMES arrets que `.model-quota-bar-fill`.
  */
 const QUOTA_STOPS: readonly (readonly [number, readonly [number, number, number]])[] = [
-  [0, [239, 68, 68]],
-  [35, [245, 158, 11]],
-  [65, [250, 204, 21]],
+  [0, [184, 32, 26]],
+  [12, [184, 32, 26]],
+  [30, [224, 100, 30]],
+  [42, [224, 100, 30]],
+  [56, [239, 192, 35]],
+  [68, [239, 192, 35]],
+  [86, [53, 208, 127]],
   [100, [53, 208, 127]]
 ]
 

@@ -4,7 +4,7 @@
  * les lettres n'apparaissent pas, puis tombent d'un coup.
  *
  * Le contrat de l'extraction :
- * - le TEXTE en cours de frappe (et les palettes `/` et `@`, qui n'en dépendent que) vit ICI ;
+ * - le TEXTE en cours de frappe (et les palettes `/` et `;`, qui n'en dépendent que) vit ICI ;
  * - les BROUILLONS restent à ChatView (une carte par conversation) : chaque frappe lui est notifiée
  *   par `onDraftInput`, qui écrit la carte SANS re-rendre la vue ;
  * - ChatView réimpose une valeur (changement de conversation, préremplissage) via le handle
@@ -17,7 +17,6 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
   type ReactNode
@@ -29,7 +28,6 @@ import {
   type MentionCandidate,
   type MentionSources
 } from './chat-mentions'
-import { buildScopeEcho, formatScopeEcho } from './chat-scope-echo'
 import {
   Dictee,
   GAIN_MAX,
@@ -186,6 +184,17 @@ export interface ChatComposerProps {
   errorNode?: ReactNode
   cadrageNode?: ReactNode
   frictionNode?: ReactNode
+  /**
+   * LA JAUGE DE CONTEXTE, PEINTE SUR LE FILET AU-DESSUS DU CHAMP (demande utilisateur conv-240,
+   * « joindre l'utile a l'agreable », reference claude.exe). Part occupee de la fenetre du modele,
+   * entre 0 et 1. `undefined` = on ne SAIT pas (fenetre non declaree, entree non mesuree) : le
+   * filet reste alors gris, il ne montre PAS 0 % — ce serait affirmer que le fil est vide.
+   */
+  contextRatio?: number
+  /** Palier deja decide par `contextGauge()` : la vue peint, elle ne juge pas. */
+  contextLevel?: 'ok' | 'tendu' | 'critique'
+  /** Libelle de survol, ecrit par le parent qui detient les nombres. */
+  contextTitle?: string
   leadingNode?: ReactNode
   stopNode?: ReactNode
   metaNode?: ReactNode
@@ -229,11 +238,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       presenceRef.current = present
       onPresence(present)
     }, [present, onPresence])
-
-    const scopeEcho = useMemo(
-      () => buildScopeEcho(input, props.mentionSources),
-      [input, props.mentionSources]
-    )
 
     function pousserTexte(value: string): void {
       setInput(value)
@@ -350,7 +354,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
           transcrire,
           (texte) => {
             // Micro encore ouvert : le texte apparaît dans la barre de prompt pendant qu'on parle.
-            if (dicteeRef.current === dictee) ecrireDictee(texte)
+            if (dicteeRef.current === dictee) {ecrireDictee(texte); setDicteeApercu('');}
           },
           (apercu) => {
             if (dicteeRef.current === dictee) setDicteeApercu(apercu)
@@ -381,19 +385,26 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const slashVisibles = slashDismissed ? [] : slashItems
 
     return (
-      <div className="composer">
+      <div
+        className="composer"
+        /* Le filet qui separe le fil du champ EST la jauge : aucun element ajoute, aucune place
+           prise. La var reste absente quand l'occupation est inconnue -> filet gris inchange. */
+        style={
+          props.contextRatio != null
+            ? ({
+                '--context-fill': `${Math.min(100, Math.max(0, props.contextRatio * 100))}%`
+              } as React.CSSProperties)
+            : undefined
+        }
+        data-context-level={props.contextRatio != null ? (props.contextLevel ?? 'ok') : undefined}
+        data-testid="composer-context-rule"
+        title={props.contextRatio != null ? props.contextTitle : undefined}
+      >
         <div className="composer-field">
           {props.attachmentsNode}
           {props.errorNode}
           {props.cadrageNode}
           {props.frictionNode}
-          {/* Écho de PÉRIMÈTRE : ce que le tour va probablement faire, et sur quoi — AVANT
-              l'envoi, pour pouvoir corriger la visée plutôt que de découvrir l'écart après. */}
-          {scopeEcho && (
-            <div className="composer-scope-echo" data-testid="scope-echo">
-              <span aria-hidden="true">◎</span> {formatScopeEcho(scopeEcho)}
-            </div>
-          )}
           {mentionsVisibles.length > 0 &&
             (() => {
               const sel = Math.min(mentionIndex, mentionsVisibles.length - 1)
@@ -417,7 +428,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                       }}
                     >
                       <span className="slash-name mono">
-                        {c.kind === 'run' ? '@run' : '@fichier'} {c.label}
+                        {c.kind === 'run' ? ';run' : ';fichier'} {c.label}
                       </span>
                       {c.hint && <span className="slash-hint">{c.hint}</span>}
                     </li>

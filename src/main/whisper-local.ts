@@ -245,21 +245,79 @@ const LIGNE_JOURNAL =
   /^(whisper_|ggml_|main:|system_info:|operator\(\)|load_|init:|gpu_|error:|warning:|\s*$)/i
 const HORODATAGE = /^\s*\[\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}\]\s*/
 /** Les annotations de bruit : whisper les rend quand il n'y a PAS de parole. */
-const BRUIT = /^[[(](blank_audio|silence|music|musique|sons?|applaudissements|rires|bruit)[\])]$/i
+const BRUIT =
+  /^(blank_audio|silence|music|musique|sons?|applaudissements|rires?|rire|bruit|soupirs?|toux|bip|bips|g[ée]n[ée]rique(\s+de\s+(fin|d[ée]but))?|bruit\s+de\s+la\s+musique|sous-titres?.*|inaudible)$/i
+
+/**
+ * Les phrases de CRÉDIT que whisper invente sur du silence ou du bruit : elles viennent des
+ * sous-titres YouTube de son corpus d'entraînement, jamais du micro.
+ */
+const CREDIT =
+  /(amara\.org|soustitreur|sous-titr(es?|age|eur)|merci\s+d['’]avoir\s+regard[ée]|abonnez-vous|like\s+et\s+abonne|g[ée]n[ée]rique\s+de\s+fin|subtitles?\s+by|transcri(ption|t)\s+par)/i
+
+/** Une annotation entre *…*, (…) ou […] dont le contenu est du bruit, n'importe où dans la ligne. */
+const ANNOTATION = /\*([^*]{1,60})\*|\(([^()]{1,60})\)|\[([^\][]{1,60})\]/g
+
+/** « bip-bip-bip-bip » : une onomatopée répétée reste la MÊME annotation de bruit. */
+const ONOMATOPEE =
+  /^(br+|hm+|mm+|pf+|euh+|ah+|oh+|bi+p|tic[- ]?tac|toc|clic|clac|sniff|snif|vroum|boum|tousse)$/i
+
+/** Replie « bip-bip-bip » sur « bip » pour reconnaître le bruit derrière la répétition. */
+function noyauAnnotation(dedans: string): string {
+  const jetons = dedans.split(/[-–—\s]+/).filter((j) => j !== '')
+  if (jetons.length === 0) return dedans
+  const premier = jetons[0]!.toLowerCase()
+  return jetons.every((j) => j.toLowerCase() === premier) ? premier : dedans
+}
+
+function retirerAnnotations(ligne: string): string {
+  return ligne.replace(ANNOTATION, (entier, a, b, c) => {
+    const dedans = (a ?? b ?? c ?? '').trim()
+    if (dedans === '') return ' '
+    const noyau = noyauAnnotation(dedans)
+    if (BRUIT.test(noyau) || ONOMATOPEE.test(noyau) || CREDIT.test(dedans)) return ' '
+    // Une annotation entre étoiles est TOUJOURS une didascalie : whisper ne l'écrit pas pour de la parole.
+    return entier.startsWith('*') ? ' ' : entier
+  })
+}
+
+/** « la la la la la » : whisper boucle sur un même mot quand l'audio ne porte rien. */
+function replierBoucles(texte: string): string {
+  const mots = texte.split(' ')
+  const gardes: string[] = []
+  let repetitions = 0
+  for (const mot of mots) {
+    const precedent = gardes[gardes.length - 1]
+    if (precedent !== undefined && precedent.toLowerCase() === mot.toLowerCase()) {
+      repetitions += 1
+      if (repetitions >= 2) continue
+    } else repetitions = 0
+    gardes.push(mot)
+  }
+  return gardes.join(' ')
+}
+
+/** Ce qui reste après nettoyage mais ne porte aucune parole : ponctuation seule, syllabe unique. */
+const SANS_PAROLE = /^[\s.,;:!?…«»"'’\-–—()[\]]*$/
 
 /**
  * De la sortie brute de la CLI à la PAROLE. Sans ce filtre, le journal du moteur (« loading
- * model… ») partirait en commande vers Jarvis — un ordre inventé à partir de rien.
+ * model… ») et les hallucinations de whisper (didascalies, crédits de sous-titres, boucles)
+ * partiraient en commande vers Jarvis — un ordre inventé à partir de rien.
  */
 export function analyserTranscription(sortie: string): string {
   const morceaux: string[] = []
   for (const brute of sortie.split(/\r?\n/)) {
     const ligne = brute.replace(HORODATAGE, '').trim()
     if (ligne === '' || LIGNE_JOURNAL.test(ligne)) continue
-    if (BRUIT.test(ligne)) continue
-    morceaux.push(ligne)
+    if (CREDIT.test(ligne)) continue
+    const propre = retirerAnnotations(ligne).replace(/\s+/g, ' ').trim()
+    if (propre === '' || SANS_PAROLE.test(propre)) continue
+    if (BRUIT.test(propre)) continue
+    morceaux.push(propre)
   }
-  return morceaux.join(' ').replace(/\s+/g, ' ').trim()
+  const texte = replierBoucles(morceaux.join(' ').replace(/\s+/g, ' ').trim())
+  return SANS_PAROLE.test(texte) ? '' : texte
 }
 
 export type Executeur = (

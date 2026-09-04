@@ -111,9 +111,33 @@ describe('commandResultSucceeded — un refus dans la charge compte comme echec'
     expect(commandResultSucceeded({ ok: true, data: { refused: true } })).toBe(false)
   })
 
+  /*
+   * MEME FAMILLE, CHAMPS MANQUANTS — mesure conv-244 (2026-09-04) sur les traces reelles : une
+   * commande `run` refusee rend `{ok:true, data:{lance:false, detail:"Commande refusee : ..."}}`
+   * et `restart_app` indisponible rend `{redemarre:false}`. RIEN n'a tourne, pourtant la trace
+   * causale les enregistrait en `status:"completed"` : 8 refus de ce type comptes comme des
+   * reussites. Le fait porteur est ce que la commande dit d'ELLE-MEME, jamais le transport.
+   */
+  it('lance:false et redemarre:false sont des echecs', () => {
+    expect(
+      commandResultSucceeded({
+        ok: true,
+        data: { lance: false, detail: 'Commande refusée : enchaînement shell refusé' }
+      })
+    ).toBe(false)
+    expect(
+      commandResultSucceeded({
+        ok: true,
+        data: { redemarre: false, detail: 'Redémarrage indisponible : aucun lanceur câblé.' }
+      })
+    ).toBe(false)
+  })
+
   it('une charge sans marqueur de refus reste une reussite', () => {
     expect(commandResultSucceeded({ ok: true, data: { stored: true } })).toBe(true)
     expect(commandResultSucceeded({ ok: true, data: { allowed: true, exitCode: 0 } })).toBe(true)
     expect(commandResultSucceeded({ ok: true, data: { lu: true, totalLignes: 12 } })).toBe(true)
+    expect(commandResultSucceeded({ ok: true, data: { lance: true, exitCode: 0 } })).toBe(true)
+    expect(commandResultSucceeded({ ok: true, data: { redemarre: true } })).toBe(true)
   })
 })

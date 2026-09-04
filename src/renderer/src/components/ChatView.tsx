@@ -1256,7 +1256,12 @@ export function ChatView({
    * `mode` n'etait alors lu que pour l'affichage, donc le clic n'avait aucun effet durable.
    * Un nouvel envoi BTW, lui, se range derriere les BTW deja presents (ordre d'arrivee conserve).
    */
-  function enqueueMessage(id: string, text: string, mode?: QueuedDirective['mode']): void {
+  function enqueueMessage(
+    id: string,
+    text: string,
+    mode?: QueuedDirective['mode'],
+    attachments?: ChatAttachment[]
+  ): void {
     // Un texte qui arrive en file APRES un Stop est un geste explicite de l'utilisateur : il LEVE le
     // gel one-shot pose par Stop. Sans cette ligne, « stop puis j'ecris dans la foulee » perdait le
     // message — le tour n'etait pas encore retombe, l'injection echouait, la file recevait le texte
@@ -1264,7 +1269,12 @@ export function ChatView({
     // arreter QUE la relance automatique de ce qui restait en file, jamais une nouvelle demande.
     stoppedQueueDrainRef.current.delete(id)
     const current = queueRef.current.get(id) ?? []
-    const entry = { id: nextQueueEntryIdRef.current++, text, mode }
+    const entry: QueuedDirective = {
+      id: nextQueueEntryIdRef.current++,
+      text,
+      mode,
+      ...(attachments && attachments.length ? { attachments } : {})
+    }
     if (mode === 'btw') {
       setConversationQueue(id, [...current, entry])
       return
@@ -1678,9 +1688,28 @@ export function ChatView({
       }
       if (e.kind === 'done' || e.kind === 'error') setConversationBusy(conversationId, false)
       if (e.kind === 'done' && e.usage) {
-        // `inputTokens` du dernier tour EST l'occupation courante : le prefixe est renvoye a chaque
-        // appel, donc le dernier tour porte le fil entier. Une somme des tours le compterait N fois.
-        const jauge = contextGauge(e.usage)
+        /*
+        OCCUPATION = ENTREE DU DERNIER APPEL, pas le cumul du tour.
+
+        `usage.inputTokens` somme toutes les iterations : juste pour la depense, faux pour la
+        fenetre, car le prefixe est renvoye a chaque appel. Un tour de neuf appels rendait
+        578 207 tokens pour une fenetre de 200 000 et la jauge restait collee a 100 %
+        (mesure du 2026-09-04, journal d'activite de conv-240). `derniereEntree` porte donc ce que
+        le DERNIER appel a recu ; repli sur le cumul pour les tours d'avant ce correctif.
+        */
+        const usage = e.usage as typeof e.usage & {
+          derniereEntree?: number
+          derniereEntreeCache?: number
+          model?: string
+          provider?: string
+        }
+        const jauge = contextGauge({
+          inputTokens: usage.derniereEntree ?? usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          cacheReadTokens: usage.derniereEntreeCache,
+          model: usage.model,
+          provider: usage.provider
+        })
         if (jauge) setContextGauges((current) => ({ ...current, [conversationId]: jauge }))
       }
       if (e.kind === 'stream-reset' && e.streamId)
@@ -2727,6 +2756,17 @@ export function ChatView({
     const id = cible ?? activeRef.current
     if (!id) return
     const occupe = cible ? busyConversationsRef.current.has(cible) : busy
+    // PIECES JOINTES : l'injection ne transporte qu'un texte. Injecter ici laisserait l'image dans
+    // le composer, donc jamais envoyee (constate le 2026-09-04). Le message part en file AVEC ses
+    // pieces jointes et le drain de fin de tour l'envoie en entier.
+    const jointes = getComposerDraft(cleDraft).attachments
+    if (occupe && jointes.length > 0) {
+      journaliserSaisie(id, text, 'message')
+      setDraftInput(cleDraft, '')
+      setDraftAttachments(cleDraft, () => [])
+      enqueueMessage(id, text, replimode, jointes)
+      return
+    }
     if (!occupe) {
       // aucun tour en cours → le texte part comme message normal
       void send(text, cible ? { targetConversationId: cible } : undefined)
@@ -2786,7 +2826,12 @@ export function ChatView({
     const [nextMessage, ...rest] = queued
     setConversationQueue(id, rest)
     // Le drain n'est PAS un geste de l'utilisateur : il ne doit rien prendre au composer.
-    void send(nextMessage.text, { keepComposerDraft: true })
+    void send(nextMessage.text, {
+      keepComposerDraft: true,
+      ...(nextMessage.attachments?.length
+        ? { piecesJointesImposees: nextMessage.attachments }
+        : {})
+    })
     // `activeId` AUTANT que `busy` : une file remplie pendant le tour de A survit à un aller-retour
     // vers une autre conversation. Le tour de A se terminant PENDANT l'absence, la transition
     // busy→false ne concerne plus A — sans `activeId` la file restait échouée là, et il fallait
@@ -3645,8 +3690,12 @@ export function ChatView({
               onClick={() => stopPilotTurn(id)}
               disabled={interruptingConversations.has(id)}
               title="Arrêter ce tour"
+              aria-label="Arrêter ce tour"
             >
-              {interruptingConversations.has(id) ? 'Arrêt…' : '■ Stop'}
+              {/* Fenetre etroite : le carre SEUL (demande du 2026-09-04), pas le libelle. */}
+              <span className="composer-btn-glyph" aria-hidden="true">
+                ■
+              </span>
             </button>
           ) : null
         }
@@ -5015,6 +5064,21 @@ export function ChatView({
             skillCommands={skillCommands}
             ghostRecommendation={ghostRecommendation}
             placeholderPendantTour={busy && activeId !== null}
+            /* Le filet au-dessus du champ porte l'occupation de la fenetre du modele. Meme source
+               que la jauge de l'en-tete : `contextGauges`, jamais un calcul refait ici. */
+            contextRatio={
+              activeId != null ? contextGauges[activeId]?.ratio : undefined
+            }
+            contextLevel={activeId != null ? contextGauges[activeId]?.level : undefined}
+            contextTitle={(() => {
+              const j = activeId != null ? contextGauges[activeId] : undefined
+              if (!j) return undefined
+              return (
+                `Contexte : ${j.used.toLocaleString('fr-FR')} tokens sur ` +
+                `${j.limit.toLocaleString('fr-FR')} (${Math.round(j.ratio * 100)} %), dont ` +
+                `${j.cacheRead.toLocaleString('fr-FR')} relus du cache.`
+              )
+            })()}
             onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
             onDraftPresence={setBrouillonPresent}
             onBtw={handleBtw}
