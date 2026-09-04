@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { SettingsSection } from '../tabs'
 import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView } from './CapabilitiesView'
+import { ExecutionWorkspaceSettings } from './ExecutionWorkspaceSettings'
 import { InterfaceView } from './InterfaceView'
 import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
 import { ShadowRoutingPilotSettings } from './ShadowRoutingPilotSettings'
@@ -236,6 +237,7 @@ export function SettingsView({
             </p>
           </section>
         )}
+        {section === 'preflight' && <ExecutionWorkspaceSettings />}
         {section === 'preflight' && (
           <section
             className="settings-preflight surface-panel"

@@ -12,6 +12,7 @@ import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
 import type {
   ChatAttachment,
   AgentTopology,
+  ExecutionWorkspaceState,
   NativePreflightTrace
 } from '../shared/preload-contracts'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
@@ -333,6 +334,9 @@ interface ChatApi {
     enabled: boolean
   ) => Promise<{ items: CapabilityItem[]; restartRequired: true }>
   chooseBehaviourWorkspace: () => Promise<string | null>
+  executionWorkspace: () => Promise<ExecutionWorkspaceState>
+  chooseExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
+  resetExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
   onModelQuestion: (cb: (question: PendingModelQuestion) => void) => () => void
   answerModelQuestion: (id: string, answer: string) => Promise<{ ok: true }>
   toolUsage: () => Promise<

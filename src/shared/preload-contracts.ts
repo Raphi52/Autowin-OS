@@ -66,3 +66,15 @@ export interface NativePreflightTrace {
   toolCount: number
   request: Record<string, unknown>
 }
+
+/** Le dossier de travail : le dépôt sur lequel les runs s'exécutent (vu depuis l'interface). */
+export interface ExecutionWorkspaceState {
+  /** Le dossier ACTIF pour cette session — figé au démarrage. */
+  path: string
+  /** Le dossier choisi et enregistré, s'il y en a un. */
+  chosen: string | null
+  /** Faux = pas un dépôt git : les copies de travail isolées seront désactivées. */
+  isGitRepo: boolean
+  /** Vrai quand le choix enregistré diffère de l'actif : il faut redémarrer. */
+  restartRequired: boolean
+}

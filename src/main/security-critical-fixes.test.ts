@@ -345,7 +345,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     sort : chaque identifiant est valide contre `^[0-9A-Fa-f]{16,512}$` cote main AVANT de
     //     partir dans un appel COM, et ils voyagent par un fichier temporaire.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(167)
+    expect(handlers).toHaveLength(170)
     expect(unguarded).toEqual([])
   })
 

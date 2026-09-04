@@ -3,6 +3,7 @@ import type { GitGraphSnapshot } from '../shared/git-graph'
 import type {
   ChatAttachment,
   AgentTopology,
+  ExecutionWorkspaceState,
   NativePreflightTrace
 } from '../shared/preload-contracts'
 import type {
@@ -392,6 +393,12 @@ const api = {
     ipcRenderer.invoke('os:capabilities:tools:set', name, enabled),
   chooseBehaviourWorkspace: (): Promise<string | null> =>
     ipcRenderer.invoke('os:behaviour:choose-workspace'),
+  executionWorkspace: (): Promise<ExecutionWorkspaceState> =>
+    ipcRenderer.invoke('os:execution-workspace'),
+  chooseExecutionWorkspace: (): Promise<ExecutionWorkspaceState> =>
+    ipcRenderer.invoke('os:execution-workspace:choose'),
+  resetExecutionWorkspace: (): Promise<ExecutionWorkspaceState> =>
+    ipcRenderer.invoke('os:execution-workspace:reset'),
   onModelQuestion: (cb: (question: PendingModelQuestion) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, question: PendingModelQuestion): void =>
       cb(question)
@@ -415,8 +422,7 @@ const api = {
   // Voix NEURONALE locale (Piper) : téléchargée sur clic, prononcée hors ligne ensuite.
   piperEtat: (): Promise<EtatPiper> => ipcRenderer.invoke('os:piper:etat'),
   piperInstaller: (): Promise<EtatPiper> => ipcRenderer.invoke('os:piper:installer'),
-  piperParler: (texte: string): Promise<Uint8Array> =>
-    ipcRenderer.invoke('os:piper:parler', texte),
+  piperParler: (texte: string): Promise<Uint8Array> => ipcRenderer.invoke('os:piper:parler', texte),
   // Enregistrements parlés : la fenêtre ne connaît qu'un identifiant de session, jamais un chemin.
   transcriptDemarrer: (): Promise<{ id: string; nom: string; chemin: string }> =>
     ipcRenderer.invoke('os:transcript:demarrer'),

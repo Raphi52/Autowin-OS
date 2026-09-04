@@ -104,11 +104,17 @@ import {
   type RecoveredDetachedUsageSettlement
 } from './runs/run-reattach'
 import type { LanceurCommandeSkill } from './skill-node-tools'
+import {
+  executionWorkspacePreferenceFile,
+  readExecutionWorkspacePreference
+} from './execution-workspace-preference'
 
 interface ExecutionWorkspaceInput {
   cwd?: string
   execPath?: string
   configured?: string
+  /** Fichier du choix fait depuis l'interface — injectable pour les tests. */
+  preferenceFile?: string
 }
 
 function gitWorkspaceFrom(start: string): string | undefined {
@@ -124,6 +130,12 @@ function gitWorkspaceFrom(start: string): string | undefined {
 export function resolveExecutionWorkspace(input: ExecutionWorkspaceInput = {}): string {
   const configured = input.configured ?? process.env[AUTOWIN_WORKSPACE_ENV]
   if (configured && existsSync(configured)) return resolve(configured)
+  // Le dossier CHOISI depuis l'interface passe avant toute detection : c'est une decision
+  // explicite de l'utilisateur. Absent ou disparu -> les replis d'avant, inchanges.
+  const chosen = readExecutionWorkspacePreference(
+    input.preferenceFile ?? executionWorkspacePreferenceFile()
+  )
+  if (chosen) return chosen
   const cwdWorkspace = gitWorkspaceFrom(input.cwd ?? process.cwd())
   if (cwdWorkspace) return cwdWorkspace
   const executableWorkspace = gitWorkspaceFrom(dirname(input.execPath ?? process.execPath))

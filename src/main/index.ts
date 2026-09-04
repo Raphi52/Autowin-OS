@@ -73,6 +73,11 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import type { ExecutionEvidence, ProviderAdapter } from './providers/types'
 import { guardBrokenProcessPipes } from './process-stream-guards'
 import { AutowinOS } from './os'
+import {
+  clearExecutionWorkspacePreference,
+  readExecutionWorkspacePreference,
+  writeExecutionWorkspacePreference
+} from './execution-workspace-preference'
 import { projectContextBlock } from './context-files'
 import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort } from './cdp-port'
 import { execFileSync } from 'node:child_process'
@@ -2208,6 +2213,44 @@ Le fil reprend ensuite normalement.`
   registerCapabilitiesIpc({
     lireConversationActive: () => bus.activeConversationId,
     broadcast
+  })
+
+  // Le DOSSIER DE TRAVAIL : le depot sur lequel les runs s'executent. Distinct du selecteur de
+  // BehaviourView juste en dessous, qui ne sert qu'a INSPECTER les fichiers d'instructions d'un
+  // dossier sans rien changer a l'execution.
+  const executionWorkspaceState = (): {
+    path: string
+    chosen: string | null
+    isGitRepo: boolean
+    restartRequired: boolean
+  } => {
+    const chosen = readExecutionWorkspacePreference() ?? null
+    return {
+      path: os.executionWorkspace,
+      chosen,
+      isGitRepo: existsSync(join(os.executionWorkspace, '.git')),
+      // Le workspace est fige au demarrage : un choix different de l'actif exige un redemarrage.
+      restartRequired: chosen !== null && chosen !== os.executionWorkspace
+    }
+  }
+
+  ipcMain.handle('os:execution-workspace', (event) => {
+    assertTrustedRendererSender(event, 'Dossier de travail')
+    return executionWorkspaceState()
+  })
+
+  ipcMain.handle('os:execution-workspace:choose', async (event) => {
+    assertTrustedRendererSender(event, 'Dossier de travail')
+    const selected = await pickDirectory(event.sender)
+    if (!selected) return executionWorkspaceState()
+    writeExecutionWorkspacePreference(selected)
+    return executionWorkspaceState()
+  })
+
+  ipcMain.handle('os:execution-workspace:reset', (event) => {
+    assertTrustedRendererSender(event, 'Dossier de travail')
+    clearExecutionWorkspacePreference()
+    return executionWorkspaceState()
   })
 
   ipcMain.handle('os:behaviour:choose-workspace', async (event) => {

@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
+// Panneau autonome (ses propres tests) : neutralise ici pour que les assertions de cette suite
+// portent bien sur le panneau Diagnostic et non sur le voisin.
+vi.mock('./ExecutionWorkspaceSettings', () => ({ ExecutionWorkspaceSettings: () => null }))
 vi.mock('./OrchestrationBudgetSettings', async () => {
   const { createElement } = await import('react')
   return {
