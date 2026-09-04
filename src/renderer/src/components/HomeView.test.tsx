@@ -446,6 +446,34 @@ describe('widgets Outlook', () => {
     const api = (window as unknown as { api: { outlookSnapshot: ReturnType<typeof vi.fn> } }).api
     expect(api.outlookSnapshot).not.toHaveBeenCalled()
   })
+
+  it('RELIT Outlook quand on revient dans la fenetre', async () => {
+    // Demande de l'utilisateur du 2026-09-04 : « je voudrais aussi que ca s'actualise
+    // automatiquement ». L'intervalle seul ne suffit pas : Windows ralentit fortement les minuteries
+    // d'une fenetre en arriere-plan, et revenir dessus est justement l'instant ou on la regarde.
+    await mount()
+    const api = (window as unknown as { api: { outlookSnapshot: ReturnType<typeof vi.fn> } }).api
+    expect(api.outlookSnapshot).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(new Date(NOW + 60_000))
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    expect(api.outlookSnapshot).toHaveBeenCalledTimes(2)
+    // `true` : sans forcer, la passerelle rendrait l'instantane deja en cache -- donc rien de neuf.
+    expect(api.outlookSnapshot).toHaveBeenLastCalledWith(true)
+  })
+
+  it('n appelle PAS Outlook a chaque aller-retour de fenetre', async () => {
+    // Alterner entre deux applications lancerait un dialogue COM par bascule.
+    await mount()
+    const api = (window as unknown as { api: { outlookSnapshot: ReturnType<typeof vi.fn> } }).api
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      window.dispatchEvent(new Event('focus'))
+    })
+    expect(api.outlookSnapshot).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('la disposition personnelle survit a un redimensionnement', () => {

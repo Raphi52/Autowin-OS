@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   compterFilsNonLus,
   formatExchangeDate,
@@ -41,13 +41,22 @@ export function InterlocuteursWidget({
   now,
   onOuvrir,
   ouvertureEnCours,
-  onRepondre
+  onRepondre,
+  onMarquerLu
 }: {
   fils: Interlocuteur[]
   now: number
   onOuvrir: (id: string) => Promise<void>
   ouvertureEnCours: string | null
   onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  /**
+   * Marque des messages comme LUS dans Outlook. Ecrit dans la boite reelle.
+   *
+   * Appele par l'ouverture d'un fil, jamais par l'affichage de la liste : c'est le geste d'ouvrir qui
+   * vaut lecture. La relecture periodique, elle, ne doit RIEN marquer -- sinon la boite se viderait de
+   * ses non-lus pendant que l'utilisateur regarde ailleurs.
+   */
+  onMarquerLu: (ids: string[]) => Promise<{ ok: boolean; erreur?: string }>
 }): React.JSX.Element {
   const [etape, setEtape] = useState<Etape>({ ecran: 'contacts' })
 
@@ -125,6 +134,7 @@ export function InterlocuteursWidget({
         onOuvrir={onOuvrir}
         ouvertureEnCours={ouvertureEnCours}
         onRepondre={onRepondre}
+        onMarquerLu={onMarquerLu}
       />
     </div>
   )
@@ -319,7 +329,8 @@ function EcranConversation({
   now,
   onOuvrir,
   ouvertureEnCours,
-  onRepondre
+  onRepondre,
+  onMarquerLu
 }: {
   conversation: FilConversation
   contact: Interlocuteur
@@ -327,12 +338,57 @@ function EcranConversation({
   onOuvrir: (id: string) => Promise<void>
   ouvertureEnCours: string | null
   onRepondre: (id: string, corps: string) => Promise<{ ok: boolean; erreur?: string }>
+  onMarquerLu: (ids: string[]) => Promise<{ ok: boolean; erreur?: string }>
 }): React.JSX.Element {
   const [brouillon, setBrouillon] = useState('')
   const [confirme, setConfirme] = useState(false)
   const [envoiEnCours, setEnvoiEnCours] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
   const [envoye, setEnvoye] = useState(false)
+  const [erreurLu, setErreurLu] = useState<string | null>(null)
+  /**
+   * Les messages dont le marquage est DEJA parti. Une reference, pas un etat : elle ne doit rien
+   * re-rendre, et elle doit survivre au rendu que declenche la relecture d'Outlook.
+   *
+   * Sans elle, la relecture periodique rend un instantane encore marque non lu (le temps qu'Outlook
+   * enregistre), l'effet reconnait le meme message et relance un appel COM -- une boucle qui parle a
+   * Outlook toutes les deux minutes pour rien.
+   */
+  const dejaDemandes = useRef<Set<string>>(new Set())
+
+  /**
+   * OUVRIR un fil vaut le LIRE : ses messages non lus passent en lu dans Outlook.
+   *
+   * Le defaut corrige, releve par l'utilisateur le 2026-09-04 : « la notif reste meme apres avoir lu
+   * le message ». Le widget ne touchait rien dans la boite, donc la pastille ne partait qu'en ouvrant
+   * Outlook lui-meme.
+   *
+   * Mes propres envois sont exclus : un message que j'ai ecrit n'est pas a lire, et le marquer
+   * n'aurait aucun effet visible tout en parlant a Outlook pour rien.
+   */
+  useEffect(() => {
+    const aMarquer = conversation.messages
+      .filter((message) => message.nonLu && !message.deMoi && !dejaDemandes.current.has(message.id))
+      .map((message) => message.id)
+    if (aMarquer.length === 0) return
+    for (const id of aMarquer) dejaDemandes.current.add(id)
+    void (async () => {
+      try {
+        const resultat = await onMarquerLu(aMarquer)
+        if (resultat.ok) {
+          setErreurLu(null)
+          return
+        }
+        // Un echec AFFICHE, et rejouable : sans le retrait ci-dessous, une panne passagere d'Outlook
+        // condamnerait ces messages a rester non lus jusqu'au prochain demarrage de l'application.
+        for (const id of aMarquer) dejaDemandes.current.delete(id)
+        setErreurLu(resultat.erreur ?? "Outlook n'a pas pu marquer ces messages comme lus.")
+      } catch (error) {
+        for (const id of aMarquer) dejaDemandes.current.delete(id)
+        setErreurLu(error instanceof Error ? error.message : String(error))
+      }
+    })()
+  }, [conversation, onMarquerLu])
 
   /**
    * Le message auquel la réponse s'accroche : le dernier message REÇU du fil.
@@ -379,6 +435,13 @@ function EcranConversation({
           <Bulle key={message.id} message={message} contact={contact} />
         ))}
       </ol>
+      {erreurLu !== null ? (
+        // Nomme, pas avale : une pastille qui ne part pas se lit comme une panne du widget, alors que
+        // c'est Outlook qui a refuse l'ecriture.
+        <p className="home-error" role="status" data-testid="home-inter-lu-erreur">
+          Ces messages restent non lus dans Outlook : {erreurLu}
+        </p>
+      ) : null}
       <div className="home-chat__repondre" onPointerDown={(event) => event.stopPropagation()}>
         {ancre === null ? (
           <p className="home-hint">

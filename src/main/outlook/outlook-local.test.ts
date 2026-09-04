@@ -226,3 +226,97 @@ describe('reponse envoyee depuis l accueil', () => {
     await expect(readFile(chemin, 'utf8')).rejects.toThrow()
   })
 })
+
+describe('marquage lu depuis l accueil', () => {
+  it('passe les identifiants par un FICHIER, un par ligne', async () => {
+    // Un fil peut compter des dizaines de messages, et un identifiant Outlook fait jusqu'a 512
+    // caracteres : la ligne de commande a une longueur maximale, un fichier n'en a pas.
+    let luDansLeFichier = ''
+    const marqueur = vi.fn(async (_script: string, idsPath: string) => {
+      luDansLeFichier = await readFile(idsPath, 'utf8')
+      return 0
+    })
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), marqueur })
+    const resultat = await passerelle.markRead(['A'.repeat(32), 'B'.repeat(40)])
+    expect(resultat.ok).toBe(true)
+    expect(luDansLeFichier.split('\n')).toEqual(['A'.repeat(32), 'B'.repeat(40)])
+  })
+
+  it('vise le script de marquage, pas celui de lecture', async () => {
+    const marqueur = vi.fn(async (_script: string, _idsPath: string) => 0)
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), marqueur })
+    await passerelle.markRead(['A'.repeat(32)])
+    expect(marqueur.mock.calls[0][0]).toMatch(/outlook-local-marquer-lu\.ps1$/)
+  })
+
+  it('ecarte les identifiants qui n ont pas la forme d un element Outlook', async () => {
+    let lu = ''
+    const marqueur = vi.fn(async (_script: string, idsPath: string) => {
+      lu = await readFile(idsPath, 'utf8')
+      return 0
+    })
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), marqueur })
+    await passerelle.markRead(['../../evil', 'A'.repeat(32)])
+    expect(lu.split('\n')).toEqual(['A'.repeat(32)])
+  })
+
+  it('ne lance RIEN quand aucun identifiant n est utilisable', async () => {
+    const marqueur = vi.fn(async () => 0)
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), marqueur })
+    const resultat = await passerelle.markRead(['../../evil'])
+    expect(resultat.ok).toBe(false)
+    expect(marqueur).not.toHaveBeenCalled()
+  })
+
+  it('VIDE le cache apres un marquage : sinon la pastille reste une minute', async () => {
+    // C'est le defaut releve par l'utilisateur le 2026-09-04 : « la notif reste meme apres avoir lu
+    // le message ». Marquer lu dans Outlook sans oublier l'instantane deja lu ne changerait rien a
+    // l'ecran pendant toute la duree de vie du cache.
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    const marqueur = vi.fn(async () => 0)
+    const passerelle = new OutlookLocalGateway({
+      appRoot: await racineFactice(),
+      runner,
+      marqueur,
+      ttlMs: 600_000
+    })
+    await passerelle.snapshot()
+    await passerelle.markRead(['A'.repeat(32)])
+    await passerelle.snapshot()
+    expect(runner).toHaveBeenCalledTimes(2)
+  })
+
+  it('ne vide PAS le cache quand le marquage a echoue', async () => {
+    const runner = ecrivain(JSON.stringify({ ok: true, mails: [], evenements: [] }))
+    const marqueur = vi.fn(async () => 1)
+    const passerelle = new OutlookLocalGateway({
+      appRoot: await racineFactice(),
+      runner,
+      marqueur,
+      ttlMs: 600_000
+    })
+    await passerelle.snapshot()
+    expect((await passerelle.markRead(['A'.repeat(32)])).ok).toBe(false)
+    await passerelle.snapshot()
+    expect(runner).toHaveBeenCalledTimes(1)
+  })
+
+  it('nomme la cause quand les elements ont disparu', async () => {
+    const marqueur = vi.fn(async () => 3)
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), marqueur })
+    const resultat = await passerelle.markRead(['A'.repeat(32)])
+    expect(resultat.ok).toBe(false)
+    expect(resultat.erreur).toMatch(/n.existe/i)
+  })
+
+  it('efface le fichier d identifiants apres le marquage', async () => {
+    let chemin = ''
+    const marqueur = vi.fn(async (_s: string, idsPath: string) => {
+      chemin = idsPath
+      return 0
+    })
+    const passerelle = new OutlookLocalGateway({ appRoot: await racineFactice(), marqueur })
+    await passerelle.markRead(['A'.repeat(32)])
+    await expect(readFile(chemin, 'utf8')).rejects.toThrow()
+  })
+})
