@@ -116,6 +116,10 @@ function IconeEnvoyer(): React.JSX.Element {
       viewBox="0 0 24 24"
       width="19"
       height="19"
+      /* RECENTRAGE OPTIQUE (conv-257, 2026-09-04) : la masse de l avion penche vers le haut
+         gauche, donc le centre GEOMETRIQUE ne tombe pas sur le centre PERCU du cercle.
+         1 px vers le bas et vers la droite, demande par l utilisateur apres observation. */
+      style={{ transform: 'translate(1px, 1px)' }}
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
