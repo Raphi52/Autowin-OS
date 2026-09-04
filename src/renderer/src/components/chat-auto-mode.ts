@@ -36,6 +36,14 @@ export function texteDernierAssistant(fil: readonly Msg[]): string | null {
     .join('\n')
 }
 
+/** La DERNIERE demande de l'utilisateur — ce a quoi le tour courant repond. */
+export function texteDerniereDemande(fil: readonly Msg[]): string | null {
+  const dernier = [...fil].reverse().find((m) => m.role === 'user') as
+    | Extract<Msg, { role: 'user' }>
+    | undefined
+  return dernier?.content ?? null
+}
+
 /**
  * Signature du tour courant. Deux redessins du MÊME tour la partagent ; un tour de plus la change.
  * Volontairement bâtie sur la longueur du fil et du texte : aucun identifiant n'est garanti présent
@@ -252,8 +260,12 @@ export function deciderRelanceAuto(entree: EntreeDecisionAuto): DecisionAuto {
   // lui-même après le dernier maillon ; sans cette lecture la boucle repartait pour un tour payant.
   if (resteAFaireDitRien(texteReponse))
     return { action: 'arreter', raison: 'reste-rien', message: MESSAGES_ARRET['reste-rien'] }
-  const brut = extrairePromptSuivant(texteReponse) ?? extractRecommendation(texteReponse)
-  const suite = brut && estPromptDePublication(brut) ? PROMPT_SALVAGE : brut
+  // Même garde qu'en affichage : si la demande de CE tour était déjà l'ordre de tri, la publication
+  // proposée passe telle quelle — sinon le mode auto renvoie `/salvage` en boucle, à ses frais.
+  const demandeDuTour = texteDerniereDemande(entree.fil) ?? undefined
+  const brut =
+    extrairePromptSuivant(texteReponse, demandeDuTour) ?? extractRecommendation(texteReponse)
+  const suite = brut && estPromptDePublication(brut, demandeDuTour) ? PROMPT_SALVAGE : brut
   // Pas de suite proposée : on ne fabrique rien et on ne s'éteint pas — on attend le tour suivant.
   if (!suite) return { action: 'attendre', raison: 'aucun-prompt' }
   /*

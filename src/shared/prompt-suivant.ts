@@ -33,7 +33,10 @@ const estOuvertureDeBloc = (ligne: string): boolean => ligne.trimStart().startsW
  * Rend le DERNIER prompt émis, nettoyé de son markdown et borné. `null` s'il n'y en a pas —
  * l'appelant retombe alors sur la recommandation, donc rien ne régresse.
  */
-export function extrairePromptSuivant(texte: string | undefined | null): string | null {
+export function extrairePromptSuivant(
+  texte: string | undefined | null,
+  demandeDuTour?: string
+): string | null {
   if (!texte) return null
   let trouve: string | null = null
   let dansUnBloc = false
@@ -55,7 +58,7 @@ export function extrairePromptSuivant(texte: string | undefined | null): string 
     if (!/[\p{L}\p{N}]/u.test(brut)) continue
     trouve = brut.length > LONGUEUR_MAX ? brut.slice(0, LONGUEUR_MAX).trimEnd() : brut
   }
-  if (trouve && estPromptDePublication(trouve)) return PROMPT_SALVAGE
+  if (trouve && estPromptDePublication(trouve, demandeDuTour)) return PROMPT_SALVAGE
   return trouve
 }
 
@@ -124,7 +127,28 @@ export const PROMPT_SALVAGE =
 const ORDRE_DE_TRI = /\/salvage\b/i
 const CHARNIERE_DE_SUITE = /\b(puis|ensuite|apr[eè]s (?:quoi|avoir)|et enfin)\b/i
 
-export function estPromptDePublication(prompt: string): boolean {
+/*
+ * TROISIEME EXCEPTION : LE TRI VIENT D'AVOIR LIEU.
+ *
+ * VECU LE 2026-09-04 (conv-288), trois tours d'affilee. L'utilisateur envoie `/salvage`, le tri est
+ * fait de bout en bout — toutes les cachettes sondees, chaque travail juge par son contenu, les
+ * verdicts enregistres —, et la seule suite qui reste est de publier. Ce prompt de publication est
+ * alors reecrit en `/salvage`. L'utilisateur renvoie ce que le champ lui propose, le tri est refait,
+ * ne trouve rien, et propose de publier. La boucle est PARFAITE et ne se termine jamais.
+ *
+ * Le garde-fou etait aveugle a ce que le tour venait de faire : il relisait le prompt sortant sans
+ * jamais regarder la demande ENTRANTE. Or quand cette demande EST l'ordre de tri, le tri a eu lieu
+ * dans ce tour meme — exiger qu'il soit refait avant de publier, c'est exiger l'impossible.
+ *
+ * C'est la cause finale du « je passe ma vie a /salvage » : l'application ne se contentait pas de le
+ * rappeler, elle REECRIVAIT la suite proposee en un ordre deja execute.
+ */
+export function ordreDeTriDejaJoue(demandeDuTour: string | undefined): boolean {
+  return demandeDuTour !== undefined && ORDRE_DE_TRI.test(demandeDuTour)
+}
+
+export function estPromptDePublication(prompt: string, demandeDuTour?: string): boolean {
+  if (ordreDeTriDejaJoue(demandeDuTour)) return false
   if (ORDRE_DE_TRI.test(prompt)) return false
   const charniere = prompt.search(CHARNIERE_DE_SUITE)
   if (charniere > 0 && !ACTES_DE_PUBLICATION.test(prompt.slice(0, charniere))) return false

@@ -219,9 +219,15 @@ function ghostDuFil(fil: Msg[]): string | null {
     .filter((p): p is Extract<ChatPart, { kind: 'text' }> => p.kind === 'text')
     .map((p) => p.text)
     .join('\n')
-  const suite = extrairePromptSuivant(text) ?? extractRecommendation(text)
-  // Le repli sur la rubrique « Recommandé » doit obéir à la même règle : publier passe par /salvage.
-  return suite && estPromptDePublication(suite) ? PROMPT_SALVAGE : suite
+  // La demande de CE tour compte : quand elle EST l'ordre de tri, le tri vient d'avoir lieu et
+  // rejouer `/salvage` fabrique une boucle sans fin (vécu trois tours d'affilée le 2026-09-04).
+  const demandeDuTour = [...fil].reverse().find((m): m is UserMsg & { messageId?: string } =>
+    m.role === 'user'
+  )?.content
+  const suite =
+    extrairePromptSuivant(text, demandeDuTour) ?? extractRecommendation(text)
+  // Le repli sur la rubrique « Recommandé » obéit à la même règle : publier passe par /salvage.
+  return suite && estPromptDePublication(suite, demandeDuTour) ? PROMPT_SALVAGE : suite
 }
 
 // Les suggestions d'accueil ne sont plus figées : elles se DÉRIVENT de l'état réel
