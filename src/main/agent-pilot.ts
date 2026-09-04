@@ -784,15 +784,25 @@ export class AgentPilot {
      * Alimente le champ `repriseProbableDe` pose sur la commande suivante de meme nom.
      */
     const echecsNonRepris = new Map<string, string>()
+    /**
+     * `actionId` -> clef CIBLEE de l'action. L'evenement `result` ne porte pas ses arguments : la
+     * clef est donc calculee a l'emission de la commande et retrouvee ici. Sans cela le lien
+     * reposerait sur le seul NOM d'action et affirmerait qu'un `edit_file` rate sur `a.ts` a ete
+     * repris par un `edit_file` reussi sur `b.ts` — la reponse inverse a la question posee.
+     */
+    const clefParAction = new Map<string, string>()
     const emit = (e: PilotEventVariant): void => {
       if (e.kind === 'result' && e.name) {
-        if (e.ok) echecsNonRepris.delete(e.name)
-        else echecsNonRepris.set(e.name, e.actionId)
+        const clef = clefParAction.get(e.actionId) ?? e.name
+        if (e.ok) echecsNonRepris.delete(clef)
+        else echecsNonRepris.set(clef, e.actionId)
       }
       if (e.kind === 'command' && e.name) {
-        const echec = echecsNonRepris.get(e.name)
+        const clef = cleDEchec(e.name, e.args as Record<string, unknown> | undefined)
+        clefParAction.set(e.actionId, clef)
+        const echec = echecsNonRepris.get(clef)
         if (echec !== undefined && echec !== e.actionId) {
-          echecsNonRepris.delete(e.name)
+          echecsNonRepris.delete(clef)
           publier({ ...e, repriseProbableDe: echec })
           return
         }
