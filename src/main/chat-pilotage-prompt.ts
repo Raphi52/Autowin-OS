@@ -117,6 +117,12 @@ export function buildChatPilotagePrompt(
     `monospace discrètes (fond rgba(255,255,255,.045), bordure rgba(255,255,255,.13)) ; mise en page ` +
     `COMPACTE — interlignes 1.45-1.55, marges de section ≤10px, padding de bloc ≤12px, aucun grand ` +
     `vide vertical : la page doit se lire sans scroller des kilomètres —, corps 14px ; les couleurs ` +
+    `GRAS PORTEUR : dans chaque phrase de contenu, mets en \`<b>\` le mot qui porte l'information — ` +
+    `le verdict, le chiffre, le nom de la chose, la différence entre deux options — pour que la page ` +
+    `se lise en diagonale sans lire les phrases entières ; vise au moins un \`<b>\` par ligne de ` +
+    `contenu, jamais une phrase entière en gras, et garde le gras dans la couleur du texte ` +
+    `(#dde3ee) ou en or #e3ba55 quand c'est un chiffre clé. Un tableau ou une liste sans aucun ` +
+    `\`<b>\` est une page ratée : le lecteur doit tout relire pour trouver l'essentiel. ` +
     `restent lisibles si le thème change ` +
     `(\`prefers-color-scheme\`) ; JAMAIS de halos, dégradés flous ou ombres décoratives. Garde le ` +
     `texte ou le Markdown normal pour ce qui est court et purement conversationnel : une ou deux ` +
