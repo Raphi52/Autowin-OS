@@ -39,7 +39,15 @@ export const UPDATE_STRATEGY_HINTS: Record<UpdateStrategy, string> = {
 /**
  * Stratégies proposées selon la branche sortie. Sur `main` avancer est sans ambiguïté ; ailleurs les
  * trois voies sont légitimes et le choix appartient à l'utilisateur.
+ *
+ * `diverged` = `main` porte des commits que `origin/main` n'a pas. Avancer devient alors
+ * STRUCTURELLEMENT impossible (`--ff-only` refuse), et ne proposer que `fast-forward` laissait
+ * l'utilisateur SANS AUCUNE issue dans l'interface : la mise à jour échouait, à chaque clic, avec un
+ * message qui lui demandait de faire à la main ce que le bouton pouvait faire. On offre donc les deux
+ * voies réelles, rebase d'abord (historique linéaire, c'est le cas courant : des commits locaux pas
+ * encore poussés).
  */
-export function strategiesFor(branch: string | undefined): UpdateStrategy[] {
-  return branch === 'main' ? ['fast-forward'] : ['merge', 'rebase', 'switch-main']
+export function strategiesFor(branch: string | undefined, diverged = false): UpdateStrategy[] {
+  if (branch !== 'main') return ['merge', 'rebase', 'switch-main']
+  return diverged ? ['rebase', 'merge'] : ['fast-forward']
 }
