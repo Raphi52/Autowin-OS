@@ -99,7 +99,7 @@ describe('projectLatestRequestExecution', () => {
 
     expect(quote).toMatchObject({
       parentId: workspace?.id,
-      display: { kind: 'quote', title: 'Devis d’exécution', runId: 'run-quote' }
+      display: { kind: 'quote', title: 'Plan d’exécution', runId: 'run-quote' }
     })
     expect(skill?.parentId).toBe(quote?.id)
   })

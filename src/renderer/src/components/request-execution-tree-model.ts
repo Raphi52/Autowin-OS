@@ -293,7 +293,7 @@ function projectRunExecutions(timeline: HarnessTimeline): RequestExecutionProjec
         actor: 'Autowin OS',
         label: quote.regime,
         content: '',
-        detail: `Devis compilé avant le premier appel provider`,
+        detail: `Plan d'exécution compilé avant le premier appel provider`,
         timestamp: quoteFact.timestamp,
         status: 'completed',
         durationMs: 0,
@@ -301,7 +301,7 @@ function projectRunExecutions(timeline: HarnessTimeline): RequestExecutionProjec
         execution: { runId },
         display: {
           kind: 'quote',
-          title: 'Devis d’exécution',
+          title: 'Plan d’exécution',
           runId,
           quote,
           observedEventIds: [quoteFact.id]

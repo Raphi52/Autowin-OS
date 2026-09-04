@@ -206,7 +206,7 @@ export function allocateExecutionTopology(
    * EN REVANCHE, provisionner le PLAFOND DUR de la boucle a ete essaye puis ANNULE, sur mesure :
    *  - en mode `blocking`, la politique n'accorde AUCUNE reparation, donc ce plafond ne peut jamais
    *    mordre ; provisionner pour lui ne protegeait de rien et faisait REFUSER des runs avant leur
-   *    premier appel (« Devis impossible avant execution », 4 tests tombes) ;
+   *    premier appel (« Plan d'execution impossible », 4 tests tombes) ;
    *  - en `metering-only` (le defaut), un depassement ne coupe pas le run : le devis S'AGRANDIT a la
    *    demande, et la depense reste visible par l'agregateur de cout.
    * Le devis dit donc le cas ACCORDE, et la marge de progres se paie a la demande — c'est la lecture
@@ -241,7 +241,7 @@ export function allocateExecutionTopology(
       quote.limits.maxProviderCalls = Math.max(quote.limits.maxProviderCalls, requis)
     } else {
       throw new Error(
-        `Devis impossible avant exécution : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
+        `Plan d'exécution impossible : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
       )
     }
   }

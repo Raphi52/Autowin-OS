@@ -195,7 +195,7 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
   }
   if (kind === 'budget') {
     return (
-      'Relève le devis du run (Settings › Budget) ou réduis le périmètre : ' +
+      'Relève les plafonds du run (Settings › Budget) ou réduis le périmètre : ' +
       'le plafond a été atteint avant cet appel.'
     )
   }

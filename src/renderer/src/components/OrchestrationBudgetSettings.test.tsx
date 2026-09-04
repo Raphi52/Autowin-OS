@@ -46,7 +46,7 @@ describe('OrchestrationBudgetSettings', () => {
     expect(container.textContent).toContain('appels fournisseur')
     expect(container.textContent).toContain('tokens totaux')
     expect(container.textContent).toContain('optionnel')
-    expect(container.textContent).toContain("usage final d'un appel")
+    expect(container.textContent).toContain("plan d'exécution du run")
   })
 })
 

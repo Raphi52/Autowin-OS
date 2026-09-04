@@ -200,7 +200,7 @@ export function reparationsAutorisees(entree: {
   if (source === undefined) {
     return {
       reparations: 0,
-      motif: 'aucune réparation : ni le graphe ni le devis ne déclarent de retour possible'
+      motif: "aucune réparation : ni le graphe ni le plan d'exécution ne déclarent de retour possible"
     }
   }
   const reparations = Math.max(0, Math.floor(source))

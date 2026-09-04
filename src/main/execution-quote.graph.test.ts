@@ -73,7 +73,7 @@ describe('provisionner un graphe à boucles', () => {
     expect(() => allocateExecutionTopology(bloquant, requete())).not.toThrow()
     expect(() =>
       allocateExecutionTopology(bloquant, requete({ worstCaseNodeExecutions: 40 }))
-    ).toThrow('Devis impossible')
+    ).toThrow("Plan d'exécution impossible")
     const mesure = compileExecutionQuote('corrige le bug')
     const alloc = allocateExecutionTopology(mesure, requete({ worstCaseNodeExecutions: 40 }))
     expect(alloc.reservedMandatoryAgents).toBe(40)

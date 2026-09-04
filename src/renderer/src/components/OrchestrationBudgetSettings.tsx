@@ -186,10 +186,11 @@ export function OrchestrationBudgetSettings(): React.JSX.Element {
         </div>
       </label>
       <small>
-        Le devis du run peut appliquer des limites encore plus strictes selon la complexité de la
-        demande. Une limite utilisateur ne peut jamais agrandir ce devis. L&apos;usage final
-        d&apos;un appel CLI n&apos;étant connu qu&apos;à sa réponse, un dépassement de cet appel est
-        affiché puis interdit tout appel suivant.
+        Le plan d&apos;exécution du run, calculé selon la complexité de la demande, peut appliquer
+        des limites plus strictes que celles-ci — et une limite saisie ici ne peut jamais
+        l&apos;élargir. Le coût réel d&apos;un appel n&apos;étant connu qu&apos;à sa réponse, un
+        dépassement n&apos;annule jamais le travail déjà payé : il est affiché, puis interdit
+        l&apos;appel suivant.
       </small>
       <button type="button" onClick={() => void save()} disabled={saveDisabled}>
         {saving ? 'Enregistrement...' : 'Enregistrer'}

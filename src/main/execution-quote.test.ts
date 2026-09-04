@@ -105,7 +105,7 @@ describe('ExecutionQuote', () => {
     })
   })
 
-  it('refuse un devis impossible avant toute admission provider — en mode bloquant', () => {
+  it("refuse un plan d'exécution impossible avant toute admission provider — en mode bloquant", () => {
     // Depuis conv-1148 (13/08), le refus n'existe plus qu'en `blocking` : en mesure seule
     // (défaut), le devis s'agrandit à la demande au lieu de tuer le run avant le premier appel.
     const quote = compileExecutionQuote('ajoute une page de réglages', {
@@ -124,12 +124,12 @@ describe('ExecutionQuote', () => {
         phaseFanOut: {},
         judgeFanOut: 0
       })
-    ).toThrow(/devis impossible.*avant exécution/i)
+    ).toThrow(/plan d'exécution impossible/i)
   })
 })
 
 describe('devis face à un workflow plus large que le régime', () => {
-  // Mesuré sur conv-1148 (13/08) : « Devis impossible avant exécution : 12 agent(s) obligatoires
+  // Mesuré sur conv-1148 (13/08) : « Plan d'exécution impossible : 12 agent(s) obligatoires
   // pour 10 place(s) restante(s) ». Le workflow choisi est un graphe DÉTERMINISTE au pire cas fini
   // et connu ; le refuser avant le premier appel contredit la décision utilisateur du 12/08
   // (« je m'en fous que ça dépense, détruis le blocage ») — le régime servait de plafond de
@@ -161,6 +161,6 @@ describe('devis face à un workflow plus large que le régime', () => {
     const quote = compileExecutionQuote('corrige tous les défauts', { spendEnforcement: 'blocking' })
     quote.limits.maxAgents = 10
     quote.limits.maxProviderCalls = 10
-    expect(() => allocateExecutionTopology(quote, demande as never)).toThrow(/Devis impossible/)
+    expect(() => allocateExecutionTopology(quote, demande as never)).toThrow(/Plan d'exécution impossible/)
   })
 })

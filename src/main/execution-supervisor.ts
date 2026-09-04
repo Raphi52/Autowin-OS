@@ -231,7 +231,7 @@ export class ExecutionSupervisor {
       onLateSettlement
     }
     if (prior && prior.quoteId !== quote.id) {
-      throw new Error('Reprise refusee : le devis ne correspond pas aux compteurs persistants.')
+      throw new Error("Reprise refusee : le plan d'execution ne correspond pas aux compteurs persistants.")
     }
     const publishTerminalSnapshot = (): ExecutionUsageSnapshot => {
       runtime.finished = true
