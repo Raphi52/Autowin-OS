@@ -157,6 +157,29 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'git-lourd',
+          /*
+           * LE NETTOYEUR DE DOSSIERS TEMPORAIRES NE TOURNE PAS PAR GROUPE.
+           *
+           * `extends: true` recopie `globalSetup` dans CHAQUE groupe : son teardown s'executait
+           * donc une fois par groupe. Celui d'`unite` (groupOrder 0) finit en PREMIER, alors que
+           * `git-lourd` tourne encore — et il supprimait tous les dossiers temporaires nes depuis
+           * le debut du run, Y COMPRIS les depots git en cours d'utilisation. Le nettoyeur n'a
+           * AUCUNE garde sur l'usage (`tests/temp-cleanup.ts`) : il ne borne que par horodatage.
+           *
+           * MESURE du 2026-09-04 : `git commit -q -m init` echoue sur « fatal: Unable to read
+           * current working directory », et `finalize` rend `merge-failed` la ou le test attend
+           * `base-in-progress`. Des tests rouges PAR INTERMITTENCE, verts en isolation — on
+           * accusait le code teste alors que la cause etait la configuration de la suite.
+           *
+           * LE NETTOYAGE RESTE ICI, ET SEULEMENT ICI. Piege mesure le 2026-09-04 : des que
+           * `projects` existe, vitest IGNORE le `globalSetup` de la racine — celui-ci ne
+           * s'executait donc QUE par heritage. Le neutraliser dans les DEUX groupes eteignait le
+           * nettoyage en entier (plus une seule ligne « [nettoyage temporaire] »), ce qui aurait
+           * remplace un bug d'ordonnancement par une fuite de disque. `git-lourd` est le groupe
+           * joue en DERNIER (groupOrder 1) : y garder le teardown le fait tourner une fois, quand
+           * plus rien d'autre ne travaille.
+           * Garde : `tests/global-nettoyage-une-seule-fois.test.ts`.
+           */
           include: GIT_LOURDS,
           // Joue APRES tout le reste (groupOrder 1), dans UN SEUL thread : plus aucun autre
           // worker ne cree de depot git pendant qu'ils tournent.
@@ -168,6 +191,9 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unite',
+          // Meme raison que pour `git-lourd` ci-dessus : ce groupe finit en premier, son teardown
+          // rangeait donc le bac des autres pendant qu'ils travaillaient.
+          globalSetup: [],
           exclude: [...EXCLUSIONS, ...GIT_LOURDS],
           sequence: { groupOrder: 0 }
         }
