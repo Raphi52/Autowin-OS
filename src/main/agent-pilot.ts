@@ -74,8 +74,16 @@ import type { ChatArtifact } from '../shared/artifacts'
  * correction pilotée depuis le chat (chercher la règle → lire le fichier → éditer → naviguer →
  * observer → lire la capture → revenir) dépense à elle seule une dizaine d'appels ; à 12, le tour se
  * coupait AVANT la phrase de clôture et l'app affichait « Réponse interrompue avant la fin ».
+ *
+ * SUPPRIMÉ le 2026-09-04, demande explicite de l'utilisateur (conv-233, « ENLEVE CE PUTAIN DE
+ * BLOQUAGE DE BUDGET ») : relever la borne ne faisait que déplacer la coupure. Ce compteur coupait
+ * des tours ENGAGÉS alors qu'il ne mesure RIEN du coût réel — un tour de 41 appels bon marché était
+ * tué, un tour de 5 appels ruineux passait. Le frein qui reste est le seul honnête : la dépense
+ * réelle du tour (`AUTOWIN_CHAT_USD_CAP`, voir `chat-turn-budget.ts`), plus l'annulation manuelle.
+ * Avec l'infini, les injections « budget du tour » et « dernière itération » ne se déclenchent plus :
+ * leurs conditions comparent l'index à une borne finie.
  */
-export const CAP_ITERATIONS_TOUR = 40
+export const CAP_ITERATIONS_TOUR = Number.POSITIVE_INFINITY
 import type { PilotEventKind } from '../shared/pilot-events'
 import { blocEtatSuivant, type EtatPrompt } from './etat-diff'
 import { protegerRappel } from './observabilite-non-bloquante'
