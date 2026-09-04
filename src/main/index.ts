@@ -84,6 +84,7 @@ import { execFileSync } from 'node:child_process'
 import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
 import { superviseBrainServer } from './brain-server-supervision'
 import { startBrainCuration } from './brain-curation-run'
+import { ensureBrainIndexFresh } from './brain-index-refresh'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
 import {
@@ -3746,6 +3747,17 @@ app.whenReady().then(async () => {
      * On rearme donc des que le check est VERT : la prochaine chute redonne droit a une tentative.
      */
     if (brainCheck?.ok) resetBrainLaunchAttempt()
+    /*
+     * #2 bis — un service qui REPOND n'est pas un service SAIN. Mesure du 2026-09-04 : le ping
+     * (GET /) passait au vert pendant que /health rendait 503 `degraded` (« index freshness
+     * mismatch ») ; les questions au Brain revenaient vides et il fallait relancer brain_index.py
+     * à la main. On lit donc /health et on réindexe, une seule fois par session, en tâche de fond.
+     */
+    if (brainCheck?.ok) {
+      void ensureBrainIndexFresh().then((r) => {
+        if (r.status !== 'not-needed') console.log('[brain-index]', r.status, '—', r.detail)
+      })
+    }
     if (brainCheck && !brainCheck.ok) {
       void ensureBrainServerStarted(() => appPreflightProbes().pingBrain()).then((r) => {
         // Retenu pour DIRE POURQUOI si le délai de grâce expire : la première sonde ne pouvait pas
